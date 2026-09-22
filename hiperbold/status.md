@@ -31,7 +31,7 @@ Atualizado em 22/09/2026. **Todas as 14 tarefas feitas.** Publicação em produ�
 
 ## Fluxo de teste no n8n
 
-Criado com autorização do Filipe (22/09/2026), só este: "TESTE CRM - MCP imóveis (Claude, 22/09/2026)", id `GeotyR9EyKzuJpF9`, em n8n.hiperbold.com.br. Gatilho MCP com caminho aleatório (sem credencial) e a ferramenta `buscar_imoveis` com 5 imóveis fictícios. O endereço fica em `F:/temp/2026-09-22/n8n-imoveis/url.txt`. Pode ser desligado ou apagado quando o teste acabar.
+Criado com autorização do Filipe (22/09/2026), só este: "TESTE CRM - MCP imóveis (Claude, 22/09/2026)", id `GeotyR9EyKzuJpF9`, em n8n.hiperbold.com.br. Gatilho MCP com caminho aleatório (sem credencial) e a ferramenta `buscar_imoveis` com 5 imóveis fictícios. O endereço fica em `F:/temp/2026-09-22/n8n-imoveis/url.txt`. Desligado em 22/09/2026 a pedido do Filipe (não apagado).
 
 ## O que já mudou no banco LOCAL
 
