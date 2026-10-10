@@ -7,10 +7,14 @@ Este é o fork `hiperbold/DeskcommCRM` do projeto `melgarafael/DeskcommCRM` (MIT
 
 ## Fluxo de trabalho
 
-1. Desenvolver no WSL, em `~/projects/deskcommcrm`.
-2. Commit e push no `main` do fork.
-3. O GitHub Actions do próprio projeto (`.github/workflows/publish-image.yml`) compila e publica três imagens: `ghcr.io/hiperbold/deskcommcrm`, `deskcomm-worker` e `deskcomm-scheduler`.
-4. O EasyPanel (projeto `hiperbold-crm-1`) só baixa a imagem pronta e reinicia.
+1. Desenvolver em `~/projects/deskcommcrm`, na branch `feat/planos-assinatura` (commit e push nela são livres, não publicam nada).
+2. Abrir PR para a `main` do fork (`gh pr create -R hiperbold/DeskcommCRM`) e esperar `ci`, `e2e` e `perf` verdes. Depois de cada push na `main` o PR fecha sozinho: a próxima publicação pede PR novo.
+3. Se a publicação leva migration: backup (`hiperbold/scripts/backup-prod.sh`), parar o agendador (`node hiperbold/scripts/easypanel/acao.mjs stopService scheduler`), `hiperbold/scripts/prod-schema.sh` com a árvore limpa, religar o agendador (`startService`).
+4. `bash hiperbold/scripts/varredura-de-segredos.sh` e então `git push origin <sha>:main`. O GitHub Actions (`.github/workflows/publish-image.yml`) compila e publica três imagens: `ghcr.io/hiperbold/deskcommcrm`, `deskcomm-worker` e `deskcomm-scheduler`.
+5. O fluxo "Deploy no EasyPanel (Hiperbold)" (`.github/workflows/deploy-easypanel.yml`) dispara quando as imagens ficam prontas, espera `ci` e `e2e` verdes da `main` e só então manda o EasyPanel (projeto `hiperbold-crm-1`) baixar a imagem e reiniciar. Se o `e2e` da `main` precisar ser rerodado, rerodar também a rodada do Deploy (`gh run rerun <id> -R hiperbold/DeskcommCRM`).
+6. Conferir `https://crm.hiperbold.com.br/api/v1/health`: o campo `version` tem de ser o commit publicado.
+
+Push na `main` é deploy de produção: só com a verificação completa verde e autorização do Filipe em vigor.
 
 **A VPS nunca compila código.** Build na VPS já derrubou os outros serviços, e o build do Next pede 4 GB.
 
@@ -44,6 +48,54 @@ Testes unitários no WSL: `bash hiperbold/scripts/test-unit.sh` (roda `pnpm test
 - Schema: o deploy só troca a imagem. Código que depende de coluna nova exige, ANTES do push, `bash hiperbold/scripts/prod-schema.sh` (re-aplica o `baseline.sql` idempotente e garante a chave de cifra).
 - Backup: `hiperbold/scripts/backup-prod.sh`, diário pela tarefa do Windows `HiperboldCRM-BackupBanco`, em `D:\Hiperbold\backups\hiperbold-crm` (30 dias). Restaurar num projeto Supabase novo: `pg_restore --no-owner --no-privileges -d <url> <arquivo>.dump`.
 - Segredos de produção: `.env.production` no WSL (fora do Git, só leitura do usuário). Nunca no chat, nunca em commit.
+
+## Portões antes de abrir PR
+
+```bash
+NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck
+pnpm lint && pnpm lint:channels
+bash hiperbold/scripts/test-unit.sh      # com o .env.local fora do caminho (mover e devolver no fim), como no GitHub
+pnpm cercas                              # as cercas estruturais não rodam no test:unit (D-190)
+pnpm test:db                             # precisa do Supabase local no ar
+NODE_OPTIONS=--max-old-space-size=8192 pnpm build
+```
+
+Falhas conhecidas que não são defeito de código: D-081 (dois testes do autor que dependem do ambiente) e D-189 (limite do Docker Hub no GitHub).
+
+## Scripts de produção
+
+Todos leem a credencial de arquivo fora do Git e nunca imprimem valor.
+
+- `hiperbold/scripts/prod-leitura.sh "<sql>"` ou `-f arquivo.sql`: consulta somente leitura no banco de produção.
+- `hiperbold/scripts/easypanel/nomes.mjs [filtro]`: nomes das variáveis de cada serviço no EasyPanel (só leitura).
+- `hiperbold/scripts/easypanel/acao.mjs <stopService|startService> <servico>`: parar e religar serviço.
+- `hiperbold/scripts/easypanel/uazapi-on.mjs [--aplicar]`: liga o pareamento por QR em produção (D-187); sem o parâmetro só simula.
+
+Os de `easypanel/` leem `EASYPANEL_HIPERBOLD_URL` e `EASYPANEL_HIPERBOLD_API_KEY` do ambiente ou do arquivo de segredos global da máquina (`~/.claude/.env`; no WSL, apontar com `HIPERBOLD_ENV=/mnt/c/...`).
+
+## Regras e decisões do fork
+
+`AGENTS.md` e `CLAUDE.md` da raiz são do autor e não são editados aqui; as regras da Hiperbold para este projeto ficam nesta seção.
+
+- **Nome para o cliente:** principal "Hiperbold CRM" (telas, documentos, central de ajuda), secundário "HiperCRM" (e-mails e mensagens leves). "DeskcommCRM" nunca aparece para o cliente.
+- **Canais:** WhatsApp só pela UAZAPI (o cliente conecta lendo o QR dentro do CRM; a instância é criada no servidor UAZAPI da Hiperbold) e pela API oficial da Meta. Instagram e Messenger só pela rota oficial, com o app da Meta do próprio CRM, sem serviço intermediário (D-186).
+- **Limite de Conexões:** Pro 3, Max 10, Scale 20, somando WhatsApp, Instagram e Messenger, e bloqueia de verdade, independente do modo de bloqueio dos outros itens.
+- **Preço não se inventa:** valor, desconto e parcela vêm do Filipe.
+- **Teste não se enfraquece:** prova vermelha se resolve na causa, nunca afrouxando a prova.
+- **Toda pendência vai para o `DEBITO.md`**, inclusive as que dependem do Filipe.
+- **Segredo nunca no chat nem em commit:** não listar chave nem valor, não ler `.env.local` nem `.env.production` com `cat` ou `grep` que imprima valor.
+- **Banco local:** nunca `supabase db reset`; o `hiperbold/scripts/supabase-local.sh` só serve para banco NOVO (apaga os dados locais).
+- **Produção:** deploy, `prod-schema.sh`, EasyPanel e banco real só pela sessão principal, nunca por sub-agente. Variável nova de produção e ação destrutiva no banco pedem confirmação do Filipe.
+- **GitHub:** o `gh` dentro do repositório resolve para o remoto do autor; sempre passar `-R hiperbold/DeskcommCRM`. Fluxos agendados herdados do autor ficam desligados no fork (D-192).
+- **Texto:** português do Brasil, sem travessão.
+
+## Em outra máquina (migração para o Mac, 10/2026)
+
+- Clonar `hiperbold/DeskcommCRM`, acrescentar o remoto `upstream` (`melgarafael/DeskcommCRM`), Node 22 e pnpm 9.15.9, Docker no ar.
+- Fora do Git e preciso levar: `.env.production` e `.env.local` da raiz do projeto, o arquivo de segredos global e o `hipercrm.env` da pasta `~/.claude` (app da Meta do CRM).
+- Banco local: é de desenvolvimento e pode nascer do zero (`hiperbold/scripts/supabase-local.sh`, depois `dev-env.sh` e `dev-owner.sh`). Não há dado de cliente nele.
+- Os scripts foram escritos para o WSL: o padrão de pasta do `backup-prod.sh` aponta para o disco D do Windows (passar a pasta como argumento) e a rotina diária de backup precisa ser recriada (D-191).
+- O ponto de retomada está no topo de [`status.md`](status.md).
 
 ## O que é só do fork
 
