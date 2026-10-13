@@ -45,9 +45,10 @@ Testes unitários no WSL: `bash hiperbold/scripts/test-unit.sh` (roda `pnpm test
 
 Regra do Filipe, de 13/10/2026: nuvem antes do Mac. É preferência, não obrigação; o que for necessário localmente pode ser instalado.
 
-- **No Mac fica só o código e o `node_modules`** (`pnpm install`, 1 GB). O pnpm da máquina troca sozinho para o 9.15.9 do `packageManager` e o Node 24 atende o `>=22` do projeto: o Node 22 não foi instalado. Serve para editar e rodar os portões que não pedem Docker: `typecheck`, `lint`, `lint:channels`, `cercas` e `test-unit.sh`. Vermelhos esperados no Mac, que não são defeito de código: os 11 testes de `instalador-idioma-da-cli` (o bash do macOS é o 3.2 e o `_i18n.sh` pede 4.4 ou mais novo) e os 2 do Asaas quando o `.env.local` fica no lugar.
+- **No Mac roda o ambiente completo** (decisão de 13/10/2026, por ser o projeto principal): os comandos de "Desenvolvimento local" valem iguais, com o Docker do OrbStack, e a senha do administrador local fica em `~/github-projects/hiperbold-crm-data.md`.
+- **Dependências:** `pnpm install` (1 GB). O pnpm da máquina troca sozinho para o 9.15.9 do `packageManager` e o Node 24 atende o `>=22` do projeto: o Node 22 não foi instalado. Serve para editar e rodar os portões que não pedem Docker: `typecheck`, `lint`, `lint:channels`, `cercas` e `test-unit.sh`. Vermelhos esperados no Mac, que não são defeito de código: os 11 testes de `instalador-idioma-da-cli` (o bash do macOS é o 3.2 e o `_i18n.sh` pede 4.4 ou mais novo) e os 2 do Asaas quando o `.env.local` fica no lugar.
 - **No GitHub**, sem custo porque o repositório é público: `ci`, `e2e` e `perf` rodam em cada PR o que pede banco (`test:db`), ponta a ponta e build. É a verificação completa antes de publicar.
-- **App no ar com banco, para conferir tela:** GitHub Codespaces, sob demanda, pelo `.devcontainer/devcontainer.json` (Node 22, pnpm 9.15.9, Docker). O Supabase local e o compose de dev NÃO sobem no Mac por padrão.
+- **Reserva na nuvem, ainda não validada:** GitHub Codespaces, sob demanda, pelo `.devcontainer/devcontainer.json` (Node 22, pnpm 9.15.9, Docker), para quando o Mac não estiver à mão.
 
 ```bash
 gh auth refresh -h github.com -s codespace     # uma vez só, abre o navegador (quem faz é o Filipe)
