@@ -41,6 +41,24 @@ Conferir: `curl http://localhost:3300/api/v1/health`.
 
 Testes unitários no WSL: `bash hiperbold/scripts/test-unit.sh` (roda `pnpm test:unit` nas condições do CI; direto, o Redis de dev e a rede espelhada do WSL dão falsos vermelhos).
 
+## No Mac e na nuvem (desde 13/10/2026)
+
+Regra do Filipe, de 13/10/2026: nuvem antes do Mac. É preferência, não obrigação; o que for necessário localmente pode ser instalado.
+
+- **No Mac fica só o código e o `node_modules`** (`pnpm install`, 1 GB). O pnpm da máquina troca sozinho para o 9.15.9 do `packageManager` e o Node 24 atende o `>=22` do projeto: o Node 22 não foi instalado. Serve para editar e rodar os portões que não pedem Docker: `typecheck`, `lint`, `lint:channels`, `cercas` e `test-unit.sh`. Vermelhos esperados no Mac, que não são defeito de código: os 11 testes de `instalador-idioma-da-cli` (o bash do macOS é o 3.2 e o `_i18n.sh` pede 4.4 ou mais novo) e os 2 do Asaas quando o `.env.local` fica no lugar.
+- **No GitHub**, sem custo porque o repositório é público: `ci`, `e2e` e `perf` rodam em cada PR o que pede banco (`test:db`), ponta a ponta e build. É a verificação completa antes de publicar.
+- **App no ar com banco, para conferir tela:** GitHub Codespaces, sob demanda, pelo `.devcontainer/devcontainer.json` (Node 22, pnpm 9.15.9, Docker). O Supabase local e o compose de dev NÃO sobem no Mac por padrão.
+
+```bash
+gh auth refresh -h github.com -s codespace     # uma vez só, abre o navegador (quem faz é o Filipe)
+gh codespace create -R hiperbold/DeskcommCRM -b feat/planos-assinatura -m standardLinux32gb
+gh codespace ssh -c <nome>                     # dentro: os comandos de "Desenvolvimento local", na mesma ordem
+gh codespace ports forward 3300:3300 54321:54321 -c <nome>   # abre http://localhost:3300 no Mac
+gh codespace stop -c <nome>                    # sempre ao terminar: parado não gasta horas
+```
+
+A conta pessoal gratuita tem uma cota mensal de horas e de disco do Codespaces (cerca de 30 horas na máquina de 4 núcleos); conferir o consumo em github.com/settings/billing antes de pensar em plano pago. Nenhum segredo de produção entra no Codespace: o `dev-env.sh` gera lá um `.env.local` com chaves aleatórias, e a senha do administrador local fica em `~/hiperbold-crm-data.md` dentro dele.
+
 ## Produção
 
 - Banco: Supabase Cloud, região São Paulo. Piloto no plano Free; Pro antes de entrar dado de cliente real.
@@ -94,7 +112,8 @@ Os de `easypanel/` leem `EASYPANEL_HIPERBOLD_URL` e `EASYPANEL_HIPERBOLD_API_KEY
 - Clonar `hiperbold/DeskcommCRM`, acrescentar o remoto `upstream` (`melgarafael/DeskcommCRM`), Node 22 e pnpm 9.15.9, Docker no ar.
 - Fora do Git e preciso levar: `.env.production` e `.env.local` da raiz do projeto, o arquivo de segredos global e o `hipercrm.env` da pasta `~/.claude` (app da Meta do CRM).
 - Banco local: é de desenvolvimento e pode nascer do zero (`hiperbold/scripts/supabase-local.sh`, depois `dev-env.sh` e `dev-owner.sh`). Não há dado de cliente nele.
-- Os scripts foram escritos para o WSL: o padrão de pasta do `backup-prod.sh` aponta para o disco D do Windows (passar a pasta como argumento) e a rotina diária de backup precisa ser recriada (D-191).
+- Os scripts foram escritos para o WSL: o padrão de pasta do `backup-prod.sh` aponta para o disco D do Windows (passar a pasta como argumento). A rotina diária de backup não vai para o Mac: decisão de 13/10/2026, a solução será no EasyPanel (D-191).
+- No Mac, feito em 13/10/2026: ver a seção "No Mac e na nuvem".
 - O ponto de retomada está no topo de [`status.md`](status.md).
 
 ## O que é só do fork

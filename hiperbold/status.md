@@ -1,8 +1,16 @@
 # Status do fork Hiperbold
 
-Atualizado em 10/10/2026. O bloco abaixo manda; as seções depois dele são histórico de 22/09 a 29/09 e ficam como registro.
+Atualizado em 13/10/2026. O bloco abaixo manda; as seções depois dele são histórico de 22/09 a 29/09 e ficam como registro.
 
 ## Ponto de retomada · 10/10/2026 (migração para Mac)
+
+### Ambiente no Mac · 13/10/2026
+
+- **Regra nova do Filipe:** nuvem antes do Mac (preferência, não obrigação). Detalhe em [`README.md`](README.md), seção "No Mac e na nuvem".
+- **Feito no Mac:** só `pnpm install` (1 GB), com Node 24.21 e pnpm 9.15.9. Node 22, Supabase local, Redis e app NÃO foram instalados nem subidos. Nada mudou em produção.
+- **Portões rodados no Mac em 13/10/2026:** `typecheck`, `lint` (0 erros) e `lint:channels` verdes. `cercas` e `test-unit.sh` com 13 testes vermelhos, todos de ambiente e nenhum de código: 11 em `tests/unit/instalador-idioma-da-cli.test.ts`, porque o bash do macOS é o 3.2 e o `_i18n.sh` pede 4.4 ou mais novo, e 2 do Asaas (`asaas-config`, `asaas-leitura`), porque o `.env.local` estava no lugar (o README manda tirar do caminho). No GitHub os três grupos rodam em Linux e valem como prova.
+- **Ambiente de nuvem:** `.devcontainer/devcontainer.json` escrito para o GitHub Codespaces e os scripts `dev-env.sh` e `dev-owner.sh` deixaram de depender dos caminhos do WSL. **AINDA NÃO VALIDADO:** o primeiro boot depende do Filipe liberar o escopo `codespace` no `gh` (`gh auth refresh -h github.com -s codespace`). Os próximos passos abaixo são todos em produção e não precisam dele.
+- **Backup diário (D-191):** decisão do Filipe em 13/10/2026: não recriar no Mac; adiado, e a solução será direto no EasyPanel. Resolver antes de entrar dado de cliente real.
 
 ### Pronto e publicado
 
@@ -28,7 +36,7 @@ Atualizado em 10/10/2026. O bloco abaixo manda; as seções depois dele são his
 ### Depende do Filipe
 
 - Os itens 1 a 4 acima.
-- **Backup diário da produção (D-191, alto):** hoje roda por tarefa agendada do Windows. Antes de desligar o computador antigo, recriar a rotina no Mac, senão a produção fica sem backup.
+- **Backup diário da produção (D-191, alto):** hoje roda por tarefa agendada do Windows. Antes de desligar o computador antigo, recriar a rotina no Mac, senão a produção fica sem backup. **13/10/2026:** o Filipe decidiu não recriar no Mac; fica adiado e vai para o EasyPanel.
 - Conferir na tela a tela de assinar (D-180) e o limite de Conexões (D-188).
 - Revisão jurídica dos Termos e da Política e os dados da empresa no site de vendas (D-073).
 

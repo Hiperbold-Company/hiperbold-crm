@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
-# Cria o acesso de administrador no CRM LOCAL (Supabase do WSL): usuário no Auth,
-# organização Hiperbold e super-admin. A senha vai para
-# F:\github-projects\hiperbold-crm-data.md, nunca para o terminal.
+# Cria o acesso de administrador no CRM LOCAL (Supabase local): usuário no Auth,
+# organização Hiperbold e super-admin. A senha vai para o arquivo
+# hiperbold-crm-data.md, sempre fora do repositório e nunca para o terminal:
+# F:\github-projects no WSL, ~/github-projects no Mac, a pasta do usuário no
+# Codespaces, ou o caminho em HIPERBOLD_CRM_DADOS.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 EMAIL="${OWNER_EMAIL:-oliveira@hiperbold.com.br}"
-DADOS=/mnt/f/github-projects/hiperbold-crm-data.md
+if [ -n "${HIPERBOLD_CRM_DADOS:-}" ]; then
+  DADOS="$HIPERBOLD_CRM_DADOS"
+elif [ -d /mnt/f/github-projects ]; then
+  DADOS=/mnt/f/github-projects/hiperbold-crm-data.md
+elif [ -d "$HOME/github-projects" ]; then
+  DADOS="$HOME/github-projects/hiperbold-crm-data.md"
+else
+  DADOS="$HOME/hiperbold-crm-data.md"
+fi
 
 getv() { grep -E "^$1=" .env.local | head -1 | cut -d= -f2-; }
 URL="$(getv NEXT_PUBLIC_SUPABASE_URL)"
@@ -27,7 +37,7 @@ else
     printf '\n## Local (WSL, desenvolvimento)\n\nEndereço: http://localhost:3300\nE-mail: %s\nSenha: %s\nCriado em %s. Some se o banco local for recriado (supabase-local.sh).\n' \
       "$EMAIL" "$PASS" "$(date -Iseconds)"
   } >> "$DADOS"
-  echo "senha local gravada em F:\\github-projects\\hiperbold-crm-data.md"
+  echo "senha local gravada em $DADOS"
 fi
 
 psqlc <<SQL
