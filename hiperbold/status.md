@@ -180,7 +180,7 @@ O ponto de retomada atual é o bloco do topo deste arquivo. O `hiperbold/HANDOFF
 
 O WSL desliga junto com a máquina. Se o CRM local não abrir, o banco do Supabase costuma voltar sem rede Docker: `docker network connect supabase_network_deskcomm-crm supabase_db_deskcomm-crm`, esperar, e `docker restart supabase_rest_deskcomm-crm`. O servidor de desenvolvimento (`PORT=3300 pnpm dev`) precisa de uma sessão WSL aberta o tempo todo. O typecheck precisa de `NODE_OPTIONS=--max-old-space-size=6144`.
 
-O `gh` no repositório resolve para o remoto do AUTOR: sempre passar `-R hiperbold/DeskcommCRM`, senão você lê os fluxos dele achando que são nossos.
+O `gh` no repositório resolve para o remoto do AUTOR: sempre passar `-R hiperbold/hiperbold-crm`, senão você lê os fluxos dele achando que são nossos.
 
 ## Fluxo de teste no n8n
 

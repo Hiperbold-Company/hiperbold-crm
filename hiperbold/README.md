@@ -1,17 +1,17 @@
 # DeskcommCRM · fork da Hiperbold
 
-Este é o fork `hiperbold/DeskcommCRM` do projeto `melgarafael/DeskcommCRM` (MIT). A doutrina do autor continua valendo e mora em `CLAUDE.md` e `AGENTS.md` na raiz: **esses dois arquivos não são editados aqui**, para puxar as atualizações do autor sem conflito. Tudo o que é específico da Hiperbold fica nesta pasta.
+Este é o fork `hiperbold/hiperbold-crm` do projeto `melgarafael/DeskcommCRM` (MIT). A doutrina do autor continua valendo e mora em `CLAUDE.md` e `AGENTS.md` na raiz: **esses dois arquivos não são editados aqui**, para puxar as atualizações do autor sem conflito. Tudo o que é específico da Hiperbold fica nesta pasta.
 
 - Pendências: [`DEBITO.md`](DEBITO.md)
 - Produção: https://crm.hiperbold.com.br
 
 ## Fluxo de trabalho
 
-1. Desenvolver em `~/projects/deskcommcrm`, na branch `feat/planos-assinatura` (commit e push nela são livres, não publicam nada).
-2. Abrir PR para a `main` do fork (`gh pr create -R hiperbold/DeskcommCRM`) e esperar `ci`, `e2e` e `perf` verdes. Depois de cada push na `main` o PR fecha sozinho: a próxima publicação pede PR novo.
+1. Desenvolver em `~/projects/hiperbold-crm`, na branch `feat/planos-assinatura` (commit e push nela são livres, não publicam nada).
+2. Abrir PR para a `main` do fork (`gh pr create -R hiperbold/hiperbold-crm`) e esperar `ci`, `e2e` e `perf` verdes. Depois de cada push na `main` o PR fecha sozinho: a próxima publicação pede PR novo.
 3. Se a publicação leva migration: backup (`hiperbold/scripts/backup-prod.sh`), parar o agendador (`node hiperbold/scripts/easypanel/acao.mjs stopService scheduler`), `hiperbold/scripts/prod-schema.sh` com a árvore limpa, religar o agendador (`startService`).
 4. `bash hiperbold/scripts/varredura-de-segredos.sh` e então `git push origin <sha>:main`. O GitHub Actions (`.github/workflows/publish-image.yml`) compila e publica três imagens: `ghcr.io/hiperbold/deskcommcrm`, `deskcomm-worker` e `deskcomm-scheduler`.
-5. O fluxo "Deploy no EasyPanel (Hiperbold)" (`.github/workflows/deploy-easypanel.yml`) dispara quando as imagens ficam prontas, espera `ci` e `e2e` verdes da `main` e só então manda o EasyPanel (projeto `hiperbold-crm-1`) baixar a imagem e reiniciar. Se o `e2e` da `main` precisar ser rerodado, rerodar também a rodada do Deploy (`gh run rerun <id> -R hiperbold/DeskcommCRM`).
+5. O fluxo "Deploy no EasyPanel (Hiperbold)" (`.github/workflows/deploy-easypanel.yml`) dispara quando as imagens ficam prontas, espera `ci` e `e2e` verdes da `main` e só então manda o EasyPanel (projeto `hiperbold-crm-1`) baixar a imagem e reiniciar. Se o `e2e` da `main` precisar ser rerodado, rerodar também a rodada do Deploy (`gh run rerun <id> -R hiperbold/hiperbold-crm`).
 6. Conferir `https://crm.hiperbold.com.br/api/v1/health`: o campo `version` tem de ser o commit publicado.
 
 Push na `main` é deploy de produção: só com a verificação completa verde e autorização do Filipe em vigor.
@@ -23,7 +23,7 @@ Push na `main` é deploy de produção: só com a verificação completa verde e
 Portas: app **3300**, ponte do Redis **8090**, Supabase local **54321** (API), **54322** (banco), **54323** (Studio), **54324** (caixa de e-mails de teste). A 3000 é do site da Unique no WSL, e a 3200 e a 3201 são de programas Node no Windows (o WSL enxerga as portas do Windows).
 
 ```bash
-cd ~/projects/deskcommcrm
+cd ~/projects/hiperbold-crm
 pnpm install
 
 # 1ª vez, ou para zerar o banco local (APAGA os dados locais)
@@ -52,7 +52,7 @@ Regra do Filipe, de 13/10/2026: nuvem antes do Mac. É preferência, não obriga
 
 ```bash
 gh auth refresh -h github.com -s codespace     # uma vez só, abre o navegador (quem faz é o Filipe)
-gh codespace create -R hiperbold/DeskcommCRM -b feat/planos-assinatura -m standardLinux32gb
+gh codespace create -R hiperbold/hiperbold-crm -b feat/planos-assinatura -m standardLinux32gb
 gh codespace ssh -c <nome>                     # dentro: os comandos de "Desenvolvimento local", na mesma ordem
 gh codespace ports forward 3300:3300 54321:54321 -c <nome>   # abre http://localhost:3300 no Mac
 gh codespace stop -c <nome>                    # sempre ao terminar: parado não gasta horas
@@ -105,12 +105,12 @@ Os de `easypanel/` leem `EASYPANEL_HIPERBOLD_URL` e `EASYPANEL_HIPERBOLD_API_KEY
 - **Segredo nunca no chat nem em commit:** não listar chave nem valor, não ler `.env.local` nem `.env.production` com `cat` ou `grep` que imprima valor.
 - **Banco local:** nunca `supabase db reset`; o `hiperbold/scripts/supabase-local.sh` só serve para banco NOVO (apaga os dados locais).
 - **Produção:** deploy, `prod-schema.sh`, EasyPanel e banco real só pela sessão principal, nunca por sub-agente. Variável nova de produção e ação destrutiva no banco pedem confirmação do Filipe.
-- **GitHub:** o `gh` dentro do repositório resolve para o remoto do autor; sempre passar `-R hiperbold/DeskcommCRM`. Fluxos agendados herdados do autor ficam desligados no fork (D-192).
+- **GitHub:** o `gh` dentro do repositório resolve para o remoto do autor; sempre passar `-R hiperbold/hiperbold-crm`. Fluxos agendados herdados do autor ficam desligados no fork (D-192).
 - **Texto:** português do Brasil, sem travessão.
 
 ## Em outra máquina (migração para o Mac, 10/2026)
 
-- Clonar `hiperbold/DeskcommCRM`, acrescentar o remoto `upstream` (`melgarafael/DeskcommCRM`), Node 22 e pnpm 9.15.9, Docker no ar.
+- Clonar `hiperbold/hiperbold-crm`, acrescentar o remoto `upstream` (`melgarafael/DeskcommCRM`), Node 22 e pnpm 9.15.9, Docker no ar.
 - Fora do Git e preciso levar: `.env.production` e `.env.local` da raiz do projeto, o arquivo de segredos global e o `hipercrm.env` da pasta `~/.claude` (app da Meta do CRM).
 - Banco local: é de desenvolvimento e pode nascer do zero (`hiperbold/scripts/supabase-local.sh`, depois `dev-env.sh` e `dev-owner.sh`). Não há dado de cliente nele.
 - Os scripts foram escritos para o WSL: o padrão de pasta do `backup-prod.sh` aponta para o disco D do Windows (passar a pasta como argumento). A rotina diária de backup não vai para o Mac: decisão de 13/10/2026, a solução será no EasyPanel (D-191).

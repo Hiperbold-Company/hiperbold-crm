@@ -230,13 +230,13 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   },
 
   // --- e o que legitimamente tem interruptor -----------------------------------
-  // Exclusivo do fork hiperbold/DeskcommCRM. As duas condições são deliberadas:
+  // Exclusivo do fork hiperbold/hiperbold-crm. As duas condições são deliberadas:
   // a de repositório impede que qualquer outro fork tente deployar num EasyPanel
   // que não é dele, e a de `workflow_run` só deixa passar imagem publicada com
   // sucesso a partir de push, nunca de PR.
   "deploy-easypanel.yml::deploy": {
     condicao:
-      ">- github.repository == 'hiperbold/DeskcommCRM' && " +
+      ">- github.repository == 'hiperbold/hiperbold-crm' && " +
       "(github.event_name == 'workflow_dispatch' || " +
       "(github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))",
     efeito:
