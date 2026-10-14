@@ -1,6 +1,67 @@
 # Status do fork Hiperbold
 
-Atualizado em 27/09/2026, noite. As seções abaixo desta são de 25/09 e continuam valendo para produção e para as fases F1 a F7.
+Atualizado em 13/10/2026. O bloco abaixo manda; as seções depois dele são histórico de 22/09 a 29/09 e ficam como registro.
+
+## Ponto de retomada · 10/10/2026 (migração para Mac)
+
+### Ambiente no Mac · 13/10/2026
+
+- **Regra nova do Filipe:** nuvem antes do Mac (preferência, não obrigação). Detalhe em [`README.md`](README.md), seção "No Mac e na nuvem".
+- **Feito no Mac:** `pnpm install` (1 GB), com Node 24.21 e pnpm 9.15.9; o Node 22 não foi preciso. Como este é o projeto principal do Filipe, o ambiente completo também subiu no Mac, no OrbStack: banco local novo pelo `supabase-local.sh` (195 tabelas, chave de cifra semeada), `redis` e `srh` pelo compose de dev, acesso de administrador pelo `dev-owner.sh` (senha em `~/github-projects/hiperbold-crm-data.md`) e `pnpm dev -p 3300`. Conferido: `/api/v1/health` saudável (Supabase e Redis ok), `/login` 200 e login do administrador aceito pelo Auth. O `NEXT_PUBLIC_APP_URL` do `.env.local` apontava para um túnel antigo e passou a `http://localhost:3300`. Nada mudou em produção.
+- **Portões rodados no Mac em 13/10/2026:** `typecheck`, `lint` (0 erros) e `lint:channels` verdes. `cercas` e `test-unit.sh` com 13 testes vermelhos, todos de ambiente e nenhum de código: 11 em `tests/unit/instalador-idioma-da-cli.test.ts`, porque o bash do macOS é o 3.2 e o `_i18n.sh` pede 4.4 ou mais novo, e 2 do Asaas (`asaas-config`, `asaas-leitura`), porque o `.env.local` estava no lugar (o README manda tirar do caminho). No GitHub os três grupos rodam em Linux e valem como prova.
+- **Ambiente de nuvem (reserva):** `.devcontainer/devcontainer.json` escrito para o GitHub Codespaces e os scripts `dev-env.sh` e `dev-owner.sh` deixaram de depender dos caminhos do WSL. O escopo `codespace` do `gh` foi liberado pelo Filipe em 13/10/2026. **AINDA NÃO VALIDADO:** nenhum Codespace foi criado; o primeiro boot é quem prova a configuração.
+- **Backup diário (D-191):** decisão do Filipe em 13/10/2026: não recriar no Mac; adiado, e a solução será direto no EasyPanel. Resolver antes de entrar dado de cliente real.
+
+### Pronto e publicado
+
+- **Produção** (`crm.hiperbold.com.br`): versão `6e61c88`, publicada em 09/10/2026 pelo PR #7. Health conferido em 10/10/2026: saudável, Supabase e Redis ok. `main` do fork e `origin/main` em `6e61c88fe`; `ci`, `e2e`, `perf`, imagens e deploy verdes nesse commit.
+- **O que está no ar:** planos e assinatura (Pro, Max, Scale), cobrança pelo Asaas com `ASAAS_ENABLED` ligado no EasyPanel desde 09/10, tela de assinar em passo a passo (0951), e-mails de conta e cobrança com fila de envio (0952), Asaas sem mandar e-mail próprio ao cliente (D-087), nome Hiperbold CRM e HiperCRM no lugar de DeskcommCRM, conectar WhatsApp por QR da UAZAPI (0953) e limite de Conexões 3, 10 e 20 somando os canais (0954).
+- **Banco de produção:** schema com 0953 e 0954 aplicado em 09/10/2026 pelo `prod-schema.sh` e conferido só lendo. Backup de antes: `hiperbold-crm-2026-10-09_1925.dump`. O backup diário rodou em 10/10 às 12h30.
+- **Branches:** `feat/planos-assinatura`, `feat/conexoes-mcp` e `fix/debitos-pequenos-2026-09-22` publicadas na origem. `merge/upstream-2026-09-22` e `merge/upstream-2026-09-27` só existem no computador antigo, mas todos os commits delas já estão na `main`; não precisam ir para o Mac. Sem stash.
+- **Site de vendas** (repositório separado `hiperbold/hipercrm-site`): `master` em `707fbdd`, igual à origem, árvore limpa.
+
+### Feito e NÃO publicado em produção
+
+- **O último commit de `feat/planos-assinatura`** (este ponto de retomada, o DEBITO, o README e os scripts `hiperbold/scripts/easypanel/`, `prod-leitura.sh` e `varredura-de-segredos.sh`) está na origem, na branch, e NÃO foi para a `main`: push na `main` dispara deploy, e o fechamento da migração não faz deploy. Só toca a pasta `hiperbold/`; vai junto no próximo PR.
+- **O QR do WhatsApp ainda não funciona em produção:** o código está no ar, mas faltam `UAZAPI_SERVIDOR_URL` e `UAZAPI_ADMIN_TOKEN` no serviço `app` do EasyPanel (conferido em 10/10: o serviço tem 41 variáveis e nenhuma da UAZAPI). Ver D-187.
+
+### Em andamento e próximo passo exato
+
+1. Confirmar com o Filipe e rodar `node hiperbold/scripts/easypanel/uazapi-on.mjs` (simula) e depois com `--aplicar` (grava as duas variáveis e republica o `app`). Conferir o health e chamar o Filipe para conectar um WhatsApp de teste pelo QR em Conexões (D-187).
+2. Filipe clica em "Ligar compra pelo cliente" em `/admin/sistema/cobranca` e faz um Pix de teste sem pagar; cancelar a cobrança em seguida (D-193).
+3. Criar as contas MIIND e MARCELA com os dados que ele passar, uma beta-tester e uma pagante (D-193).
+4. Jornada completa em produção com ele: cadastro, e-mail de boas-vindas, assinar, QR, funil e conversas.
+5. Depois, sem pressa: D-172 (WhatsApp oficial pelo Cadastro Incorporado), D-179 (tirar os documentos do repositório público), D-183, D-184 a D-186, D-123, conferir o recifrador e só então ligar `AI_CRED_RECUSAR_LEGADO=1` (D-171), D-194.
+
+### Depende do Filipe
+
+- Os itens 1 a 4 acima.
+- **Backup diário da produção (D-191, alto):** hoje roda por tarefa agendada do Windows. Antes de desligar o computador antigo, recriar a rotina no Mac, senão a produção fica sem backup. **13/10/2026:** o Filipe decidiu não recriar no Mac; fica adiado e vai para o EasyPanel.
+- Conferir na tela a tela de assinar (D-180) e o limite de Conexões (D-188).
+- Revisão jurídica dos Termos e da Política e os dados da empresa no site de vendas (D-073).
+
+### Bugs e débitos conhecidos
+
+56 itens abertos em `hiperbold/DEBITO.md`, contando D-189 a D-194, registrados hoje. Os que mordem no dia a dia: D-189 (provas do GitHub caem pelo limite do Docker Hub; rerodar), D-190 (rodar `pnpm cercas` antes do PR), D-081 (dois testes do autor que dependem do ambiente), D-041 (e2e `pre-go-live-whatsapp`), D-192 (fluxos agendados do autor desligados no fork).
+
+### Verificação deste fechamento
+
+Código de `feat/planos-assinatura` igual ao da `main` em `6e61c88`, que passou inteiro no GitHub em 09/10/2026 (`ci`, `e2e`, `perf`). Depois disso só entraram documentos e scripts em `hiperbold/`: os scripts novos foram rodados em modo leitura e simulação, passaram no lint, e a varredura de segredos passou. A bateria local completa NÃO foi rodada de novo em 10/10.
+
+### Subir e testar
+
+Comandos, portas (app 3300, Redis 8090, Supabase local 54321 a 54324) e serviços em [`README.md`](README.md): seções "Desenvolvimento local", "Portões antes de abrir PR", "Fluxo de trabalho" e "Em outra máquina". Precisam estar no ar: Docker, o Supabase local (projeto `deskcomm-crm`), o compose de dev (`redis` e `srh`), `pnpm dev -p 3300`, e para IA e crons `pnpm worker` e `pnpm dev:crons`.
+
+### Fora do Git
+
+- Na raiz do projeto: `.env.local`, `.env.local.bak-localhost`, `.env.production` (o `.env` está vazio).
+- Na pasta `~/.claude` do computador: o arquivo de segredos global (EasyPanel, UAZAPI), `hipercrm.env` (app da Meta do CRM) e `hiperbold_asaas.env` (sandbox do Asaas).
+- Banco local de desenvolvimento (Docker, sem dado de cliente; não precisa de dump).
+- Dumps diários da produção na pasta de backups do Windows (30 dias) e a tarefa agendada `HiperboldCRM-BackupBanco`.
+- Variáveis de produção no EasyPanel e os segredos do repositório no GitHub (ficam nos serviços, não na máquina).
+- O documento "E-mails do HiperCRM" (textos aprovados) fica na conta do Claude, não no repositório.
+
+---
 
 ## Publicado em 29/09/2026 (versão c3b02ec)
 
@@ -13,7 +74,7 @@ Autorizado pelo Filipe. crm.hiperbold.com.br roda a branch feat/planos-assinatur
 - Conferido no ar: health ok (supabase, redis), / com o logo, /precos 200, Entrar leva a /login, /app sem sessão manda ao login, sem erro de console.
 - Pendente: o cadastro na produção está em `so_convite`, então "Assinar" leva a um cadastro fechado (decisão do Filipe); o commit 8b98d2c (documento) ainda não foi para a main.
 
-## Ponto de retomada (28/09/2026, fase F8)
+## Ponto de retomada de 28/09/2026, fase F8 (histórico)
 
 Nada foi publicado nem enviado ao GitHub. Plano da fase: `hiperbold/planos/fase-F8-tarefas.md`.
 
@@ -30,14 +91,14 @@ Nada foi publicado nem enviado ao GitHub. Plano da fase: `hiperbold/planos/fase-
 
 **Próximo passo quando o Filipe responder:** as perguntas de `hiperbold/planos/progresso-da-noite.md`, na ordem de prioridade que ele recebeu. Publicar exige o checklist de D-075 e a conferência de D-076.
 
-## Onde está tudo agora
+## Onde estava tudo em 22/09/2026 (histórico)
 
 - **Produção** (`crm.hiperbold.com.br`): versão `02e4797`, publicada às 21h37, saudável. Traz a release 1.42.0 do autor original, as correções de segurança do webhook UAZAPI e a trava de dado de cliente nas conexões MCP.
 - **`main` do fork**: `7f35a92` (a versão de produção mais o registro da publicação).
 - **Branch `fix/debitos-pequenos-2026-09-22`**: quatro dívidas fechadas e os documentos do dia, commitados, **sem push e sem ir para produção**. Push no `main` dispara deploy sozinho, então essa branch espera decisão do Filipe.
 - Backup do banco de antes da publicação: `hiperbold-crm-2026-09-22_2120.dump`, em `D:\Hiperbold\backups\hiperbold-crm`.
 
-## O que foi publicado hoje
+## O que foi publicado em 22/09/2026 (histórico)
 
 A junção com o autor (D-028), 2298 arquivos, 18 conflitos resolvidos. Junto foram:
 
@@ -45,7 +106,7 @@ A junção com o autor (D-028), 2298 arquivos, 18 conflitos resolvidos. Junto fo
 - **A trava de dado de cliente nas conexões MCP (D-037)**: telefone, e-mail, CPF, CNPJ e endereço de WhatsApp não saem mais nos argumentos que vão para servidor de terceiro. Campo de código (`sku`, `ean`, `placa`) fica fora da regra de dígitos, senão código de barras seria confundido com telefone.
 - **Uma regressão grave, pega pela revisão antes de publicar**: a conferência nova comparava o NOME da instância contra o ID dela. Como os dois quase nunca são iguais, todo evento legítimo viraria "evento de outra conta", com resposta 200 que a UAZAPI não reentrega: o canal pararia de receber mensagem em silêncio.
 
-## O que está commitado e ainda não publicado
+## O que estava commitado e sem publicar em 22/09/2026 (histórico, já publicado)
 
 Na branch `fix/debitos-pequenos-2026-09-22`, commit `ca31fb5`:
 
@@ -58,7 +119,7 @@ Na branch `fix/debitos-pequenos-2026-09-22`, commit `ca31fb5`:
 
 Portões dessa branch: typecheck limpo, lint com 0 erros, `lint:channels` ok, unitários com **13.195 testes verdes**. O único vermelho é `e2e-parte-4-fala-com-os-servicos-do-runner`, que espera uma porta que no WSL não recusa conexão na hora. É ambiente, não código, e o caso leva 67 minutos para desistir.
 
-## O teste de ponta a ponta do CI está vermelho, e importa
+## O teste de ponta a ponta do CI em 22/09/2026 (histórico; em 09/10/2026 ci e e2e da main passaram verdes)
 
 Comparação entre as duas versões de produção:
 
@@ -77,7 +138,7 @@ Os 8 novos vieram da junção, e a maioria é colisão com escolhas nossas, não
 
 **Por que isso importa**: CI permanentemente vermelho é CI que ninguém lê, e o próximo defeito de verdade entra sem alarme.
 
-## Planos e assinatura: F1 a F5 fechadas, F6 em revisão visual, nada em produção
+## Planos e assinatura em 25/09/2026 (histórico; tudo publicado desde 29/09/2026)
 
 Branch `feat/planos-assinatura`, criada de `fix/debitos-pequenos-2026-09-22` (commit e5231de). Tudo em commit local, sem push e sem nada em produção. Migrações novas: 0904 (planos), 0905 (uso e trava), 0906 (carteira de tokens), 0907 (bloqueio), 0908 (estados da assinatura, F4), 0909 (cobrança pelo Asaas, F5, com as partes 1 a 8). O banco local de desenvolvimento está no modo `avisar`.
 
@@ -113,13 +174,13 @@ Achados de segurança desta rodada, todos corrigidos e provados no banco local: 
 
 ## Para retomar
 
-Ver `hiperbold/HANDOFF.md`, que tem a ordem sugerida e o contexto de cada item.
+O ponto de retomada atual é o bloco do topo deste arquivo. O `hiperbold/HANDOFF.md` é de 22/09/2026 e ficou como histórico das armadilhas e do contexto daquela fase.
 
 ## Ambiente local
 
 O WSL desliga junto com a máquina. Se o CRM local não abrir, o banco do Supabase costuma voltar sem rede Docker: `docker network connect supabase_network_deskcomm-crm supabase_db_deskcomm-crm`, esperar, e `docker restart supabase_rest_deskcomm-crm`. O servidor de desenvolvimento (`PORT=3300 pnpm dev`) precisa de uma sessão WSL aberta o tempo todo. O typecheck precisa de `NODE_OPTIONS=--max-old-space-size=6144`.
 
-O `gh` no repositório resolve para o remoto do AUTOR: sempre passar `-R hiperbold/DeskcommCRM`, senão você lê os fluxos dele achando que são nossos.
+O `gh` no repositório resolve para o remoto do AUTOR: sempre passar `-R hiperbold/hiperbold-crm`, senão você lê os fluxos dele achando que são nossos.
 
 ## Fluxo de teste no n8n
 

@@ -13,8 +13,8 @@ import { describe, expect, it } from "vitest";
 import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
 
 const REGISTRO = {
-  versao: "2026-09-23",
-  impressaoDaPagina: "5f0afbf045871a387e521ed3f8b61918a7bf75ca81cb87ce87334024b080f6ff",
+  versao: "2026-10-14",
+  impressaoDaPagina: "260833b6e2bf83958be2b7cfda107eadfa31a5ea80ad7cb2c60e68e52adcb72d",
 };
 
 describe("versão dos Termos de Uso", () => {
@@ -23,7 +23,7 @@ describe("versão dos Termos de Uso", () => {
   });
 
   it("o texto da página dos Termos é o que a versão vigente descreve", () => {
-    const pagina = readFileSync(join(process.cwd(), "app/legal/terms/page.tsx"), "utf8").replace(/\r\n/g, "\n");
+    const pagina = readFileSync(join(process.cwd(), "public/site/termos/index.html"), "utf8").replace(/\r\n/g, "\n");
     const impressao = createHash("sha256").update(pagina).digest("hex");
     expect(
       impressao,

@@ -18,7 +18,10 @@ trap 'rm -f "$SBENV"' EXIT
 npx --yes supabase@2.117.0 status -o env > "$SBENV"
 val() { grep -E "^$1=" "$SBENV" | head -1 | cut -d= -f2- | tr -d '"'; }
 
-G=/mnt/c/Users/nucle/.claude/.env
+# Arquivo de segredos global da máquina: /mnt/c no WSL, ~/.claude no Mac. No
+# Codespaces não existe nenhum dos dois e as chaves de IA ficam vazias.
+G="${HIPERBOLD_ENV:-/mnt/c/Users/nucle/.claude/.env}"
+[ -r "$G" ] || G="$HOME/.claude/.env"
 gval() { if [ -r "$G" ]; then grep -E "^$1=" "$G" | head -1 | cut -d= -f2- | tr -d '"\r'; fi; }
 
 umask 077

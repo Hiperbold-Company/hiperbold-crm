@@ -1,6 +1,6 @@
 name: Deploy no EasyPanel (Hiperbold)
 
-# Exclusivo do fork hiperbold/DeskcommCRM. Quando as três imagens do main foram
+# Exclusivo do fork hiperbold/hiperbold-crm. Quando as três imagens do main foram
 # publicadas no GHCR, pede ao EasyPanel para baixar e reiniciar app, worker e
 # scheduler. A VPS nunca compila: só puxa a imagem pronta.
 #
@@ -27,7 +27,7 @@ permissions: {}
 jobs:
   deploy:
     if: >-
-      github.repository == 'hiperbold/DeskcommCRM' &&
+      github.repository == 'hiperbold/hiperbold-crm' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-latest

@@ -2,6 +2,8 @@
 
 Escrito em 22/09/2026. Para quem retomar o trabalho, seja o Filipe ou outra sessão.
 
+> **Nota de 10/10/2026 (migração para Mac):** este arquivo é histórico. O ponto de retomada atual está no topo de `hiperbold/status.md`. Da seção 1 abaixo: o item 1.2 (branch `fix/debitos-pequenos-2026-09-22`) e o 1.7 (publicar `feat/planos-assinatura`) já foram publicados, e o 1.3 (D-050) foi conferido em 29/09/2026. Os demais valem pelo que estiver aberto em `hiperbold/DEBITO.md`. A seção 3 (armadilhas) continua útil.
+
 Leia antes: `hiperbold/status.md` (onde as coisas estão) e `hiperbold/DEBITO.md` (o que está pendente). Este arquivo diz o que fazer primeiro e por quê.
 
 ---

@@ -111,6 +111,10 @@ const nextConfig: NextConfig = {
         { source: "/robots.txt", destination: "/site/robots.txt" },
         { source: "/sitemap-index.xml", destination: "/site/sitemap-index.xml" },
         { source: "/sitemap-0.xml", destination: "/site/sitemap-0.xml" },
+        // Termos e Política da Hiperbold, aprovados pelo Filipe em 14/10/2026,
+        // no lugar das páginas genéricas de operador do autor (app/legal/).
+        { source: "/legal/terms", destination: "/site/termos/index.html" },
+        { source: "/legal/privacy", destination: "/site/privacidade/index.html" },
       ],
     };
   },

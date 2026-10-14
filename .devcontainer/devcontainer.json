@@ -1,0 +1,24 @@
+// Ambiente de desenvolvimento do fork Hiperbold na nuvem (GitHub Codespaces).
+// O Mac fica só com o código e o node_modules; o Supabase local, o Redis e o
+// app sobem aqui dentro, sob demanda. Passo a passo em hiperbold/README.md,
+// seção "Ambiente na nuvem (Codespaces)".
+//
+// Nenhum segredo de produção entra neste ambiente: o .env.local é gerado na
+// hora pelo hiperbold/scripts/dev-env.sh, com chaves aleatórias de desenvolvimento.
+{
+  "name": "Hiperbold CRM (desenvolvimento)",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  // O Supabase local são cerca de dez containers e o typecheck pede 6 GB.
+  "hostRequirements": { "cpus": 4, "memory": "16gb", "storage": "32gb" },
+  "postCreateCommand": "npm install -g --force pnpm@9.15.9 && pnpm install --frozen-lockfile",
+  "forwardPorts": [3300, 54321, 54323, 54324],
+  "portsAttributes": {
+    "3300": { "label": "Hiperbold CRM", "onAutoForward": "silent" },
+    "54321": { "label": "Supabase API", "onAutoForward": "silent" },
+    "54323": { "label": "Supabase Studio", "onAutoForward": "silent" },
+    "54324": { "label": "E-mails de teste", "onAutoForward": "silent" }
+  }
+}

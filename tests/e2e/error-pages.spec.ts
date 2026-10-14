@@ -48,9 +48,10 @@ test.describe("documentos legais", () => {
     expect(res?.status()).toBe(200);
     expect(new URL(page.url()).pathname).toBe("/legal/privacy");
     await expect(page.getByRole("heading", { name: /política de privacidade/i })).toBeVisible();
-    // Sem sessão não dá para saber a razão social, mas o documento não pode
-    // fingir que quem responde pelos dados é o projeto de software.
-    await expect(page.getByText(/operador desta instalação/i).first()).toBeVisible();
+    // Fork Hiperbold (14/10/2026): /legal/privacy serve a Política da Hiperbold,
+    // e quem responde pelos dados é a empresa, nomeada com CNPJ, nunca o projeto
+    // de software.
+    await expect(page.getByText(/Filipe José de Oliveira Lima Ltda\..*37\.267\.482\/0001-50/).first()).toBeVisible();
   });
 
   test("o vizinho de /legal continua fechado — a liberação é dos dois, não do prefixo", async ({
