@@ -43,6 +43,11 @@ Testes unitários no WSL: `bash hiperbold/scripts/test-unit.sh` (roda `pnpm test
 - Serviços no EasyPanel com o mesmo nome curto do `docker-compose.prod.yml` do autor, porque o nome curto é o endereço interno: `redis`, `srh`, `waha`, `app`, `worker`, `scheduler`.
 - Schema: o deploy só troca a imagem. Código que depende de coluna nova exige, ANTES do push, `bash hiperbold/scripts/prod-schema.sh` (re-aplica o `baseline.sql` idempotente e garante a chave de cifra).
 - Backup: `hiperbold/scripts/backup-prod.sh`, diário pela tarefa do Windows `HiperboldCRM-BackupBanco`, em `D:\Hiperbold\backups\hiperbold-crm` (30 dias). Restaurar num projeto Supabase novo: `pg_restore --no-owner --no-privileges -d <url> <arquivo>.dump`.
+- Backup diário (serviço `backup` no EasyPanel): imagem `ghcr.io/hiperbold/hiperbold-crm-backup:latest` (código em `hiperbold/backup/`, montada pelo workflow `backup-image.yml`). Todo dia na `HORA_DO_BACKUP` faz dois `pg_dump` (`public`+`auth`, e `private` em arquivo à parte), valida com `pg_restore --list` (mínimo 50 tabelas), cifra com `age` e envia os dois `.age` à pasta do Google Drive; recusa rodar sem `AGE_RECIPIENT`, nunca envia em claro.
+  - Variáveis: `SUPABASE_DB_URL`, `AGE_RECIPIENT` (chave pública `age1...`), `RCLONE_CONFIG_DRIVE_TOKEN` (JSON do OAuth), `RCLONE_CONFIG_DRIVE_ROOT_FOLDER_ID` (ID da pasta do Drive); opcionais `HORA_DO_BACKUP` (12:30), `TZ` (America/Sao_Paulo), `RETENCAO_LOCAL_DIAS` (7), `RETENCAO_DRIVE_DIAS` (30), `PASTA_LOCAL` (/backups). Monte um volume em `/backups`.
+  - Rodar uma vez, para testar: no terminal do serviço, `rodar.sh agora` (sai com 0 ou erro; a linha final é `backup ok: ...`, a de falha começa com `BACKUP FALHOU:`).
+  - Onde ficam: Drive (pasta pelo ID, 30 dias) e volume local (7 dias). Teste sem rede: `bash hiperbold/backup/teste-rodar.sh`.
+  - Restaurar: baixar os dois `.age` do Drive, `age -d -i <chave-privada> -o x.dump x.dump.age` (idem para o `-private`), e `pg_restore --no-owner --no-privileges -d <url> x.dump`. A chave privada nunca fica no serviço.
 - Segredos de produção: `.env.production` no WSL (fora do Git, só leitura do usuário). Nunca no chat, nunca em commit.
 
 ## O que é só do fork

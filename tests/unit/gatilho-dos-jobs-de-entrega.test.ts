@@ -244,6 +244,15 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
       "e scheduler. Desligado, as imagens publicam e a produção continua na versão antiga, sem " +
       "erro em lugar nenhum.",
   },
+  // Exclusivo do fork Hiperbold, sem condição: o workflow só dispara em push na `main`
+  // que mexe em `hiperbold/backup/**` (ou nele mesmo) e no dispatch manual.
+  "backup-image.yml::publicar": {
+    condicao: null,
+    efeito:
+      "Este job publica a imagem do serviço `backup` do EasyPanel (pg_dump 17 + age + rclone). " +
+      "Sem ele, a imagem do backup diário do banco de produção não se atualiza no GHCR e o " +
+      "serviço segue com o script antigo, sem erro em lugar nenhum.",
+  },
   "acolhida.yml::acolher": {
     condicao:
       "github.repository_owner == 'melgarafael' && " +

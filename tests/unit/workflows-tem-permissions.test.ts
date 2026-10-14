@@ -61,6 +61,9 @@ const ESCRITA_JUSTIFICADA: Record<string, string> = {
     "release (abrir o PR de release). Limita o App ao mínimo (D-162)",
   "publish-image.yml::packages: write":
     "publica a imagem do app no GHCR — é o artefato que o self-hoster instala",
+  "backup-image.yml::packages: write":
+    "publica no GHCR a imagem do serviço de backup diário do fork Hiperbold (hiperbold/backup/); " +
+    "o workflow só dispara em push na main que mexe nessa pasta, sem segredo de cliente",
   "vigia-de-colisao.yml::pull-requests: write":
     "comenta e rotula o PR cujo número de migration foi tomado depois de ele ficar verde; " +
     "é o mínimo que escreve (um comentário editado por PR + o rótulo), o workflow não roda " +
