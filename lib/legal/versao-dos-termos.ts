@@ -1,5 +1,7 @@
 /**
- * A versão VIGENTE dos Termos de Uso (`app/legal/terms/page.tsx`).
+ * A versão VIGENTE dos Termos de Uso. Desde 14/10/2026 o texto publicado em `/legal/terms` é o
+ * da Hiperbold (`public/site/termos/index.html`, exportado do hipercrm-site), não mais o
+ * `app/legal/terms/page.tsx` do autor.
  *
  * Fonte única: a tela de compra (`/app/settings/plano/assinar`) manda esta versão junto com o
  * aceite, o servidor recusa a compra sem ela ou com versão velha, e o pedido (`billing_orders.
@@ -11,4 +13,4 @@
  * Termos mudar de forma que importe: o teste `tests/unit/versao-dos-termos.test.ts` guarda a
  * impressão digital do arquivo da página e falha quando o texto muda sem a versão acompanhar.
  */
-export const VERSAO_DOS_TERMOS = "2026-09-23";
+export const VERSAO_DOS_TERMOS = "2026-10-14";
