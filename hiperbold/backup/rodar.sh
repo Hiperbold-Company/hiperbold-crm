@@ -199,6 +199,12 @@ laco() {
   local s
   trap 'log "sinal recebido, encerrando"; exit 0' TERM INT
   log "serviço de backup no ar: todo dia às $HORA_DO_BACKUP ($TZ)"
+  # RODAR_AO_INICIAR=1 faz uma rodada assim que o serviço sobe:
+  # serve para conferir um deploy novo (ou a primeira instalação) sem esperar o horário.
+  if [ "${RODAR_AO_INICIAR:-0}" = "1" ]; then
+    log "RODAR_AO_INICIAR=1: rodada imediata"
+    bash "${BASH_SOURCE[0]}" agora || log "a rodada inicial falhou (veja BACKUP FALHOU acima)"
+  fi
   while true; do
     s="$(segundos_ate_proxima "$HORA_DO_BACKUP")"
     log "próximo backup em ${s}s"
