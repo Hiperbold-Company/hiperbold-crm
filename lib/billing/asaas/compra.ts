@@ -450,6 +450,9 @@ export const MENSAGEM_PARCELAMENTO_INDISPONIVEL =
   "O parcelamento só está disponível no cartão de crédito, no plano semestral (até 6x) e no anual (até 12x).";
 /** Falha que o cliente pode repetir: nada ficou gravado como definitivo. */
 export const MENSAGEM_TENTE_NOVAMENTE = "Não foi possível concluir agora. Tente novamente em instantes.";
+/** 0955: cupom só vale em assinatura que cobra agora (ver criarAssinaturaEDevolver). */
+export const MENSAGEM_CUPOM_ASSINATURA_AGENDADA =
+  "O cupom vale para assinatura que começa a cobrar agora. Sua conta ainda tem um período pago: use o cupom quando ele terminar.";
 export const MENSAGEM_OUTRA_OFERTA_ABERTA =
   "Há um pedido em aberto de outra opção. Conclua ou peça para cancelar antes de escolher outra.";
 
@@ -1156,6 +1159,16 @@ async function criarAssinaturaEDevolver(
   agora: Date,
 ): Promise<ResultadoIniciarCompra> {
   const nextDueDate = proximaCobrancaEm ?? dataSaoPaulo(agora);
+  // 0955 (revisão do PR #10): com período pago ainda correndo, a assinatura nasce agendada para o fim dele, e
+  // o Asaas só gera a primeira cobrança cerca de 40 dias antes do vencimento. Não haveria cobrança para
+  // rebaixar agora, e nada rebaixaria depois: o desconto se perderia em silêncio. Cupom só com cobrança hoje.
+  if (descontoNaPrimeiraCobranca(pedido) && nextDueDate > dataSaoPaulo(agora)) {
+    const marcado = await deps.db.marcarPedido(org, pedido.id, "falhou", "cupom_assinatura_agendada");
+    if (marcado.error) {
+      deps.logger.error("asaas_compra_marcar_cupom_agendado_falhou", { pedidoId: pedido.id, codigo: marcado.error.code });
+    }
+    return { tipo: "erro", mensagem: MENSAGEM_CUPOM_ASSINATURA_AGENDADA };
+  }
   let assinatura: AssinaturaAsaas;
   try {
     assinatura = await deps.asaas.criarAssinatura({

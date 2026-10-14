@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   iniciarCompra,
   MENSAGEM_AGUARDE,
+  MENSAGEM_CUPOM_ASSINATURA_AGENDADA,
   MENSAGEM_GENERICA,
   MENSAGEM_OUTRA_OFERTA_ABERTA,
   MENSAGEM_TENTE_NOVAMENTE,
@@ -113,7 +114,11 @@ function assinatura(): AssinaturaAsaas {
 }
 
 /** Banco em memória: o pedido muda como mudaria com as RPCs reais; `ordem` registra a sequência das chamadas. */
-function montarBanco(pedidoInicial: PedidoLinha, ordem: string[], opcoes: { erroCriar?: { code: string; message: string } } = {}) {
+function montarBanco(
+  pedidoInicial: PedidoLinha,
+  ordem: string[],
+  opcoes: { erroCriar?: { code: string; message: string }; proximaCobrancaEm?: string | null } = {},
+) {
   let pedido = { ...pedidoInicial };
   const db: DbCompra = {
     criarPedido: vi.fn(async () => {
@@ -126,7 +131,7 @@ function montarBanco(pedidoInicial: PedidoLinha, ordem: string[], opcoes: { erro
           parcelas: pedido.parcelas ?? 1,
           descontoCents: pedido.descontoCents ?? 0,
           jaExistia: false,
-          proximaCobrancaEm: null,
+          proximaCobrancaEm: opcoes.proximaCobrancaEm ?? null,
         },
         error: null,
       };
@@ -339,6 +344,35 @@ describe("cupom: assinatura no cartão à vista (primeira cobrança rebaixada)",
     });
     expect(pedido().status).toBe("aguardando_pagamento");
     expect(pedido().amountCents).toBe(TOTAL);
+  });
+
+  it("com período pago correndo (assinatura agendada), recusa o cupom antes de criar qualquer coisa no Asaas", async () => {
+    const ordem: string[] = [];
+    const { db, pedido } = montarBanco(pedidoComCupom(), ordem, { proximaCobrancaEm: "2099-01-31" });
+    const asaas = montarAsaas(ordem);
+    const { d } = deps(db, asaas);
+
+    const r = await iniciarCompra(d, ENTRADA);
+
+    expect(r).toEqual({ tipo: "erro", mensagem: MENSAGEM_CUPOM_ASSINATURA_AGENDADA });
+    expect(asaas.criarAssinatura).not.toHaveBeenCalled();
+    expect(asaas.atualizarValorDaCobranca).not.toHaveBeenCalled();
+    expect(pedido().status).toBe("falhou");
+  });
+
+  it("sem cupom, a assinatura agendada segue como antes (nasce para o fim do período pago)", async () => {
+    const ordem: string[] = [];
+    const { db } = montarBanco(
+      pedidoComCupom({ descontoCents: 0, precoCheioCents: null, cupomCodigo: null, amountCents: PRECO_CHEIO }),
+      ordem,
+      { proximaCobrancaEm: "2099-01-31" },
+    );
+    const asaas = montarAsaas(ordem);
+    const { d } = deps(db, asaas);
+
+    await iniciarCompra(d, { ...ENTRADA, cupom: undefined });
+
+    expect(asaas.criarAssinatura).toHaveBeenCalledWith(expect.objectContaining({ nextDueDate: "2099-01-31" }));
   });
 
   it("mensal tem o mesmo desenho", async () => {
