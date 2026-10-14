@@ -49,6 +49,20 @@ confere "AGE_RECIPIENT que não começa com age1 é recusada" $?
 [[ "$saida" != *"senha-secreta"* && "$saida" != *"access_token"* ]]
 confere "a saída não vaza segredo" $?
 
+# Saúde: as marcas no volume decidem o HEALTHCHECK.
+d="$(mktemp -d)"
+saude_em() { env -i PATH="$PATH" PASTA_LOCAL="$d" bash "$SCRIPT" saude >/dev/null 2>&1; }
+saude_em; [ $? -ne 0 ]; confere "saude sem marca nenhuma é doente" $?
+: >"$d/.iniciado"; saude_em; confere "saude recém-iniciado, sem rodada, é saudável" $?
+sleep 1; : >"$d/.ultima-falha"; saude_em; [ $? -ne 0 ]; confere "saude com falha depois do início é doente" $?
+sleep 1; : >"$d/.ultimo-sucesso"; saude_em; confere "saude com sucesso mais novo que a falha é saudável" $?
+touch -t "$(date -v-2d +%Y%m%d%H%M 2>/dev/null || date -d '-2 days' +%Y%m%d%H%M)" "$d/.ultimo-sucesso" "$d/.ultima-falha" "$d/.iniciado"
+saude_em; [ $? -ne 0 ]; confere "saude com último sucesso de 2 dias atrás é doente" $?
+# Recusa por variável marca falha no volume (o serviço fica doente, não mudo).
+rm -f "$d/.ultima-falha"; env -i PATH="$PATH" PASTA_LOCAL="$d" bash "$SCRIPT" agora >/dev/null 2>&1
+[ -e "$d/.ultima-falha" ]; confere "rodada recusada deixa a marca de falha" $?
+rm -rf "$d"
+
 # Função de espera: carrega só as funções (guarda BASH_SOURCE) e mede.
 # shellcheck disable=SC1090
 source "$SCRIPT"

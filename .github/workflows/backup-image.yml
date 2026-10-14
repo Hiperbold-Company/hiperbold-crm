@@ -14,15 +14,53 @@ on:
     paths:
       - "hiperbold/backup/**"
       - ".github/workflows/backup-image.yml"
+  # Em PR a imagem é montada e o teste do script roda, sem publicar: um Dockerfile
+  # ou script quebrado reprova ANTES do merge, nunca troca o `latest` do backup.
+  pull_request:
+    paths:
+      - "hiperbold/backup/**"
+      - ".github/workflows/backup-image.yml"
   workflow_dispatch: {}
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  publicar:
+  provar:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Teste do script (sem rede e sem banco)
+        run: bash -n hiperbold/backup/rodar.sh && bash hiperbold/backup/teste-rodar.sh
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Montar a imagem sem publicar
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: hiperbold/backup
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: teste-backup:pr
+          cache-from: type=gha,scope=backup
+
+      - name: A imagem recusa subir sem as variáveis
+        run: |
+          set +e
+          saida="$(docker run --rm teste-backup:pr agora 2>&1)"; codigo=$?
+          echo "$saida"
+          [ "$codigo" -ne 0 ] && echo "$saida" | grep -q 'BACKUP FALHOU: AGE_RECIPIENT'
+
+  publicar:
+    needs: provar
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 

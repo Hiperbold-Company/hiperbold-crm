@@ -40,9 +40,34 @@ export TZ="${TZ:-America/Sao_Paulo}"
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
 
 # Falha alto, com o prefixo que o monitoramento procura, e sai com erro.
+# Marcas de estado no volume, lidas por `rodar.sh saude` (HEALTHCHECK do
+# Dockerfile): sem elas uma falha diária só existiria no log, e o EasyPanel
+# seguiria mostrando o serviço saudável enquanto a produção fica sem backup.
+MARCA_SUCESSO=".ultimo-sucesso"
+MARCA_FALHA=".ultima-falha"
+MARCA_INICIO=".iniciado"
+marcar() { [ -d "$PASTA_LOCAL" ] && : >"$PASTA_LOCAL/$1" 2>/dev/null || true; }
+
 falhar() {
   printf '%s BACKUP FALHOU: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
+  marcar "$MARCA_FALHA"
   exit 1
+}
+
+# Saudável quando a última rodada deu certo e foi há menos de 26 h, ou quando o
+# serviço subiu há menos de 26 h e ainda não houve rodada. Falha mais nova que o
+# último sucesso, ou sucesso velho demais, é doente.
+mtime() { [ -e "$1" ] && date -r "$1" +%s || echo 0; }
+saude() {
+  local agora s f i limite=$((26 * 3600))
+  agora="$(date +%s)"
+  s="$(mtime "$PASTA_LOCAL/$MARCA_SUCESSO")"
+  f="$(mtime "$PASTA_LOCAL/$MARCA_FALHA")"
+  i="$(mtime "$PASTA_LOCAL/$MARCA_INICIO")"
+  if [ "$f" -gt "$s" ]; then echo "doente: a última rodada falhou"; return 1; fi
+  if [ "$s" -gt 0 ] && [ $((agora - s)) -lt "$limite" ]; then echo "saudável: último backup há $(((agora - s) / 60)) min"; return 0; fi
+  if [ "$s" -eq 0 ] && [ "$i" -gt 0 ] && [ $((agora - i)) -lt "$limite" ]; then echo "saudável: aguardando a primeira rodada"; return 0; fi
+  echo "doente: nenhum backup bem-sucedido nas últimas 26 h"; return 1
 }
 
 # Repassa o texto trocando URL do banco, senha, token e ID da pasta por marcadores,
@@ -190,6 +215,7 @@ rodada() {
   find "$PASTA_LOCAL" -maxdepth 1 -name 'hiperbold-crm-*.age' -mtime +"$RETENCAO_LOCAL_DIAS" -delete \
     || log "AVISO: não consegui apagar backups locais antigos."
 
+  marcar "$MARCA_SUCESSO"
   log "backup ok: ${enviados[0]} e ${enviados[1]}, $(cd "$PASTA_LOCAL" && du -ch "${enviados[@]}" | tail -1 | cut -f1), $tabelas tabelas, enviado ao Drive"
 }
 
@@ -198,6 +224,8 @@ rodada() {
 laco() {
   local s
   trap 'log "sinal recebido, encerrando"; exit 0' TERM INT
+  mkdir -p "$PASTA_LOCAL"
+  marcar "$MARCA_INICIO"
   log "serviço de backup no ar: todo dia às $HORA_DO_BACKUP ($TZ)"
   # RODAR_AO_INICIAR=1 faz uma rodada assim que o serviço sobe:
   # serve para conferir um deploy novo (ou a primeira instalação) sem esperar o horário.
@@ -223,8 +251,9 @@ principal() {
   trap 'falhar "erro inesperado na linha $LINENO"' ERR
   case "${1:-}" in
     agora) conferir_ambiente; rodada ;;
+    saude) trap - ERR; saude ;;
     "") conferir_ambiente; laco ;;
-    *) echo "uso: rodar.sh [agora]" >&2; exit 2 ;;
+    *) echo "uso: rodar.sh [agora|saude]" >&2; exit 2 ;;
   esac
 }
 

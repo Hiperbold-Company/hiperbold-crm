@@ -15,5 +15,10 @@ RUN chmod 755 /usr/local/bin/rodar.sh \
 # Roda como o usuário `postgres` da imagem (não root). Volume nomeado montado em
 # /backups herda o dono desta pasta e funciona. Se o EasyPanel montar o volume como
 # root (bind mount), ajuste a permissão do volume ou rode o serviço com `user: root`.
+# Saúde = último backup bem-sucedido há menos de 26 h (ou serviço recém-subido sem
+# rodada ainda). Rodada que falha deixa o serviço doente no EasyPanel, em vez de
+# só uma linha no log que ninguém lê.
+HEALTHCHECK --interval=10m --timeout=20s --start-period=5m --retries=2 CMD ["/usr/local/bin/rodar.sh", "saude"]
+
 USER postgres
 ENTRYPOINT ["/usr/local/bin/rodar.sh"]

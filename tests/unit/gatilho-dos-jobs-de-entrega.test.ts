@@ -246,12 +246,20 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   },
   // Exclusivo do fork Hiperbold, sem condição: o workflow só dispara em push na `main`
   // que mexe em `hiperbold/backup/**` (ou nele mesmo) e no dispatch manual.
-  "backup-image.yml::publicar": {
+  "backup-image.yml::provar": {
     condicao: null,
+    efeito:
+      "Este job monta a imagem do serviço `backup` sem publicar e roda o teste do script, em PR " +
+      "e na main. Sem ele, um Dockerfile ou script quebrado só apareceria depois do merge, já " +
+      "publicado como `latest` da imagem do backup diário.",
+  },
+  "backup-image.yml::publicar": {
+    condicao: "github.event_name != 'pull_request'",
     efeito:
       "Este job publica a imagem do serviço `backup` do EasyPanel (pg_dump 17 + age + rclone). " +
       "Sem ele, a imagem do backup diário do banco de produção não se atualiza no GHCR e o " +
-      "serviço segue com o script antigo, sem erro em lugar nenhum.",
+      "serviço segue com o script antigo, sem erro em lugar nenhum. Em PR ele fica de fora de " +
+      "propósito: quem prova o PR é o job `provar`, e PR não publica imagem.",
   },
   "acolhida.yml::acolher": {
     condicao:
