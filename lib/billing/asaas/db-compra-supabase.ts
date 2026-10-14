@@ -33,6 +33,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AmbienteAsaas } from "./config";
+import type { DbSimulacaoDeCupom, SimulacaoBruta } from "./cupom";
 import type {
   CicloPedido,
   ContratoAsaas,
@@ -51,7 +52,7 @@ import type {
 const ESTADOS_ABERTOS: StatusPedido[] = ["criado", "aguardando_pagamento", "inconclusivo", "processando"];
 
 const COLUNAS_PEDIDO =
-  "id, status, tipo, ambiente, metodo, amount_cents, external_reference, asaas_payment_id, asaas_subscription_id, invoice_url, ciclo, plan_id, pacote_id, updated_at, parcelas, asaas_installment_id";
+  "id, status, tipo, ambiente, metodo, amount_cents, external_reference, asaas_payment_id, asaas_subscription_id, invoice_url, ciclo, plan_id, pacote_id, updated_at, parcelas, asaas_installment_id, cupom_id, desconto_cents, preco_cheio_cents";
 
 interface LinhaBillingOrders {
   id: string;
@@ -69,6 +70,10 @@ interface LinhaBillingOrders {
   pacote_id: string | null;
   parcelas: number;
   asaas_installment_id: string | null;
+  /** 0955: cupom do pedido, desconto em centavos e preço cheio do ciclo (só com cupom). */
+  cupom_id: string | null;
+  desconto_cents: number;
+  preco_cheio_cents: number | null;
   /** Correção 10 (tarefa 17): `cancelarPedidoAberto` usa para o gate de 15 minutos em `processando`. */
   updated_at: string;
 }
@@ -108,12 +113,20 @@ async function nomesDoPedido(
   return { planoNome, pacoteNome, planCode, pacoteCode };
 }
 
+/** 0955: o código do cupom do pedido (`billing_cupons.codigo`), nulo sem cupom. */
+async function codigoDoCupom(admin: SupabaseClient, cupomId: string | null): Promise<string | null> {
+  if (!cupomId) return null;
+  const { data } = await admin.from("billing_cupons" as never).select("codigo").eq("id", cupomId).maybeSingle();
+  return (data as { codigo: string } | null)?.codigo ?? null;
+}
+
 function paraPedidoLinha(
   row: LinhaBillingOrders,
   planoNome: string | null,
   pacoteNome: string | null,
   planCode: string | null,
   pacoteCode: string | null,
+  cupomCodigo: string | null,
 ): PedidoLinha {
   return {
     id: row.id,
@@ -128,6 +141,9 @@ function paraPedidoLinha(
     invoiceUrl: row.invoice_url,
     parcelas: row.parcelas ?? 1,
     asaasInstallmentId: row.asaas_installment_id ?? null,
+    descontoCents: row.desconto_cents ?? 0,
+    precoCheioCents: row.preco_cheio_cents ?? null,
+    cupomCodigo,
     ciclo: row.ciclo as CicloPedido | null,
     planoNome,
     pacoteNome,
@@ -142,7 +158,7 @@ function paraPedidoLinha(
  * de verdade (`createAdminClient()`). Cada método é um RPC ou uma leitura
  * pura; nenhum aqui decide regra de negócio, isso é `compra.ts`.
  */
-export function dbCompraSupabase(admin: SupabaseClient): DbCompra {
+export function dbCompraSupabase(admin: SupabaseClient): DbCompra & DbSimulacaoDeCupom {
   return {
     async criarPedido(args) {
       const { data, error } = await admin.rpc("fn_billing_criar_pedido" as never, {
@@ -158,6 +174,8 @@ export function dbCompraSupabase(admin: SupabaseClient): DbCompra {
         p_termos_versao: args.termosVersao,
         p_parcelas: args.parcelas,
         p_total_cents: args.totalCents,
+        p_cupom_codigo: args.cupom,
+        p_pagador_impressao: args.pagadorImpressao,
       } as never);
       if (error) return { data: null, error: error as RpcErro };
       const d = data as {
@@ -165,6 +183,7 @@ export function dbCompraSupabase(admin: SupabaseClient): DbCompra {
         external_reference: string;
         amount_cents: number;
         parcelas?: number;
+        desconto_cents?: number;
         ja_existia: boolean;
         proxima_cobranca_em: string | null;
       } | null;
@@ -174,10 +193,23 @@ export function dbCompraSupabase(admin: SupabaseClient): DbCompra {
         externalReference: d.external_reference,
         amountCents: d.amount_cents,
         parcelas: d.parcelas ?? 1,
+        descontoCents: d.desconto_cents ?? 0,
         jaExistia: d.ja_existia,
         proximaCobrancaEm: d.proxima_cobranca_em,
       };
       return { data: criado, error: null };
+    },
+
+    async simularCupom(args) {
+      const { data, error } = await admin.rpc("fn_billing_cupom_simular" as never, {
+        p_org: args.org,
+        p_codigo: args.codigo,
+        p_plan_code: args.planCode,
+        p_ciclo: args.ciclo,
+        p_parcelas: args.parcelas,
+      } as never);
+      if (error) return { data: null, error: error as RpcErro };
+      return { data: (data as SimulacaoBruta | null) ?? null, error: null };
     },
 
     async lerParcelamentoDoPlano(planCode, ciclo) {
@@ -244,7 +276,8 @@ export function dbCompraSupabase(admin: SupabaseClient): DbCompra {
       const row = data as LinhaBillingOrders | null;
       if (!row) return { data: null, error: null };
       const { planoNome, pacoteNome, planCode, pacoteCode } = await nomesDoPedido(admin, row.plan_id, row.pacote_id);
-      return { data: paraPedidoLinha(row, planoNome, pacoteNome, planCode, pacoteCode), error: null };
+      const cupomCodigo = await codigoDoCupom(admin, row.cupom_id);
+      return { data: paraPedidoLinha(row, planoNome, pacoteNome, planCode, pacoteCode, cupomCodigo), error: null };
     },
 
     async tomarPedido(org, pedidoId) {
@@ -270,7 +303,8 @@ export function dbCompraSupabase(admin: SupabaseClient): DbCompra {
       const row = data as LinhaBillingOrders | null;
       if (!row) return { data: null, error: null };
       const { planoNome, pacoteNome, planCode, pacoteCode } = await nomesDoPedido(admin, row.plan_id, row.pacote_id);
-      return { data: paraPedidoLinha(row, planoNome, pacoteNome, planCode, pacoteCode), error: null };
+      const cupomCodigo = await codigoDoCupom(admin, row.cupom_id);
+      return { data: paraPedidoLinha(row, planoNome, pacoteNome, planCode, pacoteCode, cupomCodigo), error: null };
     },
 
     async buscarVinculoClienteAsaas(org, ambiente) {

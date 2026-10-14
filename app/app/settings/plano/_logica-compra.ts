@@ -208,6 +208,11 @@ export interface EscolhaDeAssinatura {
   metodo: "CREDIT_CARD" | "PIX";
   /** D-177: parcelas no cartão (1 = à vista). */
   parcelas?: number;
+  /**
+   * 0955: o código do cupom aplicado (sem diferença de maiúsculas e minúsculas). O servidor recusa a MESMA
+   * chave com cupom diferente, então o cupom faz parte da escolha: mudou o cupom, mudou a chave.
+   */
+  cupom?: string;
 }
 
 export interface EscolhaDePacote {
@@ -255,7 +260,11 @@ export function classificarDesfechoDaTentativa(resultado: {
 function mesmaEscolhaDeCompra(a: EscolhaDeCompra, b: EscolhaDeCompra): boolean {
   if (a.tipo === "assinatura" && b.tipo === "assinatura") {
     return (
-      a.planCode === b.planCode && a.ciclo === b.ciclo && a.metodo === b.metodo && (a.parcelas ?? 1) === (b.parcelas ?? 1)
+      a.planCode === b.planCode &&
+      a.ciclo === b.ciclo &&
+      a.metodo === b.metodo &&
+      (a.parcelas ?? 1) === (b.parcelas ?? 1) &&
+      (a.cupom ?? "").toLowerCase() === (b.cupom ?? "").toLowerCase()
     );
   }
   if (a.tipo === "pacote_tokens" && b.tipo === "pacote_tokens") {

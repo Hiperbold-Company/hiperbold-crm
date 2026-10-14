@@ -216,6 +216,22 @@ describe("chaveParaProximaTentativaDeCompra: correção 6, decisão 13 do lado d
     expect(chave).not.toBe("chave-em-voo");
   });
 
+  it("0955: o cupom faz parte da escolha: mudou o cupom (pôr, tirar ou trocar) depois de 'aguarde', chave NOVA; o mesmo cupom (mesmo em outra caixa), a MESMA", () => {
+    const comCupom: EscolhaDeCompra = { ...ASSINATURA_PRO_MENSAL_CARTAO, cupom: "PCT10" };
+    const chaveDe = (atual: EscolhaDeCompra, anterior: EscolhaDeCompra) =>
+      chaveParaProximaTentativaDeCompra({
+        chaveAtual: "chave-em-voo",
+        escolhaAtual: atual,
+        tentativaAnterior: { escolha: anterior, desfecho: "aguarde" },
+      });
+
+    expect(chaveDe(comCupom, comCupom)).toBe("chave-em-voo");
+    expect(chaveDe({ ...comCupom, cupom: "pct10" }, comCupom)).toBe("chave-em-voo");
+    expect(chaveDe(ASSINATURA_PRO_MENSAL_CARTAO, comCupom)).not.toBe("chave-em-voo");
+    expect(chaveDe(comCupom, ASSINATURA_PRO_MENSAL_CARTAO)).not.toBe("chave-em-voo");
+    expect(chaveDe({ ...comCupom, cupom: "OUTRO20" }, comCupom)).not.toBe("chave-em-voo");
+  });
+
   it("mesma escolha, mas desfecho anterior TERMINAL (validação, falhou, cancelado): chave NOVA", () => {
     for (const mensagem of [
       "Este pedido já foi pago.",

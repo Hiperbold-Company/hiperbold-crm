@@ -133,6 +133,7 @@ import { centavosParaReais, dataSaoPaulo } from "./dinheiro";
 import { documentoValido } from "./documento";
 import { calcularParcelamento, parcelasValidas, type ParametrosDeParcelamento } from "./parcelamento";
 import { ErroAsaasException } from "./erros";
+import { impressaoDoPagador, mensagemDoErroDeCupom, mesmoCodigoDeCupom } from "./cupom";
 
 // ─── Tipos de entrada/saída ─────────────────────────────────────────────
 
@@ -203,6 +204,11 @@ export interface EntradaIniciarCompra {
   parcelas?: number;
   /** D-133: a versão dos Termos de Uso que o cliente aceitou (`lib/legal/versao-dos-termos.ts`). Sem ela a compra é recusada. */
   termosVersao: string;
+  /**
+   * Cupom de desconto (0955), só na compra de plano: o CÓDIGO digitado. O desconto, o piso de R$ 5,00 e a
+   * validade são do banco (`fn_billing_criar_pedido`); o navegador nunca manda valor.
+   */
+  cupom?: string;
 }
 
 export interface QrPixResposta {
@@ -211,9 +217,15 @@ export interface QrPixResposta {
   expirationDate: string | null;
 }
 
+/** O cupom que o pedido levou, para a auditoria da ação (só o código e o desconto, nunca dado pessoal). */
+export interface CupomDoResultado {
+  codigo: string;
+  descontoCents: number;
+}
+
 export type ResultadoIniciarCompra =
-  | { tipo: "redirecionar"; url: string }
-  | { tipo: "pix"; pedidoId: string; qr: QrPixResposta }
+  | { tipo: "redirecionar"; url: string; cupom?: CupomDoResultado }
+  | { tipo: "pix"; pedidoId: string; qr: QrPixResposta; cupom?: CupomDoResultado }
   | { tipo: "erro"; mensagem: string };
 
 export type ResultadoCancelarAssinatura =
@@ -238,6 +250,8 @@ export interface PedidoCriado {
   externalReference: string;
   amountCents: number;
   parcelas?: number;
+  /** 0955: desconto do cupom em centavos (0 sem cupom). */
+  descontoCents?: number;
   jaExistia: boolean;
   /** `AAAA-MM-DD`, só quando o período do contrato ainda está no futuro (decisão 26). */
   proximaCobrancaEm: string | null;
@@ -271,6 +285,12 @@ export interface PedidoLinha {
   /** D-177: 1 = à vista; de 2 em diante é cobrança parcelada avulsa (`amountCents` é o total com juros). */
   parcelas?: number;
   asaasInstallmentId?: string | null;
+  /** 0955: desconto do cupom em centavos (0 sem cupom). `amountCents` já é o total com desconto. */
+  descontoCents?: number;
+  /** 0955: preço cheio do ciclo no momento do pedido, só com cupom. É o valor da assinatura do Asaas, que renova no preço cheio. */
+  precoCheioCents?: number | null;
+  /** 0955: o código do cupom do pedido (`billing_cupons.codigo`), nulo sem cupom. */
+  cupomCodigo?: string | null;
   ciclo: CicloPedido | null;
   planoNome: string | null;
   pacoteNome: string | null;
@@ -318,6 +338,10 @@ export interface DbCompra {
     parcelas: number;
     /** D-177: o total que o servidor calculou, só para o banco conferir (nulo à vista). */
     totalCents: number | null;
+    /** 0955: o código do cupom digitado (nulo sem cupom). */
+    cupom: string | null;
+    /** 0955: impressão (HMAC) do CPF/CNPJ do pagador, só com cupom e documento conhecido. Nunca o documento. */
+    pagadorImpressao: string | null;
   }): Promise<RpcResultado<PedidoCriado>>;
 
   /** D-177: o preço do ciclo do plano e os parâmetros de parcelamento de `billing_settings` (leitura pura). */
@@ -424,6 +448,8 @@ export const MENSAGEM_TERMOS_NAO_ACEITOS = "Aceite os Termos de Uso para continu
 /** D-177: parcelamento fora da regra (ciclo, método, teto). */
 export const MENSAGEM_PARCELAMENTO_INDISPONIVEL =
   "O parcelamento só está disponível no cartão de crédito, no plano semestral (até 6x) e no anual (até 12x).";
+/** Falha que o cliente pode repetir: nada ficou gravado como definitivo. */
+export const MENSAGEM_TENTE_NOVAMENTE = "Não foi possível concluir agora. Tente novamente em instantes.";
 export const MENSAGEM_OUTRA_OFERTA_ABERTA =
   "Há um pedido em aberto de outra opção. Conclua ou peça para cancelar antes de escolher outra.";
 
@@ -450,6 +476,8 @@ function contemCodigo(erro: RpcErro | null | undefined, codigo: string): boolean
  * retomada (M9), antes desta função ser chamada.
  */
 function mensagemDoErroDoPedido(erro: RpcErro): string {
+  const doCupom = mensagemDoErroDeCupom(erro.message);
+  if (doCupom) return doCupom;
   if (contemCodigo(erro, "billing_compra_desligada")) {
     return "A compra pela tela ainda não está disponível. Fale com o suporte.";
   }
@@ -528,6 +556,9 @@ function mesmaOfertaDoPedidoAberto(pedido: PedidoLinha, entrada: EntradaIniciarC
   if (pedido.metodo !== entrada.metodo) return false;
   if (pedido.tipo === "assinatura") {
     if ((pedido.parcelas ?? 1) !== (entrada.parcelas ?? 1)) return false;
+    // 0955: o cupom é parte da oferta. Retomar o pedido aberto com outro cupom (ou sem) mudaria o valor que o
+    // cliente viu.
+    if (!mesmoCodigoDeCupom(pedido.cupomCodigo, entrada.cupom)) return false;
     return pedido.planCode === (entrada.planCode ?? null) && pedido.ciclo === (entrada.ciclo ?? null);
   }
   return pedido.pacoteCode === (entrada.pacote ?? null);
@@ -559,7 +590,11 @@ async function resolverPedido(
     if (!parcelasValidas(entrada.ciclo, parcelas, oferta.data.parametros)) {
       return { tipo: "erro", mensagem: MENSAGEM_PARCELAMENTO_INDISPONIVEL };
     }
-    totalCents = calcularParcelamento(oferta.data.precoCents, parcelas, oferta.data.parametros).totalCents;
+    // 0955: com cupom o desconto é do banco, que calcula o total do parcelamento sobre o preço já descontado;
+    // aqui não há total para conferir (nulo). Sem cupom o banco confere o total calculado no servidor.
+    totalCents = entrada.cupom
+      ? null
+      : calcularParcelamento(oferta.data.precoCents, parcelas, oferta.data.parametros).totalCents;
   }
 
   const criado = await deps.db.criarPedido({
@@ -575,6 +610,8 @@ async function resolverPedido(
     termosVersao: entrada.termosVersao,
     parcelas,
     totalCents,
+    cupom: entrada.cupom ?? null,
+    pagadorImpressao: entrada.cupom ? impressaoDoPagador(entrada.pagador?.documento) : null,
   });
 
   if (!criado.error) {
@@ -682,7 +719,7 @@ async function reconsultarFaturaEDevolver(deps: DepsCompra, org: string, pedido:
   try {
     if (pedido.asaasSubscriptionId) {
       const cobrancas = await deps.asaas.listarCobrancasDaAssinatura(pedido.asaasSubscriptionId);
-      cobranca = cobrancas[0] ?? null;
+      cobranca = escolherPrimeiraCobranca(cobrancas, pedido);
     } else if (pedido.asaasPaymentId) {
       const resultado = await deps.asaas.buscarCobranca(pedido.asaasPaymentId);
       cobranca = "removido" in resultado ? null : resultado;
@@ -695,7 +732,13 @@ async function reconsultarFaturaEDevolver(deps: DepsCompra, org: string, pedido:
   if (!cobranca?.invoiceUrl) {
     return { tipo: "erro", mensagem: MENSAGEM_AGUARDE };
   }
-  if (!urlDeFaturaValida(pedido.ambiente, cobranca.invoiceUrl)) {
+  // 0955: a retomada também só devolve o link depois de a primeira cobrança estar no total com desconto.
+  if (pedido.asaasSubscriptionId) {
+    const comDesconto = await garantirDescontoNaPrimeiraCobranca(deps, org, pedido, pedido.asaasSubscriptionId, cobranca);
+    if (!comDesconto.ok) return comDesconto.resultado;
+    cobranca = comDesconto.cobranca ?? cobranca;
+  }
+  if (!cobranca.invoiceUrl || !urlDeFaturaValida(pedido.ambiente, cobranca.invoiceUrl)) {
     deps.logger.error("asaas_compra_invoice_url_fora_da_lista_na_retomada", { pedidoId: pedido.id });
     return { tipo: "erro", mensagem: MENSAGEM_GENERICA };
   }
@@ -882,6 +925,114 @@ async function removerRecemCriadoOuMarcarInconclusivo(
   await deps.db.marcarPedido(org, pedidoId, "falhou", motivo);
 }
 
+// ─── Cupom: a primeira cobrança da assinatura no cartão (0955) ─────────────
+
+/**
+ * Assinatura de cartão à vista com cupom: o Asaas cria a assinatura no PREÇO CHEIO (é o valor das renovações,
+ * que o cupom não alcança) e a primeira cobrança é rebaixada para o total com desconto. Cartão parcelado e
+ * Pix já nascem com o total descontado (`amountCents`), então não passam por aqui.
+ */
+function descontoNaPrimeiraCobranca(pedido: PedidoLinha): boolean {
+  return (
+    pedido.tipo === "assinatura" &&
+    pedido.metodo === "CREDIT_CARD" &&
+    (pedido.parcelas ?? 1) <= 1 &&
+    (pedido.descontoCents ?? 0) > 0
+  );
+}
+
+/** O valor da assinatura no Asaas: o preço cheio do ciclo quando há cupom, o do pedido nos demais casos. */
+function valorDaAssinatura(pedido: PedidoLinha): number {
+  if (!descontoNaPrimeiraCobranca(pedido)) return pedido.amountCents;
+  return pedido.precoCheioCents ?? pedido.amountCents + (pedido.descontoCents ?? 0);
+}
+
+/**
+ * Qual é a PRIMEIRA cobrança da assinatura. Sem desconto o contrato de sempre vale (a primeira da lista). Com
+ * desconto, é a de MENOR vencimento entre as pendentes (a lista do Asaas não promete ordem, e rebaixar a
+ * cobrança errada deixaria o cliente pagando o preço cheio ou o desconto na renovação); se nenhuma está
+ * pendente, a de menor vencimento, que `garantirDescontoNaPrimeiraCobranca` recusa tocar.
+ */
+function escolherPrimeiraCobranca(cobrancas: CobrancaAsaas[], pedido: PedidoLinha): CobrancaAsaas | null {
+  if (!descontoNaPrimeiraCobranca(pedido)) return cobrancas[0] ?? null;
+  const porVencimento = [...cobrancas].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  return porVencimento.find((c) => c.status === "PENDING") ?? porVencimento[0] ?? null;
+}
+
+/**
+ * A assinatura do cupom não pode ficar no ar sem a primeira cobrança rebaixada. Desfaz: remove a assinatura e
+ * marca o pedido. Pedido em `processando` (criação e recuperação) vai a `falhou`, ou a `inconclusivo` se a
+ * remoção falhar (`removerRecemCriadoOuMarcarInconclusivo`). Pedido em `aguardando_pagamento` (retomada) NÃO
+ * pode ir a `inconclusivo`: `fn_billing_pedido_marcar` só aceita `inconclusivo` a partir de `processando`.
+ * Nele, se a remoção falhar o pedido fica como está, o erro é logado e o cliente pode tentar de novo (a
+ * retomada refaz a atualização); se a remoção der certo, vai a `falhou`.
+ */
+async function desfazerPorFalhaDoDesconto(
+  deps: DepsCompra,
+  org: string,
+  pedido: PedidoLinha,
+  asaasSubscriptionId: string,
+  motivo: string,
+): Promise<ResultadoIniciarCompra> {
+  if (pedido.status !== "aguardando_pagamento") {
+    await removerRecemCriadoOuMarcarInconclusivo(deps, org, pedido.id, asaasSubscriptionId, null, motivo);
+    return { tipo: "erro", mensagem: MENSAGEM_GENERICA };
+  }
+  try {
+    await deps.asaas.removerAssinatura(asaasSubscriptionId);
+  } catch (err) {
+    deps.logger.error("asaas_compra_remover_na_retomada_falhou", { pedidoId: pedido.id, tipoErro: tipoDoErro(err) });
+    return { tipo: "erro", mensagem: MENSAGEM_TENTE_NOVAMENTE };
+  }
+  const marcado = await deps.db.marcarPedido(org, pedido.id, "falhou", motivo);
+  if (marcado.error) {
+    deps.logger.error("asaas_compra_marcar_falhou_na_retomada_falhou", { pedidoId: pedido.id, codigo: marcado.error.code });
+  }
+  return { tipo: "erro", mensagem: MENSAGEM_GENERICA };
+}
+
+type ResultadoDoDesconto =
+  | { ok: true; cobranca: CobrancaAsaas | null }
+  | { ok: false; resultado: ResultadoIniciarCompra };
+
+/**
+ * Garante que a primeira cobrança da assinatura está no total com desconto ANTES de o link da fatura sair.
+ * Idempotente: cobrança que já está no valor certo não é tocada (retomada de pedido inconclusivo). Se a
+ * atualização falhar, remove a assinatura recém-criada e marca o pedido como falho (a mesma saída de
+ * `removerRecemCriadoOuMarcarInconclusivo`): nunca devolve o link de uma fatura no preço cheio.
+ */
+async function garantirDescontoNaPrimeiraCobranca(
+  deps: DepsCompra,
+  org: string,
+  pedido: PedidoLinha,
+  asaasSubscriptionId: string,
+  cobranca: CobrancaAsaas | null,
+): Promise<ResultadoDoDesconto> {
+  if (!descontoNaPrimeiraCobranca(pedido) || !cobranca) return { ok: true, cobranca };
+
+  if (Math.round(cobranca.value * 100) === pedido.amountCents) return { ok: true, cobranca };
+
+  if (cobranca.status !== "PENDING") {
+    // Já não dá para mexer no valor (paga, vencida ou cancelada no Asaas): não devolve o link e deixa a
+    // conciliação decidir. Nunca cancela uma assinatura que pode já ter sido paga.
+    deps.logger.error("asaas_compra_primeira_cobranca_nao_pendente", { pedidoId: pedido.id, status: cobranca.status });
+    return { ok: false, resultado: { tipo: "erro", mensagem: MENSAGEM_AGUARDE } };
+  }
+
+  try {
+    const atualizada = await deps.asaas.atualizarValorDaCobranca(cobranca.id, {
+      value: centavosParaReais(pedido.amountCents),
+    });
+    return { ok: true, cobranca: { ...atualizada, invoiceUrl: atualizada.invoiceUrl ?? cobranca.invoiceUrl } };
+  } catch (err) {
+    deps.logger.error("asaas_compra_atualizar_primeira_cobranca_falhou", { pedidoId: pedido.id, tipoErro: tipoDoErro(err) });
+    return {
+      ok: false,
+      resultado: await desfazerPorFalhaDoDesconto(deps, org, pedido, asaasSubscriptionId, "cupom_atualizar_primeira_cobranca_falhou"),
+    };
+  }
+}
+
 /**
  * Grava a cobrança/assinatura (fn_billing_pedido_registrar_cobranca) e
  * devolve `{ tipo: "redirecionar" }` só quando a `invoiceUrl` bate com a
@@ -1010,7 +1161,8 @@ async function criarAssinaturaEDevolver(
     assinatura = await deps.asaas.criarAssinatura({
       customer: asaasCustomerId,
       billingType: "CREDIT_CARD",
-      value: centavosParaReais(pedido.amountCents),
+      // 0955: com cupom a assinatura nasce no preço cheio (as renovações); só a primeira cobrança é rebaixada.
+      value: centavosParaReais(valorDaAssinatura(pedido)),
       nextDueDate,
       cycle: CICLO_ASAAS_DO_PEDIDO[pedido.ciclo ?? "monthly"],
       description: descricao,
@@ -1023,12 +1175,20 @@ async function criarAssinaturaEDevolver(
   let primeiraCobranca: CobrancaAsaas | null = null;
   try {
     const cobrancas = await deps.asaas.listarCobrancasDaAssinatura(assinatura.id);
-    primeiraCobranca = cobrancas[0] ?? null;
-  } catch {
+    primeiraCobranca = escolherPrimeiraCobranca(cobrancas, pedido);
+  } catch (err) {
+    // 0955: com cupom, não ler a primeira cobrança é falha de rebaixamento (não se sabe em que valor ela
+    // está): desfaz. Lista VAZIA sem erro (cobrança ainda não gerada) segue abaixo, como sempre.
+    if (descontoNaPrimeiraCobranca(pedido)) {
+      deps.logger.error("asaas_compra_ler_primeira_cobranca_falhou", { pedidoId: pedido.id, tipoErro: tipoDoErro(err) });
+      return desfazerPorFalhaDoDesconto(deps, org, pedido, assinatura.id, "cupom_ler_primeira_cobranca_falhou");
+    }
     // Sem a fatura por agora; registrarEDevolverCartao lida com
     // `invoiceUrl: null` sem inventar nada.
   }
-  return registrarEDevolverCartao(deps, org, pedido, assinatura.id, primeiraCobranca);
+  const comDesconto = await garantirDescontoNaPrimeiraCobranca(deps, org, pedido, assinatura.id, primeiraCobranca);
+  if (!comDesconto.ok) return comDesconto.resultado;
+  return registrarEDevolverCartao(deps, org, pedido, assinatura.id, comDesconto.cobranca);
 }
 
 /**
@@ -1107,11 +1267,17 @@ async function criarCobrancaOuAssinatura(
           let primeiraCobranca: CobrancaAsaas | null = null;
           try {
             const cobrancas = await deps.asaas.listarCobrancasDaAssinatura(existente.id);
-            primeiraCobranca = cobrancas[0] ?? null;
-          } catch {
+            primeiraCobranca = escolherPrimeiraCobranca(cobrancas, pedido);
+          } catch (err) {
+            if (descontoNaPrimeiraCobranca(pedido)) {
+              deps.logger.error("asaas_compra_ler_primeira_cobranca_falhou", { pedidoId: pedido.id, tipoErro: tipoDoErro(err) });
+              return desfazerPorFalhaDoDesconto(deps, org, pedido, existente.id, "cupom_ler_primeira_cobranca_falhou");
+            }
             // segue sem a fatura por agora
           }
-          return registrarEDevolverCartao(deps, org, pedido, existente.id, primeiraCobranca);
+          const comDesconto = await garantirDescontoNaPrimeiraCobranca(deps, org, pedido, existente.id, primeiraCobranca);
+          if (!comDesconto.ok) return comDesconto.resultado;
+          return registrarEDevolverCartao(deps, org, pedido, existente.id, comDesconto.cobranca);
         }
       } else {
         const existente = await deps.asaas.buscarCobrancaPorReferencia(pedido.externalReference);
@@ -1153,6 +1319,13 @@ async function criarCobrancaOuAssinatura(
 
 // ─── A função pública ───────────────────────────────────────────────────
 
+/** Anexa o cupom do pedido ao resultado de sucesso (a ação o põe na auditoria). Sem cupom, o resultado fica como está. */
+function comCupomDoPedido(resultado: ResultadoIniciarCompra, pedido: PedidoLinha): ResultadoIniciarCompra {
+  if (resultado.tipo === "erro") return resultado;
+  if (!pedido.cupomCodigo || (pedido.descontoCents ?? 0) <= 0) return resultado;
+  return { ...resultado, cupom: { codigo: pedido.cupomCodigo, descontoCents: pedido.descontoCents ?? 0 } };
+}
+
 export async function iniciarCompra(deps: DepsCompra, entrada: EntradaIniciarCompra): Promise<ResultadoIniciarCompra> {
   const ambiente = deps.config.ambiente;
 
@@ -1173,7 +1346,7 @@ export async function iniciarCompra(deps: DepsCompra, entrada: EntradaIniciarCom
 
   const tomavel = leitura1.data.status === "criado" || leitura1.data.status === "inconclusivo" || leitura1.data.status === "processando";
   if (!tomavel) {
-    return resolverRespostaPeloEstado(deps, entrada.organizationId, leitura1.data);
+    return comCupomDoPedido(await resolverRespostaPeloEstado(deps, entrada.organizationId, leitura1.data), leitura1.data);
   }
   const estadoAntesDeTomar = leitura1.data.status;
 
@@ -1190,7 +1363,7 @@ export async function iniciarCompra(deps: DepsCompra, entrada: EntradaIniciarCom
       deps.logger.error("asaas_compra_ler_pedido_falhou", { pedidoId: resolucao.pedidoId, codigo: leitura2.error?.code });
       return { tipo: "erro", mensagem: MENSAGEM_GENERICA };
     }
-    return resolverRespostaPeloEstado(deps, entrada.organizationId, leitura2.data);
+    return comCupomDoPedido(await resolverRespostaPeloEstado(deps, entrada.organizationId, leitura2.data), leitura2.data);
   }
 
   // Ganhou a posse: releitura autoritativa (decisão 12: releitura depois da
@@ -1208,13 +1381,16 @@ export async function iniciarCompra(deps: DepsCompra, entrada: EntradaIniciarCom
     return { tipo: "erro", mensagem: cliente.mensagem };
   }
 
-  return criarCobrancaOuAssinatura(
-    deps,
-    entrada.organizationId,
+  return comCupomDoPedido(
+    await criarCobrancaOuAssinatura(
+      deps,
+      entrada.organizationId,
+      pedido,
+      estadoAntesDeTomar === "inconclusivo",
+      resolucao.proximaCobrancaEm,
+      cliente.asaasCustomerId,
+    ),
     pedido,
-    estadoAntesDeTomar === "inconclusivo",
-    resolucao.proximaCobrancaEm,
-    cliente.asaasCustomerId,
   );
 }
 

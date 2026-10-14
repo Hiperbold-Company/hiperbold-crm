@@ -63,6 +63,7 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import { audit } from "@/lib/audit";
+import { authRateLimited } from "@/lib/auth/rate-limit";
 import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { criarClienteAsaas } from "@/lib/billing/asaas/cliente";
@@ -74,6 +75,13 @@ import {
   type ResultadoCancelarAssinatura,
   type ResultadoIniciarCompra,
 } from "@/lib/billing/asaas/compra";
+import {
+  FORMATO_DO_CODIGO_DE_CUPOM,
+  MENSAGEM_CUPOM_INVALIDO,
+  MENSAGEM_CUPOM_TENTATIVAS,
+  simularCupom as simularCupomNoBanco,
+  type ResultadoSimularCupom,
+} from "@/lib/billing/asaas/cupom";
 import { dbCompraSupabase } from "@/lib/billing/asaas/db-compra-supabase";
 import { criarAvisoDeCancelamentoSobre } from "@/lib/email/conta-e-cobranca/gatilhos-de-conta";
 import { supportWriteError } from "@/lib/impersonate/support";
@@ -108,6 +116,29 @@ const CODIGO = z
 
 const CHAVE = z.string().uuid("chave inválida");
 
+/**
+ * Cupom de desconto (0955): só o CÓDIGO que o cliente digitou. Vazio vira ausente; o formato é o do banco
+ * (letras, números, hífen e sublinhado, 3 a 40). Sem diferença de maiúsculas e minúsculas: quem compara é o banco.
+ */
+const CUPOM = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.string().trim().regex(FORMATO_DO_CODIGO_DE_CUPOM, "cupom inválido").optional(),
+);
+
+/**
+ * Teto de tentativas de cupom por usuário (e por IP): sem ele a simulação e a compra serviriam para adivinhar
+ * códigos. Janela de 10 minutos.
+ */
+const LIMITE_DE_TENTATIVAS_DE_CUPOM = { ip: 60, id: 20, windowSec: 600 };
+/** O mesmo teto somado por ORGANIZAÇÃO: vários usuários da mesma empresa não multiplicam as tentativas. */
+const LIMITE_DE_TENTATIVAS_DE_CUPOM_POR_ORGANIZACAO = { ip: 60, id: 40, windowSec: 600 };
+
+/** `true` = barrar. Conta a tentativa por usuário e IP, e por organização (identificador hasheado nas chaves). */
+async function tentativasDeCupomEsgotadas(userId: string, orgId: string): Promise<boolean> {
+  if (await authRateLimited("cupom", userId, LIMITE_DE_TENTATIVAS_DE_CUPOM)) return true;
+  return authRateLimited("cupom_org", orgId, LIMITE_DE_TENTATIVAS_DE_CUPOM_POR_ORGANIZACAO);
+}
+
 const PAGADOR = z.object({
   nome: z.string().trim().min(1).max(200),
   documento: z.string().trim().min(11).max(20),
@@ -127,6 +158,16 @@ const entradaIniciarAssinatura = z.object({
   // D-133: a versão dos Termos que a tela mostrou ao aceite. Opcional no schema só para a recusa ter
   // frase própria (`conferirAceiteDosTermos`).
   termosVersao: z.string().max(40).optional(),
+  // 0955: o código do cupom de desconto, se o cliente digitou um.
+  cupom: CUPOM,
+});
+
+const entradaSimularCupom = z.object({
+  codigo: z.string().trim().regex(FORMATO_DO_CODIGO_DE_CUPOM, "cupom inválido"),
+  planCode: CODIGO,
+  ciclo: z.enum(["monthly", "semiannual", "yearly"]),
+  metodo: z.enum(["CREDIT_CARD", "PIX"]),
+  parcelas: z.number().int().min(1).max(12).optional(),
 });
 
 const entradaComprarPacote = z.object({
@@ -140,6 +181,7 @@ const entradaComprarPacote = z.object({
 });
 
 export type EntradaAcaoIniciarAssinatura = z.infer<typeof entradaIniciarAssinatura>;
+export type EntradaAcaoSimularCupom = z.infer<typeof entradaSimularCupom>;
 export type EntradaAcaoComprarPacote = z.infer<typeof entradaComprarPacote>;
 
 // ─── Contexto da requisição, mesmo molde de assinaturaDaOrganizacao.ts ────
@@ -261,14 +303,23 @@ export async function iniciarAssinatura(input: {
   parcelas?: number;
   pagador?: { nome: string; documento: string; email?: string; celular?: string };
   termosVersao?: string;
+  /** 0955: o código do cupom de desconto digitado pelo cliente (opcional). */
+  cupom?: string;
 }): Promise<ResultadoIniciarCompra> {
   const auth = await autorizarAdminDaOrganizacao(MENSAGEM_SEM_PERMISSAO_COMPRAR);
   if (!auth.ok) return { tipo: "erro", mensagem: auth.mensagem };
 
   const parsed = entradaIniciarAssinatura.safeParse(input);
-  if (!parsed.success) return { tipo: "erro", mensagem: MENSAGEM_DADOS_INVALIDOS };
+  if (!parsed.success) {
+    // Cupom mal formado tem frase própria; qualquer outro defeito segue a frase genérica.
+    const soOCupomFalhou = parsed.error.issues.every((i) => i.path[0] === "cupom");
+    return { tipo: "erro", mensagem: soOCupomFalhou ? MENSAGEM_CUPOM_INVALIDO : MENSAGEM_DADOS_INVALIDOS };
+  }
   const recusaDosTermos = conferirAceiteDosTermos(parsed.data.termosVersao);
   if (recusaDosTermos) return { tipo: "erro", mensagem: recusaDosTermos };
+  if (parsed.data.cupom && (await tentativasDeCupomEsgotadas(auth.userId, auth.orgId))) {
+    return { tipo: "erro", mensagem: MENSAGEM_CUPOM_TENTATIVAS };
+  }
 
   const config = configAsaasOuNulo();
   if (!config) return { tipo: "erro", mensagem: MENSAGEM_ERRO_CONFIGURACAO };
@@ -290,6 +341,7 @@ export async function iniciarAssinatura(input: {
     parcelas: parsed.data.parcelas ?? 1,
     pagador: parsed.data.pagador,
     termosVersao: VERSAO_DOS_TERMOS,
+    ...(parsed.data.cupom ? { cupom: parsed.data.cupom } : {}),
   };
 
   const resultado = await iniciarCompra(montarDeps(config, admin), entrada);
@@ -303,10 +355,59 @@ export async function iniciarAssinatura(input: {
       parcelas: parsed.data.parcelas ?? 1,
       metodo: parsed.data.metodo,
       resultado: resultado.tipo,
+      // 0955: só o código e o desconto, nunca dado do pagador.
+      ...(resultado.cupom ? { cupom: resultado.cupom.codigo, desconto_cents: resultado.cupom.descontoCents } : {}),
     });
   }
 
   return resultado;
+}
+
+// ─── simularCupom ───────────────────────────────────────────────────────────
+
+/**
+ * 0955: mostra o valor com o cupom antes de o cliente confirmar. Só leitura (`fn_billing_cupom_simular`), no
+ * mesmo gate de `iniciarAssinatura` (sessão, papel admin, as duas chaves da compra), com teto de tentativas
+ * por usuário para ninguém adivinhar códigos. O preço e o desconto vêm do banco; a resposta nunca devolve
+ * o estado interno do cupom (limite, validade, lista de planos), só o resultado desta simulação.
+ */
+export async function simularCupom(input: {
+  codigo: string;
+  planCode: string;
+  ciclo: "monthly" | "semiannual" | "yearly";
+  metodo: "CREDIT_CARD" | "PIX";
+  parcelas?: number;
+}): Promise<ResultadoSimularCupom> {
+  const auth = await autorizarAdminDaOrganizacao(MENSAGEM_SEM_PERMISSAO_COMPRAR);
+  if (!auth.ok) return { tipo: "erro", mensagem: auth.mensagem };
+
+  const parsed = entradaSimularCupom.safeParse(input);
+  if (!parsed.success) {
+    const soOCodigoFalhou = parsed.error.issues.every((i) => i.path[0] === "codigo");
+    return { tipo: "erro", mensagem: soOCodigoFalhou ? MENSAGEM_CUPOM_INVALIDO : MENSAGEM_DADOS_INVALIDOS };
+  }
+
+  const config = configAsaasOuNulo();
+  if (!config) return { tipo: "erro", mensagem: MENSAGEM_ERRO_CONFIGURACAO };
+  if (!config.habilitado) return { tipo: "erro", mensagem: MENSAGEM_COMPRA_DESLIGADA };
+
+  const admin = createAdminClient();
+  if (!(await compraLigada(admin, config.habilitado))) {
+    return { tipo: "erro", mensagem: MENSAGEM_COMPRA_DESLIGADA };
+  }
+
+  if (await tentativasDeCupomEsgotadas(auth.userId, auth.orgId)) {
+    return { tipo: "erro", mensagem: MENSAGEM_CUPOM_TENTATIVAS };
+  }
+
+  return simularCupomNoBanco(dbCompraSupabase(admin), {
+    organizationId: auth.orgId,
+    codigo: parsed.data.codigo,
+    planCode: parsed.data.planCode,
+    ciclo: parsed.data.ciclo,
+    metodo: parsed.data.metodo,
+    parcelas: parsed.data.parcelas ?? 1,
+  });
 }
 
 // ─── comprarPacote ──────────────────────────────────────────────────────────

@@ -43,6 +43,7 @@ import type { ConfigAsaas } from "./config";
 import {
   type AssinaturaAsaas,
   type AtualizarClienteRequest,
+  type AtualizarCobrancaRequest,
   type CobrancaAsaas,
   type ClienteAsaas,
   type CriarAssinaturaRequest,
@@ -53,6 +54,7 @@ import {
   type QrPixAsaas,
   assinaturaAsaasSchema,
   atualizarClienteRequestSchema,
+  atualizarCobrancaRequestSchema,
   clienteAsaasSchema,
   cobrancaAsaasSchema,
   criarAssinaturaRequestSchema,
@@ -282,6 +284,11 @@ export interface ClienteAsaasHttp {
   buscarCobranca(id: string): Promise<CobrancaAsaas | Removido>;
   buscarCobrancaPorReferencia(externalReference: string): Promise<CobrancaAsaas | null>;
   removerCobranca(id: string): Promise<void>;
+  /**
+   * Cupom (0955): `POST /payments/{id}` com o novo `value`. Muda o valor de uma cobrança ainda pendente (a
+   * primeira cobrança de uma assinatura criada no preço cheio). Como todo POST, não repete sozinho.
+   */
+  atualizarValorDaCobranca(id: string, dados: AtualizarCobrancaRequest): Promise<CobrancaAsaas>;
   qrPix(id: string): Promise<QrPixAsaas>;
   /** D-177: cobrança parcelada no cartão (`installmentCount` + `totalValue`); devolve a PRIMEIRA parcela, com `installment`. */
   criarCobrancaParcelada(dados: CriarCobrancaParceladaRequest): Promise<CobrancaAsaas>;
@@ -448,6 +455,15 @@ export function criarClienteAsaas(deps: DepsClienteAsaas): ClienteAsaasHttp {
         if (ehRemovido(err)) return;
         throw err;
       }
+    },
+
+    async atualizarValorDaCobranca(id, dados) {
+      const corpo = atualizarCobrancaRequestSchema.parse(dados);
+      return chamarComSchema(
+        deps,
+        { metodo: "POST", caminho: `/payments/${encodeURIComponent(id)}`, corpo },
+        cobrancaAsaasSchema,
+      );
     },
 
     async qrPix(id) {

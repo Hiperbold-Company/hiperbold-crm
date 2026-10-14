@@ -510,9 +510,9 @@ describe("0945 item 5: parâmetros semeados uma vez", () => {
 });
 
 describe("0945: forma", () => {
-  it("só existe uma fn_billing_criar_pedido (12 parâmetros), e só service_role executa as funções de borda", () => {
+  it("só existe uma fn_billing_criar_pedido (14 parâmetros desde a 0955, o cupom e a impressão do pagador), e só service_role executa as funções de borda", () => {
     expect(sql(`select count(*) from pg_proc where proname = 'fn_billing_criar_pedido' and pronamespace = 'public'::regnamespace;`)).toBe("1");
-    expect(sql(`select pronargs from pg_proc where proname = 'fn_billing_criar_pedido' and pronamespace = 'public'::regnamespace;`)).toBe("12");
+    expect(sql(`select pronargs from pg_proc where proname = 'fn_billing_criar_pedido' and pronamespace = 'public'::regnamespace;`)).toBe("14");
     const acl = (nome: string) =>
       sql(`select has_function_privilege('anon', p.oid, 'execute')::text || '|' || has_function_privilege('authenticated', p.oid, 'execute')::text || '|' || has_function_privilege('service_role', p.oid, 'execute')::text from pg_proc p where proname = '${nome}' and pronamespace = 'public'::regnamespace;`);
     expect(acl("fn_billing_criar_pedido")).toBe("false|false|true");

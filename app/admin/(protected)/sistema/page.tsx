@@ -97,7 +97,10 @@ export default async function Page() {
             usuario.idioma,
           )}
         </p>
-        <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/admin/sistema/cobranca">{t("Cobrança (Asaas)")}</Link>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/admin/sistema/cobranca">{t("Cobrança (Asaas)")}</Link>
+          <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/admin/sistema/cupons">{t("Cupons de desconto")}</Link>
+        </div>
       </div>
       <FormularioDeComportamento inicial={comportamento} />
       <FormularioDeBloqueioDosPlanos inicial={bloqueio} />

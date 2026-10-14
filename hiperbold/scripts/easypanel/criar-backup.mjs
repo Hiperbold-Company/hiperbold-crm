@@ -30,6 +30,22 @@ function valorDe(caminho, chave) {
   return valor
 }
 
+async function rest(metodo, caminho, corpo) {
+  const linhas = readFileSync(join(homedir(), '.claude', '.env'), 'utf8').split(/\r?\n/)
+  const g = (k) => semAspas((linhas.find((l) => l.startsWith(`${k}=`)) ?? '').slice(k.length + 1))
+  const base = (process.env.EASYPANEL_HIPERBOLD_URL ?? g('EASYPANEL_HIPERBOLD_URL')).replace(/\/$/, '')
+  const chave = process.env.EASYPANEL_HIPERBOLD_API_KEY ?? g('EASYPANEL_HIPERBOLD_API_KEY')
+  const r = await fetch(`${base}/api${caminho}`, {
+    method: metodo,
+    headers: { Authorization: `Bearer ${chave}`, 'Content-Type': 'application/json' },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  })
+  const texto = await r.text()
+  let json = null
+  try { json = JSON.parse(texto) } catch { /* corpo vazio no POST */ }
+  return { status: r.status, corpo: json }
+}
+
 const raiz = new URL('../../../', import.meta.url).pathname
 const segredosDoCrm = join(homedir(), '.claude', 'hipercrm.env')
 const variaveis = {
@@ -69,8 +85,6 @@ if (!existe) passos.push(['createService', { projectName: PROJETO, serviceName: 
 passos.push(
   ['updateSourceImage', { projectName: PROJETO, serviceName: SERVICO, image: IMAGEM, username: app.source.username, password: app.source.password }],
   ['updateEnv', { projectName: PROJETO, serviceName: SERVICO, env }],
-  ['updateMounts', { projectName: PROJETO, serviceName: SERVICO, mounts: [{ type: 'volume', name: 'backups', mountPath: '/backups' }] }],
-  ['deployService', { projectName: PROJETO, serviceName: SERVICO }],
 )
 for (const [acao, entrada] of passos) {
   const r = await post(`services.app.${acao}`, entrada)
@@ -82,4 +96,17 @@ for (const [acao, entrada] of passos) {
     process.exit(1)
   }
 }
+// Volume: a API tRPC não tem `updateMounts`; o EasyPanel expõe o volume pela API
+// REST (`/api/listMounts` e `/api/createMount`, ver /api/openapi.json).
+const montagens = await rest('GET', `/listMounts?projectName=${PROJETO}&serviceName=${SERVICO}`)
+if (!(Array.isArray(montagens.corpo) && montagens.corpo.some((m) => m.mountPath === '/backups'))) {
+  const r = await rest('POST', '/createMount', { projectName: PROJETO, serviceName: SERVICO, values: { type: 'volume', name: 'backups', mountPath: '/backups' } })
+  console.info(`createMount: ${r.status}`)
+  if (r.status >= 400) process.exit(1)
+} else {
+  console.info('volume /backups já existe')
+}
+const publicado = await post('services.app.deployService', { projectName: PROJETO, serviceName: SERVICO })
+console.info(`deployService: ${publicado.status}`)
+if (publicado.status >= 400) process.exit(1)
 console.info('serviço publicado; a primeira rodada sai em seguida (RODAR_AO_INICIAR=1). Conferir o log do serviço e a pasta do Drive.')

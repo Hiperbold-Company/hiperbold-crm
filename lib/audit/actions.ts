@@ -1049,6 +1049,13 @@ export const AUDIT_ACTIONS = [
   // foi pedida para remoção. Nunca dado do pagador nem o payload do evento.
   "billing.asaas_refund_cut",
 
+  // Cupons de desconto na compra do plano (migration 0955). Quem age é o admin da PLATAFORMA
+  // (`app/actions/admin/cupons.ts`). `coupon_created` leva o código, o tipo, o valor e as restrições; `coupon_toggled`
+  // leva o código e o estado anterior e o novo. Nunca dado de cliente. O uso do cupom numa compra fica em
+  // `billing.order_created` (campos `cupom` e `desconto_cents` do metadata).
+  "billing.coupon_created",
+  "billing.coupon_toggled",
+
   // A campanha de PROSPECÇÃO pausada pelo tick por conta suspensa (D-066,
   // `lib/prospecting/worker.ts`, `tickProspecting`). Espelha `campaign.paused`
   // (que é da campanha de DISPARO, `campaigns`/`lib/campanhas/rodada.ts`, outra

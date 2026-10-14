@@ -12,14 +12,23 @@
  * trocar de plano, ciclo e forma de pagamento recomeçam (o ciclo escolhido pode nem existir no outro
  * plano); ao trocar de ciclo, o parcelamento volta para 1x, como antes. A cada passo novo o foco vai
  * para o título dele, e o indicador do topo marca o passo atual com `aria-current="step"`.
+ *
+ * Cupom de desconto (0955): no resumo, "Tem um cupom?" abre o campo; "Aplicar" chama `simularCupom`, e quem
+ * conta o desconto é o banco (aqui só se mostra). O cupom aplicado guarda para QUAL escolha foi simulado
+ * (plano, ciclo, forma de pagamento, parcelas): se a escolha muda, o valor guardado deixa de valer na hora
+ * (nunca aparece valor velho) e o cupom é simulado de novo; se deixar de valer, sai com o aviso. O cupom
+ * entra na escolha da chave de idempotência, porque o servidor recusa a mesma chave com cupom diferente.
+ * O desconto vale só na primeira cobrança, e o resumo diz isso e o preço da renovação.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { iniciarAssinatura } from "@/app/actions/settings/compraDoPlano";
+import { iniciarAssinatura, simularCupom } from "@/app/actions/settings/compraDoPlano";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { cn } from "@/lib/utils";
@@ -28,6 +37,7 @@ import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
 
 import type { PlanoParaVenda } from "@/lib/billing/asaas/leitura";
 import type { ResultadoIniciarCompra } from "@/lib/billing/asaas/compra";
+import type { SimulacaoDeCupom } from "@/lib/billing/asaas/cupom";
 import type { OpcaoDeParcelas } from "@/lib/billing/asaas/parcelamento";
 
 import {
@@ -52,6 +62,12 @@ type Metodo = "CREDIT_CARD" | "PIX";
 type OpcoesDoPlano = { semiannual: OpcaoDeParcelas[]; yearly: OpcaoDeParcelas[] };
 
 const SEM_OPCOES: OpcoesDoPlano = { semiannual: [], yearly: [] };
+
+/** O cupom aplicado e a escolha para a qual o banco simulou o valor (`escolha`); outra escolha, valor velho. */
+type CupomAplicado = { codigo: string; escolha: string; simulacao: SimulacaoDeCupom };
+
+const MENSAGEM_CUPOM_VAZIO = "Digite o código do cupom.";
+const MENSAGEM_CUPOM_FALHOU = "Não foi possível conferir o cupom agora. Tente novamente em instantes.";
 
 /** Classe da "caixa de escolha" (ciclo, forma de pagamento, parcela): a borda marca a escolhida e o foco do teclado aparece. */
 function classeDaEscolha(ativa: boolean): string {
@@ -91,6 +107,12 @@ export function AssinarPlanoPassoAPasso({
   // depois de "aguarde"; nova a cada mudança de plano/ciclo/método/parcelas ou a cada desfecho terminal.
   const [chave, setChave] = useState<string>(() => randomId());
   const tentativaAnteriorRef = useRef<{ escolha: EscolhaDeCompra; desfecho: DesfechoDaTentativaDeCompra } | null>(null);
+  // Cupom de desconto: o campo aberto, o código digitado, o cupom aplicado e o aviso (erro ou "cupom removido").
+  const [cupomAberto, setCupomAberto] = useState(false);
+  const [codigoDoCupom, setCodigoDoCupom] = useState("");
+  const [aplicandoCupom, setAplicandoCupom] = useState(false);
+  const [cupom, setCupom] = useState<CupomAplicado | null>(null);
+  const [avisoDoCupom, setAvisoDoCupom] = useState<{ mensagem: string; removido: boolean } | null>(null);
 
   // Foco no título do passo novo (nunca na primeira pintura da tela).
   const tituloRef = useRef<HTMLHeadingElement>(null);
@@ -111,6 +133,38 @@ export function AssinarPlanoPassoAPasso({
   const mostraParcelas = metodo === "CREDIT_CARD" && opcoesDoCiclo.length > 1;
   const parcelasEfetivas = mostraParcelas ? parcelas : 1;
   const opcaoEscolhida = mostraParcelas ? opcoesDoCiclo.find((o) => o.parcelas === parcelasEfetivas) ?? null : null;
+
+  // O cupom só vale para a escolha em que foi simulado. Escolha diferente: o valor guardado é velho, nunca se mostra.
+  const escolhaDoCupom = plano ? `${plano.code}|${ciclo}|${metodo}|${parcelasEfetivas}` : "";
+  const simulacaoDoCupom = cupom && cupom.escolha === escolhaDoCupom ? cupom.simulacao : null;
+  const reconferindoCupom = cupom !== null && simulacaoDoCupom === null;
+
+  // Trocou plano, ciclo, forma de pagamento ou parcelas com cupom aplicado: simula de novo. Se o cupom
+  // deixou de valer, sai com o aviso. A resposta de uma escolha que já foi trocada é descartada.
+  useEffect(() => {
+    if (!cupom || !plano || cupom.escolha === escolhaDoCupom) return;
+    let descartada = false;
+    simularCupom({ codigo: cupom.codigo, planCode: plano.code, ciclo, metodo, parcelas: parcelasEfetivas })
+      .then((r) => {
+        if (descartada) return;
+        if (r.tipo === "ok") {
+          setCupom({ codigo: r.codigo, escolha: escolhaDoCupom, simulacao: r });
+        } else {
+          setCupom(null);
+          setAvisoDoCupom({ mensagem: r.mensagem, removido: true });
+          setCupomAberto(true);
+        }
+      })
+      .catch(() => {
+        if (descartada) return;
+        setCupom(null);
+        setAvisoDoCupom({ mensagem: MENSAGEM_CUPOM_FALHOU, removido: true });
+        setCupomAberto(true);
+      });
+    return () => {
+      descartada = true;
+    };
+  }, [cupom, plano, escolhaDoCupom, ciclo, metodo, parcelasEfetivas]);
 
   const rotuloDoCiclo: Record<CicloDeCompra, string> = {
     monthly: t("Mensal"),
@@ -158,9 +212,48 @@ export function AssinarPlanoPassoAPasso({
     irPara(4);
   }
 
+  async function aplicarCupom() {
+    if (!plano || aplicandoCupom) return;
+    const codigo = codigoDoCupom.trim();
+    if (codigo === "") {
+      setAvisoDoCupom({ mensagem: MENSAGEM_CUPOM_VAZIO, removido: false });
+      return;
+    }
+    setAvisoDoCupom(null);
+    setAplicandoCupom(true);
+    try {
+      const r = await simularCupom({ codigo, planCode: plano.code, ciclo, metodo, parcelas: parcelasEfetivas });
+      if (r.tipo === "erro") {
+        setAvisoDoCupom({ mensagem: r.mensagem, removido: false });
+        return;
+      }
+      setCupom({ codigo: r.codigo, escolha: escolhaDoCupom, simulacao: r });
+      setCodigoDoCupom("");
+      setCupomAberto(false);
+    } catch {
+      setAvisoDoCupom({ mensagem: MENSAGEM_CUPOM_FALHOU, removido: false });
+    } finally {
+      setAplicandoCupom(false);
+    }
+  }
+
+  function removerCupom() {
+    setCupom(null);
+    setAvisoDoCupom(null);
+    setCupomAberto(false);
+  }
+
   async function assinar() {
-    if (!plano) return;
-    const escolhaAtual: EscolhaDeCompra = { tipo: "assinatura", planCode: plano.code, ciclo, metodo, parcelas: parcelasEfetivas };
+    if (!plano || reconferindoCupom) return;
+    const cupomDestaCompra = simulacaoDoCupom ? simulacaoDoCupom.codigo : undefined;
+    const escolhaAtual: EscolhaDeCompra = {
+      tipo: "assinatura",
+      planCode: plano.code,
+      ciclo,
+      metodo,
+      parcelas: parcelasEfetivas,
+      ...(cupomDestaCompra ? { cupom: cupomDestaCompra } : {}),
+    };
     const chaveDestaTentativa = chaveParaProximaTentativaDeCompra({
       chaveAtual: chave,
       escolhaAtual,
@@ -192,6 +285,8 @@ export function AssinarPlanoPassoAPasso({
         metodo,
         // D-177: só vai quando parcela; à vista a entrada segue exatamente como antes.
         ...(parcelasEfetivas > 1 ? { parcelas: parcelasEfetivas } : {}),
+        // 0955: só o código; o desconto quem calcula é o banco, na criação do pedido.
+        ...(cupomDestaCompra ? { cupom: cupomDestaCompra } : {}),
         chave: chaveDestaTentativa,
         pagador: entradaDoPagador,
         termosVersao: VERSAO_DOS_TERMOS,
@@ -516,13 +611,13 @@ export function AssinarPlanoPassoAPasso({
                 valor={
                   opcaoEscolhida && opcaoEscolhida.parcelas > 1 ? (
                     <>
-                      {opcaoEscolhida.parcelas}x {formatarReais(opcaoEscolhida.parcelaCents, tagDoIdioma)}{" "}
+                      {opcaoEscolhida.parcelas}x{simulacaoDoCupom ? "" : ` ${formatarReais(opcaoEscolhida.parcelaCents, tagDoIdioma)}`}{" "}
                       <span className="text-muted-foreground">
                         {opcaoEscolhida.comJuros
                           ? `${t("com juros de")} ${taxaMensalPercentual === null ? "" : taxaMensalPercentual.toLocaleString(tagDoIdioma)}% ${t("ao mês")}`
                           : t("sem juros")}
                       </span>
-                      {opcaoEscolhida.ultimaParcelaCents !== opcaoEscolhida.parcelaCents && (
+                      {!simulacaoDoCupom && opcaoEscolhida.ultimaParcelaCents !== opcaoEscolhida.parcelaCents && (
                         <span className="block text-xs text-muted-foreground">
                           {t("última parcela")}: {formatarReais(opcaoEscolhida.ultimaParcelaCents, tagDoIdioma)}
                         </span>
@@ -536,14 +631,109 @@ export function AssinarPlanoPassoAPasso({
                 rotuloDoBotao={t("Alterar")}
               />
             )}
+            {simulacaoDoCupom && (
+              <>
+                <div className="flex items-center justify-between gap-3 p-3" data-testid="resumo-preco-cheio">
+                  <dt className="text-muted-foreground">{t("Preço cheio")}</dt>
+                  <dd className="text-muted-foreground line-through">{formatarReais(simulacaoDoCupom.precoCheioCents, tagDoIdioma)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 p-3" data-testid="resumo-cupom">
+                  <dt>
+                    {t("Cupom")} <span className="font-medium">{simulacaoDoCupom.codigo}</span>
+                    {simulacaoDoCupom.tipoDoDesconto === "percentual" && ` (${simulacaoDoCupom.valor}%)`}
+                  </dt>
+                  <div className="flex items-center gap-2">
+                    <dd className="font-medium text-success-fg">-{formatarReais(simulacaoDoCupom.descontoCents, tagDoIdioma)}</dd>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      data-testid="cupom-remover"
+                      aria-label={`${t("Remover")}: ${t("Cupom")} ${simulacaoDoCupom.codigo}`}
+                      onClick={removerCupom}
+                    >
+                      {t("Remover")}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
             <div className="flex items-center justify-between gap-3 p-3 font-medium" data-testid="resumo-total">
-              <dt>{t("Total a pagar")}</dt>
+              <dt>{simulacaoDoCupom ? t("Total da primeira cobrança") : t("Total a pagar")}</dt>
               <dd>
-                {formatarReais(opcaoEscolhida ? opcaoEscolhida.totalCents : (precoDoCiclo(plano, ciclo) as number), tagDoIdioma)}
-                {ciclo === "monthly" && <span className="font-normal text-muted-foreground"> {t("por mês")}</span>}
+                {formatarReais(
+                  simulacaoDoCupom
+                    ? simulacaoDoCupom.totalFinalCents
+                    : opcaoEscolhida
+                      ? opcaoEscolhida.totalCents
+                      : (precoDoCiclo(plano, ciclo) as number),
+                  tagDoIdioma,
+                )}
+                {ciclo === "monthly" && !simulacaoDoCupom && (
+                  <span className="font-normal text-muted-foreground"> {t("por mês")}</span>
+                )}
               </dd>
             </div>
           </dl>
+
+          {simulacaoDoCupom && (
+            <p className="text-sm text-muted-foreground" data-testid="cupom-renovacao">
+              {t("O desconto vale só na primeira cobrança. A partir da renovação,")}{" "}
+              {formatarReais(simulacaoDoCupom.precoCheioCents, tagDoIdioma)}{" "}
+              {ciclo === "monthly" ? t("por mês") : ciclo === "semiannual" ? t("por semestre") : t("por ano")}.
+            </p>
+          )}
+
+          {reconferindoCupom && (
+            <p role="status" className="text-sm text-muted-foreground" data-testid="cupom-conferindo">
+              {t("Conferindo o cupom...")}
+            </p>
+          )}
+
+          {!cupom && (
+            <div className="space-y-2" data-testid="cupom-bloco">
+              {cupomAberto ? (
+                <>
+                  <Label htmlFor="cupom-codigo">{t("Código do cupom")}</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      id="cupom-codigo"
+                      data-testid="cupom-codigo"
+                      className="w-56"
+                      value={codigoDoCupom}
+                      maxLength={40}
+                      autoComplete="off"
+                      disabled={aplicandoCupom}
+                      onChange={(e) => setCodigoDoCupom(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void aplicarCupom();
+                        }
+                      }}
+                    />
+                    <Button variant="outline" data-testid="cupom-aplicar" disabled={aplicandoCupom} onClick={() => void aplicarCupom()}>
+                      {aplicandoCupom ? t("Aplicando...") : t("Aplicar")}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="cupom-abrir"
+                  className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                  onClick={() => setCupomAberto(true)}
+                >
+                  {t("Tem um cupom?")}
+                </button>
+              )}
+              {avisoDoCupom && (
+                <p role="alert" data-testid="cupom-erro" className="text-sm text-destructive">
+                  {avisoDoCupom.removido ? `${t("Cupom removido.")} ` : ""}
+                  {t(avisoDoCupom.mensagem)}
+                </p>
+              )}
+            </div>
+          )}
 
           {metodo === "CREDIT_CARD" && (
             <p className="text-xs text-muted-foreground">
@@ -557,7 +747,7 @@ export function AssinarPlanoPassoAPasso({
             <Button variant="outline" data-testid="voltar" disabled={pendente} onClick={() => irPara(3)}>
               {t("Voltar")}
             </Button>
-            <Button data-testid={`assinar-${plano.code}`} disabled={pendente || !aceitouTermos} onClick={() => void assinar()}>
+            <Button data-testid={`assinar-${plano.code}`} disabled={pendente || !aceitouTermos || reconferindoCupom || aplicandoCupom} onClick={() => void assinar()}>
               {pendente ? t("Enviando...") : t("Assinar")}
             </Button>
           </div>

@@ -128,6 +128,15 @@ export const criarCobrancaRequestSchema = z.object({
 });
 export type CriarCobrancaRequest = z.infer<typeof criarCobrancaRequestSchema>;
 
+/**
+ * Cupom de desconto (0955): `POST /payments/{id}` atualiza a cobrança. Aqui só o valor, o único campo que o
+ * app muda: a primeira cobrança de uma assinatura criada no preço cheio passa ao total com desconto.
+ */
+export const atualizarCobrancaRequestSchema = z.object({
+  value: z.number().positive(),
+});
+export type AtualizarCobrancaRequest = z.infer<typeof atualizarCobrancaRequestSchema>;
+
 // ─── Cobrança parcelada (D-177) ───────────────────────────────────────────
 
 /**
