@@ -83,11 +83,14 @@ import {
   type ResultadoSimularCupom,
 } from "@/lib/billing/asaas/cupom";
 import { dbCompraSupabase } from "@/lib/billing/asaas/db-compra-supabase";
+import { urlDeRetornoDoCartao } from "@/lib/billing/asaas/retorno-do-cartao";
 import { criarAvisoDeCancelamentoSobre } from "@/lib/email/conta-e-cobranca/gatilhos-de-conta";
 import { supportWriteError } from "@/lib/impersonate/support";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
+import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { precisaPagarAntesDeConfigurar } from "@/lib/onboarding/precisa-pagar";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // ─── Mensagens fixas do GATE (nunca do banco/Asaas) ────────────────────────
@@ -252,7 +255,11 @@ function configAsaasOuNulo(): ConfigAsaas | null {
   }
 }
 
-function montarDeps(config: ConfigAsaas, admin: ReturnType<typeof createAdminClient>) {
+function montarDeps(
+  config: ConfigAsaas,
+  admin: ReturnType<typeof createAdminClient>,
+  urlDeRetornoDoCartao?: string,
+) {
   return {
     db: dbCompraSupabase(admin),
     asaas: criarClienteAsaas({ fetch: globalThis.fetch.bind(globalThis), config, logger }),
@@ -260,6 +267,8 @@ function montarDeps(config: ConfigAsaas, admin: ReturnType<typeof createAdminCli
     logger,
     // COB-07: o e-mail de cancelamento confirmado (só é chamado pelo cancelamento; compra ignora).
     avisoDeCancelamento: criarAvisoDeCancelamentoSobre(admin),
+    // Cartão na fatura hospedada: o Asaas devolve o cliente ao app depois de pagar (só assinatura de plano).
+    ...(urlDeRetornoDoCartao ? { urlDeRetornoDoCartao } : {}),
   };
 }
 
@@ -344,7 +353,12 @@ export async function iniciarAssinatura(input: {
     ...(parsed.data.cupom ? { cupom: parsed.data.cupom } : {}),
   };
 
-  const resultado = await iniciarCompra(montarDeps(config, admin), entrada);
+  // Quem ainda está no passo de pagamento do onboarding volta para ele; quem já usa o CRM, para o plano.
+  const pagandoNoOnboarding = await precisaPagarAntesDeConfigurar(admin, auth.orgId);
+  const resultado = await iniciarCompra(
+    montarDeps(config, admin, urlDeRetornoDoCartao(env.NEXT_PUBLIC_APP_URL, pagandoNoOnboarding)),
+    entrada,
+  );
 
   if (resultado.tipo !== "erro") {
     await auditarPedido(auth.userId, auth.orgId, {

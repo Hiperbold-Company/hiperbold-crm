@@ -7,7 +7,10 @@ import { branding } from "@/lib/branding";
 import { turnstileSiteKey } from "@/lib/security/turnstile";
 import { verifyInviteToken } from "@/lib/auth/invite-token";
 import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
+import { sanitizarPlano } from "@/lib/auth/plano-escolhido";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { compraPeloClienteDisponivel } from "@/lib/onboarding/precisa-pagar";
 import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -38,9 +41,11 @@ export const metadata = { title: "Criar conta" };
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ invite?: string }>;
+  searchParams: Promise<{ invite?: string; plano?: string | string[] }>;
 }) {
-  const { invite } = await searchParams;
+  const { invite, plano: planoBruto } = await searchParams;
+  // O plano escolhido no site de vendas: só uma dica de forma validada; a tela de pagamento confere se está à venda.
+  const plano = sanitizarPlano(planoBruto);
   const payload = invite ? verifyInviteToken(invite) : null;
   const convite = invite && payload ? { token: invite, email: payload.email } : undefined;
   const conviteExpirado = Boolean(invite) && !payload;
@@ -57,6 +62,9 @@ export default async function SignupPage({
   // Convite VÁLIDO passa em qualquer modo — é o ponto inteiro do convite.
   const modo = convite ? null : await modoDeCadastro();
   const soPorConvite = modo === "so_convite";
+  // Hiperbold: o aceite dos Termos e o caminho "paga primeiro" só existem com a compra pelo cliente ligada.
+  // Calculado aqui, no servidor; o convite nunca passa por isso (a conta é criada para aceitar o convite).
+  const compraLigada = convite || soPorConvite ? false : await compraPeloClienteDisponivel(createAdminClient());
 
   if (soPorConvite) {
     return (
@@ -110,7 +118,12 @@ export default async function SignupPage({
       )}
 
       {/* A chave pública do Turnstile é lida aqui, em runtime: a imagem é construída sem ela (D-173). */}
-      <SignupForm convite={convite} turnstileSiteKey={turnstileSiteKey()} />
+      <SignupForm
+        convite={convite}
+        turnstileSiteKey={turnstileSiteKey()}
+        plano={plano}
+        compraLigada={compraLigada}
+      />
       {/* O convite atravessa o Google na URL de retorno: sem ele, quem foi
           convidado e cria a conta com Google ganharia uma empresa própria. */}
       <EntrarComGoogle convite={convite?.token} />

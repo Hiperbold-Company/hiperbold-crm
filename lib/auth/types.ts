@@ -149,6 +149,13 @@ export interface AuthUser {
    * o anti-pattern "tela oferece o que o código ignora".
    */
   timezone?: string | null;
+  /**
+   * O e-mail desta conta já foi confirmado pelo link do CRM? (`emailVerificado` de
+   * `lib/auth/verificacao-email.ts`, lido do `app_metadata`, que só o servidor grava.) Ausente = verificado:
+   * quem existia antes da verificação própria, entrou com o Google ou por convite não tem pedido em aberto.
+   * Alimenta a faixa `EmailNaoConfirmadoBanner`; nunca decide acesso a nada.
+   */
+  email_verificado?: boolean;
   organizations: UserOrgMembership[];
 }
 

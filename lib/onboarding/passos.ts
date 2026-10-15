@@ -37,6 +37,20 @@ export interface PassoDoOnboarding {
 export interface ContextoDoPasso {
   /** A integração de loja está ligada nesta instalação? */
   lojaLigada: boolean;
+  /**
+   * Esta organização precisa pagar o plano antes de configurar? Vem de
+   * `precisaPagarAntesDeConfigurar` (`lib/onboarding/precisa-pagar.ts`), a mesma noção de
+   * `app/app/layout.tsx`. Verdadeiro só enquanto o pagamento não foi confirmado.
+   */
+  precisaPagar: boolean;
+  /**
+   * O caminho "paga primeiro" vale nesta instalação? É a compra pelo próprio cliente LIGADA
+   * (`compraPeloClienteDisponivel`). Ligada, o wizard inteiro se reduz ao pagamento: o aceite dos
+   * Termos acontece na própria tela de pagamento e tudo o que era configuração (WhatsApp, treinar,
+   * funil, testar, equipe) virou item da tela Início. Desligada (instalação própria, CI), o wizard
+   * completo segue exatamente como era.
+   */
+  pagarPrimeiro: boolean;
 }
 
 /** Um passo marcado no estado — com ou sem `skipped`. */
@@ -52,8 +66,25 @@ export const PASSOS: readonly PassoDoOnboarding[] = [
   {
     segmento: "welcome",
     rotulo: "Seu negócio",
-    existe: () => true,
-    cumprido: (s) => marcado(s.welcome),
+    // Caminho "paga primeiro": o aceite dos Termos é dado na tela de pagamento (e, vindo do cadastro
+    // por e-mail, já foi dado no formulário); o que o negócio faz passa a ser item do Início.
+    existe: (ctx) => !ctx.pagarPrimeiro,
+    // O que marca o passo como cumprido é o ACEITE (`accepted_at`, gravado por `acceptWelcome`), não a mera
+    // existência de `welcome`: a tela Início grava `welcome.o_que_faz` sozinho (`atualizarPerfilDaEmpresa`), e
+    // esse `welcome` parcial não pode contar como "boas-vindas feitas" no wizard antigo.
+    cumprido: (s) => marcado(s.welcome?.accepted_at),
+    pulado: () => false,
+  },
+  {
+    segmento: "plano",
+    // Hiperbold (15/10/2026): o cliente novo paga ANTES de configurar o CRM. O passo NÃO se pula e
+    // não se "marca": ele existe enquanto o pagamento é exigido e some (= cumprido) quando a
+    // confirmação chega — contrato ativo, plano liberado pelo admin, compra desligada ou modo que
+    // não cobra nunca o mostram. Por isso `cumprido` é sempre falso: quem o resolve é o banco
+    // (Pix/cartão confirmados pelo webhook do Asaas), nunca um botão da tela.
+    rotulo: "Seu plano",
+    existe: (ctx) => ctx.precisaPagar,
+    cumprido: () => false,
     pulado: () => false,
   },
   {
@@ -61,21 +92,21 @@ export const PASSOS: readonly PassoDoOnboarding[] = [
     // O telefone é a primeira peça concreta do funcionário, e é o passo que
     // pede o celular na mão — o instalador já avisa para deixá-lo aberto.
     rotulo: "O telefone dele",
-    existe: () => true,
+    existe: (ctx) => !ctx.pagarPrimeiro,
     cumprido: (s) => marcado(s.whatsapp),
     pulado: (s) => foiPulado(s.whatsapp),
   },
   {
     segmento: "connect-nuvemshop",
     rotulo: "Sua loja",
-    existe: (ctx) => ctx.lojaLigada,
+    existe: (ctx) => ctx.lojaLigada && !ctx.pagarPrimeiro,
     cumprido: (s) => marcado(s.nuvemshop),
     pulado: (s) => foiPulado(s.nuvemshop),
   },
   {
     segmento: "setup-ai",
     rotulo: "Treinar",
-    existe: () => true,
+    existe: (ctx) => !ctx.pagarPrimeiro,
     cumprido: (s) => marcado(s.ai),
     pulado: (s) => foiPulado(s.ai),
   },
@@ -85,7 +116,7 @@ export const PASSOS: readonly PassoDoOnboarding[] = [
     // pessoa acabou de confirmar funcionando, e é o mesmo cérebro que vai
     // atender. Pedir o quadro antes obrigaria a montá-lo no escuro.
     rotulo: "Onde ele organiza",
-    existe: () => true,
+    existe: (ctx) => !ctx.pagarPrimeiro,
     cumprido: (s) => marcado(s.funil),
     pulado: (s) => foiPulado(s.funil),
   },
@@ -96,14 +127,14 @@ export const PASSOS: readonly PassoDoOnboarding[] = [
     // sistema" em "contratei alguém" — e é onde o erro aparece antes do
     // primeiro cliente real, não depois.
     rotulo: "Ver ele atender",
-    existe: () => true,
+    existe: (ctx) => !ctx.pagarPrimeiro,
     cumprido: (s) => marcado(s.teste),
     pulado: (s) => foiPulado(s.teste),
   },
   {
     segmento: "invite-team",
     rotulo: "Quem trabalha com ele",
-    existe: () => true,
+    existe: (ctx) => !ctx.pagarPrimeiro,
     cumprido: (s) => marcado(s.team),
     pulado: (s) => foiPulado(s.team),
   },

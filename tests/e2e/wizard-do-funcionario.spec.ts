@@ -91,14 +91,17 @@ async function login(page: Page): Promise<void> {
 test.describe.configure({ mode: "serial", timeout: 120_000 });
 
 test.describe("o wizard monta um funcionário", () => {
-  test("abre mostrando o que a instalação já trouxe, e não pede o nome de novo", async ({
+  test("abre direto no formulário, e não pede o nome de novo", async ({
     page,
   }) => {
     await login(page);
     await page.waitForURL(/\/onboarding\/welcome/, { timeout: 30_000 });
 
-    // O passo 1 começa pelo que já existe — em vez de um formulário em branco.
-    await expect(page.getByText(/já está de pé/i)).toBeVisible();
+    // Hiperbold (15/10/2026, decisão do Filipe): o passo 1 é só o formulário.
+    // O retrato da instalação ("já está de pé") saiu para o cliente que acabou
+    // de criar a conta focar no que precisa preencher.
+    await expect(page.locator("#display_name")).toBeVisible();
+    await expect(page.getByText(/já está de pé/i)).toHaveCount(0);
 
     // O instalador nunca pergunta o nome do negócio: a organização nasce
     // "Minha Empresa". Mandar isso como valor inicial obrigava a pessoa a

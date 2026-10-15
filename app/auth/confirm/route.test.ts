@@ -169,7 +169,7 @@ describe("GET /auth/confirm", () => {
 
     expect(vi.mocked(ensureTenantForUser)).toHaveBeenCalledWith(USUARIO);
     expect(vi.mocked(aplicarConvite)).not.toHaveBeenCalled();
-    expect(destino(res)).toBe("/onboarding/welcome");
+    expect(destino(res)).toBe("/onboarding");
   });
 
   it("sem convite em instalação com_aprovacao: e-mail confirmado, mas a empresa espera o pedido", async () => {

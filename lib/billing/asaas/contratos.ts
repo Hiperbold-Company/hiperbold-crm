@@ -75,6 +75,18 @@ export const assinaturaAsaasSchema = z
   .passthrough();
 export type AssinaturaAsaas = z.infer<typeof assinaturaAsaasSchema>;
 
+/**
+ * Retorno automático depois do pagamento na fatura hospedada (`PaymentCallbackRequestDTO` do Asaas:
+ * `POST /payments` e `POST /subscriptions` aceitam o mesmo objeto). Só faz sentido no cartão: o Pix
+ * é pago no app do banco e a tela do app acompanha sozinha. O domínio de `successUrl` precisa estar
+ * cadastrado na conta do Asaas; sem isso o Asaas recusa o POST com erro de validação.
+ */
+export const callbackAsaasSchema = z.object({
+  successUrl: z.string().url().max(255),
+  autoRedirect: z.boolean().optional(),
+});
+export type CallbackAsaas = z.infer<typeof callbackAsaasSchema>;
+
 export const criarAssinaturaRequestSchema = z.object({
   customer: z.string().regex(/^cus_[A-Za-z0-9]+$/),
   // Só CREDIT_CARD (decisão 1: cartão sempre pela fatura hospedada) e PIX
@@ -85,6 +97,7 @@ export const criarAssinaturaRequestSchema = z.object({
   cycle: cicloAsaasSchema,
   description: z.string().max(500).optional(),
   externalReference: z.string().min(1).max(200).optional(),
+  callback: callbackAsaasSchema.optional(),
 });
 export type CriarAssinaturaRequest = z.infer<typeof criarAssinaturaRequestSchema>;
 
@@ -125,6 +138,7 @@ export const criarCobrancaRequestSchema = z.object({
   dueDate: z.string().regex(DATA_ISO),
   description: z.string().max(500).optional(),
   externalReference: z.string().min(1).max(200).optional(),
+  callback: callbackAsaasSchema.optional(),
 });
 export type CriarCobrancaRequest = z.infer<typeof criarCobrancaRequestSchema>;
 
@@ -151,6 +165,7 @@ export const criarCobrancaParceladaRequestSchema = z.object({
   dueDate: z.string().regex(DATA_ISO),
   description: z.string().max(500).optional(),
   externalReference: z.string().min(1).max(200).optional(),
+  callback: callbackAsaasSchema.optional(),
 });
 export type CriarCobrancaParceladaRequest = z.infer<typeof criarCobrancaParceladaRequestSchema>;
 

@@ -19,7 +19,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Logger } from "@/lib/agent-engine/obs/logger";
 import type { AmbienteAsaas } from "@/lib/billing/asaas/config";
-import type { ParametrosDeParcelamento } from "@/lib/billing/asaas/parcelamento";
+import { planosParaVenda, type PlanoParaVenda } from "@/lib/billing/asaas/leitura";
+import {
+  opcoesDeParcelamento,
+  type OpcaoDeParcelas,
+  type ParametrosDeParcelamento,
+} from "@/lib/billing/asaas/parcelamento";
+import { planoDaOrganizacao } from "@/lib/billing/planos/plano-da-organizacao";
 
 export interface PacoteParaVenda {
   codigo: string;
@@ -146,4 +152,68 @@ export async function parametrosDeParcelamento(admin: SupabaseClient, log?: Logg
     log?.error("alarme_asaas_leitura", { etapa: "parametros_de_parcelamento", erro: mensagemDeErro(err) });
     return vazio;
   }
+}
+
+/** As opções de parcelamento de cada plano à venda, por ciclo: a conta é do servidor. */
+export type OpcoesDeParcelasPorPlano = Record<string, { semiannual: OpcaoDeParcelas[]; yearly: OpcaoDeParcelas[] }>;
+
+export interface DadosDaCompraDePlano {
+  planos: PlanoParaVenda[];
+  pacotes: PacoteParaVenda[];
+  precisaPagador: boolean;
+  leituraFalhou: boolean;
+  opcoesDeParcelas: OpcoesDeParcelasPorPlano;
+  taxaMensalPercentual: number | null;
+  /** D-180: o plano de um contrato vivo (avaliação, ativa ou atrasada), só para marcar o cartão; senão `null`. */
+  planoAtualCode: string | null;
+}
+
+/**
+ * Tudo o que a compra de plano precisa ler, num lugar só: a tela `/app/settings/plano/assinar` e o
+ * passo "Plano" do onboarding mostram o MESMO formulário e, por isso, leem o mesmo (antes isto
+ * morava inline na página). Só planos à venda e com preço (restrição fixa 3 da fase). Nunca lança:
+ * cada leitura degrada sozinha e `leituraFalhou` avisa.
+ */
+export async function dadosDaCompraDePlano(
+  admin: SupabaseClient,
+  organizationId: string,
+  ambiente: AmbienteAsaas,
+  log?: Logger,
+): Promise<DadosDaCompraDePlano> {
+  const [planosResultado, pacotesResultado, precisaPagador, parametros, planoDaOrg] = await Promise.all([
+    planosParaVenda(admin, log),
+    pacotesParaVenda(admin, log),
+    precisaDeFormularioDoPagador(admin, organizationId, ambiente, log),
+    parametrosDeParcelamento(admin, log),
+    planoDaOrganizacao(admin, organizationId, log),
+  ]);
+
+  const planoAtualCode =
+    !planoDaOrg.leituraFalhou &&
+    planoDaOrg.contrato !== null &&
+    ["avaliacao", "ativa", "atrasada"].includes(planoDaOrg.contrato.status)
+      ? planoDaOrg.plano.code
+      : null;
+
+  const planos = planosResultado.planos.filter((p) => p.forSale && p.priceMonthlyCents > 0);
+
+  // D-177: as opções de parcelamento são calculadas AQUI, no servidor (a conta e os parâmetros nunca vão
+  // para o navegador); o cliente só mostra e escolhe o número de parcelas.
+  const opcoesDeParcelas: OpcoesDeParcelasPorPlano = {};
+  for (const plano of planos) {
+    opcoesDeParcelas[plano.code] = {
+      semiannual: plano.priceSemiannualCents ? opcoesDeParcelamento(plano.priceSemiannualCents, "semiannual", parametros) : [],
+      yearly: plano.priceYearlyCents ? opcoesDeParcelamento(plano.priceYearlyCents, "yearly", parametros) : [],
+    };
+  }
+
+  return {
+    planos,
+    pacotes: pacotesResultado.pacotes,
+    precisaPagador,
+    leituraFalhou: planosResultado.leituraFalhou || pacotesResultado.leituraFalhou,
+    opcoesDeParcelas,
+    taxaMensalPercentual: parametros.taxaMensal === null ? null : Math.round(parametros.taxaMensal * 10000) / 100,
+    planoAtualCode,
+  };
 }

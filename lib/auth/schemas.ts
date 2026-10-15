@@ -19,19 +19,53 @@ export const organizationNameSchema = z
   .min(2, "Nome da empresa deve ter pelo menos 2 caracteres")
   .max(120, "Nome da empresa deve ter no máximo 120 caracteres");
 
-export const signupSchema = z
+const signupBase = {
+  org_name: organizationNameSchema,
+  email: z.string().email("Email inválido"),
+  password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
+  password_confirm: z.string(),
+  /** Dica do `?plano=` do site (ver `lib/auth/plano-escolhido.ts`); a ação sanitiza de novo. */
+  plano_escolhido: z.string().max(40).optional(),
+};
+
+const senhasCoincidem = {
+  path: ["password_confirm"],
+  message: "As senhas não coincidem",
+};
+
+/**
+ * O cadastro com o aceite dos Termos de Uso e da Política de Privacidade OBRIGATÓRIO. Mora no schema (e
+ * não só na tela) porque a ação é chamável direto: quem decide é o servidor. A versão e a data do aceite
+ * são do servidor (`signUp.ts`), nunca deste campo.
+ *
+ * O aceite só é exigido com a compra pelo cliente LIGADA (o caminho "paga primeiro"; ver
+ * `signupSchemaDe`): instalação com a compra desligada cadastra exatamente como antes, sem checkbox novo.
+ */
+const signupComAceite = z
   .object({
-    org_name: organizationNameSchema,
-    email: z.string().email("Email inválido"),
-    password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
-    password_confirm: z.string(),
+    ...signupBase,
+    aceite_termos: z.literal(true, {
+      error: "Aceite os Termos de Uso e a Política de Privacidade para criar a conta",
+    }),
   })
-  .refine((v) => v.password === v.password_confirm, {
-    path: ["password_confirm"],
-    message: "As senhas não coincidem",
-  });
+  .refine((v) => v.password === v.password_confirm, senhasCoincidem);
+
+/** O mesmo cadastro, sem o campo do aceite (o campo, se vier, é descartado). */
+const signupSemAceite = z
+  .object(signupBase)
+  .refine((v) => v.password === v.password_confirm, senhasCoincidem);
+
+/** Hiperbold: com a compra pelo cliente ligada o aceite é obrigatório; desligada, o cadastro é o de antes. */
+export function signupSchemaDe(exigeAceite: boolean) {
+  return exigeAceite ? signupComAceite : signupSemAceite;
+}
+
+/** O contrato com aceite obrigatório (caminho "paga primeiro"). */
+export const signupSchema = signupComAceite;
 
 export type SignupInput = z.infer<typeof signupSchema>;
+/** O cadastro quando a compra pelo cliente está desligada: o mesmo, sem o aceite. */
+export type SignupSemAceiteInput = z.infer<typeof signupSemAceite>;
 
 /**
  * Signup de quem foi CONVIDADO: a empresa já existe, então pedir o nome dela

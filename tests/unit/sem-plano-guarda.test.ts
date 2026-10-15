@@ -114,6 +114,16 @@ describe("organizacaoSemPlano", () => {
     }
   });
 
+  it("semCarencia: conta recém-criada (bloqueio 5 s adiante) já é sem plano para o passo de pagamento; a guarda do layout segue esperando", async () => {
+    const recem = { ...SEM_PLANO, bloqueio_a_partir_de: AMANHA };
+    expect(await organizacaoSemPlano(cliente("bloquear", recem).admin, "org-1")).toBe(false);
+    expect(await organizacaoSemPlano(cliente("bloquear", recem).admin, "org-1", { semCarencia: true })).toBe(true);
+    // CONTROLE: com plano (período ou ciclo) ou fora do modo bloquear, a opção não inventa "sem plano".
+    const comCiclo = { ...recem, cycle: "monthly" };
+    expect(await organizacaoSemPlano(cliente("bloquear", comCiclo).admin, "org-1", { semCarencia: true })).toBe(false);
+    expect(await organizacaoSemPlano(cliente("avisar", recem).admin, "org-1", { semCarencia: true })).toBe(false);
+  });
+
   it("leitura que falha não prende o usuário fora do produto (fail-open)", async () => {
     const saidas = [vi.spyOn(console, "error"), vi.spyOn(console, "log"), vi.spyOn(console, "warn")].map((espiao) =>
       espiao.mockImplementation(() => {}),

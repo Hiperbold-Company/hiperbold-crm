@@ -1146,6 +1146,13 @@ jobs:
       # versão fixada responde e a chave passa no teste. Sem a chave, ela pula; o
       # cabeçalho dela tem a receita para rodar contra a API de verdade.
       #
+      # `entrada-pagar-primeiro` entrou aqui em 2026-10-15: o servidor do app tem de NASCER
+      # com `ASAAS_ENABLED=true` e uma chave de SANDBOX do Asaas (o Pix só nasce de uma chamada
+      # ao sandbox), e o provedor de auth com a confirmação de e-mail desligada, como em
+      # `cadastro-sem-confirmacao-de-email`. Nenhum dos dois é dado que a spec semeie, e ligá-los
+      # no `.env.e2e` de todas as partes mudaria o que as outras specs medem. Roda local; o
+      # cabeçalho dela tem o comando e lista os testes do `verify` que guardam cada peça da jornada.
+      #
       # `modelos-do-parceiro-editar-apagar` entrou aqui em 2026-09-26: o servidor
       # do app tem de NASCER apontado para um dublê do provedor intermediado
       # (ZERNIO_API_BASE_URL + conta e chave), e isso é ambiente do `next start`,
@@ -1157,6 +1164,7 @@ jobs:
         aviso-de-caso-chega-no-whatsapp.spec.ts
         jev-chave-real.spec.ts
         modelos-do-parceiro-editar-apagar.spec.ts
+        entrada-pagar-primeiro.spec.ts
     steps:
       # ── O RELÓGIO DESTA PARTE: ONDE O TETO DE 30 MIN COMEÇA A CONTAR ──────
       #

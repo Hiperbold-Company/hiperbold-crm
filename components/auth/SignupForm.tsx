@@ -5,18 +5,21 @@ import { useRouter } from "next/navigation";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTransition, useState } from "react";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 import { useT } from "@/hooks/i18n/useT";
 import {
-  signupSchema,
+  signupSchemaDe,
   signupComConviteSchema,
   type SignupInput,
+  type SignupSemAceiteInput,
   type SignupComConviteInput,
 } from "@/lib/auth/schemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signUp } from "@/app/actions/auth/signUp";
+import { recoverOrganization } from "@/app/actions/auth/recoverOrganization";
 import { TurnstileWidget, useCaptcha } from "@/components/auth/TurnstileWidget";
 
 /**
@@ -33,9 +36,19 @@ export interface ConviteDoSignup {
 export function SignupForm({
   convite,
   turnstileSiteKey,
+  plano,
+  compraLigada = false,
 }: {
   convite?: ConviteDoSignup;
   turnstileSiteKey?: string | null;
+  /** O `?plano=` do site, já sanitizado pela página (`lib/auth/plano-escolhido.ts`). Só uma dica. */
+  plano?: string | null;
+  /**
+   * A compra do plano pelo cliente está LIGADA nesta instalação (calculado no servidor pela página)? Só então
+   * o cadastro pede o aceite dos Termos e segue o caminho "paga primeiro". Desligada (instalação própria), o
+   * formulário é o de antes: sem checkbox novo e, com a sessão já aberta, a saída é `/get-started`.
+   */
+  compraLigada?: boolean;
 }) {
   const t = useT();
   const captcha = useCaptcha(turnstileSiteKey);
@@ -59,13 +72,16 @@ export function SignupForm({
     // aceitar a conversão direta.
     resolver: (convite
       ? zodResolver(signupComConviteSchema)
-      : zodResolver(signupSchema)) as unknown as Resolver<SignupInput & { full_name: string }>,
+      : zodResolver(signupSchemaDe(compraLigada))) as unknown as Resolver<SignupInput & { full_name: string }>,
     defaultValues: {
       full_name: "",
       org_name: "",
       email: convite?.email ?? "",
       password: "",
       password_confirm: "",
+      // Desmarcado de partida: o aceite é um ato da pessoa (o valor inicial só existe para o tipo fechar).
+      ...(compraLigada ? { aceite_termos: false as unknown as true } : {}),
+      plano_escolhido: plano ?? undefined,
     },
   });
 
@@ -75,14 +91,15 @@ export function SignupForm({
     startTransition(async () => {
       // No modo convite o e-mail do formulário é readonly, e readonly no
       // cliente não vale nada: quem confere de novo é o servidor.
-      const entrada: SignupInput | SignupComConviteInput = convite
+      const { aceite_termos, ...semAceite } = values;
+      const entrada: SignupInput | SignupSemAceiteInput | SignupComConviteInput = convite
         ? {
             full_name: values.full_name,
             email: convite.email,
             password: values.password,
             password_confirm: values.password_confirm,
           }
-        : values;
+        : { ...semAceite, ...(compraLigada ? { aceite_termos } : {}), plano_escolhido: plano ?? undefined };
       const res = await signUp(entrada, convite?.token, captcha.token ?? undefined);
       // Token de uso único: gasto aqui, o widget gera outro para a próxima tentativa.
       if (captcha.ativo && !res.ok) captcha.renovar();
@@ -106,9 +123,39 @@ export function SignupForm({
          * de tentativas — e não uma segunda porta de provisionamento.
          */
         if (res.sessao_ativa) {
-          router.replace(
-            convite ? `/team/accept-invite/${convite.token}` : "/get-started",
-          );
+          if (convite) {
+            router.replace(`/team/accept-invite/${convite.token}`);
+            return;
+          }
+          // Compra pelo cliente desligada: o caminho de sempre (a recuperação em `/get-started`).
+          if (!compraLigada) {
+            router.replace("/get-started");
+            return;
+          }
+          // Hiperbold (15/10/2026): a empresa é criada aqui mesmo, com o nome que
+          // a pessoa acabou de digitar, pela MESMA ação auditada de `/get-started`
+          // (com teto de tentativas e as guardas de modo de cadastro). Em sucesso a
+          // ação redireciona sozinha para `/onboarding`, que leva ao pagamento;
+          // qualquer recusa cai na tela de `/get-started`, como antes.
+          //
+          // ⚠️ No Next 16 o redirect de uma server action chamada do CLIENTE REJEITA a promise (é assim que a
+          // navegação chega ao RedirectBoundary): `.catch(() => ({ ok: false }))` engolia o SUCESSO e ainda
+          // mandava para `/get-started`. Rejeição por redirect = a navegação já está em curso, não se faz
+          // nada; qualquer outra rejeição é falha de verdade e cai na saída.
+          const nome = (values as { org_name?: string }).org_name?.trim();
+          if (!nome) {
+            router.replace("/get-started");
+            return;
+          }
+          let criada: Awaited<ReturnType<typeof recoverOrganization>> | undefined;
+          try {
+            criada = await recoverOrganization(nome);
+          } catch (erro) {
+            if (isRedirectError(erro)) return;
+            router.replace("/get-started");
+            return;
+          }
+          if (criada && !criada.ok) router.replace("/get-started");
           return;
         }
         setSentTo(values.email);
@@ -253,6 +300,33 @@ export function SignupForm({
           <p className="text-xs text-destructive">{t(errors.password_confirm.message ?? "")}</p>
         )}
       </div>
+      {!convite && compraLigada && (
+        <div className="space-y-1.5">
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              id="aceite_termos"
+              type="checkbox"
+              className="mt-1"
+              aria-invalid={errors.aceite_termos ? true : undefined}
+              {...register("aceite_termos")}
+            />
+            <span>
+              {t("Li e aceito os")}{" "}
+              <a className="underline" href="/legal/terms" target="_blank" rel="noreferrer">
+                {t("Termos de Uso")}
+              </a>{" "}
+              {t("e a")}{" "}
+              <a className="underline" href="/legal/privacy" target="_blank" rel="noreferrer">
+                {t("Política de Privacidade")}
+              </a>
+              .
+            </span>
+          </label>
+          {errors.aceite_termos && (
+            <p className="text-xs text-destructive">{t(errors.aceite_termos.message ?? "")}</p>
+          )}
+        </div>
+      )}
       {serverError && (
         <div
           className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"

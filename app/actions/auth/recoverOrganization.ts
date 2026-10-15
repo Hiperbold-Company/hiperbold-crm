@@ -161,6 +161,7 @@ export async function recoverOrganization(name: string): Promise<RecoverOrganiza
         id: authUser.id,
         email: authUser.email,
         user_metadata: { ...authUser.user_metadata, org_name: parsed.data },
+        app_metadata: authUser.app_metadata,
       },
       { source: "recovery" },
     );
@@ -175,5 +176,6 @@ export async function recoverOrganization(name: string): Promise<RecoverOrganiza
   }
 
   revalidatePath("/app");
-  redirect("/onboarding/welcome");
+  // O roteador do wizard escolhe o passo: pagamento (compra ligada) ou boas-vindas (wizard completo).
+  redirect("/onboarding");
 }

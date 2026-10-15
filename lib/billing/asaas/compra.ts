@@ -128,7 +128,7 @@ import "server-only";
  */
 import type { ClienteAsaasHttp } from "./cliente";
 import type { AmbienteAsaas, ConfigAsaas } from "./config";
-import type { AssinaturaAsaas, CicloAsaas, CobrancaAsaas } from "./contratos";
+import type { AssinaturaAsaas, CallbackAsaas, CicloAsaas, CobrancaAsaas } from "./contratos";
 import { centavosParaReais, dataSaoPaulo } from "./dinheiro";
 import { documentoValido } from "./documento";
 import { calcularParcelamento, parcelasValidas, type ParametrosDeParcelamento } from "./parcelamento";
@@ -422,6 +422,40 @@ export interface DepsCompra {
    * cancelamento: o gatilho engole a própria falha, e `avisarCancelamento` engole a que escapar.
    */
   avisoDeCancelamento?: (cancelamento: { organizationId: string; asaasSubscriptionId: string }) => Promise<void>;
+  /**
+   * Para onde o Asaas devolve o cliente depois de pagar NO CARTÃO na fatura hospedada
+   * (`callback.successUrl` com `autoRedirect`). Opcional; sem ele o cliente volta à mão, como antes. O
+   * domínio precisa estar cadastrado na conta do Asaas: se estiver faltando, o Asaas recusa o POST com
+   * erro de validação e a compra repete SEM o retorno (`criarComRetornoDoCartao`), nunca falha por isso.
+   */
+  urlDeRetornoDoCartao?: string;
+}
+
+/** O `callback` do POST de cobrança/assinatura no cartão, ou nada quando a compra não tem para onde voltar. */
+function callbackDoCartao(deps: DepsCompra): CallbackAsaas | undefined {
+  return deps.urlDeRetornoDoCartao ? { successUrl: deps.urlDeRetornoDoCartao, autoRedirect: true } : undefined;
+}
+
+/**
+ * Cria no Asaas com o retorno automático do cartão e, se o Asaas recusar o POST por validação (o domínio
+ * do retorno não cadastrado na conta é o caso esperado), repete UMA vez sem o retorno: o POST recusado por
+ * validação não criou nada, então repetir não duplica cobrança. Outro erro segue para quem chamou.
+ */
+async function criarComRetornoDoCartao<T>(
+  deps: DepsCompra,
+  criar: (callback: CallbackAsaas | undefined) => Promise<T>,
+): Promise<T> {
+  const callback = callbackDoCartao(deps);
+  if (!callback) return criar(undefined);
+  try {
+    return await criar(callback);
+  } catch (err) {
+    if (err instanceof ErroAsaasException && err.erro.tipo === "validacao") {
+      deps.logger.warn("asaas_compra_retorno_do_cartao_recusado", { codigos: err.erro.codigos });
+      return criar(undefined);
+    }
+    throw err;
+  }
 }
 
 // ─── Mensagens fixas (risco 13: nunca a mensagem crua do Asaas na tela) ────
@@ -1171,16 +1205,19 @@ async function criarAssinaturaEDevolver(
   }
   let assinatura: AssinaturaAsaas;
   try {
-    assinatura = await deps.asaas.criarAssinatura({
-      customer: asaasCustomerId,
-      billingType: "CREDIT_CARD",
-      // 0955: com cupom a assinatura nasce no preço cheio (as renovações); só a primeira cobrança é rebaixada.
-      value: centavosParaReais(valorDaAssinatura(pedido)),
-      nextDueDate,
-      cycle: CICLO_ASAAS_DO_PEDIDO[pedido.ciclo ?? "monthly"],
-      description: descricao,
-      externalReference: pedido.externalReference,
-    });
+    assinatura = await criarComRetornoDoCartao(deps, (callback) =>
+      deps.asaas.criarAssinatura({
+        customer: asaasCustomerId,
+        billingType: "CREDIT_CARD",
+        // 0955: com cupom a assinatura nasce no preço cheio (as renovações); só a primeira cobrança é rebaixada.
+        value: centavosParaReais(valorDaAssinatura(pedido)),
+        nextDueDate,
+        cycle: CICLO_ASAAS_DO_PEDIDO[pedido.ciclo ?? "monthly"],
+        description: descricao,
+        externalReference: pedido.externalReference,
+        ...(callback ? { callback } : {}),
+      }),
+    );
   } catch (err) {
     return tratarErroDoPost(deps, org, pedido.id, err);
   }
@@ -1219,15 +1256,18 @@ async function criarCobrancaParceladaEDevolver(
 ): Promise<ResultadoIniciarCompra> {
   let cobranca: CobrancaAsaas;
   try {
-    cobranca = await deps.asaas.criarCobrancaParcelada({
-      customer: asaasCustomerId,
-      billingType: "CREDIT_CARD",
-      installmentCount: pedido.parcelas ?? 1,
-      totalValue: centavosParaReais(pedido.amountCents),
-      dueDate: dataSaoPaulo(agora),
-      description: descricao,
-      externalReference: pedido.externalReference,
-    });
+    cobranca = await criarComRetornoDoCartao(deps, (callback) =>
+      deps.asaas.criarCobrancaParcelada({
+        customer: asaasCustomerId,
+        billingType: "CREDIT_CARD",
+        installmentCount: pedido.parcelas ?? 1,
+        totalValue: centavosParaReais(pedido.amountCents),
+        dueDate: dataSaoPaulo(agora),
+        description: descricao,
+        externalReference: pedido.externalReference,
+        ...(callback ? { callback } : {}),
+      }),
+    );
   } catch (err) {
     return tratarErroDoPost(deps, org, pedido.id, err);
   }
@@ -1244,14 +1284,18 @@ async function criarCobrancaAvulsaEDevolver(
 ): Promise<ResultadoIniciarCompra> {
   let cobranca: CobrancaAsaas;
   try {
-    cobranca = await deps.asaas.criarCobranca({
-      customer: asaasCustomerId,
-      billingType: pedido.metodo,
-      value: centavosParaReais(pedido.amountCents),
-      dueDate: amanhaSaoPaulo(agora),
-      description: descricao,
-      externalReference: pedido.externalReference,
-    });
+    // O retorno automático é só do cartão: o Pix se paga no app do banco e a tela do app acompanha sozinha.
+    const criar = (callback: CallbackAsaas | undefined) =>
+      deps.asaas.criarCobranca({
+        customer: asaasCustomerId,
+        billingType: pedido.metodo,
+        value: centavosParaReais(pedido.amountCents),
+        dueDate: amanhaSaoPaulo(agora),
+        description: descricao,
+        externalReference: pedido.externalReference,
+        ...(callback ? { callback } : {}),
+      });
+    cobranca = pedido.metodo === "CREDIT_CARD" ? await criarComRetornoDoCartao(deps, criar) : await criar(undefined);
   } catch (err) {
     return tratarErroDoPost(deps, org, pedido.id, err);
   }

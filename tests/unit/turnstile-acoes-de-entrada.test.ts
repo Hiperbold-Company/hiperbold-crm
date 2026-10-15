@@ -152,6 +152,7 @@ describe("cadastro", () => {
     email: email(),
     password: "SenhaForte!2026",
     password_confirm: "SenhaForte!2026",
+    aceite_termos: true as const,
   });
 
   it("manda o token em options.captchaToken, sem perder o resto das options", async () => {

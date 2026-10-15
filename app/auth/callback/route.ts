@@ -283,5 +283,6 @@ export async function GET(request: NextRequest) {
     requestId,
   });
 
-  return await paraTelaAutenticada("/onboarding/welcome");
+  // O roteador do wizard escolhe o passo: pagamento (compra ligada) ou boas-vindas (wizard completo).
+  return await paraTelaAutenticada("/onboarding");
 }

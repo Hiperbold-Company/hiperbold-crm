@@ -4,6 +4,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TestarClient } from "./_client";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { exigirPlanoPagoParaSeguir } from "@/lib/onboarding/contexto";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,8 @@ export default async function TestarPage() {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/login");
+  // Hiperbold: o cliente novo paga antes de configurar; a URL direta volta para o passo "Plano".
+  await exigirPlanoPagoParaSeguir(activeOrg.orgId);
   const idioma = user.idioma;
 
   const admin = createAdminClient();

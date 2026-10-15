@@ -13339,6 +13339,12 @@ export const DICIONARIO: Traducoes = {
   },
   "Planos disponíveis": { es: "Planes disponibles" },
   "Pacotes de tokens": { es: "Paquetes de tokens" },
+  "Não foi possível confirmar a situação do seu plano agora. Tente novamente em instantes.": {
+    es: "No se pudo confirmar el estado de tu plan ahora. Inténtalo de nuevo en unos instantes.",
+  },
+  "Seu pedido anterior não foi concluído. Escolha de novo a forma de pagamento: se for a mesma opção, retomamos o mesmo pedido, sem cobrar duas vezes.": {
+    es: "Tu pedido anterior no se completó. Elige de nuevo la forma de pago: si es la misma opción, retomamos el mismo pedido, sin cobrar dos veces.",
+  },
   "Nenhum plano ou pacote está à venda no momento.": { es: "Ningún plan o paquete está a la venta en este momento." },
   "Não foi possível carregar os planos à venda agora. Atualize a página.": {
     es: "No se pudieron cargar los planes a la venta ahora. Actualiza la página.",
@@ -13943,6 +13949,111 @@ export const DICIONARIO: Traducoes = {
   "em pedidos abertos": { es: "en pedidos abiertos" },
   "por ano": { es: "por año" },
   "por semestre": { es: "por semestre" },
+  // ─── PASSO "PLANO" DO ONBOARDING (Hiperbold, 15/10/2026) ───
+  "Seu plano": { es: "Tu plan" },
+  "Escolha seu plano": { es: "Elige tu plan" },
+  "Escolha o plano e conclua o pagamento. Assim que ele for confirmado, você entra no CRM.": {
+    es: "Elige el plan y completa el pago. En cuanto se confirme, entras al CRM.",
+  },
+  "Peça a um administrador desta organização para escolher o plano e concluir o pagamento.": {
+    es: "Pide a un administrador de esta organización que elija el plan y complete el pago.",
+  },
+  "Aguardando o pagamento": { es: "Esperando el pago" },
+  "Pague o Pix para entrar no CRM. Assim que o pagamento for confirmado, esta tela segue sozinha.": {
+    es: "Paga el Pix para entrar al CRM. En cuanto se confirme el pago, esta pantalla avanza sola.",
+  },
+  "Conclua o pagamento no cartão para entrar no CRM. Assim que o Asaas confirmar, esta tela segue sozinha.": {
+    es: "Completa el pago con tarjeta para entrar al CRM. En cuanto Asaas lo confirme, esta pantalla avanza sola.",
+  },
+  "Abrir a cobrança para pagar": { es: "Abrir el cobro para pagar" },
+  "Ativando seu plano…": { es: "Activando tu plan…" },
+  // ─── TELA INÍCIO (Hiperbold, 15/10/2026) ───
+  "O que já está pronto e o que falta para o CRM trabalhar pela sua empresa.": {
+    es: "Lo que ya está listo y lo que falta para que el CRM trabaje por tu empresa.",
+  },
+  "O essencial está pronto. Os passos abaixo deixam o CRM ainda melhor para a sua equipe.": {
+    es: "Lo esencial está listo. Los pasos de abajo dejan el CRM aún mejor para tu equipo.",
+  },
+  "Faltam poucos passos para o CRM começar a trabalhar pela sua empresa.": {
+    es: "Faltan pocos pasos para que el CRM empiece a trabajar por tu empresa.",
+  },
+  "obrigatórios": { es: "obligatorios" },
+  "Passos obrigatórios concluídos": { es: "Pasos obligatorios completados" },
+  "Obrigatórios": { es: "Obligatorios" },
+  "Opcionais": { es: "Opcionales" },
+  "Feito": { es: "Hecho" },
+  "Falta fazer": { es: "Falta hacer" },
+  "Opcional": { es: "Opcional" },
+  "Plano ativo": { es: "Plan activo" },
+  "Seu plano está pago e liberado para usar.": { es: "Tu plan está pagado y liberado para usar." },
+  "Escolher plano": { es: "Elegir plan" },
+  "Confirmar seu e-mail": { es: "Confirmar tu correo" },
+  "Confirmando, você recebe os avisos importantes e pode recuperar o acesso quando precisar.": {
+    es: "Al confirmarlo, recibes los avisos importantes y puedes recuperar el acceso cuando lo necesites.",
+  },
+  "Ver meu perfil": { es: "Ver mi perfil" },
+  "Conte o que sua empresa faz e confirme o fuso horário. O atendente de IA usa isso para falar do seu negócio.": {
+    es: "Cuenta qué hace tu empresa y confirma la zona horaria. El agente de IA lo usa para hablar de tu negocio.",
+  },
+  "Preencher": { es: "Completar" },
+  "Conectar o WhatsApp": { es: "Conectar el WhatsApp" },
+  "Leia o QR Code com o celular da empresa para receber e responder mensagens aqui.": {
+    es: "Lee el código QR con el celular de la empresa para recibir y responder mensajes aquí.",
+  },
+  "Criar e publicar o agente de IA": { es: "Crear y publicar el agente de IA" },
+  "O agente atende seus clientes no WhatsApp e passa para a equipe quando precisa.": {
+    es: "El agente atiende a tus clientes en WhatsApp y pasa a tu equipo cuando hace falta.",
+  },
+  "Ver agentes": { es: "Ver agentes" },
+  "Logo da empresa": { es: "Logo de la empresa" },
+  "Coloque sua logo para o CRM ficar com a cara do seu negócio.": {
+    es: "Pon tu logo para que el CRM quede con la cara de tu negocio.",
+  },
+  "Enviar logo": { es: "Enviar logo" },
+  "Trocar logo": { es: "Cambiar logo" },
+  "Follow-up automático": { es: "Seguimiento automático" },
+  "Retome a conversa com quem parou de responder, sem precisar lembrar de cada pessoa.": {
+    es: "Retoma la conversación con quien dejó de responder, sin tener que acordarte de cada persona.",
+  },
+  "Criar follow-up": { es: "Crear seguimiento" },
+  "Ver follow-ups": { es: "Ver seguimientos" },
+  "Convidar a equipe": { es: "Invitar al equipo" },
+  "Chame quem atende com você para dividir as conversas.": {
+    es: "Llama a quien atiende contigo para repartir las conversaciones.",
+  },
+  "Convidar": { es: "Invitar" },
+  "Ver equipe": { es: "Ver equipo" },
+  // ─── PERFIL DA EMPRESA (Configurações › Empresa) ───
+  "Descreva em poucas palavras o que sua empresa faz.": { es: "Describe en pocas palabras qué hace tu empresa." },
+  "Perfil da empresa salvo.": { es: "Perfil de la empresa guardado." },
+  "Não foi possível salvar o perfil da empresa.": { es: "No se pudo guardar el perfil de la empresa." },
+  "Conte, do seu jeito, o que sua empresa faz. O agente de IA usa isso para falar do seu negócio. O fuso horário fica logo acima.": {
+    es: "Cuenta, a tu manera, qué hace tu empresa. El agente de IA lo usa para hablar de tu negocio. La zona horaria está justo arriba.",
+  },
+  "O que sua empresa faz": { es: "Qué hace tu empresa" },
+  "Salvar perfil": { es: "Guardar perfil" },
+  // ─── Verificação de e-mail do CRM (faixa, página de desfecho, e-mail e cadastro) ───
+  "Confirme seu e-mail: enviamos um link para": { es: "Confirma tu correo: enviamos un enlace a" },
+  "Link reenviado. Confira sua caixa de entrada.": { es: "Enlace reenviado. Revisa tu bandeja de entrada." },
+  "Aguarde 1 minuto para pedir outro link.": { es: "Espera 1 minuto para pedir otro enlace." },
+  "Você chegou ao limite de 5 reenvios por dia. Tente amanhã.": { es: "Llegaste al límite de 5 reenvíos por día. Inténtalo mañana." },
+  "Seu e-mail já está confirmado.": { es: "Tu correo ya está confirmado." },
+  "Não foi possível reenviar agora. Tente de novo em instantes.": { es: "No se pudo reenviar ahora. Inténtalo de nuevo en unos instantes." },
+  "Enviar um link novo": { es: "Enviar un enlace nuevo" },
+  "E-mail confirmado": { es: "Correo confirmado" },
+  "Obrigado. Seu endereço está confirmado.": { es: "Gracias. Tu dirección está confirmada." },
+  "Ir para o CRM": { es: "Ir al CRM" },
+  "Este link venceu": { es: "Este enlace venció" },
+  "Este link não vale mais": { es: "Este enlace ya no es válido" },
+  "Aguarde um pouco e abra o link de novo.": { es: "Espera un poco y abre el enlace de nuevo." },
+  "Ele pode já ter sido usado, ter vencido ou ter sido trocado por um link mais novo.": { es: "Puede que ya se haya usado, que haya vencido o que lo haya reemplazado un enlace más nuevo." },
+  "Entrar para pedir um link novo": { es: "Inicia sesión para pedir un enlace nuevo" },
+  "Confirme seu e-mail no {crm}": { es: "Confirma tu correo en {crm}" },
+  "Para confirmar que este endereço é seu, use o botão abaixo. O link vale por {dias} dias e funciona uma vez só.": { es: "Para confirmar que esta dirección es tuya, usa el botón de abajo. El enlace vale por {dias} días y funciona una sola vez." },
+  "Confirmação de e-mail": { es: "Confirmación de correo" },
+  "Confirmar e-mail": { es: "Confirmar correo" },
+  "Você recebe este e-mail porque criou uma conta no {crm}. Se não foi você, ignore esta mensagem.": { es: "Recibes este correo porque creaste una cuenta en {crm}. Si no fuiste tú, ignora este mensaje." },
+  "Aceite os Termos de Uso e a Política de Privacidade para criar a conta": { es: "Acepta los Términos de Uso y la Política de Privacidad para crear la cuenta" },
 };
 
 /**

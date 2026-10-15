@@ -11,7 +11,8 @@
  * (mesma doutrina da decisão 3 do plano da fase, "quem confirma é a API").
  */
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -26,11 +27,31 @@ import type { QrPixResposta } from "@/lib/billing/asaas/compra";
 
 const ESTADOS_AINDA_AGUARDANDO = new Set(["criado", "processando", "aguardando_pagamento", "inconclusivo"]);
 
-export function PixPendente({ pedidoId, qr }: { pedidoId: string; qr: QrPixResposta }) {
+/** Para onde seguir depois do Pix confirmado, quando não é a tela do plano (o wizard de onboarding continua dele). */
+export interface DepoisDePago {
+  href: string;
+}
+
+export function PixPendente({
+  pedidoId,
+  qr,
+  depoisDePago,
+}: {
+  pedidoId: string;
+  qr: QrPixResposta;
+  depoisDePago?: DepoisDePago;
+}) {
   const t = useT();
+  const router = useRouter();
   const tagDoIdioma = useTagDeIdioma();
   const [copiado, setCopiado] = useState(false);
   const estado = usePollDoPedido(pedidoId, "aguardando_pagamento");
+  const pago = estado.status === "pago";
+
+  // No wizard o passo termina sozinho quando o pagamento é confirmado.
+  useEffect(() => {
+    if (pago && depoisDePago) router.replace(depoisDePago.href);
+  }, [pago, depoisDePago, router]);
 
   async function copiar() {
     const ok = await copyToClipboard(qr.payload);
@@ -42,13 +63,17 @@ export function PixPendente({ pedidoId, qr }: { pedidoId: string; qr: QrPixRespo
     }
   }
 
-  if (estado.status === "pago") {
+  if (pago) {
     return (
       <div className="space-y-3 rounded-md border p-4">
         <Badge variant="success">{t("Pagamento confirmado")}</Badge>
         <p className="text-sm text-muted-foreground">{t("O pagamento pelo Pix foi confirmado.")}</p>
         <Button asChild variant="outline" size="sm">
-          <Link href="/app/settings/plano">{t("Ver plano")}</Link>
+          {depoisDePago ? (
+            <Link href={depoisDePago.href}>{t("Continuar")}</Link>
+          ) : (
+            <Link href="/app/settings/plano">{t("Ver plano")}</Link>
+          )}
         </Button>
       </div>
     );

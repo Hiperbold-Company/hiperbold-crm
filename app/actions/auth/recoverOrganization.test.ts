@@ -86,7 +86,7 @@ describe("recoverOrganization", () => {
     const { recoverOrganization } = await import("./recoverOrganization");
 
     await expect(recoverOrganization("Clínica Boa Vista")).rejects.toThrow(
-      "NEXT_REDIRECT:/onboarding/welcome",
+      "NEXT_REDIRECT:/onboarding",
     );
     expect(ensureTenantForUser).toHaveBeenCalledTimes(1);
 
@@ -245,7 +245,7 @@ describe("recoverOrganization — instalação que só aceita convidados", () =>
     // `next/navigation` transforma isso em throw — é como os demais casos
     // verdes deste arquivo distinguem "saiu pela porta" de "seguiu adiante".
     await expect(recoverOrganization("Plata Iphones")).rejects.toThrow(
-      "NEXT_REDIRECT:/onboarding/welcome",
+      "NEXT_REDIRECT:/onboarding",
     );
 
     expect(ensureTenantForUser).toHaveBeenCalled();
@@ -320,7 +320,7 @@ describe("recoverOrganization — instalação com aprovação", () => {
     const { recoverOrganization } = await import("./recoverOrganization");
 
     await expect(recoverOrganization("Clínica Boa Vista")).rejects.toThrow(
-      "NEXT_REDIRECT:/onboarding/welcome",
+      "NEXT_REDIRECT:/onboarding",
     );
     expect(ensureTenantForUser).toHaveBeenCalledTimes(1);
     expect(createRegistrationRequest).not.toHaveBeenCalled();

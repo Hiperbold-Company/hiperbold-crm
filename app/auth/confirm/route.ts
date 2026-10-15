@@ -232,5 +232,6 @@ export async function GET(request: NextRequest) {
     requestId,
   });
 
-  return redirectTo("/onboarding/welcome");
+  // O roteador do wizard escolhe o passo: pagamento (compra ligada) ou boas-vindas (wizard completo).
+  return redirectTo("/onboarding");
 }

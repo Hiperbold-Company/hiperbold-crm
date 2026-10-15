@@ -182,6 +182,7 @@ describe("SignupForm", () => {
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ana@exemplo.test" } });
     fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "SenhaForte!2026" } });
     fireEvent.change(screen.getByLabelText("Confirmar senha"), { target: { value: "SenhaForte!2026" } });
+    fireEvent.click(screen.getByRole("checkbox"));
   }
 
   it("sem chave a tela não muda", () => {
@@ -193,7 +194,7 @@ describe("SignupForm", () => {
 
   it("com chave: o token vai como terceiro argumento do signUp", async () => {
     acoes.signUp.mockResolvedValue({ ok: false, error: "signup_failed" });
-    render(<SignupForm turnstileSiteKey={SITE_DE_TESTE} />);
+    render(<SignupForm turnstileSiteKey={SITE_DE_TESTE} compraLigada />);
     await waitFor(() => expect(api.render).toHaveBeenCalled());
     const botao = screen.getByRole("button", { name: "Criar conta" });
     expect(botao).toBeDisabled();

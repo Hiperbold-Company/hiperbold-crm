@@ -43,6 +43,14 @@ export interface NavMetadata {
   minRole?: Role;
   /** Ausente = só no hub. `true` = uso diário, sobe para o sidebar. */
   sidebar?: boolean;
+  /**
+   * Seção em que a tela TAMBÉM aparece no hub de Configurações (`/app/settings`),
+   * além do hub do próprio grupo. Existe porque o sidebar enxuto (decisão do dono,
+   * 15/10/2026) tirou dele as telas de apoio, e quem as procura vai primeiro a
+   * Configurações. Não muda o grupo da tela: o hub de IA continua listando
+   * Follow-ups, só que agora o de Configurações também lista.
+   */
+  configuracoes?: string;
   healthDot?: boolean;
   /**
    * A porta de um MÓDULO OPCIONAL da instalação (`lib/instalacao/modulos.ts`).
@@ -109,10 +117,42 @@ export const GRUPO_NO_RODAPE: NavGroupId = "organizacao";
  * (`canShare` em Respostas rápidas, `canCompare` em Desempenho) NÃO é porta
  * fechada e por isso não vira `minRole`.
  */
+/**
+ * SIDEBAR = SÓ O ESSENCIAL (decisão do dono do produto, Hiperbold, 15/10/2026).
+ *
+ * O cliente é leigo: a barra lateral mostra oito portas, nesta ordem — Início,
+ * Inbox, Radar, Funis, Contatos, Agentes, Desempenho, Atividades — e o rodapé
+ * fixo "Configurações". O teto anterior (15 itens, medido em 900px) deixou de ser
+ * o alvo: a barra encolhe de propósito, e `tests/unit/interface-por-empresa.test.ts`
+ * guarda um teto novo de 8.
+ *
+ * Tudo o que saiu da barra continua a um clique, sem perder porta: aparece no hub
+ * de Configurações (`/app/settings`) pelo campo `configuracoes` (seções
+ * Atendimento, IA e Canais), segue no hub do próprio grupo e no ⌘K. Promover uma
+ * tela de volta ao sidebar é decisão de produto, não de espaço.
+ */
 export const NAV_CATALOG = [
   {
-    // SEM `sidebar: true`, e a razão não tem nada a ver com a qualidade desta
-    // tela: o menu lateral está no limite medido. Com ela, seriam 20 portas, e
+    // Hiperbold (15/10/2026): o que já está feito e o que falta para o CRM trabalhar pela empresa.
+    // De ADMIN (`minRole`): os passos levam a telas de administração. É a página que
+    // `app/app/page.tsx` abre enquanto faltar um passo obrigatório (compra ligada).
+    //
+    // Primeiro item do sidebar (decisão do dono, 15/10/2026). Mora no grupo "atendimento"
+    // e não em "organizacao" porque o grupo de Organização é o do RODAPÉ (só o link
+    // Configurações é desenhado ali) e Início precisa abrir a lista.
+    href: "/app/inicio",
+    label: "Início",
+    description: "O que já está pronto e o que falta para o CRM trabalhar pela sua empresa.",
+    icon: "House",
+    group: "atendimento",
+    minRole: "admin",
+    sidebar: true,
+  },
+  {
+    // SEM `sidebar: true`. (Desde 15/10/2026 o sidebar é só o essencial — ver o
+    // bloco acima de NAV_CATALOG —, então este item fica no hub por decisão de
+    // produto; o histórico abaixo é de quando o motivo era espaço.)
+    // O menu lateral estava no limite medido. Com ela, seriam 20 portas, e
     // `tests/e2e/navegacao.spec.ts` reprova ("em 900px o menu inteiro tem de
     // caber sem scroll" · Received: true). O comentário daquela spec já
     // antecipava o número: "Trocar '17 itens sem hierarquia' por '20 itens que
@@ -166,7 +206,7 @@ export const NAV_CATALOG = [
     description: "O que está marcado, com quem, e quem atende — seu e da equipe.",
     icon: "CalendarBlank",
     group: "atendimento",
-    sidebar: true,
+    configuracoes: "Atendimento",
   },
   {
     // Renomeado de "Templates": estes são scripts do atendente, consumidos pelo
@@ -177,7 +217,7 @@ export const NAV_CATALOG = [
     description: "Scripts salvos para responder mais rápido, seus ou da equipe.",
     icon: "FileText",
     group: "atendimento",
-    sidebar: true,
+    configuracoes: "Atendimento",
   },
 
   // ---- CRM — o funil ----
@@ -235,7 +275,7 @@ export const NAV_CATALOG = [
     icon: "ListChecks",
     group: "crm",
     section: "O dia a dia da venda",
-    sidebar: true,
+    configuracoes: "Atendimento",
   },
   {
     // Módulo VoIP (migration 0347). No grupo do CRM pelo mesmo critério de
@@ -312,6 +352,7 @@ export const NAV_CATALOG = [
     description: "O que se pode marcar, quanto dura, onde acontece e quem atende.",
     icon: "CalendarBlank",
     group: "organizacao",
+    configuracoes: "Atendimento",
     // "Sua empresa", junto de Atendimento e Empresa: é configuração do NEGÓCIO,
     // não da conta de quem está logado. O gate `navegacao-registry` cobra a
     // seção em todo grupo que tem hub, e sem ela o destino não aparece no hub.
@@ -333,6 +374,7 @@ export const NAV_CATALOG = [
     description: "O que foi feito, por quem, e quanto o cliente paga.",
     icon: "Receipt",
     group: "crm",
+    configuracoes: "Atendimento",
     section: "O dia a dia da venda",
     // ⚠️ FORA do sidebar, e isto foi MEDIDO, não escolhido por gosto. Com
     // `sidebar: true` o menu passou a rolar em 1280×900 e o e2e
@@ -414,7 +456,7 @@ export const NAV_CATALOG = [
     group: "ia",
     section: "Montar o agente",
     minRole: "manager",
-    sidebar: true,
+    configuracoes: "IA",
   },
   {
     // Os roteiros de atendimento (#1130, de @vgamkt): perguntas que a IA conduz
@@ -441,7 +483,7 @@ export const NAV_CATALOG = [
     group: "ia",
     section: "Montar o agente",
     minRole: "manager",
-    sidebar: true,
+    configuracoes: "IA",
   },
   {
     href: "/app/ai/credentials",
@@ -469,6 +511,7 @@ export const NAV_CATALOG = [
     description: "Ligue o Jev para decisões rápidas e escolha qual inteligência atende cada parte do sistema.",
     icon: "Plugs",
     group: "ia",
+    configuracoes: "IA",
     section: "Montar o agente",
     minRole: "manager",
     // SEM `sidebar: true`, como as outras nove telas deste grupo. Adicionar as
@@ -606,7 +649,7 @@ export const NAV_CATALOG = [
     icon: "PlugsConnected",
     group: "canais",
     minRole: "admin",
-    sidebar: true,
+    configuracoes: "Canais",
     healthDot: true,
   },
   {
@@ -640,7 +683,7 @@ export const NAV_CATALOG = [
     icon: "WebhooksLogo",
     group: "canais",
     minRole: "manager",
-    sidebar: true,
+    configuracoes: "Canais",
   },
 
   // ---- Análise — olhar o sistema funcionando ----
@@ -701,7 +744,7 @@ export const NAV_CATALOG = [
     // pessoa — orçamento e criativo são da empresa inteira. Mesmo grau dos
     // outros dois vizinhos do grupo.
     minRole: "manager",
-    sidebar: true,
+    configuracoes: "Canais",
   },
   {
     // Irmã de "Desempenho", não a mesma coisa: lá é DESFECHO (funil agora,

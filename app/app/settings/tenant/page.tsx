@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ZonaDePerigoDaOrganizacao } from "./_danger-zone";
 import { TenantForm } from "./_form";
 import { InterfaceDaEmpresaForm } from "./_interface";
+import { PerfilDaEmpresaForm } from "./_perfil";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ interface OrgRow {
   privacy_policy_url: string | null;
   /** Portas escolhidas pela EMPRESA (issue #1341). Opaco aqui: quem lê é `lerInterface`. */
   interface_settings: unknown;
+  onboarding_state: { welcome?: { o_que_faz?: unknown } } | null;
 }
 
 export default async function TenantSettingsPage() {
@@ -39,12 +41,14 @@ export default async function TenantSettingsPage() {
   const { data } = await supabase
     .from("organizations")
     .select(
-      "display_name, legal_name, cnpj, country, timezone, locale, currency, media_retention_days, dpo_email, privacy_policy_url, interface_settings",
+      "display_name, legal_name, cnpj, country, timezone, locale, currency, media_retention_days, dpo_email, privacy_policy_url, interface_settings, onboarding_state",
     )
     .eq("id", activeOrg.orgId)
     .maybeSingle();
 
   const row = (data ?? null) as OrgRow | null;
+  // "O que a empresa faz" vive onde o onboarding o grava (`onboarding_state.welcome.o_que_faz`).
+  const oQueFaz = row?.onboarding_state?.welcome?.o_que_faz;
   const idioma = user.idioma;
 
   return (
@@ -78,6 +82,7 @@ export default async function TenantSettingsPage() {
           }}
         />
       )}
+      {row && <PerfilDaEmpresaForm initial={typeof oQueFaz === "string" ? oQueFaz : ""} />}
       {row && (
         <InterfaceDaEmpresaForm
           initial={row.interface_settings}

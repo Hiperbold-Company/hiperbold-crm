@@ -54,7 +54,7 @@ import {
   type DesfechoDaTentativaDeCompra,
   type EscolhaDeCompra,
 } from "../_logica-compra";
-import { PixPendente } from "./_pix-pendente";
+import { PixPendente, type DepoisDePago } from "./_pix-pendente";
 import { AceiteDosTermos, CAMPOS_VAZIOS, FormularioDoPagador, formatarReais } from "./_comuns";
 
 type Passo = 1 | 2 | 3 | 4;
@@ -83,7 +83,13 @@ export function AssinarPlanoPassoAPasso({
   taxaMensalPercentual,
   precisaPagador,
   planoAtualCode,
+  planoInicial,
+  depoisDePago,
 }: {
+  /** O plano a deixar marcado ao abrir (o `?plano=` do site ou o do cadastro), já validado contra os à venda. Só marca: quem avança é o botão. */
+  planoInicial?: string | null;
+  /** Quando o passo vive dentro do wizard de onboarding: para onde o Pix confirmado leva. */
+  depoisDePago?: DepoisDePago;
   planos: PlanoParaVenda[];
   opcoesDeParcelas: Record<string, OpcoesDoPlano>;
   taxaMensalPercentual: number | null;
@@ -94,7 +100,9 @@ export function AssinarPlanoPassoAPasso({
   const tagDoIdioma = useTagDeIdioma();
 
   const [passo, setPasso] = useState<Passo>(1);
-  const [planCode, setPlanCode] = useState<string | null>(null);
+  const [planCode, setPlanCode] = useState<string | null>(() =>
+    planoInicial && planos.some((p) => p.code === planoInicial) ? planoInicial : null,
+  );
   const [ciclo, setCiclo] = useState<CicloDeCompra>("monthly");
   const [metodo, setMetodo] = useState<Metodo>("CREDIT_CARD");
   const [parcelas, setParcelas] = useState(1);
@@ -327,7 +335,7 @@ export function AssinarPlanoPassoAPasso({
   }
 
   if (resultado?.tipo === "pix") {
-    return <PixPendente pedidoId={resultado.pedidoId} qr={resultado.qr} />;
+    return <PixPendente pedidoId={resultado.pedidoId} qr={resultado.qr} depoisDePago={depoisDePago} />;
   }
 
   const rotulosDosPassos = [t("Plano"), t("Ciclo"), t("Pagamento"), t("Resumo")];

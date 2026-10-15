@@ -4,11 +4,13 @@ import { headers } from "next/headers";
 
 import { createClient } from "@/lib/supabase/server";
 import {
-  signupSchema,
+  signupSchemaDe,
   signupComConviteSchema,
   type SignupInput,
+  type SignupSemAceiteInput,
   type SignupComConviteInput,
 } from "@/lib/auth/schemas";
+import { compraPeloClienteDisponivel } from "@/lib/onboarding/precisa-pagar";
 import { verifyInviteToken } from "@/lib/auth/invite-token";
 import { criarContaDeConvite, lerConfigPublicaDoGoTrue } from "@/lib/auth/convite-no-gotrue";
 import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
@@ -17,6 +19,14 @@ import { authRateLimited, AUTH_LIMITS } from "@/lib/auth/rate-limit";
 import { env } from "@/lib/env";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { captchaRecusadoPeloGoTrue } from "@/lib/security/turnstile";
+import { enviarVerificacaoDeEmail } from "@/lib/auth/enviar-verificacao-email";
+import { gravarNoAppMetadata } from "@/lib/auth/verificacao-email";
+import { sanitizarPlano } from "@/lib/auth/plano-escolhido";
+import { contaRecemCriada } from "@/lib/auth/conta-recem-criada";
+import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
+import { normalizarIdioma, parseAcceptLanguage } from "@/lib/i18n/idiomas";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { logger } from "@/lib/logger";
 
 export type SignUpResult =
   | {
@@ -63,6 +73,45 @@ export type SignUpResult =
     };
 
 /**
+ * Depois de criada a conta sem convite: grava o aceite dos Termos (servidor: versão e hora vêm daqui) e, se a
+ * sessão já veio aberta (confirmação do provedor desligada), abre o pedido de verificação do CRM e manda o
+ * e-mail "Confirme seu e-mail". Com a confirmação do provedor LIGADA, o e-mail do provedor é quem confirma e
+ * só o aceite é gravado. Nunca lança: o cadastro já deu certo e a falha aqui vira log (a faixa do CRM oferece
+ * "Reenviar"; o aceite também é exigido na tela de pagamento).
+ *
+ * O aceite vai para o `app_metadata` (só o servidor escreve) e é copiado para a organização quando ela nasce
+ * (`lib/auth/provision.ts`).
+ */
+async function aposCriarConta(p: {
+  userId: string;
+  sessaoAtiva: boolean;
+  idioma: ReturnType<typeof normalizarIdioma>;
+  requestId: string | null;
+  ip: string | null;
+  userAgent: string | null;
+}): Promise<void> {
+  const aceite = { aceite_termos: { versao: VERSAO_DOS_TERMOS, aceito_em: new Date().toISOString() } };
+  try {
+    if (p.sessaoAtiva) {
+      const r = await enviarVerificacaoDeEmail({
+        userId: p.userId,
+        via: "cadastro",
+        idioma: p.idioma,
+        junto: aceite,
+        requestId: p.requestId,
+        ip: p.ip,
+        userAgent: p.userAgent,
+      });
+      if (!r.ok) logger.warn("[signup] e-mail de confirmação não saiu", { motivo: r.motivo });
+    } else if (!(await gravarNoAppMetadata(createAdminClient(), p.userId, aceite))) {
+      logger.warn("[signup] aceite dos Termos não foi gravado");
+    }
+  } catch (e) {
+    logger.warn("[signup] pós-cadastro falhou", { erro: e instanceof Error ? e.message : String(e) });
+  }
+}
+
+/**
  * Signup self-service: cria o usuário no GoTrue e dispara o e-mail de
  * confirmação. O tenant só é provisionado quando o link é confirmado em
  * /auth/confirm (evita orgs órfãs de cadastros nunca confirmados).
@@ -72,7 +121,7 @@ export type SignUpResult =
  * diferenciamos. Rate limit de envio de e-mail é do próprio GoTrue.
  */
 export async function signUp(
-  input: SignupInput | SignupComConviteInput,
+  input: SignupInput | SignupSemAceiteInput | SignupComConviteInput,
   /**
    * Token de convite, quando a conta está sendo criada para ACEITAR um convite.
    * Viaja até `/auth/confirm` pelo `user_metadata` — o mesmo canal que
@@ -85,9 +134,13 @@ export async function signUp(
   captchaToken?: string,
 ): Promise<SignUpResult> {
   const temConvite = typeof inviteToken === "string" && inviteToken.trim() !== "";
+  // Hiperbold: o aceite dos Termos e o pedido de verificação de e-mail do CRM só existem no caminho
+  // "paga primeiro" (compra pelo cliente ligada). Instalação com a compra desligada cadastra como antes.
+  // A ação é chamável direto: quem decide é o servidor, não a tela. Sem convite apenas.
+  const compraLigada = temConvite ? false : await compraPeloClienteDisponivel(createAdminClient());
   const parsed = temConvite
     ? signupComConviteSchema.safeParse(input)
-    : signupSchema.safeParse(input);
+    : signupSchemaDe(compraLigada).safeParse(input);
   if (!parsed.success) {
     return {
       ok: false,
@@ -196,6 +249,7 @@ export async function signUp(
     return { ok: true, sessao_ativa: criada.sessao_ativa };
   }
 
+  const plano = convite ? null : sanitizarPlano((parsed.data as SignupInput).plano_escolhido);
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
@@ -218,7 +272,12 @@ export async function signUp(
             invite_token: convite,
             full_name: (parsed.data as SignupComConviteInput).full_name,
           }
-        : { org_name: (parsed.data as SignupInput).org_name },
+        : {
+            org_name: (parsed.data as SignupInput).org_name,
+            // Só uma dica para a tela de pagamento pré-selecionar o plano; nunca preço. Sanitizada aqui de
+            // novo: a ação é chamável direto.
+            ...(plano ? { plano_escolhido: plano } : {}),
+          },
     },
   });
 
@@ -282,6 +341,19 @@ export async function signUp(
     ip,
     userAgent,
   });
+
+  // Cadastro sem convite: aceite dos Termos e verificação de e-mail do CRM. Com convite nada muda (o convite
+  // assinado para este endereço é a prova do e-mail, e o aceite é pedido no fluxo de quem convida).
+  if (!convite && compraLigada && contaRecemCriada(data.user)) {
+    await aposCriarConta({
+      userId: data.user.id,
+      sessaoAtiva: data.session !== null,
+      idioma: normalizarIdioma(parseAcceptLanguage(hdrs.get("accept-language"))),
+      requestId,
+      ip,
+      userAgent,
+    });
+  }
 
   // `data.session` é o único sinal confiável de que o provedor não vai mandar
   // e-mail nenhum: ele vem preenchido exatamente quando a confirmação está

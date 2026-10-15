@@ -71,7 +71,11 @@ export function contratoSemPlano(contrato: ContratoParaSemPlano | null | undefin
  * Esta organização está sem plano E o bloqueio está valendo? Nunca lança.
  * `modo !== 'bloquear'` sai antes de consultar o contrato.
  */
-export async function organizacaoSemPlano(admin: SupabaseClient, organizationId: string): Promise<boolean> {
+export async function organizacaoSemPlano(
+  admin: SupabaseClient,
+  organizationId: string,
+  opcoes: { semCarencia?: boolean } = {},
+): Promise<boolean> {
   try {
     const { modo, error: erroModo } = await modoDeBillingCacheado(admin);
     if (erroModo) throw new Error(`ler billing_settings: ${erroModo}`);
@@ -93,7 +97,13 @@ export async function organizacaoSemPlano(admin: SupabaseClient, organizationId:
     if (!linha) return false;
 
     // A mesma condição de `fn_billing_modo_leitura`: o bloqueio já venceu.
-    const bloqueioVale = linha.bloqueio_a_partir_de !== null && new Date(linha.bloqueio_a_partir_de).getTime() <= Date.now();
+    // `semCarencia`: a pergunta do passo de pagamento. A conta nasce com `bloqueio_a_partir_de = now() + 5 s`
+    // (a carência da própria transação de criação), e quem acaba de se cadastrar chega ao roteador do
+    // wizard dentro desses 5 s: esperar o bloqueio vencer fazia o "pagar primeiro" concluir o onboarding e
+    // entrar no CRM sem pagar (achado na prova pela tela, 15/10/2026). Quem decide é o contrato sem plano.
+    const bloqueioVale =
+      opcoes.semCarencia === true ||
+      (linha.bloqueio_a_partir_de !== null && new Date(linha.bloqueio_a_partir_de).getTime() <= Date.now());
     return (
       bloqueioVale &&
       contratoSemPlano({ status: linha.status, currentPeriodEnd: linha.current_period_end, cycle: linha.cycle })
@@ -105,6 +115,51 @@ export async function organizacaoSemPlano(admin: SupabaseClient, organizationId:
       error: (err instanceof Error ? err.message : String(err)).slice(0, 300),
     });
     return false;
+  }
+}
+
+/** O marcador que o cadastro do próprio visitante grava em `organizations.settings` (`lib/auth/provision.ts`). */
+export const MARCADOR_SEM_PLANO = "sem_plano";
+
+export type LeituraDeSemPlano = { ok: true; semPlano: boolean } | { ok: false; detalhe: string };
+
+/**
+ * "Esta organização NUNCA assinou?" — a pergunta do passo de pagamento do wizard, que NÃO depende
+ * do modo de cobrança (`billing_settings.modo`) nem da carência de 5 s da criação: a conta nasceu do
+ * cadastro do próprio visitante (marcador `settings.billing_inicio = 'sem_plano'`) E o contrato
+ * continua suspenso, sem período e sem ciclo. Com a compra pelo cliente ligada, quem está nesse
+ * estado paga antes de configurar, mesmo numa instalação em `avisar`.
+ *
+ * Diferente de `organizacaoSemPlano`, NÃO é fail-open: uma leitura que falha devolve
+ * `{ ok: false }` e quem chama decide (o roteador do wizard não conclui o onboarding sem saber).
+ * Nunca lança.
+ */
+export async function lerSeNuncaAssinou(admin: SupabaseClient, organizationId: string): Promise<LeituraDeSemPlano> {
+  try {
+    const { data: org, error: erroOrg } = await admin
+      .from("organizations")
+      .select("settings")
+      .eq("id", organizationId)
+      .maybeSingle();
+    if (erroOrg) throw new Error(`ler organizations.settings: ${erroOrg.message}`);
+    const marcador = (org as { settings?: { billing_inicio?: unknown } | null } | null)?.settings?.billing_inicio;
+    if (marcador !== MARCADOR_SEM_PLANO) return { ok: true, semPlano: false };
+
+    const { data, error } = await admin
+      .from("billing_contracts")
+      .select("status, cycle, current_period_end")
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (error) throw new Error(`ler billing_contracts: ${error.message}`);
+    const linha = data as { status: string; cycle: string | null; current_period_end: string | null } | null;
+    return {
+      ok: true,
+      semPlano: contratoSemPlano(linha ? { status: linha.status, currentPeriodEnd: linha.current_period_end, cycle: linha.cycle } : null),
+    };
+  } catch (err) {
+    const detalhe = (err instanceof Error ? err.message : String(err)).slice(0, 300);
+    logger.error("alarme_planos_leitura", { organization_id: organizationId, etapa: "ler_se_nunca_assinou", error: detalhe });
+    return { ok: false, detalhe };
   }
 }
 

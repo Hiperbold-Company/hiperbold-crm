@@ -60,6 +60,7 @@ const entrada = () => ({
   email: `cadastro-${++n}-${Date.now()}@exemplo.test`,
   password: "SenhaForte!2026",
   password_confirm: "SenhaForte!2026",
+  aceite_termos: true as const,
 });
 
 describe("signUp — a tela precisa saber se a sessão já veio aberta", () => {

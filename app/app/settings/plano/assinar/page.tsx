@@ -30,15 +30,11 @@ import { redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { compraLigada, configDoAsaas, ErroConfiguracaoAsaas, type AmbienteAsaas } from "@/lib/billing/asaas/config";
-import { planosParaVenda } from "@/lib/billing/asaas/leitura";
-import { planoDaOrganizacao } from "@/lib/billing/planos/plano-da-organizacao";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { opcoesDeParcelamento, type OpcaoDeParcelas } from "@/lib/billing/asaas/parcelamento";
-
-import { pacotesParaVenda, parametrosDeParcelamento, precisaDeFormularioDoPagador } from "./_dados";
+import { dadosDaCompraDePlano } from "./_dados";
 import { AssinarOuComprarClient } from "./_client";
 
 export const metadata = { title: "Assinar" };
@@ -92,46 +88,17 @@ export default async function AssinarPage() {
     );
   }
 
-  const [planosResultado, pacotesResultado, precisaPagador, parametros, planoDaOrg] = await Promise.all([
-    planosParaVenda(admin, logger),
-    pacotesParaVenda(admin, logger),
-    precisaDeFormularioDoPagador(admin, activeOrg.orgId, ambiente, logger),
-    parametrosDeParcelamento(admin, logger),
-    planoDaOrganizacao(admin, activeOrg.orgId, logger),
-  ]);
-
-  // D-180: o plano que a organização tem hoje, só para marcar o cartão no passo 1. Contrato vivo
-  // (avaliação, ativa ou atrasada) e leitura sem falha; sem contrato, suspenso ou cancelado, nenhum cartão é marcado.
-  const planoAtualCode =
-    !planoDaOrg.leituraFalhou &&
-    planoDaOrg.contrato !== null &&
-    ["avaliacao", "ativa", "atrasada"].includes(planoDaOrg.contrato.status)
-      ? planoDaOrg.plano.code
-      : null;
-
-  const planos = planosResultado.planos.filter((p) => p.forSale && p.priceMonthlyCents > 0);
-  const leituraFalhou = planosResultado.leituraFalhou || pacotesResultado.leituraFalhou;
-
-  // D-177: as opções de parcelamento são calculadas AQUI, no servidor (a conta e os parâmetros nunca vão
-  // para o navegador); o cliente só mostra e escolhe o número de parcelas.
-  const opcoesDeParcelas: Record<string, { semiannual: OpcaoDeParcelas[]; yearly: OpcaoDeParcelas[] }> = {};
-  for (const plano of planos) {
-    opcoesDeParcelas[plano.code] = {
-      semiannual: plano.priceSemiannualCents ? opcoesDeParcelamento(plano.priceSemiannualCents, "semiannual", parametros) : [],
-      yearly: plano.priceYearlyCents ? opcoesDeParcelamento(plano.priceYearlyCents, "yearly", parametros) : [],
-    };
-  }
-  const taxaMensalPercentual = parametros.taxaMensal === null ? null : Math.round(parametros.taxaMensal * 10000) / 100;
+  const dados = await dadosDaCompraDePlano(admin, activeOrg.orgId, ambiente, logger);
 
   return (
     <AssinarOuComprarClient
-      opcoesDeParcelas={opcoesDeParcelas}
-      taxaMensalPercentual={taxaMensalPercentual}
-      planos={planos}
-      pacotes={pacotesResultado.pacotes}
-      precisaPagador={precisaPagador}
-      leituraFalhou={leituraFalhou}
-      planoAtualCode={planoAtualCode}
+      opcoesDeParcelas={dados.opcoesDeParcelas}
+      taxaMensalPercentual={dados.taxaMensalPercentual}
+      planos={dados.planos}
+      pacotes={dados.pacotes}
+      precisaPagador={dados.precisaPagador}
+      leituraFalhou={dados.leituraFalhou}
+      planoAtualCode={dados.planoAtualCode}
     />
   );
 }

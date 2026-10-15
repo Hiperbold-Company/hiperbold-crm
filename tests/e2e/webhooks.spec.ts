@@ -125,10 +125,13 @@ test.describe("webhooks & automações — fluxo completo", () => {
     let pipelineId: string | undefined;
 
     try {
-      // --- Step 1: login como manager; sidebar mostra "Webhooks" ---
+      // --- Step 1: login como manager; "Webhooks" mora em Configurações › Canais
+      // (o sidebar só tem o essencial desde 15/10/2026) ---
       await login(page, creds.users.manager!.email);
-      await expect(page.getByRole("link", { name: "Webhooks" })).toBeVisible();
-      await page.getByRole("link", { name: "Webhooks" }).click();
+      await page.getByRole("link", { name: "Configurações" }).click();
+      await page.waitForURL(/\/app\/settings$/);
+      await expect(page.getByRole("link", { name: /^Webhooks/ })).toBeVisible();
+      await page.getByRole("link", { name: /^Webhooks/ }).click();
       await page.waitForURL(/\/app\/webhooks/);
 
       // --- Step 2: aba "Receber dados" — criar fonte ---

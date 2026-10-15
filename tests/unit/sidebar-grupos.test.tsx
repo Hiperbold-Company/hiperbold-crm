@@ -10,7 +10,7 @@
  * `navegacao-registry.test.ts`; aqui é a superfície.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 
 import { Sidebar } from "@/components/shell/Sidebar";
 import type { ActiveOrg, AuthUser } from "@/lib/auth/types";
@@ -56,7 +56,29 @@ describe("Sidebar agrupado", () => {
       .filter(Boolean);
     // Organização não tem título aqui: seu hub (Configurações) vive no rodapé
     // fixo, fora da área que rola — medido, ele caía fora da dobra até em 1080px.
-    expect(titulos).toEqual(["Atendimento", "CRM", "Agente de IA", "Canais", "Análise"]);
+    // Canais não aparece mais: Conexões, Webhooks e Meta Ads saíram do menu em
+    // 15/10/2026 (sidebar só com o essencial) e moram em Configurações.
+    expect(titulos).toEqual(["Atendimento", "CRM", "Agente de IA", "Análise"]);
+  });
+
+  it("o menu lateral tem só o essencial, nesta ordem (decisão do dono, 15/10/2026)", () => {
+    comoPapel("admin");
+    render(<Sidebar collapsed={false} />);
+    const nav = screen.getByRole("navigation", { name: "Navegação principal" });
+    const links = within(nav)
+      .getAllByRole("link")
+      .map((a) => a.getAttribute("href"))
+      .filter((h) => !h?.match(/^\/app\/(crm|ai|analise)$/)); // links de "Ver tudo em ..."
+    expect(links).toEqual([
+      "/app/inicio",
+      "/app/inbox",
+      "/app/radar",
+      "/app/kanban",
+      "/app/contacts",
+      "/app/ai/agents",
+      "/app/metrics",
+      "/app/activities",
+    ]);
   });
 
   it("leva às Etapas do funil pelo CRM, e não por Configurações", () => {

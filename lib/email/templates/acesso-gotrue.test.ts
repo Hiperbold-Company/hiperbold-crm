@@ -56,6 +56,15 @@ describe("moldes de acesso do GoTrue", () => {
         expect(html).not.toContain('Acme "Test" & Cia');
       });
 
+      it("traz o link por extenso abaixo do botão, para quem não consegue clicar", () => {
+        expect(html).toContain("cole no seu navegador");
+        expect(html.split("{{ .RedirectTo }}&token_hash={{ .TokenHash }}").length - 1).toBe(3);
+      });
+
+      it("desenha a logo da marca no topo", () => {
+        expect(html).toContain('<img src="https://exemplo.test/logo.png"');
+      });
+
       it("o assunto leva a marca — senão chega em inglês, do padrão do GoTrue", () => {
         expect(assuntoDoModelo(modelo, MARCA)).toContain(MARCA.nome);
       });

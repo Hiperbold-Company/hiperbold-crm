@@ -124,10 +124,11 @@ describe("sidebarGroups", () => {
     // razão e a condição que encerram a exceção estão ao lado do item, em
     // `lib/navigation/catalogo.ts`.
     const crm = sidebarGroups(true, null).find((g) => g.group.id === "crm");
+    // Tarefas saiu do menu em 15/10/2026 (sidebar só com o essencial): vive no hub
+    // de CRM e em Configurações › Atendimento.
     expect(crm?.items.map((i) => i.href)).toEqual([
       "/app/kanban",
       "/app/contacts",
-      "/app/tasks",
       // "/app/calls" (telefonia por SIP) NÃO entra aqui, e a ausência é a
       // decisão: o módulo é OPCIONAL e nasce desligado (doc 27), então a porta
       // no sidebar custaria um item a TODA instalação — e o vigésimo item é o
@@ -150,21 +151,72 @@ describe("sidebarGroups", () => {
     expect(ids).toContain("atendimento");
   });
 
-  it("a ordem dentro do grupo de IA é a do uso real: agentes, follow-ups, roteadores", () => {
+  it("o grupo de IA mostra só Agentes no menu; o resto vive no hub e em Configurações", () => {
+    // Desde 15/10/2026 (sidebar só com o essencial) Follow-ups e Roteadores
+    // saíram do menu. Continuam no hub de IA e, agora, em Configurações › IA.
     // Provedores e Execuções NÃO entram aqui, e a razão é medida: pô-las na
     // sidebar estourou a dobra em 900px (e2e `navegacao.spec.ts`). Elas seguem
     // o padrão das outras nove telas do grupo — alcançáveis pelo hub "Ver tudo
     // em IA", que é o desenho existente para tela de configuração.
     const ia = sidebarGroups(true, null).find((g) => g.group.id === "ia");
-    expect(ia?.items.map((i) => i.href)).toEqual([
+    expect(ia?.items.map((i) => i.href)).toEqual(["/app/ai/agents"]);
+  });
+
+  it("o menu inteiro, de admin, é o essencial e nesta ordem (decisão do dono, 15/10/2026)", () => {
+    const todos = sidebarGroups(false, "admin").flatMap((g) => g.items.map((i) => i.href));
+    expect(todos).toEqual([
+      "/app/inicio",
+      "/app/inbox",
+      "/app/radar",
+      "/app/kanban",
+      "/app/contacts",
       "/app/ai/agents",
-      "/app/ai/followups",
-      "/app/ai/routers",
+      "/app/metrics",
+      "/app/activities",
     ]);
   });
 });
 
 describe("hubSections", () => {
+  it("o hub de Configurações abre pelas telas de conta e empresa e recebe as que saíram do menu", () => {
+    const secoes = hubSections("organizacao", false, "admin");
+    const nomes = secoes.map((s) => s.section);
+    // Conta e empresa primeiro; as que saíram do menu lateral vêm depois.
+    expect(nomes.indexOf("Sua conta")).toBeLessThan(nomes.indexOf("Atendimento"));
+    const por = (secao: string) =>
+      secoes.find((s) => s.section === secao)?.items.map((i) => i.href) ?? [];
+    expect(por("Atendimento")).toEqual([
+      "/app/agenda",
+      "/app/templates",
+      "/app/tasks",
+      "/app/settings/tenant/agenda",
+      "/app/comandas",
+    ]);
+    expect(por("IA")).toEqual(["/app/ai/followups", "/app/ai/routers", "/app/ai/providers"]);
+    expect(por("Canais")).toEqual(["/app/connections", "/app/webhooks", "/app/ads/meta"]);
+    // Sem duplicar a mesma tela em duas seções do mesmo hub.
+    const todos = secoes.flatMap((s) => s.items.map((i) => i.href));
+    expect(new Set(todos).size).toBe(todos.length);
+  });
+
+  it("o hub de Configurações respeita o papel: agent não recebe as telas de gestão", () => {
+    const todos = hubSections("organizacao", false, "agent").flatMap((s) =>
+      s.items.map((i) => i.href),
+    );
+    expect(todos).toContain("/app/agenda");
+    expect(todos).not.toContain("/app/connections");
+    expect(todos).not.toContain("/app/ai/routers");
+  });
+
+  it("as telas que saíram do menu continuam no ⌘K e no hub do próprio grupo", () => {
+    const busca = searchable(false, "admin").map((d) => d.href);
+    for (const h of ["/app/agenda", "/app/templates", "/app/tasks", "/app/comandas", "/app/ai/followups", "/app/ai/routers", "/app/ai/providers", "/app/connections", "/app/webhooks", "/app/ads/meta", "/app/settings/tenant/agenda"]) {
+      expect(busca).toContain(h);
+    }
+    const hubIA = hubSections("ia", false, "admin").flatMap((s) => s.items.map((i) => i.href));
+    expect(hubIA).toContain("/app/ai/followups");
+  });
+
   it("o hub do CRM é inventário: as seis telas do grupo, nas duas seções", () => {
     // As seções são a régua do sidebar escrita por extenso — o que se abre todo
     // dia contra o que se define uma vez. Lista EXATA: `toContain` deixaria uma

@@ -17,6 +17,7 @@ import {
   FlowArrow,
   Funnel,
   Gauge,
+  House,
   Inbox,
   Kanban,
   Key,
@@ -45,6 +46,7 @@ import {
 } from "@/lib/ui/icons";
 
 import {
+  GRUPO_NO_RODAPE,
   NAV_CATALOG,
   NAV_GROUPS,
   type NavMetadata,
@@ -72,6 +74,7 @@ const ICONS = {
   FlowArrow,
   Funnel,
   Gauge,
+  House,
   Inbox,
   Kanban,
   Key,
@@ -154,12 +157,24 @@ export function hubSections(
   const visible = new Set<string>(
     destinosDaInterface(settings, isPlatformAdmin, role, modulos).map((d) => d.href),
   );
-  for (const d of NAV_DESTINATIONS) {
-    if (d.group !== group || !visible.has(d.href)) continue;
-    const secao = d.section ?? "";
+  const poe = (secao: string, d: NavDestination) => {
     const atual = porSecao.get(secao);
     if (atual) atual.push(d);
     else porSecao.set(secao, [d]);
+  };
+  // Primeiro as telas do próprio grupo, na ordem do registro...
+  for (const d of NAV_DESTINATIONS) {
+    if (!visible.has(d.href)) continue;
+    if (group === GRUPO_NO_RODAPE && d.configuracoes) continue;
+    if (d.group === group) poe(d.section ?? "", d);
+  }
+  // ...depois, só no hub de Configurações, as telas de outros grupos que o sidebar
+  // enxuto deixou de mostrar (`configuracoes`). Ficam no fim para "Sua conta" e
+  // "Sua empresa" continuarem abrindo a página.
+  if (group === GRUPO_NO_RODAPE) {
+    for (const d of NAV_DESTINATIONS) {
+      if (d.configuracoes && visible.has(d.href)) poe(d.configuracoes, d);
+    }
   }
   return [...porSecao.entries()].map(([section, items]) => ({ section, items }));
 }

@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { empresaExigeMfa, exigeCadastroDeMfa } from "@/lib/auth/politica-mfa";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { emailVerificado } from "@/lib/auth/verificacao-email";
 import type { AuthUser, Role, UserOrgMembership, ActiveOrg } from "./types";
 
 const ACTIVE_ORG_COOKIE = "active_org";
@@ -273,6 +274,7 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
     locale,
     idioma,
     timezone,
+    email_verificado: emailVerificado(user.app_metadata),
     organizations: memberships,
     support,
   };

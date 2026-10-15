@@ -172,17 +172,37 @@ test.describe("navegação agrupada", () => {
   });
 
   /**
-   * O canal oficial saiu de Configurações no PR #105 e virou aba de Conexões.
-   * A porta, portanto, é Conexões — que agora vive no grupo CANAIS do sidebar,
-   * e não mais como um card perdido em Configurações.
+   * O canal oficial saiu de Configurações no PR #105 e virou aba de Conexões. Desde
+   * 15/10/2026 (sidebar só com o essencial, decisão do dono) Conexões não está mais
+   * no menu lateral: a porta é Configurações › Canais, e o ⌘K continua achando.
    */
-  test("chega ao canal oficial pelo grupo Canais, não por Configurações", async ({ page }) => {
+  test("chega ao canal oficial por Configurações › Canais", async ({ page }) => {
     await loginAdmin(page);
 
-    await sidebar(page).getByRole("link", { name: "Conexões" }).click();
+    await expect(sidebar(page).getByRole("link", { name: "Conexões" })).toHaveCount(0);
+    await page.getByRole("link", { name: "Configurações" }).click();
+    await page.waitForURL(/\/app\/settings$/);
+    await page.getByRole("link", { name: /Conexões/ }).click();
     await page.waitForURL(/\/app\/connections/);
     // `API Oficial` e não só `oficial`: a aba "API não oficial" também casa com a palavra.
     await expect(page.getByRole("tab", { name: /API Oficial/i })).toBeVisible();
+  });
+
+  test("o menu lateral tem só o essencial, e o resto está em Configurações", async ({ page }) => {
+    await loginAdmin(page);
+
+    for (const nome of ["Início", "Inbox", "Radar", "Funis", "Contatos", "Agentes", "Desempenho", "Atividades"]) {
+      await expect(sidebar(page).getByRole("link", { name: nome, exact: true })).toBeVisible();
+    }
+    for (const nome of ["Agenda", "Respostas rápidas", "Tarefas", "Comandas", "Follow-ups", "Roteadores", "Provedores", "Conexões", "Webhooks", "Meta Ads"]) {
+      await expect(sidebar(page).getByRole("link", { name: nome, exact: true })).toHaveCount(0);
+    }
+
+    await page.getByRole("link", { name: "Configurações" }).click();
+    await page.waitForURL(/\/app\/settings$/);
+    for (const nome of ["Agenda", "Respostas rápidas", "Tarefas", "Comandas", "Follow-ups", "Roteadores", "Provedores", "Conexões", "Webhooks", "Meta Ads"]) {
+      await expect(page.getByRole("link", { name: new RegExp(`^${nome}`) }).first()).toBeVisible();
+    }
   });
 
   test("o ⌘K acha o canal oficial por nome, mesmo sem tela própria", async ({ page }) => {
@@ -288,8 +308,8 @@ test.describe("navegação agrupada", () => {
   test("um agent não vê o cabeçalho de um grupo que a permissão esvaziou", async ({ page }) => {
     await login(page, creds.users.agent!.email);
 
-    // CANAIS é todo manager+/admin: o título não pode sobrar sozinho.
-    await expect(sidebar(page).getByRole("heading", { name: "Canais" })).toHaveCount(0);
+    // "Agente de IA" é todo manager+/admin: o título não pode sobrar sozinho.
+    await expect(sidebar(page).getByRole("heading", { name: "Agente de IA" })).toHaveCount(0);
     await expect(sidebar(page).getByRole("heading", { name: "Atendimento" })).toBeVisible();
   });
 });

@@ -223,7 +223,7 @@ describe("porta 3 — recoverOrganization recusa quem teve o acesso revogado", (
 
     const { recoverOrganization } = await import("@/app/actions/auth/recoverOrganization");
     await expect(recoverOrganization("Empresa Legítima")).rejects.toThrow(
-      "REDIRECT:/onboarding/welcome",
+      "REDIRECT:/onboarding",
     );
     expect(ensureTenantForUser).toHaveBeenCalled();
   });

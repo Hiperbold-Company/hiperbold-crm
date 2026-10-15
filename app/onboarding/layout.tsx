@@ -7,8 +7,12 @@ import { OutrasOrganizacoes } from "./_components/OutrasOrganizacoes";
 import { SkipToEnd } from "./_components/SkipToEnd";
 import { SimboloDoProduto } from "@/components/branding/MarcaDoProduto";
 import { branding, marcaEhADoProduto } from "@/lib/branding";
+import { marcaDaSaida } from "@/lib/branding/saida";
 import { passosVisiveis } from "@/lib/onboarding/passos";
-import { env } from "@/lib/env";
+import { contextoDoOnboarding } from "@/lib/onboarding/contexto";
+import { destinoSeJaConcluido } from "@/lib/onboarding/destino";
+import { compraPeloClienteDisponivel } from "@/lib/onboarding/precisa-pagar";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 
 export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
@@ -22,11 +26,13 @@ export default async function OnboardingLayout({ children }: { children: React.R
   if (!activeOrg) redirect("/get-started");
 
   const { state, onboardedAt } = await loadOnboardingState(activeOrg.orgId);
-  if (onboardedAt) redirect("/app/inbox");
+  if (onboardedAt) {
+    redirect(destinoSeJaConcluido(await compraPeloClienteDisponivel(createAdminClient())));
+  }
 
   // Os passos que ESTA instalação oferece, com o que já foi resolvido. O
   // indicador não decide mais nada sozinho — ele desenha o que recebe.
-  const passos = passosVisiveis({ lojaLigada: env.NUVEMSHOP_ENABLED }).map((p) => ({
+  const passos = passosVisiveis(await contextoDoOnboarding(activeOrg.orgId)).map((p) => ({
     segmento: p.segmento,
     rotulo: p.rotulo,
     cumprido: p.cumprido(state),
@@ -34,6 +40,9 @@ export default async function OnboardingLayout({ children }: { children: React.R
 
   const isDev = process.env.NODE_ENV !== "production";
   const marca = branding();
+  // Hiperbold: a logo da INSTALAÇÃO (a mesma da tela de login), não a da
+  // organização, que ainda está sendo criada neste wizard.
+  const logoDaInstalacao = (await marcaDaSaida(null)).logoUrl;
 
   return (
     <IdiomaProvider locale={user.idioma}>
@@ -41,14 +50,31 @@ export default async function OnboardingLayout({ children }: { children: React.R
         <header className="border-b bg-background">
           <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-6 py-4">
             <div className="flex items-center gap-3">
-              {/* O nome está escrito logo abaixo — o símbolo é reforço, não legenda. */}
-              {marcaEhADoProduto(marca) && (
-                <SimboloDoProduto nome={marca.name} decorativo className="h-9 w-9" />
+              {logoDaInstalacao ? (
+                <>
+                  {/* <img> e não next/image: a URL é de quem hospeda (ver app/(public)/layout.tsx). */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    data-testid="logo-do-onboarding"
+                    src={logoDaInstalacao}
+                    alt={marca.name}
+                    className="h-9 w-auto max-w-[11rem] object-contain"
+                  />
+                  <span aria-hidden className="h-8 w-px bg-border" />
+                  <h1 className="text-lg font-semibold tracking-tight">{activeOrg.name}</h1>
+                </>
+              ) : (
+                <>
+                  {/* O nome está escrito logo abaixo — o símbolo é reforço, não legenda. */}
+                  {marcaEhADoProduto(marca) && (
+                    <SimboloDoProduto nome={marca.name} decorativo className="h-9 w-9" />
+                  )}
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">{marca.name}</p>
+                    <h1 className="text-lg font-semibold tracking-tight">{activeOrg.name}</h1>
+                  </div>
+                </>
               )}
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">{marca.name}</p>
-                <h1 className="text-lg font-semibold tracking-tight">{activeOrg.name}</h1>
-              </div>
             </div>
             <div className="flex items-center gap-1">
               {/*
@@ -65,9 +91,12 @@ export default async function OnboardingLayout({ children }: { children: React.R
               {isDev ? <SkipToEnd /> : null}
             </div>
           </div>
-          <div className="mx-auto w-full max-w-3xl px-4 pb-2">
-            <Stepper passos={passos} />
-          </div>
+          {/* Caminho "paga primeiro": a única etapa é o pagamento, e um indicador de uma etapa só não diz nada. */}
+          {passos.length > 1 && (
+            <div className="mx-auto w-full max-w-3xl px-4 pb-2">
+              <Stepper passos={passos} />
+            </div>
+          )}
         </header>
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">{children}</main>
       </div>

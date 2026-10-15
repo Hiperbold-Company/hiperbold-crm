@@ -9,6 +9,7 @@ import { capacidadesPadraoDoOnboarding } from "@/lib/ai/agents/capacidades-padra
 import { TOOL_CATALOG } from "@/lib/mcp/tools/catalog";
 import { CONFERENCIAS_DE_SAIDA } from "@/lib/ai/guardrails/lista-de-conferencia";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { exigirPlanoPagoParaSeguir } from "@/lib/onboarding/contexto";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,8 @@ export default async function SetupAiPage() {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/login");
+  // Hiperbold: o cliente novo paga antes de configurar; a URL direta volta para o passo "Plano".
+  await exigirPlanoPagoParaSeguir(activeOrg.orgId);
   const idioma = user.idioma;
 
   const supabase = await createClient();

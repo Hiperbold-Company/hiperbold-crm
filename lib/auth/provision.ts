@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/audit";
 import { avisarBoasVindas } from "@/lib/email/conta-e-cobranca/boas-vindas";
+import { compraPeloClienteDisponivel } from "@/lib/onboarding/precisa-pagar";
 
 /** Normaliza o nome da empresa para um slug candidato (citext unique no DB). */
 export function slugify(name: string): string {
@@ -20,7 +21,22 @@ type ProvisionUser = {
   id: string;
   email?: string;
   user_metadata?: Record<string, unknown>;
+  /** Só o servidor escreve aqui (o cadastro grava `aceite_termos`). Lido para copiar o aceite à organização. */
+  app_metadata?: Record<string, unknown>;
 };
+
+/**
+ * O aceite dos Termos que o cadastro gravou no `app_metadata` (`app/actions/auth/signUp.ts`), ou `null`.
+ * `app_metadata` e não `user_metadata`: este a própria pessoa regrava por `supabase.auth.updateUser`.
+ */
+export function aceiteDosTermosDoCadastro(
+  appMetadata: Record<string, unknown> | undefined,
+): { versao: string; aceito_em: string } | null {
+  const a = appMetadata?.aceite_termos as { versao?: unknown; aceito_em?: unknown } | undefined;
+  return typeof a?.versao === "string" && typeof a?.aceito_em === "string" && !Number.isNaN(Date.parse(a.aceito_em))
+    ? { versao: a.versao, aceito_em: a.aceito_em }
+    : null;
+}
 
 /**
  * De onde veio o provisionamento. A organização nasce igual nos dois casos — o
@@ -99,6 +115,22 @@ export async function ensureTenantForUser(
     "Minha empresa";
   const base = slugify(orgName);
 
+  // Com a compra pelo cliente ligada o passo "Bem-vindo" do wizard deixa de existir: o aceite dos Termos
+  // (dado no cadastro) e o nome da empresa já vão para `onboarding_state.welcome`, o mesmo lugar onde
+  // `acceptWelcome` os grava. Sem a compra ligada nada muda: o wizard completo segue pedindo tudo.
+  const aceite = aceiteDosTermosDoCadastro(user.app_metadata);
+  const onboardingState =
+    aceite && (await compraPeloClienteDisponivel(admin))
+      ? {
+          welcome: {
+            accepted_at: aceite.aceito_em,
+            terms_version: aceite.versao,
+            timezone: "America/Sao_Paulo",
+            display_name: orgName,
+          },
+        }
+      : null;
+
   // ponytail: check-then-insert tem janela de corrida se o mesmo link for
   // confirmado 2x em paralelo (pior caso: org duplicada órfã). Advisory lock
   // por user_id se isso aparecer na prática.
@@ -118,6 +150,7 @@ export async function ensureTenantForUser(
         // D-094 revisto: sem período gratuito). Provisionamento externo e admin da plataforma não
         // levam o marcador e seguem como antes.
         settings: { billing_inicio: "sem_plano" },
+        ...(onboardingState ? { onboarding_state: onboardingState } : {}),
       })
       .select("id, slug")
       .single();

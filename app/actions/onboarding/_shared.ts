@@ -8,6 +8,7 @@ import { supportWriteError } from "@/lib/impersonate/support";
 import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { precisaPagarAntesDeConfigurar } from "@/lib/onboarding/precisa-pagar";
 import type { OnboardingState } from "@/lib/schemas/onboarding";
 
 export class OnboardingError extends Error {
@@ -18,6 +19,7 @@ export class OnboardingError extends Error {
       | "forbidden"
       | "mfa_required"
       | "not_found"
+      | "payment_required"
       | "db_error",
     message: string,
   ) {
@@ -50,9 +52,14 @@ export interface OnboardingCtx {
  *  3. `onboarded_at` nulo: depois de concluído, nenhuma delas roda de novo.
  *     `permitirConcluido` existe só para `finishOnboarding`, que é idempotente
  *     de propósito (segundo clique cai no redirect) e continua exigindo admin.
+ *  4. Hiperbold (15/10/2026): o cliente novo paga ANTES de configurar. Enquanto o passo "Plano"
+ *     exige pagamento (`precisaPagarAntesDeConfigurar`, a mesma noção do layout de /app), nenhuma
+ *     action de configuração roda — o id de cada uma está no bundle da página, então digitar a URL
+ *     de um passo ou chamar a action direto não pula o pagamento. `acceptWelcome` (o passo 1, que
+ *     vem ANTES do pagamento) passa `semGuardaDePlano`. Fail-open como o resto do billing.
  */
 export async function requireOnboardingCtx(
-  opts: { permitirConcluido?: boolean } = {},
+  opts: { permitirConcluido?: boolean; semGuardaDePlano?: boolean } = {},
 ): Promise<OnboardingCtx> {
   const user = await loadAuthUser();
   if (!user) throw new OnboardingError("auth_required", "Auth required.");
@@ -65,9 +72,12 @@ export async function requireOnboardingCtx(
   if (await mfaEmDivida()) {
     throw new OnboardingError("mfa_required", "Confirme a verificação em duas etapas.");
   }
-  if (!opts.permitirConcluido) {
-    const { onboardedAt } = await loadOnboardingState(activeOrg.orgId);
-    if (onboardedAt) throw new OnboardingError("forbidden", "O onboarding desta organização já foi concluído.");
+  const { onboardedAt } = await loadOnboardingState(activeOrg.orgId);
+  if (onboardedAt && !opts.permitirConcluido) {
+    throw new OnboardingError("forbidden", "O onboarding desta organização já foi concluído.");
+  }
+  if (!onboardedAt && !opts.semGuardaDePlano && (await precisaPagarAntesDeConfigurar(createAdminClient(), activeOrg.orgId))) {
+    throw new OnboardingError("payment_required", "Confirme o pagamento do plano antes de configurar.");
   }
   return {
     userId: user.id,

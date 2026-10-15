@@ -35,6 +35,7 @@ test("criar conta: signup → e-mail de confirmação → onboarding → re-logi
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.getByLabel("Confirmar senha").fill(password);
+  await page.getByRole("checkbox", { name: /Li e aceito/ }).check();
   await page.getByRole("button", { name: "Criar conta" }).click();
   await expect(page.getByText("Confirme seu e-mail")).toBeVisible();
 

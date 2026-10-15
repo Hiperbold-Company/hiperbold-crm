@@ -1101,6 +1101,10 @@ export const AUDIT_ACTIONS = [
   // Consentimento ou recusa registrado pela rota própria do contato (D-151);
   // metadata.finalidade, acao e origem dizem o quê. Nunca apaga uma recusa.
   "contact.consent_registered",
+  // Verificação de e-mail do CRM (lib/auth/verificacao-email.ts): o link de confirmação saiu (cadastro ou
+  // reenvio; metadata.via diz qual) e o link foi aberto e valeu. Nunca levam o token nem o endereço em claro.
+  "auth.email_verification_sent",
+  "auth.email_verified",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

@@ -25,8 +25,21 @@ vi.mock("next/navigation", () => ({
 
 const signUp = vi.fn();
 vi.mock("@/app/actions/auth/signUp", () => ({ signUp: (...a: unknown[]) => signUp(...a) }));
+const recoverOrganization = vi.fn();
+vi.mock("@/app/actions/auth/recoverOrganization", () => ({
+  recoverOrganization: (...a: unknown[]) => recoverOrganization(...a),
+}));
 
-async function preencherEEnviar(comEmpresa = true) {
+/**
+ * O erro que o Next 16 usa para entregar o redirect de uma server action ao CLIENTE: a promise da action
+ * é REJEITADA com ele (`server-action-reducer.js`, `createRedirectErrorForAction`), é assim que a
+ * navegação chega ao RedirectBoundary. Mesmo formato do digest real.
+ */
+function erroDeRedirect(destino: string): Error {
+  return Object.assign(new Error("NEXT_REDIRECT"), { digest: `NEXT_REDIRECT;push;${destino};307;` });
+}
+
+async function preencherEEnviar(comEmpresa = true, comAceite = true) {
   const user = userEvent.setup();
   // Os dois caminhos pedem campos DIFERENTES: quem abre empresa informa o nome
   // DELA; quem chega por convite informa o nome DE SI — sem isso a pessoa
@@ -37,23 +50,51 @@ async function preencherEEnviar(comEmpresa = true) {
   await user.type(screen.getByLabelText(/^Email$/i), "dono@plata.test");
   await user.type(screen.getByLabelText(/^Senha$/i), "SenhaForte!2026");
   await user.type(screen.getByLabelText(/Confirmar senha/i), "SenhaForte!2026");
+  // O aceite dos Termos só existe no cadastro sem convite (quem abre empresa).
+  if (comEmpresa && comAceite) await user.click(screen.getByRole("checkbox"));
   await user.click(screen.getByRole("button", { name: /criar conta/i }));
 }
 
-describe("cadastro quando o provedor já abriu a sessão", () => {
+describe("cadastro quando o provedor já abriu a sessão (compra pelo cliente ligada)", () => {
   beforeEach(() => {
     replace.mockClear();
     signUp.mockReset();
+    recoverOrganization.mockReset();
   });
 
-  it("⭐ sessão já aberta: leva à saída em vez de mandar abrir o e-mail", async () => {
+  it("⭐ sessão já aberta: cria a empresa com o nome digitado, sem passar por /get-started", async () => {
+    // O Next 16 entrega o redirect de uma server action ao cliente REJEITANDO a promise com NEXT_REDIRECT.
+    // O formulário não pode tratar isso como falha: a navegação para /onboarding já está em curso.
     signUp.mockResolvedValue({ ok: true, sessao_ativa: true });
-    render(<SignupForm />);
+    recoverOrganization.mockRejectedValue(erroDeRedirect("/onboarding"));
+    render(<SignupForm compraLigada />);
+    await preencherEEnviar();
+
+    await waitFor(() => expect(recoverOrganization).toHaveBeenCalledWith("Plata Iphones"));
+    // Deixa as continuações da promise rejeitada rodarem antes de afirmar a ausência do desvio.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(replace).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Enviamos um link de confirmação/i)).toBeNull();
+  });
+
+  it("⭐ sessão já aberta e a criação recusada: leva à saída em vez de mandar abrir o e-mail", async () => {
+    signUp.mockResolvedValue({ ok: true, sessao_ativa: true });
+    recoverOrganization.mockResolvedValue({ ok: false, error: "rate_limited" });
+    render(<SignupForm compraLigada />);
     await preencherEEnviar();
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/get-started"));
     // A instrução impossível não pode sobrar na tela junto do desvio.
     expect(screen.queryByText(/Enviamos um link de confirmação/i)).toBeNull();
+  });
+
+  it("⭐ falha de VERDADE ao criar a empresa (rejeição que não é redirect): cai na saída /get-started", async () => {
+    signUp.mockResolvedValue({ ok: true, sessao_ativa: true });
+    recoverOrganization.mockRejectedValue(new Error("rede caiu"));
+    render(<SignupForm compraLigada />);
+    await preencherEEnviar();
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/get-started"));
   });
 
   it("⭐ sessão já aberta COM convite: vai aceitar o convite, não abrir empresa", async () => {
@@ -68,18 +109,55 @@ describe("cadastro quando o provedor já abriu a sessão", () => {
     await waitFor(() =>
       expect(replace).toHaveBeenCalledWith("/team/accept-invite/tok-123"),
     );
+    expect(recoverOrganization).not.toHaveBeenCalled();
   });
 
   it("CONTROLE — confirmação LIGADA: a tela do e-mail continua aparecendo", async () => {
     // Sem este caso, "sempre redireciona" ficaria verde e tiraria da tela a
     // única instrução correta para quem de fato precisa confirmar o e-mail.
     signUp.mockResolvedValue({ ok: true, sessao_ativa: false });
-    render(<SignupForm />);
+    render(<SignupForm compraLigada />);
     await preencherEEnviar();
 
     await waitFor(() =>
       expect(screen.getByText(/Enviamos um link de confirmação/i)).toBeTruthy(),
     );
     expect(replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("cadastro com a compra pelo cliente DESLIGADA: o formulário de antes", () => {
+  beforeEach(() => {
+    replace.mockClear();
+    signUp.mockReset();
+    recoverOrganization.mockReset();
+  });
+
+  it("⭐ não pede o aceite dos Termos (sem checkbox) e o cadastro segue", async () => {
+    signUp.mockResolvedValue({ ok: true, sessao_ativa: false });
+    render(<SignupForm />);
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    await preencherEEnviar(true, false);
+
+    await waitFor(() => expect(signUp).toHaveBeenCalledTimes(1));
+    expect(signUp.mock.calls[0]![0]).not.toHaveProperty("aceite_termos");
+    await waitFor(() => expect(screen.getByText(/Enviamos um link de confirmação/i)).toBeTruthy());
+  });
+
+  it("⭐ sessão já aberta: vai a /get-started como sempre, sem criar a empresa pelo caminho 'paga primeiro'", async () => {
+    signUp.mockResolvedValue({ ok: true, sessao_ativa: true });
+    render(<SignupForm />);
+    await preencherEEnviar(true, false);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/get-started"));
+    expect(recoverOrganization).not.toHaveBeenCalled();
+  });
+
+  it("CONTROLE — com a compra ligada o aceite é exigido: sem marcar, a ação nem é chamada", async () => {
+    render(<SignupForm compraLigada />);
+    expect(screen.getByRole("checkbox")).toBeTruthy();
+    await preencherEEnviar(true, false);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(signUp).not.toHaveBeenCalled();
   });
 });

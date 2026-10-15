@@ -155,7 +155,10 @@ test("interface por membro atualiza ao vivo, preserva formulário e convite apli
     await guest.getByRole("button", { name: /aceitar/i }).click();
     await guest.waitForURL("**/app/tasks");
     await expect(nav(guest).getByRole("link", { name: "Inbox", exact: true })).toHaveCount(0);
-    await expect(nav(guest).getByRole("link", { name: "Tarefas", exact: true })).toBeVisible();
+    // Tarefas não está no menu lateral (só o essencial, desde 15/10/2026): o convidado
+    // chega nela pelo "Ver tudo em CRM", e a tela abre direto no aceite.
+    await expect(nav(guest).getByRole("link", { name: "Tarefas", exact: true })).toHaveCount(0);
+    await expect(nav(guest).getByRole("link", { name: "Ver tudo em CRM" })).toBeVisible();
     await expect(guest.getByRole("heading", { name: "Tarefas", exact: true })).toBeVisible();
     await expect(guest.getByText("Nenhuma tarefa por aqui", { exact: true })).toBeVisible();
     await expect(guest.locator("[aria-busy=true]")).toHaveCount(0);

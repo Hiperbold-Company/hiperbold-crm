@@ -37,9 +37,11 @@ test.describe("a Agenda como o dono do produto a usa", () => {
 
   test("chego na Agenda CLICANDO no menu, não digitando a URL", async () => {
     await page.goto("/app");
-    // O item vive no grupo "Atendimento", junto do Inbox — decisão registrada
-    // no `registry.ts`: a Agenda é onde o dia acontece, não onde se configura.
-    const item = page.getByRole("link", { name: "Agenda", exact: true }).first();
+    // Desde 15/10/2026 o menu lateral é só o essencial: a Agenda mora em
+    // Configurações › Atendimento (e no ⌘K), não mais na barra.
+    await page.getByRole("link", { name: "Configurações" }).click();
+    await page.waitForURL(/\/app\/settings$/);
+    const item = page.getByRole("link", { name: /^Agenda/ }).first();
     await expect(item).toBeVisible({ timeout: ESPERA });
     await item.click();
 

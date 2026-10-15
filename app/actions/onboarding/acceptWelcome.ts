@@ -20,7 +20,7 @@ export type AcceptWelcomeResult =
 export async function acceptWelcome(formData: FormData): Promise<AcceptWelcomeResult> {
   let ctx;
   try {
-    ctx = await requireOnboardingCtx();
+    ctx = await requireOnboardingCtx({ semGuardaDePlano: true });
   } catch (err) {
     if (err instanceof OnboardingError) return { ok: false, error: err.code as never };
     throw err;

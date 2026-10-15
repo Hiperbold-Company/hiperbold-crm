@@ -71,7 +71,7 @@ vi.mock("@/lib/supabase/admin", () => ({
         if (tabela === "organizations") {
           if (op === "update") {
             h.atualizacoesDeOrg.push(payload);
-            return { data: null, error: null };
+            return { data: [{ id: ORG }], error: null };
           }
           return {
             data: { onboarding_state: {}, onboarded_at: h.onboardedAt },

@@ -103,6 +103,7 @@ test("⭐ o cadastro não manda esperar um e-mail que não vai chegar", async ({
   await page.locator("#email").fill(email);
   await page.locator("#password").fill(SENHA);
   await page.locator("#password_confirm").fill(SENHA);
+  await page.locator("#aceite_termos").check();
   await page.getByRole("button", { name: /criar conta/i }).click();
 
   // A saída, e não a sala de espera.

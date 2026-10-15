@@ -190,7 +190,7 @@ describe("GET /auth/callback", () => {
     const res = await GET(requisicao("code=abc"));
 
     expect(vi.mocked(ensureTenantForUser)).toHaveBeenCalledWith(USUARIO, { source: "signup" });
-    expect(await destino(res)).toBe("/onboarding/welcome");
+    expect(await destino(res)).toBe("/onboarding");
   });
 
   it("quem tem TOTP verificado não entra sem o segundo fator", async () => {
@@ -340,7 +340,7 @@ describe("GET /auth/callback", () => {
       () => vi.mocked(modoDeCadastro).mockResolvedValue("com_aprovacao"),
       "/get-started",
     ],
-    ["cadastro provisionado", () => {}, "/onboarding/welcome"],
+    ["cadastro provisionado", () => {}, "/onboarding"],
   ];
 
   it.each(CENARIOS_AUTENTICADOS)(

@@ -34,6 +34,12 @@ export const PUBLIC_PATHS: RegExp[] = [
   // `createClientDeEntradaComGoogle`. Âncora `$` de propósito: nenhum sub-path
   // futuro nasce público de carona.
   /^\/auth\/callback$/,
+  // Link de "Confirme seu e-mail" (verificação do CRM, `lib/auth/verificacao-email.ts`). Quem clica
+  // pode estar noutro navegador ou deslogado (o e-mail abre onde o cliente de e-mail abrir), e o cookie de
+  // sessão `Strict` não viaja de um clique vindo de fora. A identidade NÃO vem da sessão: vem do segredo
+  // de uso único do `?token=`, conferido por hash na própria rota (com teto por IP). Só estes dois
+  // caminhos, ancorados: a rota que consome o token e a página que mostra o desfecho.
+  /^\/auth\/verificar-email(\/resultado)?$/,
   // Retorno de OAuth social: documento público sem efeitos que reconecta a
   // navegação interna para manter os cookies de sessão sob SameSite=Strict.
   /^\/auth\/social-return$/,

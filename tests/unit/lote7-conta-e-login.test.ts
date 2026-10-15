@@ -136,6 +136,7 @@ describe("D-126: links de e-mail usam a URL configurada, não o cabeçalho Origi
       email: `cadastro-${Date.now()}@exemplo.test`,
       password: "SenhaForte!2026",
       password_confirm: "SenhaForte!2026",
+      aceite_termos: true,
     });
     expect(res).toEqual({ ok: true, sessao_ativa: false });
     const opcoes = (signUpDoProvedor.mock.calls[0] as unknown as [{ options: { emailRedirectTo: string } }])[0].options;
