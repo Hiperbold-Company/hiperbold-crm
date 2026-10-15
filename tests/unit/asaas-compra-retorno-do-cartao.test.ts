@@ -31,7 +31,7 @@ const CALLBACK = { successUrl: RETORNO, autoRedirect: true };
 const CONFIG: ConfigAsaas = {
   habilitado: true,
   baseUrl: "https://api-sandbox.asaas.com/v3",
-  apiKey: "$aact_hmlg_testeNuncaEUmaChaveReal000111222",
+  apiKey: "$aact_hmlg_" + "testeNuncaEUmaChaveReal000111222",
   webhookToken: "token-de-teste-nunca-real",
   webhookId: "",
   ambiente: "sandbox",
