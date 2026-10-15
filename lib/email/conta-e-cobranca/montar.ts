@@ -25,6 +25,7 @@ import { buildRenovacaoNoCartaoChegandoEmail } from "@/lib/email/templates/renov
 import { buildTokensDeIaAcabandoEmail } from "@/lib/email/templates/tokens-de-ia-acabando";
 import type { OpcoesBaseDoEmail } from "@/lib/email/templates/_layout-transacional";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { CAMINHO_DO_INICIO } from "@/lib/inicio/entrada";
 import type { Idioma } from "@/lib/i18n/idiomas";
 
 /** O endereço da fatura que o Asaas devolve (https, domínio do Asaas). Qualquer outro endereço não vira botão. */
@@ -69,7 +70,14 @@ const forma = z.discriminatedUnion("tipo", [
 /** O formato de `dados` de cada código de e-mail. */
 export const DADOS_DO_EMAIL = {
   "CONTA-06": z.object({}),
-  "COB-02": z.object({ plano: texto, ciclo, forma, acessoAte: data }),
+  "COB-02": z.object({
+    plano: texto,
+    ciclo,
+    forma,
+    acessoAte: data,
+    /** Primeira compra paga da organização. Linha enfileirada antes deste campo existir não o traz: vale false. */
+    primeiraCompra: z.boolean().default(false),
+  }),
   "COB-03": z.object({
     valor: centavos,
     pagoEm: data,
@@ -140,7 +148,9 @@ export function montarEmailDeConta(emailId: string, dados: unknown, ctx: Context
     case "COB-02": {
       const d = validarDados(emailId, dados);
       return buildPlanoConfirmadoEmail({
-        ...ctx.base(plano),
+        // Na primeira compra o botão leva ao Início (primeiros passos); nas seguintes, à tela do plano.
+        ...ctx.base(d.primeiraCompra ? `${ctx.appUrl}${CAMINHO_DO_INICIO}` : plano),
+        primeiraCompra: d.primeiraCompra,
         plano: d.plano,
         ciclo: d.ciclo,
         formaDePagamento: d.forma,

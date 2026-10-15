@@ -402,6 +402,55 @@ describe("layout comum", () => {
   });
 });
 
+describe("COB-02: primeira compra vira boas-vindas", () => {
+  const compra = {
+    plano: "Pro",
+    ciclo: "monthly" as const,
+    formaDePagamento: { tipo: "pix" as const },
+    acessoAte: "2026-11-07",
+  };
+  const URL_INICIO = "https://crm.exemplo.com.br/app/inicio";
+
+  it("primeira compra: selo, assunto, três parágrafos, resumo e botão para o Início", () => {
+    const r = buildPlanoConfirmadoEmail({ ...base("pt-BR", { url: URL_INICIO }), ...compra, primeiraCompra: true });
+    expect(r.subject).toBe("Sua conta no HiperCRM está pronta");
+    expect(r.html).toContain("PAGAMENTO APROVADO");
+    expect(r.text).toContain("Recebemos o pagamento e o plano Pro (mensal) já está ativo até 07/11/2026.");
+    expect(r.text).toContain(
+      "O HiperCRM reúne num só lugar as conversas do WhatsApp, seus contatos e o funil de vendas, com um atendente de IA que responde seus clientes por você.",
+    );
+    expect(r.text).toContain(
+      "Para começar, entre no CRM. A tela Início mostra os primeiros passos: conectar o seu WhatsApp e contar o que sua empresa faz leva poucos minutos.",
+    );
+    expect(r.text).toContain("Acessar CRM");
+    expect(r.text).toContain(URL_INICIO);
+    expect(r.html).toContain(`href="${URL_INICIO}"`);
+    expect(r.text).not.toContain("Ver meu plano");
+    // o bloco de detalhes continua
+    expect(r.text).toContain("Forma de pagamento: Pix");
+    expect(r.text).toContain("Acesso até: 07/11/2026");
+  });
+
+  it("compra seguinte (ou sem a marca): o COB-02 de sempre", () => {
+    for (const extra of [{}, { primeiraCompra: false }]) {
+      const r = buildPlanoConfirmadoEmail({ ...base(), ...compra, ...extra });
+      expect(r.subject).toBe("Seu plano Pro está ativo");
+      expect(r.text).toContain("já está liberado até 07/11/2026.");
+      expect(r.text).toContain("Ver meu plano");
+      expect(r.text).toContain(URL_OK);
+      expect(r.text).not.toContain("Acessar CRM");
+      expect(r.text).not.toContain("reúne num só lugar");
+    }
+  });
+
+  it("primeira compra no espanhol", () => {
+    const r = buildPlanoConfirmadoEmail({ ...base("es", { url: URL_INICIO }), ...compra, primeiraCompra: true });
+    expect(r.subject).toBe("Tu cuenta en HiperCRM está lista");
+    expect(r.text).toContain("Acceder al CRM");
+    expect(r.text).toContain("ya está activo hasta el 07/11/2026");
+  });
+});
+
 describe("catálogo de idiomas", () => {
   it("todo texto novo do espanhol e do chinês existe no dicionário e em zh-CN com os mesmos placeholders", () => {
     const zh = JSON.parse(

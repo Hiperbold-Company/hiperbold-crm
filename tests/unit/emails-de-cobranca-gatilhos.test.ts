@@ -51,10 +51,10 @@ function mundo(extra: Partial<BancoFalso["tabelas"]> = {}): BancoFalso {
         { organization_id: ORG, plan_id: "plano-pro", status: "ativa", cycle: "monthly", current_period_end: FIM_DO_PERIODO },
       ],
       billing_orders: [
-        { id: "ord-1", organization_id: ORG, tipo: "assinatura", plan_id: "plano-pro", ciclo: "monthly", metodo: "CREDIT_CARD", amount_cents: 34900, parcelas: 1, invoice_url: null },
-        { id: "ord-pix", organization_id: ORG, tipo: "assinatura", plan_id: "plano-pro", ciclo: "semiannual", metodo: "PIX", amount_cents: 180000, parcelas: 1, invoice_url: "https://www.asaas.com/i/pix123" },
-        { id: "ord-parc", organization_id: ORG, tipo: "assinatura", plan_id: "plano-pro", ciclo: "semiannual", metodo: "CREDIT_CARD", amount_cents: 195000, parcelas: 6, invoice_url: null },
-        { id: "ord-pacote", organization_id: ORG, tipo: "pacote_tokens", plan_id: null, ciclo: null, metodo: "PIX", amount_cents: 9900, parcelas: 1, invoice_url: null, tokens: 500000 },
+        { id: "ord-1", organization_id: ORG, status: "pago", tipo: "assinatura", plan_id: "plano-pro", ciclo: "monthly", metodo: "CREDIT_CARD", amount_cents: 34900, parcelas: 1, invoice_url: null },
+        { id: "ord-pix", organization_id: ORG, status: "pago", tipo: "assinatura", plan_id: "plano-pro", ciclo: "semiannual", metodo: "PIX", amount_cents: 180000, parcelas: 1, invoice_url: "https://www.asaas.com/i/pix123" },
+        { id: "ord-parc", organization_id: ORG, status: "pago", tipo: "assinatura", plan_id: "plano-pro", ciclo: "semiannual", metodo: "CREDIT_CARD", amount_cents: 195000, parcelas: 6, invoice_url: null },
+        { id: "ord-pacote", organization_id: ORG, status: "pago", tipo: "pacote_tokens", plan_id: null, ciclo: null, metodo: "PIX", amount_cents: 9900, parcelas: 1, invoice_url: null, tokens: 500000 },
       ],
       billing_payments: [
         // primeiro pagamento do cartão à vista (concedeu período)
@@ -240,6 +240,47 @@ describe("pagamento confirmado: COB-02 plano confirmado e COB-03 recibo", () => 
     await c.avisos.aoAplicar(aviso());
     const chaves = c.enviadas.map((e) => `${e.emailId}/${e.chave}`);
     expect(chaves).toEqual(["COB-02/pedido:ord-1", "COB-03/pagamento:pay_1", "COB-02/pedido:ord-1", "COB-03/pagamento:pay_1"]);
+  });
+
+  it("primeiraCompra: true quando nenhum OUTRO pedido da organização está pago, e o e-mail é o de boas-vindas", async () => {
+    const banco = mundo();
+    // só o pedido desta compra está pago; o resto da vitrine do teste ainda não foi pago
+    for (const o of banco.tabelas.billing_orders!) if (o.id !== "ord-1") o.status = "criado";
+    const c = cenario(banco);
+    await c.avisos.aoAplicar(aviso());
+    expect(c.por("COB-02")!.dados).toMatchObject({ primeiraCompra: true });
+    const m = c.renderizar(c.por("COB-02")!);
+    expect(m.subject).toBe("Sua conta no HiperCRM está pronta");
+    expect(m.text).toContain("Acessar CRM");
+    expect(m.text).toContain("https://crm.exemplo.com.br/app/inicio");
+    expect(m.text).not.toContain("/app/settings/plano");
+  });
+
+  it("primeiraCompra: false quando a organização já tem outro pedido pago, e o COB-02 segue o de sempre", async () => {
+    const c = cenario(); // ord-pix e ord-parc já estão pagos
+    await c.avisos.aoAplicar(aviso());
+    expect(c.por("COB-02")!.dados).toMatchObject({ primeiraCompra: false });
+    const m = c.renderizar(c.por("COB-02")!);
+    expect(m.subject).toBe("Seu plano Pro está ativo");
+    expect(m.text).toContain("Ver meu plano");
+  });
+
+  it("primeiraCompra: pedido pago de OUTRA organização não conta", async () => {
+    const banco = mundo();
+    for (const o of banco.tabelas.billing_orders!) if (o.id !== "ord-1") o.organization_id = "outra-org";
+    const c = cenario(banco);
+    await c.avisos.aoAplicar(aviso());
+    expect(c.por("COB-02")!.dados).toMatchObject({ primeiraCompra: true });
+  });
+
+  it("linha antiga da fila (COB-02 sem primeiraCompra) monta como compra seguinte", () => {
+    const m = montarEmailDeConta(
+      "COB-02",
+      { plano: "Pro", ciclo: "monthly", forma: { tipo: "cartao" }, acessoAte: FIM_DO_PERIODO },
+      ctx(),
+    );
+    expect(m.subject).toBe("Seu plano Pro está ativo");
+    expect(m.text).toContain("https://crm.exemplo.com.br/app/settings/plano");
   });
 
   it("o e-mail sai no espanhol quando o destinatário é de es", async () => {

@@ -13755,6 +13755,21 @@ export const DICIONARIO: Traducoes = {
   "Recebemos o pagamento e o plano {plano} ({ciclo}) já está liberado até {data}.": {
     es: "Recibimos el pago y el plan {plano} ({ciclo}) ya está disponible hasta el {data}.",
   },
+  "Sua conta no {crm} está pronta": {
+    es: "Tu cuenta en {crm} está lista",
+  },
+  "Recebemos o pagamento e o plano {plano} ({ciclo}) já está ativo até {data}.": {
+    es: "Recibimos el pago y el plan {plano} ({ciclo}) ya está activo hasta el {data}.",
+  },
+  "O {crm} reúne num só lugar as conversas do WhatsApp, seus contatos e o funil de vendas, com um atendente de IA que responde seus clientes por você.": {
+    es: "{crm} reúne en un solo lugar las conversaciones de WhatsApp, tus contactos y el embudo de ventas, con un asistente de IA que responde a tus clientes por ti.",
+  },
+  "Para começar, entre no CRM. A tela Início mostra os primeiros passos: conectar o seu WhatsApp e contar o que sua empresa faz leva poucos minutos.": {
+    es: "Para empezar, entra al CRM. La pantalla Inicio muestra los primeros pasos: conectar tu WhatsApp y contar a qué se dedica tu empresa lleva pocos minutos.",
+  },
+  "Acessar CRM": {
+    es: "Acceder al CRM",
+  },
   "Recibo do seu pagamento de {valor}": {
     es: "Recibo de tu pago de {valor}",
   },

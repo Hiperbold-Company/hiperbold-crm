@@ -17,6 +17,8 @@
  *     `pedido:<id>`) e COB-03. Cartão à vista e Pix: um recibo por pagamento (`pagamento:<id do Asaas>`).
  *     PARCELADO: UM recibo por pedido (`pedido:<id>`), com o total do parcelamento e "Cartão em Nx", sem a linha
  *     Parcela. A parcela seguinte de um pedido pago entra sem período e não dispara nada.
+ *     O COB-02 leva `primeiraCompra` (nenhum OUTRO pedido da organização está `pago`): na primeira compra o
+ *     e-mail é o de "sua conta está pronta" e o botão leva ao Início; nas seguintes, o de "plano ativo".
  *   - renovação do cartão (cobrança da assinatura, sem pedido): só o recibo (COB-02 já saiu na primeira vez).
  *   - pacote de tokens (B2): COB-09, pacote liberado (chave `pacote:<pedido>`, com cópia ao operador), com os
  *     tokens do pedido e o valor do pagamento. NÃO manda COB-03 junto: o COB-09 já mostra o valor pago. O
@@ -114,6 +116,14 @@ async function ler<T>(
   return (data as T | null) ?? null;
 }
 
+async function lerLista<T>(
+  consulta: PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<T[]> {
+  const { data, error } = await consulta;
+  if (error) throw new Error(error.message);
+  return (data as T[] | null) ?? [];
+}
+
 function cicloValido(ciclo: string | null | undefined): CicloDoPlano {
   return ciclo === "semiannual" || ciclo === "yearly" ? ciclo : "monthly";
 }
@@ -209,13 +219,23 @@ export function criarAvisosDeCobrancaSobre(admin: SupabaseClient, deps: DepsDosG
 
     // COB-02: só na compra (pedido). A renovação do cartão não tem pedido e não repete o "plano ativo".
     if (doPedido) {
+      // Primeira compra: nenhum OUTRO pedido da organização está pago (o deste já foi marcado `pago` pelo banco).
+      const pagos = await lerLista<{ id: string }>(
+        admin
+          .from("billing_orders")
+          .select("id")
+          .eq("organization_id", organizationId)
+          .eq("status", "pago")
+          .limit(2) as never,
+      );
+      const primeiraCompra = !pagos.some((p) => p.id !== doPedido.id);
       await enfileirar({
         organizationId,
         emailId: "COB-02",
         chave: `pedido:${doPedido.id}`,
         destino: "admins",
         copiaParaOperador: true,
-        dados: { plano: doPlano.name, ciclo, forma, acessoAte },
+        dados: { plano: doPlano.name, ciclo, forma, acessoAte, primeiraCompra },
       });
     }
 
