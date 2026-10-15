@@ -20,6 +20,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Logger } from "@/lib/agent-engine/obs/logger";
 import type { AmbienteAsaas } from "@/lib/billing/asaas/config";
 import { planosParaVenda, type PlanoParaVenda } from "@/lib/billing/asaas/leitura";
+import { pixDisponivel } from "@/lib/billing/asaas/pix";
 import {
   opcoesDeParcelamento,
   type OpcaoDeParcelas,
@@ -166,6 +167,8 @@ export interface DadosDaCompraDePlano {
   taxaMensalPercentual: number | null;
   /** D-180: o plano de um contrato vivo (avaliação, ativa ou atrasada), só para marcar o cartão; senão `null`. */
   planoAtualCode: string | null;
+  /** A conta Asaas tem chave Pix ativa? Sem ela a tela não oferece o Pix (só o cartão). */
+  pixDisponivel: boolean;
 }
 
 /**
@@ -180,12 +183,13 @@ export async function dadosDaCompraDePlano(
   ambiente: AmbienteAsaas,
   log?: Logger,
 ): Promise<DadosDaCompraDePlano> {
-  const [planosResultado, pacotesResultado, precisaPagador, parametros, planoDaOrg] = await Promise.all([
+  const [planosResultado, pacotesResultado, precisaPagador, parametros, planoDaOrg, pixAtivo] = await Promise.all([
     planosParaVenda(admin, log),
     pacotesParaVenda(admin, log),
     precisaDeFormularioDoPagador(admin, organizationId, ambiente, log),
     parametrosDeParcelamento(admin, log),
     planoDaOrganizacao(admin, organizationId, log),
+    pixDisponivel(),
   ]);
 
   const planoAtualCode =
@@ -215,5 +219,6 @@ export async function dadosDaCompraDePlano(
     opcoesDeParcelas,
     taxaMensalPercentual: parametros.taxaMensal === null ? null : Math.round(parametros.taxaMensal * 10000) / 100,
     planoAtualCode,
+    pixDisponivel: pixAtivo,
   };
 }

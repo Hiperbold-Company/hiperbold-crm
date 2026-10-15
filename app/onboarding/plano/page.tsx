@@ -123,6 +123,7 @@ export default async function PlanoPage({
           taxaMensalPercentual={dados.taxaMensalPercentual}
           precisaPagador={dados.precisaPagador}
           planoAtualCode={dados.planoAtualCode}
+          pixDisponivel={dados.pixDisponivel}
           planoInicial={planoInicial}
           depoisDePago={{ href: "/onboarding" }}
         />

@@ -6,10 +6,12 @@
  * guardado no navegador). Saíram de `_client.tsx` sem mudar uma linha de comportamento (D-180).
  */
 import Link from "next/link";
+import { useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useT } from "@/hooks/i18n/useT";
+import { erroDoDocumento, formatarDocumento } from "@/lib/documentos/cpf-cnpj";
 
 import type { CamposDoFormularioDoPagador } from "../_logica-compra";
 
@@ -55,6 +57,10 @@ export function FormularioDoPagador({
   idPrefixo: string;
 }) {
   const t = useT();
+  // O erro de comprimento só aparece depois de a pessoa sair do campo; o de dígito verificador, assim
+  // que o documento está completo (11 ou 14 dígitos).
+  const [saiuDoDocumento, setSaiuDoDocumento] = useState(false);
+  const erroDocumento = erroDoDocumento(pagador.documento, saiuDoDocumento);
   return (
     <div className="space-y-3 rounded-md border p-4">
       <p className="text-sm font-medium">{t("Dados de quem paga")}</p>
@@ -79,11 +85,20 @@ export function FormularioDoPagador({
         <Input
           id={`${idPrefixo}-documento`}
           value={pagador.documento}
-          onChange={(e) => onChange({ ...pagador, documento: e.target.value })}
-          maxLength={20}
+          onChange={(e) => onChange({ ...pagador, documento: formatarDocumento(e.target.value) })}
+          onBlur={() => setSaiuDoDocumento(true)}
+          inputMode="numeric"
+          placeholder="000.000.000-00"
           autoComplete="off"
+          aria-invalid={erroDocumento !== null}
+          aria-describedby={erroDocumento !== null ? `${idPrefixo}-documento-erro` : undefined}
           required
         />
+        {erroDocumento !== null && (
+          <p id={`${idPrefixo}-documento-erro`} className="text-xs text-destructive">
+            {t(erroDocumento)}
+          </p>
+        )}
       </div>
 
       <div className="space-y-1.5">

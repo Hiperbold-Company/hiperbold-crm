@@ -48,10 +48,10 @@ const SO_MENSAL_E_ANUAL: PlanoParaVenda = {
   conexoes: 3,
 };
 
-function tela(planos: PlanoParaVenda[], locale = "pt-BR") {
+function tela(planos: PlanoParaVenda[], locale = "pt-BR", pixDisponivel = true) {
   return render(
     <IdiomaProvider locale={locale}>
-      <AssinarOuComprarClient planos={planos} pacotes={[]} precisaPagador={false} leituraFalhou={false} />
+      <AssinarOuComprarClient pixDisponivel={pixDisponivel} planos={planos} pacotes={[]} precisaPagador={false} leituraFalhou={false} />
     </IdiomaProvider>,
   );
 }
@@ -178,6 +178,60 @@ describe("a tela pede ao servidor o ciclo e o método escolhidos", () => {
     expect(iniciarAssinatura.mock.calls[0]![0]).toMatchObject({ planCode: "pro", ciclo: "semiannual", metodo: "CREDIT_CARD" });
   });
 
+  it("sem chave Pix ativa na conta, o semestral e o anual oferecem só o cartão, com o aviso", () => {
+    tela([PRO], "pt-BR", false);
+
+    ateOPagamento("pro", "semiannual");
+
+    expect(screen.queryByTestId("metodo-PIX")).toBeNull();
+    expect(screen.getByTestId("metodo-unico")).toHaveTextContent("Cartão de crédito");
+    expect(screen.getByTestId("pix-indisponivel")).toHaveTextContent("Pix indisponível no momento. Use o cartão de crédito.");
+  });
+
+  it("sem chave Pix ativa, a compra sai no cartão", async () => {
+    tela([PRO], "pt-BR", false);
+
+    ateOPagamento("pro", "yearly");
+    ateOResumo();
+    fireEvent.click(screen.getByTestId("assinar-pro"));
+
+    await waitFor(() => expect(iniciarAssinatura).toHaveBeenCalledTimes(1));
+    expect(iniciarAssinatura.mock.calls[0]![0]).toMatchObject({ ciclo: "yearly", metodo: "CREDIT_CARD" });
+  });
+
+  it("com chave Pix ativa, o Pix aparece ao lado do cartão", () => {
+    tela([PRO], "pt-BR", true);
+
+    ateOPagamento("pro", "semiannual");
+
+    expect(screen.getByTestId("metodo-PIX")).toBeInTheDocument();
+    expect(screen.getByTestId("metodo-CREDIT_CARD")).toBeInTheDocument();
+    expect(screen.queryByTestId("pix-indisponivel")).toBeNull();
+  });
+
+  it("o pacote de tokens sem chave Pix ativa nasce no cartão e não mostra o botão Pix", async () => {
+    comprarPacote.mockReset();
+    comprarPacote.mockResolvedValue({ tipo: "erro", mensagem: "parou aqui" });
+    render(
+      <IdiomaProvider locale="pt-BR">
+        <AssinarOuComprarClient
+          planos={[]}
+          pixDisponivel={false}
+          pacotes={[{ codigo: "mil", nome: "Mil", tokens: 1000, precoCents: 5000 } as never]}
+          precisaPagador={false}
+          leituraFalhou={false}
+        />
+      </IdiomaProvider>,
+    );
+
+    expect(screen.getByTestId("metodo-unico-mil")).toHaveTextContent("Cartão de crédito");
+    expect(screen.queryByRole("button", { name: "Pix" })).toBeNull();
+    fireEvent.click(document.getElementById("termos-pacote-mil") as HTMLElement);
+    fireEvent.click(screen.getByTestId("comprar-mil"));
+    await waitFor(() => expect(comprarPacote).toHaveBeenCalledTimes(1));
+    expect(comprarPacote.mock.calls[0]![0]).toMatchObject({ pacote: "mil", metodo: "CREDIT_CARD" });
+  });
+
   it("anual no Pix", async () => {
     tela([PRO]);
 
@@ -259,6 +313,7 @@ describe("D-133: aceite dos Termos de Uso na tela de compra", () => {
       <IdiomaProvider locale="pt-BR">
         <AssinarOuComprarClient
           planos={[]}
+          pixDisponivel
           pacotes={[{ codigo: "mil", nome: "Mil", tokens: 1000, precoCents: 5000 } as never]}
           precisaPagador={false}
           leituraFalhou={false}

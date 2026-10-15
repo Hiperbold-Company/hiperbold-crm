@@ -3,7 +3,7 @@
 /**
  * O estado do pedido (fase F5, Tarefa 21), com o MESMO polling da tela de
  * compra (`usePollDoPedido`, `../../_use-poll-pedido.ts`) enquanto ainda
- * aguarda: a cada 5s por até 10 min, texto "aguardando a confirmação do
+ * aguarda: a cada 5s por até 10 min, texto "Aguardando a confirmação do
  * pagamento", sem prometer ativação.
  */
 import Link from "next/link";
@@ -51,7 +51,7 @@ export function PedidoClient({
     <div className="space-y-4 rounded-md border p-4">
       <Badge variant={rubrica.variante}>{t(rubrica.texto)}</Badge>
 
-      {aguardando && <p className="text-sm text-muted-foreground">{t("aguardando a confirmação do pagamento")}</p>}
+      {aguardando && <p className="text-sm text-muted-foreground">{t("Aguardando a confirmação do pagamento.")}</p>}
 
       {status === "pago" && (
         <div className="space-y-2">

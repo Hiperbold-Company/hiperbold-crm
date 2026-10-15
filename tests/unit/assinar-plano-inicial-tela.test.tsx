@@ -32,6 +32,7 @@ function tela(planoInicial: string | null | undefined) {
     <IdiomaProvider locale="pt-BR">
       <AssinarPlanoPassoAPasso
         planos={PLANOS}
+        pixDisponivel
         opcoesDeParcelas={{}}
         taxaMensalPercentual={null}
         precisaPagador={false}

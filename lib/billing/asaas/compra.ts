@@ -126,6 +126,8 @@ import "server-only";
  * `inconclusivo` em vez de `falhou`: a conciliação diária (Tarefa 16) refaz
  * a remoção, e o pedido continua retomável.
  */
+import { somenteDigitos } from "@/lib/documentos/cpf-cnpj";
+
 import type { ClienteAsaasHttp } from "./cliente";
 import type { AmbienteAsaas, ConfigAsaas } from "./config";
 import type { AssinaturaAsaas, CallbackAsaas, CicloAsaas, CobrancaAsaas } from "./contratos";
@@ -133,6 +135,7 @@ import { centavosParaReais, dataSaoPaulo } from "./dinheiro";
 import { documentoValido } from "./documento";
 import { calcularParcelamento, parcelasValidas, type ParametrosDeParcelamento } from "./parcelamento";
 import { ErroAsaasException } from "./erros";
+import { MENSAGEM_PIX_INDISPONIVEL } from "./pix-mensagem";
 import { impressaoDoPagador, mensagemDoErroDeCupom, mesmoCodigoDeCupom } from "./cupom";
 
 // ─── Tipos de entrada/saída ─────────────────────────────────────────────
@@ -865,7 +868,7 @@ async function resolverAsaasCustomerId(
       }
       const criado = await deps.asaas.criarCliente({
         name: pagador.nome,
-        cpfCnpj: pagador.documento,
+        cpfCnpj: somenteDigitos(pagador.documento),
         email: pagador.email,
         mobilePhone: pagador.celular,
         externalReference: referencia,
@@ -893,6 +896,7 @@ async function tratarErroDoPost(
   org: string,
   pedidoId: string,
   err: unknown,
+  metodo?: MetodoPedido,
 ): Promise<ResultadoIniciarCompra> {
   if (err instanceof ErroAsaasException) {
     const erro = err.erro;
@@ -910,7 +914,8 @@ async function tratarErroDoPost(
       // o log.
       deps.logger.error("asaas_compra_post_validacao_recusada", { pedidoId, codigos: erro.codigos });
       await deps.db.marcarPedido(org, pedidoId, "falhou", "asaas_validacao");
-      return { tipo: "erro", mensagem: MENSAGEM_VALIDACAO };
+      // Pix sem chave ativa na conta devolve exatamente esta validação: a frase certa manda usar o cartão.
+      return { tipo: "erro", mensagem: metodo === "PIX" ? MENSAGEM_PIX_INDISPONIVEL : MENSAGEM_VALIDACAO };
     }
     deps.logger.error("asaas_compra_post_falhou", { pedidoId, tipoErro: erro.tipo });
     await deps.db.marcarPedido(org, pedidoId, "falhou", `asaas_${erro.tipo}`);
@@ -1219,7 +1224,7 @@ async function criarAssinaturaEDevolver(
       }),
     );
   } catch (err) {
-    return tratarErroDoPost(deps, org, pedido.id, err);
+    return tratarErroDoPost(deps, org, pedido.id, err, pedido.metodo);
   }
 
   let primeiraCobranca: CobrancaAsaas | null = null;
@@ -1269,7 +1274,7 @@ async function criarCobrancaParceladaEDevolver(
       }),
     );
   } catch (err) {
-    return tratarErroDoPost(deps, org, pedido.id, err);
+    return tratarErroDoPost(deps, org, pedido.id, err, pedido.metodo);
   }
   return registrarEDevolverCartao(deps, org, pedido, null, cobranca);
 }
@@ -1297,7 +1302,7 @@ async function criarCobrancaAvulsaEDevolver(
       });
     cobranca = pedido.metodo === "CREDIT_CARD" ? await criarComRetornoDoCartao(deps, criar) : await criar(undefined);
   } catch (err) {
-    return tratarErroDoPost(deps, org, pedido.id, err);
+    return tratarErroDoPost(deps, org, pedido.id, err, pedido.metodo);
   }
   if (pedido.metodo === "CREDIT_CARD") return registrarEDevolverCartao(deps, org, pedido, null, cobranca);
   return registrarEDevolverPix(deps, org, pedido, cobranca);

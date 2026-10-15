@@ -39,6 +39,7 @@ import type { PlanoParaVenda } from "@/lib/billing/asaas/leitura";
 import type { ResultadoIniciarCompra } from "@/lib/billing/asaas/compra";
 import type { SimulacaoDeCupom } from "@/lib/billing/asaas/cupom";
 import type { OpcaoDeParcelas } from "@/lib/billing/asaas/parcelamento";
+import { MENSAGEM_PIX_INDISPONIVEL } from "@/lib/billing/asaas/pix-mensagem";
 
 import {
   chaveParaProximaTentativaDeCompra,
@@ -85,6 +86,7 @@ export function AssinarPlanoPassoAPasso({
   planoAtualCode,
   planoInicial,
   depoisDePago,
+  pixDisponivel,
 }: {
   /** O plano a deixar marcado ao abrir (o `?plano=` do site ou o do cadastro), já validado contra os à venda. Só marca: quem avança é o botão. */
   planoInicial?: string | null;
@@ -95,6 +97,8 @@ export function AssinarPlanoPassoAPasso({
   taxaMensalPercentual: number | null;
   precisaPagador: boolean;
   planoAtualCode: string | null;
+  /** A conta Asaas tem chave Pix ativa? Falso: só o cartão aparece (o servidor também recusa o Pix). */
+  pixDisponivel: boolean;
 }) {
   const t = useT();
   const tagDoIdioma = useTagDeIdioma();
@@ -500,11 +504,18 @@ export function AssinarPlanoPassoAPasso({
 
           <div className="space-y-2">
             <span className="text-sm font-medium">{t("Forma de pagamento")}</span>
-            {ciclo === "monthly" ? (
-              // O mensal só existe no cartão (renova sozinho): não há o que escolher.
-              <p className="text-sm" data-testid="metodo-unico">
-                {rotuloDoMetodo.CREDIT_CARD}
-              </p>
+            {ciclo === "monthly" || !pixDisponivel ? (
+              // O mensal só existe no cartão (renova sozinho); sem chave Pix ativa na conta, também: não há o que escolher.
+              <>
+                <p className="text-sm" data-testid="metodo-unico">
+                  {rotuloDoMetodo.CREDIT_CARD}
+                </p>
+                {ciclo !== "monthly" && (
+                  <p className="text-xs text-muted-foreground" data-testid="pix-indisponivel">
+                    {t(MENSAGEM_PIX_INDISPONIVEL)}
+                  </p>
+                )}
+              </>
             ) : (
               <div role="radiogroup" aria-label={t("Forma de pagamento")} className="grid gap-3 sm:grid-cols-2">
                 {(["CREDIT_CARD", "PIX"] as const).map((opcao) => (

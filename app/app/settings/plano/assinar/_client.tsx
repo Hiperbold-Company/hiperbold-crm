@@ -71,6 +71,7 @@ export function AssinarOuComprarClient({
   precisaPagador,
   leituraFalhou,
   planoAtualCode = null,
+  pixDisponivel,
 }: {
   /** D-177: calculadas no servidor (parâmetros de `billing_settings`); o cliente só escolhe o número de parcelas. */
   opcoesDeParcelas?: OpcoesDeParcelasPorPlano;
@@ -81,6 +82,8 @@ export function AssinarOuComprarClient({
   leituraFalhou: boolean;
   /** D-180: o plano que a organização tem hoje (contrato vivo), só para marcar o cartão; `null` quando não há. */
   planoAtualCode?: string | null;
+  /** A conta Asaas tem chave Pix ativa? Falso: a tela só oferece o cartão. */
+  pixDisponivel: boolean;
 }) {
   const t = useT();
   const nadaAVenda = planos.length === 0 && pacotes.length === 0;
@@ -112,6 +115,7 @@ export function AssinarOuComprarClient({
             taxaMensalPercentual={taxaMensalPercentual}
             precisaPagador={precisaPagador}
             planoAtualCode={planoAtualCode}
+            pixDisponivel={pixDisponivel}
           />
         </section>
       )}
@@ -121,7 +125,7 @@ export function AssinarOuComprarClient({
           <h2 className="text-lg font-medium">{t("Pacotes de tokens")}</h2>
           <div className="grid gap-4 md:grid-cols-2">
             {pacotes.map((pacote) => (
-              <PacoteParaComprar key={pacote.codigo} pacote={pacote} precisaPagador={precisaPagador} />
+              <PacoteParaComprar key={pacote.codigo} pacote={pacote} precisaPagador={precisaPagador} pixDisponivel={pixDisponivel} />
             ))}
           </div>
         </section>
@@ -132,10 +136,18 @@ export function AssinarOuComprarClient({
 
 // ─── Um pacote de tokens ────────────────────────────────────────────────────
 
-function PacoteParaComprar({ pacote, precisaPagador }: { pacote: PacoteParaVenda; precisaPagador: boolean }) {
+function PacoteParaComprar({
+  pacote,
+  precisaPagador,
+  pixDisponivel,
+}: {
+  pacote: PacoteParaVenda;
+  precisaPagador: boolean;
+  pixDisponivel: boolean;
+}) {
   const t = useT();
   const tagDoIdioma = useTagDeIdioma();
-  const [metodo, setMetodo] = useState<"CREDIT_CARD" | "PIX">("PIX");
+  const [metodo, setMetodo] = useState<"CREDIT_CARD" | "PIX">(pixDisponivel ? "PIX" : "CREDIT_CARD");
   const [pagador, setPagador] = useState<CamposDoFormularioDoPagador>(CAMPOS_VAZIOS);
   const [pendente, setPendente] = useState(false);
   const [aceitouTermos, setAceitouTermos] = useState(false);
@@ -219,24 +231,30 @@ function PacoteParaComprar({ pacote, precisaPagador }: { pacote: PacoteParaVenda
 
         <div className="space-y-1.5">
           <span className="text-sm font-medium">{t("Forma de pagamento")}</span>
-          <div className="flex w-fit items-center gap-0.5 rounded-md border bg-muted p-0.5">
-            <button
-              type="button"
-              aria-pressed={metodo === "PIX"}
-              className={classeDoToggle(metodo === "PIX")}
-              onClick={() => setMetodo("PIX")}
-            >
-              {t("Pix")}
-            </button>
-            <button
-              type="button"
-              aria-pressed={metodo === "CREDIT_CARD"}
-              className={classeDoToggle(metodo === "CREDIT_CARD")}
-              onClick={() => setMetodo("CREDIT_CARD")}
-            >
+          {pixDisponivel ? (
+            <div className="flex w-fit items-center gap-0.5 rounded-md border bg-muted p-0.5">
+              <button
+                type="button"
+                aria-pressed={metodo === "PIX"}
+                className={classeDoToggle(metodo === "PIX")}
+                onClick={() => setMetodo("PIX")}
+              >
+                {t("Pix")}
+              </button>
+              <button
+                type="button"
+                aria-pressed={metodo === "CREDIT_CARD"}
+                className={classeDoToggle(metodo === "CREDIT_CARD")}
+                onClick={() => setMetodo("CREDIT_CARD")}
+              >
+                {t("Cartão de crédito")}
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm" data-testid={`metodo-unico-${pacote.codigo}`}>
               {t("Cartão de crédito")}
-            </button>
-          </div>
+            </p>
+          )}
         </div>
 
         {precisaPagador && (

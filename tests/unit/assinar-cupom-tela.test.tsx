@@ -81,6 +81,7 @@ function tela(extra: { pacotes?: never[] } = {}) {
     <IdiomaProvider locale="pt-BR">
       <AssinarOuComprarClient
         planos={[PRO]}
+        pixDisponivel
         pacotes={extra.pacotes ?? []}
         precisaPagador={false}
         leituraFalhou={false}

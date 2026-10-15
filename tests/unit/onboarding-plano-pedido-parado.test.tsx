@@ -70,6 +70,7 @@ vi.mock("@/app/app/settings/plano/assinar/_dados", () => ({
     taxaMensalPercentual: 0,
     precisaPagador: false,
     planoAtualCode: null,
+    pixDisponivel: true,
     leituraFalhou: false,
   }),
 }));

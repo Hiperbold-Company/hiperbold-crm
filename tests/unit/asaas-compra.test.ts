@@ -28,6 +28,7 @@ import type { ConfigAsaas } from "@/lib/billing/asaas/config";
 import type { AssinaturaAsaas, ClienteAsaas, CobrancaAsaas } from "@/lib/billing/asaas/contratos";
 import { erroIndisponivel, erroTempoEsgotado, erroValidacao } from "@/lib/billing/asaas/erros";
 import { centavosParaReais } from "@/lib/billing/asaas/dinheiro";
+import { MENSAGEM_PIX_INDISPONIVEL } from "@/lib/billing/asaas/pix-mensagem";
 
 const CPF_VALIDO = "111.444.777-35";
 
@@ -455,6 +456,47 @@ describe("iniciarCompra: recuperação do inconclusivo (decisão 13)", () => {
   });
 });
 
+describe("iniciarCompra: validação do Asaas num pedido Pix", () => {
+  it("4xx de validação no POST do Pix devolve a frase do Pix indisponível, não a genérica de dados", async () => {
+    const pedido = pedidoBase({
+      tipo: "pacote_tokens",
+      metodo: "PIX",
+      ciclo: null,
+      planoNome: null,
+      pacoteNome: "1000 tokens",
+      planCode: null,
+      pacoteCode: "mil-tokens",
+    });
+    const { db, getPedido } = dbFalso(pedido);
+    const asaas = asaasFalso({
+      criarCobranca: vi.fn(async () => {
+        throw erroValidacao(400, ["invalid_action"]);
+      }),
+    });
+    const { deps } = montarDeps(db, asaas);
+
+    const resultado = await iniciarCompra(deps, { ...ENTRADA_BASE, tipo: "pacote_tokens", ciclo: undefined, planCode: undefined, pacote: "mil-tokens" });
+
+    expect(resultado).toEqual({ tipo: "erro", mensagem: "Pix indisponível no momento. Use o cartão de crédito." });
+    expect(resultado).toEqual({ tipo: "erro", mensagem: MENSAGEM_PIX_INDISPONIVEL });
+    expect(getPedido().status).toBe("falhou");
+  });
+
+  it("a mesma validação num pedido de cartão segue com a frase de dados (só o Pix é remapeado)", async () => {
+    const { db } = dbFalso(pedidoBase());
+    const asaas = asaasFalso({
+      criarAssinatura: vi.fn(async () => {
+        throw erroValidacao(400, ["invalid_action"]);
+      }),
+    });
+    const { deps } = montarDeps(db, asaas);
+
+    const resultado = await iniciarCompra(deps, ENTRADA_BASE);
+
+    expect(resultado).toEqual({ tipo: "erro", mensagem: MENSAGEM_VALIDACAO });
+  });
+});
+
 describe("iniciarCompra: cliente Asaas (decisão 16)", () => {
   it("reaproveita o vínculo local: nunca busca nem cria cliente no Asaas", async () => {
     const { db } = dbFalso(pedidoBase(), { vinculo: "cus_vinculado123" });
@@ -496,6 +538,17 @@ describe("iniciarCompra: cliente Asaas (decisão 16)", () => {
     expect(dados.externalReference).toBe("HC:org:org-1");
     // Criado já calado: nenhum PUT depois.
     expect(asaas.atualizarCliente).not.toHaveBeenCalled();
+  });
+
+  it("só os dígitos do CPF/CNPJ seguem ao Asaas, mesmo com o documento formatado na entrada", async () => {
+    const { db } = dbFalso(pedidoBase());
+    const asaas = asaasFalso();
+    const { deps } = montarDeps(db, asaas);
+
+    await iniciarCompra(deps, ENTRADA_BASE);
+
+    const dados = (asaas.criarCliente as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(dados.cpfCnpj).toBe("11144477735");
   });
 
   it("D-087: cliente reaproveitado por externalReference com notificações ligadas é atualizado UMA vez", async () => {

@@ -24,6 +24,7 @@ let configValida = true;
 let compraLigadaValor = true;
 let platformAdminScope: string | null = "full";
 let mfaPendente = false;
+let pixAtivo = true;
 
 const auditadas: Array<Record<string, unknown>> = [];
 const chamadasIniciar: Array<Record<string, unknown>> = [];
@@ -81,6 +82,7 @@ vi.mock("@/lib/billing/asaas/config", () => ({
   }),
   compraLigada: vi.fn(async () => compraLigadaValor),
 }));
+vi.mock("@/lib/billing/asaas/pix", () => ({ pixDisponivel: vi.fn(async () => pixAtivo) }));
 vi.mock("@/lib/billing/asaas/compra", () => ({
   iniciarCompra: vi.fn(async (_deps: unknown, entrada: Record<string, unknown>) => {
     chamadasIniciar.push(entrada);
@@ -126,6 +128,7 @@ beforeEach(() => {
   compraLigadaValor = true;
   platformAdminScope = "full";
   mfaPendente = false;
+  pixAtivo = true;
   auditadas.length = 0;
   chamadasIniciar.length = 0;
   chamadasCancelar.length = 0;
@@ -311,6 +314,30 @@ describe("compraDoPlano: frase fixa, nunca erro cru", () => {
   });
 });
 
+describe("compraDoPlano: CPF/CNPJ do pagador validado no servidor", () => {
+  it.each(["000.000.000-00", "111.444.777-36", "123", "111.444.777-355", "11.222.333/0001-82"])(
+    "iniciarAssinatura recusa o documento %s sem chegar à compra",
+    async (documento) => {
+      const r = await iniciarAssinatura({ ...ENTRADA_ASSINATURA, pagador: { ...PAGADOR, documento } });
+      expect(r.tipo).toBe("erro");
+      expect(chamadasIniciar.length).toBe(0);
+    },
+  );
+
+  it("comprarPacote recusa o CPF inválido sem chegar à compra", async () => {
+    const r = await comprarPacote({ ...ENTRADA_PACOTE, pagador: { ...PAGADOR, documento: "000.000.000-00" } });
+    expect(r.tipo).toBe("erro");
+    expect(chamadasIniciar.length).toBe(0);
+  });
+
+  it("aceita CPF e CNPJ válidos, com ou sem máscara", async () => {
+    for (const documento of ["111.444.777-35", "11144477735", "11.222.333/0001-81"]) {
+      const r = await iniciarAssinatura({ ...ENTRADA_ASSINATURA, pagador: { ...PAGADOR, documento }, chave: CHAVE });
+      expect(r.tipo).not.toBe("erro");
+    }
+  });
+});
+
 describe("compraDoPlano: auditoria sem dado sensível", () => {
   it("iniciarAssinatura com pagador audita billing.order_created sem CPF/e-mail/telefone/valor", async () => {
     const r = await iniciarAssinatura({ ...ENTRADA_ASSINATURA, pagador: PAGADOR });
@@ -378,5 +405,38 @@ describe("D-133: o servidor recusa a compra sem o aceite da versão vigente dos 
     await comprarPacote(ENTRADA_PACOTE);
     expect(chamadasIniciar.map((e) => e.termosVersao)).toEqual([VERSAO_DOS_TERMOS, VERSAO_DOS_TERMOS]);
     expect(auditadas.map((a) => (a.metadata as Record<string, unknown>).termos_versao)).toEqual([VERSAO_DOS_TERMOS, VERSAO_DOS_TERMOS]);
+  });
+});
+
+describe("compraDoPlano: Pix só com chave Pix ativa na conta Asaas", () => {
+  const MENSAGEM = "Pix indisponível no momento. Use o cartão de crédito.";
+
+  it("assinatura no Pix com a conta sem chave ativa é recusada ANTES de criar o pedido", async () => {
+    pixAtivo = false;
+    const r = await iniciarAssinatura({ ...ENTRADA_ASSINATURA, ciclo: "yearly", metodo: "PIX" });
+    expect(r).toEqual({ tipo: "erro", mensagem: MENSAGEM });
+    expect(chamadasIniciar).toEqual([]);
+    expect(auditadas).toEqual([]);
+  });
+
+  it("pacote no Pix com a conta sem chave ativa é recusado ANTES de criar o pedido", async () => {
+    pixAtivo = false;
+    const r = await comprarPacote(ENTRADA_PACOTE);
+    expect(r).toEqual({ tipo: "erro", mensagem: MENSAGEM });
+    expect(chamadasIniciar).toEqual([]);
+  });
+
+  it("o cartão segue passando quando o Pix está indisponível", async () => {
+    pixAtivo = false;
+    const r = await iniciarAssinatura(ENTRADA_ASSINATURA);
+    expect(r.tipo).not.toBe("erro");
+    expect(chamadasIniciar.length).toBe(1);
+  });
+
+  it("com chave Pix ativa o Pix passa", async () => {
+    pixAtivo = true;
+    const r = await comprarPacote(ENTRADA_PACOTE);
+    expect(r.tipo).not.toBe("erro");
+    expect(chamadasIniciar.length).toBe(1);
   });
 });

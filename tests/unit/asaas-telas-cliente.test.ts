@@ -112,7 +112,7 @@ describe("montarPagadorDoFormulario: decisão 16, dados do pagador", () => {
   });
 
   it("aceita CNPJ (14 dígitos), com ou sem pontuação", () => {
-    const r = montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, documento: "12.345.678/0001-99" });
+    const r = montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, documento: "11.222.333/0001-81" });
     expect(r.ok).toBe(true);
   });
 
@@ -123,7 +123,13 @@ describe("montarPagadorDoFormulario: decisão 16, dados do pagador", () => {
 
   it("recusa documento com quantidade de dígitos errada", () => {
     const r = montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, documento: "123" });
-    expect(r).toEqual({ ok: false, erro: "Informe um CPF ou CNPJ válido." });
+    expect(r).toEqual({ ok: false, erro: "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos)" });
+  });
+
+  it("recusa CPF e CNPJ com dígito verificador errado, com a mensagem de cada um", () => {
+    expect(montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, documento: "000.000.000-00" })).toEqual({ ok: false, erro: "CPF inválido" });
+    expect(montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, documento: "123.456.789-10" })).toEqual({ ok: false, erro: "CPF inválido" });
+    expect(montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, documento: "12.345.678/0001-99" })).toEqual({ ok: false, erro: "CNPJ inválido" });
   });
 
   it("recusa e-mail em formato inválido", () => {

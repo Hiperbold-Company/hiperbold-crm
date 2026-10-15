@@ -83,10 +83,13 @@ import {
   type ResultadoSimularCupom,
 } from "@/lib/billing/asaas/cupom";
 import { dbCompraSupabase } from "@/lib/billing/asaas/db-compra-supabase";
+import { pixDisponivel } from "@/lib/billing/asaas/pix";
+import { MENSAGEM_PIX_INDISPONIVEL } from "@/lib/billing/asaas/pix-mensagem";
 import { urlDeRetornoDoCartao } from "@/lib/billing/asaas/retorno-do-cartao";
 import { criarAvisoDeCancelamentoSobre } from "@/lib/email/conta-e-cobranca/gatilhos-de-conta";
 import { supportWriteError } from "@/lib/impersonate/support";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
+import { erroDoDocumento } from "@/lib/documentos/cpf-cnpj";
 import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
@@ -144,7 +147,12 @@ async function tentativasDeCupomEsgotadas(userId: string, orgId: string): Promis
 
 const PAGADOR = z.object({
   nome: z.string().trim().min(1).max(200),
-  documento: z.string().trim().min(11).max(20),
+  // Dígito verificador no servidor, com a MESMA função pura do formulário (`lib/documentos/cpf-cnpj.ts`).
+  documento: z
+    .string()
+    .trim()
+    .max(20)
+    .refine((v) => erroDoDocumento(v) === null, { message: "CPF ou CNPJ inválido" }),
   email: z.string().trim().email().max(200).optional(),
   celular: z.string().trim().min(8).max(20).optional(),
 });
@@ -339,6 +347,11 @@ export async function iniciarAssinatura(input: {
     return { tipo: "erro", mensagem: MENSAGEM_COMPRA_DESLIGADA };
   }
 
+  // Conta Asaas sem chave Pix ativa: o POST do Pix falharia. Recusa ANTES de criar pedido ou chamar o Asaas.
+  if (parsed.data.metodo === "PIX" && !(await pixDisponivel())) {
+    return { tipo: "erro", mensagem: MENSAGEM_PIX_INDISPONIVEL };
+  }
+
   const entrada: EntradaIniciarCompra = {
     organizationId: auth.orgId,
     actorId: auth.userId,
@@ -448,6 +461,11 @@ export async function comprarPacote(input: {
   const admin = createAdminClient();
   if (!(await compraLigada(admin, config.habilitado))) {
     return { tipo: "erro", mensagem: MENSAGEM_COMPRA_DESLIGADA };
+  }
+
+  // Conta Asaas sem chave Pix ativa: o POST do Pix falharia. Recusa ANTES de criar pedido ou chamar o Asaas.
+  if (parsed.data.metodo === "PIX" && !(await pixDisponivel())) {
+    return { tipo: "erro", mensagem: MENSAGEM_PIX_INDISPONIVEL };
   }
 
   const entrada: EntradaIniciarCompra = {

@@ -73,6 +73,7 @@ function tela(extra: { planoAtualCode?: string | null; precisaPagador?: boolean;
     <IdiomaProvider locale="pt-BR">
       <AssinarOuComprarClient
         planos={[PRO, MAX, ESCALE]}
+        pixDisponivel
         pacotes={extra.pacotes ?? []}
         precisaPagador={extra.precisaPagador ?? false}
         leituraFalhou={false}
@@ -445,6 +446,50 @@ describe("mensagens de erro no passo certo", () => {
     continuar();
 
     expect(screen.getByRole("alert")).toHaveTextContent("Informe o nome de quem paga.");
+    expect(screen.getByTestId("passo-pagamento")).toBeInTheDocument();
+    expect(screen.queryByTestId("assinar-pro")).toBeNull();
+    expect(iniciarAssinatura).not.toHaveBeenCalled();
+  });
+
+  it("documento do pagador: máscara ao digitar, colar cru, teto de 14 dígitos e erro inline", () => {
+    tela({ precisaPagador: true });
+    fireEvent.click(screen.getByTestId("escolher-pro"));
+    continuar();
+    const campo = document.getElementById("pagador-plano-pro-documento") as HTMLInputElement;
+    expect(campo.inputMode).toBe("numeric");
+
+    fireEvent.change(campo, { target: { value: "1114447773" } });
+    expect(campo.value).toBe("111.444.777-3");
+    fireEvent.change(campo, { target: { value: "11144477735" } });
+    expect(campo.value).toBe("111.444.777-35");
+    expect(screen.queryByText("CPF inválido")).toBeNull();
+
+    fireEvent.change(campo, { target: { value: "000.000.000-00" } });
+    expect(screen.getByText("CPF inválido")).toBeInTheDocument();
+
+    fireEvent.change(campo, { target: { value: "11222333000182" } });
+    expect(campo.value).toBe("11.222.333/0001-82");
+    expect(screen.getByText("CNPJ inválido")).toBeInTheDocument();
+
+    fireEvent.change(campo, { target: { value: "112223330001819999" } });
+    expect(campo.value).toBe("11.222.333/0001-81");
+    expect(screen.queryByText("CNPJ inválido")).toBeNull();
+
+    fireEvent.change(campo, { target: { value: "123" } });
+    fireEvent.blur(campo);
+    expect(screen.getByText("Informe um CPF (11 dígitos) ou CNPJ (14 dígitos)")).toBeInTheDocument();
+  });
+
+  it("CPF com dígito verificador errado barra o avanço do passo de pagamento", () => {
+    tela({ precisaPagador: true });
+    fireEvent.click(screen.getByTestId("escolher-pro"));
+    continuar();
+    fireEvent.change(document.getElementById("pagador-plano-pro-nome") as HTMLElement, { target: { value: "Maria Souza" } });
+    fireEvent.change(document.getElementById("pagador-plano-pro-documento") as HTMLElement, { target: { value: "123.456.789-10" } });
+    aceitar();
+    continuar();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("CPF inválido");
     expect(screen.getByTestId("passo-pagamento")).toBeInTheDocument();
     expect(screen.queryByTestId("assinar-pro")).toBeNull();
     expect(iniciarAssinatura).not.toHaveBeenCalled();

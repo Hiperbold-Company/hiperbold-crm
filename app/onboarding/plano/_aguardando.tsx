@@ -94,7 +94,7 @@ export function AguardandoPagamento({
           </button>
         </p>
       ) : (
-        <p className="text-sm text-muted-foreground">{t("aguardando a confirmação do pagamento")}</p>
+        <p className="text-sm text-muted-foreground">{t("Aguardando a confirmação do pagamento.")}</p>
       )}
     </div>
   );

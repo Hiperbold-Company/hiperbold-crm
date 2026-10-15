@@ -4,7 +4,7 @@
  * O resultado `{ tipo: "pix" }` de `iniciarAssinatura`/`comprarPacote` (fase
  * F5, Tarefa 20): QR code, copia e cola com botão de copiar, expiração, e o
  * polling do pedido a cada 5s por até 10 min (`usePollDoPedido`,
- * `../_use-poll-pedido.ts`), com o texto "aguardando a confirmação do
+ * `../_use-poll-pedido.ts`), com o texto "Aguardando a confirmação do
  * pagamento" e, ao ver `pago`, "pagamento confirmado" com link para o plano.
  *
  * Nunca promete ativação: o polling só mostra o que o pedido diz agora
@@ -122,7 +122,7 @@ export function PixPendente({
           </Link>
         </p>
       ) : (
-        <p className="text-sm text-muted-foreground">{t("aguardando a confirmação do pagamento")}</p>
+        <p className="text-sm text-muted-foreground">{t("Aguardando a confirmação do pagamento.")}</p>
       )}
     </div>
   );

@@ -270,6 +270,21 @@ function ehRemovido(err: unknown): boolean {
   return err instanceof ErroAsaasException && err.erro.tipo === "nao_encontrado";
 }
 
+const listaChavesPixSchema = z.object({ totalCount: z.number().int().min(0) }).passthrough();
+
+/**
+ * `GET /pix/addressKeys?status=ACTIVE`: quantas chaves Pix ATIVAS a conta tem. Só leitura. Fica fora de
+ * `ClienteAsaasHttp` de propósito: um método novo na interface obrigaria todo dublê de teste a implementá-lo.
+ */
+export async function contarChavesPixAtivas(deps: DepsClienteAsaas): Promise<number> {
+  const lista = await chamarComSchema(
+    deps,
+    { metodo: "GET", caminho: "/pix/addressKeys?status=ACTIVE" },
+    listaChavesPixSchema,
+  );
+  return lista.totalCount;
+}
+
 export interface ClienteAsaasHttp {
   buscarClientePorReferencia(externalReference: string): Promise<ClienteAsaas | null>;
   criarCliente(dados: CriarClienteRequest): Promise<ClienteAsaas>;

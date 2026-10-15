@@ -17,6 +17,7 @@
  * teste de unidade (`tests/unit/asaas-telas-cliente.test.ts`) sem montar
  * árvore nenhuma.
  */
+import { erroDoDocumento } from "@/lib/documentos/cpf-cnpj";
 import { randomId } from "@/lib/random-id";
 
 // ─── URL de redirecionamento (risco 8) ─────────────────────────────────────
@@ -129,11 +130,9 @@ const EMAIL_RAZOAVEL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * preenchidos (o mesmo `.optional()` do zod em
  * `app/actions/settings/compraDoPlano.ts`).
  *
- * A conferência do DÍGITO VERIFICADOR do CPF/CNPJ é só no servidor
- * (`documentoValido`, `lib/billing/asaas/documento.ts`, `server-only`, não
- * importável aqui): esta função só recusa o que nem chega a ter a
- * quantidade certa de dígitos (11 ou 14), para não gastar uma volta ao
- * servidor com um documento obviamente incompleto.
+ * O CPF/CNPJ é conferido aqui pelo DÍGITO VERIFICADOR, com a mesma função pura
+ * que o servidor usa (`lib/documentos/cpf-cnpj.ts`): quem digita um documento
+ * errado fica no passo, sem gastar uma volta ao servidor.
  */
 // ─── Ciclos de venda e economia (D-176) ────────────────────────────────────
 
@@ -312,9 +311,9 @@ export function montarPagadorDoFormulario(
     return { ok: false, erro: "Informe o nome de quem paga." };
   }
 
-  const digitosDoDocumento = documento.replace(/\D/g, "");
-  if (digitosDoDocumento.length !== 11 && digitosDoDocumento.length !== 14) {
-    return { ok: false, erro: "Informe um CPF ou CNPJ válido." };
+  const erroDoDoc = erroDoDocumento(documento);
+  if (erroDoDoc !== null) {
+    return { ok: false, erro: erroDoDoc };
   }
 
   if (email.length > 0 && !EMAIL_RAZOAVEL.test(email)) {

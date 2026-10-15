@@ -49,6 +49,7 @@ function tela(locale = "pt-BR") {
     <IdiomaProvider locale={locale}>
       <AssinarOuComprarClient
         planos={[PRO]}
+        pixDisponivel
         pacotes={[]}
         precisaPagador={false}
         leituraFalhou={false}

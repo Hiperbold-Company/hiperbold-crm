@@ -99,6 +99,7 @@ export default async function AssinarPage() {
       precisaPagador={dados.precisaPagador}
       leituraFalhou={dados.leituraFalhou}
       planoAtualCode={dados.planoAtualCode}
+      pixDisponivel={dados.pixDisponivel}
     />
   );
 }
