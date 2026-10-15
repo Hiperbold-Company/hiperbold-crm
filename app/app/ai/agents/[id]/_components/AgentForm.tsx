@@ -984,6 +984,21 @@ export function AgentForm(props: Props) {
                   )}
                 </p>
               ) : null}
+              {/*
+                O caminho para conseguir (ou trocar) um número vale com ou sem número
+                escolhido. Desde 15/10/2026 Conexões não está no menu lateral, e o único
+                link que existia aparecia só com ZERO números conectados.
+              */}
+              {props.channelSessions.length > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  <Link
+                    href="/app/connections"
+                    className="font-medium text-foreground underline underline-offset-4"
+                  >
+                    {t("Gerenciar números em Conexões")}
+                  </Link>
+                </p>
+              ) : null}
             </div>
           </Card>
 

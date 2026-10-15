@@ -103,7 +103,16 @@ export function CredentialPicker({
           </Link>{" "}
           {t("na aba Credenciais.")}
         </p>
-      ) : null}
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          <Link
+            href="/app/ai/credentials"
+            className="font-medium text-foreground underline underline-offset-4"
+          >
+            {t("Gerenciar chaves em Credenciais")}
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

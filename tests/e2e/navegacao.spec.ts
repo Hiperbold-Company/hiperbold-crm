@@ -89,14 +89,18 @@ test.describe("navegação agrupada", () => {
 
     // Organização não aparece como título aqui: seu hub (Configurações) vive no
     // rodapé fixo — ver o teste de dobra abaixo.
+    //
+    // "Canais" saiu da lista em 15/10/2026 (decisão do dono: o menu lateral é só o
+    // essencial): nenhuma tela do grupo tem `sidebar: true`, e grupo sem hub e sem
+    // item no menu não desenha título. Conexões e Webhooks moram em Configurações.
     const titulos = sidebar(page).getByRole("heading");
     await expect(titulos).toHaveText([
       "Atendimento",
       "CRM",
       "Agente de IA",
-      "Canais",
       "Análise",
     ]);
+    await expect(sidebar(page).getByRole("heading", { name: "Canais" })).toHaveCount(0);
 
     await page.screenshot({
       path: path.join(EVIDENCE, "nav-sidebar-agrupado.png"),
@@ -308,8 +312,17 @@ test.describe("navegação agrupada", () => {
   test("um agent não vê o cabeçalho de um grupo que a permissão esvaziou", async ({ page }) => {
     await login(page, creds.users.agent!.email);
 
-    // "Agente de IA" é todo manager+/admin: o título não pode sobrar sozinho.
-    await expect(sidebar(page).getByRole("heading", { name: "Agente de IA" })).toHaveCount(0);
+    // Todo item de menu do grupo "Canais" é manager+/admin, e o grupo nem tem mais
+    // item no menu lateral: o título não pode sobrar sozinho.
+    await expect(sidebar(page).getByRole("heading", { name: "Canais" })).toHaveCount(0);
     await expect(sidebar(page).getByRole("heading", { name: "Atendimento" })).toBeVisible();
+
+    // "Agente de IA" é o caso que a permissão esvazia SÓ EM PARTE: o item de menu
+    // (Agentes) é manager+, mas o agent ainda enxerga Casos, Alertas e Propostas do
+    // grupo — e a única porta para eles é o hub. O título fica, acompanhado da porta;
+    // o que não pode aparecer é o item que o papel não alcança.
+    await expect(sidebar(page).getByRole("heading", { name: "Agente de IA" })).toHaveCount(1);
+    await expect(sidebar(page).getByRole("link", { name: "Ver tudo em IA" })).toBeVisible();
+    await expect(sidebar(page).getByRole("link", { name: "Agentes", exact: true })).toHaveCount(0);
   });
 });

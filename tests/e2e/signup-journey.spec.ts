@@ -35,7 +35,10 @@ test("criar conta: signup → e-mail de confirmação → onboarding → re-logi
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.getByLabel("Confirmar senha").fill(password);
-  await page.getByRole("checkbox", { name: /Li e aceito/ }).check();
+  // Compra pelo cliente DESLIGADA (instalação própria, como no CI): o cadastro não
+  // pede o aceite dos Termos — ele fica no passo "Boas-vindas" do onboarding (abaixo).
+  // Com a compra ligada o aceite vem no cadastro (SignupForm `compraLigada`).
+  await expect(page.getByRole("checkbox", { name: /Li e aceito/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Criar conta" }).click();
   await expect(page.getByText("Confirme seu e-mail")).toBeVisible();
 
@@ -48,6 +51,8 @@ test("criar conta: signup → e-mail de confirmação → onboarding → re-logi
   await expect(page).toHaveURL(/\/onboarding\/welcome/);
   await expect(page.getByText(`Boas-vindas ao ${DEFAULT_APP_NAME}`)).toBeVisible();
   await expect(page.getByText("Loja E2E Signup")).toBeVisible();
+  // O aceite dos Termos é deste passo quando a compra está desligada.
+  await expect(page.getByRole("checkbox", { name: /Li e aceito/ })).toBeVisible();
 
   // 5. Sai (limpa sessão) e entra de novo com as credenciais criadas
   await context.clearCookies();

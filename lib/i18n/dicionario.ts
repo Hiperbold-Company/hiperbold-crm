@@ -1832,6 +1832,8 @@ export const DICIONARIO: Traducoes = {
   cadastrada: { es: "registrada" },
   "Cadastrar credencial": { es: "Registrar credencial" },
   "na aba Credenciais.": { es: "en la pestaña Credenciales." },
+  "Gerenciar chaves em Credenciais": { es: "Administrar claves en Credenciales" },
+  "Gerenciar números em Conexões": { es: "Administrar números en Conexiones" },
   "Palavras que chamam uma pessoa na hora": { es: "Palabras que llaman a una persona al instante" },
   Remover: { es: "Quitar" },
   "Sem palavras-chave.": { es: "Sin palabras clave." },
