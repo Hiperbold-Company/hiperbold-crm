@@ -28,7 +28,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { codigoConhecido, DADOS_DO_EMAIL, type CodigoDeEmail, type DadosDoEmail } from "./montar";
 
-export type DestinoDoEmail = "admins" | "criador";
+/**
+ * `admins` e `criador` são da organização; `financeiro` é SÓ de quem cuida do financeiro da instalação
+ * (`EMAIL_DO_FINANCEIRO`, ou, vazio, os mesmos da cópia dos avisos): o pedido de reembolso (COB-11).
+ */
+export type DestinoDoEmail = "admins" | "criador" | "financeiro";
 
 type EntradaDoCodigo<K extends CodigoDeEmail> = {
   organizationId: string;

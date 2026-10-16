@@ -201,6 +201,15 @@ export const CATALOGO_DA_INSTALACAO: readonly ChaveDaInstalacao[] = [
     controle: "edita",
   },
   {
+    chave: "EMAIL_DO_FINANCEIRO",
+    rotulo: "E-mail do financeiro (pedidos de reembolso)",
+    explicacao:
+      "Quem recebe o aviso quando um cliente pede reembolso depois de cancelar. Pode ser mais de um, separados por vírgula. Vazio: o aviso vai para os mesmos endereços da cópia dos avisos de clientes.",
+    grupo: "email",
+    natureza: "texto",
+    controle: "edita",
+  },
+  {
     chave: "LGPD_DPO_EMAIL",
     rotulo: "E-mail do encarregado de dados (DPO)",
     explicacao:

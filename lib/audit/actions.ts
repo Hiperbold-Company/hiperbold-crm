@@ -1105,6 +1105,14 @@ export const AUDIT_ACTIONS = [
   // reenvio; metadata.via diz qual) e o link foi aberto e valeu. Nunca levam o token nem o endereço em claro.
   "auth.email_verification_sent",
   "auth.email_verified",
+  // Pedido de reembolso do cliente (migration 0957). `refund_requested`: o admin da organização pediu o reembolso
+  // do pagamento mais recente (metadata: pagamento do Asaas, valor, motivo; nunca o texto livre).
+  // `refund_rejected` e `refund_marked_done`: o admin da PLATAFORMA recusou o pedido ou o marcou como concluído
+  // (reembolso feito fora do fluxo). Quem conclui pelo webhook do Asaas não audita: o estorno já tem o e-mail
+  // de estorno feito e o log do processamento.
+  "billing.refund_requested",
+  "billing.refund_rejected",
+  "billing.refund_marked_done",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

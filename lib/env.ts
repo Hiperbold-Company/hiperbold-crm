@@ -391,6 +391,13 @@ const schema = z.object({
    */
   EMAIL_DE_COPIA_DOS_AVISOS: z.string().optional().default(""),
 
+  /**
+   * Quem recebe o aviso de pedido de reembolso do cliente (um endereço, ou vários separados por vírgula).
+   * Vazio = os mesmos de `EMAIL_DE_COPIA_DOS_AVISOS` (e, vazio também, os administradores da plataforma).
+   * Editável pela tela de credenciais; lida por `valorDaInstalacao("EMAIL_DO_FINANCEIRO")`.
+   */
+  EMAIL_DO_FINANCEIRO: z.string().optional().default(""),
+
   // EPIC-11 Impersonate cookie HMAC secret. Optional at boot (route returns
   // 503 at runtime if missing/short); required in prod for the feature to
   // function. Min 32 chars when present is enforced at use site.

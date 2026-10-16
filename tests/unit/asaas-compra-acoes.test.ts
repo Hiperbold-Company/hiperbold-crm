@@ -29,6 +29,8 @@ let pixAtivo = true;
 const auditadas: Array<Record<string, unknown>> = [];
 const chamadasIniciar: Array<Record<string, unknown>> = [];
 const chamadasCancelar: Array<{ org: string; actor: string }> = [];
+const chamadasRpc: Array<{ nome: string; args: Record<string, unknown> }> = [];
+let erroDoMotivo: unknown = null;
 
 let resultadoIniciar: unknown = { tipo: "redirecionar", url: "https://sandbox.asaas.com/i/fake" };
 let resultadoCancelar: unknown = { tipo: "ok", cancelAtPeriodEnd: true };
@@ -52,6 +54,10 @@ vi.mock("@/lib/auth/server", () => ({
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     marca: "admin-falso",
+    rpc: async (nome: string, args: Record<string, unknown>) => {
+      chamadasRpc.push({ nome, args });
+      return { data: "id-do-motivo", error: erroDoMotivo };
+    },
     from: () => ({
       select: () => ({
         eq: () => ({
@@ -105,6 +111,9 @@ const ENTRADA_ASSINATURA = {
   termosVersao: VERSAO_DOS_TERMOS,
 };
 
+/** O cancelamento pede o motivo (migration 0957). */
+const CANCELAMENTO = { motivo: "preco", detalhe: "caro demais" };
+
 const ENTRADA_PACOTE = {
   pacote: "mil_tokens",
   metodo: "PIX" as const,
@@ -132,6 +141,8 @@ beforeEach(() => {
   auditadas.length = 0;
   chamadasIniciar.length = 0;
   chamadasCancelar.length = 0;
+  chamadasRpc.length = 0;
+  erroDoMotivo = null;
   resultadoIniciar = { tipo: "redirecionar", url: "https://sandbox.asaas.com/i/fake" };
   resultadoCancelar = { tipo: "ok", cancelAtPeriodEnd: true };
 });
@@ -148,7 +159,7 @@ describe("compraDoPlano: só o papel admin da organização compra e cancela (N4
 
     it(`${papelSemPoder} recebe erro e não chama cancelarAssinaturaDoCliente`, async () => {
       papel = papelSemPoder;
-      const r = await cancelarAssinatura();
+      const r = await cancelarAssinatura(CANCELAMENTO);
       expect(r.tipo).toBe("erro");
       expect(chamadasCancelar).toEqual([]);
     });
@@ -184,7 +195,7 @@ describe("compraDoPlano: só o papel admin da organização compra e cancela (N4
     papel = "viewer";
     ehPlatformAdmin = true;
     platformAdminScope = null;
-    const r = await cancelarAssinatura();
+    const r = await cancelarAssinatura(CANCELAMENTO);
     expect(r.tipo).toBe("erro");
     expect(chamadasCancelar).toEqual([]);
   });
@@ -192,7 +203,7 @@ describe("compraDoPlano: só o papel admin da organização compra e cancela (N4
   it("sessão de suporte em modo só-leitura/encerrada não compra nem cancela", async () => {
     supportBloqueado = true;
     const r1 = await iniciarAssinatura(ENTRADA_ASSINATURA);
-    const r2 = await cancelarAssinatura();
+    const r2 = await cancelarAssinatura(CANCELAMENTO);
     expect(r1.tipo).toBe("erro");
     expect(r2.tipo).toBe("erro");
     expect(chamadasIniciar).toEqual([]);
@@ -217,7 +228,7 @@ describe("compraDoPlano: organização SEMPRE da sessão (IDOR)", () => {
   });
 
   it("e para cancelarAssinatura (org e actor vêm da sessão, não de parâmetro)", async () => {
-    await cancelarAssinatura();
+    await cancelarAssinatura(CANCELAMENTO);
     expect(chamadasCancelar).toEqual([{ org: ORG, actor: USER }]);
   });
 });
@@ -258,14 +269,14 @@ describe("compraDoPlano: as duas chaves da decisão 18 para comprar", () => {
 describe("compraDoPlano: cancelar exige só ASAAS_ENABLED (decisão 18)", () => {
   it("compra_pelo_cliente desligado NÃO bloqueia o cancelamento", async () => {
     compraLigadaValor = false;
-    const r = await cancelarAssinatura();
+    const r = await cancelarAssinatura(CANCELAMENTO);
     expect(r.tipo).toBe("ok");
     expect(chamadasCancelar.length).toBe(1);
   });
 
   it("ASAAS_ENABLED desligado bloqueia o cancelamento", async () => {
     habilitado = false;
-    const r = await cancelarAssinatura();
+    const r = await cancelarAssinatura(CANCELAMENTO);
     expect(r.tipo).toBe("erro");
     expect(chamadasCancelar).toEqual([]);
   });
@@ -365,11 +376,45 @@ describe("compraDoPlano: auditoria sem dado sensível", () => {
     expect(JSON.stringify(metadata)).not.toContain(PAGADOR.documento);
   });
 
-  it("cancelarAssinatura audita billing.subscription_cancel_requested com só o cancel_at_period_end", async () => {
-    await cancelarAssinatura();
+  it("cancelarAssinatura audita billing.subscription_cancel_requested com o motivo, sem o texto livre", async () => {
+    await cancelarAssinatura(CANCELAMENTO);
     expect(auditadas.length).toBe(1);
     expect(auditadas[0]!.action).toBe("billing.subscription_cancel_requested");
-    expect(auditadas[0]!.metadata).toEqual({ cancel_at_period_end: true });
+    expect(auditadas[0]!.metadata).toEqual({ cancel_at_period_end: true, motivo: "preco", com_detalhe: true });
+    expect(JSON.stringify(auditadas[0])).not.toContain("caro demais");
+  });
+
+  it("cancelarAssinatura grava o motivo do cancelamento (org e ator da sessão) só depois de cancelar", async () => {
+    await cancelarAssinatura(CANCELAMENTO);
+    expect(chamadasRpc).toEqual([
+      {
+        nome: "fn_billing_cancelamento_motivo_registrar",
+        args: { p_org: ORG, p_actor: USER, p_motivo: "preco", p_detalhe: "caro demais" },
+      },
+    ]);
+  });
+
+  it("sem motivo (ou fora do vocabulário) o cancelamento é recusado antes de qualquer efeito", async () => {
+    for (const entrada of [{ motivo: "" }, { motivo: "porque_sim" }, { motivo: "outro", detalhe: "x".repeat(1001) }]) {
+      const r = await cancelarAssinatura(entrada);
+      expect(r).toEqual({ tipo: "erro", mensagem: "Diga por que está cancelando para continuar." });
+    }
+    expect(chamadasCancelar).toEqual([]);
+    expect(chamadasRpc).toEqual([]);
+    expect(auditadas).toEqual([]);
+  });
+
+  it("cancelamento com erro não grava motivo", async () => {
+    resultadoCancelar = { tipo: "erro", mensagem: "Esta organização não tem uma assinatura Asaas ativa para cancelar." };
+    await cancelarAssinatura(CANCELAMENTO);
+    expect(chamadasRpc).toEqual([]);
+  });
+
+  it("falha ao gravar o motivo não desfaz nem esconde o cancelamento", async () => {
+    erroDoMotivo = { code: "XX000", message: "boom" };
+    const r = await cancelarAssinatura(CANCELAMENTO);
+    expect(r).toEqual({ tipo: "ok", cancelAtPeriodEnd: true });
+    expect(auditadas).toHaveLength(1);
   });
 
   it("nenhuma auditoria quando o resultado é erro (tentativa recusada não vira 'pedido criado')", async () => {
@@ -378,7 +423,7 @@ describe("compraDoPlano: auditoria sem dado sensível", () => {
     expect(auditadas).toEqual([]);
 
     resultadoCancelar = { tipo: "erro", mensagem: "Esta organização não tem uma assinatura Asaas ativa para cancelar." };
-    await cancelarAssinatura();
+    await cancelarAssinatura(CANCELAMENTO);
     expect(auditadas).toEqual([]);
   });
 });

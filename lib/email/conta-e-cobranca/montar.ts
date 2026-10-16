@@ -12,6 +12,7 @@
  */
 import { z } from "zod";
 
+import { MOTIVOS_DE_CANCELAMENTO, TAMANHO_MAXIMO_DO_DETALHE } from "@/lib/billing/reembolso/motivos";
 import type { MarcaDeSaida } from "@/lib/branding/saida";
 import { buildBoasVindasEmail } from "@/lib/email/templates/boas-vindas";
 import { buildCancelamentoConfirmadoEmail } from "@/lib/email/templates/cancelamento-confirmado";
@@ -20,8 +21,10 @@ import { buildEstornoFeitoEmail } from "@/lib/email/templates/estorno-feito";
 import { buildPacoteDeTokensLiberadoEmail } from "@/lib/email/templates/pacote-de-tokens-liberado";
 import { buildPagamentoNaoAprovadoEmail } from "@/lib/email/templates/pagamento-nao-aprovado";
 import { buildPlanoConfirmadoEmail } from "@/lib/email/templates/plano-confirmado";
+import { buildReembolsoSolicitadoEmail } from "@/lib/email/templates/reembolso-solicitado";
 import { buildReciboDePagamentoEmail } from "@/lib/email/templates/recibo-de-pagamento";
 import { buildRenovacaoNoCartaoChegandoEmail } from "@/lib/email/templates/renovacao-no-cartao-chegando";
+import { buildSolicitacaoDeReembolsoRecebidaEmail } from "@/lib/email/templates/solicitacao-de-reembolso-recebida";
 import { buildTokensDeIaAcabandoEmail } from "@/lib/email/templates/tokens-de-ia-acabando";
 import type { OpcoesBaseDoEmail } from "@/lib/email/templates/_layout-transacional";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -33,6 +36,7 @@ export const FATURA_DO_ASAAS = /^https:\/\/(www\.|sandbox\.)?asaas\.com\//;
 
 const ROTA_DO_PLANO = "/app/settings/plano";
 const ROTA_DE_ASSINAR = "/app/settings/plano/assinar";
+const ROTA_DOS_REEMBOLSOS = "/admin/sistema/reembolsos";
 
 /** O que o `montar` de cada e-mail recebe, já no idioma de quem vai ler. */
 export interface ContextoDoEmail {
@@ -103,6 +107,24 @@ export const DADOS_DO_EMAIL = {
     estornadoEm: data,
   }),
   "COB-09": z.object({ tokens: z.number().int().positive(), valorPago: centavos }),
+  /** O cliente pediu reembolso (ao cliente): o pedido chegou, a equipe responde em até 3 dias úteis. */
+  "COB-10": z.object({
+    valor: centavos,
+    /** O nome do plano, ou `null` quando o pagamento é de um pacote de tokens. */
+    plano: texto.nullable(),
+    pagoEm: data,
+  }),
+  /** O cliente pediu reembolso (ao financeiro da instalação, em português). */
+  "COB-11": z.object({
+    valor: centavos,
+    plano: texto.nullable(),
+    pagoEm: data,
+    dentro7Dias: z.boolean(),
+    motivo: z.enum(MOTIVOS_DE_CANCELAMENTO),
+    detalhe: z.string().trim().max(TAMANHO_MAXIMO_DO_DETALHE).nullable(),
+    /** O link da cobrança no Asaas, ou `null` para o botão levar à lista do admin. */
+    faturaUrl: z.string().max(500).nullable(),
+  }),
   "IA-02": z.object({
     nivel: z.union([z.literal(80), z.literal(100)]),
     modo: z.enum(["avisar", "bloquear"]),
@@ -212,6 +234,29 @@ export function montarEmailDeConta(emailId: string, dados: unknown, ctx: Context
     case "COB-09": {
       const d = validarDados(emailId, dados);
       return buildPacoteDeTokensLiberadoEmail({ ...ctx.base(plano), tokens: d.tokens, valorPago: d.valorPago });
+    }
+    case "COB-10": {
+      const d = validarDados(emailId, dados);
+      return buildSolicitacaoDeReembolsoRecebidaEmail({
+        ...ctx.base(plano),
+        valor: d.valor,
+        plano: d.plano,
+        pagoEm: d.pagoEm,
+      });
+    }
+    case "COB-11": {
+      const d = validarDados(emailId, dados);
+      return buildReembolsoSolicitadoEmail({
+        ...ctx.base(`${ctx.appUrl}${ROTA_DOS_REEMBOLSOS}`),
+        valor: d.valor,
+        plano: d.plano,
+        pagoEm: d.pagoEm,
+        dentro7Dias: d.dentro7Dias,
+        motivo: d.motivo,
+        detalhe: d.detalhe,
+        urlDaLista: `${ctx.appUrl}${ROTA_DOS_REEMBOLSOS}`,
+        urlDoAsaas: d.faturaUrl && FATURA_DO_ASAAS.test(d.faturaUrl) ? d.faturaUrl : null,
+      });
     }
     case "IA-02": {
       const d = validarDados(emailId, dados);

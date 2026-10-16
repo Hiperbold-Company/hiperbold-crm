@@ -434,6 +434,21 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "anon e authenticated barrados por permission denied ao SELECT, INSERT, UPDATE e DELETE " +
       "(medido sob set role), RLS ligada sem nenhuma policy, service_role sem delete/truncate.",
   },
+  // ─── billing_cancel_feedback e billing_refund_requests (migration 0957, fork Hiperbold) ───
+  {
+    tabela: "billing_cancel_feedback",
+    razao:
+      "tests/invariants/reembolso-do-cliente-banco.test.ts (fork Hiperbold, 0957): admin da org A lê " +
+      "só os motivos da própria organização (controle positivo) e ZERO da B por JWT simulado, agent da " +
+      "mesma org lê zero, anon barrado, e authenticated não insere nem altera (só a função service_role).",
+  },
+  {
+    tabela: "billing_refund_requests",
+    razao:
+      "tests/invariants/reembolso-do-cliente-banco.test.ts (fork Hiperbold, 0957): admin da org A lê " +
+      "só os pedidos da própria organização (controle positivo) e ZERO da B por JWT simulado, agent da " +
+      "mesma org lê zero, anon barrado, authenticated não escreve e service_role não apaga.",
+  },
   // ─── billing_trigger_alarmes (migration 0910, fork Hiperbold, fase F7, D-055) ───
   //
   // Mesmo desenho deny-all de billing_payments/billing_contract_eventos,

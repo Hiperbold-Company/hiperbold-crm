@@ -189,7 +189,7 @@ describe("as actions de cancelamento passam `avisoDeCancelamento`", () => {
     h.cancelarDoCliente.mockResolvedValue({ tipo: "ok", cancelAtPeriodEnd: true });
     vi.resetModules();
     const { cancelarAssinatura } = await import("@/app/actions/settings/compraDoPlano");
-    await cancelarAssinatura();
+    await cancelarAssinatura({ motivo: "outro" });
 
     expect(h.cancelarDoCliente).toHaveBeenCalledTimes(1);
     const deps = capturarDeps();

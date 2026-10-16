@@ -83,6 +83,7 @@ import {
   type ResultadoSimularCupom,
 } from "@/lib/billing/asaas/cupom";
 import { dbCompraSupabase } from "@/lib/billing/asaas/db-compra-supabase";
+import { MOTIVOS_DE_CANCELAMENTO, TAMANHO_MAXIMO_DO_DETALHE } from "@/lib/billing/reembolso/motivos";
 import { pixDisponivel } from "@/lib/billing/asaas/pix";
 import { MENSAGEM_PIX_INDISPONIVEL } from "@/lib/billing/asaas/pix-mensagem";
 import { urlDeRetornoDoCartao } from "@/lib/billing/asaas/retorno-do-cartao";
@@ -108,6 +109,7 @@ const MENSAGEM_CANCELAMENTO_DESLIGADO =
 const MENSAGEM_ERRO_CONFIGURACAO =
   "Não foi possível concluir a operação agora. Tente novamente em instantes ou fale com o suporte.";
 const MENSAGEM_MFA = "Confirme a verificação em duas etapas.";
+const MENSAGEM_MOTIVO_DO_CANCELAMENTO = "Diga por que está cancelando para continuar.";
 const MENSAGEM_TERMOS_NAO_ACEITOS = "Aceite os Termos de Uso para continuar.";
 const MENSAGEM_TERMOS_ATUALIZADOS =
   "Os Termos de Uso foram atualizados. Recarregue a página e aceite de novo para continuar.";
@@ -189,6 +191,15 @@ const entradaComprarPacote = z.object({
   chave: CHAVE,
   pagador: PAGADOR.optional(),
   termosVersao: z.string().max(40).optional(),
+});
+
+/**
+ * O motivo do cancelamento (migration 0957, pesquisa de cancelamento): obrigatório, de um vocabulário fechado,
+ * com um texto livre opcional. Nunca organizationId: a organização é a da sessão.
+ */
+const entradaCancelarAssinatura = z.object({
+  motivo: z.enum(MOTIVOS_DE_CANCELAMENTO),
+  detalhe: z.string().trim().max(TAMANHO_MAXIMO_DO_DETALHE).optional(),
 });
 
 export type EntradaAcaoIniciarAssinatura = z.infer<typeof entradaIniciarAssinatura>;
@@ -500,10 +511,21 @@ export async function comprarPacote(input: {
  * Cancela a assinatura Asaas ATIVA da organização (decisão 18: depende só de
  * `ASAAS_ENABLED`, nunca de `compra_pelo_cliente`: desligar a venda não pode
  * prender ninguém numa assinatura já contratada).
+ *
+ * O cancelamento pede o MOTIVO (decisão do dono do produto, 15/10/2026, migration 0957): um dos cinco do
+ * vocabulário fechado, obrigatório, e um texto livre opcional. O motivo só é gravado
+ * (`billing_cancel_feedback`) depois de o cancelamento dar certo; a auditoria leva o código do motivo, nunca o
+ * texto livre. Falha ao gravar o motivo só vai ao log: nunca desfaz o cancelamento.
  */
-export async function cancelarAssinatura(): Promise<ResultadoCancelarAssinatura> {
+export async function cancelarAssinatura(input: {
+  motivo: string;
+  detalhe?: string;
+}): Promise<ResultadoCancelarAssinatura> {
   const auth = await autorizarAdminDaOrganizacao(MENSAGEM_SEM_PERMISSAO_CANCELAR);
   if (!auth.ok) return { tipo: "erro", mensagem: auth.mensagem };
+
+  const parsed = entradaCancelarAssinatura.safeParse(input);
+  if (!parsed.success) return { tipo: "erro", mensagem: MENSAGEM_MOTIVO_DO_CANCELAMENTO };
 
   const config = configAsaasOuNulo();
   if (!config) return { tipo: "erro", mensagem: MENSAGEM_ERRO_CONFIGURACAO };
@@ -513,6 +535,24 @@ export async function cancelarAssinatura(): Promise<ResultadoCancelarAssinatura>
   const resultado = await cancelarAssinaturaDoCliente(montarDeps(config, admin), auth.orgId, auth.userId);
 
   if (resultado.tipo === "ok") {
+    try {
+      const { error } = await admin.rpc("fn_billing_cancelamento_motivo_registrar" as never, {
+        p_org: auth.orgId,
+        p_actor: auth.userId,
+        p_motivo: parsed.data.motivo,
+        p_detalhe: parsed.data.detalhe ?? null,
+      } as never);
+      if (error) {
+        logger.error("[compraDoPlano] não gravou o motivo do cancelamento", {
+          codigo: (error as { code?: string }).code ?? null,
+        });
+      }
+    } catch (err) {
+      logger.error("[compraDoPlano] a gravação do motivo do cancelamento lançou", {
+        erro: err instanceof Error ? err.message.slice(0, 200) : "erro",
+      });
+    }
+
     const { requestId, ip, userAgent } = await contextoDaRequisicao();
     await audit({
       action: "billing.subscription_cancel_requested",
@@ -520,7 +560,11 @@ export async function cancelarAssinatura(): Promise<ResultadoCancelarAssinatura>
       organizationId: auth.orgId,
       resourceType: "organization",
       resourceId: auth.orgId,
-      metadata: { cancel_at_period_end: resultado.cancelAtPeriodEnd },
+      metadata: {
+        cancel_at_period_end: resultado.cancelAtPeriodEnd,
+        motivo: parsed.data.motivo,
+        com_detalhe: Boolean(parsed.data.detalhe),
+      },
       requestId,
       ip,
       userAgent,

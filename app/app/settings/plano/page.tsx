@@ -85,7 +85,10 @@ import { linhasDeTokensDeIA, type LinhasDeTokensDeIA } from "@/lib/billing/token
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { assinaturaCancelada, estadoDoReembolso, type EstadoDoReembolso } from "@/lib/billing/reembolso/regras";
+import { pagamentosReembolsaveis } from "@/lib/billing/reembolso/elegiveis";
 import { BotaoCancelarAssinatura } from "./_botao-cancelar-assinatura";
+import { BotaoSolicitarReembolso } from "./_botao-solicitar-reembolso";
 import { parcelasDoPlanoSemRenovacao, podeCancelarAssinatura } from "./_logica-compra";
 import {
   Table,
@@ -187,6 +190,21 @@ export default async function PlanoEUsoPage() {
     ? await Promise.all([estadoDasChavesAsaas(admin, logger), asaasDaOrganizacao(admin, activeOrg.orgId, logger)])
     : [null, null];
 
+  // Migration 0957: depois de CANCELAR, o admin pode pedir o reembolso do pagamento mais recente, enquanto ele
+  // tem até 7 dias (garantia). A decisão é do servidor, a partir do banco, na hora de desenhar: fora do prazo
+  // não há botão, só o aviso. Quem não cancelou não paga a leitura.
+  const contratoDaAssinatura = assinatura.contrato
+    ? { cancelAtPeriodEnd: assinatura.contrato.cancelAtPeriodEnd, status: assinatura.contrato.status }
+    : null;
+  const reembolso: EstadoDoReembolso =
+    souAdminDaOrganizacao && assinaturaCancelada(contratoDaAssinatura)
+      ? estadoDoReembolso({
+          contrato: contratoDaAssinatura,
+          elegiveis: (await pagamentosReembolsaveis(admin, activeOrg.orgId, logger)).pagamentos,
+          agora: new Date(),
+        })
+      : { tipo: "oculto" };
+
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
       <header className="space-y-1">
@@ -210,6 +228,8 @@ export default async function PlanoEUsoPage() {
           assinaturaAsaas={asaasOrg.assinatura}
           pedidos={asaasOrg.pedidos}
           fimDoPeriodo={assinatura.contrato?.currentPeriodEnd ?? null}
+          cancelada={assinaturaCancelada(contratoDaAssinatura)}
+          reembolso={reembolso}
           tagDoIdioma={tagDoIdioma}
           t={t}
         />
@@ -390,6 +410,8 @@ function CartaoDeAssinaturaEPagamento({
   assinaturaAsaas,
   pedidos,
   fimDoPeriodo,
+  cancelada,
+  reembolso,
   tagDoIdioma,
   t,
 }: {
@@ -398,6 +420,10 @@ function CartaoDeAssinaturaEPagamento({
   pedidos: PedidoAsaas[];
   /** `current_period_end` do contrato (D-177: a data em que o plano parcelado acaba). */
   fimDoPeriodo: string | null;
+  /** O cancelamento foi confirmado (`cancel_at_period_end` ligado ou contrato cancelado). */
+  cancelada: boolean;
+  /** O que mostrar sobre reembolso (migration 0957). */
+  reembolso: EstadoDoReembolso;
   tagDoIdioma: string;
   t: (texto: string) => string;
 }) {
@@ -454,9 +480,67 @@ function CartaoDeAssinaturaEPagamento({
         )}
 
         {podeCancelar && <BotaoCancelarAssinatura />}
+
+        {cancelada && (
+          <div className="space-y-2 rounded-md border border-border p-3 text-sm" data-testid="assinatura-cancelada">
+            <p>
+              {t("Assinatura cancelada")}
+              {fimDoPeriodo && (
+                <>
+                  , {t("acesso até")}{" "}
+                  <span className="font-medium">
+                    {ultimoDiaDoPeriodo(fimDoPeriodo).toLocaleDateString(tagDoIdioma, { timeZone: FUSO_SP })}
+                  </span>
+                </>
+              )}
+              .
+            </p>
+            <SecaoDeReembolso reembolso={reembolso} t={t} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
+}
+
+/**
+ * O que a página diz sobre reembolso depois do cancelamento (migration 0957). `estadoDoReembolso` já decidiu
+ * (servidor, a partir do banco): o botão só existe com o pagamento mais recente dentro dos 7 dias; passado o
+ * prazo, só o aviso; com pedido aberto, a espera.
+ */
+function SecaoDeReembolso({ reembolso, t }: { reembolso: EstadoDoReembolso; t: (texto: string) => string }) {
+  switch (reembolso.tipo) {
+    case "pode_pedir":
+      return (
+        <div className="flex flex-wrap items-center gap-3">
+          <BotaoSolicitarReembolso
+            pagamento={{
+              paymentId: reembolso.pagamento.paymentId,
+              amountCents: reembolso.pagamento.amountCents,
+              paidAt: reembolso.pagamento.paidAt,
+              plano: reembolso.pagamento.plano,
+            }}
+          />
+          <span className="text-xs text-muted-foreground">
+            {t("Você tem até 7 dias depois do pagamento para pedir o reembolso.")}
+          </span>
+        </div>
+      );
+    case "em_analise":
+      return (
+        <p className="text-muted-foreground" data-testid="reembolso-em-analise">
+          {t("Seu pedido de reembolso está em análise. Respondemos em até 3 dias úteis. Assim que o estorno for concluído, avisamos por e-mail.")}
+        </p>
+      );
+    case "fora_do_prazo":
+      return (
+        <p className="text-muted-foreground" data-testid="reembolso-fora-do-prazo">
+          {t("O prazo de 7 dias de garantia já passou, então não é possível pedir reembolso desta cobrança.")}
+        </p>
+      );
+    case "oculto":
+      return null;
+  }
 }
 
 /**

@@ -48,6 +48,9 @@
  * linha REFUNDED que o banco gravou. Estorno parcial (`PAYMENT_PARTIALLY_REFUNDED`) não dispara: o objeto
  * confirmado não traz o valor devolvido, e dizer um valor errado ao cliente é pior que não dizer.
  *
+ * Esse mesmo estorno confirmado fecha como `concluido` o pedido de reembolso aberto do pagamento (migration 0957,
+ * `gatilhos-de-reembolso.ts`), antes do e-mail.
+ *
  * Quem recebe e a cópia do operador estão em `enviar.ts`. O botão leva ao app da instalação.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -58,6 +61,7 @@ import type { CicloDoPlano, FormaDePagamento } from "@/lib/email/templates/_layo
 import { logger } from "@/lib/logger";
 
 import { enfileirarEmailDeConta, type Enfileirador } from "./fila";
+import { concluirPedidoDeReembolsoDoPagamento } from "./gatilhos-de-reembolso";
 import { FATURA_DO_ASAAS } from "./montar";
 
 const EVENTOS_DE_DINHEIRO = new Set(["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED", "PAYMENT_RECEIVED_IN_CASH"]);
@@ -370,6 +374,8 @@ export function criarAvisosDeCobrancaSobre(admin: SupabaseClient, deps: DepsDosG
           e.resultado === "aplicado" &&
           e.alarmes.includes("estorno_confirmado")
         ) {
+          // O pedido de reembolso do cliente (0957) fecha como concluído; falha dele não impede o e-mail abaixo.
+          if (e.idDoPagamento) await concluirPedidoDeReembolsoDoPagamento(admin, e.organizationId, e.idDoPagamento);
           await estorno(e, e.organizationId);
         }
       } catch (erro) {

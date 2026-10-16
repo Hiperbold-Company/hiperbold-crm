@@ -95,7 +95,7 @@ export interface LinhaDaFila {
   organization_id: string;
   email_id: string;
   chave: string;
-  destino: "admins" | "criador";
+  destino: "admins" | "criador" | "financeiro";
   criador_user_id: string | null;
   copia_para_operador: boolean;
   dados: unknown;
@@ -115,6 +115,11 @@ export interface DepsDoEnvio {
   appUrl: string;
   /** O valor em vigor de `EMAIL_DE_COPIA_DOS_AVISOS` (tela, depois ambiente), ou `null`. */
   configuracaoDaCopia: () => Promise<string | null>;
+  /**
+   * O valor em vigor de `EMAIL_DO_FINANCEIRO` (tela, depois ambiente), ou `null`. Opcional: sem ele, o destino
+   * `financeiro` cai direto nos endereços da cópia dos avisos.
+   */
+  configuracaoDoFinanceiro?: () => Promise<string | null>;
   agora?: () => Date;
 }
 
@@ -147,6 +152,7 @@ function depsReais(): DepsDoEnvio {
     marcaDaSaida,
     appUrl: env.NEXT_PUBLIC_APP_URL.replace(/\/$/, ""),
     configuracaoDaCopia: async () => (await valorDaInstalacao("EMAIL_DE_COPIA_DOS_AVISOS")).valor,
+    configuracaoDoFinanceiro: async () => (await valorDaInstalacao("EMAIL_DO_FINANCEIRO")).valor,
   };
 }
 
@@ -231,13 +237,32 @@ export async function adminsDaOrganizacao(
  * vírgula) e, vazia ou sem nenhum endereço válido, os administradores da plataforma.
  */
 export async function destinatariosDaCopiaDoOperador(deps: DepsDoEnvio): Promise<string[]> {
-  const configurado = await deps.configuracaoDaCopia();
+  const lista = enderecosValidos(await deps.configuracaoDaCopia());
+  if (lista.length > 0) return lista;
+  return administradoresDaPlataforma(deps);
+}
+
+/**
+ * Quem recebe o pedido de reembolso (destino `financeiro`): a configuração `EMAIL_DO_FINANCEIRO` e, vazia ou sem
+ * nenhum endereço válido, os mesmos da cópia dos avisos (`destinatariosDaCopiaDoOperador`). Nenhum endereço fixo
+ * no código.
+ */
+export async function destinatariosDoFinanceiro(deps: DepsDoEnvio): Promise<string[]> {
+  const lista = enderecosValidos((await deps.configuracaoDoFinanceiro?.()) ?? null);
+  if (lista.length > 0) return lista;
+  return destinatariosDaCopiaDoOperador(deps);
+}
+
+/** Os endereços válidos de uma configuração (um ou vários, separados por vírgula, ponto e vírgula ou espaço). */
+function enderecosValidos(configurado: string | null): string[] {
   const lista = (configurado ?? "")
     .split(/[,;\s]+/)
     .map((e) => e.trim())
     .filter((e) => EMAIL_VALIDO.test(e));
-  if (lista.length > 0) return unicos(lista).slice(0, TETO_DE_COPIAS);
+  return unicos(lista).slice(0, TETO_DE_COPIAS);
+}
 
+async function administradoresDaPlataforma(deps: DepsDoEnvio): Promise<string[]> {
   const { data, error } = await deps.admin
     .from("platform_admins")
     .select("user_id")
@@ -422,7 +447,11 @@ async function processarLinha(
   }
 
   let destinatarios: DestinatarioDoEmail[];
-  if (linha.destino === "criador") {
+  if (linha.destino === "financeiro") {
+    // Só quem cuida do financeiro da instalação, em português: nenhum administrador da organização recebe.
+    const enderecos = await destinatariosDoFinanceiro(deps);
+    destinatarios = enderecos.map((email) => ({ email, locale: "pt-BR", nome: null }));
+  } else if (linha.destino === "criador") {
     // O criador só recebe enquanto tiver vínculo ativo com a organização do fato: sem vínculo (nunca teve, ou foi
     // revogado), o e-mail dele não é endereço desta organização.
     const criador = linha.criador_user_id;
@@ -441,7 +470,8 @@ async function processarLinha(
   }
 
   // 2. Monta e envia, um por destinatário, no idioma dele.
-  const marca = await deps.marcaDaSaida(linha.organization_id);
+  // O financeiro recebe com a marca da INSTALAÇÃO (quem opera), nunca com a da organização cliente.
+  const marca = await deps.marcaDaSaida(linha.destino === "financeiro" ? null : linha.organization_id);
   const contexto = (
     idioma: Idioma,
     nome: string | null,
