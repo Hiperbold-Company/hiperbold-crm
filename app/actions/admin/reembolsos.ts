@@ -88,7 +88,9 @@ async function nomesDasOrganizacoes(
   const { data, error } = await admin.from("organizations").select("id, display_name").in("id", ids);
   if (error) throw new Error(`organizations: ${error.message}`);
   for (const o of (data as { id: string; display_name: string | null }[] | null) ?? []) {
-    nomes.set(o.id, (o.display_name ?? "").trim() || "Sem nome");
+    // Nome da EMPRESA (organização), não de contato: o texto padrão é só para a lista do admin.
+    const nome = typeof o.display_name === "string" ? o.display_name.trim() : "";
+    nomes.set(o.id, nome.length > 0 ? nome : "Sem nome");
   }
   return nomes;
 }
