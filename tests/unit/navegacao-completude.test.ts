@@ -47,7 +47,9 @@ const NAV_ALLOWLIST: Record<string, string> = {
   "/app/settings/atualizacao":
     "porta é o rodapé de versão (VersionFooter), que aparece justamente quando há versão nova — melhor que um card fixo. Além disso é só do dono do servidor (is_platform_admin), papel que o registro não modela",
   "/app/settings/plano/assinar":
-    "subtela de Plano e uso, alcançada pelo botão Assinar do cartão Assinatura e pagamento",
+    "subtela de Meu plano, alcançada pelo botão Assinar do cartão Assinatura e pagamento",
+  "/app/settings/billing":
+    "redirect para /app/settings/plano (Meu plano, que é a porta) desde 15/10/2026 — a antiga tela Billing era placeholder do produto de origem; o endereço fica só para link salvo não dar 404",
 };
 
 /** Deriva as rotas estáticas a partir dos arquivos de página que existem. */

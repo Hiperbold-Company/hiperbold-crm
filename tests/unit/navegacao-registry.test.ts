@@ -191,6 +191,7 @@ describe("hubSections", () => {
       "/app/tasks",
       "/app/settings/tenant/agenda",
       "/app/comandas",
+      "/app/settings/tenant/financeiro",
     ]);
     expect(por("IA")).toEqual(["/app/ai/followups", "/app/ai/routers", "/app/ai/providers"]);
     expect(por("Canais")).toEqual(["/app/connections", "/app/webhooks", "/app/ads/meta"]);
@@ -210,7 +211,7 @@ describe("hubSections", () => {
 
   it("as telas que saíram do menu continuam no ⌘K e no hub do próprio grupo", () => {
     const busca = searchable(false, "admin").map((d) => d.href);
-    for (const h of ["/app/agenda", "/app/templates", "/app/tasks", "/app/comandas", "/app/ai/followups", "/app/ai/routers", "/app/ai/providers", "/app/connections", "/app/webhooks", "/app/ads/meta", "/app/settings/tenant/agenda"]) {
+    for (const h of ["/app/agenda", "/app/templates", "/app/tasks", "/app/comandas", "/app/ai/followups", "/app/ai/routers", "/app/ai/providers", "/app/connections", "/app/webhooks", "/app/ads/meta", "/app/settings/tenant/agenda", "/app/settings/tenant/financeiro", "/app/settings/plano"]) {
       expect(busca).toContain(h);
     }
     const hubIA = hubSections("ia", false, "admin").flatMap((s) => s.items.map((i) => i.href));
@@ -255,9 +256,9 @@ describe("hubSections", () => {
     expect(hrefs).toContain("/app/settings/profile");
   });
 
-  it("Plano e uso (F2, tarefa 7) é admin e gerente, não agent nem viewer", () => {
+  it("Meu plano (F2, tarefa 7) é admin e gerente, não agent nem viewer", () => {
     // Decisão de desenho 13 da fase F2 dos planos: só admin e gerente veem a
-    // tela, diferente da vizinha Billing, que é admin-only.
+    // tela (a antiga Billing, admin-only, saiu do catálogo).
     const hrefsDoGerente = hubSections("organizacao", MANAGER.platform, MANAGER.role).flatMap((s) =>
       s.items.map((i) => i.href),
     );

@@ -1,5 +1,5 @@
 /**
- * Configurações → Plano e uso (fase F2 dos planos de assinatura, tarefa 7).
+ * Configurações → Meu plano (antes "Plano e uso"; fase F2 dos planos de assinatura, tarefa 7).
  *
  * ── O que esta tela mostra, e o que ela NÃO faz ainda ────────────────────────
  *
@@ -14,7 +14,7 @@
  * teto entram listados, com o motivo (`lib/billing/planos/estado-do-bloqueio.ts`,
  * que nunca lança: falha de leitura degrada para "não vale").
  *
- * ── Por que `manager`, e não `admin` como a vizinha Billing ──────────────────
+ * ── Por que `manager`, e não `admin` como era a antiga tela Billing ──────────────────
  *
  * Aqui não se troca cartão nem se vê fatura, só se acompanha uso, decisão de
  * desenho 13 da fase (pergunta N11, padrão "admin e gerente"). O gate é o
@@ -100,7 +100,7 @@ import { tagDeIdioma } from "@/lib/i18n/datas";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata = { title: "Plano e uso" };
+export const metadata = { title: "Meu plano" };
 export const dynamic = "force-dynamic";
 
 /**
@@ -190,7 +190,7 @@ export default async function PlanoEUsoPage() {
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Plano e uso")}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("Meu plano")}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {t("Quanto sua organização usa de cada item do plano contratado.")}
         </p>

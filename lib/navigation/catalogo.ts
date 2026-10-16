@@ -398,10 +398,17 @@ export const NAV_CATALOG = [
     // entrada cai quando uma comanda é fechada: sem esta camada, a comanda não
     // tem onde depositar.
     href: "/app/settings/tenant/financeiro",
-    label: "Financeiro",
-    description: "Contas, formas de pagamento e como cada lançamento é classificado.",
+    // Renomeado de "Financeiro" (feedback do dono, 15/10/2026): o leigo confundia com a
+    // cobrança da assinatura. Aqui é o caixa do NEGÓCIO dele, usado ao fechar uma comanda.
+    label: "Contas e recebimentos",
+    description:
+      "Onde entra o dinheiro das vendas que você registra nas comandas: contas, formas de pagamento e categorias.",
     icon: "ChartBar",
     group: "organizacao",
+    // No hub de Configurações aparece em "Atendimento", logo depois de Comandas (a
+    // projeção ignora `section` de quem tem `configuracoes`); `section` fica porque o
+    // gate de grupo com hub a cobra, como em "Tipos de agendamento".
+    configuracoes: "Atendimento",
     section: "Sua empresa",
     // Leitura para a organização, escrita para manager+ (é a RLS que decide).
     // `viewer` aqui e não `manager`: quem só olha precisa conferir para onde o
@@ -911,23 +918,16 @@ export const NAV_CATALOG = [
     // 900px, medido pelo e2e `navegacao.spec.ts`.
   },
   {
-    href: "/app/settings/billing",
-    label: "Billing",
-    description: "Plano e cobrança.",
-    icon: "Receipt",
-    group: "organizacao",
-    section: "Sua empresa",
-    minRole: "admin",
-  },
-  {
     // Fase F2 dos planos de assinatura (tarefa 7): a tela que mostra, item por
     // item, quanto a organização usa do que o plano permite. `manager`, e não
-    // `admin` como a vizinha Billing: aqui não se troca cartão nem se vê
-    // cobrança, só se acompanha uso, decisão de desenho 13 da fase (padrão da
-    // pergunta N11, `hiperbold/planos/fase-F2-tarefas.md`).
+    // `admin`: decisão de desenho 13 da fase (padrão da pergunta N11,
+    // `hiperbold/planos/fase-F2-tarefas.md`). A tela antiga "Billing" (placeholder do
+    // produto de origem) saiu do catálogo em 15/10/2026: `/app/settings/billing` só
+    // redireciona para cá. Renomeada de "Plano e uso" por feedback do dono: leigo
+    // procura "meu plano", não "uso".
     href: "/app/settings/plano",
-    label: "Plano e uso",
-    description: "Quanto sua organização usa de cada item do plano contratado.",
+    label: "Meu plano",
+    description: "Plano contratado, pagamento, uso e cancelamento.",
     icon: "Gauge",
     group: "organizacao",
     section: "Sua empresa",

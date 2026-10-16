@@ -1106,6 +1106,10 @@ export const DICIONARIO: Traducoes = {
   Financeiro: { es: "Finanzas" },
   "Onde o dinheiro fica, como o cliente paga e como cada lançamento é classificado.": { es: "Dónde está el dinero, cómo paga el cliente y cómo se clasifica cada movimiento." },
   "Contas, formas de pagamento e como cada lançamento é classificado.": { es: "Cuentas, formas de pago y cómo se clasifica cada movimiento." },
+  "Contas e recebimentos": { es: "Cuentas y cobros" },
+  "Onde entra o dinheiro das vendas que você registra nas comandas: contas, formas de pagamento e categorias.": {
+    es: "Dónde entra el dinero de las ventas que registras en las comandas: cuentas, formas de pago y categorías.",
+  },
   "conta removida": { es: "cuenta eliminada" },
   "Contas": { es: "Cuentas" },
   "Onde o dinheiro fica. O saldo que aparece nos relatórios é sempre somado dos lançamentos — o valor aqui é só o ponto de partida.": { es: "Dónde está el dinero. El saldo de los informes siempre se calcula sumando los movimientos; el valor que ingresas aquí es solo el punto de partida." },
@@ -12940,6 +12944,10 @@ export const DICIONARIO: Traducoes = {
   // ─── Tarefa 7, fase F2 dos planos de assinatura: a tela "Plano e uso" da
   // organização (app/app/settings/plano) ───
   "Plano e uso": { es: "Plan y uso" },
+  "Meu plano": { es: "Mi plan" },
+  "Plano contratado, pagamento, uso e cancelamento.": {
+    es: "Plan contratado, pago, uso y cancelación.",
+  },
   "Quanto sua organização usa de cada item do plano contratado.": {
     es: "Cuánto usa tu organización de cada elemento del plan contratado.",
   },

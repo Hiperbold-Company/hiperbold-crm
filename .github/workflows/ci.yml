@@ -231,6 +231,10 @@ jobs:
 
       - name: Typecheck
         if: matrix.parte == 1
+        # Hiperbold (15/10/2026): o tsc sem incremental passou de 4 GB (medido 4,57 GB
+        # no Mac) e estourou o heap padrão do Node no runner. 6 GB cabe na máquina.
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: pnpm typecheck
 
       # Na parte 2, não na 1: o porquê e a conta estão no cabeçalho do job.

@@ -25,7 +25,7 @@ import type { ConfigAsaas } from "@/lib/billing/asaas/config";
 import { callbackAsaasSchema, type CobrancaAsaas } from "@/lib/billing/asaas/contratos";
 import { erroValidacao, ErroAsaasException } from "@/lib/billing/asaas/erros";
 
-const RETORNO = "https://crm.hiperbold.com.br/onboarding/plano";
+const RETORNO = "https://crm.hiperbold.com.br/voltar-do-pagamento?para=onboarding";
 const CALLBACK = { successUrl: RETORNO, autoRedirect: true };
 
 const CONFIG: ConfigAsaas = {
@@ -115,7 +115,7 @@ describe("corpo do POST no Asaas", () => {
   });
 
   it("successUrl que não é URL, ou passa de 255 caracteres, é recusado antes de chamar o Asaas", async () => {
-    expect(callbackAsaasSchema.safeParse({ successUrl: "/onboarding/plano" }).success).toBe(false);
+    expect(callbackAsaasSchema.safeParse({ successUrl: "/voltar-do-pagamento?para=onboarding" }).success).toBe(false);
     expect(callbackAsaasSchema.safeParse({ successUrl: `https://x.com/${"a".repeat(250)}` }).success).toBe(false);
     expect(callbackAsaasSchema.safeParse({ successUrl: RETORNO, autoRedirect: true }).success).toBe(true);
   });

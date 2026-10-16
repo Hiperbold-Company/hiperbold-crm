@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { planoPreSelecionado, sanitizarPlano } from "@/lib/auth/plano-escolhido";
-import { urlDeRetornoDoCartao } from "@/lib/billing/asaas/retorno-do-cartao";
+import { destinoDoRetornoDoCartao, urlDeRetornoDoCartao } from "@/lib/billing/asaas/retorno-do-cartao";
 import {
   CAMINHO_DEPOIS_DE_PAGO,
   destinoDoRoteador,
@@ -72,16 +72,18 @@ describe("planoPreSelecionado: o ?plano= do site é só uma dica", () => {
 });
 
 describe("urlDeRetornoDoCartao", () => {
-  it("cliente novo volta ao passo de pagamento; quem já usa o CRM volta ao plano", () => {
-    expect(urlDeRetornoDoCartao("https://crm.hiperbold.com.br", true)).toBe("https://crm.hiperbold.com.br/onboarding/plano");
+  it("aponta para a página pública de volta, com o destino na lista fixa (nunca a tela autenticada)", () => {
+    expect(urlDeRetornoDoCartao("https://crm.hiperbold.com.br", true)).toBe(
+      "https://crm.hiperbold.com.br/voltar-do-pagamento?para=onboarding",
+    );
     expect(urlDeRetornoDoCartao("https://crm.hiperbold.com.br", false)).toBe(
-      "https://crm.hiperbold.com.br/app/settings/plano",
+      "https://crm.hiperbold.com.br/voltar-do-pagamento?para=plano",
     );
   });
 
   it("usa só a origem: barra final, caminho e consulta da configuração não vazam para o retorno", () => {
     expect(urlDeRetornoDoCartao("https://crm.hiperbold.com.br/qualquer/coisa/?x=1", true)).toBe(
-      "https://crm.hiperbold.com.br/onboarding/plano",
+      "https://crm.hiperbold.com.br/voltar-do-pagamento?para=onboarding",
     );
   });
 
@@ -89,4 +91,18 @@ describe("urlDeRetornoDoCartao", () => {
     expect(urlDeRetornoDoCartao("não é url", true)).toBeUndefined();
     expect(urlDeRetornoDoCartao("javascript:alert(1)", true)).toBeUndefined();
   });
+});
+
+describe("destinoDoRetornoDoCartao", () => {
+  it("mapeia só as duas chaves da lista", () => {
+    expect(destinoDoRetornoDoCartao("onboarding")).toBe("/onboarding/plano");
+    expect(destinoDoRetornoDoCartao("plano")).toBe("/app/settings/plano");
+  });
+
+  it.each([null, undefined, "", "PLANO", "https://evil.example", "//evil.example", "/app/admin", "plano/../x"])(
+    "valor fora da lista (%j) cai no passo do onboarding, sem redirecionamento aberto",
+    (para) => {
+      expect(destinoDoRetornoDoCartao(para)).toBe("/onboarding/plano");
+    },
+  );
 });

@@ -123,8 +123,10 @@ test.describe("rbac role matrix (spec 13 §4)", () => {
     await expect(page.getByRole("heading", { name: "API Tokens" })).toBeVisible();
     await expectNoBlockingA11y(page);
 
+    // /app/settings/billing é só redirect para a tela de plano (Meu plano).
     await page.goto("/app/settings/billing");
-    await expect(page.getByRole("heading", { name: "Billing" })).toBeVisible();
+    await page.waitForURL(/\/app\/settings\/plano/);
+    await expect(page.getByRole("heading", { name: "Meu plano" })).toBeVisible();
     await expectNoBlockingA11y(page);
   });
 

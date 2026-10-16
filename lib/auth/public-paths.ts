@@ -43,6 +43,10 @@ export const PUBLIC_PATHS: RegExp[] = [
   // Retorno de OAuth social: documento público sem efeitos que reconecta a
   // navegação interna para manter os cookies de sessão sob SameSite=Strict.
   /^\/auth\/social-return$/,
+  // Volta do pagamento no cartão (Asaas `callback.successUrl`): navegação vinda de outro site, onde o
+  // cookie `Strict` não viaja. Documento inerte, sem efeitos e sem ler sessão; o destino sai de uma lista
+  // fixa e a navegação seguinte parte dele, já com o cookie. Âncora `$`: nenhum sub-path nasce público.
+  /^\/voltar-do-pagamento$/,
   /^\/403$/,
   /^\/admin\/forbidden$/,
   /^\/404$/,

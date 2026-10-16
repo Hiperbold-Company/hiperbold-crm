@@ -236,15 +236,12 @@ describe("D-106: tokens do plano só com contrato em dia", () => {
   const conceder = (org: string) => `select public.fn_billing_garantir_concessoes('${org}', ${ciclo});`;
   const lerPlano = (org: string) => `
     select 'SONDA|' || coalesce((select tokens::text from public.billing_token_ledger where organization_id = '${org}' and chave = 'plano:' || to_char(${ciclo}, 'YYYY-MM-DD')), 'nada');`;
-  const diasDoMes = `((${ciclo} + interval '1 month')::date - ${ciclo})`;
 
-  it("a primeira concessão de um período pago que começou no mês é proporcional aos dias restantes; o mês seguinte e o plano sem período levam o teto inteiro", () => {
-    const [prop, esperado] = sonda(`
+  it("a primeira concessão de um período pago que começou no mês leva o teto inteiro (0956, sem proporção); o mês seguinte e o plano sem período também", () => {
+    const [primeiro] = sonda(`
       ${prepara(U(401), "l7b-prop", "ativa", `(${ciclo} + 9)::timestamp at time zone 'America/Sao_Paulo'`, "now() + interval '20 days'")}
-      ${conceder(U(401))} ${lerPlano(U(401))}
-      select 'SONDA|' || ((3000000 * (${diasDoMes} - 9)) / ${diasDoMes});`);
-    expect(prop).toBe(esperado);
-    expect(Number(prop)).toBeLessThan(3000000);
+      ${conceder(U(401))} ${lerPlano(U(401))}`);
+    expect(primeiro).toBe("3000000");
 
     const [cheio, proximo, jaTinha] = sonda(`
       ${prepara(U(402), "l7b-cheio", "ativa", "null", "null")} ${conceder(U(402))} ${lerPlano(U(402))}
