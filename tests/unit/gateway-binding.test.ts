@@ -20,7 +20,9 @@ const credenciais = vi.hoisted(() => ({ linha: null as Record<string, unknown> |
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (tabela: string) => {
-      const alvo = tabela === "ai_purpose_bindings" ? bindings : credenciais;
+      // `platform_config` (a lista de modelos da chave da instalação) não tem linha aqui: sem isto
+      // cairia na linha de credencial abaixo, que não é uma configuração.
+      const alvo = tabela === "ai_purpose_bindings" ? bindings : tabela === "platform_config" ? { linha: null } : credenciais;
       const chain = {
         select: () => chain,
         eq: () => chain,
@@ -210,7 +212,7 @@ describe("sem binding, a credencial da organização manda", () => {
           limit: () => chain,
           maybeSingle: async () => ({
             data:
-              tabela === "ai_purpose_bindings"
+              tabela === "ai_purpose_bindings" || tabela === "platform_config"
                 ? null
                 : tabela === "organizations"
                   ? { settings: orgSettings }
@@ -302,7 +304,7 @@ describe("a credencial da organização só vale para modelo que o provider dela
           limit: () => chain,
           maybeSingle: async () => ({
             data:
-              tabela === "ai_purpose_bindings"
+              tabela === "ai_purpose_bindings" || tabela === "platform_config"
                 ? null
                 : tabela === "organizations"
                   ? { settings: { llm: { provider } } }
@@ -377,7 +379,7 @@ describe("naFaltaUsarOPadraoDaOrganizacao", () => {
           limit: () => chain,
           maybeSingle: async () => ({
             data:
-              tabela === "ai_purpose_bindings"
+              tabela === "ai_purpose_bindings" || tabela === "platform_config"
                 ? null
                 : tabela === "organizations"
                   ? { settings: { llm: { provider: "openai", default_model: "gpt-5.6-terra" } } }
@@ -465,7 +467,7 @@ describe("o padrão da organização com o par (provedor, modelo) incoerente", (
           maybeSingle: async () => ({
             error: erro,
             data:
-              tabela === "ai_purpose_bindings"
+              tabela === "ai_purpose_bindings" || tabela === "platform_config"
                 ? null
                 : tabela === "organizations"
                   ? { settings: { llm } }

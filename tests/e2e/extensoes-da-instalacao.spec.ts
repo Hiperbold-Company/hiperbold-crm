@@ -21,6 +21,7 @@
 import { expect, test } from "./helpers/test";
 
 import { lerCreds, loginComoAdmin, loginComoDono } from "./helpers/login-admin";
+import { pularSeOculta } from "./helpers/funcao-oculta";
 import { afirmarDonoDoServidor } from "./utils/precondicao";
 
 test.describe("Extensões da instalação", () => {
@@ -77,6 +78,8 @@ test.describe("Extensões da instalação", () => {
     });
 
     test("o caminho para a tela da empresa existe e chega", async ({ page }) => {
+      // Extensões da empresa está oculta (16/10/2026): /app/extensions redireciona para /app/inicio.
+      pularSeOculta(test, "extensoes");
       await page.goto("/admin/extensoes");
 
       const ponteiro = page.getByTestId("ponteiro-extensoes-da-empresa");

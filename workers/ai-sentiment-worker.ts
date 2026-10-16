@@ -284,6 +284,9 @@ export async function processSentiment(event: EventRow): Promise<SentimentResult
         provider: "typesafe",
         model: `typesafe/${clima.modelo}`,
         origem_da_escolha: decidiu ? "jev" : "jev_observacao",
+        // De quem é a chave que pagou (16/10/2026): a da instalação (JEV_API_KEY)
+        // ou a da própria organização. Permite medir o consumo da chave da Hiperbold.
+        origem_da_chave: clima.origemDaChave ?? null,
         prompt_tokens: clima.tokensDeEntrada,
         completion_tokens: clima.tokensDeSaida,
         latency_ms: clima.latenciaMs,

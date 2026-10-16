@@ -86,6 +86,7 @@ const ORG_LEGACY = "09060003-0000-4000-8000-000000000008";
 const ORG_ANTES_CARTEIRA = "09060003-0000-4000-8000-000000000009";
 const ORG_ORIGEM_NULA = "09060003-0000-4000-8000-00000000000a";
 const ORG_ORIGEM_CREDENCIAL = "09060003-0000-4000-8000-00000000000b";
+const ORG_ORIGEM_JEV = "09060003-0000-4000-8000-0000000000a1";
 const ORG_PONDERADO_ZERO = "09060003-0000-4000-8000-00000000000c";
 const ORG_CONCORRENCIA = "09060003-0000-4000-8000-00000000000d";
 const ORG_CREDITO = "09060003-0000-4000-8000-00000000000e";
@@ -579,6 +580,26 @@ describe("11. origem_da_chave credencial_da_organizacao não debita (decisão 3/
       ${sqlChamada(ORG_ORIGEM_CREDENCIAL, "origem-org-100", 100, { origemDaChave: "credencial_da_organizacao" })}
     `);
     expect(linhasDeConsumoDe(ORG_ORIGEM_CREDENCIAL)).toBe(0);
+  });
+});
+
+describe("11b. origem_da_chave jev_da_instalacao não debita, e a chave_da_instalacao do LLM continua debitando (0960)", () => {
+  it("o Jev na chave da instalação grava a chamada (medível) e não gera linha de consumo", () => {
+    comoServico(`
+      ${criarOrgSql(ORG_ORIGEM_JEV, "carteira-origem-jev")}
+      ${ajustarTeto(ORG_ORIGEM_JEV, 1000)}
+      ${sqlChamada(ORG_ORIGEM_JEV, "origem-jev-100", 100, { origemDaChave: "jev_da_instalacao" })}
+    `);
+    expect(linhasDeConsumoDe(ORG_ORIGEM_JEV)).toBe(0);
+    const gravadas = comoServico(
+      `select 'SONDA|' || count(*) from public.llm_calls where organization_id = '${ORG_ORIGEM_JEV}' and origem_da_chave = 'jev_da_instalacao';`,
+    );
+    expect(gravadas).toEqual(["1"]);
+  });
+
+  it("a chamada de LLM na chave da instalação, na mesma organização, ainda debita", () => {
+    comoServico(`${sqlChamada(ORG_ORIGEM_JEV, "origem-llm-100", 100, { origemDaChave: "chave_da_instalacao" })}`);
+    expect(linhasDeConsumoDe(ORG_ORIGEM_JEV)).toBeGreaterThan(0);
   });
 });
 

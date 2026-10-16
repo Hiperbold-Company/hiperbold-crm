@@ -58,6 +58,7 @@ import { logger } from "@/lib/logger";
 import { scrubMessage } from "@/lib/sentry/scrub";
 
 import { MODELO_DO_JEV, type MotivoDaAusencia, type Pergunta } from "./cliente";
+import type { OrigemGravadaDoJev } from "./credencial";
 import type { EstadoDaTarefa, EstadoQuePergunta } from "./config";
 import { podeTentar, registrarFalha, registrarSucesso } from "./disjuntor";
 import { estadoDaTarefaNoPool, registrarFalhaQuePedeAcao } from "./pool";
@@ -109,6 +110,8 @@ export interface EscolhaDoJev {
   tokensDeEntrada: number;
   tokensDeSaida: number;
   latenciaMs: number;
+  /** De quem era a chave que pagou — vai a `llm_calls.origem_da_chave`. Ausente = não gravar (não debita). */
+  origemDaChave?: OrigemGravadaDoJev;
 }
 
 /**
@@ -217,6 +220,7 @@ async function perguntar(
       tokensDeEntrada: r.uso.tokensDeEntrada,
       tokensDeSaida: r.uso.tokensDeSaida,
       latenciaMs: r.latenciaMs,
+      origemDaChave: r.origemDaChave ?? undefined,
     },
     falha: null,
   };
@@ -309,13 +313,15 @@ export async function registrarRoteadorDoJev(pool: pg.Pool, r: RegistroDoRoteado
     // Execuções seria falso.
     r.observacao === null ? "jev_teste" : r.decidiu ? "jev" : "jev_observacao",
   ];
-  const insertDoCusto = `insert into public.llm_calls
+  // Por último em AMBOS os caminhos: o número do parâmetro depende de quantos vieram antes.
+  const origemDaChave = r.jev.origemDaChave ?? null;
+  const insertDoCusto = (n: number) => `insert into public.llm_calls
        (organization_id, contact_id, job_id, purpose, provider, model,
-        input_tokens, output_tokens, cost_cents, latency_ms, status, origem_da_escolha)
-     values ($1, $2, $3, 'intent_router', 'typesafe', $4, $5, $6, $7, $8, 'ok', $9)`;
+        input_tokens, output_tokens, cost_cents, latency_ms, status, origem_da_escolha, origem_da_chave)
+     values ($1, $2, $3, 'intent_router', 'typesafe', $4, $5, $6, $7, $8, 'ok', $9, $${n})`;
   try {
     if (r.observacao === null) {
-      await pool.query(insertDoCusto, custo);
+      await pool.query(insertDoCusto(custo.length + 1), [...custo, origemDaChave]);
       return;
     }
     await pool.query(
@@ -328,7 +334,7 @@ export async function registrarRoteadorDoJev(pool: pg.Pool, r: RegistroDoRoteado
          -- resposta fica, e o custo da segunda entra em llm_calls, porque houve.
          on conflict (organization_id, tarefa, message_id) where message_id is not null do nothing
        )
-       ${insertDoCusto}`,
+       ${insertDoCusto(custo.length + 10)}`,
       [
         ...custo,
         TAREFA_DO_ROTEADOR.id,
@@ -340,6 +346,7 @@ export async function registrarRoteadorDoJev(pool: pg.Pool, r: RegistroDoRoteado
         r.jev.confianca,
         r.observacao.rotuloDaIa,
         r.jev.modelo,
+        origemDaChave,
       ],
     );
   } catch (erro) {

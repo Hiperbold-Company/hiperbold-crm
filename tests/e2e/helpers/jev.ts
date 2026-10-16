@@ -59,9 +59,13 @@ export async function limparOJev(orgId: string): Promise<void> {
   if (gravou.error) throw new Error(`limpar settings.jev: ${gravou.error.message}`);
 }
 
-/** O cartão, lido do servidor a cada chamada — é a rota que o worker obedece. */
+/**
+ * O cartão, lido do servidor a cada chamada — é a rota que o worker obedece.
+ * Abre a página própria do Jev (`/app/ai/jev`, Configurações › IA › Decisões rápidas): Provedores,
+ * onde ele morava, está oculto na instalação da Hiperbold (hiperbold/FUNCOES.md) e redireciona.
+ */
 export async function abrirOCartao(page: Page): Promise<Locator> {
-  await page.goto("/app/ai/providers");
+  await page.goto("/app/ai/jev");
   const cartao = page.getByTestId("cartao-do-jev");
   await expect(cartao).toBeVisible({ timeout: 30_000 });
   return cartao;

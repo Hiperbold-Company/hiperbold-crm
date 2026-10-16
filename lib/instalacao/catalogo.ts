@@ -210,6 +210,21 @@ export const CATALOGO_DA_INSTALACAO: readonly ChaveDaInstalacao[] = [
     controle: "edita",
   },
   {
+    chave: "MODELOS_DA_INSTALACAO",
+    rotulo: "Modelos de IA liberados na chave da instalação",
+    explicacao:
+      "Quais modelos de IA podem rodar na chave que a Hiperbold paga (a dos tokens do plano). Escreva os identificadores separados por vírgula, como na OpenRouter (por exemplo, openai/gpt-6-luna). O primeiro é o padrão: é o que um agente novo recebe e o que substitui qualquer modelo fora da lista. Quem usa a própria chave de IA escolhe qualquer modelo. Escreva * para liberar todos os modelos (desliga o freio). Vazio: só o Luna (openai/gpt-6-luna).",
+    grupo: "ia",
+    natureza: "texto",
+    controle: "edita",
+    validar: (valor) => {
+      const ids = valor.split(/[,;\n]/).map((p) => p.trim()).filter(Boolean);
+      if (ids.length === 0) return "Informe ao menos um modelo, como openai/gpt-6-luna.";
+      const ruim = ids.find((id) => id !== "*" && !/^[A-Za-z0-9][A-Za-z0-9._:/-]{1,127}$/.test(id));
+      return ruim ? `"${ruim}" não parece um identificador de modelo (use letras, números, ponto, hífen e barra).` : null;
+    },
+  },
+  {
     chave: "DIAS_DE_GUARDA_APOS_CANCELAMENTO",
     rotulo: "Dias de guarda dos dados depois do fim da assinatura",
     explicacao:

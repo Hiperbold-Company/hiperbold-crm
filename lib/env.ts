@@ -238,6 +238,12 @@ const schema = z.object({
   // daqui, é por organização (BYOK). Quem lê é `baseDaApiDoJev()`, em
   // lib/ai/decisao/cliente.ts.
   JEV_API_BASE_URL: z.string().optional().default(""),
+  // Chave do Jev (TypeSafe AI) da INSTALAÇÃO: a reserva de quem não cadastrou a
+  // própria. Ordem: credencial `typesafe` ativa e validada da organização, depois
+  // esta, depois nada (o caminho de sempre). Vazio = sem reserva. Segredo: nunca
+  // sai em log, resposta de rota nem tela. Quem lê é `chaveDaInstalacaoDoJev()`,
+  // em lib/ai/decisao/chave-da-instalacao.ts.
+  JEV_API_KEY: z.string().optional().default(""),
   // Destinos internos que o DONO DA INSTALAÇÃO autoriza (decisão 22-d, #1004):
   // IPv4 e faixas CIDR IPv4 que a saída pode alcançar mesmo sendo rede interna,
   // e só para destinos que a própria INSTALAÇÃO configura (nunca o endereço que
@@ -397,6 +403,14 @@ const schema = z.object({
    * Editável pela tela de credenciais; lida por `valorDaInstalacao("EMAIL_DO_FINANCEIRO")`.
    */
   EMAIL_DO_FINANCEIRO: z.string().optional().default(""),
+
+  /**
+   * Modelos de IA liberados na chave da INSTALAÇÃO (a OpenRouter da Hiperbold, que debita os tokens do plano):
+   * ids separados por vírgula; o primeiro é o padrão. Vazio = `openai/gpt-6-luna`. Quem usa a própria chave não
+   * é limitado. Editável pela tela de credenciais; lida por `valorDaInstalacao("MODELOS_DA_INSTALACAO")`
+   * (`lib/ai/modelos-da-instalacao-leitura.ts`) e, no motor do agente, pelo `pg` (`modelos-da-instalacao.ts`).
+   */
+  MODELOS_DA_INSTALACAO: z.string().optional().default(""),
 
   /**
    * Dias que os dados de um cliente que pagou ficam guardados depois do fim da assinatura, antes da exclusão

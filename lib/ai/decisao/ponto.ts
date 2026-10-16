@@ -18,7 +18,11 @@
  *
  *  1. **Sem credencial, nada sai da máquina.** A ausência é configuração, não
  *     incidente: o caminho atual assume no mesmo milissegundo, sem gastar
- *     requisição nem esperar timeout.
+ *     requisição nem esperar timeout. "Credencial" é, nesta ordem: a da própria
+ *     organização (BYOK), depois a da INSTALAÇÃO (`JEV_API_KEY`, decisão do dono
+ *     do produto em 16/10/2026). A da instalação passa pelas MESMAS guardas da
+ *     outra (interruptor, aceite da organização, tarefa não desligada): ter
+ *     chave de reserva não é consentir.
  *  2. **O destino passa pela allowlist de egress** (F4-03), com o host vindo da
  *     config — nunca um `fetch` cru. Host fora dela falha FECHADO, como todo
  *     egress do runtime.
@@ -40,7 +44,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { baseDaApiDoJev, decidir, TETO_PADRAO_MS, type Pergunta, type ResultadoDaDecisao } from "./cliente";
 import { lerConfigDoJev } from "./config";
-import { PROVEDOR_DO_JEV } from "./credencial";
+import { chaveDaInstalacaoDoJev } from "./chave-da-instalacao";
+import { PROVEDOR_DO_JEV, origemGravadaDoJev, type OrigemDaChaveDoJev, type OrigemGravadaDoJev } from "./credencial";
 import { estadoEfetivoDaTarefa, TAREFAS_DO_JEV } from "./tarefas";
 
 export interface EntradaDoPonto {
@@ -52,9 +57,27 @@ export interface EntradaDoPonto {
   tetoMs?: number;
 }
 
+/** A chave que sai para a rede e de quem ela é (vai a `llm_calls.origem_da_chave`). */
+export interface ChaveDoJev {
+  chave: string;
+  origem: OrigemDaChaveDoJev;
+}
+
+/**
+ * O que `decidirNoPonto` devolve: a decisão do cliente mais DE QUEM era a chave
+ * (`null` = nenhuma saiu, não houve requisição). Nunca carrega a chave.
+ */
+export type ResultadoDoPonto = ResultadoDaDecisao & { origemDaChave: OrigemGravadaDoJev | null };
+
 export interface DependenciasDoPonto {
-  /** Resolve a chave do fornecedor PARA AQUELA organização. `null` = não configurado. */
+  /**
+   * Resolve a chave do fornecedor PARA AQUELA organização. `null` = não
+   * configurado. Quando informado, SUBSTITUI a resolução inteira (credencial da
+   * organização e reserva da instalação) — é a costura dos testes dos chamadores.
+   */
   buscarChave?: (organizationId: string) => Promise<string | null>;
+  /** A chave de reserva da instalação. Default: `JEV_API_KEY`. Só os testes trocam. */
+  chaveDaInstalacao?: () => string | null;
   fetchImpl?: typeof fetch;
   /** Base da API. Default: `baseDaApiDoJev()`. A allowlist deriva dela. */
   baseUrl?: string;
@@ -64,8 +87,9 @@ export interface DependenciasDoPonto {
 
 /**
  * A chave do Jev DAQUELA organização: a credencial `typesafe` ativa e validada
- * mais recente. Nunca uma chave de ambiente global — seria o contrário do BYOK,
- * e uma instalação pagaria a conta de outra. A mesma regra, sobre linhas já
+ * mais recente. Nunca a chave de outra organização — seria o contrário do BYOK.
+ * (A reserva da INSTALAÇÃO é `resolverChaveDoJev`, abaixo; esta função segue
+ * respondendo só pela própria organização.) A mesma regra, sobre linhas já
  * lidas, é `credencialEmUsoPeloJev` (`./credencial.ts`): mudar uma é mudar a outra.
  *
  * "Validada" é a convenção de todo leitor de chave do repo
@@ -88,8 +112,34 @@ export interface DependenciasDoPonto {
  * mensagem pode carregar material da credencial.
  */
 export async function chaveDaOrganizacao(organizationId: string, ponto: string): Promise<string | null> {
+  return (await resolverChaveDoJev(organizationId, ponto, { comReservaDaInstalacao: false }))?.chave ?? null;
+}
+
+/**
+ * A chave do Jev para a rede, na ordem decidida em 16/10/2026:
+ *
+ *  1. a credencial `typesafe` ativa e validada DA ORGANIZACAO (`origem:
+ *     credencial_da_organizacao`) — vence sempre;
+ *  2. a chave da INSTALAÇÃO, `JEV_API_KEY` (`origem: chave_da_instalacao`) —
+ *     só quando a organização não tem uma utilizável (nenhuma, ou a decifragem
+ *     da dela quebrou);
+ *  3. `null` — nada sai.
+ *
+ * A guarda por tarefa (interruptor, aceite, tarefa não desligada) vale ANTES das
+ * duas: a reserva da instalação não dispensa o consentimento da organização.
+ * Leitura de banco que falha antes de a guarda ser conferida devolve `null` sem
+ * reserva — sem saber se a organização consentiu, nada sai.
+ *
+ * Nunca lança, e o log leva só a classe do erro.
+ */
+export async function resolverChaveDoJev(
+  organizationId: string,
+  ponto: string,
+  opcoes: { chaveDaInstalacao?: () => string | null; comReservaDaInstalacao?: boolean } = {},
+): Promise<ChaveDoJev | null> {
   const tarefa = TAREFAS_DO_JEV.find((t) => t.ponto === ponto);
   if (!tarefa) return null;
+  let propria: string | null = null;
   try {
     // Admin client passa por cima da RLS: o filtro por organização é
     // PROGRAMÁTICO e obrigatório (CLAUDE.md, anti-pattern 10).
@@ -113,8 +163,16 @@ export async function chaveDaOrganizacao(organizationId: string, ponto: string):
       .limit(1)
       .maybeSingle();
     if (error) throw error;
-    if (!data) return null;
-    return decifrarColunasDaCredencial(data, organizationId);
+    if (data) {
+      try {
+        propria = decifrarColunasDaCredencial(data, organizationId);
+      } catch (erro) {
+        logger.warn("chave do Jev não pôde ser lida; seguindo pelo caminho de sempre", {
+          organizationId,
+          erro: erro instanceof Error ? erro.name : typeof erro,
+        });
+      }
+    }
   } catch (erro) {
     logger.warn("chave do Jev não pôde ser lida; seguindo pelo caminho de sempre", {
       organizationId,
@@ -122,6 +180,13 @@ export async function chaveDaOrganizacao(organizationId: string, ponto: string):
     });
     return null;
   }
+  if (propria !== null && propria.trim() !== "") {
+    return { chave: propria, origem: "credencial_da_organizacao" };
+  }
+  if (opcoes.comReservaDaInstalacao === false) return null;
+  const daInstalacao = (opcoes.chaveDaInstalacao ?? chaveDaInstalacaoDoJev)();
+  if (daInstalacao === null || daInstalacao.trim() === "") return null;
+  return { chave: daInstalacao.trim(), origem: "chave_da_instalacao" };
 }
 
 /** A busca da chave que não voltou dentro do teto. */
@@ -139,8 +204,13 @@ const CHAVE_ATRASADA = Symbol("chave_atrasada");
 export async function decidirNoPonto(
   entrada: EntradaDoPonto,
   deps: DependenciasDoPonto = {},
-): Promise<ResultadoDaDecisao> {
-  const buscarChave = deps.buscarChave ?? ((org: string) => chaveDaOrganizacao(org, entrada.ponto));
+): Promise<ResultadoDoPonto> {
+  const buscarChave: (org: string) => Promise<ChaveDoJev | null> = deps.buscarChave
+    ? async (org) => {
+        const injetada = await deps.buscarChave!(org);
+        return injetada === null ? null : { chave: injetada, origem: "credencial_da_organizacao" };
+      }
+    : (org) => resolverChaveDoJev(org, entrada.ponto, { chaveDaInstalacao: deps.chaveDaInstalacao });
   const teto = entrada.tetoMs ?? TETO_PADRAO_MS;
   const inicio = Date.now();
   let relogio: ReturnType<typeof setTimeout> | undefined;
@@ -149,14 +219,29 @@ export async function decidirNoPonto(
   });
   // `chaveDaOrganizacao` nunca rejeita; a injetada, no teste, pode — e rejeitada
   // ela é "sem chave", como uma leitura que falha.
-  const chave = await Promise.race([buscarChave(entrada.organizationId).catch(() => null), prazo]);
+  const resolvida = await Promise.race([buscarChave(entrada.organizationId).catch(() => null), prazo]);
   clearTimeout(relogio);
-  if (chave === CHAVE_ATRASADA) {
-    return { ok: false, motivo: "provedor_indisponivel", exigeAcao: false, defeitoNosso: false, status: null };
+  if (resolvida === CHAVE_ATRASADA) {
+    return {
+      ok: false,
+      motivo: "provedor_indisponivel",
+      exigeAcao: false,
+      defeitoNosso: false,
+      status: null,
+      origemDaChave: null,
+    };
   }
-  if (chave === null || chave.trim() === "") {
-    return { ok: false, motivo: "sem_credencial", exigeAcao: false, defeitoNosso: false, status: null };
+  if (resolvida === null || resolvida.chave.trim() === "") {
+    return {
+      ok: false,
+      motivo: "sem_credencial",
+      exigeAcao: false,
+      defeitoNosso: false,
+      status: null,
+      origemDaChave: null,
+    };
   }
+  const { chave, origem } = resolvida;
 
   const base = deps.baseUrl ?? baseDaApiDoJev();
   const allowlist = buildAllowlist([...(deps.hostsPermitidos ?? [base])]);
@@ -167,7 +252,7 @@ export async function decidirNoPonto(
       { allowlist, fetchImpl: deps.fetchImpl, log: logger },
     );
 
-  return decidir(
+  const resultado = await decidir(
     {
       chave,
       estado: entrada.estado,
@@ -177,4 +262,6 @@ export async function decidirNoPonto(
     },
     { fetchImpl: fetchContido, baseUrl: base },
   );
+  // Grava a origem própria do Jev, que não debita a carteira (migration 0960).
+  return { ...resultado, origemDaChave: origemGravadaDoJev(origem) };
 }

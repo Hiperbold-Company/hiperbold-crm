@@ -39,6 +39,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import type { ProvedorComChave } from "@/lib/ai/pontos/provedores";
 import { rotacionarCredencial } from "@/lib/ai/credenciais/guardar";
 import { gravarConfigDoJev, lerConfigDoJev } from "@/lib/ai/decisao/config";
+import { chaveDaInstalacaoDoJev } from "@/lib/ai/decisao/chave-da-instalacao";
 import { credencialEmUsoPeloJev, PROVEDOR_DO_JEV } from "@/lib/ai/decisao/credencial";
 import { logger } from "@/lib/logger";
 import {
@@ -358,6 +359,8 @@ async function desligarOJevSeFicouSemChave(p: {
   }
   if (!lerConfigDoJev(orgRes.data?.settings).ligado) return false;
   if (credencialEmUsoPeloJev(credsRes.data ?? []) !== null) return false;
+  // Com a chave da instalação (`JEV_API_KEY`) o Jev segue medindo sem a da empresa.
+  if (chaveDaInstalacaoDoJev() !== null) return false;
 
   const gravado = await gravarConfigDoJev({
     admin: p.admin,

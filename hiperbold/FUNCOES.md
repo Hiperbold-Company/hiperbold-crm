@@ -33,6 +33,8 @@ A lista de ocultas mora num único arquivo: [`lib/hiperbold/funcoes-ocultas.ts`]
 | Nuvemshop | Trazer pedidos e clientes da loja. |
 | Equipe, Distribuição de atendimento, Tags, Organização, Marca, LGPD, API Tokens, Audit Log, Notificações, Perfil, Segurança (verificação em duas etapas e sessões) | Configurações do dia a dia. |
 | Meu plano | Plano contratado, pagamento, uso e cancelamento. |
+| Jev — decisões rápidas | Um segundo modelo de IA, rápido e barato, que decide para onde mandar cada conversa (TypeSafe System One). Funciona com a chave da TypeSafe da Hiperbold no servidor (`JEV_API_KEY`); a empresa que cola a própria chave em Credenciais usa a dela. Tela própria em Configurações › IA › **Decisões rápidas (Jev)** (`/app/ai/jev`, a partir de gestor): é o mesmo cartão que morava em Provedores, que segue oculto. Precisa ser ligado e aceito por um administrador. O consumo do Jev na chave da instalação **não desconta dos tokens do plano**, mas é medido (origem `jev_da_instalacao` em `llm_calls`, migration 0960). |
+| Modelos de IA do plano | Só os modelos liberados em `MODELOS_DA_INSTALACAO` (hoje: Luna) rodam na chave da instalação, a que desconta dos tokens do plano. Editável em /admin/configuracao; o primeiro da lista é o padrão. Quem usa a própria chave de IA escolhe qualquer modelo. |
 | **Usar minha própria chave de IA (avançado)** (antes "Credenciais") | Para quem quer usar outro modelo (Grok, Claude, Gemini…) com a própria conta do OpenRouter. O consumo nessa chave não desconta dos tokens do plano. Ativa e **avançada**: fica só em Configurações › IA (decisão do Filipe, 16/10/2026), fora do "Ver tudo em IA". O cliente comum não precisa dela: o agente usa a chave da instalação. |
 
 ## Funções ocultas
@@ -50,7 +52,6 @@ Todas: **16/10/2026, decisão do Filipe: validar antes de lançar.** Id é o nom
 | `extensoes` | Guias extras instalados por cima do sistema para orientar o trabalho. | Configurações › Extensões (`/app/extensions`) e "Orientações instaladas" no hub do CRM |
 | `contas-e-recebimentos` | Cadastro das contas onde o dinheiro das vendas do cliente entra. | Configurações › Contas e recebimentos (`/app/settings/tenant/financeiro`) |
 | `provedores-ia` | Escolher qual "cérebro" de IA atende cada parte do sistema. A instalação já vem configurada. | IA › Provedores (`/app/ai/providers`) |
-| `jev` | "Jev — decisões rápidas": um segundo modelo de IA, rápido e barato, que decide para onde mandar cada conversa (TypeSafe System One). **Oculto até o Filipe criar a conta e ter a chave da TypeSafe.** | IA › Provedores › cartão do Jev (`/app/ai/providers`) |
 | `voz-whatsapp` | Ligação de voz pelo WhatsApp. Some o bloco em Segurança e a opção "Chamada de voz" em Conexões. | Configurações › Segurança (bloco "Chamada de voz pelo WhatsApp") e Conexões › Chamada de voz |
 | `conexao-provedor-parceiro` | Conectar o WhatsApp por um serviço parceiro. | Conexões › Provedor parceiro |
 | `conexao-telefone` | Conectar uma linha de telefone comum. | Conexões › Telefone |

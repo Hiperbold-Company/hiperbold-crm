@@ -56,6 +56,8 @@ import {
   PURPOSES_ISENTOS_DA_ASSINATURA,
   TITULO_ASSINATURA_SUSPENSA,
 } from './assinatura';
+import { decidirModeloDaChave, primeiraVezDoModelo } from '@/lib/ai/modelos-da-instalacao';
+import { modelosDaInstalacaoPeloDb } from './modelos-da-instalacao';
 import { custoCentsComCatalogo } from './pricing';
 import { chaveDeOrcamentoDaInstalacao } from '../../../instalacao/comportamento';
 import { createDefaultRegistry, type ProviderRegistry } from './providers';
@@ -995,15 +997,51 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
       })
     : padrao;
 
-  const model = decisao.modelId;
-  if (model === null || model === undefined) {
+  const modeloPedido = decisao.modelId;
+  if (modeloPedido === null || modeloPedido === undefined) {
     throw new Error(
       'modelo LLM não definido — configure o ponto no painel de provedores, ' +
         'organizations.settings.llm.default_model, ou passe input.model',
     );
   }
-  if (config.enabledModels.length > 0 && !config.enabledModels.includes(model)) {
-    throw new LlmModelNotEnabledError(model);
+  if (config.enabledModels.length > 0 && !config.enabledModels.includes(modeloPedido)) {
+    throw new LlmModelNotEnabledError(modeloPedido);
+  }
+
+  // ═══ FREIO DE CUSTO DA CHAVE DA INSTALAÇÃO (decisão do dono, 16/10/2026) ═══
+  //
+  // A chave da instalação paga a conta de todas as empresas e debita os tokens do
+  // plano; só os modelos de `MODELOS_DA_INSTALACAO` rodam nela. Fora da lista, o
+  // turno SEGUE com o primeiro da lista (o padrão) — nunca falha. Chave PRÓPRIA da
+  // organização (BYOK) passa intacta e nem lê a configuração. É este o ponto único
+  // do motor: toda chamada (turno, resumo, classificador, operador) passa por aqui,
+  // com a origem da chave já decidida por `resolveOrgLlmConfig`.
+  let model: string = modeloPedido;
+  if (config.origemDaChave === 'chave_da_instalacao') {
+    const lista = await modelosDaInstalacaoPeloDb(db);
+    const guarda = decidirModeloDaChave({
+      lista,
+      origemDaChave: config.origemDaChave,
+      provedor: config.provider,
+      modelId: modeloPedido,
+    });
+    if (guarda.trocado || guarda.semTraducao) {
+      if (primeiraVezDoModelo(input.tenantId, modeloPedido)) {
+        deps.log?.warn(
+          guarda.trocado
+            ? 'llm: modelo fora de MODELOS_DA_INSTALACAO na chave da instalação — usando o padrão'
+            : 'llm: modelo fora de MODELOS_DA_INSTALACAO e o provedor não executa o padrão — mantido',
+          {
+            organization_id: input.tenantId,
+            purpose,
+            provider: config.provider,
+            pedido: modeloPedido,
+            usado: guarda.modelId,
+          },
+        );
+      }
+      model = guarda.modelId;
+    }
   }
   const factory = registry[config.provider];
   if (factory === undefined) {

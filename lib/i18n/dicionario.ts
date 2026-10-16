@@ -1839,6 +1839,13 @@ export const DICIONARIO: Traducoes = {
   "na aba Credenciais.": { es: "en la pestaña Credenciales." },
   "Gerenciar chaves em Credenciais": { es: "Administrar claves en Credenciales" },
   "Usar minha própria chave de IA (avançado)": { es: "Usar mi propia clave de IA (avanzado)" },
+  "Decisões rápidas (Jev)": { es: "Decisiones rápidas (Jev)" },
+  "Classificações rápidas de mensagens com o Jev, da TypeSafe. Precisa ser ligado e aceito por um administrador.": {
+    es: "Clasificaciones rápidas de mensajes con Jev, de TypeSafe. Debe ser activado y aceptado por un administrador.",
+  },
+  "Este modelo só funciona com a sua própria chave. Sem ela, o agente usa o Luna.": {
+    es: "Este modelo solo funciona con tu propia clave. Sin ella, el agente usa Luna.",
+  },
   "Para quem quer usar outro modelo (Grok, Claude, Gemini…) com a própria conta do OpenRouter. O consumo nessa chave não desconta dos tokens do plano.":
     {
       es: "Para quien quiere usar otro modelo (Grok, Claude, Gemini…) con su propia cuenta de OpenRouter. El consumo en esa clave no se descuenta de los tokens del plan.",
@@ -4105,6 +4112,7 @@ export const DICIONARIO: Traducoes = {
   },
   "Respostas do Jev": { es: "Respuestas de Jev" },
   "Chave conferida com a TypeSafe": { es: "Clave verificada con TypeSafe" },
+  "Usa a chave da TypeSafe da Hiperbold, no servidor": { es: "Usa la clave de TypeSafe de Hiperbold, en el servidor" },
   "Clientes irritados percebidos": { es: "Clientes molestos detectados" },
   "Tempo médio": { es: "Tiempo promedio" },
   "Vezes que a IA de sempre cobriu o Jev": { es: "Veces que la IA de siempre cubrió a Jev" },

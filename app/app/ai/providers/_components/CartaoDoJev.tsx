@@ -49,6 +49,8 @@ export interface DadosDoJev {
   chave: {
     existe: boolean;
     validada: boolean;
+    /** A pergunta sai pela chave da TypeSafe da instalação (servidor), não por uma colada pela empresa. */
+    da_instalacao?: boolean;
     credencial_id: string | null;
     rotulo: string | null;
     erro_de_validacao: string | null;
@@ -335,7 +337,9 @@ export function CartaoDoJev({
       {dados.chave.validada && (
         <p className="mt-3 flex items-center gap-1.5 text-xs text-success-fg" data-testid="jev-chave-conferida">
           <span aria-hidden>✓</span>
-          {t("Chave conferida com a TypeSafe")}
+          {dados.chave.da_instalacao
+            ? t("Usa a chave da TypeSafe da Hiperbold, no servidor")
+            : t("Chave conferida com a TypeSafe")}
         </p>
       )}
 

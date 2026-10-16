@@ -1,6 +1,8 @@
 import { listSelectableChannels, type SelectableChannel } from "@/lib/channels/selectable";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capacidadesPadraoDoOnboarding } from "./capacidades-padrao";
+import { modelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao-leitura";
+
 import { escolherModeloDoProvedor } from "./escolher-modelo";
 import { chaveDePlataforma } from "@/lib/ai/runtime/agent";
 import { publishAgentVersion } from "./publish";
@@ -216,8 +218,12 @@ export async function publishFirstVersion(
     .eq("provider", provider)
     .is("deprecated_at", null);
 
+  // Agente novo SEM chave própria (nem escolha explícita) roda na chave da
+  // instalação: nasce com o modelo padrão liberado (`MODELOS_DA_INSTALACAO`).
+  const naChaveDaInstalacao = !selection && credentialId === null;
   const escolha = escolherModeloDoProvedor(
     (modelos ?? []) as Parameters<typeof escolherModeloDoProvedor>[0],
+    naChaveDaInstalacao ? { liberados: await modelosDaInstalacao(), provedor: provider } : {},
   );
   if (!escolha.escolhido) {
     return { published: false, reason: "no_model", provider, motivo: escolha.motivo };

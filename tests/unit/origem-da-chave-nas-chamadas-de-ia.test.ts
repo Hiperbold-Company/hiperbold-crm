@@ -120,7 +120,7 @@ describe("os pontos de log do worker de resposta legado levam a origem", () => {
     }
   });
 
-  it("no worker de sentimento, só as linhas do modelo resolvido levam origem; as do Jev (typesafe) ficam nulas", () => {
+  it("no worker de sentimento, as linhas do modelo resolvido levam a origem do resolvedor; a do Jev que respondeu leva a que o Jev devolveu e a da falha fica nula", () => {
     const fonte = readFileSync(join(process.cwd(), "workers/ai-sentiment-worker.ts"), "utf8");
     const blocos = fonte.split("logInvocation({").slice(1).map((b) => b.slice(0, b.indexOf("});")));
     const doResolvido = blocos.filter((b) => b.includes("model: resolvido.modelId"));
@@ -128,6 +128,14 @@ describe("os pontos de log do worker de resposta legado levam a origem", () => {
     expect(doResolvido.length).toBe(2);
     expect(doJev.length).toBe(2);
     for (const b of doResolvido) expect(b).toContain("origem_da_chave: origemDaChaveDoModelo(resolvido.origem)");
-    for (const b of doJev) expect(b).not.toContain("origem_da_chave");
+    // A que respondeu (`clima.ok`): a origem vem do Jev (`jev_da_instalacao` ou a da organização), que
+    // NÃO debita a carteira (0960). A da falha não tem origem: nada foi cobrado.
+    const doJevQueRespondeu = doJev.filter((b) => b.includes("clima.modelo"));
+    const doJevQueFalhou = doJev.filter((b) => !b.includes("clima.modelo"));
+    expect(doJevQueRespondeu.length).toBe(1);
+    expect(doJevQueFalhou.length).toBe(1);
+    expect(doJevQueRespondeu[0]).toContain("origem_da_chave: clima.origemDaChave");
+    expect(doJevQueRespondeu[0]).not.toContain("chave_da_instalacao");
+    expect(doJevQueFalhou[0]).not.toContain("origem_da_chave");
   });
 });

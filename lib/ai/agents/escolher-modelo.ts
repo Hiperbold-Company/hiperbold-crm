@@ -23,6 +23,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { idNoProvedor } from "@/lib/ai/modelos-da-instalacao";
+
 export interface ModeloDoCatalogo {
   model_id: string;
   is_default_for_provider?: boolean | null;
@@ -67,9 +69,30 @@ function ehGratuito(m: ModeloDoCatalogo): boolean {
   return custo(m) === 0;
 }
 
+/**
+ * `liberados` + `provedor`: o agente vai rodar na CHAVE DA INSTALAÇÃO, onde só os
+ * modelos de `MODELOS_DA_INSTALACAO` rodam (freio de custo; `lib/ai/modelos-da-instalacao.ts`).
+ * Então o primeiro liberado que o provedor executa E que o catálogo conhece (com
+ * ferramentas) vence o curado e o mais barato. Catálogo vazio ou sem nenhum
+ * liberado: vale a regra normal de sempre — e o freio de execução troca o modelo
+ * na hora do turno, então a escolha de cadastro nunca vira gasto indevido.
+ */
+export interface OpcoesDaEscolha {
+  liberados?: readonly string[];
+  provedor?: string;
+}
+
 export function escolherModeloDoProvedor(
   modelos: ReadonlyArray<ModeloDoCatalogo>,
+  opcoes: OpcoesDaEscolha = {},
 ): EscolhaDeModelo {
+  if (opcoes.liberados && opcoes.provedor) {
+    for (const liberado of opcoes.liberados) {
+      const id = idNoProvedor(opcoes.provedor, liberado);
+      const noCatalogo = id === null ? undefined : modelos.find((m) => m.model_id === id && serve(m));
+      if (noCatalogo) return { escolhido: true, modelId: noCatalogo.model_id, origem: "curado" };
+    }
+  }
   if (modelos.length === 0) return { escolhido: false, motivo: "catalogo_vazio" };
 
   // 1) O curado vence sempre — é uma escolha que alguém fez de propósito, e ela

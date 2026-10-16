@@ -37,7 +37,7 @@ export const FUNCOES = {
     rotas: ["/app/settings/tenant/financeiro"],
   },
   "provedores-ia": { nome: "Provedores de IA", rotas: ["/app/ai/providers"] },
-  jev: { nome: "Jev — decisões rápidas (cartão em Provedores)", rotas: [] },
+  jev: { nome: "Jev — decisões rápidas (cartão em Decisões rápidas)", rotas: [] },
   // Sem tela própria: são blocos dentro de telas que seguem visíveis.
   "voz-whatsapp": { nome: "Chamada de voz pelo WhatsApp (Segurança e Conexões)", rotas: [] },
   "conexao-provedor-parceiro": { nome: "Conexão: Provedor parceiro", rotas: [] },
@@ -61,7 +61,6 @@ export const FUNCOES_OCULTAS: readonly FuncaoId[] = [
   "extensoes", // 16/10/2026 · Configurações › Extensões e "Orientações instaladas" no hub do CRM
   "contas-e-recebimentos", // 16/10/2026 · Configurações › Contas e recebimentos
   "provedores-ia", // 16/10/2026 · IA › Provedores
-  "jev", // 16/10/2026 · IA › Provedores › cartão "Jev — decisões rápidas" (TypeSafe System One); oculto até o Filipe ter a conta/chave TypeSafe
   "voz-whatsapp", // 16/10/2026 · Configurações › Segurança › bloco "Chamada de voz pelo WhatsApp"
   "conexao-provedor-parceiro", // 16/10/2026 · Conexões › Provedor parceiro
   "conexao-telefone", // 16/10/2026 · Conexões › Telefone

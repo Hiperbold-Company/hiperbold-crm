@@ -33,6 +33,7 @@ import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { escolherModeloNoCatalogo } from "./agents/escolher-modelo";
+import { modeloPermitidoNaChave } from "./modelos-da-instalacao-leitura";
 import { OPENROUTER_BASE_URL, resolveLanguageModel, type ModelId } from "./gateway";
 
 export interface ModeloResolvido {
@@ -98,11 +99,13 @@ export async function resolverModeloDoPonto(
     // é essa chave é o provedor que a organização escolheu (issue #1181). A
     // leitura desse provedor é preguiçosa: id que já traz rota resolve sem ela,
     // e é esse o caminho de toda instalação padrão.
-    const model = await padraoDaInstalacao(
+    const daInstalacao = await padraoDaInstalacaoGuardado(
+      organizationId,
+      purpose,
       () => (daOrg !== null ? Promise.resolve(daOrg.provider) : providerDaOrganizacao(organizationId)),
       padrao,
     );
-    if (model !== null) return { model, modelId: String(padrao), origem: "padrao" };
+    if (daInstalacao !== null) return { ...daInstalacao, origem: "padrao" };
     return opcoes.naFaltaUsarOPadraoDaOrganizacao === true
       ? padraoDaOrganizacao(organizationId, daOrg)
       : null;
@@ -117,8 +120,13 @@ export async function resolverModeloDoPonto(
       organization_id: organizationId,
       purpose,
     });
-    const model = await padraoDaInstalacao(() => Promise.resolve(binding.provider), padrao);
-    return model === null ? null : { model, modelId: String(padrao), origem: "padrao" };
+    const daInstalacao = await padraoDaInstalacaoGuardado(
+      organizationId,
+      purpose,
+      () => Promise.resolve(binding.provider),
+      padrao,
+    );
+    return daInstalacao === null ? null : { ...daInstalacao, origem: "padrao" };
   }
 
   const model = instanciar(binding.provider, apiKey, binding.model_id, binding.base_url);
@@ -128,8 +136,13 @@ export async function resolverModeloDoPonto(
       purpose,
       provider: binding.provider,
     });
-    const fallback = await padraoDaInstalacao(() => Promise.resolve(binding.provider), padrao);
-    return fallback === null ? null : { model: fallback, modelId: String(padrao), origem: "padrao" };
+    const fallback = await padraoDaInstalacaoGuardado(
+      organizationId,
+      purpose,
+      () => Promise.resolve(binding.provider),
+      padrao,
+    );
+    return fallback === null ? null : { ...fallback, origem: "padrao" };
   }
 
   return { model, modelId: binding.model_id, origem: "binding" };
@@ -260,6 +273,36 @@ async function padraoDaInstalacao(
 }
 
 /**
+ * `padraoDaInstalacao` com o FREIO DE CUSTO (`MODELOS_DA_INSTALACAO`): é a chave
+ * da instalação que vai pagar, então só os modelos liberados rodam. Fora da lista
+ * o ponto usa o padrão — e, se a instalação não sabe executar o padrão (sem rota
+ * para ele), segue com o pedido em vez de silenciar o ponto. Devolve também o id
+ * EFETIVO, que é o que vai para o log de custo.
+ */
+async function padraoDaInstalacaoGuardado(
+  organizationId: string,
+  purpose: string,
+  providerDaConfiguracao: () => Promise<string | null>,
+  padrao: ModelId,
+): Promise<{ model: LanguageModel; modelId: string } | null> {
+  // "openrouter" aqui é só a regra de escrita do id (canônico, com o prefixo de
+  // fabricante): a chave da instalação resolve o id inteiro, como `resolveLanguageModel`.
+  const decisao = await modeloPermitidoNaChave({
+    organizationId,
+    origemDaChave: "chave_da_instalacao",
+    provedor: "openrouter",
+    modelId: String(padrao),
+    ponto: purpose,
+  });
+  if (decisao.trocado) {
+    const trocado = await padraoDaInstalacao(providerDaConfiguracao, decisao.modelId as ModelId);
+    if (trocado !== null) return { model: trocado, modelId: decisao.modelId };
+  }
+  const model = await padraoDaInstalacao(providerDaConfiguracao, padrao);
+  return model === null ? null : { model, modelId: String(padrao) };
+}
+
+/**
  * O provedor de um id BARE segundo o catálogo `ai_models` — `null` quando o
  * catálogo não o conhece (id legado, catálogo ainda não sincronizado).
  *
@@ -317,8 +360,13 @@ async function padraoDaOrganizacao(
     const model = id === null ? null : instanciar(llm.provider, daOrg.apiKey, id, null);
     if (model !== null) return { model, modelId, origem: "credencial_da_organizacao" };
   }
-  const model = await padraoDaInstalacao(() => Promise.resolve(llm.provider), modelId as ModelId);
-  return model === null ? null : { model, modelId, origem: "padrao" };
+  const daInstalacao = await padraoDaInstalacaoGuardado(
+    organizationId,
+    "padrao_da_organizacao",
+    () => Promise.resolve(llm.provider),
+    modelId as ModelId,
+  );
+  return daInstalacao === null ? null : { ...daInstalacao, origem: "padrao" };
 }
 
 /**

@@ -11,6 +11,7 @@ import { extractPdfText } from "@/lib/ai/rag/extractors/pdf";
 import { visaoEmVigor } from "@/lib/ai/pontos/capacidade-em-vigor";
 import { modeloRealDaChamada, registrarTelemetriaSemCusto } from "@/lib/ai/telemetria-sem-custo";
 import { resolveOrgLlmConfig, type LlmEdgeConfig } from "@/lib/agent-engine/edge/llm/credentials";
+import { modeloPermitidoNaChave } from "@/lib/ai/modelos-da-instalacao-leitura";
 import { createDefaultRegistry } from "@/lib/agent-engine/edge/llm/providers";
 import { createPool } from "@/lib/agent-engine/db/pool";
 import { env } from "@/lib/env";
@@ -269,6 +270,20 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
     // chaves do `.env` — uma segunda cópia da escada, que o chat não tinha e que
     // divergiria no primeiro degrau novo.
     const chaveEhDaInstalacao = llm.origemDaChave === "chave_da_instalacao";
+
+    // Freio de custo: na chave da instalação só rodam os modelos de
+    // `MODELOS_DA_INSTALACAO` (a visão também gasta dos tokens do plano). Fora da
+    // lista usa o padrão; chave própria da empresa passa intacta.
+    if (chaveEhDaInstalacao && llm.defaultModel) {
+      const permitido = await modeloPermitidoNaChave({
+        organizationId: row.organization_id,
+        origemDaChave: llm.origemDaChave,
+        provedor: llm.provider,
+        modelId: llm.defaultModel,
+        ponto: "media_derive",
+      });
+      if (permitido.trocado) llm = { ...llm, defaultModel: permitido.modelId };
+    }
 
     // O 5º argumento é a `base_url` do binding: o factory precisa dela para não
     // cair no endpoint padrão do provedor (ver o comentário lá em cima).

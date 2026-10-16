@@ -30,6 +30,9 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/ai/gateway-binding", () => ({ resolverModeloDoPonto: vi.fn() }));
+// A chave de reserva da instalação (JEV_API_KEY): o teste decide se ela existe.
+const instalacao = vi.hoisted(() => ({ chave: null as string | null }));
+vi.mock("@/lib/ai/decisao/chave-da-instalacao", () => ({ chaveDaInstalacaoDoJev: () => instalacao.chave }));
 
 const ORG = "22222222-2222-4222-8222-222222222222";
 const OUTRA_ORG = "99999999-9999-4999-8999-999999999999";
@@ -208,6 +211,7 @@ function chamada(over: Linha = {}): Linha {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  instalacao.chave = null;
   papel = "admin";
   estado = {
     settings: { branding: { app_name: "Loja" }, llm: { provider: "anthropic" } },
@@ -268,6 +272,7 @@ describe("GET /api/v1/ai/jev", () => {
     expect(d.chave).toEqual({
       existe: false,
       validada: false,
+      da_instalacao: false,
       credencial_id: null,
       rotulo: null,
       erro_de_validacao: null,
@@ -540,6 +545,43 @@ describe("PATCH /api/v1/ai/jev", () => {
     expect(status).toBe(422);
     expect(corpo.error.code).toBe("jev_exige_chave_validada");
     expect(escritas()).toEqual([]);
+  });
+
+  it("sem credencial da empresa, a chave da INSTALAÇÃO conta: o cartão fica pronto e a chave nunca aparece", async () => {
+    instalacao.chave = "apikey_da_instalacao_segredo";
+    const { status, corpo } = await ler();
+    expect(status).toBe(200);
+    expect(corpo.data.chave).toEqual({
+      existe: true,
+      validada: true,
+      da_instalacao: true,
+      credencial_id: null,
+      rotulo: null,
+      erro_de_validacao: null,
+    });
+    expect(JSON.stringify(corpo)).not.toContain("apikey_da_instalacao_segredo");
+  });
+
+  it("a credencial validada da empresa vence: o cartão não diz que usa a da instalação", async () => {
+    instalacao.chave = "apikey_da_instalacao_segredo";
+    estado.credenciais = [credencial()];
+    const { corpo } = await ler();
+    expect(corpo.data.chave.validada).toBe(true);
+    expect(corpo.data.chave.da_instalacao).toBe(false);
+    expect(corpo.data.chave.credencial_id).not.toBeNull();
+  });
+
+  it("liga só com a chave da instalação, mas o aceite da empresa continua exigido", async () => {
+    instalacao.chave = "apikey_da_instalacao_segredo";
+    const semAceite = await mudar({ ligado: true });
+    expect(semAceite.status).toBe(422);
+    expect(semAceite.corpo.error.code).toBe("jev_exige_aceite");
+    expect(escritas()).toEqual([]);
+
+    const { status, corpo } = await mudar({ ligado: true, aceite_lgpd: true });
+    expect(status).toBe(200);
+    expect(corpo.data.config.ligado).toBe(true);
+    expect(JSON.stringify(corpo)).not.toContain("apikey_da_instalacao_segredo");
   });
 
   it("a chave validada de OUTRA organização não liga o Jev desta", async () => {

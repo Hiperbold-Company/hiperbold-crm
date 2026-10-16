@@ -40,6 +40,7 @@
 import { scrubMessage } from "@/lib/sentry/scrub";
 
 import type { MotivoComRede } from "./cliente";
+import type { OrigemGravadaDoJev } from "./credencial";
 import { podeTentar, registrarFalha, registrarSucesso } from "./disjuntor";
 import { decidirNoPonto, type DependenciasDoPonto } from "./ponto";
 import { TAREFA_DO_CLIMA } from "./tarefas";
@@ -80,6 +81,8 @@ export type ClimaMedido =
       tokensDeEntrada: number;
       tokensDeSaida: number;
       latenciaMs: number;
+      /** De quem era a chave que pagou — vai a `llm_calls.origem_da_chave`. Ausente = não gravar (não debita). */
+      origemDaChave?: OrigemGravadaDoJev;
     }
   | {
       ok: false;
@@ -165,5 +168,6 @@ export async function medirClima(
     tokensDeEntrada: r.uso.tokensDeEntrada,
     tokensDeSaida: r.uso.tokensDeSaida,
     latenciaMs,
+    origemDaChave: r.origemDaChave ?? undefined,
   };
 }

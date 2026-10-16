@@ -57,6 +57,14 @@ describe("medirClima", () => {
     expect(r).toMatchObject({ ok: true, modelo: "jev-1.13.0", tokensDeEntrada: 80, tokensDeSaida: 18 });
   });
 
+  it("devolve de quem era a chave que pagou (a injetada em teste é a da organização)", async () => {
+    const r = await medirClima(
+      { organizationId: novaOrg(), mensagem: "oi" },
+      { buscarChave: async () => "tsk_x", fetchImpl: vi.fn().mockResolvedValue(respostaComScore(2)) },
+    );
+    expect(r).toMatchObject({ ok: true, origemDaChave: "credencial_da_organizacao" });
+  });
+
   it("o tempo medido é o da chamada ao fornecedor, não o da busca da chave", async () => {
     // Em Execuções, a IA de sempre cronometra só a chamada. Contar aqui a busca
     // da chave no banco poria tempo de banco na conta do fornecedor.

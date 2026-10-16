@@ -71,6 +71,14 @@ for (const [chave, valor] of Object.entries(PLACEHOLDERS)) {
 }
 
 /**
+ * O freio de modelos da chave da instalação (`MODELOS_DA_INSTALACAO`) nasce DESLIGADO nos testes
+ * (`*` libera todos): centenas de testes de outros assuntos usam modelos quaisquer com a "chave da
+ * instalação" e não devem depender da lista. Os testes DO freio (`modelos-da-instalacao*.test.*`)
+ * escolhem a lista que querem. `||=` porque a variável vazia também vale.
+ */
+process.env.MODELOS_DA_INSTALACAO ||= "*";
+
+/**
  * O placeholder falha NA HORA — sem perguntar ao DNS.
  *
  * "Falha alto" (acima) valia para o resultado, não para o RELÓGIO: `.invalid`

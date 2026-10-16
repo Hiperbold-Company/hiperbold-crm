@@ -43,6 +43,7 @@ import { logger } from "@/lib/logger";
 import { scrubMessage } from "@/lib/sentry/scrub";
 
 import type { EstadoQuePergunta } from "./config";
+import type { OrigemGravadaDoJev } from "./credencial";
 import { podeTentar, registrarFalha, registrarSucesso } from "./disjuntor";
 import { estadoDaTarefaNoPool, registrarFalhaQuePedeAcao } from "./pool";
 import { decidirNoPonto, type DependenciasDoPonto } from "./ponto";
@@ -80,6 +81,8 @@ export interface ManipulacaoDoJev {
   tokensDeEntrada: number;
   tokensDeSaida: number;
   latenciaMs: number;
+  /** De quem era a chave que pagou — vai a `llm_calls.origem_da_chave`. Ausente = não gravar (não debita). */
+  origemDaChave?: OrigemGravadaDoJev;
 }
 
 const ehNivel = (x: string): x is NivelDeManipulacao => (NIVEIS_DE_MANIPULACAO as readonly string[]).includes(x);
@@ -150,6 +153,7 @@ export async function perguntarManipulacaoAoJev(
     tokensDeEntrada: r.uso.tokensDeEntrada,
     tokensDeSaida: r.uso.tokensDeSaida,
     latenciaMs: r.latenciaMs,
+    origemDaChave: r.origemDaChave ?? undefined,
   };
 }
 
@@ -205,8 +209,8 @@ export async function registrarManipulacaoDoJev(pool: pg.Pool, r: RegistroDaMani
        )
        insert into public.llm_calls
          (organization_id, contact_id, job_id, purpose, provider, model,
-          input_tokens, output_tokens, cost_cents, latency_ms, status, origem_da_escolha)
-       values ($1, $13, $6, 'jailbreak_detect', 'typesafe', $14, $15, $16, $17, $12, 'ok', $18)`,
+          input_tokens, output_tokens, cost_cents, latency_ms, status, origem_da_escolha, origem_da_chave)
+       values ($1, $13, $6, 'jailbreak_detect', 'typesafe', $14, $15, $16, $17, $12, 'ok', $19, $18)`,
       [
         r.organizationId,
         TAREFA_DA_MANIPULACAO.id,
@@ -232,6 +236,8 @@ export async function registrarManipulacaoDoJev(pool: pg.Pool, r: RegistroDaMani
           cacheReadTokens: 0,
           cacheWriteTokens: 0,
         }),
+        r.jev.origemDaChave ?? null,
+        // Por último: é a origem da ESCOLHA que os testes e o cartão leem pela cauda.
         decidiu ? "jev" : "jev_observacao",
       ],
     );

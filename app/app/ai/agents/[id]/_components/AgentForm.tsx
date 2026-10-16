@@ -73,6 +73,7 @@ import type { AgentRow } from "@/hooks/ai/useAgent";
 import type { AgentVersionRow } from "@/hooks/ai/useAgentVersions";
 import type { CredentialRow, Provider } from "@/hooks/ai/useCredentials";
 import { credentialStatus } from "@/hooks/ai/useCredentials";
+import { agenteUsaChaveDaInstalacao } from "@/lib/ai/modelos-da-instalacao";
 import type { FunilDaResposta } from "@/hooks/pipelines/usePipelines";
 import { callbacksHabilitados } from "@/lib/followup/callback-policy";
 
@@ -409,6 +410,14 @@ export function AgentForm(props: Props) {
   }
 
   const cred = findCredential(props.credentials, form.credential_id);
+  // Sem chave própria, o agente roda na chave da instalação e só os modelos
+  // liberados em MODELOS_DA_INSTALACAO (o servidor aplica a mesma regra).
+  const naChaveDaInstalacao = agenteUsaChaveDaInstalacao({
+    provedor: form.provider,
+    credentialId: form.credential_id,
+    marcadorDaInstalacao: CHAVE_DA_INSTALACAO,
+    credenciais: props.credentials.map((c) => ({ provider: c.provider, validada: credentialStatus(c) === "validated" })),
+  });
   const credSt = cred ? credentialStatus(cred) : null;
   const channelSession = props.channelSessions.find((c) => c.id === form.channel_session_id);
   const modelMeta = useModelMeta(form.provider, form.model);
@@ -775,6 +784,7 @@ export function AgentForm(props: Props) {
           onToolIdsChange={(ids) => patch({ operator_tool_ids: ids })}
           modeloDoConversador={form.model}
           agentId={props.mode === "edit" ? props.agent.id : null}
+          restritoAoPlano={naChaveDaInstalacao}
           disabled={disabled}
         />
       ) : null}
@@ -885,6 +895,8 @@ export function AgentForm(props: Props) {
               onChange={(modelId) => patch({ model: modelId })}
               disabled={disabled}
               id="model"
+              restritoAoPlano={naChaveDaInstalacao}
+              preselecionarPadrao
             />
             {validation.model ? (
               <p className="text-xs text-destructive">{validation.model}</p>

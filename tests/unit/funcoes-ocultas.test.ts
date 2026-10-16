@@ -27,7 +27,8 @@ describe("registro de funções ocultas", () => {
     expect(funcaoOculta("prospeccao")).toBe(true);
     expect(funcaoOculta("voz-whatsapp")).toBe(true);
     expect(funcaoOculta("conexao-telefone")).toBe(true);
-    expect(funcaoOculta("jev")).toBe(true);
+    // O Jev voltou a aparecer em 16/10/2026 (chave da instalação).
+    expect(funcaoOculta("jev")).toBe(false);
   });
 
   it("hrefOculto: caminho exato, filhos, consulta e âncora; nunca irmão de nome parecido", () => {

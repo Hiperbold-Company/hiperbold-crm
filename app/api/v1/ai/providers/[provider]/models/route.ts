@@ -11,6 +11,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import { ehProvedorSuportado } from "@/lib/ai/pontos/provedores";
+import { modelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao-leitura";
 
 export const dynamic = "force-dynamic";
 
@@ -68,5 +69,11 @@ export async function GET(
   // dublê, que devolve a lista inteira).
   const models = (data ?? []).filter((m) => m.supports_tools === true);
 
-  return ok({ models }, { requestId });
+  // Os modelos liberados na CHAVE DA INSTALAÇÃO (`MODELOS_DA_INSTALACAO`). Quem
+  // não tem chave própria desse provedor só pode escolher estes (freio de custo,
+  // aplicado de verdade no servidor); o seletor decide, com a credencial que a
+  // pessoa escolheu, se filtra o catálogo por esta lista.
+  const modelos_da_instalacao = await modelosDaInstalacao();
+
+  return ok({ models, modelos_da_instalacao }, { requestId });
 }

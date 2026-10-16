@@ -39,6 +39,8 @@ interface Props {
   modeloDoConversador: string;
   /** O agente desta página. A medida do papel é DELE — ver `ComoOPapelEstaIndo`. */
   agentId: string | null;
+  /** O agente roda na chave da instalação: o seletor só oferece os modelos liberados. */
+  restritoAoPlano?: boolean;
   disabled?: boolean;
 }
 
@@ -177,6 +179,7 @@ export function PainelDoOperador(props: Props) {
               provider={props.provider}
               value={props.model}
               onChange={props.onModelChange}
+              restritoAoPlano={props.restritoAoPlano ?? false}
               disabled={desabilitado}
               // O estado vazio é legítimo aqui e precisa ter NOME: chamá-lo de
               // "Selecione um modelo" faria parecer pendência o que é escolha.

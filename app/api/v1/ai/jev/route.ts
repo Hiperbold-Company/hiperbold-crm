@@ -29,7 +29,8 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { camadasEfetivas } from "@/lib/agent-engine/guardrails/camadas-da-org";
-import { credencialEmUsoPeloJev, PROVEDOR_DO_JEV } from "@/lib/ai/decisao/credencial";
+import { chaveDaInstalacaoDoJev } from "@/lib/ai/decisao/chave-da-instalacao";
+import { credencialEmUsoPeloJev, fonteDaChaveDoJev, PROVEDOR_DO_JEV } from "@/lib/ai/decisao/credencial";
 import {
   ESTADO_DO_MODO,
   ESTADOS_DA_TAREFA,
@@ -380,6 +381,9 @@ export async function GET(): Promise<Response> {
 
   const credenciais = credsRes.data ?? [];
   const emUso = credencialEmUsoPeloJev(credenciais);
+  // A chave de reserva da INSTALAÇÃO (`JEV_API_KEY`) vale quando a organização não
+  // tem uma utilizável. A resposta só diz SE ela existe, nunca o valor.
+  const daInstalacao = fonteDaChaveDoJev(credenciais, chaveDaInstalacaoDoJev() !== null)?.origem === "chave_da_instalacao";
   // Sem nenhuma validada, o cartão mostra a mais recente — é ela que tem o
   // motivo da recusa para explicar.
   const mostrada =
@@ -404,8 +408,11 @@ export async function GET(): Promise<Response> {
         prefixoDaChave: JEV.prefixoDaChave,
       },
       chave: {
-        existe: mostrada !== null,
-        validada: emUso !== null,
+        existe: mostrada !== null || daInstalacao,
+        // Com a reserva da instalação, o Jev tem chave para a rede mesmo sem credencial validada da empresa.
+        validada: emUso !== null || daInstalacao,
+        // `true`: quem manda a pergunta é a chave da Hiperbold no servidor (a empresa não precisa colar a dela).
+        da_instalacao: daInstalacao,
         credencial_id: mostrada?.id ?? null,
         rotulo: mostrada?.label ?? null,
         erro_de_validacao: mostrada?.validation_error ?? null,
@@ -501,7 +508,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       .eq("provider", PROVEDOR_DO_JEV)
       .eq("is_active", true);
     if (credsErr) return falhaInterna("query_failed", credsErr, { requestId });
-    if (credencialEmUsoPeloJev(creds ?? []) === null) {
+    if (fonteDaChaveDoJev(creds ?? [], chaveDaInstalacaoDoJev() !== null) === null) {
       return fail(
         "jev_exige_chave_validada",
         t("Para ligar o Jev, cole a chave dele em Credenciais e espere o teste da chave passar."),

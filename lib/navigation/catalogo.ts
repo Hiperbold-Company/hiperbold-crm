@@ -528,6 +528,20 @@ export const NAV_CATALOG = [
     // "Ver tudo em IA", igual a Credenciais, Conhecimento, Memória e Skills.
   },
   {
+    // Hiperbold (16/10/2026): o cartão do Jev morava em Provedores, que está oculto
+    // (`provedores-ia`, hiperbold/FUNCOES.md). Esta é a porta própria dele, só em
+    // Configurações › IA (`configuracoes`), sem sidebar. Mesmo papel mínimo de Provedores.
+    href: "/app/ai/jev",
+    label: "Decisões rápidas (Jev)",
+    description:
+      "Classificações rápidas de mensagens com o Jev, da TypeSafe. Precisa ser ligado e aceito por um administrador.",
+    icon: "Lightbulb",
+    group: "ia",
+    section: "Montar o agente",
+    minRole: "manager",
+    configuracoes: "IA",
+  },
+  {
     href: "/app/ai/knowledge/sources",
     label: "Conhecimento",
     description: "Os materiais que o agente consulta antes de responder sobre o seu negócio.",

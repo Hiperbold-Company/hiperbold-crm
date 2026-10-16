@@ -6,6 +6,7 @@
  */
 
 import type { OrigemDaChaveLlm } from "@/lib/agent-engine/edge/llm/credentials";
+import type { OrigemGravadaDoJev } from "@/lib/ai/decisao/credencial";
 import { normalizarErro } from "@/lib/agent-engine/edge/llm/run-model-call";
 import type { ProvedorComChave } from "@/lib/ai/pontos/provedores";
 import type { OrigemDaEscolha } from "@/lib/ai/pontos/resolver";
@@ -73,9 +74,12 @@ export interface LogInvocationInput {
    * não debita: na dúvida, nunca cobrar do cliente o que ele pagou com a
    * própria chave. Quem chama só passa um valor quando o RESOLVEDOR do modelo
    * disse de quem é a chave (`origemDaChaveDoModelo`, `lib/ai/gateway-binding.ts`),
-   * nunca um palpite. O Jev (provedor `typesafe`) não passa nada aqui.
+   * nunca um palpite. O Jev (provedor `typesafe`) passa a origem que `decidirNoPonto`
+   * devolveu (`origemDaChave`, `lib/ai/decisao/ponto.ts`): a chave da instalação
+   * (`JEV_API_KEY`), gravada como `jev_da_instalacao` (NÃO debita a carteira, migration
+   * 0960), ou a da própria organização.
    */
-  origem_da_chave?: OrigemDaChaveLlm | null;
+  origem_da_chave?: OrigemDaChaveLlm | OrigemGravadaDoJev | null;
   finish_reason?: string | null;
   /**
    * Quando quem chama já tem o código canônico da falha (o Jev devolve o seu).

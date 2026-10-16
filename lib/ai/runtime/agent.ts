@@ -46,6 +46,7 @@ import { fetchParaDestinoDaOrganizacao } from "@/lib/automation/destinos-interno
 import { decidirElegibilidadeDaConversaViaSupabase } from "@/lib/ai/elegibilidade/consulta-supabase";
 import { ttlDaAutorizacaoMs } from "@/lib/ai/elegibilidade/gate";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { modeloPermitidoNaChave } from "@/lib/ai/modelos-da-instalacao-leitura";
 import { audit } from "@/lib/audit";
 import type { McpAuthResult } from "@/lib/mcp/auth";
 import type { McpContext } from "@/lib/mcp/types";
@@ -428,6 +429,8 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     let credentialApiKey: string;
     /** O endereço do provedor personalizado (#1642) — nasce junto da credencial. */
     let credentialBaseUrl: string | null = null;
+    /** A chave é a da instalação (e não uma cadastrada pela empresa)? Decide o freio de modelo abaixo. */
+    let chaveEhDaInstalacao = false;
     if (version.credential_id) {
       try {
         const credential = await loadCredential(version.credential_id, run.organization_id);
@@ -448,7 +451,21 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
         );
       }
       credentialApiKey = daInstalacao;
+      chaveEhDaInstalacao = true;
     }
+
+    // Freio de custo: na chave da instalação só rodam os modelos de
+    // `MODELOS_DA_INSTALACAO`; fora da lista vale o padrão (o ensaio não falha).
+    // Chave cadastrada pela empresa passa intacta.
+    const modeloEfetivo = (
+      await modeloPermitidoNaChave({
+        organizationId: run.organization_id,
+        origemDaChave: chaveEhDaInstalacao ? "chave_da_instalacao" : "credencial_da_organizacao",
+        provedor: version.provider,
+        modelId: version.model,
+        ponto: "agent_run",
+      })
+    ).modelId;
 
     // 5) Resolve inbound text + dispatch context.
     let inboundBody: string | null = null;
@@ -622,7 +639,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       : [];
 
     // 9) Build LM directly against the provider (BYOK credential — see buildModel doc).
-    const model = buildModel(version.provider, credentialApiKey, version.model, credentialBaseUrl);
+    const model = buildModel(version.provider, credentialApiKey, modeloEfetivo, credentialBaseUrl);
 
     // 10) Cost/token guard. Fires BEFORE the next step is taken.
     let abortReason: string | null = null;
@@ -639,7 +656,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       }
       const cost = await computeCostCents({
         provider: version.provider,
-        model: version.model,
+        model: modeloEfetivo,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
       });
@@ -683,7 +700,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     const usage = totalUsage(result.steps as Array<{ usage?: { inputTokens?: number; outputTokens?: number } }>);
     const cost = await computeCostCents({
       provider: version.provider,
-      model: version.model,
+      model: modeloEfetivo,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
     });

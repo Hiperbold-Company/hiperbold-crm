@@ -378,6 +378,13 @@ describe("CartaoDoJev — (5) ligado, decidindo", () => {
     expect(screen.getByTestId("jev-chave-conferida")).toHaveTextContent("Chave conferida com a TypeSafe");
   });
 
+  it("com a chave da instalação, o cartão diz de quem é a chave (sem pedir que a empresa cole a dela)", () => {
+    const d = decidindo();
+    montar({ ...d, chave: { ...d.chave, da_instalacao: true, credencial_id: null, rotulo: null } });
+    expect(screen.getByTestId("jev-chave-conferida")).toHaveTextContent("Usa a chave da TypeSafe da Hiperbold, no servidor");
+    expect(screen.queryByTestId("jev-chave")).toBeNull();
+  });
+
   it("controle: chave recusada não se diz conferida", () => {
     montar({ ...decidindo(), chave: { ...decidindo().chave, validada: false, erro_de_validacao: "auth_failed_401" } });
     expect(screen.queryByTestId("jev-chave-conferida")).toBeNull();

@@ -372,3 +372,114 @@ describe("a allowlist de egress deriva da mesma base do cliente", () => {
     expect(String(fetchImpl.mock.calls[0]![0])).toBe("http://127.0.0.1:4010/v1/systemone");
   });
 });
+
+describe("a chave do Jev: a da empresa, depois a da instalação, depois nada", () => {
+  const ORG = "33333333-3333-4333-8333-333333333333";
+  const PONTO = "sentiment_classify";
+  const CREDENCIAL = { api_key_encrypted: "cifra", api_key_iv: "iv", api_key_tag: "tag" };
+  const DA_INSTALACAO = "apikey_da_instalacao_segredo";
+
+  type FetchEspiado = typeof fetch & { mock: { calls: unknown[][] } };
+  const chamar = (fetchImpl: FetchEspiado, chaveDaInstalacao: () => string | null) =>
+    decidirNoPonto(
+      { ponto: PONTO, organizationId: ORG, estado: "x", perguntas: PERGUNTAS },
+      { fetchImpl, chaveDaInstalacao },
+    );
+  const bearer = (fetchImpl: FetchEspiado): string => {
+    const init = fetchImpl.mock.calls[0]![1] as { headers: Record<string, string> };
+    return init.headers.Authorization!;
+  };
+
+  it("a credencial validada da empresa vence a da instalação", async () => {
+    banco.linha = CREDENCIAL;
+    const fetchImpl = vi.fn().mockResolvedValue(ok(CORPO_OK));
+    const r = await chamar(fetchImpl, () => DA_INSTALACAO);
+
+    expect(r.ok).toBe(true);
+    expect(r.origemDaChave).toBe("credencial_da_organizacao");
+    expect(bearer(fetchImpl)).toBe("Bearer decifrada:cifra");
+  });
+
+  it("sem credencial da empresa, a chave da instalação sai para a rede e a origem diz de quem é", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(ok(CORPO_OK));
+    const r = await chamar(fetchImpl, () => `  ${DA_INSTALACAO}  `);
+
+    expect(r.ok).toBe(true);
+    expect(r.origemDaChave).toBe("jev_da_instalacao");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(bearer(fetchImpl)).toBe(`Bearer ${DA_INSTALACAO}`);
+  });
+
+  it("sem nenhuma das duas, não sai requisição e não há origem", async () => {
+    for (const vazia of [null, "", "   "]) {
+      const fetchImpl = vi.fn();
+      const r = await chamar(fetchImpl, () => vazia);
+      expect(r.ok === false && r.motivo).toBe("sem_credencial");
+      expect(r.origemDaChave).toBeNull();
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
+  });
+
+  it("a reserva da instalação NÃO dispensa a guarda: tarefa desligada, nada sai", async () => {
+    banco.settings = { jev: { ...LIGADO.jev, tarefas: { clima: { estado: "desligada" } } } };
+    const fetchImpl = vi.fn();
+    const r = await chamar(fetchImpl, () => DA_INSTALACAO);
+    expect(r.ok === false && r.motivo).toBe("sem_credencial");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("a reserva da instalação NÃO dispensa o interruptor/aceite: Jev desligado, nada sai", async () => {
+    banco.settings = {};
+    const fetchImpl = vi.fn();
+    const r = await chamar(fetchImpl, () => DA_INSTALACAO);
+    expect(r.ok === false && r.motivo).toBe("sem_credencial");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("ponto sem tarefa do Jev: nem a chave da instalação sai", async () => {
+    const fetchImpl = vi.fn();
+    const r = await decidirNoPonto(
+      { ponto: "stage_classifier", organizationId: ORG, estado: "x", perguntas: PERGUNTAS },
+      { fetchImpl, chaveDaInstalacao: () => DA_INSTALACAO },
+    );
+    expect(r.ok === false && r.motivo).toBe("sem_credencial");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("leitura do banco que falha: sem saber se a empresa consentiu, nada sai, nem a reserva", async () => {
+    banco.erro = { name: "PostgrestError", message: "relation does not exist" };
+    const fetchImpl = vi.fn();
+    const r = await chamar(fetchImpl, () => DA_INSTALACAO);
+    expect(r.ok === false && r.motivo).toBe("sem_credencial");
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(avisos).toHaveLength(1);
+  });
+
+  it("decifragem da credencial da empresa quebrada: cai na da instalação, e o log não leva segredo", async () => {
+    banco.linha = CREDENCIAL;
+    decifragem.falha = true;
+    const fetchImpl = vi.fn().mockResolvedValue(ok(CORPO_OK));
+    const r = await chamar(fetchImpl, () => DA_INSTALACAO);
+
+    expect(r.origemDaChave).toBe("jev_da_instalacao");
+    expect(avisos).toHaveLength(1);
+    expect(JSON.stringify(avisos)).not.toContain("apikey_segredo");
+    expect(JSON.stringify(avisos)).not.toContain(DA_INSTALACAO);
+  });
+
+  it("host fora da allowlist: a chave da instalação não sai", async () => {
+    const fetchImpl = vi.fn();
+    const r = await decidirNoPonto(
+      { ponto: PONTO, organizationId: ORG, estado: "x", perguntas: PERGUNTAS },
+      { fetchImpl, chaveDaInstalacao: () => DA_INSTALACAO, baseUrl: "https://intruso.invalido", hostsPermitidos: ["exemplo.invalido"] },
+    );
+    expect(r.ok).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("chaveDaOrganizacao segue respondendo só pela empresa (a reserva é de resolverChaveDoJev)", async () => {
+    expect(await chaveDaOrganizacao(ORG, PONTO)).toBeNull();
+    banco.linha = CREDENCIAL;
+    expect(await chaveDaOrganizacao(ORG, PONTO)).toBe("decifrada:cifra");
+  });
+});

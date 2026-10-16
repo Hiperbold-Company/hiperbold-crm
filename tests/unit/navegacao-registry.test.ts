@@ -193,8 +193,8 @@ describe("hubSections", () => {
       "/app/settings/tenant/agenda",
       // Comandas e Contas e recebimentos: ocultas em 16/10/2026 (hiperbold/FUNCOES.md).
     ]);
-    // Provedores oculto (16/10/2026); Credenciais ficou, como recurso avançado.
-    expect(por("IA")).toEqual(["/app/ai/followups", "/app/ai/routers", "/app/ai/credentials"]);
+    // Provedores oculto (16/10/2026); Credenciais ficou, como recurso avançado; o Jev tem porta própria.
+    expect(por("IA")).toEqual(["/app/ai/followups", "/app/ai/routers", "/app/ai/credentials", "/app/ai/jev"]);
     // Meta Ads oculto (16/10/2026).
     expect(por("Canais")).toEqual(["/app/connections", "/app/webhooks"]);
     // Sem duplicar a mesma tela em duas seções do mesmo hub.

@@ -421,6 +421,49 @@ describe("o que se grava", () => {
     expect(consultas[0]!.params[8]).toBe("jev_teste");
   });
 
+  it("a origem da chave vai para llm_calls.origem_da_chave, no teste e no atendimento, apontando o parâmetro certo", async () => {
+    for (const origem of ["jev_da_instalacao", "credencial_da_organizacao"] as const) {
+      const teste = poolCom(LIGADO);
+      await registrarRoteadorDoJev(teste.pool, {
+        organizationId: novaOrg(),
+        contactId: null,
+        jobId: null,
+        jev: { ...ESCOLHA, origemDaChave: origem },
+        decidiu: false,
+        observacao: null,
+      });
+      const t = teste.consultas[0]!;
+      expect(t.params.at(-1)).toBe(origem);
+      expect(t.sql).toMatch(new RegExp(`origem_da_chave\\)[\\s\\S]*\\$${t.params.length}\\)`));
+
+      const turno = poolCom(LIGADO);
+      await registrarRoteadorDoJev(turno.pool, {
+        organizationId: novaOrg(),
+        contactId: null,
+        jobId: null,
+        jev: { ...ESCOLHA, origemDaChave: origem },
+        decidiu: true,
+        observacao: { conversationId: "c", messageId: "m", rotuloDoJev: "a", rotuloDaIa: "b" },
+      });
+      const a = turno.consultas[0]!;
+      expect(a.params.at(-1)).toBe(origem);
+      expect(a.sql).toMatch(new RegExp(`\\$${a.params.length}\\)`));
+    }
+  });
+
+  it("sem origem informada grava nulo (nulo nunca debita a carteira)", async () => {
+    const { pool, consultas } = poolCom(LIGADO);
+    await registrarRoteadorDoJev(pool, {
+      organizationId: novaOrg(),
+      contactId: null,
+      jobId: null,
+      jev: ESCOLHA,
+      decidiu: false,
+      observacao: null,
+    });
+    expect(consultas[0]!.params.at(-1)).toBeNull();
+  });
+
   it("falha do banco na gravação não lança", async () => {
     const pool = { query: vi.fn().mockRejectedValue(new Error("banco fora")) } as unknown as pg.Pool;
     const aviso = vi.spyOn(console, "warn").mockImplementation(() => undefined);

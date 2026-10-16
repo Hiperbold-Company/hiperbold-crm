@@ -235,6 +235,22 @@ describe("registrarManipulacaoDoJev", () => {
     expect(consultas[0]!.params.at(-1)).toBe(origem);
   });
 
+  it("a origem da chave vai para llm_calls.origem_da_chave (nula quando não informada)", async () => {
+    const { pool, consultas } = poolCom(null);
+    await registrarManipulacaoDoJev(pool, {
+      ...registro("low", "high"),
+      jev: { ...JEV_ALTO, origemDaChave: "jev_da_instalacao" },
+    });
+    await registrarManipulacaoDoJev(pool, registro("low", "high"));
+    const [com, sem] = consultas;
+    expect(com!.sql).toMatch(/origem_da_escolha, origem_da_chave\)/);
+    expect(com!.sql).toMatch(/'ok', \$19, \$18\)/);
+    expect(com!.params[17]).toBe("jev_da_instalacao");
+    expect(sem!.params[17]).toBeNull();
+    // A origem da ESCOLHA segue por último.
+    expect(com!.params.at(-1)).toBe("jev");
+  });
+
   it("o retry do job não conta a mesma mensagem duas vezes na concordância", async () => {
     const { pool, consultas } = poolCom(null);
     await registrarManipulacaoDoJev(pool, registro("none", "none"));

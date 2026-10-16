@@ -51,6 +51,17 @@ import { describe, expect, it } from "vitest";
 
 const BASELINE = join(process.cwd(), "supabase", "baseline.sql");
 
+/**
+ * Exceções DECLARADAS, com o motivo. A regra acima existe porque o bloco antigo falha ao re-aplicar
+ * num banco com linhas do vocabulário novo. Aqui o bloco antigo NÃO falha: ele é guardado por
+ * `if not exists (... conname = ...)`, então num banco que já tem a constraint ele não faz nada, e é
+ * IMUTÁVEL (um teste de planos-carteira-migration exige que o bloco do baseline seja idêntico à
+ * migration 0906, já aplicada em produção). A ampliação mora num bloco só, o da 0960.
+ */
+const EXCECOES_DECLARADAS: ReadonlySet<string> = new Set([
+  "llm_calls_origem_da_chave_check", // 0906 (bloco imutável, guardado por if not exists) + 0960 (jev_da_instalacao)
+]);
+
 /** Nomes de constraint em cada `add constraint <nome>`, na ordem do arquivo. */
 function constraintsAdicionadas(sql: string): string[] {
   return [...sql.matchAll(/add\s+constraint\s+([a-z0-9_]+)/gi)]
@@ -69,7 +80,7 @@ describe("baseline.sql — uma constraint, um bloco", () => {
     }
 
     const repetidas = [...contagem.entries()]
-      .filter(([, n]) => n > 1)
+      .filter(([nome, n]) => n > 1 && !EXCECOES_DECLARADAS.has(nome))
       .map(([nome, n]) => `${nome} (${n}×)`);
 
     expect(
