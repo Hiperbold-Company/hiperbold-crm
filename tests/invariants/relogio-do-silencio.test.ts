@@ -37,6 +37,7 @@ const TIPOS: Array<[tipo: string, quebraOSilencio: boolean, porque: string]> = [
   ["lead_edited", true, "humano mexeu nos dados"],
   ["stage_changed", true, "humano moveu o negócio"],
   ["next_action_approved", true, "humano decidiu agir"],
+  ["lead_reregistered", true, "a PESSOA se cadastrou de novo por uma fonte: levantou a mão agora (0958)"],
   ["send_vetoed", false, "o envio não chegou ao cliente"],
   ["handoff_triggered", false, "passar para humano é promessa, não atendimento"],
   ["next_action_dismissed", false, "decidiu NÃO agir: fica sem próximo passo"],

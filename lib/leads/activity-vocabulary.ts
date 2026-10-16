@@ -86,6 +86,13 @@ export type ActivityType =
    */
   | "lead_needs_review"
   /**
+   * A pessoa se cadastrou DE NOVO por uma fonte de captação (formulário/webhook)
+   * tendo já um negócio ABERTO no funil da fonte. O CRM não cria outro negócio:
+   * registra isto na linha do tempo do que existe e mantém a etapa. Quebra o
+   * silêncio do negócio (migration 0958) — quem se cadastra de novo está vivo.
+   */
+  | "lead_reregistered"
+  /**
    * A TROCA DE COMANDO ENTRE PESSOAS. A ida e a volta IA↔humano já estavam aqui
    * (`handoff_triggered`/`handoff_resolved`); assumir, transferir e liberar não
    * geravam linha nenhuma — grep nas três rotas devolvia zero. O efeito era uma
@@ -246,6 +253,7 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   consent_declined: "Consentimento de contato recusado no formulário",
   lead_disqualified: "Desqualificado na triagem inicial",
   lead_needs_review: "Aguardando revisão humana",
+  lead_reregistered: "Cadastrou-se de novo",
   // Rótulos com OBJETO, nunca verbo nu: "Liberou" sozinho não diz o quê, e numa
   // clínica "liberar" é o que se faz com um exame. O resto do arquivo já segue
   // essa régua ("Retorno agendado", "Demanda encerrada").

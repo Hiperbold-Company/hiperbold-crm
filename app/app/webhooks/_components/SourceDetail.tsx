@@ -144,7 +144,10 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
             </Badge>
           </div>
           <SheetDescription>
-            {t("Cada envio para o endereço abaixo vira um lead no seu funil, automaticamente.")}
+            {t("Cada envio para o endereço abaixo vira um lead no seu funil, automaticamente.")}{" "}
+            {t(
+              "Se a pessoa já tiver um lead aberto neste funil, o CRM não cria outro: registra o recadastro no histórico e mantém a etapa.",
+            )}
           </SheetDescription>
         </SheetHeader>
 

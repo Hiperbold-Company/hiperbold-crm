@@ -65386,6 +65386,79 @@ $agent_worker_reembolso$;
 
 reset lock_timeout;
 
+-- ---- recadastro pela fonte de captação: desfecho novo e relógio do silêncio (migration 0958, fork Hiperbold) ----
+-- 0958, quem já tem lead aberto no funil da fonte e se cadastra de novo não ganha outro lead (fork Hiperbold).
+--
+-- Faixa 09xx reservada ao fork (ver 0901). O desfecho 'recadastro' entra no CHECK de
+-- webhook_lead_captures.outcome e a atividade lead_reregistered entra na lista positiva do relógio do
+-- silêncio (fn_update_last_activity_at, create or replace: mesmo ACL, nenhuma função nova). Reaplicável.
+-- Entra ANTES da VARREDURA anon porque recria uma função.
+
+-- 1. O desfecho "recadastro" no histórico de captação.
+do $outcome_recadastro$
+begin
+  if not exists (
+    select 1 from pg_constraint
+     where conname = 'webhook_lead_captures_outcome_check'
+       and conrelid = 'public.webhook_lead_captures'::regclass
+       and pg_get_constraintdef(oid) like '%recadastro%'
+  ) then
+    alter table public.webhook_lead_captures drop constraint if exists webhook_lead_captures_outcome_check;
+    alter table public.webhook_lead_captures
+      add constraint webhook_lead_captures_outcome_check
+      check (outcome in ('criado', 'duplicado', 'recusado', 'recadastro'));
+  end if;
+end
+$outcome_recadastro$;
+
+comment on column public.webhook_lead_captures.outcome is
+  'criado = virou lead novo; duplicado = mesmo external_id já capturado antes (retry da ferramenta); recusado = não entrou (reject_reason diz por quê); recadastro = a pessoa já tinha lead ABERTO no funil da fonte, então nenhum lead foi criado e o recadastro foi registrado na timeline dele (lead_id aponta para ele).';
+
+-- 2. Quem se cadastra de novo quebra o silêncio do negócio.
+create or replace function public.fn_update_last_activity_at()
+  returns trigger
+  language plpgsql
+  set search_path to 'public', 'pg_temp'
+as $function$
+begin
+  -- LISTA POSITIVA: só isto conta como "alguém tocou este negócio". Tipo que
+  -- não está aqui NÃO quebra o silêncio — inclusive tipo que ainda não existe.
+  -- Ver o cabeçalho da 0079 antes de acrescentar linha nesta lista.
+  if new.type not in (
+    'ai_turn',              -- a IA falou com o cliente
+    'note',                 -- alguém registrou trabalho no negócio
+    'lead_edited',          -- humano mexeu nos dados
+    'stage_changed',        -- humano moveu o negócio
+    'next_action_approved', -- humano decidiu agir
+    -- (0235) Uma ligação ATENDIDA é interação, e das mais fortes: alguém falou
+    -- com o cliente. Sem esta linha o Radar de Risco seguia marcando como frio
+    -- quem tinha acabado de passar vinte minutos ao telefone, e a IA propunha
+    -- "retomar contato" com quem nunca ficou sem contato.
+    --
+    -- `voice_call_missed` NÃO entra, e a ausência é a regra e não esquecimento:
+    -- telefone que tocou sem resposta é constatação de silêncio, não quebra
+    -- dele. É exatamente a assimetria que a 0079 existe para preservar.
+    'voice_call',
+    -- (0958) A PESSOA se cadastrou de novo por uma fonte de captação: o cliente
+    -- levantou a mão agora. É interação do lado dele, a mais forte que existe, e
+    -- o negócio que ficou parado esperando não pode seguir marcado como frio.
+    'lead_reregistered'
+  ) then
+    return new;
+  end if;
+
+  update public.crm_leads
+     set last_activity_at = greatest(coalesce(last_activity_at, '-infinity'::timestamptz), new.performed_at)
+   where id = new.lead_id;
+
+  if new.contact_id is not null then
+    update public.contacts
+       set last_activity_at = greatest(coalesce(last_activity_at, '-infinity'::timestamptz), new.performed_at)
+     where id = new.contact_id;
+  end if;
+  return new;
+end$function$;
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

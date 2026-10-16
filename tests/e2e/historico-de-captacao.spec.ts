@@ -49,6 +49,9 @@ function loadCreds(): Creds {
 
 const creds = loadCreds();
 const ts = Date.now();
+// Telefone único por execução: desde a 0958 quem já tem lead ABERTO no funil da fonte não ganha
+// outro (recadastro), então um número fixo faria a 2ª execução (ou o retry) não criar lead.
+const TELEFONE_DO_LEAD = `119${String(ts).slice(-8)}`;
 const SOURCE_NAME = `E2E Captação ${ts}`;
 const LEAD_NAME = `Beatriz Captada ${ts}`;
 const IP_DE_TESTE = "203.0.113.42";
@@ -107,7 +110,7 @@ test.describe("histórico de leads captados", () => {
         },
         data: {
           nome: LEAD_NAME,
-          telefone: "11955554444",
+          telefone: TELEFONE_DO_LEAD,
           email: `beatriz${ts}@exemplo.test`,
           segmento: "Clínica odontológica",
           utm_source: "instagram",
@@ -143,7 +146,7 @@ test.describe("histórico de leads captados", () => {
 
       // 2. Com que dados — inclusive o campo do formulário que não é canônico.
       await expect(painel.getByText("Clínica odontológica")).toBeVisible();
-      await expect(painel.getByText("11955554444")).toBeVisible();
+      await expect(painel.getByText(TELEFONE_DO_LEAD)).toBeVisible();
 
       // 3. De onde — IP, página e UTM.
       await expect(painel.getByText(IP_DE_TESTE)).toBeVisible();

@@ -300,6 +300,7 @@ export const AUDIT_ACTIONS = [
   "webhook.source_updated",
   "webhook.source_deleted",
   "webhook.lead_received",
+  "webhook.lead_reregistered",
   "webhook.inbound_invalid_signature",
   "automation.rule_created",
   "automation.rule_updated",

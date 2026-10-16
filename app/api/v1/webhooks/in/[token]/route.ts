@@ -33,7 +33,8 @@ import {
   mapRdStationPayload,
   type RdStationMapped,
 } from "@/lib/webhooks/rdstation";
-import { origemDaPagina, registrarCaptacao } from "@/lib/webhooks/captacao";
+import { limitarCampos, origemDaPagina, registrarCaptacao } from "@/lib/webhooks/captacao";
+import { decidirRecadastroDoContato } from "@/lib/webhooks/recadastro";
 import { ipDoClienteParaInet } from "@/lib/http/ip-do-cliente";
 import {
   TURNSTILE_CAMPO_DO_FORMULARIO,
@@ -579,6 +580,154 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     }
   }
 
+  // ELEGIBILIDADE DA IA (caso 1): uma submissão do Respondi é uma origem
+  // elegível — autoriza o contato a ser atendido automaticamente. Só tem efeito
+  // nos canais com o gate `allowlist` ligado; canal 'open' ignora a coluna.
+  // Consent explicitamente NEGADO não autoriza (LGPD); `not_found` (o formulário
+  // não pergunta) autoriza — mesma régua do `consentDoEnvio` acima.
+  const consentNegado =
+    respondiMapped != null &&
+    respondiMapped.consent.detectedVia !== "not_found" &&
+    !respondiMapped.consent.granted;
+  // Só quem PROVA a origem autoriza (D-109): o formato Respondi é público e qualquer um
+  // o imita, então numa fonte sem segredo (ou sem assinatura conferida) ele não vale
+  // como autorização para a IA atender o contato. O lead e o contato entram do mesmo
+  // jeito; só a autorização fica para um humano.
+  const fonteComOrigemProvada = Boolean(sourceSecret) && validSignature === true;
+  const autorizarIASeProvado = async (contato: string): Promise<void> => {
+    if (!respondiMapped || consentNegado || !fonteComOrigemProvada) return;
+    const formId = respondiMapped.custom_fields.respondi_form_id ?? "form";
+    const submissionId = respondiMapped.custom_fields.respondi_respondent_id ?? "s";
+    await autorizarContatoParaIA(admin, {
+      organizationId: source.organization_id,
+      contactId: contato,
+      reason: `respondi:${formId}:${submissionId}`,
+    });
+  };
+
+  /**
+   * RECADASTRO (decisão do dono do produto, 16/10/2026): quem já tem um lead
+   * ABERTO no funil desta fonte não ganha um segundo. O CRM registra o
+   * recadastro na linha do tempo do lead que existe, mantém a etapa e responde
+   * como se o lead tivesse sido recebido (mesmo formato do reenvio).
+   *
+   * Fica DEPOIS da reconciliação de consentimento (o contato já está resolvido e
+   * a resposta deste envio já foi carimbada nele) e ANTES de tudo o que é de
+   * lead novo: nada daqui chama `createLeadHandler`, então nenhum `lead.created`
+   * nasce — e sem ele não há automação de 1º toque, fluxo de follow-up nem
+   * contagem no teto de leads do plano. Também não toca em `crm_leads`: UPDATE
+   * ali emite evento e invalida a trava otimista do card; o relógio do negócio
+   * anda pela própria atividade (trigger `fn_update_last_activity_at`).
+   */
+  if (contactId) {
+    const decisao = await decidirRecadastroDoContato(admin, {
+      organizationId: source.organization_id as string,
+      contactId,
+      pipelineId: source.default_pipeline_id as string,
+    });
+    if (decisao.acao === "recadastrar") {
+      const leadExistenteId = decisao.leadId;
+
+      // O mesmo envio reentregue pela ferramenta (mesmo external_id) não escreve
+      // uma segunda linha na timeline: vira "duplicado", como no caminho do lead
+      // novo. O external_id do recadastro mora no payload da atividade, porque o
+      // lead que existe pertence a outro envio.
+      let reenvioDoMesmoRecadastro = false;
+      if (externalId) {
+        const { data: anteriores } = await admin
+          .from("crm_lead_activities")
+          .select("payload")
+          .eq("organization_id", source.organization_id)
+          .eq("lead_id", leadExistenteId)
+          .eq("type", "lead_reregistered")
+          .order("performed_at", { ascending: false })
+          .limit(200);
+        reenvioDoMesmoRecadastro = (anteriores ?? []).some(
+          (a) => (a.payload as { external_id?: unknown } | null)?.external_id === externalId,
+        );
+      }
+
+      if (reenvioDoMesmoRecadastro) {
+        await registrarCaptacao(admin, {
+          ...fonteDaCaptacao,
+          ...origemDaCaptacao,
+          ...dadosDaCaptacao,
+          leadId: leadExistenteId,
+          contactId,
+          outcome: "duplicado",
+        });
+        return respondWithLead(leadExistenteId);
+      }
+
+      const atividade = await emitLeadActivity(admin, {
+        organizationId: source.organization_id,
+        leadId: leadExistenteId,
+        contactId,
+        type: "lead_reregistered",
+        sourceModule: "webhook",
+        sourceId: source.id,
+        actor: { type: "webhook_source", id: source.id },
+        // Sem PII: o `reason` aparece na tela e no export. O que foi recebido vai
+        // no payload, que a anonimização do contato apaga (cascata da LGPD).
+        reason: `Cadastrou-se de novo pela fonte ${source.name}.`,
+        payload: {
+          webhook_source_id: source.id,
+          source_name: source.name,
+          ...(externalId ? { external_id: externalId } : {}),
+          recebido: {
+            nome: mapped.name,
+            telefone: mapped.phone,
+            email: mapped.email,
+            campos: limitarCampos(mapped.custom_fields),
+            origem: mapped.source_metadata,
+          },
+          ...(consentDoEnvio && respondiMapped && !respondiMapped.consent.granted
+            ? { consentimento: "recusado" }
+            : {}),
+        },
+      });
+      if (!atividade.ok) {
+        // A captação não cai por causa da timeline: o histórico de "Leads
+        // recebidos" abaixo guarda o envio inteiro de qualquer jeito.
+        logger.error("[webhooks.inbound] lead_reregistered activity failed", {
+          webhookSourceId: source.id,
+          organizationId: source.organization_id,
+          leadId: leadExistenteId,
+          error: atividade.error,
+        });
+      }
+
+      await admin
+        .from("webhook_sources")
+        .update({ last_received_at: new Date().toISOString() })
+        .eq("id", source.id);
+
+      await audit({
+        action: "webhook.lead_reregistered",
+        organizationId: source.organization_id,
+        resourceType: "crm_lead",
+        resourceId: leadExistenteId,
+        requestId,
+        metadata: { webhook_source_id: source.id },
+      });
+
+      await registrarCaptacao(admin, {
+        ...fonteDaCaptacao,
+        ...origemDaCaptacao,
+        ...dadosDaCaptacao,
+        leadId: leadExistenteId,
+        contactId,
+        outcome: "recadastro",
+      });
+
+      // A autorização da IA é do CONTATO (o formulário provado o autoriza a ser
+      // atendido), não do lead: vale também no recadastro, como valia antes.
+      await autorizarIASeProvado(contactId);
+
+      return respondWithLead(leadExistenteId);
+    }
+  }
+
   // Classificação inicial (só Respondi por ora — os motivos de
   // desqualificação/revisão e o campo de orçamento são específicos do form
   // "Imobiliárias e Incorporadoras"; um webhook genérico não tem
@@ -770,29 +919,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     outcome: "criado",
   });
 
-  // ELEGIBILIDADE DA IA (caso 1): uma submissão do Respondi é uma origem
-  // elegível — autoriza o contato a ser atendido automaticamente. Só tem efeito
-  // nos canais com o gate `allowlist` ligado; canal 'open' ignora a coluna.
-  // Consent explicitamente NEGADO não autoriza (LGPD); `not_found` (o formulário
-  // não pergunta) autoriza — mesma régua do `consentDoEnvio` acima.
-  const consentNegado =
-    respondiMapped != null &&
-    respondiMapped.consent.detectedVia !== "not_found" &&
-    !respondiMapped.consent.granted;
-  // Só quem PROVA a origem autoriza (D-109): o formato Respondi é público e qualquer um
-  // o imita, então numa fonte sem segredo (ou sem assinatura conferida) ele não vale
-  // como autorização para a IA atender o contato. O lead e o contato entram do mesmo
-  // jeito; só a autorização fica para um humano.
-  const fonteComOrigemProvada = Boolean(sourceSecret) && validSignature === true;
-  if (respondiMapped && contactId && !consentNegado && fonteComOrigemProvada) {
-    const formId = respondiMapped.custom_fields.respondi_form_id ?? "form";
-    const submissionId = respondiMapped.custom_fields.respondi_respondent_id ?? "s";
-    await autorizarContatoParaIA(admin, {
-      organizationId: source.organization_id,
-      contactId,
-      reason: `respondi:${formId}:${submissionId}`,
-    });
-  }
+  // ELEGIBILIDADE DA IA (caso 1): ver `autorizarIASeProvado`, definido acima.
+  if (contactId) await autorizarIASeProvado(contactId);
 
   // Captação: drena lead.created e inscreve no fluxo neste mesmo request.
   // Sem isto, numa instalação sem cron de 1 min (relógio HTTP), o gatilho fica pending.

@@ -1021,6 +1021,11 @@ describe("POST /api/v1/webhooks/in/[token] — classificação inicial (2026-08-
     const primeiro = respondiPayload("resp-int-rev-a-0011", telefone, "maria.exemplo+0011a@example.com");
     const res1 = await POST(jsonReq(TOKEN_RESPONDI, primeiro), reqCtx(TOKEN_RESPONDI));
     expect(res1.status).toBe(200);
+    // Desde a 0958 quem tem lead ABERTO no funil da fonte não ganha outro: para o
+    // segundo envio ser um lead NOVO (que é o que a classificação inicial mede),
+    // o primeiro precisa ter sido encerrado.
+    const leadId1 = ((await res1.json()) as { data: { lead_id: string } }).data.lead_id;
+    sql(`update public.crm_leads set status = 'won', closed_at = now() where id = '${leadId1}'`);
 
     const segundo = respondiPayload("resp-int-rev-b-0011", telefone, "maria.exemplo+0011b@example.com", (p) => {
       const respondent = p.respondent as Record<string, unknown>;
@@ -1230,7 +1235,14 @@ describe("POST /api/v1/webhooks/in/[token] — RD Station (envelope leads[])", (
   });
 
   it("rd 2 — MESMO event_uuid reenviado NÃO duplica: 200 com o lead existente", async () => {
-    const payload = rdStationEnvelope({ eventUuid: "aaaa0002-0000-4000-8000-000000000002", leadId: "5035999002" });
+    const payload = rdStationEnvelope({
+      eventUuid: "aaaa0002-0000-4000-8000-000000000002",
+      leadId: "5035999002",
+      // Telefone e e-mail próprios (o e-mail repetido casa o mesmo contato): com os de outro caso, o lead aberto dele faria este
+      // envio virar recadastro (0958) e o caso deixaria de medir a idempotência.
+      mobilePhone: "+55 (11) 97777-0002",
+      email: "maria.rd.0002@example.com",
+    });
     const first = await POST(jsonReq(TOKEN_RDSTATION, payload), reqCtx(TOKEN_RDSTATION));
     const firstId = ((await first.json()) as { data: { lead_id: string } }).data.lead_id;
 
@@ -1246,7 +1258,7 @@ describe("POST /api/v1/webhooks/in/[token] — RD Station (envelope leads[])", (
   });
 
   it("rd 3 — sem event_uuid: usa rdstation:lead:<id> como chave de idempotência", async () => {
-    const payload = rdStationEnvelope({ eventUuid: null, leadId: "5035999003" });
+    const payload = rdStationEnvelope({ eventUuid: null, leadId: "5035999003", mobilePhone: "+55 (11) 97777-0003", email: "maria.rd.0003@example.com" });
     const res = await POST(jsonReq(TOKEN_RDSTATION, payload), reqCtx(TOKEN_RDSTATION));
     expect(res.status).toBe(200);
     const leadId = ((await res.json()) as { data: { lead_id: string } }).data.lead_id;
@@ -1342,5 +1354,107 @@ describe("POST /api/v1/webhooks/in/[token] — RD Station (envelope leads[])", (
     const lead = rows(`select currency, organization_id from public.crm_leads where id = '${data.lead_id}'`)[0]!;
     expect(lead.organization_id).toBe(org);
     expect(lead.currency).toBe("EUR");
+  });
+});
+
+/**
+ * RECADASTRO (decisão do dono do produto, 16/10/2026) contra o banco de verdade:
+ * a pessoa que já tem lead ABERTO no funil da fonte e se cadastra de novo não
+ * ganha outro lead. Cobre o que o teste unitário não alcança — o CHECK de
+ * `webhook_lead_captures.outcome` aceitando `recadastro`, o relógio do silêncio
+ * andando pela atividade nova e a ausência de um segundo `lead.created`.
+ */
+describe("POST /api/v1/webhooks/in/[token] — recadastro (migration 0958)", () => {
+  const eventosLeadCriado = (leadId: string) =>
+    Number(
+      rows(
+        `select count(*) as n from public.event_log where event_type = 'lead.created' and entity_kind = 'crm_lead' and entity_id = '${leadId}'`,
+      )[0]!.n,
+    );
+
+  it("2º envio do mesmo telefone: um lead só, etapa intacta, atividade na timeline, relógio do silêncio andou e captação `recadastro`", async () => {
+    const telefone = "11955550101";
+    const e164 = "+5511955550101";
+
+    const r1 = await POST(jsonReq(TOKEN_JSON, { nome: "Recad Um", telefone }), reqCtx(TOKEN_JSON));
+    const leadId = ((await r1.json()) as { data: { lead_id: string } }).data.lead_id;
+    const antes = rows(`select stage_id, last_activity_at from public.crm_leads where id = '${leadId}'`)[0]!;
+    expect(antes.last_activity_at).toBeNull();
+
+    const r2 = await POST(
+      jsonReq(TOKEN_JSON, { nome: "Recad Um", telefone, cidade: "Varginha" }),
+      reqCtx(TOKEN_JSON),
+    );
+    expect(r2.status).toBe(200);
+    expect(((await r2.json()) as { data: { lead_id: string } }).data.lead_id).toBe(leadId);
+
+    const contactId = rows(`select contact_id from public.crm_leads where id = '${leadId}'`)[0]!
+      .contact_id as string;
+    expect(
+      Number(
+        rows(
+          `select count(*) as n from public.crm_leads where organization_id = '${GOV_ORG}' and contact_id = '${contactId}'`,
+        )[0]!.n,
+      ),
+    ).toBe(1);
+
+    const depois = rows(`select stage_id, last_activity_at from public.crm_leads where id = '${leadId}'`)[0]!;
+    expect(depois.stage_id).toBe(antes.stage_id);
+    expect(depois.last_activity_at).not.toBeNull();
+
+    const atividades = rows(
+      `select type, reason, payload from public.crm_lead_activities where lead_id = '${leadId}' and type = 'lead_reregistered'`,
+    );
+    expect(atividades).toHaveLength(1);
+    expect(atividades[0]!.reason).toBe("Cadastrou-se de novo pela fonte JSON source.");
+    expect((atividades[0]!.payload as { recebido: { telefone: string } }).recebido.telefone).toBe(e164);
+
+    expect(eventosLeadCriado(leadId)).toBe(1);
+
+    const captacoes = rows(
+      `select outcome, lead_id from public.webhook_lead_captures where contact_id = '${contactId}' order by received_at, id`,
+    );
+    expect(captacoes.map((c) => c.outcome)).toEqual(["criado", "recadastro"]);
+    expect(captacoes[1]!.lead_id).toBe(leadId);
+  });
+
+  it("lead ganho no funil: o próximo envio é uma nova oportunidade e cria outro lead", async () => {
+    const telefone = "11955550102";
+    const r1 = await POST(jsonReq(TOKEN_JSON, { nome: "Recad Dois", telefone }), reqCtx(TOKEN_JSON));
+    const primeiro = ((await r1.json()) as { data: { lead_id: string } }).data.lead_id;
+    const contactId = rows(`select contact_id from public.crm_leads where id = '${primeiro}'`)[0]!
+      .contact_id as string;
+
+    // O CHECK do funil exige etapa de ganho para o status `won`: a fixture usa a
+    // própria `status` direto, como o resto deste arquivo faz com `sql()`.
+    sql(`update public.crm_leads set status = 'won', closed_at = now() where id = '${primeiro}'`);
+
+    const r2 = await POST(jsonReq(TOKEN_JSON, { nome: "Recad Dois", telefone }), reqCtx(TOKEN_JSON));
+    const segundo = ((await r2.json()) as { data: { lead_id: string } }).data.lead_id;
+    expect(segundo).not.toBe(primeiro);
+    expect(
+      Number(
+        rows(`select count(*) as n from public.crm_leads where contact_id = '${contactId}'`)[0]!.n,
+      ),
+    ).toBe(2);
+    expect(eventosLeadCriado(segundo)).toBe(1);
+    expect(
+      rows(`select count(*) as n from public.crm_lead_activities where type = 'lead_reregistered' and contact_id = '${contactId}'`)[0]!.n,
+    ).toBe(0);
+  });
+
+  it("o CHECK do histórico de captação aceita `recadastro` e continua recusando desfecho desconhecido", () => {
+    const def = rows(
+      `select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'webhook_lead_captures_outcome_check' and conrelid = 'public.webhook_lead_captures'::regclass`,
+    );
+    expect(def).toHaveLength(1);
+    for (const v of ["criado", "duplicado", "recusado", "recadastro"]) {
+      expect(String(def[0]!.def)).toContain(`'${v}'`);
+    }
+    expect(() =>
+      sql(
+        `insert into public.webhook_lead_captures (organization_id, source_name, outcome) values ('${GOV_ORG}', 'x', 'inventado')`,
+      ),
+    ).toThrow();
   });
 });

@@ -40,12 +40,14 @@ export const DESFECHO_LABEL: Record<DesfechoDaCaptacao, string> = {
   criado: "Virou lead",
   duplicado: "Reenvio",
   recusado: "Não entrou",
+  recadastro: "Recadastro",
 };
 
 const DESFECHO_VARIANTE: Record<DesfechoDaCaptacao, "success" | "neutral" | "error"> = {
   criado: "success",
   duplicado: "neutral",
   recusado: "error",
+  recadastro: "neutral",
 };
 
 /**
@@ -161,6 +163,7 @@ export function CapturasTab() {
                 <SelectItem value="criado">{t(DESFECHO_LABEL.criado)}</SelectItem>
                 <SelectItem value="duplicado">{t(DESFECHO_LABEL.duplicado)}</SelectItem>
                 <SelectItem value="recusado">{t(DESFECHO_LABEL.recusado)}</SelectItem>
+                <SelectItem value="recadastro">{t(DESFECHO_LABEL.recadastro)}</SelectItem>
               </SelectContent>
             </Select>
           </div>

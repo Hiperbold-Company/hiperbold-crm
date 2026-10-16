@@ -4901,6 +4901,11 @@ export const DICIONARIO: Traducoes = {
   "Virou lead": { es: "Se convirtió en lead" },
   Reenvio: { es: "Reenvío" },
   "Não entrou": { es: "No entró" },
+  Recadastro: { es: "Nuevo registro" },
+  "Cadastrou-se de novo": { es: "Se registró de nuevo" },
+  "Se a pessoa já tiver um lead aberto neste funil, o CRM não cria outro: registra o recadastro no histórico e mantém a etapa.": {
+    es: "Si la persona ya tiene un lead abierto en este embudo, el CRM no crea otro: registra el nuevo registro en el historial y mantiene la etapa.",
+  },
   "Criar/mover lead no funil": { es: "Crear/mover lead en el embudo" },
   "Enviar mensagem no WhatsApp": { es: "Enviar mensaje por WhatsApp" },
   "Adicionar tag": { es: "Agregar etiqueta" },

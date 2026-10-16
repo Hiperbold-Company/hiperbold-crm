@@ -16,7 +16,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
 
 /** No que a captação deu. Espelha o CHECK de `webhook_lead_captures.outcome`. */
-export type DesfechoDaCaptacao = "criado" | "duplicado" | "recusado";
+export type DesfechoDaCaptacao = "criado" | "duplicado" | "recusado" | "recadastro";
 
 /**
  * Por que uma captação foi recusada. Vocabulário só do TypeScript — a coluna

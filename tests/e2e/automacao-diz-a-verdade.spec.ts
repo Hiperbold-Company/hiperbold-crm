@@ -56,6 +56,9 @@ function internalSecret(): string {
 
 const creds = loadCreds();
 const ts = Date.now();
+// Telefone único por execução: desde a 0958 quem já tem lead ABERTO no funil da fonte não ganha
+// outro (recadastro), então um número fixo faria a 2ª execução (ou o retry) não criar lead.
+const TELEFONE_DO_LEAD = `119${String(ts).slice(-8)}`;
 const SOURCE_NAME = `E2E Verdade ${ts}`;
 const RULE_NAME = `E2E Abordar ${ts}`;
 const LEAD_NAME = `Carlos Verdade ${ts}`;
@@ -200,7 +203,7 @@ test.describe("a automação conta o que aconteceu de verdade", () => {
       // ── O lead entra pelo formulário ─────────────────────────────────────
       const envio = await request.post(
         `${APP_URL}/api/v1/webhooks/in/${fonte.data.path_token}`,
-        { data: { nome: LEAD_NAME, telefone: "11933332222" } },
+        { data: { nome: LEAD_NAME, telefone: TELEFONE_DO_LEAD } },
       );
       expect(envio.status()).toBe(200);
 
