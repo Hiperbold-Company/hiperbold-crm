@@ -449,6 +449,15 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "só os pedidos da própria organização (controle positivo) e ZERO da B por JWT simulado, agent da " +
       "mesma org lê zero, anon barrado, authenticated não escreve e service_role não apaga.",
   },
+  // ─── org_exclusoes_programadas (migration 0959, fork Hiperbold, D-209) ───
+  {
+    tabela: "org_exclusoes_programadas",
+    razao:
+      "tests/invariants/exclusao-de-dados-apos-cancelamento.test.ts, item 4 (fork Hiperbold, 0959): " +
+      "anon e authenticated barrados por permission denied ao SELECT, inclusive o membro (admin) da " +
+      "PRÓPRIA organização com JWT simulado, RLS ligada sem nenhuma policy; service_role só lê e só " +
+      "escreve os dois marcadores de aviso (a escrita é das funções).",
+  },
   // ─── billing_trigger_alarmes (migration 0910, fork Hiperbold, fase F7, D-055) ───
   //
   // Mesmo desenho deny-all de billing_payments/billing_contract_eventos,

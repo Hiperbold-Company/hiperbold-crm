@@ -101,6 +101,7 @@ export default async function Page() {
           <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/admin/sistema/cobranca">{t("Cobrança (Asaas)")}</Link>
           <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/admin/sistema/cupons">{t("Cupons de desconto")}</Link>
           <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/admin/sistema/reembolsos">{t("Reembolsos e cancelamentos")}</Link>
+          <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/admin/sistema/exclusoes">{t("Exclusão dos dados")}</Link>
         </div>
       </div>
       <FormularioDeComportamento inicial={comportamento} />

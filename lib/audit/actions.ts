@@ -1114,6 +1114,12 @@ export const AUDIT_ACTIONS = [
   "billing.refund_requested",
   "billing.refund_rejected",
   "billing.refund_marked_done",
+  // Exclusão dos dados da organização depois do cancelamento (migration 0959, D-209). `data_purged` é gravado pelo
+  // banco dentro de fn_exclusao_executar (só contagens, organization_id nulo, o id da apagada em resource_id e
+  // metadata); `deletion_scheduled` e `deletion_cancelled` são do admin da plataforma (programar e cancelar à mão).
+  "org.data_purged",
+  "org.deletion_scheduled",
+  "org.deletion_cancelled",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

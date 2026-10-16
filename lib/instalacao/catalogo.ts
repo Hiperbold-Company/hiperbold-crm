@@ -210,6 +210,21 @@ export const CATALOGO_DA_INSTALACAO: readonly ChaveDaInstalacao[] = [
     controle: "edita",
   },
   {
+    chave: "DIAS_DE_GUARDA_APOS_CANCELAMENTO",
+    rotulo: "Dias de guarda dos dados depois do fim da assinatura",
+    explicacao:
+      "Quanto tempo os dados de um cliente que pagou ficam guardados, para exportação, depois que a assinatura acaba (cancelada ou suspensa por falta de pagamento). Passado esse prazo a organização é excluída. A Política de Privacidade promete 90 dias: o mínimo aceito é 90 e o máximo 365.",
+    grupo: "retencao",
+    natureza: "numero",
+    controle: "edita",
+    validar: (valor) => {
+      const v = valor.trim();
+      if (!/^\d{1,3}$/.test(v)) return "Digite só o número de dias, entre 90 e 365.";
+      const n = Number(v);
+      return n < 90 || n > 365 ? "O prazo precisa ficar entre 90 e 365 dias." : null;
+    },
+  },
+  {
     chave: "LGPD_DPO_EMAIL",
     rotulo: "E-mail do encarregado de dados (DPO)",
     explicacao:

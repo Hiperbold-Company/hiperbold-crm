@@ -398,6 +398,14 @@ const schema = z.object({
    */
   EMAIL_DO_FINANCEIRO: z.string().optional().default(""),
 
+  /**
+   * Dias que os dados de um cliente que pagou ficam guardados depois do fim da assinatura, antes da exclusão
+   * (migration 0959). Vazio = 90. Editável pela tela de credenciais; lida por
+   * `valorDaInstalacao("DIAS_DE_GUARDA_APOS_CANCELAMENTO")` e interpretada em `lib/retencao/exclusao-de-organizacao/datas.ts`
+   * (valor fora de 90 a 365 vale 90).
+   */
+  DIAS_DE_GUARDA_APOS_CANCELAMENTO: z.string().optional().default(""),
+
   // EPIC-11 Impersonate cookie HMAC secret. Optional at boot (route returns
   // 503 at runtime if missing/short); required in prod for the feature to
   // function. Min 32 chars when present is enforced at use site.

@@ -20,6 +20,8 @@ import {
 } from "@/components/app/ImpersonateBanner";
 import { ConexaoCaidaBanner } from "@/components/app/ConexaoCaidaBanner";
 import { EmailNaoConfirmadoBanner } from "@/components/app/EmailNaoConfirmadoBanner";
+import { ExclusaoProgramadaBanner } from "@/components/app/ExclusaoProgramadaBanner";
+import { lerExclusaoProgramada } from "@/lib/retencao/exclusao-de-organizacao/exclusao-programada";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { listarConexoesCaidas, type ConexaoCaida } from "@/lib/channels/health";
 import { VoiceCallProvider } from "@/components/voice/VoiceCallContext";
@@ -74,6 +76,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // EPIC-02: gate /app/* on completed onboarding.
   // EPIC-11: gate /app/* on org not being suspended (S-11.08).
   let conexoesCaidas: ConexaoCaida[] = [];
+  // Exclusão dos dados programada (migration 0959): a data que o aviso do topo mostra, ou nulo.
+  let exclusaoEm: string | null = null;
+  let nomeDoCrm = "";
   let enrolled = false;
   let needsMfaGate = false;
 
@@ -103,7 +108,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
      *    este layout — a cerca anterior lia o texto-fonte e reprovava esta
      *    refatoração sem que nada tivesse quebrado.
      */
-    const [orgRes, conexoes, isEnrolled, mfaRequired, modulos] = await Promise.all([
+    const [orgRes, conexoes, isEnrolled, mfaRequired, modulos, exclusao] = await Promise.all([
       admin
         .from("organizations")
         .select("onboarded_at, status, settings")
@@ -119,7 +124,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ),
       // Da INSTALAÇÃO: decide se a porta de um módulo opcional entra no menu.
       modulosLigados(admin),
+      // Uma consulta por chave primária; nunca lança (degrada para "sem aviso").
+      lerExclusaoProgramada(admin, activeOrg.orgId),
     ]);
+    exclusaoEm = exclusao?.excluirEm ?? null;
 
     const orgRow = orgRes.data;
     conexoesCaidas = conexoes;
@@ -160,6 +168,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       // de módulos já foi lida acima, então isto não custa consulta.
       modulos.includes("marca_por_organizacao"),
     );
+    nomeDoCrm = marca.name;
 
     // SÓ quando a cor veio mesmo da organização. Se ela não configurou nada, a
     // resolução devolve a cor da instalação — e reemiti-la aqui, escopada no
@@ -289,6 +298,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <ImpersonateBanner impersonating={impersonating} />
         <ConexaoCaidaBanner caidas={conexoesCaidas} />
         <EmailNaoConfirmadoBanner />
+        <ExclusaoProgramadaBanner excluirEm={exclusaoEm} nomeDoCrm={nomeDoCrm} />
         {needsMfaGate ? (
           // Gate always mounted for MFA-required roles; it latches the blocking
           // decision client-side so the enroll Server Action's revalidation

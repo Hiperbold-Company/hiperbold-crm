@@ -18,6 +18,7 @@ import { buildBoasVindasEmail } from "@/lib/email/templates/boas-vindas";
 import { buildCancelamentoConfirmadoEmail } from "@/lib/email/templates/cancelamento-confirmado";
 import { buildContaSuspensaEmail } from "@/lib/email/templates/conta-suspensa";
 import { buildEstornoFeitoEmail } from "@/lib/email/templates/estorno-feito";
+import { buildExclusaoDeDadosProgramadaEmail } from "@/lib/email/templates/exclusao-de-dados-programada";
 import { buildPacoteDeTokensLiberadoEmail } from "@/lib/email/templates/pacote-de-tokens-liberado";
 import { buildPagamentoNaoAprovadoEmail } from "@/lib/email/templates/pagamento-nao-aprovado";
 import { buildPlanoConfirmadoEmail } from "@/lib/email/templates/plano-confirmado";
@@ -124,6 +125,12 @@ export const DADOS_DO_EMAIL = {
     detalhe: z.string().trim().max(TAMANHO_MAXIMO_DO_DETALHE).nullable(),
     /** O link da cobrança no Asaas, ou `null` para o botão levar à lista do admin. */
     faturaUrl: z.string().max(500).nullable(),
+  }),
+  /** Aviso de exclusão dos dados da organização (D-30 e D-7, migration 0959). `excluirEm` é o dia civil `aaaa-mm-dd`. */
+  "COB-12": z.object({
+    excluirEm: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    dias: z.union([z.literal(30), z.literal(7)]),
+    motivo: z.enum(["cancelada", "suspensa", "manual"]),
   }),
   "IA-02": z.object({
     nivel: z.union([z.literal(80), z.literal(100)]),
@@ -256,6 +263,15 @@ export function montarEmailDeConta(emailId: string, dados: unknown, ctx: Context
         detalhe: d.detalhe,
         urlDaLista: `${ctx.appUrl}${ROTA_DOS_REEMBOLSOS}`,
         urlDoAsaas: d.faturaUrl && FATURA_DO_ASAAS.test(d.faturaUrl) ? d.faturaUrl : null,
+      });
+    }
+    case "COB-12": {
+      const d = validarDados(emailId, dados);
+      return buildExclusaoDeDadosProgramadaEmail({
+        ...ctx.base(d.motivo === "manual" ? `${ctx.appUrl}/app/settings` : plano),
+        excluirEm: d.excluirEm,
+        dias: d.dias,
+        motivo: d.motivo,
       });
     }
     case "IA-02": {

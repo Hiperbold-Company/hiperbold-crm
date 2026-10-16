@@ -217,6 +217,13 @@ CRONS="
 # sem nada no formato antigo vira uma varredura curta. Só depois de a resposta dizer restantes 0 e falhas 0
 # é que se liga AI_CRED_RECUSAR_LEGADO (ver o cabeçalho da rota).
 30 6 * * *|120|api/v1/cron/recifrar-credenciais-de-ia
+# A EXCLUSÃO DOS DADOS DEPOIS DO CANCELAMENTO (D-209, migration 0959). Uma vez ao dia, 06:00 UTC (03:00 em
+# América/São_Paulo), depois do conferir-vencimentos (05:40), que é quem move o contrato para cancelada/suspensa.
+# Programa quem acabou de perder a assinatura, enfileira os avisos de 30 e 7 dias (o envio é do cron
+# enviar-emails-de-conta) e exclui as organizações cujos 90 dias passaram: arquivos do Storage, conexões no
+# provedor e o banco. Orçamento interno de 120s dentro do teto de 170s do curl; o que não couber fica para amanhã.
+# Rodada vazia é uma sincronização e duas consultas curtas, e não audita.
+0 6 * * *|170|api/v1/cron/exclusao-de-dados
 "
 
 # CRONTAB_PATH é ponto de injeção do teste (tests/shell/scheduler-entrypoint.test.sh).
