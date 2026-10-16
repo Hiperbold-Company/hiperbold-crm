@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { ROLE_RANK, type Role } from "@/lib/auth/types";
 import type { ModuloOpcional } from "@/lib/instalacao/modulos";
+import { hrefOculto } from "@/lib/hiperbold/funcoes-ocultas";
 import { NAV_CATALOG, type NavMetadata, type NavDestinationId } from "./catalogo";
 
 const ids = NAV_CATALOG.map((d) => d.href);
@@ -75,7 +76,11 @@ export function permitidos(
   modulos?: readonly ModuloOpcional[],
 ): NavMetadata[] {
   return (NAV_CATALOG as readonly NavMetadata[]).filter(
-    (d) => canSee(d, platform, role) && (!modulos || !d.modulo || modulos.includes(d.modulo)),
+    (d) =>
+      canSee(d, platform, role) &&
+      // Hiperbold (16/10/2026): funções ocultas somem de sidebar, hubs e ⌘K (lib/hiperbold/funcoes-ocultas.ts).
+      !hrefOculto(d.href) &&
+      (!modulos || !d.modulo || modulos.includes(d.modulo)),
   );
 }
 /** Leitura tolera versões antigas/removidas sem lançar no layout. */

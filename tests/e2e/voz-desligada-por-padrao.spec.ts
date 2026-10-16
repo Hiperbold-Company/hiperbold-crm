@@ -47,6 +47,8 @@ import * as path from "node:path";
 import { expect, test, type Page } from "./helpers/test";
 
 import { generateTotp, msUntilNextTotpWindow } from "./utils/totp";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+pularSeOculta(test, "voz-whatsapp");
 
 const CREDS_PATH = path.join(process.cwd(), ".e2e-creds.json");
 const EVIDENCIA = path.join(process.cwd(), "e2e-artifacts");

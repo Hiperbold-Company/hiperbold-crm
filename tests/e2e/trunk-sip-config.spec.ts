@@ -5,6 +5,8 @@ import * as path from "node:path";
 import { expect, test, type Page } from "./helpers/test";
 
 import { generateTotp, msUntilNextTotpWindow } from "./utils/totp";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+pularSeOculta(test, "trunk-sip");
 
 /**
  * TRUNK SIP — só admin escreve, manager só lê, e o bloco de pjsip.conf sai

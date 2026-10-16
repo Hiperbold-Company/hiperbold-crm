@@ -15,6 +15,8 @@ import { TemplatesParceiroClient } from "./TemplatesParceiroClient";
 import { TelefoniaClient } from "./TelefoniaClient";
 import { useT } from "@/hooks/i18n/useT";
 import { rotaDeTemplates } from "@/lib/channels/templates-fonte";
+import { ROTULO_DA_ABA_INSTANCIA } from "@/lib/channels/rotulo-da-aba-instancia";
+import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 
 /**
  * Conexões — TODOS os canais em um lugar só.
@@ -78,24 +80,32 @@ export function ConexoesShell({
   const router = useRouter();
   const params = useSearchParams();
   const abaParam = params.get("aba");
+  // Hiperbold (16/10/2026): opções de conexão ocultas (hiperbold/FUNCOES.md). Um link com `?aba=` de
+  // opção oculta cai na aba da instância (QR), a entrada padrão.
+  const mostrar = {
+    parceiro: !funcaoOculta("conexao-provedor-parceiro"),
+    telefonia: !funcaoOculta("conexao-telefone"),
+    sociais: !funcaoOculta("conexao-redes-sociais"),
+    voz: !funcaoOculta("voz-whatsapp"),
+  };
   const aba =
-    abaParam === "sociais"
+    abaParam === "sociais" && mostrar.sociais
       ? "sociais"
       : abaParam === "oficial"
-      ? "oficial"
-      : abaParam === "parceiro"
-        ? "parceiro"
-        : abaParam === "telefonia"
-          ? "telefonia"
-          : abaParam === "instancia"
-            ? "instancia"
-            : abaParam === "voz"
-              ? "voz"
-              : abaParam === "graph" && graphParceiro
-                ? "graph"
-                // Hiperbold: sem canal por QR (decisão de 16/09/2026). A aba de
-                // entrada é a da instância, e um link antigo `?aba=numeros` cai nela.
-                : "instancia";
+        ? "oficial"
+        : abaParam === "parceiro" && mostrar.parceiro
+          ? "parceiro"
+          : abaParam === "telefonia" && mostrar.telefonia
+            ? "telefonia"
+            : abaParam === "instancia"
+              ? "instancia"
+              : abaParam === "voz" && mostrar.voz
+                ? "voz"
+                : abaParam === "graph" && graphParceiro
+                  ? "graph"
+                  : // Hiperbold: sem canal por QR (decisão de 16/09/2026). A aba de
+                    // entrada é a da instância, e um link antigo `?aba=numeros` cai nela.
+                    "instancia";
   const sub = params.get("sub") === "templates" ? "templates" : "conexao";
 
   const irPara = (proximaAba: string, proximaSub?: string): void => {
@@ -125,15 +135,15 @@ export function ConexoesShell({
         {/* "API não oficial" e não a marca: a marca vem do servidor
             (`lib/channels/instancia`) e aparece dentro do cartão. O conceito é o
             que distingue esta aba da vizinha, e é o que quem instala procura. */}
-        <TabsTrigger value="instancia">{t("API não oficial")}</TabsTrigger>
+        <TabsTrigger value="instancia">{t(ROTULO_DA_ABA_INSTANCIA)}</TabsTrigger>
         {/* "Provedor parceiro" e não a marca: o rótulo da marca vem do servidor
             (`lib/channels/connect`), porque a tela não pode nomear provider — e
             porque no dia em que houver um segundo parceiro esta aba não muda.
             Aqui fica o CONCEITO; lá dentro o cartão diz de quem se trata. */}
-        <TabsTrigger value="parceiro">{t("Provedor parceiro")}</TabsTrigger>
-        <TabsTrigger value="telefonia">{t("Telefone")}</TabsTrigger>
-        <TabsTrigger value="sociais">{t("Redes sociais")}</TabsTrigger>
-        <TabsTrigger value="voz">{t("Chamada de voz")}</TabsTrigger>
+        {mostrar.parceiro && <TabsTrigger value="parceiro">{t("Provedor parceiro")}</TabsTrigger>}
+        {mostrar.telefonia && <TabsTrigger value="telefonia">{t("Telefone")}</TabsTrigger>}
+        {mostrar.sociais && <TabsTrigger value="sociais">{t("Redes sociais")}</TabsTrigger>}
+        {mostrar.voz && <TabsTrigger value="voz">{t("Chamada de voz")}</TabsTrigger>}
         {graphParceiro && <TabsTrigger value="graph">{graphParceiro.label}</TabsTrigger>}
       </TabsList>
 
@@ -145,21 +155,33 @@ export function ConexoesShell({
         />
       </TabsContent>
 
-      <TabsContent value="telefonia" className="mt-0">
-        <TelefoniaClient />
-      </TabsContent>
-      <TabsContent value="sociais" className="mt-0"><RedesSociaisClient bloqueio={bloqueio} /></TabsContent>
+      {mostrar.telefonia && (
+        <TabsContent value="telefonia" className="mt-0">
+          <TelefoniaClient />
+        </TabsContent>
+      )}
+      {mostrar.sociais && (
+        <TabsContent value="sociais" className="mt-0">
+          <RedesSociaisClient bloqueio={bloqueio} />
+        </TabsContent>
+      )}
 
-      <TabsContent value="voz" className="mt-0">
-        <CanalVozClient wacallsConfigured={wacallsConfigured} />
-      </TabsContent>
+      {mostrar.voz && (
+        <TabsContent value="voz" className="mt-0">
+          <CanalVozClient wacallsConfigured={wacallsConfigured} />
+        </TabsContent>
+      )}
 
       {graphParceiro && (
         <TabsContent value="graph" className="mt-0">
           {/* Sub-abas como nas demais: conectar e gerenciar modelos são tarefas
               diferentes. O componente de modelos é o MESMO do outro parceiro,
               apontado para a rota desta fonte. */}
-          <Tabs value={sub} onValueChange={(v) => irPara("graph", v)} className="flex flex-col gap-4">
+          <Tabs
+            value={sub}
+            onValueChange={(v) => irPara("graph", v)}
+            className="flex flex-col gap-4"
+          >
             <TabsList>
               <TabsTrigger value="conexao">{t("Conexão")}</TabsTrigger>
               <TabsTrigger value="templates">{t("Modelos")}</TabsTrigger>
@@ -178,28 +200,38 @@ export function ConexoesShell({
         </TabsContent>
       )}
 
-      <TabsContent value="parceiro" className="mt-0">
-        {/* Sub-abas como no canal oficial, e pelo mesmo motivo: conectar e
-            gerenciar definições são tarefas diferentes, e empilhá-las numa tela
-            só faz a segunda sumir abaixo da dobra. O rótulo diz "do parceiro"
-            para não colidir com "Templates" da barra lateral, que significa
-            OUTRA coisa (respostas rápidas do atendente). */}
-        <Tabs value={sub} onValueChange={(v) => irPara("parceiro", v)} className="flex flex-col gap-4">
-          <TabsList>
-            <TabsTrigger value="conexao">{t("Conexão")}</TabsTrigger>
-            <TabsTrigger value="templates">{t("Modelos do parceiro")}</TabsTrigger>
-          </TabsList>
-          <TabsContent value="conexao" className="mt-0">
-            <CanalParceiroClient bloqueio={bloqueio} />
-          </TabsContent>
-          <TabsContent value="templates" className="mt-0">
-            <TemplatesParceiroClient />
-          </TabsContent>
-        </Tabs>
-      </TabsContent>
+      {mostrar.parceiro && (
+        <TabsContent value="parceiro" className="mt-0">
+          {/* Sub-abas como no canal oficial, e pelo mesmo motivo: conectar e
+              gerenciar definições são tarefas diferentes, e empilhá-las numa tela
+              só faz a segunda sumir abaixo da dobra. O rótulo diz "do parceiro"
+              para não colidir com "Templates" da barra lateral, que significa
+              OUTRA coisa (respostas rápidas do atendente). */}
+          <Tabs
+            value={sub}
+            onValueChange={(v) => irPara("parceiro", v)}
+            className="flex flex-col gap-4"
+          >
+            <TabsList>
+              <TabsTrigger value="conexao">{t("Conexão")}</TabsTrigger>
+              <TabsTrigger value="templates">{t("Modelos do parceiro")}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="conexao" className="mt-0">
+              <CanalParceiroClient bloqueio={bloqueio} />
+            </TabsContent>
+            <TabsContent value="templates" className="mt-0">
+              <TemplatesParceiroClient />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+      )}
 
       <TabsContent value="oficial" className="mt-0">
-        <Tabs value={sub} onValueChange={(v) => irPara("oficial", v)} className="flex flex-col gap-4">
+        <Tabs
+          value={sub}
+          onValueChange={(v) => irPara("oficial", v)}
+          className="flex flex-col gap-4"
+        >
           <TabsList>
             <TabsTrigger value="conexao">{t("Conexão")}</TabsTrigger>
             {/* "Templates da Meta", não "Templates": a barra lateral já tem um item

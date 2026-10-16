@@ -494,17 +494,17 @@ export const NAV_CATALOG = [
   },
   {
     href: "/app/ai/credentials",
-    label: "Credenciais",
-    description: "A chave do provedor de IA que os agentes usam para pensar.",
+    // Hiperbold (16/10/2026): recurso AVANÇADO. Sai do hub "Ver tudo em IA" e mora só em
+    // Configurações › IA (`configuracoes`), com texto de quem quer usar a própria conta do
+    // OpenRouter. O cliente comum não precisa: o agente usa a chave da instalação.
+    // `group: "organizacao"` é o que tira a tela do hub de IA; sem sidebar.
+    label: "Usar minha própria chave de IA (avançado)",
+    description:
+      "Para quem quer usar outro modelo (Grok, Claude, Gemini…) com a própria conta do OpenRouter. O consumo nessa chave não desconta dos tokens do plano.",
     icon: "Key",
-    // VOLTOU para "ia"/"Montar o agente" na triagem, e a razão de quem tinha
-    // movido VENCEU em vez de estar errada: quando este PR nasceu, a tela não
-    // aparecia em hub nenhum e só se chegava nela digitando a URL. Depois
-    // disso a main ganhou o hub de IA, que a lista — e `tests/unit/nav-hub`
-    // cobra a entrada ali, inclusive em espanhol. Movê-la para "Sua empresa"
-    // agora tiraria a tela do lugar onde o hub promete que ela está.
-    group: "ia",
-    section: "Montar o agente",
+    group: "organizacao",
+    section: "Sua empresa",
+    configuracoes: "IA",
     minRole: "manager",
   },
   {

@@ -17,6 +17,8 @@ import {
   type AtoresDasExtensoes,
   type CatalogoDeExtensoes,
 } from "./fixtures/catalogo-extensoes";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+pularSeOculta(test, "extensoes");
 
 // Estas jornadas esperam, em quase toda asserção, DUAS idas reais ao servidor: a
 // mutação e a recarga da lista que a tela faz antes de anunciar o resultado. Medido

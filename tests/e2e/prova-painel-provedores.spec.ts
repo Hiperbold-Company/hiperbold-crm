@@ -19,6 +19,8 @@ import { expect, test } from "./helpers/test";
 import { PONTOS_DE_IA } from "@/lib/ai/pontos/registro";
 
 import { lerCreds, loginComoAdmin, type CredsE2E } from "./helpers/login-admin";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+pularSeOculta(test, "provedores-ia");
 
 /**
  * Entra como ADMIN, com MFA — e não é detalhe de teste.

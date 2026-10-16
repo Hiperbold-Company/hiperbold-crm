@@ -219,10 +219,8 @@ describe("Testar classificação com o Jev (onda 2 do Jev, bloco 2.2)", () => {
     });
     expect(screen.getByTestId("teste-escolha-do-jev").textContent).toContain("não respondeu");
     expect(screen.getByTestId("teste-escolha-do-jev").textContent).not.toContain("%");
-    // E leva ao motivo, que mora no cartão dele.
-    expect(within(screen.getByTestId("teste-escolha-do-jev")).getByRole("link", { name: "Ver o motivo no cartão do Jev" })).toHaveAttribute(
-      "href",
-      "/app/ai/providers",
-    );
+    // O cartão do Jev mora em Provedores, oculto nesta instalação (16/10/2026, hiperbold/FUNCOES.md):
+    // sem a tela, não há link para o motivo.
+    expect(within(screen.getByTestId("teste-escolha-do-jev")).queryByRole("link", { name: "Ver o motivo no cartão do Jev" })).toBeNull();
   });
 });

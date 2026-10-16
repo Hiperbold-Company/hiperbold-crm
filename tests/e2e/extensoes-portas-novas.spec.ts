@@ -8,6 +8,8 @@ import { promisify } from "node:util";
 import { expect as expectBase, test, type Page } from "./helpers/test";
 
 import { criarAtoresDasExtensoes, type AtoresDasExtensoes } from "./fixtures/catalogo-extensoes";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+pularSeOculta(test, "extensoes");
 
 /**
  * A JORNADA QUE A ADR-0003 TORNOU POSSÍVEL, PROVADA PELA TELA.

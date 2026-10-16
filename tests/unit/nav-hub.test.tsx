@@ -5,15 +5,34 @@
  *
  * A permissão é do registro (`navegacao-registry.test.ts`); aqui é o desenho.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 
 import { NavHub } from "@/components/shell/NavHub";
 import { DICIONARIO } from "@/lib/i18n/dicionario";
 import type { ExtensionGuideView } from "@/lib/extensions/view";
 import { hubSections } from "@/lib/navigation/registry";
+import type * as RegistroReal from "@/lib/hiperbold/funcoes-ocultas";
+import type { FuncaoId } from "@/lib/hiperbold/funcoes-ocultas";
 
-afterEach(cleanup);
+// Funções ocultas da Hiperbold (16/10/2026, hiperbold/FUNCOES.md). Os testes de Extensões abaixo
+// provam a MECÂNICA do hub (cartões vindos do pacote, falha de leitura) e ligam tudo; os demais
+// usam o registro de verdade, e o teste "Extensões oculto" prova o efeito do registro no hub.
+const registro = vi.hoisted(() => ({ ligarTudo: false }));
+vi.mock("@/lib/hiperbold/funcoes-ocultas", async (importOriginal) => {
+  const real = await importOriginal<Record<string, unknown> & typeof RegistroReal>();
+  return {
+    ...real,
+    funcaoOculta: (id: FuncaoId) =>
+      registro.ligarTudo ? false : real.funcaoOculta(id),
+    hrefOculto: (href: string) => (registro.ligarTudo ? false : real.hrefOculto(href)),
+  };
+});
+
+afterEach(() => {
+  cleanup();
+  registro.ligarTudo = false;
+});
 
 describe("NavHub", () => {
   const extensionGuide: ExtensionGuideView = {
@@ -78,7 +97,7 @@ describe("NavHub", () => {
     expect(screen.getByRole("link", { name: /Agentes/ })).toBeTruthy();
   });
 
-  it("o viewer vê Extensões e Dados externos; a seção aparece filtrada, sem API Tokens nem LGPD", () => {
+  it("o viewer vê Dados externos (Extensões está oculto); a seção aparece filtrada, sem API Tokens nem LGPD", () => {
     /**
      * Esta asserção dizia `not.toContain("Dados e acesso")`, e passava porque os
      * DOIS destinos daquela seção eram `admin`. "Dados externos" entrou nela sem
@@ -98,10 +117,7 @@ describe("NavHub", () => {
     expect(secoes).toContain("Sua conta");
     expect(secoes).toContain("Sua empresa");
     expect(secoes).toContain("Dados e acesso");
-    expect(screen.getByRole("link", { name: /Extensões/ })).toHaveAttribute(
-      "href",
-      "/app/extensions",
-    );
+    expect(screen.queryByRole("link", { name: /Extensões/ })).toBeNull();
     expect(screen.getByRole("link", { name: /Dados externos/ })).toHaveAttribute(
       "href",
       "/app/integracao-dados",
@@ -172,7 +188,7 @@ describe("NavHub", () => {
       "Supervisar al agente",
     ]);
     expect(
-      screen.getByRole("link", { name: /Credenciales.*La clave del proveedor de IA/ }),
+      screen.getByRole("link", { name: /Memoria.*Lo que el agente ya aprendió/ }),
     ).toBeTruthy();
   });
 
@@ -185,7 +201,25 @@ describe("NavHub", () => {
     expect(textos.filter((texto) => !DICIONARIO[texto]?.es)).toEqual([]);
   });
 
+  it("Extensões oculto: o hub do CRM não mostra Orientações instaladas nem o link para gerenciar", () => {
+    render(
+      <NavHub
+        modulosLigados={[]}
+        group="crm"
+        isPlatformAdmin={false}
+        role="viewer"
+        title="CRM"
+        subtitle=""
+        extensionGuides={[extensionGuide]}
+        extensionsUnavailable
+      />,
+    );
+    expect(screen.queryByText("Orientações instaladas")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Gerenciar extensões" })).toBeNull();
+  });
+
   it("integra contribuições tipadas no CRM sem aceitar destino vindo do pacote", () => {
+    registro.ligarTudo = true;
     render(
       <NavHub modulosLigados={[]}
         group="crm"
@@ -208,6 +242,7 @@ describe("NavHub", () => {
   });
 
   it("expõe falha de leitura das contribuições sem derrubar o hub do CRM", () => {
+    registro.ligarTudo = true;
     render(
       <NavHub modulosLigados={[]}
         group="crm"

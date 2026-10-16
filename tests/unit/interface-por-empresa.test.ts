@@ -20,6 +20,7 @@
 import { describe, expect, it } from "vitest";
 
 import { NAV_CATALOG } from "@/lib/navigation/catalogo";
+import { hrefOculto } from "@/lib/hiperbold/funcoes-ocultas";
 import {
   combinarInterfaces,
   destinosDaInterface,
@@ -55,7 +56,8 @@ describe("portas por empresa (issue #1341)", () => {
   it("sem escolha de nenhum dos lados nada muda: a empresa completa segue completa", () => {
     expect(combinarInterfaces(completa, completa)).toEqual(INTERFACE_COMPLETA);
     expect(combinarInterfaces(undefined, null).destinos).toBeUndefined();
-    expect(hrefs(combinarInterfaces(completa, completa))).toEqual(NAV_CATALOG.map((d) => d.href));
+    // "Completa" é o catálogo menos o que a instalação oculta (16/10/2026, hiperbold/FUNCOES.md).
+    expect(hrefs(combinarInterfaces(completa, completa))).toEqual(NAV_CATALOG.map((d) => d.href).filter((h) => !hrefOculto(h)));
   });
 
   it("o vínculo NÃO abre porta que a empresa não oferece", () => {

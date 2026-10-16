@@ -23,6 +23,7 @@ import {
   desativarMfaDaConta,
 } from "@/app/actions/auth/politicaDeMfa";
 import { PainelDeChamadaDeVoz } from "@/components/voice/PainelDeChamadaDeVoz";
+import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 import { useT } from "@/hooks/i18n/useT";
 
 export function SecurityClient({
@@ -186,7 +187,8 @@ export function SecurityClient({
       {/* Chamada de voz: a outra decisão de RISCO da organização que vive
           nesta tela. Ele mesmo decide se aparece — some quando a instalação
           não tem a feature ou quem lê não pode enxergá-la. */}
-      <PainelDeChamadaDeVoz />
+      {/* Hiperbold (16/10/2026): oculto até validar (hiperbold/FUNCOES.md). */}
+      {!funcaoOculta("voz-whatsapp") && <PainelDeChamadaDeVoz />}
 
       <Card className="space-y-3 p-6">
         <h2 className="text-sm font-semibold">{t("Sessões ativas")}</h2>

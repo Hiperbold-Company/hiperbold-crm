@@ -46,6 +46,7 @@ import { fraseDaFalha } from "@/lib/ai/conversa-do-caso/frases";
 import { ApiError } from "@/lib/api/types";
 import { ChatCircle, PaperPlaneTilt, Warning } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
+import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 
 /** A rota exige 3 caracteres; o botão respeita o mesmo piso. */
 const MINIMO_DA_PERGUNTA = 3;
@@ -241,13 +242,17 @@ export function CaseChatPanel({ caseId }: { caseId: string }) {
       {semIa ? (
         <div className="flex flex-col items-start gap-2">
           <p className="text-sm text-muted-foreground">
-            {t(
-              "Nenhum provedor de IA está configurado. Peça a quem administra para configurar em IA › Provedores.",
-            )}
+            {funcaoOculta("provedores-ia")
+              ? t("Nenhum provedor de IA está configurado. Peça a quem administra a instalação.")
+              : t(
+                  "Nenhum provedor de IA está configurado. Peça a quem administra para configurar em IA › Provedores.",
+                )}
           </p>
-          <a className="text-sm text-accent underline underline-offset-2" href="/app/ai/providers">
-            {t("Abrir IA › Provedores")}
-          </a>
+          {funcaoOculta("provedores-ia") ? null : (
+            <a className="text-sm text-accent underline underline-offset-2" href="/app/ai/providers">
+              {t("Abrir IA › Provedores")}
+            </a>
+          )}
         </div>
       ) : null}
 

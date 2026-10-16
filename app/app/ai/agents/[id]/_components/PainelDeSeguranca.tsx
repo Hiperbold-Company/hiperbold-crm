@@ -52,6 +52,7 @@ import {
   type ConferenciaDeSaida,
 } from "@/lib/ai/guardrails/lista-de-conferencia";
 import { AjustesDeEstilo } from "./AjustesDeEstilo";
+import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 
 function Conferencia({
   c,
@@ -112,11 +113,17 @@ function Conferencia({
             </div>
             <p className="text-xs text-muted-foreground">
               {t("Custa")} {t(c.escolha.custo)}
-              {t(". O modelo usado se escolhe em")}{" "}
-              <a className="underline underline-offset-2" href="/app/ai/providers">
-                {t("Provedores de IA")}
-              </a>
-              .
+              {funcaoOculta("provedores-ia") ? (
+                "."
+              ) : (
+                <>
+                  {t(". O modelo usado se escolhe em")}{" "}
+                  <a className="underline underline-offset-2" href="/app/ai/providers">
+                    {t("Provedores de IA")}
+                  </a>
+                  .
+                </>
+              )}
             </p>
           </div>
         )}
@@ -172,7 +179,11 @@ export function PainelDeSeguranca() {
           {t("Esta roda sobre a mensagem que chega, antes das outras — por isso aparece separada.")}
         </p>
         <ul className="divide-y">
-          <Conferencia c={CONFERENCIA_DE_ENTRADA} ordem={null} {...props(CONFERENCIA_DE_ENTRADA.camada)} />
+          <Conferencia
+            c={CONFERENCIA_DE_ENTRADA}
+            ordem={null}
+            {...props(CONFERENCIA_DE_ENTRADA.camada)}
+          />
         </ul>
       </Card>
     </div>

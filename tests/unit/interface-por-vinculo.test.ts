@@ -1,3 +1,4 @@
+import { hrefOculto } from "@/lib/hiperbold/funcoes-ocultas";
 import { describe, expect, it } from "vitest";
 import { NAV_CATALOG } from "@/lib/navigation/catalogo";
 import {
@@ -16,7 +17,8 @@ const hrefs = (settings: unknown, role: "agent" | "admin" = "admin", platform = 
   destinosDaInterface(settings, platform, role).map((d) => d.href);
 describe("interface por vínculo é apresentação", () => {
   it("legado completa acompanha catálogo e não duplica IDs", () => {
-    expect(hrefs(null)).toEqual(NAV_CATALOG.map((d) => d.href));
+    // Menos o que a instalação oculta (16/10/2026, hiperbold/FUNCOES.md).
+    expect(hrefs(null)).toEqual(NAV_CATALOG.map((d) => d.href).filter((h) => !hrefOculto(h)));
     expect(new Set(NAV_CATALOG.map((d) => d.href)).size).toBe(NAV_CATALOG.length);
   });
   it("simplificada tem operação e Conexões somente quando papel permite", () => {

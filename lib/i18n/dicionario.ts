@@ -1285,6 +1285,7 @@ export const DICIONARIO: Traducoes = {
   // O rótulo da aba é o CONCEITO, não a marca: a marca vem do servidor e
   // aparece dentro do cartão, já escrita por quem a publicou.
   "API não oficial": { es: "API no oficial" },
+  UAZAPI: { es: "UAZAPI" },
   "Um número de WhatsApp pareado numa instância do seu servidor. As mensagens entram e saem pelo CRM, e a entrega é ligada automaticamente.":
     {
       es: "Un número de WhatsApp vinculado a una instancia de tu servidor. Los mensajes entran y salen por el CRM, y la entrega se activa automáticamente.",
@@ -1837,6 +1838,11 @@ export const DICIONARIO: Traducoes = {
   "Cadastrar credencial": { es: "Registrar credencial" },
   "na aba Credenciais.": { es: "en la pestaña Credenciales." },
   "Gerenciar chaves em Credenciais": { es: "Administrar claves en Credenciales" },
+  "Usar minha própria chave de IA (avançado)": { es: "Usar mi propia clave de IA (avanzado)" },
+  "Para quem quer usar outro modelo (Grok, Claude, Gemini…) com a própria conta do OpenRouter. O consumo nessa chave não desconta dos tokens do plano.":
+    {
+      es: "Para quien quiere usar otro modelo (Grok, Claude, Gemini…) con su propia cuenta de OpenRouter. El consumo en esa clave no se descuenta de los tokens del plan.",
+    },
   "Gerenciar números em Conexões": { es: "Administrar números en Conexiones" },
   "Palavras que chamam uma pessoa na hora": { es: "Palabras que llaman a una persona al instante" },
   Remover: { es: "Quitar" },
@@ -11761,6 +11767,9 @@ export const DICIONARIO: Traducoes = {
   "Filtro inválido.": { es: "Filtro no válido." },
   "Este contato foi anonimizado a pedido dele. A IA não responde sobre casos de contato anonimizado.":
     { es: "Este contacto fue anonimizado por petición suya. La IA no responde sobre casos de contactos anonimizados." },
+  "Nenhum provedor de IA está configurado. Peça a quem administra a instalação.": {
+    es: "Ningún proveedor de IA está configurado. Pídele a quien administra la instalación.",
+  },
   "Nenhum provedor de IA está configurado. Peça a quem administra para configurar em IA › Provedores.":
     { es: "No hay ningún proveedor de IA configurado. Pide a un administrador que lo configure en IA › Proveedores." },
   "A IA parou porque o gasto do mês atingiu o limite definido. Ajuste em Uso de IA › Orçamento.":

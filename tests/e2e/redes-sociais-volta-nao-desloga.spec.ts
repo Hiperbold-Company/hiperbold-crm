@@ -4,6 +4,8 @@ import type { AddressInfo } from "node:net";
 import { test, expect } from "./helpers/test";
 
 import { lerCreds, loginComoAdmin } from "./helpers/login-admin";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+pularSeOculta(test, "conexao-redes-sociais");
 
 /**
  * VOLTAR DA AUTORIZAÇÃO DE REDE SOCIAL NÃO DESLOGA — e diz o desfecho (#1579).

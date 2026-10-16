@@ -1,0 +1,62 @@
+# Funções do HiperCRM: ativas e ocultas
+
+Decisão do Filipe (16/10/2026): **validar antes de lançar**. O que ainda não foi testado com cliente de verdade fica escondido nesta instalação. Nada foi apagado: o código, as rotas de API e os dados continuam onde estavam. Esconder é só deixar de mostrar a tela; não muda quem pode fazer o quê.
+
+A lista de ocultas mora num único arquivo: [`lib/hiperbold/funcoes-ocultas.ts`](../lib/hiperbold/funcoes-ocultas.ts) (`FUNCOES_OCULTAS`). Menu lateral, "Ver tudo em …", Configurações, busca ⌘K e os blocos dentro das telas leem dali. Quem abrir o endereço de uma tela oculta cai no Início. O painel de plataforma (`/admin`) não é afetado.
+
+## Como reativar uma função
+
+1. Abra `lib/hiperbold/funcoes-ocultas.ts` e apague o id da função da lista `FUNCOES_OCULTAS` (a linha tem a data e o lugar onde ela morava).
+2. Mova a linha daqui de "Funções ocultas" para "Funções ativas".
+3. Nada mais muda: menu, hubs, busca e o redirecionamento do endereço voltam sozinhos.
+
+## Funções ativas
+
+| Função | Para que serve |
+|---|---|
+| Início | O que já está pronto e o que falta para o CRM trabalhar pela empresa. |
+| Inbox | As conversas de WhatsApp, com a equipe e a IA atendendo lado a lado. |
+| Radar | Quem esfriou e ainda está aberto. |
+| Agenda e Tipos de agendamento | O que está marcado, com quem, e o que se pode marcar. |
+| Respostas rápidas | Textos salvos para responder mais rápido. |
+| Funis (quadro de clientes) e Etapas do funil | O funil de vendas em colunas. |
+| Contatos | As pessoas e o histórico de cada uma. |
+| Campanhas | Mensagem para uma lista de contatos, no ritmo do número. |
+| Tarefas | O que ficou combinado, com prazo. |
+| Produtos | Catálogo que o agente de IA usa para responder. |
+| Agentes de IA, Follow-ups, Fluxos de atendimento, Roteadores | Quem atende por você e como retoma conversa que esfriou. |
+| Conhecimento, Memória, Skills, Conexões MCP | O que o agente consulta e pode fazer. |
+| Casos, Alertas, Aviso no WhatsApp, Propostas, Execuções, Uso e orçamento, Evolução da IA | Acompanhar o que a IA fez e decidir o que ela sugere. |
+| Desempenho, Atividades, Faturamento | Números do período e quanto entrou. |
+| Conexões WhatsApp: **UAZAPI** (QR Code) e **API Oficial (Meta)** | Por onde o negócio fala com o cliente. A opção que se chamava "API não oficial" passou a se chamar UAZAPI. |
+| Webhooks (receber e enviar dados) | Avisar outros sistemas quando algo acontece, e receber dados de fora. |
+| Nuvemshop | Trazer pedidos e clientes da loja. |
+| Equipe, Distribuição de atendimento, Tags, Organização, Marca, LGPD, API Tokens, Audit Log, Notificações, Perfil, Segurança (verificação em duas etapas e sessões) | Configurações do dia a dia. |
+| Meu plano | Plano contratado, pagamento, uso e cancelamento. |
+| **Usar minha própria chave de IA (avançado)** (antes "Credenciais") | Para quem quer usar outro modelo (Grok, Claude, Gemini…) com a própria conta do OpenRouter. O consumo nessa chave não desconta dos tokens do plano. Ativa e **avançada**: fica só em Configurações › IA (decisão do Filipe, 16/10/2026), fora do "Ver tudo em IA". O cliente comum não precisa dela: o agente usa a chave da instalação. |
+
+## Funções ocultas
+
+Todas: **16/10/2026, decisão do Filipe: validar antes de lançar.** Id é o nome na lista do arquivo.
+
+| Id | O que é (em português simples) | Onde morava |
+|---|---|---|
+| `prospeccao` | Buscar empresas e abordá-las aos poucos, com a IA conduzindo a conversa. | CRM › Prospecção (`/app/prospecting`) |
+| `chamadas` | Histórico das ligações de voz feitas pela IA, com o texto do que foi dito. | CRM › Chamadas (`/app/calls`) |
+| `comandas` | Registro do que foi feito para cada cliente, por quem, e quanto ele paga (serviços, como em salão ou clínica). | CRM › Comandas e Configurações › Comandas (`/app/comandas`) |
+| `meta-ads` | Ver quanto custou cada resultado dos anúncios do Facebook e Instagram, e conectar a conta de anúncios. | Análise › Meta Ads (`/app/ads/meta`) e Configurações › Meta Ads (`/app/settings/meta-ads`) |
+| `trunk-sip` | Dados de uma linha telefônica comum para a IA fazer ligações. | Configurações › Trunk SIP (`/app/settings/voip-trunk`) |
+| `conversoes` | Avisar o Google e o Facebook quais anúncios geraram venda, e marcar de onde veio quem chegou pelo site. | Configurações › Conversões (`/app/settings/conversoes`) |
+| `extensoes` | Guias extras instalados por cima do sistema para orientar o trabalho. | Configurações › Extensões (`/app/extensions`) e "Orientações instaladas" no hub do CRM |
+| `contas-e-recebimentos` | Cadastro das contas onde o dinheiro das vendas do cliente entra. | Configurações › Contas e recebimentos (`/app/settings/tenant/financeiro`) |
+| `provedores-ia` | Escolher qual "cérebro" de IA atende cada parte do sistema. A instalação já vem configurada. | IA › Provedores (`/app/ai/providers`) |
+| `jev` | "Jev — decisões rápidas": um segundo modelo de IA, rápido e barato, que decide para onde mandar cada conversa (TypeSafe System One). **Oculto até o Filipe criar a conta e ter a chave da TypeSafe.** | IA › Provedores › cartão do Jev (`/app/ai/providers`) |
+| `voz-whatsapp` | Ligação de voz pelo WhatsApp. Some o bloco em Segurança e a opção "Chamada de voz" em Conexões. | Configurações › Segurança (bloco "Chamada de voz pelo WhatsApp") e Conexões › Chamada de voz |
+| `conexao-provedor-parceiro` | Conectar o WhatsApp por um serviço parceiro. | Conexões › Provedor parceiro |
+| `conexao-telefone` | Conectar uma linha de telefone comum. | Conexões › Telefone |
+| `conexao-redes-sociais` | Conectar Instagram e outras redes para atender por elas. | Conexões › Redes sociais |
+
+## Notas
+
+- Os modelos e as telas continuam existindo no código; só não têm porta. Os alertas da Central que apontavam para Provedores levam ao Início enquanto a função estiver oculta.
+- Specs de teste de ponta a ponta das funções ocultas continuam no repositório, marcadas com o motivo e referência a este arquivo.

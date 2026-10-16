@@ -23,7 +23,9 @@ describe("/app/settings/billing", () => {
 
     expect(NAV_DESTINATIONS.map((d) => d.href)).not.toContain("/app/settings/billing");
     expect(searchable(true, "admin").map((d) => d.href)).not.toContain("/app/settings/billing");
-    const hub = hubSections("organizacao", true, "admin").flatMap((s) => s.items.map((i) => i.href));
+    const hub = hubSections("organizacao", true, "admin").flatMap((s) =>
+      s.items.map((i) => i.href),
+    );
     expect(hub).not.toContain("/app/settings/billing");
   });
 });
@@ -33,19 +35,22 @@ describe("nomes do hub", () => {
 
   it("Meu plano", () => {
     expect(por("/app/settings/plano").label).toBe("Meu plano");
-    expect(por("/app/settings/plano").description).toBe("Plano contratado, pagamento, uso e cancelamento.");
+    expect(por("/app/settings/plano").description).toBe(
+      "Plano contratado, pagamento, uso e cancelamento.",
+    );
   });
 
-  it("Contas e recebimentos fica em Atendimento, logo depois de Comandas, e não em Sua empresa", () => {
+  it("Contas e recebimentos continua no catálogo em Atendimento, mas está oculto nesta instalação (16/10/2026)", () => {
     const d = por("/app/settings/tenant/financeiro");
     expect(d.label).toBe("Contas e recebimentos");
     expect(d.minRole).toBe("viewer");
+    expect(d.configuracoes).toBe("Atendimento");
+    // Oculto (hiperbold/FUNCOES.md): nenhum hub, busca nem seção de Sua empresa o lista.
     const secoes = hubSections("organizacao", false, "admin");
-    const atendimento = secoes.find((s) => s.section === "Atendimento")!.items.map((i) => i.href);
-    const i = atendimento.indexOf("/app/comandas");
-    expect(i).toBeGreaterThanOrEqual(0);
-    expect(atendimento[i + 1]).toBe("/app/settings/tenant/financeiro");
-    const empresa = secoes.find((s) => s.section === "Sua empresa")!.items.map((x) => x.href);
-    expect(empresa).not.toContain("/app/settings/tenant/financeiro");
+    const todos = secoes.flatMap((s) => s.items.map((x) => x.href));
+    expect(todos).not.toContain("/app/settings/tenant/financeiro");
+    expect(searchable(false, "admin").map((x) => x.href)).not.toContain(
+      "/app/settings/tenant/financeiro",
+    );
   });
 });

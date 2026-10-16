@@ -44,6 +44,8 @@ import {
   mensagensMedidas,
 } from "./helpers/jev";
 import { lerCreds, loginComoAdmin, type CredsE2E } from "./helpers/login-admin";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+pularSeOculta(test, "provedores-ia");
 
 const BASE_DO_JEV = process.env.JEV_API_BASE_URL ?? "";
 /** A chave que o dublê aceita. Não é segredo: só vale para ele. */

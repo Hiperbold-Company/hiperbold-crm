@@ -33,6 +33,8 @@ import { createClient } from "@supabase/supabase-js";
 
 import { carregarEnvLocal } from "../../scripts/lib/env-de-teste";
 import { generateTotp, msUntilNextTotpWindow } from "./utils/totp";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+pularSeOculta(test, "conexao-provedor-parceiro");
 
 const PORTA = 3998;
 const URL_DO_DUBLE = `http://127.0.0.1:${PORTA}`;

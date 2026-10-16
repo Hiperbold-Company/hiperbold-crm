@@ -43,6 +43,7 @@ import {
 import { useT } from "@/hooks/i18n/useT";
 
 import { CartaoDoJev, jevNoPonto, useDadosDoJev, type DadosDoJev } from "./CartaoDoJev";
+import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 
 interface Ponto {
   id: string;
@@ -207,7 +208,10 @@ export function PainelDeProvedores() {
 
       <CartaoDoPadrao dados={dados} aoSalvar={carregar} />
 
-      <CartaoDoJev dados={jev.dados} erro={jev.erro} recarregar={jev.recarregar} />
+      {/* Hiperbold (16/10/2026): oculto até haver chave TypeSafe (hiperbold/FUNCOES.md). */}
+      {!funcaoOculta("jev") && (
+        <CartaoDoJev dados={jev.dados} erro={jev.erro} recarregar={jev.recarregar} />
+      )}
 
       <div className="space-y-8">
         {porPapel.map(({ papel, info, pontos }) => (

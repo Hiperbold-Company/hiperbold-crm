@@ -11,6 +11,7 @@ import type { ExtensionGuideView } from "@/lib/extensions/view";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { IDIOMA_PADRAO, type Idioma } from "@/lib/i18n/idiomas";
 import { hubSections, type NavGroupId } from "@/lib/navigation/registry";
+import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 import { BookOpen, Lightbulb, ListChecks, Warning } from "@/lib/ui/icons";
 
 interface NavHubProps {
@@ -128,7 +129,7 @@ export function NavHub({
         </section>
       ))}
 
-      {group === "crm" && (extensionGuides.length > 0 || extensionsUnavailable) ? (
+      {group === "crm" && !funcaoOculta("extensoes") && (extensionGuides.length > 0 || extensionsUnavailable) ? (
         <section aria-labelledby="hub-crm-orientacoes-instaladas" className="space-y-3">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>

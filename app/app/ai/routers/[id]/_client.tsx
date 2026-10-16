@@ -46,6 +46,7 @@ import type { ClassifierModelOption } from "@/lib/ai/classifier-models";
 import type { ChannelSessionLite } from "../../agents/[id]/_components/AgentForm";
 import { useFollowupFlows } from "@/hooks/followup/useFollowupFlows";
 import { useT } from "@/hooks/i18n/useT";
+import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 
 interface AgentLite {
   id: string;
@@ -797,7 +798,7 @@ function EscolhasLadoALado({
         </p>
         {/* Sem motivo, "não respondeu" não levava a lugar nenhum: o porquê (a
             chave, o crédito, o roteador sem intenções) está no cartão dele. */}
-        {!jev.respondeu && (
+        {!jev.respondeu && !funcaoOculta("provedores-ia") && (
           <Link className="text-xs underline underline-offset-4" href="/app/ai/providers">
             {t("Ver o motivo no cartão do Jev")}
           </Link>

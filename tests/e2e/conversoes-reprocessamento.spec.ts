@@ -5,6 +5,8 @@ import type { Database } from "@/lib/database.types";
 import { expect, test } from "./helpers/test";
 import { credenciaisSupabaseDeTeste } from "../../scripts/lib/env-de-teste";
 import { lerCreds, loginComoAdmin } from "./helpers/login-admin";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+pularSeOculta(test, "conversoes");
 
 // O segundo login pode aguardar uma janela TOTP inteira antes de testar a tela.
 test.describe.configure({ timeout: 60_000 });

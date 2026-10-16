@@ -1,6 +1,7 @@
 import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 
+import { redirecionamentosDasFuncoesOcultas } from "./lib/hiperbold/funcoes-ocultas";
 import { CABECALHOS_DE_SEGURANCA_EXTRAS } from "./lib/security/cabecalhos";
 
 /** Performance budget (EPIC-12 §S-12.05):
@@ -117,6 +118,11 @@ const nextConfig: NextConfig = {
         { source: "/legal/privacy", destination: "/site/privacidade/index.html" },
       ],
     };
+  },
+  // Hiperbold (16/10/2026): quem abre pelo endereço uma tela de função oculta cai no Início. A lista vem de
+  // lib/hiperbold/funcoes-ocultas.ts (hiperbold/FUNCOES.md); vale também para a navegação dentro do app.
+  async redirects() {
+    return redirecionamentosDasFuncoesOcultas();
   },
   async headers() {
     return [

@@ -19,6 +19,8 @@ import type { AddressInfo } from "node:net";
 
 import { expect, test } from "./helpers/test";
 import { createClient } from "@supabase/supabase-js";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+pularSeOculta(test, "voz-whatsapp");
 
 test("a primeira sessão mostra o QR depois de aceitar e ligar a voz", async ({
   page,

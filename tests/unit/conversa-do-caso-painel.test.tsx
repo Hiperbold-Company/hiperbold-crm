@@ -129,9 +129,13 @@ describe("CaseChatPanel — vazio", () => {
     pintar();
 
     expect(screen.getByText("Pergunte antes de decidir.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Por que a IA não resolveu sozinha?" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Por que a IA não resolveu sozinha?" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "O que o cliente já tentou?" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "O que muda se eu concluir agora?" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "O que muda se eu concluir agora?" }),
+    ).toBeInTheDocument();
   });
 
   it("a sugestão PREENCHE o campo e não gasta uma chamada paga", async () => {
@@ -165,15 +169,14 @@ describe("CaseChatPanel — instalação fresca, sem chave de IA", () => {
       screen.queryByRole("button", { name: "Por que a IA não resolveu sozinha?" }),
     ).not.toBeInTheDocument();
 
+    // Provedores está oculto nesta instalação (16/10/2026, hiperbold/FUNCOES.md): a frase não manda
+    // para uma tela que não existe e não há link.
     expect(
       screen.getByText(
-        "Nenhum provedor de IA está configurado. Peça a quem administra para configurar em IA › Provedores.",
+        "Nenhum provedor de IA está configurado. Peça a quem administra a instalação.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Abrir IA › Provedores" })).toHaveAttribute(
-      "href",
-      "/app/ai/providers",
-    );
+    expect(screen.queryByRole("link", { name: "Abrir IA › Provedores" })).not.toBeInTheDocument();
   });
 });
 
@@ -223,7 +226,9 @@ describe("CaseChatPanel — quem está respondendo", () => {
   it("agente no ar: nenhuma faixa de substituição aparece", () => {
     comChat(dados());
     pintar();
-    expect(screen.queryByText(/A IA que abriu este caso não está mais no ar/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/A IA que abriu este caso não está mais no ar/),
+    ).not.toBeInTheDocument();
   });
 });
 

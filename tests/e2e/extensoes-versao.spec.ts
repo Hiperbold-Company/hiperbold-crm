@@ -8,6 +8,8 @@ import {
   type AtoresDasExtensoes,
   type CatalogoDeVersoes,
 } from "./fixtures/catalogo-extensoes";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+pularSeOculta(test, "extensoes");
 
 // J26 — atualizar, desfazer a última troca, remover e reinstalar, pela tela, como o responsável
 // pela instalação faria. As asserções esperam a mutação e a recarga da lista; o prazo sobe pelo

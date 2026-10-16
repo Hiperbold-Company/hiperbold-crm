@@ -109,7 +109,7 @@ export function CredentialPicker({
             href="/app/ai/credentials"
             className="font-medium text-foreground underline underline-offset-4"
           >
-            {t("Gerenciar chaves em Credenciais")}
+            {t("Usar minha própria chave de IA (avançado)")}
           </Link>
         </p>
       )}

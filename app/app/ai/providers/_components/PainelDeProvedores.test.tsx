@@ -10,6 +10,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PainelDeProvedores } from "./PainelDeProvedores";
 
+// O cartão do Jev está oculto na instalação da Hiperbold (16/10/2026, hiperbold/FUNCOES.md). Estes testes
+// provam a mecânica do painel com o cartão ligado; o efeito do registro está em tests/unit/funcoes-ocultas.test.ts.
+vi.mock("@/lib/hiperbold/funcoes-ocultas", () => ({ funcaoOculta: () => false, hrefOculto: () => false }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/app/app/ai/credentials/_actions", () => ({ refreshCredentialsView: vi.fn() }));
 

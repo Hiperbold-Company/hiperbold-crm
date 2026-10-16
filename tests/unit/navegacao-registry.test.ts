@@ -137,10 +137,11 @@ describe("sidebarGroups", () => {
       // para cá no dia em que o app souber que o módulo está ligado (hoje isso
       // é profile do compose, não estado que o aplicativo conheça).
     ]);
-    // E continua alcançável: o hub é a porta dela.
-    expect(
-      hubSections("crm", true, null).flatMap((s) => s.items.map((i) => i.href)),
-    ).toContain("/app/comandas");
+    // E continua alcançável: o hub é a porta dela. (Comandas saiu do produto visível em 16/10/2026,
+    // `hiperbold/FUNCOES.md`; Produtos é a prova de que o hub segue sendo a porta do que não está no menu.)
+    expect(hubSections("crm", true, null).flatMap((s) => s.items.map((i) => i.href))).toContain(
+      "/app/products",
+    );
     expect(NAV_GROUPS.find((g) => g.id === "crm")?.hub?.href).toBe("/app/crm");
   });
 
@@ -190,11 +191,12 @@ describe("hubSections", () => {
       "/app/templates",
       "/app/tasks",
       "/app/settings/tenant/agenda",
-      "/app/comandas",
-      "/app/settings/tenant/financeiro",
+      // Comandas e Contas e recebimentos: ocultas em 16/10/2026 (hiperbold/FUNCOES.md).
     ]);
-    expect(por("IA")).toEqual(["/app/ai/followups", "/app/ai/routers", "/app/ai/providers"]);
-    expect(por("Canais")).toEqual(["/app/connections", "/app/webhooks", "/app/ads/meta"]);
+    // Provedores oculto (16/10/2026); Credenciais ficou, como recurso avançado.
+    expect(por("IA")).toEqual(["/app/ai/followups", "/app/ai/routers", "/app/ai/credentials"]);
+    // Meta Ads oculto (16/10/2026).
+    expect(por("Canais")).toEqual(["/app/connections", "/app/webhooks"]);
     // Sem duplicar a mesma tela em duas seções do mesmo hub.
     const todos = secoes.flatMap((s) => s.items.map((i) => i.href));
     expect(new Set(todos).size).toBe(todos.length);
@@ -211,27 +213,45 @@ describe("hubSections", () => {
 
   it("as telas que saíram do menu continuam no ⌘K e no hub do próprio grupo", () => {
     const busca = searchable(false, "admin").map((d) => d.href);
-    for (const h of ["/app/agenda", "/app/templates", "/app/tasks", "/app/comandas", "/app/ai/followups", "/app/ai/routers", "/app/ai/providers", "/app/connections", "/app/webhooks", "/app/ads/meta", "/app/settings/tenant/agenda", "/app/settings/tenant/financeiro", "/app/settings/plano"]) {
+    // Ocultas em 16/10/2026 (hiperbold/FUNCOES.md): somem do ⌘K também.
+    for (const h of [
+      "/app/comandas",
+      "/app/ai/providers",
+      "/app/ads/meta",
+      "/app/settings/tenant/financeiro",
+    ]) {
+      expect(busca).not.toContain(h);
+    }
+    for (const h of [
+      "/app/agenda",
+      "/app/templates",
+      "/app/tasks",
+      "/app/ai/followups",
+      "/app/ai/routers",
+      "/app/ai/credentials",
+      "/app/connections",
+      "/app/webhooks",
+      "/app/settings/tenant/agenda",
+      "/app/settings/plano",
+    ]) {
       expect(busca).toContain(h);
     }
     const hubIA = hubSections("ia", false, "admin").flatMap((s) => s.items.map((i) => i.href));
     expect(hubIA).toContain("/app/ai/followups");
   });
 
-  it("o hub do CRM é inventário: as seis telas do grupo, nas duas seções", () => {
+  it("o hub do CRM é inventário: as telas visíveis do grupo, nas duas seções", () => {
     // As seções são a régua do sidebar escrita por extenso — o que se abre todo
     // dia contra o que se define uma vez. Lista EXATA: `toContain` deixaria uma
     // tela nova entrar sem que ninguém decidisse de que lado dela ela cai.
     const secoes = hubSections("crm", true, null);
     expect(secoes.map((s) => s.section)).toEqual(["O dia a dia da venda", "Preparar a venda"]);
+    // Prospecção, Chamadas e Comandas: ocultas em 16/10/2026 (hiperbold/FUNCOES.md).
     expect(secoes.flatMap((s) => s.items.map((i) => i.href))).toEqual([
-      "/app/prospecting",
       "/app/kanban",
       "/app/campaigns",
       "/app/contacts",
       "/app/tasks",
-      "/app/calls",
-      "/app/comandas",
       "/app/products",
       "/app/settings/tenant/pipelines",
     ]);
