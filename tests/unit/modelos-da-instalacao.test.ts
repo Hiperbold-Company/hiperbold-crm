@@ -197,9 +197,13 @@ describe("o seletor de modelos", () => {
     expect(o.map((m) => m.model_id)).toEqual(["gpt-6-luna"]);
   });
 
-  it("liberado de outro fabricante não aparece num provedor direto que não o executa", () => {
+  it("nenhum liberado é do provedor direto: o seletor mostra o catálogo, nunca abre vazio", () => {
+    // Abrir vazio foi o defeito medido no e2e `agente-novo-e-uso` (instalação num provedor
+    // direto, lista só com o Luna do OpenRouter). O freio do servidor mantém o modelo pedido
+    // quando não há rota para o padrão, então a tela acompanha o servidor.
     const o = modelosParaOSeletor({ catalogo, liberados: ["openai/gpt-6-luna"], provedor: "anthropic", restrito: true });
-    expect(o).toEqual([]);
+    expect(o.map((m) => m.model_id)).toEqual(catalogo.map((c) => c.model_id));
+    expect(o.map((m) => m.model_id)).not.toContain("gpt-6-luna");
   });
 });
 

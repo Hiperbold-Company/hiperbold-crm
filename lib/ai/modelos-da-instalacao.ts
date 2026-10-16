@@ -170,6 +170,10 @@ export function modelosParaOSeletor<M extends OpcaoDeModelo>(d: {
     const nome = NOMES_PARA_A_TELA[liberado] ?? nomeDoCatalogo;
     opcoes.push({ ...(doCatalogo ?? {}), model_id: doCatalogo?.model_id ?? id, display_name: nome } as M | OpcaoDeModelo);
   }
+  // Nenhum liberado é deste provedor (ex.: a instalação roda num provedor direto e a lista só
+  // tem modelos do OpenRouter): restringir abriria o seletor VAZIO. O freio do servidor já
+  // mantém o modelo pedido nesse caso (sem rota para o padrão), então a tela segue igual a ele.
+  if (opcoes.length === 0) return [...d.catalogo];
   return opcoes;
 }
 
