@@ -51,6 +51,7 @@ async function main() {
       email: EMAIL,
       password: PASSWORD,
       email_confirm: true,
+      app_metadata: { email_verificado_em: new Date().toISOString() },
       user_metadata: { full_name: "Teste" },
     });
     if (r.error || !r.data?.user) throw r.error ?? new Error("user create");

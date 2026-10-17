@@ -10,6 +10,8 @@ import { ensureTenantForUser, vinculoAtivo } from "@/lib/auth/provision";
 import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
 import { acessoFoiRevogado } from "@/lib/auth/vinculo-revogado";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { gotrueFalso } from "../../../tests/unit/helpers/gotrue-admin-falso";
 
 /**
  * GET /auth/callback — a volta da entrada com Google (issue #1388).
@@ -47,6 +49,8 @@ vi.mock("@/lib/branding/saida", () => ({
   marcaDaSaida: vi.fn(async () => ({ nome: "Central de Teste" })),
 }));
 vi.mock("@/lib/env", () => ({ env: { NEXT_PUBLIC_APP_URL: "http://localhost:3000" } }));
+// O cliente de serviço usado na retomada da conta (D-204). Um falso com o estado do usuário no GoTrue.
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
 const USUARIO = { id: "11111111-1111-4111-8111-111111111111", email: "convidado@example.com" };
 const PAYLOAD = {
@@ -59,7 +63,7 @@ const PAYLOAD = {
 
 interface Cenario {
   /** o que `exchangeCodeForSession` devolve */
-  troca: { data: { user: unknown } | null; error: { message: string } | null };
+  troca: { data: { user: unknown; session?: unknown } | null; error: { message: string } | null };
   /** fatores TOTP que a conta já tem verificados */
   fatores?: { id: string; status: string }[];
 }
@@ -68,6 +72,7 @@ function stubSupabase(c: Cenario) {
   return {
     auth: {
       exchangeCodeForSession: vi.fn(async () => c.troca),
+      signOut: vi.fn(async () => ({ error: null })),
       mfa: {
         listFactors: vi.fn(async () => ({ data: { totp: c.fatores ?? [] } })),
       },
@@ -106,9 +111,24 @@ async function comSupabase(c: Cenario) {
   return await import("./route");
 }
 
+/** Usuário que o Google devolve: conta de e-mail e senha, com a identidade do Google recém-ligada. */
+const USUARIO_PRE_SEQUESTRADO = {
+  id: "44444444-4444-4444-8444-444444444444",
+  email: "v@example.com",
+  app_metadata: {
+    provider: "email",
+    email_verificacao: { hash: "h", expira_em: "2099-01-01T00:00:00Z", enviado_em: "2026-10-17T00:00:00Z" },
+  },
+  identities: [
+    { provider: "email", identity_data: { email: "v@example.com" } },
+    { provider: "google", identity_data: { email: "v@example.com", email_verified: true } },
+  ],
+};
+
 describe("GET /auth/callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(createAdminClient).mockReturnValue(gotrueFalso().admin as unknown as ReturnType<typeof createAdminClient>);
     vi.mocked(aplicarConvite).mockResolvedValue({ ok: true, membershipId: "m1", mudou: true });
     vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
     vi.mocked(vinculoAtivo).mockResolvedValue(null);
@@ -308,6 +328,123 @@ describe("GET /auth/callback", () => {
 
     expect(await destino(res)).toBe("/login?error=entrada_com_google_cancelada");
     expect(vi.mocked(audit)).not.toHaveBeenCalled();
+  });
+
+  // ─── D-204: pré-sequestro de conta (autoconfirm) ─────────────────────────────
+
+  it("conta cadastrada por e-mail com verificação em aberto: troca a senha, derruba as outras sessões e só então carimba", async () => {
+    const falso = gotrueFalso();
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    vi.mocked(vinculoAtivo).mockResolvedValue("org-existente");
+    const { GET } = await comSupabase({
+      troca: { data: { user: USUARIO_PRE_SEQUESTRADO, session: { access_token: "jwt-da-sessao-nova" } }, error: null },
+    });
+
+    const res = await GET(requisicao("code=abc"));
+
+    expect(falso.chamadas).toEqual(["senha", "fatores", "sessoes", "carimbo"]);
+    expect(falso.admin.auth.admin.signOut).toHaveBeenCalledWith("jwt-da-sessao-nova", "others");
+    const senha = falso.admin.auth.admin.updateUserById.mock.calls[0]![1].password!;
+    expect(senha.length).toBeGreaterThanOrEqual(32);
+    // O pedido em aberto saiu e o carimbo entrou: a faixa de "confirme seu e-mail" deixa de aparecer.
+    expect(falso.estado.app_metadata.email_verificacao).toBeUndefined();
+    expect(typeof falso.estado.app_metadata.email_verificado_em).toBe("string");
+    expect(await destino(res)).toBe("/app");
+    expect(vi.mocked(audit)).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "auth.account_reclaimed_by_google", actorUserId: USUARIO_PRE_SEQUESTRADO.id }),
+    );
+  });
+
+  it("fator de MFA NÃO verificado sai antes de derrubar as outras sessões; a sessão nova segue viva", async () => {
+    const falso = gotrueFalso({ fatores: [{ id: "f1", status: "unverified" }] });
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    vi.mocked(vinculoAtivo).mockResolvedValue("org-existente");
+    const { GET } = await comSupabase({
+      troca: { data: { user: USUARIO_PRE_SEQUESTRADO, session: { access_token: "jwt" } }, error: null },
+    });
+
+    const res = await GET(requisicao("code=abc"));
+
+    expect(falso.removidos).toEqual(["f1"]);
+    expect(falso.chamadas).toEqual(["senha", "fatores", "sessoes", "carimbo"]);
+    expect(await destino(res)).toBe("/app");
+    expect(vi.mocked(audit)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "auth.account_reclaimed_by_google",
+        metadata: expect.objectContaining({ fatores_removidos: 1 }),
+      }),
+    );
+  });
+
+  it("fator VERIFICADO removido: o provedor encerra todas as sessões, então a rota não segue com a sessão morta", async () => {
+    const falso = gotrueFalso({ fatores: [{ id: "f1", status: "verified" }, { id: "f2", status: "unverified" }] });
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    const { GET } = await comSupabase({
+      troca: { data: { user: USUARIO_PRE_SEQUESTRADO, session: { access_token: "jwt" } }, error: null },
+    });
+
+    const res = await GET(requisicao("code=abc"));
+    const cliente = await vi.mocked(createClient).mock.results[0]!.value;
+
+    expect(falso.removidos).toEqual(["f1", "f2"]);
+    // Sem "sessoes": derrubar as outras com um JWT que o provedor já encerrou só daria erro.
+    expect(falso.chamadas).toEqual(["senha", "fatores", "carimbo"]);
+    expect(typeof falso.estado.app_metadata.email_verificado_em).toBe("string");
+    expect(cliente.auth.signOut).toHaveBeenCalled();
+    expect(await destino(res)).toBe("/login?error=conta_protegida");
+    expect(vi.mocked(ensureTenantForUser)).not.toHaveBeenCalled();
+  });
+
+  it("a retomada vem ANTES do desafio de MFA: o fator do atacante não pode segurar a conta com a senha dele viva", async () => {
+    const falso = gotrueFalso();
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    const { GET } = await comSupabase({
+      troca: { data: { user: USUARIO_PRE_SEQUESTRADO, session: { access_token: "jwt" } }, error: null },
+      fatores: [{ id: "fator-do-atacante", status: "verified" }],
+    });
+
+    const res = await GET(requisicao("code=abc"));
+
+    expect(falso.chamadas).toEqual(["senha", "fatores", "sessoes", "carimbo"]);
+    expect(await destino(res)).toContain("/login/mfa");
+  });
+
+  it.each(["senha", "fatores", "sessoes", "gravacao"] as const)(
+    "falha na etapa %s: FALHA FECHADA, encerra a sessão nova, recusa a entrada e não provisiona",
+    async (etapa) => {
+      const falso = gotrueFalso({ falharEm: etapa });
+      vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+      const { GET } = await comSupabase({
+        troca: { data: { user: USUARIO_PRE_SEQUESTRADO, session: { access_token: "jwt" } }, error: null },
+      });
+
+      const res = await GET(requisicao("code=abc"));
+      const cliente = await vi.mocked(createClient).mock.results[0]!.value;
+
+      expect(await destino(res)).toBe("/login?error=entrada_com_google");
+      expect(cliente.auth.signOut).toHaveBeenCalled();
+      expect(vi.mocked(ensureTenantForUser)).not.toHaveBeenCalled();
+      expect(vi.mocked(vinculoAtivo)).not.toHaveBeenCalled();
+      // Nunca carimba por cima de uma etapa que falhou.
+      expect(falso.estado.app_metadata.email_verificado_em).toBeUndefined();
+    },
+  );
+
+  it("conta sem pedido em aberto (Google desde o início, convite, cadastro antigo): nada é tocado", async () => {
+    const falso = gotrueFalso();
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    vi.mocked(vinculoAtivo).mockResolvedValue("org-existente");
+    const { GET } = await comSupabase({
+      troca: {
+        data: { user: { ...USUARIO_PRE_SEQUESTRADO, app_metadata: { provider: "google" } }, session: { access_token: "jwt" } },
+        error: null,
+      },
+    });
+
+    const res = await GET(requisicao("code=abc"));
+
+    expect(falso.chamadas).toEqual([]);
+    expect(await destino(res)).toBe("/app");
   });
 
   // ─── #1646: a volta para tela AUTENTICADA sai pela PONTE, nunca por 302 ─────

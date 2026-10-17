@@ -146,6 +146,7 @@ async function ensureUser(): Promise<string> {
     email: EMAIL,
     password: PASSWORD,
     email_confirm: true,
+    app_metadata: { email_verificado_em: new Date().toISOString() },
     user_metadata: { full_name: "E2E B Admin" },
   });
   if (error || !data?.user) throw new Error(`criar user ${EMAIL}: ${error?.message}`);

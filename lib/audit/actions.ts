@@ -1106,6 +1106,11 @@ export const AUDIT_ACTIONS = [
   // reenvio; metadata.via diz qual) e o link foi aberto e valeu. Nunca levam o token nem o endereço em claro.
   "auth.email_verification_sent",
   "auth.email_verified",
+  // D-204: a entrada com Google caiu numa conta cadastrada por e-mail com a verificação do CRM em aberto; a senha foi
+  // trocada, as outras sessões derrubadas e o e-mail carimbado (lib/auth/retomar-conta-pelo-google.ts).
+  "auth.account_reclaimed_by_google",
+  // O mesmo, pelo link de recuperação de senha (lib/auth/retomar-conta-pela-recuperacao.ts).
+  "auth.account_reclaimed_by_recovery",
   // Pedido de reembolso do cliente (migration 0957). `refund_requested`: o admin da organização pediu o reembolso
   // do pagamento mais recente (metadata: pagamento do Asaas, valor, motivo; nunca o texto livre).
   // `refund_rejected` e `refund_marked_done`: o admin da PLATAFORMA recusou o pedido ou o marcou como concluído

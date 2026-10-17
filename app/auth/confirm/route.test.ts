@@ -6,6 +6,9 @@ import { decidirConviteDoSignup } from "@/lib/auth/convite-no-signup";
 import { ensureTenantForUser } from "@/lib/auth/provision";
 import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { audit } from "@/lib/audit";
+import { gotrueFalso, PEDIDO_EM_ABERTO } from "../../../tests/unit/helpers/gotrue-admin-falso";
 
 /**
  * GET /auth/confirm — a rota tem de TERMINAR O SERVIÇO.
@@ -28,6 +31,7 @@ import { createClient } from "@/lib/supabase/server";
  */
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/auth/aplicar-convite", () => ({ aplicarConvite: vi.fn() }));
 vi.mock("@/lib/auth/convite-no-signup", () => ({ decidirConviteDoSignup: vi.fn() }));
 vi.mock("@/lib/auth/provision", () => ({ ensureTenantForUser: vi.fn(async () => undefined) }));
@@ -46,7 +50,7 @@ const PAYLOAD = {
 
 interface Cenario {
   /** o que `verifyOtp` devolve — o `null` simula token de uso único já gasto */
-  verifyOtp: { data: { user: unknown }; error: { message: string } | null };
+  verifyOtp: { data: { user: unknown; session?: unknown }; error: { message: string } | null };
   /** o que `getUser()` devolve depois — a sessão que o 1º clique deixou */
   getUser: { data: { user: unknown } };
 }
@@ -57,6 +61,7 @@ function stubSupabase(c: Cenario) {
       verifyOtp: vi.fn(async () => c.verifyOtp),
       exchangeCodeForSession: vi.fn(async () => c.verifyOtp),
       getUser: vi.fn(async () => c.getUser),
+      signOut: vi.fn(async () => ({ error: null })),
     },
   };
 }
@@ -201,4 +206,94 @@ describe("GET /auth/confirm", () => {
     expect(destino(res)).toBe("/app");
     expect(vi.mocked(ensureTenantForUser)).not.toHaveBeenCalled();
   });
+
+  // ─── D-204: recuperação de senha sobre conta cadastrada por e-mail sem verificação ───
+
+  const CONTA_PENDENTE = { ...USUARIO, app_metadata: { email_verificacao: PEDIDO_EM_ABERTO } };
+
+  it("recuperação em conta com verificação em aberto: senha, fatores, outras sessões e carimbo, e segue para /login/reset", async () => {
+    const falso = gotrueFalso({ fatores: [{ id: "f1", status: "unverified" }] });
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    comSupabase({
+      verifyOtp: { data: { user: CONTA_PENDENTE, session: { access_token: "jwt-recuperacao" } }, error: null },
+      getUser: { data: { user: null } },
+    });
+
+    const { GET } = await import("./route");
+    const res = await GET(requisicao("type=recovery&token_hash=abc"));
+
+    expect(falso.chamadas).toEqual(["senha", "fatores", "sessoes", "carimbo"]);
+    expect(falso.admin.auth.admin.signOut).toHaveBeenCalledWith("jwt-recuperacao", "others");
+    expect(falso.removidos).toEqual(["f1"]);
+    expect(typeof falso.estado.app_metadata.email_verificado_em).toBe("string");
+    expect(destino(res)).toBe("/login/reset");
+    expect(vi.mocked(audit)).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "auth.account_reclaimed_by_recovery" }),
+    );
+  });
+
+  it("recuperação com fator verificado: o provedor encerra a sessão de recuperação, então manda entrar de novo", async () => {
+    const falso = gotrueFalso({ fatores: [{ id: "f1", status: "verified" }] });
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    comSupabase({
+      verifyOtp: { data: { user: CONTA_PENDENTE, session: { access_token: "jwt" } }, error: null },
+      getUser: { data: { user: null } },
+    });
+
+    const { GET } = await import("./route");
+    const res = await GET(requisicao("type=recovery&token_hash=abc"));
+
+    expect(destino(res)).toBe("/login?error=conta_protegida");
+    expect(falso.chamadas).toEqual(["senha", "fatores", "carimbo"]);
+  });
+
+  it("recuperação em conta JÁ verificada: não toca em senha, fatores nem sessões", async () => {
+    const falso = gotrueFalso();
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    comSupabase({
+      verifyOtp: { data: { user: USUARIO, session: { access_token: "jwt" } }, error: null },
+      getUser: { data: { user: null } },
+    });
+
+    const { GET } = await import("./route");
+    const res = await GET(requisicao("type=recovery&token_hash=abc"));
+
+    expect(falso.chamadas).toEqual([]);
+    expect(destino(res)).toBe("/login/reset");
+  });
+
+  it("recuperação cujo link falhou mas há sessão antiga (segundo clique): NÃO reassume a conta", async () => {
+    // Uma sessão que já existia não prova posse do endereço: o atacante logado não pode carimbar a própria conta.
+    const falso = gotrueFalso();
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    comSupabase({
+      verifyOtp: { data: { user: null }, error: { message: "Email link is invalid or has expired" } },
+      getUser: { data: { user: CONTA_PENDENTE } },
+    });
+
+    const { GET } = await import("./route");
+    await GET(requisicao("type=recovery&token_hash=gasto"));
+
+    expect(falso.chamadas).toEqual([]);
+  });
+
+  it.each(["senha", "fatores", "sessoes", "gravacao"] as const)(
+    "recuperação, falha na etapa %s: FALHA FECHADA, encerra a sessão e pede outro link",
+    async (etapa) => {
+      const falso = gotrueFalso({ falharEm: etapa });
+      vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+      comSupabase({
+        verifyOtp: { data: { user: CONTA_PENDENTE, session: { access_token: "jwt" } }, error: null },
+        getUser: { data: { user: null } },
+      });
+
+      const { GET } = await import("./route");
+      const res = await GET(requisicao("type=recovery&token_hash=abc"));
+      const cliente = await vi.mocked(createClient).mock.results.at(-1)!.value;
+
+      expect(destino(res)).toBe("/login?error=link_invalido");
+      expect(cliente.auth.signOut).toHaveBeenCalled();
+      expect(falso.estado.app_metadata.email_verificado_em).toBeUndefined();
+    },
+  );
 });

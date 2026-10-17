@@ -7,6 +7,7 @@ import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requirePlatformAdminFull } from "@/lib/auth/portao-de-escrita";
 import { ensureTenantForUser } from "@/lib/auth/provision";
+import { emailVerificado } from "@/lib/auth/verificacao-email";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -54,10 +55,13 @@ export async function decideRegistrationRequest(
 
   if (aprovar) {
     const { data: conta } = await admin.auth.admin.getUserById(pedido.user_id);
-    // Sem confirmação feita pelo provedor de auth, o endereço não foi provado —
-    // e aprovar entregaria uma empresa a quem digitou o e-mail de outra pessoa.
-    // Este módulo nunca confirma e-mail; só confere o que o provedor já fez.
-    if (!conta.user || !conta.user.email_confirmed_at) {
+    // Sem prova de posse do endereço, aprovar entregaria uma empresa a quem digitou o e-mail de outra
+    // pessoa. Duas provas, as duas exigidas: a confirmação do provedor de auth (sem a confirmação
+    // automática ligada, é ela que vale) E a verificação do CRM (com a confirmação automática ligada o
+    // provedor dá TODO endereço como confirmado, então `email_confirmed_at` sozinho não prova nada: D-204).
+    // A verificação do CRM mora em `app_metadata`, que só o servidor escreve, nunca em `user_metadata`.
+    // Este módulo nunca confirma e-mail; só confere o que já foi feito.
+    if (!conta.user || !conta.user.email_confirmed_at || !emailVerificado(conta.user.app_metadata)) {
       return { ok: false, error: "account_unavailable" };
     }
     try {

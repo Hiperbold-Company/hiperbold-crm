@@ -55,6 +55,7 @@ import { createHash } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { emailVerificado } from "@/lib/auth/verificacao-email";
 import { idiomaDoDestinatario } from "@/lib/billing/assinatura/renovacao-textos";
 import { marcaDaSaida, type MarcaDeSaida } from "@/lib/branding/saida";
 import { emailConfigurado, sendEmail } from "@/lib/email/roteador";
@@ -183,8 +184,11 @@ async function destinatarioDoUsuario(
   const email = data?.user?.email?.trim();
   if (!email) return null;
   // Endereço que a pessoa nunca confirmou não recebe e-mail (pode ser de outra pessoa): admins, criador e
-  // administradores da plataforma da cópia.
+  // administradores da plataforma da cópia. Duas provas, as duas exigidas: a confirmação do provedor E a
+  // verificação do CRM (`app_metadata`, só o servidor escreve). Com a confirmação automática ligada o provedor
+  // preenche `email_confirmed_at` em todo cadastro, então sozinho ele não prova posse (D-204).
   if (!(data?.user as { email_confirmed_at?: string | null } | undefined)?.email_confirmed_at) return null;
+  if (!emailVerificado(data?.user?.app_metadata)) return null;
   // Conta banida (`banned_until` no futuro) ou apagada (`deleted_at`) não recebe e-mail: vale para admins da
   // organização, criador do pedido e administradores da plataforma da cópia.
   const conta = data?.user as { banned_until?: string | null; deleted_at?: string | null } | undefined;

@@ -8,9 +8,11 @@ import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
 import { aplicarConvite } from "@/lib/auth/aplicar-convite";
 import { respostaDePonte } from "@/lib/auth/ponte-de-volta";
 import { safeNext } from "@/lib/auth/safe-next";
+import { retomarContaPeloGoogle } from "@/lib/auth/retomar-conta-pelo-google";
 import { audit } from "@/lib/audit";
 import { marcaDaSaida } from "@/lib/branding/saida";
 import { env } from "@/lib/env";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * GET /auth/callback — a VOLTA da entrada com Google (issue #1388).
@@ -138,6 +140,41 @@ export async function GET(request: NextRequest) {
   }
 
   const usuario = data.user;
+
+  // PRÉ-SEQUESTRO (D-204). Antes de QUALQUER decisão sobre a conta, inclusive o desafio de MFA abaixo: se a
+  // conta foi criada pelo cadastro com e-mail e o link do CRM nunca foi aberto, alguém pode ter escolhido a
+  // senha dela sem provar o endereço, e o Google acabou de ligar a identidade da vítima a essa conta. A regra
+  // e a ordem das etapas (senha, outras sessões, carimbo) estão em `lib/auth/retomar-conta-pelo-google.ts`.
+  // Falha fechada: se qualquer etapa falhar, a sessão que acabou de abrir é encerrada e a entrada recusada.
+  const retomada = await retomarContaPeloGoogle({
+    admin: createAdminClient(),
+    usuario,
+    accessToken: data.session?.access_token ?? null,
+  });
+  if (!retomada.ok) {
+    await audit({
+      action: "auth.google_signin_failed",
+      actorUserId: usuario.id,
+      metadata: { motivo: "retomada_da_conta_falhou", etapa: retomada.etapa },
+      requestId,
+    });
+    await supabase.auth.signOut();
+    return redirectTo("/login?error=entrada_com_google");
+  }
+  if (retomada.retomada) {
+    await audit({
+      action: "auth.account_reclaimed_by_google",
+      actorUserId: usuario.id,
+      metadata: { provider: "google", fatores_removidos: retomada.fatoresRemovidos },
+      requestId,
+    });
+    // Um fator de MFA verificado saiu e o provedor encerrou TODAS as sessões, a que acabou de abrir inclusive:
+    // seguir daqui seria entregar uma sessão morta. A conta já está limpa; entrar de novo com o Google funciona.
+    if (retomada.sessaoEncerrada) {
+      await supabase.auth.signOut();
+      return redirectTo("/login?error=conta_protegida");
+    }
+  }
 
   // O Google autentica com dois fatores (e a conta pode tê-los). O login por
   // senha NÃO deixa passar quem tem TOTP verificado sem o segundo fator

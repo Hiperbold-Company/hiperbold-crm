@@ -19,6 +19,8 @@ export interface UsuarioFalso {
    * (o caso comum); `null` é endereço nunca confirmado.
    */
   email_confirmed_at?: string | null;
+  /** Como no GoTrue: só o servidor escreve. Aqui mora a verificação do CRM (`email_verificacao` / `email_verificado_em`). */
+  app_metadata?: Record<string, unknown>;
 }
 
 export interface BancoFalso {

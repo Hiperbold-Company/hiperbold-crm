@@ -35,7 +35,8 @@ const PEDIDO = {
 function banco({
   pedido = PEDIDO as typeof PEDIDO | null,
   emailConfirmado = true,
-}: { pedido?: typeof PEDIDO | null; emailConfirmado?: boolean } = {}) {
+  appMetadata,
+}: { pedido?: typeof PEDIDO | null; emailConfirmado?: boolean; appMetadata?: Record<string, unknown> } = {}) {
   const atualizacao = vi.fn();
   const update = vi.fn((valores: Record<string, unknown>) => {
     atualizacao(valores);
@@ -54,6 +55,7 @@ function banco({
               id: PEDIDO.user_id,
               email: "dono@exemplo.com.br",
               email_confirmed_at: emailConfirmado ? "2026-09-22T10:00:00Z" : null,
+              app_metadata: appMetadata ?? {},
             },
           },
         })),
@@ -113,6 +115,30 @@ describe("decideRegistrationRequest", () => {
     ).resolves.toEqual({ ok: false, error: "account_unavailable" });
     expect(ensureTenantForUser).not.toHaveBeenCalled();
     expect(atualizacao).not.toHaveBeenCalled();
+  });
+
+  it("⭐ D-204: confirmado pelo provedor (autoconfirm) mas com a verificação do CRM em aberto não vira empresa", async () => {
+    const { atualizacao } = banco({
+      emailConfirmado: true,
+      appMetadata: { email_verificacao: { hash: "h", expira_em: "2099-01-01T00:00:00Z", enviado_em: "2026-10-17T00:00:00Z" } },
+    });
+    const { decideRegistrationRequest } = await import("./decide");
+
+    await expect(
+      decideRegistrationRequest({ requestId: PEDIDO.id, decision: "approve" }),
+    ).resolves.toEqual({ ok: false, error: "account_unavailable" });
+    expect(ensureTenantForUser).not.toHaveBeenCalled();
+    expect(atualizacao).not.toHaveBeenCalled();
+  });
+
+  it("D-204: verificação do CRM concluída (carimbo em app_metadata) aprova normalmente", async () => {
+    banco({ appMetadata: { email_verificado_em: "2026-10-17T00:00:00Z", email_verificacao: null } });
+    const { decideRegistrationRequest } = await import("./decide");
+
+    await expect(
+      decideRegistrationRequest({ requestId: PEDIDO.id, decision: "approve" }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(ensureTenantForUser).toHaveBeenCalled();
   });
 
   it("pedido já decidido (ou inexistente) não é decidido de novo", async () => {

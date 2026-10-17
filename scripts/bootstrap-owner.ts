@@ -97,6 +97,9 @@ async function ensureOwnerUser(): Promise<string> {
     email: OWNER_EMAIL,
     password: OWNER_PASSWORD,
     email_confirm: true,
+    // O dono da instalação é quem a instala: o endereço é dele. O carimbo evita que o gatilho de `auth.users`
+    // (migration 0966) abra o pedido de verificação do CRM para esta conta (D-204).
+    app_metadata: { email_verificado_em: new Date().toISOString() },
     // O dono também nasce com a preferência: ele é o único que entra antes de
     // existir organização resolvida na sessão, no primeiro login.
     user_metadata: { full_name: "Dono", locale: APP_LOCALE },
