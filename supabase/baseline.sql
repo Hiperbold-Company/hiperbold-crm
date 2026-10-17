@@ -67062,7 +67062,8 @@ reset lock_timeout;
 
 -- ---- captação com carimbo de horário e CPF do contato só do servidor (migration 0967, fork Hiperbold) ----
 --
--- Sem função: nada a ver com a VARREDURA anon (logo abaixo). Detalhe e motivo no arquivo da migration.
+-- Só uma função de gatilho (invoker, revogada de public/anon/authenticated): nada a ver com a VARREDURA anon (logo abaixo).
+-- Detalhe e motivo no arquivo da migration.
 -- D-215: catraca do carimbo da captação assinada. D-216: `cpf_hash`/`cpf_encrypted` perdem SELECT/INSERT/UPDATE para
 -- anon e authenticated (grant por coluna em todas as outras). O default ACL do Supabase concede tudo à tabela, e o
 -- GRANT do dump só acrescenta: o que fecha é o `revoke` explícito abaixo, seguido do grant por coluna.
@@ -67072,6 +67073,33 @@ alter table public.webhook_sources
 
 comment on column public.webhook_sources.exige_carimbo is
   'Ligada sozinha no primeiro envio válido com X-HiperCRM-Timestamp (D-215). Ligada, a fonte recusa envio assinado sem carimbo (anti-reenvio). Nunca volta a false por código.';
+
+-- A catraca vale no BANCO, não só no código: um manager tem UPDATE em `webhook_sources` pela REST, e sem esta trava
+-- bastaria `exige_carimbo = false` para reabrir o formato sem carimbo (e o reenvio). Só o `service_role` (o servidor)
+-- pode tirar a exigência; quem liga é a rota, e ligar qualquer um pode. Para desligar de propósito, o dono do banco
+-- usa `alter table public.webhook_sources disable trigger trg_webhook_sources_catraca_do_carimbo`.
+create or replace function public.fn_webhook_sources_catraca_do_carimbo()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if old.exige_carimbo is true and new.exige_carimbo is not true and current_user <> 'service_role' then
+    raise exception 'exige_carimbo não pode ser desligado: a fonte já recebeu um envio assinado com carimbo'
+      using errcode = '42501';
+  end if;
+  return new;
+end
+$$;
+
+-- Função nova em public nasce exposta: as duas origens de EXECUTE (grant direto a anon do default ACL e o grant a
+-- PUBLIC). Gatilho não precisa de EXECUTE do papel que dispara a escrita.
+revoke execute on function public.fn_webhook_sources_catraca_do_carimbo() from public, anon, authenticated;
+
+drop trigger if exists trg_webhook_sources_catraca_do_carimbo on public.webhook_sources;
+create trigger trg_webhook_sources_catraca_do_carimbo
+  before update of exige_carimbo on public.webhook_sources
+  for each row execute function public.fn_webhook_sources_catraca_do_carimbo();
 
 revoke select, insert, update on table public.contacts from anon, authenticated;
 

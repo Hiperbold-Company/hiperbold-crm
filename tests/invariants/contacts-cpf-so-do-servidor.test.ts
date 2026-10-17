@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { COLUNAS_DO_CONTATO_SEM_CPF } from "@/lib/contacts/colunas";
+
 import { motivoDoErro, sql } from "./psql-transporte";
 
 /**
@@ -204,5 +206,17 @@ describe("migration 0967: cpf_hash e cpf_encrypted são só do servidor", () => 
                  and not has_column_privilege(r.papel, 'public.contacts', a.attname, v.priv)) x;
     `);
     expect((achadas ?? "").split(",")).toHaveLength(6);
+  });
+  it("a lista de colunas de lib/contacts/colunas.ts (contexto das automações) é exatamente toda coluna de contacts menos as do CPF", () => {
+    const [reais] = sondasDesfeitas(`
+      select '${MARCA}' || string_agg(attname, ', ' order by attnum)
+        from pg_attribute
+       where attrelid = 'public.contacts'::regclass and attnum > 0 and not attisdropped
+         and attname not in ('cpf_hash', 'cpf_encrypted');
+    `);
+    expect(
+      COLUNAS_DO_CONTATO_SEM_CPF,
+      "coluna nova (ou removida) em contacts: acerte lib/contacts/colunas.ts na mesma migration",
+    ).toBe(reais);
   });
 });

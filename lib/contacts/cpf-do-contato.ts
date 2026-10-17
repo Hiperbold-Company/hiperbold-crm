@@ -58,9 +58,16 @@ export async function cifrarCpfDoContato(cpf: string): Promise<string | null> {
   return cifrarCpfDaInstalacao(createAdminClient(), normalizeCpf(cpf));
 }
 
+/** Código do `ErroDeCpf` quando nenhuma linha foi gravada: contato inexistente, de outra organização ou anonimizado. */
+export const CPF_SEM_LINHA = "cpf_contato_nao_gravavel";
+
 /**
  * Grava o par `cpf_hash` + `cpf_encrypted` num contato. Devolve o erro do banco (ex.: 23505 do índice
  * `uniq_contacts_org_cpf` quando outro contato da organização já tem o CPF) ou `null`.
+ *
+ * Só grava em contato NÃO anonimizado: a anonimização (LGPD) é irreversível e limpa o CPF, e um CPF novo não pode
+ * reaparecer num contato anonimizado por corrida entre o PATCH e o pedido de anonimização. Se nenhuma linha foi
+ * alterada, devolve `CPF_SEM_LINHA` (o chamador responde 409), em vez de dar o CPF por gravado.
  *
  * Os dois vão juntos porque a constraint `contacts_cpf_consistency` exige `cpf_hash` e `cpf_encrypted` ou nenhum dos dois.
  */
@@ -69,10 +76,38 @@ export async function gravarCpfDoContatoPorUsuario(
   contactId: string,
   cpf: { hash: string; cifrado: string },
 ): Promise<ErroDeCpf | null> {
-  const { error } = await createAdminClient()
+  const { data, error } = await createAdminClient()
     .from("contacts")
     .update({ cpf_hash: cpf.hash, cpf_encrypted: cpf.cifrado })
     .eq("organization_id", organizationId)
-    .eq("id", contactId);
-  return error ? { code: error.code ?? null, message: error.message } : null;
+    .eq("id", contactId)
+    .eq("is_anonymized", false)
+    .select("id");
+  if (error) return { code: error.code ?? null, message: error.message };
+  if (!data || data.length === 0) {
+    return { code: CPF_SEM_LINHA, message: "contato não encontrado ou anonimizado: o CPF não foi gravado" };
+  }
+  return null;
+}
+
+/**
+ * O CPF em claro (só dígitos) de um contato, decifrado no servidor com `fn_decrypt_oauth` (só `service_role`).
+ * `null` quando o contato não tem CPF, está anonimizado ou o banco não consegue decifrar (chave ausente/trocada).
+ * Quem chama decide ANTES se o ator pode abrir o CPF (papel mínimo) e audita; aqui não há decisão de acesso.
+ */
+export async function decifrarCpfDoContato(organizationId: string, contactId: string): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("contacts")
+    .select("cpf_encrypted")
+    .eq("organization_id", organizationId)
+    .eq("id", contactId)
+    .eq("is_anonymized", false)
+    .maybeSingle();
+  const cifrado = (data as { cpf_encrypted?: string | null } | null)?.cpf_encrypted;
+  if (error || !cifrado) return null;
+  const normalizado = cifrado.startsWith("\\x") ? cifrado : `\\x${cifrado}`;
+  const dec = await admin.rpc("fn_decrypt_oauth", { ciphertext: normalizado });
+  if (dec.error || typeof dec.data !== "string" || dec.data === "") return null;
+  return dec.data;
 }

@@ -1,3 +1,4 @@
+import { COLUNAS_DO_CONTATO_SEM_CPF } from "@/lib/contacts/colunas";
 import type { ServiceBoundary } from "@/lib/atendimento/fronteira";
 /**
  * Motor de regras: consome eventos-gatilho do event_log e executa as
@@ -63,7 +64,7 @@ export async function buildContext(admin: SupabaseClient, row: EventRow): Promis
       if (lead.contact_id) {
         const { data: contact } = await admin
           .from("contacts")
-          .select("*")
+          .select(COLUNAS_DO_CONTATO_SEM_CPF)
           .eq("id", lead.contact_id)
           .eq("organization_id", org)
           .maybeSingle();
@@ -73,7 +74,7 @@ export async function buildContext(admin: SupabaseClient, row: EventRow): Promis
   } else if (row.entity_kind === "contact" && row.entity_id) {
     const { data: contact } = await admin
       .from("contacts")
-      .select("*")
+      .select(COLUNAS_DO_CONTATO_SEM_CPF)
       .eq("id", row.entity_id)
       .eq("organization_id", org)
       .maybeSingle();
@@ -93,7 +94,7 @@ export async function buildContext(admin: SupabaseClient, row: EventRow): Promis
       if (appointment.contact_id) {
         const { data: contact } = await admin
           .from("contacts")
-          .select("*")
+          .select(COLUNAS_DO_CONTATO_SEM_CPF)
           .eq("id", appointment.contact_id)
           .eq("organization_id", org)
           .maybeSingle();
@@ -105,7 +106,7 @@ export async function buildContext(admin: SupabaseClient, row: EventRow): Promis
     if (contactId) {
       const { data: contact } = await admin
         .from("contacts")
-        .select("*")
+        .select(COLUNAS_DO_CONTATO_SEM_CPF)
         .eq("id", contactId)
         .eq("organization_id", org)
         .maybeSingle();

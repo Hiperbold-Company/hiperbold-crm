@@ -69,11 +69,11 @@ describe("conferirAssinaturaDaCaptacao (D-215, carimbo contra reenvio)", () => {
   const assinar = (texto: string) => createHmac("sha256", segredo).update(texto).digest("hex");
   const base = { rawBody, segredo, agoraMs };
 
-  it("com carimbo: valida o HMAC de `carimbo.corpo`", () => {
+  it("com carimbo: valida o HMAC de `v1:carimbo.corpo`", () => {
     const r = conferirAssinaturaDaCaptacao({
       ...base,
       carimbo: String(agoraS),
-      assinatura: assinar(`${agoraS}.${rawBody}`),
+      assinatura: assinar(`v1:${agoraS}.${rawBody}`),
       exigeCarimbo: false,
     });
     expect(r).toEqual({ valida: true, comCarimbo: true });
@@ -84,7 +84,7 @@ describe("conferirAssinaturaDaCaptacao (D-215, carimbo contra reenvio)", () => {
       conferirAssinaturaDaCaptacao({
         ...base,
         carimbo: String(c),
-        assinatura: assinar(`${c}.${rawBody}`),
+        assinatura: assinar(`v1:${c}.${rawBody}`),
         exigeCarimbo: false,
       });
     expect(tenta(agoraS - 300).valida).toBe(true);
@@ -98,7 +98,7 @@ describe("conferirAssinaturaDaCaptacao (D-215, carimbo contra reenvio)", () => {
       const r = conferirAssinaturaDaCaptacao({
         ...base,
         carimbo: c,
-        assinatura: assinar(`${c}.${rawBody}`),
+        assinatura: assinar(`v1:${c}.${rawBody}`),
         exigeCarimbo: false,
       });
       expect(r, c).toEqual({ valida: false, motivo: "carimbo_invalido" });
@@ -120,6 +120,23 @@ describe("conferirAssinaturaDaCaptacao (D-215, carimbo contra reenvio)", () => {
       ...base,
       carimbo: String(agoraS),
       assinatura: assinar(rawBody),
+      exigeCarimbo: false,
+    });
+    expect(r).toEqual({ valida: false, motivo: "assinatura_diferente" });
+  });
+
+  it("o formato sem o prefixo de versão (`carimbo.corpo`) não vale, e a assinatura antiga não vira a nova", () => {
+    const comCarimbo = (assinatura: string) =>
+      conferirAssinaturaDaCaptacao({ ...base, carimbo: String(agoraS), assinatura, exigeCarimbo: false });
+    expect(comCarimbo(assinar(`${agoraS}.${rawBody}`))).toEqual({ valida: false, motivo: "assinatura_diferente" });
+    // Corpo que COMEÇA como um carimbo: a assinatura antiga (só do corpo) não pode ser aceita como a nova.
+    const corpoMalicioso = `${agoraS}.{"nome":"Ana"}`;
+    const r = conferirAssinaturaDaCaptacao({
+      rawBody: `{"nome":"Ana"}`,
+      segredo,
+      agoraMs,
+      carimbo: String(agoraS),
+      assinatura: assinar(corpoMalicioso),
       exigeCarimbo: false,
     });
     expect(r).toEqual({ valida: false, motivo: "assinatura_diferente" });

@@ -313,8 +313,9 @@ export type ResultadoDaAssinatura =
  *
  * Dois formatos:
  *   - COM carimbo (`X-HiperCRM-Timestamp`, segundos Unix): a assinatura é o HMAC-SHA256 hex de
- *     `${carimbo}.${corpoCru}` e o carimbo precisa estar a até 300 s do relógio do servidor. Um envio
- *     capturado deixa de valer depois da janela.
+ *     `v1:${carimbo}.${corpoCru}` e o carimbo precisa estar a até 300 s do relógio do servidor. Um envio
+ *     capturado deixa de valer depois da janela. O prefixo `v1:` versiona o formato e impede que um corpo
+ *     que comece com dígitos e ponto (`123.`) faça a assinatura de `corpo` colidir com a de `carimbo.corpo`.
  *   - SEM carimbo: o formato antigo, HMAC do corpo cru. Só vale enquanto a fonte NÃO exige carimbo.
  *     A rota liga `exige_carimbo` na primeira requisição válida com carimbo, e dali em diante o formato
  *     antigo é recusado: quem já assinava sem carimbo não quebra no dia da atualização, e quem migrou
@@ -347,7 +348,7 @@ export function conferirAssinaturaDaCaptacao(entrada: {
   if (Math.abs(agora / 1000 - Number(carimbo)) > JANELA_DO_CARIMBO_SEGUNDOS) {
     return { valida: false, motivo: "carimbo_fora_da_janela" };
   }
-  const esperado = createHmac("sha256", segredo).update(`${carimbo}.${rawBody}`).digest("hex");
+  const esperado = createHmac("sha256", segredo).update(`v1:${carimbo}.${rawBody}`).digest("hex");
   return hmacConfere(esperado, assinatura)
     ? { valida: true, comCarimbo: true }
     : { valida: false, motivo: "assinatura_diferente" };

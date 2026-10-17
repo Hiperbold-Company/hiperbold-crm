@@ -21,7 +21,16 @@ import { canonicalPhoneBR, phoneLookupVariants } from "@/lib/channels/phone-vari
 import { encontrarContatoPorTelefone } from "@/lib/channels/contato-por-telefone";
 import { mesclarConsentimento } from "@/lib/contacts/consentimento";
 import { hashCpf } from "@/lib/contacts/cpf";
-import { cifrarCpfDoContato, gravarCpfDoContatoPorUsuario, idsComCpf, idsPorHashDeCpf } from "@/lib/contacts/cpf-do-contato";
+import {
+  CPF_SEM_LINHA,
+  cifrarCpfDoContato,
+  decifrarCpfDoContato,
+  gravarCpfDoContatoPorUsuario,
+  idsComCpf,
+  idsPorHashDeCpf,
+  type ErroDeCpf,
+} from "@/lib/contacts/cpf-do-contato";
+import { logger } from "@/lib/logger";
 import type { Contact } from "@/lib/types/contacts";
 import { ensureConversation, sessaoProntaParaEnvio } from "@/lib/automation/start-conversation";
 import type {
@@ -99,6 +108,44 @@ export function semHashDeCpf<T extends { cpf_hash?: string | null; cpf_available
   const { cpf_hash, ...resto } = c;
   // `cpf_available` já calculado pelo servidor (a consulta do usuário não traz o hash) vale mais que o hash.
   return { ...resto, cpf_available: c.cpf_available ?? !!cpf_hash };
+}
+
+/**
+ * CPF que já é de OUTRO contato da organização: recusa ANTES de gravar qualquer coisa, para create e patch
+ * continuarem tudo-ou-nada como eram quando o CPF ia no mesmo INSERT/UPDATE (o índice único barrava o conjunto).
+ * A corrida entre esta conferência e a gravação ainda cai no índice único, e o chamador desfaz.
+ */
+async function recusarCpfDeOutroContato(
+  organizationId: string,
+  hash: string,
+  exceto: string | null,
+  requestId: string,
+): Promise<void> {
+  const donos = await idsPorHashDeCpf(organizationId, hash);
+  if (donos.error) throw new ApiError(500, "internal_error", undefined, requestId, donos.error.message);
+  if (donos.ids.some((id) => id !== exceto)) {
+    throw new ApiError(
+      500,
+      "internal_error",
+      undefined,
+      requestId,
+      'duplicate key value violates unique constraint "uniq_contacts_org_cpf"',
+    );
+  }
+}
+
+/** A gravação do CPF não alterou linha (contato anonimizado ou sumido): 409; qualquer outra falha, o 500 de sempre. */
+function erroDaGravacaoDoCpf(erro: ErroDeCpf, requestId: string, idioma: Idioma): ApiError {
+  if (erro.code === CPF_SEM_LINHA) {
+    return new ApiError(
+      409,
+      "state_conflict",
+      undefined,
+      requestId,
+      traduzir("Não foi possível gravar o CPF: o contato foi anonimizado ou não existe mais.", idioma),
+    );
+  }
+  return new ApiError(500, "internal_error", undefined, requestId, erro.message);
 }
 
 /** Marca em cada contato se ele tem CPF, sem trazer o hash para a resposta nem para a memória. */
@@ -372,13 +419,14 @@ export async function getContactHandler(
     if (!roleAtLeast(role, "manager")) {
       cpfDecryptDenied = true;
     } else {
-      const { data: dec, error: decErr } = await supabase.rpc("decrypt_cpf", {
-        p_contact_id: input.contactId,
-      });
-      if (decErr) {
-        console.warn("[contacts.get] decrypt_cpf RPC unavailable", decErr.message);
-      } else if (typeof dec === "string") {
-        cpfDecrypted = dec;
+      // Decifra no servidor (`fn_decrypt_oauth`, só service_role). O papel mínimo (manager) já foi conferido acima e
+      // o audit logo abaixo registra a abertura, com `success` dizendo se saiu CPF.
+      cpfDecrypted = await decifrarCpfDoContato(contact.organization_id, input.contactId);
+      if (cpfDecrypted === null) {
+        logger.warn("[contacts.get] não consegui decifrar o CPF do contato", {
+          organizationId: contact.organization_id,
+          contactId: input.contactId,
+        });
       }
       const a = actorAuditPayload(ctx.actor);
       await audit({
@@ -455,6 +503,8 @@ export async function createContactHandler(
     // antes de criar o contato.
     const cifrado = await cifrarCpfDoContato(input.cpf);
     if (!cifrado) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
+    // Confere o CPF repetido ANTES de inserir: o caminho normal não cria para depois apagar.
+    await recusarCpfDeOutroContato(ctx.organization_id, hash, null, ctx.requestId);
     cpfParaGravar = { hash, cifrado };
   }
 
@@ -496,15 +546,22 @@ export async function createContactHandler(
   if (cpfParaGravar) {
     const erroDoCpf = await gravarCpfDoContatoPorUsuario(ctx.organization_id, contact.id, cpfParaGravar);
     if (erroDoCpf) {
-      // Antes o CPF ia no mesmo INSERT e a falha (CPF repetido na organização, cifra indisponível) desfazia tudo.
-      // Agora o contato já existe: desfaz à mão, pelo cliente do usuário (a RLS de DELETE vale), para o resultado
-      // visível continuar o mesmo — erro 500 e nenhum contato criado.
-      await supabase
+      // REDE DE SEGURANÇA, não o caminho normal (o CPF repetido já foi recusado antes do INSERT): só chega aqui por
+      // corrida ou falha do banco. O contato já existe, então desfaz à mão, pelo cliente do usuário (a RLS de DELETE
+      // vale), para o resultado visível continuar o mesmo — erro e nenhum contato criado.
+      const { error: eApagar } = await supabase
         .from("contacts")
         .delete()
         .eq("organization_id", ctx.organization_id)
         .eq("id", contact.id);
-      throw new ApiError(500, "internal_error", undefined, ctx.requestId, erroDoCpf.message);
+      if (eApagar) {
+        logger.error("[contacts.create] não consegui desfazer o contato criado sem CPF", {
+          organizationId: ctx.organization_id,
+          contactId: contact.id,
+          errorCode: eApagar.code,
+        });
+      }
+      throw erroDaGravacaoDoCpf(erroDoCpf, ctx.requestId, ctx.idioma ?? "pt-BR");
     }
     contact.cpf_available = true;
   }
@@ -650,19 +707,8 @@ export async function patchContactHandler(
     const cifrado = await cifrarCpfDoContato(input.cpf);
     if (!cifrado) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
     cpfParaGravar = { hash, cifrado };
-    // CPF que já é de OUTRO contato da organização: recusa antes de tocar em qualquer campo, para o PATCH
-    // continuar tudo-ou-nada como era quando o CPF ia no mesmo UPDATE (o índice único barrava o conjunto).
-    const donos = await idsPorHashDeCpf(ctx.organization_id, hash);
-    if (donos.error) throw new ApiError(500, "internal_error", undefined, ctx.requestId, donos.error.message);
-    if (donos.ids.some((id) => id !== contactId)) {
-      throw new ApiError(
-        500,
-        "internal_error",
-        undefined,
-        ctx.requestId,
-        'duplicate key value violates unique constraint "uniq_contacts_org_cpf"',
-      );
-    }
+    // Recusa antes de tocar em qualquer campo (PATCH tudo-ou-nada).
+    await recusarCpfDeOutroContato(ctx.organization_id, hash, contactId, ctx.requestId);
   }
 
   if (Object.keys(patch).length === 0 && !cpfParaGravar) {
@@ -704,7 +750,7 @@ export async function patchContactHandler(
   const contact = updated as Contact;
   if (cpfParaGravar) {
     const erroDoCpf = await gravarCpfDoContatoPorUsuario(ctx.organization_id, contact.id, cpfParaGravar);
-    if (erroDoCpf) throw new ApiError(500, "internal_error", undefined, ctx.requestId, erroDoCpf.message);
+    if (erroDoCpf) throw erroDaGravacaoDoCpf(erroDoCpf, ctx.requestId, ctx.idioma ?? "pt-BR");
   }
   const [comCpf] = await comCpfDisponivel(ctx.organization_id, [contact], ctx.requestId);
   contact.cpf_available = comCpf?.cpf_available === true;
