@@ -5,6 +5,8 @@
  *  - Invalid/expired token         → render error
  *  - Unauthenticated user          → render CTA → /login?next=...
  *  - Authenticated, email mismatch → render mismatch + sign-out CTA
+ *  - Authenticated, email match, verificação de e-mail do CRM em aberto
+ *                                  → pede para confirmar o e-mail antes (D-204)
  *  - Authenticated, email match    → form posts to Server Action which inserts
  *                                    membership and redirects to /app/inbox
  */
@@ -14,6 +16,8 @@ import { verifyInviteToken } from "@/lib/auth/invite-token";
 import { authRateLimited, AUTH_LIMITS } from "@/lib/auth/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { AcceptInviteForm } from "./AcceptInviteForm";
+import { ReenviarVerificacaoNoConvite } from "./ReenviarVerificacaoNoConvite";
+import { emailVerificado } from "@/lib/auth/verificacao-email";
 import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -123,6 +127,26 @@ export default async function AcceptInvitePage({ params }: PageProps) {
             {t("Sair")}
           </button>
         </form>
+      </Shell>
+    );
+  }
+
+  // D-204: o link do convite não prova a posse do e-mail (quem convida o vê e ele pode ser reencaminhado). Conta com a
+  // verificação do CRM em aberto confirma o endereço primeiro; o mesmo link serve depois.
+  if (!emailVerificado(user.app_metadata)) {
+    return (
+      <Shell>
+        <h1 className="text-xl font-semibold">{t("Confirme seu e-mail para aceitar o convite")}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {t("Enviamos um link de confirmação para")} <strong>{user.email}</strong>.{" "}
+          {t("Abra o link do e-mail e depois volte a este convite para ativar seu acesso.")}
+        </p>
+        <ReenviarVerificacaoNoConvite
+          label={t("Reenviar e-mail de confirmação")}
+          pendingLabel={t("Enviando...")}
+          okLabel={t("Link reenviado. Confira sua caixa de entrada.")}
+          erroLabel={t("Não foi possível reenviar agora. Tente de novo em instantes.")}
+        />
       </Shell>
     );
   }

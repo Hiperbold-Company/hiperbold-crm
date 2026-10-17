@@ -1,3 +1,4 @@
+import { recusaSeEmailNaoVerificado } from "@/lib/auth/exigir-email-verificado";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * GET  /api/v1/webhook-sources — lista as entradas automáticas de contatos da org ativa.
@@ -20,7 +21,7 @@ import type { NextRequest } from "next/server";
 
 import { respostaDeRecusa } from "@/lib/api/recusa";
 import { ok, fail } from "@/lib/api/wrappers";
-import { autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
+import { autorizarAdministracao, pessoaResponsavel, traducaoDe } from "@/lib/api/auth-dual-admin";
 import {
   criarEntradaAutomatica,
   listarEntradasAutomaticas,
@@ -71,6 +72,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);
+
+  // D-204: a entrada automática criada por conta de e-mail ainda por confirmar seguiria injetando contatos na
+  // organização depois de a dona retomar a conta.
+  const naoVerificado = await recusaSeEmailNaoVerificado({
+    userId: pessoaResponsavel(authz),
+    frase: t("Confirme seu e-mail para criar entradas automáticas (webhooks)."),
+    requestId,
+  });
+  if (naoVerificado) return naoVerificado;
 
   let raw: unknown = {};
   try {

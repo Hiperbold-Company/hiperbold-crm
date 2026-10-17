@@ -14,13 +14,12 @@
  * cadastro com e-mail e o link nunca foi aberto) E quem chegou provou o endereço pelo Google
  * (`identity_data.email_verified` da identidade do Google, com o mesmo endereço da conta). Então:
  *
- *   1. troca a senha por uma aleatória que ninguém conhece (o criador da conta perde a chave);
- *   2. remove os fatores de MFA da conta (o TOTP que o criador tenha cadastrado seguraria a vítima num desafio
- *      que ela não passa e deixaria o autenticador dele enrolado). Se um fator VERIFICADO sai, o GoTrue encerra
- *      todas as sessões, inclusive a que o Google acabou de abrir: `sessaoEncerrada` avisa quem chama;
- *   3. derruba TODAS as outras sessões (`signOut(jwt, 'others')`: o criador pode já estar logado, e uma sessão
- *      aberta sobrevive à troca de senha) quando a sessão nova ainda existe;
- *   4. só então carimba o e-mail como verificado.
+ *   1. derruba TODAS as outras sessões (`signOut(jwt, 'others')`: o criador pode já estar logado), sempre e primeiro;
+ *   2. remove os fatores de MFA (o TOTP do criador seguraria a vítima num desafio que ela não passa);
+ *   3. troca a senha por uma aleatória que ninguém conhece, pela sessão nova;
+ *   4. revoga o que a conta criou (chaves de API, convites pendentes, entradas automáticas);
+ *   5. só então carimba o e-mail como verificado.
+ * A ordem e o porquê (medidos no GoTrue real) estão em `reassumir-conta.ts`.
  *
  * A ordem é a segurança: carimbar antes e falhar no meio deixaria a conta "verificada" com a senha do
  * atacante viva, e a faixa que avisaria a vítima já teria sumido. Qualquer etapa que falhe devolve
@@ -36,18 +35,19 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { reassumirConta, type RetomadaDaConta } from "./reassumir-conta";
+import { SEM_REVOGADOS, reassumirConta, type RetomadaDaConta } from "./reassumir-conta";
 import { emailVerificado } from "./verificacao-email";
 
 export { senhaAleatoriaForte } from "./reassumir-conta";
 export type { RetomadaDaConta } from "./reassumir-conta";
 
-type AdminMinimo = Pick<SupabaseClient, "auth">;
+type AdminMinimo = Pick<SupabaseClient, "auth" | "from">;
 
 /** O recorte do usuário que a regra lê. Estrutural, para o teste não depender do tipo inteiro do SDK. */
 export interface UsuarioDoRetorno {
   id: string;
   email?: string | null;
+  phone?: string | null;
   app_metadata?: unknown;
   identities?: ReadonlyArray<{ provider?: string; identity_data?: unknown }> | null;
 }
@@ -59,11 +59,17 @@ export interface UsuarioDoRetorno {
 export function googleProvouOEmail(usuario: UsuarioDoRetorno): boolean {
   const emailDaConta = usuario.email?.trim().toLowerCase();
   if (!emailDaConta) return false;
-  const google = (usuario.identities ?? []).find((i) => i.provider === "google");
-  if (!google || !google.identity_data || typeof google.identity_data !== "object") return false;
-  const dados = google.identity_data as { email?: unknown; email_verified?: unknown };
-  if (dados.email_verified !== true) return false;
-  return typeof dados.email === "string" && dados.email.trim().toLowerCase() === emailDaConta;
+  // EXISTE uma identidade do Google com o endereço verificado e igual ao da conta? (`some`, e não o primeiro
+  // `find`: a conta pode ter mais de uma identidade do mesmo provedor, e a que prova é a que satisfaz tudo.)
+  return (usuario.identities ?? []).some((i) => {
+    if (i.provider !== "google" || !i.identity_data || typeof i.identity_data !== "object") return false;
+    const dados = i.identity_data as { email?: unknown; email_verified?: unknown };
+    return (
+      dados.email_verified === true &&
+      typeof dados.email === "string" &&
+      dados.email.trim().toLowerCase() === emailDaConta
+    );
+  });
 }
 
 /** A regra pura: retoma quem tem verificação do CRM em aberto E o Google provou o endereço. */
@@ -76,16 +82,19 @@ export async function retomarContaPeloGoogle(p: {
   usuario: UsuarioDoRetorno;
   /** O `access_token` da sessão que o Google acabou de abrir: é a sessão que SOBREVIVE ao `others`. */
   accessToken: string | null | undefined;
+  /** Troca a senha pela sessão nova (`supabase.auth.updateUser({ password })`). */
+  trocarSenhaDaSessao: (senha: string) => Promise<{ error: unknown }>;
   agora?: Date;
   gerarSenha?: () => string;
 }): Promise<RetomadaDaConta> {
   if (!contaPrecisaSerRetomada(p.usuario)) {
-    return { ok: true, retomada: false, fatoresRemovidos: 0, sessaoEncerrada: false };
+    return { ok: true, retomada: false, fatoresRemovidos: 0, sessaoEncerrada: false, revogados: SEM_REVOGADOS };
   }
   return await reassumirConta({
     admin: p.admin,
-    userId: p.usuario.id,
+    usuario: p.usuario,
     accessToken: p.accessToken,
+    trocarSenhaDaSessao: p.trocarSenhaDaSessao,
     agora: p.agora,
     gerarSenha: p.gerarSenha,
   });

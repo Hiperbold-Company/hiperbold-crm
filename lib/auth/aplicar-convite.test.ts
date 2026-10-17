@@ -72,8 +72,19 @@ function adminComConvite(linha: { revoked_at: string | null; role: string } | nu
       update: cadeiaDeUpdate,
     }),
     rpc: rpcDoAceite,
+    // A conta que aceita: por padrão VERIFICADA (sem pedido em aberto), como toda conta de antes do D-204.
+    auth: {
+      admin: {
+        getUserById: vi.fn(async () => ({
+          data: { user: { id: USUARIO_ID, app_metadata: appMetadataDaConta } },
+          error: null,
+        })),
+      },
+    },
   };
 }
+
+let appMetadataDaConta: Record<string, unknown> = {};
 
 async function aplicar(
   linha: { revoked_at: string | null; role: string } | null,
@@ -86,7 +97,10 @@ async function aplicar(
 }
 
 describe("aplicarConvite consulta a LINHA, não só o token", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    appMetadataDaConta = {};
+  });
 
   it("⭐ convite REVOGADO é recusado, e o vínculo nunca chega a ser tentado", async () => {
     const r = await aplicar({ revoked_at: "2026-09-13T10:00:00Z", role: "manager" });
@@ -128,34 +142,42 @@ describe("aplicarConvite consulta a LINHA, não só o token", () => {
     expect(rpcDoAceite).not.toHaveBeenCalled();
   });
 
-  it("D-204: convite aceito carimba a verificação do CRM (o convidado nasce com o pedido em aberto)", async () => {
+  it("D-204: conta com a verificação do CRM EM ABERTO não ganha vínculo por convite (o link não prova o e-mail)", async () => {
+    appMetadataDaConta = { email_verificacao: { hash: "h", expira_em: "2099-01-01T00:00:00Z", enviado_em: "2026-10-17T00:00:00Z" } };
+    const r = await aplicar({ revoked_at: null, role: "manager" });
+
+    expect(r).toEqual({ ok: false, motivo: "email_nao_verificado" });
+    expect(rpcDoAceite, "o vínculo foi gravado para uma conta sem o e-mail provado").not.toHaveBeenCalled();
+  });
+
+  it("D-204: o aceite NUNCA carimba a verificação (o accept_url é visível a quem convida e pode ser reencaminhado)", async () => {
+    appMetadataDaConta = {};
     const { createAdminClient } = await import("@/lib/supabase/admin");
     const { gotrueFalso } = await import("../../tests/unit/helpers/gotrue-admin-falso");
-    const falso = gotrueFalso();
-    const admin = { ...adminComConvite({ revoked_at: null, role: "manager" }), ...falso.admin };
+    const falso = gotrueFalso({ appMetadata: {} });
+    const admin = { ...adminComConvite({ revoked_at: null, role: "manager" }), auth: falso.admin.auth };
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
 
     const { aplicarConvite } = await import("@/lib/auth/aplicar-convite");
     const r = await aplicarConvite({ userId: USUARIO_ID, payload: PAYLOAD });
 
     expect(r.ok).toBe(true);
-    expect(typeof falso.estado.app_metadata.email_verificado_em).toBe("string");
-    expect(falso.estado.app_metadata.email_verificacao).toBeUndefined();
+    expect(falso.chamadas).toEqual([]);
+    expect(falso.admin.auth.admin.updateUserById).not.toHaveBeenCalled();
   });
 
-  it("D-204: convite recusado NÃO carimba nada", async () => {
+  it("D-204: não conseguiu ler a conta: FALHA FECHADA, sem vínculo", async () => {
+    appMetadataDaConta = {};
     const { createAdminClient } = await import("@/lib/supabase/admin");
-    const { gotrueFalso } = await import("../../tests/unit/helpers/gotrue-admin-falso");
-    const falso = gotrueFalso();
-    const admin = { ...adminComConvite({ revoked_at: "2026-09-13T10:00:00Z", role: "manager" }), ...falso.admin };
+    const admin = adminComConvite({ revoked_at: null, role: "manager" });
+    admin.auth.admin.getUserById = vi.fn(async () => ({ data: { user: null }, error: { message: "x" } })) as never;
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
 
     const { aplicarConvite } = await import("@/lib/auth/aplicar-convite");
     const r = await aplicarConvite({ userId: USUARIO_ID, payload: PAYLOAD });
 
-    expect(r.ok).toBe(false);
-    expect(falso.chamadas).toEqual([]);
-    expect(falso.estado.app_metadata.email_verificado_em).toBeUndefined();
+    expect(r).toEqual({ ok: false, motivo: "internal_error" });
+    expect(rpcDoAceite).not.toHaveBeenCalled();
   });
 
   it("a recusa da própria função do banco (42501) também não é vínculo", async () => {

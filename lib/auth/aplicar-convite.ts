@@ -4,8 +4,7 @@ import { audit } from "@/lib/audit";
 import { cookieSecure } from "@/lib/supabase/cookie-secure";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { InvitePayload } from "@/lib/auth/invite-token";
-import { carimbarEmailVerificado } from "@/lib/auth/verificacao-email";
-import { logger } from "@/lib/logger";
+import { emailVerificado } from "@/lib/auth/verificacao-email";
 
 /**
  * O ATO de virar membro: grava o vínculo, audita e escolhe a organização ativa.
@@ -46,7 +45,7 @@ import { logger } from "@/lib/logger";
 
 export type ResultadoDoConvite =
   | { ok: true; membershipId: string; mudou: boolean }
-  | { ok: false; motivo: "invalid_or_expired" | "internal_error" };
+  | { ok: false; motivo: "invalid_or_expired" | "internal_error" | "email_nao_verificado" };
 
 export async function aplicarConvite(params: {
   userId: string;
@@ -56,6 +55,17 @@ export async function aplicarConvite(params: {
   const { userId, payload, requestId } = params;
 
   const admin = createAdminClient();
+
+  // CONTA COM A VERIFICAÇÃO DO CRM EM ABERTO NÃO GANHA VÍNCULO POR CONVITE (D-204). O link do convite (`accept_url`)
+  // aparece para quem convida e pode ser reencaminhado: quem o tem cria a conta com o e-mail do convidado
+  // (`/signup?invite=`, ou o cadastro direto no provedor), e com a confirmação automática do provedor ligada entra
+  // sem provar o endereço. O convite NÃO prova a posse da caixa de entrada; o que prova é a verificação do CRM
+  // (link no e-mail da conta, ou o Google, ou o link de recuperação). Até lá, o vínculo espera: a tela de aceite
+  // diz o que fazer e o mesmo link do convite funciona depois. Nunca carimba a verificação por aqui.
+  // Falha de leitura da conta NÃO libera o vínculo (fail-closed).
+  const conta = await admin.auth.admin.getUserById(userId);
+  if (conta.error || !conta.data?.user) return { ok: false, motivo: "internal_error" };
+  if (!emailVerificado(conta.data.user.app_metadata)) return { ok: false, motivo: "email_nao_verificado" };
 
   // Convite REVOGADO na tela de Equipe. Sem linha, segue — ver o cabeçalho.
   const { data: linhaDoConvite } = await admin
@@ -109,20 +119,6 @@ export async function aplicarConvite(params: {
       resourceId: resultado.id,
       metadata: { invite_id: payload.invite_id, role: payload.role },
       requestId: requestId ?? null,
-    });
-  }
-
-  // O convite assinado para o e-mail desta conta, aceito por quem a usa, prova a posse do endereço: o token só chegou
-  // à caixa de entrada dele, e os três chamadores conferiram a assinatura e a igualdade com o e-mail da conta antes
-  // de chegar aqui. Carimba a verificação do CRM (D-204: todo cadastro por e-mail nasce com o pedido em aberto, o
-  // convidado incluído). Melhor esforço: a falha deixa a faixa "Confirme seu e-mail", que tem o "Reenviar", e não
-  // desfaz o vínculo que acabou de ser gravado.
-  try {
-    const carimbo = await carimbarEmailVerificado({ admin, userId });
-    if (!carimbo.ok) logger.warn("[aplicar-convite] carimbo da verificação do e-mail falhou", { motivo: carimbo.motivo });
-  } catch (e) {
-    logger.warn("[aplicar-convite] carimbo da verificação do e-mail lançou", {
-      erro: e instanceof Error ? e.message : String(e),
     });
   }
 

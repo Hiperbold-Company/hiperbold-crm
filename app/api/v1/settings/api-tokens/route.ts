@@ -1,3 +1,4 @@
+import { recusaSeEmailNaoVerificado } from "@/lib/auth/exigir-email-verificado";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * GET  /api/v1/settings/api-tokens — list tokens for the active org (no plaintext).
@@ -62,6 +63,14 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const { user: authUser, org: activeOrg } = authz;
+
+  // D-204: com o e-mail da conta ainda por confirmar, a chave sobreviveria à retomada da conta pela dona real.
+  const naoVerificado = await recusaSeEmailNaoVerificado({
+    userId: authUser.id,
+    frase: t("Confirme seu e-mail para criar chaves de API."),
+    requestId,
+  });
+  if (naoVerificado) return naoVerificado;
 
   let input;
   try {

@@ -21,7 +21,13 @@ export type AcceptInviteResult =
   | { ok: true }
   | {
       ok: false;
-      error: "invalid_or_expired" | "email_mismatch" | "not_authenticated" | "internal_error";
+      error:
+        | "invalid_or_expired"
+        | "email_mismatch"
+        | "not_authenticated"
+        | "internal_error"
+        /** A conta ainda tem a verificação de e-mail do CRM em aberto: o vínculo espera por ela (D-204). */
+        | "email_nao_verificado";
       message?: string;
       expectedEmail?: string;
     };

@@ -12,9 +12,14 @@ import { emailVerificado, emitirPedido } from "@/lib/auth/verificacao-email";
 
 import { criarAuthAdminFalso } from "./helpers/auth-admin-falso";
 
-const bordas = vi.hoisted(() => ({ admin: null as unknown, auditar: vi.fn() }));
+const bordas = vi.hoisted(() => ({ admin: null as unknown, auditar: vi.fn(), sessao: null as { id: string } | null }));
 
 vi.mock("next/headers", () => ({ headers: vi.fn() }));
+// A sessão do navegador (cookie): `getUser()` valida no provedor. Cada caso escolhe quem está logado.
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({ auth: { getUser: async () => ({ data: { user: bordas.sessao } }) } }),
+}));
+vi.mock("@/lib/branding/saida", () => ({ marcaDaSaida: async () => ({ nome: "Central de Teste" }) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => bordas.admin }));
 vi.mock("@/lib/audit", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
@@ -24,9 +29,10 @@ vi.mock("@/lib/audit", async (orig) => ({
 const USER = "11111111-1111-4111-8111-111111111111";
 let ipN = 0;
 
-function pedir(token?: string) {
+function pedir(token?: string, ponte = false) {
   const url = new URL("http://localhost/auth/verificar-email");
   if (token !== undefined) url.searchParams.set("token", token);
+  if (ponte) url.searchParams.set("p", "1");
   return new NextRequest(url, { headers: { "x-request-id": "req-9", "user-agent": "vitest" } });
 }
 
@@ -39,6 +45,8 @@ function desfecho(res: Response): string {
 beforeEach(() => {
   vi.resetModules();
   bordas.auditar.mockReset();
+  // Por padrão a pessoa está logada na PRÓPRIA conta (o caso comum); os casos sem sessão a trocam.
+  bordas.sessao = { id: USER };
   ipN += 1;
   vi.mocked(headers).mockResolvedValue({
     get: (k: string) => (k === "x-forwarded-for" ? `192.0.2.${ipN % 250}` : null),
@@ -114,5 +122,68 @@ describe("rota pública de verificação", () => {
     expect(lerConta).toHaveBeenCalledTimes(30);
     expect(desfecho(await GET(pedir(chute)))).toBe("limite");
     expect(lerConta).toHaveBeenCalledTimes(30);
+  });
+
+  // ─── D-204: só carimba com a sessão da própria conta ────────────────────────────
+
+  describe("exige a sessão da própria conta", () => {
+    async function emitir() {
+      const f = criarAuthAdminFalso([{ id: USER, email: "dono@plata.test", app_metadata: {} }]);
+      bordas.admin = f.cliente;
+      const e = await emitirPedido({ admin: f.cliente, userId: USER });
+      if (!e.ok) throw new Error("emissão falhou");
+      return { f, token: e.token };
+    }
+
+    it("sem sessão na primeira passada: devolve a PONTE (o cookie Strict não viaja do cliente de e-mail) e não consome", async () => {
+      const { f, token } = await emitir();
+      const { GET } = await import("@/app/auth/verificar-email/route");
+      bordas.sessao = null;
+
+      const res = await GET(pedir(token));
+
+      expect(res.status).toBe(200);
+      const html = await res.text();
+      expect(html).toContain("window.location.replace");
+      expect(html).toContain("p=1");
+      expect(emailVerificado(f.appMetadata(USER))).toBe(false);
+      expect(bordas.auditar).not.toHaveBeenCalled();
+    });
+
+    it("sem sessão mesmo depois da ponte: manda ao login com o aviso, e o link CONTINUA valendo", async () => {
+      const { f, token } = await emitir();
+      const { GET } = await import("@/app/auth/verificar-email/route");
+      bordas.sessao = null;
+
+      const res = await GET(pedir(token, true));
+
+      expect(res.status).toBe(307);
+      expect(new URL(res.headers.get("location")!).pathname + new URL(res.headers.get("location")!).search).toBe(
+        "/login?error=verificar_email_entre",
+      );
+      expect(emailVerificado(f.appMetadata(USER))).toBe(false);
+      // Depois de entrar, o MESMO link funciona.
+      bordas.sessao = { id: USER };
+      expect(desfecho(await GET(pedir(token)))).toBe("ok");
+      expect(emailVerificado(f.appMetadata(USER))).toBe(true);
+    });
+
+    it("sessão de OUTRA conta: não consome nem carimba (quem tem só o link não verifica a conta de ninguém)", async () => {
+      const { f, token } = await emitir();
+      const { GET } = await import("@/app/auth/verificar-email/route");
+      bordas.sessao = { id: "99999999-9999-4999-8999-999999999999" };
+
+      const res = await GET(pedir(token));
+
+      expect(new URL(res.headers.get("location")!).searchParams.get("error")).toBe("verificar_email_entre");
+      expect(emailVerificado(f.appMetadata(USER))).toBe(false);
+      expect(bordas.auditar).not.toHaveBeenCalled();
+    });
+
+    it("token de forma inválida não consulta sessão nem conta: segue 'invalido'", async () => {
+      const { GET } = await import("@/app/auth/verificar-email/route");
+      bordas.sessao = null;
+      expect(desfecho(await GET(pedir("lixo")))).toBe("invalido");
+    });
   });
 });

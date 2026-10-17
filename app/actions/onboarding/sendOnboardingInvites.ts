@@ -17,6 +17,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { audit } from "@/lib/audit";
+import { contaPodeCriarArtefatos } from "@/lib/auth/exigir-email-verificado";
 import { recusaDoPlano } from "@/lib/billing/planos/recusa-do-plano";
 import { inviteOnboardingSchema } from "@/lib/schemas/onboarding";
 import { emitirConvite } from "@/lib/team/convites";
@@ -38,7 +39,14 @@ export type SendInvitesResult =
     }
   | {
       ok: false;
-      error: "auth_required" | "no_active_org" | "forbidden" | "mfa_required" | "invalid_input";
+      error:
+        | "auth_required"
+        | "no_active_org"
+        | "forbidden"
+        | "mfa_required"
+        | "invalid_input"
+        /** A conta ainda tem a verificação de e-mail do CRM em aberto (D-204). */
+        | "email_not_verified";
       details?: unknown;
     };
 
@@ -78,6 +86,9 @@ export async function sendOnboardingInvites(payload: InvitePayload): Promise<Sen
     }
     throw err;
   }
+
+  // D-204: convidar cria acesso que sobrevive à retomada da conta; exige o e-mail de quem convida provado.
+  if (!(await contaPodeCriarArtefatos(ctx.userId))) return { ok: false, error: "email_not_verified" };
 
   const inviterName = ctx.fullName ?? ctx.email ?? "Um colega";
   const requestId = randomUUID();

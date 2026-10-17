@@ -24,6 +24,12 @@ import { createClient } from "@/lib/supabase/server";
 import { papelAcimaDoCriador } from "@/lib/auth/teto-de-papel-da-chave";
 import type { AuthUser, Role } from "@/lib/auth/types";
 
+// D-204: a trava "Confirme seu e-mail" tem teste próprio (tests/unit/trava-de-email-nao-verificado.test.ts); aqui a
+// conta é tratada como verificada para este arquivo continuar medindo o que é dele.
+vi.mock("@/lib/auth/exigir-email-verificado", () => ({
+  recusaSeEmailNaoVerificado: vi.fn(async () => null),
+  contaPodeCriarArtefatos: vi.fn(async () => true),
+}));
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(),
   resolveActiveOrg: vi.fn(),
