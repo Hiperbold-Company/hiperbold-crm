@@ -1486,7 +1486,7 @@ describe("cancelarPedidoAbertoDoCliente: 'Trocar forma de pagamento'", () => {
   });
 
   it("Asaas diz que JÁ PAGOU: não remove nada, não cancela, devolve 'pagamento em confirmação'", async () => {
-    for (const status of ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"]) {
+    for (const status of ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH", "AWAITING_RISK_ANALYSIS"]) {
       const c = cenario(aberto(), {
         buscarCobrancaPorReferencia: vi.fn(async () => cobrancaFake({ id: "pay_pix123", status })),
       });

@@ -14,8 +14,11 @@
  * - Idempotente: linha cujo `cpf_hash` já é o HMAC novo é pulada; rodar de novo não muda nada.
  * - Contato SEM `cpf_encrypted` (só o hash antigo, de quando a cifra não existia) não tem como ser recalculado: é
  *   contado e listado só por id; segue com o hash antigo até o CPF ser informado de novo.
- * - A troca é uma bijeção do mesmo CPF, então não cria duplicidade nova (`uniq_contacts_org_cpf`); se o banco
- *   recusar uma linha, ela é contada como falha e o script segue.
+ * - A troca pode COLIDIR com `uniq_contacts_org_cpf` (organização + cpf_hash, só contato não mesclado): depois do
+ *   deploy, uma captação nova grava o CPF já com o HMAC, e o contato antigo do mesmo CPF (ainda com o hash
+ *   antigo) vira duplicata assim que é recalculado. Nesse caso (23505, ou o par achado antes de gravar) a linha NÃO
+ *   é trocada: o script lista o par de ids (sem CPF, sem hash) para quem opera mesclar os dois contatos, e sai com
+ *   código 1. Qualquer outra recusa do banco é contada como falha e o script segue.
  * - Log: só ids de contato e contagens. Nunca CPF, hash, chave nem service role.
  * - Variáveis lidas pelo carregador do Next (`@next/env`), sem abrir arquivo .env à mão. Aponta para o banco do
  *   `.env.local` (dev) ou do ambiente que exportar `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
@@ -65,13 +68,27 @@ let jaNovos = 0;
 let recalculados = 0;
 let semCifra = 0;
 let falhas = 0;
+const colisoes: Array<[string, string]> = [];
 let cursor: string | null = null;
 const idsSemCifra: string[] = [];
+
+/** Outro contato ATIVO da mesma organização que já tem este hash (o que `uniq_contacts_org_cpf` protege). */
+async function contatoComEsteHash(org: string, hash: string, exceto: string): Promise<string | null> {
+  const { data } = await admin
+    .from("contacts")
+    .select("id")
+    .eq("organization_id", org)
+    .eq("cpf_hash", hash)
+    .is("is_merged_into", null)
+    .neq("id", exceto)
+    .limit(1);
+  return ((data ?? [])[0] as { id: string } | undefined)?.id ?? null;
+}
 
 for (;;) {
   let consulta = admin
     .from("contacts")
-    .select("id, cpf_hash, cpf_encrypted")
+    .select("id, organization_id, cpf_hash, cpf_encrypted")
     .not("cpf_hash", "is", null)
     .order("id", { ascending: true })
     .limit(LOTE);
@@ -81,7 +98,12 @@ for (;;) {
     console.error(`[cpf-hash] leitura falhou (${error.code ?? "sem código"}).`);
     process.exit(1);
   }
-  const linhas = (data ?? []) as Array<{ id: string; cpf_hash: string; cpf_encrypted: string | null }>;
+  const linhas = (data ?? []) as Array<{
+    id: string;
+    organization_id: string;
+    cpf_hash: string;
+    cpf_encrypted: string | null;
+  }>;
   if (linhas.length === 0) break;
 
   for (const l of linhas) {
@@ -105,11 +127,23 @@ for (;;) {
       jaNovos++;
       continue;
     }
+    // Já existe outro contato ativo com o hash novo: trocar este viola uniq_contacts_org_cpf. Vale no dry-run também.
+    const outroAntes = await contatoComEsteHash(l.organization_id, novo, l.id);
+    if (outroAntes) {
+      colisoes.push([l.id, outroAntes]);
+      continue;
+    }
     if (!APLICAR) {
       recalculados++;
       continue;
     }
     const { error: erroGravar } = await admin.from("contacts").update({ cpf_hash: novo }).eq("id", l.id);
+    if (erroGravar?.code === "23505") {
+      // Corrida: o outro contato surgiu entre a conferência e a gravação.
+      const outro = await contatoComEsteHash(l.organization_id, novo, l.id);
+      colisoes.push([l.id, outro ?? "desconhecido"]);
+      continue;
+    }
     if (erroGravar) {
       falhas++;
       log(`[cpf-hash] banco recusou o contato ${l.id} (${erroGravar.code ?? "sem código"})`);
@@ -121,7 +155,10 @@ for (;;) {
 
 log(
   `[cpf-hash] ${APLICAR ? "APLICADO" : "dry-run"}: lidos=${lidos} recalculados=${recalculados} ` +
-    `ja_com_hmac=${jaNovos} sem_cifra=${semCifra} falhas=${falhas}`,
+    `ja_com_hmac=${jaNovos} sem_cifra=${semCifra} colisoes=${colisoes.length} falhas=${falhas}`,
 );
+for (const [id, outro] of colisoes.slice(0, 200)) {
+  log(`[cpf-hash] colisão: o contato ${id} tem o mesmo CPF do contato ${outro} (mesma organização); mesclar os dois, a linha ${id} ficou com o hash antigo`);
+}
 if (idsSemCifra.length > 0) log(`[cpf-hash] sem cifra (ficam com o hash antigo): ${idsSemCifra.slice(0, 50).join(", ")}`);
-process.exit(falhas > 0 ? 1 : 0);
+process.exit(falhas > 0 || colisoes.length > 0 ? 1 : 0);

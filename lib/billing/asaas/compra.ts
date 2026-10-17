@@ -1593,7 +1593,12 @@ async function cancelarContratoSemAssinaturaViva(
   return { tipo: "ok", cancelAtPeriodEnd: true };
 }
 
-const STATUS_ASAAS_PAGO = new Set(["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"]);
+/**
+ * Cobrança que já conta como dinheiro entrando ("pagamento em confirmação"): confirmada/recebida E o cartão em
+ * análise antifraude (`AWAITING_RISK_ANALYSIS`) — a cobrança foi capturada e o Asaas ainda decide; remover agora
+ * derrubaria uma compra que pode ser aprovada em minutos.
+ */
+const STATUS_ASAAS_PAGO = new Set(["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH", "AWAITING_RISK_ANALYSIS"]);
 /** O pedido `processando` há menos que isto pode ter um POST ao Asaas ainda em voo. */
 const PEDIDO_EM_VOO_MS = 15 * 60 * 1000;
 

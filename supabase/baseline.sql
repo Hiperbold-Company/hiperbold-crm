@@ -66435,8 +66435,10 @@ reset lock_timeout;
 --      Exclusão forçada pelo admin da plataforma continua dispensando programação e não marca nada.
 --
 -- Recria fn_exclusao_pode_executar, fn_exclusao_programar e fn_exclusao_cancelar (corpo da 0959 com o estado novo)
--- e cria fn_exclusao_iniciar, fn_exclusao_adiar_para_avisar e o trigger. fn_exclusao_executar e
--- fn_exclusao_sincronizar ficam como estão (a primeira chama a guarda recriada aqui). Reaplicável.
+-- e cria fn_exclusao_iniciar, fn_exclusao_adiar_para_avisar e o trigger. Recria também fn_exclusao_sincronizar (corpo da
+-- 0959, só com o delete da reativação pulando a linha `executando`: sem isso o sincronizador apagava o registro de uma
+-- exclusão em andamento se o contrato deixasse de ser candidato). fn_exclusao_executar fica como está (chama a guarda
+-- recriada aqui). Reaplicável.
 
 set lock_timeout = '3s';
 
@@ -66720,6 +66722,98 @@ comment on function public.fn_exclusao_adiar_para_avisar() is
 
 revoke execute on function public.fn_exclusao_adiar_para_avisar() from public, anon, authenticated;
 grant execute on function public.fn_exclusao_adiar_para_avisar() to service_role;
+
+-- ── 6. fn_exclusao_sincronizar: nunca apaga a que está executando ──
+create or replace function public.fn_exclusao_sincronizar(p_dias integer)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_novas integer := 0;
+  v_atualizadas integer := 0;
+  v_apagadas integer := 0;
+begin
+  -- O piso mora no corpo: a Política de Privacidade promete 90 dias, e nenhum chamador (nem um psql na mão)
+  -- encurta isso pelo parâmetro.
+  if p_dias is null or p_dias < 90 or p_dias > 365 then
+    raise exception 'exclusao_dias_invalido' using errcode = '22023';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('org_exclusoes_sincronizar', 0));
+
+  with novas as (
+    insert into public.org_exclusoes_programadas
+      (organization_id, origem, motivo, fim_da_assinatura_em, excluir_em)
+    select c.organization_id, 'automatica', c.motivo, c.fim_em,
+           greatest(c.fim_em + make_interval(days => p_dias), now() + interval '30 days')
+      from public.fn_exclusao_candidatas() c
+     where not exists (
+       select 1 from public.org_exclusoes_programadas x where x.organization_id = c.organization_id
+     )
+    on conflict (organization_id) do nothing
+    returning 1
+  )
+  select count(*) into v_novas from novas;
+
+  -- A data mudou (suspensa que virou cancelada, N alterado, contrato reaberto e acabado de novo): os avisos
+  -- anteriores eram de outra data, então os marcadores voltam a nulo e a fila de e-mail, que é por data,
+  -- avisa de novo. NUNCA se antecipa uma data para dentro dos próximos 30 dias: diminuir N (ou o contrato
+  -- reaberto e acabado antes) não pode trazer a exclusão para hoje sem aviso. A data nova só vale se for mais
+  -- tarde que a de hoje, ou se ainda deixar 30 dias; senão a data atual fica como está.
+  with alvo as (
+    select x.organization_id, c.motivo, c.fim_em,
+           case
+             when greatest(c.fim_em + make_interval(days => p_dias), x.created_at + interval '30 days') >= x.excluir_em
+               then greatest(c.fim_em + make_interval(days => p_dias), x.created_at + interval '30 days')
+             when greatest(c.fim_em + make_interval(days => p_dias), x.created_at + interval '30 days') >= now() + interval '30 days'
+               then greatest(c.fim_em + make_interval(days => p_dias), x.created_at + interval '30 days')
+             else x.excluir_em
+           end as nova_data
+      from public.org_exclusoes_programadas x
+      join public.fn_exclusao_candidatas() c on c.organization_id = x.organization_id
+     where x.origem = 'automatica'
+       and x.estado = 'programada'
+  ), mudou as (
+    update public.org_exclusoes_programadas x
+       set motivo = a.motivo,
+           fim_da_assinatura_em = a.fim_em,
+           excluir_em = a.nova_data,
+           aviso_30_dias_em = case when x.excluir_em is distinct from a.nova_data then null else x.aviso_30_dias_em end,
+           aviso_7_dias_em = case when x.excluir_em is distinct from a.nova_data then null else x.aviso_7_dias_em end
+      from alvo a
+     where x.organization_id = a.organization_id
+       and (x.motivo is distinct from a.motivo
+            or x.fim_da_assinatura_em is distinct from a.fim_em
+            or x.excluir_em is distinct from a.nova_data)
+    returning 1
+  )
+  select count(*) into v_atualizadas from mudou;
+
+  -- Reativou ou pagou de novo (o contrato saiu de cancelada/suspensa) ou virou conta manual: a programação
+  -- AUTOMÁTICA some, inclusive a que o admin tinha cancelado à mão (a próxima vez que acabar é outro ciclo).
+  -- 0964: a que está EXECUTANDO fica (a exclusão já começou; o trigger do contrato barra a reativação, mas a linha é o
+  -- registro de que Storage e conexões estão sendo apagados e de que a rodada seguinte retoma).
+  with apagadas as (
+    delete from public.org_exclusoes_programadas x
+     where x.origem = 'automatica'
+       and x.estado <> 'executando'
+       and not exists (select 1 from public.fn_exclusao_candidatas() c where c.organization_id = x.organization_id)
+    returning 1
+  )
+  select count(*) into v_apagadas from apagadas;
+
+  return jsonb_build_object('programadas', v_novas, 'atualizadas', v_atualizadas, 'canceladas_por_reativacao', v_apagadas);
+end;
+$$;
+
+comment on function public.fn_exclusao_sincronizar(integer) is
+  '0959: cria, atualiza e apaga as programações AUTOMÁTICAS de exclusão conforme os contratos de hoje (fn_exclusao_candidatas). p_dias é a guarda após o fim da assinatura (90 a 365; piso e teto moram aqui, os mesmos da configuração). Não toca em programação manual nem na que está executando (0964). Devolve as contagens programadas, atualizadas e canceladas_por_reativacao.';
+
+revoke execute on function public.fn_exclusao_sincronizar(integer) from public, anon, authenticated;
+grant execute on function public.fn_exclusao_sincronizar(integer) to service_role;
 
 do $agent_worker_exclusao_0964$
 begin

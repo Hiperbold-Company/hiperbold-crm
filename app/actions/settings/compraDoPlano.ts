@@ -28,6 +28,11 @@
  * QUALQUER organização ficaria ao alcance de um escopo de suporte só
  * leitura, ou de uma sessão sem MFA provado.
  *
+ * MFA em TODA ação com efeito de cobrança (auditoria de 17/10/2026): `iniciarAssinatura`, `comprarPacote`,
+ * `cancelarAssinatura` e `trocarFormaDePagamento` recusam (`MENSAGEM_MFA`) quando `mfaEmDivida()` é verdadeiro,
+ * para o admin do tenant também, não só para o da plataforma. `mfaEmDivida` só vale para quem JÁ cadastrou um
+ * fator, então o cliente novo que compra no onboarding segue sem obstáculo. `simularCupom` não cobra e fica fora.
+ *
  * ─── As duas chaves da decisão 18 ──────────────────────────────────────────
  *
  * Comprar (`iniciarAssinatura`/`comprarPacote`) exige `ASAAS_ENABLED=true`
@@ -228,7 +233,19 @@ async function contextoDaRequisicao() {
 
 type Autorizacao = { ok: true; userId: string; orgId: string } | { ok: false; mensagem: string };
 
-async function autorizarAdminDaOrganizacao(mensagemSemPermissao: string): Promise<Autorizacao> {
+/**
+ * `efeitoDeCobranca` (padrão `true`): a ação mexe em cobrança (compra, cancelamento, troca de forma de pagamento) e,
+ * por isso, quem JÁ tem fator de verificação em duas etapas precisa tê-lo provado nesta sessão (`mfaEmDivida`),
+ * seja o admin do tenant ou o da plataforma. Quem não cadastrou fator não é afetado (o cliente novo que compra no
+ * onboarding não tem fator). Só `simularCupom`, que não gera cobrança, passa `false`; o admin da PLATAFORMA que
+ * bypassa o papel prova a MFA sempre.
+ */
+async function autorizarAdminDaOrganizacao(
+  mensagemSemPermissao: string,
+  opcoes: { efeitoDeCobranca?: boolean } = {},
+): Promise<Autorizacao> {
+  const efeitoDeCobranca = opcoes.efeitoDeCobranca ?? true;
+  let bypassDaPlataforma = false;
   const authUser = await loadAuthUser();
   if (!authUser) return { ok: false, mensagem: mensagemSemPermissao };
   if (supportWriteError(authUser.support)) return { ok: false, mensagem: mensagemSemPermissao };
@@ -255,9 +272,13 @@ async function autorizarAdminDaOrganizacao(mensagemSemPermissao: string): Promis
     if (paErro || !paRow || paRow.scope !== "full") {
       return { ok: false, mensagem: mensagemSemPermissao };
     }
-    if (await mfaEmDivida()) {
-      return { ok: false, mensagem: MENSAGEM_MFA };
-    }
+    bypassDaPlataforma = true;
+  }
+
+  // MFA para TODO ator que causa efeito de cobrança (não só o admin da plataforma): uma sessão de admin do tenant
+  // roubada (aal1, com fator cadastrado) não compra, não cancela nem troca a forma de pagamento.
+  if ((efeitoDeCobranca || bypassDaPlataforma) && (await mfaEmDivida())) {
+    return { ok: false, mensagem: MENSAGEM_MFA };
   }
 
   return { ok: true, userId: authUser.id, orgId: activeOrg.orgId };
@@ -422,7 +443,8 @@ export async function simularCupom(input: {
   metodo: "CREDIT_CARD" | "PIX";
   parcelas?: number;
 }): Promise<ResultadoSimularCupom> {
-  const auth = await autorizarAdminDaOrganizacao(MENSAGEM_SEM_PERMISSAO_COMPRAR);
+  // Simular não gera cobrança: não exige a MFA provada (o admin da plataforma exige sempre).
+  const auth = await autorizarAdminDaOrganizacao(MENSAGEM_SEM_PERMISSAO_COMPRAR, { efeitoDeCobranca: false });
   if (!auth.ok) return { tipo: "erro", mensagem: auth.mensagem };
 
   const parsed = entradaSimularCupom.safeParse(input);

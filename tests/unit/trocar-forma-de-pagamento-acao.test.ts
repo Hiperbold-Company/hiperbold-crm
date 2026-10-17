@@ -12,6 +12,7 @@ const USER = "11111111-1111-4111-8111-111111111111";
 
 let papel = "admin";
 let supportBloqueado = false;
+let mfaPendente = false;
 let habilitado = true;
 let limitadoPorUsuario = false;
 let limitadoPorOrg = false;
@@ -43,7 +44,7 @@ vi.mock("@/lib/impersonate/support", () => ({ supportWriteError: vi.fn(() => (su
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(async () => ({ id: USER, is_platform_admin: false, support: null })),
   resolveActiveOrg: vi.fn(async () => ({ orgId: ORG, name: "Org", role: papel })),
-  mfaEmDivida: vi.fn(async () => false),
+  mfaEmDivida: vi.fn(async () => mfaPendente),
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ marca: "admin-falso" }) }));
 vi.mock("@/lib/billing/asaas/db-compra-supabase", () => ({ dbCompraSupabase: vi.fn(() => ({})) }));
@@ -72,6 +73,7 @@ import { trocarFormaDePagamento } from "@/app/actions/settings/compraDoPlano";
 beforeEach(() => {
   papel = "admin";
   supportBloqueado = false;
+  mfaPendente = false;
   habilitado = true;
   limitadoPorUsuario = false;
   limitadoPorOrg = false;
@@ -112,6 +114,14 @@ describe("trocarFormaDePagamento", () => {
     supportBloqueado = true;
     expect((await trocarFormaDePagamento()).tipo).toBe("erro");
     expect(chamadas).toHaveLength(0);
+  });
+
+  it("admin com fator e sessão sem MFA provada é recusado antes do teto, do Asaas e da auditoria", async () => {
+    mfaPendente = true;
+    expect(await trocarFormaDePagamento()).toEqual({ tipo: "erro", mensagem: "Confirme a verificação em duas etapas." });
+    expect(chamadas).toHaveLength(0);
+    expect(auditadas).toHaveLength(0);
+    expect(limites).toHaveLength(0);
   });
 
   it("tem teto de tentativas por usuário e por organização: estourou, o Asaas nem é tocado", async () => {

@@ -109,7 +109,8 @@ async function lerCorpoComTeto(
     }
     pedacos.push(Buffer.from(value));
   }
-  return { ok: true, texto: Buffer.concat(pedacos).toString("utf8") };
+  // TextDecoder tira o BOM UTF-8 inicial, como o `req.text()` fazia (`Buffer#toString` o mantém e quebra o JSON.parse).
+  return { ok: true, texto: new TextDecoder("utf-8").decode(Buffer.concat(pedacos)) };
 }
 
 // ponytail: mirrors the default phone aliases in lib/webhooks/inbound.ts —
@@ -304,7 +305,11 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   // Ignorada com log, e nunca vira campo personalizado (o mapeador a descarta).
   const tagsDoPayload = lerTagsReservadas(payload);
   const tagsDoEnvio = fonteComOrigemProvada ? tagsDoPayload : [];
+  // O que o envio trouxe e foi DESCARTADO por falta de origem provada. Sobe na resposta 200 (`data.ignored_fields`)
+  // para quem integra ver que a etiqueta/CPF/consentimento não entrou, em vez de achar que entrou.
+  const camposIgnorados: string[] = [];
   if (!fonteComOrigemProvada && tagsDoPayload.length > 0) {
+    camposIgnorados.push("tags");
     logger.warn("[webhooks.inbound] tags do envio ignoradas: origem não provada", {
       webhookSourceId: source.id,
       organizationId: source.organization_id,
@@ -422,7 +427,9 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       const destino = String(source.redirect_to);
       if (/^https?:\/\//i.test(destino)) return NextResponse.redirect(destino, 303);
     }
-    return ok({ lead_id: leadId }, { requestId });
+    return ok(camposIgnorados.length > 0 ? { lead_id: leadId, ignored_fields: camposIgnorados } : { lead_id: leadId }, {
+      requestId,
+    });
   };
 
   // Traz o CONTATO junto, e não só o id do lead: a linha de captação precisa do
@@ -764,6 +771,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   if (consentDoEnvio && contactId && contatoNasceuAqui) {
     await auditarMudancaDeConsentimento(contactId, "sem_resposta", estadoDoConsentimentoDeMarketing(consentDoEnvio));
   } else if (consentDoEnvio && contactId && !fonteComOrigemProvada) {
+    camposIgnorados.push("consent");
     logger.warn("[webhooks.inbound] consentimento do envio ignorado em contato existente: origem não provada", {
       webhookSourceId: source.id,
       organizationId: source.organization_id,
@@ -799,12 +807,14 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   // contato com o mesmo CPF, sem chave de cifra) vai para o log SEM o número e a
   // captação segue.
   //
-  // SÓ ORIGEM PROVADA, OU CONTATO NASCIDO NESTE ENVIO (auditoria de 17/10/2026): numa
-  // fonte pública qualquer visitante que soubesse o telefone de um contato existente
-  // gravaria nele um CPF qualquer (e, com isso, travaria o CPF verdadeiro por causa do
-  // índice único). Contato criado por este mesmo envio não tem dono anterior a proteger.
+  // SÓ ORIGEM PROVADA (auditoria de 17/10/2026), também em contato recém-criado: numa
+  // fonte pública qualquer visitante gravaria um CPF qualquer (e, com isso, travaria o
+  // CPF verdadeiro por causa do índice único — o do contato novo também, porque o
+  // contato nascido aqui nasceu de um telefone que o visitante escolheu). Sem a
+  // assinatura HMAC o CPF é descartado e a resposta diz `ignored_fields: ["cpf"]`.
   if (documentoDoEnvio.estado === "cpf") {
-    if (contactId && (fonteComOrigemProvada || contatoNasceuAqui)) {
+    if (!fonteComOrigemProvada) camposIgnorados.push("cpf");
+    if (contactId && fonteComOrigemProvada) {
       await gravarCpfDoContato(admin, {
         organizationId: source.organization_id as string,
         contactId,
@@ -814,7 +824,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       logger.warn("[webhooks.inbound] cpf do envio não foi gravado", {
         webhookSourceId: source.id,
         organizationId: source.organization_id,
-        desfecho: contactId ? "origem_nao_provada" : "sem_contato",
+        desfecho: !fonteComOrigemProvada ? "origem_nao_provada" : "sem_contato",
       });
     }
   }

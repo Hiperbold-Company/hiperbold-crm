@@ -24,6 +24,7 @@ const ORG_AVISADA = U(3);
 const ORG_PRONTA = U(4);
 const ORG_NO_PRAZO = U(5);
 const ORG_REATIVADA = U(6);
+const ORG_EXECUTANDO = U(7);
 const ADMIN = U(11);
 
 function erroDe(comando: string): string | null {
@@ -78,10 +79,10 @@ beforeAll(() => {
   sql(`insert into auth.users (id, email) values ('${ADMIN}', 'i963-admin@invariant.test') on conflict (id) do nothing;`);
   for (const [org, nome] of [
     [ORG_REEMB, "Reemb"], [ORG_SEM_AVISO, "SemAviso"], [ORG_AVISADA, "Avisada"], [ORG_PRONTA, "Pronta"],
-    [ORG_NO_PRAZO, "NoPrazo"], [ORG_REATIVADA, "Reativada"],
+    [ORG_NO_PRAZO, "NoPrazo"], [ORG_REATIVADA, "Reativada"], [ORG_EXECUTANDO, "Executando"],
   ] as const) criarOrg(org, nome);
 
-  for (const org of [ORG_SEM_AVISO, ORG_AVISADA, ORG_PRONTA, ORG_NO_PRAZO, ORG_REATIVADA]) {
+  for (const org of [ORG_SEM_AVISO, ORG_AVISADA, ORG_PRONTA, ORG_NO_PRAZO, ORG_REATIVADA, ORG_EXECUTANDO]) {
     contratoCancelado(org, 50);
     pagamentoDoAsaas(org, `pay_i963_${org.slice(-2)}`);
   }
@@ -91,7 +92,7 @@ beforeAll(() => {
     update public.org_exclusoes_programadas set excluir_em = now() - interval '1 hour', aviso_30_dias_em = null, aviso_7_dias_em = null
      where organization_id = '${ORG_SEM_AVISO}';
     update public.org_exclusoes_programadas set excluir_em = now() - interval '1 hour', aviso_30_dias_em = now() - interval '25 days', aviso_7_dias_em = now() - interval '8 days'
-     where organization_id in ('${ORG_AVISADA}', '${ORG_PRONTA}', '${ORG_REATIVADA}');
+     where organization_id in ('${ORG_AVISADA}', '${ORG_PRONTA}', '${ORG_REATIVADA}', '${ORG_EXECUTANDO}');
     update public.org_exclusoes_programadas set aviso_30_dias_em = now() - interval '2 days'
      where organization_id = '${ORG_NO_PRAZO}';
   `);
@@ -195,6 +196,27 @@ describe("0964. o banco decide primeiro e a exclusão em andamento não volta at
     expect(guarda(ORG_PRONTA)).toBe("ok");
     expect(erroDe(`select public.fn_exclusao_executar('${ORG_PRONTA}', null, false);`)).toBeNull();
     expect(um(`select count(*) from public.organizations where id = '${ORG_PRONTA}';`)).toBe("0");
+  });
+});
+
+describe("0964. a sincronização não apaga a exclusão que está executando", () => {
+  it("controle: programada que deixou de ser candidata (reativada) sai na sincronização", () => {
+    expect(estado(ORG_REATIVADA)).toBe("programada");
+    sql(`select public.fn_exclusao_sincronizar(90);`);
+    expect(estado(ORG_REATIVADA)).toBe("SEM");
+  });
+
+  it("executando que deixou de ser candidata (contrato sem ciclo) continua, e a sincronização não a apaga", () => {
+    // A sincronização do controle acima reajustou as datas das programadas: vence-se de novo antes de iniciar.
+    sql(`update public.org_exclusoes_programadas
+            set excluir_em = now() - interval '1 hour', aviso_30_dias_em = now() - interval '25 days', aviso_7_dias_em = now() - interval '8 days'
+          where organization_id = '${ORG_EXECUTANDO}';`);
+    expect(um(`select public.fn_exclusao_iniciar('${ORG_EXECUTANDO}', false);`)).toBe("ok");
+    expect(estado(ORG_EXECUTANDO)).toBe("executando");
+    sql(`update public.billing_contracts set cycle = null where organization_id = '${ORG_EXECUTANDO}';`);
+    expect(um(`select count(*) from public.fn_exclusao_candidatas() where organization_id = '${ORG_EXECUTANDO}';`)).toBe("0");
+    sql(`select public.fn_exclusao_sincronizar(90);`);
+    expect(estado(ORG_EXECUTANDO)).toBe("executando");
   });
 });
 

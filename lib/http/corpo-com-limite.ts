@@ -56,7 +56,9 @@ export async function lerCorpoComLimite(
   }
 
   const bytes = Buffer.concat(pedacos.map((p) => Buffer.from(p)));
-  return { ok: true, texto: bytes.toString("utf8") };
+  // TextDecoder (e não `Buffer#toString`) para tirar o BOM UTF-8 inicial, como o `req.text()` fazia: com o BOM
+  // `JSON.parse` falha e o HMAC seria conferido sobre um texto que o remetente não assinou.
+  return { ok: true, texto: new TextDecoder("utf-8").decode(bytes) };
 }
 
 /**
