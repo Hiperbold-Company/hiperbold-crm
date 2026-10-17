@@ -5,10 +5,12 @@
  * de qualquer fetch (pulável só via opts.skipUrlCheck, usado nos testes).
  */
 import { createHmac } from "node:crypto";
+import { request as requisicaoHttps } from "node:https";
 import { registerAction } from "@/lib/automation/actions";
 import type { ActionCtx, ActionResultDetail } from "@/lib/automation/types";
 import { codigoParaOrganizacao } from "@/lib/automation/destino-recusado";
-import { assertDestinoResolvidoSeguro } from "@/lib/automation/outbound-ip";
+import { buscarNoEnderecoValidado, type RequisicaoHttps } from "@/lib/ai/mcp-externo/fetch-seguro";
+import { resolverDestinoSeguro } from "@/lib/automation/outbound-ip";
 import { assertSafeOutboundUrl } from "@/lib/automation/outbound-url";
 import { logger } from "@/lib/logger";
 import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
@@ -124,31 +126,55 @@ async function responsavelPublico(
 export async function executeCallWebhook(
   ctx: ActionCtx,
   config: Record<string, unknown>,
-  opts: { skipUrlCheck?: boolean; retryDelaysMs?: number[] } = {},
+  opts: {
+    skipUrlCheck?: boolean;
+    retryDelaysMs?: number[];
+    /** Teste: troca a resolução de DNS e a rede do caminho de produção. */
+    resolverHost?: (host: string) => Promise<string[]>;
+    requisitar?: RequisicaoHttps;
+  } = {},
 ): Promise<ActionResultDetail> {
   const url = typeof config.url === "string" ? config.url : null;
   if (!url) return { type: "call_webhook", status: "failed", error: "missing_url" };
+  const recusar = (err: unknown): ActionResultDetail => {
+    const motivo = (err as Error).message;
+    const visivel = codigoParaOrganizacao(motivo);
+    // O `error` vai para `automation_rule_runs.actions_result`, que a organização
+    // lê: "não resolve" versus "IP interno" seria oráculo dos nomes do compose.
+    // O motivo real fica no log do servidor.
+    if (visivel !== motivo) {
+      logger.warn("[automation.call_webhook] endereço recusado", { motivo });
+    }
+    return { type: "call_webhook", status: "failed", error: visivel };
+  };
+
   if (!opts.skipUrlCheck) {
     try {
       // A URL do webhook é escolha da organização: https sempre, e não só com
       // NODE_ENV=production (a imagem do worker não o define).
       assertSafeOutboundUrl(url, { httpsSempre: true });
-      // Guard textual não resolve nome: um hostname público apontando para
-      // 169.254.169.254 (metadata da nuvem) ou para os serviços internos da rede do
-      // compose passava por ele. Este segundo resolve e julga o IP.
-      await assertDestinoResolvidoSeguro(new URL(url).hostname);
     } catch (err) {
-      const motivo = (err as Error).message;
-      const visivel = codigoParaOrganizacao(motivo);
-      // O `error` vai para `automation_rule_runs.actions_result`, que a organização
-      // lê: "não resolve" versus "IP interno" seria oráculo dos nomes do compose.
-      // O motivo real fica no log do servidor.
-      if (visivel !== motivo) {
-        logger.warn("[automation.call_webhook] endereço recusado", { motivo });
-      }
-      return { type: "call_webhook", status: "failed", error: visivel };
+      return recusar(err);
     }
   }
+
+  /**
+   * Resolve o nome, julga os IPs e devolve os que passaram. Em produção ISTO é a
+   * conferência E o destino: a conexão abre nesses endereços (D-168), sem deixar
+   * o `fetch` resolver o nome DE NOVO — o intervalo entre as duas resoluções era
+   * a janela de DNS rebinding (nome público na conferência, 169.254.169.254 na
+   * conexão). Roda a CADA tentativa do laço, pelo mesmo motivo: o DNS pode mudar
+   * entre a tentativa 1 e a 3. Hostname que não resolve para IP público é recusa
+   * definitiva (não entra no retry).
+   */
+  const resolverHost = opts.resolverHost ?? resolverDestinoSeguro;
+  const conferirDestino = async (): Promise<string[] | ActionResultDetail> => {
+    try {
+      return await resolverHost(new URL(url).hostname);
+    } catch (err) {
+      return recusar(err);
+    }
+  };
 
   const leadPublic = projectPublicFields(ctx.context.lead, LEAD_PUBLIC_FIELDS);
   const contactPublic = projectPublicFields(ctx.context.contact, CONTACT_PUBLIC_FIELDS);
@@ -191,13 +217,23 @@ export async function executeCallWebhook(
       // segue redirect, e uma URL de tenant que passou no guard anti-SSRF pode
       // 302 pra um endpoint interno (ex.: http://169.254.169.254/...). Um 3xx
       // vira falha comum (conta pro retry), nunca é seguido.
-      const res = await fetch(url, {
+      const init: RequestInit = {
         method: "POST",
         headers,
         body,
         redirect: "manual",
         signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
+      };
+      let res: Response;
+      if (opts.skipUrlCheck) {
+        res = await fetch(url, init);
+      } else {
+        const destino = await conferirDestino();
+        if (!Array.isArray(destino)) return destino;
+        res = await buscarNoEnderecoValidado(url, init, destino, opts.requisitar ?? requisicaoHttps);
+        // O corpo da resposta não é lido: solta a conexão em vez de deixá-la pendurada.
+        await res.body?.cancel().catch(() => {});
+      }
       lastStatus = res.status;
       if (res.ok) {
         return { type: "call_webhook", status: "success", detail: { response_status: res.status, attempt } };

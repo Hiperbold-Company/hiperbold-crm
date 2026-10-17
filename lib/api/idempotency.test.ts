@@ -28,8 +28,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   comIdempotencia,
   hashDaColuna,
-  hashDoCorpo,
+  hashDaOperacao,
   hashLido,
+  identidadeDoAtor,
   JANELA_DA_RESERVA_MS,
   TTL_MS,
 } from "@/lib/api/idempotency";
@@ -204,7 +205,8 @@ const RECIBO_VALIDO = new Date(RELOGIO().getTime() + TTL_MS).toISOString();
 const RECIBO_VENCIDO = new Date(RELOGIO().getTime() - 1).toISOString();
 
 const CORPO = { title: "Boas-vindas" };
-const hashDoCorpoPadrao = hashDoCorpo(CORPO);
+const ATOR = "user:00000000-0000-4000-8000-0000000000aa";
+const hashDoCorpoPadrao = hashDaOperacao(ATOR, CORPO);
 const expiraReserva = new Date(RELOGIO().getTime() + JANELA_DA_RESERVA_MS).toISOString();
 const expiraRecibo = new Date(RELOGIO().getTime() + TTL_MS).toISOString();
 
@@ -234,6 +236,7 @@ function entrada(d: ReturnType<typeof duble>, executar: () => Promise<{ resposta
     organizationId: ORG,
     endpoint: ENDPOINT,
     chave: CHAVE,
+    ator: ATOR,
     corpo: CORPO,
     executar,
     agora: RELOGIO,
@@ -320,6 +323,47 @@ describe("comIdempotencia", () => {
     expect(desfecho).toEqual({ tipo: "conflito" });
     expect(executar).not.toHaveBeenCalled();
     expect(d.inseridos).toHaveLength(0);
+  });
+
+  it("(4b) mesma chave, endpoint e corpo vindos de OUTRO ator: conflito, sem replay e sem executar", async () => {
+    // O recibo é de quem o gerou. Outro usuário/token da mesma organização que
+    // soubesse a chave receberia a resposta gravada do primeiro — dado de outro.
+    const d = duble({ linhas: [recibo()] });
+    const executar = vi.fn(async () => ({ resposta: { id: "t2" }, status: 201 }));
+
+    const desfecho = await comIdempotencia({
+      ...entrada(d, executar),
+      ator: "api_token:00000000-0000-4000-8000-0000000000bb",
+    });
+
+    expect(desfecho).toEqual({ tipo: "conflito" });
+    expect(executar).not.toHaveBeenCalled();
+    expect(d.inseridos).toHaveLength(0);
+  });
+
+  it("(4c) o MESMO ator com a mesma chave segue recebendo o replay (controle)", async () => {
+    const d = duble({ linhas: [recibo()] });
+    const executar = vi.fn(async () => ({ resposta: { id: "DUPLICADO" }, status: 201 }));
+    const desfecho = await comIdempotencia(entrada(d, executar));
+    expect(desfecho).toEqual({ tipo: "replay", resposta: { id: "t1" }, status: 201 });
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  it("(4d) a reserva em curso de um ator não vira 'em_curso' para outro: é conflito", async () => {
+    const d = duble({ linhas: [reserva()] });
+    const executar = vi.fn(async () => ({ resposta: { id: "t2" }, status: 201 }));
+    const desfecho = await comIdempotencia({ ...entrada(d, executar), ator: "user:outro" });
+    expect(desfecho).toEqual({ tipo: "conflito" });
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  it("identidadeDoAtor é estável: agente pelo token (não pelo run), pessoa e token distintos", () => {
+    expect(identidadeDoAtor({ type: "user", id: "u1" })).toBe("user:u1");
+    expect(identidadeDoAtor({ type: "api_token", id: "t1" })).toBe("api_token:t1");
+    const run1 = identidadeDoAtor({ type: "ai_agent", id: "run-1", role: "agent", api_token_id: "t9" });
+    const run2 = identidadeDoAtor({ type: "ai_agent", id: "run-2", role: "agent", api_token_id: "t9" });
+    expect(run1).toBe(run2);
+    expect(identidadeDoAtor({ type: "user", id: "x" })).not.toBe(identidadeDoAtor({ type: "api_token", id: "x" }));
   });
 
   it("(5) filtro de validade e de tenant vão para o BANCO, não para o código depois", async () => {

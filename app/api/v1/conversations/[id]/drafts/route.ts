@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { resolveAuthDual, tetoDeEscritaDoToken } from "@/lib/api/auth-dual";
-import { chaveDaRequisicao, comIdempotencia } from "@/lib/api/idempotency";
+import { chaveDaRequisicao, comIdempotencia, identidadeDoAtor } from "@/lib/api/idempotency";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
@@ -158,6 +158,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
             organizationId,
             endpoint: ENDPOINT,
             chave,
+            ator: identidadeDoAtor(actor),
             // O caminho entra no corpo: a MESMA chave em OUTRA conversa é
             // conflito, e não replay do rascunho da primeira.
             corpo: { conversation_id: id, ...dados },

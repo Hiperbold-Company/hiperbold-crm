@@ -382,7 +382,7 @@ describe("POST /webhook-sources — o recibo não guarda path_token nem o segred
     expect((insercaoDoRecibo(sem)?.patch as { request_hash: string }).request_hash).not.toBe(a);
   });
 
-  it("Cache-Control: no-store só quando a resposta carrega o segredo gerado", async () => {
+  it("Cache-Control: no-store em toda criação (path_token), com ou sem segredo gerado, e no replay", async () => {
     const db = bancoDeCriacao();
     vi.mocked(createAdminClient).mockReturnValue(db as never);
     comoToken("manager", ["mcp:write"]);
@@ -394,7 +394,77 @@ describe("POST /webhook-sources — o recibo não guarda path_token nem o segred
 
     const semSegredo = await POST(req(url, "POST", corpo));
     expect(semSegredo.status).toBe(201);
-    expect(semSegredo.headers.get("cache-control")).not.toBe("no-store");
+    // O `path_token` é a chave da URL de captação: vai em toda 201, e nenhuma pode ser cacheada.
+    expect((await semSegredo.clone().json()).data.path_token).toEqual(expect.any(String));
+    expect(semSegredo.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("o replay (mesma Idempotency-Key) também sai com no-store", async () => {
+    const primeiro = bancoDeCriacao();
+    vi.mocked(createAdminClient).mockReturnValue(primeiro as never);
+    comoToken("manager", ["mcp:write"]);
+    const { POST } = await import("@/app/api/v1/webhook-sources/route");
+    await POST(req(url, "POST", corpo, { "Idempotency-Key": CHAVE }));
+    const hash = (insercaoDoRecibo(primeiro)?.patch as { request_hash: string }).request_hash;
+
+    const segundo = bancoDeCriacao({
+      idempotency_keys: (c) =>
+        c.op === "select"
+          ? [
+              {
+                id: "r1",
+                request_hash: hash,
+                status_code: 201,
+                expires_at: "2099-01-01T00:00:00Z",
+                response_body: { id: FONTE, name: "Site", has_secret: false },
+              },
+            ]
+          : null,
+      webhook_sources: (c) => (c.op === "select" ? [{ path_token: "tok_do_banco" }] : fonteDoBanco),
+    });
+    vi.mocked(createAdminClient).mockReturnValue(segundo as never);
+    const res = await POST(req(url, "POST", corpo, { "Idempotency-Key": CHAVE }));
+    expect(res.status).toBe(201);
+    expect((await res.json()).data.path_token).toBe("tok_do_banco");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("a mesma Idempotency-Key vinda de OUTRO token da organização é 409, nunca o replay", async () => {
+    const primeiro = bancoDeCriacao();
+    vi.mocked(createAdminClient).mockReturnValue(primeiro as never);
+    comoToken("manager", ["mcp:write"]);
+    const { POST } = await import("@/app/api/v1/webhook-sources/route");
+    await POST(req(url, "POST", corpo, { "Idempotency-Key": CHAVE }));
+    const hash = (insercaoDoRecibo(primeiro)?.patch as { request_hash: string }).request_hash;
+
+    const segundo = bancoDeCriacao({
+      idempotency_keys: (c) =>
+        c.op === "select"
+          ? [
+              {
+                id: "r1",
+                request_hash: hash,
+                status_code: 201,
+                expires_at: "2099-01-01T00:00:00Z",
+                response_body: { id: FONTE, name: "Site", has_secret: false },
+              },
+            ]
+          : null,
+      webhook_sources: (c) => (c.op === "select" ? [{ path_token: "tok_do_banco" }] : fonteDoBanco),
+    });
+    vi.mocked(createAdminClient).mockReturnValue(segundo as never);
+    // Outro token, mesma organização, mesmo corpo, mesma chave.
+    vi.mocked(validateBearerToken).mockResolvedValueOnce({
+      organizationId: ORG_TOKEN,
+      role: "manager",
+      actor: { type: "api_token", id: "99999999-9999-4999-8999-999999999999", role: "manager" },
+      apiTokenId: "99999999-9999-4999-8999-999999999999",
+      scopes: ["mcp:write"],
+      createdBy: DONO,
+    } as never);
+    const res = await POST(req(url, "POST", corpo, { "Idempotency-Key": CHAVE }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("idempotency_conflict");
   });
 });
 

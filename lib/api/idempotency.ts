@@ -46,6 +46,19 @@
  * efeito roda uma vez por chave, e o "ainda não gravei" deixa de ser invisível
  * para a segunda requisição.
  *
+ * ── Quem chamou entra no recibo ─────────────────────────────────────────────
+ * A chave de idempotência é um segredo de QUEM a gerou, mas o recibo é por
+ * (organização, chave, endpoint): sem o ator, outro token ou outro usuário da
+ * mesma organização que soubesse (ou adivinhasse) a chave, com o mesmo corpo,
+ * receberia o REPLAY da resposta gravada — e a resposta de outro é dado de
+ * outro. Por isso o ator (`identidadeDoAtor`) entra na identidade da operação:
+ * `request_hash` é o hash de `{ ator, corpo }` (`hashDaOperacao`), e a mesma
+ * chave + endpoint + corpo vinda de OUTRO ator cai no caminho do `conflito`
+ * (409), igual a "mesma chave, corpo diferente". Sem coluna nova: o recibo já
+ * guardava a identidade da operação no hash. Efeito de borda na implantação:
+ * recibo gravado ANTES desta mudança tinha o hash só do corpo; retentativa com
+ * ele (janela de até 24h) recebe 409 em vez do replay, uma única vez.
+ *
  * ── O hash na coluna `bytea` ────────────────────────────────────────────────
  * `request_hash` é `bytea` (`supabase/baseline.sql:1554`), e as funções SQL do
  * repo a escrevem decodificada (`decode(p_hash, 'hex')`). Escrever o hex CRU
@@ -80,6 +93,8 @@
 
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+import type { Actor } from "@/lib/api/handlers/types";
 
 /** Chave do header, nas duas grafias que o HTTP aceita. */
 export function chaveDaRequisicao(req: Request): string | null {
@@ -118,6 +133,24 @@ export function hashDoCorpo(corpo: unknown): string {
   return createHash("sha256")
     .update(JSON.stringify(ordenar(corpo)))
     .digest("hex");
+}
+
+/**
+ * Quem chamou, estável entre tentativas: pessoa (`user:<id>`), token de servidor
+ * (`api_token:<id>`) ou agente (`ai_agent:` + o token que o carrega, senão o
+ * agente, senão o id do run). O run NÃO é a identidade preferida: cada turno do
+ * mesmo agente tem run novo e a retentativa não pode virar conflito.
+ */
+export function identidadeDoAtor(ator: Actor): string {
+  if (ator.type === "ai_agent") {
+    return `ai_agent:${ator.api_token_id ?? ator.agent_id ?? ator.id}`;
+  }
+  return `${ator.type}:${ator.id}`;
+}
+
+/** A identidade da operação: QUEM pediu + O QUE pediu. É o que o recibo guarda. */
+export function hashDaOperacao(ator: string, corpo: unknown): string {
+  return hashDoCorpo({ ator, corpo });
 }
 
 function ordenar(valor: unknown): unknown {
@@ -175,6 +208,11 @@ export type EntradaDaIdempotencia<T> = {
   organizationId: string;
   endpoint: string;
   chave: string;
+  /**
+   * Quem chamou (`identidadeDoAtor(actor)`). Faz parte da identidade da
+   * operação: a mesma chave vinda de OUTRO ator é `conflito`, nunca replay.
+   */
+  ator: string;
   /** O corpo já validado, que define a identidade da operação. */
   corpo: unknown;
   /** O efeito. Só é chamado por quem conseguir reservar a chave. */
@@ -189,9 +227,9 @@ const COLUNAS = "id, request_hash, status_code, response_body, expires_at";
 export async function comIdempotencia<T>(
   entrada: EntradaDaIdempotencia<T>,
 ): Promise<DesfechoIdempotente<T>> {
-  const { db, organizationId, endpoint, chave, corpo, executar } = entrada;
+  const { db, organizationId, endpoint, chave, ator, corpo, executar } = entrada;
   const agora = entrada.agora ?? (() => new Date());
-  const hash = hashDoCorpo(corpo);
+  const hash = hashDaOperacao(ator, corpo);
 
   /**
    * Lê a linha da chave. `somenteVivo` é o filtro da janela: com ele, reserva

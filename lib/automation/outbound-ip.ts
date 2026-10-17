@@ -85,12 +85,12 @@ export function ipEhEspecial(ip: string): boolean {
  * é a assinatura do rebinding — o `fetch` pode escolher o privado, e não temos
  * como saber qual ele pegou.
  *
- * Isto REDUZ muito a janela do rebinding, mas não a fecha por completo: entre
- * esta resolução e a do `fetch` existe um intervalo em que o DNS pode mudar de
- * resposta. Fechar de vez exige fixar o IP na conexão (agente com `lookup`
- * próprio), o que muda o SNI/Host e quebra TLS com vários destinos legítimos.
- * A janela residual está declarada aqui de propósito, para o próximo leitor não
- * precisar descobrir sozinho — que foi exatamente como este arquivo nasceu.
+ * Esta função SOZINHA não fecha o rebinding: entre ela e a resolução do
+ * `fetch` existe um intervalo em que o DNS pode mudar de resposta. Quem fecha é
+ * quem conecta nos endereços que `resolverDestinoSeguro` devolve, com o nome só
+ * no SNI/Host (`lib/ai/mcp-externo/fetch-seguro.ts`, D-168) — o caminho do MCP
+ * externo e o do `call_webhook` de automação. Quem ainda usa só esta função
+ * (adaptadores de canal, conexões de banco) mantém a janela residual.
  */
 export async function assertDestinoResolvidoSeguro(hostname: string): Promise<void> {
   await resolverDestinoSeguro(hostname);

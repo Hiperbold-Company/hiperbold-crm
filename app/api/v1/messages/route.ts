@@ -10,7 +10,12 @@ import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { audit } from "@/lib/audit";
 import { registrarTrocaDeComando } from "@/lib/inbox/atividade-de-comando";
 import { resolveAuthDual } from "@/lib/api/auth-dual";
-import { chaveDaRequisicao, comIdempotencia, type DesfechoIdempotente } from "@/lib/api/idempotency";
+import {
+  chaveDaRequisicao,
+  comIdempotencia,
+  identidadeDoAtor,
+  type DesfechoIdempotente,
+} from "@/lib/api/idempotency";
 import type { HandlerCtx } from "@/lib/api/handlers/types";
 import { ApiError } from "@/lib/api/types";
 import { fail, ok } from "@/lib/api/wrappers";
@@ -331,6 +336,7 @@ export async function POST(req: NextRequest): Promise<Response> {
             organizationId,
             endpoint: ENDPOINT,
             chave,
+            ator: identidadeDoAtor(actor),
             // O corpo VALIDADO define a identidade da operação.
             corpo: input,
             executar: async () => ({ resposta: await enviar(), status: 201 }),

@@ -47,9 +47,20 @@ export interface DepsDeConhecimento {
   t?: (texto: string) => string;
 }
 
-const faqItemSchema = z.object({
-  question: z.string().min(1),
-  answer: z.string().min(1),
+/**
+ * Tetos de tamanho do que entra no acervo pela API/MCP. Sem eles, uma chamada
+ * só enfileirava texto sem limite para o indexador (custo de embedding e
+ * memória do worker). Valores largos de propósito: nenhum material legítimo de
+ * uma empresa chega perto. Compartilhados com as tools MCP.
+ */
+export const LIMITE_MARKDOWN_BLOB = 200_000;
+export const LIMITE_PERGUNTA = 2_000;
+export const LIMITE_RESPOSTA = 20_000;
+export const LIMITE_ITENS_DE_FAQ = 500;
+
+export const faqItemSchema = z.object({
+  question: z.string().min(1).max(LIMITE_PERGUNTA),
+  answer: z.string().min(1).max(LIMITE_RESPOSTA),
   tags: z.array(z.string()).optional().default([]),
   locale: z.string().optional().default("pt-BR"),
 });
@@ -63,15 +74,15 @@ export const criarFonteSchema = z.object({
   agent_id: z.string().uuid().optional(),
   source_type: z.string().min(1),
   name: z.string().trim().min(2).max(120),
-  items: z.array(faqItemSchema).optional(),
-  markdown_blob: z.string().optional(),
+  items: z.array(faqItemSchema).max(LIMITE_ITENS_DE_FAQ).optional(),
+  markdown_blob: z.string().max(LIMITE_MARKDOWN_BLOB).optional(),
   source_metadata: z.record(z.string(), z.unknown()).optional().default({}),
 });
 export type NovaFonte = z.infer<typeof criarFonteSchema>;
 
 export const alterarFonteSchema = z.object({
   name: z.string().min(2).max(120).optional(),
-  items: z.array(faqItemSchema).optional(),
+  items: z.array(faqItemSchema).max(LIMITE_ITENS_DE_FAQ).optional(),
   source_metadata: z.record(z.string(), z.unknown()).optional(),
 });
 export type AlteracaoDeFonte = z.infer<typeof alterarFonteSchema>;

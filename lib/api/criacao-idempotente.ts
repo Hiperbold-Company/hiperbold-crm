@@ -21,7 +21,7 @@
  */
 import { z } from "zod";
 
-import { chaveDaRequisicao, comIdempotencia } from "@/lib/api/idempotency";
+import { chaveDaRequisicao, comIdempotencia, identidadeDoAtor } from "@/lib/api/idempotency";
 import { fail, ok } from "@/lib/api/wrappers";
 import type { AuthAdminOk } from "@/lib/api/auth-dual-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -63,6 +63,7 @@ export async function criarComChaveOpcional<T>(
     organizationId: authz.organizationId,
     endpoint,
     chave,
+    ator: identidadeDoAtor(authz.actor),
     corpo,
     executar: async () => ({ resposta: await executar(), status: 201 }),
   });

@@ -319,6 +319,26 @@ export function ensureRole(actual: Role, minimum: Role): void {
   }
 }
 
+/**
+ * Capacidade `apenasHumano` (catálogo) é operada por PESSOA. A porta MCP externa
+ * não pode servi-la a uma chave de agente de IA (`actor.type === "ai_agent"`):
+ * o turno do agente publicado já não a monta (`lib/ai/runtime/tools.ts`), e esta
+ * é a mesma barreira no outro ingresso. Recusa no padrão das demais do MCP.
+ */
+export function ensureNaoAgenteParaApenasHumano(
+  actor: Actor,
+  toolName: string,
+  apenasHumano: boolean | undefined,
+): void {
+  if (apenasHumano === true && actor.type === "ai_agent") {
+    throw new McpAuthError(
+      -32002,
+      403,
+      `Tool '${toolName}' is operated by a person only; AI agent tokens cannot call it.`,
+    );
+  }
+}
+
 export function ensureScope(scopes: string[], required: string): void {
   if (!scopes.includes(required)) {
     throw new McpAuthError(-32002, 403, `Token missing required scope '${required}'.`);

@@ -184,8 +184,10 @@ export async function POST(req: NextRequest): Promise<Response> {
         return { ...fonte, path_token: (data as { path_token?: string } | null)?.path_token ?? null };
       },
     });
-    // Resposta com segredo em claro nunca fica em cache de navegador, proxy ou CDN.
-    if (segredoGerado !== null && resposta.ok) resposta.headers.set("Cache-Control", "no-store");
+    // Toda resposta de sucesso (execução real E replay) carrega o `path_token`, que é a chave da URL de
+    // captação, e a execução real pode levar também o segredo em claro: nunca fica em cache de navegador,
+    // proxy ou CDN.
+    if (resposta.ok) resposta.headers.set("Cache-Control", "no-store");
     return resposta;
   } catch (err) {
     return respostaDeRecusa(err, requestId);

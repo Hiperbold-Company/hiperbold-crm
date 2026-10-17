@@ -28,7 +28,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
 
-import { comIdempotencia, hashDoCorpo, JANELA_DA_RESERVA_MS } from "@/lib/api/idempotency";
+import { comIdempotencia, hashDaOperacao, JANELA_DA_RESERVA_MS } from "@/lib/api/idempotency";
 import { pgComoSupabase } from "../pg-como-supabase";
 
 const container = process.env.TEST_DB_CONTAINER;
@@ -45,7 +45,8 @@ const pool = new pg.Pool({
 const ORG = "c0115a00-0000-4000-8000-000000000778";
 const ENDPOINT = "/api/v1/message-templates";
 const CORPO = { title: "corrida" };
-const HASH = hashDoCorpo(CORPO);
+const ATOR = "user:00000000-0000-4000-8000-0000000000aa";
+const HASH = hashDaOperacao(ATOR, CORPO);
 
 beforeAll(async () => {
   await pool.query(
@@ -107,7 +108,7 @@ describe("idempotência — a reserva fecha a corrida (banco real)", () => {
       await new Promise((r) => setTimeout(r, 400));
       return { resposta: { id: "t-1" }, status: 201 };
     };
-    const entrada = { db, organizationId: ORG, endpoint: ENDPOINT, chave, corpo: CORPO, executar };
+    const entrada = { db, organizationId: ORG, endpoint: ENDPOINT, chave, ator: ATOR, corpo: CORPO, executar };
 
     const desfechos = await Promise.all([
       comIdempotencia(entrada),
@@ -131,7 +132,7 @@ describe("idempotência — a reserva fecha a corrida (banco real)", () => {
       efeitos += 1;
       return { resposta: { id: "t-2" }, status: 201 };
     };
-    const entrada = { db, organizationId: ORG, endpoint: ENDPOINT, chave, corpo: CORPO, executar };
+    const entrada = { db, organizationId: ORG, endpoint: ENDPOINT, chave, ator: ATOR, corpo: CORPO, executar };
 
     expect(await comIdempotencia(entrada)).toEqual({
       tipo: "executou",
@@ -167,6 +168,7 @@ describe("idempotência — a reserva fecha a corrida (banco real)", () => {
       organizationId: ORG,
       endpoint: ENDPOINT,
       chave,
+      ator: ATOR,
       corpo: CORPO,
       executar: async () => {
         efeitos += 1;
@@ -189,6 +191,7 @@ describe("idempotência — a reserva fecha a corrida (banco real)", () => {
       organizationId: ORG,
       endpoint: ENDPOINT,
       chave,
+      ator: ATOR,
       corpo: CORPO,
       executar: async () => {
         efeitos += 1;
@@ -215,6 +218,7 @@ describe("idempotência — a reserva fecha a corrida (banco real)", () => {
       organizationId: ORG,
       endpoint: ENDPOINT,
       chave,
+      ator: ATOR,
       corpo: CORPO,
       executar: async () => ({ resposta: { id: "t-5" }, status: 201 }),
     });
@@ -236,6 +240,7 @@ describe("idempotência — a reserva fecha a corrida (banco real)", () => {
       organizationId: ORG,
       endpoint: ENDPOINT,
       chave,
+      ator: ATOR,
       corpo: { title: "outro corpo" },
       executar: async () => {
         efeitos += 1;

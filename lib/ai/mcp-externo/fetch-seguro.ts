@@ -85,7 +85,7 @@ async function comLimiteDeBytes(res: Response): Promise<Response> {
 }
 
 /** O que `https.request` oferece, para o teste trocar a rede. */
-type RequisicaoHttps = typeof requisicaoHttps;
+export type RequisicaoHttps = typeof requisicaoHttps;
 
 /**
  * `lookup` que só devolve os endereços JÁ validados: o `https.request` nunca
@@ -109,7 +109,7 @@ export function lookupFixo(enderecos: readonly string[]) {
  * `accept-encoding: identity`: o `fetch` do Node descompacta sozinho, o
  * `https.request` não, e o teto de bytes precisa contar o que o servidor mandou.
  */
-async function buscarNoEnderecoValidado(
+export async function buscarNoEnderecoValidado(
   input: string | URL | Request,
   init: RequestInit | undefined,
   enderecos: readonly string[],

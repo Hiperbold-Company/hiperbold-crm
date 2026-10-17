@@ -44,7 +44,7 @@ import {
   VINCULO_DE_AGENDAMENTO,
 } from "@/lib/agenda/tipos";
 import { ApiError } from "@/lib/api/types";
-import { comIdempotencia, hashDoCorpo } from "@/lib/api/idempotency";
+import { comIdempotencia, hashDoCorpo, identidadeDoAtor } from "@/lib/api/idempotency";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
@@ -278,6 +278,9 @@ export async function marcarAgendamentoHandler(
     organizationId: ctx.organization_id,
     endpoint: ENDPOINT_IDEMPOTENCIA_AGENDA,
     chave,
+    // Chave do cliente: vale por QUEM chamou. Chave derivada do job interno já
+    // é única por job + input, e o ator pode mudar entre tentativas (run novo).
+    ator: ctx.idempotencyKey !== undefined ? identidadeDoAtor(ctx.actor) : "job-interno",
     corpo: input,
     executar: async () => ({
       resposta: await executarCriacaoDeAgendamento(supabase, ctx, input),

@@ -16,7 +16,11 @@
  * ⚠️ SEGREDO DE `call_webhook` NUNCA SAI PARA UMA CHAVE. A configuração da ação guarda `secret_enc` (o segredo
  * cifrado). A tela precisa dele de volta para o editor reenviá-lo intacto; uma integração por token não: nas
  * respostas a ator que não é pessoa, `secret_enc` vira `has_secret: true`. Editar `actions` por token SUBSTITUI
- * a lista — um segredo que se queira manter é reenviado em `secret` (texto) e cifrado de novo.
+ * a lista, mas o segredo já gravado de uma ação `call_webhook` é PRESERVADO quando a ação reenviada fica na
+ * mesma posição, é `call_webhook` com a MESMA `url` e não traz `secret` novo (a chave nunca viu o `secret_enc`,
+ * então não tinha como reenviá-lo). Sem esse casamento seguro a edição é recusada (422) em vez de zerar o
+ * segredo em silêncio; `has_secret: false` remove o segredo de propósito. Um `secret_enc` vindo no corpo de
+ * quem não é pessoa é sempre descartado: cifra só nasce de `secret` ou do que já está gravado.
  * O audit nunca leva `actions`.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -81,6 +85,80 @@ const semCifra = (deps: DepsDeRegras, completa: boolean) =>
     ),
   );
 
+type AcaoDeRegra = { type: string; config?: Record<string, unknown> };
+
+/**
+ * Para quem NÃO é pessoa (token/MCP): devolve `novas` com o `secret_enc` das ações já gravadas, casando por
+ * posição + `call_webhook` + mesma `url`. Pura (sem banco) para ser testável. Lança 422 quando a ação diz que
+ * tem segredo (`has_secret: true`) ou o tinha antes, mas não há como casar com segurança — nunca zera em silêncio.
+ */
+export function preservarSegredosDeWebhook(
+  deps: Pick<DepsDeRegras, "requestId" | "t">,
+  existentes: unknown,
+  novas: AcaoDeRegra[],
+): AcaoDeRegra[] {
+  const antes = Array.isArray(existentes) ? (existentes as AcaoDeRegra[]) : [];
+  return novas.map((acao, i) => {
+    if (acao.type !== "call_webhook") return acao;
+    const { secret_enc: _injetado, has_secret: temSegredo, ...config } = (acao.config ?? {}) as Record<string, unknown>;
+    void _injetado;
+    const limpa: AcaoDeRegra = { ...acao, config };
+    const traziSegredoNovo = typeof config.secret === "string" && config.secret !== "";
+    if (traziSegredoNovo || temSegredo === false) return limpa;
+
+    const anterior = antes[i];
+    const cifrado = anterior?.type === "call_webhook" ? anterior.config?.secret_enc : undefined;
+    const tinhaSegredo = typeof cifrado === "string" && cifrado !== "";
+    if (!tinhaSegredo) {
+      // O mesmo endereço, com segredo gravado, em OUTRA posição: a ação foi reordenada e o casamento
+      // por posição não vale. Tratar como ação nova perderia o segredo em silêncio.
+      const moveuDePosicao = antes.some(
+        (a, j) =>
+          j !== i &&
+          a?.type === "call_webhook" &&
+          typeof a.config?.secret_enc === "string" &&
+          a.config.secret_enc !== "" &&
+          a.config.url === config.url,
+      );
+      if (moveuDePosicao) {
+        throw new ApiError(
+          422,
+          "validation_failed",
+          undefined,
+          deps.requestId,
+          (deps.t ?? ((x: string) => x))(
+            `A ação ${i + 1} (call_webhook) mudou de posição e já tinha segredo: reenvie o segredo em "secret" para guardá-lo, ou envie "has_secret": false para removê-lo.`,
+          ),
+        );
+      }
+      if (temSegredo === true) {
+        throw new ApiError(
+          422,
+          "validation_failed",
+          undefined,
+          deps.requestId,
+          (deps.t ?? ((x: string) => x))(
+            `A ação ${i + 1} (call_webhook) diz ter segredo, mas não há segredo gravado nessa posição. Reenvie o segredo em "secret".`,
+          ),
+        );
+      }
+      return limpa;
+    }
+    if (anterior?.config?.url !== config.url) {
+      throw new ApiError(
+        422,
+        "validation_failed",
+        undefined,
+        deps.requestId,
+        (deps.t ?? ((x: string) => x))(
+          `A ação ${i + 1} (call_webhook) mudou de endereço ou de posição e já tinha segredo: reenvie o segredo em "secret" para guardá-lo, ou envie "has_secret": false para removê-lo.`,
+        ),
+      );
+    }
+    return { ...limpa, config: { ...config, secret_enc: cifrado } };
+  });
+}
+
 export async function listarRegrasCompletas(deps: DepsDeRegras): Promise<unknown[]> {
   const { data, error } = await deps.supabase
     .from("automation_rules")
@@ -94,7 +172,10 @@ export async function listarRegrasCompletas(deps: DepsDeRegras): Promise<unknown
 /** A regra nasce PAUSADA, qualquer que seja o corpo. */
 export async function criarRegra(deps: DepsDeRegras, input: CreateAutomationRuleInput) {
   // Secrets de call_webhook nunca ficam em claro no jsonb (migration 0041).
-  const safeActions = await encryptRuleActionSecrets(deps.admin, input.actions);
+  const safeActions = await encryptRuleActionSecrets(
+    deps.admin,
+    deps.actor.type === "user" ? input.actions : preservarSegredosDeWebhook(deps, [], input.actions),
+  );
   if (safeActions === null) throw semCifra(deps, true);
 
   const { data: created, error } = await deps.supabase
@@ -129,7 +210,7 @@ export async function criarRegra(deps: DepsDeRegras, input: CreateAutomationRule
 export async function alterarRegra(deps: DepsDeRegras, id: string, entrada: UpdateAutomationRuleInput) {
   const { data: existing, error: fetchErr } = await deps.supabase
     .from("automation_rules")
-    .select("id")
+    .select("id, actions")
     .eq("id", id)
     .eq("organization_id", deps.organizationId)
     .maybeSingle();
@@ -143,7 +224,13 @@ export async function alterarRegra(deps: DepsDeRegras, id: string, entrada: Upda
     ...autoriaDaMudanca(deps.actor),
   };
   if (entrada.actions !== undefined) {
-    const safeActions = await encryptRuleActionSecrets(deps.admin, entrada.actions);
+    // Pessoa: o editor reenvia o `secret_enc` que recebeu. Chave: nunca o recebeu, então o servidor o
+    // reaproveita do que está gravado (ou recusa) — e descarta qualquer `secret_enc` vindo no corpo.
+    const reenviadas =
+      deps.actor.type === "user"
+        ? entrada.actions
+        : preservarSegredosDeWebhook(deps, (existing as { actions?: unknown }).actions, entrada.actions);
+    const safeActions = await encryptRuleActionSecrets(deps.admin, reenviadas);
     if (safeActions === null) throw semCifra(deps, false);
     patch.actions = safeActions;
   }

@@ -17,6 +17,10 @@ import {
   arquivarFonte,
   cadastrarFonte,
   criarFonteSchema,
+  LIMITE_ITENS_DE_FAQ,
+  LIMITE_MARKDOWN_BLOB,
+  LIMITE_PERGUNTA,
+  LIMITE_RESPOSTA,
   editarFonte,
   lerFonte,
   type DepsDeConhecimento,
@@ -40,8 +44,8 @@ function recusa(ctx: McpContext, status: number, code: string, message: string):
 }
 
 const itemShape = z.object({
-  question: z.string().min(1),
-  answer: z.string().min(1),
+  question: z.string().min(1).max(LIMITE_PERGUNTA),
+  answer: z.string().min(1).max(LIMITE_RESPOSTA),
   tags: z.array(z.string()).optional(),
   locale: z.string().optional(),
 });
@@ -64,9 +68,9 @@ const createShape = {
   /** faq (pergunta/resposta) ou documento (texto corrido). conversas e catálogo são preenchidos pelo sistema. */
   source_type: z.string().min(1),
   name: z.string().min(2).max(120),
-  items: z.array(itemShape).optional(),
+  items: z.array(itemShape).max(LIMITE_ITENS_DE_FAQ).optional(),
   /** FAQ: texto com `## Pergunta:` / `## Resposta:`. Documento: o texto inteiro. */
-  markdown_blob: z.string().optional(),
+  markdown_blob: z.string().max(LIMITE_MARKDOWN_BLOB).optional(),
 };
 
 export const crmCreateKnowledgeSource: McpToolDefinition<typeof createShape> = {
@@ -91,7 +95,7 @@ const updateShape = {
   source_id: z.string().uuid(),
   name: z.string().min(2).max(120).optional(),
   /** FAQ: SUBSTITUI todos os pares. */
-  items: z.array(itemShape).optional(),
+  items: z.array(itemShape).max(LIMITE_ITENS_DE_FAQ).optional(),
 };
 
 export const crmUpdateKnowledgeSource: McpToolDefinition<typeof updateShape> = {
