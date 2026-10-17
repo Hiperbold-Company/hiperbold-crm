@@ -247,7 +247,9 @@ describe("o dono", () => {
   it("a conta criada leva o marcador em app_metadata, que é a prova do retry", async () => {
     await provisionExternalTenant(ENTRADA);
     expect(h.createUser).toHaveBeenCalledWith(
-      expect.objectContaining({ app_metadata: { provisioning: MARCADOR } }),
+      expect.objectContaining({
+          app_metadata: { provisioning: MARCADOR, email_verificado_em: expect.any(String) },
+        }),
     );
   });
 });
@@ -268,7 +270,7 @@ describe("a repetição depois de uma falha transitória PROVISIONA", () => {
     h.erroDoInsertDaOrg = { code: "57014", message: "canceling statement due to statement timeout" };
     await expect(provisionExternalTenant(ENTRADA)).rejects.toThrow(/org insert failed/);
     const contaCriada = h.createUser.mock.calls[0]![0] as { app_metadata: unknown };
-    expect(contaCriada.app_metadata).toEqual({ provisioning: MARCADOR });
+    expect(contaCriada.app_metadata).toEqual({ provisioning: MARCADOR, email_verificado_em: expect.any(String) });
 
     // --- 2ª chamada (retry do parceiro): o GoTrue recusa o e-mail, porque a
     // conta da 1ª chamada ficou lá. Ela está no diretório, com o marcador

@@ -4,6 +4,8 @@ import { audit } from "@/lib/audit";
 import { cookieSecure } from "@/lib/supabase/cookie-secure";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { InvitePayload } from "@/lib/auth/invite-token";
+import { carimbarEmailVerificado } from "@/lib/auth/verificacao-email";
+import { logger } from "@/lib/logger";
 
 /**
  * O ATO de virar membro: grava o vínculo, audita e escolhe a organização ativa.
@@ -107,6 +109,20 @@ export async function aplicarConvite(params: {
       resourceId: resultado.id,
       metadata: { invite_id: payload.invite_id, role: payload.role },
       requestId: requestId ?? null,
+    });
+  }
+
+  // O convite assinado para o e-mail desta conta, aceito por quem a usa, prova a posse do endereço: o token só chegou
+  // à caixa de entrada dele, e os três chamadores conferiram a assinatura e a igualdade com o e-mail da conta antes
+  // de chegar aqui. Carimba a verificação do CRM (D-204: todo cadastro por e-mail nasce com o pedido em aberto, o
+  // convidado incluído). Melhor esforço: a falha deixa a faixa "Confirme seu e-mail", que tem o "Reenviar", e não
+  // desfaz o vínculo que acabou de ser gravado.
+  try {
+    const carimbo = await carimbarEmailVerificado({ admin, userId });
+    if (!carimbo.ok) logger.warn("[aplicar-convite] carimbo da verificação do e-mail falhou", { motivo: carimbo.motivo });
+  } catch (e) {
+    logger.warn("[aplicar-convite] carimbo da verificação do e-mail lançou", {
+      erro: e instanceof Error ? e.message : String(e),
     });
   }
 

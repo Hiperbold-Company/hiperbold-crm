@@ -6,6 +6,8 @@ import { ensureTenantForUser } from "@/lib/auth/provision";
 import { decidirConviteDoSignup } from "@/lib/auth/convite-no-signup";
 import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
 import { aplicarConvite } from "@/lib/auth/aplicar-convite";
+import { retomarContaPelaRecuperacao } from "@/lib/auth/retomar-conta-pela-recuperacao";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/audit";
 import { env } from "@/lib/env";
 
@@ -140,6 +142,42 @@ export async function GET(request: NextRequest) {
   }
 
   if (type === "recovery") {
+    // PRÉ-SEQUESTRO (D-204). O link de recuperação foi consumido AGORA (não é `sessaoPreservada`: uma sessão que já
+    // existia não prova nada) e chegou à caixa de entrada do endereço da conta. Se a conta ainda tem a verificação
+    // do CRM em aberto, quem a criou pode ter a senha, sessões e um TOTP: a senha vira aleatória, os fatores saem,
+    // as outras sessões caem e o e-mail é carimbado, antes de a pessoa definir a dela em /login/reset.
+    // Falha fechada: a sessão de recuperação é encerrada e a pessoa pede outro link.
+    if (!sessaoPreservada && data?.user) {
+      const retomada = await retomarContaPelaRecuperacao({
+        admin: createAdminClient(),
+        usuario: data.user,
+        accessToken: data.session?.access_token ?? null,
+      });
+      if (!retomada.ok) {
+        await audit({
+          action: "auth.password_reset_failed",
+          actorUserId: usuario.id,
+          metadata: { reason: "retomada_da_conta_falhou", etapa: retomada.etapa },
+          requestId,
+        });
+        await supabase.auth.signOut();
+        return redirectTo("/login?error=link_invalido");
+      }
+      if (retomada.retomada) {
+        await audit({
+          action: "auth.account_reclaimed_by_recovery",
+          actorUserId: usuario.id,
+          metadata: { fatores_removidos: retomada.fatoresRemovidos },
+          requestId,
+        });
+        // Um fator verificado saiu e o provedor encerrou TODAS as sessões, a de recuperação inclusive. A conta
+        // já está limpa: um novo link de "Esqueci minha senha" funciona sem o desafio de MFA.
+        if (retomada.sessaoEncerrada) {
+          await supabase.auth.signOut();
+          return redirectTo("/login?error=conta_protegida");
+        }
+      }
+    }
     return redirectTo("/login/reset");
   }
 

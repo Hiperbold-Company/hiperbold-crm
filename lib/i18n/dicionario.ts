@@ -12827,6 +12827,9 @@ export const DICIONARIO: Traducoes = {
   "O acesso desta conta foi retirado por quem administra o sistema — então não criamos uma empresa nova para você. Se o acesso deveria continuar, peça a quem administra para restaurá-lo; se você está entrando em outra equipe, peça um convite.": {
     es: "El acceso de esta cuenta fue retirado por quien administra el sistema — así que no creamos una empresa nueva para ti. Si el acceso debería continuar, pídele a quien administra que lo restaure; si estás entrando en otro equipo, pide una invitación.",
   },
+  "Por segurança, encerramos todas as sessões desta conta e removemos a verificação em duas etapas, porque o endereço de e-mail ainda não tinha sido confirmado. Já está tudo certo: entre novamente com o Google ou peça um novo link em Esqueci minha senha.": {
+    es: "Por seguridad, cerramos todas las sesiones de esta cuenta y quitamos la verificación en dos pasos, porque la dirección de correo aún no estaba confirmada. Ya está todo en orden: entra de nuevo con Google o pide un nuevo enlace en Olvidé mi contraseña.",
+  },
 
   // ─── Painel "Para integrar" (dados não-secretos da conexão) ───
   "Para integrar": { es: "Para integrar" },

@@ -128,6 +128,36 @@ describe("aplicarConvite consulta a LINHA, não só o token", () => {
     expect(rpcDoAceite).not.toHaveBeenCalled();
   });
 
+  it("D-204: convite aceito carimba a verificação do CRM (o convidado nasce com o pedido em aberto)", async () => {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const { gotrueFalso } = await import("../../tests/unit/helpers/gotrue-admin-falso");
+    const falso = gotrueFalso();
+    const admin = { ...adminComConvite({ revoked_at: null, role: "manager" }), ...falso.admin };
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const { aplicarConvite } = await import("@/lib/auth/aplicar-convite");
+    const r = await aplicarConvite({ userId: USUARIO_ID, payload: PAYLOAD });
+
+    expect(r.ok).toBe(true);
+    expect(typeof falso.estado.app_metadata.email_verificado_em).toBe("string");
+    expect(falso.estado.app_metadata.email_verificacao).toBeUndefined();
+  });
+
+  it("D-204: convite recusado NÃO carimba nada", async () => {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const { gotrueFalso } = await import("../../tests/unit/helpers/gotrue-admin-falso");
+    const falso = gotrueFalso();
+    const admin = { ...adminComConvite({ revoked_at: "2026-09-13T10:00:00Z", role: "manager" }), ...falso.admin };
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const { aplicarConvite } = await import("@/lib/auth/aplicar-convite");
+    const r = await aplicarConvite({ userId: USUARIO_ID, payload: PAYLOAD });
+
+    expect(r.ok).toBe(false);
+    expect(falso.chamadas).toEqual([]);
+    expect(falso.estado.app_metadata.email_verificado_em).toBeUndefined();
+  });
+
   it("a recusa da própria função do banco (42501) também não é vínculo", async () => {
     // Segunda linha de defesa: mesmo que a linha diga que o convite vive, a
     // `fn_accept_team_invite` recusa quem foi revogado DEPOIS da emissão. O

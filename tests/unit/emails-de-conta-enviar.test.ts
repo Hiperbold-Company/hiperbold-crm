@@ -861,6 +861,45 @@ describe("endereço sem confirmação não recebe e-mail", () => {
     expect(destinos(c)).toEqual(["socio@empresa-a.com.br"]);
   });
 
+  it("D-204: com a confirmação do provedor automática, verificação do CRM em aberto também deixa de fora", async () => {
+    const banco = mundo();
+    // O provedor deu o endereço como confirmado (autoconfirm), mas o link do CRM nunca foi aberto.
+    banco.usuarios.a1 = {
+      ...banco.usuarios.a1!,
+      email_confirmed_at: "2026-10-17T00:00:00Z",
+      app_metadata: { email_verificacao: { hash: "h", expira_em: "2099-01-01T00:00:00Z", enviado_em: "2026-10-17T00:00:00Z" } },
+    };
+    const c = cenario(banco);
+    await enfileirar(c);
+    await enviarFilaDeEmails(c.deps);
+    expect(destinos(c)).toEqual(["socio@empresa-a.com.br"]);
+  });
+
+  it("D-204: verificação do CRM concluída (carimbo em app_metadata) volta a receber", async () => {
+    const banco = mundo();
+    banco.usuarios.a1 = {
+      ...banco.usuarios.a1!,
+      app_metadata: { email_verificado_em: "2026-10-17T00:00:00Z", email_verificacao: null },
+    };
+    const c = cenario(banco);
+    await enfileirar(c);
+    await enviarFilaDeEmails(c.deps);
+    expect(destinos(c)).toContain("dono@empresa-a.com.br");
+  });
+
+  it("D-204: carimbo em user_metadata (que a própria pessoa escreve) não conta como prova", async () => {
+    const banco = mundo();
+    banco.usuarios.a1 = {
+      ...banco.usuarios.a1!,
+      user_metadata: { email_verificado_em: "2026-10-17T00:00:00Z" },
+      app_metadata: { email_verificacao: { hash: "h", expira_em: "2099-01-01T00:00:00Z", enviado_em: "2026-10-17T00:00:00Z" } },
+    };
+    const c = cenario(banco);
+    await enfileirar(c);
+    await enviarFilaDeEmails(c.deps);
+    expect(destinos(c)).not.toContain("dono@empresa-a.com.br");
+  });
+
   it("nenhum admin com endereço confirmado: sem_destinatario", async () => {
     const banco = mundo();
     banco.usuarios.a1 = { ...banco.usuarios.a1!, email_confirmed_at: null };

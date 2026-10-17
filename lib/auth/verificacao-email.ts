@@ -22,7 +22,9 @@
  *   verificado = tem `email_verificado_em`  OU  não tem pedido em aberto
  *
  * Só quem se cadastrou DEPOIS desta mudança pelo caminho de e-mail ganha um pedido (a ação de cadastro o
- * grava junto com a conta). Logo, toda conta que já existia, quem entrou com o Google (o provedor já
+ * grava junto com a conta, e o gatilho de `auth.users` da migration 0966 o grava em TODO cadastro por e-mail e
+ * senha, inclusive o `POST /auth/v1/signup` direto, quando a compra pelo cliente está ligada; quem cria conta
+ * por admin API e já sabe do endereço grava `email_verificado_em` na criação, e o aceite de convite carimba). Logo, toda conta que já existia, quem entrou com o Google (o provedor já
  * verificou o endereço), quem entrou por convite assinado para o endereço e quem confirmou pelo link do
  * Supabase antes da virada NÃO tem pedido e conta como verificada, sem constante de data para ajustar no
  * deploy. O custo conhecido: se a gravação do pedido falhar no cadastro, a pessoa aparece como verificada
@@ -219,6 +221,25 @@ export async function gravarPedido(p: {
   if (!r.ok) return r;
   if (estado.jaVerificado) return { ok: false, motivo: "ja_verificado" };
   return { ok: true };
+}
+
+/**
+ * Carimba a conta como verificada SEM passar pelo link: o caminho de quem provou a posse do endereço por
+ * outro meio (hoje, o Google, ver `lib/auth/retomar-conta-pelo-google.ts`). Apaga o pedido em aberto (o link
+ * que está na caixa de entrada deixa de valer) e grava `email_verificado_em`. Idempotente: conta já carimbada
+ * não é reescrita.
+ */
+export async function carimbarEmailVerificado(p: {
+  admin: AdminMinimo;
+  userId: string;
+  agora?: Date;
+}): Promise<{ ok: true } | { ok: false; motivo: "usuario_nao_encontrado" | "gravacao_falhou" }> {
+  const agora = p.agora ?? new Date();
+  const r = await alterarAppMetadata(p.admin, p.userId, (atual) => {
+    if (typeof atual.email_verificado_em === "string" && atual.email_verificado_em !== "") return null;
+    return { ...atual, email_verificado_em: agora.toISOString(), email_verificacao: null };
+  });
+  return r.ok ? { ok: true } : r;
 }
 
 export type ConsumoDoToken =

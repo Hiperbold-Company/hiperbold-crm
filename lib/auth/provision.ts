@@ -573,7 +573,9 @@ async function ensureExternalOwnerUser(
     password: randomBytes(24).toString("base64url"),
     email_confirm: true,
     user_metadata: { full_name: fullName },
-    app_metadata: { provisioning: marcador },
+    // `email_verificado_em`: o endereço vem do parceiro que provisiona, não de um cadastro aberto. Sem o carimbo o
+    // gatilho de `auth.users` (migration 0966) abriria o pedido de verificação do CRM para esta conta (D-204).
+    app_metadata: { provisioning: marcador, email_verificado_em: new Date().toISOString() },
   });
   if (data?.user) return data.user.id;
   // `email_exists` é o código do GoTrue atual; versões anteriores só diziam

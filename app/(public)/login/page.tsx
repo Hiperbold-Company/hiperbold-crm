@@ -142,6 +142,19 @@ export default async function LoginPage({
           )}
         </div>
       )}
+      {/* A conta foi cadastrada por e-mail sem o endereço confirmado e quem chegou o provou (Google ou link de
+          recuperação): senha, sessões abertas e verificação em duas etapas foram refeitas. A sessão que acabou de
+          abrir caiu junto, então a tela diz o que houve e o que fazer, em vez de "tente novamente". */}
+      {error === "conta_protegida" && (
+        <div
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="alert"
+        >
+          {t(
+            "Por segurança, encerramos todas as sessões desta conta e removemos a verificação em duas etapas, porque o endereço de e-mail ainda não tinha sido confirmado. Já está tudo certo: entre novamente com o Google ou peça um novo link em Esqueci minha senha.",
+          )}
+        </div>
+      )}
       {/* A chave pública do Turnstile é lida aqui, em runtime: a imagem é construída sem ela (D-173). */}
       <LoginForm next={next} turnstileSiteKey={turnstileSiteKey()} />
       <EntrarComGoogle next={next} />

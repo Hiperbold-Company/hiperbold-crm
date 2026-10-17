@@ -22,7 +22,7 @@ export type UpdatePasswordResult = {
 
 /**
  * Define a nova senha dentro da sessão de recovery (estabelecida pelo link do
- * e-mail via /auth/confirm). Ao concluir, encerra a sessão e redireciona para
+ * e-mail via /auth/confirm). Ao concluir, encerra TODAS as sessões da conta e redireciona para
  * /login?reset=success — o usuário prova a senha nova num login limpo.
  */
 export async function updatePassword(
@@ -97,6 +97,20 @@ export async function updatePassword(
     userAgent,
   });
 
+  // Senha trocada: toda sessão que já existia na conta (a de quem a tinha antes, inclusive) cai. É o ponto de
+  // um sequestro de conta ser desfeito pela recuperação. As OUTRAS primeiro e conferido, depois a desta sessão
+  // (a recuperação não deve ficar de pé). Falha ao derrubar não desfaz a senha nova, mas deixa rastro.
+  const outras = await supabase.auth.signOut({ scope: "others" });
+  if (outras.error) {
+    await audit({
+      action: "auth.password_reset_failed",
+      actorUserId: user.id,
+      metadata: { reason: "sessoes_nao_encerradas" },
+      requestId,
+      ip,
+      userAgent,
+    });
+  }
   await supabase.auth.signOut();
   redirect("/login?reset=success");
 }
