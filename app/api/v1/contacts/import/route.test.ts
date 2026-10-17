@@ -21,6 +21,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/contacts/cpf-do-contato", () => ({
   cifrarCpfDoContato: vi.fn(async (cpf: string) => `cifrado(${cpf})`),
   gravarCpfDoContatoPorUsuario: vi.fn(async () => null),
+  idsPorHashDeCpf: vi.fn(async () => ({ ids: [], error: null })),
 }));
 
 const ORG = "22222222-2222-4222-8222-222222222222";

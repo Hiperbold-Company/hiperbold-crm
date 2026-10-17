@@ -28,6 +28,8 @@ let usuario: BancoEmMemoria;
 let servidor: BancoEmMemoria;
 let cifraDisponivel = true;
 let sequencia = 0;
+/** Quantas linhas o cliente do USUÁRIO chegou a inserir (o CPF repetido não pode criar para depois apagar). */
+let insercoesDoUsuario = 0;
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => servidor }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => usuario }));
@@ -44,6 +46,7 @@ import { createContactHandler, patchContactHandler } from "@/app/api/v1/contacts
 import { POST as importar } from "@/app/api/v1/contacts/import/route";
 import { requireRole } from "@/lib/auth/require-role";
 import { hashCpf } from "@/lib/contacts/cpf";
+import { CPF_SEM_LINHA, decifrarCpfDoContato, gravarCpfDoContatoPorUsuario } from "@/lib/contacts/cpf-do-contato";
 
 const ctx = { organization_id: ORG, actor: { type: "user" as const, id: USER }, requestId: "req" };
 
@@ -77,7 +80,9 @@ function montar(inicial: Linha[] = []) {
         if (toca) return { message: "permission denied for table contacts", code: "42501" };
       }
       if (modo === "insert") {
+        if (recusarCpf) insercoesDoUsuario += linhas.length;
         for (const l of linhas) l.id ??= `contato-${++sequencia}`;
+        for (const l of linhas) l.is_anonymized ??= false;
         for (const l of linhas) {
           const erro = constraintsDoBanco(tabelas.contacts!, l);
           if (erro) return erro;
@@ -95,6 +100,10 @@ function montar(inicial: Linha[] = []) {
   const rpc = {
     fn_encrypt_oauth: (args: Record<string, unknown>) =>
       cifraDisponivel ? { data: `cifrado(${args.plaintext as string})` } : { error: { message: "chave ausente" } },
+    fn_decrypt_oauth: (args: Record<string, unknown>) => {
+      const m = /^cifrado\((.*)\)$/.exec(String(args.ciphertext).replace(/^\\x/, ""));
+      return m ? { data: m[1] } : { error: { message: "não decifra" } };
+    },
   };
   usuario = criarBancoEmMemoria(tabelas, { aoEscrever: comum(true) });
   servidor = criarBancoEmMemoria(tabelas, { aoEscrever: comum(false), rpc });
@@ -105,6 +114,7 @@ const contatos = () => usuario.tabelas.contacts!;
 
 beforeEach(() => {
   sequencia = 0;
+  insercoesDoUsuario = 0;
   cifraDisponivel = true;
   vi.mocked(requireRole).mockResolvedValue({
     ok: true,
@@ -158,6 +168,8 @@ describe("criar contato com CPF", () => {
     );
     expect((erro as ApiError).status).toBe(500);
     expect(contatos().map((c) => c.id)).toEqual(["existente"]);
+    // Conferido ANTES: o caminho normal não cria o contato para depois apagá-lo.
+    expect(insercoesDoUsuario).toBe(0);
   });
 });
 
@@ -225,6 +237,7 @@ describe("importação com CPF", () => {
 
     expect(corpo.data).toMatchObject({ imported: 0, skipped_duplicates: 1, errors: [] });
     expect(contatos().map((c) => c.id)).toEqual(["existente"]);
+    expect(insercoesDoUsuario).toBe(0);
   });
 
   it("sem a chave de cifra a linha vai para os erros e nada é criado", async () => {
@@ -235,5 +248,56 @@ describe("importação com CPF", () => {
     expect(corpo.data.imported).toBe(0);
     expect(corpo.data.errors).toHaveLength(1);
     expect(contatos()).toHaveLength(0);
+  });
+});
+
+describe("gravação e abertura do CPF pelo servidor", () => {
+  const linhaBase = { organization_id: ORG, name: "Maria", tags: [], consent: {}, custom_fields: {} };
+
+  it("contato anonimizado: nada é gravado e o resultado é CPF_SEM_LINHA (nunca 'gravado')", async () => {
+    montar([{ ...linhaBase, id: "anon", is_anonymized: true }]);
+    const erro = await gravarCpfDoContatoPorUsuario(ORG, "anon", { hash: hashCpf(CPF) as string, cifrado: "cifrado(x)" });
+
+    expect(erro).toMatchObject({ code: CPF_SEM_LINHA });
+    expect(contatos()[0]).not.toHaveProperty("cpf_hash");
+  });
+
+  it("contato de outra organização: também CPF_SEM_LINHA", async () => {
+    montar([{ ...linhaBase, id: "c1", organization_id: "outra-org", is_anonymized: false }]);
+    const erro = await gravarCpfDoContatoPorUsuario(ORG, "c1", { hash: hashCpf(CPF) as string, cifrado: "cifrado(x)" });
+    expect(erro).toMatchObject({ code: CPF_SEM_LINHA });
+  });
+
+  it("PATCH em que o contato é anonimizado entre a leitura e a gravação do CPF: 409", async () => {
+    const tabelas = montar([{ ...linhaBase, id: "c1", is_anonymized: false }]);
+    // Simula a corrida: o UPDATE do usuário passa, e logo depois o contato é anonimizado.
+    const original = tabelas.contacts![0]!;
+    const fromOriginal = usuario.from.bind(usuario);
+    usuario.from = ((nome: string) => {
+      const consulta = fromOriginal(nome);
+      const then = consulta.then.bind(consulta);
+      consulta.then = ((ok: never, ko: never) =>
+        then(ok, ko).then((v: unknown) => {
+          original.is_anonymized = true;
+          return v;
+        })) as never;
+      return consulta;
+    }) as never;
+
+    const erro = await patchContactHandler(usuario as never, ctx, "c1", { cpf: CPF } as never).catch((e: unknown) => e);
+    expect((erro as ApiError).status).toBe(409);
+    expect(original).not.toHaveProperty("cpf_hash");
+  });
+
+  it("decifra o CPF gravado (ida e volta com a cifra do servidor) e devolve null sem CPF ou anonimizado", async () => {
+    montar([
+      { ...linhaBase, id: "c1", is_anonymized: false, cpf_hash: "h", cpf_encrypted: `\\xcifrado(${CPF})` },
+      { ...linhaBase, id: "c2", is_anonymized: false },
+      { ...linhaBase, id: "c3", is_anonymized: true, cpf_hash: "h3", cpf_encrypted: `\\xcifrado(${CPF})` },
+    ]);
+    expect(await decifrarCpfDoContato(ORG, "c1")).toBe(CPF);
+    expect(await decifrarCpfDoContato(ORG, "c2")).toBeNull();
+    expect(await decifrarCpfDoContato(ORG, "c3")).toBeNull();
+    expect(await decifrarCpfDoContato("outra-org", "c1")).toBeNull();
   });
 });

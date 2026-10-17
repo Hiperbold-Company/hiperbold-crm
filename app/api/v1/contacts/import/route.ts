@@ -26,7 +26,7 @@ import { lerMultipartComTeto } from "@/lib/api/multipart-com-teto";
 import { requireRole } from "@/lib/auth/require-role";
 import { audit } from "@/lib/audit";
 import { hashCpf } from "@/lib/contacts/cpf";
-import { cifrarCpfDoContato, gravarCpfDoContatoPorUsuario } from "@/lib/contacts/cpf-do-contato";
+import { cifrarCpfDoContato, gravarCpfDoContatoPorUsuario, idsPorHashDeCpf } from "@/lib/contacts/cpf-do-contato";
 import { traduzir } from "@/lib/i18n/dicionario";
 import {
   CSV_MAX_BYTES,
@@ -40,6 +40,7 @@ import { contactCreateSchemaDoPais } from "@/lib/schemas";
 import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { recusarEscritaEmModoLeitura } from "@/lib/billing/assinatura/recusa-de-escrita";
+import { logger } from "@/lib/logger";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -283,6 +284,16 @@ export async function POST(req: NextRequest): Promise<Response> {
         errors.push({ linha, motivo: t("CPF indisponível neste servidor") });
         continue;
       }
+      // CPF repetido na organização: duplicado, conferido ANTES de inserir (não cria para depois apagar).
+      const donos = await idsPorHashDeCpf(orgId, hash);
+      if (donos.error) {
+        errors.push({ linha, motivo: donos.error.message });
+        continue;
+      }
+      if (donos.ids.length > 0) {
+        skippedDuplicates += 1;
+        continue;
+      }
       cpfParaGravar = { hash, cifrado };
     }
 
@@ -305,12 +316,20 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (cpfParaGravar) {
       const erroDoCpf = await gravarCpfDoContatoPorUsuario(orgId, (criado as { id: string }).id, cpfParaGravar);
       if (erroDoCpf) {
-        // Antes o CPF ia no mesmo INSERT e a falha desfazia a linha inteira: desfaz à mão, pelo cliente do usuário.
-        await supabase
+        // REDE DE SEGURANÇA, não o caminho normal (o CPF repetido já foi pulado antes do INSERT): só chega aqui por
+        // corrida ou falha do banco. Desfaz à mão, pelo cliente do usuário, e registra se nem isso deu.
+        const { error: eApagar } = await supabase
           .from("contacts")
           .delete()
           .eq("organization_id", orgId)
           .eq("id", (criado as { id: string }).id);
+        if (eApagar) {
+          logger.error("[contacts.import] não consegui desfazer o contato criado sem CPF", {
+            organizationId: orgId,
+            contactId: (criado as { id: string }).id,
+            errorCode: eApagar.code,
+          });
+        }
         if (erroDoCpf.code === "23505") {
           skippedDuplicates += 1;
         } else {

@@ -24,8 +24,12 @@ export function marcacaoDoCrm(nome: string): boolean {
   );
 }
 
+/** `{{contact.cpf_hash}}` e `{{contact.cpf_encrypted}}` nunca saem num texto, mesmo que o contexto traga a coluna (D-216). */
+const CAMPO_DO_CPF = /^contact\.cpf_/;
+
 export function renderTemplate(template: string, context: Record<string, unknown>): string {
   return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_m, path: string) => {
+    if (CAMPO_DO_CPF.test(ALIASES[path] ?? path)) return "";
     const resolved = resolveField(context, ALIASES[path] ?? path);
     // `{{primeiro_nome}}` = primeira palavra do nome, como no Inbox e na campanha.
     const texto = String(resolved ?? "");

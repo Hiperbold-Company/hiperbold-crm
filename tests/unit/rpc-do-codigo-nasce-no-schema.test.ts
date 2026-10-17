@@ -84,13 +84,6 @@ const BASELINE = "supabase/baseline.sql";
 // vermelho pedindo a remoção daqui (é o `it` abaixo que faz isso).
 
 const CONGELADAS: Record<string, { degradacao: string; porque: string }> = {
-  decrypt_cpf: {
-    degradacao: "app/api/v1/contacts/_handler.ts:324",
-    porque:
-      "A chamada já está prevista para não existir: se o erro volta, o handler " +
-      "loga `decrypt_cpf RPC unavailable` e a resposta segue SEM CPF — o contato " +
-      "não quebra. Criar a RPC no banco é decisão de produto, não deste gate.",
-  },
   jsonb_set_last_alarm_at: {
     degradacao: "lib/lgpd/sla-alarm.ts:203",
     porque:

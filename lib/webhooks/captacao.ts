@@ -28,6 +28,8 @@ export type DesfechoDaCaptacao = "criado" | "duplicado" | "recusado" | "recadast
 export type MotivoDaRecusa =
   | "sem_campo_mapeavel"
   | "assinatura_invalida"
+  // A fonte tem segredo mas ele não decifra (chave da instalação ausente/trocada): recusa 503, nunca aceita como pública.
+  | "segredo_indisponivel"
   | "erro_ao_criar_lead"
   // F3, decisão 5 (Tarefa 7): o gatilho de crm_leads recusou por PT402 (teto
   // de leads do plano). Motivo próprio: "erro_ao_criar_lead" sugeriria falha
@@ -48,6 +50,8 @@ export const MOTIVO_DA_RECUSA_LABEL: Record<MotivoDaRecusa, string> = {
     "O envio não trazia nome, telefone nem e-mail reconhecíveis — confira os nomes dos campos do formulário.",
   assinatura_invalida:
     "A assinatura não conferiu. Quem enviou não usou o segredo configurado nesta fonte.",
+  segredo_indisponivel:
+    "O envio chegou, mas o CRM não conseguiu abrir o segredo desta fonte (a chave da instalação está ausente ou foi trocada). Fale com quem administra a instalação; tente reenviar depois.",
   erro_ao_criar_lead:
     "Os dados chegaram, mas o lead não pôde ser criado — confira se o funil e a etapa da fonte ainda existem.",
   limite_do_plano:

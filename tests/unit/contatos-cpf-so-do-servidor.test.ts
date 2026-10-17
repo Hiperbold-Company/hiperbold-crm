@@ -8,7 +8,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError } from "@/lib/api/types";
+import type { ApiError } from "@/lib/api/types";
 
 const ORG = "c05e7a00-0000-4000-8000-000000000001";
 const OUTRO = "c05e7a00-0000-4000-8000-0000000000c2";
@@ -21,9 +21,27 @@ const servidor = {
   donos: new Map<string, string[]>(),
   gravacoes: [] as Array<{ org: string; id: string; hash: string; cifrado: unknown }>,
   erroAoGravar: null as { code: string | null; message: string } | null,
+  decifrados: [] as string[],
+  cpfEmClaro: "52998224725" as string | null,
 };
+const logs: Array<{ nivel: string; mensagem: string; dados: unknown }> = [];
+let erroAoApagar: { code?: string; message: string } | null = null;
+let papelDoUsuario = "manager";
 
+vi.mock("@/lib/logger", () => ({
+  logger: {
+    info: (mensagem: string, dados?: unknown) => logs.push({ nivel: "info", mensagem, dados }),
+    warn: (mensagem: string, dados?: unknown) => logs.push({ nivel: "warn", mensagem, dados }),
+    error: (mensagem: string, dados?: unknown) => logs.push({ nivel: "error", mensagem, dados }),
+    debug: () => undefined,
+  },
+}));
 vi.mock("@/lib/contacts/cpf-do-contato", () => ({
+  CPF_SEM_LINHA: "cpf_contato_nao_gravavel",
+  decifrarCpfDoContato: vi.fn(async (_org: string, id: string) => {
+    servidor.decifrados.push(id);
+    return servidor.cpfEmClaro;
+  }),
   cifrarCpfDoContato: vi.fn(async (cpf: string) => `cifrado(${cpf})`),
   idsComCpf: vi.fn(async (_org: string, ids: string[]) => ({
     ids: new Set(ids.filter((i) => servidor.comCpf.has(i))),
@@ -72,9 +90,11 @@ const usuario = {
 function clienteDoUsuario(): never {
   let modo: "select" | "insert" | "update" | "delete" = "select";
   let filtroId: string | null = null;
+  let tabela = "contacts";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cadeia: any = {
     select: (cols?: string) => {
+      if (tabela === "user_organizations") return cadeia;
       usuario.selects.push(cols ?? "*");
       return cadeia;
     },
@@ -109,15 +129,18 @@ function clienteDoUsuario(): never {
     lt: () => cadeia,
     single: async () => ({ data: usuario.linhas.at(-1) ?? null, error: null }),
     maybeSingle: async () => ({
-      data: usuario.linhas.find((l) => l.id === filtroId) ?? usuario.linhas[0] ?? null,
+      data: tabela === "user_organizations" ? { role: papelDoUsuario } : usuario.linhas.find((l) => l.id === filtroId) ?? usuario.linhas[0] ?? null,
       error: null,
     }),
     then: (res: (v: unknown) => unknown) => {
       if (modo === "delete" && filtroId) usuario.deletes.push(filtroId);
-      return Promise.resolve({ data: modo === "select" ? usuario.linhas : null, error: null }).then(res);
+      return Promise.resolve({
+        data: modo === "select" ? usuario.linhas : null,
+        error: modo === "delete" ? erroAoApagar : null,
+      }).then(res);
     },
   };
-  return { from: () => cadeia, rpc: async () => ({ error: null }) } as never;
+  return { from: (t: string) => ((tabela = t), cadeia), rpc: async () => ({ error: null }) } as never;
 }
 
 const linha = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -148,6 +171,11 @@ beforeEach(() => {
   usuario.deletes = [];
   usuario.orFiltros = [];
   usuario.linhas = [];
+  servidor.decifrados = [];
+  servidor.cpfEmClaro = CPF;
+  logs.length = 0;
+  erroAoApagar = null;
+  papelDoUsuario = "manager";
 });
 
 describe("lista e leitura de contatos pela sessão do usuário", () => {
@@ -209,7 +237,19 @@ describe("criar contato com CPF", () => {
     expect(r.contact.cpf_available).toBe(true);
   });
 
-  it("se o servidor não consegue gravar o CPF, o contato recém-criado é desfeito e o erro é o 500 de sempre", async () => {
+  it("CPF que já é de outro contato é recusado ANTES do INSERT: nada é criado nem apagado", async () => {
+    servidor.donos.set(hashCpf(CPF) as string, [OUTRO]);
+
+    const erro = await createContactHandler(clienteDoUsuario(), ctx, { name: "Maria", cpf: CPF, source: "manual" } as never).catch(
+      (e: unknown) => e,
+    );
+
+    expect((erro as ApiError).status).toBe(500);
+    expect(usuario.inserts).toHaveLength(0);
+    expect(usuario.deletes).toHaveLength(0);
+  });
+
+  it("corrida: se a gravação falha depois do INSERT, o contato é desfeito (rede de segurança)", async () => {
     usuario.linhas = [linha(CONTATO)];
     servidor.erroAoGravar = { code: "23505", message: 'duplicate key value violates unique constraint "uniq_contacts_org_cpf"' };
 
@@ -217,8 +257,31 @@ describe("criar contato com CPF", () => {
       (e: unknown) => e,
     );
 
-    expect(erro).toBeInstanceOf(ApiError);
     expect((erro as ApiError).status).toBe(500);
+    expect(usuario.deletes).toEqual([CONTATO]);
+  });
+
+  it("se nem o desfazer funciona, o erro do apagamento é registrado no log", async () => {
+    usuario.linhas = [linha(CONTATO)];
+    servidor.erroAoGravar = { code: "23505", message: "duplicate" };
+    erroAoApagar = { code: "42501", message: "permission denied" };
+
+    await createContactHandler(clienteDoUsuario(), ctx, { name: "Maria", cpf: CPF, source: "manual" } as never).catch(() => undefined);
+
+    const registro = logs.find((l) => l.nivel === "error");
+    expect(registro?.mensagem).toMatch(/desfazer o contato criado/);
+    expect(registro?.dados).toMatchObject({ contactId: CONTATO, organizationId: ORG, errorCode: "42501" });
+  });
+
+  it("contato anonimizado (ou sumido) no momento de gravar o CPF: 409, e o contato novo é desfeito", async () => {
+    usuario.linhas = [linha(CONTATO)];
+    servidor.erroAoGravar = { code: "cpf_contato_nao_gravavel", message: "contato anonimizado" };
+
+    const erro = await createContactHandler(clienteDoUsuario(), ctx, { name: "Maria", cpf: CPF, source: "manual" } as never).catch(
+      (e: unknown) => e,
+    );
+
+    expect((erro as ApiError).status).toBe(409);
     expect(usuario.deletes).toEqual([CONTATO]);
   });
 
@@ -263,5 +326,60 @@ describe("alterar o CPF de um contato", () => {
     expect(servidor.gravacoes).toHaveLength(0);
     expect(r.cpf_available).toBe(true);
     expect(usuario.updates[0]).not.toHaveProperty("cpf_hash");
+  });
+});
+
+describe("PATCH do CPF e contato anonimizado no meio do caminho", () => {
+  it("a gravação não alterou linha (anonimizado depois da leitura): 409, nunca 'gravado'", async () => {
+    usuario.linhas = [linha(CONTATO)];
+    servidor.erroAoGravar = { code: "cpf_contato_nao_gravavel", message: "contato anonimizado" };
+
+    const erro = await patchContactHandler(clienteDoUsuario(), ctx, CONTATO, { cpf: CPF } as never).catch((e: unknown) => e);
+
+    expect((erro as ApiError).status).toBe(409);
+  });
+});
+
+describe("abrir o CPF do contato (decrypt_cpf não existe: decifra o servidor)", () => {
+  it("manager com propósito informado recebe o CPF, decifrado pelo servidor", async () => {
+    usuario.linhas = [linha(CONTATO)];
+    servidor.comCpf.add(CONTATO);
+
+    const r = await getContactHandler(clienteDoUsuario(), ctx, { contactId: CONTATO, decryptPurpose: "atendimento" });
+
+    expect(r.cpf_decrypted).toBe(CPF);
+    expect(servidor.decifrados).toEqual([CONTATO]);
+  });
+
+  it("agent (abaixo de manager) é negado e o servidor nem é chamado", async () => {
+    usuario.linhas = [linha(CONTATO)];
+    servidor.comCpf.add(CONTATO);
+    papelDoUsuario = "agent";
+
+    const r = await getContactHandler(clienteDoUsuario(), ctx, { contactId: CONTATO, decryptPurpose: "atendimento" });
+
+    expect(r.cpf_decrypted).toBeNull();
+    expect(r.cpf_decrypt_denied).toBe(true);
+    expect(servidor.decifrados).toHaveLength(0);
+  });
+
+  it("sem propósito informado, ou sem CPF no contato, o servidor não decifra", async () => {
+    usuario.linhas = [linha(CONTATO)];
+    servidor.comCpf.add(CONTATO);
+    await getContactHandler(clienteDoUsuario(), ctx, { contactId: CONTATO });
+    servidor.comCpf.clear();
+    await getContactHandler(clienteDoUsuario(), ctx, { contactId: CONTATO, decryptPurpose: "x" });
+    expect(servidor.decifrados).toHaveLength(0);
+  });
+
+  it("se o banco não consegue decifrar, a resposta segue sem CPF (e registra aviso)", async () => {
+    usuario.linhas = [linha(CONTATO)];
+    servidor.comCpf.add(CONTATO);
+    servidor.cpfEmClaro = null;
+
+    const r = await getContactHandler(clienteDoUsuario(), ctx, { contactId: CONTATO, decryptPurpose: "atendimento" });
+
+    expect(r.cpf_decrypted).toBeNull();
+    expect(logs.some((l) => l.nivel === "warn" && /decifrar o CPF/.test(l.mensagem))).toBe(true);
   });
 });

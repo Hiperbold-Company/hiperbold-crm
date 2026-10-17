@@ -235,14 +235,29 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   }
 
   const sigHeader = req.headers.get("x-hipercrm-signature") ?? req.headers.get("x-deskcomm-signature");
-  // secret cifrado at-rest (migration 0041). Decrypt falhou (chave da GUC
-  // ausente/trocada)? Precedente WAHA: pula a validação em vez de derrubar a
-  // captação — secret aqui é defesa opcional, não gate de disponibilidade.
+  // secret cifrado at-rest (migration 0041). A fonte TEM segredo, então ela não é pública: se o segredo não
+  // decifra (chave da GUC ausente/trocada), recusar com 503 neutro. Aceitar o envio como se a fonte fosse pública
+  // desligaria, em silêncio, a prova de origem (etiqueta, CPF e consentimento só valem com ela) justo quando a
+  // instalação está com a chave quebrada. Quem integra tenta de novo quando o operador consertar a chave.
   let sourceSecret: string | null = null;
-  let hmacSkipped = false;
   if (source.secret_encrypted) {
     sourceSecret = await decryptWebhookSecret(admin, source.secret_encrypted as unknown as string);
-    if (sourceSecret === null) hmacSkipped = true;
+    if (sourceSecret === null) {
+      logger.error("[webhooks.inbound] segredo da fonte não decifra: captação recusada", {
+        webhookSourceId: source.id,
+        organizationId: source.organization_id,
+      });
+      await registrarCaptacao(admin, {
+        ...fonteDaCaptacao,
+        ...origemDaCaptacao,
+        outcome: "recusado",
+        rejectReason: "segredo_indisponivel",
+      });
+      return fail("service_unavailable", "Service temporarily unavailable.", 503, {
+        requestId,
+        headers: { "Retry-After": "60" },
+      });
+    }
   }
   // D-215: proteção contra reenvio. Com `X-HiperCRM-Timestamp` a assinatura cobre `${carimbo}.${corpo}` e o
   // carimbo tem de estar a até 300 s do relógio do servidor. Fonte que já enviou um envio válido COM carimbo
@@ -404,10 +419,9 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     payload_parsed: payload,
     // A assinatura em si não é guardada (ver headersJson); `valid_signature` diz o que importa.
     signature_header: null,
-    // hmacSkipped (decrypt indisponível) conta como "não validado mas aceito",
-    // igual ao webhook WAHA — o feed da UI não pinta de vermelho.
+    // Fonte sem segredo (formulário público) não tem assinatura a validar: o feed da UI não a pinta de vermelho.
     valid_signature: validSignature ?? true,
-    event_type: hmacSkipped ? "lead_capture.received_hmac_skipped" : "lead_capture.received",
+    event_type: "lead_capture.received",
     external_id: null,
     status: "received",
     attempts: 0,

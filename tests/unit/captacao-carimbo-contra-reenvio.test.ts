@@ -34,7 +34,9 @@ vi.mock("@/lib/logger", () => {
   return { logger: { info: nada, warn: nada, error: nada, debug: nada } };
 });
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({ checkRateLimit: vi.fn(async () => ({ allowed: true })) }));
-vi.mock("@/lib/webhooks/secrets", () => ({ decryptWebhookSecret: vi.fn(async () => SEGREDO) }));
+/** `null` simula o segredo que não decifra (chave da instalação ausente/trocada). */
+let segredoDecifrado: string | null = SEGREDO;
+vi.mock("@/lib/webhooks/secrets", () => ({ decryptWebhookSecret: vi.fn(async () => segredoDecifrado) }));
 vi.mock("@/lib/channels/contato-por-telefone", () => ({
   encontrarContatoPorTelefoneComNome: vi.fn(async () => null),
 }));
@@ -97,7 +99,7 @@ function enviar(cabecalhos: Record<string, string>) {
 const comCarimbo = (carimbo: number, assinadoCom: number = carimbo) =>
   enviar({
     "x-hipercrm-timestamp": String(carimbo),
-    "x-hipercrm-signature": hmac(`${assinadoCom}.${CORPO}`),
+    "x-hipercrm-signature": hmac(`v1:${assinadoCom}.${CORPO}`),
   });
 
 /** Envio no formato antigo: só o corpo assinado. */
@@ -106,6 +108,7 @@ const semCarimbo = () => enviar({ "x-hipercrm-signature": hmac(CORPO) });
 beforeEach(() => {
   seqLead = 0;
   auditorias.length = 0;
+  segredoDecifrado = SEGREDO;
 });
 
 describe("captação assinada com carimbo (D-215)", () => {
@@ -150,7 +153,7 @@ describe("captação assinada com carimbo (D-215)", () => {
   it("carimbo que não é segundos Unix (milissegundos, texto) é recusado", async () => {
     montar(false);
     expect((await comCarimbo(Date.now())).status).toBe(401);
-    const r = await enviar({ "x-hipercrm-timestamp": "ontem", "x-hipercrm-signature": hmac(`ontem.${CORPO}`) });
+    const r = await enviar({ "x-hipercrm-timestamp": "ontem", "x-hipercrm-signature": hmac(`v1:ontem.${CORPO}`) });
     expect(r.status).toBe(401);
   });
 
@@ -158,6 +161,39 @@ describe("captação assinada com carimbo (D-215)", () => {
     montar(false);
     const r = await enviar({ "x-hipercrm-timestamp": String(agora()), "x-hipercrm-signature": hmac(CORPO) });
     expect(r.status).toBe(401);
+  });
+});
+
+describe("formato versionado (v1:)", () => {
+  it("a assinatura de `carimbo.corpo`, sem o prefixo, é recusada", async () => {
+    montar(false);
+    const c = agora();
+    const r = await enviar({ "x-hipercrm-timestamp": String(c), "x-hipercrm-signature": hmac(`${c}.${CORPO}`) });
+    expect(r.status).toBe(401);
+    expect(banco.tabelas["crm_leads"]).toHaveLength(0);
+  });
+});
+
+describe("fonte com segredo que não decifra", () => {
+  it("recusa com 503 neutro, não cria lead e não trata a fonte como pública", async () => {
+    montar(false);
+    segredoDecifrado = null;
+    const r = await semCarimbo();
+    expect(r.status).toBe(503);
+    expect((await r.json()).error.code).toBe("service_unavailable");
+    expect(banco.tabelas["crm_leads"]).toHaveLength(0);
+    expect(banco.tabelas["webhook_events_log"]).toHaveLength(0);
+    expect(banco.tabelas["webhook_lead_captures"]?.[0]).toMatchObject({
+      outcome: "recusado",
+      reject_reason: "segredo_indisponivel",
+    });
+  });
+
+  it("nem um envio sem assinatura passa quando o segredo não decifra", async () => {
+    montar(false);
+    segredoDecifrado = null;
+    expect((await enviar({})).status).toBe(503);
+    expect(banco.tabelas["crm_leads"]).toHaveLength(0);
   });
 });
 
