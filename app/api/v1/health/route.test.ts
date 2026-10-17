@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 /**
@@ -89,5 +89,95 @@ describe("GET /api/v1/health — o endereço interno não sai para quem não tem
     // verboso, o operador perderia o diagnóstico e ninguém notaria — o caso
     // acima ficaria verde do mesmo jeito.
     expect(corpo).toContain(HOST_VAZADO);
+  });
+});
+
+/**
+ * Worker e scheduler aparecem em `checks` (migration 0961), mas NÃO mexem no
+ * status geral nem no HTTP: o `update.sh` e o deploy esperam `healthy` / 200 daqui,
+ * e os dois serviços acabam de reiniciar num deploy, sem batimento novo ainda.
+ * O alarme deles é das rotas /health/worker e /health/scheduler.
+ */
+describe("GET /api/v1/health — worker e scheduler entram em checks sem derrubar o status geral", () => {
+  let batimentos: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    vi.resetModules();
+    batimentos = {};
+    vi.doMock("@/lib/env", () => ({
+      env: {
+        NEXT_PUBLIC_SUPABASE_URL: "http://supabase.teste:54321",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
+        SUPABASE_SERVICE_ROLE_KEY: "chave-de-teste",
+        UPSTASH_REDIS_REST_URL: "http://redis.teste:8090",
+        UPSTASH_REDIS_REST_TOKEN: "token-de-teste",
+        INTERNAL_CRON_SECRET: SEGREDO,
+        INTERNAL_SECRET: "",
+      },
+    }));
+    vi.doMock("@/lib/supabase/admin", () => ({
+      createAdminClient: () => ({
+        from: () => ({
+          select: () => ({
+            eq: (_c: string, servico: string) => ({
+              maybeSingle: async () => ({
+                data: batimentos[servico] ? { ultimo_em: batimentos[servico] } : null,
+                error: null,
+              }),
+            }),
+          }),
+        }),
+      }),
+    }));
+    // Supabase e Redis respondem 200 (o canal de WhatsApp está sem configuração, então o geral base é
+    // "degraded"): o que sobra de diferença entre os casos é só o batimento.
+    vi.stubGlobal("fetch", async () => new Response("[]", { status: 200 }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.doUnmock("@/lib/supabase/admin");
+  });
+
+  const ha = (s: number) => new Date(Date.now() - s * 1000).toISOString();
+
+  it("batimentos recentes: os dois ok em checks, geral 200", async () => {
+    batimentos = { worker: ha(10), scheduler: ha(10) };
+    const { GET } = await import("./route");
+    const res = await GET(pedido());
+    const { data } = await res.json();
+    expect(data.checks.worker.status).toBe("ok");
+    expect(data.checks.scheduler.status).toBe("ok");
+    expect(data.checks.supabase.status).toBe("ok");
+    expect(data.checks.redis.status).toBe("ok");
+    expect(data.status).toBe("degraded"); // só por causa do canal sem configuração
+    expect(res.status).toBe(200);
+  });
+
+  it("worker parado e scheduler sem linha: degraded em checks, mas o geral e o HTTP são idênticos ao caso saudável", async () => {
+    batimentos = { worker: ha(10), scheduler: ha(10) };
+    const { GET: saudavel } = await import("./route");
+    const base = await (await saudavel(pedido())).json();
+
+    vi.resetModules();
+    batimentos = { worker: ha(900) };
+    const { GET } = await import("./route");
+    const res = await GET(pedido());
+    const { data } = await res.json();
+    expect(data.checks.worker).toMatchObject({ status: "degraded", reason: "batimento_atrasado" });
+    expect(data.checks.scheduler).toMatchObject({ status: "degraded", reason: "sem_batimento" });
+    // As dependências de antes mandam sozinhas no status geral.
+    expect(data.status).toBe(base.data.status);
+    expect(data.status).not.toBe("unhealthy");
+    expect(res.status).toBe(200);
+  });
+
+  it("controle: dependência de antes caída continua tornando o geral unhealthy/503", async () => {
+    batimentos = { worker: ha(10), scheduler: ha(10) };
+    vi.stubGlobal("fetch", async () => new Response("", { status: 500 }));
+    const { GET } = await import("./route");
+    const res = await GET(pedido());
+    expect(res.status).toBe(503);
+    expect((await res.json()).data.status).toBe("unhealthy");
   });
 });

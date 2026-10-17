@@ -28,6 +28,8 @@ import { env } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { alvoDe, classificarFalhaDeAlcance, type FalhaDeAlcance } from "@/lib/net/alcance";
 import { validarConfigRedisRest } from "@/lib/redis-config";
+import { estadoDoServico } from "@/lib/system/batimento-app";
+import type { ServicoDeFundo } from "@/lib/system/batimento";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,7 +44,11 @@ type MotivoDeFalha =
   | "nao_configurado"
   | "configuracao_invalida"
   /** Não é falha: nenhuma conexão ativa usa este serviço, então ele não foi consultado. */
-  | "sem_conexao_ativa";
+  | "sem_conexao_ativa"
+  /** Worker/scheduler: nenhum batimento gravado ainda, ou o último passou do limite. */
+  | "sem_batimento"
+  | "batimento_atrasado"
+  | "leitura_indisponivel";
 
 type Check = {
   status: CheckStatus;
@@ -195,6 +201,23 @@ async function checkRedis(): Promise<Check> {
 }
 
 /**
+ * Worker e scheduler (migration 0961). Batimento recente = ok; ausente ou velho
+ * = `degraded`, nunca `down`: o monitor que quer o alarme duro bate nas rotas
+ * próprias (`/health/worker`, `/health/scheduler`, 503). Aqui é informação.
+ */
+async function checkServicoDeFundo(servico: ServicoDeFundo): Promise<Check> {
+  const t0 = Date.now();
+  const estado = await estadoDoServico(servico);
+  if (estado.status === "ok") return { status: "ok", latency_ms: Date.now() - t0 };
+  return {
+    status: "degraded",
+    latency_ms: Date.now() - t0,
+    reason: estado.motivo,
+    error: estado.motivo,
+  };
+}
+
+/**
  * Hiperbold: o serviço do canal por QR só é dependência se alguma conexão ativa
  * o usa. A Hiperbold não usa esse canal (decisão de 16/09/2026) e o serviço foi
  * retirado; sem isto o health ficaria "unhealthy" para sempre por um serviço que
@@ -320,18 +343,31 @@ function semAlvo(check: Check): Check {
 }
 
 export async function GET(req: NextRequest) {
-  const [supabase, redis, waha] = await Promise.all([
+  const [supabase, redis, waha, worker, scheduler] = await Promise.all([
     checkSupabase(),
     checkRedis(),
     checkWaha(),
+    checkServicoDeFundo("worker"),
+    checkServicoDeFundo("scheduler"),
   ]);
 
   const verboso = req.nextUrl.searchParams.get("verbose") === "1" && segredoInternoConfere(req);
   const filtrar = verboso ? (c: Check) => c : semAlvo;
-  const checks = { supabase: filtrar(supabase), redis: filtrar(redis), waha: filtrar(waha) };
+  const checks = {
+    supabase: filtrar(supabase),
+    redis: filtrar(redis),
+    waha: filtrar(waha),
+    worker: filtrar(worker),
+    scheduler: filtrar(scheduler),
+  };
 
-  const anyDown = Object.values(checks).some((c) => c.status === "down");
-  const anyDegraded = Object.values(checks).some((c) => c.status === "degraded");
+  // O status GERAL sai só das dependências de antes. Worker e scheduler aparecem em `checks`, mas NÃO
+  // entram na conta: o `update.sh` e o fluxo de deploy esperam `healthy` aqui, e os dois serviços acabam
+  // de reiniciar no deploy (ainda sem batimento novo) — contá-los reprovaria uma atualização boa e
+  // dispararia a reversão da imagem. O alarme deles é das rotas /health/worker e /health/scheduler.
+  const { worker: _w, scheduler: _s, ...dependencias } = checks;
+  const anyDown = Object.values(dependencias).some((c) => c.status === "down");
+  const anyDegraded = Object.values(dependencias).some((c) => c.status === "degraded");
   const status: "healthy" | "degraded" | "unhealthy" = anyDown
     ? "unhealthy"
     : anyDegraded

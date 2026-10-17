@@ -107,6 +107,7 @@ import {
   type CacheAlertKnobs,
 } from "@/lib/agent-engine/obs/metrics";
 import { rodarLoopDaFila } from "@/lib/agent-engine/queue/loop";
+import { criarBatedor, gravarBatimentoPg } from "@/lib/system/batimento";
 import {
   adiarAteORecarregar,
   avisarFaltaDeSaldo,
@@ -590,6 +591,18 @@ export async function startWorker(
     }
   };
 
+  // Batimento para o monitor externo (migration 0961): amarrado à VOLTA do laço da fila, e não a um
+  // setInterval — laço travado para de bater. Ocioso o laço gira a cada QUEUE_POLL_INTERVAL_MS, e o
+  // batedor grava no máximo 1×/30 s. Falha de escrita só vai ao log: nunca atrapalha a fila.
+  const batimento = criarBatedor({
+    gravar: () =>
+      gravarBatimentoPg(pool, "worker", process.env.APP_VERSION || null, {
+        worker_id: workerId,
+        uptime_s: Math.round(process.uptime()),
+      }),
+    aoFalhar: (err) => log.warn("batimento do worker não gravado", { error: errMsg(err) }),
+  });
+
   const workerLoop = rodarLoopDaFila<JobRow>({
     relogio: () => faltaParaOProximoJob(pool),
     claimar: () => claimJobs(pool, { workerId, maxConcurrency: env.QUEUE_MAX_CONCURRENCY }),
@@ -606,6 +619,7 @@ export async function startWorker(
     // logo abaixo, matando o processo antes do drain dos jobs em voo.
     dormir: (ms) => sleep(ms, undefined, { signal: loopsAbort.signal }),
     deveParar: () => shuttingDown,
+    aoCadaVolta: batimento.tocar,
     intervalos: {
       ociosoMs: env.QUEUE_POLL_INTERVAL_MS,
       retryMs: env.QUEUE_CLAIM_RETRY_INTERVAL_MS,

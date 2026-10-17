@@ -49,6 +49,16 @@ describe("GET /api/v1/health — o motivo aponta para o que precisa ser feito", 
   beforeEach(() => {
     vi.resetModules();
     vi.doUnmock("@/lib/env");
+    // A rota também lê o batimento do worker e do scheduler no banco (migration 0961). Este arquivo mede
+    // a AUSÊNCIA de ida à rede para um endereço malformado, então a leitura do batimento é trocada por
+    // uma resposta imediata: senão o tempo dela entra na medida.
+    vi.doMock("@/lib/supabase/admin", () => ({
+      createAdminClient: () => ({
+        from: () => ({
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+        }),
+      }),
+    }));
   });
 
   it("⭐ `.env` com as aspas sobrando: o motivo é a CONFIGURAÇÃO, e o serviço nem é procurado", async () => {
