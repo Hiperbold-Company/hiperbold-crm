@@ -210,6 +210,7 @@ function montar(pedido: PedidoLinha, opcoes: { erroDoPedido?: string } = {}) {
       data: { asaasSubscriptionId: null, asaasAssinaturaEncerradaEm: null, currentPeriodEnd: null },
       error: null,
     })),
+    cancelarNoFimDoPeriodo: vi.fn(),
     marcarAssinaturaEncerrada: vi.fn(),
   };
   const asaas = {

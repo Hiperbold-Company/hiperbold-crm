@@ -51,6 +51,12 @@ export interface PedidoDeReembolsoListado {
   asaasPaymentId: string;
   /** O link da cobrança no Asaas, quando se sabe. */
   linkDoAsaas: string | null;
+  /**
+   * Só quando o pagamento é de um PACOTE de tokens: quanto o pacote deu e quanto da carteira avulsa da organização
+   * já foi consumido. Quem decide reembolsar precisa saber se os tokens foram usados. A carteira avulsa é uma só por
+   * organização (soma todos os pacotes), então `consumido` é o da carteira, não do pacote isolado.
+   */
+  pacote: { tokensDoPacote: number | null; creditadoAvulso: number | null; consumidoAvulso: number | null } | null;
 }
 
 export interface MotivoDeCancelamentoListado {
@@ -132,15 +138,39 @@ export async function listarPedidosDeReembolso(): Promise<
     const nomes = await nomesDasOrganizacoes(admin, [...new Set(linhas.map((l) => l.organization_id))]);
 
     const idsDePedido = [...new Set(linhas.map((l) => l.order_id).filter((i): i is string => !!i))];
-    const faturas = new Map<string, { invoice_url: string | null; ambiente: "sandbox" | "producao" }>();
+    const faturas = new Map<
+      string,
+      { invoice_url: string | null; ambiente: "sandbox" | "producao"; tipo: string | null; tokens: number | null }
+    >();
     if (idsDePedido.length > 0) {
       const { data: pedidos, error: erroDosPedidos } = await admin
         .from("billing_orders")
-        .select("id, invoice_url, ambiente")
+        .select("id, invoice_url, ambiente, tipo, tokens")
         .in("id", idsDePedido);
       if (erroDosPedidos) throw new Error(`billing_orders: ${erroDosPedidos.message}`);
-      for (const o of (pedidos as { id: string; invoice_url: string | null; ambiente: "sandbox" | "producao" }[] | null) ?? []) {
-        faturas.set(o.id, { invoice_url: o.invoice_url, ambiente: o.ambiente });
+      for (const o of (pedidos as
+        | { id: string; invoice_url: string | null; ambiente: "sandbox" | "producao"; tipo?: string | null; tokens?: number | null }[]
+        | null) ?? []) {
+        faturas.set(o.id, { invoice_url: o.invoice_url, ambiente: o.ambiente, tipo: o.tipo ?? null, tokens: o.tokens ?? null });
+      }
+    }
+
+    // A carteira avulsa das organizações com pagamento de pacote: o consumo que o admin precisa ver antes de reembolsar.
+    const orgsComPacote = [
+      ...new Set(
+        linhas.filter((l) => (l.order_id ? faturas.get(l.order_id)?.tipo === "pacote_tokens" : false)).map((l) => l.organization_id),
+      ),
+    ];
+    const avulsas = new Map<string, { creditado: number; consumido: number }>();
+    if (orgsComPacote.length > 0) {
+      const { data: carteiras, error: erroDasCarteiras } = await admin
+        .from("billing_token_wallets")
+        .select("organization_id, creditado, consumido")
+        .eq("fonte", "avulso")
+        .in("organization_id", orgsComPacote);
+      if (erroDasCarteiras) throw new Error(`billing_token_wallets: ${erroDasCarteiras.message}`);
+      for (const c of (carteiras as { organization_id: string; creditado: number | string; consumido: number | string }[] | null) ?? []) {
+        avulsas.set(c.organization_id, { creditado: Number(c.creditado), consumido: Number(c.consumido) });
       }
     }
 
@@ -164,6 +194,14 @@ export async function listarPedidosDeReembolso(): Promise<
           invoiceUrl: fatura?.invoice_url ?? null,
           ambiente: fatura?.ambiente ?? null,
         }),
+        pacote:
+          fatura?.tipo === "pacote_tokens"
+            ? {
+                tokensDoPacote: fatura.tokens,
+                creditadoAvulso: avulsas.get(l.organization_id)?.creditado ?? null,
+                consumidoAvulso: avulsas.get(l.organization_id)?.consumido ?? null,
+              }
+            : null,
       };
     });
     // Pendentes primeiro, do que espera há mais tempo; o resto, do mais novo (a ordem do banco).

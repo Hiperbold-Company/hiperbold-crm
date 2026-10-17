@@ -12,8 +12,19 @@
  * cada 3s até virar. Cartão e Pix caem no mesmo caminho: quem confirma é o Asaas.
  */
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState, useTransition } from "react";
 
+import { trocarFormaDePagamento } from "@/app/actions/settings/compraDoPlano";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
@@ -41,6 +52,28 @@ export function AguardandoPagamento({
   const status = estado.status ?? statusInicial;
   const situacao = situacaoDoPedido(status);
   const urlSegura = urlDaCobranca && urlDeRedirecionamentoEhSegura(urlDaCobranca) ? urlDaCobranca : null;
+  const [confirmando, setConfirmando] = useState(false);
+  const [trocando, iniciarTroca] = useTransition();
+  const [erroDaTroca, setErroDaTroca] = useState<string | null>(null);
+
+  /**
+   * Saída de quem ficou preso aqui (Pix que não vai pagar, cartão que não concluiu): cancela o pedido aberto,
+   * sem cobrança paga, e a página volta ao formulário. Se o pagamento já entrou, o servidor recusa e a frase
+   * "em confirmação" aparece no lugar.
+   */
+  function trocar() {
+    iniciarTroca(async () => {
+      const r = await trocarFormaDePagamento();
+      if (r.tipo === "erro") {
+        setErroDaTroca(r.mensagem);
+        setConfirmando(false);
+        return;
+      }
+      setErroDaTroca(null);
+      setConfirmando(false);
+      router.refresh();
+    });
+  }
 
   useEffect(() => {
     if (situacao !== "confirmado") return;
@@ -96,6 +129,50 @@ export function AguardandoPagamento({
       ) : (
         <p className="text-sm text-muted-foreground">{t("Aguardando a confirmação do pagamento.")}</p>
       )}
+
+      <div className="space-y-2 border-t pt-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          data-testid="trocar-forma-de-pagamento"
+          disabled={trocando}
+          onClick={() => setConfirmando(true)}
+        >
+          {t("Trocar forma de pagamento")}
+        </Button>
+        {erroDaTroca && (
+          <p role="alert" data-testid="trocar-forma-de-pagamento-erro" className="text-sm text-destructive">
+            {t(erroDaTroca)}
+          </p>
+        )}
+      </div>
+
+      <AlertDialog open={confirmando} onOpenChange={setConfirmando}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("Trocar a forma de pagamento?")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                "Cancelamos este pedido, que ainda não foi pago, e você escolhe de novo o plano e a forma de pagamento. Se você já pagou, não cancelamos: o pagamento está em confirmação.",
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={trocando}>{t("Voltar")}</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="trocar-forma-de-pagamento-confirmar"
+              disabled={trocando}
+              onClick={(e) => {
+                e.preventDefault();
+                trocar();
+              }}
+            >
+              {t("Trocar forma de pagamento")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

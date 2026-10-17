@@ -89,6 +89,7 @@ function montar(parcelas: number, amountCents: number, opcoes: { registrarParcel
     }),
     marcarPedido: vi.fn(async () => ({ data: null, error: null })),
     lerContrato: vi.fn(async () => ({ data: null, error: null })),
+    cancelarNoFimDoPeriodo: vi.fn(),
     marcarAssinaturaEncerrada: vi.fn(),
   };
   const asaas = {

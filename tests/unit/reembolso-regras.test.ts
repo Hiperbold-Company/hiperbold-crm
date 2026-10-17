@@ -40,8 +40,20 @@ describe("a garantia de 7 dias", () => {
     expect(dentroDaGarantia(diasAtras(0), AGORA)).toBe(true);
     expect(dentroDaGarantia(diasAtras(6.9), AGORA)).toBe(true);
     expect(dentroDaGarantia(diasAtras(7), AGORA)).toBe(true);
-    expect(dentroDaGarantia(new Date(AGORA.getTime() - 7 * DIA - 1000).toISOString(), AGORA)).toBe(false);
     expect(dentroDaGarantia(diasAtras(8), AGORA)).toBe(false);
+  });
+
+  it("conta por DIA CIVIL de São Paulo, não por 168 horas (migration 0963)", () => {
+    // Agora: 15/10 às 09:00 em SP. Pago 8/10 às 08:00 SP (7 dias e 1 hora atrás): ainda é o 7º dia civil.
+    expect(dentroDaGarantia("2026-10-08T11:00:00Z", AGORA)).toBe(true);
+    // Pago 8/10 às 00:00 SP: o mesmo dia civil, 7 dias e 9 horas atrás.
+    expect(dentroDaGarantia("2026-10-08T03:00:00Z", AGORA)).toBe(true);
+    // Pago 7/10 às 23:59 SP: o 8º dia civil, fora, embora só tenha 7 dias e 9 horas.
+    expect(dentroDaGarantia("2026-10-08T02:59:00Z", AGORA)).toBe(false);
+    // A virada do dia é a de São Paulo, não a UTC: 16/10 às 01:00Z ainda é 15/10 às 22:00 em SP.
+    const quaseMeiaNoite = new Date("2026-10-16T01:00:00Z");
+    expect(dentroDaGarantia("2026-10-09T03:30:00Z", quaseMeiaNoite)).toBe(true); // 09/10 00:30 SP -> 15/10 22:00 SP: 6 dias
+    expect(dentroDaGarantia("2026-10-08T02:00:00Z", quaseMeiaNoite)).toBe(false); // 07/10 23:00 SP -> 8 dias
   });
 
   it("data ilegível nunca dá garantia", () => {

@@ -66,6 +66,21 @@ export async function sincronizarProgramacoes(
   };
 }
 
+/**
+ * Passo 1b (migration 0964). Programação automática JÁ vencida cujo aviso de 7 dias nunca foi enfileirado não pode
+ * ser apagada (a guarda recusa) nem ficar presa para sempre (a rodada só avisa o que ainda vai vencer): o banco
+ * empurra a data para daqui a 7 dias e zera os marcadores, e o passo 2 desta mesma rodada enfileira o aviso.
+ * Devolve quantas foram adiadas, ou `null` quando falhou (a rodada segue sem apagar ninguém por esta via).
+ */
+export async function adiarVencidasSemAviso(admin: SupabaseClient): Promise<number | null> {
+  const { data, error } = await admin.rpc("fn_exclusao_adiar_para_avisar" as never);
+  if (error) {
+    logger.error("[exclusao] adiar vencidas sem aviso falhou", { codigo: (error as { code?: string }).code ?? null });
+    return null;
+  }
+  return Number(data ?? 0);
+}
+
 /** Passo 2. Quantos avisos novos entraram na fila. */
 export async function enfileirarAvisosDevidos(
   admin: SupabaseClient,
@@ -118,7 +133,8 @@ export async function organizacoesVencidas(admin: SupabaseClient, agora: Date, l
   const { data, error } = await admin
     .from("org_exclusoes_programadas" as never)
     .select(COLUNAS)
-    .eq("estado", "programada")
+    // `executando` (migration 0964) é a exclusão que começou e não terminou (o Storage falhou): retoma-se.
+    .in("estado", ["programada", "executando"])
     .lte("excluir_em", agora.toISOString())
     .order("excluir_em", { ascending: true })
     .limit(limite);
@@ -141,7 +157,10 @@ export async function excluirOrganizacao(
   opcoes: { forcar?: boolean } = {},
 ): Promise<ResultadoDaExclusao> {
   const forcar = opcoes.forcar === true;
-  const { data: veredito, error: erroGuarda } = await admin.rpc("fn_exclusao_pode_executar" as never, {
+  // O BANCO decide primeiro (migration 0964): `fn_exclusao_iniciar` trava o contrato, reconfere a guarda e marca a
+  // programação como `executando`. Só depois disso se toca no Storage e nas conexões (sem volta), e um pagamento que
+  // chegue agora não consegue reativar o contrato (o trigger de billing_contracts recusa).
+  const { data: veredito, error: erroGuarda } = await admin.rpc("fn_exclusao_iniciar" as never, {
     p_org: organizationId,
     p_forcar: forcar,
   } as never);
@@ -221,6 +240,7 @@ export interface ResumoDaRodada {
   programadas: number;
   atualizadas: number;
   canceladasPorReativacao: number;
+  adiadasParaAvisar: number;
   avisosEnfileirados: number;
   vencidas: number;
   excluidas: number;
@@ -244,6 +264,7 @@ export async function rodarExclusaoDeDados(admin: SupabaseClient, opcoes: Opcoes
     programadas: 0,
     atualizadas: 0,
     canceladasPorReativacao: 0,
+    adiadasParaAvisar: 0,
     avisosEnfileirados: 0,
     vencidas: 0,
     excluidas: 0,
@@ -257,6 +278,11 @@ export async function rodarExclusaoDeDados(admin: SupabaseClient, opcoes: Opcoes
     resumo.programadas = sinc.programadas;
     resumo.atualizadas = sinc.atualizadas;
     resumo.canceladasPorReativacao = sinc.canceladas_por_reativacao;
+  }
+
+  // Vencida sem o aviso de D-7: espera 7 dias e é avisada nesta mesma rodada (nunca se apaga sem aviso).
+  if (!resumo.sincronizacaoFalhou) {
+    resumo.adiadasParaAvisar = (await adiarVencidasSemAviso(admin)) ?? 0;
   }
 
   // Sem a sincronização de HOJE as linhas podem estar velhas (um cliente que reativou ainda aparece como

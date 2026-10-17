@@ -265,7 +265,13 @@ export async function POST(req: NextRequest): Promise<Response> {
       consent: {},
     };
     if (contato.cpf) {
-      insertRow.cpf_hash = hashCpf(contato.cpf as string);
+      const hash = hashCpf(contato.cpf as string);
+      if (!hash) {
+        // Sem a chave do servidor o CPF não é gravado (falha fechada): a linha vai para os erros.
+        errors.push({ linha, motivo: t("CPF indisponível neste servidor") });
+        continue;
+      }
+      insertRow.cpf_hash = hash;
       // LGPD: além do hash (dedupe), grava a versão cifrada — igual ao create
       // unitário, senão o contato importado nasce sem CPF recuperável.
       const enc = await encryptCpfSql(supabase, contato.cpf as string);

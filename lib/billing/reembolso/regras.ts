@@ -28,11 +28,26 @@ export interface PagamentoReembolsavel {
   ambiente: "sandbox" | "producao" | null;
 }
 
-/** O pagamento tem no máximo 7 dias? Mesma conta do banco: `agora - paga_em <= 7 dias`. */
+const FUSO = "America/Sao_Paulo";
+
+/** O dia civil de São Paulo daquele instante, como número de dias (só a diferença entre dois importa). */
+function diaCivilDeSaoPaulo(instante: Date): number {
+  const [a, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: FUSO, year: "numeric", month: "2-digit", day: "2-digit" })
+    .format(instante)
+    .split("-")
+    .map(Number) as [number, number, number];
+  return Math.round(Date.UTC(a, m - 1, d) / MS_POR_DIA);
+}
+
+/**
+ * O pagamento está dentro da garantia? A janela é de 7 DIAS CIVIS de São Paulo, não de 168 horas: pago às 23h do
+ * dia 1, vale até o fim do dia 8. Mesma conta do banco (migration 0963):
+ * `(hoje em SP)::date - (paid_at em SP)::date <= 7`.
+ */
 export function dentroDaGarantia(paidAt: string, agora: Date): boolean {
   const pago = Date.parse(paidAt);
   if (Number.isNaN(pago)) return false;
-  return agora.getTime() - pago <= PRAZO_DA_GARANTIA_EM_DIAS * MS_POR_DIA;
+  return diaCivilDeSaoPaulo(agora) - diaCivilDeSaoPaulo(new Date(pago)) <= PRAZO_DA_GARANTIA_EM_DIAS;
 }
 
 /** A assinatura foi cancelada (o cancelamento foi confirmado): `cancel_at_period_end` ligado ou contrato cancelado. */

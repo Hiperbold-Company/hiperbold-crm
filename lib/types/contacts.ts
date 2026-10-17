@@ -10,7 +10,10 @@ export interface Contact {
   email: string | null;
   email_normalized: string | null;
   phone_number: string | null;
-  cpf_hash: string | null;
+  /** Só existe dentro do servidor: a API não devolve o hash (veja `cpf_available`). */
+  cpf_hash?: string | null;
+  /** A API diz só SE há CPF cadastrado, nunca o hash. */
+  cpf_available?: boolean;
   birthdate: string | null;
   is_blocked: boolean;
   blocked_reason: string | null;

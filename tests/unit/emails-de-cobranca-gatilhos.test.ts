@@ -265,6 +265,26 @@ describe("pagamento confirmado: COB-02 plano confirmado e COB-03 recibo", () => 
     expect(m.text).toContain("Ver meu plano");
   });
 
+  it("primeiraCompra: pacote de tokens pago antes NÃO tira a primeira assinatura de 'primeira compra'", async () => {
+    const banco = mundo();
+    // só o pedido desta assinatura e um pacote de tokens estão pagos
+    for (const o of banco.tabelas.billing_orders!) if (o.id !== "ord-1" && o.id !== "ord-pacote") o.status = "criado";
+    const c = cenario(banco);
+    await c.avisos.aoAplicar(aviso());
+    expect(c.por("COB-02")!.dados).toMatchObject({ primeiraCompra: true });
+  });
+
+  it("primeiraCompra: false quando a assinatura anterior foi paga e estornada (quem reassina não é cliente novo)", async () => {
+    const banco = mundo();
+    for (const o of banco.tabelas.billing_orders!) {
+      if (o.id === "ord-pix") o.status = "estornado";
+      else if (o.id !== "ord-1") o.status = "criado";
+    }
+    const c = cenario(banco);
+    await c.avisos.aoAplicar(aviso());
+    expect(c.por("COB-02")!.dados).toMatchObject({ primeiraCompra: false });
+  });
+
   it("primeiraCompra: pedido pago de OUTRA organização não conta", async () => {
     const banco = mundo();
     for (const o of banco.tabelas.billing_orders!) if (o.id !== "ord-1") o.organization_id = "outra-org";

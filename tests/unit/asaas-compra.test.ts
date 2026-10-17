@@ -12,8 +12,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   cancelarAssinaturaDoCliente,
+  cancelarPedidoAbertoDoCliente,
   iniciarCompra,
   MENSAGEM_AGUARDE,
+  MENSAGEM_GENERICA,
+  MENSAGEM_JA_CANCELADA,
+  MENSAGEM_PAGAMENTO_EM_CONFIRMACAO,
+  MENSAGEM_PEDIDO_EM_PROCESSAMENTO,
   MENSAGEM_DOCUMENTO_INVALIDO,
   MENSAGEM_SEM_ASSINATURA_ASAAS,
   MENSAGEM_TERMOS_NAO_ACEITOS,
@@ -243,6 +248,7 @@ function dbFalso(pedidoInicial: PedidoLinha, opts: { vinculo?: string | null } =
       data: { asaasSubscriptionId: null, asaasAssinaturaEncerradaEm: null, currentPeriodEnd: null },
       error: null,
     })),
+    cancelarNoFimDoPeriodo: vi.fn(async () => ({ data: { cancelAtPeriodEnd: true }, error: null })),
     marcarAssinaturaEncerrada: vi.fn(async () => ({
       data: { jaRegistrado: false, asaasAssinaturaEncerradaEm: "2026-09-24T00:00:00Z" },
       error: null,
@@ -267,6 +273,7 @@ function dbStubVazio(): DbCompra {
     registrarCobranca: naoDeveriaSerChamado("registrarCobranca") as DbCompra["registrarCobranca"],
     marcarPedido: naoDeveriaSerChamado("marcarPedido") as DbCompra["marcarPedido"],
     lerContrato: naoDeveriaSerChamado("lerContrato") as DbCompra["lerContrato"],
+    cancelarNoFimDoPeriodo: naoDeveriaSerChamado("cancelarNoFimDoPeriodo") as DbCompra["cancelarNoFimDoPeriodo"],
     marcarAssinaturaEncerrada: naoDeveriaSerChamado("marcarAssinaturaEncerrada") as DbCompra["marcarAssinaturaEncerrada"],
     lerParcelamentoDoPlano: naoDeveriaSerChamado("lerParcelamentoDoPlano") as DbCompra["lerParcelamentoDoPlano"],
     registrarParcelamento: naoDeveriaSerChamado("registrarParcelamento") as DbCompra["registrarParcelamento"],
@@ -1364,5 +1371,179 @@ describe("cancelarAssinaturaDoCliente: aviso COB-07 (cancelamento confirmado)", 
 
     expect(resultado).toEqual({ tipo: "ok", cancelAtPeriodEnd: false });
     expect(avisoDeCancelamento).toHaveBeenCalledWith({ organizationId: "org-1", asaasSubscriptionId: "sub_agendada123" });
+  });
+});
+
+describe("cancelarAssinaturaDoCliente: contrato pago SEM assinatura viva (Pix, parcelado) cancela no fim do período", () => {
+  const AGORA = new Date("2026-10-17T12:00:00Z");
+  function cenario(contrato: Record<string, unknown>) {
+    const cancelarNoFimDoPeriodo = vi.fn(async () => ({ data: { cancelAtPeriodEnd: true }, error: null }));
+    const db: DbCompra = {
+      ...dbStubVazio(),
+      lerContrato: vi.fn(async () => ({
+        data: { asaasSubscriptionId: null, asaasAssinaturaEncerradaEm: null, currentPeriodEnd: "2026-11-15T03:00:00Z", ...contrato },
+        error: null,
+      })),
+      buscarPedidoAbertoPorTipo: vi.fn(async () => ({ data: null, error: null })),
+      cancelarNoFimDoPeriodo: cancelarNoFimDoPeriodo as DbCompra["cancelarNoFimDoPeriodo"],
+    };
+    const asaas = asaasFalso();
+    return { db, asaas, cancelarNoFimDoPeriodo, ...montarDeps(db, asaas, () => AGORA) };
+  }
+
+  it("contrato ativo com período a frente: liga cancel_at_period_end SEM chamar o Asaas (era erro 'sem assinatura')", async () => {
+    const c = cenario({ status: "ativa", cancelAtPeriodEnd: false });
+    const r = await cancelarAssinaturaDoCliente(c.deps, "org-1", "actor-1");
+    expect(r).toEqual({ tipo: "ok", cancelAtPeriodEnd: true });
+    expect(c.cancelarNoFimDoPeriodo).toHaveBeenCalledWith("org-1", "actor-1");
+    expect(c.asaas.removerAssinatura).not.toHaveBeenCalled();
+  });
+
+  it("já cancelado: frase própria, sem gravar de novo", async () => {
+    const c = cenario({ status: "ativa", cancelAtPeriodEnd: true });
+    expect(await cancelarAssinaturaDoCliente(c.deps, "org-1", "actor-1")).toEqual({ tipo: "erro", mensagem: MENSAGEM_JA_CANCELADA });
+    expect(c.cancelarNoFimDoPeriodo).not.toHaveBeenCalled();
+  });
+
+  it("sem período pago a frente, ou contrato que não está ativo, continua recusando", async () => {
+    for (const contrato of [
+      { status: "ativa", cancelAtPeriodEnd: false, currentPeriodEnd: "2026-10-01T03:00:00Z" },
+      { status: "ativa", cancelAtPeriodEnd: false, currentPeriodEnd: null },
+      { status: "suspensa", cancelAtPeriodEnd: false },
+      { status: "avaliacao", cancelAtPeriodEnd: false },
+    ]) {
+      const c = cenario(contrato);
+      expect(await cancelarAssinaturaDoCliente(c.deps, "org-1", "actor-1")).toEqual({ tipo: "erro", mensagem: MENSAGEM_SEM_ASSINATURA_ASAAS });
+      expect(c.cancelarNoFimDoPeriodo).not.toHaveBeenCalled();
+    }
+  });
+
+  it("falha do banco ao ligar devolve erro (nunca 'ok')", async () => {
+    const c = cenario({ status: "ativa", cancelAtPeriodEnd: false });
+    c.db.cancelarNoFimDoPeriodo = vi.fn(async () => ({ data: null, error: { code: "XX000", message: "x" } })) as DbCompra["cancelarNoFimDoPeriodo"];
+    expect((await cancelarAssinaturaDoCliente(c.deps, "org-1", "actor-1")).tipo).toBe("erro");
+  });
+});
+
+describe("cancelarPedidoAbertoDoCliente: 'Trocar forma de pagamento'", () => {
+  const AGORA = new Date("2026-10-17T12:00:00Z");
+  const aberto = (extra: Partial<PedidoLinha> = {}) =>
+    pedidoBase({ status: "aguardando_pagamento", metodo: "PIX", asaasPaymentId: "pay_pix123", ...extra });
+
+  function cenario(pedido: PedidoLinha | null, asaasExtra: Partial<ClienteAsaasHttp> = {}) {
+    const marcarPedido = vi.fn(async (_o: string, id: string, status: "inconclusivo" | "falhou" | "cancelado") => ({
+      data: { pedidoId: id, statusAnterior: "aguardando_pagamento" as const, statusNovo: status },
+      error: null,
+    }));
+    const db: DbCompra = {
+      ...dbStubVazio(),
+      buscarPedidoAbertoPorTipo: vi.fn(async () => ({ data: pedido, error: null })),
+      marcarPedido: marcarPedido as DbCompra["marcarPedido"],
+    };
+    const asaas = asaasFalso({
+      buscarCobrancaPorReferencia: vi.fn(async () => cobrancaFake({ id: "pay_pix123", status: "PENDING", billingType: "PIX" })),
+      listarCobrancasDoParcelamento: vi.fn(async () => []),
+      ...asaasExtra,
+    });
+    return { db, asaas, marcarPedido, ...montarDeps(db, asaas, () => AGORA) };
+  }
+
+  it("Pix pendente: remove a cobrança no Asaas e SÓ DEPOIS marca o pedido cancelado", async () => {
+    const ordem: string[] = [];
+    const c = cenario(aberto(), {
+      removerCobranca: vi.fn(async () => {
+        ordem.push("asaas_delete");
+      }),
+    });
+    c.marcarPedido.mockImplementationOnce(async (_o, id, status) => {
+      ordem.push("marcar");
+      return { data: { pedidoId: id, statusAnterior: "aguardando_pagamento" as const, statusNovo: status }, error: null };
+    });
+    expect(await cancelarPedidoAbertoDoCliente(c.deps, "org-1")).toEqual({ tipo: "ok", cancelou: true });
+    expect(c.asaas.removerCobranca).toHaveBeenCalledWith("pay_pix123");
+    expect(ordem).toEqual(["asaas_delete", "marcar"]);
+  });
+
+  it("cartão com assinatura: remove a assinatura (achada pela referência) e cancela o pedido", async () => {
+    const c = cenario(aberto({ metodo: "CREDIT_CARD", asaasPaymentId: null, asaasSubscriptionId: "sub_fake123" }), {
+      buscarAssinaturaPorReferencia: vi.fn(async () => assinaturaFake()),
+      buscarCobrancaPorReferencia: vi.fn(async () => null),
+      listarCobrancasDaAssinatura: vi.fn(async () => [cobrancaFake({ status: "PENDING" })]),
+    });
+    expect(await cancelarPedidoAbertoDoCliente(c.deps, "org-1")).toEqual({ tipo: "ok", cancelou: true });
+    expect(c.asaas.removerAssinatura).toHaveBeenCalledWith("sub_fake123");
+    expect(c.marcarPedido).toHaveBeenCalledWith("org-1", "pedido-1", "cancelado", "trocar_forma_de_pagamento");
+  });
+
+  it("parcelado: remove o parcelamento inteiro, não só a parcela", async () => {
+    const c = cenario(aberto({ metodo: "CREDIT_CARD", asaasPaymentId: "pay_parc1" }), {
+      buscarCobrancaPorReferencia: vi.fn(async () => cobrancaFake({ id: "pay_parc1", installment: "7315c152-a55f-4727-aa6c-d48249df28d4" })),
+      listarCobrancasDoParcelamento: vi.fn(async () => [cobrancaFake({ id: "pay_parc1", status: "PENDING" })]),
+    });
+    expect(await cancelarPedidoAbertoDoCliente(c.deps, "org-1")).toEqual({ tipo: "ok", cancelou: true });
+    expect(c.asaas.removerParcelamento).toHaveBeenCalledWith("7315c152-a55f-4727-aa6c-d48249df28d4");
+    expect(c.asaas.removerCobranca).not.toHaveBeenCalled();
+  });
+
+  it("Asaas diz que JÁ PAGOU: não remove nada, não cancela, devolve 'pagamento em confirmação'", async () => {
+    for (const status of ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"]) {
+      const c = cenario(aberto(), {
+        buscarCobrancaPorReferencia: vi.fn(async () => cobrancaFake({ id: "pay_pix123", status })),
+      });
+      expect(await cancelarPedidoAbertoDoCliente(c.deps, "org-1")).toEqual({ tipo: "erro", mensagem: MENSAGEM_PAGAMENTO_EM_CONFIRMACAO });
+      expect(c.asaas.removerCobranca).not.toHaveBeenCalled();
+      expect(c.asaas.removerAssinatura).not.toHaveBeenCalled();
+      expect(c.marcarPedido).not.toHaveBeenCalled();
+    }
+  });
+
+  it("o pagamento entra NO MEIO (a remoção falha e a releitura mostra pago): 'em confirmação', pedido intocado", async () => {
+    let leituras = 0;
+    const c = cenario(aberto(), {
+      buscarCobrancaPorReferencia: vi.fn(async () => {
+        leituras += 1;
+        return cobrancaFake({ id: "pay_pix123", status: leituras === 1 ? "PENDING" : "RECEIVED" });
+      }),
+      removerCobranca: vi.fn(async () => {
+        throw erroValidacao(400, ["invalid_action"]);
+      }),
+    });
+    expect(await cancelarPedidoAbertoDoCliente(c.deps, "org-1")).toEqual({ tipo: "erro", mensagem: MENSAGEM_PAGAMENTO_EM_CONFIRMACAO });
+    expect(c.marcarPedido).not.toHaveBeenCalled();
+  });
+
+  it("remoção que falha por outro motivo: erro genérico e o pedido NÃO é cancelado", async () => {
+    const c = cenario(aberto(), {
+      removerCobranca: vi.fn(async () => {
+        throw erroIndisponivel(500, false);
+      }),
+    });
+    expect(await cancelarPedidoAbertoDoCliente(c.deps, "org-1")).toEqual({ tipo: "erro", mensagem: MENSAGEM_GENERICA });
+    expect(c.marcarPedido).not.toHaveBeenCalled();
+  });
+
+  it("busca no Asaas que falha recusa o cancelamento inteiro (cobrança fantasma)", async () => {
+    const c = cenario(aberto(), {
+      buscarCobrancaPorReferencia: vi.fn(async () => {
+        throw erroIndisponivel(500, false);
+      }),
+    });
+    expect((await cancelarPedidoAbertoDoCliente(c.deps, "org-1")).tipo).toBe("erro");
+    expect(c.marcarPedido).not.toHaveBeenCalled();
+    expect(c.asaas.removerCobranca).not.toHaveBeenCalled();
+  });
+
+  it("sem pedido aberto é idempotente: ok sem tocar em nada", async () => {
+    const c = cenario(null);
+    expect(await cancelarPedidoAbertoDoCliente(c.deps, "org-1")).toEqual({ tipo: "ok", cancelou: false });
+    expect(c.marcarPedido).not.toHaveBeenCalled();
+  });
+
+  it("pedido processando há poucos minutos (POST em voo) não é cancelado; parado há mais de 15 min é", async () => {
+    const recente = cenario(aberto({ status: "processando", atualizadoEm: "2026-10-17T11:55:00Z" }));
+    expect(await cancelarPedidoAbertoDoCliente(recente.deps, "org-1")).toEqual({ tipo: "erro", mensagem: MENSAGEM_PEDIDO_EM_PROCESSAMENTO });
+    expect(recente.marcarPedido).not.toHaveBeenCalled();
+    const antigo = cenario(aberto({ status: "processando", atualizadoEm: "2026-10-17T11:00:00Z" }));
+    expect(await cancelarPedidoAbertoDoCliente(antigo.deps, "org-1")).toEqual({ tipo: "ok", cancelou: true });
   });
 });

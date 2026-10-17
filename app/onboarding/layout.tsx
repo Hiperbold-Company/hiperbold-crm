@@ -4,6 +4,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { loadOnboardingState } from "@/app/actions/onboarding/_shared";
 import { Stepper } from "./_components/Stepper";
 import { OutrasOrganizacoes } from "./_components/OutrasOrganizacoes";
+import { SairDoOnboarding } from "./_components/SairDoOnboarding";
 import { SkipToEnd } from "./_components/SkipToEnd";
 import { SimboloDoProduto } from "@/components/branding/MarcaDoProduto";
 import { branding, marcaEhADoProduto } from "@/lib/branding";
@@ -89,6 +90,7 @@ export default async function OnboardingLayout({ children }: { children: React.R
                   .map((o) => ({ id: o.organization_id, nome: o.organization_name }))}
               />
               {isDev ? <SkipToEnd /> : null}
+              <SairDoOnboarding />
             </div>
           </div>
           {/* Caminho "paga primeiro": a única etapa é o pagamento, e um indicador de uma etapa só não diz nada. */}

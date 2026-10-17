@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
+import { formatarDataDoAsaas } from "@/lib/billing/asaas/data-do-asaas";
 import { copyToClipboard } from "@/lib/clipboard";
 
 import { usePollDoPedido } from "../_use-poll-pedido";
@@ -47,6 +48,8 @@ export function PixPendente({
   const [copiado, setCopiado] = useState(false);
   const estado = usePollDoPedido(pedidoId, "aguardando_pagamento");
   const pago = estado.status === "pago";
+  // O Asaas manda "AAAA-MM-DD HH:mm:ss" sem fuso: lido à mão como horário de São Paulo, nunca pelo navegador.
+  const expiraEm = formatarDataDoAsaas(qr.expirationDate, tagDoIdioma);
 
   // No wizard o passo termina sozinho quando o pagamento é confirmado.
   useEffect(() => {
@@ -108,18 +111,25 @@ export function PixPendente({
         </div>
       </div>
 
-      {qr.expirationDate && (
-        <p className="text-xs text-muted-foreground">
-          {t("Expira em")} {new Date(qr.expirationDate).toLocaleString(tagDoIdioma)}
+      {expiraEm && (
+        <p className="text-xs text-muted-foreground" data-testid="pix-expira-em">
+          {t("Expira em")} {expiraEm} ({t("horário de Brasília")})
         </p>
       )}
 
       {estado.parou ? (
         <p className="text-sm text-muted-foreground">
           {t("Ainda não recebemos a confirmação. Você pode acompanhar este pedido depois.")}{" "}
-          <Link href={`/app/settings/plano/pedido/${pedidoId}`} className="underline">
-            {t("Ver pedido")}
-          </Link>
+          {depoisDePago ? (
+            // No wizard o cliente ainda não tem acesso a /app: a página do passo mostra o pedido aberto.
+            <button type="button" className="underline" data-testid="pix-atualizar-pedido" onClick={() => router.refresh()}>
+              {t("Atualizar")}
+            </button>
+          ) : (
+            <Link href={`/app/settings/plano/pedido/${pedidoId}`} className="underline">
+              {t("Ver pedido")}
+            </Link>
+          )}
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">{t("Aguardando a confirmação do pagamento.")}</p>

@@ -62,9 +62,19 @@ export function podeCancelarAssinatura(args: {
     ambiente: "sandbox" | "producao";
     asaasSubscriptionId: string | null;
   }>;
+  /**
+   * O contrato da organização. Quem paga sem assinatura no Asaas (Pix, parcelado no cartão) cancela no fim do
+   * período pago: o botão aparece com contrato `ativa`, ainda não cancelado e com período pago a frente.
+   */
+  contrato?: { status: string; cancelAtPeriodEnd: boolean; currentPeriodEnd: string | null } | null;
+  agora?: Date;
 }): boolean {
   if (!args.habilitado || args.erroConfiguracao !== null) return false;
   if (args.assinaturaDoContrato !== null && args.assinaturaDoContrato.encerradaEm === null) return true;
+  if (args.contrato && args.contrato.status === "ativa" && !args.contrato.cancelAtPeriodEnd) {
+    const fim = args.contrato.currentPeriodEnd ? Date.parse(args.contrato.currentPeriodEnd) : Number.NaN;
+    if (Number.isFinite(fim) && fim > (args.agora ?? new Date()).getTime()) return true;
+  }
   return args.pedidos.some(
     (p) =>
       p.tipo === "assinatura" &&

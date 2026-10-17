@@ -33,6 +33,7 @@ vi.mock("@/lib/supabase/admin", () => ({
     from: (tabela: string) => {
       const q: Record<string, unknown> = {
         select: () => q,
+        eq: () => q,
         order: () => q,
         limit: async () => ({ data: h.tabelas[tabela] ?? [], error: null }),
         in: async () => ({ data: h.tabelas[tabela] ?? [], error: null }),
@@ -118,6 +119,35 @@ describe("listarPedidosDeReembolso", () => {
     expect(novo).toMatchObject({ empresa: "Empresa A", amountCents: 34900, dentro7Dias: true, motivo: "preco", detalhe: "obrigado" });
     expect(novo.linkDoAsaas).toBe("https://www.asaas.com/i/fatura9");
     expect(r.pedidos.find((p) => p.id === "r-velho")!.linkDoAsaas).toBe("https://www.asaas.com/i/abc123");
+  });
+});
+
+describe("listarPedidosDeReembolso: pacote de tokens mostra o consumo", () => {
+  it("pagamento de pacote traz os tokens do pacote e o consumo da carteira avulsa; assinatura não traz pacote", async () => {
+    h.tabelas.billing_refund_requests = [
+      linha("r-pacote", ORG_A, "pendente", "2026-10-15T10:00:00+00:00", { order_id: "ord-pacote" }),
+      linha("r-plano", ORG_B, "pendente", "2026-10-15T11:00:00+00:00", { order_id: "ord-plano" }),
+    ];
+    h.tabelas.organizations = [
+      { id: ORG_A, display_name: "Empresa A" },
+      { id: ORG_B, display_name: "Empresa B" },
+    ];
+    h.tabelas.billing_orders = [
+      { id: "ord-pacote", invoice_url: null, ambiente: "producao", tipo: "pacote_tokens", tokens: 500000 },
+      { id: "ord-plano", invoice_url: null, ambiente: "producao", tipo: "assinatura", tokens: null },
+    ];
+    h.tabelas.billing_token_wallets = [{ organization_id: ORG_A, creditado: "500000", consumido: "120000" }];
+
+    const { listarPedidosDeReembolso } = await acoes();
+    const r = await listarPedidosDeReembolso();
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.pedidos.find((p) => p.id === "r-pacote")!.pacote).toEqual({
+      tokensDoPacote: 500000,
+      creditadoAvulso: 500000,
+      consumidoAvulso: 120000,
+    });
+    expect(r.pedidos.find((p) => p.id === "r-plano")!.pacote).toBeNull();
   });
 });
 

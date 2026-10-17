@@ -19,6 +19,7 @@ import {
   iniciarCompra,
   MENSAGEM_AGUARDE,
   MENSAGEM_CUPOM_ASSINATURA_AGENDADA,
+  MENSAGEM_CUPOM_SEM_PAGADOR,
   MENSAGEM_GENERICA,
   MENSAGEM_OUTRA_OFERTA_ABERTA,
   MENSAGEM_TENTE_NOVAMENTE,
@@ -30,6 +31,10 @@ import {
 import type { ClienteAsaasHttp } from "@/lib/billing/asaas/cliente";
 import type { AssinaturaAsaas, CobrancaAsaas } from "@/lib/billing/asaas/contratos";
 import { erroIndisponivel, erroValidacao } from "@/lib/billing/asaas/erros";
+import { impressaoDoPagador } from "@/lib/billing/asaas/cupom";
+
+// 0955/12: sem a chave do servidor o cupom é recusado (falha fechada); o arquivo inteiro roda com ela.
+process.env.CPF_ENCRYPTION_KEY = "chave-de-teste-do-servidor";
 
 const PRECO_CHEIO = 104900;
 const DESCONTO = 10490;
@@ -55,6 +60,7 @@ const ENTRADA: EntradaIniciarCompra = {
   chave: "11111111-1111-1111-1111-111111111111",
   termosVersao: "2026-09-23",
   cupom: "PCT10",
+  pagador: { nome: "Fulano de Tal", documento: "111.444.777-35" },
 };
 
 function pedidoComCupom(overrides: Partial<PedidoLinha> = {}): PedidoLinha {
@@ -178,6 +184,7 @@ function montarBanco(
       data: { asaasSubscriptionId: null, asaasAssinaturaEncerradaEm: null, currentPeriodEnd: null },
       error: null,
     })),
+    cancelarNoFimDoPeriodo: vi.fn(),
     marcarAssinaturaEncerrada: vi.fn(async () => ({ data: { jaRegistrado: false, asaasAssinaturaEncerradaEm: "x" }, error: null })),
   };
   return { db, pedido: () => pedido };
@@ -189,7 +196,7 @@ function montarAsaas(ordem: string[], sobrescritas: Partial<ClienteAsaasHttp> = 
       throw new Error(`${nome} não deveria ser chamado neste teste`);
     });
   return {
-    buscarClientePorReferencia: vi.fn(async () => null),
+    buscarClientePorReferencia: vi.fn(async () => ({ id: "cus_fake123", cpfCnpj: "11144477735" })),
     criarCliente: nao("criarCliente"),
     atualizarCliente: nao("atualizarCliente"),
     criarAssinatura: vi.fn(async () => {
@@ -274,9 +281,7 @@ describe("cupom: o que vai ao banco", () => {
   });
 
   it("com cupom e documento, manda ao banco só a IMPRESSÃO (64 hexadecimais), nunca o documento; formatação não muda a impressão", async () => {
-    const original = process.env.CPF_ENCRYPTION_KEY;
-    process.env.CPF_ENCRYPTION_KEY = "chave-de-teste-do-servidor";
-    try {
+    {
       const mandado: Array<string | null> = [];
       for (const documento of ["111.444.777-35", "11144477735"]) {
         const ordem: string[] = [];
@@ -290,28 +295,51 @@ describe("cupom: o que vai ao banco", () => {
       }
       expect(mandado[0]).toMatch(/^[0-9a-f]{64}$/);
       expect(mandado[1]).toBe(mandado[0]);
-    } finally {
-      if (original === undefined) delete process.env.CPF_ENCRYPTION_KEY;
-      else process.env.CPF_ENCRYPTION_KEY = original;
     }
   });
 
-  it("sem cupom, ou sem documento, nenhuma impressão é mandada", async () => {
-    process.env.CPF_ENCRYPTION_KEY = "chave-de-teste-do-servidor";
+  it("sem cupom nenhuma impressão é mandada", async () => {
+    const ordem: string[] = [];
+    const { db } = montarBanco(pedidoComCupom({ descontoCents: 0, precoCheioCents: null, cupomCodigo: null, amountCents: PRECO_CHEIO }), ordem);
+    const { d } = deps(db, montarAsaas(ordem));
+    await iniciarCompra(d, { ...ENTRADA, cupom: undefined, pagador: { nome: "Fulano de Tal", documento: "111.444.777-35" } });
+    expect(vi.mocked(db.criarPedido).mock.calls[0]?.[0].pagadorImpressao).toBeNull();
+  });
+
+  it("cupom SEM documento do pagador (corpo sem pagador, primeira compra): recusa, nada é criado nem tocado no Asaas (0955/12)", async () => {
+    const ordem: string[] = [];
+    const b = montarBanco(pedidoComCupom(), ordem);
+    const asaas = montarAsaas(ordem);
+    asaas.buscarClientePorReferencia = vi.fn(async () => null);
+    b.db.buscarVinculoClienteAsaas = vi.fn(async () => ({ data: null, error: null }));
+    const r = await iniciarCompra(deps(b.db, asaas).d, { ...ENTRADA, pagador: undefined });
+    expect(r).toEqual({ tipo: "erro", mensagem: MENSAGEM_CUPOM_SEM_PAGADOR });
+    expect(b.db.criarPedido).not.toHaveBeenCalled();
+  });
+
+  it("cupom SEM a chave do servidor: recusa (falha fechada), não compra sem a regra de um cupom por documento", async () => {
+    const chave = process.env.CPF_ENCRYPTION_KEY;
+    delete process.env.CPF_ENCRYPTION_KEY;
     try {
       const ordem: string[] = [];
-      const { db } = montarBanco(pedidoComCupom({ descontoCents: 0, precoCheioCents: null, cupomCodigo: null, amountCents: PRECO_CHEIO }), ordem);
-      const { d } = deps(db, montarAsaas(ordem));
-      await iniciarCompra(d, { ...ENTRADA, cupom: undefined, pagador: { nome: "Fulano de Tal", documento: "111.444.777-35" } });
-      expect(vi.mocked(db.criarPedido).mock.calls[0]?.[0].pagadorImpressao).toBeNull();
-
-      const ordem2: string[] = [];
-      const b2 = montarBanco(pedidoComCupom(), ordem2);
-      await iniciarCompra(deps(b2.db, montarAsaas(ordem2)).d, ENTRADA);
-      expect(vi.mocked(b2.db.criarPedido).mock.calls[0]?.[0].pagadorImpressao).toBeNull();
+      const b = montarBanco(pedidoComCupom(), ordem);
+      const r = await iniciarCompra(deps(b.db, montarAsaas(ordem)).d, ENTRADA);
+      expect(r).toEqual({ tipo: "erro", mensagem: MENSAGEM_CUPOM_SEM_PAGADOR });
+      expect(b.db.criarPedido).not.toHaveBeenCalled();
     } finally {
-      delete process.env.CPF_ENCRYPTION_KEY;
+      process.env.CPF_ENCRYPTION_KEY = chave;
     }
+  });
+
+  it("o documento vem do CADASTRO do cliente no Asaas, não do corpo: outro documento no corpo não muda a impressão", async () => {
+    const ordem: string[] = [];
+    const b = montarBanco(pedidoComCupom(), ordem);
+    const asaas = montarAsaas(ordem);
+    asaas.buscarClientePorReferencia = vi.fn(async () => ({ id: "cus_fake123", cpfCnpj: "11144477735" })) as never;
+    await iniciarCompra(deps(b.db, asaas).d, { ...ENTRADA, pagador: { nome: "Outro", documento: "529.982.247-25" } });
+    const doCadastro = vi.mocked(b.db.criarPedido).mock.calls[0]?.[0].pagadorImpressao;
+    expect(doCadastro).toBe(impressaoDoPagador("111.444.777-35"));
+    expect(doCadastro).not.toBe(impressaoDoPagador("529.982.247-25"));
   });
 
   it("sem cupom, o banco recebe cupom nulo", async () => {
@@ -769,7 +797,8 @@ describe("cupom: erros do banco viram frases em pt-BR e o Asaas não é tocado",
 
       expect(r).toEqual({ tipo: "erro", mensagem: frase });
       expect(asaas.criarAssinatura).not.toHaveBeenCalled();
-      expect(asaas.buscarClientePorReferencia).not.toHaveBeenCalled();
+      // (A leitura do cadastro do cliente para a impressão do pagador é só um GET; nada é criado nem alterado.)
+      expect(asaas.criarCliente).not.toHaveBeenCalled();
       expect(db.tomarPedido).not.toHaveBeenCalled();
     });
   }

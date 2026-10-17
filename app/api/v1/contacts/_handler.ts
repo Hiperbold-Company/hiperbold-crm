@@ -83,8 +83,19 @@ function actorAuditPayload(actor: Actor): {
 // list
 // ---------------------------------------------------------------------------
 
+/**
+ * O contato como a API o devolve: SEM `cpf_hash`. O hash é só chave de busca interna (HMAC com segredo do
+ * servidor); mesmo assim não sai em resposta nenhuma, e o cliente fica com o booleano `cpf_available`.
+ */
+export type ContatoPublico = Omit<Contact, "cpf_hash"> & { cpf_available: boolean };
+
+export function semHashDeCpf<T extends { cpf_hash?: string | null }>(c: T): Omit<T, "cpf_hash"> & { cpf_available: boolean } {
+  const { cpf_hash, ...resto } = c;
+  return { ...resto, cpf_available: !!cpf_hash };
+}
+
 export interface ListContactsResult {
-  contacts: Contact[];
+  contacts: ContatoPublico[];
   cursor: string | null;
   has_more: boolean;
 }
@@ -167,7 +178,8 @@ export async function listContactsHandler(
       }
     }
     if (digits.length === 11) {
-      orParts.push(`cpf_hash.eq.${hashCpf(digits)}`);
+      const hash = hashCpf(digits);
+      if (hash) orParts.push(`cpf_hash.eq.${hash}`);
     }
     query = query.or(orParts.join(","));
   }
@@ -219,7 +231,7 @@ export async function listContactsHandler(
     throw new ApiError(500, "internal_error", undefined, ctx.requestId, convErr);
   }
 
-  return { contacts, cursor: nextCursor, has_more: hasMore };
+  return { contacts: contacts.map(semHashDeCpf) as ContatoPublico[], cursor: nextCursor, has_more: hasMore };
 }
 
 /**
@@ -277,7 +289,7 @@ export interface GetContactInput {
   decryptPurpose?: string | null;
 }
 
-export interface GetContactResult extends Contact {
+export interface GetContactResult extends Omit<Contact, "cpf_hash"> {
   cpf_available: boolean;
   cpf_decrypted: string | null;
   cpf_decrypt_denied?: boolean;
@@ -360,7 +372,7 @@ export async function getContactHandler(
   const contactWithConversa = enriched[0] ?? contact;
 
   return {
-    ...contactWithConversa,
+    ...semHashDeCpf(contactWithConversa),
     cpf_available: !!contact.cpf_hash,
     cpf_decrypted: cpfDecrypted,
     cpf_decrypt_denied: cpfDecryptDenied || undefined,
@@ -372,7 +384,7 @@ export async function getContactHandler(
 // ---------------------------------------------------------------------------
 
 export interface CreateContactResult {
-  contact: Contact;
+  contact: ContatoPublico;
   action: "created";
 }
 
@@ -398,7 +410,10 @@ export async function createContactHandler(
   };
 
   if (input.cpf) {
-    insertRow.cpf_hash = hashCpf(input.cpf);
+    const hash = hashCpf(input.cpf);
+    // Sem a chave do servidor não há como gravar o CPF com segurança: recusa, nunca grava em claro nem com hash fraco.
+    if (!hash) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
+    insertRow.cpf_hash = hash;
     const enc = await encryptCpfSql(supabase, input.cpf);
     if (enc) insertRow.cpf_encrypted = enc;
   }
@@ -478,7 +493,7 @@ export async function createContactHandler(
     metadata: { ...a.metadataActor, source: contact.source },
   });
 
-  return { contact, action: "created" };
+  return { contact: semHashDeCpf(contact) as ContatoPublico, action: "created" };
 }
 
 // ---------------------------------------------------------------------------
@@ -490,7 +505,7 @@ export async function patchContactHandler(
   ctx: HandlerCtx,
   contactId: string,
   input: ContactPatchInterno,
-): Promise<Contact> {
+): Promise<ContatoPublico> {
   const { data: existing, error: selErr } = await supabase
     .from("contacts")
     // ⚠️ Os campos sensíveis entram aqui para existir o **`from`** da regra L-06
@@ -573,7 +588,9 @@ export async function patchContactHandler(
     );
   }
   if (input.cpf !== undefined) {
-    patch.cpf_hash = hashCpf(input.cpf);
+    const hash = hashCpf(input.cpf);
+    if (!hash) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
+    patch.cpf_hash = hash;
     const enc = await encryptCpfSql(supabase, input.cpf);
     if (enc) patch.cpf_encrypted = enc;
   }
@@ -686,7 +703,7 @@ export async function patchContactHandler(
     metadata: { ...a.metadataActor, fields, ...sensiveis },
   });
 
-  return contact;
+  return semHashDeCpf(contact) as ContatoPublico;
 }
 
 // ---------------------------------------------------------------------------

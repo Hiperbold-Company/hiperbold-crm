@@ -8,6 +8,7 @@ import { logger } from "@/lib/logger";
 import { pedidoDaAssinatura } from "@/lib/onboarding/pedido-da-assinatura";
 import { podeEscolherOutraForma } from "@/lib/onboarding/situacao-do-pedido";
 import { planoPreSelecionado } from "@/lib/auth/plano-escolhido";
+import { adminsDaOrganizacao } from "@/lib/email/conta-e-cobranca/enviar";
 import { precisaPagarAntesDeConfigurar } from "@/lib/onboarding/precisa-pagar";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -57,6 +58,10 @@ export default async function PlanoPage({
         <p className="text-sm text-muted-foreground">
           {t("Peça a um administrador desta organização para escolher o plano e concluir o pagamento.")}
         </p>
+        <ContatoDosAdministradores
+          administradores={await administradoresParaContato(admin, activeOrg.orgId)}
+          t={t}
+        />
       </div>
     );
   }
@@ -128,6 +133,54 @@ export default async function PlanoPage({
           depoisDePago={{ href: "/onboarding" }}
         />
       )}
+    </div>
+  );
+}
+
+type Contato = { nome: string | null; email: string };
+
+/** Até 3 administradores com e-mail confirmado, para quem não é admin saber a quem pedir. Nunca lança. */
+async function administradoresParaContato(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+): Promise<Contato[]> {
+  try {
+    const lista = await adminsDaOrganizacao(organizationId, admin);
+    return lista.slice(0, 3).map((a) => ({ nome: a.nome, email: a.email }));
+  } catch (err) {
+    logger.error("alarme_onboarding_plano_contato_dos_admins", {
+      organization_id: organizationId,
+      erro: (err instanceof Error ? err.message : String(err)).slice(0, 300),
+    });
+    return [];
+  }
+}
+
+/**
+ * Quem foi convidado e não é administrador não escolhe o plano: sem isto a tela só dizia "peça a um
+ * administrador" e não dizia a QUEM. O botão "Sair" mora no cabeçalho do wizard (`SairDoOnboarding`).
+ */
+function ContatoDosAdministradores({
+  administradores,
+  t,
+}: {
+  administradores: Contato[];
+  t: (texto: string) => string;
+}) {
+  if (administradores.length === 0) return null;
+  return (
+    <div data-testid="plano-contato-dos-administradores" className="space-y-1 rounded-md border p-4 text-sm">
+      <p className="font-medium">{administradores.length === 1 ? t("Administrador") : t("Administradores")}</p>
+      <ul className="space-y-0.5 text-muted-foreground">
+        {administradores.map((a) => (
+          <li key={a.email}>
+            {a.nome ? `${a.nome}: ` : ""}
+            <a href={`mailto:${a.email}`} className="underline">
+              {a.email}
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

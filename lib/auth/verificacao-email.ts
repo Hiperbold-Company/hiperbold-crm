@@ -130,7 +130,7 @@ export async function gravarNoAppMetadata(
 }
 
 export type EmissaoDoPedido =
-  | { ok: true; token: string; email: string | null; expiraEm: string }
+  | { ok: true; token: string; email: string | null; expiraEm: string; hash: string }
   | { ok: false; motivo: "usuario_nao_encontrado" | "gravacao_falhou" | "ja_verificado" | "muito_cedo" };
 
 /**
@@ -151,6 +151,13 @@ export async function emitirPedido(p: {
    * tem pedido e conta como verificada, ganharia um e passaria a ver a faixa por ter chamado o "Reenviar".
    */
   somenteSePendente?: boolean;
+  /**
+   * Confere tudo (carimbo, pedido existente, intervalo mínimo) e gera o token, MAS NÃO GRAVA o pedido: quem
+   * chama grava com `gravarPedido` só depois de o e-mail sair. É o reenvio: gravar antes trocava o hash do
+   * link que já está na caixa da pessoa por um de e-mail que talvez nunca saia, e um envio que falha
+   * deixava a pessoa sem link nenhum válido.
+   */
+  semGravar?: boolean;
 }): Promise<EmissaoDoPedido> {
   const agora = p.agora ?? new Date();
   const { token, hash } = gerarToken(p.userId);
@@ -177,13 +184,41 @@ export async function emitirPedido(p: {
       estado.recusa = "muito_cedo";
       return null;
     }
+    if (p.semGravar) return null;
     const pedido: PedidoDeVerificacao = { hash, expira_em: expiraEm, enviado_em: agora.toISOString() };
     return { ...atual, ...(p.junto ?? {}), email_verificacao: pedido };
   });
 
   if (!r.ok) return r;
   if (estado.recusa) return { ok: false, motivo: estado.recusa };
-  return { ok: true, token, email: r.email, expiraEm };
+  return { ok: true, token, email: r.email, expiraEm, hash };
+}
+
+/**
+ * Grava o pedido que `emitirPedido({ semGravar: true })` preparou, DEPOIS de o e-mail ter saído. Troca o pedido
+ * anterior (o link antigo deixa de valer). Confere de novo só o carimbo: a pessoa pode ter aberto o link
+ * antigo enquanto o e-mail novo ia embora, e então não há mais o que pedir.
+ */
+export async function gravarPedido(p: {
+  admin: AdminMinimo;
+  userId: string;
+  hash: string;
+  expiraEm: string;
+  agora?: Date;
+}): Promise<{ ok: true } | { ok: false; motivo: "usuario_nao_encontrado" | "gravacao_falhou" | "ja_verificado" }> {
+  const agora = p.agora ?? new Date();
+  const estado: { jaVerificado: boolean } = { jaVerificado: false };
+  const r = await alterarAppMetadata(p.admin, p.userId, (atual) => {
+    if (typeof atual.email_verificado_em === "string" && atual.email_verificado_em !== "") {
+      estado.jaVerificado = true;
+      return null;
+    }
+    const pedido: PedidoDeVerificacao = { hash: p.hash, expira_em: p.expiraEm, enviado_em: agora.toISOString() };
+    return { ...atual, email_verificacao: pedido };
+  });
+  if (!r.ok) return r;
+  if (estado.jaVerificado) return { ok: false, motivo: "ja_verificado" };
+  return { ok: true };
 }
 
 export type ConsumoDoToken =

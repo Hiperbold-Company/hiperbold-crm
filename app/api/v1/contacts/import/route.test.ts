@@ -11,6 +11,7 @@ import { PERFIS_DO_PAIS } from "@/lib/legal/perfil-do-pais";
 import { createClient } from "@/lib/supabase/server";
 import { POST } from "./route";
 
+process.env.CPF_ENCRYPTION_KEY = "chave-de-teste-do-cpf";
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn() }));
