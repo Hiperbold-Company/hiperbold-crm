@@ -26,7 +26,8 @@ import { ApiError } from "@/lib/api/types";
 import { recusaDoPlano } from "@/lib/billing/planos/recusa-do-plano";
 import {
   atorDoAudit,
-  cabeConviteNaHora,
+  gastarVagaDeConvite,
+  haVagaDeConviteNaHora,
   autorizarAdministracao,
   nomeDaOrganizacao,
   nomeDeQuemAgiu,
@@ -113,7 +114,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const email = inv.email.trim().toLowerCase();
 
     // Teto por organização (qualquer porta): cada e-mail novo gasta uma vaga da hora.
-    if (!memberEmails.has(email) && !(await cabeConviteNaHora(activeOrg.orgId))) {
+    if (!memberEmails.has(email) && !(await haVagaDeConviteNaHora(activeOrg.orgId))) {
       failed.push({ email, reason: "rate_limited" });
       continue;
     }
@@ -151,6 +152,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         }
         throw err;
       }
+      await gastarVagaDeConvite(activeOrg.orgId);
       const { convite, accept_url, email_dispatched, email_error } = emitido;
       sent.push({
         email,
@@ -161,6 +163,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         accept_url,
       });
     } else {
+      await gastarVagaDeConvite(activeOrg.orgId);
       sent.push(
         await issueInvite({
           email,

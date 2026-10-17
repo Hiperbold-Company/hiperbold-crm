@@ -640,11 +640,11 @@ describe("POST /api/v1/webhooks/in/[token] — Respondi (payload aninhado, achad
     expect(activityRows[0]!.actor_kind).toBe("system");
   });
 
-  it("caso 3b — quem JÁ era contato e agora recusa também fica carimbado (o ramo que o INSERT não alcança)", async () => {
-    // Primeiro envio: concede. Segundo envio, MESMO telefone: recusa.
-    // O bloco de consentimento do INSERT só roda pra contato novo — sem a
-    // reconciliação do contato existente, a recusa do segundo envio se perderia
-    // e a pessoa continuaria marcada como tendo concedido.
+  it("caso 3b — fonte PÚBLICA (sem segredo): contato que já existia NÃO é reescrito pelo envio seguinte", async () => {
+    // Primeiro envio: concede (contato novo, recebe o que o formulário disse). Segundo envio,
+    // MESMO telefone, sem prova de origem: a recusa dele NÃO sobrescreve o contato. A fonte sem
+    // segredo é falável por qualquer um que conheça o token, e o consentimento de quem já existe
+    // só muda por origem provada (caso 3b-provada). Auditoria de 17/10/2026.
     const telefone = "55 15988880031";
     const email = "maria.exemplo+0031@example.com";
 
@@ -678,8 +678,47 @@ describe("POST /api/v1/webhooks/in/[token] — Respondi (payload aninhado, achad
     );
     const depois = rows(`select consent from public.contacts where id = '${contactId}'`)[0]!
       .consent as { marketing: { granted_at: string | null; declined_at?: string | null } };
+    expect(depois.marketing.declined_at ?? null).toBeNull();
+    expect(depois.marketing.granted_at).not.toBeNull();
+  });
+
+  it("caso 3b-provada — fonte com segredo e assinatura: quem já era contato e agora recusa fica carimbado e auditado", async () => {
+    const telefone = "55 15988880099";
+    const email = "maria.exemplo+0099@example.com";
+    const assinado = (corpo: Record<string, unknown>) => {
+      const raw = JSON.stringify(corpo);
+      return new NextRequest(`http://localhost/api/v1/webhooks/in/${TOKEN_SECRET}`, {
+        method: "POST",
+        body: raw,
+        headers: {
+          "content-type": "application/json",
+          "x-hipercrm-signature": createHmac("sha256", SECRET).update(raw).digest("hex"),
+        },
+      });
+    };
+    const r1 = await POST(assinado(respondiPayload("resp-int-decl-0099-a", telefone, email)), reqCtx(TOKEN_SECRET));
+    expect(r1.status).toBe(200);
+    const lead1 = ((await r1.json()) as { data: { lead_id: string } }).data.lead_id;
+    const contactId = rows(`select contact_id from public.crm_leads where id = '${lead1}'`)[0]!.contact_id as string;
+
+    const recusa = respondiPayload("resp-int-decl-0099-b", telefone, email, (p) => {
+      const respondent = p.respondent as Record<string, unknown>;
+      const rawAnswers = respondent.raw_answers as Array<Record<string, unknown>>;
+      const legaltext = rawAnswers.find((r) => (r.question as Record<string, unknown>).question_type === "legaltext")!;
+      legaltext.answer = "no";
+      (respondent.answers as Record<string, unknown>)["Autorização de contato"] = "Não aceito";
+    });
+    const r2 = await POST(assinado(recusa), reqCtx(TOKEN_SECRET));
+    expect(r2.status).toBe(200);
+
+    const depois = rows(`select consent from public.contacts where id = '${contactId}'`)[0]!
+      .consent as { marketing: { granted_at: string | null; declined_at?: string | null } };
     expect(depois.marketing.declined_at).toBeTruthy();
     expect(depois.marketing.granted_at).toBeNull();
+    const auditoria = rows(
+      `select metadata from public.api_audit_log where action = 'lgpd.consent_changed' and resource_id = '${contactId}' order by created_at desc limit 1`,
+    );
+    expect(auditoria[0]?.metadata).toMatchObject({ from: "concedido", to: "recusado", origin_proven: true });
   });
 
   it("caso 3c — formulário SEM a pergunta de autorização: nada é carimbado (ninguém perguntou ≠ disse não)", async () => {
@@ -1266,7 +1305,7 @@ describe("POST /api/v1/webhooks/in/[token] — RD Station (envelope leads[])", (
     expect(lead.external_id).toBe("rdstation:lead:5035999003");
   });
 
-  it("rd 4 — nome + email e SEM telefone em lugar nenhum: ainda cria lead (regra atual)", async () => {
+  it("rd 4 — nome + email e SEM telefone em lugar nenhum: cria lead E contato pelo e-mail", async () => {
     const payload = rdStationEnvelope({
       eventUuid: "aaaa0004-0000-4000-8000-000000000004",
       leadId: "5035999004",
@@ -1278,7 +1317,12 @@ describe("POST /api/v1/webhooks/in/[token] — RD Station (envelope leads[])", (
     const leadId = ((await res.json()) as { data: { lead_id: string } }).data.lead_id;
     const lead = rows(`select * from public.crm_leads where id = '${leadId}'`)[0]!;
     expect(lead.title).toBe("Maria RD");
-    expect(lead.contact_id).toBeNull(); // sem telefone → contato não é criado (mesma regra do genérico)
+    // Sem telefone o contato é achado/criado pelo e-mail normalizado (17/10/2026): recadastro, etiquetas e CPF
+    // passam a funcionar também para formulário só com e-mail.
+    expect(lead.contact_id).not.toBeNull();
+    const contato = rows(`select email, phone_number from public.contacts where id = '${lead.contact_id as string}'`)[0]!;
+    // (o e-mail pode casar um contato que já tinha telefone: é a deduplicação por e-mail funcionando)
+    expect(String(contato.email).length).toBeGreaterThan(3);
   });
 
   it("rd 5 — sem identidade nenhuma (nome/email/telefone ausentes): 400 invalid_request, sem lead", async () => {

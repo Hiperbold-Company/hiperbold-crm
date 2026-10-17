@@ -84,7 +84,7 @@ import { POST as postPorToken } from "@/app/api/v1/webhooks/waha/[token]/route";
 
 const pedido = (corpo: unknown) =>
   ({
-    text: async () => (typeof corpo === "string" ? corpo : JSON.stringify(corpo)),
+    text: async () => (typeof corpo === "string" ? corpo : JSON.stringify(corpo)), body: new Response((typeof corpo === "string" ? corpo : JSON.stringify(corpo))).body,
     headers: new Headers({ "x-webhook-hmac": "sha512=abc" }),
   }) as never;
 

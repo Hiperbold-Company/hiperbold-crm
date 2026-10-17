@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { invalidarCredencialDoGoogle } from "@/lib/agenda/google/config";
 import { audit } from "@/lib/audit";
+import { ehFalhaDaSessao, ERRO_SESSAO_INVALIDA } from "@/lib/auth/falha-de-sessao";
 import { requirePlatformAdminFull } from "@/lib/auth/portao-de-escrita";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -66,7 +67,14 @@ const entradaSchema = z.object({
 export type GoogleOAuthInput = z.infer<typeof entradaSchema>;
 
 export async function updateGoogleOAuth(input: GoogleOAuthInput): Promise<UpdateGoogleOAuthResult> {
-  const { user: authUser } = await requirePlatformAdminFull();
+  let authUser: Awaited<ReturnType<typeof requirePlatformAdminFull>>["user"];
+  try {
+    ({ user: authUser } = await requirePlatformAdminFull());
+  } catch (err) {
+    // GoTrue fora do ar ou sessão sem o fator: o guarda lança (falha fechado); a tela recebe uma frase, não o digest opaco.
+    if (ehFalhaDaSessao(err)) return { ok: false, error: ERRO_SESSAO_INVALIDA };
+    throw err;
+  }
 
   const parsed = entradaSchema.safeParse(input);
   if (!parsed.success) {

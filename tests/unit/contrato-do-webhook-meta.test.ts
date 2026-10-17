@@ -47,7 +47,7 @@ const REAIS = JSON.parse(readFileSync("tests/fixtures/meta/inbound-webhooks.json
 const pedido = (corpo: unknown) => {
   const cru = typeof corpo === "string" ? corpo : JSON.stringify(corpo);
   return {
-    text: async () => cru,
+    text: async () => cru, body: new Response(cru).body,
     headers: new Headers({
       "x-hub-signature-256": `sha256=${createHmac("sha256", APP_SECRET).update(cru, "utf8").digest("hex")}`,
     }),
@@ -169,7 +169,7 @@ describe("a rota — o desfecho que a Meta enxerga", () => {
     vi.stubEnv("META_APP_SECRET", APP_SECRET);
 
     const res = await POST(
-      { text: async () => '{"entry":3}', headers: new Headers() } as never,
+      { text: async () => '{"entry":3}', body: new Response('{"entry":3}').body, headers: new Headers() } as never,
       ctx,
     );
 

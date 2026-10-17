@@ -96,35 +96,48 @@ async function emitirOrgAtualizada(admin: ClienteAdmin, organizationId: string, 
     });
 }
 
-/** Dados da empresa (`updateTenant`). `dados` já passou por `tenantSchema`. */
+/**
+ * Dados da empresa (`updateTenant`). `dados` já passou por `tenantSchema` (inteiro) ou por
+ * `tenantSchema.pick(...)` (só as chaves enviadas): grava e audita SÓ as chaves presentes.
+ * Antes o PATCH parcial regravava as dez colunas com o valor lido e auditava as dez como
+ * alteradas, e um valor antigo inválido (CNPJ legado, por exemplo) travava qualquer outra edição.
+ */
 export async function atualizarDadosDaEmpresa(
   admin: ClienteAdmin,
   organizationId: string,
-  dados: TenantInput,
+  dados: Partial<TenantInput>,
   autor: AutorDaOrganizacao,
 ): Promise<ResultadoDaOrganizacao> {
   // O país só entra se tiver PERFIL REVISADO (issue #1033): é a lista que o
   // seletor mostra, e é ela que a gravação confere — nem por API entra país sem lei revisada.
   const pais = dados.country ?? null;
-  if (pais !== null && !paisesOferecidos().some((p) => p.codigo === pais)) {
+  if ("country" in dados && pais !== null && !paisesOferecidos().some((p) => p.codigo === pais)) {
     return { ok: false, error: `País sem perfil revisado: ${pais}` };
   }
 
-  const { error } = await admin
-    .from("organizations")
-    .update({
-      display_name: dados.display_name,
-      legal_name: dados.legal_name,
-      cnpj: dados.cnpj ?? null,
-      country: pais,
-      timezone: dados.timezone,
-      locale: dados.locale,
-      currency: dados.currency,
-      media_retention_days: dados.media_retention_days,
-      dpo_email: dados.dpo_email ?? null,
-      privacy_policy_url: dados.privacy_policy_url ?? null,
-    })
-    .eq("id", organizationId);
+  const COLUNAS_DA_EMPRESA = [
+    "display_name",
+    "legal_name",
+    "cnpj",
+    "country",
+    "timezone",
+    "locale",
+    "currency",
+    "media_retention_days",
+    "dpo_email",
+    "privacy_policy_url",
+  ] as const;
+  const NULAVEIS = new Set<string>(["cnpj", "country", "dpo_email", "privacy_policy_url"]);
+  const patch: Record<string, unknown> = {};
+  for (const coluna of COLUNAS_DA_EMPRESA) {
+    if (!(coluna in dados)) continue;
+    const valor = (dados as Record<string, unknown>)[coluna];
+    patch[coluna] = valor === undefined && NULAVEIS.has(coluna) ? null : valor;
+  }
+  const alteradas = Object.keys(patch);
+  if (alteradas.length === 0) return { ok: true };
+
+  const { error } = await admin.from("organizations").update(patch).eq("id", organizationId);
   if (error) return { ok: false, error: error.message };
 
   await audit({
@@ -133,7 +146,7 @@ export async function atualizarDadosDaEmpresa(
     organizationId,
     resourceType: "organization",
     resourceId: organizationId,
-    metadata: { fields_changed: Object.keys(dados) },
+    metadata: { fields_changed: alteradas },
   });
   await emitirOrgAtualizada(admin, organizationId, autor.requestId);
   return { ok: true };

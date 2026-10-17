@@ -114,20 +114,13 @@ export async function PATCH(req: NextRequest): Promise<Response> {
         : fail("internal_error", t("Não foi possível concluir agora. Tente novamente em instantes."), 500, { requestId });
 
   if (Object.keys(dadosPedidos).length > 0) {
-    // Parcial → valida o conjunto FINAL pelo schema completo da action.
-    const completo = tenantSchema.safeParse({
-      display_name: atual.display_name,
-      legal_name: atual.legal_name,
-      cnpj: atual.cnpj,
-      country: atual.country,
-      timezone: atual.timezone,
-      locale: atual.locale,
-      currency: atual.currency,
-      media_retention_days: atual.media_retention_days,
-      dpo_email: atual.dpo_email,
-      privacy_policy_url: atual.privacy_policy_url,
-      ...dadosPedidos,
-    });
+    // Parcial → valida SÓ as chaves enviadas. Validar o conjunto final (atual + pedido) fazia um
+    // valor antigo inválido, que ninguém estava mexendo, recusar a edição de outro campo.
+    const mascara = Object.fromEntries(Object.keys(dadosPedidos).map((k) => [k, true])) as Record<
+      keyof typeof dadosPedidos,
+      true
+    >;
+    const completo = tenantSchema.pick(mascara).safeParse(dadosPedidos);
     if (!completo.success) {
       return fail("unprocessable_entity", t("Não entendi o que mudar na organização."), 422, {
         requestId,

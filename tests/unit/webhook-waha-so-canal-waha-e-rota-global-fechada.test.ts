@@ -53,7 +53,7 @@ const CORPO = { event: "message", session: "default", payload: { id: "wamid.X", 
 
 function pedido() {
   return {
-    text: async () => JSON.stringify(CORPO),
+    text: async () => JSON.stringify(CORPO), body: new Response(JSON.stringify(CORPO)).body,
     headers: new Headers(),
   } as never;
 }
@@ -115,7 +115,7 @@ describe("D-108: rota global fechada por padrão", () => {
     const registrada = await postGlobal(pedido());
     const corpoOutro = { ...CORPO, session: "nao-existe" };
     const inexistente = await postGlobal({
-      text: async () => JSON.stringify(corpoOutro),
+      text: async () => JSON.stringify(corpoOutro), body: new Response(JSON.stringify(corpoOutro)).body,
       headers: new Headers(),
     } as never);
 
@@ -128,7 +128,7 @@ describe("D-108: rota global fechada por padrão", () => {
 
     const waha = await postGlobal(pedido());
     const uazapi = await postGlobal({
-      text: async () => JSON.stringify({ ...CORPO, session: "uazapi-sessao" }),
+      text: async () => JSON.stringify({ ...CORPO, session: "uazapi-sessao" }), body: new Response(JSON.stringify({ ...CORPO, session: "uazapi-sessao" })).body,
       headers: new Headers(),
     } as never);
 

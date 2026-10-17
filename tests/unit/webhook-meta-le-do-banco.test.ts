@@ -107,7 +107,7 @@ function entrega(segredo: string) {
     ],
   });
   return {
-    text: async () => cru,
+    text: async () => cru, body: new Response(cru).body,
     headers: new Headers({
       "x-hub-signature-256": `sha256=${createHmac("sha256", segredo).update(cru, "utf8").digest("hex")}`,
     }),

@@ -79,6 +79,11 @@ export interface CaptacaoParaRegistrar {
   /** A página que hospedava o formulário (Origin ou Referer). */
   origin?: string | null;
   requestId?: string | null;
+  /**
+   * O `external_id` do envio (idempotência de quem integra). Guardado para o
+   * reenvio de um RECADASTRO ser reconhecido mesmo depois que o lead aberto fecha.
+   */
+  externalId?: string | null;
 }
 
 /** Teto por campo — um site pode mandar um textarea inteiro, e a tela é uma tabela. */
@@ -182,6 +187,7 @@ export async function registrarCaptacao(
     user_agent: captacao.userAgent?.slice(0, 500) ?? null,
     origin: captacao.origin ?? null,
     request_id: captacao.requestId ?? null,
+    external_id: captacao.externalId ?? null,
   });
 
   // Falha ABERTA na ação (o lead entra de qualquer jeito) e ABERTA na

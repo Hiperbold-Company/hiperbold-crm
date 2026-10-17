@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { InboxKind } from "@/lib/agent-engine/db/repository";
 import { ROLE_RANK, type Role } from "@/lib/auth/types";
+import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 import { logger } from "@/lib/logger";
 
 /** DTO projetado no servidor. O browser nunca deriva URLs de referências livres. */
@@ -72,7 +73,13 @@ export const POLITICAS_DE_AVISO = {
   reactivation_expired: { refs: ["organization"], orientacao: "Revise no Radar se ainda cabe retomar os negócios indicados." },
   capabilities_missing: { refs: ["conversation"], orientacao: "Peça ao gestor para revisar as ferramentas habilitadas para o assistente deste atendimento." },
   message_send_stuck: { refs: ["conversation"], orientacao: "Confira a resposta que não chegou antes de decidir se precisa enviar novamente." },
-  midia_nao_lida: { refs: [], orientacao: "Peça ao gestor para revisar o provedor e as credenciais de leitura de fotos e áudios.", geral: { papel: "manager", href: "/app/ai/providers", rotulo: "Revisar provedores de IA" } },
+  // A tela de provedores pode estar oculta na instalação (funcoes-ocultas.ts): sem contexto geral o aviso
+  // cai em "sem_destino" com a orientação, em vez de um botão que leva a um redirecionamento.
+  midia_nao_lida: {
+    refs: [],
+    orientacao: "Peça ao gestor para revisar o provedor e as credenciais de leitura de fotos e áudios.",
+    geral: funcaoOculta("provedores-ia") ? undefined : { papel: "manager", href: "/app/ai/providers", rotulo: "Revisar provedores de IA" },
+  },
   channel_template_review: { refs: [], orientacao: "Confira os modelos na conexão WhatsApp via Parceiro. Este aviso não identifica um modelo específico.", geral: { papel: "admin", href: "/app/connections?aba=parceiro&sub=templates", rotulo: "Revisar modelos do canal" } },
   channel_number_alert: { refs: ["channel_session"], orientacao: "Peça a quem administra para revisar a situação do número nas conexões.", geral: CONEXOES },
   // Sem `geral`, ao contrário do vizinho acima: o `canal-mudo-watcher` SEMPRE

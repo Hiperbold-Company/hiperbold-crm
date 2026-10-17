@@ -8,7 +8,7 @@
  * COMO FUNCIONA. Esconder é só estar em `FUNCOES_OCULTAS`. Todo o resto deriva daqui:
  *  - menu lateral, "Ver tudo em …", Configurações e ⌘K: `permitidos()` (lib/navigation/interface.ts)
  *    descarta o destino cujo caminho pertence a uma função oculta;
- *  - quem abre o endereço direto: `next.config.ts` redireciona para `/app/inicio`
+ *  - quem abre o endereço direto: `next.config.ts` redireciona para `/app` (a casa do papel)
  *    (`redirecionamentosDasFuncoesOcultas`), inclusive na navegação dentro do app;
  *  - blocos dentro de uma tela que continua visível (opções de Conexões, voz em Segurança, links
  *    para Credenciais): a tela pergunta `funcaoOculta(id)`.
@@ -86,8 +86,12 @@ export function hrefOculto(href: string): boolean {
   return rotasOcultas().some((r) => caminho === r || caminho.startsWith(`${r}/`));
 }
 
-/** Para onde vai quem abre uma tela oculta pelo endereço. */
-export const DESTINO_DAS_FUNCOES_OCULTAS = "/app/inicio";
+/**
+ * Para onde vai quem abre uma tela oculta pelo endereço: `/app`, a entrada que escolhe a casa pelo
+ * papel (`app/app/page.tsx` → `homeDaInterface`). Era `/app/inicio`, que só o admin da empresa pode
+ * abrir: atendente e gerente que caíam num link antigo (aviso, favorito, e-mail) iam parar em /403.
+ */
+export const DESTINO_DAS_FUNCOES_OCULTAS = "/app";
 
 /** Entradas de `redirects()` do `next.config.ts`; `:path*` casa o caminho e tudo abaixo dele. */
 export function redirecionamentosDasFuncoesOcultas(): Array<{

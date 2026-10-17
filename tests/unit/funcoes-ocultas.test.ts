@@ -60,7 +60,7 @@ describe("registro de funções ocultas", () => {
     }
   });
 
-  it("o redirecionamento do endereço cobre toda rota oculta e manda para o Início", () => {
+  it("o redirecionamento do endereço cobre toda rota oculta e manda para a casa do papel (/app), nunca para uma tela que só o admin abre", () => {
     const regras = redirecionamentosDasFuncoesOcultas();
     const origens = regras.map((r) => r.source);
     expect(origens).toContain("/app/prospecting/:path*");
@@ -69,7 +69,7 @@ describe("registro de funções ocultas", () => {
     expect(origens).not.toContain("/app/ai/credentials/:path*");
     for (const r of regras) {
       expect(r.destination).toBe(DESTINO_DAS_FUNCOES_OCULTAS);
-      expect(r.destination).toBe("/app/inicio");
+      expect(r.destination).toBe("/app");
       expect(r.permanent).toBe(false);
     }
   });
@@ -125,7 +125,7 @@ describe("next.config", () => {
     const regras = (await cfg.redirects?.()) ?? [];
     expect(regras).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ source: "/app/calls/:path*", destination: "/app/inicio" }),
+        expect.objectContaining({ source: "/app/calls/:path*", destination: "/app" }),
       ]),
     );
   });

@@ -58,3 +58,23 @@ export async function lerCorpoComLimite(
   const bytes = Buffer.concat(pedacos.map((p) => Buffer.from(p)));
   return { ok: true, texto: bytes.toString("utf8") };
 }
+
+/**
+ * Corpo de uma requisição com teto, nos dois passos que o webhook público precisa:
+ * recusa pelo `Content-Length` declarado (sem ler nada) e, depois, pelo fluxo real
+ * (o cabeçalho pode mentir ou faltar, como no `Transfer-Encoding: chunked`).
+ *
+ * `req.text()` lê tudo o que o remetente mandar. Em rota por token (o token é um
+ * segredo fraco: vai na URL cadastrada em painel de terceiro) isso deixa qualquer
+ * um que o conheça encher a memória do processo e, nas rotas que arquivam, o banco.
+ */
+export async function lerCorpoDaRequisicao(
+  req: { headers: Headers; body: ReadableStream<Uint8Array> | null },
+  limiteBytes: number,
+): Promise<ResultadoCorpoComLimite> {
+  const declarado = Number(req.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declarado) && declarado > limiteBytes) {
+    return { ok: false, texto: "" };
+  }
+  return lerCorpoComLimite(req.body, limiteBytes);
+}

@@ -92,7 +92,7 @@ const REAL = {
 const pedido = (corpo: unknown) => {
   const cru = typeof corpo === "string" ? corpo : JSON.stringify(corpo);
   return {
-    text: async () => cru,
+    text: async () => cru, body: new Response(cru).body,
     headers: new Headers({
       "x-zernio-signature": createHmac("sha256", SECRET).update(cru, "utf8").digest("hex"),
     }),
@@ -220,7 +220,7 @@ describe("a rota — o desfecho que o provider enxerga", () => {
   it("a assinatura continua vindo ANTES do contrato — corpo torto sem HMAC é 401", async () => {
     arquivoFechado.length = 0;
     const res = await POST(
-      { text: async () => '{"message":{"conversationId":1}}', headers: new Headers() } as never,
+      { text: async () => '{"message":{"conversationId":1}}', body: new Response('{"message":{"conversationId":1}}').body, headers: new Headers() } as never,
       ctx,
     );
     expect(res.status).toBe(401);

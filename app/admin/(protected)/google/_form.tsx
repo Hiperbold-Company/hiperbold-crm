@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { ERRO_SESSAO_INVALIDA } from "@/lib/auth/falha-de-sessao";
 import { updateGoogleOAuth } from "@/app/actions/settings/updateGoogleOAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -144,7 +145,11 @@ export function FormularioDoGoogle({
                   ...(clientSecret.trim() ? { client_secret: clientSecret.trim() } : {}),
                 });
                 if (!r.ok) {
-                  toast.error(t(r.error));
+                  toast.error(
+                    r.error === ERRO_SESSAO_INVALIDA
+                      ? t("Sua sessão precisa ser confirmada de novo. Saia e entre com o código de verificação.")
+                      : t(r.error),
+                  );
                   return;
                 }
                 toast.success(t("Credenciais do Google salvas."));

@@ -121,6 +121,11 @@ export async function abrirArquivoDoWebhook(
     provider: string;
     rawBody: string;
     headers: Headers;
+    /**
+     * Corpo NÃO arquivado (assinatura recusada: quem o mandou não provou nada). A linha
+     * guarda só o fato — o motivo e o tamanho — no lugar do conteúdo.
+     */
+    corpoOmitido?: { motivo: string; bytes: number };
   },
 ): Promise<string | null> {
   let parsed: Record<string, unknown> | null = null;
@@ -139,8 +144,10 @@ export async function abrirArquivoDoWebhook(
   // árvore (alcança qualquer profundidade); `raw_body` por regex, porque o
   // corpo cru também precisa ficar sem o token quando não é JSON válido, e
   // a mesma regex funciona igual quando é.
-  const parsedRedigido = parsed ? (redigirValoresSensiveis(parsed) as Record<string, unknown>) : null;
-  const rawBodyRedigido = redigirTextoCru(entrada.rawBody);
+  const parsedRedigido = entrada.corpoOmitido ? null : parsed ? (redigirValoresSensiveis(parsed) as Record<string, unknown>) : null;
+  const rawBodyRedigido = entrada.corpoOmitido
+    ? `[corpo não arquivado: ${entrada.corpoOmitido.motivo}; ${entrada.corpoOmitido.bytes} bytes]`
+    : redigirTextoCru(entrada.rawBody);
 
   try {
     const { data, error } = await admin

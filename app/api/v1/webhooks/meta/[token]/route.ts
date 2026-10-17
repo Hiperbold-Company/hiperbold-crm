@@ -42,10 +42,14 @@ import {
   telefoneDoEmbed,
   type EmbedDoContato,
 } from "@/lib/messaging/falha-de-entrega";
+import { lerCorpoDaRequisicao } from "@/lib/http/corpo-com-limite";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/** Uma entrega da Meta é de poucos KB; 1 MB é folga de sobra. */
+const TETO_CORPO_BYTES = 1024 * 1024;
 
 interface RouteCtx {
   params: Promise<{ token: string }>;
@@ -78,7 +82,13 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   const session = await metaSessionByWebhookToken(token);
   if (!session) return fail("not_found", "unknown webhook token", 404, { requestId });
 
-  const rawBody = await req.text();
+  // Teto de tamanho ANTES da assinatura: `req.text()` lê tudo o que o remetente mandar,
+  // e esta rota é alcançável por quem conhece o token (ele está na URL do painel da Meta).
+  const corpoLido = await lerCorpoDaRequisicao(req, TETO_CORPO_BYTES);
+  if (!corpoLido.ok) {
+    return fail("payload_too_large", "request body too large", 413, { requestId });
+  }
+  const rawBody = corpoLido.texto;
   // Do mesmo lugar que o handshake: BANCO primeiro, `.env` como piso (0257). Sem
   // segredo nenhum configurado a verificação devolve `false` e a entrega morre em
   // 401 — que é o desfecho de hoje, e não um 500.

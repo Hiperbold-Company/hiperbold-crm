@@ -5,6 +5,12 @@ import { revalidatePath } from "next/cache";
 import { audit } from "@/lib/audit";
 import { requirePlatformAdminFull } from "@/lib/auth/portao-de-escrita";
 import { sessionAal } from "@/lib/auth/server";
+import {
+  CHAVE_MODELOS_DA_INSTALACAO,
+  idsForaDoCatalogo,
+  lerModelosDaInstalacao,
+} from "@/lib/ai/modelos-da-instalacao";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { acharChave } from "@/lib/instalacao/catalogo";
 import {
   estadoParaTela,
@@ -160,12 +166,35 @@ export async function salvarConfiguracaoDaInstalacao(
   });
 
   revalidatePath("/admin/configuracao");
+
+  // Lista de modelos da chave da instalação: avisa (sem recusar) o id que não está no catálogo.
+  let avisoDosModelos: string | null = null;
+  if (chave === CHAVE_MODELOS_DA_INSTALACAO) {
+    try {
+      const { data: catalogo } = await createAdminClient()
+        .from("ai_models")
+        .select("provider, model_id")
+        .is("deprecated_at", null);
+      if (catalogo && catalogo.length > 0) {
+        const desconhecidos = idsForaDoCatalogo(lerModelosDaInstalacao(limpo), catalogo);
+        if (desconhecidos.length > 0) {
+          avisoDosModelos = `Salvo, mas estes modelos não estão no catálogo e provavelmente não vão funcionar: ${desconhecidos.join(", ")}. Confira a grafia.`;
+        }
+      }
+    } catch {
+      // O aviso é cortesia: falhar em conferir o catálogo nunca desfaz o salvamento.
+    }
+  }
+  const avisos = [
+    ...(limpas.length > 0
+      ? ["O endereço mudou, então a senha de administrador guardada foi apagada. Digite-a de novo."]
+      : []),
+    ...(avisoDosModelos ? [avisoDosModelos] : []),
+  ];
   return {
     ok: true,
     estado: await estadoParaTela(chave, doCatalogo.natureza === "segredo"),
-    ...(limpas.length > 0
-      ? { aviso: "O endereço mudou, então a senha de administrador guardada foi apagada. Digite-a de novo." }
-      : {}),
+    ...(avisos.length > 0 ? { aviso: avisos.join(" ") } : {}),
   };
 }
 

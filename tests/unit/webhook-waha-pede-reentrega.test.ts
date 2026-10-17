@@ -128,7 +128,7 @@ const EVENTO = {
 };
 const pedido = () =>
   ({
-    text: async () => JSON.stringify(EVENTO),
+    text: async () => JSON.stringify(EVENTO), body: new Response(JSON.stringify(EVENTO)).body,
     headers: new Headers({ "x-webhook-hmac": "sha512=abc" }),
   }) as never;
 

@@ -17,6 +17,7 @@ import { audit } from "@/lib/audit";
 import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
 import { carregarComportamentoDaInstalacao } from "@/lib/instalacao/comportamento-servidor";
 import { logger } from "@/lib/logger";
+import { lerCorpoDaRequisicao } from "@/lib/http/corpo-com-limite";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { conferirContratoWaha, lerRoteamentoWahaPorToken } from "@/lib/waha/envelope";
 import { processarEventoWaha, REENTREGA_EM_SEGUNDOS } from "@/lib/waha/desfecho-do-webhook";
@@ -24,6 +25,9 @@ import { authenticateWahaWebhook } from "@/lib/waha/webhook-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/** Teto do corpo de uma entrega do WAHA (pode trazer mídia inline em instalação que a liga). */
+const TETO_CORPO_BYTES = 5 * 1024 * 1024;
 
 interface RouteCtx {
   params: Promise<{ token: string }>;
@@ -37,7 +41,11 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     return fail("not_found", "unknown webhook token", 404, { requestId });
   }
 
-  const rawBody = await req.text();
+  const corpoLido = await lerCorpoDaRequisicao(req, TETO_CORPO_BYTES);
+  if (!corpoLido.ok) {
+    return fail("payload_too_large", "request body too large", 413, { requestId });
+  }
+  const rawBody = corpoLido.texto;
   // ─── O contrato do fio, em DOIS momentos ─────────────────────────────────
   //
   // Isto era `JSON.parse(rawBody) as WahaEnvelope`: um cast, que não checa nada

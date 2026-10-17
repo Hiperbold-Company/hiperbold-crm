@@ -133,7 +133,15 @@ export async function decidirRecadastroDoContato(
  */
 export async function mesclarTagsNoLead(
   admin: SupabaseClient,
-  alvo: { organizationId: string; leadId: string; tags: readonly string[]; sourceId: string; requestId: string },
+  alvo: {
+    organizationId: string;
+    leadId: string;
+    tags: readonly string[];
+    sourceId: string;
+    requestId: string;
+    /** A origem do envio foi provada (HMAC)? Carimbado no evento para a automação separar. */
+    origemProvada: boolean;
+  },
 ): Promise<{ adicionadas: string[] }> {
   if (alvo.tags.length === 0) return { adicionadas: [] };
   try {
@@ -176,7 +184,7 @@ export async function mesclarTagsNoLead(
       p_entity_kind: "crm_lead",
       p_entity_id: alvo.leadId,
       p_payload: { added_tags: adicionadas, tags, service_origin: null },
-      p_metadata: { request_id: alvo.requestId, actor_type: "webhook_source", actor_id: alvo.sourceId },
+      p_metadata: { request_id: alvo.requestId, actor_type: "webhook_source", actor_id: alvo.sourceId, origin_proven: alvo.origemProvada },
       p_organization_id: alvo.organizationId,
     });
     if (eEvento) {

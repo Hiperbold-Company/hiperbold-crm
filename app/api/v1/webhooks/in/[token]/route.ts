@@ -20,6 +20,7 @@ import { classificarLeadInicial, type ResultadoClassificacaoInicial } from "@/li
 import type { CreateLeadInput } from "@/lib/schemas";
 import {
   corpoSemDocumento,
+  lerCorpoJsonObjeto,
   lerDocumentoReservado,
   lerTagsReservadas,
   mapInboundPayload,
@@ -34,9 +35,11 @@ import { encontrarContatoPorTelefoneComNome } from "@/lib/channels/contato-por-t
 import {
   buildContactConsentGrant,
   buildContactConsentDenial,
+  estadoDoConsentimentoDeMarketing,
   isRespondiPayload,
   mapRespondiPayload,
   respondiLeadTitle,
+  type EstadoDoConsentimento,
   type RespondiMapped,
 } from "@/lib/webhooks/respondi";
 import {
@@ -211,17 +214,21 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   if (isForm) {
     payload = payloadDeFormulario(rawBody);
   } else {
-    try {
-      payload = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : {};
-    } catch {
+    // JSON que não é OBJETO (`null`, número, texto, lista) é corpo inválido, com o
+    // mesmo rastro do JSON malformado. `null` derrubava a rota em 500 sem rastro.
+    const objeto = lerCorpoJsonObjeto(rawBody);
+    if (typeof objeto === "string") {
       await registrarCaptacao(admin, {
         ...fonteDaCaptacao,
         ...origemDaCaptacao,
         outcome: "recusado",
         rejectReason: "corpo_invalido",
       });
-      return fail("invalid_request", "invalid_json", 400, { requestId });
+      return fail("invalid_request", objeto === "json_invalido" ? "invalid_json" : "corpo_invalido", 400, {
+        requestId,
+      });
     }
+    payload = objeto;
   }
 
   const sigHeader = req.headers.get("x-hipercrm-signature") ?? req.headers.get("x-deskcomm-signature");
@@ -252,6 +259,13 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     return fail("unauthenticated", "invalid_signature", 401, { requestId });
   }
 
+  // ORIGEM PROVADA: a fonte tem segredo E a assinatura HMAC deste envio conferiu.
+  // Fonte sem segredo é formulário público (o token está no HTML da página) e
+  // qualquer um fala por ela; o envio com HMAC válido é integração de servidor.
+  // Só quem prova a origem pode afirmar consentimento sobre contato que já
+  // existe, pôr etiqueta e gravar CPF em contato que já existe (D-109, 17/10/2026).
+  const fonteComOrigemProvada = Boolean(sourceSecret) && validSignature === true;
+
   // CAMPOS RESERVADOS (17/10/2026): `cpf` (alias `cpf_cnpj`) e `tags` não são dado
   // livre do formulário. O documento sai do payload AQUI — antes do Turnstile, do
   // log de recebimento e de todo `registrarCaptacao` — para que o número não
@@ -260,10 +274,22 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   // adiante, na memória, até a gravação cifrada no contato. A assinatura HMAC já
   // foi conferida acima sobre o corpo ORIGINAL; o que se guarda no log forense é
   // o corpo sem o documento.
+  // O token do Turnstile viaja no campo que o widget injeta no formulário (ou no
+  // cabeçalho, para quem envia por fetch) e NÃO é dado do lead: sai do payload antes
+  // do log e do mapeamento, para não virar campo personalizado — e sai também do
+  // corpo cru guardado no log forense (é credencial de uso único, mas vale enquanto
+  // a Cloudflare não o consumir).
+  const campoDoToken = payload[TURNSTILE_CAMPO_DO_FORMULARIO];
+  const tokenDoTurnstile =
+    typeof campoDoToken === "string" ? campoDoToken : req.headers.get("x-turnstile-token");
+  const trouxeCampoDoToken = TURNSTILE_CAMPO_DO_FORMULARIO in payload;
+  delete payload[TURNSTILE_CAMPO_DO_FORMULARIO];
+
   const documentoDoEnvio: DocumentoDoEnvio = lerDocumentoReservado(payload);
-  const rawBodyParaLog = removerDocumentoDoPayload(payload)
-    ? corpoSemDocumento(rawBody, isForm, payload)
-    : rawBody;
+  const rawBodyParaLog =
+    removerDocumentoDoPayload(payload) || trouxeCampoDoToken
+      ? corpoSemDocumento(rawBody, isForm, payload, [TURNSTILE_CAMPO_DO_FORMULARIO])
+      : rawBody;
   if (documentoDoEnvio.estado === "descartado") {
     // Sem o valor: só o fato e o motivo.
     logger.warn("[webhooks.inbound] documento do envio ignorado", {
@@ -272,15 +298,19 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       motivo: documentoDoEnvio.motivo,
     });
   }
-  const tagsDoEnvio = lerTagsReservadas(payload);
-
-  // O token do Turnstile viaja no campo que o widget injeta no formulário (ou no
-  // cabeçalho, para quem envia por fetch) e NÃO é dado do lead: sai do payload antes
-  // do log e do mapeamento, para não virar campo personalizado.
-  const campoDoToken = payload[TURNSTILE_CAMPO_DO_FORMULARIO];
-  const tokenDoTurnstile =
-    typeof campoDoToken === "string" ? campoDoToken : req.headers.get("x-turnstile-token");
-  delete payload[TURNSTILE_CAMPO_DO_FORMULARIO];
+  // Etiqueta é DECISÃO de quem integra (aciona regra de automação por etiqueta):
+  // só vale de origem provada. Num formulário público (ou com assinatura que não
+  // conferiu) qualquer visitante poria `tags: ["pago"]` e dispararia a automação.
+  // Ignorada com log, e nunca vira campo personalizado (o mapeador a descarta).
+  const tagsDoPayload = lerTagsReservadas(payload);
+  const tagsDoEnvio = fonteComOrigemProvada ? tagsDoPayload : [];
+  if (!fonteComOrigemProvada && tagsDoPayload.length > 0) {
+    logger.warn("[webhooks.inbound] tags do envio ignoradas: origem não provada", {
+      webhookSourceId: source.id,
+      organizationId: source.organization_id,
+      quantidade: tagsDoPayload.length,
+    });
+  }
 
   // D-173: verificação contra robô na captação anônima. Só vale quando o operador liga
   // (TURNSTILE_CAPTACAO_EXIGIR) e só para quem NÃO prova a origem: envio com assinatura
@@ -317,6 +347,10 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   req.headers.forEach((value, key) => {
     const k = key.toLowerCase();
     if (k.startsWith("authorization") || k === "cookie") return;
+    // Credenciais do envio: a assinatura HMAC (o corpo também está no log, então
+    // guardá-la entregaria a um leitor do log o par para reenviar o mesmo envio) e
+    // o token do Turnstile.
+    if (k === "x-turnstile-token" || k.endsWith("-signature")) return;
     headersJson[key] = value;
   });
   await admin.from("webhook_events_log").insert({
@@ -327,7 +361,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     headers: headersJson,
     raw_body: rawBodyParaLog,
     payload_parsed: payload,
-    signature_header: sigHeader ?? null,
+    // A assinatura em si não é guardada (ver headersJson); `valid_signature` diz o que importa.
+    signature_header: null,
     // hmacSkipped (decrypt indisponível) conta como "não validado mas aceito",
     // igual ao webhook WAHA — o feed da UI não pinta de vermelho.
     valid_signature: validSignature ?? true,
@@ -382,7 +417,10 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
 
   const respondWithLead = (leadId: string): NextResponse => {
     if (isForm && source.redirect_to) {
-      return NextResponse.redirect(source.redirect_to as string, 303);
+      // Defesa em profundidade: o schema já recusa outro esquema ao salvar, mas linha
+      // antiga (ou escrita direto no banco) com `javascript:`/`data:` não pode virar redirect.
+      const destino = String(source.redirect_to);
+      if (/^https?:\/\//i.test(destino)) return NextResponse.redirect(destino, 303);
     }
     return ok({ lead_id: leadId }, { requestId });
   };
@@ -430,6 +468,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
 
   /** O que o formulário trouxe, do jeito que a tela de histórico mostra. */
   const dadosDaCaptacao = {
+    externalId,
     capturedName: mapped.name,
     capturedPhone: mapped.phone,
     capturedEmail: mapped.email,
@@ -450,6 +489,36 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       outcome: "duplicado",
     });
     return respondWithLead(deduped.id);
+  }
+
+  // RECADASTRO JÁ REGISTRADO: o `external_id` de um recadastro não mora em lead nenhum
+  // (o lead que existe pertence a outro envio), e a checagem pela timeline do lead só
+  // enxerga enquanto ele continua ABERTO. Depois que o lead fecha, o reenvio do mesmo
+  // envio caía no caminho "lead novo" e criava um lead duplicado. O histórico de
+  // captação guarda (organização, fonte, external_id, desfecho `recadastro`) e é
+  // consultado antes de qualquer efeito, de modo que o reenvio não regrava nada.
+  if (externalId) {
+    const { data: jaRegistrados } = await admin
+      .from("webhook_lead_captures")
+      .select("lead_id, contact_id")
+      .eq("organization_id", source.organization_id)
+      .eq("webhook_source_id", source.id)
+      .eq("external_id", externalId)
+      .eq("outcome", "recadastro")
+      .order("received_at", { ascending: false })
+      .limit(1);
+    const anterior = (jaRegistrados ?? [])[0] as { lead_id: string | null; contact_id: string | null } | undefined;
+    if (anterior?.lead_id) {
+      await registrarCaptacao(admin, {
+        ...fonteDaCaptacao,
+        ...origemDaCaptacao,
+        ...dadosDaCaptacao,
+        leadId: anterior.lead_id,
+        contactId: anterior.contact_id,
+        outcome: "duplicado",
+      });
+      return respondWithLead(anterior.lead_id);
+    }
   }
 
   if (!mapped.name && !mapped.phone && !mapped.email) {
@@ -504,10 +573,26 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   // Nasceu neste request? O INSERT já grava o consentimento com a forma certa;
   // a reconciliação abaixo existe só para quem JÁ era contato.
   let contatoNasceuAqui = false;
-  if (mapped.phone) {
-    /** O que os dois caminhos (telefone e e-mail) devolvem — um tipo só. */
-    type ContatoAchado = { data: { id: string; name: string | null } | null };
+  /** O que os caminhos de busca (telefone e e-mail) devolvem — um tipo só. */
+  type ContatoAchado = { data: { id: string; name: string | null } | null };
 
+  // uniq_contacts_org_email (baseline.sql) é um SEGUNDO índice único parcial,
+  // independente de uniq_contacts_org_phone — um INSERT pode colidir nele
+  // mesmo com telefone inédito (mesma pessoa manda e-mail repetido, telefone
+  // novo). email_normalized é coluna GERADA (`lower(trim(email))`), então a
+  // comparação replica exatamente essa normalização — não `email` bruto.
+  const selectActiveByEmail = (): PromiseLike<ContatoAchado> | null => {
+    if (!mapped.email) return null;
+    return admin
+      .from("contacts")
+      .select("id, name")
+      .eq("organization_id", source.organization_id)
+      .eq("email_normalized", mapped.email.trim().toLowerCase())
+      .is("is_merged_into", null)
+      .maybeSingle();
+  };
+
+  if (mapped.phone) {
     // ⚠️ QUAL GRAFIA VENCE é decidido por `escolherContatoCanonico`, e não pelo
     // banco. Isto era `.in(variantes).limit(1)` SEM `order by`: com as duas
     // grafias do mesmo celular ainda vivas — estado que a migration `0198`
@@ -522,22 +607,6 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
         mapped.phone!,
       ),
     });
-
-    // uniq_contacts_org_email (baseline.sql) é um SEGUNDO índice único parcial,
-    // independente de uniq_contacts_org_phone — um INSERT pode colidir nele
-    // mesmo com telefone inédito (mesma pessoa manda e-mail repetido, telefone
-    // novo). email_normalized é coluna GERADA (`lower(trim(email))`), então a
-    // comparação replica exatamente essa normalização — não `email` bruto.
-    const selectActiveByEmail = (): PromiseLike<ContatoAchado> | null => {
-      if (!mapped.email) return null;
-      return admin
-        .from("contacts")
-        .select("id, name")
-        .eq("organization_id", source.organization_id)
-        .eq("email_normalized", mapped.email.trim().toLowerCase())
-        .is("is_merged_into", null)
-        .maybeSingle();
-    };
 
     const { data: existing } = await selectActiveByPhone();
     if (existing) {
@@ -595,6 +664,49 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
         contatoNasceuAqui = contactId !== undefined;
       }
     }
+  } else if (mapped.email) {
+    // Envio SÓ com e-mail (formulário sem telefone): o contato é achado — ou criado —
+    // pelo e-mail normalizado, para o recadastro, as etiquetas e o CPF funcionarem
+    // também para quem não informa telefone. Sem isto o lead nascia sem contato e a
+    // mesma pessoa virava um lead novo a cada envio.
+    const porEmail = selectActiveByEmail();
+    const { data: existente } = porEmail ? await porEmail : { data: null };
+    if (existente) {
+      contactId = existente.id as string;
+      existingContactName = existente.name as string | null;
+    } else {
+      const { data: criado, error: erroDoInsert } = await admin
+        .from("contacts")
+        .insert({
+          organization_id: source.organization_id,
+          name: mapped.name ?? mapped.email,
+          email: mapped.email,
+          source: "webhook",
+          source_metadata: { webhook_source_id: source.id, ...mapped.source_metadata },
+          ...(consentDoEnvio ? { consent: consentDoEnvio } : {}),
+        })
+        .select("id")
+        .maybeSingle();
+      if (erroDoInsert) {
+        if (erroDoInsert.code === "23505") {
+          // Corrida: outro envio criou o contato com este e-mail entre a busca e o INSERT.
+          const reler = selectActiveByEmail();
+          const { data: vencedor } = reler ? await reler : { data: null };
+          contactId = (vencedor?.id as string | undefined) ?? undefined;
+          existingContactName = (vencedor?.name as string | null | undefined) ?? undefined;
+        } else {
+          logger.error("[webhooks.inbound] contact insert (e-mail) failed", {
+            webhookSourceId: source.id,
+            organizationId: source.organization_id,
+            errorCode: erroDoInsert.code,
+            errorMessage: erroDoInsert.message,
+          });
+        }
+      } else {
+        contactId = (criado?.id as string | undefined) ?? undefined;
+        contatoNasceuAqui = contactId !== undefined;
+      }
+    }
   }
 
   /**
@@ -611,11 +723,60 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
    * `profiling` seguem null como o default. Só para envio do Respondi — um
    * webhook genérico não pergunta consentimento e não tem o que afirmar.
    *
+   * SÓ ORIGEM PROVADA ESCREVE EM CONTATO QUE JÁ EXISTE (auditoria de 17/10/2026).
+   * O formato Respondi é público e a fonte sem segredo aceita qualquer um: quem
+   * conhece o token (ele está no HTML da página) e o telefone de alguém que RECUSOU
+   * apagava a recusa mandando "concedi". Por isso, em fonte sem HMAC válido, o
+   * contato que já existia NÃO é tocado (nem concessão, nem recusa) e o `declined_at`
+   * que ele tem segue valendo; o contato que nasce neste envio recebe o que o
+   * formulário disse, porque não há histórico a sobrescrever. Quando o envio é
+   * provado e o estado muda, a mudança vai para a auditoria (`lgpd.consent_changed`,
+   * com a fonte), nos dois sentidos.
+   *
    * Falha aqui não derruba a captação: o contato já está resolvido e o lead
    * ainda vai entrar. Perder o carimbo é ruim; perder a captação é pior. Fica
    * no log, como as demais bordas desta rota.
    */
-  if (consentDoEnvio && contactId && !contatoNasceuAqui) {
+  const auditarMudancaDeConsentimento = async (
+    alvoContactId: string,
+    de: EstadoDoConsentimento,
+    para: EstadoDoConsentimento,
+  ): Promise<void> => {
+    if (de === para) return;
+    await audit({
+      action: "lgpd.consent_changed",
+      organizationId: source.organization_id,
+      resourceType: "contact",
+      resourceId: alvoContactId,
+      requestId,
+      metadata: {
+        finalidade: "marketing",
+        from: de,
+        to: para,
+        source: "webhook:respondi",
+        webhook_source_id: source.id,
+        source_name: source.name,
+        origin_proven: fonteComOrigemProvada,
+      },
+    });
+  };
+
+  if (consentDoEnvio && contactId && contatoNasceuAqui) {
+    await auditarMudancaDeConsentimento(contactId, "sem_resposta", estadoDoConsentimentoDeMarketing(consentDoEnvio));
+  } else if (consentDoEnvio && contactId && !fonteComOrigemProvada) {
+    logger.warn("[webhooks.inbound] consentimento do envio ignorado em contato existente: origem não provada", {
+      webhookSourceId: source.id,
+      organizationId: source.organization_id,
+      contactId,
+    });
+  } else if (consentDoEnvio && contactId) {
+    const { data: atual } = await admin
+      .from("contacts")
+      .select("consent")
+      .eq("id", contactId)
+      .eq("organization_id", source.organization_id)
+      .maybeSingle();
+    const antes = estadoDoConsentimentoDeMarketing(atual?.consent);
     const { error: eConsent } = await admin
       .from("contacts")
       .update({ consent: consentDoEnvio })
@@ -628,6 +789,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
         contactId,
         error: eConsent.message,
       });
+    } else {
+      await auditarMudancaDeConsentimento(contactId, antes, estadoDoConsentimentoDeMarketing(consentDoEnvio));
     }
   }
 
@@ -635,8 +798,13 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   // personalizado). Falha aberta: o que impede a gravação (já tem CPF, outro
   // contato com o mesmo CPF, sem chave de cifra) vai para o log SEM o número e a
   // captação segue.
+  //
+  // SÓ ORIGEM PROVADA, OU CONTATO NASCIDO NESTE ENVIO (auditoria de 17/10/2026): numa
+  // fonte pública qualquer visitante que soubesse o telefone de um contato existente
+  // gravaria nele um CPF qualquer (e, com isso, travaria o CPF verdadeiro por causa do
+  // índice único). Contato criado por este mesmo envio não tem dono anterior a proteger.
   if (documentoDoEnvio.estado === "cpf") {
-    if (contactId) {
+    if (contactId && (fonteComOrigemProvada || contatoNasceuAqui)) {
       await gravarCpfDoContato(admin, {
         organizationId: source.organization_id as string,
         contactId,
@@ -646,7 +814,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       logger.warn("[webhooks.inbound] cpf do envio não foi gravado", {
         webhookSourceId: source.id,
         organizationId: source.organization_id,
-        desfecho: "sem_contato",
+        desfecho: contactId ? "origem_nao_provada" : "sem_contato",
       });
     }
   }
@@ -664,7 +832,6 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   // o imita, então numa fonte sem segredo (ou sem assinatura conferida) ele não vale
   // como autorização para a IA atender o contato. O lead e o contato entram do mesmo
   // jeito; só a autorização fica para um humano.
-  const fonteComOrigemProvada = Boolean(sourceSecret) && validSignature === true;
   const autorizarIASeProvado = async (contato: string): Promise<void> => {
     if (!respondiMapped || consentNegado || !fonteComOrigemProvada) return;
     const formId = respondiMapped.custom_fields.respondi_form_id ?? "form";
@@ -739,6 +906,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
         tags: tagsDoEnvio,
         sourceId: source.id as string,
         requestId,
+        origemProvada: fonteComOrigemProvada,
       });
 
       const atividade = await emitLeadActivity(admin, {
@@ -849,6 +1017,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     custom_fields?: Record<string, unknown>;
     source_metadata?: Record<string, unknown>;
     external_id?: string;
+    origin_proven?: boolean;
   } = {
     pipeline_id: source.default_pipeline_id,
     stage_id: source.default_stage_id,
@@ -857,6 +1026,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       : (mapped.name ?? mapped.phone ?? mapped.email ?? "Lead sem nome"),
     contact_id: contactId,
     tags: tagsDoEnvio,
+    origin_proven: fonteComOrigemProvada,
     source: "webhook",
     custom_fields: mapped.custom_fields,
     source_metadata: { webhook_source_id: source.id, ...mapped.source_metadata },

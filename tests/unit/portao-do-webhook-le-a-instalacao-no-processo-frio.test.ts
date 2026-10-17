@@ -101,7 +101,7 @@ const CORPO = { event: "message", session: "default", payload: { id: "wamid.X" }
 /** Entrega SEM o header `x-webhook-hmac`. */
 const semAssinatura = () =>
   ({
-    text: async () => JSON.stringify(CORPO),
+    text: async () => JSON.stringify(CORPO), body: new Response(JSON.stringify(CORPO)).body,
     headers: new Headers(),
   }) as never;
 

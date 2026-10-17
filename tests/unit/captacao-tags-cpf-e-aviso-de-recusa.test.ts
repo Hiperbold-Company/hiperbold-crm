@@ -13,7 +13,7 @@
  * de cifra (`fn_encrypt_oauth`, do Postgres), a criação do lead, o segredo da
  * fonte, o limite por IP, o audit e o motor local de eventos.
  */
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,12 +28,17 @@ const TELEFONE = "+5511999990000";
 const CPF = "52998224725";
 const CPF_FORMATADO = "529.982.247-25";
 const CIFRA_FALSA = "\\xc1f4a11ce0b0";
+const SEGREDO = "segredo-da-fonte-de-teste";
 
 let banco: BancoEmMemoria;
 let sequencia = 0;
 let seqLead = 0;
 let planoNoLimite = false;
 let cifraDisponivel = true;
+/** Segredo que o dublê de decifra devolve; `null` = fonte sem segredo (formulário público). */
+let segredoDaFonte: string | null = SEGREDO;
+/** O próximo envio sai assinado (HMAC-SHA256 do corpo) quando a fonte tem segredo? */
+let assinar = true;
 const leadsCriados: Array<Record<string, unknown>> = [];
 const auditorias: Array<Record<string, unknown>> = [];
 const logs: unknown[] = [];
@@ -51,7 +56,7 @@ vi.mock("@/lib/logger", () => {
   return { logger: { info: guardar, warn: guardar, error: guardar, debug: guardar } };
 });
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({ checkRateLimit: vi.fn(async () => ({ allowed: true })) }));
-vi.mock("@/lib/webhooks/secrets", () => ({ decryptWebhookSecret: vi.fn(async () => null) }));
+vi.mock("@/lib/webhooks/secrets", () => ({ decryptWebhookSecret: vi.fn(async () => segredoDaFonte) }));
 vi.mock("@/lib/channels/contato-por-telefone", () => ({
   encontrarContatoPorTelefoneComNome: vi.fn(async (_admin: unknown, org: string, telefone: string) => {
     const achado = (banco.tabelas["contacts"] ?? []).find(
@@ -90,12 +95,16 @@ vi.mock("@/lib/ai/elegibilidade/autorizacao", () => ({ autorizarContatoParaIA: v
 import { POST } from "@/app/api/v1/webhooks/in/[token]/route";
 import { avisarRecusaDaFonte, tituloDoAvisoDeRecusa } from "@/lib/webhooks/aviso-de-recusa";
 
-function chamar(corpo: string, tipo: "json" | "form" = "json") {
+function chamar(corpo: string, tipo: "json" | "form" = "json", extra: Record<string, string> = {}) {
+  const assinatura: Record<string, string> =
+    segredoDaFonte && assinar ? { "x-hipercrm-signature": createHmac("sha256", segredoDaFonte).update(corpo).digest("hex") } : {};
   const req = new NextRequest(`http://localhost/api/v1/webhooks/in/${TOKEN}`, {
     method: "POST",
     headers: {
       "content-type": tipo === "form" ? "application/x-www-form-urlencoded" : "application/json",
       "x-forwarded-for": "203.0.113.7",
+      ...assinatura,
+      ...extra,
     },
     body: corpo,
   });
@@ -132,7 +141,7 @@ function montar(extras: { leads?: Linha[]; contatos?: Linha[]; fontes?: Linha[] 
           name: "Landing de Outubro",
           organization_id: ORG,
           path_token: TOKEN,
-          secret_encrypted: null,
+          secret_encrypted: segredoDaFonte ? "cifrado" : null,
           default_pipeline_id: FUNIL,
           default_stage_id: "etapa-entrada",
           field_map: {},
@@ -182,6 +191,8 @@ beforeEach(() => {
   leadsCriados.length = 0;
   auditorias.length = 0;
   logs.length = 0;
+  segredoDaFonte = SEGREDO;
+  assinar = true;
 });
 
 describe("fixtures", () => {
@@ -470,5 +481,197 @@ describe("recusa abre aviso na Central: um por fonte por dia", () => {
     await expect(
       avisarRecusaDaFonte(sujo as never, { organizationId: ORG, sourceName: "X", motivoLegivel: "y" }),
     ).resolves.toBeUndefined();
+  });
+});
+
+// ─── Auditoria de 17/10/2026: o que só a ORIGEM PROVADA (HMAC válido) pode afirmar ────────────────
+//
+// Fonte sem segredo é formulário público: o token está no HTML e qualquer um fala por ela. Etiqueta,
+// CPF em contato que já existe e consentimento sobre contato que já existe só valem com a assinatura.
+
+const RESPONDI = (respondenteId: string, resposta: string) => ({
+  form: { form_id: "f1", form_name: "Form" },
+  respondent: {
+    respondent_id: respondenteId,
+    answers: {
+      "Qual é o seu nome?": "Maria",
+      "Qual é o melhor WhatsApp para falarmos sobre essa análise?": "55 11988887777",
+    },
+    raw_answers: [{ question: { question_type: "legaltext" }, answer: resposta }],
+  },
+});
+
+describe("etiquetas: só de origem provada", () => {
+  it("fonte pública: `tags` é ignorada (log), não vira etiqueta nem campo personalizado", async () => {
+    segredoDaFonte = null;
+    montar();
+    const r = await json({ nome: "Maria", telefone: "11999990000", tags: ["pago", "vip"], cidade: "Varginha" });
+    expect(r.status).toBe(200);
+    expect(leadsCriados[0]!.tags).toEqual([]);
+    expect(leadsCriados[0]!.custom_fields).toEqual({ cidade: "Varginha" });
+    expect(JSON.stringify(logs)).toContain("tags do envio ignoradas");
+  });
+
+  it("fonte com segredo mas SEM assinatura é recusada (401) e nada entra", async () => {
+    montar();
+    assinar = false;
+    const r = await json({ nome: "Maria", telefone: "11999990000", tags: ["pago"] });
+    expect(r.status).toBe(401);
+    expect(leadsCriados).toHaveLength(0);
+  });
+
+  it("recadastro em fonte pública não une etiqueta nem emite lead.tag_added", async () => {
+    segredoDaFonte = null;
+    montar({ leads: [leadAberto({ id: "lead-aberto", tags: ["Cliente"] })] });
+    await json({ nome: "Maria", telefone: "11999990000", tags: "pago" });
+    expect(tabela("crm_leads")[0]!.tags).toEqual(["Cliente"]);
+    expect(banco.chamadasRpc.filter((c) => c.nome === "emit_event")).toHaveLength(0);
+  });
+
+  it("origem provada: a etiqueta entra e os eventos carregam origin_proven", async () => {
+    montar({ leads: [leadAberto({ id: "lead-aberto", tags: [] })] });
+    await json({ nome: "Maria", telefone: "11999990000", tags: "pago" });
+    const ev = banco.chamadasRpc.find((c) => c.nome === "emit_event")!;
+    expect((ev.args.p_metadata as Record<string, unknown>).origin_proven).toBe(true);
+
+    montar();
+    await json({ nome: "Ana", telefone: "11999990009", tags: "novo" });
+    expect(leadsCriados[0]!.tags).toEqual(["novo"]);
+    expect(leadsCriados[0]!.origin_proven).toBe(true);
+  });
+});
+
+describe("CPF: só de origem provada, ou em contato nascido neste envio", () => {
+  it("fonte pública NÃO grava CPF em contato que já existe", async () => {
+    segredoDaFonte = null;
+    montar();
+    const r = await json({ nome: "Maria", telefone: "11999990000", cpf: CPF });
+    expect(r.status).toBe(200);
+    expect(contato("contato-1").cpf_hash).toBeNull();
+    expect(JSON.stringify(logs)).toContain("origem_nao_provada");
+  });
+
+  it("fonte pública grava o CPF do contato que ELA mesma criou", async () => {
+    segredoDaFonte = null;
+    montar();
+    await json({ nome: "Nova", telefone: "11999990077", cpf: CPF });
+    const novo = tabela("contacts").find((c) => c.phone_number === "+5511999990077")!;
+    expect(novo.cpf_hash).toBe(sha(CPF));
+  });
+});
+
+describe("consentimento: contato existente só muda com origem provada", () => {
+  const contatoDeclinado = () => ({
+    id: "contato-r",
+    organization_id: ORG,
+    name: "Maria",
+    phone_number: "+5511988887777",
+    is_merged_into: null,
+    cpf_hash: null,
+    consent: { marketing: { granted_at: null, declined_at: "2026-01-01T00:00:00.000Z", source: "manual", version: null } },
+  });
+
+  it("fonte pública: NÃO apaga o declined_at de quem já recusou", async () => {
+    segredoDaFonte = null;
+    montar({ contatos: [contatoDeclinado()] });
+    const r = await json(RESPONDI("r1", "Sim"));
+    expect(r.status).toBe(200);
+    const marketing = (contato("contato-r").consent as { marketing: Record<string, unknown> }).marketing;
+    expect(marketing.declined_at).toBe("2026-01-01T00:00:00.000Z");
+    expect(marketing.granted_at).toBeNull();
+    expect(auditorias.filter((a) => a.action === "lgpd.consent_changed")).toHaveLength(0);
+  });
+
+  it("origem provada: grava e audita lgpd.consent_changed com a fonte", async () => {
+    montar({ contatos: [contatoDeclinado()] });
+    await json(RESPONDI("r2", "Sim"));
+    const marketing = (contato("contato-r").consent as { marketing: Record<string, unknown> }).marketing;
+    expect(marketing.granted_at).toEqual(expect.any(String));
+    const a = auditorias.find((x) => x.action === "lgpd.consent_changed")!;
+    expect(a.resourceId).toBe("contato-r");
+    expect(a.metadata).toMatchObject({ from: "recusado", to: "concedido", webhook_source_id: "fonte-1", origin_proven: true });
+  });
+
+  it("contato novo de fonte pública recebe o que o formulário disse (nada a sobrescrever)", async () => {
+    segredoDaFonte = null;
+    montar({ contatos: [] });
+    await json(RESPONDI("r3", "Sim"));
+    const novo = tabela("contacts")[0]!;
+    expect((novo.consent as { marketing: { granted_at: unknown } }).marketing.granted_at).toEqual(expect.any(String));
+  });
+});
+
+describe("corpo JSON que não é objeto", () => {
+  beforeEach(() => montar());
+  it.each(["null", "42", '"texto"', "[1,2]"])("%s -> 400 corpo_invalido, com rastro", async (corpo) => {
+    const r = await chamar(corpo);
+    expect(r.status).toBe(400);
+    expect(JSON.stringify(await r.json())).toContain("corpo_invalido");
+    expect(tabela("webhook_lead_captures")[0]).toMatchObject({ outcome: "recusado", reject_reason: "corpo_invalido" });
+  });
+});
+
+describe("credenciais do envio não vão para o log forense", () => {
+  it("assinatura e token do Turnstile ficam fora de headers, signature_header e raw_body", async () => {
+    montar();
+    await chamar(JSON.stringify({ nome: "Maria", telefone: "11999990000", "cf-turnstile-response": "TOKEN-TURNSTILE" }), "json", {
+      "x-turnstile-token": "TOKEN-HEADER",
+    });
+    const log = tabela("webhook_events_log")[0]!;
+    const guardado = JSON.stringify(log);
+    expect(guardado).not.toContain("TOKEN-TURNSTILE");
+    expect(guardado).not.toContain("TOKEN-HEADER");
+    expect(Object.keys(log.headers as object).map((k) => k.toLowerCase())).not.toContain("x-hipercrm-signature");
+    expect(log.signature_header).toBeNull();
+    expect(log.valid_signature).toBe(true);
+  });
+
+  it("formulário: o campo do Turnstile também sai do corpo cru", async () => {
+    segredoDaFonte = null;
+    montar();
+    await chamar("nome=Maria&telefone=11999990000&cf-turnstile-response=TOKEN-TURNSTILE", "form");
+    expect(String(tabela("webhook_events_log")[0]!.raw_body)).not.toContain("TOKEN-TURNSTILE");
+  });
+});
+
+describe("idempotência do recadastro depois que o lead aberto fecha", () => {
+  it("reenvio com o mesmo external_id não cria lead novo mesmo com o lead já ganho", async () => {
+    montar({ leads: [leadAberto({ id: "lead-aberto" })] });
+    await json({ nome: "Maria", telefone: "11999990000", external_id: "E-9" });
+    expect(tabela("webhook_lead_captures")[0]).toMatchObject({ outcome: "recadastro", external_id: "E-9" });
+
+    tabela("crm_leads")[0]!.status = "won"; // o lead fechou
+    const r = await json({ nome: "Maria", telefone: "11999990000", external_id: "E-9" });
+    expect(r.status).toBe(200);
+    expect(leadsCriados).toHaveLength(0);
+    expect(tabela("webhook_lead_captures")[1]).toMatchObject({ outcome: "duplicado", lead_id: "lead-aberto" });
+  });
+});
+
+describe("envio só com e-mail", () => {
+  it("cria o contato pelo e-mail e liga o lead a ele", async () => {
+    segredoDaFonte = null;
+    montar({ contatos: [] });
+    await json({ nome: "Só Email", email: "ana@exemplo.com" });
+    expect(tabela("contacts")).toHaveLength(1);
+    expect(tabela("contacts")[0]).toMatchObject({ email: "ana@exemplo.com", name: "Só Email" });
+    expect(leadsCriados[0]!.contact_id).toBeTruthy();
+  });
+});
+
+describe("aviso de recusa: corrida do INSERT", () => {
+  it("23505 do índice único é 'já existe', sem log de falha", async () => {
+    montar();
+    const original = banco.from.bind(banco);
+    (banco as { from: unknown }).from = (t: string) => {
+      const q = original(t) as unknown as Record<string, unknown>;
+      if (t === "agent_inbox_items") {
+        q.insert = () => Promise.resolve({ data: null, error: { code: "23505", message: "duplicate key" } });
+      }
+      return q;
+    };
+    logs.length = 0;
+    await avisarRecusaDaFonte(banco as never, { organizationId: ORG, sourceName: "X", motivoLegivel: "y" });
+    expect(JSON.stringify(logs)).not.toContain("aviso não gravado");
   });
 });

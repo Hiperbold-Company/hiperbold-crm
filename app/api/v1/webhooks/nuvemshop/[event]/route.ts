@@ -17,11 +17,15 @@ import type { NextRequest, NextResponse } from "next/server";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { lerCorpoDaRequisicao } from "@/lib/http/corpo-com-limite";
 import { slugToEvent } from "@/lib/nuvemshop/config";
 import { verifyHmac } from "@/lib/nuvemshop/oauth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/** Evento da Nuvemshop é um ponteiro (loja, tipo, id): 1 MB é de sobra. */
+const TETO_CORPO_BYTES = 1024 * 1024;
 
 interface RouteCtx {
   params: Promise<{ event: string }>;
@@ -47,7 +51,11 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     return fail("not_found", `unknown nuvemshop event slug: ${slug}`, 404);
   }
 
-  const rawBody = await req.text();
+  const corpoLido = await lerCorpoDaRequisicao(req, TETO_CORPO_BYTES);
+  if (!corpoLido.ok) {
+    return fail("payload_too_large", "request body too large", 413);
+  }
+  const rawBody = corpoLido.texto;
   let body: NuvemshopPayload;
   try {
     body = JSON.parse(rawBody) as NuvemshopPayload;

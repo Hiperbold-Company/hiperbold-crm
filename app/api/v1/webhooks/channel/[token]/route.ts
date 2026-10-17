@@ -40,11 +40,15 @@ import {
 } from "@/lib/channels/arquivo-de-webhook";
 import { acceptsInboundWebhook, handleInboundWebhook, verifyInboundWebhookSignature, inboundPayloadBelongsToSession } from "@/lib/channels/inbound";
 import { carregarComportamentoDaInstalacao } from "@/lib/instalacao/comportamento-servidor";
+import { lerCorpoDaRequisicao } from "@/lib/http/corpo-com-limite";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/** Teto do corpo de uma entrega (pode trazer mídia inline em canal que a envia). */
+const TETO_CORPO_BYTES = 5 * 1024 * 1024;
 
 export async function POST(
   req: NextRequest,
@@ -59,7 +63,6 @@ export async function POST(
     return fail("not_found", "unknown webhook token", 404, { requestId });
   }
 
-  const rawBody = await req.text();
   const admin = createAdminClient();
 
   // `CHANNEL_SESSION_REF_COLUMNS` já traz a coluna de ref de TODO canal (a
@@ -113,35 +116,22 @@ export async function POST(
     return fail("invalid_request", "provider_mismatch", 400, { requestId });
   }
 
+  // Teto de tamanho ANTES de ler: `req.text()` lê tudo o que o remetente mandar, e o
+  // token desta rota vai na URL cadastrada em painel de terceiro.
+  const corpoLido = await lerCorpoDaRequisicao(req, TETO_CORPO_BYTES);
+  if (!corpoLido.ok) {
+    logger.warn("[webhook-canal] corpo acima do teto", {
+      organization_id: sessao.organization_id,
+      channel_session_id: sessao.id,
+      provider: sessao.provider,
+      request_id: requestId,
+    });
+    return fail("payload_too_large", "request body too large", 413, { requestId });
+  }
+  const rawBody = corpoLido.texto;
+
   const cifrado = sessao.webhook_secret_encrypted;
   const secret = cifrado ? await decryptWebhookSecret(admin, cifrado as string) : null;
-
-  // ─── O corpo cru vai para o arquivo ANTES de qualquer processamento ────────
-  //
-  // Se o processo morrer no meio — exceção, OOM, deploy no instante errado — o
-  // payload continua gravado, que é justamente quando alguém vai querer lê-lo.
-  // Este caminho não gravava NADA, enquanto a rota do outro canal grava desde
-  // sempre: era o único canal sem instrumento para investigar o que chegou.
-  //
-  // ⚠️ ANTES DA CONFERÊNCIA DE ASSINATURA, e isso é o conserto: a recusa por
-  // assinatura saía com `return` LOGO ACIMA desta linha. Consequência dupla —
-  // o payload recusado não era arquivado em lugar nenhum, e o ramo que grava
-  // `valid_signature: false` (mais abaixo) ficava INALCANÇÁVEL, porque a única
-  // recusa por assinatura já tinha saído antes. Uma recusa de segurança que não
-  // deixa rastro de si mesma é pior que não ter a recusa: ninguém descobre que
-  // está sendo tentada.
-  //
-  // Quem chega aqui já apresentou o TOKEN certo da instalação (a sessão foi
-  // resolvida por ele, acima) e errou o SEGREDO de assinatura. Isso não é ruído
-  // de internet: é alguém com metade das credenciais. Arquivar é o que permite
-  // descobrir isso.
-  const arquivo = await abrirArquivoDoWebhook(admin, {
-    organizationId: sessao.organization_id,
-    channelSessionId: sessao.id,
-    provider: sessao.provider,
-    rawBody,
-    headers: req.headers,
-  });
 
   // D-043: `verifyInboundWebhookSignature` lê "exigir assinatura no webhook" da
   // MEMÓRIA do processo, de forma síncrona. Sem carregar a linha da instalação
@@ -152,8 +142,24 @@ export async function POST(
   // disto no máximo uma leitura por janela, e nunca lança.
   await carregarComportamentoDaInstalacao();
 
+  // ─── A assinatura é conferida ANTES de o corpo ir para o arquivo ───────────
+  //
+  // O corpo cru só é arquivado depois que a assinatura conferiu: quem conhece apenas
+  // o TOKEN (público o bastante para estar numa URL) não pode escrever payload
+  // arbitrário, de até o teto, na tabela de arquivo. A recusa continua deixando
+  // rastro de si mesma — era o conserto de uma auditoria anterior, e uma recusa de
+  // segurança sem rastro é pior que não ter a recusa —, mas o rastro é o fato (qual
+  // conexão, quando, quantos bytes, quais cabeçalhos), não o conteúdo.
   if (!verifyInboundWebhookSignature(sessao.provider, rawBody, req.headers, secret)) {
-    await fecharArquivoDoWebhook(admin, arquivo, {
+    const arquivoDaRecusa = await abrirArquivoDoWebhook(admin, {
+      organizationId: sessao.organization_id,
+      channelSessionId: sessao.id,
+      provider: sessao.provider,
+      rawBody: "",
+      corpoOmitido: { motivo: "assinatura recusada", bytes: Buffer.byteLength(rawBody, "utf8") },
+      headers: req.headers,
+    });
+    await fecharArquivoDoWebhook(admin, arquivoDaRecusa, {
       status: "error",
       validSignature: false,
       erro: "bad_signature",
@@ -169,6 +175,17 @@ export async function POST(
     });
     return fail("unauthorized", "bad_signature", 401, { requestId });
   }
+
+  // O corpo cru vai para o arquivo ANTES de qualquer processamento: se o processo
+  // morrer no meio — exceção, OOM, deploy no instante errado — o payload continua
+  // gravado, que é justamente quando alguém vai querer lê-lo.
+  const arquivo = await abrirArquivoDoWebhook(admin, {
+    organizationId: sessao.organization_id,
+    channelSessionId: sessao.id,
+    provider: sessao.provider,
+    rawBody,
+    headers: req.headers,
+  });
 
   if (!await inboundPayloadBelongsToSession(admin, { session: sessao, rawBody, headers: req.headers, secret })) {
     // Assinatura BOA, conta errada: `validSignature: true` de propósito. Marcar
@@ -217,12 +234,22 @@ export async function POST(
       { requestId },
     );
   } catch (err) {
+    // O motivo real fica no arquivo e no log, que são nossos; a resposta ao provedor
+    // (quem sabe o token e errou algo) leva só um código genérico — `err.message`
+    // de uma exceção de ingestão pode citar tabela, coluna e valor.
     const detalhe = err instanceof Error ? err.message : "ingest_failed";
     await fecharArquivoDoWebhook(admin, arquivo, {
       status: "error",
       validSignature: null,
       erro: detalhe,
     });
-    return fail("internal_error", detalhe, 500, { requestId });
+    logger.error("[webhook-canal] ingestão falhou", {
+      organization_id: sessao.organization_id,
+      channel_session_id: sessao.id,
+      provider: sessao.provider,
+      request_id: requestId,
+      detail: detalhe.slice(0, 200),
+    });
+    return fail("internal_error", "ingest_failed", 500, { requestId });
   }
 }

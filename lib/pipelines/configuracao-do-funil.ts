@@ -114,38 +114,51 @@ export async function aplicarConfiguracaoDoFunil(
     return { ok: false, error: "validation_failed", details: parsed.error.flatten() };
   }
 
-  const { data: row, error: readErr } = await supabase
-    .from("crm_pipelines")
-    .select("vocabulary, settings")
-    .eq("id", pipelineId)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-  if (readErr) return { ok: false, error: readErr.message };
-  if (!row) return { ok: false, error: "not_found" };
+  // LER-MODIFICAR-GRAVAR com trava otimista: dois salvamentos ao mesmo tempo (duas abas, a tela e um
+  // token) liam o MESMO `settings`, cada um mesclava só as suas chaves e o último gravava o objeto
+  // inteiro por cima — a chave do primeiro sumia em silêncio. O UPDATE só vale se a linha ainda tem o
+  // `updated_at` que foi lido (o gatilho `fn_set_updated_at` o move a cada escrita); senão relê e
+  // mescla de novo sobre o que o outro gravou. Depois de 4 corridas seguidas, `conflict` (409).
+  let aplicou = false;
+  for (let tentativa = 0; tentativa < 4 && !aplicou; tentativa += 1) {
+    const { data: row, error: readErr } = await supabase
+      .from("crm_pipelines")
+      .select("vocabulary, settings, updated_at")
+      .eq("id", pipelineId)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (readErr) return { ok: false, error: readErr.message };
+    if (!row) return { ok: false, error: "not_found" };
 
-  const nextVocabulary = parsed.data.vocabulary
-    ? { ...((row.vocabulary as Record<string, unknown> | null) ?? {}), ...parsed.data.vocabulary }
-    : ((row.vocabulary as Record<string, unknown> | null) ?? {});
+    const nextVocabulary = parsed.data.vocabulary
+      ? { ...((row.vocabulary as Record<string, unknown> | null) ?? {}), ...parsed.data.vocabulary }
+      : ((row.vocabulary as Record<string, unknown> | null) ?? {});
 
-  const currentSettings = (row.settings as Record<string, unknown> | null) ?? {};
-  const nextSettings: Record<string, unknown> = { ...currentSettings };
-  if (parsed.data.fields !== undefined) nextSettings.fields = parsed.data.fields;
-  if (parsed.data.lost_reasons !== undefined) nextSettings.lost_reasons = parsed.data.lost_reasons;
-  if (parsed.data.won_reasons !== undefined) nextSettings.won_reasons = parsed.data.won_reasons;
-  if (parsed.data.won_reason_required !== undefined) {
-    nextSettings.won_reason_required = parsed.data.won_reason_required;
+    const currentSettings = (row.settings as Record<string, unknown> | null) ?? {};
+    const nextSettings: Record<string, unknown> = { ...currentSettings };
+    if (parsed.data.fields !== undefined) nextSettings.fields = parsed.data.fields;
+    if (parsed.data.lost_reasons !== undefined) nextSettings.lost_reasons = parsed.data.lost_reasons;
+    if (parsed.data.won_reasons !== undefined) nextSettings.won_reasons = parsed.data.won_reasons;
+    if (parsed.data.won_reason_required !== undefined) {
+      nextSettings.won_reason_required = parsed.data.won_reason_required;
+    }
+    if (parsed.data.reabertura !== undefined) nextSettings.reabertura = parsed.data.reabertura;
+    if (parsed.data.reabertura_campos !== undefined) {
+      nextSettings.reabertura_campos = parsed.data.reabertura_campos;
+    }
+
+    let escrita = supabase
+      .from("crm_pipelines")
+      .update({ vocabulary: nextVocabulary, settings: nextSettings })
+      .eq("id", pipelineId)
+      .eq("organization_id", organizationId);
+    const versaoLida = (row as { updated_at?: string | null }).updated_at;
+    if (versaoLida) escrita = escrita.eq("updated_at", versaoLida);
+    const { data: gravadas, error } = await escrita.select("id");
+    if (error) return { ok: false, error: error.message };
+    aplicou = (gravadas ?? []).length > 0;
   }
-  if (parsed.data.reabertura !== undefined) nextSettings.reabertura = parsed.data.reabertura;
-  if (parsed.data.reabertura_campos !== undefined) {
-    nextSettings.reabertura_campos = parsed.data.reabertura_campos;
-  }
-
-  const { error } = await supabase
-    .from("crm_pipelines")
-    .update({ vocabulary: nextVocabulary, settings: nextSettings })
-    .eq("id", pipelineId)
-    .eq("organization_id", organizationId);
-  if (error) return { ok: false, error: error.message };
+  if (!aplicou) return { ok: false, error: "conflict" };
 
   await audit({
     action: "pipeline.config_updated",

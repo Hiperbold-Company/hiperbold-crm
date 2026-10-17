@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { audit, hashEmail } from "@/lib/audit";
 import { authRateLimited } from "@/lib/auth/rate-limit";
-import { consumirToken } from "@/lib/auth/verificacao-email";
+import { consumirToken, lerToken } from "@/lib/auth/verificacao-email";
 import { env } from "@/lib/env";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,6 +11,10 @@ export const dynamic = "force-dynamic";
 
 /** Tentativas por IP e hora. Link de e-mail legítimo é aberto 1 ou 2 vezes; o teto barra quem chuta tokens. */
 const LIMITE_POR_IP = { ip: 30, windowSec: 3600 } as const;
+// Por CONTA: o token é `<user_id>.<segredo>` e o user_id se lê antes de qualquer conferência, então
+// quem varia o IP (o teto acima é por origem) ainda pode tentar segredos contra UMA conta. Balde próprio,
+// com o teto por IP folgado para não contar a mesma tentativa duas vezes.
+const LIMITE_POR_CONTA = { ip: 1000, id: 30, windowSec: 3600 } as const;
 
 /**
  * GET /auth/verificar-email?token=<user_id>.<segredo> — abre o link do e-mail "Confirme seu e-mail".
@@ -32,6 +36,10 @@ export async function GET(request: NextRequest) {
   if (await authRateLimited("verificar_email", null, LIMITE_POR_IP)) return para("limite");
 
   const token = request.nextUrl.searchParams.get("token");
+  const lido = lerToken(token);
+  if (lido && (await authRateLimited("verificar_email_conta", lido.userId, LIMITE_POR_CONTA))) {
+    return para("limite");
+  }
   const requestId = request.headers.get("x-request-id");
   const consumo = await consumirToken({ admin: createAdminClient(), token });
 
