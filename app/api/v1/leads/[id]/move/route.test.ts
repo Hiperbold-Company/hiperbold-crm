@@ -71,8 +71,8 @@ function bancoFalso(
     if (tabela === "crm_stages") {
       const chain = {
         select: () => chain,
-        eq: (_col: string, id: string) => {
-          (chain as { id?: string }).id = id;
+        eq: (col: string, id: string) => {
+          if (col === "id") (chain as { id?: string }).id = id;
           return chain;
         },
         maybeSingle: async () => ({

@@ -13,6 +13,7 @@ import { observeServiceOrigin } from "@/lib/atendimento/origem";
 import { ApiError } from "@/lib/api/types";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
+import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
 import { roleAtLeast } from "@/lib/auth/types";
@@ -336,6 +337,7 @@ export async function getContactHandler(
       await audit({
         action: "contact.updated",
         actorUserId: a.actorUserId,
+        actorApiTokenId: colunasDeAtorNoAudit(ctx.actor).actorApiTokenId,
         organizationId: contact.organization_id,
         resourceType: "contact",
         resourceId: contact.id,
@@ -468,6 +470,7 @@ export async function createContactHandler(
   await audit({
     action: "contact.created",
     actorUserId: a.actorUserId,
+    actorApiTokenId: colunasDeAtorNoAudit(ctx.actor).actorApiTokenId,
     organizationId: contact.organization_id,
     resourceType: "contact",
     resourceId: contact.id,
@@ -675,6 +678,7 @@ export async function patchContactHandler(
   await audit({
     action: "contact.updated",
     actorUserId: a.actorUserId,
+    actorApiTokenId: colunasDeAtorNoAudit(ctx.actor).actorApiTokenId,
     organizationId: contact.organization_id,
     resourceType: "contact",
     resourceId: contact.id,
@@ -790,6 +794,7 @@ export async function deleteContactHandler(
     await audit({
       action: "contact.delete_blocked",
       actorUserId: a.actorUserId,
+      actorApiTokenId: colunasDeAtorNoAudit(ctx.actor).actorApiTokenId,
       organizationId: ctx.organization_id,
       resourceType: "contact",
       resourceId: contactId,
@@ -844,6 +849,7 @@ export async function deleteContactHandler(
     await audit({
       action: "contact.delete_blocked",
       actorUserId: a.actorUserId,
+      actorApiTokenId: colunasDeAtorNoAudit(ctx.actor).actorApiTokenId,
       organizationId: ctx.organization_id,
       resourceType: "contact",
       resourceId: contactId,
@@ -879,6 +885,7 @@ export async function deleteContactHandler(
   await audit({
     action: "contact.deleted",
     actorUserId: a.actorUserId,
+    actorApiTokenId: colunasDeAtorNoAudit(ctx.actor).actorApiTokenId,
     organizationId: ctx.organization_id,
     resourceType: "contact",
     resourceId: contactId,

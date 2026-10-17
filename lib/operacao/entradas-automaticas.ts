@@ -23,6 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError } from "@/lib/api/types";
 import type { Actor } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
+import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import { autoriaDaMudanca } from "@/lib/operacao/autoria";
 
@@ -268,7 +269,7 @@ export async function criarEntradaAutomatica(
 
   await audit({
     action: "webhook.source_created",
-    actorUserId: deps.actor.type === "user" ? deps.actor.id : null,
+    ...colunasDeAtorNoAudit(deps.actor),
     organizationId: deps.organizationId,
     resourceType: "webhook_source",
     resourceId: (created as unknown as { id: string }).id,
@@ -310,7 +311,7 @@ export async function definirEntradaAtiva(
 
   await audit({
     action: "webhook.source_updated",
-    actorUserId: deps.actor.type === "user" ? deps.actor.id : null,
+    ...colunasDeAtorNoAudit(deps.actor),
     organizationId: deps.organizationId,
     resourceType: "webhook_source",
     resourceId: input.id,
@@ -324,6 +325,120 @@ export async function definirEntradaAtiva(
   });
 
   return semSegredo(updated as unknown as Record<string, unknown>, antes.path_token);
+}
+
+export interface EdicaoDeEntradaAutomatica {
+  name?: string;
+  default_pipeline_id?: string;
+  default_stage_id?: string;
+  redirect_to?: string | null;
+  field_map?: Record<string, string[]>;
+  is_active?: boolean;
+  /**
+   * Já CIFRADO pelo chamador (a operação nunca vê plaintext de segredo): texto
+   * troca o segredo, `null` o remove, `undefined` não mexe.
+   */
+  secret_encrypted?: string | null;
+}
+
+/**
+ * Edita uma entrada automática da organização — a MESMA operação da rota
+ * `PATCH /api/v1/webhook-sources/[id]` e da tool MCP de edição.
+ *
+ * D-132: o destino (funil e etapa desta organização, a etapa do funil e em uso)
+ * é conferido contra o PAR que ficaria gravado — o enviado, ou o que já existe
+ * para a metade omitida. Fonte de outra organização responde 404.
+ */
+export async function atualizarEntradaAutomatica(
+  deps: DepsDaOperacao,
+  id: string,
+  edicao: EdicaoDeEntradaAutomatica,
+): Promise<FonteVisivel> {
+  const { data: existente, error: erroDeLeitura } = await deps.supabase
+    .from("webhook_sources")
+    .select("id, default_pipeline_id, default_stage_id")
+    .eq("id", id)
+    .eq("organization_id", deps.organizationId)
+    .maybeSingle();
+  if (erroDeLeitura) {
+    throw new ApiError(500, "internal_error", undefined, deps.requestId, erroDeLeitura.message);
+  }
+  if (!existente) {
+    throw new ApiError(404, "not_found", undefined, deps.requestId, "Fonte não encontrada.");
+  }
+  const atual = existente as unknown as { default_pipeline_id: string; default_stage_id: string };
+
+  if (edicao.default_pipeline_id !== undefined || edicao.default_stage_id !== undefined) {
+    await destinoValido(
+      deps,
+      edicao.default_pipeline_id ?? atual.default_pipeline_id,
+      edicao.default_stage_id ?? atual.default_stage_id,
+    );
+  }
+
+  const { secret_encrypted: segredo, ...resto } = edicao;
+  const patch: Record<string, unknown> = {
+    ...resto,
+    updated_at: new Date().toISOString(),
+    // A autoria vai junto de TODA escrita, pelo mesmo helper que o agente usa: a
+    // tela precisa distinguir o que ela mesma mudou do que o assistente mudou
+    // (migration 0101).
+    ...autoriaDaMudanca(deps.actor),
+  };
+  if (segredo !== undefined) patch.secret_encrypted = segredo;
+
+  const { data: atualizada, error } = await deps.supabase
+    .from("webhook_sources")
+    .update(patch)
+    .eq("id", id)
+    .eq("organization_id", deps.organizationId)
+    .select(COLUNAS_DA_FONTE)
+    .single();
+  // Fase F3, decisão 3: ativar por aqui também conta contra o teto de integrações.
+  if (error || !atualizada) {
+    throw erroDePlanoOuGenerico(error, deps.requestId, "webhook_source_update_failed");
+  }
+
+  await audit({
+    action: "webhook.source_updated",
+    ...colunasDeAtorNoAudit(deps.actor),
+    organizationId: deps.organizationId,
+    resourceType: "webhook_source",
+    resourceId: id,
+    requestId: deps.requestId,
+    // Nunca gravar o valor do segredo no audit log — só o fato da troca.
+    metadata: { ...resto, ...(segredo !== undefined ? { secret_changed: true } : {}), actor_type: deps.actor.type },
+  });
+
+  const tokens = await tokensDasFontes(deps, [id]);
+  return semSegredo(atualizada as unknown as Record<string, unknown>, tokens.get(id) ?? "");
+}
+
+/**
+ * Remove uma entrada automática da organização. O funil e as etapas ficam; o que
+ * deixa de existir é a URL de captação — formulário que ainda a usa para de
+ * virar contato, por isso a tool equivalente é `critico`. Fonte de outra
+ * organização responde 404.
+ */
+export async function excluirEntradaAutomatica(deps: DepsDaOperacao, id: string): Promise<void> {
+  const antes = await fonteDaOrg(deps, id);
+
+  const { error } = await deps.supabase
+    .from("webhook_sources")
+    .delete()
+    .eq("id", id)
+    .eq("organization_id", deps.organizationId);
+  if (error) throw new ApiError(500, "internal_error", undefined, deps.requestId, error.message);
+
+  await audit({
+    action: "webhook.source_deleted",
+    ...colunasDeAtorNoAudit(deps.actor),
+    organizationId: deps.organizationId,
+    resourceType: "webhook_source",
+    resourceId: id,
+    requestId: deps.requestId,
+    metadata: { name: antes.name, actor_type: deps.actor.type },
+  });
 }
 
 export interface RecebimentoDaEntrada {

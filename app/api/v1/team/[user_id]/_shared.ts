@@ -5,7 +5,8 @@
  * Alias (EPIC-09, kept for existing callers): PATCH /api/v1/team/[user_id]/role
  *
  * Guardrails:
- *  - Caller must be admin of the active org (requireRole, spec 13 §4).
+ *  - Caller must be admin of the active org (spec 13 §4) — sessão OU token
+ *    `role:admin` + `mcp:write` (`lib/api/auth-dual-admin.ts`).
  *  - Cannot demote the last remaining admin (count check before write).
  *  - Cannot change role of a revoked member.
  */
@@ -14,12 +15,10 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
+import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
-import { traduzir } from "@/lib/i18n/dicionario";
 import { changeRoleSchema, validateRequest } from "@/lib/schemas";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 
 export async function changeMemberRole(
   req: NextRequest,
@@ -28,10 +27,16 @@ export async function changeMemberRole(
   const requestId = randomUUID();
   const { user_id: targetUserId } = await ctx.params;
 
-  const authz = await requireRole("admin", { requestId, resource: "team" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "team",
+    role: "admin",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const { user: authUser, org: activeOrg } = authz;
-  const t = (texto: string) => traduzir(texto, authUser.idioma);
+  const activeOrg = { orgId: authz.organizationId };
+  const ator = atorDoAudit(authz);
+  const t = traducaoDe(authz);
 
   let input;
   try {
@@ -46,7 +51,7 @@ export async function changeMemberRole(
     throw err;
   }
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
 
   const { data: target, error: fetchErr } = await supabase
     .from("user_organizations")
@@ -94,7 +99,7 @@ export async function changeMemberRole(
 
   await audit({
     action: "team.role_changed",
-    actorUserId: authUser.id,
+    ...ator,
     organizationId: activeOrg.orgId,
     resourceType: "membership",
     resourceId: target.id,

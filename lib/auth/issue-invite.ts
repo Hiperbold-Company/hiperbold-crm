@@ -21,6 +21,12 @@ export async function issueInvite(input: {
   orgName: string;
   inviterId: string;
   inviterName: string;
+  /**
+   * Convite emitido por um TOKEN de servidor: o audit assina com o token
+   * (`actor_api_token_id`) e não com `inviterId`, que nesse caso é só o dono da
+   * chave (a coluna `invited_by` precisa de uma pessoa).
+   */
+  actorApiTokenId?: string | null;
   requestId: string;
   inviteId?: string;
   issuedAt?: number;
@@ -89,7 +95,8 @@ export async function issueInvite(input: {
     }
     await audit({
       action: "member.invited",
-      actorUserId: input.inviterId,
+      actorUserId: input.actorApiTokenId ? null : input.inviterId,
+      actorApiTokenId: input.actorApiTokenId ?? null,
       organizationId: input.organizationId,
       resourceType: "membership",
       resourceId: inviteId,

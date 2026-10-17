@@ -152,6 +152,10 @@ export const ALVO_DE_FUNIL: Record<string, AlvoDeFunil> = {
   crm_archive_stage: "sem_funil",
   crm_create_webhook_source: "sem_funil",
   crm_set_webhook_source_active: "sem_funil",
+  crm_update_webhook_source: "sem_funil",
+  crm_delete_webhook_source: "sem_funil",
+  crm_update_pipeline_config: "sem_funil",
+  crm_update_organization_settings: "sem_funil",
   crm_set_automation_rule_active: "sem_funil",
 };
 

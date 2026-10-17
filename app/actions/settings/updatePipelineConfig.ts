@@ -5,11 +5,11 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import { audit } from "@/lib/audit";
 import {
   pipelineConfigPatchSchema,
   type PipelineConfigPatch,
 } from "@/lib/schemas/settings";
+import { aplicarConfiguracaoDoFunil } from "@/lib/pipelines/configuracao-do-funil";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { portaoDeAdminDaOrganizacao } from "@/lib/auth/portao-de-escrita";
 
@@ -37,60 +37,20 @@ export async function updatePipelineConfig(
   const portao = await portaoDeAdminDaOrganizacao(authUser, activeOrg);
   if (!portao.ok) return { ok: false, error: portao.erro };
 
+  // O núcleo é o mesmo da rota `PATCH /api/v1/pipelines/[id]/config` e das tools MCP
+  // (`lib/pipelines/configuracao-do-funil.ts`): o portão acima é o desta porta.
   const supabase = await createClient();
   const hdrs = await headers();
   const requestId = hdrs.get("x-request-id");
 
-  const { data: row, error: readErr } = await supabase
-    .from("crm_pipelines")
-    .select("vocabulary, settings, organization_id")
-    .eq("id", pipelineId)
-    .maybeSingle();
-  if (readErr) return { ok: false, error: readErr.message };
-  if (!row) return { ok: false, error: "not_found" };
-  if (row.organization_id !== activeOrg.orgId) {
-    return { ok: false, error: "forbidden_tenant" };
-  }
-
-  const nextVocabulary = parsed.data.vocabulary
-    ? { ...((row.vocabulary as Record<string, unknown> | null) ?? {}), ...parsed.data.vocabulary }
-    : ((row.vocabulary as Record<string, unknown> | null) ?? {});
-
-  const currentSettings = (row.settings as Record<string, unknown> | null) ?? {};
-  const nextSettings: Record<string, unknown> = { ...currentSettings };
-  if (parsed.data.fields !== undefined) nextSettings.fields = parsed.data.fields;
-  if (parsed.data.lost_reasons !== undefined) nextSettings.lost_reasons = parsed.data.lost_reasons;
-  if (parsed.data.won_reasons !== undefined) nextSettings.won_reasons = parsed.data.won_reasons;
-  if (parsed.data.won_reason_required !== undefined) {
-    nextSettings.won_reason_required = parsed.data.won_reason_required;
-  }
-  if (parsed.data.reabertura !== undefined) nextSettings.reabertura = parsed.data.reabertura;
-  if (parsed.data.reabertura_campos !== undefined) {
-    nextSettings.reabertura_campos = parsed.data.reabertura_campos;
-  }
-
-  const { error } = await supabase
-    .from("crm_pipelines")
-    .update({ vocabulary: nextVocabulary, settings: nextSettings })
-    .eq("id", pipelineId);
-  if (error) return { ok: false, error: error.message };
-
-  await audit({
-    action: "pipeline.config_updated",
-    actorUserId: authUser.id,
+  const aplicado = await aplicarConfiguracaoDoFunil(supabase, {
     organizationId: activeOrg.orgId,
-    resourceType: "pipeline",
-    resourceId: pipelineId,
+    pipelineId,
+    patch: parsed.data,
+    autor: { actorUserId: authUser.id },
     requestId,
-    metadata: {
-      vocabulary_changed: !!parsed.data.vocabulary,
-      fields_count: parsed.data.fields?.length ?? null,
-      lost_reasons_count: parsed.data.lost_reasons?.length ?? null,
-      won_reasons_count: parsed.data.won_reasons?.length ?? null,
-      won_reason_required: parsed.data.won_reason_required ?? null,
-      reabertura: parsed.data.reabertura ?? null,
-    },
   });
+  if (!aplicado.ok) return { ok: false, error: aplicado.error, details: aplicado.details };
 
   revalidatePath("/app/settings/tenant/pipelines");
   return { ok: true };

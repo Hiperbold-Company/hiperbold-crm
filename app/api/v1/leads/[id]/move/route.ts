@@ -15,9 +15,8 @@ import { audit } from "@/lib/audit";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
-import { requireRole } from "@/lib/auth/require-role";
+import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { moveLeadSchema, validateRequest } from "@/lib/schemas";
-import { createClient } from "@/lib/supabase/server";
 import { emitLeadActivity, stageChangeReason } from "@/lib/leads/activity-emitter";
 import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import {
@@ -32,7 +31,6 @@ import {
   settingsDoFunil,
   validaCamposExigidos,
 } from "@/lib/leads/campos-exigidos";
-import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
@@ -46,12 +44,22 @@ export async function POST(
   const requestId = randomUUID();
   const { id: leadId } = await ctx.params;
 
-  const supabase = await createClient();
-  // spec 13 §4: escrita é agent+ (viewer é read-only).
-  const authz = await requireRole("agent", { requestId, resource: "crm_leads" });
+  // spec 13 §4: escrita é agent+ (viewer é read-only). Sessão OU token
+  // (`role:agent`+, `mcp:write`). ⚠️ No ramo do token o client é o ADMIN (sem RLS):
+  // TODA leitura e escrita abaixo filtra `organization_id` explicitamente, e a org
+  // vem da linha do token — um id de lead/etapa de outra organização responde 404.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "crm_leads",
+    role: "agent",
+    escrita: true,
+    comDono: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const user = authz.user;
+  const supabase = authz.supabase;
+  const orgId = authz.organizationId;
+  const t = traducaoDe(authz);
+  const user = { idioma: authz.idioma };
 
   let input;
   try {
@@ -66,11 +74,12 @@ export async function POST(
     throw err;
   }
 
-  // Fetch current lead (RLS scoped).
+  // Fetch current lead (RLS scoped + filtro explícito de organização).
   const { data: lead, error: selErr } = await supabase
     .from("crm_leads")
     .select("*")
     .eq("id", leadId)
+    .eq("organization_id", orgId)
     .maybeSingle();
 
   if (selErr) {
@@ -87,6 +96,7 @@ export async function POST(
     .from("crm_stages")
     .select("id, pipeline_id, name, is_lost, is_won")
     .eq("id", input.stage_id)
+    .eq("organization_id", orgId)
     .maybeSingle();
 
   if (stageErr) {
@@ -233,6 +243,7 @@ export async function POST(
         : {}),
     })
     .eq("id", leadId)
+    .eq("organization_id", orgId)
     .eq("updated_at", input.expected_updated_at)
     .select("id")
     .maybeSingle();
@@ -262,6 +273,7 @@ export async function POST(
       .from("crm_leads")
       .select("updated_at")
       .eq("id", leadId)
+      .eq("organization_id", orgId)
       .maybeSingle();
     return fail(
       "lead_stage_changed_concurrent",
@@ -282,6 +294,7 @@ export async function POST(
     .from("crm_stages")
     .select("name")
     .eq("id", lead.stage_id)
+    .eq("organization_id", orgId)
     .maybeSingle();
 
   const atividade = await emitLeadActivity(supabase, {
@@ -291,7 +304,7 @@ export async function POST(
     type: "stage_changed",
     sourceModule: "crm",
     sourceId: leadId,
-    actor: { type: "user", id: user.id },
+    actor: authz.actor,
     reason: stageChangeReason(fromStage?.name ?? null, stage.name),
     payload: {
       from_stage_id: lead.stage_id,
@@ -321,6 +334,7 @@ export async function POST(
     .from("crm_leads")
     .select("*")
     .eq("id", leadId)
+    .eq("organization_id", orgId)
     .maybeSingle();
 
   const finalLead = fresh ?? lead;
@@ -337,7 +351,11 @@ export async function POST(
         position_in_stage: input.position_in_stage,
         status: finalLead.status,
       },
-      p_metadata: { request_id: requestId, actor_user_id: user.id },
+      p_metadata: {
+        request_id: requestId,
+        actor_user_id: atorDoAudit(authz).actorUserId,
+        actor_api_token_id: atorDoAudit(authz).actorApiTokenId,
+      },
       p_organization_id: lead.organization_id,
     })
     .then(({ error }) => {
@@ -346,7 +364,7 @@ export async function POST(
 
   await audit({
     action: "lead.moved",
-    actorUserId: user.id,
+    ...atorDoAudit(authz),
     organizationId: lead.organization_id,
     resourceType: "crm_lead",
     resourceId: leadId,

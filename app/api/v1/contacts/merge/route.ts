@@ -12,7 +12,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * mesmo das policies de `merge_queue` —, e o gate é `requireRole`, nunca uma
  * comparação de rank na mão.
  *
- * O cliente é o do USUÁRIO (cookie), não o admin: assim `auth.uid()` chega à
+ * Na sessão o cliente é o do USUÁRIO (cookie), não o admin: assim `auth.uid()` chega à
  * função, ela reconfere o papel na org e a atividade da timeline sai com
  * `performed_by_user_id` preenchido. Trocar por service role apagaria as três
  * coisas de uma vez.
@@ -23,9 +23,8 @@ import { type NextRequest } from "next/server";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { atorDoAudit, autorizarAdministracao } from "@/lib/api/auth-dual-admin";
 import { contactsMergeSchema, validateRequest } from "@/lib/schemas";
-import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -82,9 +81,17 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const requestId = randomUUID();
 
-  const authz = await requireRole("manager", { requestId, resource: "contact" });
+  // Sessão OU token (`role:manager`+, `mcp:write`). No token o client é o admin
+  // (`auth.uid()` nulo): a função pula a conferência de papel — que aqui já foi
+  // feita pelo token — e a org é a da linha do token, nunca do corpo.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "contact",
+    role: "manager",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const { user, org } = authz;
+  const org = { orgId: authz.organizationId };
 
   let input;
   try {
@@ -99,7 +106,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     throw err;
   }
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
   const { data, error } = await supabase.rpc("fn_mesclar_contatos", {
     p_organization_id: org.orgId,
     p_contato_principal: input.primary_contact_id,
@@ -131,7 +138,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   // sairia da fusão sem registro em lugar algum se esta linha não existisse.
   await audit({
     action: "contact.merged",
-    actorUserId: user.id,
+    ...atorDoAudit(authz),
     organizationId: org.orgId,
     resourceType: "contact",
     resourceId: input.primary_contact_id,

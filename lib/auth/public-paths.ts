@@ -143,6 +143,32 @@ export const PUBLIC_PATHS: RegExp[] = [
   // cartão de fidelidade (a única das automações que não é texto) não teria
   // como sair depois do corte de gateway.
   /^\/api\/v1\/conversations\/[^/]+\/media$/,
+  // API FASE 1 (17/10/2026) — ADMINISTRAÇÃO DA ORGANIZAÇÃO POR TOKEN. Sessão OU
+  // Bearer `dsk_…`, resolvidos por `lib/api/auth-dual-admin.ts` DENTRO de cada
+  // rota (papel do token = piso da sessão; `mcp:read` para ler, `mcp:write` para
+  // escrever; org sempre da linha do token). "Público" aqui quer dizer "o proxy
+  // não decide", nunca "sem autenticação". Todas ANCORADAS com `$`, e todo
+  // segmento de id é FORMA DE UUID, nunca `[^/]+`: as pastas têm irmãos
+  // literais (`/team/assignable`, `/team/<id>/interface`, `/pipelines/default`,
+  // `/leads/bulk`…) que não aceitam Bearer e não podem nascer públicos de carona.
+  /^\/api\/v1\/team$/,
+  /^\/api\/v1\/team\/invite$/,
+  /^\/api\/v1\/team\/invites$/,
+  /^\/api\/v1\/team\/invites\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(resend|revoke)$/i,
+  /^\/api\/v1\/team\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/team\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(role|revoke|reactivate)$/i,
+  /^\/api\/v1\/pipelines$/,
+  /^\/api\/v1\/pipelines\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/pipelines\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(stages|config)$/i,
+  /^\/api\/v1\/pipelines\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/stages\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/webhook-sources$/,
+  /^\/api\/v1\/webhook-sources\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/webhook-sources\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/events$/i,
+  /^\/api\/v1\/settings\/organizacao$/,
+  /^\/api\/v1\/leads$/,
+  /^\/api\/v1\/leads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(move|win|lose)$/i,
+  /^\/api\/v1\/contacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/contacts\/merge$/,
   /^\/_next\//,
   /^\/favicon\.ico$/,
   // O ícone da aba (`app/icon.tsx`), que o `<head>` de TODA página pede —

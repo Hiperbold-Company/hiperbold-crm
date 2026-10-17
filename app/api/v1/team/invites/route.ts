@@ -13,8 +13,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
 import { ok, falhaInterna } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
+import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
 import {
   conviteEstaEmAberto,
   linkDeAceite,
@@ -24,13 +23,18 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: NextRequest): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "team" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "team",
+    role: "manager",
+    escrita: false,
+  });
   if (!authz.ok) return authz.response;
-  const { org: activeOrg } = authz;
+  const activeOrg = { orgId: authz.organizationId };
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
   const { data: rows, error } = await supabase
     .from("team_invites")
     .select(

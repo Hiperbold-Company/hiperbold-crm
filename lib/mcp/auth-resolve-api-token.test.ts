@@ -360,6 +360,8 @@ describe("validateBearerToken — a tradução para MCP não mudou", () => {
       actor: { type: "api_token", id: TOKEN_ID, role: "agent" },
       apiTokenId: TOKEN_ID,
       scopes: ["mcp:read", "mcp:write"],
+      // Quem criou a chave: as rotas de administração gravam nas colunas com FK em auth.users.
+      createdBy: expect.any(String),
     });
   });
 

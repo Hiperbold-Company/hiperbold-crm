@@ -66,6 +66,13 @@ export type AuthDual =
       scopes?: string[];
       /** Id da linha do token (`api_tokens.id`) — o `actor_api_token_id` do audit. */
       apiTokenId?: string;
+      /**
+       * Quem criou o token (`api_tokens.created_by`), só no modo token. Serve às
+       * colunas com FK para `auth.users` que uma rota de administração grava
+       * (`invited_by`, `revoked_by`); NÃO é identidade de quem chama — o ator é
+       * o token e o audit leva `actor_api_token_id`.
+       */
+      donoDoToken?: string;
     }
   | { ok: false; response: Response };
 
@@ -159,6 +166,7 @@ export async function resolveAuthDual(
       via: "token",
       scopes: auth.scopes,
       apiTokenId: auth.apiTokenId,
+      donoDoToken: auth.createdBy,
     };
   }
 

@@ -12,6 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
 import type { Actor } from "@/lib/api/handlers/types";
+import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
 import { requireRole } from "@/lib/auth/require-role";
 import { extractBearer, validateBearerToken, ensureRole, ensureScope, McpAuthError } from "@/lib/mcp/auth";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -159,12 +160,16 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const supabase = await createClient();
-  // spec 13 §4: escrita é agent+ (viewer é read-only).
-  const authz = await requireRole("agent", { requestId, resource: "contacts" });
+  // spec 13 §4: escrita é agent+ (viewer é read-only). Sessão OU token (`role:agent`+, `mcp:write`).
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "contacts",
+    role: "agent",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const user = authz.user;
-  const activeOrg = authz.org;
+  const supabase = authz.supabase;
+  const activeOrg = { orgId: authz.organizationId };
 
   // O documento do titular é validado pela régua do PAÍS da organização (issue
   // #1033): quem decide é a coluna `organizations.country`, nunca o corpo da
@@ -189,9 +194,9 @@ export async function POST(req: NextRequest): Promise<Response> {
       supabase,
       {
         organization_id: activeOrg.orgId,
-        actor: { type: "user", id: user.id },
+        actor: authz.actor,
         requestId,
-        idioma: user.idioma,
+        idioma: authz.idioma,
       },
       input as ContactCreate,
     );

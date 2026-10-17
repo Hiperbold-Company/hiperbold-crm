@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { audit } from "@/lib/audit";
+import { atualizarPerfilDaOrganizacao } from "@/lib/organizacao/configuracao";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { portaoDeAdminDaOrganizacao } from "@/lib/auth/portao-de-escrita";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
@@ -40,33 +40,13 @@ export async function atualizarPerfilDaEmpresa(input: PerfilDaEmpresaInput): Pro
   const ip = ipDoCliente(hdrs);
   const userAgent = hdrs.get("user-agent") ?? null;
 
-  const { data: atual, error: erroDeLeitura } = await supabase
-    .from("organizations")
-    .select("onboarding_state")
-    .eq("id", activeOrg.orgId)
-    .maybeSingle<{ onboarding_state: Record<string, unknown> | null }>();
-  if (erroDeLeitura || !atual) return { ok: false, error: "internal_error" };
-
-  const estado = atual.onboarding_state ?? {};
-  const welcome = (estado.welcome ?? {}) as Record<string, unknown>;
-  const { error } = await supabase
-    .from("organizations")
-    .update({ onboarding_state: { ...estado, welcome: { ...welcome, o_que_faz: parsed.data.o_que_faz } } })
-    .eq("id", activeOrg.orgId);
-  if (error) return { ok: false, error: "internal_error" };
-
-  await audit({
-    action: "org.updated",
+  const gravado = await atualizarPerfilDaOrganizacao(supabase, activeOrg.orgId, parsed.data.o_que_faz, {
     actorUserId: authUser.id,
-    organizationId: activeOrg.orgId,
-    resourceType: "organization",
-    resourceId: activeOrg.orgId,
     requestId,
     ip,
     userAgent,
-    // O texto livre NÃO entra no audit (append-only, retenção de 5 anos): só o nome do campo.
-    metadata: { fields_changed: ["o_que_faz"] },
   });
+  if (!gravado.ok) return gravado;
 
   revalidatePath("/app/settings/tenant");
   revalidatePath("/app/inicio");

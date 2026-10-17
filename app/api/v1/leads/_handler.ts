@@ -11,6 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError } from "@/lib/api/types";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
+import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { bloqueioValeParaOrganizacao } from "@/lib/billing/planos/bloqueio-vale";
 import { podeCriar } from "@/lib/billing/planos/pode-criar";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
@@ -615,6 +616,7 @@ export async function createLeadHandler(
   await audit({
     action: "lead.created",
     actorUserId: a.actorUserId,
+    actorApiTokenId: colunasDeAtorNoAudit(ctx.actor).actorApiTokenId,
     organizationId: ctx.organization_id,
     resourceType: "crm_lead",
     resourceId: (lead as { id: string }).id,
@@ -857,6 +859,7 @@ export async function updateLeadHandler(
   await audit({
     action: "lead.updated",
     actorUserId: a.actorUserId,
+    actorApiTokenId: colunasDeAtorNoAudit(ctx.actor).actorApiTokenId,
     organizationId: existing.organization_id,
     resourceType: "crm_lead",
     resourceId: leadId,
@@ -1268,6 +1271,7 @@ export async function moveLeadHandler(
   await audit({
     action: "lead.moved",
     actorUserId: a.actorUserId,
+    actorApiTokenId: colunasDeAtorNoAudit(ctx.actor).actorApiTokenId,
     organizationId: lead.organization_id,
     resourceType: "crm_lead",
     resourceId: leadId,

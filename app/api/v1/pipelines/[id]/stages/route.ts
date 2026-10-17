@@ -23,10 +23,9 @@ import { z } from "zod";
 
 import { respostaDeRecusa } from "@/lib/api/recusa";
 import { fail, ok } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
+import { corDaEtapaSchema } from "@/lib/leads/stage-cor";
 import { criarEtapa } from "@/lib/leads/stage-operations";
-import { createClient } from "@/lib/supabase/server";
-import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +35,13 @@ interface RouteCtx {
 
 // `.max(80)`: o nome é o topo de uma coluna do quadro, não um parágrafo. O banco
 // não limita, mas a tela quebra muito antes disso.
-const bodySchema = z.object({ name: z.string().min(1).max(80) }).strict();
+const bodySchema = z
+  .object({
+    name: z.string().min(1).max(80),
+    /** Cor da coluna, `#RRGGBB`. Ausente = cor padrão da tela. */
+    color: corDaEtapaSchema.nullable().optional(),
+  })
+  .strict();
 
 /**
  * GET — as etapas vivas do funil, na ordem do quadro.
@@ -50,18 +55,24 @@ const bodySchema = z.object({ name: z.string().min(1).max(80) }).strict();
  * dizer "quem está em Perdido". Quem escolhe etapa de NASCIMENTO é recusado
  * antes, pela regra de que card não nasce fechado.
  */
-export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
+export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "pipeline_stages" });
+  // Sessão OU token (`role:manager`+, `mcp:read`) — a org do token vem da linha dele.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "pipeline_stages",
+    role: "manager",
+    escrita: false,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+  const t = traducaoDe(authz);
   const { id } = await ctx.params;
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
   const { data, error } = await supabase
     .from("crm_stages")
-    .select("id, name, position, is_won, is_lost")
-    .eq("organization_id", authz.org.orgId)
+    .select("id, name, position, is_won, is_lost, color")
+    .eq("organization_id", authz.organizationId)
     .eq("pipeline_id", id)
     .eq("is_archived", false)
     .order("position", { ascending: true });
@@ -75,9 +86,14 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "crm_stages" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "crm_stages",
+    role: "manager",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+  const t = traducaoDe(authz);
 
   const { id: pipelineId } = await ctx.params;
 
@@ -96,16 +112,16 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     });
   }
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
   try {
     const { funil } = await criarEtapa(
       {
         supabase,
-        organizationId: authz.org.orgId,
-        actor: { type: "user", id: authz.user.id, role: authz.org.role },
+        organizationId: authz.organizationId,
+        actor: authz.actor,
         requestId,
       },
-      { pipelineId, nome: parsed.data.name },
+      { pipelineId, nome: parsed.data.name, cor: parsed.data.color },
     );
     return ok(funil, { status: 201, requestId });
   } catch (err) {

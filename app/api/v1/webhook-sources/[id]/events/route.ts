@@ -6,10 +6,10 @@
 import { randomUUID } from "node:crypto";
 
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import type { NextRequest } from "next/server";
+
+import { autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
@@ -17,15 +17,21 @@ interface RouteCtx {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(_req: Request, ctx: RouteCtx): Promise<Response> {
+export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const requestId = randomUUID();
   const { id } = await ctx.params;
-  const authz = await requireRole("manager", { requestId, resource: "webhook_sources" });
+  // Sessão OU token (`role:manager`+, `mcp:read`) — a org do token vem da linha dele.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "webhook_sources",
+    role: "manager",
+    escrita: false,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { org: activeOrg } = authz;
+  const t = traducaoDe(authz);
+  const activeOrg = { orgId: authz.organizationId };
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
   // D-128: `path_token` não é legível pela sessão. O papel (manager) já foi conferido e o filtro por
   // organização vai junto: o servidor só entrega o token de uma fonte DESTA organização.
   const { data: source, error: sourceErr } = await createAdminClient()

@@ -1,15 +1,18 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * POST /api/v1/leads — create lead (handler em ./_handler.ts).
+ *
+ * Sessão de navegador OU token de servidor (`dsk_…` com `role:agent`+ e
+ * `mcp:write`), a mesma dualidade de `PATCH /api/v1/leads/[id]`. A org nunca vem
+ * do corpo: no ramo do token ela sai da linha do token (`lib/api/auth-dual.ts`).
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
 import { createLeadSchema, validateRequest, type CreateLeadInput } from "@/lib/schemas";
-import { createClient } from "@/lib/supabase/server";
 
 import { createLeadHandler } from "./_handler";
 
@@ -22,9 +25,14 @@ export async function POST(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
 
   // spec 13 §4: escrita é agent+ (viewer é read-only).
-  const authz = await requireRole("agent", { requestId, resource: "crm_leads" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "crm_leads",
+    role: "agent",
+    escrita: true,
+    comDono: true,
+  });
   if (!authz.ok) return authz.response;
-  const { user: authUser, org: activeOrg } = authz;
 
   let input;
   try {
@@ -39,16 +47,16 @@ export async function POST(req: NextRequest): Promise<Response> {
     throw err;
   }
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
 
   try {
     const lead = await createLeadHandler(
       supabase,
       {
-        organization_id: activeOrg.orgId,
-        actor: { type: "user", id: authUser.id },
+        organization_id: authz.organizationId,
+        actor: authz.actor,
         requestId,
-        idioma: authUser.idioma,
+        idioma: authz.idioma,
       },
       input as CreateLeadInput,
     );

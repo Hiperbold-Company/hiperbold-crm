@@ -11,8 +11,8 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
+import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import {
   ETAPAS_INICIAIS,
@@ -21,24 +21,27 @@ import {
   validarNomeDeFunil,
   type FunilEditavel,
 } from "@/lib/pipelines/pipeline-editing";
-import { createClient } from "@/lib/supabase/server";
 import { conflitoDoBanco, corpo, lerFunis } from "./_funis";
 import { listPipelinesHandler } from "./_handler";
-import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "pipelines" });
+  // Sessão OU token (`role:manager`+, `mcp:read`) — a org do token vem da linha dele.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "pipelines",
+    role: "manager",
+    escrita: false,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+  const t = traducaoDe(authz);
 
-  const supabase = await createClient();
   try {
-    const { pipelines } = await listPipelinesHandler(supabase, {
-      organization_id: authz.org.orgId,
-      actor: { type: "user", id: authz.user.id },
+    const { pipelines } = await listPipelinesHandler(authz.supabase, {
+      organization_id: authz.organizationId,
+      actor: authz.actor,
       requestId,
     });
     return ok(pipelines, { requestId });
@@ -74,10 +77,16 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "crm_pipelines" });
+  // Sessão OU token (`role:manager`+, `mcp:write`) — a org do token vem da linha dele.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "crm_pipelines",
+    role: "manager",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const orgId = authz.org.orgId;
+  const t = traducaoDe(authz);
+  const orgId = authz.organizationId;
 
   let json: unknown;
   try {
@@ -96,7 +105,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const name = parsed.data.name.trim();
   const description = parsed.data.description?.trim() || null;
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
 
   let funis: FunilEditavel[];
   try {
@@ -179,7 +188,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   void audit({
     action: "pipeline.created",
-    actorUserId: authz.user.id,
+    ...atorDoAudit(authz),
     organizationId: orgId,
     resourceType: "crm_pipeline",
     resourceId: pipelineId,

@@ -24,6 +24,8 @@
  */
 import { z } from "zod";
 
+import { corDaEtapaSchema } from "@/lib/leads/stage-cor";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { ApiError } from "@/lib/api/types";
@@ -96,6 +98,8 @@ export const crmListStages: McpToolDefinition<typeof listStagesShape> = {
 const createStageShape = {
   pipeline_id: z.string().uuid(),
   name: z.string().min(1).max(80),
+  /** Cor da coluna no quadro, `#RRGGBB`. Ausente = cor padrão. */
+  color: corDaEtapaSchema.nullable().optional(),
 };
 
 export const crmCreateStage: McpToolDefinition<typeof createStageShape> = {
@@ -112,6 +116,7 @@ export const crmCreateStage: McpToolDefinition<typeof createStageShape> = {
     const { stageId, funil } = await criarEtapa(deps(ctx), {
       pipelineId: input.pipeline_id,
       nome: input.name,
+      cor: input.color,
     });
     return { stage_id: stageId, ...funil };
   },
@@ -131,6 +136,8 @@ const updateStageShape = {
    * probabilidade" em vez de somar zero em silêncio.
    */
   win_probability: z.number().int().min(0).max(100).nullable().optional(),
+  /** Cor da coluna, `#RRGGBB`; `null` volta à cor padrão. */
+  color: corDaEtapaSchema.nullable().optional(),
 };
 
 export const crmUpdateStage: McpToolDefinition<typeof updateStageShape> = {
@@ -153,6 +160,7 @@ export const crmUpdateStage: McpToolDefinition<typeof updateStageShape> = {
     if (input.is_lost !== undefined) pedido.is_lost = input.is_lost;
     if (input.after_stage_id !== undefined) pedido.depois_de = input.after_stage_id;
     if (input.win_probability !== undefined) pedido.win_probability = input.win_probability;
+    if (input.color !== undefined) pedido.color = input.color;
     if (Object.keys(pedido).length === 0) {
       throw new ApiError(
         422,

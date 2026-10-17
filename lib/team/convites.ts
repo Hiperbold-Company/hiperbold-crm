@@ -82,6 +82,8 @@ interface EmitirParams {
   interfaceSettings?: InterfaceSettings;
   inviterId: string;
   inviterName: string;
+  /** Token de servidor que emitiu (assina o audit no lugar de `inviterId`). */
+  actorApiTokenId?: string | null;
   requestId: string;
 }
 
@@ -135,6 +137,7 @@ export async function emitirConvite(
     orgName: params.orgName,
     inviterId: params.inviterId,
     inviterName: params.inviterName,
+    actorApiTokenId: params.actorApiTokenId,
     requestId: params.requestId,
     inviteId,
     issuedAt,
@@ -194,6 +197,8 @@ export async function reenviarConvite(
     orgName: string;
     actorId: string;
     actorName: string;
+    /** Token de servidor que reenviou (assina o audit no lugar de `actorId`). */
+    actorApiTokenId?: string | null;
     requestId: string;
   },
 ): Promise<ResultadoEmissao | null> {
@@ -206,6 +211,7 @@ export async function reenviarConvite(
     orgName: params.orgName,
     inviterId: params.actorId,
     inviterName: params.actorName,
+    actorApiTokenId: params.actorApiTokenId,
     requestId: params.requestId,
     inviteId: convite.id,
     issuedAt: Math.floor(Date.now() / 1000),

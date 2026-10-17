@@ -11,18 +11,16 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
+import { atorDoAudit, autorizarAdministracao, pessoaResponsavel, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { traduzir } from "@/lib/i18n/dicionario";
 import { registrarTrocaDeComando } from "@/lib/inbox/atividade-de-comando";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ user_id: string }> },
 ): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -31,15 +29,26 @@ export async function POST(
   const requestId = randomUUID();
   const { user_id: targetUserId } = await ctx.params;
 
-  const authz = await requireRole("admin", { requestId, resource: "team" });
+  // Sessão OU token (`role:admin` + `mcp:write`); org do token vem da linha dele.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "team",
+    role: "admin",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user: authUser, org: activeOrg } = authz;
-  if (targetUserId === authUser.id) {
+  const t = traducaoDe(authz);
+  const ator = atorDoAudit(authz);
+  const activeOrg = { orgId: authz.organizationId };
+  const responsavelId = pessoaResponsavel(authz);
+  // Ninguém revoga o próprio acesso — e a chave não pode tirar o acesso do seu
+  // DONO, porque a chave morre junto com ele (D-101) e a integração ficaria
+  // cega sem aviso.
+  if (responsavelId && targetUserId === responsavelId) {
     return fail("state_conflict", t("Não é possível revogar o próprio acesso."), 409, { requestId });
   }
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
 
   const { data: target, error: fetchErr } = await supabase
     .from("user_organizations")
@@ -102,7 +111,7 @@ export async function POST(
   // Falha aqui não desfaz a revogação do membro: o log avisa e o vínculo já barra.
   const { data: chavesRevogadas, error: chavesErr } = await supabase
     .from("api_tokens")
-    .update({ revoked_at: nowIso, revoked_by: authUser.id, updated_at: nowIso })
+    .update({ revoked_at: nowIso, revoked_by: responsavelId, updated_at: nowIso })
     .eq("organization_id", activeOrg.orgId)
     .eq("created_by", targetUserId)
     .is("revoked_at", null)
@@ -135,7 +144,7 @@ export async function POST(
   for (const chave of chavesRevogadas ?? []) {
     await audit({
       action: "token.revoked",
-      actorUserId: authUser.id,
+      ...ator,
       organizationId: activeOrg.orgId,
       resourceType: "api_token",
       resourceId: chave.id,
@@ -148,7 +157,7 @@ export async function POST(
     for (const conv of openConvs) {
       await audit({
         action: "conversation.released",
-        actorUserId: authUser.id,
+        ...ator,
         organizationId: activeOrg.orgId,
         resourceType: "conversation",
         resourceId: conv.id,
@@ -162,7 +171,7 @@ export async function POST(
         conversationId: conv.id,
         contactId: conv.contact_id,
         tipo: "conversation_released",
-        actor: { type: "user", id: authUser.id, role: authz.org.role },
+        actor: authz.actor,
         motivo: "Atendente revogado da organização",
       });
     }
@@ -170,7 +179,7 @@ export async function POST(
 
   await audit({
     action: "member.revoked",
-    actorUserId: authUser.id,
+    ...ator,
     organizationId: activeOrg.orgId,
     resourceType: "membership",
     resourceId: target.id,

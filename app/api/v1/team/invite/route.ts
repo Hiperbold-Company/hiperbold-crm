@@ -24,7 +24,13 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 
 import { recusaDoPlano } from "@/lib/billing/planos/recusa-do-plano";
-import { requireRole } from "@/lib/auth/require-role";
+import {
+  atorDoAudit,
+  autorizarAdministracao,
+  nomeDaOrganizacao,
+  nomeDeQuemAgiu,
+  pessoaResponsavel,
+} from "@/lib/api/auth-dual-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inviteMemberSchema, validateRequest } from "@/lib/schemas";
 
@@ -49,9 +55,22 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "team" });
+  // Sessão OU token (`role:admin` + `mcp:write`). O convidante que fica gravado
+  // (`invited_by`) é a pessoa da sessão ou o DONO do token; quem agiu de fato
+  // vai no audit (`actor_api_token_id`).
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "team",
+    role: "admin",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const { user: authUser, org: activeOrg } = authz;
+  const convidanteId = pessoaResponsavel(authz);
+  if (!convidanteId) {
+    return fail("forbidden", "Token sem dono ativo.", 403, { requestId });
+  }
+  const activeOrg = { orgId: authz.organizationId, name: await nomeDaOrganizacao(authz) };
+  const ator = atorDoAudit(authz);
 
   let input;
   try {
@@ -70,7 +89,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const failed: FailedItem[] = [];
 
   const admin = isServiceRoleConfigured() ? createAdminClient() : null;
-  const inviterName = authUser.full_name ?? authUser.email ?? "Um colega";
+  const inviterName = await nomeDeQuemAgiu(authz);
   // Emails com membership ATIVA na org — para pular o reconvite de quem já é membro.
   // O schema `auth` NÃO é acessível via PostgREST (erro "Invalid schema: auth"), então
   // resolvemos email↔usuário pela GoTrue admin API (getUserById) — mesmo padrão de
@@ -107,7 +126,8 @@ export async function POST(req: NextRequest): Promise<Response> {
           interfaceSettings: inv.interface_settings,
           organizationId: activeOrg.orgId,
           orgName: activeOrg.name,
-          inviterId: authUser.id,
+          inviterId: convidanteId,
+          actorApiTokenId: ator.actorApiTokenId,
           inviterName,
           requestId,
         });
@@ -141,7 +161,8 @@ export async function POST(req: NextRequest): Promise<Response> {
           interfaceSettings: inv.interface_settings,
           organizationId: activeOrg.orgId,
           orgName: activeOrg.name,
-          inviterId: authUser.id,
+          inviterId: convidanteId,
+          actorApiTokenId: ator.actorApiTokenId,
           inviterName,
           requestId,
         }),

@@ -14,14 +14,17 @@ import type { NextRequest } from "next/server";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
-import { traduzir } from "@/lib/i18n/dicionario";
+import {
+  atorDoAudit,
+  autorizarAdministracao,
+  pessoaResponsavel,
+  traducaoDe,
+} from "@/lib/api/auth-dual-admin";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -30,16 +33,23 @@ export async function POST(
   const requestId = randomUUID();
   const { id } = await ctx.params;
 
-  const authz = await requireRole("admin", { requestId, resource: "team" });
+  // Sessão OU token (`role:admin` + `mcp:write`); org do token vem da linha dele.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "team",
+    role: "admin",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user: authUser, org: activeOrg } = authz;
+  const t = traducaoDe(authz);
+  const ator = atorDoAudit(authz);
+  const activeOrg = { orgId: authz.organizationId };
 
   if (!z.string().uuid().safeParse(id).success) {
     return fail("invalid_request", t("Convite inválido."), 400, { requestId });
   }
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
   const { data: row, error: readErr } = await supabase
     .from("team_invites")
     .select("id, email, role, accepted_at, revoked_at")
@@ -58,15 +68,16 @@ export async function POST(
   const nowIso = new Date().toISOString();
   const { error: updErr } = await supabase
     .from("team_invites")
-    .update({ revoked_at: nowIso, revoked_by: authUser.id })
+    .update({ revoked_at: nowIso, revoked_by: pessoaResponsavel(authz) })
     .eq("id", id)
+    .eq("organization_id", activeOrg.orgId)
     .is("accepted_at", null)
     .is("revoked_at", null);
   if (updErr) return falhaInterna("internal_error", updErr, { requestId });
 
   await audit({
     action: "member.invite_revoked",
-    actorUserId: authUser.id,
+    ...ator,
     organizationId: activeOrg.orgId,
     resourceType: "membership",
     resourceId: id,

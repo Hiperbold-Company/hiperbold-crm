@@ -27,6 +27,12 @@ export interface McpAuthResult {
   actor: Actor;
   apiTokenId: string;
   scopes: string[];
+  /**
+   * `api_tokens.created_by`: a PESSOA que provisionou a chave. É quem responde
+   * pelo token nas colunas com FK para `auth.users` (`invited_by`, `revoked_by`)
+   * — a trilha do audit continua dizendo que foi o token (`actor_api_token_id`).
+   */
+  createdBy?: string;
 }
 
 export class McpAuthError extends Error {
@@ -290,6 +296,7 @@ export async function validateBearerToken(
     actor,
     apiTokenId: resolved.id,
     scopes: resolved.scopes,
+    createdBy: resolved.createdBy,
   };
 }
 

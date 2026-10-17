@@ -11,8 +11,8 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * FK nenhuma. `?definitivo=1` só passa pelo caso honesto do "criei sem querer":
  * funil sem negócio, sem formulário e sem automação apontando para ele.
  *
- * Auth: sessão por cookie, papel manager+. `organization_id` sai do JWT — nunca
- * do body nem da URL. As regras vivem em `lib/pipelines/pipeline-editing.ts`
+ * Auth: sessão por cookie OU token `dsk_…` (`role:manager`+ e `mcp:write`), papel
+ * manager+. `organization_id` sai do JWT/da linha do token — nunca do body nem da URL. As regras vivem em `lib/pipelines/pipeline-editing.ts`
  * (puras, testadas); aqui só há transporte e a ORDEM das escritas, que é o que o
  * índice único de padrão cobra.
  */
@@ -21,8 +21,8 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
+import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import {
   podeExcluirDeVez,
@@ -33,10 +33,8 @@ import {
   validarNomeDeFunil,
   type FunilEditavel,
 } from "@/lib/pipelines/pipeline-editing";
-import { createClient } from "@/lib/supabase/server";
 
 import { conflitoDoBanco, corpo, lerDependencias, lerFunis } from "../_funis";
-import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
@@ -93,10 +91,15 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "crm_pipelines" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "crm_pipelines",
+    role: "manager",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const orgId = authz.org.orgId;
+  const t = traducaoDe(authz);
+  const orgId = authz.organizationId;
 
   const { id: pipelineId } = await ctx.params;
 
@@ -116,7 +119,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   }
   const pedido = parsed.data;
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
 
   let funis: FunilEditavel[];
   try {
@@ -282,7 +285,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
       // que o DELETE emite: quem audita quer saber quem trouxe o funil de volta,
       // e `pipeline.updated` esconderia isso entre os renames.
       action: tiraDoArquivo ? "pipeline.unarchived" : "pipeline.updated",
-      actorUserId: authz.user.id,
+      ...atorDoAudit(authz),
       organizationId: orgId,
       resourceType: "crm_pipeline",
       resourceId: pipelineId,
@@ -303,15 +306,20 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "crm_pipelines" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "crm_pipelines",
+    role: "manager",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const orgId = authz.org.orgId;
+  const t = traducaoDe(authz);
+  const orgId = authz.organizationId;
 
   const { id: pipelineId } = await ctx.params;
   const definitivo = req.nextUrl.searchParams.get("definitivo") === "1";
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
 
   let funis: FunilEditavel[];
   try {
@@ -362,7 +370,7 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
 
   void audit({
     action: definitivo ? "pipeline.deleted" : "pipeline.archived",
-    actorUserId: authz.user.id,
+    ...atorDoAudit(authz),
     organizationId: orgId,
     resourceType: "crm_pipeline",
     resourceId: pipelineId,

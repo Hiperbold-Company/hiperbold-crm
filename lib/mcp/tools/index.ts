@@ -26,6 +26,14 @@ import {
   crmMoveLeadStage,
   crmRetomarLead,
 } from "./leads";
+import {
+  crmDeleteWebhookSource,
+  crmGetOrganizationSettings,
+  crmGetPipelineConfig,
+  crmUpdateOrganizationSettings,
+  crmUpdatePipelineConfig,
+  crmUpdateWebhookSource,
+} from "./administracao";
 import { crmGetPipelineForecast, crmListPipelines } from "./pipelines";
 import { crmSendWhatsappMessage } from "./messages";
 import { crmStartConversationAndSend } from "./start-conversation";
@@ -132,6 +140,8 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmListAutomationRules,
   crmListAutomationRuns,
   crmListTeamMembers,
+  crmGetPipelineConfig,
+  crmGetOrganizationSettings,
   crmListFollowups,
   crmListAtRiskLeads,
   crmListAvailableAttendants,
@@ -161,6 +171,10 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmArchiveStage,
   crmCreateWebhookSource,
   crmSetWebhookSourceActive,
+  crmUpdateWebhookSource,
+  crmDeleteWebhookSource,
+  crmUpdatePipelineConfig,
+  crmUpdateOrganizationSettings,
   crmSetAutomationRuleActive,
   crmScheduleFollowup,
   crmEnrollFollowupFlow,

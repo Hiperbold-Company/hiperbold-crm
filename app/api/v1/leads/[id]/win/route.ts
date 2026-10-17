@@ -15,9 +15,8 @@ import { type NextRequest } from "next/server";
 
 import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
 import { encerraDemanda } from "@/lib/leads/encerramento";
-import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +30,18 @@ export async function POST(
   const requestId = randomUUID();
   const { id: leadId } = await ctx.params;
 
-  const supabase = await createClient();
-  // spec 13 §4: escrita é agent+ (viewer é read-only).
-  const authz = await requireRole("agent", { requestId, resource: "crm_leads" });
+  // spec 13 §4: escrita é agent+ (viewer é read-only). Sessão OU token
+  // (`role:agent`+, `mcp:write`); com a empresa em visibilidade `own` o token
+  // de papel abaixo de gerente é recusado (D-148).
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "crm_leads",
+    role: "agent",
+    escrita: true,
+    comDono: true,
+  });
   if (!authz.ok) return authz.response;
+  const supabase = authz.supabase;
 
   // O MOTIVO DE GANHO (issue #1536): corpo opcional. Body vazio/ausente é o
   // contrato antigo — ganhar sem motivo continua valendo, salvo quando o funil
@@ -49,10 +56,10 @@ export async function POST(
     const { lead } = await encerraDemanda(
       supabase,
       {
-        organization_id: authz.org.orgId,
-        actor: { type: "user", id: authz.user.id },
+        organization_id: authz.organizationId,
+        actor: authz.actor,
         requestId,
-        idioma: authz.user.idioma,
+        idioma: authz.idioma,
       },
       { leadId, desfecho: "won", motivo: wonReason },
     );

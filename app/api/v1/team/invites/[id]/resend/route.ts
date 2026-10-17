@@ -12,16 +12,22 @@ import type { NextRequest } from "next/server";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
-import { requireRole } from "@/lib/auth/require-role";
+import {
+  atorDoAudit,
+  autorizarAdministracao,
+  nomeDaOrganizacao,
+  nomeDeQuemAgiu,
+  pessoaResponsavel,
+  traducaoDe,
+} from "@/lib/api/auth-dual-admin";
 import { isServiceRoleConfigured } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { traduzir } from "@/lib/i18n/dicionario";
 import { reenviarConvite, statusConvite, type ConviteDeTime } from "@/lib/team/convites";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -30,10 +36,19 @@ export async function POST(
   const requestId = randomUUID();
   const { id } = await ctx.params;
 
-  const authz = await requireRole("admin", { requestId, resource: "team" });
+  // Sessão OU token (`role:admin` + `mcp:write`); org do token vem da linha dele.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "team",
+    role: "admin",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user: authUser, org: activeOrg } = authz;
+  const t = traducaoDe(authz);
+  const ator = atorDoAudit(authz);
+  const activeOrg = { orgId: authz.organizationId, name: await nomeDaOrganizacao(authz) };
+  const responsavelId = pessoaResponsavel(authz);
+  if (!responsavelId) return fail("forbidden", "Token sem dono ativo.", 403, { requestId });
 
   if (!z.string().uuid().safeParse(id).success) {
     return fail("invalid_request", t("Convite inválido."), 400, { requestId });
@@ -72,8 +87,9 @@ export async function POST(
     resultado = await reenviarConvite(admin, {
       convite,
       orgName: activeOrg.name,
-      actorId: authUser.id,
-      actorName: authUser.full_name ?? authUser.email ?? "Um colega",
+      actorId: responsavelId,
+      actorName: await nomeDeQuemAgiu(authz),
+      actorApiTokenId: ator.actorApiTokenId,
       requestId,
     });
   } catch (err) {

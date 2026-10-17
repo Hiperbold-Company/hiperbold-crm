@@ -46,9 +46,17 @@ interface Estado {
   updates: Array<Record<string, unknown>>;
 }
 
+/** `.eq()` encadeável: a rota filtra por id E por organização (e por `updated_at`). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function cadeia<T extends object>(folha: T): any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = { ...folha, eq: () => c };
+  return c;
+}
+
 function stub(estado: Estado) {
   const select = () => ({
-    eq: () => ({
+    eq: () => cadeia({
       maybeSingle: async () => ({
         data: {
           id: LEAD_ID,
@@ -68,7 +76,7 @@ function stub(estado: Estado) {
   return {
     from: (tabela: string) => ({
       select: () => (tabela === "crm_leads" ? select() : {
-        eq: () => ({
+        eq: () => cadeia({
           maybeSingle: async () => ({
             data: { id: ETAPA_ABERTA_ID, pipeline_id: PIPELINE_ID, name: "Em contato", is_lost: false },
             error: null,
@@ -80,15 +88,11 @@ function stub(estado: Estado) {
         // O gatilho de bloqueio é BEFORE e roda ANTES do trigger de motivo da
         // perda: reabrir acima do teto recusa mesmo sem nada de errado com o
         // motivo da perda (aqui nem se aplica: a etapa de destino é aberta).
-        return {
-          eq: () => ({
-            eq: () => ({
-              select: () => ({
-                maybeSingle: async () => ({ data: null, error: RECUSA_DO_BANCO }),
-              }),
-            }),
+        return cadeia({
+          select: () => ({
+            maybeSingle: async () => ({ data: null, error: RECUSA_DO_BANCO }),
           }),
-        };
+        });
       },
     }),
     rpc: () => Promise.resolve({ data: null, error: null }),

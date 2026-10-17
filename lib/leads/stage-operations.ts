@@ -38,6 +38,7 @@ import {
   type PatchDeMarcacao,
   type UpdateDeMarcacao,
 } from "@/lib/leads/stage-editing";
+import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { autoriaDaMudanca } from "@/lib/operacao/autoria";
 
 type SB = SupabaseClient;
@@ -52,7 +53,7 @@ export interface DepsDeEtapa {
 
 /** As colunas que a tela e as regras usam. `position` entra: a reordenação calcula em cima dela. */
 const COLUNAS =
-  "id, name, slug, position, is_won, is_lost, is_archived, win_probability, agent_stage_hint, avisar_na_central, last_change_actor_kind, last_change_at";
+  "id, name, slug, position, is_won, is_lost, is_archived, win_probability, agent_stage_hint, avisar_na_central, color, last_change_actor_kind, last_change_at";
 
 /** A etapa como sai para quem lê — inclui a autoria da última mudança de configuração. */
 export interface EtapaVisivel {
@@ -72,6 +73,8 @@ export interface EtapaVisivel {
   win_probability: number | null;
   /** Negócio que entra aqui abre um aviso na Central (migration 0440). */
   avisar_na_central: boolean;
+  /** Cor da coluna no quadro, `#RRGGBB`; `null` = a cor padrão da tela. */
+  color: string | null;
   /** `user` | `ai` | `system` — `null` nas etapas anteriores a esta coluna. */
   last_change_actor_kind: string | null;
   last_change_at: string | null;
@@ -79,6 +82,7 @@ export interface EtapaVisivel {
 
 type EtapaLida = EtapaEditavel & {
   avisar_na_central?: boolean | null;
+  color?: string | null;
   last_change_actor_kind: string | null;
   last_change_at: string | null;
 };
@@ -133,6 +137,7 @@ export function corpo(etapas: EtapaLida[]): { etapas: EtapaVisivel[] } {
         is_lost: e.is_lost,
         win_probability: e.win_probability ?? null,
         avisar_na_central: e.avisar_na_central === true,
+        color: e.color ?? null,
         last_change_actor_kind: e.last_change_actor_kind ?? null,
         last_change_at: e.last_change_at ?? null,
       })),
@@ -219,9 +224,14 @@ async function funilDepois(
 }
 
 /** `actorUserId` do audit — `null` quando quem agiu não é uma pessoa. */
-function autorDoAudit(actor: Actor): { actorUserId: string | null; metadata: Record<string, unknown> } {
-  if (actor.type === "user") return { actorUserId: actor.id, metadata: { actor_type: "user" } };
-  return { actorUserId: null, metadata: { actor_type: actor.type, actor_id: actor.id } };
+function autorDoAudit(actor: Actor): {
+  actorUserId: string | null;
+  actorApiTokenId: string | null;
+  metadata: Record<string, unknown>;
+} {
+  const colunas = colunasDeAtorNoAudit(actor);
+  if (actor.type === "user") return { ...colunas, metadata: { actor_type: "user" } };
+  return { ...colunas, metadata: { actor_type: actor.type, actor_id: actor.id } };
 }
 
 // ---------------------------------------------------------------------------
@@ -243,7 +253,7 @@ export interface EtapaCriada {
  */
 export async function criarEtapa(
   deps: DepsDeEtapa,
-  input: { pipelineId: string; nome: string },
+  input: { pipelineId: string; nome: string; cor?: string | null },
 ): Promise<EtapaCriada> {
   const name = input.nome.trim();
   const etapas = await funilOuNadaFeito(deps, input.pipelineId);
@@ -264,6 +274,8 @@ export async function criarEtapa(
     // entram na conta: `uniq_crm_stages_pipeline_slug` não é parcial.
     slug: slugDeNome(name, etapas.map((e) => e.slug)),
     position: posicaoEntre(etapas[etapas.length - 1]?.position ?? null, null),
+    // `undefined` não viaja: sem cor pedida, a coluna fica `null` (cor padrão da tela).
+    ...(input.cor !== undefined ? { color: input.cor } : {}),
     ...autoria,
   };
 
@@ -279,6 +291,7 @@ export async function criarEtapa(
   void audit({
     action: "pipeline.stage_created",
     actorUserId: autor.actorUserId,
+    actorApiTokenId: autor.actorApiTokenId,
     organizationId: deps.organizationId,
     resourceType: "crm_stage",
     resourceId: stageId,
@@ -313,6 +326,8 @@ export interface PedidoDeEdicao {
   depois_de?: string | null;
   /** Liga ou desliga o aviso na Central para quem entra nesta etapa (0440). */
   avisar_na_central?: boolean;
+  /** Cor da coluna, `#RRGGBB`; `null` volta à cor padrão. O CHECK do banco é a rede. */
+  color?: string | null;
 }
 
 export async function atualizarEtapa(
@@ -381,11 +396,13 @@ export async function atualizarEtapa(
     position?: number;
     win_probability?: number | null;
     avisar_na_central?: boolean;
+    color?: string | null;
   } = {};
   if (pedido.name !== undefined) patchDoAlvo.name = pedido.name.trim();
   // `undefined` não viaja; `null` limpa a calibração de propósito.
   if (pedido.win_probability !== undefined) patchDoAlvo.win_probability = pedido.win_probability;
   if (pedido.avisar_na_central !== undefined) patchDoAlvo.avisar_na_central = pedido.avisar_na_central;
+  if (pedido.color !== undefined) patchDoAlvo.color = pedido.color;
 
   if (pedido.depois_de !== undefined) {
     // Só as ativas compõem a régua: arquivada não ocupa lugar no quadro.
@@ -456,6 +473,7 @@ export async function atualizarEtapa(
     void audit({
       action: "pipeline.stage_updated",
       actorUserId: autor.actorUserId,
+      actorApiTokenId: autor.actorApiTokenId,
       organizationId: deps.organizationId,
       resourceType: "crm_stage",
       resourceId: stageId,
@@ -628,6 +646,7 @@ export async function arquivarEtapa(
   void audit({
     action: "pipeline.stage_archived",
     actorUserId: autor.actorUserId,
+    actorApiTokenId: autor.actorApiTokenId,
     organizationId: deps.organizationId,
     resourceType: "crm_stage",
     resourceId: stageId,

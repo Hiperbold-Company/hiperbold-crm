@@ -10,9 +10,8 @@ import type { InterfaceSettings } from "@/lib/navigation/interface";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
+import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
 import { ok, falhaInterna } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isServiceRoleConfigured } from "@/lib/audit";
 
@@ -34,14 +33,20 @@ interface MemberDto extends MembershipRow {
   last_sign_in_at: string | null;
 }
 
-export async function GET(_req: NextRequest): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  // spec 13 §4: team read é manager+ (viewer/agent = none; nota 7).
-  const authz = await requireRole("manager", { requestId, resource: "team" });
+  // spec 13 §4: team read é manager+ (viewer/agent = none; nota 7). Sessão OU
+  // token (`role:manager`+, `mcp:read`) — a org do token sai da linha dele.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "team",
+    role: "manager",
+    escrita: false,
+  });
   if (!authz.ok) return authz.response;
-  const { org: activeOrg } = authz;
+  const activeOrg = { orgId: authz.organizationId };
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
   const { data: rows, error } = await supabase
     .from("user_organizations")
     .select("user_id, role, interface_settings, invited_at, accepted_at, revoked_at, created_at")

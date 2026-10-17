@@ -12,8 +12,8 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * índices únicos imediatos cobram) vivem em `lib/leads/stage-operations.ts`,
  * compartilhadas com o agente de IA — BRIEFING §3, Decisão 4.
  *
- * Auth: sessão por cookie, papel manager+. `organization_id` sai do JWT — nunca
- * do body nem da URL.
+ * Auth: sessão por cookie OU token `dsk_…` (`role:manager`+, `mcp:write`), papel
+ * manager+. `organization_id` sai do JWT/da linha do token — nunca do body nem da URL.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
@@ -21,10 +21,9 @@ import { z } from "zod";
 
 import { respostaDeRecusa } from "@/lib/api/recusa";
 import { fail, ok } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
+import { corDaEtapaSchema } from "@/lib/leads/stage-cor";
 import { arquivarEtapa, atualizarEtapa } from "@/lib/leads/stage-operations";
-import { createClient } from "@/lib/supabase/server";
-import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +52,8 @@ const bodySchema = z
     win_probability: z.number().int().min(0).max(100).nullable().optional(),
     /** Negócio que entra nesta etapa abre um aviso na Central (migration 0440). */
     avisar_na_central: z.boolean().optional(),
+    /** Cor da coluna, `#RRGGBB`; `null` volta à cor padrão. */
+    color: corDaEtapaSchema.nullable().optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: "Nada para alterar." });
@@ -62,9 +63,14 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "crm_stages" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "crm_stages",
+    role: "manager",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+  const t = traducaoDe(authz);
 
   const { id: pipelineId, stageId } = await ctx.params;
 
@@ -83,13 +89,13 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     });
   }
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
   try {
     const { funil } = await atualizarEtapa(
       {
         supabase,
-        organizationId: authz.org.orgId,
-        actor: { type: "user", id: authz.user.id, role: authz.org.role },
+        organizationId: authz.organizationId,
+        actor: authz.actor,
         requestId,
       },
       { pipelineId, stageId, pedido: parsed.data },
@@ -105,19 +111,24 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "crm_stages" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "crm_stages",
+    role: "manager",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
 
   const { id: pipelineId, stageId } = await ctx.params;
   const destinoId = req.nextUrl.searchParams.get("destino");
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
   try {
     const { funil } = await arquivarEtapa(
       {
         supabase,
-        organizationId: authz.org.orgId,
-        actor: { type: "user", id: authz.user.id, role: authz.org.role },
+        organizationId: authz.organizationId,
+        actor: authz.actor,
         requestId,
       },
       { pipelineId, stageId, destinoId },

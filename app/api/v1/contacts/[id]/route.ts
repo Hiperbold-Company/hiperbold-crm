@@ -5,13 +5,16 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * DELETE /api/v1/contacts/[id] — remove (handler em ../_handler.ts)
  *
  * Thin wrapper: auth + Zod + ok/fail. Decrypt CPF + LGPD irreversibility no handler.
+ *
+ * PATCH e DELETE aceitam sessão OU token `dsk_…` (`role:agent`+, `mcp:write`) pelo
+ * `resolveAuthDual` (via `autorizarAdministracao`); o GET segue só-sessão.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ApiError } from "@/lib/api/types";
 import { ok, fail, noContent } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { contactPatchSchemaDoPais, validateRequest } from "@/lib/schemas";
@@ -77,12 +80,16 @@ export async function PATCH(
   const requestId = randomUUID();
   const { id } = await ctx.params;
 
-  const supabase = await createClient();
-  // spec 13 §4: escrita é agent+ (viewer é read-only).
-  const authz = await requireRole("agent", { requestId, resource: "contacts" });
+  // spec 13 §4: escrita é agent+ (viewer é read-only). Sessão OU token (`role:agent`+, `mcp:write`).
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "contacts",
+    role: "agent",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const user = authz.user;
-  const activeOrg = authz.org;
+  const supabase = authz.supabase;
+  const activeOrg = { orgId: authz.organizationId };
 
   // O documento do titular é validado pela régua do PAÍS da organização (issue
   // #1033) — a mesma razão do POST: quem decide é a organização, não o corpo.
@@ -106,9 +113,9 @@ export async function PATCH(
       supabase,
       {
         organization_id: activeOrg.orgId,
-        actor: { type: "user", id: user.id },
+        actor: authz.actor,
         requestId,
-        idioma: user.idioma,
+        idioma: authz.idioma,
       },
       id,
       input,
@@ -123,7 +130,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -132,21 +139,25 @@ export async function DELETE(
   const requestId = randomUUID();
   const { id } = await ctx.params;
 
-  const authz = await requireRole("agent", { requestId, resource: "contacts" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "contacts",
+    role: "agent",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const user = authz.user;
-  const activeOrg = authz.org;
+  const activeOrg = { orgId: authz.organizationId };
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
 
   try {
     await deleteContactHandler(
       supabase,
       {
         organization_id: activeOrg.orgId,
-        actor: { type: "user", id: user.id },
+        actor: authz.actor,
         requestId,
-        idioma: user.idioma,
+        idioma: authz.idioma,
       },
       id,
     );

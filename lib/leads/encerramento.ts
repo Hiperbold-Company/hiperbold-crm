@@ -23,6 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
+import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { emitLeadActivity } from "@/lib/leads/activity-emitter";
 import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
@@ -324,6 +325,7 @@ export async function encerraDemanda(
   await audit({
     action: eventType,
     actorUserId: a.actorUserId,
+    actorApiTokenId: colunasDeAtorNoAudit(ctx.actor).actorApiTokenId,
     organizationId: ctx.organization_id,
     resourceType: "crm_lead",
     resourceId: input.leadId,

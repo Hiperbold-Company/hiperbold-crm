@@ -37,17 +37,15 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
+import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { audit } from "@/lib/audit";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
-import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ user_id: string }> },
 ): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -56,12 +54,19 @@ export async function POST(
   const requestId = randomUUID();
   const { user_id: targetUserId } = await ctx.params;
 
-  const authz = await requireRole("admin", { requestId, resource: "team" });
+  // Sessão OU token (`role:admin` + `mcp:write`); org do token vem da linha dele.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "team",
+    role: "admin",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user: authUser, org: activeOrg } = authz;
+  const t = traducaoDe(authz);
+  const ator = atorDoAudit(authz);
+  const activeOrg = { orgId: authz.organizationId };
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
 
   const { data: target, error: fetchErr } = await supabase
     .from("user_organizations")
@@ -97,7 +102,7 @@ export async function POST(
 
   await audit({
     action: "member.reactivated",
-    actorUserId: authUser.id,
+    ...ator,
     organizationId: activeOrg.orgId,
     resourceType: "membership",
     resourceId: target.id,

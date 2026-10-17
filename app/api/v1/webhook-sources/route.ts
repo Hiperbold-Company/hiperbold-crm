@@ -20,33 +20,36 @@ import type { NextRequest } from "next/server";
 
 import { respostaDeRecusa } from "@/lib/api/recusa";
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import {
   criarEntradaAutomatica,
   listarEntradasAutomaticas,
   type DepsDaOperacao,
 } from "@/lib/operacao/entradas-automaticas";
 import { createWebhookSourceSchema } from "@/lib/schemas";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
-import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "webhook_sources" });
+  // Sessão OU token (`role:manager`+, `mcp:read`) — a org do token vem da linha dele.
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "webhook_sources",
+    role: "manager",
+    escrita: false,
+  });
   if (!authz.ok) return authz.response;
 
-  const supabase = await createClient();
   try {
     const entradas = await listarEntradasAutomaticas({
-      supabase,
+      supabase: authz.supabase,
       // D-128: o token não é legível pela sessão; o servidor o lê depois de conferido o papel (manager).
       leitorDeTokens: createAdminClient(),
-      organizationId: authz.org.orgId,
-      actor: { type: "user", id: authz.user.id, role: authz.org.role },
+      organizationId: authz.organizationId,
+      actor: authz.actor,
       requestId,
     });
     return ok(entradas, { requestId });
@@ -60,9 +63,14 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "webhook_sources" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "webhook_sources",
+    role: "manager",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+  const t = traducaoDe(authz);
 
   let raw: unknown = {};
   try {
@@ -94,12 +102,11 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
   }
 
-  const supabase = await createClient();
   const deps: DepsDaOperacao = {
-    supabase,
+    supabase: authz.supabase,
     leitorDeTokens: createAdminClient(),
-    organizationId: authz.org.orgId,
-    actor: { type: "user", id: authz.user.id, role: authz.org.role },
+    organizationId: authz.organizationId,
+    actor: authz.actor,
     requestId,
   };
 

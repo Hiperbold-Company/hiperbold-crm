@@ -56,9 +56,17 @@ interface Estado {
   updates: Array<Record<string, unknown>>;
 }
 
+/** `.eq()` encadeável: a rota filtra por id E por organização (e por `updated_at`). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function cadeia<T extends object>(folha: T): any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = { ...folha, eq: () => c };
+  return c;
+}
+
 function stub(estado: Estado) {
   const select = (tabela: string) => ({
-    eq: () => ({
+    eq: () => cadeia({
       maybeSingle: async () => {
         if (tabela === "crm_leads") {
           return {
@@ -97,21 +105,17 @@ function stub(estado: Estado) {
         // devolve o MESMO 422 que a decisão, então os dois caminhos chegavam à
         // mesma saída e o caso ficava verde com a decisão sabotada. Ramo
         // redundante não distingue conserto de defeito.
-        return {
-          eq: () => ({
-            eq: () => ({
-              select: () => ({
-                maybeSingle: async () =>
-                  payload.lost_reason
-                    ? {
-                        data: { id: LEAD_ID, stage_id: PERDIDO_ID, updated_at: UPDATED_AT },
-                        error: null,
-                      }
-                    : { data: null, error: RECUSA_DO_BANCO },
-              }),
-            }),
+        return cadeia({
+          select: () => ({
+            maybeSingle: async () =>
+              payload.lost_reason
+                ? {
+                    data: { id: LEAD_ID, stage_id: PERDIDO_ID, updated_at: UPDATED_AT },
+                    error: null,
+                  }
+                : { data: null, error: RECUSA_DO_BANCO },
           }),
-        };
+        });
       },
     }),
     // A rota emite o evento de domínio depois do movimento (`.then` sobre o
