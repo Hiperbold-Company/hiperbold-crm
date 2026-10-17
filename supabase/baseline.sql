@@ -66282,6 +66282,9 @@ begin
  end if;
 end
 $api_tokens_so_o_servidor$;
+
+reset lock_timeout;
+
 -- ---- a garantia de 7 dias do reembolso por dia civil de São Paulo (migration 0963, fork Hiperbold) ----
 -- Entra ANTES da VARREDURA anon porque recria uma função.
 -- 0963, a garantia de 7 dias do reembolso conta por DIA CIVIL de São Paulo (fork Hiperbold).
