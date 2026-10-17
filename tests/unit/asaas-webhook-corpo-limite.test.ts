@@ -28,6 +28,19 @@ describe("lerCorpoComLimite", () => {
     expect(resultado).toEqual({ ok: true, texto: '{"a":1}' });
   });
 
+  it("tira o BOM UTF-8 inicial, como o req.text() fazia (senão o JSON.parse quebra)", async () => {
+    const bytes = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('{"a":1}')]);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
+    const resultado = await lerCorpoComLimite(stream, 1024);
+    expect(resultado.texto).toBe('{"a":1}');
+    expect(() => JSON.parse(resultado.texto)).not.toThrow();
+  });
+
   it("corpo acima do teto (num chunk só) recusa sem texto", async () => {
     const resultado = await lerCorpoComLimite(streamDe("a".repeat(2000)), 1024);
     expect(resultado.ok).toBe(false);

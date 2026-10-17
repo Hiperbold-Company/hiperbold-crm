@@ -480,6 +480,41 @@ describe("POST /api/v1/webhooks/in/[token] (Task 6)", () => {
     expect(rows(`select * from public.crm_leads where title = 'Carla'`).length).toBe(1);
   });
 
+  it("caso 4b — origem não provada: CPF, etiquetas e (Respondi) consentimento NÃO entram, nem em contato recém-criado, e a resposta diz `ignored_fields`", async () => {
+    const res = await POST(
+      jsonReq(TOKEN_JSON, { nome: "Pública Cpf", telefone: "11955550412", cpf: "529.982.247-25", tags: ["pago"] }),
+      reqCtx(TOKEN_JSON),
+    );
+    expect(res.status).toBe(200);
+    const { data } = (await res.json()) as { data: { lead_id: string; ignored_fields?: string[] } };
+    expect([...(data.ignored_fields ?? [])].sort()).toEqual(["cpf", "tags"]);
+    const lead = rows(`select tags, contact_id from public.crm_leads where id = '${data.lead_id}'`)[0]!;
+    expect(lead.tags).toEqual([]);
+    const contato = rows(`select cpf_hash, cpf_encrypted from public.contacts where id = '${lead.contact_id as string}'`)[0]!;
+    expect(contato.cpf_hash).toBeNull();
+    expect(contato.cpf_encrypted).toBeNull();
+  });
+
+  it("caso 4c — origem provada (HMAC válido): nada a ignorar, a resposta não traz `ignored_fields` e a etiqueta entra", async () => {
+    const raw = JSON.stringify({ nome: "Assinada Tag", telefone: "11955550413", tags: ["pago"] });
+    const res = await POST(
+      new NextRequest(`http://localhost/api/v1/webhooks/in/${TOKEN_SECRET}`, {
+        method: "POST",
+        body: raw,
+        headers: {
+          "content-type": "application/json",
+          "x-hipercrm-signature": createHmac("sha256", SECRET).update(raw).digest("hex"),
+        },
+      }),
+      reqCtx(TOKEN_SECRET),
+    );
+    expect(res.status).toBe(200);
+    const { data } = (await res.json()) as { data: { lead_id: string } };
+    expect(data).not.toHaveProperty("ignored_fields");
+    const lead = rows(`select tags from public.crm_leads where id = '${data.lead_id}'`)[0]!;
+    expect(lead.tags).toEqual(["pago"]);
+  });
+
   it("caso 5 — payload sem nome/telefone/email: 400 invalid_request, sem lead", async () => {
     const before = rows(`select count(*) as n from public.crm_leads where organization_id = '${GOV_ORG}'`)[0]!.n;
     const res = await POST(jsonReq(TOKEN_JSON, { utm_source: "ig", empresa: "ACME" }), reqCtx(TOKEN_JSON));

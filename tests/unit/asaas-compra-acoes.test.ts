@@ -191,6 +191,27 @@ describe("compraDoPlano: só o papel admin da organização compra e cancela (N4
     expect(chamadasIniciar).toEqual([]);
   });
 
+  it("admin DO TENANT com fator e sessão sem MFA provada: comprar, cancelar e pacote são recusados (MFA para todo ator)", async () => {
+    mfaPendente = true;
+    const r1 = await iniciarAssinatura(ENTRADA_ASSINATURA);
+    const r2 = await comprarPacote(ENTRADA_PACOTE);
+    const r3 = await cancelarAssinatura(CANCELAMENTO);
+    for (const r of [r1, r2, r3]) {
+      expect(r).toEqual({ tipo: "erro", mensagem: "Confirme a verificação em duas etapas." });
+    }
+    expect(chamadasIniciar).toEqual([]);
+    expect(chamadasCancelar).toEqual([]);
+    expect(auditadas).toEqual([]);
+  });
+
+  it("admin do tenant SEM dívida de MFA (sem fator, ou com a sessão provada) compra e cancela normalmente", async () => {
+    mfaPendente = false;
+    expect((await iniciarAssinatura(ENTRADA_ASSINATURA)).tipo).not.toBe("erro");
+    expect((await cancelarAssinatura(CANCELAMENTO)).tipo).not.toBe("erro");
+    expect(chamadasIniciar.length).toBe(1);
+    expect(chamadasCancelar.length).toBe(1);
+  });
+
   it("platform admin sem linha em platform_admins NÃO bypassa o papel", async () => {
     papel = "viewer";
     ehPlatformAdmin = true;

@@ -513,6 +513,7 @@ describe("etiquetas: só de origem provada", () => {
     expect(leadsCriados[0]!.tags).toEqual([]);
     expect(leadsCriados[0]!.custom_fields).toEqual({ cidade: "Varginha" });
     expect(JSON.stringify(logs)).toContain("tags do envio ignoradas");
+    expect((await r.json()).data.ignored_fields).toEqual(["tags"]);
   });
 
   it("fonte com segredo mas SEM assinatura é recusada (401) e nada entra", async () => {
@@ -544,7 +545,7 @@ describe("etiquetas: só de origem provada", () => {
   });
 });
 
-describe("CPF: só de origem provada, ou em contato nascido neste envio", () => {
+describe("CPF: só de origem provada, também em contato recém-criado", () => {
   it("fonte pública NÃO grava CPF em contato que já existe", async () => {
     segredoDaFonte = null;
     montar();
@@ -552,14 +553,29 @@ describe("CPF: só de origem provada, ou em contato nascido neste envio", () => 
     expect(r.status).toBe(200);
     expect(contato("contato-1").cpf_hash).toBeNull();
     expect(JSON.stringify(logs)).toContain("origem_nao_provada");
+    expect((await r.json()).data.ignored_fields).toEqual(["cpf"]);
   });
 
-  it("fonte pública grava o CPF do contato que ELA mesma criou", async () => {
+  it("fonte pública NÃO grava CPF nem no contato que ELA mesma criou (e o número não vaza)", async () => {
     segredoDaFonte = null;
     montar();
-    await json({ nome: "Nova", telefone: "11999990077", cpf: CPF });
+    const r = await json({ nome: "Nova", telefone: "11999990077", cpf: CPF });
+    expect(r.status).toBe(200);
     const novo = tabela("contacts").find((c) => c.phone_number === "+5511999990077")!;
+    expect(novo).toBeDefined();
+    expect(novo.cpf_hash ?? null).toBeNull();
+    expect(novo.cpf_encrypted ?? null).toBeNull();
+    expect(banco.chamadasRpc.filter((c) => c.nome === "fn_encrypt_oauth")).toHaveLength(0);
+    expect((await r.json()).data.ignored_fields).toEqual(["cpf"]);
+    expect(tudoQueFoiGuardadoExcetoAColunaCifrada()).not.toContain(CPF);
+  });
+
+  it("origem provada em contato recém-criado grava e não devolve ignored_fields", async () => {
+    montar();
+    const r = await json({ nome: "Nova", telefone: "11999990078", cpf: CPF });
+    const novo = tabela("contacts").find((c) => c.phone_number === "+5511999990078")!;
     expect(novo.cpf_hash).toBe(sha(CPF));
+    expect((await r.json()).data).not.toHaveProperty("ignored_fields");
   });
 });
 
@@ -583,6 +599,7 @@ describe("consentimento: contato existente só muda com origem provada", () => {
     expect(marketing.declined_at).toBe("2026-01-01T00:00:00.000Z");
     expect(marketing.granted_at).toBeNull();
     expect(auditorias.filter((a) => a.action === "lgpd.consent_changed")).toHaveLength(0);
+    expect((await r.json()).data.ignored_fields).toEqual(["consent"]);
   });
 
   it("origem provada: grava e audita lgpd.consent_changed com a fonte", async () => {
@@ -601,6 +618,16 @@ describe("consentimento: contato existente só muda com origem provada", () => {
     await json(RESPONDI("r3", "Sim"));
     const novo = tabela("contacts")[0]!;
     expect((novo.consent as { marketing: { granted_at: unknown } }).marketing.granted_at).toEqual(expect.any(String));
+  });
+});
+
+describe("corpo com BOM UTF-8 inicial", () => {
+  it("é lido como o req.text() lia: o BOM sai e o envio entra", async () => {
+    segredoDaFonte = null;
+    montar();
+    const r = await chamar("\uFEFF" + JSON.stringify({ nome: "Maria", telefone: "11999990000" }));
+    expect(r.status).toBe(200);
+    expect(leadsCriados).toHaveLength(1);
   });
 });
 
