@@ -137,7 +137,7 @@ describe("os dois lugares que abriam a tela continuam perguntando ao rascunho", 
   const ler = async (p: string) => (await import("node:fs")).readFileSync(p, "utf8");
 
   it("a rota GET resolve o rascunho pela regra, não pela coluna crua", async () => {
-    const fonte = await ler("app/api/v1/ai/followup-flows/[id]/route.ts");
+    const fonte = await ler("lib/followup/administracao.ts");
     expect(fonte, "a rota parou de importar a regra").toMatch(
       /import \{ rascunhoDoFluxo \} from "@\/lib\/followup\/rascunho"/,
     );

@@ -326,7 +326,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       chave === null
         ? { tipo: "executou", resposta: await enviar(), status: 201 }
         : await comIdempotencia({
-            db: supabase,
+            // Servidor, não a sessão: `idempotency_keys` não é acessível a `authenticated` (0969).
+            db: createAdminClient(),
             organizationId,
             endpoint: ENDPOINT,
             chave,

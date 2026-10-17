@@ -306,7 +306,8 @@ export const crmRotateWebhookSourceSecret: McpToolDefinition<typeof rotateSecret
     "Gira o segredo de assinatura (HMAC-SHA256 do corpo, cabeçalho X-HiperCRM-Signature) de uma entrada automática " +
     "de contatos: o servidor gera outro, guarda cifrado e o devolve em `secret` UMA ÚNICA VEZ. O segredo ANTERIOR " +
     "para de valer na hora — o formulário ou servidor que ainda assina com ele passa a receber 401 até ser atualizado. " +
-    "Entregue o novo segredo a quem configura o formulário e não o repita depois.",
+    "O segredo aparece UMA ÚNICA VEZ: entregue-o a quem configura o formulário, guarde-o FORA desta conversa " +
+    "(cofre de segredos) e não o repita depois.",
   inputSchema: rotateSecretShape,
   category: "write",
   requiresRole: "manager",

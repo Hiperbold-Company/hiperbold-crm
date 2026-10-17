@@ -1,8 +1,9 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
- * GET  /api/v1/ai/credentials — lista credentials da org ativa (manager+).
- *                                Lê da view `ai_provider_credentials_safe`,
- *                                que NUNCA expõe campos cifrados.
+ * GET  /api/v1/ai/credentials — lista credentials da org ativa (manager+; sessão OU token `dsk_…`
+ *                                com `mcp:read`). Lê da view `ai_provider_credentials_safe`, que NUNCA
+ *                                expõe campos cifrados; para chave de API saem também os últimos 4
+ *                                caracteres e o autor (`lib/ai/credenciais/listar.ts`).
  * POST /api/v1/ai/credentials — cria credential (admin). Plaintext da api_key
  *                                entra apenas neste endpoint, é cifrado AES-GCM
  *                                e descartado da memória. Validação async não
@@ -15,12 +16,12 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
+import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
 import { requireRole } from "@/lib/auth/require-role";
+import { listarCredenciaisDeIA } from "@/lib/ai/credenciais/listar";
 import { guardarCredencial } from "@/lib/ai/credenciais/guardar";
-import { codigoNuloParaOrganizacao } from "@/lib/automation/destino-recusado";
 import { IDS_COM_CHAVE } from "@/lib/ai/pontos/provedores";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
@@ -47,29 +48,22 @@ const createSchema = z.object({
   base_url: z.string().trim().max(500).optional(),
 });
 
-export async function GET(): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
+  // Sessão OU token (`manager`+ e `mcp:read`). Para uma chave, sem os últimos 4 caracteres da chave de IA.
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "ai_credentials" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "ai_credentials",
+    role: "manager",
+    escrita: false,
+  });
   if (!authz.ok) return authz.response;
-  const { org: activeOrg } = authz;
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("ai_provider_credentials_safe")
-    .select(SAFE_COLUMNS)
-    .eq("organization_id", activeOrg.orgId)
-    .order("created_at", { ascending: false });
-
-  if (error) {
+  const lista = await listarCredenciaisDeIA(authz.supabase, authz.organizationId, authz.actor);
+  if (!lista.ok) {
     return fail("internal_error", "Erro ao listar credentials.", 500, { requestId });
   }
-  // Linhas gravadas antes do código único ainda podem trazer o código cru da
-  // régua de destino; a organização nunca o recebe (oráculo de nomes internos).
-  const linhas = (data ?? []).map((linha) => ({
-    ...linha,
-    validation_error: codigoNuloParaOrganizacao(linha.validation_error),
-  }));
-  return ok(linhas, { requestId });
+  return ok(lista.linhas, { requestId });
 }
 
 export async function POST(req: NextRequest): Promise<Response> {

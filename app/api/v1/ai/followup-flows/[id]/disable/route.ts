@@ -2,72 +2,31 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * POST /api/v1/ai/followup-flows/:id/disable — status='disabled' (manager+).
  * No-op ok (200, sem novo audit) se já estava disabled.
+ *
+ * ⚠️ AQUI SÓ HÁ TRANSPORTE. A regra vive em `lib/followup/administracao.ts`, a mesma das tools MCP.
+ * Auth: sessão OU token `dsk_…` (`manager` + `mcp:write`, como a tela); a organização sai da sessão/da linha do token.
  */
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
-import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
-import { traduzir } from "@/lib/i18n/dicionario";
+import { respostaDeRecusa } from "@/lib/api/recusa";
+import { ok } from "@/lib/api/wrappers";
+import { desativarFluxo } from "@/lib/followup/administracao";
+import { entradaDeFluxo } from "@/lib/followup/porta";
 
 export const dynamic = "force-dynamic";
 
-const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 type RouteCtx = { params: Promise<{ id: string }> };
 
-export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
+export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  const requestId = randomUUID();
   const { id } = await ctx.params;
-  if (!UUID_RX.test(id)) {
-    return fail("invalid_request", "id inválido.", 400, { requestId });
+  const e = await entradaDeFluxo(req, { escrita: true, role: "manager", id });
+  if (e.resposta) return e.resposta;
+  try {
+    return ok(await desativarFluxo(e.deps, id), { requestId: e.requestId });
+  } catch (err) {
+    return respostaDeRecusa(err, e.requestId);
   }
-
-  const authz = await requireRole("manager", { requestId, resource: "followup_flows" });
-  if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
-
-  const supabase = await createClient();
-  const { data: existing, error: fetchErr } = await supabase
-    .from("followup_flow_pointers")
-    .select("id, status")
-    .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
-    .maybeSingle();
-  if (fetchErr) return falhaInterna("internal_error", fetchErr, { requestId });
-  if (!existing) return fail("not_found", t("Fluxo não encontrado."), 404, { requestId });
-
-  if (existing.status === "disabled") {
-    return ok({ id, status: "disabled" }, { requestId });
-  }
-
-  const { data: updated, error: updErr } = await supabase
-    .from("followup_flow_pointers")
-    .update({ status: "disabled", updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
-    .select("id, status, updated_at")
-    .single();
-  if (updErr || !updated) {
-    return falhaInterna("internal_error", updErr ?? "followup_flow_disable_failed", {
-      requestId,
-    });
-  }
-
-  void audit({
-    action: "followup_flow.disabled",
-    actorUserId: user.id,
-    organizationId: activeOrg.orgId,
-    resourceType: "followup_flow_pointer",
-    resourceId: id,
-    requestId,
-  });
-
-  return ok(updated, { requestId });
 }

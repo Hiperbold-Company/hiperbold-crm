@@ -130,11 +130,12 @@ describe("D-113 segunda metade: escrita das tabelas da sessão pede papel", () =
     expect(recusado(() => como(GOV_MANAGER, nota))).toBe("");
   });
 
-  it("idempotency_keys: viewer não grava; agent grava o recibo", () => {
+  it("idempotency_keys: desde a 0969 nenhum papel de sessão grava o recibo (é do servidor); o servidor grava", () => {
     const chave = (k: string) => `insert into public.idempotency_keys (organization_id, key, endpoint, request_hash, expires_at)
       values ('${GOV_ORG}', '${k}', '/api/v1/messages', '\\x01'::bytea, now() + interval '1 hour');`;
-    expect(recusado(() => como(GOV_VIEWER, chave("11a-v")))).toContain(RLS);
-    expect(recusado(() => como(GOV_AGENT_A, chave("11a-a")))).toBe("");
+    expect(recusado(() => como(GOV_VIEWER, chave("11a-v")))).toContain("permission denied");
+    expect(recusado(() => como(GOV_AGENT_A, chave("11a-a")))).toContain("permission denied");
+    expect(recusado(() => sql(chave("11a-srv")))).toBe("");
   });
 
   it("a leitura segue para o membro; o serviço (dono do banco) segue gravando", () => {

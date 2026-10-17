@@ -5,30 +5,24 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * pipeline do CreateSourceDialog (feature Webhooks).
  *
  * POST /api/v1/pipelines — cria um funil COM as etapas com que ele nasce.
+ *
+ * ⚠️ O POST é só transporte: a regra vive em `lib/pipelines/administracao.ts`, a mesma das tools MCP.
+ * Auth: sessão OU token `dsk_…` (`role:manager`+, `mcp:read` / `mcp:write`) — a org do token vem da linha dele.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
-import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
-import { audit } from "@/lib/audit";
-import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
-import {
-  ETAPAS_INICIAIS,
-  posicaoEntre,
-  slugDeFunil,
-  validarNomeDeFunil,
-  type FunilEditavel,
-} from "@/lib/pipelines/pipeline-editing";
-import { conflitoDoBanco, corpo, lerFunis } from "./_funis";
+import { autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
+import { respostaDeRecusa } from "@/lib/api/recusa";
+import { fail, ok } from "@/lib/api/wrappers";
+import { criarFunil } from "@/lib/pipelines/administracao";
 import { listPipelinesHandler } from "./_handler";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  // Sessão OU token (`role:manager`+, `mcp:read`) — a org do token vem da linha dele.
   const authz = await autorizarAdministracao(req, {
     requestId,
     resource: "pipelines",
@@ -50,8 +44,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 }
 
-// `.max(80)`: o nome é o título de uma linha da lista e o topo do quadro, não um
-// parágrafo. O banco não limita, mas a tela quebra muito antes disso.
+// `.max(80)`: o nome é o título de uma linha da lista e o topo do quadro, não um parágrafo.
 const bodySchema = z
   .object({
     name: z.string().min(1).max(80),
@@ -59,25 +52,11 @@ const bodySchema = z
   })
   .strict();
 
-/** As etapas com que o funil nasce, já com a régua de posição do board. */
-function etapasIniciais(orgId: string, pipelineId: string) {
-  return ETAPAS_INICIAIS.map((etapa, i) => ({
-    organization_id: orgId,
-    pipeline_id: pipelineId,
-    name: etapa.name,
-    slug: etapa.slug,
-    position: (i + 1) * 1000,
-    is_won: etapa.is_won,
-    is_lost: etapa.is_lost,
-  }));
-}
-
 export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  // Sessão OU token (`role:manager`+, `mcp:write`) — a org do token vem da linha dele.
   const authz = await autorizarAdministracao(req, {
     requestId,
     resource: "crm_pipelines",
@@ -86,7 +65,6 @@ export async function POST(req: NextRequest): Promise<Response> {
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);
-  const orgId = authz.organizationId;
 
   let json: unknown;
   try {
@@ -94,7 +72,6 @@ export async function POST(req: NextRequest): Promise<Response> {
   } catch {
     return fail("invalid_request", t("Corpo não é JSON válido."), 400, { requestId });
   }
-
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
     return fail("unprocessable_entity", t("Dê um nome ao funil — é o que aparece na lista."), 422, {
@@ -102,105 +79,14 @@ export async function POST(req: NextRequest): Promise<Response> {
       details: parsed.error.flatten(),
     });
   }
-  const name = parsed.data.name.trim();
-  const description = parsed.data.description?.trim() || null;
 
-  const supabase = authz.supabase;
-
-  let funis: FunilEditavel[];
   try {
-    funis = await lerFunis(supabase, orgId);
-  } catch (err) {
-    return fail("internal_error", (err as Error).message, 500, { requestId });
-  }
-
-  // ⚠️ VALIDAR ANTES DE TOCAR O BANCO. O índice único é a rede de segurança, não
-  // a primeira linha: um 23505 cru não diz QUAL funil já tem esse nome.
-  const veredito = validarNomeDeFunil(name, funis, null);
-  if (!veredito.ok) return fail("unprocessable_entity", veredito.erro, 422, { requestId });
-
-  const row = {
-    organization_id: orgId,
-    name,
-    description,
-    // Arquivados entram na conta do slug: `uniq_crm_pipelines_org_slug` não é parcial.
-    slug: slugDeFunil(name, funis.map((f) => f.slug)),
-    // No fim da lista: funil novo aparecendo no meio seria a tela decidindo por
-    // quem criou. `lerFunis` vem ordenado.
-    position: posicaoEntre(funis[funis.length - 1]?.position ?? null, null),
-    // ⚠️ O PRIMEIRO FUNIL DA ORGANIZAÇÃO NASCE PADRÃO. Numa instalação onde o
-    // gatilho de seed não rodou, a org fica sem padrão nenhum — e todo lead
-    // criado sem funil escolhido não teria para onde ir. `uniq_..._org_default`
-    // é parcial, então só os ativos disputam esse lugar.
-    is_default: funis.filter((f) => !f.is_archived).length === 0,
-  };
-
-  const { data: criado, error } = await supabase
-    .from("crm_pipelines")
-    .insert(row)
-    .select("id")
-    .single();
-
-  if (error) {
-    // Fase F3, decisão 3: o gatilho de plano recusa ANTES do conflito de nome
-    // (mesma ordem do banco). PT402 pelo `code`, nunca pelo texto do Postgres.
-    const recusa = recusaDoPlano(error);
-    if (recusa) return fail("plano_limite_atingido", recusa.mensagem, STATUS_RECUSA_DO_PLANO, { requestId });
-    const conflito = conflitoDoBanco(error as { code?: string }, name, requestId);
-    if (conflito) return conflito;
-    return falhaInterna("internal_error", error, { requestId });
-  }
-  const pipelineId = (criado as { id: string }).id;
-
-  const { error: etapasErr } = await supabase
-    .from("crm_stages")
-    .insert(etapasIniciais(orgId, pipelineId));
-
-  // ⚠️ COMPENSAÇÃO, PORQUE SÃO DUAS ESCRITAS SEM TRANSAÇÃO. Um funil sem etapa é
-  // quadro morto: o board abre sem coluna nenhuma, não recebe negócio, e quem
-  // criou não tem como saber que aquilo nasceu quebrado. O funil recém-criado
-  // ainda não tem negócio, então `crm_leads_pipeline_id_fkey ON DELETE RESTRICT`
-  // não atrapalha o desfazimento. A alternativa correta-por-construção seria uma
-  // função SQL transacional — que custaria migration + apêndice no baseline para
-  // um caso que estas três linhas cobrem.
-  if (etapasErr) {
-    await supabase
-      .from("crm_pipelines")
-      .delete()
-      .eq("id", pipelineId)
-      .eq("organization_id", orgId);
-
-    // Fase F3, decisão 3: o teto de etapas por funil é POR FUNIL, então um
-    // funil que nasce com as etapas iniciais pode bater nele já na primeira
-    // etapa (organização com teto menor que ETAPAS_INICIAIS.length). A
-    // compensação acima é a mesma de qualquer outra falha aqui: o funil sem
-    // etapa não pode ficar.
-    const recusa = recusaDoPlano(etapasErr);
-    if (recusa) return fail("plano_limite_atingido", recusa.mensagem, STATUS_RECUSA_DO_PLANO, { requestId });
-
-    return fail(
-      "internal_error",
-      `Não consegui criar as etapas de «${name}». Nada foi salvo — tente de novo.`,
-      500,
-      { requestId, details: { erro: etapasErr.message } },
+    const corpo = await criarFunil(
+      { supabase: authz.supabase, organizationId: authz.organizationId, actor: authz.actor, requestId, t },
+      parsed.data,
     );
-  }
-
-  void audit({
-    action: "pipeline.created",
-    ...atorDoAudit(authz),
-    organizationId: orgId,
-    resourceType: "crm_pipeline",
-    resourceId: pipelineId,
-    requestId,
-    metadata: { name, slug: row.slug, is_default: row.is_default },
-  });
-
-  // Relê em vez de espelhar o que foi pedido: a tela mostra o que o banco tem.
-  try {
-    const depois = await lerFunis(supabase, orgId);
-    return ok(corpo(depois), { status: 201, requestId });
+    return ok(corpo, { status: 201, requestId });
   } catch (err) {
-    return fail("internal_error", (err as Error).message, 500, { requestId });
+    return respostaDeRecusa(err, requestId);
   }
 }

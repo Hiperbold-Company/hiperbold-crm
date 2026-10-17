@@ -1,48 +1,39 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
- * GET  /api/v1/automation-rules — lista as regras de automação da org ativa.
- * POST /api/v1/automation-rules — cria uma regra. is_active NUNCA aceito no
+ * GET  /api/v1/automation-rules — lista as regras de automação da org (manager+).
+ * POST /api/v1/automation-rules — cria uma regra (manager+). is_active NUNCA aceito no
  *   create (schema não tem o campo) — regra nasce pausada (default FALSE do banco).
+ *
+ * ⚠️ AQUI SÓ HÁ TRANSPORTE. A regra vive em `lib/operacao/regras-automaticas-admin.ts`, a mesma das tools MCP.
+ * Auth: sessão OU token `dsk_…` (`manager` + `mcp:read` / `mcp:write`, como a tela); a organização sai da
+ * sessão/da linha do token. Para uma chave, o segredo cifrado de `call_webhook` nunca volta na resposta.
  */
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
-import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { respostaDeRecusa } from "@/lib/api/recusa";
+import { fail, ok } from "@/lib/api/wrappers";
+import { criarRegra, listarRegrasCompletas } from "@/lib/operacao/regras-automaticas-admin";
+import { entradaDeRegra } from "@/lib/operacao/regras-automaticas-porta";
 import { createAutomationRuleSchema } from "@/lib/schemas";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { encryptRuleActionSecrets } from "@/lib/webhooks/secrets";
-import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
-  const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "automation_rules" });
-  if (!authz.ok) return authz.response;
-  const { org: activeOrg } = authz;
-
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("automation_rules")
-    .select("*")
-    .eq("organization_id", activeOrg.orgId)
-    .order("created_at", { ascending: false });
-  if (error) return falhaInterna("internal_error", error, { requestId });
-  return ok(data ?? [], { requestId });
+export async function GET(req: NextRequest): Promise<Response> {
+  const e = await entradaDeRegra(req, { escrita: false, role: "manager" });
+  if (e.resposta) return e.resposta;
+  try {
+    return ok(await listarRegrasCompletas(e.deps), { requestId: e.requestId });
+  } catch (err) {
+    return respostaDeRecusa(err, e.requestId);
+  }
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "automation_rules" });
-  if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
+  const e = await entradaDeRegra(req, { escrita: true, role: "manager" });
+  if (e.resposta) return e.resposta;
 
   let raw: unknown = {};
   try {
@@ -52,53 +43,14 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
   const parsed = createAutomationRuleSchema.safeParse(raw);
   if (!parsed.success) {
-    return fail("invalid_request", t("Dados inválidos."), 400, {
-      requestId,
+    return fail("invalid_request", e.t("Dados inválidos."), 400, {
+      requestId: e.requestId,
       details: parsed.error.flatten(),
     });
   }
-
-  // Secrets de call_webhook nunca ficam em claro no jsonb (migration 0041).
-  const safeActions = await encryptRuleActionSecrets(createAdminClient(), parsed.data.actions);
-  if (safeActions === null) {
-    return fail(
-      "encryption_unavailable",
-      t("Não foi possível guardar o segredo do webhook com segurança: a chave de cifra desta instalação não está ativa. Quem administra o servidor resolve rodando o update.sh, que gera e ativa a chave. Enquanto isso, você pode criar a ação sem segredo."),
-      422,
-      { requestId },
-    );
+  try {
+    return ok(await criarRegra(e.deps, parsed.data), { requestId: e.requestId, status: 201 });
+  } catch (err) {
+    return respostaDeRecusa(err, e.requestId);
   }
-
-  const supabase = await createClient();
-  const { data: created, error: insErr } = await supabase
-    .from("automation_rules")
-    .insert({
-      organization_id: activeOrg.orgId,
-      created_by_user_id: user.id,
-      name: parsed.data.name,
-      trigger_event: parsed.data.trigger_event,
-      conditions: parsed.data.conditions,
-      actions: safeActions,
-      // O gatilho de data do funil (#989) precisa que a regra guarde o funil, o
-      // campo e o N assinado — sem isso a varredura não sabe onde olhar. Os
-      // outros gatilhos gravam o objeto vazio do default.
-      trigger_config: parsed.data.trigger_config ?? {},
-    })
-    .select("*")
-    .single();
-  if (insErr || !created) {
-    return falhaInterna("internal_error", insErr ?? "automation_rule_insert_failed", { requestId });
-  }
-
-  void audit({
-    action: "automation.rule_created",
-    actorUserId: user.id,
-    organizationId: activeOrg.orgId,
-    resourceType: "automation_rule",
-    resourceId: created.id,
-    requestId,
-    metadata: { name: parsed.data.name, trigger_event: parsed.data.trigger_event },
-  });
-
-  return ok(created, { requestId, status: 201 });
 }

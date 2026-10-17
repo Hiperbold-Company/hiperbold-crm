@@ -29,36 +29,41 @@ describe("recibo administrativo só tem autoridade quando produzido pelo servido
       if not exists(select 1 from public.idempotency_keys where organization_id='${org}' and key='${key}' and not tenant_creation_trusted) then raise exception 'old receipt destroyed'; end if;
     end $$;`));
 
-  it("membro não insere namespace reservado nem marker verdadeiro e não promove recibo comum", () => prove(`
+  // Desde a 0969 `idempotency_keys` é do servidor: o membro não lê nem grava NADA na tabela (o recibo guarda a
+  // resposta de criações, `path_token` e prompt de agente inclusive). Aqui continua provado que o recibo
+  // protegido não se forja nem se promove; a leitura/escrita de recibo comum pelo membro deixou de existir.
+  it("membro não insere namespace reservado nem marker verdadeiro nem recibo comum, e não promove recibo comum", () => prove(`
+    insert into public.idempotency_keys ${receipt} values ('${org}','normal','ordinary',decode('abcd','hex'),201,'{}');
     ${asAttacker}
     do $$ begin
       begin insert into public.idempotency_keys ${receipt} values ('${org}','reserved','${endpoint}',decode('abcd','hex'),201,'{}');
         raise exception 'reserved insert allowed'; exception when insufficient_privilege then null; end;
       begin insert into public.idempotency_keys (organization_id,key,endpoint,request_hash,status_code,response_body,tenant_creation_trusted) values ('${org}','trusted','ordinary',decode('abcd','hex'),201,'{}',true);
         raise exception 'trusted insert allowed'; exception when insufficient_privilege then null; end;
-      insert into public.idempotency_keys ${receipt} values ('${org}','normal','ordinary',decode('abcd','hex'),201,'{}');
+      begin insert into public.idempotency_keys ${receipt} values ('${org}','normal2','ordinary',decode('abcd','hex'),201,'{}');
+        raise exception 'ordinary insert allowed'; exception when insufficient_privilege then null; end;
       begin update public.idempotency_keys set tenant_creation_trusted=true where key='normal';
         raise exception 'promotion allowed'; exception when insufficient_privilege then null; end;
       begin update public.idempotency_keys set endpoint='${endpoint}' where key='normal';
         raise exception 'rename into reserved allowed'; exception when insufficient_privilege then null; end;
     end $$;`));
 
-  it("membro não lê, altera, rebaixa, renomeia ou apaga recibo protegido, nem trunca a tabela", () => prove(`
+  it("membro não lê, altera, rebaixa, renomeia ou apaga recibo algum, nem trunca a tabela", () => prove(`
     insert into public.idempotency_keys (organization_id,key,endpoint,request_hash,status_code,response_body,tenant_creation_trusted) values ('${org}','trusted','${endpoint}',decode('abcd','hex'),201,'{}',true),('${org}','legacy','${endpoint}',decode('abcd','hex'),201,'{}',false);
     ${asAttacker}
-    do $$ declare n integer; begin
-      if exists(select 1 from public.idempotency_keys where key in ('trusted','legacy')) then raise exception 'reserved read allowed'; end if;
-      update public.idempotency_keys set response_body='{"id":"${victim}"}' where key in ('trusted','legacy');
-      get diagnostics n = row_count; if n <> 0 then raise exception 'tampering allowed'; end if;
-      update public.idempotency_keys set tenant_creation_trusted=false,endpoint='ordinary' where key in ('trusted','legacy');
-      get diagnostics n = row_count; if n <> 0 then raise exception 'rename escape allowed'; end if;
-      delete from public.idempotency_keys where key in ('trusted','legacy');
-      get diagnostics n = row_count; if n <> 0 then raise exception 'deletion allowed'; end if;
+    do $$ begin
+      begin perform 1 from public.idempotency_keys where key in ('trusted','legacy');
+        raise exception 'read allowed'; exception when insufficient_privilege then null; end;
+      begin update public.idempotency_keys set response_body='{"id":"${victim}"}' where key in ('trusted','legacy');
+        raise exception 'tampering allowed'; exception when insufficient_privilege then null; end;
+      begin update public.idempotency_keys set tenant_creation_trusted=false,endpoint='ordinary' where key in ('trusted','legacy');
+        raise exception 'rename escape allowed'; exception when insufficient_privilege then null; end;
+      begin delete from public.idempotency_keys where key in ('trusted','legacy');
+        raise exception 'deletion allowed'; exception when insufficient_privilege then null; end;
       begin truncate public.idempotency_keys; raise exception 'truncate allowed'; exception when insufficient_privilege then null; end;
     end $$;`));
 
-  it("namespaces MCP e LGPD conservam INSERT/read/update/delete e isolamento", () => prove(`
-    ${asAttacker}
+  it("namespaces MCP e LGPD: o servidor conserva INSERT/read/update/delete; o membro não alcança nada", () => prove(`
     do $$ declare e text; n integer; begin
       foreach e in array array['mcp:crm_send_whatsapp_message','/api/v1/lgpd/requests/${key}/approve'] loop
         insert into public.idempotency_keys ${receipt} values ('${org}','compat',e,decode('abcd','hex'),202,'{"ok":true}');
@@ -67,8 +72,14 @@ describe("recibo administrativo só tem autoridade quando produzido pelo servido
         get diagnostics n = row_count; if n <> 1 then raise exception 'update broken'; end if;
         delete from public.idempotency_keys where key='compat' and endpoint=e;
         get diagnostics n = row_count; if n <> 1 then raise exception 'delete broken'; end if;
-        begin insert into public.idempotency_keys ${receipt} values ('${victim}','cross',e,decode('abcd','hex'),201,'{}');
-          raise exception 'cross tenant allowed'; exception when insufficient_privilege then null; end;
       end loop;
+    end $$;
+    insert into public.idempotency_keys ${receipt} values ('${org}','mcp-do-servidor','mcp:crm_send_whatsapp_message',decode('abcd','hex'),202,'{"ok":true}');
+    ${asAttacker}
+    do $$ begin
+      begin perform 1 from public.idempotency_keys where key='mcp-do-servidor';
+        raise exception 'read allowed'; exception when insufficient_privilege then null; end;
+      begin insert into public.idempotency_keys ${receipt} values ('${victim}','cross','mcp:crm_send_whatsapp_message',decode('abcd','hex'),201,'{}');
+        raise exception 'cross tenant allowed'; exception when insufficient_privilege then null; end;
     end $$;`));
 });

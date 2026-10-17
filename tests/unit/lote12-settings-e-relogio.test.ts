@@ -53,7 +53,7 @@ describe("atualizarSettingDaOrganizacao", () => {
 describe("os escritores de organizations.settings não regravam o objeto inteiro (D-132)", () => {
   const ESCRITORES = [
     "app/actions/auth/politicaDeMfa.ts",
-    "app/api/v1/settings/routing/route.ts",
+    "lib/organizacao/atendimento.ts",
     "app/api/v1/settings/campanhas/route.ts",
     "app/api/v1/settings/sons/route.ts",
     "app/api/v1/metrics/atrito/route.ts",

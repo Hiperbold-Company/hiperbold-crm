@@ -384,7 +384,8 @@ export const crmCreateWebhookSource: McpToolDefinition<typeof createSourceShape>
     "A entrada nasce ATIVA: a partir daí, qualquer POST na URL vira contato. " +
     "Com generate_secret=true o servidor gera o segredo de assinatura (HMAC-SHA256 do corpo, cabeçalho " +
     "X-HiperCRM-Signature) e o devolve em `secret` UMA ÚNICA VEZ — entregue-o a quem vai configurar o " +
-    "formulário e não o repita depois; leituras só mostram has_secret.",
+    "formulário e guarde-o FORA desta conversa (cofre de segredos); não o repita depois, ele não volta a aparecer: " +
+    "leituras só mostram has_secret.",
   inputSchema: createSourceShape,
   category: "write",
   requiresRole: "manager",

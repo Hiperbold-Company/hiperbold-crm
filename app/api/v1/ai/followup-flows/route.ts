@@ -1,24 +1,22 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
- * GET  /api/v1/ai/followup-flows — lista pointers da org ativa (any member).
- * POST /api/v1/ai/followup-flows — cria draft (manager+). Nasce status='draft',
+ * GET  /api/v1/ai/followup-flows — lista os fluxos da organização (viewer+).
+ * POST /api/v1/ai/followup-flows — cria o fluxo em rascunho (manager+). Nasce status='draft',
  *   draft_graph null, trigger_config default 'manual' (default do banco).
+ *
+ * ⚠️ AQUI SÓ HÁ TRANSPORTE. A regra vive em `lib/followup/administracao.ts`, a mesma das tools MCP.
+ * Auth: sessão OU token `dsk_…` (`mcp:read` / `mcp:write`, no mesmo piso de papel da tela); a organização
+ * sai da sessão/da linha do token.
  */
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
-import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { moduloLigado } from "@/lib/instalacao/modulos";
+import { respostaDeRecusa } from "@/lib/api/recusa";
+import { fail, ok } from "@/lib/api/wrappers";
+import { criarFluxo, listarFluxos } from "@/lib/followup/administracao";
 import { createFollowupFlowSchema } from "@/lib/followup/api-schemas";
-import { traduzir } from "@/lib/i18n/dicionario";
+import { entradaDeFluxo } from "@/lib/followup/porta";
 
 export const dynamic = "force-dynamic";
-
-const LIST_COLUMNS = "id, name, status, active_version_id, handoff_policy, updated_at";
 
 /**
  * `?surface=atendimento` lista os roteiros de atendimento (a tela deles chega no
@@ -27,89 +25,41 @@ const LIST_COLUMNS = "id, name, status, active_version_id, handoff_policy, updat
  * prova prática do #1130 os roteiros apareciam nessas listas como se fossem
  * follow-ups (e abriam no editor de follow-up).
  */
-export async function GET(req?: NextRequest): Promise<Response> {
-  const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "followup_flows" });
-  if (!authz.ok) return authz.response;
-  const { org: activeOrg } = authz;
-
-  const querRoteiros = req?.nextUrl.searchParams.get("surface") === "atendimento";
-  const supabase = await createClient();
-  const base = supabase
-    .from("followup_flow_pointers")
-    .select(LIST_COLUMNS)
-    .eq("organization_id", activeOrg.orgId);
-  const { data, error } = await (querRoteiros
-    ? base.eq("surface", "atendimento")
-    : base.neq("surface", "atendimento")
-  ).order("updated_at", { ascending: false });
-  if (error) return falhaInterna("internal_error", error, { requestId });
-  return ok(data ?? [], { requestId });
+export async function GET(req: NextRequest): Promise<Response> {
+  const e = await entradaDeFluxo(req, { escrita: false, role: "viewer" });
+  if (e.resposta) return e.resposta;
+  try {
+    const surface = req.nextUrl.searchParams.get("surface") === "atendimento" ? "atendimento" : undefined;
+    return ok(await listarFluxos(e.deps, { surface }), { requestId: e.requestId });
+  } catch (err) {
+    return respostaDeRecusa(err, e.requestId);
+  }
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "followup_flows" });
-  if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
+  const e = await entradaDeFluxo(req, { escrita: true, role: "manager" });
+  if (e.resposta) return e.resposta;
+  const t = e.deps.t!;
 
   let raw: unknown;
   try {
     raw = await req.json();
   } catch {
-    return fail("invalid_request", t("Body JSON inválido."), 400, { requestId });
+    return fail("invalid_request", t("Body JSON inválido."), 400, { requestId: e.requestId });
   }
-
   const parsed = createFollowupFlowSchema.safeParse(raw);
   if (!parsed.success) {
     return fail("validation_failed", t("Campos inválidos."), 422, {
-      requestId,
+      requestId: e.requestId,
       details: parsed.error.flatten(),
     });
   }
-
-  // Roteiro de atendimento é módulo opcional da instalação (doc 64): desligado,
-  // a porta não existe — 404, a mesma resposta do banco externo desligado.
-  if (
-    parsed.data.surface === "atendimento" &&
-    !(await moduloLigado(createAdminClient(), "fluxos_atendimento"))
-  ) {
-    return fail("not_found", t("Fluxo não encontrado."), 404, { requestId });
+  try {
+    return ok(await criarFluxo(e.deps, parsed.data), { requestId: e.requestId, status: 201 });
+  } catch (err) {
+    return respostaDeRecusa(err, e.requestId);
   }
-
-  const supabase = await createClient();
-  const { data: created, error: insErr } = await supabase
-    .from("followup_flow_pointers")
-    .insert({
-      organization_id: activeOrg.orgId,
-      name: parsed.data.name,
-      ...(parsed.data.surface !== undefined ? { surface: parsed.data.surface } : {}),
-    })
-    .select("*")
-    .single();
-
-  if (insErr || !created) {
-    if (insErr?.code === "23505") {
-      return fail("conflict", t("Já existe um fluxo com este nome."), 409, { requestId });
-    }
-    return falhaInterna("internal_error", insErr ?? "followup_flow_insert_failed", {
-      requestId,
-    });
-  }
-
-  void audit({
-    action: "followup_flow.created",
-    actorUserId: user.id,
-    organizationId: activeOrg.orgId,
-    resourceType: "followup_flow_pointer",
-    resourceId: created.id,
-    requestId,
-    metadata: { name: parsed.data.name },
-  });
-
-  return ok(created, { requestId, status: 201 });
 }

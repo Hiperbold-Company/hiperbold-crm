@@ -286,6 +286,117 @@ describe("POST /webhook-sources com generate_secret e Idempotency-Key", () => {
 });
 
 // ---------------------------------------------------------------------------
+// recibo de idempotência: nada de acesso nele (achados da auditoria da fase 2)
+// ---------------------------------------------------------------------------
+
+describe("POST /webhook-sources — o recibo não guarda path_token nem o segredo digitado", () => {
+  const CHAVE = "9f0e6c1e-3b0a-4b8e-9d55-0a1b2c3d4e5f";
+  const url = "/api/v1/webhook-sources";
+  const corpo = { name: "Site", default_pipeline_id: FUNIL, default_stage_id: ETAPA };
+
+  function bancoDeCriacao(extra: Record<string, (c: Chamada) => unknown> = {}) {
+    return bancoFalso(
+      {
+        crm_pipelines: () => ({ id: FUNIL }),
+        crm_stages: () => ({ id: ETAPA, is_archived: false }),
+        webhook_sources: (c) => (c.op === "insert" ? fonteDoBanco : [{ id: FONTE, path_token: "tok_publico" }]),
+        idempotency_keys: () => null,
+        ...extra,
+      },
+      (nome) => (nome === "fn_encrypt_oauth" ? "\\xcifrado" : null),
+    );
+  }
+  const insercaoDoRecibo = (db: ReturnType<typeof bancoFalso>) =>
+    db.chamadas.find((c) => c.tabela === "idempotency_keys" && c.op === "insert");
+  const recibos = (db: ReturnType<typeof bancoFalso>) =>
+    db.chamadas.filter((c) => c.tabela === "idempotency_keys" && c.op !== "select");
+
+  it("path_token vai na resposta ao vivo e fica FORA do recibo gravado", async () => {
+    const db = bancoDeCriacao();
+    vi.mocked(createAdminClient).mockReturnValue(db as never);
+    comoToken("manager", ["mcp:write"]);
+    const { POST } = await import("@/app/api/v1/webhook-sources/route");
+    const res = await POST(req(url, "POST", corpo, { "Idempotency-Key": CHAVE }));
+    expect(res.status).toBe(201);
+    const dados = (await res.json()).data;
+    expect(typeof dados.path_token).toBe("string");
+    expect(dados.path_token.length).toBeGreaterThan(10);
+    expect(JSON.stringify(recibos(db))).not.toContain(dados.path_token);
+    expect(recibos(db).every((c) => c.filtros.organization_id === undefined || c.filtros.organization_id === ORG_TOKEN)).toBe(true);
+  });
+
+  it("replay: o servidor recoloca o path_token lido do banco, na organização do token, sem criar de novo", async () => {
+    const primeiro = bancoDeCriacao();
+    vi.mocked(createAdminClient).mockReturnValue(primeiro as never);
+    comoToken("manager", ["mcp:write"]);
+    const { POST } = await import("@/app/api/v1/webhook-sources/route");
+    await POST(req(url, "POST", corpo, { "Idempotency-Key": CHAVE }));
+    const hash = (insercaoDoRecibo(primeiro)?.patch as { request_hash: string }).request_hash;
+
+    const segundo = bancoDeCriacao({
+      idempotency_keys: (c) =>
+        c.op === "select"
+          ? [
+              {
+                id: "r1",
+                request_hash: hash,
+                status_code: 201,
+                expires_at: "2099-01-01T00:00:00Z",
+                response_body: { id: FONTE, name: "Site", has_secret: false },
+              },
+            ]
+          : null,
+      webhook_sources: (c) => (c.op === "select" ? [{ path_token: "tok_do_banco" }] : fonteDoBanco),
+    });
+    vi.mocked(createAdminClient).mockReturnValue(segundo as never);
+    const res = await POST(req(url, "POST", corpo, { "Idempotency-Key": CHAVE }));
+    expect(res.status).toBe(201);
+    const dados = (await res.json()).data;
+    expect(dados).toMatchObject({ id: FONTE, path_token: "tok_do_banco" });
+    expect(segundo.chamadas.some((c) => c.tabela === "webhook_sources" && c.op === "insert")).toBe(false);
+    const leitura = segundo.chamadas.find((c) => c.tabela === "webhook_sources" && c.op === "select");
+    expect(leitura?.filtros).toMatchObject({ id: FONTE, organization_id: ORG_TOKEN });
+  });
+
+  it("o segredo DIGITADO não entra no hash do recibo: dois segredos, mesmo hash; e não aparece no recibo", async () => {
+    const hashCom = async (segredo: string) => {
+      const db = bancoDeCriacao();
+      vi.mocked(createAdminClient).mockReturnValue(db as never);
+      comoToken("manager", ["mcp:write"]);
+      const { POST } = await import("@/app/api/v1/webhook-sources/route");
+      const res = await POST(req(url, "POST", { ...corpo, secret: segredo }, { "Idempotency-Key": CHAVE }));
+      expect(res.status).toBe(201);
+      expect(JSON.stringify(recibos(db))).not.toContain(segredo);
+      return (insercaoDoRecibo(db)?.patch as { request_hash: string }).request_hash;
+    };
+    const a = await hashCom("segredo-digitado-AAAAAAAAAAAA");
+    const b = await hashCom("segredo-digitado-BBBBBBBBBBBB");
+    expect(a).toBe(b);
+    // E é diferente do pedido SEM segredo: o marcador `has_secret` ainda distingue as duas operações.
+    const sem = bancoDeCriacao();
+    vi.mocked(createAdminClient).mockReturnValue(sem as never);
+    const { POST } = await import("@/app/api/v1/webhook-sources/route");
+    await POST(req(url, "POST", corpo, { "Idempotency-Key": CHAVE }));
+    expect((insercaoDoRecibo(sem)?.patch as { request_hash: string }).request_hash).not.toBe(a);
+  });
+
+  it("Cache-Control: no-store só quando a resposta carrega o segredo gerado", async () => {
+    const db = bancoDeCriacao();
+    vi.mocked(createAdminClient).mockReturnValue(db as never);
+    comoToken("manager", ["mcp:write"]);
+    const { POST } = await import("@/app/api/v1/webhook-sources/route");
+    const comSegredo = await POST(req(url, "POST", { ...corpo, generate_secret: true }));
+    expect(comSegredo.status).toBe(201);
+    expect(comSegredo.headers.get("cache-control")).toBe("no-store");
+    expect((await comSegredo.json()).data.secret).toMatch(/^[0-9a-f]{64}$/);
+
+    const semSegredo = await POST(req(url, "POST", corpo));
+    expect(semSegredo.status).toBe(201);
+    expect(semSegredo.headers.get("cache-control")).not.toBe("no-store");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // campos personalizados do funil
 // ---------------------------------------------------------------------------
 

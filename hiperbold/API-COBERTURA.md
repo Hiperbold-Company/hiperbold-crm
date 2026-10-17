@@ -1,6 +1,6 @@
 # API × telas — matriz de cobertura (D-211)
 
-Gerada em 17/10/2026 a partir do estado do código na branch `feat/api-fase-2` (fase 1 + fase 2). Fontes: `lib/navigation/catalogo.ts`, `app/app/**`, `app/api/v1/**` (rotas que usam `autorizarAdministracao`/`resolveAuthDual`), `lib/auth/public-paths.ts` e `lib/mcp/tools/index.ts`. Uma linha por tela/grupo de ação; ações irmãs da mesma rota foram agrupadas.
+Gerada em 17/10/2026 a partir do estado do código na branch `feat/api-fase-3` (fases 1, 2 e 3). Fontes: `lib/navigation/catalogo.ts`, `app/app/**`, `app/api/v1/**` (rotas que usam `autorizarAdministracao`/`resolveAuthDual`), `lib/auth/public-paths.ts` e `lib/mcp/tools/index.ts`. Uma linha por tela/grupo de ação; ações irmãs da mesma rota foram agrupadas.
 
 Legenda: **Bearer dsk_?** = a rota aceita `Authorization: Bearer dsk_…` (tem entrada em `public-paths.ts` e usa a porta sessão-ou-token). **Prioridade alta** = necessária para montar um cliente novo do zero (fontes de captação, campos personalizados, agentes/IA, respostas rápidas, follow-ups, roteadores, conexões, mais equipe, funis, etapas e dados da empresa).
 
@@ -8,42 +8,26 @@ Legenda: **Bearer dsk_?** = a rota aceita `Authorization: Bearer dsk_…` (tem e
 
 | Prioridade | Linhas | Rota com Bearer | Com tool MCP | Fechadas (Bearer + tool) |
 |---|---|---|---|---|
-| alta | 48 | 27 | 23 | 21 |
+| alta | 48 | 43 | 41 | 41 |
 | média | 46 | 8 | 21 | 5 |
 | baixa | 24 | 0 | 3 | 0 |
-| **total** | 118 | 35 | 47 | 26 |
+| **total** | 118 | 51 | 65 | 46 |
 
 Observação: "rota existe mas sem Bearer" é a lacuna dominante — a maior parte do `/api/v1` já existe para a tela (sessão por cookie) e falta só converter a porta de autenticação para `autorizarAdministracao` (papel = o da tela, escopo `mcp:read`/`mcp:write`), declarar a rota em `public-paths.ts` e expor a tool. Onde a coluna Rota diz "(Server Actions …)", não há rota REST: é preciso extrair o núcleo da action para `lib/` e criar a rota.
 
 ## Lacunas de prioridade alta ainda abertas (próxima fatia)
 
-- Equipe — convidar (lote) (`POST /api/v1/team/invite`): Bearer ok, sem tool
-- Equipe — listar convites (`GET /api/v1/team/invites`): Bearer ok, sem tool
-- Equipe — reenviar / revogar convite (`POST /api/v1/team/invites/{id}/resend | revoke`): Bearer ok, sem tool
-- Equipe — mudar papel (`PATCH /api/v1/team/{user_id}/role`): Bearer ok, sem tool
-- Equipe — revogar / reativar acesso (`POST /api/v1/team/{user_id}/revoke | reactivate`): Bearer ok, sem tool
-- Funis — criar / editar / apagar funil (`POST /api/v1/pipelines · PATCH|DELETE /api/v1/pipelines/{id}`): Bearer ok, sem tool
-- Webhooks — regras automáticas — criar / editar / apagar regra (`POST /api/v1/automation-rules · PATCH|DELETE /{id}`): sem Bearer, sem tool
-- Credenciais de IA (/app/ai/credentials) — listar / criar / editar / apagar / revalidar chave de IA (`GET|POST /ai/credentials · PATCH|DELETE /{id} · POST /{id}/revalidate · POST /test`): sem Bearer, sem tool
-- Provedores (/app/ai/providers) — ler / alterar provedores e modelos (`GET|PUT|PATCH /ai/providers · GET /ai/providers/{provider}/models`): sem Bearer, sem tool
-- Conhecimento (/app/ai/knowledge/sources) — listar materiais (`GET /api/v1/ai/knowledge/sources`): sem Bearer
-- Conhecimento — criar / enviar arquivo / editar / apagar / reindexar material (`POST /ai/knowledge/sources · /upload · PATCH|DELETE /{id} · POST /{id}/reindex · /reindex-all`): sem Bearer, sem tool
-- Follow-ups (/app/ai/followups) — listar fluxos de follow-up (`GET /api/v1/ai/followup-flows`): sem Bearer, sem tool
-- Follow-ups — criar fluxo (do zero ou de modelo aprovado) (`POST /ai/followup-flows · POST /from-model · GET /modelos-aprovados`): sem Bearer, sem tool
-- Follow-ups — editar / apagar / duplicar fluxo (`GET|PATCH|DELETE /ai/followup-flows/{id} · POST /{id}/duplicate`): sem Bearer, sem tool
-- Follow-ups — publicar / desativar / reverter fluxo (`POST /ai/followup-flows/{id}/publish|disable|rollback`): sem Bearer, sem tool
-- Roteadores (/app/ai/routers) — listar / criar roteador (`GET|POST /api/v1/ai/routers`): sem Bearer, sem tool
-- Roteadores — ver / editar / apagar roteador (`GET|PATCH|DELETE /ai/routers/{id}`): sem Bearer, sem tool
-- Roteadores — definir membros (agentes) do roteador (`PUT /ai/routers/{id}/members`): sem Bearer, sem tool
-- Respostas rápidas (/app/templates) — listar (`GET /api/v1/message-templates`): sem Bearer
-- Respostas rápidas — criar (pessoal ou compartilhada, Idempotency-Key) (`POST /api/v1/message-templates`): sem Bearer, sem tool
-- Respostas rápidas — editar / apagar (`PATCH|DELETE /api/v1/message-templates/{id}`): sem Bearer, sem tool
-- Conexões (/app/connections) — listar sessões de canal (WhatsApp não oficial) (`GET /api/v1/channel-sessions`): sem Bearer, sem tool
-- Conexões — criar sessão / QR / código de pareamento / reconectar / apagar (`POST /channel-sessions · GET /{id}/qr · POST /{id}/pairing-code|reconnect · DELETE /{id}`): sem Bearer, sem tool
-- Conexões — acesso da IA à sessão (`GET|PATCH /channel-sessions/{id}/ai-access`): sem Bearer, sem tool
-- Conexões — canal oficial (Cloud API): ler / conectar / registrar / número / webhook (`GET|POST /channels/official · /numero · /registrar · /webhook`): sem Bearer, sem tool
-- Conexões — instância (provisionar/remover), pareamento por QR, parceiro, social (`/channels/instancia · /pareamento-qr · /partner · /graph-partner · /social`): sem Bearer, sem tool
-- Distribuição de atendimento (/app/settings/atendimento) — ler / alterar roteamento e canais (`GET|PATCH /settings/routing · /settings/routing/channels`): sem Bearer, sem tool
+Fase 3 (17/10/2026) fechou: respostas rápidas, follow-ups, roteadores, regras automáticas (criar/editar/apagar), distribuição de atendimento, conhecimento (criar/editar/arquivar), tools de equipe e funis, e a leitura de conexões e credenciais de IA. O que sobrou:
+
+- Equipe — listar convites (`GET /api/v1/team/invites`): Bearer ok, tool falta
+- Equipe — reenviar / revogar convite (`POST /api/v1/team/invites/{id}/resend | revoke`): Bearer ok, tool falta
+- Provedores (/app/ai/providers) — ler / alterar provedores e modelos (`GET|PUT|PATCH /ai/providers · GET /ai/providers/{provider}/models`): Bearer não, tool falta
+- Conexões — criar sessão / QR / código de pareamento / reconectar / apagar (`POST /channel-sessions · GET /{id}/qr · POST /{id}/pairing-code|reconnect · DELETE /{id}`): Bearer não, tool falta
+- Conexões — acesso da IA à sessão (`GET|PATCH /channel-sessions/{id}/ai-access`): Bearer não, tool falta
+- Conexões — canal oficial (Cloud API): ler / conectar / registrar / número / webhook (`GET|POST /channels/official · /numero · /registrar · /webhook`): Bearer não, tool falta
+- Conexões — instância (provisionar/remover), pareamento por QR, parceiro, social (`/channels/instancia · /pareamento-qr · /partner · /graph-partner · /social`): Bearer não, tool falta
+
+Fechamentos PARCIAIS contados como fechados acima (o resto de cada linha continua só na sessão): credenciais de IA (só listar; cadastrar, trocar, apagar e revalidar chave seguem na sessão, com segundo fator), conhecimento (criar/editar/arquivar por token; envio de arquivo e reindexação só na sessão), follow-ups (do zero por token; `from-model` e `modelos-aprovados` só na sessão), distribuição de atendimento (`/settings/routing` por token; `/settings/routing/channels` só na sessão: a RPC depende de `auth.uid()`), respostas rápidas (chave só cria e mexe nas compartilhadas; a pessoal é do atendente).
 
 ## Matriz
 
@@ -52,16 +36,16 @@ Observação: "rota existe mas sem Bearer" é a lacuna dominante — a maior par
 | Organização (/app/settings/tenant) | ler dados da empresa | GET /api/v1/settings/organizacao | sim | crm_get_organization_settings | alta |
 | Organização | editar dados da empresa, perfil e áreas do menu | PATCH /api/v1/settings/organizacao | sim | crm_update_organization_settings | alta |
 | Equipe (/app/team) | listar membros | GET /api/v1/team | sim | crm_list_team_members | alta |
-| Equipe | convidar (lote) | POST /api/v1/team/invite | sim | falta | alta |
+| Equipe | convidar (lote) | POST /api/v1/team/invite | sim | crm_invite_team_members | alta |
 | Equipe | listar convites | GET /api/v1/team/invites | sim | falta | alta |
 | Equipe | reenviar / revogar convite | POST /api/v1/team/invites/{id}/resend | revoke | sim | falta | alta |
-| Equipe | mudar papel | PATCH /api/v1/team/{user_id}/role | sim | falta | alta |
+| Equipe | mudar papel | PATCH /api/v1/team/{user_id}/role | sim | crm_change_team_member_role | alta |
 | Equipe | editar membro (carga, janela) | PATCH /api/v1/team/{user_id} | sim | falta | média |
-| Equipe | revogar / reativar acesso | POST /api/v1/team/{user_id}/revoke | reactivate | sim | falta | alta |
+| Equipe | revogar / reativar acesso | POST /api/v1/team/{user_id}/revoke | reactivate | sim | crm_revoke_team_member · crm_reactivate_team_member | alta |
 | Equipe | personalizar menu do membro | PATCH /api/v1/team/{user_id}/interface | não | falta | baixa |
 | Equipe | listar atribuíveis | GET /api/v1/team/assignable | não | falta | baixa |
 | Funis (/app/kanban) | listar funis | GET /api/v1/pipelines | sim | crm_list_pipelines | alta |
-| Funis | criar / editar / apagar funil | POST /api/v1/pipelines · PATCH|DELETE /api/v1/pipelines/{id} | sim | falta | alta |
+| Funis | criar / editar / apagar funil | POST /api/v1/pipelines · PATCH|DELETE /api/v1/pipelines/{id} | sim | crm_create_pipeline · crm_update_pipeline · crm_delete_pipeline | alta |
 | Funis | quadro (board) de um funil | GET /api/v1/pipelines/{id}/board | não | falta | média |
 | Funis | previsão (forecast) | GET /api/v1/pipelines/{id}/forecast | não | crm_get_pipeline_forecast | baixa |
 | Etapas do funil (/app/settings/tenant/pipelines) | listar etapas | GET /api/v1/pipelines/{id}/stages | sim | crm_list_stages | alta |
@@ -79,7 +63,7 @@ Observação: "rota existe mas sem Bearer" é a lacuna dominante — a maior par
 | Webhooks — entradas automáticas | ver recebimentos (nomes dos campos) | GET /api/v1/webhook-sources/{id}/events | sim | crm_list_webhook_source_events | média |
 | Webhooks — entradas automáticas | capturas de leads (lista) | GET /api/v1/lead-captures | não | falta | baixa |
 | Webhooks — regras automáticas | listar regras / execuções | GET /api/v1/automation-rules · /runs | não | crm_list_automation_rules · crm_list_automation_runs | média |
-| Webhooks — regras automáticas | criar / editar / apagar regra | POST /api/v1/automation-rules · PATCH|DELETE /{id} | não | falta | alta |
+| Webhooks — regras automáticas | criar / editar / apagar regra | POST /api/v1/automation-rules · PATCH|DELETE /{id} | sim | crm_create_automation_rule · crm_update_automation_rule · crm_delete_automation_rule | alta |
 | Webhooks — regras automáticas | ligar-desligar regra | PATCH /api/v1/automation-rules/{id} | não | crm_set_automation_rule_active | média |
 | Webhooks — regras automáticas | reenviar execução | POST /api/v1/automation-rules/runs/{runId}/resend | não | falta | baixa |
 | Agentes (/app/ai/agents) | listar agentes | GET /api/v1/ai/agents | sim | crm_list_ai_agents | alta |
@@ -96,10 +80,10 @@ Observação: "rota existe mas sem Bearer" é a lacuna dominante — a maior par
 | Agentes | propostas de melhoria: ver / aplicar | GET /ai/agents/{id}/proposals · POST …/{pid}/apply | não | crm_list_improvement_proposals | média |
 | Agentes | execuções e uso de ferramentas do agente | GET /ai/agents/{id}/runs · /tool-usage | não | falta | baixa |
 | Agentes | agentes atribuíveis | GET /api/v1/ai/agents/assignable | não | falta | baixa |
-| Credenciais de IA (/app/ai/credentials) | listar / criar / editar / apagar / revalidar chave de IA | GET|POST /ai/credentials · PATCH|DELETE /{id} · POST /{id}/revalidate · POST /test | não | falta | alta |
+| Credenciais de IA (/app/ai/credentials) | listar / criar / editar / apagar / revalidar chave de IA | GET|POST /ai/credentials · PATCH|DELETE /{id} · POST /{id}/revalidate · POST /test | só leitura (GET /ai/credentials) | crm_list_ai_credentials (só leitura, sem 4 últimos nem autor) | alta |
 | Provedores (/app/ai/providers) | ler / alterar provedores e modelos | GET|PUT|PATCH /ai/providers · GET /ai/providers/{provider}/models | não | falta | alta |
-| Conhecimento (/app/ai/knowledge/sources) | listar materiais | GET /api/v1/ai/knowledge/sources | não | crm_list_knowledge_sources | alta |
-| Conhecimento | criar / enviar arquivo / editar / apagar / reindexar material | POST /ai/knowledge/sources · /upload · PATCH|DELETE /{id} · POST /{id}/reindex · /reindex-all | não | falta | alta |
+| Conhecimento (/app/ai/knowledge/sources) | listar materiais | GET /api/v1/ai/knowledge/sources | sim | crm_list_knowledge_sources | alta |
+| Conhecimento | criar / enviar arquivo / editar / apagar / reindexar material | POST /ai/knowledge/sources · /upload · PATCH|DELETE /{id} · POST /{id}/reindex · /reindex-all | sim: criar / editar / arquivar (upload e reindexar só na sessão) | crm_get_knowledge_source · crm_create_knowledge_source · crm_update_knowledge_source · crm_archive_knowledge_source | alta |
 | Conhecimento | buscar no conhecimento | (busca interna do agente) | não | crm_search_knowledge | média |
 | Memória (/app/ai/memory) | ler / gravar memória da empresa | GET|POST /ai/memory · POST|PATCH /ai/memory/entries · GET /versions/{id} | não | crm_get_org_memory · crm_save_org_memory | média |
 | Skills (/app/ai/skills) | listar / instalar / importar / editar / restaurar / apagar | GET /ai/skills · GET|PUT|DELETE /{name} · POST /{name}/install|restore · POST /import | não | falta | média |
@@ -111,29 +95,29 @@ Observação: "rota existe mas sem Bearer" é a lacuna dominante — a maior par
 | Casos (/app/ai/cases) | listar / ver / responder caso humano | GET /ai/cases · GET /{id} · POST /{id}/reply · /chat | não | crm_list_human_cases · crm_get_human_case · crm_add_case_note · crm_close_human_case | média |
 | Alertas / Aviso no WhatsApp (/app/ai/cases/avisos) | alerta de caso: ler / gravar / testar | GET|PUT /ai/cases/alerta · POST /alerta/teste | não | falta | média |
 | Alertas (/app/ai/inbox) | listar / resolver avisos da IA | GET /ai/inbox · PATCH /{id} · POST /resolve-all | não | falta | baixa |
-| Follow-ups (/app/ai/followups) | listar fluxos de follow-up | GET /api/v1/ai/followup-flows | não | falta | alta |
-| Follow-ups | criar fluxo (do zero ou de modelo aprovado) | POST /ai/followup-flows · POST /from-model · GET /modelos-aprovados | não | falta | alta |
-| Follow-ups | editar / apagar / duplicar fluxo | GET|PATCH|DELETE /ai/followup-flows/{id} · POST /{id}/duplicate | não | falta | alta |
-| Follow-ups | publicar / desativar / reverter fluxo | POST /ai/followup-flows/{id}/publish|disable|rollback | não | falta | alta |
+| Follow-ups (/app/ai/followups) | listar fluxos de follow-up | GET /api/v1/ai/followup-flows | sim | crm_list_followup_flows | alta |
+| Follow-ups | criar fluxo (do zero ou de modelo aprovado) | POST /ai/followup-flows · POST /from-model · GET /modelos-aprovados | sim: do zero (from-model e modelos-aprovados só na sessão) | crm_create_followup_flow | alta |
+| Follow-ups | editar / apagar / duplicar fluxo | GET|PATCH|DELETE /ai/followup-flows/{id} · POST /{id}/duplicate | sim | crm_get_followup_flow · crm_update_followup_flow · crm_delete_followup_flow · crm_duplicate_followup_flow | alta |
+| Follow-ups | publicar / desativar / reverter fluxo | POST /ai/followup-flows/{id}/publish|disable|rollback | sim | crm_publish_followup_flow · crm_disable_followup_flow · crm_rollback_followup_flow | alta |
 | Follow-ups | inscrições (matrículas): listar / ver / pausar / retomar / cancelar / adiar | GET|POST /ai/followups/enrollments · POST /{id}/pause|resume|cancel|skip|snooze · GET /queue | não | crm_enroll_followup_flow · crm_list_followups · crm_cancel_followup · crm_schedule_followup | média |
 | Follow-ups | cancelar promessa de retorno | POST /ai/followups/promises/{id}/cancel | não | falta | baixa |
 | Fluxos de atendimento (/app/ai/atendimento) | (telas de fluxo de atendimento — rotas próprias não mapeadas em /api/v1) | falta | não | falta | média |
-| Roteadores (/app/ai/routers) | listar / criar roteador | GET|POST /api/v1/ai/routers | não | falta | alta |
-| Roteadores | ver / editar / apagar roteador | GET|PATCH|DELETE /ai/routers/{id} | não | falta | alta |
-| Roteadores | definir membros (agentes) do roteador | PUT /ai/routers/{id}/members | não | falta | alta |
+| Roteadores (/app/ai/routers) | listar / criar roteador | GET|POST /api/v1/ai/routers | sim | crm_list_ai_routers · crm_create_ai_router | alta |
+| Roteadores | ver / editar / apagar roteador | GET|PATCH|DELETE /ai/routers/{id} | sim | crm_get_ai_router · crm_update_ai_router · crm_delete_ai_router | alta |
+| Roteadores | definir membros (agentes) do roteador | PUT /ai/routers/{id}/members | sim | crm_set_ai_router_members | alta |
 | Roteadores | testar roteador | POST /ai/routers/{id}/test | não | falta | média |
-| Respostas rápidas (/app/templates) | listar | GET /api/v1/message-templates | não | crm_list_message_templates | alta |
-| Respostas rápidas | criar (pessoal ou compartilhada, Idempotency-Key) | POST /api/v1/message-templates | não | falta | alta |
-| Respostas rápidas | editar / apagar | PATCH|DELETE /api/v1/message-templates/{id} | não | falta | alta |
+| Respostas rápidas (/app/templates) | listar | GET /api/v1/message-templates | sim | crm_list_message_templates | alta |
+| Respostas rápidas | criar (pessoal ou compartilhada, Idempotency-Key) | POST /api/v1/message-templates | sim (chave só cria compartilhada) | crm_create_message_template | alta |
+| Respostas rápidas | editar / apagar | PATCH|DELETE /api/v1/message-templates/{id} | sim (chave só mexe nas compartilhadas) | crm_update_message_template · crm_delete_message_template | alta |
 | Respostas rápidas | renderizar com variáveis | (interno) | não | crm_render_message_template | baixa |
-| Conexões (/app/connections) | listar sessões de canal (WhatsApp não oficial) | GET /api/v1/channel-sessions | não | falta | alta |
+| Conexões (/app/connections) | listar sessões de canal (WhatsApp não oficial) | GET /api/v1/channel-sessions | sim (só leitura) | crm_list_channel_sessions | alta |
 | Conexões | criar sessão / QR / código de pareamento / reconectar / apagar | POST /channel-sessions · GET /{id}/qr · POST /{id}/pairing-code|reconnect · DELETE /{id} | não | falta | alta |
 | Conexões | acesso da IA à sessão | GET|PATCH /channel-sessions/{id}/ai-access | não | falta | alta |
 | Conexões | canal oficial (Cloud API): ler / conectar / registrar / número / webhook | GET|POST /channels/official · /numero · /registrar · /webhook | não | falta | alta |
 | Conexões | instância (provisionar/remover), pareamento por QR, parceiro, social | /channels/instancia · /pareamento-qr · /partner · /graph-partner · /social | não | falta | alta |
 | Conexões | modelos de mensagem do canal (HSM) | GET|POST|PATCH /channels/templates · /partner/templates · /graph-partner/templates | não | falta | média |
 | Conexões | números de telefone | GET|POST /phone-numbers · PATCH /{id} | não | falta | média |
-| Distribuição de atendimento (/app/settings/atendimento) | ler / alterar roteamento e canais | GET|PATCH /settings/routing · /settings/routing/channels | não | falta | alta |
+| Distribuição de atendimento (/app/settings/atendimento) | ler / alterar roteamento e canais | GET|PATCH /settings/routing · /settings/routing/channels | sim: /settings/routing (/channels só na sessão) | crm_get_attendance_routing · crm_update_attendance_routing | alta |
 | Distribuição de atendimento | disponibilidade/presença de atendentes | GET /attendants/availability · PATCH /{user_id} · POST /presence | não | crm_list_available_attendants | média |
 | Canal oficial (/app/settings/canal-oficial) · WhatsApp (/app/settings/tenant/whatsapp) | telas de configuração do canal (usam as rotas de channels/*) | ver Conexões | não | falta | média |
 | Nuvemshop (/app/integrations/nuvemshop) | conectar / desconectar | (Server Actions connectNuvemshop / disconnectNuvemshop) | não | falta | média |
@@ -172,5 +156,5 @@ Observação: "rota existe mas sem Bearer" é a lacuna dominante — a maior par
 
 - Rotas com Bearer: `git grep -lE "autorizarAdministracao|resolveAuthDual|auth-dual" -- app/api/v1`; proxy: `lib/auth/public-paths.ts`.
 - Tools: `grep -rhoE 'name: "crm_[a-z_]+"' lib/mcp/tools/*.ts | sort -u`; catálogo: `lib/mcp/tools/catalogo/`.
-- Padrão de conversão de rota: `lib/api/auth-dual-admin.ts` (porta), `lib/api/criacao-idempotente.ts` (POST de criação com `Idempotency-Key`), núcleo compartilhado em `lib/<domínio>/` e testes em `tests/unit/api-fase2-admin-por-token.test.ts`.
+- Padrão de conversão de rota: `lib/api/auth-dual-admin.ts` (porta), `lib/api/porta-admin.ts` (id + autorização), `lib/api/criacao-idempotente.ts` (POST de criação com `Idempotency-Key`; recibo sempre com o cliente de servidor, migration 0969), núcleo compartilhado em `lib/<domínio>/` e testes em `tests/unit/api-fase{2,3}-admin-por-token.test.ts` e `tests/unit/mcp-administracao-fase{2,3}-tools.test.ts`.
 - Escritas com token exigem `requireSupportWrite()` antes do efeito, audit com `actor_api_token_id` e organização sempre da linha do token.

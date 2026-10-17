@@ -131,32 +131,52 @@ export async function POST(req: NextRequest): Promise<Response> {
     requestId,
   };
 
+  // O recibo de idempotência é uma linha de banco que vive 24h: nem o segredo digitado nem o `path_token`
+  // (a chave da URL de captação) moram nele. O segredo digitado entra no hash só como marcador; o
+  // `path_token` sai do recibo e é recolocado na resposta ao vivo e, no replay, lido pelo servidor.
+  const { secret: segredoDigitado, ...pedidoSemSegredo } = parsed.data;
+  const corpoDoRecibo = segredoDigitado ? { ...pedidoSemSegredo, has_secret: true } : pedidoSemSegredo;
+  let pathToken: string | null = null;
+
   try {
-    return await criarComChaveOpcional(req, authz, {
+    const resposta = await criarComChaveOpcional(req, authz, {
       requestId,
       endpoint: ENDPOINT,
       // O segredo GERADO não faz parte do pedido (muda a cada tentativa): o pedido é `generate_secret: true`.
-      corpo: parsed.data,
+      corpo: corpoDoRecibo,
       t,
-      executar: () =>
-        criarEntradaAutomatica(deps, {
+      executar: async () => {
+        const { path_token, ...fonte } = await criarEntradaAutomatica(deps, {
           name: parsed.data.name,
           default_pipeline_id: parsed.data.default_pipeline_id,
           default_stage_id: parsed.data.default_stage_id,
           redirect_to: parsed.data.redirect_to ?? null,
           field_map: parsed.data.field_map,
           secret_encrypted: secretEncrypted,
-        }),
-      aoExecutar: (fonte) =>
-        segredoGerado === null
-          ? fonte
-          : {
-              ...fonte,
-              secret: segredoGerado,
-              secret_shown_once: true,
-              signature: ASSINATURA_DA_ENTRADA,
-            },
+        });
+        pathToken = path_token;
+        return fonte;
+      },
+      aoExecutar: (fonte) => ({
+        ...fonte,
+        path_token: pathToken,
+        ...(segredoGerado === null
+          ? {}
+          : { secret: segredoGerado, secret_shown_once: true, signature: ASSINATURA_DA_ENTRADA }),
+      }),
+      aoReproduzir: async (fonte) => {
+        const { data } = await admin
+          .from("webhook_sources")
+          .select("path_token")
+          .eq("id", fonte.id)
+          .eq("organization_id", authz.organizationId)
+          .maybeSingle();
+        return { ...fonte, path_token: (data as { path_token?: string } | null)?.path_token ?? null };
+      },
     });
+    // Resposta com segredo em claro nunca fica em cache de navegador, proxy ou CDN.
+    if (segredoGerado !== null && resposta.ok) resposta.headers.set("Cache-Control", "no-store");
+    return resposta;
   } catch (err) {
     return respostaDeRecusa(err, requestId);
   }

@@ -4966,6 +4966,10 @@ export const DICIONARIO: Traducoes = {
   "A conta está suspensa por falta de pagamento: as automações ficam paradas até a assinatura ser regularizada. Fale com o suporte.": {
     es: "La cuenta está suspendida por falta de pago: las automatizaciones quedan detenidas hasta que se regularice la suscripción. Habla con soporte.",
   },
+  // API fase 3: núcleo dos roteadores (lib/ai/agents/roteadores.ts).
+  "Um dos agentes não existe nesta organização.": {
+    es: "Uno de los agentes no existe en esta organización.",
+  },
   // D-148: trocar o dono do negócio por outra pessoa exige gerente.
   "Passar o negócio para outra pessoa exige papel de gerente.": {
     es: "Pasar el negocio a otra persona requiere rol de gerente.",

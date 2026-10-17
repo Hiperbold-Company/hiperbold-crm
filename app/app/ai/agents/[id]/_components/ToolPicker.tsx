@@ -66,6 +66,8 @@ export interface McpToolMeta extends CapacidadeSelecionavel {
   /** `false` = capacidade do harness: mostra, explica e não deixa marcar. */
   marcavel: boolean;
   motivo_nao_marcavel: string | null;
+  /** Operada por pessoa: nenhum pacote a oferece (ver `selecao-por-pacote.ts`). */
+  apenasHumano?: boolean;
 }
 
 interface Props {

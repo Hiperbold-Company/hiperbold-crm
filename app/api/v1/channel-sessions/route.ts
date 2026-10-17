@@ -1,7 +1,8 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * GET  /api/v1/channel-sessions — lista os canais WhatsApp da org (do DB).
- *   Acessível a qualquer membro (usado pelo seletor do inbox e pela sidebar).
+ *   Acessível a qualquer membro (usado pelo seletor do inbox e pela sidebar) e a chave `dsk_…` com `mcp:read`
+ *   (só leitura; regra em `lib/channels/listar-conexoes.ts`, sem segredo).
  * POST /api/v1/channel-sessions — conecta um NOVO número (cria a sessão com
  *   nome único e inicia no WAHA). Admin only.
  *
@@ -14,10 +15,9 @@ import { connectWahaChannel, ChannelConnectionError } from "@/lib/channels/conne
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mfaEmDivida } from "@/lib/auth/server";
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { requireRole } from "@/lib/auth/require-role";
-import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
-import { PROVIDERS_DE_MENSAGEM } from "@/lib/channels/capabilities";
+import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
+import { listarConexoesDeMensagem } from "@/lib/channels/listar-conexoes";
 import { createChannelSchema } from "@/lib/schemas/channels";
 import { createClient } from "@/lib/supabase/server";
 import { getWahaClient } from "@/lib/waha/client";
@@ -25,39 +25,18 @@ import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
-export const CHANNEL_COLUMNS =
-  "id, provider, waha_session_name, display_name, phone_number, status, status_reason, last_health_check_at, last_status_change_at, daily_message_limit, is_warmup_complete, created_at";
-
-export async function GET(): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
+  // Sessão OU token (`viewer`+ e `mcp:read`). Qualquer membro lista (seletor do inbox, sidebar); uma chave só lê.
   const requestId = randomUUID();
-  const user = await loadAuthUser();
-  if (!user) return fail("unauthenticated", "Auth required.", 401, { requestId });
-  const activeOrg = await resolveActiveOrg(user);
-  if (!activeOrg) return fail("forbidden_tenant", "Nenhuma organização ativa.", 403, { requestId });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "channel_sessions",
+    role: "viewer",
+    escrita: false,
+  });
+  if (!authz.ok) return authz.response;
 
-  const supabase = await createClient();
-  const base = () =>
-    supabase
-      .from("channel_sessions")
-      .select(CHANNEL_COLUMNS)
-      .eq("organization_id", activeOrg.orgId)
-      // Só canal de MENSAGEM. A linha de chamada de voz (spec 18) mora na mesma
-      // tabela, tem card próprio em Conexões e não tem `waha_session_name` nem
-      // telefone: entrando aqui, ela vira um número a mais no seletor do inbox e
-      // na barra lateral — sem nome, sem estado vigiado e sem para onde mandar.
-      .in("provider", [...PROVIDERS_DE_MENSAGEM]);
-  // Canais arquivados sobrevivem só como âncora das FKs RESTRICT
-  // (conversations/messages). Para o usuário eles foram excluídos.
-  //
-  // Tolerante à coluna ausente porque esta é a PRIMEIRA tela de quem já tem
-  // número ligado: num clone que subiu o código sem a migration 0106, o filtro
-  // devolveria 42703 → 500 → "Nenhum número conectado ainda", convidando o
-  // operador a parear de novo um número que já está no ar. Sem a coluna, nada
-  // está arquivado, e a lista sem o filtro é a lista certa (ver lib/channels/archived).
-  const { data, error, schemaOutdated } = await queryTolerantToMissingArchived(
-    () => base().is(ARCHIVED_AT, null).order("created_at", { ascending: true }),
-    () => base().order("created_at", { ascending: true }),
-  );
+  const { data, error, schemaOutdated } = await listarConexoesDeMensagem(authz.supabase, authz.organizationId);
   if (error) return falhaInterna("internal_error", error, { requestId });
 
   return ok(data ?? [], {

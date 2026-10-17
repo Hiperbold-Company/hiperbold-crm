@@ -12,29 +12,19 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * funil sem negócio, sem formulário e sem automação apontando para ele.
  *
  * Auth: sessão por cookie OU token `dsk_…` (`role:manager`+ e `mcp:write`), papel
- * manager+. `organization_id` sai do JWT/da linha do token — nunca do body nem da URL. As regras vivem em `lib/pipelines/pipeline-editing.ts`
- * (puras, testadas); aqui só há transporte e a ORDEM das escritas, que é o que o
- * índice único de padrão cobra.
+ * manager+. `organization_id` sai do JWT/da linha do token — nunca do body nem da URL.
+ * ⚠️ AQUI SÓ HÁ TRANSPORTE. A regra, a ORDEM das escritas (que o índice único de padrão cobra) e a tradução das
+ * recusas vivem em `lib/pipelines/administracao.ts`, a mesma das tools MCP; as regras puras, em
+ * `lib/pipelines/pipeline-editing.ts`.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
-import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
-import { audit } from "@/lib/audit";
-import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
-import {
-  podeExcluirDeVez,
-  posicaoEntre,
-  updatesDeMarcaExclusiva,
-  updatesDePadrao,
-  validarArquivamento,
-  validarNomeDeFunil,
-  type FunilEditavel,
-} from "@/lib/pipelines/pipeline-editing";
-
-import { conflitoDoBanco, corpo, lerDependencias, lerFunis } from "../_funis";
+import { autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
+import { respostaDeRecusa } from "@/lib/api/recusa";
+import { fail, ok } from "@/lib/api/wrappers";
+import { editarFunil, excluirOuArquivarFunil } from "@/lib/pipelines/administracao";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +35,7 @@ interface RouteCtx {
 /**
  * `depois_de` é o vizinho DE CIMA (`null` = primeiro da lista), não um número de
  * posição: quem clica na seta sabe onde o funil vai parar, não qual fração de
- * `position` isso vira. Mandar o número da tela duplicaria a conta que
- * `posicaoEntre` já faz — e as duas divergiriam no primeiro ajuste.
+ * `position` isso vira.
  */
 const bodySchema = z
   .object({
@@ -54,37 +43,20 @@ const bodySchema = z
     description: z.string().max(280).nullable().optional(),
     is_default: z.boolean().optional(),
     /**
-     * ⚠️ `false` É ACEITO AQUI, ao contrário de `is_default: false` — e a
-     * assimetria é deliberada, não descuido. Toda organização PRECISA de um
-     * funil padrão (sem ele, lead criado sem funil escolhido fica sem destino);
-     * nenhuma precisa de um funil de clientes, e não ter é o estado de fábrica.
-     * Recusar o desligamento prenderia o operador numa escolha que ele fez para
-     * experimentar. Quem "consertar" esta assimetria quebra o desfazer.
+     * ⚠️ `false` É ACEITO AQUI, ao contrário de `is_default: false` — e a assimetria é deliberada. Toda
+     * organização PRECISA de um funil padrão; nenhuma precisa de um funil de clientes, e não ter é o estado de
+     * fábrica. Recusar o desligamento prenderia o operador numa escolha que ele fez para experimentar.
      */
     is_client_pipeline: z.boolean().optional(),
     /**
-     * TIRAR DO ARQUIVO (#979). `true` é aceito pelo schema e recusado pelo
-     * handler, de propósito: quem manda `is_archived: true` quer arquivar, e
-     * arquivar tem porta própria (`DELETE`) porque conta as dependências antes
-     * — formulário apontando para o funil, automação ativa, ser o padrão ou o
-     * último vivo. Deixar o PATCH arquivar daria a volta em todas elas. Recusar
-     * no handler, e não com `z.literal(false)`, é o que permite responder
-     * "use o DELETE" em vez de "não entendi o que mudar neste funil".
+     * TIRAR DO ARQUIVO (#979). `true` é aceito pelo schema e recusado pelo núcleo, de propósito: quem manda
+     * `is_archived: true` quer arquivar, e arquivar tem porta própria (`DELETE`) porque conta as dependências.
      */
     is_archived: z.boolean().optional(),
     depois_de: z.string().min(1).nullable().optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: "Nada para alterar." });
-
-type PatchDoFunil = {
-  name?: string;
-  description?: string | null;
-  position?: number;
-  is_default?: boolean;
-  is_client_pipeline?: boolean;
-  is_archived?: boolean;
-};
 
 export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -99,7 +71,6 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);
-  const orgId = authz.organizationId;
 
   const { id: pipelineId } = await ctx.params;
 
@@ -109,7 +80,6 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   } catch {
     return fail("invalid_request", t("Corpo não é JSON válido."), 400, { requestId });
   }
-
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
     return fail("unprocessable_entity", t("Não entendi o que mudar neste funil."), 422, {
@@ -117,187 +87,16 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
       details: parsed.error.flatten(),
     });
   }
-  const pedido = parsed.data;
-
-  const supabase = authz.supabase;
-
-  let funis: FunilEditavel[];
-  try {
-    funis = await lerFunis(supabase, orgId);
-  } catch (err) {
-    return fail("internal_error", (err as Error).message, 500, { requestId });
-  }
-
-  // Funil de outra org morre AQUI, antes de qualquer escrita: `lerFunis` filtra
-  // por `organization_id`, então ele simplesmente não está nesta lista — e a
-  // resposta é a mesma de um funil inexistente (dizer "existe, mas não é seu" já
-  // vaza a existência).
-  const alvo = funis.find((f) => f.id === pipelineId);
-  if (!alvo) return fail("not_found", t("Funil não encontrado."), 404, { requestId });
-
-  // ⚠️ ARQUIVAR É DO `DELETE`, NÃO DAQUI — ele conta as dependências antes
-  // (`validarArquivamento`), e este handler não conta nenhuma.
-  if (pedido.is_archived === true) {
-    return fail(
-      "unprocessable_entity",
-      `Para arquivar «${alvo.name}», use a opção Arquivar da lista de funis — ela confere antes se algum ` +
-        `formulário ou automação ainda manda negócio para ele. Por aqui só dá para tirar do arquivo.`,
-      422,
-      { requestId },
-    );
-  }
-
-  // ⚠️ ARQUIVADO NÃO SE EDITA — e a guarda fica, mas o MOTIVO escrito aqui era
-  // falso. Dizia que `uniq_crm_pipelines_org_default` é parcial em
-  // `is_archived`, e que por isso marcar um arquivado como padrão "passa pelo
-  // índice". Medido em `supabase/baseline.sql`: ele é `where (is_default = true)`
-  // e mais nada, então essa marcação bate em 23505, não passa.
-  //
-  // O que a guarda evita de verdade é pior de explicar ao usuário: editar nome,
-  // posição ou marca de um funil que sumiu da lista dele. Alcançável sem má-fé —
-  // uma aba aberta antes de o funil ser arquivado — e o erro do banco, quando
-  // vem, fala de índice, não do que a pessoa fez.
-  //
-  // ⚠️ A ÚNICA EXCEÇÃO É TIRÁ-LO DO ARQUIVO, E SÓ SE FOR ISSO SOZINHO (#979).
-  // Pedido MISTO (desarquivar + renomear, por exemplo) continua 409: quem o
-  // montou está com uma tela antiga na frente, e as validações de nome e de
-  // posição são medidas contra a lista de ATIVOS — lista de onde o alvo ainda
-  // não saiu no instante em que elas rodariam. Aceitar metade do pedido seria
-  // pior: o funil voltaria com o nome velho e ninguém saberia por quê.
-  const soTiraDoArquivo = pedido.is_archived === false && Object.keys(pedido).length === 1;
-  if (alvo.is_archived && !soTiraDoArquivo) {
-    return fail(
-      "state_conflict",
-      `O funil «${alvo.name}» está arquivado e não está mais na sua lista. Tire-o do arquivo antes de editar.`,
-      409,
-      { requestId },
-    );
-  }
-
-  if (pedido.name !== undefined) {
-    const veredito = validarNomeDeFunil(pedido.name, funis, pipelineId);
-    if (!veredito.ok) return fail("unprocessable_entity", veredito.erro, 422, { requestId });
-  }
-
-  // ⚠️ O PADRÃO SE MUDA, NÃO SE APAGA — mesma regra da marcação de ganho nas
-  // etapas. Sem funil padrão, todo lead criado sem funil escolhido fica sem
-  // destino; e o índice único não impede a organização de ficar com ZERO.
-  if (pedido.is_default === false) {
-    return fail(
-      "unprocessable_entity",
-      `«${alvo.name}» é o funil padrão e a organização precisa de um. Marque OUTRO funil como padrão — ` +
-        `o padrão se muda, não se apaga.`,
-      422,
-      { requestId },
-    );
-  }
-
-  const patchDoAlvo: PatchDoFunil = {};
-  if (pedido.name !== undefined) patchDoAlvo.name = pedido.name.trim();
-  if (pedido.description !== undefined) {
-    patchDoAlvo.description = pedido.description?.trim() || null;
-  }
-
-  // Tirar do arquivo é update SIMPLES: nenhum índice a disputar (nem o de slug
-  // nem o de padrão são parciais em `is_archived`, então o funil já ocupava o
-  // lugar dele enquanto estava arquivado). Só entra no patch se ele ESTIVER
-  // arquivado — pedir de novo em quem já está fora é pedido já atendido, e uma
-  // escrita vazia viraria linha de auditoria sem fato nenhum por trás.
-  const tiraDoArquivo = pedido.is_archived === false && alvo.is_archived;
-  if (tiraDoArquivo) patchDoAlvo.is_archived = false;
-
-  if (pedido.depois_de !== undefined) {
-    // Só os ativos compõem a régua: arquivado não ocupa lugar na lista.
-    const ativos = funis.filter((f) => !f.is_archived && f.id !== pipelineId);
-    const i = pedido.depois_de === null ? -1 : ativos.findIndex((f) => f.id === pedido.depois_de);
-    if (pedido.depois_de !== null && i < 0) {
-      return fail(
-        "unprocessable_entity",
-        t("O funil que você escolheu como vizinho não está mais na lista. Recarregue a página."),
-        422,
-        { requestId },
-      );
-    }
-    const posicao = posicaoEntre(ativos[i]?.position ?? null, ativos[i + 1]?.position ?? null);
-    // `posicaoEntre` devolve NaN com vizinhos de MESMA posição (lista que precisa
-    // de rebalanceamento). NaN vira `null` no JSON e a coluna é NOT NULL: seria um
-    // 23502 cru. Recusar aqui é a diferença entre "tente de novo" e "null value in
-    // column position violates not-null constraint".
-    if (!Number.isFinite(posicao)) {
-      return fail(
-        "state_conflict",
-        t("Os funis desta lista estão empatados na ordenação. Recarregue a página e mova o funil para outro lugar."),
-        409,
-        { requestId },
-      );
-    }
-    patchDoAlvo.position = posicao;
-  }
-
-  // Eleger padrão pode exigir DOIS updates (liberar o antigo, ocupar o lugar);
-  // nome, descrição e posição viajam junto com o update do alvo, nunca num terceiro.
-  // O tipo é o mais LARGO dos dois de propósito: `UpdateDePadrao` (só `is_default`)
-  // cabe aqui dentro, e declarar assim evita o cast que esconderia um erro real
-  // se o formato do patch de padrão mudasse.
-  const updates: Array<{ pipelineId: string; patch: PatchDoFunil }> =
-    pedido.is_default === true
-      ? updatesDePadrao(funis, pipelineId)
-      : pedido.is_client_pipeline === true
-        ? updatesDeMarcaExclusiva(funis, pipelineId, "is_client_pipeline")
-        : [];
-
-  // Desligar é update SIMPLES: não há anterior a liberar, e nenhum índice a
-  // disputar. Entra pelo patch do alvo como nome e descrição entram.
-  if (pedido.is_client_pipeline === false) patchDoAlvo.is_client_pipeline = false;
-  if (Object.keys(patchDoAlvo).length > 0) {
-    const i = updates.findIndex((u) => u.pipelineId === pipelineId);
-    if (i >= 0) updates[i] = { pipelineId, patch: { ...updates[i]!.patch, ...patchDoAlvo } };
-    else updates.push({ pipelineId, patch: patchDoAlvo });
-  }
-
-  // ⚠️ EM SEQUÊNCIA, NA ORDEM QUE `updatesDePadrao` DEVOLVE.
-  // `uniq_crm_pipelines_org_default` é imediato (não deferível): marcar o novo
-  // antes de liberar o antigo é 23505 na cara do usuário. Disparar em paralelo
-  // desfaz exatamente essa proteção.
-  for (const u of updates) {
-    const { error } = await supabase
-      .from("crm_pipelines")
-      .update(u.patch)
-      .eq("id", u.pipelineId)
-      .eq("organization_id", orgId);
-    if (!error) continue;
-
-    // Fase F3, decisão 3: este update é o único ponto desta rota que pode
-    // desarquivar (`tiraDoArquivo`), e desarquivar conta contra o teto de
-    // funis. PT402 pelo `code`, nunca pelo texto do Postgres.
-    const recusa = recusaDoPlano(error);
-    if (recusa) return fail("plano_limite_atingido", recusa.mensagem, STATUS_RECUSA_DO_PLANO, { requestId });
-
-    const nome = funis.find((f) => f.id === u.pipelineId)?.name ?? alvo.name;
-    const conflito = conflitoDoBanco(error as { code?: string }, nome, requestId);
-    if (conflito) return conflito;
-    return falhaInterna("internal_error", error, { requestId });
-  }
-
-  if (updates.length > 0) {
-    void audit({
-      // Tirar do arquivo tem código PRÓPRIO, espelhando o `pipeline.archived`
-      // que o DELETE emite: quem audita quer saber quem trouxe o funil de volta,
-      // e `pipeline.updated` esconderia isso entre os renames.
-      action: tiraDoArquivo ? "pipeline.unarchived" : "pipeline.updated",
-      ...atorDoAudit(authz),
-      organizationId: orgId,
-      resourceType: "crm_pipeline",
-      resourceId: pipelineId,
-      requestId,
-      metadata: { pedido, updates },
-    });
-  }
 
   try {
-    return ok(corpo(await lerFunis(supabase, orgId)), { requestId });
+    const corpo = await editarFunil(
+      { supabase: authz.supabase, organizationId: authz.organizationId, actor: authz.actor, requestId, t },
+      pipelineId,
+      parsed.data,
+    );
+    return ok(corpo, { requestId });
   } catch (err) {
-    return fail("internal_error", (err as Error).message, 500, { requestId });
+    return respostaDeRecusa(err, requestId);
   }
 }
 
@@ -314,73 +113,18 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);
-  const orgId = authz.organizationId;
 
   const { id: pipelineId } = await ctx.params;
   const definitivo = req.nextUrl.searchParams.get("definitivo") === "1";
 
-  const supabase = authz.supabase;
-
-  let funis: FunilEditavel[];
   try {
-    funis = await lerFunis(supabase, orgId);
+    const corpo = await excluirOuArquivarFunil(
+      { supabase: authz.supabase, organizationId: authz.organizationId, actor: authz.actor, requestId, t },
+      pipelineId,
+      { definitivo },
+    );
+    return ok(corpo, { requestId });
   } catch (err) {
-    return fail("internal_error", (err as Error).message, 500, { requestId });
-  }
-  const alvo = funis.find((f) => f.id === pipelineId);
-  if (!alvo) return fail("not_found", t("Funil não encontrado."), 404, { requestId });
-
-  let deps;
-  try {
-    deps = await lerDependencias(supabase, orgId, pipelineId);
-  } catch (err) {
-    return fail("internal_error", (err as Error).message, 500, { requestId });
-  }
-
-  const veredito = definitivo
-    ? podeExcluirDeVez(funis, pipelineId, deps)
-    : validarArquivamento(funis, pipelineId, deps);
-  if (!veredito.ok) {
-    // A CONTAGEM VAI EM `details`, não só dentro da frase: a tela mostra "este
-    // funil tem N negócios" sem precisar extrair o número da mensagem com regex —
-    // segunda régua que quebraria na primeira vez que alguém melhorasse o texto.
-    return fail("unprocessable_entity", veredito.erro, 422, {
-      requestId,
-      details: {
-        negocios: deps.negocios,
-        fontes_de_webhook: deps.fontesDeWebhook,
-        automacoes: deps.regrasAtivas,
-      },
-    });
-  }
-
-  const { error } = definitivo
-    ? await supabase.from("crm_pipelines").delete().eq("id", pipelineId).eq("organization_id", orgId)
-    : await supabase
-        .from("crm_pipelines")
-        .update({ is_archived: true })
-        .eq("id", pipelineId)
-        .eq("organization_id", orgId);
-
-  if (error) {
-    const conflito = conflitoDoBanco(error as { code?: string }, alvo.name, requestId);
-    if (conflito) return conflito;
-    return falhaInterna("internal_error", error, { requestId });
-  }
-
-  void audit({
-    action: definitivo ? "pipeline.deleted" : "pipeline.archived",
-    ...atorDoAudit(authz),
-    organizationId: orgId,
-    resourceType: "crm_pipeline",
-    resourceId: pipelineId,
-    requestId,
-    metadata: { name: alvo.name, slug: alvo.slug, negocios: deps.negocios },
-  });
-
-  try {
-    return ok(corpo(await lerFunis(supabase, orgId)), { requestId });
-  } catch (err) {
-    return fail("internal_error", (err as Error).message, 500, { requestId });
+    return respostaDeRecusa(err, requestId);
   }
 }

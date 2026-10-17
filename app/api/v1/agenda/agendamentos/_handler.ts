@@ -45,6 +45,7 @@ import {
 } from "@/lib/agenda/tipos";
 import { ApiError } from "@/lib/api/types";
 import { comIdempotencia, hashDoCorpo } from "@/lib/api/idempotency";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
 import { roleAtLeast } from "@/lib/auth/types";
@@ -272,7 +273,8 @@ export async function marcarAgendamentoHandler(
   if (chave === null) return executarCriacaoDeAgendamento(supabase, ctx, input);
 
   const desfecho = await comIdempotencia({
-    db: supabase,
+    // Servidor, não a sessão: `idempotency_keys` não é acessível a `authenticated` (0969).
+    db: createAdminClient(),
     organizationId: ctx.organization_id,
     endpoint: ENDPOINT_IDEMPOTENCIA_AGENDA,
     chave,

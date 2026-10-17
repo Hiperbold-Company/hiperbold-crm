@@ -3,6 +3,10 @@ import { beforeEach, expect, it, vi } from "vitest";
 const deps = vi.hoisted(() => ({ audit: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: deps.audit }));
 
+// O recibo é gravado com o cliente de SERVIDOR (0969): o dublê da vez serve aos dois.
+const servidor = vi.hoisted(() => ({ db: null as unknown }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => servidor.db }));
+
 const consulta = vi.hoisted(() => ({
   horarios: vi.fn(async (db: unknown, _org: string, intervalo: { de: Date; ate: Date }) => ({
     ok: true,
@@ -140,6 +144,7 @@ function bancoDeTeste() {
     },
   };
 
+  servidor.db = db;
   return { db: db as unknown as SupabaseClient, inseridos, recibos };
 }
 

@@ -47,6 +47,52 @@ import {
   crmPauseAiAgent,
   crmPublishAiAgentVersion,
 } from "./agentes";
+import {
+  crmCreateMessageTemplate,
+  crmDeleteMessageTemplate,
+  crmUpdateMessageTemplate,
+} from "./administracao-fase3";
+import {
+  crmCreateFollowupFlow,
+  crmDeleteFollowupFlow,
+  crmDisableFollowupFlow,
+  crmDuplicateFollowupFlow,
+  crmGetFollowupFlow,
+  crmListFollowupFlows,
+  crmPublishFollowupFlow,
+  crmRollbackFollowupFlow,
+  crmUpdateFollowupFlow,
+} from "./administracao-followups";
+import {
+  crmCreateAiRouter,
+  crmDeleteAiRouter,
+  crmGetAiRouter,
+  crmListAiRouters,
+  crmSetAiRouterMembers,
+  crmUpdateAiRouter,
+} from "./administracao-roteadores";
+import {
+  crmCreateAutomationRule,
+  crmDeleteAutomationRule,
+  crmUpdateAutomationRule,
+} from "./administracao-regras";
+import { crmGetAttendanceRouting, crmUpdateAttendanceRouting } from "./administracao-atendimento";
+import {
+  crmArchiveKnowledgeSource,
+  crmCreateKnowledgeSource,
+  crmGetKnowledgeSource,
+  crmUpdateKnowledgeSource,
+} from "./administracao-conhecimento";
+import {
+  crmChangeTeamMemberRole,
+  crmCreatePipeline,
+  crmDeletePipeline,
+  crmInviteTeamMembers,
+  crmReactivateTeamMember,
+  crmRevokeTeamMember,
+  crmUpdatePipeline,
+} from "./administracao-equipe-e-funis";
+import { crmListAiCredentials, crmListChannelSessions } from "./administracao-leituras";
 import { crmGetPipelineForecast, crmListPipelines } from "./pipelines";
 import { crmSendWhatsappMessage } from "./messages";
 import { crmStartConversationAndSend } from "./start-conversation";
@@ -153,6 +199,14 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmListAutomationRules,
   crmListAutomationRuns,
   crmListTeamMembers,
+  crmListFollowupFlows,
+  crmGetFollowupFlow,
+  crmListAiRouters,
+  crmGetAiRouter,
+  crmGetAttendanceRouting,
+  crmGetKnowledgeSource,
+  crmListChannelSessions,
+  crmListAiCredentials,
   crmGetPipelineConfig,
   crmListPipelineFields,
   crmListAiAgents,
@@ -199,6 +253,34 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmPublishAiAgentVersion,
   crmPauseAiAgent,
   crmUpdateOrganizationSettings,
+  crmCreateMessageTemplate,
+  crmUpdateMessageTemplate,
+  crmDeleteMessageTemplate,
+  crmCreateFollowupFlow,
+  crmUpdateFollowupFlow,
+  crmDeleteFollowupFlow,
+  crmDuplicateFollowupFlow,
+  crmPublishFollowupFlow,
+  crmDisableFollowupFlow,
+  crmRollbackFollowupFlow,
+  crmCreateAiRouter,
+  crmUpdateAiRouter,
+  crmDeleteAiRouter,
+  crmSetAiRouterMembers,
+  crmCreateAutomationRule,
+  crmUpdateAutomationRule,
+  crmDeleteAutomationRule,
+  crmUpdateAttendanceRouting,
+  crmCreateKnowledgeSource,
+  crmUpdateKnowledgeSource,
+  crmArchiveKnowledgeSource,
+  crmInviteTeamMembers,
+  crmChangeTeamMemberRole,
+  crmRevokeTeamMember,
+  crmReactivateTeamMember,
+  crmCreatePipeline,
+  crmUpdatePipeline,
+  crmDeletePipeline,
   crmSetAutomationRuleActive,
   crmScheduleFollowup,
   crmEnrollFollowupFlow,
