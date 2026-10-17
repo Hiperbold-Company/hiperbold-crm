@@ -31,6 +31,15 @@ import { GOV_MANAGER, GOV_ORG, GOV_PIPELINE, GOV_STAGE, seedGov, sql } from "./g
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => fakeAdminClient() }));
 
+// D-216: "tem CPF?" é consulta do servidor (cliente de serviço, que este teste não tem). O que se mede aqui é outra
+// coisa; o CPF em si é medido em tests/invariants/contacts-cpf-so-do-servidor.test.ts e tests/unit/contatos-cpf-so-do-servidor.test.ts.
+vi.mock("@/lib/contacts/cpf-do-contato", () => ({
+  cifrarCpfDoContato: async (cpf: string) => `cifrado(${cpf})`,
+  idsComCpf: async () => ({ ids: new Set<string>(), error: null }),
+  idsPorHashDeCpf: async () => ({ ids: [], error: null }),
+  gravarCpfDoContatoPorUsuario: async () => null,
+}));
+
 function sqlString(v: string): string {
   return `'${v.replace(/'/g, "''")}'`;
 }

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { mapInboundPayload, normalizePhoneBR, verifyInboundSignature } from "@/lib/webhooks/inbound";
+import {
+  conferirAssinaturaDaCaptacao,
+  mapInboundPayload,
+  normalizePhoneBR,
+  verifyInboundSignature,
+} from "@/lib/webhooks/inbound";
 import { createHmac } from "node:crypto";
 
 describe("normalizePhoneBR", () => {
@@ -54,6 +59,78 @@ describe("verifyInboundSignature", () => {
   it("header ausente", () => expect(verifyInboundSignature(body, null, secret)).toBe(false));
   it("header com tamanho diferente não lança (timingSafeEqual exige mesmo length)", () =>
     expect(verifyInboundSignature(body, "abc", secret)).toBe(false));
+});
+
+describe("conferirAssinaturaDaCaptacao (D-215, carimbo contra reenvio)", () => {
+  const rawBody = '{"nome":"Ana"}';
+  const segredo = "s3cr3t";
+  const agoraMs = 1_800_000_000_000;
+  const agoraS = agoraMs / 1000;
+  const assinar = (texto: string) => createHmac("sha256", segredo).update(texto).digest("hex");
+  const base = { rawBody, segredo, agoraMs };
+
+  it("com carimbo: valida o HMAC de `carimbo.corpo`", () => {
+    const r = conferirAssinaturaDaCaptacao({
+      ...base,
+      carimbo: String(agoraS),
+      assinatura: assinar(`${agoraS}.${rawBody}`),
+      exigeCarimbo: false,
+    });
+    expect(r).toEqual({ valida: true, comCarimbo: true });
+  });
+
+  it("carimbo na borda de 300 s passa; 301 s recusa, nos dois sentidos", () => {
+    const tenta = (c: number) =>
+      conferirAssinaturaDaCaptacao({
+        ...base,
+        carimbo: String(c),
+        assinatura: assinar(`${c}.${rawBody}`),
+        exigeCarimbo: false,
+      });
+    expect(tenta(agoraS - 300).valida).toBe(true);
+    expect(tenta(agoraS + 300).valida).toBe(true);
+    expect(tenta(agoraS - 301)).toEqual({ valida: false, motivo: "carimbo_fora_da_janela" });
+    expect(tenta(agoraS + 301)).toEqual({ valida: false, motivo: "carimbo_fora_da_janela" });
+  });
+
+  it("carimbo malformado é recusado como inválido", () => {
+    for (const c of ["abc", "-5", "1.5", "1800000000000", "1e9"]) {
+      const r = conferirAssinaturaDaCaptacao({
+        ...base,
+        carimbo: c,
+        assinatura: assinar(`${c}.${rawBody}`),
+        exigeCarimbo: false,
+      });
+      expect(r, c).toEqual({ valida: false, motivo: "carimbo_invalido" });
+    }
+  });
+
+  it("sem carimbo e fonte que não exige: formato antigo continua valendo", () => {
+    const r = conferirAssinaturaDaCaptacao({ ...base, carimbo: null, assinatura: assinar(rawBody), exigeCarimbo: false });
+    expect(r).toEqual({ valida: true, comCarimbo: false });
+  });
+
+  it("sem carimbo e fonte que exige: recusa, mesmo com a assinatura antiga correta", () => {
+    const r = conferirAssinaturaDaCaptacao({ ...base, carimbo: null, assinatura: assinar(rawBody), exigeCarimbo: true });
+    expect(r).toEqual({ valida: false, motivo: "carimbo_ausente" });
+  });
+
+  it("com carimbo, a assinatura só do corpo não vale", () => {
+    const r = conferirAssinaturaDaCaptacao({
+      ...base,
+      carimbo: String(agoraS),
+      assinatura: assinar(rawBody),
+      exigeCarimbo: false,
+    });
+    expect(r).toEqual({ valida: false, motivo: "assinatura_diferente" });
+  });
+
+  it("sem assinatura: recusa", () => {
+    expect(conferirAssinaturaDaCaptacao({ ...base, carimbo: null, assinatura: null, exigeCarimbo: false })).toEqual({
+      valida: false,
+      motivo: "sem_assinatura",
+    });
+  });
 });
 
 describe("normalizePhoneBR: prefixos de tronco e '+' curto (auditoria 17/10/2026)", () => {

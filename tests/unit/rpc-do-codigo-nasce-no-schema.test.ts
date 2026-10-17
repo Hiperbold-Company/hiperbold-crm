@@ -91,13 +91,6 @@ const CONGELADAS: Record<string, { degradacao: string; porque: string }> = {
       "loga `decrypt_cpf RPC unavailable` e a resposta segue SEM CPF — o contato " +
       "não quebra. Criar a RPC no banco é decisão de produto, não deste gate.",
   },
-  encrypt_cpf: {
-    degradacao: "lib/contacts/cpf.ts:36",
-    porque:
-      "O caminho de degradação está escrito na própria função: sem a RPC, loga " +
-      "`encrypt_cpf RPC unavailable — storing cpf_hash only` e devolve `null`, e " +
-      "o contato é gravado só com o hash. Mesma decisão de produto, fora do gate.",
-  },
   jsonb_set_last_alarm_at: {
     degradacao: "lib/lgpd/sla-alarm.ts:203",
     porque:

@@ -212,7 +212,7 @@ const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
   "app/api/v1/webhooks/in/[token]/route.ts": {
     categoria: "PROTOCOLO",
     motivo:
-      "header que o webhook de ENTRADA exige de quem envia. Renomear invalida a assinatura de todo integrador já configurado, e o sintoma para ele é 401 sem explicação",
+      "header que o webhook de ENTRADA exige de quem envia. Renomear invalida a assinatura de todo integrador já configurado, e o sintoma para ele é 401 sem explicação.",
     marcas: ["x-deskcomm-signature"],
   },
   "lib/mcp/server.ts": {

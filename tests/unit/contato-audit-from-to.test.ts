@@ -38,6 +38,14 @@ vi.mock("@/lib/audit", () => ({
   hashEmail: (e: string) => e,
 }));
 
+// D-216: "tem CPF?" é consulta do servidor (cliente de serviço); aqui o contato não tem.
+vi.mock("@/lib/contacts/cpf-do-contato", () => ({
+  cifrarCpfDoContato: vi.fn(async (cpf: string) => `cifrado(${cpf})`),
+  idsComCpf: vi.fn(async () => ({ ids: new Set<string>(), error: null })),
+  idsPorHashDeCpf: vi.fn(async () => ({ ids: [], error: null })),
+  gravarCpfDoContatoPorUsuario: vi.fn(async () => null),
+}));
+
 const ORG = "c05e7a00-0000-4000-8000-000000000001";
 const CONTATO = "c05e7a00-0000-4000-8000-0000000000c1";
 const USUARIO = "c05e7a00-0000-4000-8000-0000000000a1";

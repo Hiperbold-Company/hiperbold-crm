@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { hashCpf } from "@/lib/contacts/cpf";
+import { gravarCpfDoContatoPorUsuario } from "@/lib/contacts/cpf-do-contato";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import type { PerfilDoPais } from "@/lib/legal/perfil-do-pais";
 import { PERFIS_DO_PAIS } from "@/lib/legal/perfil-do-pais";
@@ -16,6 +17,11 @@ vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+// D-216: o CPF não vai no INSERT do usuário; o servidor o grava à parte (cliente de serviço).
+vi.mock("@/lib/contacts/cpf-do-contato", () => ({
+  cifrarCpfDoContato: vi.fn(async (cpf: string) => `cifrado(${cpf})`),
+  gravarCpfDoContatoPorUsuario: vi.fn(async () => null),
+}));
 
 const ORG = "22222222-2222-4222-8222-222222222222";
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -255,7 +261,14 @@ describe("POST /api/v1/contacts/import — a planilha segue o PAÍS da organiza�
     // O documento não é gravado em claro: o que prova o valor (e a normalização
     // do país) é o hash — `hashCpf("123456789XI000")`, com o valor já em
     // maiúsculas e sem o que não é dígito nem letra.
-    expect(db.tentativas[0]).toMatchObject({ cpf_hash: hashCpf("123456789XI000") });
+    // D-216: o INSERT do usuário não leva o CPF; o servidor o grava no contato criado.
+    expect(db.tentativas[0]).not.toHaveProperty("cpf_hash");
+    expect(db.tentativas[0]).not.toHaveProperty("cpf_encrypted");
+    expect(gravarCpfDoContatoPorUsuario).toHaveBeenCalledWith(
+      ORG,
+      "contato-1",
+      expect.objectContaining({ hash: hashCpf("123456789XI000") }),
+    );
     expect(db.rpc).toHaveBeenCalledWith("emit_event", expect.objectContaining({
       p_payload: expect.objectContaining({ has_cpf: true }),
     }));

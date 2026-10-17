@@ -19,6 +19,7 @@ import { emitLeadActivity } from "@/lib/leads/activity-emitter";
 import { classificarLeadInicial, type ResultadoClassificacaoInicial } from "@/lib/leads/classificacao-inicial";
 import type { CreateLeadInput } from "@/lib/schemas";
 import {
+  conferirAssinaturaDaCaptacao,
   corpoSemDocumento,
   lerCorpoJsonObjeto,
   lerDocumentoReservado,
@@ -26,7 +27,6 @@ import {
   mapInboundPayload,
   payloadDeFormulario,
   removerDocumentoDoPayload,
-  verifyInboundSignature,
   type DocumentoDoEnvio,
   type FieldMap,
 } from "@/lib/webhooks/inbound";
@@ -164,7 +164,9 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   const admin = createAdminClient();
   const { data: source, error: srcErr } = await admin
     .from("webhook_sources")
-    .select("id, name, organization_id, secret_encrypted, default_pipeline_id, default_stage_id, field_map, redirect_to, is_active")
+    .select(
+      "id, name, organization_id, secret_encrypted, exige_carimbo, default_pipeline_id, default_stage_id, field_map, redirect_to, is_active",
+    )
     .eq("path_token", token)
     .maybeSingle();
   if (srcErr) return falhaInterna("internal_error", srcErr, { requestId });
@@ -242,14 +244,30 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     sourceSecret = await decryptWebhookSecret(admin, source.secret_encrypted as unknown as string);
     if (sourceSecret === null) hmacSkipped = true;
   }
-  const validSignature = sourceSecret ? verifyInboundSignature(rawBody, sigHeader, sourceSecret) : null;
-  if (sourceSecret && !validSignature) {
+  // D-215: proteção contra reenvio. Com `X-HiperCRM-Timestamp` a assinatura cobre `${carimbo}.${corpo}` e o
+  // carimbo tem de estar a até 300 s do relógio do servidor. Fonte que já enviou um envio válido COM carimbo
+  // passa a exigi-lo (`exige_carimbo`), e o formato antigo (só o corpo) deixa de valer para ela.
+  const carimboHeader = req.headers.get("x-hipercrm-timestamp");
+  const conferencia = sourceSecret
+    ? conferirAssinaturaDaCaptacao({
+        rawBody,
+        assinatura: sigHeader,
+        carimbo: carimboHeader,
+        segredo: sourceSecret,
+        exigeCarimbo: source.exige_carimbo === true,
+      })
+    : null;
+  const validSignature = conferencia ? conferencia.valida : null;
+  if (sourceSecret && conferencia && !conferencia.valida) {
     await audit({
       action: "webhook.inbound_invalid_signature",
       organizationId: source.organization_id,
       resourceType: "webhook_source",
       resourceId: source.id,
       requestId,
+      // O motivo fica só no audit (quem opera vê por que a batida morreu); a resposta ao chamador é a mesma
+      // recusa neutra de sempre, para não ensinar a quem não tem o segredo qual parte errou.
+      metadata: { motivo: conferencia.motivo },
     });
     await registrarCaptacao(admin, {
       ...fonteDaCaptacao,
@@ -258,6 +276,24 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       rejectReason: "assinatura_invalida",
     });
     return fail("unauthenticated", "invalid_signature", 401, { requestId });
+  }
+
+  // A catraca do carimbo (D-215): primeiro envio válido com carimbo liga `exige_carimbo` da fonte. Só chega
+  // aqui com a assinatura conferida, então quem não tem o segredo não consegue ligá-la. Falhar em gravar não
+  // derruba a captação: a fonte segue no formato antigo até o próximo envio com carimbo.
+  if (conferencia && conferencia.valida && conferencia.comCarimbo && source.exige_carimbo !== true) {
+    const { error: eCatraca } = await admin
+      .from("webhook_sources")
+      .update({ exige_carimbo: true })
+      .eq("id", source.id)
+      .eq("organization_id", source.organization_id);
+    if (eCatraca) {
+      logger.warn("[webhooks.inbound] não consegui ligar exige_carimbo", {
+        webhookSourceId: source.id,
+        organizationId: source.organization_id,
+        errorCode: eCatraca.code,
+      });
+    }
   }
 
   // ORIGEM PROVADA: a fonte tem segredo E a assinatura HMAC deste envio conferiu.

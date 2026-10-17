@@ -284,9 +284,71 @@ export function mapInboundPayload(
 /** HMAC SHA-256 hex do raw body. Header: X-HiperCRM-Signature (X-Deskcomm-Signature ainda aceito na entrada). */
 export function verifyInboundSignature(rawBody: string, header: string | null, secret: string): boolean {
   if (!header) return false;
-  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-  const a = Buffer.from(expected, "utf8");
-  const b = Buffer.from(header, "utf8");
+  return hmacConfere(createHmac("sha256", secret).update(rawBody).digest("hex"), header);
+}
+
+function hmacConfere(esperado: string, recebido: string): boolean {
+  const a = Buffer.from(esperado, "utf8");
+  const b = Buffer.from(recebido, "utf8");
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
+}
+
+/** Quanto o carimbo do envio pode destoar do relógio do servidor, para mais ou para menos (D-215). */
+export const JANELA_DO_CARIMBO_SEGUNDOS = 300;
+
+export type MotivoDaRecusaDeAssinatura =
+  | "sem_assinatura"
+  | "assinatura_diferente"
+  | "carimbo_ausente"
+  | "carimbo_invalido"
+  | "carimbo_fora_da_janela";
+
+export type ResultadoDaAssinatura =
+  | { valida: true; comCarimbo: boolean }
+  | { valida: false; motivo: MotivoDaRecusaDeAssinatura };
+
+/**
+ * Confere a assinatura de um envio à captação, com a proteção contra reenvio (D-215).
+ *
+ * Dois formatos:
+ *   - COM carimbo (`X-HiperCRM-Timestamp`, segundos Unix): a assinatura é o HMAC-SHA256 hex de
+ *     `${carimbo}.${corpoCru}` e o carimbo precisa estar a até 300 s do relógio do servidor. Um envio
+ *     capturado deixa de valer depois da janela.
+ *   - SEM carimbo: o formato antigo, HMAC do corpo cru. Só vale enquanto a fonte NÃO exige carimbo.
+ *     A rota liga `exige_carimbo` na primeira requisição válida com carimbo, e dali em diante o formato
+ *     antigo é recusado: quem já assinava sem carimbo não quebra no dia da atualização, e quem migrou
+ *     fica protegido.
+ *
+ * Pura: o relógio entra por parâmetro.
+ */
+export function conferirAssinaturaDaCaptacao(entrada: {
+  rawBody: string;
+  assinatura: string | null;
+  carimbo: string | null;
+  segredo: string;
+  exigeCarimbo: boolean;
+  agoraMs?: number;
+}): ResultadoDaAssinatura {
+  const { rawBody, assinatura, carimbo, segredo, exigeCarimbo } = entrada;
+  if (!assinatura) return { valida: false, motivo: "sem_assinatura" };
+
+  if (carimbo === null || carimbo === "") {
+    if (exigeCarimbo) return { valida: false, motivo: "carimbo_ausente" };
+    return verifyInboundSignature(rawBody, assinatura, segredo)
+      ? { valida: true, comCarimbo: false }
+      : { valida: false, motivo: "assinatura_diferente" };
+  }
+
+  // Segundos Unix inteiros. Milissegundos (13 dígitos) caem aqui como inválido de propósito: aceitá-los
+  // como segundos os jogaria no futuro, e a recusa pelo motivo certo ajuda quem integra.
+  if (!/^\d{1,11}$/.test(carimbo)) return { valida: false, motivo: "carimbo_invalido" };
+  const agora = entrada.agoraMs ?? Date.now();
+  if (Math.abs(agora / 1000 - Number(carimbo)) > JANELA_DO_CARIMBO_SEGUNDOS) {
+    return { valida: false, motivo: "carimbo_fora_da_janela" };
+  }
+  const esperado = createHmac("sha256", segredo).update(`${carimbo}.${rawBody}`).digest("hex");
+  return hmacConfere(esperado, assinatura)
+    ? { valida: true, comCarimbo: true }
+    : { valida: false, motivo: "assinatura_diferente" };
 }

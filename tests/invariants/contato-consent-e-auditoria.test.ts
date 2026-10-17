@@ -1,10 +1,19 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import pg from "pg";
 
 import { patchContactHandler } from "@/app/api/v1/contacts/_handler";
 import type { HandlerCtx } from "@/lib/api/handlers/types";
 
 import { pgComoSupabase } from "../pg-como-supabase";
+
+// D-216: "tem CPF?" é consulta do servidor (cliente de serviço, que este teste não tem). O que se mede aqui é outra
+// coisa; o CPF em si é medido em tests/invariants/contacts-cpf-so-do-servidor.test.ts e tests/unit/contatos-cpf-so-do-servidor.test.ts.
+vi.mock("@/lib/contacts/cpf-do-contato", () => ({
+  cifrarCpfDoContato: async (cpf: string) => `cifrado(${cpf})`,
+  idsComCpf: async () => ({ ids: new Set<string>(), error: null }),
+  idsPorHashDeCpf: async () => ({ ids: [], error: null }),
+  gravarCpfDoContatoPorUsuario: async () => null,
+}));
 
 /**
  * CONSENTIMENTO QUE NÃO SE PERDE, E AUDITORIA QUE DIZ O QUE MUDOU.
