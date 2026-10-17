@@ -7,7 +7,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { env } from "@/lib/env";
 import { audit } from "@/lib/audit";
-import { signInviteToken, INVITE_TTL_SECONDS } from "@/lib/auth/invite-token";
+import { signInviteToken, linkDeAceiteDoEmail, INVITE_TTL_SECONDS, type InvitePayload } from "@/lib/auth/invite-token";
 import { buildInviteEmail } from "@/lib/email/templates/invite";
 import { sendEmail, type EmailDeliveryError, type TransporteDeEmail } from "@/lib/email/roteador";
 import { marcaDaSaida } from "@/lib/branding/saida";
@@ -41,7 +41,7 @@ export async function issueInvite(input: {
   const inviteId = input.inviteId ?? randomUUID();
   const iat = input.issuedAt ?? Math.floor(Date.now() / 1000);
   const exp = iat + INVITE_TTL_SECONDS;
-  const token = signInviteToken({
+  const payload: InvitePayload = {
     invite_id: inviteId,
     email,
     organization_id: input.organizationId,
@@ -50,8 +50,11 @@ export async function issueInvite(input: {
     iat,
     invited_by: input.inviterId,
     interface_settings: interfaceSettings,
-  });
+  };
+  const token = signInviteToken(payload);
   const acceptUrl = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/team/accept-invite/${token}`;
+  // O link do E-MAIL leva a prova de posse (`v`); o `accept_url` devolvido abaixo, que o admin vê, NÃO leva (D-204).
+  const emailUrl = linkDeAceiteDoEmail(acceptUrl, payload);
   let dispatched = false;
   /**
    * POR QUE O MOTIVO É DEVOLVIDO, e não só o `false`.
@@ -72,7 +75,7 @@ export async function issueInvite(input: {
       const message = buildInviteEmail({
         inviterName: input.inviterName,
         orgName: input.orgName,
-        acceptUrl,
+        acceptUrl: emailUrl,
         role: input.role,
         expiresAt: new Date(exp * 1000),
         marca,

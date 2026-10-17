@@ -107,3 +107,51 @@ export function verifyInviteToken(token: string): InvitePayload | null {
 }
 
 export const INVITE_TTL_SECONDS = 60 * 60 * 24; // 24h
+
+/**
+ * PROVA DE QUE O LINK CHEGOU PELA CAIXA DE ENTRADA DO CONVIDADO (D-204).
+ *
+ * O `accept_url` aparece para quem convida (tela de Equipe, resposta da API) e pode ser reencaminhado, então o
+ * token do convite sozinho NÃO prova a posse do e-mail. O link que sai POR E-MAIL leva, além do token, um
+ * segundo segredo `v`: o HMAC dos campos do convite com o segredo do servidor, em domínio próprio (prefixo
+ * fixo, para que a prova nunca coincida com a assinatura do token). Só o e-mail o contém. O `accept_url`
+ * mostrado ao admin e devolvido pela API nunca leva `v`.
+ *
+ * Sem estado: a prova é recalculada dos campos do token, então vale para o token vigente e morre com ele
+ * (outro convite, outro papel, outro `iat` ou `exp` dão outra prova). Reenviar o convite emite token novo e
+ * prova nova. NUNCA vai para log nem audit.
+ */
+const DOMINIO_DA_PROVA_DO_EMAIL = "invite-email-proof.v1";
+
+export function provaDoEmailDoConvite(payload: InvitePayload): string {
+  const campos = [
+    DOMINIO_DA_PROVA_DO_EMAIL,
+    payload.invite_id,
+    payload.email.trim().toLowerCase(),
+    payload.organization_id,
+    payload.role,
+    String(payload.iat ?? ""),
+    String(payload.exp),
+  ].join("\n");
+  return b64url(createHmac("sha256", SECRET()).update(campos).digest());
+}
+
+/** Comparação em tempo constante. Sem segredo utilizável (produção mal configurada), nada confere. */
+export function provaDoEmailConfere(payload: InvitePayload, prova: string | null | undefined): boolean {
+  if (typeof prova !== "string" || prova.length === 0) return false;
+  let esperada: string;
+  try {
+    esperada = provaDoEmailDoConvite(payload);
+  } catch {
+    return false;
+  }
+  const a = Buffer.from(prova);
+  const b = Buffer.from(esperada);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+/** Link de aceite que vai POR E-MAIL: o `accept_url` mais a prova de posse. Nunca devolvido por API nem exibido. */
+export function linkDeAceiteDoEmail(acceptUrl: string, payload: InvitePayload): string {
+  return `${acceptUrl}?v=${provaDoEmailDoConvite(payload)}`;
+}

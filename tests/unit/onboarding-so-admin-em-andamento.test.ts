@@ -41,6 +41,8 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@/lib/env", () => ({ env: { NEXT_PUBLIC_APP_URL: "http://localhost:3000" } }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
+// A trava de e-mail não verificado (D-204) não é o assunto aqui: a conta do teste já é verificada.
+vi.mock("@/lib/auth/exigir-email-verificado", () => ({ contaPodeCriarArtefatos: async () => true }));
 vi.mock("@/lib/email/roteador", () => ({ sendEmail: h.enviarEmail }));
 vi.mock("@/lib/branding/saida", () => ({ marcaDaSaida: async () => ({ nome: "Local", cor: "#000000" }) }));
 vi.mock("@/lib/email/templates/invite", () => ({

@@ -31,6 +31,8 @@ import { TurnstileWidget, useCaptcha } from "@/components/auth/TurnstileWidget";
 export interface ConviteDoSignup {
   token: string;
   email: string;
+  /** O `v` do link do e-mail do convite (D-204): atravessa o cadastro até o aceite. Nunca vai à server action. */
+  prova?: string;
 }
 
 export function SignupForm({
@@ -124,7 +126,7 @@ export function SignupForm({
          */
         if (res.sessao_ativa) {
           if (convite) {
-            router.replace(`/team/accept-invite/${convite.token}`);
+            router.replace(`/team/accept-invite/${convite.token}${convite.prova ? `?v=${convite.prova}` : ""}`);
             return;
           }
           // Compra pelo cliente desligada: o caminho de sempre (a recuperação em `/get-started`).
@@ -189,7 +191,7 @@ export function SignupForm({
   };
 
   if (contaExistente && convite) {
-    const destino = `/login?next=${encodeURIComponent(`/team/accept-invite/${convite.token}`)}`;
+    const destino = `/login?next=${encodeURIComponent(`/team/accept-invite/${convite.token}${convite.prova ? `?v=${convite.prova}` : ""}`)}`;
     return (
       <div className="space-y-4 rounded-md border bg-muted/40 px-4 py-6 text-center" role="status">
         <p className="text-sm font-medium">{t("Você já tem uma conta com este e-mail")}</p>

@@ -2,9 +2,9 @@
 import { useActionState } from "react";
 import { acceptInviteAction, type AcceptInviteResult } from "@/app/actions/team/acceptInvite";
 
-export function AcceptInviteForm({ token, label, failureLabel, pendingLabel }: { token: string; label: string; failureLabel: string; pendingLabel: string }) {
+export function AcceptInviteForm({ token, prova, label, failureLabel, pendingLabel }: { token: string; prova?: string | null; label: string; failureLabel: string; pendingLabel: string }) {
   const [result, submit, pending] = useActionState<AcceptInviteResult | null, FormData>(
-    async () => acceptInviteAction(token), null,
+    async () => acceptInviteAction(token, prova ?? null), null,
   );
   return <form action={submit} className="mt-4 space-y-3">
     {result && !result.ok && <p role="alert">{failureLabel}</p>}

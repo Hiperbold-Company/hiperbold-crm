@@ -6,13 +6,14 @@
  *  - Unauthenticated user          → render CTA → /login?next=...
  *  - Authenticated, email mismatch → render mismatch + sign-out CTA
  *  - Authenticated, email match, verificação de e-mail do CRM em aberto
- *                                  → pede para confirmar o e-mail antes (D-204)
+ *                                  → pede para confirmar o e-mail antes (D-204),
+ *                                    salvo link do e-mail do convite (`?v=` válido)
  *  - Authenticated, email match    → form posts to Server Action which inserts
  *                                    membership and redirects to /app/inbox
  */
 import Link from "next/link";
 
-import { verifyInviteToken } from "@/lib/auth/invite-token";
+import { provaDoEmailConfere, verifyInviteToken } from "@/lib/auth/invite-token";
 import { authRateLimited, AUTH_LIMITS } from "@/lib/auth/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { AcceptInviteForm } from "./AcceptInviteForm";
@@ -25,10 +26,13 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ v?: string | string[] }>;
 }
 
-export default async function AcceptInvitePage({ params }: PageProps) {
+export default async function AcceptInvitePage({ params, searchParams }: PageProps) {
   const { token } = await params;
+  const { v } = await searchParams;
+  const vBruto = typeof v === "string" ? v : null;
 
   // Rota pública, fora da árvore de `app/app/layout.tsx` — sem `IdiomaProvider`,
   // então resolve o idioma direto, como `admin/forbidden/page.tsx`. Buscado
@@ -75,8 +79,12 @@ export default async function AcceptInvitePage({ params }: PageProps) {
     );
   }
 
+  // `v` é a prova de que o link veio pela caixa de entrada do convidado (o e-mail do convite o leva, o `accept_url` da
+  // tela do admin não). Só segue adiante quando confere com ESTE convite; o servidor confere de novo no aceite.
+  const prova = provaDoEmailConfere(payload, vBruto) ? vBruto : null;
+
   if (!user) {
-    const next = encodeURIComponent(`/team/accept-invite/${token}`);
+    const next = encodeURIComponent(`/team/accept-invite/${token}${prova ? `?v=${prova}` : ""}`);
     return (
       <Shell>
         <h1 className="text-xl font-semibold">{t("Você foi convidado")}</h1>
@@ -99,7 +107,7 @@ export default async function AcceptInvitePage({ params }: PageProps) {
             amarrada a este convite.
           */}
           <Link
-            href={`/signup?invite=${encodeURIComponent(token)}`}
+            href={`/signup?invite=${encodeURIComponent(token)}${prova ? `&v=${encodeURIComponent(prova)}` : ""}`}
             className="text-sm underline underline-offset-4"
           >
             {t("Ainda não tenho conta")}
@@ -132,8 +140,9 @@ export default async function AcceptInvitePage({ params }: PageProps) {
   }
 
   // D-204: o link do convite não prova a posse do e-mail (quem convida o vê e ele pode ser reencaminhado). Conta com a
-  // verificação do CRM em aberto confirma o endereço primeiro; o mesmo link serve depois.
-  if (!emailVerificado(user.app_metadata)) {
+  // verificação do CRM em aberto confirma o endereço primeiro; o mesmo link serve depois. A exceção é o link que
+  // chegou POR E-MAIL (com `v` válido): ele é a prova, e o aceite carimba o endereço.
+  if (!emailVerificado(user.app_metadata) && !prova) {
     return (
       <Shell>
         <h1 className="text-xl font-semibold">{t("Confirme seu e-mail para aceitar o convite")}</h1>
@@ -158,7 +167,7 @@ export default async function AcceptInvitePage({ params }: PageProps) {
         {t("Você foi convidado para entrar como")} <strong>{payload.role}</strong>.{" "}
         {t("Confirme abaixo para ativar seu acesso.")}
       </p>
-      <AcceptInviteForm token={token} label={t("Aceitar convite")} pendingLabel={t("Confirmando…")} failureLabel={t("Não foi possível aceitar este convite. Ele pode ter vencido ou seu acesso foi revogado. Peça um novo link ao administrador.")} />
+      <AcceptInviteForm token={token} prova={prova} label={t("Aceitar convite")} pendingLabel={t("Confirmando…")} failureLabel={t("Não foi possível aceitar este convite. Ele pode ter vencido ou seu acesso foi revogado. Peça um novo link ao administrador.")} />
     </Shell>
   );
 }
