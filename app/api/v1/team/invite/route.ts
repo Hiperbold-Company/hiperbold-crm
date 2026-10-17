@@ -26,12 +26,11 @@ import { ApiError } from "@/lib/api/types";
 import { recusaDoPlano } from "@/lib/billing/planos/recusa-do-plano";
 import {
   atorDoAudit,
-  gastarVagaDeConvite,
-  haVagaDeConviteNaHora,
   autorizarAdministracao,
   nomeDaOrganizacao,
   nomeDeQuemAgiu,
   pessoaResponsavel,
+  reservarVagaDeConvite,
 } from "@/lib/api/auth-dual-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inviteMemberSchema, validateRequest } from "@/lib/schemas";
@@ -113,15 +112,17 @@ export async function POST(req: NextRequest): Promise<Response> {
   for (const inv of input.invitations) {
     const email = inv.email.trim().toLowerCase();
 
-    // Teto por organização (qualquer porta): cada e-mail novo gasta uma vaga da hora.
-    if (!memberEmails.has(email) && !(await haVagaDeConviteNaHora(activeOrg.orgId))) {
-      failed.push({ email, reason: "rate_limited" });
-      continue;
-    }
-
     // já é membro ativo → pula (não reenvia convite)
     if (memberEmails.has(email)) {
       failed.push({ email, reason: "already_member" });
+      continue;
+    }
+
+    // Teto por organização (qualquer porta). A vaga é RESERVADA antes (incremento atômico: é o que
+    // impede o lote concorrente de passar do teto) e DEVOLVIDA se o convite não se concretizar.
+    const vaga = await reservarVagaDeConvite(activeOrg.orgId);
+    if (!vaga.concedida) {
+      failed.push({ email, reason: "rate_limited" });
       continue;
     }
 
@@ -140,6 +141,7 @@ export async function POST(req: NextRequest): Promise<Response> {
           requestId,
         });
       } catch (err) {
+        await vaga.devolver();
         // Fase F3, decisão 4 (item 1 — convite novo/renovado bloqueia, sem
         // isenção): este é um LOTE de até 20 e-mails, então um convite acima
         // do teto vira UMA falha do item, e o resto do lote segue (mesmo
@@ -152,8 +154,9 @@ export async function POST(req: NextRequest): Promise<Response> {
         }
         throw err;
       }
-      await gastarVagaDeConvite(activeOrg.orgId);
       const { convite, accept_url, email_dispatched, email_error } = emitido;
+      // E-mail que não saiu não gastou a vaga: o teto existe para limitar e-mail enviado.
+      if (!email_dispatched) await vaga.devolver();
       sent.push({
         email,
         invite_id: convite.id,
@@ -163,20 +166,24 @@ export async function POST(req: NextRequest): Promise<Response> {
         accept_url,
       });
     } else {
-      await gastarVagaDeConvite(activeOrg.orgId);
-      sent.push(
-        await issueInvite({
-          email,
-          role: inv.role,
-          interfaceSettings: inv.interface_settings,
-          organizationId: activeOrg.orgId,
-          orgName: activeOrg.name,
-          inviterId: convidanteId,
-          actorApiTokenId: ator.actorApiTokenId,
-          inviterName,
-          requestId,
-        }),
-      );
+      try {
+        sent.push(
+          await issueInvite({
+            email,
+            role: inv.role,
+            interfaceSettings: inv.interface_settings,
+            organizationId: activeOrg.orgId,
+            orgName: activeOrg.name,
+            inviterId: convidanteId,
+            actorApiTokenId: ator.actorApiTokenId,
+            inviterName,
+            requestId,
+          }),
+        );
+      } catch (err) {
+        await vaga.devolver();
+        throw err;
+      }
     }
   }
 

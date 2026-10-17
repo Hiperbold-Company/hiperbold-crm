@@ -448,19 +448,35 @@ describe("ligada — a transição", () => {
     // A evidência da rodada anterior mostrava "Cliente desde 21/09/2026" numa
     // ficha capturada em 15/09: `min(starts_at)` punha na ficha uma data que
     // ainda não tinha chegado. A relação começa quando se combina a hora.
+    //
+    // INDEPENDENTE DO CALENDÁRIO E DO RELÓGIO DO ANFITRIÃO (D-214). O caso media o futuro com
+    // `now() + interval '30 days'` e comparava o resultado com `Date.now()` do processo do teste:
+    // duas réguas de dois relógios (o do contêiner do Postgres e o da máquina que roda o vitest),
+    // que discordam por drift, suspensão do laptop ou fuso do host. Agora o horário é uma data
+    // ABSOLUTA muito à frente (futuro em qualquer dia em que o teste rode) e toda comparação de
+    // "já passou / ainda não chegou" é feita pelo relógio do PRÓPRIO banco, o mesmo que carimba
+    // `created_at` e que o gatilho usa. A asserção é a mesma: a data da ficha é o dia em que se
+    // combinou (== created_at), nunca o do horário, e já existe.
     const contato = await criarContato(ORG_A, "Marcou para o futuro");
-    const { rows } = await pool.query<{ criado: Date; inicio: Date }>(
+    const HORARIO_FUTURO = "2099-06-15T10:00:00Z";
+    const { rows } = await pool.query<{ criado: Date; inicio: Date; futuro: boolean }>(
       `insert into calendar_appointments (organization_id, title, starts_at, ends_at, contact_id)
-       values ($1, 'Futuro', now() + interval '30 days', now() + interval '30 days 1 hour', $2)
-       returning created_at as criado, starts_at as inicio`,
-      [ORG_A, contato],
+       values ($1, 'Futuro', $2::timestamptz, $2::timestamptz + interval '1 hour', $3)
+       returning created_at as criado, starts_at as inicio, starts_at > clock_timestamp() as futuro`,
+      [ORG_A, HORARIO_FUTURO, contato],
     );
-    const { criado, inicio } = rows[0]!;
-    expect(inicio.getTime(), "controle: o horário é mesmo futuro").toBeGreaterThan(Date.now());
+    const { criado, inicio, futuro } = rows[0]!;
+    expect(futuro, "controle: o horário é mesmo futuro (pelo relógio do banco)").toBe(true);
+    expect(inicio.toISOString()).toBe("2099-06-15T10:00:00.000Z");
 
     const depois = await lerContato(contato);
     expect(depois.first_service_at?.toISOString()).toBe(criado.toISOString());
-    expect(depois.first_service_at!.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(depois.first_service_at!.getTime(), "não pode ser a data do horário").toBeLessThan(inicio.getTime());
+    const { rows: passou } = await pool.query<{ ja_passou: boolean }>(
+      "select first_service_at <= clock_timestamp() as ja_passou from contacts where id = $1",
+      [contato],
+    );
+    expect(passou[0]?.ja_passou, "'Cliente desde' já aconteceu (pelo relógio do banco)").toBe(true);
     expect(depois.tags).toContain(TAG_DE_CLIENTE);
   });
 

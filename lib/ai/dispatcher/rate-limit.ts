@@ -110,6 +110,12 @@ export interface RateLimitResult {
   count: number;
   limit: number;
   window_sec: number;
+  /**
+   * Janela em que o incremento caiu. É o que `devolverRateLimit` precisa para
+   * devolver NA MESMA janela — a que virou entre o gasto e a devolução não pode
+   * ser debitada por uma vaga que nunca saiu dela.
+   */
+  window_start?: number;
 }
 
 /**
@@ -149,7 +155,59 @@ export async function checkRateLimit(
     count,
     limit,
     window_sec: windowSec,
+    window_start: windowStart,
   };
+}
+
+function memDecrement(key: string): void {
+  const existing = _memBuckets.get(key);
+  if (existing && existing.expiresAt > Date.now() && existing.count > 0) existing.count -= 1;
+}
+
+/**
+ * DEVOLVE uma unidade ao contador: desfaz um `checkRateLimit` cujo efeito não se concretizou.
+ *
+ * Existe porque "gastar antes" queima a vaga de quem falhou (convite que não saiu, reenvio que
+ * deu erro) e "só ler antes e gastar depois" deixa requisições concorrentes passarem juntas do
+ * teto. Com a primitiva, o fluxo certo é reservar (incremento atômico, que já barra), tentar o
+ * efeito e DEVOLVER se ele não aconteceu — o contador nunca fica abaixo do real nem concede
+ * além do teto.
+ *
+ * Nunca fica negativo. Passe o `window_start` do resultado de `checkRateLimit` para devolver na
+ * janela onde a vaga foi tomada; sem ele vale a janela corrente. Falha de Redis cai para a
+ * memória, como no incremento, e nunca lança (devolver é compensação: não pode derrubar o
+ * caminho de erro de quem a chama).
+ */
+export async function devolverRateLimit(
+  bucket: string,
+  windowSec: number,
+  windowStart?: number,
+): Promise<void> {
+  const inicio = windowStart ?? Math.floor(Date.now() / (windowSec * 1000));
+  const key = `${bucket}:${inicio}`;
+
+  const redis = getRedis();
+  if (!redis) {
+    memDecrement(key);
+    return;
+  }
+  try {
+    const depois = await redis.decr(key);
+    if (depois < 0) {
+      // A chave não tinha vaga no Redis (o gasto caiu no contador em memória, ou a janela
+      // expirou): desfaz o decremento e devolve no balde em memória, se houver.
+      await redis.incr(key);
+      // `decr` numa chave ausente a cria SEM expiração: sem isto ela ficaria para sempre.
+      await redis.expire(key, windowSec);
+      memDecrement(key);
+    }
+  } catch (err) {
+    logger.warn("[ai-dispatcher.rate-limit] redis decr failed; falling back to in-memory", {
+      error: err instanceof Error ? err.message : String(err),
+      bucket,
+    });
+    memDecrement(key);
+  }
 }
 
 /**
