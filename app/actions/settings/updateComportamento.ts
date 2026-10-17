@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { audit } from "@/lib/audit";
+import { ehFalhaDaSessao, MENSAGEM_SESSAO_INVALIDA } from "@/lib/auth/falha-de-sessao";
 import { requirePlatformAdminFull } from "@/lib/auth/portao-de-escrita";
 import {
   carregarComportamentoDaInstalacao,
@@ -44,7 +45,14 @@ const entradaSchema = z.object({
 export async function updateComportamento(
   input: z.infer<typeof entradaSchema>,
 ): Promise<UpdateComportamentoResult> {
-  const { user } = await requirePlatformAdminFull();
+  let user: Awaited<ReturnType<typeof requirePlatformAdminFull>>["user"];
+  try {
+    ({ user: user } = await requirePlatformAdminFull());
+  } catch (err) {
+    // GoTrue fora do ar ou sessão sem o fator: o guarda lança (falha fechado); a tela recebe uma frase, não o digest opaco.
+    if (ehFalhaDaSessao(err)) return { ok: false, error: MENSAGEM_SESSAO_INVALIDA };
+    throw err;
+  }
 
   const parsed = entradaSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid_input" };

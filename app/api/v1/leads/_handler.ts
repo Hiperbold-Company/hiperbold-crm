@@ -421,6 +421,13 @@ export async function createLeadHandler(
      */
     via_planilha?: boolean;
     /**
+     * Interno (captação por webhook). Diz se a ORIGEM do envio foi provada (fonte
+     * com segredo e HMAC válido). Vai no `metadata` do `lead.created` para a regra
+     * de automação poder separar o que um visitante anônimo mandou do que veio de
+     * integração de servidor. Ausente = o criador não declara (tela, API, MCP).
+     */
+    origin_proven?: boolean;
+    /**
      * Interno (clone para outro funil, pela tela ou pela automação). O dono veio
      * do negócio de ORIGEM, não de quem pediu: se ele não pode mais ser dono
      * (desligado, virou viewer, agente arquivado), o clone nasce sem dono e a
@@ -606,6 +613,7 @@ export async function createLeadHandler(
         request_id: ctx.requestId,
         ...a.metadataActor,
         ...(input.via_planilha ? { via: ORIGEM_DA_PLANILHA } : {}),
+        ...(typeof input.origin_proven === "boolean" ? { origin_proven: input.origin_proven } : {}),
       },
       p_organization_id: ctx.organization_id,
     })

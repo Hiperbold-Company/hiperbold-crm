@@ -66,6 +66,9 @@ export function verifyMetaSignature(
   // timingSafeEqual estoura se os tamanhos diferem — comparar antes evita
   // transformar assinatura malformada em exceção 500.
   if (received.length !== expected.length) return false;
+  // Hex de verdade: `Buffer.from("zz…", "hex")` devolve um buffer MENOR (corta no primeiro
+  // par inválido) e `timingSafeEqual` lança RangeError, que virava 500 em vez de 401.
+  if (!/^[0-9a-f]{64}$/i.test(received)) return false;
   return timingSafeEqual(Buffer.from(received, "hex"), Buffer.from(expected, "hex"));
 }
 

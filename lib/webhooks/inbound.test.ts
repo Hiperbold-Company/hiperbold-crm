@@ -55,3 +55,28 @@ describe("verifyInboundSignature", () => {
   it("header com tamanho diferente não lança (timingSafeEqual exige mesmo length)", () =>
     expect(verifyInboundSignature(body, "abc", secret)).toBe(false));
 });
+
+describe("normalizePhoneBR: prefixos de tronco e '+' curto (auditoria 17/10/2026)", () => {
+  it("0 de tronco e 00 internacional saem antes das regras de tamanho", () => {
+    expect(normalizePhoneBR("011 99876-5432")).toBe("+5511998765432");
+    expect(normalizePhoneBR("0055 11 99876-5432")).toBe("+5511998765432");
+    expect(normalizePhoneBR("0 11 3333-4444")).toBe("+551133334444");
+  });
+  it("'+' com menos de 10 dígitos não é telefone", () => {
+    expect(normalizePhoneBR("+123")).toBeNull();
+    expect(normalizePhoneBR("+12345678")).toBeNull();
+    expect(normalizePhoneBR("+0123456789")).toBeNull();
+  });
+});
+
+describe("lerCorpoJsonObjeto", () => {
+  it("só objeto passa; vazio vira {}", async () => {
+    const { lerCorpoJsonObjeto } = await import("@/lib/webhooks/inbound");
+    expect(lerCorpoJsonObjeto("")).toEqual({});
+    expect(lerCorpoJsonObjeto('{"a":1}')).toEqual({ a: 1 });
+    expect(lerCorpoJsonObjeto("null")).toBe("nao_objeto");
+    expect(lerCorpoJsonObjeto("[1]")).toBe("nao_objeto");
+    expect(lerCorpoJsonObjeto("7")).toBe("nao_objeto");
+    expect(lerCorpoJsonObjeto("{x")).toBe("json_invalido");
+  });
+});

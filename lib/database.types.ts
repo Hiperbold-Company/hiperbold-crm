@@ -8790,6 +8790,7 @@ export type Database = {
           captured_name: string | null
           captured_phone: string | null
           contact_id: string | null
+          external_id: string | null
           fields: Json
           id: string
           lead_id: string | null
@@ -8810,6 +8811,7 @@ export type Database = {
           captured_name?: string | null
           captured_phone?: string | null
           contact_id?: string | null
+          external_id?: string | null
           fields?: Json
           id?: string
           lead_id?: string | null
@@ -8830,6 +8832,7 @@ export type Database = {
           captured_name?: string | null
           captured_phone?: string | null
           contact_id?: string | null
+          external_id?: string | null
           fields?: Json
           id?: string
           lead_id?: string | null

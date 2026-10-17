@@ -69,6 +69,16 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const { id } = await ctx.params;
 
   const supabase = authz.supabase;
+  // Funil de OUTRA organização (ou inexistente) é 404, e não uma lista vazia 200: a lista vazia
+  // confirmaria que o id existe e escondia o erro de quem passou o id errado.
+  const { data: funil } = await supabase
+    .from("crm_pipelines")
+    .select("id")
+    .eq("organization_id", authz.organizationId)
+    .eq("id", id)
+    .maybeSingle();
+  if (!funil) return fail("not_found", t("Funil não encontrado."), 404, { requestId });
+
   const { data, error } = await supabase
     .from("crm_stages")
     .select("id, name, position, is_won, is_lost, color")

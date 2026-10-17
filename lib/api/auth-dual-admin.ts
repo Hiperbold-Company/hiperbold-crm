@@ -40,7 +40,7 @@ import { loadAuthUser } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
+import { checkRateLimit, peekRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { resolveAuthDual, tetoDeEscritaDoToken, type AuthDual } from "./auth-dual";
 
 export type AuthAdminOk = Extract<AuthDual, { ok: true }>;
@@ -170,6 +170,20 @@ export const INTERVALO_DE_REENVIO_SEGUNDOS = 600;
 export async function cabeConviteNaHora(organizationId: string): Promise<boolean> {
   const r = await checkRateLimit(`convite:org:${organizationId}`, MAX_CONVITES_POR_HORA, 3600);
   return r.allowed;
+}
+
+/**
+ * Há vaga de convite nesta hora? SÓ LÊ (não gasta). Quem convida em lote consulta aqui ANTES de tentar
+ * e chama `gastarVagaDeConvite` DEPOIS que o convite saiu: o convite recusado pelo plano (teto de
+ * usuários) não pode consumir a vaga da hora de quem ainda não conseguiu convidar ninguém.
+ */
+export async function haVagaDeConviteNaHora(organizationId: string): Promise<boolean> {
+  return (await peekRateLimit(`convite:org:${organizationId}`, 3600)) < MAX_CONVITES_POR_HORA;
+}
+
+/** Gasta uma vaga da hora: chamar só depois de o convite ter sido emitido. */
+export async function gastarVagaDeConvite(organizationId: string): Promise<void> {
+  await checkRateLimit(`convite:org:${organizationId}`, MAX_CONVITES_POR_HORA, 3600);
 }
 
 /** `true` quando este convite pode ser reenviado agora (o intervalo mínimo já passou). */

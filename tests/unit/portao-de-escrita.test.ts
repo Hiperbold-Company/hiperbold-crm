@@ -96,6 +96,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 vi.mock("@/lib/auth/requirePlatformAdmin", () => ({
   requirePlatformAdmin: vi.fn(async () => {
     if (!h.escopo) throw new Error("NEXT_REDIRECT:/admin/forbidden");
+    if (h.mfaEmDivida) throw new Error("NEXT_REDIRECT:/login/mfa?next=/admin");
     return {
       user: { id: USER },
       platformAdmin: { user_id: USER, scope: h.escopo, mfa_required: false },

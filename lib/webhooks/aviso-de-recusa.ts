@@ -17,6 +17,10 @@
  * (o corpo diz onde olhar). O limite do plano continua com o aviso próprio da
  * organização (`avisarLimiteDeLeadsAtingido`); este é por FONTE.
  *
+ * A leitura-antes-de-inserir sozinha deixava a corrida passar (duas recusas ao
+ * mesmo tempo gravavam dois avisos): o índice único parcial da migration 0962
+ * fecha a corrida e o `23505` do INSERT é tratado como "já existe".
+ *
  * Nunca lança, nunca leva dado do lead: só o nome da fonte e o motivo.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -79,7 +83,11 @@ export async function avisarRecusaDaFonte(
       title: titulo,
       body: corpoDoAvisoDeRecusa(entrada.sourceName, entrada.motivoLegivel),
     });
-    if (error) {
+    // 23505 = o índice único `agent_inbox_items_aviso_de_recusa_dia_uq` (migration 0962)
+    // recusou a segunda linha do mesmo dia: duas recusas simultâneas passam juntas pela
+    // leitura acima, e só o banco serializa. É o "on conflict do nothing" — o aviso do dia
+    // já existe, nada a fazer e nada a logar.
+    if (error && error.code !== "23505") {
       logger.warn("aviso-de-recusa: aviso não gravado", {
         organization_id: entrada.organizationId,
         detail: error.message.slice(0, 160),

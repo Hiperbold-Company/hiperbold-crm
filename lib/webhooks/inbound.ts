@@ -27,19 +27,47 @@ export interface MappedLead {
   source_metadata: Record<string, string>;
 }
 
-/** Normaliza telefone BR para E.164 com o nono dígito no celular. */
+/**
+ * Normaliza telefone BR para E.164 com o nono dígito no celular.
+ *
+ * Prefixos de tronco (`0` do DDD nacional, `00` da chamada internacional) saem
+ * ANTES das regras de tamanho: "011 99999-0000" tem 12 dígitos e era lido como
+ * número com DDI, e "0055 11 ..." nem batia nas faixas. Com `+`, o número já é
+ * internacional e precisa de pelo menos 10 dígitos (E.164 real mais curto): um
+ * "+123" não é telefone e antes virava contato.
+ */
 export function normalizePhoneBR(raw: unknown): string | null {
   if (typeof raw !== "string" || !raw.trim()) return null;
   const digits = raw.replace(/\D/g, "");
   let e164: string | null = null;
   if (raw.trim().startsWith("+")) {
-    e164 = /^\d{8,15}$/.test(digits) ? `+${digits}` : null;
-  } else if (digits.length === 12 || digits.length === 13) {
-    e164 = digits.startsWith("55") ? `+${digits}` : null;
-  } else if (digits.length === 10 || digits.length === 11) {
-    e164 = `+55${digits}`;
+    e164 = /^[1-9]\d{9,14}$/.test(digits) ? `+${digits}` : null;
+  } else {
+    const semTronco = digits.replace(/^0+/, "");
+    if (semTronco.length === 12 || semTronco.length === 13) {
+      e164 = semTronco.startsWith("55") ? `+${semTronco}` : null;
+    } else if (semTronco.length === 10 || semTronco.length === 11) {
+      e164 = `+55${semTronco}`;
+    }
   }
   return e164 ? canonicalPhoneBR(e164) : null;
+}
+
+/**
+ * O corpo JSON de um envio: o objeto, ou o motivo de não ser um. `null`, número,
+ * texto e lista são JSON válido que a rota tratava como payload: `null` fazia
+ * `Object.entries(null)` lançar (500) e o resto virava envio sem campos.
+ */
+export function lerCorpoJsonObjeto(rawBody: string): Record<string, unknown> | "json_invalido" | "nao_objeto" {
+  if (!rawBody) return {};
+  let valor: unknown;
+  try {
+    valor = JSON.parse(rawBody);
+  } catch {
+    return "json_invalido";
+  }
+  if (valor === null || typeof valor !== "object" || Array.isArray(valor)) return "nao_objeto";
+  return valor as Record<string, unknown>;
 }
 
 // ─── Campos RESERVADOS do envio (decisão do dono do produto, 17/10/2026) ───────
@@ -171,12 +199,18 @@ export function removerDocumentoDoPayload(payload: Record<string, unknown>): boo
   return havia;
 }
 
-/** O corpo cru SEM as chaves de documento, para o log forense. */
-export function corpoSemDocumento(rawBody: string, ehFormulario: boolean, payloadLimpo: Record<string, unknown>): string {
+/** O corpo cru SEM as chaves de documento (e as extras, como o token do Turnstile), para o log forense. */
+export function corpoSemDocumento(
+  rawBody: string,
+  ehFormulario: boolean,
+  payloadLimpo: Record<string, unknown>,
+  tambemRemover: readonly string[] = [],
+): string {
   if (!ehFormulario) return JSON.stringify(payloadLimpo);
   const params = new URLSearchParams(rawBody);
+  const extras = new Set(tambemRemover.map((c) => c.toLowerCase()));
   for (const chave of [...new Set([...params.keys()])]) {
-    if (CHAVES_DE_CPF.has(chave.toLowerCase())) params.delete(chave);
+    if (CHAVES_DE_CPF.has(chave.toLowerCase()) || extras.has(chave.toLowerCase())) params.delete(chave);
   }
   return params.toString();
 }

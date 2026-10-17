@@ -4,6 +4,7 @@ import { useCallback } from "react";
 
 import { useActiveOrg, usePermission } from "@/hooks/auth/AuthProvider";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
+import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { rotuloDoContato, SEM_NOME } from "@/lib/contacts/rotulo-do-contato";
 import { entregarAviso } from "@/lib/notifications/deliver";
@@ -70,7 +71,8 @@ export function useInboundCallAlerts(): void {
         title: "Ligação recebida",
         body: name ? `${name} · ${fromNumber}` : fromNumber,
         tag: callId,
-        href: "/app/calls",
+        // Com as Chamadas ocultas a tela redireciona: o aviso segue, mas sem botão para lá.
+        href: funcaoOculta("chamadas") ? undefined : "/app/calls",
       });
     })();
   }, []);

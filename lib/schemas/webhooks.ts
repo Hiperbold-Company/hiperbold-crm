@@ -121,11 +121,22 @@ export const actionSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+/**
+ * Destino do redirect pós-envio da captação. `z.string().url()` aceita `javascript:`,
+ * `data:` e `file:` (são URLs válidas); como o destino vai num `Location` para o
+ * navegador de quem preencheu o formulário, só http e https servem.
+ */
+export const redirectHttpSchema = z
+  .string()
+  .url()
+  .max(2000)
+  .refine((v) => /^https?:\/\//i.test(v), { message: "redirect_to precisa começar com http:// ou https://" });
+
 export const createWebhookSourceSchema = z.object({
   name: z.string().min(1).max(120),
   default_pipeline_id: z.string().uuid(),
   default_stage_id: z.string().uuid(),
-  redirect_to: z.string().url().max(2000).nullish(),
+  redirect_to: redirectHttpSchema.nullish(),
   field_map: z
     .object({
       name: z.array(z.string()).optional(),

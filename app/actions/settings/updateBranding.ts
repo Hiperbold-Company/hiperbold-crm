@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 
 import { audit } from "@/lib/audit";
+import { ehFalhaDaSessao, MENSAGEM_SESSAO_INVALIDA } from "@/lib/auth/falha-de-sessao";
 import { requirePlatformAdminFull } from "@/lib/auth/portao-de-escrita";
 import { invalidarMarcaDaInstalacao } from "@/lib/branding/instalacao";
 import { normalizarHex } from "@/lib/branding/rampa";
@@ -80,7 +81,21 @@ export async function updateBranding(
     return { ok: false, error: "validation_failed", details: parsed.error.flatten() };
   }
 
-  const { user: authUser } = await requirePlatformAdminFull();
+  let authUser: Awaited<ReturnType<typeof requirePlatformAdminFull>>["user"];
+
+  try {
+
+    ({ user: authUser } = await requirePlatformAdminFull());
+
+  } catch (err) {
+
+    // GoTrue fora do ar ou sessão sem o fator: o guarda lança (falha fechado); a tela recebe uma frase, não o digest opaco.
+
+    if (ehFalhaDaSessao(err)) return { ok: false, error: MENSAGEM_SESSAO_INVALIDA };
+
+    throw err;
+
+  }
 
   const hdrs = await headers();
   const requestId = hdrs.get("x-request-id");

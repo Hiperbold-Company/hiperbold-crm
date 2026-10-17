@@ -8710,6 +8710,9 @@ export const DICIONARIO: Traducoes = {
   "Ao trocar uma credencial já em uso:": { es: "Al cambiar una credencial ya en uso:" },
   "quem já conectou a agenda vai precisar conectar de novo. O Google invalida as autorizações antigas quando o aplicativo muda — não há como evitar, e ninguém perde compromisso por isso.": { es: "quien ya conectó su agenda tendrá que conectarla de nuevo. Google invalida las autorizaciones anteriores cuando cambia la aplicación. No hay forma de evitarlo, pero nadie pierde citas por eso." },
   "Nunca configurado por aqui.": { es: "Todavía no se ha configurado aquí." },
+  "Sua sessão precisa ser confirmada de novo. Saia e entre com o código de verificação.": {
+    es: "Su sesión debe confirmarse de nuevo. Cierre sesión e ingrese con el código de verificación.",
+  },
   "Credenciais do Google salvas.": { es: "Credenciales de Google guardadas." },
   "cifra indisponível nesta instalação (GUC app.nuvemshop_oauth_key ausente) — o segredo não foi gravado": {
     es: "cifrado no disponible en esta instalación (falta el GUC app.nuvemshop_oauth_key): no se guardó el secreto",

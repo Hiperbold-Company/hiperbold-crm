@@ -36,6 +36,7 @@ import {
 } from "@/lib/pipelines/configuracao-do-funil";
 import { perfilDaEmpresaSchema } from "@/lib/schemas/perfil-da-empresa";
 import { tenantSchema, type PipelineConfigPatch } from "@/lib/schemas/settings";
+import { redirectHttpSchema } from "@/lib/schemas/webhooks";
 import type { McpContext, McpToolDefinition } from "../types";
 
 function deps(ctx: McpContext): DepsDaOperacao {
@@ -108,6 +109,9 @@ export const crmUpdatePipelineConfig: McpToolDefinition<typeof updatePipelineCon
     });
     if (!r.ok) {
       if (r.error === "not_found") throw recusa(ctx, 404, "not_found", "Funil não encontrado.");
+      if (r.error === "conflict") {
+        throw recusa(ctx, 409, "conflict", "Outra alteração mexeu neste funil ao mesmo tempo. Tente de novo.");
+      }
       if (r.error === "validation_failed") {
         throw recusa(ctx, 422, "unprocessable_entity", "Não entendi o que mudar na configuração deste funil.");
       }
@@ -126,7 +130,7 @@ const updateSourceShape = {
   name: z.string().min(1).max(120).optional(),
   default_pipeline_id: z.string().uuid().optional(),
   default_stage_id: z.string().uuid().optional(),
-  redirect_to: z.string().url().max(2000).nullable().optional(),
+  redirect_to: redirectHttpSchema.nullable().optional(),
   field_map: z
     .object({
       name: z.array(z.string()).optional(),
@@ -256,19 +260,9 @@ export const crmUpdateOrganizationSettings: McpToolDefinition<typeof updateOrgSh
     if (Object.keys(pedidos).length > 0) {
       const atual = await lerConfiguracaoDaOrganizacao(ctx.supabase, ctx.organizationId);
       if (!atual) throw recusa(ctx, 404, "not_found", "Organização não encontrada.");
-      const completo = tenantSchema.safeParse({
-        display_name: atual.display_name,
-        legal_name: atual.legal_name,
-        cnpj: atual.cnpj,
-        country: atual.country,
-        timezone: atual.timezone,
-        locale: atual.locale,
-        currency: atual.currency,
-        media_retention_days: atual.media_retention_days,
-        dpo_email: atual.dpo_email,
-        privacy_policy_url: atual.privacy_policy_url,
-        ...pedidos,
-      });
+      // Valida SÓ as chaves pedidas (ver a rota REST): um valor antigo inválido não trava outra edição.
+      const mascara = Object.fromEntries(Object.keys(pedidos).map((k) => [k, true]));
+      const completo = tenantSchema.pick(mascara as never).safeParse(pedidos);
       if (!completo.success) {
         throw recusa(ctx, 422, "unprocessable_entity", "Não entendi o que mudar na organização.");
       }

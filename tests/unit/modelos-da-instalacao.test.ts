@@ -14,6 +14,7 @@ import {
   idNoProvedor,
   lerModelosDaInstalacao,
   listaRestringe,
+  idsForaDoCatalogo,
   modeloLiberado,
   modeloPadraoDaInstalacao,
   modelosParaOSeletor,
@@ -285,5 +286,23 @@ describe("agente novo sem modelo escolhido", () => {
         provedor: "anthropic",
       }),
     ).toMatchObject({ modelId: "claude-x" });
+  });
+});
+
+describe("modeloLiberado: com e sem fabricante, nos dois sentidos", () => {
+  it("lista sem fabricante libera o id com fabricante", () => {
+    expect(modeloLiberado(["gpt-6-luna"], "openai/gpt-6-luna")).toBe(true);
+  });
+  it("lista com fabricante libera o id puro", () => {
+    expect(modeloLiberado(["openai/gpt-6-luna"], "gpt-6-luna")).toBe(true);
+  });
+  it("fabricantes diferentes nunca se casam", () => {
+    expect(modeloLiberado(["anthropic/x"], "openai/x")).toBe(false);
+  });
+  it("idsForaDoCatalogo acusa o id que não existe e aceita as duas grafias", () => {
+    const catalogo = [{ provider: "openai", model_id: "gpt-6-luna" }];
+    expect(idsForaDoCatalogo(["gpt-6-luna", "openai/gpt-6-luna", "openai/gpt-6-lunaa"], catalogo)).toEqual([
+      "openai/gpt-6-lunaa",
+    ]);
   });
 });

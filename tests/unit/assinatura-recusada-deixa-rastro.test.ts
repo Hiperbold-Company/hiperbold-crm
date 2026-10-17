@@ -48,17 +48,25 @@ function onde(texto: string, agulha: string | RegExp): number {
 }
 
 describe("a recusa por assinatura é arquivada e logada", () => {
-  it("o arquivo é aberto ANTES da conferência de assinatura", () => {
-    // Este é o defeito, na sua forma mais crua: uma linha depois da outra.
+  it("a recusa abre o arquivo DENTRO do ramo da assinatura inválida, SEM o corpo", () => {
+    // Auditoria de 17/10/2026: o corpo cru só é arquivado depois da assinatura (quem conhece só o
+    // token não escreve payload arbitrário na tabela). A recusa continua deixando rastro, mas o
+    // rastro é o fato, não o conteúdo: `corpoOmitido` e `rawBody: ""`.
     const s = fonte();
-    const abertura = onde(s, "await abrirArquivoDoWebhook(");
     const conferencia = onde(s, "if (!verifyInboundWebhookSignature(");
-    expect(abertura).toBeGreaterThan(-1);
+    const fimDoRamo = onde(s, 'return fail("unauthorized", "bad_signature"');
     expect(conferencia).toBeGreaterThan(-1);
-    expect(
-      abertura,
-      "a conferência de assinatura voltou a acontecer antes do arquivo: a recusa sai sem rastro",
-    ).toBeLessThan(conferencia);
+    const ramo = s.slice(conferencia, fimDoRamo);
+    expect(ramo, "a recusa deixou de abrir o arquivo").toMatch(/abrirArquivoDoWebhook\(/);
+    expect(ramo, "a recusa voltou a arquivar o corpo não autenticado").toMatch(/corpoOmitido:/);
+    expect(ramo).toMatch(/rawBody:\s*""/);
+  });
+
+  it("o arquivo COM o corpo só é aberto depois de a assinatura conferir", () => {
+    const s = fonte();
+    const conferencia = onde(s, "if (!verifyInboundWebhookSignature(");
+    const aberturaComCorpo = s.indexOf("await abrirArquivoDoWebhook(", s.indexOf('return fail("unauthorized", "bad_signature"'));
+    expect(aberturaComCorpo).toBeGreaterThan(conferencia);
   });
 
   it("o ramo de assinatura inválida grava `valid_signature: false`", () => {

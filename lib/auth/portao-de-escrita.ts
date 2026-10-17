@@ -65,9 +65,11 @@ export async function escopoCompletoDaPlataforma(userId: string): Promise<boolea
  * `support_readonly` existe para olhar.
  */
 export async function requirePlatformAdminFull(): Promise<PlatformAdminContext> {
+  // `requirePlatformAdmin` já recusa a sessão aal1 de quem TEM fator verificado (redirect para
+  // /login/mfa) e lê os fatores UMA vez; chamar `mfaEmDivida()` depois repetia o `listFactors` (uma
+  // ida a mais ao GoTrue por salvamento) para chegar à mesma resposta.
   const ctx = await requirePlatformAdmin();
   if (ctx.platformAdmin.scope !== "full") redirect("/admin/forbidden");
-  if (await mfaEmDivida()) redirect("/login/mfa?next=/admin");
   return ctx;
 }
 

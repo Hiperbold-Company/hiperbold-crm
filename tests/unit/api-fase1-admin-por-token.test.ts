@@ -17,7 +17,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { audit } from "@/lib/audit";
-import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
+import { checkRateLimit, peekRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { emitirConvite } from "@/lib/team/convites";
 import { requireRole } from "@/lib/auth/require-role";
 import { isPublicPath } from "@/lib/auth/public-paths";
@@ -30,6 +30,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({
   checkRateLimit: vi.fn(async () => ({ allowed: true })),
+  peekRateLimit: vi.fn(async () => 0),
 }));
 vi.mock("@/lib/audit", () => ({
   audit: vi.fn(async () => undefined),
@@ -240,9 +241,11 @@ describe("a organização é a do token (isolamento)", () => {
   it("PATCH config do funil de outra organização → 404, sem escrita; do próprio → grava e audita o token", async () => {
     const db = bancoFalso({
       crm_pipelines: (c) =>
-        c.filtros.organization_id === ORG_TOKEN
-          ? { id: FUNIL, name: "Vendas", vocabulary: {}, settings: { fields: [] } }
-          : null,
+        c.filtros.organization_id !== ORG_TOKEN
+          ? null
+          : c.op === "update"
+            ? [{ id: FUNIL }] // PostgREST devolve as linhas gravadas (a trava otimista confere que houve uma)
+            : { id: FUNIL, name: "Vendas", vocabulary: {}, settings: { fields: [] } },
     });
     vi.mocked(createAdminClient).mockReturnValue(db as never);
     const { PATCH } = await import("@/app/api/v1/pipelines/[id]/config/route");
@@ -318,7 +321,8 @@ describe("a organização é a do token (isolamento)", () => {
     expect(res.status).toBe(200);
     const escrita = db.chamadas.find((c) => c.op === "update");
     expect(escrita?.filtros.id).toBe(ORG_TOKEN);
-    expect(escrita?.patch).toMatchObject({ display_name: "Acme 2", legal_name: "Acme Ltda" });
+    // Só a chave pedida é gravada: o PATCH parcial não reescreve as outras nove colunas.
+    expect(escrita?.patch).toEqual({ display_name: "Acme 2" });
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "org.updated", organizationId: ORG_TOKEN, actorApiTokenId: TOKEN_ID }),
     );
@@ -397,9 +401,8 @@ describe("endurecimentos da auditoria", () => {
   });
 
   it("POST /team/invite: acima do teto por hora da organização o e-mail NÃO sai (rate_limited)", async () => {
-    vi.mocked(checkRateLimit).mockImplementation(async (bucket: string) => ({
-      allowed: !bucket.startsWith("convite:org:"),
-    }) as never);
+    // A vaga da hora é LIDA antes de convidar (peek) e só gasta depois que o convite saiu.
+    vi.mocked(peekRateLimit).mockImplementation(async (bucket: string) => (bucket.startsWith("convite:org:") ? 999 : 0));
     const db = bancoFalso({ user_organizations: () => [], organizations: () => ({ display_name: "Acme" }) });
     vi.mocked(createAdminClient).mockReturnValue(db as never);
     comoToken("admin", ["mcp:write"]);
@@ -409,7 +412,23 @@ describe("endurecimentos da auditoria", () => {
     expect(corpo.data.sent).toEqual([]);
     expect(corpo.data.failed[0]?.reason).toBe("rate_limited");
     expect(emitirConvite).not.toHaveBeenCalled();
-    vi.mocked(checkRateLimit).mockImplementation(async () => ({ allowed: true }) as never);
+    expect(checkRateLimit).not.toHaveBeenCalledWith(expect.stringMatching(/^convite:org:/), expect.anything(), expect.anything());
+    vi.mocked(peekRateLimit).mockImplementation(async () => 0);
+  });
+
+  it("POST /team/invite: convite recusado pelo plano NÃO gasta a vaga da hora; o enviado gasta", async () => {
+    const db = bancoFalso({ user_organizations: () => [], organizations: () => ({ display_name: "Acme" }) });
+    vi.mocked(createAdminClient).mockReturnValue(db as never);
+    comoToken("admin", ["mcp:write"]);
+    vi.mocked(checkRateLimit).mockClear();
+    vi.mocked(emitirConvite).mockRejectedValueOnce({ code: "PT402", details: "usuarios" });
+    const { POST } = await import("@/app/api/v1/team/invite/route");
+    await POST(req("/api/v1/team/invite", "POST", { invitations: [{ email: "a@x.com", role: "agent" }] }));
+    const gastos = () =>
+      vi.mocked(checkRateLimit).mock.calls.filter(([bucket]) => String(bucket).startsWith("convite:org:")).length;
+    expect(gastos()).toBe(0);
+    await POST(req("/api/v1/team/invite", "POST", { invitations: [{ email: "b@x.com", role: "agent" }] }));
+    expect(gastos()).toBe(1);
   });
 
   it("POST /team/invites/[id]/resend: segundo reenvio dentro de 10 min leva 429 e nada é reenviado", async () => {

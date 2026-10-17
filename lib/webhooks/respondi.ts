@@ -296,6 +296,23 @@ export function buildContactConsentGrant(formId: string | null): {
   };
 }
 
+/** O que o contato tem registrado sobre marketing: concedeu, recusou ou nunca respondeu. */
+export type EstadoDoConsentimento = "concedido" | "recusado" | "sem_resposta";
+
+/**
+ * Lê a coluna `contacts.consent` (jsonb, tolerante a qualquer forma) e diz em que
+ * estado ela deixa a finalidade `marketing`. `declined_at` vence `granted_at`
+ * porque a recusa é gravada com `granted_at: null`; os dois preenchidos não
+ * ocorrem, mas na dúvida vale o lado que NÃO autoriza contato.
+ */
+export function estadoDoConsentimentoDeMarketing(consent: unknown): EstadoDoConsentimento {
+  const marketing = (consent as { marketing?: { granted_at?: unknown; declined_at?: unknown } } | null | undefined)
+    ?.marketing;
+  if (marketing?.declined_at) return "recusado";
+  if (marketing?.granted_at) return "concedido";
+  return "sem_resposta";
+}
+
 /**
  * A RECUSA, gravada como fato positivo — e este é o ponto inteiro.
  *

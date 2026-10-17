@@ -77,6 +77,27 @@ function idCanonico(provedor: string | null | undefined, id: string): string {
   return `${provedor}/${id}`;
 }
 
+/** O que vem depois do fabricante: `openai/gpt-6` -> `gpt-6`. Sem barra, o próprio id. */
+function semFabricante(id: string): string {
+  const i = id.indexOf("/");
+  return i === -1 ? id : id.slice(i + 1);
+}
+
+/**
+ * Dois ids são o MESMO modelo? Iguais, ou um deles sem fabricante e o nome batendo — nos DOIS
+ * sentidos: a lista pode trazer `gpt-6` e o agente `openai/gpt-6`, ou o contrário. Os dois com
+ * fabricante só casam se forem iguais (`anthropic/x` não é `openai/x`). Sem caixa.
+ */
+function mesmoModelo(a: string, b: string): boolean {
+  const x = a.toLowerCase();
+  const y = b.toLowerCase();
+  if (x === y) return true;
+  // Os dois nomeiam o fabricante e não são iguais: modelos diferentes.
+  if (x.includes("/") && y.includes("/")) return false;
+  const [puro, completo] = x.includes("/") ? [y, x] : [x, y];
+  return completo.endsWith(`/${puro}`);
+}
+
 /** O modelo está liberado na chave da instalação? Compara o id canônico, sem caixa. */
 export function modeloLiberado(
   lista: readonly string[],
@@ -84,13 +105,20 @@ export function modeloLiberado(
   provedor?: string | null,
 ): boolean {
   if (!listaRestringe(lista)) return true;
-  const alvo = idCanonico(provedor, modelId).toLowerCase();
-  const puro = modelId.toLowerCase();
-  return lista.some((liberado) => {
-    const l = liberado.toLowerCase();
-    // Id puro (sem fabricante) casa com o nome depois da barra: `gpt-6-luna` é `openai/gpt-6-luna`.
-    return l === alvo || l === puro || (!puro.includes("/") && l.endsWith(`/${puro}`));
-  });
+  const alvo = idCanonico(provedor, modelId);
+  return lista.some((liberado) => mesmoModelo(liberado, alvo) || mesmoModelo(liberado, modelId));
+}
+
+/**
+ * Entradas da lista que NÃO existem no catálogo (`ai_models`). Lista com id escrito errado libera
+ * nada em silêncio: o aviso na hora de salvar é a única chance de a pessoa notar.
+ */
+export function idsForaDoCatalogo(
+  lista: readonly string[],
+  catalogo: ReadonlyArray<{ provider: string | null; model_id: string }>,
+): string[] {
+  const conhecidos = catalogo.map((m) => idCanonico(m.provider, m.model_id));
+  return lista.filter((id) => !conhecidos.some((c) => mesmoModelo(id, c) || mesmoModelo(id, semFabricante(c))));
 }
 
 export interface DecisaoDeModelo {

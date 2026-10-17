@@ -96,6 +96,11 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     if (aplicado.error === "not_found") {
       return fail("not_found", t("Funil não encontrado."), 404, { requestId });
     }
+    if (aplicado.error === "conflict") {
+      return fail("conflict", t("Outra pessoa alterou este funil ao mesmo tempo. Recarregue e tente de novo."), 409, {
+        requestId,
+      });
+    }
     if (aplicado.error === "validation_failed" || aplicado.error === "invalid_request") {
       return fail("unprocessable_entity", t("Não entendi o que mudar na configuração deste funil."), 422, {
         requestId,
