@@ -14,6 +14,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+// A porta de autorização (sessão OU token) abre o cliente da sessão; estas rotas só usam o de servidor.
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn(async () => ({})) }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn() }));
 

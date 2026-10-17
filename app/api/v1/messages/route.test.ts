@@ -9,7 +9,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 vi.mock("@/lib/api/auth-dual", () => ({ resolveAuthDual: vi.fn() }));
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({ checkRateLimit: vi.fn() }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({})) }));
+// O recibo de idempotência é gravado com o cliente de SERVIDOR (0969): o dublê da vez serve aos dois.
+const servidor = vi.hoisted(() => ({ db: {} as unknown }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => servidor.db) }));
 vi.mock("@/lib/messaging/ritmo-do-envio-por-token", () => ({
   depsDoRitmo: vi.fn(async () => ({})),
   reservarEnvioPorToken: vi.fn(async () => null),
@@ -134,6 +136,7 @@ let banco = bancoFalso();
 // ficou morto em produção com esta suíte verde (#1676).
 function autenticado(via: "session" | "token", scopes?: string[]) {
   banco = bancoFalso();
+  servidor.db = banco.supabase;
   mockedAuth.mockResolvedValue({
     ok: true,
     organizationId: ORG_ID,

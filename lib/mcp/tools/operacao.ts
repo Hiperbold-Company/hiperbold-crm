@@ -29,6 +29,7 @@ import { corDaEtapaSchema } from "@/lib/leads/stage-cor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { ApiError } from "@/lib/api/types";
+import { redirectHttpSchema } from "@/lib/schemas/webhooks";
 import {
   arquivarEtapa,
   atualizarEtapa,
@@ -37,9 +38,11 @@ import {
   corpo as corpoDoFunil,
 } from "@/lib/leads/stage-operations";
 import {
+  ASSINATURA_DA_ENTRADA,
   criarEntradaAutomatica,
   definirEntradaAtiva,
   listarEntradasAutomaticas,
+  novoSegredoDeEntrada,
   recebimentosDaEntrada,
   type DepsDaOperacao,
 } from "@/lib/operacao/entradas-automaticas";
@@ -356,8 +359,20 @@ const createSourceShape = {
   name: z.string().min(1).max(120),
   default_pipeline_id: z.string().uuid(),
   default_stage_id: z.string().uuid(),
+  /** Para onde o navegador de quem preencheu o formulário é mandado depois do envio (http/https). */
+  redirect_to: redirectHttpSchema.optional(),
+  /** Nomes de campo do formulário que viram nome, telefone e e-mail do contato. */
+  field_map: z
+    .object({
+      name: z.array(z.string()).optional(),
+      phone: z.array(z.string()).optional(),
+      email: z.array(z.string()).optional(),
+    })
+    .optional(),
   /** Segredo opcional de assinatura. Cifrado no servidor; nunca volta em leitura. */
   secret: z.string().min(16).max(200).optional(),
+  /** Pede ao servidor que GERE o segredo HMAC: ele volta uma única vez, na resposta desta chamada. */
+  generate_secret: z.boolean().optional(),
 };
 
 export const crmCreateWebhookSource: McpToolDefinition<typeof createSourceShape> = {
@@ -366,17 +381,39 @@ export const crmCreateWebhookSource: McpToolDefinition<typeof createSourceShape>
     "Cria uma entrada automática de contatos e devolve o path_token da URL de captação. " +
     "O pipeline e o stage têm que ser da MESMA organização e o stage têm que pertencer ao pipeline; " +
     "stage arquivado é recusado (os contatos cairiam numa coluna fora do quadro). " +
-    "A entrada nasce ATIVA: a partir daí, qualquer POST na URL vira contato.",
+    "A entrada nasce ATIVA: a partir daí, qualquer POST na URL vira contato. " +
+    "Com generate_secret=true o servidor gera o segredo de assinatura (HMAC-SHA256 do corpo, cabeçalho " +
+    "X-HiperCRM-Signature) e o devolve em `secret` UMA ÚNICA VEZ — entregue-o a quem vai configurar o " +
+    "formulário e guarde-o FORA desta conversa (cofre de segredos); não o repita depois, ele não volta a aparecer: " +
+    "leituras só mostram has_secret.",
   inputSchema: createSourceShape,
   category: "write",
   requiresRole: "manager",
   requiresScope: "mcp:write",
+  // O segredo que o chamador digitou não pode ir parar no `api_audit_log` (args vão para o metadata).
+  redigirParaAuditoria: (args) => (args.secret === undefined ? args : { ...args, secret: "[redacted]" }),
   handler: async (input, ctx) => {
+    if (input.generate_secret && input.secret) {
+      throw new ApiError(
+        422,
+        "unprocessable_entity",
+        undefined,
+        ctx.requestId,
+        "Envie `secret` OU `generate_secret`, não os dois.",
+      );
+    }
     // Segredo nunca fica em claro no banco (migration 0041). Sem chave de cifra
     // configurada, RECUSA em vez de degradar para plaintext — mesma decisão da rota.
+    const admin = createAdminClient();
+    const cifrar = (texto: string) => encryptWebhookSecret(admin, texto);
     let secretEncrypted: string | null = null;
-    if (input.secret) {
-      secretEncrypted = await encryptWebhookSecret(createAdminClient(), input.secret);
+    let segredoGerado: string | null = null;
+    if (input.generate_secret) {
+      const novo = await novoSegredoDeEntrada(ctx.requestId, cifrar);
+      secretEncrypted = novo.cifrado;
+      segredoGerado = novo.claro;
+    } else if (input.secret) {
+      secretEncrypted = await cifrar(input.secret);
       if (secretEncrypted === null) {
         throw new ApiError(
           422,
@@ -388,12 +425,17 @@ export const crmCreateWebhookSource: McpToolDefinition<typeof createSourceShape>
       }
     }
 
-    return criarEntradaAutomatica(deps(ctx), {
+    const criada = await criarEntradaAutomatica(deps(ctx), {
       name: input.name,
       default_pipeline_id: input.default_pipeline_id,
       default_stage_id: input.default_stage_id,
+      redirect_to: input.redirect_to ?? null,
+      field_map: input.field_map,
       secret_encrypted: secretEncrypted,
     });
+    return segredoGerado === null
+      ? criada
+      : { ...criada, secret: segredoGerado, secret_shown_once: true, signature: ASSINATURA_DA_ENTRADA };
   },
 };
 

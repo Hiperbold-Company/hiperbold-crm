@@ -167,12 +167,40 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/v1\/pipelines\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/stages\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   /^\/api\/v1\/webhook-sources$/,
   /^\/api\/v1\/webhook-sources\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  /^\/api\/v1\/webhook-sources\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/events$/i,
+  /^\/api\/v1\/webhook-sources\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(events|rotate-secret)$/i,
   /^\/api\/v1\/settings\/organizacao$/,
+  // API FASE 2 (17/10/2026) — campos personalizados do funil e agentes de IA por token. Mesma moldura da
+  // fase 1 (`autorizarAdministracao` dentro da rota; "público" = o proxy não decide). Ancoradas com `$`, id
+  // em forma de UUID e chave de campo na forma do schema (`[a-z][a-z0-9_]*`, até 40).
+  /^\/api\/v1\/pipelines\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/fields$/i,
+  /^\/api\/v1\/pipelines\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/fields\/[a-z][a-z0-9_]{0,39}$/i,
+  /^\/api\/v1\/ai\/agents$/,
+  /^\/api\/v1\/ai\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/ai\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(versions|publish|pause)$/i,
+  /^\/api\/v1\/ai\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/versions\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   /^\/api\/v1\/leads$/,
   /^\/api\/v1\/leads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(move|win|lose)$/i,
   /^\/api\/v1\/contacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   /^\/api\/v1\/contacts\/merge$/,
+  // API FASE 3 (17/10/2026) — respostas prontas, follow-ups, roteadores, regras automáticas, roteamento
+  // de atendimento, material de conhecimento e leitura de conexões/provedores por token. Mesma moldura
+  // das fases 1 e 2: `autorizarAdministracao` dentro da rota; "público" = o proxy não decide.
+  /^\/api\/v1\/message-templates$/,
+  /^\/api\/v1\/message-templates\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/ai\/followup-flows$/,
+  /^\/api\/v1\/ai\/followup-flows\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/ai\/followup-flows\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(publish|disable|duplicate|rollback)$/i,
+  /^\/api\/v1\/ai\/routers$/,
+  /^\/api\/v1\/ai\/routers\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/ai\/routers\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/members$/i,
+  /^\/api\/v1\/automation-rules$/,
+  /^\/api\/v1\/settings\/routing$/,
+  // Só LEITURA por token: conexões de canal e credenciais de IA (sem segredo nenhum). Escrita fica na sessão.
+  /^\/api\/v1\/channel-sessions$/,
+  /^\/api\/v1\/ai\/credentials$/,
+  /^\/api\/v1\/ai\/knowledge\/sources$/,
+  /^\/api\/v1\/ai\/knowledge\/sources\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/automation-rules\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   /^\/_next\//,
   /^\/favicon\.ico$/,
   // O ícone da aba (`app/icon.tsx`), que o `<head>` de TODA página pede —

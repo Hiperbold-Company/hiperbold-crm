@@ -33,6 +33,8 @@ vi.mock("@/lib/auth/require-role", () => ({ requireRole: h.guard }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: h.apoio }));
 vi.mock("@/lib/audit", () => ({ audit: h.audit }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ from: h.from }) }));
+// O recibo é gravado com o cliente de SERVIDOR (0969).
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ from: h.from }) }));
 
 import { POST } from "@/app/api/v1/message-templates/route";
 

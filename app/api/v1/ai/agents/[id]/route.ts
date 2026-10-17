@@ -6,15 +6,16 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *
  * organization_id sempre vem do JWT da sessão, nunca do body/path inseguro.
  * Audit: trigger trg_ai_agents_audit grava em audit_log automaticamente.
+ *
+ * Auth: sessão OU token `dsk_…` (`lib/api/auth-dual-admin.ts`): o MESMO piso de papel da sessão,
+ * `mcp:read` para ler e `mcp:write` para escrever; organização da sessão/da linha do token, nunca do body.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
+import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { traduzir } from "@/lib/i18n/dicionario";
 import {
   agentPatchSchema,
   AGENT_CONFIG_DEFAULTS,
@@ -34,7 +35,7 @@ const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // GET
 // ---------------------------------------------------------------------------
 
-export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
+export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const requestId = randomUUID();
   const { id } = await ctx.params;
 
@@ -42,17 +43,21 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     return fail("invalid_request", "id inválido.", 400, { requestId });
   }
 
-  const authz = await requireRole("manager", { requestId, resource: "ai_agents" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "ai_agents",
+    role: "manager",
+    escrita: false,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { org: activeOrg } = authz;
+  const t = traducaoDe(authz);
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
   const { data, error } = await supabase
     .from("ai_agents")
     .select(AGENT_COLUMNS)
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .maybeSingle();
 
   if (error) {
@@ -80,10 +85,14 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     return fail("invalid_request", "id inválido.", 400, { requestId });
   }
 
-  const authz = await requireRole("admin", { requestId, resource: "ai_agents" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "ai_agents",
+    role: "admin",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { org: activeOrg } = authz;
+  const t = traducaoDe(authz);
 
   let rawBody: unknown;
   try {
@@ -125,7 +134,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     .from("ai_agents")
     .select(AGENT_COLUMNS)
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .maybeSingle();
 
   if (loadErr) {
@@ -198,7 +207,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     .from("ai_agents")
     .update(update)
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .select(AGENT_COLUMNS)
     .single();
 
@@ -213,7 +222,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
 // DELETE — soft delete (is_active=false). 409 se is_default=true.
 // ---------------------------------------------------------------------------
 
-export async function DELETE(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
+export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
@@ -224,10 +233,14 @@ export async function DELETE(_req: NextRequest, ctx: RouteCtx): Promise<Response
     return fail("invalid_request", "id inválido.", 400, { requestId });
   }
 
-  const authz = await requireRole("admin", { requestId, resource: "ai_agents" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "ai_agents",
+    role: "admin",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user: authUser, org: activeOrg } = authz;
+  const t = traducaoDe(authz);
 
   const admin = createAdminClient();
 
@@ -235,7 +248,7 @@ export async function DELETE(_req: NextRequest, ctx: RouteCtx): Promise<Response
     .from("ai_agents")
     .select("id, is_default, is_active, kind, archived_at")
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .maybeSingle();
 
   if (loadErr) {
@@ -264,7 +277,7 @@ export async function DELETE(_req: NextRequest, ctx: RouteCtx): Promise<Response
     .from("ai_agents")
     .update(patch)
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId);
+    .eq("organization_id", authz.organizationId);
 
   if (updErr) {
     return fail("internal_error", "Erro ao desativar agent.", 500, { requestId });
@@ -272,8 +285,8 @@ export async function DELETE(_req: NextRequest, ctx: RouteCtx): Promise<Response
 
   void audit({
     action: "ai_agent.archived",
-    actorUserId: authUser.id,
-    organizationId: activeOrg.orgId,
+    ...atorDoAudit(authz),
+    organizationId: authz.organizationId,
     resourceType: "ai_agent",
     resourceId: id,
     requestId,

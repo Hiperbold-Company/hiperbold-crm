@@ -6,23 +6,24 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *   - prev published version → 'superseded'
  *   - target version → 'published'
  *   - ai_agents.published_version_id → target
- * Validates credential, channel_session, model and tool_ids before commit.
+ * Valida credencial, channel_session, model e tool_ids antes do commit
+ * (`capacidadesDesconhecidas` + `validarEscopoDaVersao`, em `lib/ai/agents/administracao.ts`).
  *
- * Maps validation errors to 422 with stable codes (PublishErrorCode).
- * Emits event_log 'ai_agent.published' fire-and-forget after commit.
+ * Erros de validação viram 422 com código estável (PublishErrorCode).
+ * Emite event_log 'ai_agent.published' fire-and-forget depois do commit.
+ *
+ * Auth: sessão OU token `dsk_…` (`lib/api/auth-dual-admin.ts`): `admin` + `mcp:write`, o MESMO piso da
+ * sessão; organização da sessão/da linha do token, nunca do body. A regra é compartilhada com a tool MCP.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
-import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { autorizarAdministracao, pessoaResponsavel, traducaoDe } from "@/lib/api/auth-dual-admin";
+import { respostaDeRecusa } from "@/lib/api/recusa";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { publishSchema, PUBLISH_ERROR_CODES } from "@/lib/ai/agents/validation";
-import { capacidadesDesconhecidas } from "@/lib/ai/agents/capacidades-conhecidas";
-import { mensagemDoEscopo, validarEscopoDaVersao } from "@/lib/ai/agents/escopo";
-import { publishAgentVersion } from "@/lib/ai/agents/publish";
-import { traduzir } from "@/lib/i18n/dicionario";
+import { publishSchema } from "@/lib/ai/agents/validation";
+import { publicarVersaoDoAgente } from "@/lib/ai/agents/administracao";
 
 export const dynamic = "force-dynamic";
 
@@ -40,10 +41,14 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     return fail("invalid_request", "id inválido.", 400, { requestId });
   }
 
-  const authz = await requireRole("admin", { requestId, resource: "ai_agents" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "ai_agents",
+    role: "admin",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user: authUser, org: activeOrg } = authz;
+  const t = traducaoDe(authz);
 
   let raw: unknown;
   try {
@@ -60,96 +65,21 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     });
   }
 
-  const admin = createAdminClient();
-
-  // Pre-flight: tool_ids do target version são válidos no catálogo MCP atual?
-  // (catálogo evolui — validar à hora do publish, fora da transação SQL.)
-  const { data: targetV } = await admin
-    .from("ai_agent_versions")
-    .select("id, agent_id, organization_id, tool_ids, operator_tool_ids, status")
-    .eq("id", parsed.data.version_id)
-    .eq("organization_id", activeOrg.orgId)
-    .maybeSingle();
-
-  if (!targetV || targetV.agent_id !== id) {
-    return fail("version_not_found", t("Version não encontrada."), 404, { requestId });
-  }
-
-  const tools = (targetV.tool_ids ?? []) as string[];
-  const invalid = capacidadesDesconhecidas(tools);
-  if (invalid.length > 0) {
-    return fail("tool_id_invalid", t("tool_ids contém ids inexistentes no catálogo MCP."), 422, {
-      requestId,
-      details: { invalid },
-    });
-  }
-
-  // A conexão pode ter sido desligada (ou a ferramenta sumido do cache) entre
-  // salvar a versão e publicar agora: confere de novo na hora de virar a
-  // chave, não só quando a versão foi gravada.
-  const escopo = await validarEscopoDaVersao(admin, activeOrg.orgId, {
-    tool_ids: tools,
-    operator_tool_ids: (targetV.operator_tool_ids ?? []) as string[],
-  });
-  if (!escopo.ok) {
-    return fail("validation_failed", mensagemDoEscopo(escopo), 422, { requestId });
-  }
-
-  const result = await publishAgentVersion(admin, {
-    orgId: activeOrg.orgId,
-    agentId: id,
-    versionId: parsed.data.version_id,
-  });
-
-  if (!result.ok) {
-    if (PUBLISH_ERROR_CODES.has(result.code as string)) {
-      const status = result.code === "agent_not_found" || result.code === "version_not_found"
-        ? 404
-        : 422;
-      return fail(result.code, t("Validação de publish falhou."), status, { requestId });
-    }
-    return fail("internal_error", "Erro ao publicar.", 500, { requestId });
-  }
-
-  // event_log + audit fire-and-forget.
-  void admin
-    .from("event_log")
-    .insert({
-      organization_id: activeOrg.orgId,
-      event_type: "ai_agent.published",
-      // NOT NULL sem default — ver `tests/unit/evento-de-publicacao-tem-dono.test.ts`.
-      entity_kind: "ai_agent",
-      payload: {
-        agent_id: result.agent_id,
-        version_id: result.version_id,
-        previous_version_id: result.previous_version_id,
-        published_at: result.published_at,
+  try {
+    const publicada = await publicarVersaoDoAgente(
+      {
+        supabase: authz.supabase,
+        admin: createAdminClient(),
+        organizationId: authz.organizationId,
+        actor: authz.actor,
+        responsavel: pessoaResponsavel(authz),
+        requestId,
       },
-    })
-    .then(({ error }) => {
-      if (error) console.error("[ai_agents/publish] event_log error", error.message);
-    });
-
-  void audit({
-    action: "ai_agent.published",
-    actorUserId: authUser.id,
-    organizationId: activeOrg.orgId,
-    resourceType: "ai_agent",
-    resourceId: id,
-    requestId,
-    metadata: {
-      version_id: result.version_id,
-      previous_version_id: result.previous_version_id,
-    },
-  });
-
-  return ok(
-    {
-      agent_id: result.agent_id,
-      version_id: result.version_id,
-      previous_version_id: result.previous_version_id,
-      published_at: result.published_at,
-    },
-    { requestId },
-  );
+      id,
+      parsed.data.version_id,
+    );
+    return ok(publicada, { requestId });
+  } catch (err) {
+    return respostaDeRecusa(err, requestId);
+  }
 }

@@ -18,6 +18,8 @@ import type { AuthUser } from "@/lib/auth/types";
 
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+// A porta de autorização (sessão OU token) abre o cliente da sessão; estas rotas só usam o de servidor.
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn(async () => ({})) }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 
 const ORG_ID = "22222222-2222-4222-8222-222222222222";

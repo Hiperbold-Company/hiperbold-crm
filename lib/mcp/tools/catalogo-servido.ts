@@ -49,6 +49,8 @@ export interface CapacidadeServida {
   marcavel: boolean;
   /** Por que não é marcável, em pt-BR para a tela. `null` quando é marcável. */
   motivo_nao_marcavel: string | null;
+  /** Capacidade operada por PESSOA (administração por chave de API): fora de todo pacote. */
+  apenasHumano?: boolean;
 }
 
 export function juntarCatalogoComHandlers(
@@ -78,6 +80,9 @@ export function juntarCatalogoComHandlers(
       pacotes: entrada.pacotes,
       marcavel: !IDS_DO_HARNESS.has(handler.name),
       motivo_nao_marcavel: motivoDoHarness(handler.name),
+      // Operada por pessoa: continua visível e marcável como sempre, mas nenhum pacote a oferece nem a conta no teto
+      // (`selecao-por-pacote.ts`) — o agente não a exerce.
+      ...(entrada.apenasHumano === true ? { apenasHumano: true } : {}),
     };
   });
 }

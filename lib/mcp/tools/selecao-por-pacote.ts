@@ -71,6 +71,12 @@ export interface CapacidadeSelecionavel {
    * capacidade à mão (teste, catálogo de terceiro) não tem como saber disto.
    */
   marcavel?: boolean;
+  /**
+   * `true` = capacidade operada por PESSOA (administrar a empresa por chave de API). O agente nunca a exerce, então
+   * nenhum pacote a oferece nem a conta no teto: ligá-la só gastaria uma das 25 vagas com algo que o modelo não pode
+   * chamar (as ~100 capacidades de administração das fases 1 a 3 da API estouravam o pacote `escalar` sozinhas).
+   */
+  apenasHumano?: boolean;
 }
 
 export type EstadoPacote = "ligado" | "parcial" | "desligado";
@@ -79,7 +85,7 @@ function doPacote(
   catalogo: ReadonlyArray<CapacidadeSelecionavel>,
   pacote: ToolBundle,
 ): CapacidadeSelecionavel[] {
-  return catalogo.filter((c) => c.pacotes.includes(pacote) && c.marcavel !== false);
+  return catalogo.filter((c) => c.pacotes.includes(pacote) && c.marcavel !== false && c.apenasHumano !== true);
 }
 
 /** As que o toggle do pacote liga sozinho — tudo que não é `critico`. */

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { resolveAuthDual, tetoDeEscritaDoToken } from "@/lib/api/auth-dual";
 import { chaveDaRequisicao, comIdempotencia } from "@/lib/api/idempotency";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
@@ -152,7 +153,8 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
       chave === null
         ? ({ tipo: "executou", resposta: await criar(), status: 201 } as const)
         : await comIdempotencia({
-            db: supabase,
+            // Servidor, não a sessão: `idempotency_keys` não é acessível a `authenticated` (0969).
+            db: createAdminClient(),
             organizationId,
             endpoint: ENDPOINT,
             chave,

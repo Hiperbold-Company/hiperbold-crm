@@ -14,6 +14,9 @@ vi.mock("@/lib/api/auth-dual", () => ({
   tetoDeEscritaDoToken: vi.fn(),
 }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
+// O recibo é gravado com o cliente de SERVIDOR (0969): o dublê da vez serve aos dois.
+const servidor = vi.hoisted(() => ({ db: null as unknown }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => servidor.db }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn() }));
 
 /**
@@ -104,7 +107,9 @@ function clienteFake(conversas: Linha[]) {
     };
     return q;
   }
-  return { from: builder } as unknown as SupabaseClient;
+  const cliente = { from: builder } as unknown as SupabaseClient;
+  servidor.db = cliente;
+  return cliente;
 }
 
 function req(url: string, body: unknown, chave?: string) {

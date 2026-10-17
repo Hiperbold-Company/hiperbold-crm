@@ -20,8 +20,10 @@ import { ApiError } from "@/lib/api/types";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { interfaceSettingsSchema } from "@/lib/navigation/interface";
 import {
+  ASSINATURA_DA_ENTRADA,
   atualizarEntradaAutomatica,
   excluirEntradaAutomatica,
+  girarSegredoDaEntrada,
   type DepsDaOperacao,
 } from "@/lib/operacao/entradas-automaticas";
 import {
@@ -31,9 +33,20 @@ import {
   lerConfiguracaoDaOrganizacao,
 } from "@/lib/organizacao/configuracao";
 import {
+  alteracaoDeCampoSchema,
+  alterarCampoDoFunil,
+  criarCampoDoFunil,
+  listarCamposDoFunil,
+  novoCampoSchema,
+  removerCampoDoFunil,
+  type DepsDosCampos,
+} from "@/lib/pipelines/campos-do-funil";
+import {
   aplicarConfiguracaoDoFunil,
   lerConfiguracaoDoFunil,
 } from "@/lib/pipelines/configuracao-do-funil";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { perfilDaEmpresaSchema } from "@/lib/schemas/perfil-da-empresa";
 import { tenantSchema, type PipelineConfigPatch } from "@/lib/schemas/settings";
 import { redirectHttpSchema } from "@/lib/schemas/webhooks";
@@ -122,6 +135,114 @@ export const crmUpdatePipelineConfig: McpToolDefinition<typeof updatePipelineCon
 };
 
 // ---------------------------------------------------------------------------
+// campos personalizados do funil (um a um)
+// ---------------------------------------------------------------------------
+
+function depsDosCampos(ctx: McpContext): DepsDosCampos {
+  return {
+    supabase: ctx.supabase,
+    organizationId: ctx.organizationId,
+    actor: ctx.actor,
+    requestId: ctx.requestId,
+  };
+}
+
+const listFieldsShape = { pipeline_id: z.string().uuid() };
+
+export const crmListPipelineFields: McpToolDefinition<typeof listFieldsShape> = {
+  name: "crm_list_pipeline_fields",
+  description:
+    "Lista os campos personalizados de UM funil (key, label, type, required, options, obrigatorio_em), na ordem da tela.",
+  inputSchema: listFieldsShape,
+  category: "read",
+  requiresRole: "manager",
+  requiresScope: "mcp:read",
+  handler: async (input, ctx) => ({ fields: await listarCamposDoFunil(depsDosCampos(ctx), input.pipeline_id) }),
+};
+
+const obrigatorioEmShape = z.object({
+  etapas: z.array(z.string().uuid()).max(50).optional(),
+  ao_ganhar: z.boolean().optional(),
+  ao_perder: z.boolean().optional(),
+});
+
+const createFieldShape = {
+  pipeline_id: z.string().uuid(),
+  /** Letras, números e underscore; começa por letra. Não muda depois. */
+  key: z.string().min(1).max(40),
+  label: z.string().min(1).max(80),
+  type: z.enum(["text", "textarea", "number", "date", "select", "multiselect", "boolean", "email", "phone", "url"]),
+  required: z.boolean().optional(),
+  /** Obrigatório para select e multiselect; proibido nos outros tipos. */
+  options: z.array(z.object({ value: z.string().min(1), label: z.string().min(1) })).optional(),
+  obrigatorio_em: obrigatorioEmShape.optional(),
+};
+
+export const crmCreatePipelineField: McpToolDefinition<typeof createFieldShape> = {
+  name: "crm_create_pipeline_field",
+  description:
+    "Acrescenta UM campo personalizado ao fim da lista de um funil, sem tocar nos outros (diferente de " +
+    "crm_update_pipeline_config, que SUBSTITUI a lista inteira). key: letras/números/underscore, não muda depois; " +
+    "chave repetida é recusada. select/multiselect exigem options. obrigatorio_em.etapas só aceita etapas do mesmo funil. " +
+    "Exige papel admin.",
+  inputSchema: createFieldShape,
+  category: "write",
+  requiresRole: "admin",
+  requiresScope: "mcp:write",
+  handler: async (input, ctx) => {
+    const { pipeline_id, ...campo } = input;
+    const parsed = novoCampoSchema.safeParse(campo);
+    if (!parsed.success) {
+      throw recusa(ctx, 422, "unprocessable_entity", "Não entendi o campo. Informe key (letras, números, _), label e type.");
+    }
+    return criarCampoDoFunil(depsDosCampos(ctx), pipeline_id, parsed.data);
+  },
+};
+
+const updateFieldShape = {
+  pipeline_id: z.string().uuid(),
+  key: z.string().min(1).max(40),
+  label: z.string().min(1).max(80).optional(),
+  required: z.boolean().optional(),
+  options: z.array(z.object({ value: z.string().min(1), label: z.string().min(1) })).optional(),
+  /** `null` limpa a regra de obrigatoriedade. */
+  obrigatorio_em: obrigatorioEmShape.nullable().optional(),
+};
+
+export const crmUpdatePipelineField: McpToolDefinition<typeof updateFieldShape> = {
+  name: "crm_update_pipeline_field",
+  description:
+    "Altera um campo personalizado existente de um funil: label, required, options (substitui a lista) e/ou " +
+    "obrigatorio_em (null limpa). key e type NÃO mudam — para outro tipo, crie outro campo. Exige papel admin.",
+  inputSchema: updateFieldShape,
+  category: "write",
+  requiresRole: "admin",
+  requiresScope: "mcp:write",
+  handler: async (input, ctx) => {
+    const { pipeline_id, key, ...alteracao } = input;
+    const parsed = alteracaoDeCampoSchema.safeParse(
+      Object.fromEntries(Object.entries(alteracao).filter(([, v]) => v !== undefined)),
+    );
+    if (!parsed.success) throw recusa(ctx, 422, "unprocessable_entity", "Não entendi o que mudar no campo.");
+    return alterarCampoDoFunil(depsDosCampos(ctx), pipeline_id, key, parsed.data);
+  },
+};
+
+const deleteFieldShape = { pipeline_id: z.string().uuid(), key: z.string().min(1).max(40) };
+
+export const crmDeletePipelineField: McpToolDefinition<typeof deleteFieldShape> = {
+  name: "crm_delete_pipeline_field",
+  description:
+    "Remove a definição de um campo personalizado do funil. O valor que os negócios já guardam nele permanece nos " +
+    "dados deles, mas o campo some dos cartões e formulários. Exige papel admin.",
+  inputSchema: deleteFieldShape,
+  category: "write",
+  requiresRole: "admin",
+  requiresScope: "mcp:write",
+  handler: async (input, ctx) => removerCampoDoFunil(depsDosCampos(ctx), input.pipeline_id, input.key),
+};
+
+// ---------------------------------------------------------------------------
 // entradas automáticas (webhook_sources)
 // ---------------------------------------------------------------------------
 
@@ -174,6 +295,29 @@ export const crmDeleteWebhookSource: McpToolDefinition<typeof deleteSourceShape>
   handler: async (input, ctx) => {
     await excluirEntradaAutomatica(deps(ctx), input.source_id);
     return { id: input.source_id, deleted: true };
+  },
+};
+
+const rotateSecretShape = { source_id: z.string().uuid() };
+
+export const crmRotateWebhookSourceSecret: McpToolDefinition<typeof rotateSecretShape> = {
+  name: "crm_rotate_webhook_source_secret",
+  description:
+    "Gira o segredo de assinatura (HMAC-SHA256 do corpo, cabeçalho X-HiperCRM-Signature) de uma entrada automática " +
+    "de contatos: o servidor gera outro, guarda cifrado e o devolve em `secret` UMA ÚNICA VEZ. O segredo ANTERIOR " +
+    "para de valer na hora — o formulário ou servidor que ainda assina com ele passa a receber 401 até ser atualizado. " +
+    "O segredo aparece UMA ÚNICA VEZ: entregue-o a quem configura o formulário, guarde-o FORA desta conversa " +
+    "(cofre de segredos) e não o repita depois.",
+  inputSchema: rotateSecretShape,
+  category: "write",
+  requiresRole: "manager",
+  requiresScope: "mcp:write",
+  handler: async (input, ctx) => {
+    const admin = createAdminClient();
+    const { fonte, segredo } = await girarSegredoDaEntrada(deps(ctx), input.source_id, (texto) =>
+      encryptWebhookSecret(admin, texto),
+    );
+    return { ...fonte, secret: segredo, secret_shown_once: true, signature: ASSINATURA_DA_ENTRADA };
   },
 };
 

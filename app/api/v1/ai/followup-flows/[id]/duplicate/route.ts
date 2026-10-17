@@ -4,106 +4,32 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *
  * Copia rascunho (ou a versão no ar, se o rascunho estiver vazio), gatilho e
  * política de handoff. A cópia nasce SEMPRE `draft`, sem `active_version_id`:
- * duplicar não publica e não passa a mandar mensagem. Inscrições, versões e
- * vínculo com agente ficam no original — armar o clone no agente é o mesmo
- * passo extra da instalação de modelo.
+ * duplicar não publica e não passa a mandar mensagem. Nome recebe sufixo " (cópia)".
  *
- * Nome recebe sufixo " (cópia)" (ou " (cópia N)" se o primeiro já existir).
+ * ⚠️ AQUI SÓ HÁ TRANSPORTE. A regra vive em `lib/followup/administracao.ts`, a mesma das tools MCP.
+ * Auth: sessão OU token `dsk_…` (`manager` + `mcp:write`, como a tela); a organização sai da sessão/da linha do token.
  */
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
-import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
-import { nomeDaCopia } from "@/lib/followup/nome-da-copia";
-import { rascunhoDoFluxo } from "@/lib/followup/rascunho";
-import { traduzir } from "@/lib/i18n/dicionario";
+import { respostaDeRecusa } from "@/lib/api/recusa";
+import { ok } from "@/lib/api/wrappers";
+import { duplicarFluxo } from "@/lib/followup/administracao";
+import { entradaDeFluxo } from "@/lib/followup/porta";
 
 export const dynamic = "force-dynamic";
 
-const SOURCE_COLUMNS =
-  "id, name, draft_graph, trigger_config, handoff_policy, surface, active_version_id";
-
-const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 type RouteCtx = { params: Promise<{ id: string }> };
 
-export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
+export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  const requestId = randomUUID();
   const { id } = await ctx.params;
-  if (!UUID_RX.test(id)) {
-    return fail("invalid_request", "id inválido.", 400, { requestId });
+  const e = await entradaDeFluxo(req, { escrita: true, role: "manager", id });
+  if (e.resposta) return e.resposta;
+  try {
+    return ok(await duplicarFluxo(e.deps, id), { requestId: e.requestId, status: 201 });
+  } catch (err) {
+    return respostaDeRecusa(err, e.requestId);
   }
-
-  const authz = await requireRole("manager", { requestId, resource: "followup_flows" });
-  if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
-
-  const supabase = await createClient();
-  const { data: origem, error: fetchErr } = await supabase
-    .from("followup_flow_pointers")
-    .select(SOURCE_COLUMNS)
-    .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
-    .maybeSingle();
-  if (fetchErr) return falhaInterna("internal_error", fetchErr, { requestId });
-  if (!origem) return fail("not_found", t("Fluxo não encontrado."), 404, { requestId });
-
-  const { data: nomes, error: nomesErr } = await supabase
-    .from("followup_flow_pointers")
-    .select("name")
-    .eq("organization_id", activeOrg.orgId);
-  if (nomesErr) return falhaInterna("internal_error", nomesErr, { requestId });
-
-  const draft_graph = await rascunhoDoFluxo(
-    supabase,
-    origem as { draft_graph: unknown; active_version_id: string | null },
-    activeOrg.orgId,
-  );
-
-  const nome = nomeDaCopia(
-    String(origem.name),
-    (nomes ?? []).map((r) => String((r as { name: string }).name)),
-  );
-
-  const { data: copia, error: insErr } = await supabase
-    .from("followup_flow_pointers")
-    .insert({
-      organization_id: activeOrg.orgId,
-      name: nome,
-      status: "draft",
-      draft_graph,
-      trigger_config: origem.trigger_config,
-      handoff_policy: origem.handoff_policy,
-      surface: origem.surface ?? "followup",
-    })
-    .select("*")
-    .single();
-
-  if (insErr || !copia) {
-    if (insErr?.code === "23505") {
-      return fail("conflict", t("Já existe um fluxo com este nome."), 409, { requestId });
-    }
-    return falhaInterna("internal_error", insErr ?? "followup_flow_duplicate_failed", {
-      requestId,
-    });
-  }
-
-  void audit({
-    action: "followup_flow.duplicated",
-    actorUserId: user.id,
-    organizationId: activeOrg.orgId,
-    resourceType: "followup_flow_pointer",
-    resourceId: copia.id,
-    requestId,
-    metadata: { source_pointer_id: id, name: nome },
-  });
-
-  return ok(copia, { requestId, status: 201 });
 }

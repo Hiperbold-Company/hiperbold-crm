@@ -28,8 +28,11 @@ vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: deps.support 
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: deps.role }));
 vi.mock("@/lib/audit", () => ({ audit: deps.audit }));
 // 0962: a emissão grava pelo cliente de serviço (authenticated não escreve em api_tokens).
+// D-204: antes de emitir, a rota lê a conta no provedor (`auth.admin.getUserById`) para conferir o e-mail provado;
+// aqui é uma conta sem pedido de verificação em aberto (a regra da trava tem teste próprio).
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
+    auth: { admin: { getUserById: async () => ({ data: { user: { id: "human", app_metadata: {} } }, error: null }) } },
     from: () => ({ insert: () => ({ select: () => ({ single: deps.single }) }) }),
   }),
 }));

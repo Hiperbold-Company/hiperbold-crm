@@ -441,6 +441,87 @@ export async function excluirEntradaAutomatica(deps: DepsDaOperacao, id: string)
   });
 }
 
+/** Cifra o segredo com o cliente de servidor; `null` quando a chave de cifra da instalação não está ativa. */
+export type CifradorDeSegredo = (texto: string) => Promise<string | null>;
+
+/** Como quem envia assina o corpo — vai junto do segredo na resposta que o entrega. */
+export const ASSINATURA_DA_ENTRADA = {
+  header: "X-HiperCRM-Signature",
+  algorithm: "HMAC-SHA256 hex do corpo cru",
+} as const;
+
+/** O segredo HMAC novo: 256 bits aleatórios em hex (64 caracteres, acima do piso de 16 do schema). */
+export function gerarSegredoDeEntrada(): string {
+  return randomBytes(32).toString("hex");
+}
+
+function recusaDeCifra(requestId: string): ApiError {
+  return new ApiError(
+    422,
+    "encryption_unavailable",
+    undefined,
+    requestId,
+    "Não foi possível guardar o segredo com segurança: a chave de cifra desta instalação não está ativa. " +
+      "Quem administra o servidor resolve rodando o update.sh, que gera e ativa a chave.",
+  );
+}
+
+/**
+ * Gera um segredo novo e o devolve JÁ cifrado junto do texto claro. O texto claro é do chamador:
+ * só pode sair na resposta que o pediu, uma vez (nunca em log, audit nem recibo de idempotência).
+ */
+export async function novoSegredoDeEntrada(
+  requestId: string,
+  cifrar: CifradorDeSegredo,
+): Promise<{ claro: string; cifrado: string }> {
+  const claro = gerarSegredoDeEntrada();
+  const cifrado = await cifrar(claro);
+  if (cifrado === null) throw recusaDeCifra(requestId);
+  return { claro, cifrado };
+}
+
+/**
+ * Gira o segredo HMAC de uma entrada automática: gera outro, grava cifrado e devolve o texto claro
+ * UMA vez. A partir daí o segredo antigo para de valer na hora — o formulário ou o servidor que
+ * assina com ele passa a receber 401 até ser atualizado. Entrada de outra organização responde 404.
+ */
+export async function girarSegredoDaEntrada(
+  deps: DepsDaOperacao,
+  id: string,
+  cifrar: CifradorDeSegredo,
+): Promise<{ fonte: FonteVisivel; segredo: string }> {
+  const antes = await fonteDaOrg(deps, id);
+  const { claro, cifrado } = await novoSegredoDeEntrada(deps.requestId, cifrar);
+
+  const { data: atualizada, error } = await deps.supabase
+    .from("webhook_sources")
+    .update({
+      secret_encrypted: cifrado,
+      updated_at: new Date().toISOString(),
+      ...autoriaDaMudanca(deps.actor),
+    })
+    .eq("id", id)
+    .eq("organization_id", deps.organizationId)
+    .select(COLUNAS_DA_FONTE)
+    .single();
+  if (error || !atualizada) {
+    throw erroDePlanoOuGenerico(error, deps.requestId, "webhook_source_update_failed");
+  }
+
+  await audit({
+    action: "webhook.source_secret_rotated",
+    ...colunasDeAtorNoAudit(deps.actor),
+    organizationId: deps.organizationId,
+    resourceType: "webhook_source",
+    resourceId: id,
+    requestId: deps.requestId,
+    // Só o fato da troca — o valor, claro ou cifrado, nunca vai para o audit log.
+    metadata: { name: antes.name, actor_type: deps.actor.type },
+  });
+
+  return { fonte: semSegredo(atualizada as unknown as Record<string, unknown>, antes.path_token), segredo: claro };
+}
+
 export interface RecebimentoDaEntrada {
   id: string;
   recebido_em: string;

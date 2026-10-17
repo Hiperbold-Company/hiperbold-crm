@@ -38,7 +38,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const RAIZ = process.cwd();
-const PUBLISH = path.join(RAIZ, "app/api/v1/ai/followup-flows/[id]/publish/route.ts");
+// A regra de publicar mora no núcleo compartilhado (rota e tool MCP) desde a fase 3 da API.
+const PUBLISH = path.join(RAIZ, "lib/followup/administracao.ts");
 const SELETOR = path.join(RAIZ, "app/app/ai/followups/[id]/_components/TriggerConfigControl.tsx");
 
 function kindsComMotor(): string[] {

@@ -4,17 +4,18 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * PATCH /api/v1/ai/agents/:id/versions/:vid  — edit (admin) — apenas se status='draft'.
  *
  * Spec 10 §4.4. Versões published/superseded/archived são imutáveis (409).
+ *
+ * Auth: sessão OU token `dsk_…` (`lib/api/auth-dual-admin.ts`): o MESMO piso de papel da sessão,
+ * `mcp:read` para ler e `mcp:write` para escrever; organização da sessão/da linha do token, nunca do body.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
+import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { versionPatchSchema } from "@/lib/ai/agents/validation";
-import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
@@ -25,23 +26,27 @@ const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 type Ctx = { params: Promise<{ id: string; vid: string }> };
 
-export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
+export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
   const requestId = randomUUID();
   const { id, vid } = await ctx.params;
   if (!UUID_RX.test(id) || !UUID_RX.test(vid)) {
     return fail("invalid_request", "ids inválidos.", 400, { requestId });
   }
 
-  const authz = await requireRole("manager", { requestId, resource: "ai_agents" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "ai_agents",
+    role: "manager",
+    escrita: false,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { org: activeOrg } = authz;
+  const t = traducaoDe(authz);
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
   const { data, error } = await supabase
     .from("ai_agent_versions")
     .select(VERSION_COLUMNS)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .eq("agent_id", id)
     .eq("id", vid)
     .maybeSingle();
@@ -61,10 +66,14 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
     return fail("invalid_request", "ids inválidos.", 400, { requestId });
   }
 
-  const authz = await requireRole("admin", { requestId, resource: "ai_agents" });
+  const authz = await autorizarAdministracao(req, {
+    requestId,
+    resource: "ai_agents",
+    role: "admin",
+    escrita: true,
+  });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user: authUser, org: activeOrg } = authz;
+  const t = traducaoDe(authz);
 
   let raw: unknown;
   try {
@@ -89,7 +98,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
     .from("ai_agent_versions")
     .select("id, status, agent_id, organization_id, followup")
     .eq("id", vid)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .eq("agent_id", id)
     .maybeSingle();
 
@@ -136,7 +145,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
     .from("ai_agent_versions")
     .update(update)
     .eq("id", vid)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .select(VERSION_COLUMNS)
     .single();
 
@@ -146,8 +155,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   void audit({
     action: "ai_agent.version_updated",
-    actorUserId: authUser.id,
-    organizationId: activeOrg.orgId,
+    ...atorDoAudit(authz),
+    organizationId: authz.organizationId,
     resourceType: "ai_agent_version",
     resourceId: vid,
     requestId,

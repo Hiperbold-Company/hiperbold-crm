@@ -2,45 +2,23 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * POST /api/v1/team/[user_id]/reactivate — devolve o acesso de um membro revogado.
  *
- * ─── Por que esta rota precisou existir ─────────────────────────────────────
+ * Revogar era uma porta que só abria por fora: a única forma de devolver o membro era emitir um convite novo —
+ * caminho longo, cheio de beco (medido em 2026-09-10). Reativar é o inverso exato de revogar (espelho de
+ * `../revoke/route.ts`: mesmos guardrails, mesma forma de resposta, mesma trilha).
  *
- * Revogar era uma porta que só abria por fora. Medido numa instalação real em
- * 2026-09-10, com uma pessoa de verdade do outro lado: quem administra revoga,
- * o membro some da lista, e a ÚNICA forma de devolvê-lo era emitir um convite
- * novo — que o RPC aceita (ele limpa `revoked_at` quando o convite é posterior
- * à revogação), mas cujo caminho é longo e cheio de beco: quem já tem conta é
- * empurrado para "Criar conta", que falha com *"Tente novamente"* e nunca vai
- * funcionar; e quem entra pelo login cai na tela de acesso revogado, que só
- * oferece Sair.
+ * NÃO reaproveita `fn_accept_team_invite`: aquela função é o ACEITE, ato de quem foi convidado; aqui quem age é
+ * quem ADMINISTRA, sobre um vínculo já aceito um dia (reescrever `accepted_at` apagaria quando a pessoa entrou).
+ * NÃO devolve papel diferente do que a pessoa tinha: reativar é desfazer a revogação, não promover.
  *
- * Reativar é o inverso exato de revogar, e este arquivo é o espelho de
- * `../revoke/route.ts` — mesmos guardrails, mesma forma de resposta, mesma
- * trilha.
- *
- * ─── Por que NÃO reaproveita `fn_accept_team_invite` ────────────────────────
- *
- * Aquela função existe para o ACEITE, e o aceite é ato de quem foi convidado:
- * ela exige um convite assinado, compara com `revoked_at` e grava
- * `accepted_at = now()`. Aqui quem age é quem ADMINISTRA, sobre um vínculo que
- * já foi aceito um dia. Passar por lá exigiria emitir um convite que ninguém
- * vai receber, e reescreveria a data de aceite — apagando quando a pessoa de
- * fato entrou na equipe.
- *
- * ─── O que esta rota NÃO faz ────────────────────────────────────────────────
- *
- * Não devolve papel diferente do que a pessoa tinha. Reativar é desfazer a
- * revogação, não promover: trocar papel já tem rota própria
- * (`../role/route.ts`), e juntar as duas faria uma reativação distraída virar
- * promoção silenciosa.
+ * ⚠️ AQUI SÓ HÁ TRANSPORTE. A regra vive em `lib/team/administracao.ts`, a mesma das tools MCP.
+ * Auth: sessão OU token (`role:admin` + `mcp:write`).
  */
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
-import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
-import { audit } from "@/lib/audit";
-import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { respostaDeRecusa } from "@/lib/api/recusa";
+import { ok } from "@/lib/api/wrappers";
+import { reativarAcessoDoMembro } from "@/lib/team/administracao";
+import { entradaDeEquipe } from "@/lib/team/porta";
 
 export const dynamic = "force-dynamic";
 
@@ -51,64 +29,12 @@ export async function POST(
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  const requestId = randomUUID();
   const { user_id: targetUserId } = await ctx.params;
-
-  // Sessão OU token (`role:admin` + `mcp:write`); org do token vem da linha dele.
-  const authz = await autorizarAdministracao(req, {
-    requestId,
-    resource: "team",
-    role: "admin",
-    escrita: true,
-  });
-  if (!authz.ok) return authz.response;
-  const t = traducaoDe(authz);
-  const ator = atorDoAudit(authz);
-  const activeOrg = { orgId: authz.organizationId };
-
-  const supabase = authz.supabase;
-
-  const { data: target, error: fetchErr } = await supabase
-    .from("user_organizations")
-    .select("id, user_id, role, revoked_at")
-    .eq("organization_id", activeOrg.orgId)
-    .eq("user_id", targetUserId)
-    .maybeSingle();
-  if (fetchErr) return falhaInterna("internal_error", fetchErr, { requestId });
-  if (!target) return fail("not_found", t("Membro não encontrado."), 404, { requestId });
-
-  // Idempotente, na mesma forma que `revoke` usa para o caso simétrico: dois
-  // cliques seguidos não podem virar erro na cara de quem administra.
-  if (!target.revoked_at) {
-    return ok({ user_id: targetUserId, already_active: true }, { requestId });
+  const e = await entradaDeEquipe(req);
+  if (e.resposta) return e.resposta;
+  try {
+    return ok(await reativarAcessoDoMembro(e.deps, targetUserId), { requestId: e.requestId });
+  } catch (err) {
+    return respostaDeRecusa(err, e.requestId);
   }
-
-  const nowIso = new Date().toISOString();
-  // O vínculo só é gravado pelo servidor (migration 0929, D-125): o admin já foi conferido acima.
-  const { error: updErr } = await createAdminClient()
-    .from("user_organizations")
-    .update({ revoked_at: null, updated_at: nowIso })
-    .eq("id", target.id)
-    .eq("organization_id", activeOrg.orgId);
-  if (updErr) {
-    // Fase F3, decisão 4 (item 2): reativação pelo ADMIN é "vínculo direto",
-    // não aceite de convite — nenhuma das três isenções do gatilho vale
-    // aqui, então bloqueia igual. PT402 pelo `code`, nunca pelo texto do
-    // Postgres.
-    const recusa = recusaDoPlano(updErr);
-    if (recusa) return fail("plano_limite_atingido", recusa.mensagem, STATUS_RECUSA_DO_PLANO, { requestId });
-    return falhaInterna("internal_error", updErr, { requestId });
-  }
-
-  await audit({
-    action: "member.reactivated",
-    ...ator,
-    organizationId: activeOrg.orgId,
-    resourceType: "membership",
-    resourceId: target.id,
-    requestId,
-    metadata: { target_user_id: targetUserId, restored_role: target.role },
-  });
-
-  return ok({ user_id: targetUserId, reactivated_at: nowIso }, { requestId });
 }

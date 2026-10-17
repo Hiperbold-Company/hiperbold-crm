@@ -331,7 +331,7 @@ describe("credenciais de IA: a listagem", () => {
       ReturnType<typeof createClient>
     >);
 
-    const res = await listar();
+    const res = await listar(new NextRequest("http://localhost/api/v1/ai/credentials"));
     const corpo = (await res.json()) as { data: typeof linhas };
     expect(corpo.data.map((l) => l.validation_error)).toEqual([
       DESTINO_RECUSADO,

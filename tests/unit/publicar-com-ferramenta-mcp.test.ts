@@ -38,7 +38,8 @@ describe("capacidadesDesconhecidas — id de catálogo, externo e inventado", ()
 // ─── A catraca: nenhuma das três conferências volta a comparar à mão ────────
 
 const ARQUIVOS_DE_PUBLICACAO = [
-  "app/api/v1/ai/agents/[id]/publish/route.ts",
+  // A conferência do POST .../publish mora no núcleo que a rota e a tool MCP compartilham.
+  "lib/ai/agents/administracao.ts",
   "app/app/ai/agents/[id]/_actions.ts",
 ];
 
@@ -61,7 +62,7 @@ describe("nenhuma conferência de publicação volta a comparar tool_ids com VAL
   it("as três conferências chamam validarEscopoDaVersao para tool_ids antes de publicar", () => {
     const publishRoute = readFileSync(join(raiz, ARQUIVOS_DE_PUBLICACAO[0]!), "utf8");
     const actions = readFileSync(join(raiz, ARQUIVOS_DE_PUBLICACAO[1]!), "utf8");
-    expect(publishRoute).toMatch(/validarEscopoDaVersao\(admin, activeOrg\.orgId, \{\s*\n\s*tool_ids/);
+    expect(publishRoute).toMatch(/validarEscopoDaVersao\(deps\.admin, deps\.organizationId, \{\s*\n\s*tool_ids/);
     expect((actions.match(/validarEscopoDaVersao\(admin, activeOrg\.orgId, \{\s*\n\s*tool_ids/g) ?? []).length).toBe(2);
   });
 });

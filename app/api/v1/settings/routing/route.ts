@@ -12,72 +12,57 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * knobs (max_retries, backoff_seconds) são CONFIG — o worker de G5-02 LÊ daqui;
  * nunca constantes hardcoded no worker (doutrina). org de fonte confiável.
  *
- * POR QUE `visibility_mode` ENTRA AQUI (issue #144). A matriz de papéis da spec
- * 13 §4 trata as duas como a MESMA linha — "config de atendimento/roteamento:
- * manager+" — e a §3.5 as declara no mesmo bloco. Separar em duas rotas com o
- * mesmo gate seria inventar uma fronteira que a spec não tem, e deixaria a tela
- * fazendo dois round-trips para salvar uma decisão só ("como distribuo, e quem
- * enxerga o quê").
+ * `visibility_mode` entra aqui (issue #144) porque a spec 13 §4 trata as duas como a MESMA linha
+ * ("config de atendimento/roteamento: manager+"), e fica em `settings.visibility_mode`, irmão de
+ * `settings.routing` e não dentro dele: é esse caminho exato que `fn_can_view_lead`/
+ * `fn_can_view_conversation` leem na RLS.
  *
- * Até esta mudança, `visibility_mode` era LIDO em `app/app/layout.tsx` e escrito
- * por NINGUÉM: a restrição existia na RLS, no schema e na doutrina, e não havia
- * caminho no produto para ligá-la — só `UPDATE` à mão no banco. Num produto
- * self-host isso equivale a não existir.
- *
- * `visibility_mode` fica em `settings.visibility_mode`, irmão de
- * `settings.routing` e não dentro dele: é esse caminho exato que
- * `fn_can_view_lead`/`fn_can_view_conversation` leem na RLS.
+ * ⚠️ AQUI SÓ HÁ TRANSPORTE. A regra (inclusive POR QUE a escrita vai pelo cliente de servidor — a policy de
+ * escrita de `organizations` é de platform admin) vive em `lib/organizacao/atendimento.ts`, a mesma das
+ * tools MCP. Auth: sessão OU token `dsk_…` (`manager` + `mcp:read` / `mcp:write`); a organização sai da
+ * sessão/da linha do token.
  */
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
+import { entradaDeAdministracao } from "@/lib/api/porta-admin";
 import { ApiError } from "@/lib/api/types";
-import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
-import { atendimentoConfigPatchSchema, routingConfigSchema, validateRequest } from "@/lib/schemas";
-import { mesclarSettingsDeAtendimento } from "@/lib/schemas/routing";
-import { DEFAULT_VISIBILITY_MODE, type VisibilityMode } from "@/lib/auth/types";
+import { respostaDeRecusa } from "@/lib/api/recusa";
+import { fail, ok } from "@/lib/api/wrappers";
+import { gravarAtendimento, lerAtendimento, type DepsDeAtendimento } from "@/lib/organizacao/atendimento";
+import { atendimentoConfigPatchSchema, validateRequest } from "@/lib/schemas";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { atualizarSettingDaOrganizacao } from "@/lib/organizations/atualizar-setting";
-import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-/** Default aplicado quando settings.routing ainda não existe (G1-06b). */
-const DEFAULT_ROUTING = routingConfigSchema.parse({});
+async function entrada(req: NextRequest, escrita: boolean) {
+  const e = await entradaDeAdministracao(req, { resource: "settings_routing", role: "manager", escrita });
+  if (e.resposta) return { resposta: e.resposta } as const;
+  const deps: DepsDeAtendimento = {
+    supabase: e.authz.supabase,
+    admin: createAdminClient(),
+    organizationId: e.authz.organizationId,
+    actor: e.authz.actor,
+    requestId: e.requestId,
+  };
+  return { deps, requestId: e.requestId, resposta: undefined } as const;
+}
 
-export async function GET(_req: NextRequest): Promise<Response> {
-  const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "settings_routing" });
-  if (!authz.ok) return authz.response;
-  const { org: activeOrg } = authz;
-
-  const supabase = await createClient();
-  const { data: orgRow, error } = await supabase
-    .from("organizations")
-    .select("settings")
-    .eq("id", activeOrg.orgId)
-    .maybeSingle();
-  if (error) return falhaInterna("internal_error", error, { requestId });
-
-  const settings = (orgRow?.settings as Record<string, unknown> | null) ?? {};
-  const routing = routingConfigSchema.catch(DEFAULT_ROUTING).parse(settings.routing ?? {});
-  // O default é o MESMO de `lib/auth/types.ts`, que é o que a RLS assume quando
-  // a chave não existe (`coalesce(..., 'own_and_unassigned')`). Divergir aqui
-  // faria a tela mostrar um estado que o banco não pratica.
-  const visibility_mode = (settings.visibility_mode as VisibilityMode | undefined) ?? DEFAULT_VISIBILITY_MODE;
-  return ok({ ...routing, visibility_mode }, { requestId });
+export async function GET(req: NextRequest): Promise<Response> {
+  const e = await entrada(req, false);
+  if (e.resposta) return e.resposta;
+  try {
+    return ok(await lerAtendimento(e.deps), { requestId: e.requestId });
+  } catch (err) {
+    return respostaDeRecusa(err, e.requestId);
+  }
 }
 
 export async function PATCH(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "settings_routing" });
-  if (!authz.ok) return authz.response;
-  const { user: authUser, org: activeOrg } = authz;
+  const e = await entrada(req, true);
+  if (e.resposta) return e.resposta;
 
   let input;
   try {
@@ -86,81 +71,14 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     if (err instanceof ApiError) {
       return fail(err.code, err.message, err.status, {
         details: err.details as Record<string, unknown> | undefined,
-        requestId,
+        requestId: e.requestId,
       });
     }
     throw err;
   }
-
-/**
- * A ESCRITA EM `organizations` VAI PELO ADMIN CLIENT — e não é preguiça.
- *
- * A única policy de escrita da tabela é `orgs_write_platform_admin`, com
- * `USING (fn_is_platform_admin())`. Pelo client de sessão, o UPDATE de quem não
- * é super-admin de plataforma casa ZERO linhas — e o PostgREST devolve sucesso,
- * porque "nenhuma linha casou o filtro" não é erro. Resultado: a tela dizia
- * "salvo", nada era gravado, e recarregar mostrava o estado antigo.
- *
- * Medido em Postgres com o baseline aplicado (issue #144): sob `authenticated`
- * com o JWT de um manager, `update organizations` devolve 0 linhas; sob
- * postgres, 1. Ninguém tinha notado porque o dono do repo e o owner criado pelo
- * `bootstrap-owner.ts` SÃO platform_admin — quem tropeça é o segundo admin
- * convidado e qualquer manager.
- *
- * O gate continua sendo o de cima (papel resolvido de fonte confiável), e o
- * filtro por `organization_id` é explícito, como a doutrina exige de todo
- * handler que usa service role.
- */
-  const supabase = createAdminClient();
-  const { data: orgRow, error: readErr } = await supabase
-    .from("organizations")
-    .select("settings")
-    .eq("id", activeOrg.orgId)
-    .maybeSingle();
-  if (readErr) return falhaInterna("internal_error", readErr, { requestId });
-
-  const currentSettings = (orgRow?.settings as Record<string, unknown> | null) ?? {};
-  const { visibility_mode } = input;
-  // A mescla (não-destrutiva em dois níveis) mora em `lib/schemas/routing.ts`,
-  // onde o teste a lê pela mesma função.
-  const { settings: nextSettings, routing } = mesclarSettingsDeAtendimento(currentSettings, input);
-
-  // D-132: só as chaves que este PATCH mexe, gravadas pelo banco. Gravar o
-  // `settings` inteiro apagaria o que outro escritor (MFA, marca, IA) salvou
-  // entre a leitura acima e esta escrita.
-  const gravouRouting = await atualizarSettingDaOrganizacao(supabase, activeOrg.orgId, ["routing"], nextSettings.routing);
-  if (!gravouRouting.ok) {
-    return fail("internal_error", gravouRouting.detalhe ?? gravouRouting.motivo, 500, { requestId });
+  try {
+    return ok(await gravarAtendimento(e.deps, input), { requestId: e.requestId });
+  } catch (err) {
+    return respostaDeRecusa(err, e.requestId);
   }
-  if (visibility_mode !== undefined) {
-    const gravouVisibilidade = await atualizarSettingDaOrganizacao(
-      supabase,
-      activeOrg.orgId,
-      ["visibility_mode"],
-      visibility_mode,
-    );
-    if (!gravouVisibilidade.ok) {
-      return fail("internal_error", gravouVisibilidade.detalhe ?? gravouVisibilidade.motivo, 500, { requestId });
-    }
-  }
-
-  void audit({
-    action: "routing.config_changed",
-    actorUserId: authUser.id,
-    organizationId: activeOrg.orgId,
-    resourceType: "organization",
-    resourceId: activeOrg.orgId,
-    requestId,
-    metadata: { routing, ...(visibility_mode !== undefined ? { visibility_mode } : {}) },
-  });
-
-  return ok(
-    {
-      ...routing,
-      visibility_mode:
-        visibility_mode ??
-        ((currentSettings.visibility_mode as VisibilityMode | undefined) ?? DEFAULT_VISIBILITY_MODE),
-    },
-    { requestId },
-  );
 }

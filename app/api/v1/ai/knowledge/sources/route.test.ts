@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import type { AuthUser } from "@/lib/auth/types";
 
@@ -69,6 +70,12 @@ beforeEach(() => {
     orgId: ORG_ID,
     name: "Org",
     role: "manager",
+  } as never);
+  // A porta (sessão OU token) resolve a sessão por `requireRole`.
+  vi.mocked(requireRole).mockResolvedValue({
+    ok: true,
+    user: { id: "11111111-1111-4111-8111-111111111111", idioma: "pt-BR" },
+    org: { orgId: ORG_ID, name: "Org", role: "manager" },
   } as never);
 });
 
