@@ -22,6 +22,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logger } from "@/lib/logger";
+import { mesclarTags } from "@/lib/webhooks/inbound";
 
 /** O mínimo de um lead do contato, no funil da fonte, para decidir. */
 export interface LeadDoContatoNoFunil {
@@ -111,4 +112,87 @@ export async function decidirRecadastroDoContato(
   if (contato?.is_anonymized === true) return { acao: "criar" };
 
   return decisao;
+}
+
+/**
+ * As etiquetas do recadastro entram na UNIÃO das do lead que já existe (decisão
+ * do dono do produto, 17/10/2026). É a ÚNICA escrita em `crm_leads` do recadastro
+ * e só acontece quando há etiqueta NOVA:
+ *
+ *   - o UPDATE toca só `tags` (e o `updated_at` do gatilho). Etapa e status ficam
+ *     como estão, então `trg_emit_event_on_lead_change` (que só olha status e
+ *     dono) não emite won/lost/reopened/assigned, e nenhum gatilho de etapa
+ *     dispara. Cobre o `eq("status", "open")`: um lead que fechou entre a
+ *     decisão e aqui não é mexido;
+ *   - emite `lead.tag_added` com o que foi acrescentado, como toda outra via que
+ *     põe etiqueta em lead (automação, API, lote) — é o evento que regra de
+ *     automação por etiqueta escuta.
+ *
+ * Falha ABERTA: o recadastro não cai por causa de etiqueta; o erro vai para o log.
+ * `organization_id` vem da FONTE.
+ */
+export async function mesclarTagsNoLead(
+  admin: SupabaseClient,
+  alvo: { organizationId: string; leadId: string; tags: readonly string[]; sourceId: string; requestId: string },
+): Promise<{ adicionadas: string[] }> {
+  if (alvo.tags.length === 0) return { adicionadas: [] };
+  try {
+    const { data: lead, error: eLeitura } = await admin
+      .from("crm_leads")
+      .select("tags")
+      .eq("organization_id", alvo.organizationId)
+      .eq("id", alvo.leadId)
+      .maybeSingle();
+    if (eLeitura || !lead) {
+      logger.error("[webhooks.recadastro] não foi possível ler as etiquetas do lead", {
+        organizationId: alvo.organizationId,
+        leadId: alvo.leadId,
+        errorCode: eLeitura?.code,
+      });
+      return { adicionadas: [] };
+    }
+    const existentes = ((lead as { tags?: string[] | null }).tags ?? []).filter((t) => typeof t === "string");
+    const { tags, adicionadas } = mesclarTags(existentes, alvo.tags);
+    if (adicionadas.length === 0) return { adicionadas: [] };
+
+    const { error: eGravar } = await admin
+      .from("crm_leads")
+      .update({ tags })
+      .eq("organization_id", alvo.organizationId)
+      .eq("id", alvo.leadId)
+      .eq("status", "open");
+    if (eGravar) {
+      logger.error("[webhooks.recadastro] não foi possível gravar as etiquetas do lead", {
+        organizationId: alvo.organizationId,
+        leadId: alvo.leadId,
+        errorCode: eGravar.code,
+        errorMessage: eGravar.message,
+      });
+      return { adicionadas: [] };
+    }
+
+    const { error: eEvento } = await admin.rpc("emit_event", {
+      p_event_type: "lead.tag_added",
+      p_entity_kind: "crm_lead",
+      p_entity_id: alvo.leadId,
+      p_payload: { added_tags: adicionadas, tags, service_origin: null },
+      p_metadata: { request_id: alvo.requestId, actor_type: "webhook_source", actor_id: alvo.sourceId },
+      p_organization_id: alvo.organizationId,
+    });
+    if (eEvento) {
+      logger.error("[webhooks.recadastro] emit_event lead.tag_added falhou", {
+        organizationId: alvo.organizationId,
+        leadId: alvo.leadId,
+        errorMessage: eEvento.message,
+      });
+    }
+    return { adicionadas };
+  } catch (err) {
+    logger.error("[webhooks.recadastro] etiquetas do recadastro falharam", {
+      organizationId: alvo.organizationId,
+      leadId: alvo.leadId,
+      error: err instanceof Error ? err.message : "desconhecido",
+    });
+    return { adicionadas: [] };
+  }
 }

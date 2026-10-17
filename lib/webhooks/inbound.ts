@@ -5,6 +5,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
+import { cnpjValido, cpfValido, somenteDigitos } from "@/lib/documentos/cpf-cnpj";
 
 export interface FieldMap {
   name?: string[];
@@ -41,6 +42,163 @@ export function normalizePhoneBR(raw: unknown): string | null {
   return e164 ? canonicalPhoneBR(e164) : null;
 }
 
+// ─── Campos RESERVADOS do envio (decisão do dono do produto, 17/10/2026) ───────
+//
+// `tags` e `cpf` não são dado livre do formulário: têm destino próprio (a coluna
+// `crm_leads.tags` e o par cifrado `contacts.cpf_encrypted`/`cpf_hash`) e por isso
+// NUNCA viram campo personalizado. Casam por chave sem diferenciar caixa.
+
+/** Quantas etiquetas um único envio pode pôr; o que passa disso é descartado. */
+export const MAX_TAGS_POR_ENVIO = 20;
+/** Tamanho máximo de cada etiqueta (o mesmo teto do lead); o que passa é cortado. */
+export const MAX_CARACTERES_DA_TAG = 60;
+/** Teto de etiquetas de um lead depois de unir as do recadastro (o mesmo do schema do lead). */
+export const MAX_TAGS_DO_LEAD = 50;
+
+const CHAVES_DE_TAGS = new Set(["tags", "tags[]"]);
+const CHAVES_DE_CPF = new Set(["cpf", "cpf_cnpj"]);
+
+function ehChaveReservada(chave: string): boolean {
+  const k = chave.toLowerCase();
+  return CHAVES_DE_TAGS.has(k) || CHAVES_DE_CPF.has(k);
+}
+
+/**
+ * Etiquetas do envio: lista de textos, ou um texto separado por `,` ou `|`.
+ * Apara, descarta o vazio, corta cada uma em 60 caracteres, tira repetida SEM
+ * diferenciar caixa (a primeira grafia vence, a caixa original é preservada) e
+ * para em 20.
+ */
+export function parseTagsReservadas(valor: unknown): string[] {
+  const pedacos: string[] = [];
+  const juntar = (v: unknown): void => {
+    if (typeof v === "string") pedacos.push(...v.split(/[,|]/));
+    else if (typeof v === "number") pedacos.push(String(v));
+  };
+  if (Array.isArray(valor)) valor.forEach(juntar);
+  else juntar(valor);
+
+  const vistas = new Set<string>();
+  const saida: string[] = [];
+  for (const crua of pedacos) {
+    const tag = crua.trim().slice(0, MAX_CARACTERES_DA_TAG).trim();
+    if (tag === "") continue;
+    const chave = tag.toLowerCase();
+    if (vistas.has(chave)) continue;
+    vistas.add(chave);
+    saida.push(tag);
+    if (saida.length >= MAX_TAGS_POR_ENVIO) break;
+  }
+  return saida;
+}
+
+/** As etiquetas reservadas do payload (chave `tags` ou `tags[]`, caixa livre). */
+export function lerTagsReservadas(payload: Record<string, unknown>): string[] {
+  const juntas: unknown[] = [];
+  for (const [chave, valor] of Object.entries(payload)) {
+    if (!CHAVES_DE_TAGS.has(chave.toLowerCase())) continue;
+    if (Array.isArray(valor)) juntas.push(...valor);
+    else juntas.push(valor);
+  }
+  return parseTagsReservadas(juntas);
+}
+
+/**
+ * União das etiquetas que o lead já tem com as do envio: as existentes ficam
+ * como estão (e na ordem), as novas entram no fim, sem repetir nenhuma que já
+ * exista com outra caixa. Devolve só o que foi ACRESCENTADO, para o evento.
+ */
+export function mesclarTags(
+  existentes: readonly string[],
+  novas: readonly string[],
+): { tags: string[]; adicionadas: string[] } {
+  const tags = [...existentes];
+  const vistas = new Set(existentes.map((t) => t.toLowerCase()));
+  const adicionadas: string[] = [];
+  for (const nova of novas) {
+    if (tags.length >= MAX_TAGS_DO_LEAD) break;
+    const chave = nova.toLowerCase();
+    if (vistas.has(chave)) continue;
+    vistas.add(chave);
+    tags.push(nova);
+    adicionadas.push(nova);
+  }
+  return { tags, adicionadas };
+}
+
+export type DocumentoDoEnvio =
+  | { estado: "ausente" }
+  | { estado: "cpf"; cpf: string }
+  | { estado: "descartado"; motivo: "cnpj" | "invalido" };
+
+/**
+ * O documento do envio (`cpf`, alias `cpf_cnpj`). Só CPF com dígito verificador
+ * correto é aceito; CNPJ e qualquer outra coisa são descartados — e o descarte é
+ * silencioso para quem enviou. O valor NUNCA sai daqui em mensagem de erro.
+ */
+export function lerDocumentoReservado(payload: Record<string, unknown>): DocumentoDoEnvio {
+  let visto = false;
+  let motivo: "cnpj" | "invalido" = "invalido";
+  for (const [chave, valor] of Object.entries(payload)) {
+    if (!CHAVES_DE_CPF.has(chave.toLowerCase())) continue;
+    let texto: string | null = null;
+    if (typeof valor === "string") texto = valor;
+    // Número JSON perde o zero à esquerda: devolve ao tamanho de CPF.
+    else if (typeof valor === "number" && Number.isInteger(valor) && valor > 0) texto = String(valor).padStart(11, "0");
+    if (texto === null || texto.trim() === "") continue;
+    visto = true;
+    const digitos = somenteDigitos(texto);
+    if (digitos.length === 11 && cpfValido(digitos)) return { estado: "cpf", cpf: digitos };
+    if (digitos.length === 14 && cnpjValido(digitos)) motivo = "cnpj";
+  }
+  return visto ? { estado: "descartado", motivo } : { estado: "ausente" };
+}
+
+/**
+ * Tira o documento do payload (muta) para que ele NÃO chegue a nenhum registro:
+ * log de recebimento, histórico de captação, campo personalizado. Devolve se
+ * havia alguma chave de documento — quem precisa regravar o corpo cru sabe então
+ * que tem de limpá-lo também.
+ */
+export function removerDocumentoDoPayload(payload: Record<string, unknown>): boolean {
+  let havia = false;
+  for (const chave of Object.keys(payload)) {
+    if (CHAVES_DE_CPF.has(chave.toLowerCase())) {
+      delete payload[chave];
+      havia = true;
+    }
+  }
+  return havia;
+}
+
+/** O corpo cru SEM as chaves de documento, para o log forense. */
+export function corpoSemDocumento(rawBody: string, ehFormulario: boolean, payloadLimpo: Record<string, unknown>): string {
+  if (!ehFormulario) return JSON.stringify(payloadLimpo);
+  const params = new URLSearchParams(rawBody);
+  for (const chave of [...new Set([...params.keys()])]) {
+    if (CHAVES_DE_CPF.has(chave.toLowerCase())) params.delete(chave);
+  }
+  return params.toString();
+}
+
+/**
+ * Form-urlencoded para objeto. Chave repetida vale o último valor — exceto as
+ * de etiqueta (`tags` / `tags[]`), que se juntam numa lista: é assim que um
+ * formulário com vários marcadores envia.
+ */
+export function payloadDeFormulario(rawBody: string): Record<string, unknown> {
+  const saida: Record<string, unknown> = {};
+  for (const [chave, valor] of new URLSearchParams(rawBody)) {
+    if (CHAVES_DE_TAGS.has(chave.toLowerCase())) {
+      const anterior = saida["tags"];
+      saida["tags"] = Array.isArray(anterior) ? [...anterior, valor] : [valor];
+    } else {
+      saida[chave] = valor;
+    }
+  }
+  return saida;
+}
+
 function firstMatch(payload: Record<string, unknown>, aliases: string[]): { key: string; value: string } | null {
   const lowered = new Map(Object.keys(payload).map((k) => [k.toLowerCase(), k]));
   for (const alias of aliases) {
@@ -72,6 +230,7 @@ export function mapInboundPayload(
   const source_metadata: Record<string, string> = {};
   for (const [key, value] of Object.entries(payload)) {
     if (consumed.has(key)) continue;
+    if (ehChaveReservada(key)) continue; // tags/cpf têm destino próprio, nunca campo personalizado
     const str =
       typeof value === "string" ? value : typeof value === "number" || typeof value === "boolean" ? String(value) : null;
     if (str === null) continue; // objetos/arrays aninhados: descartados no v1

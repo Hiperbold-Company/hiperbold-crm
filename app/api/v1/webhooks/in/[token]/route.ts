@@ -18,7 +18,18 @@ import { createLeadHandler } from "@/app/api/v1/leads/_handler";
 import { emitLeadActivity } from "@/lib/leads/activity-emitter";
 import { classificarLeadInicial, type ResultadoClassificacaoInicial } from "@/lib/leads/classificacao-inicial";
 import type { CreateLeadInput } from "@/lib/schemas";
-import { mapInboundPayload, verifyInboundSignature, type FieldMap } from "@/lib/webhooks/inbound";
+import {
+  corpoSemDocumento,
+  lerDocumentoReservado,
+  lerTagsReservadas,
+  mapInboundPayload,
+  payloadDeFormulario,
+  removerDocumentoDoPayload,
+  verifyInboundSignature,
+  type DocumentoDoEnvio,
+  type FieldMap,
+} from "@/lib/webhooks/inbound";
+import { gravarCpfDoContato } from "@/lib/webhooks/cpf-da-captacao";
 import { encontrarContatoPorTelefoneComNome } from "@/lib/channels/contato-por-telefone";
 import {
   buildContactConsentGrant,
@@ -34,7 +45,7 @@ import {
   type RdStationMapped,
 } from "@/lib/webhooks/rdstation";
 import { limitarCampos, origemDaPagina, registrarCaptacao } from "@/lib/webhooks/captacao";
-import { decidirRecadastroDoContato } from "@/lib/webhooks/recadastro";
+import { decidirRecadastroDoContato, mesclarTagsNoLead } from "@/lib/webhooks/recadastro";
 import { ipDoClienteParaInet } from "@/lib/http/ip-do-cliente";
 import {
   TURNSTILE_CAMPO_DO_FORMULARIO,
@@ -157,28 +168,6 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     return fail("not_found", "unknown webhook token", 404, { requestId });
   }
 
-  const declarado = Number(req.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declarado) && declarado > TETO_CORPO_BYTES) {
-    return fail("payload_too_large", "request body too large", 413, { requestId });
-  }
-  const corpoLido = await lerCorpoComTeto(req.body, TETO_CORPO_BYTES);
-  if (!corpoLido.ok) {
-    return fail("payload_too_large", "request body too large", 413, { requestId });
-  }
-  const rawBody = corpoLido.texto;
-  const contentType = req.headers.get("content-type") ?? "";
-  const isForm = contentType.includes("application/x-www-form-urlencoded");
-  let payload: Record<string, unknown>;
-  if (isForm) {
-    payload = Object.fromEntries(new URLSearchParams(rawBody));
-  } else {
-    try {
-      payload = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : {};
-    } catch {
-      return fail("invalid_request", "invalid_json", 400, { requestId });
-    }
-  }
-
   // A ORIGEM, lida uma vez e usada em todos os desfechos abaixo — inclusive nos
   // que recusam. Quem publicou um formulário que não está entrando precisa ver
   // que a batida CHEGOU e por que morreu; sem isto o registro só existe quando
@@ -194,6 +183,46 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     webhookSourceId: source.id as string,
     sourceName: (source.name as string) ?? "Fonte sem nome",
   };
+
+  const declarado = Number(req.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declarado) && declarado > TETO_CORPO_BYTES) {
+    await registrarCaptacao(admin, {
+      ...fonteDaCaptacao,
+      ...origemDaCaptacao,
+      outcome: "recusado",
+      rejectReason: "corpo_grande_demais",
+    });
+    return fail("payload_too_large", "request body too large", 413, { requestId });
+  }
+  const corpoLido = await lerCorpoComTeto(req.body, TETO_CORPO_BYTES);
+  if (!corpoLido.ok) {
+    await registrarCaptacao(admin, {
+      ...fonteDaCaptacao,
+      ...origemDaCaptacao,
+      outcome: "recusado",
+      rejectReason: "corpo_grande_demais",
+    });
+    return fail("payload_too_large", "request body too large", 413, { requestId });
+  }
+  const rawBody = corpoLido.texto;
+  const contentType = req.headers.get("content-type") ?? "";
+  const isForm = contentType.includes("application/x-www-form-urlencoded");
+  let payload: Record<string, unknown>;
+  if (isForm) {
+    payload = payloadDeFormulario(rawBody);
+  } else {
+    try {
+      payload = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : {};
+    } catch {
+      await registrarCaptacao(admin, {
+        ...fonteDaCaptacao,
+        ...origemDaCaptacao,
+        outcome: "recusado",
+        rejectReason: "corpo_invalido",
+      });
+      return fail("invalid_request", "invalid_json", 400, { requestId });
+    }
+  }
 
   const sigHeader = req.headers.get("x-hipercrm-signature") ?? req.headers.get("x-deskcomm-signature");
   // secret cifrado at-rest (migration 0041). Decrypt falhou (chave da GUC
@@ -222,6 +251,28 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     });
     return fail("unauthenticated", "invalid_signature", 401, { requestId });
   }
+
+  // CAMPOS RESERVADOS (17/10/2026): `cpf` (alias `cpf_cnpj`) e `tags` não são dado
+  // livre do formulário. O documento sai do payload AQUI — antes do Turnstile, do
+  // log de recebimento e de todo `registrarCaptacao` — para que o número não
+  // chegue a NENHUM registro (webhook_events_log, histórico de captação, campo
+  // personalizado, atividade, log de aplicação). Só o `documentoDoEnvio` segue
+  // adiante, na memória, até a gravação cifrada no contato. A assinatura HMAC já
+  // foi conferida acima sobre o corpo ORIGINAL; o que se guarda no log forense é
+  // o corpo sem o documento.
+  const documentoDoEnvio: DocumentoDoEnvio = lerDocumentoReservado(payload);
+  const rawBodyParaLog = removerDocumentoDoPayload(payload)
+    ? corpoSemDocumento(rawBody, isForm, payload)
+    : rawBody;
+  if (documentoDoEnvio.estado === "descartado") {
+    // Sem o valor: só o fato e o motivo.
+    logger.warn("[webhooks.inbound] documento do envio ignorado", {
+      webhookSourceId: source.id,
+      organizationId: source.organization_id,
+      motivo: documentoDoEnvio.motivo,
+    });
+  }
+  const tagsDoEnvio = lerTagsReservadas(payload);
 
   // O token do Turnstile viaja no campo que o widget injeta no formulário (ou no
   // cabeçalho, para quem envia por fetch) e NÃO é dado do lead: sai do payload antes
@@ -274,7 +325,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     webhook_path_token: token,
     http_method: "POST",
     headers: headersJson,
-    raw_body: rawBody,
+    raw_body: rawBodyParaLog,
     payload_parsed: payload,
     signature_header: sigHeader ?? null,
     // hmacSkipped (decrypt indisponível) conta como "não validado mas aceito",
@@ -580,6 +631,26 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     }
   }
 
+  // CPF do envio, no CONTATO e cifrado (nunca no lead, na captação nem em campo
+  // personalizado). Falha aberta: o que impede a gravação (já tem CPF, outro
+  // contato com o mesmo CPF, sem chave de cifra) vai para o log SEM o número e a
+  // captação segue.
+  if (documentoDoEnvio.estado === "cpf") {
+    if (contactId) {
+      await gravarCpfDoContato(admin, {
+        organizationId: source.organization_id as string,
+        contactId,
+        cpf: documentoDoEnvio.cpf,
+      });
+    } else {
+      logger.warn("[webhooks.inbound] cpf do envio não foi gravado", {
+        webhookSourceId: source.id,
+        organizationId: source.organization_id,
+        desfecho: "sem_contato",
+      });
+    }
+  }
+
   // ELEGIBILIDADE DA IA (caso 1): uma submissão do Respondi é uma origem
   // elegível — autoriza o contato a ser atendido automaticamente. Só tem efeito
   // nos canais com o gate `allowlist` ligado; canal 'open' ignora a coluna.
@@ -615,9 +686,11 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
    * a resposta deste envio já foi carimbada nele) e ANTES de tudo o que é de
    * lead novo: nada daqui chama `createLeadHandler`, então nenhum `lead.created`
    * nasce — e sem ele não há automação de 1º toque, fluxo de follow-up nem
-   * contagem no teto de leads do plano. Também não toca em `crm_leads`: UPDATE
-   * ali emite evento e invalida a trava otimista do card; o relógio do negócio
-   * anda pela própria atividade (trigger `fn_update_last_activity_at`).
+   * contagem no teto de leads do plano. A ÚNICA escrita em `crm_leads` é a união
+   * de etiquetas (`mesclarTagsNoLead`), só quando o envio traz etiqueta NOVA, e
+   * só na coluna `tags`: não mexe em etapa nem status, então nenhum evento de
+   * etapa/ganho/perda nasce; o relógio do negócio anda pela própria atividade
+   * (trigger `fn_update_last_activity_at`).
    */
   if (contactId) {
     const decisao = await decidirRecadastroDoContato(admin, {
@@ -659,6 +732,15 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
         return respondWithLead(leadExistenteId);
       }
 
+      // As etiquetas do envio entram na união das do lead; etapa e status não mudam.
+      const { adicionadas: tagsAdicionadas } = await mesclarTagsNoLead(admin, {
+        organizationId: source.organization_id as string,
+        leadId: leadExistenteId,
+        tags: tagsDoEnvio,
+        sourceId: source.id as string,
+        requestId,
+      });
+
       const atividade = await emitLeadActivity(admin, {
         organizationId: source.organization_id,
         leadId: leadExistenteId,
@@ -674,6 +756,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
           webhook_source_id: source.id,
           source_name: source.name,
           ...(externalId ? { external_id: externalId } : {}),
+          ...(tagsAdicionadas.length > 0 ? { tags_adicionadas: tagsAdicionadas } : {}),
           recebido: {
             nome: mapped.name,
             telefone: mapped.phone,
@@ -773,7 +856,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       ? respondiLeadTitle(respondiMapped)
       : (mapped.name ?? mapped.phone ?? mapped.email ?? "Lead sem nome"),
     contact_id: contactId,
-    tags: [],
+    tags: tagsDoEnvio,
     source: "webhook",
     custom_fields: mapped.custom_fields,
     source_metadata: { webhook_source_id: source.id, ...mapped.source_metadata },

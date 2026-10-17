@@ -14,6 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logger } from "@/lib/logger";
+import { avisarRecusaDaFonte } from "@/lib/webhooks/aviso-de-recusa";
 
 /** No que a captação deu. Espelha o CHECK de `webhook_lead_captures.outcome`. */
 export type DesfechoDaCaptacao = "criado" | "duplicado" | "recusado" | "recadastro";
@@ -35,7 +36,11 @@ export type MotivoDaRecusa =
   // D-173: a captação exige o Turnstile (TURNSTILE_CAPTACAO_EXIGIR) e o envio veio
   // sem token, com token inválido, ou a Cloudflare não respondeu. Quem publicou o
   // formulário precisa ver que a batida chegou e por que morreu.
-  | "verificacao_de_seguranca";
+  | "verificacao_de_seguranca"
+  // O corpo não é JSON válido, ou passou do teto de tamanho. Antes não deixavam
+  // rastro nenhum: a batida chegava, recebia 400/413 e sumia.
+  | "corpo_invalido"
+  | "corpo_grande_demais";
 
 /** O que a tela mostra para cada motivo, em português de gente. */
 export const MOTIVO_DA_RECUSA_LABEL: Record<MotivoDaRecusa, string> = {
@@ -49,6 +54,10 @@ export const MOTIVO_DA_RECUSA_LABEL: Record<MotivoDaRecusa, string> = {
     "Os dados chegaram, mas o plano desta organização já está no limite de leads. Fale com o suporte para ampliar.",
   verificacao_de_seguranca:
     "O envio não passou na verificação de segurança (Turnstile): faltou o token do widget no formulário, ele estava inválido ou a Cloudflare não respondeu.",
+  corpo_invalido:
+    "O corpo do envio não é um JSON válido — confira se a ferramenta que envia manda o formato certo.",
+  corpo_grande_demais:
+    "O corpo do envio passou do tamanho máximo aceito (64 KB).",
 };
 
 export interface CaptacaoParaRegistrar {
@@ -186,6 +195,18 @@ export async function registrarCaptacao(
       outcome: captacao.outcome,
       errorCode: error.code,
       errorMessage: error.message,
+    });
+  }
+
+  // Recusa vira aviso na Central (um por fonte por dia). Fica AQUI, e não em cada
+  // `return` da rota, para que nenhum motivo novo de recusa escape do aviso.
+  if (captacao.outcome === "recusado" && captacao.webhookSourceId) {
+    const motivo = captacao.rejectReason ?? null;
+    await avisarRecusaDaFonte(admin, {
+      organizationId: captacao.organizationId,
+      sourceName: captacao.sourceName,
+      motivoLegivel:
+        (motivo && MOTIVO_DA_RECUSA_LABEL[motivo]) || "o envio não pôde ser aceito",
     });
   }
 }

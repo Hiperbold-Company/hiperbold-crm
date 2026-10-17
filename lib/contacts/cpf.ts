@@ -42,3 +42,28 @@ export async function encryptCpfSql(
   if (!data) return null;
   return data as Uint8Array;
 }
+
+/**
+ * Cifra o CPF com a chave da INSTALAÇÃO, no banco: a RPC `fn_encrypt_oauth`
+ * (`pgp_sym_encrypt`, aes256, chave de `private.app_secrets` /
+ * `app.nuvemshop_oauth_key`; `execute` só para `service_role`). É o que o
+ * formulário de captação grava em `contacts.cpf_encrypted`, junto de
+ * `cpf_hash = hashCpf(cpf)` — a constraint `contacts_cpf_consistency` exige os
+ * dois ou nenhum. Para ler de volta: `fn_decrypt_oauth(cpf_encrypted)`, também
+ * só `service_role`.
+ *
+ * Existe porque `encryptCpfSql` chama a RPC `encrypt_cpf`, que NÃO existe no
+ * schema (congelada em `tests/unit/rpc-do-codigo-nasce-no-schema.test.ts`).
+ *
+ * Devolve `null` sem lançar quando o banco não consegue cifrar (chave mestra
+ * ausente): quem chama NÃO grava o CPF em claro nesse caso. O erro nunca é
+ * logado com o texto do CPF.
+ */
+export async function cifrarCpfDaInstalacao(
+  admin: SupabaseClient,
+  digitos: string,
+): Promise<string | null> {
+  const { data, error } = await admin.rpc("fn_encrypt_oauth", { plaintext: digitos });
+  if (error || !data) return null;
+  return data as unknown as string;
+}
