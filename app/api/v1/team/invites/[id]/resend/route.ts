@@ -14,12 +14,12 @@ import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import {
   atorDoAudit,
-  cabeConviteNaHora,
-  podeReenviarConvite,
   autorizarAdministracao,
   nomeDaOrganizacao,
   nomeDeQuemAgiu,
   pessoaResponsavel,
+  reservarReenvioDeConvite,
+  reservarVagaDeConvite,
   traducaoDe,
 } from "@/lib/api/auth-dual-admin";
 import { isServiceRoleConfigured } from "@/lib/audit";
@@ -84,9 +84,14 @@ export async function POST(
     });
   }
 
-  // Teto por organização, por qualquer porta: no mínimo 10 min entre dois reenvios
-  // do MESMO convite, e o reenvio também gasta uma vaga da hora de e-mails.
-  if (!(await podeReenviarConvite(activeOrg.orgId, id)) || !(await cabeConviteNaHora(activeOrg.orgId))) {
+  // Teto por organização, por qualquer porta: no mínimo 10 min entre dois reenvios do MESMO
+  // convite, e o reenvio também toma uma vaga da hora de e-mails. As duas são RESERVADAS aqui e
+  // DEVOLVIDAS se o reenvio não acontecer (erro, recusa do plano, convite que mudou, e-mail que
+  // não saiu) — senão a falha trancaria o convite por 10 min sem que nenhum e-mail tivesse saído.
+  const reenvio = await reservarReenvioDeConvite(activeOrg.orgId, id);
+  const vaga = reenvio.concedida ? await reservarVagaDeConvite(activeOrg.orgId) : null;
+  if (!reenvio.concedida || !vaga?.concedida) {
+    await reenvio.devolver();
     return fail(
       "rate_limited",
       t("Este convite foi reenviado há pouco. Aguarde alguns minutos para reenviar de novo."),
@@ -94,6 +99,10 @@ export async function POST(
       { requestId, headers: { "Retry-After": "600" } },
     );
   }
+  const devolverTudo = async (): Promise<void> => {
+    await reenvio.devolver();
+    await vaga.devolver();
+  };
 
   let resultado;
   try {
@@ -106,6 +115,7 @@ export async function POST(
       requestId,
     });
   } catch (err) {
+    await devolverTudo();
     // Fase F3, decisão 4 (item 1): renovar um convite VENCIDO volta a ocupar
     // vaga de membro (achado B1 da 0905) — bloqueia igual, sem isenção.
     const recusa = recusaDoPlano(err);
@@ -113,10 +123,12 @@ export async function POST(
     throw err;
   }
   if (!resultado) {
+    await devolverTudo();
     return fail("state_conflict", t("O convite mudou. Atualize e tente de novo."), 409, {
       requestId,
     });
   }
+  if (!resultado.email_dispatched) await devolverTudo();
 
   return ok(
     {

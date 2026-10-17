@@ -17,8 +17,8 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { audit } from "@/lib/audit";
-import { checkRateLimit, peekRateLimit } from "@/lib/ai/dispatcher/rate-limit";
-import { emitirConvite } from "@/lib/team/convites";
+import { checkRateLimit, devolverRateLimit } from "@/lib/ai/dispatcher/rate-limit";
+import { emitirConvite, reenviarConvite } from "@/lib/team/convites";
 import { requireRole } from "@/lib/auth/require-role";
 import { isPublicPath } from "@/lib/auth/public-paths";
 import { McpAuthError, validateBearerToken } from "@/lib/mcp/auth";
@@ -29,8 +29,8 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({
-  checkRateLimit: vi.fn(async () => ({ allowed: true })),
-  peekRateLimit: vi.fn(async () => 0),
+  checkRateLimit: vi.fn(async () => ({ allowed: true, window_start: 111 })),
+  devolverRateLimit: vi.fn(async () => undefined),
 }));
 vi.mock("@/lib/audit", () => ({
   audit: vi.fn(async () => undefined),
@@ -40,6 +40,7 @@ vi.mock("@/lib/team/convites", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/team/convites")>();
   return {
     ...real,
+    reenviarConvite: vi.fn(real.reenviarConvite),
     emitirConvite: vi.fn(async (_admin: unknown, p: { email: string }) => ({
       convite: { id: "inv-1", expires_at: "2099-01-01T00:00:00Z", email: p.email },
       accept_url: "https://app.example/team/accept-invite/SEGREDO",
@@ -400,62 +401,195 @@ describe("endurecimentos da auditoria", () => {
     expect(s.data.sent[0]?.accept_url).toContain("SEGREDO");
   });
 
-  it("POST /team/invite: acima do teto por hora da organização o e-mail NÃO sai (rate_limited)", async () => {
-    // A vaga da hora é LIDA antes de convidar (peek) e só gasta depois que o convite saiu.
-    vi.mocked(peekRateLimit).mockImplementation(async (bucket: string) => (bucket.startsWith("convite:org:") ? 999 : 0));
+  /** Devoluções de vaga de CONVITE (a hora da organização) e de REENVIO, separadas por balde. */
+  const devolvidas = (prefixo: string) =>
+    vi.mocked(devolverRateLimit).mock.calls.filter(([bucket]) => String(bucket).startsWith(prefixo)).length;
+  const reservadas = (prefixo: string) =>
+    vi.mocked(checkRateLimit).mock.calls.filter(([bucket]) => String(bucket).startsWith(prefixo)).length;
+  const bancoDeConvite = () => {
     const db = bancoFalso({ user_organizations: () => [], organizations: () => ({ display_name: "Acme" }) });
     vi.mocked(createAdminClient).mockReturnValue(db as never);
     comoToken("admin", ["mcp:write"]);
+    return db;
+  };
+  const convidar = async (email: string) => {
     const { POST } = await import("@/app/api/v1/team/invite/route");
-    const res = await POST(req("/api/v1/team/invite", "POST", { invitations: [{ email: "a@x.com", role: "agent" }] }));
+    return POST(req("/api/v1/team/invite", "POST", { invitations: [{ email, role: "agent" }] }));
+  };
+
+  it("POST /team/invite: acima do teto por hora da organização o e-mail NÃO sai (rate_limited) e a tentativa barrada não ocupa vaga", async () => {
+    bancoDeConvite();
+    vi.mocked(checkRateLimit).mockImplementation(
+      async (bucket: string) => ({ allowed: !bucket.startsWith("convite:org:"), window_start: 111 }) as never,
+    );
+    const res = await convidar("a@x.com");
     const corpo = (await res.json()) as { data: { sent: unknown[]; failed: Array<{ reason: string }> } };
     expect(corpo.data.sent).toEqual([]);
     expect(corpo.data.failed[0]?.reason).toBe("rate_limited");
     expect(emitirConvite).not.toHaveBeenCalled();
-    expect(checkRateLimit).not.toHaveBeenCalledWith(expect.stringMatching(/^convite:org:/), expect.anything(), expect.anything());
-    vi.mocked(peekRateLimit).mockImplementation(async () => 0);
+    // a vaga é tomada por incremento atômico (que já barra); o incremento da barrada volta
+    expect(reservadas("convite:org:")).toBe(1);
+    expect(devolvidas("convite:org:")).toBe(1);
+    vi.mocked(checkRateLimit).mockImplementation(async () => ({ allowed: true, window_start: 111 }) as never);
   });
 
-  it("POST /team/invite: convite recusado pelo plano NÃO gasta a vaga da hora; o enviado gasta", async () => {
-    const db = bancoFalso({ user_organizations: () => [], organizations: () => ({ display_name: "Acme" }) });
-    vi.mocked(createAdminClient).mockReturnValue(db as never);
-    comoToken("admin", ["mcp:write"]);
-    vi.mocked(checkRateLimit).mockClear();
+  it("POST /team/invite: convite que sai FICA com a vaga gasta (nada devolvido)", async () => {
+    bancoDeConvite();
+    const res = await convidar("b@x.com");
+    expect(res.status).toBe(201);
+    expect(reservadas("convite:org:")).toBe(1);
+    expect(devolvidas("convite:org:")).toBe(0);
+  });
+
+  it("POST /team/invite: convite recusado pelo plano DEVOLVE a vaga da hora; o enviado seguinte a gasta", async () => {
+    bancoDeConvite();
     vi.mocked(emitirConvite).mockRejectedValueOnce({ code: "PT402", details: "usuarios" });
-    const { POST } = await import("@/app/api/v1/team/invite/route");
-    await POST(req("/api/v1/team/invite", "POST", { invitations: [{ email: "a@x.com", role: "agent" }] }));
-    const gastos = () =>
-      vi.mocked(checkRateLimit).mock.calls.filter(([bucket]) => String(bucket).startsWith("convite:org:")).length;
-    expect(gastos()).toBe(0);
-    await POST(req("/api/v1/team/invite", "POST", { invitations: [{ email: "b@x.com", role: "agent" }] }));
-    expect(gastos()).toBe(1);
+    const recusado = await convidar("a@x.com");
+    const corpo = (await recusado.json()) as { data: { sent: unknown[]; failed: Array<{ email: string }> } };
+    expect(corpo.data.sent).toEqual([]);
+    expect(corpo.data.failed).toHaveLength(1);
+    expect(reservadas("convite:org:")).toBe(1);
+    expect(devolvidas("convite:org:")).toBe(1);
+
+    await convidar("b@x.com");
+    expect(reservadas("convite:org:")).toBe(2);
+    expect(devolvidas("convite:org:")).toBe(1); // o segundo ficou com a vaga
   });
 
-  it("POST /team/invites/[id]/resend: segundo reenvio dentro de 10 min leva 429 e nada é reenviado", async () => {
-    const INV = "12121212-1212-4212-8212-121212121212";
-    vi.mocked(checkRateLimit).mockImplementation(async (bucket: string) => ({
-      allowed: !bucket.startsWith("reenvio:"),
-    }) as never);
+  it("POST /team/invite: erro inesperado na emissão DEVOLVE a vaga e a falha segue para cima", async () => {
+    bancoDeConvite();
+    vi.mocked(emitirConvite).mockRejectedValueOnce(new Error("banco caiu"));
+    await expect(convidar("a@x.com")).rejects.toThrow("banco caiu");
+    expect(devolvidas("convite:org:")).toBe(1);
+  });
+
+  it("POST /team/invite: e-mail que NÃO saiu (provedor recusou) devolve a vaga; o convite continua criado", async () => {
+    bancoDeConvite();
+    vi.mocked(emitirConvite).mockResolvedValueOnce({
+      convite: { id: "inv-9", expires_at: "2099-01-01T00:00:00Z", email: "a@x.com" },
+      accept_url: "https://app.example/team/accept-invite/SEGREDO",
+      email_dispatched: false,
+      email_error: "smtp recusou",
+      renovado: false,
+    } as never);
+    const res = await convidar("a@x.com");
+    const corpo = (await res.json()) as { data: { sent: Array<{ email_dispatched: boolean }> } };
+    expect(res.status).toBe(201);
+    expect(corpo.data.sent[0]?.email_dispatched).toBe(false);
+    expect(devolvidas("convite:org:")).toBe(1);
+  });
+
+  it("POST /team/invite: quem já é membro não toma vaga nenhuma", async () => {
     const db = bancoFalso({
-      team_invites: () => ({
-        id: INV,
-        organization_id: ORG_TOKEN,
-        email: "a@x.com",
-        role: "agent",
-        accepted_at: null,
-        revoked_at: null,
-        expires_at: "2099-01-01T00:00:00Z",
-        resend_count: 0,
-      }),
+      user_organizations: () => [{ user_id: "membro-1" }],
       organizations: () => ({ display_name: "Acme" }),
     });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (db as any).auth = { admin: { getUserById: async () => ({ data: { user: { email: "ja@x.com" } } }) } };
     vi.mocked(createAdminClient).mockReturnValue(db as never);
     comoToken("admin", ["mcp:write"]);
-    const { POST } = await import("@/app/api/v1/team/invites/[id]/resend/route");
-    const res = await POST(req(`/api/v1/team/invites/${INV}/resend`, "POST"), { params: Promise.resolve({ id: INV }) });
-    expect(res.status).toBe(429);
-    expect(db.chamadas.some((c) => c.tabela === "team_invites" && c.op === "update")).toBe(false);
-    vi.mocked(checkRateLimit).mockImplementation(async () => ({ allowed: true }) as never);
+    const res = await convidar("JA@x.com");
+    const corpo = (await res.json()) as { data: { failed: Array<{ reason: string }> } };
+    expect(corpo.data.failed[0]?.reason).toBe("already_member");
+    expect(reservadas("convite:org:")).toBe(0);
+  });
+
+  describe("reenvio de convite", () => {
+    const INV = "12121212-1212-4212-8212-121212121212";
+    const conviteAberto = () => ({
+      id: INV,
+      organization_id: ORG_TOKEN,
+      email: "a@x.com",
+      role: "agent",
+      accepted_at: null,
+      revoked_at: null,
+      expires_at: "2099-01-01T00:00:00Z",
+      resend_count: 0,
+    });
+    const reenviar = async () => {
+      const db = bancoFalso({ team_invites: conviteAberto, organizations: () => ({ display_name: "Acme" }) });
+      vi.mocked(createAdminClient).mockReturnValue(db as never);
+      comoToken("admin", ["mcp:write"]);
+      const { POST } = await import("@/app/api/v1/team/invites/[id]/resend/route");
+      const res = await POST(req(`/api/v1/team/invites/${INV}/resend`, "POST"), { params: Promise.resolve({ id: INV }) });
+      return { res, db };
+    };
+    const devolvidas = (prefixo: string) =>
+      vi.mocked(devolverRateLimit).mock.calls.filter(([bucket]) => String(bucket).startsWith(prefixo)).length;
+    const reservadas = (prefixo: string) =>
+      vi.mocked(checkRateLimit).mock.calls.filter(([bucket]) => String(bucket).startsWith(prefixo)).length;
+
+    it("segundo reenvio dentro de 10 min leva 429, nada é reenviado e a vaga da hora nem é tocada", async () => {
+      vi.mocked(checkRateLimit).mockImplementation(
+        async (bucket: string) => ({ allowed: !bucket.startsWith("reenvio:"), window_start: 111 }) as never,
+      );
+      const { res, db } = await reenviar();
+      expect(res.status).toBe(429);
+      expect(db.chamadas.some((c) => c.tabela === "team_invites" && c.op === "update")).toBe(false);
+      expect(reservadas("convite:org:")).toBe(0);
+      expect(devolvidas("reenvio:")).toBe(1); // a tentativa barrada não prolonga o intervalo
+      vi.mocked(checkRateLimit).mockImplementation(async () => ({ allowed: true, window_start: 111 }) as never);
+    });
+
+    it("hora da organização cheia: 429 e o intervalo do convite volta (a falha não é do convite)", async () => {
+      vi.mocked(checkRateLimit).mockImplementation(
+        async (bucket: string) => ({ allowed: !bucket.startsWith("convite:org:"), window_start: 111 }) as never,
+      );
+      const { res } = await reenviar();
+      expect(res.status).toBe(429);
+      expect(devolvidas("reenvio:")).toBe(1);
+      expect(devolvidas("convite:org:")).toBe(1); // o incremento da barrada
+      vi.mocked(checkRateLimit).mockImplementation(async () => ({ allowed: true, window_start: 111 }) as never);
+    });
+
+    it("reenvio que falha (erro) devolve as DUAS vagas: o convite pode ser reenviado em seguida", async () => {
+      vi.mocked(reenviarConvite).mockRejectedValueOnce(new Error("banco caiu"));
+      await expect(reenviar()).rejects.toThrow("banco caiu");
+      expect(devolvidas("reenvio:")).toBe(1);
+      expect(devolvidas("convite:org:")).toBe(1);
+    });
+
+    it("reenvio recusado pelo plano devolve as duas vagas", async () => {
+      vi.mocked(reenviarConvite).mockRejectedValueOnce({ code: "PT402", details: "usuarios" });
+      const { res } = await reenviar();
+      expect(res.status).toBe(402);
+      expect(devolvidas("reenvio:")).toBe(1);
+      expect(devolvidas("convite:org:")).toBe(1);
+    });
+
+    it("convite que mudou no meio (409) devolve as duas vagas", async () => {
+      vi.mocked(reenviarConvite).mockResolvedValueOnce(null as never);
+      const { res } = await reenviar();
+      expect(res.status).toBe(409);
+      expect(devolvidas("reenvio:")).toBe(1);
+      expect(devolvidas("convite:org:")).toBe(1);
+    });
+
+    it("reenvio que sai fica com as duas vagas gastas", async () => {
+      vi.mocked(reenviarConvite).mockResolvedValueOnce({
+        convite: { ...conviteAberto(), last_sent_at: "2026-10-17T12:00:00Z", resend_count: 1 },
+        accept_url: "https://app.example/team/accept-invite/SEGREDO",
+        email_dispatched: true,
+      } as never);
+      const { res } = await reenviar();
+      expect(res.status).toBe(200);
+      expect(reservadas("reenvio:")).toBe(1);
+      expect(reservadas("convite:org:")).toBe(1);
+      expect(devolvidas("reenvio:")).toBe(0);
+      expect(devolvidas("convite:org:")).toBe(0);
+    });
+
+    it("e-mail que não saiu devolve as duas vagas (nada foi enviado)", async () => {
+      vi.mocked(reenviarConvite).mockResolvedValueOnce({
+        convite: { ...conviteAberto(), last_sent_at: "2026-10-17T12:00:00Z", resend_count: 1 },
+        accept_url: "https://app.example/team/accept-invite/SEGREDO",
+        email_dispatched: false,
+      } as never);
+      const { res } = await reenviar();
+      expect(res.status).toBe(200);
+      expect(devolvidas("reenvio:")).toBe(1);
+      expect(devolvidas("convite:org:")).toBe(1);
+    });
   });
 });
 

@@ -40,7 +40,7 @@ import { loadAuthUser } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { checkRateLimit, peekRateLimit } from "@/lib/ai/dispatcher/rate-limit";
+import { checkRateLimit, devolverRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { resolveAuthDual, tetoDeEscritaDoToken, type AuthDual } from "./auth-dual";
 
 export type AuthAdminOk = Extract<AuthDual, { ok: true }>;
@@ -162,32 +162,51 @@ export async function nomeDeQuemAgiu(authz: AuthAdminOk): Promise<string> {
  * `INTERVALO_DE_REENVIO_SEGUNDOS` entre dois reenvios do MESMO convite. Convite
  * dispara e-mail de verdade com o nome da empresa — sem teto, uma chave (ou uma
  * aba em laço) vira máquina de spam com o remetente da instalação.
+ *
+ * RESERVA E DEVOLUÇÃO. A vaga é tomada ANTES do efeito, por incremento atômico (é isso que
+ * impede requisições concorrentes de passarem juntas do teto — ler primeiro e gastar depois
+ * deixava todas passarem), e é DEVOLVIDA quando o convite não se concretiza (e-mail inválido,
+ * recusa do plano, erro, e-mail que não saiu). Vaga queimada por convite que falhou trancaria
+ * a organização por até uma hora sem um único e-mail enviado.
  */
 export const MAX_CONVITES_POR_HORA = 20;
 export const INTERVALO_DE_REENVIO_SEGUNDOS = 600;
 
-/** `true` quando ainda cabe mais um e-mail de convite nesta organização na hora corrente. */
-export async function cabeConviteNaHora(organizationId: string): Promise<boolean> {
-  const r = await checkRateLimit(`convite:org:${organizationId}`, MAX_CONVITES_POR_HORA, 3600);
-  return r.allowed;
+const JANELA_DE_CONVITES_SEGUNDOS = 3600;
+
+/** Vaga tomada: `devolver()` desfaz o gasto (idempotente; nunca lança). */
+export interface ReservaDeConvite {
+  /** `false` quando o teto está cheio — nesse caso nada foi gasto e `devolver` é no-op. */
+  concedida: boolean;
+  devolver: () => Promise<void>;
 }
 
-/**
- * Há vaga de convite nesta hora? SÓ LÊ (não gasta). Quem convida em lote consulta aqui ANTES de tentar
- * e chama `gastarVagaDeConvite` DEPOIS que o convite saiu: o convite recusado pelo plano (teto de
- * usuários) não pode consumir a vaga da hora de quem ainda não conseguiu convidar ninguém.
- */
-export async function haVagaDeConviteNaHora(organizationId: string): Promise<boolean> {
-  return (await peekRateLimit(`convite:org:${organizationId}`, 3600)) < MAX_CONVITES_POR_HORA;
+async function reservar(bucket: string, limite: number, janelaSegundos: number): Promise<ReservaDeConvite> {
+  const r = await checkRateLimit(bucket, limite, janelaSegundos);
+  let devolvida = false;
+  const devolver = async (): Promise<void> => {
+    if (devolvida) return;
+    devolvida = true;
+    try {
+      await devolverRateLimit(bucket, janelaSegundos, r.window_start);
+    } catch {
+      // compensação best-effort: o pior caso é a vaga voltar sozinha quando a janela vira
+    }
+  };
+  if (!r.allowed) {
+    // A tentativa barrada também incrementou o contador: devolve, senão ela ocuparia a vaga de quem vem depois.
+    await devolver();
+    return { concedida: false, devolver: async () => undefined };
+  }
+  return { concedida: true, devolver };
 }
 
-/** Gasta uma vaga da hora: chamar só depois de o convite ter sido emitido. */
-export async function gastarVagaDeConvite(organizationId: string): Promise<void> {
-  await checkRateLimit(`convite:org:${organizationId}`, MAX_CONVITES_POR_HORA, 3600);
+/** Toma uma vaga de e-mail de convite desta organização na hora corrente. */
+export function reservarVagaDeConvite(organizationId: string): Promise<ReservaDeConvite> {
+  return reservar(`convite:org:${organizationId}`, MAX_CONVITES_POR_HORA, JANELA_DE_CONVITES_SEGUNDOS);
 }
 
-/** `true` quando este convite pode ser reenviado agora (o intervalo mínimo já passou). */
-export async function podeReenviarConvite(organizationId: string, conviteId: string): Promise<boolean> {
-  const r = await checkRateLimit(`reenvio:${organizationId}:${conviteId}`, 1, INTERVALO_DE_REENVIO_SEGUNDOS);
-  return r.allowed;
+/** Toma o direito de reenviar ESTE convite agora (o intervalo mínimo entre reenvios já passou). */
+export function reservarReenvioDeConvite(organizationId: string, conviteId: string): Promise<ReservaDeConvite> {
+  return reservar(`reenvio:${organizationId}:${conviteId}`, 1, INTERVALO_DE_REENVIO_SEGUNDOS);
 }

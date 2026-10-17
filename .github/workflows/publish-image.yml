@@ -766,12 +766,41 @@ jobs:
       - name: O scheduler sobe E tem o evento do event_log no crontab?
         run: |
           set -euo pipefail
+          docker rm -f sched app-stub >/dev/null 2>&1 || true
+          docker network rm sched-net >/dev/null 2>&1 || true
+
+          # O scheduler bate SEMPRE em `http://app:3000` (fixo no entrypoint; o
+          # `APP_URL` que este passo passava nunca foi lido). Sem nada com esse nome
+          # na rede, TODO cron falha por DNS (HTTP 000) assim que o relógio cruza o
+          # primeiro minuto cheio, e o HEALTHCHECK da imagem — que exige uma rota 2xx
+          # nos últimos 10 min assim que existe qualquer registro — passa a reprovar
+          # com "scheduler: nenhuma rota respondeu 2xx". Então o resultado do passo
+          # dependia de onde o boot caía no minuto: se o contêiner ficava `healthy`
+          # antes da primeira batida (a maioria das vezes) o passo passava; se o boot
+          # caía nos últimos segundos do minuto, a batida vinha antes da primeira
+          # sonda e o contêiner nunca chegava a `healthy` (D-208).
+          # O app de mentira abaixo (200 em qualquer rota, node da imagem do worker, já
+          # carregada) tira o acaso: a sonda de saúde mede o que ela diz medir — crond de
+          # pé E um app que aceita o que ele manda — em qualquer ordem de chegada.
+          docker network create sched-net >/dev/null
+          docker run -d --name app-stub --network sched-net --network-alias app \
+            --entrypoint node deskcomm-worker:pr \
+            -e "require('http').createServer((q,s)=>{s.statusCode=200;s.end('ok')}).listen(3000,()=>console.log('app-stub: ouvindo'))"
+          for _ in $(seq 1 20); do
+            docker logs app-stub 2>&1 | grep -q 'app-stub: ouvindo' && break
+            sleep 1
+          done
+          docker logs app-stub 2>&1 | grep -q 'app-stub: ouvindo' || {
+            echo "::error::o app de mentira (alvo dos crons) não subiu"
+            docker logs app-stub 2>&1 | tail -20
+            exit 1
+          }
+
           # `INTERNAL_SECRET` é obrigatório: com ele vazio o entrypoint sai 1, e é
           # assim mesmo (cron que responderia 401 em silêncio não deve subir).
-          docker run -d --name sched \
+          docker run -d --name sched --network sched-net \
             --health-interval=3s --health-timeout=3s --health-start-period=3s --health-retries=20 \
             -e INTERNAL_SECRET=chave-de-mentira \
-            -e APP_URL=http://127.0.0.1:3000 \
             -e TZ=UTC \
             deskcomm-scheduler:pr
 
@@ -815,6 +844,12 @@ jobs:
             exit 1
           fi
           docker logs sched 2>&1 | tail -20
+
+      - name: Limpa o scheduler e o app de mentira
+        if: always()
+        run: |
+          docker rm -f sched app-stub >/dev/null 2>&1 || true
+          docker network rm sched-net >/dev/null 2>&1 || true
 
   # Job de fachada: dá UM nome estável para a branch protection exigir. Sem ele,
   # o required check teria que listar cada instância da matriz pelo nome gerado,
