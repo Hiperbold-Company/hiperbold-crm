@@ -109,7 +109,8 @@ export async function POST(
   // texto que guardou. O autenticador também confere o vínculo do criador a cada
   // chamada; esta revogação impede a chave de voltar se a pessoa for readmitida.
   // Falha aqui não desfaz a revogação do membro: o log avisa e o vínculo já barra.
-  const { data: chavesRevogadas, error: chavesErr } = await supabase
+  // Cliente de serviço: `api_tokens` só é escrita pelo servidor (migration 0962).
+  const { data: chavesRevogadas, error: chavesErr } = await createAdminClient()
     .from("api_tokens")
     .update({ revoked_at: nowIso, revoked_by: responsavelId, updated_at: nowIso })
     .eq("organization_id", activeOrg.orgId)

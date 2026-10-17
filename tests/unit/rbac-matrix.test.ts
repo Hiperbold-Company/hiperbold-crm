@@ -15,6 +15,7 @@ import { NextRequest } from "next/server";
 
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { audit } from "@/lib/audit";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { AuthUser, Role } from "@/lib/auth/types";
 
@@ -92,6 +93,9 @@ function session(role: Role | null, tables: Record<string, unknown> = {}) {
   );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(createClient).mockResolvedValue(makeSupabaseStub(role, tables) as any);
+  // 0962: a rota de chaves de API lê e escreve `api_tokens` pelo cliente de serviço.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vi.mocked(createAdminClient).mockReturnValue(makeSupabaseStub(role, tables) as any);
 }
 
 async function errorCode(res: Response): Promise<string> {

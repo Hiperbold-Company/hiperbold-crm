@@ -27,8 +27,9 @@ const deps = vi.hoisted(() => ({
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: deps.support }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: deps.role }));
 vi.mock("@/lib/audit", () => ({ audit: deps.audit }));
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({
+// 0962: a emissão grava pelo cliente de serviço (authenticated não escreve em api_tokens).
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
     from: () => ({ insert: () => ({ select: () => ({ single: deps.single }) }) }),
   }),
 }));
@@ -56,7 +57,7 @@ beforeEach(() => {
   deps.role.mockResolvedValue({
     ok: true,
     user: { id: "human", idioma: "pt-BR" },
-    org: { orgId: "org-teto" },
+    org: { orgId: "org-teto", role: "admin" },
   });
 });
 

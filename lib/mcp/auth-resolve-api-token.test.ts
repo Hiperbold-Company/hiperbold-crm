@@ -267,6 +267,11 @@ describe("resolveApiToken — o caminho feliz (par de vacuidade dos casos acima)
  * A RÉGUA. Cada linha foi lida de `lib/mcp/auth.ts` ANTES da extração, onde
  * `validateBearerToken` lançava `McpAuthError` direto. Mudar qualquer célula
  * aqui é mudar o que o cliente MCP recebe.
+ *
+ * Desde 17/10/2026 (auditoria, achado baixo 5) desconhecido, revogado, expirado,
+ * criador sem acesso e organização suspensa devolvem UMA mensagem só — o motivo
+ * real fica no log. Os casos de criador sem acesso e suspensa estão em
+ * `tests/unit/token-recusa-neutra.test.ts`.
  */
 const TABELA_DE_TRADUCAO: Array<{
   caso: string;
@@ -306,7 +311,7 @@ const TABELA_DE_TRADUCAO: Array<{
     resposta: naoAchou,
     mcpCode: -32001,
     httpStatus: 401,
-    message: "Token not recognized.",
+    message: "Invalid or expired token.",
   },
   {
     caso: "token revogado (revoked)",
@@ -314,7 +319,7 @@ const TABELA_DE_TRADUCAO: Array<{
     resposta: achou(linhaViva({ revoked_at: "2026-09-01T10:00:00.000Z" })),
     mcpCode: -32001,
     httpStatus: 401,
-    message: "Token revoked.",
+    message: "Invalid or expired token.",
   },
   {
     caso: "token expirado (expired)",
@@ -322,7 +327,7 @@ const TABELA_DE_TRADUCAO: Array<{
     resposta: achou(linhaViva({ expires_at: NO_PASSADO })),
     mcpCode: -32001,
     httpStatus: 401,
-    message: "Token expired.",
+    message: "Invalid or expired token.",
   },
   {
     caso: "banco falhou (lookup_failed) — o ÚNICO 500 da tabela",

@@ -5,6 +5,21 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *
  * Token format: `dsk_<8-hex-prefix>_<32-byte-random-base64url>`.
  * Stored as: prefix + sha256(plaintext) bytea — no reversible storage.
+ *
+ * ## Quem escreve em `api_tokens` (migration 0962)
+ *
+ * SÓ o servidor. `authenticated` e `anon` não têm privilégio nenhum na tabela:
+ * antes, o admin de plataforma `support_readonly` e o admin de tenant em sessão
+ * aal1 inseriam, direto pelo PostgREST, um token `role:admin` + `mcp:write` sem
+ * passar por este gate. Agora a escrita e a leitura passam por aqui, com o
+ * cliente de serviço DEPOIS de `requireRole("admin")` (que recusa sessão aal1 de
+ * quem tem fator, 403 `mfa_required`), e por isso cada consulta filtra
+ * `organization_id` na mão: a organização é a da sessão, `created_by` é quem
+ * está na sessão, e nenhum dos dois vem do corpo.
+ *
+ * Teto de papel: a chave nunca declara um `role:` acima do papel ATUAL de quem
+ * a cria na organização (o autenticador, `lib/mcp/auth.ts`, já recusa a chave
+ * cujo criador não alcança o papel; aqui ela nem nasce).
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -13,8 +28,9 @@ import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { papelAcimaDoCriador } from "@/lib/auth/teto-de-papel-da-chave";
 import { createApiTokenSchema, validateRequest } from "@/lib/schemas";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
@@ -28,8 +44,7 @@ export async function GET(_req: NextRequest): Promise<Response> {
   if (!authz.ok) return authz.response;
   const { org: activeOrg } = authz;
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const { data, error } = await createAdminClient()
     .from("api_tokens")
     .select(SELECT_COLS)
     .eq("organization_id", activeOrg.orgId)
@@ -61,6 +76,16 @@ export async function POST(req: NextRequest): Promise<Response> {
     throw err;
   }
 
+  const acima = papelAcimaDoCriador(input.scopes, activeOrg.role);
+  if (acima) {
+    return fail(
+      "forbidden_role",
+      t("Uma chave não pode ter um papel acima do seu na organização."),
+      403,
+      { requestId, details: { role: acima } },
+    );
+  }
+
   const prefix = `dsk_${randomBytes(4).toString("hex")}`;
   const secret = randomBytes(32).toString("base64url");
   const plaintext = `${prefix}_${secret}`;
@@ -70,8 +95,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     ? new Date(Date.now() + input.expires_in_days * 24 * 60 * 60 * 1000).toISOString()
     : null;
 
-  const supabase = await createClient();
-  const { data: created, error: insErr } = await supabase
+  const { data: created, error: insErr } = await createAdminClient()
     .from("api_tokens")
     .insert({
       organization_id: activeOrg.orgId,

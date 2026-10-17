@@ -9,7 +9,7 @@ import type { NextRequest } from "next/server";
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,9 @@ export async function POST(
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const { user: authUser, org: activeOrg } = authz;
 
-  const supabase = await createClient();
+  // Só o servidor escreve em `api_tokens` (migration 0962): cliente de serviço
+  // depois do gate admin + MFA, com a organização da sessão em TODA consulta.
+  const supabase = createAdminClient();
   const { data: token, error: fetchErr } = await supabase
     .from("api_tokens")
     .select("id, revoked_at")
@@ -46,7 +48,8 @@ export async function POST(
   const { error: updErr } = await supabase
     .from("api_tokens")
     .update({ revoked_at: nowIso, revoked_by: authUser.id, updated_at: nowIso })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("organization_id", activeOrg.orgId);
   if (updErr) return falhaInterna("internal_error", updErr, { requestId });
 
   await audit({

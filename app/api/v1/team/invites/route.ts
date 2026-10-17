@@ -7,7 +7,9 @@
  *
  * `status` é derivado aqui, não vem do banco. `accept_url` só acompanha convite
  * em aberto (pendente/expirado) — é o link copiável que o admin usa quando o
- * e-mail não saiu.
+ * e-mail não saiu. Esse link é uma credencial de entrada na organização (quem o
+ * tem aceita o convite), então só a SESSÃO de um admin o recebe: o gerente, que
+ * lê a lista, vê o convite sem o link; o token também não (só pelo e-mail).
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -46,13 +48,15 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (error) return falhaInterna("internal_error", error, { requestId });
 
   const now = Date.now();
+  // Pelo TOKEN o link de aceite não sai (só pelo e-mail); na sessão, só o admin o vê.
+  const podeVerLink =
+    authz.via === "session" && authz.actor.type === "user" && authz.actor.role === "admin";
   const invites = ((rows ?? []) as ConviteDeTime[]).map((row) => {
     const status = statusConvite(row, now);
     return {
       ...row,
       status,
-      // Pelo TOKEN o link de aceite não sai (só pelo e-mail); a sessão segue vendo o link.
-      accept_url: authz.via === "session" && conviteEstaEmAberto(row, now) ? linkDeAceite(row) : null,
+      accept_url: podeVerLink && conviteEstaEmAberto(row, now) ? linkDeAceite(row) : null,
     };
   });
 

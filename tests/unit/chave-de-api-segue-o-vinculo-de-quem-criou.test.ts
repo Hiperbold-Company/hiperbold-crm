@@ -1,11 +1,12 @@
 /**
- * D-101: a chave `dsk_` continuava valendo depois que quem a criou foi removido
+ * D-101 (e 0962): a chave `dsk_` continuava valendo depois que quem a criou foi removido
  * ou rebaixado, e os escopos eram texto livre.
  *
  * Prova:
  *  1. o autenticador recusa a chave cujo criador perdeu o vínculo, ou tem papel
  *     abaixo do `role:` que a chave declara; mantém a chave de criador em dia e
- *     a de admin de plataforma ativo; falha de leitura é `lookup_failed`;
+ *     falha de leitura é `lookup_failed`; admin de plataforma sem vínculo NÃO
+ *     sustenta a chave (0962);
  *  2. o schema de criação só aceita escopos da lista fechada: `actor:ai_agent`
  *     e `agent_run:<uuid>` (autoria de agente) não saem de um formulário.
  */
@@ -101,9 +102,17 @@ describe("D-101 chave de API e vínculo do criador", () => {
     expect(await reason(resolveApiToken(PLAINTEXT))).toBe("creator_inactive");
   });
 
-  it("criador sem vínculo mas admin de plataforma ativo: segue valendo", async () => {
+  it("criador sem vínculo, mesmo admin de plataforma ativo: NÃO vale (0962, sem ramo de plataforma)", async () => {
+    // Era o outro lado do buraco: um `support_readonly` inseria a chave pelo PostgREST
+    // e o autenticador a aceitava só porque havia uma linha em `platform_admins`.
     armar({ escopos: ["mcp:read", "role:admin"], vinculo: null, plataforma: true });
-    expect(await reason(resolveApiToken(PLAINTEXT))).toBe("aceito");
+    expect(await reason(resolveApiToken(PLAINTEXT))).toBe("creator_inactive");
+  });
+
+  it("o autenticador nem consulta platform_admins", async () => {
+    const consultadas = armar({ escopos: ["mcp:read", "role:admin"], vinculo: null, plataforma: true });
+    await reason(resolveApiToken(PLAINTEXT));
+    expect(consultadas).not.toContain("platform_admins");
   });
 
   it("falha ao ler o vínculo não vira chave aceita: lookup_failed", async () => {

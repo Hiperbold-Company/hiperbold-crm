@@ -9331,6 +9331,7 @@ export const DICIONARIO: Traducoes = {
   "O período não pode passar de 62 dias.": { es: "El período no puede pasar de 62 días." },
   "title e body são obrigatórios.": { es: "title y body son obligatorios." },
   "Token não encontrado.": { es: "Token no encontrado." },
+  "Uma chave não pode ter um papel acima do seu na organização.": { es: "Una clave no puede tener un rol superior al suyo en la organización." },
   "tool_ids contém ids inexistentes no catálogo MCP.": { es: "tool_ids contiene ids inexistentes en el catálogo MCP." },
   "Validação de publish falhou.": { es: "Falló la validación de publicación." },
   "Versão não encontrada nesta organização.": { es: "Versión no encontrada en esta organización." },

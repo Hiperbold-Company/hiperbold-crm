@@ -11,9 +11,14 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 // D-097: as inscrições de push do membro saem pelo cliente de serviço (a RLS só
 // deixa cada um mexer na própria linha).
 const pushApagado: Array<[string, unknown]> = [];
+// 0962: `api_tokens` só é escrita pelo servidor, então a revogação das chaves do
+// membro passa pelo cliente de serviço. O cliente da sessão NÃO tem mais essa
+// tabela no dublê: se a rota voltasse a usá-lo, o teste quebraria.
+let fabricaDeChaves: (() => unknown) | null = null;
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (tabela: string) => {
+      if (tabela === "api_tokens") return fabricaDeChaves!();
       const cadeia: Record<string, unknown> = {};
       if (tabela === "user_organizations") {
         // D-125: o vínculo só é gravado pelo servidor (cliente de serviço).
@@ -74,25 +79,26 @@ function mockBanco(opts: MockBancoOpts & { chaves?: Array<{ id: string }> }) {
     return { eq: vi.fn(async () => ({ error: null })) };
   });
 
+  fabricaDeChaves = () => {
+    const cadeia: Record<string, unknown> = {};
+    cadeia.update = (valores: Record<string, unknown>) => {
+      chavesUpdate = valores;
+      return cadeia;
+    };
+    cadeia.eq = (coluna: string, valor: unknown) => {
+      chavesFiltros.push([coluna, valor]);
+      return cadeia;
+    };
+    cadeia.is = (coluna: string, valor: unknown) => {
+      chavesFiltros.push([coluna, valor]);
+      return cadeia;
+    };
+    cadeia.select = async () => ({ data: opts.chaves ?? [], error: null });
+    return cadeia;
+  };
+
   vi.mocked(createClient).mockResolvedValue({
     from: (table: string) => {
-      if (table === "api_tokens") {
-        const cadeia: Record<string, unknown> = {};
-        cadeia.update = (valores: Record<string, unknown>) => {
-          chavesUpdate = valores;
-          return cadeia;
-        };
-        cadeia.eq = (coluna: string, valor: unknown) => {
-          chavesFiltros.push([coluna, valor]);
-          return cadeia;
-        };
-        cadeia.is = (coluna: string, valor: unknown) => {
-          chavesFiltros.push([coluna, valor]);
-          return cadeia;
-        };
-        cadeia.select = async () => ({ data: opts.chaves ?? [], error: null });
-        return cadeia;
-      }
       if (table === "conversations") {
         return {
           select: () => ({

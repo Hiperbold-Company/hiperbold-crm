@@ -51,18 +51,25 @@ function chamandoDe(ip: string): void {
  * passado. O teste fica preso ao contrato (linha → dado), não ao formato da query.
  */
 function bancoFalso(resultado: { data: unknown; error: { message: string } | null }): void {
-  const cadeia = new Proxy(
-    {},
-    {
-      get(_alvo, prop) {
-        if (prop === "then") {
-          return (resolve: (v: unknown) => unknown) => resolve(resultado);
-        }
-        return () => cadeia;
+  const encadeamento = (res: unknown) =>
+    new Proxy(
+      {},
+      {
+        get(_alvo, prop) {
+          if (prop === "then") {
+            return (resolve: (v: unknown) => unknown) => resolve(res);
+          }
+          return () => encadeamento(res);
+        },
       },
-    },
-  ) as never;
-  vi.mocked(createAdminClient).mockReturnValue({ from: () => cadeia } as never);
+    ) as never;
+  // O vínculo de quem criou o token (D-101) é outra tabela: responde "admin ativo",
+  // para que o teste siga medindo o teto de falhas e não o autenticador do criador.
+  const vinculo = encadeamento({ data: { role: "admin" }, error: null });
+  const tokens = encadeamento(resultado);
+  vi.mocked(createAdminClient).mockReturnValue({
+    from: (tabela: string) => (tabela === "user_organizations" ? vinculo : tokens),
+  } as never);
 }
 
 /** Linha de `api_tokens` como o lookup devolve (schema real, token morto ou vivo). */

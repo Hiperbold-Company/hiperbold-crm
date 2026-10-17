@@ -144,11 +144,16 @@ describe("D-091 token de API", () => {
     });
   });
 
-  it("pela casca MCP vira 403 (a conta existe, está suspensa), não 401", async () => {
+  it("pela casca MCP vira a MESMA recusa neutra de qualquer token que não vale (401), sem dizer que a conta está suspensa", async () => {
+    // Era 403 ("a conta existe, está suspensa"). Auditoria de 17/10/2026, achado baixo 5:
+    // quem tem um `dsk_` roubado ou chutado não pode sondar o estado da empresa pela
+    // resposta; o motivo (`tenant_suspended`) fica no log e em `resolveApiToken`.
     adminDeTokens(linha("suspended"));
     const erro = await validateBearerToken(`Bearer ${PLAINTEXT}`).catch((e) => e);
     expect(erro).toBeInstanceOf(McpAuthError);
-    expect(erro.httpStatus).toBe(403);
+    expect(erro.httpStatus).toBe(401);
+    expect(erro.message).toBe("Invalid or expired token.");
+    expect(erro.message).not.toMatch(/suspend/i);
   });
 
   it("organização ativa: token resolve", async () => {

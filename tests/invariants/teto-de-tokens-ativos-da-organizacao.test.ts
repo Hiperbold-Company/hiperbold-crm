@@ -203,6 +203,11 @@ describe("teto de tokens ativos por organização (0415)", () => {
       const cliente = await pool.connect();
       try {
         await cliente.query("begin");
+        // 0962: authenticated perdeu o privilégio de INSERT em api_tokens (só o servidor
+        // escreve). O que este caso prova é outra coisa, a de que o GATILHO não exige
+        // EXECUTE de quem insere; então o privilégio de tabela volta aqui, dentro da
+        // transação desfeita, para o INSERT chegar ao gatilho e à RLS como antes.
+        await cliente.query("grant insert on public.api_tokens to authenticated");
         await cliente.query("set local role authenticated");
         try {
           await cliente.query(

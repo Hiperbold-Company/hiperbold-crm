@@ -17,6 +17,7 @@ import { createHash } from "node:crypto";
 
 import type { Actor } from "@/lib/api/handlers/types";
 import { registrarFalhaDeToken, tokenFailureLimited } from "@/lib/auth/rate-limit";
+import { logger } from "@/lib/logger";
 import type { Role } from "@/lib/auth/types";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -110,10 +111,18 @@ export class ApiTokenError extends Error {
 
 /**
  * Quem criou o token mantém vínculo ATIVO com a organização, com papel pelo menos
- * igual ao que o token declara (`role:`)? O admin de plataforma ativo também vale
- * (a policy de `api_tokens` o deixa criar sem ser membro). Falha de leitura
- * lança `lookup_failed`: decisão de acesso não trata leitura que não aconteceu
- * como resposta.
+ * igual ao que o token declara (`role:`)? Falha de leitura lança `lookup_failed`:
+ * decisão de acesso não trata leitura que não aconteceu como resposta.
+ *
+ * ⚠️ NÃO HÁ RAMO DE PLATAFORMA (migration 0962, auditoria de 17/10/2026). Este
+ * ramo aceitava qualquer linha ativa de `platform_admins`, sem olhar o escopo, e
+ * era a metade de um buraco: um `support_readonly` inseria uma chave
+ * `role:admin` + `mcp:write` para qualquer organização pelo PostgREST e ela
+ * passava aqui. A escolha foi a mais estrita das duas possíveis (exigir
+ * `scope = 'full'` ou exigir vínculo real): vínculo real. Quem administra uma
+ * empresa de fora entra por sessão de suporte (que não emite chave) ou é membro;
+ * nenhum fluxo legítimo de hoje cria chave com criador de fora da organização
+ * (a provisão externa usa o dono recém-criado, que é membro).
  */
 async function criadorAindaPodeOQueATokenPode(
   supabase: ReturnType<typeof createAdminClient>,
@@ -130,18 +139,7 @@ async function criadorAindaPodeOQueATokenPode(
     .maybeSingle();
   if (error) throw new ApiTokenError("lookup_failed", `Token creator lookup failed: ${error.message}`);
   const papelDoCriador = (vinculo as { role?: string } | null)?.role as Role | undefined;
-  if (papelDoCriador && (ROLE_RANK[papelDoCriador] ?? 0) >= ROLE_RANK[papelDoToken]) return true;
-
-  const { data: plataforma, error: erroDePlataforma } = await supabase
-    .from("platform_admins")
-    .select("user_id")
-    .eq("user_id", criadorId)
-    .is("revoked_at", null)
-    .maybeSingle();
-  if (erroDePlataforma) {
-    throw new ApiTokenError("lookup_failed", `Token creator lookup failed: ${erroDePlataforma.message}`);
-  }
-  return !!plataforma;
+  return !!papelDoCriador && (ROLE_RANK[papelDoCriador] ?? 0) >= ROLE_RANK[papelDoToken];
 }
 
 /** `organizations(status)` volta como objeto (FK 1:1) ou, por segurança, lista. */
@@ -245,6 +243,9 @@ export async function resolveApiToken(plaintext: string): Promise<ResolvedApiTok
  * nada de "quantas faltam": a resposta não diz se o token existe nem quanto
  * resta da janela.
  */
+/** A única mensagem de recusa para um token que não vale (ver o `catch` em `validateBearerToken`). */
+export const TOKEN_INVALIDO_MSG = "Invalid or expired token.";
+
 const TETO_DE_TOKEN_MSG =
   "Too many failed token attempts. Wait a few minutes before retrying and send a valid `dsk_` API token — if yours was revoked or expired, issue a new one.";
 
@@ -278,11 +279,19 @@ export async function validateBearerToken(
           contaNoIp: err.reason === "malformed" || err.reason === "not_found",
         });
       }
-      throw new McpAuthError(
-        err.reason === "lookup_failed" ? -32603 : err.reason === "tenant_suspended" ? -32002 : -32001,
-        err.reason === "lookup_failed" ? 500 : err.reason === "tenant_suspended" ? 403 : 401,
-        err.message,
-      );
+      // Uma resposta só para tudo o que é "este token não vale": desconhecido,
+      // revogado, expirado, criador sem acesso e organização suspensa. Mensagens
+      // distintas deixavam quem tem um `dsk_` roubado ou chutado sondar o estado
+      // da chave e da empresa (a chave existe? foi revogada? a conta está
+      // suspensa?). O motivo real fica no log, nunca na resposta.
+      logger.warn("[mcp.auth] bearer recusado", { reason: err.reason });
+      if (err.reason === "lookup_failed") {
+        throw new McpAuthError(-32603, 500, err.message);
+      }
+      if (err.reason === "malformed") {
+        throw new McpAuthError(-32001, 401, err.message);
+      }
+      throw new McpAuthError(-32001, 401, TOKEN_INVALIDO_MSG);
     }
     throw err;
   }
