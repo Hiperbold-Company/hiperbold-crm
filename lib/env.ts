@@ -81,6 +81,14 @@ const schema = z.object({
    */
   TENANT_PROVISIONING_SECRET: z.string().optional().default(""),
 
+  /**
+   * Endereço da central de ajuda desta instalação (ex.: https://ajuda.suaempresa.com).
+   * Opcional: vazio = o botão "Ajuda" não aparece. Fica fora do código porque o
+   * produto é white-label. O caminho do artigo da tela é montado por
+   * `lib/ajuda/artigos.ts`.
+   */
+  HELP_CENTER_URL: z.string().optional().default(""),
+
   // Laboratório local de extensões: origem HTTP exata em 127.0.0.1. O cliente
   // recusa a exceção se a URL do app não for loopback. Vazio mantém HTTPS público.
   EXTENSIONS_LOCAL_CATALOG_ORIGIN: z.string().optional().default(""),

@@ -18,6 +18,7 @@ import {
 import { updatePipelineConfig } from "@/app/actions/settings/updatePipelineConfig";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import type { PipelineConfigPatch } from "@/lib/schemas/settings";
+import { ROTULO_DO_TIPO_DE_CAMPO } from "@/lib/campos/rotulo-do-tipo";
 import { camposDoFunil } from "@/lib/leads/campos-do-funil";
 import { modoDeReabertura } from "@/lib/leads/reabertura";
 import { CATEGORIAS_DE_PERDA } from "@/lib/schemas/leads";
@@ -458,7 +459,7 @@ function PipelineEditor({
               <SelectContent>
                 {TIPOS_DE_CAMPO.map((tipo) => (
                   <SelectItem key={tipo} value={tipo}>
-                    {tipo}
+                    {t(ROTULO_DO_TIPO_DE_CAMPO[tipo])}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -7137,6 +7137,16 @@ export const DICIONARIO: Traducoes = {
 
   // ─── Onboarding: invite-team — ROTULO_DO_PAPEL (lib/auth/types.ts) ───
   "Somente leitura": { es: "Solo lectura" },
+  "Visualizador": { es: "Visualizador" },
+  "Ajuda": { es: "Ayuda" },
+  "Papel": { es: "Rol" },
+
+  // ─── Campo personalizado — ROTULO_DO_TIPO_DE_CAMPO (lib/campos/rotulo-do-tipo.ts) ───
+  "Texto longo": { es: "Texto largo" },
+  "Lista de opções": { es: "Lista de opciones" },
+  "Lista de várias opções": { es: "Lista de varias opciones" },
+  "Sim ou não": { es: "Sí o no" },
+  "Link": { es: "Enlace" },
   "Assistente com autonomia de operação": { es: "Asistente con autonomía de operación" },
   "Gerente": { es: "Gerente" },
   "Administrador": { es: "Administrador" },
