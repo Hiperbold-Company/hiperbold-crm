@@ -34,11 +34,13 @@
  */
 import type { NextRequest } from "next/server";
 
+import { fail } from "@/lib/api/wrappers";
 import type { Role } from "@/lib/auth/types";
 import { loadAuthUser } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { resolveAuthDual, tetoDeEscritaDoToken, type AuthDual } from "./auth-dual";
 
 export type AuthAdminOk = Extract<AuthDual, { ok: true }>;
@@ -57,11 +59,13 @@ export interface OpcoesAuthAdmin {
   escrita: boolean;
   /** A rota lê/escreve dado com dono por atendente (ver `AuthDualOptions.comDono`). */
   comDono?: boolean;
+  /** Piso do TOKEN quando a operação é mais destrutiva que o da sessão (ver `AuthDualOptions.tokenRole`). */
+  tokenRole?: Role;
 }
 
 export async function autorizarAdministracao(
   req: NextRequest,
-  { requestId, resource, role, escrita, comDono }: OpcoesAuthAdmin,
+  { requestId, resource, role, escrita, comDono, tokenRole }: OpcoesAuthAdmin,
 ): Promise<ResultadoAuthAdmin> {
   const authz = await resolveAuthDual(req, {
     requestId,
@@ -69,8 +73,21 @@ export async function autorizarAdministracao(
     role,
     scope: escrita ? ESCOPO_DE_ESCRITA : ESCOPO_DE_LEITURA,
     comDono,
+    tokenRole,
   });
   if (!authz.ok) return authz;
+
+  // São operações de ADMINISTRAÇÃO, de gente: o token temporário do agente
+  // publicado (`actor:ai_agent`, `role:ai_operator`) e qualquer chave marcada como
+  // agente de IA não as exercem — o agente não administra a empresa em que atende.
+  if (authz.via === "token" && authz.actor.type === "ai_agent") {
+    return {
+      ok: false,
+      response: fail("forbidden", "AI agent tokens cannot perform administration operations.", 403, {
+        requestId,
+      }),
+    };
+  }
 
   if (escrita) {
     const teto = await tetoDeEscritaDoToken(authz, resource, requestId);
@@ -137,4 +154,26 @@ export async function nomeDeQuemAgiu(authz: AuthAdminOk): Promise<string> {
   } catch {
     return neutro;
   }
+}
+
+/**
+ * Teto por ORGANIZAÇÃO para envio de convite por e-mail, por qualquer porta
+ * (sessão ou token): `MAX_CONVITES_POR_HORA` e-mails por hora, e no mínimo
+ * `INTERVALO_DE_REENVIO_SEGUNDOS` entre dois reenvios do MESMO convite. Convite
+ * dispara e-mail de verdade com o nome da empresa — sem teto, uma chave (ou uma
+ * aba em laço) vira máquina de spam com o remetente da instalação.
+ */
+export const MAX_CONVITES_POR_HORA = 20;
+export const INTERVALO_DE_REENVIO_SEGUNDOS = 600;
+
+/** `true` quando ainda cabe mais um e-mail de convite nesta organização na hora corrente. */
+export async function cabeConviteNaHora(organizationId: string): Promise<boolean> {
+  const r = await checkRateLimit(`convite:org:${organizationId}`, MAX_CONVITES_POR_HORA, 3600);
+  return r.allowed;
+}
+
+/** `true` quando este convite pode ser reenviado agora (o intervalo mínimo já passou). */
+export async function podeReenviarConvite(organizationId: string, conviteId: string): Promise<boolean> {
+  const r = await checkRateLimit(`reenvio:${organizationId}:${conviteId}`, 1, INTERVALO_DE_REENVIO_SEGUNDOS);
+  return r.allowed;
 }

@@ -14,6 +14,8 @@ import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import {
   atorDoAudit,
+  cabeConviteNaHora,
+  podeReenviarConvite,
   autorizarAdministracao,
   nomeDaOrganizacao,
   nomeDeQuemAgiu,
@@ -82,6 +84,17 @@ export async function POST(
     });
   }
 
+  // Teto por organização, por qualquer porta: no mínimo 10 min entre dois reenvios
+  // do MESMO convite, e o reenvio também gasta uma vaga da hora de e-mails.
+  if (!(await podeReenviarConvite(activeOrg.orgId, id)) || !(await cabeConviteNaHora(activeOrg.orgId))) {
+    return fail(
+      "rate_limited",
+      t("Este convite foi reenviado há pouco. Aguarde alguns minutos para reenviar de novo."),
+      429,
+      { requestId, headers: { "Retry-After": "600" } },
+    );
+  }
+
   let resultado;
   try {
     resultado = await reenviarConvite(admin, {
@@ -109,7 +122,8 @@ export async function POST(
     {
       ...resultado.convite,
       status: statusConvite(resultado.convite),
-      accept_url: resultado.accept_url,
+      // Pelo TOKEN o link de aceite não volta (o convite só vale pelo e-mail).
+      accept_url: authz.via === "token" ? null : resultado.accept_url,
       email_dispatched: resultado.email_dispatched,
     },
     { requestId },

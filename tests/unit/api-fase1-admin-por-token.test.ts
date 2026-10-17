@@ -17,6 +17,8 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { audit } from "@/lib/audit";
+import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
+import { emitirConvite } from "@/lib/team/convites";
 import { requireRole } from "@/lib/auth/require-role";
 import { isPublicPath } from "@/lib/auth/public-paths";
 import { McpAuthError, validateBearerToken } from "@/lib/mcp/auth";
@@ -33,6 +35,18 @@ vi.mock("@/lib/audit", () => ({
   audit: vi.fn(async () => undefined),
   isServiceRoleConfigured: () => true,
 }));
+vi.mock("@/lib/team/convites", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/team/convites")>();
+  return {
+    ...real,
+    emitirConvite: vi.fn(async (_admin: unknown, p: { email: string }) => ({
+      convite: { id: "inv-1", expires_at: "2099-01-01T00:00:00Z", email: p.email },
+      accept_url: "https://app.example/team/accept-invite/SEGREDO",
+      email_dispatched: true,
+      renovado: false,
+    })),
+  };
+});
 vi.mock("@/lib/mcp/auth", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/mcp/auth")>();
   return { ...real, validateBearerToken: vi.fn() };
@@ -308,6 +322,121 @@ describe("a organização é a do token (isolamento)", () => {
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "org.updated", organizationId: ORG_TOKEN, actorApiTokenId: TOKEN_ID }),
     );
+  });
+});
+
+describe("endurecimentos da auditoria", () => {
+  const ctxContato = { params: Promise.resolve({ id: ALVO }) };
+
+  it("DELETE /contacts/[id]: token agent leva 403 (piso do token é gerente); manager passa do portão", async () => {
+    const db = bancoFalso({ contacts: () => null });
+    vi.mocked(createAdminClient).mockReturnValue(db as never);
+    const { DELETE } = await import("@/app/api/v1/contacts/[id]/route");
+
+    comoToken("agent", ["mcp:write"]);
+    expect((await DELETE(req(`/api/v1/contacts/${ALVO}`, "DELETE"), ctxContato)).status).toBe(403);
+    expect(db.chamadas.some((c) => c.op === "delete")).toBe(false);
+
+    comoToken("manager", ["mcp:write"]);
+    const res = await DELETE(req(`/api/v1/contacts/${ALVO}`, "DELETE"), ctxContato);
+    expect(res.status).not.toBe(403);
+  });
+
+  it("DELETE /contacts/[id]: a sessão agent continua podendo (só o token ganhou piso)", async () => {
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      user: { id: DONO, idioma: "pt-BR" },
+      org: { orgId: ORG_TOKEN, name: "Acme", role: "agent" },
+    } as never);
+    vi.mocked(createClient).mockResolvedValue(bancoFalso({ contacts: () => null }) as never);
+    const { DELETE } = await import("@/app/api/v1/contacts/[id]/route");
+    const res = await DELETE(req(`/api/v1/contacts/${ALVO}`, "DELETE", undefined, false), ctxContato);
+    expect(res.status).not.toBe(403);
+    expect(vi.mocked(requireRole).mock.calls[0]?.[0]).toBe("agent");
+  });
+
+  it("token de agente de IA (actor:ai_agent) não administra, mesmo com role:admin", async () => {
+    vi.mocked(validateBearerToken).mockResolvedValue({
+      organizationId: ORG_TOKEN,
+      role: "admin",
+      actor: { type: "ai_agent", id: "run-1", role: "admin", api_token_id: TOKEN_ID },
+      apiTokenId: TOKEN_ID,
+      scopes: ["mcp:read", "mcp:write", "role:admin", "actor:ai_agent"],
+      createdBy: DONO,
+    });
+    const db = bancoFalso({ user_organizations: () => [] });
+    vi.mocked(createAdminClient).mockReturnValue(db as never);
+    const { GET } = await import("@/app/api/v1/team/route");
+    expect((await GET(req("/api/v1/team", "GET"))).status).toBe(403);
+    expect(db.chamadas).toEqual([]);
+  });
+
+  it("POST /team/invite: pelo token a resposta NÃO traz o link de aceite; pela sessão traz", async () => {
+    const db = bancoFalso({ user_organizations: () => [], organizations: () => ({ display_name: "Acme" }) });
+    vi.mocked(createAdminClient).mockReturnValue(db as never);
+    const { POST } = await import("@/app/api/v1/team/invite/route");
+    const corpo = { invitations: [{ email: "novo@x.com", role: "agent" }] };
+
+    comoToken("admin", ["mcp:write"]);
+    const viaToken = await POST(req("/api/v1/team/invite", "POST", corpo));
+    expect(viaToken.status).toBe(201);
+    const t = (await viaToken.json()) as { data: { sent: Array<Record<string, unknown>> } };
+    expect(t.data.sent).toHaveLength(1);
+    expect(t.data.sent[0]).not.toHaveProperty("accept_url");
+    expect(JSON.stringify(t)).not.toContain("SEGREDO");
+
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      user: { id: DONO, idioma: "pt-BR", full_name: "Dono", email: "d@x.com" },
+      org: { orgId: ORG_TOKEN, name: "Acme", role: "admin" },
+    } as never);
+    vi.mocked(createClient).mockResolvedValue(db as never);
+    const viaSessao = await POST(req("/api/v1/team/invite", "POST", corpo, false));
+    const s = (await viaSessao.json()) as { data: { sent: Array<{ accept_url?: string }> } };
+    expect(s.data.sent[0]?.accept_url).toContain("SEGREDO");
+  });
+
+  it("POST /team/invite: acima do teto por hora da organização o e-mail NÃO sai (rate_limited)", async () => {
+    vi.mocked(checkRateLimit).mockImplementation(async (bucket: string) => ({
+      allowed: !bucket.startsWith("convite:org:"),
+    }) as never);
+    const db = bancoFalso({ user_organizations: () => [], organizations: () => ({ display_name: "Acme" }) });
+    vi.mocked(createAdminClient).mockReturnValue(db as never);
+    comoToken("admin", ["mcp:write"]);
+    const { POST } = await import("@/app/api/v1/team/invite/route");
+    const res = await POST(req("/api/v1/team/invite", "POST", { invitations: [{ email: "a@x.com", role: "agent" }] }));
+    const corpo = (await res.json()) as { data: { sent: unknown[]; failed: Array<{ reason: string }> } };
+    expect(corpo.data.sent).toEqual([]);
+    expect(corpo.data.failed[0]?.reason).toBe("rate_limited");
+    expect(emitirConvite).not.toHaveBeenCalled();
+    vi.mocked(checkRateLimit).mockImplementation(async () => ({ allowed: true }) as never);
+  });
+
+  it("POST /team/invites/[id]/resend: segundo reenvio dentro de 10 min leva 429 e nada é reenviado", async () => {
+    const INV = "12121212-1212-4212-8212-121212121212";
+    vi.mocked(checkRateLimit).mockImplementation(async (bucket: string) => ({
+      allowed: !bucket.startsWith("reenvio:"),
+    }) as never);
+    const db = bancoFalso({
+      team_invites: () => ({
+        id: INV,
+        organization_id: ORG_TOKEN,
+        email: "a@x.com",
+        role: "agent",
+        accepted_at: null,
+        revoked_at: null,
+        expires_at: "2099-01-01T00:00:00Z",
+        resend_count: 0,
+      }),
+      organizations: () => ({ display_name: "Acme" }),
+    });
+    vi.mocked(createAdminClient).mockReturnValue(db as never);
+    comoToken("admin", ["mcp:write"]);
+    const { POST } = await import("@/app/api/v1/team/invites/[id]/resend/route");
+    const res = await POST(req(`/api/v1/team/invites/${INV}/resend`, "POST"), { params: Promise.resolve({ id: INV }) });
+    expect(res.status).toBe(429);
+    expect(db.chamadas.some((c) => c.tabela === "team_invites" && c.op === "update")).toBe(false);
+    vi.mocked(checkRateLimit).mockImplementation(async () => ({ allowed: true }) as never);
   });
 });
 

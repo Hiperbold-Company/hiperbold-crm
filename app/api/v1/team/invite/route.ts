@@ -26,6 +26,7 @@ import { ApiError } from "@/lib/api/types";
 import { recusaDoPlano } from "@/lib/billing/planos/recusa-do-plano";
 import {
   atorDoAudit,
+  cabeConviteNaHora,
   autorizarAdministracao,
   nomeDaOrganizacao,
   nomeDeQuemAgiu,
@@ -111,6 +112,12 @@ export async function POST(req: NextRequest): Promise<Response> {
   for (const inv of input.invitations) {
     const email = inv.email.trim().toLowerCase();
 
+    // Teto por organização (qualquer porta): cada e-mail novo gasta uma vaga da hora.
+    if (!memberEmails.has(email) && !(await cabeConviteNaHora(activeOrg.orgId))) {
+      failed.push({ email, reason: "rate_limited" });
+      continue;
+    }
+
     // já é membro ativo → pula (não reenvia convite)
     if (memberEmails.has(email)) {
       failed.push({ email, reason: "already_member" });
@@ -170,5 +177,10 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
   }
 
-  return ok({ sent, failed }, { status: 201, requestId });
+  // Pelo TOKEN o convite sai só por e-mail: o link de aceite dá o papel convidado a
+  // quem o tiver, e uma chave de integração não deve receber esse segredo na
+  // resposta (ficaria em log, fila e histórico de quem chamou). A sessão segue
+  // recebendo o link — é o que a tela copia quando o e-mail não sai.
+  const sentVisivel = authz.via === "token" ? sent.map(({ accept_url: _link, ...resto }) => resto) : sent;
+  return ok({ sent: sentVisivel, failed }, { status: 201, requestId });
 }

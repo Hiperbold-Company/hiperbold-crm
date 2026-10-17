@@ -139,10 +139,15 @@ export async function DELETE(
   const requestId = randomUUID();
   const { id } = await ctx.params;
 
+  // Apagar o contato leva conversas e mensagens (dado COM DONO por atendente). O
+  // token usa o client admin, sem a RLS do "só os meus": por isso, pelo token, o
+  // piso é gerente e vale a regra D-148 (`comDono`) — a sessão segue `agent`.
   const authz = await autorizarAdministracao(req, {
     requestId,
     resource: "contacts",
     role: "agent",
+    tokenRole: "manager",
+    comDono: true,
     escrita: true,
   });
   if (!authz.ok) return authz.response;

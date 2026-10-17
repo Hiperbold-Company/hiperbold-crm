@@ -51,7 +51,8 @@ export async function GET(req: NextRequest): Promise<Response> {
     return {
       ...row,
       status,
-      accept_url: conviteEstaEmAberto(row, now) ? linkDeAceite(row) : null,
+      // Pelo TOKEN o link de aceite não sai (só pelo e-mail); a sessão segue vendo o link.
+      accept_url: authz.via === "session" && conviteEstaEmAberto(row, now) ? linkDeAceite(row) : null,
     };
   });
 
