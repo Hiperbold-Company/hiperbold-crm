@@ -112,6 +112,12 @@ class Consulta implements PromiseLike<ResultadoDoBanco> {
     this.filtros.push((l) => (valor === null ? valorDa(l, coluna) == null : valorDa(l, coluna) === valor));
     return this;
   }
+  /** Só `not(coluna, "is", valor)`, que é o que os testes usam. */
+  not(coluna: string, operador: "is", valor: unknown): this {
+    if (operador !== "is") throw new Error(`banco em memória: not(${operador}) não implementado`);
+    this.filtros.push((l) => (valor === null ? valorDa(l, coluna) != null : valorDa(l, coluna) !== valor));
+    return this;
+  }
   /** Filtro composto não é interpretado: o teste que depende dele monta a fixture para não precisar. */
   or(_expressao: string): this {
     return this;

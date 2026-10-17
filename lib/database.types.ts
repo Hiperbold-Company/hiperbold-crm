@@ -8885,6 +8885,7 @@ export type Database = {
           created_by_user_id: string | null
           default_pipeline_id: string
           default_stage_id: string
+          exige_carimbo: boolean
           field_map: Json
           id: string
           is_active: boolean
@@ -8904,6 +8905,7 @@ export type Database = {
           created_by_user_id?: string | null
           default_pipeline_id: string
           default_stage_id: string
+          exige_carimbo?: boolean
           field_map?: Json
           id?: string
           is_active?: boolean
@@ -8923,6 +8925,7 @@ export type Database = {
           created_by_user_id?: string | null
           default_pipeline_id?: string
           default_stage_id?: string
+          exige_carimbo?: boolean
           field_map?: Json
           id?: string
           is_active?: boolean

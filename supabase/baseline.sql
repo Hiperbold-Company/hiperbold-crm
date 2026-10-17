@@ -66852,6 +66852,44 @@ create unique index if not exists agent_inbox_items_aviso_de_recusa_dia_uq
   where kind = 'other' and ref_kind is null and ref_id is null
     and title like 'A fonte % recusou um lead em %';
 
+-- ---- captação com carimbo de horário e CPF do contato só do servidor (migration 0967, fork Hiperbold) ----
+--
+-- Sem função: nada a ver com a VARREDURA anon (logo abaixo). Detalhe e motivo no arquivo da migration.
+-- D-215: catraca do carimbo da captação assinada. D-216: `cpf_hash`/`cpf_encrypted` perdem SELECT/INSERT/UPDATE para
+-- anon e authenticated (grant por coluna em todas as outras). O default ACL do Supabase concede tudo à tabela, e o
+-- GRANT do dump só acrescenta: o que fecha é o `revoke` explícito abaixo, seguido do grant por coluna.
+-- ⚠️ Coluna nova em `contacts` precisa do próprio grant de coluna (tests/invariants/contacts-cpf-so-do-servidor.test.ts).
+alter table public.webhook_sources
+  add column if not exists exige_carimbo boolean not null default false;
+
+comment on column public.webhook_sources.exige_carimbo is
+  'Ligada sozinha no primeiro envio válido com X-HiperCRM-Timestamp (D-215). Ligada, a fonte recusa envio assinado sem carimbo (anti-reenvio). Nunca volta a false por código.';
+
+revoke select, insert, update on table public.contacts from anon, authenticated;
+
+do $$
+declare
+  v_colunas text;
+begin
+  select string_agg(format('%I', a.attname), ', ' order by a.attnum)
+    into v_colunas
+    from pg_attribute a
+   where a.attrelid = 'public.contacts'::regclass
+     and a.attnum > 0
+     and not a.attisdropped
+     and a.attname not in ('cpf_hash', 'cpf_encrypted');
+
+  execute format('grant select (%s) on table public.contacts to anon, authenticated', v_colunas);
+  execute format('grant insert (%s) on table public.contacts to anon, authenticated', v_colunas);
+  execute format('grant update (%s) on table public.contacts to anon, authenticated', v_colunas);
+end
+$$;
+
+comment on column public.contacts.cpf_hash is
+  'HMAC do CPF (busca exata). Sem SELECT/INSERT/UPDATE para anon e authenticated (0967, D-216): só o servidor lê e grava.';
+comment on column public.contacts.cpf_encrypted is
+  'CPF cifrado. Sem SELECT/INSERT/UPDATE para anon e authenticated (0967, D-216): só o servidor lê e grava.';
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

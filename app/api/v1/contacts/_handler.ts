@@ -20,7 +20,8 @@ import { roleAtLeast } from "@/lib/auth/types";
 import { canonicalPhoneBR, phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { encontrarContatoPorTelefone } from "@/lib/channels/contato-por-telefone";
 import { mesclarConsentimento } from "@/lib/contacts/consentimento";
-import { hashCpf, encryptCpfSql } from "@/lib/contacts/cpf";
+import { hashCpf } from "@/lib/contacts/cpf";
+import { cifrarCpfDoContato, gravarCpfDoContatoPorUsuario, idsComCpf, idsPorHashDeCpf } from "@/lib/contacts/cpf-do-contato";
 import type { Contact } from "@/lib/types/contacts";
 import { ensureConversation, sessaoProntaParaEnvio } from "@/lib/automation/start-conversation";
 import type {
@@ -33,8 +34,11 @@ import { contactListQuerySchema } from "@/lib/schemas";
 
 type SB = SupabaseClient;
 
+// `cpf_hash` e `cpf_encrypted` NÃO entram aqui: o papel `authenticated` não lê nem grava essas colunas (migration
+// 0967, D-216), e pedir qualquer uma — ou `select *` — com a sessão do usuário dá "permission denied". Quem precisa de
+// "tem CPF?" usa `idsComCpf` (lib/contacts/cpf-do-contato.ts), com o cliente de serviço.
 const SELECT_COLS =
-  "id, organization_id, name, display_name, email, email_normalized, phone_number, cpf_hash, birthdate, is_blocked, blocked_reason, is_anonymized, anonymized_at, is_merged_into, merged_at, consent, tags, source, source_metadata, custom_fields, created_at, updated_at, last_activity_at, first_service_at";
+  "id, organization_id, name, display_name, email, email_normalized, phone_number, birthdate, is_blocked, blocked_reason, is_anonymized, anonymized_at, is_merged_into, merged_at, consent, tags, source, source_metadata, custom_fields, created_at, updated_at, last_activity_at, first_service_at";
 
 interface CursorPayload {
   sort: string | null;
@@ -89,9 +93,26 @@ function actorAuditPayload(actor: Actor): {
  */
 export type ContatoPublico = Omit<Contact, "cpf_hash"> & { cpf_available: boolean };
 
-export function semHashDeCpf<T extends { cpf_hash?: string | null }>(c: T): Omit<T, "cpf_hash"> & { cpf_available: boolean } {
+export function semHashDeCpf<T extends { cpf_hash?: string | null; cpf_available?: boolean }>(
+  c: T,
+): Omit<T, "cpf_hash"> & { cpf_available: boolean } {
   const { cpf_hash, ...resto } = c;
-  return { ...resto, cpf_available: !!cpf_hash };
+  // `cpf_available` já calculado pelo servidor (a consulta do usuário não traz o hash) vale mais que o hash.
+  return { ...resto, cpf_available: c.cpf_available ?? !!cpf_hash };
+}
+
+/** Marca em cada contato se ele tem CPF, sem trazer o hash para a resposta nem para a memória. */
+async function comCpfDisponivel(
+  organizationId: string,
+  contatos: Contact[],
+  requestId: string,
+): Promise<Contact[]> {
+  const { ids, error } = await idsComCpf(
+    organizationId,
+    contatos.map((c) => c.id),
+  );
+  if (error) throw new ApiError(500, "internal_error", undefined, requestId, error.message);
+  return contatos.map((c) => ({ ...c, cpf_available: ids.has(c.id) }));
 }
 
 export interface ListContactsResult {
@@ -178,8 +199,15 @@ export async function listContactsHandler(
       }
     }
     if (digits.length === 11) {
+      // A consulta do usuário não enxerga `cpf_hash`: o contato do CPF é achado pelo servidor e entra na busca por id.
       const hash = hashCpf(digits);
-      if (hash) orParts.push(`cpf_hash.eq.${hash}`);
+      if (hash) {
+        const achados = await idsPorHashDeCpf(ctx.organization_id, hash);
+        if (achados.error) {
+          throw new ApiError(500, "internal_error", undefined, ctx.requestId, achados.error.message);
+        }
+        for (const id of achados.ids) orParts.push(`id.eq.${id}`);
+      }
     }
     query = query.or(orParts.join(","));
   }
@@ -226,7 +254,11 @@ export async function listContactsHandler(
         })
       : null;
 
-  const { contacts, error: convErr } = await withConversas(supabase, ctx.organization_id, page);
+  const { contacts, error: convErr } = await withConversas(
+    supabase,
+    ctx.organization_id,
+    await comCpfDisponivel(ctx.organization_id, page, ctx.requestId),
+  );
   if (convErr) {
     throw new ApiError(500, "internal_error", undefined, ctx.requestId, convErr);
   }
@@ -319,12 +351,15 @@ export async function getContactHandler(
       traduzir("Contato não encontrado.", ctx.idioma ?? "pt-BR"),
     );
   }
-  const contact = data as Contact;
+  const [contact] = await comCpfDisponivel(ctx.organization_id, [data as Contact], ctx.requestId);
+  if (!contact) {
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId);
+  }
 
   let cpfDecrypted: string | null = null;
   let cpfDecryptDenied = false;
 
-  if (input.decryptPurpose && contact.cpf_hash && ctx.actor.type === "user") {
+  if (input.decryptPurpose && contact.cpf_available && ctx.actor.type === "user") {
     const { data: membership } = await supabase
       .from("user_organizations")
       .select("role")
@@ -373,7 +408,7 @@ export async function getContactHandler(
 
   return {
     ...semHashDeCpf(contactWithConversa),
-    cpf_available: !!contact.cpf_hash,
+    cpf_available: contact.cpf_available === true,
     cpf_decrypted: cpfDecrypted,
     cpf_decrypt_denied: cpfDecryptDenied || undefined,
   };
@@ -409,13 +444,18 @@ export async function createContactHandler(
     consent: input.consent ?? {},
   };
 
+  // O CPF NÃO vai no INSERT do usuário (D-216: o papel `authenticated` não grava `cpf_hash`/`cpf_encrypted`). Ele
+  // é gravado logo depois pelo servidor, sobre o contato que a RLS acabou de aceitar criar.
+  let cpfParaGravar: { hash: string; cifrado: string } | null = null;
   if (input.cpf) {
     const hash = hashCpf(input.cpf);
     // Sem a chave do servidor não há como gravar o CPF com segurança: recusa, nunca grava em claro nem com hash fraco.
     if (!hash) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
-    insertRow.cpf_hash = hash;
-    const enc = await encryptCpfSql(supabase, input.cpf);
-    if (enc) insertRow.cpf_encrypted = enc;
+    // `cpf_hash` e `cpf_encrypted` vão juntos (contacts_cpf_consistency): sem a chave de cifra do banco, recusa
+    // antes de criar o contato.
+    const cifrado = await cifrarCpfDoContato(input.cpf);
+    if (!cifrado) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
+    cpfParaGravar = { hash, cifrado };
   }
 
   const { data: created, error: insErr } = await supabase
@@ -453,6 +493,21 @@ export async function createContactHandler(
   }
 
   const contact = created as Contact;
+  if (cpfParaGravar) {
+    const erroDoCpf = await gravarCpfDoContatoPorUsuario(ctx.organization_id, contact.id, cpfParaGravar);
+    if (erroDoCpf) {
+      // Antes o CPF ia no mesmo INSERT e a falha (CPF repetido na organização, cifra indisponível) desfazia tudo.
+      // Agora o contato já existe: desfaz à mão, pelo cliente do usuário (a RLS de DELETE vale), para o resultado
+      // visível continuar o mesmo — erro 500 e nenhum contato criado.
+      await supabase
+        .from("contacts")
+        .delete()
+        .eq("organization_id", ctx.organization_id)
+        .eq("id", contact.id);
+      throw new ApiError(500, "internal_error", undefined, ctx.requestId, erroDoCpf.message);
+    }
+    contact.cpf_available = true;
+  }
   if (contact.phone_number) {
     try {
       const sessionId = await sessaoProntaParaEnvio(supabase, ctx.organization_id);
@@ -473,7 +528,7 @@ export async function createContactHandler(
         source: contact.source,
         has_email: !!contact.email,
         has_phone: !!contact.phone_number,
-        has_cpf: !!contact.cpf_hash,
+        has_cpf: contact.cpf_available === true,
       },
       p_metadata: { request_id: ctx.requestId, ...a.metadataActor },
       p_organization_id: contact.organization_id,
@@ -587,15 +642,30 @@ export async function patchContactHandler(
       input.consent,
     );
   }
+  // O CPF NÃO vai no UPDATE do usuário (D-216): o servidor o grava depois, sobre o contato que a RLS aceitou alterar.
+  let cpfParaGravar: { hash: string; cifrado: string } | null = null;
   if (input.cpf !== undefined) {
     const hash = hashCpf(input.cpf);
     if (!hash) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
-    patch.cpf_hash = hash;
-    const enc = await encryptCpfSql(supabase, input.cpf);
-    if (enc) patch.cpf_encrypted = enc;
+    const cifrado = await cifrarCpfDoContato(input.cpf);
+    if (!cifrado) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
+    cpfParaGravar = { hash, cifrado };
+    // CPF que já é de OUTRO contato da organização: recusa antes de tocar em qualquer campo, para o PATCH
+    // continuar tudo-ou-nada como era quando o CPF ia no mesmo UPDATE (o índice único barrava o conjunto).
+    const donos = await idsPorHashDeCpf(ctx.organization_id, hash);
+    if (donos.error) throw new ApiError(500, "internal_error", undefined, ctx.requestId, donos.error.message);
+    if (donos.ids.some((id) => id !== contactId)) {
+      throw new ApiError(
+        500,
+        "internal_error",
+        undefined,
+        ctx.requestId,
+        'duplicate key value violates unique constraint "uniq_contacts_org_cpf"',
+      );
+    }
   }
 
-  if (Object.keys(patch).length === 0) {
+  if (Object.keys(patch).length === 0 && !cpfParaGravar) {
     throw new ApiError(
       400,
       "invalid_request",
@@ -632,8 +702,18 @@ export async function patchContactHandler(
   }
 
   const contact = updated as Contact;
+  if (cpfParaGravar) {
+    const erroDoCpf = await gravarCpfDoContatoPorUsuario(ctx.organization_id, contact.id, cpfParaGravar);
+    if (erroDoCpf) throw new ApiError(500, "internal_error", undefined, ctx.requestId, erroDoCpf.message);
+  }
+  const [comCpf] = await comCpfDisponivel(ctx.organization_id, [contact], ctx.requestId);
+  contact.cpf_available = comCpf?.cpf_available === true;
   const a = actorAuditPayload(ctx.actor);
-  const fields = Object.keys(patch).filter((k) => k !== "updated_at");
+  // O `fields` sempre nomeou as colunas gravadas, inclusive as do CPF (agora gravadas à parte).
+  const fields = [
+    ...Object.keys(patch).filter((k) => k !== "updated_at"),
+    ...(cpfParaGravar ? ["cpf_hash", "cpf_encrypted"] : []),
+  ];
 
   /**
    * O par ANTES/DEPOIS dos campos que a L-06 nomeia.

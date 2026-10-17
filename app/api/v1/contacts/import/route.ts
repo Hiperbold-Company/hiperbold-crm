@@ -25,7 +25,8 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { lerMultipartComTeto } from "@/lib/api/multipart-com-teto";
 import { requireRole } from "@/lib/auth/require-role";
 import { audit } from "@/lib/audit";
-import { encryptCpfSql, hashCpf } from "@/lib/contacts/cpf";
+import { hashCpf } from "@/lib/contacts/cpf";
+import { cifrarCpfDoContato, gravarCpfDoContatoPorUsuario } from "@/lib/contacts/cpf-do-contato";
 import { traduzir } from "@/lib/i18n/dicionario";
 import {
   CSV_MAX_BYTES,
@@ -264,6 +265,9 @@ export async function POST(req: NextRequest): Promise<Response> {
       source_metadata: {},
       consent: {},
     };
+    // D-216: o CPF não vai no INSERT do usuário (o papel `authenticated` não grava `cpf_hash`/`cpf_encrypted`);
+    // o servidor o grava logo depois, no contato que a RLS acabou de aceitar criar.
+    let cpfParaGravar: { hash: string; cifrado: string } | null = null;
     if (contato.cpf) {
       const hash = hashCpf(contato.cpf as string);
       if (!hash) {
@@ -271,11 +275,15 @@ export async function POST(req: NextRequest): Promise<Response> {
         errors.push({ linha, motivo: t("CPF indisponível neste servidor") });
         continue;
       }
-      insertRow.cpf_hash = hash;
       // LGPD: além do hash (dedupe), grava a versão cifrada — igual ao create
       // unitário, senão o contato importado nasce sem CPF recuperável.
-      const enc = await encryptCpfSql(supabase, contato.cpf as string);
-      if (enc) insertRow.cpf_encrypted = enc;
+      const cifrado = await cifrarCpfDoContato(contato.cpf as string);
+      if (!cifrado) {
+        // Sem a chave de cifra do banco o par hash+cifrado não se completa: a linha vai para os erros.
+        errors.push({ linha, motivo: t("CPF indisponível neste servidor") });
+        continue;
+      }
+      cpfParaGravar = { hash, cifrado };
     }
 
     const { data: criado, error: insErr } = await supabase
@@ -292,6 +300,24 @@ export async function POST(req: NextRequest): Promise<Response> {
       }
       errors.push({ linha, motivo: insErr.message });
       continue;
+    }
+
+    if (cpfParaGravar) {
+      const erroDoCpf = await gravarCpfDoContatoPorUsuario(orgId, (criado as { id: string }).id, cpfParaGravar);
+      if (erroDoCpf) {
+        // Antes o CPF ia no mesmo INSERT e a falha desfazia a linha inteira: desfaz à mão, pelo cliente do usuário.
+        await supabase
+          .from("contacts")
+          .delete()
+          .eq("organization_id", orgId)
+          .eq("id", (criado as { id: string }).id);
+        if (erroDoCpf.code === "23505") {
+          skippedDuplicates += 1;
+        } else {
+          errors.push({ linha, motivo: erroDoCpf.message });
+        }
+        continue;
+      }
     }
 
     imported += 1;
