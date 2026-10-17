@@ -25,6 +25,9 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { provaDoEmailDoConvite } from "@/lib/auth/invite-token";
+import type { gotrueFalso as gotrueFalsoTipo } from "../../tests/unit/helpers/gotrue-admin-falso";
+
 const ORG = "33333333-3333-4333-8333-333333333333";
 const CONVITE = "22222222-2222-4222-8222-222222222222";
 const USUARIO_ID = "11111111-1111-4111-8111-111111111111";
@@ -72,8 +75,19 @@ function adminComConvite(linha: { revoked_at: string | null; role: string } | nu
       update: cadeiaDeUpdate,
     }),
     rpc: rpcDoAceite,
+    // A conta que aceita: por padrão VERIFICADA (sem pedido em aberto), como toda conta de antes do D-204.
+    auth: {
+      admin: {
+        getUserById: vi.fn(async () => ({
+          data: { user: { id: USUARIO_ID, app_metadata: appMetadataDaConta } },
+          error: null,
+        })),
+      },
+    },
   };
 }
+
+let appMetadataDaConta: Record<string, unknown> = {};
 
 async function aplicar(
   linha: { revoked_at: string | null; role: string } | null,
@@ -86,7 +100,10 @@ async function aplicar(
 }
 
 describe("aplicarConvite consulta a LINHA, não só o token", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    appMetadataDaConta = {};
+  });
 
   it("⭐ convite REVOGADO é recusado, e o vínculo nunca chega a ser tentado", async () => {
     const r = await aplicar({ revoked_at: "2026-09-13T10:00:00Z", role: "manager" });
@@ -128,34 +145,42 @@ describe("aplicarConvite consulta a LINHA, não só o token", () => {
     expect(rpcDoAceite).not.toHaveBeenCalled();
   });
 
-  it("D-204: convite aceito carimba a verificação do CRM (o convidado nasce com o pedido em aberto)", async () => {
+  it("D-204: conta com a verificação do CRM EM ABERTO não ganha vínculo por convite (o link não prova o e-mail)", async () => {
+    appMetadataDaConta = { email_verificacao: { hash: "h", expira_em: "2099-01-01T00:00:00Z", enviado_em: "2026-10-17T00:00:00Z" } };
+    const r = await aplicar({ revoked_at: null, role: "manager" });
+
+    expect(r).toEqual({ ok: false, motivo: "email_nao_verificado" });
+    expect(rpcDoAceite, "o vínculo foi gravado para uma conta sem o e-mail provado").not.toHaveBeenCalled();
+  });
+
+  it("D-204: conta JÁ verificada aceita sem `v` e não reescreve nada na conta", async () => {
+    appMetadataDaConta = {};
     const { createAdminClient } = await import("@/lib/supabase/admin");
     const { gotrueFalso } = await import("../../tests/unit/helpers/gotrue-admin-falso");
-    const falso = gotrueFalso();
-    const admin = { ...adminComConvite({ revoked_at: null, role: "manager" }), ...falso.admin };
+    const falso = gotrueFalso({ appMetadata: {} });
+    const admin = { ...adminComConvite({ revoked_at: null, role: "manager" }), auth: falso.admin.auth };
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
 
     const { aplicarConvite } = await import("@/lib/auth/aplicar-convite");
     const r = await aplicarConvite({ userId: USUARIO_ID, payload: PAYLOAD });
 
     expect(r.ok).toBe(true);
-    expect(typeof falso.estado.app_metadata.email_verificado_em).toBe("string");
-    expect(falso.estado.app_metadata.email_verificacao).toBeUndefined();
+    expect(falso.chamadas).toEqual([]);
+    expect(falso.admin.auth.admin.updateUserById).not.toHaveBeenCalled();
   });
 
-  it("D-204: convite recusado NÃO carimba nada", async () => {
+  it("D-204: não conseguiu ler a conta: FALHA FECHADA, sem vínculo", async () => {
+    appMetadataDaConta = {};
     const { createAdminClient } = await import("@/lib/supabase/admin");
-    const { gotrueFalso } = await import("../../tests/unit/helpers/gotrue-admin-falso");
-    const falso = gotrueFalso();
-    const admin = { ...adminComConvite({ revoked_at: "2026-09-13T10:00:00Z", role: "manager" }), ...falso.admin };
+    const admin = adminComConvite({ revoked_at: null, role: "manager" });
+    admin.auth.admin.getUserById = vi.fn(async () => ({ data: { user: null }, error: { message: "x" } })) as never;
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
 
     const { aplicarConvite } = await import("@/lib/auth/aplicar-convite");
     const r = await aplicarConvite({ userId: USUARIO_ID, payload: PAYLOAD });
 
-    expect(r.ok).toBe(false);
-    expect(falso.chamadas).toEqual([]);
-    expect(falso.estado.app_metadata.email_verificado_em).toBeUndefined();
+    expect(r).toEqual({ ok: false, motivo: "internal_error" });
+    expect(rpcDoAceite).not.toHaveBeenCalled();
   });
 
   it("a recusa da própria função do banco (42501) também não é vínculo", async () => {
@@ -194,3 +219,83 @@ describe("D-100: reenviar o convite com outro papel mata o link do papel antigo"
   });
 });
 
+
+describe("D-204: o link que chega POR E-MAIL prova a posse (`v`); o accept_url do admin não", () => {
+  const EMAIL = "v@example.com"; // o e-mail que o `gotrueFalso` dá à conta
+  const PAYLOAD_EMAIL = { ...PAYLOAD, email: EMAIL, iat: Math.floor(Date.now() / 1000) };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  async function aplicarComPedidoAberto(
+    prova: string | null | undefined,
+    payload: Parameters<typeof provaDoEmailDoConvite>[0] = PAYLOAD_EMAIL,
+    opcoes: Parameters<typeof gotrueFalsoTipo>[0] = {},
+  ) {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const { gotrueFalso } = await import("../../tests/unit/helpers/gotrue-admin-falso");
+    const falso = gotrueFalso(opcoes); // padrão: pedido de verificação em aberto
+    const admin = { ...adminComConvite({ revoked_at: null, role: "manager" }), auth: falso.admin.auth };
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+    const { aplicarConvite } = await import("@/lib/auth/aplicar-convite");
+    const r = await aplicarConvite({ userId: USUARIO_ID, payload, provaDoEmail: prova });
+    return { r, falso };
+  }
+
+  it("⭐ com `v` válido e o e-mail do convite: carimba o e-mail como verificado e aplica o convite", async () => {
+    const { r, falso } = await aplicarComPedidoAberto(provaDoEmailDoConvite(PAYLOAD_EMAIL));
+
+    expect(r.ok, "o convidado que clicou no link do próprio e-mail ainda precisaria de um segundo e-mail").toBe(true);
+    expect(rpcDoAceite).toHaveBeenCalledTimes(1);
+    expect(falso.chamadas).toEqual(["carimbo"]);
+    expect(falso.estado.app_metadata.email_verificado_em).toEqual(expect.any(String));
+    expect(falso.estado.app_metadata.email_verificacao).toBeUndefined();
+  });
+
+  it("⭐ o link do admin (sem `v`) com pedido aberto segue recusado, sem carimbo e sem vínculo", async () => {
+    for (const prova of [undefined, null, ""]) {
+      const { r, falso } = await aplicarComPedidoAberto(prova);
+      expect(r).toEqual({ ok: false, motivo: "email_nao_verificado" });
+      expect(falso.chamadas).toEqual([]);
+    }
+    expect(rpcDoAceite, "o vínculo foi gravado para quem só tinha o link da tela do admin").not.toHaveBeenCalled();
+  });
+
+  it("`v` de OUTRO convite é recusado", async () => {
+    const outro = { ...PAYLOAD_EMAIL, invite_id: "44444444-4444-4444-8444-444444444444" };
+    const { r, falso } = await aplicarComPedidoAberto(provaDoEmailDoConvite(outro));
+    expect(r).toEqual({ ok: false, motivo: "email_nao_verificado" });
+    expect(falso.chamadas).toEqual([]);
+    expect(rpcDoAceite).not.toHaveBeenCalled();
+  });
+
+  it("`v` ADULTERADO (um caractere trocado, ou truncado) é recusado", async () => {
+    const boa = provaDoEmailDoConvite(PAYLOAD_EMAIL);
+    const trocada = `${boa.slice(0, -1)}${boa.endsWith("A") ? "B" : "A"}`;
+    for (const prova of [trocada, boa.slice(0, -2), `${boa}x`]) {
+      const { r } = await aplicarComPedidoAberto(prova);
+      expect(r).toEqual({ ok: false, motivo: "email_nao_verificado" });
+    }
+    expect(rpcDoAceite).not.toHaveBeenCalled();
+  });
+
+  it("`v` válido, mas a conta tem OUTRO e-mail que o do convite: recusado", async () => {
+    const dePessoaDiferente = { ...PAYLOAD_EMAIL, email: "outra@example.com" };
+    const { r, falso } = await aplicarComPedidoAberto(provaDoEmailDoConvite(dePessoaDiferente), dePessoaDiferente);
+    expect(r).toEqual({ ok: false, motivo: "email_nao_verificado" });
+    expect(falso.chamadas).toEqual([]);
+  });
+
+  it("falha ao gravar o carimbo: FALHA FECHADA, sem vínculo", async () => {
+    const { r } = await aplicarComPedidoAberto(provaDoEmailDoConvite(PAYLOAD_EMAIL), PAYLOAD_EMAIL, {
+      falharEm: "gravacao",
+    });
+    expect(r).toEqual({ ok: false, motivo: "internal_error" });
+    expect(rpcDoAceite).not.toHaveBeenCalled();
+  });
+
+  it("conta já verificada: `v` é irrelevante e nada é reescrito", async () => {
+    const { r, falso } = await aplicarComPedidoAberto(undefined, PAYLOAD_EMAIL, { appMetadata: {} });
+    expect(r.ok).toBe(true);
+    expect(falso.chamadas).toEqual([]);
+  });
+});

@@ -53,7 +53,11 @@ export function InviteTeamForm() {
         invitations: emails.map((email) => ({ email, role })),
       });
       if (res && !res.ok) {
-        toast.error(`${t("Falha:")} ${res.error}`);
+        toast.error(
+          res.error === "email_not_verified"
+            ? t("Confirme seu e-mail para convidar pessoas.")
+            : `${t("Falha:")} ${res.error}`,
+        );
         return;
       }
       if (res && res.ok && res.recusados?.length) {

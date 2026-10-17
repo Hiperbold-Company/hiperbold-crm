@@ -6,9 +6,10 @@
  * sem provar o endereço: a pessoa real não o conhece, e ele a trancaria num desafio que ela não passa (ou, no
  * caso da troca de senha, no "AAL2 exigido"). Por isso sai junto com a senha.
  *
- * ⚠️ O GoTrue encerra TODAS as sessões da conta quando o fator removido estava VERIFICADO (documentado em
- * `GoTrueAdminMFAApi.deleteFactor` no auth-js). Quem chama precisa tratar `verificadosRemovidos > 0` como
- * "a sessão que acabou de abrir também caiu".
+ * ⚠️ O auth-js documenta (`GoTrueAdminMFAApi.deleteFactor`) que remover fator VERIFICADO encerra todas as sessões.
+ * Medido contra o GoTrue v2.196.0 REAL: não encerra, REBAIXA as sessões para AAL1
+ * (`DowngradeSessionsToAAL1`). Outra versão pode se comportar como o auth-js diz, então quem chama confere se a
+ * sessão nova ainda vale em vez de presumir (`reassumir-conta.ts`).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 

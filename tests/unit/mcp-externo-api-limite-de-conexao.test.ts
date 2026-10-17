@@ -28,6 +28,12 @@ import { atualizarFerramentas, criarConexao, listarConexoes } from "@/lib/ai/mcp
 import type { ConexaoPublica } from "@/lib/ai/mcp-externo/tipos";
 import type { AuthUser } from "@/lib/auth/types";
 
+// D-204: a trava "Confirme seu e-mail" tem teste próprio (tests/unit/trava-de-email-nao-verificado.test.ts); aqui a
+// conta é tratada como verificada para este arquivo continuar medindo o que é dele.
+vi.mock("@/lib/auth/exigir-email-verificado", () => ({
+  recusaSeEmailNaoVerificado: vi.fn(async () => null),
+  contaPodeCriarArtefatos: vi.fn(async () => true),
+}));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/auth/server", () => ({ loadAuthUser: vi.fn(), resolveActiveOrg: vi.fn() }));
 vi.mock("@/lib/ai/mcp-externo/conexoes", () => ({

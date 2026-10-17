@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
 
+import { recusaSeEmailNaoVerificado } from "@/lib/auth/exigir-email-verificado";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
@@ -48,6 +49,14 @@ export async function POST(
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);
   const ator = atorDoAudit(authz);
+
+  // D-204: reenviar renova um convite com link novo; mesma trava de `POST /team/invite`.
+  const naoVerificado = await recusaSeEmailNaoVerificado({
+    userId: pessoaResponsavel(authz),
+    frase: t("Confirme seu e-mail para convidar pessoas."),
+    requestId,
+  });
+  if (naoVerificado) return naoVerificado;
   const activeOrg = { orgId: authz.organizationId, name: await nomeDaOrganizacao(authz) };
   const responsavelId = pessoaResponsavel(authz);
   if (!responsavelId) return fail("forbidden", "Token sem dono ativo.", 403, { requestId });

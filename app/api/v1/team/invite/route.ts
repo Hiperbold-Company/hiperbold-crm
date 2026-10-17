@@ -1,4 +1,5 @@
 import type { EmailDeliveryError } from "@/lib/email/roteador";
+import { recusaSeEmailNaoVerificado } from "@/lib/auth/exigir-email-verificado";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { issueInvite } from "@/lib/auth/issue-invite";
 import { emitirConvite } from "@/lib/team/convites";
@@ -31,6 +32,7 @@ import {
   nomeDeQuemAgiu,
   pessoaResponsavel,
   reservarVagaDeConvite,
+  traducaoDe,
 } from "@/lib/api/auth-dual-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inviteMemberSchema, validateRequest } from "@/lib/schemas";
@@ -70,6 +72,13 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!convidanteId) {
     return fail("forbidden", "Token sem dono ativo.", 403, { requestId });
   }
+  // D-204: convidar é criar acesso que sobrevive à retomada da conta; exige o e-mail de quem convida provado.
+  const naoVerificado = await recusaSeEmailNaoVerificado({
+    userId: convidanteId,
+    frase: traducaoDe(authz)("Confirme seu e-mail para convidar pessoas."),
+    requestId,
+  });
+  if (naoVerificado) return naoVerificado;
   const activeOrg = { orgId: authz.organizationId, name: await nomeDaOrganizacao(authz) };
   const ator = atorDoAudit(authz);
 

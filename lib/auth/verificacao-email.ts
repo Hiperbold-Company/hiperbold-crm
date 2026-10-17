@@ -24,7 +24,7 @@
  * Só quem se cadastrou DEPOIS desta mudança pelo caminho de e-mail ganha um pedido (a ação de cadastro o
  * grava junto com a conta, e o gatilho de `auth.users` da migration 0966 o grava em TODO cadastro por e-mail e
  * senha, inclusive o `POST /auth/v1/signup` direto, quando a compra pelo cliente está ligada; quem cria conta
- * por admin API e já sabe do endereço grava `email_verificado_em` na criação, e o aceite de convite carimba). Logo, toda conta que já existia, quem entrou com o Google (o provedor já
+ * por admin API e já sabe do endereço grava `email_verificado_em` na criação, e o aceite de convite NÃO carimba: o link do convite não prova a caixa de entrada, ver `aplicar-convite.ts`). Logo, toda conta que já existia, quem entrou com o Google (o provedor já
  * verificou o endereço), quem entrou por convite assinado para o endereço e quem confirmou pelo link do
  * Supabase antes da virada NÃO tem pedido e conta como verificada, sem constante de data para ajustar no
  * deploy. O custo conhecido: se a gravação do pedido falhar no cadastro, a pessoa aparece como verificada

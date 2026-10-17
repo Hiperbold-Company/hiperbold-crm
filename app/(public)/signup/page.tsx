@@ -5,7 +5,7 @@ import { SignupForm } from "@/components/auth/SignupForm";
 import { Button } from "@/components/ui/button";
 import { branding } from "@/lib/branding";
 import { turnstileSiteKey } from "@/lib/security/turnstile";
-import { verifyInviteToken } from "@/lib/auth/invite-token";
+import { provaDoEmailConfere, verifyInviteToken } from "@/lib/auth/invite-token";
 import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
 import { sanitizarPlano } from "@/lib/auth/plano-escolhido";
 import { createClient } from "@/lib/supabase/server";
@@ -41,13 +41,15 @@ export const metadata = { title: "Criar conta" };
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ invite?: string; plano?: string | string[] }>;
+  searchParams: Promise<{ invite?: string; v?: string | string[]; plano?: string | string[] }>;
 }) {
-  const { invite, plano: planoBruto } = await searchParams;
+  const { invite, v, plano: planoBruto } = await searchParams;
   // O plano escolhido no site de vendas: só uma dica de forma validada; a tela de pagamento confere se está à venda.
   const plano = sanitizarPlano(planoBruto);
   const payload = invite ? verifyInviteToken(invite) : null;
-  const convite = invite && payload ? { token: invite, email: payload.email } : undefined;
+  // `v`: a prova de que o link veio pelo e-mail do convidado (D-204). Só atravessa o cadastro quando confere.
+  const prova = payload && typeof v === "string" && provaDoEmailConfere(payload, v) ? v : undefined;
+  const convite = invite && payload ? { token: invite, email: payload.email, prova } : undefined;
   const conviteExpirado = Boolean(invite) && !payload;
 
   const supabase = await createClient();

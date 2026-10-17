@@ -142,6 +142,18 @@ export default async function LoginPage({
           )}
         </div>
       )}
+      {/* O link "Confirme seu e-mail" só vale com a sessão da própria conta neste navegador (D-204): quem o abriu
+          sem estar logado volta para cá com o aviso; o link continua valendo depois do login. */}
+      {error === "verificar_email_entre" && (
+        <div
+          className="rounded-md border border-amber-300 bg-amber-100 px-3 py-2 text-sm text-amber-950"
+          role="status"
+        >
+          {t(
+            "Entre na sua conta e abra o link de confirmação do e-mail de novo. Se você não tem a senha, use Esqueci minha senha: o link de redefinição também confirma o seu e-mail.",
+          )}
+        </div>
+      )}
       {/* A conta foi cadastrada por e-mail sem o endereço confirmado e quem chegou o provou (Google ou link de
           recuperação): senha, sessões abertas e verificação em duas etapas foram refeitas. A sessão que acabou de
           abrir caiu junto, então a tela diz o que houve e o que fazer, em vez de "tente novamente". */}

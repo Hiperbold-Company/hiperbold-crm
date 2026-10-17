@@ -21,12 +21,22 @@ export type AcceptInviteResult =
   | { ok: true }
   | {
       ok: false;
-      error: "invalid_or_expired" | "email_mismatch" | "not_authenticated" | "internal_error";
+      error:
+        | "invalid_or_expired"
+        | "email_mismatch"
+        | "not_authenticated"
+        | "internal_error"
+        /** A conta ainda tem a verificação de e-mail do CRM em aberto: o vínculo espera por ela (D-204). */
+        | "email_nao_verificado";
       message?: string;
       expectedEmail?: string;
     };
 
-export async function acceptInviteAction(token: string): Promise<AcceptInviteResult> {
+/**
+ * `prova` é o `v` do link que chegou POR E-MAIL (D-204): sem ele, conta com a verificação do CRM em aberto é
+ * recusada (`email_nao_verificado`). Quem decide é `aplicarConvite`; aqui só se repassa.
+ */
+export async function acceptInviteAction(token: string, prova?: string | null): Promise<AcceptInviteResult> {
   const payload = verifyInviteToken(token);
   if (!payload) return { ok: false, error: "invalid_or_expired" };
 
@@ -53,7 +63,11 @@ export async function acceptInviteAction(token: string): Promise<AcceptInviteRes
   // A linha de `team_invites` (a revogação e o fechamento do convite) é tratada
   // dentro de `aplicarConvite`, e não aqui: `/auth/confirm` chama a MESMA função
   // e precisa das duas coisas. Ver o cabeçalho de `lib/auth/aplicar-convite.ts`.
-  const resultado = await aplicarConvite({ userId: user.id, payload });
+  const resultado = await aplicarConvite({
+    userId: user.id,
+    payload,
+    provaDoEmail: typeof prova === "string" ? prova : null,
+  });
   if (!resultado.ok) return { ok: false, error: resultado.motivo };
 
   redirect("/app");

@@ -8,7 +8,7 @@ import {
   type UsuarioDoRetorno,
 } from "@/lib/auth/retomar-conta-pelo-google";
 
-import { gotrueFalso, type OpcoesDoGotrueFalso } from "./helpers/gotrue-admin-falso";
+import { gotrueFalso, gotrueFalsoAtual, type OpcoesDoGotrueFalso } from "./helpers/gotrue-admin-falso";
 
 /**
  * D-204: a regra que decide quando a entrada com Google reassume uma conta cadastrada por e-mail.
@@ -52,8 +52,56 @@ describe("googleProvouOEmail", () => {
       { identities: [{ provider: "google", identity_data: { email: "outro@empresa.com", email_verified: true } }] },
     ],
     ["conta sem e-mail", { email: null }],
+    [
+      "duas identidades do Google e nenhuma serve (uma não verificada, outra de outro endereço)",
+      {
+        identities: [
+          { provider: "google", identity_data: { email: "vitima@empresa.com", email_verified: false } },
+          { provider: "google", identity_data: { email: "outro@empresa.com", email_verified: true } },
+        ],
+      },
+    ],
   ] as Array<[string, Partial<UsuarioDoRetorno>]>)("recusa: %s", (_nome, sobre) => {
     expect(googleProvouOEmail(usuario(sobre))).toBe(false);
+  });
+});
+
+describe("googleProvouOEmail com várias identidades", () => {
+  it("basta EXISTIR uma do Google verificada com o mesmo endereço, mesmo depois de uma que não serve", () => {
+    const u = usuario({
+      identities: [
+        { provider: "google", identity_data: { email: "outro@empresa.com", email_verified: true } },
+        { provider: "email", identity_data: { email: "vitima@empresa.com" } },
+        { provider: "google", identity_data: { email: "vitima@empresa.com", email_verified: true } },
+      ],
+    });
+    expect(googleProvouOEmail(u)).toBe(true);
+  });
+});
+
+describe("conta com porta que a admin API não fecha", () => {
+  it.each([
+    ["telefone na conta", { phone: "+5511999990000" }],
+    [
+      "identidade de outro provedor",
+      {
+        identities: [
+          { provider: "email", identity_data: { email: "vitima@empresa.com" } },
+          { provider: "google", identity_data: { email: "vitima@empresa.com", email_verified: true } },
+          { provider: "github", identity_data: { email: "vitima@empresa.com" } },
+        ],
+      },
+    ],
+  ] as Array<[string, Partial<UsuarioDoRetorno>]>)("%s: recusa ANTES de mexer em qualquer coisa", async (_n, sobre) => {
+    const f = gotrueFalso();
+    const r = await retomarContaPeloGoogle({
+      admin: f.admin as unknown as Parameters<typeof retomarContaPeloGoogle>[0]["admin"],
+      trocarSenhaDaSessao: (senha) => f.trocarSenha(senha),
+      usuario: usuario(sobre),
+      accessToken: "jwt",
+    });
+    expect(r).toEqual({ ok: false, etapa: "identidades" });
+    expect(f.chamadas).toEqual([]);
   });
 });
 
@@ -90,43 +138,91 @@ describe("senhaAleatoriaForte", () => {
   });
 });
 
+const trocarSenhaDaSessaoAtual = () => gotrueFalsoAtual()!.trocarSenha as unknown as import("vitest").Mock<(s: string) => Promise<{ error: unknown }>>;
+
 describe("retomarContaPeloGoogle", () => {
   function gotrue(opcoes: OpcoesDoGotrueFalso = {}) {
     const f = gotrueFalso(opcoes);
     return { ...f, passa: f.admin as unknown as Parameters<typeof retomarContaPeloGoogle>[0]["admin"] };
   }
 
-  it("ordem: senha, fatores de MFA, outras sessões, carimbo; preserva a sessão nova", async () => {
-    const { admin, chamadas, passa } = gotrue({ fatores: [{ id: "f1", status: "unverified" }] });
+  it("ordem: outras sessões (sempre, primeiro), fatores de MFA, senha pela sessão nova, revogação, carimbo", async () => {
+    const { admin, chamadas, passa } = gotrue({
+      fatores: [{ id: "f1", status: "unverified" }],
+      criados: { api_tokens: 2, team_invites: 1, webhook_sources: 3 },
+    });
     const r = await retomarContaPeloGoogle({
       admin: passa,
+      trocarSenhaDaSessao: (senha) => gotrueFalsoAtual()!.trocarSenha(senha),
       usuario: usuario(),
       accessToken: "jwt-novo",
       gerarSenha: () => "S3nha!",
     });
-    expect(r).toEqual({ ok: true, retomada: true, fatoresRemovidos: 1, sessaoEncerrada: false });
-    expect(chamadas).toEqual(["senha", "fatores", "sessoes", "carimbo"]);
+    expect(r).toEqual({
+      ok: true,
+      retomada: true,
+      fatoresRemovidos: 1,
+      sessaoEncerrada: false,
+      revogados: { tokens: 2, convites: 1, entradas: 3 },
+    });
+    expect(chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
     expect(admin.auth.admin.signOut).toHaveBeenCalledWith("jwt-novo", "others");
-    expect(admin.auth.admin.updateUserById).toHaveBeenNthCalledWith(1, "u1", { password: "S3nha!" });
+    expect(trocarSenhaDaSessaoAtual().mock.calls[0]![0]).toBe("S3nha!");
+    // A senha NÃO vai pela admin API (ela apagaria a sessão nova também: medido no GoTrue 2.196.0).
+    expect(admin.auth.admin.updateUserById).toHaveBeenCalledTimes(1);
     expect(admin.auth.admin.mfa.deleteFactor).toHaveBeenCalledWith({ userId: "u1", id: "f1" });
   });
 
-  it("fator verificado removido: o provedor já encerrou as sessões, então não derruba 'others' e avisa", async () => {
+  it("revoga só o que a conta criou: chaves, convites pendentes e entradas automáticas, pelo id dela", async () => {
+    const { revogacoes, passa } = gotrue();
+    await retomarContaPeloGoogle({ admin: passa,
+      trocarSenhaDaSessao: (senha) => gotrueFalsoAtual()!.trocarSenha(senha), usuario: usuario(), accessToken: "jwt" });
+    expect(revogacoes.map((r) => r.tabela)).toEqual(["api_tokens", "team_invites", "webhook_sources"]);
+    expect(revogacoes[0]!.filtros).toEqual([["created_by", "u1"], ["revoked_at", null]]);
+    expect(revogacoes[1]!.filtros).toEqual([["invited_by", "u1"], ["accepted_at", null], ["revoked_at", null]]);
+    expect(revogacoes[2]!.filtros).toEqual([["created_by_user_id", "u1"], ["is_active", true]]);
+    expect(revogacoes[2]!.valores).toMatchObject({ is_active: false });
+  });
+
+  it("fator verificado removido: a sessão nova é CONFERIDA, não presumida (o GoTrue 2.196.0 só rebaixa para AAL1)", async () => {
     const { chamadas, passa } = gotrue({ fatores: [{ id: "f1", status: "verified" }] });
-    const r = await retomarContaPeloGoogle({ admin: passa, usuario: usuario(), accessToken: "jwt" });
-    expect(r).toEqual({ ok: true, retomada: true, fatoresRemovidos: 1, sessaoEncerrada: true });
-    expect(chamadas).toEqual(["senha", "fatores", "carimbo"]);
+    const r = await retomarContaPeloGoogle({
+      admin: passa,
+      trocarSenhaDaSessao: (senha) => gotrueFalsoAtual()!.trocarSenha(senha),
+      usuario: usuario(),
+      accessToken: "jwt",
+    });
+    expect(r).toMatchObject({ ok: true, retomada: true, fatoresRemovidos: 1, sessaoEncerrada: false });
+    expect(chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
+  });
+
+  it("provedor em que remover fator verificado encerra a sessão nova: avisa, e troca a senha pela admin API", async () => {
+    const { admin, chamadas, passa } = gotrue({
+      fatores: [{ id: "f1", status: "verified" }],
+      sessaoNovaMorreAoRemoverFator: true,
+    });
+    const r = await retomarContaPeloGoogle({
+      admin: passa,
+      trocarSenhaDaSessao: (senha) => gotrueFalsoAtual()!.trocarSenha(senha),
+      usuario: usuario(),
+      accessToken: "jwt",
+      gerarSenha: () => "S3nha!",
+    });
+    expect(r).toMatchObject({ ok: true, retomada: true, sessaoEncerrada: true });
+    expect(chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
+    expect(admin.auth.admin.updateUserById).toHaveBeenNthCalledWith(1, "u1", { password: "S3nha!" });
   });
 
   it("o carimbo grava em app_metadata (nunca user_metadata) e remove o pedido com null explícito", async () => {
     const { admin, passa } = gotrue();
     await retomarContaPeloGoogle({
       admin: passa,
+      trocarSenhaDaSessao: (senha) => gotrueFalsoAtual()!.trocarSenha(senha),
       usuario: usuario(),
       accessToken: "jwt",
       agora: new Date("2026-10-17T12:00:00Z"),
     });
-    const gravado = admin.auth.admin.updateUserById.mock.calls[1]![1] as {
+    const gravado = admin.auth.admin.updateUserById.mock.calls[0]![1] as {
       app_metadata: Record<string, unknown>;
       user_metadata?: unknown;
     };
@@ -136,13 +232,15 @@ describe("retomarContaPeloGoogle", () => {
   });
 
   it.each([
-    ["senha", ["senha"]],
-    ["fatores", ["senha", "fatores"]],
-    ["sessoes", ["senha", "fatores", "sessoes"]],
-    ["gravacao", ["senha", "fatores", "sessoes", "carimbo"]],
+    ["sessoes", ["sessoes"]],
+    ["fatores", ["sessoes", "fatores"]],
+    ["senha", ["sessoes", "fatores", "senha"]],
+    ["revogacao", ["sessoes", "fatores", "senha", "revogacao"]],
+    ["gravacao", ["sessoes", "fatores", "senha", "revogacao", "carimbo"]],
   ] as const)("falha em %s: não avança e não carimba", async (falharEm, esperado) => {
     const { chamadas, estado, passa } = gotrue({ falharEm });
-    const r = await retomarContaPeloGoogle({ admin: passa, usuario: usuario(), accessToken: "jwt" });
+    const r = await retomarContaPeloGoogle({ admin: passa,
+      trocarSenhaDaSessao: (senha) => gotrueFalsoAtual()!.trocarSenha(senha), usuario: usuario(), accessToken: "jwt" });
     expect(r.ok).toBe(false);
     expect(chamadas).toEqual(esperado);
     expect(estado.app_metadata.email_verificado_em).toBeUndefined();
@@ -150,7 +248,8 @@ describe("retomarContaPeloGoogle", () => {
 
   it("sem o token da sessão nova: recusa antes de mexer em qualquer coisa", async () => {
     const { chamadas, passa } = gotrue();
-    const r = await retomarContaPeloGoogle({ admin: passa, usuario: usuario(), accessToken: null });
+    const r = await retomarContaPeloGoogle({ admin: passa,
+      trocarSenhaDaSessao: (senha) => gotrueFalsoAtual()!.trocarSenha(senha), usuario: usuario(), accessToken: null });
     expect(r).toEqual({ ok: false, etapa: "sem_sessao" });
     expect(chamadas).toEqual([]);
   });
@@ -159,10 +258,11 @@ describe("retomarContaPeloGoogle", () => {
     const { chamadas, passa } = gotrue();
     const r = await retomarContaPeloGoogle({
       admin: passa,
+      trocarSenhaDaSessao: (senha) => gotrueFalsoAtual()!.trocarSenha(senha),
       usuario: usuario({ app_metadata: { provider: "google" } }),
       accessToken: null,
     });
-    expect(r).toEqual({ ok: true, retomada: false, fatoresRemovidos: 0, sessaoEncerrada: false });
+    expect(r).toMatchObject({ ok: true, retomada: false, fatoresRemovidos: 0, sessaoEncerrada: false });
     expect(chamadas).toEqual([]);
   });
 });

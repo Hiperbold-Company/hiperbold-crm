@@ -7,6 +7,8 @@ import { decidirConviteDoSignup } from "@/lib/auth/convite-no-signup";
 import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
 import { aplicarConvite } from "@/lib/auth/aplicar-convite";
 import { retomarContaPelaRecuperacao } from "@/lib/auth/retomar-conta-pela-recuperacao";
+import { carimbarEmailVerificado, emailVerificado } from "@/lib/auth/verificacao-email";
+import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/audit";
 import { env } from "@/lib/env";
@@ -141,43 +143,73 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  if (type === "recovery") {
-    // PRÉ-SEQUESTRO (D-204). O link de recuperação foi consumido AGORA (não é `sessaoPreservada`: uma sessão que já
-    // existia não prova nada) e chegou à caixa de entrada do endereço da conta. Se a conta ainda tem a verificação
-    // do CRM em aberto, quem a criou pode ter a senha, sessões e um TOTP: a senha vira aleatória, os fatores saem,
-    // as outras sessões caem e o e-mail é carimbado, antes de a pessoa definir a dela em /login/reset.
-    // Falha fechada: a sessão de recuperação é encerrada e a pessoa pede outro link.
-    if (!sessaoPreservada && data?.user) {
-      const retomada = await retomarContaPelaRecuperacao({
-        admin: createAdminClient(),
-        usuario: data.user,
-        accessToken: data.session?.access_token ?? null,
+  // O link foi CONSUMIDO agora (não é `sessaoPreservada`: uma sessão que já existia não prova nada) e chegou à
+  // caixa de entrada do endereço da conta. É a prova de posse que o D-204 usa, e o que se faz com ela depende do
+  // tipo do link.
+  const consumidoAgora = !sessaoPreservada && Boolean(data?.user);
+  const pedidoEmAberto = !emailVerificado(data?.user?.app_metadata);
+
+  if (consumidoAgora && pedidoEmAberto && type === "signup") {
+    // Confirmação de cadastro do próprio provedor (vale enquanto a confirmação automática está DESLIGADA): é o
+    // fluxo legítimo de quem acabou de se cadastrar. Só carimba a verificação do CRM, SEM retomada: não há senha de
+    // terceiro a desfazer, e sem este passo a pessoa ficaria presa à faixa "Confirme seu e-mail" por um endereço que
+    // acabou de confirmar. Melhor esforço: a falha deixa a faixa, que tem o "Reenviar".
+    try {
+      const carimbo = await carimbarEmailVerificado({ admin: createAdminClient(), userId: usuario.id });
+      if (!carimbo.ok) logger.warn("[auth/confirm] carimbo da verificação do e-mail falhou", { motivo: carimbo.motivo });
+    } catch (e) {
+      logger.warn("[auth/confirm] carimbo da verificação do e-mail lançou", {
+        erro: e instanceof Error ? e.message : String(e),
       });
-      if (!retomada.ok) {
-        await audit({
-          action: "auth.password_reset_failed",
-          actorUserId: usuario.id,
-          metadata: { reason: "retomada_da_conta_falhou", etapa: retomada.etapa },
-          requestId,
-        });
+    }
+  }
+
+  if (consumidoAgora && pedidoEmAberto && (type === "recovery" || type === "magiclink" || type === "email")) {
+    // PRÉ-SEQUESTRO (D-204). Recuperação de senha, link mágico e OTP de e-mail consumidos agora provam a posse do
+    // endereço. Se a conta ainda tem a verificação do CRM em aberto, quem a criou pode ter a senha, sessões, um
+    // TOTP e chaves de API: a senha vira aleatória, as outras sessões caem, os fatores saem, o que a conta criou é
+    // revogado e o e-mail é carimbado (`lib/auth/reassumir-conta.ts`). Falha fechada: a sessão é encerrada e a
+    // pessoa pede outro link.
+    const retomada = await retomarContaPelaRecuperacao({
+      admin: createAdminClient(),
+      usuario,
+      accessToken: data?.session?.access_token ?? null,
+      // Pela sessão que o link acabou de abrir (ver `lib/auth/reassumir-conta.ts`).
+      trocarSenhaDaSessao: (senha) => supabase.auth.updateUser({ password: senha }),
+    });
+    if (!retomada.ok) {
+      await audit({
+        action: type === "recovery" ? "auth.password_reset_failed" : "auth.email_link_rejected",
+        actorUserId: usuario.id,
+        metadata: { type, reason: "retomada_da_conta_falhou", etapa: retomada.etapa },
+        requestId,
+      });
+      await supabase.auth.signOut();
+      return redirectTo("/login?error=link_invalido");
+    }
+    if (retomada.retomada) {
+      await audit({
+        action: "auth.account_reclaimed_by_recovery",
+        actorUserId: usuario.id,
+        metadata: {
+          type,
+          fatores_removidos: retomada.fatoresRemovidos,
+          tokens_revogados: retomada.revogados.tokens,
+          convites_revogados: retomada.revogados.convites,
+          entradas_desativadas: retomada.revogados.entradas,
+        },
+        requestId,
+      });
+      // Um fator verificado saiu e o provedor encerrou TODAS as sessões, a deste link inclusive. A conta já está
+      // limpa: um novo link funciona sem o desafio de MFA.
+      if (retomada.sessaoEncerrada) {
         await supabase.auth.signOut();
-        return redirectTo("/login?error=link_invalido");
-      }
-      if (retomada.retomada) {
-        await audit({
-          action: "auth.account_reclaimed_by_recovery",
-          actorUserId: usuario.id,
-          metadata: { fatores_removidos: retomada.fatoresRemovidos },
-          requestId,
-        });
-        // Um fator verificado saiu e o provedor encerrou TODAS as sessões, a de recuperação inclusive. A conta
-        // já está limpa: um novo link de "Esqueci minha senha" funciona sem o desafio de MFA.
-        if (retomada.sessaoEncerrada) {
-          await supabase.auth.signOut();
-          return redirectTo("/login?error=conta_protegida");
-        }
+        return redirectTo("/login?error=conta_protegida");
       }
     }
+  }
+
+  if (type === "recovery") {
     return redirectTo("/login/reset");
   }
 

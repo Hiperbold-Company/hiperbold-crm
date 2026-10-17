@@ -36,6 +36,19 @@
 --    vale com a compra pelo cliente ligada (`billing_settings.compra_pelo_cliente`), a mesma condição em que a ação de
 --    cadastro grava o pedido: instalação sem ela não ganha faixa de e-mail nenhuma.
 --
+--    POR QUE O GATE EM `compra_pelo_cliente` (decisão do dono do produto, 17/10/2026). A verificação de e-mail do CRM
+--    (faixa "Confirme seu e-mail", "Reenviar", trava de chaves e convites) existe só no caminho "paga primeiro", que é
+--    o da Hiperbold; o código de cadastro (`signUp`) e o "Reenviar" já são condicionados a ele. Uma instalação própria
+--    (self-host aberto) tem a confirmação de e-mail do próprio provedor e NENHUM envio de verificação do CRM: abrir o
+--    pedido ali poria uma faixa que promete um link que nunca sai, e travaria convites e chaves para sempre. Em produção
+--    da Hiperbold a compra está ligada, então a regra vale lá. LIMITE CONHECIDO: desligar `compra_pelo_cliente` com a
+--    confirmação automática do provedor (`mailer_autoconfirm`) ainda ligada reabre o buraco para os cadastros novos;
+--    as duas chaves andam juntas. Contas que já nasceram com pedido continuam com ele.
+--
+--    O aceite de convite NÃO carimba a verificação (o `accept_url` aparece a quem convida e pode ser reencaminhado):
+--    a conta convidada confirma o e-mail pelo link do CRM, pelo Google ou pela recuperação de senha, e só então
+--    ganha o vínculo (`lib/auth/aplicar-convite.ts`).
+--
 -- Reaplicável: `if not exists`, `create or replace` (inclusive o gatilho) e revoke/grant declarativos. A criação do
 -- gatilho em `auth.users` não derruba a instalação se o papel que aplica não for dono da tabela (vira aviso; a
 -- próxima atualização tenta de novo).

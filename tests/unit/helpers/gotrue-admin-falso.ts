@@ -5,7 +5,7 @@
  */
 import { vi } from "vitest";
 
-export type EtapaQuePodeFalhar = "senha" | "fatores" | "sessoes" | "gravacao";
+export type EtapaQuePodeFalhar = "senha" | "fatores" | "sessoes" | "revogacao" | "gravacao";
 
 export interface OpcoesDoGotrueFalso {
   falharEm?: EtapaQuePodeFalhar;
@@ -13,6 +13,10 @@ export interface OpcoesDoGotrueFalso {
   fatores?: Array<{ id: string; status: "verified" | "unverified" }>;
   /** `app_metadata` inicial. Padrão: pedido de verificação em aberto. */
   appMetadata?: Record<string, unknown>;
+  /** Quantas linhas cada tabela devolve ao ser revogada pela reassunção (padrão 0). */
+  criados?: { api_tokens?: number; team_invites?: number; webhook_sources?: number };
+  /** Simula um provedor em que remover fator verificado encerra também a sessão nova (o GoTrue 2.196.0 só rebaixa). */
+  sessaoNovaMorreAoRemoverFator?: boolean;
 }
 
 export const PEDIDO_EM_ABERTO = { hash: "h", expira_em: "2099-01-01T00:00:00Z", enviado_em: "2026-10-17T00:00:00Z" };
@@ -20,12 +24,36 @@ export const PEDIDO_EM_ABERTO = { hash: "h", expira_em: "2099-01-01T00:00:00Z", 
 export function gotrueFalso(opcoes: OpcoesDoGotrueFalso = {}) {
   const chamadas: string[] = [];
   const removidos: string[] = [];
+  const revogacoes: Array<{ tabela: string; valores: Record<string, unknown>; filtros: Array<[string, unknown]> }> = [];
+  let sessaoNovaViva = true;
   const estado = {
     app_metadata: { ...(opcoes.appMetadata ?? { email_verificacao: PEDIDO_EM_ABERTO }) } as Record<string, unknown>,
     senha: null as string | null,
   };
   const admin = {
+    // A revogação do que a conta criou: `update(...).eq(...).is(...).select("id")`. Devolve `criados[tabela]` linhas.
+    from: vi.fn((tabela: string) => ({
+      update: (valores: Record<string, unknown>) => {
+        const filtros: Array<[string, unknown]> = [];
+        if (chamadas[chamadas.length - 1] !== "revogacao") chamadas.push("revogacao");
+        revogacoes.push({ tabela, valores, filtros });
+        const cadeia = {
+          eq: (c: string, v: unknown) => (filtros.push([c, v]), cadeia),
+          is: (c: string, v: unknown) => (filtros.push([c, v]), cadeia),
+          select: async () => {
+            if (opcoes.falharEm === "revogacao") return { data: null, error: { message: "x" } };
+            const n = (opcoes.criados as Record<string, number | undefined> | undefined)?.[tabela] ?? 0;
+            return { data: Array.from({ length: n }, (_, i) => ({ id: `${tabela}-${i}` })), error: null };
+          },
+        };
+        return cadeia;
+      },
+    })),
     auth: {
+      // A conferência de que a sessão nova ainda vale, depois de remover os fatores.
+      getUser: vi.fn(async () =>
+        sessaoNovaViva ? { data: { user: { id: "u" } }, error: null } : { data: { user: null }, error: { message: "session_not_found" } },
+      ),
       admin: {
         getUserById: vi.fn(async () => ({
           data: { user: { id: "u", email: "v@example.com", app_metadata: { ...estado.app_metadata } } },
@@ -62,13 +90,27 @@ export function gotrueFalso(opcoes: OpcoesDoGotrueFalso = {}) {
           }),
           deleteFactor: vi.fn(async ({ id }: { id: string }) => {
             removidos.push(id);
+            if (opcoes.sessaoNovaMorreAoRemoverFator) sessaoNovaViva = false;
             return { data: { id }, error: null };
           }),
         },
       },
     },
   };
-  return { admin, chamadas, removidos, estado };
+  // A troca de senha PELA SESSÃO nova (`supabase.auth.updateUser`): o que as rotas passam a `trocarSenhaDaSessao`.
+  const trocarSenha = vi.fn(async (senha: string) => {
+    chamadas.push("senha");
+    if (opcoes.falharEm === "senha") return { error: { message: "x" } };
+    estado.senha = senha;
+    return { error: null };
+  });
+  const falso = { admin, chamadas, removidos, revogacoes, estado, trocarSenha };
+  atual = falso;
+  return falso;
 }
+
+let atual: { chamadas: string[]; trocarSenha: (senha: string) => Promise<{ error: unknown }> } | null = null;
+/** O último GoTrue falso criado: os dublês de `supabase.auth.updateUser` das rotas o consultam. */
+export const gotrueFalsoAtual = () => atual;
 
 export type AdminFalso = ReturnType<typeof gotrueFalso>["admin"];

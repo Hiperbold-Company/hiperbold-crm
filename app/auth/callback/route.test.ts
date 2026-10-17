@@ -11,7 +11,7 @@ import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
 import { acessoFoiRevogado } from "@/lib/auth/vinculo-revogado";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { gotrueFalso } from "../../../tests/unit/helpers/gotrue-admin-falso";
+import { gotrueFalso, gotrueFalsoAtual } from "../../../tests/unit/helpers/gotrue-admin-falso";
 
 /**
  * GET /auth/callback — a volta da entrada com Google (issue #1388).
@@ -73,6 +73,8 @@ function stubSupabase(c: Cenario) {
     auth: {
       exchangeCodeForSession: vi.fn(async () => c.troca),
       signOut: vi.fn(async () => ({ error: null })),
+      // A troca de senha pela sessão nova: registra na ordem do GoTrue falso do caso.
+      updateUser: vi.fn(async ({ password }: { password: string }) => (await gotrueFalsoAtual()?.trocarSenha(password)) ?? { error: null }),
       mfa: {
         listFactors: vi.fn(async () => ({ data: { totp: c.fatores ?? [] } })),
       },
@@ -342,9 +344,9 @@ describe("GET /auth/callback", () => {
 
     const res = await GET(requisicao("code=abc"));
 
-    expect(falso.chamadas).toEqual(["senha", "fatores", "sessoes", "carimbo"]);
+    expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
     expect(falso.admin.auth.admin.signOut).toHaveBeenCalledWith("jwt-da-sessao-nova", "others");
-    const senha = falso.admin.auth.admin.updateUserById.mock.calls[0]![1].password!;
+    const senha = falso.trocarSenha.mock.calls[0]![0];
     expect(senha.length).toBeGreaterThanOrEqual(32);
     // O pedido em aberto saiu e o carimbo entrou: a faixa de "confirme seu e-mail" deixa de aparecer.
     expect(falso.estado.app_metadata.email_verificacao).toBeUndefined();
@@ -366,7 +368,7 @@ describe("GET /auth/callback", () => {
     const res = await GET(requisicao("code=abc"));
 
     expect(falso.removidos).toEqual(["f1"]);
-    expect(falso.chamadas).toEqual(["senha", "fatores", "sessoes", "carimbo"]);
+    expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
     expect(await destino(res)).toBe("/app");
     expect(vi.mocked(audit)).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -376,8 +378,25 @@ describe("GET /auth/callback", () => {
     );
   });
 
-  it("fator VERIFICADO removido: o provedor encerra todas as sessões, então a rota não segue com a sessão morta", async () => {
-    const falso = gotrueFalso({ fatores: [{ id: "f1", status: "verified" }, { id: "f2", status: "unverified" }] });
+  it("fator verificado removido e a sessão nova SOBREVIVE (GoTrue 2.196.0 só rebaixa para AAL1): segue o fluxo normal", async () => {
+    const falso = gotrueFalso({ fatores: [{ id: "f1", status: "verified" }] });
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    vi.mocked(vinculoAtivo).mockResolvedValue("org-existente");
+    const { GET } = await comSupabase({
+      troca: { data: { user: USUARIO_PRE_SEQUESTRADO, session: { access_token: "jwt" } }, error: null },
+    });
+
+    const res = await GET(requisicao("code=abc"));
+
+    expect(falso.removidos).toEqual(["f1"]);
+    expect(await destino(res)).toBe("/app");
+  });
+
+  it("provedor em que remover fator verificado encerra a sessão nova: a rota não segue com a sessão morta", async () => {
+    const falso = gotrueFalso({
+      fatores: [{ id: "f1", status: "verified" }, { id: "f2", status: "unverified" }],
+      sessaoNovaMorreAoRemoverFator: true,
+    });
     vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
     const { GET } = await comSupabase({
       troca: { data: { user: USUARIO_PRE_SEQUESTRADO, session: { access_token: "jwt" } }, error: null },
@@ -387,8 +406,8 @@ describe("GET /auth/callback", () => {
     const cliente = await vi.mocked(createClient).mock.results[0]!.value;
 
     expect(falso.removidos).toEqual(["f1", "f2"]);
-    // Sem "sessoes": derrubar as outras com um JWT que o provedor já encerrou só daria erro.
-    expect(falso.chamadas).toEqual(["senha", "fatores", "carimbo"]);
+    // As outras sessões caem SEMPRE, antes dos fatores; o fator verificado leva também a sessão nova.
+    expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
     expect(typeof falso.estado.app_metadata.email_verificado_em).toBe("string");
     expect(cliente.auth.signOut).toHaveBeenCalled();
     expect(await destino(res)).toBe("/login?error=conta_protegida");
@@ -405,11 +424,11 @@ describe("GET /auth/callback", () => {
 
     const res = await GET(requisicao("code=abc"));
 
-    expect(falso.chamadas).toEqual(["senha", "fatores", "sessoes", "carimbo"]);
+    expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
     expect(await destino(res)).toContain("/login/mfa");
   });
 
-  it.each(["senha", "fatores", "sessoes", "gravacao"] as const)(
+  it.each(["sessoes", "fatores", "senha", "revogacao", "gravacao"] as const)(
     "falha na etapa %s: FALHA FECHADA, encerra a sessão nova, recusa a entrada e não provisiona",
     async (etapa) => {
       const falso = gotrueFalso({ falharEm: etapa });

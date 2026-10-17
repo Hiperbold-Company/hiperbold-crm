@@ -66856,7 +66856,8 @@ create unique index if not exists agent_inbox_items_aviso_de_recusa_dia_uq
 --
 -- Cria FUNÇÕES e entra ANTES do bloco da VARREDURA anon (logo abaixo), que é de propósito o último do arquivo. Os
 -- revokes de cada função vão no próprio bloco. Os gatilhos em `auth.users` são tolerantes a papel sem dono da tabela
--- (aviso, não erro). Medição do GoTrue e o porquê no arquivo da migration.
+-- (aviso, não erro). Medição do GoTrue e o porquê no arquivo da migration, inclusive por que o gatilho de cadastro só
+-- vale com `billing_settings.compra_pelo_cliente` ligada.
 set lock_timeout = '3s';
 
 create table if not exists public.email_trocas_aprovadas (

@@ -150,6 +150,8 @@ export async function GET(request: NextRequest) {
     admin: createAdminClient(),
     usuario,
     accessToken: data.session?.access_token ?? null,
+    // Pela sessão que o Google acabou de abrir: a troca pela admin API apagaria também esta (medido no GoTrue real).
+    trocarSenhaDaSessao: (senha) => supabase.auth.updateUser({ password: senha }),
   });
   if (!retomada.ok) {
     await audit({
@@ -165,11 +167,18 @@ export async function GET(request: NextRequest) {
     await audit({
       action: "auth.account_reclaimed_by_google",
       actorUserId: usuario.id,
-      metadata: { provider: "google", fatores_removidos: retomada.fatoresRemovidos },
+      metadata: {
+        provider: "google",
+        fatores_removidos: retomada.fatoresRemovidos,
+        tokens_revogados: retomada.revogados.tokens,
+        convites_revogados: retomada.revogados.convites,
+        entradas_desativadas: retomada.revogados.entradas,
+      },
       requestId,
     });
-    // Um fator de MFA verificado saiu e o provedor encerrou TODAS as sessões, a que acabou de abrir inclusive:
-    // seguir daqui seria entregar uma sessão morta. A conta já está limpa; entrar de novo com o Google funciona.
+    // Em provedor que encerra as sessões ao remover um fator verificado (o GoTrue 2.196.0 só rebaixa para AAL1, mas
+    // o auth-js documenta o contrário), a sessão que acabou de abrir caiu: seguir daqui seria entregar uma sessão
+    // morta. A conta já está limpa; entrar de novo com o Google funciona.
     if (retomada.sessaoEncerrada) {
       await supabase.auth.signOut();
       return redirectTo("/login?error=conta_protegida");

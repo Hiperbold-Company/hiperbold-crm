@@ -214,7 +214,7 @@ describe("troca de e-mail só com aprovação do servidor (0966)", () => {
     novo(6, '{"provider":"email","email_verificacao":{"hash":"aa","expira_em":"2099-01-01T00:00:00Z","enviado_em":"2026-01-01T00:00:00Z"}}');
     expect(pedido(ID(6)).hash).toBe("aa");
 
-    // Convite pelo cadastro comum: nasce em aberto (o aceite do convite é quem carimba, pelo servidor).
+    // Convite pelo cadastro comum: nasce em aberto (o aceite do convite NÃO carimba: a conta confirma o e-mail pelo CRM antes de ganhar o vínculo).
     sql(
       `insert into auth.users (id, email, raw_app_meta_data, raw_user_meta_data) values ('${ID(7)}', 'convidado@exemplo.com.br', '{"provider":"email"}', '{"invite_token":"x"}');`,
     );

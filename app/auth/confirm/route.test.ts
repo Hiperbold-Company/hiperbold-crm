@@ -8,7 +8,8 @@ import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/audit";
-import { gotrueFalso, PEDIDO_EM_ABERTO } from "../../../tests/unit/helpers/gotrue-admin-falso";
+import { emailVerificado } from "@/lib/auth/verificacao-email";
+import { gotrueFalso, gotrueFalsoAtual, PEDIDO_EM_ABERTO } from "../../../tests/unit/helpers/gotrue-admin-falso";
 
 /**
  * GET /auth/confirm — a rota tem de TERMINAR O SERVIÇO.
@@ -62,6 +63,8 @@ function stubSupabase(c: Cenario) {
       exchangeCodeForSession: vi.fn(async () => c.verifyOtp),
       getUser: vi.fn(async () => c.getUser),
       signOut: vi.fn(async () => ({ error: null })),
+      // A troca de senha pela sessão nova: registra na ordem do GoTrue falso do caso.
+      updateUser: vi.fn(async ({ password }: { password: string }) => (await gotrueFalsoAtual()?.trocarSenha(password)) ?? { error: null }),
     },
   };
 }
@@ -222,7 +225,7 @@ describe("GET /auth/confirm", () => {
     const { GET } = await import("./route");
     const res = await GET(requisicao("type=recovery&token_hash=abc"));
 
-    expect(falso.chamadas).toEqual(["senha", "fatores", "sessoes", "carimbo"]);
+    expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
     expect(falso.admin.auth.admin.signOut).toHaveBeenCalledWith("jwt-recuperacao", "others");
     expect(falso.removidos).toEqual(["f1"]);
     expect(typeof falso.estado.app_metadata.email_verificado_em).toBe("string");
@@ -232,7 +235,7 @@ describe("GET /auth/confirm", () => {
     );
   });
 
-  it("recuperação com fator verificado: o provedor encerra a sessão de recuperação, então manda entrar de novo", async () => {
+  it("recuperação com fator verificado e a sessão sobrevive (GoTrue 2.196.0 só rebaixa): segue para /login/reset sem desafio de MFA", async () => {
     const falso = gotrueFalso({ fatores: [{ id: "f1", status: "verified" }] });
     vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
     comSupabase({
@@ -243,8 +246,23 @@ describe("GET /auth/confirm", () => {
     const { GET } = await import("./route");
     const res = await GET(requisicao("type=recovery&token_hash=abc"));
 
+    expect(destino(res)).toBe("/login/reset");
+    expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
+  });
+
+  it("recuperação em provedor que encerra a sessão ao remover fator verificado: manda entrar de novo", async () => {
+    const falso = gotrueFalso({ fatores: [{ id: "f1", status: "verified" }], sessaoNovaMorreAoRemoverFator: true });
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    comSupabase({
+      verifyOtp: { data: { user: CONTA_PENDENTE, session: { access_token: "jwt" } }, error: null },
+      getUser: { data: { user: null } },
+    });
+
+    const { GET } = await import("./route");
+    const res = await GET(requisicao("type=recovery&token_hash=abc"));
+
     expect(destino(res)).toBe("/login?error=conta_protegida");
-    expect(falso.chamadas).toEqual(["senha", "fatores", "carimbo"]);
+    expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
   });
 
   it("recuperação em conta JÁ verificada: não toca em senha, fatores nem sessões", async () => {
@@ -277,7 +295,7 @@ describe("GET /auth/confirm", () => {
     expect(falso.chamadas).toEqual([]);
   });
 
-  it.each(["senha", "fatores", "sessoes", "gravacao"] as const)(
+  it.each(["sessoes", "fatores", "senha", "revogacao", "gravacao"] as const)(
     "recuperação, falha na etapa %s: FALHA FECHADA, encerra a sessão e pede outro link",
     async (etapa) => {
       const falso = gotrueFalso({ falharEm: etapa });
@@ -296,4 +314,94 @@ describe("GET /auth/confirm", () => {
       expect(falso.estado.app_metadata.email_verificado_em).toBeUndefined();
     },
   );
+
+  // ─── D-204: tipos de link ─────────────────────────────────────────────────────────
+
+  it.each(["magiclink", "email"] as const)(
+    "link %s consumido agora em conta com verificação em aberto: retoma a conta (e segue o fluxo normal)",
+    async (tipo) => {
+      const falso = gotrueFalso();
+      vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+      comSupabase({
+        verifyOtp: { data: { user: CONTA_PENDENTE, session: { access_token: "jwt" } }, error: null },
+        getUser: { data: { user: null } },
+      });
+      vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
+
+      const { GET } = await import("./route");
+      const res = await GET(requisicao(`type=${tipo}&token_hash=abc`));
+
+      expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
+      expect(destino(res)).toBe("/onboarding");
+      expect(vi.mocked(audit)).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "auth.account_reclaimed_by_recovery", metadata: expect.objectContaining({ type: tipo }) }),
+      );
+    },
+  );
+
+  it("confirmação de cadastro do provedor (signup): SÓ carimba, sem retomada (autoconfirm desligado não regride)", async () => {
+    const falso = gotrueFalso();
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    comSupabase({
+      verifyOtp: { data: { user: CONTA_PENDENTE, session: { access_token: "jwt" } }, error: null },
+      getUser: { data: { user: null } },
+    });
+    vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
+
+    const { GET } = await import("./route");
+    const res = await GET(requisicao("type=signup&token_hash=abc"));
+
+    // Nada de senha, sessões, fatores nem revogação: é quem acabou de se cadastrar.
+    expect(falso.chamadas).toEqual(["carimbo"]);
+    expect(falso.admin.auth.admin.signOut).not.toHaveBeenCalled();
+    expect(falso.removidos).toEqual([]);
+    // E o que o resto do produto lê passa a dizer "verificado": decide.ts e os e-mails de conta não ficam presos.
+    expect(emailVerificado(falso.estado.app_metadata)).toBe(true);
+    expect(destino(res)).toBe("/onboarding");
+  });
+
+  it("signup com link já gasto e sessão antiga: NÃO carimba (sessão que já existia não prova o endereço)", async () => {
+    const falso = gotrueFalso();
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    comSupabase({
+      verifyOtp: { data: { user: null }, error: { message: "Email link is invalid or has expired" } },
+      getUser: { data: { user: CONTA_PENDENTE } },
+    });
+    vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
+
+    const { GET } = await import("./route");
+    await GET(requisicao("type=signup&token_hash=gasto"));
+
+    expect(falso.chamadas).toEqual([]);
+  });
+
+  it("signup sem pedido em aberto (conta antiga ou instalação sem a verificação do CRM): não toca no provedor", async () => {
+    const falso = gotrueFalso();
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    comSupabase({
+      verifyOtp: { data: { user: USUARIO, session: { access_token: "jwt" } }, error: null },
+      getUser: { data: { user: null } },
+    });
+    vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
+
+    const { GET } = await import("./route");
+    await GET(requisicao("type=signup&token_hash=abc"));
+
+    expect(falso.chamadas).toEqual([]);
+  });
+
+  it("falha ao carimbar no signup NÃO derruba o cadastro: a faixa com o Reenviar cobre", async () => {
+    const falso = gotrueFalso({ falharEm: "gravacao" });
+    vi.mocked(createAdminClient).mockReturnValue(falso.admin as unknown as ReturnType<typeof createAdminClient>);
+    comSupabase({
+      verifyOtp: { data: { user: CONTA_PENDENTE, session: { access_token: "jwt" } }, error: null },
+      getUser: { data: { user: null } },
+    });
+    vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
+
+    const { GET } = await import("./route");
+    const res = await GET(requisicao("type=signup&token_hash=abc"));
+
+    expect(destino(res)).toBe("/onboarding");
+  });
 });

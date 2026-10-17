@@ -12837,6 +12837,20 @@ export const DICIONARIO: Traducoes = {
   "O acesso desta conta foi retirado por quem administra o sistema — então não criamos uma empresa nova para você. Se o acesso deveria continuar, peça a quem administra para restaurá-lo; se você está entrando em outra equipe, peça um convite.": {
     es: "El acceso de esta cuenta fue retirado por quien administra el sistema — así que no creamos una empresa nueva para ti. Si el acceso debería continuar, pídele a quien administra que lo restaure; si estás entrando en otro equipo, pide una invitación.",
   },
+  "Entre na sua conta e abra o link de confirmação do e-mail de novo. Se você não tem a senha, use Esqueci minha senha: o link de redefinição também confirma o seu e-mail.": {
+    es: "Entra en tu cuenta y abre de nuevo el enlace de confirmación del correo. Si no tienes la contraseña, usa Olvidé mi contraseña: el enlace de restablecimiento también confirma tu correo.",
+  },
+  "Confirme seu e-mail para criar chaves de API.": { es: "Confirma tu correo para crear claves de API." },
+  "Confirme seu e-mail para conectar um MCP externo.": { es: "Confirma tu correo para conectar un MCP externo." },
+  "Confirme seu e-mail para convidar pessoas.": { es: "Confirma tu correo para invitar a personas." },
+  "Confirme seu e-mail para criar entradas automáticas (webhooks).": {
+    es: "Confirma tu correo para crear entradas automáticas (webhooks).",
+  },
+  "Confirme seu e-mail para aceitar o convite": { es: "Confirma tu correo para aceptar la invitación" },
+  "Abra o link do e-mail e depois volte a este convite para ativar seu acesso.": {
+    es: "Abre el enlace del correo y luego vuelve a esta invitación para activar tu acceso.",
+  },
+  "Reenviar e-mail de confirmação": { es: "Reenviar correo de confirmación" },
   "Por segurança, encerramos todas as sessões desta conta e removemos a verificação em duas etapas, porque o endereço de e-mail ainda não tinha sido confirmado. Já está tudo certo: entre novamente com o Google ou peça um novo link em Esqueci minha senha.": {
     es: "Por seguridad, cerramos todas las sesiones de esta cuenta y quitamos la verificación en dos pasos, porque la dirección de correo aún no estaba confirmada. Ya está todo en orden: entra de nuevo con Google o pide un nuevo enlace en Olvidé mi contraseña.",
   },

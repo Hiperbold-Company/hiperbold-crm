@@ -1,3 +1,4 @@
+import { recusaSeEmailNaoVerificado } from "@/lib/auth/exigir-email-verificado";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * POST /api/v1/ai/mcp/conexoes/:id/atualizar — reconecta no servidor MCP e
@@ -47,6 +48,14 @@ export async function POST(
   const authz = await requireRole("admin", { requestId, resource: "ai_mcp_connections" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
+
+  // D-204: ver `POST /conexoes`.
+  const naoVerificado = await recusaSeEmailNaoVerificado({
+    userId: authz.user.id,
+    frase: t("Confirme seu e-mail para conectar um MCP externo."),
+    requestId,
+  });
+  if (naoVerificado) return naoVerificado;
 
   const { id } = await ctx.params;
   const idParsed = idSchema.safeParse(id);
