@@ -21,6 +21,7 @@ import { drainEventLog } from "@/lib/event-log/drain";
 import { ensureHandlersRegistered } from "@/lib/event-log/register-handlers";
 import { logger } from "@/lib/logger";
 import { autorizaCron } from "@/lib/auth/cron-auth";
+import { registrarBatimentoDoScheduler } from "@/lib/system/batimento-app";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,10 @@ async function handle(req: NextRequest): Promise<Response> {
   if (!autorizaCron(req)) {
     return fail("forbidden", "Cron secret missing or invalid.", 403, { requestId });
   }
+
+  // Batimento do scheduler (migration 0961): esta rota roda a cada minuto pelo crond. Só depois da
+  // autorização, e sem esperar: monitor não pode atrasar nem derrubar o drain.
+  registrarBatimentoDoScheduler();
 
   ensureHandlersRegistered();
   try {

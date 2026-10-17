@@ -50,6 +50,13 @@ export interface DepsDoLoopDaFila<J> {
   /** Espera abortável. Rejeita quando o desligamento aborta o sinal. */
   dormir: (ms: number) => Promise<unknown>;
   deveParar: () => boolean;
+  /**
+   * Chamado no topo de CADA volta, antes de qualquer espera. É o gancho do
+   * batimento do worker: ligado à volta do laço (e não a um timer próprio), um
+   * laço travado deixa de chamá-lo e o batimento para. Síncrono e sem lançar —
+   * uma exceção aqui é engolida para nunca derrubar o consumo da fila.
+   */
+  aoCadaVolta?: () => void;
   intervalos: IntervalosDaFila;
   log: Logger;
 }
@@ -66,6 +73,11 @@ export async function rodarLoopDaFila<J>(deps: DepsDoLoopDaFila<J>): Promise<voi
   let ultimaTrouxe = true;
 
   while (!deps.deveParar()) {
+    try {
+      deps.aoCadaVolta?.();
+    } catch {
+      /* observabilidade nunca derruba o laço */
+    }
     let faltaMs: number | null = 0;
     if (!ultimaTrouxe) {
       try {

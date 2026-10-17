@@ -53,6 +53,10 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/500$/,
   /^\/503$/,
   /^\/api\/v1\/health$/,
+  // Saúde do worker e do scheduler para o monitor externo (Uptime Kuma). Só estado e idade do último
+  // batimento, sem segredo nem dado de organização. Ancorado nos DOIS nomes: nenhum sub-path futuro
+  // sob /health/ nasce público de carona.
+  /^\/api\/v1\/health\/(worker|scheduler)$/,
   /^\/api\/v1\/webhooks\//,
   /^\/api\/v1\/cron\//,
   // Landing page de captura de clique do Google Ads (migration 0306). Quem

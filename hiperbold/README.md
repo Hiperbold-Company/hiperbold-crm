@@ -74,6 +74,21 @@ A conta pessoal gratuita tem uma cota mensal de horas e de disco do Codespaces (
   - Restaurar: baixar os dois `.age` do Drive, `age -d -i <chave-privada> -o x.dump x.dump.age` (idem para o `-private`), e `pg_restore --no-owner --no-privileges -d <url> x.dump`. A chave privada nunca fica no serviço.
 - Segredos de produção: `.env.production` no WSL (fora do Git, só leitura do usuário). Nunca no chat, nunca em commit.
 
+## Monitoramento (Uptime Kuma)
+
+Monitor externo do tipo HTTP(s) com palavra-chave, intervalo de 60 s, nas três URLs públicas (sem login, sem segredo, nunca em cache):
+
+| URL | Palavra-chave | O que prova |
+|---|---|---|
+| `https://crm.hiperbold.com.br/api/v1/health` | `healthy` | app, banco, Redis e canal de WhatsApp respondem |
+| `https://crm.hiperbold.com.br/api/v1/health/worker` | `ok` | o worker (agente de IA 24/7) bateu nos últimos 180 s |
+| `https://crm.hiperbold.com.br/api/v1/health/scheduler` | `ok` | o agendador chamou o app nos últimos 180 s |
+
+- As duas rotas novas respondem 200 `{"status":"ok","ultimo_batimento_em":...,"segundos_desde":N}` ou 503 `{"status":"down",...,"motivo":...}` (`sem_batimento`, `batimento_atrasado` ou `leitura_indisponivel`). O Kuma deve tratar 503 como queda (padrão).
+- Como bate: o worker grava na tabela `sistema_batimentos` a cada ~30 s, amarrado à volta do laço da fila (laço travado = deixa de bater, mesmo com o processo vivo). O scheduler não tem código próprio: o app grava quando recebe o cron `event-log-drain` (1×/min) com o segredo certo, então segredo divergente também aparece como `down`.
+- `/api/v1/health` mostra `worker` e `scheduler` em `checks` (`ok` ou `degraded`), mas eles **não** mudam o `status` geral nem o HTTP: o deploy depende de `healthy` ali, e os dois serviços acabam de reiniciar logo depois de um deploy. O alarme deles é das rotas próprias.
+- Logo depois de uma publicação com a migration 0961, as duas rotas dão 503 até o primeiro batimento (até ~1 min). Não é defeito.
+
 ## Portões antes de abrir PR
 
 ```bash
