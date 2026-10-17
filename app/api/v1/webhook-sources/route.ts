@@ -9,7 +9,9 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *
  * `secret` é write-only na leitura: GET devolve só `has_secret` (padrão
  * api-tokens — o plaintext aparece apenas na resposta do POST/PATCH que o
- * definiu).
+ * definiu). `generate_secret: true` no POST faz o servidor gerar o segredo HMAC e
+ * devolvê-lo uma única vez (fora do recibo de `Idempotency-Key`). Girar depois:
+ * `POST /api/v1/webhook-sources/[id]/rotate-secret`.
  *
  * ⚠️ A REGRA VIVE EM `lib/operacao/entradas-automaticas.ts`, compartilhada com o
  * agente de IA (BRIEFING §3, Decisão 4). Aqui só há transporte e a cifragem do
@@ -21,9 +23,12 @@ import type { NextRequest } from "next/server";
 import { respostaDeRecusa } from "@/lib/api/recusa";
 import { ok, fail } from "@/lib/api/wrappers";
 import { autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
+import { criarComChaveOpcional } from "@/lib/api/criacao-idempotente";
 import {
+  ASSINATURA_DA_ENTRADA,
   criarEntradaAutomatica,
   listarEntradasAutomaticas,
+  novoSegredoDeEntrada,
   type DepsDaOperacao,
 } from "@/lib/operacao/entradas-automaticas";
 import { createWebhookSourceSchema } from "@/lib/schemas";
@@ -31,6 +36,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 
 export const dynamic = "force-dynamic";
+
+/** Tag do endpoint no recibo de idempotência. */
+const ENDPOINT = "/api/v1/webhook-sources";
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
@@ -88,38 +96,67 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   // Secret nunca é armazenado em claro (migration 0041): cifra via admin RPC
   // (grant service_role). Sem a chave de cifra configurada, recusa em vez de
-  // degradar pra plaintext.
+  // degradar pra plaintext. `generate_secret` pede ao SERVIDOR que gere o segredo:
+  // o texto claro volta uma vez, na resposta da criação, e fica FORA do recibo de
+  // idempotência (replay não o reentrega).
+  const admin = createAdminClient();
+  const cifrar = (texto: string) => encryptWebhookSecret(admin, texto);
   let secretEncrypted: string | null = null;
-  if (parsed.data.secret) {
-    secretEncrypted = await encryptWebhookSecret(createAdminClient(), parsed.data.secret);
-    if (secretEncrypted === null) {
-      return fail(
-        "encryption_unavailable",
-        t("Não foi possível guardar o segredo com segurança: a chave de cifra desta instalação não está ativa. Quem administra o servidor resolve rodando o update.sh, que gera e ativa a chave. Enquanto isso, você pode criar a fonte sem segredo."),
-        422,
-        { requestId },
-      );
+  let segredoGerado: string | null = null;
+  try {
+    if (parsed.data.generate_secret) {
+      const novo = await novoSegredoDeEntrada(requestId, cifrar);
+      secretEncrypted = novo.cifrado;
+      segredoGerado = novo.claro;
+    } else if (parsed.data.secret) {
+      secretEncrypted = await cifrar(parsed.data.secret);
+      if (secretEncrypted === null) {
+        return fail(
+          "encryption_unavailable",
+          t("Não foi possível guardar o segredo com segurança: a chave de cifra desta instalação não está ativa. Quem administra o servidor resolve rodando o update.sh, que gera e ativa a chave. Enquanto isso, você pode criar a fonte sem segredo."),
+          422,
+          { requestId },
+        );
+      }
     }
+  } catch (err) {
+    return respostaDeRecusa(err, requestId);
   }
 
   const deps: DepsDaOperacao = {
     supabase: authz.supabase,
-    leitorDeTokens: createAdminClient(),
+    leitorDeTokens: admin,
     organizationId: authz.organizationId,
     actor: authz.actor,
     requestId,
   };
 
   try {
-    const criada = await criarEntradaAutomatica(deps, {
-      name: parsed.data.name,
-      default_pipeline_id: parsed.data.default_pipeline_id,
-      default_stage_id: parsed.data.default_stage_id,
-      redirect_to: parsed.data.redirect_to ?? null,
-      field_map: parsed.data.field_map,
-      secret_encrypted: secretEncrypted,
+    return await criarComChaveOpcional(req, authz, {
+      requestId,
+      endpoint: ENDPOINT,
+      // O segredo GERADO não faz parte do pedido (muda a cada tentativa): o pedido é `generate_secret: true`.
+      corpo: parsed.data,
+      t,
+      executar: () =>
+        criarEntradaAutomatica(deps, {
+          name: parsed.data.name,
+          default_pipeline_id: parsed.data.default_pipeline_id,
+          default_stage_id: parsed.data.default_stage_id,
+          redirect_to: parsed.data.redirect_to ?? null,
+          field_map: parsed.data.field_map,
+          secret_encrypted: secretEncrypted,
+        }),
+      aoExecutar: (fonte) =>
+        segredoGerado === null
+          ? fonte
+          : {
+              ...fonte,
+              secret: segredoGerado,
+              secret_shown_once: true,
+              signature: ASSINATURA_DA_ENTRADA,
+            },
     });
-    return ok(criada, { requestId, status: 201 });
   } catch (err) {
     return respostaDeRecusa(err, requestId);
   }

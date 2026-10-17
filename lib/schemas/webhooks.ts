@@ -132,7 +132,7 @@ export const redirectHttpSchema = z
   .max(2000)
   .refine((v) => /^https?:\/\//i.test(v), { message: "redirect_to precisa começar com http:// ou https://" });
 
-export const createWebhookSourceSchema = z.object({
+const baseDaEntradaAutomatica = z.object({
   name: z.string().min(1).max(120),
   default_pipeline_id: z.string().uuid(),
   default_stage_id: z.string().uuid(),
@@ -146,7 +146,20 @@ export const createWebhookSourceSchema = z.object({
     .optional(),
   secret: z.string().min(16).max(200).nullish(),
 });
-export const updateWebhookSourceSchema = createWebhookSourceSchema.partial().extend({
+export const createWebhookSourceSchema = baseDaEntradaAutomatica
+  .extend({
+    /**
+     * Pede ao SERVIDOR que gere o segredo HMAC (256 bits). O texto claro volta uma única vez, na
+     * resposta da criação, e nunca mais — nem em leitura, nem em replay de `Idempotency-Key`.
+     * Mutuamente exclusivo com `secret`. Só existe na criação: depois, o caminho é girar o segredo.
+     */
+    generate_secret: z.boolean().optional(),
+  })
+  .refine((v) => !(v.generate_secret && v.secret), {
+    message: "Envie `secret` OU `generate_secret`, não os dois.",
+    path: ["generate_secret"],
+  });
+export const updateWebhookSourceSchema = baseDaEntradaAutomatica.partial().extend({
   is_active: z.boolean().optional(),
 });
 

@@ -5,15 +5,19 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * Spec 10 §4.3. Limpa published_version_id (agente não responde gatilhos),
  * mas mantém archived_at=null. Versão antes-published vira 'superseded' pra
  * preservar continuidade do versionamento.
+ *
+ * Auth: sessão OU token `dsk_…` (`lib/api/auth-dual-admin.ts`): `admin` + `mcp:write`, o MESMO piso da
+ * sessão; organização da sessão/da linha do token, nunca do body. A regra vive em
+ * `lib/ai/agents/administracao.ts`, compartilhada com a tool MCP.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
-import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { autorizarAdministracao, pessoaResponsavel } from "@/lib/api/auth-dual-admin";
+import { respostaDeRecusa } from "@/lib/api/recusa";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { traduzir } from "@/lib/i18n/dicionario";
+import { pausarAgente } from "@/lib/ai/agents/administracao";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +25,7 @@ const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function POST(_req: NextRequest, ctx: Ctx): Promise<Response> {
+export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
@@ -29,46 +33,30 @@ export async function POST(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const { id } = await ctx.params;
   if (!UUID_RX.test(id)) return fail("invalid_request", "id inválido.", 400, { requestId });
 
-  const authz = await requireRole("admin", { requestId, resource: "ai_agents" });
-  if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user: authUser, org: activeOrg } = authz;
-
-  const admin = createAdminClient();
-  const { data: existing } = await admin
-    .from("ai_agents")
-    .select("id, published_version_id, archived_at")
-    .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
-    .maybeSingle();
-
-  if (!existing) return fail("not_found", t("Agent não encontrado."), 404, { requestId });
-  if (existing.archived_at) {
-    return fail("state_conflict", "Agent arquivado.", 409, { requestId });
-  }
-
-  const previousVersionId = existing.published_version_id as string | null;
-
-  const { error } = await admin
-    .from("ai_agents")
-    .update({ paused_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("organization_id", activeOrg.orgId);
-
-  if (error) return fail("internal_error", "Erro ao pausar agent.", 500, { requestId });
-
-  void audit({
-    action: "ai_agent.paused",
-    actorUserId: authUser.id,
-    organizationId: activeOrg.orgId,
-    resourceType: "ai_agent",
-    resourceId: id,
+  const authz = await autorizarAdministracao(req, {
     requestId,
-    metadata: { previous_version_id: previousVersionId },
+    resource: "ai_agents",
+    role: "admin",
+    escrita: true,
   });
+  if (!authz.ok) return authz.response;
 
-  return ok(
-    { id, published_version_id: previousVersionId, paused_at: new Date().toISOString() },
-    { requestId },
-  );
+  try {
+    return ok(
+      await pausarAgente(
+        {
+          supabase: authz.supabase,
+          admin: createAdminClient(),
+          organizationId: authz.organizationId,
+          actor: authz.actor,
+          responsavel: pessoaResponsavel(authz),
+          requestId,
+        },
+        id,
+      ),
+      { requestId },
+    );
+  } catch (err) {
+    return respostaDeRecusa(err, requestId);
+  }
 }

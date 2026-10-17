@@ -27,13 +27,26 @@ import {
   crmRetomarLead,
 } from "./leads";
 import {
+  crmCreatePipelineField,
+  crmDeletePipelineField,
+  crmListPipelineFields,
+  crmUpdatePipelineField,
   crmDeleteWebhookSource,
   crmGetOrganizationSettings,
   crmGetPipelineConfig,
+  crmRotateWebhookSourceSecret,
   crmUpdateOrganizationSettings,
   crmUpdatePipelineConfig,
   crmUpdateWebhookSource,
 } from "./administracao";
+import {
+  crmCreateAiAgent,
+  crmCreateAiAgentVersion,
+  crmGetAiAgent,
+  crmListAiAgents,
+  crmPauseAiAgent,
+  crmPublishAiAgentVersion,
+} from "./agentes";
 import { crmGetPipelineForecast, crmListPipelines } from "./pipelines";
 import { crmSendWhatsappMessage } from "./messages";
 import { crmStartConversationAndSend } from "./start-conversation";
@@ -141,6 +154,9 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmListAutomationRuns,
   crmListTeamMembers,
   crmGetPipelineConfig,
+  crmListPipelineFields,
+  crmListAiAgents,
+  crmGetAiAgent,
   crmGetOrganizationSettings,
   crmListFollowups,
   crmListAtRiskLeads,
@@ -173,7 +189,15 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmSetWebhookSourceActive,
   crmUpdateWebhookSource,
   crmDeleteWebhookSource,
+  crmRotateWebhookSourceSecret,
   crmUpdatePipelineConfig,
+  crmCreatePipelineField,
+  crmUpdatePipelineField,
+  crmDeletePipelineField,
+  crmCreateAiAgent,
+  crmCreateAiAgentVersion,
+  crmPublishAiAgentVersion,
+  crmPauseAiAgent,
   crmUpdateOrganizationSettings,
   crmSetAutomationRuleActive,
   crmScheduleFollowup,

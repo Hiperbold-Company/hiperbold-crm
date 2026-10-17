@@ -167,8 +167,17 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/v1\/pipelines\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/stages\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   /^\/api\/v1\/webhook-sources$/,
   /^\/api\/v1\/webhook-sources\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  /^\/api\/v1\/webhook-sources\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/events$/i,
+  /^\/api\/v1\/webhook-sources\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(events|rotate-secret)$/i,
   /^\/api\/v1\/settings\/organizacao$/,
+  // API FASE 2 (17/10/2026) — campos personalizados do funil e agentes de IA por token. Mesma moldura da
+  // fase 1 (`autorizarAdministracao` dentro da rota; "público" = o proxy não decide). Ancoradas com `$`, id
+  // em forma de UUID e chave de campo na forma do schema (`[a-z][a-z0-9_]*`, até 40).
+  /^\/api\/v1\/pipelines\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/fields$/i,
+  /^\/api\/v1\/pipelines\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/fields\/[a-z][a-z0-9_]{0,39}$/i,
+  /^\/api\/v1\/ai\/agents$/,
+  /^\/api\/v1\/ai\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/ai\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(versions|publish|pause)$/i,
+  /^\/api\/v1\/ai\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/versions\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   /^\/api\/v1\/leads$/,
   /^\/api\/v1\/leads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(move|win|lose)$/i,
   /^\/api\/v1\/contacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,

@@ -22,7 +22,8 @@ const ROOT = process.cwd();
 const FILES_WITH_VERSION_COLUMNS = [
   "app/app/ai/agents/[id]/_actions.ts",
   "app/app/ai/agents/[id]/page.tsx",
-  "app/api/v1/ai/agents/route.ts",
+  // A criação do agente (e a da versão) moveu para o núcleo compartilhado com as tools MCP.
+  "lib/ai/agents/administracao.ts",
   "app/api/v1/ai/agents/[id]/versions/route.ts",
   "app/api/v1/ai/agents/[id]/versions/[vid]/route.ts",
   // A cópia da rota /duplicate mudou de casa: a implementação agora é

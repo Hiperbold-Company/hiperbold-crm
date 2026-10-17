@@ -299,6 +299,7 @@ export const AUDIT_ACTIONS = [
   "webhook.source_created",
   "webhook.source_updated",
   "webhook.source_deleted",
+  "webhook.source_secret_rotated",
   "webhook.lead_received",
   "webhook.lead_reregistered",
   "webhook.inbound_invalid_signature",

@@ -21,6 +21,9 @@ import {
   type PipelineConfigPatch,
 } from "@/lib/schemas/settings";
 
+/** O teto de campos personalizados por funil (o mesmo de `pipelineConfigPatchSchema`). */
+export const LIMITE_DE_CAMPOS = 50;
+
 export interface ConfiguracaoDoFunil {
   id: string;
   name: string;
@@ -83,6 +86,16 @@ export async function lerConfiguracaoDoFunil(
   return { ok: true, dados: paraConfiguracao(data as Linha) };
 }
 
+/**
+ * Edição CIRÚRGICA da lista de campos personalizados, dentro da mesma trava otimista do merge: recebe
+ * os campos que estão no banco NESTA tentativa e devolve a lista nova — ou a recusa. Assim "acrescente
+ * o campo X" nunca apaga o campo que outra aba/token gravou um instante antes (o `fields` do patch
+ * SUBSTITUI a lista inteira; esta forma altera um item).
+ */
+export type EdicaoDeCampos = (
+  atuais: unknown[],
+) => { campos: unknown[] } | { erro: string; details?: unknown };
+
 export interface AutorDaConfiguracao {
   actorUserId?: string | null;
   actorApiTokenId?: string | null;
@@ -101,6 +114,10 @@ export async function aplicarConfiguracaoDoFunil(
     organizationId: string;
     pipelineId: string;
     patch: PipelineConfigPatch;
+    /** Altera a lista de campos sobre o que está no banco; roda a cada tentativa da trava otimista. */
+    editarCampos?: EdicaoDeCampos;
+    /** Acrescentado ao `metadata` do audit (ex.: qual campo mudou). Nunca valor de dado de contato. */
+    detalheDoAudit?: Record<string, unknown>;
     autor: AutorDaConfiguracao;
     requestId?: string | null;
   },
@@ -137,6 +154,15 @@ export async function aplicarConfiguracaoDoFunil(
     const currentSettings = (row.settings as Record<string, unknown> | null) ?? {};
     const nextSettings: Record<string, unknown> = { ...currentSettings };
     if (parsed.data.fields !== undefined) nextSettings.fields = parsed.data.fields;
+    if (input.editarCampos) {
+      const atuais = Array.isArray(currentSettings.fields) ? (currentSettings.fields as unknown[]) : [];
+      const editada = input.editarCampos(atuais);
+      if ("erro" in editada) return { ok: false, error: editada.erro, details: editada.details };
+      if (editada.campos.length > LIMITE_DE_CAMPOS) {
+        return { ok: false, error: "validation_failed", details: { fields: ["max_fields"] } };
+      }
+      nextSettings.fields = editada.campos;
+    }
     if (parsed.data.lost_reasons !== undefined) nextSettings.lost_reasons = parsed.data.lost_reasons;
     if (parsed.data.won_reasons !== undefined) nextSettings.won_reasons = parsed.data.won_reasons;
     if (parsed.data.won_reason_required !== undefined) {
@@ -175,6 +201,7 @@ export async function aplicarConfiguracaoDoFunil(
       won_reasons_count: parsed.data.won_reasons?.length ?? null,
       won_reason_required: parsed.data.won_reason_required ?? null,
       reabertura: parsed.data.reabertura ?? null,
+      ...(input.detalheDoAudit ?? {}),
     },
   });
 

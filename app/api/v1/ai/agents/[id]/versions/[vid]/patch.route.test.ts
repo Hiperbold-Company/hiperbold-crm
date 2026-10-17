@@ -11,6 +11,8 @@ vi.mock("@/lib/impersonate/support", () => ({
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+// A porta sessão-ou-token também monta o cliente da sessão (a rota PATCH só usa o admin).
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn(async () => ({})) }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 
 const ORG = "22222222-2222-4222-8222-222222222222";
