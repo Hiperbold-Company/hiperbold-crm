@@ -3,7 +3,7 @@
  * no CONTATO — nunca no lead, no histórico de captação nem em campo
  * personalizado (decisão do dono do produto, 17/10/2026).
  *
- * Mesmo esquema do resto do produto para a coluna: `cpf_hash` (sha256 do CPF só
+ * Mesmo esquema do resto do produto para a coluna: `cpf_hash` (HMAC-SHA256 do CPF só
  * com dígitos, `hashCpf`) + `cpf_encrypted` (`cifrarCpfDaInstalacao`), gravados
  * JUNTOS por causa da constraint `contacts_cpf_consistency`.
  *
@@ -56,6 +56,7 @@ export async function gravarCpfDoContato(
     if (contato.cpf_hash) return "ja_tinha";
 
     const hash = hashCpf(alvo.cpf);
+    if (!hash) return registrar("sem_chave_de_cifra");
     const { data: outro, error: eOutro } = await admin
       .from("contacts")
       .select("id")

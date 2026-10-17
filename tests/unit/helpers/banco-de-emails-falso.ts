@@ -42,7 +42,7 @@ export function criarBancoFalso(inicial: Partial<BancoFalso> = {}): BancoFalso {
 }
 
 class Consulta implements PromiseLike<{ data: unknown; error: unknown }> {
-  private filtros: Array<[string, "eq" | "is", unknown]> = [];
+  private filtros: Array<[string, "eq" | "is" | "in", unknown]> = [];
   private op: "select" | "upsert" | "update" = "select";
   private payload: Linha = {};
   private max = Infinity;
@@ -61,6 +61,10 @@ class Consulta implements PromiseLike<{ data: unknown; error: unknown }> {
   }
   is(coluna: string, valor: unknown): this {
     this.filtros.push([coluna, "is", valor]);
+    return this;
+  }
+  in(coluna: string, valores: unknown[]): this {
+    this.filtros.push([coluna, "in", valores]);
     return this;
   }
   order(): this {
@@ -94,7 +98,9 @@ class Consulta implements PromiseLike<{ data: unknown; error: unknown }> {
   private casam(): Linha[] {
     const linhas = this.banco.tabelas[this.tabela] ?? [];
     return linhas.filter((l) =>
-      this.filtros.every(([c, tipo, v]) => (tipo === "is" ? (l[c] ?? null) === v : l[c] === v)),
+      this.filtros.every(([c, tipo, v]) =>
+        tipo === "is" ? (l[c] ?? null) === v : tipo === "in" ? (v as unknown[]).includes(l[c]) : l[c] === v,
+      ),
     );
   }
 

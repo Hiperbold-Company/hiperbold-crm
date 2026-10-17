@@ -21,7 +21,7 @@ import { IDIOMA_PADRAO, type Idioma } from "@/lib/i18n/idiomas";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { emitirPedido, VALIDADE_DO_LINK_EM_DIAS } from "./verificacao-email";
+import { emitirPedido, gravarPedido, VALIDADE_DO_LINK_EM_DIAS } from "./verificacao-email";
 
 /** Os tetos do "Reenviar" (decisão do dono do produto, 15/10/2026). */
 export const LIMITES_DO_REENVIO = {
@@ -101,7 +101,12 @@ export async function enviarVerificacaoDeEmail(
     junto: p.junto,
     // O mesmo "1 por minuto", agora durável: mora no pedido e vale mesmo se o contador do limitador reiniciar.
     ...(p.via === "reenvio"
-      ? { intervaloMinimoMs: LIMITES_DO_REENVIO.porMinuto.janelaSeg * 1000, somenteSePendente: true }
+      ? {
+          intervaloMinimoMs: LIMITES_DO_REENVIO.porMinuto.janelaSeg * 1000,
+          somenteSePendente: true,
+          // O pedido novo só substitui o antigo depois de o e-mail sair (ver abaixo).
+          semGravar: true,
+        }
       : {}),
   });
   if (!pedido.ok) return { ok: false, motivo: pedido.motivo };
@@ -127,6 +132,22 @@ export async function enviarVerificacaoDeEmail(
   if (!r.ok) {
     logger.warn("[verificar-email] envio falhou", { via: p.via, erro: r.error ?? "send_failed" });
     return { ok: false, motivo: r.error === "not_configured" ? "email_nao_configurado" : "envio_falhou" };
+  }
+
+  // Reenvio: o e-mail saiu, agora sim o hash novo toma o lugar do antigo. Se o envio tivesse falhado, o link
+  // que a pessoa já tem na caixa continuaria valendo.
+  if (p.via === "reenvio") {
+    const gravado = await gravarPedido({
+      admin: deps.admin,
+      userId: p.userId,
+      hash: pedido.hash,
+      expiraEm: pedido.expiraEm,
+      agora,
+    });
+    if (!gravado.ok) {
+      logger.warn("[verificar-email] gravar o pedido depois do envio falhou", { motivo: gravado.motivo });
+      return { ok: false, motivo: gravado.motivo };
+    }
   }
 
   await deps.auditar({

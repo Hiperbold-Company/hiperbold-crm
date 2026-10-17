@@ -228,6 +228,15 @@ export default async function PlanoEUsoPage() {
           assinaturaAsaas={asaasOrg.assinatura}
           pedidos={asaasOrg.pedidos}
           fimDoPeriodo={assinatura.contrato?.currentPeriodEnd ?? null}
+          contrato={
+            assinatura.contrato
+              ? {
+                  status: assinatura.contrato.status,
+                  cancelAtPeriodEnd: assinatura.contrato.cancelAtPeriodEnd,
+                  currentPeriodEnd: assinatura.contrato.currentPeriodEnd ?? null,
+                }
+              : null
+          }
           cancelada={assinaturaCancelada(contratoDaAssinatura)}
           reembolso={reembolso}
           tagDoIdioma={tagDoIdioma}
@@ -410,6 +419,7 @@ function CartaoDeAssinaturaEPagamento({
   assinaturaAsaas,
   pedidos,
   fimDoPeriodo,
+  contrato,
   cancelada,
   reembolso,
   tagDoIdioma,
@@ -420,6 +430,8 @@ function CartaoDeAssinaturaEPagamento({
   pedidos: PedidoAsaas[];
   /** `current_period_end` do contrato (D-177: a data em que o plano parcelado acaba). */
   fimDoPeriodo: string | null;
+  /** Estado do contrato, para o cancelamento de quem não tem assinatura viva no Asaas (Pix, parcelado). */
+  contrato: { status: string; cancelAtPeriodEnd: boolean; currentPeriodEnd: string | null } | null;
   /** O cancelamento foi confirmado (`cancel_at_period_end` ligado ou contrato cancelado). */
   cancelada: boolean;
   /** O que mostrar sobre reembolso (migration 0957). */
@@ -441,6 +453,7 @@ function CartaoDeAssinaturaEPagamento({
     ambiente: chaves.ambiente,
     assinaturaDoContrato: assinaturaAsaas,
     pedidos,
+    contrato,
   });
 
   return (

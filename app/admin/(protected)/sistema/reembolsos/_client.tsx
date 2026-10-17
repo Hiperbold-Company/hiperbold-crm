@@ -66,7 +66,24 @@ export function ListaDePedidosDeReembolso({ pedidos }: { pedidos: PedidoDeReembo
               <span className="font-medium">{p.empresa}</span>
               {p.detalhe && <span className="block max-w-xs text-xs text-text-muted">{p.detalhe}</span>}
             </TableCell>
-            <TableCell>{formatCentsBRL(p.amountCents)}</TableCell>
+            <TableCell>
+              {formatCentsBRL(p.amountCents)}
+              {p.pacote && (
+                <span className="block text-xs text-text-muted" data-testid={`reembolso-pacote-${p.id}`}>
+                  {t("Pacote de tokens")}
+                  {p.pacote.tokensDoPacote !== null && <>: {p.pacote.tokensDoPacote.toLocaleString("pt-BR")}</>}
+                  {p.pacote.consumidoAvulso !== null && p.pacote.creditadoAvulso !== null ? (
+                    <>
+                      {" · "}
+                      {t("consumido")} {p.pacote.consumidoAvulso.toLocaleString("pt-BR")} {t("de")}{" "}
+                      {p.pacote.creditadoAvulso.toLocaleString("pt-BR")}
+                    </>
+                  ) : (
+                    <> · {t("consumo indisponível")}</>
+                  )}
+                </span>
+              )}
+            </TableCell>
             <TableCell>
               {data(p.paidAt)}
               {p.linkDoAsaas && (

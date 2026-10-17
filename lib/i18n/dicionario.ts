@@ -14018,6 +14018,15 @@ export const DICIONARIO: Traducoes = {
     es: "Completa el pago con tarjeta para entrar al CRM. En cuanto Asaas lo confirme, esta pantalla avanza sola.",
   },
   "Abrir a cobrança para pagar": { es: "Abrir el cobro para pagar" },
+  "Trocar forma de pagamento": { es: "Cambiar la forma de pago" },
+  "Trocar a forma de pagamento?": { es: "¿Cambiar la forma de pago?" },
+  "Cancelamos este pedido, que ainda não foi pago, e você escolhe de novo o plano e a forma de pagamento. Se você já pagou, não cancelamos: o pagamento está em confirmação.": {
+    es: "Cancelamos este pedido, que aún no fue pagado, y eliges de nuevo el plan y la forma de pago. Si ya pagaste, no cancelamos: el pago está en confirmación.",
+  },
+  "Administradores": { es: "Administradores" },
+  "horário de Brasília": { es: "hora de Brasilia" },
+  "consumido": { es: "consumido" },
+  "consumo indisponível": { es: "consumo no disponible" },
   "Ativando seu plano…": { es: "Activando tu plan…" },
   // ─── TELA INÍCIO (Hiperbold, 15/10/2026) ───
   "O que já está pronto e o que falta para o CRM trabalhar pela sua empresa.": {

@@ -135,6 +135,7 @@ describe("a lista do admin", () => {
     amountCents: 34900,
     paidAt: "2026-10-13T15:00:00Z",
     dentro7Dias: true,
+    pacote: null,
     motivo: "preco",
     detalhe: "obrigado",
     status: "pendente",

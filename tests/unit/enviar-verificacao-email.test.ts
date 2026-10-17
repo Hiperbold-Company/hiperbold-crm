@@ -189,6 +189,41 @@ describe("reenvio: 1 por minuto e 5 por dia", () => {
     expect(m.enviados).toHaveLength(1 + 5);
   });
 
+  it("reenvio cujo envio FALHA mantém o pedido anterior: o link que a pessoa já tem na caixa continua valendo", async () => {
+    const m = montar();
+    await enviarVerificacaoDeEmail({ userId: USER, via: "cadastro" }, m.deps);
+    const antigo = pedidoEmAberto(m.f.appMetadata(USER))!;
+    const tokenAntigo = decodeURIComponent(
+      /token=([^"&\s]+)/.exec(m.enviados[0]!.html)![1]!,
+    );
+    m.avancar(61_000);
+
+    // o provedor de e-mail cai no reenvio
+    (m.deps.enviar as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: false, error: "send_failed" });
+    expect(await enviarVerificacaoDeEmail({ userId: USER, via: "reenvio" }, m.deps)).toEqual({
+      ok: false,
+      motivo: "envio_falhou",
+    });
+
+    // o pedido gravado é o MESMO de antes (hash e carimbo de envio), e o link antigo ainda verifica a conta
+    expect(pedidoEmAberto(m.f.appMetadata(USER))).toEqual(antigo);
+    const consumo = await consumirToken({ admin: m.f.cliente, token: tokenAntigo, agora: new Date(T0.getTime() + 3_600_000) });
+    expect(consumo.ok).toBe(true);
+  });
+
+  it("reenvio que sai troca o pedido: o link antigo deixa de valer e o novo vale", async () => {
+    const m = montar();
+    await enviarVerificacaoDeEmail({ userId: USER, via: "cadastro" }, m.deps);
+    const tokenAntigo = decodeURIComponent(/token=([^"&\s]+)/.exec(m.enviados[0]!.html)![1]!);
+    m.avancar(61_000);
+    expect(await enviarVerificacaoDeEmail({ userId: USER, via: "reenvio" }, m.deps)).toEqual({ ok: true });
+    const tokenNovo = decodeURIComponent(/token=([^"&\s]+)/.exec(m.enviados[1]!.html)![1]!);
+
+    const agora = new Date(T0.getTime() + 3_600_000);
+    expect((await consumirToken({ admin: m.f.cliente, token: tokenAntigo, agora })).ok).toBe(false);
+    expect((await consumirToken({ admin: m.f.cliente, token: tokenNovo, agora })).ok).toBe(true);
+  });
+
   it("o teto é por usuário: outro usuário não gasta o orçamento deste", async () => {
     const m = pendente();
     await enviarVerificacaoDeEmail({ userId: USER, via: "cadastro" }, m.deps);

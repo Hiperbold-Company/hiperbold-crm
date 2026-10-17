@@ -223,13 +223,16 @@ export function criarAvisosDeCobrancaSobre(admin: SupabaseClient, deps: DepsDosG
 
     // COB-02: só na compra (pedido). A renovação do cartão não tem pedido e não repete o "plano ativo".
     if (doPedido) {
-      // Primeira compra: nenhum OUTRO pedido da organização está pago (o deste já foi marcado `pago` pelo banco).
+      // Primeira compra: nenhum OUTRO pedido de ASSINATURA da organização foi pago (o deste já foi marcado `pago`
+      // pelo banco). Conta `pago` e `estornado` (um estornado foi pago um dia: quem reassina não é cliente novo) e
+      // só o tipo `assinatura`: um pacote de tokens comprado antes não faz da primeira assinatura uma "segunda".
       const pagos = await lerLista<{ id: string }>(
         admin
           .from("billing_orders")
           .select("id")
           .eq("organization_id", organizationId)
-          .eq("status", "pago")
+          .eq("tipo", "assinatura")
+          .in("status", ["pago", "estornado"])
           .limit(2) as never,
       );
       const primeiraCompra = !pagos.some((p) => p.id !== doPedido.id);

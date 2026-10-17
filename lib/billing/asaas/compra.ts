@@ -235,6 +235,11 @@ export type ResultadoCancelarAssinatura =
   | { tipo: "ok"; cancelAtPeriodEnd: boolean }
   | { tipo: "erro"; mensagem: string };
 
+/** `cancelou: false` = não havia pedido aberto (nada a fazer, o formulário já pode voltar). */
+export type ResultadoCancelarPedidoAberto =
+  | { tipo: "ok"; cancelou: boolean }
+  | { tipo: "erro"; mensagem: string };
+
 // ─── A interface estreita do banco (implementação real: Tarefa 15) ────────
 
 export interface RpcErro {
@@ -323,6 +328,13 @@ export interface ContratoAsaas {
    * caminho, então quem calcula a próxima cobrança é este arquivo).
    */
   currentPeriodEnd: string | null;
+  /**
+   * `billing_contracts.status` e `cancel_at_period_end`: decidem o cancelamento de quem NÃO tem assinatura
+   * viva no Asaas (Pix, parcelado no cartão). Opcionais para quem monta o contrato sem eles; ausentes, o
+   * cancelamento sem assinatura recusa (comportamento anterior).
+   */
+  status?: string | null;
+  cancelAtPeriodEnd?: boolean;
 }
 
 export interface DbCompra {
@@ -398,6 +410,12 @@ export interface DbCompra {
 
   /** Leitura pura de `billing_contracts` (campos usados por `cancelarAssinaturaDoCliente` e pela retomada M9, correção 3). */
   lerContrato(org: string): Promise<RpcResultado<ContratoAsaas | null>>;
+
+  /**
+   * `fn_billing_cancelar_no_fim_do_periodo(p_org, true, p_actor)` (0908): liga `cancel_at_period_end` e grava o
+   * evento de auditoria. Idempotente. É o cancelamento de quem não tem assinatura viva no Asaas (Pix, parcelado).
+   */
+  cancelarNoFimDoPeriodo(org: string, actor: string): Promise<RpcResultado<{ cancelAtPeriodEnd: boolean }>>;
 
   /** `fn_billing_asaas_marcar_assinatura_encerrada` (migração 0909, Tarefa 6, decisão 22). */
   marcarAssinaturaEncerrada(
@@ -475,6 +493,16 @@ export const MENSAGEM_PAGADOR_OBRIGATORIO =
   "Informe seus dados de pagamento para concluir a primeira compra.";
 export const MENSAGEM_SEM_ASSINATURA_ASAAS =
   "Esta organização não tem uma assinatura Asaas ativa para cancelar.";
+/** Trocar a forma de pagamento: o Asaas já tem pagamento confirmado ou em confirmação para o pedido. */
+export const MENSAGEM_PAGAMENTO_EM_CONFIRMACAO =
+  "Seu pagamento está em confirmação. Aguarde alguns instantes: assim que for confirmado, você entra no CRM.";
+/** Trocar a forma de pagamento: o pedido ainda está sendo montado no Asaas. */
+export const MENSAGEM_PEDIDO_EM_PROCESSAMENTO =
+  "Seu pedido está sendo processado agora. Tente trocar a forma de pagamento em alguns minutos.";
+/** 0955/12: o cupom depende de identificar o pagador pelo cadastro do Asaas; sem isso ele é recusado (falha fechada). */
+export const MENSAGEM_CUPOM_SEM_PAGADOR =
+  "Não foi possível validar o cupom agora. Tente novamente em instantes ou continue sem o cupom.";
+export const MENSAGEM_JA_CANCELADA = "Esta assinatura já foi cancelada.";
 export const MENSAGEM_TROCA_DE_CICLO =
   "Sua assinatura atual ainda está no período pago em outro ciclo. A troca de ciclo ainda não está disponível: fale com o suporte ou contrate de novo depois do fim do período.";
 /** 0942: `billing_troca_de_plano_indisponivel`. A tela passa esta frase por `t()` (es e zh-CN em `lib/i18n`). */
@@ -604,6 +632,29 @@ function mesmaOfertaDoPedidoAberto(pedido: PedidoLinha, entrada: EntradaIniciarC
   return pedido.pacoteCode === (entrada.pacote ?? null);
 }
 
+/**
+ * O documento do pagador, na ordem de confiança: o cadastro do cliente no Asaas (achado pela referência da
+ * organização, que é onde o CPF/CNPJ ficou guardado) e, só na PRIMEIRA compra (ainda não existe cliente), o
+ * documento que está prestes a virar esse cadastro (`resolverAsaasCustomerId` cria o cliente com ele e valida o
+ * dígito verificador). Nunca grava nem loga o documento.
+ */
+async function impressaoDoPagadorNoServidor(
+  deps: DepsCompra,
+  entrada: EntradaIniciarCompra,
+  ambiente: AmbienteAsaas,
+): Promise<string | null> {
+  try {
+    const cadastrado = await deps.asaas.buscarClientePorReferencia(`HC:org:${entrada.organizationId}`);
+    if (cadastrado) return impressaoDoPagador(cadastrado.cpfCnpj);
+    const vinculo = await deps.db.buscarVinculoClienteAsaas(entrada.organizationId, ambiente);
+    if (vinculo.error || vinculo.data) return null; // há cliente mas não o achamos pelo cadastro: não confia no corpo
+    return documentoValido(entrada.pagador?.documento ?? "") ? impressaoDoPagador(entrada.pagador?.documento) : null;
+  } catch (err) {
+    deps.logger.warn("asaas_compra_impressao_do_pagador_falhou", { org: entrada.organizationId, tipoErro: tipoDoErro(err) });
+    return null;
+  }
+}
+
 async function resolverPedido(
   deps: DepsCompra,
   entrada: EntradaIniciarCompra,
@@ -637,6 +688,15 @@ async function resolverPedido(
       : calcularParcelamento(oferta.data.precoCents, parcelas, oferta.data.parametros).totalCents;
   }
 
+  // 0955/12: a impressão do pagador (a regra "um cupom por CPF/CNPJ") vem do documento do CADASTRO do cliente no
+  // Asaas, lido no servidor, e nunca do corpo da requisição: quem manda o corpo poderia omitir o documento ou
+  // trocá-lo a cada tentativa para reusar o cupom. Sem chave do servidor ou sem documento, o cupom é recusado.
+  let pagadorImpressao: string | null = null;
+  if (entrada.cupom) {
+    pagadorImpressao = await impressaoDoPagadorNoServidor(deps, entrada, ambiente);
+    if (!pagadorImpressao) return { tipo: "erro", mensagem: MENSAGEM_CUPOM_SEM_PAGADOR };
+  }
+
   const criado = await deps.db.criarPedido({
     org: entrada.organizationId,
     tipo: entrada.tipo,
@@ -651,7 +711,7 @@ async function resolverPedido(
     parcelas,
     totalCents,
     cupom: entrada.cupom ?? null,
-    pagadorImpressao: entrada.cupom ? impressaoDoPagador(entrada.pagador?.documento) : null,
+    pagadorImpressao,
   });
 
   if (!criado.error) {
@@ -1505,6 +1565,133 @@ async function cancelarAssinaturaAgendadaDoPedido(
   return { tipo: "ok", cancelAtPeriodEnd: false };
 }
 
+/**
+ * Contrato pago SEM assinatura viva no Asaas (Pix, cobrança parcelada no cartão): não há o que remover lá, e a
+ * pessoa precisa conseguir cancelar do mesmo jeito (o motivo é gravado pela ação e a seção de reembolso só
+ * aparece com a assinatura cancelada). Liga `cancel_at_period_end` sem chamar o Asaas: o acesso segue até o fim
+ * do período pago e o contrato vira `cancelada` quando ele acaba. Só vale para contrato `ativa` com período
+ * pago ainda a frente; já cancelado devolve a frase de "já cancelada" (sem gravar de novo).
+ */
+async function cancelarContratoSemAssinaturaViva(
+  deps: DepsCompra,
+  organizationId: string,
+  actorId: string,
+  contrato: ContratoAsaas,
+): Promise<ResultadoCancelarAssinatura> {
+  if (contrato.cancelAtPeriodEnd || contrato.status === "cancelada") {
+    return { tipo: "erro", mensagem: MENSAGEM_JA_CANCELADA };
+  }
+  const fim = contrato.currentPeriodEnd ? Date.parse(contrato.currentPeriodEnd) : Number.NaN;
+  if (contrato.status !== "ativa" || !Number.isFinite(fim) || fim <= relogio(deps).getTime()) {
+    return { tipo: "erro", mensagem: MENSAGEM_SEM_ASSINATURA_ASAAS };
+  }
+  const marcado = await deps.db.cancelarNoFimDoPeriodo(organizationId, actorId);
+  if (marcado.error || !marcado.data) {
+    deps.logger.error("asaas_cancelar_sem_assinatura_falhou", { org: organizationId, codigo: marcado.error?.code });
+    return { tipo: "erro", mensagem: MENSAGEM_GENERICA };
+  }
+  return { tipo: "ok", cancelAtPeriodEnd: true };
+}
+
+const STATUS_ASAAS_PAGO = new Set(["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"]);
+/** O pedido `processando` há menos que isto pode ter um POST ao Asaas ainda em voo. */
+const PEDIDO_EM_VOO_MS = 15 * 60 * 1000;
+
+/**
+ * "Trocar forma de pagamento": o cliente que ficou preso no pedido aberto (Pix que não vai pagar, cartão que
+ * não concluiu) cancela ESSE pedido para escolher de novo. Segura contra dinheiro em trânsito:
+ *
+ *  - acha o que existe no Asaas pela `externalReference` (assinatura, cobrança avulsa, parcelamento), nunca só
+ *    pelos ids locais (o POST pode ter dado certo e o registro falhado);
+ *  - se QUALQUER cobrança já está confirmada/recebida, NÃO cancela: devolve a frase "pagamento em
+ *    confirmação" (o webhook vai marcar o pedido pago);
+ *  - remove no Asaas e SÓ DEPOIS marca o pedido `cancelado`; erro na remoção reconfere o pagamento e, se ele
+ *    entrou no meio do caminho, também devolve "em confirmação". Repetir é seguro (remoções idempotentes);
+ *  - sem pedido aberto devolve `ok` (`cancelou: false`).
+ */
+export async function cancelarPedidoAbertoDoCliente(
+  deps: DepsCompra,
+  organizationId: string,
+): Promise<ResultadoCancelarPedidoAberto> {
+  const aberto = await deps.db.buscarPedidoAbertoPorTipo(organizationId, "assinatura");
+  if (aberto.error) {
+    deps.logger.error("asaas_trocar_pagamento_ler_pedido_falhou", { org: organizationId, codigo: aberto.error.code });
+    return { tipo: "erro", mensagem: MENSAGEM_GENERICA };
+  }
+  const pedido = aberto.data;
+  if (!pedido) return { tipo: "ok", cancelou: false };
+  if (pedido.status === "pago") return { tipo: "erro", mensagem: MENSAGEM_PAGAMENTO_EM_CONFIRMACAO };
+  if (pedido.ambiente !== deps.config.ambiente) {
+    deps.logger.error("asaas_trocar_pagamento_ambiente_diferente", { org: organizationId, pedidoId: pedido.id });
+    return { tipo: "erro", mensagem: MENSAGEM_GENERICA };
+  }
+  if (pedido.status === "processando") {
+    const atualizado = Date.parse(pedido.atualizadoEm);
+    if (Number.isFinite(atualizado) && relogio(deps).getTime() - atualizado < PEDIDO_EM_VOO_MS) {
+      return { tipo: "erro", mensagem: MENSAGEM_PEDIDO_EM_PROCESSAMENTO };
+    }
+  }
+
+  const existente: {
+    assinaturaId: string | null;
+    parcelamentoId: string | null;
+    cobrancaAvulsaId: string | null;
+    cobrancas: Map<string, CobrancaAsaas>;
+  } = { assinaturaId: null, parcelamentoId: null, cobrancaAvulsaId: null, cobrancas: new Map() };
+
+  async function lerOQueExiste(): Promise<void> {
+    existente.cobrancas.clear();
+    const assinatura = await deps.asaas.buscarAssinaturaPorReferencia(pedido!.externalReference);
+    existente.assinaturaId = assinatura?.id ?? pedido!.asaasSubscriptionId;
+    if (existente.assinaturaId) {
+      for (const c of await deps.asaas.listarCobrancasDaAssinatura(existente.assinaturaId)) {
+        existente.cobrancas.set(c.id, c);
+      }
+    }
+    const avulsa = await deps.asaas.buscarCobrancaPorReferencia(pedido!.externalReference);
+    existente.parcelamentoId = avulsa?.installment ?? null;
+    existente.cobrancaAvulsaId = avulsa && !avulsa.installment && !avulsa.subscription ? avulsa.id : null;
+    if (avulsa) existente.cobrancas.set(avulsa.id, avulsa);
+    if (existente.parcelamentoId) {
+      for (const c of await deps.asaas.listarCobrancasDoParcelamento(existente.parcelamentoId)) {
+        existente.cobrancas.set(c.id, c);
+      }
+    }
+  }
+  const algumaPaga = () => [...existente.cobrancas.values()].some((c) => STATUS_ASAAS_PAGO.has(c.status));
+
+  try {
+    await lerOQueExiste();
+  } catch (err) {
+    deps.logger.error("asaas_trocar_pagamento_procurar_falhou", { org: organizationId, tipoErro: tipoDoErro(err) });
+    return { tipo: "erro", mensagem: MENSAGEM_GENERICA };
+  }
+  if (algumaPaga()) return { tipo: "erro", mensagem: MENSAGEM_PAGAMENTO_EM_CONFIRMACAO };
+
+  try {
+    if (existente.assinaturaId) await deps.asaas.removerAssinatura(existente.assinaturaId);
+    if (existente.parcelamentoId) await deps.asaas.removerParcelamento(existente.parcelamentoId);
+    if (existente.cobrancaAvulsaId) await deps.asaas.removerCobranca(existente.cobrancaAvulsaId);
+  } catch (err) {
+    deps.logger.error("asaas_trocar_pagamento_remover_falhou", { org: organizationId, tipoErro: tipoDoErro(err) });
+    // O Asaas recusa remover cobrança já paga: reconfere antes de dizer que falhou.
+    try {
+      await lerOQueExiste();
+      if (algumaPaga()) return { tipo: "erro", mensagem: MENSAGEM_PAGAMENTO_EM_CONFIRMACAO };
+    } catch {
+      // sem a reconferência, a frase genérica abaixo vale.
+    }
+    return { tipo: "erro", mensagem: MENSAGEM_GENERICA };
+  }
+
+  const marcado = await deps.db.marcarPedido(organizationId, pedido.id, "cancelado", "trocar_forma_de_pagamento");
+  if (marcado.error || !marcado.data) {
+    deps.logger.error("asaas_trocar_pagamento_marcar_falhou", { org: organizationId, codigo: marcado.error?.code });
+    return { tipo: "erro", mensagem: MENSAGEM_GENERICA };
+  }
+  return { tipo: "ok", cancelou: true };
+}
+
 async function avisarCancelamento(
   deps: DepsCompra,
   organizationId: string,
@@ -1540,7 +1727,10 @@ export async function cancelarAssinaturaDoCliente(
   }
   const { asaasSubscriptionId, asaasAssinaturaEncerradaEm } = contrato.data;
   if (!asaasSubscriptionId || asaasAssinaturaEncerradaEm) {
-    return cancelarAssinaturaAgendadaDoPedido(deps, organizationId);
+    const agendada = await cancelarAssinaturaAgendadaDoPedido(deps, organizationId);
+    if (agendada.tipo === "ok" || agendada.mensagem !== MENSAGEM_SEM_ASSINATURA_ASAAS) return agendada;
+    // Sem assinatura viva nem agendada no Asaas (Pix, parcelado no cartão): o cancelamento é só do contrato.
+    return cancelarContratoSemAssinaturaViva(deps, organizationId, actorId, contrato.data);
   }
 
   try {

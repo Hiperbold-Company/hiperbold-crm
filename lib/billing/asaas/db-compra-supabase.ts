@@ -373,7 +373,7 @@ export function dbCompraSupabase(admin: SupabaseClient): DbCompra & DbSimulacaoD
     async lerContrato(org) {
       const { data, error } = await admin
         .from("billing_contracts")
-        .select("asaas_subscription_id, asaas_assinatura_encerrada_em, current_period_end")
+        .select("asaas_subscription_id, asaas_assinatura_encerrada_em, current_period_end, status, cancel_at_period_end")
         .eq("organization_id", org)
         .maybeSingle();
       if (error) return { data: null, error: error as RpcErro };
@@ -381,14 +381,30 @@ export function dbCompraSupabase(admin: SupabaseClient): DbCompra & DbSimulacaoD
         asaas_subscription_id: string | null;
         asaas_assinatura_encerrada_em: string | null;
         current_period_end: string | null;
+        status: string | null;
+        cancel_at_period_end: boolean | null;
       } | null;
       if (!row) return { data: null, error: null };
       const contrato: ContratoAsaas = {
         asaasSubscriptionId: row.asaas_subscription_id,
         asaasAssinaturaEncerradaEm: row.asaas_assinatura_encerrada_em,
         currentPeriodEnd: row.current_period_end,
+        status: row.status,
+        cancelAtPeriodEnd: row.cancel_at_period_end === true,
       };
       return { data: contrato, error: null };
+    },
+
+    async cancelarNoFimDoPeriodo(org, actor) {
+      const { data, error } = await admin.rpc("fn_billing_cancelar_no_fim_do_periodo" as never, {
+        p_org: org,
+        p_sim: true,
+        p_actor: actor,
+      } as never);
+      if (error) return { data: null, error: error as RpcErro };
+      const d = data as { cancel_at_period_end: boolean } | null;
+      if (!d) return { data: null, error: null };
+      return { data: { cancelAtPeriodEnd: d.cancel_at_period_end }, error: null };
     },
 
     async marcarAssinaturaEncerrada(org, asaasSubscriptionId, actor) {

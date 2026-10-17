@@ -1120,6 +1120,9 @@ export const AUDIT_ACTIONS = [
   "org.data_purged",
   "org.deletion_scheduled",
   "org.deletion_cancelled",
+  // "Trocar forma de pagamento" no passo Plano do onboarding: o admin da organização cancelou o pedido aberto
+  // (ainda sem pagamento) para escolher de novo. Metadata: só o tipo do pedido; nunca dado do pagador.
+  "billing.order_payment_method_reset",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

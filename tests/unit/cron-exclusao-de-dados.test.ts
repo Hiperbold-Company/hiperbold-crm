@@ -22,7 +22,7 @@ vi.mock("@/lib/retencao/exclusao-de-organizacao/rodada", () => ({ rodarExclusaoD
 import { GET, POST } from "@/app/api/v1/cron/exclusao-de-dados/route";
 
 const VAZIO = {
-  sincronizacaoFalhou: false, programadas: 0, atualizadas: 0, canceladasPorReativacao: 0,
+  sincronizacaoFalhou: false, programadas: 0, atualizadas: 0, canceladasPorReativacao: 0, adiadasParaAvisar: 0,
   avisosEnfileirados: 0, vencidas: 0, excluidas: 0, falhas: 0, fiscaisExpurgados: 0,
 };
 const chamar = (segredo = SEGREDO, metodo: typeof GET = GET) =>

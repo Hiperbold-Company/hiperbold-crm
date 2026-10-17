@@ -13,11 +13,11 @@
  * de cifra (`fn_encrypt_oauth`, do Postgres), a criação do lead, o segredo da
  * fonte, o limite por IP, o audit e o motor local de eventos.
  */
-import { createHash } from "node:crypto";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/types";
+import { hashCpf } from "@/lib/contacts/cpf";
 import { cpfValido } from "@/lib/documentos/cpf-cnpj";
 import { criarBancoEmMemoria, type BancoEmMemoria, type Linha } from "../helpers/banco-em-memoria";
 
@@ -121,7 +121,9 @@ function leadAberto(parcial: Linha): Linha {
 
 const tabela = (nome: string) => banco.tabelas[nome] ?? [];
 const contato = (id: string) => tabela("contacts").find((c) => c.id === id)!;
-const sha = (d: string) => createHash("sha256").update(d).digest("hex");
+// O cpf_hash agora é o HMAC com a chave do servidor (lib/contacts/cpf.ts), igual ao que o código grava.
+process.env.CPF_ENCRYPTION_KEY = "chave-de-teste-do-cpf";
+const sha = (d: string) => hashCpf(d) as string;
 
 function montar(extras: { leads?: Linha[]; contatos?: Linha[]; fontes?: Linha[] } = {}) {
   banco = criarBancoEmMemoria(

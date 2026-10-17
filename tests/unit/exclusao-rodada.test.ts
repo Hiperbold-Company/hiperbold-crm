@@ -32,6 +32,10 @@ function adminFalso(opcoes: {
           estado.filtros[c] = v;
           return cadeia;
         },
+        in: (c: string, v: unknown) => {
+          estado.filtros[c] = v;
+          return cadeia;
+        },
         gt: () => ((estado.modo = "avisos"), cadeia),
         lte: () => ((estado.modo = "vencidas"), cadeia),
         order: () => cadeia,
@@ -52,7 +56,7 @@ function adminFalso(opcoes: {
     rpc: async (nome: string, args: unknown) => {
       rpcs.push({ nome, args });
       // A guarda de leitura diz ok por padrão; cada caso troca o que quer provar.
-      const padrao = nome === "fn_exclusao_pode_executar" ? { data: "ok", error: null } : { data: null, error: null };
+      const padrao = nome === "fn_exclusao_iniciar" ? { data: "ok", error: null } : { data: null, error: null };
       return (opcoes.rpc?.(nome, args) ?? padrao) as { data: unknown; error: unknown };
     },
   };
@@ -125,9 +129,9 @@ describe("excluir uma organização", () => {
   it("A GUARDA VEM ANTES DO STORAGE: recusada pelo banco, nada é apagado no Storage nem nas conexões", async () => {
     apagarArquivos.mockReset();
     for (const recusa of ["exclusao_org_reativada", "exclusao_sem_aviso_de_7_dias", "exclusao_ainda_nao_venceu", "exclusao_cancelada", "exclusao_nao_programada"]) {
-      const { admin, rpcs } = adminFalso({ rpc: (nome) => (nome === "fn_exclusao_pode_executar" ? { data: recusa } : { data: null }) });
+      const { admin, rpcs } = adminFalso({ rpc: (nome) => (nome === "fn_exclusao_iniciar" ? { data: recusa } : { data: null }) });
       expect(await excluirOrganizacao(admin, ORG, null)).toEqual({ ok: false, etapa: "guarda", motivo: recusa });
-      expect(rpcs.map((x) => x.nome)).toEqual(["fn_exclusao_pode_executar"]);
+      expect(rpcs.map((x) => x.nome)).toEqual(["fn_exclusao_iniciar"]);
     }
     expect(apagarArquivos).not.toHaveBeenCalled();
   });
@@ -141,10 +145,10 @@ describe("excluir uma organização", () => {
 
   it("a exclusão forçada do admin pergunta e executa com p_forcar", async () => {
     apagarArquivos.mockResolvedValue({ ok: true, apagados: 0 });
-    const { admin, rpcs } = adminFalso({ rpc: (nome) => ({ data: nome === "fn_exclusao_pode_executar" ? "ok" : { origem: "manual", motivo: "manual" } }) });
+    const { admin, rpcs } = adminFalso({ rpc: (nome) => ({ data: nome === "fn_exclusao_iniciar" ? "ok" : { origem: "manual", motivo: "manual" } }) });
     await excluirOrganizacao(admin, ORG, "admin-1", { forcar: true });
     expect(rpcs.map((x) => [x.nome, (x.args as { p_forcar?: boolean }).p_forcar])).toEqual([
-      ["fn_exclusao_pode_executar", true],
+      ["fn_exclusao_iniciar", true],
       ["fn_exclusao_executar", true],
     ]);
     expect(rpcs.some((x) => x.nome === "fn_exclusao_programar")).toBe(false);
@@ -160,14 +164,14 @@ describe("excluir uma organização", () => {
 
   it("a guarda do banco recusa (reativou): vira etapa guarda, sem lançar", async () => {
     apagarArquivos.mockResolvedValue({ ok: true, apagados: 0 });
-    const { admin } = adminFalso({ rpc: (nome) => (nome === "fn_exclusao_pode_executar" ? { data: "ok" } : { error: { message: "exclusao_org_reativada", code: "22023" } }) });
+    const { admin } = adminFalso({ rpc: (nome) => (nome === "fn_exclusao_iniciar" ? { data: "ok" } : { error: { message: "exclusao_org_reativada", code: "22023" } }) });
     expect(await excluirOrganizacao(admin, ORG, null)).toEqual({ ok: false, etapa: "guarda", motivo: "exclusao_org_reativada" });
   });
 
   it("sucesso: chama fn_exclusao_executar com a organização e o ator e devolve o resumo", async () => {
     apagarArquivos.mockResolvedValue({ ok: true, apagados: 7 });
     const { admin, rpcs } = adminFalso({
-      rpc: (nome) => ({ data: nome === "fn_exclusao_pode_executar" ? "ok" : { organization_id: ORG, origem: "automatica", motivo: "suspensa", contatos: 4, usuarios_removidos: 1 } }),
+      rpc: (nome) => ({ data: nome === "fn_exclusao_iniciar" ? "ok" : { organization_id: ORG, origem: "automatica", motivo: "suspensa", contatos: 4, usuarios_removidos: 1 } }),
     });
     const r = await excluirOrganizacao(admin, ORG, "ator-1");
     expect(rpcs.find((x) => x.nome === "fn_exclusao_executar")).toEqual({
@@ -188,7 +192,7 @@ describe("a rodada", () => {
     });
     const r = await rodarExclusaoDeDados(admin, { diasDeGuarda: 90, agora: new Date("2027-01-02T09:00:00Z") });
     expect(r).toMatchObject({ sincronizacaoFalhou: true, avisosEnfileirados: 0, vencidas: 0, excluidas: 0 });
-    expect(rpcs.some((x) => x.nome === "fn_exclusao_executar" || x.nome === "fn_exclusao_pode_executar")).toBe(false);
+    expect(rpcs.some((x) => x.nome === "fn_exclusao_executar" || x.nome === "fn_exclusao_iniciar")).toBe(false);
     expect(apagarArquivos).not.toHaveBeenCalled();
   });
 
@@ -198,7 +202,7 @@ describe("a rodada", () => {
     });
     const r = await rodarExclusaoDeDados(admin, { diasDeGuarda: 90, agora: new Date("2026-10-16T09:00:00Z") });
     expect(r).toMatchObject({ programadas: 0, avisosEnfileirados: 0, vencidas: 0, excluidas: 0, falhas: 0 });
-    expect(rpcs.map((x) => x.nome)).toEqual(["fn_exclusao_sincronizar", "fn_exclusao_expurgar_fiscais_vencidos"]);
+    expect(rpcs.map((x) => x.nome)).toEqual(["fn_exclusao_sincronizar", "fn_exclusao_adiar_para_avisar", "fn_exclusao_expurgar_fiscais_vencidos"]);
     expect(rpcs[0]?.args).toEqual({ p_dias: 90 });
   });
 
@@ -207,9 +211,30 @@ describe("a rodada", () => {
     apagarArquivos.mockResolvedValueOnce({ ok: false, apagados: 0, motivo: "x" }).mockResolvedValue({ ok: true, apagados: 0 });
     const { admin } = adminFalso({
       vencidas: [prog(), prog({ organization_id: OUTRA })],
-      rpc: (nome) => ({ data: nome === "fn_exclusao_pode_executar" ? "ok" : nome === "fn_exclusao_executar" ? { origem: "automatica", motivo: "cancelada" } : { programadas: 0 } }),
+      rpc: (nome) => ({ data: nome === "fn_exclusao_iniciar" ? "ok" : nome === "fn_exclusao_executar" ? { origem: "automatica", motivo: "cancelada" } : { programadas: 0 } }),
     });
     const r = await rodarExclusaoDeDados(admin, { diasDeGuarda: 90, agora: new Date("2027-01-02T09:00:00Z") });
     expect(r).toMatchObject({ vencidas: 2, excluidas: 1, falhas: 1 });
+  });
+  it("vencida SEM o aviso de D-7: o banco empurra a data ANTES dos avisos e dos vencidos, e a rodada não apaga nesta passada (migration 0964)", async () => {
+    const { admin, rpcs } = adminFalso({
+      rpc: (nome) => ({ data: nome === "fn_exclusao_sincronizar" ? { programadas: 0, atualizadas: 0, canceladas_por_reativacao: 0 } : nome === "fn_exclusao_adiar_para_avisar" ? 3 : 0 }),
+    });
+    const r = await rodarExclusaoDeDados(admin, { diasDeGuarda: 90, agora: new Date("2026-10-16T09:00:00Z") });
+    expect(r.adiadasParaAvisar).toBe(3);
+    const ordem = rpcs.map((x) => x.nome);
+    expect(ordem.indexOf("fn_exclusao_adiar_para_avisar")).toBeGreaterThan(ordem.indexOf("fn_exclusao_sincronizar"));
+    expect(rpcs.some((x) => x.nome === "fn_exclusao_executar")).toBe(false);
+  });
+
+  it("o banco decide primeiro: sem o OK de fn_exclusao_iniciar nada é apagado no Storage (migration 0964)", async () => {
+    apagarArquivos.mockReset();
+    const { admin, rpcs } = adminFalso({
+      rpc: (nome) => ({ data: nome === "fn_exclusao_iniciar" ? "exclusao_org_reativada" : null }),
+    });
+    const r = await excluirOrganizacao(admin, ORG, null);
+    expect(r).toMatchObject({ ok: false, etapa: "guarda", motivo: "exclusao_org_reativada" });
+    expect(apagarArquivos).not.toHaveBeenCalled();
+    expect(rpcs.some((x) => x.nome === "fn_exclusao_executar")).toBe(false);
   });
 });

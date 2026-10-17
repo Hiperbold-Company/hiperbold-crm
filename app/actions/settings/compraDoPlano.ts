@@ -60,6 +60,7 @@
  * `assinaturaDaOrganizacao.ts` já segue para dado do cliente.
  */
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { audit } from "@/lib/audit";
@@ -70,9 +71,11 @@ import { criarClienteAsaas } from "@/lib/billing/asaas/cliente";
 import { compraLigada, configDoAsaas, type ConfigAsaas } from "@/lib/billing/asaas/config";
 import {
   cancelarAssinaturaDoCliente,
+  cancelarPedidoAbertoDoCliente,
   iniciarCompra,
   type EntradaIniciarCompra,
   type ResultadoCancelarAssinatura,
+  type ResultadoCancelarPedidoAberto,
   type ResultadoIniciarCompra,
 } from "@/lib/billing/asaas/compra";
 import {
@@ -111,6 +114,9 @@ const MENSAGEM_ERRO_CONFIGURACAO =
 const MENSAGEM_MFA = "Confirme a verificação em duas etapas.";
 const MENSAGEM_MOTIVO_DO_CANCELAMENTO = "Diga por que está cancelando para continuar.";
 const MENSAGEM_TERMOS_NAO_ACEITOS = "Aceite os Termos de Uso para continuar.";
+const MENSAGEM_SEM_PERMISSAO_TROCAR_PAGAMENTO =
+  "Você não tem permissão para trocar a forma de pagamento desta organização.";
+const MENSAGEM_TROCAS_DEMAIS = "Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.";
 const MENSAGEM_TERMOS_ATUALIZADOS =
   "Os Termos de Uso foram atualizados. Recarregue a página e aceite de novo para continuar.";
 
@@ -569,6 +575,58 @@ export async function cancelarAssinatura(input: {
       ip,
       userAgent,
     });
+  }
+
+  return resultado;
+}
+
+// ─── trocarFormaDePagamento ─────────────────────────────────────────────────
+
+/** Teto de trocas por usuário (e por IP) e por organização: cada troca remove e recria cobrança no Asaas. */
+const LIMITE_DE_TROCAS_DE_PAGAMENTO = { ip: 30, id: 6, windowSec: 600 };
+const LIMITE_DE_TROCAS_DE_PAGAMENTO_POR_ORGANIZACAO = { ip: 30, id: 10, windowSec: 600 };
+
+/**
+ * "Trocar forma de pagamento" (passo Plano do onboarding): quem ficou preso numa tela de "aguardando" (Pix que
+ * não vai pagar, cartão que não concluiu) cancela o pedido aberto, sem pagamento, para escolher de novo. A
+ * remoção no Asaas e a recusa quando o pagamento já entrou estão em `cancelarPedidoAbertoDoCliente`. Só o admin
+ * da organização, com teto de tentativas, e auditada. Depende só de `ASAAS_ENABLED` (como o cancelamento:
+ * desligar a venda não prende ninguém num pedido). Nunca recebe id de pedido nem de organização: é o pedido
+ * aberto da organização da sessão.
+ */
+export async function trocarFormaDePagamento(): Promise<ResultadoCancelarPedidoAberto> {
+  const auth = await autorizarAdminDaOrganizacao(MENSAGEM_SEM_PERMISSAO_TROCAR_PAGAMENTO);
+  if (!auth.ok) return { tipo: "erro", mensagem: auth.mensagem };
+
+  if (
+    (await authRateLimited("trocar_pagamento", auth.userId, LIMITE_DE_TROCAS_DE_PAGAMENTO)) ||
+    (await authRateLimited("trocar_pagamento_org", auth.orgId, LIMITE_DE_TROCAS_DE_PAGAMENTO_POR_ORGANIZACAO))
+  ) {
+    return { tipo: "erro", mensagem: MENSAGEM_TROCAS_DEMAIS };
+  }
+
+  const config = configAsaasOuNulo();
+  if (!config) return { tipo: "erro", mensagem: MENSAGEM_ERRO_CONFIGURACAO };
+  if (!config.habilitado) return { tipo: "erro", mensagem: MENSAGEM_COMPRA_DESLIGADA };
+
+  const resultado = await cancelarPedidoAbertoDoCliente(montarDeps(config, createAdminClient()), auth.orgId);
+
+  if (resultado.tipo === "ok") {
+    if (resultado.cancelou) {
+      const { requestId, ip, userAgent } = await contextoDaRequisicao();
+      await audit({
+        action: "billing.order_payment_method_reset",
+        actorUserId: auth.userId,
+        organizationId: auth.orgId,
+        resourceType: "organization",
+        resourceId: auth.orgId,
+        metadata: { tipo: "assinatura" },
+        requestId,
+        ip,
+        userAgent,
+      });
+    }
+    revalidatePath("/onboarding/plano");
   }
 
   return resultado;
