@@ -9,6 +9,7 @@ import { useTeamInvites, type TeamInvite } from "@/hooks/team/useTeamInvites";
 import { useResendInvite } from "@/hooks/team/useResendInvite";
 import { useRevokeInvite } from "@/hooks/team/useRevokeInvite";
 import { Badge } from "@/components/ui/badge";
+import { rotuloDoPapel } from "@/lib/auth/types";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -95,7 +96,7 @@ export function TeamInvitesClient({ canManage }: Props) {
             <TableHeader>
               <TableRow>
                 <TableHead>{t("E-mail")}</TableHead>
-                <TableHead>Role</TableHead>
+                <TableHead>{t("Papel")}</TableHead>
                 <TableHead>{t("Interface")}</TableHead>
                 <TableHead>{t("Status")}</TableHead>
                 <TableHead>{t("E-mail enviado")}</TableHead>
@@ -112,7 +113,7 @@ export function TeamInvitesClient({ canManage }: Props) {
                   <TableRow key={inv.id}>
                     <TableCell className="font-medium">{inv.email}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{inv.role}</Badge>
+                      <Badge variant="secondary">{t(rotuloDoPapel(inv.role))}</Badge>
                     </TableCell>
                     <TableCell className="text-sm">
                       {inv.interface_settings?.destinos

@@ -13,6 +13,7 @@ import { cssDaMarca, ESCOPO_DA_ORGANIZACAO } from "@/lib/branding/css";
 import { marcaDaInstalacao } from "@/lib/branding/instalacao";
 import { resolverMarcaDaOrganizacao } from "@/lib/branding/organizacao";
 import { env } from "@/lib/env";
+import { baseDaCentralDeAjuda } from "@/lib/ajuda/artigos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { modulosLigados } from "@/lib/instalacao/modulos";
 import {
@@ -251,6 +252,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <AppShell
           sidebarCollapsed={collapsed}
           podeAtender={Boolean(activeOrg && roleAtLeast(activeOrg.role, "agent"))}
+          ajudaBase={baseDaCentralDeAjuda(env.HELP_CENTER_URL)}
         >
           {children}
         </AppShell>

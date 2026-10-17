@@ -4,8 +4,9 @@ import { MobileSidebar } from "./MobileSidebar";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { UserMenu } from "./UserMenu";
 import { SearchTrigger } from "./SearchTrigger";
+import { BotaoAjuda } from "./BotaoAjuda";
 
-export function TopBar() {
+export function TopBar({ ajudaBase = null }: { ajudaBase?: string | null } = {}) {
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b bg-background/95 px-3 backdrop-blur md:gap-4 md:px-6">
       <div className="flex min-w-0 items-center gap-2">
@@ -16,6 +17,7 @@ export function TopBar() {
         <SearchTrigger />
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        <BotaoAjuda base={ajudaBase} />
         <AlertsBell />
         <UserMenu />
       </div>

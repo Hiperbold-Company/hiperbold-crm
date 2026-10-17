@@ -50,12 +50,24 @@ export const PAPEIS_HUMANOS: ReadonlyArray<Role> = ["viewer", "agent", "manager"
 
 /** Rótulo pt-BR para quem configura. `ai_operator` nunca aparece em seletor de time. */
 export const ROTULO_DO_PAPEL: Record<Role, string> = {
-  viewer: "Somente leitura",
+  viewer: "Visualizador",
   agent: "Atendente",
   ai_operator: "Assistente com autonomia de operação",
   manager: "Gerente",
   admin: "Administrador",
 };
+
+/**
+ * Rótulo de tela de um papel vindo do banco ou da API (`string` solto).
+ *
+ * Só o que se EXIBE muda: o valor gravado e o contrato da API seguem
+ * `viewer`/`agent`/`manager`/`admin`. Valor desconhecido volta como veio, em
+ * vez de sumir da tela. Passe o resultado por `t()` ao renderizar.
+ */
+export function rotuloDoPapel(papel: string | null | undefined): string {
+  if (!papel) return "";
+  return Object.hasOwn(ROTULO_DO_PAPEL, papel) ? ROTULO_DO_PAPEL[papel as Role] : papel;
+}
 
 /**
  * Escopo de visualização de conversas por atendente (G4-01, spec 13 §3.5).

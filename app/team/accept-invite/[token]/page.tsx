@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AcceptInviteForm } from "./AcceptInviteForm";
 import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { rotuloDoPapel } from "@/lib/auth/types";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,7 @@ export default async function AcceptInvitePage({ params }: PageProps) {
       <Shell>
         <h1 className="text-xl font-semibold">{t("Você foi convidado")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {t("Para aceitar o convite como")} <strong>{payload.role}</strong>,{" "}
+          {t("Para aceitar o convite como")} <strong>{t(rotuloDoPapel(payload.role))}</strong>,{" "}
           {t("faça login com o email")} <strong>{payload.email}</strong>.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -131,7 +132,7 @@ export default async function AcceptInvitePage({ params }: PageProps) {
     <Shell>
       <h1 className="text-xl font-semibold">{t("Aceitar convite")}</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        {t("Você foi convidado para entrar como")} <strong>{payload.role}</strong>.{" "}
+        {t("Você foi convidado para entrar como")} <strong>{t(rotuloDoPapel(payload.role))}</strong>.{" "}
         {t("Confirme abaixo para ativar seu acesso.")}
       </p>
       <AcceptInviteForm token={token} label={t("Aceitar convite")} pendingLabel={t("Confirmando…")} failureLabel={t("Não foi possível aceitar este convite. Ele pode ter vencido ou seu acesso foi revogado. Peça um novo link ao administrador.")} />

@@ -98,7 +98,7 @@ describe("um campo multiselect já gravado", () => {
     const seletor = screen.getByLabelText(/Tipo do campo 1/i);
     // O texto do gatilho do Radix é o rótulo do item casado. Vazio = nenhum
     // `SelectItem` bateu com o `value`, que é exatamente o defeito.
-    expect(seletor.textContent?.trim()).toBe("multiselect");
+    expect(seletor.textContent?.trim()).toBe("Lista de várias opções");
   });
 
   it("deixa editar as opções — sem isso o campo fica só de leitura", () => {

@@ -21,10 +21,12 @@ interface AppShellProps {
    * 403 a cada minuto em nome de ninguém.
    */
   podeAtender: boolean;
+  /** Endereço da central de ajuda desta instalação (`HELP_CENTER_URL`); `null` esconde o botão. */
+  ajudaBase?: string | null;
   children: ReactNode;
 }
 
-export function AppShell({ sidebarCollapsed, podeAtender, children }: AppShellProps) {
+export function AppShell({ sidebarCollapsed, podeAtender, ajudaBase = null, children }: AppShellProps) {
   useInboundMessageAlerts();
   useInboundCallAlerts();
   useCrmAlerts();
@@ -65,7 +67,7 @@ export function AppShell({ sidebarCollapsed, podeAtender, children }: AppShellPr
         cima da lista.
       */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <TopBar />
+        <TopBar ajudaBase={ajudaBase} />
         {/*
           O RODAPÉ DESCONTA O QUE AS PEÇAS FIXAS OCUPAM (issue #1305).
 
