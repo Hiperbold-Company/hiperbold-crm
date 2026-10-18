@@ -67,6 +67,21 @@ if (process.env.NODE_ENV !== "production") {
 
 export const VALID_TOOL_IDS: ReadonlyArray<string> = TOOL_CATALOG.map((t) => t.name);
 
+/**
+ * Tools de ADMINISTRAÇÃO (fases 1 a 3 da API): espelham rotas que recusam chave de
+ * agente de IA (`lib/api/auth-dual-admin.ts`), e o MCP recusa igual. As escritas de
+ * operação (`./operacao`: criar etapa, ligar regra) NÃO entram aqui: são a
+ * capacidade W4 de um cliente MCP `actor:ai_agent` com papel de gerente, provada em
+ * `tests/e2e/agente-organiza-operacao.spec.ts`; quem as barra é o papel.
+ */
+const NOMES_DE_ADMINISTRACAO: ReadonlySet<string> = new Set(
+  [...TOOLS_ADMINISTRACAO, ...TOOLS_ADMINISTRACAO_FASE3].map((t) => t.name),
+);
+
+export function eToolDeAdministracao(name: string): boolean {
+  return NOMES_DE_ADMINISTRACAO.has(name);
+}
+
 export function catalogEntry(name: string): McpToolCatalogEntry | undefined {
   return TOOL_CATALOG.find((t) => t.name === name);
 }

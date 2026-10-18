@@ -28,4 +28,5 @@ export {
   catalogEntry,
   declararTools,
   deModuloDesligado,
+  eToolDeAdministracao,
 } from "./catalogo";

@@ -36,6 +36,15 @@ vi.mock("@/lib/mcp/tools", () => ({
       handler: (...a: unknown[]) => handlerSpy(...a),
     },
     {
+      name: "crm_create_stage",
+      description: "escrita de operação (W4): apenasHumano, mas é do agente com papel",
+      inputSchema: {},
+      requiresRole: "viewer",
+      requiresScope: "mcp:write",
+      category: "write",
+      handler: (...a: unknown[]) => handlerSpy(...a),
+    },
+    {
       name: "tool_comum_do_catalogo",
       description: "não é apenasHumano",
       inputSchema: {},
@@ -107,6 +116,16 @@ describe("MCP: chave de agente de IA e tool apenasHumano", () => {
     expect(leitura.isError).toBeFalsy();
     expect(escrita.isError).toBeFalsy();
     expect(handlerSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("escrita de OPERAÇÃO apenasHumano (crm_create_stage) segue alcançável pelo agente: quem barra é o papel (W4)", async () => {
+    const { eToolDeAdministracao } = await import("@/lib/mcp/tools/catalog");
+    expect(catalogEntry("crm_create_stage")?.apenasHumano).toBe(true);
+    expect(eToolDeAdministracao("crm_create_stage")).toBe(false);
+    expect(eToolDeAdministracao("crm_create_followup_flow")).toBe(true);
+    const r = await chamar(agenteDeIa, "crm_create_stage");
+    expect(r.isError).toBeFalsy();
+    expect(handlerSpy).toHaveBeenCalledTimes(1);
   });
 
   it("agente de IA segue alcançando tool que NÃO é apenasHumano", async () => {

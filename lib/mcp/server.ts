@@ -16,7 +16,7 @@ import type { ModuloOpcional } from "@/lib/instalacao/modulos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditMcpToolCall } from "./audit";
 import {
-  ensureNaoAgenteParaApenasHumano,
+  ensureNaoAgenteParaAdministracao,
   ensureRole,
   ensureScope,
   type McpAuthResult,
@@ -24,7 +24,7 @@ import {
 import { verificarTetoMcp } from "./rate-limit";
 import { FERRAMENTAS_COM_DONO, exigirVisibilidadeDoToken } from "./visibilidade-do-token";
 import { allTools } from "./tools";
-import { catalogEntry, deModuloDesligado } from "./tools/catalog";
+import { deModuloDesligado, eToolDeAdministracao } from "./tools/catalog";
 import { higienizarUuidsDeAterro } from "./uuid-de-aterro";
 import type { McpContext } from "./types";
 
@@ -99,12 +99,12 @@ export function createMcpServer(
           await verificarTetoMcp(auth, tool.category);
           ensureScope(auth.scopes, tool.requiresScope);
           ensureRole(auth.role, tool.requiresRole);
-          // Administração é de pessoa: chave de agente de IA não alcança tool
-          // `apenasHumano`, nem de leitura, nem de escrita. Antes do handler.
-          ensureNaoAgenteParaApenasHumano(
+          // Administração é de pessoa: chave de agente de IA não alcança tool de
+          // administração (as mesmas rotas recusam o agente). Antes do handler.
+          ensureNaoAgenteParaAdministracao(
             auth.actor,
             tool.name,
-            catalogEntry(tool.name)?.apenasHumano,
+            eToolDeAdministracao(tool.name),
           );
           // "Só os meus" vale também para a chave (D-148): o cliente desta tool é
           // o admin e não passa pela RLS que aplicaria a visibilidade.

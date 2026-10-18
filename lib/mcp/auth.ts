@@ -325,12 +325,12 @@ export function ensureRole(actual: Role, minimum: Role): void {
  * o turno do agente publicado já não a monta (`lib/ai/runtime/tools.ts`), e esta
  * é a mesma barreira no outro ingresso. Recusa no padrão das demais do MCP.
  */
-export function ensureNaoAgenteParaApenasHumano(
+export function ensureNaoAgenteParaAdministracao(
   actor: Actor,
   toolName: string,
-  apenasHumano: boolean | undefined,
+  eAdministracao: boolean,
 ): void {
-  if (apenasHumano === true && actor.type === "ai_agent") {
+  if (eAdministracao && actor.type === "ai_agent") {
     throw new McpAuthError(
       -32002,
       403,
