@@ -23,6 +23,12 @@ import { camposDoFunil } from "@/lib/leads/campos-do-funil";
 import { modoDeReabertura } from "@/lib/leads/reabertura";
 import { CATEGORIAS_DE_PERDA } from "@/lib/schemas/leads";
 import { customFieldSchema, type CustomFieldDef } from "@/lib/schemas/settings";
+import {
+  GRUPOS_DE_CAMPO,
+  ROTULO_DO_GRUPO,
+  grupoDoCampo,
+  type GrupoDeCampo,
+} from "@/lib/leads/grupo-do-campo";
 import { Plus, Trash } from "@/lib/ui/icons";
 import { AgentMappingSection, ancoraDoMapeamento } from "./_mapping";
 import { StagesSection, ancoraDasEtapas } from "./_stages";
@@ -502,6 +508,35 @@ function PipelineEditor({
                 }}
               />
             )}
+            {/* Em qual bloco da ficha o campo aparece. Mostra o grupo EFETIVO
+                (o gravado ou, na falta dele, o inferido pela chave): o seletor
+                nunca aparece em branco para um funil antigo, e escolher grava
+                `grupo` explícito. */}
+            <div className="flex items-center gap-2 md:col-span-4">
+              <Label className="text-xs">{t("Categoria")}</Label>
+              <Select
+                value={grupoDoCampo(f)}
+                onValueChange={(grupo) => {
+                  const next = [...fields];
+                  next[i] = { ...f, grupo: grupo as GrupoDeCampo };
+                  setFields(next);
+                }}
+              >
+                <SelectTrigger
+                  className="h-8 w-48 text-xs"
+                  aria-label={`${t("Categoria do campo")} ${i + 1}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {GRUPOS_DE_CAMPO.map((g) => (
+                    <SelectItem key={g} value={g}>
+                      {t(ROTULO_DO_GRUPO[g])}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {/* ── QUANDO ESTE CAMPO OBRIGA (issue #1536) ────────────────────
                 O `obrigatorio_em` nasceu no schema sem nenhuma tela: quem
                 operava não conseguia ligar a régua principal do PR. As três

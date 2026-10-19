@@ -14223,6 +14223,23 @@ export const DICIONARIO: Traducoes = {
   "Exclusão programada.": { es: "Eliminación programada." },
   "Escolha uma organização": { es: "Elige una organización" },
   "Excluir em": { es: "Eliminar el" },
+  // ─── FICHA DO NEGÓCIO: campos por categoria, linha do tempo do contato, evento manual ───
+  "Categoria do campo": { es: "Categoría del campo" },
+  "preenchidos": { es: "completados" },
+  "Dados do lead": { es: "Datos del lead" },
+  "Rastreamento": { es: "Rastreo" },
+  "Registrar evento": { es: "Registrar evento" },
+  "Data e hora": { es: "Fecha y hora" },
+  "O que aconteceu": { es: "Qué pasó" },
+  "Ligação": { es: "Llamada" },
+  "WhatsApp": { es: "WhatsApp" },
+  "Escreva o que aconteceu.": { es: "Escribe qué pasó." },
+  "Use até 2000 caracteres.": { es: "Usa hasta 2000 caracteres." },
+  "Data e hora inválidas.": { es: "Fecha y hora inválidas." },
+  "A data do evento não pode ser no futuro.": { es: "La fecha del evento no puede ser futura." },
+  "Evento registrado": { es: "Evento registrado" },
+  "registro manual": { es: "registro manual" },
+  "registrado em": { es: "registrado el" },
 };
 
 /**

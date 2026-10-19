@@ -78,6 +78,8 @@ export interface TimelineItem {
   payload: Record<string, unknown>;
   metadata: Record<string, unknown>;
   performed_at: string;
+  /** Quando a linha foi GRAVADA; difere de `performed_at` no evento registrado depois de ocorrido. */
+  created_at?: string;
   performed_by_user_id: string | null;
   /** 0071 — quem agiu, por quê e com base em quê. */
   actor_kind?: string | null;
@@ -97,4 +99,11 @@ export interface TimelineItem {
 export interface TimelineItemView extends TimelineItem {
   actor_agent_name?: string | null;
   actor_user_name?: string | null;
+  /**
+   * De qual negócio e funil a atividade veio. Só a timeline por contato da ficha
+   * (`leads/[id]/timeline?escopo=contato`) preenche: é o que deixa ler uma linha
+   * do tempo que mistura vários negócios do mesmo contato.
+   */
+  negocio_titulo?: string | null;
+  funil_nome?: string | null;
 }

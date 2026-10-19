@@ -771,6 +771,10 @@ export const AUDIT_ACTIONS = [
   // Mover um card para OUTRO funil (issue #922) clona o negócio no destino e
   // encerra o original: é a escrita que mexe em DOIS funis de uma vez.
   "lead.moved_to_pipeline",
+  // Evento registrado à mão na linha do tempo do negócio (ligação, reunião, nota…).
+  // O metadata leva o subtipo e o tamanho do texto, nunca o texto: `api_audit_log` é
+  // append-only e o que entra ali não sai pela cascata de LGPD.
+  "lead.activity_logged",
   /**
    * A equipe perguntou à IA sobre um caso (migration 0281). Uma linha por
    * PERGUNTA, respondida ou não — `respondeu:false` com `error_code` é o que

@@ -14,6 +14,8 @@ import type { Lead } from "@/lib/types/leads";
 import { updateLeadSchema, type UpdateLeadInput } from "@/lib/schemas/leads";
 import { parseReaisToCents } from "@/lib/money";
 import { CustomFieldsEditor, type CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
+import { agruparCampos, ROTULO_DO_GRUPO, type GrupoDeCampo } from "@/lib/leads/grupo-do-campo";
+import { CaretDown, CaretRight } from "@/lib/ui/icons";
 import { EcoDoValor } from "./EcoDoValor";
 
 interface FormShape {
@@ -166,17 +168,17 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
           <Input id="tagsRaw" placeholder="vip, recompra" {...form.register("tagsRaw")} />
         </div>
 
-        {fieldDefs.length > 0 && (
-          <div className="space-y-2 border-t border-border pt-4">
-            <p className="text-sm font-medium">{t("Campos do funil")}</p>
-            <CustomFieldsEditor
-              fields={fieldDefs}
-              value={customFields}
-              onChange={setCustomFields}
-              mode="lead"
-            />
-          </div>
-        )}
+        {agruparCampos(fieldDefs).map((bloco) => (
+          <BlocoDeCampos
+            // `lead.id` na chave: ao trocar de negócio o bloco recomeça no estado
+            // inicial (recolhido, ou aberto se o funil exige algum campo dele).
+            key={`${bloco.grupo}:${lead.id}`}
+            grupo={bloco.grupo}
+            campos={bloco.campos}
+            valores={customFields}
+            onChange={setCustomFields}
+          />
+        ))}
 
       <div className="flex justify-end gap-2">
         {onCancel && (
@@ -189,5 +191,73 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
         </Button>
       </div>
     </form>
+  );
+}
+
+/** O funil exige este campo em algum momento (destaque ou gatilho de etapa/ganho/perda). */
+function campoExigido(c: CustomFieldDef): boolean {
+  const o = c.obrigatorio_em;
+  return Boolean(c.required || (o && ((o.etapas?.length ?? 0) > 0 || o.ao_ganhar || o.ao_perder)));
+}
+
+/**
+ * Um bloco de campos do funil na ficha: "Dados do lead" e "Rastreamento".
+ *
+ * "Dados do lead" fica sempre aberto. "Rastreamento" (utm_*, gclid…) nasce
+ * RECOLHIDO: são parâmetros que quase ninguém edita à mão, e vinte linhas de
+ * utm antes do botão Salvar empurram o que importa para fora da tela. O
+ * cabeçalho diz quantos estão preenchidos, para o recolhido não parecer vazio.
+ * Abre sozinho se o funil exigir algum campo do bloco (`required` ou `obrigatorio_em`) — esconder o campo que o
+ * funil exige faria o erro de salvar apontar para algo invisível.
+ *
+ * Os valores continuam no estado do formulário (`valores`), recolhido ou não: o
+ * Salvar grava os dois blocos de uma vez.
+ */
+function BlocoDeCampos({
+  grupo,
+  campos,
+  valores,
+  onChange,
+}: {
+  grupo: GrupoDeCampo;
+  campos: CustomFieldDef[];
+  valores: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+}) {
+  const t = useT();
+  const recolhivel = grupo === "rastreamento";
+  const exigeAbrir = campos.some(campoExigido);
+  const [aberto, setAberto] = useState(!recolhivel || exigeAbrir);
+  const preenchidos = campos.filter((c) => {
+    const v = valores[c.key];
+    return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
+  }).length;
+
+  return (
+    <section
+      className="space-y-2 border-t border-border pt-4"
+      data-bloco-de-campos={grupo}
+      aria-label={t(ROTULO_DO_GRUPO[grupo])}
+    >
+      {recolhivel ? (
+        <button
+          type="button"
+          onClick={() => setAberto((v) => !v)}
+          aria-expanded={aberto}
+          className="flex w-full items-center gap-1.5 text-left text-sm font-medium hover:text-text"
+        >
+          {aberto ? <CaretDown size={12} aria-hidden /> : <CaretRight size={12} aria-hidden />}
+          {t(ROTULO_DO_GRUPO[grupo])}
+          <span className="text-xs font-normal text-text-muted">
+            · {preenchidos}/{campos.length} {t("preenchidos")}
+          </span>
+        </button>
+      ) : (
+        <p className="text-sm font-medium">{t(ROTULO_DO_GRUPO[grupo])}</p>
+      )}
+      {aberto && (
+        <CustomFieldsEditor fields={campos} value={valores} onChange={onChange} mode="lead" />
+      )}
+    </section>
   );
 }

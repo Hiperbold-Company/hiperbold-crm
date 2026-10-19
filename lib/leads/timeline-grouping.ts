@@ -25,6 +25,8 @@ import type { TimelineItemView } from "@/lib/types/contacts";
 
 /** Tipos que NUNCA colapsam: contêm decisão humana, não relato. */
 const NUNCA_COLAPSA = new Set([
+  // O que a equipe ESCREVEU à mão (ligação, reunião, nota): o texto é o conteúdo.
+  "note",
   "next_action_approved",
   "next_action_dismissed",
   // A reativação segue a mesma regra: são as linhas que registram alguém

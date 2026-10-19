@@ -12,14 +12,22 @@ import {
   actorShape,
 } from "@/lib/leads/activity-vocabulary";
 import { agrupaTimeline, ehBlocoColapsavel, ehBlocoDeDia } from "@/lib/leads/timeline-grouping";
+import { eventoManualDaAtividade, foiRetroativo, ROTULO_DO_SUBTIPO, type SubtipoDeEventoManual } from "@/lib/leads/evento-manual";
+import { EnvelopeSimple, Note, Phone, UsersThree, WhatsappLogo, DotsThree } from "@/lib/ui/icons";
 import type { TimelineItemView } from "@/lib/types/contacts";
 
 interface Props {
+  /** O negócio ABERTO: evento de outro negócio do contato ganha a indicação de origem. */
+  leadId: string;
   itens: TimelineItemView[];
   /** Ids que chegaram por realtime nesta sessão — ficam FORA do agrupamento. */
   chegouAoVivo: Set<string>;
   isLoading: boolean;
   isError: boolean;
+  /** Há história mais antiga no servidor: mostra "Carregar mais". */
+  temMais?: boolean;
+  carregandoMais?: boolean;
+  aoCarregarMais?: () => void;
 }
 
 function quando(iso: string, idioma: string): string {
@@ -51,7 +59,24 @@ function Marcador({ item }: { item: TimelineItemView }) {
   );
 }
 
-function Linha({ item, aoVivo }: { item: TimelineItemView; aoVivo?: boolean }) {
+const ICONE_DO_SUBTIPO: Record<SubtipoDeEventoManual, typeof Note> = {
+  nota: Note,
+  ligacao: Phone,
+  reuniao: UsersThree,
+  email: EnvelopeSimple,
+  whatsapp: WhatsappLogo,
+  outro: DotsThree,
+};
+
+function Linha({
+  item,
+  leadId,
+  aoVivo,
+}: {
+  item: TimelineItemView;
+  leadId: string;
+  aoVivo?: boolean;
+}) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
   const nome = actorName(
@@ -62,12 +87,21 @@ function Linha({ item, aoVivo }: { item: TimelineItemView; aoVivo?: boolean }) {
     },
     t,
   );
+  const manual = eventoManualDaAtividade(item);
+  const Icone = manual ? ICONE_DO_SUBTIPO[manual.subtype] : null;
+  // A timeline da ficha é a do CONTATO: o que veio de OUTRO negócio dele diz de
+  // qual funil e negócio veio. O do negócio aberto não repete o óbvio.
+  const origem =
+    item.lead_id !== leadId && (item.negocio_titulo || item.funil_nome)
+      ? [item.funil_nome, item.negocio_titulo].filter(Boolean).join(" · ")
+      : null;
   return (
-    <li className="flex gap-2 py-1.5">
+    <li className="flex gap-2 py-1.5" data-evento-manual={manual ? manual.subtype : undefined}>
       <Marcador item={item} />
       <div className="min-w-0 flex-1">
-        <p className="text-xs text-text">
-          {t(activityLabel(item.type))}
+        <p className="flex items-center gap-1 text-xs text-text">
+          {Icone && <Icone size={13} aria-hidden className="shrink-0 text-text-muted" />}
+          {manual ? t(ROTULO_DO_SUBTIPO[manual.subtype]) : t(activityLabel(item.type))}
           {aoVivo && (
             // O que chegou AGORA fica marcado: sem isto ele entraria na lista
             // idêntico ao resto e a chegada seria indistinguível do histórico.
@@ -76,10 +110,30 @@ function Linha({ item, aoVivo }: { item: TimelineItemView; aoVivo?: boolean }) {
             </span>
           )}
         </p>
-        {item.reason && <p className="mt-0.5 text-xs text-text-muted">{t(item.reason)}</p>}
+        {origem && (
+          <p className="mt-0.5 text-[11px] text-text-muted" data-origem-do-negocio>
+            {t("Em")} {origem}
+          </p>
+        )}
+        {manual ? (
+          // O texto COMPLETO, com as quebras de linha da pessoa: é o conteúdo do
+          // registro, não um resumo — truncar esconderia justamente o que foi
+          // anotado.
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-xs text-text">{manual.text}</p>
+        ) : (
+          item.reason && <p className="mt-0.5 text-xs text-text-muted">{t(item.reason)}</p>
+        )}
         <p className="mt-0.5 text-[11px] text-text-muted">
           {nome} · {quando(item.performed_at, tagDoIdioma)}
+          {manual && ` · ${t("registro manual")}`}
         </p>
+        {manual && foiRetroativo(item.performed_at, item.created_at) && item.created_at && (
+          // Evento anotado muito depois de ocorrer: a data da linha é a do
+          // acontecimento, e sem esta o leitor tomaria o registro por contemporâneo.
+          <p className="mt-0.5 text-[11px] text-text-muted" data-registrado-em>
+            {t("registrado em")} {quando(item.created_at, tagDoIdioma)}
+          </p>
+        )}
       </div>
     </li>
   );
@@ -93,7 +147,16 @@ function Linha({ item, aoVivo }: { item: TimelineItemView; aoVivo?: boolean }) {
  * Reimplementar a regra aqui dentro seria a mesma falha que o card já pagou —
  * precedência reescrita em componente é rejeição de review.
  */
-export function LeadTimeline({ itens, chegouAoVivo, isLoading, isError }: Props) {
+export function LeadTimeline({
+  leadId,
+  itens,
+  chegouAoVivo,
+  isLoading,
+  isError,
+  temMais = false,
+  carregandoMais = false,
+  aoCarregarMais,
+}: Props) {
   const t = useT();
   const [abertos, setAbertos] = useState<Set<number>>(new Set());
   const blocos = agrupaTimeline(itens, chegouAoVivo);
@@ -120,15 +183,16 @@ export function LeadTimeline({ itens, chegouAoVivo, isLoading, isError }: Props)
   }
 
   return (
+    <div>
     <ul className="border-l border-border pl-3">
       {blocos.map((b, i) => {
         if (b.tipo === "item") {
-          return <Linha key={b.item.id} item={b.item} aoVivo={b.aoVivo} />;
+          return <Linha leadId={leadId} key={b.item.id} item={b.item} aoVivo={b.aoVivo} />;
         }
         if (b.tipo === "dia") {
           // Bloco de dia com UM item só não vira bloco: "terça · 1 ação" custa
           // um clique e não informa nada que a própria linha não informe.
-          if (!ehBlocoDeDia(b)) return <Linha key={b.itens[0]!.id} item={b.itens[0]!} />;
+          if (!ehBlocoDeDia(b)) return <Linha leadId={leadId} key={b.itens[0]!.id} item={b.itens[0]!} />;
           const aberto = abertos.has(i);
           return (
             <li key={b.dia} className="py-1.5">
@@ -158,7 +222,7 @@ export function LeadTimeline({ itens, chegouAoVivo, isLoading, isError }: Props)
               {aberto && (
                 <ul className="ml-2 border-l border-border pl-3">
                   {b.itens.map((it) => (
-                    <Linha key={it.id} item={it} />
+                    <Linha leadId={leadId} key={it.id} item={it} />
                   ))}
                 </ul>
               )}
@@ -166,7 +230,7 @@ export function LeadTimeline({ itens, chegouAoVivo, isLoading, isError }: Props)
           );
         }
         if (!ehBlocoColapsavel(b)) {
-          return <Linha key={b.itens[0]!.id} item={b.itens[0]!} />;
+          return <Linha leadId={leadId} key={b.itens[0]!.id} item={b.itens[0]!} />;
         }
         const aberto = abertos.has(i);
         const primeiro = b.itens[0]!;
@@ -204,7 +268,7 @@ export function LeadTimeline({ itens, chegouAoVivo, isLoading, isError }: Props)
             {aberto && (
               <ul className="ml-2 border-l border-border pl-3">
                 {b.itens.map((it) => (
-                  <Linha key={it.id} item={it} />
+                  <Linha leadId={leadId} key={it.id} item={it} />
                 ))}
               </ul>
             )}
@@ -212,5 +276,16 @@ export function LeadTimeline({ itens, chegouAoVivo, isLoading, isError }: Props)
         );
       })}
     </ul>
+    {temMais && (
+      <button
+        type="button"
+        onClick={() => aoCarregarMais?.()}
+        disabled={carregandoMais}
+        className="mt-2 w-full rounded-md border border-border py-1.5 text-xs text-text-muted hover:text-text disabled:opacity-60"
+      >
+        {carregandoMais ? t("Carregando…") : t("Carregar mais")}
+      </button>
+    )}
+    </div>
   );
 }

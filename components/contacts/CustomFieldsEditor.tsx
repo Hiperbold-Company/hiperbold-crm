@@ -35,6 +35,10 @@ export interface CustomFieldDef {
   label: string;
   type: CustomFieldType;
   required?: boolean;
+  /** Bloco da ficha do negócio; ausente é inferido (`lib/leads/grupo-do-campo.ts`). */
+  grupo?: "dados" | "rastreamento";
+  /** Quando o campo passa a OBRIGAR (etapas de entrada, ao ganhar, ao perder). */
+  obrigatorio_em?: { etapas?: string[]; ao_ganhar?: boolean; ao_perder?: boolean };
   options?: Array<{ value: string; label: string }>;
 }
 

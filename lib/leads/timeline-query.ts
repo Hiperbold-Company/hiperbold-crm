@@ -21,6 +21,7 @@ export const TIMELINE_COL_LIST = [
   "payload",
   "metadata",
   "performed_at",
+  "created_at",
   "performed_by_user_id",
   "actor_kind",
   "actor_agent_id",
@@ -77,22 +78,70 @@ export function decodeCursor(raw: string): Cursor | null {
  * O EIXO do dossiê: quais atividades pertencem a ESTE negócio.
  *
  * Função em vez de string solta na rota porque o segundo lado da união é
- * removível sem nada quebrar — hoje ele casa ZERO linhas, e é exatamente por
+ * removível sem nada quebrar — ele casa ZERO linhas (`crm_lead_activities.lead_id`
+ * é NOT NULL, então `lead_id is null` não existe no banco), e é exatamente por
  * isso que parece redundante para quem lê rápido. O teste ao lado
  * (`timeline-eixo.test.ts`) prende as três propriedades; o comentário pede, o
  * teste obriga.
  *
  *  - lado 1 (`lead_id = este`): dá porta ao negócio SEM contato, que antes não
  *    tinha nenhuma e mostrava "Nada aconteceu" com 111 atividades no banco;
- *  - lado 2 (`contact_id = <contato> and lead_id is null`): preserva a
- *    atividade que nasce da CONVERSA e não de um negócio — o que o eixo antigo,
- *    por contato, protegia de graça e que eu perderia ao trocar de eixo;
+ *  - lado 2 (`contact_id = <contato> and lead_id is null`): defesa de intenção
+ *    para a atividade que nasça da CONVERSA e não de um negócio. HOJE não devolve
+ *    nada: a coluna é NOT NULL. Só passaria a devolver se o schema a afrouxasse;
  *  - o negócio IRMÃO fica de fora por construção: a atividade dele tem
  *    `lead_id = irmão`, e não casa com nenhum dos dois lados.
  */
 export function eixoDoDossie(leadId: string, contactId: string | null): string | null {
   if (!contactId) return null; // sem contato o lado 2 não existe: quem chama usa `.eq`
   return `lead_id.eq.${leadId},and(contact_id.eq.${contactId},lead_id.is.null)`;
+}
+
+/**
+ * Anexa a qual negócio e funil cada atividade pertence — o que torna legível uma
+ * linha do tempo que mistura vários negócios. Duas consultas simples (negócios,
+ * depois funis) em vez de embed: o shape do embed do PostgREST varia entre objeto
+ * e array e já custou um defeito em `settingsDoEmbed`.
+ */
+export async function comOrigemDoNegocio(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rows: TimelineItemView[],
+  organizationId: string,
+): Promise<TimelineItemView[]> {
+  const leadIds = [...new Set(rows.map((r) => r.lead_id).filter((v): v is string => !!v))];
+  if (leadIds.length === 0) return rows;
+
+  const { data: leads } = await supabase
+    .from("crm_leads")
+    .select("id, title, pipeline_id")
+    .eq("organization_id", organizationId)
+    .in("id", leadIds);
+  const negocios = new Map<string, { title: string; pipeline_id: string | null }>();
+  for (const l of (leads ?? []) as Array<{ id: string; title: string; pipeline_id: string | null }>) {
+    negocios.set(l.id, { title: l.title, pipeline_id: l.pipeline_id });
+  }
+
+  const pipelineIds = [
+    ...new Set([...negocios.values()].map((n) => n.pipeline_id).filter((v): v is string => !!v)),
+  ];
+  const funis = new Map<string, string>();
+  if (pipelineIds.length > 0) {
+    const { data: pipes } = await supabase
+      .from("crm_pipelines")
+      .select("id, name")
+      .eq("organization_id", organizationId)
+      .in("id", pipelineIds);
+    for (const p of (pipes ?? []) as Array<{ id: string; name: string }>) funis.set(p.id, p.name);
+  }
+
+  return rows.map((r) => {
+    const n = negocios.get(r.lead_id);
+    return {
+      ...r,
+      negocio_titulo: n?.title ?? null,
+      funil_nome: n?.pipeline_id ? (funis.get(n.pipeline_id) ?? null) : null,
+    };
+  });
 }
 
 /** Anexa o nome do agente e da pessoa que agiram, para a linha não dizer só "Agente". */

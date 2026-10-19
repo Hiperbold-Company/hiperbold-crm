@@ -5,6 +5,7 @@ import { useRef } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { usePermission } from "@/hooks/auth/AuthProvider";
 import { useLeadTimeline } from "@/hooks/leads/useLeadTimeline";
 import type { Lead } from "@/lib/types/leads";
 import { ContatoDoNegocio } from "./ContatoDoNegocio";
@@ -12,6 +13,7 @@ import { ConversaNoDossie } from "./ConversaNoDossie";
 import { LeadFieldsForm } from "./LeadFieldsForm";
 import { ScoreSlot } from "./ScoreSlot";
 import { LeadTimeline } from "./LeadTimeline";
+import { RegistrarEvento } from "./RegistrarEvento";
 import { OwnerBadge } from "./OwnerBadge";
 import { resolveLeadOwner } from "@/lib/kanban/owner";
 import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
@@ -59,6 +61,9 @@ export function LeadDossier({
   const t = useT();
   const campos = useRef<HTMLDivElement | null>(null);
   const timeline = useLeadTimeline(open ? lead.id : null, lead.contact_id);
+  // Mesmo piso da rota (agent): viewer e acompanhamento somente-leitura não
+  // veem um botão que só devolveria 403.
+  const podeRegistrarEvento = usePermission("lead.activity.log");
   const owner = resolveLeadOwner(lead, ownerNames);
   const score = lead.score ?? null;
 
@@ -141,7 +146,14 @@ export function LeadDossier({
           <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
             {t("Linha do tempo")}
           </h3>
+          {podeRegistrarEvento && (
+            <RegistrarEvento leadId={lead.id} onRegistrado={timeline.revelarEvento} />
+          )}
           <LeadTimeline
+            leadId={lead.id}
+            temMais={timeline.temMais}
+            carregandoMais={timeline.carregandoMais}
+            aoCarregarMais={timeline.carregarMais}
             itens={timeline.itens}
             chegouAoVivo={timeline.chegouAoVivo}
             isLoading={timeline.isLoading}

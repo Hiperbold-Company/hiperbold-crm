@@ -343,3 +343,45 @@ describe("retomada de negócio encerrado (#1538)", () => {
     expect(vi.mocked(updatePipelineConfig).mock.calls.at(-1)![1].reabertura).toBe("mesmo_registro");
   });
 });
+
+describe("categoria do campo na ficha (Dados do lead / Rastreamento)", () => {
+  const COM_RASTREIO: PipelineRow = {
+    ...FUNIL,
+    settings: {
+      fields: [
+        { key: "empresa", label: "Empresa", type: "text" },
+        { key: "utm_source", label: "UTM Source", type: "text" },
+      ],
+    },
+  };
+
+  it("campo sem `grupo` mostra o grupo INFERIDO pela chave, não um seletor em branco", () => {
+    render(<PipelinesClient pipelines={[COM_RASTREIO]} etapas={{}} podeEditarConfig />);
+    expect(screen.getByLabelText("Categoria do campo 1").textContent?.trim()).toBe("Dados do lead");
+    expect(screen.getByLabelText("Categoria do campo 2").textContent?.trim()).toBe("Rastreamento");
+  });
+
+  it("salvar sem mexer NÃO grava `grupo`: funil antigo segue idêntico ao de antes", async () => {
+    vi.mocked(updatePipelineConfig).mockClear();
+    render(<PipelinesClient pipelines={[COM_RASTREIO]} etapas={{}} podeEditarConfig />);
+    fireEvent.click(screen.getByRole("button", { name: /Salvar vocabulário e campos/i }));
+    await vi.waitFor(() => expect(updatePipelineConfig).toHaveBeenCalledTimes(1));
+    const campos = vi.mocked(updatePipelineConfig).mock.calls[0]![1].fields!;
+    expect(campos.every((c) => !("grupo" in c))).toBe(true);
+  });
+
+  it("escolher a categoria grava `grupo` explícito no campo", async () => {
+    vi.mocked(updatePipelineConfig).mockClear();
+    render(<PipelinesClient pipelines={[COM_RASTREIO]} etapas={{}} podeEditarConfig />);
+    const { default: userEvent } = await import("@testing-library/user-event");
+    await userEvent.click(screen.getByLabelText("Categoria do campo 1"));
+    await userEvent.click(await screen.findByRole("option", { name: "Rastreamento" }));
+    expect(screen.getByLabelText("Categoria do campo 1").textContent?.trim()).toBe("Rastreamento");
+
+    fireEvent.click(screen.getByRole("button", { name: /Salvar vocabulário e campos/i }));
+    await vi.waitFor(() => expect(updatePipelineConfig).toHaveBeenCalledTimes(1));
+    const campos = vi.mocked(updatePipelineConfig).mock.calls[0]![1].fields!;
+    expect(campos[0]).toMatchObject({ key: "empresa", grupo: "rastreamento" });
+    expect(campos[1]).not.toHaveProperty("grupo");
+  });
+});

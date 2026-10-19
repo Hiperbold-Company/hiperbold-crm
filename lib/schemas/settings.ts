@@ -167,6 +167,12 @@ export const customFieldSchema = z.object({
   ]),
   required: z.boolean().optional(),
   /**
+   * Em qual bloco da ficha do negócio o campo aparece. Ausente é INFERIDO pela
+   * chave (`lib/leads/grupo-do-campo.ts`): `utm_*`, `gclid` e afins vão para
+   * "Rastreamento", o resto para "Dados do lead". Funil antigo continua válido.
+   */
+  grupo: z.enum(["dados", "rastreamento"]).optional(),
+  /**
    * QUANDO este campo passa a OBRIGAR (issue #1536).
    *
    * `required` continua com o significado antigo (destaca o campo no formulário);
