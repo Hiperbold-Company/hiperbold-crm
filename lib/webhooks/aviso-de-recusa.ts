@@ -49,7 +49,7 @@ export function tituloDoAvisoDeRecusa(nomeDaFonte: string, agora: Date): string 
 export function corpoDoAvisoDeRecusa(nomeDaFonte: string, motivoLegivel: string): string {
   const limpo = motivoLegivel.trim().replace(/\.+$/, "");
   const motivo = limpo.charAt(0).toLowerCase() + limpo.slice(1);
-  return `A fonte ${nomeDaFonte.slice(0, TAMANHO_MAXIMO_DO_NOME)} recusou um lead: ${motivo}. Veja em Webhooks › Leads recebidos.`;
+  return `A fonte ${nomeDaFonte.slice(0, TAMANHO_MAXIMO_DO_NOME)} recusou um lead: ${motivo}. Veja em Automações e Webhooks › Leads recebidos.`;
 }
 
 export async function avisarRecusaDaFonte(

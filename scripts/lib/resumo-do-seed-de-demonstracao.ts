@@ -28,7 +28,7 @@ export interface EstadoDaDemonstracao {
 
 /** Onde a pessoa vê o que o seed criou: o nome no menu, a rota e as abas, como a tela os escreve. */
 export const TELAS_DA_DEMONSTRACAO = [
-  { tela: "Webhooks", rota: "/app/webhooks", abas: ["Automações", "Atividade"] },
+  { tela: "Automações e Webhooks", rota: "/app/webhooks", abas: ["Automações", "Registro de atividade"] },
   { tela: "Follow-ups", rota: "/app/ai/followups", abas: ["Fluxos", "Fila"] },
 ] as const;
 

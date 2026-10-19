@@ -92,7 +92,7 @@ test.describe("navegação agrupada", () => {
     //
     // "Canais" saiu da lista em 15/10/2026 (decisão do dono: o menu lateral é só o
     // essencial): nenhuma tela do grupo tem `sidebar: true`, e grupo sem hub e sem
-    // item no menu não desenha título. Conexões e Webhooks moram em Configurações.
+    // item no menu não desenha título. Conexões e Automações e Webhooks moram em Configurações.
     const titulos = sidebar(page).getByRole("heading");
     await expect(titulos).toHaveText([
       "Atendimento",
@@ -198,7 +198,7 @@ test.describe("navegação agrupada", () => {
     for (const nome of ["Início", "Inbox", "Radar", "Funis", "Contatos", "Agentes", "Desempenho", "Atividades"]) {
       await expect(sidebar(page).getByRole("link", { name: nome, exact: true })).toBeVisible();
     }
-    for (const nome of ["Agenda", "Respostas rápidas", "Tarefas", "Comandas", "Follow-ups", "Roteadores", "Provedores", "Conexões", "Webhooks", "Meta Ads"]) {
+    for (const nome of ["Agenda", "Respostas rápidas", "Tarefas", "Comandas", "Follow-ups", "Roteadores", "Provedores", "Conexões", "Automações e Webhooks", "Meta Ads"]) {
       await expect(sidebar(page).getByRole("link", { name: nome, exact: true })).toHaveCount(0);
     }
 
@@ -206,7 +206,7 @@ test.describe("navegação agrupada", () => {
     await page.waitForURL(/\/app\/settings$/);
     // Comandas, Provedores e Meta Ads estão ocultos (16/10/2026, hiperbold/FUNCOES.md); Credenciais
     // virou "Usar minha própria chave de IA (avançado)" e mora só em Configurações.
-    for (const nome of ["Agenda", "Respostas rápidas", "Tarefas", "Follow-ups", "Roteadores", "Usar minha própria chave de IA", "Conexões", "Webhooks"]) {
+    for (const nome of ["Agenda", "Respostas rápidas", "Tarefas", "Follow-ups", "Roteadores", "Usar minha própria chave de IA", "Conexões", "Automações e Webhooks"]) {
       await expect(page.getByRole("link", { name: new RegExp(`^${nome}`) }).first()).toBeVisible();
     }
     for (const nome of ["Comandas", "Provedores", "Meta Ads", "Trunk SIP", "Conversões", "Extensões", "Contas e recebimentos"]) {

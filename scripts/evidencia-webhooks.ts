@@ -47,7 +47,7 @@ async function main(): Promise<void> {
     await page.waitForTimeout(400);
   }
 
-  await page.getByRole("tab", { name: "Atividade" }).click();
+  await page.getByRole("tab", { name: "Registro de atividade" }).click();
   await page.waitForTimeout(1500);
   await page.screenshot({ path: path.join(DESTINO, "03-atividade-diz-falhou.png") });
 

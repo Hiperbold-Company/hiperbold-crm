@@ -103,11 +103,12 @@ test.describe("J6.8 — anti-SSRF do outbound call_webhook (real, ponta a ponta)
     try {
       // --- fonte inbound (para gerar o lead que dispara a regra) ---
       await login(page, creds.users.manager!.email);
-      // Webhooks mora em Configurações › Canais (sidebar só com o essencial, 15/10/2026).
+      // Automações e Webhooks mora em Configurações › Canais (sidebar só com o essencial, 15/10/2026).
       await page.getByRole("link", { name: "Configurações" }).click();
       await page.waitForURL(/\/app\/settings$/);
-      await page.getByRole("link", { name: /^Webhooks/ }).click();
+      await page.getByRole("link", { name: /^Automações e Webhooks/ }).click();
       await page.waitForURL(/\/app\/webhooks/);
+      await page.getByRole("tab", { name: "Receber dados" }).click();
       await page.getByRole("button", { name: /Nova fonte|Criar primeira fonte/ }).click();
       await page.locator("#src-name").fill(SOURCE_NAME);
       const dialog = page.getByRole("dialog");
@@ -183,7 +184,7 @@ test.describe("J6.8 — anti-SSRF do outbound call_webhook (real, ponta a ponta)
       await drenar();
 
       // --- aba Atividade: a run aparece e NÃO é Sucesso (ação outbound barrada) ---
-      await page.getByRole("tab", { name: "Atividade" }).click();
+      await page.getByRole("tab", { name: "Registro de atividade" }).click();
       const runTitle = page.getByText(RULE_NAME, { exact: true }).first();
       const runCard = cardOf(runTitle);
       let appeared = false;

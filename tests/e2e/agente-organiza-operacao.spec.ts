@@ -307,7 +307,7 @@ test.describe("o agente organiza a operação e a tela conta quem foi", () => {
 
       // E a tentativa TEM que estar registrada: barrar em silêncio seria pior.
       await page.goto(`${APP_URL}/app/webhooks`);
-      await page.getByRole("tab", { name: "Atividade" }).click();
+      await page.getByRole("tab", { name: "Registro de atividade" }).click();
       const execucao = page.getByText(REGRA, { exact: true }).first();
       await expect(execucao).toBeVisible({ timeout: 20_000 });
       // A tentativa barrada TEM que aparecer como falha: barrar em silêncio

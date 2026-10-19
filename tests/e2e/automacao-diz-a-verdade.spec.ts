@@ -124,6 +124,7 @@ test.describe("a automação conta o que aconteceu de verdade", () => {
     try {
       await login(page, creds.users.manager!.email);
       await page.goto(`${APP_URL}/app/webhooks`);
+      await page.getByRole("tab", { name: "Receber dados" }).click();
 
       // ── A fonte ──────────────────────────────────────────────────────────
       await page.getByRole("button", { name: /Nova fonte|Criar primeira fonte/ }).click();
@@ -238,7 +239,7 @@ test.describe("a automação conta o que aconteceu de verdade", () => {
       ).toBeGreaterThan(0);
 
       // ── A TELA: o que a aba Atividade diz ────────────────────────────────
-      await page.getByRole("tab", { name: "Atividade" }).click();
+      await page.getByRole("tab", { name: "Registro de atividade" }).click();
       const cartao = cardDe(page.getByText(RULE_NAME, { exact: true }).first());
       await expect(
         page.getByText(RULE_NAME, { exact: true }).first(),

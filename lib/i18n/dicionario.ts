@@ -4683,10 +4683,12 @@ export const DICIONARIO: Traducoes = {
   },
   "Aparência clara": { es: "Apariencia clara" },
   "Aparência escura": { es: "Apariencia oscura" },
-  // ─── Webhooks ───
-  "Receba contatos de fora (landing pages, formulários) e crie automações que agem sozinhas.": {
-    es: "Recibe contactos de afuera (landing pages, formularios) y crea automatizaciones que actúan solas.",
+  // ─── Automações e Webhooks ───
+  "Automações e Webhooks": { es: "Automatizaciones y Webhooks" },
+  "Regras que agem sozinhas, entrada de leads de sites e formulários, e o registro do que chegou e do que rodou.": {
+    es: "Reglas que actúan solas, entrada de leads desde sitios y formularios, y el registro de lo que llegó y de lo que se ejecutó.",
   },
+  "Registro de atividade": { es: "Registro de actividad" },
   "Receber dados": { es: "Recibir datos" },
   "Leads recebidos": { es: "Leads recibidos" },
   Automações: { es: "Automatizaciones" },
@@ -11279,7 +11281,6 @@ export const DICIONARIO: Traducoes = {
   "As colunas de cada funil, o vocabulário do negócio e os motivos de perda.": { es: "Las columnas de cada embudo, el vocabulario del negocio y los motivos de pérdida." },
   "As conversas de WhatsApp, com você e a IA atendendo lado a lado.": { es: "Las conversaciones de WhatsApp, donde tú y la IA atienden lado a lado." },
   "As pessoas do outro lado da conversa e seu histórico.": { es: "Las personas del otro lado de la conversación y su historial." },
-  "Avise outros sistemas quando algo acontecer aqui dentro.": { es: "Avisa a otros sistemas cuando algo pase aquí." },
   "Conectar a conta de anúncios para ler o desempenho das campanhas.": { es: "Conectar la cuenta de anuncios para leer el rendimiento de las campañas." },
   "Conecte a loja para trazer pedidos e clientes para dentro do CRM.": { es: "Conecta la tienda para traer pedidos y clientes al CRM." },
   "Devolver ao anúncio as vendas que ele trouxe, e marcar a origem de quem chega pelo site.": { es: "Devolver al anuncio las ventas que trajo, y marcar el origen de quien llega por el sitio." },

@@ -85,7 +85,7 @@ function Resultados({ aoEscolher }: { aoEscolher: () => void }) {
       const casaCategoria = categoriaAtiva === "todos" || d.group === categoriaAtiva;
       if (!casaCategoria) return false;
       if (!termo) return true;
-      return normalizar(`${d.label} ${d.description} ${ROTULO_GRUPO.get(d.group) ?? ""}`).includes(termo);
+      return normalizar(`${d.label} ${d.description} ${(d.termos ?? []).join(" ")} ${ROTULO_GRUPO.get(d.group) ?? ""}`).includes(termo);
     });
     if (termo) return filtrados;
     // O catálogo não é contíguo por grupo (a Prospecção, de CRM, vem antes do

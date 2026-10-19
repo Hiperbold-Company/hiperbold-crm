@@ -128,20 +128,30 @@ test.describe("webhooks & automações — fluxo completo", () => {
     let pipelineId: string | undefined;
 
     try {
-      // --- Step 1: login como manager; "Webhooks" mora em Configurações › Canais
+      // --- Step 1: login como manager; "Automações e Webhooks" mora em Configurações › Canais
       // (o sidebar só tem o essencial desde 15/10/2026) ---
       await login(page, creds.users.manager!.email);
       await page.getByRole("link", { name: "Configurações" }).click();
       await page.waitForURL(/\/app\/settings$/);
-      await expect(page.getByRole("link", { name: /^Webhooks/ })).toBeVisible();
-      await page.getByRole("link", { name: /^Webhooks/ }).click();
+      await expect(page.getByRole("link", { name: /^Automações e Webhooks/ })).toBeVisible();
+      await page.getByRole("link", { name: /^Automações e Webhooks/ }).click();
       await page.waitForURL(/\/app\/webhooks/);
 
-      // --- Step 2: aba "Receber dados" — criar fonte ---
-      await expect(page.getByRole("tab", { name: "Receber dados" })).toHaveAttribute(
+      // --- Step 2: a tela abre em "Automações" (a aba de destaque); a ordem das
+      // abas é Automações, Receber dados, Leads recebidos, Registro de atividade ---
+      await expect(page.getByRole("heading", { name: "Automações e Webhooks", level: 1 })).toBeVisible();
+      await expect(page.getByRole("tab", { name: "Automações" })).toHaveAttribute(
         "data-state",
         "active",
       );
+      await expect(page.getByRole("tab")).toHaveText([
+        "Automações",
+        "Receber dados",
+        "Leads recebidos",
+        "Registro de atividade",
+      ]);
+      // --- aba "Receber dados" — criar fonte ---
+      await page.getByRole("tab", { name: "Receber dados" }).click();
       await page.getByRole("button", { name: /Nova fonte|Criar primeira fonte/ }).click();
       await expect(page.getByRole("dialog")).toBeVisible();
       await page.locator("#src-name").fill(SOURCE_NAME);
@@ -297,7 +307,7 @@ test.describe("webhooks & automações — fluxo completo", () => {
       // A regra não tem condição — dispara tanto pro "Lead de Teste" (passo 3)
       // quanto pro lead real (passo 5), logo pode haver 2 cards com esse nome;
       // .first() basta pra confirmar que a automação rodou com sucesso.
-      await page.getByRole("tab", { name: "Atividade" }).click();
+      await page.getByRole("tab", { name: "Registro de atividade" }).click();
       const runTitle = page.getByText(RULE_NAME, { exact: true }).first();
       const runCard = cardOf(runTitle);
       let found = false;
@@ -352,12 +362,12 @@ test.describe("webhooks & automações — fluxo completo", () => {
       );
       await expect(leadCard).toHaveAttribute("title", new RegExp(`Tags:.*${TAG}`));
 
-      // --- Step 9: AGENT não vê "Webhooks" e é redirecionado ---
+      // --- Step 9: AGENT não vê "Automações e Webhooks" e é redirecionado ---
       const agentContext = await browser.newContext();
       const agentPage = await agentContext.newPage();
       try {
         await login(agentPage, creds.users.agent!.email);
-        await expect(agentPage.getByRole("link", { name: "Webhooks" })).toHaveCount(0);
+        await expect(agentPage.getByRole("link", { name: "Automações e Webhooks" })).toHaveCount(0);
         await agentPage.goto(`${APP_URL}/app/webhooks`);
         await agentPage.waitForURL(/\/app\/inbox/);
         expect(agentPage.url()).toMatch(/\/app\/inbox/);

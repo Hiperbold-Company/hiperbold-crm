@@ -37,6 +37,13 @@ export interface NavMetadata {
   description: string;
   icon: string;
   group: NavGroupId;
+  /**
+   * Palavras que a pessoa digita para achar a tela e que NÃO estão no rótulo nem na
+   * descrição (sinônimo, nome antigo, termo técnico). Só o ⌘K lê: não aparece em
+   * card, menu nem hub. Exemplo: a tela "Automações e Webhooks" também se acha por
+   * "log" e "registro".
+   */
+  termos?: readonly string[];
   /** Obrigatória em grupo com hub — é o agrupamento por jornada dentro dele. */
   section?: string;
   /** Ausente = viewer. Ver a regra de escolha abaixo. */
@@ -699,8 +706,10 @@ export const NAV_CATALOG = [
   },
   {
     href: "/app/webhooks",
-    label: "Webhooks",
-    description: "Avise outros sistemas quando algo acontecer aqui dentro.",
+    label: "Automações e Webhooks",
+    description:
+      "Regras que agem sozinhas, entrada de leads de sites e formulários, e o registro do que chegou e do que rodou.",
+    termos: ["automação", "automações", "automatização", "webhook", "webhooks", "log", "logs", "registro", "histórico"],
     icon: "WebhooksLogo",
     group: "canais",
     minRole: "manager",

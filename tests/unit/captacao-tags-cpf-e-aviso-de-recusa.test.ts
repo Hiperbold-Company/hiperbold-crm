@@ -421,7 +421,7 @@ describe("recusa abre aviso na Central: um por fonte por dia", () => {
     expect(a).toMatchObject({ organization_id: ORG, kind: "other", severity: "warn" });
     expect(String(a.title)).toContain("Landing de Outubro");
     expect(a.body).toBe(
-      "A fonte Landing de Outubro recusou um lead: o envio não trazia nome, telefone nem e-mail reconhecíveis — confira os nomes dos campos do formulário. Veja em Webhooks › Leads recebidos.",
+      "A fonte Landing de Outubro recusou um lead: o envio não trazia nome, telefone nem e-mail reconhecíveis — confira os nomes dos campos do formulário. Veja em Automações e Webhooks › Leads recebidos.",
     );
   });
 

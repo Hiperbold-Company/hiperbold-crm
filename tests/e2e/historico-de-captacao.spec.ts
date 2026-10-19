@@ -77,6 +77,7 @@ test.describe("histórico de leads captados", () => {
     try {
       await login(page, creds.users.manager!.email);
       await page.goto(`${APP_URL}/app/webhooks`);
+      await page.getByRole("tab", { name: "Receber dados" }).click();
 
       // ── Uma fonte de captação, criada pela tela ──────────────────────────
       await page.getByRole("button", { name: /Nova fonte|Criar primeira fonte/ }).click();
