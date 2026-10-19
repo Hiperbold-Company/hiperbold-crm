@@ -127,6 +127,12 @@ const ACTION_MIN_ROLE: Record<string, Role> = {
   "contact.create": "agent",
   "contact.update": "agent",
   "contact.delete": "manager",
+  // Tela Contatos: seleção em lote, "Excluir" do lote (`POST /api/v1/contacts/bulk-delete`) e
+  // "Exportar CSV" (`POST /api/v1/contacts/export`) são de gerência: as duas rotas exigem `manager`.
+  // O atendente segue com a lixeira de UM contato (`DELETE /api/v1/contacts/[id]`, `agent`). A rota
+  // é quem barra — isto só esconde o botão.
+  "contact.bulk_delete": "manager",
+  "contact.export": "manager",
   "pipeline.view": "viewer",
   "pipeline.create": "manager",
   "pipeline.move_card": "agent",

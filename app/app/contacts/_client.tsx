@@ -1,5 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
 import { Plus, MagnifyingGlass, UploadSimple, UsersThree } from "@/lib/ui/icons";
 import { Input } from "@/components/ui/input";
@@ -15,31 +17,35 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useContactList } from "@/hooks/contacts/useContactList";
+import { useContactCount } from "@/hooks/contacts/useContactCount";
+import { useContactFilterOptions } from "@/hooks/contacts/useContactFilterOptions";
+import { useBulkDeleteContacts } from "@/hooks/contacts/useBulkDeleteContacts";
+import { useBuscaNaUrl } from "@/hooks/contacts/useBuscaNaUrl";
 import { ContactsTable } from "@/components/contacts/ContactsTable";
 import { PontoDaEtiqueta } from "@/components/tags/PontoDaEtiqueta";
 import { NewContactDialog } from "@/components/contacts/NewContactDialog";
 import { ImportContactsDialog } from "@/components/contacts/ImportContactsDialog";
 import { TAG_DE_CLIENTE } from "@/lib/contacts/cliente";
-import { useActiveOrg } from "@/hooks/auth/AuthProvider";
+import { useActiveOrg, usePermission } from "@/hooks/auth/AuthProvider";
+import { FiltrosAvancadosDeContatos } from "@/components/contacts/FiltrosAvancadosDeContatos";
+import { BarraDeSelecaoDeContatos } from "@/components/contacts/BarraDeSelecaoDeContatos";
+import { ExcluirContatosEmLoteDialog } from "@/components/contacts/ExcluirContatosEmLoteDialog";
+import { baixarCsvDeContatos } from "@/lib/contacts/baixar-csv";
+import { ORIGENS_DE_CONTATO } from "@/lib/contacts/origens";
+import {
+  filtrosFromParams,
+  filtrosParaCorpo,
+  filtrosToParams,
+  quantidadeDeFiltros,
+  type FiltrosDaTela,
+} from "@/lib/contacts/filtros-url";
 import { MergeDialog } from "@/components/contacts/MergeDialog";
 import { EmptyContacts } from "@/components/empty";
 import type { ContactOrderBy } from "@/lib/schemas/contacts";
 
-const SOURCE_OPTIONS = [
+const SOURCE_OPTIONS: Array<{ value: string | undefined; label: string }> = [
   { value: undefined, label: "Todas as origens" },
-  { value: "manual", label: "Manual" },
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "site", label: "Site (landing page)" },
-  { value: "nuvemshop", label: "Nuvemshop" },
-  { value: "import_csv", label: "Importado (CSV)" },
-  // Os dois valores que a atribuição de anúncio grava em `contacts.source`
-  // (`PlataformaDeAnuncio` em lib/leads/atribuicao-de-anuncio.ts). Sem eles, o
-  // contato que veio de um clique em anúncio existe no banco e não é
-  // alcançável por nenhum filtro desta tela. O handler aceita qualquer valor
-  // (`_handler.ts:167` faz `eq("source", q.source)`), então a lista é a única
-  // porta — e ela estava incompleta desde que a atribuição passou a existir.
-  { value: "meta_ads", label: "Anúncio da Meta" },
-  { value: "google_ads", label: "Anúncio do Google" },
+  ...ORIGENS_DE_CONTATO,
 ];
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
@@ -47,10 +53,17 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 export function ContactsListClient() {
   const t = useT();
   const clientesLigado = useActiveOrg()?.cliente_pela_agenda === true;
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [tag, setTag] = useState<string | undefined>(undefined);
-  const [source, setSource] = useState<string | undefined>(undefined);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Os filtros moram na URL: recarregar, voltar e compartilhar o link mantêm a lista.
+  // `toString()` e não o objeto: o hook devolve uma instância nova a cada render.
+  const chaveDaUrl = searchParams.toString();
+  const filtros = useMemo<FiltrosDaTela>(
+    () => filtrosFromParams(new URLSearchParams(chaveDaUrl)),
+    [chaveDaUrl],
+  );
+  const { search, tag, source } = filtros;
   const [orderBy, setOrderBy] = useState<ContactOrderBy>("last_activity_at");
   const [orderDir, setOrderDir] = useState<"asc" | "desc">("desc");
   const [limit, setLimit] = useState<number>(25);
@@ -58,16 +71,43 @@ export function ContactsListClient() {
   const [importOpen, setImportOpen] = useState(false);
   const [duplicadosOpen, setDuplicadosOpen] = useState(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setSearch(searchInput), 250);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
+  const podeExcluirEmLote = usePermission("contact.bulk_delete");
+  const podeExportar = usePermission("contact.export");
+  const [selecionados, setSelecionados] = useState<ReadonlySet<string>>(new Set());
+  const [todosDoFiltro, setTodosDoFiltro] = useState(false);
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const exclusaoEmLote = useBulkDeleteContacts();
 
-  const filters = useMemo(
-    () => ({ search, tag, source, order_by: orderBy, order_dir: orderDir, limit }),
-    [search, tag, source, orderBy, orderDir, limit],
+  /** Troca parte dos filtros na URL (`undefined` apaga a chave). */
+  const mudarFiltros = useCallback(
+    (mudanca: Partial<Record<keyof FiltrosDaTela, string | undefined>>) => {
+      const proximo = filtrosToParams({ ...filtros, ...mudanca } as FiltrosDaTela);
+      const qs = proximo.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [filtros, pathname, router],
   );
-  const q = useContactList(filters);
+
+  // A caixa é estado local; a URL a segue sem nunca reescrevê-la no meio da digitação.
+  const busca = useBuscaNaUrl(search ?? "", (texto) => mudarFiltros({ search: texto || undefined }));
+  const searchInput = busca.texto;
+
+  const listFilters = useMemo(
+    () => ({ ...filtros, order_by: orderBy, order_dir: orderDir, limit }),
+    [filtros, orderBy, orderDir, limit],
+  );
+  const q = useContactList(listFilters);
+  const contagem = useContactCount(filtros);
+  const opcoesDeFiltro = useContactFilterOptions();
+  const totalDoFiltro = contagem.data;
+
+  // Outro filtro = outro conjunto: a seleção não atravessa.
+  const chaveDosFiltros = filtrosToParams(filtros).toString();
+  useEffect(() => {
+    setSelecionados(new Set());
+    setTodosDoFiltro(false);
+  }, [chaveDosFiltros]);
 
   const allContacts = useMemo(
     () => q.data?.pages.flatMap((p) => p.data) ?? [],
@@ -77,6 +117,8 @@ export function ContactsListClient() {
   const tagOptions = useMemo(() => {
     const set = new Set<string>();
     for (const c of allContacts) for (const tag of c.tags) set.add(tag);
+    // A etiqueta filtrada na URL continua na lista mesmo que a página carregada não a mostre.
+    if (filtros.tag) set.add(filtros.tag);
     // `cliente` na lista mesmo que nenhum contato da página carregada a tenha —
     // COM A REGRA LIGADA. As demais opções saem do que já foi paginado — o que
     // basta para etiqueta que a equipe criou e usa em bloco, e falha justamente
@@ -86,7 +128,7 @@ export function ContactsListClient() {
     // roda; quem já tem a etiqueta continua aparecendo pela linha de cima.
     if (clientesLigado) set.add(TAG_DE_CLIENTE);
     return Array.from(set).sort();
-  }, [allContacts, clientesLigado]);
+  }, [allContacts, clientesLigado, filtros.tag]);
 
   const handleSort = useCallback(
     (column: ContactOrderBy) => {
@@ -99,6 +141,105 @@ export function ContactsListClient() {
     },
     [orderBy],
   );
+
+  // ── Seleção em lote ───────────────────────────────────────────────────────
+  const selecaoDisponivel = podeExcluirEmLote || podeExportar;
+  // Contato anonimizado (LGPD) aparece na lista, com o selo, mas não entra no lote nem na exportação.
+  const idsCarregados = useMemo(
+    () => allContacts.filter((c) => !c.is_anonymized).map((c) => c.id),
+    [allContacts],
+  );
+  const quantidadeSelecionada = todosDoFiltro ? (totalDoFiltro ?? 0) : selecionados.size;
+  const selecaoAtiva = selecaoDisponivel && quantidadeSelecionada > 0;
+  const paginaInteiraMarcada =
+    idsCarregados.length > 0 && idsCarregados.every((id) => selecionados.has(id));
+  // A faixa do Gmail: com a página inteira marcada e mais resultados no filtro, oferece "todos".
+  const faixaDeTodosDoFiltro =
+    selecaoDisponivel &&
+    (todosDoFiltro || (paginaInteiraMarcada && (totalDoFiltro ?? 0) > idsCarregados.length));
+  // No modo "todos do filtro" as linhas mostradas aparecem marcadas.
+  const idsMarcadosNaTabela = useMemo<ReadonlySet<string>>(
+    () => (todosDoFiltro ? new Set(idsCarregados) : selecionados),
+    [todosDoFiltro, idsCarregados, selecionados],
+  );
+
+  const limparSelecao = useCallback(() => {
+    setSelecionados(new Set());
+    setTodosDoFiltro(false);
+  }, []);
+
+  const alternarContato = useCallback(
+    (id: string) => {
+      if (todosDoFiltro) {
+        // Desmarcar uma linha sai do "todos do filtro": vira seleção explícita do que está carregado.
+        setTodosDoFiltro(false);
+        setSelecionados(new Set(idsCarregados.filter((x) => x !== id)));
+        return;
+      }
+      setSelecionados((atual) => {
+        const proximo = new Set(atual);
+        if (proximo.has(id)) proximo.delete(id);
+        else proximo.add(id);
+        return proximo;
+      });
+    },
+    [todosDoFiltro, idsCarregados],
+  );
+
+  const alternarPagina = useCallback(
+    (marcar: boolean) => {
+      setTodosDoFiltro(false);
+      setSelecionados(marcar ? new Set(idsCarregados) : new Set());
+    },
+    [idsCarregados],
+  );
+
+  async function excluirSelecionados() {
+    const alvo = todosDoFiltro
+      ? { filtro: filtrosParaCorpo(filtros), esperado: totalDoFiltro ?? 0 }
+      : { ids: [...selecionados] };
+    try {
+      const r = await exclusaoEmLote.mutateAsync(alvo);
+      toast.success(
+        r.excluidos === 1
+          ? t("1 contato excluído.")
+          : `${r.excluidos.toLocaleString("pt-BR")} ${t("contatos excluídos.")}`,
+      );
+      if (r.ignorados > 0) {
+        toast.warning(
+          `${r.ignorados.toLocaleString("pt-BR")} ${t("não foram excluídos: anonimizados ou já mesclados.")}`,
+        );
+      }
+      if (r.bloqueados > 0) {
+        toast.warning(
+          `${r.bloqueados.toLocaleString("pt-BR")} ${t("não foram excluídos: têm compromisso na agenda.")}`,
+        );
+      }
+      limparSelecao();
+    } catch {
+      // o hook já mostrou o erro; a lista é recarregada e a seleção fica para nova tentativa
+    } finally {
+      setConfirmarExclusao(false);
+    }
+  }
+
+  async function exportar() {
+    setExportando(true);
+    try {
+      const r = await baixarCsvDeContatos(
+        todosDoFiltro
+          ? { filtro: filtrosParaCorpo(filtros), esperado: totalDoFiltro ?? undefined }
+          : { ids: [...selecionados] },
+      );
+      toast.success(
+        `${r.linhas.toLocaleString("pt-BR")} ${r.linhas === 1 ? t("contato exportado") : t("contatos exportados")} (${r.arquivo}).`,
+      );
+    } catch (err) {
+      toast.error(t(err instanceof Error ? err.message : "Não foi possível exportar os contatos."));
+    } finally {
+      setExportando(false);
+    }
+  }
 
   return (
     <div className="space-y-4 p-6">
@@ -147,7 +288,7 @@ export function ContactsListClient() {
             type="search"
             placeholder={t("Buscar por nome, email ou telefone…")}
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(e) => busca.setTexto(e.target.value)}
             className="h-9 w-full pl-8"
           />
         </div>
@@ -162,9 +303,9 @@ export function ContactsListClient() {
           <DropdownMenuContent align="start">
             <DropdownMenuLabel>{t("Tag")}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setTag(undefined)}>{t("Todas")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => mudarFiltros({ tag: undefined })}>{t("Todas")}</DropdownMenuItem>
             {tagOptions.map((tagOption) => (
-              <DropdownMenuItem key={tagOption} onClick={() => setTag(tagOption)}>
+              <DropdownMenuItem key={tagOption} onClick={() => mudarFiltros({ tag: tagOption })}>
                 <PontoDaEtiqueta tag={tagOption} className="mr-2" />
                 {tagOption}
               </DropdownMenuItem>
@@ -180,12 +321,18 @@ export function ContactsListClient() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             {SOURCE_OPTIONS.map((s) => (
-              <DropdownMenuItem key={s.label} onClick={() => setSource(s.value)}>
+              <DropdownMenuItem key={s.label} onClick={() => mudarFiltros({ source: s.value })}>
                 {t(s.label)}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <FiltrosAvancadosDeContatos
+          filtros={filtros}
+          opcoes={opcoesDeFiltro.data}
+          onChange={mudarFiltros}
+        />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -204,21 +351,62 @@ export function ContactsListClient() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {(search || tag || source) && (
+        {(quantidadeDeFiltros(filtros) > 0 || searchInput.trim() !== "") && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => {
-              setSearchInput("");
-              setSearch("");
-              setTag(undefined);
-              setSource(undefined);
+              busca.limpar();
+              router.replace(pathname, { scroll: false });
             }}
           >
             {t("Limpar filtros")}
           </Button>
         )}
       </div>
+
+      {selecaoAtiva && (
+        <BarraDeSelecaoDeContatos
+          quantidade={quantidadeSelecionada}
+          podeExcluir={podeExcluirEmLote}
+          podeExportar={podeExportar}
+          exportando={exportando}
+          onExcluir={() => setConfirmarExclusao(true)}
+          onExportar={() => void exportar()}
+          onLimpar={limparSelecao}
+        />
+      )}
+
+      {faixaDeTodosDoFiltro && totalDoFiltro !== undefined && (
+        <div
+          role="status"
+          data-faixa-selecionar-todos
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+        >
+          {todosDoFiltro ? (
+            <>
+              {t("Todos os")} <strong>{totalDoFiltro.toLocaleString("pt-BR")}</strong>{" "}
+              {t("contatos do filtro estão selecionados.")}{" "}
+              <button type="button" className="font-medium text-accent underline" onClick={limparSelecao}>
+                {t("Limpar seleção")}
+              </button>
+            </>
+          ) : (
+            <>
+              {idsCarregados.length === limit
+                ? `${t("Os")} ${idsCarregados.length} ${t("desta página estão selecionados.")}`
+                : `${t("Os")} ${idsCarregados.length} ${t("contatos carregados estão selecionados.")}`}{" "}
+              <button
+                type="button"
+                className="font-medium text-accent underline"
+                onClick={() => setTodosDoFiltro(true)}
+              >
+                {t("Selecionar todos os")} {totalDoFiltro.toLocaleString("pt-BR")} {t("contatos do filtro")}
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {q.isLoading ? (
         <div className="space-y-2">
@@ -247,6 +435,11 @@ export function ContactsListClient() {
           <Card className="overflow-hidden">
             <ContactsTable
               contacts={allContacts}
+              selecao={
+                selecaoDisponivel
+                  ? { ids: idsMarcadosNaTabela, onToggle: alternarContato, onTogglePagina: alternarPagina }
+                  : undefined
+              }
               orderBy={orderBy}
               orderDir={orderDir}
               onSort={handleSort}
@@ -254,7 +447,9 @@ export function ContactsListClient() {
           </Card>
           <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              {allContacts.length} {allContacts.length === 1 ? t("contato") : t("contatos")}
+              {totalDoFiltro !== undefined && totalDoFiltro > allContacts.length
+                ? `${allContacts.length.toLocaleString("pt-BR")} ${t("de")} ${totalDoFiltro.toLocaleString("pt-BR")} ${t("contatos")}`
+                : `${allContacts.length} ${allContacts.length === 1 ? t("contato") : t("contatos")}`}
               {q.hasNextPage ? ` ${t("carregados — há mais resultados")}` : ""}
             </p>
             {q.hasNextPage && (
@@ -274,6 +469,13 @@ export function ContactsListClient() {
       <NewContactDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ImportContactsDialog open={importOpen} onOpenChange={setImportOpen} />
       <MergeDialog open={duplicadosOpen} onOpenChange={setDuplicadosOpen} />
+      <ExcluirContatosEmLoteDialog
+        open={confirmarExclusao}
+        quantidade={quantidadeSelecionada}
+        pendente={exclusaoEmLote.isPending}
+        onConfirm={() => void excluirSelecionados()}
+        onOpenChange={setConfirmarExclusao}
+      />
     </div>
   );
 }

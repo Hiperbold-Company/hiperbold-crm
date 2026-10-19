@@ -1,0 +1,16 @@
+URL com filtros: http://localhost:3417/app/contacts?criado=30d&funil=bd8ff67a-16f3-4de1-842c-847175275d54&campo_escopo=contato&campo=cargo&campo_op=contem&campo_valor=diretora
+linhas com filtro: 6 | rodapé: Customer 360 — busque, filtre e gerencie contatos.
+URL campo do negócio: http://localhost:3417/app/contacts?campo_escopo=negocio&campo=utm_source&campo_op=contem&campo_valor=google
+linhas utm_source=google (negócio): 7
+URL após limpar: http://localhost:3417/app/contacts
+faixa: Os 25 desta página estão selecionados. Selecionar todos os 58 contatos do filtro
+barra: 58 selecionados
+Excluir
+Exportar CSV
+Limpar seleção
+botão Excluir habilitado sem digitar? false
+CSV bytes iniciais (BOM): ef bb bf
+CSV linhas: 59
+modal: Excluir 3 contatos? | Isso remove os contatos selecionados e as conversas e mensagens deles. Os negócios continuam, sem contato. Contato com compromisso na agenda não é excluído. Esta ação não pode ser desfeita. | Cancelar | Excluir
+toast: 3 contatos excluídos.,58 contatos exportados (contatos-2026-10-19.csv).
+atendente (bruno@exemplo.com.br): caixas de seleção=0, lixeiras por linha=25, barra de lote=0

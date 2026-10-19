@@ -27,6 +27,11 @@ import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { exigirVisibilidadeDoToken } from "@/lib/mcp/visibilidade-do-token";
+import type { Role } from "@/lib/auth/types";
+import { temFiltroDeData } from "@/lib/contacts/filtros";
+import { fusoDaOrganizacao } from "@/lib/contacts/fuso-da-organizacao";
+
 import { listContactsHandler, createContactHandler } from "./_handler";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +57,17 @@ export const dynamic = "force-dynamic";
  * do proxy antes de chegar neste arquivo. Ver o comentário lá.
  */
 type ContactsAuth =
-  | { ok: true; organizationId: string; actor: Actor; supabase: SupabaseClient; idioma?: Idioma }
+  | {
+      ok: true;
+      organizationId: string;
+      actor: Actor;
+      supabase: SupabaseClient;
+      idioma?: Idioma;
+      /** Fuso da organização, quando a sessão já o trouxe (o Bearer o lê só se o filtro pedir). */
+      timezone?: string | null;
+      /** Chamada por token (cliente admin, sem a RLS): carrega o papel da chave para a regra D-148. */
+      token?: { role: Role };
+    }
   | { ok: false; response: Response };
 
 async function resolveContactsAuth(req: NextRequest, requestId: string): Promise<ContactsAuth> {
@@ -96,6 +111,7 @@ async function resolveContactsAuth(req: NextRequest, requestId: string): Promise
       organizationId: auth.organizationId,
       actor: auth.actor,
       supabase: createAdminClient(),
+      token: { role: auth.role },
     };
   }
 
@@ -107,6 +123,7 @@ async function resolveContactsAuth(req: NextRequest, requestId: string): Promise
     actor: { type: "user", id: authz.user.id },
     supabase: await createClient(),
     idioma: authz.user.idioma,
+    timezone: authz.org.timezone ?? null,
   };
 }
 
@@ -119,15 +136,10 @@ export async function GET(req: NextRequest): Promise<Response> {
   const t = (texto: string) => traduzir(texto, idioma ?? "pt-BR");
 
   const url = new URL(req.url);
-  const qsParsed = contactListQuerySchema.safeParse({
-    search: url.searchParams.get("search") ?? undefined,
-    tag: url.searchParams.get("tag") ?? undefined,
-    source: url.searchParams.get("source") ?? undefined,
-    cursor: url.searchParams.get("cursor") ?? undefined,
-    limit: url.searchParams.get("limit") ?? undefined,
-    order_by: url.searchParams.get("order_by") ?? undefined,
-    order_dir: url.searchParams.get("order_dir") ?? undefined,
-  });
+  // Os filtros têm os MESMOS nomes na URL da tela e aqui (`filtrosDeContatosSchema`).
+  const qsParsed = contactListQuerySchema.safeParse(
+    Object.fromEntries([...url.searchParams.entries()].filter(([, v]) => v !== "")),
+  );
   if (!qsParsed.success) {
     return fail("validation_failed", t("Query inválida."), 422, {
       details: qsParsed.error.flatten().fieldErrors as Record<string, unknown>,
@@ -135,7 +147,30 @@ export async function GET(req: NextRequest): Promise<Response> {
     });
   }
 
+  // Funil, etapa e campo do NEGÓCIO filtram por `crm_leads`, que tem dono por atendente. A sessão
+  // passa pela RLS; o token roda com o cliente admin e, em empresa no modo "só os meus", uma chave
+  // abaixo de gerente não pode usar o negócio como filtro (descobriria quem tem negócio de quem).
+  // Mesma regra D-148 de `lib/api/auth-dual.ts`.
+  const filtraPorNegocio = Boolean(
+    qsParsed.data.funil ||
+      qsParsed.data.etapa ||
+      (qsParsed.data.campo && qsParsed.data.campo_valor && qsParsed.data.campo_escopo === "negocio"),
+  );
+  if (auth.token && filtraPorNegocio) {
+    try {
+      await exigirVisibilidadeDoToken(supabase, organizationId, auth.token.role);
+    } catch (err) {
+      if (err instanceof McpAuthError) {
+        return fail("forbidden_role", err.message, err.httpStatus, { requestId });
+      }
+      throw err;
+    }
+  }
+
   try {
+    const timezone = temFiltroDeData(qsParsed.data)
+      ? (auth.timezone ?? (await fusoDaOrganizacao(supabase, organizationId)))
+      : null;
     const { contacts, cursor, has_more } = await listContactsHandler(
       supabase,
       {
@@ -145,6 +180,7 @@ export async function GET(req: NextRequest): Promise<Response> {
         idioma,
       },
       qsParsed.data,
+      { timezone },
     );
     return ok(contacts, { requestId, meta: { cursor, has_more } });
   } catch (err) {

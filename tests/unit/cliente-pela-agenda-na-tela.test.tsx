@@ -26,9 +26,17 @@ const USER = { id: "u-1", is_platform_admin: false, support: null };
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useActiveOrg: () => ({ ...ORG, cliente_pela_agenda: ligada }),
   useAuth: () => ({ user: USER, activeOrg: { ...ORG, cliente_pela_agenda: ligada } }),
+  usePermission: () => true,
 }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/app/contacts",
+  useSearchParams: () => new URLSearchParams(),
+}));
+// A lista de contatos agora lê contagem e opções de filtro do servidor; aqui só interessa a tag.
+vi.mock("@/hooks/contacts/useContactCount", () => ({ useContactCount: () => ({ data: undefined }) }));
+vi.mock("@/hooks/contacts/useContactFilterOptions", () => ({ useContactFilterOptions: () => ({ data: undefined }) }));
 vi.mock("@/hooks/contacts/useContact", () => ({
   useContact: () => ({ isLoading: false, isError: false, data: { data: CONTATO }, refetch: vi.fn() }),
 }));

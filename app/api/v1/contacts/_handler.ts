@@ -17,7 +17,7 @@ import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
 import { roleAtLeast } from "@/lib/auth/types";
-import { canonicalPhoneBR, phoneLookupVariants } from "@/lib/channels/phone-variants";
+import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
 import { encontrarContatoPorTelefone } from "@/lib/channels/contato-por-telefone";
 import { mesclarConsentimento } from "@/lib/contacts/consentimento";
 import { hashCpf } from "@/lib/contacts/cpf";
@@ -30,6 +30,8 @@ import {
   idsPorHashDeCpf,
   type ErroDeCpf,
 } from "@/lib/contacts/cpf-do-contato";
+import { consultaDeContatos, semJuncoes } from "@/lib/contacts/consulta";
+import { VINCULOS_RESTRICT_NAO_APAGADOS } from "@/lib/contacts/vinculos-restrict";
 import { logger } from "@/lib/logger";
 import type { Contact } from "@/lib/types/contacts";
 import { ensureConversation, sessaoProntaParaEnvio } from "@/lib/automation/start-conversation";
@@ -172,94 +174,22 @@ export async function listContactsHandler(
   supabase: SB,
   ctx: HandlerCtx,
   raw: ContactListQueryParams,
+  /** `timezone`: fuso da organização, para contar o dia dos filtros de data. */
+  opcoes?: { timezone?: string | null },
 ): Promise<ListContactsResult> {
   const q: ContactListQuery = contactListQuerySchema.parse(raw);
   const sortCol = q.order_by;
   const asc = q.order_dir === "asc";
 
-  let query = supabase
-    .from("contacts")
-    .select(SELECT_COLS)
-    .eq("organization_id", ctx.organization_id)
-    // A LÁPIDE DE FUSÃO NÃO É UM CONTATO VIVO.
-    //
-    // `is_merged_into` marca o cadastro que foi absorvido por outro. Ele não é
-    // apagado de propósito (é o que libera telefone e e-mail para o vencedor
-    // herdar, e é o registro da fusão), mas ele deixou de ser uma pessoa da
-    // base — e o resto do produto já o trata assim: `contacts/duplicates`, o
-    // webhook de captação (`webhooks/in/[token]`) e as duas leituras de
-    // `lib/channels/contato-por-telefone` filtram `is_merged_into is null`.
-    // Esta listagem era a ÚNICA que não filtrava.
-    //
-    // Sem esta linha, a fusão parece não ter acontecido: medido pela tela em
-    // 2026-09-04, logo depois de juntar dois cadastros a lista seguia mostrando
-    // OS DOIS, com o mesmo telefone e ambos com status "ativo" — e quem opera
-    // ou tenta juntar de novo (o diálogo de duplicados já não os oferece) ou
-    // conclui que o recurso não funciona. Antes de a fusão existir na tela, a
-    // coluna só era escrita por uma data migration de mão única, e por isso
-    // ninguém tinha esbarrado nisto.
-    .is("is_merged_into", null)
+  const { query: consulta } = await consultaDeContatos(supabase, SELECT_COLS, q, {
+    organizationId: ctx.organization_id,
+    requestId: ctx.requestId,
+    timezone: opcoes?.timezone,
+  });
+  let query = consulta
     .order(sortCol, { ascending: asc, nullsFirst: false })
     .order("id", { ascending: asc })
     .limit(q.limit + 1);
-
-  if (q.search) {
-    // ⚠️ `%` e `_` são curingas do LIKE, e `,`/`(`/`)` são delimitadores do DSL
-    // do `.or()` — um nome com vírgula ("Silva, Maria") injetaria uma condição
-    // extra na string do filtro. Mesmo escape de conversations/_handler.ts.
-    const s = q.search.trim().replace(/[%_]/g, (m) => `\\${m}`).replace(/[,()]/g, " ");
-    const digits = q.search.replace(/\D/g, "");
-    const orParts = [
-      `name.ilike.%${s}%`,
-      // ⚠️ `display_name` ESTAVA DE FORA, e é a coluna que a tela MOSTRA.
-      //
-      // Contato que entra pelo WhatsApp nasce só com `display_name` (o pushName);
-      // `name` fica nulo até alguém editar à mão, e a busca ignorava exatamente
-      // o nome que o usuário vê e digita. Medido nesta instalação: 15 de 33
-      // contatos têm `display_name` e nenhum `name`.
-      //
-      // Quem decide o nome exibido é `nomeDoContato`/`rotuloDoContato`
-      // (lib/contacts/rotulo-do-contato.ts) — a ordem em vigor se lê ali, não
-      // aqui. Esta linha já afirmou que a UI prefere `display_name`, e a issue
-      // #906 inverteu a precedência sem que a frase acompanhasse. O que
-      // justifica a coluna no OR não é a ordem: é que ela é a ÚNICA preenchida
-      // em metade da base, então buscar sem ela devolve zero para quem existe.
-      //
-      // Achado por um turno de agente REAL (IA 360 · wave 2): pedido para marcar
-      // um retorno para "Cliente Retorno E2E", o modelo chamou esta busca, levou
-      // zero resultados para um contato que EXISTE, e desistiu — a demanda
-      // morreria por uma coluna faltando no OR.
-      `display_name.ilike.%${s}%`,
-      `email.ilike.%${s}%`,
-      `phone_number.ilike.%${s}%`,
-    ];
-    if (digits.length >= 8) {
-      // 10/11 dígitos sem DDI: no Brasil é DDD+local. Sem o 55, `3284793302`
-      // não gera a variante com o 9 e o cadastro `+5532984793302` some da busca.
-      const base =
-        !digits.startsWith("55") && (digits.length === 10 || digits.length === 11)
-          ? `55${digits}`
-          : digits;
-      for (const v of phoneLookupVariants(base)) {
-        const d = v.replace(/\D/g, "");
-        if (d && d !== digits) orParts.push(`phone_number.ilike.%${d}%`);
-      }
-    }
-    if (digits.length === 11) {
-      // A consulta do usuário não enxerga `cpf_hash`: o contato do CPF é achado pelo servidor e entra na busca por id.
-      const hash = hashCpf(digits);
-      if (hash) {
-        const achados = await idsPorHashDeCpf(ctx.organization_id, hash);
-        if (achados.error) {
-          throw new ApiError(500, "internal_error", undefined, ctx.requestId, achados.error.message);
-        }
-        for (const id of achados.ids) orParts.push(`id.eq.${id}`);
-      }
-    }
-    query = query.or(orParts.join(","));
-  }
-  if (q.tag) query = query.contains("tags", [q.tag]);
-  if (q.source) query = query.eq("source", q.source);
 
   if (q.cursor) {
     const c = decodeCursor(q.cursor);
@@ -289,7 +219,7 @@ export async function listContactsHandler(
     throw new ApiError(500, "internal_error", undefined, ctx.requestId, error.message);
   }
 
-  const rows = (data ?? []) as Contact[];
+  const rows = ((data ?? []) as unknown as Contact[]).map(semJuncoes);
   const hasMore = rows.length > q.limit;
   const page = hasMore ? rows.slice(0, q.limit) : rows;
   const last = page[page.length - 1];
@@ -876,9 +806,6 @@ function throwOnDbError(
  * teste que acompanha este handler (`tests/unit/contato-delete.test.ts`)
  * exercita a contagem com filtro de organização.
  */
-const VINCULOS_RESTRICT_NAO_APAGADOS: ReadonlyArray<{ tabela: string; rotulo: string }> = [
-  { tabela: "calendar_appointments", rotulo: "compromisso(s) na agenda" },
-];
 
 export async function deleteContactHandler(
   supabase: SB,

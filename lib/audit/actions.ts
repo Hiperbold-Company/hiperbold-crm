@@ -713,6 +713,12 @@ export const AUDIT_ACTIONS = [
   // exatamente o que faltou no incidente: o histórico foi destruído ANTES do
   // erro, sem rastro de nada.
   "contact.delete_blocked",
+  // Exclusão em lote e exportação de contatos (tela Contatos). UMA linha por
+  // operação, com contagens, ids e o RESUMO do filtro — nunca o texto buscado nem
+  // valor de campo, que podem ser dado pessoal. A exportação leva dado pessoal para
+  // fora do sistema, então a trilha diz quem, quando e quantos.
+  "contacts.bulk_deleted",
+  "contacts.exported",
   // Visão de plataforma sobre o agente de um cliente (fase A da spec 19). Entra
   // porque toda leitura de `admin/` é auditada neste repo — e porque aqui o
   // operador enxerga o agente publicado na organização de outra pessoa.

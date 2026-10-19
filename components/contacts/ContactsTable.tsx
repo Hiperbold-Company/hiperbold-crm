@@ -5,7 +5,7 @@ import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 import type { Locale } from "date-fns";
 
 import { useT } from "@/hooks/i18n/useT";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -39,8 +39,17 @@ import type { Contact } from "@/lib/types/contacts";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 
+/** A seleção em lote, quando a pessoa pode usá-la (exclusão pede `agent`). Ausente = sem caixas. */
+export interface SelecaoDaTabela {
+  ids: ReadonlySet<string>;
+  onToggle: (id: string) => void;
+  /** Marca (ou desmarca) todas as linhas que a tabela mostra. */
+  onTogglePagina: (marcar: boolean) => void;
+}
+
 interface Props {
   contacts: Contact[];
+  selecao?: SelecaoDaTabela;
   orderBy: ContactOrderBy;
   orderDir: "asc" | "desc";
   onSort: (column: ContactOrderBy) => void;
@@ -107,7 +116,39 @@ function SortableHead({
   );
 }
 
-export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
+/** Caixa de seleção nativa: acessível por teclado e leitor de tela sem biblioteca nova. */
+function CaixaDeSelecao({
+  marcada,
+  indeterminada = false,
+  desabilitada = false,
+  onChange,
+  rotulo,
+}: {
+  marcada: boolean;
+  indeterminada?: boolean;
+  desabilitada?: boolean;
+  onChange: (marcada: boolean) => void;
+  rotulo: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminada && !marcada;
+  }, [indeterminada, marcada]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      className="h-4 w-4 cursor-pointer rounded-sm border-border accent-[var(--color-accent,currentColor)]"
+      checked={marcada}
+      disabled={desabilitada}
+      aria-label={rotulo}
+      onChange={(e) => onChange(e.target.checked)}
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
+}
+
+export function ContactsTable({ contacts, selecao, orderBy, orderDir, onSort }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
   const clientesLigado = useActiveOrg()?.cliente_pela_agenda === true;
@@ -158,6 +199,19 @@ export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
     <Table>
       <TableHeader>
         <TableRow>
+          {selecao && (
+            <TableHead className="w-10">
+              <CaixaDeSelecao
+                rotulo={t("Selecionar esta página")}
+                marcada={
+                  contacts.some((c) => !c.is_anonymized) &&
+                  contacts.filter((c) => !c.is_anonymized).every((c) => selecao.ids.has(c.id))
+                }
+                indeterminada={contacts.some((c) => selecao.ids.has(c.id))}
+                onChange={selecao.onTogglePagina}
+              />
+            </TableHead>
+          )}
           <SortableHead
             label={t("Nome")}
             column="display_name"
@@ -195,7 +249,22 @@ export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
       </TableHeader>
       <TableBody>
         {contacts.map((c) => (
-          <TableRow key={c.id} className="cursor-pointer">
+          <TableRow
+            key={c.id}
+            className="cursor-pointer"
+            data-state={selecao?.ids.has(c.id) ? "selected" : undefined}
+          >
+            {selecao && (
+              <TableCell className="w-10">
+                <CaixaDeSelecao
+                  rotulo={`${t("Selecionar")} ${displayName(c, t)}`}
+                  marcada={selecao.ids.has(c.id)}
+                  // Anonimizado (LGPD) aparece, mas não entra no lote nem na exportação.
+                  desabilitada={Boolean(c.is_anonymized)}
+                  onChange={() => selecao.onToggle(c.id)}
+                />
+              </TableCell>
+            )}
             <TableCell className="font-medium">
               <Link href={`/app/contacts/${c.id}`} className="hover:underline">
                 {displayName(c)}

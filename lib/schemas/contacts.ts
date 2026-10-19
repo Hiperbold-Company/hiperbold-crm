@@ -9,6 +9,7 @@
  */
 import { z } from "zod";
 
+import { chaveSensivelDeCampo } from "@/lib/contacts/campos-sensiveis";
 import { normalizarTag, normalizarTags } from "@/lib/contacts/tag-normalizada";
 import { isValidCpf, type PerfilDoPais } from "@/lib/legal/perfil-do-pais";
 
@@ -136,17 +137,74 @@ export const CONTACT_ORDER_BY = [
   "phone_number",
 ] as const;
 
-export const contactListQuerySchema = z.object({
-  search: z.string().optional(),
-  // O filtro normaliza pelo MESMO caminho da escrita: `?tag=VIP` acha o que a
-  // ficha gravou como "vip" (issue #1224).
-  tag: z.string().transform(normalizarTag).optional(),
-  source: z.string().optional(),
-  cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-  order_by: z.enum(CONTACT_ORDER_BY).default("last_activity_at"),
-  order_dir: z.enum(["asc", "desc"]).default("desc"),
-});
+/** Atalhos de período — os mesmos do quadro do funil (`lib/kanban/datas-do-lead.ts`). */
+const PERIODOS_DE_CONTATOS = ["hoje", "7d", "30d", "mes"] as const;
+/** Janela de datas aceita nos filtros: fora dela (`9999-12-31`) o cálculo do dia seguinte vira 500 no banco. */
+export const DIA_MINIMO_DO_FILTRO = "2000-01-01";
+export const DIA_MAXIMO_DO_FILTRO = "2100-12-31";
+const DIA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+const diaIso = () =>
+  z
+    .string()
+    .regex(DIA_ISO)
+    .refine((d) => d >= DIA_MINIMO_DO_FILTRO && d <= DIA_MAXIMO_DO_FILTRO, {
+      message: "Data fora do intervalo aceito.",
+    });
+/** Chave de campo personalizado que o filtro aceita: vira caminho JSON no PostgREST, então só letras, números e `_`. */
+export const CHAVE_DE_CAMPO_FILTRAVEL = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
+
+/**
+ * Os filtros da lista de contatos — a MESMA forma na URL da tela, na query do
+ * GET, e (como objeto) no corpo de "excluir/exportar todos do filtro". Uma
+ * definição só: o que a tela mostra, o que se exclui e o que se exporta são o
+ * mesmo conjunto porque passam pela mesma régua (`lib/contacts/consulta.ts`).
+ */
+const formaDosFiltros = {
+    search: z.string().max(200).optional(),
+    // O filtro normaliza pelo MESMO caminho da escrita: `?tag=VIP` acha o que a
+    // ficha gravou como "vip" (issue #1224).
+    tag: z.string().transform(normalizarTag).optional(),
+    source: z.string().max(80).optional(),
+    /** Entrou no CRM (`contacts.created_at`): atalho OU `criado_de`/`criado_ate`. */
+    criado: z.enum(PERIODOS_DE_CONTATOS).optional(),
+    criado_de: diaIso().optional(),
+    criado_ate: diaIso().optional(),
+    /** Última atividade (`contacts.last_activity_at`). */
+    ativ: z.enum(PERIODOS_DE_CONTATOS).optional(),
+    ativ_de: diaIso().optional(),
+    ativ_ate: diaIso().optional(),
+    /** Contatos que têm negócio neste funil (e, opcionalmente, nesta etapa). */
+    funil: z.string().uuid().optional(),
+    etapa: z.string().uuid().optional(),
+    /** Campo personalizado: do contato ou de algum negócio dele. */
+    campo_escopo: z.enum(["contato", "negocio"]).default("contato"),
+    campo: z
+      .string()
+      .regex(CHAVE_DE_CAMPO_FILTRAVEL)
+      .refine((c) => !chaveSensivelDeCampo(c), { message: "Campo não filtrável." })
+      .optional(),
+    campo_op: z.enum(["contem", "igual"]).default("contem"),
+    campo_valor: z.string().min(1).max(200).optional(),
+};
+
+const campoEValorJuntos = (v: { campo?: string; campo_valor?: string }) => !v.campo === !v.campo_valor;
+const MENSAGEM_CAMPO_E_VALOR = { message: "Informe o campo e o valor juntos.", path: ["campo_valor"] };
+
+export const filtrosDeContatosSchema = z
+  .object(formaDosFiltros)
+  .refine(campoEValorJuntos, MENSAGEM_CAMPO_E_VALOR);
+export type FiltrosDeContatos = z.output<typeof filtrosDeContatosSchema>;
+export type FiltrosDeContatosEntrada = z.input<typeof filtrosDeContatosSchema>;
+
+export const contactListQuerySchema = z
+  .object({
+    ...formaDosFiltros,
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    order_by: z.enum(CONTACT_ORDER_BY).default("last_activity_at"),
+    order_dir: z.enum(["asc", "desc"]).default("desc"),
+  })
+  .refine(campoEValorJuntos, MENSAGEM_CAMPO_E_VALOR);
 export type ContactListQuery = z.output<typeof contactListQuerySchema>;
 export type ContactListQueryParams = z.input<typeof contactListQuerySchema>;
 export type ContactOrderBy = (typeof CONTACT_ORDER_BY)[number];
@@ -184,3 +242,34 @@ export const contactsMergeSchema = z
     path: ["secondary_contact_ids"],
   });
 export type ContactsMergeInput = z.infer<typeof contactsMergeSchema>;
+
+/** Teto de contatos por chamada de exclusão em lote. */
+export const TETO_DA_EXCLUSAO_EM_LOTE = 5_000;
+/** Teto de linhas por exportação. */
+export const TETO_DA_EXPORTACAO = 20_000;
+
+/**
+ * Quem entra num lote: ids explícitos (a seleção da tela) OU "todos do filtro".
+ * "Todos do filtro" nunca viaja como lista de milhares de ids: o servidor
+ * resolve o filtro, e `esperado` é a contagem que a pessoa VIU — se a lista
+ * mudou no meio do caminho, a exclusão recusa em vez de apagar outro conjunto.
+ */
+export const alvoDeLoteSchema = z.union([
+  z.object({
+    ids: z.array(z.string().uuid()).min(1).max(TETO_DA_EXCLUSAO_EM_LOTE),
+  }),
+  z.object({
+    filtro: filtrosDeContatosSchema,
+    esperado: z.number().int().min(1),
+  }),
+]);
+export type AlvoDeLote = z.output<typeof alvoDeLoteSchema>;
+
+export const contactsBulkDeleteSchema = alvoDeLoteSchema;
+
+/** Exportação: o mesmo alvo, sem teto de ids de exclusão (o teto é o da exportação). */
+export const contactsExportSchema = z.union([
+  z.object({ ids: z.array(z.string().uuid()).min(1).max(TETO_DA_EXPORTACAO) }),
+  z.object({ filtro: filtrosDeContatosSchema, esperado: z.number().int().min(1).optional() }),
+]);
+export type ContactsExportInput = z.output<typeof contactsExportSchema>;

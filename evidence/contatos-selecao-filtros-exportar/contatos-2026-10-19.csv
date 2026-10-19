@@ -1,0 +1,59 @@
+﻿Nome,E-mail,Telefone,Tags,Origem,Entrou no CRM,Última atividade,Funis e etapas,Cargo,Empresa
+Lote Teste 12,lote12@exemplo.com.br,+55 35 98880-0012,vip,Manual,07/10/2026 16:44,19/10/2026 16:44,Consultas > Novo contato,Diretora,Acme 12
+Lote Teste 24,lote24@exemplo.com.br,+55 35 98880-0024,vip,Manual,25/09/2026 16:44,19/10/2026 16:44,,Diretora,Acme 24
+Lote Teste 36,lote36@exemplo.com.br,+55 35 98880-0036,vip,Manual,13/09/2026 16:44,19/10/2026 16:44,,Diretora,Acme 36
+Paulo Lima (fictício),,,,Manual,19/10/2026 13:34,19/10/2026 13:39,FUTURO 2027 > Em contato,,
+Lote Teste 01,lote1@exemplo.com.br,+55 35 98880-0001,,WhatsApp,18/10/2026 16:44,18/10/2026 16:44,Consultas > Novo contato,Analista,
+Lote Teste 13,lote13@exemplo.com.br,+55 35 98880-0013,,WhatsApp,06/10/2026 16:44,18/10/2026 16:44,,Analista,
+Lote Teste 25,lote25@exemplo.com.br,+55 35 98880-0025,,WhatsApp,24/09/2026 16:44,18/10/2026 16:44,,Analista,
+Lote Teste 37,lote37@exemplo.com.br,+55 35 98880-0037,,WhatsApp,12/09/2026 16:44,18/10/2026 16:44,,Analista,
+Lote Teste 02,lote2@exemplo.com.br,+55 35 98880-0002,,Site (landing page),17/10/2026 16:44,17/10/2026 16:44,Consultas > Novo contato,Diretora,Acme 2
+Lote Teste 14,lote14@exemplo.com.br,+55 35 98880-0014,,Site (landing page),05/10/2026 16:44,17/10/2026 16:44,,Diretora,Acme 14
+Lote Teste 26,lote26@exemplo.com.br,+55 35 98880-0026,,Site (landing page),23/09/2026 16:44,17/10/2026 16:44,,Diretora,Acme 26
+Lote Teste 38,lote38@exemplo.com.br,+55 35 98880-0038,,Site (landing page),11/09/2026 16:44,17/10/2026 16:44,,Diretora,Acme 38
+Lote Teste 03,lote3@exemplo.com.br,+55 35 98880-0003,vip,Anúncio da Meta,16/10/2026 16:44,16/10/2026 16:44,Consultas > Novo contato,Analista,
+Lote Teste 15,lote15@exemplo.com.br,+55 35 98880-0015,vip,Anúncio da Meta,04/10/2026 16:44,16/10/2026 16:44,,Analista,
+Lote Teste 27,lote27@exemplo.com.br,+55 35 98880-0027,vip,Anúncio da Meta,22/09/2026 16:44,16/10/2026 16:44,,Analista,
+Lote Teste 39,lote39@exemplo.com.br,+55 35 98880-0039,vip,Anúncio da Meta,10/09/2026 16:44,16/10/2026 16:44,,Analista,
+Lote Teste 04,lote4@exemplo.com.br,+55 35 98880-0004,,Manual,15/10/2026 16:44,15/10/2026 16:44,Consultas > Novo contato,Diretora,Acme 4
+Lote Teste 16,lote16@exemplo.com.br,+55 35 98880-0016,,Manual,03/10/2026 16:44,15/10/2026 16:44,,Diretora,Acme 16
+Lote Teste 28,lote28@exemplo.com.br,+55 35 98880-0028,,Manual,21/09/2026 16:44,15/10/2026 16:44,,Diretora,Acme 28
+Lote Teste 40,lote40@exemplo.com.br,+55 35 98880-0040,,Manual,09/09/2026 16:44,15/10/2026 16:44,,Diretora,Acme 40
+Lote Teste 05,lote5@exemplo.com.br,+55 35 98880-0005,,WhatsApp,14/10/2026 16:44,14/10/2026 16:44,Consultas > Novo contato,Analista,
+Lote Teste 17,lote17@exemplo.com.br,+55 35 98880-0017,,WhatsApp,02/10/2026 16:44,14/10/2026 16:44,,Analista,
+Lote Teste 29,lote29@exemplo.com.br,+55 35 98880-0029,,WhatsApp,20/09/2026 16:44,14/10/2026 16:44,,Analista,
+Lote Teste 06,lote6@exemplo.com.br,+55 35 98880-0006,vip,Site (landing page),13/10/2026 16:44,13/10/2026 16:44,Consultas > Novo contato,Diretora,Acme 6
+Lote Teste 18,lote18@exemplo.com.br,+55 35 98880-0018,vip,Site (landing page),01/10/2026 16:44,13/10/2026 16:44,,Diretora,Acme 18
+Lote Teste 30,lote30@exemplo.com.br,+55 35 98880-0030,vip,Site (landing page),19/09/2026 16:44,13/10/2026 16:44,,Diretora,Acme 30
+Lote Teste 07,lote7@exemplo.com.br,+55 35 98880-0007,,Anúncio da Meta,12/10/2026 16:44,12/10/2026 16:44,Consultas > Novo contato,Analista,
+Lote Teste 19,lote19@exemplo.com.br,+55 35 98880-0019,,Anúncio da Meta,30/09/2026 16:44,12/10/2026 16:44,,Analista,
+Lote Teste 31,lote31@exemplo.com.br,+55 35 98880-0031,,Anúncio da Meta,18/09/2026 16:44,12/10/2026 16:44,,Analista,
+Lote Teste 08,lote8@exemplo.com.br,+55 35 98880-0008,,Manual,11/10/2026 16:44,11/10/2026 16:44,Consultas > Novo contato,Diretora,Acme 8
+Lote Teste 20,lote20@exemplo.com.br,+55 35 98880-0020,,Manual,29/09/2026 16:44,11/10/2026 16:44,,Diretora,Acme 20
+Lote Teste 32,lote32@exemplo.com.br,+55 35 98880-0032,,Manual,17/09/2026 16:44,11/10/2026 16:44,,Diretora,Acme 32
+Lote Teste 09,lote9@exemplo.com.br,+55 35 98880-0009,vip,WhatsApp,10/10/2026 16:44,10/10/2026 16:44,Consultas > Novo contato,Analista,
+Lote Teste 21,lote21@exemplo.com.br,+55 35 98880-0021,vip,WhatsApp,28/09/2026 16:44,10/10/2026 16:44,,Analista,
+Lote Teste 33,lote33@exemplo.com.br,+55 35 98880-0033,vip,WhatsApp,16/09/2026 16:44,10/10/2026 16:44,,Analista,
+Lote Teste 10,lote10@exemplo.com.br,+55 35 98880-0010,,Site (landing page),09/10/2026 16:44,09/10/2026 16:44,Consultas > Novo contato,Diretora,Acme 10
+Lote Teste 22,lote22@exemplo.com.br,+55 35 98880-0022,,Site (landing page),27/09/2026 16:44,09/10/2026 16:44,,Diretora,Acme 22
+Lote Teste 34,lote34@exemplo.com.br,+55 35 98880-0034,,Site (landing page),15/09/2026 16:44,09/10/2026 16:44,,Diretora,Acme 34
+Lote Teste 11,lote11@exemplo.com.br,+55 35 98880-0011,,Anúncio da Meta,08/10/2026 16:44,08/10/2026 16:44,Consultas > Novo contato,Analista,
+Lote Teste 23,lote23@exemplo.com.br,+55 35 98880-0023,,Anúncio da Meta,26/09/2026 16:44,08/10/2026 16:44,,Analista,
+Lote Teste 35,lote35@exemplo.com.br,+55 35 98880-0035,,Anúncio da Meta,14/09/2026 16:44,08/10/2026 16:44,,Analista,
+Maria Souza (fictícia),maria.fiction@exemplo.test,,,Manual,19/10/2026 13:19,10/09/2026 15:00,FUTURO 2026 > Concluído; FUTURO 2027 > Inscrito,,
+Marina Souza Exemplo,marina.souza@exemplo.com.br,+55 11 90000-0010,consulta,Manual,18/10/2026 14:12,,Consultas > Novo contato,,
+Rafael Mendes Exemplo,,+55 11 90000-0017,consulta,Manual,18/10/2026 14:12,,Consultas > Fechado,,
+Paulo Henrique Exemplo,paulo.henrique@exemplo.com.br,+55 11 90000-0011,retorno,Manual,18/10/2026 14:12,,Consultas > Em conversa,,
+Luciana Barros Exemplo,luciana.barros@exemplo.com.br,+55 11 90000-0018,retorno,Manual,18/10/2026 14:12,,Consultas > Fechado,,
+Rita Alves (fictícia),,,,Manual,19/10/2026 13:34,,FUTURO 2027 > Inscrito,,
+Caio Prado (fictício),,,,Manual,19/10/2026 13:34,,FUTURO 2027 > Em contato,,
+Fernanda Lima Exemplo,fernanda.lima@exemplo.com.br,+55 11 90000-0012,consulta; indicação,Manual,18/10/2026 14:12,,Consultas > Novo contato,,
+Thiago Ramos Exemplo,thiago.ramos@exemplo.com.br,+55 11 90000-0019,consulta,Manual,18/10/2026 14:12,,Consultas > Perdido,,
+Ricardo Alves Exemplo,,+55 11 90000-0013,convênio,Manual,18/10/2026 14:12,,Consultas > Consulta marcada,,
+Beatriz Nunes Exemplo,beatriz.nunes@exemplo.com.br,+55 11 90000-0020,indicação; consulta,Manual,18/10/2026 14:12,,,,
+Juliana Prado Exemplo,juliana.prado@exemplo.com.br,+55 11 90000-0014,consulta,Manual,18/10/2026 14:12,,Consultas > Em conversa,,
+André Castro Exemplo,andre.castro@exemplo.com.br,+55 11 90000-0021,,Manual,18/10/2026 14:12,,,,
+Carlos Eduardo Exemplo,carlos.eduardo@exemplo.com.br,+55 11 90000-0015,retorno; convênio,Manual,18/10/2026 14:12,,Consultas > Compareceu,,
+Camila Rocha Exemplo,camila.rocha@exemplo.com.br,+55 11 90000-0022,convênio,Manual,18/10/2026 14:12,,,,
+Patrícia Gomes Exemplo,patricia.gomes@exemplo.com.br,+55 11 90000-0016,indicação,Manual,18/10/2026 14:12,,Consultas > Consulta marcada,,
+Diego Martins Exemplo,,+55 11 90000-0023,,Manual,18/10/2026 14:12,,,,

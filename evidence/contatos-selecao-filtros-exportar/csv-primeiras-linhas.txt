@@ -1,0 +1,6 @@
+﻿Nome,E-mail,Telefone,Tags,Origem,Entrou no CRM,Última atividade,Funis e etapas,Cargo,Empresa
+Lote Teste 12,lote12@exemplo.com.br,+55 35 98880-0012,vip,Manual,07/10/2026 16:44,19/10/2026 16:44,Consultas > Novo contato,Diretora,Acme 12
+Lote Teste 24,lote24@exemplo.com.br,+55 35 98880-0024,vip,Manual,25/09/2026 16:44,19/10/2026 16:44,,Diretora,Acme 24
+Lote Teste 36,lote36@exemplo.com.br,+55 35 98880-0036,vip,Manual,13/09/2026 16:44,19/10/2026 16:44,,Diretora,Acme 36
+Paulo Lima (fictício),,,,Manual,19/10/2026 13:34,19/10/2026 13:39,FUTURO 2027 > Em contato,,
+Lote Teste 01,lote1@exemplo.com.br,+55 35 98880-0001,,WhatsApp,18/10/2026 16:44,18/10/2026 16:44,Consultas > Novo contato,Analista,

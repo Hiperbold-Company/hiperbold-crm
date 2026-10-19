@@ -174,6 +174,72 @@ describe("GET /api/v1/contacts — Bearer (integrações externas)", () => {
     });
   });
 
+  describe("filtros por NEGÓCIO (funil, etapa, campo do negócio) pelo token — visibilidade D-148", () => {
+    const FUNIL = "f1111111-1111-4111-8111-111111111111";
+    const urlDoFunil = `http://localhost/api/v1/contacts?funil=${FUNIL}`;
+    const bearer = { authorization: "Bearer dsk_abc_def" };
+
+    /** O cliente admin do token, que responde só o que `exigirVisibilidadeDoToken` lê da organização. */
+    function adminComModo(modo: string): void {
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: () => ({
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: { settings: { visibility_mode: modo } }, error: null }) }),
+          }),
+        }),
+      } as never);
+    }
+
+    it("empresa em 'só os meus' + chave abaixo de gerente: funil é 403 e o handler não roda", async () => {
+      tokenOk({ role: "agent" });
+      adminComModo("own");
+      const { GET } = await import("./route");
+      const res = await GET(req(urlDoFunil, bearer));
+      expect(res.status).toBe(403);
+      expect(listContactsHandler).not.toHaveBeenCalled();
+    });
+
+    it("etapa e campo do negócio caem na mesma regra", async () => {
+      tokenOk({ role: "agent" });
+      adminComModo("own");
+      const { GET } = await import("./route");
+      for (const q of [
+        "etapa=e1111111-1111-4111-8111-111111111111",
+        "campo_escopo=negocio&campo=utm_source&campo_valor=google",
+      ]) {
+        expect((await GET(req(`http://localhost/api/v1/contacts?${q}`, bearer))).status, q).toBe(403);
+      }
+      expect(listContactsHandler).not.toHaveBeenCalled();
+    });
+
+    it("campo do CONTATO e lista sem filtro de negócio continuam liberados", async () => {
+      tokenOk({ role: "agent" });
+      adminComModo("own");
+      const { GET } = await import("./route");
+      expect((await GET(req("http://localhost/api/v1/contacts?campo=cargo&campo_valor=x", bearer))).status).toBe(200);
+      expect((await GET(req("http://localhost/api/v1/contacts", bearer))).status).toBe(200);
+    });
+
+    it("chave de gerente ou modo que não é 'own': o filtro por negócio passa", async () => {
+      tokenOk({ role: "manager" });
+      adminComModo("own");
+      const { GET } = await import("./route");
+      expect((await GET(req(urlDoFunil, bearer))).status).toBe(200);
+
+      vi.mocked(listContactsHandler).mockClear();
+      tokenOk({ role: "agent" });
+      adminComModo("own_and_unassigned");
+      expect((await GET(req(urlDoFunil, bearer))).status).toBe(200);
+    });
+
+    it("sessão de pessoa não passa por esta regra (a RLS cuida)", async () => {
+      sessaoOk();
+      const { GET } = await import("./route");
+      expect((await GET(req(urlDoFunil))).status).toBe(200);
+      expect(createAdminClient).not.toHaveBeenCalled();
+    });
+  });
+
   it("extractBearer não confunde header ausente com token vazio", () => {
     expect(extractBearer(null)).toBeNull();
     expect(extractBearer("")).toBeNull();
