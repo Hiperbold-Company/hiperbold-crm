@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useT } from "@/hooks/i18n/useT";
 import { useBoard } from "@/hooks/kanban/useBoard";
+import { useActiveOrg } from "@/hooks/auth/AuthProvider";
 
 function formatError(err: unknown, t: (texto: string) => string): string {
   if (err instanceof Error) return err.message;
@@ -70,7 +71,12 @@ export function PipelinePageClient({
     const settings = data?.pipeline.settings;
     return (motivo: string) => categoriaDoMotivo(motivo, settings);
   }, [data?.pipeline.settings]);
-  const filteredLeads = data ? applyFilters(data.leads, filters, { categoriaDo }) : [];
+  // O fuso é o DA ORGANIZAÇÃO: "Hoje" e "Este mês" dos filtros de data contam nele,
+  // não no do navegador de quem olha.
+  const fusoDaOrganizacao = useActiveOrg()?.timezone ?? null;
+  const filteredLeads = data
+    ? applyFilters(data.leads, filters, { categoriaDo, timezone: fusoDaOrganizacao })
+    : [];
   // NÃO é a conta do FilterBar: o seletor de filtro lista as três caixas
   // (`marcadoresDoCard`: negócio, contato e conversa), e esta lista, a da tag em
   // lote, só `lead.tags` — é lá que a ação em lote grava (#852). O `useMemo` é o

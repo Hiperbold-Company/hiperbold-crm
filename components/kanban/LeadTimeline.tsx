@@ -106,7 +106,10 @@ function Linha({
             // O que chegou AGORA fica marcado: sem isto ele entraria na lista
             // idêntico ao resto e a chegada seria indistinguível do histórico.
             <span className="ml-1.5 text-[10px] uppercase tracking-wide text-accent">
-              {t("agora")}
+              {/* "agora" é de quem acabou de acontecer. Evento manual RETROATIVO que
+                  acabou de ser registrado chegou agora, mas aconteceu antes: "agora" ao
+                  lado de uma data de semanas atrás confunde, então vira "novo". */}
+              {manual && foiRetroativo(item.performed_at, item.created_at) ? t("novo") : t("agora")}
             </span>
           )}
         </p>

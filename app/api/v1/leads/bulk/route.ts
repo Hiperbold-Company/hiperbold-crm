@@ -20,6 +20,11 @@ import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recu
 import { requireRole } from "@/lib/auth/require-role";
 import { RECUSA_DE_TROCA_DE_FUNIL } from "@/lib/leads/clonar-para-funil";
 import { resolveOwnerPatch } from "@/lib/leads/owner-patch";
+import {
+  assumirAoMover,
+  deveAssumirAoMover,
+  lerDonoAoMoverLigado,
+} from "@/lib/leads/assumir-ao-mover";
 import { emitLeadActivity, stageChangeReason } from "@/lib/leads/activity-emitter";
 import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import { bulkLeadActionSchema, validateRequest } from "@/lib/schemas";
@@ -141,7 +146,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const { data: scoped } = await supabase
     .from("crm_leads")
     .select(
-      "id, organization_id, tags, stage_id, pipeline_id, contact_id, lost_reason, custom_fields, won_reason, status",
+      "id, organization_id, tags, stage_id, pipeline_id, contact_id, lost_reason, custom_fields, won_reason, status, owner_user_id, owner_agent_id",
     )
     .eq("organization_id", organizationId)
     .in("id", input.lead_ids);
@@ -458,6 +463,42 @@ export async function POST(req: NextRequest): Promise<Response> {
           }
         }),
       );
+      // Quem move leads sem responsável assume (opt-in da organização). O lote é
+      // sempre de uma PESSOA com sessão; só entram os que MUDARAM de etapa, e o
+      // UPDATE condicional não toma negócio que já tem dono.
+      if (movidos.length > 0 && (await lerDonoAoMoverLigado(supabase, organizationId))) {
+        const semDono = new Set(
+          (
+            (visible) as Array<{
+              id: string;
+              owner_user_id?: string | null;
+              owner_agent_id?: string | null;
+            }>
+          )
+            .filter((l) =>
+              deveAssumirAoMover({
+                ligado: true,
+                actor: { type: "user", id: user.id },
+                mudouDeEtapa: true,
+                dono: l,
+              }),
+            )
+            .map((l) => l.id),
+        );
+        await assumirAoMover(supabase, {
+          organizationId,
+          leadIds: movidos.map((m) => m.lead_id).filter((id) => semDono.has(id)),
+          userId: user.id,
+          requestId,
+          origem: "leads/bulk",
+          contatos: new Map(
+            ((visible) as Array<{ id: string; contact_id?: string | null }>).map((l) => [
+              l.id,
+              l.contact_id ?? null,
+            ]),
+          ),
+        });
+      }
       await Promise.all(
         movidos.map((row) =>
           supabase

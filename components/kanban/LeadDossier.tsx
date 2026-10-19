@@ -16,6 +16,7 @@ import { LeadTimeline } from "./LeadTimeline";
 import { RegistrarEvento } from "./RegistrarEvento";
 import { OwnerBadge } from "./OwnerBadge";
 import { resolveLeadOwner } from "@/lib/kanban/owner";
+import { rotuloDeIdade, ultimaMovimentacao } from "@/lib/kanban/datas-do-lead";
 import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
 import type { CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
 
@@ -118,6 +119,19 @@ export function LeadDossier({
             {t("Editar campos")}
           </button>
         </div>
+
+        {/* As duas datas do negócio, perto da etapa: quando nasceu e quando
+            entrou na etapa de agora (se faltar o carimbo, vale a criação). */}
+        <p className="pt-2 text-[11px] text-text-muted" data-datas-do-negocio>
+          {t("Criado em")} {new Date(lead.created_at).toLocaleString(tagDoIdioma, { dateStyle: "short", timeStyle: "short" })}
+          {" · "}
+          {t("Última movimentação")}{" "}
+          {new Date(ultimaMovimentacao(lead)).toLocaleString(tagDoIdioma, { dateStyle: "short", timeStyle: "short" })}
+          {(() => {
+            const rel = rotuloDeIdade(ultimaMovimentacao(lead), new Date(), null, t);
+            return rel ? ` (${rel})` : "";
+          })()}
+        </p>
 
         {/* O score NÃO aparece na timeline: recálculo é telemetria e não emite
             atividade (silêncio para telemetria, pulso para mudança de estado).

@@ -156,6 +156,29 @@ describe("Carregar mais e registro retroativo na linha", () => {
     expect(container.querySelector("[data-registrado-em]")).toHaveTextContent("registrado em");
   });
 
+  it("evento retroativo recém-chegado leva 'novo', não 'agora' (a data dele é de semanas atrás)", () => {
+    render(
+      <LeadTimeline
+        {...base}
+        chegouAoVivo={new Set(["m"])}
+        itens={[manual({ performed_at: "2026-09-10T15:00:00Z", created_at: "2026-10-19T12:00:00Z" })]}
+      />,
+    );
+    expect(screen.getByText("novo")).toBeInTheDocument();
+    expect(screen.queryByText("agora")).not.toBeInTheDocument();
+  });
+
+  it("evento registrado na hora que chega ao vivo continua com 'agora'", () => {
+    render(
+      <LeadTimeline
+        {...base}
+        chegouAoVivo={new Set(["m"])}
+        itens={[manual({ performed_at: "2026-10-19T11:50:00Z", created_at: "2026-10-19T12:00:00Z" })]}
+      />,
+    );
+    expect(screen.getByText("agora")).toBeInTheDocument();
+  });
+
   it("evento registrado na hora NÃO repete a data", () => {
     const { container } = render(
       <LeadTimeline

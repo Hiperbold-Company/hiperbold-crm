@@ -14240,6 +14240,17 @@ export const DICIONARIO: Traducoes = {
   "Evento registrado": { es: "Evento registrado" },
   "registro manual": { es: "registro manual" },
   "registrado em": { es: "registrado el" },
+  // ─── Datas do negócio, filtros de data e "quem move assume" ───
+  "Última movimentação": { es: "Última movimiento" },
+  "Qualquer data": { es: "Cualquier fecha" },
+  "Este mês": { es: "Este mes" },
+  "Período personalizado": { es: "Período personalizado" },
+  "movido": { es: "movido" },
+  "novo": { es: "nuevo" },
+  "Negócio sem responsável": { es: "Negocio sin responsable" },
+  "Vale quando uma pessoa da equipe muda o negócio de etapa.": { es: "Vale cuando una persona del equipo cambia el negocio de etapa." },
+  "Quem move um lead sem responsável passa a ser o responsável": { es: "Quien mueve un lead sin responsable pasa a ser el responsable" },
+  "Desligado, mover o negócio não muda quem é o responsável. Ligado, o primeiro atendente, gerente ou administrador que mudar a etapa de um negócio sem responsável assume esse negócio, e isso aparece na linha do tempo. Movimentos feitos pelo agente de IA, por automações ou por integrações nunca atribuem.": { es: "Desactivado, mover el negocio no cambia quién es el responsable. Activado, el primer agente, gerente o administrador que cambie la etapa de un negocio sin responsable asume ese negocio, y eso aparece en la línea de tiempo. Los movimientos hechos por el agente de IA, por automatizaciones o por integraciones nunca asignan." },
 };
 
 /**

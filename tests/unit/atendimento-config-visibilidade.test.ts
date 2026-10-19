@@ -97,6 +97,7 @@ describe("config de atendimento — routing + visibilidade na mesma porta", () =
     const {
       handoff_return_after_minutes: _padrao,
       conversation_stays_with_attendant: _fica,
+      assign_owner_on_move: _donoAoMover,
       ...semPrazo
     } = routingConfigSchema.parse(antigo);
     expect(atendimentoConfigPatchSchema.parse(antigo)).toEqual(semPrazo);

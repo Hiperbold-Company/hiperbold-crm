@@ -29,6 +29,7 @@ const inicial: AtendimentoConfig = {
   visibility_mode: "all",
   handoff_return_after_minutes: null,
   conversation_stays_with_attendant: false,
+  assign_owner_on_move: false,
 };
 
 function corpoDoPatch(): Record<string, unknown> {
@@ -96,5 +97,32 @@ describe("Distribuição de atendimento — a conversa fica com quem atendeu", (
   it("empresa com o ajuste ligado vê a caixa marcada", () => {
     render(<AtendimentoForm initial={{ ...inicial, conversation_stays_with_attendant: true }} />);
     expect(screen.getByTestId("fica-com-quem-atendeu")).toBeChecked();
+  });
+});
+
+describe("Distribuição de atendimento — quem move um lead sem responsável assume", () => {
+  it("desligado por padrão, com o texto simples, e salvar outra coisa manda false", async () => {
+    render(<AtendimentoForm initial={inicial} />);
+    expect(screen.getByTestId("dono-ao-mover-interruptor")).not.toBeChecked();
+    expect(
+      screen.getByText("Quem move um lead sem responsável passa a ser o responsável"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("opcao-modo-round_robin"));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    expect(corpoDoPatch()).toMatchObject({ assign_owner_on_move: false });
+  });
+
+  it("ligar manda true", async () => {
+    render(<AtendimentoForm initial={inicial} />);
+    fireEvent.click(screen.getByTestId("dono-ao-mover-interruptor"));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    expect(corpoDoPatch()).toMatchObject({ assign_owner_on_move: true });
+  });
+
+  it("empresa com a regra ligada vê a caixa marcada", () => {
+    render(<AtendimentoForm initial={{ ...inicial, assign_owner_on_move: true }} />);
+    expect(screen.getByTestId("dono-ao-mover-interruptor")).toBeChecked();
   });
 });

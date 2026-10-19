@@ -29,6 +29,8 @@ export interface AtendimentoConfig {
   handoff_return_after_minutes: number | null;
   /** "A conversa fica com quem atendeu" — desligado é o padrão do produto. */
   conversation_stays_with_attendant: boolean;
+  /** "Quem move um lead sem responsável passa a ser o responsável" — desligado é o padrão. */
+  assign_owner_on_move: boolean;
 }
 
 const MODO_COPY: Record<RoutingMode, { titulo: string; corpo: string }> = {
@@ -320,6 +322,35 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
             <span className="block text-xs text-muted-foreground">
               {t(
                 "Responder pelo Inbox numa conversa sem dono passa a assumi-la, e a IA fica calada até alguém devolver. Quando o cliente escreve numa conversa encerrada, ela volta direto para o último atendente, sem passar pela distribuição, se ele ainda faz parte da equipe.",
+              )}
+            </span>
+          </span>
+        </label>
+      </Card>
+
+      <Card className="space-y-4 p-4" data-testid="dono-ao-mover">
+        <div>
+          <h2 className="text-sm font-semibold">{t("Negócio sem responsável")}</h2>
+          <p className="text-xs text-muted-foreground">
+            {t("Vale quando uma pessoa da equipe muda o negócio de etapa.")}
+          </p>
+        </div>
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            data-testid="dono-ao-mover-interruptor"
+            checked={form.assign_owner_on_move}
+            disabled={isPending}
+            onChange={(e) => setForm((f) => ({ ...f, assign_owner_on_move: e.target.checked }))}
+            className="mt-1 h-4 w-4 shrink-0 accent-primary"
+          />
+          <span className="space-y-1">
+            <span className="block text-sm font-medium">
+              {t("Quem move um lead sem responsável passa a ser o responsável")}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {t(
+                "Desligado, mover o negócio não muda quem é o responsável. Ligado, o primeiro atendente, gerente ou administrador que mudar a etapa de um negócio sem responsável assume esse negócio, e isso aparece na linha do tempo. Movimentos feitos pelo agente de IA, por automações ou por integrações nunca atribuem.",
               )}
             </span>
           </span>

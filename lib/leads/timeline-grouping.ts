@@ -27,6 +27,10 @@ import type { TimelineItemView } from "@/lib/types/contacts";
 const NUNCA_COLAPSA = new Set([
   // O que a equipe ESCREVEU à mão (ligação, reunião, nota): o texto é o conteúdo.
   "note",
+  // Alguém ASSUMIU o negócio ao movê-lo: é troca de responsável, e junto do
+  // `stage_changed` da mesma operação ele cairia num bloco "2 ações" e esconderia
+  // justamente quem passou a ser o dono.
+  "lead_owner_assumed",
   "next_action_approved",
   "next_action_dismissed",
   // A reativação segue a mesma regra: são as linhas que registram alguém

@@ -40,8 +40,18 @@ function bancoFalso(
   stageExtra: Record<string, unknown> = {},
   /** `status` do lead (issue #1538); o padrão é aberto. */
   statusDoLead = "open",
+  /** A regra "quem move assume" e o responsável que o negócio já tem. */
+  regra: { ligada?: boolean; donoHumano?: string | null; donoAgente?: string | null } = {},
 ) {
-  const banco = { updatedAt: CARREGADO, stageId: STAGE_A, ultimoPatch: null as Record<string, unknown> | null };
+  const banco = {
+    updatedAt: CARREGADO,
+    stageId: STAGE_A,
+    ultimoPatch: null as Record<string, unknown> | null,
+    /** O que o UPDATE condicional de "assumir ao mover" gravou (null = não escreveu). */
+    donoAssumido: null as Record<string, unknown> | null,
+    donoHumano: regra.donoHumano ?? null,
+    donoAgente: regra.donoAgente ?? null,
+  };
   vi.mocked(emitLeadActivity).mockImplementation(async () => {
     banco.updatedAt = DEPOIS_DA_ATIVIDADE;
     return { ok: true } as never;
@@ -53,6 +63,8 @@ function bancoFalso(
     pipeline_id: PIPELINE_ID,
     stage_id: banco.stageId,
     contact_id: null,
+    owner_user_id: banco.donoHumano,
+    owner_agent_id: banco.donoAgente,
     status: statusDoLead,
     updated_at: banco.updatedAt,
     custom_fields: {} as Record<string, unknown>,
@@ -65,6 +77,17 @@ function bancoFalso(
         select: () => chain,
         eq: () => chain,
         maybeSingle: async () => ({ data: { settings: settingsDoFunil }, error: null }),
+      };
+      return chain;
+    }
+    if (tabela === "organizations") {
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        maybeSingle: async () => ({
+          data: { settings: { routing: { assign_owner_on_move: regra.ligada === true } } },
+          error: null,
+        }),
       };
       return chain;
     }
@@ -95,15 +118,28 @@ function bancoFalso(
           const leitura = { eq: () => leitura, maybeSingle: async () => ({ data: lead(), error: null }) };
           return leitura;
         },
-        update: (valores: { stage_id: string } & Record<string, unknown>) => {
+        update: (valores: { stage_id?: string } & Record<string, unknown>) => {
           const escrita = {
             eq: () => escrita,
+            in: () => escrita,
+            // Só o UPDATE condicional de dono usa `is`: ele só atinge quem ainda
+            // não tem responsável, como o `where owner_* is null` do banco.
+            is: () => escrita,
             select: () => escrita,
             maybeSingle: async () => {
-              banco.stageId = valores.stage_id;
+              banco.stageId = valores.stage_id as string;
               banco.updatedAt = DEPOIS_DO_MOVE;
               banco.ultimoPatch = valores;
               return { data: { id: LEAD_ID }, error: null };
+            },
+            then: (resolve: (v: unknown) => unknown) => {
+              const semDono = !banco.donoHumano && !banco.donoAgente;
+              if (valores.owner_kind !== undefined && semDono) {
+                banco.donoAssumido = valores;
+                banco.donoHumano = valores.owner_user_id as string;
+                return resolve({ data: [{ id: LEAD_ID }], error: null });
+              }
+              return resolve({ data: [], error: null });
             },
           };
           return escrita;
@@ -376,3 +412,56 @@ vi.mock("@/lib/impersonate/support", async (importOriginal) => ({
   requireSupportWrite: vi.fn(async () => null),
   authenticatedSessionId: vi.fn(async () => "f2200000-0000-4000-8000-000000000099"),
 }));
+
+describe("POST /api/v1/leads/[id]/move — quem move um lead sem responsável assume", () => {
+  async function move(regra: Parameters<typeof bancoFalso>[3], stageId = STAGE_B) {
+    const db = bancoFalso(null, {}, "open", regra);
+    vi.mocked(createClient).mockResolvedValue(db as never);
+    const { POST } = await import("./route");
+    const res = await POST(
+      request({ stage_id: stageId, position_in_stage: 1000, expected_updated_at: CARREGADO }),
+      { params: Promise.resolve({ id: LEAD_ID }) },
+    );
+    return { res, banco: db.banco };
+  }
+  const atividadesDeDono = () =>
+    vi.mocked(emitLeadActivity).mock.calls.filter((c) => c[1].type === "lead_owner_assumed");
+
+  it("ligada + sem responsável + etapa mudou: a pessoa vira dona, com assigned_at e o evento na timeline", async () => {
+    const { res, banco } = await move({ ligada: true });
+    expect(res.status).toBe(200);
+    expect(banco.donoAssumido).toMatchObject({
+      owner_user_id: USER_ID,
+      owner_agent_id: null,
+      owner_kind: "user",
+    });
+    expect(typeof banco.donoAssumido?.assigned_at).toBe("string");
+    expect(atividadesDeDono()).toHaveLength(1);
+    expect(atividadesDeDono()[0]![1]).toMatchObject({
+      reason: "Assumiu ao mover o negócio",
+      actor: { type: "user", id: USER_ID },
+    });
+  });
+
+  it("desligada (o padrão): nada muda", async () => {
+    const { banco } = await move({ ligada: false });
+    expect(banco.donoAssumido).toBeNull();
+    expect(atividadesDeDono()).toHaveLength(0);
+  });
+
+  it("negócio que já tem responsável humano: não é tomado", async () => {
+    const { banco } = await move({ ligada: true, donoHumano: "99999999-9999-4999-8999-999999999999" });
+    expect(banco.donoAssumido).toBeNull();
+    expect(atividadesDeDono()).toHaveLength(0);
+  });
+
+  it("negócio de um AGENTE DE IA não conta como sem responsável", async () => {
+    const { banco } = await move({ ligada: true, donoAgente: "88888888-8888-4888-8888-888888888888" });
+    expect(banco.donoAssumido).toBeNull();
+  });
+
+  it("reordenar dentro da mesma etapa não é mover: não assume", async () => {
+    const { banco } = await move({ ligada: true }, STAGE_A);
+    expect(banco.donoAssumido).toBeNull();
+  });
+});

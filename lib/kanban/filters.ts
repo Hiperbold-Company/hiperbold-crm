@@ -1,5 +1,12 @@
 import type { Lead } from "@/lib/types/leads";
 import { cardTemMarcador } from "@/lib/kanban/marcadores-do-card";
+import {
+  dentroDoFiltroDeData,
+  filtroDeDataFromParams,
+  filtroDeDataToParams,
+  ultimaMovimentacao,
+  type FiltroDeData,
+} from "@/lib/kanban/datas-do-lead";
 
 /**
  * Prefixo que marca um dono AGENTE no filtro (0070). O param de URL continua
@@ -30,6 +37,10 @@ export interface LeadFilters {
   lostReason?: string;
   /** A categoria do motivo de perda (issue #1537), resolvida no funil. */
   lostCategory?: string;
+  /** "Criado em" (`crm_leads.created_at`): atalho ou período, no fuso da organização. */
+  createdAt?: FiltroDeData;
+  /** "Última movimentação" (`stage_changed_at`, ou `created_at` se nulo). */
+  movedAt?: FiltroDeData;
 }
 
 /**
@@ -54,6 +65,8 @@ export function filtersFromParams(
     overdueOnly: sp.get("overdue") === "1" || undefined,
     lostReason: sp.get("motivo") ?? undefined,
     lostCategory: sp.get("categoria") ?? undefined,
+    createdAt: filtroDeDataFromParams(sp, "criado"),
+    movedAt: filtroDeDataFromParams(sp, "mov"),
   };
 }
 
@@ -66,6 +79,8 @@ export function filtersToParams(f: LeadFilters): string {
   if (f.overdueOnly) p.set("overdue", "1");
   if (f.lostReason) p.set("motivo", f.lostReason);
   if (f.lostCategory) p.set("categoria", f.lostCategory);
+  filtroDeDataToParams(p, "criado", f.createdAt);
+  filtroDeDataToParams(p, "mov", f.movedAt);
   return p.toString();
 }
 
@@ -77,6 +92,10 @@ export function filtersToParams(f: LeadFilters): string {
  */
 export interface ContextoDosFiltros {
   categoriaDo?: (motivo: string) => string | undefined;
+  /** Fuso IANA DA ORGANIZAÇÃO: é nele que "hoje" e "este mês" são contados. */
+  timezone?: string | null;
+  /** "Agora" injetável, para o teste não depender do relógio. */
+  agora?: Date;
 }
 
 export function applyFilters(
@@ -126,6 +145,9 @@ export function applyFilters(
       return false;
     if (typeof f.valueCentsMax === "number" && (l.value_cents ?? 0) > f.valueCentsMax)
       return false;
+    const agora = contexto?.agora ?? new Date();
+    if (!dentroDoFiltroDeData(l.created_at, f.createdAt, agora, contexto?.timezone)) return false;
+    if (!dentroDoFiltroDeData(ultimaMovimentacao(l), f.movedAt, agora, contexto?.timezone)) return false;
     if (f.overdueOnly) {
       if (l.status !== "open") return false;
       if (!l.expected_close_date || l.expected_close_date >= today) return false;

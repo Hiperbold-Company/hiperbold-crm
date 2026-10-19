@@ -18,6 +18,11 @@ import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recu
 import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { moveLeadSchema, validateRequest } from "@/lib/schemas";
 import { emitLeadActivity, stageChangeReason } from "@/lib/leads/activity-emitter";
+import {
+  assumirAoMover,
+  deveAssumirAoMover,
+  lerDonoAoMoverLigado,
+} from "@/lib/leads/assumir-ao-mover";
 import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import {
   decideMotivoDaPerda,
@@ -322,6 +327,32 @@ export async function POST(
       origem: "leads/[id]/move",
       erro: atividade.error,
       requestId,
+    });
+  }
+
+  // ── QUEM MOVE UM LEAD SEM RESPONSÁVEL ASSUME (opt-in da organização) ─────────
+  //
+  // Só pessoa com sessão (`authz.via === "session"`: chave de integração não é
+  // pessoa), só quando a etapa MUDA e só se o negócio não tem responsável. O
+  // UPDATE condicional dentro de `assumirAoMover` é o que garante que, entre duas
+  // pessoas movendo ao mesmo tempo, só uma assuma. Falha aqui não desfaz o move.
+  if (
+    authz.via === "session" &&
+    !mesmaEtapa &&
+    deveAssumirAoMover({
+      ligado: await lerDonoAoMoverLigado(supabase, orgId),
+      actor: authz.actor,
+      mudouDeEtapa: true,
+      dono: lead as { owner_user_id?: string | null; owner_agent_id?: string | null },
+    })
+  ) {
+    await assumirAoMover(supabase, {
+      organizationId: orgId,
+      leadIds: [leadId],
+      userId: authz.actor.id,
+      requestId,
+      origem: "leads/[id]/move",
+      contatos: new Map([[leadId, (lead as { contact_id?: string | null }).contact_id ?? null]]),
     });
   }
 

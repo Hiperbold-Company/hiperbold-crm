@@ -18,6 +18,8 @@ import { useAssignableAgents } from "@/hooks/kanban/useAssignableAgents";
 import type { Lead, OwnerKind } from "@/lib/types/leads";
 import { marcadoresDoCard } from "@/lib/kanban/marcadores-do-card";
 import { OwnerBadge } from "./OwnerBadge";
+import { FiltroDeDataPopover } from "./FiltroDeDataPopover";
+import { filtroDeDataAtivo } from "@/lib/kanban/datas-do-lead";
 import {
   agentOwnerFilter,
   parseAgentOwnerFilter,
@@ -307,6 +309,19 @@ export function FilterBar({ filters, onChange, leads, settings }: FilterBarProps
         </DropdownMenuContent>
       </DropdownMenu>
 
+      <FiltroDeDataPopover
+        id="criado"
+        titulo={t("Criado em")}
+        valor={filters.createdAt}
+        onChange={(createdAt) => onChange({ ...filters, createdAt })}
+      />
+      <FiltroDeDataPopover
+        id="movimentacao"
+        titulo={t("Última movimentação")}
+        valor={filters.movedAt}
+        onChange={(movedAt) => onChange({ ...filters, movedAt })}
+      />
+
       <label
         className={cn(
           "flex cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm",
@@ -327,6 +342,8 @@ export function FilterBar({ filters, onChange, leads, settings }: FilterBarProps
         filters.overdueOnly ||
         filters.lostReason ||
         filters.lostCategory ||
+        filtroDeDataAtivo(filters.createdAt) ||
+        filtroDeDataAtivo(filters.movedAt) ||
         (filters.status && filters.status !== "all")) && (
         <Button
           variant="ghost"

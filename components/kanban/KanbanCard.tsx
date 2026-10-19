@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
 import type { Lead } from "@/lib/types/leads";
 import { resolveCardState, stageAgeLabel, type CardInput } from "@/lib/kanban/card-state";
+import { rotuloDeIdade, ultimaMovimentacao } from "@/lib/kanban/datas-do-lead";
 import { KanbanCardActions } from "./KanbanCardActions";
 import { NextActionSlot } from "./NextActionSlot";
 import { ReactivationSlot } from "./ReactivationSlot";
@@ -81,6 +82,8 @@ export function KanbanCard({
   const value = formatValor(card.valueCents, card.currency);
   const state = resolveCardState(card, t);
   const age = stageAgeLabel(card.hoursInStage, t);
+  // "movido há 3 dias": a última movimentação (entrada na etapa; se faltar, a criação).
+  const movido = rotuloDeIdade(ultimaMovimentacao(lead), new Date(), null, t);
 
   // Clique ABRE o dossiê; ctrl/cmd+clique SELECIONA; shift+clique estende até a
   // âncora. "Clicar abre" é a convenção mais forte, e seleção múltipla é recurso
@@ -308,6 +311,17 @@ export function KanbanCard({
                 : `${t("em")} ${card.stageName}`}
             </span>
           </div>
+          {movido && (
+            // Discreto de propósito: uma linha miúda, sem cor, que não disputa
+            // atenção com o estado do card. A data exata está no `title`.
+            <p
+              className="truncate text-[10px] text-text-muted"
+              data-movido-ha
+              title={`${t("Criado em")} ${new Date(lead.created_at).toLocaleDateString()} · ${t("Última movimentação")} ${new Date(ultimaMovimentacao(lead)).toLocaleDateString()}`}
+            >
+              {t("movido")} {movido}
+            </p>
+          )}
         </div>
       )}
     </Draggable>

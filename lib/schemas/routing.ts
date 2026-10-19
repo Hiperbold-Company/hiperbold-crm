@@ -55,6 +55,15 @@ export const routingConfigSchema = z.object({
    * No TypeScript, quem lê é `conversaFicaComQuemAtendeu()`, com a mesma régua.
    */
   conversation_stays_with_attendant: z.boolean().default(false),
+  /**
+   * "Quem move um lead sem responsável passa a ser o responsável" (decisão do dono
+   * do produto, out/2026). Desligado é o padrão: organização existente não muda.
+   * Ligado, uma PESSOA (sessão, em qualquer papel) que muda a etapa de um negócio
+   * sem responsável humano assume o negócio na mesma operação. Agente de IA,
+   * automação, webhook, cron e chave de integração nunca atribuem. A decisão é
+   * pura e vive em `lib/leads/assumir-ao-mover.ts`; este é só o interruptor.
+   */
+  assign_owner_on_move: z.boolean().default(false),
 });
 export type RoutingConfig = z.infer<typeof routingConfigSchema>;
 
@@ -70,6 +79,14 @@ export function conversaFicaComQuemAtendeu(settings: unknown): boolean {
   const routing = (settings as Record<string, unknown>).routing;
   if (!routing || typeof routing !== "object") return false;
   return (routing as Record<string, unknown>).conversation_stays_with_attendant === true;
+}
+
+/** Lê o interruptor "quem move assume" sem nunca lançar: só o booleano `true` liga. */
+export function donoAoMoverLigado(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object") return false;
+  const routing = (settings as Record<string, unknown>).routing;
+  if (!routing || typeof routing !== "object") return false;
+  return (routing as Record<string, unknown>).assign_owner_on_move === true;
 }
 
 /**
@@ -111,6 +128,8 @@ export const atendimentoConfigPatchSchema = routingConfigSchema.extend({
     .optional(),
   /** Opcional pela mesma razão: cliente antigo não desliga o ajuste por omissão. */
   conversation_stays_with_attendant: z.boolean().optional(),
+  /** Opcional pela mesma razão: cliente antigo não desliga o ajuste por omissão. */
+  assign_owner_on_move: z.boolean().optional(),
 });
 export type AtendimentoConfigPatch = z.infer<typeof atendimentoConfigPatchSchema>;
 
@@ -133,6 +152,7 @@ export function mesclarSettingsDeAtendimento(
     visibility_mode,
     handoff_return_after_minutes,
     conversation_stays_with_attendant,
+    assign_owner_on_move,
     ...routingInput
   } = input;
   const routingAtual = routingConfigSchema
@@ -146,6 +166,7 @@ export function mesclarSettingsDeAtendimento(
         : routingAtual.handoff_return_after_minutes,
     conversation_stays_with_attendant:
       conversation_stays_with_attendant ?? routingAtual.conversation_stays_with_attendant,
+    assign_owner_on_move: assign_owner_on_move ?? routingAtual.assign_owner_on_move,
   };
   const settings: Record<string, unknown> = { ...atual, routing };
   if (visibility_mode !== undefined) settings.visibility_mode = visibility_mode;

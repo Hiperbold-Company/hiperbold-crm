@@ -775,6 +775,9 @@ export const AUDIT_ACTIONS = [
   // O metadata leva o subtipo e o tamanho do texto, nunca o texto: `api_audit_log` é
   // append-only e o que entra ali não sai pela cascata de LGPD.
   "lead.activity_logged",
+  // Uma pessoa mudou a etapa de um negócio sem responsável e passou a ser a responsável
+  // (regra opt-in da organização, `assign_owner_on_move`). Uma linha por negócio assumido.
+  "lead.owner_assumed_on_move",
   /**
    * A equipe perguntou à IA sobre um caso (migration 0281). Uma linha por
    * PERGUNTA, respondida ou não — `respondeu:false` com `error_code` é o que

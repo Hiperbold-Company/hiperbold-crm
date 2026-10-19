@@ -173,7 +173,18 @@ export type ActivityType =
    * quem abre o card no destino precisa ler. O outro lado da troca é a
    * `demand_closed` da origem, com a razão "Levado para o funil X".
    */
-  | "moved_from_pipeline";
+  | "moved_from_pipeline"
+  /**
+   * Uma PESSOA mudou a etapa de um negócio SEM responsável e, com a regra da
+   * organização ligada (Configurações › Distribuição de atendimento), passou a ser
+   * a responsável (`lib/leads/assumir-ao-mover.ts`).
+   *
+   * Tipo próprio e não `conversation_claimed`: aquele rótulo diz "Assumiu a
+   * conversa", e o negócio pode nem ter conversa. Fica FORA da lista positiva de
+   * `fn_update_last_activity_at` de propósito — o `stage_changed` que a mesma
+   * operação grava já quebra o silêncio, e esta linha só diz quem assumiu.
+   */
+  | "lead_owner_assumed";
 
 export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   lead_created: "Entrou pelo WhatsApp",
@@ -275,6 +286,7 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   // ter mudado de contato sem ninguém tê-lo movido.
   contacts_merged: "Contatos duplicados juntados",
   moved_from_pipeline: "Veio de outro funil",
+  lead_owner_assumed: "Assumiu o negócio",
 };
 
 /** Quando o tipo é legado/desconhecido, a linha ainda é honesta — sem jargão. */
