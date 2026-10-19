@@ -13,6 +13,8 @@ import {
   intervaloDoFiltro,
   rotuloDeIdade,
   somaDias,
+  formataDataNoFuso,
+  normalizaPeriodo,
   ultimaMovimentacao,
   type FiltroDeData,
 } from "@/lib/kanban/datas-do-lead";
@@ -160,6 +162,40 @@ describe("filtros de data na URL (como os filtros existentes)", () => {
   });
 });
 
+describe("período invertido e formato por fuso", () => {
+  it("'de' depois de 'até' é normalizado (as pontas trocam), no filtro e no helper", () => {
+    expect(normalizaPeriodo({ de: "2026-10-15", ate: "2026-10-05" })).toEqual({ de: "2026-10-05", ate: "2026-10-15" });
+    expect(intervaloDoFiltro({ de: "2026-10-15", ate: "2026-10-05" }, AGORA, SP)).toEqual({
+      de: "2026-10-05",
+      ate: "2026-10-15",
+    });
+    expect(dentroDoFiltroDeData("2026-10-10T12:00:00Z", { de: "2026-10-15", ate: "2026-10-05" }, AGORA, SP)).toBe(true);
+  });
+
+  it("formataDataNoFuso respeita o fuso e não lança com fuso inválido", () => {
+    expect(formataDataNoFuso("2026-09-02T01:00:00Z", SP, "pt-BR")).toBe("01/09/2026");
+    expect(formataDataNoFuso("2026-09-02T01:00:00Z", "UTC", "pt-BR")).toBe("02/09/2026");
+    expect(formataDataNoFuso("2026-09-02T01:00:00Z", "Nao/Existe", "pt-BR")).toMatch(/\d{2}\/\d{2}\/2026/);
+    expect(formataDataNoFuso("lixo", SP)).toBe("");
+  });
+
+  it("o formatador é reaproveitado: milhares de cards não constroem milhares de Intl", () => {
+    const Original = Intl.DateTimeFormat;
+    let construcoes = 0;
+    (Intl as { DateTimeFormat: unknown }).DateTimeFormat = function (...args: ConstructorParameters<typeof Original>) {
+      construcoes++;
+      return new Original(...args);
+    };
+    try {
+      for (let i = 0; i < 500; i++) diaNoFuso("2026-10-19T12:00:00Z", "Europe/Lisbon");
+      // no máximo uma construção para este fuso (o resto vem do cache)
+      expect(construcoes).toBeLessThanOrEqual(1);
+    } finally {
+      (Intl as { DateTimeFormat: unknown }).DateTimeFormat = Original;
+    }
+  });
+});
+
 describe("rótulo relativo do card", () => {
   const agora = new Date("2026-10-19T15:00:00Z");
   it("conta em dias do fuso", () => {
@@ -222,7 +258,10 @@ describe("FiltroDeDataPopover", () => {
 });
 
 // ── A ficha mostra as duas datas ────────────────────────────────────────────────
-vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({
+  usePermission: () => true,
+  useFusoDaOrganizacao: () => "America/Sao_Paulo",
+}));
 vi.mock("@/hooks/leads/useLeadTimeline", () => ({
   useLeadTimeline: () => ({
     itens: [],
@@ -273,6 +312,12 @@ describe("ficha do negócio: Criado em e Última movimentação", () => {
     expect(linha.textContent).toContain("Última movimentação");
     expect(linha.textContent).toMatch(/01\/09\/2026/);
     expect(linha.textContent).toMatch(/10\/10\/2026/);
+  });
+
+  it("as datas saem no FUSO da organização, não no do navegador: 01h UTC do dia 2 é 22h do dia 1 em São Paulo", () => {
+    ficha({ ...base, created_at: "2026-09-02T01:00:00Z" } as Lead);
+    const linha = document.querySelector("[data-datas-do-negocio]") as HTMLElement;
+    expect(linha.textContent).toMatch(/Criado em 01\/09\/2026, 22:00/);
   });
 
   it("sem carimbo de etapa, a última movimentação é a criação", () => {

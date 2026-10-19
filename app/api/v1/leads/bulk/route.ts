@@ -23,6 +23,7 @@ import { resolveOwnerPatch } from "@/lib/leads/owner-patch";
 import {
   assumirAoMover,
   deveAssumirAoMover,
+  ehMembroDaOrganizacao,
   lerDonoAoMoverLigado,
 } from "@/lib/leads/assumir-ao-mover";
 import { emitLeadActivity, stageChangeReason } from "@/lib/leads/activity-emitter";
@@ -466,7 +467,12 @@ export async function POST(req: NextRequest): Promise<Response> {
       // Quem move leads sem responsável assume (opt-in da organização). O lote é
       // sempre de uma PESSOA com sessão; só entram os que MUDARAM de etapa, e o
       // UPDATE condicional não toma negócio que já tem dono.
-      if (movidos.length > 0 && (await lerDonoAoMoverLigado(supabase, organizationId))) {
+      if (
+        movidos.length > 0 &&
+        (await lerDonoAoMoverLigado(supabase, organizationId)) &&
+        // Pertença REAL: o suporte da plataforma em acompanhamento não é da equipe.
+        (await ehMembroDaOrganizacao(supabase, organizationId, user.id))
+      ) {
         const semDono = new Set(
           (
             (visible) as Array<{
@@ -479,6 +485,7 @@ export async function POST(req: NextRequest): Promise<Response> {
               deveAssumirAoMover({
                 ligado: true,
                 actor: { type: "user", id: user.id },
+                membro: true,
                 mudouDeEtapa: true,
                 dono: l,
               }),

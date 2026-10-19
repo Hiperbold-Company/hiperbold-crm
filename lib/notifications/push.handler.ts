@@ -137,6 +137,41 @@ async function leadBits(organizationId: string, leadId: string): Promise<{
   };
 }
 
+/**
+ * Janela em que uma atividade `lead_owner_assumed` do próprio destinatário vale como
+ * "ele acabou de assumir ao mover". Larga o bastante para a fila de eventos
+ * (`event_log` é drenado depois da requisição) e curta o bastante para não engolir
+ * uma atribuição legítima feita por outra pessoa em seguida.
+ */
+export const JANELA_AUTO_ATRIBUICAO_S = 120;
+
+/**
+ * O próprio destinatário acabou de assumir este negócio ao movê-lo? O push de
+ * "Lead atribuído a você" é para quem recebeu o negócio de OUTRO; quem assumiu ao
+ * mover é o autor, e o aviso seria ruído. Responde pela atividade que a mesma
+ * operação grava (`lead_owner_assumed`), sem mexer no gatilho SQL: o gatilho
+ * `lead.assigned` não sabe quem agiu, e dá-lo a saber custaria uma migration para
+ * um aviso que o consumidor já consegue decidir.
+ */
+async function assumiuAoMoverAgora(
+  organizationId: string,
+  leadId: string,
+  userId: string,
+): Promise<boolean> {
+  const desde = new Date(Date.now() - JANELA_AUTO_ATRIBUICAO_S * 1000).toISOString();
+  const { data, error } = await createAdminClient()
+    .from("crm_lead_activities")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("lead_id", leadId)
+    .eq("type", "lead_owner_assumed")
+    .eq("performed_by_user_id", userId)
+    .gte("created_at", desde)
+    .limit(1);
+  // Falha de leitura NÃO silencia o aviso: perder um aviso devido é pior que um a mais.
+  return !error && (data?.length ?? 0) > 0;
+}
+
 function hrefDoLead(pipelineId: string | null): string {
   return pipelineId ? `/app/pipelines/${pipelineId}` : "/app/kanban";
 }
@@ -196,6 +231,9 @@ export const webPushInboundHandler: EventHandler = {
 
     if (row.event_type === "lead.assigned") {
       const toUserId = typeof row.payload.to_user_id === "string" ? row.payload.to_user_id : lead.ownerUserId;
+      if (toUserId && (await assumiuAoMoverAgora(row.organization_id, leadId, toUserId))) {
+        return { consumer_key: WEB_PUSH_INBOUND_KEY, status: "skipped", detail: "auto_atribuicao" };
+      }
       return enviarParaUsuario(row.organization_id, toUserId, {
         title: "Lead atribuído a você",
         body: truncar(lead.title),

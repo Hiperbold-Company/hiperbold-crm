@@ -40,31 +40,63 @@ export function filtroDeDataAtivo(f: FiltroDeData | undefined): boolean {
   return Boolean(f && (f.predefinido || f.de || f.ate));
 }
 
-/** Fuso válido ou, na falta, o do navegador — `Intl` lança em fuso que não existe. */
-function fusoSeguro(tz: string | null | undefined): string {
-  if (tz) {
-    try {
-      new Intl.DateTimeFormat("en-CA", { timeZone: tz });
-      return tz;
-    } catch {
-      /* cai no do navegador */
-    }
+/** Formatadores por fuso: construir um `Intl.DateTimeFormat` é caro e o filtro roda por card. */
+const FORMATADORES_DE_DIA = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * O formatador de dia (`YYYY-MM-DD`) do fuso, em cache. Fuso inválido ou ausente
+ * cai no do navegador — `Intl` lança em fuso que não existe.
+ */
+function formatadorDeDia(tz: string | null | undefined): Intl.DateTimeFormat {
+  const chave = tz ?? "";
+  const em = FORMATADORES_DE_DIA.get(chave);
+  if (em) return em;
+  const opcoes = { year: "numeric", month: "2-digit", day: "2-digit" } as const;
+  let f: Intl.DateTimeFormat;
+  try {
+    f = new Intl.DateTimeFormat("en-CA", { ...opcoes, ...(tz ? { timeZone: tz } : {}) });
+  } catch {
+    f = new Intl.DateTimeFormat("en-CA", opcoes);
   }
-  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  FORMATADORES_DE_DIA.set(chave, f);
+  return f;
 }
 
 /** O dia (`YYYY-MM-DD`) em que o instante cai NO FUSO dado; `null` se o instante é inválido. */
 export function diaNoFuso(instante: string | Date, tz: string | null | undefined): string | null {
   const d = typeof instante === "string" ? new Date(instante) : instante;
   if (Number.isNaN(d.getTime())) return null;
-  const partes = new Intl.DateTimeFormat("en-CA", {
-    timeZone: fusoSeguro(tz),
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(d);
+  const partes = formatadorDeDia(tz).formatToParts(d);
   const v = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? "";
   return `${v("year")}-${v("month")}-${v("day")}`;
+}
+
+/**
+ * A data para exibir, NO FUSO da organização (o mesmo em que o filtro conta o dia).
+ * Fuso inválido ou ausente cai no do navegador.
+ */
+export function formataDataNoFuso(
+  instante: string | Date,
+  tz: string | null | undefined,
+  idioma: string | undefined = undefined,
+  comHora = false,
+): string {
+  const d = typeof instante === "string" ? new Date(instante) : instante;
+  if (Number.isNaN(d.getTime())) return "";
+  const opcoes: Intl.DateTimeFormatOptions = comHora
+    ? { dateStyle: "short", timeStyle: "short" }
+    : { dateStyle: "short" };
+  try {
+    return new Intl.DateTimeFormat(idioma, { ...opcoes, ...(tz ? { timeZone: tz } : {}) }).format(d);
+  } catch {
+    return new Intl.DateTimeFormat(idioma, opcoes).format(d);
+  }
+}
+
+/** "de" depois de "até" é troca de campos, não filtro vazio: normaliza invertendo as pontas. */
+export function normalizaPeriodo(f: FiltroDeData): FiltroDeData {
+  if (f.de && f.ate && f.de > f.ate) return { ...f, de: f.ate, ate: f.de };
+  return f;
 }
 
 /** Soma dias a um `YYYY-MM-DD` (calendário, sem fuso). */
@@ -94,7 +126,7 @@ export function intervaloDoFiltro(
       const de = f.de && DIA.test(f.de) ? f.de : undefined;
       const ate = f.ate && DIA.test(f.ate) ? f.ate : undefined;
       if (!de && !ate) return null;
-      return { de, ate };
+      return normalizaPeriodo({ de, ate });
     }
   }
 }

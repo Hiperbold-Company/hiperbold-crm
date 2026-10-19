@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { audit } from "@/lib/audit";
-import { assumirAoMover, deveAssumirAoMover } from "@/lib/leads/assumir-ao-mover";
+import { assumirAoMover, deveAssumirAoMover, ehMembroDaOrganizacao } from "@/lib/leads/assumir-ao-mover";
 import { ACTIVITY_LABELS } from "@/lib/leads/activity-vocabulary";
 import {
   atendimentoConfigPatchSchema,
@@ -16,6 +16,7 @@ const PESSOA = { type: "user", id: "11111111-1111-4111-8111-111111111111" };
 const base = {
   ligado: true,
   actor: PESSOA,
+  membro: true,
   mudouDeEtapa: true,
   dono: { owner_user_id: null, owner_agent_id: null },
 };
@@ -35,6 +36,10 @@ describe("deveAssumirAoMover — a decisão", () => {
       expect(deveAssumirAoMover({ ...base, actor: { type, id: "x" } })).toBe(false);
     },
   );
+
+  it("quem NÃO é membro da organização (suporte da plataforma) nunca assume, mesmo com papel efetivo", () => {
+    expect(deveAssumirAoMover({ ...base, membro: false })).toBe(false);
+  });
 
   it("mesma etapa (reordenar) não assume", () => {
     expect(deveAssumirAoMover({ ...base, mudouDeEtapa: false })).toBe(false);
@@ -150,6 +155,21 @@ function bancoComDonos(donos: Record<string, string | null>) {
   };
   return { supabase: supabase as never, gravados, atividades };
 }
+
+describe("ehMembroDaOrganizacao", () => {
+  const banco = (resposta: { data: unknown; error: unknown }) =>
+    ({
+      from: () => {
+        const c = { select: () => c, eq: () => c, is: () => c, maybeSingle: async () => resposta };
+        return c;
+      },
+    }) as never;
+  it("linha ativa = membro; sem linha = não; erro de leitura = não", async () => {
+    expect(await ehMembroDaOrganizacao(banco({ data: { user_id: "u" }, error: null }), "o", "u")).toBe(true);
+    expect(await ehMembroDaOrganizacao(banco({ data: null, error: null }), "o", "u")).toBe(false);
+    expect(await ehMembroDaOrganizacao(banco({ data: { user_id: "u" }, error: { message: "x" } }), "o", "u")).toBe(false);
+  });
+});
 
 describe("assumirAoMover — a escrita", () => {
   beforeEach(() => vi.clearAllMocks());

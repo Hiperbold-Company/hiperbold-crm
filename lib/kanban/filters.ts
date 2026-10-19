@@ -104,6 +104,8 @@ export function applyFilters(
   contexto?: ContextoDosFiltros,
 ): Lead[] {
   const today = new Date().toISOString().slice(0, 10);
+  // Um "agora" por varredura, e não por card.
+  const agora = contexto?.agora ?? new Date();
   const search = f.search?.trim().toLowerCase() ?? "";
 
   return leads.filter((l) => {
@@ -145,7 +147,6 @@ export function applyFilters(
       return false;
     if (typeof f.valueCentsMax === "number" && (l.value_cents ?? 0) > f.valueCentsMax)
       return false;
-    const agora = contexto?.agora ?? new Date();
     if (!dentroDoFiltroDeData(l.created_at, f.createdAt, agora, contexto?.timezone)) return false;
     if (!dentroDoFiltroDeData(ultimaMovimentacao(l), f.movedAt, agora, contexto?.timezone)) return false;
     if (f.overdueOnly) {

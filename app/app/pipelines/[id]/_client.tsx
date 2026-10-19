@@ -74,9 +74,16 @@ export function PipelinePageClient({
   // O fuso é o DA ORGANIZAÇÃO: "Hoje" e "Este mês" dos filtros de data contam nele,
   // não no do navegador de quem olha.
   const fusoDaOrganizacao = useActiveOrg()?.timezone ?? null;
-  const filteredLeads = data
-    ? applyFilters(data.leads, filters, { categoriaDo, timezone: fusoDaOrganizacao })
-    : [];
+  // `useMemo`: esta página re-renderiza a cada tecla da busca e a cada seleção de card,
+  // e a varredura (agora com duas datas por card) não precisa refazer-se a cada uma.
+  const leadsDoQuadro = data?.leads;
+  const filteredLeads = useMemo(
+    () =>
+      leadsDoQuadro
+        ? applyFilters(leadsDoQuadro, filters, { categoriaDo, timezone: fusoDaOrganizacao })
+        : [],
+    [leadsDoQuadro, filters, categoriaDo, fusoDaOrganizacao],
+  );
   // NÃO é a conta do FilterBar: o seletor de filtro lista as três caixas
   // (`marcadoresDoCard`: negócio, contato e conversa), e esta lista, a da tag em
   // lote, só `lead.tags` — é lá que a ação em lote grava (#852). O `useMemo` é o

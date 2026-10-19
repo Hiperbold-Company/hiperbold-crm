@@ -43,6 +43,8 @@ const JA_NA_ETAPA = "44444444-4444-4444-8444-444444444447";
 
 interface Estado {
   ligada: boolean;
+  /** `false` = o ator não é membro da organização (suporte da plataforma). */
+  membro: boolean;
   /** Os patches do UPDATE condicional de dono, com os ids que ele alcançou. */
   assumidos: Array<{ patch: Record<string, unknown>; ids: string[] }>;
 }
@@ -76,6 +78,7 @@ function cliente(estado: Estado) {
     from: (tabela: string) => {
       let op: "select" | "update" = "select";
       let patch: Record<string, unknown> = {};
+      void estado.membro;
       let ids: string[] = [];
       const exigeSemDono: string[] = [];
       const b = {
@@ -95,7 +98,9 @@ function cliente(estado: Estado) {
           return b;
         },
         maybeSingle: async () =>
-          tabela === "organizations"
+          tabela === "user_organizations"
+            ? { data: estado.membro ? { user_id: USER_ID } : null, error: null }
+            : tabela === "organizations"
             ? { data: { settings: { routing: { assign_owner_on_move: estado.ligada } } }, error: null }
             : { data: { id: DESTINO, name: "Destino", is_lost: false, is_won: false, pipeline_id: PIPELINE_ID, organization_id: ORG_ID }, error: null },
         then: (resolve: (v: unknown) => unknown) => {
@@ -167,7 +172,7 @@ const atividadesDeDono = () =>
 let estado: Estado;
 beforeEach(() => {
   vi.clearAllMocks();
-  estado = { ligada: true, assumidos: [] };
+  estado = { ligada: true, membro: true, assumidos: [] };
   sessao(estado);
 });
 
@@ -190,6 +195,14 @@ describe("mover em lote: quem move um lead sem responsável assume", () => {
 
   it("desligada (o padrão): ninguém é tocado", async () => {
     estado.ligada = false;
+    const res = await POST(pedido());
+    expect(res.status).toBe(200);
+    expect(estado.assumidos).toHaveLength(0);
+    expect(atividadesDeDono()).toHaveLength(0);
+  });
+
+  it("suporte da plataforma em acompanhamento (não é membro) não assume ninguém, e o lote anda", async () => {
+    estado.membro = false;
     const res = await POST(pedido());
     expect(res.status).toBe(200);
     expect(estado.assumidos).toHaveLength(0);

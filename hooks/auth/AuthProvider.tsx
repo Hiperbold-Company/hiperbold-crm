@@ -100,6 +100,17 @@ export function useUser(): AuthUser {
   return useAuth().user;
 }
 
+/**
+ * O fuso IANA da organização ativa, ou `null` (o consumidor cai no do navegador).
+ *
+ * Tolerante à falta de provider de propósito: o quadro e a ficha desenham datas
+ * também em telas de amostra e em testes, e lançar ali por causa de um rótulo de
+ * data seria o remédio pior que a doença.
+ */
+export function useFusoDaOrganizacao(): string | null {
+  return useContext(Ctx)?.activeOrg?.timezone ?? null;
+}
+
 export function useActiveOrg(): ActiveOrg | null {
   return useAuth().activeOrg;
 }

@@ -15,6 +15,10 @@
  *    esconderia o negócio de quem de fato o trabalha; E
  *  - o movimento MUDA a etapa. Arrastar dentro da própria coluna é reordenar, não
  *    mover; assumir um negócio por reordená-lo seria um efeito que ninguém pediu; E
+ *  - essa pessoa é MEMBRO da organização (linha ativa em `user_organizations`):
+ *    o suporte da plataforma em acompanhamento age com papel efetivo, mas não
+ *    é da equipe — virar dono de negócio do cliente seria o suporte entrar na
+ *    carteira dele. Confere a pertença REAL, não o papel; E
  *  - o negócio não tem responsável nenhum: `owner_user_id` E `owner_agent_id`
  *    nulos — exatamente o que a tela chama de "Sem responsável" (`resolveLeadOwner`
  *    devolve `kind: null` só aí). Negócio de um AGENTE DE IA não conta como sem
@@ -41,6 +45,8 @@ import { donoAoMoverLigado } from "@/lib/schemas/routing";
 export interface DecisaoAssumirAoMover {
   ligado: boolean;
   actor: { type: string; id: string };
+  /** O ator é membro ativo da organização (ver `ehMembroDaOrganizacao`). */
+  membro: boolean;
   /** `false` quando a escrita só reordenou o negócio dentro da mesma etapa. */
   mudouDeEtapa: boolean;
   dono: { owner_user_id?: string | null; owner_agent_id?: string | null };
@@ -50,6 +56,7 @@ export interface DecisaoAssumirAoMover {
 export function deveAssumirAoMover(d: DecisaoAssumirAoMover): boolean {
   if (!d.ligado) return false;
   if (d.actor.type !== "user" || !d.actor.id) return false;
+  if (!d.membro) return false;
   if (!d.mudouDeEtapa) return false;
   return !d.dono.owner_user_id && !d.dono.owner_agent_id;
 }
@@ -66,6 +73,26 @@ export async function lerDonoAoMoverLigado(
     .maybeSingle();
   if (error || !data) return false;
   return donoAoMoverLigado((data as { settings?: unknown }).settings);
+}
+
+/**
+ * A pessoa é membro ATIVO da organização? A linha de `user_organizations` é a
+ * pertença real; o papel efetivo da sessão também existe para o suporte da
+ * plataforma, que não é membro. Falha de leitura é "não": nunca atribui no escuro.
+ */
+export async function ehMembroDaOrganizacao(
+  supabase: SupabaseClient,
+  organizationId: string,
+  userId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("user_organizations")
+    .select("user_id")
+    .eq("organization_id", organizationId)
+    .eq("user_id", userId)
+    .is("revoked_at", null)
+    .maybeSingle();
+  return !error && !!data;
 }
 
 export const ORIGEM_ASSUMIR_AO_MOVER = "assumir_ao_mover";

@@ -21,6 +21,7 @@ import { emitLeadActivity, stageChangeReason } from "@/lib/leads/activity-emitte
 import {
   assumirAoMover,
   deveAssumirAoMover,
+  ehMembroDaOrganizacao,
   lerDonoAoMoverLigado,
 } from "@/lib/leads/assumir-ao-mover";
 import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
@@ -336,12 +337,20 @@ export async function POST(
   // pessoa), só quando a etapa MUDA e só se o negócio não tem responsável. O
   // UPDATE condicional dentro de `assumirAoMover` é o que garante que, entre duas
   // pessoas movendo ao mesmo tempo, só uma assuma. Falha aqui não desfaz o move.
+  const ligadoAoMover =
+    authz.via === "session" && !mesmaEtapa && (await lerDonoAoMoverLigado(supabase, orgId));
   if (
-    authz.via === "session" &&
-    !mesmaEtapa &&
+    ligadoAoMover &&
     deveAssumirAoMover({
-      ligado: await lerDonoAoMoverLigado(supabase, orgId),
+      ligado: true,
       actor: authz.actor,
+      // Pertença REAL: o suporte da plataforma em acompanhamento tem papel
+      // efetivo mas não é membro, e não vira dono do negócio do cliente.
+      // (Só consulta quando o negócio está sem responsável: o resto nem chega lá.)
+      membro:
+        !lead.owner_user_id &&
+        !lead.owner_agent_id &&
+        (await ehMembroDaOrganizacao(supabase, orgId, authz.actor.id)),
       mudouDeEtapa: true,
       dono: lead as { owner_user_id?: string | null; owner_agent_id?: string | null },
     })

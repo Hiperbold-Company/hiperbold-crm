@@ -41,7 +41,13 @@ function bancoFalso(
   /** `status` do lead (issue #1538); o padrão é aberto. */
   statusDoLead = "open",
   /** A regra "quem move assume" e o responsável que o negócio já tem. */
-  regra: { ligada?: boolean; donoHumano?: string | null; donoAgente?: string | null } = {},
+  regra: {
+    ligada?: boolean;
+    donoHumano?: string | null;
+    donoAgente?: string | null;
+    /** `false` = a pessoa NÃO é membro da organização (suporte da plataforma). */
+    membro?: boolean;
+  } = {},
 ) {
   const banco = {
     updatedAt: CARREGADO,
@@ -77,6 +83,18 @@ function bancoFalso(
         select: () => chain,
         eq: () => chain,
         maybeSingle: async () => ({ data: { settings: settingsDoFunil }, error: null }),
+      };
+      return chain;
+    }
+    if (tabela === "user_organizations") {
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        is: () => chain,
+        maybeSingle: async () => ({
+          data: regra.membro === false ? null : { user_id: USER_ID },
+          error: null,
+        }),
       };
       return chain;
     }
@@ -463,5 +481,12 @@ describe("POST /api/v1/leads/[id]/move — quem move um lead sem responsável as
   it("reordenar dentro da mesma etapa não é mover: não assume", async () => {
     const { banco } = await move({ ligada: true }, STAGE_A);
     expect(banco.donoAssumido).toBeNull();
+  });
+
+  it("suporte da plataforma em acompanhamento (papel efetivo, mas NÃO membro) não vira dono", async () => {
+    const { res, banco } = await move({ ligada: true, membro: false });
+    expect(res.status).toBe(200);
+    expect(banco.donoAssumido).toBeNull();
+    expect(atividadesDeDono()).toHaveLength(0);
   });
 });

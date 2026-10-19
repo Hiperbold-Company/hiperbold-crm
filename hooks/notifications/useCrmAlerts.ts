@@ -1,5 +1,6 @@
 "use client";
 
+import { ehEcoLocal } from "@/lib/kanban/local-echo";
 import { useCallback } from "react";
 
 import { useActiveOrg, useUser } from "@/hooks/auth/AuthProvider";
@@ -44,7 +45,12 @@ export function useCrmAlerts(): void {
       const status = str(novo.status);
       const statusAntes = str(antigo?.status);
 
-      if (owner && owner === user.id && owner !== ownerAntes) {
+      // "Lead atribuído a você" é aviso de quem recebeu de OUTRO. Quem acabou de mover
+      // (e, ao mover, assumiu) um negócio sem responsável é o autor da própria
+      // atribuição: o eco local da ação (a mesma marca que impede o card de pulsar)
+      // diz que a mudança é minha, e o aviso seria ruído.
+      const leadId = str(novo.id);
+      if (owner && owner === user.id && owner !== ownerAntes && !(leadId && ehEcoLocal(leadId))) {
         entregarAviso({
           category: "lead_assigned",
           kind: "lead_assigned",

@@ -8,6 +8,7 @@ import {
   PERIODOS_PREDEFINIDOS,
   ROTULO_DO_PERIODO,
   filtroDeDataAtivo,
+  normalizaPeriodo,
   type FiltroDeData,
 } from "@/lib/kanban/datas-do-lead";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,8 @@ export function FiltroDeDataPopover({
 
   function personalizado(campo: "de" | "ate", v: string) {
     const next: FiltroDeData = { de: valor?.de, ate: valor?.ate, [campo]: v || undefined };
-    onChange(filtroDeDataAtivo(next) ? next : undefined);
+    // "De" depois de "Até" é troca de campos: normaliza em vez de mostrar uma lista vazia.
+    onChange(filtroDeDataAtivo(next) ? normalizaPeriodo(next) : undefined);
   }
 
   return (

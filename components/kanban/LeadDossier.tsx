@@ -5,7 +5,6 @@ import { useRef } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { usePermission } from "@/hooks/auth/AuthProvider";
 import { useLeadTimeline } from "@/hooks/leads/useLeadTimeline";
 import type { Lead } from "@/lib/types/leads";
 import { ContatoDoNegocio } from "./ContatoDoNegocio";
@@ -16,7 +15,8 @@ import { LeadTimeline } from "./LeadTimeline";
 import { RegistrarEvento } from "./RegistrarEvento";
 import { OwnerBadge } from "./OwnerBadge";
 import { resolveLeadOwner } from "@/lib/kanban/owner";
-import { rotuloDeIdade, ultimaMovimentacao } from "@/lib/kanban/datas-do-lead";
+import { useFusoDaOrganizacao, usePermission } from "@/hooks/auth/AuthProvider";
+import { formataDataNoFuso, rotuloDeIdade, ultimaMovimentacao } from "@/lib/kanban/datas-do-lead";
 import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
 import type { CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
 
@@ -64,6 +64,7 @@ export function LeadDossier({
   const timeline = useLeadTimeline(open ? lead.id : null, lead.contact_id);
   // Mesmo piso da rota (agent): viewer e acompanhamento somente-leitura não
   // veem um botão que só devolveria 403.
+  const fuso = useFusoDaOrganizacao();
   const podeRegistrarEvento = usePermission("lead.activity.log");
   const owner = resolveLeadOwner(lead, ownerNames);
   const score = lead.score ?? null;
@@ -123,12 +124,12 @@ export function LeadDossier({
         {/* As duas datas do negócio, perto da etapa: quando nasceu e quando
             entrou na etapa de agora (se faltar o carimbo, vale a criação). */}
         <p className="pt-2 text-[11px] text-text-muted" data-datas-do-negocio>
-          {t("Criado em")} {new Date(lead.created_at).toLocaleString(tagDoIdioma, { dateStyle: "short", timeStyle: "short" })}
+          {t("Criado em")} {formataDataNoFuso(lead.created_at, fuso, tagDoIdioma, true)}
           {" · "}
           {t("Última movimentação")}{" "}
-          {new Date(ultimaMovimentacao(lead)).toLocaleString(tagDoIdioma, { dateStyle: "short", timeStyle: "short" })}
+          {formataDataNoFuso(ultimaMovimentacao(lead), fuso, tagDoIdioma, true)}
           {(() => {
-            const rel = rotuloDeIdade(ultimaMovimentacao(lead), new Date(), null, t);
+            const rel = rotuloDeIdade(ultimaMovimentacao(lead), new Date(), fuso, t);
             return rel ? ` (${rel})` : "";
           })()}
         </p>
