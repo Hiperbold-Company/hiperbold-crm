@@ -226,6 +226,9 @@ export async function POST(req: NextRequest) {
         display_name: org.display_name,
         plan: request.plan,
         creator_role: "admin",
+        // Dono = outra pessoa: o criador nasce membro da agência (migration 0974), não provisório.
+        creator_membership:
+          request.owner_email === adminCtx.user.email?.trim().toLowerCase() ? "admin" : "membro_da_agencia",
       },
     });
   }

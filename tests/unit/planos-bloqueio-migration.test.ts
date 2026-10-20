@@ -873,12 +873,19 @@ describe("0907 parte 3 (Tarefa 3): fn_billing_ia_pode_responder, o gate de token
 
 describe("0905 (editado NO LUGAR, Tarefa 2): fn_billing_uso e fn_billing_pode_criar não dobram a contagem no aceite", () => {
   it("as duas funções filtram o convite pendente cujo e-mail já tem vínculo ativo", () => {
-    for (const sql of [MIGRATION_0905, BASELINE]) {
-      const ocorrencias = [
-        ...sql.matchAll(/and not public\.fn_billing_convite_ja_tem_vinculo_ativo\(ti\.id\)/g),
-      ];
-      // Uma em fn_billing_uso, outra em fn_billing_pode_criar.
-      expect(ocorrencias.length).toBe(2);
+    const filtro = /and not public\.fn_billing_convite_ja_tem_vinculo_ativo\(ti\.id\)/g;
+    // Uma em fn_billing_uso, outra em fn_billing_pode_criar.
+    expect([...MIGRATION_0905.matchAll(filtro)].length).toBe(2);
+    // No baseline a função aparece redefinida em apêndices posteriores (0974 refez as duas): vale a ÚLTIMA
+    // definição de cada uma, que é a que o banco instala, não a contagem no arquivo inteiro.
+    for (const assinatura of [
+      "create or replace function public.fn_billing_uso(",
+      "create or replace function public.fn_billing_pode_criar(",
+    ]) {
+      const inicio = BASELINE.lastIndexOf(assinatura);
+      expect(inicio).toBeGreaterThan(-1);
+      const corpo = BASELINE.slice(inicio, BASELINE.indexOf("$$;", BASELINE.indexOf("$$", inicio) + 2));
+      expect([...corpo.matchAll(filtro)].length).toBe(1);
     }
   });
 

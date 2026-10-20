@@ -1151,6 +1151,10 @@ export const AUDIT_ACTIONS = [
   // "Trocar forma de pagamento" no passo Plano do onboarding: o admin da organização cancelou o pedido aberto
   // (ainda sem pagamento) para escolher de novo. Metadata: só o tipo do pedido; nunca dado do pagador.
   "billing.order_payment_method_reset",
+  // Membro da agência (migration 0974): o admin da plataforma de escopo full marca ou remove o vínculo permanente
+  // da agência numa organização. Gravados pelo banco dentro de fn_membro_da_agencia_definir (metadata: target_user_id e acao).
+  "agency_member.added",
+  "agency_member.removed",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

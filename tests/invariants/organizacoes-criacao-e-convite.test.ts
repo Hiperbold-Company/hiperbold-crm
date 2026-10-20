@@ -87,12 +87,15 @@ describe("organização criada leva acesso e convite seguro", () => {
         then raise exception 'a organizacao devia ter os dois admins'; end if;
     end $$;`));
 
-  it("a marca só nasce quando o tenant é de OUTRA pessoa", () => prove(`
+  it("a marca só nasce quando o tenant é de OUTRA pessoa — e é a de membro da agência (0974), não a de provisório", () => prove(`
     do $$ declare r jsonb; org uuid; begin
       r := ${call}; org := (r->>'id')::uuid;
-      if not (select provisional_until_handover from public.user_organizations
+      if not (select membro_da_agencia from public.user_organizations
                where organization_id=org and user_id='${actor}')
-        then raise exception 'tenant de terceiro e o vinculo nao nasceu provisorio'; end if;
+        then raise exception 'tenant de terceiro e o vinculo nao nasceu membro da agencia'; end if;
+      if (select provisional_until_handover from public.user_organizations
+               where organization_id=org and user_id='${actor}')
+        then raise exception 'tenant de terceiro nasceu provisorio (voltou o defeito de 2026-10-20)'; end if;
     end $$;`));
 
   it("quem cria o PRÓPRIO tenant nasce SEM a marca, e nunca sai", () => prove(`
@@ -102,9 +105,9 @@ describe("organização criada leva acesso e convite seguro", () => {
              || jsonb_build_object('owner_email', (select email from auth.users where id='${actor}'));
       r := public.fn_create_tenant_with_owner('${actor}','f2180000-0000-4000-8000-0000000000aa', corpo, 'abcd');
       org := (r->>'id')::uuid;
-      if (select provisional_until_handover from public.user_organizations
+      if (select provisional_until_handover or membro_da_agencia from public.user_organizations
            where organization_id=org and user_id='${actor}')
-        then raise exception 'criou para si e o vinculo nasceu provisorio'; end if;
+        then raise exception 'criou para si e o vinculo nasceu provisorio ou de agencia'; end if;
       perform public.fn_accept_team_invite('${guest}',org,'admin','${actor}',now()-interval '1 minute',now()-interval '1 minute','{"preset":"completa"}'::jsonb);
       if (select count(*) from public.user_organizations where organization_id=org and user_id='${actor}') <> 1
         then raise exception 'saiu do proprio tenant'; end if;
@@ -113,6 +116,9 @@ describe("organização criada leva acesso e convite seguro", () => {
   it("na entrega o provisório sai — e a organização não fica vazia", () => prove(`
     do $$ declare r jsonb; org uuid; begin
       r := ${call}; org := (r->>'id')::uuid;
+      -- O criador nasce membro da agência (0974); este caso é do provisório LEGADO, anterior à 0974.
+      update public.user_organizations set membro_da_agencia=false, provisional_until_handover=true
+        where organization_id=org and user_id='${actor}';
       perform public.fn_accept_team_invite('${guest}',org,'admin','${actor}',now()-interval '1 minute',now()-interval '1 minute','{"preset":"completa"}'::jsonb);
       if (select count(*) from public.user_organizations where organization_id=org and user_id='${actor}') <> 0
         then raise exception 'o provisorio ficou'; end if;
@@ -126,6 +132,8 @@ describe("organização criada leva acesso e convite seguro", () => {
   it("papel que não é o do dono não dispara a entrega", () => prove(`
     do $$ declare r jsonb; org uuid; begin
       r := ${call}; org := (r->>'id')::uuid;
+      update public.user_organizations set membro_da_agencia=false, provisional_until_handover=true
+        where organization_id=org and user_id='${actor}';
       perform public.fn_accept_team_invite('${guest}',org,'agent','${actor}',now()-interval '1 minute',now()-interval '1 minute','{"preset":"completa"}'::jsonb);
       if (select count(*) from public.user_organizations where organization_id=org and user_id='${actor}') <> 1
         then raise exception 'um colega entrando expulsou o provisorio'; end if;

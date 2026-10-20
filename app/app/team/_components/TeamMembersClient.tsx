@@ -94,9 +94,18 @@ export function TeamMembersClient({ currentUserId, canManage }: Props) {
                     {m.full_name ?? m.email ?? m.user_id.slice(0, 8)}
                   </div>
                   {m.email ? <div className="text-xs text-muted-foreground">{m.email}</div> : null}
+                  {m.membro_da_agencia ? (
+                    <div className="mt-1 flex flex-col items-start gap-1">
+                      <Badge variant="info">{t("Agência")}</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {t("Acesso da agência que opera o seu CRM. Não ocupa vaga do plano.")}
+                      </span>
+                    </div>
+                  ) : null}
                 </TableCell>
                 <TableCell>
-                  {canManage && m.user_id !== currentUserId ? (
+                  {/* Membro da agência: o papel é da agência, o cliente só lê (o servidor também recusa). */}
+                  {canManage && m.user_id !== currentUserId && !m.membro_da_agencia ? (
                     <Select
                       value={m.role}
                       onValueChange={(v) =>
@@ -122,7 +131,7 @@ export function TeamMembersClient({ currentUserId, canManage }: Props) {
                   )}
                 </TableCell>
                 <TableCell>
-                  {canManage ? (
+                  {canManage && !m.membro_da_agencia ? (
                     <Button
                       variant="outline"
                       size="sm"
@@ -168,7 +177,9 @@ export function TeamMembersClient({ currentUserId, canManage }: Props) {
                 </TableCell>
                 {canManage ? (
                   <TableCell>
-                    {m.user_id !== currentUserId ? (
+                    {m.membro_da_agencia ? (
+                      <span className="text-xs text-muted-foreground">{t("Agência")}</span>
+                    ) : m.user_id !== currentUserId ? (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" aria-label={t("Ações")}>

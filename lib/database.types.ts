@@ -8539,6 +8539,7 @@ export type Database = {
           id: string
           invited_at: string | null
           invited_by: string | null
+          membro_da_agencia: boolean
           organization_id: string
           revoked_at: string | null
           role: string
@@ -8553,6 +8554,7 @@ export type Database = {
           id?: string
           invited_at?: string | null
           invited_by?: string | null
+          membro_da_agencia?: boolean
           organization_id: string
           revoked_at?: string | null
           role: string
@@ -8567,6 +8569,7 @@ export type Database = {
           id?: string
           invited_at?: string | null
           invited_by?: string | null
+          membro_da_agencia?: boolean
           organization_id?: string
           revoked_at?: string | null
           role?: string
@@ -9814,6 +9817,10 @@ export type Database = {
       fn_member_role_in_org: {
         Args: { p_org: string; p_user: string }
         Returns: string
+      }
+      fn_membro_da_agencia_definir: {
+        Args: { p_ativo: boolean; p_actor: string; p_org: string; p_user_email: string }
+        Returns: Json
       }
       fn_mesclar_contatos: {
         Args: {
