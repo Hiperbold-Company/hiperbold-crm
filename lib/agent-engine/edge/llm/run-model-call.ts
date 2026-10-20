@@ -56,7 +56,7 @@ import {
   PURPOSES_ISENTOS_DA_ASSINATURA,
   TITULO_ASSINATURA_SUSPENSA,
 } from './assinatura';
-import { decidirModeloDaChave, primeiraVezDoModelo } from '@/lib/ai/modelos-da-instalacao';
+import { decidirModeloDaChave, idNaRotaDaInstalacao, primeiraVezDoModelo } from '@/lib/ai/modelos-da-instalacao';
 import { modelosDaInstalacaoPeloDb } from './modelos-da-instalacao';
 import { custoCentsComCatalogo } from './pricing';
 import { chaveDeOrcamentoDaInstalacao } from '../../../instalacao/comportamento';
@@ -1019,11 +1019,15 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
   let model: string = modeloPedido;
   if (config.origemDaChave === 'chave_da_instalacao') {
     const lista = await modelosDaInstalacaoPeloDb(db);
+    // A chave da instalação sai SEMPRE pela OpenRouter (`config.provider`), que só entende o id
+    // com fabricante (`openai/gpt-6-luna`). Id puro do catálogo de um provedor direto
+    // (`claude-sonnet-5`, pedido ao `anthropic`) ganha o prefixo do provedor que foi pedido.
+    const pedidoNaRota = idNaRotaDaInstalacao(config.providerPedido, modeloPedido);
     const guarda = decidirModeloDaChave({
       lista,
       origemDaChave: config.origemDaChave,
       provedor: config.provider,
-      modelId: modeloPedido,
+      modelId: pedidoNaRota,
     });
     if (guarda.trocado || guarda.semTraducao) {
       if (primeiraVezDoModelo(input.tenantId, modeloPedido)) {
@@ -1040,8 +1044,8 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
           },
         );
       }
-      model = guarda.modelId;
     }
+    model = guarda.modelId;
   }
   const factory = registry[config.provider];
   if (factory === undefined) {

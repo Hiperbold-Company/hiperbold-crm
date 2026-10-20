@@ -188,23 +188,23 @@ describe("o seletor de modelos", () => {
     expect(o[0]).toMatchObject({ model_id: "openai/gpt-6-luna", display_name: "Luna (OpenAI)" });
   });
 
-  it("provedor direto: o id liberado vira o nome puro e acha a linha do catálogo", () => {
+  it("qualquer provedor escolhido na tela: a chave da instalação sai pela OpenRouter, então o liberado entra com o id inteiro", () => {
     const o = modelosParaOSeletor({
       catalogo: [{ model_id: "gpt-6-luna", display_name: "GPT-6 Luna" }, { model_id: "gpt-5-mini", display_name: "Mini" }],
       liberados: ["openai/gpt-6-luna"],
       provedor: "openai",
       restrito: true,
     });
-    expect(o.map((m) => m.model_id)).toEqual(["gpt-6-luna"]);
+    expect(o.map((m) => m.model_id)).toEqual(["openai/gpt-6-luna"]);
+    expect(o[0]?.display_name).toBe("Luna (OpenAI)");
   });
 
-  it("nenhum liberado é do provedor direto: o seletor mostra o catálogo, nunca abre vazio", () => {
-    // Abrir vazio foi o defeito medido no e2e `agente-novo-e-uso` (instalação num provedor
-    // direto, lista só com o Luna do OpenRouter). O freio do servidor mantém o modelo pedido
-    // quando não há rota para o padrão, então a tela acompanha o servidor.
+  it("provedor direto com catálogo de Claude: o seletor mostra só o Luna — sem Claude", () => {
+    // Antes, a lista só com o Luna da OpenRouter não tinha rota no provedor direto e o seletor caía
+    // no catálogo inteiro (com os Claude). A chave da instalação agora é sempre a OpenRouter.
     const o = modelosParaOSeletor({ catalogo, liberados: ["openai/gpt-6-luna"], provedor: "anthropic", restrito: true });
-    expect(o.map((m) => m.model_id)).toEqual(catalogo.map((c) => c.model_id));
-    expect(o.map((m) => m.model_id)).not.toContain("gpt-6-luna");
+    expect(o.map((m) => m.model_id)).toEqual(["openai/gpt-6-luna"]);
+    expect(o.map((m) => m.model_id)).not.toContain("anthropic/claude-opus-5");
   });
 });
 
@@ -290,8 +290,12 @@ describe("agente novo sem modelo escolhido", () => {
 });
 
 describe("modeloLiberado: com e sem fabricante, nos dois sentidos", () => {
-  it("lista sem fabricante libera o id com fabricante", () => {
-    expect(modeloLiberado(["gpt-6-luna"], "openai/gpt-6-luna")).toBe(true);
+  it("lista sem fabricante libera o id puro, mas NÃO um id com fabricante (o nome sozinho não diz de quem é)", () => {
+    expect(modeloLiberado(["gpt-6-luna"], "gpt-6-luna")).toBe(true);
+    expect(modeloLiberado(["gpt-6-luna"], "openai/gpt-6-luna")).toBe(false);
+    // O caso que o freio existe para barrar: mesmo nome, outro fabricante.
+    expect(modeloLiberado(["gpt-6-luna"], "anthropic/gpt-6-luna")).toBe(false);
+    expect(modeloLiberado(["gpt-6-luna"], "maliciosa/gpt-6-luna", "openrouter")).toBe(false);
   });
   it("lista com fabricante libera o id puro", () => {
     expect(modeloLiberado(["openai/gpt-6-luna"], "gpt-6-luna")).toBe(true);

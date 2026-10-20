@@ -10,9 +10,8 @@
  *  - `binding` e `credencial_da_organizacao`: a chave é uma linha de
  *    `ai_provider_credentials` DA PRÓPRIA organização (as duas leituras filtram
  *    `organization_id`), a que o cliente cadastrou. Nunca debita a carteira.
- *  - `padrao`: caiu no `.env` da instalação (`resolveLanguageModel`: gateway,
- *    OpenRouter, Anthropic ou OpenAI da instalação). É a chave que a Hiperbold
- *    paga, e a única que debita.
+ *  - `padrao`: caiu no `.env` da instalação (`resolveLanguageModel`: a OpenRouter
+ *    da instalação, sempre). É a chave que a Hiperbold paga, e a única que debita.
  *
  * Fica em arquivo próprio, e não dentro de `gateway-binding.ts`, porque vários
  * testes mockam aquele módulo inteiro só com `resolverModeloDoPonto`. Um valor

@@ -38,7 +38,7 @@ vi.mock("@/lib/agent-engine/agent/conversa-do-caso", () => ({
   responderSobreOCaso: vi.fn(),
 }));
 vi.mock("@/lib/agent-engine/agent/request-deps", () => ({
-  requestTurnDeps: () => ({ llmCfg: { anthropicApiKey: "k" }, log: undefined, registry: undefined }),
+  requestTurnDeps: () => ({ llmCfg: { openrouterApiKey: "k" }, log: undefined, registry: undefined }),
 }));
 vi.mock("@/lib/agent-engine/agent/conversa-do-caso/persona", async (original) => ({
   ...(await original<Record<string, unknown>>()),

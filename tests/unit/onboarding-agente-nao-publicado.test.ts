@@ -230,7 +230,7 @@ function montarBanco(mundo: Mundo = {}): Estado {
   };
   const canais = mundo.canais ?? { data: [CANAL], error: null };
 
-  const modelos = mundo.modelosPorProvedor ?? { anthropic: "claude-sonnet-9" };
+  const modelos = mundo.modelosPorProvedor ?? { anthropic: "claude-sonnet-9", openrouter: "openai/gpt-6-luna" };
 
   responderRpc = (nome, args) => {
     if (nome !== "fn_publish_ai_agent_version") {
@@ -289,6 +289,8 @@ function montarBanco(mundo: Mundo = {}): Estado {
       // NENHUM marcado, e a regra agora olha ferramentas e preço.
       const provider = String(c.filtros.provider ?? "");
       const modelId = modelos[provider];
+      // Consulta por modelo exato (agente sem chave própria: o Luna liberado precisa estar no catálogo).
+      if (c.filtros.model_id !== undefined && modelId !== c.filtros.model_id) return { data: [], error: null };
       return {
         data: modelId
           ? [
@@ -568,7 +570,9 @@ describe("onboarding: publicação impossível não pode terminar em silêncio",
         version_number: 1,
         provisioning_origin: "onboarding",
         status: "draft",
-        provider: "anthropic",
+        // Sem chave própria, a chave da instalação sai pela OpenRouter com o modelo liberado.
+        provider: "openrouter",
+        model: "openai/gpt-6-luna",
         credential_id: null,
       }],
     });
@@ -632,10 +636,10 @@ describe("onboarding: publicação impossível não pode terminar em silêncio",
  * de outro provedor é o defeito que `lib/ai/pontos/resolver.ts` documenta.
  */
 describe("onboarding: o agente nasce no provedor que a instalação escolheu", () => {
-  it("instalação em OpenRouter publica em OpenRouter — com o modelo DELE", async () => {
+  it("instalação em OpenRouter publica em OpenRouter — com o modelo liberado (Luna), sem depender do catálogo", async () => {
     const estado = montarBanco({
       settings: { llm: { provider: "openrouter", default_model: "claude-sonnet-5" } },
-      modelosPorProvedor: { anthropic: "claude-sonnet-9", openrouter: "z-ai/glm-4.7" },
+      modelosPorProvedor: { anthropic: "claude-sonnet-9", openrouter: "openai/gpt-6-luna" },
     });
 
     const res = await clicar();
@@ -644,36 +648,30 @@ describe("onboarding: o agente nasce no provedor que a instalação escolheu", (
     expect(estado.versoes).toHaveLength(1);
     expect(estado.versoes[0]).toMatchObject({
       provider: "openrouter",
-      model: "z-ai/glm-4.7",
+      model: "openai/gpt-6-luna",
       status: "published",
     });
   });
 
   it("o `default_model` do settings NÃO é a fonte do modelo", async () => {
-    // Numa instalação OpenRouter ele vale um id da ANTHROPIC: o gatilho do
-    // banco semeia o default da Anthropic e o instalador só sobrescreve
-    // `{llm,provider}`. Usá-lo mandaria "claude-sonnet-5" ao endpoint da
-    // OpenRouter — texto plausível, nenhum lead criado.
-    // O `default_model` aqui é um id PLAUSÍVEL para a OpenRouter — e não o
-    // curado. Fosse "claude-sonnet-5", este caso passaria por vacuidade: o
-    // código de hoje já grava outro valor, e a implementação errada
-    // ("lê o modelo do settings") não seria reprovada por ele.
+    // O gatilho antigo semeava o default da Anthropic em `settings.llm`; usá-lo mandaria
+    // "claude-sonnet-5" à OpenRouter. Quem manda no agente sem chave própria é a lista liberada
+    // da instalação (`MODELOS_DA_INSTALACAO`), nunca o settings da organização.
     const estado = montarBanco({
       settings: { llm: { provider: "openrouter", default_model: "algum/modelo-do-settings" } },
-      modelosPorProvedor: { anthropic: "claude-sonnet-9", openrouter: "z-ai/glm-4.7" },
+      modelosPorProvedor: { anthropic: "claude-sonnet-9", openrouter: "openai/gpt-6-luna" },
     });
 
     await clicar();
 
-    expect(estado.versoes[0]?.model).toBe("z-ai/glm-4.7");
+    expect(estado.versoes[0]?.model).toBe("openai/gpt-6-luna");
     expect(estado.versoes[0]?.model).not.toBe("algum/modelo-do-settings");
   });
 
-  it("VPS fresca em OpenRouter: sem modelo no catálogo, fica rascunho e DIZ por quê", async () => {
-    // O estado real de uma instalação nova: o baseline semeia zero linhas de
-    // OpenRouter e o catálogo só chega no cron diário. Publicar aqui exigiria
-    // inventar um id de modelo — e um id inventado é o mesmo agente mudo com
-    // outro carimbo.
+  it("VPS fresca em OpenRouter: o Luna ainda não está no catálogo, fica rascunho e DIZ por quê", async () => {
+    // O estado real de uma instalação nova: o baseline semeia zero linhas de OpenRouter e o catálogo só
+    // chega no cron diário. O modelo vem da lista liberada, mas `fn_publish_ai_agent_version` recusa
+    // modelo fora do catálogo — publicar aqui seria o mesmo agente mudo com outro carimbo.
     const estado = montarBanco({
       settings: { llm: { provider: "openrouter" } },
       modelosPorProvedor: { anthropic: "claude-sonnet-9" },
@@ -686,20 +684,17 @@ describe("onboarding: o agente nasce no provedor que a instalação escolheu", (
     expect(r.ok).toBe(true);
     expect(r.ok && r.publish_blocked_by).toBe("modelo");
     expect(estado.versoes).toHaveLength(0);
-    expect(estado.agentes[0]?.published_version_id ?? null).toBeNull();
-    // O wizard não avança calado: a tela é a única pista que a pessoa tem.
     expect(redirects).toEqual([]);
   });
 
-  it("controle: instalação sem escolha registrada segue na Anthropic, e publica", async () => {
-    // Sem este caso, um conserto que simplesmente parasse de publicar sempre
-    // passaria nos três acima.
+  it("controle: instalação sem escolha registrada (seed antigo em Anthropic) também nasce em OpenRouter + Luna", async () => {
+    // Sem este caso, um conserto que simplesmente parasse de publicar sempre passaria nos de cima.
     const estado = montarBanco();
 
     const res = await clicar();
 
     expect(res).toBe("redirecionou");
-    expect(estado.versoes[0]).toMatchObject({ provider: "anthropic", model: "claude-sonnet-9" });
+    expect(estado.versoes[0]).toMatchObject({ provider: "openrouter", model: "openai/gpt-6-luna" });
   });
 
   it("nasce podendo mexer no CRM: capacidades ligadas e funil no escopo", async () => {
@@ -882,7 +877,7 @@ describe("onboarding: qual chave o funcionário usa", () => {
       credenciais: [
         { id: "cred-openai", provider: "openai", validated_at: "2026-09-15T10:00:00.000Z" },
       ],
-      modelosPorProvedor: { anthropic: "claude-sonnet-9", openai: "gpt-5-mini" },
+      modelosPorProvedor: { anthropic: "claude-sonnet-9", openai: "gpt-5-mini", openrouter: "openai/gpt-6-luna" },
     });
 
     const r = await clicar();
@@ -910,14 +905,16 @@ describe("onboarding: qual chave o funcionário usa", () => {
       credenciais: [
         { id: "cred-openai", provider: "openai", validated_at: "2026-09-15T10:00:00.000Z" },
       ],
-      modelosPorProvedor: { anthropic: "claude-sonnet-9", openai: "gpt-5-mini" },
+      modelosPorProvedor: { anthropic: "claude-sonnet-9", openai: "gpt-5-mini", openrouter: "openai/gpt-6-luna" },
     });
 
     await clicar();
 
     expect(estado.versoes).toHaveLength(1);
-    expect(estado.versoes[0]!.provider).toBe("anthropic");
-    expect(estado.versoes[0]!.model).toBe("claude-sonnet-9");
+    // Chave da instalação = OpenRouter + modelo liberado (20/10/2026); a credencial OpenAI colada
+    // para OUTRO provedor não muda isso.
+    expect(estado.versoes[0]!.provider).toBe("openrouter");
+    expect(estado.versoes[0]!.model).toBe("openai/gpt-6-luna");
     expect(estado.versoes[0]!.credential_id).toBeNull();
   });
 
@@ -932,7 +929,7 @@ describe("onboarding: qual chave o funcionário usa", () => {
     const outroProvedor = montarBanco({
       chaveDaInstalacao: false,
       credenciais: [{ id: "cred-openai", provider: "openai", validated_at: null }],
-      modelosPorProvedor: { anthropic: "claude-sonnet-9" },
+      modelosPorProvedor: { anthropic: "claude-sonnet-9", openrouter: "openai/gpt-6-luna" },
     });
 
     const r1 = await clicar();
@@ -950,7 +947,7 @@ describe("onboarding: qual chave o funcionário usa", () => {
     const provedorDaEmpresa = montarBanco({
       chaveDaInstalacao: false,
       credenciais: [{ id: "cred-anthropic", provider: "anthropic", validated_at: null }],
-      modelosPorProvedor: { anthropic: "claude-sonnet-9" },
+      modelosPorProvedor: { anthropic: "claude-sonnet-9", openrouter: "openai/gpt-6-luna" },
     });
 
     const r2 = await clicar();

@@ -59,7 +59,6 @@ import { escolherVersoesDaTela } from "@/lib/ai/agents/versoes-da-tela";
 
 const ORG = "33333333-3333-4333-8333-333333333333";
 const AGENTE = "44444444-4444-4444-8444-444444444444";
-const CREDENCIAL = "11111111-1111-4111-8111-111111111111";
 const CANAL = "22222222-2222-4222-8222-222222222222";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
@@ -71,6 +70,10 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
+// O salvar confere provedor/modelo permitidos (lib/ai/agents/provedor-permitido.ts): a lista do plano.
+vi.mock("@/lib/ai/modelos-da-instalacao-leitura", () => ({
+  modelosDaInstalacao: vi.fn(async () => ["openai/gpt-6-luna"]),
+}));
 vi.mock("@/lib/ai/agents/escopo", () => ({
   validarEscopoDaVersao: vi.fn(async () => ({ ok: true })),
   mensagemDoEscopo: () => "Escopo inválido.",
@@ -201,9 +204,10 @@ const PROMPT_NOVO = "Você é a recepção da clínica. Atenda com educação e 
 
 const VERSION_PAYLOAD = {
   system_prompt: PROMPT_NOVO,
-  provider: "anthropic",
-  model: "claude-sonnet-5",
-  credential_id: CREDENCIAL,
+  // Par permitido pelo plano: este arquivo mede a escolha do rascunho, não a regra de provedor.
+  provider: "openrouter",
+  model: "openai/gpt-6-luna",
+  credential_id: null,
   tool_ids: [],
   channel_session_id: CANAL,
   max_steps: 10,

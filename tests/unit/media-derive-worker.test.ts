@@ -85,6 +85,7 @@ vi.mock("@/lib/messaging/media/derive", () => ({
 vi.mock("@/lib/agent-engine/edge/llm/credentials", () => ({
   resolveOrgLlmConfig: vi.fn(async () => ({
     provider: "openai",
+    providerPedido: "openai",
     apiKey: "sk-test",
     defaultModel: "gpt-5",
     params: {},
@@ -103,6 +104,7 @@ import { resolveOrgLlmConfig, type OrgLlmConfig } from "@/lib/agent-engine/edge/
 function configResolvida(over: Partial<OrgLlmConfig> = {}): OrgLlmConfig {
   return {
     provider: "openai",
+    providerPedido: "openai",
     apiKey: "sk-test",
     origemDaChave: "credencial_da_organizacao",
     defaultModel: "gpt-5",

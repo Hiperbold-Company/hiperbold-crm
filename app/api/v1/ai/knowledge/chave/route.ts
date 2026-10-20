@@ -3,7 +3,7 @@
  *
  * Existe porque a tela de conhecimento prometia "a indexação começa em
  * instantes" sem nunca perguntar se havia chave para isso. Numa instalação sem
- * `OPENAI_API_KEY` — que é o estado de TODO primeiro deploy, já que o campo do
+ * `OPENROUTER_API_KEY` — que é o estado de TODO primeiro deploy, já que o campo do
  * instalador é opcional e pulável com Enter — o material subia, a fonte nascia
  * `ready`, e nada acontecia nunca. Nenhuma das rotas de conhecimento chamava
  * uma linha de verificação de chave.

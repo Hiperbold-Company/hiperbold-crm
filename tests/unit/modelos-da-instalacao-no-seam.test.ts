@@ -64,6 +64,7 @@ function registrySpiao() {
   };
 }
 
+// A chave da instalação é só a da OpenRouter; a da OpenAI no servidor NÃO entra no seam (20/10/2026).
 const cfg = { openrouterApiKey: "chave-da-instalacao", openaiApiKey: "chave-openai-da-instalacao", cacheTtl: "1h" as const };
 
 async function rodar(opts: Parameters<typeof poolFalso>[0]) {
@@ -92,9 +93,16 @@ describe("o seam e a chave da instalação", () => {
     expect(avisos.join(" ")).toContain("MODELOS_DA_INSTALACAO");
   });
 
-  it("provedor direto recebe o padrão com o nome dele", async () => {
+  it("agente pedindo a OpenAI sem chave própria sai pela OpenRouter, com o padrão escrito com o fabricante — nunca direto na OpenAI", async () => {
     const { chamadas } = await rodar({ provider: "openai", defaultModel: "gpt-5.6-terra" });
-    expect(chamadas[0]).toMatchObject({ provider: "openai", apiKey: "chave-openai-da-instalacao", modelId: "gpt-6-luna" });
+    expect(chamadas).toHaveLength(1);
+    expect(chamadas[0]).toMatchObject({ provider: "openrouter", apiKey: "chave-da-instalacao", modelId: "openai/gpt-6-luna" });
+    expect(chamadas.some((c) => c.provider === "openai")).toBe(false);
+  });
+
+  it("id puro do provedor pedido ganha o fabricante antes do freio (o liberado passa)", async () => {
+    const { chamadas } = await rodar({ provider: "openai", defaultModel: "gpt-6-luna" });
+    expect(chamadas[0]).toMatchObject({ provider: "openrouter", modelId: "openai/gpt-6-luna" });
   });
 
   it("modelo que está na lista configurada pela tela passa inalterado", async () => {

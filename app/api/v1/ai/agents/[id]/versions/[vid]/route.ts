@@ -16,6 +16,8 @@ import { audit } from "@/lib/audit";
 import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { versionPatchSchema } from "@/lib/ai/agents/validation";
+import { recusaDaVersao } from "@/lib/ai/agents/provedor-permitido";
+import { modelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao-leitura";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +98,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
   const admin = createAdminClient();
   const { data: existing } = await admin
     .from("ai_agent_versions")
-    .select("id, status, agent_id, organization_id, followup")
+    .select("id, status, agent_id, organization_id, followup, provider, model, credential_id")
     .eq("id", vid)
     .eq("organization_id", authz.organizationId)
     .eq("agent_id", id)
@@ -108,6 +110,30 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
       requestId,
       details: { current_status: existing.status },
     });
+  }
+
+  // Provedor e modelo PERMITIDOS: só quando o pedido mexe num dos três campos (editar outra coisa de
+  // uma versão antiga não pode ficar travado). Vale o par RESULTANTE: o que o pedido traz sobre o que
+  // a linha já tem. Mesmos códigos do criar/publicar (lib/ai/agents/provedor-permitido.ts).
+  if (
+    patch.provider !== undefined ||
+    patch.model !== undefined ||
+    patch.credential_id !== undefined
+  ) {
+    const recusa = await recusaDaVersao(
+      admin,
+      authz.organizationId,
+      {
+        provider: patch.provider ?? (existing.provider as string),
+        model: patch.model ?? (existing.model as string),
+        credential_id:
+          patch.credential_id !== undefined
+            ? patch.credential_id
+            : ((existing.credential_id as string | null) ?? null),
+      },
+      await modelosDaInstalacao(),
+    );
+    if (recusa) return fail(recusa.code, recusa.message, 422, { requestId });
   }
 
   const update: Record<string, unknown> = {};

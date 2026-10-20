@@ -78,20 +78,18 @@ describe("origem da chave do resolvedor de modelo dos workers antigos", () => {
 });
 
 describe("origem da chave do embedding no vocabulário de llm_calls", () => {
-  it("as quatro origens da escada de embedding têm tradução, e só as do .env são da instalação", () => {
+  it("as três origens da escada de embedding têm tradução, e só a do .env (OpenRouter) é da instalação", () => {
     expect(origemDaChaveParaLlmCalls("binding_do_ponto")).toBe("credencial_da_organizacao");
     expect(origemDaChaveParaLlmCalls("credencial_da_organizacao")).toBe("credencial_da_organizacao");
-    expect(origemDaChaveParaLlmCalls("gateway_da_instalacao")).toBe("chave_da_instalacao");
     expect(origemDaChaveParaLlmCalls("chave_da_instalacao")).toBe("chave_da_instalacao");
   });
 });
 
 describe("D-053 item 3: provedor e modelo reais", () => {
-  it("o provedor do embedding é o caminho real: gateway, endereço próprio ou OpenAI direto", () => {
-    expect(provedorDoEmbedding({ viaGateway: true, baseUrl: null })).toBe("gateway");
-    expect(provedorDoEmbedding({ viaGateway: true, baseUrl: "https://x.exemplo/v1" })).toBe("gateway");
-    expect(provedorDoEmbedding({ viaGateway: false, baseUrl: "https://x.exemplo/v1" })).toBe("custom");
-    expect(provedorDoEmbedding({ viaGateway: false, baseUrl: null })).toBe("openai");
+  it("o provedor do embedding é o caminho real: OpenRouter (instalação), endereço próprio ou OpenAI direto", () => {
+    expect(provedorDoEmbedding({ viaOpenRouter: true, baseUrl: "https://openrouter.ai/api/v1" })).toBe("openrouter");
+    expect(provedorDoEmbedding({ viaOpenRouter: false, baseUrl: "https://x.exemplo/v1" })).toBe("custom");
+    expect(provedorDoEmbedding({ viaOpenRouter: false, baseUrl: null })).toBe("openai");
   });
 
   it("o modelo da visão nunca sai vazio: configurado, senão o que o provedor devolveu, senão `desconhecido`", () => {

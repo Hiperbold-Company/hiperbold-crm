@@ -76,6 +76,8 @@ export async function GET(): Promise<Response> {
         "provider, model_id, display_name, supports_tools, supports_vision, input_price_per_million_cents, output_price_per_million_cents, context_window",
       )
       .is("deprecated_at", null)
+      // Variante de lote da OpenRouter (`:batch`, assíncrona): não é oferecida a ponto algum.
+      .not("model_id", "like", "%:batch")
       .order("provider")
       .order("display_name"),
     db.from("organizations").select("settings").eq("id", org.orgId).maybeSingle(),

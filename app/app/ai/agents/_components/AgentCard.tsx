@@ -20,7 +20,8 @@ interface Props {
  * Três casos, e cada um existe por um motivo medido:
  *
  *  1. versão publicada → é ela que o runtime lê (`agent-config.ts`), então é ela
- *     que a lista mostra. `ai_agents.model` não é sincronizado ao publicar.
+ *     que a lista mostra; sem publicada, o rascunho mais novo. `ai_agents.model`
+ *     não é sincronizado ao salvar nem ao publicar, e por isso nunca vence uma versão.
  *  2. `provedor/modelo` → o formato do `rag_bot` legado, onde a coluna É a fonte.
  *  3. id nu → como todo `mcp_agent` nasce (`createMcpAgentAction` grava o id do
  *     catálogo). Antes, o `split("/")[0]` devolvia o próprio modelo e a lista
@@ -36,14 +37,24 @@ interface Props {
  * o cliente ou o que ficou no rascunho — e essa é exatamente a confusão que
  * custou uma depuração no modelo errado.
  */
-export function origemDoModelo(agent: AgentRow): "versao_publicada" | "cadastro" {
-  return agent.versao_publicada?.model ? "versao_publicada" : "cadastro";
+export function origemDoModelo(agent: AgentRow): "versao_publicada" | "rascunho" | "cadastro" {
+  if (agent.versao_publicada?.model) return "versao_publicada";
+  return rascunhoVigente(agent) ? "rascunho" : "cadastro";
+}
+
+/** O rascunho mais novo (maior número de versão), ou `null`. */
+function rascunhoVigente(agent: AgentRow): { provider: string; model: string } | null {
+  const rascunhos = (agent.versoes_rascunho ?? []).filter((v) => v.model);
+  if (rascunhos.length === 0) return null;
+  return rascunhos.reduce((a, b) => (b.version_number > a.version_number ? b : a));
 }
 
 export function modeloEmVigor(agent: AgentRow): string {
-  const publicada = agent.versao_publicada;
-  if (publicada?.model) {
-    return publicada.provider ? `${publicada.provider} · ${publicada.model}` : publicada.model;
+  // Publicada vence; sem publicada, o rascunho; só sem nenhuma versão vale o cadastro
+  // (`rag_bot` legado e o agente recém-criado). `ai_agents.model` nunca vence uma versão.
+  const vigente = agent.versao_publicada?.model ? agent.versao_publicada : rascunhoVigente(agent);
+  if (vigente?.model) {
+    return vigente.provider ? `${vigente.provider} · ${vigente.model}` : vigente.model;
   }
   const cadastro = agent.model?.trim() ?? "";
   if (cadastro === "") return "—";
@@ -68,7 +79,9 @@ export function AgentCard({ agent, canWrite }: Props) {
             title={
               origemDoModelo(agent) === "versao_publicada"
                 ? t("Modelo da versão publicada — é o que atende o cliente.")
-                : t("Modelo do cadastro; nenhuma versão publicada ainda.")
+                : origemDoModelo(agent) === "rascunho"
+                  ? t("Modelo do rascunho; nenhuma versão publicada ainda.")
+                  : t("Modelo do cadastro; nenhuma versão publicada ainda.")
             }
           >
             {modeloEmVigor(agent)}

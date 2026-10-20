@@ -75,6 +75,8 @@ export async function listClassifierModels(
     .select("provider, model_id, display_name, is_default_for_provider, deprecated_at")
     .in("provider", [...origemPorProvider.keys()])
     .is("deprecated_at", null)
+    // Variante de lote da OpenRouter (assíncrona) não classifica mensagem de conversa.
+    .not("model_id", "like", "%:batch")
     .order("provider", { ascending: true })
     .order("is_default_for_provider", { ascending: false })
     .order("display_name", { ascending: true });
