@@ -15,6 +15,8 @@ import { updateLeadSchema, type UpdateLeadInput } from "@/lib/schemas/leads";
 import { parseReaisToCents } from "@/lib/money";
 import { CustomFieldsEditor, type CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
 import { agruparCampos, ROTULO_DO_GRUPO, type GrupoDeCampo } from "@/lib/leads/grupo-do-campo";
+import { SeletorDeEtiquetas } from "@/components/tags/SeletorDeEtiquetas";
+import { TETO_DE_TAGS, TETO_DO_TAMANHO_DA_TAG_DO_LEAD } from "@/lib/schemas/tetos";
 import { CaretDown, CaretRight } from "@/lib/ui/icons";
 import { EcoDoValor } from "./EcoDoValor";
 
@@ -22,7 +24,6 @@ interface FormShape {
   title: string;
   description: string;
   valueReais: string;
-  tagsRaw: string;
   expected_close_date: string;
 }
 
@@ -54,13 +55,15 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
   const t = useT();
   const edit = useEditLead(pipelineId);
   const [customFields, setCustomFields] = useState<Record<string, unknown>>(lead.custom_fields ?? {});
+  // As etiquetas do NEGÓCIO moram no estado do formulário (não gravam ao marcar):
+  // entram no patch do "Salvar", como o campo de texto fazia.
+  const [tags, setTags] = useState<string[]>(lead.tags ?? []);
 
   const form = useForm<FormShape>({
     defaultValues: {
       title: lead.title,
       description: lead.description ?? "",
       valueReais: centsToReais(lead.value_cents),
-      tagsRaw: (lead.tags ?? []).join(", "),
       expected_close_date: lead.expected_close_date ?? "",
     },
   });
@@ -70,19 +73,14 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
       title: lead.title,
       description: lead.description ?? "",
       valueReais: centsToReais(lead.value_cents),
-      tagsRaw: (lead.tags ?? []).join(", "),
       expected_close_date: lead.expected_close_date ?? "",
     });
     setCustomFields(lead.custom_fields ?? {});
+    setTags(lead.tags ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
 
   async function onSubmit(values: FormShape) {
-    const tags = values.tagsRaw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
     const reais = values.valueReais.trim();
     let valueCents: number | null = null;
     if (reais.length > 0) {
@@ -164,8 +162,19 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="tagsRaw">{t("Tags (separadas por vírgula)")}</Label>
-          <Input id="tagsRaw" placeholder="vip, recompra" {...form.register("tagsRaw")} />
+          <Label>{t("Tags")}</Label>
+          <SeletorDeEtiquetas
+            orgId={lead.organization_id}
+            value={tags}
+            onChange={setTags}
+            limite={TETO_DE_TAGS}
+            tamanhoMaximo={TETO_DO_TAMANHO_DA_TAG_DO_LEAD}
+            // O negócio guarda a grafia do cadastro ("Novo Paciente"), só aparada.
+            paraGravar={(tag) => tag.trim().slice(0, TETO_DO_TAMANHO_DA_TAG_DO_LEAD)}
+            rotuloDoCampo={t("Adicionar tag ao negócio")}
+            disabled={edit.isPending}
+            className="space-y-2 rounded-md border border-border p-2"
+          />
         </div>
 
         {agruparCampos(fieldDefs).map((bloco) => (

@@ -6444,6 +6444,16 @@ export const DICIONARIO: Traducoes = {
   // ─── Inbox: tags de contato/conversa ───
   "Sem tags no contato.": { es: "Sin etiquetas en el contacto." },
   "Adicionar tag ao contato": { es: "Agregar etiqueta al contacto" },
+  "Adicionar tag ao negócio": { es: "Agregar etiqueta al negocio" },
+  "Buscar ou criar tag…": { es: "Buscar o crear etiqueta…" },
+  "Criar etiqueta": { es: "Crear etiqueta" },
+  "Limite de {n} tags atingido. Desmarque uma para escolher outra.": { es: "Límite de {n} etiquetas alcanzado. Desmarca una para elegir otra." },
+  "Carregando etiquetas…": { es: "Cargando etiquetas…" },
+  "Não foi possível carregar as etiquetas da empresa.": { es: "No se pudieron cargar las etiquetas de la empresa." },
+  "Esta empresa ainda não tem etiquetas. Digite acima para criar a primeira.": { es: "Esta empresa aún no tiene etiquetas. Escribe arriba para crear la primera." },
+  "Nenhuma etiqueta encontrada.": { es: "No se encontró ninguna etiqueta." },
+  "Etiquetas da empresa": { es: "Etiquetas de la empresa" },
+  "Outras": { es: "Otras" },
   "Remover tag": { es: "Quitar etiqueta" },
   "Tags da conversa": { es: "Etiquetas de la conversación" },
 
