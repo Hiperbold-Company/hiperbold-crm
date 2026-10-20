@@ -595,7 +595,7 @@ export async function processRagIndexer(row: EventRow): Promise<HandlerResult> {
         last_index_status: "sem_credencial",
         last_index_error:
           "Falta uma chave da OpenAI para indexar. Cadastre uma em IA › Credenciais " +
-          "(ou defina OPENAI_API_KEY na instalação) e este material entra sozinho.",
+          "(ou defina OPENROUTER_API_KEY na instalação) e este material entra sozinho.",
       });
       await avisarNaCentral(
         row.organization_id,

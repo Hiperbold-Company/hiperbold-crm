@@ -89,7 +89,7 @@ async function chamar(statusDaOrg: string | undefined, opts: { schemaAtrasado?: 
   try {
     await runModelCall(
       p.pool,
-      { anthropicApiKey: "sk-ant-x", cacheTtl: "1h" },
+      { openrouterApiKey: "sk-ant-x", cacheTtl: "1h" },
       { tenantId: ORG, messages: [{ role: "user", content: "oi" }], ...(opts.purpose ? { purpose: opts.purpose } : {}) } as never,
       { registry: r.registry as never, log: { info: vi.fn(), warn: (m: string) => void avisos.push(m), error: vi.fn() } as never },
     );

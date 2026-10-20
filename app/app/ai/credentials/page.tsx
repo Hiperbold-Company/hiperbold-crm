@@ -116,18 +116,17 @@ export default async function CredentialsPage() {
   // A chave do `.env` também é "IA principal" — sem ela na conta, a lista
   // acusaria falta de IA a quem atende com a chave que veio na instalação.
   const ambiente = lerAmbiente();
-  const instalacaoTemIa =
-    ambiente.gateway || Object.values(ambiente.chavesDeProvedor).some(Boolean);
+  // Só a OpenRouter conta: é a única chave de IA da instalação (o gateway da Vercel e as chaves
+  // diretas da OpenAI/Anthropic não atendem a conversa — 20/10/2026).
+  const instalacaoTemIa = Object.values(ambiente.chavesDeProvedor).some(Boolean);
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Chaves de acesso à IA", idioma)}</h1>
         <p className="text-sm text-muted-foreground">
-          {/* Os provedores saem da lista única: escritos à mão, a frase citava
-              três quando já eram cinco. */}
           {traduzir(
-            "A conta de inteligência artificial é sua: você contrata direto com {provedores} e cola a chave aqui. A chave fica guardada criptografada e nunca mais aparece na tela depois de salva — nem para você. O Jev (TypeSafe) não conversa com o cliente: a chave dele serve só para decisões rápidas.",
+            "A chave do Hiperbold CRM já vem incluída no seu plano: seus agentes funcionam com ela, e o uso desconta do limite de tokens do plano. Cadastrar uma chave própria é opcional e avançado — serve para quem quer usar outro fornecedor de IA ({provedores}) e paga direto a ele. A chave fica guardada criptografada e nunca mais aparece na tela depois de salva — nem para você. O Jev (TypeSafe) não conversa com o cliente: a chave dele serve só para decisões rápidas.",
             idioma,
           ).replace(
             "{provedores}",
@@ -143,6 +142,8 @@ export default async function CredentialsPage() {
         usageMap={usageMap}
         jev={jev}
         instalacaoTemIa={instalacaoTemIa}
+        // Só o FATO de o servidor ter a chave do plano (OpenRouter): o valor dela nunca chega à tela.
+        chaveDoPlano={ambiente.chavesDeProvedor.openrouter === true}
       />
     </div>
   );

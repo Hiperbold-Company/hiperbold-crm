@@ -1623,6 +1623,27 @@ export const DICIONARIO: Traducoes = {
     es: "Solo cambia el nombre interno. Las versiones publicadas y el historial se conservan.",
   },
   "Renomeado.": { es: "Renombrado." },
+  "Empresa de IA": { es: "Empresa de IA" },
+  "Modelo do rascunho; nenhuma versão publicada ainda.": {
+    es: "Modelo del borrador; todavía no hay versión publicada.",
+  },
+  "Incluída no seu plano": { es: "Incluida en tu plan" },
+  "O uso desconta do limite de tokens do seu plano.": {
+    es: "El uso se descuenta del límite de tokens de tu plan.",
+  },
+  "Nenhuma chave própria cadastrada": { es: "Ninguna clave propia registrada" },
+  "Você não precisa cadastrar nada: a chave do Hiperbold CRM já está incluída no seu plano. Cadastre uma chave própria só se quiser outro fornecedor de IA e pagar direto a ele.": {
+    es: "No necesitas registrar nada: la clave de Hiperbold CRM ya está incluida en tu plan. Registra una clave propia solo si quieres otro proveedor de IA y pagarle directamente.",
+  },
+  "A chave do Hiperbold CRM já vem incluída no seu plano: seus agentes funcionam com ela, e o uso desconta do limite de tokens do plano. Cadastrar uma chave própria é opcional e avançado — serve para quem quer usar outro fornecedor de IA ({provedores}) e paga direto a ele. A chave fica guardada criptografada e nunca mais aparece na tela depois de salva — nem para você. O Jev (TypeSafe) não conversa com o cliente: a chave dele serve só para decisões rápidas.": {
+    es: "La clave de Hiperbold CRM ya viene incluida en tu plan: tus agentes funcionan con ella y el uso se descuenta del límite de tokens del plan. Registrar una clave propia es opcional y avanzado: sirve para quien quiere usar otro proveedor de IA ({provedores}) y le paga directamente. La clave se guarda cifrada y nunca vuelve a aparecer en pantalla después de guardada, ni siquiera para ti. Jev (TypeSafe) no conversa con el cliente: su clave sirve solo para decisiones rápidas.",
+  },
+  "não disponível no seu plano; escolha outro": { es: "no disponible en tu plan; elige otro" },
+  "Na chave do Hiperbold CRM, o uso desconta do limite do seu plano.": {
+    es: "En la clave de Hiperbold CRM, el uso se descuenta del límite de tu plan.",
+  },
+  "Chave própria do Hiperbold CRM (OpenRouter)": { es: "Clave propia de Hiperbold CRM (OpenRouter)" },
+  "OpenRouter (sua chave)": { es: "OpenRouter (tu clave)" },
   "Modelo da versão publicada — é o que atende o cliente.": {
     es: "Modelo de la versión publicada: es el que atiende al cliente.",
   },

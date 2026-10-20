@@ -12,6 +12,7 @@ import { visaoEmVigor } from "@/lib/ai/pontos/capacidade-em-vigor";
 import { modeloRealDaChamada, registrarTelemetriaSemCusto } from "@/lib/ai/telemetria-sem-custo";
 import { resolveOrgLlmConfig, type LlmEdgeConfig } from "@/lib/agent-engine/edge/llm/credentials";
 import { modeloPermitidoNaChave } from "@/lib/ai/modelos-da-instalacao-leitura";
+import { idNaRotaDaInstalacao } from "@/lib/ai/modelos-da-instalacao";
 import { createDefaultRegistry } from "@/lib/agent-engine/edge/llm/providers";
 import { createPool } from "@/lib/agent-engine/db/pool";
 import { env } from "@/lib/env";
@@ -140,10 +141,9 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
 
     // Credencial BYOK da org p/ visão (imagem).
     const llmCfg: LlmEdgeConfig = {
-      anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-      openaiApiKey: process.env.OPENAI_API_KEY,
-      // Sem esta linha, a instalação que escolheu OpenRouter no install.sh (a
-      // primeira opção do menu) não tem chave nenhuma que este seam aceite:
+      // A chave da INSTALAÇÃO é só a da OpenRouter (decisão do dono, 20/10/2026): a visão e a
+      // transcrição da instalação saem por ela, nunca direto pela OpenAI nem pela Anthropic.
+      // Sem esta linha, a instalação não tem chave nenhuma que este seam aceite:
       // toda derivação de mídia lança LlmNotConfiguredError ANTES de chegar ao
       // aviso, e o desfecho é 5 tentativas, media_derived_status='failed' e
       // ZERO avisos na Central — só um logger.error no log do contêiner.
@@ -232,18 +232,33 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
     // transcrever, capturada aqui porque é o único ponto que resolve a
     // credencial OpenAI da transcrição sem reestruturar nada.
     let openaiKeyOrigem: "chave_da_instalacao" | "credencial_da_organizacao" | null = null;
-    if (llm.provider === "openai") {
+    // EXCEÇÃO deliberada à regra "chave da instalação = OpenRouter" (decisão do dono, 20/10/2026):
+    // a TRANSCRIÇÃO da instalação continua direto no Whisper da OpenAI com `OPENAI_API_KEY`, porque
+    // não dá para provar a rota de transcrição da OpenRouter antes de publicar, e quebrar a
+    // transcrição em produção é pior. `resolveOrgLlmConfig` já não devolve essa chave (a escada da
+    // instalação é só OpenRouter), então ela é lida do ambiente aqui, e só aqui.
+    if (llm.provider === "openai" && llm.origemDaChave === "credencial_da_organizacao") {
       openaiKey = llm.apiKey;
       openaiKeyOrigem = llm.origemDaChave;
     } else {
+      let daOrganizacao: string | null = null;
       try {
         const oa = await resolveOrgLlmConfig(derivePool(), llmCfg, row.organization_id, {
           provider: "openai",
         });
-        openaiKey = oa.apiKey;
-        openaiKeyOrigem = oa.origemDaChave;
+        // Só a credencial OpenAI da PRÓPRIA organização serve ao Whisper. Se o resolvedor caiu na chave
+        // da instalação, o que veio é a OpenRouter — que NÃO pode ir para api.openai.com.
+        if (oa.origemDaChave === "credencial_da_organizacao") daOrganizacao = oa.apiKey;
       } catch {
-        openaiKey = null; // sem credencial e sem OPENAI_API_KEY: áudio fica sem transcrição
+        // Sem chave nenhuma no resolvedor: segue para a chave OpenAI da instalação, se houver.
+      }
+      if (daOrganizacao !== null) {
+        openaiKey = daOrganizacao;
+        openaiKeyOrigem = "credencial_da_organizacao";
+      } else {
+        const daInstalacao = (process.env.OPENAI_API_KEY ?? "").trim();
+        openaiKey = daInstalacao === "" ? null : daInstalacao; // sem nenhuma: áudio fica sem transcrição
+        openaiKeyOrigem = openaiKey === null ? null : "chave_da_instalacao";
       }
     }
 
@@ -274,15 +289,17 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
     // Freio de custo: na chave da instalação só rodam os modelos de
     // `MODELOS_DA_INSTALACAO` (a visão também gasta dos tokens do plano). Fora da
     // lista usa o padrão; chave própria da empresa passa intacta.
+    // A chave da instalação sai pela OpenRouter, que só entende o id com fabricante: o id puro do
+    // catálogo de um provedor direto ganha o prefixo do provedor pedido antes do freio.
     if (chaveEhDaInstalacao && llm.defaultModel) {
       const permitido = await modeloPermitidoNaChave({
         organizationId: row.organization_id,
         origemDaChave: llm.origemDaChave,
         provedor: llm.provider,
-        modelId: llm.defaultModel,
+        modelId: idNaRotaDaInstalacao(llm.providerPedido, llm.defaultModel),
         ponto: "media_derive",
       });
-      if (permitido.trocado) llm = { ...llm, defaultModel: permitido.modelId };
+      llm = { ...llm, defaultModel: permitido.modelId };
     }
 
     // O 5º argumento é a `base_url` do binding: o factory precisa dela para não

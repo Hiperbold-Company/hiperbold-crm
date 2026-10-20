@@ -53,8 +53,9 @@ export default async function RouterEditorPage({ params }: { params: Promise<{ i
   // Só os modelos que esta organização consegue usar de fato — ver a razão em
   // lib/ai/classifier-models.
   const classifierModels = await listClassifierModels(supabase, activeOrg.orgId, {
-    anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
-    openai: Boolean(process.env.OPENAI_API_KEY),
+    // A chave da instalação é a da OpenRouter e serve aos dois (decisão do dono, 20/10/2026).
+    anthropic: Boolean(process.env.OPENROUTER_API_KEY),
+    openai: Boolean(process.env.OPENROUTER_API_KEY),
   });
 
   const initialState: RouterDetailState = {

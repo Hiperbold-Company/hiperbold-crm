@@ -32,48 +32,29 @@ beforeEach(() => {
   for (const k of Object.keys(envMock)) delete envMock[k];
 });
 
-describe("resolveLanguageModel", () => {
-  it("com gateway da Vercel devolve a STRING (o gateway roteia e fatura)", () => {
-    envMock.AI_GATEWAY_API_KEY = "gw-key";
-    expect(resolveLanguageModel("anthropic/claude-haiku-4-5")).toBe(
-      "anthropic/claude-haiku-4-5",
-    );
-  });
-
-  it("só com ANTHROPIC_API_KEY devolve PROVIDER, não string — o bug do worker", () => {
-    envMock.ANTHROPIC_API_KEY = "sk-ant-xxx";
-    const model = resolveLanguageModel("anthropic/claude-haiku-4-5");
+describe("resolveLanguageModel — a chave da instalação sai SEMPRE pela OpenRouter", () => {
+  it("com OPENROUTER_API_KEY devolve provider explícito (nunca string que o gateway da Vercel roteie)", () => {
+    envMock.OPENROUTER_API_KEY = "sk-or-xxx";
+    const model = resolveLanguageModel("openai/gpt-6-luna");
     expect(model).not.toBeNull();
     expect(typeof model).not.toBe("string");
   });
 
-  it("com OPENROUTER_API_KEY devolve provider (ids da OpenRouter são provider/modelo)", () => {
-    envMock.OPENROUTER_API_KEY = "sk-or-xxx";
-    const model = resolveLanguageModel("anthropic/claude-haiku-4-5");
-    expect(model).not.toBeNull();
-    expect(typeof model).not.toBe("string");
-  });
-
-  it("gateway da Vercel tem precedência sobre OpenRouter", () => {
+  it("o gateway da Vercel NÃO tem mais precedência: com as duas chaves, vale a OpenRouter", () => {
     envMock.AI_GATEWAY_API_KEY = "gw-key";
     envMock.OPENROUTER_API_KEY = "sk-or-xxx";
-    expect(typeof resolveLanguageModel("anthropic/claude-haiku-4-5")).toBe("string");
+    expect(typeof resolveLanguageModel("anthropic/claude-haiku-4-5")).not.toBe("string");
   });
 
-  it("id openai/* cai no provider OpenAI quando só há OPENAI_API_KEY", () => {
+  it("OpenAI e Anthropic no servidor NÃO atendem a chave da instalação: sem OpenRouter devolve null", () => {
     envMock.OPENAI_API_KEY = "sk-openai";
-    const model = resolveLanguageModel("openai/gpt-4o-mini");
-    expect(model).not.toBeNull();
-    expect(typeof model).not.toBe("string");
+    envMock.ANTHROPIC_API_KEY = "sk-ant-xxx";
+    envMock.AI_GATEWAY_API_KEY = "gw-key";
+    expect(resolveLanguageModel("openai/gpt-6-luna")).toBeNull();
+    expect(resolveLanguageModel("anthropic/claude-haiku-4-5")).toBeNull();
   });
 
   it("sem chave nenhuma devolve null, para o chamador PULAR com motivo claro", () => {
-    expect(resolveLanguageModel("anthropic/claude-haiku-4-5")).toBeNull();
-  });
-
-  it("chave errada para o prefixo do id também é null (não inventa provider)", () => {
-    // Só OpenAI configurada, mas o id pede Anthropic: não dá para atender.
-    envMock.OPENAI_API_KEY = "sk-openai";
-    expect(resolveLanguageModel("anthropic/claude-haiku-4-5")).toBeNull();
+    expect(resolveLanguageModel("openai/gpt-6-luna")).toBeNull();
   });
 });

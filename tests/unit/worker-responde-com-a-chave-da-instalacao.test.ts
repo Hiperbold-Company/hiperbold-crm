@@ -1,4 +1,13 @@
 /**
+ * A CHAVE DA INSTALAÇÃO ATENDE O WORKER — e ela é SEMPRE a OpenRouter (decisão do dono, 20/10/2026).
+ *
+ * Histórico (issue #1181): a instalação com só `OPENAI_API_KEY` não respondia, porque o id BARE do
+ * catálogo não achava rota. Hoje a chave da instalação é só `OPENROUTER_API_KEY`: o id bare ganha o
+ * fabricante pelo catálogo, o freio de custo troca o que não é liberado pelo Luna, e OpenAI/Anthropic
+ * no servidor NÃO atendem este caminho.
+ *
+ * Texto original do teste:
+ *
  * A CHAVE DA INSTALAÇÃO ATENDE O WORKER — inclusive quando só há `OPENAI_API_KEY`.
  *
  * O `install.sh` oferece OpenAI como provedor e a chave vai para
@@ -91,29 +100,36 @@ beforeEach(() => {
   estado.leiturasDeOrganizacao = 0;
 });
 
-describe("o worker responde com a chave da instalação", () => {
-  it("só com OPENAI_API_KEY, o id do catálogo resolve o ponto", async () => {
-    envMock.OPENAI_API_KEY = "sk-openai";
+const LUNA = "openai/gpt-6-luna";
+/** O id bare do catálogo, escrito com o fabricante que o catálogo lhe dá — o que a OpenRouter entende. */
+const TERRA_NA_ROTA = "openai/gpt-5.6-terra";
+// O setup dos testes liga o freio em `*` (libera todos os modelos): a troca pelo Luna é provada em
+// `modelos-da-instalacao-no-gateway.test.ts`. Aqui o que se prova é a ROTA: sempre OpenRouter.
+
+describe("o worker responde com a chave da instalação (sempre a OpenRouter)", () => {
+  it("só com OPENROUTER_API_KEY, o id bare do catálogo resolve o ponto, escrito com o fabricante", async () => {
+    envMock.OPENROUTER_API_KEY = "sk-or";
 
     const resolvido = await resolverModeloDoPonto("bot_respond", ORG, MODELO_PADRAO_DA_OPENAI);
 
     expect(resolvido).not.toBeNull();
-    expect(resolvido?.modelId).toBe(MODELO_PADRAO_DA_OPENAI);
+    expect(resolvido?.modelId).toBe(TERRA_NA_ROTA);
     expect(resolvido?.origem).toBe("padrao");
   });
 
-  it("o id que chega ao provedor é o do catálogo, sem a rota", async () => {
-    envMock.OPENAI_API_KEY = "sk-openai";
+  it("o id que chega à OpenRouter leva o fabricante (ela não entende id bare)", async () => {
+    envMock.OPENROUTER_API_KEY = "sk-or";
 
     const resolvido = await resolverModeloDoPonto("bot_respond", ORG, MODELO_PADRAO_DA_OPENAI);
-    const instanciado = resolvido?.model as { modelId?: string } | undefined;
+    const instanciado = resolvido?.model as { modelId?: string; provider?: string } | undefined;
 
     expect(typeof resolvido?.model).toBe("object");
-    expect(instanciado?.modelId).toBe(MODELO_PADRAO_DA_OPENAI);
+    expect(instanciado?.modelId).toBe(TERRA_NA_ROTA);
+    expect(instanciado?.provider).toMatch(/openai/); // o SDK OpenAI-compatível apontado à OpenRouter
   });
 
   it("binding sem credencial utilizável também cai na chave da instalação", async () => {
-    envMock.OPENAI_API_KEY = "sk-openai";
+    envMock.OPENROUTER_API_KEY = "sk-or";
     estado.binding = {
       provider: "openai",
       credential_id: null,
@@ -133,47 +149,48 @@ describe("o worker responde com a chave da instalação", () => {
     expect(resolvido).toBeNull();
   });
 
-  it("id de outro provedor não vira chamada com a chave da OpenAI", async () => {
-    envMock.OPENAI_API_KEY = "sk-openai";
+  it.each([["OPENAI_API_KEY"], ["ANTHROPIC_API_KEY"], ["AI_GATEWAY_API_KEY"]])(
+    "só com %s no servidor, a chave da instalação NÃO atende: o ponto pula (nunca vai direto ao fabricante)",
+    async (variavel) => {
+      envMock[variavel] = "sk-qualquer";
 
-    const resolvido = await resolverModeloDoPonto(
-      "bot_respond",
-      ORG,
-      "anthropic/claude-haiku-4-5",
-    );
+      expect(await resolverModeloDoPonto("bot_respond", ORG, MODELO_PADRAO_DA_OPENAI)).toBeNull();
+      expect(await resolverModeloDoPonto("bot_respond", ORG, LUNA)).toBeNull();
+    },
+  );
 
-    expect(resolvido).toBeNull();
+  it("modelo de outro fabricante também sai pela OpenRouter (nunca direto na Anthropic)", async () => {
+    envMock.OPENROUTER_API_KEY = "sk-or";
+
+    const resolvido = await resolverModeloDoPonto("bot_respond", ORG, "anthropic/claude-haiku-4-5");
+
+    expect(resolvido?.modelId).toBe("anthropic/claude-haiku-4-5");
+    expect((resolvido?.model as { provider?: string }).provider).toMatch(/openai/); // SDK OpenAI-compatível
   });
 
-  it("id canônico prefixado segue resolvendo — não-regressão do degrau antigo", async () => {
-    envMock.OPENAI_API_KEY = "sk-openai";
+  it("id canônico liberado segue resolvendo, sem trocar", async () => {
+    envMock.OPENROUTER_API_KEY = "sk-or";
 
-    const resolvido = await resolverModeloDoPonto("bot_respond", ORG, "openai/gpt-5.6-terra");
+    const resolvido = await resolverModeloDoPonto("bot_respond", ORG, LUNA);
 
     expect(resolvido).not.toBeNull();
-    expect(resolvido?.modelId).toBe("openai/gpt-5.6-terra");
+    expect(resolvido?.modelId).toBe(LUNA);
   });
 
   it("id prefixado não paga a leitura do provedor da organização", async () => {
-    // O caminho da instalação padrão (chave Anthropic, sem credencial
-    // cadastrada) roda a cada evento do worker de sentimento. A única leitura
-    // de `organizations` que lhe cabe é a da procura por credencial; a do
-    // provedor só serve a id BARE e seria descartada aqui.
-    envMock.ANTHROPIC_API_KEY = "sk-ant";
+    // O caminho da instalação padrão roda a cada evento do worker de sentimento. A única leitura de
+    // `organizations` que lhe cabe é a da procura por credencial; a do provedor só serve a id BARE.
+    envMock.OPENROUTER_API_KEY = "sk-or";
 
-    const resolvido = await resolverModeloDoPonto(
-      "sentiment_classify",
-      ORG,
-      "anthropic/claude-haiku-4-5",
-    );
+    const resolvido = await resolverModeloDoPonto("sentiment_classify", ORG, LUNA);
 
     expect(resolvido).not.toBeNull();
     expect(estado.leiturasDeOrganizacao).toBe(1);
   });
 
   it("caminho 1 — a chave da CONTA responde, sem chave nenhuma no ambiente", async () => {
-    // Sem `OPENAI_API_KEY` de propósito: quem paga é a credencial que a
-    // organização cadastrou e validou em IA › Credenciais.
+    // Sem chave de instalação de propósito: quem paga é a credencial que a organização cadastrou e
+    // validou em IA › Credenciais (e ela é direta no provedor dela).
     estado.settings = { llm: { provider: "openai" } };
     estado.credencial = { api_key_encrypted: "x", api_key_iv: "y", api_key_tag: "z" };
 
@@ -181,10 +198,11 @@ describe("o worker responde com a chave da instalação", () => {
 
     expect(resolvido).not.toBeNull();
     expect(resolvido?.origem).toBe("credencial_da_organizacao");
+    expect(resolvido?.modelId).toBe(MODELO_PADRAO_DA_OPENAI);
   });
 
-  it("caminho 2 — sem chave na conta, quem responde é a chave da PLATAFORMA", async () => {
-    envMock.OPENAI_API_KEY = "sk-openai";
+  it("caminho 2 — sem chave na conta, quem responde é a chave da PLATAFORMA (OpenRouter)", async () => {
+    envMock.OPENROUTER_API_KEY = "sk-or";
     estado.settings = { llm: { provider: "openai" } };
 
     const resolvido = await resolverModeloDoPonto("bot_respond", ORG, MODELO_PADRAO_DA_OPENAI);
@@ -193,13 +211,10 @@ describe("o worker responde com a chave da instalação", () => {
     expect(resolvido?.origem).toBe("padrao");
   });
 
-  it("conta no provedor SEM chave no ambiente: o degrau é o do MODELO no catálogo", async () => {
-    // O caso que a issue #1181 descreve e que a main ainda não respondia: o
-    // gatilho semeia `anthropic` na organização, o instalador coletou só
-    // `OPENAI_API_KEY`, e o id BARE do catálogo é da OpenAI. A rota do provedor
-    // da conta não acha chave nenhuma, o ponto pedia silêncio com
-    // `ai_gateway_key_missing` — e a chave da instalação estava lá o tempo todo.
-    envMock.OPENAI_API_KEY = "sk-openai";
+  it("conta num provedor qualquer (anthropic semeado): a rota da instalação não depende dele", async () => {
+    // O caso da issue #1181: o gatilho semeava `anthropic`, e o id BARE do catálogo é da OpenAI.
+    // Agora a chave da instalação é a OpenRouter, que atende seja qual for o provedor da conta.
+    envMock.OPENROUTER_API_KEY = "sk-or";
     estado.settings = { llm: { provider: "anthropic" } };
     estado.catalogo = { provider: "openai" };
 
@@ -207,18 +222,5 @@ describe("o worker responde com a chave da instalação", () => {
 
     expect(resolvido).not.toBeNull();
     expect(resolvido?.origem).toBe("padrao");
-  });
-
-  it("o catálogo não vira passe livre: id de outro provedor continua sem resposta", async () => {
-    // Controle negativo do degrau novo: a instalação tem só a chave da OpenAI,
-    // mas o id é da Anthropic — mandá-lo para o endpoint da OpenAI seria
-    // adivinhar provedor, que é exatamente o freio do PR #151.
-    envMock.OPENAI_API_KEY = "sk-openai";
-    estado.settings = { llm: { provider: "anthropic" } };
-    estado.catalogo = { provider: "anthropic" };
-
-    const resolvido = await resolverModeloDoPonto("bot_respond", ORG, "claude-haiku-4-5");
-
-    expect(resolvido).toBeNull();
   });
 });

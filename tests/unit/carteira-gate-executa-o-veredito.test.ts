@@ -122,7 +122,7 @@ async function chamar(
   try {
     await runModelCall(
       p.pool,
-      { anthropicApiKey: "sk-ant-x", cacheTtl: "1h", ...cfg },
+      { openrouterApiKey: "sk-ant-x", cacheTtl: "1h", ...cfg },
       { tenantId: ORG, messages: [{ role: "user", content: "oi" }], ...input } as never,
       { registry: r.registry as never, log: l.log },
     );
@@ -248,7 +248,7 @@ describe("o gate da carteira de tokens lê billing_settings e executa o veredito
       const p = poolFalso({ modoDeBilling: "avisar" });
       const r1 = registryQueRegistra();
       const l1 = loggerFalso();
-      const cfg = { anthropicApiKey: "sk-ant-x", cacheTtl: "1h" as const };
+      const cfg = { openrouterApiKey: "sk-ant-x", cacheTtl: "1h" as const };
       const input = { tenantId: ORG, messages: [{ role: "user" as const, content: "oi" }] };
       await expect(
         runModelCall(p.pool, cfg, input as never, { registry: r1.registry as never, log: l1.log }),

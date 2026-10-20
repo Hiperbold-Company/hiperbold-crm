@@ -87,8 +87,9 @@ const RASCUNHO = {
   version_number: 1,
   status: "draft",
   system_prompt: "Você é a Sofia, assistente do consultório. Atenda com acolhimento.",
-  provider: "anthropic",
-  model: "claude-sonnet-5",
+  // A chave da instalação sai pela OpenRouter (20/10/2026): é o único par sem credencial própria.
+  provider: "openrouter",
+  model: "openai/gpt-6-luna",
   credential_id: null,
   tool_ids: [],
   channel_session_id: null,
@@ -128,7 +129,7 @@ function abrirEditor(
         // Instalação fresca: NENHUMA credencial cadastrada na tela de IA, e a
         // chave da Anthropic vindo do ambiente.
         credentials={[] as never}
-        provedoresDaInstalacao={["anthropic"]}
+        provedoresDaInstalacao={["openrouter"]}
         channelSessions={(opcoes.canais ?? []) as never}
         draft={versao as never}
         published={null}

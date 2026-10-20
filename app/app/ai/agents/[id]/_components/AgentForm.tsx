@@ -37,6 +37,15 @@ import Link from "next/link";
 
 import { TETO_TOOLS_POR_AGENTE } from "@/lib/mcp/tools/selecao-por-pacote";
 import { PROVEDORES } from "@/lib/ai/pontos/provedores";
+import {
+  AJUDA_DA_CHAVE_DO_PLANO,
+  AVISO_DO_PAR_NAO_PERMITIDO,
+  VALOR_DA_OPCAO_DO_PLANO,
+  VALOR_DO_PAR_NAO_PERMITIDO,
+  opcaoInicialDoAgenteNovo,
+  opcoesDeProvedor,
+  valorDaOpcaoEmVigor,
+} from "@/lib/ai/agents/opcoes-de-provedor";
 
 import { ModelPicker, useModelMeta } from "./ModelPicker";
 import { CHAVE_DA_INSTALACAO, CredentialPicker, STATUS_LABEL, findCredential } from "./CredentialPicker";
@@ -364,6 +373,22 @@ export function AgentForm(props: Props) {
   const isEdit = props.mode === "edit";
   const readOnly = props.readOnly ?? false;
 
+  // As opções do campo "Empresa de inteligência artificial": a chave do plano e SÓ os provedores
+  // que a empresa conectou (credencial ativa e validada). Ver `lib/ai/agents/opcoes-de-provedor.ts`.
+  const opcoesDeIA = React.useMemo(
+    () =>
+      opcoesDeProvedor({
+        credenciais: props.credentials.map((c) => ({
+          id: c.id,
+          provider: c.provider,
+          conectada: c.is_active !== false && credentialStatus(c) === "validated",
+          criadaEm: (c as { created_at?: string | null }).created_at ?? null,
+        })),
+        provedoresConhecidos: PROVEDORES,
+      }),
+    [props.credentials],
+  );
+
   const baseline = React.useMemo(() => {
     if (isEdit) {
       // `base` já traz a regra (rascunho vigente > publicada > última versão).
@@ -372,10 +397,27 @@ export function AgentForm(props: Props) {
       const ref = props.base ?? props.draft ?? props.published;
       return buildState({ agent: props.agent, version: ref, t });
     }
-    return buildState({ version: null, t, provedorPadrao: props.provedorPadrao });
-  }, [isEdit, props, t]);
+    // Agente NOVO: o provedor que a empresa já usa, se ela o conectou; senão a chave do plano.
+    const novo = buildState({ version: null, t, provedorPadrao: props.provedorPadrao });
+    const inicial = opcaoInicialDoAgenteNovo({ provedorPadrao: props.provedorPadrao, opcoes: opcoesDeIA });
+    return {
+      ...novo,
+      provider: inicial.provider as Provider,
+      credential_id: inicial.credentialId ?? CHAVE_DA_INSTALACAO,
+    };
+  }, [isEdit, props, t, opcoesDeIA]);
+
 
   const [form, setForm] = React.useState<FormState>(baseline);
+  // Qual opção do campo corresponde ao que o agente tem. Par que o plano não permite (agente antigo em
+  // Anthropic na chave da instalação, ou provedor desconectado depois) vira o valor "atual", com aviso.
+  const valorDaOpcao = valorDaOpcaoEmVigor({
+    provider: form.provider,
+    credentialId: form.credential_id,
+    marcadorDaInstalacao: CHAVE_DA_INSTALACAO,
+    opcoes: opcoesDeIA,
+  });
+  const parNaoPermitido = valorDaOpcao === VALOR_DO_PAR_NAO_PERMITIDO;
   const [saving, setSaving] = React.useState(false);
   const [publishing, setPublishing] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -404,9 +446,16 @@ export function AgentForm(props: Props) {
     setForm((prev) => ({ ...prev, ...p }));
   }
 
-  // Quando provider muda, limpa credential e modelo (eles dependem do provider).
-  function changeProvider(p: Provider) {
-    patch({ provider: p, credential_id: "", model: "" });
+  // Escolher outra opção limpa o modelo (ele depende da empresa de IA). A chave do plano grava a
+  // OpenRouter com "a chave desta instalação"; um provedor conectado grava a credencial dele.
+  function escolherOpcaoDeIA(valor: string) {
+    const opcao = opcoesDeIA.find((o) => o.valor === valor);
+    if (!opcao) return;
+    patch({
+      provider: opcao.provider as Provider,
+      credential_id: opcao.credentialId ?? CHAVE_DA_INSTALACAO,
+      model: "",
+    });
   }
 
   const cred = findCredential(props.credentials, form.credential_id);
@@ -448,6 +497,10 @@ export function AgentForm(props: Props) {
       errors.system_prompt =
         `${t("As instruções têm")} ${tamanhoDoPrompt.toLocaleString("pt-BR")} ${t("caracteres, e o máximo é 20.000. Corte")} ` +
         `${(tamanhoDoPrompt - 20000).toLocaleString("pt-BR")} ${t("para conseguir salvar.")}`;
+    // O par provedor/chave que o plano não permite (ou que a empresa desconectou) não salva nem
+    // publica: o servidor recusa o mesmo (`lib/ai/agents/provedor-permitido.ts`).
+    if (parNaoPermitido)
+      errors.provider = `${t("Empresa de IA")} ${form.provider}: ${t(AVISO_DO_PAR_NAO_PERMITIDO)}.`;
     if (!form.model) errors.model = t("Escolha o modelo de inteligência artificial.");
     if (!form.credential_id)
       errors.credential_id = t("Escolha a chave de acesso da empresa de inteligência artificial.");
@@ -483,7 +536,7 @@ export function AgentForm(props: Props) {
       }
     }
     return errors;
-  }, [form, t]);
+  }, [form, t, parNaoPermitido]);
 
   const isValid = Object.keys(validation).length === 0;
 
@@ -864,8 +917,8 @@ export function AgentForm(props: Props) {
             <div className="space-y-1">
               <Label htmlFor="provider">{t("Empresa de inteligência artificial")}</Label>
               <Select
-                value={form.provider}
-                onValueChange={(v) => changeProvider(v as Provider)}
+                value={valorDaOpcao}
+                onValueChange={(v) => escolherOpcaoDeIA(v)}
                 disabled={disabled}
               >
                 <SelectTrigger id="provider">
@@ -873,20 +926,34 @@ export function AgentForm(props: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   {/*
-                    Derivado de PROVEDORES, nunca escrito à mão: esta lista tinha
-                    três itens fixos enquanto o sistema executava quatro, e a
-                    OpenRouter — a opção [1] do instalador — não aparecia. Um
-                    agente publicado nela abria com o campo em BRANCO, porque
-                    nenhum item casava com o valor, e o primeiro save silencioso
-                    trocava o provedor do dono por outro.
+                    SÓ a chave do plano e os provedores que a empresa CONECTOU em
+                    Configurações › IA › "Usar minha própria chave de IA (avançado)"
+                    (credencial ativa e validada). Provedor sem chave conectada não
+                    aparece — a lista antiga oferecia sete empresas, e escolher uma
+                    sem chave só terminava em "chave inválida" na hora de publicar.
                   */}
-                  {PROVEDORES.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.rotulo}
+                  {opcoesDeIA.map((o) => (
+                    <SelectItem key={o.valor} value={o.valor}>
+                      {t(o.rotulo)}
                     </SelectItem>
                   ))}
+                  {parNaoPermitido ? (
+                    <SelectItem value={VALOR_DO_PAR_NAO_PERMITIDO} disabled>
+                      {PROVEDORES.find((p) => p.id === form.provider)?.rotulo ?? form.provider} —{" "}
+                      {t(AVISO_DO_PAR_NAO_PERMITIDO)}
+                    </SelectItem>
+                  ) : null}
                 </SelectContent>
               </Select>
+              {valorDaOpcao === VALOR_DA_OPCAO_DO_PLANO ? (
+                <p className="text-xs text-muted-foreground">{t(AJUDA_DA_CHAVE_DO_PLANO)}</p>
+              ) : null}
+              {parNaoPermitido ? (
+                <p className="text-xs text-destructive">
+                  {(PROVEDORES.find((p) => p.id === form.provider)?.rotulo ?? form.provider) + " — "}
+                  {t(AVISO_DO_PAR_NAO_PERMITIDO)}
+                </p>
+              ) : null}
             </div>
 
             <ModelPicker
@@ -902,15 +969,32 @@ export function AgentForm(props: Props) {
               <p className="text-xs text-destructive">{validation.model}</p>
             ) : null}
 
-            <CredentialPicker
-              provider={form.provider}
-              credentials={props.credentials}
-              value={form.credential_id}
-              onChange={(id) => patch({ credential_id: id })}
-              disabled={disabled}
-              id="credential_id"
-              instalacaoTemChave={(props.provedoresDaInstalacao ?? []).includes(form.provider)}
-            />
+            {/* A chave do plano não tem o que escolher; o seletor só aparece para a chave da própria
+                empresa (e, com uma credencial só, serve para ver qual está valendo). */}
+            {valorDaOpcao !== VALOR_DA_OPCAO_DO_PLANO && !parNaoPermitido ? (
+              <CredentialPicker
+                provider={form.provider}
+                credentials={props.credentials}
+                value={form.credential_id}
+                onChange={(id) => patch({ credential_id: id })}
+                disabled={disabled}
+                id="credential_id"
+                instalacaoTemChave={false}
+              />
+            ) : null}
+            {valorDaOpcao === VALOR_DA_OPCAO_DO_PLANO ? (
+              <p className="text-xs text-muted-foreground">
+                <Link
+                  href="/app/ai/credentials"
+                  className="font-medium text-foreground underline underline-offset-4"
+                >
+                  {t("Usar minha própria chave de IA (avançado)")}
+                </Link>
+              </p>
+            ) : null}
+            {validation.provider ? (
+              <p className="text-xs text-destructive">{validation.provider}</p>
+            ) : null}
             {validation.credential_id ? (
               <p className="text-xs text-destructive">{validation.credential_id}</p>
             ) : null}

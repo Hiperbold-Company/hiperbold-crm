@@ -116,7 +116,7 @@ describe("o retrato da instalação", () => {
     const r = await lerRetratoDaInstalacao({
       supabase: clientFalso(tabelas([])),
       orgId: ORG,
-      ambiente: { ...SEM_AMBIENTE, ANTHROPIC_API_KEY: "sk-ant-xxx" },
+      ambiente: { ...SEM_AMBIENTE, OPENROUTER_API_KEY: "sk-or-xxx" },
     });
     expect(r.inteligencia.origemDaChave).toBe("instalacao");
     expect(r.inteligencia.chaveEmVerificacao).toBe(false);

@@ -31,7 +31,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { modeloEmVigor } from "@/app/app/ai/agents/_components/AgentCard";
+import { modeloEmVigor, origemDoModelo } from "@/app/app/ai/agents/_components/AgentCard";
 import type { AgentRow } from "@/hooks/ai/useAgent";
 
 function agente(over: Partial<AgentRow>): AgentRow {
@@ -71,6 +71,33 @@ describe("modelo mostrado no cartão do agente", () => {
       versao_publicada: { provider: "anthropic", model: "claude-sonnet-5" },
     });
     expect(modeloEmVigor(a)).toBe("anthropic · claude-sonnet-5");
+  });
+
+  it("sem versão publicada, mostra o modelo do RASCUNHO e não o do cadastro (Salomão: cadastro Sonnet, rascunho Luna)", () => {
+    const a = agente({
+      model: "anthropic/claude-sonnet-4-6",
+      published_version_id: null,
+      versoes_rascunho: [{ provider: "openrouter", model: "openai/gpt-6-luna", version_number: 1 }],
+    });
+    expect(modeloEmVigor(a)).toBe("openrouter · openai/gpt-6-luna");
+    expect(origemDoModelo(a)).toBe("rascunho");
+  });
+
+  it("com vários rascunhos vale o de maior número; a publicada vence qualquer rascunho", () => {
+    const rascunhos = [
+      { provider: "openrouter", model: "openai/gpt-6-luna", version_number: 3 },
+      { provider: "anthropic", model: "claude-sonnet-5", version_number: 2 },
+    ];
+    expect(modeloEmVigor(agente({ versoes_rascunho: rascunhos }))).toBe("openrouter · openai/gpt-6-luna");
+    expect(
+      modeloEmVigor(
+        agente({
+          versoes_rascunho: rascunhos,
+          versao_publicada: { provider: "openrouter", model: "openai/gpt-6-luna" },
+        }),
+      ),
+    ).toBe("openrouter · openai/gpt-6-luna");
+    expect(origemDoModelo(agente({ model: "x" }))).toBe("cadastro");
   });
 
   it("mantém provedor · modelo para o rag_bot legado, onde a coluna é a fonte", () => {

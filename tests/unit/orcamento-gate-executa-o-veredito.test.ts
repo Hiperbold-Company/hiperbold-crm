@@ -153,7 +153,7 @@ async function chamar(
   try {
     await runModelCall(
       p.pool,
-      { anthropicApiKey: "sk-ant-x", cacheTtl: "1h", ...cfg },
+      { openrouterApiKey: "sk-ant-x", cacheTtl: "1h", ...cfg },
       { tenantId: ORG, messages: [{ role: "user", content: "oi" }], ...input } as never,
       { registry: r.registry as never, log: l.log },
     );

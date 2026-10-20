@@ -23,7 +23,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { idNoProvedor } from "@/lib/ai/modelos-da-instalacao";
+import { ehVarianteEmLote, idNoProvedor } from "@/lib/ai/modelos-da-instalacao";
 
 export interface ModeloDoCatalogo {
   model_id: string;
@@ -44,7 +44,8 @@ export type EscolhaDeModelo =
  * requisito, e é a mesma régua que `validarBinding` aplica no painel.
  */
 function serve(m: ModeloDoCatalogo): boolean {
-  return m.supports_tools === true;
+  // A variante `:batch` é assíncrona (Batch API) e não conversa: nunca é o modelo escolhido.
+  return m.supports_tools === true && !ehVarianteEmLote(m.model_id);
 }
 
 /** Soma dos preços conhecidos; ausente conta como caro para ir ao fim da fila. */

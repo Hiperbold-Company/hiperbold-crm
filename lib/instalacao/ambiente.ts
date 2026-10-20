@@ -47,10 +47,18 @@ export interface AmbienteDaInstalacao {
   transporteDeWhatsapp: TransporteDeWhatsapp;
 }
 
-/** O nome da variável de chave de plataforma de cada provedor. */
+/**
+ * O nome da variável de chave de plataforma de cada provedor.
+ *
+ * A chave da INSTALAÇÃO é uma só, a da OpenRouter (decisão do dono, 20/10/2026): ela atende
+ * `anthropic`, `openai` e `openrouter` — o agente que pede qualquer um dos três e não tem chave
+ * própria sai pela OpenRouter (`resolveOrgLlmConfig`). `ANTHROPIC_API_KEY` e `OPENAI_API_KEY`
+ * continuam podendo existir no servidor para outros usos, mas NÃO contam como chave de
+ * plataforma de IA: não é por elas que a conversa sai.
+ */
 const VARIAVEL_DA_CHAVE: Record<string, string> = {
-  anthropic: "ANTHROPIC_API_KEY",
-  openai: "OPENAI_API_KEY",
+  anthropic: "OPENROUTER_API_KEY",
+  openai: "OPENROUTER_API_KEY",
   openrouter: "OPENROUTER_API_KEY",
   // O Google não tem chave de plataforma: `resolveOrgLlmConfig` não tem ramo de
   // fallback para ele, e nenhuma variável existe em `lib/env.ts` nem no

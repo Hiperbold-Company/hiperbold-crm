@@ -9,6 +9,8 @@ import { capacidadesPadraoDoOnboarding } from "@/lib/ai/agents/capacidades-padra
 import { versionCreateSchema } from "@/lib/ai/agents/validation";
 import { lockRouter, writeRouterMembers } from "@/lib/ai/agents/router-members";
 import { chaveDePlataforma } from "@/lib/ai/runtime/agent";
+import { modeloPadraoDaInstalacao, PROVEDOR_DA_CHAVE_DA_INSTALACAO } from "@/lib/ai/modelos-da-instalacao";
+import { modelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao-leitura";
 import { PROVIDERS } from "@/lib/ai/agents/validation";
 import { capabilitiesOf } from "@/lib/channels/capabilities";
 import type { ChannelProvider } from "@/lib/channels/types";
@@ -56,6 +58,21 @@ export interface ModelChoice {
   credential_id: string | null;
   label: string;
 }
+/**
+ * A escolha da chave do PLANO (a da instalação): sai pela OpenRouter, com o primeiro modelo de
+ * `MODELOS_DA_INSTALACAO` (Luna). É a única forma de a chave da instalação ser publicada: a
+ * publicação recusa outro provedor/modelo sem credencial própria (`provedor-permitido.ts`).
+ */
+async function escolhaDoPlano(): Promise<ModelChoice> {
+  // A lista em vigor pelo resolvedor da instalação (tela primeiro, `.env` como piso).
+  const model = modeloPadraoDaInstalacao(await modelosDaInstalacao());
+  return {
+    provider: PROVEDOR_DA_CHAVE_DA_INSTALACAO,
+    model,
+    credential_id: null,
+    label: `Hiperbold CRM (OpenRouter) · ${model}`,
+  };
+}
 export async function resolveSetupModel(
   db: pg.PoolClient,
   orgId: string,
@@ -72,7 +89,8 @@ export async function resolveSetupModel(
     [orgId, channelId],
   );
   for (const row of published.rows) {
-    if (PROVIDERS.includes(row.provider) && (row.credential_id || chaveDePlataforma(row.provider)))
+    if (!row.credential_id && chaveDePlataforma(row.provider)) return escolhaDoPlano();
+    if (PROVIDERS.includes(row.provider) && row.credential_id)
       return {
         provider: row.provider,
         model: row.model,
@@ -92,7 +110,10 @@ export async function resolveSetupModel(
   for (const provider of providers) {
     if (!PROVIDERS.includes(provider)) continue;
     const credential = credentials.rows.find((c) => c.provider === provider);
-    if (!credential && !chaveDePlataforma(provider)) continue;
+    if (!credential) {
+      if (chaveDePlataforma(provider)) return escolhaDoPlano();
+      continue;
+    }
     const models = await db.query(
       "select model_id,display_name,is_default_for_provider,supports_tools,input_price_per_million_cents,output_price_per_million_cents from ai_models where provider=$1 and deprecated_at is null",
       [provider],

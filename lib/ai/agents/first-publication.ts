@@ -2,6 +2,7 @@ import { listSelectableChannels, type SelectableChannel } from "@/lib/channels/s
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capacidadesPadraoDoOnboarding } from "./capacidades-padrao";
 import { modelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao-leitura";
+import { modeloPadraoDaInstalacao, PROVEDOR_DA_CHAVE_DA_INSTALACAO } from "@/lib/ai/modelos-da-instalacao";
 
 import { escolherModeloDoProvedor } from "./escolher-modelo";
 import { chaveDePlataforma } from "@/lib/ai/runtime/agent";
@@ -201,36 +202,55 @@ export async function publishFirstVersion(
   }
 
 
-  // O modelo daquele provedor. Não existe fallback literal: um id de outro
-  // provedor (ou inventado) produz o pior desfecho do produto — o agente
-  // responde texto plausível e nunca cria o lead nem move o card.
-  //
-  // Buscar SÓ o `is_default_for_provider` travava a OpenRouter, que é a opção
-  // [1] do instalador: medido num ambiente real, ela chega com 400 modelos
-  // sincronizados e NENHUM marcado como padrão, porque o cron de catálogo não
-  // escreve esse campo. A regra de escolha (com o requisito de ferramentas)
-  // vive em `escolherModeloDoProvedor`.
-  const { data: modelos } = await admin
-    .from("ai_models")
-    .select(
-      "model_id, is_default_for_provider, supports_tools, input_price_per_million_cents, output_price_per_million_cents",
-    )
-    .eq("provider", provider)
-    .is("deprecated_at", null);
-
-  // Agente novo SEM chave própria (nem escolha explícita) roda na chave da
-  // instalação: nasce com o modelo padrão liberado (`MODELOS_DA_INSTALACAO`).
+  // Agente novo SEM chave própria (nem escolha explícita) roda na chave da instalação, que sai
+  // SEMPRE pela OpenRouter (decisão do dono, 20/10/2026): nasce com provedor `openrouter` e o
+  // modelo padrão liberado (`MODELOS_DA_INSTALACAO`, o Luna), sem depender do catálogo do
+  // provedor que a organização tinha semeado (`anthropic` nas organizações antigas).
   const naChaveDaInstalacao = !selection && credentialId === null;
-  const escolha = escolherModeloDoProvedor(
-    (modelos ?? []) as Parameters<typeof escolherModeloDoProvedor>[0],
-    naChaveDaInstalacao ? { liberados: await modelosDaInstalacao(), provedor: provider } : {},
-  );
-  if (!escolha.escolhido) {
-    return { published: false, reason: "no_model", provider, motivo: escolha.motivo };
+  let providerDaVersao = provider;
+  let modelId: string;
+  if (naChaveDaInstalacao) {
+    providerDaVersao = PROVEDOR_DA_CHAVE_DA_INSTALACAO;
+    modelId = modeloPadraoDaInstalacao(await modelosDaInstalacao());
+    // O modelo vem da lista liberada, não do catálogo — mas `fn_publish_ai_agent_version` recusa
+    // (`model_not_found`) modelo que o catálogo da OpenRouter ainda não tem. Uma VPS nova só o recebe
+    // no cron diário: melhor dizer isso agora (rascunho com motivo) do que publicar e falhar calado.
+    const { data: noCatalogo } = await admin
+      .from("ai_models")
+      .select("model_id")
+      .eq("provider", providerDaVersao)
+      .eq("model_id", modelId)
+      .is("deprecated_at", null)
+      .limit(1);
+    if (!noCatalogo || noCatalogo.length === 0) {
+      return { published: false, reason: "no_model", provider: providerDaVersao, motivo: "catalogo_vazio" };
+    }
+  } else {
+    // O modelo daquele provedor. Não existe fallback literal: um id de outro
+    // provedor (ou inventado) produz o pior desfecho do produto — o agente
+    // responde texto plausível e nunca cria o lead nem move o card.
+    //
+    // Buscar SÓ o `is_default_for_provider` travava a OpenRouter, que é a opção
+    // [1] do instalador: medido num ambiente real, ela chega com 400 modelos
+    // sincronizados e NENHUM marcado como padrão, porque o cron de catálogo não
+    // escreve esse campo. A regra de escolha (com o requisito de ferramentas)
+    // vive em `escolherModeloDoProvedor`.
+    const { data: modelos } = await admin
+      .from("ai_models")
+      .select(
+        "model_id, is_default_for_provider, supports_tools, input_price_per_million_cents, output_price_per_million_cents",
+      )
+      .eq("provider", provider)
+      .is("deprecated_at", null);
+
+    const escolha = escolherModeloDoProvedor((modelos ?? []) as Parameters<typeof escolherModeloDoProvedor>[0]);
+    if (!escolha.escolhido) {
+      return { published: false, reason: "no_model", provider, motivo: escolha.motivo };
+    }
+    modelId = selection?.model ?? escolha.modelId;
+    if (selection && !(modelos ?? []).some((m) => m.model_id === modelId && m.supports_tools))
+      return { published: false, reason: "failed", message: "model_not_found" };
   }
-  const modelId = selection?.model ?? escolha.modelId;
-  if (selection && !(modelos ?? []).some((m) => m.model_id === modelId && m.supports_tools))
-    return { published: false, reason: "failed", message: "model_not_found" };
 
   // "Em que negócios ele pode mexer". Toda organização nasce com um funil de
   // entrada, criado por gatilho no INSERT de `organizations`. Sem preencher
@@ -278,7 +298,7 @@ export async function publishFirstVersion(
       // Provedor e modelo saem SEMPRE da mesma origem — o par é indivisível.
       // Emprestar só o id do modelo de outro provedor manda um nome que o
       // endpoint não conhece.
-      provider,
+      provider: providerDaVersao,
       model: modelId,
       // Sem capacidades o turno não monta ferramenta nenhuma: o agente
       // entregue conversa e não alcança contato, lead nem funil.

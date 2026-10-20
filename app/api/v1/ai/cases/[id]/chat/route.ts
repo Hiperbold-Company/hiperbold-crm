@@ -243,7 +243,7 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
         // Sem chave de IA a tela não oferece o clique: numa instalação fresca,
         // um botão que sempre falha é pior que um botão ausente com a frase que
         // diz onde configurar.
-        ia_configurada: Boolean(cfg.anthropicApiKey || cfg.openaiApiKey || cfg.openrouterApiKey),
+        ia_configurada: Boolean(cfg.openrouterApiKey),
       };
     }
   } catch (erro) {

@@ -8,6 +8,7 @@
 import type { OrigemDaChaveLlm } from "@/lib/agent-engine/edge/llm/credentials";
 import type { OrigemGravadaDoJev } from "@/lib/ai/decisao/credencial";
 import { normalizarErro } from "@/lib/agent-engine/edge/llm/run-model-call";
+import { PROVEDOR_DA_CHAVE_DA_INSTALACAO } from "@/lib/ai/modelos-da-instalacao";
 import type { ProvedorComChave } from "@/lib/ai/pontos/provedores";
 import type { OrigemDaEscolha } from "@/lib/ai/pontos/resolver";
 import { logger } from "@/lib/logger";
@@ -117,7 +118,14 @@ export function logInvocation(row: LogInvocationInput): void {
           // `provider` não existia no shape antigo; deriva-se do id do modelo, e
           // vira 'desconhecido' quando não dá para saber — chute viraria
           // estatística, e estatística errada é pior que lacuna declarada.
-          provider: row.provider ?? providerDoModelo(row.model),
+          // Na chave da instalação a chamada SAIU pela OpenRouter (decisão do dono, 20/10/2026),
+          // seja qual for o fabricante do modelo: `openai/gpt-6-luna` é provedor `openrouter`, e
+          // não `openai`. Só quem sabe o provedor de fato (`row.provider`) vence.
+          provider:
+            row.provider ??
+            (row.origem_da_chave === "chave_da_instalacao"
+              ? PROVEDOR_DA_CHAVE_DA_INSTALACAO
+              : providerDoModelo(row.model)),
           model: row.model,
           origem_da_escolha: row.origem_da_escolha ?? null,
           // 0906: nula quando quem chama não sabe (ver o tipo). Nula não debita.

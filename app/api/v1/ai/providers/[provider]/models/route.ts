@@ -12,6 +12,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import { ehProvedorSuportado } from "@/lib/ai/pontos/provedores";
 import { modelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao-leitura";
+import { ehVarianteEmLote } from "@/lib/ai/modelos-da-instalacao";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +68,7 @@ export async function GET(
   // O filtro é em memória de propósito: são no máximo centenas de linhas, e
   // assim o teste da rota enxerga a regra (um `eq` no banco o esconderia do
   // dublê, que devolve a lista inteira).
-  const models = (data ?? []).filter((m) => m.supports_tools === true);
+  const models = (data ?? []).filter((m) => m.supports_tools === true && !ehVarianteEmLote(m.model_id));
 
   // Os modelos liberados na CHAVE DA INSTALAÇÃO (`MODELOS_DA_INSTALACAO`). Quem
   // não tem chave própria desse provedor só pode escolher estes (freio de custo,

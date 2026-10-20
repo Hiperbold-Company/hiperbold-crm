@@ -14,6 +14,14 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+// A chave da INSTALAÇÃO sai sempre pela OpenRouter (20/10/2026). O que este arquivo prova é que o
+// PAINEL escolhe provedor e modelo, então a organização aqui tem chave PRÓPRIA em todo provedor
+// (a rota da chave da instalação está em `chave-da-instalacao-sempre-pela-openrouter.test.ts`).
+vi.mock("@/lib/ai/credenciais/cifra", () => ({
+  decifrarColunasDaCredencial: () => "chave-propria-da-empresa",
+}));
+const CREDENCIAL_DA_EMPRESA = { id: "cred-1", api_key_encrypted: "x", api_key_iv: "y", api_key_tag: "z" };
+
 import { runModelCall } from "@/lib/agent-engine/edge/llm/run-model-call";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
@@ -59,7 +67,7 @@ function poolFalso(opts: {
       return { rows: opts.binding ? [opts.binding] : [] };
     }
     if (sql.includes("from ai_provider_credentials")) {
-      return { rows: [] }; // sem BYOK → cai na chave de plataforma
+      return { rows: [CREDENCIAL_DA_EMPRESA] }; // chave própria em todo provedor
     }
     if (sql.includes("insert into llm_calls")) {
       inserts.push({ sql, params });
@@ -100,7 +108,7 @@ function registrySpiao() {
   };
 }
 
-const cfg = { anthropicApiKey: "chave-anthropic", openaiApiKey: "chave-openai", cacheTtl: "1h" as const };
+const cfg = { openrouterApiKey: "chave-da-instalacao", cacheTtl: "1h" as const };
 
 async function rodar(opts: Parameters<typeof poolFalso>[0] & { purpose: string; model?: string }) {
   const { pool, inserts } = poolFalso(opts);
@@ -146,7 +154,7 @@ describe("o seam usa o modelo que o painel escolheu", () => {
     // A chave tem de ser a do provider ESCOLHIDO, não a do padrão da org. É a
     // forma exata do defeito do PR #151: modelo certo, chave do provider
     // errado, e o turno morre com 404 no endpoint de quem não tem o modelo.
-    expect(chamadas[0]?.apiKey).toBe("chave-openai");
+    expect(chamadas[0]?.apiKey).toBe("chave-propria-da-empresa");
     expect(resultado.origem).toBe("binding");
   });
 

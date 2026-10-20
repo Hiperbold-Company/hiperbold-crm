@@ -73,7 +73,7 @@ beforeEach(() => {
   chaveMock = () => ({
     apiKey: "sk-da-organizacao",
     baseUrl: null,
-    viaGateway: false,
+    viaOpenRouter: false,
     origem: "credencial_da_organizacao",
     rotulo: "Chave principal",
     avisos: [],
@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe("embedText", () => {
-  it("SEM gateway, usa o provider OpenAI explícito — nunca a string com barra", async () => {
+  it("com chave da organização, usa o provider OpenAI explícito — nunca a string com barra", async () => {
     await embedText("oi", { organizationId: "org-1" });
 
     const arg = embedSpy.mock.calls[0]?.[0] as { model: unknown; headers?: unknown };
@@ -95,21 +95,127 @@ describe("embedText", () => {
     expect(arg.headers).toBeUndefined();
   });
 
-  it("COM gateway, mantém a string (é ele quem roteia) e anexa os headers do tenant", async () => {
+  it("chave da INSTALAÇÃO sai pela OpenRouter: provider explícito com o endereço dela e o id com fabricante", async () => {
     chaveMock = () => ({
-      apiKey: null,
-      baseUrl: null,
-      viaGateway: true,
-      origem: "gateway_da_instalacao",
+      apiKey: "sk-or-instalacao",
+      baseUrl: "https://openrouter.ai/api/v1",
+      viaOpenRouter: true,
+      origem: "chave_da_instalacao",
       rotulo: null,
       avisos: [],
     });
 
     await embedText("oi", { organizationId: "org-1" });
 
-    const arg = embedSpy.mock.calls[0]?.[0] as { model: unknown; headers?: Record<string, string> };
-    expect(arg.model).toBe("openai/text-embedding-3-small");
-    expect(arg.headers?.["X-AI-Gateway-Tenant-Id"]).toBe("org-1");
+    const arg = embedSpy.mock.calls[0]?.[0] as { model: { modelId?: string; provider?: string }; headers?: unknown };
+    // Nunca a string com barra (que o AI SDK mandaria ao gateway da Vercel) e nunca a OpenAI direto.
+    expect(typeof arg.model).toBe("object");
+    expect(arg.model.modelId).toBe("openai/text-embedding-3-small");
+    expect(arg.headers).toBeUndefined();
+  });
+
+  describe("plano B: OpenRouter falhou, OpenAI direto uma vez", () => {
+    const chaveDaInstalacao = () => ({
+      apiKey: "sk-or-instalacao",
+      baseUrl: "https://openrouter.ai/api/v1",
+      viaOpenRouter: true,
+      origem: "chave_da_instalacao",
+      rotulo: null,
+      avisos: [],
+    });
+    const erroHttp = (statusCode: number) => Object.assign(new Error("falhou"), { statusCode });
+    const resposta = { embedding: Array.from({ length: 1536 }, () => 0.1), usage: { tokens: 5 } };
+
+    it.each([[500], [503]])("HTTP %s na OpenRouter, com OPENAI_API_KEY: tenta a OpenAI direto e grava provider openai", async (status) => {
+      vi.stubEnv("OPENAI_API_KEY", "sk-openai-do-servidor");
+      chaveMock = chaveDaInstalacao;
+      embedSpy.mockReset();
+      embedSpy.mockRejectedValueOnce(erroHttp(status)).mockResolvedValueOnce(resposta);
+
+      const r = await embedText("oi", { organizationId: "org-1" });
+
+      expect(r.embedding).toHaveLength(1536);
+      expect(embedSpy).toHaveBeenCalledTimes(2);
+      const segunda = embedSpy.mock.calls[1]?.[0] as { model: { modelId?: string } };
+      expect(segunda.model.modelId).toBe("text-embedding-3-small");
+      expect(insertMock.mock.calls[0]?.[1]).toMatchObject({ provider: "openai", origem_da_chave: "chave_da_instalacao" });
+      vi.unstubAllEnvs();
+    });
+
+    it("erro de rede (sem status) também aciona o plano B", async () => {
+      vi.stubEnv("OPENAI_API_KEY", "sk-openai-do-servidor");
+      chaveMock = chaveDaInstalacao;
+      embedSpy.mockReset();
+      embedSpy.mockRejectedValueOnce(new Error("fetch failed")).mockResolvedValueOnce(resposta);
+      await embedText("oi", { organizationId: "org-1" });
+      expect(embedSpy).toHaveBeenCalledTimes(2);
+      vi.unstubAllEnvs();
+    });
+
+    it.each([[400], [401], [402], [403], [404], [429]])(
+      "HTTP %s NÃO aciona o plano B: é chave, saldo, limite ou pedido errado e precisa aparecer",
+      async (status) => {
+        vi.stubEnv("OPENAI_API_KEY", "sk-openai-do-servidor");
+        chaveMock = chaveDaInstalacao;
+        embedSpy.mockReset();
+        embedSpy.mockRejectedValue(erroHttp(status));
+        await expect(embedText("oi", { organizationId: "org-1" })).rejects.toMatchObject({ statusCode: status });
+        expect(embedSpy).toHaveBeenCalledTimes(1);
+        vi.unstubAllEnvs();
+      },
+    );
+
+    it("429 embrulhado em RetryError (o SDK esgotou as tentativas) também NÃO aciona o plano B", async () => {
+      vi.stubEnv("OPENAI_API_KEY", "sk-openai-do-servidor");
+      chaveMock = chaveDaInstalacao;
+      embedSpy.mockReset();
+      embedSpy.mockRejectedValue(Object.assign(new Error("Failed after 3 attempts"), { lastError: erroHttp(429) }));
+      await expect(embedText("oi", { organizationId: "org-1" })).rejects.toThrow("Failed after 3 attempts");
+      expect(embedSpy).toHaveBeenCalledTimes(1);
+      vi.unstubAllEnvs();
+    });
+
+    it("quando o plano B é usado, deixa o rastro no log em nível error", async () => {
+      vi.stubEnv("OPENAI_API_KEY", "sk-openai-do-servidor");
+      chaveMock = chaveDaInstalacao;
+      embedSpy.mockReset();
+      embedSpy.mockRejectedValueOnce(erroHttp(503)).mockResolvedValueOnce(resposta);
+      const erroLog = vi.spyOn(console, "error").mockImplementation(() => {});
+      await embedText("oi", { organizationId: "org-1" });
+      const linhas = erroLog.mock.calls.map((c) => String(c[0]));
+      erroLog.mockRestore();
+      expect(linhas.some((l) => l.includes('"level":"error"') && l.includes("plano B") && l.includes('"status":503'))).toBe(true);
+      vi.unstubAllEnvs();
+    });
+
+    it("sem OPENAI_API_KEY no servidor, o erro da OpenRouter sobe como está", async () => {
+      vi.stubEnv("OPENAI_API_KEY", "");
+      chaveMock = chaveDaInstalacao;
+      embedSpy.mockReset();
+      embedSpy.mockRejectedValue(erroHttp(500));
+      await expect(embedText("oi", { organizationId: "org-1" })).rejects.toMatchObject({ statusCode: 500 });
+      expect(embedSpy).toHaveBeenCalledTimes(1);
+      vi.unstubAllEnvs();
+    });
+
+    it("tenta a OpenAI UMA vez só: se ela também falhar, o erro sobe (sem laço)", async () => {
+      vi.stubEnv("OPENAI_API_KEY", "sk-openai-do-servidor");
+      chaveMock = chaveDaInstalacao;
+      embedSpy.mockReset();
+      embedSpy.mockRejectedValue(erroHttp(500));
+      await expect(embedText("oi", { organizationId: "org-1" })).rejects.toMatchObject({ statusCode: 500 });
+      expect(embedSpy).toHaveBeenCalledTimes(2);
+      vi.unstubAllEnvs();
+    });
+
+    it("a credencial da PRÓPRIA organização nunca tem plano B: o erro dela sobe", async () => {
+      vi.stubEnv("OPENAI_API_KEY", "sk-openai-do-servidor");
+      embedSpy.mockReset();
+      embedSpy.mockRejectedValue(erroHttp(500));
+      await expect(embedText("oi", { organizationId: "org-1" })).rejects.toMatchObject({ statusCode: 500 });
+      expect(embedSpy).toHaveBeenCalledTimes(1);
+      vi.unstubAllEnvs();
+    });
   });
 
   it("devolve a contagem de tokens que o SDK reporta", async () => {
@@ -135,7 +241,7 @@ describe("embedText", () => {
       return {
         apiKey: "sk-x",
         baseUrl: null,
-        viaGateway: false,
+        viaOpenRouter: false,
         origem: "credencial_da_organizacao",
         rotulo: "x",
         avisos: [],
@@ -145,7 +251,7 @@ describe("embedText", () => {
     const chave = {
       apiKey: "sk-x",
       baseUrl: null,
-      viaGateway: false,
+      viaOpenRouter: false,
       origem: "credencial_da_organizacao" as const,
       rotulo: "x",
       avisos: [],
@@ -183,32 +289,26 @@ describe("embedText", () => {
       const casos = [
         {
           nome: "credencial da organização, direto na OpenAI",
-          chave: { apiKey: "sk-org", baseUrl: null, viaGateway: false, origem: "credencial_da_organizacao" },
+          chave: { apiKey: "sk-org", baseUrl: null, viaOpenRouter: false, origem: "credencial_da_organizacao" },
           provider: "openai",
           origem: "credencial_da_organizacao",
         },
         {
           nome: "binding do painel com endereço próprio",
-          chave: { apiKey: "sk-b", baseUrl: "https://gateway.da-empresa.exemplo/v1", viaGateway: false, origem: "binding_do_ponto" },
+          chave: { apiKey: "sk-b", baseUrl: "https://gateway.da-empresa.exemplo/v1", viaOpenRouter: false, origem: "binding_do_ponto" },
           provider: "custom",
           origem: "credencial_da_organizacao",
         },
         {
           nome: "binding do painel sem endereço próprio",
-          chave: { apiKey: "sk-b", baseUrl: null, viaGateway: false, origem: "binding_do_ponto" },
+          chave: { apiKey: "sk-b", baseUrl: null, viaOpenRouter: false, origem: "binding_do_ponto" },
           provider: "openai",
           origem: "credencial_da_organizacao",
         },
         {
-          nome: "gateway da instalação",
-          chave: { apiKey: null, baseUrl: null, viaGateway: true, origem: "gateway_da_instalacao" },
-          provider: "gateway",
-          origem: "chave_da_instalacao",
-        },
-        {
-          nome: "chave OpenAI da instalação",
-          chave: { apiKey: "sk-inst", baseUrl: null, viaGateway: false, origem: "chave_da_instalacao" },
-          provider: "openai",
+          nome: "chave da instalação, pela OpenRouter",
+          chave: { apiKey: "sk-inst", baseUrl: "https://openrouter.ai/api/v1", viaOpenRouter: true, origem: "chave_da_instalacao" },
+          provider: "openrouter",
           origem: "chave_da_instalacao",
         },
       ] as const;

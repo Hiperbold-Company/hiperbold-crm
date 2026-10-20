@@ -55,7 +55,7 @@ function deps(corpos: string[]) {
   delete knobs.compaction;
   return {
     crmCfg: { supabase: createClient("http://127.0.0.1:1", "test-key") },
-    llmCfg: { anthropicApiKey: "fake-local" },
+    llmCfg: { openrouterApiKey: "fake-local" },
     knobs,
     log: createLogger(),
     clock: () => new Date("2026-09-07T15:00:00Z"),

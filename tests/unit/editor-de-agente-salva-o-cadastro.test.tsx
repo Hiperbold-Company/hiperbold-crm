@@ -75,6 +75,10 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
+// O salvar confere provedor/modelo permitidos (lib/ai/agents/provedor-permitido.ts): a lista do plano.
+vi.mock("@/lib/ai/modelos-da-instalacao-leitura", () => ({
+  modelosDaInstalacao: vi.fn(async () => ["openai/gpt-6-luna"]),
+}));
 vi.mock("@/lib/ai/agents/escopo", () => ({
   validarEscopoDaVersao: vi.fn(async () => cena.escopo),
   mensagemDoEscopo: () => "Escopo inválido.",
@@ -90,7 +94,15 @@ import { revalidatePath } from "next/cache";
 // ---------------------------------------------------------------------------
 
 const CREDENCIAIS = [
-  { id: CREDENCIAL, provider: "anthropic", label: "chave da casa", is_active: true },
+  {
+    id: CREDENCIAL,
+    provider: "anthropic",
+    label: "chave da casa",
+    is_active: true,
+    // Chave própria CONECTADA (ativa e validada): só assim o provedor aparece no campo do agente.
+    validated_at: "2026-09-02T00:00:00Z",
+    created_at: "2026-09-02T00:00:00Z",
+  },
 ];
 const SESSOES = [{ id: CANAL, label: "WhatsApp da clínica", status: "WORKING" }];
 
@@ -302,11 +314,13 @@ function adminDuble(agente: Record<string, unknown>) {
   };
 }
 
+// Par permitido pelo plano (chave da instalação, OpenRouter, Luna): este bloco mede o CADASTRO, não
+// a regra de provedor (essa é de tests/unit/agente-recusa-provedor-nas-tres-portas.test.ts).
 const VERSION_PAYLOAD = {
   system_prompt: VERSAO.system_prompt,
-  provider: "anthropic",
-  model: "claude-sonnet-5",
-  credential_id: CREDENCIAL,
+  provider: "openrouter",
+  model: "openai/gpt-6-luna",
+  credential_id: null,
   tool_ids: [],
   channel_session_id: CANAL,
   max_steps: 10,

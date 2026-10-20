@@ -30,6 +30,8 @@ import { capacidadesDesconhecidas } from "./capacidades-conhecidas";
 import { mcpAgentDraftRecords } from "./create-draft";
 import { mensagemDoEscopo, validarEscopoDaVersao } from "./escopo";
 import { publishAgentVersion } from "./publish";
+import { modelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao-leitura";
+import { recusaDaVersao } from "./provedor-permitido";
 import {
   PUBLISH_ERROR_CODES,
   agentMcpCreateSchema,
@@ -52,8 +54,14 @@ export interface DepsDeAgentes {
 export const COLUNAS_DO_AGENTE =
   "id, organization_id, name, description, model, system_prompt, is_active, is_default, kind, channel, priority, published_version_id, paused_at, operation_mode, operation_revision, archived_at, config, guardrails, active_kb_version_id, created_at, updated_at";
 
-const COLUNAS_DO_AGENTE_NA_LISTA =
-  "id, organization_id, name, description, model, system_prompt, is_active, is_default, kind, priority, published_version_id, paused_at, operation_mode, operation_revision, archived_at, config, guardrails, active_kb_version_id, created_at, updated_at, versao_publicada:ai_agent_versions!ai_agents_published_version_id_fkey(provider, model)";
+/**
+ * `versao_publicada` é o que atende o cliente; `versoes_rascunho` (só as `draft`, filtro na
+ * consulta) é o que vale enquanto NADA foi publicado. A lista mostra o modelo da versão
+ * vigente — publicada, ou o rascunho —, nunca `ai_agents.model`, que é o valor do CADASTRO e
+ * não é sincronizado ao salvar nem ao publicar (ver `modeloEmVigor`, `AgentCard.tsx`).
+ */
+export const COLUNAS_DO_AGENTE_NA_LISTA =
+  "id, organization_id, name, description, model, system_prompt, is_active, is_default, kind, priority, published_version_id, paused_at, operation_mode, operation_revision, archived_at, config, guardrails, active_kb_version_id, created_at, updated_at, versao_publicada:ai_agent_versions!ai_agents_published_version_id_fkey(provider, model), versoes_rascunho:ai_agent_versions!ai_agent_versions_agent_id_fkey(provider, model, version_number, status)";
 
 const VERSION_COLUMNS =
   "id, organization_id, agent_id, version_number, system_prompt, provider, model, credential_id, tool_ids, trigger_config, channel_session_id, max_steps, token_budget, cost_budget_cents, history_message_window, history_token_window, handoff_keywords, handoff_tool_enabled, cases_enabled, split_messages, split_max_chars, followup, operator_enabled, operator_model, operator_tool_ids, status, published_at, superseded_at, created_at, created_by,pipeline_ids,knowledge_source_ids,provisioning_origin";
@@ -79,7 +87,8 @@ export async function listarAgentes(
   let query = deps.supabase
     .from("ai_agents")
     .select(COLUNAS_DO_AGENTE_NA_LISTA)
-    .eq("organization_id", deps.organizationId);
+    .eq("organization_id", deps.organizationId)
+    .eq("versoes_rascunho.status", "draft");
   if (!opts.incluirArquivados) query = query.is("archived_at", null);
   const { data, error } = await query.order("created_at", { ascending: false });
   if (error) throw recusa(deps, 500, "internal_error", "Erro ao listar agents.");
@@ -210,6 +219,17 @@ export async function criarVersaoDoAgente(
       `Esta instalação não tem chave de ${v.provider} no ambiente. Cadastre uma chave em IA › Credenciais ou escolha outra empresa de inteligência artificial.`,
     );
   }
+
+  // Provedor e modelo PERMITIDOS: a chave da instalação só sai pela OpenRouter, com os modelos de
+  // `MODELOS_DA_INSTALACAO`; a chave da empresa tem de ser dela e do provedor da versão. A tela já
+  // esconde o resto, mas a recusa de verdade é esta (lib/ai/agents/provedor-permitido.ts).
+  const recusaDeProvedor = await recusaDaVersao(
+    deps.admin,
+    deps.organizationId,
+    { provider: v.provider, model: v.model, credential_id: v.credential_id },
+    await modelosDaInstalacao(),
+  );
+  if (recusaDeProvedor) throw recusa(deps, 422, recusaDeProvedor.code, recusaDeProvedor.message);
 
   // O escopo aponta para coisas que EXISTEM nesta organização. Sem esta conferência, um id de outra
   // organização (ou de um material apagado) entra no array, a versão é publicada, e o assistente não

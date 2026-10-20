@@ -32,6 +32,8 @@ export interface AgentRow {
    * e nunca é atualizado ao publicar.
    */
   versao_publicada?: { provider: string; model: string } | null;
+  /** Rascunhos do agente (a consulta já filtra `status = 'draft'`) — o modelo vigente enquanto nada foi publicado. */
+  versoes_rascunho?: Array<{ provider: string; model: string; version_number: number }> | null;
   archived_at?: string | null;
   created_at: string;
   updated_at: string;
