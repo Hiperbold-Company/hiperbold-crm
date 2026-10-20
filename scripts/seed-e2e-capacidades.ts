@@ -43,7 +43,7 @@ const NOME_DO_AGENTE = "E2E Capacidades";
 
 interface Creds {
   org_id: string;
-  followup_agent_fixtures?: { credential_id: string; channel_session_id: string };
+  followup_agent_fixtures?: { credential_id: string; credential_conectada_id?: string; channel_session_id: string };
   capacidades?: { agent_id: string; version_id: string };
 }
 
@@ -55,7 +55,7 @@ async function main(): Promise<void> {
   const creds = lerCreds();
   const orgId = creds.org_id;
   let fixtures = creds.followup_agent_fixtures;
-  if (!fixtures) {
+  if (!fixtures || !fixtures.credential_conectada_id) {
     // RODA o pré-requisito em vez de mandar rodar. As fixtures moram no mesmo
     // `.e2e-creds.json` que `seed-e2e-credentials.ts` reescreve por inteiro —
     // e ele é chamado de dentro do login quando o fator TOTP foi rotacionado
@@ -70,6 +70,15 @@ async function main(): Promise<void> {
       "`followup_agent_fixtures` continua ausente mesmo depois de rodar " +
         "seed-e2e-followup-agent.ts — o problema não é a ordem dos seeds.",
     );
+  }
+
+  // A versão usa a credencial CONECTADA (validada): o formulário do agente só aceita o par
+  // provedor/credencial que a empresa conectou, e esta spec EDITA a versão pela tela (salvar e
+  // recarregar). Com a credencial sem validação o par vira "não permitido" e "Salvar rascunho" fica
+  // desabilitado. Ver o cabeçalho de `seed-e2e-followup-agent.ts`.
+  const credencialDoAgente = fixtures.credential_conectada_id;
+  if (!credencialDoAgente) {
+    throw new Error("`credential_conectada_id` ausente nas fixtures de seed-e2e-followup-agent.ts.");
   }
 
   // 1) Agente + versão rascunho, idempotentes pelo nome.
@@ -156,6 +165,7 @@ async function main(): Promise<void> {
       .from("ai_agent_versions")
       .update({
         tool_ids: TOOLS_LIGADAS,
+        credential_id: credencialDoAgente,
         // Coluna da 0125, e o mesmo motivo do `tool_ids`: a tela do escopo de
         // funis SALVA aqui, então sem repor, a segunda execução acha o funil
         // que a primeira marcou e o caso "nasce fechada" passa a medir sujeira.
@@ -178,6 +188,7 @@ async function main(): Promise<void> {
       .update({
         tool_ids: TOOLS_LIGADAS,
         pipeline_ids: [],
+        credential_id: credencialDoAgente,
         // Configuração DATADA de 60 dias atrás de propósito. O painel distingue
         // "ligada agora" (não pede decisão) de "ligada há tempo e nunca usada"
         // (pede), e uma versão criada neste instante só alcançaria o primeiro
@@ -197,7 +208,7 @@ async function main(): Promise<void> {
         system_prompt: "Você atende clientes da clínica com educação e objetividade.",
         provider: "anthropic",
         model: "claude-sonnet-4-6",
-        credential_id: fixtures.credential_id,
+        credential_id: credencialDoAgente,
         channel_session_id: fixtures.channel_session_id,
         status: "draft",
         // Ligadas de propósito: o painel só mostra a mistura real (uma

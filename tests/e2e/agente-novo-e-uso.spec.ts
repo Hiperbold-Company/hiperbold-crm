@@ -57,9 +57,14 @@ test.describe("Criar um agente pela tela", () => {
     // E ela diz o que falta — as exigências que o servidor também impõe.
     // Escritas como instrução, não como acusação — um formulário recém-aberto
     // que já diz "obrigatório" em vermelho trata o usuário como quem errou.
-    for (const exigencia of [/escolha o modelo/i, /escolha a chave de acesso/i]) {
-      await expect(page.getByText(exigencia).first()).toBeVisible();
-    }
+    //
+    // "Escolha a chave de acesso" saiu da lista em 20/10/2026: o agente novo já nasce com a chave do plano
+    // ("Chave própria do Hiperbold CRM (OpenRouter)") escolhida, então não há chave a escolher. O que a
+    // tela diz no lugar, neste ambiente — que não tem `OPENROUTER_API_KEY` de propósito, como uma VPS
+    // que pulou a chave no instalador —, é que a instalação não tem a chave do plano.
+    await expect(page.getByText(/escolha o modelo/i).first()).toBeVisible();
+    await expect(page.getByText(/Chave própria do Hiperbold CRM \(OpenRouter\)/).first()).toBeVisible();
+    await expect(page.getByText(/esta instalação não tem chave de openrouter/i).first()).toBeVisible();
 
     // ⚠️ O NÚMERO DE WHATSAPP NÃO ESTÁ NESSA LISTA, e a ausência é o teste.
     //
@@ -91,6 +96,14 @@ test.describe("Criar um agente pela tela", () => {
       .fill(
         "Você é a recepção de uma clínica odontológica. Atenda com educação, responda dúvidas sobre horários e ajude a marcar consulta.",
       );
+
+    // A chave do plano não existe neste ambiente (sem `OPENROUTER_API_KEY`), então a pessoa faz o que a
+    // própria tela manda: escolhe a empresa de IA que a organização conectou (Anthropic, a credencial
+    // validada que o seed de fixtures cria). O campo traz só a chave do plano e as empresas conectadas.
+    await page.locator("#provider").click();
+    await expect(page.getByRole("option").first()).toContainText("Chave própria do Hiperbold CRM (OpenRouter)");
+    await page.getByRole("option", { name: /anthropic/i }).click();
+    await expect(page.locator("#provider")).toContainText(/anthropic/i);
 
     // Os três campos que a tela exige. São comboboxes do Radix, NÃO `<select>`
     // nativo: não existe `<option>` no DOM até o menu abrir, e procurar por
