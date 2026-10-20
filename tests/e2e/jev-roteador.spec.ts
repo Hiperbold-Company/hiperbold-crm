@@ -232,14 +232,20 @@ test.describe("Jev no roteador — Testar classificação, pela tela", () => {
     // só DEPOIS de ele terminar a validação é marcada à mão — senão o resultado
     // dele sobrescreveria a marca. A mesma chave falsa é a "sua IA" que "não
     // respondeu" no Testar classificação. O provedor é o da organização do seed
-    // (anthropic): a IA de sempre é a do provedor que a empresa escolheu.
+    // (anthropic até a 0973, openrouter depois): a IA de sempre é a do provedor que a empresa escolheu.
     await test.step("a IA de sempre da empresa: uma chave de conversa cadastrada e validada", async () => {
+      // O provedor é o que a ORGANIZAÇÃO escolheu, lido do banco — não um literal. Até 20/10/2026 a
+      // organização nova nascia `anthropic` e esta spec cadastrava a chave da Anthropic; desde a 0973 ela
+      // nasce `openrouter` (a IA da instalação sai pela OpenRouter) e a chave `anthropic` deixou de ser a "IA
+      // de sempre" dela: o cartão ficava "sozinho". A IA de sempre é a do provedor que a empresa escolheu.
+      const { data: org } = await admin.from("organizations").select("settings").eq("id", orgId).single();
+      const provedor = (org?.settings as { llm?: { provider?: string } } | null)?.llm?.provider || "anthropic";
+      const chaveFalsa =
+        provedor === "openrouter"
+          ? "sk-or-v1-e2e-ia-de-sempre-0000000000000000000000"
+          : "sk-ant-e2e-ia-de-sempre-0000000000000000000000";
       const criou = await page.request.post("/api/v1/ai/credentials", {
-        data: {
-          provider: "anthropic",
-          label: `IA de sempre ${sufixo}`,
-          api_key: "sk-ant-e2e-ia-de-sempre-0000000000000000000000",
-        },
+        data: { provider: provedor, label: `IA de sempre ${sufixo}`, api_key: chaveFalsa },
       });
       expect(criou.status(), "a IA de sempre não foi cadastrada").toBe(201);
       semeado.iaDeSempre = ((await criou.json()) as { data: { id: string } }).data.id;

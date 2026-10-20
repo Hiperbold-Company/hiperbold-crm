@@ -258,8 +258,12 @@ test.describe("Lote 12 — painel do contato no Inbox", () => {
     const campo = page.getByLabel("Adicionar tag ao contato");
     await expect(campo).toBeVisible();
 
-    // A lista é de CAIXAS de marcar (vocabulário + em uso), não mais de chips "+ x".
-    await expect(page.getByRole("checkbox", { name: "obra", exact: true })).toBeVisible();
+    // A lista é de CAIXAS de marcar (vocabulário + em uso), não mais de chips "+ x". O rótulo é a grafia
+    // com que a etiqueta foi cadastrada ("Obra", como o contato semeado a tem), e a caixa grava a forma
+    // normalizada ("obra"): por isso o nome é achado sem diferenciar caixa e a asserção do banco, mais
+    // abaixo, é que prova a normalização.
+    const caixaObra = page.getByRole("checkbox", { name: /^obra$/i });
+    await expect(caixaObra).toBeVisible();
     const rotulos = (await page.locator("label:has(input[type=checkbox])").allInnerTexts()).map((x) => x.trim());
     registra(`#946 · etiquetas oferecidas = ${JSON.stringify(rotulos)}`);
     // "VIP", "vip " e "vip" viraram UMA caixa — e ela já vem marcada, porque o
@@ -279,7 +283,7 @@ test.describe("Lote 12 — painel do contato no Inbox", () => {
     const resposta = page.waitForResponse(
       (r) => r.url().includes(`/contacts/${contatoId}`) && r.request().method() === "PATCH",
     );
-    await page.getByRole("checkbox", { name: "obra", exact: true }).click();
+    await caixaObra.click();
     const r = await resposta;
     const { data: depois } = await admin.from("contacts").select("tags").eq("id", contatoId).single();
     registra(`#946 · PATCH = ${r.status()} · antes=${JSON.stringify(antes)} depois=${JSON.stringify(depois)}`);
