@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { Plus } from "@/lib/ui/icons";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -107,7 +108,8 @@ export function RegistrarEvento({
 
   if (!aberto) {
     return (
-      <Button type="button" variant="outline" size="sm" className="mb-2 h-7 text-xs" onClick={abrir}>
+      <Button type="button" size="sm" className="mb-2 h-7 text-xs" onClick={abrir}>
+        <Plus size={12} weight="bold" className="mr-1" aria-hidden />
         {t("Registrar evento")}
       </Button>
     );
