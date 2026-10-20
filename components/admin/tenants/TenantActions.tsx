@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { SuspendDialog } from "./SuspendDialog";
 import { ReactivateDialog } from "./ReactivateDialog";
+import { ExcluirOrganizacaoDialog } from "./ExcluirOrganizacaoDialog";
 import { ImpersonateButton } from "@/components/admin/ImpersonateButton";
 import { useT } from "@/hooks/i18n/useT";
 
@@ -14,6 +16,7 @@ interface TenantActionsProps {
   organizationId: string;
   status: "active" | "suspended" | "redacted";
   displayName: string;
+  slug: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -24,8 +27,11 @@ export function TenantActions({
   organizationId,
   status,
   displayName,
+  slug,
 }: TenantActionsProps) {
   const t = useT();
+  const router = useRouter();
+  const [excluirOpen, setExcluirOpen] = useState(false);
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [reactivateOpen, setReactivateOpen] = useState(false);
 
@@ -74,6 +80,25 @@ export function TenantActions({
           </Button>
         )}
 
+        {/* Excluir: só depois de suspender. Em tenant ativo fica desabilitado com a dica. */}
+        {!isRedacted && (
+          <div className="space-y-1">
+            <Button
+              className="w-full"
+              variant="destructive"
+              disabled={!isSuspended}
+              onClick={() => setExcluirOpen(true)}
+              data-testid="excluir-organizacao"
+              title={!isSuspended ? t("Suspenda antes de excluir") : undefined}
+            >
+              {t("Excluir organização")}
+            </Button>
+            {!isSuspended && (
+              <p className="text-xs text-muted-foreground text-center">{t("Suspenda antes de excluir")}</p>
+            )}
+          </div>
+        )}
+
         {isRedacted && (
           <p className="text-xs text-muted-foreground text-center py-2">
             {t("Tenant redigido — ações de gestão não disponíveis.")}
@@ -92,6 +117,15 @@ export function TenantActions({
         onClose={() => setReactivateOpen(false)}
         organizationId={organizationId}
       />
+
+      {isSuspended && (
+        <ExcluirOrganizacaoDialog
+          open={excluirOpen}
+          onClose={() => setExcluirOpen(false)}
+          organizacao={{ id: organizationId, slug, displayName }}
+          onExcluida={() => router.push("/admin/tenants")}
+        />
+      )}
     </>
   );
 }
