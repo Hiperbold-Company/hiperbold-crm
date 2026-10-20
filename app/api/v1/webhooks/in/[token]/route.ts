@@ -48,6 +48,8 @@ import {
   type RdStationMapped,
 } from "@/lib/webhooks/rdstation";
 import { limitarCampos, origemDaPagina, registrarCaptacao } from "@/lib/webhooks/captacao";
+import { encaixarCamposNoFunil } from "@/lib/webhooks/encaixar-campos";
+import { camposDoFunil, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
 import { decidirRecadastroDoContato, mesclarTagsNoLead } from "@/lib/webhooks/recadastro";
 import { ipDoClienteParaInet } from "@/lib/http/ip-do-cliente";
 import {
@@ -1073,6 +1075,37 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     }
   }
 
+  // ENCAIXE NOS CAMPOS DO FUNIL: o formulário manda o RÓTULO ("Empresa", "Cargo / Posição") e as UTMs,
+  // e a ficha do negócio lê pela `key` do campo do funil. Sem o encaixe o dado fica gravado sob a chave
+  // crua e não aparece em "Dados do lead" nem em "Rastreamento". Objeto NOVO: o histórico de captação
+  // (`dadosDaCaptacao`) segue guardando o que chegou, como chegou. Falha ABERTA: sem ler o funil, o lead
+  // entra com os campos crus, como antes — perder a captação é pior que perder o encaixe.
+  let camposParaOLead: Record<string, unknown> = mapped.custom_fields;
+  {
+    const { data: funil, error: erroDoFunil } = await admin
+      .from("crm_pipelines")
+      .select("settings")
+      .eq("organization_id", source.organization_id)
+      .eq("id", source.default_pipeline_id)
+      .maybeSingle();
+    if (erroDoFunil) {
+      logger.warn("[webhooks.inbound] não li os campos do funil; lead entra com os campos como vieram", {
+        webhookSourceId: source.id,
+        organizationId: source.organization_id,
+        errorCode: erroDoFunil.code,
+      });
+    } else if (funil) {
+      const campos = camposDoFunil(settingsDoEmbed({ settings: funil.settings }));
+      if (campos.length > 0) {
+        camposParaOLead = encaixarCamposNoFunil({
+          campos: mapped.custom_fields,
+          rastreamento: mapped.source_metadata,
+          funil: campos,
+        }).custom_fields;
+      }
+    }
+  }
+
   const leadInput: CreateLeadInput & {
     custom_fields?: Record<string, unknown>;
     source_metadata?: Record<string, unknown>;
@@ -1088,7 +1121,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     tags: tagsDoEnvio,
     origin_proven: fonteComOrigemProvada,
     source: "webhook",
-    custom_fields: mapped.custom_fields,
+    custom_fields: camposParaOLead,
     source_metadata: { webhook_source_id: source.id, ...mapped.source_metadata },
     ...(externalId ? { external_id: externalId } : {}),
   };
