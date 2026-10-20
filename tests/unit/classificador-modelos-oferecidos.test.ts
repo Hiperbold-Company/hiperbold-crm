@@ -36,7 +36,8 @@ function db(opts: {
   } as never;
 }
 
-const SEM_PLATAFORMA = { anthropic: false, openai: false };
+const SEM_PLATAFORMA = { openrouter: false, modelosDaInstalacao: ["openai/gpt-6-luna"] };
+const COM_PLATAFORMA = { openrouter: true, modelosDaInstalacao: ["openai/gpt-6-luna"] };
 
 describe("listClassifierModels", () => {
   it("oferece apenas provedores com credencial da organização ativa e validada", async () => {
@@ -56,14 +57,38 @@ describe("listClassifierModels", () => {
     ]);
   });
 
-  it("a chave da instalação também conta — quem hospeda configurou o .env, não a tela", async () => {
+  it("a chave da instalação conta — e é só a OpenRouter, com os modelos do plano", async () => {
     let pedidos: unknown = null;
-    await listClassifierModels(
-      db({ creds: { data: [] }, models: { data: [] }, onIn: (v) => (pedidos = v) }),
+    const out = await listClassifierModels(
+      db({
+        creds: { data: [] },
+        models: {
+          data: [
+            { provider: "openrouter", model_id: "openai/gpt-6-luna", display_name: "Luna" },
+            { provider: "openrouter", model_id: "anthropic/claude-sonnet-4-6", display_name: "Sonnet" },
+          ],
+        },
+        onIn: (v) => (pedidos = v),
+      }),
       "org1",
-      { anthropic: true, openai: false },
+      COM_PLATAFORMA,
     );
-    expect(pedidos).toEqual(["anthropic"]);
+    expect(pedidos).toEqual(["openrouter"]);
+    // Sonnet ficaria escolhível e o freio rodaria Luna no lugar: fora da lista.
+    expect(out.map((m) => m.model_id)).toEqual(["openai/gpt-6-luna"]);
+    expect(out[0]?.origem).toBe("plataforma");
+  });
+
+  it("credencial OpenRouter da organização não sofre o filtro do plano", async () => {
+    const out = await listClassifierModels(
+      db({
+        creds: { data: [{ provider: "openrouter" }] },
+        models: { data: [{ provider: "openrouter", model_id: "anthropic/claude-sonnet-4-6", display_name: "Sonnet" }] },
+      }),
+      "org1",
+      COM_PLATAFORMA,
+    );
+    expect(out.map((m) => [m.model_id, m.origem])).toEqual([["anthropic/claude-sonnet-4-6", "org"]]);
   });
 
   it("credencial da organização vence a chave da instalação na marcação de origem", async () => {
@@ -73,7 +98,7 @@ describe("listClassifierModels", () => {
         models: { data: [{ provider: "anthropic", model_id: "claude-haiku-4-5", display_name: "Haiku" }] },
       }),
       "org1",
-      { anthropic: true, openai: false },
+      COM_PLATAFORMA,
     );
     expect(out[0]?.origem).toBe("org");
   });

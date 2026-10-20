@@ -14,7 +14,7 @@
  *   ... --producao   com   CONFIRMO_PRODUCAO=sim   no ambiente
  *
  * ═══ O que faz ═══
- * Para cada lead da organização cuja `source` NÃO é 'kommo' (os que vieram de captação), no funil do próprio lead:
+ * Para cada lead da organização cuja `source` é 'webhook' (só os que vieram da captação; manual, automação, API, WhatsApp e importação ficam de fora), no funil do próprio lead:
  *   - move cada chave de `custom_fields` que case com um campo do funil (key, rótulo, ou rótulo antes de " / ";
  *     sem caixa/acento) para a `key` do campo, QUANDO a key está vazia; a chave crua só sai se o valor foi copiado;
  *   - copia UTMs e ids de clique de `source_metadata` para `custom_fields` quando o funil declara o campo e ele
@@ -134,7 +134,7 @@ try {
     `select id, pipeline_id, custom_fields, source_metadata
        from crm_leads
       where organization_id = $1
-        and source is distinct from 'kommo'
+        and source = 'webhook'
       order by id
       ${APLICAR ? "for update" : ""}`,
     [orgId],

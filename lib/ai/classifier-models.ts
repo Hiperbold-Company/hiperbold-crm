@@ -13,8 +13,11 @@
  * ─── As duas origens de credencial, e por que ambas contam ───────────────────
  *  - BYOK: `ai_provider_credentials` ativa E validada (é o que
  *    `resolveOrgLlmConfig` exige para usar a chave da organização).
- *  - Plataforma: `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` do ambiente, o fallback
- *    de quem hospeda o próprio sistema e configurou a chave no `.env`.
+ *  - Plataforma: a chave da instalação, que é SÓ a OpenRouter (`OPENROUTER_API_KEY`,
+ *    decisão do dono em 20/10/2026), e que só roda os modelos de
+ *    `MODELOS_DA_INSTALACAO`. Oferecer o catálogo inteiro dela faria o operador
+ *    escolher um modelo que o freio de `runModelCall` troca em silêncio pelo do
+ *    plano: o roteador mostraria um modelo e rodaria outro.
  *
  * Ter a chave não garante que ela tenha saldo — isso só o provedor sabe, na
  * hora da chamada. O que esta lista garante é que não oferecemos um caminho que
@@ -23,6 +26,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ehProvedorSuportado } from "@/lib/ai/pontos/provedores";
+import { PROVEDOR_DA_CHAVE_DA_INSTALACAO, modeloLiberado } from "@/lib/ai/modelos-da-instalacao";
 
 /** Um modelo oferecível, já com o provedor que precisa viajar junto dele. */
 export interface ClassifierModelOption {
@@ -33,10 +37,12 @@ export interface ClassifierModelOption {
   origem: "org" | "plataforma";
 }
 
-/** Chaves de plataforma disponíveis, por provedor. */
+/** A chave da instalação: existe? E quais modelos ela pode rodar. */
 export interface PlatformKeys {
-  anthropic: boolean;
-  openai: boolean;
+  /** `OPENROUTER_API_KEY` presente no servidor. */
+  openrouter: boolean;
+  /** `MODELOS_DA_INSTALACAO` já interpretada (`lerModelosDaInstalacao`). */
+  modelosDaInstalacao: readonly string[];
 }
 
 export async function listClassifierModels(
@@ -62,11 +68,8 @@ export async function listClassifierModels(
     // classificador — um modelo que o runtime do agente nem sabe instanciar.
     if (ehProvedorSuportado(c.provider)) origemPorProvider.set(c.provider, "org");
   }
-  if (platformKeys.anthropic && !origemPorProvider.has("anthropic")) {
-    origemPorProvider.set("anthropic", "plataforma");
-  }
-  if (platformKeys.openai && !origemPorProvider.has("openai")) {
-    origemPorProvider.set("openai", "plataforma");
+  if (platformKeys.openrouter && !origemPorProvider.has(PROVEDOR_DA_CHAVE_DA_INSTALACAO)) {
+    origemPorProvider.set(PROVEDOR_DA_CHAVE_DA_INSTALACAO, "plataforma");
   }
   if (origemPorProvider.size === 0) return [];
 
@@ -82,8 +85,14 @@ export async function listClassifierModels(
     .order("display_name", { ascending: true });
   if (modelErr) throw new Error(`classifier_models_catalog_failed: ${modelErr.message}`);
 
-  return ((models ?? []) as Array<{ provider: string; model_id: string; display_name: string | null }>).map(
-    (m) => ({
+  return ((models ?? []) as Array<{ provider: string; model_id: string; display_name: string | null }>)
+    // Na chave da instalação, só o que o plano roda: o resto o freio trocaria em silêncio.
+    .filter(
+      (m) =>
+        origemPorProvider.get(m.provider) !== "plataforma" ||
+        modeloLiberado(platformKeys.modelosDaInstalacao, m.model_id, m.provider),
+    )
+    .map((m) => ({
       provider: m.provider,
       model_id: m.model_id,
       display_name: m.display_name ?? m.model_id,
