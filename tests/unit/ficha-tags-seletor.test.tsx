@@ -18,6 +18,10 @@ vi.mock("@/hooks/kanban/useUpdateLead", () => ({
   useEditLead: () => ({ mutateAsync, isPending: false }),
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// Os produtos do negócio (migration 0972) têm teste próprio (`ficha-produtos-do-negocio.test.tsx`);
+// aqui a seção sai da ficha para este arquivo continuar falando só do que fala.
+vi.mock("@/components/kanban/ItensDoNegocio", () => ({ ItensDoNegocio: () => null }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true }));
 
 const get = vi.fn();
 vi.mock("@/lib/api/client", () => ({

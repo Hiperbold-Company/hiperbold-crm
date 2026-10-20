@@ -288,6 +288,19 @@ export function formatValorDoNegocio(
 }
 
 /**
+ * O preço de tabela do catálogo (`catalog_products.preco_cents`, régua de
+ * `formatCents`: UNIDADES MENORES da moeda) na régua do NEGÓCIO (×100 em qualquer
+ * moeda), que é a de `crm_leads.value_cents` e `crm_lead_itens.valor_unitario_cents`.
+ *
+ * Em BRL, USD e MXN (duas casas) as réguas coincidem e a função devolve o mesmo
+ * número. Em moeda sem centavos (PYG, JPY) o preço do catálogo já é a moeda inteira
+ * e o negócio guarda ×100 — copiar o número cru faria o item custar cem vezes menos.
+ */
+export function precoDoCatalogoParaValorDoNegocio(precoCents: number, moeda: string): number {
+  return Math.round(precoCents * 10 ** (2 - casasDaMoeda(moeda)));
+}
+
+/**
  * As moedas que o produto SERVE — e servir quer dizer três coisas juntas: o
  * seletor da organização a oferece, o schema a aceita, e `formatCents` sabe
  * escrevê-la na convenção de quem a usa.

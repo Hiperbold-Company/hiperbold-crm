@@ -781,6 +781,12 @@ export const AUDIT_ACTIONS = [
   // O metadata leva o subtipo e o tamanho do texto, nunca o texto: `api_audit_log` é
   // append-only e o que entra ali não sai pela cascata de LGPD.
   "lead.activity_logged",
+  // Os produtos do negócio (migration 0972). Mexem no VALOR do negócio por gatilho,
+  // então quem adicionou, mudou ou tirou um item precisa ficar registrado. O metadata
+  // leva o produto e a quantidade, nunca o texto livre.
+  "lead.product_added",
+  "lead.product_updated",
+  "lead.product_removed",
   // Uma pessoa mudou a etapa de um negócio sem responsável e passou a ser a responsável
   // (regra opt-in da organização, `assign_owner_on_move`). Uma linha por negócio assumido.
   "lead.owner_assumed_on_move",

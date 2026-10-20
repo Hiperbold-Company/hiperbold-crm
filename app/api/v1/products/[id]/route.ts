@@ -57,6 +57,11 @@ export async function PATCH(
     if (error.code === "23505") {
       return fail("conflict", t("Já existe um produto com esse código."), 409, { requestId });
     }
+    // 23514 = o CHECK de preço: valor fixo sem preço (ex.: PATCH só com
+    // `preco_cents: null` num produto fixo). É corpo inválido, não falha nossa.
+    if (error.code === "23514") {
+      return fail("validation_failed", t("Dados inválidos."), 422, { requestId });
+    }
     return fail("internal_error", "Erro ao salvar o produto.", 500, { requestId });
   }
   // `maybeSingle` devolve null quando a RLS barrou ou o id não é desta org — os

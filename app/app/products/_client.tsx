@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api/client";
 import { MAXIMO_DE_FOTOS } from "@/lib/catalogo/fotos";
 import { formatCents } from "@/lib/money";
-import { precoParaCentavos, type Produto } from "@/lib/schemas/produtos";
+import { precoParaCentavos, type Produto, type TipoDePreco } from "@/lib/schemas/produtos";
 
 interface Textos {
   titulo: string;
@@ -32,6 +32,8 @@ interface Rascunho {
   nome: string;
   marca: string;
   categoria: string;
+  /** Valor fixo (preço de tabela) ou variável (definido em cada negócio). */
+  tipo_de_preco: TipoDePreco;
   preco: string;
   custo: string;
   quantidade: string;
@@ -43,6 +45,7 @@ const VAZIO: Rascunho = {
   nome: "",
   marca: "",
   categoria: "",
+  tipo_de_preco: "fixo",
   preco: "",
   custo: "",
   quantidade: "0",
@@ -53,8 +56,11 @@ function doRascunho(
   r: Rascunho,
   t: (s: string) => string,
 ): Record<string, unknown> | { erro: string } {
-  const preco_cents = precoParaCentavos(r.preco);
-  if (preco_cents === null) return { erro: t("Preço inválido. Escreva assim: 5.499,00") };
+  // Valor variável não tem preço de tabela: nada a validar, e a rota grava nulo.
+  const preco_cents = r.tipo_de_preco === "variavel" ? null : precoParaCentavos(r.preco);
+  if (r.tipo_de_preco === "fixo" && preco_cents === null) {
+    return { erro: t("Preço inválido. Escreva assim: 5.499,00") };
+  }
   const custo_cents = r.custo.trim() === "" ? null : precoParaCentavos(r.custo);
   if (r.custo.trim() !== "" && custo_cents === null) return { erro: t("Custo inválido.") };
 
@@ -63,7 +69,8 @@ function doRascunho(
     nome: r.nome.trim(),
     ...(r.marca.trim() ? { marca: r.marca.trim() } : {}),
     ...(r.categoria.trim() ? { categoria: r.categoria.trim() } : {}),
-    preco_cents,
+    tipo_de_preco: r.tipo_de_preco,
+    ...(preco_cents !== null ? { preco_cents } : {}),
     custo_cents,
     controla_estoque: r.controla_estoque,
     quantidade: Number(r.quantidade) || 0,
@@ -422,16 +429,50 @@ export function ProdutosClient({
                 className="mt-1 h-9 w-full rounded-md border px-3"
               />
             </label>
-            <label className="text-sm">
-              {t("Preço de venda")}
-              <input
-                value={rascunho.preco}
-                onChange={(e) => setRascunho({ ...rascunho, preco: e.target.value })}
-                placeholder="5.499,00"
-                className="mt-1 h-9 w-full rounded-md border px-3"
-                data-testid="produto-preco"
-              />
-            </label>
+            <fieldset className="text-sm sm:col-span-2" data-testid="produto-tipo-de-preco">
+              <legend className="mb-1">{t("Valor do produto")}</legend>
+              <div className="flex flex-wrap gap-x-6 gap-y-1">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="tipo_de_preco"
+                    checked={rascunho.tipo_de_preco === "fixo"}
+                    onChange={() => setRascunho({ ...rascunho, tipo_de_preco: "fixo" })}
+                    data-testid="produto-tipo-fixo"
+                  />
+                  {t("Valor fixo")}
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="tipo_de_preco"
+                    checked={rascunho.tipo_de_preco === "variavel"}
+                    onChange={() => setRascunho({ ...rascunho, tipo_de_preco: "variavel" })}
+                    data-testid="produto-tipo-variavel"
+                  />
+                  {t("Valor variável")}
+                </label>
+              </div>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {rascunho.tipo_de_preco === "fixo"
+                  ? t("O atendente de IA informa este preço quando alguém pergunta.")
+                  : t(
+                      "Sem preço de tabela: o valor é definido pelo atendente dentro de cada negócio, e o atendente de IA não cita preço deste produto.",
+                    )}
+              </span>
+            </fieldset>
+            {rascunho.tipo_de_preco === "fixo" ? (
+              <label className="text-sm">
+                {t("Preço de venda")}
+                <input
+                  value={rascunho.preco}
+                  onChange={(e) => setRascunho({ ...rascunho, preco: e.target.value })}
+                  placeholder="5.499,00"
+                  className="mt-1 h-9 w-full rounded-md border px-3"
+                  data-testid="produto-preco"
+                />
+              </label>
+            ) : null}
             <label className="text-sm">
               {t("Custo")} <span className="text-muted-foreground">{t("(opcional)")}</span>
               <input
@@ -508,9 +549,18 @@ export function ProdutosClient({
                     : ` · ${t("sem controle de estoque")}`}
                 </p>
               </div>
-              <span className="shrink-0 tabular-nums font-medium">
-                {formatCents(p.preco_cents, p.moeda)}
-              </span>
+              {p.tipo_de_preco === "variavel" || p.preco_cents === null ? (
+                <span
+                  className="shrink-0 rounded-md border px-2 py-0.5 text-xs text-muted-foreground"
+                  data-testid={`valor-variavel-${p.codigo}`}
+                >
+                  {t("Valor variável")}
+                </span>
+              ) : (
+                <span className="shrink-0 tabular-nums font-medium">
+                  {formatCents(p.preco_cents, p.moeda)}
+                </span>
+              )}
               {podeEditar ? (
                 <>
                   <Button

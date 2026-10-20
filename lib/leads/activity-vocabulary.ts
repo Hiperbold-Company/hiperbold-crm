@@ -184,7 +184,19 @@ export type ActivityType =
    * `fn_update_last_activity_at` de propósito — o `stage_changed` que a mesma
    * operação grava já quebra o silêncio, e esta linha só diz quem assumiu.
    */
-  | "lead_owner_assumed";
+  | "lead_owner_assumed"
+  /**
+   * UM PRODUTO ENTROU OU SAIU DO NEGÓCIO (`crm_lead_itens`, migration 0972).
+   *
+   * Tipos próprios e não `lead_edited`: os itens mudam o VALOR do negócio por
+   * gatilho do banco, fora do `PATCH` do lead — então nenhuma `lead_edited`
+   * nasceria, e o valor do negócio mudaria sem a linha do tempo dizer por quê.
+   * O `reason` nomeia o produto e a quantidade, nunca o valor (mesma régua de
+   * `lead_edited`). Fora da lista positiva de `fn_update_last_activity_at`: mexer
+   * nos itens é trabalho interno, não contato com o cliente.
+   */
+  | "lead_product_added"
+  | "lead_product_removed";
 
 export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   lead_created: "Entrou pelo WhatsApp",
@@ -287,6 +299,8 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   contacts_merged: "Contatos duplicados juntados",
   moved_from_pipeline: "Veio de outro funil",
   lead_owner_assumed: "Assumiu o negócio",
+  lead_product_added: "Produto adicionado",
+  lead_product_removed: "Produto removido",
 };
 
 /** Quando o tipo é legado/desconhecido, a linha ainda é honesta — sem jargão. */

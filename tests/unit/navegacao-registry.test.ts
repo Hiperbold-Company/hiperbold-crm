@@ -145,6 +145,14 @@ describe("sidebarGroups", () => {
     expect(NAV_GROUPS.find((g) => g.id === "crm")?.hub?.href).toBe("/app/crm");
   });
 
+  it("Produtos também é porta em Configurações, sem sair do hub do CRM", () => {
+    const hrefs = (g: "organizacao" | "crm") =>
+      hubSections(g, true, null).flatMap((s) => s.items.map((i) => i.href));
+    expect(hrefs("organizacao")).toContain("/app/products");
+    // A porta antiga continua: mesma tela, dois caminhos.
+    expect(hrefs("crm")).toContain("/app/products");
+  });
+
   it("omite o grupo inteiro quando o papel não vê nenhum item dele", () => {
     // CANAIS é todo manager+/admin: um agent não deve ver o título órfão.
     const ids = sidebarGroups(AGENT.platform, AGENT.role).map((g) => g.group.id);
@@ -190,6 +198,8 @@ describe("hubSections", () => {
       "/app/agenda",
       "/app/templates",
       "/app/tasks",
+      // Produtos: segunda porta (20/10/2026), a do CRM continua.
+      "/app/products",
       "/app/settings/tenant/agenda",
       // Comandas e Contas e recebimentos: ocultas em 16/10/2026 (hiperbold/FUNCOES.md).
     ]);

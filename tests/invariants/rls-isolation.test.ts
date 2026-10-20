@@ -289,6 +289,16 @@ beforeAll(() => {
             values (v_org, 'RLS-' || v_org::text, 'Produto de invariante', 100);
         end if;
 
+        -- crm_lead_itens (migration 0972): os produtos de um negócio. Entra COM o
+        -- negócio-pai porque a visibilidade da tabela é a dele; o gatilho da soma
+        -- também mexe no valor do negócio, que é outra tabela tenant-aware.
+        if not exists (select 1 from public.crm_lead_itens where organization_id = v_org) then
+          insert into public.crm_lead_itens
+            (organization_id, lead_id, nome_snapshot, quantidade, valor_unitario_cents)
+            values (v_org, (select id from public.crm_leads where organization_id = v_org limit 1),
+                    'Item de invariante', 1, 100);
+        end if;
+
         -- crm_tasks (migration 0210): o que o time combinou fazer, com prazo.
         -- Entra COM o vínculo de lead porque a tarefa presa a um negócio é o
         -- caso que cruza duas tabelas tenant-aware — se a policy vazasse, o
@@ -556,6 +566,11 @@ export const TABLES = [
   // exige `manager` — esse segundo eixo é medido em
   // `tests/invariants/catalogo-so-gestor-muda-preco.test.ts`, não aqui.
   "catalog_products",
+  // migration 0972 — os produtos de um negócio. Leitura herda a visibilidade do negócio-pai
+  // (fn_can_view_lead); a escrita exige `agent` e esses eixos (atendente sem acesso ao
+  // negócio, viewer, gatilho de vínculo) são medidos em
+  // `tests/invariants/produtos-no-negocio.test.ts`, não aqui.
+  "crm_lead_itens",
   // migration 0210 — as tarefas do CRM. A leitura é org-scoped sem gate de papel
   // (o `viewer` precisa ver o que o time combinou); a ESCRITA exige `agent`, e
   // esse segundo eixo NÃO é medido aqui — o usuário semeado é `agent`, então o
