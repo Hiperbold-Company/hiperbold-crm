@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Buildings } from "@/lib/ui/icons";
+import { ExcluirOrganizacaoDialog } from "./ExcluirOrganizacaoDialog";
 import type { AdminTenantRow } from "@/hooks/useAdminTenants";
 import { useT } from "@/hooks/i18n/useT";
 
@@ -136,6 +138,7 @@ export function TenantsTable({
 }: TenantsTableProps) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
+  const [paraExcluir, setParaExcluir] = useState<AdminTenantRow | null>(null);
   if (data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 rounded-md border py-16 text-center text-muted-foreground">
@@ -161,7 +164,7 @@ export function TenantsTable({
               <TableHead className="w-[70px] text-right">{t("Users")}</TableHead>
               <TableHead className="w-[90px] text-right">{t("Conversas")}</TableHead>
               <TableHead className="w-[90px]">{t("Criado em")}</TableHead>
-              <TableHead className="w-[60px]" />
+              <TableHead className="w-[190px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -185,18 +188,38 @@ export function TenantsTable({
                   {formatDate(row.created_at, tagDoIdioma)}
                 </TableCell>
                 <TableCell>
-                  <Link
-                    href={`/admin/tenants/${row.id}`}
-                    className="text-xs font-medium text-accent hover:underline"
-                  >
-                    {t("Ver")}
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/admin/tenants/${row.id}`}
+                      className="text-xs font-medium text-accent hover:underline"
+                    >
+                      {t("Ver")}
+                    </Link>
+                    {row.status === "suspended" && (
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-error hover:underline"
+                        onClick={() => setParaExcluir(row)}
+                        data-testid={`excluir-organizacao-${row.id}`}
+                      >
+                        {t("Excluir organização")}
+                      </button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
+      {paraExcluir && (
+        <ExcluirOrganizacaoDialog
+          open
+          onClose={() => setParaExcluir(null)}
+          organizacao={{ id: paraExcluir.id, slug: paraExcluir.slug, displayName: paraExcluir.display_name }}
+        />
+      )}
 
       {hasNextPage && (
         <div className="flex justify-center">
