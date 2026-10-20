@@ -6,6 +6,8 @@
  * with a stable error code, and unknown errors to 500.
  */
 import { chaveDePlataforma } from "@/lib/ai/runtime/agent";
+import { modelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao-leitura";
+import { recusaDaChaveDaInstalacao } from "./provedor-permitido";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PUBLISH_ERROR_CODES, type PublishErrorCode } from "./validation";
 
@@ -38,7 +40,7 @@ export async function publishAgentVersion(
 ): Promise<PublishResult> {
   const { data: version, error: readError } = await admin
     .from("ai_agent_versions")
-    .select("provider,credential_id")
+    .select("provider,model,credential_id")
     .eq("organization_id", params.orgId)
     .eq("agent_id", params.agentId)
     .eq("id", params.versionId)
@@ -48,6 +50,17 @@ export async function publishAgentVersion(
   const platform = version.credential_id === null;
   if (platform && !chaveDePlataforma(version.provider))
     return { ok: false, code: "credential_missing", message: "credential_missing" };
+  // Provedor e modelo que o plano não permite (ou a variante em lote) não vão ao ar, qualquer que
+  // seja a porta: tela, API, MCP, onboarding ou proposta. As credenciais a SQL confere logo abaixo.
+  const recusa = recusaDaChaveDaInstalacao(
+    {
+      provider: String(version.provider),
+      model: String((version as { model?: unknown }).model ?? ""),
+      credential_id: (version.credential_id as string | null) ?? null,
+    },
+    await modelosDaInstalacao(),
+  );
+  if (recusa) return { ok: false, code: recusa.code, message: recusa.message };
   const { data, error } = await admin.rpc("fn_publish_ai_agent_version", {
     p_org_id: params.orgId,
     p_agent_id: params.agentId,

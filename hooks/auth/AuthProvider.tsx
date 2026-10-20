@@ -138,6 +138,9 @@ const ACTION_MIN_ROLE: Record<string, Role> = {
   "pipeline.move_card": "agent",
   // "Registrar evento" na ficha do negócio: mesmo piso da rota (requireRole agent).
   "lead.activity.log": "agent",
+  // "Produtos" na ficha do negócio: adicionar, alterar e remover itens. Mesmo piso das rotas
+  // `/api/v1/leads/[id]/itens` (requireRole agent); a rota é quem barra.
+  "lead.items.edit": "agent",
   "team.invite": "admin",
   "team.change_role": "admin",
   "settings.write": "admin",

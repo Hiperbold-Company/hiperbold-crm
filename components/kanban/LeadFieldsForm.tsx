@@ -1,7 +1,7 @@
 "use client";
 
 import { useT } from "@/hooks/i18n/useT";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -9,20 +9,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { usePermission } from "@/hooks/auth/AuthProvider";
 import { useEditLead } from "@/hooks/kanban/useUpdateLead";
 import type { Lead } from "@/lib/types/leads";
 import { updateLeadSchema, type UpdateLeadInput } from "@/lib/schemas/leads";
 import { parseReaisToCents } from "@/lib/money";
 import { CustomFieldsEditor, type CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
 import { agruparCampos, ROTULO_DO_GRUPO, type GrupoDeCampo } from "@/lib/leads/grupo-do-campo";
+import { SeletorDeEtiquetas } from "@/components/tags/SeletorDeEtiquetas";
+import { TETO_DE_TAGS, TETO_DO_TAMANHO_DA_TAG_DO_LEAD } from "@/lib/schemas/tetos";
 import { CaretDown, CaretRight } from "@/lib/ui/icons";
 import { EcoDoValor } from "./EcoDoValor";
+import { ItensDoNegocio } from "./ItensDoNegocio";
 
 interface FormShape {
   title: string;
   description: string;
   valueReais: string;
-  tagsRaw: string;
   expected_close_date: string;
 }
 
@@ -54,13 +57,21 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
   const t = useT();
   const edit = useEditLead(pipelineId);
   const [customFields, setCustomFields] = useState<Record<string, unknown>>(lead.custom_fields ?? {});
+  // As etiquetas do NEGÓCIO moram no estado do formulário (não gravam ao marcar):
+  // entram no patch do "Salvar", como o campo de texto fazia.
+  const [tags, setTags] = useState<string[]>(lead.tags ?? []);
+  // O VALOR É A SOMA DOS PRODUTOS quando o negócio tem produtos (gatilho do banco,
+  // migration 0972). `null` = sem produtos (ou a lista ainda não chegou): o valor é
+  // o que a pessoa digita, como sempre foi.
+  const podeEditarItens = usePermission("lead.items.edit");
+  const [somaDosProdutos, setSomaDosProdutos] = useState<number | null>(null);
+  const ultimaSoma = useRef<number | null>(null);
 
   const form = useForm<FormShape>({
     defaultValues: {
       title: lead.title,
       description: lead.description ?? "",
       valueReais: centsToReais(lead.value_cents),
-      tagsRaw: (lead.tags ?? []).join(", "),
       expected_close_date: lead.expected_close_date ?? "",
     },
   });
@@ -70,22 +81,29 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
       title: lead.title,
       description: lead.description ?? "",
       valueReais: centsToReais(lead.value_cents),
-      tagsRaw: (lead.tags ?? []).join(", "),
       expected_close_date: lead.expected_close_date ?? "",
     });
     setCustomFields(lead.custom_fields ?? {});
+    setTags(lead.tags ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
 
-  async function onSubmit(values: FormShape) {
-    const tags = values.tagsRaw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+  /**
+   * O total dos produtos mudou. Com produtos, o campo mostra a soma; quando o
+   * ÚLTIMO produto sai, o campo volta a ser editável com o último total — o
+   * banco não zera o valor (migration 0972), e a ficha não pode mostrar outro.
+   */
+  function aoMudarOTotalDosProdutos(total: number | null) {
+    if (total !== null) form.setValue("valueReais", centsToReais(total));
+    else if (ultimaSoma.current !== null) form.setValue("valueReais", centsToReais(ultimaSoma.current));
+    ultimaSoma.current = total;
+    setSomaDosProdutos(total);
+  }
 
+  async function onSubmit(values: FormShape) {
     const reais = values.valueReais.trim();
     let valueCents: number | null = null;
-    if (reais.length > 0) {
+    if (somaDosProdutos === null && reais.length > 0) {
       valueCents = parseReaisToCents(reais);
       if (valueCents === null) {
         form.setError("valueReais", { message: t("Valor inválido") });
@@ -96,7 +114,8 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
     const patch: Record<string, unknown> = {
       title: values.title.trim(),
       description: values.description.trim() ? values.description.trim() : null,
-      value_cents: valueCents,
+      // Com produtos o valor é a soma deles, que o banco mantém: não se envia.
+      ...(somaDosProdutos === null ? { value_cents: valueCents } : {}),
       tags,
       expected_close_date: values.expected_close_date || null,
       ...(fieldDefs.length > 0 ? { custom_fields: customFields } : {}),
@@ -137,6 +156,14 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
           <Textarea id="description" rows={3} {...form.register("description")} />
         </div>
 
+        <ItensDoNegocio
+          leadId={lead.id}
+          pipelineId={pipelineId}
+          moeda={lead.currency ?? null}
+          podeEditar={podeEditarItens}
+          onTotalChange={aoMudarOTotalDosProdutos}
+        />
+
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <Label htmlFor="valueReais">{t("Valor (R$)")}</Label>
@@ -144,9 +171,17 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
               id="valueReais"
               inputMode="decimal"
               placeholder="0,00"
+              readOnly={somaDosProdutos !== null}
+              className={somaDosProdutos !== null ? "bg-muted/40" : undefined}
               {...form.register("valueReais")}
             />
-            <EcoDoValor control={form.control} />
+            {somaDosProdutos !== null ? (
+              <p className="text-xs text-muted-foreground" data-testid="valor-pela-soma">
+                {t("Soma dos produtos deste negócio.")}
+              </p>
+            ) : (
+              <EcoDoValor control={form.control} />
+            )}
             {form.formState.errors.valueReais && (
               <p className="text-xs text-error-fg">
                 {t(form.formState.errors.valueReais.message ?? "")}
@@ -164,8 +199,19 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="tagsRaw">{t("Tags (separadas por vírgula)")}</Label>
-          <Input id="tagsRaw" placeholder="vip, recompra" {...form.register("tagsRaw")} />
+          <Label>{t("Tags")}</Label>
+          <SeletorDeEtiquetas
+            orgId={lead.organization_id}
+            value={tags}
+            onChange={setTags}
+            limite={TETO_DE_TAGS}
+            tamanhoMaximo={TETO_DO_TAMANHO_DA_TAG_DO_LEAD}
+            // O negócio guarda a grafia do cadastro ("Novo Paciente"), só aparada.
+            paraGravar={(tag) => tag.trim().slice(0, TETO_DO_TAMANHO_DA_TAG_DO_LEAD)}
+            rotuloDoCampo={t("Adicionar tag ao negócio")}
+            disabled={edit.isPending}
+            className="space-y-2 rounded-md border border-border p-2"
+          />
         </div>
 
         {agruparCampos(fieldDefs).map((bloco) => (

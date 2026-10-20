@@ -258,27 +258,32 @@ test.describe("Lote 12 — painel do contato no Inbox", () => {
     const campo = page.getByLabel("Adicionar tag ao contato");
     await expect(campo).toBeVisible();
 
-    const chips = await page.getByRole("button", { name: /^\+ / }).allInnerTexts();
-    registra(`#946 · chips oferecidos = ${JSON.stringify(chips)}`);
-    // "VIP", "vip " e "vip" viraram UM chip — e ele não é oferecido, porque o
-    // contato desta conversa já tem "VIP".
-    expect(chips.filter((x) => x.trim().toLowerCase() === "+ vip")).toEqual([]);
-    expect(chips.map((x) => x.trim())).toContain("+ obra");
-    // A etiqueta que o CONTATO já tem, em CAIXA ALTA, não é oferecida — e a
-    // rota conhece "vip", o que separa "não oferece" de "não existe".
+    // A lista é de CAIXAS de marcar (vocabulário + em uso), não mais de chips "+ x". O rótulo é a grafia
+    // com que a etiqueta foi cadastrada ("Obra", como o contato semeado a tem), e a caixa grava a forma
+    // normalizada ("obra"): por isso o nome é achado sem diferenciar caixa e a asserção do banco, mais
+    // abaixo, é que prova a normalização.
+    const caixaObra = page.getByRole("checkbox", { name: /^obra$/i });
+    await expect(caixaObra).toBeVisible();
+    const rotulos = (await page.locator("label:has(input[type=checkbox])").allInnerTexts()).map((x) => x.trim());
+    registra(`#946 · etiquetas oferecidas = ${JSON.stringify(rotulos)}`);
+    // "VIP", "vip " e "vip" viraram UMA caixa — e ela já vem marcada, porque o
+    // contato desta conversa tem "VIP".
+    const vips = page.getByRole("checkbox", { name: /^vip$/i });
+    await expect(vips).toHaveCount(1);
+    await expect(vips).toBeChecked();
+    // A rota conhece "vip", o que separa "não oferece" de "não existe".
     expect(corpoTags).toContain("vip");
-    // Nenhum chip repetido, e todos em minúscula.
-    const limpos = chips.map((x) => x.replace(/^\+\s*/, "").trim());
-    expect(new Set(limpos).size, "nenhuma duplicata na sugestão").toBe(limpos.length);
-    expect(limpos.every((x) => x === x.toLowerCase()), "a sugestão mostra a forma que o clique grava").toBe(true);
+    // Nenhuma etiqueta repetida (pela chave, sem caixa).
+    const chaves = rotulos.map((x) => x.toLowerCase());
+    expect(new Set(chaves).size, "nenhuma duplicata na lista").toBe(chaves.length);
     await captura(page, "946-04-sugestao-de-tags");
 
-    // Clicar no chip grava a forma normalizada.
+    // Marcar a caixa grava a forma normalizada.
     const antes = (await admin.from("contacts").select("tags").eq("id", contatoId).single()).data;
     const resposta = page.waitForResponse(
       (r) => r.url().includes(`/contacts/${contatoId}`) && r.request().method() === "PATCH",
     );
-    await page.getByRole("button", { name: "+ obra", exact: true }).click();
+    await caixaObra.click();
     const r = await resposta;
     const { data: depois } = await admin.from("contacts").select("tags").eq("id", contatoId).single();
     registra(`#946 · PATCH = ${r.status()} · antes=${JSON.stringify(antes)} depois=${JSON.stringify(depois)}`);

@@ -1,27 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ContactTagsEditor } from "@/components/inbox/ContactTagsEditor";
-import { ProvedorDeCoresDasEtiquetas } from "@/components/tags/CoresDasEtiquetas";
 
-// O provider das cores lê a organização ATIVA pelo `useAuth` (mesmo harness do
-// teste irmão, `chip-de-etiqueta.test.tsx`): sem isto ele derruba com "useAuth
-// must be used inside <AuthProvider>" — erro certo para a tela, ruído aqui.
+/**
+ * Tags do CONTATO no Inbox: o editor mostra a LISTA de etiquetas da empresa
+ * (vocabulário cadastrado + em uso), agrupada, cada uma uma caixa de marcar.
+ *
+ * Antes eram no máximo 8 sugestões "em uso nos contatos": uma empresa nova, com
+ * 17 etiquetas cadastradas e nenhum contato etiquetado, não via nenhuma e
+ * dependia de digitar — e cada operador digitava a sua variação (#852).
+ *
+ * Mesmo desenho do teste irmão da rota (`tags-para-escolher-rota.test.ts`): aqui
+ * a fonte é uma lista pronta no mock da rede; o que se prova é o que a pessoa vê
+ * e o que o clique grava.
+ */
+
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useAuth: () => ({ activeOrg: { orgId: "org-1" } }),
 }));
-
-/**
- * Tags do CONTATO sem sugestão (#852, item 1 da divisão). O editor de tags da
- * conversa já oferecia as tags em uso; o do contato obrigava a digitar do zero,
- * e cada operador criava a sua variação ("google", "gogle", "google ads").
- *
- * Dois lados, porque um sem o outro não resolve:
- *  - a ROTA precisa devolver as tags que existem, só da organização da sessão;
- *  - o EDITOR precisa oferecê-las e gravar a escolhida.
- */
 
 const get = vi.fn();
 vi.mock("@/lib/api/client", () => ({
@@ -34,149 +33,194 @@ vi.mock("@/hooks/contacts/useUpdateContact", () => ({
 
 const ORG = "org-1";
 
+const VOCABULARIO = [
+  { tag: "Google Ads", cor: "#0091ff", grupo: "Origem do lead" },
+  { tag: "Indicação", cor: "#12a594", grupo: "Origem do lead" },
+  { tag: "Novo Paciente", cor: "#ffb224", grupo: "Situação do paciente" },
+  { tag: "Dra. Ana", cor: null, grupo: "Profissional parceiro" },
+  { tag: "Sem grupo", cor: null, grupo: null },
+];
+
+function monta(tags: string[], vocabulario: unknown = VOCABULARIO) {
+  get.mockImplementation(async (url: string) => {
+    if (url === "/api/v1/tags/para-escolher") return { data: vocabulario };
+    throw new Error(`rota inesperada: ${url}`);
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <ContactTagsEditor contactId="c-1" orgId={ORG} tags={tags} />
+    </QueryClientProvider>,
+  );
+}
+
+const espera = { timeout: 5000 };
+
 beforeEach(() => {
   get.mockReset();
   mutate.mockReset();
 });
 
-describe("ContactTagsEditor", () => {
-  it("oferece as tags existentes que o contato ainda não tem, e clicar grava", async () => {
-    get.mockResolvedValue({ data: ["google", "vip"] });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <ContactTagsEditor contactId="c-1" orgId={ORG} tags={["vip"]} />
-      </QueryClientProvider>,
-    );
+describe("ContactTagsEditor — a lista de etiquetas da empresa", () => {
+  it("lê o vocabulário da rota certa e mostra grupos na ordem cadastrada, 'Outras' no fim", async () => {
+    monta([]);
 
-    // 5s e não o 1s padrão: medido vermelho UMA vez com este arquivo rodando ao
-    // lado de outro — 1637ms contra 436ms sozinho. O que estoura é o custo frio
-    // do primeiro render do arquivo sob concorrência, não a consulta, que já
-    // está resolvida no mock.
-    const sugestao = await screen.findByRole("button", { name: "+ google" }, { timeout: 5000 });
-    // Nada mais no repositório amarra o hook à rota: `/api/v1/contact-tags`
-    // aparece em três lugares e nenhum deles é um portão. Trocar a URL por
-    // `/api/v1/conversation-tags`, que existe, deixava typecheck, eslint e a
-    // suíte inteira verdes — e o editor do CONTATO passaria a sugerir tags de
-    // CONVERSA, que é outro vocabulário, sem ninguém notar.
-    expect(get).toHaveBeenCalledWith("/api/v1/contact-tags");
-    expect(screen.queryByRole("button", { name: "+ vip" })).toBeNull();
+    await screen.findByRole("checkbox", { name: "Google Ads" }, espera);
+    // Nada amarra o hook à rota além deste teste: trocar por `/contact-tags`
+    // (só nomes em uso) devolveria a lista sem grupo nem cor, com tudo verde.
+    expect(get).toHaveBeenCalledWith("/api/v1/tags/para-escolher");
 
-    await userEvent.click(sugestao);
-
-    expect(mutate).toHaveBeenCalledWith({ tags: ["vip", "google"] });
+    const grupos = screen.getAllByRole("group", { name: /./ }).filter((g) => g.getAttribute("aria-labelledby"));
+    expect(grupos.map((g) => g.textContent)).toEqual([
+      "Origem do leadGoogle AdsIndicação",
+      "Situação do pacienteNovo Paciente",
+      "Profissional parceiroDra. Ana",
+      "OutrasSem grupo",
+    ]);
   });
 
-  /**
-   * As duas direções da mesma cegueira: o filtro comparava com sensibilidade a
-   * caixa, então bastava a tag estar gravada fora da forma normalizada — de um
-   * lado ou do outro — para o chip nunca sumir. Clicar nele gravava a variante
-   * minúscula, o contato ficava com as DUAS, e do segundo clique em diante o
-   * botão não fazia nada.
-   */
-  it("tag do vocabulário em caixa mista não vira chip para quem já a tem", async () => {
-    // A segunda tag existe como TESTEMUNHA: esperar pelo campo de texto, que
-    // está na tela desde o primeiro render, fazia a asserção negativa passar
-    // ANTES de a consulta resolver — verde vácuo. Medido: com o filtro
-    // sabotado o caso continuava verde. Esperar por "+ google" prova que o
-    // vocabulário chegou, e só então a ausência de "+ VIP" quer dizer algo.
-    get.mockResolvedValue({ data: ["VIP", "google"] });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <ContactTagsEditor contactId="c-1" orgId={ORG} tags={["vip"]} />
-      </QueryClientProvider>,
-    );
-
-    await screen.findByRole("button", { name: "+ google" }, { timeout: 5000 });
-    expect(screen.queryByRole("button", { name: /\+ ?VIP/i })).toBeNull();
+  it("empresa nova: etiquetas cadastradas aparecem mesmo sem nenhum contato etiquetado", async () => {
+    monta([]);
+    const caixas = await screen.findAllByRole("checkbox", {}, espera);
+    expect(caixas).toHaveLength(5);
+    expect(caixas.every((c) => !(c as HTMLInputElement).checked)).toBe(true);
   });
 
-  /**
-   * Alcançável DIGITANDO, sem chip nenhum: o contato tem "VIP" gravado de
-   * antes, alguém digita "vip", e sem comparar formas normalizadas o contato
-   * fica com as duas — a duplicação, pelo caminho mais comum de todos.
-   */
-  it("digitar a variante de uma tag que o contato já tem não grava a segunda", async () => {
-    get.mockResolvedValue({ data: [] });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <ContactTagsEditor contactId="c-1" orgId={ORG} tags={["VIP"]} />
-      </QueryClientProvider>,
-    );
+  it("cada etiqueta com cor mostra a bolinha; sem cor, nada", async () => {
+    monta([]);
+    const google = (await screen.findByRole("checkbox", { name: "Google Ads" }, espera)).closest("label")!;
+    const ponto = google.querySelector("[data-ponto-da-etiqueta]");
+    expect(ponto?.getAttribute("style") ?? "").toMatch(/rgb\(0,\s*145,\s*255\)|#0091ff/i);
+    const ana = screen.getByRole("checkbox", { name: "Dra. Ana" }).closest("label")!;
+    expect(ana.querySelector("[data-ponto-da-etiqueta]")).toBeNull();
+  });
 
-    await userEvent.type(screen.getByLabelText("Adicionar tag ao contato"), "vip");
-    await userEvent.click(screen.getByRole("button", { name: "Adicionar tag" }));
+  it("marcada = o contato tem; a comparação é pela forma normalizada (VIP/vip)", async () => {
+    monta(["novo paciente", "INDICAÇÃO"]);
+    const novo = await screen.findByRole("checkbox", { name: "Novo Paciente" }, espera);
+    expect((novo as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("checkbox", { name: "Indicação" }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("checkbox", { name: "Google Ads" }) as HTMLInputElement).checked).toBe(false);
+  });
 
+  it("marcar grava na hora, na forma normalizada, sem duplicar o que o contato já tem", async () => {
+    monta(["vip"]);
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Novo Paciente" }, espera));
+    // A lista mostra a grafia do cadastro; o contato guarda a chave (a rota
+    // normaliza de qualquer jeito: "Novo Paciente" e "novo paciente" são uma tag).
+    expect(mutate).toHaveBeenCalledWith({ tags: ["vip", "novo paciente"] });
+  });
+
+  it("desmarcar remove na hora, inclusive a variante em caixa mista", async () => {
+    monta(["VIP", "Novo Paciente", "google ads"]);
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Novo Paciente" }, espera));
+    expect(mutate).toHaveBeenCalledWith({ tags: ["VIP", "google ads"] });
+  });
+
+  it("tag que o contato tem e o vocabulário não conhece vira caixa marcada em 'Outras'", async () => {
+    monta(["importada"]);
+    const caixa = await screen.findByRole("checkbox", { name: "importada" }, espera);
+    expect((caixa as HTMLInputElement).checked).toBe(true);
+    expect(caixa.closest("[aria-labelledby]")?.textContent).toContain("Outras");
+    await userEvent.click(caixa);
+    expect(mutate).toHaveBeenCalledWith({ tags: [] });
+  });
+
+  it("a lista com rolagem: altura máxima e rolagem vertical", async () => {
+    monta([]);
+    const lista = (await screen.findByRole("checkbox", { name: "Google Ads" }, espera)).closest(
+      '[role="group"][aria-label="Etiquetas da empresa"]',
+    )!;
+    expect(lista.className).toMatch(/max-h-/);
+    expect(lista.className).toMatch(/overflow-y-auto/);
+  });
+});
+
+describe("ContactTagsEditor — busca e criação", () => {
+  it("a busca filtra sem acento e sem caixa, e grupo sem resultado some", async () => {
+    monta([]);
+    await screen.findByRole("checkbox", { name: "Google Ads" }, espera);
+
+    await userEvent.type(screen.getByLabelText("Adicionar tag ao contato"), "INDICACAO");
+
+    expect(screen.getAllByRole("checkbox").map((c) => c.closest("label")?.textContent)).toEqual(["Indicação"]);
+    expect(screen.queryByText("Situação do paciente")).toBeNull();
+    // Existe: não oferece criar.
+    expect(screen.queryByRole("button", { name: /Criar etiqueta/ })).toBeNull();
+  });
+
+  it("texto que não existe oferece criar, e criar grava a tag normalizada", async () => {
+    monta(["vip"]);
+    await screen.findByRole("checkbox", { name: "Google Ads" }, espera);
+
+    await userEvent.type(screen.getByLabelText("Adicionar tag ao contato"), "Retorno 2026");
+    expect(screen.getByText("Nenhuma etiqueta encontrada.")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Criar etiqueta “Retorno 2026”" }));
+
+    expect(mutate).toHaveBeenCalledWith({ tags: ["vip", "retorno 2026"] });
+  });
+
+  it("Enter cria quando o texto não existe (o caminho de quem digita direto)", async () => {
+    monta([]);
+    await screen.findByRole("checkbox", { name: "Google Ads" }, espera);
+    await userEvent.type(screen.getByLabelText("Adicionar tag ao contato"), "nova{Enter}");
+    expect(mutate).toHaveBeenCalledWith({ tags: ["nova"] });
+  });
+
+  it("não duplica por caixa: digitar a variante de uma tag que o contato já tem não grava", async () => {
+    monta(["VIP"]);
+    await screen.findByRole("checkbox", { name: "Google Ads" }, espera);
+    await userEvent.type(screen.getByLabelText("Adicionar tag ao contato"), "vip{Enter}");
     expect(mutate).not.toHaveBeenCalled();
+    // E a variante também não é oferecida como "nova": ela já existe (marcada).
+    expect(screen.queryByRole("button", { name: /Criar etiqueta/ })).toBeNull();
   });
 
-  it("contato com a tag em caixa mista não recebe o chip da versão minúscula", async () => {
-    get.mockResolvedValue({ data: ["vip", "google"] });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <ContactTagsEditor contactId="c-1" orgId={ORG} tags={["VIP"]} />
-      </QueryClientProvider>,
-    );
-
-    await screen.findByRole("button", { name: "+ google" }, { timeout: 5000 });
-    expect(screen.queryByRole("button", { name: /\+ ?vip/i })).toBeNull();
+  it("digitar a etiqueta do vocabulário em outra caixa ou sem acento não a oferece como nova; Enter marca a existente", async () => {
+    monta([]);
+    await screen.findByRole("checkbox", { name: "Google Ads" }, espera);
+    await userEvent.type(screen.getByLabelText("Adicionar tag ao contato"), "indicacao");
+    expect(screen.queryByRole("button", { name: /Criar etiqueta/ })).toBeNull();
+    await userEvent.keyboard("{Enter}");
+    // Grava a chave da etiqueta CADASTRADA ("indicação"), não a digitada.
+    expect(mutate).toHaveBeenCalledWith({ tags: ["indicação"] });
   });
+});
 
-  /**
-   * O chip diz o que o clique grava MESMO que a lista chegue crua. Hoje quem
-   * normaliza a lista é `GET /api/v1/contact-tags`, mas o editor não pode
-   * depender disso: o cabeçalho daquela rota já manda trocar a consulta pela
-   * `fn_vocabulario_de_tags`, e o rótulo do chip não pode mudar de verdade
-   * junto com a fonte. "Google " cru viraria o chip "+ Google" que grava
-   * "google", e "VIP"/"vip" viraria dois chips que gravam a mesma tag.
-   */
-  it("lista crua da fonte: o chip já mostra a forma que o clique grava, uma vez só", async () => {
-    get.mockResolvedValue({ data: ["VIP", "vip", "Google "] });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <ContactTagsEditor contactId="c-1" orgId={ORG} tags={["cliente"]} />
-      </QueryClientProvider>,
-    );
-
-    const google = await screen.findByRole("button", { name: "+ google" }, { timeout: 5000 });
-    expect(screen.getAllByRole("button", { name: /^\+ ?vip$/i })).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "+ vip" })).toBeTruthy();
+describe("ContactTagsEditor — limite e estados", () => {
+  it("no limite de 20, as não marcadas e o criar ficam travados; as marcadas ainda saem", async () => {
+    const vinte = Array.from({ length: 20 }, (_, i) => `t${i}`);
+    monta(["google ads", ...vinte.slice(1)]);
+    const google = await screen.findByRole("checkbox", { name: "Google Ads" }, espera);
+    expect((google as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByRole("checkbox", { name: "Indicação" }) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText(/Limite de 20 tags/)).toBeTruthy();
 
     await userEvent.click(google);
+    expect(mutate).toHaveBeenCalledWith({ tags: vinte.slice(1) });
 
-    expect(mutate).toHaveBeenCalledWith({ tags: ["cliente", "google"] });
+    await userEvent.type(screen.getByLabelText("Adicionar tag ao contato"), "outra");
+    expect((screen.getByRole("button", { name: /Criar etiqueta/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("a sugestão mostra a cor da etiqueta, e não desenha nada quando ela não tem cor", async () => {
-    // #1271: a cor serve para RECONHECER antes de ler — inclusive na hora de
-    // ESCOLHER a etiqueta. `get` passa a responder por URL porque agora são duas
-    // leituras na mesma tela (o vocabulário das sugestões e o mapa de cores).
-    get.mockImplementation(async (url: string) =>
-      url === "/api/v1/tags/cores"
-        ? { data: [{ tag: "google", cor: "#e54d2e" }] }
-        : { data: ["google", "vip"] },
-    );
+  it("empresa sem vocabulário: avisa e deixa criar digitando", async () => {
+    monta([], []);
+    expect(await screen.findByText(/ainda não tem etiquetas/, {}, espera)).toBeTruthy();
+    await userEvent.type(screen.getByLabelText("Adicionar tag ao contato"), "primeira{Enter}");
+    expect(mutate).toHaveBeenCalledWith({ tags: ["primeira"] });
+  });
+
+  it("a falha da leitura é dita, e as tags do contato continuam editáveis", async () => {
+    get.mockRejectedValue(new Error("500"));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <ProvedorDeCoresDasEtiquetas>
-          <ContactTagsEditor contactId="c-1" orgId={ORG} tags={["cliente"]} />
-        </ProvedorDeCoresDasEtiquetas>
+        <ContactTagsEditor contactId="c-1" orgId={ORG} tags={["vip"]} />
       </QueryClientProvider>,
     );
-
-    const google = await screen.findByRole("button", { name: "+ google" }, { timeout: 5000 });
-    const ponto = google.querySelector('[data-ponto-da-etiqueta="google"]');
-    expect(ponto).not.toBeNull();
-    expect(ponto?.getAttribute("style") ?? "").toMatch(/rgb\(229,\s*77,\s*46\)|#e54d2e/i);
-
-    // A que não tem cor continua sem ponto: um ponto cinza ao lado de cada
-    // etiqueta transformaria "não escolhi" em "escolhi cinza".
-    const vip = screen.getByRole("button", { name: "+ vip" });
-    expect(vip.querySelector("[data-ponto-da-etiqueta]")).toBeNull();
+    const alerta = await screen.findByRole("alert", {}, espera);
+    expect(within(alerta).getByText(/Não foi possível carregar as etiquetas/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("checkbox", { name: "vip" }));
+    expect(mutate).toHaveBeenCalledWith({ tags: [] });
   });
 });

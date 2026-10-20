@@ -28,7 +28,7 @@ interface Creds {
   password: string;
   users: Record<string, { email: string }>;
   admin_totp?: { factor_id: string; secret: string };
-  followup_agent_fixtures?: { credential_id: string; channel_session_id: string };
+  followup_agent_fixtures?: { credential_id: string; credential_conectada_id?: string; channel_session_id: string };
 }
 
 function loadCreds(): Creds {
@@ -949,7 +949,9 @@ test.describe("followup flow selector no editor do agente (Task 7.2)", () => {
           system_prompt: "Você é um atendente de teste E2E. Responda de forma clara em pt-BR.",
           provider: "anthropic",
           model: "claude-sonnet-4-6",
-          credential_id: fixtures.credential_id,
+          // A credencial CONECTADA (validada): esta spec EDITA o agente pela tela, e o formulário só aceita o par
+          // provedor/credencial que a empresa conectou — com a sem validação, "Salvar rascunho" fica desabilitado.
+          credential_id: fixtures.credential_conectada_id ?? fixtures.credential_id,
           channel_session_id: fixtures.channel_session_id,
         },
       },

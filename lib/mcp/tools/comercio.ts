@@ -108,8 +108,27 @@ const TAMANHO_DA_PAGINA = 1000;
  */
 const PAGINAS_MAXIMAS = 10;
 
-export function avisosDaBusca(input: { empate: boolean; ignorados: readonly string[] }): string {
+/**
+ * O texto que o agente lê no lugar do preço de um produto de VALOR VARIÁVEL.
+ *
+ * Esse produto não tem preço de tabela: o valor é definido pelo atendente dentro
+ * de cada negócio. Cotar um número aqui seria inventá-lo — e preço dito a um
+ * cliente é promessa que a loja terá de cumprir ou desfazer.
+ */
+export const AVISO_DE_VALOR_VARIAVEL =
+  "o valor deste produto é definido no atendimento, caso a caso. NÃO cite preço, faixa, " +
+  '"a partir de" nem estimativa: diga que o valor é combinado no atendimento e siga a conversa ' +
+  "(levante o que a pessoa precisa para a equipe passar o valor).";
+
+export function avisosDaBusca(input: {
+  empate: boolean;
+  ignorados: readonly string[];
+  comValorVariavel?: boolean;
+}): string {
   const avisos: string[] = [];
+  if (input.comValorVariavel) {
+    avisos.push(`Produto com \`valor_variavel: true\`: ${AVISO_DE_VALOR_VARIAVEL}`);
+  }
   if (input.ignorados.length > 0) {
     avisos.push(
       `não há produto com ${input.ignorados.join(" nem ")} no catálogo desta loja. ` +
@@ -162,6 +181,9 @@ export const crmSearchProducts: McpToolDefinition<typeof produtosInputShape> = {
     "produto. Use SEMPRE que a pessoa perguntar preço, e responda com o valor que voltar aqui — " +
     "nunca com um valor que você lembra ou estima: preço errado dito a um cliente é promessa que a " +
     "loja terá de cumprir ou desfazer. " +
+    "⚠️ Produto com `valor_variavel: true` NÃO tem preço de tabela: o valor é definido no " +
+    "atendimento. Não cite preço, faixa nem estimativa dele — diga que o valor é combinado no " +
+    "atendimento. " +
     "Passe o que a pessoa escreveu, do jeito que ela escreveu: a busca entende erro de digitação " +
     "('ifone') e acha por marca, categoria ou código. " +
     "⚠️ SE VOLTAR MAIS DE UM produto com `empate: true`, NÃO escolha por conta própria — os dois " +
@@ -219,7 +241,7 @@ export const crmSearchProducts: McpToolDefinition<typeof produtosInputShape> = {
       const { data: lote, error, count } = await ctx.supabase
         .from("catalog_products")
         .select(
-          "id, codigo, nome, descricao, marca, categoria, preco_cents, moeda, controla_estoque, quantidade, ativo, fotos",
+          "id, codigo, nome, descricao, marca, categoria, preco_cents, tipo_de_preco, moeda, controla_estoque, quantidade, ativo, fotos",
           { count: "exact" },
         )
         .eq("organization_id", ctx.organizationId)
@@ -258,7 +280,9 @@ export const crmSearchProducts: McpToolDefinition<typeof produtosInputShape> = {
       descricao: string | null;
       marca: string | null;
       categoria: string | null;
-      preco_cents: number;
+      /** Nulo quando `tipo_de_preco = 'variavel'` (migration 0972). */
+      preco_cents: number | null;
+      tipo_de_preco?: string | null;
       moeda: string;
       controla_estoque: boolean;
       quantidade: number;
@@ -319,14 +343,28 @@ export const crmSearchProducts: McpToolDefinition<typeof produtosInputShape> = {
     // casa o Pro e o Pro Max igualmente, e a diferença entre eles é o preço.
     const empate = topo.length > 1 && topo[0]!.nota === topo[1]!.nota;
 
-    const mensagem = avisosDaBusca({ empate, ignorados });
+    // Valor variável é decidido pelo `tipo_de_preco`, nunca pela ausência do
+    // número: o preço de um produto fixo nunca é nulo (CHECK do banco), mas a
+    // decisão de NÃO cotar não pode depender disso.
+    const ehVariavel = (p: Linha) => p.tipo_de_preco === "variavel";
+    const mensagem = avisosDaBusca({
+      empate,
+      ignorados,
+      comValorVariavel: topo.some(({ produto }) => ehVariavel(produto)),
+    });
 
     return {
       produtos: topo.map(({ produto }) => ({
         codigo: produto.codigo,
         nome: produto.nome,
-        preco: formatCents(produto.preco_cents, produto.moeda),
-        preco_cents: produto.preco_cents,
+        // Valor variável: nenhum número sai daqui. Nem `preco`, nem `preco_cents`,
+        // nem `null` — chave ausente não dá ao modelo o que preencher.
+        ...(ehVariavel(produto) || produto.preco_cents === null
+          ? { valor_variavel: true as const, valor: "definido no atendimento" }
+          : {
+              preco: formatCents(produto.preco_cents, produto.moeda),
+              preco_cents: produto.preco_cents,
+            }),
         ...(produto.marca ? { marca: produto.marca } : {}),
         ...(produto.descricao ? { descricao: produto.descricao } : {}),
         disponivel: !produto.controla_estoque || produto.quantidade > 0,

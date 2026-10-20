@@ -136,7 +136,6 @@ function registrySpiao() {
 
 /** A instalação TEM a chave da OpenRouter no `.env` em todos os casos. */
 const cfg = {
-  anthropicApiKey: "chave-anthropic-da-instalacao",
   openrouterApiKey: "chave-openrouter-da-instalacao",
   cacheTtl: "1h" as const,
 };

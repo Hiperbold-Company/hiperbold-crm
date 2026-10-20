@@ -5,7 +5,9 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { seedGov, GOV_ADMIN } from "./gov-helpers";
 vi.mock("@/lib/audit", () => ({ audit: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/ai/runtime/agent", () => ({
-  chaveDePlataforma: (provider: string) => (provider === "openai" ? "test-key-never-sent" : null),
+  // A chave da instalação é a da OpenRouter e serve a openai/anthropic/openrouter (20/10/2026).
+  chaveDePlataforma: (provider: string) =>
+    ["openai", "anthropic", "openrouter"].includes(provider) ? "test-key-never-sent" : null,
 }));
 import { setupProspectingAgent } from "@/lib/prospecting/agent-setup";
 import { prospectingAgentSetupSchema } from "@/lib/prospecting/agent-setup-schema";
@@ -22,7 +24,16 @@ const pool = new pg.Pool({
   connectionString: `postgresql://postgres:postgres@127.0.0.1:${process.env.TEST_DB_PORT ?? 54329}/postgres`,
   max: 5,
 });
-beforeAll(() => seedGov());
+beforeAll(async () => {
+  await seedGov();
+  // A chave da instalação publica em OpenRouter + Luna, e `fn_publish_ai_agent_version` exige o modelo no
+  // catálogo — que numa instalação nova só chega pelo cron de sincronização. A fixture o semeia.
+  await pool.query(
+    `insert into ai_models(provider, model_id, display_name, supports_tools)
+     select 'openrouter', 'openai/gpt-6-luna', 'OpenAI: GPT-6 Luna', true
+      where not exists (select 1 from ai_models where provider = 'openrouter' and model_id = 'openai/gpt-6-luna')`,
+  );
+});
 afterAll(() => pool.end());
 
 // Exercise the canonical publish wrapper and SQL function against real Postgres,
@@ -39,7 +50,7 @@ function publicationClient(failOnce = false): SupabaseClient {
         },
         async maybeSingle() {
           const { rows } = await pool.query(
-            "select provider,credential_id from ai_agent_versions where organization_id=$1 and agent_id=$2 and id=$3",
+            "select provider,model,credential_id from ai_agent_versions where organization_id=$1 and agent_id=$2 and id=$3",
             [filters.organization_id, filters.agent_id, filters.id],
           );
           return { data: rows[0] ?? null, error: null };

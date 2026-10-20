@@ -379,17 +379,36 @@ async function versaoComAsCapacidades(req: APIRequestContext, agenteId: string):
   } else {
     const credRes = await req.get(`${APP_URL}/api/v1/ai/credentials`);
     const cred = (await credRes.json()) as { data?: Array<{ id: string; provider: string }> };
-    credentialId = cred.data?.find((c) => c.provider === provider)?.id ?? cred.data?.[0]?.id;
+    credentialId = cred.data?.find((c) => c.provider === provider)?.id;
+    if (!credentialId) {
+      // Sem `QA_LLM_API_KEY` e sem credencial DESTE provedor. O servidor recusa, desde 20/10/2026, o par
+      // versão/credencial de provedores diferentes (422 `provider_not_allowed`), então o que valia antes —
+      // pegar a primeira credencial de QUALQUER provedor e deixar o provedor da versão como estava — não
+      // existe mais. Duas saídas, como uma pessoa faria: a credencial que a empresa conectou (validada), com
+      // o provedor e um modelo dela; ou, sem nenhuma, a chave do plano (OpenRouter + o primeiro modelo de
+      // `MODELOS_DA_INSTALACAO`, hoje Luna), que só existe em instalação com `OPENROUTER_API_KEY`. Sem chave
+      // de IA o turno falha igual (o relatório registra o HTTP e segue), o que a corrida já tolera.
+      const conectada = (
+        (await (await req.get(`${APP_URL}/api/v1/ai/credentials`)).json()) as {
+          data?: Array<{ id: string; provider: string; validated_at?: string | null; is_active?: boolean }>;
+        }
+      ).data?.find((c) => c.validated_at && c.is_active !== false);
+      if (conectada) {
+        const modeloDela =
+          conectada.provider === "anthropic" ? "claude-sonnet-4-6" : conectada.provider === "openai" ? modelo : null;
+        if (modeloDela === null) throw new Error(`sem modelo conhecido para a credencial ${conectada.provider}`);
+        return criarVersao(req, agenteId, conectada.id, canalId, conectada.provider, modeloDela);
+      }
+      return criarVersao(req, agenteId, null, canalId, "openrouter", "openai/gpt-6-luna");
+    }
   }
-  if (!credentialId) throw new Error("sem credencial de LLM");
-
   return criarVersao(req, agenteId, credentialId, canalId, provider, modelo);
 }
 
 async function criarVersao(
   req: APIRequestContext,
   agenteId: string,
-  credentialId: string,
+  credentialId: string | null,
   canalId: string,
   provider: string,
   modelo: string,

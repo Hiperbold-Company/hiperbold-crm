@@ -61,7 +61,7 @@ function poolComProvedorOpenAI() {
           {
             llm: {
               provider: "openai",
-              default_model: "gpt-6.1-nova",
+              default_model: "openai/gpt-6.1-nova",
               params: {},
               enabled_models: [],
               monthly_budget_cents: null,
@@ -89,8 +89,8 @@ describe("runModelCall grava cost_cents pelo catálogo para modelo fora da Anthr
   it("openai/gpt-6.1-nova: 1000 de entrada, 200 de saída, 800 de cache lido", async () => {
     catalogoLinhas = [
       {
-        provider: "openai",
-        model_id: "gpt-6.1-nova",
+        provider: "openrouter",
+        model_id: "openai/gpt-6.1-nova",
         input_price_per_million_cents: 20,
         output_price_per_million_cents: 120,
       },
@@ -98,13 +98,12 @@ describe("runModelCall grava cost_cents pelo catálogo para modelo fora da Anthr
     _resetRuntimeCostCacheForTests();
 
     const { pool, inserts } = poolComProvedorOpenAI();
-    const cfg = { openaiApiKey: "sk-openai-de-teste", cacheTtl: "1h" as const };
-    const okRegistry = {
-      openai: () =>
+    const cfg = { openrouterApiKey: "sk-or-de-teste", cacheTtl: "1h" as const };
+    const fabricaOk = () =>
         ({
           specificationVersion: "v3",
           provider: "openai",
-          modelId: "gpt-6.1-nova",
+          modelId: "openai/gpt-6.1-nova",
           doGenerate: async () => ({
             content: [{ type: "text", text: "ok" }],
             finishReason: { unified: "stop", raw: undefined },
@@ -114,8 +113,8 @@ describe("runModelCall grava cost_cents pelo catálogo para modelo fora da Anthr
             },
             warnings: [],
           }),
-        }) as never,
-    };
+        }) as never;
+    const okRegistry = { openrouter: fabricaOk };
 
     await runModelCall(
       pool,
@@ -133,8 +132,9 @@ describe("runModelCall grava cost_cents pelo catálogo para modelo fora da Anthr
     const custoGravado = params[11];
     // (1000×20 + 200×120) / 1_000_000 = 0,044 cents.
     expect(custoGravado).toBeCloseTo(0.044, 6);
-    expect(params).toContain("openai");
-    expect(params).toContain("gpt-6.1-nova");
+    // A chave da instalação sai pela OpenRouter: o provedor gravado é esse, e o modelo, com fabricante.
+    expect(params).toContain("openrouter");
+    expect(params).toContain("openai/gpt-6.1-nova");
   });
 
   it("lê o catálogo pelo db (pool.query), nunca por fetch: zero fetch na chamada inteira", async () => {
@@ -144,8 +144,8 @@ describe("runModelCall grava cost_cents pelo catálogo para modelo fora da Anthr
     // `fetch` global.
     catalogoLinhas = [
       {
-        provider: "openai",
-        model_id: "gpt-6.1-nova",
+        provider: "openrouter",
+        model_id: "openai/gpt-6.1-nova",
         input_price_per_million_cents: 20,
         output_price_per_million_cents: 120,
       },
@@ -153,13 +153,12 @@ describe("runModelCall grava cost_cents pelo catálogo para modelo fora da Anthr
     _resetRuntimeCostCacheForTests();
 
     const { pool } = poolComProvedorOpenAI();
-    const cfg = { openaiApiKey: "sk-openai-de-teste", cacheTtl: "1h" as const };
-    const okRegistry = {
-      openai: () =>
+    const cfg = { openrouterApiKey: "sk-or-de-teste", cacheTtl: "1h" as const };
+    const fabricaOk = () =>
         ({
           specificationVersion: "v3",
           provider: "openai",
-          modelId: "gpt-6.1-nova",
+          modelId: "openai/gpt-6.1-nova",
           doGenerate: async () => ({
             content: [{ type: "text", text: "ok" }],
             finishReason: { unified: "stop", raw: undefined },
@@ -169,8 +168,8 @@ describe("runModelCall grava cost_cents pelo catálogo para modelo fora da Anthr
             },
             warnings: [],
           }),
-        }) as never,
-    };
+        }) as never;
+    const okRegistry = { openrouter: fabricaOk };
 
     const fetchEspiao = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("fetch_proibido_no_teste"));
     try {

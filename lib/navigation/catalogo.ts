@@ -337,6 +337,10 @@ export const NAV_CATALOG = [
     icon: "Storefront",
     group: "crm",
     section: "Preparar a venda",
+    // A MESMA tela também no hub de Configurações (pedido do dono, 20/10/2026):
+    // quem procura "onde cadastro o que vendo" vai primeiro a Configurações. Não
+    // sai do CRM — o grupo e a porta de lá continuam.
+    configuracoes: "Atendimento",
     // SEM `sidebar`: mora atrás de "Ver tudo em CRM".
     //
     // O critério é QUEM CONSOME a tela, e a descrição acima já o entrega: o

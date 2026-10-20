@@ -67278,6 +67278,921 @@ comment on function public.fn_excluir_contatos_em_lote(uuid, uuid[]) is
 
 reset lock_timeout;
 
+-- ---- produtos no negócio: preço fixo ou variável e itens do negócio com valor somado (migration 0972, fork Hiperbold) ----
+--
+-- Cria FUNÇÕES (quatro gatilhos, security definer, EXECUTE revogado de public/anon/authenticated) e entra ANTES da VARREDURA anon.
+-- Detalhe e motivo no arquivo da migration: catalog_products.tipo_de_preco ('fixo'|'variavel', preco_cents deixa de ser
+-- not null), tabela crm_lead_itens (RLS com a visibilidade do negócio-pai) e o valor do negócio (crm_leads.value_cents)
+-- como a SOMA dos itens, mantido por gatilho.
+
+-- ---- 1. catálogo: preço fixo ou variável ----------------------------------
+
+alter table public.catalog_products
+  add column if not exists tipo_de_preco text not null default 'fixo';
+
+alter table public.catalog_products
+  drop constraint if exists catalog_products_tipo_de_preco_valido;
+alter table public.catalog_products
+  add constraint catalog_products_tipo_de_preco_valido
+  check (tipo_de_preco in ('fixo', 'variavel'));
+
+-- Variável não tem preço de tabela. O `check (preco_cents >= 0)` da 0204 segue
+-- valendo: NULL passa em CHECK, e o que o NULL não pode é morar num produto fixo.
+alter table public.catalog_products alter column preco_cents drop not null;
+
+alter table public.catalog_products
+  drop constraint if exists catalog_products_fixo_tem_preco;
+alter table public.catalog_products
+  add constraint catalog_products_fixo_tem_preco
+  check (tipo_de_preco = 'variavel' or preco_cents is not null);
+
+comment on column public.catalog_products.tipo_de_preco is
+  'fixo = preco_cents é o preço de tabela (o agente de IA o cota). variavel = sem preço de tabela: o atendente define o valor dentro de cada negócio e o agente NÃO cota preço.';
+comment on column public.catalog_products.preco_cents is
+  'Preço de tabela em centavos. Obrigatório quando tipo_de_preco = fixo; nulo (a rota grava nulo) quando variavel.';
+
+-- ---- 2. os itens do negócio ------------------------------------------------
+
+create table if not exists public.crm_lead_itens (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id uuid not null references public.crm_leads(id) on delete cascade,
+  -- set null + snapshot: ver o cabeçalho.
+  product_id uuid references public.catalog_products(id) on delete set null,
+  nome_snapshot text not null,
+  quantidade numeric not null default 1,
+  valor_unitario_cents bigint not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  constraint crm_lead_itens_quantidade_positiva check (quantidade > 0 and quantidade <= 1000000),
+  constraint crm_lead_itens_valor_nao_negativo check (valor_unitario_cents >= 0 and valor_unitario_cents <= 100000000000),
+  constraint crm_lead_itens_nome_nao_vazio check (length(btrim(nome_snapshot)) > 0)
+);
+
+create index if not exists crm_lead_itens_lead_idx
+  on public.crm_lead_itens (lead_id, created_at);
+-- A FK de produto precisa de índice para o `set null` do DELETE do catálogo não varrer a tabela.
+create index if not exists crm_lead_itens_produto_idx
+  on public.crm_lead_itens (product_id) where product_id is not null;
+create index if not exists crm_lead_itens_org_idx
+  on public.crm_lead_itens (organization_id);
+
+drop trigger if exists trg_crm_lead_itens_updated_at on public.crm_lead_itens;
+create trigger trg_crm_lead_itens_updated_at
+  before update on public.crm_lead_itens
+  for each row execute function public.fn_set_updated_at();
+
+alter table public.crm_lead_itens enable row level security;
+
+-- LEITURA: a organização do item E a mesma visibilidade do negócio-pai
+-- (`fn_can_view_lead`, por EXISTS no lead_id — a lição G4-01 da 0042: um scalar
+-- de dono devolveria NULL para o negócio oculto e trataria como fila).
+drop policy if exists tenant_isolation_crm_lead_itens_select on public.crm_lead_itens;
+create policy tenant_isolation_crm_lead_itens_select on public.crm_lead_itens
+  for select using (
+    public.fn_is_platform_admin()
+    or (
+      organization_id in (select public.fn_user_org_ids())
+      and exists (
+        select 1 from public.crm_leads l
+         where l.id = crm_lead_itens.lead_id
+           and l.organization_id = crm_lead_itens.organization_id
+           and public.fn_can_view_lead(l.organization_id, l.owner_user_id)
+      )
+    )
+  );
+
+-- ESCRITA: `agent` para cima (viewer é só leitura), sobre negócio que o chamador
+-- enxerga. Um comando por policy: `for all` deixaria o `using` governar o SELECT.
+-- O bypass do admin de plataforma é o COMPLETO (`fn_is_platform_admin_full`):
+-- `support_readonly` e sessão sem o segundo fator (aal1) leem, mas não escrevem.
+drop policy if exists tenant_isolation_crm_lead_itens_insert on public.crm_lead_itens;
+create policy tenant_isolation_crm_lead_itens_insert on public.crm_lead_itens
+  for insert with check (
+    public.fn_is_platform_admin_full()
+    or (
+      organization_id in (select public.fn_user_org_ids())
+      and public.fn_role_at_least(organization_id, 'agent')
+      and exists (
+        select 1 from public.crm_leads l
+         where l.id = crm_lead_itens.lead_id
+           and l.organization_id = crm_lead_itens.organization_id
+           and public.fn_can_view_lead(l.organization_id, l.owner_user_id)
+      )
+    )
+  );
+
+drop policy if exists tenant_isolation_crm_lead_itens_update on public.crm_lead_itens;
+create policy tenant_isolation_crm_lead_itens_update on public.crm_lead_itens
+  for update using (
+    public.fn_is_platform_admin_full()
+    or (
+      organization_id in (select public.fn_user_org_ids())
+      and public.fn_role_at_least(organization_id, 'agent')
+      and exists (
+        select 1 from public.crm_leads l
+         where l.id = crm_lead_itens.lead_id
+           and l.organization_id = crm_lead_itens.organization_id
+           and public.fn_can_view_lead(l.organization_id, l.owner_user_id)
+      )
+    )
+  ) with check (
+    public.fn_is_platform_admin_full()
+    or (
+      organization_id in (select public.fn_user_org_ids())
+      and public.fn_role_at_least(organization_id, 'agent')
+      and exists (
+        select 1 from public.crm_leads l
+         where l.id = crm_lead_itens.lead_id
+           and l.organization_id = crm_lead_itens.organization_id
+           and public.fn_can_view_lead(l.organization_id, l.owner_user_id)
+      )
+    )
+  );
+
+drop policy if exists tenant_isolation_crm_lead_itens_delete on public.crm_lead_itens;
+create policy tenant_isolation_crm_lead_itens_delete on public.crm_lead_itens
+  for delete using (
+    public.fn_is_platform_admin_full()
+    or (
+      organization_id in (select public.fn_user_org_ids())
+      and public.fn_role_at_least(organization_id, 'agent')
+      and exists (
+        select 1 from public.crm_leads l
+         where l.id = crm_lead_itens.lead_id
+           and l.organization_id = crm_lead_itens.organization_id
+           and public.fn_can_view_lead(l.organization_id, l.owner_user_id)
+      )
+    )
+  );
+
+-- O `ALTER DEFAULT PRIVILEGES ... GRANT ALL ON TABLES TO anon` do baseline
+-- alcança toda tabela criada depois dele. Sem o revoke, os itens (nome e preço
+-- de venda por negócio) ficam legíveis pela anon key, que vai para o browser.
+revoke all on public.crm_lead_itens from anon;
+grant select, insert, update, delete on public.crm_lead_itens to authenticated;
+grant all on public.crm_lead_itens to service_role;
+-- O default ACL do Supabase concede também TRUNCATE, REFERENCES e TRIGGER a `authenticated`, e o `grant`
+-- acima só acrescenta. TRUNCATE ignora RLS e esvaziaria os itens de TODAS as organizações. (`service_role`
+-- segue com tudo, como nas demais tabelas de dados; só a auditoria é append-only, migration 0258.)
+revoke truncate, references, trigger on public.crm_lead_itens from authenticated;
+
+comment on table public.crm_lead_itens is
+  'Os produtos de UM negócio (quantidade e valor unitário). Com itens, crm_leads.value_cents é a soma deles, mantida por gatilho (0972). product_id é set null: o nome fica copiado em nome_snapshot.';
+comment on column public.crm_lead_itens.nome_snapshot is
+  'Nome do produto no momento da inclusão. O negócio continua dizendo o que vendeu se o catálogo mudar ou o produto for apagado.';
+comment on column public.crm_lead_itens.valor_unitario_cents is
+  'Valor de UMA unidade, em centavos. Produto fixo nasce com o preço do catálogo (editável); produto variável nasce vazio e é definido aqui.';
+
+-- ---- 3a. o negócio, filho de uma só organização -----------------------------
+-- O negócio e o produto do item têm de ser da organização do item. A FK só
+-- garante que o pai existe, não de QUAL organização ele é (mesma classe da 0938).
+-- Security definer: o pai de outra organização é invisível para quem escreve.
+
+create or replace function public.fn_crm_lead_itens_vinculos_da_organizacao()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if exists (
+    select 1 from public.crm_leads p
+     where p.id = new.lead_id
+       and p.organization_id is distinct from new.organization_id
+  ) then
+    raise exception 'Registro vinculado não encontrado.' using errcode = '23503';
+  end if;
+
+  if new.product_id is not null
+     and (tg_op = 'INSERT' or new.product_id is distinct from old.product_id
+          or new.organization_id is distinct from old.organization_id)
+     and exists (
+       select 1 from public.catalog_products p
+        where p.id = new.product_id
+          and p.organization_id is distinct from new.organization_id
+     ) then
+    raise exception 'Registro vinculado não encontrado.' using errcode = '23503';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke execute on function public.fn_crm_lead_itens_vinculos_da_organizacao() from public, anon, authenticated;
+
+drop trigger if exists trg_crm_lead_itens_vinculos_da_organizacao on public.crm_lead_itens;
+create trigger trg_crm_lead_itens_vinculos_da_organizacao
+  before insert or update of lead_id, product_id, organization_id on public.crm_lead_itens
+  for each row execute function public.fn_crm_lead_itens_vinculos_da_organizacao();
+
+-- ---- tetos: subtotal seguro para o JavaScript, nome curto, no máximo 100 itens ----
+-- `quantidade <= 1.000.000` e `valor <= 1e11` sozinhos deixam o produto passar de 1e17, acima do inteiro
+-- seguro do JavaScript (9,007e15): a soma na tela e a do banco divergiriam. O teto do SUBTOTAL da linha é
+-- 9e13 centavos; com no máximo 100 itens por negócio a soma fica abaixo de Number.MAX_SAFE_INTEGER.
+-- Constraints em `alter` (e não só no `create table`) para um banco que já tem a tabela receber o teto.
+alter table public.crm_lead_itens
+  drop constraint if exists crm_lead_itens_subtotal_teto;
+alter table public.crm_lead_itens
+  add constraint crm_lead_itens_subtotal_teto
+  check (round(quantidade * valor_unitario_cents) <= 90000000000000);
+
+alter table public.crm_lead_itens
+  drop constraint if exists crm_lead_itens_nome_curto;
+alter table public.crm_lead_itens
+  add constraint crm_lead_itens_nome_curto
+  check (length(nome_snapshot) <= 300);
+
+-- No máximo 100 itens por negócio, NO BANCO. A rota também confere (mensagem melhor), mas a rota não é a única
+-- porta: o PostgREST atende direto. O lock da linha do negócio (`for no key update`, que não conflita com o
+-- `for key share` da FK) faz duas inserções simultâneas passarem uma de cada vez pela contagem.
+-- Security definer: a contagem não pode depender do que a RLS deixa o chamador ver. Não é RPC.
+create or replace function public.fn_crm_lead_itens_limite_por_negocio()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform 1 from public.crm_leads l where l.id = new.lead_id for no key update;
+  if (select count(*) from public.crm_lead_itens i where i.lead_id = new.lead_id) >= 100 then
+    raise exception 'Esse negócio já tem o máximo de produtos.' using errcode = 'PT422';
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.fn_crm_lead_itens_limite_por_negocio() from public, anon, authenticated;
+
+drop trigger if exists trg_crm_lead_itens_limite_por_negocio on public.crm_lead_itens;
+create trigger trg_crm_lead_itens_limite_por_negocio
+  before insert on public.crm_lead_itens
+  for each row execute function public.fn_crm_lead_itens_limite_por_negocio();
+
+-- ---- 3b. o item mexeu: o valor do negócio vira a soma -----------------------
+
+create or replace function public.fn_crm_lead_itens_recalcula_valor()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_lead uuid;
+  v_soma bigint;
+  v_itens bigint;
+begin
+  -- O item pode mudar de negócio num UPDATE: os dois totais se refazem.
+  for v_lead in
+    select distinct x from unnest(array[
+      case when tg_op in ('UPDATE', 'DELETE') then old.lead_id end,
+      case when tg_op in ('INSERT', 'UPDATE') then new.lead_id end
+    ]) as x where x is not null
+  loop
+    select count(*), coalesce(sum(round(i.quantidade * i.valor_unitario_cents)), 0)::bigint
+      into v_itens, v_soma
+      from public.crm_lead_itens i
+     where i.lead_id = v_lead;
+
+    -- Sem itens o valor é do usuário: não se escreve nada. E só se escreve quando
+    -- muda, para não acordar os demais gatilhos do negócio à toa.
+    if v_itens > 0 then
+      update public.crm_leads l
+         set value_cents = v_soma
+       where l.id = v_lead
+         and l.value_cents is distinct from v_soma;
+    end if;
+  end loop;
+
+  return null;
+end;
+$$;
+
+revoke execute on function public.fn_crm_lead_itens_recalcula_valor() from public, anon, authenticated;
+
+drop trigger if exists trg_crm_lead_itens_recalcula_valor on public.crm_lead_itens;
+create trigger trg_crm_lead_itens_recalcula_valor
+  after insert or update or delete on public.crm_lead_itens
+  for each row execute function public.fn_crm_lead_itens_recalcula_valor();
+
+-- ---- 3c. o valor foi digitado num negócio com itens: vale a soma ------------
+-- Só dispara quando `value_cents` MUDA. A escrita do gatilho 3b cai aqui também
+-- e calcula o mesmo número, então é idempotente.
+
+create or replace function public.fn_crm_leads_valor_pelos_itens()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_soma bigint;
+  v_itens bigint;
+begin
+  select count(*), coalesce(sum(round(i.quantidade * i.valor_unitario_cents)), 0)::bigint
+    into v_itens, v_soma
+    from public.crm_lead_itens i
+   where i.lead_id = new.id;
+
+  if v_itens > 0 then
+    new.value_cents := v_soma;
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.fn_crm_leads_valor_pelos_itens() from public, anon, authenticated;
+
+drop trigger if exists trg_crm_leads_valor_pelos_itens on public.crm_leads;
+create trigger trg_crm_leads_valor_pelos_itens
+  before update of value_cents on public.crm_leads
+  for each row
+  when (new.value_cents is distinct from old.value_cents)
+  execute function public.fn_crm_leads_valor_pelos_itens();
+
+-- ---- padrão de IA da organização nova: OpenRouter + Luna (migration 0973, fork Hiperbold) ----
+-- 0973 — organização nova nasce com a IA da instalação: OpenRouter + Luna (decisão do dono, 20/10/2026)
+--
+-- Toda chamada de IA que roda na CHAVE DA INSTALAÇÃO (a que desconta dos tokens do plano) sai pela
+-- OpenRouter, com o modelo liberado em `MODELOS_DA_INSTALACAO` (hoje Luna, `openai/gpt-6-luna`). O gatilho
+-- `trg_seed_org_llm_defaults` ainda semeava `provider = 'anthropic'` e `default_model = <o curado da
+-- Anthropic>` em toda organização nova — um padrão que a chave da instalação já não executa (o freio de custo
+-- o trocava por Luna na hora do turno, mas o cadastro mostrava Claude).
+--
+-- Agora o gatilho semeia o par `openrouter` + o PRIMEIRO modelo de `platform_config.MODELOS_DA_INSTALACAO`
+-- (a lista que o operador edita em /admin/configuracao) e, sem linha ou com a lista em `*`, o literal Luna.
+-- Quem cola a PRÓPRIA chave depois troca o par em Configurações › IA (`padrao-da-organizacao.ts`), como antes.
+--
+-- Não toca organização existente: o padrão delas é escolha (ou herança) que o dono do produto reavalia
+-- caso a caso, e o motor já manda a chave da instalação pela OpenRouter qualquer que seja o provedor gravado.
+--
+-- Reaplicável: create or replace + drop/create trigger.
+
+create or replace function public.fn_seed_org_llm_defaults() returns trigger
+    language plpgsql
+    set search_path to 'public', 'pg_temp'
+    as $$
+declare
+  v_lista  text;
+  v_modelo text;
+begin
+  if coalesce(new.settings->'llm'->>'default_model', '') = '' then
+    -- O primeiro da lista liberada na chave da instalação. `platform_config` pode não existir num clone
+    -- com o schema atrasado: nesse caso vale o literal.
+    begin
+      select valor into v_lista
+        from public.platform_config
+       where chave = 'MODELOS_DA_INSTALACAO' and not eh_segredo
+       limit 1;
+    exception when others then
+      v_lista := null;
+    end;
+    v_modelo := nullif(btrim(split_part(regexp_replace(coalesce(v_lista, ''), '[;' || chr(10) || ']', ',', 'g'), ',', 1)), '');
+    if v_modelo is null or v_modelo = '*' then
+      v_modelo := 'openai/gpt-6-luna';
+    end if;
+    new.settings := jsonb_set(
+      coalesce(new.settings, '{}'::jsonb),
+      '{llm}',
+      coalesce(new.settings->'llm', '{}'::jsonb)
+        || jsonb_build_object('provider', 'openrouter', 'default_model', v_modelo),
+      true
+    );
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.fn_seed_org_llm_defaults() from public, anon;
+
+drop trigger if exists trg_seed_org_llm_defaults on public.organizations;
+create trigger trg_seed_org_llm_defaults
+  before insert on public.organizations
+  for each row execute function public.fn_seed_org_llm_defaults();
+
+-- ---- membro da agência: vínculo permanente que não ocupa vaga e não sai na entrega (migration 0974, fork Hiperbold) ----
+--
+-- Faixa 09xx reservada ao fork (ver 0901).
+--
+-- O defeito. Quem cria a organização pelo painel entrava como admin PROVISÓRIO
+-- (`provisional_until_handover`, 0237): não contava vaga, mas o bloco "O DONO ASSUMIU" de
+-- `fn_accept_team_invite` apaga todo vínculo provisório quando o primeiro convidado admin aceita.
+-- Em produção o dono da Hiperbold perdeu o acesso à organização da cliente assim que o primeiro
+-- admin dela aceitou. A agência que opera o CRM precisa de um vínculo que sobreviva à entrega.
+--
+-- O que muda.
+--   1. `user_organizations.membro_da_agencia boolean not null default false` (DIRC: vive aqui, não é
+--      tabela nem derivado). Vínculo comum em tudo (papel, seletor de organizações, RLS), com três
+--      diferenças: não conta vaga do plano, `fn_accept_team_invite` não o apaga (ela só apaga
+--      `provisional_until_handover`, e este vínculo nunca é provisório) e o cliente não o remove.
+--   2. `fn_billing_uso`, `fn_billing_pode_criar` e `fn_billing_trava_user_organizations`
+--      (as únicas que contam 'membros'; `fn_billing_conferir_teto` e `fn_billing_bloqueia` delegam)
+--      passam a excluir `membro_da_agencia`, na ÚLTIMA definição de cada uma.
+--      `fn_billing_convite_ja_tem_vinculo_ativo` fica como está: convite para o e-mail de quem já tem
+--      vínculo de agência não ocupa vaga, que é o resultado certo.
+--   3. `trg_user_orgs_agencia_so_servidor`: só o servidor (fn_billing_e_servidor) grava a coluna ou
+--      apaga a linha de um membro da agência. Sem isto o admin do cliente, que tem DELETE pela policy
+--      `user_orgs_delete` e UPDATE de qualquer coluna pela `user_orgs_update`, removia a agência
+--      pela REST. A 0929 já barra papel e revogação; as rotas de equipe recusam no código.
+--   4. `fn_membro_da_agencia_definir(p_org, p_user_email, p_ativo, p_actor)`: a ÚNICA porta para marcar
+--      e remover. Confere admin da plataforma de escopo `full` pelo ator em parâmetro (mesmo padrão de
+--      `fn_create_tenant_with_owner`), exige usuário já existente em auth.users, cria o vínculo
+--      (admin, aceito agora) ou marca o existente (reativa, promove a admin, tira o provisório),
+--      e grava `agency_member.added` / `agency_member.removed` em `api_audit_log`. Remover é revogar
+--      (`revoked_at`, o que dispara a liberação das conversas e mata as chaves de API dele) e tirar a
+--      marca; não apaga a linha. Recusa deixar a organização sem admin (23514, pela 0929).
+--      SECURITY DEFINER; revoke das duas origens de EXECUTE; só service_role.
+--   5. `fn_create_tenant_with_owner`: quando o dono informado é OUTRA pessoa, o criador nasce
+--      `membro_da_agencia` (antes: provisório). Dono = o próprio criador segue como estava.
+--
+-- Os vínculos provisórios que já existem (criados antes desta migration) continuam sendo apagados na
+-- entrega, como antes: quem quiser mantê-los marca pela função do item 4.
+--
+-- Idempotente: add column if not exists, create or replace, drop trigger if exists antes de recriar.
+-- `lock_timeout` de sessão (D-084, B3) para o ALTER/CREATE TRIGGER desistirem em 5s em vez de
+-- enfileirar escrita atrás de uma transação longa; o reaplicar tenta de novo.
+
+set lock_timeout = '5s';
+
+alter table public.user_organizations
+  add column if not exists membro_da_agencia boolean not null default false;
+
+reset lock_timeout;
+
+comment on column public.user_organizations.membro_da_agencia is
+  '0974: vínculo da agência que opera o CRM da organização. Permanente (fn_accept_team_invite só apaga provisional_until_handover), não ocupa vaga do plano (fn_billing_uso / fn_billing_pode_criar / fn_billing_trava_user_organizations o excluem) e só o servidor grava a coluna ou apaga a linha (trg_user_orgs_agencia_so_servidor). Marcar e remover: fn_membro_da_agencia_definir, só admin da plataforma de escopo full.';
+
+-- 1. Contagem de membros do plano: a agência não ocupa vaga.
+create or replace function public.fn_billing_uso(p_org uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_funis bigint;
+  v_etapas_por_funil bigint;
+  v_leads bigint;
+  v_membros bigint;
+  v_conexoes bigint;
+  v_integracoes_webhook bigint;
+begin
+  select count(*) into v_funis
+  from public.crm_pipelines
+  where organization_id = p_org and is_archived = false;
+
+  select coalesce(max(t.qtd), 0) into v_etapas_por_funil
+  from (
+    select p.id, count(s.id) filter (where s.is_archived = false) as qtd
+    from public.crm_pipelines p
+    left join public.crm_stages s on s.pipeline_id = p.id
+    where p.organization_id = p_org and p.is_archived = false
+    group by p.id
+  ) t;
+
+  select coalesce(buc.valor, 0) into v_leads
+  from public.billing_usage_counters buc
+  where buc.organization_id = p_org and buc.item = 'leads';
+  v_leads := coalesce(v_leads, 0);
+
+  select
+    (
+      select count(*) from public.user_organizations uo
+      where uo.organization_id = p_org
+        and uo.accepted_at is not null
+        and uo.revoked_at is null
+        and not uo.provisional_until_handover
+        and not uo.membro_da_agencia
+    )
+    +
+    (
+      -- Fase F3 (migration 0907, decisão 4, último parágrafo): sem o filtro
+      -- de fn_billing_convite_ja_tem_vinculo_ativo, o instante do aceite (o
+      -- convite ainda pendente, aplicar-convite.ts só marca accepted_at
+      -- DEPOIS do RPC, mais o vínculo já ativo) contaria o MESMO ocupante
+      -- duas vezes.
+      select count(*) from public.team_invites ti
+      where ti.organization_id = p_org
+        and ti.accepted_at is null
+        and ti.revoked_at is null
+        and ti.expires_at > now()
+        and not public.fn_billing_convite_ja_tem_vinculo_ativo(ti.id)
+    )
+  into v_membros;
+
+  select count(*) into v_conexoes
+  from public.channel_sessions
+  where organization_id = p_org and archived_at is null;
+
+  select count(*) into v_integracoes_webhook
+  from public.webhook_sources
+  where organization_id = p_org and is_active = true;
+
+  return jsonb_build_object(
+    'funis', v_funis,
+    'etapas_por_funil', v_etapas_por_funil,
+    'leads', v_leads,
+    'membros', v_membros,
+    'conexoes', v_conexoes,
+    'integracoes_webhook', v_integracoes_webhook
+  );
+end;
+$$;
+
+create or replace function public.fn_billing_pode_criar(p_org uuid, p_item text, p_pipeline uuid default null)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_tetos jsonb;
+  v_teto integer;
+  v_atual bigint;
+  v_pode boolean;
+  v_motivo text;
+begin
+  if p_item not in ('funis', 'etapas_por_funil', 'leads', 'membros', 'conexoes', 'integracoes_webhook') then
+    raise exception 'billing_item_desconhecido' using errcode = '22023';
+  end if;
+
+  v_tetos := public.fn_billing_limites_efetivos(p_org);
+  v_teto := (v_tetos ->> p_item)::integer;
+
+  if v_teto is null then
+    return jsonb_build_object('pode', true, 'motivo', 'sem_limite', 'atual', null, 'teto', null);
+  end if;
+
+  if p_item = 'funis' then
+    select count(*) into v_atual
+    from public.crm_pipelines
+    where organization_id = p_org and is_archived = false;
+  elsif p_item = 'etapas_por_funil' then
+    if p_pipeline is null then
+      raise exception 'billing_pipeline_obrigatorio_para_etapas_por_funil' using errcode = '22023';
+    end if;
+
+    select count(*) into v_atual
+    from public.crm_stages
+    where pipeline_id = p_pipeline and organization_id = p_org and is_archived = false;
+  elsif p_item = 'leads' then
+    select coalesce(valor, 0) into v_atual
+    from public.billing_usage_counters
+    where organization_id = p_org and item = 'leads';
+    v_atual := coalesce(v_atual, 0);
+  elsif p_item = 'membros' then
+    select
+      (
+        select count(*) from public.user_organizations uo
+        where uo.organization_id = p_org
+          and uo.accepted_at is not null
+          and uo.revoked_at is null
+          and not uo.provisional_until_handover
+          and not uo.membro_da_agencia
+      )
+      +
+      (
+        -- Fase F3 (migration 0907, decisão 4, último parágrafo): mesmo filtro
+        -- de fn_billing_uso, acima, para o instante do aceite não contar o
+        -- mesmo ocupante duas vezes (convite ainda pendente + vínculo já
+        -- ativo).
+        select count(*) from public.team_invites ti
+        where ti.organization_id = p_org
+          and ti.accepted_at is null
+          and ti.revoked_at is null
+          and ti.expires_at > now()
+          and not public.fn_billing_convite_ja_tem_vinculo_ativo(ti.id)
+      )
+    into v_atual;
+  elsif p_item = 'conexoes' then
+    select count(*) into v_atual
+    from public.channel_sessions
+    where organization_id = p_org and archived_at is null;
+  elsif p_item = 'integracoes_webhook' then
+    select count(*) into v_atual
+    from public.webhook_sources
+    where organization_id = p_org and is_active = true;
+  end if;
+
+  v_pode := v_atual < v_teto;
+  v_motivo := case when v_pode then 'ok' else 'teto_atingido' end;
+
+  return jsonb_build_object('pode', v_pode, 'motivo', v_motivo, 'atual', v_atual, 'teto', v_teto);
+end;
+$$;
+
+create or replace function public.fn_billing_trava_user_organizations()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_novo_ativo boolean;
+  v_antigo_ativo boolean;
+  v_invited_by_antigo uuid;
+  v_invited_at_antigo timestamptz;
+  v_convite_ja_ocupava_a_vaga boolean;
+begin
+  v_novo_ativo := new.accepted_at is not null and new.revoked_at is null and not new.provisional_until_handover
+    and not new.membro_da_agencia;
+
+  if tg_op = 'INSERT' then
+    v_antigo_ativo := false;
+    v_invited_by_antigo := null;
+    v_invited_at_antigo := null;
+  else
+    v_antigo_ativo := old.accepted_at is not null and old.revoked_at is null and not old.provisional_until_handover
+      and not old.membro_da_agencia;
+    v_invited_by_antigo := old.invited_by;
+    v_invited_at_antigo := old.invited_at;
+  end if;
+
+  if v_novo_ativo and not v_antigo_ativo then
+    -- Isenção 1 da 0907: existe convite pendente e válido para o e-mail deste
+    -- usuário nesta organização. Guardada numa variável porque agora decide
+    -- DUAS coisas: liberar o bloqueio (como antes) e dispensar a conferência
+    -- de aviso abaixo (0912): o convite já ocupava a vaga.
+    v_convite_ja_ocupava_a_vaga :=
+      public.fn_billing_convite_pendente_do_membro(new.organization_id, new.user_id);
+
+    if not (
+      v_convite_ja_ocupava_a_vaga
+      or public.fn_billing_veio_de_aceite_de_convite(
+        new.invited_by, new.invited_at, v_invited_by_antigo, v_invited_at_antigo, tg_op = 'INSERT'
+      )
+      or public.fn_billing_dono_do_provisionamento(new.organization_id, new.user_id, new.role)
+    ) then
+      if public.fn_billing_bloqueia(new.organization_id, 'membros', null) then
+        raise exception 'Limite do plano atingido' using errcode = 'PT402', detail = 'membros';
+      end if;
+    end if;
+
+    -- 0912: só confere o teto (e avisa) quando o vínculo SOMA um ocupante. Com
+    -- convite pendente do mesmo e-mail a pessoa já estava contada como convite,
+    -- e neste BEFORE INSERT o vínculo novo ainda não é visível: conferir aqui
+    -- contaria a mesma pessoa duas vezes.
+    if not v_convite_ja_ocupava_a_vaga then
+      perform public.fn_billing_conferir_teto(new.organization_id, 'membros', null);
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- 2. Só o servidor grava a marca ou apaga o vínculo de um membro da agência.
+-- security definer pelo mesmo motivo de fn_user_orgs_so_servidor_grava_vinculo (0929):
+-- fn_billing_e_servidor só tem execute para service_role e o gatilho roda com o papel de quem grava.
+create or replace function public.fn_user_orgs_agencia_so_servidor()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if public.fn_billing_e_servidor() then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.membro_da_agencia then
+      raise exception 'membro_da_agencia só pode ser gravado pelo servidor' using errcode = '42501';
+    end if;
+    return new;
+  elsif tg_op = 'UPDATE' then
+    if new.membro_da_agencia is distinct from old.membro_da_agencia then
+      raise exception 'membro_da_agencia só pode ser gravado pelo servidor' using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
+  -- DELETE. A cascata da organização ou do usuário nunca é barrada (mesma exceção da 0929).
+  if old.membro_da_agencia
+     and exists (select 1 from public.organizations where id = old.organization_id)
+     and exists (select 1 from auth.users where id = old.user_id) then
+    raise exception 'o vínculo de membro da agência só sai pelo painel da plataforma' using errcode = '42501';
+  end if;
+  return old;
+end;
+$$;
+
+comment on function public.fn_user_orgs_agencia_so_servidor() is
+  '0974: recusa (42501) gravar user_organizations.membro_da_agencia, ou apagar a linha de um membro da agência, fora do servidor (fn_billing_e_servidor). A cascata da organização ou do usuário passa. A troca de papel e a revogação por quem não é o servidor já são barradas pela 0929; as rotas de equipe recusam o membro da agência no código.';
+
+revoke execute on function public.fn_user_orgs_agencia_so_servidor() from public, anon, authenticated;
+grant execute on function public.fn_user_orgs_agencia_so_servidor() to service_role;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'agent_worker') then
+    execute 'revoke execute on function public.fn_user_orgs_agencia_so_servidor() from agent_worker';
+  end if;
+end
+$$;
+
+set lock_timeout = '5s';
+
+drop trigger if exists trg_user_orgs_agencia_so_servidor on public.user_organizations;
+create trigger trg_user_orgs_agencia_so_servidor
+  before insert or update of membro_da_agencia or delete on public.user_organizations
+  for each row
+  execute function public.fn_user_orgs_agencia_so_servidor();
+
+reset lock_timeout;
+
+-- 3. A porta única para marcar e remover o membro da agência.
+create or replace function public.fn_membro_da_agencia_definir(
+  p_org uuid,
+  p_user_email text,
+  p_ativo boolean,
+  p_actor uuid
+) returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_email text;
+  v_user uuid;
+  v_vinculo public.user_organizations%rowtype;
+  v_id uuid;
+  v_acao text;
+begin
+  if p_org is null or p_actor is null or p_ativo is null
+     or p_user_email is null or btrim(p_user_email) = '' then
+    raise exception 'membro_da_agencia_argumento_invalido' using errcode = '22023';
+  end if;
+
+  -- Só o admin da plataforma de escopo full, pelo ator em parâmetro (o mesmo corpo de
+  -- fn_create_tenant_with_owner). A server action confere de novo o escopo e o segundo fator.
+  if not exists (
+    select 1 from public.platform_admins
+    where user_id = p_actor and revoked_at is null and scope = 'full'
+  ) then
+    raise exception 'platform_admin_required' using errcode = '42501';
+  end if;
+
+  if not exists (select 1 from public.organizations where id = p_org) then
+    raise exception 'organizacao_nao_encontrada' using errcode = 'P0002';
+  end if;
+
+  v_email := lower(btrim(p_user_email));
+  select au.id into v_user from auth.users au where lower(au.email) = v_email limit 1;
+  if v_user is null then
+    raise exception 'usuario_nao_encontrado' using errcode = 'P0002';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('membro_da_agencia:' || p_org::text, 0));
+
+  select * into v_vinculo from public.user_organizations
+    where organization_id = p_org and user_id = v_user
+    for update;
+
+  if p_ativo then
+    if not found then
+      insert into public.user_organizations
+        (organization_id, user_id, role, accepted_at, invited_by, interface_settings, membro_da_agencia)
+      values
+        (p_org, v_user, 'admin', now(), p_actor, '{"preset":"completa"}'::jsonb, true)
+      returning id into v_id;
+      v_acao := 'criado';
+    elsif v_vinculo.membro_da_agencia and v_vinculo.revoked_at is null and v_vinculo.role = 'admin' then
+      v_id := v_vinculo.id;
+      v_acao := 'ja_era';
+    else
+      update public.user_organizations
+         set membro_da_agencia = true,
+             role = 'admin',
+             revoked_at = null,
+             accepted_at = coalesce(accepted_at, now()),
+             provisional_until_handover = false,
+             updated_at = now()
+       where id = v_vinculo.id;
+      v_id := v_vinculo.id;
+      v_acao := 'marcado';
+    end if;
+  else
+    if not found or not v_vinculo.membro_da_agencia then
+      raise exception 'membro_da_agencia_nao_encontrado' using errcode = 'P0002';
+    end if;
+    -- Remover é revogar e tirar a marca, não apagar a linha: o gatilho de rota libera as conversas
+    -- abertas dele e a chave de API morre com o vínculo. A 0929 recusa deixar a organização sem admin.
+    update public.user_organizations
+       set membro_da_agencia = false,
+           revoked_at = coalesce(revoked_at, now()),
+           updated_at = now()
+     where id = v_vinculo.id;
+    v_id := v_vinculo.id;
+    v_acao := 'removido';
+  end if;
+
+  if v_acao <> 'ja_era' then
+    insert into public.api_audit_log
+      (organization_id, actor_user_id, acting_as_platform_admin, action, resource_type, resource_id, bypassed_rls, metadata)
+    values (
+      p_org, p_actor, true,
+      case when p_ativo then 'agency_member.added' else 'agency_member.removed' end,
+      'membership', v_id, true,
+      jsonb_build_object('target_user_id', v_user, 'acao', v_acao)
+    );
+  end if;
+
+  return jsonb_build_object(
+    'id', v_id,
+    'user_id', v_user,
+    'acao', v_acao,
+    'membro_da_agencia', p_ativo
+  );
+end;
+$$;
+
+comment on function public.fn_membro_da_agencia_definir(uuid, text, boolean, uuid) is
+  '0974: marca (p_ativo = true) ou remove (false) o membro da agência de uma organização. Só admin da plataforma de escopo full (42501 platform_admin_required); usuário precisa existir em auth.users (P0002 usuario_nao_encontrado). Marcar cria o vínculo admin aceito agora ou promove o existente (reativa, tira o provisório); remover revoga e tira a marca. Grava agency_member.added / agency_member.removed em api_audit_log. Devolve {id, user_id, acao: criado|marcado|ja_era|removido, membro_da_agencia}. A server action app/actions/admin/membrosDaAgencia.ts confere platform admin full + MFA antes de chamar.';
+
+-- OS DOIS REVOKES (CLAUDE.md, item 9): (A) from public, (B) from anon (default ACL do baseline),
+-- e authenticated porque a função é VOLÁTIL e SECURITY DEFINER: alcançável por qualquer logado seria
+-- escrita cross-tenant. Só service_role.
+revoke execute on function public.fn_membro_da_agencia_definir(uuid, text, boolean, uuid) from public, anon, authenticated;
+grant execute on function public.fn_membro_da_agencia_definir(uuid, text, boolean, uuid) to service_role;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'agent_worker') then
+    execute 'revoke execute on function public.fn_membro_da_agencia_definir(uuid, text, boolean, uuid) from agent_worker';
+  end if;
+end
+$$;
+
+-- 4. Quem cria a organização para OUTRA pessoa nasce membro da agência (antes: provisório).
+create or replace function public.fn_create_tenant_with_owner(
+  p_actor uuid, p_key uuid, p_request jsonb, p_hash text
+) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  prior public.idempotency_keys%rowtype;
+  org public.organizations%rowtype;
+  result jsonb;
+  dono_e_outra_pessoa boolean;
+begin
+  if not exists (select 1 from public.platform_admins where user_id = p_actor
+    and revoked_at is null and scope = 'full') then
+    raise exception 'platform_admin_required' using errcode = '42501';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_actor::text || ':' || p_key::text, 0));
+  select * into prior from public.idempotency_keys
+    where key = p_key::text and endpoint = '/api/v1/admin/tenants:' || p_actor::text
+      and expires_at > now() and tenant_creation_trusted;
+  if found then
+    if prior.request_hash <> decode(p_hash, 'hex') then
+      raise exception 'idempotency_conflict' using errcode = '22023';
+    end if;
+    if prior.response_body->>'id' is distinct from prior.organization_id::text
+      or not exists (select 1 from public.organizations where id = prior.organization_id and created_by = p_actor) then
+      raise exception 'idempotency_provenance_invalid' using errcode = '22023';
+    end if;
+    return prior.response_body || jsonb_build_object('created', false);
+  end if;
+
+  -- A MESMA comparação que já decidia `interface_settings`, agora com nome e
+  -- guardada. Era ela que sabia a resposta e não a anotava em lugar nenhum.
+  dono_e_outra_pessoa := lower(p_request->>'owner_email') is distinct from
+    (select lower(email) from auth.users where id = p_actor);
+
+  insert into public.organizations(display_name, slug, legal_name, cnpj, status, settings, created_by)
+    values (p_request->>'display_name', p_request->>'slug', coalesce(nullif(p_request->>'legal_name', ''), p_request->>'display_name'),
+      p_request->>'cnpj', 'active', jsonb_build_object('plan', p_request->>'plan'), p_actor)
+    returning * into org;
+  insert into public.user_organizations(organization_id, user_id, role, accepted_at, interface_settings, membro_da_agencia)
+    values (org.id, p_actor, 'admin', now(),
+      case when dono_e_outra_pessoa
+        then '{"preset":"completa"}'::jsonb
+        else coalesce(p_request->'owner_interface_settings', '{"preset":"completa"}'::jsonb) end,
+      dono_e_outra_pessoa);
+  result := jsonb_build_object('id', org.id, 'slug', org.slug, 'display_name', org.display_name,
+    'invite_id', gen_random_uuid(), 'issued_at', floor(extract(epoch from now()))::bigint);
+  insert into public.idempotency_keys(organization_id, key, endpoint, request_hash, status_code, response_body, tenant_creation_trusted)
+    values (org.id, p_key::text, '/api/v1/admin/tenants:' || p_actor::text,
+      decode(p_hash, 'hex'), 201, result, true);
+  return result || jsonb_build_object('created', true);
+end $$;
+
+revoke execute on function public.fn_create_tenant_with_owner(uuid, uuid, jsonb, text) from public, anon, authenticated;
+grant execute on function public.fn_create_tenant_with_owner(uuid, uuid, jsonb, text) to service_role;
+
+revoke execute on function public.fn_billing_uso(uuid) from public, anon, authenticated;
+grant execute on function public.fn_billing_uso(uuid) to service_role;
+revoke execute on function public.fn_billing_pode_criar(uuid, text, uuid) from public, anon, authenticated;
+grant execute on function public.fn_billing_pode_criar(uuid, text, uuid) to service_role;
+revoke execute on function public.fn_billing_trava_user_organizations() from public, anon, authenticated;
+grant execute on function public.fn_billing_trava_user_organizations() to service_role;
+
+notify pgrst, 'reload schema';
+
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

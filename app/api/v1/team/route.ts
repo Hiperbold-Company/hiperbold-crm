@@ -25,6 +25,8 @@ interface MembershipRow {
   accepted_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  /** Vínculo da agência que opera o CRM (migration 0974). */
+  membro_da_agencia: boolean;
 }
 
 interface MemberDto extends MembershipRow {
@@ -49,7 +51,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   const supabase = authz.supabase;
   const { data: rows, error } = await supabase
     .from("user_organizations")
-    .select("user_id, role, interface_settings, invited_at, accepted_at, revoked_at, created_at")
+    .select("user_id, role, interface_settings, invited_at, accepted_at, revoked_at, created_at, membro_da_agencia")
     .eq("organization_id", activeOrg.orgId)
     // Revogado CONTINUA na lista, com `revoked_at` preenchido — a tela o
     // distingue. Filtrá-lo aqui fazia a revogação sumir com a pessoa, e sem a

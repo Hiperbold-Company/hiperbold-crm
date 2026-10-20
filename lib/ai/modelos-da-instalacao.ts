@@ -23,6 +23,27 @@ export const CHAVE_MODELOS_DA_INSTALACAO = "MODELOS_DA_INSTALACAO";
 /** Na lista, libera TODOS os modelos (o freio desligado; chave de emergência do operador). */
 export const LIBERA_TODOS = "*";
 
+/**
+ * POR ONDE A CHAVE DA INSTALAÇÃO SAI (decisão do dono, 20/10/2026): sempre pela OpenRouter.
+ *
+ * A chave da instalação é a que paga a conta de todas as empresas e debita os tokens do plano.
+ * Ela nunca vai direto à OpenAI nem à Anthropic, mesmo que `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`
+ * estejam no servidor (a OpenAI está, para outras coisas): o provedor da chamada é este, e a
+ * `llm_calls` grava `provider = 'openrouter'`. Sem `OPENROUTER_API_KEY` a chamada falha com o erro
+ * claro de "sem chave" — nunca cai para outro provedor. Quem cola a PRÓPRIA chave (BYOK) escolhe
+ * o provedor que quiser, e este arquivo não se aplica a ela.
+ */
+export const PROVEDOR_DA_CHAVE_DA_INSTALACAO = "openrouter";
+
+/**
+ * `openai/gpt-6-luna:batch` é a variante de LOTE da OpenRouter (Batch API: assíncrona, com metade
+ * do preço): "`:batch` endpoints are not usable interactively". Serve a processamento em massa,
+ * nunca a uma conversa de WhatsApp, então não pode ser oferecida a agente nenhum.
+ */
+export function ehVarianteEmLote(modelId: string): boolean {
+  return /:batch$/i.test(modelId.trim());
+}
+
 /** O padrão quando a configuração está vazia ou ilegível: o modelo da Luna. */
 export const MODELO_PADRAO_DA_INSTALACAO = "openai/gpt-6-luna";
 
@@ -69,6 +90,17 @@ export function idNoProvedor(provedor: string, id: string): string | null {
 }
 
 /**
+ * O id como a OpenRouter o escreve (`fabricante/modelo`), a partir do id que o agente ou o catálogo
+ * guarda e do provedor que ELE pediu. Id que já traz o fabricante passa intacto; o nome puro do
+ * catálogo de um provedor direto (`claude-sonnet-5`, pedido ao `anthropic`) ganha o prefixo dele.
+ * Sem isso, a chave da instalação mandaria `claude-sonnet-5` à OpenRouter, que não o conhece.
+ */
+export function idNaRotaDaInstalacao(provedorPedido: string | null | undefined, id: string): string {
+  if (id.includes("/") || !provedorPedido || ROTEADORES.has(provedorPedido)) return id;
+  return `${provedorPedido}/${id}`;
+}
+
+/**
  * O id canônico (`fabricante/modelo`) de um id como o catálogo ou o agente o
  * guarda: roteador já traz o prefixo, provedor direto guarda o nome puro.
  */
@@ -84,18 +116,20 @@ function semFabricante(id: string): string {
 }
 
 /**
- * Dois ids são o MESMO modelo? Iguais, ou um deles sem fabricante e o nome batendo — nos DOIS
- * sentidos: a lista pode trazer `gpt-6` e o agente `openai/gpt-6`, ou o contrário. Os dois com
- * fabricante só casam se forem iguais (`anthropic/x` não é `openai/x`). Sem caixa.
+ * A entrada da lista (`liberado`) e o id pedido (`pedido`) são o MESMO modelo? Iguais, sem caixa —
+ * ou a entrada traz o fabricante e o pedido é o nome puro (`openai/gpt-6` na lista, `gpt-6` no
+ * agente). O contrário NÃO vale: entrada sem fabricante (`gpt-6`) não libera `anthropic/gpt-6`,
+ * porque o nome sozinho não diz de quem é o modelo e um fabricante qualquer passaria pelo freio de
+ * custo. Aceitar aquele par exigiria consultar o catálogo (`ai_models`) para confirmar o fabricante,
+ * e esta régua é pura e síncrona (roda no caminho do turno); sem a consulta, o par exato com
+ * prefixo é o único seguro. Os dois com fabricante só casam se iguais.
  */
-function mesmoModelo(a: string, b: string): boolean {
-  const x = a.toLowerCase();
-  const y = b.toLowerCase();
+function mesmoModelo(liberado: string, pedido: string): boolean {
+  const x = liberado.toLowerCase();
+  const y = pedido.toLowerCase();
   if (x === y) return true;
-  // Os dois nomeiam o fabricante e não são iguais: modelos diferentes.
-  if (x.includes("/") && y.includes("/")) return false;
-  const [puro, completo] = x.includes("/") ? [y, x] : [x, y];
-  return completo.endsWith(`/${puro}`);
+  // Entrada com fabricante, pedido puro: o nome bate. Todo o resto é modelo diferente.
+  return x.includes("/") && !y.includes("/") && x.endsWith(`/${y}`);
 }
 
 /** O modelo está liberado na chave da instalação? Compara o id canônico, sem caixa. */
@@ -185,22 +219,22 @@ export interface OpcaoDeModelo {
 export function modelosParaOSeletor<M extends OpcaoDeModelo>(d: {
   catalogo: readonly M[];
   liberados: readonly string[];
-  provedor: string;
+  /** Mantido por compatibilidade: na chave da instalação o provedor é sempre a OpenRouter, qualquer que seja o escolhido na tela. */
+  provedor?: string;
   restrito: boolean;
 }): Array<M | OpcaoDeModelo> {
   if (!d.restrito || !listaRestringe(d.liberados)) return [...d.catalogo];
   const opcoes: Array<M | OpcaoDeModelo> = [];
   for (const liberado of d.liberados) {
-    const id = idNoProvedor(d.provedor, liberado);
-    if (id === null) continue;
-    const doCatalogo = d.catalogo.find((c) => c.model_id.toLowerCase() === id.toLowerCase());
-    const nomeDoCatalogo = doCatalogo ? doCatalogo.display_name : id;
+    if (liberado === LIBERA_TODOS) continue;
+    // A chave da instalação roda TUDO pela OpenRouter, que aceita o id inteiro (`openai/gpt-6-luna`):
+    // o liberado entra no seletor seja qual for o provedor escolhido na tela, e o Claude do catálogo
+    // da Anthropic não aparece para quem não tem chave própria.
+    const doCatalogo = d.catalogo.find((c) => c.model_id.toLowerCase() === liberado.toLowerCase());
+    const nomeDoCatalogo = doCatalogo ? doCatalogo.display_name : liberado;
     const nome = NOMES_PARA_A_TELA[liberado] ?? nomeDoCatalogo;
-    opcoes.push({ ...(doCatalogo ?? {}), model_id: doCatalogo?.model_id ?? id, display_name: nome } as M | OpcaoDeModelo);
+    opcoes.push({ ...(doCatalogo ?? {}), model_id: doCatalogo?.model_id ?? liberado, display_name: nome } as M | OpcaoDeModelo);
   }
-  // Nenhum liberado é deste provedor (ex.: a instalação roda num provedor direto e a lista só
-  // tem modelos do OpenRouter): restringir abriria o seletor VAZIO. O freio do servidor já
-  // mantém o modelo pedido nesse caso (sem rota para o padrão), então a tela segue igual a ele.
   if (opcoes.length === 0) return [...d.catalogo];
   return opcoes;
 }

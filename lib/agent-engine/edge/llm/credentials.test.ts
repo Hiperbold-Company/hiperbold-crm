@@ -26,30 +26,31 @@ function poolFake(settingsLlm: unknown, credenciais: unknown[]) {
 const SEM_BYOK: unknown[] = [];
 
 describe("resolveOrgLlmConfig — chave de plataforma por provider", () => {
-  it("usa a chave OpenAI do ambiente quando a org não tem BYOK", async () => {
-    // O defeito de origem: existia fallback de env só para a Anthropic. A
-    // transcrição de áudio chama o Whisper (OpenAI), e numa org que usa
-    // Anthropic no chat isso lançava LlmNotConfiguredError — ou, pior, o
-    // chamador mandava a chave da Anthropic para a OpenAI e levava 401. A
-    // OPENAI_API_KEY que o instalador coleta não chegava a lugar nenhum.
-    const cfg: LlmEdgeConfig = { anthropicApiKey: "sk-ant-plataforma", openaiApiKey: "sk-proj-plataforma" };
+  it("a chave da instalação é a da OpenRouter, mesmo quando o agente pede OpenAI e a OpenAI está no servidor", async () => {
+    // Decisão do dono (20/10/2026): a chave da instalação sai SEMPRE pela OpenRouter. As chaves
+    // diretas da OpenAI/Anthropic no servidor não entram na escada.
+    const cfg: LlmEdgeConfig = {
+      anthropicApiKey: "sk-ant-plataforma",
+      openaiApiKey: "sk-proj-plataforma",
+      openrouterApiKey: "sk-or-plataforma",
+    };
     const out = await resolveOrgLlmConfig(
       poolFake({ provider: "anthropic", default_model: "claude-sonnet-4-6" }, SEM_BYOK),
       cfg,
       "org-1",
       { provider: "openai" },
     );
-    expect(out.provider).toBe("openai");
-    expect(out.apiKey).toBe("sk-proj-plataforma");
+    expect(out.provider).toBe("openrouter");
+    expect(out.providerPedido).toBe("openai");
+    expect(out.apiKey).toBe("sk-or-plataforma");
   });
 
-  it("mantém a chave Anthropic do ambiente (comportamento que já existia)", async () => {
-    const out = await resolveOrgLlmConfig(
-      poolFake({ provider: "anthropic", default_model: "claude-sonnet-4-6" }, SEM_BYOK),
-      { anthropicApiKey: "sk-ant-plataforma" },
-      "org-1",
-    );
-    expect(out.apiKey).toBe("sk-ant-plataforma");
+  it("só com a chave da Anthropic ou da OpenAI no servidor, a chave da instalação NÃO existe", async () => {
+    for (const cfg of [{ anthropicApiKey: "sk-ant-plataforma" }, { openaiApiKey: "sk-proj-plataforma" }]) {
+      await expect(
+        resolveOrgLlmConfig(poolFake({ provider: "anthropic" }, SEM_BYOK), cfg, "org-1"),
+      ).rejects.toBeInstanceOf(LlmNotConfiguredError);
+    }
   });
 
   it("a credencial BYOK da org vence a do ambiente", async () => {
@@ -92,14 +93,18 @@ describe("resolveOrgLlmConfig — a origem da chave acompanha o degrau", () => {
     expect(out.origemDaChave).toBe("credencial_da_organizacao");
   });
 
-  it.each([
-    ["anthropic", { anthropicApiKey: "sk-ant-plataforma" }],
-    ["openai", { openaiApiKey: "sk-proj-plataforma" }],
-    ["openrouter", { openrouterApiKey: "sk-or-plataforma" }],
-  ] as const)("sem credencial da org, a chave de %s do .env → chave_da_instalacao", async (provider, cfg) => {
-    const out = await resolveOrgLlmConfig(poolFake({ provider }, SEM_BYOK), cfg, "org-1");
-    expect(out.origemDaChave).toBe("chave_da_instalacao");
-  });
+  it.each(["anthropic", "openai", "openrouter"] as const)(
+    "sem credencial da org, pedindo %s, a chave da OpenRouter do .env → chave_da_instalacao",
+    async (provider) => {
+      const out = await resolveOrgLlmConfig(
+        poolFake({ provider }, SEM_BYOK),
+        { openrouterApiKey: "sk-or-plataforma" },
+        "org-1",
+      );
+      expect(out.origemDaChave).toBe("chave_da_instalacao");
+      expect(out.provider).toBe("openrouter");
+    },
+  );
 
   it("credencial ESCOLHIDA e revogada cai no .env — e o rótulo diz que a chave é da instalação", async () => {
     // O degrau menos óbvio: quem configurou escolheu uma credencial da empresa,
@@ -148,13 +153,22 @@ describe("llmEdgeConfigFromEnv — o que sai do .env chega ao turno", () => {
     expect(cfg.openaiApiKey).toBe("sk-proj-y");
   });
 
-  it("o caminho inteiro: chave do .env resolve um modelo OpenAI numa org sem BYOK", async () => {
-    const cfg = llmEdgeConfigFromEnv({ OPENAI_API_KEY: "sk-proj-do-env" });
+  it("o caminho inteiro: a OpenRouter do .env atende uma org sem BYOK que pede OpenAI — e a OPENAI_API_KEY do .env não", async () => {
+    const cfg = llmEdgeConfigFromEnv({ OPENAI_API_KEY: "sk-proj-do-env", OPENROUTER_API_KEY: "sk-or-do-env" });
     const out = await resolveOrgLlmConfig(
       poolFake({ provider: "openai", default_model: "gpt-5-mini" }, SEM_BYOK),
       cfg,
       "org1",
     );
-    expect(out.apiKey).toBe("sk-proj-do-env");
+    expect(out.apiKey).toBe("sk-or-do-env");
+    expect(out.provider).toBe("openrouter");
+    // Só a OpenAI no .env: não há chave da instalação.
+    await expect(
+      resolveOrgLlmConfig(
+        poolFake({ provider: "openai" }, SEM_BYOK),
+        llmEdgeConfigFromEnv({ OPENAI_API_KEY: "sk-proj-do-env" }),
+        "org1",
+      ),
+    ).rejects.toBeInstanceOf(LlmNotConfiguredError);
   });
 });

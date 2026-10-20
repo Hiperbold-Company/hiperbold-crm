@@ -135,13 +135,21 @@ describe("tela de Credenciais — o aviso de que falta a IA principal", () => {
     expect(screen.getByText("Jev (TypeSafe AI)")).toBeInTheDocument();
   });
 
-  it.each([["ANTHROPIC_API_KEY"], ["OPENAI_API_KEY"], ["OPENROUTER_API_KEY"], ["AI_GATEWAY_API_KEY"]])(
-    "só a chave do Jev, mas a instalação trouxe %s: não avisa",
+  it("só a chave do Jev, mas a instalação trouxe OPENROUTER_API_KEY (a chave do plano): não avisa", async () => {
+    ambiente(["OPENROUTER_API_KEY"]);
+    await abrir([JEV]);
+    expect(screen.getByText("Jev (TypeSafe AI)")).toBeInTheDocument();
+    expect(screen.queryByTestId("aviso-so-decisao")).toBeNull();
+  });
+
+  // As chaves diretas da OpenAI/Anthropic e o gateway da Vercel NÃO atendem a conversa da instalação
+  // (ela sai sempre pela OpenRouter, 20/10/2026): sem OPENROUTER_API_KEY continua faltando IA principal.
+  it.each([["ANTHROPIC_API_KEY"], ["OPENAI_API_KEY"], ["AI_GATEWAY_API_KEY"]])(
+    "só a chave do Jev e %s no servidor: avisa, porque essa chave não atende a conversa",
     async (variavel) => {
       ambiente([variavel]);
       await abrir([JEV]);
-      expect(screen.getByText("Jev (TypeSafe AI)")).toBeInTheDocument();
-      expect(screen.queryByTestId("aviso-so-decisao")).toBeNull();
+      expect(screen.getByTestId("aviso-so-decisao")).toBeInTheDocument();
     },
   );
 

@@ -73,7 +73,7 @@ function registryQueFalha(erro: unknown) {
  * incomodar, que é como uma guarda de segredo morre.
  */
 const CHAVE_SENTINELA = "sk-CHAVE-QUE-NUNCA-PODE-VAZAR-9f3a2b";
-const cfg = { anthropicApiKey: CHAVE_SENTINELA, cacheTtl: "1h" as const };
+const cfg = { openrouterApiKey: CHAVE_SENTINELA, cacheTtl: "1h" as const };
 
 async function chamarComErro(erro: unknown) {
   const { pool, inserts } = poolQueGrava();
@@ -220,8 +220,7 @@ describe("a origem da escolha viaja com o log", () => {
   it("o sucesso registra de onde veio a decisão de usar aquele modelo", async () => {
     // É o que transforma o log de "o que aconteceu" em "por que aconteceu".
     const { pool, inserts } = poolQueGrava();
-    const okRegistry = {
-      anthropic: () =>
+    const fabricaOk = () =>
         ({
           specificationVersion: "v3",
           provider: "anthropic",
@@ -235,8 +234,9 @@ describe("a origem da escolha viaja com o log", () => {
             },
             warnings: [],
           }),
-        }) as never,
-    };
+        }) as never;
+    const okRegistry = { anthropic: fabricaOk, openrouter: fabricaOk };
+
     await runModelCall(
       pool,
       cfg,
@@ -326,7 +326,7 @@ describe("cancelamento de chamada auxiliar", () => {
         messages: [{ role: "user", content: "Monte o agente." }],
         abortSignal: controller.signal,
       },
-      { registry: { anthropic: factory } },
+      { registry: { anthropic: factory, openrouter: factory } },
     );
     const rejected = expect(call).rejects.toMatchObject({ name: "AbortError" });
     await started;
@@ -348,7 +348,7 @@ describe("cancelamento de chamada auxiliar", () => {
           messages: [{ role: "user", content: "Monte o agente." }],
           abortSignal: AbortSignal.abort(),
         },
-        { registry: { anthropic: factory } },
+        { registry: { anthropic: factory, openrouter: factory } },
       ),
     ).rejects.toMatchObject({ name: "AbortError" });
     expect(factory).not.toHaveBeenCalled();

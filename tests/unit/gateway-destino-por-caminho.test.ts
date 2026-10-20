@@ -89,21 +89,10 @@ afterEach(() => {
   }
 });
 
-describe("destino real de cada caminho de resolveLanguageModel", () => {
-  it("gateway da Vercel → a requisição vai para o gateway", async () => {
-    envMock.AI_GATEWAY_API_KEY = "gw-key";
-    // O SDK lê esta chave do process.env por conta própria quando o model é
-    // string — é justamente esse acoplamento implícito que originou o bug.
-    process.env.AI_GATEWAY_API_KEY = "gw-key";
-
-    const model = resolveLanguageModel(MODELO);
-    expect(model).not.toBeNull();
-    expect(await destinoDe(model!)).toContain("ai-gateway.vercel.sh");
-  });
-
+describe("destino real de resolveLanguageModel — a chave da instalação é SEMPRE a OpenRouter", () => {
   it("OpenRouter → a requisição vai para a OpenRouter, não para a Anthropic", async () => {
     envMock.OPENROUTER_API_KEY = "sk-or-xxx";
-    // Chave da Anthropic presente de propósito: a precedência tem que valer.
+    // Chave da Anthropic presente de propósito: ela não tem vez.
     envMock.ANTHROPIC_API_KEY = "sk-ant-xxx";
 
     const model = resolveLanguageModel(MODELO);
@@ -113,19 +102,9 @@ describe("destino real de cada caminho de resolveLanguageModel", () => {
     expect(hosts).not.toContain("api.anthropic.com");
   });
 
-  it("provider direto → a requisição vai para a Anthropic", async () => {
-    envMock.ANTHROPIC_API_KEY = "sk-ant-xxx";
-
-    const model = resolveLanguageModel(MODELO);
-    expect(model).not.toBeNull();
-    expect(await destinoDe(model!)).toContain("api.anthropic.com");
-  });
-
-  it("com gateway E OpenRouter configurados, quem roteia é o gateway", async () => {
-    // A ordem é contrato de faturamento: quem tem gateway contratado espera que
-    // o tráfego passe (e seja cobrado) por lá. Medir pelo tipo do retorno não
-    // pega uma inversão de precedência que aponte para o endpoint errado —
-    // este caso pega, porque compara os dois hosts possíveis.
+  it("com gateway da Vercel E OpenRouter configurados, quem roteia é a OpenRouter", async () => {
+    // Decisão do dono (20/10/2026): a chave da instalação sai pela OpenRouter, que é a rota que a
+    // carteira de tokens e o relatório de custo medem. O gateway da Vercel deixou de ter precedência.
     envMock.AI_GATEWAY_API_KEY = "gw-key";
     process.env.AI_GATEWAY_API_KEY = "gw-key";
     envMock.OPENROUTER_API_KEY = "sk-or-xxx";
@@ -133,8 +112,17 @@ describe("destino real de cada caminho de resolveLanguageModel", () => {
     const model = resolveLanguageModel(MODELO);
     expect(model).not.toBeNull();
     const hosts = await destinoDe(model!);
-    expect(hosts).toContain("ai-gateway.vercel.sh");
-    expect(hosts).not.toContain("openrouter.ai");
+    expect(hosts).toContain("openrouter.ai");
+    expect(hosts).not.toContain("ai-gateway.vercel.sh");
+  });
+
+  it("só gateway, Anthropic e OpenAI no servidor: não há rota (null), nenhuma requisição direta", async () => {
+    envMock.AI_GATEWAY_API_KEY = "gw-key";
+    envMock.ANTHROPIC_API_KEY = "sk-ant-xxx";
+    envMock.OPENAI_API_KEY = "sk-openai-xxx";
+
+    expect(resolveLanguageModel(MODELO)).toBeNull();
+    expect(destinos).toEqual([]);
   });
 
   it("OPENROUTER_BASE_URL customizada é respeitada (proxy/gateway próprio)", async () => {

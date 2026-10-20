@@ -226,6 +226,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     codigo: p.codigo,
     nome: p.nome,
     preco_cents: p.preco_cents,
+    // A planilha traz preço: o produto que ela cria ou atualiza é de valor FIXO
+    // (migration 0972). Produto de valor variável se cadastra pela tela.
+    tipo_de_preco: "fixo",
     custo_cents: p.custo_cents,
     marca: p.marca ?? null,
     categoria: p.categoria ?? null,

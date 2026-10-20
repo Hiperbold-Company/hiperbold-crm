@@ -15,6 +15,8 @@ import { credencialEmUsoPeloJev } from "@/lib/ai/decisao/credencial";
 import { avisoAoExcluirAChaveDoJev } from "@/lib/ai/decisao/textos";
 import { useT } from "@/hooks/i18n/useT";
 import { CredentialCard } from "./CredentialCard";
+import { ChaveDoPlanoCard } from "./ChaveDoPlanoCard";
+import { ROTULO_DA_OPENROUTER_DA_EMPRESA } from "@/lib/ai/agents/opcoes-de-provedor";
 import { AddCredentialDialog } from "./AddCredentialDialog";
 
 interface Props {
@@ -31,14 +33,21 @@ interface Props {
    * É o caso mais comum do kit, e essa chave não é linha desta lista.
    */
   instalacaoTemIa?: boolean;
+  /**
+   * O servidor tem `OPENROUTER_API_KEY`: mostra o cartão fixo da chave do plano no topo. É um fato do
+   * servidor, não uma linha da lista, e a tela nunca recebe a chave.
+   */
+  chaveDoPlano?: boolean;
 }
 
 // Rótulo e ordem saem das listas — provedor novo aparece na tela sem que
 // alguém precise lembrar de acrescentá-lo em três lugares. A UNIÃO, porque a
 // chave do Jev (que só decide) também mora aqui.
-const PROVIDER_LABELS: Record<string, string> = Object.fromEntries(
-  PROVEDORES_COM_CHAVE.map((p) => [p.id, p.rotulo]),
-);
+const PROVIDER_LABELS: Record<string, string> = {
+  ...Object.fromEntries(PROVEDORES_COM_CHAVE.map((p) => [p.id, p.rotulo])),
+  // A OpenRouter que a EMPRESA cadastrou não pode se confundir com a do plano (cartão fixo do topo).
+  openrouter: ROTULO_DA_OPENROUTER_DA_EMPRESA,
+};
 
 const PROVIDER_ORDER: ProvedorComChave[] = PROVEDORES_COM_CHAVE.map((p) => p.id);
 
@@ -48,6 +57,7 @@ export function CredentialsList({
   usageMap,
   jev = null,
   instalacaoTemIa = false,
+  chaveDoPlano = false,
 }: Props) {
   const t = useT();
   const { data } = useCredentialsList({ initialData });
@@ -93,13 +103,18 @@ export function CredentialsList({
 
   if (credentials.length === 0) {
     return (
-      <>
+      <div className="flex flex-col gap-6">
+        {chaveDoPlano && <ChaveDoPlanoCard />}
         <Card className="flex flex-col items-center gap-3 p-10 text-center">
-          <h2 className="font-medium">{t("Nenhuma chave cadastrada ainda")}</h2>
+          <h2 className="font-medium">{t("Nenhuma chave própria cadastrada")}</h2>
           <p className="max-w-md text-sm text-muted-foreground">
-            {t(
-              "Seus agentes só conseguem pensar depois que você cola aqui uma chave da Anthropic, da OpenAI ou do Google. A cobrança vai direto para a sua conta no provedor, e a chave fica guardada criptografada.",
-            )}
+            {chaveDoPlano
+              ? t(
+                  "Você não precisa cadastrar nada: a chave do Hiperbold CRM já está incluída no seu plano. Cadastre uma chave própria só se quiser outro fornecedor de IA e pagar direto a ele.",
+                )
+              : t(
+                  "Seus agentes só conseguem pensar depois que você cola aqui uma chave da Anthropic, da OpenAI ou do Google. A cobrança vai direto para a sua conta no provedor, e a chave fica guardada criptografada.",
+                )}
           </p>
           {canWrite && (
             <Button className="mt-1" onClick={() => setAddOpen(true)}>
@@ -108,12 +123,13 @@ export function CredentialsList({
           )}
         </Card>
         <AddCredentialDialog open={addOpen} onOpenChange={setAddOpen} />
-      </>
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-6">
+      {chaveDoPlano && <ChaveDoPlanoCard />}
       {soDecisao && (
         <Card className="border-amber-500/40 bg-amber-500/5 p-4" data-testid="aviso-so-decisao">
           <p className="text-sm">

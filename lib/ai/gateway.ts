@@ -1,9 +1,9 @@
 /**
- * Vercel AI Gateway wrapper.
+ * Roteamento de modelo da chave da INSTALAÇÃO.
  *
  * Centralises model routing so the rest of the codebase only references model
- * strings like `"anthropic/claude-sonnet-4-6"`. Lazy initialisation: if
- * `AI_GATEWAY_API_KEY` (or `ANTHROPIC_API_KEY` as fallback) is missing we
+ * strings like `"openai/gpt-6-luna"`. A chave da instalação sai sempre pela
+ * OpenRouter (`OPENROUTER_API_KEY`). Lazy initialisation: if it is missing we
  * deliberately do NOT throw at import time — `resolveLanguageModel()` returns
  * null and callers skip gracefully.
  *
@@ -11,7 +11,6 @@
  * Only model strings via the gateway-shaped `ai` SDK calls.
  */
 
-import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 
@@ -48,20 +47,18 @@ export const DEFAULT_EMBEDDING_MODEL: ModelId = "openai/text-embedding-3-small";
  * em loop. Mesma armadilha que o `embed.ts` já documentava e resolvia para
  * embeddings; aqui o caminho de chat ficou sem o equivalente.
  *
- * Ordem de resolução, do mais específico ao mais genérico:
- *   1. Gateway da Vercel  -> devolve a string; o gateway roteia e fatura
- *   2. OpenRouter         -> provider OpenAI-compatível apontado ao endpoint
- *      dela. Os ids da OpenRouter já são `provider/modelo`, então o mesmo id
- *      canônico serve sem tradução.
- *   3. Provider direto     -> Anthropic ou OpenAI, conforme o prefixo do id
+ * A chave da INSTALAÇÃO sai SEMPRE pela OpenRouter (`OPENROUTER_API_KEY`), decisão do dono do
+ * produto em 20/10/2026: é a que paga a conta de todas as empresas e debita os tokens do plano.
+ * Os ids da OpenRouter já são `fabricante/modelo`, então o mesmo id canônico serve sem tradução.
+ * Nem o gateway da Vercel nem a Anthropic/OpenAI direto entram aqui, mesmo com as chaves no
+ * servidor — é a rota que o relatório de custo e a carteira de tokens medem.
  *
- * Devolve null quando nada está configurado, para o chamador PULAR com motivo
- * claro em vez de estourar com erro de rede lá dentro.
+ * Devolve null quando não há `OPENROUTER_API_KEY`, para o chamador PULAR com motivo claro (ou
+ * falhar com o erro de "sem chave") em vez de cair para outro provedor ou estourar com erro de
+ * rede lá dentro.
  */
 export function resolveLanguageModel(model: ModelId): LanguageModel | null {
   const id = String(model);
-
-  if (gatewayConfig()) return id as LanguageModel;
 
   if (env.OPENROUTER_API_KEY) {
     return createOpenAI({
@@ -70,35 +67,12 @@ export function resolveLanguageModel(model: ModelId): LanguageModel | null {
     }).chat(id); // chat/completions, como o registry do worker (providers.ts)
   }
 
-  if (id.startsWith("anthropic/") && env.ANTHROPIC_API_KEY) {
-    return createAnthropic({ apiKey: env.ANTHROPIC_API_KEY })(
-      id.slice("anthropic/".length),
-    );
-  }
-
-  if (id.startsWith("openai/") && env.OPENAI_API_KEY) {
-    return createOpenAI({ apiKey: env.OPENAI_API_KEY })(id.slice("openai/".length));
-  }
-
   return null;
 }
 
 export function isEmbeddingProviderConfigured(): boolean {
-  // Embeddings go through the gateway when `AI_GATEWAY_API_KEY` is set;
-  // otherwise the worker calls `openai/...` directly via OPENAI_API_KEY.
-  return Boolean(env.AI_GATEWAY_API_KEY) || Boolean(env.OPENAI_API_KEY);
-}
-
-/**
- * Headers that flow with every gateway call. Tenant ID lets the gateway
- * dashboard slice usage per organization; ZDR opts the request out of provider
- * training corpora (privacy-by-default for tenant data).
- */
-export function gatewayHeaders(opts: { organizationId: string }): Record<string, string> {
-  return {
-    "X-AI-Gateway-Tenant-Id": opts.organizationId,
-    "X-AI-Gateway-Zero-Retention": "1",
-  };
+  // Embeddings da instalação saem pela OpenRouter, como o resto (ver `lib/ai/embeddings/chave.ts`).
+  return Boolean(env.OPENROUTER_API_KEY);
 }
 
 /**

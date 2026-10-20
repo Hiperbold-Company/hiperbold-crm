@@ -140,9 +140,11 @@ export async function lerRetratoDaInstalacao(
           }
         : null,
       modeloCurado,
-      // Chave sem modelo no catálogo não publica agente — é o estado de uma
-      // instalação nova em OpenRouter, cujo catálogo só chega no cron diário.
-      prontaParaPublicar: origemDaChave !== "nenhuma" && Boolean(modeloCurado),
+      // Chave PRÓPRIA sem modelo no catálogo não publica agente — é o estado de uma
+      // instalação nova em OpenRouter, cujo catálogo só chega no cron diário. A chave da
+      // INSTALAÇÃO publica com o modelo liberado (Luna), sem depender do catálogo.
+      prontaParaPublicar:
+        origemDaChave === "instalacao" || (origemDaChave === "org" && Boolean(modeloCurado)),
     },
     whatsapp: {
       transporteApontado: ambiente.transporteDeWhatsapp.apontado && ambiente.transporteDeWhatsapp.comChave,

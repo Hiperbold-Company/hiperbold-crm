@@ -34,6 +34,8 @@ import {
 import { publishAgentVersion } from "@/lib/ai/agents/publish";
 import { escolherVersoesDaTela } from "@/lib/ai/agents/versoes-da-tela";
 import { capacidadesDesconhecidas } from "@/lib/ai/agents/capacidades-conhecidas";
+import { recusaDaVersao } from "@/lib/ai/agents/provedor-permitido";
+import { modelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao-leitura";
 
 const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -165,6 +167,19 @@ export async function saveAgentDraftAction(
     .maybeSingle();
   if (!agent) return { ok: false, error: "not_found" };
   if (agent.archived_at) return { ok: false, error: "agent_archived" };
+
+  // Provedor e modelo PERMITIDOS, no SALVAR (não só no publicar): a chave da instalação só sai pela
+  // OpenRouter com os modelos do plano, e a credencial própria tem de ser desta empresa e do provedor
+  // da versão. A tela já esconde o resto, mas a recusa de verdade é esta.
+  const recusaDeProvedor = await recusaDaVersao(
+    admin,
+    activeOrg.orgId,
+    { provider: v.provider, model: v.model, credential_id: v.credential_id },
+    await modelosDaInstalacao(),
+  );
+  if (recusaDeProvedor) {
+    return { ok: false, error: recusaDeProvedor.code, message: recusaDeProvedor.message };
+  }
 
   // O escopo aponta para coisas que EXISTEM nesta organização. Marcar um
   // material apagado (ou de outra organização) produz uma configuração muda: a
@@ -723,6 +738,22 @@ export async function createMcpAgentAction(
 
   const requestId = randomUUID();
   const admin = createAdminClient();
+
+  // Provedor e modelo permitidos ANTES de criar o assistente: recusar depois deixaria um agente
+  // arquivado de lixo (lib/ai/agents/provedor-permitido.ts).
+  const recusaDeProvedor = await recusaDaVersao(
+    admin,
+    activeOrg.orgId,
+    {
+      provider: parsed.data.version.provider,
+      model: parsed.data.version.model,
+      credential_id: parsed.data.version.credential_id,
+    },
+    await modelosDaInstalacao(),
+  );
+  if (recusaDeProvedor) {
+    return { ok: false, error: recusaDeProvedor.code, message: recusaDeProvedor.message };
+  }
 
   // Cria agent kind='mcp_agent' + v1 draft. Compensa rollback se versão falhar.
   const { data: agentRow, error: agentErr } = await admin

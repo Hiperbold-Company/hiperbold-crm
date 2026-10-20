@@ -34,6 +34,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { escolherModeloNoCatalogo } from "./agents/escolher-modelo";
 import { modeloPermitidoNaChave } from "./modelos-da-instalacao-leitura";
+import { idNaRotaDaInstalacao } from "./modelos-da-instalacao";
 import { OPENROUTER_BASE_URL, resolveLanguageModel, type ModelId } from "./gateway";
 
 export interface ModeloResolvido {
@@ -208,68 +209,38 @@ function idParaOProvider(provider: string, id: string): string | null {
 }
 
 /**
- * O último degrau da escada: a chave da INSTALAÇÃO, no provedor que a
- * configuração manda usar.
+ * O último degrau da escada: a chave da INSTALAÇÃO, que sai SEMPRE pela OpenRouter
+ * (decisão do dono, 20/10/2026) — nunca direto pela OpenAI nem pela Anthropic, mesmo com as
+ * chaves delas no servidor. Sem `OPENROUTER_API_KEY` devolve `null` e o chamador PULA com o
+ * motivo claro, em vez de cair para outro provedor.
  *
- * `resolveLanguageModel` roteia pelo PREFIXO do id canônico
- * (`openai/gpt-5.6-terra`) — e o catálogo serve id BARE: `gpt-5.6-terra` é o
- * `is_default_for_provider` da OpenAI (migration 0104, `ai_models`). Id sem
- * prefixo não acha provedor nenhum, o resolver devolvia `null` e o worker de
- * resposta automática PULAVA a mensagem do cliente com
- * `reason: "ai_gateway_key_missing"` mesmo com `OPENAI_API_KEY` no `.env` —
- * enquanto o ensaio do agente e o "Sugerir resposta", que montam o provedor
- * pelo par (provider, chave), respondiam pela mesma chave (issue #1181).
+ * A OpenRouter só entende o id com fabricante (`openai/gpt-6-luna`). O catálogo serve id BARE:
+ * `gpt-5.6-terra` é o `is_default_for_provider` da OpenAI (migration 0104, `ai_models`), e o id
+ * sem prefixo não acha rota — o worker de resposta automática PULAVA a mensagem do cliente com
+ * `reason: "ai_gateway_key_missing"` mesmo com chave no `.env` (issue #1181). O fabricante de um
+ * id bare vem do CATÁLOGO (`ai_models`), a mesma fonte que o resto do produto usa para ele, e, na
+ * falta dele no catálogo, do provedor que a organização escolheu. Nada é adivinhado: sem uma das
+ * duas respostas devolve `null`, em vez de mandar um id para um endpoint que não o conhece.
  *
- * O prefixo sintetizado aqui vem do provedor que a ORGANIZAÇÃO escolheu, e é só
- * isso que ele é: ROTA. O nome do modelo que chega ao SDK continua sendo o do
- * catálogo, como em `idParaOProvider`. Id que já traz rota não passa por aqui:
- * quem o roteia (ou recusa) é o próprio `resolveLanguageModel`, acima — e é o
- * mesmo freio do PR #151, que impede id de outro provedor de virar chamada com
- * a chave desta organização.
- *
- * O provedor chega como função e só é lido quando o id é BARE: no caminho sem
- * binding ele custa uma consulta a `organizations`, e o id prefixado — o de
- * toda instalação padrão — resolve sem ela.
- *
- * O degrau de BAIXO é a conta SEM chave: quando a rota do provedor que a
- * organização escolheu não acha chave no ambiente (o `anthropic` que o gatilho
- * semeia numa instalação onde o instalador coletou `OPENAI_API_KEY`, por
- * exemplo), o id BARE é resolvido pelo provedor do MODELO no catálogo
- * `ai_models` — a mesma fonte que o resto do produto usa para o id BARE, e o
- * que a própria mensagem de `LlmNotConfiguredError` já declara ("fallback de
- * plataforma, conforme o provider do modelo"). Sem linha no catálogo, nada é
- * adivinhado: devolve `null` e o chamador PULA com motivo claro, em vez de
- * mandar um id para o endpoint de outro provedor.
+ * O provedor da configuração chega como função e só é lido quando o id é BARE e o catálogo não o
+ * conhece: o id prefixado — o de toda instalação padrão — resolve sem nenhuma consulta.
  */
 async function padraoDaInstalacao(
   providerDaConfiguracao: () => Promise<string | null>,
   padrao: ModelId,
-): Promise<LanguageModel | null> {
-  const peloId = resolveLanguageModel(padrao);
-  if (peloId !== null) return peloId;
-  const id = String(padrao);
-  if (id.includes("/")) return null;
-  const provider = await providerDaConfiguracao();
-  if (provider !== null && provider !== "openrouter") {
-    const peloProvider = resolveLanguageModel(`${provider}/${id}`);
-    if (peloProvider !== null) return peloProvider;
+): Promise<{ model: LanguageModel; modelId: string } | null> {
+  // Sem OPENROUTER_API_KEY não há rota, qualquer que seja o id.
+  if (resolveLanguageModel(padrao) === null) return null;
+  let id = String(padrao);
+  if (!id.includes("/")) {
+    const doCatalogo = await provedorDoModeloNoCatalogo(id);
+    const fabricante =
+      doCatalogo ?? (await providerDaConfiguracao().catch(() => null));
+    if (fabricante === null || fabricante === "openrouter") return null;
+    id = idNaRotaDaInstalacao(fabricante, id);
   }
-
-  // A CONTA NÃO TEM CHAVE PARA ESTE ID — e a instalação tem. A rota de cima
-  // sintetiza o prefixo a partir do provedor que a ORGANIZAÇÃO escolheu (ou do
-  // `anthropic` que `fn_seed_org_llm_defaults` semeia), e quando esse provedor
-  // não tem chave no `.env` o ponto pedia silêncio com
-  // `reason: "ai_gateway_key_missing"` enquanto `OPENAI_API_KEY` estava lá — a
-  // instalação que responde pelo teste do agente e pelo "Sugerir resposta" ficava
-  // muda só no caminho que responde sozinho (issue #1181).
-  //
-  // Quem diz de QUEM é o id é o CATÁLOGO (`ai_models`), não a vontade de usar
-  // qualquer chave que exista: é a mesma fonte que serve o id BARE e o mesmo
-  // predicado que `resolveOrgLlmConfig` declara. Id que o catálogo não conhece,
-  // ou cujo provedor é exatamente o que já tentamos, segue sem resposta.
-  const provedorDoModelo = await provedorDoModeloNoCatalogo(id);
-  if (provedorDoModelo === null || provedorDoModelo === provider) return null;
-  return resolveLanguageModel(`${provedorDoModelo}/${id}`);
+  const model = resolveLanguageModel(id);
+  return model === null ? null : { model, modelId: id };
 }
 
 /**
@@ -296,10 +267,9 @@ async function padraoDaInstalacaoGuardado(
   });
   if (decisao.trocado) {
     const trocado = await padraoDaInstalacao(providerDaConfiguracao, decisao.modelId as ModelId);
-    if (trocado !== null) return { model: trocado, modelId: decisao.modelId };
+    if (trocado !== null) return trocado;
   }
-  const model = await padraoDaInstalacao(providerDaConfiguracao, padrao);
-  return model === null ? null : { model, modelId: String(padrao) };
+  return padraoDaInstalacao(providerDaConfiguracao, padrao);
 }
 
 /**

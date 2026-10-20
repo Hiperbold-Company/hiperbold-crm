@@ -117,21 +117,21 @@ describe("chave da instalação", () => {
     expect(r?.modelId).toBe("anthropic/claude-opus-5");
   });
 
-  it("id bare do catálogo que é o liberado passa (gpt-6-luna == openai/gpt-6-luna)", async () => {
-    envMock.OPENAI_API_KEY = "sk-openai";
+  it("o liberado passa inalterado, e sai pela OpenRouter", async () => {
+    envMock.OPENROUTER_API_KEY = "sk-or-instalacao";
 
     const r = await resolverModeloDoPonto("bot_respond", ORG, "openai/gpt-6-luna");
 
     expect(r?.modelId).toBe("openai/gpt-6-luna");
   });
 
-  it("se a instalação não sabe executar o padrão, o ponto segue com o pedido (nunca fica mudo)", async () => {
-    envMock.ANTHROPIC_API_KEY = "sk-ant"; // sem rota para openai/gpt-6-luna
+  it("sem OPENROUTER_API_KEY a chave da instalação não atende: o ponto pula, sem cair para a Anthropic/OpenAI do servidor", async () => {
+    envMock.ANTHROPIC_API_KEY = "sk-ant";
+    envMock.OPENAI_API_KEY = "sk-openai";
 
     const r = await resolverModeloDoPonto("sentiment_classify", ORG, "anthropic/claude-haiku-4-5");
 
-    expect(r).not.toBeNull();
-    expect(r?.modelId).toBe("anthropic/claude-haiku-4-5");
+    expect(r).toBeNull();
   });
 });
 

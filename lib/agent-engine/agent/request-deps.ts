@@ -9,7 +9,8 @@ export function requestTurnDeps(): InboundTurnDeps {
   const env = loadEnv();
   const fixture = process.env.INTERNAL_AGENT_RUN_STUB === 'true';
   const llmCfg = llmEdgeConfigFromEnv(env);
-  if (fixture) llmCfg.anthropicApiKey = 'local-controlled-provider';
+  // A chave da instalação é a da OpenRouter (20/10/2026): é ela que o dublê precisa ocupar.
+  if (fixture) llmCfg.openrouterApiKey = 'local-controlled-provider';
   return {
     ...(fixture
       ? {

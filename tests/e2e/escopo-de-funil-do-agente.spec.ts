@@ -25,7 +25,7 @@
  */
 import { execFileSync } from "node:child_process";
 
-import { test, expect, type Browser, type Page } from "./helpers/test";
+import { test, expect, esperarARevelacao, type Browser, type Page } from "./helpers/test";
 
 import { loginComoAdmin, lerCreds, type CredsE2E } from "./helpers/login-admin";
 
@@ -90,6 +90,9 @@ function agenteDeTeste(): string {
 /** Abre a aba do Operador, onde a marcação de funis vive. */
 async function abrirOperacao(): Promise<void> {
   await pagina.goto(`/app/ai/agents/${agenteDeTeste()}`);
+  // Página criada à mão no beforeAll: o embrulho do `test` não a alcança, então a espera da revelação do
+  // streaming SSR (#1374) é explícita — senão há duas cópias da aba por instantes (strict mode).
+  await esperarARevelacao(pagina);
   await pagina.getByTestId("papel-operacao").click();
   await expect(pagina.getByText(/em que neg(ó|o)cios ele pode mexer/i)).toBeVisible({
     timeout: 20_000,

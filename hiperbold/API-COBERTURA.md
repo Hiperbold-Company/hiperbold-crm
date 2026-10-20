@@ -123,7 +123,7 @@ Fechamentos PARCIAIS contados como fechados acima (o resto de cada linha continu
 | Nuvemshop (/app/integrations/nuvemshop) | conectar / desconectar | (Server Actions connectNuvemshop / disconnectNuvemshop) | não | falta | média |
 | Trunk SIP (/app/settings/voip-trunk) | ler / gravar | GET|PUT /api/v1/voip/trunk | não | falta | baixa |
 | Chamadas (/app/calls) | listar / registrar chamadas; voz (aceitar, rejeitar, histórico, sessões) | GET|POST /calls · /voice/** | não | falta | baixa |
-| Tags (/app/settings/tags) | listar tags de contato/conversa; cores; vocabulário | GET /contact-tags · /conversation-tags · /tags/cores · GET|POST /tags/vocabulario | não | crm_list_tags · crm_manage_tags | média |
+| Tags (/app/settings/tags) | listar tags de contato/conversa; cores; vocabulário | GET /contact-tags · /conversation-tags · /tags/cores · /tags/para-escolher · GET|POST /tags/vocabulario | não | crm_list_tags · crm_manage_tags | média |
 | Contatos (/app/contacts) | criar / listar / ver / editar / apagar / mesclar | POST|GET /contacts · GET|PATCH|DELETE /contacts/{id} · POST /contacts/merge | sim | crm_search_contacts · crm_get_contact | média |
 | Contatos | importar CSV / duplicados / consentimento / desbloquear | POST /contacts/import · GET /duplicates · POST /{id}/consent|unblock | não | falta | média |
 | Funis — negócios (cartões) | criar / editar / mover / ganhar / perder | POST /leads · PATCH /leads/{id} · POST /leads/{id}/move|win|lose | sim | crm_create_lead · crm_update_lead · crm_move_lead_stage | média |

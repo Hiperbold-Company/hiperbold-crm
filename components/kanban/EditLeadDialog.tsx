@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useEditLead } from "@/hooks/kanban/useUpdateLead";
+import { useItensDoNegocio } from "@/hooks/leads/useItensDoNegocio";
 import type { Lead } from "@/lib/types/leads";
 import { updateLeadSchema, type UpdateLeadInput } from "@/lib/schemas/leads";
 import { parseReaisToCents } from "@/lib/money";
@@ -44,6 +45,10 @@ function centsToReais(cents: number | null | undefined): string {
 export function EditLeadDialog({ open, onOpenChange, lead, pipelineId }: Props) {
   const t = useT();
   const edit = useEditLead(pipelineId);
+  // Com produtos no negócio o valor é a soma deles (migration 0972): o campo vira
+  // leitura e o valor não é enviado. Os produtos se mexem na ficha (dossiê).
+  const itens = useItensDoNegocio(open ? lead.id : null);
+  const valorPelosProdutos = (itens.data?.length ?? 0) > 0;
 
   const form = useForm<FormShape>({
     defaultValues: {
@@ -76,7 +81,7 @@ export function EditLeadDialog({ open, onOpenChange, lead, pipelineId }: Props) 
 
     const reais = values.valueReais.trim();
     let valueCents: number | null = null;
-    if (reais.length > 0) {
+    if (!valorPelosProdutos && reais.length > 0) {
       valueCents = parseReaisToCents(reais);
       if (valueCents === null) {
         form.setError("valueReais", { message: t("Valor inválido") });
@@ -87,7 +92,7 @@ export function EditLeadDialog({ open, onOpenChange, lead, pipelineId }: Props) 
     const patch: Record<string, unknown> = {
       title: values.title.trim(),
       description: values.description.trim() ? values.description.trim() : null,
-      value_cents: valueCents,
+      ...(valorPelosProdutos ? {} : { value_cents: valueCents }),
       tags,
       expected_close_date: values.expected_close_date || null,
     };
@@ -141,9 +146,16 @@ export function EditLeadDialog({ open, onOpenChange, lead, pipelineId }: Props) 
                 id="valueReais"
                 inputMode="decimal"
                 placeholder="0,00"
+                readOnly={valorPelosProdutos}
                 {...form.register("valueReais")}
               />
-              <EcoDoValor control={form.control} />
+              {valorPelosProdutos ? (
+                <p className="text-xs text-muted-foreground">
+                  {t("Soma dos produtos deste negócio. Para mudar, abra a ficha.")}
+                </p>
+              ) : (
+                <EcoDoValor control={form.control} />
+              )}
               {form.formState.errors.valueReais && (
                 <p className="text-xs text-error-fg">
                   {form.formState.errors.valueReais.message}

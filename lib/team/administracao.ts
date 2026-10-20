@@ -68,18 +68,36 @@ interface Alvo {
   user_id: string;
   role: string;
   revoked_at: string | null;
+  /** Vínculo da agência que opera o CRM (migration 0974): o cliente não altera nem remove. */
+  membro_da_agencia: boolean;
 }
 
 async function membroDaOrganizacao(deps: DepsDeEquipe, userId: string): Promise<Alvo> {
   const { data: target, error } = await deps.supabase
     .from("user_organizations")
-    .select("id, user_id, role, revoked_at")
+    .select("id, user_id, role, revoked_at, membro_da_agencia")
     .eq("organization_id", deps.organizationId)
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw falhaInterna(deps, error);
   if (!target) throw recusa(deps, 404, "not_found", tr(deps)("Membro não encontrado."));
   return target as unknown as Alvo;
+}
+
+/**
+ * O membro da agência (migration 0974) é do painel da plataforma: papel e acesso dele não mudam pelas rotas de equipe
+ * da organização, nem pelas tools MCP. O banco já barra o admin do cliente pela REST; aqui a recusa vale também para o
+ * servidor, que grava com service role e passaria pelo gatilho.
+ */
+function recusarMembroDaAgencia(deps: DepsDeEquipe, alvo: Alvo): void {
+  if (alvo.membro_da_agencia) {
+    throw recusa(
+      deps,
+      403,
+      "forbidden",
+      tr(deps)("Este acesso é da agência que opera o seu CRM. Só a agência pode alterá-lo."),
+    );
+  }
 }
 
 async function adminsAtivos(deps: DepsDeEquipe): Promise<number> {
@@ -105,6 +123,7 @@ export async function mudarPapelDoMembro(
 ): Promise<{ user_id: string; role: Role }> {
   const t = tr(deps);
   const target = await membroDaOrganizacao(deps, userId);
+  recusarMembroDaAgencia(deps, target);
   if (target.revoked_at) throw recusa(deps, 409, "state_conflict", t("Membro está revogado."));
 
   if (target.role === "admin" && novoPapel !== "admin" && (await adminsAtivos(deps)) <= 1) {
@@ -153,6 +172,7 @@ export async function revogarAcessoDoMembro(
     throw recusa(deps, 409, "state_conflict", t("Não é possível revogar o próprio acesso."));
   }
   const target = await membroDaOrganizacao(deps, userId);
+  recusarMembroDaAgencia(deps, target);
   if (target.revoked_at) return { user_id: userId, already_revoked: true };
 
   if (target.role === "admin" && (await adminsAtivos(deps)) <= 1) {

@@ -149,3 +149,50 @@ describe("TeamMembersClient — seletor de papel (G2-02)", () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 });
+
+describe("TeamMembersClient — membro da agência (migration 0974)", () => {
+  const AGENCIA_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+  function comAgencia(): TeamMember[] {
+    return [
+      ...members(),
+      {
+        user_id: AGENCIA_ID,
+        role: "admin",
+        invited_at: null,
+        accepted_at: "2026-01-03T00:00:00Z",
+        revoked_at: null,
+        created_at: "2026-01-03T00:00:00Z",
+        membro_da_agencia: true,
+        email: "agencia@example.com",
+        full_name: "Pessoa da Agência",
+        last_sign_in_at: null,
+      },
+    ];
+  }
+
+  it("mostra o selo Agência e o texto, sem seletor de papel nem menu de ações para o cliente admin", async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: comAgencia() });
+    renderClient();
+
+    expect(await screen.findByText("agencia@example.com")).toBeInTheDocument();
+    expect(screen.getAllByText("Agência").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Acesso da agência que opera o seu CRM. Não ocupa vaga do plano."),
+    ).toBeInTheDocument();
+
+    // O admin do cliente (canManage) segue com seletor para o atendente, e NÃO ganha para a agência.
+    expect(screen.getByRole("combobox", { name: /Papel de Agente/i })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /Papel de Pessoa da Agência/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Interface de Pessoa da Agência/i })).not.toBeInTheDocument();
+
+    // Ações (revogar) existem para o atendente (1 menu) e não para a agência nem para "você".
+    expect(screen.getAllByRole("button", { name: "Ações" })).toHaveLength(1);
+  });
+
+  it("quem não é da agência não ganha selo", async () => {
+    renderClient();
+    expect(await screen.findByText("agente@example.com")).toBeInTheDocument();
+    expect(screen.queryByText("Agência")).not.toBeInTheDocument();
+  });
+});

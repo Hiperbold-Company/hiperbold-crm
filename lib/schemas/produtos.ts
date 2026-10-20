@@ -10,6 +10,14 @@ import { z } from "zod";
  * volta 422 sem explicar. Aqui os dois lados importam daqui.
  */
 
+/**
+ * Como o produto é cobrado: `fixo` tem preço de tabela (o agente de IA o cota);
+ * `variavel` não tem — o atendente define o valor dentro de cada negócio e o
+ * agente NÃO cita preço. Vocabulário FECHADO (CHECK no banco, migration 0972).
+ */
+export const TIPOS_DE_PRECO = ["fixo", "variavel"] as const;
+export type TipoDePreco = (typeof TIPOS_DE_PRECO)[number];
+
 /** Como o produto entrou no catálogo. Vocabulário ABERTO, sem CHECK no banco. */
 export const ORIGENS_DO_PRODUTO = ["manual", "planilha", "nuvemshop"] as const;
 export type OrigemDoProduto = (typeof ORIGENS_DO_PRODUTO)[number];
@@ -91,13 +99,18 @@ const codigo = z
 
 const nome = z.string().trim().min(2, "o nome precisa de ao menos 2 letras").max(200);
 
-export const produtoCreateSchema = z.object({
+const produtoBase = z.object({
   codigo,
   nome,
   descricao: z.string().trim().max(2000).optional(),
   marca: z.string().trim().max(80).optional(),
   categoria: z.string().trim().max(80).optional(),
-  preco_cents: z.number().int().min(0, "preço não pode ser negativo"),
+  // Sem `.default()` aqui: o patch deriva deste objeto e um default sobreviveria ao
+  // `.partial()`, trocando o tipo de todo produto editado. O padrão "fixo" é do cadastro.
+  tipo_de_preco: z.enum(TIPOS_DE_PRECO).optional(),
+  // Obrigatório quando o valor é fixo; no variável é ignorado e gravado como nulo
+  // (ver o `transform` abaixo): produto variável não tem preço de tabela.
+  preco_cents: z.number().int().min(0, "preço não pode ser negativo").nullable().optional(),
   // ⚠️ `moeda` NÃO entra aqui de propósito, e a ausência é a regra.
   //
   // Ela esteve neste schema e era controle decorativo ao contrário: a rota
@@ -118,8 +131,36 @@ export const produtoCreateSchema = z.object({
   imagem_url: z.string().trim().url().max(2000).optional(),
 });
 
-/** Tudo opcional: o PATCH muda o que veio e não encosta no resto. */
-export const produtoPatchSchema = produtoCreateSchema.partial();
+const MSG_PRECO_FIXO = "informe o preço — ou escolha valor variável";
+
+/** Cadastro: valor fixo exige preço; variável grava preço nulo, qualquer que seja o corpo. */
+export const produtoCreateSchema = produtoBase
+  .superRefine((v, ctx) => {
+    if ((v.tipo_de_preco ?? "fixo") === "fixo" && (v.preco_cents === undefined || v.preco_cents === null)) {
+      ctx.addIssue({ code: "custom", path: ["preco_cents"], message: MSG_PRECO_FIXO });
+    }
+  })
+  .transform((v) => {
+    const tipo_de_preco: TipoDePreco = v.tipo_de_preco ?? "fixo";
+    return tipo_de_preco === "variavel"
+      ? { ...v, tipo_de_preco, preco_cents: null }
+      : { ...v, tipo_de_preco, preco_cents: v.preco_cents as number };
+  });
+
+/**
+ * Tudo opcional: o PATCH muda o que veio e não encosta no resto.
+ *
+ * Trocar para `fixo` exige mandar o preço junto (o banco recusaria fixo sem
+ * preço); trocar para `variavel` apaga o preço de tabela.
+ */
+export const produtoPatchSchema = produtoBase
+  .partial()
+  .superRefine((v, ctx) => {
+    if (v.tipo_de_preco === "fixo" && (v.preco_cents === undefined || v.preco_cents === null)) {
+      ctx.addIssue({ code: "custom", path: ["preco_cents"], message: MSG_PRECO_FIXO });
+    }
+  })
+  .transform((v) => (v.tipo_de_preco === "variavel" ? { ...v, preco_cents: null } : v));
 
 export type ProdutoCreate = z.infer<typeof produtoCreateSchema>;
 export type ProdutoPatch = z.infer<typeof produtoPatchSchema>;
@@ -131,7 +172,9 @@ export interface Produto {
   descricao: string | null;
   marca: string | null;
   categoria: string | null;
-  preco_cents: number;
+  /** Nulo quando `tipo_de_preco = 'variavel'` (migration 0972). */
+  preco_cents: number | null;
+  tipo_de_preco: TipoDePreco;
   moeda: string;
   custo_cents: number | null;
   controla_estoque: boolean;
@@ -146,5 +189,5 @@ export interface Produto {
 
 /** As colunas que a tela e a rota leem — uma lista, não duas. */
 export const COLUNAS_DO_PRODUTO =
-  "id, codigo, nome, descricao, marca, categoria, preco_cents, moeda, custo_cents, " +
+  "id, codigo, nome, descricao, marca, categoria, preco_cents, tipo_de_preco, moeda, custo_cents, " +
   "controla_estoque, quantidade, ativo, origem, imagem_url, fotos, updated_at";

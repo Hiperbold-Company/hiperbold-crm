@@ -2,8 +2,10 @@
  * Config LLM por org, pós-fusão (PORT-NOTES): a credencial BYOK vive em
  * `ai_provider_credentials` do CRM (AES-256-GCM via lib/crypto/aes_gcm — colunas
  * api_key_encrypted/api_key_iv/api_key_tag) e os knobs de modelo/params vivem em
- * `organizations.settings->'llm'`. Sem BYOK, o fallback é a chave de plataforma
- * do env (ANTHROPIC_API_KEY ou OPENAI_API_KEY, conforme o provider). O plaintext da chave
+ * `organizations.settings->'llm'`. Sem BYOK, o fallback é a chave da INSTALAÇÃO, e ela
+ * sai SEMPRE pela OpenRouter (`OPENROUTER_API_KEY`), qualquer que seja o provider pedido
+ * (decisão do dono, 20/10/2026): nunca direto pela OpenAI nem pela Anthropic, mesmo com
+ * `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` no servidor. O plaintext da chave
  * existe apenas em memória do processo no instante da chamada; nunca em log.
  *
  * O TETO **não** mora mais no jsonb: desde a migration 0159 ele é
@@ -19,6 +21,7 @@ import type pg from 'pg';
 import { z } from 'zod';
 
 import { decifrarColunasDaCredencial } from '@/lib/ai/credenciais/cifra';
+import { PROVEDOR_DA_CHAVE_DA_INSTALACAO } from '@/lib/ai/modelos-da-instalacao';
 import {
   LIMIAR_PADRAO_PCT,
   normalizarChaveDeOrcamento,
@@ -133,7 +136,7 @@ export class LlmNotConfiguredError extends Error {
   override readonly name = 'llm_not_configured';
   constructor() {
     super(
-      'org sem credencial LLM utilizável — cadastre uma chave BYOK ativa/validada em ai_provider_credentials ou defina ANTHROPIC_API_KEY / OPENAI_API_KEY (fallback de plataforma, conforme o provider do modelo)',
+      'org sem credencial LLM utilizável — cadastre uma chave BYOK ativa/validada em ai_provider_credentials ou defina OPENROUTER_API_KEY (a chave da instalação sai sempre pela OpenRouter)',
     );
   }
 }
@@ -164,7 +167,18 @@ export interface OrcamentoDaOrg {
 export type OrigemDaChaveLlm = 'credencial_da_organizacao' | 'chave_da_instalacao';
 
 export interface OrgLlmConfig {
+  /**
+   * O provedor por onde a chamada SAI. Na chave da instalação é sempre `openrouter`
+   * (`PROVEDOR_DA_CHAVE_DA_INSTALACAO`), mesmo que a organização ou o agente tenham
+   * pedido `anthropic`/`openai`; com credencial própria é o provedor dela.
+   */
   provider: string;
+  /**
+   * O provedor que foi PEDIDO (organização, agente ou ponto). Igual a `provider`, exceto na chave
+   * da instalação, onde a rota virou OpenRouter: quem escreve o id do modelo precisa dele para dar
+   * o prefixo de fabricante a um id puro do catálogo (`idNaRotaDaInstalacao`).
+   */
+  providerPedido: string;
   /** plaintext decifrado — existe só em memória, jamais logado/persistido */
   apiKey: string;
   /**
@@ -389,19 +403,24 @@ export async function resolveOrgLlmConfig(
   // Atribuída junto com a chave, em cada degrau: a origem é um fato de QUAL
   // ramo escolheu a chave, e só este ponto sabe isso sem adivinhar.
   let origemDaChave: OrigemDaChaveLlm;
+  // O provedor por onde a chamada sai: o pedido, salvo na chave da instalação (OpenRouter).
+  let provedorDaSaida = provider;
   const cred = credRows[0];
   if (cred !== undefined) {
     apiKey = decifrarColunasDaCredencial(cred, organizationId);
     origemDaChave = 'credencial_da_organizacao';
-  } else if (provider === 'anthropic' && cfg.anthropicApiKey) {
-    apiKey = cfg.anthropicApiKey;
-    origemDaChave = 'chave_da_instalacao';
-  } else if (provider === 'openai' && cfg.openaiApiKey) {
-    apiKey = cfg.openaiApiKey;
-    origemDaChave = 'chave_da_instalacao';
-  } else if (provider === 'openrouter' && cfg.openrouterApiKey) {
+  } else if (
+    (provider === 'anthropic' || provider === 'openai' || provider === 'openrouter') &&
+    cfg.openrouterApiKey
+  ) {
+    // A chave da INSTALAÇÃO sai sempre pela OpenRouter (decisão do dono, 20/10/2026), seja qual
+    // for o provedor pedido. `cfg.anthropicApiKey` e `cfg.openaiApiKey` seguem na config para
+    // quem precisa delas por outro motivo (transcrição, voz), mas NUNCA entram aqui: a OpenAI
+    // pode estar no servidor e o Luna não vai direto a ela. Sem `OPENROUTER_API_KEY` cai no
+    // `LlmNotConfiguredError` abaixo, sem tentar outro provedor.
     apiKey = cfg.openrouterApiKey;
     origemDaChave = 'chave_da_instalacao';
+    provedorDaSaida = PROVEDOR_DA_CHAVE_DA_INSTALACAO;
   } else {
     throw new LlmNotConfiguredError();
   }
@@ -425,7 +444,8 @@ export async function resolveOrgLlmConfig(
   }
 
   return {
-    provider,
+    provider: provedorDaSaida,
+    providerPedido: provider,
     apiKey,
     baseUrl,
     origemDaChave,

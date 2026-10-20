@@ -11,6 +11,8 @@ export interface TeamMember {
   accepted_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  /** Vínculo da agência que opera o CRM (migration 0974): sem ação para o cliente. */
+  membro_da_agencia?: boolean;
   email: string | null;
   full_name: string | null;
   last_sign_in_at: string | null;

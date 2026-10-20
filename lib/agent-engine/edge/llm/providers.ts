@@ -273,11 +273,21 @@ export function createDefaultRegistry(opts?: {
      */
     openrouter: (apiKey, modelId, baseUrl) => {
       const endpoint = baseUrl ?? OPENROUTER_ENDPOINT;
+      const contidoDaRota = contidoOuJulgado(endpoint, baseUrl);
+      // A chave da instalação sai pela OpenRouter (20/10/2026), então o Luna (`openai/gpt-6-luna`)
+      // deixou de passar pela fábrica `openai` — e com ela o `OPENAI_REASONING_EFFORT`, que corta a
+      // latência do turno (4,9 s para 1,8 s, medido em 24/09). A OpenRouter lê o mesmo campo
+      // `reasoning.effort` no corpo do chat/completions, então o ajuste acompanha o modelo da
+      // OpenAI para dentro da rota, e só ele: os outros fabricantes não recebem nada.
+      const aplicaEsforco =
+        esforcoOpenAI !== null &&
+        modelId.toLowerCase().startsWith('openai/') &&
+        modeloOpenAIRaciocina(modelId.slice('openai/'.length));
       const provider = createOpenAI({
         apiKey,
         baseURL: endpoint,
         headers: cabecalhosDeAtribuicaoOpenRouter(),
-        fetch: contidoOuJulgado(endpoint, baseUrl),
+        fetch: aplicaEsforco ? comEsforcoDeRaciocinio(contidoDaRota, esforcoOpenAI) : contidoDaRota,
       });
       // Chat Completions, NÃO Responses: a OpenRouter fala a API da OpenAI
       // (chat/completions). O `createOpenAI()(modelId)` desta versão do SDK usa
@@ -367,5 +377,7 @@ export function createFakeRegistry(
           warnings: [],
         },
     });
-  return { anthropic: factory, fake: factory };
+  // `openrouter` porque a chave da instalação sai SEMPRE por ela (20/10/2026): é o provedor que o
+  // seam resolve para um agente sem chave própria, qualquer que seja o provedor gravado nele.
+  return { anthropic: factory, openrouter: factory, fake: factory };
 }

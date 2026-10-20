@@ -24,8 +24,15 @@ import { listSelectableChannels } from "@/lib/channels/selectable";
 import { lerRetratoDaInstalacao } from "@/lib/instalacao/retrato";
 import { provarSaldo } from "@/lib/instalacao/prova-de-credito";
 import { loadCredential, CredentialUnavailableError } from "@/lib/ai/credentials";
+import { modeloPadraoDaInstalacao, PROVEDOR_DA_CHAVE_DA_INSTALACAO } from "@/lib/ai/modelos-da-instalacao";
+import { modelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao-leitura";
+import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+/** A prova gasta uma geração real na chave da instalação: 1 por minuto, por organização. */
+const PROVAS_POR_JANELA = 1;
+const JANELA_DA_PROVA_SEGUNDOS = 60;
 
 /**
  * `listSelectableChannels` é a fonte única (já exclui arquivado) e LANÇA em
@@ -68,7 +75,10 @@ export async function GET(req: NextRequest) {
   if (!authzProva.ok) return authzProva.response;
 
   const { origemDaChave, modeloCurado, provedor, chaveEmVerificacao } = retrato.inteligencia;
-  if (origemDaChave === "nenhuma" || !modeloCurado) {
+  // Na chave da INSTALAÇÃO o modelo da prova é o padrão liberado (Luna), pela OpenRouter, e não o
+  // curado do provedor da organização: não depende do catálogo.
+  const naChaveDaInstalacao = origemDaChave === "instalacao";
+  if (origemDaChave === "nenhuma" || (!naChaveDaInstalacao && !modeloCurado)) {
     // "Ainda conferindo" e "não tem" pedem frases OPOSTAS: a primeira é esperar,
     // a segunda é cadastrar. A validação da chave roda em segundo plano, então
     // quem acaba de colá-la cai sempre nesta janela.
@@ -127,13 +137,42 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const r = await provarSaldo(provedor, apiKey, modeloCurado);
+  // Só aqui, no ponto que de fato gasta: as respostas "sem chave"/"ainda conferindo" acima não custam
+  // nada e não consomem o balde. Por organização (a chave é da instalação, o gasto é de todas).
+  const balde = await checkRateLimit(
+    `instalacao-provar:${org.orgId}`,
+    PROVAS_POR_JANELA,
+    JANELA_DA_PROVA_SEGUNDOS,
+  );
+  if (!balde.allowed) {
+    return fail(
+      "rate_limited",
+      "A prova de saldo já foi feita há instantes. Espere um minuto para testar de novo.",
+      429,
+      {
+        headers: {
+          "Retry-After": String(JANELA_DA_PROVA_SEGUNDOS),
+          "X-RateLimit-Limit": String(balde.limit),
+          "X-RateLimit-Remaining": String(Math.max(0, balde.limit - balde.count)),
+        },
+      },
+    );
+  }
+
+  const r = naChaveDaInstalacao
+    ? await provarSaldo(
+        PROVEDOR_DA_CHAVE_DA_INSTALACAO,
+        apiKey,
+        modeloPadraoDaInstalacao(await modelosDaInstalacao()),
+      )
+    : await provarSaldo(provedor, apiKey, modeloCurado ?? "");
   return ok({ ...retrato, prova: { feita: true, ...r } });
 }
 
 function chaveDoAmbiente(provider: string): string {
+  // A chave da instalação é a da OpenRouter para os três provedores (20/10/2026).
   return (
-    { anthropic: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY", openrouter: "OPENROUTER_API_KEY" }[
+    { anthropic: "OPENROUTER_API_KEY", openai: "OPENROUTER_API_KEY", openrouter: "OPENROUTER_API_KEY" }[
       provider
     ] ?? "__inexistente__"
   );

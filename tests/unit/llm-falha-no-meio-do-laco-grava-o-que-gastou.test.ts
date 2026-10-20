@@ -55,7 +55,7 @@ function registry(passos: Array<"ferramenta" | "falha">) {
 }
 
 const eco = tool({ description: "eco", inputSchema: z.object({}), execute: async () => "ok" });
-const cfg = { anthropicApiKey: "sk-teste", cacheTtl: "1h" as const };
+const cfg = { openrouterApiKey: "sk-teste", cacheTtl: "1h" as const };
 
 async function rodar(passos: Array<"ferramenta" | "falha">) {
   const { pool: p, inserts } = pool();

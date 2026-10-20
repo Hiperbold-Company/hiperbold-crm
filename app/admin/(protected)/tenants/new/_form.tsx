@@ -144,6 +144,13 @@ export function NewTenantForm() {
             {t("Você já é administrador de")} {created.display_name}.
           </p>
           {created.owner_invitation && (
+            <p className="text-sm text-muted-foreground">
+              {t(
+                "Você ficou como membro da agência: o acesso é permanente, não ocupa vaga do plano e continua quando o dono assumir.",
+              )}
+            </p>
+          )}
+          {created.owner_invitation && (
             <div className="space-y-3">
               <p>
                 {created.owner_invitation.email_dispatched

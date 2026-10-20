@@ -14,6 +14,8 @@ import { generateText } from "ai";
 import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildModel, chaveDePlataforma } from "@/lib/ai/runtime/agent";
+import { modeloPermitidoNaChave } from "@/lib/ai/modelos-da-instalacao-leitura";
+import { idNaRotaDaInstalacao, PROVEDOR_DA_CHAVE_DA_INSTALACAO } from "@/lib/ai/modelos-da-instalacao";
 import { loadCredential } from "@/lib/ai/credentials";
 import { slugDeNome } from "@/lib/leads/stage-editing";
 import {
@@ -86,9 +88,23 @@ async function cerebroDoFuncionario(
     }
   }
 
+  // A chave da instalação sai SEMPRE pela OpenRouter (decisão do dono, 20/10/2026): o provedor da
+  // chamada é `openrouter` e o modelo, escrito como ela o entende e dentro do freio de custo.
   const daInstalacao = chaveDePlataforma(provider);
   if (!daInstalacao) return { erro: `esta instalação não tem chave de ${provider}` };
-  return { provider, model, apiKey: daInstalacao, origemDaChave: "chave_da_instalacao" };
+  const liberado = await modeloPermitidoNaChave({
+    organizationId: orgId,
+    origemDaChave: "chave_da_instalacao",
+    provedor: PROVEDOR_DA_CHAVE_DA_INSTALACAO,
+    modelId: idNaRotaDaInstalacao(provider, model),
+    ponto: "onboarding_funil",
+  });
+  return {
+    provider: PROVEDOR_DA_CHAVE_DA_INSTALACAO,
+    model: liberado.modelId,
+    apiKey: daInstalacao,
+    origemDaChave: "chave_da_instalacao",
+  };
 }
 
 async function carregarQuadroAtual(

@@ -4,6 +4,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
+import { COLUNAS_DO_AGENTE_NA_LISTA } from "@/lib/ai/agents/administracao";
 import type { AgentRow } from "@/hooks/ai/useAgent";
 import { AgentsList } from "./_components/AgentsList";
 import { logger } from "@/lib/logger";
@@ -11,14 +12,13 @@ import { logger } from "@/lib/logger";
 export const dynamic = "force-dynamic";
 
 /**
- * `versao_publicada` vem por join porque `ai_agents.model` é o valor do CADASTRO:
- * para `mcp_agent`, quem responde é `ai_agent_versions.model` da versão publicada,
- * e publicar não sincroniza a coluna de cima. Sem este join a lista anunciaria
- * para sempre o modelo escolhido no dia da criação.
+ * `versao_publicada` e `versoes_rascunho` vêm por join porque `ai_agents.model` é o valor do
+ * CADASTRO: para `mcp_agent`, quem responde é `ai_agent_versions.model` da versão publicada (ou,
+ * enquanto não há publicada, o que vale é o rascunho), e nem salvar nem publicar sincroniza a
+ * coluna de cima. Sem estes joins a lista anunciaria para sempre o modelo escolhido no dia da
+ * criação (visto em produção: cartão "Sonnet" para um rascunho em Luna).
  */
-const AGENT_COLUMNS =
-  "id, organization_id, name, description, model, system_prompt, is_active, is_default, kind, priority, published_version_id, paused_at, operation_mode, operation_revision, archived_at, config, guardrails, active_kb_version_id, created_at, updated_at, " +
-  "versao_publicada:ai_agent_versions!ai_agents_published_version_id_fkey(provider, model)";
+const AGENT_COLUMNS = COLUNAS_DO_AGENTE_NA_LISTA;
 
 export default async function AgentsListPage() {
   const user = await requireAuth();
@@ -33,6 +33,7 @@ export default async function AgentsListPage() {
     .from("ai_agents")
     .select(AGENT_COLUMNS)
     .eq("organization_id", activeOrg.orgId)
+    .eq("versoes_rascunho.status", "draft")
     .order("created_at", { ascending: false });
 
   // Sem ler o `error`, "não consegui perguntar" e "você não tem agente nenhum"

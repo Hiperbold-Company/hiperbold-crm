@@ -28,10 +28,12 @@
  *  2. **Credencial OpenAI da organização** (`ai_provider_credentials`, ativa e
  *     validada). É o degrau que faz "cadastrei a chave na tela e funcionou"
  *     virar verdade sem exigir que ninguém entenda o que é um binding.
- *  3. **Gateway da Vercel** (`AI_GATEWAY_API_KEY`) — quando a instalação roteia
- *     tudo por ele.
- *  4. **Chave da instalação** (`OPENAI_API_KEY`) — o que o `install.sh` pede.
- *  5. Nada. E "nada" é uma resposta legítima que o chamador precisa saber
+ *  3. **Chave da instalação** (`OPENROUTER_API_KEY`) — a que paga a conta de todas
+ *     as empresas. Sai SEMPRE pela OpenRouter (`POST /api/v1/embeddings`, mesmo
+ *     modelo `openai/text-embedding-3-small`, 1536 dimensões), nunca direto pela
+ *     OpenAI nem pelo gateway da Vercel, mesmo com `OPENAI_API_KEY` no servidor
+ *     (decisão do dono, 20/10/2026). Doc: https://openrouter.ai/docs/api-reference/embeddings/create-embeddings
+ *  4. Nada. E "nada" é uma resposta legítima que o chamador precisa saber
  *     mostrar, não um erro para engolir.
  *
  * A decisão devolve a ORIGEM junto com a chave. Não é enfeite: é o que permite
@@ -49,6 +51,7 @@
 import type { OrigemDaChaveLlm } from "@/lib/agent-engine/edge/llm/credentials";
 import { decifrarColunasDaCredencial } from "@/lib/ai/credenciais/cifra";
 import { env } from "@/lib/env";
+import { OPENROUTER_BASE_URL } from "@/lib/ai/gateway";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -62,7 +65,6 @@ export const DIMENSOES_DO_EMBEDDING = 1536;
 export type OrigemDaChave =
   | "binding_do_ponto"
   | "credencial_da_organizacao"
-  | "gateway_da_instalacao"
   | "chave_da_instalacao";
 
 /**
@@ -72,8 +74,8 @@ export type OrigemDaChave =
  *  - `binding_do_ponto` e `credencial_da_organizacao`: a chave é uma linha de
  *    `ai_provider_credentials` DA PRÓPRIA organização (as duas leituras deste
  *    arquivo filtram `organization_id`), a que o cliente cadastrou. Nunca debita.
- *  - `gateway_da_instalacao` e `chave_da_instalacao`: a chave vem do `.env` da
- *    instalação (`AI_GATEWAY_API_KEY`, `OPENAI_API_KEY`), a que a Hiperbold
+ *  - `chave_da_instalacao`: a chave vem do `.env` da
+ *    instalação (`OPENROUTER_API_KEY`), a que a Hiperbold
  *    paga. É a origem que debita, quando o peso do ponto for maior que zero
  *    (hoje `embedding_indexar` e `embedding_consultar` pesam 0).
  *
@@ -83,7 +85,6 @@ export type OrigemDaChave =
 const ORIGEM_NO_VOCABULARIO_DE_LLM_CALLS: Record<OrigemDaChave, OrigemDaChaveLlm> = {
   binding_do_ponto: "credencial_da_organizacao",
   credencial_da_organizacao: "credencial_da_organizacao",
-  gateway_da_instalacao: "chave_da_instalacao",
   chave_da_instalacao: "chave_da_instalacao",
 };
 
@@ -96,14 +97,14 @@ export function origemDaChaveParaLlmCalls(origem: OrigemDaChave): OrigemDaChaveL
  * grava (D-053 item 3). O modelo é fixo (`text-embedding-3-small`, da OpenAI),
  * mas o provedor que atende nem sempre é a OpenAI:
  *
- *  - pelo gateway da instalação: `gateway`;
+ *  - pela chave da instalação: `openrouter`;
  *  - por endereço próprio (`baseUrl`, o do binding do painel): `custom`, o mesmo
  *    rótulo que o painel usa para "compatível com OpenAI, endereço seu". O
  *    endereço em si NÃO vai para a telemetria: pode carregar credencial;
- *  - direto na OpenAI: `openai`.
+ *  - direto na OpenAI (credencial da própria organização): `openai`.
  */
-export function provedorDoEmbedding(chave: Pick<ChaveDeEmbedding, "viaGateway" | "baseUrl">): string {
-  if (chave.viaGateway) return "gateway";
+export function provedorDoEmbedding(chave: Pick<ChaveDeEmbedding, "viaOpenRouter" | "baseUrl">): string {
+  if (chave.viaOpenRouter) return "openrouter";
   if (chave.baseUrl) return "custom";
   return "openai";
 }
@@ -111,17 +112,19 @@ export function provedorDoEmbedding(chave: Pick<ChaveDeEmbedding, "viaGateway" |
 export const EXPLICACAO_DA_ORIGEM: Record<OrigemDaChave, string> = {
   binding_do_ponto: "Escolhida por você no painel de Provedores.",
   credencial_da_organizacao: "Usando a chave OpenAI cadastrada em Credenciais.",
-  gateway_da_instalacao: "Usando o gateway de IA configurado nesta instalação.",
-  chave_da_instalacao: "Usando a chave que veio na instalação.",
+  chave_da_instalacao: "Usando a chave de IA da instalação (OpenRouter).",
 };
 
 export interface ChaveDeEmbedding {
   /** Plaintext. Vive só no escopo de quem chamou — nunca logada nem persistida. */
-  apiKey: string | null;
+  apiKey: string;
   /** `null` = falar direto com a OpenAI. */
   baseUrl: string | null;
-  /** Quando true, a chamada vai pelo gateway (o SDK lê a chave do process.env). */
-  viaGateway: boolean;
+  /**
+   * Quando true, é a chave da INSTALAÇÃO e a chamada vai pela OpenRouter (`baseUrl` é o endereço
+   * dela, vindo do `.env`, nunca de uma empresa). O modelo leva o fabricante: `openai/...`.
+   */
+  viaOpenRouter: boolean;
   origem: OrigemDaChave;
   /** Rótulo da credencial, quando houver — a tela mostra qual chave está valendo. */
   rotulo: string | null;
@@ -158,7 +161,7 @@ export async function resolverChaveDeEmbedding(
       return {
         apiKey: credencial.apiKey,
         baseUrl: binding.base_url,
-        viaGateway: false,
+        viaOpenRouter: false,
         origem: "binding_do_ponto",
         rotulo: credencial.rotulo,
         avisos,
@@ -182,31 +185,20 @@ export async function resolverChaveDeEmbedding(
     return {
       apiKey: daOrg.apiKey,
       baseUrl: null,
-      viaGateway: false,
+      viaOpenRouter: false,
       origem: "credencial_da_organizacao",
       rotulo: daOrg.rotulo,
       avisos,
     };
   }
 
-  // 3 · O gateway da instalação. A chave não sai daqui: o SDK a lê do process.env.
-  if (env.AI_GATEWAY_API_KEY) {
+  // 3 · A chave da INSTALAÇÃO, sempre pela OpenRouter — nunca direto pela OpenAI, mesmo que
+  // `OPENAI_API_KEY` esteja no servidor (decisão do dono, 20/10/2026).
+  if (env.OPENROUTER_API_KEY) {
     return {
-      apiKey: null,
-      baseUrl: env.AI_GATEWAY_BASE_URL || null,
-      viaGateway: true,
-      origem: "gateway_da_instalacao",
-      rotulo: null,
-      avisos,
-    };
-  }
-
-  // 4 · A chave que o install.sh pediu.
-  if (env.OPENAI_API_KEY) {
-    return {
-      apiKey: env.OPENAI_API_KEY,
-      baseUrl: null,
-      viaGateway: false,
+      apiKey: env.OPENROUTER_API_KEY,
+      baseUrl: env.OPENROUTER_BASE_URL || OPENROUTER_BASE_URL,
+      viaOpenRouter: true,
       origem: "chave_da_instalacao",
       rotulo: null,
       avisos,

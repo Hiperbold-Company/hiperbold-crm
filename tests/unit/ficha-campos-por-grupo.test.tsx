@@ -17,6 +17,15 @@ vi.mock("@/hooks/kanban/useUpdateLead", () => ({
   useEditLead: () => ({ mutateAsync, isPending: false }),
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// Os produtos do negócio (migration 0972) têm teste próprio (`ficha-produtos-do-negocio.test.tsx`);
+// aqui a seção sai da ficha para este arquivo continuar falando só do que fala.
+vi.mock("@/components/kanban/ItensDoNegocio", () => ({ ItensDoNegocio: () => null }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true }));
+// O seletor de etiquetas lê o vocabulário da rede; este arquivo não trata de
+// etiquetas (isso é de `ficha-tags-seletor.test.tsx`), então a leitura fica vazia.
+vi.mock("@/hooks/contacts/useEtiquetasParaEscolher", () => ({
+  useEtiquetasParaEscolher: () => ({ data: [], isLoading: false, isError: false }),
+}));
 
 const LEAD = {
   id: "11111111-1111-4111-8111-111111111111",

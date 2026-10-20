@@ -5,6 +5,8 @@ import { ROLE_RANK } from "@/lib/auth/types";
 import { listClassifierModels } from "@/lib/ai/classifier-models";
 import { listSelectableChannels } from "@/lib/channels/selectable";
 import { createClient } from "@/lib/supabase/server";
+import { valorDaInstalacao } from "@/lib/instalacao/config";
+import { CHAVE_MODELOS_DA_INSTALACAO, lerModelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao";
 import type { RouterDetailState } from "@/hooks/ai/useRouters";
 import { RouterEditorClient } from "./_client";
 
@@ -52,9 +54,12 @@ export default async function RouterEditorPage({ params }: { params: Promise<{ i
 
   // Só os modelos que esta organização consegue usar de fato — ver a razão em
   // lib/ai/classifier-models.
+  // A chave da instalação é só a OpenRouter, e só com os modelos do plano (decisão do dono, 20/10/2026).
   const classifierModels = await listClassifierModels(supabase, activeOrg.orgId, {
-    anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
-    openai: Boolean(process.env.OPENAI_API_KEY),
+    openrouter: Boolean(process.env.OPENROUTER_API_KEY),
+    modelosDaInstalacao: lerModelosDaInstalacao(
+      (await valorDaInstalacao(CHAVE_MODELOS_DA_INSTALACAO)).valor,
+    ),
   });
 
   const initialState: RouterDetailState = {

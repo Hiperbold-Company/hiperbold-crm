@@ -19,7 +19,13 @@ import { mfaEmDivida } from "@/lib/auth/server";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { logger } from "@/lib/logger";
-import { diasRestantes } from "@/lib/retencao/exclusao-de-organizacao/datas";
+import { valorDaInstalacao } from "@/lib/instalacao/config";
+import {
+  DIAS_DE_GUARDA_PADRAO,
+  diaCivil,
+  diasRestantes,
+  interpretarDiasDeGuarda,
+} from "@/lib/retencao/exclusao-de-organizacao/datas";
 import { excluirOrganizacao } from "@/lib/retencao/exclusao-de-organizacao/rodada";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -29,6 +35,8 @@ const MENSAGEM_GENERICA = "Não foi possível concluir. Tente de novo.";
 const MENSAGEM_LEITURA = "Não foi possível carregar as exclusões.";
 const MENSAGEM_SEM_ESCOPO = "Seu acesso de suporte não permite mexer nas exclusões.";
 const CAMINHO_DA_TELA = "/admin/sistema/exclusoes";
+const CAMINHO_DOS_TENANTS = "/admin/tenants";
+const MENSAGEM_SO_SUSPENSA = "Suspenda a organização antes de excluir.";
 const LIMITE_DA_LISTA = 200;
 
 export interface ExclusaoListada {
@@ -124,6 +132,63 @@ export async function listarExclusoes(): Promise<
   }
 }
 
+export interface SituacaoDaExclusaoDaOrganizacao {
+  /** A exclusão programada que está valendo (a cancelada não conta), ou `null`. */
+  programada: { excluirEm: string; origem: "automatica" | "manual" } | null;
+  /** Dia civil `aaaa-mm-dd` sugerido: suspensão + dias de guarda da instalação, nunca antes de amanhã. */
+  dataPadrao: string;
+  diasDeGuarda: number;
+}
+
+/**
+ * O que o modal "Excluir organização" do painel de tenants precisa saber: se já há exclusão programada e qual
+ * data a regra existente sugere (a mesma contagem de `fn_exclusao_sincronizar`: início do estado + dias de guarda
+ * da instalação, 90 por padrão). Só leitura; mesmo gate das demais ações.
+ */
+export async function situacaoDaExclusaoDaOrganizacao(input: {
+  organizationId: string;
+}): Promise<({ ok: true } & SituacaoDaExclusaoDaOrganizacao) | { ok: false; error: string }> {
+  const gate = await autorizar();
+  if (!gate.ok) return gate;
+  const parsed = z.object({ organizationId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: MENSAGEM_DADOS_INVALIDOS };
+  try {
+    const admin = createAdminClient();
+    const { data: org, error: erroOrg } = await admin
+      .from("organizations")
+      .select("suspended_at")
+      .eq("id", parsed.data.organizationId)
+      .maybeSingle();
+    if (erroOrg || !org) return { ok: false, error: "Organização não encontrada." };
+
+    const { data: linha, error } = await admin
+      .from("org_exclusoes_programadas" as never)
+      .select("origem, estado, excluir_em")
+      .eq("organization_id", parsed.data.organizationId)
+      .maybeSingle();
+    if (error) throw new Error((error as { message: string }).message);
+    const prog = linha as unknown as { origem: "automatica" | "manual"; estado: string; excluir_em: string } | null;
+
+    // Configuração inválida: a rodada do cron aborta; aqui só se sugere uma data, então vale o padrão.
+    const dias = interpretarDiasDeGuarda((await valorDaInstalacao("DIAS_DE_GUARDA_APOS_CANCELAMENTO")).valor);
+    const diasDeGuarda = dias.ok ? dias.dias : DIAS_DE_GUARDA_PADRAO;
+    const inicio = (org as { suspended_at: string | null }).suspended_at
+      ? new Date((org as { suspended_at: string }).suspended_at)
+      : new Date();
+    const sugerida = diaCivil(new Date(inicio.getTime() + diasDeGuarda * 86_400_000));
+    const amanha = diaCivil(new Date(Date.now() + 86_400_000));
+    return {
+      ok: true,
+      programada: prog && prog.estado === "programada" ? { excluirEm: prog.excluir_em, origem: prog.origem } : null,
+      dataPadrao: sugerida < amanha ? amanha : sugerida,
+      diasDeGuarda,
+    };
+  } catch (err) {
+    logger.error("[exclusao] situação da organização falhou", { erro: err instanceof Error ? err.message.slice(0, 200) : "erro" });
+    return { ok: false, error: MENSAGEM_LEITURA };
+  }
+}
+
 const entradaProgramar = z.object({
   organizationId: z.string().uuid(),
   /** Dia civil `aaaa-mm-dd`, de amanhã em diante (fuso de São Paulo). */
@@ -173,6 +238,7 @@ export async function programarExclusao(input: {
     userAgent,
   });
   revalidatePath(CAMINHO_DA_TELA);
+  revalidatePath(CAMINHO_DOS_TENANTS);
   return { ok: true };
 }
 
@@ -209,18 +275,25 @@ export async function cancelarExclusao(input: {
     userAgent,
   });
   revalidatePath(CAMINHO_DA_TELA);
+  revalidatePath(CAMINHO_DOS_TENANTS);
   return { ok: true };
 }
 
-const entradaExcluirAgora = z.object({
-  organizationId: z.string().uuid(),
-  nomeDigitado: z.string().min(1).max(300),
-  confirmar: z.literal(true),
-});
+const entradaExcluirAgora = z
+  .object({
+    organizationId: z.string().uuid(),
+    /** Tela de Exclusões: o nome da organização, exatamente como está no cadastro. */
+    nomeDigitado: z.string().min(1).max(300).optional(),
+    /** Painel de tenants: o slug. Quando vem, a organização TEM de estar suspensa. */
+    slugDigitado: z.string().min(1).max(300).optional(),
+    confirmar: z.literal(true),
+  })
+  .refine((v) => (v.nomeDigitado === undefined) !== (v.slugDigitado === undefined));
 
 export async function excluirAgora(input: {
   organizationId: string;
-  nomeDigitado: string;
+  nomeDigitado?: string;
+  slugDigitado?: string;
   confirmar: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const gate = await autorizar();
@@ -231,12 +304,19 @@ export async function excluirAgora(input: {
   const admin = createAdminClient();
   const { data: org, error: erroOrg } = await admin
     .from("organizations")
-    .select("display_name")
+    .select("display_name, slug, status")
     .eq("id", parsed.data.organizationId)
     .maybeSingle();
   if (erroOrg || !org) return { ok: false, error: "Organização não encontrada." };
-  // O nome EXATO, sem aparar e sem ignorar maiúsculas: quem digita precisa estar olhando para o nome.
-  if (parsed.data.nomeDigitado !== nomeDaEmpresa((org as { display_name: string | null }).display_name)) {
+  const linhaDaOrg = org as { display_name: string | null; slug: string | null; status: string | null };
+  if (parsed.data.slugDigitado !== undefined) {
+    // Pelo painel de tenants a exclusão vem DEPOIS da suspensão, e o que se digita é o slug, exato.
+    if (linhaDaOrg.status !== "suspended") return { ok: false, error: MENSAGEM_SO_SUSPENSA };
+    if (parsed.data.slugDigitado !== linhaDaOrg.slug) {
+      return { ok: false, error: "O identificador digitado não confere com o da organização." };
+    }
+  } else if (parsed.data.nomeDigitado !== nomeDaEmpresa(linhaDaOrg.display_name)) {
+    // O nome EXATO, sem aparar e sem ignorar maiúsculas: quem digita precisa estar olhando para o nome.
     return { ok: false, error: "O nome digitado não confere com o da organização." };
   }
 
@@ -269,5 +349,6 @@ export async function excluirAgora(input: {
     };
   }
   revalidatePath(CAMINHO_DA_TELA);
+  revalidatePath(CAMINHO_DOS_TENANTS);
   return { ok: true };
 }

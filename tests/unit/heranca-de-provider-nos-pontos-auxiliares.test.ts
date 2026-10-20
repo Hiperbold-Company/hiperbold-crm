@@ -44,6 +44,14 @@ import {
   type AgentePublicado,
   type EntradaDaDecisao,
 } from "@/lib/ai/pontos/resolver";
+// A chave da INSTALAÇÃO sai sempre pela OpenRouter (20/10/2026). O que este arquivo prova é que o
+// PAINEL escolhe provedor e modelo, então a organização aqui tem chave PRÓPRIA em todo provedor
+// (a rota da chave da instalação está em `chave-da-instalacao-sempre-pela-openrouter.test.ts`).
+vi.mock("@/lib/ai/credenciais/cifra", () => ({
+  decifrarColunasDaCredencial: () => "chave-propria-da-empresa",
+}));
+const CREDENCIAL_DA_EMPRESA = { id: "cred-1", api_key_encrypted: "x", api_key_iv: "y", api_key_tag: "z" };
+
 import { runModelCall } from "@/lib/agent-engine/edge/llm/run-model-call";
 
 const PADRAO = { provider: "anthropic", defaultModel: "claude-sonnet-4-5" };
@@ -152,7 +160,7 @@ function poolFalso() {
       return { rows: [{ llm: { provider: "anthropic", default_model: "claude-sonnet-4-5" } }] };
     }
     if (sql.includes("from ai_purpose_bindings")) return { rows: [] };
-    if (sql.includes("from ai_provider_credentials")) return { rows: [] };
+    if (sql.includes("from ai_provider_credentials")) return { rows: [CREDENCIAL_DA_EMPRESA] };
     if (sql.includes("insert into llm_calls")) return { rows: [{ id: "call-1" }] };
     return { rows: [] };
   });
@@ -187,7 +195,7 @@ describe("o seam instancia o modelo do agente, não o do padrão da org", () => 
 
     const r = await runModelCall(
       poolFalso(),
-      { anthropicApiKey: "chave-anthropic", openaiApiKey: "chave-openai", cacheTtl: "1h" as const },
+      { openrouterApiKey: "chave-da-instalacao", cacheTtl: "1h" as const },
       {
         tenantId: "11111111-1111-4111-8111-111111111111",
         purpose,
@@ -203,7 +211,7 @@ describe("o seam instancia o modelo do agente, não o do padrão da org", () => 
     // A linha do log de produção era `provider: openai, model: claude-sonnet-4-5`.
     expect(chamadas[0]).toMatchObject({ provider: "openai", modelId: "gpt-5.6-luna" });
     // E a chave tem de ser a do provider instanciado — o outro meio do PR #151.
-    expect(chamadas[0]?.apiKey).toBe("chave-openai");
+    expect(chamadas[0]?.apiKey).toBe("chave-propria-da-empresa");
     expect(r.origem).not.toBe("padrao_da_organizacao");
   });
 });

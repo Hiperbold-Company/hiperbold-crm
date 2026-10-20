@@ -726,6 +726,8 @@ describe("agentes de IA por token", () => {
     const db = bancoFalso({
       ai_agents: () => ({ id: AGENTE, kind: "mcp_agent", archived_at: null }),
       ai_agent_versions: (c) => (c.op === "insert" ? { id: VERSAO, version_number: 2 } : { version_number: 1 }),
+      // A credencial escolhida é desta organização, ativa e do provedor da versão.
+      ai_provider_credentials: () => ({ provider: "anthropic", is_active: true }),
     });
     vi.mocked(createAdminClient).mockReturnValue(db as never);
     comoToken("admin", ["mcp:write"]);
@@ -746,6 +748,39 @@ describe("agentes de IA por token", () => {
     expect(res.status).toBe(201);
     const insercao = db.chamadas.find((c) => c.tabela === "ai_agent_versions" && c.op === "insert");
     expect(insercao?.patch).toMatchObject({ organization_id: ORG_TOKEN, agent_id: AGENTE, status: "draft", created_by: DONO, version_number: 2 });
+  });
+
+  it("POST versions: na chave da instalação (credential_id null) só vale OpenRouter + modelo liberado; o resto é 422", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-da-instalacao");
+    const db = bancoFalso({
+      ai_agents: () => ({ id: AGENTE, kind: "mcp_agent", archived_at: null }),
+      ai_agent_versions: (c) => (c.op === "insert" ? { id: VERSAO, version_number: 2 } : { version_number: 1 }),
+    });
+    vi.mocked(createAdminClient).mockReturnValue(db as never);
+    comoToken("admin", ["mcp:write"]);
+    const { POST } = await import("@/app/api/v1/ai/agents/[id]/versions/route");
+    const url = `/api/v1/ai/agents/${AGENTE}/versions`;
+    const base = {
+      system_prompt: "Você atende clientes de uma clínica com cordialidade.",
+      credential_id: null,
+      channel_session_id: null,
+    };
+
+    const outroProvedor = await POST(
+      req(url, "POST", { ...base, provider: "anthropic", model: "claude-sonnet-5" }),
+      ctxDe({ id: AGENTE }),
+    );
+    expect(outroProvedor.status).toBe(422);
+    expect(JSON.stringify(await outroProvedor.json())).toContain("provider_not_allowed");
+
+    const emLote = await POST(
+      req(url, "POST", { ...base, provider: "openrouter", model: "openai/gpt-6-luna:batch" }),
+      ctxDe({ id: AGENTE }),
+    );
+    expect(emLote.status).toBe(422);
+    expect(JSON.stringify(await emLote.json())).toContain("model_not_allowed");
+    expect(db.chamadas.some((c) => c.tabela === "ai_agent_versions" && c.op === "insert")).toBe(false);
+    vi.unstubAllEnvs();
   });
 });
 

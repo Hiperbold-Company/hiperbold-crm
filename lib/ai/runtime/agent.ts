@@ -47,6 +47,7 @@ import { decidirElegibilidadeDaConversaViaSupabase } from "@/lib/ai/elegibilidad
 import { ttlDaAutorizacaoMs } from "@/lib/ai/elegibilidade/gate";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { modeloPermitidoNaChave } from "@/lib/ai/modelos-da-instalacao-leitura";
+import { idNaRotaDaInstalacao, PROVEDOR_DA_CHAVE_DA_INSTALACAO } from "@/lib/ai/modelos-da-instalacao";
 import { audit } from "@/lib/audit";
 import type { McpAuthResult } from "@/lib/mcp/auth";
 import type { McpContext } from "@/lib/mcp/types";
@@ -160,17 +161,19 @@ function buildSentinelRegex(keywords: string[]): RegExp | null {
  * executa.
  */
 /**
- * A chave de plataforma do provedor — as mesmas variáveis que
- * `llmEdgeConfigFromEnv` lê no turno de produção. Google não tem: o runtime
+ * A chave de plataforma (da INSTALAÇÃO) para o provedor — a mesma que
+ * `llmEdgeConfigFromEnv` lê no turno de produção: `OPENROUTER_API_KEY`. Google não tem: o runtime
  * real também não tem ramo de fallback para ele, e prometer aqui um caminho que
  * lá não existe faria o ensaio passar e a mensagem real falhar.
  */
 export function chaveDePlataforma(provider: string): string | null {
-  const nome = { anthropic: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY", openrouter: "OPENROUTER_API_KEY" }[
-    provider
-  ];
-  if (!nome) return null;
-  const v = (process.env[nome] ?? "").trim();
+  // A chave da INSTALAÇÃO é uma só, a da OpenRouter, e serve aos três provedores que a instalação
+  // sabia atender (`anthropic`, `openai`, `openrouter`): decisão do dono, 20/10/2026. As chaves
+  // `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` do servidor NÃO entram — nunca direto, mesmo que estejam
+  // lá. Quem usa o resultado precisa chamar o provedor `openrouter` (`PROVEDOR_DA_CHAVE_DA_INSTALACAO`)
+  // com o id do modelo escrito para ele (`idNaRotaDaInstalacao`), e não o provedor pedido.
+  if (provider !== "anthropic" && provider !== "openai" && provider !== "openrouter") return null;
+  const v = (process.env.OPENROUTER_API_KEY ?? "").trim();
   return v === "" ? null : v;
 }
 
@@ -431,6 +434,9 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     let credentialBaseUrl: string | null = null;
     /** A chave é a da instalação (e não uma cadastrada pela empresa)? Decide o freio de modelo abaixo. */
     let chaveEhDaInstalacao = false;
+    // O provedor por onde a chamada sai: o da versão, salvo na chave da instalação, que sai SEMPRE
+    // pela OpenRouter (decisão do dono, 20/10/2026).
+    let provedorDaSaida = version.provider;
     if (version.credential_id) {
       try {
         const credential = await loadCredential(version.credential_id, run.organization_id);
@@ -452,6 +458,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       }
       credentialApiKey = daInstalacao;
       chaveEhDaInstalacao = true;
+      provedorDaSaida = PROVEDOR_DA_CHAVE_DA_INSTALACAO;
     }
 
     // Freio de custo: na chave da instalação só rodam os modelos de
@@ -461,8 +468,10 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       await modeloPermitidoNaChave({
         organizationId: run.organization_id,
         origemDaChave: chaveEhDaInstalacao ? "chave_da_instalacao" : "credencial_da_organizacao",
-        provedor: version.provider,
-        modelId: version.model,
+        provedor: provedorDaSaida,
+        // A OpenRouter só entende o id com fabricante: o nome puro do catálogo de um provedor
+        // direto ganha o prefixo do provedor da versão. BYOK passa intacto.
+        modelId: chaveEhDaInstalacao ? idNaRotaDaInstalacao(version.provider, version.model) : version.model,
         ponto: "agent_run",
       })
     ).modelId;
@@ -639,7 +648,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       : [];
 
     // 9) Build LM directly against the provider (BYOK credential — see buildModel doc).
-    const model = buildModel(version.provider, credentialApiKey, modeloEfetivo, credentialBaseUrl);
+    const model = buildModel(provedorDaSaida, credentialApiKey, modeloEfetivo, credentialBaseUrl);
 
     // 10) Cost/token guard. Fires BEFORE the next step is taken.
     let abortReason: string | null = null;
@@ -655,7 +664,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
         return true;
       }
       const cost = await computeCostCents({
-        provider: version.provider,
+        provider: provedorDaSaida,
         model: modeloEfetivo,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
@@ -699,7 +708,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     // 12) Aggregate metrics.
     const usage = totalUsage(result.steps as Array<{ usage?: { inputTokens?: number; outputTokens?: number } }>);
     const cost = await computeCostCents({
-      provider: version.provider,
+      provider: provedorDaSaida,
       model: modeloEfetivo,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,

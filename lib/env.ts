@@ -726,12 +726,21 @@ if (
 // uma chave que ela já tem — ou, pior, desistir do recurso. Então o aviso passou
 // a dizer só o que ESTE processo sabe: o que a variável é, e o que fazer se não
 // houver chave em lugar nenhum.
+if (!env.OPENROUTER_API_KEY) {
+  console.warn(
+    "[env] OPENROUTER_API_KEY ausente — ela é a chave da INSTALAÇÃO: toda chamada de IA que roda " +
+      "na chave da instalação (agente, classificadores, visão e preparo de material do acervo) sai " +
+      "SEMPRE por ela, nunca direto pela OpenAI nem pela Anthropic, mesmo " +
+      "que OPENAI_API_KEY/ANTHROPIC_API_KEY estejam aqui. Se alguma organização já cadastrou a " +
+      "própria chave em IA › Credenciais, ela segue funcionando por ela; se não cadastrou nenhuma, " +
+      "a IA fica parada até que alguém cadastre — pela tela ou aqui.",
+  );
+}
 if (!env.OPENAI_API_KEY) {
   console.warn(
-    "[env] OPENAI_API_KEY ausente — ela é o ÚLTIMO degrau da escada de chave da OpenAI " +
-      "(preparo de material do acervo e transcrição de áudio). Se alguma organização já " +
-      "cadastrou a chave em IA › Credenciais, os dois seguem funcionando por ela; se não " +
-      "cadastrou nenhuma, ambos ficam parados até que alguém cadastre — pela tela ou aqui.",
+    "[env] OPENAI_API_KEY ausente — a transcrição de áudio da instalação (Whisper) e a ligação por voz " +
+      "usam a chave da OpenAI direto, e o plano B dos embeddings também. Se alguma organização já " +
+      "cadastrou a chave OpenAI em IA › Credenciais, a transcrição segue por ela.",
   );
 }
 if (!env.IMPERSONATE_COOKIE_SECRET || env.IMPERSONATE_COOKIE_SECRET.length < 32) {
