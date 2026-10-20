@@ -21,7 +21,7 @@
  */
 import { execFileSync } from "node:child_process";
 
-import { test, expect, type Browser, type Page } from "./helpers/test";
+import { test, expect, esperarARevelacao, type Browser, type Page } from "./helpers/test";
 
 import { loginComoAdmin, lerCreds, type CredsE2E } from "./helpers/login-admin";
 
@@ -95,12 +95,18 @@ function agenteDeTeste(): string {
 /** Abre o agente semeado e vai para a aba do papel que organiza o sistema. */
 async function abrirAbaDoOperador(): Promise<void> {
   await pagina.goto(`/app/ai/agents/${agenteDeTeste()}`);
+  // Página criada à mão no beforeAll: o embrulho do `test` não a alcança, então a espera da revelação do
+  // streaming SSR (#1374) é explícita — senão há duas cópias da aba por instantes (strict mode).
+  await esperarARevelacao(pagina);
   await pagina.getByTestId("papel-operacao").click();
 }
 
 test.describe("A aba do papel que organiza o sistema", () => {
   test("os TRÊS papéis aparecem, e os nomes dizem o que cada um faz", async () => {
     await pagina.goto(`/app/ai/agents/${agenteDeTeste()}`);
+    // Página criada à mão no beforeAll: o embrulho do `test` não a alcança, então a espera da revelação do
+    // streaming SSR (#1374) é explícita — senão há duas cópias da aba por instantes (strict mode).
+    await esperarARevelacao(pagina);
 
     // Os rótulos são o contrato com quem configura. "Conversador"/"Operador" é
     // vocabulário nosso; quem tem uma clínica pensa em quem fala com o cliente
@@ -114,6 +120,9 @@ test.describe("A aba do papel que organiza o sistema", () => {
 
   test("o papel que confere mostra a lista inteira, aberta, e sem interruptor decorativo", async () => {
     await pagina.goto(`/app/ai/agents/${agenteDeTeste()}`);
+    // Página criada à mão no beforeAll: o embrulho do `test` não a alcança, então a espera da revelação do
+    // streaming SSR (#1374) é explícita — senão há duas cópias da aba por instantes (strict mode).
+    await esperarARevelacao(pagina);
     await pagina.getByTestId("papel-seguranca").click();
 
     const painel = pagina.getByTestId("painel-de-seguranca");
@@ -228,6 +237,9 @@ test.describe("A aba do papel que organiza o sistema", () => {
     // o Zod, o VERSION_COLUMNS e o SELECT que relê. É onde um campo que ninguém
     // propagou some em silêncio.
     await pagina.reload();
+    // Página criada à mão no beforeAll: o embrulho do `test` não a alcança, então a espera da revelação do
+    // streaming SSR (#1374) é explícita — senão há duas cópias da aba por instantes (strict mode).
+    await esperarARevelacao(pagina);
     await pagina.getByTestId("papel-operacao").click();
 
     await expect(
@@ -250,6 +262,12 @@ test.describe("A aba do papel que organiza o sistema", () => {
     await expect(pagina.getByText(/rascunho v\d+ salvo/i)).toBeVisible({ timeout: 20_000 });
 
     await pagina.reload();
+
+    // Página criada à mão no beforeAll: o embrulho do `test` não a alcança, então a espera da revelação do
+
+    // streaming SSR (#1374) é explícita — senão há duas cópias da aba por instantes (strict mode).
+
+    await esperarARevelacao(pagina);
     await pagina.getByTestId("papel-operacao").click();
     // `operator_model` NULL = herda o do Conversador. Se o refresh trouxesse
     // uma string vazia virando "modelo escolhido", o botão apareceria — e o
