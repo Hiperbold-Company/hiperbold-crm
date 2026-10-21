@@ -112,7 +112,7 @@ const sidebar = (page: Page) => page.getByRole("navigation", { name: "Navegaçã
 async function irParaFunis(page: Page): Promise<void> {
   await sidebar(page).getByRole("link", { name: "Pipeline", exact: true }).click();
   await page.waitForURL(/\/app\/kanban/);
-  await expect(page.getByRole("heading", { name: "Funis", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pipeline", level: 1 })).toBeVisible();
 }
 
 /** A linha do funil VIVO, pelo nome — o mesmo locator de `pipelines-gestao`. */
