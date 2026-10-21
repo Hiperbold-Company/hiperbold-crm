@@ -22,7 +22,9 @@
  * era: o token tem o próprio teto (`role:<papel>` + escopo) e não é uma pessoa
  * com perfil na organização.
  */
-import { fail } from "@/lib/api/wrappers";
+import type { NextResponse } from "next/server";
+
+import { fail, type ApiError } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole, type RoleCheck } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -46,9 +48,24 @@ export async function exigirPermissao(
 ): Promise<RoleCheck> {
   const authz = await requireRole(pisoDaPermissao(chave), opts);
   if (!authz.ok) return authz;
+  const recusa = conferirPermissao(authz, chave, opts);
+  return recusa ? { ok: false, response: recusa } : authz;
+}
 
+/**
+ * A segunda metade de `exigirPermissao`, para a rota que JÁ passou pelo
+ * `requireRole` e só descobre depois de ler o corpo se a capacidade entra em
+ * jogo (ex.: `POST /api/v1/leads/bulk` com `action: "move"`). O papel tem de
+ * estar acima do piso da chave — quem chama garante, como em `requireRole`.
+ * Devolve a resposta de recusa, ou `null` quando pode.
+ */
+export function conferirPermissao(
+  authz: Extract<RoleCheck, { ok: true }>,
+  chave: ChaveDePermissao,
+  opts: OpcoesDaPermissao = {},
+): NextResponse<ApiError> | null {
   const { org, user } = authz;
-  if (papelPode(org.role, chave, org.permissoes)) return authz;
+  if (papelPode(org.role, chave, org.permissoes)) return null;
 
   // Fire-and-forget, como em `requireRole`: falha de audit alerta, não bloqueia o 403.
   void audit({
@@ -59,11 +76,8 @@ export async function exigirPermissao(
     requestId: opts.requestId,
     metadata: { reason: "permission", permission: chave, effective_role: org.role },
   });
-  return {
-    ok: false,
-    response: fail("forbidden_permission", traduzir(MENSAGEM_SEM_PERMISSAO, user.idioma), 403, {
-      requestId: opts.requestId,
-      details: { permission: chave, rotulo: capacidade(chave).rotulo },
-    }),
-  };
+  return fail("forbidden_permission", traduzir(MENSAGEM_SEM_PERMISSAO, user.idioma), 403, {
+    requestId: opts.requestId,
+    details: { permission: chave, rotulo: capacidade(chave).rotulo },
+  });
 }

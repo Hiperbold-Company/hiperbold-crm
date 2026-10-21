@@ -34,6 +34,7 @@ import { podeCriar } from "@/lib/billing/planos/pode-criar";
 import { bloqueioValeParaOrganizacao } from "@/lib/billing/planos/bloqueio-vale";
 import { STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import { requireRole } from "@/lib/auth/require-role";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { recusarEscritaEmModoLeitura } from "@/lib/billing/assinatura/recusa-de-escrita";
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { CSV_MAX_BYTES, CSV_MAX_DATA_ROWS, decodificarCsv } from "@/lib/contacts/csv";
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const requestId = randomUUID();
   // Mesma régua do POST unitário de lead: escrita é `agent` para cima.
-  const authz = await requireRole("agent", { requestId, resource: "crm_leads" });
+  const authz = await exigirPermissao("contatos.importar", { requestId, resource: "crm_leads" });
   if (!authz.ok) return authz.response;
   const orgId = authz.org.orgId;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);

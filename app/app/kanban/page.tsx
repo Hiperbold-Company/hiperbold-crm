@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 
 import { Kanban } from "@/lib/ui/icons";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
-import { ROLE_RANK } from "@/lib/auth/types";
 import { papelPode } from "@/lib/permissoes/resolver";
 import {
   bloqueioDoBotao,
@@ -70,7 +69,8 @@ export default async function KanbanPickerPage() {
   const arquivados = podeGerenciar ? todos.filter((f) => f.is_archived) : [];
   // Importar planilha é ESCRITA DE OPERAÇÃO, não configuração: quem atende
   // sobe a lista que recebeu. Espelha o `requireRole("agent")` da rota.
-  const podeImportar = ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent;
+  // Permissões por perfil: a mesma chave de `POST /api/v1/leads/import`.
+  const podeImportar = papelPode(activeOrg.role, "contatos.importar", activeOrg.permissoes);
   const idioma = user.idioma;
   const t = (texto: string) => traduzir(texto, idioma);
 

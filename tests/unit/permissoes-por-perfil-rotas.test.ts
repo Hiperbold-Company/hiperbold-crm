@@ -226,7 +226,7 @@ describe("POST /api/v1/leads/[id]/move (negocios.mover) — caminho de sessão",
   it("padrão: atendente passa do portão (o corpo vazio cai na validação, não no 403)", async () => {
     sessao("agent");
     const res = await mover();
-    expect(res.status).not.toBe(403);
+    expect(res.status).toBe(422);
     expect(vi.mocked(requireRole).mock.calls[0]?.[0]).toBe("agent");
   });
 
@@ -236,6 +236,6 @@ describe("POST /api/v1/leads/[id]/move (negocios.mover) — caminho de sessão",
     expect(res.status).toBe(403);
     expect(await codigo(res)).toBe("forbidden_permission");
     sessao("manager", { "negocios.mover": ["manager"] });
-    expect((await mover()).status).not.toBe(403);
+    expect((await mover()).status).toBe(422);
   });
 });

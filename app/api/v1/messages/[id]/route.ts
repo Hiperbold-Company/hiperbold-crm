@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import {
   CHANNEL_SESSION_REF_COLUMNS,
@@ -26,7 +26,7 @@ const JANELA_EDICAO_MS = 15 * 60 * 1000;
 
 async function alterar(req: NextRequest, ctx: Ctx, acao: "edit" | "revoke"): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("agent", { requestId, resource: "messages" });
+  const authz = await exigirPermissao("chat.responder", { requestId, resource: "messages" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const { id } = await ctx.params;

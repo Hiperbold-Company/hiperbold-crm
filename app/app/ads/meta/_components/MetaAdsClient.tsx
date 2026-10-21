@@ -51,6 +51,7 @@ const MENSAGEM_POR_CODIGO: Record<string, string> = {
     "A chave de criptografia da instalação não está disponível, então o token guardado não pode ser lido. Isso é configuração do servidor.",
   upstream_unavailable: "Não consegui falar com a plataforma agora. Tente atualizar em instantes.",
   forbidden_role: "Seu papel não permite ver os dados de anúncios.",
+  forbidden_permission: "Seu perfil não tem permissão para isso. Fale com o administrador.",
 };
 
 /**

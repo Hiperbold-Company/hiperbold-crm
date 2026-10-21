@@ -45,6 +45,12 @@ const COPY: Record<string, { variant: Variant; msg?: string }> = {
     variant: "warning",
     msg: "Você não tem permissão para esta ação.",
   },
+  // Permissões por perfil (`lib/permissoes`): o papel alcança, mas a organização
+  // tirou esta capacidade dele.
+  forbidden_permission: {
+    variant: "warning",
+    msg: "Seu perfil não tem permissão para isso. Fale com o administrador.",
+  },
   resource_not_found: {
     variant: "error",
     msg: "Recurso não encontrado ou já removido.",

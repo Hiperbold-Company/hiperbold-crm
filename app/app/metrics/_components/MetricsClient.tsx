@@ -95,7 +95,7 @@ export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentU
 
       {/* Relatório "Perdas" (#1537): manager+, porque é o funil inteiro — o
           mesmo critério do /metrics para quem compara. */}
-      {podeVerPerdas ? <PerdasPanel /> : null}
+      {podeVerPerdas ? <PerdasPanel avisoDaEmpresaToda={!canCompare} /> : null}
 
       {/* Previsão ponderada do funil (issue #1535): por mês × moeda, com os
           baldes "sem data" e "sem probabilidade" à parte. Depois do atrito de

@@ -31,7 +31,7 @@ import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import type { Actor } from "@/lib/api/handlers/types";
 import { fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
-import type { Role } from "@/lib/auth/types";
+import { ROLE_RANK, type Role } from "@/lib/auth/types";
 import type { Idioma } from "@/lib/i18n/idiomas";
 import {
   McpAuthError,
@@ -41,7 +41,7 @@ import {
   validateBearerToken,
 } from "@/lib/mcp/auth";
 import { exigirVisibilidadeDoToken } from "@/lib/mcp/visibilidade-do-token";
-import type { ChaveDePermissao } from "@/lib/permissoes/catalogo";
+import { pisoDaPermissao, type ChaveDePermissao } from "@/lib/permissoes/catalogo";
 import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { JANELA_SEGUNDOS, TETO_DE_ESCRITA, TETO_POR_ORGANIZACAO } from "@/lib/mcp/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -118,6 +118,15 @@ export async function resolveAuthDual(
   req: NextRequest,
   { requestId, resource, role, scope, tokenRole, comDono, permissao }: AuthDualOptions,
 ): Promise<AuthDual> {
+  // `role` é o piso do TOKEN e era o da sessão; com `permissao`, o da sessão
+  // passa a ser o piso da chave. Uma rota que declarasse `role` ACIMA desse piso
+  // rebaixaria a sessão sem ninguém perceber — em dev e teste isso explode na
+  // primeira chamada; em produção o portão segue (nunca 500 por configuração).
+  if (permissao && process.env.NODE_ENV !== "production" && ROLE_RANK[role] > ROLE_RANK[pisoDaPermissao(permissao)]) {
+    throw new Error(
+      `[auth-dual] role "${role}" acima do piso de "${permissao}" (${pisoDaPermissao(permissao)}): a sessão seria rebaixada.`,
+    );
+  }
   const authHeader = req.headers.get("authorization");
 
   if (extractBearer(authHeader)) {

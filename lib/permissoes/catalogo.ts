@@ -83,11 +83,12 @@ export const CAPACIDADES = [
     liberavel: ["manager"],
   },
   {
-    // POST /api/v1/contacts/import — insert em contacts é `agent` na RLS.
+    // POST /api/v1/contacts/import e POST /api/v1/leads/import — insert em
+    // contacts e crm_leads é `agent` na RLS.
     chave: "contatos.importar",
     categoria: "Contatos",
-    rotulo: "Importar contatos de planilha",
-    descricao: "Subir uma planilha para criar contatos de uma vez.",
+    rotulo: "Importar planilhas de contatos e de negócios",
+    descricao: "Subir uma planilha para criar contatos ou negócios de uma vez.",
     padrao: ["manager", "agent"],
     liberavel: ["manager", "agent"],
   },

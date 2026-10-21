@@ -302,6 +302,20 @@ describe("salvarPermissoesPorPerfil", () => {
     expect(chamadas.find((c) => c.rpc)?.args?.p_valor).toBeNull();
   });
 
+  it("o mapa INTEIRO igual ao padrão (o que a tela manda depois de Restaurar) também grava null", async () => {
+    const { salvarPermissoesPorPerfil } =
+      await import("@/app/actions/settings/salvarPermissoesPorPerfil");
+    const r = await salvarPermissoesPorPerfil(permissoesPadrao());
+    expect(r.ok).toBe(true);
+    expect(chamadas.find((c) => c.rpc)?.args?.p_valor).toBeNull();
+    expect(auditSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "org.permissions_updated",
+        metadata: expect.objectContaining({ gravado: null }),
+      }),
+    );
+  });
+
   it("organization_id no corpo não muda o alvo: o corpo nem é aceito com ele", async () => {
     const { salvarPermissoesPorPerfil } =
       await import("@/app/actions/settings/salvarPermissoesPorPerfil");
