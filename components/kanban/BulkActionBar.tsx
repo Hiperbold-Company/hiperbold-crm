@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useActiveOrg, useUser } from "@/hooks/auth/AuthProvider";
+import { useActiveOrg, usePermission, useUser } from "@/hooks/auth/AuthProvider";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { useBulkAction } from "@/hooks/kanban/useBulkAction";
@@ -64,6 +64,8 @@ export function BulkActionBar({
   const activeOrg = useActiveOrg();
   const vocab = resolveVocabulary(vocabulary);
   const bulk = useBulkAction(pipelineId);
+  // "Mover para…" muda a etapa: é a permissão `negocios.mover` (a rota recusa sem ela).
+  const podeMover = usePermission("negocios.mover");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [tagInput, setTagInput] = useState("");
 
@@ -172,22 +174,24 @@ export function BulkActionBar({
       >
         <span className="text-sm font-medium">{rotuloDaContagem}</span>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="outline" disabled={bulk.isPending}>
-              {t("Mover para…")}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuLabel>{t("Etapa")}</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {stages.map((s) => (
-              <DropdownMenuItem key={s.id} onClick={() => runMove(s.id)}>
-                {s.name}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {podeMover && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" disabled={bulk.isPending}>
+                {t("Mover para…")}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuLabel>{t("Etapa")}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {stages.map((s) => (
+                <DropdownMenuItem key={s.id} onClick={() => runMove(s.id)}>
+                  {s.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         {/* Extraído do PR #418 (@clinicacentrodosorrisosc-code): a lista de
             atendentes. Antes só dava para atribuir a SI MESMO, e "redistribuir

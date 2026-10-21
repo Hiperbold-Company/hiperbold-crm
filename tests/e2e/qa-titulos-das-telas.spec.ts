@@ -34,10 +34,10 @@ test.describe.configure({ timeout: 180_000 });
 const FRASE_DA_LANDING = "atendimento e vendas por WhatsApp com agentes de IA";
 
 const TELAS: ReadonlyArray<readonly [string, string]> = [
-  ["/app/inbox", "Inbox"],
+  ["/app/inbox", "Chat"],
   ["/app/crm", "CRM"],
   ["/app/contacts", "Contatos"],
-  ["/app/kanban", "Funis"],
+  ["/app/kanban", "Pipeline"],
   ["/app/team", "Equipe"],
   ["/app/tasks", "Tarefas"],
   ["/app/activities", "Atividades"],

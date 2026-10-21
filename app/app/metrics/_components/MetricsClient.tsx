@@ -42,10 +42,12 @@ function attendantLabel(a: AttendantMetric, t: (texto: string) => string): strin
 
 interface Props {
   canCompare: boolean;
+  /** Permissões por perfil (`relatorios.perdas`). Ausente = o de antes (`canCompare`). */
+  podeVerPerdas?: boolean;
   currentUserId: string;
 }
 
-export function MetricsClient({ canCompare, currentUserId }: Props) {
+export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentUserId }: Props) {
   const t = useT();
   const [owner, setOwner] = useState<string>(ALL);
   const selectedOwner = owner === ALL ? null : owner;
@@ -93,7 +95,7 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
 
       {/* Relatório "Perdas" (#1537): manager+, porque é o funil inteiro — o
           mesmo critério do /metrics para quem compara. */}
-      {canCompare ? <PerdasPanel /> : null}
+      {podeVerPerdas ? <PerdasPanel avisoDaEmpresaToda={!canCompare} /> : null}
 
       {/* Previsão ponderada do funil (issue #1535): por mês × moeda, com os
           baldes "sem data" e "sem probabilidade" à parte. Depois do atrito de

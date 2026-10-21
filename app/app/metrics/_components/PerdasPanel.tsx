@@ -9,8 +9,8 @@
  * apresenta — reimplementar a soma aqui faria a tela e o teste dizerem coisas
  * diferentes.
  *
- * Só manager+ (a rota é manager+): é o funil inteiro, não o pedaço de quem
- * olha.
+ * Padrão manager+ (Permissões por perfil, `relatorios.perdas`, pode liberar ao
+ * atendente): é o funil inteiro, não o pedaço de quem olha.
  */
 import { useT } from "@/hooks/i18n/useT";
 import { rotuloDoMotivoDePerda } from "@/lib/schemas/leads";
@@ -77,7 +77,17 @@ function Bloco({
   );
 }
 
-export function PerdasPanel() {
+export function PerdasPanel({
+  avisoDaEmpresaToda = false,
+}: {
+  /**
+   * Quem vê não é gerente nem administrador (o painel chegou por
+   * Permissões por perfil). A rota lê o funil INTEIRO, não o recorte de
+   * negócios que a pessoa enxerga — sem a linha, um atendente leria a perda da
+   * empresa como se fosse a dele.
+   */
+  avisoDaEmpresaToda?: boolean;
+} = {}) {
   const t = useT();
   const { data, isLoading, isError } = usePerdasMetrics();
   if (isLoading) return <p className="text-sm text-muted-foreground">{t("Carregando…")}</p>;
@@ -94,6 +104,11 @@ export function PerdasPanel() {
           {t("Por motivo, categoria e etapa de saída — quantidade e valor por moeda.")}
           {relatorio.truncado ? ` ${t("Cortado no limite de leitura.")}` : ""}
         </p>
+        {avisoDaEmpresaToda ? (
+          <p className="text-xs text-muted-foreground" data-testid="perdas-empresa-toda">
+            {t("Números da empresa toda — não dependem de quais negócios você vê.")}
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent className="grid gap-6 md:grid-cols-3">
         <Bloco

@@ -101,6 +101,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     resource: "crm_stages",
     role: "manager",
     escrita: true,
+    permissao: "funis.editar",
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);

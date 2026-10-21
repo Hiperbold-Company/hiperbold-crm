@@ -1126,6 +1126,7 @@ jobs:
         jev-decisoes-rapidas.spec.ts
         jev-roteador.spec.ts
         buffer-ssr-caixa-orfa.spec.ts
+        permissoes-por-perfil.spec.ts
 
       # ─── FORA_DO_CI — as que ficaram fora, e o motivo de cada uma ───
       #

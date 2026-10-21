@@ -52,6 +52,8 @@ export function KanbanCardActions({ lead, pipelineId }: KanbanCardActionsProps) 
   // spec 13 §4: escrita no funil é agent+ — viewer não reatribui (a rota
   // PATCH também recusa; aqui é só não oferecer o que seria negado).
   const canAssign = usePermission("pipeline.move_card");
+  // Ganhar e perder movem o negócio de etapa: permissão por perfil `negocios.mover`.
+  const podeMover = usePermission("negocios.mover");
   const { data: members } = useAssignableMembers(canAssign);
   // A rota já devolve só agente ativo e não arquivado — é o picker.
   const { data: agents } = useAssignableAgents(canAssign);
@@ -161,21 +163,25 @@ export function KanbanCardActions({ lead, pipelineId }: KanbanCardActionsProps) 
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           )}
-          <DropdownMenuItem
-            disabled={winMutation.isPending}
-            onSelect={() => {
-              winMutation.mutate({ leadId: lead.id });
-            }}
-          >
-            {t("Marcar como ganho")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              setLoseOpen(true);
-            }}
-          >
-            {t("Marcar como perdido")}
-          </DropdownMenuItem>
+          {podeMover && (
+            <>
+              <DropdownMenuItem
+                disabled={winMutation.isPending}
+                onSelect={() => {
+                  winMutation.mutate({ leadId: lead.id });
+                }}
+              >
+                {t("Marcar como ganho")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  setLoseOpen(true);
+                }}
+              >
+                {t("Marcar como perdido")}
+              </DropdownMenuItem>
+            </>
+          )}
           {/*
             `canAssign` já É `usePermission("pipeline.move_card")` — a MESMA
             permissão que `POST /api/v1/leads/[id]/clone` exige no servidor

@@ -1,6 +1,7 @@
 import type { InterfaceSettings } from "@/lib/navigation/interface";
 import type { Idioma } from "@/lib/i18n/idiomas";
 import type { ModuloOpcional } from "@/lib/instalacao/modulos";
+import type { PermissoesResolvidas } from "@/lib/permissoes/resolver";
 
 /**
  * Papéis dentro do tenant.
@@ -104,6 +105,12 @@ export interface UserOrgMembership {
    * então quem usa passa por `fusoValido` e cai em `FUSO_PADRAO`.
    */
   timezone?: string | null;
+  /**
+   * Permissões por perfil da organização (`settings.permissoes`), JÁ resolvidas
+   * por `resolverPermissoes` — nunca o jsonb cru. Vem no mesmo embed que traz
+   * nome e idioma, sem consulta a mais. Ausente = padrão do catálogo.
+   */
+  permissoes?: PermissoesResolvidas;
 }
 
 export interface AuthUser {
@@ -178,6 +185,12 @@ export interface ActiveOrg {
   status?: string | null;
   /** Fuso IANA da organização — ver `UserOrgMembership.timezone`. */
   timezone?: string | null;
+  /**
+   * Permissões por perfil da organização, resolvidas (`lib/permissoes`).
+   * Ausente = padrão do catálogo (sessão de suporte, snapshot sem o campo).
+   * É o que `usePermission` e `exigirPermissao` consultam.
+   */
+  permissoes?: PermissoesResolvidas;
   name: string;
   role: Role;
   /**

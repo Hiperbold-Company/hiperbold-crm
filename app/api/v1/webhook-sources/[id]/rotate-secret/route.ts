@@ -41,6 +41,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     resource: "webhook_sources",
     role: "manager",
     escrita: true,
+    permissao: "automacoes.gerenciar",
   });
   if (!authz.ok) return authz.response;
 

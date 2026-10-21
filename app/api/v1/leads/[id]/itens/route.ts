@@ -26,6 +26,7 @@ import { type NextRequest } from "next/server";
 import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { precoDoCatalogoParaValorDoNegocio } from "@/lib/money";
 import { requireSupportWrite } from "@/lib/impersonate/support";
@@ -76,7 +77,7 @@ export async function POST(
 
   const requestId = randomUUID();
   const { id: leadId } = await ctx.params;
-  const authz = await requireRole("agent", { requestId, resource: "crm_lead_itens" });
+  const authz = await exigirPermissao("negocios.registrar", { requestId, resource: "crm_lead_itens" });
   if (!authz.ok) return authz.response;
   const { user, org } = authz;
   const t = (texto: string) => traduzir(texto, user.idioma ?? "pt-BR");

@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TeamMembersClient } from "./_components/TeamMembersClient";
 import { TeamInvitesClient } from "./_components/TeamInvitesClient";
 import { AttendantsClient } from "./_components/AttendantsClient";
+import { PermissoesPorPerfilClient } from "./_components/PermissoesPorPerfilClient";
 import { fusoUtilizavel } from "@/lib/tempo/fusos";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export const metadata: Metadata = { title: "Equipe" };
  * `aba` em português porque é o que aparece na barra de endereço de quem usa o
  * produto; os valores internos das abas seguem os do componente.
  */
-const ABAS: Record<string, string> = { membros: "members", atendimento: "attendants" };
+const ABAS: Record<string, string> = { membros: "members", atendimento: "attendants", permissoes: "permissions" };
 
 export default async function TeamPage({
   searchParams,
@@ -62,10 +63,13 @@ export default async function TeamPage({
         ) : null}
       </header>
 
-      <Tabs defaultValue={abaInicial} className="flex flex-1 flex-col">
+      <Tabs defaultValue={abaInicial === "permissions" && !isManager ? "members" : abaInicial} className="flex flex-1 flex-col">
         <TabsList>
           <TabsTrigger value="members">{t("Membros")}</TabsTrigger>
           <TabsTrigger value="attendants">{t("Atendimento")}</TabsTrigger>
+          {/* Permissões por perfil: gerente vê em modo leitura (sabe o que pode),
+              só o administrador edita — a action confere de novo. */}
+          {isManager ? <TabsTrigger value="permissions">{t("Permissões")}</TabsTrigger> : null}
         </TabsList>
         <TabsContent value="members" className="mt-4 flex flex-col gap-8">
           <TeamMembersClient currentUserId={user.id} canManage={isAdmin} />
@@ -100,6 +104,11 @@ export default async function TeamPage({
             </p>
           )}
         </TabsContent>
+        {isManager ? (
+          <TabsContent value="permissions" className="mt-4">
+            <PermissoesPorPerfilClient podeEditar={isAdmin} />
+          </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   );

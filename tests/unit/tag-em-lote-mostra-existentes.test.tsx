@@ -21,6 +21,7 @@ vi.mock("@/hooks/kanban/useBulkAction", () => ({
   useBulkAction: () => ({ mutate, isPending: false }),
 }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
+  usePermission: () => true,
   useUser: () => ({ id: "u-1" }),
   useActiveOrg: () => ({ orgId: "org-1", role: "agent" }),
 }));

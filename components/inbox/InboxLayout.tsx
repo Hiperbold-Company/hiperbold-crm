@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useAuth } from "@/hooks/auth/AuthProvider";
+import { useAuth, usePermission } from "@/hooks/auth/AuthProvider";
 import { fonteDeTemplates } from "@/lib/channels/templates-fonte";
 import { estadoDaJanela, formatarDecorrido } from "@/lib/channels/janela";
 import { JanelaFechadaAviso } from "@/components/inbox/JanelaFechadaAviso";
@@ -376,6 +376,15 @@ export function InboxLayout({
         : `${t("A janela de 24h fechou há")} ${formatarDecorrido(janela.fechadaHaMs)}. ${t("Só um modelo aprovado sai daqui — texto livre é recusado pela plataforma.")}`
       : null;
 
+  // Permissões por perfil (`chat.responder`, padrão atendente+): quem não pode
+  // responder continua lendo e anotando — barra só a RESPOSTA, pelo mesmo
+  // caminho da janela fechada, que deixa a nota interna livre. A rota
+  // (`POST /api/v1/messages`) é quem barra de verdade.
+  const podeResponder = usePermission("chat.responder");
+  const semPermissaoDeResponder = podeResponder
+    ? null
+    : t("Seu perfil não responde conversas nesta organização. Notas internas continuam liberadas.");
+
   const blockedReason = selectedConversation?.contacts?.is_blocked
     ? t("Contato bloqueado — envio de mensagens desabilitado.")
     : selectedConversation?.contacts?.is_anonymized
@@ -603,6 +612,14 @@ export function InboxLayout({
                 onAbrirConversa={handleSelect}
               />
             )}
+            {semPermissaoDeResponder && (
+              <p
+                data-testid="aviso-sem-permissao-de-responder"
+                className="border-t border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground"
+              >
+                {semPermissaoDeResponder}
+              </p>
+            )}
             {motivoDaJanela && (
               <JanelaFechadaAviso
                 conversationId={selectedConversation.id}
@@ -618,7 +635,7 @@ export function InboxLayout({
               ref={composerRef}
               conversationId={selectedConversation.id}
               blockedReason={supportReadonly ? "Acompanhamento somente leitura" : blockedReason}
-              janelaFechada={motivoDaJanela}
+              janelaFechada={motivoDaJanela ?? semPermissaoDeResponder}
               disabled={selectedConversation.status === "closed"}
               contactName={selectedConversation.contacts?.name ?? null}
               respondendo={respondendo}

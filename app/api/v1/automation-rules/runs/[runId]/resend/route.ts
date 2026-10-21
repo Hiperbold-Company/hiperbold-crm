@@ -10,7 +10,7 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildContext } from "@/lib/automation/engine";
@@ -38,7 +38,7 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
 
   const requestId = randomUUID();
   const { runId } = await ctx.params;
-  const authz = await requireRole("manager", { requestId, resource: "automation_rules" });
+  const authz = await exigirPermissao("automacoes.gerenciar", { requestId, resource: "automation_rules" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const { user, org: activeOrg } = authz;

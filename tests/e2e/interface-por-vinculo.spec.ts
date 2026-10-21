@@ -118,7 +118,7 @@ test("interface por membro atualiza ao vivo, preserva formulário e convite apli
     await expect(member.getByRole("heading", { name: /Radar/ }).first()).toBeVisible();
     await member.goto("/app/settings/profile");
     await customize(page, emails[1]!, "Produtos");
-    await expect(nav(member).getByRole("link", { name: "Inbox", exact: true })).toHaveCount(0);
+    await expect(nav(member).getByRole("link", { name: "Chat", exact: true })).toHaveCount(0);
     await member.goto("/app");
     await member.waitForURL("**/app/products");
     await nav(member).getByRole("link", { name: "Ver tudo em CRM" }).click();
@@ -126,7 +126,7 @@ test("interface por membro atualiza ao vivo, preserva formulário e convite apli
     await expect(member.getByRole("link", { name: /Contatos/ })).toHaveCount(0);
     await member.keyboard.press("ControlOrMeta+k");
     await expect(member.getByRole("option").filter({ hasText: "Produtos" })).toBeVisible();
-    await expect(member.getByRole("option").filter({ hasText: "Inbox" })).toHaveCount(0);
+    await expect(member.getByRole("option").filter({ hasText: "Chat" })).toHaveCount(0);
     await member.keyboard.press("Escape");
     mkdirSync(evidence, { recursive: true });
     await member.screenshot({ path: `${evidence}/interface-hub-only.png` });
@@ -154,7 +154,7 @@ test("interface por membro atualiza ao vivo, preserva formulário e convite apli
     await guest.goto(link);
     await guest.getByRole("button", { name: /aceitar/i }).click();
     await guest.waitForURL("**/app/tasks");
-    await expect(nav(guest).getByRole("link", { name: "Inbox", exact: true })).toHaveCount(0);
+    await expect(nav(guest).getByRole("link", { name: "Chat", exact: true })).toHaveCount(0);
     // Tarefas não está no menu lateral (só o essencial, desde 15/10/2026): o convidado
     // chega nela pelo "Ver tudo em CRM", e a tela abre direto no aceite.
     await expect(nav(guest).getByRole("link", { name: "Tarefas", exact: true })).toHaveCount(0);

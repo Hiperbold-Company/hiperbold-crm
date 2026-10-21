@@ -17,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { empresaExigeMfa, exigeCadastroDeMfa } from "@/lib/auth/politica-mfa";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
 import { emailVerificado } from "@/lib/auth/verificacao-email";
+import { resolverPermissoes } from "@/lib/permissoes/resolver";
 import type { AuthUser, Role, UserOrgMembership, ActiveOrg } from "./types";
 
 const ACTIVE_ORG_COOKIE = "active_org";
@@ -43,6 +44,8 @@ interface OrgJoin {
   locale: string | null;
   timezone: string | null;
   status?: string | null;
+  /** `settings->permissoes` — só esta chave do jsonb, nunca `settings` inteiro. */
+  permissoes?: unknown;
 }
 
 /** O mesmo `organizations`, alcançado por outro embed: só as portas da EMPRESA. */
@@ -189,7 +192,7 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
           // issue #1341 acabou de engordar), e o alias traz só as portas da EMPRESA.
           // `timezone` veio do main (fuso da organização nas listas, #1290) e convive
           // com o alias: um embed por relação, sem renomear o que já existia.
-          "organization_id, role, interface_settings, accepted_at, organizations(display_name, locale, timezone, status), interface_da_empresa:organizations(interface_settings)",
+          "organization_id, role, interface_settings, accepted_at, organizations(display_name, locale, timezone, status, permissoes:settings->permissoes), interface_da_empresa:organizations(interface_settings)",
         )
         .eq("user_id", user.id)
         .is("revoked_at", null)
@@ -246,6 +249,9 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
       locale: org?.locale ?? null,
       timezone: org?.timezone ?? null,
       organization_status: org?.status ?? null,
+      // Permissões por perfil: resolvidas AQUI, uma vez, pelo resolvedor que
+      // nunca lança — valor estragado no banco vira o padrão do catálogo.
+      permissoes: resolverPermissoes(org?.permissoes),
     };
   });
 
@@ -304,6 +310,7 @@ export const resolveActiveOrg = cache(async (authUser: AuthUser): Promise<Active
     status: ativo.organization_status ?? null,
     interface_settings: ativo.interface_settings,
     timezone: ativo.timezone ?? null,
+    permissoes: ativo.permissoes,
   };
 });
 

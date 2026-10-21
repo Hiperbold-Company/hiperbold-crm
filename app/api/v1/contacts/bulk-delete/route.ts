@@ -28,7 +28,7 @@ import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { resolverAlvoDeLote } from "@/lib/contacts/alvo-de-lote";
 import { excluirContatosEmLote } from "@/lib/contacts/excluir-em-lote";
 import { resumoDoFiltroParaAuditoria } from "@/lib/contacts/filtros";
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "contacts" });
+  const authz = await exigirPermissao("contatos.excluir_em_lote", { requestId, resource: "contacts" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const organizationId = authz.org.orgId;

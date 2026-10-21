@@ -33,6 +33,9 @@ export const ApiErrorCodes = {
   forbidden: "forbidden",
   forbidden_role: "forbidden_role",
   forbidden_tenant: "forbidden_tenant",
+  // Permissões por perfil (`lib/permissoes`): o papel alcança o piso, mas a
+  // organização tirou esta capacidade dele.
+  forbidden_permission: "forbidden_permission",
   lgpd_anonymization_irreversible: "lgpd_anonymization_irreversible",
 
   // 404

@@ -155,7 +155,7 @@ describe("os elos que somem sem barulho", () => {
     // Por prop PRÓPRIA, não por `blockedReason`: a primeira versão passava por
     // ali e levava a nota interna junto, que nunca chega ao cliente.
     expect(fonte, "o motivo da janela não chega ao composer").toMatch(
-      /janelaFechada=\{motivoDaJanela\}/,
+      /janelaFechada=\{motivoDaJanela(?: \?\? semPermissaoDeResponder)?\}/,
     );
   });
 

@@ -563,7 +563,7 @@ test.describe("J1 — onboarding do dono numa instalação fresca", () => {
     await expect(page.getByText("Desativada", { exact: true })).toHaveCount(0);
     // e a pessoa não ficou presa: o shell do app respondeu ao reload (se a
     // sessão tivesse caído no enroll, aqui seria a tela de login).
-    await expect(page.getByRole("link", { name: "Inbox", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Chat", exact: true })).toBeVisible();
     await snap(page, "j1.10-verificacao-ativada");
   });
 

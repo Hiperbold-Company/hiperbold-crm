@@ -17,7 +17,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { requireRole } from "@/lib/auth/require-role";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { listarContas } from "@/lib/plataformas-de-anuncio/meta/insights";
 import { lerCredencialDeLeitura } from "@/lib/plataformas-de-anuncio/credenciais-de-leitura";
 import { ok } from "@/lib/api/wrappers";
@@ -30,7 +30,7 @@ export const dynamic = "force-dynamic";
 export async function GET(): Promise<Response> {
   const requestId = randomUUID();
 
-  const authz = await requireRole("manager", { requestId, resource: "ads_insights" });
+  const authz = await exigirPermissao("relatorios.anuncios", { requestId, resource: "ads_insights" });
   if (!authz.ok) return authz.response;
   const { org } = authz;
 

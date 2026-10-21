@@ -82,6 +82,13 @@ export const AUDIT_ACTIONS = [
    * o valor de agora e a escolha anterior não se reconstrói.
    */
   "org.interface_changed",
+  /**
+   * O administrador mudou as PERMISSÕES POR PERFIL (`settings.permissoes`,
+   * `lib/permissoes`). Metadata com antes e depois: a coluna guarda só o valor
+   * de agora, e "quem liberou a exportação para o atendente, e quando" só tem
+   * resposta aqui.
+   */
+  "org.permissions_updated",
   "member.accepted",
   "member.role_changed",
   "member.revoked",

@@ -25,6 +25,7 @@ import { z } from "zod";
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { LEAD_STAGES, type LeadStage } from "@/lib/agent-engine/agent/lead-state";
 import {
   diffParaUpdates,
@@ -179,7 +180,7 @@ export async function PUT(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "pipeline_agent_mapping" });
+  const authz = await exigirPermissao("funis.editar", { requestId, resource: "pipeline_agent_mapping" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const orgId = authz.org.orgId;

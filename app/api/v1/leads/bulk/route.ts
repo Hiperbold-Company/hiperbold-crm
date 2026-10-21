@@ -18,6 +18,7 @@ import { podeCriar } from "@/lib/billing/planos/pode-criar";
 import { bloqueioValeParaOrganizacao } from "@/lib/billing/planos/bloqueio-vale";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import { requireRole } from "@/lib/auth/require-role";
+import { conferirPermissao } from "@/lib/permissoes/servidor";
 import { RECUSA_DE_TROCA_DE_FUNIL } from "@/lib/leads/clonar-para-funil";
 import { resolveOwnerPatch } from "@/lib/leads/owner-patch";
 import {
@@ -86,6 +87,14 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   if (input.lead_ids.length > MAX_BULK) {
     return fail("bulk_too_large", `${t("Máximo")} ${MAX_BULK} ${t("leads por bulk.")}`, 422, { requestId });
+  }
+
+  // Permissões por perfil: mover em lote é "Mover negócios entre etapas" — a
+  // mesma escolha de `/leads/[id]/move`. O `requireRole("agent")` acima já é o
+  // piso de `negocios.mover`; aqui entra a escolha da organização.
+  if (input.action === "move") {
+    const recusa = conferirPermissao(authz, "negocios.mover", { requestId, resource: "crm_leads" });
+    if (recusa) return recusa;
   }
 
   // G3-04: assign é reatribuição de dono em lote → piso ≥manager (spec 04 §6.5,

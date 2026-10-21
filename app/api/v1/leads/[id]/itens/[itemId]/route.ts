@@ -17,7 +17,7 @@ import { type NextRequest } from "next/server";
 
 import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { registrarAtividadeDeItem } from "@/lib/leads/itens-do-negocio";
@@ -53,7 +53,7 @@ export async function PATCH(req: NextRequest, ctx: Params): Promise<Response> {
 
   const requestId = randomUUID();
   const { id: leadId, itemId } = await ctx.params;
-  const authz = await requireRole("agent", { requestId, resource: "crm_lead_itens" });
+  const authz = await exigirPermissao("negocios.registrar", { requestId, resource: "crm_lead_itens" });
   if (!authz.ok) return authz.response;
   const { user, org } = authz;
   const t = (texto: string) => traduzir(texto, user.idioma ?? "pt-BR");
@@ -107,7 +107,7 @@ export async function DELETE(_req: NextRequest, ctx: Params): Promise<Response> 
 
   const requestId = randomUUID();
   const { id: leadId, itemId } = await ctx.params;
-  const authz = await requireRole("agent", { requestId, resource: "crm_lead_itens" });
+  const authz = await exigirPermissao("negocios.registrar", { requestId, resource: "crm_lead_itens" });
   if (!authz.ok) return authz.response;
   const { user, org } = authz;
   const t = (texto: string) => traduzir(texto, user.idioma ?? "pt-BR");

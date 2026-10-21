@@ -12,6 +12,8 @@ import { Providers } from "@/app/providers";
 import { createClient, resetRealtimeAuthentication } from "@/lib/supabase/browser";
 import type { AuthUser, ActiveOrg, Role } from "@/lib/auth/types";
 import { ROLE_RANK } from "@/lib/auth/types";
+import { ehChaveDePermissao, type ChaveDePermissao } from "@/lib/permissoes/catalogo";
+import { papelPode } from "@/lib/permissoes/resolver";
 
 interface AuthCtx {
   user: AuthUser;
@@ -182,10 +184,35 @@ const ACTION_MIN_ROLE: Record<string, Role> = {
   "voice.call": "agent",
 };
 
+/**
+ * Ações deste mapa que passaram a obedecer às PERMISSÕES POR PERFIL
+ * (`lib/permissoes/catalogo.ts`): para elas o papel mínimo acima deixa de
+ * valer, e quem decide é a escolha da organização (padrão = o de antes).
+ *
+ * `inbox.reply` fica FORA de propósito: hoje quem o consulta é a Agenda
+ * (`EntradaDaAgenda`), para editar compromisso — ligá-lo a "Responder
+ * conversas" faria tirar o chat do gerente tirar também a agenda. O Chat
+ * consulta a chave `chat.responder` direto.
+ */
+const ACAO_PARA_PERMISSAO: Record<string, ChaveDePermissao> = {
+  "contact.export": "contatos.exportar",
+  "contact.bulk_delete": "contatos.excluir_em_lote",
+  "pipeline.create": "funis.editar",
+  "lead.activity.log": "negocios.registrar",
+  "lead.items.edit": "negocios.registrar",
+};
+
+/**
+ * Esconde ou mostra um botão. NÃO é autorização: quem barra é a rota
+ * (`requireRole` / `exigirPermissao`). Aceita as ações do mapa acima ou uma
+ * chave do catálogo de permissões (`"contatos.importar"`).
+ */
 export function usePermission(action: string): boolean {
   const { user, activeOrg } = useAuth();
   if (user.is_platform_admin && !user.support) return true;
   if (!activeOrg) return false;
+  const chave = ehChaveDePermissao(action) ? action : ACAO_PARA_PERMISSAO[action];
+  if (chave) return papelPode(activeOrg.role, chave, activeOrg.permissoes);
   const required = ACTION_MIN_ROLE[action];
   if (!required) return false;
   return ROLE_RANK[activeOrg.role] >= ROLE_RANK[required];

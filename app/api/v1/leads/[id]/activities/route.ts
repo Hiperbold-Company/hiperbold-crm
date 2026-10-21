@@ -32,7 +32,7 @@ import { type NextRequest } from "next/server";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { buildLeadActivityRow } from "@/lib/leads/activity-emitter";
@@ -61,7 +61,7 @@ export async function POST(
     return fail("not_found", traduzir("Negócio não encontrado.", "pt-BR"), 404, { requestId });
   }
 
-  const authz = await requireRole("agent", { requestId, resource: "crm_leads" });
+  const authz = await exigirPermissao("negocios.registrar", { requestId, resource: "crm_leads" });
   if (!authz.ok) return authz.response;
   const { user, org } = authz;
   const t = (texto: string) => traduzir(texto, user.idioma ?? "pt-BR");

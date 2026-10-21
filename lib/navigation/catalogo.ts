@@ -181,7 +181,7 @@ export const NAV_CATALOG = [
   // ---- Atendimento — onde o operador passa o dia ----
   {
     href: "/app/inbox",
-    label: "Inbox",
+    label: "Chat",
     description: "As conversas de WhatsApp, com você e a IA atendendo lado a lado.",
     icon: "Inbox",
     group: "atendimento",
@@ -239,8 +239,10 @@ export const NAV_CATALOG = [
     // Ficou "Funis" porque é o que esta tela É: a lista dos funis, de onde se
     // abre o quadro de cada um. "Pipeline" é palavra de quem construiu o
     // sistema; "funil de vendas" é palavra de quem vende.
+    //
+    // Em 21/10/2026 o dono do produto trocou o rótulo para "Pipeline".
     href: "/app/kanban",
-    label: "Funis",
+    label: "Pipeline",
     description: "Seus funis de venda — clique em um para abrir o quadro de clientes.",
     icon: "Kanban",
     group: "crm",

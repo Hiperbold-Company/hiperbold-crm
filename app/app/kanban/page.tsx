@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { Kanban } from "@/lib/ui/icons";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
-import { ROLE_RANK } from "@/lib/auth/types";
+import { papelPode } from "@/lib/permissoes/resolver";
 import {
   bloqueioDoBotao,
   estadoDoBloqueio,
@@ -16,7 +16,7 @@ import { logger } from "@/lib/logger";
 import { FunisClient, type FunilDaLista } from "./_client";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Funis" };
+export const metadata: Metadata = { title: "Pipeline" };
 
 /**
  * A lista de funis — e o lugar onde eles se gerenciam.
@@ -60,14 +60,17 @@ export default async function KanbanPickerPage() {
 
   const todos = (data ?? []) as Array<FunilDaLista & { is_archived: boolean }>;
   const funis = todos.filter((f) => !f.is_archived);
-  const podeGerenciar = ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
+  // Permissões por perfil (`funis.editar`): criar, arquivar e excluir funil são
+  // as rotas que `exigirPermissao("funis.editar")` guarda. Padrão = gerente+.
+  const podeGerenciar = papelPode(activeOrg.role, "funis.editar", activeOrg.permissoes);
   // O arquivo só vai para quem pode mexer nele: tirar do arquivo e excluir são
   // `requireRole("manager")` nas rotas, e mostrar a gaveta a quem receberia 403
   // seria prometer o que não se cumpre — mesmo critério de `podeGerenciar`.
   const arquivados = podeGerenciar ? todos.filter((f) => f.is_archived) : [];
   // Importar planilha é ESCRITA DE OPERAÇÃO, não configuração: quem atende
   // sobe a lista que recebeu. Espelha o `requireRole("agent")` da rota.
-  const podeImportar = ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent;
+  // Permissões por perfil: a mesma chave de `POST /api/v1/leads/import`.
+  const podeImportar = papelPode(activeOrg.role, "contatos.importar", activeOrg.permissoes);
   const idioma = user.idioma;
   const t = (texto: string) => traduzir(texto, idioma);
 
@@ -96,7 +99,7 @@ export default async function KanbanPickerPage() {
             era maior do que o comentário contava: são QUATRO assertions em TRÊS
             specs, e `pipelines-gestao.spec.ts` — a spec da própria feature que
             gerou o comentário — é uma delas. Todas atualizadas junto. */}
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Funis")}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("Pipeline")}</h1>
       </header>
 
       <FunisClient

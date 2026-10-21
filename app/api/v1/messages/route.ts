@@ -66,6 +66,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     comDono: true,
     role: "agent",
     scope: "mcp:write",
+    // Pela sessão, obedece às permissões por perfil; o token segue como era.
+    permissao: "chat.responder",
   });
   if (!authz.ok) return authz.response;
   const { supabase, organizationId, actor, idioma } = authz;

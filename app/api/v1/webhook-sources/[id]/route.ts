@@ -41,6 +41,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     resource: "webhook_sources",
     role: "manager",
     escrita: true,
+    permissao: "automacoes.gerenciar",
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);
@@ -107,6 +108,7 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
     resource: "webhook_sources",
     role: "manager",
     escrita: true,
+    permissao: "automacoes.gerenciar",
   });
   if (!authz.ok) return authz.response;
 

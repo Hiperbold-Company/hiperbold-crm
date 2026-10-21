@@ -238,7 +238,10 @@ describe("painel do inbox — demandas abertas", () => {
   });
 });
 
-vi.mock("@/hooks/auth/AuthProvider", () => ({ useAuth: () => ({ user: { support: null } }) }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({
+  useAuth: () => ({ user: { support: null } }),
+  usePermission: () => true,
+}));
 
 
 describe("desfecho — rascunho atravessa somente lacuna transitória do mesmo contexto", () => {
