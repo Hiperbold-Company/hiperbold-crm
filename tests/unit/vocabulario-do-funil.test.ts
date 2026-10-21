@@ -92,7 +92,11 @@ describe("o vocabulário do funil na interface", () => {
   });
 
   it("nenhum item de menu se chama 'Kanban' ou 'Pipelines'", () => {
-    const ruins = NAV_DESTINATIONS.filter((d) => PROIBIDAS.test(d.label));
+    // Exceção deliberada: em 21/10/2026 o dono do produto trocou o rótulo de
+    // /app/kanban para "Pipeline". Só esse destino, só esse rótulo.
+    const ruins = NAV_DESTINATIONS.filter(
+      (d) => PROIBIDAS.test(d.label) && !(d.href === "/app/kanban" && d.label === "Pipeline"),
+    );
     expect(ruins.map((d) => d.label)).toEqual([]);
   });
 

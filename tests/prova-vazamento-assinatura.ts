@@ -87,7 +87,7 @@ async function main(): Promise<void> {
     visita = i;
     // CLIQUE, não `goto`: navegação client-side preserva o contexto de JS, que é
     // a única condição em que um canal órfão sobrevive para ser contado.
-    await page.getByRole("link", { name: "Inbox", exact: true }).click();
+    await page.getByRole("link", { name: "Chat", exact: true }).click();
     await page.waitForURL(/\/app\/inbox/, { timeout: 20_000 });
     await page.waitForTimeout(2500);
     // O BOARD, não a LISTA de pipelines. `/app/kanban` é o índice — o canal do

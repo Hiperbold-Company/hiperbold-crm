@@ -1143,6 +1143,7 @@ export const DICIONARIO: Traducoes = {
 
   // ─── Navegação (a barra lateral, presente em toda tela) ───
   Inbox: { es: "Inbox" },
+  Chat: { es: "Chat" },
   Agenda: { es: "Agenda" },
   Radar: { es: "Radar" },
   "Respostas rápidas": { es: "Respuestas rápidas" },
@@ -1153,6 +1154,7 @@ export const DICIONARIO: Traducoes = {
   // "Kanban" saiu do menu (a tela virou "Funis"); "Etapas do funil" é o nome novo
   // da tela de configuração, que antes disputava "Funis" com ela.
   Funis: { es: "Embudos" },
+  Pipeline: { es: "Pipeline" },
   "Etapas do funil": { es: "Etapas del embudo" },
   "Tipos de agendamento": { es: "Tipos de cita" },
   Automação: { es: "Automatización" },

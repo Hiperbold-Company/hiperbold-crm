@@ -89,7 +89,7 @@ test("agent abre contexto, volta ainda aberto, resolve e reabre; RLS e menu ocul
   await page.setViewportSize({ width: 1440, height: 1000 });
   await login(page, "agent"); await central(page);
   const navigation = page.getByRole("navigation", { name: "Navegação principal" });
-  await expect(navigation.getByRole("link", { name: "Inbox", exact: true })).toHaveCount(0);
+  await expect(navigation.getByRole("link", { name: "Chat", exact: true })).toHaveCount(0);
   for (const prefix of ["Conversa", "Negócio"]) {
     await expect(row(page, `${prefix} própria`).getByRole("link")).toBeVisible();
     await expect(row(page, `${prefix} sem responsável`).getByRole("link")).toBeVisible();
