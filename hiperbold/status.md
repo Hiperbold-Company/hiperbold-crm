@@ -1,6 +1,44 @@
 # Status do fork Hiperbold
 
-Atualizado em 13/10/2026. O bloco abaixo manda; as seções depois dele são histórico de 22/09 a 29/09 e ficam como registro.
+Atualizado em 21/10/2026. O bloco abaixo manda; os blocos depois dele (10/10 e 22/09 a 29/09) são histórico e ficam como registro.
+
+## Ponto de retomada · 21/10/2026
+
+### No ar
+
+- **Produção** (`crm.hiperbold.com.br`): lote de 21/10 publicado pelo PR #13 (merge `deabfa09e`). O lote anterior saiu pelo PR #12 (`eaaf9d4`).
+- **O que o lote de 21/10 trouxe:**
+  - menu e títulos "Inbox" → "Chat" e "Funis" → "Pipeline";
+  - aba **Permissões** em Equipe: o administrador escolhe o que gerente, atendente e leitor podem fazer, em 10 permissões (`lib/permissoes/catalogo.ts`), gravadas em `organizations.settings.permissoes`;
+  - migration 0975: gerente e leitor deixam de pagar a RLS por linha em `crm_leads` (19 s → 10 ms). **Aplicada em produção em 21/10 às 13h50**, com backup `2026-10-21_1341`, antes do código.
+- **Banco de produção:** schema até a 0975. Não há migration pendente.
+
+### Próximo lote (aprovado pelo Filipe, não começado)
+
+Branch `lote/2026-10-22`, criada da `main` depois do merge do PR #13.
+
+1. Cortar release (`pnpm release:cortar`). O acervo de `.changes/` está em 27891 de 30000 B; acima disso o `verify` da `main` barra o deploy.
+2. Não deslogar ninguém a cada publicação. Causa provável e conserto na memória do projeto (`proximo-lote`).
+3. Aviso "Nova versão disponível" para aba aberta durante uma publicação.
+4. A mesma lentidão de gerente nas 16 policies `visibilidade_por_atendente` e nas policies de escrita com `fn_role_at_least`.
+
+Depois: Permissões v2, que libera abaixo do que a RLS trava hoje (atendente criar funil, gerente editar IA e convidar).
+
+### Clientes no CRM
+
+- **CBEXS:** 21 funis, captação pelo n8n assinada. A gerente Ingrid já vê o filtro de funis em Contatos desde a 0975.
+- **Dra. Marcela** (`dra-marcela-xavier`): Pro em avaliação até 02/11.
+- **MIIND** (`miind`): criada em 21/10, Pro em avaliação de 14 dias (até 04/11). Funis, campos, fonte "n8n · Site Bu1lder" e fluxo n8n `HRhGbstaOrruKK6D` prontos; sem teste, porque o site ainda não envia. Detalhe no `AGENTS.md` da pasta do cliente.
+
+### Depende do Filipe
+
+- MIIND: convidar Diego (dono) e Priscila pela tela Equipe, conectar o WhatsApp, preencher "O que sua empresa faz", e decidir se "Bu1lder convertido" e "Primeiro cliente" contam como ganho.
+- CBEXS: o que fazer quando alguém novo escreve nos WhatsApps da Ingrid e da Rosana ("não criar negócio" é o recomendado).
+- Testar o login com Google, apagar os leads de teste e reconvidar a Morgana.
+
+### Armadilha nova
+
+- `gh` sem `-R hiperbold/hiperbold-crm` vai ao repositório de origem (`melgarafael/DeskcommCRM`), que tem PRs com os mesmos números. Sempre passar `-R`.
 
 ## Ponto de retomada · 10/10/2026 (migração para Mac)
 
