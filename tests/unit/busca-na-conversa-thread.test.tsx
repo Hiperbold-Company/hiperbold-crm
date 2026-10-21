@@ -35,6 +35,7 @@ vi.mock("@/hooks/inbox/useClaimConversation", () => ({
 vi.mock("@/hooks/inbox/useDeleteNote", () => ({ useDeleteNote: () => ({ mutate: vi.fn() }) }));
 vi.mock("@/hooks/ai/useDebugToggle", () => ({ useDebugToggle: () => ({ enabled: false }) }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
+  usePermission: () => true,
   useActiveOrg: () => ({ role: "agent" }),
   useUser: () => ({ id: "u-1" }),
 }));

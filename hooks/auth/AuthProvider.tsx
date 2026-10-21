@@ -198,7 +198,6 @@ const ACAO_PARA_PERMISSAO: Record<string, ChaveDePermissao> = {
   "contact.export": "contatos.exportar",
   "contact.bulk_delete": "contatos.excluir_em_lote",
   "pipeline.create": "funis.editar",
-  "pipeline.move_card": "negocios.mover",
   "lead.activity.log": "negocios.registrar",
   "lead.items.edit": "negocios.registrar",
 };

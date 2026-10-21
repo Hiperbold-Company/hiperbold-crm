@@ -18,7 +18,7 @@ import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useDeleteNote } from "@/hooks/inbox/useDeleteNote";
 import { useAlterarMensagem } from "@/hooks/inbox/useAlterarMensagem";
 import { useDebugToggle } from "@/hooks/ai/useDebugToggle";
-import { useActiveOrg, useUser } from "@/hooks/auth/AuthProvider";
+import { useActiveOrg, usePermission, useUser } from "@/hooks/auth/AuthProvider";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { capabilitiesOf, transportaMensagem, type ChannelProvider } from "@/lib/channels/capabilities";
 import { montarCartoesDaPassagem, type CartaoDaPassagem } from "@/lib/escalacao/cartao-da-passagem";
@@ -108,6 +108,8 @@ export function ChatThread({
   const jaAncorou = useRef(false);
   const activeOrg = useActiveOrg();
   const currentUser = useUser();
+  // As rotas PATCH/DELETE de mensagem exigem `chat.responder`: sem ele, não oferecer editar/apagar.
+  const podeResponder = usePermission("chat.responder");
   const deleteNote = useDeleteNote(conversationId ?? "");
   const { editar, apagar, ocultar, restaurar } = useAlterarMensagem(conversationId);
   const canManage = activeOrg != null && ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
@@ -397,10 +399,10 @@ export function ChatThread({
                   // CRM — inclusive nas do colega, porque `sent_via='user'` só
                   // registra que um humano digitou, nunca qual.
                   viewerUserId={currentUser.id}
-                  onEditar={canalAlteraEnviada && item.data.sent_by_user_id === currentUser.id
+                  onEditar={podeResponder && canalAlteraEnviada && item.data.sent_by_user_id === currentUser.id
                     ? (text) => editar.mutateAsync({ id: item.data.id, text }).then(() => undefined)
                     : undefined}
-                  onApagar={canalAlteraEnviada && item.data.sent_by_user_id === currentUser.id
+                  onApagar={podeResponder && canalAlteraEnviada && item.data.sent_by_user_id === currentUser.id
                     ? () => apagar.mutateAsync(item.data.id).then(() => undefined)
                     : undefined}
                   onOcultar={canManage && item.data.direction === "inbound"

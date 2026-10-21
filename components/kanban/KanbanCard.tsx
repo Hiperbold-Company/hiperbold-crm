@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
 import type { Lead } from "@/lib/types/leads";
 import { resolveCardState, stageAgeLabel, type CardInput } from "@/lib/kanban/card-state";
-import { useFusoDaOrganizacao } from "@/hooks/auth/AuthProvider";
+import { useFusoDaOrganizacao, usePermission } from "@/hooks/auth/AuthProvider";
 import { formataDataNoFuso, rotuloDeIdade, ultimaMovimentacao } from "@/lib/kanban/datas-do-lead";
 import { KanbanCardActions } from "./KanbanCardActions";
 import { NextActionSlot } from "./NextActionSlot";
@@ -80,6 +80,8 @@ export function KanbanCard({
   onOpen,
 }: KanbanCardProps) {
   const t = useT();
+  // Mover etapa é permissão por perfil (a rota é quem barra): sem ela o card não arrasta.
+  const podeMover = usePermission("negocios.mover");
   const value = formatValor(card.valueCents, card.currency);
   const state = resolveCardState(card, t);
   const age = stageAgeLabel(card.hoursInStage, t);
@@ -126,7 +128,7 @@ export function KanbanCard({
   const handleClick = (e: MouseEvent<HTMLDivElement>) => decidirClique(e);
 
   return (
-    <Draggable draggableId={card.id} index={index}>
+    <Draggable draggableId={card.id} index={index} isDragDisabled={!podeMover}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}

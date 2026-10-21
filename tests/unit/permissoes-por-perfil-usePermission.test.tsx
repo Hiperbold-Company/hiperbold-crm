@@ -58,6 +58,8 @@ function montar(role: Role, permissoes?: Record<string, string[]>) {
           "pipeline.create",
           "inbox.reply",
           "contact.create",
+          "pipeline.move_card",
+          "negocios.mover",
         ]}
       />
     </AuthProvider>,
@@ -85,5 +87,18 @@ describe("usePermission × permissões por perfil", () => {
     expect(v("pipeline.create")).toBe("false");
     // `inbox.reply` não é mapeado (a Agenda o usa): segue o piso de papel.
     expect(v("inbox.reply")).toBe("true");
+  });
+
+  it("org que tirou 'mover negócios' do atendente: negocios.mover vira false, mas pipeline.move_card (atribuir, excluir, clonar) segue só o papel", () => {
+    const v = montar("agent", { "negocios.mover": ["manager"] });
+    expect(v("negocios.mover")).toBe("false");
+    // Antes `pipeline.move_card` era ligado a `negocios.mover` e sumia junto.
+    expect(v("pipeline.move_card")).toBe("true");
+  });
+
+  it("padrão: atendente move negócio e pipeline.move_card é agent+", () => {
+    const v = montar("agent");
+    expect(v("negocios.mover")).toBe("true");
+    expect(v("pipeline.move_card")).toBe("true");
   });
 });
