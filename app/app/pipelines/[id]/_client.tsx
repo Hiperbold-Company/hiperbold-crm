@@ -31,7 +31,8 @@ import { Plus } from "@/lib/ui/icons";
 import type { LeadFilters } from "@/lib/kanban/filters";
 import { applyFilters, filtersFromParams, filtersToParams } from "@/lib/kanban/filters";
 import { categoriaDoMotivo } from "@/lib/leads/motivos-de-perda-do-funil";
-import { ROLE_RANK, type Role } from "@/lib/auth/types";
+import type { Role } from "@/lib/auth/types";
+import { papelPode } from "@/lib/permissoes/resolver";
 
 export function PipelinePageClient({
   pipelineId,
@@ -46,6 +47,8 @@ export function PipelinePageClient({
   role: Role;
 }) {
   const t = useT();
+  // Permissões por perfil: renomear etapa é "Criar e editar funis e etapas".
+  const activeOrgDasPermissoes = useActiveOrg();
   const { data, isLoading, error, pulses, realtimeStatus, seguranca } = useBoard(pipelineId);
   const router = useRouter();
   const pathname = usePathname();
@@ -171,7 +174,7 @@ export function PipelinePageClient({
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
           leadInicial={searchParams.get("lead")}
-          podeRenomearEtapa={ROLE_RANK[role] >= ROLE_RANK.manager}
+          podeRenomearEtapa={papelPode(role, "funis.editar", activeOrgDasPermissoes?.permissoes)}
         />
       )}
       <BulkActionBar

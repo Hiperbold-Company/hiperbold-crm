@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { ROLE_RANK } from "@/lib/auth/types";
+import { papelPode } from "@/lib/permissoes/resolver";
 
 import { MetricsClient } from "./_components/MetricsClient";
 
@@ -13,6 +14,9 @@ export default async function MetricsPage() {
   const activeOrg = await resolveActiveOrg(user);
   // spec 13 §6.1: agent vê as próprias (RLS); a comparação por atendente é manager+.
   const canCompare = !!activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
+  // Permissões por perfil: o painel de Perdas segue `relatorios.perdas` (padrão
+  // gerente+), o mesmo portão de `GET /api/v1/metrics/lost`.
+  const podeVerPerdas = !!activeOrg && papelPode(activeOrg.role, "relatorios.perdas", activeOrg.permissoes);
   // `t` local em vez do hook: esta página é componente de SERVIDOR, e lá o
   // idioma vem resolvido em `user.idioma` (a cadeia pessoa → organização →
   // padrão vive em `lib/auth/server.ts`), sem reler o `locale` cru.
@@ -30,7 +34,7 @@ export default async function MetricsPage() {
         </p>
       </header>
 
-      <MetricsClient canCompare={canCompare} currentUserId={user.id} />
+      <MetricsClient canCompare={canCompare} podeVerPerdas={podeVerPerdas} currentUserId={user.id} />
     </div>
   );
 }

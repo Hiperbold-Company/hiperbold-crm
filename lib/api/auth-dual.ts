@@ -41,6 +41,8 @@ import {
   validateBearerToken,
 } from "@/lib/mcp/auth";
 import { exigirVisibilidadeDoToken } from "@/lib/mcp/visibilidade-do-token";
+import type { ChaveDePermissao } from "@/lib/permissoes/catalogo";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { JANELA_SEGUNDOS, TETO_DE_ESCRITA, TETO_POR_ORGANIZACAO } from "@/lib/mcp/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -98,6 +100,14 @@ export interface AuthDualOptions {
    * passa pela RLS que aplicaria o "só os meus". Ver `lib/mcp/visibilidade-do-token.ts`.
    */
   comDono?: boolean;
+  /**
+   * Capacidade de PERMISSÕES POR PERFIL (`lib/permissoes/catalogo.ts`) que a
+   * rota exige. Vale SÓ no caminho de sessão: ali `exigirPermissao` toma o
+   * lugar de `requireRole` (mesmo piso, mais a escolha da organização). O
+   * caminho do token segue como era — o token tem o próprio teto
+   * (`role:<papel>` + escopo) e não é uma pessoa com perfil na organização.
+   */
+  permissao?: ChaveDePermissao;
 }
 
 /**
@@ -106,7 +116,7 @@ export interface AuthDualOptions {
  */
 export async function resolveAuthDual(
   req: NextRequest,
-  { requestId, resource, role, scope, tokenRole, comDono }: AuthDualOptions,
+  { requestId, resource, role, scope, tokenRole, comDono, permissao }: AuthDualOptions,
 ): Promise<AuthDual> {
   const authHeader = req.headers.get("authorization");
 
@@ -170,7 +180,9 @@ export async function resolveAuthDual(
     };
   }
 
-  const authz = await requireRole(role, { requestId, resource });
+  const authz = permissao
+    ? await exigirPermissao(permissao, { requestId, resource })
+    : await requireRole(role, { requestId, resource });
   if (!authz.ok) return { ok: false, response: authz.response };
   return {
     ok: true,

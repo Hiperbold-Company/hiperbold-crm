@@ -39,6 +39,7 @@ export async function POST(
     resource: "crm_leads",
     role: "agent",
     escrita: true,
+    permissao: "negocios.mover",
     comDono: true,
   });
   if (!authz.ok) return authz.response;

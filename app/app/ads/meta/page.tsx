@@ -22,6 +22,7 @@ import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
+import { papelPode } from "@/lib/permissoes/resolver";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { existeConexaoDeLeitura } from "@/lib/plataformas-de-anuncio/credenciais-de-leitura";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -35,7 +36,9 @@ export default async function MetaAdsPage() {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
-  if (!(user.is_platform_admin && !user.support) && ROLE_RANK[activeOrg.role] < ROLE_RANK.manager) {
+  // Permissões por perfil (`relatorios.anuncios`, padrão gerente+): o mesmo
+  // portão das rotas `/api/v1/ads/meta/*`.
+  if (!(user.is_platform_admin && !user.support) && !papelPode(activeOrg.role, "relatorios.anuncios", activeOrg.permissoes)) {
     redirect("/403");
   }
 

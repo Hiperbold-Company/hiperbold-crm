@@ -19,7 +19,13 @@ export async function entradaDeRegra(
   req: NextRequest,
   opts: { escrita: boolean; role: Role; id?: string },
 ): Promise<EntradaDeRegra> {
-  const e = await entradaDeAdministracao(req, { resource: "automation_rules", ...opts });
+  // Escrita pela SESSÃO obedece às permissões por perfil (`automacoes.gerenciar`);
+  // leitura e token seguem como eram.
+  const e = await entradaDeAdministracao(req, {
+    resource: "automation_rules",
+    ...opts,
+    ...(opts.escrita ? { permissao: "automacoes.gerenciar" as const } : {}),
+  });
   if (e.resposta) return { resposta: e.resposta };
   const t = traducaoDe(e.authz);
   return {

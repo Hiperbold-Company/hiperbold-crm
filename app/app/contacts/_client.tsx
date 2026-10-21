@@ -73,6 +73,8 @@ export function ContactsListClient() {
 
   const podeExcluirEmLote = usePermission("contact.bulk_delete");
   const podeExportar = usePermission("contact.export");
+  // Permissões por perfil: o botão segue `POST /api/v1/contacts/import`.
+  const podeImportar = usePermission("contatos.importar");
   const [selecionados, setSelecionados] = useState<ReadonlySet<string>>(new Set());
   const [todosDoFiltro, setTodosDoFiltro] = useState(false);
   const [confirmarExclusao, setConfirmarExclusao] = useState(false);
@@ -266,10 +268,12 @@ export function ContactsListClient() {
             <UsersThree size={16} weight="bold" aria-hidden />
             <span>{t("Duplicados")}</span>
           </Button>
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <UploadSimple size={16} weight="bold" aria-hidden />
-            <span>{t("Importar CSV")}</span>
-          </Button>
+          {podeImportar ? (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <UploadSimple size={16} weight="bold" aria-hidden />
+              <span>{t("Importar CSV")}</span>
+            </Button>
+          ) : null}
           <Button onClick={() => setCreateOpen(true)}>
             <Plus size={16} weight="bold" aria-hidden />
             <span>{t("Novo contato")}</span>

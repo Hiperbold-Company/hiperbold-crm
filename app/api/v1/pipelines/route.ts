@@ -62,6 +62,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     resource: "crm_pipelines",
     role: "manager",
     escrita: true,
+    permissao: "funis.editar",
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);

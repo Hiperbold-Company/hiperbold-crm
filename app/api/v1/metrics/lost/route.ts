@@ -16,7 +16,7 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { agruparPerdas, type PerdaLinha } from "@/lib/metrics/perdas";
@@ -35,7 +35,7 @@ const querySchema = z.object({
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
 
-  const authz = await requireRole("manager", { requestId, resource: "metrics" });
+  const authz = await exigirPermissao("relatorios.perdas", { requestId, resource: "metrics" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const { org: activeOrg } = authz;

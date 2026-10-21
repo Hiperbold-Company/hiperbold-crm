@@ -43,6 +43,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     comDono: true,
     role: "agent",
     scope: "mcp:write",
+    // Pela sessão, obedece às permissões por perfil; o token segue como era.
+    permissao: "chat.responder",
   });
   if (!authz.ok) return authz.response;
   // O ramo do token não carrega idioma de usuário: cai no padrão do produto.

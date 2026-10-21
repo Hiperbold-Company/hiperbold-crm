@@ -36,6 +36,7 @@ import type { NextRequest } from "next/server";
 
 import { fail } from "@/lib/api/wrappers";
 import type { Role } from "@/lib/auth/types";
+import type { ChaveDePermissao } from "@/lib/permissoes/catalogo";
 import { loadAuthUser } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -61,11 +62,13 @@ export interface OpcoesAuthAdmin {
   comDono?: boolean;
   /** Piso do TOKEN quando a operação é mais destrutiva que o da sessão (ver `AuthDualOptions.tokenRole`). */
   tokenRole?: Role;
+  /** Permissão por perfil, só no caminho de SESSÃO (ver `AuthDualOptions.permissao`). */
+  permissao?: ChaveDePermissao;
 }
 
 export async function autorizarAdministracao(
   req: NextRequest,
-  { requestId, resource, role, escrita, comDono, tokenRole }: OpcoesAuthAdmin,
+  { requestId, resource, role, escrita, comDono, tokenRole, permissao }: OpcoesAuthAdmin,
 ): Promise<ResultadoAuthAdmin> {
   const authz = await resolveAuthDual(req, {
     requestId,
@@ -74,6 +77,7 @@ export async function autorizarAdministracao(
     scope: escrita ? ESCOPO_DE_ESCRITA : ESCOPO_DE_LEITURA,
     comDono,
     tokenRole,
+    permissao,
   });
   if (!authz.ok) return authz;
 

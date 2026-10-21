@@ -23,7 +23,7 @@ import { type NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { lerMultipartComTeto } from "@/lib/api/multipart-com-teto";
-import { requireRole } from "@/lib/auth/require-role";
+import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { audit } from "@/lib/audit";
 import { hashCpf } from "@/lib/contacts/cpf";
 import { cifrarCpfDoContato, gravarCpfDoContatoPorUsuario, idsPorHashDeCpf } from "@/lib/contacts/cpf-do-contato";
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const supabase = await createClient();
   // spec 13 §4: escrita é agent+ (viewer é read-only), igual ao POST unitário.
-  const authz = await requireRole("agent", { requestId, resource: "contacts" });
+  const authz = await exigirPermissao("contatos.importar", { requestId, resource: "contacts" });
   if (!authz.ok) return authz.response;
   const user = authz.user;
   const orgId = authz.org.orgId;
