@@ -79,7 +79,7 @@ beforeEach(() => {
   vi.mocked(requireRole).mockResolvedValue({
     ok: true,
     user: { id: USER_ID, idioma: "pt-BR" },
-    org: { orgId: ORG_A },
+    org: { orgId: ORG_A, role: "agent" },
   } as never);
   vi.mocked(createClient).mockResolvedValue(db.client);
 });

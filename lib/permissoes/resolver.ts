@@ -35,7 +35,9 @@ function ordenar(papeis: Iterable<PapelConfiguravel>): PapelConfiguravel[] {
 }
 
 export function permissoesPadrao(): PermissoesResolvidas {
-  return Object.fromEntries(CAPACIDADES.map((c) => [c.chave, ordenar(c.padrao)])) as unknown as PermissoesResolvidas;
+  return Object.fromEntries(
+    CAPACIDADES.map((c) => [c.chave, ordenar(c.padrao)]),
+  ) as unknown as PermissoesResolvidas;
 }
 
 /** Um valor de capacidade é válido se for lista de perfis configuráveis, todos dentro do `liberavel`. */
@@ -51,7 +53,8 @@ function papeisValidos(chave: ChaveDePermissao, valor: unknown): PapelConfigurav
 /** Lê `settings.permissoes` (qualquer forma) e devolve o efetivo. Nunca lança. */
 export function resolverPermissoes(cru: unknown): PermissoesResolvidas {
   const resultado: Record<string, readonly PapelConfiguravel[]> = { ...permissoesPadrao() };
-  if (!cru || typeof cru !== "object" || Array.isArray(cru)) return resultado as PermissoesResolvidas;
+  if (!cru || typeof cru !== "object" || Array.isArray(cru))
+    return resultado as PermissoesResolvidas;
   for (const [chave, valor] of Object.entries(cru as Record<string, unknown>)) {
     if (!ehChaveDePermissao(chave)) continue;
     const papeis = papeisValidos(chave, valor);
@@ -81,7 +84,9 @@ function mesmoConjunto(a: readonly string[], b: readonly string[]): boolean {
 }
 
 /** Só o que difere do padrão — é o que se grava. Objeto vazio = tudo no padrão. */
-export function diferencasDoPadrao(mapa: PermissoesResolvidas): Partial<Record<ChaveDePermissao, PapelConfiguravel[]>> {
+export function diferencasDoPadrao(
+  mapa: PermissoesResolvidas,
+): Partial<Record<ChaveDePermissao, PapelConfiguravel[]>> {
   const saida: Partial<Record<ChaveDePermissao, PapelConfiguravel[]>> = {};
   for (const c of CAPACIDADES) {
     const efetivo = ordenar(mapa[c.chave] ?? c.padrao);

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { permissoesPadrao } from "@/lib/permissoes/resolver";
 
 /**
  * Auth FALHA ALTO, não baixo.
@@ -130,6 +131,8 @@ describe("loadAuthUser — falha de permissão não vira 'sem organização'", (
         // D-091: o status da organização viaja junto; sem a coluna, `null`.
         organization_status: null,
         interface_settings: { preset: "completa" },
+        // Permissões por perfil: sem a chave no banco, o padrão do catálogo.
+        permissoes: permissoesPadrao(),
       },
     ]);
   });

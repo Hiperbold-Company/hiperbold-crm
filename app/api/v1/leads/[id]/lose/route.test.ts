@@ -23,7 +23,7 @@ beforeEach(() => {
   vi.mocked(requireRole).mockResolvedValue({
     ok: true,
     user: { id: USER_ID },
-    org: { orgId: ORG_ID },
+    org: { orgId: ORG_ID, role: "agent" },
   } as never);
   vi.mocked(createClient).mockResolvedValue({ from: vi.fn() } as never);
 });

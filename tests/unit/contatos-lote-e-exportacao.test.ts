@@ -346,12 +346,15 @@ describe("POST /api/v1/contacts/export", () => {
     expect(certo.headers.get("x-contatos-exportados")).toBe("4");
   });
 
-  it("atendente não exporta: o piso é gerente e nada é lido", async () => {
+  it("recusa do portão: 403 e nada é lido", async () => {
+    // Desde as permissões por perfil o piso pedido ao `requireRole` é o MENOR papel
+    // liberável de `contatos.exportar` (viewer); quem decide "só gerente" no padrão
+    // é a escolha da organização — provado em `permissoes-por-perfil-rotas.test.ts`.
     sessaoComo("agent");
     const { POST } = await import("@/app/api/v1/contacts/export/route");
     const res = await POST(post("/api/v1/contacts/export", { ids: [uid(1)] }));
     expect(res.status).toBe(403);
-    expect(requireRoleMock.mock.calls[0]![0]).toBe("manager");
+    expect(requireRoleMock.mock.calls[0]![0]).toBe("viewer");
     expect(banco.consultas).toHaveLength(0);
     expect(auditSpy).not.toHaveBeenCalled();
   });

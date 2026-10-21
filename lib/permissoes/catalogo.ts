@@ -28,13 +28,20 @@ import type { Role } from "@/lib/auth/types";
 export const PAPEIS_CONFIGURAVEIS = ["manager", "agent", "viewer"] as const;
 export type PapelConfiguravel = (typeof PAPEIS_CONFIGURAVEIS)[number];
 
-export const CATEGORIAS_DE_PERMISSAO = ["Contatos", "Pipeline", "Chat", "Relatórios", "Automações"] as const;
+export const CATEGORIAS_DE_PERMISSAO = [
+  "Contatos",
+  "Pipeline",
+  "Chat",
+  "Relatórios",
+  "Automações",
+] as const;
 export type CategoriaDePermissao = (typeof CATEGORIAS_DE_PERMISSAO)[number];
 
 /** A RLS ou a função do banco exige papel mais alto: liberar só na rota daria erro. */
 export const MOTIVO_EXIGE_BANCO = "Exige mudança no banco — chega numa próxima versão";
 /** O banco permitiria, mas a tela que mostra isto não tem porta para este perfil. */
-export const MOTIVO_SEM_PORTA = "A tela disto ainda não abre para este perfil — chega numa próxima versão";
+export const MOTIVO_SEM_PORTA =
+  "A tela disto ainda não abre para este perfil — chega numa próxima versão";
 /** Decisão de escopo desta primeira versão, sem impedimento técnico. */
 export const MOTIVO_FORA_DA_VERSAO = "Não disponível para este perfil nesta versão";
 
@@ -58,7 +65,8 @@ export const CAPACIDADES = [
     chave: "contatos.exportar",
     categoria: "Contatos",
     rotulo: "Exportar contatos (CSV)",
-    descricao: "Baixar a lista de contatos em planilha. O arquivo leva dado pessoal para fora do sistema.",
+    descricao:
+      "Baixar a lista de contatos em planilha. O arquivo leva dado pessoal para fora do sistema.",
     padrao: ["manager"],
     liberavel: ["manager", "agent", "viewer"],
   },
@@ -189,10 +197,16 @@ export function pisoDaPermissao(chave: ChaveDePermissao): Role {
  * que mudam quem entra, o que custa dinheiro ou o que responde a direito legal.
  */
 export const SO_ADMINISTRADOR = [
-  { rotulo: "Equipe e convites", descricao: "Convidar pessoas, trocar o perfil de alguém e tirar acesso." },
+  {
+    rotulo: "Equipe e convites",
+    descricao: "Convidar pessoas, trocar o perfil de alguém e tirar acesso.",
+  },
   { rotulo: "Conexão do WhatsApp", descricao: "Conectar, trocar e desconectar os números." },
   { rotulo: "Agentes de IA", descricao: "Publicar agentes e mexer nas credenciais de IA." },
   { rotulo: "Plano e cobrança", descricao: "Trocar de plano e ver as faturas." },
   { rotulo: "LGPD", descricao: "Atender pedidos de dados e anonimizar contatos." },
-  { rotulo: "Marca e chaves de API", descricao: "Logo, cores e as chaves que integram outros sistemas." },
+  {
+    rotulo: "Marca e chaves de API",
+    descricao: "Logo, cores e as chaves que integram outros sistemas.",
+  },
 ] as const;

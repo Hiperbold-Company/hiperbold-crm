@@ -71,7 +71,7 @@ beforeEach(() => {
   vi.mocked(requireRole).mockResolvedValue({
     ok: true,
     user: { id: USER, idioma: "pt-BR" },
-    org: { orgId: ORG_A },
+    org: { orgId: ORG_A, role: "agent" },
   } as never);
 });
 
