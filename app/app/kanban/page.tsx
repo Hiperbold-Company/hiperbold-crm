@@ -17,7 +17,7 @@ import { logger } from "@/lib/logger";
 import { FunisClient, type FunilDaLista } from "./_client";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Funis" };
+export const metadata: Metadata = { title: "Pipeline" };
 
 /**
  * A lista de funis — e o lugar onde eles se gerenciam.
@@ -99,7 +99,7 @@ export default async function KanbanPickerPage() {
             era maior do que o comentário contava: são QUATRO assertions em TRÊS
             specs, e `pipelines-gestao.spec.ts` — a spec da própria feature que
             gerou o comentário — é uma delas. Todas atualizadas junto. */}
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Funis")}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("Pipeline")}</h1>
       </header>
 
       <FunisClient
