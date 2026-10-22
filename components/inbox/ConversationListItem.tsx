@@ -16,13 +16,24 @@ import { cn } from "@/lib/utils";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
+import { iniciaisDoNome } from "@/lib/ui/iniciais";
 
 interface Props {
   conversation: ConversationWithContact;
   isSelected: boolean;
   onSelect: (id: string) => void;
-  /** Posição 1-based na fila (G5-03). Presente só na visão Fila. */
+  /**
+   * Posição 1-based na fila de ESPERA (G5-03): a ordem de atendimento, em que o
+   * mais antigo esperando é o 1º. Não é o índice da linha — a lista sai por
+   * atividade recente. Presente só na visão Fila, quando o servidor a conhece.
+   */
   queuePosition?: number;
+  /**
+   * A linha está na visão Fila (mostra "Aguardando há…"). Ausente = deduz da
+   * posição, como antes; a lista passa explícito porque a posição pode faltar
+   * (ver `comPosicaoNaFila`) sem a linha deixar de estar na Fila.
+   */
+  naFila?: boolean;
   /**
    * Mostrar POR ONDE a conversa entrou.
    *
@@ -80,15 +91,9 @@ const COR_DO_COMANDO: Record<string, string> = {
   encerrada: "bg-muted-foreground/30",
 };
 
+/** Por letra (`lib/ui/iniciais`): "Rejeane 🧡" é "R", nunca "R" + meio emoji. */
 function initials(name: string | null | undefined, fallback: string): string {
-  const v = (name ?? "").trim();
-  if (!v) return fallback.slice(0, 2).toUpperCase();
-  const parts = v.split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return fallback.slice(0, 2).toUpperCase();
-  if (parts.length === 1) return (parts[0] ?? "").slice(0, 2).toUpperCase();
-  const first = parts[0]?.[0] ?? "";
-  const last = parts[parts.length - 1]?.[0] ?? "";
-  return (first + last).toUpperCase();
+  return iniciaisDoNome(name) ?? fallback.slice(0, 2).toUpperCase();
 }
 
 function relativeTime(iso: string | null, locale: Locale): string {
@@ -105,10 +110,10 @@ function relativeTime(iso: string | null, locale: Locale): string {
 /**
  * "Aguardando há 5 min" — desde quando o cliente ESPERA.
  *
- * A régua é `esperaDaConversa`, a mesma `awaiting_since` que ordena a Fila
- * (#990): `last_inbound_at` é a ÚLTIMA mensagem do cliente, então a pílula de
+ * A régua é `esperaDaConversa`, a mesma `awaiting_since` que numera a posição
+ * na Fila (#990): `last_inbound_at` é a ÚLTIMA mensagem do cliente, então a pílula de
  * quem insistia voltava para "há 1 min" a cada mensagem dele — o tempo na linha
- * contradizia a posição do lado e a ordem da lista. O fallback segue sendo a
+ * contradizia a posição do lado. O fallback segue sendo a
  * criação, para a conversa que nunca recebeu mensagem.
  */
 function waitingLabel(
@@ -125,6 +130,7 @@ export function ConversationListItem({
   isSelected,
   onSelect,
   queuePosition,
+  naFila: naFilaDaLista,
   mostrarCanal,
   mostrarAtendente,
   mostrarAutomatico = true,
@@ -140,27 +146,17 @@ export function ConversationListItem({
   const overflow = tags.length - visibleTags.length;
   const preview = conversation.last_message_preview?.trim() || t("Sem mensagens");
   const truncated = preview.length > 60 ? `${preview.slice(0, 60)}…` : preview;
-  const naFila = queuePosition !== undefined;
+  const naFila = naFilaDaLista ?? queuePosition !== undefined;
   /**
    * A HORA DO CANTO RESPONDE À MESMA PERGUNTA QUE ORDENA A LISTA.
    *
-   * Na Fila a lista sai por TEMPO DE ESPERA (`ORDEM_DA_ESPERA`: `awaiting_since`
-   * crescente — a mensagem mais antiga sem resposta, #990), mas a hora do canto era
-   * sempre a da última mensagem de QUALQUER lado. Bastava o atendente responder para o número daquela linha pular para
-   * agora sem que a linha saísse do lugar: lida de cima para baixo, a coluna de
-   * horas saía fora de ordem (#464 — "a lista parece aleatória") embaixo de uma
-   * lista que estava certa.
-   *
-   * Fora da Fila a ordem é por atividade recente, e aí a última mensagem de
-   * qualquer lado É a resposta certa — a régua do relógio segue a régua da lista.
-   *
-   * A origem é a MESMA da pílula "Aguardando há…" (`waitingLabel`), inclusive no
-   * fallback: duas respostas para o mesmo "desde quando?" na mesma linha, a 40px
-   * de distância, seriam a próxima divergência.
+   * Todas as abas, a Fila inclusive, saem por atividade recente (lote
+   * 2026-10-22) — então a hora do canto é a da última mensagem de qualquer lado,
+   * em toda linha, e a coluna de horas se lê em ordem de cima para baixo (#464).
+   * Na Fila, "desde quando o cliente espera" continua na pílula "Aguardando há…"
+   * (`waitingLabel`, por `esperaDaConversa`), ao lado da posição na fila.
    */
-  const horaDaOrdem = naFila
-    ? esperaDaConversa(conversation)
-    : conversation.last_message_at;
+  const horaDaOrdem = conversation.last_message_at;
   const time = relativeTime(horaDaOrdem, localeDaData);
   const unread = conversation.unread_count_for_assignee ?? 0;
 
@@ -245,13 +241,18 @@ export function ConversationListItem({
       <div className="min-w-0 flex-1">
         {naFila && (
           <div className="mb-1 flex items-center gap-1.5">
+            {queuePosition !== undefined && (
+              <span
+                className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-soft px-1 text-[10px] font-medium tabular-nums text-accent"
+                aria-label={`${t("Posição")} ${queuePosition} ${t("na fila")}`}
+              >
+                {queuePosition}º
+              </span>
+            )}
             <span
-              className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-soft px-1 text-[10px] font-medium tabular-nums text-accent"
-              aria-label={`${t("Posição")} ${queuePosition} ${t("na fila")}`}
+              className="text-[11px] text-text-muted"
+              title={t("Desde quando o cliente espera resposta")}
             >
-              {queuePosition}º
-            </span>
-            <span className="text-[11px] text-text-muted">
               {waitingLabel(conversation, t, localeDaData)}
             </span>
           </div>
@@ -266,14 +267,7 @@ export function ConversationListItem({
           >
             {displayName}
           </span>
-          <span
-            className="shrink-0 text-[11px] tabular-nums text-text-subtle"
-            // O mesmo lugar da tela mostra duas coisas diferentes conforme a aba:
-            // na Fila é "desde quando o cliente ESPERA" (a mensagem mais antiga sem
-            // resposta — #990), nas outras é "há quanto tempo a conversa mexeu". O
-            // rótulo existe só onde a leitura muda.
-            title={naFila ? t("Desde quando o cliente espera resposta") : undefined}
-          >
+          <span className="shrink-0 text-[11px] tabular-nums text-text-subtle">
             {time}
           </span>
         </div>

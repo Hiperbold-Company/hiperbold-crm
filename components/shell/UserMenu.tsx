@@ -16,12 +16,11 @@ import { SeletorDeIdioma } from "@/components/shell/SeletorDeIdioma";
 import { useT } from "@/hooks/i18n/useT";
 import Link from "next/link";
 import { SignOut, ShieldCheck } from "@/lib/ui/icons";
+import { iniciaisDoNome } from "@/lib/ui/iniciais";
 
+/** Por letra (`lib/ui/iniciais`): emoji no nome não vira meio caractere. */
 function initials(name: string | null, email: string): string {
-  if (name && name.trim()) {
-    return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
-  }
-  return email.slice(0, 2).toUpperCase();
+  return iniciaisDoNome(name) ?? email.slice(0, 2).toUpperCase();
 }
 
 export function UserMenu() {

@@ -8,6 +8,8 @@ import { ApiError } from "@/lib/api/types";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { ehAFila } from "@/lib/inbox/comando-da-conversa";
+import { comPosicaoNaFila } from "@/lib/routing/queue";
 import { listConversationsQuerySchema } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
 import { comNomeDoAtendente } from "@/lib/users/com-nome-do-atendente";
@@ -76,7 +78,14 @@ export async function GET(req: NextRequest): Promise<Response> {
     // handler é compartilhado com as tools MCP, que já resolvem o nome por conta
     // própria (`lib/mcp/tools/conversations.ts`) — enriquecer lá faria a mesma
     // leitura duas vezes por chamada do agente.
-    return ok(await comNomeDoAtendente(conversations), {
+    // Na Fila, cada linha leva a sua posição na fila de espera ("1º, 2º…"). A
+    // lista sai por atividade recente, então o número NÃO é o índice da linha:
+    // é a ordem de atendimento, contada por `ORDEM_DA_ESPERA` sobre a fila
+    // inteira (ver `comPosicaoNaFila`). Fora da Fila, nada é anexado.
+    const comPosicao = ehAFila(qsParsed.data)
+      ? await comPosicaoNaFila(supabase, activeOrg.orgId, conversations)
+      : conversations;
+    return ok(await comNomeDoAtendente(comPosicao), {
       requestId,
       meta: { cursor, has_more },
     });

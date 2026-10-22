@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { CircleNotch, Microphone, MicrophoneSlash, PhoneX, Warning } from "@/lib/ui/icons";
 import { useT } from "@/hooks/i18n/useT";
+import { inicialDoNome } from "@/lib/ui/iniciais";
 
 function formatarDuracao(segundos: number): string {
   const m = Math.floor(segundos / 60);
@@ -63,7 +64,7 @@ export function ActiveCallPanel() {
 
   const contact = call?.contact_id ? contactQuery.data?.data : undefined;
   const nome = contact ? rotuloDoContato(contact) : phoneForDisplay(call?.peer_phone ?? "");
-  const inicial = (nome || "?").trim().charAt(0).toUpperCase();
+  const inicial = inicialDoNome(nome) ?? "?";
 
   const conectada = call?.status === "connected" && !!call.answered_at;
 
