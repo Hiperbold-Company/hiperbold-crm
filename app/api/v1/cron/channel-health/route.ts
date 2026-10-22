@@ -52,7 +52,7 @@ import {
   type ChannelProvider,
   type ChannelSessionRef,
 } from "@/lib/channels";
-import { sincronizarSaudeDaConexao } from "@/lib/channels/health";
+import { falhasSeguidasDepois, sincronizarSaudeDaConexao } from "@/lib/channels/health";
 import { pareamentoQrPendente } from "@/lib/channels/pareamento-qr";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -71,6 +71,7 @@ type LinhaDeSessao = ChannelSessionRef & {
   phone_number: string | null;
   archived_at: string | null;
   pareamento_qr_estado: string | null;
+  consecutive_health_fails: number | null;
 };
 
 async function handle(req: NextRequest): Promise<Response> {
@@ -88,7 +89,7 @@ async function handle(req: NextRequest): Promise<Response> {
   const { data, error } = await admin
     .from("channel_sessions")
     .select(
-      `id, organization_id, status, display_name, phone_number, archived_at, pareamento_qr_estado, ${CHANNEL_SESSION_REF_COLUMNS}`,
+      `id, organization_id, status, display_name, phone_number, archived_at, pareamento_qr_estado, consecutive_health_fails, ${CHANNEL_SESSION_REF_COLUMNS}`,
     )
     .is("archived_at", null)
     .limit(LIMITE);
@@ -151,13 +152,24 @@ async function handle(req: NextRequest): Promise<Response> {
       // O status novo vale para o banco, mas SÓ quando deu para perguntar:
       // gravar por cima com um erro de rede transitório trocaria informação boa
       // por ruído, e é o mesmo cuidado que a tela de conexões já toma.
+      //
+      // E as checagens SEGUIDAS sem resposta são contadas: uma ou duas são
+      // soluço de rede e não avisam ninguém (`LIMIAR_FALHAS_SEGUIDAS_SEM_RESPOSTA`
+      // em `lib/channels/health.ts`). Só escreve quando o número muda.
       let statusFinal = s.status;
+      const falhasAntes = s.consecutive_health_fails ?? 0;
+      const falhasSeguidas = falhasSeguidasDepois(falhasAntes, saude);
+      const patch: Record<string, unknown> = {};
       if (saude.reachable && saude.status && saude.status !== s.status) {
         statusFinal = saude.status;
-        const agora = new Date().toISOString();
+        patch.status = saude.status;
+        patch.last_status_change_at = new Date().toISOString();
+      }
+      if (falhasSeguidas !== falhasAntes) patch.consecutive_health_fails = falhasSeguidas;
+      if (Object.keys(patch).length > 0) {
         await admin
           .from("channel_sessions")
-          .update({ status: saude.status, last_status_change_at: agora })
+          .update(patch)
           .eq("id", s.id)
           .eq("organization_id", s.organization_id);
       }
@@ -168,6 +180,8 @@ async function handle(req: NextRequest): Promise<Response> {
         { id: s.id, organization_id: s.organization_id, status: statusFinal },
         saude,
         apelido,
+        "varredura",
+        falhasSeguidas,
       );
       desfechos[desfecho] = (desfechos[desfecho] ?? 0) + 1;
     } catch (err) {
