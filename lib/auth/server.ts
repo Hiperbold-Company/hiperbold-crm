@@ -18,6 +18,8 @@ import { empresaExigeMfa, exigeCadastroDeMfa } from "@/lib/auth/politica-mfa";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
 import { emailVerificado } from "@/lib/auth/verificacao-email";
 import { resolverPermissoes } from "@/lib/permissoes/resolver";
+import { getUserResiliente } from "@/lib/auth/get-user-resiliente";
+import type { User } from "@supabase/supabase-js";
 import type { AuthUser, Role, UserOrgMembership, ActiveOrg } from "./types";
 
 const ACTIVE_ORG_COOKIE = "active_org";
@@ -90,6 +92,8 @@ function escolherMembroAtivo(
 
 /**
  * Loads the AuthUser for the current request. Returns null if unauthenticated.
+ * LANÇA (`auth_unavailable`) quando o GoTrue segue fora do ar depois das novas
+ * tentativas — não dá para afirmar que a pessoa está deslogada.
  * Use only in Server Components / Route Handlers / Server Actions.
  *
  * Uses the user-scoped server client (cookie session). RLS policies allow:
@@ -125,21 +129,25 @@ export function ehSessaoAusente(error: { name?: string } | null | undefined): bo
 }
 
 export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  // Erro transitório do GoTrue (rede, 5xx — o que acontece durante a troca de
+  // contêiner de uma publicação) tenta de novo antes de concluir qualquer coisa.
+  // Ver `lib/auth/get-user-resiliente.ts`.
+  const { cliente: supabase, resultado } = await getUserResiliente<User, Awaited<ReturnType<typeof createClient>>>(
+    createClient,
+  );
+  const user = resultado.user;
+  const error = resultado.erro;
   // ⚠️ O `error` era DESCARTADO — nem chegava a ser desestruturado —, e aqui
   // `user: null` é tão ambíguo quanto o `data: null` que a query logo abaixo
   // trata com todo o cuidado: significa "não está logado" (estado normal) E
   // "não deu para perguntar" (rede, GoTrue fora do ar, token ilegível).
   //
-  // A ação não muda, e isso é deliberado: sem usuário confirmado, devolver
-  // `null` — e portanto redirecionar para o login — é o desfecho seguro.
-  // Falhar FECHADO na ação continua certo. O que estava errado era falhar
-  // fechado também na INFORMAÇÃO: quem investigasse depois via só uma pessoa
-  // "deslogada", sem nada distinguindo isso de uma falha transitória.
+  // Falhar FECHADO na ação continua certo: sem usuário confirmado, nada passa.
+  // Mas "fechado" não é "login": desde 22/10/2026 a falha TRANSITÓRIA que
+  // persiste depois das novas tentativas LANÇA (página "tente de novo"), e só o
+  // erro definitivo devolve `null`. Antes, toda publicação do CRM mandava quem
+  // estava logado digitar a senha de novo. Este log continua separando os casos
+  // para quem investigar depois.
   //
   // Custou caro uma vez: um vermelho de e2e em que a barra lateral "perdeu o
   // logo" foi, por eliminação, uma casca de app que não era a casca do app —
@@ -160,12 +168,31 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
     // (rede, GoTrue fora do ar) de `AuthApiError` (token ilegível). Ambas podem
     // chegar com o mesmo `status`, e a mensagem vem em inglês do upstream — sem o
     // nome, distinguir as duas viraria regex sobre texto que muda entre versões.
-    logger.error("[auth] getUser falhou — tratando como não autenticado", {
-      name: error.name,
-      code: error.code ?? null,
-      status: error.status ?? null,
-      message: error.message,
-    });
+    logger.error(
+      resultado.estado === "indisponivel"
+        ? "[auth] getUser falhou depois das novas tentativas — sessão preservada, sem login"
+        : "[auth] getUser falhou — tratando como não autenticado",
+      {
+        name: error.name,
+        code: error.code ?? null,
+        status: error.status ?? null,
+        message: error.message,
+      },
+    );
+  }
+  // Falha TRANSITÓRIA que persistiu: a sessão pode muito bem estar válida (é o
+  // caso medido em toda publicação). Devolver `null` aqui mandaria a pessoa ao
+  // login e a faria digitar a senha de novo. Lançar cai num error boundary
+  // ("Tentar de novo"): chamado pelo layout de `app/app`, quem pega é o boundary
+  // PAI, `app/error.tsx` — o `app/app/error.tsx` só cobre os filhos do layout.
+  // Nas rotas vira 500 — o mesmo
+  // desfecho de `auth_permissions_unavailable` logo abaixo: defeito de infra
+  // não se disfarça de decisão de autenticação.
+  if (resultado.estado === "indisponivel") {
+    throw new Error(
+      `auth_unavailable: ${resultado.erro.message ?? "getUser falhou"} — o servidor de ` +
+        `autenticação não respondeu; a sessão NÃO foi tratada como deslogada.`,
+    );
   }
   if (!user) return null;
 

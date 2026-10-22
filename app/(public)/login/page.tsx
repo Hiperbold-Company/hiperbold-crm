@@ -6,6 +6,8 @@ import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
 import { branding } from "@/lib/branding";
 import { turnstileSiteKey } from "@/lib/security/turnstile";
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { destinoDoLoginComSessao } from "@/lib/auth/login-com-sessao";
 import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -14,17 +16,23 @@ export const metadata = { title: "Entrar" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; reset?: string; error?: string }>;
+  searchParams: Promise<{ next?: string; reset?: string; error?: string; recovery_used?: string }>;
 }) {
-  const { next, reset, error } = await searchParams;
+  const { next, reset, error, recovery_used } = await searchParams;
   // Fora da árvore de `app/app/layout.tsx` — sem `IdiomaProvider` do lado do
   // servidor (o cliente já tem o seu, montado em `app/(public)/layout.tsx`).
-  // Quase nunca há sessão aqui (é a própria tela de entrar), mas resolve do
-  // mesmo jeito por segurança — `user` opcional.
+  // Com sessão válida a pessoa nem vê o formulário (redirect logo abaixo);
+  // sem sessão, `user` fica nulo e o idioma vem do navegador.
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // Quem JÁ tem sessão válida não digita a senha de novo: segue para onde ia.
+  // Só quando a tela não veio dar um recado (erro, senha redefinida, código de
+  // recuperação usado) — esses avisos precisam ser lidos, e quem chega com eles
+  // costuma ter acabado de perder a sessão de propósito.
+  const destino = destinoDoLoginComSessao({ logado: !!user, next, reset, error, recovery_used });
+  if (destino) redirect(destino);
   const idioma = await idiomaDoVisitante(
     (user?.user_metadata?.locale as string | undefined) ?? null,
   );
