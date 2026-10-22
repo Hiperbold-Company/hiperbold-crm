@@ -9672,6 +9672,7 @@ export const DICIONARIO: Traducoes = {
   "Atendimentos já resolvidos que alguém marcou como aproveitáveis, com os dados pessoais removidos.": { es: "Conversaciones ya resueltas que alguien marcó como aprovechables, con los datos personales eliminados." },
   "Entra sozinha: conversas resolvidas que alguém marcar como aproveitáveis pela IA são anonimizadas e indexadas em lote.": { es: "Entra sola: las conversaciones resueltas que alguien marque como aprovechables por la IA se anonimizan y se indexan en lote." },
   "Catálogo de produtos": { es: "Catálogo de productos" },
+  "Catálogo de Produtos E-commerce": { es: "Catálogo de Productos E-commerce" },
 
   // ─── Moeda da organização (Configurações › Organização, migration 0206) ───
   //
@@ -9688,6 +9689,7 @@ export const DICIONARIO: Traducoes = {
     es: "Se aplica a todos los precios del catálogo. Un producto ya registrado conserva la moneda con la que se creó.",
   },
   "Os produtos sincronizados da sua loja, com preço, descrição e disponibilidade.": { es: "Los productos sincronizados de tu tienda, con precio, descripción y disponibilidad." },
+  "Os produtos sincronizados da sua loja virtual, com preço, descrição e disponibilidade.": { es: "Los productos sincronizados de tu tienda virtual, con precio, descripción y disponibilidad." },
   "Entra sozinho: os produtos vêm da sincronização com a sua loja, não de conteúdo digitado aqui.": { es: "Entra solo: los productos vienen de la sincronización con tu tienda, no de contenido escrito aquí." },
   "Escolhida por você no painel de Provedores.": { es: "La elegiste en el panel de Proveedores." },
   "Usando a chave OpenAI cadastrada em Credenciais.": { es: "Usando la clave de OpenAI registrada en Credenciales." },

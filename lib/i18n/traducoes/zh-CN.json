@@ -5617,5 +5617,7 @@
   "WhatsApp, Instagram e Messenger somados": "WhatsApp、Instagram 和 Messenger 合计",
   "Este limite bloqueia novas conexões ao ser atingido.": "达到此上限后将无法再新增连接。",
   "Nesta fase só o limite de Conexões bloqueia. Os demais itens apenas avisam.": "目前只有“连接”上限会拦截，其他项目仅作提醒。",
-  "Conexões ilimitadas": "不限连接数"
+  "Conexões ilimitadas": "不限连接数",
+  "Catálogo de Produtos E-commerce": "电商产品目录",
+  "Os produtos sincronizados da sua loja virtual, com preço, descrição e disponibilidade.": "从你的网店同步的产品，包含价格、描述和库存情况。"
 }

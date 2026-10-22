@@ -79,8 +79,8 @@ export const TIPOS_DE_FONTE = [
   },
   {
     id: "catalogo",
-    rotulo: "Catálogo de produtos",
-    oQueE: "Os produtos sincronizados da sua loja, com preço, descrição e disponibilidade.",
+    rotulo: "Catálogo de Produtos E-commerce",
+    oQueE: "Os produtos sincronizados da sua loja virtual, com preço, descrição e disponibilidade.",
     comoSePreenche: "automatico",
     comoChega:
       "Entra sozinho: os produtos vêm da sincronização com a sua loja, não de conteúdo digitado aqui.",
