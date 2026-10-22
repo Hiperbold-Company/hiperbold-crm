@@ -83,9 +83,14 @@ describe("loadAuthUser — o erro do getUser deixa rastro", () => {
       },
     };
 
-    expect(await loadAuthUser()).toBeNull(); // a ação não muda: falha fechado
+    // Falha fechado, mas NÃO como "deslogado": desde 22/10/2026 a falha
+    // transitória que persiste depois das novas tentativas lança (página
+    // "tente de novo"), em vez de mandar ao login quem tem sessão válida.
+    // Ver `tests/unit/auth-nao-desloga-em-falha-transitoria.test.ts`.
+    await expect(loadAuthUser()).rejects.toThrow(/auth_unavailable/);
     expect(erros).toHaveLength(1);
     expect(erros[0]!.msg).toMatch(/getUser falhou/);
+    expect(erros[0]!.msg).toMatch(/sessão preservada/);
     // Sem estes campos a linha não diagnostica nada — seria um "algo deu errado"
     // que manda investigar do zero, que é o custo que o conserto veio evitar.
     // `name` é o que separa rede (AuthRetryableFetchError) de token ilegível
