@@ -1,13 +1,24 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
- * POST /api/v1/conversations/[id]/usable-for-rag
+ * GET/POST /api/v1/conversations/[id]/usable-for-rag
  *
- * Agent-toggle for the RAG opt-in flag (LGPD L-08). When enabled, the
- * conversation becomes eligible for the daily kb-conversations-batch cron,
- * which anonymizes + chunks + embeds the dialogue into the agent's KB.
+ * "Usar para ensinar o agente" (LGPD L-08). Marcada, a conversa entra no lote
+ * diário `kb-conversations-batch`, que anonimiza, divide e indexa o diálogo na
+ * fonte "Conversas anteriores" do Conhecimento. Quem marca é o botão do Chat
+ * (`components/inbox/EnsinarAgenteButton.tsx`).
  *
- * Auth: cookie session, role >= agent.
- * Audit: action `conversation.usable_for_rag_toggled` with prev/next values.
+ * Auth: sessão de cookie, papel >= agent — o mesmo piso de encerrar a conversa
+ * (`/close`). Organização sempre da sessão, nunca do corpo.
+ * Audit: `conversation.usable_for_rag_toggled`, só quando o estado muda.
+ *
+ * Três regras que a tela promete e a rota cumpre:
+ *  - só conversa ENCERRADA (`conversaPodeEnsinar`) pode ser marcada: o lote só
+ *    lê encerradas, e uma marcação em conversa aberta ficava parada na fila;
+ *  - marcar ou desmarcar duas vezes não muda nada nem gera auditoria nova;
+ *  - `rag_review_status = 'ingested'` NUNCA é apagado por aqui. Desmarcar não
+ *    tira da base o que o lote já indexou (nenhum código remove esses trechos),
+ *    e zerar o status fazia a conversa ser indexada de novo, em dobro, se
+ *    alguém a marcasse outra vez.
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -20,13 +31,55 @@ import { requireRole } from "@/lib/auth/require-role";
 import { validateRequest } from "@/lib/schemas/_validate";
 import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { conversaPodeEnsinar, type EstadoDoEnsino } from "@/lib/ai/rag/conversa-que-ensina";
 
 export const dynamic = "force-dynamic";
 
-const bodySchema = z.object({ enabled: z.boolean() });
+const bodySchema = z.object({ enabled: z.boolean() }).strict();
 
 interface RouteCtx {
   params: Promise<{ id: string }>;
+}
+
+interface LinhaDaConversa {
+  id: string;
+  status: string;
+  usable_for_rag: boolean;
+  usable_for_rag_marked_at: string | null;
+  rag_review_status: EstadoDoEnsino["rag_review_status"];
+}
+
+const COLUNAS = "id, status, usable_for_rag, usable_for_rag_marked_at, rag_review_status";
+
+function estado(linha: LinhaDaConversa): EstadoDoEnsino {
+  return {
+    conversation_id: linha.id,
+    usable_for_rag: linha.usable_for_rag,
+    usable_for_rag_marked_at: linha.usable_for_rag_marked_at,
+    rag_review_status: linha.rag_review_status,
+    pode_marcar: conversaPodeEnsinar(linha.status),
+  };
+}
+
+export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
+  const requestId = randomUUID();
+  const { id } = await ctx.params;
+
+  const authz = await requireRole("agent", { requestId, resource: "conversations" });
+  if (!authz.ok) return authz.response;
+  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("conversations")
+    .select(COLUNAS)
+    .eq("id", id)
+    .eq("organization_id", authz.org.orgId)
+    .maybeSingle();
+  if (error) return falhaInterna("internal_error", error, { requestId });
+  if (!data) return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
+
+  return ok(estado(data as LinhaDaConversa), { requestId });
 }
 
 export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
@@ -56,29 +109,45 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
 
   const supabase = await createClient();
 
-  // Read prev value first to put it in the audit payload (best-effort).
-  const { data: prevRow } = await supabase
+  const { data: atualRow, error: leituraErr } = await supabase
     .from("conversations")
-    .select("usable_for_rag")
+    .select(COLUNAS)
     .eq("id", id)
     .eq("organization_id", activeOrg.orgId)
     .maybeSingle();
+  if (leituraErr) return falhaInterna("internal_error", leituraErr, { requestId });
+  if (!atualRow) {
+    return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
+  }
+  const atual = atualRow as LinhaDaConversa;
 
-  const prev = (prevRow as { usable_for_rag: boolean } | null)?.usable_for_rag ?? null;
+  // Já está no estado pedido: nada muda, nada se audita.
+  if (atual.usable_for_rag === input.enabled) {
+    return ok(estado(atual), { requestId });
+  }
 
-  const nowIso = new Date().toISOString();
+  if (input.enabled && !conversaPodeEnsinar(atual.status)) {
+    return fail(
+      "invalid_state",
+      t("Só uma conversa encerrada pode ensinar o agente. Encerre a conversa e marque de novo."),
+      409,
+      { requestId },
+    );
+  }
+
+  const jaNaBase = atual.rag_review_status === "ingested";
   const update = input.enabled
     ? {
         usable_for_rag: true,
-        usable_for_rag_marked_at: nowIso,
+        usable_for_rag_marked_at: new Date().toISOString(),
         usable_for_rag_marked_by: authUser.id,
-        rag_review_status: null,
+        rag_review_status: jaNaBase ? "ingested" : null,
       }
     : {
         usable_for_rag: false,
         usable_for_rag_marked_at: null,
         usable_for_rag_marked_by: null,
-        rag_review_status: null,
+        rag_review_status: jaNaBase ? "ingested" : null,
       };
 
   const { data, error } = await supabase
@@ -86,7 +155,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .update(update)
     .eq("id", id)
     .eq("organization_id", activeOrg.orgId)
-    .select("id, usable_for_rag")
+    .select(COLUNAS)
     .maybeSingle();
 
   if (error) {
@@ -102,9 +171,14 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     organizationId: activeOrg.orgId,
     resourceType: "conversation",
     resourceId: id,
-    metadata: { conversation_id: id, enabled: input.enabled, prev },
+    metadata: {
+      conversation_id: id,
+      enabled: input.enabled,
+      prev: atual.usable_for_rag,
+      ja_na_base: jaNaBase,
+    },
     requestId,
   });
 
-  return ok(data, { requestId });
+  return ok(estado(data as LinhaDaConversa), { requestId });
 }

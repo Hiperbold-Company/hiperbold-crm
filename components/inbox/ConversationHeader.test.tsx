@@ -16,9 +16,25 @@ import type { ConversationWithContact } from "@/hooks/inbox/useConversationsReal
 const closeMutate = vi.hoisted(() => vi.fn());
 const arquivarMutate = vi.hoisted(() => vi.fn());
 const startCall = vi.hoisted(() => vi.fn());
+const permissao = vi.hoisted(() => ({ agentOuMais: true }));
 
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useAuth: () => ({ user: { id: "u1", support: null } }),
+  usePermission: () => permissao.agentOuMais,
+}));
+vi.mock("@/hooks/inbox/useEnsinarAgente", () => ({
+  useEnsinarAgente: () => ({
+    estado: {
+      data: {
+        conversation_id: "conv-1",
+        usable_for_rag: false,
+        usable_for_rag_marked_at: null,
+        rag_review_status: null,
+        pode_marcar: true,
+      },
+    },
+    alternar: { mutate: vi.fn(), isPending: false },
+  }),
 }));
 vi.mock("@/hooks/inbox/useClaimConversation", () => ({
   useClaimConversation: () => ({ mutate: vi.fn(), isPending: false }),
@@ -85,6 +101,7 @@ beforeEach(() => {
   closeMutate.mockReset();
   arquivarMutate.mockReset();
   startCall.mockReset();
+  permissao.agentOuMais = true;
 });
 
 describe("ConversationHeader — chamada de voz na Inbox", () => {
@@ -204,5 +221,28 @@ describe("ConversationHeader — busca dentro da conversa (#1793)", () => {
     expect(buscar).toHaveBeenCalledOnce();
     expect(closeMutate).not.toHaveBeenCalled();
     expect(arquivarMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("ConversationHeader — Usar para ensinar o agente", () => {
+  const rotulo = "Usar para ensinar o agente";
+
+  it("aparece na conversa encerrada (fechada, resolvida ou arquivada)", () => {
+    for (const status of ["closed", "resolved", "archived"]) {
+      const { unmount } = render(<ConversationHeader conversation={conversa(status)} />);
+      expect(screen.getByRole("button", { name: rotulo })).toHaveAttribute("aria-pressed", "false");
+      unmount();
+    }
+  });
+
+  it("não aparece na conversa aberta: o lote noturno só lê conversa encerrada", () => {
+    render(<ConversationHeader conversation={conversa("open")} />);
+    expect(screen.queryByRole("button", { name: rotulo })).toBeNull();
+  });
+
+  it("não aparece para quem não alcança o piso da rota (viewer)", () => {
+    permissao.agentOuMais = false;
+    render(<ConversationHeader conversation={conversa("closed")} />);
+    expect(screen.queryByRole("button", { name: rotulo })).toBeNull();
   });
 });

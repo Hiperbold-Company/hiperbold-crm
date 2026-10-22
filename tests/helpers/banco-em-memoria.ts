@@ -118,8 +118,23 @@ class Consulta implements PromiseLike<ResultadoDoBanco> {
     this.filtros.push((l) => (valor === null ? valorDa(l, coluna) != null : valorDa(l, coluna) !== valor));
     return this;
   }
-  /** Filtro composto não é interpretado: o teste que depende dele monta a fixture para não precisar. */
-  or(_expressao: string): this {
+  /**
+   * Só a forma simples é interpretada: uma lista de `coluna.gt.valor` /
+   * `coluna.lt.valor` separada por vírgula (ex.: a janela do lote de conversas).
+   * Qualquer outra (com `and(...)`, cursor composto) segue IGNORADA, como antes:
+   * o teste que depende dela monta a fixture para não precisar.
+   */
+  or(expressao: string): this {
+    const termos = expressao.split(",").map((t) => /^([a-z_]+)\.(gt|lt)\.(.+)$/.exec(t));
+    if (termos.some((m) => m === null)) return this;
+    this.filtros.push((l) =>
+      termos.some((m) => {
+        const [, coluna, op, valor] = m as RegExpExecArray;
+        const v = valorDa(l, coluna!);
+        if (v === null || v === undefined) return false;
+        return op === "gt" ? String(v) > valor! : String(v) < valor!;
+      }),
+    );
     return this;
   }
   order(coluna: string, opts?: { ascending?: boolean }): this {
