@@ -8,6 +8,390 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [2.0.0] — 2026-10-22
+
+### ⚠️ Requer atenção
+
+- **Etiquetas, CPF e consentimento enviados ao endereço de captação só valem com a assinatura da fonte** Quem manda `tags`, `cpf` ou consentimento para uma fonte de captação precisa assinar o
+  envio: abra a fonte em Webhooks, copie o segredo e calcule o HMAC-SHA256 hexadecimal do
+  corpo cru no cabeçalho `X-HiperCRM-Signature`. Fonte sem segredo (formulário público de
+  site) continua recebendo leads, mas deixa de gravar etiqueta, CPF e consentimento; para
+  esses campos, mande o envio pelo seu servidor, com a fonte protegida por segredo. Quem
+  já assina não precisa mudar nada.
+- **A IA da chave da instalação sai sempre pela OpenRouter, com o Luna como modelo padrão** - Preencha `OPENROUTER_API_KEY` no servidor; sem ela a IA da instalação para com o aviso de "sem chave".
+  - Mantenha `OPENAI_API_KEY`: transcrição, voz e o plano B dos embeddings usam a OpenAI direto.
+
+### Adicionado
+
+- **No painel de plataforma, uma organização suspensa pode ter a exclusão programada ou feita na hora** Em Tenants, organização suspensa ganha "Excluir organização": programar para uma data (reprogramável e
+  cancelável) ou excluir agora, digitando o slug. É a mesma exclusão de Sistema › Exclusões, sem volta; os
+  registros fiscais e a auditoria ficam. Só administrador da plataforma com acesso completo e duas etapas.
+
+- **Chave de API administra agentes de IA, campos personalizados do funil e o segredo das entradas automáticas** Uma chave de API com papel de administrador (ou de gerente, nas entradas automáticas) passa a fazer
+  pela API o que o administrador faz na tela: listar, criar, salvar versão nova, publicar e pausar
+  agentes de IA; acrescentar, alterar e remover campos personalizados de um funil, um a um, sem reenviar
+  a lista inteira; e gerar ou girar o segredo de assinatura de uma entrada automática de contatos. O
+  segredo aparece uma única vez, na resposta que o gerou. As mesmas ações estão disponíveis como
+  ferramentas do CRM para o Claude Code. Criações aceitam o cabeçalho `Idempotency-Key`.
+
+- **Chave de API administra respostas prontas, follow-ups, roteadores, regras automáticas, distribuição de atendimento e material de conhecimento** Uma chave de API com papel de gerente ou administrador (o mesmo da tela) passa a fazer pela API o que
+  essa pessoa faz na tela: criar, editar e apagar respostas prontas compartilhadas; criar, editar,
+  duplicar, publicar, desativar e reverter fluxos de follow-up; criar, editar e apagar roteadores de
+  atendimento e definir as intenções deles; criar, editar e apagar regras automáticas (a regra nasce
+  pausada, e o segredo de um webhook nunca volta); ler e alterar a distribuição de atendimento; e
+  cadastrar, editar e arquivar material de conhecimento. Convidar pessoas, mudar papel, revogar e
+  reativar acesso e criar, editar e arquivar funis também passam a existir como ferramentas do CRM para
+  o Claude Code, assim como a leitura dos números de WhatsApp conectados e das chaves de IA cadastradas
+  (sem nenhum segredo). Criações aceitam o cabeçalho `Idempotency-Key`.
+
+  Correção de segurança: o recibo de idempotência (a resposta guardada por 24 horas de uma criação) não
+  era mais do que o servidor deveria ler, mas qualquer membro da organização, o Visualizador inclusive,
+  conseguia lê-lo diretamente no banco com a própria sessão. Agora só o servidor lê e escreve nele, e o
+  recibo deixa de guardar o endereço de captação e o segredo digitado de uma entrada automática. A
+  atualização aplica a mudança sozinha.
+
+- **Você recebe um e-mail quando um número de WhatsApp cai — e outro quando ele volta** O CRM já sabia quando uma conexão caía: abria um aviso na Central e mostrava
+  uma faixa vermelha no topo de todas as telas. Só que os dois exigem alguém com
+  o produto aberto. A queda que custa caro é a outra: ela acontece às 19h, o time
+  já fechou o navegador, e a descoberta vem no dia seguinte pelo cliente
+  reclamando que ninguém respondeu.
+
+  Agora, quando uma conexão sai do ar, os administradores da organização recebem
+  um e-mail dizendo qual número caiu, o que aconteceu e o que fazer, com um botão
+  que abre Conexões. Quando ela volta, sai um segundo e-mail avisando — com o
+  lembrete de olhar as conversas do período, porque o que o cliente mandou
+  enquanto o número estava desconectado não chega depois.
+
+  O aviso sai uma vez por queda, não de tempos em tempos: o mesmo alarme repetido
+  a cada cinco minutos é o caminho mais curto para alguém parar de lê-lo. Só os
+  administradores recebem, que são quem pode reconectar. E o envio depende do
+  e-mail estar configurado na instalação: quem não configurou continua com a
+  Central e a faixa exatamente como estavam, sem nenhum erro novo.
+
+- **Captação assinada aceita carimbo de horário e passa a recusar envio reenviado** O endereço de captação com segredo agora aceita, junto da assinatura, o cabeçalho
+  `X-HiperCRM-Timestamp` (segundos Unix). Com ele, a assinatura em `X-HiperCRM-Signature`
+  é o HMAC-SHA256 hexadecimal de `v1:carimbo.corpo` (as letras `v1:`, o carimbo, um ponto
+  e o corpo exatamente como foi enviado), e o CRM recusa o envio quando o carimbo difere
+  do relógio do servidor em mais de 5 minutos. Assim, um envio assinado que alguém
+  capturou deixa de poder ser reenviado depois.
+
+  Nada muda para quem já assina só o corpo: a fonte segue aceitando esse formato até
+  receber o primeiro envio válido com carimbo. A partir daí ela passa a exigir o carimbo
+  e recusa o formato antigo. Não há chave para ligar nem desligar, e o banco não deixa
+  desligar a exigência depois que ela liga.
+
+  Também nesta versão:
+
+  - Se o segredo de uma fonte não puder ser aberto (a chave da instalação está ausente ou
+    foi trocada), a captação responde 503 e registra a recusa no histórico, em vez de
+    aceitar o envio como se a fonte fosse pública.
+  - O número do CPF guardado nos contatos deixa de ser legível ou gravável por quem usa a
+    API do banco diretamente com a sessão de um usuário; o CRM continua mostrando se o
+    contato tem CPF.
+  - Gravar o CPF de um contato pela tela, pela API de contatos ou pela importação de
+    planilha passa a funcionar (antes falhava por falta da função de cifra), e quem tem
+    papel de gerente ou acima volta a conseguir abrir o CPF de um contato.
+
+- **Conectar um número de WhatsApp que já roda numa instância do seu próprio servidor** Quem já mantém números de WhatsApp em um servidor de instâncias próprio
+  precisava, até agora, mover o número para um dos transportes que o CRM conhecia
+  — ou seja, desconectar o aparelho, parear de novo e deixar para trás as
+  automações que já falavam com aquela instância.
+
+  Agora Conexões tem a aba "API não oficial": você informa o endereço do servidor
+  e o token da instância, e o CRM testa os dois antes de gravar. Dá certo, a
+  conexão aparece com o número e o apelido, o token fica guardado cifrado (e não
+  é mostrado de novo) e a volta das mensagens é ligada sozinha — o CRM registra o
+  próprio endereço no servidor sem apagar os webhooks que já estavam lá.
+
+  A partir daí é um canal como os outros: as conversas entram no inbox com
+  imagem, áudio, documento e figurinha; o texto de PDF e a descrição de imagem
+  são extraídos como em qualquer canal; o que você envia pelo CRM sai pela
+  instância e os tiques de entregue e lido voltam para a bolha. Áudio gravado no
+  próprio CRM chega como nota de voz. Quando alguém responde pelo celular, a IA
+  pausa naquela conversa, e quando a instância cai ou pede o QR de novo, o aviso
+  aparece na Central e se fecha sozinho quando o número volta.
+
+  Dois pontos para saber antes de usar:
+
+  - **O número corre o mesmo risco de bloqueio do canal por QR.** É o WhatsApp
+    comum, não a API oficial: o CRM trata este canal com as mesmas travas
+    anti-bloqueio, e não com as regras de janela e modelo do canal oficial.
+  - **O que outro sistema enviar pela mesma instância aparece na conversa.** Se
+    um n8n (ou qualquer outra automação) responder por aquele mesmo número, a
+    resposta entra no inbox como saída de fora do CRM, e a IA daquela conversa
+    pausa, como pausa quando alguém responde pelo celular: o cliente já recebeu
+    uma resposta e não deve receber duas. O que o próprio CRM envia não aparece
+    duplicado.
+
+  Para a conexão funcionar, o endereço público do CRM precisa estar configurado
+  (`NEXT_PUBLIC_APP_URL`): é dele que sai o endereço de volta registrado no
+  servidor. Sem ele, a conexão é gravada, o aviso diz que a entrada de mensagens
+  não foi ligada, e basta reconectar com o mesmo token depois de configurar.
+
+- **O cliente conecta o WhatsApp sozinho, lendo um QR Code dentro do CRM** Até agora, conectar um número de WhatsApp exigia ter uma instância já pareada num
+  servidor e colar o endereço e o token dela em Conexões. Agora, quando a
+  instalação tem o servidor de WhatsApp configurado, a opção principal em Conexões
+  (e no passo "Dê um telefone a ele" do primeiro acesso) passa a ser
+  **Conectar WhatsApp (QR Code)**: o CRM cria a instância no servidor, mostra o
+  QR Code grande, e o cliente só abre o WhatsApp no celular, vai em Dispositivos
+  conectados e lê. O QR se renova sozinho enquanto a tela está aberta; quem
+  prefere pode conectar com um código digitado no celular, informando o número.
+  Ao conectar, o CRM preenche o número e o nome do perfil e liga a entrada das
+  mensagens.
+
+  O formulário antigo (endereço do servidor e token da instância) continua
+  disponível, dobrado em "Avançado".
+
+  Cuidados que vêm junto:
+
+  - Quem desiste (cancela, ou deixa o QR sem ler por 30 minutos) não deixa nada
+    para trás: a instância é apagada no servidor e a vaga do plano é liberada. Há
+    no máximo dois pareamentos em andamento por organização.
+  - Remover uma conexão criada assim também apaga a instância no servidor. As
+    conexões feitas com servidor e token do próprio cliente continuam como eram:
+    só o webhook do CRM é retirado, a instância é dele.
+  - O limite de Conexões do plano vale antes de qualquer instância ser criada e
+    conta todas as conexões da empresa (WhatsApp, Instagram e Messenger somados),
+    conferido no banco; sem limite no plano, o teto de segurança é 50. Cada empresa
+    também tem um limite de pedidos por hora para gerar, renovar e cancelar QR
+    Codes, e o código de pareamento por telefone sai um a cada 30 segundos, no
+    máximo cinco por pareamento.
+  - Gravar o token de administrador em Admin › Configuração exige a verificação em
+    duas etapas confirmada na sessão, e o endereço do servidor não pode apontar
+    para a rede interna.
+
+  **Para ligar o recurso é preciso configurar**, em Admin › Configuração
+  (grupo WhatsApp), o **Servidor de WhatsApp para conectar por QR Code** (endereço
+  https) e o **Token de administrador do servidor de WhatsApp**. O token fica
+  guardado cifrado e não é mostrado de novo. Dá para configurar também no arquivo
+  de instalação (`UAZAPI_SERVIDOR_URL` e `UAZAPI_ADMIN_TOKEN`), mas o valor
+  gravado na tela vale sobre ele. Sem as duas chaves, a opção não aparece e nada
+  muda para quem já usa o sistema.
+
+  O agendador ganha uma rodada nova (`pareamento-qr-limpeza`, a cada 5 minutos)
+  que limpa os pareamentos esquecidos; ela vem junto com a imagem do agendador,
+  sem edição manual.
+
+- **O agente consulta outros sistemas por conexões MCP** Até aqui o agente só usava as ferramentas do próprio CRM. Uma imobiliária que
+  guarda os imóveis em outro sistema, ou uma loja com o estoque num ERP, não
+  tinha como fazer o agente consultar esses dados durante o atendimento.
+
+  Agora dá para conectar servidores MCP (o padrão aberto de ferramentas para
+  IA) em IA › Ensinar o agente › Conexões MCP. O CRM se conecta ao servidor,
+  lista as ferramentas dele, e cada uma vira uma capacidade que se marca no
+  agente como qualquer outra. Ela conta no limite de 25 capacidades.
+
+  Nenhuma ferramenta externa roda sem o admin decidir antes se ela só consulta
+  ou se altera dados. Uma ferramenta nova, ou uma cuja descrição o servidor
+  mudou, fica aguardando aprovação até alguém olhar. O Testar só roda as de
+  consulta. Com o Operador ligado, as que alteram dados saem do agente que
+  conversa com o cliente, e cada uso delas fica na auditoria.
+
+  Dado de cliente não sai junto com o pedido: telefone, e-mail, CPF, CNPJ e
+  endereço de WhatsApp são retirados do que o agente manda para a ferramenta
+  externa, e o que saiu fica no registro. Código de barras, referência de
+  produto, CEP, ano e preço passam inteiros, que é do que a consulta de catálogo
+  vive.
+
+  A chave de acesso do servidor é guardada cifrada, e a tela mostra só o começo
+  do endereço. Um servidor fora do ar ou lento não derruba o atendimento: o
+  agente responde sem aquela ferramenta e a Central avisa. Os dados que o agente
+  manda para a ferramenta saem para o servidor de terceiro, e a tela de cadastro
+  avisa isso.
+
+- **Confirmação de e-mail feita pelo próprio CRM** Quem cria uma conta passa a receber um e-mail "Confirme seu e-mail" do CRM, com
+  um link de uso único que vale por 7 dias. Enquanto o endereço não é confirmado,
+  uma faixa no topo avisa e oferece "Reenviar" (1 por minuto, 5 por dia); ela
+  nunca bloqueia o uso. Contas que já existiam não veem a faixa.
+
+  O cadastro ganha a caixa de aceite dos Termos de Uso e da Política de
+  Privacidade, e o link do site de vendas pode levar o plano escolhido
+  (`/signup?plano=pro`).
+
+- **Contatos - seleção em lote, filtros por data, funil e campo, e exportação em CSV** Para gerentes e administradores, a tela de Contatos ganhou caixas de seleção (por linha, por página e
+  "selecionar todos os N contatos do filtro", como no Gmail) e uma barra de ações com Excluir e Exportar
+  CSV; o atendente segue com a lixeira de um contato por vez. A exclusão em lote faz o mesmo que a
+  lixeira de cada linha (apaga o contato e as conversas e mensagens dele; contato com compromisso na
+  agenda, anonimizado ou já mesclado não é excluído), em blocos de tudo-ou-nada (nenhum contato fica com
+  o histórico apagado e a ficha de pé), pede confirmação com a quantidade exata e, acima de 50, exige
+  digitar o número. A atualização aplica uma função nova no banco (migration 0971), sem ação manual.
+  Novos filtros, combináveis com a busca e guardados na URL: quando entrou no
+  CRM e última atividade (Hoje, 7 dias, 30 dias, Este mês ou de/até, no fuso da organização), funil e
+  etapa em que o contato tem negócio, e campo personalizado do contato ou do negócio (contém ou igual).
+  A exportação gera um CSV em UTF-8 que abre direto no Excel em português, sem CPF nem outros documentos,
+  e fica registrada na auditoria. Excluir em lote e exportar têm limite de chamadas por usuário.
+
+- **Cupom de desconto na compra do plano** Quem assina um plano pode digitar um código de cupom e ver o valor com desconto
+  antes de confirmar. O desconto vale só na primeira cobrança: as renovações da
+  assinatura seguem no preço cheio do ciclo. Ele pode ser em porcentagem (de 1 a
+  99) ou em valor fixo, nunca passa de 99% do preço e o total nunca fica abaixo de
+  R$ 5,00. No cartão parcelado, os juros são calculados sobre o preço já
+  descontado e cada parcela precisa ficar em pelo menos R$ 5,00; se o desconto
+  deixar a parcela abaixo disso, a tela pede menos parcelas.
+
+  Cada cupom pode ter planos e ciclos permitidos, validade, limite total de usos
+  e pode ser ativado ou desativado. Uma empresa, e também um mesmo CPF ou CNPJ de
+  pagador, usa o mesmo cupom uma vez só. Cupom não vale para pacote de tokens.
+
+  Quem administra a plataforma cria e liga ou desliga cupons e vê quantas vezes
+  cada um foi usado. Todo código que não se aplica à compra (inexistente,
+  desativado, vencido, esgotado ou de outro plano) recebe a mesma mensagem, e as
+  tentativas de cupom têm limite por usuário, por empresa e por origem.
+
+  A mudança de banco (`0955`) vem junto com a atualização; nada a configurar.
+  Sem cupom, a compra funciona como antes.
+
+- **E-mails de conta e cobrança para quem administra a empresa** Até aqui o CRM mandava um único e-mail de cobrança, a régua de renovação do
+  plano que não renova sozinho. Os avisos de pagamento, recibo e atraso ficavam
+  por conta do gateway.
+
+  Agora o CRM manda dez e-mails novos para os admins da empresa cliente: boas-vindas
+  quando a empresa é criada, plano confirmado, recibo de cada pagamento (um só
+  por compra parcelada), aviso dias antes da renovação automática no cartão,
+  pagamento não aprovado, conta suspensa, cancelamento confirmado, estorno,
+  pacote de tokens liberado e tokens de IA do mês acabando (em 80% e em 100%).
+  Todos usam o mesmo layout, com a marca da instalação.
+
+  Os e-mails entram numa fila no banco no momento do acontecimento e saem por um
+  agendamento que roda a cada minuto. Falha do servidor de e-mail não perde o
+  aviso: ele é tentado de novo com espera crescente, até seis vezes. Cada aviso
+  sai uma vez só, mesmo que o evento do gateway chegue repetido.
+
+  Quem opera a instalação pode receber cópia dos avisos de empresa nova e de
+  cobrança (assinatura, recusa, suspensão, cancelamento, estorno e pacote de
+  tokens). O endereço fica em Configuração, no grupo de e-mail, em "E-mail que
+  recebe cópia dos avisos de clientes"; vazio, a cópia vai para os admins da
+  plataforma.
+
+  Precisa de SMTP ou Resend configurado para sair. Sem nenhum dos dois, os
+  avisos esperam na fila e saem quando o envio for configurado.
+
+- **Ficha do negócio com campos em duas categorias, história do contato na linha do tempo e registro manual de eventos** Na ficha do negócio, os campos do funil passam a aparecer em dois blocos: "Dados do lead" (empresa,
+  cargo, instituição e afins) e, depois, "Rastreamento" (utm_source, utm_medium, gclid e afins), que
+  começa recolhido. Em Configurações, Funis, cada campo ganha o seletor "Categoria"; quando ninguém
+  escolhe, a categoria é deduzida pelo nome do campo, então os funis que já existem ficam arrumados sem
+  nenhuma ação.
+
+  A linha do tempo da ficha agora conta a história do contato inteiro: os eventos dos outros negócios
+  dele aparecem junto, cada um indicando o funil e o negócio de origem, e novos eventos chegam sem
+  recarregar a tela.
+
+  O botão "Registrar evento" anota na linha do tempo o que aconteceu fora do CRM: uma nota, uma ligação,
+  uma reunião, um e-mail ou uma conversa de WhatsApp, com texto de até 2000 caracteres e data e hora
+  (agora por padrão; pode ser no passado, não no futuro). O registro mostra quem o fez e conta como
+  contato com o cliente para o aviso de negócio parado.
+
+- **O limite de Conexões do plano vale para todos os canais e bloqueia de verdade** O item "Conexões" do plano (Pro 3, Max 10, Scale 20) agora soma todos os canais
+  da empresa: WhatsApp pela API não oficial, WhatsApp oficial, Instagram e
+  Messenger. Ao chegar no limite, o CRM recusa uma conexão nova (e também
+  reativar uma removida) com a mensagem "Sua conta atingiu o limite de N conexões
+  do plano X. Remova uma conexão ou mude de plano.", e o botão de conectar fica
+  desabilitado com um link para a tela de planos.
+
+  Diferente dos outros itens do plano (funis, leads, membros, integrações), que
+  seguem o modo da trava configurado em Admin, o limite de Conexões bloqueia
+  sempre. Conexões que já existem não são afetadas: uma empresa que já tem mais
+  conexões que o limite continua com elas, só não cria nem reativa mais. Plano
+  sem limite de conexões (como o Ilimitado) não bloqueia nada.
+
+  A mudança de banco (`0954`) vem junto com a atualização; nada a configurar.
+
+- **Membro da agência, um acesso permanente que não ocupa vaga e não sai quando o dono assume** Quem cria a organização pelo painel de plataforma entra como membro da agência, com o selo "Agência" na
+  Equipe; o cliente não remove nem muda o papel dele. A página do tenant adiciona e remove membros.
+
+- **Permissões por perfil em Equipe** Nova aba Permissões em Equipe: o administrador liga e desliga, por perfil, exportar e importar contatos, mover e registrar negócios, editar funis, responder no Chat, relatórios e automações. O padrão é o de antes, e a regra vale no servidor.
+
+- **Produtos dentro do negócio, com valor fixo ou variável e o valor do negócio somado sozinho** O produto pode ter valor fixo ou variável (definido pelo atendente no negócio; a IA não cita preço).
+  A ficha do negócio ganha a seção Produtos, com quantidade e valor, e o Valor do negócio vira a soma.
+  Produtos também aparecem em Configurações.
+
+- **Quem move um lead sem responsável pode passar a ser o responsável, datas do negócio na ficha e no card e filtros de data no quadro** Em Configurações, Distribuição de atendimento, um novo interruptor "Quem move um lead sem responsável
+  passa a ser o responsável" (desligado por padrão, então nada muda para quem já usa). Ligado, o
+  atendente, gerente ou administrador que muda a etapa de um negócio sem responsável, arrastando no
+  quadro ou movendo em lote, assume esse negócio, e o fato aparece na linha do tempo ("Assumiu o
+  negócio"). O agente de IA, as automações e as integrações nunca atribuem, e negócio que já tem
+  responsável, humano ou agente de IA, não é tomado.
+
+  A ficha do negócio passa a mostrar "Criado em" e "Última movimentação", e o card do quadro mostra
+  discretamente "movido há 3 dias". A barra de filtros do quadro ganha "Criado em" e "Última
+  movimentação", cada um com Hoje, Últimos 7 dias, Últimos 30 dias, Este mês e período personalizado
+  (de/até), contados no fuso da organização e guardados no endereço da página como os outros filtros.
+
+  Na linha do tempo, um evento registrado à mão depois de ocorrido passa a mostrar "novo" em vez de
+  "agora" ao chegar.
+
+- **Tela Início com o que já está pronto e o que falta, e perfil da empresa em Configurações** Com a compra pelo cliente ligada, quem acabou de assinar abre o CRM numa tela
+  Início que mostra os passos obrigatórios (plano, e-mail, perfil da empresa e
+  WhatsApp) e os opcionais (agente de IA, logo, follow-up e equipe), com um botão
+  em cada um. Feitos os obrigatórios, a entrada volta a ser o Inbox. Em
+  Configurações › Empresa há agora o campo "O que sua empresa faz".
+
+### Alterado
+
+- **A tela Webhooks agora se chama Automações e Webhooks e abre na aba Automações** Menu, busca ⌘K e título mudaram; o endereço é o mesmo e `?tab=` (`rules`, `sources`, `capturas`,
+  `activity`) abre uma aba direto.
+
+- **Etiquetas, CPF e consentimento enviados ao endereço de captação só valem com a assinatura da fonte** O endereço de captação (o link que recebe leads de formulário, Respondi, RD Station
+  ou do seu próprio servidor) é público: o código dele está no HTML da página, e
+  qualquer pessoa que o conheça consegue mandar um envio. Por isso três campos que
+  mudam a vida de um contato agora só entram quando o CRM tem prova de quem mandou:
+
+  - **`tags`** (etiquetas, que podem acionar automações);
+  - **`cpf`** (ou `cpf_cnpj`), que passa a ser gravado só com a assinatura, inclusive em
+    contato que nasce naquele mesmo envio (antes valia para contato novo);
+  - o **consentimento** do formulário (Respondi), sobre contato que já existia.
+
+  A prova é a assinatura da fonte: o envio leva o cabeçalho `X-HiperCRM-Signature` com o
+  HMAC-SHA256, em hexadecimal, do corpo exatamente como foi enviado, usando o segredo da
+  fonte. O formato não mudou (o cabeçalho antigo `X-Deskcomm-Signature` segue aceito).
+
+  Sem a assinatura o lead e o contato entram normalmente, mas esses campos são
+  descartados — e agora isso aparece: a resposta 200 traz `data.ignored_fields` (por
+  exemplo `["tags", "cpf"]`), e o motivo fica no registro de operação do servidor. Antes
+  o descarte era silencioso.
+
+- **Os e-mails de confirmar conta e redefinir senha chegam com a logo e o link por extenso** Os dois e-mails de acesso ganharam o mesmo visual dos e-mails de cobrança: a
+  logo da instalação no topo, o texto num cartão branco e, abaixo do botão, o
+  link escrito por extenso para quem não consegue clicar.
+
+- **A IA da chave da instalação sai sempre pela OpenRouter, com o Luna como modelo padrão** Atendimento, classificadores, leitura de imagem e embeddings na chave da instalação usam
+  `OPENROUTER_API_KEY`, nunca a OpenAI ou a Anthropic direto. Embeddings têm plano B na OpenAI quando a
+  OpenRouter falha. Organização e agente novos nascem em Luna; agente com modelo Claude roda em Luna. O
+  formulário do agente só oferece a chave do plano e as chaves conectadas, e o servidor recusa outro
+  modelo na chave do plano. A variante `:batch` não é mais oferecida.
+
+- **Tags do contato (Inbox) e Tags do negócio (ficha) mostram a lista de etiquetas da empresa** A lista vem de Configurações › Tags, com cor e grupo, filtro e "Criar etiqueta". No Inbox marcar grava
+  na hora; na ficha do negócio vale ao Salvar.
+
+- **Inbox agora se chama Chat e Funis agora se chama Pipeline** Mudaram o nome no menu, na busca ⌘K e no título das duas telas; os endereços são os mesmos.
+
+### Corrigido
+
+- **Empresa, cargo e UTMs enviados pela captação agora aparecem na ficha do negócio** A captação encaixa cada dado no campo do funil pela chave ou pelo nome, sem diferenciar maiúscula,
+  acento ou separador ("Cargo" encaixa em "Cargo / Posição"). O que não tem campo segue guardado como
+  antes, e valor já preenchido nunca é sobrescrito.
+
+- **Contatos, kanban e listas de negócios lentos para gerente em organização grande** Em organização com milhares de negócios, gerentes e leitores esperavam até 19 s pela lista, e a tela de
+  Contatos aparecia sem os funis. A regra de quem vê cada negócio passou a ser conferida uma vez por consulta.
+  Quem vê o quê não mudou.
+
+- **O passo do telefone não cria mais uma conexão que já nasce quebrada** No primeiro acesso, o passo "Dê um telefone a ele" perguntava como você já usa
+  o número e oferecia, como primeira opção, ler um código com o celular. Só que
+  essa opção depende de um serviço que nem toda instalação tem no ar — e, quando
+  ele não está, a conexão era gravada mesmo assim e ficava marcada como quebrada
+  para sempre.
+
+  O resultado aparecia depois, longe dali: uma faixa vermelha no topo de todas as
+  telas dizendo que um "WhatsApp sem nome" estava desconectado, sem nada que
+  alguém pudesse fazer a respeito. O número de verdade estava conectado; a
+  conexão caída era um fantasma que o próprio primeiro acesso tinha criado, e ela
+  nem aparecia em Conexões para ser removida.
+
+  Agora o passo oferece conectar pela sua própria instância, o mesmo formulário
+  da tela de Conexões, que só grava a conexão depois que o servidor e o token
+  respondem. Nenhuma das três formas cria canal antes disso, então o primeiro
+  acesso não deixa mais rastro de uma conexão que nunca existiu.
+
 ## [1.57.0] — 2026-09-27
 
 ### Adicionado
@@ -8938,7 +9322,8 @@ Primeira versão marcada do DeskcommCRM. O projeto vinha sendo desenvolvido publ
 
 - **Node 22 é obrigatório para desenvolvimento.** A suíte de invariantes instancia o cliente do Supabase, que exige o `WebSocket` global — nativo apenas a partir do Node 22. Isso não afeta quem apenas hospeda: a VPS roda a imagem pronta.
 
-[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v1.57.0...HEAD
+[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/melgarafael/DeskcommCRM/compare/v1.57.0...v2.0.0
 [1.57.0]: https://github.com/melgarafael/DeskcommCRM/compare/v1.56.1...v1.57.0
 [1.56.1]: https://github.com/melgarafael/DeskcommCRM/compare/v1.56.0...v1.56.1
 [1.56.0]: https://github.com/melgarafael/DeskcommCRM/compare/v1.55.0...v1.56.0
