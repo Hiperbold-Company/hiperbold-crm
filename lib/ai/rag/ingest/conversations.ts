@@ -2,8 +2,8 @@
  * Conversations RAG ingestion (S-06.07, LGPD-critical L-08).
  *
  * Pipeline (per org, per batch run):
- *   1. List conversations where usable_for_rag=true AND status='resolved'
- *      AND usable_for_rag_marked_at > sinceTs
+ *   1. List conversations where usable_for_rag=true AND status in
+ *      STATUS_QUE_ENSINAM (closed/resolved/archived) AND rag_review_status is null
  *   2. For each conversation:
  *      a. Load messages (filtered by org_id), build "Cliente: ...\nAtendente: ..."
  *      b. Run anonymize() (CPF / email / phone / CEP / PT-BR first names)
@@ -31,6 +31,7 @@ import {
   markVersionReady,
 } from "@/lib/ai/rag/version";
 import { herdarChunksDaVersaoAtiva } from "@/lib/ai/rag/herdar-chunks";
+import { STATUS_QUE_ENSINAM } from "@/lib/ai/rag/conversa-que-ensina";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const CONV_MAX_CHARS = 1600;
@@ -135,7 +136,7 @@ function buildTranscript(messages: MsgRow[]): string {
 export async function ingestConversationsBatch(
   args: IngestConversationsArgs,
 ): Promise<IngestConversationsResult> {
-  const { organizationId, agentId, sinceTs } = args;
+  const { organizationId, agentId } = args;
   const cap = args.cap ?? 50;
   const admin = createAdminClient();
 
@@ -157,13 +158,22 @@ export async function ingestConversationsBatch(
   }
 
   // 1. Pull eligible conversations.
+  //
+  // Status: os três terminais (`STATUS_QUE_ENSINAM`). Era só `resolved`, que
+  // nenhum código grava — o Chat encerra com `closed` —, e a base ficava vazia.
+  //
+  // Sem janela de tempo: quem decide se a conversa ainda falta é
+  // `rag_review_status is null` (vira `ingested`/`skipped`/`pending_review` ao
+  // ser processada). Com a janela de 24 h, uma rodada que falhasse (sem chave de
+  // embedding, acima do teto do lote) deixava a conversa marcada fora para
+  // sempre. A conversa reaberta fica fora pelo status enquanto aberta e entra
+  // quando é encerrada de novo.
   const { data: convRows, error: convErr } = await admin
     .from("conversations")
     .select("id, organization_id, contact_id")
     .eq("organization_id", organizationId)
     .eq("usable_for_rag", true)
-    .eq("status", "resolved")
-    .gt("usable_for_rag_marked_at", sinceTs.toISOString())
+    .in("status", [...STATUS_QUE_ENSINAM])
     .is("rag_review_status", null)
     .limit(cap);
 
