@@ -41,6 +41,14 @@ function codigo(sql: string): string {
 
 const le = (arquivo: string) => codigo(readFileSync(join(process.cwd(), "supabase/migrations", arquivo), "utf8"));
 
+/**
+ * A 0976 reescreveu as 16 policies da 0939 (atalho de visão total na frente) e levou o par
+ * drop+create para o bloco dela: recriá-las aqui faria cada update.sh reinstalar a versão anterior
+ * (tests/unit/baseline-nao-constroi-o-que-derruba). No bloco da 0939 fica o resto da migration.
+ */
+const DO_DE_POLICY = /^do \$(t_\w+)\$\nbegin\n[\s\S]*?\nend\n\$\1\$;$/gm;
+const semPoliciesMovidas = (n: string, c: string) => (n === "0939" ? c.replace(DO_DE_POLICY, "").replace(/\n{2,}/g, "\n").trim() : c);
+
 describe("0937 a 0939: posição, igualdade e registro", () => {
   const varredura = BASELINE.lastIndexOf("-- ---- VARREDURA anon:");
   let anterior = BASELINE.lastIndexOf("-- ---- uma chave de organizations.settings por vez, atômica");
@@ -56,7 +64,7 @@ describe("0937 a 0939: posição, igualdade e registro", () => {
     });
 
     it(`${n}: o SQL da migration e o do bloco são iguais, ignorando comentários`, () => {
-      expect(codigo(extraiBloco(n))).toBe(codigo(migration));
+      expect(codigo(extraiBloco(n))).toBe(semPoliciesMovidas(n, codigo(migration)));
     });
 
     it(`${n}: registrada no MANIFEST`, () => {
