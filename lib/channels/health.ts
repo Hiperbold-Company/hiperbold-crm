@@ -74,6 +74,45 @@ export const DETALHE_CREDENCIAL_RECUSADA = "credencial_recusada_pelo_transporte"
  */
 export const PREFIXO_EMPURRAO = "PUSH:";
 
+/**
+ * Quantas checagens SEGUIDAS do vigia sem resposta do servidor viram aviso.
+ *
+ * ─── O defeito, medido em produção ──────────────────────────────────────────
+ *
+ * O vigia roda de 5 em 5 minutos. Bastava UMA rodada sem resposta ("fetch
+ * failed", "servidor_respondeu_503", timeout) para abrir o aviso "Não foi
+ * possível verificar" e mandar e-mail aos admins; a rodada seguinte respondia e
+ * saía o e-mail "voltou". Foram 11 pares de e-mail em 10 dias para uma conexão
+ * que nunca saiu de `WORKING` — o alarme que ensina a ignorar o alarme.
+ *
+ * Com 3, o aviso só sai depois de ~15 minutos sem resposta. Vale SÓ para o
+ * episódio `UNREACHABLE` observado pela varredura: QR para escanear, sessão
+ * parada/deslogada e credencial recusada continuam avisando na primeira
+ * checagem, porque ali o servidor RESPONDEU e o problema é certo.
+ */
+export const LIMIAR_FALHAS_SEGUIDAS_SEM_RESPOSTA = 3;
+
+/**
+ * "Sem resposta" que NÃO é soluço de rede: o próprio CRM sabe que não tem como
+ * perguntar (credencial ausente, canal desligado, transporte não configurado).
+ * Esperar 15 minutos não muda nada aqui, então o aviso sai na primeira rodada.
+ */
+export const DETALHES_SEM_RESPOSTA_DE_CONFIGURACAO: readonly string[] = [
+  "sem_credencial_para_a_sessao",
+  "canal_desligado_na_instalacao",
+  "transporte_nao_configurado",
+];
+
+/**
+ * O contador de `channel_sessions.consecutive_health_fails` depois desta
+ * checagem: soma um a cada checagem sem resposta e zera a cada checagem
+ * respondida.
+ */
+export function falhasSeguidasDepois(anteriores: number | null | undefined, saude: SaudeObservada): number {
+  if (saude.reachable) return 0;
+  return Math.max(0, anteriores ?? 0) + 1;
+}
+
 export interface AvisoDeConexao {
   kind: "qr_rescan" | "channel_number_alert";
   severity: "warn" | "critical";
@@ -246,8 +285,27 @@ export async function sincronizarSaudeDaConexao(
    * ela mesma poderia ter aberto.
    */
   origem: "varredura" | "empurrao" = "varredura",
-): Promise<"avisado" | "ja_avisado" | "resolvido" | "sem_mudanca"> {
+  /**
+   * Checagens seguidas sem resposta, JÁ contando esta (ver
+   * `falhasSeguidasDepois`). Só o vigia informa; sem o número, o aviso sai na
+   * hora, como sempre foi para o empurrão do provedor.
+   */
+  falhasSeguidas?: number,
+): Promise<"avisado" | "ja_avisado" | "resolvido" | "sem_mudanca" | "tolerado"> {
   const aviso = avisoDaConexao(saude, apelido);
+
+  // Uma ou duas rodadas sem resposta são soluço de rede, não queda: nada na
+  // Central, nada por e-mail — e, por isso mesmo, nenhum "voltou" depois. Antes
+  // de ler a linha de saúde, de propósito: tolerar não mexe no episódio que
+  // estiver aberto (um QR pendente segue pendente).
+  if (
+    aviso?.episodio === "UNREACHABLE" &&
+    !DETALHES_SEM_RESPOSTA_DE_CONFIGURACAO.includes(saude.detail ?? "") &&
+    falhasSeguidas !== undefined &&
+    falhasSeguidas < LIMIAR_FALHAS_SEGUIDAS_SEM_RESPOSTA
+  ) {
+    return "tolerado";
+  }
 
   const { data: linha } = await admin
     .from("channel_session_health")
