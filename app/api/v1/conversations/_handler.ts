@@ -18,7 +18,6 @@ import type {
 } from "@/lib/schemas";
 import type { Conversation } from "@/lib/types/messaging";
 import { normalizarTermoDeBusca } from "@/lib/inbox/termo-de-busca";
-import { ORDEM_DA_ESPERA, ehAFila } from "@/lib/inbox/comando-da-conversa";
 import { aplicarMarcador } from "@/lib/inbox/marcador-da-conversa";
 
 /**
@@ -154,32 +153,25 @@ export async function listConversationsHandler(
   ctx: HandlerCtx,
   q: ListConversationsQuery,
 ): Promise<ListConversationsResult> {
-  // Fila: ordena por TEMPO DE ESPERA — quem espera há mais tempo primeiro. A
-  // régua é `awaiting_since` = a mensagem do cliente MAIS ANTIGA sem resposta
-  // (não `last_inbound_at`, que é reescrito a cada mensagem dele e fazia quem
-  // insiste descer para o fim da fila — #990; e não `created_at`, que pode ser uma
-  // conversa antiga reaberta). Demais visões: por atividade recente.
-  // A Fila deixou de se identificar por `assigned_to=unassigned` — ela agora pede
-  // `comando`. Sem esta linha o `isQueue` ficaria PARA SEMPRE falso na aba Fila e
-  // a ordenação por tempo de espera sumiria **sem nenhum sintoma na tela**: a
-  // lista continuaria populada, só que ordenada por atividade recente, e quem
-  // espera desde ontem afundaria embaixo de quem escreveu agora.
-  const isQueue = ehAFila(q);
-  // A régua da Fila não se escreve aqui: vem de `ORDEM_DA_ESPERA`, a mesma que
-  // numera a posição da linha na tela e o número que o cliente ouve. Enquanto
-  // cada lugar tinha a sua cópia, trocar uma só fazia a lista ordenar por uma
-  // pergunta e a posição responder outra — sem sintoma nenhum, porque as duas
-  // telas continuam populadas e plausíveis.
-  const sortCol = isQueue ? ORDEM_DA_ESPERA.coluna : "last_message_at";
-  const ordem = isQueue ? ORDEM_DA_ESPERA.opcoes : ({ ascending: false, nullsFirst: false } as const);
-  const asc = isQueue;
+  // UMA ORDEM SÓ, EM TODAS AS ABAS: atividade mais recente primeiro.
+  //
+  // A Fila ordenava por tempo de espera (`ORDEM_DA_ESPERA`, quem espera há mais
+  // tempo no topo). O dono do produto pediu a lista do mais recente para o mais
+  // antigo em todas as abas (lote 2026-10-22): quem acabou de escrever sobe, como
+  // em qualquer aplicativo de mensagens. A ordem de ATENDIMENTO não se perdeu: ela
+  // virou o número "1º, 2º…" da linha, calculado por `getQueuePositions`
+  // (`lib/routing/queue.ts`) com a MESMA `ORDEM_DA_ESPERA` que o cliente ouve no
+  // WhatsApp — e anexado na borda HTTP (`route.ts`), não aqui, porque o handler é
+  // compartilhado com as tools MCP, que já calculam a posição por conta própria.
+  const sortCol = "last_message_at";
+  const ordem = { ascending: false, nullsFirst: false } as const;
 
   let query = supabase
     .from("conversations")
     .select(SELECT_COLS)
     .eq("organization_id", ctx.organization_id)
     .order(sortCol, ordem)
-    .order("id", { ascending: asc })
+    .order("id", { ascending: false })
     .limit(q.limit + 1);
 
   // `.in` e não `.eq`: o filtro agora chega como LISTA (um valor vira lista de um,
@@ -371,7 +363,7 @@ export async function listConversationsHandler(
         traduzir("Cursor inválido.", ctx.idioma ?? "pt-BR"),
       );
     }
-    const op = asc ? "gt" : "lt";
+    const op = "lt";
     if (c.sort) {
       query = query.or(
         `${sortCol}.${op}.${c.sort},and(${sortCol}.eq.${c.sort},id.${op}.${c.id})`,
@@ -379,7 +371,7 @@ export async function listConversationsHandler(
     } else {
       // Página já na região de sort NULL (nulls last): pagina só por id.
       query = query.is(sortCol, null);
-      query = asc ? query.gt("id", c.id) : query.lt("id", c.id);
+      query = query.lt("id", c.id);
     }
   }
 

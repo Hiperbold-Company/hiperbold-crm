@@ -53,8 +53,10 @@ export function ConversationList({
   const canais = useChannelSessions().data ?? [];
   const maisDeUmCanal = canais.length > 1;
 
-  // Fila (G5-03): a lista já vem ordenada por tempo de espera (server), então a
-  // posição é o índice na lista visível. Só mostramos posição/espera nessa visão.
+  // Fila (G5-03): a lista vem por atividade recente, como as outras abas, e a
+  // posição "1º, 2º…" é a ORDEM DE ATENDIMENTO, que o servidor anexa em
+  // `queue_position` (o mais antigo na espera é o 1º, mesmo aparecendo embaixo).
+  // Não é o índice da linha. Só mostramos posição/espera nessa visão.
   // A Fila deixou de mandar `assigned_to=unassigned` (agora pede `comando`), e
   // sem esta linha a numeração "1º, 2º…" e o tempo de espera sumiriam da única
   // visão em que servem para alguma coisa — sem erro nenhum, só sumiriam.
@@ -159,13 +161,14 @@ export function ConversationList({
         {items.length === 0 && filtrosAtivos.length > 0 && (
           <EmptyPorFiltro filtros={filtrosAtivos} onLimpar={onLimparFiltros} />
         )}
-        {items.map((c, i) => (
+        {items.map((c) => (
           <ConversationListItem
             key={c.id}
             conversation={c}
             isSelected={c.id === selectedId}
             onSelect={onSelect}
-            queuePosition={isQueue ? i + 1 : undefined}
+            naFila={isQueue}
+            queuePosition={isQueue ? (c.queue_position ?? undefined) : undefined}
             mostrarCanal={maisDeUmCanal}
             mostrarAtendente={mostrarAtendente}
             mostrarAutomatico={mostrarAutomatico}

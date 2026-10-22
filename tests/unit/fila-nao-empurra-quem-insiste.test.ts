@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { listConversationsHandler } from "@/app/api/v1/conversations/_handler";
 import { esperaDaConversa } from "@/lib/inbox/comando-da-conversa";
+import { comPosicaoNaFila } from "@/lib/routing/queue";
 
 /**
  * QUEM INSISTE NÃO DESCE NA FILA (issue #990).
@@ -20,8 +21,9 @@ import { esperaDaConversa } from "@/lib/inbox/comando-da-conversa";
  *   1. a RÉGUA — `awaiting_since` (migration 0267) guarda o começo da espera e
  *      não o fim dela, no cenário acima e nos dois casos de borda que decidem a
  *      coluna (a resposta do atendente, e uma saída fora de ordem);
- *   2. a ROTA — `listConversationsHandler` devolve A antes de B nesse cenário,
- *      ordenando pelo que ela PEDE ao banco — não pelo que o teste gostaria.
+ *   2. a POSIÇÃO — na Fila, A é a 1º e B a 2º nesse cenário (`comPosicaoNaFila`,
+ *      pela ordem que ela PEDE ao banco). A lista em si sai por atividade
+ *      recente desde o lote 2026-10-22; a régua da espera vive no número.
  *
  * O que NÃO mede: o SQL da 0267. O `CASE` que mantém a coluna é plpgsql e exige
  * Postgres; quem o prova é a suíte de invariantes, com Docker, no CI deste repo.
@@ -259,11 +261,32 @@ function linha(id: string, awaitingSince: string, lastInboundAt: string) {
   };
 }
 
-describe("a aba Fila devolve o cliente que insiste na frente", () => {
-  it("⭐ A (espera desde 10h00) vem antes de B (espera desde 10h05)", async () => {
-    // A entrou por último no banco de propósito: a ordem não pode vir da
+/**
+ * O dublê acumula as ordens pedidas por cliente; a conta da posição é OUTRA
+ * consulta, com a sua ordem, e não pode herdar a da lista. Um dublê novo com as
+ * mesmas linhas, como o banco responderia a uma consulta nova.
+ */
+const linhasDo = new WeakMap<object, Array<Record<string, unknown>>>();
+function fakeComLinhas(linhas: Array<Record<string, unknown>>) {
+  const f = fakeSupabase(linhas);
+  linhasDo.set(f.client as object, linhas);
+  return f;
+}
+function outroCliente(client: unknown) {
+  return fakeSupabase(linhasDo.get(client as object) ?? []).client;
+}
+
+describe("na aba Fila, o cliente que insiste continua na frente da ESPERA", () => {
+  /**
+   * Desde o lote 2026-10-22 a lista da Fila sai por atividade recente, como as
+   * outras abas (decisão do dono do produto). A régua da #990 não sumiu: ela
+   * passou da ORDEM DAS LINHAS para o NÚMERO de cada linha (`queue_position`,
+   * via `comPosicaoNaFila`). É ali que "quem insiste não desce" tem de valer.
+   */
+  it("⭐ A (espera desde 10h00, insistiu às 10h10) é a 1º; B (espera desde 10h05) é a 2º", async () => {
+    // A entrou por último no banco de propósito: a posição não pode vir da
     // inserção, tem de vir da espera.
-    const { client, ordensPedidas } = fakeSupabase([
+    const { client } = fakeComLinhas([
       linha("conv-b", T("10:05"), T("10:05")),
       linha("conv-a", T("10:00"), T("10:10")),
     ]);
@@ -273,21 +296,25 @@ describe("a aba Fila devolve o cliente que insiste na frente", () => {
       ctx,
       { limit: 50, comando: ["aguardando"] } as never,
     );
+    const comPosicao = await comPosicaoNaFila(
+      outroCliente(client),
+      "org-1",
+      r.conversations,
+    );
 
-    expect(r.conversations.map((c) => c.id)).toEqual(["conv-a", "conv-b"]);
-
-    // A ordem que a rota PEDIU — é ela que o dublê aplicou acima. Sem esta
-    // asserção, o caso passaria a medir o dublê em vez da rota.
-    expect(ordensPedidas.map((o) => o.coluna)).toEqual(["awaiting_since", "id"]);
-    const primeiraOrdem = ordensPedidas[0];
-    if (primeiraOrdem === undefined) throw new Error("a rota não pediu ordem nenhuma");
-    expect(primeiraOrdem.opcoes).toEqual({ ascending: true, nullsFirst: false });
+    expect(comPosicao.map((c) => [c.id, c.queue_position])).toEqual([
+      ["conv-a", 1],
+      ["conv-b", 2],
+    ]);
   });
 
-  it("a pílula e a hora do canto leem o MESMO instante que ordena a lista", async () => {
-    const { client } = fakeSupabase([
-      linha("conv-b", T("10:05"), T("10:05")),
+  it("⭐ quem insiste é o 1º mesmo quando a lista o põe EMBAIXO", async () => {
+    // B escreveu por último (10h20) e sobe na lista; A espera desde 10h00 e é a
+    // 1º, mesmo aparecendo embaixo. Pela régua antiga (`last_inbound_at`) A seria
+    // a 2º — é a troca que a #990 descreve.
+    const { client, ordensPedidas } = fakeComLinhas([
       linha("conv-a", T("10:00"), T("10:10")),
+      linha("conv-b", T("10:05"), T("10:20")),
     ]);
 
     const r = await listConversationsHandler(
@@ -295,17 +322,26 @@ describe("a aba Fila devolve o cliente que insiste na frente", () => {
       ctx,
       { limit: 50, comando: ["aguardando"] } as never,
     );
+    expect(r.conversations.map((c) => c.id)).toEqual(["conv-b", "conv-a"]);
+    // A ordem que a rota PEDIU — é ela que o dublê aplicou acima.
+    expect(ordensPedidas.slice(0, 2).map((o) => o.coluna)).toEqual(["last_message_at", "id"]);
 
-    const primeira = r.conversations[0];
-    if (primeira === undefined) throw new Error("a Fila veio vazia");
-    expect(primeira.id).toBe("conv-a");
-    // `last_inbound_at` diria 10h10 — a linha mostraria "há 1 min" embaixo da
-    // posição 1º de quem espera desde 10h00.
-    expect(esperaDaConversa(primeira)).toBe(T("10:00"));
+    const comPosicao = await comPosicaoNaFila(
+      outroCliente(client),
+      "org-1",
+      r.conversations,
+    );
+    expect(comPosicao.map((c) => [c.id, c.queue_position])).toEqual([
+      ["conv-b", 2],
+      ["conv-a", 1],
+    ]);
+    // E a pílula da linha de A diz desde 10h00, não "há 1 min".
+    const a = comPosicao.find((c) => c.id === "conv-a");
+    expect(a && esperaDaConversa(a)).toBe(T("10:00"));
   });
 
-  it("quem nunca recebeu mensagem do cliente vai para o fim, não para o topo", async () => {
-    const { client } = fakeSupabase([
+  it("quem nunca recebeu mensagem do cliente vai para o fim da espera, não para o topo", async () => {
+    const { client } = fakeComLinhas([
       { ...linha("conv-sem-mensagem", T("10:00"), T("10:00")), awaiting_since: null },
       linha("conv-b", T("10:05"), T("10:05")),
     ]);
@@ -315,8 +351,14 @@ describe("a aba Fila devolve o cliente que insiste na frente", () => {
       ctx,
       { limit: 50, comando: ["aguardando"] } as never,
     );
+    const comPosicao = await comPosicaoNaFila(
+      outroCliente(client),
+      "org-1",
+      r.conversations,
+    );
+    const posicao = Object.fromEntries(comPosicao.map((c) => [c.id, c.queue_position]));
 
-    expect(r.conversations.map((c) => c.id)).toEqual(["conv-b", "conv-sem-mensagem"]);
+    expect(posicao).toEqual({ "conv-b": 1, "conv-sem-mensagem": 2 });
   });
 
   it("a aba de atividade recente continua por última mensagem", async () => {

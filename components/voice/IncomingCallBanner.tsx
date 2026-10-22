@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Phone, PhoneX } from "@/lib/ui/icons";
 import { useT } from "@/hooks/i18n/useT";
+import { inicialDoNome } from "@/lib/ui/iniciais";
 
 /**
  * Chamada recebida — overlay global (spec §5.2). Sobrepõe qualquer tela,
@@ -22,7 +23,7 @@ export function IncomingCallBanner() {
 
   const contact = call?.contact_id ? contactQuery.data?.data : undefined;
   const nome = contact ? rotuloDoContato(contact) : phoneForDisplay(call?.peer_phone ?? "");
-  const inicial = (nome || "?").trim().charAt(0).toUpperCase();
+  const inicial = inicialDoNome(nome) ?? "?";
 
   // Toque sintetizado via Web Audio (sem arquivo de asset): dois beeps curtos
   // a cada 2s, padrão de toque de telefone. `.catch` silencioso porque

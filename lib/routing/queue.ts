@@ -123,3 +123,27 @@ export async function getQueuePosition(
     .lte("awaiting_since", ref);
   return count ?? 1;
 }
+
+/**
+ * Anexa a cada conversa a sua POSIÇÃO NA FILA DE ESPERA (`queue_position`, 1-based).
+ *
+ * A lista da aba Fila passou a sair da mais recente para a mais antiga, como as
+ * outras abas (lote 2026-10-22). Com isso o índice da linha deixou de ser a ordem
+ * de atendimento — e o "1º, 2º…" não pode ser o índice: ele continua dizendo quem
+ * atender primeiro (o mais antigo na espera é o 1º, mesmo aparecendo embaixo), e
+ * sai de `getQueuePositions`, a MESMA conta que a tool MCP devolve e que o cliente
+ * ouve no WhatsApp. Funciona com "carregar mais": a posição é da fila inteira, não
+ * da página.
+ *
+ * `null` quando a conversa não está no mapa (saiu da fila entre as duas leituras,
+ * ou a fila passou do teto de linhas do PostgREST).
+ */
+export async function comPosicaoNaFila<T extends { id: string }>(
+  supabase: SupabaseClient,
+  organizationId: string,
+  conversas: T[],
+): Promise<Array<T & { queue_position: number | null }>> {
+  if (conversas.length === 0) return [];
+  const mapa = await getQueuePositions(supabase, organizationId);
+  return conversas.map((c) => ({ ...c, queue_position: mapa.get(c.id) ?? null }));
+}

@@ -2,13 +2,12 @@
 import { useT } from "@/hooks/i18n/useT";
 import { Badge } from "@/components/ui/badge";
 import type { OwnerKind } from "@/lib/types/leads";
+import { iniciaisDoNome } from "@/lib/ui/iniciais";
 
 /** Iniciais a partir do nome (primeira + última palavra). */
 export function ownerInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+  // Por letra, não por unidade UTF-16 — a regra mora em `lib/ui/iniciais`.
+  return iniciaisDoNome(name, { palavraUnica: 2 }) ?? "?";
 }
 
 /**
