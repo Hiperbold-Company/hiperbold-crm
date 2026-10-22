@@ -1554,6 +1554,11 @@ export const DICIONARIO: Traducoes = {
   versão: { es: "versión" },
   "Nova versão": { es: "Nueva versión" },
   disponível: { es: "disponible" },
+  "Nova versão disponível": { es: "Nueva versión disponible" },
+  "Atualize a página para usar a versão mais recente.": {
+    es: "Actualiza la página para usar la versión más reciente.",
+  },
+  "Agora não": { es: "Ahora no" },
   "Abrir navegação": { es: "Abrir navegación" },
   "Buscar telas": { es: "Buscar pantallas" },
   "Buscar telas do sistema…": { es: "Buscar pantallas del sistema…" },

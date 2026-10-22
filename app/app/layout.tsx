@@ -22,6 +22,8 @@ import {
 import { ConexaoCaidaBanner } from "@/components/app/ConexaoCaidaBanner";
 import { EmailNaoConfirmadoBanner } from "@/components/app/EmailNaoConfirmadoBanner";
 import { ExclusaoProgramadaBanner } from "@/components/app/ExclusaoProgramadaBanner";
+import { AvisoDeVersaoNova } from "@/components/app/AvisoDeVersaoNova";
+import { identificadorDaVersao } from "@/lib/versao/identificador";
 import { lerExclusaoProgramada } from "@/lib/retencao/exclusao-de-organizacao/exclusao-programada";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { listarConexoesCaidas, type ConexaoCaida } from "@/lib/channels/health";
@@ -301,6 +303,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <ConexaoCaidaBanner caidas={conexoesCaidas} />
         <EmailNaoConfirmadoBanner />
         <ExclusaoProgramadaBanner excluirEm={exclusaoEm} nomeDoCrm={nomeDoCrm} />
+        <AvisoDeVersaoNova versaoCarregada={identificadorDaVersao()} />
         {needsMfaGate ? (
           // Gate always mounted for MFA-required roles; it latches the blocking
           // decision client-side so the enroll Server Action's revalidation
