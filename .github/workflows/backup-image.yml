@@ -3,7 +3,7 @@ name: Publicar imagem do backup (GHCR)
 # Exclusivo do fork Hiperbold. Monta a imagem do serviço `backup` do EasyPanel
 # (hiperbold/backup/): pg_dump 17 + age + rclone, que faz o backup diário do banco
 # de produção, cifra e envia ao Google Drive. A VPS nunca compila: só puxa a imagem
-# pronta (`ghcr.io/hiperbold/hiperbold-crm-backup:latest`).
+# pronta (`ghcr.io/hiperbold-company/hiperbold-crm-backup:latest`).
 #
 # Só reage ao que muda a imagem. Não entra no deploy-easypanel.yml: o serviço
 # `backup` é reiniciado à mão no EasyPanel quando a imagem muda.
@@ -86,7 +86,7 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/hiperbold/hiperbold-crm-backup:latest
-            ghcr.io/hiperbold/hiperbold-crm-backup:sha-${{ steps.sha.outputs.curto }}
+            ghcr.io/hiperbold-company/hiperbold-crm-backup:latest
+            ghcr.io/hiperbold-company/hiperbold-crm-backup:sha-${{ steps.sha.outputs.curto }}
           cache-from: type=gha,scope=backup
           cache-to: type=gha,mode=max,scope=backup

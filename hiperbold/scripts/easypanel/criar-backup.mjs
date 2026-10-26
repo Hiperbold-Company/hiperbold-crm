@@ -1,5 +1,5 @@
 // Cria (ou atualiza) o serviço `backup` no projeto do CRM no EasyPanel: imagem
-// ghcr.io/hiperbold/hiperbold-crm-backup:latest (hiperbold/backup/), volume em
+// ghcr.io/hiperbold-company/hiperbold-crm-backup:latest (hiperbold/backup/), volume em
 // /backups e as variáveis do rodar.sh. D-191, decisão do Filipe de 13/10/2026.
 //
 // De onde vem cada valor (nada é impresso, só os nomes):
@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { PROJETO, get, post } from './_api.mjs'
 
 const SERVICO = 'backup'
-const IMAGEM = 'ghcr.io/hiperbold/hiperbold-crm-backup:latest'
+const IMAGEM = 'ghcr.io/hiperbold-company/hiperbold-crm-backup:latest'
 const aplicar = process.argv.includes('--aplicar')
 
 const semAspas = (v) => v.trim().replace(/^["']|["']$/g, '')
