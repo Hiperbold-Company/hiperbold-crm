@@ -69,6 +69,7 @@ beforeEach(() => {
       conversa("aberta", "open", ONTEM, ONTEM),
       conversa("reencerrada", "closed", SEMANAS, ONTEM),
       conversa("parada", "closed", SEMANAS, SEMANAS),
+      conversa("so-midia", "closed", ONTEM, SEMANAS),
     ],
     messages: ids.map((id) => ({
       organization_id: ORG,
@@ -77,6 +78,7 @@ beforeEach(() => {
       direction: "inbound",
       sent_at: "2026-10-21T10:00:00Z",
     })),
+    // `so-midia` não tem mensagem com texto: nada a ensinar.
     ai_knowledge_sources: [
       { id: "src-1", organization_id: ORG, source_type: "conversas", is_active: true, created_at: "2026-09-01" },
     ],
@@ -98,7 +100,14 @@ describe("lote de conversas: quem entra", () => {
       reencerrada: "ingested",
       parada: "ingested",
       aberta: null,
+      "so-midia": "skipped",
     });
     expect(r.processed).toBe(5);
+  });
+
+  it("conversa sem texto sai da fila de vez (skipped), para não ocupar o teto de toda rodada", async () => {
+    await ingestConversationsBatch({ organizationId: ORG, agentId: "agente-1", sinceTs: DESDE });
+    const soMidia = banco.tabelas["conversations"]!.find((c) => c["id"] === "so-midia");
+    expect(soMidia?.["rag_review_status"]).toBe("skipped");
   });
 });

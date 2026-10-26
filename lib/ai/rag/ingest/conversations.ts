@@ -175,6 +175,8 @@ export async function ingestConversationsBatch(
     .eq("usable_for_rag", true)
     .in("status", [...STATUS_QUE_ENSINAM])
     .is("rag_review_status", null)
+    // Mais antigas primeiro: uma falha passageira não passa a frente de quem espera.
+    .order("usable_for_rag_marked_at", { ascending: true })
     .limit(cap);
 
   if (convErr) {
@@ -279,6 +281,14 @@ export async function ingestConversationsBatch(
     const msgs = (msgRows ?? []) as MsgRow[];
     const transcript = buildTranscript(msgs);
     if (!transcript) {
+      // Sem texto nenhum (só mídia, por exemplo) não há o que ensinar, e nunca
+      // haverá: sai da fila de vez. Sem isto, como o lote não tem janela de
+      // tempo, 50 conversas assim ocupariam o teto de toda rodada para sempre.
+      await admin
+        .from("conversations")
+        .update({ rag_review_status: "skipped" })
+        .eq("id", conv.id)
+        .eq("organization_id", organizationId);
       skipped++;
       continue;
     }
