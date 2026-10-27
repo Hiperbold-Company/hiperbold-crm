@@ -84,7 +84,7 @@ function rodar(
       ...process.env,
       PATH: `${path.join(pasta, "bin")}:${process.env.PATH}`,
       GH_FIXTURES: fixtures,
-      GITHUB_REPOSITORY: "hiperbold/hiperbold-crm",
+      GITHUB_REPOSITORY: "Hiperbold-Company/hiperbold-crm",
       // Teto curto: o que não termina vira reprovação em 1 segundo, não em 55 min.
       TETO_SEGUNDOS: "1",
       INTERVALO_SEGUNDOS: "1",

@@ -350,13 +350,15 @@ a migration `20260716120000_0030_config_rls_role_policies.sql` aplica
   ou reabrir é uma mutação separada, escopada à organização e auditada. A Central
   não inventa telas técnicas para toda referência nem amplia RBAC por causa de um
   menu oculto ou de uma preferência de interface.
-- **Fila com posição/espera** (G5-03): a visão Fila (`assigned_to=unassigned`)
-  ordena por `last_inbound_at` ASC (quem espera há mais tempo primeiro); posição =
-  índice na lista ordenada; "aguardando há X" derivado de `last_inbound_at`. **A
-  hora no canto da linha, na Fila, é a MESMA** (`last_inbound_at`): a coluna de
-  horas tem de ler na ordem da lista, e `last_message_at` anda quando o atendente
-  responde — faria os números saírem fora de ordem numa lista que está certa (é
-  o relato da #464). Nas demais visões vale a régua delas, a atividade recente. A
+- **Fila com posição/espera** (G5-03): desde o lote 2026-10-22 a visão Fila
+  ordena como as demais, por atividade recente (`last_message_at` DESC — decisão
+  do dono do produto). A posição "1º, 2º…" NÃO é o índice da linha: é a ordem de
+  atendimento, `queue_position` anexado pela rota (`comPosicaoNaFila` em
+  `lib/routing/queue.ts`, por `ORDEM_DA_ESPERA` = `awaiting_since` ASC sobre a
+  fila inteira), o mesmo número que o cliente ouve; o mais antigo esperando é o
+  1º mesmo aparecendo embaixo. "Aguardando há X" vem de `esperaDaConversa`. A
+  hora no canto da linha é `last_message_at` em toda visão, a régua da lista
+  (#464: a coluna de horas tem de ler na ordem da lista). A
   contagem da fila casa com `counts.unassigned` (mesmo predicado: sem dono +
   status `open`).
 

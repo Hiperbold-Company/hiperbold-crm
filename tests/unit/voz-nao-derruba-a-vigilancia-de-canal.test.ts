@@ -33,6 +33,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as Saude from "@/lib/channels/health";
+
 const SEGREDO = "segredo-de-cron-da-voz";
 
 vi.mock("@/lib/env", () => ({
@@ -45,7 +47,10 @@ vi.mock("@/lib/env", () => ({
 vi.mock("@/lib/waha/client", () => ({ getWahaClient: () => null }));
 
 const sincronizou = vi.fn();
-vi.mock("@/lib/channels/health", () => ({
+vi.mock("@/lib/channels/health", async (importOriginal) => ({
+  // A conta de falhas seguidas é regra pura e fica a de verdade; só o efeito
+  // (Central, e-mail) é dublê aqui.
+  ...(await importOriginal<typeof Saude>()),
   sincronizarSaudeDaConexao: (...args: unknown[]) => {
     sincronizou(...args);
     return Promise.resolve("sem_mudanca");

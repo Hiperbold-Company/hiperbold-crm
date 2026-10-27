@@ -3,6 +3,8 @@ import { cookieSecure } from "@/lib/supabase/cookie-secure";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 import { isPublicPath } from "@/lib/auth/public-paths";
+import { getUserResiliente } from "@/lib/auth/get-user-resiliente";
+import type { User } from "@supabase/supabase-js";
 import {
   verifyImpersonateCookieEdge,
   IMPERSONATE_COOKIE_NAME_EDGE,
@@ -11,6 +13,49 @@ import {
 const COOKIE_NAME = "sb-deskcomm-auth";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * O servidor de autenticação não respondeu, nem depois das novas tentativas.
+ *
+ * NÃO é "deslogado": a sessão provavelmente segue válida (é o caso de toda
+ * publicação, durante a troca de contêiner). Por isso nada de `/login` e nada
+ * de apagar cookie — os cookies que um refresh bem-sucedido já gravou em
+ * `response` são copiados, senão o navegador ficaria com o refresh token velho.
+ *
+ * API recebe 503 no envelope de erro; tela recebe a página `/503` (pública,
+ * traduzida) por REWRITE, para a URL continuar a mesma e recarregar bastar.
+ *
+ * ⚠️ O `status: 503` do rewrite NÃO chega ao navegador: no Next a página
+ * reescrita responde com o próprio status (200). Chegam o conteúdo de
+ * manutenção, o `Cache-Control: no-store` e o `Retry-After`; o status, não.
+ * Aceito de propósito — o que importa é não mandar ao login nem apagar cookie.
+ */
+function respostaDeAuthIndisponivel(
+  request: NextRequest,
+  response: NextResponse,
+  pathname: string,
+  requestId: string,
+): NextResponse {
+  const saida = pathname.startsWith("/api/")
+    ? new NextResponse(
+        JSON.stringify({
+          error: {
+            code: "unavailable",
+            message: "Authentication service temporarily unavailable — retry shortly",
+          },
+        }),
+        { status: 503, headers: { "content-type": "application/json" } },
+      )
+    : NextResponse.rewrite(new URL("/503", request.url), {
+        status: 503,
+        request: { headers: request.headers },
+      });
+  response.cookies.getAll().forEach((c) => saida.cookies.set(c));
+  saida.headers.set("x-request-id", requestId);
+  saida.headers.set("Retry-After", "5");
+  saida.headers.set("Cache-Control", "no-store");
+  return saida;
+}
 
 export async function proxy(request: NextRequest) {
   // Inject X-Request-Id for downstream correlation (audit log, error wrappers). O que o
@@ -54,10 +99,12 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  const supabase = createServerClient(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
+  // Um cliente NOVO por tentativa (ver `lib/auth/get-user-resiliente.ts`): o
+  // GoTrueClient guarda a falha de refresh em cache, e a mesma instância
+  // devolveria a falha sem ir à rede. O adaptador de cookies é o mesmo — um
+  // refresh que deu certo numa tentativa chega à seguinte pelo `request.cookies`.
+  const criarCliente = () =>
+    createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -76,13 +123,21 @@ export async function proxy(request: NextRequest) {
         secure: cookieSecure(),
         path: "/",
       },
-    },
-  );
+    });
 
   // Validate JWT server-side (NEVER use getSession on backend per CLAUDE.md).
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Falha TRANSITÓRIA (rede, 5xx — a troca de contêiner de toda publicação)
+  // tenta de novo; se persistir, responde "indisponível" em vez de mandar ao
+  // login. Antes, toda publicação deslogava quem estava com a sessão válida.
+  const { cliente: supabase, resultado } = await getUserResiliente<
+    User,
+    ReturnType<typeof criarCliente>
+  >(criarCliente);
+  const user = resultado.user;
+
+  if (resultado.estado === "indisponivel") {
+    return respostaDeAuthIndisponivel(request, response, pathname, requestId);
+  }
 
   if (!user) {
     // API routes must respond with JSON envelope (contract: {error:{code,message}})

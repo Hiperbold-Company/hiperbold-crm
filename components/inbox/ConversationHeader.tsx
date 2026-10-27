@@ -17,7 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { JanelaSelo } from "@/components/inbox/JanelaSelo";
 import { ChannelLogo } from "@/components/inbox/ChannelLogo";
 import { Phone, ArrowRight, MagnifyingGlass } from "@/lib/ui/icons";
-import { useAuth } from "@/hooks/auth/AuthProvider";
+import { useAuth, usePermission } from "@/hooks/auth/AuthProvider";
+import { EnsinarAgenteButton } from "@/components/inbox/EnsinarAgenteButton";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useReleaseConversation } from "@/hooks/inbox/useReleaseConversation";
 import {
@@ -99,6 +100,7 @@ export function ConversationHeader({
   const [reassignOpen, setReassignOpen] = useState(false);
   const [confirmFecharOpen, setConfirmFecharOpen] = useState(false);
   const [confirmArquivarOpen, setConfirmArquivarOpen] = useState(false);
+  const podeEnsinar = usePermission("inbox.claim");
 
   const c = conversation.contacts ?? null;
   const displayName = rotuloDoContato(c, t);
@@ -353,6 +355,12 @@ export function ConversationHeader({
           onClick={() => reopen.mutate({ conversation_id: conversation.id, expected_revision: conversation.service_revision })}>
           {t("Reabrir")}
         </Button>}
+        {/* ENSINAR O AGENTE: só na conversa encerrada, que é a que o lote noturno
+            lê — e ocupa o lugar que Transferir/Lembrar/Fechar deixam vagos nesse
+            estado, então não alarga a barra. Mesmo piso da rota (agent). */}
+        {encerrada && podeEnsinar && (
+          <EnsinarAgenteButton conversationId={conversation.id} encerrada={encerrada} />
+        )}
         {/* ARQUIVAR (#923): tira da frente sem destruir.
             A conversa já arquivada não mostra o botão — arquivar duas vezes não
             é um gesto que exista, e o botão só reapareceria como um clique que

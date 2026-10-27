@@ -68,6 +68,9 @@ let etapaOrigemId = "";
 let etapaDestinoId = "";
 
 async function login(page: Page, email: string, senha: string): Promise<void> {
+  // Trocar de usuário na mesma página exige sair antes: `/login` com sessão
+  // válida devolve ao app em vez de mostrar o formulário.
+  await page.context().clearCookies();
   await page.goto("/login");
   await page.locator("#email").fill(email);
   await page.locator("#password").fill(senha);

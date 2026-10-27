@@ -75,12 +75,12 @@ export const TIPOS_DE_FONTE = [
       "Atendimentos já resolvidos que alguém marcou como aproveitáveis, com os dados pessoais removidos.",
     comoSePreenche: "automatico",
     comoChega:
-      "Entra sozinha: conversas resolvidas que alguém marcar como aproveitáveis pela IA são anonimizadas e indexadas em lote.",
+      "Entra sozinha: marque pelo botão “Usar para ensinar o agente” numa conversa encerrada do Chat. Ela é anonimizada e indexada na rodada noturna.",
   },
   {
     id: "catalogo",
-    rotulo: "Catálogo de produtos",
-    oQueE: "Os produtos sincronizados da sua loja, com preço, descrição e disponibilidade.",
+    rotulo: "Catálogo de Produtos E-commerce",
+    oQueE: "Os produtos sincronizados da sua loja virtual, com preço, descrição e disponibilidade.",
     comoSePreenche: "automatico",
     comoChega:
       "Entra sozinho: os produtos vêm da sincronização com a sua loja, não de conteúdo digitado aqui.",

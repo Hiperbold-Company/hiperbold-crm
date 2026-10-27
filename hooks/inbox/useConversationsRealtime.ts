@@ -62,6 +62,13 @@ export type ConversationWithContact = Conversation & {
    * responsável": o dono é o `assigned_to_user_id`, o nome é a cortesia.
    */
   assigned_to_user_name?: string | null;
+  /**
+   * Posição na fila de espera (1-based; o mais antigo na espera é o 1º), anexada
+   * pela rota só na aba Fila. A lista sai por atividade recente, então a posição
+   * NÃO é o índice da linha. Ausente fora da Fila; `null` quando a conversa não
+   * entrou na conta (ver `comPosicaoNaFila`).
+   */
+  queue_position?: number | null;
 };
 
 /** O vocabulário de LEITURA (7), que inclui os dois estados que só o motor escreve. */
