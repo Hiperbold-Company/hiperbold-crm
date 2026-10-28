@@ -31,6 +31,7 @@ import { exigirVisibilidadeDoToken } from "@/lib/mcp/visibilidade-do-token";
 import type { Role } from "@/lib/auth/types";
 import { temFiltroDeData } from "@/lib/contacts/filtros";
 import { fusoDaOrganizacao } from "@/lib/contacts/fuso-da-organizacao";
+import { filtraPorNegocio } from "@/lib/contacts/consulta";
 
 import { listContactsHandler, createContactHandler } from "./_handler";
 
@@ -147,16 +148,11 @@ export async function GET(req: NextRequest): Promise<Response> {
     });
   }
 
-  // Funil, etapa e campo do NEGÓCIO filtram por `crm_leads`, que tem dono por atendente. A sessão
+  // Funil, etapa e campo que olha o NEGÓCIO (escopos "negocio" e "qualquer") filtram por `crm_leads`, que tem dono por atendente. A sessão
   // passa pela RLS; o token roda com o cliente admin e, em empresa no modo "só os meus", uma chave
   // abaixo de gerente não pode usar o negócio como filtro (descobriria quem tem negócio de quem).
   // Mesma regra D-148 de `lib/api/auth-dual.ts`.
-  const filtraPorNegocio = Boolean(
-    qsParsed.data.funil ||
-      qsParsed.data.etapa ||
-      (qsParsed.data.campo && qsParsed.data.campo_valor && qsParsed.data.campo_escopo === "negocio"),
-  );
-  if (auth.token && filtraPorNegocio) {
+  if (auth.token && filtraPorNegocio(qsParsed.data)) {
     try {
       await exigirVisibilidadeDoToken(supabase, organizationId, auth.token.role);
     } catch (err) {

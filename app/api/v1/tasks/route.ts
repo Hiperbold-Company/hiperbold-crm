@@ -61,6 +61,20 @@ const listaSchema = z.object({
   due_to: z.string().datetime({ offset: true }).optional(),
   /** "abertas" = o que ainda pede ação. É o default da tela. */
   aberto: z.enum(["true", "false"]).optional(),
+  /**
+   * Só as tarefas de quem pergunta: as que ELE criou ou de que é responsável.
+   * É o recorte do sino de tarefas (quem recebe o aviso de vencimento, ver
+   * `destinatariosDoAviso`). O id sai da sessão, nunca do parâmetro.
+   */
+  para_mim: z.enum(["true", "false"]).optional(),
+  /** Abertas com prazo que já chegou. Combina com `para_mim` no sino. */
+  vencidas: z.enum(["true", "false"]).optional(),
+  /**
+   * Junta o título e o funil do negócio, para o sino levar direto ao card. A
+   * leitura do negócio passa pela RLS de `crm_leads`: quem não enxerga aquele
+   * negócio recebe `lead: null`, e o link cai na tela de Tarefas.
+   */
+  com_negocio: z.enum(["true", "false"]).optional(),
 });
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -83,9 +97,11 @@ export async function GET(req: NextRequest): Promise<Response> {
   // ⚠️ `organization_id` à mão mesmo com RLS ligada: é a regra do CLAUDE.md, e
   // ela não é redundante — o dia em que esta rota trocar para o admin client
   // (que bypassa RLS) o filtro já está aqui.
+  const colunas =
+    filtros.com_negocio === "true" ? `${COLUNAS}, lead:crm_leads(title, pipeline_id)` : COLUNAS;
   let query = supabase
     .from("crm_tasks")
-    .select(COLUNAS)
+    .select(colunas)
     .eq("organization_id", authz.org.orgId)
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false })
@@ -98,6 +114,14 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (filtros.due_from) query = query.gte("due_date", filtros.due_from);
   if (filtros.due_to) query = query.lte("due_date", filtros.due_to);
   if (filtros.aberto === "true") query = query.in("status", ["pending", "in_progress"]);
+  if (filtros.para_mim === "true") {
+    // `authz.user.id` é uuid validado pela sessão: interpolar no `or` não abre
+    // injeção de filtro, que é o risco de montar `or` com texto do cliente.
+    query = query.or(`assigned_to.eq.${authz.user.id},created_by.eq.${authz.user.id}`);
+  }
+  if (filtros.vencidas === "true") {
+    query = query.in("status", ["pending", "in_progress"]).lte("due_date", new Date().toISOString());
+  }
 
   const { data, error } = await query;
   if (error) {

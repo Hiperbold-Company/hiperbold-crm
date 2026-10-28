@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { LEADS_POR_REQUISICAO, intervaloDaColuna, lotesDeIds } from "@/lib/kanban/selecao";
+import {
+  LEADS_POR_REQUISICAO,
+  avisoDeLoteInterrompido,
+  intervaloDaColuna,
+  lotesDeIds,
+} from "@/lib/kanban/selecao";
 
 /**
  * A aritmética da seleção múltipla no quadro (`lib/kanban/selecao.ts`).
@@ -60,5 +65,22 @@ describe("intervaloDaColuna — o shift+clique", () => {
 
   it("âncora igual ao alvo devolve um id só", () => {
     expect(intervaloDaColuna(coluna, "c", "c")).toEqual(["c"]);
+  });
+});
+
+describe("avisoDeLoteInterrompido — o lote que parou no meio", () => {
+  it("nada aplicado: sem aviso (o motivo real é o toast do erro)", () => {
+    // O aviso antigo dizia "0 de 128 já haviam sido alterados — o restante não foi."
+    expect(avisoDeLoteInterrompido(0, 128)).toBeNull();
+  });
+
+  it("parte aplicada: diz quantos entraram e quantos não", () => {
+    expect(avisoDeLoteInterrompido(50, 128)).toBe(
+      "50 de 128 foram alterados antes do erro; os outros 78 não foram.",
+    );
+  });
+
+  it("tudo aplicado: nada a avisar", () => {
+    expect(avisoDeLoteInterrompido(128, 128)).toBeNull();
   });
 });

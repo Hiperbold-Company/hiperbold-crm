@@ -203,6 +203,17 @@ const DIVIDA_RBAC_CONHECIDA = new Set([
   "user_recovery_codes",
 ]);
 
+/**
+ * Tabelas cuja policy ALL prende a linha ao PRÓPRIO usuário (`user_id =
+ * auth.uid()`) além da organização. Papel não se aplica: um `viewer` guarda as
+ * próprias preferências como qualquer outro. Não é dívida e não entra em
+ * DIVIDA_RBAC_CONHECIDA; o caso abaixo reprova se a policy afrouxar.
+ */
+const POR_DONO_DA_LINHA = new Set([
+  // 0978: colunas da tela de Contatos por usuário (preferencias-por-usuario-rls.test.ts)
+  "user_preferences",
+]);
+
 describe("0150 — a dívida de RBAC não cresce", () => {
   it("as tabelas já corrigidas têm policy de escrita com fn_role_at_least", () => {
     const corrigidas = [
@@ -234,8 +245,22 @@ describe("0150 — a dívida de RBAC não cresce", () => {
       .split(",")
       .filter(Boolean);
 
-    const novas = atuais.filter((t) => !DIVIDA_RBAC_CONHECIDA.has(t));
+    const novas = atuais.filter((t) => !DIVIDA_RBAC_CONHECIDA.has(t) && !POR_DONO_DA_LINHA.has(t));
     expect(novas).toEqual([]);
+  });
+
+  it("tabela por dono da linha prende leitura E escrita ao próprio usuário", () => {
+    // Não é dívida de RBAC: papel não importa quando cada um só alcança a
+    // própria linha. A exceção só vale enquanto a policy provar isso.
+    for (const t of POR_DONO_DA_LINHA) {
+      const ok = sql(`
+        select bool_and(coalesce(qual, '') like '%user_id = ( SELECT auth.uid()%'
+                    and coalesce(with_check, '') like '%user_id = ( SELECT auth.uid()%')
+          from pg_policies
+         where schemaname = 'public' and tablename = '${t}' and cmd = 'ALL';
+      `);
+      expect(ok.trim().endsWith("t"), t).toBe(true);
+    }
   });
 
   it("CONTROLE: a allowlist não guarda tabela que já não existe (senão ela cobre o futuro por acidente)", () => {

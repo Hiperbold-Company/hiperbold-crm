@@ -173,11 +173,26 @@ const formaDosFiltros = {
     ativ: z.enum(PERIODOS_DE_CONTATOS).optional(),
     ativ_de: diaIso().optional(),
     ativ_ate: diaIso().optional(),
-    /** Contatos que têm negócio neste funil (e, opcionalmente, nesta etapa). */
+    /** Contatos que têm negócio neste funil (e, opcionalmente, numa destas etapas). */
     funil: z.string().uuid().optional(),
-    etapa: z.string().uuid().optional(),
-    /** Campo personalizado: do contato ou de algum negócio dele. */
-    campo_escopo: z.enum(["contato", "negocio"]).default("contato"),
+    /**
+     * Uma ou mais etapas: na URL, separadas por vírgula (`etapa=a,b`); no corpo, também como
+     * lista. Um id só (a forma antiga) continua valendo. Sai sempre como lista.
+     */
+    etapa: z
+      .union([z.string().max(4000), z.array(z.string()).max(100)])
+      .transform((v) =>
+        (Array.isArray(v) ? v : v.split(","))
+          .map((s) => s.trim())
+          .filter(Boolean),
+      )
+      .pipe(z.array(z.string().uuid()).max(100))
+      .optional(),
+    /**
+     * Campo personalizado: do contato, de algum negócio dele, ou dos dois ("qualquer", o padrão:
+     * a importação grava `utm_source` no NEGÓCIO, e quem filtra não sabe disso).
+     */
+    campo_escopo: z.enum(["qualquer", "contato", "negocio"]).default("qualquer"),
     campo: z
       .string()
       .regex(CHAVE_DE_CAMPO_FILTRAVEL)

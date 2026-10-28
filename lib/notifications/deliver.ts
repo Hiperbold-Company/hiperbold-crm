@@ -14,6 +14,8 @@ export interface EntregarAvisoInput {
   tag?: string;
   href?: string;
   icon?: string;
+  /** O rótulo do botão do toast. Padrão: "Abrir conversa" (os avisos de mensagem). */
+  actionLabel?: string;
 }
 
 export function entregarAviso(input: EntregarAvisoInput): void {
@@ -34,7 +36,7 @@ export function entregarAviso(input: EntregarAvisoInput): void {
       description: body,
       action: href
         ? {
-            label: traduzir("Abrir conversa", idioma),
+            label: traduzir(input.actionLabel ?? "Abrir conversa", idioma),
             onClick: () => {
               window.location.assign(href);
             },

@@ -9,11 +9,15 @@ export interface PerdasPayload extends RelatorioDePerdas {
   truncado: boolean;
 }
 
-/** Relatório "Perdas" (issue #1537) — manager+, janela de 30 dias. */
-export function usePerdasMetrics(enabled = true) {
+/**
+ * Relatório "Perdas" (issue #1537) — manager+. Sem `janela`, os últimos 30 dias;
+ * a tela Desempenho passa o período do filtro global.
+ */
+export function usePerdasMetrics(enabled = true, janela?: { from: string; to: string }) {
+  const qs = janela ? `?${new URLSearchParams({ from: janela.from, to: janela.to }).toString()}` : "";
   return useQuery({
-    queryKey: ["metrics", "perdas"],
-    queryFn: async () => apiClient.get<{ data: PerdasPayload }>("/api/v1/metrics/lost"),
+    queryKey: ["metrics", "perdas", janela?.from ?? "", janela?.to ?? ""],
+    queryFn: async () => apiClient.get<{ data: PerdasPayload }>(`/api/v1/metrics/lost${qs}`),
     staleTime: 30_000,
     enabled,
   });

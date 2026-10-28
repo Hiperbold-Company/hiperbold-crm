@@ -21,13 +21,15 @@ function fusoDoNavegador(): string {
   }
 }
 
-export function useActivityReport(dias: number) {
+/** `atendente` ausente = "Todos". O filtro é aplicado no servidor. */
+export function useActivityReport(dias: number, atendente?: string | null) {
   const tz = fusoDoNavegador();
   return useQuery({
-    queryKey: ["reports", "activities", dias, tz],
+    queryKey: ["reports", "activities", dias, tz, atendente ?? null],
     queryFn: async () =>
       apiClient.get<{ data: RelatorioComJanela }>(
-        `/api/v1/reports/activities?days=${dias}&tz=${encodeURIComponent(tz)}`,
+        `/api/v1/reports/activities?days=${dias}&tz=${encodeURIComponent(tz)}` +
+          (atendente ? `&atendente=${encodeURIComponent(atendente)}` : ""),
       ),
     staleTime: 30_000,
   });

@@ -10,7 +10,7 @@ import {
   periodoDoFiltro,
   resumoDoFiltroParaAuditoria,
 } from "@/lib/contacts/filtros";
-import { filtrosFromParams, filtrosParaCorpo, filtrosToParams } from "@/lib/contacts/filtros-url";
+import { etapasDoFiltro, filtrosFromParams, filtrosParaCorpo, filtrosToParams } from "@/lib/contacts/filtros-url";
 import { contactListQuerySchema, filtrosDeContatosSchema } from "@/lib/schemas";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
@@ -131,19 +131,67 @@ describe("consulta de contatos (o que vai ao banco)", () => {
     expect(select[1]).toBe("id, name, lf:crm_leads!crm_leads_contact_id_fkey!inner(id)");
     expect(chamadas).toContainEqual(["eq", "lf.organization_id", ORG]);
     expect(chamadas).toContainEqual(["eq", "lf.pipeline_id", FUNIL]);
-    expect(chamadas).toContainEqual(["eq", "lf.stage_id", ETAPA]);
-    expect(chamadas.some((c) => c[0] === "in")).toBe(false);
+    expect(chamadas).toContainEqual(["in", "lf.stage_id", [ETAPA]]);
+    // Nenhuma lista de ids de CONTATO: só as etapas escolhidas vão no `in`.
+    expect(chamadas.filter((c) => c[0] === "in").map((c) => c[1])).toEqual(["lf.stage_id"]);
+  });
+
+  it("várias etapas: um `in` na junção, na ordem pedida; a forma antiga (um id) continua valendo", async () => {
+    const OUTRA = "44444444-4444-4444-8444-444444444444";
+    const { supabase, chamadas } = gravador();
+    await consultaDeContatos(supabase, "id", filtros({ funil: FUNIL, etapa: `${ETAPA},${OUTRA}` }), ctx);
+    expect(chamadas).toContainEqual(["in", "lf.stage_id", [ETAPA, OUTRA]]);
+    expect(filtros({ etapa: ETAPA }).etapa).toEqual([ETAPA]);
+    expect(filtros({ etapa: [ETAPA, OUTRA] }).etapa).toEqual([ETAPA, OUTRA]);
+    expect(filtrosDeContatosSchema.safeParse({ etapa: `${ETAPA},abc` }).success).toBe(false);
+    const demais = Array.from({ length: 101 }, () => ETAPA).join(",");
+    expect(filtrosDeContatosSchema.safeParse({ etapa: demais }).success).toBe(false);
+  });
+
+  it("campo em qualquer lugar (padrão): OU entre o contato e uma junção OPCIONAL de negócios", async () => {
+    const { supabase, chamadas } = gravador();
+    await consultaDeContatos(supabase, "id", filtros({ campo: "utm_source", campo_op: "igual", campo_valor: "lead_ads" }), ctx);
+    const select = chamadas.find((c) => c[0] === "select")![1] as string;
+    // Sem `!inner`: quem tem o valor só no próprio cadastro não pode ser cortado pela junção.
+    expect(select).toBe("id, lc:crm_leads!crm_leads_contact_id_fkey(id)");
+    expect(chamadas).toContainEqual(["eq", "lc.organization_id", ORG]);
+    expect(chamadas).toContainEqual(["ilike", "lc.custom_fields->>utm_source", "lead\\_ads"]);
+    expect(chamadas).toContainEqual(["or", 'custom_fields->>utm_source.ilike."lead\\\\_ads",lc.not.is.null']);
+  });
+
+  it("campo em qualquer lugar + funil e etapas: a junção opcional leva os mesmos predicados", async () => {
+    const { supabase, chamadas } = gravador();
+    await consultaDeContatos(
+      supabase,
+      "id",
+      filtros({ funil: FUNIL, etapa: ETAPA, campo: "utm_source", campo_valor: "google" }),
+      ctx,
+    );
+    const select = chamadas.find((c) => c[0] === "select")![1] as string;
+    expect(select).toBe(
+      "id, lf:crm_leads!crm_leads_contact_id_fkey!inner(id), lc:crm_leads!crm_leads_contact_id_fkey(id)",
+    );
+    expect(chamadas).toContainEqual(["eq", "lc.pipeline_id", FUNIL]);
+    expect(chamadas).toContainEqual(["in", "lc.stage_id", [ETAPA]]);
+    expect(chamadas).toContainEqual(["eq", "lf.pipeline_id", FUNIL]);
+  });
+
+  it("o valor do campo vai ENTRE ASPAS no `or`: vírgula e parêntese não abrem outra condição", async () => {
+    const { supabase, chamadas } = gravador();
+    await consultaDeContatos(supabase, "id", filtros({ campo: "cargo", campo_valor: 'a,b) "x"' }), ctx);
+    const ou = chamadas.find((c) => c[0] === "or")![1] as string;
+    expect(ou).toBe('custom_fields->>cargo.ilike."%a,b) \\"x\\"%",lc.not.is.null');
   });
 
   it("campo do contato: ilike no caminho JSON, com curingas do valor escapados", async () => {
     const { supabase, chamadas } = gravador();
-    await consultaDeContatos(supabase, "id", filtros({ campo: "cargo", campo_valor: "100%_ok\\" }), ctx);
+    await consultaDeContatos(supabase, "id", filtros({ campo_escopo: "contato", campo: "cargo", campo_valor: "100%_ok\\" }), ctx);
     expect(chamadas).toContainEqual(["ilike", "custom_fields->>cargo", "%100\\%\\_ok\\\\%"]);
   });
 
   it("campo 'igual' não leva curinga nas pontas", async () => {
     const { supabase, chamadas } = gravador();
-    await consultaDeContatos(supabase, "id", filtros({ campo: "empresa", campo_op: "igual", campo_valor: "Acme" }), ctx);
+    await consultaDeContatos(supabase, "id", filtros({ campo_escopo: "contato", campo: "empresa", campo_op: "igual", campo_valor: "Acme" }), ctx);
     expect(chamadas).toContainEqual(["ilike", "custom_fields->>empresa", "Acme"]);
   });
 
@@ -164,7 +212,7 @@ describe("consulta de contatos (o que vai ao banco)", () => {
 
   it("`*` do valor vira texto (no PostgREST ele é curinga e não tem escape)", async () => {
     const { supabase, chamadas } = gravador();
-    await consultaDeContatos(supabase, "id", filtros({ campo: "cargo", campo_valor: "a*b" }), ctx);
+    await consultaDeContatos(supabase, "id", filtros({ campo_escopo: "contato", campo: "cargo", campo_valor: "a*b" }), ctx);
     expect(chamadas).toContainEqual(["ilike", "custom_fields->>cargo", "%a_b%"]);
     const busca = gravador();
     await consultaDeContatos(busca.supabase, "id", filtros({ search: "a*b" }), ctx);
@@ -189,7 +237,7 @@ describe("consulta de contatos (o que vai ao banco)", () => {
   });
 
   it("as junções saem da linha antes da resposta", () => {
-    expect(semJuncoes({ id: "1", lf: [{ id: "x" }], name: "A" })).toEqual({ id: "1", name: "A" });
+    expect(semJuncoes({ id: "1", lf: [{ id: "x" }], lc: [], name: "A" })).toEqual({ id: "1", name: "A" });
   });
 });
 
@@ -202,7 +250,7 @@ describe("auditoria do filtro", () => {
     expect(texto).not.toContain("Maria");
     expect(texto).not.toContain("11999990000");
     expect(texto).not.toContain("diretora");
-    expect(resumo).toMatchObject({ busca: true, funil_id: FUNIL, campo: { escopo: "contato", chave: "cargo", operador: "contem" } });
+    expect(resumo).toMatchObject({ busca: true, funil_id: FUNIL, campo: { escopo: "qualquer", chave: "cargo", operador: "contem" } });
   });
 });
 
@@ -219,6 +267,24 @@ describe("filtros na URL", () => {
   it("URL editada à mão não vira 422: valores inválidos somem", () => {
     const f = filtrosFromParams(new URLSearchParams("funil=abc&criado=ontem&criado_de=hoje&ativ_ate=9999-12-31&campo=a-b&campo_valor=x"));
     expect(f).toEqual({});
+  });
+
+  it("várias etapas na URL: separadas por vírgula; id inválido sai sozinho, o resto fica", () => {
+    const OUTRA = "44444444-4444-4444-8444-444444444444";
+    const f = filtrosFromParams(new URLSearchParams(`funil=${FUNIL}&etapa=${ETAPA},abc,${OUTRA},${ETAPA}`));
+    expect(f.etapa).toBe(`${ETAPA},${OUTRA}`);
+    expect(etapasDoFiltro(f)).toEqual([ETAPA, OUTRA]);
+    expect(filtrosFromParams(filtrosToParams(f))).toEqual(f);
+    expect(filtrosDeContatosSchema.parse(filtrosParaCorpo(f)).etapa).toEqual([ETAPA, OUTRA]);
+    expect(filtrosFromParams(new URLSearchParams("etapa=abc"))).toEqual({});
+  });
+
+  it("campo sem escopo na URL é 'qualquer' (contato ou negócio); os escopos antigos continuam", () => {
+    const base = "campo=utm_source&campo_valor=lead_ads";
+    expect(filtrosFromParams(new URLSearchParams(base)).campo_escopo).toBe("qualquer");
+    expect(filtrosFromParams(new URLSearchParams(`${base}&campo_escopo=contato`)).campo_escopo).toBe("contato");
+    expect(filtrosFromParams(new URLSearchParams(`${base}&campo_escopo=negocio`)).campo_escopo).toBe("negocio");
+    expect(filtrosDeContatosSchema.parse({ campo: "utm_source", campo_valor: "x" }).campo_escopo).toBe("qualquer");
   });
 
   it("campo de documento na URL é descartado", () => {

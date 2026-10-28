@@ -9630,6 +9630,18 @@ export type Database = {
         Args: { p_from: string; p_org: string; p_owner?: string; p_to: string }
         Returns: Json
       }
+      fn_desempenho_atendimento: {
+        Args: { p_from: string; p_org: string; p_owner?: string; p_pipeline?: string; p_to: string }
+        Returns: Json
+      }
+      fn_desempenho_negocios: {
+        Args: { p_from: string; p_org: string; p_owner?: string; p_pipeline?: string; p_to: string }
+        Returns: Json
+      }
+      fn_desempenho_origens: {
+        Args: { p_from: string; p_org: string; p_owner?: string; p_pipeline?: string; p_to: string }
+        Returns: Json
+      }
       fn_buscar_trechos_das_fontes: {
         Args: {
           p_embedding: string
@@ -9696,6 +9708,13 @@ export type Database = {
           p_org: string
         }
         Returns: number
+      }
+      fn_contar_eventos_manuais_do_funil: {
+        Args: { p_organization_id: string; p_pipeline_id: string }
+        Returns: {
+          lead_id: string
+          total: number
+        }[]
       }
       fn_conversation_assign: {
         Args: {

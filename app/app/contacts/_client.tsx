@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
-import { Plus, MagnifyingGlass, UploadSimple, UsersThree } from "@/lib/ui/icons";
+import { Columns, Plus, MagnifyingGlass, UploadSimple, UsersThree } from "@/lib/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -40,6 +40,8 @@ import {
   type FiltrosDaTela,
 } from "@/lib/contacts/filtros-url";
 import { MergeDialog } from "@/components/contacts/MergeDialog";
+import { PersonalizarColunasDialog } from "@/components/contacts/PersonalizarColunasDialog";
+import { useColunasDeContatos } from "@/hooks/contacts/useColunasDeContatos";
 import { EmptyContacts } from "@/components/empty";
 import type { ContactOrderBy } from "@/lib/schemas/contacts";
 
@@ -70,6 +72,9 @@ export function ContactsListClient() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [duplicadosOpen, setDuplicadosOpen] = useState(false);
+  const [colunasOpen, setColunasOpen] = useState(false);
+  // As colunas que ESTE usuário escolheu (salvas no servidor, `user_preferences`).
+  const { colunas } = useColunasDeContatos();
 
   const podeExcluirEmLote = usePermission("contact.bulk_delete");
   const podeExportar = usePermission("contact.export");
@@ -103,6 +108,11 @@ export function ContactsListClient() {
   const contagem = useContactCount(filtros);
   const opcoesDeFiltro = useContactFilterOptions();
   const totalDoFiltro = contagem.data;
+  const camposDoContato = useMemo(() => opcoesDeFiltro.data?.campos.contato ?? [], [opcoesDeFiltro.data]);
+  const rotulosDeCampo = useMemo(
+    () => new Map(camposDoContato.map((c) => [c.key, c.label] as const)),
+    [camposDoContato],
+  );
 
   // Outro filtro = outro conjunto: a seleção não atravessa.
   const chaveDosFiltros = filtrosToParams(filtros).toString();
@@ -257,13 +267,17 @@ export function ContactsListClient() {
           vem do PR #267, e vale para os DOIS botões agora: numa tela de 390px
           uma linha de dois botões sem isso comprime os rótulos.
         */}
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {/*
             A porta do recurso de duplicados fica AQUI, na tela que já existe, e
             não num item de menu novo: quem descobre que tem contato repetido
             descobre olhando a lista, e a barra lateral não precisa crescer para
             um trabalho que se faz de vez em quando.
           */}
+          <Button variant="outline" onClick={() => setColunasOpen(true)} data-acao="personalizar-colunas">
+            <Columns size={16} weight="bold" aria-hidden />
+            <span>{t("Personalizar colunas")}</span>
+          </Button>
           <Button variant="outline" onClick={() => setDuplicadosOpen(true)}>
             <UsersThree size={16} weight="bold" aria-hidden />
             <span>{t("Duplicados")}</span>
@@ -447,6 +461,8 @@ export function ContactsListClient() {
               orderBy={orderBy}
               orderDir={orderDir}
               onSort={handleSort}
+              colunas={colunas}
+              rotulosDeCampo={rotulosDeCampo}
             />
           </Card>
           <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
@@ -473,6 +489,9 @@ export function ContactsListClient() {
       <NewContactDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ImportContactsDialog open={importOpen} onOpenChange={setImportOpen} />
       <MergeDialog open={duplicadosOpen} onOpenChange={setDuplicadosOpen} />
+      {colunasOpen && (
+        <PersonalizarColunasDialog open onOpenChange={setColunasOpen} camposDoContato={camposDoContato} />
+      )}
       <ExcluirContatosEmLoteDialog
         open={confirmarExclusao}
         quantidade={quantidadeSelecionada}

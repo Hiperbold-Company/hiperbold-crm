@@ -22,6 +22,8 @@ export function useRegistrarEvento(leadId: string) {
       apiClient.post<{ data: { id: string } }>(`/api/v1/leads/${leadId}/activities`, input),
     onError: showApiError,
     onSuccess: async () => {
+      // A contagem do filtro "Eventos manuais" do quadro (0979) mudou também.
+      void qc.invalidateQueries({ queryKey: ["eventos-manuais"] });
       await qc.invalidateQueries({ queryKey: chaveDaTimeline(leadId) });
     },
   });

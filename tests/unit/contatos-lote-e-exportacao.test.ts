@@ -40,6 +40,7 @@ const USER = "99999999-9999-4999-8999-999999999999";
 const F1 = "f1111111-1111-4111-8111-111111111111";
 const F2 = "f2222222-2222-4222-8222-222222222222";
 const E1 = "e1111111-1111-4111-8111-111111111111";
+const E_SEM_NEGOCIO = "e3333333-3333-4333-8333-333333333333";
 const uid = (n: number) => `c0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 let banco: BancoEmMemoria;
@@ -75,7 +76,7 @@ function popular(): BancoEmMemoria {
   const contatos: Linha[] = [
     contato(1, { tags: ["vip"], custom_fields: { cargo: "Diretora", cpf: "111.222.333-44", rg: "MG-1", Documento: "x", passaporte: "p" } }),
     contato(2, { tags: ["vip"], created_at: "2026-09-01T12:00:00Z" }),
-    contato(3, { custom_fields: { empresa: "50%_off*" } }),
+    contato(3, { custom_fields: { empresa: "50%_off*", utm_source: "google site" } }),
     contato(4),
     contato(5, { source: "site", last_activity_at: "2026-10-18T12:00:00Z" }),
     contato(6, { is_anonymized: true }),
@@ -101,6 +102,8 @@ function popular(): BancoEmMemoria {
         // contato 5 tem UM negócio no F1 com utm google
         { id: "l3", organization_id: ORG_A, contact_id: uid(5), pipeline_id: F1, stage_id: E1, custom_fields: { utm_source: "Google Ads" } },
         { id: "l4", organization_id: ORG_B, contact_id: uid(100), pipeline_id: F1, stage_id: E1, custom_fields: { utm_source: "google" } },
+        // Negócio de OUTRA organização apontando para o contato 2 da org A: não pode fazer o 2 casar.
+        { id: "l5", organization_id: ORG_B, contact_id: uid(2), pipeline_id: F1, stage_id: E1, custom_fields: { utm_source: "google" } },
       ],
       crm_pipelines: [{ id: F1, organization_id: ORG_A, name: "Vendas", settings: { fields: [{ key: "cargo", label: "Cargo" }] } }],
       crm_stages: [{ id: E1, organization_id: ORG_A, name: "Proposta" }],
@@ -405,17 +408,27 @@ describe("lista, contagem, lote e exportação concordam", () => {
     { nome: "última atividade de/até 18/10", filtro: { ativ_de: "2026-10-18", ativ_ate: "2026-10-18" }, esperado: [5] },
     { nome: "funil F1", filtro: { funil: F1 }, esperado: [4, 5] },
     { nome: "funil F1 + etapa E1", filtro: { funil: F1, etapa: E1 }, esperado: [4, 5] },
-    { nome: "campo do contato 'cargo contém dir'", filtro: { campo: "cargo", campo_valor: "dir" }, esperado: [1] },
-    { nome: "campo do contato igual (sem curinga)", filtro: { campo: "cargo", campo_op: "igual", campo_valor: "dir" }, esperado: [] },
+    { nome: "campo do contato 'cargo contém dir'", filtro: { campo_escopo: "contato", campo: "cargo", campo_valor: "dir" }, esperado: [1] },
+    { nome: "campo do contato igual (sem curinga)", filtro: { campo_escopo: "contato", campo: "cargo", campo_op: "igual", campo_valor: "dir" }, esperado: [] },
+    { nome: "campo do contato utm google: só o cadastro do contato", filtro: { campo_escopo: "contato", campo: "utm_source", campo_valor: "google" }, esperado: [3] },
+    // O padrão (escopo "qualquer"): o valor no cadastro do contato (3) OU em algum negócio dele (4, 5).
+    // A tela da CBEXS procurava `utm_source` só no contato, e a importação o grava no negócio.
+    { nome: "campo em qualquer lugar (padrão): contato OU negócio", filtro: { campo: "utm_source", campo_valor: "google" }, esperado: [3, 4, 5] },
+    { nome: "campo em qualquer lugar + funil F1: o valor tem de estar num negócio DO funil", filtro: { funil: F1, campo: "utm_source", campo_valor: "google" }, esperado: [5] },
+    { nome: "campo em qualquer lugar + funil F2", filtro: { funil: F2, campo: "utm_source", campo_valor: "google" }, esperado: [4] },
+    { nome: "campo em qualquer lugar, 'igual': só o valor exato, e nunca pelo negócio de OUTRA organização (l5)", filtro: { campo: "utm_source", campo_op: "igual", campo_valor: "google" }, esperado: [4] },
+    { nome: "campo em qualquer lugar + funil + etapa", filtro: { funil: F1, etapa: E1, campo: "cargo", campo_valor: "Diretora" }, esperado: [] },
+    { nome: "várias etapas: negócio em QUALQUER das marcadas", filtro: { funil: F1, etapa: `${E1},${E_SEM_NEGOCIO}` }, esperado: [4, 5] },
+    { nome: "várias etapas, nenhuma com negócio", filtro: { funil: F1, etapa: E_SEM_NEGOCIO }, esperado: [] },
     { nome: "campo do negócio utm_source contém google", filtro: { campo_escopo: "negocio", campo: "utm_source", campo_valor: "google" }, esperado: [4, 5] },
     // O defeito que a junção única corrige: o contato 4 tem um negócio no F1 (instagram) e OUTRO
     // com google no F2; "funil F1 E google" tem de casar o MESMO negócio — só o contato 5.
     { nome: "funil F1 + utm google no MESMO negócio", filtro: { funil: F1, campo_escopo: "negocio", campo: "utm_source", campo_valor: "google" }, esperado: [5] },
-    { nome: "% e _ no valor são literais", filtro: { campo: "empresa", campo_valor: "50%_off" }, esperado: [3] },
-    { nome: "% sozinho NÃO é curinga", filtro: { campo: "empresa", campo_valor: "%" }, esperado: [3] },
-    { nome: "* é texto, não curinga", filtro: { campo: "empresa", campo_valor: "off*" }, esperado: [3] },
+    { nome: "% e _ no valor são literais", filtro: { campo_escopo: "contato", campo: "empresa", campo_valor: "50%_off" }, esperado: [3] },
+    { nome: "% sozinho NÃO é curinga", filtro: { campo_escopo: "contato", campo: "empresa", campo_valor: "%" }, esperado: [3] },
+    { nome: "* é texto, não curinga", filtro: { campo_escopo: "contato", campo: "empresa", campo_valor: "off*" }, esperado: [3] },
     // Se `*` valesse como curinga ("50, qualquer coisa, off") isto casaria o contato 3; como texto, não.
-    { nome: "* no meio não casa 'qualquer coisa'", filtro: { campo: "empresa", campo_valor: "50*off" }, esperado: [] },
+    { nome: "* no meio não casa 'qualquer coisa'", filtro: { campo_escopo: "contato", campo: "empresa", campo_valor: "50*off" }, esperado: [] },
   ];
 
   for (const caso of casos) {

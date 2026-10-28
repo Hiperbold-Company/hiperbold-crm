@@ -38,6 +38,8 @@ import type { ContactOrderBy } from "@/lib/schemas/contacts";
 import type { Contact } from "@/lib/types/contacts";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
+import { COLUNAS_DO_SISTEMA, COLUNAS_PADRAO, PREFIXO_DE_CAMPO } from "@/lib/contacts/colunas-da-lista";
+import { rotuloDaOrigem } from "@/lib/contacts/origens";
 
 /** A seleção em lote, quando a pessoa pode usá-la (exclusão pede `agent`). Ausente = sem caixas. */
 export interface SelecaoDaTabela {
@@ -53,6 +55,20 @@ interface Props {
   orderBy: ContactOrderBy;
   orderDir: "asc" | "desc";
   onSort: (column: ContactOrderBy) => void;
+  /**
+   * As colunas, na ordem (`lib/contacts/colunas-da-lista.ts`). Ausente = as 7 de sempre.
+   * "nome" e "acoes" vêm sempre — quem garante é `normalizarColunas`.
+   */
+  colunas?: readonly string[];
+  /** Rótulo de cada campo personalizado do contato (`cf:<chave>`); sem rótulo, a chave. */
+  rotulosDeCampo?: ReadonlyMap<string, string>;
+}
+
+/** Valor de campo personalizado como texto de célula. */
+function textoDoCampo(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v);
+  return JSON.stringify(v);
 }
 
 function displayName(c: Contact, t: (texto: string) => string = (texto) => texto): string {
@@ -148,7 +164,15 @@ function CaixaDeSelecao({
   );
 }
 
-export function ContactsTable({ contacts, selecao, orderBy, orderDir, onSort }: Props) {
+export function ContactsTable({
+  contacts,
+  selecao,
+  orderBy,
+  orderDir,
+  onSort,
+  colunas = COLUNAS_PADRAO,
+  rotulosDeCampo,
+}: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
   const clientesLigado = useActiveOrg()?.cliente_pela_agenda === true;
@@ -212,39 +236,36 @@ export function ContactsTable({ contacts, selecao, orderBy, orderDir, onSort }: 
               />
             </TableHead>
           )}
-          <SortableHead
-            label={t("Nome")}
-            column="display_name"
-            orderBy={orderBy}
-            orderDir={orderDir}
-            onSort={onSort}
-          />
-          <SortableHead
-            label={t("Email")}
-            column="email"
-            orderBy={orderBy}
-            orderDir={orderDir}
-            onSort={onSort}
-          />
-          <SortableHead
-            label={t("Telefone")}
-            column="phone_number"
-            orderBy={orderBy}
-            orderDir={orderDir}
-            onSort={onSort}
-          />
-          <TableHead>{t("Tags")}</TableHead>
-          <SortableHead
-            label={t("Última atividade")}
-            column="last_activity_at"
-            orderBy={orderBy}
-            orderDir={orderDir}
-            onSort={onSort}
-          />
-          <TableHead>{t("Status")}</TableHead>
-          <TableHead className="w-[88px]">
-            <span className="sr-only">{t("Ações")}</span>
-          </TableHead>
+          {colunas.map((id) => {
+            const ordem = { orderBy, orderDir, onSort };
+            switch (id) {
+              case "nome":
+                return <SortableHead key={id} label={t("Nome")} column="display_name" {...ordem} />;
+              case "email":
+                return <SortableHead key={id} label={t("Email")} column="email" {...ordem} />;
+              case "telefone":
+                return <SortableHead key={id} label={t("Telefone")} column="phone_number" {...ordem} />;
+              case "ultima_atividade":
+                return (
+                  <SortableHead key={id} label={t("Última atividade")} column="last_activity_at" {...ordem} />
+                );
+              case "entrou_no_crm":
+                return <SortableHead key={id} label={t("Entrou no CRM")} column="created_at" {...ordem} />;
+              case "acoes":
+                return (
+                  <TableHead key={id} className="w-[88px]">
+                    <span className="sr-only">{t("Ações")}</span>
+                  </TableHead>
+                );
+              default: {
+                const doSistema = COLUNAS_DO_SISTEMA.find((c) => c.id === id);
+                const chave = id.slice(PREFIXO_DE_CAMPO.length);
+                return (
+                  <TableHead key={id}>{doSistema ? t(doSistema.rotulo) : (rotulosDeCampo?.get(chave) ?? chave)}</TableHead>
+                );
+              }
+            }
+          })}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -265,90 +286,145 @@ export function ContactsTable({ contacts, selecao, orderBy, orderDir, onSort }: 
                 />
               </TableCell>
             )}
-            <TableCell className="font-medium">
-              <Link href={`/app/contacts/${c.id}`} className="hover:underline">
-                {displayName(c)}
-              </Link>
-            </TableCell>
-            <TableCell className="text-muted-foreground">
-              {c.email ?? "—"}
-            </TableCell>
-            <TableCell className="text-muted-foreground">
-              {c.phone_number ? phoneForDisplay(c.phone_number) : "—"}
-            </TableCell>
-            <TableCell>
-              <div className="flex flex-wrap gap-1">
-                {c.tags.length === 0
-                  ? <span className="text-muted-foreground text-xs">—</span>
-                  : c.tags.map((tag) => (
-                      <ChipDeEtiqueta key={tag} tag={tag} />
-                    ))}
-              </div>
-            </TableCell>
-            <TableCell className="text-muted-foreground text-sm">
-              {c.last_activity_at
-                ? formatUltimaAtividade(c.last_activity_at, localeDaData)
-                : "—"}
-            </TableCell>
-            <TableCell>
-              <div className="flex flex-wrap gap-1">
-                {c.is_anonymized && <Badge variant="destructive">{t("Anonimizado")}</Badge>}
-                {c.is_blocked && <Badge variant="warning">{t("Bloqueado")}</Badge>}
-                {/*
-                  Lê a COLUNA, nunca a tag, e só com a regra ligada: a tag
-                  `cliente` é removível à mão e pelo PATCH (que substitui `tags`
-                  por inteiro), e um selo que some porque alguém editou
-                  etiquetas mentiria sobre um fato. Desligada, a coluna está
-                  congelada e o selo mentiria do outro lado.
-                */}
-                {clientesLigado && c.first_service_at && (
-                  <Badge variant="secondary">{t("Cliente")}</Badge>
-                )}
-                {!c.is_anonymized && !c.is_blocked && (
-                  <Badge variant="success">{t("Ativo")}</Badge>
-                )}
-              </div>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center justify-end gap-0.5">
-                {c.conversa ? (
-                  <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link
-                      href={`/app/inbox?id=${c.conversa.id}`}
-                      title={t("Abrir conversa no Inbox")}
-                      aria-label={`${t("Abrir conversa com")} ${displayName(c, t)} ${t("no Inbox")}`}
-                    >
-                      <ChatCircle size={16} weight="regular" aria-hidden />
-                      {c.conversa.unread > 0 && (
-                        <span className="sr-only">{c.conversa.unread} {t("sem ler")}</span>
-                      )}
+            {colunas.map((id) => {
+              switch (id) {
+                case "nome":
+                  return (
+                  <TableCell key="nome" className="font-medium">
+                    <Link href={`/app/contacts/${c.id}`} className="hover:underline">
+                      {displayName(c)}
                     </Link>
-                  </Button>
-                ) : c.phone_number ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    title={t("Iniciar conversa no Inbox")}
-                    aria-label={`${t("Iniciar conversa com")} ${displayName(c, t)} ${t("no Inbox")}`}
-                    disabled={abrindo === c.id}
-                    onClick={() => void iniciarConversa(c)}
-                  >
-                    <ChatCircle size={16} weight="regular" aria-hidden />
-                  </Button>
-                ) : null}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-error-fg"
-                  title={t("Excluir contato")}
-                  aria-label={`${t("Excluir contato")} ${displayName(c, t)}`}
-                  onClick={() => setAlvo(c)}
-                >
-                  <Trash size={16} weight="regular" aria-hidden />
-                </Button>
-              </div>
-            </TableCell>
+                  </TableCell>
+                  );
+                case "email":
+                  return (
+                  <TableCell key="email" className="text-muted-foreground">
+                    {c.email ?? "—"}
+                  </TableCell>
+                  );
+                case "telefone":
+                  return (
+                  <TableCell key="telefone" className="text-muted-foreground">
+                    {c.phone_number ? phoneForDisplay(c.phone_number) : "—"}
+                  </TableCell>
+                  );
+                case "tags":
+                  return (
+                  <TableCell key="tags">
+                    <div className="flex flex-wrap gap-1">
+                      {c.tags.length === 0
+                        ? <span className="text-muted-foreground text-xs">—</span>
+                        : c.tags.map((tag) => (
+                            <ChipDeEtiqueta key={tag} tag={tag} />
+                          ))}
+                    </div>
+                  </TableCell>
+                  );
+                case "ultima_atividade":
+                  return (
+                  <TableCell key="ultima_atividade" className="text-muted-foreground text-sm">
+                    {c.last_activity_at
+                      ? formatUltimaAtividade(c.last_activity_at, localeDaData)
+                      : "—"}
+                  </TableCell>
+                  );
+                case "status":
+                  return (
+                  <TableCell key="status">
+                    <div className="flex flex-wrap gap-1">
+                      {c.is_anonymized && <Badge variant="destructive">{t("Anonimizado")}</Badge>}
+                      {c.is_blocked && <Badge variant="warning">{t("Bloqueado")}</Badge>}
+                      {/*
+                        Lê a COLUNA, nunca a tag, e só com a regra ligada: a tag
+                        `cliente` é removível à mão e pelo PATCH (que substitui `tags`
+                        por inteiro), e um selo que some porque alguém editou
+                        etiquetas mentiria sobre um fato. Desligada, a coluna está
+                        congelada e o selo mentiria do outro lado.
+                      */}
+                      {clientesLigado && c.first_service_at && (
+                        <Badge variant="secondary">{t("Cliente")}</Badge>
+                      )}
+                      {!c.is_anonymized && !c.is_blocked && (
+                        <Badge variant="success">{t("Ativo")}</Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  );
+                case "acoes":
+                  return (
+                  <TableCell key="acoes">
+                    <div className="flex items-center justify-end gap-0.5">
+                      {c.conversa ? (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                          <Link
+                            href={`/app/inbox?id=${c.conversa.id}`}
+                            title={t("Abrir conversa no Inbox")}
+                            aria-label={`${t("Abrir conversa com")} ${displayName(c, t)} ${t("no Inbox")}`}
+                          >
+                            <ChatCircle size={16} weight="regular" aria-hidden />
+                            {c.conversa.unread > 0 && (
+                              <span className="sr-only">{c.conversa.unread} {t("sem ler")}</span>
+                            )}
+                          </Link>
+                        </Button>
+                      ) : c.phone_number ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title={t("Iniciar conversa no Inbox")}
+                          aria-label={`${t("Iniciar conversa com")} ${displayName(c, t)} ${t("no Inbox")}`}
+                          disabled={abrindo === c.id}
+                          onClick={() => void iniciarConversa(c)}
+                        >
+                          <ChatCircle size={16} weight="regular" aria-hidden />
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-error-fg"
+                        title={t("Excluir contato")}
+                        aria-label={`${t("Excluir contato")} ${displayName(c, t)}`}
+                        onClick={() => setAlvo(c)}
+                      >
+                        <Trash size={16} weight="regular" aria-hidden />
+                      </Button>
+                    </div>
+                  </TableCell>
+                  );
+                case "entrou_no_crm":
+                  return (
+                    <TableCell key={id} className="text-muted-foreground text-sm">
+                      {format(new Date(c.created_at), "dd/MM/yyyy", { locale: localeDaData })}
+                    </TableCell>
+                  );
+                case "origem":
+                  return (
+                    <TableCell key={id} className="text-muted-foreground text-sm">
+                      {c.source ? t(rotuloDaOrigem(c.source)) : "—"}
+                    </TableCell>
+                  );
+                case "aniversario":
+                  return (
+                    <TableCell key={id} className="text-muted-foreground text-sm">
+                      {c.birthdate ? format(new Date(`${c.birthdate}T12:00:00`), "dd/MM/yyyy", { locale: localeDaData }) : "—"}
+                    </TableCell>
+                  );
+                case "ultima_mensagem":
+                  return (
+                    <TableCell key={id} className="max-w-[16rem] truncate text-muted-foreground text-sm">
+                      {c.conversa?.preview ?? "—"}
+                    </TableCell>
+                  );
+                default:
+                  return (
+                    <TableCell key={id} className="max-w-[14rem] truncate text-muted-foreground text-sm">
+                      {textoDoCampo(c.custom_fields?.[id.slice(PREFIXO_DE_CAMPO.length)])}
+                    </TableCell>
+                  );
+              }
+            })}
           </TableRow>
         ))}
       </TableBody>

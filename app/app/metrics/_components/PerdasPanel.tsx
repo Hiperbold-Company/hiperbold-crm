@@ -79,7 +79,10 @@ function Bloco({
 
 export function PerdasPanel({
   avisoDaEmpresaToda = false,
+  janela,
 }: {
+  /** Período do filtro global de Desempenho. Ausente = últimos 30 dias. */
+  janela?: { from: string; to: string };
   /**
    * Quem vê não é gerente nem administrador (o painel chegou por
    * Permissões por perfil). A rota lê o funil INTEIRO, não o recorte de
@@ -89,7 +92,7 @@ export function PerdasPanel({
   avisoDaEmpresaToda?: boolean;
 } = {}) {
   const t = useT();
-  const { data, isLoading, isError } = usePerdasMetrics();
+  const { data, isLoading, isError } = usePerdasMetrics(true, janela);
   if (isLoading) return <p className="text-sm text-muted-foreground">{t("Carregando…")}</p>;
   if (isError || !data)
     return <p className="text-sm text-destructive">{t("Erro ao carregar o relatório de perdas.")}</p>;

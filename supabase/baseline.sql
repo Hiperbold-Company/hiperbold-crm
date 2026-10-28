@@ -68347,6 +68347,987 @@ $t_crm_leads_escrita$;
 notify pgrst, 'reload schema';
 
 
+-- ---- captação repetida não duplica negócio: lock e janela de 10 min no INSERT (migration 0977, fork Hiperbold) ----
+-- ============================================================================
+-- 0977 — CAPTAÇÃO REPETIDA NÃO DUPLICA NEGÓCIO: dois envios do mesmo formulário
+-- em segundos viram UM negócio, também na corrida.
+--
+-- Medido em produção (27/10/2026, organização CBEXS): o formulário do site
+-- (WordPress/Fluent Forms -> n8n -> POST /api/v1/webhooks/in/[token]) foi
+-- enviado duas vezes pela mesma pessoa em 1 segundo (clique duplo). Cada envio
+-- trouxe um external_id diferente (`wp-46-9294`, `wp-46-9295`), então o índice
+-- `uniq_crm_leads_org_source_external` não pegou. O contato foi reconhecido,
+-- e mesmo assim nasceram DOIS negócios abertos no mesmo funil.
+--
+-- Por que o recadastro (16/10/2026, lib/webhooks/recadastro.ts) não bastou: a
+-- rota PERGUNTA se o contato já tem negócio aberto no funil e só depois cria.
+-- Com dois envios simultâneos, os dois perguntam antes de qualquer um criar,
+-- os dois ouvem "não" e os dois criam. Pergunta e criação são duas chamadas da
+-- REST; não há transação que as junte.
+--
+-- A correção mora no INSERT, que é a única operação das duas que é atômica: um
+-- gatilho BEFORE INSERT em crm_leads que, só para o negócio que a captação
+-- pública cria, toma `pg_advisory_xact_lock` por (organização, contato, funil)
+-- e recusa a linha quando já existe negócio ABERTO do mesmo contato no mesmo
+-- funil criado há no máximo 10 minutos. O lock vale até o fim da transação do
+-- INSERT: o segundo envio espera o primeiro gravar e, em READ COMMITTED, a
+-- consulta seguinte do gatilho já enxerga a linha do primeiro.
+--
+-- A recusa sai com sqlstate PT409 e mensagem `captacao_repetida_na_janela`. A
+-- rota reconhece a mensagem, procura o negócio vencedor e responde como no
+-- reenvio do mesmo external_id (200 com o lead que existe; histórico de
+-- captação com desfecho `duplicado`). Nada de `lead.created` nasce para o
+-- segundo envio, então nenhuma automação de primeiro toque dispara duas vezes.
+--
+-- A janela de 10 minutos é a mesma constante de lib/webhooks/captacao-repetida.ts
+-- (JANELA_DA_CAPTACAO_REPETIDA_MS), cobrada por teste.
+--
+-- Quem o gatilho alcança (e só isso):
+--   - source = 'webhook' E source_metadata com `webhook_source_id` (é o que a rota
+--     de captação grava), SEM `clonado_de` (o clone de um negócio que veio da
+--     captação herda os dois primeiros e não é captação);
+--   - com contato e nascendo aberto;
+--   - contato não anonimizado (mesma régua do recadastro).
+-- Tela, API, MCP, importação, automação e clone não passam por aqui.
+--
+-- Reaplicável: create or replace + drop trigger if exists. Função nova em
+-- public: EXECUTE revogado de PUBLIC, anon e authenticated (regra 9).
+-- ============================================================================
+
+create or replace function public.fn_crm_leads_captacao_repetida()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_existente uuid;
+begin
+  if new.source is distinct from 'webhook'
+     or new.contact_id is null
+     or new.status is distinct from 'open'
+     or not coalesce(new.source_metadata ? 'webhook_source_id', false)
+     or coalesce(new.source_metadata ? 'clonado_de', false) then
+    return new;
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      new.organization_id::text || ':' || new.contact_id::text || ':' || new.pipeline_id::text,
+      977
+    )
+  );
+
+  if exists (
+    select 1 from public.contacts c
+     where c.id = new.contact_id
+       and c.organization_id = new.organization_id
+       and c.is_anonymized = true
+  ) then
+    return new;
+  end if;
+
+  select l.id into v_existente
+    from public.crm_leads l
+   where l.organization_id = new.organization_id
+     and l.contact_id = new.contact_id
+     and l.pipeline_id = new.pipeline_id
+     and l.status = 'open'
+     and l.created_at >= clock_timestamp() - interval '10 minutes'
+   order by l.created_at, l.id
+   limit 1;
+
+  if v_existente is not null then
+    raise exception using
+      errcode = 'PT409',
+      message = 'captacao_repetida_na_janela',
+      detail = v_existente::text;
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function public.fn_crm_leads_captacao_repetida() is
+  '0977: gatilho BEFORE INSERT de crm_leads. Só para o negócio da captação pública (source webhook, source_metadata com webhook_source_id e sem clonado_de, com contato, aberto): advisory lock por (organização, contato, funil) e recusa PT409 captacao_repetida_na_janela quando já há negócio aberto do mesmo contato no mesmo funil criado há até 10 minutos. Fecha a corrida do clique duplo que o recadastro (consulta antes do insert) não fecha. Sem HTTP.';
+
+revoke execute on function public.fn_crm_leads_captacao_repetida() from public, anon, authenticated;
+grant execute on function public.fn_crm_leads_captacao_repetida() to service_role;
+
+drop trigger if exists trg_crm_leads_captacao_repetida on public.crm_leads;
+create trigger trg_crm_leads_captacao_repetida
+  before insert on public.crm_leads
+  for each row
+  execute function public.fn_crm_leads_captacao_repetida();
+
+comment on trigger trg_crm_leads_captacao_repetida on public.crm_leads is
+  '0977: na ordem alfabética dos BEFORE roda depois de trg_crm_lead_close_on_stage (vê o status final) e de trg_crm_leads_billing_bloqueio. Recusa o segundo negócio do mesmo envio repetido; ver fn_crm_leads_captacao_repetida.';
+
+
+-- ---- contagem de eventos manuais por negócio do funil (migration 0979, fork Hiperbold) ----
+-- A contagem é por negócio, só dos eventos registrados à mão ("Registrar evento" da
+-- ficha): `crm_lead_activities` com type = 'note' e source_module = 'manual'
+-- (lib/leads/evento-manual.ts, ORIGEM_DO_EVENTO_MANUAL). Nenhuma outra origem conta:
+-- nota que o agente de IA ou uma automação escreve tem outro source_module.
+--
+-- Por que no banco: o quadro filtra no navegador, mas trazer a timeline inteira de
+-- centenas de negócios só para contar linhas é o custo errado. A função devolve UMA
+-- linha por negócio que tem ao menos um evento manual (quem não aparece tem zero).
+--
+-- Isolamento: SECURITY INVOKER — a RLS de crm_leads e de crm_lead_activities do
+-- chamador vale inteira (inclusive a visão "só os meus" do atendente) — e, além
+-- dela, o filtro explícito por p_organization_id nas DUAS tabelas, que a rota tira
+-- da sessão, nunca da URL nem do corpo.
+--
+-- Desempenho: índice parcial (organization_id, lead_id) só das linhas manuais, que
+-- são uma fração pequena da timeline (mensagens e mudanças de etapa são a maioria).
+--
+-- Reaplicável: create index if not exists + create or replace function.
+
+set lock_timeout = '3s';
+
+create index if not exists idx_lead_activities_manuais_por_lead
+  on public.crm_lead_activities (organization_id, lead_id)
+  where type = 'note' and source_module = 'manual';
+
+create or replace function public.fn_contar_eventos_manuais_do_funil(
+  p_organization_id uuid,
+  p_pipeline_id uuid
+)
+returns table (lead_id uuid, total integer)
+language sql
+stable
+security invoker
+set search_path = public, pg_temp
+as $$
+  select a.lead_id, count(*)::integer as total
+    from public.crm_lead_activities a
+    join public.crm_leads l
+      on l.id = a.lead_id
+     and l.organization_id = p_organization_id
+   where a.organization_id = p_organization_id
+     and l.pipeline_id = p_pipeline_id
+     and a.type = 'note'
+     and a.source_module = 'manual'
+   group by a.lead_id;
+$$;
+
+revoke execute on function public.fn_contar_eventos_manuais_do_funil(uuid, uuid) from public, anon;
+grant execute on function public.fn_contar_eventos_manuais_do_funil(uuid, uuid) to authenticated, service_role;
+
+comment on function public.fn_contar_eventos_manuais_do_funil(uuid, uuid) is
+  'Eventos registrados à mão (type note, source_module manual) por negócio de um funil. Security invoker: a RLS do chamador vale; filtro explícito por organização. Só negócios com ao menos um evento.';
+
+reset lock_timeout;
+
+-- ---- a tarefa avisa quem criou e o responsável quando vence (migration 0980, fork Hiperbold) ----
+--
+-- Cria FUNÇÃO (fn_reivindicar_tarefas_vencidas): entra ANTES da VARREDURA anon.
+-- ============================================================================
+-- 0980 — A TAREFA AVISA QUEM PRECISA QUANDO VENCE (CBEXS, 28/10/2026).
+--
+-- `crm_tasks` (0210) tinha prazo e nenhum aviso: o prazo chegava em silêncio, e
+-- quem marcou "ligar de volta às 10h" só descobria abrindo a tela de Tarefas.
+-- Esta migration dá ao vencimento um ACONTECIMENTO: a varredura
+-- `app/api/v1/cron/tarefas-vencidas` chama `fn_reivindicar_tarefas_vencidas`,
+-- que marca a tarefa e emite `crm_task.due` no `event_log`; quem manda o push
+-- ao celular de quem criou e do responsável é o consumidor do barramento
+-- (`lib/notifications/push.handler.ts`). Nenhum gatilho, nenhum HTTP no banco.
+--
+-- UM AVISO POR TAREFA POR VENCIMENTO. `due_notified_for` guarda o prazo que já
+-- foi avisado. A reivindicação só pega a linha quando `due_notified_for` é
+-- diferente de `due_date` — então rodar de novo não avisa de novo, e REMARCAR
+-- o prazo (03/11 vira 05/11) rearma o aviso sozinho, sem ninguém limpar nada.
+-- O `update ... from (select ... for update skip locked)` torna a marca e a
+-- emissão uma coisa só: duas rodadas sobrepostas do cron nunca pegam a mesma
+-- linha, e se a emissão falhar a marca volta junto (mesma transação).
+--
+-- JANELA DE 24 HORAS. Só entra o que venceu nas últimas 24h. Sem a janela, a
+-- primeira rodada depois do deploy avisaria de uma vez todas as tarefas
+-- atrasadas há meses de toda instalação; com ela, o atraso antigo continua
+-- visível na lista (e no sino da tela, que é derivado de `crm_tasks`), mas não
+-- vira enxurrada no celular. A consequência, declarada: se o cron ficar parado
+-- mais de 24h, os vencimentos desse intervalo não vão ao celular.
+--
+-- O EFEITO COLATERAL ACEITO. Marcar a tarefa passa pelo `trg_crm_tasks_updated_at`
+-- e move o `updated_at`. Nenhuma tela ordena nem filtra tarefa por esse campo.
+--
+-- Isolamento: a função não recebe organização nem id; cada evento leva a
+-- organização da PRÓPRIA linha (`p_organization_id => t.organization_id`). Ela
+-- só é executável por `service_role` (revogada de public, anon e authenticated).
+-- Idempotente: `add column if not exists`, `create index if not exists`,
+-- `create or replace function`.
+-- ============================================================================
+
+alter table public.crm_tasks
+  add column if not exists due_notified_for timestamptz;
+
+comment on column public.crm_tasks.due_notified_for is
+  '0980: o prazo (due_date) que já foi avisado a quem criou e ao responsável. Diferente de due_date = ainda não avisado neste vencimento; remarcar o prazo rearma o aviso. Escrito só por fn_reivindicar_tarefas_vencidas.';
+
+-- A varredura de minuto em minuto: só o que está aberto e tem prazo.
+create index if not exists crm_tasks_vencimento_aberto_idx
+  on public.crm_tasks (due_date)
+  where due_date is not null and status in ('pending', 'in_progress');
+
+create or replace function public.fn_reivindicar_tarefas_vencidas(p_limite integer default 200)
+returns table (task_id uuid, organization_id uuid, due_date timestamptz)
+language plpgsql
+volatile
+security invoker
+set search_path = public, pg_temp
+as $$
+declare
+  v_linha record;
+begin
+  for v_linha in
+    update public.crm_tasks t
+       set due_notified_for = t.due_date
+      from (
+        select c.id
+          from public.crm_tasks c
+         where c.due_date is not null
+           and c.status in ('pending', 'in_progress')
+           and c.due_date <= now()
+           and c.due_date > now() - interval '24 hours'
+           and c.due_notified_for is distinct from c.due_date
+         order by c.due_date, c.id
+         limit greatest(1, least(coalesce(p_limite, 200), 1000))
+         for update of c skip locked
+      ) alvo
+     where t.id = alvo.id
+    returning t.id, t.organization_id, t.due_date, t.lead_id, t.contact_id, t.created_by, t.assigned_to
+  loop
+    perform public.emit_event(
+      'crm_task.due',
+      'crm_task',
+      v_linha.id,
+      jsonb_build_object(
+        'task_id', v_linha.id,
+        'lead_id', v_linha.lead_id,
+        'contact_id', v_linha.contact_id,
+        'due_date', v_linha.due_date,
+        'created_by', v_linha.created_by,
+        'assigned_to', v_linha.assigned_to
+      ),
+      jsonb_build_object('actor_kind', 'system', 'source', 'cron/tarefas-vencidas'),
+      v_linha.organization_id
+    );
+    task_id := v_linha.id;
+    organization_id := v_linha.organization_id;
+    due_date := v_linha.due_date;
+    return next;
+  end loop;
+end;
+$$;
+
+comment on function public.fn_reivindicar_tarefas_vencidas(integer) is
+  '0980: marca (due_notified_for = due_date) as tarefas abertas que venceram nas últimas 24h e ainda não foram avisadas neste vencimento, e emite crm_task.due para cada uma, na organização da própria linha. Uma vez por tarefa por vencimento; skip locked contra rodadas sobrepostas. Chamada pelo cron tarefas-vencidas. Sem HTTP.';
+
+revoke execute on function public.fn_reivindicar_tarefas_vencidas(integer) from public, anon, authenticated;
+grant execute on function public.fn_reivindicar_tarefas_vencidas(integer) to service_role;
+
+notify pgrst, 'reload schema';
+
+
+-- ---- desempenho (BI): negócios e origens (migration 0981, fork Hiperbold) ----
+-- ============================================================================
+-- 0981 — DESEMPENHO (BI): agregações de NEGÓCIOS e de ORIGENS no servidor.
+--
+-- A tela Desempenho (/app/metrics) vira a área de inteligência de dados do CRM,
+-- com filtro global de período, funil e atendente. Os números saem daqui, já
+-- agregados: o navegador nunca recebe as linhas de negócio para somar.
+--
+-- fn_desempenho_negocios — cartões (criados, ganhos, perdidos, em aberto e
+--   carteira aberta), série diária no fuso da organização, negócios abertos por
+--   etapa (funil escolhido) ou por funil (todos), movimentações de etapa no
+--   período (crm_lead_activities type='stage_changed', destino em
+--   payload.to_stage_id ou payload.para, as duas formas que os emissores gravam)
+--   e o ranking por responsável.
+-- fn_desempenho_origens — negócios CRIADOS no período por
+--   custom_fields.utm_source / utm_medium / utm_campaign (minúsculas, sem espaço
+--   nas pontas), com ganhos, perdidos, abertos, valor ganho e taxa de ganho
+--   (ganhos ÷ criados). Chave nula = sem origem.
+--
+-- Regras de conta, iguais às de fn_attendant_metrics:
+--   * perda por transferência entre funis ('moved_to_another_pipeline') não é
+--     perda comercial (0266);
+--   * janela semiaberta [p_from, p_to).
+-- Dinheiro: só a MOEDA PRINCIPAL (a mais frequente entre os negócios do escopo
+-- com valor) entra nas somas; `fora_da_moeda` conta o que ficou de fora. Somar
+-- BRL com USD seria número inventado.
+--
+-- Isolamento: SECURITY INVOKER. Roda com o client da sessão, então a RLS de
+-- crm_leads (0975) e de crm_lead_activities escopa o atendente aos negócios que
+-- ele já vê hoje; gerente e admin veem a organização. `p_org` filtra
+-- explicitamente toda tabela. Sem efeito: nada a auditar.
+--
+-- Reaplicável: create or replace. Revoga EXECUTE de PUBLIC e anon (as duas
+-- origens: grant de criação a PUBLIC e default ACL do Supabase a anon).
+-- ============================================================================
+
+create or replace function public.fn_desempenho_negocios(
+  p_org uuid,
+  p_from timestamptz,
+  p_to timestamptz,
+  p_pipeline uuid default null,
+  p_owner uuid default null
+) returns jsonb
+language sql stable
+security invoker
+set search_path = public
+as $$
+  with
+  cfg as (
+    select coalesce(
+      (select o.timezone from public.organizations o
+        where o.id = p_org
+          and exists (select 1 from pg_timezone_names z where z.name = o.timezone)),
+      'America/Sao_Paulo'
+    ) as tz
+  ),
+  escopo as (
+    select l.id, l.status, l.value_cents, l.currency, l.owner_user_id, l.created_at,
+           l.closed_at, l.stage_id, l.pipeline_id, l.lost_reason
+    from public.crm_leads l
+    where l.organization_id = p_org
+      and (p_pipeline is null or l.pipeline_id = p_pipeline)
+      and (p_owner is null or l.owner_user_id = p_owner)
+  ),
+  moeda as (
+    select coalesce((
+      select e.currency from escopo e
+      where e.value_cents is not null and e.currency is not null
+        and ((e.created_at >= p_from and e.created_at < p_to)
+          or (e.closed_at >= p_from and e.closed_at < p_to)
+          or e.status = 'open')
+      group by e.currency
+      order by count(*) desc, e.currency
+      limit 1
+    ), 'BRL') as currency
+  ),
+  fatos as (
+    select 'criados'::text as tipo, e.created_at as instante, e.value_cents, e.currency, e.owner_user_id
+      from escopo e where e.created_at >= p_from and e.created_at < p_to
+    union all
+    select 'ganhos', e.closed_at, e.value_cents, e.currency, e.owner_user_id
+      from escopo e where e.status = 'won' and e.closed_at >= p_from and e.closed_at < p_to
+    union all
+    select 'perdidos', e.closed_at, e.value_cents, e.currency, e.owner_user_id
+      from escopo e
+     where e.status = 'lost'
+       and coalesce(e.lost_reason, '') <> 'moved_to_another_pipeline'
+       and e.closed_at >= p_from and e.closed_at < p_to
+    union all
+    select 'em_aberto', e.created_at, e.value_cents, e.currency, e.owner_user_id
+      from escopo e where e.status = 'open' and e.created_at >= p_from and e.created_at < p_to
+  ),
+  fatos_m as (
+    select f.tipo, f.instante, f.owner_user_id,
+           (f.value_cents is not null and f.currency = m.currency) as na_moeda,
+           (f.value_cents is not null and f.currency is distinct from m.currency) as outra_moeda,
+           case when f.currency = m.currency then coalesce(f.value_cents, 0) else 0 end as valor
+    from fatos f cross join moeda m
+  ),
+  dias as (
+    select d::date as dia
+    from cfg, generate_series(
+      (p_from at time zone cfg.tz)::date,
+      ((p_to - interval '1 microsecond') at time zone cfg.tz)::date,
+      interval '1 day'
+    ) d
+  ),
+  fd as (
+    select f.tipo, (f.instante at time zone cfg.tz)::date as dia, count(*) as q, sum(f.valor) as v
+    from fatos_m f cross join cfg
+    group by 1, 2
+  ),
+  mov as (
+    select a.performed_at,
+           nullif(coalesce(a.payload->>'to_stage_id', a.payload->>'para'), '') as destino
+    from public.crm_lead_activities a
+    join escopo e on e.id = a.lead_id
+    where a.organization_id = p_org
+      and a.type = 'stage_changed'
+      and a.performed_at >= p_from and a.performed_at < p_to
+  ),
+  mov_dia as (
+    select (m.performed_at at time zone cfg.tz)::date as dia, count(*) as q
+    from mov m cross join cfg
+    group by 1
+  ),
+  abertos as (
+    select e.stage_id, e.pipeline_id, count(*) as q,
+           sum(case when e.currency = m.currency then coalesce(e.value_cents, 0) else 0 end) as v
+    from escopo e cross join moeda m
+    where e.status = 'open'
+    group by e.stage_id, e.pipeline_id
+  ),
+  por_dono as (
+    select f.owner_user_id,
+           count(*) filter (where f.tipo = 'criados') as criados,
+           count(*) filter (where f.tipo = 'ganhos') as ganhos,
+           count(*) filter (where f.tipo = 'perdidos') as perdidos,
+           coalesce(sum(f.valor) filter (where f.tipo = 'ganhos'), 0) as valor_ganho,
+           count(*) filter (where f.tipo = 'ganhos' and f.na_moeda) as ganhos_na_moeda
+    from fatos_m f
+    group by f.owner_user_id
+  )
+  select jsonb_build_object(
+    'moeda', (select currency from moeda),
+    'fuso', (select tz from cfg),
+    'fora_da_moeda', (select count(*) from fatos_m where outra_moeda),
+    'cartoes', jsonb_build_object(
+      'criados', (select jsonb_build_object('quantidade', count(*), 'valor_cents', coalesce(sum(valor), 0)) from fatos_m where tipo = 'criados'),
+      'ganhos', (select jsonb_build_object('quantidade', count(*), 'valor_cents', coalesce(sum(valor), 0)) from fatos_m where tipo = 'ganhos'),
+      'perdidos', (select jsonb_build_object('quantidade', count(*), 'valor_cents', coalesce(sum(valor), 0)) from fatos_m where tipo = 'perdidos'),
+      'em_aberto', (select jsonb_build_object('quantidade', count(*), 'valor_cents', coalesce(sum(valor), 0)) from fatos_m where tipo = 'em_aberto'),
+      'carteira', (select jsonb_build_object('quantidade', coalesce(sum(q), 0), 'valor_cents', coalesce(sum(v), 0)) from abertos)
+    ),
+    'diario', coalesce((
+      select jsonb_agg(x.obj order by x.dia) from (
+        select d.dia, jsonb_build_object(
+          'dia', to_char(d.dia, 'YYYY-MM-DD'),
+          'criados', coalesce(sum(fd.q) filter (where fd.tipo = 'criados'), 0),
+          'criados_valor_cents', coalesce(sum(fd.v) filter (where fd.tipo = 'criados'), 0),
+          'ganhos', coalesce(sum(fd.q) filter (where fd.tipo = 'ganhos'), 0),
+          'ganhos_valor_cents', coalesce(sum(fd.v) filter (where fd.tipo = 'ganhos'), 0),
+          'perdidos', coalesce(sum(fd.q) filter (where fd.tipo = 'perdidos'), 0),
+          'perdidos_valor_cents', coalesce(sum(fd.v) filter (where fd.tipo = 'perdidos'), 0),
+          'em_aberto', coalesce(sum(fd.q) filter (where fd.tipo = 'em_aberto'), 0),
+          'em_aberto_valor_cents', coalesce(sum(fd.v) filter (where fd.tipo = 'em_aberto'), 0),
+          'movimentacoes', coalesce((select md.q from mov_dia md where md.dia = d.dia), 0)
+        ) as obj
+        from dias d left join fd on fd.dia = d.dia
+        group by d.dia
+      ) x
+    ), '[]'::jsonb),
+    'etapas', case when p_pipeline is null then '[]'::jsonb else coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'stage_id', s.id, 'nome', s.name, 'posicao', s.position,
+        'quantidade', coalesce(a.q, 0), 'valor_cents', coalesce(a.v, 0)
+      ) order by s.position, s.name)
+      from public.crm_stages s
+      left join abertos a on a.stage_id = s.id
+      where s.organization_id = p_org and s.pipeline_id = p_pipeline and s.is_archived = false
+    ), '[]'::jsonb) end,
+    'funis', case when p_pipeline is not null then '[]'::jsonb else coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'pipeline_id', p.id, 'nome', p.name,
+        'quantidade', coalesce(x.q, 0), 'valor_cents', coalesce(x.v, 0)
+      ) order by p.position, p.name)
+      from public.crm_pipelines p
+      left join (select pipeline_id, sum(q) as q, sum(v) as v from abertos group by pipeline_id) x
+        on x.pipeline_id = p.id
+      where p.organization_id = p_org and p.is_archived = false
+    ), '[]'::jsonb) end,
+    'movimentacoes', jsonb_build_object(
+      'total', (select count(*) from mov),
+      'por_etapa', coalesce((
+        select jsonb_agg(jsonb_build_object(
+          'stage_id', s.id, 'nome', s.name, 'funil', p.name, 'quantidade', x.q
+        ) order by x.q desc, p.position, s.position)
+        from (select destino, count(*) as q from mov where destino is not null group by destino) x
+        join public.crm_stages s on s.id::text = x.destino and s.organization_id = p_org
+        join public.crm_pipelines p on p.id = s.pipeline_id
+      ), '[]'::jsonb)
+    ),
+    'atendentes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'user_id', d.owner_user_id,
+        'criados', d.criados,
+        'ganhos', d.ganhos,
+        'perdidos', d.perdidos,
+        'valor_ganho_cents', d.valor_ganho,
+        'ticket_medio_cents', case when d.ganhos_na_moeda > 0
+          then round(d.valor_ganho::numeric / d.ganhos_na_moeda) else null end
+      ) order by d.valor_ganho desc, d.ganhos desc, d.criados desc, d.owner_user_id nulls last)
+      from por_dono d
+    ), '[]'::jsonb)
+  );
+$$;
+
+revoke execute on function public.fn_desempenho_negocios(uuid, timestamptz, timestamptz, uuid, uuid) from public, anon;
+grant execute on function public.fn_desempenho_negocios(uuid, timestamptz, timestamptz, uuid, uuid) to authenticated, service_role;
+
+comment on function public.fn_desempenho_negocios(uuid, timestamptz, timestamptz, uuid, uuid) is
+  'Migration 0981: agregações da aba Negócios de Desempenho (cartões, série diária no fuso da organização, abertos por etapa ou funil, movimentações de etapa, ranking por responsável). SECURITY INVOKER: a RLS de crm_leads escopa o atendente.';
+
+create or replace function public.fn_desempenho_origens(
+  p_org uuid,
+  p_from timestamptz,
+  p_to timestamptz,
+  p_pipeline uuid default null,
+  p_owner uuid default null
+) returns jsonb
+language sql stable
+security invoker
+set search_path = public
+as $$
+  with
+  escopo as (
+    select l.status, l.value_cents, l.currency, l.lost_reason,
+           nullif(lower(btrim(l.custom_fields->>'utm_source')), '') as src,
+           nullif(lower(btrim(l.custom_fields->>'utm_medium')), '') as med,
+           nullif(lower(btrim(l.custom_fields->>'utm_campaign')), '') as camp
+    from public.crm_leads l
+    where l.organization_id = p_org
+      and (p_pipeline is null or l.pipeline_id = p_pipeline)
+      and (p_owner is null or l.owner_user_id = p_owner)
+      and l.created_at >= p_from and l.created_at < p_to
+  ),
+  moeda as (
+    select coalesce((
+      select e.currency from escopo e
+      where e.value_cents is not null and e.currency is not null
+      group by e.currency order by count(*) desc, e.currency limit 1
+    ), 'BRL') as currency
+  ),
+  base as (
+    select e.src, e.med, e.camp, e.status,
+           (e.status = 'lost' and coalesce(e.lost_reason, '') <> 'moved_to_another_pipeline') as perdido,
+           case when e.currency = m.currency then coalesce(e.value_cents, 0) else 0 end as valor
+    from escopo e cross join moeda m
+  ),
+  linhas as (
+    select 'source'::text as dim, src as chave, status, perdido, valor from base
+    union all select 'medium', med, status, perdido, valor from base
+    union all select 'campaign', camp, status, perdido, valor from base
+  ),
+  agg as (
+    select dim, chave,
+           count(*) as total,
+           count(*) filter (where status = 'won') as ganhos,
+           count(*) filter (where perdido) as perdidos,
+           count(*) filter (where status = 'open') as abertos,
+           coalesce(sum(valor) filter (where status = 'won'), 0) as valor_ganho
+    from linhas
+    group by dim, chave
+  ),
+  ordenado as (
+    select a.*, row_number() over (partition by a.dim order by a.total desc, a.ganhos desc, a.chave nulls last) as rn
+    from agg a
+  )
+  select jsonb_build_object(
+    'moeda', (select currency from moeda),
+    'total', (select count(*) from escopo),
+    'limite', 50,
+    'por_source', coalesce((select jsonb_agg(jsonb_build_object(
+        'chave', o.chave, 'total', o.total, 'ganhos', o.ganhos, 'perdidos', o.perdidos,
+        'abertos', o.abertos, 'valor_ganho_cents', o.valor_ganho,
+        'taxa_de_ganho', round(o.ganhos::numeric / o.total, 4)
+      ) order by o.rn) from ordenado o where o.dim = 'source' and o.rn <= 50), '[]'::jsonb),
+    'por_medium', coalesce((select jsonb_agg(jsonb_build_object(
+        'chave', o.chave, 'total', o.total, 'ganhos', o.ganhos, 'perdidos', o.perdidos,
+        'abertos', o.abertos, 'valor_ganho_cents', o.valor_ganho,
+        'taxa_de_ganho', round(o.ganhos::numeric / o.total, 4)
+      ) order by o.rn) from ordenado o where o.dim = 'medium' and o.rn <= 50), '[]'::jsonb),
+    'por_campaign', coalesce((select jsonb_agg(jsonb_build_object(
+        'chave', o.chave, 'total', o.total, 'ganhos', o.ganhos, 'perdidos', o.perdidos,
+        'abertos', o.abertos, 'valor_ganho_cents', o.valor_ganho,
+        'taxa_de_ganho', round(o.ganhos::numeric / o.total, 4)
+      ) order by o.rn) from ordenado o where o.dim = 'campaign' and o.rn <= 50), '[]'::jsonb),
+    'cortado', jsonb_build_object(
+      'source', (select count(*) > 50 from agg where dim = 'source'),
+      'medium', (select count(*) > 50 from agg where dim = 'medium'),
+      'campaign', (select count(*) > 50 from agg where dim = 'campaign')
+    )
+  );
+$$;
+
+revoke execute on function public.fn_desempenho_origens(uuid, timestamptz, timestamptz, uuid, uuid) from public, anon;
+grant execute on function public.fn_desempenho_origens(uuid, timestamptz, timestamptz, uuid, uuid) to authenticated, service_role;
+
+comment on function public.fn_desempenho_origens(uuid, timestamptz, timestamptz, uuid, uuid) is
+  'Migration 0981: negócios criados no período por utm_source, utm_medium e utm_campaign (custom_fields), com ganhos e taxa de ganho. SECURITY INVOKER: a RLS de crm_leads escopa o atendente.';
+
+notify pgrst, 'reload schema';
+
+
+-- ---- relatório de atividades: filtro por atendente (migration 0983, fork Hiperbold) ----
+-- 0983 — RELATÓRIO DE ATIVIDADES: filtro por atendente.
+--
+-- Pedido da CBEXS (28/10/2026): a tela Atividades mostrava a equipe somada; a
+-- gestora precisa ver o que UMA pessoa fez. `fn_activity_report` ganha o sexto
+-- parâmetro `p_user uuid default null`: com ele, a janela inteira (total, por
+-- ator, por tipo, série diária e lista) se restringe às atividades cujo
+-- `performed_by_user_id` é essa pessoa. Null = comportamento de antes.
+--
+-- O filtro só ESTREITA: a função segue SECURITY INVOKER, então a RLS de
+-- `crm_lead_activities` continua recortando por quem chama (agent em modo
+-- 'own' não vê além do que já via). Quem garante que `p_user` é da mesma
+-- organização é a rota (membro ativo de `user_organizations`); aqui, um id de
+-- fora da org simplesmente não casa com nenhuma linha da `p_org`.
+--
+-- A assinatura MUDA (cinco -> seis parâmetros): a antiga é derrubada, senão a
+-- RPC ficaria ambígua para o PostgREST (duas candidatas para a mesma chamada).
+-- Único chamador: app/api/v1/reports/activities/route.ts.
+--
+-- Reaplicável: drop function if exists + create or replace + revoke/grant.
+
+set lock_timeout = '3s';
+
+drop function if exists public.fn_activity_report(uuid, timestamptz, timestamptz, text, int);
+
+create or replace function public.fn_activity_report(
+  p_org uuid,
+  p_from timestamptz,
+  p_to timestamptz,
+  p_tz text default 'UTC',
+  p_limit int default 200,
+  p_user uuid default null
+) returns jsonb
+language sql stable
+set search_path = public
+as $$
+  with janela as (
+    select
+      a.id,
+      a.type,
+      a.actor_kind,
+      a.performed_by_user_id,
+      a.actor_agent_id,
+      a.performed_at,
+      a.reason,
+      a.lead_id,
+      a.contact_id
+    from public.crm_lead_activities a
+    where a.organization_id = p_org
+      and a.performed_at >= p_from
+      and a.performed_at <  p_to
+      -- Filtro por atendente (0983): só o que ESTA pessoa fez. Estreita, nunca
+      -- alarga — a RLS de quem chama continua decidindo o que ele enxerga.
+      and (p_user is null or a.performed_by_user_id = p_user)
+  )
+  select jsonb_build_object(
+    'total', (select count(*) from janela),
+    -- QUEM fez. Agrupa pela tripla (tipo de ator, pessoa, agente) porque duas
+    -- pessoas diferentes com o mesmo `actor_kind` são duas linhas, não uma.
+    'by_actor', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'actor_kind', g.actor_kind,
+          'user_id', g.performed_by_user_id,
+          'agent_id', g.actor_agent_id,
+          'count', g.c
+        ) order by g.c desc, coalesce(g.actor_kind, 'zzz')
+      )
+      from (
+        select actor_kind, performed_by_user_id, actor_agent_id, count(*) as c
+        from janela
+        group by 1, 2, 3
+      ) g
+    ), '[]'::jsonb),
+    -- O QUE foi feito. O tipo cru; o rótulo legível é do TypeScript
+    -- (`ACTIVITY_LABELS`), fonte única de escrita e leitura.
+    'by_type', coalesce((
+      select jsonb_agg(
+        jsonb_build_object('type', g.type, 'count', g.c) order by g.c desc, g.type
+      )
+      from (select type, count(*) as c from janela group by 1) g
+    ), '[]'::jsonb),
+    -- QUANDO. Dias sem atividade entram com zero — um buraco no gráfico é a
+    -- informação (a operação parou), e omitir a linha esconde justamente isso.
+    'daily', coalesce((
+      select jsonb_agg(
+        jsonb_build_object('date', to_char(d.dia, 'YYYY-MM-DD'), 'count', coalesce(c.n, 0))
+        order by d.dia
+      )
+      from generate_series(
+             date_trunc('day', p_from at time zone p_tz),
+             date_trunc('day', (p_to - interval '1 microsecond') at time zone p_tz),
+             interval '1 day'
+           ) as d(dia)
+      left join (
+        select date_trunc('day', performed_at at time zone p_tz) as dia, count(*) as n
+        from janela
+        group by 1
+      ) c on c.dia = d.dia
+    ), '[]'::jsonb),
+    -- A LISTA, limitada. O relatório não é a timeline: quem quer o histórico
+    -- inteiro de um negócio abre o negócio, e é para lá que cada linha aponta.
+    'items', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', i.id,
+          'type', i.type,
+          'performed_at', i.performed_at,
+          'actor_kind', i.actor_kind,
+          'user_id', i.performed_by_user_id,
+          'agent_id', i.actor_agent_id,
+          'reason', i.reason,
+          'lead_id', i.lead_id,
+          'lead_title', i.lead_title,
+          'contact_id', i.contact_id,
+          -- Os TRÊS campos crus, não um rótulo pronto: como esta pessoa se chama
+          -- na tela é decisão de `lib/contacts/rotulo-do-contato.ts`, e a cadeia
+          -- já divergiu em seis arquivos uma vez.
+          'contact_display_name', i.contact_display_name,
+          'contact_name', i.contact_name,
+          'contact_phone', i.contact_phone
+        ) order by i.performed_at desc, i.id
+      )
+      from (
+        select
+          j.*,
+          l.title as lead_title,
+          ct.display_name as contact_display_name,
+          ct.name as contact_name,
+          ct.phone_number as contact_phone
+        from janela j
+        left join public.crm_leads l on l.id = j.lead_id
+        left join public.contacts ct on ct.id = j.contact_id
+        order by j.performed_at desc, j.id
+        limit greatest(p_limit, 0)
+      ) i
+    ), '[]'::jsonb),
+    -- A lista foi cortada? Sem isto, um período movimentado pareceria calmo.
+    'items_truncated', (select count(*) from janela) > greatest(p_limit, 0)
+  );
+$$;
+
+revoke all on function public.fn_activity_report(uuid, timestamptz, timestamptz, text, int, uuid) from public;
+revoke execute on function public.fn_activity_report(uuid, timestamptz, timestamptz, text, int, uuid) from anon;
+grant execute on function public.fn_activity_report(uuid, timestamptz, timestamptz, text, int, uuid)
+  to authenticated, service_role;
+
+reset lock_timeout;
+-- ---- desempenho (BI): atendimento (migration 0982, fork Hiperbold) ----
+-- ============================================================================
+-- 0982 — DESEMPENHO (BI): agregações da aba ATENDIMENTO no servidor.
+--
+-- O que conta como ATENDIMENTO: o par (conversa, service_revision) das
+-- mensagens — a fronteira de atendimento da 0222. Cada encerramento abre uma
+-- revisão nova; mensagem antiga sem revisão (antes da 0222) vale como revisão 0,
+-- a conversa inteira. Um atendimento entra na janela quando COMEÇA nela (a
+-- primeira mensagem da revisão está em [p_from, p_to)).
+--
+--   finalizado  = revisão já superada pela conversa, ou revisão em curso com
+--                 service_closed_at preenchido;
+--   em aberto   = o resto;
+--   aguardando  = em aberto, revisão em curso, e a última mensagem do cliente é
+--                 posterior à última nossa (last_inbound_at > last_outbound_at).
+--
+-- Tempos (só resposta HUMANA: sent_by_user_id preenchido; robô não conta, como
+-- em fn_attendant_metrics):
+--   primeira resposta = 1ª mensagem do cliente no atendimento → 1ª resposta
+--                       humana depois dela, na mesma revisão;
+--   resposta          = cada TURNO do cliente (mensagem dele cuja anterior não
+--                       era dele) → a próxima mensagem nossa, quando ela é de
+--                       pessoa. Atribuída a quem respondeu.
+-- Contagem por atendente usa o responsável ATUAL da conversa
+-- (assigned_to_user_id) — o schema não guarda o responsável de cada revisão.
+-- Mapa de calor = mensagens RECEBIDAS por dia da semana × hora, no fuso da
+-- organização.
+--
+-- NÃO medido (o schema atual não dá): duração do atendimento (revisão antiga não
+-- guarda quando encerrou), departamento (não existe), tempo para iniciar
+-- (atribuição por revisão não é guardada).
+--
+-- Filtro de funil: conversa cujo contato tem negócio naquele funil. Grupos ficam
+-- de fora (is_group). Comparação: a janela anterior de mesmo tamanho.
+--
+-- Isolamento: SECURITY INVOKER; a RLS de conversations e messages escopa o
+-- atendente ao que ele já vê na Inbox. `p_org` filtra toda tabela.
+-- Reaplicável: create or replace. Revoga EXECUTE de PUBLIC e anon.
+-- ============================================================================
+
+create or replace function public.fn_desempenho_atendimento(
+  p_org uuid,
+  p_from timestamptz,
+  p_to timestamptz,
+  p_pipeline uuid default null,
+  p_owner uuid default null
+) returns jsonb
+language sql stable
+security invoker
+set search_path = public
+as $$
+  with
+  cfg as (
+    select coalesce(
+      (select o.timezone from public.organizations o
+        where o.id = p_org
+          and exists (select 1 from pg_timezone_names z where z.name = o.timezone)),
+      'America/Sao_Paulo'
+    ) as tz,
+    p_from - (p_to - p_from) as anterior
+  ),
+  conv as (
+    select c.id, c.assigned_to_user_id, c.service_revision, c.service_closed_at,
+           c.service_started_at, c.last_inbound_at, c.last_outbound_at
+    from public.conversations c
+    where c.organization_id = p_org
+      and coalesce(c.is_group, false) = false
+      and (p_owner is null or c.assigned_to_user_id = p_owner)
+      and (p_pipeline is null or exists (
+        select 1 from public.crm_leads l
+        where l.organization_id = p_org and l.pipeline_id = p_pipeline and l.contact_id = c.contact_id
+      ))
+  ),
+  msg as (
+    select m.id, m.conversation_id, coalesce(m.service_revision, 0) as rev,
+           m.direction, m.sent_at, m.sent_by_user_id
+    from public.messages m
+    join conv c on c.id = m.conversation_id
+    cross join cfg
+    where m.organization_id = p_org
+      and m.sent_at >= cfg.anterior and m.sent_at < p_to
+  ),
+  g0 as (
+    select conversation_id, rev, min(sent_at) as inicio,
+           min(sent_at) filter (where direction = 'inbound') as entrada
+    from msg
+    group by conversation_id, rev
+  ),
+  g1 as (
+    select g0.conversation_id, g0.rev, g0.inicio, g0.entrada, min(m.sent_at) as primeira_resp
+    from g0
+    left join msg m
+      on m.conversation_id = g0.conversation_id and m.rev = g0.rev
+     and m.direction = 'outbound' and m.sent_by_user_id is not null
+     and m.sent_at > g0.entrada
+    group by g0.conversation_id, g0.rev, g0.inicio, g0.entrada
+  ),
+  atend as (
+    select g1.*, c.assigned_to_user_id,
+           (g1.inicio >= p_from) as na_janela,
+           ((g1.rev > 0 and g1.rev < c.service_revision)
+             or ((g1.rev = 0 or g1.rev = c.service_revision) and c.service_closed_at is not null)) as finalizado,
+           ((g1.rev = 0 or g1.rev = c.service_revision)
+             and c.last_inbound_at is not null
+             and c.last_inbound_at > coalesce(c.last_outbound_at, '-infinity'::timestamptz)) as cliente_esperando
+    from g1
+    join conv c on c.id = g1.conversation_id
+    cross join cfg
+    where case
+      when g1.rev = c.service_revision and c.service_started_at is not null
+        then c.service_started_at >= cfg.anterior
+      else not exists (
+        select 1 from public.messages m2
+        where m2.conversation_id = g1.conversation_id
+          and coalesce(m2.service_revision, 0) = g1.rev
+          and m2.sent_at < cfg.anterior
+      )
+    end
+  ),
+  atual as (
+    select a.*, extract(epoch from (a.primeira_resp - a.entrada)) as primeira_seg
+    from atend a where a.na_janela
+  ),
+  ordenadas as (
+    select m.id, m.conversation_id, m.direction, m.sent_at,
+           lag(m.direction) over (partition by m.conversation_id order by m.sent_at, m.id) as dir_anterior,
+           min(m.sent_at) filter (where m.direction = 'outbound') over (
+             partition by m.conversation_id order by m.sent_at desc, m.id desc
+             rows between unbounded preceding and 1 preceding
+           ) as prox_saida
+    from msg m
+  ),
+  turnos as (
+    select distinct on (t.id)
+           t.id, t.sent_at, o.sent_by_user_id as respondeu,
+           extract(epoch from (t.prox_saida - t.sent_at)) as seg
+    from ordenadas t
+    join msg o on o.conversation_id = t.conversation_id and o.sent_at = t.prox_saida and o.direction = 'outbound'
+    where t.direction = 'inbound'
+      and t.dir_anterior is distinct from 'inbound'
+      and t.sent_at >= p_from and t.sent_at < p_to
+    order by t.id, o.sent_by_user_id nulls last
+  ),
+  turnos_humanos as (
+    select * from turnos where respondeu is not null
+  ),
+  dias as (
+    select d::date as dia
+    from cfg, generate_series(
+      (p_from at time zone cfg.tz)::date,
+      ((p_to - interval '1 microsecond') at time zone cfg.tz)::date,
+      interval '1 day'
+    ) d
+  ),
+  a_dia as (
+    select (a.inicio at time zone cfg.tz)::date as dia, count(*) as q, avg(a.primeira_seg) as primeira_seg
+    from atual a cross join cfg group by 1
+  ),
+  t_dia as (
+    select (t.sent_at at time zone cfg.tz)::date as dia, avg(t.seg) as seg
+    from turnos_humanos t cross join cfg group by 1
+  ),
+  calor as (
+    select extract(dow from (m.sent_at at time zone cfg.tz))::int as dow,
+           extract(hour from (m.sent_at at time zone cfg.tz))::int as hora,
+           count(*) as q
+    from msg m cross join cfg
+    where m.direction = 'inbound' and m.sent_at >= p_from
+    group by 1, 2
+  ),
+  por_dono as (
+    select a.assigned_to_user_id as user_id,
+           count(*) as atendimentos,
+           count(*) filter (where a.finalizado) as finalizados,
+           count(*) filter (where not a.finalizado) as em_aberto,
+           avg(a.primeira_seg) as primeira_seg
+    from atual a group by a.assigned_to_user_id
+  ),
+  por_resp as (
+    select t.respondeu as user_id, count(*) as respostas, avg(t.seg) as seg
+    from turnos_humanos t group by t.respondeu
+  )
+  select jsonb_build_object(
+    'fuso', (select tz from cfg),
+    'cartoes', jsonb_build_object(
+      'atendimentos', (select count(*) from atual),
+      'atendimentos_anterior', (select count(*) from atend where not na_janela),
+      'finalizados', (select count(*) from atual where finalizado),
+      'em_aberto', (select count(*) from atual where not finalizado),
+      'aguardando', (select count(*) from atual where not finalizado and cliente_esperando)
+    ),
+    'tempos', jsonb_build_object(
+      'primeira_resposta_seg', (select round(avg(primeira_seg)::numeric, 1) from atual),
+      'resposta_seg', (select round(avg(seg)::numeric, 1) from turnos_humanos),
+      'respostas', (select count(*) from turnos_humanos)
+    ),
+    'diario', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'dia', to_char(d.dia, 'YYYY-MM-DD'),
+        'atendimentos', coalesce(ad.q, 0),
+        'primeira_resposta_seg', round(ad.primeira_seg::numeric, 1),
+        'resposta_seg', round(td.seg::numeric, 1)
+      ) order by d.dia)
+      from dias d
+      left join a_dia ad on ad.dia = d.dia
+      left join t_dia td on td.dia = d.dia
+    ), '[]'::jsonb),
+    'mapa_de_calor', coalesce((
+      select jsonb_agg(jsonb_build_object('dow', c.dow, 'hora', c.hora, 'quantidade', c.q) order by c.dow, c.hora)
+      from calor c
+    ), '[]'::jsonb),
+    'atendentes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'user_id', coalesce(d.user_id, r.user_id),
+        'atendimentos', coalesce(d.atendimentos, 0),
+        'finalizados', coalesce(d.finalizados, 0),
+        'em_aberto', coalesce(d.em_aberto, 0),
+        'primeira_resposta_seg', round(d.primeira_seg::numeric, 1),
+        'respostas', coalesce(r.respostas, 0),
+        'resposta_seg', round(r.seg::numeric, 1)
+      ) order by coalesce(d.atendimentos, 0) desc, coalesce(r.respostas, 0) desc, coalesce(d.user_id, r.user_id) nulls last)
+      from por_dono d
+      full outer join por_resp r on r.user_id = d.user_id
+    ), '[]'::jsonb)
+  );
+$$;
+
+revoke execute on function public.fn_desempenho_atendimento(uuid, timestamptz, timestamptz, uuid, uuid) from public, anon;
+grant execute on function public.fn_desempenho_atendimento(uuid, timestamptz, timestamptz, uuid, uuid) to authenticated, service_role;
+
+comment on function public.fn_desempenho_atendimento(uuid, timestamptz, timestamptz, uuid, uuid) is
+  'Migration 0982: agregações da aba Atendimento de Desempenho (atendimentos = conversa × service_revision, tempos de primeira resposta e de resposta humanas, mapa de calor de mensagens recebidas, ranking). SECURITY INVOKER: a RLS de conversations e messages escopa o atendente.';
+
+notify pgrst, 'reload schema';
+
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
@@ -70130,3 +71111,68 @@ comment on policy crm_lead_activities_manual_autoria on public.crm_lead_activiti
   'Evento manual da timeline (source_module = manual): autor = quem está logado, ator user e data até 5 min à frente. Restritiva: soma-se à policy de INSERT por papel e não toca nas outras origens.';
 
 reset lock_timeout;
+
+-- ---- preferências por usuário: colunas da tela de Contatos (migration 0978, fork Hiperbold) ----
+-- 0978 — PREFERÊNCIAS POR USUÁRIO (CBEXS, 28/10/2026): a primeira é "quais colunas a tela de
+-- Contatos mostra, e em que ordem". Não havia lugar: `user_organizations.interface_settings` é
+-- escolha do ADMINISTRADOR sobre o vínculo (e a escrita daquela linha é do admin), e o
+-- localStorage não acompanha a pessoa em outro navegador.
+--
+-- Uma linha por (organização, usuário, chave). Apresentação pura, nunca autorização: nada no
+-- servidor lê esta tabela para decidir acesso. A RLS deixa cada um ler e escrever SÓ as próprias
+-- linhas, e só nas organizações de que é membro.
+--
+-- Reaplicável: create ... if not exists, constraints e policies recriadas. Sem função nova: nada
+-- a revogar de PUBLIC/anon além da tabela.
+
+create table if not exists public.user_preferences (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  chave text not null,
+  valor jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'public.user_preferences'::regclass
+                 and conname = 'user_preferences_chave_valida') then
+    alter table public.user_preferences add constraint user_preferences_chave_valida
+      check (chave ~ '^[a-z][a-z0-9_.]{0,59}$');
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.user_preferences'::regclass
+                 and conname = 'user_preferences_valor_objeto') then
+    alter table public.user_preferences add constraint user_preferences_valor_objeto
+      check (jsonb_typeof(valor) = 'object' and pg_column_size(valor) <= 16384);
+  end if;
+end $$;
+
+create unique index if not exists uniq_user_preferences_org_user_chave
+  on public.user_preferences (organization_id, user_id, chave);
+
+alter table public.user_preferences enable row level security;
+
+drop policy if exists tenant_isolation_user_preferences_all on public.user_preferences;
+create policy tenant_isolation_user_preferences_all on public.user_preferences
+  for all
+  to authenticated
+  using (
+    user_id = (select auth.uid())
+    and organization_id in (select * from public.fn_user_org_ids())
+  )
+  with check (
+    user_id = (select auth.uid())
+    and organization_id in (select * from public.fn_user_org_ids())
+  );
+
+-- O default ACL do Supabase dá tudo a anon em tabela nova de public.
+revoke all on public.user_preferences from anon;
+grant select, insert, update, delete on public.user_preferences to authenticated;
+
+comment on table public.user_preferences is
+  '0978: preferência de apresentação por usuário e organização (ex.: chave contatos.colunas). Nunca autorização. RLS: só as próprias linhas, só em organização de que é membro.';
+
+-- As travas do modo somente leitura do suporte alcançam a tabela nova.
+do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;

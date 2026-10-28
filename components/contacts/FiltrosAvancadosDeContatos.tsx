@@ -8,12 +8,26 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { FiltroDeDataPopover } from "@/components/kanban/FiltroDeDataPopover";
 import type { OpcoesDeFiltroDeContatos } from "@/hooks/contacts/useContactFilterOptions";
 import { useT } from "@/hooks/i18n/useT";
-import type { FiltrosDaTela } from "@/lib/contacts/filtros-url";
+import { etapasDoFiltro, type FiltrosDaTela } from "@/lib/contacts/filtros-url";
 import type { FiltroDeData } from "@/lib/kanban/datas-do-lead";
 import { cn } from "@/lib/utils";
 
 const CLASSE_DO_CAMPO = "h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm";
 const CHAVE_VALIDA = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
+
+type Escopo = "qualquer" | "contato" | "negocio";
+
+/** As chaves sugeridas: no escopo "qualquer", as do contato e as do negócio, sem repetir. */
+function sugestoesDoEscopo(
+  opcoes: OpcoesDeFiltroDeContatos | undefined,
+  escopo: Escopo,
+): Array<{ key: string; label: string }> {
+  if (!opcoes) return [];
+  if (escopo !== "qualquer") return opcoes.campos[escopo];
+  const vistas = new Map<string, { key: string; label: string }>();
+  for (const c of [...opcoes.campos.negocio, ...opcoes.campos.contato]) if (!vistas.has(c.key)) vistas.set(c.key, c);
+  return [...vistas.values()].sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+}
 
 /** Os filtros da tela que não são busca/etiqueta/origem: datas, funil/etapa e campo = valor. */
 export function FiltrosAvancadosDeContatos({
@@ -86,15 +100,20 @@ function FiltroDeFunil({
   // A etapa sozinha na URL (sem funil) é lida pelo servidor, mas a tela escolhe sempre
   // o funil primeiro; se o funil não existe mais, o resumo cai em "Todos".
   const funil = funis.find((f) => f.id === filtros.funil);
-  const etapa = funis.flatMap((f) => f.etapas).find((e) => e.id === filtros.etapa);
-  const ativo = Boolean(filtros.funil || filtros.etapa);
-  const resumo = funil
-    ? etapa
-      ? `${funil.name} › ${etapa.name}`
-      : funil.name
-    : ativo
-      ? t("Filtrado")
-      : t("Todos");
+  const marcadas = etapasDoFiltro(filtros);
+  const ativo = Boolean(filtros.funil || marcadas.length > 0);
+  const resumo = funil ? resumoDoFunil(funil, marcadas, t) : ativo ? t("Filtrado") : t("Todos");
+
+  /** Marca ou desmarca uma etapa, mantendo a ordem do funil na URL. */
+  function alternarEtapa(id: string) {
+    if (!funil) return;
+    const proximas = new Set(marcadas);
+    if (proximas.has(id)) proximas.delete(id);
+    else proximas.add(id);
+    const emOrdem = funil.etapas.map((e) => e.id).filter((e) => proximas.has(e));
+    // Todas marcadas = qualquer etapa do funil: a URL fica curta e o servidor não precisa do `in`.
+    onChange({ etapa: emOrdem.length > 0 && emOrdem.length < funil.etapas.length ? emOrdem.join(",") : undefined });
+  }
 
   return (
     <Popover>
@@ -130,24 +149,35 @@ function FiltroDeFunil({
           </select>
         </div>
         {funil && (
-          <div className="space-y-1">
-            <Label htmlFor="contatos-etapa" className="text-xs">
-              {t("Etapa")}
-            </Label>
-            <select
-              id="contatos-etapa"
-              className={CLASSE_DO_CAMPO}
-              value={filtros.etapa ?? ""}
-              onChange={(e) => onChange({ etapa: e.target.value || undefined })}
-            >
-              <option value="">{t("Qualquer etapa")}</option>
+          <fieldset className="space-y-1" data-filtro="etapas">
+            <legend className="text-xs font-medium">{t("Etapas")}</legend>
+            <div className="max-h-56 space-y-0.5 overflow-y-auto rounded-md border border-input p-1">
+              <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={marcadas.length === 0}
+                  onChange={() => onChange({ etapa: undefined })}
+                />
+                {t("Qualquer etapa")}
+              </label>
               {funil.etapas.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
+                <label
+                  key={e.id}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted"
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={marcadas.includes(e.id)}
+                    onChange={() => alternarEtapa(e.id)}
+                  />
+                  <span className="truncate">{e.name}</span>
+                </label>
               ))}
-            </select>
-          </div>
+            </div>
+            <p className="text-xs text-muted-foreground">{t("Traz quem tem negócio em qualquer das etapas marcadas.")}</p>
+          </fieldset>
         )}
         {ativo && (
           <Button variant="ghost" size="sm" onClick={() => onChange({ funil: undefined, etapa: undefined })}>
@@ -157,6 +187,18 @@ function FiltroDeFunil({
       </PopoverContent>
     </Popover>
   );
+}
+
+/** "FUTURO 2027", "FUTURO 2027 › Proposta" ou "FUTURO 2027 › 3 etapas". */
+export function resumoDoFunil(
+  funil: { name: string; etapas: Array<{ id: string; name: string }> },
+  marcadas: string[],
+  t: (texto: string) => string,
+): string {
+  const conhecidas = funil.etapas.filter((e) => marcadas.includes(e.id));
+  if (conhecidas.length === 0) return funil.name;
+  if (conhecidas.length === 1) return `${funil.name} › ${conhecidas[0]!.name}`;
+  return `${funil.name} › ${conhecidas.length} ${t("etapas")}`;
 }
 
 function FiltroDeCampo({
@@ -170,20 +212,20 @@ function FiltroDeCampo({
 }) {
   const t = useT();
   const [aberto, setAberto] = useState(false);
-  const [escopo, setEscopo] = useState<"contato" | "negocio">(filtros.campo_escopo ?? "contato");
+  const [escopo, setEscopo] = useState<Escopo>(filtros.campo_escopo ?? "qualquer");
   const [campo, setCampo] = useState(filtros.campo ?? "");
   const [operador, setOperador] = useState<"contem" | "igual">(filtros.campo_op ?? "contem");
   const [valor, setValor] = useState(filtros.campo_valor ?? "");
 
   // "Limpar filtros" (ou voltar no navegador) muda a URL por fora: o formulário acompanha.
   useEffect(() => {
-    setEscopo(filtros.campo_escopo ?? "contato");
+    setEscopo(filtros.campo_escopo ?? "qualquer");
     setCampo(filtros.campo ?? "");
     setOperador(filtros.campo_op ?? "contem");
     setValor(filtros.campo_valor ?? "");
   }, [filtros.campo_escopo, filtros.campo, filtros.campo_op, filtros.campo_valor]);
 
-  const sugestoes = opcoes?.campos[escopo] ?? [];
+  const sugestoes = sugestoesDoEscopo(opcoes, escopo);
   const ativo = Boolean(filtros.campo && filtros.campo_valor);
   const rotuloDoCampo = (chave: string) =>
     [...(opcoes?.campos.contato ?? []), ...(opcoes?.campos.negocio ?? [])].find((c) => c.key === chave)?.label ??
@@ -212,14 +254,20 @@ function FiltroDeCampo({
         >
           {t("Campo")}:{" "}
           {ativo
-            ? `${rotuloDoCampo(filtros.campo!)} ${filtros.campo_op === "igual" ? t("é igual a") : t("contém")} ${filtros.campo_valor}`
+            ? `${rotuloDoCampo(filtros.campo!)} ${filtros.campo_op === "igual" ? t("é igual a") : t("contém")} ${filtros.campo_valor}${
+                filtros.campo_escopo === "contato"
+                  ? ` (${t("só do contato")})`
+                  : filtros.campo_escopo === "negocio"
+                    ? ` (${t("só do negócio")})`
+                    : ""
+              }`
             : t("qualquer")}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 space-y-3 p-3">
         <p className="text-xs font-medium">{t("Campo personalizado")}</p>
-        <div className="grid grid-cols-2 gap-1" role="radiogroup" aria-label={t("De onde é o campo")}>
-          {(["contato", "negocio"] as const).map((e) => (
+        <div className="grid grid-cols-3 gap-1" role="radiogroup" aria-label={t("De onde é o campo")}>
+          {(["qualquer", "contato", "negocio"] as const).map((e) => (
             <Button
               key={e}
               type="button"
@@ -229,15 +277,17 @@ function FiltroDeCampo({
               aria-checked={escopo === e}
               onClick={() => setEscopo(e)}
             >
-              {e === "contato" ? t("Do contato") : t("Do negócio")}
+              {e === "qualquer" ? t("Os dois") : e === "contato" ? t("Do contato") : t("Do negócio")}
             </Button>
           ))}
         </div>
-        {escopo === "negocio" && (
-          <p className="text-xs text-muted-foreground">
-            {t("Traz o contato que tem algum negócio com esse valor.")}
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground">
+          {escopo === "qualquer"
+            ? t("Traz o contato que tem o valor no cadastro dele ou em algum negócio.")
+            : escopo === "negocio"
+              ? t("Traz o contato que tem algum negócio com esse valor.")
+              : t("Procura só no cadastro do contato.")}
+        </p>
         <div className="space-y-1">
           <Label htmlFor="contatos-campo" className="text-xs">
             {t("Campo")}

@@ -244,7 +244,7 @@ test.describe("Lote 12 — quadro do funil", () => {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  test("#935 caminho 3 — LOTE até a etapa de perda: recusa 422 nomeando os cards", async ({ page }) => {
+  test("#935 caminho 3 — LOTE até a etapa de perda: pede o motivo antes, e o servidor recusa lote sem motivo", async ({ page }) => {
     await login(page, c.users.manager!.email, c.password);
     await abreQuadro(page, pipelineId, `LoteA ${SUFIXO}`);
     const a = page.getByRole("group", { name: `Lead: LoteA ${SUFIXO}` });
@@ -260,21 +260,37 @@ test.describe("Lote 12 — quadro do funil", () => {
     );
     await captura(page, "935-06-lote-dois-selecionados");
 
-    const resposta = page.waitForResponse(
-      (r) => r.url().includes("/leads/bulk") && r.request().method() === "POST",
-    );
+    // Desde 28/10/2026 (pedido CBEXS) a tela pede o motivo ANTES: nenhum POST sai
+    // ao escolher a etapa de perda; abre a mesma janela do "Marcar como perdido".
+    let postsAoLote = 0;
+    page.on("request", (r) => {
+      if (r.url().includes("/leads/bulk") && r.method() === "POST") postsAoLote += 1;
+    });
     await page.getByRole("button", { name: "Mover para…" }).click();
     await page.getByRole("menuitem", { name: "Perdido" }).click();
-    const r = await resposta;
+    const janela = page.getByRole("dialog", { name: "Marcar como perdido" });
+    await expect(janela).toBeVisible({ timeout: 10_000 });
+    await expect(janela.getByText("O mesmo motivo vale para os 2 negócios selecionados.")).toBeVisible();
+    await captura(page, "935-07-lote-pede-motivo");
+    await janela.getByRole("button", { name: "Cancelar" }).click();
+    await expect(janela).toBeHidden();
+    registra(`#935 lote · POSTs ao lote antes do motivo = ${postsAoLote}`);
+    expect(postsAoLote).toBe(0);
+
+    // A garantia do servidor continua: lote sem motivo é recusado e NOMEIA os cards.
+    const r = await page.request.post("/api/v1/leads/bulk", {
+      data: {
+        action: "move",
+        lead_ids: [leads["lote-a"], leads["lote-b"]],
+        params: { stage_id: etapas.Perdido },
+      },
+    });
     const corpo = await r.text();
-    registra(`#935 lote · POST /leads/bulk = ${r.status()} · corpo = ${corpo}`);
+    registra(`#935 lote · POST /leads/bulk sem motivo = ${r.status()} · corpo = ${corpo}`);
     expect(r.status()).toBe(422);
     expect(corpo).toContain("lost_reason_required");
-    // A recusa NOMEIA os cards ofensores, e não só o lote.
     expect(corpo).toContain(leads["lote-a"]);
     expect(corpo).toContain(leads["lote-b"]);
-    await expect(page.getByText("use “Marcar como perdido” no menu do card")).toBeVisible({ timeout: 10_000 });
-    await captura(page, "935-07-lote-recusado");
 
     const { data } = await admin
       .from("crm_leads")

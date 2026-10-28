@@ -51,6 +51,11 @@ import { limitarCampos, origemDaPagina, registrarCaptacao } from "@/lib/webhooks
 import { encaixarCamposNoFunil } from "@/lib/webhooks/encaixar-campos";
 import { camposDoFunil, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
 import { decidirRecadastroDoContato, mesclarTagsNoLead } from "@/lib/webhooks/recadastro";
+import {
+  buscarNegocioDaCaptacaoRepetida,
+  ehCaptacaoRepetida,
+  JANELA_DA_CAPTACAO_REPETIDA_MS,
+} from "@/lib/webhooks/captacao-repetida";
 import { ipDoClienteParaInet } from "@/lib/http/ip-do-cliente";
 import {
   TURNSTILE_CAMPO_DO_FORMULARIO,
@@ -1158,6 +1163,40 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
           });
           return respondWithLead(vencedor.id);
         }
+      }
+      // Corrida do clique duplo (27/10/2026, CBEXS): dois envios do mesmo
+      // formulário, com external_id DIFERENTES, passam juntos pelo recadastro
+      // acima. O gatilho `trg_crm_leads_captacao_repetida` (migration 0977)
+      // serializa o INSERT por (organização, contato, funil) e recusa o segundo
+      // negócio; aqui ele vira a mesma resposta do reenvio do mesmo external_id.
+      if (contactId && ehCaptacaoRepetida(err)) {
+        const vencedorId = await buscarNegocioDaCaptacaoRepetida(admin, {
+          organizationId: source.organization_id as string,
+          contactId,
+          pipelineId: source.default_pipeline_id as string,
+        });
+        if (vencedorId) {
+          logger.info("[webhooks.inbound] envio repetido absorvido no negócio que já existe", {
+            webhookSourceId: source.id,
+            organizationId: source.organization_id,
+            leadId: vencedorId,
+            janelaMs: JANELA_DA_CAPTACAO_REPETIDA_MS,
+            comExternalId: Boolean(externalId),
+          });
+          await registrarCaptacao(admin, {
+            ...fonteDaCaptacao,
+            ...origemDaCaptacao,
+            ...dadosDaCaptacao,
+            leadId: vencedorId,
+            contactId,
+            outcome: "duplicado",
+          });
+          return respondWithLead(vencedorId);
+        }
+        logger.error("[webhooks.inbound] envio repetido recusado sem negócio vencedor visível", {
+          webhookSourceId: source.id,
+          organizationId: source.organization_id,
+        });
       }
       // F3, decisão 5 (Tarefa 7): este webhook é uma origem AUTOMÁTICA de
       // lead (N18/N22: toda origem para no teto). O contato e o log de

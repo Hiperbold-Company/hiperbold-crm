@@ -17,6 +17,10 @@
  *  - Funil/etapa/campo-de-negócio entram por JUNÇÃO (`!inner`) na tabela de
  *    negócios, com `organization_id` conferido na própria junção. Sem lista de ids
  *    no meio — uma base de 6.000 contatos estouraria a URL.
+ *  - O campo no escopo "qualquer" (o padrão da tela) é um OU entre o campo do próprio
+ *    contato e uma segunda junção, SEM `!inner`, com os negócios que têm o valor
+ *    (`lc.not.is.null`). O valor entra no `or` entre aspas, com `\` e `"` escapados:
+ *    é o único texto do usuário que passa pelo DSL do `or`.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -52,21 +56,63 @@ export interface ContextoDaConsulta {
  */
 const JUNCAO = "lf";
 const FK_DO_NEGOCIO = "crm_leads!crm_leads_contact_id_fkey!inner(id)";
+/**
+ * A junção do campo no escopo "qualquer": SEM `!inner`, para o contato que tem o valor no
+ * PRÓPRIO cadastro continuar na lista mesmo sem negócio com o valor. Ela só filtra pelo `or`
+ * (`lc.not.is.null`). Leva os mesmos predicados de funil/etapa de `lf`: com funil escolhido, o
+ * valor tem de estar num negócio DESSE funil — e o contato tem de ter negócio nele (`lf`).
+ */
+const JUNCAO_DO_CAMPO = "lc";
+const FK_DO_NEGOCIO_OPCIONAL = "crm_leads!crm_leads_contact_id_fkey(id)";
+/** Teto de etapas num filtro: o `in` vai na URL, e a tela nunca passa de um funil. */
+export const MAXIMO_DE_ETAPAS_NO_FILTRO = 100;
 
-function campoDeNegocioAtivo(f: FiltrosDeContatos): boolean {
-  return Boolean(f.campo && f.campo_valor && f.campo_escopo === "negocio");
+function campoAtivo(f: FiltrosDeContatos): boolean {
+  return Boolean(f.campo && f.campo_valor);
 }
 
-/** As colunas pedidas + a junção, quando algum filtro de negócio está ativo. */
+function campoDeNegocioAtivo(f: FiltrosDeContatos): boolean {
+  return campoAtivo(f) && f.campo_escopo === "negocio";
+}
+
+function campoEmQualquerAtivo(f: FiltrosDeContatos): boolean {
+  return campoAtivo(f) && f.campo_escopo === "qualquer";
+}
+
+function temEtapa(f: FiltrosDeContatos): boolean {
+  return Boolean(f.etapa && f.etapa.length > 0);
+}
+
+/**
+ * O filtro lê `crm_leads`? Decide a regra D-148 do token (route.ts): funil, etapa e campo que
+ * olha negócio ("negocio" e "qualquer").
+ */
+export function filtraPorNegocio(f: FiltrosDeContatos): boolean {
+  return Boolean(f.funil || temEtapa(f) || campoDeNegocioAtivo(f) || campoEmQualquerAtivo(f));
+}
+
+/** As colunas pedidas + as junções, quando algum filtro de negócio está ativo. */
 export function colunasComJuncoes(colunas: string, f: FiltrosDeContatos): string {
-  return f.funil || f.etapa || campoDeNegocioAtivo(f) ? `${colunas}, ${JUNCAO}:${FK_DO_NEGOCIO}` : colunas;
+  let saida = colunas;
+  if (f.funil || temEtapa(f) || campoDeNegocioAtivo(f)) saida += `, ${JUNCAO}:${FK_DO_NEGOCIO}`;
+  if (campoEmQualquerAtivo(f)) saida += `, ${JUNCAO_DO_CAMPO}:${FK_DO_NEGOCIO_OPCIONAL}`;
+  return saida;
 }
 
 /** Tira da linha as junções de filtro: elas servem para filtrar, não fazem parte do contato. */
 export function semJuncoes<T extends object>(linha: T): T {
   const copia = { ...(linha as Record<string, unknown>) };
   delete copia[JUNCAO];
+  delete copia[JUNCAO_DO_CAMPO];
   return copia as T;
+}
+
+/**
+ * Valor para o DSL do `or` do PostgREST: entre aspas, com `\` e `"` escapados. Sem as aspas,
+ * `,` `(` `)` do valor abririam outra condição.
+ */
+function valorEntreAspas(valor: string): string {
+  return `"${valor.replace(/[\\"]/g, (m) => `\\${m}`)}"`;
 }
 
 /**
@@ -164,11 +210,14 @@ export async function consultaDeContatos(
   if (ativ?.gte) query = query.gte("last_activity_at", ativ.gte);
   if (ativ?.lt) query = query.lt("last_activity_at", ativ.lt);
 
-  const comJuncao = Boolean(f.funil || f.etapa || campoDeNegocioAtivo(f));
+  if (f.etapa && f.etapa.length > MAXIMO_DE_ETAPAS_NO_FILTRO) {
+    throw new ApiError(422, "validation_failed", undefined, ctx.requestId, "Etapas demais no filtro.");
+  }
+  const comJuncao = Boolean(f.funil || temEtapa(f) || campoDeNegocioAtivo(f));
   if (comJuncao) {
     query = query.eq(`${JUNCAO}.organization_id`, ctx.organizationId);
     if (f.funil) query = query.eq(`${JUNCAO}.pipeline_id`, f.funil);
-    if (f.etapa) query = query.eq(`${JUNCAO}.stage_id`, f.etapa);
+    if (temEtapa(f)) query = query.in(`${JUNCAO}.stage_id`, f.etapa!);
   }
 
   if (f.campo && f.campo_valor) {
@@ -177,10 +226,20 @@ export async function consultaDeContatos(
     }
     const padrao =
       f.campo_op === "igual" ? escaparLike(f.campo_valor) : `%${escaparLike(f.campo_valor)}%`;
-    query = query.ilike(
-      f.campo_escopo === "negocio" ? `${JUNCAO}.custom_fields->>${f.campo}` : `custom_fields->>${f.campo}`,
-      padrao,
-    );
+    if (f.campo_escopo === "qualquer") {
+      // O valor no próprio contato OU num negócio dele (do funil/etapas escolhidos, se houver).
+      const lc = JUNCAO_DO_CAMPO;
+      query = query.eq(`${lc}.organization_id`, ctx.organizationId);
+      if (f.funil) query = query.eq(`${lc}.pipeline_id`, f.funil);
+      if (temEtapa(f)) query = query.in(`${lc}.stage_id`, f.etapa!);
+      query = query.ilike(`${lc}.custom_fields->>${f.campo}`, padrao);
+      query = query.or(`custom_fields->>${f.campo}.ilike.${valorEntreAspas(padrao)},${lc}.not.is.null`);
+    } else {
+      query = query.ilike(
+        f.campo_escopo === "negocio" ? `${JUNCAO}.custom_fields->>${f.campo}` : `custom_fields->>${f.campo}`,
+        padrao,
+      );
+    }
   }
 
   return { query };

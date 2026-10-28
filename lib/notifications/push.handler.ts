@@ -7,6 +7,10 @@ import { vapidPronto } from "./vapid";
 import { pushDoAvisoDaCentral } from "./push-dos-avisos";
 import type { PushPayload } from "./push_payload";
 import { rotuloDoContato, SEM_NOME } from "@/lib/contacts/rotulo-do-contato";
+import { traduzir } from "@/lib/i18n/dicionario";
+import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { avisoAindaVale, destinatariosDoAviso, destinoDaTarefa } from "@/lib/tarefas/aviso-de-vencimento";
+import type { Tarefa } from "@/lib/tarefas/tipos";
 
 export const WEB_PUSH_INBOUND_KEY = "web-push-inbound.v1";
 
@@ -188,6 +192,59 @@ async function enviarParaUsuario(
   return { consumer_key: WEB_PUSH_INBOUND_KEY, status: "ok", detail: `sent:${sent}` };
 }
 
+/**
+ * A tarefa venceu (`crm_task.due`, cron `tarefas-vencidas`, migration 0980): o
+ * push vai a quem criou e ao responsável, uma vez cada. A tarefa é relida do
+ * banco (o evento leva só ids) e o aviso é descartado se, entre o cron e a
+ * drenagem, ela foi concluída ou remarcada — `avisoAindaVale`.
+ */
+async function handleTarefaVencida(row: EventRow): Promise<HandlerResult> {
+  const taskId = typeof row.payload.task_id === "string" ? row.payload.task_id : row.entity_id;
+  if (!taskId) return { consumer_key: WEB_PUSH_INBOUND_KEY, status: "skipped", detail: "sem_tarefa" };
+  const admin = createAdminClient();
+  // ⚠️ Organização junto do id: o client é service-role e ignora RLS.
+  const { data } = await admin
+    .from("crm_tasks")
+    .select("id, title, status, due_date, lead_id, created_by, assigned_to")
+    .eq("organization_id", row.organization_id)
+    .eq("id", taskId)
+    .maybeSingle();
+  const tarefa = data as Pick<
+    Tarefa,
+    "id" | "title" | "status" | "due_date" | "lead_id" | "created_by" | "assigned_to"
+  > | null;
+  if (!tarefa) return { consumer_key: WEB_PUSH_INBOUND_KEY, status: "skipped", detail: "tarefa_sumiu" };
+  const prazoDoEvento = typeof row.payload.due_date === "string" ? row.payload.due_date : null;
+  if (!avisoAindaVale(tarefa, prazoDoEvento)) {
+    return { consumer_key: WEB_PUSH_INBOUND_KEY, status: "skipped", detail: "tarefa_encerrada_ou_remarcada" };
+  }
+  const destinatarios = destinatariosDoAviso(tarefa);
+  if (destinatarios.length === 0) {
+    return { consumer_key: WEB_PUSH_INBOUND_KEY, status: "skipped", detail: "sem_destinatario" };
+  }
+  const [lead, org] = await Promise.all([
+    tarefa.lead_id ? leadBits(row.organization_id, tarefa.lead_id) : Promise.resolve(null),
+    admin.from("organizations").select("locale").eq("id", row.organization_id).maybeSingle(),
+  ]);
+  // Ninguém está logado quando o push sai: o idioma é o da organização.
+  const idioma = normalizarIdioma((org.data as { locale?: string | null } | null)?.locale ?? null);
+  const payload: PushPayload = {
+    title: traduzir("Hora da tarefa", idioma),
+    // Só o título da tarefa, nunca o nome do negócio: o responsável pode não
+    // enxergar aquele negócio (visibilidade por atendente, 0939), e o push sai
+    // pela chave de serviço, sem RLS. O título ele recebeu de quem criou.
+    body: truncar(tarefa.title),
+    tag: `task-due:${tarefa.id}`,
+    href: destinoDaTarefa(tarefa.lead_id, lead?.pipelineId ?? null),
+  };
+  let enviados = 0;
+  for (const userId of destinatarios) {
+    const { sent } = await enviarPushAoUsuario(row.organization_id, userId, payload);
+    enviados += sent;
+  }
+  return { consumer_key: WEB_PUSH_INBOUND_KEY, status: "ok", detail: `sent:${enviados}` };
+}
+
 export const webPushInboundHandler: EventHandler = {
   key: WEB_PUSH_INBOUND_KEY,
   events: [
@@ -198,6 +255,8 @@ export const webPushInboundHandler: EventHandler = {
     "user.mentioned",
     // Os avisos que pedem gente (migration 0442) — ver `./push-dos-avisos.ts`.
     "central.aviso_criado",
+    // A tarefa venceu (migration 0980) — ver `handleTarefaVencida`.
+    "crm_task.due",
   ],
   async handle(row): Promise<HandlerResult> {
     if (!vapidPronto()) {
@@ -205,6 +264,7 @@ export const webPushInboundHandler: EventHandler = {
     }
     if (row.event_type === "message.received") return handleInbound(row);
     if (row.event_type === "central.aviso_criado") return handleAvisoQuePedeGente(row);
+    if (row.event_type === "crm_task.due") return handleTarefaVencida(row);
 
     if (row.event_type === "user.mentioned") {
       const toUserId = typeof row.payload.to_user_id === "string" ? row.payload.to_user_id : null;
