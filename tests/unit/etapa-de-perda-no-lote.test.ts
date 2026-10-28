@@ -21,6 +21,8 @@ import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ROLE_RANK, type AuthUser, type Role } from "@/lib/auth/types";
+import { audit } from "@/lib/audit";
+import { emitLeadActivity } from "@/lib/leads/activity-emitter";
 
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
@@ -56,6 +58,8 @@ interface Estado {
   rpcChamado: boolean;
   rpcArgs: Record<string, unknown> | null;
   isLostDaEtapa: boolean;
+  /** `status` dos cards antes do lote (padrão: aberto). */
+  statusAtual?: string;
 }
 
 function clienteStub(estado: Estado) {
@@ -67,6 +71,7 @@ function clienteStub(estado: Estado) {
     pipeline_id: PIPELINE_ID,
     contact_id: "66666666-6666-4666-8666-666666666666",
     lost_reason: estado.motivoAtual,
+    status: estado.statusAtual ?? "open",
   }));
 
   return {
@@ -242,5 +247,59 @@ describe("mover o lote para uma etapa de perda (#917)", () => {
 
     expect(estado.rpcChamado).toBe(true);
     expect(res.status).toBe(200);
+  });
+
+  describe("a perda em lote grava o que a perda individual grava", () => {
+    beforeEach(() => {
+      vi.mocked(emitLeadActivity).mockClear();
+      vi.mocked(audit).mockClear();
+    });
+
+    it("cada card fechado ganha a linha 'Perdido — <motivo>' na timeline e um audit lead.lost", async () => {
+      sessao(estado);
+      const res = await POST(pedido({ stage_id: PERDIDO_ID, lost_reason: "price" }));
+      expect(res.status).toBe(200);
+
+      const fechamentos = vi
+        .mocked(emitLeadActivity)
+        .mock.calls.map(([, ev]) => ev)
+        .filter((ev) => ev.type === "demand_closed");
+      expect(fechamentos.map((ev) => ev.leadId).sort()).toEqual([CARD_A, CARD_B].sort());
+      for (const ev of fechamentos) {
+        expect(ev.reason).toBe("Perdido — price");
+        expect(ev.payload).toMatchObject({ desfecho: "lost", to_stage_id: PERDIDO_ID, bulk: true });
+      }
+
+      const perdas = vi
+        .mocked(audit)
+        .mock.calls.map(([a]) => a)
+        .filter((a) => a.action === "lead.lost");
+      expect(perdas.map((a) => a.resourceId).sort()).toEqual([CARD_A, CARD_B].sort());
+      for (const a of perdas) {
+        expect(a.organizationId).toBe(ORG_ID);
+        expect(a.metadata).toMatchObject({ lost_reason: "price", bulk: true });
+      }
+    });
+
+    it("card que JÁ estava perdido não ganha uma segunda perda", async () => {
+      estado.motivoAtual = "price";
+      estado.statusAtual = "lost";
+      sessao(estado);
+      const res = await POST(pedido({ stage_id: PERDIDO_ID, lost_reason: "price" }));
+      expect(res.status).toBe(200);
+      expect(
+        vi.mocked(emitLeadActivity).mock.calls.filter(([, ev]) => ev.type === "demand_closed"),
+      ).toHaveLength(0);
+      expect(vi.mocked(audit).mock.calls.filter(([a]) => a.action === "lead.lost")).toHaveLength(0);
+    });
+
+    it("etapa comum: nenhuma linha de perda", async () => {
+      estado.isLostDaEtapa = false;
+      sessao(estado);
+      await POST(pedido({ stage_id: PERDIDO_ID }));
+      expect(
+        vi.mocked(emitLeadActivity).mock.calls.filter(([, ev]) => ev.type === "demand_closed"),
+      ).toHaveLength(0);
+    });
   });
 });

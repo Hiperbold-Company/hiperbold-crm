@@ -9697,6 +9697,13 @@ export type Database = {
         }
         Returns: number
       }
+      fn_contar_eventos_manuais_do_funil: {
+        Args: { p_organization_id: string; p_pipeline_id: string }
+        Returns: {
+          lead_id: string
+          total: number
+        }[]
+      }
       fn_conversation_assign: {
         Args: {
           p_conversation_id: string

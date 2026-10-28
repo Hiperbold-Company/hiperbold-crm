@@ -51,6 +51,7 @@ vi.mock("@/hooks/kanban/useBoard", () => ({
   }),
 }));
 vi.mock("@/components/kanban/FilterBar", () => ({ FilterBar: () => null }));
+vi.mock("@/hooks/kanban/useEventosManuais", () => ({ useEventosManuais: () => undefined }));
 vi.mock("@/components/kanban/NewLeadDialog", () => ({ NewLeadDialog: () => null }));
 /**
  * O quadro é substituído por um dublê que SELECIONA um card: a barra em lote só

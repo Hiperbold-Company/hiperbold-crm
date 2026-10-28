@@ -28,6 +28,24 @@ export function lotesDeIds<T>(ids: readonly T[]): T[][] {
 }
 
 /**
+ * O aviso de um lote INTERROMPIDO no meio — ou `null` quando não há o que avisar.
+ *
+ * A seleção vai em várias chamadas (`lotesDeIds`), cada uma atômica, e um erro
+ * na terceira deixa as duas primeiras aplicadas. O aviso diz QUANTOS ficaram
+ * aplicados — e só aparece quando há algum. Com zero, o aviso antigo dizia
+ * "0 de 128 já haviam sido alterados — o restante não foi.", que se lê como
+ * "128 já estavam alterados antes" e escondia a única informação útil, que é o
+ * motivo da recusa (o toast do erro, que sai ao lado). Nada aplicado = nada a
+ * somar ao erro.
+ */
+export function avisoDeLoteInterrompido(aplicados: number, total: number): string | null {
+  if (aplicados <= 0 || total <= 0) return null;
+  const restantes = Math.max(0, total - aplicados);
+  if (restantes === 0) return null;
+  return `${aplicados} de ${total} foram alterados antes do erro; os outros ${restantes} não foram.`;
+}
+
+/**
  * Os ids entre a âncora e o alvo, inclusive, na ordem em que a coluna os mostra.
  *
  * `ordenados` é a coluna INTEIRA já filtrada e ordenada como o usuário a vê —

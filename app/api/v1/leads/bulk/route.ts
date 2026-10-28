@@ -473,6 +473,69 @@ export async function POST(req: NextRequest): Promise<Response> {
           }
         }),
       );
+      // ── A PERDA EM LOTE GRAVA O QUE A PERDA INDIVIDUAL GRAVA ────────────────
+      //
+      // "Marcar como perdido" (`encerraDemanda`) deixa, além da etapa e do
+      // motivo, uma linha `demand_closed` na timeline ("Perdido — <motivo>") e
+      // um audit `lead.lost` por negócio. O `lead.lost` do event_log e o
+      // `lost_from_stage_id` saem do gatilho, nos dois caminhos. Sem isto, a
+      // perda de 128 negócios pela barra de seleção existia na coluna e sumia
+      // da timeline e da auditoria de cada um. Só entra quem FECHOU agora (não
+      // estava perdido antes); trocar a posição dentro da coluna de perda não é
+      // perda nova.
+      if (etapaDeDestino.is_lost) {
+        const antes = new Map(
+          visible.map((l) => [l.id, { status: l.status, lost_reason: l.lost_reason }]),
+        );
+        const motivoInformado = (motivoDoLote ?? "").trim();
+        const perdidosAgora = movidos.filter((row) => antes.get(row.lead_id)?.status !== "lost");
+        await Promise.all(
+          perdidosAgora.map(async (row) => {
+            const motivo = motivoInformado || (antes.get(row.lead_id)?.lost_reason ?? "");
+            const r = await emitLeadActivity(supabase, {
+              organizationId,
+              leadId: row.lead_id,
+              type: "demand_closed",
+              sourceModule: "crm",
+              sourceId: row.lead_id,
+              actor: { type: "user", id: user.id },
+              reason: `Perdido — ${motivo}`,
+              payload: {
+                desfecho: "lost",
+                from_stage_id: row.from_stage_id,
+                to_stage_id: input.params.stage_id,
+                bulk: true,
+              },
+            });
+            if (!r.ok) {
+              await registraFalhaDeAtividade(supabase, {
+                organizationId,
+                leadId: row.lead_id,
+                tipo: "demand_closed",
+                origem: "leads/bulk",
+                erro: r.error,
+                requestId,
+              });
+            }
+            await audit({
+              action: "lead.lost",
+              actorUserId: user.id,
+              organizationId,
+              resourceType: "crm_lead",
+              resourceId: row.lead_id,
+              requestId,
+              metadata: {
+                actor_type: "user",
+                from_stage_id: row.from_stage_id,
+                to_stage_id: input.params.stage_id,
+                lost_reason: motivo,
+                bulk: true,
+              },
+            });
+          }),
+        );
+      }
+
       // Quem move leads sem responsável assume (opt-in da organização). O lote é
       // sempre de uma PESSOA com sessão; só entram os que MUDARAM de etapa, e o
       // UPDATE condicional não toma negócio que já tem dono.
