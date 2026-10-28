@@ -106,50 +106,57 @@ export function EditContactDialog({ contact, open, onOpenChange, customFieldDefs
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
+      {/* Altura presa à viewport: título e rodapé ficam fixos e só o corpo rola.
+          Sem isso o diálogo (grid) cresce com o formulário e passa da tela. */}
+      <DialogContent data-testid="editar-contato-dialog" className="flex max-h-[90dvh] flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{t("Editar contato")}</DialogTitle>
           <DialogDescription>{t("Atualize os dados deste contato.")}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="ec-name">{t("Nome")}</Label>
-            <Input id="ec-name" {...form.register("name")} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ec-email">Email</Label>
-            <Input id="ec-email" type="email" {...form.register("email")} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ec-phone">{t("Telefone (E.164)")}</Label>
-            <Input id="ec-phone" {...form.register("phone_number")} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ec-birthdate">{t("Data de nascimento")}</Label>
-            <Input id="ec-birthdate" type="date" {...form.register("birthdate")} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ec-tags">{t("Tags")}</Label>
-            <Input id="ec-tags" {...form.register("tagsRaw")} />
-          </div>
-          {customFieldDefs.length > 0 && (
-            <div className="space-y-3 rounded-md border border-border p-3">
-              <div>
-                <h3 className="text-sm font-medium">{t("Campos personalizados")}</h3>
-                <p className="text-xs text-muted-foreground">
-                  {t("Campos definidos no funil padrão da organização.")}
-                </p>
-              </div>
-              <CustomFieldsEditor
-                fields={customFieldDefs}
-                mode="contact"
-                value={customFields ?? {}}
-                onChange={(next) => form.setValue("custom_fields", next, { shouldDirty: true })}
-              />
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-4">
+          <div
+            data-testid="editar-contato-corpo"
+            className="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="ec-name">{t("Nome")}</Label>
+              <Input id="ec-name" {...form.register("name")} />
             </div>
-          )}
-          {serverError && <p className="text-sm text-error-fg">{serverError}</p>}
-          <DialogFooter>
+            <div className="space-y-2">
+              <Label htmlFor="ec-email">Email</Label>
+              <Input id="ec-email" type="email" {...form.register("email")} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ec-phone">{t("Telefone (E.164)")}</Label>
+              <Input id="ec-phone" {...form.register("phone_number")} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ec-birthdate">{t("Data de nascimento")}</Label>
+              <Input id="ec-birthdate" type="date" {...form.register("birthdate")} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ec-tags">{t("Tags")}</Label>
+              <Input id="ec-tags" {...form.register("tagsRaw")} />
+            </div>
+            {customFieldDefs.length > 0 && (
+              <div className="space-y-3 rounded-md border border-border p-3">
+                <div>
+                  <h3 className="text-sm font-medium">{t("Campos personalizados")}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {t("Campos definidos no funil padrão da organização.")}
+                  </p>
+                </div>
+                <CustomFieldsEditor
+                  fields={customFieldDefs}
+                  mode="contact"
+                  value={customFields ?? {}}
+                  onChange={(next) => form.setValue("custom_fields", next, { shouldDirty: true })}
+                />
+              </div>
+            )}
+            {serverError && <p className="text-sm text-error-fg">{serverError}</p>}
+          </div>
+          <DialogFooter className="shrink-0">
             <Button
               type="button"
               variant="ghost"
