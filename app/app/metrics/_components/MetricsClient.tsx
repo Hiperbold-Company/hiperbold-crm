@@ -1,181 +1,119 @@
 "use client";
 
+/**
+ * Desempenho — a área de inteligência de dados do CRM.
+ *
+ * Um filtro global (período, funil, atendente) na URL vale para as abas
+ * Negócios, Origens e Atendimento. Atrito fica numa aba própria e NÃO segue o
+ * filtro: é o número do sistema inteiro, e quebrá-lo por pessoa convida a
+ * otimização local que degrada o todo (doutrina §3.6).
+ *
+ * O que a tela mostrava antes continua: funil por etapa (agora "abertos por
+ * etapa/funil" na aba Negócios), Perdas e Previsão (Negócios), performance por
+ * atendente (Atendimento) e Atrito.
+ */
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useMemo } from "react";
+
 import { useT } from "@/hooks/i18n/useT";
-import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  type Aba,
+  type FiltrosDaTela,
+  filtrosParaUrl,
+  janelaDosFiltros,
+  lerFiltrosDaUrl,
+  queryDaApi,
+} from "@/lib/metrics/desempenho";
 
-import { useAttendantMetrics, type AttendantMetric } from "@/hooks/metrics/useAttendantMetrics";
+import { AbaAtendimento } from "./AbaAtendimento";
+import { AbaNegocios } from "./AbaNegocios";
+import { AbaOrigens } from "./AbaOrigens";
 import { AtritoPanel } from "./AtritoPanel";
-import { PerdasPanel } from "./PerdasPanel";
-import { PrevisaoPanel } from "./PrevisaoPanel";
-import { useTeamMembers } from "@/hooks/team/useTeamMembers";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-const ALL = "__all__";
-
-function formatDuration(seconds: number | null): string {
-  if (seconds == null) return "—";
-  const s = Math.round(seconds);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  const rest = s % 60;
-  return rest === 0 ? `${m}min` : `${m}min ${rest}s`;
-}
-
-function attendantLabel(a: AttendantMetric, t: (texto: string) => string): string {
-  return a.name ?? a.email ?? `${t("Atendente")} ${a.user_id.slice(0, 8)}`;
-}
+import { FiltrosDeDesempenho, type FunilDoFiltro } from "./FiltrosDeDesempenho";
 
 interface Props {
   canCompare: boolean;
   /** Permissões por perfil (`relatorios.perdas`). Ausente = o de antes (`canCompare`). */
   podeVerPerdas?: boolean;
   currentUserId: string;
+  funis?: FunilDoFiltro[];
 }
 
-export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentUserId }: Props) {
+export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentUserId, funis = [] }: Props) {
   const t = useT();
-  const [owner, setOwner] = useState<string>(ALL);
-  const selectedOwner = owner === ALL ? null : owner;
-  const { data, isLoading, isError } = useAttendantMetrics(selectedOwner);
-  // Opções do filtro: só manager+ (a rota /team é manager+). Agent nem vê o filtro.
-  const team = useTeamMembers({ enabled: canCompare });
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const filtros = useMemo(() => lerFiltrosDaUrl(searchParams), [searchParams]);
+  // O atendente comum não escolhe pessoa: a RLS já o escopa (ver FiltrosDeDesempenho).
+  const efetivos: FiltrosDaTela = canCompare ? filtros : { ...filtros, atendente: null };
+  // A janela é recalculada quando o filtro muda, não a cada render: a query
+  // precisa ser estável para o cache não buscar de novo a todo instante.
+  const chaveDosFiltros = filtrosParaUrl({ ...efetivos, aba: "negocios" });
+  const { query, janela } = useMemo(() => {
+    const { from, to } = janelaDosFiltros(efetivos);
+    return { query: queryDaApi(efetivos), janela: { from: from.toISOString(), to: to.toISOString() } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDosFiltros]);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">{t("Carregando…")}</p>;
-  if (isError || !data)
-    return <p className="text-sm text-destructive">{t("Erro ao carregar métricas.")}</p>;
-
-  const metrics = data.data;
-  const funnelTotal = metrics.funnel.reduce((acc, s) => acc + s.count, 0);
-  const maxCount = Math.max(1, ...metrics.funnel.map((s) => s.count));
+  const mudar = (f: FiltrosDaTela) => router.replace(`${pathname}${filtrosParaUrl(f)}`, { scroll: false });
 
   return (
-    <div className="flex flex-col gap-6">
-      {canCompare ? (
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">{t("Atendente")}</span>
-          <Select value={owner} onValueChange={setOwner}>
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder={t("Todos os atendentes")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("Todos os atendentes")}</SelectItem>
-              {(team.data?.data ?? [])
-                .filter((m) => m.role !== "viewer")
-                .map((m) => (
-                  <SelectItem key={m.user_id} value={m.user_id}>
-                    {m.full_name ?? m.email ?? m.user_id.slice(0, 8)}
-                    {m.user_id === currentUserId ? ` ${t("(você)")}` : ""}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : null}
+    <div className="flex flex-col gap-4">
+      <FiltrosDeDesempenho
+        filtros={efetivos}
+        onChange={mudar}
+        funis={funis}
+        podeEscolherAtendente={canCompare}
+        currentUserId={currentUserId}
+      />
 
-      {/* Acima do funil e da performance de propósito: é o número do sistema
-          inteiro, ao qual as métricas de área se subordinam (doutrina §3.6).
-          Não filtra por atendente — atrito é propriedade do sistema, e quebrá-lo
-          por pessoa convida a otimização local que degrada o todo. */}
-      <AtritoPanel podeEditarRegua={canCompare} />
+      <Tabs value={filtros.aba} onValueChange={(v) => mudar({ ...filtros, aba: v as Aba })}>
+        <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
+          <TabsTrigger value="negocios">{t("Negócios")}</TabsTrigger>
+          <TabsTrigger value="origens">{t("Origens")}</TabsTrigger>
+          <TabsTrigger value="atendimento">{t("Atendimento")}</TabsTrigger>
+          <TabsTrigger value="atrito">{t("Atrito")}</TabsTrigger>
+        </TabsList>
 
-      {/* Relatório "Perdas" (#1537): manager+, porque é o funil inteiro — o
-          mesmo critério do /metrics para quem compara. */}
-      {podeVerPerdas ? <PerdasPanel avisoDaEmpresaToda={!canCompare} /> : null}
-
-      {/* Previsão ponderada do funil (issue #1535): por mês × moeda, com os
-          baldes "sem data" e "sem probabilidade" à parte. Depois do atrito de
-          propósito — é o número da EQUIPE comercial, que se subordina ao do
-          sistema inteiro acima. */}
-      <PrevisaoPanel />
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            {t("Funil")} {selectedOwner ? t("do atendente") : ""} · {funnelTotal}{" "}
-            {funnelTotal === 1 ? t("aberto") : t("abertos")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {metrics.funnel.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("Nenhuma etapa configurada.")}</p>
-          ) : (
-            metrics.funnel.map((s) => (
-              <div key={s.stage_id} className="flex items-center gap-3">
-                <span className="w-40 shrink-0 truncate text-sm">{s.stage_name}</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary transition-[width]"
-                    style={{ width: `${(s.count / maxCount) * 100}%` }}
-                  />
-                </div>
-                <span className="w-8 shrink-0 text-right text-sm tabular-nums">{s.count}</span>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            {canCompare ? t("Performance por atendente") : t("Sua performance")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {metrics.attendants.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {t("Sem atividade no período (ganhos/perdidos, conversas ou respostas).")}
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("Atendente")}</TableHead>
-                  <TableHead className="text-right">{t("Ganhos")}</TableHead>
-                  <TableHead className="text-right">{t("Perdidos")}</TableHead>
-                  <TableHead className="text-right">{t("Conversas")}</TableHead>
-                  <TableHead className="text-right">{t("1ª resposta (média)")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {metrics.attendants.map((a) => (
-                  <TableRow key={a.user_id}>
-                    <TableCell className="font-medium">
-                      {attendantLabel(a, t)}
-                      {a.user_id === currentUserId ? (
-                        <span className="text-muted-foreground"> {t("(você)")}</span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{a.won}</TableCell>
-                    <TableCell className="text-right tabular-nums">{a.lost}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {a.conversations_handled}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatDuration(a.avg_first_response_seconds)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+        <TabsContent value="negocios" className="mt-4">
+          {filtros.aba === "negocios" ? (
+            <AbaNegocios
+              query={query}
+              janela={janela}
+              funilEscolhido={!!efetivos.funil}
+              podeVerPerdas={podeVerPerdas}
+              perdasDaEmpresaToda={!canCompare}
+              currentUserId={currentUserId}
+            />
+          ) : null}
+        </TabsContent>
+        <TabsContent value="origens" className="mt-4">
+          {filtros.aba === "origens" ? <AbaOrigens query={query} /> : null}
+        </TabsContent>
+        <TabsContent value="atendimento" className="mt-4">
+          {filtros.aba === "atendimento" ? (
+            <AbaAtendimento
+              query={query}
+              janela={janela}
+              atendente={efetivos.atendente}
+              canCompare={canCompare}
+              currentUserId={currentUserId}
+            />
+          ) : null}
+        </TabsContent>
+        <TabsContent value="atrito" className="mt-4">
+          {filtros.aba === "atrito" ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground">
+                {t("O atrito é do sistema inteiro: não segue período, funil nem atendente.")}
+              </p>
+              <AtritoPanel podeEditarRegua={canCompare} />
+            </div>
+          ) : null}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

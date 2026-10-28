@@ -14,6 +14,7 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
+import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { TIPOS_DA_LISTA, diasEntre, progressoNaEtapa } from "@/lib/metrics/desempenho";
 import { nomesDasPessoas } from "@/lib/metrics/nomes";
 import { abrirPedidoDeDesempenho } from "@/lib/metrics/rota-desempenho";
@@ -137,7 +138,7 @@ export async function GET(req: NextRequest): Promise<Response> {
         return {
           id: l.id,
           titulo: l.title,
-          contato: l.contato?.display_name ?? l.contato?.name ?? null,
+          contato: nomeDoContato(l.contato),
           tags: l.tags ?? [],
           status: l.status,
           value_cents: l.value_cents,
