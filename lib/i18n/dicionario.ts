@@ -14452,7 +14452,6 @@ export const DICIONARIO: Traducoes = {
   "Criar tarefa": { es: "Crear tarea" },
   "Nenhuma tarefa em aberto neste negócio.": { es: "No hay tareas abiertas en este negocio." },
   "Marcar como feita": { es: "Marcar como hecha" },
-  "Atrasada": { es: "Atrasada" },
   "Data e hora": { es: "Fecha y hora" },
   "O que aconteceu": { es: "Qué pasó" },
   "Ligação": { es: "Llamada" },

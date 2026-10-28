@@ -177,7 +177,7 @@ export function PersonalizarColunasDialog({
                 return (
                   <label
                     key={id}
-                    className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-muted"
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted"
                   >
                     <input
                       type="checkbox"

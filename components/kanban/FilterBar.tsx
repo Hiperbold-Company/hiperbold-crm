@@ -93,7 +93,7 @@ function FiltroDeEventosManuaisControle({
       <span>{t("Eventos manuais")}</span>
       <select
         aria-label={t("Comparação de eventos manuais")}
-        className="h-7 rounded border border-border bg-surface px-1 text-sm"
+        className="h-7 rounded-md border border-border bg-surface px-1 text-sm"
         value={operador}
         onChange={(e) => {
           const op = e.target.value as OperadorDeEventosManuais | "";

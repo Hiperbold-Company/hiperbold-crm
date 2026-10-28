@@ -262,6 +262,8 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   usePermission: () => true,
   useFusoDaOrganizacao: () => "America/Sao_Paulo",
 }));
+// A seção de tarefas da ficha tem testes próprios; aqui só as datas importam.
+vi.mock("@/components/kanban/TarefasDoNegocio", () => ({ TarefasDoNegocio: () => null }));
 vi.mock("@/hooks/leads/useLeadTimeline", () => ({
   useLeadTimeline: () => ({
     itens: [],
