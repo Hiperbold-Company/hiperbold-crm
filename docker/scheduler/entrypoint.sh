@@ -114,6 +114,11 @@ CRONS="
 # antes em avisar entre 30 e 45 minutos antes. Barato: só olha compromisso
 # confirmado, futuro e ainda não avisado.
 */5 * * * *|45|api/v1/cron/agenda-reminder
+# A TAREFA VENCEU (0980). De minuto em minuto porque o aviso é "na hora": quem
+# marcou "ligar às 10h" precisa do push às 10h, não às 10h14. Barato: uma consulta
+# num índice parcial das tarefas abertas com prazo; quem não tem nada vencendo não
+# gera evento nem auditoria.
+* * * * *|45|api/v1/cron/tarefas-vencidas
 */15 * * * *|45|api/v1/cron/agenda-expira-pendentes
 */15 * * * *|60|api/v1/cron/risk-watcher
 # O CASO PARADO. De hora em hora, e não a cada 5 minutos: o prazo é de 24h, e

@@ -7,6 +7,7 @@ export const NOTIFY_UI_CATEGORIES = [
   "lead_lost",
   "mention",
   "call_inbound",
+  "task_due",
 ] as const;
 
 export type NotifyCategory = (typeof NOTIFY_UI_CATEGORIES)[number];
@@ -32,6 +33,7 @@ export function prefsPadrao(): NotifyPrefs {
     lead_lost: { in_app: true, push: true },
     mention: { in_app: true, push: true },
     call_inbound: { in_app: true, push: true },
+    task_due: { in_app: true, push: true },
   };
 }
 
@@ -105,6 +107,8 @@ const PREFS_DO_SERVIDOR: NotifyPrefs = {
   lead_won: { in_app: true, push: true },
   lead_lost: { in_app: true, push: true },
   mention: { in_app: true, push: true },
+  // A tarefa venceu (migration 0980) — sino de tarefas da barra do topo.
+  task_due: { in_app: true, push: true },
 };
 
 /**

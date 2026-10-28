@@ -143,6 +143,8 @@ const ACTION_MIN_ROLE: Record<string, Role> = {
   // "Produtos" na ficha do negócio: adicionar, alterar e remover itens. Mesmo piso das rotas
   // `/api/v1/leads/[id]/itens` (requireRole agent); a rota é quem barra.
   "lead.items.edit": "agent",
+  // "Criar tarefa" no painel do negócio: mesmo piso de `POST /api/v1/tasks` (requireRole agent).
+  "task.create": "agent",
   "team.invite": "admin",
   "team.change_role": "admin",
   "settings.write": "admin",

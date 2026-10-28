@@ -13,6 +13,7 @@ import { LeadFieldsForm } from "./LeadFieldsForm";
 import { ScoreSlot } from "./ScoreSlot";
 import { LeadTimeline } from "./LeadTimeline";
 import { RegistrarEvento } from "./RegistrarEvento";
+import { TarefasDoNegocio } from "./TarefasDoNegocio";
 import { OwnerBadge } from "./OwnerBadge";
 import { resolveLeadOwner } from "@/lib/kanban/owner";
 import { useFusoDaOrganizacao, usePermission } from "@/hooks/auth/AuthProvider";
@@ -155,6 +156,10 @@ export function LeadDossier({
           </h3>
           <ContatoDoNegocio contactId={lead.contact_id} pipelineId={pipelineId} />
         </section>
+
+        {/* As tarefas do negócio, logo antes da linha do tempo: o que está
+            combinado para a frente fica perto do que já aconteceu. */}
+        {open && <TarefasDoNegocio leadId={lead.id} contactId={lead.contact_id} />}
 
         {/* ② timeline */}
         <section className="flex-1 py-3">

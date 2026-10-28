@@ -1,5 +1,6 @@
 "use client";
 import { AlertsBell } from "./AlertsBell";
+import { SinoDeTarefas } from "./SinoDeTarefas";
 import { MobileSidebar } from "./MobileSidebar";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { UserMenu } from "./UserMenu";
@@ -18,6 +19,7 @@ export function TopBar({ ajudaBase = null }: { ajudaBase?: string | null } = {})
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <BotaoAjuda base={ajudaBase} />
+        <SinoDeTarefas />
         <AlertsBell />
         <UserMenu />
       </div>
