@@ -7,7 +7,11 @@
  *
  * Campos: os DECLARADOS nos funis (`crm_pipelines.settings.fields`, com rótulo) mais
  * as chaves que aparecem nos dados (uma amostra dos contatos e dos negócios mais
- * recentes), porque a importação grava `utm_source`, `cargo` etc. sem declarar. A
+ * recentes), porque a importação grava `utm_source`, `cargo` etc. sem declarar.
+ * Os declarados são campos do NEGÓCIO e só entram na lista do negócio: oferecê-los
+ * também como "do contato" levava a tela a procurar `utm_source` no cadastro do
+ * contato, onde ele não existe, e a lista vinha vazia (CBEXS, 28/10/2026). O
+ * rótulo declarado vale para as duas listas. A
  * chave precisa casar com `CHAVE_DE_CAMPO_FILTRAVEL`: ela vira caminho JSON na
  * consulta. Chave que lembra CPF nunca é oferecida.
  */
@@ -84,8 +88,8 @@ export async function GET(_req: NextRequest): Promise<Response> {
     }
   }
 
-  const montar = (presentes: Set<string>): CampoOferecido[] => {
-    const todas = new Set<string>([...rotulos.keys(), ...presentes]);
+  const montar = (presentes: Set<string>, comDeclarados: boolean): CampoOferecido[] => {
+    const todas = new Set<string>([...(comDeclarados ? rotulos.keys() : []), ...presentes]);
     return [...todas]
       .filter((k) => CHAVE_DE_CAMPO_FILTRAVEL.test(k) && !chaveSensivelDeCampo(k))
       .map((key) => ({ key, label: rotulos.get(key) ?? key }))
@@ -102,8 +106,8 @@ export async function GET(_req: NextRequest): Promise<Response> {
           .map((e) => ({ id: e.id as string, name: e.name as string })),
       })),
       campos: {
-        contato: montar(chavesDe(contatos.data as never)),
-        negocio: montar(chavesDe(negocios.data as never)),
+        contato: montar(chavesDe(contatos.data as never), false),
+        negocio: montar(chavesDe(negocios.data as never), true),
       },
     },
     { requestId },

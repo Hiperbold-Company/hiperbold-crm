@@ -1162,6 +1162,7 @@ export const AUDIT_ACTIONS = [
   // da agência numa organização. Gravados pelo banco dentro de fn_membro_da_agencia_definir (metadata: target_user_id e acao).
   "agency_member.added",
   "agency_member.removed",
+  "user_preferences.updated",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

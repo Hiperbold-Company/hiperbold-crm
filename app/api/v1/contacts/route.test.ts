@@ -206,6 +206,9 @@ describe("GET /api/v1/contacts — Bearer (integrações externas)", () => {
       for (const q of [
         "etapa=e1111111-1111-4111-8111-111111111111",
         "campo_escopo=negocio&campo=utm_source&campo_valor=google",
+        // O escopo padrão ("qualquer") também lê negócio: sem escopo na URL, mesma regra.
+        "campo=utm_source&campo_valor=google",
+        "etapa=e1111111-1111-4111-8111-111111111111,e2222222-2222-4222-8222-222222222222",
       ]) {
         expect((await GET(req(`http://localhost/api/v1/contacts?${q}`, bearer))).status, q).toBe(403);
       }
@@ -216,7 +219,9 @@ describe("GET /api/v1/contacts — Bearer (integrações externas)", () => {
       tokenOk({ role: "agent" });
       adminComModo("own");
       const { GET } = await import("./route");
-      expect((await GET(req("http://localhost/api/v1/contacts?campo=cargo&campo_valor=x", bearer))).status).toBe(200);
+      expect(
+        (await GET(req("http://localhost/api/v1/contacts?campo_escopo=contato&campo=cargo&campo_valor=x", bearer))).status,
+      ).toBe(200);
       expect((await GET(req("http://localhost/api/v1/contacts", bearer))).status).toBe(200);
     });
 

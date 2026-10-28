@@ -108,7 +108,7 @@ export function temFiltro(f: Partial<FiltrosDeContatosEntrada>): boolean {
       f.ativ_de ||
       f.ativ_ate ||
       f.funil ||
-      f.etapa ||
+      (Array.isArray(f.etapa) ? f.etapa.length > 0 : f.etapa) ||
       (f.campo && f.campo_valor),
   );
 }
@@ -127,7 +127,7 @@ export function resumoDoFiltroParaAuditoria(f: FiltrosDeContatos): Record<string
     ...(criado ? { entrou_no_crm: criado } : {}),
     ...(ativ ? { ultima_atividade: ativ } : {}),
     ...(f.funil ? { funil_id: f.funil } : {}),
-    ...(f.etapa ? { etapa_id: f.etapa } : {}),
+    ...(f.etapa && f.etapa.length > 0 ? { etapa_ids: f.etapa } : {}),
     ...(f.campo && f.campo_valor
       ? { campo: { escopo: f.campo_escopo, chave: f.campo, operador: f.campo_op } }
       : {}),
