@@ -26,6 +26,7 @@ import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { useBulkAction } from "@/hooks/kanban/useBulkAction";
 import { resolveVocabulary } from "@/lib/kanban/vocabulary";
+import { LoseLeadDialog } from "./LoseLeadDialog";
 import type { PipelineVocabulary, Stage } from "@/lib/kanban/types";
 
 interface BulkActionBarProps {
@@ -67,6 +68,9 @@ export function BulkActionBar({
   // "Mover para…" muda a etapa: é a permissão `negocios.mover` (a rota recusa sem ela).
   const podeMover = usePermission("negocios.mover");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // A etapa de PERDA escolhida em "Mover para…": a janela do motivo abre ANTES,
+  // e só a confirmação dela move o lote (ver `runMove`).
+  const [perdaPendente, setPerdaPendente] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState("");
 
   // Reatribuir dono em lote é ≥manager NA ROTA (spec 04 §6.5). Sem este gate a
@@ -100,6 +104,14 @@ export function BulkActionBar({
       : `${selectedIds.length} ${t("selecionados")}`;
 
   const runMove = (stageId: string) => {
+    // Mover para a etapa de perda FECHA os negócios como perdidos, e o banco
+    // recusa perda sem motivo (CHECK `crm_leads_lost_reason_required`). Sem a
+    // janela, o lote ia sem motivo, a rota devolvia 422 no primeiro lote e nada
+    // se movia. Pede o motivo antes, uma vez, e o aplica a todos.
+    if (stages.find((s) => s.id === stageId)?.is_lost) {
+      setPerdaPendente(stageId);
+      return;
+    }
     bulk.mutate(
       {
         action: "move",
@@ -111,6 +123,21 @@ export function BulkActionBar({
       },
       { onSuccess: () => onClear() },
     );
+  };
+
+  const runLoseMove = async (motivo: string) => {
+    if (!perdaPendente) return;
+    const res = await bulk.mutateAsync({
+      action: "move",
+      lead_ids: selectedIds,
+      params: { stage_id: perdaPendente, lost_reason: motivo },
+    });
+    const n = res.data.updated_count;
+    toast.success(
+      `${n} ${t(n === 1 ? "negócio marcado como perdido." : "negócios marcados como perdidos.")}`,
+    );
+    setPerdaPendente(null);
+    onClear();
   };
 
   const runAssign = (ownerId: string | null) => {
@@ -294,6 +321,20 @@ export function BulkActionBar({
           {t("Cancelar")}
         </Button>
       </div>
+
+      {/* Montada só quando há perda a confirmar: a janela lê os motivos do funil. */}
+      {perdaPendente !== null && (
+        <LoseLeadDialog
+          open
+          onOpenChange={(aberto) => {
+            if (!aberto) setPerdaPendente(null);
+          }}
+          pipelineId={pipelineId}
+          quantidade={selectedIds.length}
+          pendente={bulk.isPending}
+          aoConfirmar={runLoseMove}
+        />
+      )}
 
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>

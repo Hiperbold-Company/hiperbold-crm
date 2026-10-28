@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useT } from "@/hooks/i18n/useT";
 import { useBoard } from "@/hooks/kanban/useBoard";
+import { useEventosManuais } from "@/hooks/kanban/useEventosManuais";
 import { useActiveOrg } from "@/hooks/auth/AuthProvider";
 
 function formatError(err: unknown, t: (texto: string) => string): string {
@@ -80,12 +81,18 @@ export function PipelinePageClient({
   // `useMemo`: esta página re-renderiza a cada tecla da busca e a cada seleção de card,
   // e a varredura (agora com duas datas por card) não precisa refazer-se a cada uma.
   const leadsDoQuadro = data?.leads;
+  // Contados no servidor, e só com o filtro "Eventos manuais" ligado (0979).
+  const eventosManuais = useEventosManuais(pipelineId, Boolean(filters.manualEvents));
   const filteredLeads = useMemo(
     () =>
       leadsDoQuadro
-        ? applyFilters(leadsDoQuadro, filters, { categoriaDo, timezone: fusoDaOrganizacao })
+        ? applyFilters(leadsDoQuadro, filters, {
+            categoriaDo,
+            timezone: fusoDaOrganizacao,
+            eventosManuais,
+          })
         : [],
-    [leadsDoQuadro, filters, categoriaDo, fusoDaOrganizacao],
+    [leadsDoQuadro, filters, categoriaDo, fusoDaOrganizacao, eventosManuais],
   );
   // NÃO é a conta do FilterBar: o seletor de filtro lista as três caixas
   // (`marcadoresDoCard`: negócio, contato e conversa), e esta lista, a da tag em

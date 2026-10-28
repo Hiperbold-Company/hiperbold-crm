@@ -24,6 +24,45 @@ export function parseAgentOwnerFilter(value: string | undefined): string | null 
   return value.slice(AGENT_OWNER_PREFIX.length) || null;
 }
 
+/**
+ * O filtro "Eventos manuais": quantos eventos o negócio tem registrados À MÃO
+ * ("Registrar evento" da ficha — `crm_lead_activities` com `type = 'note'` e
+ * `source_module = 'manual'`, ver `lib/leads/evento-manual.ts`). A contagem vem
+ * do banco (`GET /api/v1/pipelines/[id]/eventos-manuais`, migration 0979); aqui
+ * só se compara.
+ */
+export type OperadorDeEventosManuais = "lt" | "eq" | "gt";
+export const OPERADORES_DE_EVENTOS_MANUAIS: readonly OperadorDeEventosManuais[] = [
+  "lt",
+  "eq",
+  "gt",
+];
+export interface FiltroDeEventosManuais {
+  op: OperadorDeEventosManuais;
+  /** Inteiro ≥ 0. */
+  n: number;
+}
+
+/** O negócio com `total` eventos manuais passa no filtro? */
+export function atendeEventosManuais(total: number, filtro: FiltroDeEventosManuais): boolean {
+  if (filtro.op === "lt") return total < filtro.n;
+  if (filtro.op === "eq") return total === filtro.n;
+  return total > filtro.n;
+}
+
+/** `eventos=gt:5` na URL. Valor malformado é filtro AUSENTE, nunca um número inventado. */
+export function filtroDeEventosManuaisFromParam(
+  valor: string | null | undefined,
+): FiltroDeEventosManuais | undefined {
+  const m = /^(lt|eq|gt):(\d{1,6})$/.exec(valor ?? "");
+  if (!m) return undefined;
+  return { op: m[1] as OperadorDeEventosManuais, n: Number(m[2]) };
+}
+
+export function filtroDeEventosManuaisToParam(filtro: FiltroDeEventosManuais): string {
+  return `${filtro.op}:${filtro.n}`;
+}
+
 export interface LeadFilters {
   /** userId | `agent:<uuid>` | "any" | "unassigned" */
   owner?: string | "any" | "unassigned";
@@ -41,6 +80,8 @@ export interface LeadFilters {
   createdAt?: FiltroDeData;
   /** "Última movimentação" (`stage_changed_at`, ou `created_at` se nulo). */
   movedAt?: FiltroDeData;
+  /** "Eventos manuais": operador + número (ver `FiltroDeEventosManuais`). */
+  manualEvents?: FiltroDeEventosManuais;
 }
 
 /**
@@ -67,6 +108,7 @@ export function filtersFromParams(
     lostCategory: sp.get("categoria") ?? undefined,
     createdAt: filtroDeDataFromParams(sp, "criado"),
     movedAt: filtroDeDataFromParams(sp, "mov"),
+    manualEvents: filtroDeEventosManuaisFromParam(sp.get("eventos")),
   };
 }
 
@@ -81,6 +123,7 @@ export function filtersToParams(f: LeadFilters): string {
   if (f.lostCategory) p.set("categoria", f.lostCategory);
   filtroDeDataToParams(p, "criado", f.createdAt);
   filtroDeDataToParams(p, "mov", f.movedAt);
+  if (f.manualEvents) p.set("eventos", filtroDeEventosManuaisToParam(f.manualEvents));
   return p.toString();
 }
 
@@ -96,6 +139,12 @@ export interface ContextoDosFiltros {
   timezone?: string | null;
   /** "Agora" injetável, para o teste não depender do relógio. */
   agora?: Date;
+  /**
+   * Eventos manuais por negócio, como o servidor contou (negócio ausente = 0).
+   * `undefined` = a contagem ainda não chegou: o filtro de eventos NÃO se aplica,
+   * em vez de tratar todo mundo como zero e esvaziar o quadro por um instante.
+   */
+  eventosManuais?: ReadonlyMap<string, number>;
 }
 
 export function applyFilters(
@@ -149,6 +198,10 @@ export function applyFilters(
       return false;
     if (!dentroDoFiltroDeData(l.created_at, f.createdAt, agora, contexto?.timezone)) return false;
     if (!dentroDoFiltroDeData(ultimaMovimentacao(l), f.movedAt, agora, contexto?.timezone)) return false;
+    if (f.manualEvents && contexto?.eventosManuais) {
+      const total = contexto.eventosManuais.get(l.id) ?? 0;
+      if (!atendeEventosManuais(total, f.manualEvents)) return false;
+    }
     if (f.overdueOnly) {
       if (l.status !== "open") return false;
       if (!l.expected_close_date || l.expected_close_date >= today) return false;

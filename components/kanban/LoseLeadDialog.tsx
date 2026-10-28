@@ -20,8 +20,22 @@ import { OUTRO, motivoDePerdaAceito, opcoesDeMotivoDePerda } from "@/lib/leads/m
 interface LoseLeadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  leadId: string;
+  /** O card do menu. Ausente quando quem confirma é `aoConfirmar` (o lote). */
+  leadId?: string;
   pipelineId: string;
+  /**
+   * A MESMA janela para o lote: a barra de seleção, ao mover vários negócios
+   * para a etapa de perda, abre esta janela antes e aplica o motivo escolhido a
+   * todos (`POST /api/v1/leads/bulk` com `lost_reason`). Uma janela só, para a
+   * lista de motivos, o "Outro" e a recusa fora do vocabulário nunca divergirem
+   * entre perder um e perder vários. Quem passa isto cuida do erro (toast) e do
+   * resultado; a janela só fecha quando a promessa resolve.
+   */
+  aoConfirmar?: (motivo: string) => Promise<void>;
+  /** Quantos negócios a confirmação alcança — muda só o texto da janela. */
+  quantidade?: number;
+  /** Trava o botão enquanto o lote não responde. */
+  pendente?: boolean;
 }
 
 const MAX_LEN = 500;
@@ -31,6 +45,9 @@ export function LoseLeadDialog({
   onOpenChange,
   leadId,
   pipelineId,
+  aoConfirmar,
+  quantidade,
+  pendente = false,
 }: LoseLeadDialogProps) {
   const t = useT();
   const [reasonCode, setReasonCode] = useState<string>("");
@@ -83,12 +100,19 @@ export function LoseLeadDialog({
     finalReason.length === 0 ||
     finalReason.length > MAX_LEN ||
     outroRecusado ||
-    mutation.isPending;
+    mutation.isPending ||
+    pendente;
 
   const handleSubmit = async () => {
     if (disabled) return;
     try {
-      await mutation.mutateAsync({ leadId, lostReason: finalReason });
+      if (aoConfirmar) {
+        await aoConfirmar(finalReason);
+      } else if (leadId) {
+        await mutation.mutateAsync({ leadId, lostReason: finalReason });
+      } else {
+        return;
+      }
       setReasonCode("");
       setOtherText("");
       onOpenChange(false);
@@ -103,6 +127,9 @@ export function LoseLeadDialog({
         <DialogHeader>
           <DialogTitle>{t("Marcar como perdido")}</DialogTitle>
           <DialogDescription>
+            {quantidade && quantidade > 1
+              ? `${t("O mesmo motivo vale para os")} ${quantidade} ${t("negócios selecionados.")} `
+              : null}
             {t("Informe o motivo. Essa informação ajuda a melhorar o funil.")}
           </DialogDescription>
         </DialogHeader>
@@ -179,12 +206,12 @@ export function LoseLeadDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || pendente}
           >
             {t("Cancelar")}
           </Button>
           <Button onClick={handleSubmit} disabled={disabled}>
-            {mutation.isPending ? t("Salvando...") : t("Confirmar")}
+            {mutation.isPending || pendente ? t("Salvando...") : t("Confirmar")}
           </Button>
         </DialogFooter>
       </DialogContent>

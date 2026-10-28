@@ -5,7 +5,7 @@ import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import type { BulkLeadActionInput } from "@/lib/schemas/leads";
 import { liberarEcoLocal, marcarEcoLocal } from "@/lib/kanban/local-echo";
-import { lotesDeIds } from "@/lib/kanban/selecao";
+import { avisoDeLoteInterrompido, lotesDeIds } from "@/lib/kanban/selecao";
 
 export function useBulkAction(pipelineId: string) {
   const qc = useQueryClient();
@@ -36,11 +36,10 @@ export function useBulkAction(pipelineId: string) {
           );
           aplicados += resposta.data.updated_count;
         } catch (erro) {
-          if (lotes.length > 1) {
-            toast.warning(
-              `${aplicados} de ${input.lead_ids.length} já haviam sido alterados — o restante não foi.`,
-            );
-          }
+          // Só quando ALGUM lote entrou: com zero, o motivo real é o do erro
+          // (o toast de `showApiError`), e somar "0 de N…" o escondia.
+          const aviso = avisoDeLoteInterrompido(aplicados, input.lead_ids.length);
+          if (aviso) toast.warning(aviso);
           throw erro;
         }
       }
