@@ -214,7 +214,7 @@ describe("relatório de atividades — isolamento entre organizações", () => {
   });
 });
 
-describe("relatório de atividades — filtro por atendente (0978)", () => {
+describe("relatório de atividades — filtro por atendente (0983)", () => {
   it("sem filtro nada muda: o filtro nulo é 'Todos'", () => {
     expect(relatorioComo(USER_MULTI, ORG_A).total).toBe(ATIVIDADES_A);
   });

@@ -68464,8 +68464,8 @@ comment on trigger trg_crm_leads_captacao_repetida on public.crm_leads is
   '0977: na ordem alfabética dos BEFORE roda depois de trg_crm_lead_close_on_stage (vê o status final) e de trg_crm_leads_billing_bloqueio. Recusa o segundo negócio do mesmo envio repetido; ver fn_crm_leads_captacao_repetida.';
 
 
--- ---- relatório de atividades: filtro por atendente (migration 0978, fork Hiperbold) ----
--- 0978 — RELATÓRIO DE ATIVIDADES: filtro por atendente.
+-- ---- relatório de atividades: filtro por atendente (migration 0983, fork Hiperbold) ----
+-- 0983 — RELATÓRIO DE ATIVIDADES: filtro por atendente.
 --
 -- Pedido da CBEXS (28/10/2026): a tela Atividades mostrava a equipe somada; a
 -- gestora precisa ver o que UMA pessoa fez. `fn_activity_report` ganha o sexto
@@ -68515,7 +68515,7 @@ as $$
     where a.organization_id = p_org
       and a.performed_at >= p_from
       and a.performed_at <  p_to
-      -- Filtro por atendente (0978): só o que ESTA pessoa fez. Estreita, nunca
+      -- Filtro por atendente (0983): só o que ESTA pessoa fez. Estreita, nunca
       -- alarga — a RLS de quem chama continua decidindo o que ele enxerga.
       and (p_user is null or a.performed_by_user_id = p_user)
   )
