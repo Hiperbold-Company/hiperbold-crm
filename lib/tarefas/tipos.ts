@@ -45,6 +45,12 @@ export interface Tarefa {
   updated_at: string;
 }
 
+/** A tarefa com o negócio junto (`GET /api/v1/tasks?com_negocio=true`). */
+export interface TarefaComNegocio extends Tarefa {
+  /** `null` quando não há negócio ou quem pergunta não o enxerga. */
+  lead: { title: string; pipeline_id: string | null } | null;
+}
+
 export interface NovaTarefa {
   title: string;
   description?: string | null;

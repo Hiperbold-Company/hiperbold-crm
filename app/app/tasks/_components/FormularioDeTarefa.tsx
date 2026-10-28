@@ -38,6 +38,16 @@ interface Props {
   aoSalvar: (entrada: NovaTarefa) => Promise<unknown>;
   leadId?: string | null;
   contactId?: string | null;
+  /**
+   * Quem pode ser responsável. Com a lista, o formulário mostra o campo
+   * "Responsável" (o painel do negócio usa); sem ela, a tarefa nasce sem
+   * responsável, como sempre foi na tela de Tarefas.
+   */
+  responsaveis?: Array<{ id: string; nome: string }>;
+  /** O responsável que já vem marcado ao criar (o painel passa quem cria). */
+  responsavelPadrao?: string | null;
+  /** Esconde prioridade e situação: o formulário curto do painel do negócio. */
+  compacto?: boolean;
 }
 
 /**
@@ -65,6 +75,9 @@ export function FormularioDeTarefa({
   aoSalvar,
   leadId,
   contactId,
+  responsaveis,
+  responsavelPadrao,
+  compacto = false,
 }: Props) {
   const t = useT();
   const editando = Boolean(tarefa);
@@ -82,6 +95,9 @@ export function FormularioDeTarefa({
   const [hora, setHora] = useState(tarefa?.due_date ? prazo.hora : "09:00");
   const [prioridade, setPrioridade] = useState<PrioridadeDaTarefa>(tarefa?.priority ?? "medium");
   const [situacao, setSituacao] = useState<SituacaoDaTarefa>(tarefa?.status ?? "pending");
+  const [responsavel, setResponsavel] = useState<string>(
+    tarefa?.assigned_to ?? responsavelPadrao ?? "",
+  );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -107,6 +123,7 @@ export function FormularioDeTarefa({
         status: situacao,
         lead_id: tarefa?.lead_id ?? leadId ?? null,
         contact_id: tarefa?.contact_id ?? contactId ?? null,
+        ...(responsaveis ? { assigned_to: responsavel || null } : {}),
       });
       aoMudarAbertura(false);
     } catch (falha) {
@@ -170,6 +187,25 @@ export function FormularioDeTarefa({
             </div>
           </div>
 
+          {responsaveis ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="tarefa-responsavel">{t("Responsável")}</Label>
+              <Select value={responsavel} onValueChange={setResponsavel}>
+                <SelectTrigger id="tarefa-responsavel">
+                  <SelectValue placeholder={t("Escolha quem vai fazer")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {responsaveis.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
+          {compacto ? null : (
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="tarefa-prioridade">{t("Prioridade")}</Label>
@@ -204,6 +240,7 @@ export function FormularioDeTarefa({
               </Select>
             </div>
           </div>
+          )}
 
           {erro ? (
             <p role="alert" className="rounded-md bg-destructive/10 p-2 text-xs font-medium text-destructive">

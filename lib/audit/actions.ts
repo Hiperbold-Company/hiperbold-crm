@@ -695,6 +695,8 @@ export const AUDIT_ACTIONS = [
   "crm_task.created",
   "crm_task.updated",
   "crm_task.deleted",
+  // O cron `tarefas-vencidas` (migration 0980) emitiu avisos de vencimento.
+  "crm_task.due_notified",
   "organization.switched",
   // Chamada originada via /api/v1/calls (módulo VoIP, migration 0347).
   // Só o CREATE é auditado aqui — status/transcript são atualizados pelo
