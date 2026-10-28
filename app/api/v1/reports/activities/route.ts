@@ -68,6 +68,13 @@ const querySchema = z.object({
   tz: z.string().min(1).max(64).default("UTC").refine(fusoValido, {
     message: "Fuso horário desconhecido.",
   }),
+  /**
+   * Filtro por atendente (`?atendente=<user_id>`). Ausente = "Todos". O formato
+   * é validado aqui; que a pessoa seja DA ORGANIZAÇÃO é conferido abaixo, contra
+   * `user_organizations` — um UUID válido de outra organização não é um filtro,
+   * é uma sondagem de quem existe no sistema.
+   */
+  atendente: z.string().uuid().optional(),
 });
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -83,6 +90,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   const parsed = querySchema.safeParse({
     days: url.searchParams.get("days") ?? undefined,
     tz: url.searchParams.get("tz") ?? undefined,
+    atendente: url.searchParams.get("atendente") || undefined,
   });
   if (!parsed.success) {
     return fail("validation_failed", "Query inválida.", 422, {
@@ -94,12 +102,27 @@ export async function GET(req: NextRequest): Promise<Response> {
   const { de, ate } = janelaDoPeriodo(parsed.data.days, new Date());
 
   const supabase = await createClient();
+
+  const atendente = parsed.data.atendente ?? null;
+  if (atendente) {
+    const { membro, erro } = await ehMembroDaOrganizacao(supabase, activeOrg.orgId, atendente);
+    if (erro) return falhaInterna("internal_error", erro, { requestId });
+    if (!membro) {
+      return fail("validation_failed", "Atendente não pertence a esta organização.", 422, {
+        details: { atendente: ["Atendente não pertence a esta organização."] },
+        requestId,
+      });
+    }
+  }
+
   const { data, error } = await supabase.rpc("fn_activity_report", {
     p_org: activeOrg.orgId,
     p_from: de.toISOString(),
     p_to: ate.toISOString(),
     p_tz: parsed.data.tz,
     p_limit: LIMITE_DE_LINHAS,
+    // Opcional na função (default null = todos). A RLS segue valendo por cima.
+    ...(atendente ? { p_user: atendente } : {}),
   });
   if (error) return falhaInterna("internal_error", error, { requestId });
 
@@ -137,6 +160,29 @@ export async function GET(req: NextRequest): Promise<Response> {
 }
 
 /**
+ * O atendente do filtro é membro desta organização? `user_organizations` só
+ * mostra ao `agent` o próprio vínculo (RLS), então a conferência usa o admin
+ * client — filtrado à mão por `organization_id` da sessão — quando existe, como
+ * `/api/v1/team/assignable`. Sem service role (dev), cai no client do usuário:
+ * conservador, pois um `agent` só confirmaria a si mesmo.
+ */
+async function ehMembroDaOrganizacao(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+  userId: string,
+): Promise<{ membro: boolean; erro: unknown }> {
+  const client = isServiceRoleConfigured() ? createAdminClient() : supabase;
+  const { data, error } = await client
+    .from("user_organizations")
+    .select("user_id")
+    .eq("organization_id", orgId)
+    .eq("user_id", userId)
+    .is("revoked_at", null)
+    .maybeSingle();
+  return { membro: Boolean(data), erro: error };
+}
+
+/**
  * Id → nome, para pessoas e agentes. Degrada com `null` em vez de falhar: sem
  * o service role (dev), sem a pessoa (conta apagada) ou sem o agente, o
  * `actorName` cai no rótulo genérico e a linha continua honesta.
@@ -158,9 +204,7 @@ async function resolveNomes(
       idsDeUsuario.map(async (id) => {
         const { data } = await admin.auth.admin.getUserById(id);
         usuarios[id] =
-          (data?.user?.user_metadata?.full_name as string | undefined) ??
-          data?.user?.email ??
-          null;
+          (data?.user?.user_metadata?.full_name as string | undefined) ?? data?.user?.email ?? null;
       }),
     );
   }

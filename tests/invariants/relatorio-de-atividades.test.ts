@@ -91,7 +91,11 @@ function semearOrg(
 }
 
 /** Chama a função como `authenticated` com as claims da pessoa, e devolve o jsonb. */
-function relatorioComo(userId: string, org: string): {
+function relatorioComo(
+  userId: string,
+  org: string,
+  atendente?: string,
+): {
   total: number;
   tipos: string[];
   atores: string[];
@@ -105,7 +109,12 @@ function relatorioComo(userId: string, org: string): {
       now() - interval '1 day',
       now() + interval '1 minute',
       'UTC',
-      500
+      500${
+        atendente
+          ? `,
+      '${atendente}'::uuid`
+          : ""
+      }
     )::text;
   `);
   const linhas = out.split("\n");
@@ -158,10 +167,10 @@ describe("relatório de atividades — a função", () => {
 
   it("não é alcançável pela anon key, e é alcançável por quem tem sessão", () => {
     const anon = sql(
-      `select has_function_privilege('anon', 'public.fn_activity_report(uuid,timestamptz,timestamptz,text,int)', 'EXECUTE');`,
+      `select has_function_privilege('anon', 'public.fn_activity_report(uuid,timestamptz,timestamptz,text,int,uuid)', 'EXECUTE');`,
     );
     const auth = sql(
-      `select has_function_privilege('authenticated', 'public.fn_activity_report(uuid,timestamptz,timestamptz,text,int)', 'EXECUTE');`,
+      `select has_function_privilege('authenticated', 'public.fn_activity_report(uuid,timestamptz,timestamptz,text,int,uuid)', 'EXECUTE');`,
     );
     expect(anon).toBe("f");
     expect(auth).toBe("t");
@@ -202,5 +211,39 @@ describe("relatório de atividades — isolamento entre organizações", () => {
     const b = relatorioComo(USER_SO_A, ORG_B);
     expect(b.total).toBe(0);
     expect(b.leads).toEqual([]);
+  });
+});
+
+describe("relatório de atividades — filtro por atendente (0978)", () => {
+  it("sem filtro nada muda: o filtro nulo é 'Todos'", () => {
+    expect(relatorioComo(USER_MULTI, ORG_A).total).toBe(ATIVIDADES_A);
+  });
+
+  it("com o atendente que trabalhou, tudo se restringe a ele (total, ator, tipo, lista)", () => {
+    const r = relatorioComo(USER_MULTI, ORG_A, USER_SO_A);
+    expect(r.total).toBe(ATIVIDADES_A);
+    expect(r.atores).toEqual([USER_SO_A]);
+    expect(r.tipos).toEqual([TIPO_A]);
+    expect(r.leads).toEqual([LEAD_A]);
+  });
+
+  it("com um atendente que não fez nada na organização, o relatório é vazio", () => {
+    const r = relatorioComo(USER_MULTI, ORG_A, USER_MULTI);
+    expect(r.total).toBe(0);
+    expect(r.atores).toEqual([]);
+    expect(r.leads).toEqual([]);
+  });
+
+  it("o filtro não atravessa organização: quem trabalhou na A, filtrado na B, dá zero", () => {
+    expect(relatorioComo(USER_MULTI, ORG_B, USER_SO_A).total).toBe(0);
+    expect(relatorioComo(USER_MULTI, ORG_B, USER_MULTI).total).toBe(ATIVIDADES_B);
+  });
+
+  it("a assinatura antiga (5 parâmetros) não existe mais — a RPC não fica ambígua", () => {
+    const n = sql(`
+      select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.proname = 'fn_activity_report';
+    `);
+    expect(n).toBe("1");
   });
 });
