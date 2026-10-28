@@ -3,6 +3,8 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { papelPode } from "@/lib/permissoes/resolver";
+import { createClient } from "@/lib/supabase/server";
+import { Suspense } from "react";
 
 import { MetricsClient } from "./_components/MetricsClient";
 
@@ -21,20 +23,39 @@ export default async function MetricsPage() {
   // idioma vem resolvido em `user.idioma` (a cadeia pessoa → organização →
   // padrão vive em `lib/auth/server.ts`), sem reler o `locale` cru.
   const idioma = user.idioma;
+  // Funis do filtro global: leitura da sessão (a RLS decide), só os vivos.
+  let funis: { id: string; name: string }[] = [];
+  if (activeOrg) {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("crm_pipelines")
+      .select("id, name")
+      .eq("organization_id", activeOrg.orgId)
+      .eq("is_archived", false)
+      .order("position");
+    funis = data ?? [];
+  }
   const t = (texto: string) => traduzir(texto, idioma);
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
+    <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{t("Desempenho")}</h1>
         <p className="text-sm text-muted-foreground">
           {canCompare
-            ? t("Atrito, funil e performance por atendente nos últimos 30 dias.")
-            : t("Atrito, seu funil e sua performance nos últimos 30 dias.")}
+            ? t("Negócios, origens e atendimento da equipe, com filtro de período, funil e atendente.")
+            : t("Seus negócios, origens e atendimentos, com filtro de período e funil.")}
         </p>
       </header>
 
-      <MetricsClient canCompare={canCompare} podeVerPerdas={podeVerPerdas} currentUserId={user.id} />
+      <Suspense fallback={<p className="text-sm text-muted-foreground">{t("Carregando…")}</p>}>
+        <MetricsClient
+          canCompare={canCompare}
+          podeVerPerdas={podeVerPerdas}
+          currentUserId={user.id}
+          funis={funis}
+        />
+      </Suspense>
     </div>
   );
 }
