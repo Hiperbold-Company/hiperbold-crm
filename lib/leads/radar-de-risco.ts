@@ -38,6 +38,13 @@ const IDS_POR_CONSULTA = 100;
 
 export const RADAR_MIN_HOURS_PADRAO = RISK_COLD_HOURS;
 
+// Negócio parado há mais que isto não é "esfriando", é acervo: na CBEXS, 492
+// negócios migrados do Kommo, parados há ~900 dias, ocupavam o radar inteiro.
+// Pior: a varredura ordena do mais frio e para no `SCAN_CAP`, então o acervo
+// tirava a vaga dos recentes, que nem chegavam a ser lidos. O corte vai na
+// consulta, antes do teto. O negócio segue aberto no funil; só sai do radar.
+export const RADAR_MAX_DIAS_PARADO = 90;
+
 export interface AtRiskLead {
   id: string;
   title: string;
@@ -109,6 +116,7 @@ export async function carregaRadarDeRisco(
   const minHours = opts.minHours ?? RADAR_MIN_HOURS_PADRAO;
   const now = opts.now ?? new Date();
   const nowIso = now.toISOString();
+  const corteDoAcervo = new Date(now.getTime() - RADAR_MAX_DIAS_PARADO * 86_400_000).toISOString();
 
   // Funil ARQUIVADO não é trabalho ativo. Arquivar só marca
   // `crm_pipelines.is_archived`: os leads seguem `open`, e sem este corte o
@@ -136,7 +144,11 @@ export async function carregaRadarDeRisco(
       "id, title, contact_id, owner_user_id, owner_kind, owner_agent_id, stage_id, last_activity_at, created_at, pipeline_id",
     )
     .eq("organization_id", organizationId)
-    .eq("status", "open");
+    .eq("status", "open")
+    // Mesma régua do `lastActivity` abaixo: sem atividade, vale a criação.
+    .or(
+      `last_activity_at.gte.${corteDoAcervo},and(last_activity_at.is.null,created_at.gte.${corteDoAcervo})`,
+    );
   if (funisArquivados.length > 0) {
     consultaDeLeads = consultaDeLeads.not("pipeline_id", "in", `(${funisArquivados.join(",")})`);
   }
