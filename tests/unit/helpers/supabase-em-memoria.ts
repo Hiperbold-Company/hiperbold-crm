@@ -8,9 +8,15 @@
  *  - `ilike` com `%`, `_` e `\` (escape); `*` vira `%` ANTES de casar (é assim no PostgREST, e é
  *    o que `consulta.ts` precisa neutralizar);
  *  - caminho JSON `custom_fields->>chave`;
- *  - `or("coluna.ilike.valor,coluna.eq.valor")`;
+ *  - `or("coluna.ilike.valor,coluna.eq.valor")`, com valor entre aspas (`"a,b"`, `\"` e `\\`
+ *    escapados) e `apelido.not.is.null` (a junção opcional achou algum registro);
  *  - junção `apelido:tabela!fk!inner(id)` + predicados `apelido.coluna`: o contato passa se ALGUM
- *    registro da tabela ligada satisfaz TODOS os predicados daquele apelido.
+ *    registro da tabela ligada satisfaz TODOS os predicados daquele apelido;
+ *  - junção SEM `!inner` (`apelido:tabela!fk(id)`): não corta o contato; só responde ao
+ *    `apelido.not.is.null` do `or`. Cada apelido tem os PRÓPRIOS predicados.
+ *
+ * Que estas regras são as do PostgREST de verdade foi medido contra um PostgREST real (v16.2) em
+ * 28/10/2026, com os mesmos casos de "qualquer" de `contatos-lote-e-exportacao.test.ts`.
  *
  * `fn_excluir_contatos_em_lote` é reimplementada aqui com a mesma regra da migration 0971 — a prova
  * do SQL de verdade é `tests/invariants/excluir-contatos-em-lote.test.ts` (Postgres real).
@@ -55,6 +61,33 @@ function ilikeCasa(valor: unknown, padrao: string): boolean {
   return new RegExp(`^${re}$`, "i").test(String(valor));
 }
 
+/** Quebra o `or` nas vírgulas de fora das aspas. */
+function partesDoOr(expr: string): string[] {
+  const partes: string[] = [];
+  let atual = "";
+  let aspas = false;
+  for (let i = 0; i < expr.length; i++) {
+    const c = expr[i]!;
+    if (aspas && c === "\\") {
+      atual += c + (expr[++i] ?? "");
+    } else if (c === '"') {
+      aspas = !aspas;
+      atual += c;
+    } else if (c === "," && !aspas) {
+      partes.push(atual);
+      atual = "";
+    } else atual += c;
+  }
+  partes.push(atual);
+  return partes;
+}
+
+/** Valor entre aspas do `or`: tira as aspas e desfaz `\"` e `\\`. */
+function valorDoOr(v: string): string {
+  if (!(v.startsWith('"') && v.endsWith('"') && v.length >= 2)) return v;
+  return v.slice(1, -1).replace(/\\(.)/g, "$1");
+}
+
 export function clienteEmMemoria(banco: BancoEmMemoria): never {
   let chamadasDaExclusao = 0;
 
@@ -62,25 +95,29 @@ export function clienteEmMemoria(banco: BancoEmMemoria): never {
     from(tabela: string) {
       const filtros: Array<[string, string, unknown]> = [];
       const predicados: Array<(l: Linha) => boolean> = [];
-      const predicadosDaJuncao: Array<(l: Linha) => boolean> = [];
-      let juncao: { apelido: string; tabela: string } | null = null;
+      const juncoes = new Map<string, { tabela: string; inner: boolean; predicados: Array<(l: Linha) => boolean> }>();
       let operacao: "select" | "delete" = "select";
       let opcoes: { count?: string; head?: boolean } | undefined;
       let ordem: { col: string; asc: boolean } | undefined;
       let faixa: [number, number] | undefined;
 
       const adicionar = (coluna: string, fn: (v: unknown) => boolean) => {
-        const j = juncao && coluna.startsWith(`${juncao.apelido}.`);
-        const nome = j ? coluna.slice(juncao!.apelido.length + 1) : coluna;
-        (j ? predicadosDaJuncao : predicados).push((l) => fn(valorDe(l, nome)));
+        const apelido = [...juncoes.keys()].find((a) => coluna.startsWith(`${a}.`));
+        const nome = apelido ? coluna.slice(apelido.length + 1) : coluna;
+        (apelido ? juncoes.get(apelido)!.predicados : predicados).push((l) => fn(valorDe(l, nome)));
+      };
+
+      /** A junção achou algum registro ligado que satisfaz todos os predicados dela? */
+      const juncaoAchou = (apelido: string, linha: Linha): boolean => {
+        const j = juncoes.get(apelido);
+        if (!j) throw new Error(`junção ${apelido} não declarada no select`);
+        const ligadas = banco.tabelas[j.tabela] ?? [];
+        return ligadas.some((n) => n.contact_id === linha.id && j.predicados.every((p) => p(n)));
       };
 
       const casa = (linha: Linha): boolean => {
         if (!predicados.every((p) => p(linha))) return false;
-        if (juncao) {
-          const ligadas = banco.tabelas[juncao.tabela] ?? [];
-          return ligadas.some((n) => n.contact_id === linha.id && predicadosDaJuncao.every((p) => p(n)));
-        }
+        for (const [apelido, j] of juncoes) if (j.inner && !juncaoAchou(apelido, linha)) return false;
         return true;
       };
 
@@ -114,8 +151,9 @@ export function clienteEmMemoria(banco: BancoEmMemoria): never {
       const cadeia: Record<string, unknown> = {
         select(colunas?: string, o?: { count?: string; head?: boolean }) {
           if (o) opcoes = o;
-          const m = colunas ? /(\w+):(\w+)!\w+!inner\(/.exec(colunas) : null;
-          if (m) juncao = { apelido: m[1]!, tabela: m[2]! };
+          for (const m of (colunas ?? "").matchAll(/(\w+):(\w+)!\w+(!inner)?\(/g)) {
+            juncoes.set(m[1]!, { tabela: m[2]!, inner: Boolean(m[3]), predicados: [] });
+          }
           return cadeia;
         },
         delete() {
@@ -159,13 +197,19 @@ export function clienteEmMemoria(banco: BancoEmMemoria): never {
         },
         or(expr: string) {
           filtros.push(["or", "", expr]);
-          const partes = expr.split(",").map((p) => {
+          const partes = partesDoOr(expr).map((p) => {
             const [col, op, ...resto] = p.split(".");
-            return { col: col!, op: op!, val: resto.join(".") };
+            return { col: col!, op: op!, val: valorDoOr(resto.join(".")) };
           });
           predicados.push((l) =>
             partes.some(({ col, op, val }) =>
-              op === "ilike" ? ilikeCasa(valorDe(l, col), val) : op === "eq" ? String(valorDe(l, col)) === val : false,
+              op === "ilike"
+                ? ilikeCasa(valorDe(l, col), val)
+                : op === "eq"
+                  ? String(valorDe(l, col)) === val
+                  : op === "not" && val === "is.null"
+                    ? juncaoAchou(col, l)
+                    : false,
             ),
           );
           return cadeia;

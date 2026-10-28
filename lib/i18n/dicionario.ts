@@ -14544,6 +14544,27 @@ export const DICIONARIO: Traducoes = {
   "Trocar de plano e ver as faturas.": { es: "Cambiar de plan y ver las facturas." },
   "Ver o relatório de perdas": { es: "Ver el informe de pérdidas" },
   "Ver o resultado dos anúncios (Meta Ads)": { es: "Ver el resultado de los anuncios (Meta Ads)" },
+  // ─── CONTATOS: filtro de campo, várias etapas e "Personalizar colunas" (CBEXS, 28/10/2026) ───
+  Etapas: { es: "Etapas" },
+  "Traz quem tem negócio em qualquer das etapas marcadas.": { es: "Trae a quien tiene negocio en cualquiera de las etapas marcadas." },
+  etapas: { es: "etapas" },
+  "só do contato": { es: "solo del contacto" },
+  "só do negócio": { es: "solo del negocio" },
+  "Os dois": { es: "Ambos" },
+  "Traz o contato que tem o valor no cadastro dele ou em algum negócio.": { es: "Trae el contacto que tiene el valor en su registro o en algún negocio." },
+  "Procura só no cadastro do contato.": { es: "Busca solo en el registro del contacto." },
+  "Personalizar colunas": { es: "Personalizar columnas" },
+  "Escolha as colunas da lista e a ordem. Nome e ações ficam sempre.": { es: "Elige las columnas de la lista y su orden. Nombre y acciones quedan siempre." },
+  "Na lista, nesta ordem": { es: "En la lista, en este orden" },
+  fixa: { es: "fija" },
+  "Colunas disponíveis": { es: "Columnas disponibles" },
+  campo: { es: "campo" },
+  "Limite de colunas atingido. Desmarque uma para escolher outra.": { es: "Límite de columnas alcanzado. Desmarca una para elegir otra." },
+  "Colunas salvas.": { es: "Columnas guardadas." },
+  "Colunas restauradas ao padrão.": { es: "Columnas restablecidas al estándar." },
+  "Não foi possível salvar as colunas.": { es: "No se pudieron guardar las columnas." },
+  Aniversário: { es: "Cumpleaños" },
+  "Última mensagem": { es: "Último mensaje" },
 };
 
 /**

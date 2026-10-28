@@ -22,8 +22,9 @@ export interface FiltrosDaTela {
   ativ_de?: string;
   ativ_ate?: string;
   funil?: string;
+  /** Uma ou mais etapas, separadas por vírgula (a forma da URL e do servidor). */
   etapa?: string;
-  campo_escopo?: "contato" | "negocio";
+  campo_escopo?: "qualquer" | "contato" | "negocio";
   campo?: string;
   campo_op?: "contem" | "igual";
   campo_valor?: string;
@@ -53,6 +54,18 @@ const DIA = /^\d{4}-\d{2}-\d{2}$/;
 const diaValido = (d: string | null): d is string =>
   Boolean(d && DIA.test(d) && d >= DIA_MINIMO_DO_FILTRO && d <= DIA_MAXIMO_DO_FILTRO);
 const CHAVE_DE_CAMPO = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
+/** O mesmo teto do servidor (`MAXIMO_DE_ETAPAS_NO_FILTRO`). */
+const MAXIMO_DE_ETAPAS = 100;
+
+/** Sem escopo (ou um desconhecido) é "qualquer": o contato OU algum negócio dele. */
+function escopoDoCampo(v: string | null): "qualquer" | "contato" | "negocio" {
+  return v === "contato" || v === "negocio" ? v : "qualquer";
+}
+
+/** As etapas do filtro como lista (a URL guarda separadas por vírgula). */
+export function etapasDoFiltro(f: Pick<FiltrosDaTela, "etapa">): string[] {
+  return f.etapa ? f.etapa.split(",").filter(Boolean) : [];
+}
 
 export function filtrosFromParams(sp: { get(chave: string): string | null }): FiltrosDaTela {
   const texto = (chave: string, max: number): string | undefined => {
@@ -72,7 +85,11 @@ export function filtrosFromParams(sp: { get(chave: string): string | null }): Fi
     };
   };
   const funil = sp.get("funil");
-  const etapa = sp.get("etapa");
+  // Ids inválidos saem um a um: o resto da lista continua valendo.
+  const etapa = [...new Set((sp.get("etapa") ?? "").split(",").map((e) => e.trim()))]
+    .filter((e) => UUID.test(e))
+    .slice(0, MAXIMO_DE_ETAPAS)
+    .join(",");
   const campo = sp.get("campo");
   const valor = texto("campo_valor", 200);
   const comCampo = campo && CHAVE_DE_CAMPO.test(campo) && !chaveSensivelDeCampo(campo) && valor;
@@ -84,12 +101,12 @@ export function filtrosFromParams(sp: { get(chave: string): string | null }): Fi
     ...periodo("criado"),
     ...periodo("ativ"),
     ...(funil && UUID.test(funil) ? { funil } : {}),
-    ...(etapa && UUID.test(etapa) ? { etapa } : {}),
+    ...(etapa ? { etapa } : {}),
     ...(comCampo
       ? {
           campo,
           campo_valor: valor,
-          campo_escopo: sp.get("campo_escopo") === "negocio" ? ("negocio" as const) : ("contato" as const),
+          campo_escopo: escopoDoCampo(sp.get("campo_escopo")),
           campo_op: sp.get("campo_op") === "igual" ? ("igual" as const) : ("contem" as const),
         }
       : {}),
