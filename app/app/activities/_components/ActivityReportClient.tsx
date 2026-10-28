@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/empty";
@@ -13,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useT } from "@/hooks/i18n/useT";
+import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useActivityReport } from "@/hooks/reports/useActivityReport";
 import type {
   LinhaDeAtividade,
@@ -24,6 +26,10 @@ import { ClockCounterClockwise } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
 const PERIODOS = [7, 30, 90] as const;
+
+/** Radix não aceita `value=""` num item: "Todos" tem um valor próprio. */
+const TODOS = "todos";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Marcador do ator: FORMA, nunca cor — os mesmos três desenhos do kanban e da
@@ -76,7 +82,7 @@ function SerieDiaria({ dias }: { dias: LinhaDoDia[] }) {
             data-dia={d.data}
             data-quantidade={d.quantidade}
           />
-          <span className="text-[10px] tabular-nums text-muted-foreground">{d.rotulo}</span>
+          <span className="text-[10px] text-muted-foreground tabular-nums">{d.rotulo}</span>
         </div>
       ))}
     </div>
@@ -86,23 +92,72 @@ function SerieDiaria({ dias }: { dias: LinhaDoDia[] }) {
 export function ActivityReportClient() {
   const t = useT();
   const [dias, setDias] = useState<number>(7);
-  const { data, isLoading, isError } = useActivityReport(dias);
+
+  // O atendente mora na URL (`?atendente=<user_id>`), como os outros filtros do
+  // app: recarregar a página ou mandar o link mantém o recorte. Valor que não é
+  // UUID é ignorado aqui; quem decide se a pessoa é da organização é o servidor.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const doParametro = searchParams.get("atendente");
+  const atendente = doParametro && UUID.test(doParametro) ? doParametro : null;
+
+  function escolherAtendente(valor: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (valor === TODOS) params.delete("atendente");
+    else params.set("atendente", valor);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  // Falha em carregar a equipe (ex.: papel sem acesso à lista) deixa só "Todos".
+  const { data: membros } = useAssignableMembers(true);
+  const { data, isLoading, isError } = useActivityReport(dias, atendente);
 
   const relatorio = data?.data;
 
+  const opcoesDeAtendente = (membros ?? []).map((m) => ({
+    id: m.user_id,
+    nome: m.full_name ?? t("Atendente sem nome"),
+  }));
+  // Link com um atendente que a lista não traz (viewer, vínculo revogado): o
+  // filtro vale mesmo assim, e o seletor precisa ter o item para mostrá-lo.
+  if (atendente && !opcoesDeAtendente.some((o) => o.id === atendente)) {
+    opcoesDeAtendente.push({ id: atendente, nome: t("Atendente sem nome") });
+  }
+
   const seletor = (
-    <Select value={String(dias)} onValueChange={(v) => setDias(Number(v))}>
-      <SelectTrigger className="w-44" aria-label={t("Período")}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {PERIODOS.map((p) => (
-          <SelectItem key={p} value={String(p)}>
-            {t("Últimos")} {p} {t("dias")}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="flex flex-wrap items-center gap-3">
+      <Select value={String(dias)} onValueChange={(v) => setDias(Number(v))}>
+        <SelectTrigger className="w-44" aria-label={t("Período")}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {PERIODOS.map((p) => (
+            <SelectItem key={p} value={String(p)}>
+              {t("Últimos")} {p} {t("dias")}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={atendente ?? TODOS} onValueChange={escolherAtendente}>
+        <SelectTrigger
+          className="w-52"
+          aria-label={t("Atendente")}
+          data-testid="filtro-de-atendente"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={TODOS}>{t("Todos")}</SelectItem>
+          {opcoesDeAtendente.map((o) => (
+            <SelectItem key={o.id} value={o.id}>
+              {o.nome}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 
   if (isLoading) {
@@ -226,7 +281,7 @@ export function ActivityReportClient() {
                     key={i.id}
                     className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md border border-border p-2 text-sm"
                   >
-                    <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                       {quandoLegivel(i.quando, "pt-BR")}
                     </span>
                     <MarcadorDeAtor forma={i.atorForma} />
@@ -314,7 +369,7 @@ function LinhaComBarra({
           {forma && <MarcadorDeAtor forma={forma} />}
           <span className="truncate">{nome}</span>
         </span>
-        <span className="shrink-0 tabular-nums text-muted-foreground">{quantidade}</span>
+        <span className="shrink-0 text-muted-foreground tabular-nums">{quantidade}</span>
       </div>
       <BarraDeLinha fatia={fatia} />
     </div>
