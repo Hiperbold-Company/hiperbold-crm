@@ -1,0 +1,212 @@
+{
+  "resultados": {
+    "1": {
+      "nome": "Contatos: campo utm_source é igual a",
+      "prova_2810": {
+        "chip": "Campo: utm_source é igual a prova_2810",
+        "contagem_tela": "4 contatos",
+        "linhas": 4,
+        "linhas_prova": 4,
+        "url": "/app/contacts?campo_escopo=qualquer&campo=utm_source&campo_op=igual&campo_valor=prova_2810"
+      },
+      "search_ads": {
+        "chip": "Campo: utm_source é igual a search_ads",
+        "contagem_tela": "480 contatos",
+        "linhas": 25,
+        "linhas_prova": 0,
+        "url": "/app/contacts?campo_escopo=qualquer&campo=utm_source&campo_op=igual&campo_valor=search_ads"
+      },
+      "banco_search_ads": "480"
+    },
+    "2": {
+      "nome": "Contatos: funil com 2 etapas",
+      "nomeFunil": "FUTURO 2027",
+      "chip": "Funil: FUTURO 2027 › 2 etapas",
+      "contagem_tela": "12 contatos",
+      "linhas": 12,
+      "banco_contatos_distintos": "12",
+      "urlApos1": "/app/contacts?funil=902595df-d921-4ddd-ac21-eb02f2b0e1e4&etapa=1980f7a4-6474-4753-b47f-29215809496a",
+      "marcada1": true,
+      "marcadas": [
+        "AVALIANDO PROGRAMA",
+        "CV RECEBIDO / ENTREVISTA"
+      ],
+      "url": "/app/contacts?funil=902595df-d921-4ddd-ac21-eb02f2b0e1e4&etapa=1980f7a4-6474-4753-b47f-29215809496a%2Cf3dd1770-80e9-483b-816e-591a94f6e346"
+    },
+    "3": {
+      "nome": "Contatos: personalizar colunas persiste",
+      "contadorAntes": "7/12",
+      "contadorDepois": "9/12",
+      "escolhidas": [
+        "Entrou no CRM",
+        "Origem"
+      ],
+      "ordemEscolhida": [
+        "nome",
+        "email",
+        "telefone",
+        "tags",
+        "ultima_atividade",
+        "status",
+        "origem",
+        "entrou_no_crm",
+        "acoes"
+      ],
+      "ordemRecarregada": [
+        "nome",
+        "email",
+        "telefone",
+        "tags",
+        "ultima_atividade",
+        "status",
+        "origem",
+        "entrou_no_crm",
+        "acoes"
+      ],
+      "igual": true,
+      "cabecalhoAntes": [
+        "Nome",
+        "Email",
+        "Telefone",
+        "Tags",
+        "Última atividade",
+        "Status",
+        "Ações"
+      ],
+      "cabecalhoDepois": [
+        "Nome",
+        "Email",
+        "Telefone",
+        "Tags",
+        "Última atividade",
+        "Status",
+        "Origem",
+        "Entrou no CRM",
+        "Ações"
+      ]
+    },
+    "4": {
+      "nome": "Ficha: Editar cabe em 1366x768",
+      "contato": "2937dba4-9862-4199-9ce6-219281424c2d",
+      "dialog": {
+        "top": 38.40625,
+        "bottom": 729.59375,
+        "height": 691.1875
+      },
+      "cabe": true,
+      "botoes": {
+        "Salvar": {
+          "visivel": true,
+          "caixa": {
+            "top": 669,
+            "bottom": 705
+          }
+        },
+        "Cancelar": {
+          "visivel": true,
+          "caixa": {
+            "top": 669,
+            "bottom": 705
+          }
+        }
+      }
+    },
+    "5": {
+      "nome": "Quadro: eventos manuais maior que 1",
+      "antes": 11,
+      "depois": [
+        "PROVA 2810 A"
+      ],
+      "maiorQue0": [
+        "PROVA 2810 A",
+        "PROVA 2810 B"
+      ]
+    },
+    "6": {
+      "nome": "Quadro: mover vários para Perdido pede motivo antes",
+      "textoJanela": "Marcar como perdido\n\nO mesmo motivo vale para os 3 negócios selecionados. Informe o motivo. Essa informação ajuda a melhorar o funil.\n\nMotivo\nValor do programa\nFormato do programa\nOutro\nPrograma do concorrente\nLead não qualificado\nForma de pagamento\nPrograma não é grátis\nSem retorno ao contato\nPróxi",
+      "bancoAntesDeConfirmar": "PROVA 2810 B:open, PROVA 2810 C:open, PROVA 2810 D:open",
+      "motivoEscolhido": "Valor do programa",
+      "bancoDepois": "PROVA 2810 B:lost:Perdido:Valor do programa ; PROVA 2810 C:lost:Perdido:Valor do programa ; PROVA 2810 D:lost:Perdido:Valor do programa"
+    },
+    "7": {
+      "nome": "Painel do negócio: criar tarefa e sino",
+      "lista": [
+        "Prova 2810 tarefa vencida\n\n27/10/2026, 09:00 · Atrasada",
+        "Prova 2810 ligar amanhã\n\n29/10/2026, 10:00"
+      ],
+      "sinoContagem": "1",
+      "sinoItens": [
+        "Prova 2810 tarefa vencida 27/10/2026, 09:00 · PROVA 2810 A"
+      ],
+      "banco": "Prova 2810 ligar amanhã @ 2026-10-29 10:00 pending ; Prova 2810 tarefa vencida @ 2026-10-27 09:00 pending"
+    },
+    "8": {
+      "nome": "Atividades: filtro de atendente",
+      "opcoesPeriodo": [
+        "Últimos 7 dias",
+        "Últimos 30 dias",
+        "Últimos 90 dias"
+      ],
+      "opcoes": [
+        "Todos",
+        "Atendente sem nome"
+      ],
+      "atendente": "Atendente sem nome",
+      "antes": "Atividades O que aconteceu na operação no período — e quanto disso foi a equipe. Últimos 90 dias Todos 14 acontecimentos A equipe 12 86% Os agentes 0 0% Automático 2 14% Quando 30/07 31/07 01/08 02/08 03/08 04/08 05/08 06/08 07/08 08/08 09/08 10/08 11/08 12/08 13/08 14/08 15/08 16/08 17/08 18/08 19/08 20/08 21/08 22/08 23/08 24/08 25/08 26/08 27/08 28/08 29/08 30/08 31/08 01/09 02/09 03/09 04/09 05/09 06/09 07/09 08/09 09/09 10/09 11/09 12/09 13/09 14/09 15/09 16/09 17/09 18/09 19/09 20/09 21/09 22/09 23/09 24/09 25/09 26/09 27/09 28/09 29/09 30/09 01/10 02/10 03/10 04/10 05/10 06/10 07/10 08/",
+      "depois": "Atividades O que aconteceu na operação no período — e quanto disso foi a equipe. Últimos 90 dias Atendente sem nome 12 acontecimentos A equipe 12 100% Os agentes 0 0% Automático 0 0% Quando 30/07 31/07 01/08 02/08 03/08 04/08 05/08 06/08 07/08 08/08 09/08 10/08 11/08 12/08 13/08 14/08 15/08 16/08 17/08 18/08 19/08 20/08 21/08 22/08 23/08 24/08 25/08 26/08 27/08 28/08 29/08 30/08 31/08 01/09 02/09 03/09 04/09 05/09 06/09 07/09 08/09 09/09 10/09 11/09 12/09 13/09 14/09 15/09 16/09 17/09 18/09 19/09 20/09 21/09 22/09 23/09 24/09 25/09 26/09 27/09 28/09 29/09 30/09 01/10 02/10 03/10 04/10 05/10 06",
+      "mudou": true,
+      "url": "/app/activities?atendente=3650ae1c-d881-4502-929a-71bab0780083"
+    },
+    "9": {
+      "nome": "Desempenho: filtros e abas",
+      "abas": {
+        "Negócios": {
+          "trecho": "Negócios criados 715 R$ 83.550,00 Ganhos 38 R$ 162.254,00 Perdidos 559 R$ 11.900,00 Criados e ainda abertos 481 R$ 0,00 Carteira aberta (total) 3.649 R$ 671.760,00 Dados diários — Negócios criados Clique num cartão acima para trocar a série. Quantidade Valor 01/08 05/08 09/08 13/08 17/08 21/08 25/08 29/08 02/09 06/09 10/09 14/09 18/09 22/09 26/09 30/09 04/10 08/10 12/10 16/10 20/10 24/10 28/10 0 8 16 24 32 Negócios abertos por funil Escolha um funil no filtro para ver as etapas. ASSOCIADOS 1124 ",
+          "temNumero": true,
+          "erroNaTela": false
+        },
+        "Origens": {
+          "trecho": "Negócios criados 715 Com origem rastreada 573 80% Ganhos 17 Taxa de ganho 2.4% Negócios por origem Negócios criados no período, pela UTM gravada no negócio. Taxa de ganho = ganhos ÷ criados. Origem (utm_source) Mídia (utm_medium) Campanha (utm_campaign) lead_ads 372 1 ganhos (sem origem) 142 11 ganhos search_ads 80 1 ganhos email 77 2 ganhos informa 9 0 ganhos ig 7 1 ganhos content 7 0 ganhos instagram_feed 6 1 ganhos wom 5 0 ganhos prova_2810 4 0 ganhos google_ads 2 0 ganhos bexia 1 0 ganhos ch",
+          "temNumero": true,
+          "erroNaTela": false
+        },
+        "Atendimento": {
+          "trecho": "Atendimentos 0 sem base no período anterior Finalizados 0 Em aberto 0 Aguardando resposta 0 cliente falou por último 1ª resposta (média) — Tempo de resposta (média) — 0 respostas Atendimentos por dia Atendimentos iniciados em cada dia. 06/08 15/08 24/08 03/09 12/09 21/09 30/09 09/10 18/10 28/10 0 1 2 3 4 Tempo de resposta por dia Só respostas de pessoas; o robô não entra na conta. 07/08 16/08 25/08 03/09 12/09 21/09 30/09 09/10 18/10 28/10 Quando os clientes escrevem Mensagens recebidas por dia ",
+          "temNumero": true,
+          "erroNaTela": false
+        },
+        "Atrito": {
+          "trecho": "O atrito é do sistema inteiro: não segue período, funil nem atendente. Atrito O que o resultado custou para os dois lados. Nenhuma demanda encerrada no período — os números abaixo ainda não têm base. Contar como perdida no silêncio após horas sem resposta. (padrão do sistema) Conversão 8 Negócios ganhos O QUE ISSO CUSTOU Turnos até o desfecho (mediana) Sobre as demandas encerradas no período. — Insistência do agente (média de retornos) Quantas vezes o agente voltou ao cliente por conta própria. ",
+          "temNumero": true,
+          "erroNaTela": true
+        }
+      },
+      "origensMostraUtm": true,
+      "antes": "Negócios criados 715 R$ 83.550,00 Ganhos 38 R$ 162.254,00 Perdidos 559 R$ 11.900,00 Criados e ainda abertos 481 R$ 0,00 Carteira aberta (total) 3.649 R$ 671.760,00 Dados diários — Negócios criados Clique num cartão acima para trocar a série. Quantidade Valor 01/08 05/08 09/08 13/08 17/08 21/08 25/08",
+      "comFunil": "Negócios criados 41 R$ 15.720,00 Ganhos 1 R$ 15.720,00 Perdidos 1 R$ 0,00 Criados e ainda abertos 40 R$ 0,00 Carteira aberta (total) 103 R$ 0,00 Dados diários — Negócios criados Clique num cartão acima para trocar a série. Quantidade Valor 01/08 05/08 09/08 13/08 17/08 21/08 25/08 29/08 02/09 06/09 ",
+      "comAtendente": "Negócios criados 0 R$ 0,00 Ganhos 0 R$ 0,00 Perdidos 0 R$ 0,00 Criados e ainda abertos 0 R$ 0,00 Carteira aberta (total) 0 R$ 0,00 Dados diários — Negócios criados Clique num cartão acima para trocar a série. Quantidade Valor 01/08 05/08 09/08 13/08 17/08 21/08 25/08 29/08 02/09 06/09 10/09 14/09 18",
+      "opcoesAt": [
+        "Todos os atendentes",
+        "oliveira@hiperbold.com.br (você)"
+      ],
+      "url": "/app/metrics?periodo=90d&funil=902595df-d921-4ddd-ac21-eb02f2b0e1e4&atendente=3650ae1c-d881-4502-929a-71bab0780083"
+    }
+  },
+  "problemas": {
+    "5": [
+      "HTTP 500 GET http://localhost:3300/api/v1/leads/at-risk",
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    ],
+    "6": [
+      "HTTP 500 GET http://localhost:3300/api/v1/leads/at-risk",
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    ],
+    "7": [
+      "HTTP 500 GET http://localhost:3300/api/v1/leads/at-risk",
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "HTTP 500 GET http://localhost:3300/api/v1/leads/at-risk",
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    ]
+  }
+}
