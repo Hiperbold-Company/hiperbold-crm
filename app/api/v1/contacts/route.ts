@@ -152,7 +152,8 @@ export async function GET(req: NextRequest): Promise<Response> {
   // passa pela RLS; o token roda com o cliente admin e, em empresa no modo "só os meus", uma chave
   // abaixo de gerente não pode usar o negócio como filtro (descobriria quem tem negócio de quem).
   // Mesma regra D-148 de `lib/api/auth-dual.ts`.
-  if (auth.token && filtraPorNegocio(qsParsed.data)) {
+  // Os UTMs também saem de `crm_leads`: a mesma regra vale para quem os pede por token.
+  if (auth.token && (filtraPorNegocio(qsParsed.data) || qsParsed.data.com_utm)) {
     try {
       await exigirVisibilidadeDoToken(supabase, organizationId, auth.token.role);
     } catch (err) {

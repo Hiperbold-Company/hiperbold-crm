@@ -2,6 +2,8 @@
  * Domain types for Contacts (EPIC-05).
  * Mirror the verified `contacts` schema (see CLAUDE.md / Spec 05).
  */
+import type { UtmsDoContato } from "@/lib/contacts/utm-dos-negocios";
+
 export interface Contact {
   id: string;
   organization_id: string;
@@ -50,6 +52,11 @@ export interface Contact {
    * Derivado (não é coluna): a conversa mais recente deste contato — atalho para o inbox.
    * Ausente é normal: contato criado à mão pode nunca ter conversado.
    */
+  /**
+   * Derivado (não é coluna): os UTMs do negócio mais recente do contato que tem cada chave.
+   * Só vem quando a lista pede (`com_utm=1`); chave ausente = nenhum negócio a tem.
+   */
+  utms?: UtmsDoContato;
   conversa?: {
     id: string;
     preview: string | null;

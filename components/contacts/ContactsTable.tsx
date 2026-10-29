@@ -417,6 +417,16 @@ export function ContactsTable({
                       {c.conversa?.preview ?? "—"}
                     </TableCell>
                   );
+                case "utm_source":
+                case "utm_medium":
+                case "utm_campaign":
+                case "utm_content":
+                case "utm_term":
+                  return (
+                    <TableCell key={id} className="max-w-[14rem] truncate text-muted-foreground text-sm">
+                      {textoDoCampo(c.utms?.[id])}
+                    </TableCell>
+                  );
                 default:
                   return (
                     <TableCell key={id} className="max-w-[14rem] truncate text-muted-foreground text-sm">

@@ -31,6 +31,13 @@ import {
   type ErroDeCpf,
 } from "@/lib/contacts/cpf-do-contato";
 import { consultaDeContatos, semJuncoes } from "@/lib/contacts/consulta";
+import {
+  FILTRO_TEM_UTM,
+  UTM_LINHAS_POR_PAGINA,
+  SELECT_DE_UTM,
+  utmsMaisRecentesPorContato,
+  type NegocioComUtm,
+} from "@/lib/contacts/utm-dos-negocios";
 import { VINCULOS_RESTRICT_NAO_APAGADOS } from "@/lib/contacts/vinculos-restrict";
 import { logger } from "@/lib/logger";
 import type { Contact } from "@/lib/types/contacts";
@@ -240,7 +247,52 @@ export async function listContactsHandler(
     throw new ApiError(500, "internal_error", undefined, ctx.requestId, convErr);
   }
 
-  return { contacts: contacts.map(semHashDeCpf) as ContatoPublico[], cursor: nextCursor, has_more: hasMore };
+  let saida = contacts;
+  if (q.com_utm) {
+    const comUtm = await withUtms(supabase, ctx.organization_id, contacts);
+    if (comUtm.error) {
+      throw new ApiError(500, "internal_error", undefined, ctx.requestId, comUtm.error);
+    }
+    saida = comUtm.contacts;
+  }
+
+  return { contacts: saida.map(semHashDeCpf) as ContatoPublico[], cursor: nextCursor, has_more: hasMore };
+}
+
+/**
+ * Anexa os UTMs de cada contato da página, calculados dos NEGÓCIOS dele (o UTM mora em
+ * `crm_leads.custom_fields`, nunca no contato). UMA consulta para a página inteira, filtrada pela
+ * organização da sessão/token e pelos ids da página; só o JSON extraído das 5 chaves volta. Com a
+ * sessão, a RLS de `crm_leads` ainda limita aos negócios que o usuário enxerga.
+ *
+ * UTM é dado de NEGÓCIO: quem chama com client admin (bearer) aplica antes a regra D-148
+ * (`exigirVisibilidadeDoToken`), como `route.ts` faz para `com_utm`. Este handler não a repete.
+ */
+export async function withUtms(
+  supabase: SB,
+  organizationId: string,
+  contacts: Contact[],
+): Promise<{ contacts: Contact[]; error: string | null }> {
+  const contactIds = contacts.map((c) => c.id);
+  if (contactIds.length === 0) return { contacts, error: null };
+
+  const { data, error } = await supabase
+    .from("crm_leads")
+    .select(SELECT_DE_UTM)
+    .eq("organization_id", organizationId)
+    .in("contact_id", contactIds)
+    .or(FILTRO_TEM_UTM)
+    // Do mais recente para o mais antigo, com teto explícito: se a página tiver mais negócios com
+    // UTM que o `max_rows` do PostgREST, o corte perde só os mais antigos, nunca o que a coluna mostra.
+    .order("created_at", { ascending: false })
+    .limit(UTM_LINHAS_POR_PAGINA);
+  if (error) return { contacts, error: error.message };
+
+  const porContato = utmsMaisRecentesPorContato((data ?? []) as unknown as NegocioComUtm[]);
+  return {
+    contacts: contacts.map((c) => ({ ...c, utms: porContato.get(c.id) ?? {} })),
+    error: null,
+  };
 }
 
 /**

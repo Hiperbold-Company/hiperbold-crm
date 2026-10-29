@@ -42,6 +42,7 @@ import {
 import { MergeDialog } from "@/components/contacts/MergeDialog";
 import { PersonalizarColunasDialog } from "@/components/contacts/PersonalizarColunasDialog";
 import { useColunasDeContatos } from "@/hooks/contacts/useColunasDeContatos";
+import { pedeUtm } from "@/lib/contacts/colunas-da-lista";
 import { EmptyContacts } from "@/components/empty";
 import type { ContactOrderBy } from "@/lib/schemas/contacts";
 
@@ -100,9 +101,11 @@ export function ContactsListClient() {
   const busca = useBuscaNaUrl(search ?? "", (texto) => mudarFiltros({ search: texto || undefined }));
   const searchInput = busca.texto;
 
+  // Os UTMs vêm dos negócios: só são buscados quando alguma coluna de UTM está na tela.
+  const comUtm = pedeUtm(colunas);
   const listFilters = useMemo(
-    () => ({ ...filtros, order_by: orderBy, order_dir: orderDir, limit }),
-    [filtros, orderBy, orderDir, limit],
+    () => ({ ...filtros, order_by: orderBy, order_dir: orderDir, limit, com_utm: comUtm }),
+    [filtros, orderBy, orderDir, limit, comUtm],
   );
   const q = useContactList(listFilters);
   const contagem = useContactCount(filtros);

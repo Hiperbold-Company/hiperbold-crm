@@ -218,6 +218,14 @@ export const contactListQuerySchema = z
     limit: z.coerce.number().int().min(1).max(100).default(50),
     order_by: z.enum(CONTACT_ORDER_BY).default("last_activity_at"),
     order_dir: z.enum(["asc", "desc"]).default("desc"),
+    /**
+     * `1` = anexar a cada contato da página os UTMs do negócio mais recente que tem cada chave
+     * (`lib/contacts/utm-dos-negocios.ts`). A tela só pede quando alguma coluna de UTM está visível.
+     */
+    // Booleano também: a rota valida a URL e o handler valida de novo o que ela já validou.
+    com_utm: z
+      .union([z.boolean(), z.enum(["0", "1"]).transform((v) => v === "1")])
+      .optional(),
   })
   .refine(campoEValorJuntos, MENSAGEM_CAMPO_E_VALOR);
 export type ContactListQuery = z.output<typeof contactListQuerySchema>;
