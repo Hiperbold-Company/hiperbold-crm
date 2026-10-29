@@ -10,6 +10,7 @@
  * com a mesma régua de chave do filtro e nunca chave de documento (CPF, RG...).
  */
 import { chaveSensivelDeCampo } from "@/lib/contacts/campos-sensiveis";
+import { ehChaveDeUtm } from "@/lib/contacts/utm-dos-negocios";
 
 export const CHAVE_DA_PREFERENCIA = "contatos.colunas";
 export const MAXIMO_DE_COLUNAS = 12;
@@ -26,6 +27,12 @@ export const COLUNAS_DO_SISTEMA = [
   { id: "origem", rotulo: "Origem" },
   { id: "aniversario", rotulo: "Aniversário" },
   { id: "ultima_mensagem", rotulo: "Última mensagem" },
+  // UTM: calculado do negócio mais recente do contato que tem a chave (`utm-dos-negocios.ts`).
+  { id: "utm_source", rotulo: "UTM origem (utm_source)" },
+  { id: "utm_medium", rotulo: "UTM mídia (utm_medium)" },
+  { id: "utm_campaign", rotulo: "UTM campanha (utm_campaign)" },
+  { id: "utm_content", rotulo: "UTM conteúdo (utm_content)" },
+  { id: "utm_term", rotulo: "UTM termo (utm_term)" },
   { id: "acoes", rotulo: "Ações" },
 ] as const;
 
@@ -54,6 +61,16 @@ export function colunaValida(id: string): boolean {
   if (!id.startsWith(PREFIXO_DE_CAMPO)) return false;
   const chave = id.slice(PREFIXO_DE_CAMPO.length);
   return CHAVE_DE_CAMPO.test(chave) && !chaveSensivelDeCampo(chave);
+}
+
+/** Coluna de UTM: o valor vem dos NEGÓCIOS do contato, e a lista só o busca se alguma estiver na tela. */
+export function ehColunaDeUtm(id: string): boolean {
+  return ehChaveDeUtm(id);
+}
+
+/** Alguma coluna escolhida pede os UTMs dos negócios? */
+export function pedeUtm(colunas: readonly string[]): boolean {
+  return colunas.some(ehColunaDeUtm);
 }
 
 export function ehColunaFixa(id: string): boolean {

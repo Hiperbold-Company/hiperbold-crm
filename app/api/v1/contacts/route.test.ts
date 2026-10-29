@@ -209,6 +209,8 @@ describe("GET /api/v1/contacts — Bearer (integrações externas)", () => {
         // O escopo padrão ("qualquer") também lê negócio: sem escopo na URL, mesma regra.
         "campo=utm_source&campo_valor=google",
         "etapa=e1111111-1111-4111-8111-111111111111,e2222222-2222-4222-8222-222222222222",
+        // As colunas de UTM leem os negócios do contato: a mesma regra.
+        "com_utm=1",
       ]) {
         expect((await GET(req(`http://localhost/api/v1/contacts?${q}`, bearer))).status, q).toBe(403);
       }

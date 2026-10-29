@@ -1,0 +1,28 @@
+{
+  "vendas": {
+    "titulo": "Hiperbold CRM · CRM com WhatsApp e agentes de IA",
+    "hipercrm_visivel": 0,
+    "link_scale": [
+      "/signup?plano=scale"
+    ]
+  },
+  "eventos_botao_antes": "Eventos manuais: qualquer",
+  "eventos_botao_altura_px": 32,
+  "eventos_botao_depois": "Eventos manuais > 1",
+  "eventos_url": "/app/pipelines/3a728da2-6455-4d65-9234-63d95feb6a9e?eventos=gt%3A1",
+  "utm_cabecalhos": [
+    "UTM origem (utm_source)",
+    "UTM campanha (utm_campaign)"
+  ],
+  "utm_celulas_preenchidas": 25,
+  "utm_cabecalhos_apos_recarregar": [
+    "UTM origem (utm_source)",
+    "UTM campanha (utm_campaign)"
+  ],
+  "radar_texto": [
+    "13 crítico",
+    "10 em risco",
+    "0 em voo"
+  ],
+  "radar_mostra_acervo_200_dias": false
+}

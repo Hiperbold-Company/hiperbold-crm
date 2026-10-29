@@ -13,8 +13,8 @@ import { describe, expect, it } from "vitest";
 import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
 
 const REGISTRO = {
-  versao: "2026-10-14",
-  impressaoDaPagina: "260833b6e2bf83958be2b7cfda107eadfa31a5ea80ad7cb2c60e68e52adcb72d",
+  versao: "2026-10-29",
+  impressaoDaPagina: "b2972efcc4c5e9f06d15aea60c9c06fa58e4bb550f6f834f6de0392ddb1a4b21",
 };
 
 describe("versão dos Termos de Uso", () => {

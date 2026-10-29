@@ -95,6 +95,7 @@ function fakeSupabase(resolve: Resolver, cap: Capturas) {
       is: () => chain,
       gt: () => chain,
       lt: () => chain,
+      or: () => chain,
       order: () => chain,
       limit: () => chain,
       maybeSingle: () => Promise.resolve(resolve({ ...c, terminal: "maybeSingle" })),

@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { carregaRadarDeRisco } from "@/lib/leads/radar-de-risco";
 
+import { filtraOr } from "../helpers/filtro-or-postgrest";
+
 /**
  * O RADAR CHAMA A PESSOA PELO NOME QUE ALGUÉM ESCOLHEU.
  *
@@ -52,6 +54,7 @@ function bancoFalso(tabelas: Record<string, Linha[]>): SupabaseClient {
         linhas = linhas.filter((l) => !vals.includes(String(l[col])));
         return chain;
       },
+      or: (expr: string) => ((linhas = filtraOr(linhas, expr)), chain),
       order: () => chain,
       limit: () => chain,
       maybeSingle: async () => ({ data: linhas[0] ?? null, error: null }),

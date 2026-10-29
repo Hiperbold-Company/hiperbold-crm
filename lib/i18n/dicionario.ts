@@ -14564,6 +14564,11 @@ export const DICIONARIO: Traducoes = {
   "Não foi possível salvar as colunas.": { es: "No se pudieron guardar las columnas." },
   Aniversário: { es: "Cumpleaños" },
   "Última mensagem": { es: "Último mensaje" },
+  "UTM origem (utm_source)": { es: "UTM origen (utm_source)" },
+  "UTM mídia (utm_medium)": { es: "UTM medio (utm_medium)" },
+  "UTM campanha (utm_campaign)": { es: "UTM campaña (utm_campaign)" },
+  "UTM conteúdo (utm_content)": { es: "UTM contenido (utm_content)" },
+  "UTM termo (utm_term)": { es: "UTM término (utm_term)" },
 };
 
 /**
