@@ -13,4 +13,4 @@
  * Termos mudar de forma que importe: o teste `tests/unit/versao-dos-termos.test.ts` guarda a
  * impressão digital do arquivo da página e falha quando o texto muda sem a versão acompanhar.
  */
-export const VERSAO_DOS_TERMOS = "2026-10-14";
+export const VERSAO_DOS_TERMOS = "2026-10-29";

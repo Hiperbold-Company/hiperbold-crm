@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { carregaRadarDeRisco } from "@/lib/leads/radar-de-risco";
 
+import { filtraOr } from "../helpers/filtro-or-postgrest";
+
 /** O mesmo teto que o módulo usa: a janela que o corte de funil tem de caber. */
 const SCAN_CAP = 500;
 
@@ -52,6 +54,7 @@ function bancoFalso(tabelas: Record<string, Linha[]>, registro: ChamadaIn[] = []
         linhas = linhas.filter((l) => !vals.includes(String(l[col])));
         return chain;
       },
+      or: (expr: string) => ((linhas = filtraOr(linhas, expr)), chain),
       order: () => chain,
       // HONRA o teto. Sem isto, "cortar na consulta" e "cortar em JS depois do
       // `.limit()`" produzem a MESMA saída no dublê, e o teste não distingue as
