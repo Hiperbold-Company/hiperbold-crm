@@ -30,7 +30,7 @@ function termoAceita(linha: Linha, termo: string): boolean {
   if (termo.startsWith("and(") && termo.endsWith(")")) {
     return partesNoTopo(termo.slice(4, -1)).every((t) => termoAceita(linha, t));
   }
-  const [coluna, op, ...resto] = termo.split(".");
+  const [coluna = "", op, ...resto] = termo.split(".");
   const valor = resto.join(".");
   const atual = linha[coluna] ?? null;
   if (op === "is" && valor === "null") return atual === null;

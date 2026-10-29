@@ -19,12 +19,12 @@ import type { Lead, OwnerKind } from "@/lib/types/leads";
 import { marcadoresDoCard } from "@/lib/kanban/marcadores-do-card";
 import { OwnerBadge } from "./OwnerBadge";
 import { FiltroDeDataPopover } from "./FiltroDeDataPopover";
+import { FiltroDeEventosManuaisPopover } from "./FiltroDeEventosManuaisPopover";
 import { filtroDeDataAtivo } from "@/lib/kanban/datas-do-lead";
 import {
   agentOwnerFilter,
   parseAgentOwnerFilter,
   type LeadFilters,
-  type OperadorDeEventosManuais,
 } from "@/lib/kanban/filters";
 import { categoriaDoMotivo } from "@/lib/leads/motivos-de-perda-do-funil";
 import { rotuloDoMotivoDePerda } from "@/lib/schemas/leads";
@@ -40,92 +40,6 @@ interface FilterBarProps {
    * de categoria não teria o que oferecer.
    */
   settings?: Record<string, unknown>;
-}
-
-const OPERADORES_DE_EVENTOS: Array<{ value: OperadorDeEventosManuais; label: string }> = [
-  { value: "lt", label: "menor que" },
-  { value: "eq", label: "igual a" },
-  { value: "gt", label: "maior que" },
-];
-
-/**
- * "Eventos manuais": operador + número inteiro ≥ 0. O número tem estado próprio
- * porque o campo pode estar vazio no meio da digitação; só um inteiro válido
- * chega ao filtro (e à URL). Sem operador, o filtro sai.
- */
-function FiltroDeEventosManuaisControle({
-  valor,
-  onChange,
-}: {
-  valor: LeadFilters["manualEvents"];
-  onChange: (proximo: LeadFilters["manualEvents"]) => void;
-}) {
-  const t = useT();
-  const [numero, setNumero] = useState(valor ? String(valor.n) : "");
-  const [operador, setOperador] = useState<OperadorDeEventosManuais | "">(valor?.op ?? "");
-
-  // A URL manda: "Limpar filtros" e voltar/avançar no navegador refletem aqui.
-  // Ajuste durante a renderização (não em efeito): só quando o valor da URL muda.
-  const chave = valor ? `${valor.op}:${valor.n}` : "";
-  const [chaveVista, setChaveVista] = useState(chave);
-  if (chave !== chaveVista) {
-    setChaveVista(chave);
-    setOperador(valor?.op ?? "");
-    setNumero(valor ? String(valor.n) : "");
-  }
-
-  const aplicar = (op: OperadorDeEventosManuais | "", texto: string) => {
-    if (!op) {
-      onChange(undefined);
-      return;
-    }
-    if (!/^\d{1,6}$/.test(texto.trim())) return;
-    onChange({ op, n: Number(texto.trim()) });
-  };
-
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-sm",
-        valor && "border-accent bg-accent/10",
-      )}
-    >
-      <span>{t("Eventos manuais")}</span>
-      <select
-        aria-label={t("Comparação de eventos manuais")}
-        className="h-7 rounded-md border border-border bg-surface px-1 text-sm"
-        value={operador}
-        onChange={(e) => {
-          const op = e.target.value as OperadorDeEventosManuais | "";
-          setOperador(op);
-          const texto = op && numero.trim() === "" ? "0" : numero;
-          if (op && numero.trim() === "") setNumero("0");
-          aplicar(op, texto);
-        }}
-      >
-        <option value="">{t("qualquer")}</option>
-        {OPERADORES_DE_EVENTOS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {t(o.label)}
-          </option>
-        ))}
-      </select>
-      <Input
-        type="number"
-        inputMode="numeric"
-        min={0}
-        step={1}
-        aria-label={t("Quantidade de eventos manuais")}
-        className="h-7 w-16 px-2"
-        value={numero}
-        disabled={!operador}
-        onChange={(e) => {
-          setNumero(e.target.value);
-          aplicar(operador, e.target.value);
-        }}
-      />
-    </div>
-  );
 }
 
 const STATUS_OPTIONS: Array<{ value: NonNullable<LeadFilters["status"]>; label: string }> = [
@@ -409,7 +323,7 @@ export function FilterBar({ filters, onChange, leads, settings }: FilterBarProps
         onChange={(movedAt) => onChange({ ...filters, movedAt })}
       />
 
-      <FiltroDeEventosManuaisControle
+      <FiltroDeEventosManuaisPopover
         valor={filters.manualEvents}
         onChange={(manualEvents) => onChange({ ...filters, manualEvents })}
       />
