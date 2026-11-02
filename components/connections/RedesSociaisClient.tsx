@@ -1,314 +1,356 @@
 "use client";
-import { useState } from "react";
-import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePathname, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
+import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
-import { useT } from "@/hooks/i18n/useT";
 import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
-import { ChannelAiAccess } from "./ChannelAiAccess";
 
-type Account = {
+/**
+ * Redes sociais: Instagram Direct e Facebook Messenger pela conexão OFICIAL e
+ * direta com a Meta (plano aprovado em 30/10/2026). Substitui a integração
+ * anterior por intermediário, que pedia chave de API e perfil.
+ *
+ * Conectar é navegação de página inteira para a rota que monta o OAuth; a volta
+ * chega em `/app/connections?aba=sociais&meta_social=ok|erro&motivo=&n=`. O
+ * aviso da volta é lido UMA vez e os parâmetros saem da URL, para um F5 não
+ * repetir "conta conectada".
+ */
+
+export type PlataformaSocial = "instagram" | "messenger";
+
+export type ContaSocial = {
   id: string;
-  platform: string;
-  username: string;
-  active: boolean;
-  inbox_supported: boolean;
-  channel: { id: string; status: string } | null;
+  plataforma: PlataformaSocial;
+  nome: string | null;
+  usuario: string | null;
+  conectado_em: string;
+  token_expira_em: string | null;
+  status: string;
 };
-type State = {
-  label: string;
-  configured: boolean;
-  networks: { id: string; label: string; inbox: boolean }[];
-  accounts: Account[];
+
+export type EstadoMetaSocial = {
+  configurado: Record<PlataformaSocial, boolean>;
+  contas: ContaSocial[];
 };
+
+const ROTA = "/api/v1/channels/meta-social";
+const SETE_DIAS_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Status que o backend usa para conta funcionando. Qualquer outro vira "precisa de atenção". */
+const STATUS_SAUDAVEIS = new Set(["ativo", "ativa", "active", "connected", "conectado", "conectada", "working", "ok"]);
+
+export function urlDeConectar(plataforma: PlataformaSocial): string {
+  return `${ROTA}/conectar?plataforma=${plataforma}`;
+}
+
+/** A conta precisa ser reconectada: status de erro ou token que vence em menos de 7 dias. */
+export function precisaReconectar(conta: ContaSocial, agora: number = Date.now()): boolean {
+  if (!STATUS_SAUDAVEIS.has(conta.status.trim().toLowerCase())) return true;
+  if (!conta.token_expira_em) return false;
+  const vence = Date.parse(conta.token_expira_em);
+  return Number.isFinite(vence) && vence - agora < SETE_DIAS_MS;
+}
+
+type Aviso = { tipo: "ok" | "erro"; texto: string; limite?: boolean };
+
+const MOTIVOS: Record<string, string> = {
+  nao_configurado: "A conexão ainda não foi liberada nesta instalação.",
+  cancelado: "A conexão foi cancelada antes de terminar. Clique em Conectar para tentar de novo.",
+  estado_invalido:
+    "A conexão expirou ou foi aberta em outra janela. Clique em Conectar para tentar de novo.",
+  limite_do_plano: "Seu plano chegou ao limite de conexões.",
+  conta_em_outra_organizacao:
+    "Esta conta já está conectada em outra empresa neste sistema. Desconecte lá antes de conectar aqui.",
+  sem_paginas:
+    "Não encontramos nenhuma conta para conectar. Confira se você é administrador da Página e se marcou a conta na hora de autorizar.",
+  falha_meta: "A Meta não respondeu como esperado. Tente de novo em alguns minutos.",
+};
+
+function lerAviso(params: URLSearchParams, t: (s: string) => string): Aviso | null {
+  const resultado = params.get("meta_social");
+  if (resultado === "ok") {
+    const n = Number(params.get("n"));
+    const texto =
+      Number.isInteger(n) && n > 1
+        ? `${n} ${t("contas conectadas. As novas mensagens passam a chegar no Chat.")}`
+        : t("Conta conectada. As novas mensagens passam a chegar no Chat.");
+    return { tipo: "ok", texto };
+  }
+  if (resultado === "erro") {
+    const motivo = params.get("motivo") ?? "";
+    return {
+      tipo: "erro",
+      texto: t(MOTIVOS[motivo] ?? MOTIVOS.falha_meta ?? ""),
+      limite: motivo === "limite_do_plano",
+    };
+  }
+  return null;
+}
+
+const CARTOES: { plataforma: PlataformaSocial; titulo: string; descricao: string }[] = [
+  {
+    plataforma: "instagram",
+    titulo: "Instagram Direct",
+    descricao: "Receba e responda as mensagens do Direct no Chat do CRM.",
+  },
+  {
+    plataforma: "messenger",
+    titulo: "Facebook Messenger",
+    descricao: "Receba e responda as mensagens da sua Página do Facebook no Chat do CRM.",
+  },
+];
+
 export function RedesSociaisClient({
   bloqueio,
 }: {
   /**
-   * Fase F3, tarefa 9. "Autorizar conta" nunca cria `channel_sessions` (só
-   * devolve a URL de OAuth); quem cria é "Receber no atendimento"
-   * (`connectSocialInbox`), e só quando a conta ainda não tem `account.channel`
-   * — por isso só esse botão, por conta, é travado.
+   * O limite de Conexões do plano (D-188). Conectar conta NOVA cria canal, então
+   * "Conectar" fica travado; "Reconectar" renova uma conta que já existe e não é
+   * barrado pelo teto.
    */
   bloqueio?: BloqueioDoBotao;
 } = {}) {
   const t = useT();
+  const tagDeIdioma = useTagDeIdioma();
   const params = useSearchParams();
+  const caminho = usePathname();
+  const qc = useQueryClient();
+  const [aviso, setAviso] = useState<Aviso | null>(() => lerAviso(new URLSearchParams(params.toString()), t));
+  const [paraDesconectar, setParaDesconectar] = useState<ContaSocial | null>(null);
+
   const query = useQuery({
-    queryKey: ["social-connections"],
-    queryFn: async () => (await apiClient.get<{ data: State }>("/api/v1/channels/social")).data,
+    queryKey: ["meta-social"],
+    queryFn: async () => (await apiClient.get<{ data: EstadoMetaSocial }>(ROTA)).data,
   });
-  const state = query.data;
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [key, setKey] = useState("");
-  const [profiles, setProfiles] = useState<{ id: string; name: string }[]>([]);
-  const [profile, setProfile] = useState("");
-  const [platform, setPlatform] = useState("instagram");
-  const [editing, setEditing] = useState(false);
-  const [health, setHealth] = useState<Record<string, string>>({});
-  const load = () => query.refetch();
-  async function perform(id: string, body: Record<string, unknown>) {
-    setBusy(id);
-    setError(null);
-    try {
-      const result = await apiClient.post<{ data: Record<string, unknown> }>(
-        "/api/v1/channels/social",
-        body,
-      );
-      if (body.action === "profiles") {
-        const found = result.data.profiles as { id: string; name: string }[];
-        setProfiles(found);
-        setProfile(found[0]?.id ?? "");
-      } else if (body.action === "authorize") {
-        window.location.assign(result.data.auth_url as string);
-      } else if (body.action === "health") {
-        setHealth((current) => ({
-          ...current,
-          [id]:
-            result.data.status === "healthy"
-              ? "Conexão verificada"
-              : "A conexão precisa de atenção",
-        }));
-      } else {
-        setKey("");
-        setEditing(false);
-        toast.success(t("Configuração salva."));
-        await load();
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Não foi possível concluir a conexão.");
-    } finally {
-      setBusy(null);
-    }
-  }
+
+  // Tira da URL o resultado da volta do OAuth, mantendo a aba. `replaceState`, e
+  // não `router.replace`: limpar a query não é navegar e não precisa refazer o
+  // componente de servidor.
+  useEffect(() => {
+    const atual = new URLSearchParams(window.location.search);
+    if (!atual.has("meta_social")) return;
+    for (const k of ["meta_social", "motivo", "n"]) atual.delete(k);
+    const qs = atual.toString();
+    window.history.replaceState(null, "", qs ? `${caminho}?${qs}` : caminho);
+  }, [caminho]);
+
+  const desconectar = useMutation({
+    mutationFn: async (id: string) => apiClient.delete(`${ROTA}/${encodeURIComponent(id)}`),
+    onSuccess: async () => {
+      toast.success(t("Conta desconectada."));
+      await qc.invalidateQueries({ queryKey: ["meta-social"] });
+    },
+    onError: () => {
+      toast.error(t("Não foi possível desconectar a conta. Tente de novo."));
+    },
+    onSettled: () => setParaDesconectar(null),
+  });
+
+  const estado = query.data;
+  const bloqueado = !!bloqueio?.desabilitado;
+  const formatarData = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(tagDeIdioma);
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">{t("Redes sociais")}</h2>
-          <p className="text-sm text-muted-foreground">
-            {t("Conecte suas contas e receba mensagens no atendimento.")} {state?.label}
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => void load()} disabled={!!busy}>
-          {t("Atualizar")}
-        </Button>
+      <div>
+        <h2 className="text-lg font-semibold">{t("Redes sociais")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t("Conecte o Instagram e o Facebook da empresa e atenda as mensagens no Chat.")}
+        </p>
       </div>
-      {params.get("error") && (
-        <p role="alert" className="rounded-md border p-3 text-sm">
-          {t(
-            "A autorização não foi concluída. Tente conectar novamente e aceite as permissões necessárias.",
-          )}
-        </p>
-      )}
-      {params.get("connected") && (
-        <p role="status" className="rounded-md border p-3 text-sm">
-          {t(
-            "Autorização concluída. Confira a conta na lista e ative o atendimento, quando disponível.",
-          )}
-        </p>
-      )}
-      {(error || query.error) && (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive p-3 text-sm text-destructive"
+
+      {aviso && (
+        <div
+          role={aviso.tipo === "ok" ? "status" : "alert"}
+          data-testid="aviso-meta-social"
+          className={
+            aviso.tipo === "ok"
+              ? "flex items-start justify-between gap-3 rounded-md border p-3 text-sm"
+              : "flex items-start justify-between gap-3 rounded-md border border-destructive p-3 text-sm text-destructive"
+          }
         >
-          {t(error ?? query.error?.message ?? "Não foi possível carregar as redes sociais.")}
+          <div>
+            <p>{aviso.texto}</p>
+            {aviso.limite && <AvisoDeLimiteDeConexoes motivo={bloqueio?.motivo} />}
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setAviso(null)}>
+            {t("Fechar")}
+          </Button>
+        </div>
+      )}
+
+      {query.error && (
+        <p role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">
+          {t("Não foi possível carregar as redes sociais.")}{" "}
+          <Button variant="link" className="h-auto p-0" onClick={() => void query.refetch()}>
+            {t("Tentar de novo")}
+          </Button>
         </p>
       )}
-      {!state && !error && <p role="status">{t("Carregando…")}</p>}
-      {(error || query.error) && (
-        <Button variant="outline" onClick={() => setEditing(true)}>
-          {t("Reconfigurar integração")}
-        </Button>
-      )}
-      {((state && !state.configured) || editing) && (
-        <Card className="space-y-4 p-4">
-          <h3 className="font-semibold">{t("Vincular o provedor")}</h3>
-          <div className="space-y-2">
-            <Label htmlFor="social-api-key">{t("Chave de API")}</Label>
-            <Input
-              id="social-api-key"
-              type="password"
-              autoComplete="off"
-              value={key}
-              onChange={(e) => {
-                setKey(e.target.value);
-                setProfiles([]);
-              }}
-            />
-            <p className="text-xs text-muted-foreground">
-              {t("A chave fica cifrada no servidor e não é exibida novamente.")}
-            </p>
-          </div>
-          <Button
-            disabled={!!busy || key.trim().length < 8}
-            onClick={() => void perform("profiles", { action: "profiles", api_key: key.trim() })}
-          >
-            {t("Buscar perfis")}
-          </Button>
-          {profiles.length > 0 && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="social-profile">{t("Perfil da empresa")}</Label>
-                <select
-                  id="social-profile"
-                  className="w-full rounded-md border bg-background p-2"
-                  value={profile}
-                  onChange={(e) => setProfile(e.target.value)}
-                >
-                  {profiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <Button
-                disabled={!!busy || !profile}
-                onClick={() =>
-                  void perform("configure", {
-                    action: "configure",
-                    api_key: key.trim(),
-                    profile_id: profile,
-                  })
-                }
+      {!estado && !query.error && <p role="status">{t("Carregando…")}</p>}
+
+      {estado && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {CARTOES.map(({ plataforma, titulo, descricao }) => {
+            const configurado = !!estado.configurado?.[plataforma];
+            const contas = (estado.contas ?? []).filter((c) => c.plataforma === plataforma);
+            return (
+              <Card
+                key={plataforma}
+                className="flex flex-col gap-3 p-4"
+                data-testid={`cartao-${plataforma}`}
               >
-                {t("Salvar conexão")}
-              </Button>
-            </>
-          )}
-        </Card>
-      )}
-      {state?.configured && (
-        <>
-          <Card className="flex flex-wrap items-end gap-3 p-4">
-            <div className="min-w-48 flex-1 space-y-2">
-              <Label htmlFor="social-network">{t("Conectar uma rede")}</Label>
-              <select
-                id="social-network"
-                className="w-full rounded-md border bg-background p-2"
-                value={platform}
-                onChange={(e) => setPlatform(e.target.value)}
-              >
-                {state.networks.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button
-              disabled={!!busy}
-              onClick={() => void perform("authorize", { action: "authorize", platform })}
-            >
-              {busy === "authorize" ? t("Abrindo…") : t("Autorizar conta")}
-            </Button>
-            <p className="w-full text-xs text-muted-foreground">
-              {t(
-                "Você autoriza na própria rede e retorna ao CRM. Cada perfil comporta uma conta por rede; use a mesma conta ao reconectar.",
-              )}
-            </p>
-          </Card>
-          <div className="grid gap-4 xl:grid-cols-2">
-            {state.accounts.map((account) => (
-              <Card key={account.id} className="flex flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                      {state.networks.find((n) => n.id === account.platform)?.label ??
-                        account.platform}
-                    </p>
-                    <h3 className="font-semibold">{account.username}</h3>
+                    <h3 className="font-semibold">{titulo}</h3>
+                    <p className="text-sm text-muted-foreground">{t(descricao)}</p>
                   </div>
-                  <Badge variant={account.active ? "secondary" : "outline"}>
-                    {account.active ? t("Vinculada") : t("Reconectar")}
-                  </Badge>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    disabled={!!busy}
-                    onClick={() =>
-                      void perform(account.id, { action: "health", account_id: account.id })
-                    }
-                  >
-                    {t("Verificar conexão")}
-                  </Button>
-                  {account.inbox_supported &&
-                    (!account.channel || account.channel.status !== "WORKING") && (
-                      <Button
-                        disabled={
-                          !!busy || !account.active || (!account.channel && bloqueio?.desabilitado)
-                        }
-                        title={
-                          !account.channel && bloqueio?.desabilitado
-                            ? bloqueio.motivo ?? undefined
-                            : undefined
-                        }
-                        onClick={() =>
-                          void perform(account.id, { action: "inbox", account_id: account.id })
-                        }
-                      >
-                        {t("Receber no atendimento")}
-                      </Button>
-                    )}
-                  {!account.channel && bloqueio?.desabilitado && (
-                    <AvisoDeLimiteDeConexoes motivo={bloqueio.motivo} className="w-full text-xs text-destructive" />
-                  )}
-                  {account.channel && (
-                    <Button asChild variant="outline">
-                      <Link href="/app/inbox">{t("Abrir atendimento")}</Link>
+                  {configurado && !bloqueado ? (
+                    <Button asChild>
+                      <a href={urlDeConectar(plataforma)}>{t("Conectar")}</a>
+                    </Button>
+                  ) : (
+                    <Button
+                      disabled
+                      title={!configurado ? t("A conexão ainda não foi liberada nesta instalação.") : bloqueio?.motivo ?? undefined}
+                    >
+                      {t("Conectar")}
                     </Button>
                   )}
                 </div>
-                {health[account.id] && (
-                  <p role="status" className="text-sm">
-                    {t(health[account.id] ?? "")}
+                {!configurado && (
+                  <p className="text-xs text-muted-foreground">
+                    {t("A conexão ainda não foi liberada nesta instalação.")}
                   </p>
                 )}
-                {account.channel ? (
-                  <>
-                    <p className="text-sm">
-                      {account.channel.status === "WORKING"
-                        ? t("Recebimento configurado. Novas mensagens entram na caixa de entrada.")
-                        : t(
-                            "O recebimento precisa de atenção. Confira a conexão antes de atender.",
-                          )}
-                    </p>
-                    <ChannelAiAccess channelId={account.channel.id} phoneTesting={false} />
-                  </>
+                {configurado && bloqueado && (
+                  <AvisoDeLimiteDeConexoes motivo={bloqueio?.motivo} className="text-xs text-destructive" />
+                )}
+
+                {contas.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t("Nenhuma conta conectada.")}</p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
-                    {account.inbox_supported
-                      ? t(
-                          "Ative para receber novas conversas. A IA começa pausada para evitar respostas duplicadas com outras automações.",
-                        )
-                      : t(
-                          "Conta disponível no provedor. O atendimento por mensagens desta rede ainda não está integrado ao CRM.",
-                        )}
-                  </p>
+                  <ul className="flex flex-col gap-2">
+                    {contas.map((conta) => {
+                      const atencao = precisaReconectar(conta);
+                      return (
+                        <li key={conta.id} className="flex flex-col gap-2 rounded-md border p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">
+                                {conta.nome ?? (conta.usuario ? `@${conta.usuario}` : t("Conta sem nome"))}
+                              </p>
+                              {conta.usuario && conta.nome && (
+                                <p className="truncate text-sm text-muted-foreground">@{conta.usuario}</p>
+                              )}
+                              <p className="text-xs text-muted-foreground">
+                                {t("Conectada desde")} {formatarData(conta.conectado_em)}
+                              </p>
+                            </div>
+                            <Badge variant={atencao ? "outline" : "secondary"}>
+                              {atencao ? t("Precisa de atenção") : t("Conectada")}
+                            </Badge>
+                          </div>
+                          {atencao && (
+                            <p role="status" className="text-sm text-destructive">
+                              {t("Reconecte para continuar recebendo mensagens.")}
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-2">
+                            {atencao && configurado && (
+                              <Button asChild size="sm">
+                                <a href={urlDeConectar(plataforma)}>{t("Reconectar")}</a>
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={desconectar.isPending}
+                              onClick={() => setParaDesconectar(conta)}
+                            >
+                              {t("Desconectar")}
+                            </Button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 )}
               </Card>
-            ))}
-          </div>
-          {state.accounts.length === 0 && (
-            <p>{t("Nenhuma conta conectada neste perfil. Autorize uma rede para começar.")}</p>
-          )}
-          <Button variant="ghost" className="self-start" onClick={() => setEditing(!editing)}>
-            {t("Alterar credencial")}
-          </Button>
-        </>
+            );
+          })}
+        </div>
       )}
+
+      <details className="rounded-lg border p-3 text-sm" data-testid="requisitos-redes-sociais">
+        <summary className="cursor-pointer font-medium">{t("O que é preciso para conectar")}</summary>
+        <div className="mt-3 flex flex-col gap-3">
+          <div>
+            <p className="font-medium">Instagram</p>
+            <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+              <li>{t("A conta precisa ser profissional (Empresa ou Criador de conteúdo).")}</li>
+              <li>
+                {t(
+                  "No aplicativo do Instagram, ligue \"Permitir acesso às mensagens\" em Configurações > Mensagens e respostas de stories > Ferramentas conectadas.",
+                )}
+              </li>
+            </ul>
+          </div>
+          <div>
+            <p className="font-medium">Messenger</p>
+            <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+              <li>{t("Você precisa ser administrador da Página do Facebook.")}</li>
+            </ul>
+          </div>
+          <p className="text-muted-foreground">
+            {t("A Meta só permite responder até 24 horas depois da última mensagem do cliente.")}
+          </p>
+        </div>
+      </details>
+
+      <AlertDialog open={!!paraDesconectar} onOpenChange={(aberto) => !aberto && setParaDesconectar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("Desconectar esta conta?")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("As novas mensagens deixam de chegar. As mensagens já recebidas continuam no Chat.")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("Cancelar")}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={desconectar.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (paraDesconectar) desconectar.mutate(paraDesconectar.id);
+              }}
+            >
+              {t("Desconectar")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -79,6 +79,21 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     costPerMessage: true,
     alteraMensagemEnviada: false,
   },
+  // Instagram Direct e Messenger pela Meta, sem intermediário (0984). A mesma
+  // física do canal social intermediado: só se responde dentro de 24h da
+  // última mensagem do cliente (HUMAN_AGENT, 7 dias, fica fora por ora), não há
+  // definição aprovada, não há grupo e não há risco de banimento por volume.
+  meta_social: {
+    freeformOutsideWindow: false,
+    requiresTemplates: false,
+    canManageTemplates: false,
+    banRisk: false,
+    minIntervalMs: 1000,
+    voiceNote: "server-convert",
+    groups: "none",
+    costPerMessage: false,
+    alteraMensagemEnviada: false,
+  },
   zernio: {
     freeformOutsideWindow: false,
     requiresTemplates: true,
@@ -160,6 +175,8 @@ export const CHANNEL_PROVIDER_UAZAPI: ChannelProvider = "uazapi";
 export const CHANNEL_PROVIDER_DATAFY: ChannelProvider = "datafy";
 /** Chamada de voz WhatsApp (spec 18). Não transporta mensagem — ver abaixo. */
 export const CHANNEL_PROVIDER_WACALLS: ChannelProvider = "wacalls";
+/** Instagram Direct e Messenger pela conexão oficial e direta com a Meta. */
+export const CHANNEL_PROVIDER_META_SOCIAL: ChannelProvider = "meta_social";
 
 /**
  * Os providers por onde MENSAGEM entra e sai — a única lista que responde
@@ -183,6 +200,7 @@ export const PROVIDERS_DE_MENSAGEM = [
   "uazapi",
   "zernio_social",
   "datafy",
+  "meta_social",
 ] as const satisfies readonly ProviderDeMensagem[];
 
 /**

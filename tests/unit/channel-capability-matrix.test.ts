@@ -24,6 +24,7 @@ const PROVIDERS = [
   "uazapi",
   "zernio_social",
   "datafy",
+  "meta_social",
 ] as const satisfies readonly ProviderDeMensagem[];
 
 /**

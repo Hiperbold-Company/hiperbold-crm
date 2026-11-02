@@ -16,7 +16,9 @@ export type ChannelProvider =
   | "uazapi"
   | "zernio_social"
   | "wacalls"
-  | "datafy";
+  | "datafy"
+  /** Instagram Direct e Messenger pela conexão oficial e direta com a Meta (0984). */
+  | "meta_social";
 
 /**
  * Os providers que transportam MENSAGEM — o subconjunto sobre o qual a matriz

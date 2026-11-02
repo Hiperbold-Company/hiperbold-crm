@@ -3777,6 +3777,12 @@ export type Database = {
           last_health_check_at: string | null
           last_status_change_at: string
           meta_phone_number_id: string | null
+          meta_social_account_id: string | null
+          meta_social_platform: string | null
+          meta_social_token_encrypted: string | null
+          meta_social_token_expires_at: string | null
+          meta_social_token_refreshed_at: string | null
+          meta_social_username: string | null
           meta_token_encrypted: string | null
           meta_waba_id: string | null
           meta_webhook_override_em: string | null
@@ -3816,6 +3822,12 @@ export type Database = {
           last_health_check_at?: string | null
           last_status_change_at?: string
           meta_phone_number_id?: string | null
+          meta_social_account_id?: string | null
+          meta_social_platform?: string | null
+          meta_social_token_encrypted?: string | null
+          meta_social_token_expires_at?: string | null
+          meta_social_token_refreshed_at?: string | null
+          meta_social_username?: string | null
           meta_token_encrypted?: string | null
           meta_waba_id?: string | null
           meta_webhook_override_em?: string | null
@@ -3855,6 +3867,12 @@ export type Database = {
           last_health_check_at?: string | null
           last_status_change_at?: string
           meta_phone_number_id?: string | null
+          meta_social_account_id?: string | null
+          meta_social_platform?: string | null
+          meta_social_token_encrypted?: string | null
+          meta_social_token_expires_at?: string | null
+          meta_social_token_refreshed_at?: string | null
+          meta_social_username?: string | null
           meta_token_encrypted?: string | null
           meta_waba_id?: string | null
           meta_webhook_override_em?: string | null
@@ -6660,6 +6678,39 @@ export type Database = {
           },
         ]
       }
+      meta_data_deletion_requests: {
+        Row: {
+          completed_at: string | null
+          confirmation_code: string
+          id: string
+          issued_at: string | null
+          meta_user_id: string
+          platform: string
+          received_at: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          confirmation_code: string
+          id?: string
+          issued_at?: string | null
+          meta_user_id: string
+          platform: string
+          received_at?: string
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          confirmation_code?: string
+          id?: string
+          issued_at?: string | null
+          meta_user_id?: string
+          platform?: string
+          received_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       merge_queue: {
         Row: {
           candidates: string[]
@@ -7728,7 +7779,10 @@ export type Database = {
       }
       platform_meta_app: {
         Row: {
+          app_id: string | null
           app_secret_encrypted: string | null
+          instagram_app_id: string | null
+          instagram_app_secret_encrypted: string | null
           id: number
           updated_at: string
           updated_by: string | null
@@ -7736,7 +7790,10 @@ export type Database = {
           verify_token_encrypted: string | null
         }
         Insert: {
+          app_id?: string | null
           app_secret_encrypted?: string | null
+          instagram_app_id?: string | null
+          instagram_app_secret_encrypted?: string | null
           id?: number
           updated_at?: string
           updated_by?: string | null
@@ -7744,7 +7801,10 @@ export type Database = {
           verify_token_encrypted?: string | null
         }
         Update: {
+          app_id?: string | null
           app_secret_encrypted?: string | null
+          instagram_app_id?: string | null
+          instagram_app_secret_encrypted?: string | null
           id?: number
           updated_at?: string
           updated_by?: string | null

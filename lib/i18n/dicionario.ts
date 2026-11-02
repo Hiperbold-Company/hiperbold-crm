@@ -14569,6 +14569,41 @@ export const DICIONARIO: Traducoes = {
   "UTM campanha (utm_campaign)": { es: "UTM campaña (utm_campaign)" },
   "UTM conteúdo (utm_content)": { es: "UTM contenido (utm_content)" },
   "UTM termo (utm_term)": { es: "UTM término (utm_term)" },
+
+  // ─── CONEXÕES › Redes sociais (Instagram Direct e Messenger pela Meta) ───
+  "Conecte o Instagram e o Facebook da empresa e atenda as mensagens no Chat.": { es: "Conecta el Instagram y el Facebook de la empresa y atiende los mensajes en el Chat." },
+  "Receba e responda as mensagens do Direct no Chat do CRM.": { es: "Recibe y responde los mensajes del Direct en el Chat del CRM." },
+  "Receba e responda as mensagens da sua Página do Facebook no Chat do CRM.": { es: "Recibe y responde los mensajes de tu Página de Facebook en el Chat del CRM." },
+  "A conexão ainda não foi liberada nesta instalação.": { es: "La conexión aún no fue habilitada en esta instalación." },
+  "Nenhuma conta conectada.": { es: "Ninguna cuenta conectada." },
+  "Conta sem nome": { es: "Cuenta sin nombre" },
+  "Conectada desde": { es: "Conectada desde" },
+  "Precisa de atenção": { es: "Requiere atención" },
+  "Reconecte para continuar recebendo mensagens.": { es: "Vuelve a conectar para seguir recibiendo mensajes." },
+  "O que é preciso para conectar": { es: "Qué se necesita para conectar" },
+  "A conta precisa ser profissional (Empresa ou Criador de conteúdo).": { es: "La cuenta debe ser profesional (Empresa o Creador de contenido)." },
+  "No aplicativo do Instagram, ligue \"Permitir acesso às mensagens\" em Configurações > Mensagens e respostas de stories > Ferramentas conectadas.": { es: "En la aplicación de Instagram, activa \"Permitir acceso a los mensajes\" en Configuración > Mensajes y respuestas a historias > Herramientas conectadas." },
+  "Você precisa ser administrador da Página do Facebook.": { es: "Debes ser administrador de la Página de Facebook." },
+  "A Meta só permite responder até 24 horas depois da última mensagem do cliente.": { es: "Meta solo permite responder hasta 24 horas después del último mensaje del cliente." },
+  "Desconectar esta conta?": { es: "¿Desconectar esta cuenta?" },
+  "As novas mensagens deixam de chegar. As mensagens já recebidas continuam no Chat.": { es: "Los mensajes nuevos dejan de llegar. Los mensajes ya recibidos siguen en el Chat." },
+  "Não foi possível desconectar a conta. Tente de novo.": { es: "No se pudo desconectar la cuenta. Inténtalo de nuevo." },
+  "Conta conectada. As novas mensagens passam a chegar no Chat.": { es: "Cuenta conectada. Los mensajes nuevos empiezan a llegar al Chat." },
+  "contas conectadas. As novas mensagens passam a chegar no Chat.": { es: "cuentas conectadas. Los mensajes nuevos empiezan a llegar al Chat." },
+  "A conexão foi cancelada antes de terminar. Clique em Conectar para tentar de novo.": { es: "La conexión se canceló antes de terminar. Haz clic en Conectar para intentarlo de nuevo." },
+  "A conexão expirou ou foi aberta em outra janela. Clique em Conectar para tentar de novo.": { es: "La conexión expiró o se abrió en otra ventana. Haz clic en Conectar para intentarlo de nuevo." },
+  "Seu plano chegou ao limite de conexões.": { es: "Tu plan llegó al límite de conexiones." },
+  "Esta conta já está conectada em outra empresa neste sistema. Desconecte lá antes de conectar aqui.": { es: "Esta cuenta ya está conectada en otra empresa de este sistema. Desconéctala allí antes de conectarla aquí." },
+  "Não encontramos nenhuma conta para conectar. Confira se você é administrador da Página e se marcou a conta na hora de autorizar.": { es: "No encontramos ninguna cuenta para conectar. Verifica que eres administrador de la Página y que marcaste la cuenta al autorizar." },
+  "A Meta não respondeu como esperado. Tente de novo em alguns minutos.": { es: "Meta no respondió como se esperaba. Inténtalo de nuevo en unos minutos." },
+
+  // ─── Página pública /exclusao-de-dados (status do pedido de exclusão da Meta) ───
+  "Recebemos o pedido de exclusão dos dados ligados à sua conta do Instagram ou do Facebook.": { es: "Recibimos la solicitud de eliminación de los datos vinculados a tu cuenta de Instagram o de Facebook." },
+  "Código do pedido:": { es: "Código de la solicitud:" },
+  "A exclusão é concluída em até 15 dias.": { es: "La eliminación se completa en hasta 15 días." },
+  "Dúvidas sobre o pedido? Escreva para": { es: "¿Dudas sobre la solicitud? Escribe a" },
+  "e informe o código do pedido.": { es: "e informa el código de la solicitud." },
+  "Dúvidas sobre o pedido? Fale com a empresa com quem você conversou pelo Instagram ou pelo Facebook.": { es: "¿Dudas sobre la solicitud? Habla con la empresa con la que conversaste por Instagram o por Facebook." },
 };
 
 /**

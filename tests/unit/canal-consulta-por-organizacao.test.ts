@@ -65,7 +65,28 @@ interface Consulta {
   filtros: string[];
   /** Filtros da cadeia MAIS os do terminal. Ver o comentário abaixo. */
   filtrosComTerminal: string[];
+  /** Consulta declarada como exceção (ver `EXCECOES_DECLARADAS`). */
+  excecao: boolean;
 }
+
+/**
+ * Exceções DECLARADAS, por arquivo, e só valem com a marca
+ * `cerca-canal: <motivo>` nas linhas logo acima da consulta.
+ *
+ * O canal social oficial da Meta (migration 0984) tem UM webhook para a
+ * instalação inteira: a organização é DESCOBERTA pela conta (`entry.id`,
+ * assinado pelo segredo do app), então essa consulta não pode filtrar uma
+ * organização que ainda não conhece. O que a torna segura: o índice único
+ * parcial `channel_sessions_meta_social_conta_ativa_uidx` (uma conta viva em
+ * uma organização só), o recorte `archived_at is null`, e a recusa quando volta
+ * mais de uma linha. A segunda é a checagem "esta conta já está em OUTRA
+ * organização?" — a que protege esse índice. A terceira procura a linha
+ * ARQUIVADA da própria organização para reativar (o recorte é o inverso, de
+ * propósito, e o `organization_id` está lá).
+ *
+ * A lista só cresce com motivo escrito; a marca fora destes arquivos não vale.
+ */
+const EXCECOES_DECLARADAS = new Set(["lib/channels/meta-social/ingest.ts", "lib/channels/meta-social/store.ts"]);
 
 /** `.eq("x", …)`, `.is(ARCHIVED_AT, null)` → nome da coluna filtrada. */
 function colunasFiltradas(trecho: string): string[] {
@@ -109,6 +130,9 @@ function consultas(fonte: string, arquivo: string): Consulta[] {
       linha: fonte.slice(0, i).split("\n").length,
       filtros: colunasFiltradas(cadeia),
       filtrosComTerminal: colunasFiltradas(comTerminal),
+      excecao:
+        EXCECOES_DECLARADAS.has(path.relative(RAIZ, arquivo)) &&
+        /cerca-canal: [a-z_]+/.test(fonte.slice(Math.max(0, i - 400), i)),
     });
     i = fonte.indexOf(marca, i + marca.length);
   }
@@ -131,6 +155,7 @@ describe("lib/channels: consulta a channel_sessions por identificador do provide
   it("quem filtra por identificador do provider filtra organization_id também", () => {
     const faltando = TODAS.filter(
       (c) =>
+        !c.excecao &&
         c.filtros.some((f) => COLUNAS_DE_REF.includes(f)) &&
         !c.filtros.includes("organization_id"),
     ).map((c) => `${c.arquivo}:${c.linha} (filtros: ${c.filtros.join(", ") || "nenhum"})`);
@@ -152,6 +177,7 @@ describe("lib/channels: consulta a channel_sessions por identificador do provide
     // linhas, justo no ponto em que o banco deixou de proteger.
     const semRecorte = TODAS.filter(
       (c) =>
+        !c.excecao &&
         c.filtros.some((f) => COLUNAS_DE_REF.includes(f)) &&
         !c.filtrosComTerminal.includes("archived_at"),
     ).map((c) => `${c.arquivo}:${c.linha}`);
