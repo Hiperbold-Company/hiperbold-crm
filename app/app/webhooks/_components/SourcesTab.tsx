@@ -19,7 +19,11 @@ import { SourceDetail } from "./SourceDetail";
 import { useT } from "@/hooks/i18n/useT";
 import { usePermission } from "@/hooks/auth/AuthProvider";
 
-function lastReceivedLabel(iso: string | null, t: (texto: string) => string, locale: Locale): string {
+function lastReceivedLabel(
+  iso: string | null,
+  t: (texto: string) => string,
+  locale: Locale,
+): string {
   if (!iso) return t("nunca recebeu");
   return `${t("último recebimento")} ${formatDistanceToNowStrict(new Date(iso), { addSuffix: true, locale: locale })}`;
 }

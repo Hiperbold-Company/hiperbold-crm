@@ -34,6 +34,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { Copy, Trash, CaretDown, PencilSimple } from "@/lib/ui/icons";
 import { usePermission } from "@/hooks/auth/AuthProvider";
 import { EditSourceDialog } from "./EditSourceDialog";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 import { cn } from "@/lib/utils";
 import {
   useDeleteWebhookSource,
@@ -117,7 +118,11 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
       const res = await fetch(`/api/v1/webhooks/in/${source.path_token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: "Lead de Teste", telefone: "11999990000", utm_source: "teste" }),
+        body: JSON.stringify({
+          nome: "Lead de Teste",
+          telefone: "11999990000",
+          utm_source: "teste",
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -222,6 +227,11 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
                   <p className="font-medium text-text">{t("Formulário próprio")}</p>
                   <p>{t("Use o HTML pronto logo acima — já aponta para o endereço certo.")}</p>
                 </div>
+                <LinkDeAjudaDaTela
+                  caminho="/crm/receber-leads/conectar-formularios-e-n8n/"
+                  rotulo={t("Passo a passo na central de ajuda")}
+                  semPrefixo
+                />
               </div>
             </details>
           </section>
@@ -251,7 +261,9 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
           <section className="space-y-2">
             <p className="text-sm font-medium text-text">{t("Últimos recebimentos")}</p>
             {events.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("Ainda não chegou nada por aqui.")}</p>
+              <p className="text-sm text-muted-foreground">
+                {t("Ainda não chegou nada por aqui.")}
+              </p>
             ) : (
               <ul className="space-y-1">
                 {events.map((ev) => (
@@ -262,7 +274,9 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
                         ev.valid_signature === false ? "bg-error" : "bg-success",
                       )}
                     />
-                    <span className="text-muted-foreground">{relativeReceivedAt(ev.created_at, localeDaData)}</span>
+                    <span className="text-muted-foreground">
+                      {relativeReceivedAt(ev.created_at, localeDaData)}
+                    </span>
                     {ev.valid_signature === false ? (
                       <span className="text-xs text-error">{t("assinatura inválida")}</span>
                     ) : null}
@@ -273,75 +287,77 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
           </section>
 
           {podeGerenciar ? (
-          <>
-          <section className="flex items-center justify-between gap-3 rounded-sm border border-border p-3">
-            <div>
-              <p className="text-sm font-medium text-text">{t("Fonte ativa")}</p>
-              {/* A rota de entrada responde 404 à fonte pausada ANTES de gravar
+            <>
+              <section className="flex items-center justify-between gap-3 rounded-sm border border-border p-3">
+                <div>
+                  <p className="text-sm font-medium text-text">{t("Fonte ativa")}</p>
+                  {/* A rota de entrada responde 404 à fonte pausada ANTES de gravar
                   qualquer registro — por isso o envio não aparece em Leads recebidos. */}
-              <p className="text-xs text-muted-foreground">
-                {!source.is_active && bloqueio?.desabilitado
-                  ? bloqueio.motivo
-                  : t(
-                      "Pausada, o endereço recusa os envios: nenhum lead novo entra, e os envios recusados não aparecem em Leads recebidos.",
-                    )}
-              </p>
-            </div>
-            <Switch
-              checked={source.is_active}
-              disabled={update.isPending || (!source.is_active && bloqueio?.desabilitado)}
-              title={
-                !source.is_active && bloqueio?.desabilitado ? bloqueio.motivo ?? undefined : undefined
-              }
-              onCheckedChange={(checked) =>
-                update.mutate(
-                  { id: source.id, is_active: checked },
-                  {
-                    onSuccess: () =>
-                      toast.success(checked ? t("Fonte ativada.") : t("Fonte pausada.")),
-                  },
-                )
-              }
-            />
-          </section>
+                  <p className="text-xs text-muted-foreground">
+                    {!source.is_active && bloqueio?.desabilitado
+                      ? bloqueio.motivo
+                      : t(
+                          "Pausada, o endereço recusa os envios: nenhum lead novo entra, e os envios recusados não aparecem em Leads recebidos.",
+                        )}
+                  </p>
+                </div>
+                <Switch
+                  checked={source.is_active}
+                  disabled={update.isPending || (!source.is_active && bloqueio?.desabilitado)}
+                  title={
+                    !source.is_active && bloqueio?.desabilitado
+                      ? (bloqueio.motivo ?? undefined)
+                      : undefined
+                  }
+                  onCheckedChange={(checked) =>
+                    update.mutate(
+                      { id: source.id, is_active: checked },
+                      {
+                        onSuccess: () =>
+                          toast.success(checked ? t("Fonte ativada.") : t("Fonte pausada.")),
+                      },
+                    )
+                  }
+                />
+              </section>
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button type="button" variant="destructive">
-                <Trash /> {t("Excluir fonte")}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>{t("Excluir esta fonte?")}</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {t(
-                    "O endereço para de funcionar na hora: formulários que ainda enviam para ele deixam de criar leads. Os leads e contatos que já chegaram continuam no funil, e o histórico em Leads recebidos guarda o nome da fonte. Essa ação não pode ser desfeita.",
-                  )}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>{t("Cancelar")}</AlertDialogCancel>
-                <AlertDialogAction
-                  disabled={del.isPending}
-                  onClick={async () => {
-                    try {
-                      await del.mutateAsync(source.id);
-                    } catch {
-                      // A mensagem da API já foi mostrada pelo showApiError do hook;
-                      // a fonte continua aberta, porque ela continua existindo.
-                      return;
-                    }
-                    toast.success(t("Fonte excluída."));
-                    onOpenChange(false);
-                  }}
-                >
-                  {t("Excluir")}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          </>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button type="button" variant="destructive">
+                    <Trash /> {t("Excluir fonte")}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{t("Excluir esta fonte?")}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t(
+                        "O endereço para de funcionar na hora: formulários que ainda enviam para ele deixam de criar leads. Os leads e contatos que já chegaram continuam no funil, e o histórico em Leads recebidos guarda o nome da fonte. Essa ação não pode ser desfeita.",
+                      )}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("Cancelar")}</AlertDialogCancel>
+                    <AlertDialogAction
+                      disabled={del.isPending}
+                      onClick={async () => {
+                        try {
+                          await del.mutateAsync(source.id);
+                        } catch {
+                          // A mensagem da API já foi mostrada pelo showApiError do hook;
+                          // a fonte continua aberta, porque ela continua existindo.
+                          return;
+                        }
+                        toast.success(t("Fonte excluída."));
+                        onOpenChange(false);
+                      }}
+                    >
+                      {t("Excluir")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
           ) : null}
         </div>
       </SheetContent>

@@ -31,9 +31,14 @@ type CampoDoMapa = "name" | "phone" | "email";
 const CAMPOS: readonly CampoDoMapa[] = ["name", "phone", "email"];
 
 /** `field_map` gravado → lista limpa. O tipo da linha é `Record<string, unknown>`. */
-function listaDoMapa(fieldMap: Record<string, unknown> | null | undefined, campo: CampoDoMapa): string[] {
+function listaDoMapa(
+  fieldMap: Record<string, unknown> | null | undefined,
+  campo: CampoDoMapa,
+): string[] {
   const v = fieldMap?.[campo];
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
+  return Array.isArray(v)
+    ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "")
+    : [];
 }
 
 /** "a, b ,, c" → ["a", "b", "c"]. */
@@ -109,7 +114,9 @@ function FormularioDeEdicao({
     }
     const redirect = redirectTo.trim();
     if (redirect && !/^https?:\/\/\S+$/i.test(redirect)) {
-      toast.error(t("A página de obrigado precisa ser um endereço completo, começando com https://"));
+      toast.error(
+        t("A página de obrigado precisa ser um endereço completo, começando com https://"),
+      );
       return;
     }
 
@@ -148,77 +155,81 @@ function FormularioDeEdicao({
   };
 
   return (
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="edit-src-name">{t("Nome")}</Label>
-            <Input
-              id="edit-src-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={120}
-              required
-            />
-          </div>
-          <FunilEEtapa
-            idPrefix="edit-src"
-            pipelineId={pipelineId}
-            stageId={stageId}
-            onPipelineChange={setPipelineId}
-            onStageChange={setStageId}
-          />
-          <div className="space-y-2">
-            <Label htmlFor="edit-src-redirect">{t("Página de obrigado (opcional)")}</Label>
-            <Input
-              id="edit-src-redirect"
-              // Sem `type="url"`: a validação do navegador barraria o envio com
-              // uma frase genérica dele; a conferência abaixo diz o que corrigir.
-              inputMode="url"
-              value={redirectTo}
-              onChange={(e) => setRedirectTo(e.target.value)}
-              placeholder="https://tusitio.com/gracias"
-            />
-            <p className="text-xs text-muted-foreground">
-              {t("Para onde enviar a pessoa depois que ela preencher seu formulário. Em branco, ela não é redirecionada.")}
-            </p>
-          </div>
-          <fieldset className="space-y-3 rounded-sm border border-border p-3">
-            <legend className="px-1 text-sm font-medium text-text">{t("Campos do seu formulário")}</legend>
-            <p className="text-xs text-muted-foreground">
-              {t(
-                "Use o nome do campo como o seu formulário envia, por exemplo form_fields[phone] ou contato_celular. Pode pôr vários, separados por vírgula. Em branco, o CRM reconhece os nomes comuns sozinho.",
-              )}
-            </p>
-            <CampoDoFormulario
-              id="edit-src-map-name"
-              rotulo={t("Campo do nome")}
-              comuns="name, nome, full_name, fullname"
-              valor={campos.name}
-              onChange={(v) => setCampos((c) => ({ ...c, name: v }))}
-            />
-            <CampoDoFormulario
-              id="edit-src-map-phone"
-              rotulo={t("Campo do telefone")}
-              comuns="phone, telefone, whatsapp, celular, phone_number, tel"
-              valor={campos.phone}
-              onChange={(v) => setCampos((c) => ({ ...c, phone: v }))}
-            />
-            <CampoDoFormulario
-              id="edit-src-map-email"
-              rotulo={t("Campo do e-mail")}
-              comuns="email, e-mail, mail"
-              valor={campos.email}
-              onChange={(v) => setCampos((c) => ({ ...c, email: v }))}
-            />
-          </fieldset>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              {t("Cancelar")}
-            </Button>
-            <Button type="submit" disabled={update.isPending}>
-              {update.isPending ? t("Salvando…") : t("Salvar")}
-            </Button>
-          </DialogFooter>
-        </form>
+    <form onSubmit={onSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="edit-src-name">{t("Nome")}</Label>
+        <Input
+          id="edit-src-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={120}
+          required
+        />
+      </div>
+      <FunilEEtapa
+        idPrefix="edit-src"
+        pipelineId={pipelineId}
+        stageId={stageId}
+        onPipelineChange={setPipelineId}
+        onStageChange={setStageId}
+      />
+      <div className="space-y-2">
+        <Label htmlFor="edit-src-redirect">{t("Página de obrigado (opcional)")}</Label>
+        <Input
+          id="edit-src-redirect"
+          // Sem `type="url"`: a validação do navegador barraria o envio com
+          // uma frase genérica dele; a conferência abaixo diz o que corrigir.
+          inputMode="url"
+          value={redirectTo}
+          onChange={(e) => setRedirectTo(e.target.value)}
+          placeholder="https://tusitio.com/gracias"
+        />
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "Para onde enviar a pessoa depois que ela preencher seu formulário. Em branco, ela não é redirecionada.",
+          )}
+        </p>
+      </div>
+      <fieldset className="space-y-3 rounded-sm border border-border p-3">
+        <legend className="px-1 text-sm font-medium text-text">
+          {t("Campos do seu formulário")}
+        </legend>
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "Use o nome do campo como o seu formulário envia, por exemplo form_fields[phone] ou contato_celular. Pode pôr vários, separados por vírgula. Em branco, o CRM reconhece os nomes comuns sozinho.",
+          )}
+        </p>
+        <CampoDoFormulario
+          id="edit-src-map-name"
+          rotulo={t("Campo do nome")}
+          comuns="name, nome, full_name, fullname"
+          valor={campos.name}
+          onChange={(v) => setCampos((c) => ({ ...c, name: v }))}
+        />
+        <CampoDoFormulario
+          id="edit-src-map-phone"
+          rotulo={t("Campo do telefone")}
+          comuns="phone, telefone, whatsapp, celular, phone_number, tel"
+          valor={campos.phone}
+          onChange={(v) => setCampos((c) => ({ ...c, phone: v }))}
+        />
+        <CampoDoFormulario
+          id="edit-src-map-email"
+          rotulo={t("Campo do e-mail")}
+          comuns="email, e-mail, mail"
+          valor={campos.email}
+          onChange={(v) => setCampos((c) => ({ ...c, email: v }))}
+        />
+      </fieldset>
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+          {t("Cancelar")}
+        </Button>
+        <Button type="submit" disabled={update.isPending}>
+          {update.isPending ? t("Salvando…") : t("Salvar")}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }
 

@@ -14607,6 +14607,7 @@ export const DICIONARIO: Traducoes = {
   "Central de ajuda (abre em nova aba)": { es: "Centro de ayuda (se abre en una pestaña nueva)" },
   "Como conectar o formulário do seu site": { es: "Cómo conectar el formulario de tu sitio" },
   "Como criar campos personalizados": { es: "Cómo crear campos personalizados" },
+  "Passo a passo na central de ajuda": { es: "Paso a paso en el centro de ayuda" },
 };
 
 /**

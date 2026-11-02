@@ -27,7 +27,13 @@ interface Props {
 }
 
 /** Funil e etapa de entrada de uma fonte de captação (criação e edição). */
-export function FunilEEtapa({ idPrefix, pipelineId, stageId, onPipelineChange, onStageChange }: Props) {
+export function FunilEEtapa({
+  idPrefix,
+  pipelineId,
+  stageId,
+  onPipelineChange,
+  onStageChange,
+}: Props) {
   const t = useT();
   const { data: pipelinesRes, isLoading: pipelinesLoading } = usePipelines();
   const { data: boardRes, isLoading: stagesLoading } = usePipelineStages(pipelineId || null);
@@ -62,7 +68,11 @@ export function FunilEEtapa({ idPrefix, pipelineId, stageId, onPipelineChange, o
       </div>
       <div className="space-y-2">
         <Label htmlFor={`${idPrefix}-stage`}>{t("Estágio de entrada")}</Label>
-        <Select value={stageId} onValueChange={onStageChange} disabled={!pipelineId || stagesLoading}>
+        <Select
+          value={stageId}
+          onValueChange={onStageChange}
+          disabled={!pipelineId || stagesLoading}
+        >
           <SelectTrigger id={`${idPrefix}-stage`}>
             <SelectValue
               placeholder={pipelineId ? t("Escolha o estágio") : t("Escolha o funil primeiro")}

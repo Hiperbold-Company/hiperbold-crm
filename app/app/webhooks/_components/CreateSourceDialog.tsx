@@ -13,10 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  useCreateWebhookSource,
-  type WebhookSourceRow,
-} from "@/hooks/webhooks/useWebhookSources";
+import { useCreateWebhookSource, type WebhookSourceRow } from "@/hooks/webhooks/useWebhookSources";
 import { FunilEEtapa } from "./FunilEEtapa";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { useT } from "@/hooks/i18n/useT";
@@ -119,14 +116,12 @@ export function CreateSourceDialog({ open, onOpenChange, onCreated, bloqueio }: 
             <Button
               type="submit"
               disabled={create.isPending || bloqueio?.desabilitado}
-              title={bloqueio?.desabilitado ? bloqueio.motivo ?? undefined : undefined}
+              title={bloqueio?.desabilitado ? (bloqueio.motivo ?? undefined) : undefined}
             >
               {t("Criar fonte")}
             </Button>
           </DialogFooter>
-          {bloqueio?.desabilitado && (
-            <p className="text-xs text-destructive">{bloqueio.motivo}</p>
-          )}
+          {bloqueio?.desabilitado && <p className="text-xs text-destructive">{bloqueio.motivo}</p>}
         </form>
       </DialogContent>
     </Dialog>

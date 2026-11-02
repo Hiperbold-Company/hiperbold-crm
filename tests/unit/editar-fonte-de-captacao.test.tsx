@@ -82,7 +82,12 @@ const ETAPAS: Record<string, { id: string; name: string }[]> = {
 
 function rotear(url: string) {
   if (url === "/api/v1/pipelines") {
-    return { data: [{ id: "p1", name: "Comercial" }, { id: "p2", name: "Pós-venda" }] };
+    return {
+      data: [
+        { id: "p1", name: "Comercial" },
+        { id: "p2", name: "Pós-venda" },
+      ],
+    };
   }
   const m = /^\/api\/v1\/pipelines\/(\w+)\/board$/.exec(url);
   if (m) return { data: { stages: ETAPAS[m[1]!] ?? [] } };
@@ -112,18 +117,26 @@ describe("diálogo Editar fonte", () => {
     comQuery(<EditSourceDialog source={FONTE} open onOpenChange={() => {}} />);
 
     expect(screen.getByLabelText("Nome")).toHaveValue("Landing page");
-    expect(screen.getByLabelText("Página de obrigado (opcional)")).toHaveValue("https://site.com/obrigado");
+    expect(screen.getByLabelText("Página de obrigado (opcional)")).toHaveValue(
+      "https://site.com/obrigado",
+    );
     expect(screen.getByLabelText("Campo do telefone")).toHaveValue("form_fields[phone], zap");
     expect(screen.getByLabelText("Campo do nome")).toHaveValue("");
-    await waitFor(() => expect(screen.getByLabelText("Funil de entrada")).toHaveTextContent("Comercial"));
-    await waitFor(() => expect(screen.getByLabelText("Estágio de entrada")).toHaveTextContent("Novo"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Funil de entrada")).toHaveTextContent("Comercial"),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("Estágio de entrada")).toHaveTextContent("Novo"),
+    );
   });
 
   it("trocar o funil limpa a etapa, e o PATCH leva funil e etapa juntos", async () => {
     const user = userEvent.setup();
     const fechar = vi.fn();
     comQuery(<EditSourceDialog source={FONTE} open onOpenChange={fechar} />);
-    await waitFor(() => expect(screen.getByLabelText("Estágio de entrada")).toHaveTextContent("Novo"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Estágio de entrada")).toHaveTextContent("Novo"),
+    );
 
     await user.click(screen.getByLabelText("Funil de entrada"));
     await user.click(await screen.findByRole("option", { name: "Pós-venda" }));
