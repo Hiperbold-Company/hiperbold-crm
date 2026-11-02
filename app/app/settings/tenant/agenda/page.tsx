@@ -8,6 +8,7 @@ import { clientePelaAgendaLigado, colegasPodemMexerNaAgendaLigado } from "@/lib/
 import { nomesDosAtendentes } from "@/lib/users/nome-do-atendente";
 
 import { TiposDeAgendamentoClient, type TipoRow } from "./_client";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,7 @@ export default async function TiposDeAgendamentoPage() {
         <p className="mt-1 text-sm text-text-muted">
           {t("O que se pode marcar, quanto dura e quem atende. É isto que a tela de marcar e o agente de IA oferecem ao cliente.")}
         </p>
+        <LinkDeAjudaDaTela />
       </header>
       <TiposDeAgendamentoClient
         tiposIniciais={(tipos ?? []) as TipoRow[]}

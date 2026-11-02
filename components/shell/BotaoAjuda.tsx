@@ -1,5 +1,5 @@
 "use client";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Question } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
@@ -15,7 +15,9 @@ import { urlDaAjuda } from "@/lib/ajuda/artigos";
 export function BotaoAjuda({ base }: { base: string | null }) {
   const t = useT();
   const rota = usePathname();
-  const href = urlDaAjuda(base, rota);
+  // Tela com abas (`?tab=`) abre o artigo da aba, quando ela tem um.
+  const aba = useSearchParams()?.get("tab") ?? null;
+  const href = urlDaAjuda(base, rota, aba);
   if (!href) return null;
 
   return (

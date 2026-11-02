@@ -53,6 +53,7 @@ import { PixPendente } from "./_pix-pendente";
 import { AceiteDosTermos, CAMPOS_VAZIOS, FormularioDoPagador, formatarReais } from "./_comuns";
 import { AssinarPlanoPassoAPasso } from "./_passo-a-passo";
 import type { PacoteParaVenda } from "./_dados";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 function classeDoToggle(ativo: boolean): string {
   return cn(
@@ -92,6 +93,7 @@ export function AssinarOuComprarClient({
     <div className="flex h-full flex-col gap-8 overflow-y-auto p-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{t("Assinar ou comprar")}</h1>
+        <LinkDeAjudaDaTela />
       </header>
 
       {leituraFalhou && (

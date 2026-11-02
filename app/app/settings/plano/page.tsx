@@ -102,6 +102,7 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const metadata = { title: "Meu plano" };
 export const dynamic = "force-dynamic";
@@ -212,6 +213,7 @@ export default async function PlanoEUsoPage() {
         <p className="max-w-2xl text-sm text-muted-foreground">
           {t("Quanto sua organização usa de cada item do plano contratado.")}
         </p>
+        <LinkDeAjudaDaTela />
         {/* Sem plano (D-094 revisto), o contrato guarda um plano só como chave da linha: não o exibe. */}
         {!leituraFalhou && !(assinatura.contrato && contratoSemPlano(assinatura.contrato)) && (
           <p className="text-sm text-muted-foreground">
