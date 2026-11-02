@@ -45,6 +45,7 @@ import { useColunasDeContatos } from "@/hooks/contacts/useColunasDeContatos";
 import { pedeUtm } from "@/lib/contacts/colunas-da-lista";
 import { EmptyContacts } from "@/components/empty";
 import type { ContactOrderBy } from "@/lib/schemas/contacts";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 const SOURCE_OPTIONS: Array<{ value: string | undefined; label: string }> = [
   { value: undefined, label: "Todas as origens" },
@@ -264,6 +265,7 @@ export function ContactsListClient() {
           <p className="text-sm text-muted-foreground">
             {t("Customer 360 — busque, filtre e gerencie contatos.")}
           </p>
+          <LinkDeAjudaDaTela />
         </div>
         {/*
           A estrutura é a da main (o "Importar CSV" do PR #313); o `shrink-0`

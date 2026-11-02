@@ -14,6 +14,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
 import { FunisClient, type FunilDaLista } from "./_client";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Pipeline" };
@@ -100,6 +101,7 @@ export default async function KanbanPickerPage() {
             specs, e `pipelines-gestao.spec.ts` — a spec da própria feature que
             gerou o comentário — é uma delas. Todas atualizadas junto. */}
         <h1 className="text-2xl font-semibold tracking-tight">{t("Pipeline")}</h1>
+        <LinkDeAjudaDaTela />
       </header>
 
       <FunisClient

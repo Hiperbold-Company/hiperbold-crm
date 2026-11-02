@@ -25,6 +25,7 @@ import type { PassoDoInicio } from "@/lib/inicio/primeiros-passos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ArrowRight, CheckCircle } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Início" };
@@ -55,6 +56,7 @@ export default async function InicioPage() {
             ? t("O essencial está pronto. Os passos abaixo deixam o CRM ainda melhor para a sua equipe.")
             : t("Faltam poucos passos para o CRM começar a trabalhar pela sua empresa.")}
         </p>
+        <LinkDeAjudaDaTela />
         <div className="space-y-1.5">
           <p className="text-sm font-medium" data-testid="inicio-progresso">
             {contagem.obrigatoriosFeitos} {t("de")} {contagem.obrigatoriosTotal} {t("obrigatórios")}

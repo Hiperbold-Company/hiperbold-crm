@@ -34,6 +34,7 @@ import type { LinhaDeVocabulario } from "@/lib/schemas/tags";
 import { createClient } from "@/lib/supabase/server";
 
 import { PainelDeTags } from "./_painel";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const metadata = { title: "Tags" };
 export const dynamic = "force-dynamic";
@@ -77,6 +78,7 @@ export default async function TagsPage() {
             "As etiquetas que os agentes, o Inbox e o funil usam nesta organização. Renomear ou juntar corrige também as regras de agente que escrevem a etiqueta, na mesma operação.",
           )}
         </p>
+        <LinkDeAjudaDaTela />
       </header>
 
       {error ? (

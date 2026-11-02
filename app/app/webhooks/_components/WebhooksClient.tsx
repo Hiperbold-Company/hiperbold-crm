@@ -9,6 +9,17 @@ import { ActivityTab } from "./ActivityTab";
 import { CapturasTab } from "./CapturasTab";
 import { useT } from "@/hooks/i18n/useT";
 import { ABA_PADRAO_DE_AUTOMACOES, type AbaDeAutomacoes } from "./abas";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
+import { CAMINHO_CONECTAR_FORMULARIOS, artigoDaAba } from "@/lib/ajuda/artigos";
+
+/**
+ * O artigo de cada aba, no topo do conteúdo dela. Fica DENTRO do
+ * `TabsContent`, e não na fila de abas: a largura da tablist é medida (ver o
+ * skeleton abaixo) e não muda por causa disto. Aba sem artigo não mostra nada.
+ */
+function AjudaDaAba({ aba }: { aba: AbaDeAutomacoes }) {
+  return <LinkDeAjudaDaTela caminho={artigoDaAba("/app/webhooks", aba)} className="mb-3" />;
+}
 
 export function WebhooksClient({
   bloqueio,
@@ -48,10 +59,29 @@ export function WebhooksClient({
         <TabsTrigger value="capturas">{t("Leads recebidos")}</TabsTrigger>
         <TabsTrigger value="activity">{t("Registro de atividade")}</TabsTrigger>
       </TabsList>
-      <TabsContent value="rules"><RulesTab /></TabsContent>
-      <TabsContent value="sources"><SourcesTab bloqueio={bloqueio} /></TabsContent>
-      <TabsContent value="capturas"><CapturasTab /></TabsContent>
-      <TabsContent value="activity"><ActivityTab /></TabsContent>
+      <TabsContent value="rules">
+        <AjudaDaAba aba="rules" />
+        <RulesTab />
+      </TabsContent>
+      <TabsContent value="sources">
+        <div className="mb-3 space-y-1">
+          <LinkDeAjudaDaTela caminho={artigoDaAba("/app/webhooks", "sources")} />
+          <LinkDeAjudaDaTela
+            caminho={CAMINHO_CONECTAR_FORMULARIOS}
+            rotulo={t("Como conectar o formulário do seu site")}
+            semPrefixo
+          />
+        </div>
+        <SourcesTab bloqueio={bloqueio} />
+      </TabsContent>
+      <TabsContent value="capturas">
+        <AjudaDaAba aba="capturas" />
+        <CapturasTab />
+      </TabsContent>
+      <TabsContent value="activity">
+        <AjudaDaAba aba="activity" />
+        <ActivityTab />
+      </TabsContent>
     </Tabs>
   );
 }

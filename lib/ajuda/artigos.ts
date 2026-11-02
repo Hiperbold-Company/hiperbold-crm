@@ -21,6 +21,7 @@ export const ARTIGOS_POR_ROTA: Readonly<Record<string, string>> = {
   // Primeiros passos
   "/app/inicio": "/crm/primeiros-passos/tela-inicio/",
   "/app/crm": "/crm/primeiros-passos/conhecer-o-menu/",
+  "/app/settings/plano/assinar": "/crm/primeiros-passos/criar-conta-e-assinar/",
 
   // WhatsApp e conversas
   "/app/inbox": "/crm/whatsapp/conectar-pelo-qr-code/",
@@ -54,13 +55,31 @@ export const ARTIGOS_POR_ROTA: Readonly<Record<string, string>> = {
   "/app/settings/billing": "/crm/assinatura/meu-plano/",
 
   // Receber leads (fontes de captação)
-  "/app/webhooks": "/crm/receber-leads/fontes-de-captacao/",
+  "/app/webhooks": "/crm/automacoes/criar-uma-automacao/",
 
   // Integrações e API
   "/app/settings/api-tokens": "/crm/integracoes-e-api/tokens-de-api/",
 
   // Privacidade
   "/app/lgpd": "/crm/privacidade/lgpd/",
+};
+
+/** Artigo sobre os campos personalizados (seção "Vocabulário e campos" de Etapas do funil). */
+export const CAMINHO_CAMPOS_PERSONALIZADOS = "/crm/funis-e-leads/campos-personalizados/";
+
+/** Segundo artigo da aba "Receber dados": como ligar o formulário do site. */
+export const CAMINHO_CONECTAR_FORMULARIOS = "/crm/receber-leads/conectar-formularios-e-n8n/";
+
+/**
+ * Telas com abas (`?tab=`): de qual aba para qual artigo. Vence o artigo da
+ * rota quando a aba tem o seu; aba ausente aqui fica com o artigo da rota.
+ */
+export const ARTIGOS_POR_ABA: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "/app/webhooks": {
+    sources: "/crm/receber-leads/fontes-de-captacao/",
+    capturas: "/crm/receber-leads/leads-recebidos/",
+    rules: "/crm/automacoes/criar-uma-automacao/",
+  },
 };
 
 /** Tira query, âncora e barra final. `/app/team/?a=1#x` vira `/app/team`. */
@@ -71,18 +90,44 @@ function normalizarRota(rota: string): string {
 }
 
 /**
- * Caminho do artigo (começa e termina com `/`) para a rota atual do CRM.
- * Prefixo mais longo vence; sem correspondência, a página do produto.
+ * Artigo de uma aba, ou `null` quando a tela não tem abas mapeadas ou a aba
+ * não tem artigo próprio. Casa a rota EXATA (sem query nem barra final): as
+ * abas são da tela, não das subrotas dela.
  */
-export function caminhoDoArtigo(rota: string | null | undefined): string {
-  if (!rota) return CAMINHO_PADRAO_DA_AJUDA;
+export function artigoDaAba(
+  rota: string | null | undefined,
+  aba: string | null | undefined,
+): string | null {
+  if (!rota || !aba) return null;
+  const porAba = ARTIGOS_POR_ABA[normalizarRota(rota)];
+  if (!porAba || !Object.hasOwn(porAba, aba)) return null;
+  return porAba[aba] ?? null;
+}
+
+/**
+ * Artigo PRÓPRIO da tela (e da aba, se houver), ou `null`. Nunca cai na página
+ * genérica do produto: é o que o link "Dúvidas?" usa para não aparecer em tela
+ * que não tem artigo.
+ */
+export function artigoProprio(rota: string | null | undefined, aba?: string | null): string | null {
+  const daAba = artigoDaAba(rota, aba);
+  if (daAba) return daAba;
+  if (!rota) return null;
   const alvo = normalizarRota(rota);
   let melhor: string | null = null;
   for (const prefixo of Object.keys(ARTIGOS_POR_ROTA)) {
     const casa = alvo === prefixo || alvo.startsWith(`${prefixo}/`);
     if (casa && (melhor === null || prefixo.length > melhor.length)) melhor = prefixo;
   }
-  return melhor === null ? CAMINHO_PADRAO_DA_AJUDA : ARTIGOS_POR_ROTA[melhor]!;
+  return melhor === null ? null : ARTIGOS_POR_ROTA[melhor]!;
+}
+
+/**
+ * Caminho do artigo (começa e termina com `/`) para a rota atual do CRM.
+ * Aba com artigo vence; depois, prefixo mais longo; sem nada, a página do produto.
+ */
+export function caminhoDoArtigo(rota: string | null | undefined, aba?: string | null): string {
+  return artigoProprio(rota, aba) ?? CAMINHO_PADRAO_DA_AJUDA;
 }
 
 /**
@@ -107,8 +152,22 @@ export function baseDaCentralDeAjuda(bruto: string | null | undefined): string |
 export function urlDaAjuda(
   base: string | null | undefined,
   rota: string | null | undefined,
+  aba?: string | null,
 ): string | null {
   const baseLimpa = baseDaCentralDeAjuda(base);
   if (!baseLimpa) return null;
-  return `${baseLimpa}${caminhoDoArtigo(rota)}`;
+  return `${baseLimpa}${caminhoDoArtigo(rota, aba)}`;
+}
+
+/**
+ * URL de um caminho da central (ex.: `CAMINHO_PADRAO_DA_AJUDA`), ou `null`
+ * sem central configurada ou sem caminho.
+ */
+export function urlNaCentral(
+  base: string | null | undefined,
+  caminho: string | null | undefined,
+): string | null {
+  const baseLimpa = baseDaCentralDeAjuda(base);
+  if (!baseLimpa || !caminho) return null;
+  return `${baseLimpa}${caminho}`;
 }
