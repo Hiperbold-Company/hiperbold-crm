@@ -17,6 +17,7 @@ import { useWebhookSources, type WebhookSourceRow } from "@/hooks/webhooks/useWe
 import { CreateSourceDialog } from "./CreateSourceDialog";
 import { SourceDetail } from "./SourceDetail";
 import { useT } from "@/hooks/i18n/useT";
+import { usePermission } from "@/hooks/auth/AuthProvider";
 
 function lastReceivedLabel(iso: string | null, t: (texto: string) => string, locale: Locale): string {
   if (!iso) return t("nunca recebeu");
@@ -29,8 +30,14 @@ export function SourcesTab({ bloqueio }: { bloqueio?: BloqueioDoBotao } = {}) {
   const { data, isLoading } = useWebhookSources();
   const [createOpen, setCreateOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<WebhookSourceRow | null>(null);
+  // Esconde o que a rota recusaria (POST exige `automacoes.gerenciar`).
+  const podeGerenciar = usePermission("automacoes.gerenciar");
 
   const sources = data?.data ?? [];
+  // O detalhe lê a linha da LISTA, não o retrato guardado no clique: depois de
+  // editar, pausar ou reativar, a lista é recarregada e o detalhe acompanha. O
+  // retrato só vale enquanto a fonte recém-criada ainda não chegou na lista.
+  const aberta = selected ? (sources.find((s) => s.id === selected.id) ?? selected) : null;
 
   if (isLoading) {
     return (
@@ -55,9 +62,15 @@ export function SourcesTab({ bloqueio }: { bloqueio?: BloqueioDoBotao } = {}) {
               <li>{t("2. Copie o endereço ou o formulário pronto.")}</li>
               <li>{t("3. Cole no seu site — cada envio vira um lead aqui dentro.")}</li>
             </ol>
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus /> {t("Criar primeira fonte")}
-            </Button>
+            {podeGerenciar ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus /> {t("Criar primeira fonte")}
+              </Button>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {t("Seu perfil não pode criar fontes. Fale com quem administra a empresa.")}
+              </p>
+            )}
           </CardContent>
         </Card>
         <CreateSourceDialog
@@ -68,7 +81,7 @@ export function SourcesTab({ bloqueio }: { bloqueio?: BloqueioDoBotao } = {}) {
         />
         {selected ? (
           <SourceDetail
-            source={selected}
+            source={aberta ?? selected}
             open={!!selected}
             onOpenChange={() => setSelected(null)}
             bloqueio={bloqueio}
@@ -80,11 +93,13 @@ export function SourcesTab({ bloqueio }: { bloqueio?: BloqueioDoBotao } = {}) {
 
   return (
     <div className="space-y-4 pt-4">
-      <div className="flex sm:justify-end">
-        <Button onClick={() => setCreateOpen(true)} className="w-full sm:w-auto">
-          <Plus /> {t("Nova fonte")}
-        </Button>
-      </div>
+      {podeGerenciar ? (
+        <div className="flex sm:justify-end">
+          <Button onClick={() => setCreateOpen(true)} className="w-full sm:w-auto">
+            <Plus /> {t("Nova fonte")}
+          </Button>
+        </div>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {sources.map((s) => (
           <Card
@@ -118,7 +133,7 @@ export function SourcesTab({ bloqueio }: { bloqueio?: BloqueioDoBotao } = {}) {
       />
       {selected ? (
         <SourceDetail
-          source={selected}
+          source={aberta ?? selected}
           open={!!selected}
           onOpenChange={() => setSelected(null)}
           bloqueio={bloqueio}

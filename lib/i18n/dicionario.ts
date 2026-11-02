@@ -4972,15 +4972,42 @@ export const DICIONARIO: Traducoes = {
   "Ainda não chegou nada por aqui.": { es: "Todavía no ha llegado nada por aquí." },
   "assinatura inválida": { es: "firma inválida" },
   "Fonte ativa": { es: "Fuente activa" },
-  "Pausada, ela para de aceitar novos envios.": { es: "Pausada, deja de aceptar nuevos envíos." },
+  "Pausada, o endereço recusa os envios: nenhum lead novo entra, e os envios recusados não aparecem em Leads recebidos.": {
+    es: "En pausa, la dirección rechaza los envíos: no entra ningún lead nuevo, y los envíos rechazados no aparecen en Leads recibidos.",
+  },
   "Fonte ativada.": { es: "Fuente activada." },
   "Fonte pausada.": { es: "Fuente pausada." },
   "Excluir fonte": { es: "Eliminar fuente" },
   "Excluir esta fonte?": { es: "¿Eliminar esta fuente?" },
-  "O endereço para de funcionar imediatamente. Leads já recebidos continuam no seu funil — só a captação futura é interrompida. Essa ação não pode ser desfeita.": {
-    es: "La dirección deja de funcionar de inmediato. Los leads que ya recibiste siguen en tu embudo, pero dejarás de captar nuevos. Esta acción no se puede deshacer.",
+  "O endereço para de funcionar na hora: formulários que ainda enviam para ele deixam de criar leads. Os leads e contatos que já chegaram continuam no funil, e o histórico em Leads recebidos guarda o nome da fonte. Essa ação não pode ser desfeita.": {
+    es: "La dirección deja de funcionar al instante: los formularios que todavía envían a ella dejan de crear leads. Los leads y contactos que ya llegaron siguen en el embudo, y el historial en Leads recibidos conserva el nombre de la fuente. Esta acción no se puede deshacer.",
   },
   "Fonte excluída.": { es: "Fuente eliminada." },
+  // ─── Editar fonte de captação ───
+  "Editar fonte": { es: "Editar fuente" },
+  "As mudanças valem para os próximos envios. O endereço da fonte continua o mesmo.": {
+    es: "Los cambios valen para los próximos envíos. La dirección de la fuente sigue siendo la misma.",
+  },
+  "Dê um nome para a fonte.": { es: "Dale un nombre a la fuente." },
+  "A página de obrigado precisa ser um endereço completo, começando com https://": {
+    es: "La página de agradecimiento debe ser una dirección completa, que empiece con https://",
+  },
+  "Fonte atualizada.": { es: "Fuente actualizada." },
+  "Página de obrigado (opcional)": { es: "Página de agradecimiento (opcional)" },
+  "Para onde enviar a pessoa depois que ela preencher seu formulário. Em branco, ela não é redirecionada.": {
+    es: "A dónde enviar a la persona después de que complete tu formulario. En blanco, no se la redirige.",
+  },
+  "Campos do seu formulário": { es: "Campos de tu formulario" },
+  "Use o nome do campo como o seu formulário envia, por exemplo form_fields[phone] ou contato_celular. Pode pôr vários, separados por vírgula. Em branco, o CRM reconhece os nomes comuns sozinho.": {
+    es: "Usa el nombre del campo tal como lo envía tu formulario, por ejemplo form_fields[phone] o contato_celular. Puedes poner varios, separados por coma. En blanco, el CRM reconoce solo los nombres comunes.",
+  },
+  "Campo do nome": { es: "Campo del nombre" },
+  "Campo do telefone": { es: "Campo del teléfono" },
+  "Campo do e-mail": { es: "Campo del correo" },
+  "Já reconhecidos sozinhos:": { es: "Ya reconocidos solos:" },
+  "Seu perfil não pode criar fontes. Fale com quem administra a empresa.": {
+    es: "Tu perfil no puede crear fuentes. Habla con quien administra la empresa.",
+  },
   "nunca recebeu": { es: "nunca recibió" },
   "último recebimento": { es: "último recibido" },
   "Conecte sua landing page em 2 minutos": { es: "Conecta tu landing page en 2 minutos" },
@@ -6328,8 +6355,8 @@ export const DICIONARIO: Traducoes = {
   "Ex.: Roteador de vendas": { es: "Ej.: Enrutador de ventas" },
   Perfil: { es: "Perfil" },
   CNPJ: { es: "CNPJ" },
-  "Cole o endereço acima no campo \"Action\" (ou \"URL de envio\") do seu formulário.": {
-    es: "Pega la dirección de arriba en el campo \"Action\" (o \"URL de envío\") de tu formulario.",
+  "No Elementor Pro: Ações após o envio › Webhook, e cole o endereço acima na URL do webhook. Contact Form 7 precisa de um plugin de webhook (ex.: CF7 to Webhook); Fluent Forms Pro e WPForms Pro têm integração por Webhook.": {
+    es: "En Elementor Pro: Acciones después del envío › Webhook, y pega la dirección de arriba en la URL del webhook. Contact Form 7 necesita un plugin de webhook (p. ej.: CF7 to Webhook); Fluent Forms Pro y WPForms Pro tienen integración por Webhook.",
   },
   Descartar: { es: "Descartar" },
   Você: { es: "Tú" },

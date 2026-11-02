@@ -31,7 +31,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { copyToClipboard } from "@/lib/clipboard";
-import { Copy, Trash, CaretDown } from "@/lib/ui/icons";
+import { Copy, Trash, CaretDown, PencilSimple } from "@/lib/ui/icons";
+import { usePermission } from "@/hooks/auth/AuthProvider";
+import { EditSourceDialog } from "./EditSourceDialog";
 import { cn } from "@/lib/utils";
 import {
   useDeleteWebhookSource,
@@ -97,6 +99,10 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
   );
   const [testing, setTesting] = React.useState(false);
   const [testOk, setTestOk] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
+  // Esconde o que a rota recusaria (PATCH/DELETE exigem `automacoes.gerenciar`).
+  // Não é autorização: quem barra é a rota.
+  const podeGerenciar = usePermission("automacoes.gerenciar");
 
   const url = publicUrl(source.path_token);
   const events = eventsRes?.data ?? [];
@@ -149,7 +155,17 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
               "Se a pessoa já tiver um lead aberto neste funil, o CRM não cria outro: registra o recadastro no histórico e mantém a etapa.",
             )}
           </SheetDescription>
+          {podeGerenciar ? (
+            <div>
+              <Button type="button" variant="secondary" onClick={() => setEditOpen(true)}>
+                <PencilSimple /> {t("Editar")}
+              </Button>
+            </div>
+          ) : null}
         </SheetHeader>
+        {podeGerenciar ? (
+          <EditSourceDialog source={source} open={editOpen} onOpenChange={setEditOpen} />
+        ) : null}
 
         <div className="mt-6 space-y-6">
           <section className="space-y-2">
@@ -194,7 +210,7 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
                   <p className="font-medium text-text">WordPress / Elementor</p>
                   <p>
                     {t(
-                      'Cole o endereço acima no campo "Action" (ou "URL de envio") do seu formulário.',
+                      "No Elementor Pro: Ações após o envio › Webhook, e cole o endereço acima na URL do webhook. Contact Form 7 precisa de um plugin de webhook (ex.: CF7 to Webhook); Fluent Forms Pro e WPForms Pro têm integração por Webhook.",
                     )}
                   </p>
                 </div>
@@ -256,13 +272,19 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
             )}
           </section>
 
-          <section className="flex items-center justify-between rounded-sm border border-border p-3">
+          {podeGerenciar ? (
+          <>
+          <section className="flex items-center justify-between gap-3 rounded-sm border border-border p-3">
             <div>
               <p className="text-sm font-medium text-text">{t("Fonte ativa")}</p>
+              {/* A rota de entrada responde 404 à fonte pausada ANTES de gravar
+                  qualquer registro — por isso o envio não aparece em Leads recebidos. */}
               <p className="text-xs text-muted-foreground">
                 {!source.is_active && bloqueio?.desabilitado
                   ? bloqueio.motivo
-                  : t("Pausada, ela para de aceitar novos envios.")}
+                  : t(
+                      "Pausada, o endereço recusa os envios: nenhum lead novo entra, e os envios recusados não aparecem em Leads recebidos.",
+                    )}
               </p>
             </div>
             <Switch
@@ -294,15 +316,22 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
                 <AlertDialogTitle>{t("Excluir esta fonte?")}</AlertDialogTitle>
                 <AlertDialogDescription>
                   {t(
-                    "O endereço para de funcionar imediatamente. Leads já recebidos continuam no seu funil — só a captação futura é interrompida. Essa ação não pode ser desfeita.",
+                    "O endereço para de funcionar na hora: formulários que ainda enviam para ele deixam de criar leads. Os leads e contatos que já chegaram continuam no funil, e o histórico em Leads recebidos guarda o nome da fonte. Essa ação não pode ser desfeita.",
                   )}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>{t("Cancelar")}</AlertDialogCancel>
                 <AlertDialogAction
+                  disabled={del.isPending}
                   onClick={async () => {
-                    await del.mutateAsync(source.id);
+                    try {
+                      await del.mutateAsync(source.id);
+                    } catch {
+                      // A mensagem da API já foi mostrada pelo showApiError do hook;
+                      // a fonte continua aberta, porque ela continua existindo.
+                      return;
+                    }
                     toast.success(t("Fonte excluída."));
                     onOpenChange(false);
                   }}
@@ -312,6 +341,8 @@ export function SourceDetail({ source, open, onOpenChange, bloqueio }: Props) {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          </>
+          ) : null}
         </div>
       </SheetContent>
     </Sheet>
