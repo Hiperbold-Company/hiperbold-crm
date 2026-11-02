@@ -43,6 +43,33 @@ import type { InboundMessageEvent, OutboundEchoEvent } from "./webhook";
 
 type Admin = SupabaseClient;
 
+/**
+ * O que o tipo traduzido deixa em `messages.metadata`: a opção escolhida
+ * (`reply`) e o tipo cru da Meta (`tipo_original`). Ver `tipoParaOCrm` em
+ * `./webhook.ts` — é lá que se garante que `type` cabe no CHECK do banco.
+ */
+function metadataDoTipo(e: InboundMessageEvent | OutboundEchoEvent) {
+  return {
+    ...(e.reply ? { reply: e.reply } : {}),
+    ...(e.tipoOriginal ? { tipo_original: e.tipoOriginal } : {}),
+  };
+}
+
+/** Tipo que o CRM não sabe mostrar entra gravado e marcado — e deixa rastro no log. */
+function avisarNaoSuportado(
+  e: InboundMessageEvent | OutboundEchoEvent,
+  orgId: string,
+  direcao: "inbound" | "outbound",
+) {
+  if (!e.naoSuportado) return;
+  logger.warn("[meta.ingest] tipo de mensagem não suportado gravado como marca", {
+    organization_id: orgId,
+    tipo_original: e.tipoOriginal ?? null,
+    direcao,
+    external_id: e.externalId,
+  });
+}
+
 export type IngestOutcome =
   | { status: "ingested"; messageId: string; conversationId: string }
   | { status: "duplicate" }
@@ -253,6 +280,7 @@ export async function ingestMetaInbound(
       metadata: {
         ...(e.media ? { meta_media_id: e.media.id, voice: e.media.voice } : {}),
         ...(e.sharedContact ? { shared_contact: e.sharedContact } : {}),
+        ...metadataDoTipo(e),
       },
     })
     .select("id")
@@ -274,6 +302,8 @@ export async function ingestMetaInbound(
   // oficial era o pior dos três justamente onde a falha dói mais, porque é ele
   // que tem janela de 24h — e conversa sem carimbo é janela que ninguém vê
   // fechar. Quem decide o que fazer com a falha agora é uma função só.
+  avisarNaoSuportado(e, orgId, "inbound");
+
   await marcarConversaComMensagem(admin, {
     organizationId: orgId,
     conversationId: conversationId as string,
@@ -306,7 +336,9 @@ export async function ingestMetaInbound(
     conversationId: conversationId as string,
     messageId: messageId || null,
     channelSessionId: sessao.id,
-    texto: e.text ?? null,
+    // A marca de não suportado é para quem atende ler, não o que o cliente
+    // escreveu: o agente, o STOP e as automações por palavra não a recebem.
+    texto: e.naoSuportado ? null : (e.text ?? null),
     nomeDoContato: e.profileName ?? null,
     origem: "meta_webhook",
   });
@@ -425,6 +457,7 @@ export async function ingestMetaEcho(
         from_business_app: true,
         ...(e.media ? { meta_media_id: e.media.id, voice: e.media.voice } : {}),
         ...(e.sharedContact ? { shared_contact: e.sharedContact } : {}),
+        ...metadataDoTipo(e),
       },
     })
     .select("id")
@@ -434,6 +467,8 @@ export async function ingestMetaEcho(
     if (erroInsert.code === "23505") return { status: "duplicate" };
     return { status: "failed", reason: `mensagem: ${erroInsert.message}` };
   }
+
+  avisarNaoSuportado(e, orgId, "outbound");
 
   await marcarConversaComMensagem(admin, {
     organizationId: orgId,
