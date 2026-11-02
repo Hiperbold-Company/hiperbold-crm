@@ -11,8 +11,15 @@
  * `(plataforma pelo object, entry.id)` entre as não arquivadas. É a LINHA DO
  * BANCO que diz a organização; conta desconhecida é ignorada com 200.
  *
- * 200 sempre que a assinatura confere: a Meta reentrega o que não recebe 2xx, e
- * recusar o que ignoramos viraria reentrega em backoff por horas.
+ * 200 quando a assinatura confere e nada FALHOU: a Meta reentrega o que não
+ * recebe 2xx, e recusar o que ignoramos (conta desconhecida, envelope assinado
+ * fora do contrato, entrada sem `entry[].id`) viraria reentrega em backoff por
+ * horas, sem nada que ela pudesse mudar.
+ *
+ * 500 quando algum evento falhou por erro NOSSO (leitura da sessão, escrita da
+ * mensagem): aí a reentrega é justamente o que salva a mensagem. É seguro
+ * porque a ingestão é idempotente — o que já entrou volta como `duplicate`
+ * (`unique (organization_id, external_id)`, 23505) e só o que falhou é gravado.
  */
 import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
@@ -72,13 +79,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
   const envelope = envelopeMetaSocial.safeParse(json);
   if (!envelope.success) {
-    return fail("validation_failed", "payload fora do contrato do canal", 400, { requestId });
+    // Assinado pela Meta e fora do contrato: recusar só geraria reentrega do
+    // mesmo corpo. Fica registrado e ignorado.
+    logger.warn("[meta-social.webhook] envelope assinado fora do contrato; ignorado", { request_id: requestId });
+    const ignorado = NextResponse.json({ received: 0, outcomes: ["ignored:fora_do_contrato"] }, { status: 200 });
+    ignorado.headers.set("X-Request-Id", requestId);
+    return ignorado;
   }
 
   const eventos = lerEventosMetaSocial(envelope.data);
   const admin = createAdminClient();
   const sessoes = new Map<string, SessaoMetaSocial | null>();
   const desfechos: string[] = [];
+  let falhas = 0;
 
   for (const e of eventos) {
     const chave = `${e.plataforma}:${e.contaId}`;
@@ -92,6 +105,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const r = await ingerirEventoMetaSocial(admin, sessao, e, { appIdsProprios: cfg.appIds });
       desfechos.push(r.reason ? `${r.status}:${r.reason}` : r.status);
     } catch (err) {
+      // Não interrompe o laço: os outros eventos do lote seguem sendo gravados,
+      // e a reentrega (pelo 500 abaixo) refaz só o que faltou.
+      falhas += 1;
       desfechos.push("failed");
       logger.error("[meta-social.webhook] evento não ingerido", {
         request_id: requestId,
@@ -101,7 +117,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const resposta = NextResponse.json({ received: eventos.length, outcomes: desfechos }, { status: 200 });
+  const resposta = NextResponse.json(
+    { received: eventos.length, outcomes: desfechos },
+    { status: falhas > 0 ? 500 : 200 },
+  );
   resposta.headers.set("X-Request-Id", requestId);
   return resposta;
 }

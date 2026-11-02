@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import { invalidarAppDaMeta } from "@/lib/channels/meta/app";
+import { invalidarConfigMetaSocial } from "@/lib/channels/meta-social/config";
 import { audit } from "@/lib/audit";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { logger } from "@/lib/logger";
@@ -117,6 +118,8 @@ async function gravar(
   // No MESMO processo que renderiza (na VPS há um processo de app só), então a
   // credencial nova vale na próxima entrega sem esperar o TTL de 30s.
   invalidarAppDaMeta();
+  // O canal social (Instagram e Messenger) lê esta mesma linha, com memo próprio.
+  invalidarConfigMetaSocial();
 
   const cabecalhos = await headers();
   await audit({
@@ -311,4 +314,82 @@ export async function rotacionarVerifyTokenDaMeta(): Promise<UpdateMetaAppResult
   if (!r.ok) return r;
 
   return { ok: true, verifyToken };
+}
+
+/**
+ * Os ids dos apps e a chave secreta do app do Instagram — o que o canal social
+ * oficial (Instagram Direct e Messenger, migration 0984) precisa para o OAuth.
+ *
+ * Campos vazios = "mantenha o que está gravado", como a chave do WhatsApp: a
+ * chave do Instagram nunca volta à tela, então salvar de novo sem redigitá-la
+ * não pode apagá-la. Ids são só dígitos (é o formato do painel da Meta); a
+ * chave do Instagram tem o mesmo piso da do app da Meta.
+ *
+ * Nenhuma regra de par aqui: o resolvedor (`lib/channels/meta-social/config.ts`)
+ * só serve o app do Instagram com id E chave do MESMO lugar, e a tela mostra o
+ * que falta. Gate, cifra, upsert, invalidação dos memos e trilha são os de
+ * `gravar` — o mesmo caminho da chave do WhatsApp.
+ */
+/** Vazio (ou só espaço) vira ausente: "mantenha o que está gravado". */
+const vazioEhAusente = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+const idDoApp = z.preprocess(vazioEhAusente, z.string().trim().regex(/^[0-9]{5,30}$/).optional());
+
+const entradaSocialSchema = z.object({
+  app_id: idDoApp,
+  instagram_app_id: idDoApp,
+  instagram_app_secret: z.preprocess(vazioEhAusente, z.string().trim().min(16).max(300).optional()),
+});
+
+export interface MetaSocialAppInput {
+  app_id?: string;
+  instagram_app_id?: string;
+  instagram_app_secret?: string;
+}
+
+export async function updateAppSocialDaMeta(input: MetaSocialAppInput): Promise<UpdateMetaAppResult> {
+  let authUser: Awaited<ReturnType<typeof requirePlatformAdminFull>>["user"];
+  try {
+    ({ user: authUser } = await requirePlatformAdminFull());
+  } catch (err) {
+    if (ehFalhaDaSessao(err)) return { ok: false, error: MENSAGEM_SESSAO_INVALIDA };
+    throw err;
+  }
+
+  const parsed = entradaSocialSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "invalid_input", details: parsed.error.flatten() };
+  }
+  const { app_id, instagram_app_id, instagram_app_secret } = parsed.data;
+  if (!app_id && !instagram_app_id && !instagram_app_secret) return { ok: false, error: "nada_para_salvar" };
+
+  const valores: Record<string, unknown> = { updated_by: authUser.id };
+  const campos: string[] = [];
+  if (app_id) {
+    valores.app_id = app_id;
+    campos.push("app_id");
+  }
+  if (instagram_app_id) {
+    valores.instagram_app_id = instagram_app_id;
+    campos.push("instagram_app_id");
+  }
+  if (instagram_app_secret) {
+    const cifrado = await encryptWebhookSecret(createAdminClient(), instagram_app_secret);
+    if (!cifrado) {
+      return {
+        ok: false,
+        error:
+          "cifra indisponível nesta instalação (GUC app.nuvemshop_oauth_key ausente) — a chave do Instagram não foi gravada",
+      };
+    }
+    valores.instagram_app_secret_encrypted = cifrado;
+    campos.push("instagram_app_secret_encrypted");
+  }
+
+  // Trilha: QUAIS campos mudaram. Os ids não são segredo, mas a trilha segue a
+  // regra da casa e não carrega valor nenhum.
+  return gravar(authUser, valores, "platform_meta_app.updated", {
+    campos,
+    canal: "meta_social",
+    segredo_do_instagram_trocado: Boolean(instagram_app_secret),
+  });
 }

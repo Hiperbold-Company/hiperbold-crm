@@ -9,9 +9,17 @@
  *  - Token NUNCA vai para log nem para mensagem de erro. `ErroDaMeta` carrega
  *    só o status HTTP, o código da Meta e um trecho da mensagem DELA.
  *  - Token em header (`Authorization: Bearer`) sempre que o endpoint aceita.
- *    As exceções são os endpoints de troca/renovação de token, que a Meta só
- *    aceita por query string; eles são chamados de servidor para servidor e a
- *    URL nunca é registrada.
+ *  - `client_secret` NUNCA em query string onde a Meta aceita corpo: as trocas
+ *    do Messenger (`/oauth/access_token`, código e `fb_exchange_token`) e a do
+ *    código do Instagram (`api.instagram.com/oauth/access_token`) vão por POST
+ *    com corpo `application/x-www-form-urlencoded`.
+ *  - A exceção documentada são os dois endpoints de `graph.instagram.com`
+ *    (`/access_token` com `ig_exchange_token` e `/refresh_access_token`): a doc
+ *    da Instagram API com login do Instagram só descreve GET, com o segredo e o
+ *    token na query. Ficam em GET, de servidor para servidor, e a URL nunca sai
+ *    daqui: `chamarMeta` não a registra, e a `ErroDaMeta` carrega só a etapa, o
+ *    status, o código da Meta e a mensagem DELA — nem a falha de rede (cuja
+ *    mensagem pode citar a URL) passa: dela só vai o NOME do erro.
  */
 import {
   CAMPOS_DO_WEBHOOK_INSTAGRAM,
@@ -136,13 +144,17 @@ export interface TokenComValidade {
   expiraEmSegundos: number | null;
 }
 
-/** Código (1h, uso único) → token CURTO. */
+/**
+ * Código (1h, uso único) → token CURTO e o `user_id` de quem autorizou — o id
+ * que o `signed_request` da exclusão de dados traz quando essa pessoa remove o
+ * app (guardado na sessão, `metadata.meta_autorizador_id`).
+ */
 export async function trocarCodigoInstagram(
   app: AppOAuth,
   code: string,
   redirectUri: string,
   fetcher?: typeof fetch,
-): Promise<string> {
+): Promise<{ token: string; userId: string | null }> {
   const r = await chamarMeta(
     "instagram_troca_de_codigo",
     `${HOST_OAUTH_INSTAGRAM}/oauth/access_token`,
@@ -161,7 +173,7 @@ export async function trocarCodigoInstagram(
   const dado = Array.isArray(r.data) ? (r.data[0] as Record<string, unknown> | undefined) : r;
   const token = str(dado?.access_token);
   if (!token) throw new ErroDaMeta("instagram_troca_de_codigo", 200, null, "sem access_token");
-  return token;
+  return { token, userId: str(dado?.user_id) };
 }
 
 function lerTokenComValidade(etapa: string, r: Record<string, unknown>): TokenComValidade {
@@ -228,14 +240,21 @@ export async function trocarCodigoMessenger(
   redirectUri: string,
   fetcher?: typeof fetch,
 ): Promise<string> {
-  const u = new URL(`/${VERSAO_DA_GRAPH_SOCIAL}/oauth/access_token`, HOST_GRAPH_FACEBOOK);
-  u.searchParams.set("client_id", app.appId);
-  u.searchParams.set("client_secret", app.appSecret);
-  u.searchParams.set("redirect_uri", redirectUri);
-  u.searchParams.set("code", code);
   return lerTokenComValidade(
     "messenger_troca_de_codigo",
-    await chamarMeta("messenger_troca_de_codigo", u.toString(), {}, fetcher),
+    await chamarMeta(
+      "messenger_troca_de_codigo",
+      `${HOST_GRAPH_FACEBOOK}/${VERSAO_DA_GRAPH_SOCIAL}/oauth/access_token`,
+      {
+        form: {
+          client_id: app.appId,
+          client_secret: app.appSecret,
+          redirect_uri: redirectUri,
+          code,
+        },
+      },
+      fetcher,
+    ),
   ).token;
 }
 
@@ -245,15 +264,41 @@ export async function tokenLongoMessenger(
   tokenCurto: string,
   fetcher?: typeof fetch,
 ): Promise<string> {
-  const u = new URL(`/${VERSAO_DA_GRAPH_SOCIAL}/oauth/access_token`, HOST_GRAPH_FACEBOOK);
-  u.searchParams.set("grant_type", "fb_exchange_token");
-  u.searchParams.set("client_id", app.appId);
-  u.searchParams.set("client_secret", app.appSecret);
-  u.searchParams.set("fb_exchange_token", tokenCurto);
   return lerTokenComValidade(
     "messenger_token_longo",
-    await chamarMeta("messenger_token_longo", u.toString(), {}, fetcher),
+    await chamarMeta(
+      "messenger_token_longo",
+      `${HOST_GRAPH_FACEBOOK}/${VERSAO_DA_GRAPH_SOCIAL}/oauth/access_token`,
+      {
+        form: {
+          grant_type: "fb_exchange_token",
+          client_id: app.appId,
+          client_secret: app.appSecret,
+          fb_exchange_token: tokenCurto,
+        },
+      },
+      fetcher,
+    ),
   ).token;
+}
+
+/**
+ * O id (com escopo do app) da pessoa do Facebook que autorizou — o mesmo
+ * `user_id` que o `signed_request` da exclusão de dados traz. `null` em falha:
+ * não ter o id não impede conectar, só deixa a exclusão casar pela conta.
+ */
+export async function usuarioDoFacebook(tokenDeUsuario: string, fetcher?: typeof fetch): Promise<string | null> {
+  try {
+    const r = await chamarMeta(
+      "messenger_usuario",
+      `${HOST_GRAPH_FACEBOOK}/${VERSAO_DA_GRAPH_SOCIAL}/me?fields=id`,
+      { token: tokenDeUsuario },
+      fetcher,
+    );
+    return str(r.id);
+  } catch {
+    return null;
+  }
 }
 
 export interface PaginaConcedida extends ContaDaMeta {

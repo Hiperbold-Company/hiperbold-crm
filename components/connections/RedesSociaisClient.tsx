@@ -20,6 +20,7 @@ import { Card } from "@/components/ui/card";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { fraseDoMotivo } from "@/lib/channels/meta-social/motivos";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
 
@@ -29,7 +30,7 @@ import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
  * anterior por intermediário, que pedia chave de API e perfil.
  *
  * Conectar é navegação de página inteira para a rota que monta o OAuth; a volta
- * chega em `/app/connections?aba=sociais&meta_social=ok|erro&motivo=&n=`. O
+ * chega em `/app/connections?aba=sociais&meta_social=ok|erro|parcial&motivo=&n=&recusadas=`. O
  * aviso da volta é lido UMA vez e os parâmetros saem da URL, para um F5 não
  * repetir "conta conectada".
  */
@@ -69,36 +70,49 @@ export function precisaReconectar(conta: ContaSocial, agora: number = Date.now()
   return Number.isFinite(vence) && vence - agora < SETE_DIAS_MS;
 }
 
-type Aviso = { tipo: "ok" | "erro"; texto: string; limite?: boolean };
+type Aviso = { tipo: "ok" | "erro" | "parcial"; texto: string; limite?: boolean };
 
-const MOTIVOS: Record<string, string> = {
-  nao_configurado: "A conexão ainda não foi liberada nesta instalação.",
-  cancelado: "A conexão foi cancelada antes de terminar. Clique em Conectar para tentar de novo.",
-  estado_invalido:
-    "A conexão expirou ou foi aberta em outra janela. Clique em Conectar para tentar de novo.",
-  limite_do_plano: "Seu plano chegou ao limite de conexões.",
-  conta_em_outra_organizacao:
-    "Esta conta já está conectada em outra empresa neste sistema. Desconecte lá antes de conectar aqui.",
-  sem_paginas:
-    "Não encontramos nenhuma conta para conectar. Confira se você é administrador da Página e se marcou a conta na hora de autorizar.",
-  falha_meta: "A Meta não respondeu como esperado. Tente de novo em alguns minutos.",
+const inteiro = (v: string | null): number => {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : 0;
 };
 
-function lerAviso(params: URLSearchParams, t: (s: string) => string): Aviso | null {
+/**
+ * A frase da volta. Os códigos de `motivo` e as frases são os de
+ * `lib/channels/meta-social/motivos.ts` — o mesmo conjunto que o backend emite.
+ */
+export function lerAviso(params: URLSearchParams, t: (s: string) => string): Aviso | null {
   const resultado = params.get("meta_social");
   if (resultado === "ok") {
-    const n = Number(params.get("n"));
+    const n = inteiro(params.get("n"));
     const texto =
-      Number.isInteger(n) && n > 1
+      n > 1
         ? `${n} ${t("contas conectadas. As novas mensagens passam a chegar no Chat.")}`
         : t("Conta conectada. As novas mensagens passam a chegar no Chat.");
     return { tipo: "ok", texto };
   }
+  const motivo = params.get("motivo") ?? "";
+  if (resultado === "parcial") {
+    const n = inteiro(params.get("n"));
+    const x = inteiro(params.get("recusadas"));
+    const conectadas =
+      n === 1 ? t("1 Página conectada") : `${n} ${t("Páginas conectadas")}`;
+    const recusadas =
+      x === 1
+        ? t("1 não pôde ser conectada")
+        : x > 1
+          ? `${x} ${t("não puderam ser conectadas")}`
+          : t("outras não puderam ser conectadas");
+    return {
+      tipo: "parcial",
+      texto: `${conectadas}; ${recusadas}: ${t(fraseDoMotivo(motivo))}`,
+      limite: motivo === "limite_do_plano",
+    };
+  }
   if (resultado === "erro") {
-    const motivo = params.get("motivo") ?? "";
     return {
       tipo: "erro",
-      texto: t(MOTIVOS[motivo] ?? MOTIVOS.falha_meta ?? ""),
+      texto: t(fraseDoMotivo(motivo)),
       limite: motivo === "limite_do_plano",
     };
   }
@@ -147,7 +161,7 @@ export function RedesSociaisClient({
   useEffect(() => {
     const atual = new URLSearchParams(window.location.search);
     if (!atual.has("meta_social")) return;
-    for (const k of ["meta_social", "motivo", "n"]) atual.delete(k);
+    for (const k of ["meta_social", "motivo", "n", "recusadas"]) atual.delete(k);
     const qs = atual.toString();
     window.history.replaceState(null, "", qs ? `${caminho}?${qs}` : caminho);
   }, [caminho]);
@@ -184,10 +198,13 @@ export function RedesSociaisClient({
         <div
           role={aviso.tipo === "ok" ? "status" : "alert"}
           data-testid="aviso-meta-social"
+          data-tipo={aviso.tipo}
           className={
             aviso.tipo === "ok"
               ? "flex items-start justify-between gap-3 rounded-md border p-3 text-sm"
-              : "flex items-start justify-between gap-3 rounded-md border border-destructive p-3 text-sm text-destructive"
+              : aviso.tipo === "parcial"
+                ? "flex items-start justify-between gap-3 rounded-md border border-warning/40 bg-warning-bg p-3 text-sm"
+                : "flex items-start justify-between gap-3 rounded-md border border-destructive p-3 text-sm text-destructive"
           }
         >
           <div>

@@ -61,6 +61,20 @@ export type EventoMetaSocial =
       plataforma: PlataformaMetaSocial;
       contaId: string;
       mid: string;
+    }
+  | {
+      /**
+       * O cliente leu. Instagram (`messaging_seen`) diz QUAL mensagem (`mid`);
+       * Messenger (`message_reads`) diz ATÉ QUANDO (`watermark`, ms): tudo o que
+       * a Página enviou antes disso está lido.
+       */
+      tipo: "lida";
+      plataforma: PlataformaMetaSocial;
+      contaId: string;
+      clienteId: string;
+      mid: string | null;
+      ateMs: number | null;
+      lidaEm: string | null;
     };
 
 const id = z.union([z.string().min(1), z.number()]).transform(String);
@@ -69,6 +83,13 @@ const itemDeMensagem = z
     sender: z.object({ id }).loose().optional(),
     recipient: z.object({ id }).loose().optional(),
     timestamp: z.union([z.number(), z.string()]).optional(),
+    read: z
+      .object({
+        mid: z.string().min(1).optional(),
+        watermark: z.union([z.number(), z.string()]).optional(),
+      })
+      .loose()
+      .optional(),
     message: z
       .object({
         mid: z.string().min(1),
@@ -99,7 +120,9 @@ export const envelopeMetaSocial = z
       .array(
         z
           .object({
-            id,
+            // Opcional no SCHEMA para uma entrada sem id não derrubar o envelope
+            // inteiro (as outras entradas seguem); a leitura pula a que não tem.
+            id: id.optional(),
             messaging: z.array(z.unknown()).optional(),
             changes: z.array(z.unknown()).optional(),
           })
@@ -137,8 +160,9 @@ function dataDoTimestamp(t: unknown): string | null {
 }
 
 /**
- * Extrai os eventos que interessam. Leitura, reação e postback são IGNORADOS
- * (não viram erro): a Meta reentrega o que não recebe 2xx.
+ * Extrai os eventos que interessam: mensagem, mensagem apagada e leitura.
+ * Reação e postback são IGNORADOS (não viram erro): a Meta reentrega o que não
+ * recebe 2xx.
  */
 export function lerEventosMetaSocial(envelope: EnvelopeMetaSocial): EventoMetaSocial[] {
   const plataforma = plataformaDoObjeto(envelope.object);
@@ -146,6 +170,8 @@ export function lerEventosMetaSocial(envelope: EnvelopeMetaSocial): EventoMetaSo
   const out: EventoMetaSocial[] = [];
   for (const entry of envelope.entry) {
     const contaId = entry.id;
+    // Sem `entry.id` não há conta, e sem conta não há organização: ignorado.
+    if (!contaId) continue;
     // `messaging[]` é o formato normal; o "Testar" do painel manda `changes[]`
     // com `field: "messages"` e o mesmo item em `value`.
     const itens: unknown[] = [
@@ -157,7 +183,26 @@ export function lerEventosMetaSocial(envelope: EnvelopeMetaSocial): EventoMetaSo
     ];
     for (const bruto of itens) {
       const lido = itemDeMensagem.safeParse(bruto);
-      if (!lido.success || !lido.data.message) continue;
+      if (!lido.success) continue;
+      if (!lido.data.message) {
+        // Leitura: quem leu é o cliente (sender), e quem recebe é a conta.
+        const r = lido.data.read;
+        const clienteId = lido.data.sender?.id;
+        if (!r || lido.data.recipient?.id !== contaId || !clienteId || clienteId === contaId) continue;
+        const marca = r.watermark !== undefined ? Number(r.watermark) : Number.NaN;
+        const ateMs = Number.isFinite(marca) && marca > 0 ? (marca < 1e12 ? marca * 1000 : marca) : null;
+        if (!r.mid && ateMs === null) continue;
+        out.push({
+          tipo: "lida",
+          plataforma,
+          contaId,
+          clienteId,
+          mid: r.mid ?? null,
+          ateMs,
+          lidaEm: dataDoTimestamp(lido.data.timestamp),
+        });
+        continue;
+      }
       const m = lido.data.message;
       if (m.is_deleted) {
         out.push({ tipo: "apagada", plataforma, contaId, mid: m.mid });

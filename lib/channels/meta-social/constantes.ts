@@ -45,8 +45,14 @@ export const ESCOPOS_MESSENGER = [
   "pages_read_engagement",
 ] as const;
 
-export const CAMPOS_DO_WEBHOOK_INSTAGRAM =
-  "messages,messaging_postbacks,messaging_seen,messaging_reactions";
+/**
+ * Os campos assinados por conta. Só o que o parser lê: campo assinado e
+ * ignorado é tráfego e reentrega sem uso. `messaging_seen` (Instagram) e
+ * `message_reads` (Messenger) carimbam a leitura da mensagem de saída;
+ * `message_echoes` é o eco do que a Página enviou (o Instagram manda o eco em
+ * `messages`, com `is_echo`). Reação fica de fora: o parser não a lê.
+ */
+export const CAMPOS_DO_WEBHOOK_INSTAGRAM = "messages,messaging_postbacks,messaging_seen";
 export const CAMPOS_DO_WEBHOOK_MESSENGER =
   "messages,messaging_postbacks,message_echoes,message_reads";
 

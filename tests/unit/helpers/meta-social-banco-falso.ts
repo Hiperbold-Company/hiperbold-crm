@@ -15,7 +15,27 @@ const UNICOS: Record<string, string[][]> = {
   messages: [["organization_id", "external_id"]],
   contacts: [["organization_id", "social_identity"]],
   calendar_oauth_nonces: [["nonce"]],
+  meta_social_envios: [["organization_id", "mid"]],
 };
+
+/** Defaults de coluna que o comportamento testado lê. */
+const PADROES: Record<string, Linha> = {
+  meta_data_deletion_requests: { status: "received", completed_at: null },
+};
+
+/** Índices únicos PARCIAIS: só valem entre as linhas que o predicado aceita. */
+const UNICOS_PARCIAIS: Record<string, { cols: string[]; onde: (l: Linha) => boolean }[]> = {
+  meta_data_deletion_requests: [{ cols: ["platform", "meta_user_id"], onde: (l) => (l.status ?? "received") === "received" }],
+};
+
+/** `metadata->>chave` lê a chave do jsonb, como o PostgREST. */
+function valor(l: Linha, c: string): unknown {
+  const m = /^([a-z_]+)->>([a-z_]+)$/.exec(c);
+  if (!m) return l[c];
+  const o = l[m[1]!] as Record<string, unknown> | null | undefined;
+  const v = o?.[m[2]!];
+  return v === undefined || v === null ? null : String(v);
+}
 
 export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
   const tabelas: Record<string, Linha[]> = {};
@@ -24,7 +44,7 @@ export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
 
   function consulta(nome: string) {
     const filtros: ((l: Linha) => boolean)[] = [];
-    let op: "select" | "insert" | "update" = "select";
+    let op: "select" | "insert" | "update" | "delete" = "select";
     let carga: Linha | Linha[] | null = null;
     let limite = Infinity;
     let ordem: { col: string; asc: boolean } | null = null;
@@ -44,8 +64,12 @@ export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
         carga = v;
         return q;
       },
+      delete() {
+        op = "delete";
+        return q;
+      },
       eq(c: string, v: unknown) {
-        filtros.push((l) => l[c] === v);
+        filtros.push((l) => valor(l, c) === v);
         return q;
       },
       neq(c: string, v: unknown) {
@@ -91,11 +115,20 @@ export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
       executar(): { data: unknown; error: { code: string; message: string } | null } {
         const linhas = t(nome);
         if (op === "insert") {
-          const novas: Linha[] = (Array.isArray(carga) ? carga : [carga!]).map((l) => ({ id: randomUUID(), ...l }));
+          const novas: Linha[] = (Array.isArray(carga) ? carga : [carga!]).map((l) => ({
+            id: randomUUID(),
+            ...(PADROES[nome] ?? {}),
+            ...l,
+          }));
           for (const n of novas) {
             for (const cols of UNICOS[nome] ?? []) {
               if (cols.some((c) => n[c] == null)) continue;
               if (linhas.some((l) => cols.every((c) => l[c] === n[c])))
+                return { data: null, error: { code: "23505", message: "duplicate key" } };
+            }
+            for (const { cols, onde } of UNICOS_PARCIAIS[nome] ?? []) {
+              if (!onde(n)) continue;
+              if (linhas.some((l) => onde(l) && cols.every((c) => l[c] === n[c])))
                 return { data: null, error: { code: "23505", message: "duplicate key" } };
             }
           }
@@ -103,6 +136,10 @@ export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
           return { data: novas, error: null };
         }
         let alvo = linhas.filter((l) => filtros.every((f) => f(l)));
+        if (op === "delete") {
+          for (const l of alvo) linhas.splice(linhas.indexOf(l), 1);
+          return { data: retornar ? alvo : null, error: null };
+        }
         if (op === "update") {
           for (const l of alvo) Object.assign(l, carga);
           return { data: retornar ? alvo : null, error: null };
@@ -111,7 +148,8 @@ export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
           const { col, asc } = ordem;
           alvo = [...alvo].sort((a, b) => (String(a[col]) < String(b[col]) ? -1 : 1) * (asc ? 1 : -1));
         }
-        return { data: alvo.slice(0, limite), error: null };
+        // Cópias, como o PostgREST: quem leu não segura a linha viva do banco.
+        return { data: alvo.slice(0, limite).map((l) => ({ ...l })), error: null };
       },
       maybeSingle() {
         const r = q.executar();

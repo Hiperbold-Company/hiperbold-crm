@@ -16,9 +16,29 @@ import { MAX_MEDIA_BYTES, MediaTooLargeError } from "@/lib/messaging/media/types
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ChannelAdapter, OutboundEnvelope } from "../types";
 import { CHANNEL_PROVIDER_META_SOCIAL } from "../capabilities";
+import { fraseDaFalhaDeCanal } from "../frases-de-falha";
 import { tetoDoTexto } from "./constantes";
-import { enviar, montarEnvios } from "./oauth";
+import { ErroDaMeta, enviar, montarEnvios } from "./oauth";
 import { credencialDaConta } from "./store";
+import { registrarEnvio } from "./envios";
+
+const FRASE_DE_RESERVA = "A rede recusou o envio. Confira a conexão em Conexões › Redes sociais.";
+
+/**
+ * Erro da Meta no envio → código do canal (traduzido por `frases-de-falha.ts`).
+ * Os códigos da Graph que mudam o que o operador faz:
+ *   190 token inválido/vencido → reconectar;
+ *   10 / 2018278 / 2534022 fora da janela de 24h → esperar o cliente escrever;
+ *   551 pessoa indisponível → não há o que fazer daqui.
+ */
+export function codigoDaFalhaDeEnvio(err: ErroDaMeta): string {
+  if (err.codigoDaMeta === 190 || err.status === 401) return "meta_social_token_invalid";
+  if (err.codigoDaMeta === 10 || err.codigoDaMeta === 2018278 || err.codigoDaMeta === 2534022)
+    return "meta_social_outside_window";
+  if (err.codigoDaMeta === 551) return "meta_social_recipient_unavailable";
+  if (err.status === null) return "meta_social_error";
+  return "meta_social_send_failed";
+}
 
 export const metaSocialAdapter: ChannelAdapter = {
   provider: CHANNEL_PROVIDER_META_SOCIAL,
@@ -52,8 +72,26 @@ export const metaSocialAdapter: ChannelAdapter = {
     });
     if (envios.length === 0) throw new Error("Mensagem vazia.");
     await envelope.beforeSend?.();
+    const admin = createAdminClient();
     let ultimo: string | null = null;
-    for (const r of envios) ultimo = await enviar(r, cred.token);
+    for (const r of envios) {
+      try {
+        ultimo = await enviar(r, cred.token);
+      } catch (err) {
+        // Para o operador, nunca o texto cru da Meta: a frase sai do mapa de
+        // falhas de canal, pelo código que este canal deu ao erro.
+        if (err instanceof ErroDaMeta) throw new Error(fraseDaFalhaDeCanal(codigoDaFalhaDeEnvio(err)) ?? FRASE_DE_RESERVA);
+        throw err;
+      }
+      // TODO mid devolvido vira registro de envio nosso, na hora: o eco de cada
+      // pedaço (e da imagem) chega pelo webhook sem `app_id` em parte dos casos,
+      // e só o último mid vira `external_id` da mensagem.
+      await registrarEnvio(admin, {
+        organizationId: envelope.organizationId,
+        channelSessionId: cred.sessionId,
+        mid: ultimo,
+      });
+    }
     return { externalId: ultimo };
   },
 

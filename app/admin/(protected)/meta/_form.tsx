@@ -7,9 +7,11 @@ import { toast } from "sonner";
 
 import {
   rotacionarVerifyTokenDaMeta,
+  updateAppSocialDaMeta,
   updateMetaApp,
   type UpdateMetaAppResult,
 } from "@/app/actions/settings/updateMetaApp";
+import type { EnderecoParaAMeta } from "@/lib/channels/meta-social/enderecos";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +42,16 @@ interface Props {
   /** O par está no `.env` desta instalação (o piso de rollback). */
   readonly temNoAmbiente: boolean;
   readonly leituraFalhou: boolean;
+  /**
+   * Instagram Direct e Messenger pela conexão oficial (migration 0984). Os ids
+   * não são segredo e voltam preenchidos; da chave do Instagram, só SE existe.
+   */
+  readonly social?: {
+    readonly appId: string | null;
+    readonly instagramAppId: string | null;
+    readonly temSegredoDoInstagram: boolean;
+    readonly enderecos: readonly EnderecoParaAMeta[];
+  };
 }
 
 /** O piso do schema da action. Abaixo disso o Zod recusa e a tela culparia o dono. */
@@ -52,6 +64,7 @@ export function FormularioDaMeta({
   atualizadoEm,
   temNoAmbiente,
   leituraFalhou,
+  social,
 }: Props) {
   const t = useT();
   const router = useRouter();
@@ -66,6 +79,18 @@ export function FormularioDaMeta({
   const [ocupado, iniciar] = useTransition();
 
   const podeSalvar = chave.trim().length >= TAMANHO_MINIMO_DA_CHAVE;
+
+  const [appId, setAppId] = useState(social?.appId ?? "");
+  const [instagramAppId, setInstagramAppId] = useState(social?.instagramAppId ?? "");
+  const [chaveDoInstagram, setChaveDoInstagram] = useState("");
+  const idValido = (v: string) => v.trim() === "" || /^[0-9]{5,30}$/.test(v.trim());
+  const chaveDoInstagramValida =
+    chaveDoInstagram.trim() === "" || chaveDoInstagram.trim().length >= TAMANHO_MINIMO_DA_CHAVE;
+  const socialMudou =
+    appId.trim() !== (social?.appId ?? "") ||
+    instagramAppId.trim() !== (social?.instagramAppId ?? "") ||
+    chaveDoInstagram.trim() !== "";
+  const podeSalvarSocial = socialMudou && idValido(appId) && idValido(instagramAppId) && chaveDoInstagramValida;
 
   function motivoDaRecusa(r: Extract<UpdateMetaAppResult, { ok: false }>): string {
     switch (r.error) {
@@ -99,6 +124,20 @@ export function FormularioDaMeta({
       const r = await updateMetaApp({ app_secret: chave.trim() });
       if (r.ok) setChave("");
       aoGravar(r, t("Chave secreta salva."));
+    });
+  }
+
+  function salvarSocial() {
+    iniciar(async () => {
+      // Só o que mudou: id igual ao gravado não vai, e a chave vazia é "manter".
+      const r = await updateAppSocialDaMeta({
+        app_id: appId.trim() !== (social?.appId ?? "") ? appId.trim() : undefined,
+        instagram_app_id:
+          instagramAppId.trim() !== (social?.instagramAppId ?? "") ? instagramAppId.trim() : undefined,
+        instagram_app_secret: chaveDoInstagram.trim() || undefined,
+      });
+      if (r.ok) setChaveDoInstagram("");
+      aoGravar(r, t("Configuração do Instagram e do Messenger salva."));
     });
   }
 
@@ -244,6 +283,82 @@ export function FormularioDaMeta({
           </div>
         ) : null}
       </Card>
+
+      {social ? (
+        <Card className="flex flex-col gap-4 p-4" data-testid="meta-social-config">
+          <div className="flex flex-col gap-1">
+            <h2 className="font-medium">{t("Instagram Direct e Messenger")}</h2>
+            <p className="text-sm text-muted-foreground">
+              {t("Para as empresas conectarem o Instagram e a Página do Facebook em Conexões › Redes sociais. A chave secreta do aplicativo, acima, também vale para o Messenger.")}
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="meta-app-id">{t("ID do app da Meta")}</Label>
+            <Input
+              id="meta-app-id"
+              data-testid="meta-app-id"
+              inputMode="numeric"
+              autoComplete="off"
+              value={appId}
+              onChange={(e) => setAppId(e.target.value)}
+              placeholder={t("Só números, em Configurações do app › Básico")}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="meta-instagram-app-id">{t("ID do app do Instagram")}</Label>
+            <Input
+              id="meta-instagram-app-id"
+              data-testid="meta-instagram-app-id"
+              inputMode="numeric"
+              autoComplete="off"
+              value={instagramAppId}
+              onChange={(e) => setInstagramAppId(e.target.value)}
+              placeholder={t("Só números, em Instagram › Configuração da API com login do Instagram")}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="meta-instagram-app-secret">{t("Chave secreta do app do Instagram")}</Label>
+            <Input
+              id="meta-instagram-app-secret"
+              data-testid="meta-instagram-app-secret"
+              type="password"
+              autoComplete="off"
+              value={chaveDoInstagram}
+              onChange={(e) => setChaveDoInstagram(e.target.value)}
+              placeholder={social.temSegredoDoInstagram ? t("••••••••  (já cadastrada)") : t("32 letras e números")}
+            />
+            <p className="text-xs text-muted-foreground" data-testid="meta-instagram-segredo-estado">
+              {social.temSegredoDoInstagram
+                ? t("Já existe uma chave salva. Deixe em branco para mantê-la, ou digite uma nova para substituir.")
+                : t("Ela é guardada cifrada e nunca volta a aparecer nesta tela.")}
+            </p>
+          </div>
+
+          <div className="flex justify-end">
+            <Button data-testid="meta-social-salvar" disabled={!podeSalvarSocial || ocupado} onClick={salvarSocial}>
+              {ocupado ? t("Salvando…") : t("Salvar")}
+            </Button>
+          </div>
+
+          <div className="flex flex-col gap-2 border-t border-border pt-4">
+            <h3 className="text-sm font-medium">{t("Endereços para cadastrar no painel da Meta")}</h3>
+            {social.enderecos.map((e) => (
+              <div key={e.url} className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">{t(e.rotulo)}</span>
+                <div className="flex items-center gap-2">
+                  <Input readOnly value={e.url} className="font-mono text-xs" onFocus={(ev) => ev.currentTarget.select()} />
+                  <Button variant="outline" onClick={() => void copiar(e.url)} aria-label={`${t("Copiar")}: ${t(e.rotulo)}`}>
+                    {t("Copiar")}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <AlertDialog open={confirmandoTroca} onOpenChange={setConfirmandoTroca}>
         <AlertDialogContent>

@@ -6711,6 +6711,42 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_social_envios: {
+        Row: {
+          channel_session_id: string
+          created_at: string
+          mid: string
+          organization_id: string
+        }
+        Insert: {
+          channel_session_id: string
+          created_at?: string
+          mid: string
+          organization_id: string
+        }
+        Update: {
+          channel_session_id?: string
+          created_at?: string
+          mid?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_social_envios_channel_session_id_fkey"
+            columns: ["channel_session_id"]
+            isOneToOne: false
+            referencedRelation: "channel_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_social_envios_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       merge_queue: {
         Row: {
           candidates: string[]

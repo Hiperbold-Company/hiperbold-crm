@@ -146,7 +146,10 @@ describe("signed_request da exclusão de dados", () => {
   };
   it("confere com qualquer segredo e diz qual", () => {
     const s = assinar({ algorithm: "HMAC-SHA256", user_id: "123", issued_at: 1_762_000_000 }, "ig");
-    expect(lerSignedRequest(s, ["meta", "ig"])).toMatchObject({ userId: "123", segredo: 1 });
+    expect(lerSignedRequest(s, ["meta", "ig"], new Date(1_762_000_000_000 + 60_000))).toMatchObject({
+      userId: "123",
+      segredo: 1,
+    });
   });
   it("recusa assinatura alheia e carga sem user_id", () => {
     expect(lerSignedRequest(assinar({ user_id: "1" }, "outro"), ["meta"])).toBeNull();

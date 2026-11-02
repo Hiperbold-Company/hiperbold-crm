@@ -18,13 +18,13 @@ import { decryptWebhookSecret, encryptWebhookSecret } from "@/lib/webhooks/secre
 import { CHANNEL_PROVIDER_META_SOCIAL } from "../capabilities";
 import { reactivateChannelSession } from "../reactivate";
 import { canalDaConversa, type PlataformaMetaSocial } from "./constantes";
+import type { MotivoDaVolta } from "./motivos";
 import { assinarWebhookDaConta, desassinarWebhookDaConta, type ContaDaMeta } from "./oauth";
 
-export type MotivoDaRecusa =
-  | "conta_em_outra_organizacao"
-  | "limite_do_plano"
-  | "cifra_indisponivel"
-  | "gravacao_falhou";
+export type MotivoDaRecusa = Extract<
+  MotivoDaVolta,
+  "conta_em_outra_organizacao" | "limite_do_plano" | "cifra_indisponivel" | "gravacao_falhou"
+>;
 
 export class ConexaoRecusada extends Error {
   constructor(readonly motivo: MotivoDaRecusa) {
@@ -32,6 +32,13 @@ export class ConexaoRecusada extends Error {
     this.name = "ConexaoRecusada";
   }
 }
+
+/**
+ * Chave do `metadata` da sessão com o id da pessoa da Meta que autorizou. Em
+ * metadata e não em coluna: só a exclusão de dados lê, raramente, e sem
+ * precisar de índice.
+ */
+export const CHAVE_DO_AUTORIZADOR = "meta_autorizador_id";
 
 /** Status que a tela lê como saudável. Qualquer outro pede "Reconectar". */
 export const STATUS_SAUDAVEL = "WORKING";
@@ -85,6 +92,12 @@ export async function conectarConta(
     token: string;
     expiraEm: string | null;
     ator: Ator;
+    /**
+     * Id da pessoa da Meta que autorizou (Instagram: `user_id` da troca do
+     * código; Messenger: `/me` do usuário do Facebook). É por ele que o pedido
+     * de exclusão de dados acha esta sessão. Ausente = mantém o que havia.
+     */
+    autorizadorId?: string | null;
   },
   assinar: typeof assinarWebhookDaConta = assinarWebhookDaConta,
 ): Promise<{ channelId: string; reconectado: boolean; recebimento: boolean }> {
@@ -139,6 +152,7 @@ export async function conectarConta(
       nome_da_conta: conta.nome,
       conectado_em: agora,
       token_erro: null,
+      ...(input.autorizadorId ? { [CHAVE_DO_AUTORIZADOR]: input.autorizadorId } : {}),
     },
   };
 

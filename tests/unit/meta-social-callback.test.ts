@@ -81,6 +81,8 @@ describe("callback do Instagram", () => {
       meta_social_token_encrypted: "cifrado:longo",
       status: "WORKING",
     });
+    // O user_id da troca do código: é por ele que a exclusão de dados acha a sessão.
+    expect((sessoes[0]!.metadata as Record<string, unknown>).meta_autorizador_id).toBe("1");
 
     const replay = await chamar(state, cookie);
     expect(replay).toContain("meta_social=erro");

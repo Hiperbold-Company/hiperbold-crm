@@ -17,8 +17,16 @@
  *   5. QUEIMA do nonce antes de trocar o código: replay morre aqui (23505).
  *   6. troca do código, conta(s), conexão.
  *
- * Todo desfecho volta para `/app/connections?aba=sociais&meta_social=ok|erro
- * &motivo=<código>&n=<quantas contas>`.
+ * Todo desfecho volta para `/app/connections?aba=sociais&meta_social=ok|erro|parcial
+ * &motivo=<código>&n=<quantas contas>&recusadas=<quantas não>`. Os códigos de
+ * `motivo` são os de `lib/channels/meta-social/motivos.ts`, o mesmo conjunto
+ * que a tela traduz.
+ *
+ * Auditoria antes de queimar o nonce NÃO leva a organização do `state`: até
+ * ali o `state` pode ser uma cópia (vazou de um histórico, de um log), e quem a
+ * tem não pode escrever trilha na organização de outra pessoa. Depois do nonce
+ * queimado o `state` é deste navegador e deste uso, e a falha vai para a
+ * organização dele.
  */
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -35,7 +43,9 @@ import {
   tokenLongoMessenger,
   trocarCodigoInstagram,
   trocarCodigoMessenger,
+  usuarioDoFacebook,
 } from "@/lib/channels/meta-social/oauth";
+import type { MotivoDaVolta } from "@/lib/channels/meta-social/motivos";
 import { ConexaoRecusada, conectarConta, type Ator } from "@/lib/channels/meta-social/store";
 import { redirectUriDe, voltarParaConexoes } from "@/lib/channels/meta-social/volta";
 import { env } from "@/lib/env";
@@ -51,7 +61,7 @@ interface RouteCtx {
   params: Promise<{ plataforma: string }>;
 }
 
-const erro = (motivo: string, n = 0) => voltarParaConexoes({ meta_social: "erro", motivo, n });
+const erro = (motivo: MotivoDaVolta) => voltarParaConexoes({ meta_social: "erro", motivo, n: 0 });
 
 /** A pessoa do `state` ainda é admin da organização (ou admin de plataforma ativo)? */
 async function aindaAdministra(
@@ -96,7 +106,17 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   }
   if (!estado) return erro("retorno_nao_verificavel");
   const { organizationId, userId } = estado;
-  const falhou = async (motivo: string, detalhe?: string) => {
+  /** Falha ANTES de o nonce ser queimado: trilha da instalação, sem a organização do state. */
+  const recusouSemVinculo = async (motivo: MotivoDaVolta, detalhe?: string) => {
+    await audit({
+      action: "channel.meta_social_connect_failed",
+      resourceType: "channel_session",
+      metadata: { plataforma, motivo, ...(detalhe ? { detalhe } : {}) },
+    });
+    return erro(motivo);
+  };
+  /** Falha DEPOIS do nonce queimado: o state é deste uso, a trilha vai para a organização dele. */
+  const registrarFalha = async (motivo: MotivoDaVolta, detalhe?: string) => {
     await audit({
       action: "channel.meta_social_connect_failed",
       organizationId,
@@ -105,21 +125,24 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
       resourceType: "channel_session",
       metadata: { plataforma, motivo, ...(detalhe ? { detalhe } : {}) },
     });
+  };
+  const falhou = async (motivo: MotivoDaVolta, detalhe?: string) => {
+    await registrarFalha(motivo, detalhe);
     return erro(motivo);
   };
 
   if (!vinculoMetaSocialConfere(req.cookies.get(NOME_DO_VINCULO_META_SOCIAL)?.value, estado.nonce, env.INTERNAL_SECRET)) {
-    return falhou("retorno_nao_verificavel", "vinculo_ausente_ou_nao_confere");
+    return recusouSemVinculo("retorno_nao_verificavel", "vinculo_ausente_ou_nao_confere");
   }
   const code = url.searchParams.get("code");
-  if (!code) return falhou("retorno_incompleto");
+  if (!code) return recusouSemVinculo("retorno_incompleto");
 
   const admin = createAdminClient();
   if (!(await supportCallbackWriteAllowed(organizationId, userId, estado.authSessionId))) {
-    return falhou("retorno_nao_verificavel", "suporte_sem_escrita");
+    return recusouSemVinculo("retorno_nao_verificavel", "suporte_sem_escrita");
   }
   if (!(await aindaAdministra(admin, organizationId, userId))) {
-    return falhou("sem_permissao");
+    return recusouSemVinculo("sem_permissao");
   }
 
   const { error: erroDoNonce } = await admin.from("calendar_oauth_nonces").insert({
@@ -129,7 +152,10 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     expira_em: new Date(estado.expiraEmMs).toISOString(),
   });
   if (erroDoNonce) {
-    return falhou("retorno_nao_verificavel", erroDoNonce.code === "23505" ? "state_reutilizado" : "nonce_indisponivel");
+    return recusouSemVinculo(
+      "retorno_nao_verificavel",
+      erroDoNonce.code === "23505" ? "state_reutilizado" : "nonce_indisponivel",
+    );
   }
 
   const cfg = await configMetaSocial();
@@ -142,7 +168,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   try {
     if (plataforma === "instagram") {
       const curto = await trocarCodigoInstagram(app, code, redirectUri);
-      const longo = await tokenLongoInstagram(app, curto);
+      const longo = await tokenLongoInstagram(app, curto.token);
       const conta = await contaInstagram(longo.token);
       await conectarConta(admin, {
         organizationId,
@@ -153,6 +179,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
           ? new Date(Date.now() + longo.expiraEmSegundos * 1000).toISOString()
           : null,
         ator,
+        autorizadorId: curto.userId,
       });
       return voltarParaConexoes({ meta_social: "ok", n: 1 });
     }
@@ -161,11 +188,13 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     const longo = await tokenLongoMessenger(app, curto);
     const paginas = await paginasMessenger(longo);
     if (paginas.length === 0) return falhou("nenhuma_pagina");
+    const autorizadorId = await usuarioDoFacebook(longo);
 
     // Cada Página concedida vira um canal. A que estourar o limite do plano
     // (ou estiver em outra organização) não derruba as outras.
     let conectadas = 0;
-    let primeiraRecusa: string | null = null;
+    let recusadas = 0;
+    let primeiraRecusa: MotivoDaVolta | null = null;
     for (const p of paginas) {
       try {
         await conectarConta(admin, {
@@ -175,17 +204,22 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
           token: p.token,
           expiraEm: null,
           ator,
+          autorizadorId,
         });
         conectadas += 1;
       } catch (err) {
         if (!(err instanceof ConexaoRecusada)) throw err;
+        recusadas += 1;
         // Limite do plano tem precedência na mensagem: é o que a pessoa resolve.
         if (primeiraRecusa === null || err.motivo === "limite_do_plano") primeiraRecusa = err.motivo;
       }
     }
+    if (primeiraRecusa && conectadas === 0) return falhou(primeiraRecusa);
     if (primeiraRecusa) {
-      await falhou(primeiraRecusa);
-      return erro(primeiraRecusa, conectadas);
+      // Recusa PARCIAL: umas Páginas entraram, outras não. Dizer só "erro"
+      // esconderia as que funcionam; dizer só "ok" esconderia as que faltam.
+      await registrarFalha(primeiraRecusa, `parcial:${conectadas}/${conectadas + recusadas}`);
+      return voltarParaConexoes({ meta_social: "parcial", n: conectadas, recusadas, motivo: primeiraRecusa });
     }
     return voltarParaConexoes({ meta_social: "ok", n: conectadas });
   } catch (err) {

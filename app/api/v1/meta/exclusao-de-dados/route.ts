@@ -3,10 +3,16 @@
  * (Instagram e Messenger). Público no proxy: quem chama é a Meta, sem sessão.
  *
  * Autenticação = o `signed_request` (HMAC-SHA256 com um segredo desta
- * instalação). Qual segredo conferiu diz de qual app veio. O pedido é gravado
- * em `meta_data_deletion_requests` e auditado; a resposta é o formato que a
- * Meta exige: `{ url, confirmation_code }`, com a URL pública de status
+ * instalação, emitido há menos de 24h). Qual segredo conferiu diz de qual app
+ * veio. O pedido é gravado em `meta_data_deletion_requests` (um aberto por
+ * rede e pessoa: a reentrega devolve o mesmo código, sem trilha nova) e
+ * CUMPRIDO na hora: as conexões autorizadas por essa pessoa são arquivadas
+ * (`lib/channels/meta-social/exclusao.ts`). A resposta é o formato que a Meta
+ * exige: `{ url, confirmation_code }`, com a URL pública de status
  * (`/exclusao-de-dados?codigo=<c>`, página da tela).
+ *
+ * Se o cumprimento falhar (banco), o pedido fica aberto e a resposta ainda
+ * leva o código: a Meta já o tem, e a reentrega dela cumpre depois.
  */
 import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
@@ -17,10 +23,16 @@ import { fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { configMetaSocial } from "@/lib/channels/meta-social/config";
 import type { PlataformaMetaSocial } from "@/lib/channels/meta-social/constantes";
-import { lerSignedRequest, registrarPedidoDeExclusao } from "@/lib/channels/meta-social/exclusao";
+import {
+  executarPedidoDeExclusao,
+  lerSignedRequest,
+  registrarPedidoDeExclusao,
+  type PedidoRegistrado,
+} from "@/lib/channels/meta-social/exclusao";
 import { env } from "@/lib/env";
 import { lerCorpoDaRequisicao } from "@/lib/http/corpo-com-limite";
 import { ipDoClienteParaInet } from "@/lib/http/ip-do-cliente";
+import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -59,9 +71,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!pedido) return fail("unauthorized", "invalid_signature", 401, { requestId });
   const plataforma = candidatos[pedido.segredo]!.plataforma;
 
-  let codigo: string;
+  const admin = createAdminClient();
+  let pedidoRegistrado: PedidoRegistrado;
   try {
-    codigo = await registrarPedidoDeExclusao(createAdminClient(), {
+    pedidoRegistrado = await registrarPedidoDeExclusao(admin, {
       plataforma,
       userId: pedido.userId,
       emitidoEm: pedido.emitidoEm,
@@ -69,12 +82,38 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   } catch {
     return fail("internal_error", "Não foi possível registrar o pedido.", 500, { requestId });
   }
-  await audit({
-    action: "meta.data_deletion_requested",
-    resourceType: "meta_data_deletion_request",
-    requestId,
-    metadata: { plataforma, confirmation_code: codigo },
-  });
+  const codigo = pedidoRegistrado.codigo;
+  if (pedidoRegistrado.novo) {
+    await audit({
+      action: "meta.data_deletion_requested",
+      resourceType: "meta_data_deletion_request",
+      resourceId: pedidoRegistrado.id,
+      requestId,
+      metadata: { plataforma, confirmation_code: codigo },
+    });
+  }
+
+  if (!pedidoRegistrado.concluido) {
+    try {
+      const r = await executarPedidoDeExclusao(
+        admin,
+        { id: pedidoRegistrado.id, plataforma, userId: pedido.userId },
+        { requestId },
+      );
+      await audit({
+        action: "meta.data_deletion_executed",
+        resourceType: "meta_data_deletion_request",
+        resourceId: pedidoRegistrado.id,
+        requestId,
+        metadata: { plataforma, confirmation_code: codigo, conexoes_arquivadas: r.arquivadas.length },
+      });
+    } catch (err) {
+      logger.error("[meta.exclusao] pedido registrado e não cumprido; a reentrega tenta de novo", {
+        request_id: requestId,
+        detalhe: err instanceof Error ? err.message.slice(0, 200) : "erro",
+      });
+    }
+  }
 
   const base = new URL(env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").origin;
   const resposta = NextResponse.json(

@@ -50,12 +50,22 @@ describe("state do OAuth social", () => {
 
   it("carga adulterada ou segredo diferente não vale", () => {
     const s = emitirEstadoMetaSocial(dados, { segredo: SEGREDO, agora });
-    const [carga, assinatura] = s.split(".");
-    const outra = Buffer.from(
-      Buffer.from(carga!, "base64url").toString().replace(dados.organizationId, "99999999-9999-4999-8999-999999999999"),
-    ).toString("base64url");
-    expect(verificarEstadoMetaSocial(`${outra}.${assinatura}`, { segredo: SEGREDO, agora, plataforma: "instagram" })).toBeNull();
+    const bruto = Buffer.from(s, "base64url");
+    bruto[20] = bruto[20]! ^ 0x01;
+    const adulterado = bruto.toString("base64url");
+    expect(verificarEstadoMetaSocial(adulterado, { segredo: SEGREDO, agora, plataforma: "instagram" })).toBeNull();
     expect(verificarEstadoMetaSocial(s, { segredo: `${SEGREDO}x`, agora, plataforma: "instagram" })).toBeNull();
+    expect(verificarEstadoMetaSocial("lixo.lixo", { segredo: SEGREDO, agora, plataforma: "instagram" })).toBeNull();
+  });
+
+  it("a URL não revela a sessão de login, a organização nem o usuário", () => {
+    const s = emitirEstadoMetaSocial(dados, { segredo: SEGREDO, agora, nonce: "nonce-longo-0123456789abcdef" });
+    const legivel = `${s} ${Buffer.from(s, "base64url").toString("utf8")} ${Buffer.from(s, "base64url").toString("latin1")}`;
+    for (const segredoDaUrl of [dados.authSessionId, dados.organizationId, dados.userId, "nonce-longo-0123456789abcdef"]) {
+      expect(legivel).not.toContain(segredoDaUrl);
+    }
+    // Dois states dos mesmos dados não são iguais (IV aleatório).
+    expect(emitirEstadoMetaSocial(dados, { segredo: SEGREDO, agora, nonce: "nonce-longo-0123456789abcdef" })).not.toBe(s);
   });
 });
 

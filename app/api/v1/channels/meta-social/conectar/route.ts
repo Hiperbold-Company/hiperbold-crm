@@ -33,6 +33,7 @@ import {
   assinarVinculoMetaSocial,
   emitirEstadoMetaSocial,
 } from "@/lib/channels/meta-social/estado";
+import type { MotivoDaVolta } from "@/lib/channels/meta-social/motivos";
 import { urlDeConsentimento } from "@/lib/channels/meta-social/oauth";
 import { temContaDaPlataforma } from "@/lib/channels/meta-social/store";
 import { destinoDaVolta, redirectUriDe } from "@/lib/channels/meta-social/volta";
@@ -45,7 +46,7 @@ export const dynamic = "force-dynamic";
 
 const consulta = z.object({ plataforma: z.enum(PLATAFORMAS_META_SOCIAL) });
 
-const erro = (motivo: string) =>
+const erro = (motivo: MotivoDaVolta) =>
   NextResponse.redirect(destinoDaVolta({ meta_social: "erro", motivo }));
 
 export async function GET(req: NextRequest): Promise<Response> {

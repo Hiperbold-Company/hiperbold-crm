@@ -13,8 +13,17 @@
  * agente) e pausa da IA quando alguém responde por fora. Uma segunda cópia
  * desse caminho seria a cópia que diverge.
  *
- * O que é DESTE canal: o eco do próprio envio (ignorado pelo `app_id`), a
- * mensagem apagada (`revoked_at`) e o nome do perfil, best-effort.
+ * O que é DESTE canal: o eco do próprio envio, a mensagem apagada
+ * (`revoked_at`), a leitura (`read_at`) e o nome do perfil, best-effort.
+ *
+ * O eco do próprio envio é reconhecido de três jeitos, nesta ordem:
+ *   1. `app_id` do eco é de um app desta instalação (quando a Meta o manda);
+ *   2. o `mid` está em `meta_social_envios` — TODO mid que a Meta devolveu num
+ *      envio nosso, pedaço por pedaço e a imagem (o adapter grava ao enviar);
+ *   3. o `mid` já é o `external_id` de uma mensagem desta organização.
+ * Sem o 2, só o mid do ÚLTIMO pedaço ficava conhecido (é o que vira
+ * `external_id`), e o eco dos pedaços anteriores, sem `app_id`, entrava como
+ * "respondido pelo celular": linha duplicada e IA pausada.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -140,10 +149,12 @@ export async function ingerirEventoMetaSocial(
       : { status: "ignored", reason: "mensagem_desconhecida" };
   }
 
+  if (evento.tipo === "lida") return marcarLida(admin, sessao, evento);
+
   // Eco de envio feito PELA API deste app: a linha já existe (o CRM a gravou)
   // ou vai existir em instantes. Ingerir criaria uma duplicata "do celular" e
   // pausaria a IA como se uma pessoa tivesse respondido por fora.
-  if (evento.direcao === "outbound" && evento.appId && opcoes.appIdsProprios.includes(evento.appId)) {
+  if (evento.direcao === "outbound" && (await ehEcoDoProprioEnvio(admin, sessao, evento, opcoes.appIdsProprios))) {
     return { status: "ignored", reason: "eco_do_proprio_envio" };
   }
   if (!evento.texto && evento.anexos.length === 0) {
@@ -183,4 +194,77 @@ export async function ingerirEventoMetaSocial(
     });
   }
   return { status: r.status, reason: r.reason };
+}
+
+/**
+ * O eco é de um envio NOSSO? Lança se a consulta falhar: na dúvida, a rota
+ * devolve 500 e a Meta reentrega — tratar como "do celular" pausaria a IA.
+ */
+async function ehEcoDoProprioEnvio(
+  admin: SupabaseClient,
+  sessao: SessaoMetaSocial,
+  evento: Extract<EventoMetaSocial, { tipo: "mensagem" }>,
+  appIdsProprios: readonly string[],
+): Promise<boolean> {
+  if (evento.appId && appIdsProprios.includes(evento.appId)) return true;
+  const { data: envio, error: erroDoEnvio } = await admin
+    .from("meta_social_envios")
+    .select("mid")
+    .eq("organization_id", sessao.organizationId)
+    .eq("mid", evento.mid)
+    .limit(1);
+  if (erroDoEnvio) throw new Error("meta_social_echo_lookup_failed");
+  if ((envio ?? []).length > 0) return true;
+  const { data: gravada, error: erroDaMensagem } = await admin
+    .from("messages")
+    .select("id")
+    .eq("organization_id", sessao.organizationId)
+    .eq("external_id", evento.mid)
+    .limit(1);
+  if (erroDaMensagem) throw new Error("meta_social_echo_lookup_failed");
+  return (gravada ?? []).length > 0;
+}
+
+/**
+ * Carimba a leitura nas mensagens de SAÍDA desta sessão. Cada coluna é gravada
+ * uma vez (`is null`): o primeiro evento que a alcança é o que vale, e a Meta
+ * reentrega. Quem leu, recebeu: `delivered_at` vazio ganha a mesma hora.
+ */
+async function marcarLida(
+  admin: SupabaseClient,
+  sessao: SessaoMetaSocial,
+  evento: Extract<EventoMetaSocial, { tipo: "lida" }>,
+): Promise<DesfechoDaIngestao> {
+  const quando = evento.lidaEm ?? new Date().toISOString();
+  let conversaId: string | null = null;
+  if (!evento.mid) {
+    const { data, error } = await admin
+      .from("conversations")
+      .select("id")
+      .eq("organization_id", sessao.organizationId)
+      .eq("channel_session_id", sessao.id)
+      .eq("provider_conversation_id", evento.clienteId)
+      .limit(1);
+    if (error) throw new Error("meta_social_read_lookup_failed");
+    conversaId = ((data ?? []) as { id: string }[])[0]?.id ?? null;
+    if (!conversaId) return { status: "ignored", reason: "conversa_desconhecida" };
+  }
+  let alcancou = 0;
+  for (const coluna of ["read_at", "delivered_at"] as const) {
+    let q = admin
+      .from("messages")
+      .update({ [coluna]: quando })
+      .eq("organization_id", sessao.organizationId)
+      .eq("channel_session_id", sessao.id)
+      .eq("direction", "outbound");
+    q = evento.mid
+      ? q.eq("external_id", evento.mid)
+      : q.eq("conversation_id", conversaId!).lte("created_at", new Date(evento.ateMs!).toISOString());
+    const { data, error } = await q.is(coluna, null).select("id");
+    if (error) throw new Error("meta_social_read_update_failed");
+    if (coluna === "read_at") alcancou = (data ?? []).length;
+  }
+  return alcancou > 0
+    ? { status: "ingested", reason: "lida" }
+    : { status: "ignored", reason: "nada_a_marcar" };
 }

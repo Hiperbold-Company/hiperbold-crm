@@ -4,6 +4,8 @@ import { loadAuthUser } from "@/lib/auth/server";
 import { appDaMetaDoAmbiente } from "@/lib/channels/meta/app";
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import type { Idioma } from "@/lib/i18n/idiomas";
+import { enderecosParaAMeta } from "@/lib/channels/meta-social/enderecos";
+import { env } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { FormularioDaMeta } from "./_form";
@@ -47,7 +49,8 @@ export default async function Page() {
 
   // Server-side only (RLS ligada, zero policies, grants revogados de
   // anon/authenticated): o admin client é o único caminho.
-  const { data, error } = await createAdminClient()
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("platform_meta_app")
     .select("app_secret_encrypted, verify_token_encrypted, verify_token_created_at, updated_at")
     .eq("id", 1)
@@ -61,6 +64,20 @@ export default async function Page() {
         updated_at: string | null;
       }
     | null;
+
+  // As colunas do canal social (0984) numa leitura À PARTE: um clone que ainda
+  // não aplicou a 0984 devolve 42703 aqui, e isso não pode derrubar a leitura
+  // do app do WhatsApp acima. Os ids não são segredo e voltam; da chave do
+  // Instagram, só SE existe.
+  const { data: dadosSociais } = await admin
+    .from("platform_meta_app")
+    .select("app_id, instagram_app_id, instagram_app_secret_encrypted")
+    .eq("id", 1)
+    .maybeSingle();
+  const social = dadosSociais as
+    | { app_id: string | null; instagram_app_id: string | null; instagram_app_secret_encrypted: string | null }
+    | null;
+  const base = new URL(env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").origin;
 
   // O `.env` é o piso de rollback (`lib/channels/meta/app.ts`). Dizer que ele
   // existe é o que torna a precedência visível: sem isto, quem tem o par no
@@ -77,6 +94,12 @@ export default async function Page() {
       // Leitura que falhou não pode virar "nunca configurado": essa frase
       // levaria o dono a gerar um token por cima do que já está colado na Meta.
       leituraFalhou={Boolean(error)}
+      social={{
+        appId: social?.app_id ?? null,
+        instagramAppId: social?.instagram_app_id ?? null,
+        temSegredoDoInstagram: Boolean(social?.instagram_app_secret_encrypted),
+        enderecos: enderecosParaAMeta(base),
+      }}
     />
   );
 }
@@ -92,3 +115,4 @@ function formatar(iso: string | null, idioma: Idioma): string | null {
     timeStyle: "short",
   });
 }
+

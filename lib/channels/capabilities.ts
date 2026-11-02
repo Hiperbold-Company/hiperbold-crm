@@ -6,9 +6,9 @@
  * nasce de uma diferença real e medida entre WAHA e Meta Cloud; capability que
  * ninguém consome é código morto, e o teste de matriz reprova.
  */
-import type { ChannelCapabilities, ChannelProvider, ProviderDeMensagem } from "./types";
+import type { AnexosDeSaida, ChannelCapabilities, ChannelProvider, ProviderDeMensagem } from "./types";
 
-export type { ChannelProvider, ChannelCapabilities, ProviderDeMensagem };
+export type { AnexosDeSaida, ChannelProvider, ChannelCapabilities, ProviderDeMensagem };
 
 /**
  * A matriz descreve o que um canal de MENSAGEM permite — por isso a chave é
@@ -17,6 +17,9 @@ export type { ChannelProvider, ChannelCapabilities, ProviderDeMensagem };
  * qualquer coisa (inclusive tudo `false`) faria a pergunta parecer legítima.
  * `capabilitiesOf` segue falhando fechado para quem não está aqui.
  */
+/** O que os canais de WhatsApp enviam: tudo que o composer oferece. */
+const TODOS_OS_ANEXOS: AnexosDeSaida = { imagem: true, video: true, audio: true, documento: true, contato: true };
+
 export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilities> = {
   // Auto-restrição: falo quando quiser, mas o WhatsApp me bane se eu abusar.
   waha: {
@@ -30,6 +33,7 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     groups: "full",
     costPerMessage: false,
     alteraMensagemEnviada: true,
+    anexosDeSaida: TODOS_OS_ANEXOS,
   },
   // Hetero-restrição: não me banem, mas a Meta me proíbe e me cobra.
   meta_cloud: {
@@ -44,6 +48,7 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     groups: "limited",
     costPerMessage: true,
     alteraMensagemEnviada: false,
+    anexosDeSaida: TODOS_OS_ANEXOS,
   },
   // Mesma hetero-restrição do canal oficial, por baixo: é um BSP: a WABA é da
   // Meta, os templates são aprovados pela Meta e a janela de 24h é da Meta. O
@@ -78,21 +83,28 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     groups: "none",
     costPerMessage: true,
     alteraMensagemEnviada: false,
+    anexosDeSaida: TODOS_OS_ANEXOS,
   },
   // Instagram Direct e Messenger pela Meta, sem intermediário (0984). A mesma
   // física do canal social intermediado: só se responde dentro de 24h da
   // última mensagem do cliente (HUMAN_AGENT, 7 dias, fica fora por ora), não há
   // definição aprovada, não há grupo e não há risco de banimento por volume.
+  //
+  // O envio deste canal hoje é TEXTO e IMAGEM (o adapter recusa o resto), então
+  // a matriz diz isso: sem voz, vídeo, áudio, documento nem cartão de contato.
+  // Declarar o que o adapter não cumpre faria a tela oferecer um anexo que
+  // volta como falha depois do clique.
   meta_social: {
     freeformOutsideWindow: false,
     requiresTemplates: false,
     canManageTemplates: false,
     banRisk: false,
     minIntervalMs: 1000,
-    voiceNote: "server-convert",
+    voiceNote: "none",
     groups: "none",
     costPerMessage: false,
     alteraMensagemEnviada: false,
+    anexosDeSaida: { imagem: true, video: false, audio: false, documento: false, contato: false },
   },
   zernio: {
     freeformOutsideWindow: false,
@@ -104,6 +116,7 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     groups: "limited",
     costPerMessage: true,
     alteraMensagemEnviada: false,
+    anexosDeSaida: TODOS_OS_ANEXOS,
   },
   // Parceiro homologado pela Meta que espelha a Cloud API (recorte do #1130):
   // a WABA, a janela de 24h e o custo são da Meta. O parceiro muda o TRANSPORTE
@@ -124,6 +137,7 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     groups: "limited",
     costPerMessage: true,
     alteraMensagemEnviada: false,
+    anexosDeSaida: TODOS_OS_ANEXOS,
   },
   // A mesma física do canal por QR, por outro transporte: a instância é um
   // aparelho pareado ao WhatsApp comum, sem WABA por trás. Não existe janela de
@@ -146,6 +160,7 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     // false aqui é o que impede a tela de oferecer editar/apagar sem o
     // canal saber cumprir.
     alteraMensagemEnviada: false,
+    anexosDeSaida: TODOS_OS_ANEXOS,
   },
 };
 
@@ -177,6 +192,20 @@ export const CHANNEL_PROVIDER_DATAFY: ChannelProvider = "datafy";
 export const CHANNEL_PROVIDER_WACALLS: ChannelProvider = "wacalls";
 /** Instagram Direct e Messenger pela conexão oficial e direta com a Meta. */
 export const CHANNEL_PROVIDER_META_SOCIAL: ChannelProvider = "meta_social";
+
+/**
+ * Os providers de REDE SOCIAL (Instagram Direct, Messenger) — o intermediado e
+ * o oficial direto. Existe porque a tela de números de WhatsApp lista as
+ * sessões de mensagem e precisa deixar estas de fora: uma conta do Instagram
+ * não é "número", e os botões de lá (Reconectar por QR, Excluir pelo
+ * transporte do WhatsApp) não servem para ela. Cada uma tem a própria aba.
+ */
+export const PROVIDERS_SOCIAIS = ["zernio_social", "meta_social"] as const satisfies readonly ProviderDeMensagem[];
+
+/** `true` quando a sessão é de rede social, não de WhatsApp. */
+export function ehCanalSocial(provider: string | null | undefined): boolean {
+  return (PROVIDERS_SOCIAIS as readonly string[]).includes(provider ?? "");
+}
 
 /**
  * Os providers por onde MENSAGEM entra e sai — a única lista que responde
@@ -259,4 +288,17 @@ export function capabilitiesOf(provider: ChannelProvider): ChannelCapabilities {
   // barra em compilação; isto barra o que vem do banco em runtime.
   if (!caps) throw new Error(`unknown_channel_provider: ${provider}`);
   return caps;
+}
+
+/**
+ * O que a tela de conversa OFERECE para anexar, pelo canal da conversa.
+ *
+ * Provider desconhecido ou ausente (conversa sem canal lido, clone com
+ * provider mais novo que esta imagem) oferece TUDO — é o comportamento de antes
+ * desta capability, e o adapter segue recusando o que não cumpre.
+ */
+export function anexosOferecidos(provider: string | null | undefined): AnexosDeSaida & { voz: boolean } {
+  if (!transportaMensagem(provider)) return { ...TODOS_OS_ANEXOS, voz: true };
+  const c = capabilitiesOf(provider as ChannelProvider);
+  return { ...c.anexosDeSaida, voz: c.voiceNote !== "none" && c.anexosDeSaida.audio };
 }

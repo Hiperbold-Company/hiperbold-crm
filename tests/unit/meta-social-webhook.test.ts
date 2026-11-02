@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import { verificationChallenge } from "@/lib/channels/meta/webhook";
+import { CAMPOS_DO_WEBHOOK_INSTAGRAM, CAMPOS_DO_WEBHOOK_MESSENGER } from "@/lib/channels/meta-social/constantes";
 import {
   assinaturaMetaSocialConfere,
   envelopeMetaSocial,
@@ -120,7 +121,7 @@ describe("leitura do payload", () => {
     expect(e).toMatchObject({ direcao: "outbound", clienteId: CLIENTE, appId: "123" });
   });
 
-  it("leitura, reação e postback são ignorados; apagada vira evento próprio", () => {
+  it("reação e postback são ignorados; leitura e apagada viram eventos próprios", () => {
     const eventos = ler({
       object: "instagram",
       entry: [
@@ -135,7 +136,39 @@ describe("leitura do payload", () => {
         },
       ],
     });
-    expect(eventos).toEqual([{ tipo: "apagada", plataforma: "instagram", contaId: IG, mid: "mid.9" }]);
+    expect(eventos).toEqual([
+      { tipo: "lida", plataforma: "instagram", contaId: IG, clienteId: CLIENTE, mid: "mid.1", ateMs: null, lidaEm: null },
+      { tipo: "apagada", plataforma: "instagram", contaId: IG, mid: "mid.9" },
+    ]);
+  });
+
+  it("message_reads do Messenger vira leitura até a marca d'água; entrada sem id é pulada", () => {
+    const eventos = ler({
+      object: "page",
+      entry: [
+        { messaging: [{ sender: { id: CLIENTE }, recipient: { id: "PAG" }, message: { mid: "m", text: "a" } }] },
+        {
+          id: "PAG",
+          messaging: [{ sender: { id: CLIENTE }, recipient: { id: "PAG" }, timestamp: 1_762_000_000_500, read: { watermark: 1_762_000_000_000 } }],
+        },
+      ],
+    });
+    expect(eventos).toEqual([
+      {
+        tipo: "lida",
+        plataforma: "messenger",
+        contaId: "PAG",
+        clienteId: CLIENTE,
+        mid: null,
+        ateMs: 1_762_000_000_000,
+        lidaEm: new Date(1_762_000_000_500).toISOString(),
+      },
+    ]);
+  });
+
+  it("campos assinados: só o que o parser lê (sem reações no Instagram)", () => {
+    expect(CAMPOS_DO_WEBHOOK_INSTAGRAM).toBe("messages,messaging_postbacks,messaging_seen");
+    expect(CAMPOS_DO_WEBHOOK_MESSENGER).toBe("messages,messaging_postbacks,message_echoes,message_reads");
   });
 
   it("item que não fecha com o entry.id e object desconhecido não viram linha", () => {

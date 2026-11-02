@@ -1175,6 +1175,10 @@ export const AUDIT_ACTIONS = [
   "channel.meta_social_tokens_renewed",
   // A Meta pediu a exclusão dos dados de quem removeu o app (callback público).
   "meta.data_deletion_requested",
+  // O pedido foi CUMPRIDO: as conexões autorizadas por essa pessoa foram
+  // arquivadas (assinatura do webhook retirada, token apagado). Uma linha por
+  // organização afetada (resource = a sessão), mais a da instalação com o total.
+  "meta.data_deletion_executed",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

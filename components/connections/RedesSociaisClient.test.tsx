@@ -149,7 +149,8 @@ describe("Redes sociais pela conexão oficial da Meta", () => {
     h.get.mockResolvedValue(estado({ instagram: true, messenger: true }));
     montar();
     const aviso = await screen.findByRole("alert");
-    expect(aviso.textContent).toContain("A Meta não respondeu como esperado.");
+    expect(aviso.textContent).toContain("Algo deu errado ao conectar.");
+    expect(aviso.textContent).not.toContain("xyz_novo");
     expect(aviso.textContent).not.toContain("xyz_novo");
   });
 
@@ -160,5 +161,17 @@ describe("Redes sociais pela conexão oficial da Meta", () => {
       "Não foi possível carregar as redes sociais.",
     );
     expect(screen.queryByText("Nenhuma conta conectada.")).toBeNull();
+  });
+});
+
+describe("volta com recusa parcial", () => {
+  it("diz quantas Páginas entraram, quantas não e por quê", async () => {
+    const { lerAviso } = await import("@/components/connections/RedesSociaisClient");
+    const aviso = lerAviso(
+      new URLSearchParams("meta_social=parcial&n=2&recusadas=1&motivo=limite_do_plano"),
+      (s) => s,
+    );
+    expect(aviso).toMatchObject({ tipo: "parcial", limite: true });
+    expect(aviso!.texto).toBe("2 Páginas conectadas; 1 não pôde ser conectada: Seu plano chegou ao limite de conexões.");
   });
 });
