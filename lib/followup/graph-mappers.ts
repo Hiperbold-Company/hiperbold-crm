@@ -79,6 +79,10 @@ export function toFlowNode(n: RFNode): FlowNode {
       return { ...shared, type, config: n.data.config as ConfigOf<"collect"> };
     case "skill":
       return { ...shared, type, config: n.data.config as ConfigOf<"skill"> };
+    case "crm_action":
+      return { ...shared, type, config: n.data.config as ConfigOf<"crm_action"> };
+    case "field_op":
+      return { ...shared, type, config: n.data.config as ConfigOf<"field_op"> };
     default: {
       const exhaustive: never = type;
       throw new Error(`unknown node type: ${String(exhaustive)}`);

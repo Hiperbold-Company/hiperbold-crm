@@ -5705,6 +5705,10 @@ export type Database = {
           timing_plan: Json | null
           updated_at: string
           version_id: string
+          lane: string
+          vars: Json
+          origin_event_id: string | null
+          parent_enrollment_id: string | null
         }
         Insert: {
           revision?: number
@@ -5732,6 +5736,10 @@ export type Database = {
           timing_plan?: Json | null
           updated_at?: string
           version_id: string
+          lane?: string
+          vars?: Json
+          origin_event_id?: string | null
+          parent_enrollment_id?: string | null
         }
         Update: {
           revision?: number
@@ -5759,6 +5767,10 @@ export type Database = {
           timing_plan?: Json | null
           updated_at?: string
           version_id?: string
+          lane?: string
+          vars?: Json
+          origin_event_id?: string | null
+          parent_enrollment_id?: string | null
         }
         Relationships: [
           { foreignKeyName: "followup_enrollments_appointment_id_fkey"; columns: ["appointment_id"]; isOneToOne: false; referencedRelation: "calendar_appointments"; referencedColumns: ["id"] },
@@ -9431,6 +9443,17 @@ export type Database = {
       fn_colegas_podem_mexer_na_agenda: { Args: { p_org: string }; Returns: boolean }
       fn_definir_colegas_podem_mexer_na_agenda: { Args: { p_org: string; p_ligado: boolean }; Returns: Json }
       fn_definir_cliente_pela_agenda: { Args: { p_ligado: boolean; p_org: string }; Returns: Json }
+      fn_automacao_iniciar: {
+        Args: {
+          p_org: string
+          p_pointer: string
+          p_contact: string
+          p_vars: Json
+          p_origin_event_id: string | null
+          p_parent_enrollment_id: string | null
+        }
+        Returns: Json
+      }
       fn_followup_patch: { Args: { p_org: string; p_id: string; p_revision: number; p_patch: Json }; Returns: number }
       fn_followup_apply_step: { Args: { p_org: string; p_id: string; p_revision: number; p_patch: Json; p_event: Json }; Returns: number }
       fn_followup_inline_settle: { Args: { p_org: string; p_id: string; p_worker: string; p_done: boolean; p_error?: string | null; p_retry_at?: string | null; p_hold?: boolean; p_acquired_at?: string }; Returns: boolean }

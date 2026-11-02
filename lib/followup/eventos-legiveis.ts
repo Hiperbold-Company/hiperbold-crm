@@ -19,6 +19,7 @@
  * contato) — quando o nó sumiu do grafo pinado, o id cru aparece dito como id,
  * porque um alvo feio é melhor que alvo nenhum.
  */
+import { fraseDaAcao, fraseDaOperacao, fraseDaRegraNova } from "@/lib/automacoes/vocabulario";
 import {
   CONDITION_FALSE_BRANCH_ID,
   CONDITION_TRUE_BRANCH_ID,
@@ -133,6 +134,8 @@ const TIPO_DO_NO: Record<FlowNode["type"], string> = {
   skill: "Skill",
   action: "Mensagem",
   end: "Fim",
+  crm_action: "Ações de CRM",
+  field_op: "Operação de campo",
 };
 
 const DESFECHO: Record<string, string> = {
@@ -198,6 +201,10 @@ export function resumoDoNo(node: FlowNode): NoDoDossie {
       };
     case "end":
       return { ...base, resumo: `encerra — ${DESFECHO[node.config.outcome] ?? node.config.outcome}` };
+    case "crm_action":
+      return { ...base, resumo: node.config.actions.map((a) => fraseDaAcao(a)).join("; ") };
+    case "field_op":
+      return { ...base, resumo: node.config.ops.map((o) => fraseDaOperacao(o)).join("; ") };
   }
 }
 
@@ -265,9 +272,9 @@ function fraseDoRamoDeclarado(origem: FlowNode | undefined, branchId: string, no
     if (!check) return RAMO_SEM_NOME;
     // Regra batizada usa o nome que a pessoa deu; sem nome, a condição por
     // extenso — `regra-2` na tela do operador é o que o vocabulário proíbe.
-    return check.label
-      ? fraseDaRegraNomeada(check.label)
-      : fraseDaRegraSemNome(check.field, check.op, check.value, nomes);
+    if (check.label) return fraseDaRegraNomeada(check.label);
+    if ("kind" in check) return `quando ${fraseDaRegraNova(check).toLocaleLowerCase("pt-BR")}`;
+    return fraseDaRegraSemNome(check.field, check.op, check.value, nomes);
   }
 
   return RAMO_SEM_NOME;

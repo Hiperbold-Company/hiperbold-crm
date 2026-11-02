@@ -40,7 +40,7 @@ import { describe, expect, it } from "vitest";
 const RAIZ = process.cwd();
 // A regra de publicar mora no núcleo compartilhado (rota e tool MCP) desde a fase 3 da API.
 const PUBLISH = path.join(RAIZ, "lib/followup/administracao.ts");
-const SELETOR = path.join(RAIZ, "app/app/ai/followups/[id]/_components/TriggerConfigControl.tsx");
+const SELETOR = path.join(RAIZ, "components/fluxos/editor/TriggerConfigControl.tsx");
 
 function kindsComMotor(): string[] {
   const fonte = readFileSync(PUBLISH, "utf8");

@@ -37,9 +37,9 @@ import {
   type FollowupFlowDetailRow,
 } from "@/hooks/followup/useFollowupFlow";
 import { Trash, TreeStructure } from "@/lib/ui/icons";
-import { FlowStatusBadge } from "../../_components/FlowStatusBadge";
-import { DeleteFollowupFlowButton } from "../../_components/DeleteFollowupFlowButton";
-import { RenameFollowupFlowButton } from "../../_components/RenameFollowupFlowButton";
+import { FlowStatusBadge } from "@/app/app/ai/followups/_components/FlowStatusBadge";
+import { DeleteFollowupFlowButton } from "@/app/app/ai/followups/_components/DeleteFollowupFlowButton";
+import { RenameFollowupFlowButton } from "@/app/app/ai/followups/_components/RenameFollowupFlowButton";
 import { TriggerConfigControl } from "./TriggerConfigControl";
 
 interface Props {

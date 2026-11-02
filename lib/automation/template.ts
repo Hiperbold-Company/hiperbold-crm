@@ -27,10 +27,24 @@ export function marcacaoDoCrm(nome: string): boolean {
 /** `{{contact.cpf_hash}}` e `{{contact.cpf_encrypted}}` nunca saem num texto, mesmo que o contexto traga a coluna (D-216). */
 const CAMPO_DO_CPF = /^contact\.cpf_/;
 
+/**
+ * `{{campo.<chave>}}` (automações): o campo personalizado do NEGÓCIO, e o do
+ * CONTATO quando o negócio não tem a chave. Os demais namespaces das automações
+ * (`gatilho.*`, `sistema.*`) chegam prontos no contexto — quem monta é
+ * `lib/automacoes/template-vars.ts`.
+ */
+function resolveCampo(context: Record<string, unknown>, chave: string): unknown {
+  const doNegocio = resolveField(context, `lead.custom_fields.${chave}`);
+  if (doNegocio !== undefined && doNegocio !== null && doNegocio !== "") return doNegocio;
+  return resolveField(context, `contact.custom_fields.${chave}`);
+}
+
 export function renderTemplate(template: string, context: Record<string, unknown>): string {
   return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_m, path: string) => {
     if (CAMPO_DO_CPF.test(ALIASES[path] ?? path)) return "";
-    const resolved = resolveField(context, ALIASES[path] ?? path);
+    const resolved = path.startsWith("campo.")
+      ? resolveCampo(context, path.slice("campo.".length))
+      : resolveField(context, ALIASES[path] ?? path);
     // `{{primeiro_nome}}` = primeira palavra do nome, como no Inbox e na campanha.
     const texto = String(resolved ?? "");
     return path === "primeiro_nome" ? (texto.trim().split(/\s+/)[0] ?? "") : texto;

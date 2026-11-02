@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 
-import { Play, Clock, GitBranch, Brain, ChatCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece } from "@/lib/ui/icons";
+import { Play, Clock, GitBranch, Brain, ChatCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Kanban, PencilSimple } from "@/lib/ui/icons";
+import { fraseDaAcao, fraseDaOperacao } from "@/lib/automacoes/vocabulario";
 import type { FlowNode, NodeType } from "@/lib/followup/graph-schema";
 import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
 import { NOS_DA_SUPERFICIE } from "@/lib/followup/validate-publish";
@@ -40,7 +41,7 @@ type RegraDeCondicao = Extract<FlowNode, { type: "condition" }>["config"]["check
  * porque é a pergunta mais comum de um funil — e a que o seletor responde sem
  * digitar nada.
  */
-export function regraEmBranco(): RegraDeCondicao {
+export function regraEmBranco(): Extract<RegraDeCondicao, { field: string }> {
   return { field: "lead_stage", op: "eq", value: "" };
 }
 
@@ -160,6 +161,24 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
     defaultLabel: "Fim do fluxo",
     defaultConfig: () => ({ outcome: "exhausted" }),
   },
+  crm_action: {
+    type: "crm_action",
+    paletteLabel: "Ações de CRM",
+    icon: Kanban,
+    chipClassName: "bg-success-bg text-success-fg",
+    borderClassName: "border-l-success",
+    defaultLabel: "Ações de CRM",
+    defaultConfig: () => ({ actions: [{ type: "add_tags", target: "contact", tags: ["Nova tag"] }], on_error: "route" }),
+  },
+  field_op: {
+    type: "field_op",
+    paletteLabel: "Operação de campo",
+    icon: PencilSimple,
+    chipClassName: "bg-info-bg text-info-fg",
+    borderClassName: "border-l-info",
+    defaultLabel: "Definir campo",
+    defaultConfig: () => ({ ops: [{ target: { scope: "lead_custom", key: "campo" }, op: "set", value: "valor" }] }),
+  },
 };
 
 /**
@@ -245,6 +264,18 @@ export function describeNodeConfig(
     case "end": {
       const c = config as ConfigOf<"end">;
       return t(RESULTADOS_DO_FIM[c.outcome]);
+    }
+    case "crm_action": {
+      const c = config as ConfigOf<"crm_action">;
+      const primeira = c.actions[0];
+      const resto = c.actions.length > 1 ? ` +${c.actions.length - 1}` : "";
+      return primeira ? `${t(fraseDaAcao(primeira))}${resto}` : "";
+    }
+    case "field_op": {
+      const c = config as ConfigOf<"field_op">;
+      const primeira = c.ops[0];
+      const resto = c.ops.length > 1 ? ` +${c.ops.length - 1}` : "";
+      return primeira ? `${fraseDaOperacao(primeira)}${resto}` : "";
     }
     default: {
       const exhaustive: never = type;

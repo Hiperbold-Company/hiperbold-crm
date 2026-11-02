@@ -51,6 +51,16 @@ import {
 import { interpolarDestino, persistirRespostaFollowupSupabase } from "./persistir-resposta";
 import { quandoDoRetornoVivo, reavaliarDepoisDoRetorno } from "./retorno-segura-o-fluxo";
 import { triggerConfigSchema } from "./api-schemas";
+import { definicaoDoNo } from "./registro-de-nos";
+import type { DesfechoDoEfeito } from "./node-handlers";
+import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
+import { carregarFatosDaAutomacao } from "@/lib/automacoes/carregar-fatos";
+import {
+  MAX_PASSOS_DA_AUTOMACAO,
+  MAX_VISITAS_POR_NO,
+  ORCAMENTO_DE_PASSOS_POR_TICK,
+  ORCAMENTO_DE_TEMPO_POR_TICK_MS,
+} from "@/lib/automacoes/schemas";
 
 const MAX_STEPS = 80;
 const CLAIM_LEASE_SECONDS = 120;
@@ -71,6 +81,8 @@ export interface EnrollmentPatch {
   updated_at?: string;
   /** Plano de tempo decidido no acionamento (migration 0144) — escrito uma vez, pela ponte. */
   timing_plan?: TimingPlan;
+  /** Variáveis da execução (0986) — o motor grava o objeto inteiro, já mesclado. */
+  vars?: Record<string, unknown>;
 }
 
 export interface FollowupJobRequest {
@@ -156,6 +168,11 @@ export interface AdminClient {
    * `no-show-recuperacao-esgotada.ts`.
    */
   abrirAvisoRecuperacaoEsgotada?(item: AvisoRecuperacaoEsgotada): Promise<void>;
+  /**
+   * Automação (0986): contato, negócio da execução e variáveis, lidos AO VIVO a
+   * cada passo. Opcional — o motor de follow-up não precisa.
+   */
+  loadFatosDaAutomacao?(orgId: string, contactId: string, vars: Record<string, unknown>): Promise<FatosDaAutomacao>;
   persistirRespostaFollowup(input: {
     organization_id: string;
     contact_id: string;
@@ -164,10 +181,49 @@ export interface AdminClient {
   }): Promise<void>;
 }
 
+/** O que o efeito de um bloco recebe para agir. */
+export interface PedidoDeEfeito {
+  enrollment: EnrollmentRow;
+  node: FlowNode;
+  fatos: FatosDaAutomacao | null;
+  /** `${node}:${passo}` — identidade do efeito, para quem precisar de chave idempotente. */
+  chave: string;
+}
+
+export interface ResultadoDoEfeito {
+  desfecho: DesfechoDoEfeito;
+  /** Variáveis a MESCLAR nas da execução (ex.: `_lead_id` do negócio criado). */
+  vars?: Record<string, unknown>;
+  /** O que cada ação fez, em dados curtos e sem PII — vai para o evento `effect_done`. */
+  detalhes?: Array<Record<string, unknown>>;
+}
+
+/** Executa os blocos de efeito (`crm_action`, `field_op`). Produção: `lib/automacoes/efeitos`. */
+export interface ExecutorDeEfeitos {
+  executar(pedido: PedidoDeEfeito): Promise<ResultadoDoEfeito>;
+}
+
 export interface TickDeps {
   db: AdminClient;
   clock: () => Date;
   enqueueJob: (job: FollowupJobRequest) => Promise<void>;
+  /** Sem executor, todo bloco de efeito sai por "Erro" com `efeitos_indisponiveis`. */
+  efeitos?: ExecutorDeEfeitos;
+}
+
+function ehAutomacao(enrollment: EnrollmentRow): boolean {
+  return enrollment.lane === "automacao";
+}
+
+/**
+ * A fronteira do atendimento só vale para a raia de follow-up. Uma automação
+ * nasce de evento de CRM (lead criado, etapa) sem conversa, e os blocos do lote
+ * 1 não enviam mensagem — o plano manda conferir a fronteira só no efeito de
+ * envio (lote 2).
+ */
+async function conferirFronteira(db: AdminClient, enrollment: EnrollmentRow): Promise<void> {
+  if (ehAutomacao(enrollment)) return;
+  await db.assertServiceBoundary?.(enrollment);
 }
 
 export interface TickSummary {
@@ -212,6 +268,8 @@ function eventTypeFor(result: NodeResult): string {
       return "flow_dead";
     case "fail":
       return "node_failed";
+    case "effect":
+      return "effect_pending";
   }
 }
 
@@ -240,6 +298,8 @@ function eventPayload(result: NodeResult): Record<string, unknown> {
       return { reason: result.reason };
     case "fail":
       return { error: result.error };
+    case "effect":
+      return {};
   }
 }
 
@@ -306,8 +366,8 @@ async function markDead(
   const flowName = (await db.loadFlowPointerName(enrollment.organization_id, enrollment.pointer_id)) ?? enrollment.pointer_id;
   await db.insertDeadInboxItem({
     organization_id: enrollment.organization_id,
-    title: "Um fluxo de follow-up parou de tentar",
-    body: `O fluxo "${flowName}" (enrollment ${enrollment.id}) foi marcado como "dead": ${sanitized}`,
+    title: ehAutomacao(enrollment) ? "Uma automação parou de tentar" : "Um fluxo de follow-up parou de tentar",
+    body: `${ehAutomacao(enrollment) ? "A automação" : "O fluxo"} "${flowName}" (enrollment ${enrollment.id}) foi marcado como "dead": ${sanitized}`,
     ref_id: enrollment.id,
   });
 
@@ -366,13 +426,20 @@ async function applyResult(
   smartWaits: EsperaAdaptativa[] = [],
   events: EnrollmentEventRef[] = [],
   respostaParaGravar: string | null = null,
-): Promise<void> {
+  varsNovas: Record<string, unknown> | null = null,
+): Promise<boolean> {
   const { db, clock, enqueueJob } = deps;
-  await db.assertServiceBoundary?.(enrollment);
+  await conferirFronteira(db, enrollment);
+
+  if (result.kind === "effect") {
+    // O motor resolve o efeito ANTES de chamar a decisão de novo; chegar aqui é defeito.
+    await applyHandlerFailure(deps, enrollment, "effect_sem_desfecho", summary);
+    return false;
+  }
 
   if (result.kind === "fail") {
     await applyHandlerFailure(deps, enrollment, result.error, summary);
-    return;
+    return false;
   }
 
   if (result.kind === "dead") {
@@ -381,7 +448,7 @@ async function applyResult(
     // max_steps/exhausted-backoff — so the operator sees exactly one dead-letter notice.
     await markDead(db, clock, enrollment, result.reason);
     summary.dead++;
-    return;
+    return false;
   }
 
   const idemKey = `${node.id}:${enrollment.steps_taken}`;
@@ -423,7 +490,7 @@ async function applyResult(
         });
         tallyOutcome(result, summary);
       }
-      return;
+      return false;
     }
   }
 
@@ -431,6 +498,7 @@ async function applyResult(
     steps_taken: enrollment.steps_taken + 1,
     claimed_until: null,
     updated_at: clock().toISOString(),
+    ...(varsNovas ? { vars: varsNovas } : {}),
   };
 
   switch (result.kind) {
@@ -462,7 +530,7 @@ async function applyResult(
           : ACTION_RECHECK_MS;
       patch.next_eval_at = new Date(clock().getTime() + graceMs).toISOString();
       if (!isReplay) {
-        await db.assertServiceBoundary?.(enrollment);
+        await conferirFronteira(db, enrollment);
         await enqueueJob({
           organization_id: enrollment.organization_id,
           contact_id: enrollment.contact_id,
@@ -511,7 +579,7 @@ async function applyResult(
     !((node.config.if_exists ?? "overwrite") === "confirm" && ehConfirmacao(respostaParaGravar))
   ) {
     try {
-      await db.assertServiceBoundary?.(enrollment);
+      await conferirFronteira(db, enrollment);
       await db.persistirRespostaFollowup({
         organization_id: enrollment.organization_id,
         contact_id: enrollment.contact_id,
@@ -526,6 +594,7 @@ async function applyResult(
   }
 
   if (!isReplay) tallyOutcome(result, summary);
+  return !isReplay;
 }
 
 /**
@@ -551,19 +620,47 @@ export async function avancarEnrollmentAtivo(
   await processEnrollment(deps, enrollment, summary);
 }
 
+/**
+ * Um tick de UMA inscrição. Follow-up: um nó por tick (como sempre foi).
+ * Automação: os blocos instantâneos seguem em sequência no mesmo tick, até uma
+ * espera, o fim, ou o orçamento (`ORCAMENTO_DE_PASSOS_POR_TICK` passos ou
+ * `ORCAMENTO_DE_TEMPO_POR_TICK_MS`, dentro do lease de 120 s do claim). Cada
+ * passo é gravado (`applyResult`) antes do seguinte — um tick que cai no meio
+ * retoma exatamente do último passo gravado.
+ */
 async function processEnrollment(
   deps: TickDeps,
   enrollment: EnrollmentRow,
   summary: TickSummary,
   inboundBodyOverride?: string,
 ): Promise<void> {
+  if (!ehAutomacao(enrollment) || inboundBodyOverride !== undefined) {
+    await processarUmPasso(deps, enrollment, summary, inboundBodyOverride);
+    return;
+  }
+  const inicio = deps.clock().getTime();
+  let atual: EnrollmentRow | null = enrollment;
+  for (let passo = 0; atual && passo < ORCAMENTO_DE_PASSOS_POR_TICK; passo++) {
+    if (passo > 0 && deps.clock().getTime() - inicio > ORCAMENTO_DE_TEMPO_POR_TICK_MS) break;
+    atual = await processarUmPasso(deps, atual, summary);
+  }
+  // Orçamento esgotado com o contato ainda andando: `next_eval_at` já é "agora",
+  // então o próximo tick continua de onde parou.
+}
+
+async function processarUmPasso(
+  deps: TickDeps,
+  enrollment: EnrollmentRow,
+  summary: TickSummary,
+  inboundBodyOverride?: string,
+): Promise<EnrollmentRow | null> {
   const { db, clock } = deps;
-  try { await db.assertServiceBoundary?.(enrollment); await db.assertAgenda?.(enrollment); }
+  try { await conferirFronteira(db, enrollment); await db.assertAgenda?.(enrollment); }
   catch (error) {
     if(error instanceof AgendaDeferredError){
       if(error.protection.motivo === "leitura_indisponivel") throw error;
       await db.updateEnrollment(enrollment.id,enrollment.organization_id,{next_eval_at:error.protection.reavaliar_em,claimed_until:null,last_error:error.message});
-      return;
+      return null;
     }
     if (!(error instanceof StaleServiceBoundaryError)) throw error;
     // ⚠️ A ESPERA LONGA MORRE AQUI, E NÃO PODE MORRER CALADA.
@@ -594,7 +691,7 @@ async function processEnrollment(
       });
     }
     await db.updateEnrollment(enrollment.id, enrollment.organization_id, { status: "cancelled", cancel_reason: "Atendimento encerrado ou substituído", claimed_until: null, completed_at: clock().toISOString() });
-    return;
+    return null;
   }
 
   // O RETORNO AGENDADO FALA PRIMEIRO. Com um "te escrevo no dia 30" a caminho, o
@@ -613,15 +710,16 @@ async function processEnrollment(
         idempotency_key: `${enrollment.current_node_id}:${enrollment.steps_taken}:retorno:${seguraAte}`,
       });
       await db.updateEnrollment(enrollment.id, enrollment.organization_id, { next_eval_at: seguraAte, claimed_until: null });
-      return;
+      return null;
     }
   }
 
-
-  if (enrollment.steps_taken > MAX_STEPS) {
+  const automacao = ehAutomacao(enrollment);
+  // Teto de passos POR RAIA: a automação encadeia muitos blocos instantâneos.
+  if (enrollment.steps_taken > (automacao ? MAX_PASSOS_DA_AUTOMACAO : MAX_STEPS)) {
     await markDead(db, clock, enrollment, "max_steps");
     summary.dead++;
-    return;
+    return null;
   }
 
   const graph = await db.loadFlowGraph(enrollment.organization_id, enrollment.version_id);
@@ -630,7 +728,7 @@ async function processEnrollment(
   const node = graph.nodes.find((n) => n.id === enrollment.current_node_id);
   if (!node) throw new Error("node_not_found");
   if (inboundBodyOverride !== undefined && node.type !== "match_reply" && node.type !== "wait") {
-    return;
+    return null;
   }
 
   const leadRow = await db.loadLeadFacts(enrollment.organization_id, enrollment.contact_id);
@@ -657,19 +755,14 @@ async function processEnrollment(
   let matchReplyOcupado = false;
   let events: EnrollmentEventRef[] = [];
 
-  const smartWaits = node.type === "trigger" ? coletarEsperasAdaptativas(graph.nodes) : [];
+  // Automação não planeja tempo com IA: a espera adaptativa usa o máximo.
+  const smartWaits = node.type === "trigger" && !automacao ? coletarEsperasAdaptativas(graph.nodes) : [];
   const vaiPlanejar = smartWaits.length > 0 && (enrollment.timing_plan ?? null) === null;
-  const precisaEventos =
-    vaiPlanejar ||
-    node.type === "wait" ||
-    node.type === "ai_classify" ||
-    node.type === "match_reply" ||
-    node.type === "action" ||
-    node.type === "repeat" ||
-    // O `condition` só entra aqui por causa de `last_outcome`: o desfecho do
-    // passo anterior mora nos eventos (evento `ai_classified`), e sem lê-los o
-    // motor avaliava a condição contra `null` fixo — controle decorativo.
-    node.type === "condition";
+  // Quem precisa dos eventos é declarado no registro (`registro-de-nos.ts`):
+  // wait, ai_classify, match_reply, action, repeat, condition (este por causa de
+  // `last_outcome`, que mora no evento `ai_classified`) e os blocos de efeito.
+  // A automação lê sempre: o teto de visitas por bloco se conta nos eventos.
+  const precisaEventos = vaiPlanejar || automacao || definicaoDoNo(node.type).precisaEventos;
 
   if (precisaEventos) {
     events = await db.loadEnrollmentEvents(enrollment.id);
@@ -744,6 +837,28 @@ async function processEnrollment(
   const nextAlways = selectEdge(graph.edges, node.id, { type: "always" });
   const proximo = nextAlways ? (graph.nodes.find((n) => n.id === nextAlways.target) ?? null) : null;
 
+  let fatos: FatosDaAutomacao | undefined;
+  let efeito: DesfechoDoEfeito | null = null;
+  let varsNovas: Record<string, unknown> | null = null;
+  if (automacao) {
+    // Teto de visitas: "ir para" em laço, ou um caminho que volta sem espera,
+    // para aqui — antes de gastar os 400 passos da execução.
+    const visitas = events.filter((e) => e.node_id === node.id && e.event_type === "node_advanced").length;
+    if (visitas >= MAX_VISITAS_POR_NO) {
+      await markDead(db, clock, enrollment, "visitas_por_no");
+      summary.dead++;
+      return null;
+    }
+    fatos = db.loadFatosDaAutomacao
+      ? await db.loadFatosDaAutomacao(enrollment.organization_id, enrollment.contact_id, enrollment.vars ?? {})
+      : undefined;
+    if (definicaoDoNo(node.type).efeito) {
+      const resolvido = await resolverEfeito(deps, enrollment, node, events, fatos ?? null);
+      efeito = resolvido.desfecho;
+      if (resolvido.vars) varsNovas = { ...(enrollment.vars ?? {}), ...resolvido.vars };
+    }
+  }
+
   const result = processNode({
     node,
     edges: graph.edges,
@@ -762,8 +877,10 @@ async function processEnrollment(
     repeatTaken,
     repeatTotal,
     proximo,
+    ...(fatos ? { fatos } : {}),
+    efeito,
   });
-  await applyResult(
+  const aplicou = await applyResult(
     deps,
     enrollment,
     node,
@@ -772,7 +889,103 @@ async function processEnrollment(
     smartWaits,
     events,
     node.type === "match_reply" && wokeEarly ? (lastInboundBody ?? "").trim() || null : null,
+    varsNovas,
   );
+  if (!automacao || !aplicou || result.kind !== "advance") return null;
+  // O próximo bloco no MESMO tick: o estado que acabou de ser gravado.
+  return {
+    ...enrollment,
+    current_node_id: result.next_node_id,
+    status: "active",
+    steps_taken: enrollment.steps_taken + 1,
+    next_eval_at: result.next_eval_at.toISOString(),
+    claimed_until: null,
+    updated_at: clock().toISOString(),
+    ...(varsNovas ? { vars: varsNovas } : {}),
+  };
+}
+
+/**
+ * O efeito de um bloco roda NO MÁXIMO UMA VEZ por passo.
+ *
+ * Chave `${nó}:${passo}`: antes de agir grava `effect_started`; depois,
+ * `effect_done` (ou `effect_failed`) com o desfecho. Num replay (o tick caiu
+ * depois de agir e antes de avançar), o desfecho é RELIDO do evento e o efeito
+ * não roda de novo. Se só o `effect_started` existe, não há como saber se a
+ * ação aconteceu — o bloco sai por "Erro" (`efeito_interrompido`) em vez de
+ * arriscar criar o negócio duas vezes.
+ */
+async function resolverEfeito(
+  deps: TickDeps,
+  enrollment: EnrollmentRow,
+  node: FlowNode,
+  events: EnrollmentEventRef[],
+  fatos: FatosDaAutomacao | null,
+): Promise<{ desfecho: DesfechoDoEfeito; vars?: Record<string, unknown> }> {
+  const { db } = deps;
+  const chave = `${node.id}:${enrollment.steps_taken}`;
+  const chaveInicio = `${chave}:efeito_inicio`;
+  const chaveFim = `${chave}:efeito_fim`;
+  const base = { organization_id: enrollment.organization_id, enrollment_id: enrollment.id, node_id: node.id };
+
+  const lerFim = (lista: EnrollmentEventRef[]) => {
+    const fim = lista.find((e) => e.idempotency_key === chaveFim);
+    if (!fim) return null;
+    const d = fim.payload?.desfecho as DesfechoDoEfeito | undefined;
+    const vars = fim.payload?.vars as Record<string, unknown> | undefined;
+    return {
+      desfecho: d && typeof d.ok === "boolean" ? d : { ok: false, erro: "desfecho_ilegivel" },
+      ...(vars && typeof vars === "object" ? { vars } : {}),
+    };
+  };
+
+  const jaFeito = lerFim(events);
+  if (jaFeito) return jaFeito;
+
+  const gravarFim = async (r: ResultadoDoEfeito) => {
+    const { inserted } = await db.insertEnrollmentEvent({
+      ...base,
+      event_type: r.desfecho.ok ? "effect_done" : "effect_failed",
+      payload: {
+        desfecho: r.desfecho,
+        ...(r.vars ? { vars: r.vars } : {}),
+        ...(r.detalhes ? { detalhes: r.detalhes } : {}),
+      },
+      idempotency_key: chaveFim,
+    });
+    if (!inserted) {
+      // Outro tick gravou primeiro: vale o dele.
+      const outro = lerFim(await db.loadEnrollmentEvents(enrollment.id));
+      if (outro) return outro;
+    }
+    return { desfecho: r.desfecho, ...(r.vars ? { vars: r.vars } : {}) };
+  };
+
+  const iniciou = events.some((e) => e.idempotency_key === chaveInicio);
+  const { inserted } = iniciou
+    ? { inserted: false }
+    : await db.insertEnrollmentEvent({
+        ...base,
+        event_type: "effect_started",
+        payload: { tipo: node.type },
+        idempotency_key: chaveInicio,
+      });
+  if (!inserted) {
+    return gravarFim({ desfecho: { ok: false, erro: "efeito_interrompido" } });
+  }
+
+  let resultado: ResultadoDoEfeito;
+  if (!deps.efeitos) {
+    resultado = { desfecho: { ok: false, erro: "efeitos_indisponiveis" } };
+  } else {
+    try {
+      resultado = await deps.efeitos.executar({ enrollment, node, fatos, chave });
+    } catch (err) {
+      logger.warn("automacao: efeito lançou; o bloco sai por Erro", { erro: errorMessage(err) });
+      resultado = { desfecho: { ok: false, erro: "efeito_falhou" } };
+    }
+  }
+  return gravarFim(resultado);
 }
 
 export async function runFollowupTick(deps: TickDeps, opts?: { limit?: number }): Promise<TickSummary> {
@@ -1024,6 +1237,9 @@ export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
     },
     async persistirRespostaFollowup(input) {
       await persistirRespostaFollowupSupabase(admin, input);
+    },
+    async loadFatosDaAutomacao(orgId, contactId, vars) {
+      return carregarFatosDaAutomacao(admin, orgId, contactId, vars);
     },
   };
 }

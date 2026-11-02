@@ -172,7 +172,7 @@ describe("ConditionForm — a regra nasce e muda sem decidir sozinha", () => {
     await user.click(screen.getByRole("combobox", { name: "Valor" }));
     await user.click(await screen.findByRole("option", { name: "Pago · Vendas" }));
 
-    expect(gravados.at(-1)!.checks[0]!.value).toBe(ID_PAGO);
+    expect((gravados.at(-1)!.checks[0] as { value: unknown }).value).toBe(ID_PAGO);
     expect(screen.getByText("O lead está na etapa “Pago · Vendas”")).toBeInTheDocument();
   });
 
@@ -230,7 +230,7 @@ describe("ConditionForm — a regra nasce e muda sem decidir sozinha", () => {
     await user.clear(campo);
     await user.type(campo, "5");
 
-    expect(gravados.at(-1)!.checks[1]!.value).toBe(5);
+    expect((gravados.at(-1)!.checks[1] as { value: unknown }).value).toBe(5);
   });
 
   it("trocar o campo recomeça o valor — o 3 de passos não vira a etapa “3”", async () => {

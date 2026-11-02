@@ -31,10 +31,12 @@ import {
   actionConfigSchema,
   aiClassifyConfigSchema,
   conditionConfigSchema,
+  legacyConditionCheckSchema,
   endConfigSchema,
   waitConfigSchema,
 } from "./graph-schema";
 import * as vocabulario from "./vocabulario";
+import { MAPAS_DA_AUTOMACAO } from "@/lib/automacoes/vocabulario";
 import {
   ALVOS_DA_CLASSIFICACAO,
   CAMPOS_DA_CONDICAO,
@@ -92,7 +94,8 @@ function discriminantes(uniao: unknown, chave: string): string[] {
   });
 }
 
-const checkShape = zod(conditionConfigSchema).shape.checks.element.shape;
+// As regras legadas (as que este vocabulário descreve); as das automações têm `lib/automacoes/vocabulario.ts`.
+const checkShape = zod(legacyConditionCheckSchema).shape;
 
 const CAMPOS_NO_SCHEMA = valoresDoEnum(checkShape.field);
 const OPERADORES_NO_SCHEMA = valoresDoEnum(checkShape.op);
@@ -272,6 +275,8 @@ describe("vocabulário NOVO não entra escondido", () => {
   const TODOS_OS_MAPAS: Array<Record<string, unknown>> = [
     ...mapasExportados().map(([, mapa]) => mapa),
     Object.fromEntries(OPERADORES_NO_SCHEMA.map((op) => [op, true])),
+    // Os blocos das automações têm dicionário próprio (`lib/automacoes/vocabulario.ts`).
+    ...MAPAS_DA_AUTOMACAO,
   ];
 
 

@@ -4,7 +4,7 @@ import { carregarFluxoParaEdicao } from "@/lib/followup/editar";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
-import { FlowBuilder } from "../../followups/[id]/_components/FlowBuilder";
+import { FlowBuilder } from "@/components/fluxos/editor/FlowBuilder";
 
 export const dynamic = "force-dynamic";
 

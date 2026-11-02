@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { conditionConfigSchema, nodeBranches } from "@/lib/followup/graph-schema";
+import { conditionConfigSchema, nodeBranches, type LegacyConditionCheck } from "@/lib/followup/graph-schema";
 import {
   CAMPOS_DA_CONDICAO,
   COMBINADORES,
@@ -48,7 +48,8 @@ function operadorValidoPara(campo: CampoDaCondicao, atual: OperadorDaCondicao): 
 }
 
 type ConditionConfig = ConfigOf<"condition">;
-type Check = ConditionConfig["checks"][number];
+/** O formulário dos FOLLOW-UPS edita só as quatro regras legadas; as das automações têm formulário próprio. */
+type Check = LegacyConditionCheck;
 type Branching = NonNullable<ConditionConfig["branching"]>;
 
 /** Id novo que não colide com os já usados. Opaco de propósito: é a identidade
@@ -86,7 +87,7 @@ export function ConditionForm({
   const funis = etapasPorFunil(etapas);
   const [combinator, setCombinator] = useState(config.combinator);
   const [branching, setBranching] = useState<Branching>(config.branching ?? "combined");
-  const [checks, setChecks] = useState(config.checks);
+  const [checks, setChecks] = useState(config.checks as Check[]);
   const [error, setError] = useState<string | null>(null);
   /** Troca de modo pendente de confirmação, com quantas ligações ela deixa órfãs. */
   const [trocaPendente, setTrocaPendente] = useState<{ modo: Branching; orfas: number } | null>(null);

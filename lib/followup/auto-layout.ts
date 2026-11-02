@@ -44,6 +44,8 @@ const TYPE_ORDER: Record<NodeType, number> = {
   collect: 6,
   skill: 7,
   action: 8,
+  crm_action: 8,
+  field_op: 8,
   end: 9,
 };
 

@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+import {
+  automacaoTriggerConfigSchema,
+  crmActionConfigSchema,
+  fieldOpConfigSchema,
+  regrasNovasDeCondicao,
+} from '@/lib/automacoes/schemas';
+
 /**
  * Flow graph schema for the follow-up automation system.
  * Defines types and Zod validators for nodes, edges, and complete graphs.
@@ -16,6 +23,9 @@ export const NODE_TYPES = [
   'skill',
   'action',
   'end',
+  // Blocos das AUTOMAÇÕES (superfície `automacao`, lote 1). Ver `lib/automacoes/schemas.ts`.
+  'crm_action',
+  'field_op',
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
@@ -50,6 +60,15 @@ export const CONDITION_FALSE_BRANCH_ID = 'false';
 export const REPEAT_BODY_BRANCH_ID = 'body';
 /** Saída do `repeat` quando o contador chegou a zero. */
 export const REPEAT_DONE_BRANCH_ID = 'done';
+/**
+ * Saída "Erro" dos blocos de efeito (`crm_action`, `field_op`).
+ *
+ * NÃO entra em `RESERVED_BRANCH_IDS` de propósito: aquela lista recusa o id em
+ * ramo DECLARADO pelo usuário, e um grafo já publicado que tenha um ramo
+ * chamado `erro` passaria a falhar no parse — o fluxo morreria no meio. Os
+ * blocos de efeito não têm ramo declarado, então não há colisão possível.
+ */
+export const ERROR_BRANCH_ID = 'erro';
 
 /** Branch ids the contract owns — a user-declared branch may not claim one. */
 export const RESERVED_BRANCH_IDS = [
@@ -252,7 +271,7 @@ export const actionConfigSchema = z.discriminatedUnion('mode', [
  * — identity lives on the rule itself, never in a parallel array that would
  * desync the moment the user reorders the rules.
  */
-export const conditionCheckSchema = z.strictObject({
+export const legacyConditionCheckSchema = z.strictObject({
   id: declaredBranchIdSchema.optional(),
   label: z.string().min(1).max(60).optional(),
   field: z.enum([
@@ -264,6 +283,35 @@ export const conditionCheckSchema = z.strictObject({
   op: z.enum(['eq', 'neq', 'gte', 'lte', 'contains']),
   value: z.union([z.string(), z.number()]),
 });
+export type LegacyConditionCheck = z.infer<typeof legacyConditionCheckSchema>;
+
+/**
+ * As regras das AUTOMAÇÕES (lote 1), discriminadas por `kind`: campo padrão ou
+ * personalizado, tag, etapa, negócio aberto no funil, negócio existe, situação
+ * do negócio. Uma regra legada não tem `kind` — é assim que as duas famílias se
+ * separam (`ehRegraNova`). O publish só aceita regra nova na superfície
+ * `automacao` (`validate-publish.ts`).
+ */
+const identidadeDoRamo = {
+  id: declaredBranchIdSchema.optional(),
+  label: z.string().min(1).max(60).optional(),
+};
+export const novaConditionCheckSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.field }),
+  z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.tag }),
+  z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.stage }),
+  z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.open_deal_in_pipeline }),
+  z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.deal_exists }),
+  z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.deal_status }),
+]);
+export type NovaConditionCheck = z.infer<typeof novaConditionCheckSchema>;
+
+export const conditionCheckSchema = z.union([legacyConditionCheckSchema, novaConditionCheckSchema]);
+
+/** Regra das automações (tem `kind`) — e não uma das quatro legadas dos follow-ups. */
+export function ehRegraNova(check: ConditionCheck): check is NovaConditionCheck {
+  return 'kind' in check;
+}
 
 export type ConditionCheck = z.infer<typeof conditionCheckSchema>;
 
@@ -392,7 +440,9 @@ export const flowNodeSchema = z.discriminatedUnion('type', [
       x: z.number(),
       y: z.number(),
     }),
-    config: z.strictObject({}),
+    // `{}` nos follow-ups (o disparo mora em `pointer.trigger_config`); nas
+    // automações, os gatilhos moram no próprio grafo — vários por fluxo.
+    config: z.union([z.strictObject({}), automacaoTriggerConfigSchema]),
   }),
   // Wait node: pauses flow for a duration
   z.strictObject({
@@ -490,6 +540,28 @@ export const flowNodeSchema = z.discriminatedUnion('type', [
       y: z.number(),
     }),
     config: endConfigSchema,
+  }),
+  // Ações de CRM (automação): criar/mover/ganhar/perder negócio, tags, dono, aviso, tarefa, nota.
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('crm_action'),
+    label: z.string().min(1).max(60),
+    position: z.strictObject({
+      x: z.number(),
+      y: z.number(),
+    }),
+    config: crmActionConfigSchema,
+  }),
+  // Operação de campo (automação): definir, limpar, acrescentar, somar.
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('field_op'),
+    label: z.string().min(1).max(60),
+    position: z.strictObject({
+      x: z.number(),
+      y: z.number(),
+    }),
+    config: fieldOpConfigSchema,
   }),
 ]);
 
@@ -699,6 +771,152 @@ function fallbackBranch(label: string): FlowBranch {
   };
 }
 
+const FALLBACK_DONE_LABEL = 'Concluído';
+
+/** Os dois desfechos de um bloco de efeito: deu certo (o `else`) ou deu erro. */
+function ramosDeEfeito(): FlowBranch[] {
+  return [
+    {
+      id: ERROR_BRANCH_ID,
+      label: 'Erro',
+      check: null,
+      kind: 'match',
+      condition: { type: 'branch', branch_id: ERROR_BRANCH_ID },
+    },
+    fallbackBranch(FALLBACK_DONE_LABEL),
+  ];
+}
+
+
+type RamosDe<K extends NodeType> = (node: Pick<Extract<FlowNode, { type: K }>, 'type' | 'config'>) => FlowBranch[];
+
+function saidaUnica(): FlowBranch[] {
+  return [fallbackBranch(FALLBACK_ALWAYS_LABEL)];
+}
+
+/**
+ * As saídas de cada tipo de nó — UMA entrada por tipo, exaustiva pelo tipo
+ * (`registro-de-nos.ts` agrega este mapa com o resto do contrato do nó).
+ */
+export const RAMOS_POR_TIPO: { [K in NodeType]: RamosDe<K> } = {
+  condition: (node) => {
+    if (node.config.branching === 'per_check') {
+      const branches: FlowBranch[] = node.config.checks.flatMap((check) =>
+        check.id === undefined
+          ? [] // unreachable for a parsed config: 'per_check' refines every check to have an id
+          : [
+              {
+                id: check.id,
+                label: check.label ?? null, // null: o vocabulário monta a frase a partir de `check`
+                check,
+                kind: 'match' as const,
+                condition: { type: 'branch' as const, branch_id: check.id },
+              },
+            ]
+      );
+      return [...branches, fallbackBranch(FALLBACK_NONE_LABEL)];
+    }
+    return [
+      {
+        id: CONDITION_TRUE_BRANCH_ID,
+        label: 'Sim',
+        check: null,
+        kind: 'match',
+        condition: { type: 'cond_result', value: true },
+      },
+      {
+        id: CONDITION_FALSE_BRANCH_ID,
+        label: 'Não',
+        check: null,
+        kind: 'match',
+        condition: { type: 'cond_result', value: false },
+      },
+      fallbackBranch(FALLBACK_OTHERS_LABEL),
+    ];
+  },
+
+  ai_classify: (node) => {
+    const declared = node.config.branches;
+    const classBranches: FlowBranch[] = declared
+      ? declared.map((b) => ({
+          id: b.id,
+          label: b.label,
+          check: null,
+          kind: 'match' as const,
+          condition: { type: 'branch' as const, branch_id: b.id },
+        }))
+      : node.config.classes.map((cls) => ({
+          id: cls, // v1: the class string is its own branch id
+          label: cls,
+          check: null,
+          kind: 'match' as const,
+          condition: { type: 'class_match' as const, value: cls },
+        }));
+    return [
+      ...classBranches,
+      {
+        id: NO_REPLY_BRANCH_ID,
+        label: NO_REPLY_LABEL,
+        check: null,
+        kind: 'match',
+        condition: declared
+          ? { type: 'branch', branch_id: NO_REPLY_BRANCH_ID }
+          : { type: 'class_match', value: NO_REPLY_BRANCH_ID },
+      },
+      fallbackBranch(FALLBACK_OTHERS_LABEL),
+    ];
+  },
+
+  match_reply: (node) => {
+    const classBranches: FlowBranch[] = node.config.branches.map((b) => ({
+      id: b.id,
+      label: b.label,
+      check: null,
+      kind: 'match' as const,
+      condition: { type: 'branch' as const, branch_id: b.id },
+    }));
+    return [
+      ...classBranches,
+      {
+        id: NO_REPLY_BRANCH_ID,
+        label: NO_REPLY_LABEL,
+        check: null,
+        kind: 'match',
+        condition: { type: 'branch', branch_id: NO_REPLY_BRANCH_ID },
+      },
+      fallbackBranch(FALLBACK_OTHERS_LABEL),
+    ];
+  },
+
+  repeat: () => [
+    {
+      id: REPEAT_BODY_BRANCH_ID,
+      label: 'Próxima volta',
+      check: null,
+      kind: 'match',
+      condition: { type: 'branch', branch_id: REPEAT_BODY_BRANCH_ID },
+    },
+    {
+      id: REPEAT_DONE_BRANCH_ID,
+      label: 'Acabou',
+      check: null,
+      kind: 'match',
+      condition: { type: 'branch', branch_id: REPEAT_DONE_BRANCH_ID },
+    },
+    fallbackBranch(FALLBACK_OTHERS_LABEL),
+  ],
+
+  crm_action: ramosDeEfeito,
+  field_op: ramosDeEfeito,
+
+  trigger: saidaUnica,
+  wait: saidaUnica,
+  collect: saidaUnica,
+  skill: saidaUnica,
+  action: saidaUnica,
+  end: saidaUnica,
+};
+
 /**
  * Every output of `node`, in the order the builder should draw the handles,
  * with the mandatory fallback last. A v1 node yields v1 conditions and a v2
@@ -706,118 +924,8 @@ function fallbackBranch(label: string): FlowBranch {
  * because the contract grew.
  */
 export function nodeBranches(node: BranchableNode): FlowBranch[] {
-  switch (node.type) {
-    case 'condition': {
-      if (node.config.branching === 'per_check') {
-        const branches: FlowBranch[] = node.config.checks.flatMap((check) =>
-          check.id === undefined
-            ? [] // unreachable for a parsed config: 'per_check' refines every check to have an id
-            : [
-                {
-                  id: check.id,
-                  label: check.label ?? null, // null: o vocabulário monta a frase a partir de `check`
-                  check,
-                  kind: 'match' as const,
-                  condition: { type: 'branch' as const, branch_id: check.id },
-                },
-              ]
-        );
-        return [...branches, fallbackBranch(FALLBACK_NONE_LABEL)];
-      }
-      return [
-        {
-          id: CONDITION_TRUE_BRANCH_ID,
-          label: 'Sim',
-          check: null,
-          kind: 'match',
-          condition: { type: 'cond_result', value: true },
-        },
-        {
-          id: CONDITION_FALSE_BRANCH_ID,
-          label: 'Não',
-          check: null,
-          kind: 'match',
-          condition: { type: 'cond_result', value: false },
-        },
-        fallbackBranch(FALLBACK_OTHERS_LABEL),
-      ];
-    }
-
-    case 'ai_classify': {
-      const declared = node.config.branches;
-      const classBranches: FlowBranch[] = declared
-        ? declared.map((b) => ({
-            id: b.id,
-            label: b.label,
-            check: null,
-            kind: 'match' as const,
-            condition: { type: 'branch' as const, branch_id: b.id },
-          }))
-        : node.config.classes.map((cls) => ({
-            id: cls, // v1: the class string is its own branch id
-            label: cls,
-            check: null,
-            kind: 'match' as const,
-            condition: { type: 'class_match' as const, value: cls },
-          }));
-      return [
-        ...classBranches,
-        {
-          id: NO_REPLY_BRANCH_ID,
-          label: NO_REPLY_LABEL,
-          check: null,
-          kind: 'match',
-          condition: declared
-            ? { type: 'branch', branch_id: NO_REPLY_BRANCH_ID }
-            : { type: 'class_match', value: NO_REPLY_BRANCH_ID },
-        },
-        fallbackBranch(FALLBACK_OTHERS_LABEL),
-      ];
-    }
-
-    case 'match_reply': {
-      const classBranches: FlowBranch[] = node.config.branches.map((b) => ({
-        id: b.id,
-        label: b.label,
-        check: null,
-        kind: 'match' as const,
-        condition: { type: 'branch' as const, branch_id: b.id },
-      }));
-      return [
-        ...classBranches,
-        {
-          id: NO_REPLY_BRANCH_ID,
-          label: NO_REPLY_LABEL,
-          check: null,
-          kind: 'match',
-          condition: { type: 'branch', branch_id: NO_REPLY_BRANCH_ID },
-        },
-        fallbackBranch(FALLBACK_OTHERS_LABEL),
-      ];
-    }
-
-    case 'repeat':
-      return [
-        {
-          id: REPEAT_BODY_BRANCH_ID,
-          label: 'Próxima volta',
-          check: null,
-          kind: 'match',
-          condition: { type: 'branch', branch_id: REPEAT_BODY_BRANCH_ID },
-        },
-        {
-          id: REPEAT_DONE_BRANCH_ID,
-          label: 'Acabou',
-          check: null,
-          kind: 'match',
-          condition: { type: 'branch', branch_id: REPEAT_DONE_BRANCH_ID },
-        },
-        fallbackBranch(FALLBACK_OTHERS_LABEL),
-      ];
-
-    default:
-      return [fallbackBranch(FALLBACK_ALWAYS_LABEL)];
-  }
+  const ramos = RAMOS_POR_TIPO[node.type] as (n: BranchableNode) => FlowBranch[];
+  return ramos(node);
 }
 
 /**

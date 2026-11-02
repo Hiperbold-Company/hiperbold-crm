@@ -5,7 +5,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
 import type { FollowupFlowDetailRow } from "@/hooks/followup/useFollowupFlow";
-import { FlowBuilder } from "./_components/FlowBuilder";
+import { FlowBuilder } from "@/components/fluxos/editor/FlowBuilder";
 
 export const dynamic = "force-dynamic";
 

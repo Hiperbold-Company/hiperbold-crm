@@ -52,6 +52,7 @@ import {
   type actionConfigSchema,
   type aiClassifyConfigSchema,
   type conditionConfigSchema,
+  type LegacyConditionCheck,
   type contactFlowFieldTypeSchema,
   type endConfigSchema,
   type waitConfigSchema,
@@ -59,7 +60,8 @@ import {
 import type { EnrollmentOutcome, EnrollmentStatus } from "./node-handlers";
 
 type ConditionConfig = z.infer<typeof conditionConfigSchema>;
-type Check = ConditionConfig["checks"][number];
+/** As quatro regras dos follow-ups. As das automações têm vocabulário próprio (`lib/automacoes/vocabulario.ts`). */
+type Check = LegacyConditionCheck;
 
 export type CampoDaCondicao = Check["field"];
 export type OperadorDaCondicao = Check["op"];

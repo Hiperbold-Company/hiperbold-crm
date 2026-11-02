@@ -1,6 +1,7 @@
 import type { FlowGraph, FlowEdge, FlowNode, NodeType } from './graph-schema';
 import type { FollowupFlowSurface } from './api-schemas';
-import { branchIdForCondition, nodeBranches } from './graph-schema';
+import { branchIdForCondition, ehRegraNova, nodeBranches } from './graph-schema';
+import { NOS_DA_SUPERFICIE } from './registro-de-nos';
 import { rotuloDoRamo } from './rotulo-do-ramo';
 import type { NomesDeValor } from './vocabulario';
 import { capabilitiesOf, transportaMensagem, type ChannelProvider } from '../channels/capabilities';
@@ -34,6 +35,8 @@ export const PUBLISH_ERROR_CODES = [
   'roteiro_ramificado',
   'campo_repetido',
   'roteiro_em_ciclo',
+  'gatilho_da_automacao',
+  'regra_de_automacao',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -145,11 +148,8 @@ function cicloDoEncadeamento(
  * Na prova prática do #1130 a paleta do roteiro oferecia seis caixas que o motor
  * recusava em silêncio; a recusa aqui é o erro que a pessoa lê no editor.
  */
-export const NOS_DA_SUPERFICIE: Record<FollowupFlowSurface, readonly NodeType[]> = {
-  followup: ['trigger', 'wait', 'condition', 'ai_classify', 'match_reply', 'repeat', 'action', 'end'],
-  crm_automation: ['trigger', 'wait', 'condition', 'ai_classify', 'match_reply', 'repeat', 'action', 'end'],
-  atendimento: ['trigger', 'collect', 'skill', 'end'],
-};
+// Derivado do registro de nós (`registro-de-nos.ts`): uma entrada por tipo, exaustiva.
+export { NOS_DA_SUPERFICIE };
 
 /** Regras do roteiro de atendimento que o grafo sozinho não carrega. */
 function validarSuperficie(
@@ -167,11 +167,47 @@ function validarSuperficie(
         message:
           surface === 'atendimento'
             ? `A caixa "${n.label}" não é de roteiro de atendimento — use Pergunta, Skill e Fim.`
-            : `A caixa "${n.label}" é de roteiro de atendimento e não roda num follow-up.`,
+            : surface === 'automacao'
+              ? `A caixa "${n.label}" não roda numa automação.`
+              : n.type === 'crm_action' || n.type === 'field_op'
+                ? `A caixa "${n.label}" é de automação e não roda num follow-up.`
+                : `A caixa "${n.label}" é de roteiro de atendimento e não roda num follow-up.`,
       });
     }
   }
-  if (surface !== 'atendimento') return;
+  // Os gatilhos de uma AUTOMAÇÃO moram no nó Início (vários por fluxo); nos
+  // follow-ups, em `pointer.trigger_config`, e o Início fica sem configuração.
+  for (const n of [...graph.nodes].sort(byId)) {
+    if (n.type !== 'trigger') continue;
+    const temGatilhos = 'triggers' in n.config;
+    if (surface === 'automacao' && !temGatilhos) {
+      errors.push({
+        node_id: n.id,
+        code: 'gatilho_da_automacao',
+        message: 'Escolha no Início quando a automação começa.',
+      });
+    }
+    if (surface !== 'automacao' && temGatilhos) {
+      errors.push({
+        node_id: n.id,
+        code: 'gatilho_da_automacao',
+        message: 'Os gatilhos no Início são de automação; neste fluxo o disparo fica nas configurações.',
+      });
+    }
+  }
+  if (surface !== 'atendimento') {
+    for (const n of [...graph.nodes].sort(byId)) {
+      if (n.type !== 'condition' || surface === 'automacao') continue;
+      if (n.config.checks.some(ehRegraNova)) {
+        errors.push({
+          node_id: n.id,
+          code: 'regra_de_automacao',
+          message: `A condição "${n.label}" usa uma regra de automação, que o follow-up não sabe avaliar.`,
+        });
+      }
+    }
+    return;
+  }
 
   const saidas = new Map<string, number>();
   for (const e of graph.edges) {
@@ -477,6 +513,19 @@ function conferirRegras(
       node_id: node.id,
       ...(node.config.branching === 'per_check' && check.id !== undefined ? { branch_id: check.id } : {}),
     };
+    if (ehRegraNova(check)) {
+      // Regra de automação: o operador que compara precisa de valor; "tem valor"
+      // e "está vazio" não. O resto (ids de etapa/funil) o schema já exige.
+      if (
+        check.kind === 'field' &&
+        check.op !== 'has_value' &&
+        check.op !== 'empty' &&
+        String(check.value ?? '').trim() === ''
+      ) {
+        errors.push({ ...ancora, code: 'empty_check_value', message: `${regra} sem valor: preencha ou remova a regra.` });
+      }
+      return;
+    }
     const valor = String(check.value).trim();
 
     if (valor === '') {
