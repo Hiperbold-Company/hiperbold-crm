@@ -11,6 +11,7 @@ import { TeamInvitesClient } from "./_components/TeamInvitesClient";
 import { AttendantsClient } from "./_components/AttendantsClient";
 import { PermissoesPorPerfilClient } from "./_components/PermissoesPorPerfilClient";
 import { fusoUtilizavel } from "@/lib/tempo/fusos";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Equipe" };
@@ -55,6 +56,7 @@ export default async function TeamPage({
           <p className="text-sm text-muted-foreground">
             {t("Gestão de membros, roles e atendimento do tenant.")}
           </p>
+          <LinkDeAjudaDaTela />
         </div>
         {isAdmin ? (
           <Button asChild className="shrink-0">

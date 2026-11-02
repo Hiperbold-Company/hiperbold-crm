@@ -8,6 +8,7 @@ import { COLUNAS_DO_AGENTE_NA_LISTA } from "@/lib/ai/agents/administracao";
 import type { AgentRow } from "@/hooks/ai/useAgent";
 import { AgentsList } from "./_components/AgentsList";
 import { logger } from "@/lib/logger";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,7 @@ export default async function AgentsListPage() {
           <p className="text-sm text-muted-foreground">
             {traduzir("Configure o comportamento dos agents que respondem no WhatsApp.", idioma)}
           </p>
+          <LinkDeAjudaDaTela />
         </div>
       </header>
       <AgentsList initialData={agents} canWrite={canWrite} />

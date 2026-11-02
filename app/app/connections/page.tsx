@@ -10,6 +10,7 @@ import { canalGraphParceiroLigado, GRAPH_PARTNER_LABEL } from "@/lib/channels/gr
 import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Conexões" };
@@ -45,6 +46,7 @@ export default async function ConnectionsPage() {
             idioma,
           )}
         </p>
+        <LinkDeAjudaDaTela />
       </header>
       <ConexoesShell
         wahaConfigured={wahaConfigured}

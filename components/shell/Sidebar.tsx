@@ -3,7 +3,15 @@ import Link from "next/link";
 import { useT } from "@/hooks/i18n/useT";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { ArrowRight, CaretDoubleLeft, CaretDoubleRight, CaretDown, Gear } from "@/lib/ui/icons";
+import {
+  ArrowRight,
+  ArrowSquareOut,
+  CaretDoubleLeft,
+  CaretDoubleRight,
+  CaretDown,
+  Gear,
+  Question,
+} from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { toggleSidebar } from "@/app/actions/shell/toggleSidebar";
 import { useAuth } from "@/hooks/auth/AuthProvider";
@@ -13,6 +21,8 @@ import { LogotipoDoProduto, SimboloDoProduto } from "@/components/branding/Marca
 import { marcaEhADoProduto } from "@/lib/branding";
 import { useMarcaDaInstalacao } from "@/lib/branding/contexto";
 import { GRUPO_NO_RODAPE, sidebarGroups } from "@/lib/navigation/registry";
+import { CAMINHO_PADRAO_DA_AJUDA, urlNaCentral } from "@/lib/ajuda/artigos";
+import { useBaseDaCentralDeAjuda } from "@/lib/ajuda/contexto";
 
 const CHAVE_GRUPOS_FECHADOS = "sidebar-grupos-fechados";
 
@@ -51,6 +61,10 @@ export function SidebarContent({
   // 1280x768, ele caía fora da dobra mesmo em telas de 1080px.
   const grupos = todos.filter((g) => g.group.id !== GRUPO_NO_RODAPE);
   const rodape = todos.find((g) => g.group.id === GRUPO_NO_RODAPE)?.group.hub;
+  // Link EXTERNO, por isso fora do catálogo de navegação (que só conhece telas
+  // do produto): a página do CRM na central desta instalação. Sem
+  // `HELP_CENTER_URL` não existe, porque o produto é white-label.
+  const centralDeAjuda = urlNaCentral(useBaseDaCentralDeAjuda(), CAMINHO_PADRAO_DA_AJUDA);
 
   /**
    * Grupo fechado é preferência POR NAVEGADOR, não por conta: começa vazio (tudo
@@ -326,6 +340,29 @@ export function SidebarContent({
         })}
       </nav>
       <div className="border-t p-2">
+        {centralDeAjuda && (
+          <a
+            href={centralDeAjuda}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={collapsed ? t("Central de ajuda") : undefined}
+            aria-label={collapsed ? t("Central de ajuda (abre em nova aba)") : undefined}
+            onClick={onNavigate}
+            className={cn(
+              "mb-1 flex items-center gap-3 rounded-md px-3 py-1 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground",
+              collapsed && "justify-center px-2",
+            )}
+          >
+            <Question size={18} aria-hidden />
+            {!collapsed && (
+              <>
+                <span className="truncate">{t("Central de ajuda")}</span>
+                <ArrowSquareOut size={14} className="ml-auto shrink-0" aria-hidden />
+                <span className="sr-only">{t("(abre em nova aba)")}</span>
+              </>
+            )}
+          </a>
+        )}
         {rodape && (
           <Link
             href={rodape.href}

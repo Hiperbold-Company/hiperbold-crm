@@ -3,6 +3,7 @@
 import { useT } from "@/hooks/i18n/useT";
 
 import { CartaoDoJev, useDadosDoJev } from "../../providers/_components/CartaoDoJev";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 /** A página do Jev: o cartão de sempre, com título, sem o resto do painel de Provedores. */
 export function PainelDoJev() {
@@ -16,6 +17,7 @@ export function PainelDoJev() {
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           {t("Classificações rápidas de mensagens com o Jev, da TypeSafe. Precisa ser ligado e aceito por um administrador.")}
         </p>
+        <LinkDeAjudaDaTela />
       </header>
       <CartaoDoJev dados={jev.dados} erro={jev.erro} recarregar={jev.recarregar} />
     </div>

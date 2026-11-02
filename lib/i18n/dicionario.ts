@@ -14596,6 +14596,17 @@ export const DICIONARIO: Traducoes = {
   "UTM campanha (utm_campaign)": { es: "UTM campaña (utm_campaign)" },
   "UTM conteúdo (utm_content)": { es: "UTM contenido (utm_content)" },
   "UTM termo (utm_term)": { es: "UTM término (utm_term)" },
+
+  // ─── Central de ajuda (components/ajuda, components/shell/Sidebar.tsx) ───
+  "Dúvidas?": { es: "¿Dudas?" },
+  "Veja como usar esta tela na central de ajuda": {
+    es: "Mira cómo usar esta pantalla en el centro de ayuda",
+  },
+  "(abre em nova aba)": { es: "(se abre en una pestaña nueva)" },
+  "Central de ajuda": { es: "Centro de ayuda" },
+  "Central de ajuda (abre em nova aba)": { es: "Centro de ayuda (se abre en una pestaña nueva)" },
+  "Como conectar o formulário do seu site": { es: "Cómo conectar el formulario de tu sitio" },
+  "Como criar campos personalizados": { es: "Cómo crear campos personalizados" },
 };
 
 /**

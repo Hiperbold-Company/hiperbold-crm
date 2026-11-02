@@ -7,6 +7,7 @@ import { BudgetCard } from "@/components/ai/BudgetCard";
 import { getBudgetStatus } from "@/lib/ai/budget/check";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { UsageDashboardClient } from "./_client";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,7 @@ export default async function AiUsagePage({ searchParams }: PageProps) {
             idioma,
           )}
         </p>
+        <LinkDeAjudaDaTela />
       </header>
       <BudgetCard initialData={budget} isAdmin={isAdmin} />
       <UsageDashboardClient agents={agents} initial={initial} />
