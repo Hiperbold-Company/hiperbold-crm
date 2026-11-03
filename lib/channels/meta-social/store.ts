@@ -39,6 +39,8 @@ export class ConexaoRecusada extends Error {
  * precisar de índice.
  */
 export const CHAVE_DO_AUTORIZADOR = "meta_autorizador_id";
+/** Chave do `metadata` com o portfólio de negócios do cliente (Instagram pelo login unificado). */
+export const CHAVE_DA_EMPRESA = "meta_client_business_id";
 
 /** Status que a tela lê como saudável. Qualquer outro pede "Reconectar". */
 export const STATUS_SAUDAVEL = "WORKING";
@@ -93,11 +95,14 @@ export async function conectarConta(
     expiraEm: string | null;
     ator: Ator;
     /**
-     * Id da pessoa da Meta que autorizou (Instagram: `user_id` da troca do
-     * código; Messenger: `/me` do usuário do Facebook). É por ele que o pedido
-     * de exclusão de dados acha esta sessão. Ausente = mantém o que havia.
+     * Id app-scoped de quem autorizou (Instagram: o `/me` do token, que no
+     * login unificado é o USUÁRIO DO SISTEMA de integração; Messenger: `/me`
+     * do usuário do Facebook). A exclusão de dados casa por ele e pela conta.
+     * Ausente = mantém o que havia.
      */
     autorizadorId?: string | null;
+    /** `client_business_id` do portfólio (só Instagram). Ausente = mantém. */
+    empresaId?: string | null;
   },
   assinar: typeof assinarWebhookDaConta = assinarWebhookDaConta,
 ): Promise<{ channelId: string; reconectado: boolean; recebimento: boolean }> {
@@ -153,6 +158,7 @@ export async function conectarConta(
       conectado_em: agora,
       token_erro: null,
       ...(input.autorizadorId ? { [CHAVE_DO_AUTORIZADOR]: input.autorizadorId } : {}),
+      ...(input.empresaId ? { [CHAVE_DA_EMPRESA]: input.empresaId } : {}),
     },
   };
 

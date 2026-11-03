@@ -12,8 +12,6 @@ process.env.INTERNAL_SECRET = SEGREDO;
 process.env.NEXT_PUBLIC_APP_URL = "https://crm.exemplo";
 process.env.META_APP_ID = "12345678";
 process.env.META_APP_SECRET = "segredo-do-app-da-meta";
-process.env.INSTAGRAM_APP_ID = "IG-APP";
-process.env.INSTAGRAM_APP_SECRET = "ig-segredo";
 
 const h = vi.hoisted(() => ({
   db: null as unknown,

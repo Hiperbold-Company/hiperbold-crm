@@ -37,13 +37,14 @@ import { PLATAFORMAS_META_SOCIAL, caminhoDoCallback, type PlataformaMetaSocial }
 import { NOME_DO_VINCULO_META_SOCIAL, verificarEstadoMetaSocial, vinculoMetaSocialConfere } from "@/lib/channels/meta-social/estado";
 import {
   ErroDaMeta,
-  contaInstagram,
+  contasInstagramConcedidas,
   paginasMessenger,
-  tokenLongoInstagram,
   tokenLongoMessenger,
-  trocarCodigoInstagram,
+  trocarCodigoLoginUnificado,
   trocarCodigoMessenger,
   usuarioDoFacebook,
+  usuarioDoSistema,
+  type ContaDaMeta,
 } from "@/lib/channels/meta-social/oauth";
 import type { MotivoDaVolta } from "@/lib/channels/meta-social/motivos";
 import { ConexaoRecusada, conectarConta, type Ator } from "@/lib/channels/meta-social/store";
@@ -166,45 +167,49 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const ator: Ator = { userId, authSessionId: estado.authSessionId };
 
   try {
+    // Cada conta concedida vira um canal: no Instagram, cada conta do portfólio
+    // marcada no login (todas com o MESMO token, o do usuário do sistema); no
+    // Messenger, cada Página (com o token dela).
+    let contas: { conta: ContaDaMeta; token: string }[];
+    let expiraEm: string | null = null;
+    let autorizadorId: string | null;
+    let empresaId: string | null = null;
     if (plataforma === "instagram") {
-      const curto = await trocarCodigoInstagram(app, code, redirectUri);
-      const longo = await tokenLongoInstagram(app, curto.token);
-      const conta = await contaInstagram(longo.token);
-      await conectarConta(admin, {
-        organizationId,
-        plataforma,
-        conta,
-        token: longo.token,
-        expiraEm: longo.expiraEmSegundos
-          ? new Date(Date.now() + longo.expiraEmSegundos * 1000).toISOString()
-          : null,
-        ator,
-        autorizadorId: curto.userId,
-      });
-      return voltarParaConexoes({ meta_social: "ok", n: 1 });
+      const suat = await trocarCodigoLoginUnificado(app, code, redirectUri);
+      const sistema = await usuarioDoSistema(suat.token);
+      const concedidas = await contasInstagramConcedidas(suat.token);
+      if (concedidas.length === 0) return falhou("nenhuma_conta_instagram");
+      contas = concedidas.map((conta) => ({ conta, token: suat.token }));
+      expiraEm = suat.expiraEmSegundos ? new Date(Date.now() + suat.expiraEmSegundos * 1000).toISOString() : null;
+      // O /me do SUAT é o usuário do sistema de integração, não a pessoa: a
+      // exclusão de dados casa por ele E pela conta (`exclusao.ts`).
+      autorizadorId = sistema.id;
+      empresaId = sistema.clientBusinessId;
+    } else {
+      const curto = await trocarCodigoMessenger(app, code, redirectUri);
+      const longo = await tokenLongoMessenger(app, curto);
+      const paginas = await paginasMessenger(longo);
+      if (paginas.length === 0) return falhou("nenhuma_pagina");
+      autorizadorId = await usuarioDoFacebook(longo);
+      contas = paginas.map((p) => ({ conta: { id: p.id, nome: p.nome, usuario: null }, token: p.token }));
     }
 
-    const curto = await trocarCodigoMessenger(app, code, redirectUri);
-    const longo = await tokenLongoMessenger(app, curto);
-    const paginas = await paginasMessenger(longo);
-    if (paginas.length === 0) return falhou("nenhuma_pagina");
-    const autorizadorId = await usuarioDoFacebook(longo);
-
-    // Cada Página concedida vira um canal. A que estourar o limite do plano
-    // (ou estiver em outra organização) não derruba as outras.
+    // A conta que estourar o limite do plano (ou estiver em outra organização)
+    // não derruba as outras.
     let conectadas = 0;
     let recusadas = 0;
     let primeiraRecusa: MotivoDaVolta | null = null;
-    for (const p of paginas) {
+    for (const c of contas) {
       try {
         await conectarConta(admin, {
           organizationId,
           plataforma,
-          conta: { id: p.id, nome: p.nome, usuario: null },
-          token: p.token,
-          expiraEm: null,
+          conta: c.conta,
+          token: c.token,
+          expiraEm,
           ator,
           autorizadorId,
+          empresaId,
         });
         conectadas += 1;
       } catch (err) {
@@ -216,7 +221,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     }
     if (primeiraRecusa && conectadas === 0) return falhou(primeiraRecusa);
     if (primeiraRecusa) {
-      // Recusa PARCIAL: umas Páginas entraram, outras não. Dizer só "erro"
+      // Recusa PARCIAL: umas contas entraram, outras não. Dizer só "erro"
       // esconderia as que funcionam; dizer só "ok" esconderia as que faltam.
       await registrarFalha(primeiraRecusa, `parcial:${conectadas}/${conectadas + recusadas}`);
       return voltarParaConexoes({ meta_social: "parcial", n: conectadas, recusadas, motivo: primeiraRecusa });

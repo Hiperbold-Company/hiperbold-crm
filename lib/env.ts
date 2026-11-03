@@ -600,14 +600,14 @@ const schema = z.object({
   META_GRAPH_BASE_URL: z.string().optional().default(""),
   META_ADS_GRAPH_BASE_URL: z.string().optional().default(""),
   /**
-   * Instagram Direct e Messenger pela conexão oficial (migration 0984). PISO de
-   * rollback: o caminho normal é a configuração do app guardada no banco
-   * (`platform_meta_app`), que vence o `.env`. Ids não são segredo; o segredo
-   * do Instagram é. Lidas por `lib/channels/meta-social/config.ts`.
+   * Instagram Direct e Messenger pela conexão oficial (migrations 0984 e 0988).
+   * PISO de rollback: o caminho normal é a configuração do app guardada no
+   * banco (`platform_meta_app`), que vence o `.env`. Nenhuma das duas é
+   * segredo. `META_UNIFIED_CONFIG_ID` é o `config_id` do login unificado do
+   * Instagram. Lidas por `lib/channels/meta-social/config.ts`.
    */
   META_APP_ID: z.string().optional().default(""),
-  INSTAGRAM_APP_ID: z.string().optional().default(""),
-  INSTAGRAM_APP_SECRET: z.string().optional().default(""),
+  META_UNIFIED_CONFIG_ID: z.string().optional().default(""),
 
   // Marca da instalação (white-label) — ver lib/branding.ts.
   // Sem prefixo NEXT_PUBLIC_ de propósito: essas seriam queimadas no bundle

@@ -1,7 +1,7 @@
 /**
  * Canal social oficial: eco do próprio envio sem `app_id`, leitura, webhook
  * que falha → 500, exclusão de dados (frescor, idempotência, execução),
- * renovação sem sobrescrever reconexão, motivos da volta, frase de falha.
+ * aviso de validade sem sobrescrever reconexão, motivos da volta, frase de falha.
  * Contra o banco em memória com as restrições únicas reais.
  */
 import { createHmac } from "node:crypto";
@@ -38,7 +38,7 @@ import {
 import { ingerirEventoMetaSocial, sessaoPelaConta } from "@/lib/channels/meta-social/ingest";
 import { FRASES_DOS_MOTIVOS, MOTIVOS_DA_VOLTA, fraseDoMotivo } from "@/lib/channels/meta-social/motivos";
 import { ErroDaMeta, chamarMeta } from "@/lib/channels/meta-social/oauth";
-import { renovarTokensDoInstagram } from "@/lib/channels/meta-social/renovacao";
+import { marcarTokensPertoDeVencer } from "@/lib/channels/meta-social/renovacao";
 import type { EventoMetaSocial } from "@/lib/channels/meta-social/webhook";
 import { pausarIaPorAtendimentoManual } from "@/lib/escalacao/atendimento-manual";
 
@@ -271,7 +271,7 @@ describe("exclusão de dados", () => {
     expect(banco.t("meta_data_deletion_requests")).toHaveLength(1);
   });
 
-  it("cumpre: arquiva as sessões autorizadas pela pessoa ou da conta dela, em cada organização; marca concluído", async () => {
+  it("cumpre: arquiva as sessões autorizadas pela pessoa ou da conta dela, nas duas redes (um app só), em cada organização; marca concluído", async () => {
     const banco = bancoFalso({
       channel_sessions: [
         { ...sessao, id: "pelo-autorizador", metadata: { meta_autorizador_id: "U1" } },
@@ -289,19 +289,20 @@ describe("exclusão de dados", () => {
       { id: p.id, plataforma: "instagram", userId: "U1" },
       { arquivar: (a, o, i) => arquivarConta(a, o, i, desassinar) },
     );
-    expect(r.arquivadas.map((x) => x.sessionId).sort()).toEqual(["pela-conta", "pelo-autorizador"]);
+    // Desde o login unificado (0988) Instagram e Messenger são o MESMO app da
+    // Meta: o id app-scoped é o mesmo, e o pedido vale para as duas redes.
+    expect(r.arquivadas.map((x) => x.sessionId).sort()).toEqual(["outra-rede", "pela-conta", "pelo-autorizador"]);
     const porId = Object.fromEntries(banco.t("channel_sessions").map((l) => [l.id, l]));
-    for (const id of ["pela-conta", "pelo-autorizador"]) {
+    for (const id of ["outra-rede", "pela-conta", "pelo-autorizador"]) {
       expect(porId[id]!.archived_at).toBeTruthy();
       expect(porId[id]!.meta_social_token_encrypted).toBeNull();
     }
     expect(porId.alheia!.archived_at).toBeNull();
-    expect(porId["outra-rede"]!.archived_at).toBeNull();
-    expect(desassinar).toHaveBeenCalledTimes(2);
+    expect(desassinar).toHaveBeenCalledTimes(3);
     expect(banco.t("meta_data_deletion_requests")[0]).toMatchObject({ status: "completed" });
     expect(banco.t("meta_data_deletion_requests")[0]!.completed_at).toBeTruthy();
     const trilhas = h.audit.mock.calls.map(([e]) => e).filter((e) => e.action === "meta.data_deletion_executed");
-    expect(trilhas.map((e) => e.organizationId).sort()).toEqual([ORG, ORG_B].sort());
+    expect(trilhas.map((e) => e.organizationId).sort()).toEqual([ORG, ORG, ORG_B].sort());
   });
 
   it("nada casou: concluído sem efeito", async () => {
@@ -337,42 +338,48 @@ describe("exclusão de dados", () => {
   });
 });
 
-describe("renovação: reconexão no meio não é sobrescrita; uma falha não para a rodada", () => {
+describe("aviso de validade: reconexão no meio não é sobrescrita", () => {
   const agora = new Date("2026-11-02T06:35:00Z");
   const dia = 24 * 3600 * 1000;
   const linha = (id: string) => ({
     ...sessao,
     id,
     meta_social_account_id: id,
-    meta_social_token_encrypted: `cifrado:TOK-${id}`,
+    status: "WORKING",
+    status_reason: null,
     meta_social_token_expires_at: new Date(agora.getTime() + 5 * dia).toISOString(),
     meta_social_token_refreshed_at: new Date(agora.getTime() - 50 * dia).toISOString(),
-    metadata: { nome_da_conta: id },
   });
 
-  it("três linhas: a do meio lança; a terceira é reconectada durante a rodada", async () => {
-    const banco = bancoFalso({ channel_sessions: [linha("a"), linha("b"), linha("c")] });
-    const renovar = vi.fn(async (token: string) => {
-      if (token === "TOK-b") throw new Error("recusado");
-      if (token === "TOK-c") {
-        // A pessoa reconecta a conta "c" enquanto a Meta responde.
-        const c = banco.t("channel_sessions").find((l) => l.id === "c")!;
-        Object.assign(c, {
-          meta_social_token_encrypted: "cifrado:RECONECTADO",
-          meta_social_token_refreshed_at: agora.toISOString(),
-          metadata: { nome_da_conta: "c", conectado_em: "agora" },
-        });
-      }
-      return { token: `NOVO-${token}`, expiraEmSegundos: 60 * 24 * 3600 };
+  it("a conta reconectada entre a leitura e a escrita não é marcada; as outras são", async () => {
+    const banco = bancoFalso({ channel_sessions: [linha("a"), linha("b")] });
+    let mexeu = false;
+    // A pessoa reconecta "b" depois que a rodada leu as linhas.
+    const db = new Proxy(banco.db, {
+      get(alvo, p) {
+        if (p !== "from") return Reflect.get(alvo, p);
+        return (nome: string) => {
+          const q = alvo.from(nome) as unknown as { update: (v: unknown) => unknown };
+          const original = q.update.bind(q);
+          q.update = (v: unknown) => {
+            if (!mexeu) {
+              mexeu = true;
+              Object.assign(banco.t("channel_sessions").find((l) => l.id === "b")!, {
+                meta_social_token_refreshed_at: agora.toISOString(),
+                meta_social_token_expires_at: null,
+              });
+            }
+            return original(v);
+          };
+          return q;
+        };
+      },
     });
-    const r = await renovarTokensDoInstagram(banco.db, agora, renovar);
-    expect(renovar).toHaveBeenCalledTimes(3);
-    expect(r).toEqual({ examinadas: 3, renovadas: 1, falhas: 1 });
+    const r = await marcarTokensPertoDeVencer(db, agora);
+    expect(r).toEqual({ examinadas: 2, marcadas: 1 });
     const porId = Object.fromEntries(banco.t("channel_sessions").map((l) => [l.id, l]));
-    expect(porId.a!.meta_social_token_encrypted).toBe("cifrado:NOVO-TOK-a");
-    expect(porId.b!.metadata).toMatchObject({ token_erro: "meta_recusou_a_renovacao", nome_da_conta: "b" });
-    expect(porId.c!.meta_social_token_encrypted).toBe("cifrado:RECONECTADO");
-    expect(porId.c!.metadata).toEqual({ nome_da_conta: "c", conectado_em: "agora" });
+    expect(porId.a).toMatchObject({ status: "FAILED", status_reason: "token_vence_em_breve" });
+    expect(porId.b).toMatchObject({ status: "WORKING", status_reason: null });
   });
 });
 
@@ -400,8 +407,8 @@ describe("motivos da volta do OAuth: um conjunto só", () => {
 
 describe("chamada à Meta não vaza a URL", () => {
   it("falha de rede cuja mensagem cita a URL com o segredo: o erro leva só o nome", async () => {
-    const url = "https://graph.instagram.com/access_token?client_secret=SEGREDO&access_token=TOKEN";
-    const err = await chamarMeta("instagram_token_longo", url, {}, (async () => {
+    const url = "https://graph.facebook.com/v26.0/oauth/access_token?client_secret=SEGREDO&access_token=TOKEN";
+    const err = await chamarMeta("instagram_troca_de_codigo", url, {}, (async () => {
       throw new TypeError(`fetch failed for ${url}`);
     }) as typeof fetch).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ErroDaMeta);

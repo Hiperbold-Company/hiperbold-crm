@@ -865,25 +865,10 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "endpoint de token do OAuth do Google — o par de `accounts.google.com` no fluxo de autorização da agenda, e também do Google Ads (`lib/plataformas-de-anuncio/google/token.ts`).",
   },
-  "graph.instagram.com": {
-    categoria: "FORNECEDOR",
-    motivo:
-      "endpoint da Instagram API com login do Instagram (canal social oficial, migration 0984): conta, token longo e renovação, assinatura do webhook e envio de Direct. Contrato da Meta.",
-  },
-  "api.instagram.com": {
-    categoria: "FORNECEDOR",
-    motivo:
-      "troca do código do OAuth do Instagram por token (`/oauth/access_token`), canal social oficial (0984). Contrato da Meta; não há outro host para essa troca.",
-  },
-  "www.instagram.com": {
-    categoria: "FORNECEDOR",
-    motivo:
-      "tela de consentimento do OAuth do Instagram (`/oauth/authorize`), para onde o botão Conectar leva o navegador (0984). Contrato da Meta.",
-  },
   "www.facebook.com": {
     categoria: "FORNECEDOR",
     motivo:
-      "diálogo de consentimento do login do Facebook (`/<versão>/dialog/oauth`), que concede as Páginas do Messenger (0984). Contrato da Meta.",
+      "diálogo de consentimento do login do Facebook (`/<versão>/dialog/oauth`), que concede as Páginas do Messenger (0984), e do login unificado do Instagram (`/dialog/oauth` com `config_id`, 0988). Contrato da Meta.",
   },
   "googleads.googleapis.com": {
     categoria: "FORNECEDOR",

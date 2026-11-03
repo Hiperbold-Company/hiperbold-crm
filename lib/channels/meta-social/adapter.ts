@@ -17,22 +17,35 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { ChannelAdapter, OutboundEnvelope } from "../types";
 import { CHANNEL_PROVIDER_META_SOCIAL } from "../capabilities";
 import { fraseDaFalhaDeCanal } from "../frases-de-falha";
-import { tetoDoTexto } from "./constantes";
+import { tetoDoTexto, type PlataformaMetaSocial } from "./constantes";
 import { ErroDaMeta, enviar, montarEnvios } from "./oauth";
 import { credencialDaConta } from "./store";
 import { registrarEnvio } from "./envios";
+import { MOTIVO_TOKEN_VENCE_EM_BREVE } from "./renovacao";
+
+/** `status_reason` da sessão cujo token a Meta recusou no envio: a tela pede "Reconectar". */
+export const MOTIVO_TOKEN_INVALIDO = "token_invalido";
 
 const FRASE_DE_RESERVA = "A rede recusou o envio. Confira a conexão em Conexões › Redes sociais.";
 
 /**
  * Erro da Meta no envio → código do canal (traduzido por `frases-de-falha.ts`).
  * Os códigos da Graph que mudam o que o operador faz:
- *   190 token inválido/vencido → reconectar;
+ *   190 token inválido/vencido (ou o cliente tirou o app do portfólio / moveu
+ *       a conta de portfólio) → reconectar;
+ *   200 no Instagram: o dono desligou "Permitir acesso às mensagens";
+ *   10 com "business or creator" ou "instagram_manage_messages" na mensagem:
+ *       conta não profissional ou permissão faltando → ajustar e reconectar;
  *   10 / 2018278 / 2534022 fora da janela de 24h → esperar o cliente escrever;
  *   551 pessoa indisponível → não há o que fazer daqui.
+ * Erros do login unificado:
+ * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login/eligibility-and-troubleshooting
  */
-export function codigoDaFalhaDeEnvio(err: ErroDaMeta): string {
+export function codigoDaFalhaDeEnvio(err: ErroDaMeta, plataforma?: PlataformaMetaSocial): string {
   if (err.codigoDaMeta === 190 || err.status === 401) return "meta_social_token_invalid";
+  if (plataforma === "instagram" && err.codigoDaMeta === 200) return "meta_social_messages_access_off";
+  if (err.codigoDaMeta === 10 && /business or creator|instagram_manage_messages/i.test(err.message))
+    return "meta_social_account_not_eligible";
   if (err.codigoDaMeta === 10 || err.codigoDaMeta === 2018278 || err.codigoDaMeta === 2534022)
     return "meta_social_outside_window";
   if (err.codigoDaMeta === 551) return "meta_social_recipient_unavailable";
@@ -80,7 +93,19 @@ export const metaSocialAdapter: ChannelAdapter = {
       } catch (err) {
         // Para o operador, nunca o texto cru da Meta: a frase sai do mapa de
         // falhas de canal, pelo código que este canal deu ao erro.
-        if (err instanceof ErroDaMeta) throw new Error(fraseDaFalhaDeCanal(codigoDaFalhaDeEnvio(err)) ?? FRASE_DE_RESERVA);
+        if (err instanceof ErroDaMeta) {
+          const codigo = codigoDaFalhaDeEnvio(err, cred.plataforma);
+          // Token recusado: a sessão passa a pedir "Reconectar" na tela, e o
+          // vigia `channel-health` (pelo `checkHealth` abaixo) abre o aviso.
+          if (codigo === "meta_social_token_invalid") {
+            await admin
+              .from("channel_sessions")
+              .update({ status: "FAILED", status_reason: MOTIVO_TOKEN_INVALIDO, last_status_change_at: new Date().toISOString() })
+              .eq("organization_id", envelope.organizationId)
+              .eq("id", cred.sessionId);
+          }
+          throw new Error(fraseDaFalhaDeCanal(codigo) ?? FRASE_DE_RESERVA);
+        }
         throw err;
       }
       // TODO mid devolvido vira registro de envio nosso, na hora: o eco de cada
@@ -116,8 +141,8 @@ export const metaSocialAdapter: ChannelAdapter = {
 
   /**
    * Saúde lida da SESSÃO, sem ir à Meta: o que derruba este canal é token
-   * vencido ou renovação que falhou, e quem descobre isso é o cron
-   * `meta-social-tokens`. O vigia de conexão (`channel-health`) transforma a
+   * vencido, perto de vencer (o cron `meta-social-tokens` marca) ou recusado
+   * num envio. O vigia de conexão (`channel-health`) transforma a
    * resposta em aviso na Central, como faz com os outros canais.
    */
   async checkHealth(input) {
@@ -143,6 +168,10 @@ export const metaSocialAdapter: ChannelAdapter = {
       return { reachable: true, status: "FAILED", detail: "token_vencido" };
     if (l.metadata?.token_erro)
       return { reachable: true, status: "FAILED", detail: "renovacao_do_token_falhou" };
+    if (l.status_reason === MOTIVO_TOKEN_INVALIDO)
+      return { reachable: true, status: "FAILED", detail: "token_invalido" };
+    if (l.status_reason === MOTIVO_TOKEN_VENCE_EM_BREVE)
+      return { reachable: true, status: "FAILED", detail: "token_vence_em_breve" };
     if (l.status_reason === "assinatura_do_webhook_falhou")
       return { reachable: true, status: "FAILED", detail: "recebimento_nao_configurado" };
     return { reachable: true, status: "WORKING", detail: null };

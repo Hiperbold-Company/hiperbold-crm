@@ -7820,6 +7820,7 @@ export type Database = {
           instagram_app_id: string | null
           instagram_app_secret_encrypted: string | null
           id: number
+          unified_config_id: string | null
           updated_at: string
           updated_by: string | null
           verify_token_created_at: string | null
@@ -7831,6 +7832,7 @@ export type Database = {
           instagram_app_id?: string | null
           instagram_app_secret_encrypted?: string | null
           id?: number
+          unified_config_id?: string | null
           updated_at?: string
           updated_by?: string | null
           verify_token_created_at?: string | null
@@ -7842,6 +7844,7 @@ export type Database = {
           instagram_app_id?: string | null
           instagram_app_secret_encrypted?: string | null
           id?: number
+          unified_config_id?: string | null
           updated_at?: string
           updated_by?: string | null
           verify_token_created_at?: string | null

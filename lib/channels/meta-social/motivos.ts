@@ -30,6 +30,8 @@ export const FRASES_DOS_MOTIVOS = {
     "Esta conta já está conectada em outra empresa neste sistema. Desconecte lá antes de conectar aqui.",
   nenhuma_pagina:
     "Não encontramos nenhuma conta para conectar. Confira se você é administrador da Página e se marcou a conta na hora de autorizar.",
+  nenhuma_conta_instagram:
+    "Não encontramos nenhuma conta do Instagram para conectar. Confira se a conta é profissional, se está num portfólio de negócios da Meta e se você marcou a conta na hora de autorizar.",
   meta_recusou:
     "A Meta recusou a conexão. Tente de novo em alguns minutos. Se continuar, confira se a conta é profissional e se você aceitou todas as permissões.",
   cifra_indisponivel:

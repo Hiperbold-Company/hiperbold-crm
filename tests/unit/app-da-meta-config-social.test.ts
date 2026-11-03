@@ -1,12 +1,12 @@
 /**
- * /admin/meta: ids dos apps e chave do app do Instagram (canal social, 0984).
- * Só admin de plataforma (full), chave cifrada e nunca devolvida, trilha sem
- * valor, e o memo da configuração do canal social invalidado ao salvar.
+ * /admin/meta: id do app da Meta e `config_id` do login unificado do Instagram
+ * (canal social, 0984 e 0988). Só admin de plataforma (full), trilha com os
+ * campos e o memo da configuração do canal social invalidado ao salvar. O app
+ * próprio do Instagram (id + chave) não é mais aceito.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const USUARIO = "11111111-1111-4111-8111-111111111111";
-const CHAVE_IG = "abcdef0123456789abcdef0123456789";
 const gravacoes: Record<string, unknown>[] = [];
 const h = vi.hoisted(() => ({ portao: vi.fn(), invalidar: vi.fn() }));
 
@@ -39,35 +39,39 @@ beforeEach(() => {
 });
 
 describe("updateAppSocialDaMeta", () => {
-  it("grava os ids e a chave cifrada, invalida o memo e audita sem valor", async () => {
-    const r = await updateAppSocialDaMeta({ app_id: "1234567890", instagram_app_id: "987654321", instagram_app_secret: CHAVE_IG });
+  it("grava o id do app e o config_id, invalida o memo e audita os campos", async () => {
+    const r = await updateAppSocialDaMeta({ app_id: "1234567890", unified_config_id: "1855366338969369" });
     expect(r).toEqual({ ok: true });
     expect(gravacoes[0]).toMatchObject({
       id: 1,
       app_id: "1234567890",
-      instagram_app_id: "987654321",
-      instagram_app_secret_encrypted: `cifra(${CHAVE_IG})`,
+      unified_config_id: "1855366338969369",
       updated_by: USUARIO,
     });
+    expect(gravacoes[0]).not.toHaveProperty("instagram_app_id");
+    expect(gravacoes[0]).not.toHaveProperty("instagram_app_secret_encrypted");
     expect(h.invalidar).toHaveBeenCalled();
-    const trilha = JSON.stringify(audit.mock.calls);
-    expect(trilha).not.toContain(CHAVE_IG);
     expect(audit.mock.calls[0]![0]).toMatchObject({
       action: "platform_meta_app.updated",
-      metadata: { campos: ["app_id", "instagram_app_id", "instagram_app_secret_encrypted"] },
+      metadata: { campos: ["app_id", "unified_config_id"] },
     });
   });
 
-  it("campo vazio mantém o gravado: a chave em branco não apaga a salva", async () => {
-    await updateAppSocialDaMeta({ app_id: "1234567890", instagram_app_secret: "" });
-    expect(gravacoes[0]).not.toHaveProperty("instagram_app_secret_encrypted");
-    expect(gravacoes[0]).not.toHaveProperty("instagram_app_id");
+  it("campo vazio mantém o gravado: config_id em branco não apaga o salvo", async () => {
+    await updateAppSocialDaMeta({ app_id: "1234567890", unified_config_id: "" });
+    expect(gravacoes[0]).not.toHaveProperty("unified_config_id");
   });
 
-  it("nada preenchido: nada_para_salvar; id com letra ou chave curta: invalid_input", async () => {
+  it("o app próprio do Instagram não é mais gravado, nem se vier no corpo", async () => {
+    await updateAppSocialDaMeta({ app_id: "1234567890", instagram_app_secret: "abcdef0123456789abcdef" } as never);
+    expect(gravacoes[0]).not.toHaveProperty("instagram_app_secret_encrypted");
+    expect(gravacoes[0]).not.toHaveProperty("instagram_app_secret");
+  });
+
+  it("nada preenchido: nada_para_salvar; id ou config_id com letra: invalid_input", async () => {
     expect(await updateAppSocialDaMeta({})).toEqual({ ok: false, error: "nada_para_salvar" });
     expect((await updateAppSocialDaMeta({ app_id: "abc123" })).ok).toBe(false);
-    expect((await updateAppSocialDaMeta({ instagram_app_secret: "curta" })).ok).toBe(false);
+    expect((await updateAppSocialDaMeta({ unified_config_id: "config-1" })).ok).toBe(false);
     expect(gravacoes).toEqual([]);
   });
 

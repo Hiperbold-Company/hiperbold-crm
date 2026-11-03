@@ -43,13 +43,13 @@ interface Props {
   readonly temNoAmbiente: boolean;
   readonly leituraFalhou: boolean;
   /**
-   * Instagram Direct e Messenger pela conexão oficial (migration 0984). Os ids
-   * não são segredo e voltam preenchidos; da chave do Instagram, só SE existe.
+   * Instagram Direct e Messenger pela conexão oficial (migrations 0984 e
+   * 0988). O id do app e o `config_id` do login unificado não são segredo e
+   * voltam preenchidos.
    */
   readonly social?: {
     readonly appId: string | null;
-    readonly instagramAppId: string | null;
-    readonly temSegredoDoInstagram: boolean;
+    readonly configIdDoLoginUnificado: string | null;
     readonly enderecos: readonly EnderecoParaAMeta[];
   };
 }
@@ -81,16 +81,11 @@ export function FormularioDaMeta({
   const podeSalvar = chave.trim().length >= TAMANHO_MINIMO_DA_CHAVE;
 
   const [appId, setAppId] = useState(social?.appId ?? "");
-  const [instagramAppId, setInstagramAppId] = useState(social?.instagramAppId ?? "");
-  const [chaveDoInstagram, setChaveDoInstagram] = useState("");
+  const [configId, setConfigId] = useState(social?.configIdDoLoginUnificado ?? "");
   const idValido = (v: string) => v.trim() === "" || /^[0-9]{5,30}$/.test(v.trim());
-  const chaveDoInstagramValida =
-    chaveDoInstagram.trim() === "" || chaveDoInstagram.trim().length >= TAMANHO_MINIMO_DA_CHAVE;
   const socialMudou =
-    appId.trim() !== (social?.appId ?? "") ||
-    instagramAppId.trim() !== (social?.instagramAppId ?? "") ||
-    chaveDoInstagram.trim() !== "";
-  const podeSalvarSocial = socialMudou && idValido(appId) && idValido(instagramAppId) && chaveDoInstagramValida;
+    appId.trim() !== (social?.appId ?? "") || configId.trim() !== (social?.configIdDoLoginUnificado ?? "");
+  const podeSalvarSocial = socialMudou && idValido(appId) && idValido(configId);
 
   function motivoDaRecusa(r: Extract<UpdateMetaAppResult, { ok: false }>): string {
     switch (r.error) {
@@ -132,11 +127,9 @@ export function FormularioDaMeta({
       // Só o que mudou: id igual ao gravado não vai, e a chave vazia é "manter".
       const r = await updateAppSocialDaMeta({
         app_id: appId.trim() !== (social?.appId ?? "") ? appId.trim() : undefined,
-        instagram_app_id:
-          instagramAppId.trim() !== (social?.instagramAppId ?? "") ? instagramAppId.trim() : undefined,
-        instagram_app_secret: chaveDoInstagram.trim() || undefined,
+        unified_config_id:
+          configId.trim() !== (social?.configIdDoLoginUnificado ?? "") ? configId.trim() : undefined,
       });
-      if (r.ok) setChaveDoInstagram("");
       aoGravar(r, t("Configuração do Instagram e do Messenger salva."));
     });
   }
@@ -289,7 +282,7 @@ export function FormularioDaMeta({
           <div className="flex flex-col gap-1">
             <h2 className="font-medium">{t("Instagram Direct e Messenger")}</h2>
             <p className="text-sm text-muted-foreground">
-              {t("Para as empresas conectarem o Instagram e a Página do Facebook em Conexões › Redes sociais. A chave secreta do aplicativo, acima, também vale para o Messenger.")}
+              {t("Para as empresas conectarem o Instagram e a Página do Facebook em Conexões › Redes sociais. A chave secreta do aplicativo, acima, vale para os dois.")}
             </p>
           </div>
 
@@ -307,33 +300,18 @@ export function FormularioDaMeta({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="meta-instagram-app-id">{t("ID do app do Instagram")}</Label>
+            <Label htmlFor="meta-unified-config-id">{t("ID da configuração do login unificado")}</Label>
             <Input
-              id="meta-instagram-app-id"
-              data-testid="meta-instagram-app-id"
+              id="meta-unified-config-id"
+              data-testid="meta-unified-config-id"
               inputMode="numeric"
               autoComplete="off"
-              value={instagramAppId}
-              onChange={(e) => setInstagramAppId(e.target.value)}
-              placeholder={t("Só números, em Instagram › Configuração da API com login do Instagram")}
+              value={configId}
+              onChange={(e) => setConfigId(e.target.value)}
+              placeholder={t("Só números, em Instagram › API com login unificado › Configurações")}
             />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="meta-instagram-app-secret">{t("Chave secreta do app do Instagram")}</Label>
-            <Input
-              id="meta-instagram-app-secret"
-              data-testid="meta-instagram-app-secret"
-              type="password"
-              autoComplete="off"
-              value={chaveDoInstagram}
-              onChange={(e) => setChaveDoInstagram(e.target.value)}
-              placeholder={social.temSegredoDoInstagram ? t("••••••••  (já cadastrada)") : t("32 letras e números")}
-            />
-            <p className="text-xs text-muted-foreground" data-testid="meta-instagram-segredo-estado">
-              {social.temSegredoDoInstagram
-                ? t("Já existe uma chave salva. Deixe em branco para mantê-la, ou digite uma nova para substituir.")
-                : t("Ela é guardada cifrada e nunca volta a aparecer nesta tela.")}
+            <p className="text-xs text-muted-foreground">
+              {t("É o que o Instagram usa para conectar, junto com o ID e a chave do app da Meta. Não é segredo.")}
             </p>
           </div>
 

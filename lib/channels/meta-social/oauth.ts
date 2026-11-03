@@ -9,32 +9,26 @@
  *  - Token NUNCA vai para log nem para mensagem de erro. `ErroDaMeta` carrega
  *    só o status HTTP, o código da Meta e um trecho da mensagem DELA.
  *  - Token em header (`Authorization: Bearer`) sempre que o endpoint aceita.
- *  - `client_secret` NUNCA em query string onde a Meta aceita corpo: as trocas
- *    do Messenger (`/oauth/access_token`, código e `fb_exchange_token`) e a do
- *    código do Instagram (`api.instagram.com/oauth/access_token`) vão por POST
- *    com corpo `application/x-www-form-urlencoded`.
- *  - A exceção documentada são os dois endpoints de `graph.instagram.com`
- *    (`/access_token` com `ig_exchange_token` e `/refresh_access_token`): a doc
- *    da Instagram API com login do Instagram só descreve GET, com o segredo e o
- *    token na query. Ficam em GET, de servidor para servidor, e a URL nunca sai
- *    daqui: `chamarMeta` não a registra, e a `ErroDaMeta` carrega só a etapa, o
- *    status, o código da Meta e a mensagem DELA — nem a falha de rede (cuja
- *    mensagem pode citar a URL) passa: dela só vai o NOME do erro.
+ *  - `client_secret` NUNCA em query string: as trocas de código do Instagram
+ *    (login unificado) e do Messenger e a `fb_exchange_token` vão por POST com
+ *    corpo `application/x-www-form-urlencoded` ao `/oauth/access_token` da
+ *    Graph (a doc do login unificado mostra GET; o endpoint aceita POST, que é
+ *    o que o Messenger já usa).
+ *  - Tudo em `graph.facebook.com`: o token do Instagram pelo login unificado
+ *    (SUAT) não funciona em `graph.instagram.com`
+ *    (https://developers.facebook.com/documentation/instagram-platform/webhooks/setup).
+ *  - Falha de rede não vaza a URL: da exceção só vai o NOME do erro.
  */
 import {
   CAMPOS_DO_WEBHOOK_INSTAGRAM,
   CAMPOS_DO_WEBHOOK_MESSENGER,
-  ESCOPOS_INSTAGRAM,
   ESCOPOS_MESSENGER,
   HOST_AUTORIZACAO_FACEBOOK,
-  HOST_AUTORIZACAO_INSTAGRAM,
   HOST_GRAPH_FACEBOOK,
-  HOST_GRAPH_INSTAGRAM,
-  HOST_OAUTH_INSTAGRAM,
   VERSAO_DA_GRAPH_SOCIAL,
   type PlataformaMetaSocial,
 } from "./constantes";
-import type { AppOAuth } from "./config";
+import type { AppDoLoginUnificado, AppOAuth } from "./config";
 
 const TIMEOUT_MS = 15_000;
 
@@ -50,9 +44,8 @@ export class ErroDaMeta extends Error {
   }
 }
 
-export function hostDaGraph(plataforma: PlataformaMetaSocial): string {
-  return plataforma === "instagram" ? HOST_GRAPH_INSTAGRAM : HOST_GRAPH_FACEBOOK;
-}
+/** A base de toda chamada do canal (os dois lados falam com `graph.facebook.com`). */
+const GRAPH = `${HOST_GRAPH_FACEBOOK}/${VERSAO_DA_GRAPH_SOCIAL}`;
 
 function leErro(corpo: unknown): { codigo: number | null; mensagem: string } {
   const o = (corpo && typeof corpo === "object" ? corpo : {}) as Record<string, unknown>;
@@ -112,18 +105,33 @@ const str = (v: unknown): string | null =>
 
 // ─── Consentimento ─────────────────────────────────────────────────────────
 
+/**
+ * Instagram: login unificado — `www.facebook.com/dialog/oauth` com o
+ * `config_id` da configuração (as permissões são as DELA; sem `scope`) e
+ * `override_default_response_type=true`, para o `response_type=code` valer
+ * sobre o padrão da configuração.
+ * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login/get-started
+ * https://developers.facebook.com/documentation/facebook-login/facebook-login-for-business
+ *
+ * `display=popup` e `prompt=login` (que o painel acrescenta ao link gerado) são
+ * opcionais e ficam de fora: o Conectar é navegação de página inteira, não
+ * janela; e `prompt=login` obrigaria a digitar a senha do Facebook a cada
+ * conexão, mesmo com a sessão certa aberta.
+ */
 export function urlDeConsentimento(
   plataforma: PlataformaMetaSocial,
-  app: AppOAuth,
+  app: AppOAuth | AppDoLoginUnificado,
   redirectUri: string,
   state: string,
 ): string {
   if (plataforma === "instagram") {
-    const u = new URL("/oauth/authorize", HOST_AUTORIZACAO_INSTAGRAM);
+    if (!("configId" in app) || !app.configId) throw new Error("config_id do login unificado ausente");
+    const u = new URL("/dialog/oauth", HOST_AUTORIZACAO_FACEBOOK);
     u.searchParams.set("client_id", app.appId);
+    u.searchParams.set("config_id", app.configId);
     u.searchParams.set("redirect_uri", redirectUri);
     u.searchParams.set("response_type", "code");
-    u.searchParams.set("scope", ESCOPOS_INSTAGRAM.join(","));
+    u.searchParams.set("override_default_response_type", "true");
     u.searchParams.set("state", state);
     return u.toString();
   }
@@ -136,44 +144,12 @@ export function urlDeConsentimento(
   return u.toString();
 }
 
-// ─── Instagram ─────────────────────────────────────────────────────────────
+// ─── Instagram (login unificado) ───────────────────────────────────────────
 
 export interface TokenComValidade {
   token: string;
   /** Segundos até vencer; null = sem vencimento declarado. */
   expiraEmSegundos: number | null;
-}
-
-/**
- * Código (1h, uso único) → token CURTO e o `user_id` de quem autorizou — o id
- * que o `signed_request` da exclusão de dados traz quando essa pessoa remove o
- * app (guardado na sessão, `metadata.meta_autorizador_id`).
- */
-export async function trocarCodigoInstagram(
-  app: AppOAuth,
-  code: string,
-  redirectUri: string,
-  fetcher?: typeof fetch,
-): Promise<{ token: string; userId: string | null }> {
-  const r = await chamarMeta(
-    "instagram_troca_de_codigo",
-    `${HOST_OAUTH_INSTAGRAM}/oauth/access_token`,
-    {
-      form: {
-        client_id: app.appId,
-        client_secret: app.appSecret,
-        grant_type: "authorization_code",
-        redirect_uri: redirectUri,
-        code,
-      },
-    },
-    fetcher,
-  );
-  // Formato antigo: {access_token, user_id}; novo: {data:[{access_token, ...}]}.
-  const dado = Array.isArray(r.data) ? (r.data[0] as Record<string, unknown> | undefined) : r;
-  const token = str(dado?.access_token);
-  if (!token) throw new ErroDaMeta("instagram_troca_de_codigo", 200, null, "sem access_token");
-  return { token, userId: str(dado?.user_id) };
 }
 
 function lerTokenComValidade(etapa: string, r: Record<string, unknown>): TokenComValidade {
@@ -183,53 +159,85 @@ function lerTokenComValidade(etapa: string, r: Record<string, unknown>): TokenCo
   return { token, expiraEmSegundos: Number.isFinite(exp) && exp > 0 ? exp : null };
 }
 
-/** Token curto → token LONGO (60 dias). */
-export async function tokenLongoInstagram(
+/**
+ * Código → token de usuário do sistema de integração empresarial (SUAT), com o
+ * id e a chave do APP DA META. A validade é a da configuração do painel (o
+ * padrão é não vencer); a doc não descreve os campos da resposta, então
+ * `expires_in` é lido SE vier — NÃO CONFIRMADO NA DOC que ele vem quando a
+ * configuração define validade.
+ * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login/authentication
+ */
+export async function trocarCodigoLoginUnificado(
   app: AppOAuth,
-  tokenCurto: string,
+  code: string,
+  redirectUri: string,
   fetcher?: typeof fetch,
 ): Promise<TokenComValidade> {
-  const u = new URL("/access_token", HOST_GRAPH_INSTAGRAM);
-  u.searchParams.set("grant_type", "ig_exchange_token");
-  u.searchParams.set("client_secret", app.appSecret);
-  u.searchParams.set("access_token", tokenCurto);
   return lerTokenComValidade(
-    "instagram_token_longo",
-    await chamarMeta("instagram_token_longo", u.toString(), {}, fetcher),
+    "instagram_troca_de_codigo",
+    await chamarMeta(
+      "instagram_troca_de_codigo",
+      `${GRAPH}/oauth/access_token`,
+      { form: { client_id: app.appId, client_secret: app.appSecret, redirect_uri: redirectUri, code } },
+      fetcher,
+    ),
   );
 }
 
-/** Renova um token longo (precisa ter ≥24h e não estar vencido). */
-export async function renovarTokenInstagram(
-  token: string,
-  fetcher?: typeof fetch,
-): Promise<TokenComValidade> {
-  const u = new URL("/refresh_access_token", HOST_GRAPH_INSTAGRAM);
-  u.searchParams.set("grant_type", "ig_refresh_token");
-  u.searchParams.set("access_token", token);
-  return lerTokenComValidade(
-    "instagram_renovacao",
-    await chamarMeta("instagram_renovacao", u.toString(), {}, fetcher),
-  );
+export interface UsuarioDoSistema {
+  /** O portfólio de negócios do cliente. */
+  clientBusinessId: string | null;
+  /**
+   * O `id` app-scoped do /me. Com SUAT o /me é o USUÁRIO DO SISTEMA de
+   * integração, não a pessoa que fez o login (doc do get-started).
+   */
+  id: string | null;
+}
+
+/** GET /me?fields=client_business_id,id — https://developers.facebook.com/documentation/facebook-login/facebook-login-for-business */
+export async function usuarioDoSistema(token: string, fetcher?: typeof fetch): Promise<UsuarioDoSistema> {
+  const r = await chamarMeta("instagram_empresa", `${GRAPH}/me?fields=client_business_id,id`, { token }, fetcher);
+  return { clientBusinessId: str(r.client_business_id), id: str(r.id) };
 }
 
 export interface ContaDaMeta {
-  /** IG: `user_id` da conta profissional; Messenger: id da Página. É o `entry.id`. */
+  /** IG: id da conta profissional (IG_ID); Messenger: id da Página. É o `entry.id`. */
   id: string;
   usuario: string | null;
   nome: string | null;
 }
 
-export async function contaInstagram(token: string, fetcher?: typeof fetch): Promise<ContaDaMeta> {
-  const r = await chamarMeta(
-    "instagram_conta",
-    `${HOST_GRAPH_INSTAGRAM}/${VERSAO_DA_GRAPH_SOCIAL}/me?fields=user_id,username,name`,
-    { token },
-    fetcher,
-  );
-  const id = str(r.user_id);
-  if (!id) throw new ErroDaMeta("instagram_conta", 200, null, "sem user_id");
-  return { id, usuario: str(r.username), nome: str(r.name) };
+/** Teto de páginas da listagem: 10 × 100 contas é muito além de qualquer portfólio real. */
+const TETO_DE_PAGINAS = 10;
+
+/**
+ * As contas do Instagram concedidas no login (precisa de `instagram_basic`).
+ * Paginado pelo cursor `after` — a URL de `paging.next` não é seguida, para o
+ * token continuar só no header.
+ * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login/get-started
+ */
+export async function contasInstagramConcedidas(token: string, fetcher?: typeof fetch): Promise<ContaDaMeta[]> {
+  const contas: ContaDaMeta[] = [];
+  const vistas = new Set<string>();
+  let depois: string | null = null;
+  for (let i = 0; i < TETO_DE_PAGINAS; i += 1) {
+    const u = new URL(`${GRAPH}/me/assigned_instagram_accounts`);
+    u.searchParams.set("fields", "id,username");
+    u.searchParams.set("limit", "100");
+    if (depois) u.searchParams.set("after", depois);
+    const r = await chamarMeta("instagram_contas", u.toString(), { token }, fetcher);
+    for (const c of Array.isArray(r.data) ? (r.data as Record<string, unknown>[]) : []) {
+      const id = str(c.id);
+      if (!id || vistas.has(id)) continue;
+      vistas.add(id);
+      contas.push({ id, usuario: str(c.username), nome: null });
+    }
+    const paging = (r.paging && typeof r.paging === "object" ? r.paging : {}) as Record<string, unknown>;
+    const cursores = (paging.cursors && typeof paging.cursors === "object" ? paging.cursors : {}) as Record<string, unknown>;
+    depois = paging.next ? str(cursores.after) : null;
+    if (!depois) break;
+  }
+  return contas;
 }
 
 // ─── Messenger ─────────────────────────────────────────────────────────────
@@ -326,22 +334,26 @@ export async function paginasMessenger(
 
 // ─── Assinatura do webhook, por conta ──────────────────────────────────────
 
-function urlDaAssinatura(plataforma: PlataformaMetaSocial, contaId: string): string {
-  const campos =
-    plataforma === "instagram" ? CAMPOS_DO_WEBHOOK_INSTAGRAM : CAMPOS_DO_WEBHOOK_MESSENGER;
-  return `${hostDaGraph(plataforma)}/${VERSAO_DA_GRAPH_SOCIAL}/${encodeURIComponent(contaId)}/subscribed_apps?subscribed_fields=${campos}`;
-}
-
+/**
+ * Assina a conta nos webhooks do app.
+ *  - Instagram (login unificado): POST graph.facebook.com/<IG_ID>/subscribed_apps
+ *    com `subscribed_fields` no corpo do formulário e o SUAT.
+ *    https://developers.facebook.com/documentation/instagram-platform/webhooks/setup
+ *  - Messenger: POST /<PAGE_ID>/subscribed_apps com o token da Página.
+ */
 export async function assinarWebhookDaConta(
   plataforma: PlataformaMetaSocial,
   contaId: string,
   token: string,
   fetcher?: typeof fetch,
 ): Promise<void> {
+  const base = `${GRAPH}/${encodeURIComponent(contaId)}/subscribed_apps`;
   const r = await chamarMeta(
     `${plataforma}_assinatura`,
-    urlDaAssinatura(plataforma, contaId),
-    { method: "POST", token },
+    plataforma === "instagram" ? base : `${base}?subscribed_fields=${CAMPOS_DO_WEBHOOK_MESSENGER}`,
+    plataforma === "instagram"
+      ? { token, form: { subscribed_fields: CAMPOS_DO_WEBHOOK_INSTAGRAM } }
+      : { method: "POST", token },
     fetcher,
   );
   if (r.success !== true) throw new ErroDaMeta(`${plataforma}_assinatura`, 200, null, "success != true");
@@ -355,7 +367,7 @@ export async function desassinarWebhookDaConta(
 ): Promise<void> {
   await chamarMeta(
     `${plataforma}_desassinatura`,
-    `${hostDaGraph(plataforma)}/${VERSAO_DA_GRAPH_SOCIAL}/${encodeURIComponent(contaId)}/subscribed_apps`,
+    `${GRAPH}/${encodeURIComponent(contaId)}/subscribed_apps`,
     { method: "DELETE", token },
     fetcher,
   );
@@ -363,7 +375,14 @@ export async function desassinarWebhookDaConta(
 
 // ─── Perfil do remetente (best-effort) ─────────────────────────────────────
 
-/** Nome de quem escreveu. `null` em qualquer falha — nunca bloqueia a ingestão. */
+/**
+ * Nome de quem escreveu. `null` em qualquer falha — nunca bloqueia a ingestão.
+ * Instagram: GET /<IGSID>?fields=name,username,profile_pic. A página do perfil
+ * só documenta o host `graph.instagram.com` (login do Instagram); no login
+ * unificado toda chamada vai a `graph.facebook.com` — NÃO CONFIRMADO NA DOC
+ * para este endpoint especificamente.
+ * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/user-profile
+ */
 export async function perfilDoRemetente(
   plataforma: PlataformaMetaSocial,
   clienteId: string,
@@ -374,7 +393,7 @@ export async function perfilDoRemetente(
   try {
     const r = await chamarMeta(
       `${plataforma}_perfil`,
-      `${hostDaGraph(plataforma)}/${VERSAO_DA_GRAPH_SOCIAL}/${encodeURIComponent(clienteId)}?fields=${campos}`,
+      `${GRAPH}/${encodeURIComponent(clienteId)}?fields=${campos}`,
       { token },
       fetcher,
     );
@@ -420,6 +439,14 @@ export function dividirTexto(texto: string, teto: number): string[] {
 }
 
 /**
+ * As requisições de um envio, sem token. Instagram: POST
+ * graph.facebook.com/<IG_ID>/messages com o SUAT. A página de envio só
+ * documenta `graph.instagram.com` (login do Instagram); a do login unificado
+ * diz que as chamadas vão a `graph.facebook.com/<IG_ID>` — o caminho
+ * `/messages` nesse host é NÃO CONFIRMADO NA DOC.
+ * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api
+ * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login/authentication
+ *
  * As requisições de um envio, sem token. O token vai no header na hora de
  * executar — nunca na URL, que um proxy ou log poderia guardar.
  */
@@ -431,7 +458,7 @@ export function montarEnvios(input: {
   imagemUrl?: string | null;
   teto: number;
 }): RequisicaoDeEnvio[] {
-  const url = `${hostDaGraph(input.plataforma)}/${VERSAO_DA_GRAPH_SOCIAL}/${encodeURIComponent(input.contaId)}/messages`;
+  const url = `${GRAPH}/${encodeURIComponent(input.contaId)}/messages`;
   const base: Record<string, unknown> = {
     recipient: { id: input.destinatario },
     ...(input.plataforma === "messenger" ? { messaging_type: "RESPONSE" } : {}),

@@ -96,7 +96,7 @@ export function lerAviso(params: URLSearchParams, t: (s: string) => string): Avi
     const n = inteiro(params.get("n"));
     const x = inteiro(params.get("recusadas"));
     const conectadas =
-      n === 1 ? t("1 Página conectada") : `${n} ${t("Páginas conectadas")}`;
+      n === 1 ? t("1 conta conectada") : `${n} ${t("contas conectadas")}`;
     const recusadas =
       x === 1
         ? t("1 não pôde ser conectada")
@@ -330,6 +330,11 @@ export function RedesSociaisClient({
               <li>
                 {t(
                   "No aplicativo do Instagram, ligue \"Permitir acesso às mensagens\" em Configurações > Mensagens e respostas de stories > Ferramentas conectadas.",
+                )}
+              </li>
+              <li>
+                {t(
+                  "A conta precisa estar num portfólio de negócios da Meta. Se ainda não estiver, o login da Meta guia você nesse passo.",
                 )}
               </li>
             </ul>

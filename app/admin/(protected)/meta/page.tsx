@@ -65,18 +65,18 @@ export default async function Page() {
       }
     | null;
 
-  // As colunas do canal social (0984) numa leitura À PARTE: um clone que ainda
-  // não aplicou a 0984 devolve 42703 aqui, e isso não pode derrubar a leitura
-  // do app do WhatsApp acima. Os ids não são segredo e voltam; da chave do
-  // Instagram, só SE existe.
-  const { data: dadosSociais } = await admin
+  // As colunas do canal social numa leitura À PARTE, uma por migration: um
+  // clone que ainda não aplicou a 0984 (ou a 0988) devolve 42703 aqui, e isso
+  // não pode derrubar a leitura do app do WhatsApp acima nem a do `app_id`.
+  // Nenhum dos dois é segredo e os dois voltam.
+  const { data: dadosSociais } = await admin.from("platform_meta_app").select("app_id").eq("id", 1).maybeSingle();
+  const { data: dadosUnificados } = await admin
     .from("platform_meta_app")
-    .select("app_id, instagram_app_id, instagram_app_secret_encrypted")
+    .select("unified_config_id")
     .eq("id", 1)
     .maybeSingle();
-  const social = dadosSociais as
-    | { app_id: string | null; instagram_app_id: string | null; instagram_app_secret_encrypted: string | null }
-    | null;
+  const social = dadosSociais as { app_id: string | null } | null;
+  const unificado = dadosUnificados as { unified_config_id: string | null } | null;
   const base = new URL(env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").origin;
 
   // O `.env` é o piso de rollback (`lib/channels/meta/app.ts`). Dizer que ele
@@ -96,8 +96,7 @@ export default async function Page() {
       leituraFalhou={Boolean(error)}
       social={{
         appId: social?.app_id ?? null,
-        instagramAppId: social?.instagram_app_id ?? null,
-        temSegredoDoInstagram: Boolean(social?.instagram_app_secret_encrypted),
+        configIdDoLoginUnificado: unificado?.unified_config_id ?? null,
         enderecos: enderecosParaAMeta(base),
       }}
     />

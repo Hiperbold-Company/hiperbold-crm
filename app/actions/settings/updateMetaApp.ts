@@ -317,18 +317,17 @@ export async function rotacionarVerifyTokenDaMeta(): Promise<UpdateMetaAppResult
 }
 
 /**
- * Os ids dos apps e a chave secreta do app do Instagram — o que o canal social
- * oficial (Instagram Direct e Messenger, migration 0984) precisa para o OAuth.
+ * O id do app da Meta e o `config_id` do login unificado do Instagram — o que o
+ * canal social oficial (Instagram Direct e Messenger, migrations 0984 e 0988)
+ * precisa para o OAuth. Nenhum dos dois é segredo: a chave é o App Secret de
+ * cima, a mesma do WhatsApp oficial.
  *
- * Campos vazios = "mantenha o que está gravado", como a chave do WhatsApp: a
- * chave do Instagram nunca volta à tela, então salvar de novo sem redigitá-la
- * não pode apagá-la. Ids são só dígitos (é o formato do painel da Meta); a
- * chave do Instagram tem o mesmo piso da do app da Meta.
+ * Campos vazios = "mantenha o que está gravado". São só dígitos (é o formato
+ * do painel da Meta). O app próprio do Instagram (id + chave da 0984) não é
+ * mais aceito: o Instagram conecta pelo login unificado.
  *
- * Nenhuma regra de par aqui: o resolvedor (`lib/channels/meta-social/config.ts`)
- * só serve o app do Instagram com id E chave do MESMO lugar, e a tela mostra o
- * que falta. Gate, cifra, upsert, invalidação dos memos e trilha são os de
- * `gravar` — o mesmo caminho da chave do WhatsApp.
+ * Gate, upsert, invalidação dos memos e trilha são os de `gravar` — o mesmo
+ * caminho da chave do WhatsApp.
  */
 /** Vazio (ou só espaço) vira ausente: "mantenha o que está gravado". */
 const vazioEhAusente = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
@@ -336,14 +335,12 @@ const idDoApp = z.preprocess(vazioEhAusente, z.string().trim().regex(/^[0-9]{5,3
 
 const entradaSocialSchema = z.object({
   app_id: idDoApp,
-  instagram_app_id: idDoApp,
-  instagram_app_secret: z.preprocess(vazioEhAusente, z.string().trim().min(16).max(300).optional()),
+  unified_config_id: idDoApp,
 });
 
 export interface MetaSocialAppInput {
   app_id?: string;
-  instagram_app_id?: string;
-  instagram_app_secret?: string;
+  unified_config_id?: string;
 }
 
 export async function updateAppSocialDaMeta(input: MetaSocialAppInput): Promise<UpdateMetaAppResult> {
@@ -359,8 +356,8 @@ export async function updateAppSocialDaMeta(input: MetaSocialAppInput): Promise<
   if (!parsed.success) {
     return { ok: false, error: "invalid_input", details: parsed.error.flatten() };
   }
-  const { app_id, instagram_app_id, instagram_app_secret } = parsed.data;
-  if (!app_id && !instagram_app_id && !instagram_app_secret) return { ok: false, error: "nada_para_salvar" };
+  const { app_id, unified_config_id } = parsed.data;
+  if (!app_id && !unified_config_id) return { ok: false, error: "nada_para_salvar" };
 
   const valores: Record<string, unknown> = { updated_by: authUser.id };
   const campos: string[] = [];
@@ -368,28 +365,12 @@ export async function updateAppSocialDaMeta(input: MetaSocialAppInput): Promise<
     valores.app_id = app_id;
     campos.push("app_id");
   }
-  if (instagram_app_id) {
-    valores.instagram_app_id = instagram_app_id;
-    campos.push("instagram_app_id");
-  }
-  if (instagram_app_secret) {
-    const cifrado = await encryptWebhookSecret(createAdminClient(), instagram_app_secret);
-    if (!cifrado) {
-      return {
-        ok: false,
-        error:
-          "cifra indisponível nesta instalação (GUC app.nuvemshop_oauth_key ausente) — a chave do Instagram não foi gravada",
-      };
-    }
-    valores.instagram_app_secret_encrypted = cifrado;
-    campos.push("instagram_app_secret_encrypted");
+  if (unified_config_id) {
+    valores.unified_config_id = unified_config_id;
+    campos.push("unified_config_id");
   }
 
   // Trilha: QUAIS campos mudaram. Os ids não são segredo, mas a trilha segue a
   // regra da casa e não carrega valor nenhum.
-  return gravar(authUser, valores, "platform_meta_app.updated", {
-    campos,
-    canal: "meta_social",
-    segredo_do_instagram_trocado: Boolean(instagram_app_secret),
-  });
+  return gravar(authUser, valores, "platform_meta_app.updated", { campos, canal: "meta_social" });
 }

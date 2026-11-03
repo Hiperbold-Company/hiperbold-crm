@@ -10,7 +10,7 @@ vi.mock("@/lib/auth/cron-auth", () => ({ autorizaCron: () => true }));
 
 import { metaSocialAdapter } from "@/lib/channels/meta-social/adapter";
 import { dividirTexto, montarEnvios } from "@/lib/channels/meta-social/oauth";
-import { renovarTokensDoInstagram } from "@/lib/channels/meta-social/renovacao";
+import { marcarTokensPertoDeVencer } from "@/lib/channels/meta-social/renovacao";
 import { lerSignedRequest } from "@/lib/channels/meta-social/exclusao";
 
 const ORG = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -30,9 +30,9 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("montagem do envio", () => {
-  it("texto no Instagram: /<conta>/messages, sem token na URL", () => {
+  it("texto no Instagram (login unificado): graph.facebook.com/<IG_ID>/messages, sem token na URL", () => {
     const [r] = montarEnvios({ plataforma: "instagram", contaId: "IG-A", destinatario: "IGSID", texto: "oi", teto: 1000 });
-    expect(r!.url).toBe("https://graph.instagram.com/v26.0/IG-A/messages");
+    expect(r!.url).toBe("https://graph.facebook.com/v26.0/IG-A/messages");
     expect(r!.corpo).toEqual({ recipient: { id: "IGSID" }, message: { text: "oi" } });
   });
 
@@ -82,6 +82,40 @@ describe("adapter.send", () => {
     expect(JSON.parse(String(init.body))).toEqual({ recipient: { id: "IGSID-1" }, message: { text: "olá" } });
   });
 
+  const enviarCom = async (resposta: unknown, status: number) => {
+    const banco = bancoFalso({ channel_sessions: [{ ...sessao, status: "WORKING", status_reason: null }] });
+    h.db = banco.db;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(resposta), { status })));
+    const erro = await metaSocialAdapter
+      .send({ organizationId: ORG, sessionRef: "IG-A", to: "provider-thread", kind: "text", body: "x", providerConversationId: "IGSID-1" })
+      .catch((e: unknown) => e as Error);
+    return { erro: erro as Error, sessao: banco.t("channel_sessions")[0]! };
+  };
+
+  it("token recusado (190): frase de reconectar e a sessão passa a pedir Reconectar", async () => {
+    const { erro, sessao: s } = await enviarCom({ error: { code: 190, message: "Error validating access token" } }, 400);
+    expect(erro.message).toMatch(/Reconecte/);
+    expect(s).toMatchObject({ status: "FAILED", status_reason: "token_invalido" });
+    const saude = await metaSocialAdapter.checkHealth!({ organizationId: ORG, sessionRef: "IG-A" } as never);
+    expect(saude).toMatchObject({ status: "FAILED", detail: "token_invalido" });
+  });
+
+  it("(#200) acesso às mensagens desligado e (#10) conta não profissional têm frase própria", async () => {
+    const a = await enviarCom(
+      { error: { code: 200, message: "The account owner has disabled access to Instagram Direct Messaging" } },
+      403,
+    );
+    expect(a.erro.message).toMatch(/Permitir acesso às mensagens/);
+    expect(a.sessao).toMatchObject({ status: "WORKING" });
+    const b = await enviarCom(
+      { error: { code: 10, message: "Access is denied because the instagram account type is not business or creator" } },
+      403,
+    );
+    expect(b.erro.message).toMatch(/profissional/);
+    const c = await enviarCom({ error: { code: 10, message: "outside of allowed window" } }, 400);
+    expect(c.erro.message).toMatch(/24 horas/);
+  });
+
   it("conta de outra organização não envia", async () => {
     h.db = bancoFalso({ channel_sessions: [sessao] }).db;
     vi.stubGlobal("fetch", vi.fn());
@@ -98,42 +132,59 @@ describe("adapter.send", () => {
   });
 });
 
-describe("renovação do token do Instagram", () => {
+describe("validade do token do Instagram (login unificado)", () => {
   const agora = new Date("2026-11-02T06:35:00Z");
   const dia = 24 * 3600 * 1000;
-  const linha = (id: string, venceEmDias: number, renovadoHaDias: number) => ({
+  const linha = (id: string, venceEmDias: number | null, extra: Record<string, unknown> = {}) => ({
     ...sessao,
     id,
     meta_social_account_id: id,
-    meta_social_token_expires_at: new Date(agora.getTime() + venceEmDias * dia).toISOString(),
-    meta_social_token_refreshed_at: new Date(agora.getTime() - renovadoHaDias * dia).toISOString(),
+    status: "WORKING",
+    status_reason: null,
+    meta_social_token_expires_at:
+      venceEmDias === null ? null : new Date(agora.getTime() + venceEmDias * dia).toISOString(),
+    meta_social_token_refreshed_at: new Date(agora.getTime() - 50 * dia).toISOString(),
     metadata: {},
+    ...extra,
   });
 
-  it("renova só quem vence em menos de 20 dias e tem 24h; falha marca a sessão", async () => {
+  it("sem validade não faz nada; vence em até 7 dias pede reconectar; nunca renova", async () => {
+    const fetchFalso = vi.fn();
+    vi.stubGlobal("fetch", fetchFalso);
     const banco = bancoFalso({
-      channel_sessions: [linha("vence", 5, 50), linha("longe", 40, 20), linha("novo", 5, 0.5), linha("falha", 3, 57)],
+      channel_sessions: [
+        linha("sem-validade", null),
+        linha("longe", 30),
+        linha("perto", 5),
+        linha("ja-marcada", 3, { status: "FAILED", status_reason: "token_vence_em_breve" }),
+      ],
     });
-    const renovar = vi.fn(async (token: string) => {
-      if (token === "TOKEN-SECRETO" && renovar.mock.calls.length === 1) throw new Error("recusado");
-      return { token: "NOVO", expiraEmSegundos: 60 * 24 * 3600 };
-    });
-    const r = await renovarTokensDoInstagram(banco.db, agora, renovar);
-    expect(r).toEqual({ examinadas: 2, renovadas: 1, falhas: 1 });
+    const r = await marcarTokensPertoDeVencer(banco.db, agora);
+    expect(r).toEqual({ examinadas: 1, marcadas: 1 });
     const porId = Object.fromEntries(banco.t("channel_sessions").map((l) => [l.id, l]));
-    expect(porId.falha!.metadata).toMatchObject({ token_erro: "meta_recusou_a_renovacao" });
-    expect(porId.vence!.meta_social_token_encrypted).toBe("cifrado:NOVO");
-    expect(porId.longe!.meta_social_token_encrypted).toBe("cifrado:TOKEN-SECRETO");
+    expect(porId.perto).toMatchObject({ status: "FAILED", status_reason: "token_vence_em_breve" });
+    expect(porId["sem-validade"]).toMatchObject({ status: "WORKING", status_reason: null });
+    expect(porId.longe).toMatchObject({ status: "WORKING", status_reason: null });
+    // O token não muda: não há renovação automática.
+    expect(porId.perto!.meta_social_token_encrypted).toBe("cifrado:TOKEN-SECRETO");
+    expect(fetchFalso).not.toHaveBeenCalled();
+  });
+
+  it("a sessão marcada aparece como FAILED na saúde (o vigia abre o aviso)", async () => {
+    h.db = bancoFalso({
+      channel_sessions: [linha("IG-A", 5, { status: "FAILED", status_reason: "token_vence_em_breve" })],
+    }).db;
+    const saude = await metaSocialAdapter.checkHealth!({ organizationId: ORG, sessionRef: "IG-A" } as never);
+    expect(saude).toMatchObject({ status: "FAILED", detail: "token_vence_em_breve" });
   });
 
   it("o cron só audita quando houve efeito", async () => {
     const { GET } = await import("@/app/api/v1/cron/meta-social-tokens/route");
-    h.db = bancoFalso({ channel_sessions: [linha("longe", 40, 20)] }).db;
+    h.db = bancoFalso({ channel_sessions: [linha("longe", 30), linha("sem-validade", null)] }).db;
     await GET(new Request("https://crm.test/api/v1/cron/meta-social-tokens") as never);
     expect(h.audit).not.toHaveBeenCalled();
 
-    h.db = bancoFalso({ channel_sessions: [linha("vence", 5, 50)] }).db;
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 400 })));
+    h.db = bancoFalso({ channel_sessions: [linha("perto", 5)] }).db;
     await GET(new Request("https://crm.test/api/v1/cron/meta-social-tokens") as never);
     expect(h.audit).toHaveBeenCalledTimes(1);
   });

@@ -2,9 +2,8 @@
  * POST /api/v1/meta/exclusao-de-dados — callback de exclusão de dados da Meta
  * (Instagram e Messenger). Público no proxy: quem chama é a Meta, sem sessão.
  *
- * Autenticação = o `signed_request` (HMAC-SHA256 com um segredo desta
- * instalação, emitido há menos de 24h). Qual segredo conferiu diz de qual app
- * veio. O pedido é gravado em `meta_data_deletion_requests` (um aberto por
+ * Autenticação = o `signed_request` (HMAC-SHA256 com o App Secret do app da
+ * Meta desta instalação, emitido há menos de 24h). O pedido é gravado em `meta_data_deletion_requests` (um aberto por
  * rede e pessoa: a reentrega devolve o mesmo código, sem trilha nova) e
  * CUMPRIDO na hora: as conexões autorizadas por essa pessoa são arquivadas
  * (`lib/channels/meta-social/exclusao.ts`). A resposta é o formato que a Meta
@@ -63,10 +62,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!lido.success) return fail("validation_error", "signed_request ausente", 400, { requestId });
 
   const cfg = await configMetaSocial();
-  const candidatos: { plataforma: PlataformaMetaSocial; segredo: string }[] = [
-    ...(cfg.messenger ? [{ plataforma: "messenger" as const, segredo: cfg.messenger.appSecret }] : []),
-    ...(cfg.instagram ? [{ plataforma: "instagram" as const, segredo: cfg.instagram.appSecret }] : []),
-  ];
+  // Um app só (o da Meta) desde o login unificado do Instagram (0988): o pedido
+  // é gravado como `messenger` (a coluna só aceita as duas redes) e cumprido
+  // nas DUAS redes (`executarPedidoDeExclusao`).
+  const candidatos: { plataforma: PlataformaMetaSocial; segredo: string }[] = cfg.messenger
+    ? [{ plataforma: "messenger", segredo: cfg.messenger.appSecret }]
+    : [];
   const pedido = lerSignedRequest(lido.data.signed_request, candidatos.map((c) => c.segredo));
   if (!pedido) return fail("unauthorized", "invalid_signature", 401, { requestId });
   const plataforma = candidatos[pedido.segredo]!.plataforma;

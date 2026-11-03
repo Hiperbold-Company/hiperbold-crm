@@ -11,8 +11,11 @@
  *   - IDEMPOTÊNCIA: um pedido aberto por `(rede, pessoa)` (índice único parcial
  *     da 0987). A reentrega devolve o MESMO código, sem linha nova e sem trilha
  *     nova; a reentrega de um pedido já cumprido (mesmo `issued_at`) também.
- *   - EXECUÇÃO: o pedido é cumprido na hora — toda conexão `meta_social` dessa
- *     rede autorizada por essa pessoa (ou cuja conta É essa pessoa) é arquivada
+ *   - EXECUÇÃO: o pedido é cumprido na hora — toda conexão `meta_social`
+ *     autorizada por essa pessoa (ou cuja conta É ela) é arquivada, nas DUAS
+ *     redes: desde o login unificado (0988) Instagram e Messenger são o mesmo
+ *     app da Meta, o mesmo segredo e o mesmo id app-scoped, então o pedido não
+ *     diz de qual rede veio. Ela é arquivada
  *     pelo mesmo caminho do "Desconectar" (`arquivarConta`: tira a assinatura
  *     do webhook na Meta e apaga o token). Nada casou = cumprido sem efeito.
  */
@@ -152,8 +155,17 @@ export interface ResultadoDaExclusao {
 }
 
 /**
- * Cumpre o pedido: arquiva toda conexão viva desta rede autorizada pela pessoa
- * (ou cuja conta é ela) e marca o pedido como concluído. Lança se o banco
+ * Cumpre o pedido: arquiva toda conexão viva (Instagram e Messenger) autorizada
+ * pela pessoa (ou cuja conta é ela) e marca o pedido como concluído.
+ *
+ * Limite conhecido do Instagram pelo login unificado: o `/me` do token SUAT é
+ * o USUÁRIO DO SISTEMA de integração, não a pessoa que fez o login
+ * (https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login/get-started),
+ * e o login não devolve token da pessoa. O `meta_autorizador_id` gravado é o
+ * do usuário do sistema; se o `user_id` do `signed_request` for o da pessoa,
+ * o casamento sai pela conta (`meta_social_account_id`) — e, se não bater,
+ * o pedido é cumprido sem arquivar nada. NÃO CONFIRMADO NA DOC qual id a Meta
+ * manda nesse fluxo. Lança se o banco
  * falhar — o pedido fica aberto, e a reentrega da Meta tenta de novo.
  */
 export async function executarPedidoDeExclusao(
@@ -167,7 +179,6 @@ export async function executarPedidoDeExclusao(
     .from("channel_sessions")
     .select("id, organization_id")
     .eq("provider", CHANNEL_PROVIDER_META_SOCIAL)
-    .eq("meta_social_platform", pedido.plataforma)
     .eq("meta_social_account_id", pedido.userId)
     .is("archived_at", null);
   if (erroPelaConta) throw new Error("meta_deletion_sessions_lookup_failed");
@@ -175,7 +186,6 @@ export async function executarPedidoDeExclusao(
     .from("channel_sessions")
     .select("id, organization_id")
     .eq("provider", CHANNEL_PROVIDER_META_SOCIAL)
-    .eq("meta_social_platform", pedido.plataforma)
     .eq(`metadata->>${CHAVE_DO_AUTORIZADOR}`, pedido.userId)
     .is("archived_at", null);
   if (erroPeloAutorizador) throw new Error("meta_deletion_sessions_lookup_failed");

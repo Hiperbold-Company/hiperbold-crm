@@ -71285,3 +71285,20 @@ create unique index if not exists meta_data_deletion_requests_aberto_uidx
   where status = 'received';
 
 notify pgrst, 'reload schema';
+
+-- ---- Instagram pelo login unificado da Meta (migration 0988) ----
+-- Espelho idempotente da 0988; racional completo no arquivo da migration.
+
+alter table public.platform_meta_app
+  add column if not exists unified_config_id text;
+
+comment on column public.platform_meta_app.unified_config_id is
+  '0988: id da configuração do login unificado do Instagram (Facebook Login para Empresas, token SUAT). Não é segredo.';
+
+comment on column public.platform_meta_app.instagram_app_id is
+  'OBSOLETA desde a 0988: o Instagram conecta pelo login unificado (app da Meta + unified_config_id). Mantida para rollback; o código não lê.';
+
+comment on column public.platform_meta_app.instagram_app_secret_encrypted is
+  'OBSOLETA desde a 0988: o Instagram conecta pelo login unificado (app da Meta + unified_config_id). Mantida para rollback; o código não lê.';
+
+notify pgrst, 'reload schema';

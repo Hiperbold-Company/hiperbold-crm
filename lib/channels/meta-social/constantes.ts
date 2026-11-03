@@ -1,7 +1,12 @@
 /**
  * Vocabulário do canal social OFICIAL da Meta (Instagram Direct pela Instagram
- * API com login do Instagram; Messenger pela Página do Facebook). Puro, sem
- * banco nem rede.
+ * API com login unificado; Messenger pela Página do Facebook). Puro, sem banco
+ * nem rede.
+ *
+ * Os dois falam com `graph.facebook.com` e entram pelo diálogo de
+ * `www.facebook.com`. O Instagram pelo login unificado não usa
+ * `graph.instagram.com` (a doc diz que o token dele não funciona lá):
+ * https://developers.facebook.com/documentation/instagram-platform/webhooks/setup
  *
  * A versão da Graph API é constante PRÓPRIA deste canal, e não a de
  * `lib/graph-version.ts`: o WhatsApp oficial segue na versão dele, e um bump
@@ -11,9 +16,6 @@ import { VERSAO_DA_GRAPH_DO_CANAL_SOCIAL } from "@/lib/graph-version";
 
 export const VERSAO_DA_GRAPH_SOCIAL = VERSAO_DA_GRAPH_DO_CANAL_SOCIAL;
 
-export const HOST_GRAPH_INSTAGRAM = "https://graph.instagram.com";
-export const HOST_OAUTH_INSTAGRAM = "https://api.instagram.com";
-export const HOST_AUTORIZACAO_INSTAGRAM = "https://www.instagram.com";
 export const HOST_GRAPH_FACEBOOK = "https://graph.facebook.com";
 export const HOST_AUTORIZACAO_FACEBOOK = "https://www.facebook.com";
 
@@ -33,10 +35,14 @@ export function canalDaConversa(plataforma: PlataformaMetaSocial): "instagram" |
   return plataforma === "instagram" ? "instagram" : "facebook";
 }
 
-export const ESCOPOS_INSTAGRAM = [
-  "instagram_business_basic",
-  "instagram_business_manage_messages",
-] as const;
+/**
+ * O Instagram (login unificado) NÃO manda `scope` na URL: as permissões
+ * (`instagram_basic`, `instagram_manage_messages`) são as da CONFIGURAÇÃO do
+ * painel, identificada pelo `config_id`. Listadas aqui só como documentação do
+ * que a configuração precisa ter.
+ * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login/permissions
+ */
+export const PERMISSOES_DA_CONFIGURACAO_INSTAGRAM = ["instagram_basic", "instagram_manage_messages"] as const;
 
 export const ESCOPOS_MESSENGER = [
   "pages_show_list",

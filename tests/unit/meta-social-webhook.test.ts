@@ -203,4 +203,54 @@ describe("leitura do payload", () => {
     });
     expect(e).toMatchObject({ mid: "t.1", texto: "teste" });
   });
+
+  describe("login unificado: os dois formatos (messaging[] e changes[]) dão os MESMOS eventos", () => {
+    const itens = {
+      entrada: { sender: { id: CLIENTE }, recipient: { id: IG }, timestamp: 1_762_000_000_000, message: { mid: "u.1", text: "oi" } },
+      eco: {
+        sender: { id: IG },
+        recipient: { id: CLIENTE },
+        timestamp: 1_762_000_001_000,
+        message: { mid: "u.2", text: "resposta", is_echo: true, app_id: 12345678 },
+      },
+      lida: { sender: { id: CLIENTE }, recipient: { id: IG }, timestamp: 1_762_000_002_000, read: { mid: "u.2" } },
+    };
+    const comoMessaging = {
+      object: "instagram",
+      entry: [{ id: IG, time: 1, messaging: [itens.entrada, itens.eco, itens.lida] }],
+    };
+    const comoChanges = {
+      object: "instagram",
+      entry: [
+        {
+          id: IG,
+          time: 1,
+          changes: [
+            { field: "messages", value: itens.entrada },
+            { field: "messages", value: itens.eco },
+            { field: "messaging_seen", value: itens.lida },
+          ],
+        },
+      ],
+    };
+
+    it("entrada, eco e leitura", () => {
+      const a = ler(comoMessaging);
+      expect(a).toEqual([
+        expect.objectContaining({ tipo: "mensagem", direcao: "inbound", clienteId: CLIENTE, mid: "u.1", texto: "oi" }),
+        expect.objectContaining({ tipo: "mensagem", direcao: "outbound", clienteId: CLIENTE, mid: "u.2", appId: "12345678" }),
+        expect.objectContaining({ tipo: "lida", clienteId: CLIENTE, mid: "u.2" }),
+      ]);
+      expect(ler(comoChanges)).toEqual(a);
+    });
+
+    it("campo de changes que não é mensagem (comentário) é ignorado", () => {
+      expect(
+        ler({
+          object: "instagram",
+          entry: [{ id: IG, changes: [{ field: "comments", value: { id: "c1", text: "lindo", from: { id: CLIENTE } } }] }],
+        }),
+      ).toEqual([]);
+    });
+  });
 });

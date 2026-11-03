@@ -172,6 +172,6 @@ describe("volta com recusa parcial", () => {
       (s) => s,
     );
     expect(aviso).toMatchObject({ tipo: "parcial", limite: true });
-    expect(aviso!.texto).toBe("2 Páginas conectadas; 1 não pôde ser conectada: Seu plano chegou ao limite de conexões.");
+    expect(aviso!.texto).toBe("2 contas conectadas; 1 não pôde ser conectada: Seu plano chegou ao limite de conexões.");
   });
 });

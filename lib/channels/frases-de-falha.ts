@@ -43,6 +43,10 @@ const FRASES: Record<string, string> = {
   meta_social_outside_window:
     "Passaram mais de 24 horas desde a última mensagem do cliente. A Meta só libera a resposta quando ele escrever de novo.",
   meta_social_recipient_unavailable: "Esta pessoa não pode receber mensagens desta conta agora.",
+  meta_social_messages_access_off:
+    "O dono da conta desligou \"Permitir acesso às mensagens\" no Instagram. Peça para ligar em Configurações > Mensagens e respostas de stories > Ferramentas conectadas.",
+  meta_social_account_not_eligible:
+    "Esta conta do Instagram precisa ser profissional (Empresa ou Criador) e ter a permissão de mensagens. Ajuste e conecte de novo em Conexões › Redes sociais.",
   // Falha do NOSSO Storage ao preparar a mídia — não é do canal.
   storage_sign_failed: "Não conseguimos preparar o arquivo para envio.",
 };

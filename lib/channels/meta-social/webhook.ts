@@ -29,6 +29,9 @@ export function assinaturaMetaSocialConfere(
   return confere;
 }
 
+/** Campos de `changes[]` cujo `value` é um item de mensagem (ou de leitura). */
+const CAMPOS_DE_MENSAGEM_EM_CHANGES: ReadonlySet<unknown> = new Set(["messages", "messaging_seen"]);
+
 export function plataformaDoObjeto(object: unknown): PlataformaMetaSocial | null {
   if (object === "instagram") return "instagram";
   if (object === "page") return "messenger";
@@ -172,13 +175,18 @@ export function lerEventosMetaSocial(envelope: EnvelopeMetaSocial): EventoMetaSo
     const contaId = entry.id;
     // Sem `entry.id` não há conta, e sem conta não há organização: ignorado.
     if (!contaId) continue;
-    // `messaging[]` é o formato normal; o "Testar" do painel manda `changes[]`
-    // com `field: "messages"` e o mesmo item em `value`.
+    // Dois formatos, os dois aceitos: `messaging[]` (login do Instagram e
+    // Messenger) e `changes[]` com `{field, value}` (login unificado e o
+    // "Testar" do painel), com o mesmo item de mensagem em `value`.
+    // https://developers.facebook.com/documentation/instagram-platform/webhooks/examples
+    // O `changes[]` de mensagem não tem exemplo na doc (só comentários): o
+    // `value` como o item de `messaging[]` e o campo `messaging_seen` para a
+    // leitura são NÃO CONFIRMADO NA DOC.
     const itens: unknown[] = [
       ...(entry.messaging ?? []),
       ...(entry.changes ?? []).flatMap((c) => {
         const o = c as { field?: unknown; value?: unknown };
-        return o && o.field === "messages" && o.value ? [o.value] : [];
+        return o && CAMPOS_DE_MENSAGEM_EM_CHANGES.has(o.field) && o.value ? [o.value] : [];
       }),
     ];
     for (const bruto of itens) {
