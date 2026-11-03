@@ -1,4 +1,5 @@
 import type {JobClaim} from "@/lib/agent-engine/queue/claim";
+import { carregarFatosDaAutomacaoPg } from "@/lib/automacoes/carregar-fatos-pg";
 import { assertAgendaEffectPg } from "@/lib/agenda/efeito";
 import { isFollowupCasRecusado, parseServiceBoundary, StaleServiceBoundaryError } from "@/lib/atendimento/fronteira";
 import { requireCurrentServiceBoundary } from "@/lib/atendimento/fronteira-server";
@@ -294,6 +295,11 @@ function mapEnrollmentRow(row: Record<string, unknown>): EnrollmentRow {
     // `?? null` e não `as TimingPlan`: num clone sem a migration 0144 a chave
     // simplesmente não vem, e "sem plano" é exatamente o que null significa.
     timing_plan: row.timing_plan ?? null,
+    // 0986: raia e variáveis. Sem a raia, uma automação lida por aqui seria tratada como follow-up.
+    ...(row.lane === "automacao" ? { lane: "automacao" as const } : {}),
+    ...(row.vars && typeof row.vars === "object" && !Array.isArray(row.vars)
+      ? { vars: row.vars as Record<string, unknown> }
+      : {}),
   };
 }
 
@@ -402,6 +408,9 @@ export function createPgAdminClient(pool: pg.Pool): TurnBridgeAdminClient {
         revisions.set(id,Number(rows[0]!.revision));
       } catch(error){if(isFollowupCasRecusado(error as {code?:string;message?:string})) throw new StaleServiceBoundaryError();throw error;}
 
+    },
+    async loadFatosDaAutomacao(orgId, contactId, vars) {
+      return carregarFatosDaAutomacaoPg(pool, orgId, contactId, vars);
     },
     async loadFlowPointerName(orgId, pointerId) {
       const { rows } = await pool.query<{ name: string }>(

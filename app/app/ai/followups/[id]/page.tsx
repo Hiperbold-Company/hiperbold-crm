@@ -45,6 +45,8 @@ export default async function FollowupFlowBuilderPage({
   ]);
 
   if (!pointer) notFound();
+  // Automação abre no editor dela, com a paleta e os gatilhos de automação.
+  if ((pointer as { surface?: string }).surface === "automacao") redirect(`/app/automacoes/${id}`);
 
   // Mesma regra da rota: rascunho ausente COM versão publicada abre o que está
   // NO AR. Ver `lib/followup/rascunho.ts`.

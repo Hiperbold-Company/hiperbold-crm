@@ -61,6 +61,8 @@ import { ActionNode } from "./nodes/ActionNode";
 import { EndNode } from "./nodes/EndNode";
 import { CollectNode } from "./nodes/CollectNode";
 import { SkillNode } from "./nodes/SkillNode";
+import { EffectNode } from "./nodes/EffectNode";
+import { regraDeAutomacaoEmBranco } from "./forms/automacao/CondicaoAutomacaoForm";
 
 const EMPTY_GRAPH: FlowGraph = { nodes: [], edges: [] };
 const DND_MIME = "application/x-followup-node-type";
@@ -78,6 +80,8 @@ const nodeTypes: NodeTypes = {
   end: EndNode,
   collect: CollectNode,
   skill: SkillNode,
+  crm_action: EffectNode,
+  field_op: EffectNode,
 };
 
 interface Props {
@@ -234,7 +238,14 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
     (type: NodeType, position: { x: number; y: number }) => {
       const visual = NODE_VISUALS[type];
       const id = `${type}-${nextId.current++}`;
-      const config = type === "action" ? configPadraoDaAcao(triggerKind) : visual.defaultConfig();
+      // Na automação a condição nasce com uma regra de automação (campo), não com
+      // a regra legada de etapa dos follow-ups.
+      const config =
+        type === "action"
+          ? configPadraoDaAcao(triggerKind)
+          : type === "condition" && surface === "automacao"
+            ? { combinator: "and" as const, checks: [regraDeAutomacaoEmBranco()] }
+            : visual.defaultConfig();
       const newNode: RFNode = {
         id,
         type,
@@ -243,7 +254,7 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
       };
       setNodes((nds) => nds.concat(newNode));
     },
-    [setNodes, t, triggerKind],
+    [setNodes, t, triggerKind, surface],
   );
 
   const onPaletteAdd = useCallback(

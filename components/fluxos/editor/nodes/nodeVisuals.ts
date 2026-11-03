@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 
 import { Play, Clock, GitBranch, Brain, ChatCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Kanban, PencilSimple } from "@/lib/ui/icons";
-import { fraseDaAcao, fraseDaOperacao } from "@/lib/automacoes/vocabulario";
+import { fraseDaAcao, fraseDaOperacao, GATILHOS_DA_AUTOMACAO } from "@/lib/automacoes/vocabulario";
 import type { FlowNode, NodeType } from "@/lib/followup/graph-schema";
 import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
 import { NOS_DA_SUPERFICIE } from "@/lib/followup/validate-publish";
@@ -211,8 +211,12 @@ export function describeNodeConfig(
   t: (texto: string) => string,
 ): string {
   switch (type) {
-    case "trigger":
+    case "trigger": {
+      // Na automação o Início carrega os gatilhos: o card diz quais.
+      const gatilhos = (config as { triggers?: Array<{ kind: keyof typeof GATILHOS_DA_AUTOMACAO }> }).triggers;
+      if (gatilhos && gatilhos.length > 0) return gatilhos.map((g) => t(GATILHOS_DA_AUTOMACAO[g.kind])).join(" · ");
       return t("Início do fluxo");
+    }
     case "wait": {
       const c = config as ConfigOf<"wait">;
       return c.mode === "fixed"
@@ -269,7 +273,7 @@ export function describeNodeConfig(
       const c = config as ConfigOf<"crm_action">;
       const primeira = c.actions[0];
       const resto = c.actions.length > 1 ? ` +${c.actions.length - 1}` : "";
-      return primeira ? `${t(fraseDaAcao(primeira))}${resto}` : "";
+      return primeira ? `${fraseDaAcao(primeira)}${resto}` : "";
     }
     case "field_op": {
       const c = config as ConfigOf<"field_op">;

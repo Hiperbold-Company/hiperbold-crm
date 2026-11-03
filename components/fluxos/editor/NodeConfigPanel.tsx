@@ -20,6 +20,10 @@ import { MatchReplyForm } from "./forms/MatchReplyForm";
 import { RepeatForm } from "./forms/RepeatForm";
 import { SkillForm } from "./forms/SkillForm";
 import { WaitForm } from "./forms/WaitForm";
+import { AutomationTriggerForm } from "./forms/automacao/AutomationTriggerForm";
+import { CondicaoAutomacaoForm } from "./forms/automacao/CondicaoAutomacaoForm";
+import { CrmActionForm } from "./forms/automacao/CrmActionForm";
+import { FieldOpForm } from "./forms/automacao/FieldOpForm";
 import type { ConfigOf } from "./forms/shared";
 import { NODE_VISUALS } from "./nodes/nodeVisuals";
 
@@ -100,7 +104,13 @@ export function NodeConfigPanel({
       </div>
 
       <div className="space-y-4 border-t border-border pt-4">
-        {type === "trigger" && surface !== "atendimento" && (
+        {type === "trigger" && surface === "automacao" && (
+          <AutomationTriggerForm
+            config={node.data.config as ConfigOf<"trigger">}
+            onChange={(config) => onChange({ config })}
+          />
+        )}
+        {type === "trigger" && surface === "followup" && (
           <p className="text-sm text-text-muted">
             {t(
               "Início do fluxo — sem configuração adicional. O disparo (manual, mudança de etapa, silêncio ou fim de conversa) é definido nas configurações do fluxo.",
@@ -113,7 +123,19 @@ export function NodeConfigPanel({
         {type === "wait" && (
           <WaitForm config={node.data.config as ConfigOf<"wait">} onChange={(config) => onChange({ config })} />
         )}
-        {type === "condition" && (
+        {type === "condition" && surface === "automacao" && (
+          <CondicaoAutomacaoForm
+            config={node.data.config as ConfigOf<"condition">}
+            onChange={(config) => onChange({ config })}
+          />
+        )}
+        {type === "crm_action" && (
+          <CrmActionForm config={node.data.config as ConfigOf<"crm_action">} onChange={(config) => onChange({ config })} />
+        )}
+        {type === "field_op" && (
+          <FieldOpForm config={node.data.config as ConfigOf<"field_op">} onChange={(config) => onChange({ config })} />
+        )}
+        {type === "condition" && surface !== "automacao" && (
           <ConditionForm
             config={node.data.config as ConfigOf<"condition">}
             onChange={(config) => onChange({ config })}

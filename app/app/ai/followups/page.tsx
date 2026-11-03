@@ -30,7 +30,8 @@ export default async function FollowupFlowsPage() {
     .select(FLOW_COLUMNS)
     .eq("organization_id", activeOrg.orgId)
     // Roteiro de atendimento não é follow-up (prova do #1130): tem tela própria.
-    .neq("surface", "atendimento")
+    // Automação (0986) também: tem a tela /app/automacoes.
+    .not("surface", "in", "(atendimento,automacao)")
     .order("updated_at", { ascending: false });
 
   const flows = (data ?? []) as unknown as FollowupFlowPointerRow[];
