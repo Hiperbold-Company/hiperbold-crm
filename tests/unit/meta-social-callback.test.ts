@@ -40,7 +40,7 @@ const USER = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 type Chamada = { url: string; init?: RequestInit };
 
 /** A Meta do login unificado. `paginas` = as páginas de `assigned_instagram_accounts`. */
-function metaFalsa(paginas: { id: string; username: string }[][]) {
+function metaFalsa(paginas: { id: string; username: string }[][], granulares: string[] = []) {
   const chamadas: Chamada[] = [];
   const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
     const u = String(url);
@@ -63,6 +63,16 @@ function metaFalsa(paginas: { id: string; username: string }[][]) {
       });
     }
     if (u.includes("/subscribed_apps")) return json({ success: true });
+    if (u.includes("/debug_token")) {
+      return json({
+        data: {
+          scopes: ["instagram_basic", "instagram_manage_messages"],
+          granular_scopes: granulares.length ? [{ scope: "instagram_basic", target_ids: granulares }] : [],
+        },
+      });
+    }
+    const porId = granulares.find((id) => u.includes(`/${id}?fields=`));
+    if (porId) return json({ id: porId, username: `conta_${porId}` });
     return new Response("{}", { status: 404 });
   });
   return { fetcher, chamadas };
@@ -187,6 +197,17 @@ describe("callback do Instagram (login unificado)", () => {
     expect(replay).toContain("meta_social=erro");
     expect(replay).toContain("motivo=retorno_nao_verificavel");
     expect(banco.t("channel_sessions")).toHaveLength(2);
+  });
+
+  it("lista vazia, mas a conta está no granular_scopes do debug_token: conecta pelo plano B", async () => {
+    const banco = novoBanco();
+    h.db = banco.db;
+    meta = metaFalsa([[]], ["17841400000000001"]);
+    vi.stubGlobal("fetch", meta.fetcher);
+    expect(await chamar("n-5b")).toContain("meta_social=ok");
+    expect(banco.t("channel_sessions")).toHaveLength(1);
+    const debug = meta.chamadas.find((c) => c.url.includes("/debug_token"));
+    expect(new Headers(debug?.init?.headers).get("authorization")).toBe("Bearer 12345678|segredo-do-app-da-meta");
   });
 
   it("nenhuma conta concedida: motivo nenhuma_conta_instagram, nada conectado", async () => {
