@@ -156,6 +156,8 @@ async function novaAutomacao(page: Page, nome: string): Promise<string> {
   await page.waitForURL(/\/app\/automacoes\/[0-9a-f-]+$/, { timeout: PRAZO });
   const id = page.url().split("/").pop()!;
   await expect(page.locator(".react-flow")).toBeVisible({ timeout: PRAZO });
+  // O aviso "Fluxo criado." cobriria o topo das fotos do painel.
+  await expect(page.getByText("Fluxo criado.")).toHaveCount(0, { timeout: 20_000 });
   await zoomAte(page, 0.8);
   return id;
 }
@@ -166,6 +168,8 @@ async function publicar(page: Page): Promise<void> {
   await page.getByTestId("publish-button").click();
   await expect(page.getByText("Fluxo publicado.")).toBeVisible({ timeout: PRAZO });
   await expect(page.locator('[data-testid^="node-error-"]')).toHaveCount(0);
+  await expect(page.getByLabel(/status: Ativo/)).toBeVisible({ timeout: PRAZO });
+  await expect(page.getByText("Fluxo publicado.")).toHaveCount(0, { timeout: 20_000 });
 }
 
 /** Execuções de uma automação para um contato, lidas no banco (só para esperar o motor). */
@@ -265,7 +269,11 @@ test.describe("Automações — gatilhos e uma automação iniciando outra", () 
       await page.getByTestId("gatilho-0-tipo").selectOption("started_by_automation");
       await expect(page.getByTestId("gatilho-0-aceitar")).toHaveValue("qualquer");
       await expect(page.getByTestId("automation-trigger-form")).toContainText("{{param.chave}}");
-      await foto(page, "03-gatilho-iniciada-por-outra-automacao", page.getByTestId("node-config-panel"));
+      await foto(
+        page,
+        "03-gatilho-iniciada-por-outra-automacao",
+        page.getByTestId("node-config-panel"),
+      );
       await fecharPainel(page);
       await abrirNo(page, "n2");
       await page.getByTestId("delete-node").click();
@@ -326,18 +334,23 @@ test.describe("Automações — gatilhos e uma automação iniciando outra", () 
       await ligar(page, iniciar, fimAtender, "erro");
       await ligar(page, aguardar, fimAtender);
       await publicar(page);
+      // O card diz o NOME da automação iniciada, não "escolhida".
+      await expect(page.getByTestId(`node-card-${iniciar}`)).toContainText(nomeRastrear);
       await foto(page, "04-editor-atender-anuncio");
 
       // ── 3. A mensagem de Ana ──
       await inbound("Oi, quero saber mais");
       const contatoDaAna = async (): Promise<string | null> => {
-        const r = await page.request.get(`/api/v1/contacts?search=${telefoneAna.slice(-8)}&limit=5`);
+        const r = await page.request.get(
+          `/api/v1/contacts?search=${telefoneAna.slice(-8)}&limit=5`,
+        );
         const lista = (
           (await r.json()) as { data: Array<{ id: string; phone_number: string | null }> }
         ).data;
         return (
-          lista.find((x) => (x.phone_number ?? "").replace(/\D/g, "").endsWith(telefoneAna.slice(-8)))
-            ?.id ?? null
+          lista.find((x) =>
+            (x.phone_number ?? "").replace(/\D/g, "").endsWith(telefoneAna.slice(-8)),
+          )?.id ?? null
         );
       };
       await expect.poll(contatoDaAna, { timeout: PRAZO }).not.toBeNull();
