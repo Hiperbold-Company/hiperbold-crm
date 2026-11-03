@@ -96,6 +96,21 @@ export interface LiveEnrollmentRef {
   /** Instante em que o nó estacionou. Sem isto o inbound de uma pergunta
    *  anterior acorda a espera seguinte (ALWAYS → menu de novo). */
   updated_at?: string;
+  /** Raia da inscrição. Ausente = follow-up (adapters antigos). */
+  lane?: "followup" | "automacao";
+  /**
+   * `config.mode` do nó atual quando ele é um `wait` (só preenchido para
+   * automação `active`). Na automação, "Esperar um tempo" (`delay`) é tempo
+   * puro: a resposta do contato não o corta — quem quer reagir à resposta usa
+   * `until_reply`, que estaciona em `waiting_reply`.
+   */
+  wait_mode?: string | null;
+}
+
+/** Automação parada num "Esperar um tempo": a mensagem do contato não a acorda
+ *  nem a cancela. Follow-up e os outros modos seguem a política de sempre. */
+export function esperaDeTempoPuro(e: Pick<LiveEnrollmentRef, "lane" | "status" | "wait_mode">): boolean {
+  return e.lane === "automacao" && e.status === "active" && e.wait_mode === "delay";
 }
 
 /** Interface estreita de DB (mesma doutrina de `AdminClient`/`TurnBridgeAdminClient`
@@ -247,7 +262,7 @@ async function reactToInbound(
   // espera imune sobrevive — não por um `if` de imunidade, mas por não estar
   // no conjunto que reage.
   const waitingReply = live.filter((e) => e.status === "waiting_reply");
-  const esperaAtiva = live.filter((e) => e.status === "active");
+  const esperaAtiva = live.filter((e) => e.status === "active" && !esperaDeTempoPuro(e));
   let reacted = 0;
   for (const e of waitingReply) {
     if (parseCancelOnReply(e.trigger_config)) {
@@ -469,7 +484,7 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
       const ids = await idsDoContatoEGemeos(admin, orgId, contactId);
       let consulta = admin
         .from("followup_enrollments")
-        .select("id, status, current_node_id, steps_taken, pointer_id, updated_at")
+        .select("id, status, current_node_id, steps_taken, pointer_id, updated_at, lane, version_id")
         .eq("organization_id", orgId)
         .in("contact_id", ids)
         .in("status", statuses);
@@ -490,6 +505,25 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
       if (pErr) throw new Error(pErr.message);
       const byPointer = new Map((pointers ?? []).map((p) => [p.id, p]));
 
+      // Modo do `wait` atual só para automação `active` (o "Esperar um tempo"
+      // não reage à resposta — ver `esperaDeTempoPuro`). Uma leitura de grafo
+      // por versão, e só quando há automação ativa entre as inscrições.
+      const versoes = [
+        ...new Set(
+          enrollments.filter((e) => e.lane === "automacao" && e.status === "active").map((e) => e.version_id as string),
+        ),
+      ].filter((v) => typeof v === "string" && v.length > 0);
+      const grafoPorVersao = new Map<string, unknown>();
+      if (versoes.length > 0) {
+        const { data: vs, error: vErr } = await admin
+          .from("followup_flow_versions")
+          .select("id, graph")
+          .eq("organization_id", orgId)
+          .in("id", versoes);
+        if (vErr) throw new Error(vErr.message);
+        for (const v of vs ?? []) grafoPorVersao.set(v.id as string, v.graph);
+      }
+
       return enrollments.map((e) => {
         const p = byPointer.get(e.pointer_id);
         return {
@@ -501,6 +535,8 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
           handoff_policy: (p?.handoff_policy as LiveEnrollmentRef["handoff_policy"]) ?? "pause",
           trigger_config: p?.trigger_config ?? null,
           updated_at: typeof e.updated_at === "string" ? e.updated_at : undefined,
+          lane: e.lane === "automacao" ? "automacao" : "followup",
+          wait_mode: modoDoWait(grafoPorVersao.get(e.version_id as string), e.current_node_id),
         };
       });
     },
@@ -522,4 +558,17 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
       return data as unknown as string;
     },
   };
+}
+
+/** `config.mode` do nó `nodeId` quando é `wait`; `null` em qualquer outro caso
+ *  (grafo ausente ou malformado não lança: cai na política de sempre). */
+export function modoDoWait(graph: unknown, nodeId: string): string | null {
+  if (!graph || typeof graph !== "object") return null;
+  const nodes = (graph as { nodes?: unknown }).nodes;
+  if (!Array.isArray(nodes)) return null;
+  const no = nodes.find((n) => n && typeof n === "object" && (n as { id?: unknown }).id === nodeId) as
+    | { type?: unknown; config?: { mode?: unknown } }
+    | undefined;
+  if (!no || no.type !== "wait") return null;
+  return typeof no.config?.mode === "string" ? no.config.mode : null;
 }

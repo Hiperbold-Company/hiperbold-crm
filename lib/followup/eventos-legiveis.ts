@@ -684,7 +684,11 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
       const nome = tipo === "field_op" ? "Campos" : tipo ? (ACOES_DE_CRM[tipo as keyof typeof ACOES_DE_CRM] ?? tipo) : "Ação";
       if (d.ok === false) return `${nome}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
       if (tipo === "start_automation") return fraseDoInicioDeOutra(d);
-      if (tipo === "field_op" && Array.isArray(d.campos)) return `${nome}: ${(d.campos as string[]).join(", ")}`;
+      if (tipo === "field_op" && Array.isArray(d.campos)) {
+        // Evento novo traz o rótulo do campo; o antigo só a chave.
+        const rotulos = Array.isArray(d.rotulos) && d.rotulos.length === d.campos.length ? d.rotulos : d.campos;
+        return `${nome}: ${(rotulos as string[]).join(", ")}`;
+      }
       const r = texto(d.resultado);
       const resultado =
         r === "criado" ? "negócio criado" : r === "ja_existia" ? "já existia" : r === "movido" ? "movido" : r === "sem_mudanca" ? "já estava assim" : "feito";
