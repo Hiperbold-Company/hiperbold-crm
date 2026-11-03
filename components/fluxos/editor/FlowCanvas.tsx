@@ -62,6 +62,8 @@ import { EndNode } from "./nodes/EndNode";
 import { CollectNode } from "./nodes/CollectNode";
 import { SkillNode } from "./nodes/SkillNode";
 import { EffectNode } from "./nodes/EffectNode";
+import { ConversaNode } from "./nodes/ConversaNode";
+import { respostasAntesDe } from "./forms/automacao/respostas";
 import { regraDeAutomacaoEmBranco } from "./forms/automacao/CondicaoAutomacaoForm";
 
 const EMPTY_GRAPH: FlowGraph = { nodes: [], edges: [] };
@@ -82,6 +84,8 @@ const nodeTypes: NodeTypes = {
   skill: SkillNode,
   crm_action: EffectNode,
   field_op: EffectNode,
+  message: ConversaNode,
+  question: ConversaNode,
 };
 
 interface Props {
@@ -204,6 +208,13 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
       .map((e) => branchIdForCondition(source, e.data?.condition ?? { type: "always" }))
       .filter((id): id is string => id !== null);
   }, [selectedNode, edges]);
+
+  // As respostas (`{{resposta.<chave>}}`) que os blocos de conversa ANTES do
+  // selecionado deixam — o formulário as oferece como variável.
+  const respostasDoSelecionado = useMemo(
+    () => (selectedNode ? respostasAntesDe(selectedNode.id, nodes, edges) : []),
+    [selectedNode, nodes, edges],
+  );
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -434,6 +445,7 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
                 flowId={flowId}
                 settings={settings}
                 onSettingsChange={setSettings}
+                respostasAnteriores={respostasDoSelecionado}
               />
             </div>
           </aside>

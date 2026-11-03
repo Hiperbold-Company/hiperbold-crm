@@ -179,8 +179,8 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
     defaultLabel: "Definir campo",
     defaultConfig: () => ({ ops: [{ target: { scope: "lead_custom", key: "campo" }, op: "set", value: "valor" }] }),
   },
-  // Blocos de conversa (lote 2). O formulário é da unidade 3; aqui só o
-  // visual e a config com que o bloco nasce (válida no schema).
+  // Blocos de conversa (lote 2): o visual e a config com que o bloco nasce
+  // (válida no schema; o formulário mora em forms/automacao/).
   message: {
     type: "message",
     paletteLabel: "Mensagem",
@@ -188,7 +188,7 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
     chipClassName: "bg-success-bg text-success-fg",
     borderClassName: "border-l-success",
     defaultLabel: "Enviar mensagem",
-    defaultConfig: () => ({ body: "Olá, {{primeiro_nome}}!" }),
+    defaultConfig: () => ({ body: "Olá, {{contact.name}}!" }),
   },
   question: {
     type: "question",
@@ -198,9 +198,11 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
     borderClassName: "border-l-accent-500",
     defaultLabel: "Fazer pergunta",
     defaultConfig: () => ({
-      question: "Qual é o seu e-mail?",
-      save_to: { scope: "contact", key: "email" },
-      validation: "email",
+      // E-mail e telefone do contato são só leitura para a automação (o publish
+      // recusaria): o bloco nasce gravando num campo personalizado do negócio.
+      question: "Qual é o melhor horário para falarmos?",
+      save_to: { scope: "lead_custom", key: "resposta" },
+      validation: "text",
       timeout_ms: 86_400_000,
       retries: 1,
     }),

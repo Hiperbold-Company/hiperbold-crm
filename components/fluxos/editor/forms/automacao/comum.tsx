@@ -9,8 +9,10 @@
  * portal e a prova pela tela consegue escolher a opção pelo rótulo.
  */
 import { useQueries } from "@tanstack/react-query";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api/client";
 import { CAMPOS_SO_LEITURA } from "@/lib/automacoes/campos";
@@ -167,12 +169,17 @@ export function SeletorDeCampo({
   valor,
   onChange,
   paraEscrita = false,
+  vazio,
+  onLimpar,
 }: {
   id: string;
   valor: FieldRef | null;
   onChange: (ref: FieldRef) => void;
   /** Na escrita some o que é só leitura (variáveis, etapa/funil/situação, que têm ação própria). */
   paraEscrita?: boolean;
+  /** Rótulo da opção vazia ESCOLHÍVEL (ex.: "Não salvar"); ausente = a vazia só aparece desabilitada. */
+  vazio?: string;
+  onLimpar?: () => void;
 }) {
   const t = useT();
   const personalizados = useCamposPersonalizados();
@@ -221,13 +228,21 @@ export function SeletorDeCampo({
       value={atual}
       data-testid={id}
       onChange={(e) => {
+        if (e.target.value === "") {
+          onLimpar?.();
+          return;
+        }
         const ref = campoDoValor(e.target.value);
         if (ref) onChange(ref);
       }}
     >
-      <option value="" disabled>
-        {t("Escolha o campo")}
-      </option>
+      {vazio !== undefined ? (
+        <option value="">{vazio}</option>
+      ) : (
+        <option value="" disabled>
+          {t("Escolha o campo")}
+        </option>
+      )}
       {blocos}
       {/* Campo gravado que não está mais declarado em funil nenhum: continua visível. */}
       {atual && !conhecidos.has(atual) && (
@@ -269,3 +284,117 @@ export function listaDeTags(texto: string): string[] {
 /** Ajuda curta sobre as variáveis aceitas nos textos. */
 export const AJUDA_DAS_VARIAVEIS =
   "Aceita variáveis: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{sistema.data}}.";
+
+/** Unidades de tempo dos formulários da automação. */
+export const UNIDADES_DE_TEMPO = {
+  segundos: { ms: 1000, rotulo: "segundos" },
+  minutos: { ms: 60_000, rotulo: "minutos" },
+  horas: { ms: 3_600_000, rotulo: "horas" },
+  dias: { ms: 86_400_000, rotulo: "dias" },
+} as const;
+export type UnidadeDeTempo = keyof typeof UNIDADES_DE_TEMPO;
+
+/** A maior unidade em que `ms` é um número inteiro (3_600_000 → 1 hora). */
+export function unidadeDe(ms: number, unidades: readonly UnidadeDeTempo[]): UnidadeDeTempo {
+  const ordem = [...unidades].sort((a, b) => UNIDADES_DE_TEMPO[b].ms - UNIDADES_DE_TEMPO[a].ms);
+  return ordem.find((u) => ms > 0 && ms % UNIDADES_DE_TEMPO[u].ms === 0) ?? ordem[ordem.length - 1]!;
+}
+
+/**
+ * Um tempo com número e unidade ("2 horas"). Devolve milissegundos, ou `null`
+ * quando o número não serve (vazio, negativo, quebrado) — quem chama decide o
+ * aviso, porque o mínimo e o máximo são do bloco.
+ */
+export function TempoComUnidade({
+  id,
+  ms,
+  unidades,
+  onChange,
+}: {
+  id: string;
+  ms: number;
+  unidades: readonly UnidadeDeTempo[];
+  onChange: (ms: number | null) => void;
+}) {
+  const t = useT();
+  const [unidade, setUnidade] = useState<UnidadeDeTempo>(() => unidadeDe(ms, unidades));
+  const [numero, setNumero] = useState(() => String(ms / UNIDADES_DE_TEMPO[unidadeDe(ms, unidades)].ms));
+  const emitir = (texto: string, u: UnidadeDeTempo) => {
+    const n = Number(texto);
+    onChange(texto.trim() !== "" && Number.isInteger(n) && n > 0 ? n * UNIDADES_DE_TEMPO[u].ms : null);
+  };
+  return (
+    <div className="flex gap-2">
+      <Input
+        id={id}
+        type="number"
+        min={1}
+        className="w-28"
+        value={numero}
+        data-testid={id}
+        onChange={(e) => {
+          setNumero(e.target.value);
+          emitir(e.target.value, unidade);
+        }}
+      />
+      <Seletor
+        id={`${id}-unidade`}
+        valor={unidade}
+        opcoes={unidades.map((u) => ({ valor: u, rotulo: t(UNIDADES_DE_TEMPO[u].rotulo) }))}
+        onChange={(v) => {
+          setUnidade(v as UnidadeDeTempo);
+          emitir(numero, v as UnidadeDeTempo);
+        }}
+      />
+    </div>
+  );
+}
+
+/** Uma variável de resposta que um bloco anterior deixa para os seguintes. */
+export interface RespostaDisponivel {
+  /** `{{resposta.<chave>}}`, pronto para colar. */
+  variavel: string;
+  /** Rótulo do bloco que a produz. */
+  origem: string;
+}
+
+/**
+ * A ajuda das variáveis do texto: as fixas e as respostas dos blocos de
+ * pergunta e de mensagem com opções que vêm ANTES deste no fluxo. Clicar numa
+ * resposta a acrescenta ao fim do texto.
+ */
+export function AjudaDeVariaveis({
+  respostas = [],
+  onInserir,
+  testId,
+}: {
+  respostas?: RespostaDisponivel[];
+  onInserir?: (variavel: string) => void;
+  testId?: string;
+}) {
+  const t = useT();
+  return (
+    <div className="space-y-1" data-testid={testId}>
+      <p className="text-xs text-text-muted">{t(AJUDA_DAS_VARIAVEIS)}</p>
+      {respostas.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-xs text-text-muted">{t("Respostas dos blocos anteriores:")}</span>
+          {respostas.map((r) => (
+            <Button
+              key={r.variavel}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-6 px-1.5 font-mono text-[11px]"
+              title={r.origem}
+              data-testid={`inserir-variavel-${r.variavel}`}
+              onClick={() => onInserir?.(r.variavel)}
+            >
+              {r.variavel}
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
