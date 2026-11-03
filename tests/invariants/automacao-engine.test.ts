@@ -110,6 +110,31 @@ beforeEach(async () => {
 });
 
 describe("motor na raia automacao", () => {
+  it("o claim continua de pé no meio do laço e é solto quando o laço para (B1)", async () => {
+    const grafo: FlowGraph = {
+      nodes: [INICIO, ACAO, no("fim", "end", { outcome: "converted" }, 200)],
+      edges: [aresta("e1", "t", "a"), aresta("e2", "a", "fim")],
+    };
+    const s = await semear(grafo);
+    const id = await iniciar(s.pointer, s.contato);
+    const vistos: Array<string | null> = [];
+    const exec: ExecutorDeEfeitos = {
+      async executar(pedido) {
+        // O passo do Início já foi gravado: sem o claim, outro worker poderia
+        // pegar esta execução AGORA, no meio do efeito.
+        const { rows } = await pool.query(`select claimed_until from followup_enrollments where id = $1`, [pedido.enrollment.id]);
+        vistos.push(rows[0].claimed_until ? String(rows[0].claimed_until) : null);
+        return { desfecho: { ok: true } };
+      },
+    };
+    await runFollowupTick(deps(exec));
+    expect(vistos).toHaveLength(1);
+    expect(vistos[0], "claim solto no meio do laço").not.toBeNull();
+    const e = await inscricao(id);
+    expect(e.status).toBe("completed");
+    expect(e.claimed_until).toBeNull();
+  });
+
   it("anda em sequência no mesmo tick até o Fim, roda o efeito uma vez e guarda as variáveis", async () => {
     const grafo: FlowGraph = {
       nodes: [

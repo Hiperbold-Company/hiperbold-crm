@@ -116,7 +116,7 @@ export async function listarFluxos(
   // e Automações (0986) têm lista própria.
   const { data, error } = await (opts.surface
     ? base.eq("surface", opts.surface)
-    : base.not("surface", "in", "(atendimento,automacao)")
+    : base.neq("surface", "automacao").neq("surface", "atendimento")
   ).order("updated_at", { ascending: false });
   if (error) throw falhaInterna(deps, error);
   return data ?? [];
@@ -220,6 +220,9 @@ export async function criarFluxo(
   return linha;
 }
 
+const MENSAGEM_GATILHO_DE_AUTOMACAO =
+  "Automação começa pelos gatilhos do bloco Início, não por gatilho de follow-up.";
+
 export async function alterarFluxo(
   deps: DepsDeFollowup,
   id: string,
@@ -227,12 +230,21 @@ export async function alterarFluxo(
 ): Promise<unknown> {
   const { data: existing, error: fetchErr } = await deps.supabase
     .from("followup_flow_pointers")
-    .select("id")
+    .select("id, surface")
     .eq("id", id)
     .eq("organization_id", deps.organizationId)
     .maybeSingle();
   if (fetchErr) throw falhaInterna(deps, fetchErr);
   if (!existing) throw naoEncontrado(deps);
+  // Automação (0986): os gatilhos moram no Início do grafo. O `trigger_config`
+  // do ponteiro fica manual para nenhum leitor do relógio a matricular.
+  if (
+    (existing as { surface?: string }).surface === "automacao" &&
+    patch.trigger_config !== undefined &&
+    (patch.trigger_config as { kind?: string } | null)?.kind !== "manual"
+  ) {
+    throw recusa(deps, 422, "validation_failed", tr(deps)(MENSAGEM_GATILHO_DE_AUTOMACAO));
+  }
 
   if (Object.keys(patch).length === 0) {
     const { data: unchanged, error: reloadErr } = await deps.supabase
@@ -451,6 +463,9 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
 
   // Roteiro de atendimento: só com o módulo ligado, e só começa por palavra-gatilho ou roteador — nunca pelo relógio.
   const surface = (pointer.surface ?? "followup") as FollowupFlowSurface;
+  if (surface === "automacao" && ((pointer.trigger_config as { kind?: string } | null)?.kind ?? "manual") !== "manual") {
+    throw recusa(deps, 422, "trigger_kind_not_implemented", t(MENSAGEM_GATILHO_DE_AUTOMACAO));
+  }
   if (surface === "atendimento") {
     if (!(await moduloLigado(admin, "fluxos_atendimento"))) throw naoEncontrado(deps);
     const kind = (pointer.trigger_config as { kind?: string } | null)?.kind ?? "manual";

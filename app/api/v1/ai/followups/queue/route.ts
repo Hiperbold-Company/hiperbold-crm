@@ -195,6 +195,8 @@ export async function GET(req: NextRequest): Promise<Response> {
        ai_agents:agent_id(name)`,
     )
     .eq("organization_id", activeOrg.orgId)
+    // A fila é dos follow-ups; as execuções de automação têm tela própria.
+    .eq("lane", "followup")
     .order("next_eval_at", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true })
     .limit(limit + 1);

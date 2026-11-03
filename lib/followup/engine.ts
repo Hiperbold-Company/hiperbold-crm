@@ -500,6 +500,11 @@ async function applyResult(
     updated_at: clock().toISOString(),
     ...(varsNovas ? { vars: varsNovas } : {}),
   };
+  // Automação que AVANÇA segue no mesmo tick (`processEnrollment`): soltar o
+  // claim aqui deixaria outro worker pegar a mesma execução no meio do laço —
+  // o efeito seria feito por um e o outro sairia pelo ramo Erro
+  // (`efeito_interrompido`). O laço solta o claim quando para.
+  if (ehAutomacao(enrollment) && result.kind === "advance" && !isReplay) delete patch.claimed_until;
 
   switch (result.kind) {
     case "advance":
@@ -645,7 +650,11 @@ async function processEnrollment(
     atual = await processarUmPasso(deps, atual, summary);
   }
   // Orçamento esgotado com o contato ainda andando: `next_eval_at` já é "agora",
-  // então o próximo tick continua de onde parou.
+  // então o próximo tick continua de onde parou — e o claim, que os passos
+  // intermediários mantiveram, é solto aqui.
+  if (atual) {
+    await deps.db.updateEnrollment(atual.id, atual.organization_id, { claimed_until: null });
+  }
 }
 
 async function processarUmPasso(
@@ -899,7 +908,7 @@ async function processarUmPasso(
     status: "active",
     steps_taken: enrollment.steps_taken + 1,
     next_eval_at: result.next_eval_at.toISOString(),
-    claimed_until: null,
+    claimed_until: enrollment.claimed_until ?? null,
     updated_at: clock().toISOString(),
     ...(varsNovas ? { vars: varsNovas } : {}),
   };

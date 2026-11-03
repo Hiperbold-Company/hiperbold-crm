@@ -46,6 +46,8 @@ export async function GET(req: NextRequest): Promise<Response> {
     .from("followup_enrollments")
     .select(ENROLLMENT_LIST_COLUMNS)
     .eq("organization_id", activeOrg.orgId)
+    // Lista de follow-ups: execução de automação (0986) fica em /app/automacoes/[id]/execucoes.
+    .eq("lane", "followup")
     .order("updated_at", { ascending: false });
   if (status !== null) query = query.eq("status", status);
 

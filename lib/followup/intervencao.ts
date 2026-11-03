@@ -204,6 +204,8 @@ export interface EnrollmentParaIntervir {
   next_eval_at: string | null;
   claimed_until: string | null;
   steps_taken: number;
+  /** Raia da execução (0986). Ausente em linha antiga = follow-up. */
+  lane?: string | null;
 }
 
 const COLUNAS = [
@@ -216,6 +218,7 @@ const COLUNAS = [
   "next_eval_at",
   "claimed_until",
   "steps_taken",
+  "lane",
 ].join(", ");
 
 export type FalhaDaIntervencao = {
@@ -407,6 +410,9 @@ async function registraNaTimeline(
   }
 }
 
+export const MENSAGEM_DE_AUTOMACAO =
+  "Esta execução é de uma automação: ela não se pausa, adia ou pula. Para pará-la, cancele a execução.";
+
 async function abre(
   deps: DepsDaIntervencao,
   id: string,
@@ -416,6 +422,12 @@ async function abre(
   const lido = await carrega(deps, id);
   if (lido && "ok" in lido) return lido;
   if (!lido) return { ok: false, codigo: "nao_encontrado", mensagem: "Follow-up não encontrado." };
+  // Pausar, retomar, adiar e pular são gestos do RELÓGIO de um follow-up. Uma
+  // automação (0986) não tem espera a adiar nem passo a pular por fora do motor
+  // dela — para pará-la, cancela-se a execução.
+  if (lido.lane === "automacao") {
+    return { ok: false, codigo: "estado_incompativel", mensagem: MENSAGEM_DE_AUTOMACAO };
+  }
   if (!aceita(lido.status)) {
     return { ok: false, codigo: "estado_incompativel", mensagem: mensagemDeEstado };
   }

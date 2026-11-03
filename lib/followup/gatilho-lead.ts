@@ -214,7 +214,7 @@ export function createSupabaseGatilhoLeadDb(admin: SupabaseClient): GatilhoLeadD
       }>) {
         // Roteiro de atendimento (0394) é do turno, nunca do relógio: o banco
         // já o prende em gatilho manual, e este corte é a segunda porta.
-        if (!row.active_version_id || row.surface === "atendimento") continue;
+        if (!row.active_version_id || row.surface === "atendimento" || row.surface === "automacao") continue; // automação (0986): gatilhos próprios no grafo
         const parsed = triggerConfigSchema.safeParse(row.trigger_config);
         if (!parsed.success || parsed.data.kind !== "lead_created") continue;
         pointers.push({

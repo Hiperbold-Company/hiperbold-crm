@@ -91,6 +91,8 @@ async function aplicarTextoAosEnrollmentsEmEspera(
     .from("followup_enrollments")
     .select("*")
     .eq("organization_id", orgId)
+    // Só follow-up: a automação (0986) roda no worker, com o executor de efeitos.
+    .eq("lane", "followup")
     .in("contact_id", contactIds)
     .eq("status", "waiting_reply");
   if (error) throw new Error(error.message);
@@ -124,6 +126,8 @@ export async function avancarFollowupsAtivosDoContato(
       .from("followup_enrollments")
       .select("*")
       .eq("organization_id", organizationId)
+      // Só follow-up: a automação (0986) roda no worker, com o executor de efeitos.
+      .eq("lane", "followup")
       .in("contact_id", contactIds)
       .eq("status", "active")
       .lte("next_eval_at", agora)
@@ -165,6 +169,8 @@ export async function aplicarTextoNosFollowups(
       .from("followup_enrollments")
       .select("*")
       .eq("organization_id", sinal.organizationId)
+      // Só follow-up: a automação (0986) roda no worker, com o executor de efeitos.
+      .eq("lane", "followup")
       .in("contact_id", contactIds)
       .eq("status", "active")
       .lte("next_eval_at", agora)

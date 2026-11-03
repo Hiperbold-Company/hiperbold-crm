@@ -158,6 +158,9 @@ export function ConditionForm({
     commit({ checks: next });
   };
 
+  // Fora do JSX de propósito: um `>=` dentro da tag do botão confunde a cerca
+  // `controle-decorativo`, que lê a tag até o primeiro `>`.
+  const limiteDeRegras = checks.length >= 10;
   return (
     <div className="space-y-3">
       <div className="space-y-2">
@@ -356,7 +359,7 @@ export function ConditionForm({
         type="button"
         variant="secondary"
         size="sm"
-        disabled={checks.length >= 10}
+        disabled={limiteDeRegras}
         onClick={() => {
           const nova: Check = regraEmBranco();
           const next = porRegra

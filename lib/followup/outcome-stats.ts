@@ -68,6 +68,7 @@ export async function aggregateFollowupOutcomes(pool: pg.Pool, orgId: string): P
      from followup_enrollments e
      join followup_flow_pointers p on p.id = e.pointer_id
      where e.organization_id = $1
+       and e.lane = 'followup'
      group by e.pointer_id, e.version_id, p.name
      order by p.name, e.version_id`,
     [orgId],

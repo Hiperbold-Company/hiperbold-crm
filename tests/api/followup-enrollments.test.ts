@@ -102,6 +102,7 @@ function makeDb(
       const row: Row = {
         id: randomUUID(),
         status: "active",
+        lane: "followup",
         next_eval_at: new Date().toISOString(),
         outcome: null,
         completed_at: null,
@@ -356,8 +357,10 @@ describe("POST /api/v1/ai/followups/enrollments", () => {
 describe("GET /api/v1/ai/followups/enrollments", () => {
   it("viewer (any member) → 200, só enrollments da própria org", async () => {
     const rows = [
-      { id: "a", organization_id: ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, status: "active", updated_at: "2026-01-01" },
-      { id: "b", organization_id: OTHER_ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, status: "active", updated_at: "2026-01-01" },
+      { id: "a", organization_id: ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, lane: "followup", status: "active", updated_at: "2026-01-01" },
+      { id: "b", organization_id: OTHER_ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, lane: "followup", status: "active", updated_at: "2026-01-01" },
+      // Execução de automação (0986) da MESMA org: não é follow-up, não entra na lista.
+      { id: "c", organization_id: ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, lane: "automacao", status: "active", updated_at: "2026-01-01" },
     ];
     const db = makeDb([], [], [], rows);
     session("viewer", db);
@@ -379,8 +382,8 @@ describe("GET /api/v1/ai/followups/enrollments", () => {
 
   it("?status=completed filtra", async () => {
     const rows = [
-      { id: "a", organization_id: ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, status: "active", updated_at: "2026-01-01" },
-      { id: "b", organization_id: ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, status: "completed", updated_at: "2026-01-01" },
+      { id: "a", organization_id: ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, lane: "followup", status: "active", updated_at: "2026-01-01" },
+      { id: "b", organization_id: ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, lane: "followup", status: "completed", updated_at: "2026-01-01" },
     ];
     const db = makeDb([], [], [], rows);
     session("viewer", db);

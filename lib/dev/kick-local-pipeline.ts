@@ -72,6 +72,8 @@ async function tickAtivosDoContato(
     .from("followup_enrollments")
     .select("*")
     .eq("organization_id", contato.organizationId)
+    // Só follow-up: a automação (0986) roda no worker, com o executor de efeitos.
+    .eq("lane", "followup")
     .in("contact_id", ids)
     .in("status", [...statuses]);
   if (!opts?.mesmoAntesDoPrazo) {

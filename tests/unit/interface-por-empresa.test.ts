@@ -182,19 +182,21 @@ describe("a organização não consegue se trancar do lado de fora", () => {
 
 describe("medição da folga (pergunta de aceite da issue #1341)", () => {
   /**
-   * Teto do menu lateral: 8 itens (Início, Inbox, Radar, Funis, Contatos,
-   * Agentes, Desempenho, Atividades). Decisão do dono do produto (Hiperbold,
-   * 15/10/2026): o cliente é leigo e a barra mostra só o essencial. Era 15 — o
+   * Teto do menu lateral: 9 itens (Início, Inbox, Radar, Funis, Contatos,
+   * Automações, Agentes, Desempenho, Atividades). Decisão do dono do produto
+   * (Hiperbold, 15/10/2026): o cliente é leigo e a barra mostra só o essencial.
+   * Em 02/11/2026 o dono decidiu pôr "Automações" no menu do CRM (lote 1 das
+   * automações); `navegacao.spec.ts` mediu que em 900px o menu segue sem rolar. Era 15 — o
    * limite da dobra a 1280x900 —, e o menu menor deixa folga de sobra nela.
    * Tela nova no sidebar passa por decisão de produto, não por este número.
    */
-  const TETO = 8;
+  const TETO = 9;
 
   /**
    * Baseline: a configuração de HOJE — nenhuma escolha, nem da empresa nem do
    * vínculo — vista por um admin, que enxerga o menu inteiro (Início é de admin).
    */
-  it("hoje: 8 itens no menu lateral, folga 0 (é o essencial que o dono definiu)", () => {
+  it("hoje: 9 itens no menu lateral, folga 0 (é o essencial que o dono definiu)", () => {
     expect(itensNoMenuLateral(INTERFACE_COMPLETA)).toBe(TETO);
     // `undefined` é o caminho de quem não tem escolha nenhuma gravada
     expect(itensNoMenuLateral(undefined)).toBe(TETO);
@@ -205,25 +207,25 @@ describe("medição da folga (pergunta de aceite da issue #1341)", () => {
    * A escolha da empresa é interseção, então o menu só ENCOLHE — a mudança não
    * tem como empurrar o instrumento de tela para o vermelho.
    */
-  it("configuração COMPLETA (ninguém escolheu): 8 itens, folga 0 — igual a hoje", () => {
+  it("configuração COMPLETA (ninguém escolheu): 9 itens, folga 0 — igual a hoje", () => {
     expect(itensNoMenuLateral(combinarInterfaces(completa, completa))).toBe(TETO);
   });
 
-  it("configuração SIMPLIFICADA (empresa escolhe o preset): 5 itens, folga 3", () => {
+  it("configuração SIMPLIFICADA (empresa escolhe o preset): 5 itens, folga 4", () => {
     // Inbox, Agenda, Funis, Contatos e Conexões: nos grupos SEM hub (Atendimento e
     // Canais) a escolha explícita da empresa põe a tela no menu; Tarefas mora em
     // CRM, que tem hub, e só sobe com `sidebar` — que ela deixou de ter em 15/10/2026.
     const itens = itensNoMenuLateral(combinarInterfaces(simplificada, completa));
     expect(itens).toBe(5);
-    expect(TETO - itens).toBe(3);
+    expect(TETO - itens).toBe(4);
   });
 
-  it("configuração MÍNIMA (empresa escolhe 1 porta): 1 item, folga 7", () => {
+  it("configuração MÍNIMA (empresa escolhe 1 porta): 1 item, folga 8", () => {
     const minima = combinarInterfaces({ preset: "completa", destinos: ["/app/inbox"] }, completa);
     expect(interfaceTemDestino(minima, "admin")).toBe(true); // a guarda exige ≥1 porta
     const itens = itensNoMenuLateral(minima);
     expect(itens).toBe(1);
-    expect(TETO - itens).toBe(7);
+    expect(TETO - itens).toBe(8);
   });
 
   it("nenhuma escolha da empresa pode AUMENTAR o menu (é interseção, não soma)", () => {

@@ -45,12 +45,12 @@ export function NodePalette({ onAdd, variant = "desktop", surface = "followup" }
         variant="secondary"
         size="sm"
         className="justify-start gap-2"
+        onClick={() => onAdd(visual.type)}
         draggable
         onDragStart={(e) => {
           e.dataTransfer.setData("application/x-followup-node-type", visual.type);
           e.dataTransfer.effectAllowed = "move";
         }}
-        onClick={() => onAdd(visual.type)}
         data-testid={`palette-add-${visual.type}`}
       >
         <span

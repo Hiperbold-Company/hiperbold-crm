@@ -14648,6 +14648,7 @@ export const DICIONARIO: Traducoes = {
   "é maior que": { es: "es mayor que" },
   "é menor ou igual a": { es: "es menor o igual a" },
   "é menor que": { es: "es menor que" },
+  "Regras que mexem no CRM sozinhas: criar negócio, pôr tag, preencher campo, definir responsável.": { es: "Reglas que actúan en el CRM solas: crear negocio, poner etiqueta, completar campo, definir responsable." },
 };
 
 /**

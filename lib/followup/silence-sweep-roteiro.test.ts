@@ -22,6 +22,8 @@ describe("loadActiveSilencePointers", () => {
     const linhas = [
       { id: "p-followup", organization_id: "o", active_version_id: "v1", trigger_config: SILENCIO, surface: "followup" },
       { id: "p-roteiro", organization_id: "o", active_version_id: "v2", trigger_config: SILENCIO, surface: "atendimento" },
+      // Automação (0986): os gatilhos dela moram no grafo; o relógio não a carrega.
+      { id: "p-automacao", organization_id: "o", active_version_id: "v3", trigger_config: SILENCIO, surface: "automacao" },
     ];
     const cadeia = {
       select: () => cadeia,
@@ -39,6 +41,7 @@ function adminCom(trigger: unknown): SupabaseClient {
   const linhas = [
     { id: "p-followup", organization_id: "o", active_version_id: "v1", trigger_config: trigger, surface: "followup" },
     { id: "p-roteiro", organization_id: "o", active_version_id: "v2", trigger_config: trigger, surface: "atendimento" },
+    { id: "p-automacao", organization_id: "o", active_version_id: "v3", trigger_config: trigger, surface: "automacao" },
   ];
   const cadeia = {
     select: () => cadeia,

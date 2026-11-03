@@ -112,6 +112,8 @@ describe("GET /api/v1/ai/followup-flows — roteiros fora da lista de follow-ups
     const res = await GET(new NextRequest("http://localhost/api/v1/ai/followup-flows"));
     expect(res.status).toBe(200);
     expect(filtros).toContainEqual(["neq", "surface", "atendimento"]);
+    // Automação (0986) tem tela própria e não entra na lista de follow-ups.
+    expect(filtros).toContainEqual(["neq", "surface", "automacao"]);
   });
 
   it("?surface=atendimento: só os roteiros", async () => {

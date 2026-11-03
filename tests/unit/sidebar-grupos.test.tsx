@@ -75,6 +75,8 @@ describe("Sidebar agrupado", () => {
       "/app/radar",
       "/app/kanban",
       "/app/contacts",
+      // Automações: no menu do CRM por decisão do dono (02/11/2026, lote 1).
+      "/app/automacoes",
       "/app/ai/agents",
       "/app/metrics",
       "/app/activities",
