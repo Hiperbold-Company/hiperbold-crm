@@ -12,12 +12,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useActiveOrg } from "@/hooks/auth/AuthProvider";
 import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSessions";
+import { ehCanalSocial } from "@/lib/channels/capabilities";
 import { useEtiquetasParaEscolher } from "@/hooks/contacts/useEtiquetasParaEscolher";
 import { useT } from "@/hooks/i18n/useT";
 import {
   EVENTOS_DE_AGENDAMENTO,
   MAX_PALAVRAS_CHAVE,
+  MAX_PUBLICACOES,
   MODOS_DA_PALAVRA_CHAVE,
+  MODOS_DO_COMENTARIO,
+  idDePublicacaoSchema,
+  type ModoDoComentario,
   normalizarParaPalavraChave,
   palavraChaveSchema,
   type AutomacaoTrigger,
@@ -29,6 +34,7 @@ import {
   CAMPOS_PADRAO_DO_NEGOCIO,
   EVENTOS_DE_AGENDAMENTO_ROTULOS,
   MODOS_DA_PALAVRA_CHAVE_ROTULOS,
+  MODOS_DO_COMENTARIO_ROTULOS,
 } from "@/lib/automacoes/vocabulario";
 import { X } from "@/lib/ui/icons";
 
@@ -192,6 +198,8 @@ export function CamposDoGatilho({
       return <CamposDoSemResposta prefixo={prefixo} g={gatilho} onChange={onChange} />;
     case "case_opened":
       return <TextoDoCaso />;
+    case "instagram_comment":
+      return <CamposDoComentario prefixo={prefixo} g={gatilho} onChange={onChange} />;
     case "started_by_automation":
       return (
         <CamposDoIniciador
@@ -291,6 +299,116 @@ function CamposDaMensagem({
         rotulo={t("Não disparar se um atendente estiver cuidando da conversa")}
         marcado={g.skip_if_human !== false}
         onChange={(m) => onChange({ ...g, skip_if_human: m })}
+      />
+    </>
+  );
+}
+
+/**
+ * Id do post colado. Só o id numérico serve: o link do post (`/p/<código>/`)
+ * traz o código curto, que NÃO é o id que a Meta manda no comentário — não há
+ * conversão simples e segura, então o link é recusado com a explicação.
+ */
+export function idDoPostColado(texto: string): string | null {
+  const limpo = texto.trim();
+  const r = idDePublicacaoSchema.safeParse(limpo);
+  return r.success ? r.data : null;
+}
+
+function CamposDoComentario({
+  prefixo,
+  g,
+  onChange,
+}: {
+  prefixo: string;
+  g: Gatilho<"instagram_comment">;
+  onChange: (g: AutomacaoTrigger) => void;
+}) {
+  const t = useT();
+  const canais = useChannelSessions();
+  // Contas de rede social (a lista de canais não diz qual rede; a capability é o que existe).
+  const contas = (canais.data ?? []).filter((c) => ehCanalSocial(c.provider));
+  const escolhidas = g.channel_session_ids ?? [];
+  const marcarConta = (id: string, marcado: boolean) => {
+    const proximos = marcado ? [...escolhidas, id] : escolhidas.filter((x) => x !== id);
+    const { channel_session_ids: _antes, ...resto } = g;
+    onChange(proximos.length > 0 ? { ...resto, channel_session_ids: proximos } : resto);
+  };
+  const posts = g.media_ids ?? [];
+  return (
+    <>
+      <fieldset className="space-y-1.5" data-testid={`${prefixo}-contas`}>
+        <legend className="text-sm font-medium text-text">{t("Em quais contas")}</legend>
+        <p className="text-xs text-text-muted">{t("Nenhuma marcada = qualquer conta conectada.")}</p>
+        {contas.map((c) => (
+          <Marcador
+            key={c.id}
+            id={`${prefixo}-conta-${c.id}`}
+            rotulo={channelLabel(c, t)}
+            marcado={escolhidas.includes(c.id)}
+            onChange={(m) => marcarConta(c.id, m)}
+          />
+        ))}
+        {canais.isError && <p className="text-xs text-error-fg">{t("Não foi possível carregar as contas.")}</p>}
+      </fieldset>
+      <Campo
+        id={`${prefixo}-post`}
+        rotulo={t("Em quais posts")}
+        ajuda={t("Cole o id do post (só números). Nenhum = qualquer post.")}
+      >
+        <ListaDeChips
+          id={`${prefixo}-post`}
+          itens={posts}
+          max={MAX_PUBLICACOES}
+          placeholder={t("Ex.: 17895695668004550")}
+          onChange={(ids) => {
+            const { media_ids: _antes, ...resto } = g;
+            onChange(ids.length > 0 ? { ...resto, media_ids: ids } : resto);
+          }}
+          validar={(texto) => {
+            const id = idDoPostColado(texto);
+            if (!id) return t("Use o id do post (só números). O link do post não traz o id.");
+            if (posts.includes(id)) return t("Esse post já está na lista.");
+            return null;
+          }}
+        />
+      </Campo>
+      <Campo
+        id={`${prefixo}-modo`}
+        rotulo={t("Qual comentário")}
+        ajuda={t("Compara palavras inteiras, sem acento e sem diferenciar maiúsculas.")}
+      >
+        <Seletor
+          id={`${prefixo}-modo`}
+          valor={g.match}
+          opcoes={MODOS_DO_COMENTARIO.map((m) => ({ valor: m, rotulo: t(MODOS_DO_COMENTARIO_ROTULOS[m]) }))}
+          onChange={(v) => onChange({ ...g, match: v as ModoDoComentario })}
+        />
+      </Campo>
+      {g.match !== "any" && (
+        <Campo id={`${prefixo}-palavra`} rotulo={t("Palavras-chave")}>
+          <ListaDeChips
+            id={`${prefixo}-palavra`}
+            itens={g.keywords}
+            max={MAX_PALAVRAS_CHAVE}
+            placeholder={t("Ex.: quero")}
+            onChange={(keywords) => onChange({ ...g, keywords })}
+            validar={(texto) => {
+              const r = palavraChaveSchema.safeParse(texto);
+              if (!r.success) return t(r.error.issues[0]?.message ?? "");
+              const chave = normalizarParaPalavraChave(texto);
+              if (g.keywords.some((k) => normalizarParaPalavraChave(k) === chave))
+                return t("Essa palavra-chave já está na lista.");
+              return null;
+            }}
+          />
+        </Campo>
+      )}
+      <Marcador
+        id={`${prefixo}-criar-contato`}
+        rotulo={t("Criar o contato de quem comentou, se ainda não existir")}
+        marcado={g.create_contact !== false}
+        onChange={(m) => onChange({ ...g, create_contact: m })}
       />
     </>
   );

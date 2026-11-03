@@ -16,6 +16,8 @@ const GRUPOS: Array<{ categoria: CategoriaDoNo; rotulo: string }> = [
   { categoria: "logica", rotulo: "Lógica" },
   { categoria: "controle", rotulo: "Controle" },
   { categoria: "mensagem", rotulo: "Mensagens" },
+  // Só a automação tem blocos nesta categoria (registro de nós).
+  { categoria: "instagram", rotulo: "Instagram" },
 ];
 
 interface Props {

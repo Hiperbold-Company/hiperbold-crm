@@ -137,8 +137,12 @@ export async function identidadeDoComentarista(
     .is("archived_at", null)
     .maybeSingle();
   if (error) throw new Error("sessao_do_comentario_indeterminada");
-  const linha = data as { meta_social_platform: string | null; meta_social_account_id: string | null } | null;
-  if (!linha || linha.meta_social_platform !== "instagram" || !linha.meta_social_account_id) return null;
+  const linha = data as {
+    meta_social_platform: string | null;
+    meta_social_account_id: string | null;
+  } | null;
+  if (!linha || linha.meta_social_platform !== "instagram" || !linha.meta_social_account_id)
+    return null;
   // Import tardio: a ingestão do canal puxa a cadeia inteira de entrada social,
   // que só interessa quando há mesmo um comentário para resolver.
   const { identidadeSocial } = await import("@/lib/channels/meta-social/ingest");

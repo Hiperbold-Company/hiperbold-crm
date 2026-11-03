@@ -52,12 +52,18 @@ function texto(v: unknown): string | null {
 }
 
 /** O comentário que iniciou a execução, ou `null` quando ela não nasceu de um comentário. */
-export function comentarioDoGatilho(vars: Record<string, unknown> | undefined): ComentarioDoGatilho | null {
+export function comentarioDoGatilho(
+  vars: Record<string, unknown> | undefined,
+): ComentarioDoGatilho | null {
   const g = vars?.gatilho as Record<string, unknown> | undefined;
   if (!g || g.tipo !== "instagram_comment") return null;
   const commentId = texto(g.comment_id);
   if (!commentId) return null;
-  return { comment_id: commentId, channel_session_id: texto(g.channel_session_id), autor_id: texto(g.autor_id) };
+  return {
+    comment_id: commentId,
+    channel_session_id: texto(g.channel_session_id),
+    autor_id: texto(g.autor_id),
+  };
 }
 
 /** O texto da resposta já com as variáveis; `null` quando ficou vazio ou passou do teto (em bytes, como o canal mede). */
@@ -73,7 +79,10 @@ function falha(tipo: NoDoInstagram["type"], erro: string): ResultadoDoEfeito {
 }
 
 function feito(tipo: NoDoInstagram["type"], resultado: string, saida?: string): ResultadoDoEfeito {
-  return { desfecho: { ok: true, ...(saida ? { saida } : {}) }, detalhes: [{ tipo, ok: true, resultado }] };
+  return {
+    desfecho: { ok: true, ...(saida ? { saida } : {}) },
+    detalhes: [{ tipo, ok: true, resultado }],
+  };
 }
 
 /** O texto foi recusado pelo canal (vazio ou acima do teto em bytes): o canal LANÇA com este código. */
@@ -81,7 +90,10 @@ function textoRecusado(err: unknown): boolean {
   return err instanceof Error && err.message === canal.ERRO_TEXTO_INVALIDO;
 }
 
-export async function executarInstagram(c: Contexto, node: NoDoInstagram): Promise<ResultadoDoEfeito> {
+export async function executarInstagram(
+  c: Contexto,
+  node: NoDoInstagram,
+): Promise<ResultadoDoEfeito> {
   const comentario = comentarioDoGatilho(c.fatos?.vars);
   if (!comentario) return falha(node.type, "sem_comentario");
   const pedidoPor = c.handler.requestId.slice(0, 200);
@@ -127,7 +139,8 @@ export async function executarInstagram(c: Contexto, node: NoDoInstagram): Promi
       return falha(node.type, "comentario_nao_encontrado");
     }
     case "instagram_check_follow": {
-      if (!comentario.channel_session_id || !comentario.autor_id) return falha(node.type, "sem_comentario");
+      if (!comentario.channel_session_id || !comentario.autor_id)
+        return falha(node.type, "sem_comentario");
       const { segue } = await canal.conferirSeSegue(c.admin, {
         organizationId: c.org,
         channelSessionId: comentario.channel_session_id,

@@ -240,7 +240,19 @@ function grafoDoCenario(valor = "facebook"): FlowGraph {
 describe("registro de nós e publish da automação", () => {
   it("a paleta da automação oferece só o que o motor dela executa", () => {
     expect([...NOS_DA_SUPERFICIE.automacao].sort()).toEqual(
-      ["condition", "crm_action", "end", "field_op", "message", "question", "trigger", "wait"].sort(),
+      [
+        "condition",
+        "crm_action",
+        "end",
+        "field_op",
+        "message",
+        "question",
+        "trigger",
+        "wait",
+        "instagram_private_reply",
+        "instagram_public_reply",
+        "instagram_check_follow",
+      ].sort(),
     );
     expect(NOS_DA_SUPERFICIE.followup).not.toContain("crm_action");
     expect(NOS_DA_SUPERFICIE.followup).not.toContain("message");
