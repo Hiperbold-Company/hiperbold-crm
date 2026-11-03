@@ -163,7 +163,8 @@ export async function acordarAutomacaoEmEspera(
     .maybeSingle();
   if (esperaErr) throw new Error(esperaErr.message);
   const estacionou = (espera as { created_at?: string } | null)?.created_at;
-  if (!estacionou || Date.parse(inboundEnviadoEm) < Date.parse(estacionou)) return false;
+  const chegou = Date.parse(inboundEnviadoEm);
+  if (!estacionou || !Number.isFinite(chegou) || chegou < Date.parse(estacionou)) return false;
   if (enrollment.next_eval_at && enrollment.next_eval_at <= agoraIso) return true;
   const { error } = await admin
     .from("followup_enrollments")
