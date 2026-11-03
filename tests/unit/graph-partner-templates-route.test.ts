@@ -98,10 +98,10 @@ describe("rota de modelos do canal parceiro Graph", () => {
     expect(h.find).not.toHaveBeenCalled();
   });
 
-  it("ler pede agent; sincronizar e criar pedem admin", async () => {
+  it("ler pede agent; sincronizar e criar pedem gerente (03/11/2026)", async () => {
     await GET();
     await post({ acao: "sincronizar" });
-    expect(h.role.mock.calls.map((c) => c[0])).toEqual(["agent", "admin"]);
+    expect(h.role.mock.calls.map((c) => c[0])).toEqual(["agent", "manager"]);
   });
 
   it("papel recusado devolve a resposta do guarda e não toca a plataforma", async () => {

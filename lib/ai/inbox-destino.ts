@@ -21,7 +21,7 @@ export const REFERENCIAS_DE_AVISO = {
   contact: { tabela: "contacts", papel: "agent", rotulo: "Ver contato", href: (id: string) => `/app/contacts/${id}` },
   lead: { tabela: "crm_leads", papel: "agent", rotulo: "Abrir negócio", href: (id: string, pipelineId?: string) => `/app/pipelines/${pipelineId}?lead=${id}` },
   followup_enrollment: { tabela: "followup_enrollments", papel: "viewer", rotulo: "Abrir acompanhamento", href: (id: string) => `/app/ai/followups/enrollments/${id}` },
-  channel_session: { tabela: "channel_sessions", papel: "admin", rotulo: "Revisar conexão", href: () => "/app/connections", ativo: true },
+  channel_session: { tabela: "channel_sessions", papel: "manager", rotulo: "Revisar conexão", href: () => "/app/connections", ativo: true },
   ai_knowledge_source: { tabela: "ai_knowledge_sources", papel: "manager", rotulo: "Abrir base de conhecimento", href: () => "/app/ai/knowledge/sources" },
   agent_case: { tabela: "agent_cases", papel: "agent", rotulo: "Abrir atendimento", href: (id: string) => `/app/ai/cases?caso=${id}` },
   // O PONTEIRO do fluxo, não a inscrição: o aviso de `followup_sem_agente` é
@@ -38,7 +38,8 @@ export type InboxRefKind = keyof typeof REFERENCIAS_DE_AVISO | "organization" | 
 type ContextoGeral = { papel: Role; href: string; rotulo: string };
 interface Politica { refs: readonly InboxRefKind[]; orientacao: string; geral?: ContextoGeral }
 const EVOLUCAO: ContextoGeral = { papel: "manager", href: "/app/ai/evolution", rotulo: "Abrir evolução do assistente" };
-const CONEXOES: ContextoGeral = { papel: "admin", href: "/app/connections", rotulo: "Revisar conexões" };
+// Piso da tela de Conexões: administrador ou gerente (decisão do dono do produto, 03/11/2026).
+const CONEXOES: ContextoGeral = { papel: "manager", href: "/app/connections", rotulo: "Revisar conexões" };
 
 /** Completude em compile time; pares desconhecidos em clones falham fechados. */
 export const POLITICAS_DE_AVISO = {
@@ -54,7 +55,7 @@ export const POLITICAS_DE_AVISO = {
   appointment_outcome_required:{refs:["appointment"],orientacao:"Abra o compromisso e confirme a presença."},
   appointment_recovery_review:{refs:["appointment"],orientacao:"Confira o motivo e escolha o próximo passo no compromisso."},
   routing_unassigned: { refs: ["conversation"], orientacao: "Confira os responsáveis em Configurações → Atendimento." },
-  qr_rescan: { refs: ["channel_session"], orientacao: "Peça a quem administra para revisar a conexão do WhatsApp." },
+  qr_rescan: { refs: ["channel_session"], orientacao: "Peça a um administrador ou gerente para revisar a conexão do WhatsApp." },
   job_dead: { refs: ["conversation", "job_queue", "cron_jobs"], orientacao: "Confira o motivo deste aviso com quem administra antes de tentar a operação novamente." },
   event_dead: { refs: [], orientacao: "Peça a quem administra para conferir o processamento descrito neste aviso." },
   budget_exceeded: { refs: ["ai_budget"], orientacao: "Peça ao gestor para revisar o limite e o uso de IA." },
@@ -80,7 +81,7 @@ export const POLITICAS_DE_AVISO = {
     orientacao: "Peça ao gestor para revisar o provedor e as credenciais de leitura de fotos e áudios.",
     geral: funcaoOculta("provedores-ia") ? undefined : { papel: "manager", href: "/app/ai/providers", rotulo: "Revisar provedores de IA" },
   },
-  channel_template_review: { refs: [], orientacao: "Confira os modelos na conexão WhatsApp via Parceiro. Este aviso não identifica um modelo específico.", geral: { papel: "admin", href: "/app/connections?aba=parceiro&sub=templates", rotulo: "Revisar modelos do canal" } },
+  channel_template_review: { refs: [], orientacao: "Confira os modelos na conexão WhatsApp via Parceiro. Este aviso não identifica um modelo específico.", geral: { papel: "manager", href: "/app/connections?aba=parceiro&sub=templates", rotulo: "Revisar modelos do canal" } },
   channel_number_alert: { refs: ["channel_session"], orientacao: "Peça a quem administra para revisar a situação do número nas conexões.", geral: CONEXOES },
   // Sem `geral`, ao contrário do vizinho acima: o `canal-mudo-watcher` SEMPRE
   // nasce apontando para a conexão que ficou muda (`ref_kind: channel_session`),

@@ -42,13 +42,13 @@ beforeEach(() => {
     { _id: "account", platform: "instagram", username: "brand", isActive: true },
   ]);
 });
-it("requires admin and never returns the stored key", async () => {
+it("requires manager (since 2026-11-03) and never returns the stored key", async () => {
   const response = await GET();
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(JSON.stringify(await response.json())).not.toContain("hidden-key");
   expect(h.read).toHaveBeenCalledWith({}, "trusted");
-  expect(h.role).toHaveBeenCalledWith("admin", expect.anything());
+  expect(h.role).toHaveBeenCalledWith("manager", expect.anything());
 });
 it("refuses foreign organization injection", async () => {
   expect(

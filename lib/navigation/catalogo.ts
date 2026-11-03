@@ -698,7 +698,10 @@ export const NAV_CATALOG = [
       "Seus números de WhatsApp: por QR ou canal oficial da Meta, com saúde, reconexão e templates.",
     icon: "PlugsConnected",
     group: "canais",
-    minRole: "admin",
+    // Decisão do dono do produto (03/11/2026): "Gerente pode sim ver conexões. Só
+    // o nível mais básico, o atendente, que não pode ver mesmo." Piso `manager`:
+    // atendente e leitor ficam de fora. As rotas da API da tela seguem o mesmo piso.
+    minRole: "manager",
     configuracoes: "Canais",
     healthDot: true,
   },

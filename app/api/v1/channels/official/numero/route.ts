@@ -3,7 +3,7 @@
  *
  * `status` (CONNECTED, PENDING...) e `code_verification_status`, lidos AO VIVO no Graph com o token
  * guardado na sessão. `precisaRegistrar` é verdadeiro no `PENDING`: o número foi verificado mas nunca
- * registrado, e a Meta não deixa enviar. Só admin da organização. O token nunca volta.
+ * registrado, e a Meta não deixa enviar. Só administrador ou gerente da organização (03/11/2026). O token nunca volta.
  *
  * A Meta recusar a leitura NÃO é erro de requisição: a resposta é 200 com `disponivel: false` e o
  * motivo em português, que é a informação que a tela precisa mostrar.
@@ -24,7 +24,7 @@ const NO_STORE = { "cache-control": "no-store, max-age=0" } as const;
 
 export async function GET(_req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "channels_official_numero" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_official_numero" });
   if (!authz.ok) return authz.response;
 
   const cred = await credenciaisDoCanalOficialVivo(createAdminClient(), authz.org.orgId);

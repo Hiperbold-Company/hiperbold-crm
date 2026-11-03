@@ -61,9 +61,9 @@ function urlDoWebhook(req: NextRequest, token: string): string {
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const requestId = randomUUID();
-  // Conectar um canal move dinheiro e expõe a conta da empresa: é decisão de
-  // dono, não de quem atende.
-  const authz = await requireRole("admin", { requestId, resource: "channels_partner" });
+  // Conectar um canal move dinheiro e expõe a conta da empresa: administrador ou
+  // gerente (decisão do dono do produto, 03/11/2026), não quem atende.
+  const authz = await requireRole("manager", { requestId, resource: "channels_partner" });
   if (!authz.ok) return authz.response;
   const orgId = authz.org.orgId;
 
@@ -95,9 +95,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  // Conectar um canal move dinheiro e expõe a conta da empresa: é decisão de
-  // dono, não de quem atende.
-  const authz = await requireRole("admin", { requestId, resource: "channels_partner" });
+  // Conectar um canal move dinheiro e expõe a conta da empresa: administrador ou
+  // gerente (decisão do dono do produto, 03/11/2026), não quem atende.
+  const authz = await requireRole("manager", { requestId, resource: "channels_partner" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const orgId = authz.org.orgId;

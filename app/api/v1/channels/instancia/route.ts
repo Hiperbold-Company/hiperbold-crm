@@ -52,8 +52,9 @@ function contextoDaRequisicao(req: NextRequest) {
 
 export async function GET(): Promise<NextResponse> {
   const requestId = randomUUID();
-  // Conectar número expõe a conta da empresa: é decisão de quem administra.
-  const authz = await requireRole("admin", { requestId, resource: "channels_instancia" });
+  // Conectar número expõe a conta da empresa: administrador ou gerente (decisão do
+  // dono do produto, 03/11/2026); atendente e leitor não.
+  const authz = await requireRole("manager", { requestId, resource: "channels_instancia" });
   if (!authz.ok) return authz.response;
 
   const conexoes = await listarConexoesPorInstancia(createAdminClient(), authz.org.orgId);
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "channels_instancia" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_instancia" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const orgId = authz.org.orgId;
@@ -148,7 +149,7 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "channels_instancia" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_instancia" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 

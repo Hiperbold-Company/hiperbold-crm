@@ -16,7 +16,7 @@ import { aiAccessUpdateSchema, type AiAccessMode } from "@/lib/ai/elegibilidade/
 
 interface Access { mode: AiAccessMode; test_phone_numbers: string[] }
 
-/** Mesma porta em todos os tipos de conexão; telefones acessíveis só a administradores. */
+/** Mesma porta em todos os tipos de conexão; telefones acessíveis só a administrador ou gerente (03/11/2026). */
 export function ChannelAiAccess({ channelId, phoneTesting = true }: { channelId: string; phoneTesting?: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(false);

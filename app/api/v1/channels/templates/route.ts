@@ -97,7 +97,7 @@ type OrgGate =
   | { autorizado: false; resposta: NextResponse };
 
 async function orgOrFail(requestId: string): Promise<OrgGate> {
-  const authz = await requireRole("admin", { requestId, resource: "channels_templates" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_templates" });
   if (!authz.ok) return { autorizado: false, resposta: authz.response };
   return { autorizado: true, orgId: authz.org.orgId };
 }
@@ -225,7 +225,7 @@ export async function POST(_req: NextRequest): Promise<NextResponse> {
  * pré-preencher no próximo disparo. Valor vazio esquece o link.
  *
  * Só slot de mídia e só `https://` — ver `lib/channels/meta/valores-salvos.ts`.
- * Mesmo papel do sync (`admin`), e bloqueado em sessão de suporte, porque
+ * Mesmo papel do sync (`manager`), e bloqueado em sessão de suporte, porque
  * escreve na configuração do canal.
  *
  * Grava em TODAS as linhas do mesmo nome e idioma da organização: a tela lista

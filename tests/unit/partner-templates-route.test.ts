@@ -71,10 +71,10 @@ beforeEach(() => {
 });
 
 describe("rota de modelos do canal intermediado", () => {
-  it("ler pede agent; sincronizar e criar pedem admin", async () => {
+  it("ler pede agent; sincronizar e criar pedem gerente (03/11/2026)", async () => {
     expect((await GET()).status).toBe(200);
     expect((await post({ acao: "sincronizar" })).status).toBe(200);
-    expect(h.role.mock.calls.map((c) => c[0])).toEqual(["agent", "admin"]);
+    expect(h.role.mock.calls.map((c) => c[0])).toEqual(["agent", "manager"]);
   });
 
   it("papel recusado (viewer no POST) devolve 403 antes de olhar conexão ou corpo", async () => {
