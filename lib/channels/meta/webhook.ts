@@ -118,6 +118,12 @@ export interface InboundMessageEvent {
   text: string | null;
   /** Preenchido quando `type === "contact"` (cartão compartilhado). */
   sharedContact?: SharedContact | null;
+  /** Opção escolhida num botão ou lista. Ver `RespostaDeOpcao`. */
+  reply?: RespostaDeOpcao | null;
+  /** Tipo cru da Meta, quando difere do gravado (`button`, `interactive`, `order`…). */
+  tipoOriginal?: string;
+  /** `true` = tipo que o CRM não sabe mostrar; `text` é só a marca para quem atende. */
+  naoSuportado?: boolean;
   media: {
     id: string;
     /** A Meta manda URL pronta, com `ext=` de expiração — baixe na hora, não guarde. */
@@ -170,6 +176,10 @@ export interface OutboundEchoEvent {
   text: string | null;
   /** Preenchido quando `type === "contact"` (cartão compartilhado pelo app). */
   sharedContact?: SharedContact | null;
+  /** Ver `InboundMessageEvent`. */
+  reply?: RespostaDeOpcao | null;
+  tipoOriginal?: string;
+  naoSuportado?: boolean;
   media: {
     id: string;
     url: string | null;
@@ -207,6 +217,101 @@ export function normalizeRejectedReason(v: unknown): string | null {
 
 function str(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+/**
+ * Opção que o cliente tocou: botão de template (`button`), botão interativo
+ * (`interactive.button_reply`) ou item de lista (`interactive.list_reply`).
+ * `id` é o payload/id que a empresa definiu; `title`, o que o cliente leu.
+ */
+export interface RespostaDeOpcao {
+  id: string | null;
+  title: string;
+  kind: "template_button" | "button_reply" | "list_reply";
+  description?: string;
+}
+
+/**
+ * Tipos da Meta que já são, um a um, valores aceitos por `messages_type_check`.
+ * `contacts` (plural) vira `contact`; o resto é tratado em `tipoParaOCrm`.
+ */
+const TIPOS_DIRETOS = new Set([
+  "text", "image", "video", "audio", "document", "sticker", "location", "reaction",
+]);
+
+interface TipoNormalizado {
+  type: string;
+  /** Texto da opção ou marca de não suportado; `undefined` = a regra antiga decide. */
+  text?: string;
+  reply?: RespostaDeOpcao;
+  tipoOriginal?: string;
+  naoSuportado?: boolean;
+}
+
+export function marcaDeNaoSuportado(tipo: string): string {
+  return `[tipo de mensagem não suportado: ${tipo}]`;
+}
+
+/**
+ * Traduz `messages[].type` para o vocabulário do banco. **Nunca devolve um tipo
+ * que o CHECK recusa**: o insert falharia e a mensagem do cliente se perderia
+ * (foi o que aconteceu com resposta de botão, que chegava como `button`).
+ *
+ * Resposta de botão ou lista vira `text` com o título da opção: para quem lê a
+ * conversa, para o agente, para o STOP e para as automações por palavra, ela É o
+ * que o cliente disse. O id da opção fica em `metadata.reply`.
+ *
+ * Qualquer outro tipo (`order`, `unsupported`, `system`, `nfm_reply`, os que a
+ * Meta ainda vai inventar) vira `text` com uma marca visível e o tipo original
+ * em `metadata.tipo_original` — gravado e sinalizado, nunca descartado.
+ */
+function tipoParaOCrm(tipo: string, raw: Record<string, unknown>): TipoNormalizado {
+  if (tipo === "contacts") return { type: "contact" };
+  if (TIPOS_DIRETOS.has(tipo)) return { type: tipo };
+
+  if (tipo === "button") {
+    const b = (raw.button ?? {}) as Record<string, unknown>;
+    const title = str(b.text) ?? str(b.payload);
+    if (title) {
+      return {
+        type: "text",
+        text: title,
+        reply: { id: str(b.payload), title, kind: "template_button" },
+        tipoOriginal: tipo,
+      };
+    }
+  }
+
+  if (tipo === "interactive") {
+    const it = (raw.interactive ?? {}) as Record<string, unknown>;
+    const sub = str(it.type);
+    if (sub === "button_reply" || sub === "list_reply") {
+      const r = (it[sub] ?? {}) as Record<string, unknown>;
+      const title = str(r.title) ?? str(r.id);
+      if (title) {
+        const description = str(r.description);
+        return {
+          type: "text",
+          text: title,
+          reply: { id: str(r.id), title, kind: sub, ...(description ? { description } : {}) },
+          tipoOriginal: tipo,
+        };
+      }
+    }
+    const rotulo = sub ? `${tipo}:${sub}` : tipo;
+    return { type: "text", text: marcaDeNaoSuportado(rotulo), tipoOriginal: rotulo, naoSuportado: true };
+  }
+
+  return { type: "text", text: marcaDeNaoSuportado(tipo), tipoOriginal: tipo, naoSuportado: true };
+}
+
+/** Campos opcionais do evento que só existem quando o tipo foi traduzido. */
+function extrasDoTipo(n: TipoNormalizado) {
+  return {
+    ...(n.reply ? { reply: n.reply } : {}),
+    ...(n.tipoOriginal ? { tipoOriginal: n.tipoOriginal } : {}),
+    ...(n.naoSuportado ? { naoSuportado: true } : {}),
+  };
 }
 
 /**
@@ -253,7 +358,8 @@ export function parseMetaWebhook(envelope: MetaWebhookEnvelope): MetaWebhookEven
           const tipo = str(raw.type) ?? "unknown";
           const corpoMidia = tipo !== "contacts" ? (raw[tipo] as Record<string, unknown> | undefined) : undefined;
           const sharedContact = tipo === "contacts" ? parseMetaInboundContact(raw) : null;
-          const tipoCrm = tipo === "contacts" ? "contact" : tipo;
+          const normalizado = tipoParaOCrm(tipo, raw);
+          const tipoCrm = normalizado.type;
 
           out.push({
             kind: "inbound_message",
@@ -266,12 +372,16 @@ export function parseMetaWebhook(envelope: MetaWebhookEnvelope): MetaWebhookEven
             sentAt: new Date(Number(str(raw.timestamp) ?? "0") * 1000),
             type: tipoCrm,
             text:
-              tipoCrm === "text"
+              normalizado.text ??
+              (tipoCrm === "text"
                 ? str((raw.text as Record<string, unknown>)?.body)
-                : sharedContact?.name ?? null,
+                : sharedContact?.name ?? null),
             ...(sharedContact ? { sharedContact } : {}),
+            ...extrasDoTipo(normalizado),
+            // Tipo traduzido nunca carrega ponteiro de mídia: um balão de texto
+            // com `meta-media:` dispararia a persistência de algo que não é mídia.
             media:
-              corpoMidia && str(corpoMidia.id)
+              !normalizado.tipoOriginal && corpoMidia && str(corpoMidia.id)
                 ? {
                     id: str(corpoMidia.id)!,
                     url: str(corpoMidia.url),
@@ -318,7 +428,8 @@ export function parseMetaWebhook(envelope: MetaWebhookEnvelope): MetaWebhookEven
           // mesmo mapeamento da recebida, senão o insert falha e a IA não pausa.
           const corpoMidia = tipo !== "contacts" ? (raw[tipo] as Record<string, unknown> | undefined) : undefined;
           const sharedContact = tipo === "contacts" ? parseMetaInboundContact(raw) : null;
-          const tipoCrm = tipo === "contacts" ? "contact" : tipo;
+          const normalizado = tipoParaOCrm(tipo, raw);
+          const tipoCrm = normalizado.type;
           out.push({
             kind: "outbound_echo",
             wabaId,
@@ -329,12 +440,16 @@ export function parseMetaWebhook(envelope: MetaWebhookEnvelope): MetaWebhookEven
             type: tipoCrm,
             // Texto do balão: o corpo, o nome do cartão, ou a legenda da mídia.
             text:
-              tipoCrm === "text"
+              normalizado.text ??
+              (tipoCrm === "text"
                 ? str((raw.text as Record<string, unknown>)?.body)
-                : sharedContact?.name ?? str(corpoMidia?.caption),
+                : sharedContact?.name ?? str(corpoMidia?.caption)),
             ...(sharedContact ? { sharedContact } : {}),
+            ...extrasDoTipo(normalizado),
+            // Tipo traduzido nunca carrega ponteiro de mídia: um balão de texto
+            // com `meta-media:` dispararia a persistência de algo que não é mídia.
             media:
-              corpoMidia && str(corpoMidia.id)
+              !normalizado.tipoOriginal && corpoMidia && str(corpoMidia.id)
                 ? {
                     id: str(corpoMidia.id)!,
                     url: str(corpoMidia.url),

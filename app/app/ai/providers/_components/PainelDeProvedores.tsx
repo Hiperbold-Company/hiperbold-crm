@@ -44,6 +44,7 @@ import { useT } from "@/hooks/i18n/useT";
 
 import { CartaoDoJev, jevNoPonto, useDadosDoJev, type DadosDoJev } from "./CartaoDoJev";
 import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 interface Ponto {
   id: string;
@@ -190,6 +191,7 @@ export function PainelDeProvedores() {
           {t("Seu sistema usa inteligência artificial em")} {dados.pontos.length}{" "}
           {t("lugares diferentes. Aqui você vê qual está atendendo cada um — e troca, se quiser.")}
         </p>
+        <LinkDeAjudaDaTela />
       </header>
 
       {semChave && (

@@ -4,6 +4,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { ApiTokensClient } from "./_components/ApiTokensClient";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function ApiTokensPage() {
           <strong>{traduzir("uma única vez", idioma)}</strong>{" "}
           {traduzir("na criação.", idioma)}
         </p>
+        <LinkDeAjudaDaTela />
       </header>
       <ApiTokensClient />
     </div>

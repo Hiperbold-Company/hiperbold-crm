@@ -4,6 +4,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { RequestsTable } from "./RequestsTable";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function LgpdRequestsPage() {
         <p className="text-sm text-muted-foreground">
           {t("Anonimizações e solicitações de dados de titulares. Apenas admins.")}
         </p>
+        <LinkDeAjudaDaTela />
       </header>
       <RequestsTable />
     </div>

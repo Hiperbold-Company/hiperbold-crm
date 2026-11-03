@@ -22,6 +22,7 @@ import { logger } from "@/lib/logger";
 import { PROVEDORES } from "@/lib/ai/pontos/provedores";
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import { CredentialsList } from "./_components/CredentialsList";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +136,7 @@ export default async function CredentialsPage() {
             ),
           )}
         </p>
+        <LinkDeAjudaDaTela />
       </header>
       <CredentialsList
         initialData={credentials}

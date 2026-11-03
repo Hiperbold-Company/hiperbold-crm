@@ -41,6 +41,7 @@ import {
 import { usePessoasDaAgenda } from "@/hooks/agenda/usePessoasDaAgenda";
 import { CalendarPlus, CaretLeft, CaretRight } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 const VISOES: Array<{ id: VisaoDaAgenda; rotulo: string }> = [
   { id: "dia", rotulo: "Dia" },
@@ -472,6 +473,7 @@ export function AgendaClient({
           <p className="text-sm text-muted-foreground">
             {t("O que está marcado, com quem, e quem atende — seu e da equipe.")}
           </p>
+          <LinkDeAjudaDaTela />
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {/* "Hoje" é o hoje DA ORGANIZAÇÃO. Com `new Date()` o botão desfazia a

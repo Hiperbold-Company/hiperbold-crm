@@ -11,6 +11,7 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { InviteForm } from "./_components/InviteForm";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default async function TeamInvitePage() {
         <p className="text-sm text-muted-foreground">
           {t("Cole até 20 emails (um por linha) e escolha a role compartilhada.")}
         </p>
+        <LinkDeAjudaDaTela />
       </header>
       <InviteForm bloqueio={bloqueio} />
     </div>

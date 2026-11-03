@@ -6,13 +6,18 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let rotaAtual = "/app/contacts";
-vi.mock("next/navigation", () => ({ usePathname: () => rotaAtual }));
+let queryAtual = "";
+vi.mock("next/navigation", () => ({
+  usePathname: () => rotaAtual,
+  useSearchParams: () => new URLSearchParams(queryAtual),
+}));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 
 import { BotaoAjuda } from "./BotaoAjuda";
 
 beforeEach(() => {
   rotaAtual = "/app/contacts";
+  queryAtual = "";
 });
 
 describe("botão Ajuda", () => {
@@ -46,6 +51,26 @@ describe("botão Ajuda", () => {
     expect(screen.getByRole("link", { name: "Ajuda" })).toHaveAttribute(
       "href",
       "https://ajuda.exemplo.com/crm/",
+    );
+  });
+
+  it("tela com abas: ?tab= com artigo vence o artigo da tela", () => {
+    rotaAtual = "/app/webhooks";
+    queryAtual = "tab=capturas";
+    render(<BotaoAjuda base="https://ajuda.exemplo.com" />);
+    expect(screen.getByRole("link", { name: "Ajuda" })).toHaveAttribute(
+      "href",
+      "https://ajuda.exemplo.com/crm/receber-leads/leads-recebidos/",
+    );
+  });
+
+  it("aba sem artigo fica com o artigo da tela", () => {
+    rotaAtual = "/app/webhooks";
+    queryAtual = "tab=activity";
+    render(<BotaoAjuda base="https://ajuda.exemplo.com" />);
+    expect(screen.getByRole("link", { name: "Ajuda" })).toHaveAttribute(
+      "href",
+      "https://ajuda.exemplo.com/crm/automacoes/criar-uma-automacao/",
     );
   });
 });

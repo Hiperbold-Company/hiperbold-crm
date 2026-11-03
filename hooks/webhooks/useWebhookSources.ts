@@ -39,6 +39,16 @@ export interface CreateWebhookSourceInput {
   redirect_to?: string | null;
 }
 
+/** O que o PATCH aceita da tela. Campo ausente não muda; `redirect_to: null` remove. */
+export interface UpdateWebhookSourceInput {
+  name?: string;
+  default_pipeline_id?: string;
+  default_stage_id?: string;
+  redirect_to?: string | null;
+  field_map?: { name?: string[]; phone?: string[]; email?: string[] };
+  is_active?: boolean;
+}
+
 const SOURCES_KEY = ["webhook-sources"];
 
 export function useWebhookSources() {
@@ -64,8 +74,8 @@ export function useCreateWebhookSource() {
 export function useUpdateWebhookSource() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) =>
-      apiClient.patch<{ data: WebhookSourceRow }>(`/api/v1/webhook-sources/${id}`, { is_active }),
+    mutationFn: async ({ id, ...patch }: { id: string } & UpdateWebhookSourceInput) =>
+      apiClient.patch<{ data: WebhookSourceRow }>(`/api/v1/webhook-sources/${id}`, patch),
     onError: showApiError,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: SOURCES_KEY });
