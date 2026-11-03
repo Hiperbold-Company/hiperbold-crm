@@ -257,6 +257,8 @@ export const webPushInboundHandler: EventHandler = {
     "central.aviso_criado",
     // A tarefa venceu (migration 0980) — ver `handleTarefaVencida`.
     "crm_task.due",
+    // O bloco "Avisar a equipe" das Automações (0986) — `lib/automacoes/efeitos`.
+    "automacao.aviso",
   ],
   async handle(row): Promise<HandlerResult> {
     if (!vapidPronto()) {
@@ -265,6 +267,16 @@ export const webPushInboundHandler: EventHandler = {
     if (row.event_type === "message.received") return handleInbound(row);
     if (row.event_type === "central.aviso_criado") return handleAvisoQuePedeGente(row);
     if (row.event_type === "crm_task.due") return handleTarefaVencida(row);
+    if (row.event_type === "automacao.aviso") {
+      const toUserId = typeof row.payload.to_user_id === "string" ? row.payload.to_user_id : null;
+      const corpo = typeof row.payload.body === "string" ? row.payload.body : "Aviso de automação";
+      return enviarParaUsuario(row.organization_id, toUserId, {
+        title: "Aviso de automação",
+        body: truncar(corpo),
+        tag: `automacao:${row.id}`,
+        href: "/app/automacoes",
+      });
+    }
 
     if (row.event_type === "user.mentioned") {
       const toUserId = typeof row.payload.to_user_id === "string" ? row.payload.to_user_id : null;

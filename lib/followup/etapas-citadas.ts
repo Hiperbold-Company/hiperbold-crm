@@ -25,6 +25,10 @@ export function idsDeEtapaCitados(nodes: readonly FlowNode[]): string[] {
   for (const node of nodes) {
     if (node.type !== "condition") continue;
     for (const check of node.config.checks) {
+      if ("kind" in check) {
+        if (check.kind === "stage") check.stage_ids.forEach((id) => ids.add(id));
+        continue;
+      }
       const valor = String(check.value).trim();
       if (check.field === "lead_stage" && UUID_RX.test(valor)) ids.add(valor);
     }

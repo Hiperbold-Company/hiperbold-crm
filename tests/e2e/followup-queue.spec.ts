@@ -201,7 +201,7 @@ test.describe("followup queue — fila unificada (Task 7.1)", () => {
     await cancelTrigger.click();
     const dialog = page.getByRole("alertdialog");
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText("O lead não receberá mais mensagens deste fluxo");
+    await expect(dialog).toContainText("O contato não receberá mais mensagens deste fluxo");
     await page.screenshot({ path: path.join(ARTIFACTS_DIR, "followup-7.1-04-cancel-dialog.png"), fullPage: true });
 
     await dialog.getByRole("button", { name: "Cancelar follow-up" }).click();

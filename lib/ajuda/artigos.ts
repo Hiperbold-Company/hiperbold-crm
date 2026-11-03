@@ -30,6 +30,7 @@ export const ARTIGOS_POR_ROTA: Readonly<Record<string, string>> = {
 
   // Funis, leads e contatos
   "/app/kanban": "/crm/funis-e-leads/funis-e-etapas/",
+  "/app/automacoes": "/crm/automacoes/criar-uma-automacao/",
   "/app/pipelines": "/crm/funis-e-leads/funis-e-etapas/",
   "/app/leads": "/crm/funis-e-leads/funis-e-etapas/",
   "/app/settings/tenant/pipelines": "/crm/funis-e-leads/funis-e-etapas/",

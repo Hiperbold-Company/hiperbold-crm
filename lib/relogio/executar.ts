@@ -1,4 +1,5 @@
 import { recoverStuckMessages } from "@/app/api/v1/cron/recover-stuck-messages/route";
+import { criarExecutorDeEfeitos } from "@/lib/automacoes/efeitos";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
 import { drainEventLog } from "@/lib/event-log/drain";
 import { ensureHandlersRegistered } from "@/lib/event-log/register-handlers";
@@ -159,6 +160,7 @@ export async function executarTickDoRelogio(): Promise<{
       db: createSupabaseAdminClient(admin),
       clock: () => new Date(),
       enqueueJob: enfileirarFollowup,
+      efeitos: criarExecutorDeEfeitos(admin),
     };
     const acordados = await aplicarRespostasQueChegaram(admin, deps);
     if (acordados > 0) {

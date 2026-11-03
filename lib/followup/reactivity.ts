@@ -467,12 +467,17 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
     },
     async loadLiveEnrollmentsForContact(orgId, contactId, statuses = LIVE_STATUSES) {
       const ids = await idsDoContatoEGemeos(admin, orgId, contactId);
-      const { data: enrollments, error } = await admin
+      let consulta = admin
         .from("followup_enrollments")
         .select("id, status, current_node_id, steps_taken, pointer_id, updated_at")
         .eq("organization_id", orgId)
         .in("contact_id", ids)
         .in("status", statuses);
+      // A resposta do contato não acorda nem cancela AUTOMAÇÃO (0986): os blocos
+      // dela são de CRM, e uma espera de automação não é "esperando resposta".
+      // O opt-out (lista maior de status) continua alcançando as duas raias.
+      if (statuses === LIVE_STATUSES) consulta = consulta.eq("lane", "followup");
+      const { data: enrollments, error } = await consulta;
       if (error) throw new Error(error.message);
       if (!enrollments?.length) return [];
 

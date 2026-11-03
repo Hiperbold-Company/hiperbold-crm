@@ -2713,7 +2713,7 @@ um primeiro deploy. Cron drenado pelo endpoint, como em produção.
 
 | # | Caso | Expectativa | Resultado |
 |---|------|-------------|-----------|
-| J27.1 | A regra de etapa é escolhida numa lista, agrupada por funil | grava o `stage_id`; a saída do cartão lê «O lead está na etapa “Etapa · Funil”» | PASS |
+| J27.1 | A regra de etapa é escolhida numa lista, agrupada por funil | grava o `stage_id`; a saída do cartão lê «O negócio está na etapa “Etapa · Funil”» | PASS |
 | J27.2 | O cartão não mostra identificador interno | nenhum uuid no texto do cartão | PASS |
 | J27.3 | Nada de texto cortado no cartão | `scrollWidth ≤ clientWidth` e `scrollHeight ≤ clientHeight` em todo subtítulo e toda saída | PASS — medido, não olhado |
 | J27.4 | O passo de classificar fala português | "2 classes · espera 15 min"; saídas "Interessado", "Sem interesse", "Sem resposta", "Outros casos"; nenhum cartão com a palavra "grace" | PASS |
@@ -3072,3 +3072,24 @@ o CI só publica artefato em falha). Medido no run 36309605444, parte 3, head
 | J34.3 | Termo em 2 de 4 mensagens (uma em maiúsculas) | contador "Resultados nas mensagens carregadas: 2"; as 2 bolhas com o anel no `box-shadow` COMPUTADO (`0 0 0 4px`, cor ≠ fundo), uma enviada e uma recebida; as outras 2 sem anel | PASS — anel `rgb(28, 26, 22) 0 0 0 4px` sobre recebida `rgb(245, 243, 238)` e enviada `rgb(80, 109, 72)`; sem anel nas outras |
 | J34.4 | Esc fecha | campo, contador e marcas somem; o foco volta à lupa | PASS |
 | J34.5 | Trocar de conversa pela lista, sem recarregar | a conversa B (que tem o termo) abre sem campo, sem contador e sem marca; abrir a busca nela começa vazia | PASS |
+
+## J35 — Montar uma automação do CRM pela tela `[P1]` (2026-11-02)
+
+Automações do CRM, lote 1 (migration 0986): superfície `automacao` no mesmo motor
+dos follow-ups. Spec: `tests/e2e/automacoes-crm-basico.spec.ts` (job e2e, parte 5).
+Evidência: `evidence/automacoes-lote1/` (README cita cada imagem). Medido local em
+02/11/2026, build de produção: `1 passed`; com `navegacao.spec.ts`, `14 passed (5.7m)`.
+
+| # | Caso | Expectativa | Resultado |
+|---|------|-------------|-----------|
+| J35.1 | Achar a tela | "Automações" no grupo CRM do menu (e no hub de Configurações) abre a lista; em 900px o menu não rola | PASS |
+| J35.2 | Criar | "Nova automação" abre o editor com Início (manual) → Fim, paleta agrupada por categoria | PASS |
+| J35.3 | Configurar sem digitar identificador | gatilho, campo, funil e etapa escolhidos em listas pelo nome | PASS |
+| J35.4 | Publicar | o publish aceita o cenário e o status vira Ativo | PASS |
+| J35.5 | Lead do Facebook chega pela captação | o negócio ganha o campo e a tag, e nasce o negócio no Pós-venda | PASS |
+| J35.6 | Lead de outra origem | passa pela condição e não ganha nada | PASS |
+| J35.7 | Ler o que aconteceu | Execuções → dossiê em português, sem uuid na tela | PASS |
+| J35.8 | Follow-up do mesmo contato | matricula e segue vivo ao lado da automação | PASS |
+
+Fora desta rodada: gatilho "Entrou na etapa" e "Testar com um contato" pela tela
+(cobertos por unitários e pelo invariante `tests/invariants/automacao-engine.test.ts`).

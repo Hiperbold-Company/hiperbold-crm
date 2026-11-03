@@ -1,5 +1,7 @@
 import type { FlowBranch } from "./graph-schema";
 import { fraseDaCondicao, type NomesDeValor } from "./vocabulario";
+import { ehRegraNova } from "./graph-schema";
+import { fraseDaRegraNova } from "@/lib/automacoes/vocabulario";
 
 /**
  * Como uma saída do nó se chama para quem lê — na bolinha do canvas, no painel
@@ -18,6 +20,7 @@ import { fraseDaCondicao, type NomesDeValor } from "./vocabulario";
 export function rotuloDoRamo(branch: FlowBranch, nomes: NomesDeValor = {}): string {
   if (branch.label !== null) return branch.label;
   if (branch.check !== null) {
+    if (ehRegraNova(branch.check)) return fraseDaRegraNova(branch.check, nomes);
     return fraseDaCondicao(branch.check.field, branch.check.op, branch.check.value, nomes);
   }
   // Inalcançável com um ramo vindo de `nodeBranches`: ou o texto já está

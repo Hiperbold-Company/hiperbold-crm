@@ -19,6 +19,7 @@
  * contato) — quando o nó sumiu do grafo pinado, o id cru aparece dito como id,
  * porque um alvo feio é melhor que alvo nenhum.
  */
+import { ACOES_DE_CRM, fraseDaAcao, fraseDaOperacao, fraseDaRegraNova, fraseDoErro } from "@/lib/automacoes/vocabulario";
 import {
   CONDITION_FALSE_BRANCH_ID,
   CONDITION_TRUE_BRANCH_ID,
@@ -133,6 +134,8 @@ const TIPO_DO_NO: Record<FlowNode["type"], string> = {
   skill: "Skill",
   action: "Mensagem",
   end: "Fim",
+  crm_action: "Ações de CRM",
+  field_op: "Operação de campo",
 };
 
 const DESFECHO: Record<string, string> = {
@@ -153,7 +156,7 @@ export function resumoDoNo(node: FlowNode): NoDoDossie {
   const base = { id: node.id, tipo: node.type, rotulo: node.label };
   switch (node.type) {
     case "trigger":
-      return { ...base, resumo: "onde o follow-up começa" };
+      return { ...base, resumo: "triggers" in node.config ? "onde a automação começa" : "onde o follow-up começa" };
     case "wait":
       return {
         ...base,
@@ -198,6 +201,10 @@ export function resumoDoNo(node: FlowNode): NoDoDossie {
       };
     case "end":
       return { ...base, resumo: `encerra — ${DESFECHO[node.config.outcome] ?? node.config.outcome}` };
+    case "crm_action":
+      return { ...base, resumo: node.config.actions.map((a) => fraseDaAcao(a)).join("; ") };
+    case "field_op":
+      return { ...base, resumo: node.config.ops.map((o) => fraseDaOperacao(o)).join("; ") };
   }
 }
 
@@ -265,9 +272,9 @@ function fraseDoRamoDeclarado(origem: FlowNode | undefined, branchId: string, no
     if (!check) return RAMO_SEM_NOME;
     // Regra batizada usa o nome que a pessoa deu; sem nome, a condição por
     // extenso — `regra-2` na tela do operador é o que o vocabulário proíbe.
-    return check.label
-      ? fraseDaRegraNomeada(check.label)
-      : fraseDaRegraSemNome(check.field, check.op, check.value, nomes);
+    if (check.label) return fraseDaRegraNomeada(check.label);
+    if ("kind" in check) return `quando ${fraseDaRegraNova(check).toLocaleLowerCase("pt-BR")}`;
+    return fraseDaRegraSemNome(check.field, check.op, check.value, nomes);
   }
 
   return RAMO_SEM_NOME;
@@ -512,7 +519,52 @@ export function descreveEvento(
         detalhe: "o follow-up existia para esse caso e parou junto com ele",
         ...motor,
       };
+    // ---- Automações (0986) ----
+    case "automacao_iniciada": {
+      const g = texto(p.gatilho);
+      const porque =
+        g === "lead_created" ? "um negócio foi criado" : g === "stage_entered" ? "o negócio entrou na etapa" : g === "manual" ? "alguém iniciou manualmente" : null;
+      return {
+        titulo: p.reiniciada === true ? "A automação recomeçou" : "A automação começou",
+        detalhe: porque,
+        ...(g === "manual" ? pessoa : motor),
+      };
+    }
+    case "trigger_ignored_running":
+      return {
+        titulo: "Gatilho ignorado: o contato já estava nesta automação",
+        detalhe: "a execução em andamento seguiu; o novo disparo não abriu outra",
+        ...motor,
+      };
+    case "effect_started":
+      return { titulo: "Começou a executar as ações", detalhe: null, ...motor };
+    case "effect_done":
+      return { titulo: "Ações executadas", detalhe: detalhesDoEfeito(p), ...motor };
+    case "effect_failed": {
+      const d = (p.desfecho ?? {}) as { erro?: unknown };
+      const erro = fraseDoErro(texto(d.erro) ?? undefined);
+      const feito = detalhesDoEfeito(p);
+      return { titulo: "Uma ação falhou", detalhe: feito ? `${erro} — ${feito}` : erro, ...motor };
+    }
     default:
       return { titulo: "Passo registrado pelo motor", detalhe: `código: ${evento.event_type}`, ...motor };
   }
+}
+
+/** O que cada ação do bloco fez, numa linha ("Adicionar tags: ok; Criar negócio: criado"). */
+function detalhesDoEfeito(p: Record<string, unknown>): string | null {
+  const lista = Array.isArray(p.detalhes) ? (p.detalhes as Array<Record<string, unknown>>) : [];
+  if (lista.length === 0) return null;
+  return lista
+    .map((d) => {
+      const tipo = texto(d.tipo);
+      const nome = tipo === "field_op" ? "Campos" : tipo ? (ACOES_DE_CRM[tipo as keyof typeof ACOES_DE_CRM] ?? tipo) : "Ação";
+      if (d.ok === false) return `${nome}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
+      if (tipo === "field_op" && Array.isArray(d.campos)) return `${nome}: ${(d.campos as string[]).join(", ")}`;
+      const r = texto(d.resultado);
+      const resultado =
+        r === "criado" ? "negócio criado" : r === "ja_existia" ? "já existia" : r === "movido" ? "movido" : r === "sem_mudanca" ? "já estava assim" : "feito";
+      return `${nome}: ${resultado}`;
+    })
+    .join("; ");
 }

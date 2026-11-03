@@ -18,6 +18,7 @@
  * ⚠️ PUBLICAR NÃO ENVIA NADA NA HORA, mas arma o gatilho: a partir dele o motor passa a matricular
  * contatos e a mandar as mensagens do fluxo. A validação semântica roda aqui, na hora de virar a chave.
  */
+import { grafoInicialDaAutomacao, referenciasDoGrafo } from "@/lib/automacoes/referencias";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ApiError } from "@/lib/api/types";
@@ -105,15 +106,17 @@ export function idValido(id: string): boolean {
  */
 export async function listarFluxos(
   deps: DepsDeFollowup,
-  opts: { surface?: "atendimento" } = {},
+  opts: { surface?: "atendimento" | "automacao" } = {},
 ): Promise<unknown[]> {
   const base = deps.supabase
     .from("followup_flow_pointers")
     .select(LIST_COLUMNS)
     .eq("organization_id", deps.organizationId);
-  const { data, error } = await (opts.surface === "atendimento"
-    ? base.eq("surface", "atendimento")
-    : base.neq("surface", "atendimento")
+  // Sem superfície: só os fluxos do RELÓGIO (follow-ups). Roteiro de atendimento
+  // e Automações (0986) têm lista própria.
+  const { data, error } = await (opts.surface
+    ? base.eq("surface", opts.surface)
+    : base.neq("surface", "automacao").neq("surface", "atendimento")
   ).order("updated_at", { ascending: false });
   if (error) throw falhaInterna(deps, error);
   return data ?? [];
@@ -197,6 +200,12 @@ export async function criarFluxo(
       organization_id: deps.organizationId,
       name: entrada.name,
       ...(entrada.surface !== undefined ? { surface: entrada.surface } : {}),
+      // Automação nasce com o Início já de automação (gatilho manual) e o
+      // `trigger_config` manual: os leitores do follow-up (varredura de
+      // silêncio, retorno) nunca a confundem com um fluxo deles.
+      ...(entrada.surface === "automacao"
+        ? { draft_graph: grafoInicialDaAutomacao(), trigger_config: { kind: "manual" } }
+        : {}),
     })
     .select("*")
     .single();
@@ -211,6 +220,9 @@ export async function criarFluxo(
   return linha;
 }
 
+const MENSAGEM_GATILHO_DE_AUTOMACAO =
+  "Automação começa pelos gatilhos do bloco Início, não por gatilho de follow-up.";
+
 export async function alterarFluxo(
   deps: DepsDeFollowup,
   id: string,
@@ -218,12 +230,21 @@ export async function alterarFluxo(
 ): Promise<unknown> {
   const { data: existing, error: fetchErr } = await deps.supabase
     .from("followup_flow_pointers")
-    .select("id")
+    .select("id, surface")
     .eq("id", id)
     .eq("organization_id", deps.organizationId)
     .maybeSingle();
   if (fetchErr) throw falhaInterna(deps, fetchErr);
   if (!existing) throw naoEncontrado(deps);
+  // Automação (0986): os gatilhos moram no Início do grafo. O `trigger_config`
+  // do ponteiro fica manual para nenhum leitor do relógio a matricular.
+  if (
+    (existing as { surface?: string }).surface === "automacao" &&
+    patch.trigger_config !== undefined &&
+    (patch.trigger_config as { kind?: string } | null)?.kind !== "manual"
+  ) {
+    throw recusa(deps, 422, "validation_failed", tr(deps)(MENSAGEM_GATILHO_DE_AUTOMACAO));
+  }
 
   if (Object.keys(patch).length === 0) {
     const { data: unchanged, error: reloadErr } = await deps.supabase
@@ -442,6 +463,9 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
 
   // Roteiro de atendimento: só com o módulo ligado, e só começa por palavra-gatilho ou roteador — nunca pelo relógio.
   const surface = (pointer.surface ?? "followup") as FollowupFlowSurface;
+  if (surface === "automacao" && ((pointer.trigger_config as { kind?: string } | null)?.kind ?? "manual") !== "manual") {
+    throw recusa(deps, 422, "trigger_kind_not_implemented", t(MENSAGEM_GATILHO_DE_AUTOMACAO));
+  }
   if (surface === "atendimento") {
     if (!(await moduloLigado(admin, "fluxos_atendimento"))) throw naoEncontrado(deps);
     const kind = (pointer.trigger_config as { kind?: string } | null)?.kind ?? "manual";
@@ -530,6 +554,39 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
   }
 
   const graph = pointer.draft_graph as unknown as FlowGraph;
+  // Automação: todo funil e etapa citados têm de ser DESTA organização — o
+  // motor executa com a service role.
+  if (surface === "automacao") {
+    const { funis, etapas, pessoas, fontes } = referenciasDoGrafo(graph);
+    const vazio = Promise.resolve({ data: [], error: null });
+    const [rf, re, rp, rs] = await Promise.all([
+      funis.length ? admin.from("crm_pipelines").select("id").eq("organization_id", orgId).in("id", funis) : vazio,
+      etapas.length ? admin.from("crm_stages").select("id").eq("organization_id", orgId).in("id", etapas) : vazio,
+      pessoas.length
+        ? admin
+            .from("user_organizations")
+            .select("user_id")
+            .eq("organization_id", orgId)
+            .in("user_id", pessoas)
+            .is("revoked_at", null)
+        : vazio,
+      fontes.length ? admin.from("webhook_sources").select("id").eq("organization_id", orgId).in("id", fontes) : vazio,
+    ]);
+    if (rf.error) throw falhaInterna(deps, rf.error);
+    if (re.error) throw falhaInterna(deps, re.error);
+    if (rp.error) throw falhaInterna(deps, rp.error);
+    if (rs.error) throw falhaInterna(deps, rs.error);
+    if ((rf.data ?? []).length !== funis.length || (re.data ?? []).length !== etapas.length) {
+      throw recusa(deps, 422, "validation_failed", t("Uma etapa ou funil escolhido não existe mais. Escolha de novo na lista."));
+    }
+    // Pessoa e fonte de captação também: o motor grava dono, tarefa e aviso com a service role.
+    if (new Set((rp.data ?? []).map((r) => (r as { user_id: string }).user_id)).size !== pessoas.length) {
+      throw recusa(deps, 422, "validation_failed", t("Uma pessoa escolhida não faz mais parte da equipe. Escolha de novo na lista."));
+    }
+    if ((rs.data ?? []).length !== fontes.length) {
+      throw recusa(deps, 422, "validation_failed", t("Uma fonte de captação escolhida não existe mais. Escolha de novo na lista."));
+    }
+  }
   // A regra de etapa guarda o `stage_id`, e só o banco diz se a etapa existe e está ativa.
   const citadas = await carregaEtapasCitadas(admin, orgId, graph.nodes);
   if (!citadas.ok) throw falhaInterna(deps, citadas.mensagem);

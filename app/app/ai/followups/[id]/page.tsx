@@ -5,7 +5,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
 import type { FollowupFlowDetailRow } from "@/hooks/followup/useFollowupFlow";
-import { FlowBuilder } from "./_components/FlowBuilder";
+import { FlowBuilder } from "@/components/fluxos/editor/FlowBuilder";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +45,8 @@ export default async function FollowupFlowBuilderPage({
   ]);
 
   if (!pointer) notFound();
+  // Automação abre no editor dela, com a paleta e os gatilhos de automação.
+  if ((pointer as { surface?: string }).surface === "automacao") redirect(`/app/automacoes/${id}`);
 
   // Mesma regra da rota: rascunho ausente COM versão publicada abre o que está
   // NO AR. Ver `lib/followup/rascunho.ts`.

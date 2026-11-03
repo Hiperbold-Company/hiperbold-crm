@@ -31,10 +31,12 @@ import {
   actionConfigSchema,
   aiClassifyConfigSchema,
   conditionConfigSchema,
+  legacyConditionCheckSchema,
   endConfigSchema,
   waitConfigSchema,
 } from "./graph-schema";
 import * as vocabulario from "./vocabulario";
+import { MAPAS_DA_AUTOMACAO } from "@/lib/automacoes/vocabulario";
 import {
   ALVOS_DA_CLASSIFICACAO,
   CAMPOS_DA_CONDICAO,
@@ -92,7 +94,8 @@ function discriminantes(uniao: unknown, chave: string): string[] {
   });
 }
 
-const checkShape = zod(conditionConfigSchema).shape.checks.element.shape;
+// As regras legadas (as que este vocabulário descreve); as das automações têm `lib/automacoes/vocabulario.ts`.
+const checkShape = zod(legacyConditionCheckSchema).shape;
 
 const CAMPOS_NO_SCHEMA = valoresDoEnum(checkShape.field);
 const OPERADORES_NO_SCHEMA = valoresDoEnum(checkShape.op);
@@ -272,6 +275,8 @@ describe("vocabulário NOVO não entra escondido", () => {
   const TODOS_OS_MAPAS: Array<Record<string, unknown>> = [
     ...mapasExportados().map(([, mapa]) => mapa),
     Object.fromEntries(OPERADORES_NO_SCHEMA.map((op) => [op, true])),
+    // Os blocos das automações têm dicionário próprio (`lib/automacoes/vocabulario.ts`).
+    ...MAPAS_DA_AUTOMACAO,
   ];
 
 
@@ -460,22 +465,22 @@ describe("a regra mostra o que a pessoa escolheu, nunca o identificador", () => 
   it("etapa gravada por id aparece pelo nome, com o funil junto", () => {
     // O motor compara `stage_id`; a tela grava o id e LÊ o nome. Sem o nome, o
     // card mostraria o uuid — o defeito que este módulo existe para impedir.
-    expect(fraseDaCondicao("lead_stage", "eq", ID_DA_ETAPA, nomes)).toBe("O lead está na etapa “Pago · Vendas”");
+    expect(fraseDaCondicao("lead_stage", "eq", ID_DA_ETAPA, nomes)).toBe("O negócio está na etapa “Pago · Vendas”");
     expect(fraseDaRegraSemNome("lead_stage", "neq", ID_DA_ETAPA, nomes)).toBe(
-      "quando o lead não está na etapa “Pago · Vendas”",
+      "quando o negócio não está na etapa “Pago · Vendas”",
     );
   });
 
   it("valor que não é id de etapa nenhuma aparece como foi salvo — o texto antigo não some", () => {
-    expect(fraseDaCondicao("lead_stage", "eq", "PAGO", nomes)).toBe("O lead está na etapa “PAGO”");
+    expect(fraseDaCondicao("lead_stage", "eq", "PAGO", nomes)).toBe("O negócio está na etapa “PAGO”");
   });
 
   it("id de etapa sem nome resolvido nunca vai para a tela", () => {
     // Etapa apagada, de outra org, ou leitura que falhou: o uuid não é nome de
     // nada para quem lê, e aparecer entre aspas o faria parecer um.
     const OUTRO_ID = "1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d";
-    expect(fraseDaCondicao("lead_stage", "eq", OUTRO_ID, nomes)).toBe("O lead está na etapa (não encontrada)");
-    expect(fraseDaCondicao("lead_stage", "neq", ID_DA_ETAPA)).toBe("O lead não está na etapa (não encontrada)");
+    expect(fraseDaCondicao("lead_stage", "eq", OUTRO_ID, nomes)).toBe("O negócio está na etapa (não encontrada)");
+    expect(fraseDaCondicao("lead_stage", "neq", ID_DA_ETAPA)).toBe("O negócio não está na etapa (não encontrada)");
   });
 
   it("o nome da etapa só vale para o campo etapa", () => {
@@ -486,10 +491,10 @@ describe("a regra mostra o que a pessoa escolheu, nunca o identificador", () => 
 
   it("regra sem valor diz que falta preencher, em vez de aspas vazias", () => {
     // `“”` se lia como "a etapa de nome vazio" — uma regra que parecia pronta.
-    expect(fraseDaCondicao("lead_stage", "eq", "")).toBe("O lead está na etapa (a preencher)");
+    expect(fraseDaCondicao("lead_stage", "eq", "")).toBe("O negócio está na etapa (a preencher)");
     expect(fraseDaCondicao("tag", "eq", "  ")).toBe("O contato tem a etiqueta (a preencher)");
     expect(fraseDaCondicao("steps_taken", "gte", "")).toBe("O fluxo já deu pelo menos (a preencher) passos");
-    expect(fraseDaCondicao("lead_stage", "eq", "", nomes)).toBe("O lead está na etapa (a preencher)");
+    expect(fraseDaCondicao("lead_stage", "eq", "", nomes)).toBe("O negócio está na etapa (a preencher)");
   });
 });
 

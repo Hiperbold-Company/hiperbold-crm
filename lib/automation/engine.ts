@@ -176,6 +176,15 @@ export async function runAutomationForEvent(
   if (causedByRule) {
     return { consumer_key: AUTOMATION_CONSUMER_KEY, status: "skipped", detail: "caused_by_rule" };
   }
+  // O que uma AUTOMAÇÃO (0986, motor dos follow-ups) fez também não dispara
+  // regra: as duas famílias convivem, e regra reagindo a automação reagindo a
+  // regra é o laço que o anti-loop existe para impedir.
+  if (
+    Boolean(row.metadata?.caused_by_automation) ||
+    (typeof requestId === "string" && requestId.startsWith("automacao:"))
+  ) {
+    return { consumer_key: AUTOMATION_CONSUMER_KEY, status: "skipped", detail: "caused_by_automation" };
+  }
 
   const expectedKind = EXPECTED_ENTITY_KIND[row.event_type];
   if (expectedKind && row.entity_kind !== expectedKind) {

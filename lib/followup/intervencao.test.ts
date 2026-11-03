@@ -124,7 +124,7 @@ describe("escolheSaida — pular sem decidir pelo operador", () => {
       { etapa: (id) => (id === ID_DA_ETAPA ? "Pago · Vendas" : null) },
     );
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.opcoes[0]?.quando).toBe("quando o lead está na etapa “Pago · Vendas”");
+    if (!r.ok) expect(r.opcoes[0]?.quando).toBe("quando o negócio está na etapa “Pago · Vendas”");
   });
 
   it("com a escolha feita, respeita a escolha", () => {

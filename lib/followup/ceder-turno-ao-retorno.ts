@@ -122,6 +122,7 @@ export async function deveCederTurnoAoRetorno(
          join followup_enrollment_events ev
            on ev.organization_id = e.organization_id and ev.enrollment_id = e.id
         where e.organization_id = $1 and e.contact_id = $2
+          and e.lane = 'followup'
           and ev.event_type = 'enrolled_by_inbound_after_silence'
           and ev.payload->>'message_id' = $3
         limit 1`,
@@ -132,6 +133,7 @@ export async function deveCederTurnoAoRetorno(
     const { rows: vivos } = await pool.query<{ pointer_id: string }>(
       `select pointer_id from followup_enrollments
         where organization_id = $1 and contact_id = $2
+          and lane = 'followup'
           and status in ('active','waiting_reply','paused_handoff','paused_manual')
         limit 1`,
       [pedido.organizationId, pedido.contactId],

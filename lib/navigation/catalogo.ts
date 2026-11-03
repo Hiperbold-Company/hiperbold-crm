@@ -273,6 +273,22 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    // Automações do CRM (0986): o mesmo motor dos follow-ups, na superfície
+    // `automacao`. Decisão do dono (02/11/2026): porta no sidebar do CRM E no hub
+    // de Configurações. Não confundir com "Automações e Webhooks" (Canais), que
+    // são as regras de evento → webhook antigas.
+    href: "/app/automacoes",
+    label: "Automações",
+    description: "Regras que mexem no CRM sozinhas: criar negócio, pôr tag, preencher campo, definir responsável.",
+    termos: ["automação", "automatizar", "regra", "gatilho", "lead criado", "fluxo"],
+    icon: "FlowArrow",
+    group: "crm",
+    section: "Preparar a venda",
+    minRole: "manager",
+    sidebar: true,
+    configuracoes: "Atendimento",
+  },
+  {
     // Extraída do PR #418 (@clinicacentrodosorrisosc-code). Fica no CRM e no
     // sidebar porque é tela de USO DIÁRIO — quem atende abre para ver o que
     // vence hoje, do mesmo jeito que abre o Inbox. Sem `minRole`: `viewer` VÊ

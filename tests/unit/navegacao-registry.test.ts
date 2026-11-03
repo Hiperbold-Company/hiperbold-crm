@@ -129,6 +129,8 @@ describe("sidebarGroups", () => {
     expect(crm?.items.map((i) => i.href)).toEqual([
       "/app/kanban",
       "/app/contacts",
+      // Automações: decisão do dono (02/11/2026); o e2e de 900px seguiu sem rolar.
+      "/app/automacoes",
       // "/app/calls" (telefonia por SIP) NÃO entra aqui, e a ausência é a
       // decisão: o módulo é OPCIONAL e nasce desligado (doc 27), então a porta
       // no sidebar custaria um item a TODA instalação — e o vigésimo item é o
@@ -179,6 +181,8 @@ describe("sidebarGroups", () => {
       "/app/radar",
       "/app/kanban",
       "/app/contacts",
+      // Automações: no menu do CRM por decisão do dono (02/11/2026, lote 1).
+      "/app/automacoes",
       "/app/ai/agents",
       "/app/metrics",
       "/app/activities",
@@ -197,6 +201,8 @@ describe("hubSections", () => {
     expect(por("Atendimento")).toEqual([
       "/app/agenda",
       "/app/templates",
+      // Automações: segunda porta por decisão do dono (02/11/2026); a do CRM continua.
+      "/app/automacoes",
       "/app/tasks",
       // Produtos: segunda porta (20/10/2026), a do CRM continua.
       "/app/products",
@@ -262,6 +268,7 @@ describe("hubSections", () => {
       "/app/campaigns",
       "/app/contacts",
       "/app/tasks",
+      "/app/automacoes",
       "/app/products",
       "/app/settings/tenant/pipelines",
     ]);

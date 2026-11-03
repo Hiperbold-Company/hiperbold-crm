@@ -25,6 +25,7 @@
  * agregada por tick (`followup.worker_run` + `followup.silence_sweep_run`),
  * sem organization_id (roda pra todas as orgs).
  */
+import { criarExecutorDeEfeitos } from "@/lib/automacoes/efeitos";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
@@ -94,6 +95,8 @@ async function handle(req: NextRequest): Promise<Response> {
     db: createSupabaseAdminClient(admin),
     clock: () => new Date(),
     enqueueJob,
+    // Blocos de efeito das Automações (ações de CRM, operação de campo).
+    efeitos: criarExecutorDeEfeitos(admin),
   };
 
   const confirmation=await admin.rpc("fn_appointment_confirmation_sweep",{});

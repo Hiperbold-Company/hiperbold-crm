@@ -39,6 +39,8 @@ describe('graph-schema', () => {
         'skill',
         'action',
         'end',
+        'crm_action',
+        'field_op',
       ]);
     });
 

@@ -29,7 +29,8 @@ export async function GET(req: NextRequest): Promise<Response> {
   const e = await entradaDeFluxo(req, { escrita: false, role: "viewer" });
   if (e.resposta) return e.resposta;
   try {
-    const surface = req.nextUrl.searchParams.get("surface") === "atendimento" ? "atendimento" : undefined;
+    const pedida = req.nextUrl.searchParams.get("surface");
+    const surface = pedida === "atendimento" || pedida === "automacao" ? pedida : undefined;
     return ok(await listarFluxos(e.deps, { surface }), { requestId: e.requestId });
   } catch (err) {
     return respostaDeRecusa(err, e.requestId);

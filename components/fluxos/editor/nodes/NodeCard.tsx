@@ -20,7 +20,7 @@ import type { NodeVisual } from "./nodeVisuals";
  */
 function regraSemEtapa(branch: FlowBranch, nomes: NomesDeValor): boolean {
   const check = branch.check;
-  if (check === null || check.field !== "lead_stage") return false;
+  if (check === null || "kind" in check || check.field !== "lead_stage") return false;
   const valor = String(check.value).trim();
   return valor !== "" && nomes.etapa?.(valor) === null;
 }

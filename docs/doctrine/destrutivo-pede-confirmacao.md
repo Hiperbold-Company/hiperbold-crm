@@ -21,7 +21,7 @@ canvas custa o turno.
 No builder de follow-up, o botão de excluir a **seleção** (nó ou aresta) e o botão de excluir o
 **fluxo inteiro** dividem o mesmo assento da barra: mesmo ícone de lixeira, mesma cor destrutiva,
 mesmo tamanho, a poucos pixels de distância — em
-`app/app/ai/followups/[id]/_components/PublishBar.tsx`.
+`components/fluxos/editor/PublishBar.tsx`.
 
 Só um dos dois pedia confirmação. O arranjo resultante é o pior possível entre dois irmãos: o
 botão mais à mão (o que existe para limpar o que o operador acabou de selecionar) disparava a
@@ -59,7 +59,7 @@ O padrão da casa é o `AlertDialog` de `components/ui/alert-dialog`, o mesmo de
 ## Verificação
 
 O contrato do call-site é medido em teste, não em prosa:
-`app/app/ai/followups/[id]/_components/PublishBar.test.tsx` fixa que nada é excluído antes da
+`components/fluxos/editor/PublishBar.test.tsx` fixa que nada é excluído antes da
 confirmação, que cancelar não exclui, que confirmar exclui uma vez, e que o diálogo nomeia o
 alvo conforme a seleção. Do lado do canvas,
 `tests/unit/followup-excluir-no-leva-as-arestas.test.ts` garante que apagar o nó continua levando

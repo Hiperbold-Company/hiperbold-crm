@@ -101,7 +101,7 @@ const KIND_LABEL: Record<TriggerKind, string> = {
   case_opened: "Agente pediu ajuda",
   webhook: "Automação (Webhooks)",
   inbound_after_silence: "Cliente voltou",
-  lead_created: "Lead criado",
+  lead_created: "Negócio criado",
 };
 
 function parseTriggerConfig(raw: Record<string, unknown>): TriggerFormState {
@@ -229,7 +229,7 @@ function summaryLabel(
   }
   if (cfg.kind === "case_opened") return `${t("Gatilho")}: ${t("quando o agente pede ajuda")}`;
   if (cfg.kind === "webhook") return t("Disparado por uma automação em Webhooks");
-  if (cfg.kind === "lead_created") return `${t("Gatilho")}: ${t("Lead criado")}`;
+  if (cfg.kind === "lead_created") return `${t("Gatilho")}: ${t("Negócio criado")}`;
   if (cfg.kind === "manual" || cfg.kind === undefined) return `${t("Gatilho")}: ${t("Manual")}`;
   // conversation_end de dados antigos (API crua) — sem UI própria, mas mostrado
   // com transparência em vez de mentir "Manual".
@@ -508,7 +508,7 @@ export function TriggerConfigControl({ flowId, triggerConfig }: Props) {
           )}
 
           <div className="flex items-center justify-between gap-2">
-            <Label htmlFor="trigger-cancel-on-reply">{t("Cancelar se o lead responder")}</Label>
+            <Label htmlFor="trigger-cancel-on-reply">{t("Cancelar se o contato responder")}</Label>
             <Switch
               id="trigger-cancel-on-reply"
               checked={form.kind === "appointment_no_show" || form.cancelOnReply}
