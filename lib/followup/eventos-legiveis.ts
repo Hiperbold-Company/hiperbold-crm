@@ -197,6 +197,21 @@ export function rotuloDoDesfechoDaAutomacao(outcome: string): string {
   return DESFECHO[outcome] ?? "Concluída";
 }
 
+/**
+ * O gatilho que começou a execução (lote 3), na frase "começou: …". Só o TIPO:
+ * nunca o texto da mensagem, a tag ou a data (LGPD — o evento `automacao_iniciada`
+ * guarda só `gatilho`, `fn_automacao_iniciar`).
+ */
+export const GATILHO_QUE_COMECOU = {
+  message_received: "mensagem recebida",
+  tag_added: "tag adicionada",
+  appointment: "agendamento",
+  birthday: "aniversário do contato",
+  date_field: "data de um campo do negócio",
+  no_reply: "contato sem resposta",
+  case_opened: "caso aberto na Central",
+} as const;
+
 /** O rótulo do tipo, para o cabeçalho do passo. */
 export function tipoDoNo(tipo: FlowNode["type"]): string {
   return TIPO_DO_NO[tipo] ?? "Passo";
@@ -590,11 +605,30 @@ export function descreveEvento(
     case "automacao_iniciada": {
       const g = texto(p.gatilho);
       const porque =
-        g === "lead_created" ? "um negócio foi criado" : g === "stage_entered" ? "o negócio entrou na etapa" : g === "manual" ? "alguém iniciou manualmente" : null;
+        g === "lead_created"
+          ? "um negócio foi criado"
+          : g === "stage_entered"
+            ? "o negócio entrou na etapa"
+            : g === "manual"
+              ? "alguém iniciou manualmente"
+              : g === "started_by_automation"
+                ? "outra automação a iniciou"
+                : g && Object.hasOwn(GATILHO_QUE_COMECOU, g)
+                  ? `começou: ${GATILHO_QUE_COMECOU[g as keyof typeof GATILHO_QUE_COMECOU]}`
+                  : null;
       return {
         titulo: p.reiniciada === true ? "A automação recomeçou" : "A automação começou",
         detalhe: porque,
         ...(g === "manual" ? pessoa : motor),
+      };
+    }
+    case "iniciada_pela_automacao": {
+      // Só as CHAVES dos dados recebidos: os valores moram nas variáveis da execução (LGPD).
+      const chaves = Array.isArray(p.chaves) ? (p.chaves as unknown[]).filter((k): k is string => typeof k === "string") : [];
+      return {
+        titulo: `Iniciada pela automação “${texto(p.automacao_nome) ?? "outra automação"}”`,
+        detalhe: chaves.length > 0 ? `dados recebidos: ${chaves.map((k) => `{{param.${k}}}`).join(", ")}` : null,
+        ...motor,
       };
     }
     case "trigger_ignored_running":
@@ -618,6 +652,21 @@ export function descreveEvento(
   }
 }
 
+/** Na execução de ORIGEM: "Iniciou a automação “Y”" (e o que o banco respondeu). */
+function fraseDoInicioDeOutra(d: Record<string, unknown>): string {
+  const alvo = `“${texto(d.automacao_nome) ?? "escolhida"}”`;
+  switch (texto(d.resultado)) {
+    case "reiniciada":
+      return `Reiniciou a automação ${alvo}`;
+    case "ja_em_execucao":
+      return `A automação ${alvo} já estava em execução para o contato`;
+    case "duplicada":
+      return `A automação ${alvo} já tinha sido iniciada por este passo`;
+    default:
+      return `Iniciou a automação ${alvo}`;
+  }
+}
+
 /** O que cada ação do bloco fez, numa linha ("Adicionar tags: ok; Criar negócio: criado"). */
 function detalhesDoEfeito(p: Record<string, unknown>): string | null {
   const lista = Array.isArray(p.detalhes) ? (p.detalhes as Array<Record<string, unknown>>) : [];
@@ -634,7 +683,12 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
       }
       const nome = tipo === "field_op" ? "Campos" : tipo ? (ACOES_DE_CRM[tipo as keyof typeof ACOES_DE_CRM] ?? tipo) : "Ação";
       if (d.ok === false) return `${nome}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
-      if (tipo === "field_op" && Array.isArray(d.campos)) return `${nome}: ${(d.campos as string[]).join(", ")}`;
+      if (tipo === "start_automation") return fraseDoInicioDeOutra(d);
+      if (tipo === "field_op" && Array.isArray(d.campos)) {
+        // Evento novo traz o rótulo do campo; o antigo só a chave.
+        const rotulos = Array.isArray(d.rotulos) && d.rotulos.length === d.campos.length ? d.rotulos : d.campos;
+        return `${nome}: ${(rotulos as string[]).join(", ")}`;
+      }
       const r = texto(d.resultado);
       const resultado =
         r === "criado" ? "negócio criado" : r === "ja_existia" ? "já existia" : r === "movido" ? "movido" : r === "sem_mudanca" ? "já estava assim" : "feito";

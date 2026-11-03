@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   automacaoTriggerConfigSchema,
+  automacaoTriggerSchema,
+  ERRO_PALAVRA_CHAVE_SEM_LETRA,
+  GATILHO_EM_BRANCO,
   GATILHO_PADRAO,
   type AutomacaoTrigger,
   type AutomacaoTriggerConfig,
@@ -20,17 +23,38 @@ import { useWebhookSources } from "@/hooks/webhooks/useWebhookSources";
 import { useT } from "@/hooks/i18n/useT";
 import { Plus, Trash } from "@/lib/ui/icons";
 
+import { CamposDoGatilho } from "./CamposDoGatilho";
 import { Campo, opcoesDeEtapa, Seletor, useFunis } from "./comum";
 
 function gatilhoEmBranco(kind: AutomacaoTriggerKind): AutomacaoTrigger {
-  switch (kind) {
-    case "manual":
-      return { kind };
-    case "lead_created":
-      return { kind };
-    case "stage_entered":
-      return { kind, stage_ids: [], via: "any" };
+  return structuredClone(GATILHO_EM_BRANCO[kind]) as AutomacaoTrigger;
+}
+
+/** O que falta num gatilho que o schema recusou, em português (passa pelo `t()`). */
+const FALTA_NO_GATILHO: Record<AutomacaoTriggerKind, string> = {
+  manual: "Complete o gatilho.",
+  lead_created: "Complete o gatilho.",
+  stage_entered: "Complete o gatilho: escolha ao menos uma etapa.",
+  message_received: "Complete o gatilho: informe ao menos uma palavra-chave.",
+  tag_added: "Complete o gatilho: escolha ao menos uma tag.",
+  appointment: "Complete o gatilho: marque ao menos um acontecimento da agenda.",
+  birthday: "Complete o gatilho.",
+  date_field: "Complete o gatilho: informe de 0 a 365 dias e o horário.",
+  no_reply: "O tempo sem resposta precisa ser de 5 minutos a 30 dias.",
+  case_opened: "Complete o gatilho.",
+  started_by_automation: "Complete o gatilho.",
+};
+
+/** A frase do primeiro gatilho incompleto, ou `null` quando todos servem. */
+export function faltaNosGatilhos(triggers: AutomacaoTrigger[]): string | null {
+  for (const g of triggers) {
+    const r = automacaoTriggerSchema.safeParse(g);
+    if (r.success) continue;
+    if (r.error.issues.some((i) => i.message === ERRO_PALAVRA_CHAVE_SEM_LETRA))
+      return ERRO_PALAVRA_CHAVE_SEM_LETRA;
+    return FALTA_NO_GATILHO[g.kind];
   }
+  return null;
 }
 
 /**
@@ -41,9 +65,12 @@ function gatilhoEmBranco(kind: AutomacaoTriggerKind): AutomacaoTrigger {
 export function AutomationTriggerForm({
   config,
   onChange,
+  flowId,
 }: {
   config: Partial<AutomacaoTriggerConfig> | Record<string, never>;
   onChange: (config: AutomacaoTriggerConfig) => void;
+  /** A automação aberta: fica fora da lista "Aceitar de". */
+  flowId?: string;
 }) {
   const t = useT();
   const inicial = automacaoTriggerConfigSchema.safeParse(config);
@@ -58,7 +85,7 @@ export function AutomationTriggerForm({
     setRascunho(novo);
     const r = automacaoTriggerConfigSchema.safeParse(novo);
     if (!r.success) {
-      setErro(t("Complete o gatilho: escolha ao menos uma etapa."));
+      setErro(t(faltaNosGatilhos(novo.triggers) ?? "Complete o gatilho."));
       return;
     }
     setErro(null);
@@ -174,6 +201,13 @@ export function AutomationTriggerForm({
               </Campo>
             </>
           )}
+
+          <CamposDoGatilho
+            prefixo={`gatilho-${i}`}
+            gatilho={g}
+            onChange={(novo) => trocar(i, novo)}
+            {...(flowId !== undefined ? { flowId } : {})}
+          />
         </div>
       ))}
       {rascunho.triggers.length < 5 && (
@@ -228,7 +262,11 @@ export function AutomationTriggerForm({
           />
         </Campo>
       </div>
-      {erro && <p className="text-xs text-error-fg">{erro}</p>}
+      {erro && (
+        <p className="text-xs text-error-fg" data-testid="gatilho-erro">
+          {erro}
+        </p>
+      )}
     </div>
   );
 }

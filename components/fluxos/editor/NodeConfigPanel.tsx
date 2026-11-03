@@ -114,6 +114,7 @@ export function NodeConfigPanel({
           <AutomationTriggerForm
             config={node.data.config as ConfigOf<"trigger">}
             onChange={(config) => onChange({ config })}
+            {...(flowId !== undefined ? { flowId } : {})}
           />
         )}
         {type === "trigger" && surface === "followup" && (
@@ -155,7 +156,12 @@ export function NodeConfigPanel({
           />
         )}
         {type === "crm_action" && (
-          <CrmActionForm config={node.data.config as ConfigOf<"crm_action">} onChange={(config) => onChange({ config })} />
+          <CrmActionForm
+            config={node.data.config as ConfigOf<"crm_action">}
+            onChange={(config) => onChange({ config })}
+            respostas={respostasAnteriores}
+            {...(flowId !== undefined ? { flowId } : {})}
+          />
         )}
         {type === "field_op" && (
           <FieldOpForm config={node.data.config as ConfigOf<"field_op">} onChange={(config) => onChange({ config })} />

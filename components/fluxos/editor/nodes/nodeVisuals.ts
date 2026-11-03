@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 
 import { Play, Clock, GitBranch, Brain, ChatCircle, ChatsCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Kanban, PencilSimple } from "@/lib/ui/icons";
-import { fraseDaAcao, fraseDaOperacao, GATILHOS_DA_AUTOMACAO } from "@/lib/automacoes/vocabulario";
+import { fraseDaAcao, fraseDaOperacao, GATILHOS_DA_AUTOMACAO, type NomesDaAutomacao } from "@/lib/automacoes/vocabulario";
 import type { FollowupFlowSurface } from "@/lib/followup/api-schemas";
 import type { FlowNode, NodeType } from "@/lib/followup/graph-schema";
 import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
@@ -241,6 +241,9 @@ export function describeNodeConfig(
   // Só o cartão Fim muda com a superfície: na automação o fim não tem "esgotado"
   // nem "convertido" para escolher, ele conclui. Ausente = follow-up.
   surface?: FollowupFlowSurface,
+  // Nomes (automação, etapa, pessoa) para a frase do card de Ações de CRM;
+  // ausente = a frase genérica ("escolhida").
+  nomes?: NomesDaAutomacao,
 ): string {
   switch (type) {
     case "trigger": {
@@ -308,7 +311,7 @@ export function describeNodeConfig(
       const c = config as ConfigOf<"crm_action">;
       const primeira = c.actions[0];
       const resto = c.actions.length > 1 ? ` +${c.actions.length - 1}` : "";
-      return primeira ? `${fraseDaAcao(primeira)}${resto}` : "";
+      return primeira ? `${fraseDaAcao(primeira, nomes)}${resto}` : "";
     }
     case "field_op": {
       const c = config as ConfigOf<"field_op">;

@@ -39,7 +39,9 @@ import { lerCampo } from "../condicoes";
 import type { FatosDaAutomacao } from "../fatos";
 import type { CrmAction, FieldOp } from "../schemas";
 import { renderizar } from "../template-vars";
+import { CAMPOS_PADRAO_DO_CONTATO, CAMPOS_PADRAO_DO_NEGOCIO } from "../vocabulario";
 import { executarConversa } from "./conversa";
+import { executarIniciarAutomacao } from "./iniciar-automacao";
 
 /** Evento que avisa a equipe (push) — consumido por `lib/notifications/push.handler.ts`. */
 export const EVENTO_DE_AVISO_DA_AUTOMACAO = "automacao.aviso";
@@ -51,6 +53,8 @@ export interface Contexto {
   org: string;
   pointerId: string;
   enrollmentId: string;
+  /** `${node}:${passo}` do efeito — base das chaves idempotentes. */
+  chave: string;
   contatoId: string;
   fatos: FatosDaAutomacao | null;
   handler: HandlerCtx;
@@ -116,7 +120,7 @@ async function rodizio(c: Contexto, ids: string[] | undefined): Promise<string |
   return selectRoundRobin(candidatos.map((userId) => ({ userId, currentLoad: 0, lastAssignedAt: ultimo.get(userId) ?? null })));
 }
 
-async function executarAcao(c: Contexto, acao: CrmAction): Promise<Passo> {
+async function executarAcao(c: Contexto, acao: CrmAction, indice: number): Promise<Passo> {
   const base = { tipo: acao.type };
   switch (acao.type) {
     case "create_deal": {
@@ -175,10 +179,18 @@ async function executarAcao(c: Contexto, acao: CrmAction): Promise<Passo> {
       if (!dono) return { ok: false, erro: acao.target === "lead" ? "sem_negocio" : "sem_contato", detalhe: base };
       const atuais = dono.tags ?? [];
       const igual = (a: string, b: string) => a.toLocaleLowerCase("pt-BR") === b.toLocaleLowerCase("pt-BR");
+      // A tag é template como os outros blocos (`{{param.origem}}`): renderiza,
+      // apara e descarta a que ficou vazia. Todas vazias = erro legível.
+      const escolhidas: string[] = [];
+      for (const bruta of acao.tags) {
+        const t = renderizar(bruta, c.fatos, c.agora).trim().slice(0, 60).trim();
+        if (t && !escolhidas.some((e) => igual(e, t))) escolhidas.push(t);
+      }
+      if (escolhidas.length === 0) return { ok: false, erro: "tag_vazia", detalhe: base };
       const novas =
         acao.type === "add_tags"
-          ? [...atuais, ...acao.tags.filter((t) => !atuais.some((a) => igual(a, t)))]
-          : atuais.filter((a) => !acao.tags.some((t) => igual(a, t)));
+          ? [...atuais, ...escolhidas.filter((t) => !atuais.some((a) => igual(a, t)))]
+          : atuais.filter((a) => !escolhidas.some((t) => igual(a, t)));
       if (novas.length === atuais.length && novas.every((t, i) => t === atuais[i])) {
         return { ok: true, detalhe: { ...base, resultado: "sem_mudanca" } };
       }
@@ -270,6 +282,8 @@ async function executarAcao(c: Contexto, acao: CrmAction): Promise<Passo> {
       if (error) return { ok: false, erro: "efeito_falhou", detalhe: base };
       return { ok: true, detalhe: { ...base, lead_id: lead.id } };
     }
+    case "start_automation":
+      return executarIniciarAutomacao(c, acao, indice);
   }
 }
 
@@ -299,6 +313,16 @@ const TIPO_PADRAO: Partial<Record<string, Pick<CustomFieldDef, "type">>> = {
 
 /** Campos padrão que a operação de campo NÃO escreve: têm bloco próprio (etapa, dono) ou são do sistema. */
 
+/** Nome do campo como a tela mostra: o `label` do campo personalizado do
+ *  funil, o nome do campo padrão, ou a chave quando não há definição (campo
+ *  personalizado do contato, campo removido do funil). */
+export function rotuloDoCampo(alvo: FieldOp["target"], defs: ReadonlyMap<string, Pick<CustomFieldDef, "label">>): string {
+  if (alvo.scope === "lead_custom") return defs.get(alvo.key)?.label ?? alvo.key;
+  if (alvo.scope === "lead") return CAMPOS_PADRAO_DO_NEGOCIO[alvo.key] ?? alvo.key;
+  if (alvo.scope === "contact") return CAMPOS_PADRAO_DO_CONTATO[alvo.key] ?? alvo.key;
+  return alvo.scope === "var" ? alvo.path : alvo.key;
+}
+
 /**
  * `literal`: o valor é a RESPOSTA do contato, gravada como veio — nunca
  * renderizada como template (um `{{...}}` digitado pelo contato não lê campo
@@ -313,6 +337,10 @@ export async function executarOperacoes(c: Contexto, ops: FieldOp[], literal = f
   const contato = c.fatos?.contato ?? null;
   const defs = lead ? await camposDoFunil(c, lead.pipeline_id) : new Map<string, CustomFieldDef>();
   const feitos: string[] = [];
+  // O rótulo do campo vai no evento (é configuração do funil, não dado do
+  // contato): o histórico mostra "Origem do contato", não `origem_do_contato`.
+  const rotulos: string[] = [];
+  const rotuloDe = (alvo: FieldOp["target"]) => rotuloDoCampo(alvo, defs);
 
   for (const op of ops) {
     const alvo = op.target;
@@ -347,6 +375,7 @@ export async function executarOperacoes(c: Contexto, ops: FieldOp[], literal = f
       const valor = op.op === "clear" ? [] : op.op === "append" ? [...anteriores, ...lista.filter((t) => !anteriores.includes(t))] : lista;
       (alvo.scope === "lead" ? patchLead : patchContato).tags = valor;
       feitos.push(alvo.key);
+      rotulos.push(rotuloDe(alvo));
       continue;
     }
     const r = aplicarOperacao(op.op, atual, texto, def as Pick<CustomFieldDef, "type" | "options"> | null);
@@ -360,6 +389,7 @@ export async function executarOperacoes(c: Contexto, ops: FieldOp[], literal = f
     else if (alvo.scope === "contact") patchContato[alvo.key] = valor;
     else customContato[alvo.key] = valor;
     feitos.push(alvo.key);
+    rotulos.push(rotuloDe(alvo));
   }
 
   if (lead && (Object.keys(patchLead).length > 0 || Object.keys(customLead).length > 0)) {
@@ -375,7 +405,7 @@ export async function executarOperacoes(c: Contexto, ops: FieldOp[], literal = f
       ...(Object.keys(customContato).length > 0 ? { custom_fields: { ...contato.custom_fields, ...customContato } } : {}),
     } as Parameters<typeof patchContactHandler>[3]);
   }
-  return { ok: true, detalhe: { tipo: "field_op", campos: feitos } };
+  return { ok: true, detalhe: { tipo: "field_op", campos: feitos, rotulos } };
 }
 
 function contextoDe(admin: SupabaseClient, pedido: PedidoDeEfeito, agora: Date): Contexto {
@@ -385,6 +415,7 @@ function contextoDe(admin: SupabaseClient, pedido: PedidoDeEfeito, agora: Date):
     org: enrollment.organization_id,
     pointerId: enrollment.pointer_id,
     enrollmentId: enrollment.id,
+    chave: pedido.chave,
     contatoId: enrollment.contact_id,
     fatos: pedido.fatos,
     agora,
@@ -433,10 +464,10 @@ export function criarExecutorDeEfeitos(
       const detalhes: Array<Record<string, unknown>> = [];
       let vars: Record<string, unknown> = {};
       let primeiroErro: string | undefined;
-      for (const acao of node.config.actions) {
+      for (const [indice, acao] of node.config.actions.entries()) {
         let passo: Passo;
         try {
-          passo = await executarAcao(c, acao);
+          passo = await executarAcao(c, acao, indice);
         } catch (err) {
           const codigo = codigoDoErro(err);
           if (codigo === "plano_limite_atingido") await avisarLimiteDeLeadsAtingido(admin, c.org);

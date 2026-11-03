@@ -69,7 +69,7 @@ import {
   type EstadoDaEspera,
   type RespostaRecebida,
 } from "@/lib/automacoes/conversa";
-import { devolverTurnoAoAgente } from "@/lib/automacoes/devolver-turno";
+import { devolverTurnoAoAgente, devolverTurnoDoInicio } from "@/lib/automacoes/devolver-turno";
 import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
 import { carregarFatosDaAutomacao } from "@/lib/automacoes/carregar-fatos";
 import {
@@ -207,6 +207,12 @@ export interface AdminClient {
    * Opcional: sem ele, nada é devolvido.
    */
   devolverTurnoAoAgente?(orgId: string, enrollmentId: string, desde: string): Promise<void>;
+  /**
+   * A execução nasceu de "mensagem recebida" (a IA cedeu aquela mensagem, `uma-voz.ts`)
+   * e terminou: se não falou na conversa, pede de novo o turno da IA
+   * (`devolverTurnoDoInicio`). Opcional: sem ele, nada é devolvido.
+   */
+  devolverTurnoDoInicio?(orgId: string, enrollmentId: string, conversationId: string, messageId: string): Promise<void>;
   persistirRespostaFollowup(input: {
     organization_id: string;
     contact_id: string;
@@ -417,6 +423,32 @@ async function markDead(
     completed_at: clock().toISOString(),
     updated_at: clock().toISOString(),
   });
+  if (ehAutomacao(enrollment)) await devolverSeNasceuDeMensagem(db, enrollment);
+}
+
+/**
+ * A execução de automação nascida de "mensagem recebida" terminou (concluída ou
+ * morta). A IA pode ter cedido aquela mensagem enquanto ela estava viva
+ * (`uma-voz.ts`); se a execução não falou na conversa, o turno volta à IA.
+ * Falha aqui não muda o desfecho, já gravado.
+ */
+async function devolverSeNasceuDeMensagem(db: AdminClient, enrollment: EnrollmentRow): Promise<void> {
+  const g = (enrollment.vars ?? {})["gatilho"] as
+    | { tipo?: unknown; conversation_id?: unknown; message_id?: unknown }
+    | undefined;
+  if (
+    !db.devolverTurnoDoInicio ||
+    g?.tipo !== "message_received" ||
+    typeof g.conversation_id !== "string" ||
+    typeof g.message_id !== "string"
+  ) {
+    return;
+  }
+  try {
+    await db.devolverTurnoDoInicio(enrollment.organization_id, enrollment.id, g.conversation_id, g.message_id);
+  } catch {
+    logger.warn("automacao: devolver o turno do início à IA falhou", { enrollment_id: enrollment.id });
+  }
 }
 
 async function applyHandlerFailure(
@@ -995,6 +1027,7 @@ async function processarUmPasso(
       logger.warn("automacao: devolver o turno à IA falhou", { enrollment_id: enrollment.id });
     }
   }
+  if (automacao && aplicou && result.kind === "complete") await devolverSeNasceuDeMensagem(db, enrollment);
   if (!automacao || !aplicou || result.kind !== "advance") return null;
   // O próximo bloco no MESMO tick: o estado que acabou de ser gravado.
   return {
@@ -1386,6 +1419,9 @@ export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
     },
     async devolverTurnoAoAgente(orgId, enrollmentId, desde) {
       await devolverTurnoAoAgente(admin, { organizationId: orgId, enrollmentId, desde });
+    },
+    async devolverTurnoDoInicio(orgId, enrollmentId, conversationId, messageId) {
+      await devolverTurnoDoInicio(admin, { organizationId: orgId, enrollmentId, conversationId, messageId });
     },
     async loadRespostasDaEspera(orgId, contactId, desde) {
       const ids = await idsDoContatoEGemeos(admin, orgId, contactId);

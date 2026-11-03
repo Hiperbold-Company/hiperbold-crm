@@ -75,6 +75,7 @@ import {
   naoDisparados,
 } from "@/lib/automation/gatilho-de-data-do-funil";
 import { autorizaCron } from "@/lib/auth/cron-auth";
+import { createSupabaseDataDoNegocioDb, varrerDatasDasAutomacoes } from "@/lib/automacoes/varredura-de-data";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -93,6 +94,28 @@ async function handle(req: NextRequest): Promise<Response> {
   const admin = createAdminClient();
   const agora = new Date();
 
+  // As AUTOMAÇÕES com gatilho "Data de um campo do negócio" (lote 3) iniciam
+  // execução direto pelo `fn_automacao_iniciar`, sem evento: cada uma tem o
+  // próprio horário e a origem determinística torna a rodada idempotente. As
+  // regras antigas, abaixo, seguem com o evento dirigido por `rule_id`.
+  let automacoes = { automacoes: 0, candidatos: 0, iniciadas: 0, ignoradas: 0, falhas: 0 };
+  try {
+    automacoes = await varrerDatasDasAutomacoes(createSupabaseDataDoNegocioDb(admin), agora);
+  } catch (err) {
+    logger.error("[lead-date-field-due] varredura das automações falhou", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId,
+    });
+  }
+  if (automacoes.iniciadas > 0) {
+    await audit({
+      action: "automacao.data_do_negocio_sweep_run",
+      resourceType: "followup_flow_pointer",
+      metadata: { ...automacoes },
+      requestId,
+    });
+  }
+
   const { data: regras, error: erroRegras } = await admin
     .from("automation_rules")
     .select("id, organization_id, trigger_config")
@@ -110,7 +133,7 @@ async function handle(req: NextRequest): Promise<Response> {
   const todasAsRegras = regras ?? [];
   if (todasAsRegras.length === 0) {
     return ok(
-      { organizacoes: 0, regras: 0, examinados: 0, emitidos: 0, pulados: {} },
+      { organizacoes: 0, regras: 0, examinados: 0, emitidos: 0, pulados: {}, automacoes },
       { requestId },
     );
   }
@@ -277,6 +300,7 @@ async function handle(req: NextRequest): Promise<Response> {
       examinados,
       emitidos,
       pulados,
+      automacoes,
     },
     { requestId },
   );

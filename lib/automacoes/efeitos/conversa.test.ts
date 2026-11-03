@@ -155,6 +155,7 @@ function contexto(admin: SupabaseClient, over: Partial<Contexto> = {}): Contexto
     org: ORG,
     pointerId: "ptr-1",
     enrollmentId: "enr-1",
+    chave: "message-1:0",
     contatoId: CONTATO,
     fatos: null,
     handler: { requestId: "automacao:ptr-1:req" } as Contexto["handler"],
