@@ -7,7 +7,7 @@ import { flowGraphSchema, nodeBranches, type FlowGraph } from "@/lib/followup/gr
 import { NOS_DA_SUPERFICIE, REGISTRO_DE_NOS } from "@/lib/followup/registro-de-nos";
 import { validateFlowForPublish } from "@/lib/followup/validate-publish";
 
-import { aplicarOperacao, coagirPeloTipo, dataIso } from "./campos";
+import { aplicarOperacao, campoSoLeitura, coagirPeloTipo, dataIso } from "./campos";
 import { avaliarRegraNova, comparaCampo } from "./condicoes";
 import type { FatosDaAutomacao } from "./fatos";
 import { casaGatilho, fatosDoEvento, gatilhosDoGrafo, varsDoGatilho } from "./gatilhos";
@@ -280,5 +280,33 @@ describe("registro de nós e publish da automação", () => {
     const g = grafoInicialDaAutomacao();
     expect(flowGraphSchema.safeParse(g).success).toBe(true);
     expect(gatilhosDoGrafo(g)?.triggers).toEqual([{ kind: "manual" }]);
+  });
+});
+
+describe("campos que a automação não escreve (C2) e espera imune (B8)", () => {
+  it("telefone e e-mail do contato, e etapa/funil/situação/responsável/origem do negócio, são só leitura", () => {
+    expect(campoSoLeitura({ scope: "contact", key: "phone_number" })).toBe(true);
+    expect(campoSoLeitura({ scope: "contact", key: "email" })).toBe(true);
+    expect(campoSoLeitura({ scope: "lead", key: "stage_id" })).toBe(true);
+    expect(campoSoLeitura({ scope: "lead", key: "source" })).toBe(true);
+    expect(campoSoLeitura({ scope: "contact", key: "name" })).toBe(false);
+    expect(campoSoLeitura({ scope: "lead_custom", key: "midia" })).toBe(false);
+  });
+  it("o publish recusa operação de campo no telefone do contato", () => {
+    const g = grafoDoCenario();
+    const n4 = g.nodes.find((n) => n.id === "n4")!;
+    (n4.config as { ops: unknown[] }).ops = [{ target: { scope: "contact", key: "phone_number" }, op: "set", value: "+5511999990000" }];
+    const r = validateFlowForPublish(g, { surface: "automacao" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.map((e) => e.code)).toContain("campo_so_leitura");
+  });
+  it("o publish recusa espera imune à resposta numa automação", () => {
+    const g = grafoDoCenario();
+    g.nodes.push({ id: "w1", type: "wait", label: "Esperar", position: { x: 0, y: 0 }, config: { mode: "fixed", duration_ms: 3_600_000, immune_to_reply: true } } as FlowGraph["nodes"][number]);
+    g.edges = g.edges.map((e) => (e.id === "e6" ? { ...e, target: "w1" } : e));
+    g.edges.push({ id: "e8", source: "w1", target: "n5", priority: 0, condition: { type: "always" } });
+    const r = validateFlowForPublish(g, { surface: "automacao" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.map((e) => e.code)).toContain("espera_imune_na_automacao");
   });
 });

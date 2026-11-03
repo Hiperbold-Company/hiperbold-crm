@@ -39,6 +39,23 @@ export function automacaoQueCausou(row: Pick<EventRow, "metadata">): string | nu
   return texto(c?.pointer_id);
 }
 
+/**
+ * A EXECUÇÃO de automação que causou o evento (`request_id =
+ * automacao:<pointer>:<execução>:…`, ou `caused_by_automation.enrollment_id`).
+ * Vira o `parent_enrollment_id` da execução que o evento iniciar: é assim que a
+ * cadeia A → B → A é medida e cortada (`fn_automacao_iniciar`).
+ */
+export function execucaoQueCausou(row: Pick<EventRow, "metadata">): string | null {
+  const rid = texto(row.metadata?.request_id);
+  if (rid?.startsWith("automacao:")) {
+    const id = rid.split(":")[2] ?? "";
+    return /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+  }
+  const c = row.metadata?.caused_by_automation as { enrollment_id?: unknown } | undefined;
+  const id = texto(c?.enrollment_id);
+  return id && /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+}
+
 /** Os fatos de gatilho que UMA linha do event_log produz (lead criado também é "entrou na etapa"). */
 export function fatosDoEvento(row: EventRow): FatoDeGatilho[] {
   const leadId = texto(row.entity_id);

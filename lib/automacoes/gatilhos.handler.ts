@@ -18,7 +18,7 @@ import { contaBloqueadaParaProduzir } from "@/lib/billing/assinatura/pode-produz
 import type { EventHandler, EventRow, HandlerResult } from "@/lib/event-log/dispatcher";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { casaGatilho, fatosDoEvento, gatilhosDoGrafo, varsDoGatilho } from "./gatilhos";
+import { execucaoQueCausou, casaGatilho, fatosDoEvento, gatilhosDoGrafo, varsDoGatilho } from "./gatilhos";
 import { iniciarAutomacao, type InicioDaAutomacao } from "./iniciar";
 import type { AutomacaoTriggerConfig } from "./schemas";
 
@@ -81,6 +81,7 @@ export async function aplicarGatilhosDeAutomacao(db: GatilhosDb, row: EventRow):
       contactId: contato,
       vars: varsDoGatilho(fato, row.id),
       originEventId: row.id,
+      parentEnrollmentId: execucaoQueCausou(row),
     });
     if (r.resultado === "iniciada" || r.resultado === "reiniciada") resumo.iniciadas++;
     else resumo.ignoradas++;

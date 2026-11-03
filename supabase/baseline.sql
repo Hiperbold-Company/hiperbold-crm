@@ -69375,6 +69375,8 @@ comment on column public.followup_enrollments.origin_event_id is
 -- 2) a vaga única do FOLLOW-UP continua igual, só que restrita à raia dele.
 -- Cópia do predicado EM VIGOR (com paused_manual, issue #1041), mais a raia.
 -- Só derruba a versão sem `lane`: numa reaplicação o índice já está na final.
+-- Em banco vivo a troca não abre janela sem unicidade: o índice novo nasce com
+-- outro nome ANTES de o antigo cair, e só então herda o nome (tudo num comando).
 do $$
 begin
   if exists (
@@ -69383,7 +69385,11 @@ begin
       and indexname  = 'idx_followup_enrollments_one_live'
       and indexdef not ilike '%lane%'
   ) then
+    execute $i$create unique index if not exists idx_followup_enrollments_one_live_raia
+      on public.followup_enrollments (organization_id, contact_id)
+      where status in ('active','waiting_reply','paused_handoff','paused_manual') and lane = 'followup'$i$;
     execute 'drop index public.idx_followup_enrollments_one_live';
+    execute 'alter index public.idx_followup_enrollments_one_live_raia rename to idx_followup_enrollments_one_live';
   end if;
 end
 $$;
@@ -69490,6 +69496,8 @@ declare
   v_live public.followup_enrollments;
   v_id uuid;
   v_anon boolean;
+  v_profundidade int;
+  v_ciclo boolean;
 begin
   select p.active_version_id into v_version
     from public.followup_flow_pointers p
@@ -69528,6 +69536,74 @@ begin
     return jsonb_build_object('resultado', 'sem_inicio');
   end if;
 
+  -- Cadeia de automações (o evento que chegou foi causado por outra execução):
+  -- a mesma automação voltando na cadeia (A → B → A) ou uma cadeia funda demais
+  -- é cortada aqui, com aviso na Central — senão duas automações que se
+  -- disparam giram até o teto por hora de cada contato.
+  if p_parent_enrollment_id is not null then
+    with recursive cadeia(id, pointer_id, parent, n) as (
+      select e.id, e.pointer_id, e.parent_enrollment_id, 1
+        from public.followup_enrollments e
+       where e.organization_id = p_org and e.id = p_parent_enrollment_id
+      union all
+      select e.id, e.pointer_id, e.parent_enrollment_id, c.n + 1
+        from public.followup_enrollments e
+        join cadeia c on e.id = c.parent
+       where e.organization_id = p_org and c.n < 20
+    )
+    select coalesce(max(n), 0), coalesce(bool_or(pointer_id = p_pointer), false)
+      into v_profundidade, v_ciclo
+      from cadeia;
+    if v_ciclo or v_profundidade >= 5 then
+      insert into public.agent_inbox_items(organization_id, kind, severity, title, body, ref_kind, ref_id)
+      select p_org, 'other', 'warn', 'Automações em cadeia interrompidas',
+             case when v_ciclo
+               then 'Uma automação disparou outra que voltaria a disparar a primeira. A volta foi cortada para não girar sem fim.'
+               else 'Uma sequência de automações disparando umas às outras passou de 5 passos e foi cortada.' end,
+             'followup_flow_pointer', p_pointer
+       where not exists (
+         select 1 from public.agent_inbox_items i
+          where i.organization_id = p_org and i.kind = 'other' and i.status = 'open'
+            and i.ref_kind = 'followup_flow_pointer' and i.ref_id = p_pointer
+            and i.title = 'Automações em cadeia interrompidas');
+      return jsonb_build_object('resultado', case when v_ciclo then 'ciclo' else 'cadeia_longa' end);
+    end if;
+  end if;
+
+  -- Teto por organização e por hora: freio de último caso contra laço que
+  -- escape das guardas acima (cada execução nova conta, de qualquer automação).
+  if (select count(*) from public.followup_enrollments e
+       where e.organization_id = p_org and e.lane = 'automacao'
+         and e.started_at > now() - interval '1 hour') >= 5000 then
+    insert into public.agent_inbox_items(organization_id, kind, severity, title, body, ref_kind, ref_id)
+    select p_org, 'other', 'critical', 'Automações pausadas pelo teto da hora',
+           'Mais de 5000 execuções de automação começaram na última hora. As novas ficam recusadas até o volume baixar.',
+           'organization', p_org
+     where not exists (
+       select 1 from public.agent_inbox_items i
+        where i.organization_id = p_org and i.kind = 'other' and i.status = 'open'
+          and i.title = 'Automações pausadas pelo teto da hora');
+    return jsonb_build_object('resultado', 'limite_da_organizacao');
+  end if;
+
+  -- Espera e teto do contato ANTES de mexer na execução viva: um "recomeçar"
+  -- barrado por eles não pode cancelar a execução que estava em curso.
+  if v_cooldown > 0 and exists (
+    select 1 from public.followup_enrollments e
+     where e.organization_id = p_org and e.pointer_id = p_pointer and e.contact_id = p_contact
+       and e.completed_at > now() - make_interval(mins => v_cooldown)
+       and coalesce(e.cancel_reason, '') <> 'reiniciada'
+  ) then
+    return jsonb_build_object('resultado', 'em_espera');
+  end if;
+
+  -- Freio contra laço entre fluxos: no máximo 10 execuções por automação por contato por hora.
+  if (select count(*) from public.followup_enrollments e
+       where e.organization_id = p_org and e.pointer_id = p_pointer and e.contact_id = p_contact
+         and e.started_at > now() - interval '1 hour') >= 10 then
+    return jsonb_build_object('resultado', 'limite_por_hora');
+  end if;
+
   select * into v_live
     from public.followup_enrollments e
    where e.organization_id = p_org and e.pointer_id = p_pointer and e.contact_id = p_contact
@@ -69548,22 +69624,6 @@ begin
        set status = 'cancelled', cancel_reason = 'reiniciada', completed_at = now(),
            next_eval_at = null, claimed_until = null, updated_at = now()
      where id = v_live.id;
-  end if;
-
-  if v_cooldown > 0 and exists (
-    select 1 from public.followup_enrollments e
-     where e.organization_id = p_org and e.pointer_id = p_pointer and e.contact_id = p_contact
-       and e.completed_at > now() - make_interval(mins => v_cooldown)
-       and coalesce(e.cancel_reason, '') <> 'reiniciada'
-  ) then
-    return jsonb_build_object('resultado', 'em_espera');
-  end if;
-
-  -- Freio contra laço entre fluxos: no máximo 10 execuções por automação por contato por hora.
-  if (select count(*) from public.followup_enrollments e
-       where e.organization_id = p_org and e.pointer_id = p_pointer and e.contact_id = p_contact
-         and e.started_at > now() - interval '1 hour') >= 10 then
-    return jsonb_build_object('resultado', 'limite_por_hora');
   end if;
 
   begin

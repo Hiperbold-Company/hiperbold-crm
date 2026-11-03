@@ -13,6 +13,7 @@ import { useMemo, type ReactNode } from "react";
 
 import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api/client";
+import { CAMPOS_SO_LEITURA } from "@/lib/automacoes/campos";
 import type { FieldRef } from "@/lib/automacoes/schemas";
 import {
   CAMPOS_PADRAO_DO_CONTATO,
@@ -175,7 +176,6 @@ export function SeletorDeCampo({
 }) {
   const t = useT();
   const personalizados = useCamposPersonalizados();
-  const SO_LEITURA_DO_NEGOCIO = new Set(["stage_id", "pipeline_id", "status", "owner_user_id"]);
   const atual = valor ? valorDoCampo(valor) : "";
   const conhecidos = new Set<string>();
   const grupo = (rotulo: string, itens: Opcao[]) => {
@@ -191,9 +191,11 @@ export function SeletorDeCampo({
     );
   };
   const negocio = Object.entries(CAMPOS_PADRAO_DO_NEGOCIO)
-    .filter(([k]) => !paraEscrita || !SO_LEITURA_DO_NEGOCIO.has(k))
+    .filter(([k]) => !paraEscrita || !CAMPOS_SO_LEITURA.lead.has(k))
     .map(([k, r]) => ({ valor: `lead:${k}`, rotulo: t(r) }));
-  const contato = Object.entries(CAMPOS_PADRAO_DO_CONTATO).map(([k, r]) => ({
+  const contato = Object.entries(CAMPOS_PADRAO_DO_CONTATO)
+    .filter(([k]) => !paraEscrita || !CAMPOS_SO_LEITURA.contact.has(k))
+    .map(([k, r]) => ({
     valor: `contact:${k}`,
     rotulo: t(r),
   }));

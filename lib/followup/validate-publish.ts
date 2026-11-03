@@ -1,3 +1,5 @@
+import { campoSoLeitura } from '@/lib/automacoes/campos';
+import { nomeDoCampo } from '@/lib/automacoes/vocabulario';
 import type { FlowGraph, FlowEdge, FlowNode, NodeType } from './graph-schema';
 import type { FollowupFlowSurface } from './api-schemas';
 import { branchIdForCondition, ehRegraNova, nodeBranches } from './graph-schema';
@@ -37,6 +39,8 @@ export const PUBLISH_ERROR_CODES = [
   'roteiro_em_ciclo',
   'gatilho_da_automacao',
   'regra_de_automacao',
+  'campo_so_leitura',
+  'espera_imune_na_automacao',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -173,6 +177,33 @@ function validarSuperficie(
                 ? `A caixa "${n.label}" é de automação e não roda num follow-up.`
                 : `A caixa "${n.label}" é de roteiro de atendimento e não roda num follow-up.`,
       });
+    }
+  }
+  if (surface === 'automacao') {
+    for (const n of [...graph.nodes].sort(byId)) {
+      // Telefone e e-mail do contato, etapa/funil/situação/responsável/origem do
+      // negócio: a operação de campo não escreve (o motor recusa de novo).
+      if (n.type === 'field_op') {
+        for (const op of n.config.ops) {
+          if (campoSoLeitura(op.target)) {
+            errors.push({
+              node_id: n.id,
+              code: 'campo_so_leitura',
+              message: `"${n.label}": ${nomeDoCampo(op.target)} não pode ser alterado por automação.`,
+            });
+          }
+        }
+      }
+      // Espera "imune à resposta" deixa a execução em `dormente`, fora da vaga
+      // de automação do contato (índice e trava da 0986): duas execuções da
+      // mesma automação conviveriam. Na automação a espera não ouve resposta.
+      if (n.type === 'wait' && 'immune_to_reply' in n.config && n.config.immune_to_reply) {
+        errors.push({
+          node_id: n.id,
+          code: 'espera_imune_na_automacao',
+          message: `"${n.label}": na automação a espera não tem a opção "imune à resposta".`,
+        });
+      }
     }
   }
   // Os gatilhos de uma AUTOMAÇÃO moram no nó Início (vários por fluxo); nos

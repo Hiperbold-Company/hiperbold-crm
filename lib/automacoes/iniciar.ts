@@ -1,7 +1,8 @@
 /**
  * Iniciar uma automação para um contato — a ÚNICA porta, `fn_automacao_iniciar`
  * (migration 0986). A função do banco decide reentrada (ignorar ou recomeçar),
- * cooldown, teto por hora e idempotência por evento, sob o lock do contato.
+ * cooldown, teto por hora, cadeia/ciclo entre automações, teto da organização
+ * e idempotência por evento, sob o lock do contato.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -14,7 +15,10 @@ export type ResultadoDoInicio =
   | "contato_invalido"
   | "sem_inicio"
   | "em_espera"
-  | "limite_por_hora";
+  | "limite_por_hora"
+  | "ciclo"
+  | "cadeia_longa"
+  | "limite_da_organizacao";
 
 export interface InicioDaAutomacao {
   resultado: ResultadoDoInicio;

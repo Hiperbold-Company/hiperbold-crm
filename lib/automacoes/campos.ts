@@ -8,7 +8,28 @@
  */
 import type { CustomFieldDef } from "@/lib/schemas/settings";
 
-import type { FieldOp } from "./schemas";
+import type { FieldOp, FieldRef } from "./schemas";
+
+/**
+ * Campos que a operação de campo NÃO escreve:
+ *  - do negócio, os que têm ação própria (etapa, funil, situação, responsável)
+ *    ou são procedência (origem);
+ *  - do contato, telefone e e-mail: são a IDENTIDADE do contato (é por eles que
+ *    a conversa e a captação o acham) e o canal de envio. Uma automação que os
+ *    reescrevesse por template mandaria mensagem para outra pessoa (auditoria
+ *    do lote 1, C2).
+ */
+export const CAMPOS_SO_LEITURA: { readonly lead: ReadonlySet<string>; readonly contact: ReadonlySet<string> } = {
+  lead: new Set(["stage_id", "pipeline_id", "status", "owner_user_id", "source"]),
+  contact: new Set(["phone_number", "email"]),
+};
+
+export function campoSoLeitura(ref: FieldRef): boolean {
+  if (ref.scope === "var") return true;
+  if (ref.scope === "lead") return CAMPOS_SO_LEITURA.lead.has(ref.key);
+  if (ref.scope === "contact") return CAMPOS_SO_LEITURA.contact.has(ref.key);
+  return false;
+}
 
 export type Coercao = { ok: true; valor: unknown } | { ok: false; erro: string };
 

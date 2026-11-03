@@ -990,11 +990,24 @@ async function resolverEfeito(
     try {
       resultado = await deps.efeitos.executar({ enrollment, node, fatos, chave });
     } catch (err) {
-      logger.warn("automacao: efeito lançou; o bloco sai por Erro", { erro: errorMessage(err) });
+      // Só o CÓDIGO: a mensagem bruta de um erro de banco ou de handler pode
+      // trazer o valor que o template montou (nome, telefone, texto do cliente).
+      logger.warn("automacao: efeito lançou; o bloco sai por Erro", { codigo: codigoDoErroDeEfeito(err) });
       resultado = { desfecho: { ok: false, erro: "efeito_falhou" } };
     }
   }
   return gravarFim(resultado);
+}
+
+/** Código estável de um erro lançado por efeito, sem a mensagem (que pode carregar dado pessoal). */
+export function codigoDoErroDeEfeito(err: unknown): string {
+  if (err && typeof err === "object") {
+    const codigo = (err as { code?: unknown }).code;
+    if (typeof codigo === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(codigo)) return codigo;
+    const nome = (err as { name?: unknown }).name;
+    if (typeof nome === "string" && /^[A-Za-z0-9_]{1,64}$/.test(nome)) return nome;
+  }
+  return "erro_desconhecido";
 }
 
 export async function runFollowupTick(deps: TickDeps, opts?: { limit?: number }): Promise<TickSummary> {

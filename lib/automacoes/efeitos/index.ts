@@ -22,6 +22,7 @@ import { patchContactHandler } from "@/app/api/v1/contacts/_handler";
 import type { HandlerCtx } from "@/lib/api/handlers/types";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
+import { organizacaoPodeProduzir } from "@/lib/billing/assinatura/pode-produzir";
 import { STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import type { ExecutorDeEfeitos, PedidoDeEfeito, ResultadoDoEfeito } from "@/lib/followup/engine";
@@ -32,7 +33,7 @@ import { avisarLimiteDeLeadsAtingido } from "@/lib/leads/aviso-limite-de-leads";
 import { selectRoundRobin } from "@/lib/routing/decide";
 import { customFieldSchema, type CustomFieldDef } from "@/lib/schemas/settings";
 
-import { aplicarOperacao } from "../campos";
+import { aplicarOperacao, campoSoLeitura } from "../campos";
 import { carregarFatosDaAutomacao } from "../carregar-fatos";
 import { lerCampo } from "../condicoes";
 import type { FatosDaAutomacao } from "../fatos";
@@ -296,7 +297,6 @@ const TIPO_PADRAO: Partial<Record<string, Pick<CustomFieldDef, "type">>> = {
 };
 
 /** Campos padrão que a operação de campo NÃO escreve: têm bloco próprio (etapa, dono) ou são do sistema. */
-const SOMENTE_LEITURA = new Set(["stage_id", "pipeline_id", "status", "owner_user_id", "source"]);
 
 async function executarOperacoes(c: Contexto, ops: FieldOp[]): Promise<Passo> {
   const patchLead: Record<string, unknown> = {};
@@ -317,7 +317,7 @@ async function executarOperacoes(c: Contexto, ops: FieldOp[]): Promise<Passo> {
     if ((alvo.scope === "contact" || alvo.scope === "contact_custom") && !contato) {
       return { ok: false, erro: "sem_contato", detalhe: { tipo: "field_op" } };
     }
-    if ((alvo.scope === "lead" || alvo.scope === "contact") && SOMENTE_LEITURA.has(alvo.key)) {
+    if (campoSoLeitura(alvo)) {
       return { ok: false, erro: `valor_invalido:${alvo.key}`, detalhe: { tipo: "field_op", campo: alvo.key } };
     }
     const texto = op.value ? renderizar(op.value, c.fatos, c.agora) : "";
@@ -396,12 +396,20 @@ export function criarExecutorDeEfeitos(
     clock?: () => Date;
     /** Recarrega os fatos depois de uma ação que criou/moveu negócio (o passo seguinte do MESMO bloco vê o negócio novo). */
     recarregarFatos?: (pedido: PedidoDeEfeito, vars: Record<string, unknown>) => Promise<FatosDaAutomacao | null>;
+    /** Organização suspensa (plataforma ou cobrança) não muda o CRM sozinha. Padrão: `organizacaoPodeProduzir`. */
+    podeProduzir?: (organizationId: string) => Promise<boolean>;
   } = {},
 ): ExecutorDeEfeitos {
   const clock = opts.clock ?? (() => new Date());
+  const podeProduzir = opts.podeProduzir ?? ((org: string) => organizacaoPodeProduzir(admin, org));
   return {
     async executar(pedido): Promise<ResultadoDoEfeito> {
       const node: FlowNode = pedido.node;
+      // Antes de qualquer leitura ou escrita: a execução que já estava na fila
+      // quando a conta foi suspensa não age por ela.
+      if (!(await podeProduzir(pedido.enrollment.organization_id))) {
+        return { desfecho: { ok: false, erro: "organizacao_bloqueada" }, detalhes: [{ tipo: node.type }] };
+      }
       const c = contextoDe(admin, pedido, clock());
       if (node.type === "field_op") {
         try {
