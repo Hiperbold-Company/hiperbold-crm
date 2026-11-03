@@ -19,7 +19,15 @@
  * contato) — quando o nó sumiu do grafo pinado, o id cru aparece dito como id,
  * porque um alvo feio é melhor que alvo nenhum.
  */
-import { ACOES_DE_CRM, fraseDaAcao, fraseDaOperacao, fraseDaRegraNova, fraseDoErro } from "@/lib/automacoes/vocabulario";
+import {
+  ACOES_DE_CRM,
+  ENVIOS_DA_CONVERSA,
+  fraseDaAcao,
+  fraseDaOperacao,
+  fraseDaRegraNova,
+  fraseDoErro,
+  VALIDACOES_DA_PERGUNTA,
+} from "@/lib/automacoes/vocabulario";
 import {
   CONDITION_FALSE_BRANCH_ID,
   CONDITION_TRUE_BRANCH_ID,
@@ -42,6 +50,12 @@ import {
 // ---------------------------------------------------------------------------
 // Duração
 // ---------------------------------------------------------------------------
+
+/** "30 segundos", "1 minuto"... — a espera em segundos das automações. */
+export function segundosLegiveis(s: number): string {
+  if (s < 60) return `${s} ${s === 1 ? "segundo" : "segundos"}`;
+  return duracaoLegivel(s * 1000);
+}
 
 /** "45 minutos", "4 horas", "2 dias" — arredondado para a maior unidade inteira. */
 export function duracaoLegivel(ms: number): string {
@@ -136,6 +150,8 @@ const TIPO_DO_NO: Record<FlowNode["type"], string> = {
   end: "Fim",
   crm_action: "Ações de CRM",
   field_op: "Operação de campo",
+  message: "Mensagem",
+  question: "Pergunta",
 };
 
 const DESFECHO: Record<string, string> = {
@@ -163,7 +179,11 @@ export function resumoDoNo(node: FlowNode): NoDoDossie {
         resumo:
           node.config.mode === "fixed"
             ? `espera ${duracaoLegivel(node.config.duration_ms)}`
-            : `espera adaptativa, entre ${duracaoLegivel(node.config.min_ms)} e ${duracaoLegivel(node.config.max_ms)}`,
+            : node.config.mode === "smart"
+              ? `espera adaptativa, entre ${duracaoLegivel(node.config.min_ms)} e ${duracaoLegivel(node.config.max_ms)}`
+              : node.config.mode === "delay"
+                ? `espera ${segundosLegiveis(node.config.duration_s)}`
+                : `espera o contato responder, por até ${duracaoLegivel(node.config.timeout_ms)}`,
       };
     case "condition":
       return {
@@ -205,6 +225,17 @@ export function resumoDoNo(node: FlowNode): NoDoDossie {
       return { ...base, resumo: node.config.actions.map((a) => fraseDaAcao(a)).join("; ") };
     case "field_op":
       return { ...base, resumo: node.config.ops.map((o) => fraseDaOperacao(o)).join("; ") };
+    case "message": {
+      const o = node.config.options;
+      return {
+        ...base,
+        resumo: o
+          ? `envia uma mensagem com ${o.kind === "buttons" ? "botões" : "lista"}: ${o.items.map((i) => i.label).join(", ")}`
+          : "envia uma mensagem",
+      };
+    }
+    case "question":
+      return { ...base, resumo: `pergunta e grava a resposta (${VALIDACOES_DA_PERGUNTA[node.config.validation]})` };
   }
 }
 
@@ -558,6 +589,13 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
   return lista
     .map((d) => {
       const tipo = texto(d.tipo);
+      // Bloco de conversa: o que saiu (mensagem, nova tentativa, aviso) ou a resposta registrada.
+      const envio = texto(d.envio);
+      if (envio) {
+        const nomeDoEnvio = ENVIOS_DA_CONVERSA[envio as keyof typeof ENVIOS_DA_CONVERSA] ?? envio;
+        if (d.ok === false) return `${nomeDoEnvio}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
+        return `${nomeDoEnvio}: ${envio === "resposta" ? (texto(d.opcao_id) ? `opção ${texto(d.opcao_id)}` : "registrada") : "enviada"}`;
+      }
       const nome = tipo === "field_op" ? "Campos" : tipo ? (ACOES_DE_CRM[tipo as keyof typeof ACOES_DE_CRM] ?? tipo) : "Ação";
       if (d.ok === false) return `${nome}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
       if (tipo === "field_op" && Array.isArray(d.campos)) return `${nome}: ${(d.campos as string[]).join(", ")}`;

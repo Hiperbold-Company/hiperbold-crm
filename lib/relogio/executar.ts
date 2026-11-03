@@ -119,10 +119,41 @@ async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps
     if (!texto) continue;
     const enviada = typeof msg?.sent_at === "string" ? msg.sent_at : "";
     if (enviada && !inboundEhDestaPergunta(enviada, enrollment.updated_at)) continue;
+    if (enrollment.lane === "automacao") {
+      // Automação esperando resposta (mensagem com opções, pergunta, "até
+      // responder"): não aplica o texto aqui, sem claim. Acorda a execução
+      // (`next_eval_at = agora`) e o `runFollowupTick` logo abaixo, neste mesmo
+      // tick, a reivindica e lê a resposta (com o id da opção tocada).
+      if (await acordarAutomacaoEmEspera(admin, enrollment)) n++;
+      continue;
+    }
     await aplicarRespostaInbound(deps, enrollment, texto);
     n++;
   }
   return n;
+}
+
+/**
+ * Antecipa o próximo passo de uma automação em `waiting_reply`. Só mexe em
+ * `next_eval_at`, e só se ainda estiver no futuro: o passo seguinte grava
+ * `updated_at`, e é isso que impede o mesmo inbound de acordá-la de novo.
+ */
+export async function acordarAutomacaoEmEspera(
+  admin: SupabaseClient,
+  enrollment: Pick<EnrollmentRow, "id" | "organization_id" | "next_eval_at">,
+  agora: Date = new Date(),
+): Promise<boolean> {
+  const agoraIso = agora.toISOString();
+  if (enrollment.next_eval_at && enrollment.next_eval_at <= agoraIso) return true;
+  const { error } = await admin
+    .from("followup_enrollments")
+    .update({ next_eval_at: agoraIso })
+    .eq("organization_id", enrollment.organization_id)
+    .eq("id", enrollment.id)
+    .eq("lane", "automacao")
+    .eq("status", "waiting_reply");
+  if (error) throw new Error(error.message);
+  return true;
 }
 
 /**

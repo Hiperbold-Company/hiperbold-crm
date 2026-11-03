@@ -22,7 +22,7 @@
  *     O modelo não mexe no agente de ninguém — a tela diz que falta esse passo.
  */
 import type { TriggerConfig } from "@/lib/followup/api-schemas";
-import type { FlowGraph } from "@/lib/followup/graph-schema";
+import { duracaoMaximaDaEspera, type FlowGraph } from "@/lib/followup/graph-schema";
 
 /** Para qual tipo de negócio o modelo foi escrito. Hoje só clínica; o catálogo já é plural. */
 export const NICHOS_DE_MODELO = ["clinica"] as const;
@@ -93,9 +93,7 @@ export function horizonteDoModeloMs(grafo: FlowGraph): number {
     const no = porId.get(id);
     const proprio =
       no?.type === "wait"
-        ? no.config.mode === "fixed"
-          ? no.config.duration_ms
-          : no.config.max_ms
+        ? duracaoMaximaDaEspera(no.config)
         : no?.type === "match_reply"
           ? no.config.grace_timeout_ms
           : no?.type === "ai_classify"

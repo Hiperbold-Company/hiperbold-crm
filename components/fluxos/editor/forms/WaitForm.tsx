@@ -26,7 +26,7 @@ export function WaitForm({
   onChange: (c: ConfigOf<"wait">) => void;
 }) {
   const t = useT();
-  const [mode, setMode] = useState<"fixed" | "smart">(config.mode);
+  const [mode, setMode] = useState<"fixed" | "smart">(config.mode === "smart" ? "smart" : "fixed");
   const [durationMin, setDurationMin] = useState(
     config.mode === "fixed" ? msToMin(config.duration_ms) : 10,
   );

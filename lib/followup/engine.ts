@@ -52,7 +52,13 @@ import { interpolarDestino, persistirRespostaFollowupSupabase } from "./persisti
 import { quandoDoRetornoVivo, reavaliarDepoisDoRetorno } from "./retorno-segura-o-fluxo";
 import { triggerConfigSchema } from "./api-schemas";
 import { definicaoDoNo } from "./registro-de-nos";
-import type { DesfechoDoEfeito } from "./node-handlers";
+import {
+  ehBlocoDeConversa,
+  tempoLimiteDaConversa,
+  type AcaoDeConversa,
+  type DesfechoDoEfeito,
+} from "./node-handlers";
+import { estadoDaEspera, pisoDaEspera, type EstadoDaEspera, type RespostaRecebida } from "@/lib/automacoes/conversa";
 import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
 import { carregarFatosDaAutomacao } from "@/lib/automacoes/carregar-fatos";
 import {
@@ -177,6 +183,13 @@ export interface AdminClient {
    * cada passo. Opcional — o motor de follow-up não precisa.
    */
   loadFatosDaAutomacao?(orgId: string, contactId: string, vars: Record<string, unknown>): Promise<FatosDaAutomacao>;
+  /**
+   * Bloco de conversa (automação): as mensagens do contato (e gêmeos de
+   * telefone) desde `desde`, da mais antiga à mais nova, no máximo 5, com o id
+   * da opção tocada na resposta nativa. Opcional: sem ele o motor usa
+   * `loadLastInboundBody` (sem id de opção).
+   */
+  loadRespostasDaEspera?(orgId: string, contactId: string, desde: string): Promise<RespostaRecebida[]>;
   persistirRespostaFollowup(input: {
     organization_id: string;
     contact_id: string;
@@ -190,6 +203,8 @@ export interface PedidoDeEfeito {
   enrollment: EnrollmentRow;
   node: FlowNode;
   fatos: FatosDaAutomacao | null;
+  /** Bloco de conversa: o que a decisão pediu (enviar, registrar a resposta). Ausente nos blocos de CRM. */
+  acao?: AcaoDeConversa;
   /** `${node}:${passo}` — identidade do efeito, para quem precisar de chave idempotente. */
   chave: string;
 }
@@ -740,7 +755,10 @@ async function processarUmPasso(
 
   const node = graph.nodes.find((n) => n.id === enrollment.current_node_id);
   if (!node) throw new Error("node_not_found");
-  if (inboundBodyOverride !== undefined && node.type !== "match_reply" && node.type !== "wait") {
+  // A automação não é aplicada pelo texto do inbound (o caminho sem claim): a
+  // resposta a um bloco de conversa é lida dos eventos e das mensagens pelo
+  // tick que reivindica a execução (o relógio a acorda — `lib/relogio/executar.ts`).
+  if (inboundBodyOverride !== undefined && (automacao || (node.type !== "match_reply" && node.type !== "wait"))) {
     return null;
   }
 
@@ -872,7 +890,25 @@ async function processarUmPasso(
     }
   }
 
-  const result = processNode({
+  // Bloco de conversa (automação): o que esta estadia já fez e, se já está
+  // esperando, as mensagens do contato desde o início da espera em curso.
+  let espera: EstadoDaEspera | undefined;
+  let respostas: RespostaRecebida[] | undefined;
+  if (automacao && ehBlocoDeConversa(node)) {
+    espera = estadoDaEspera(events, node.id);
+    const limite = tempoLimiteDaConversa(node);
+    if (espera.aguardando && limite !== null) {
+      const desde = pisoDaEspera(espera.prazo, limite, enrollment.updated_at);
+      respostas = db.loadRespostasDaEspera
+        ? await db.loadRespostasDaEspera(enrollment.organization_id, enrollment.contact_id, desde)
+        : await (async () => {
+            const corpo = await db.loadLastInboundBody(enrollment.organization_id, enrollment.contact_id, null, desde);
+            return corpo === null ? [] : [{ texto: corpo, replyId: null }];
+          })();
+    }
+  }
+
+  const entrada = {
     node,
     edges: graph.edges,
     enrollment,
@@ -891,8 +927,17 @@ async function processarUmPasso(
     repeatTotal,
     proximo,
     ...(fatos ? { fatos } : {}),
-    efeito,
-  });
+    ...(espera ? { espera } : {}),
+    ...(respostas ? { respostas } : {}),
+  };
+  let result = processNode({ ...entrada, efeito });
+  // A decisão do bloco de conversa pediu UM efeito (enviar ou registrar): o
+  // motor o executa uma vez por passo e pergunta de novo, com o desfecho.
+  if (automacao && result.kind === "effect" && result.acao) {
+    const resolvido = await resolverEfeito(deps, enrollment, node, events, fatos ?? null, result.acao);
+    if (resolvido.vars) varsNovas = { ...(enrollment.vars ?? {}), ...resolvido.vars };
+    result = processNode({ ...entrada, efeito: resolvido.desfecho });
+  }
   const aplicou = await applyResult(
     deps,
     enrollment,
@@ -934,6 +979,7 @@ async function resolverEfeito(
   node: FlowNode,
   events: EnrollmentEventRef[],
   fatos: FatosDaAutomacao | null,
+  acao?: AcaoDeConversa,
 ): Promise<{ desfecho: DesfechoDoEfeito; vars?: Record<string, unknown> }> {
   const { db } = deps;
   const chave = `${node.id}:${enrollment.steps_taken}`;
@@ -980,7 +1026,8 @@ async function resolverEfeito(
     : await db.insertEnrollmentEvent({
         ...base,
         event_type: "effect_started",
-        payload: { tipo: node.type },
+        // Só o TIPO da ação de conversa — nunca o valor (a resposta do contato).
+        payload: { tipo: node.type, ...(acao ? { acao: acao.tipo } : {}) },
         idempotency_key: chaveInicio,
       });
   if (!inserted) {
@@ -992,7 +1039,7 @@ async function resolverEfeito(
     resultado = { desfecho: { ok: false, erro: "efeitos_indisponiveis" } };
   } else {
     try {
-      resultado = await deps.efeitos.executar({ enrollment, node, fatos, chave });
+      resultado = await deps.efeitos.executar({ enrollment, node, fatos, chave, ...(acao ? { acao } : {}) });
     } catch (err) {
       // Só o CÓDIGO: a mensagem bruta de um erro de banco ou de handler pode
       // trazer o valor que o template montou (nome, telefone, texto do cliente).
@@ -1281,6 +1328,26 @@ export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
     },
     async loadFatosDaAutomacao(orgId, contactId, vars) {
       return carregarFatosDaAutomacao(admin, orgId, contactId, vars);
+    },
+    async loadRespostasDaEspera(orgId, contactId, desde) {
+      const ids = await idsDoContatoEGemeos(admin, orgId, contactId);
+      const { data, error } = await admin
+        .from("messages")
+        .select("body, metadata, sent_at")
+        .eq("organization_id", orgId)
+        .in("contact_id", ids)
+        .eq("direction", "inbound")
+        .gte("sent_at", desde)
+        .order("sent_at", { ascending: true })
+        .limit(5);
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as Array<{ body: string | null; metadata: unknown }>).map((m) => {
+        const reply = (m.metadata as { reply?: { id?: unknown } } | null)?.reply;
+        return {
+          texto: typeof m.body === "string" ? m.body : "",
+          replyId: typeof reply?.id === "string" ? reply.id : null,
+        };
+      });
     },
   };
 }

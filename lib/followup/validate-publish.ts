@@ -2,7 +2,13 @@ import { campoSoLeitura } from '@/lib/automacoes/campos';
 import { nomeDoCampo } from '@/lib/automacoes/vocabulario';
 import type { FlowGraph, FlowEdge, FlowNode, NodeType } from './graph-schema';
 import type { FollowupFlowSurface } from './api-schemas';
-import { branchIdForCondition, ehRegraNova, nodeBranches } from './graph-schema';
+import {
+  branchIdForCondition,
+  duracaoMaximaDaEspera,
+  duracaoMinimaDaEspera,
+  ehRegraNova,
+  nodeBranches,
+} from './graph-schema';
 import { NOS_DA_SUPERFICIE } from './registro-de-nos';
 import { rotuloDoRamo } from './rotulo-do-ramo';
 import type { NomesDeValor } from './vocabulario';
@@ -292,16 +298,23 @@ const MIN_CYCLE_WAIT_MS = 300_000; // 5min
 const MAX_PATH_STEPS = 30;
 
 function waitMs(config: Extract<FlowNode, { type: 'wait' }>['config']): number {
-  return config.mode === 'fixed' ? config.duration_ms : config.max_ms;
+  return duracaoMaximaDaEspera(config);
 }
 
-/** A wait node whose duration meets the 5min floor required to break a cycle. */
+/**
+ * A wait node whose duration meets the 5min floor required to break a cycle.
+ *
+ * Os blocos de conversa que ESPERAM resposta (pergunta, mensagem com opções,
+ * "até responder") também quebram o ciclo: só andam com o prazo vencido ou com
+ * o contato escrevendo — e uma volta por mensagem do contato é conversa, não
+ * rajada (o teto de 30 por hora e as 20 visitas por bloco seguram o resto).
+ */
 function isSufficientWaitNode(node: FlowNode): boolean {
   if (node.type === 'match_reply') return node.config.grace_timeout_ms >= MIN_CYCLE_WAIT_MS;
+  if (node.type === 'question') return node.config.timeout_ms >= MIN_CYCLE_WAIT_MS;
+  if (node.type === 'message') return (node.config.reply_timeout_ms ?? 0) >= MIN_CYCLE_WAIT_MS && !!node.config.options;
   if (node.type !== 'wait') return false;
-  return node.config.mode === 'fixed'
-    ? node.config.duration_ms >= MIN_CYCLE_WAIT_MS
-    : node.config.min_ms >= MIN_CYCLE_WAIT_MS;
+  return duracaoMinimaDaEspera(node.config) >= MIN_CYCLE_WAIT_MS;
 }
 
 function buildOutEdges(edges: FlowEdge[]): Map<string, FlowEdge[]> {

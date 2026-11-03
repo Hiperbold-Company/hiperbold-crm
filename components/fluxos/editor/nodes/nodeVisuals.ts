@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 
-import { Play, Clock, GitBranch, Brain, ChatCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Kanban, PencilSimple } from "@/lib/ui/icons";
+import { Play, Clock, GitBranch, Brain, ChatCircle, ChatsCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Kanban, PencilSimple } from "@/lib/ui/icons";
 import { fraseDaAcao, fraseDaOperacao, GATILHOS_DA_AUTOMACAO } from "@/lib/automacoes/vocabulario";
 import type { FlowNode, NodeType } from "@/lib/followup/graph-schema";
 import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
@@ -179,6 +179,32 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
     defaultLabel: "Definir campo",
     defaultConfig: () => ({ ops: [{ target: { scope: "lead_custom", key: "campo" }, op: "set", value: "valor" }] }),
   },
+  // Blocos de conversa (lote 2). O formulário é da unidade 3; aqui só o
+  // visual e a config com que o bloco nasce (válida no schema).
+  message: {
+    type: "message",
+    paletteLabel: "Mensagem",
+    icon: ChatsCircle,
+    chipClassName: "bg-success-bg text-success-fg",
+    borderClassName: "border-l-success",
+    defaultLabel: "Enviar mensagem",
+    defaultConfig: () => ({ body: "Olá, {{primeiro_nome}}!" }),
+  },
+  question: {
+    type: "question",
+    paletteLabel: "Pergunta",
+    icon: Question,
+    chipClassName: "bg-accent-soft text-accent",
+    borderClassName: "border-l-accent-500",
+    defaultLabel: "Fazer pergunta",
+    defaultConfig: () => ({
+      question: "Qual é o seu e-mail?",
+      save_to: { scope: "contact", key: "email" },
+      validation: "email",
+      timeout_ms: 86_400_000,
+      retries: 1,
+    }),
+  },
 };
 
 /**
@@ -219,6 +245,8 @@ export function describeNodeConfig(
     }
     case "wait": {
       const c = config as ConfigOf<"wait">;
+      if (c.mode === "delay") return c.duration_s < 60 ? `${c.duration_s} s` : minutos(c.duration_s * 1000);
+      if (c.mode === "until_reply") return `${t("Até responder")} · ${minutos(c.timeout_ms)}`;
       return c.mode === "fixed"
         ? minutos(c.duration_ms)
         : `${Math.round(c.min_ms / 60_000)}–${minutos(c.max_ms)} ${t("(adaptativo)")}`;
@@ -280,6 +308,14 @@ export function describeNodeConfig(
       const primeira = c.ops[0];
       const resto = c.ops.length > 1 ? ` +${c.ops.length - 1}` : "";
       return primeira ? `${fraseDaOperacao(primeira)}${resto}` : "";
+    }
+    case "message": {
+      const c = config as ConfigOf<"message">;
+      return c.options ? c.options.items.map((i) => i.label).join(" · ") : c.body.slice(0, 60);
+    }
+    case "question": {
+      const c = config as ConfigOf<"question">;
+      return c.question.slice(0, 60);
     }
     default: {
       const exhaustive: never = type;

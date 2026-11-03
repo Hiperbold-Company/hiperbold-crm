@@ -6,7 +6,7 @@
  * versões em inglês e espanhol); o histórico, que é texto do servidor, fica em
  * português como o resto de `eventos-legiveis.ts`.
  */
-import type { NovaConditionCheck } from "@/lib/followup/graph-schema";
+import type { NovaConditionCheck, QuestionValidation } from "@/lib/followup/graph-schema";
 
 import type {
   AutomacaoTriggerKind,
@@ -183,8 +183,39 @@ export function fraseDaOperacao(op: FieldOp): string {
   }
 }
 
+/** Como a resposta de uma pergunta é conferida (formulário e card). */
+export const VALIDACOES_DA_PERGUNTA: Record<QuestionValidation, string> = {
+  text: "Texto",
+  phone: "Telefone",
+  email: "E-mail",
+  number: "Número",
+  cpf: "CPF",
+  date: "Data",
+};
+
+/** Tipo das opções do bloco de mensagem. */
+export const TIPOS_DE_OPCAO: Record<"buttons" | "list", string> = {
+  buttons: "Botões (até 3)",
+  list: "Lista (até 10)",
+};
+
+/** O que um bloco de conversa fez num passo (histórico da execução). */
+export const ENVIOS_DA_CONVERSA: Record<"mensagem" | "nova_tentativa" | "tempo_esgotado" | "resposta", string> = {
+  mensagem: "Mensagem",
+  nova_tentativa: "Nova tentativa",
+  tempo_esgotado: "Aviso de tempo esgotado",
+  resposta: "Resposta do contato",
+};
+
 /** Códigos de erro dos efeitos em português (histórico da execução). */
 export const ERROS_DO_EFEITO: Record<string, string> = {
+  janela_fechada: "janela de 24h fechada",
+  teto_por_hora: "limite de 30 mensagens por hora",
+  teto_indisponivel: "não foi possível conferir o limite de mensagens por hora",
+  sem_conversa_whatsapp: "contato sem conversa de WhatsApp",
+  contato_bloqueado: "o contato pediu para não receber mensagens",
+  envio_falhou: "o envio da mensagem falhou",
+  organizacao_bloqueada: "a conta não pode enviar nem mudar o CRM agora",
   sem_negocio: "o contato não tem negócio para esta ação",
   sem_contato: "o contato não foi encontrado",
   efeito_interrompido: "a execução foi interrompida no meio desta ação, e ela não foi repetida",
@@ -263,4 +294,7 @@ export const MAPAS_DA_AUTOMACAO: ReadonlyArray<Record<string, string>> = [
   SITUACOES_DO_NEGOCIO,
   SE_JA_TEM_NEGOCIO,
   SE_DER_ERRO,
+  VALIDACOES_DA_PERGUNTA,
+  TIPOS_DE_OPCAO,
+  ENVIOS_DA_CONVERSA,
 ];

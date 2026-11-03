@@ -510,6 +510,8 @@ export const ALVOS_DA_CLASSIFICACAO: Record<AlvoDaClassificacao, string> = {
 export const MODOS_DE_ESPERA: Record<ModoDeEspera, string> = {
   fixed: "Tempo fixo",
   smart: "A IA escolhe a hora",
+  delay: "Tempo em segundos",
+  until_reply: "Até o contato responder",
 };
 
 export const MODOS_DA_ACAO: Record<ModoDaAcao, string> = {

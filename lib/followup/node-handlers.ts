@@ -5,9 +5,18 @@ import type { ServiceBoundary } from "@/lib/atendimento/fronteira";
  * this node + these facts, what happens next" so it's testable without Postgres.
  */
 import { avaliarRegraNova } from "@/lib/automacoes/condicoes";
+import {
+  conferirRespostaDaPergunta,
+  ENVIO_NOVA_TENTATIVA,
+  type EstadoDaEspera,
+  type RespostaRecebida,
+} from "@/lib/automacoes/conversa";
 import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
+import { casarRespostaComOpcao } from "@/lib/channels/opcoes-numeradas";
 import {
   ERROR_BRANCH_ID,
+  FALLBACK_BRANCH_ID,
+  INVALID_REPLY_BRANCH_ID,
   NO_REPLY_BRANCH_ID,
   REPEAT_BODY_BRANCH_ID,
   REPEAT_DONE_BRANCH_ID,
@@ -134,8 +143,18 @@ export type NodeResult =
    * Bloco de EFEITO (`crm_action`, `field_op`) ainda sem desfecho: o motor
    * executa o efeito (idempotente por nó+passo, `engine.ts`) e chama a decisão
    * de novo com `efeito` preenchido. Nunca é gravado como passo.
+   *
+   * Nos blocos de conversa (`message`, `question`, espera "até responder") a
+   * decisão diz QUAL efeito quer em `acao` — enviar (a mensagem, a nova
+   * tentativa, o aviso de tempo esgotado) ou registrar a resposta aceita.
    */
-  | { kind: "effect" };
+  | { kind: "effect"; acao?: AcaoDeConversa };
+
+/** O efeito que um bloco de conversa pede ao motor neste passo. */
+export type AcaoDeConversa =
+  | { tipo: "enviar"; envio: "mensagem" | typeof ENVIO_NOVA_TENTATIVA | "tempo_esgotado" }
+  /** Resposta aceita: grava no campo (se o bloco tem destino) e nas variáveis. */
+  | { tipo: "registrar_resposta"; valor: string; opcao_id?: string };
 
 /** O que o efeito de um bloco produziu — lido de volta do evento `effect_done` num replay. */
 export interface DesfechoDoEfeito {
@@ -553,6 +572,10 @@ export interface EntradaDoNo {
   repeatTotal?: number | null;
   /** Próximo nó pela aresta `always` — a ação olha o `match_reply` seguinte para pular o envio. */
   proximo?: FlowNode | null;
+  /** Bloco de conversa (automação): o que esta estadia já fez, lido dos eventos (`estadoDaEspera`). */
+  espera?: EstadoDaEspera;
+  /** Bloco de conversa: as mensagens do contato desde o início da espera em curso, da mais antiga à mais nova. */
+  respostas?: RespostaRecebida[];
 }
 
 /**
@@ -574,6 +597,175 @@ function decidirEfeito(input: EntradaDoNo): NodeResult {
   return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
 }
 
+/** Como cada bloco de conversa se comporta — derivado da config do nó. */
+interface RegrasDaConversa {
+  /** O bloco envia uma mensagem ao entrar (a espera "até responder" não envia). */
+  envia: boolean;
+  /** O bloco espera resposta (mensagem sem opções não espera). */
+  esperaResposta: boolean;
+  timeoutMs: number;
+  /** Novas tentativas depois de resposta inválida. */
+  tentativas: number;
+  /** Há aviso de tempo esgotado para enviar antes de sair por "Sem resposta". */
+  avisaTempoEsgotado: boolean;
+  /** A resposta serve? Devolve o valor a gravar (e o id da opção, no bloco de mensagem). */
+  conferir: (r: RespostaRecebida) => { valor: string; opcao_id?: string } | null;
+  /** O ramo da resposta aceita. */
+  ramoDaResposta: (opcaoId?: string) => string;
+  /** O ramo da resposta inválida (tentativas esgotadas). */
+  ramoInvalido: string;
+}
+
+function regrasDaConversa(node: FlowNode): RegrasDaConversa | null {
+  if (node.type === "message") {
+    const opcoes = node.config.options;
+    return {
+      envia: true,
+      esperaResposta: opcoes !== undefined,
+      timeoutMs: node.config.reply_timeout_ms ?? 0,
+      tentativas: node.config.invalid_reply?.attempts ?? 0,
+      avisaTempoEsgotado: false,
+      conferir: (r) => {
+        if (!opcoes) return null;
+        const id = casarRespostaComOpcao({ texto: r.texto, replyId: r.replyId }, opcoes.items);
+        const item = id ? opcoes.items.find((i) => i.id === id) : undefined;
+        return item ? { valor: item.label, opcao_id: item.id } : null;
+      },
+      ramoDaResposta: (opcaoId) => opcaoId ?? FALLBACK_BRANCH_ID,
+      // A de escape do bloco com opções É "Resposta inválida".
+      ramoInvalido: FALLBACK_BRANCH_ID,
+    };
+  }
+  if (node.type === "question") {
+    const validacao = node.config.validation;
+    return {
+      envia: true,
+      esperaResposta: true,
+      timeoutMs: node.config.timeout_ms,
+      tentativas: node.config.retries,
+      avisaTempoEsgotado: node.config.timeout_message !== undefined,
+      conferir: (r) => {
+        const c = conferirRespostaDaPergunta(validacao, r.texto);
+        return c.ok ? { valor: c.valor } : null;
+      },
+      ramoDaResposta: () => FALLBACK_BRANCH_ID,
+      ramoInvalido: INVALID_REPLY_BRANCH_ID,
+    };
+  }
+  if (node.type === "wait" && node.config.mode === "until_reply") {
+    return {
+      envia: false,
+      esperaResposta: true,
+      timeoutMs: node.config.timeout_ms,
+      tentativas: 0,
+      avisaTempoEsgotado: false,
+      // Qualquer mensagem do contato é resposta (áudio e imagem inclusive, sem texto).
+      conferir: (r) => ({ valor: r.texto.trim() }),
+      ramoDaResposta: () => FALLBACK_BRANCH_ID,
+      ramoInvalido: FALLBACK_BRANCH_ID,
+    };
+  }
+  return null;
+}
+
+/**
+ * Bloco de conversa que ESPERA resposta: o tempo limite da espera. `null` para
+ * todo outro nó (e para a mensagem sem opções, que não espera).
+ */
+export function tempoLimiteDaConversa(node: FlowNode): number | null {
+  const regras = regrasDaConversa(node);
+  return regras && regras.esperaResposta ? regras.timeoutMs : null;
+}
+
+/** O nó é um bloco de conversa (mensagem, pergunta, espera "até responder"). */
+export function ehBlocoDeConversa(node: FlowNode): boolean {
+  return regrasDaConversa(node) !== null;
+}
+
+/** Sai do bloco pelo ramo `ramo`; sem aresta (nem a de escape), a execução termina ali. */
+function sairPor(input: EntradaDoNo, ramo: string, motivo?: string): NodeResult {
+  const { node, edges, clock } = input;
+  const edge =
+    ramo === FALLBACK_BRANCH_ID
+      ? selectEdge(edges, node.id, { type: "always" })
+      : selectEdge(edges, node.id, { type: "branch", branch_id: ramo });
+  if (!edge) return motivo ? { kind: "complete", outcome: null, cancel_reason: motivo } : { kind: "complete", outcome: null };
+  return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
+}
+
+/**
+ * A decisão dos blocos de CONVERSA (automação): mensagem, pergunta e a espera
+ * "até responder". Um passo faz no máximo UM efeito (enviar ou registrar), e a
+ * decisão é chamada de novo com o desfecho dele:
+ *
+ *  1. entrada: envia (se o bloco envia); falhou → "Erro"; sem resposta a
+ *     esperar → "Concluído"; senão estaciona em `waiting_reply` até o prazo;
+ *  2. com resposta desde o início da espera: a primeira que serve é
+ *     registrada e o bloco sai pelo ramo dela; nenhuma serviu → nova tentativa
+ *     (reenvia e espera de novo, com prazo novo) ou, esgotadas, "Resposta
+ *     inválida";
+ *  3. sem resposta e prazo vencido: o aviso de tempo esgotado (se houver) e
+ *     "Sem resposta";
+ *  4. sem resposta e prazo em curso: volta a esperar, com o MESMO prazo.
+ */
+export function decidirConversa(input: EntradaDoNo): NodeResult {
+  const regras = regrasDaConversa(input.node);
+  if (!regras) return { kind: "fail", error: `node "${input.node.id}" is not a conversation block` };
+  const { clock, efeito } = input;
+  const espera = input.espera ?? { aguardando: false, prazo: null, novasTentativas: 0 };
+  const esperar = (ate: Date): NodeResult => ({ kind: "wait", next_eval_at: ate, wake_status: "waiting_reply" });
+  const erro = () => sairPor(input, ERROR_BRANCH_ID, efeito?.erro);
+
+  if (!espera.aguardando) {
+    if (regras.envia) {
+      if (!efeito) return { kind: "effect", acao: { tipo: "enviar", envio: "mensagem" } };
+      if (!efeito.ok) return erro();
+      if (!regras.esperaResposta) return sairPor(input, FALLBACK_BRANCH_ID);
+    }
+    return esperar(new Date(clock().getTime() + regras.timeoutMs));
+  }
+
+  const respostas = input.respostas ?? [];
+  if (respostas.length > 0) {
+    let aceita: { valor: string; opcao_id?: string } | null = null;
+    for (const r of respostas) {
+      aceita = regras.conferir(r);
+      if (aceita) break;
+    }
+    if (aceita) {
+      if (!efeito) {
+        return {
+          kind: "effect",
+          acao: {
+            tipo: "registrar_resposta",
+            valor: aceita.valor,
+            ...(aceita.opcao_id ? { opcao_id: aceita.opcao_id } : {}),
+          },
+        };
+      }
+      if (!efeito.ok) return erro();
+      return sairPor(input, regras.ramoDaResposta(aceita.opcao_id));
+    }
+    if (espera.novasTentativas < regras.tentativas) {
+      if (!efeito) return { kind: "effect", acao: { tipo: "enviar", envio: ENVIO_NOVA_TENTATIVA } };
+      if (!efeito.ok) return erro();
+      return esperar(new Date(clock().getTime() + regras.timeoutMs));
+    }
+    return sairPor(input, regras.ramoInvalido);
+  }
+
+  const prazo = espera.prazo ? Date.parse(espera.prazo) : Number.NaN;
+  if (!Number.isFinite(prazo) || clock().getTime() >= prazo) {
+    // O aviso sai antes de "Sem resposta"; se falhar, o registro mostra a falha
+    // e a execução segue pelo mesmo ramo — o contato não respondeu de qualquer jeito.
+    if (regras.avisaTempoEsgotado && !efeito) {
+      return { kind: "effect", acao: { tipo: "enviar", envio: "tempo_esgotado" } };
+    }
+    return sairPor(input, NO_REPLY_BRANCH_ID);
+  }
+  return esperar(new Date(prazo));
+}
+
 type Decisor<K extends NodeType> = (input: EntradaDoNo & { node: Extract<FlowNode, { type: K }> }) => NodeResult;
 
 /**
@@ -585,6 +777,8 @@ type Decisor<K extends NodeType> = (input: EntradaDoNo & { node: Extract<FlowNod
 export const DECISORES: { [K in NodeType]: Decisor<K> } = {
   crm_action: (input) => decidirEfeito(input),
   field_op: (input) => decidirEfeito(input),
+  message: (input) => decidirConversa(input),
+  question: (input) => decidirConversa(input),
   trigger: (input) => {
     const { node, edges, enrollment, clock, smartWaits, planEnqueued, planRecheckCount } = input;
     const edge = selectEdge(edges, node.id, { type: "always" });
@@ -613,6 +807,16 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
   },
   wait: (input) => {
     const { node, edges, enrollment, clock, waitElapsed, wokeEarly } = input;
+    // Automação: "até responder" é bloco de conversa; "em segundos" é o
+    // `fixed` com outra unidade e sem piso de 5 min — sem acordar por resposta.
+    if (node.config.mode === "until_reply") return decidirConversa(input);
+    if (node.config.mode === "delay") {
+      if (!waitElapsed) return { kind: "wait", next_eval_at: new Date(clock().getTime() + node.config.duration_s * 1000) };
+      const edge = selectEdge(edges, node.id, { type: "always" });
+      if (!edge) return { kind: "fail", error: `wait node "${node.id}" has no outbound edge after elapsing` };
+      return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
+    }
+    const config = node.config;
     // Resposta do lead corta a espera: o timer é teto (ninguém respondeu),
     // não um atraso obrigatório depois de cada envio.
     if (wokeEarly) {
@@ -631,18 +835,18 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
       // uma linha editada à mão, ou um bug futuro que grave sem clampar,
       // prenderia o lead muito além do que o operador configurou na tela, e
       // ninguém veria. Custa uma comparação por espera.
-      const planejada = node.config.mode === "smart" ? esperaPlanejadaDe(enrollment.timing_plan, node.id) : null;
+      const planejada = config.mode === "smart" ? esperaPlanejadaDe(enrollment.timing_plan, node.id) : null;
       const durationMs =
-        node.config.mode === "fixed"
-          ? node.config.duration_ms
+        config.mode === "fixed"
+          ? config.duration_ms
           : planejada === null
-            ? node.config.max_ms
-            : clampEspera(planejada.escolhido_ms, node.config.min_ms, node.config.max_ms).escolhido_ms;
+            ? config.max_ms
+            : clampEspera(planejada.escolhido_ms, config.min_ms, config.max_ms).escolhido_ms;
       // Espera imune dorme: o status tira a inscrição do alcance da
       // reatividade (que decide por status, sem carregar o grafo) e libera o
       // slot único anti-spam enquanto ela espera. Quem a acorda continua sendo
       // o `next_eval_at` abaixo, pelo mesmo claim — não há segundo agendador.
-      const imune = node.config.mode === "fixed" && node.config.immune_to_reply === true;
+      const imune = config.mode === "fixed" && config.immune_to_reply === true;
       return {
         kind: "wait",
         next_eval_at: new Date(clock().getTime() + durationMs),
