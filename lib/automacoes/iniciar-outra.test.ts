@@ -718,3 +718,53 @@ describe("publish", () => {
     expect(referenciasDoGrafo(grafoQueInicia(B)).automacoes).toEqual([B]);
   });
 });
+
+describe("o destino trabalha no MESMO negócio da origem (item 16)", () => {
+  const LEAD_DA_ORIGEM = "50000000-0000-4000-8000-0000000000aa";
+  it("o negócio da execução de origem vai para `_lead_id` do destino", async () => {
+    const { admin, t } = criarBanco({
+      enrollments: [
+        { id: "e-a", organization_id: ORG, pointer_id: A, contact_id: CONTATO, status: "active", parent_enrollment_id: null },
+      ],
+    });
+    const p = pedido({ id: "e-a", pointer_id: A }, [iniciarB]);
+    p.fatos = { ...FATOS, negocio: { id: LEAD_DA_ORIGEM }, vars: { _lead_id: LEAD_DA_ORIGEM } } as unknown as FatosDaAutomacao;
+    expect((await executor(admin).executar(p)).desfecho).toEqual({ ok: true });
+    const nova = t.followup_enrollments!.find((e) => e.pointer_id === B)!;
+    const vars = nova.vars as { _lead_id?: string; gatilho: Record<string, unknown> };
+    expect(vars._lead_id).toBe(LEAD_DA_ORIGEM);
+    expect(vars.gatilho).toMatchObject({ lead_id: LEAD_DA_ORIGEM, _lead_id: LEAD_DA_ORIGEM });
+  });
+  it("origem sem negócio: o destino não recebe `_lead_id`", async () => {
+    const { admin, t } = criarBanco({
+      enrollments: [
+        { id: "e-a", organization_id: ORG, pointer_id: A, contact_id: CONTATO, status: "active", parent_enrollment_id: null },
+      ],
+    });
+    await executor(admin).executar(pedido({ id: "e-a", pointer_id: A }, [iniciarB]));
+    const nova = t.followup_enrollments!.find((e) => e.pointer_id === B)!;
+    expect("_lead_id" in (nova.vars as Record<string, unknown>)).toBe(false);
+  });
+});
+
+describe("frase do início para os gatilhos do lote 3 (item 17)", () => {
+  const detalhe = (gatilho: string) =>
+    descreveEvento(
+      { id: "x", node_id: null, event_type: "automacao_iniciada", payload: { gatilho }, created_at: AGORA.toISOString() },
+      {},
+      "pt-BR",
+      "automacao",
+    ).detalhe;
+  it("cada gatilho novo diz o que começou, sem dado do contato", () => {
+    expect(detalhe("message_received")).toBe("começou: mensagem recebida");
+    expect(detalhe("tag_added")).toBe("começou: tag adicionada");
+    expect(detalhe("appointment")).toBe("começou: agendamento");
+    expect(detalhe("birthday")).toBe("começou: aniversário do contato");
+    expect(detalhe("date_field")).toBe("começou: data de um campo do negócio");
+    expect(detalhe("no_reply")).toBe("começou: contato sem resposta");
+    expect(detalhe("case_opened")).toBe("começou: caso aberto na Central");
+    expect(detalhe("lead_created")).toBe("um negócio foi criado");
+    expect(detalhe("desconhecido")).toBeNull();
+    expect(detalhe("constructor")).toBeNull();
+  });
+});

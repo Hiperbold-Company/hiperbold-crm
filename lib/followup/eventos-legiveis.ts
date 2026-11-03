@@ -613,7 +613,7 @@ export function descreveEvento(
               ? "alguém iniciou manualmente"
               : g === "started_by_automation"
                 ? "outra automação a iniciou"
-                : g && g in GATILHO_QUE_COMECOU
+                : g && Object.hasOwn(GATILHO_QUE_COMECOU, g)
                   ? `começou: ${GATILHO_QUE_COMECOU[g as keyof typeof GATILHO_QUE_COMECOU]}`
                   : null;
       return {
