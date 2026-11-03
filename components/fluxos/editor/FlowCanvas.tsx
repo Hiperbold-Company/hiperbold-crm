@@ -63,6 +63,7 @@ import { CollectNode } from "./nodes/CollectNode";
 import { SkillNode } from "./nodes/SkillNode";
 import { EffectNode } from "./nodes/EffectNode";
 import { ConversaNode } from "./nodes/ConversaNode";
+import { SuperficieDoFluxoProvider } from "./SuperficieDoFluxo";
 import { respostasAntesDe } from "./forms/automacao/respostas";
 import { regraDeAutomacaoEmBranco } from "./forms/automacao/CondicaoAutomacaoForm";
 
@@ -488,7 +489,9 @@ export function FlowCanvas(props: Props) {
   return (
     <ReactFlowProvider>
       <EtapasDoFluxoProvider>
-        <FlowCanvasInner {...props} />
+        <SuperficieDoFluxoProvider surface={props.initialData.surface ?? "followup"}>
+          <FlowCanvasInner {...props} />
+        </SuperficieDoFluxoProvider>
       </EtapasDoFluxoProvider>
     </ReactFlowProvider>
   );

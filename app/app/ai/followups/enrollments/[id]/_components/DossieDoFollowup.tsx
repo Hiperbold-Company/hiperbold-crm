@@ -31,15 +31,21 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CaretLeft, Clock, Pause, Play, SkipForward, Trash, Warning } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
+import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
 import {
   descreveEvento,
+  rotuloDoDesfechoDaAutomacao,
   rotuloDoStatus,
   tipoDoNo,
   tomDoStatus,
   type EventoDeEnrollment,
   type NoDoDossie,
+  type RaiaDoEnrollment,
 } from "@/lib/followup/eventos-legiveis";
-import { useFollowupEnrollment, useIntervirNoFollowup } from "@/hooks/followup/useFollowupEnrollment";
+import {
+  useFollowupEnrollment,
+  useIntervirNoFollowup,
+} from "@/hooks/followup/useFollowupEnrollment";
 import { useCancelFollowupEnrollment } from "@/hooks/followup/useFollowupQueue";
 import { useT } from "@/hooks/i18n/useT";
 
@@ -76,7 +82,7 @@ function paraCampoLocal(d: Date): string {
 function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[11px] uppercase tracking-wide text-text-muted">{rotulo}</span>
+      <span className="text-[11px] tracking-wide text-text-muted uppercase">{rotulo}</span>
       <span className="text-sm text-text">{children}</span>
     </div>
   );
@@ -95,7 +101,9 @@ function LinhaDoTempo({
   nos,
   autores,
   truncado,
+  raia,
 }: {
+  raia: RaiaDoEnrollment;
   eventos: EventoDeEnrollment[];
   nos: NoDoDossie[];
   autores: Record<string, string>;
@@ -120,12 +128,14 @@ function LinhaDoTempo({
     <>
       {truncado && (
         <p className="pb-2 text-xs text-warning-fg">
-          {t("Mostrando os primeiros passos — este follow-up tem histórico maior que o desta tela.")}
+          {t(
+            "Mostrando os primeiros passos — este follow-up tem histórico maior que o desta tela.",
+          )}
         </p>
       )}
       <ul className="border-l border-border pl-3" data-testid="dossie-timeline">
         {eventos.map((evento) => {
-          const lido = descreveEvento(evento, porId, tagDoIdioma);
+          const lido = descreveEvento(evento, porId, tagDoIdioma, raia);
           const autorId = (evento.payload as { actor_user_id?: unknown } | null)?.actor_user_id;
           const nome = typeof autorId === "string" ? autores[autorId] : undefined;
           return (
@@ -136,12 +146,15 @@ function LinhaDoTempo({
                   "mt-1.5 h-2 w-2 shrink-0 rounded-full",
                   lido.autor === "pessoa" && "bg-text",
                   lido.autor === "motor" && "border border-text bg-transparent",
-                  lido.autor === "cliente" && "border border-dashed border-text-muted bg-transparent",
+                  lido.autor === "cliente" &&
+                    "border border-dashed border-text-muted bg-transparent",
                 )}
               />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-text">{t(lido.titulo)}</p>
-                {lido.detalhe && <p className="mt-0.5 text-xs text-text-muted">{t(lido.detalhe)}</p>}
+                {lido.detalhe && (
+                  <p className="mt-0.5 text-xs text-text-muted">{t(lido.detalhe)}</p>
+                )}
                 <p className="mt-0.5 text-[11px] text-text-muted">
                   {lido.onde}
                   {nome ? ` · ${nome}` : ""} · {absoluta(evento.created_at, localeDaData)}
@@ -166,7 +179,6 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
   const [pulando, setPulando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
 
-
   if (isLoading) {
     return <p className="p-6 text-sm text-text-muted">{t("Carregando o follow-up…")}</p>;
   }
@@ -176,7 +188,9 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
     return (
       <div className="p-6">
         <p className="text-sm text-warning-fg">
-          {t("Não consegui carregar este follow-up. Recarregue a página; se persistir, ele pode ter sido removido.")}
+          {t(
+            "Não consegui carregar este follow-up. Recarregue a página; se persistir, ele pode ter sido removido.",
+          )}
         </p>
         <Link href="/app/ai/followups" className="mt-3 inline-block text-sm underline">
           {t("Voltar para a fila")}
@@ -236,11 +250,15 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
               // O passo saiu do grafo pinado: dizer o id EXPLICITAMENTE é o que
               // permite alguém investigar; esconder deixaria a tela muda.
               <span className="text-text-muted">
-                {t("passo")} {data.current_node_id} — {t("não existe mais na versão publicada deste fluxo")}
+                {t("passo")} {data.current_node_id} —{" "}
+                {t("não existe mais na versão publicada deste fluxo")}
               </span>
             )}
           </p>
-          <p className="flex items-center gap-1.5 text-sm text-text-muted" data-testid="dossie-proximo-passo">
+          <p
+            className="flex items-center gap-1.5 text-sm text-text-muted"
+            data-testid="dossie-proximo-passo"
+          >
             <Clock size={14} aria-hidden />
             {data.next_eval_at
               ? `${t("Volta a andar")} ${relativa(data.next_eval_at, localeDaData)} (${absoluta(data.next_eval_at, localeDaData)})`
@@ -252,7 +270,13 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
           </p>
           {data.outcome && (
             <p className="text-sm text-text-muted">
-              {t("Desfecho")}: {data.outcome}
+              {t("Desfecho")}:{" "}
+              {data.lane === "automacao"
+                ? t(rotuloDoDesfechoDaAutomacao(data.outcome))
+                : t(
+                    RESULTADOS_DO_FIM[data.outcome as keyof typeof RESULTADOS_DO_FIM] ??
+                      data.outcome,
+                  )}
             </p>
           )}
           {data.cancel_reason && (
@@ -262,8 +286,8 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
           )}
           {data.last_error && (
             <p className="flex items-center gap-1.5 text-sm text-warning-fg">
-              <Warning size={14} aria-hidden /> {t("Última falha")}: {data.last_error} ({t("tentativa")}{" "}
-              {data.attempts} {t("de")} {data.max_attempts})
+              <Warning size={14} aria-hidden /> {t("Última falha")}: {data.last_error} (
+              {t("tentativa")} {data.attempts} {t("de")} {data.max_attempts})
             </p>
           )}
           {motorOcupado && (
@@ -375,6 +399,7 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
           nos={data.nos}
           autores={data.autores}
           truncado={data.eventos_truncados}
+          raia={data.lane ?? "followup"}
         />
       </section>
 
@@ -383,7 +408,9 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
           <DialogHeader>
             <DialogTitle>{t("Adiar o próximo passo")}</DialogTitle>
             <DialogDescription>
-              {t("O follow-up continua no mesmo passo e volta a andar no horário que você escolher.")}
+              {t(
+                "O follow-up continua no mesmo passo e volta a andar no horário que você escolher.",
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2">
@@ -421,7 +448,9 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>{t("Cancelar este follow-up?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("O contato não receberá mais mensagens deste fluxo. Diferente de pausar, isto não pode ser desfeito.")}
+              {t(
+                "O contato não receberá mais mensagens deste fluxo. Diferente de pausar, isto não pode ser desfeito.",
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

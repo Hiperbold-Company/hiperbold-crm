@@ -65,6 +65,8 @@ export interface DossieDoEnrollment {
    * também o que explica um 409 na hora de intervir.
    */
   motor_ocupado: boolean;
+  /** A raia em que correu: a tela de uma automação fala "concluída", não "esgotou". */
+  lane: "followup" | "automacao";
   started_at: string;
   completed_at: string | null;
   updated_at: string;
@@ -151,7 +153,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .select(
       `id, status, contact_id, pointer_id, version_id, current_node_id, next_eval_at, claimed_until,
        started_at, completed_at, updated_at, outcome, cancel_reason, last_error, attempts, max_attempts,
-       steps_taken, timing_plan,
+       steps_taken, timing_plan, lane,
        contacts:contact_id(id, name, display_name, phone_number),
        followup_flow_pointers:pointer_id(name),
        ai_agents:agent_id(name),
@@ -177,9 +179,10 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const lidos = eventos ?? [];
   const truncado = lidos.length > TETO_DE_EVENTOS;
 
+  const raia = row.lane === "automacao" ? "automacao" : "followup";
   const versao = embedded(row.followup_flow_versions as { graph: unknown } | { graph: unknown }[] | null);
   const grafo = versao ? flowGraphSchema.safeParse(versao.graph) : null;
-  const nos: NoDoDossie[] = grafo?.success ? grafo.data.nodes.map(resumoDoNo) : [];
+  const nos: NoDoDossie[] = grafo?.success ? grafo.data.nodes.map((n) => resumoDoNo(n, raia)) : [];
   const porId = new Map(nos.map((n) => [n.id, n]));
 
   // O nó de ORIGEM vai junto: no grafo v2 o rótulo do ramo mora nele, não na
@@ -223,6 +226,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     next_eval_at: row.next_eval_at,
     claimed_until: row.claimed_until,
     motor_ocupado: row.claimed_until !== null && Date.parse(row.claimed_until) > Date.now(),
+    lane: raia,
     started_at: row.started_at,
     completed_at: row.completed_at,
     updated_at: row.updated_at,

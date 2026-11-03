@@ -6,15 +6,17 @@ import type { RFNode } from "@/lib/followup/graph-mappers";
 import { useT } from "@/hooks/i18n/useT";
 import { NODE_VISUALS, describeNodeConfig } from "./nodeVisuals";
 import { NodeCard } from "./NodeCard";
+import { useSuperficieDoFluxo } from "../SuperficieDoFluxo";
 
 export function EndNode({ id, data, selected }: NodeProps<RFNode>) {
   const t = useT();
+  const surface = useSuperficieDoFluxo();
   return (
     <NodeCard
       id={id}
       visual={NODE_VISUALS.end}
       label={data.label}
-      subtitle={describeNodeConfig("end", data.config, t)}
+      subtitle={describeNodeConfig("end", data.config, t, surface)}
       selected={selected}
       errors={data.errors}
       showSource={false}

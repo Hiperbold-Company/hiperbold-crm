@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 
 import { Play, Clock, GitBranch, Brain, ChatCircle, ChatsCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Kanban, PencilSimple } from "@/lib/ui/icons";
 import { fraseDaAcao, fraseDaOperacao, GATILHOS_DA_AUTOMACAO } from "@/lib/automacoes/vocabulario";
+import type { FollowupFlowSurface } from "@/lib/followup/api-schemas";
 import type { FlowNode, NodeType } from "@/lib/followup/graph-schema";
 import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
 import { NOS_DA_SUPERFICIE } from "@/lib/followup/validate-publish";
@@ -237,6 +238,9 @@ export function describeNodeConfig(
   // tradução nenhuma sem o typecheck notar: em português o padrão devolve o
   // mesmo texto, então o esquecimento só aparecia para quem usa espanhol.
   t: (texto: string) => string,
+  // Só o cartão Fim muda com a superfície: na automação o fim não tem "esgotado"
+  // nem "convertido" para escolher, ele conclui. Ausente = follow-up.
+  surface?: FollowupFlowSurface,
 ): string {
   switch (type) {
     case "trigger": {
@@ -297,6 +301,7 @@ export function describeNodeConfig(
     }
     case "end": {
       const c = config as ConfigOf<"end">;
+      if (surface === "automacao") return t("Concluída");
       return t(RESULTADOS_DO_FIM[c.outcome]);
     }
     case "crm_action": {

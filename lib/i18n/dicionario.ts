@@ -7454,6 +7454,12 @@ export const DICIONARIO: Traducoes = {
   "pediu para parar": { es: "pidió parar" },
   "passou para uma pessoa": { es: "pasó a una persona" },
   "desfecho próprio": { es: "desenlace propio" },
+  // Automação — o fim conclui, não "esgota" nem "converte"
+  "termina a automação": { es: "termina la automatización" },
+  "Automação concluída": { es: "Automatización concluida" },
+  "Quando a execução chega aqui, a automação termina para este contato.": {
+    es: "Cuando la ejecución llega aquí, la automatización termina para este contacto.",
+  },
   // descreveEvento — títulos e detalhes fixos (sem interpolação)
   "Seguiu em frente": { es: "Siguió adelante" },
   "Começou a esperar": { es: "Empezó a esperar" },

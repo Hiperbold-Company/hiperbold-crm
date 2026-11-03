@@ -163,12 +163,46 @@ const DESFECHO: Record<string, string> = {
   custom: "desfecho próprio",
 };
 
+/**
+ * Em qual das duas raias o enrollment correu (`followup_enrollments.lane`).
+ * Ausente significa follow-up: é o padrão de sempre e o de quem não informa.
+ */
+export type RaiaDoEnrollment = "followup" | "automacao";
+
+/**
+ * O que o bloco Fim grava (`converted`/`exhausted`/`custom`) é vocabulário de
+ * follow-up: "converteu", "esgotou as tentativas". Uma automação não tem tentativa
+ * a esgotar nem conversão a medir — chegar ao Fim é terminar. O enum no grafo não
+ * muda; só a leitura dele, por raia.
+ */
+const DESFECHOS_DO_BLOCO_FIM = new Set(["converted", "exhausted", "custom"]);
+
+/** O desfecho como frase curta ("terminou"), para a linha do tempo e o resumo do bloco. */
+export function desfechoLegivel(outcome: string, raia: RaiaDoEnrollment = "followup"): string {
+  if (raia === "automacao") {
+    if (DESFECHOS_DO_BLOCO_FIM.has(outcome)) return "terminou";
+    // Desfecho que não é do bloco Fim (respondeu, pediu para parar…) tem frase;
+    // o que nem isso tem não vaza como palavra do enum.
+    return DESFECHO[outcome] ?? "terminou";
+  }
+  return DESFECHO[outcome] ?? outcome;
+}
+
+/**
+ * O desfecho como rótulo, para o quadro "Onde está agora". Só a automação passa
+ * por aqui: o follow-up segue mostrando o que o servidor mandou.
+ */
+export function rotuloDoDesfechoDaAutomacao(outcome: string): string {
+  if (DESFECHOS_DO_BLOCO_FIM.has(outcome)) return "Concluída";
+  return DESFECHO[outcome] ?? "Concluída";
+}
+
 /** O rótulo do tipo, para o cabeçalho do passo. */
 export function tipoDoNo(tipo: FlowNode["type"]): string {
   return TIPO_DO_NO[tipo] ?? "Passo";
 }
 
-export function resumoDoNo(node: FlowNode): NoDoDossie {
+export function resumoDoNo(node: FlowNode, raia: RaiaDoEnrollment = "followup"): NoDoDossie {
   const base = { id: node.id, tipo: node.type, rotulo: node.label };
   switch (node.type) {
     case "trigger":
@@ -220,6 +254,7 @@ export function resumoDoNo(node: FlowNode): NoDoDossie {
               : "envia uma mensagem de modelo pronto",
       };
     case "end":
+      if (raia === "automacao") return { ...base, resumo: "termina a automação" };
       return { ...base, resumo: `encerra — ${DESFECHO[node.config.outcome] ?? node.config.outcome}` };
     case "crm_action":
       return { ...base, resumo: node.config.actions.map((a) => fraseDaAcao(a)).join("; ") };
@@ -382,6 +417,7 @@ export function descreveEvento(
   evento: EventoDeEnrollment,
   nos: Record<string, NoDoDossie>,
   idioma: string,
+  raia: RaiaDoEnrollment = "followup",
 ): EventoLegivel {
   // `idioma` por PARÂMETRO, não por hook: este módulo é puro e roda também
   // fora de componente. Hook aqui quebraria em runtime, e o teste que monta
@@ -452,8 +488,8 @@ export function descreveEvento(
       const desfecho = texto(p.outcome);
       const nota = texto(p.cancel_reason);
       return {
-        titulo: "Fluxo concluído",
-        detalhe: desfecho ? (DESFECHO[desfecho] ?? desfecho) : nota,
+        titulo: raia === "automacao" ? "Automação concluída" : "Fluxo concluído",
+        detalhe: desfecho ? desfechoLegivel(desfecho, raia) : nota,
         ...motor,
       };
     }

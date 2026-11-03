@@ -22,6 +22,8 @@ export interface FollowupEnrollmentDossie {
   next_eval_at: string | null;
   claimed_until: string | null;
   motor_ocupado: boolean;
+  /** Ausente em resposta antiga: vale follow-up. */
+  lane?: "followup" | "automacao";
   started_at: string;
   completed_at: string | null;
   updated_at: string;
