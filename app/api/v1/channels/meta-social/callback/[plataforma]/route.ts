@@ -38,6 +38,7 @@ import { NOME_DO_VINCULO_META_SOCIAL, verificarEstadoMetaSocial, vinculoMetaSoci
 import {
   ErroDaMeta,
   contasInstagramConcedidas,
+  contasInstagramPeloDebugToken,
   paginasMessenger,
   tokenLongoMessenger,
   trocarCodigoLoginUnificado,
@@ -177,8 +178,17 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     if (plataforma === "instagram") {
       const suat = await trocarCodigoLoginUnificado(app, code, redirectUri);
       const sistema = await usuarioDoSistema(suat.token);
-      const concedidas = await contasInstagramConcedidas(suat.token);
-      if (concedidas.length === 0) return falhou("nenhuma_conta_instagram");
+      let concedidas = await contasInstagramConcedidas(suat.token);
+      if (concedidas.length === 0) {
+        const planoB = await contasInstagramPeloDebugToken(app, suat.token).catch(() => null);
+        concedidas = planoB?.contas ?? [];
+        if (concedidas.length === 0) {
+          return falhou(
+            "nenhuma_conta_instagram",
+            `assigned=0 debug_token=${planoB ? "ok" : "falhou"} escopos=${(planoB?.escopos ?? []).join(",").slice(0, 300)}`,
+          );
+        }
+      }
       contas = concedidas.map((conta) => ({ conta, token: suat.token }));
       expiraEm = suat.expiraEmSegundos ? new Date(Date.now() + suat.expiraEmSegundos * 1000).toISOString() : null;
       // O /me do SUAT é o usuário do sistema de integração, não a pessoa: a

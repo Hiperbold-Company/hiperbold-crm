@@ -240,6 +240,45 @@ export async function contasInstagramConcedidas(token: string, fetcher?: typeof 
   return contas;
 }
 
+/**
+ * Plano B da descoberta: quando `/me/assigned_instagram_accounts` volta vazio, as
+ * contas concedidas ainda aparecem no `granular_scopes` do `debug_token` (os
+ * `target_ids` de `instagram_basic` / `instagram_manage_messages`). Cada id é
+ * conferido com `GET /<id>?fields=id,username` usando o token do cliente.
+ * Devolve também os escopos concedidos, para o diagnóstico (não são segredo).
+ * https://developers.facebook.com/docs/graph-api/reference/debug_token
+ */
+export async function contasInstagramPeloDebugToken(
+  app: AppOAuth,
+  token: string,
+  fetcher?: typeof fetch,
+): Promise<{ contas: ContaDaMeta[]; escopos: string[] }> {
+  const u = new URL(`${GRAPH}/debug_token`);
+  u.searchParams.set("input_token", token);
+  const r = await chamarMeta("instagram_debug_token", u.toString(), { token: `${app.appId}|${app.appSecret}` }, fetcher);
+  const dados = (r.data && typeof r.data === "object" ? r.data : {}) as Record<string, unknown>;
+  const escopos = Array.isArray(dados.scopes) ? (dados.scopes as unknown[]).map(String) : [];
+  const granulares = Array.isArray(dados.granular_scopes) ? (dados.granular_scopes as Record<string, unknown>[]) : [];
+  const ids = new Set<string>();
+  for (const g of granulares) {
+    if (g.scope !== "instagram_basic" && g.scope !== "instagram_manage_messages") continue;
+    for (const alvo of Array.isArray(g.target_ids) ? (g.target_ids as unknown[]) : []) {
+      const id = str(alvo);
+      if (id) ids.add(id);
+    }
+  }
+  const contas: ContaDaMeta[] = [];
+  for (const id of ids) {
+    try {
+      const c = await chamarMeta("instagram_conta", `${GRAPH}/${encodeURIComponent(id)}?fields=id,username,name`, { token }, fetcher);
+      contas.push({ id: str(c.id) ?? id, usuario: str(c.username), nome: str(c.name) });
+    } catch {
+      contas.push({ id, usuario: null, nome: null });
+    }
+  }
+  return { contas, escopos };
+}
+
 // ─── Messenger ─────────────────────────────────────────────────────────────
 
 export async function trocarCodigoMessenger(
