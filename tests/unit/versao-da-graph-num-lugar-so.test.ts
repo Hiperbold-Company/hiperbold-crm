@@ -37,7 +37,7 @@ import path from "node:path";
 import ts from "typescript";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { VERSAO_PADRAO_DA_GRAPH, graphVersion } from "@/lib/graph-version";
+import { VERSAO_DA_GRAPH_DO_CANAL_SOCIAL, VERSAO_PADRAO_DA_GRAPH, graphVersion } from "@/lib/graph-version";
 
 const RAIZ = path.join(__dirname, "..", "..");
 
@@ -205,7 +205,9 @@ describe("a versão da Graph tem um lugar só", () => {
       (linha) => linha.match(LITERAL_DE_VERSAO)![0],
     );
 
-    expect(literais).toEqual([VERSAO_PADRAO_DA_GRAPH]);
+    // Duas versões declaradas, cada uma uma vez: a do WhatsApp e a do canal
+    // social oficial (0984), que foi conferida em outra versão da Meta.
+    expect(literais).toEqual([VERSAO_PADRAO_DA_GRAPH, VERSAO_DA_GRAPH_DO_CANAL_SOCIAL]);
   });
 
   it("a catraca reconhece a versão no meio do endereço, e não confunde versão de outra coisa", () => {

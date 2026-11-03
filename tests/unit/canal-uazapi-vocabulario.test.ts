@@ -35,6 +35,7 @@ describe("capabilities da instância em servidor próprio", () => {
       groups: "full",
       costPerMessage: false,
       alteraMensagemEnviada: false,
+      anexosDeSaida: { imagem: true, video: true, audio: true, documento: true, contato: true },
     });
   });
 

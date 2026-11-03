@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import { invalidarAppDaMeta } from "@/lib/channels/meta/app";
+import { invalidarConfigMetaSocial } from "@/lib/channels/meta-social/config";
 import { audit } from "@/lib/audit";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { logger } from "@/lib/logger";
@@ -117,6 +118,8 @@ async function gravar(
   // No MESMO processo que renderiza (na VPS há um processo de app só), então a
   // credencial nova vale na próxima entrega sem esperar o TTL de 30s.
   invalidarAppDaMeta();
+  // O canal social (Instagram e Messenger) lê esta mesma linha, com memo próprio.
+  invalidarConfigMetaSocial();
 
   const cabecalhos = await headers();
   await audit({
@@ -311,4 +314,63 @@ export async function rotacionarVerifyTokenDaMeta(): Promise<UpdateMetaAppResult
   if (!r.ok) return r;
 
   return { ok: true, verifyToken };
+}
+
+/**
+ * O id do app da Meta e o `config_id` do login unificado do Instagram — o que o
+ * canal social oficial (Instagram Direct e Messenger, migrations 0984 e 0988)
+ * precisa para o OAuth. Nenhum dos dois é segredo: a chave é o App Secret de
+ * cima, a mesma do WhatsApp oficial.
+ *
+ * Campos vazios = "mantenha o que está gravado". São só dígitos (é o formato
+ * do painel da Meta). O app próprio do Instagram (id + chave da 0984) não é
+ * mais aceito: o Instagram conecta pelo login unificado.
+ *
+ * Gate, upsert, invalidação dos memos e trilha são os de `gravar` — o mesmo
+ * caminho da chave do WhatsApp.
+ */
+/** Vazio (ou só espaço) vira ausente: "mantenha o que está gravado". */
+const vazioEhAusente = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+const idDoApp = z.preprocess(vazioEhAusente, z.string().trim().regex(/^[0-9]{5,30}$/).optional());
+
+const entradaSocialSchema = z.object({
+  app_id: idDoApp,
+  unified_config_id: idDoApp,
+});
+
+export interface MetaSocialAppInput {
+  app_id?: string;
+  unified_config_id?: string;
+}
+
+export async function updateAppSocialDaMeta(input: MetaSocialAppInput): Promise<UpdateMetaAppResult> {
+  let authUser: Awaited<ReturnType<typeof requirePlatformAdminFull>>["user"];
+  try {
+    ({ user: authUser } = await requirePlatformAdminFull());
+  } catch (err) {
+    if (ehFalhaDaSessao(err)) return { ok: false, error: MENSAGEM_SESSAO_INVALIDA };
+    throw err;
+  }
+
+  const parsed = entradaSocialSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "invalid_input", details: parsed.error.flatten() };
+  }
+  const { app_id, unified_config_id } = parsed.data;
+  if (!app_id && !unified_config_id) return { ok: false, error: "nada_para_salvar" };
+
+  const valores: Record<string, unknown> = { updated_by: authUser.id };
+  const campos: string[] = [];
+  if (app_id) {
+    valores.app_id = app_id;
+    campos.push("app_id");
+  }
+  if (unified_config_id) {
+    valores.unified_config_id = unified_config_id;
+    campos.push("unified_config_id");
+  }
+
+  // Trilha: QUAIS campos mudaram. Os ids não são segredo, mas a trilha segue a
+  // regra da casa e não carrega valor nenhum.
+  return gravar(authUser, valores, "platform_meta_app.updated", { campos, canal: "meta_social" });
 }

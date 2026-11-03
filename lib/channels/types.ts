@@ -16,7 +16,9 @@ export type ChannelProvider =
   | "uazapi"
   | "zernio_social"
   | "wacalls"
-  | "datafy";
+  | "datafy"
+  /** Instagram Direct e Messenger pela conexão oficial e direta com a Meta (0984). */
+  | "meta_social";
 
 /**
  * Os providers que transportam MENSAGEM — o subconjunto sobre o qual a matriz
@@ -34,6 +36,15 @@ export type ChannelProvider =
  * pareasse voz derrubava `getAdapter` com `unknown_channel_provider`.
  */
 export type ProviderDeMensagem = Exclude<ChannelProvider, "wacalls">;
+
+export interface AnexosDeSaida {
+  imagem: boolean;
+  video: boolean;
+  audio: boolean;
+  documento: boolean;
+  /** Cartão de contato compartilhado (vcard). */
+  contato: boolean;
+}
 
 export interface ChannelCapabilities {
   /** Pode enviar texto livre a qualquer momento? false = exige template fora da janela. */
@@ -56,8 +67,17 @@ export interface ChannelCapabilities {
   banRisk: boolean;
   /** Intervalo mínimo imposto PELA PLATAFORMA entre msgs ao mesmo destinatário (ms). */
   minIntervalMs: number | null;
-  /** 'server-convert' = o canal converte áudio; 'opus-only' = precisamos entregar ogg/opus. */
-  voiceNote: "server-convert" | "opus-only";
+  /**
+   * 'server-convert' = o canal converte áudio; 'opus-only' = precisamos entregar
+   * ogg/opus; 'none' = o canal não envia mensagem de voz (a tela não oferece o
+   * gravador).
+   */
+  voiceNote: "server-convert" | "opus-only" | "none";
+  /**
+   * Que anexos o canal ENVIA. A tela só oferece o que está `true`; o adapter
+   * continua recusando o resto (a matriz descreve, o adapter cumpre).
+   */
+  anexosDeSaida: AnexosDeSaida;
   groups: "full" | "limited" | "none";
   /** Mensagem entregue gera custo → decisões de envio precisam considerar orçamento. */
   costPerMessage: boolean;

@@ -24,6 +24,7 @@ const PROVIDERS = [
   "uazapi",
   "zernio_social",
   "datafy",
+  "meta_social",
 ] as const satisfies readonly ProviderDeMensagem[];
 
 /**
@@ -47,6 +48,7 @@ const CAPABILITIES = [
   "groups",
   "costPerMessage",
   "alteraMensagemEnviada",
+  "anexosDeSaida",
 ] as const;
 
 describe("matriz capability × provider é exaustiva", () => {

@@ -17,7 +17,8 @@ export type ChannelSessionRef =
   | { provider: "zernio" | "zernio_social"; zernio_account_id: string }
   | { provider: "uazapi"; uazapi_instance_id: string }
   | { provider: "datafy"; datafy_phone_number_id: string }
-  | { provider: "wacalls"; wacalls_session_id: string };
+  | { provider: "wacalls"; wacalls_session_id: string }
+  | { provider: "meta_social"; meta_social_account_id: string };
 
 /**
  * Colunas que um `select` do PostgREST precisa trazer para `resolveSessionRef`
@@ -25,7 +26,7 @@ export type ChannelSessionRef =
  * nomeia coluna de provider, e ela some da feature junto com a decisão.
  */
 export const CHANNEL_SESSION_REF_COLUMNS =
-  "provider, waha_session_name, meta_phone_number_id, zernio_account_id, uazapi_instance_id, datafy_phone_number_id, wacalls_session_id";
+  "provider, waha_session_name, meta_phone_number_id, zernio_account_id, uazapi_instance_id, datafy_phone_number_id, wacalls_session_id, meta_social_account_id";
 
 export function resolveSessionRef(session: ChannelSessionRef): string {
   switch (session.provider) {
@@ -59,5 +60,9 @@ export function resolveSessionRef(session: ChannelSessionRef): string {
     // linha real de provider `wacalls` chegasse aqui em tempo de execução.
     case "wacalls":
       return session.wacalls_session_id;
+    // O id da conta do Instagram ou da Página (0984): é o `entry.id` do webhook
+    // e o caminho do envio (`/<id>/messages`). O token é coluna cifrada à parte.
+    case "meta_social":
+      return session.meta_social_account_id;
   }
 }
