@@ -340,6 +340,9 @@ export const AUDIT_ACTIONS = [
   "followup_flow.rolled_back",
   "followup.worker_run",
   "followup.silence_sweep_run",
+  // Varreduras de relógio das automações (lote 3) — só quando iniciaram execução.
+  "automacao.sem_resposta_sweep_run",
+  "automacao.data_do_negocio_sweep_run",
   // Roteiros de atendimento encerrados por prazo (0397) — só quando houve efeito.
   "followup.roteiros_expirados",
   "followup_enrollment.created",

@@ -37,7 +37,11 @@ export async function automacoesComGatilho<K extends AutomacaoTriggerKind>(
   if (orgId) consulta = consulta.eq("organization_id", orgId);
   const { data, error } = await consulta;
   if (error) throw new Error(error.message);
-  const pointers = (data ?? []) as Array<{ id: string; organization_id: string; active_version_id: string }>;
+  const pointers = (data ?? []) as Array<{
+    id: string;
+    organization_id: string;
+    active_version_id: string;
+  }>;
   const armadas: Array<AutomacaoArmada<K>> = [];
   for (let i = 0; i < pointers.length; i += LOTE) {
     const fatia = pointers.slice(i, i + LOTE);
@@ -50,7 +54,9 @@ export async function automacoesComGatilho<K extends AutomacaoTriggerKind>(
       );
     if (e2) throw new Error(e2.message);
     const porId = new Map(
-      ((versoes ?? []) as Array<{ id: string; organization_id: string; graph: unknown }>).map((v) => [v.id, v]),
+      ((versoes ?? []) as Array<{ id: string; organization_id: string; graph: unknown }>).map(
+        (v) => [v.id, v],
+      ),
     );
     for (const p of fatia) {
       const v = porId.get(p.active_version_id);

@@ -24,7 +24,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { contaBloqueadaParaProduzir } from "@/lib/billing/assinatura/pode-produzir";
 
-import { automacoesComGatilho, origensJaIniciadas, uuidDeterministico, type AutomacaoArmada } from "./armadas";
+import {
+  automacoesComGatilho,
+  origensJaIniciadas,
+  uuidDeterministico,
+  type AutomacaoArmada,
+} from "./armadas";
 import { iniciarAutomacao, type InicioDaAutomacao } from "./iniciar";
 import { CHAVE_DE_ORIGEM_AUTOMACAO } from "./teto-de-mensagens";
 
@@ -49,7 +54,11 @@ export interface UltimaSaida {
 export interface SemRespostaDb {
   automacoesArmadas(): Promise<Array<AutomacaoArmada<"no_reply">>>;
   modoLeitura(orgId: string): Promise<boolean>;
-  conversasCandidatas(orgId: string, desdeIso: string, ateIso: string): Promise<ConversaCandidata[]>;
+  conversasCandidatas(
+    orgId: string,
+    desdeIso: string,
+    ateIso: string,
+  ): Promise<ConversaCandidata[]>;
   ultimaSaida(orgId: string, conversationId: string): Promise<UltimaSaida | null>;
   jaIniciadas(orgId: string, pointerId: string, origens: string[]): Promise<Set<string>>;
   iniciar(input: Parameters<typeof iniciarAutomacao>[1]): Promise<InicioDaAutomacao>;
@@ -64,7 +73,9 @@ export interface ResumoSemResposta {
 }
 
 /** O contato não respondeu à última saída? Pura: lê só os carimbos da conversa. */
-export function semRespostaDesde(c: Pick<ConversaCandidata, "last_outbound_at" | "last_inbound_at">): boolean {
+export function semRespostaDesde(
+  c: Pick<ConversaCandidata, "last_outbound_at" | "last_inbound_at">,
+): boolean {
   const saida = Date.parse(c.last_outbound_at);
   if (!Number.isFinite(saida)) return false;
   if (!c.last_inbound_at) return true;
@@ -72,12 +83,25 @@ export function semRespostaDesde(c: Pick<ConversaCandidata, "last_outbound_at" |
   return !Number.isFinite(entrada) || entrada < saida;
 }
 
-export function origemSemResposta(pointerId: string, conversationId: string, ultimaSaidaId: string): string {
+export function origemSemResposta(
+  pointerId: string,
+  conversationId: string,
+  ultimaSaidaId: string,
+): string {
   return uuidDeterministico("automacao:no_reply", pointerId, conversationId, ultimaSaidaId);
 }
 
-export async function varrerSemResposta(db: SemRespostaDb, agora: Date): Promise<ResumoSemResposta> {
-  const resumo: ResumoSemResposta = { automacoes: 0, candidatas: 0, iniciadas: 0, ignoradas: 0, falhas: 0 };
+export async function varrerSemResposta(
+  db: SemRespostaDb,
+  agora: Date,
+): Promise<ResumoSemResposta> {
+  const resumo: ResumoSemResposta = {
+    automacoes: 0,
+    candidatas: 0,
+    iniciadas: 0,
+    ignoradas: 0,
+    falhas: 0,
+  };
   const armadas = await db.automacoesArmadas();
   const modoLeitura = new Map<string, boolean>();
   for (const a of armadas) {
@@ -91,7 +115,9 @@ export async function varrerSemResposta(db: SemRespostaDb, agora: Date): Promise
       for (const g of a.gatilhos) {
         const ate = new Date(agora.getTime() - g.after_minutes * 60_000);
         const desde = new Date(ate.getTime() - JANELA_DA_VARREDURA_SEM_RESPOSTA_MIN * 60_000);
-        const candidatas = (await db.conversasCandidatas(a.organization_id, desde.toISOString(), ate.toISOString()))
+        const candidatas = (
+          await db.conversasCandidatas(a.organization_id, desde.toISOString(), ate.toISOString())
+        )
           .filter(semRespostaDesde)
           .slice(0, TETO_DE_CONVERSAS_SEM_RESPOSTA);
         resumo.candidatas += candidatas.length;
@@ -169,10 +195,15 @@ export function createSupabaseSemRespostaDb(admin: SupabaseClient): SemRespostaD
       if (error) throw new Error(error.message);
       if (!data) return null;
       const m = data as { id: string; metadata: Record<string, unknown> | null };
-      const origem = m.metadata?.[CHAVE_DE_ORIGEM_AUTOMACAO] as { pointer_id?: unknown } | undefined;
-      return { id: m.id, pointer_id: typeof origem?.pointer_id === "string" ? origem.pointer_id : null };
+      const origem = m.metadata?.[CHAVE_DE_ORIGEM_AUTOMACAO] as
+        { pointer_id?: unknown } | undefined;
+      return {
+        id: m.id,
+        pointer_id: typeof origem?.pointer_id === "string" ? origem.pointer_id : null,
+      };
     },
-    jaIniciadas: (orgId, pointerId, origens) => origensJaIniciadas(admin, orgId, pointerId, origens),
+    jaIniciadas: (orgId, pointerId, origens) =>
+      origensJaIniciadas(admin, orgId, pointerId, origens),
     iniciar: (input) => iniciarAutomacao(admin, input),
   };
 }
