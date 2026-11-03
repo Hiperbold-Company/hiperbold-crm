@@ -235,7 +235,7 @@ export function ConversationListItem({
           )}
           aria-hidden
         />
-        <ChannelLogo channel={canal} size={16} className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-background ring-2 ring-background" />
+        <ChannelLogo channel={canal} size={16} className="absolute -bottom-1 -right-1 rounded-md bg-background ring-2 ring-background" />
       </div>
 
       <div className="min-w-0 flex-1">
