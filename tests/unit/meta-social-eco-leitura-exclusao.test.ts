@@ -338,6 +338,31 @@ describe("exclusão de dados", () => {
   });
 });
 
+describe("desconectar Instagram que veio pela Página", () => {
+  it("desassina na Página; mas não quando o Messenger da mesma Página segue conectado", async () => {
+    const { arquivarConta } = await import("@/lib/channels/meta-social/store");
+    const pelaPagina = { ...sessao, id: "ig-pg", meta_social_page_id: "PAG-9", meta_social_token_encrypted: "cifrado:TOKEN-DA-PAGINA" };
+
+    const sozinha = bancoFalso({ channel_sessions: [pelaPagina] });
+    const desassinar = vi.fn(async () => undefined);
+    const r = await arquivarConta(sozinha.db as never, ORG, "ig-pg", desassinar);
+    expect(r?.desassinado).toBe(true);
+    expect(desassinar).toHaveBeenCalledWith("instagram", "IG-A", "TOKEN-DA-PAGINA", "PAG-9");
+
+    const comMessenger = bancoFalso({
+      channel_sessions: [
+        pelaPagina,
+        { ...sessao, id: "msg", meta_social_platform: "messenger", meta_social_account_id: "PAG-9" },
+      ],
+    });
+    const desassinar2 = vi.fn(async () => undefined);
+    const r2 = await arquivarConta(comMessenger.db as never, ORG, "ig-pg", desassinar2);
+    expect(desassinar2).not.toHaveBeenCalled();
+    expect(r2?.desassinado).toBe(false);
+    expect(comMessenger.t("channel_sessions").find((l) => l.id === "ig-pg")!.archived_at).toBeTruthy();
+  });
+});
+
 describe("aviso de validade: reconexão no meio não é sobrescrita", () => {
   const agora = new Date("2026-11-02T06:35:00Z");
   const dia = 24 * 3600 * 1000;

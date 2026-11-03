@@ -76,9 +76,11 @@ describe("0087 · o canal da sessão chega ao clone", () => {
     // continua valendo — ela existe para pegar coluna que entrou SEM querer.
     // As seis `meta_social_*` (migration 0984) também são de propósito: são do
     // provider `meta_social` (Instagram e Messenger oficiais), não do meta_cloud.
+    // `meta_social_page_id` (migration 0990) idem: a Página do Instagram conectado por ela.
     expect(cols).toEqual([
       "meta_phone_number_id",
       "meta_social_account_id",
+      "meta_social_page_id",
       "meta_social_platform",
       "meta_social_token_encrypted",
       "meta_social_token_expires_at",

@@ -78,6 +78,8 @@ export const metaSocialAdapter: ChannelAdapter = {
     const envios = montarEnvios({
       plataforma: cred.plataforma,
       contaId: envelope.sessionRef,
+      // Instagram conectado pela Página: envia pela Página, com o token dela.
+      paginaId: cred.paginaId,
       destinatario: envelope.providerConversationId,
       texto: envelope.kind === "image" ? (envelope.media?.caption ?? null) : (envelope.body ?? ""),
       imagemUrl: envelope.kind === "image" ? (envelope.media?.url ?? null) : null,

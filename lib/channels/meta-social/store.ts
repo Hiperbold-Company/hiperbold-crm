@@ -103,6 +103,12 @@ export async function conectarConta(
     autorizadorId?: string | null;
     /** `client_business_id` do portfólio (só Instagram). Ausente = mantém. */
     empresaId?: string | null;
+    /**
+     * Instagram conectado pela Página (plano C do callback): id da Página dona
+     * da conta, e `token` é o da Página. Gravado SEMPRE: ausente/null (conta
+     * pelo SUAT, ou Messenger) limpa o que havia numa reconexão.
+     */
+    paginaId?: string | null;
   },
   assinar: typeof assinarWebhookDaConta = assinarWebhookDaConta,
 ): Promise<{ channelId: string; reconectado: boolean; recebimento: boolean }> {
@@ -147,6 +153,7 @@ export async function conectarConta(
     meta_social_token_expires_at: input.expiraEm,
     meta_social_token_refreshed_at: agora,
     meta_social_username: conta.usuario,
+    meta_social_page_id: plataforma === "instagram" ? (input.paginaId ?? null) : null,
     display_name: `${rotulo} · ${apelido}`,
     status: "STARTING",
     status_reason: null,
@@ -219,7 +226,7 @@ export async function conectarConta(
 
   let recebimento = true;
   try {
-    await assinar(plataforma, conta.id, input.token);
+    await assinar(plataforma, conta.id, input.token, plataforma === "instagram" ? (input.paginaId ?? null) : null);
   } catch (err) {
     recebimento = false;
     logger.warn("[meta-social.store] assinatura do webhook falhou", {
@@ -307,10 +314,10 @@ export async function credencialDaConta(
   admin: SupabaseClient,
   organizationId: string,
   contaId: string,
-): Promise<{ sessionId: string; plataforma: PlataformaMetaSocial; token: string } | null> {
+): Promise<{ sessionId: string; plataforma: PlataformaMetaSocial; token: string; paginaId: string | null } | null> {
   const { data } = await admin
     .from("channel_sessions")
-    .select("id, meta_social_platform, meta_social_token_encrypted")
+    .select("id, meta_social_platform, meta_social_token_encrypted, meta_social_page_id")
     .eq("organization_id", organizationId)
     .eq("provider", CHANNEL_PROVIDER_META_SOCIAL)
     .eq("meta_social_account_id", contaId)
@@ -320,11 +327,17 @@ export async function credencialDaConta(
     id: string;
     meta_social_platform: PlataformaMetaSocial;
     meta_social_token_encrypted: string | null;
+    meta_social_page_id?: string | null;
   }[];
   if (linhas.length !== 1 || !linhas[0]!.meta_social_token_encrypted) return null;
   const token = await decryptWebhookSecret(admin, linhas[0]!.meta_social_token_encrypted);
   if (!token) return null;
-  return { sessionId: linhas[0]!.id, plataforma: linhas[0]!.meta_social_platform, token };
+  return {
+    sessionId: linhas[0]!.id,
+    plataforma: linhas[0]!.meta_social_platform,
+    token,
+    paginaId: linhas[0]!.meta_social_platform === "instagram" ? (linhas[0]!.meta_social_page_id ?? null) : null,
+  };
 }
 
 /**
@@ -340,7 +353,7 @@ export async function arquivarConta(
 ): Promise<{ plataforma: PlataformaMetaSocial; contaId: string; desassinado: boolean } | null> {
   const { data } = await admin
     .from("channel_sessions")
-    .select("id, meta_social_platform, meta_social_account_id, meta_social_token_encrypted")
+    .select("id, meta_social_platform, meta_social_account_id, meta_social_token_encrypted, meta_social_page_id")
     .eq("organization_id", organizationId)
     .eq("id", id)
     .eq("provider", CHANNEL_PROVIDER_META_SOCIAL)
@@ -351,13 +364,15 @@ export async function arquivarConta(
     meta_social_platform: PlataformaMetaSocial;
     meta_social_account_id: string;
     meta_social_token_encrypted: string | null;
+    meta_social_page_id?: string | null;
   };
+  const paginaId = linha.meta_social_platform === "instagram" ? (linha.meta_social_page_id ?? null) : null;
   let desassinado = false;
-  if (linha.meta_social_token_encrypted) {
+  if (linha.meta_social_token_encrypted && !(await paginaAindaEmUso(admin, organizationId, id, linha, paginaId))) {
     const token = await decryptWebhookSecret(admin, linha.meta_social_token_encrypted);
     if (token) {
       try {
-        await desassinar(linha.meta_social_platform, linha.meta_social_account_id, token);
+        await desassinar(linha.meta_social_platform, linha.meta_social_account_id, token, paginaId);
         desassinado = true;
       } catch {
         desassinado = false;
@@ -377,4 +392,36 @@ export async function arquivarConta(
     .eq("id", id);
   if (error) throw new Error("meta_social_archive_failed");
   return { plataforma: linha.meta_social_platform, contaId: linha.meta_social_account_id, desassinado };
+}
+
+/**
+ * A assinatura do webhook de uma Página é UMA por app: o Messenger da Página e
+ * o Instagram conectado por ela (`meta_social_page_id`) dividem a mesma. Tirar
+ * a assinatura ao desconectar um derrubaria o recebimento do outro — então,
+ * se a mesma Página segue em uso por outra conexão viva DESTA organização, a
+ * assinatura fica.
+ */
+async function paginaAindaEmUso(
+  admin: SupabaseClient,
+  organizationId: string,
+  id: string,
+  linha: { meta_social_platform: PlataformaMetaSocial; meta_social_account_id: string },
+  paginaId: string | null,
+): Promise<boolean> {
+  const pagina = linha.meta_social_platform === "messenger" ? linha.meta_social_account_id : paginaId;
+  if (!pagina) return false;
+  const base = admin
+    .from("channel_sessions")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("provider", CHANNEL_PROVIDER_META_SOCIAL)
+    .is("archived_at", null)
+    .neq("id", id);
+  const { data, error } =
+    linha.meta_social_platform === "messenger"
+      ? await base.eq("meta_social_platform", "instagram").eq("meta_social_page_id", pagina).limit(1)
+      : await base.eq("meta_social_platform", "messenger").eq("meta_social_account_id", pagina).limit(1);
+  // Na dúvida, não desassina: uma assinatura sobrando é inofensiva; uma a menos derruba o recebimento.
+  if (error) return true;
+  return (data ?? []).length > 0;
 }
