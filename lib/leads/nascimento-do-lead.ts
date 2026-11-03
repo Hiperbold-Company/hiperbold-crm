@@ -99,6 +99,17 @@ const ORIGEM_PADRAO: OrigemDoNascimento = {
   motivo: "primeira mensagem recebida no WhatsApp",
 };
 
+/** Origem do lead que nasce de uma conversa de rede social (Instagram Direct, Messenger). */
+export function origemDaRedeSocial(platform: string): OrigemDoNascimento | undefined {
+  if (platform === "instagram") {
+    return { rotulo: "Instagram", source: "instagram", motivo: "primeira mensagem recebida no Instagram Direct" };
+  }
+  if (platform === "facebook") {
+    return { rotulo: "Messenger", source: "messenger", motivo: "primeira mensagem recebida no Messenger" };
+  }
+  return undefined;
+}
+
 /**
  * Por que um lead NÃO nasceu. Cada motivo é registrado — silêncio não distingue
  * "não devia nascer" de "falhou ao nascer", e a segunda é a que custa caro.
