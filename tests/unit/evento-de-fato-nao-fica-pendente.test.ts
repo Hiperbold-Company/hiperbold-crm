@@ -102,6 +102,15 @@ const CONSUMIDORES_FORA_DO_REGISTRY: Record<string, string> = {
   "conversation.routing_requested":
     "lib/routing/worker.ts — o worker de distribuição roda pelo cron " +
     "`/api/v1/cron/routing-worker` e drena este tipo direto do event_log (migration 0040).",
+  // ⚠️ DECLARAÇÃO PROVISÓRIA (03/11/2026): o consumidor está sendo escrito em
+  // paralelo, no gatilho "Comentário no Instagram" das Automações. O evento nasce
+  // `pending` DE PROPÓSITO, para o handler que chegar drená-lo; pô-lo na lista de
+  // registro o faria nascer `done` e o handler nunca o veria. Quando o handler
+  // entrar em lib/event-log/register-handlers.ts, esta linha SAI.
+  "instagram.comentario_recebido":
+    "migration 0991 (fn_meta_social_registrar_comentario) — consumidor: gatilho de " +
+    "comentário do Instagram das Automações, em construção; contrato em " +
+    "docs/specs/instagram-comentarios-contrato.md.",
 };
 
 /**

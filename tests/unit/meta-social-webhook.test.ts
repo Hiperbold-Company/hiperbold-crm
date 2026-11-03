@@ -167,7 +167,7 @@ describe("leitura do payload", () => {
   });
 
   it("campos assinados: só o que o parser lê (sem reações no Instagram)", () => {
-    expect(CAMPOS_DO_WEBHOOK_INSTAGRAM).toBe("messages,messaging_postbacks,messaging_seen");
+    expect(CAMPOS_DO_WEBHOOK_INSTAGRAM).toBe("messages,messaging_postbacks,messaging_seen,comments");
     expect(CAMPOS_DO_WEBHOOK_MESSENGER).toBe("messages,messaging_postbacks,message_echoes,message_reads");
   });
 

@@ -9,6 +9,8 @@
  * `envelope.providerConversationId`. `resolveRecipient` só diz "há endereço":
  * o contato não carrega o id da rede.
  */
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { assertSafeOutboundUrl } from "@/lib/automation/outbound-url";
 import { assertDestinoResolvidoSeguro } from "@/lib/automation/outbound-ip";
 import { lerComTeto } from "@/lib/messaging/media/ler-com-teto";
@@ -25,6 +27,23 @@ import { MOTIVO_TOKEN_VENCE_EM_BREVE } from "./renovacao";
 
 /** `status_reason` da sessão cujo token a Meta recusou no envio: a tela pede "Reconectar". */
 export const MOTIVO_TOKEN_INVALIDO = "token_invalido";
+
+/**
+ * A Meta recusou o token num envio: a sessão passa a pedir "Reconectar" na
+ * tela, e o vigia `channel-health` (pelo `checkHealth` abaixo) abre o aviso.
+ * Usado pelo envio do Direct e pela fila de respostas a comentários.
+ */
+export async function marcarTokenInvalido(
+  admin: SupabaseClient,
+  organizationId: string,
+  sessionId: string,
+): Promise<void> {
+  await admin
+    .from("channel_sessions")
+    .update({ status: "FAILED", status_reason: MOTIVO_TOKEN_INVALIDO, last_status_change_at: new Date().toISOString() })
+    .eq("organization_id", organizationId)
+    .eq("id", sessionId);
+}
 
 const FRASE_DE_RESERVA = "A rede recusou o envio. Confira a conexão em Conexões › Redes sociais.";
 
@@ -100,11 +119,7 @@ export const metaSocialAdapter: ChannelAdapter = {
           // Token recusado: a sessão passa a pedir "Reconectar" na tela, e o
           // vigia `channel-health` (pelo `checkHealth` abaixo) abre o aviso.
           if (codigo === "meta_social_token_invalid") {
-            await admin
-              .from("channel_sessions")
-              .update({ status: "FAILED", status_reason: MOTIVO_TOKEN_INVALIDO, last_status_change_at: new Date().toISOString() })
-              .eq("organization_id", envelope.organizationId)
-              .eq("id", cred.sessionId);
+            await marcarTokenInvalido(admin, envelope.organizationId, cred.sessionId);
           }
           throw new Error(fraseDaFalhaDeCanal(codigo) ?? FRASE_DE_RESERVA);
         }

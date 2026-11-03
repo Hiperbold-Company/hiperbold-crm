@@ -27,6 +27,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { fail } from "@/lib/api/wrappers";
 import { verificationChallenge } from "@/lib/channels/meta/webhook";
+import { ingerirComentario, lerComentariosMetaSocial } from "@/lib/channels/meta-social/comentarios";
 import { configMetaSocial } from "@/lib/channels/meta-social/config";
 import { ingerirEventoMetaSocial, sessaoPelaConta, type SessaoMetaSocial } from "@/lib/channels/meta-social/ingest";
 import {
@@ -117,8 +118,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // Comentários do Instagram (0991): mesma resolução da organização pela
+  // conta do `entry.id`, gravação idempotente e um evento por comentário novo.
+  const comentarios = lerComentariosMetaSocial(envelope.data);
+  for (const c of comentarios) {
+    const chave = `instagram:${c.contaId}`;
+    try {
+      if (!sessoes.has(chave)) sessoes.set(chave, await sessaoPelaConta(admin, "instagram", c.contaId));
+      const sessao = sessoes.get(chave) ?? null;
+      if (!sessao) {
+        desfechos.push("ignored:conta_desconhecida");
+        continue;
+      }
+      const r = await ingerirComentario(admin, sessao, c);
+      desfechos.push(`${r.status}:${r.reason}`);
+    } catch (err) {
+      falhas += 1;
+      desfechos.push("failed");
+      logger.error("[meta-social.webhook] comentário não ingerido", {
+        request_id: requestId,
+        detalhe: err instanceof Error ? err.message.slice(0, 200) : "erro",
+      });
+    }
+  }
+
   const resposta = NextResponse.json(
-    { received: eventos.length, outcomes: desfechos },
+    { received: eventos.length + comentarios.length, outcomes: desfechos },
     { status: falhas > 0 ? 500 : 200 },
   );
   resposta.headers.set("X-Request-Id", requestId);

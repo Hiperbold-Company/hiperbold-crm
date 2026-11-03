@@ -146,6 +146,11 @@ CRONS="
 # 24h de idade; a rodada pega quem vence em menos de 20 dias. Diária basta, e
 # rodada vazia não chama a Meta nem audita.
 35 6 * * *|120|api/v1/cron/meta-social-tokens
+# A FILA DE RESPOSTAS A COMENTÁRIOS DO INSTAGRAM (0991). De minuto em minuto:
+# a resposta privada é a DM que a pessoa espera logo depois de comentar. O teto
+# de 600 por hora por conta fica dentro da rodada; fila vazia é uma consulta e
+# não audita.
+* * * * *|60|api/v1/cron/meta-social-fila
 0 12 * * *|60|api/v1/cron/lgpd-sla-watcher
 30 3 * * *|120|api/v1/cron/kb-conversations-batch
 15 4 * * *|60|api/v1/cron/sync-model-catalog
