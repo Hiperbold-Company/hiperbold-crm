@@ -1135,7 +1135,7 @@ describe("0909 Tarefa 5: CONFIRMED e depois RECEIVED concedem uma vez (decisão 
     expect(sql(`select resultado from public.asaas_webhook_events where event_id = 'evt-t5-001a';`).trim()).toBe("aguardando");
 
     // CONFIRMED: concede, plan_id troca para Pro.
-    const confirmado = `jsonb_build_object('id','pay_t5_001','status','CONFIRMED','value',199.00,'dueDate','2026-10-01','paymentDate','2026-10-01','customer','cus_t5001','externalReference','HC:ord:${pedidoId}')`;
+    const confirmado = `jsonb_build_object('id','pay_t5_001','status','CONFIRMED','value',199.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'paymentDate',to_char(current_date,'YYYY-MM-DD'),'customer','cus_t5001','externalReference','HC:ord:${pedidoId}')`;
     const { id: eventoId1, lease: lease1 } = (() => {
       sql(`select public.fn_billing_asaas_registrar_evento('evt-t5-001b', 'PAYMENT_CONFIRMED', 'pay_t5_001', 'sandbox', 'webhook', '{}'::jsonb);`);
       return reservarPorEventId("evt-t5-001b");
@@ -1155,7 +1155,7 @@ describe("0909 Tarefa 5: CONFIRMED e depois RECEIVED concedem uma vez (decisão 
     sql(`select public.fn_billing_asaas_registrar_evento('evt-t5-001c', 'PAYMENT_RECEIVED', 'pay_t5_001', 'sandbox', 'webhook', '{}'::jsonb);`);
     const { id: eventoId2, lease: lease2 } = reservarPorEventId("evt-t5-001c");
     const resultadoReceived = sql(
-      `select public.fn_billing_asaas_aplicar_evento('${eventoId2}'::uuid, '${lease2}'::uuid, jsonb_build_object('id','pay_t5_001','status','RECEIVED','value',199.00,'dueDate','2026-10-01','customer','cus_t5001'));`,
+      `select public.fn_billing_asaas_aplicar_evento('${eventoId2}'::uuid, '${lease2}'::uuid, jsonb_build_object('id','pay_t5_001','status','RECEIVED','value',199.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'customer','cus_t5001'));`,
     );
     expect(resultadoReceived).toContain('"resultado": "ja_aplicado"');
     expect(sql(`select count(*) from public.billing_payments where asaas_payment_id = 'pay_t5_001';`).trim()).toBe("1");
@@ -1182,7 +1182,7 @@ describe("0909 Tarefa 5: pacote de tokens credita uma vez (decisão 8)", () => {
     ).trim();
     sql(`select public.fn_billing_pedido_registrar_cobranca('${ORG_T5_PACOTE}'::uuid, '${pedidoId}'::uuid, 'pay_t5_002', null, null);`);
 
-    const confirmacao = `jsonb_build_object('id','pay_t5_002','status','RECEIVED','value',50.00,'dueDate','2026-10-01','externalReference','HC:ord:${pedidoId}')`;
+    const confirmacao = `jsonb_build_object('id','pay_t5_002','status','RECEIVED','value',50.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'externalReference','HC:ord:${pedidoId}')`;
     const resultado = registrarEAplicar("evt-t5-002", "pay_t5_002", confirmacao);
     expect(resultado).toContain('"resultado": "aplicado"');
 
@@ -1253,19 +1253,19 @@ describe("0909 Tarefa 5: cliente trocado e valor menor dão divergente; valor ma
     sql(`select public.fn_billing_pedido_registrar_cobranca('${ORG_T5_DIVERGENTE}'::uuid, '${pedidoId}'::uuid, 'pay_t5_004a', null, null);`);
     sql(`select public.fn_billing_vincular_cliente_asaas('${ORG_T5_DIVERGENTE}'::uuid, 'sandbox', 'cus_t5004');`);
 
-    const confA = `jsonb_build_object('id','pay_t5_004a','status','CONFIRMED','value',199.00,'dueDate','2026-10-01','customer','cus_OUTRO')`;
+    const confA = `jsonb_build_object('id','pay_t5_004a','status','CONFIRMED','value',199.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'customer','cus_OUTRO')`;
     const resultadoA = registrarEAplicar("evt-t5-004a", "pay_t5_004a", confA);
     expect(resultadoA).toContain('"resultado": "divergente"');
     expect(sql(`select count(*) from public.billing_payments where asaas_payment_id = 'pay_t5_004a';`).trim()).toBe("0");
 
     // valor MENOR: divergente, tambem sem gravar.
-    const confB = `jsonb_build_object('id','pay_t5_004b','status','CONFIRMED','value',50.00,'dueDate','2026-10-01','customer','cus_t5004','externalReference','HC:ord:${pedidoId}')`;
+    const confB = `jsonb_build_object('id','pay_t5_004b','status','CONFIRMED','value',50.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'customer','cus_t5004','externalReference','HC:ord:${pedidoId}')`;
     const resultadoB = registrarEAplicar("evt-t5-004b", "pay_t5_004b", confB);
     expect(resultadoB).toContain('"resultado": "divergente"');
     expect(sql(`select count(*) from public.billing_payments where asaas_payment_id = 'pay_t5_004b';`).trim()).toBe("0");
 
     // valor MAIOR: concede com o alarme divergente_valor.
-    const confC = `jsonb_build_object('id','pay_t5_004c','status','CONFIRMED','value',250.00,'dueDate','2026-10-01','customer','cus_t5004','externalReference','HC:ord:${pedidoId}')`;
+    const confC = `jsonb_build_object('id','pay_t5_004c','status','CONFIRMED','value',250.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'customer','cus_t5004','externalReference','HC:ord:${pedidoId}')`;
     sql(`select public.fn_billing_asaas_registrar_evento('evt-t5-004c', 'PAYMENT_CONFIRMED', 'pay_t5_004c', 'sandbox', 'webhook', '{}'::jsonb);`);
     const { id: eventoIdC, lease: leaseC } = reservarPorEventId("evt-t5-004c");
     const resultadoC = sql(`select public.fn_billing_asaas_aplicar_evento('${eventoIdC}'::uuid, '${leaseC}'::uuid, ${confC});`);
@@ -1276,7 +1276,7 @@ describe("0909 Tarefa 5: cliente trocado e valor menor dão divergente; valor ma
 
 describe("0909 Tarefa 5: prefixo HT: dá outro_app", () => {
   it("externalReference de outro app nunca casa com pedido nenhum", () => {
-    const conf = `jsonb_build_object('id','pay_t5_005','status','CONFIRMED','value',100.00,'dueDate','2026-10-01','externalReference','HT:algumacoisa')`;
+    const conf = `jsonb_build_object('id','pay_t5_005','status','CONFIRMED','value',100.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'externalReference','HT:algumacoisa')`;
     const resultado = registrarEAplicar("evt-t5-005", "pay_t5_005", conf);
     expect(resultado).toContain('"resultado": "outro_app"');
   });
@@ -1296,7 +1296,7 @@ describe("0909 Tarefa 5: pago fora do prazo concede com alarme (decisão 4/A1)",
     sql(`update public.billing_contracts set status = 'suspensa' where organization_id = '${ORG_T5_VENCIDO}';`);
     sql(`select public.fn_billing_vincular_cliente_asaas('${ORG_T5_VENCIDO}'::uuid, 'sandbox', 'cus_t5006');`);
 
-    const conf = `jsonb_build_object('id','pay_t5_006','status','CONFIRMED','value',199.00,'dueDate','2026-10-01','customer','cus_t5006')`;
+    const conf = `jsonb_build_object('id','pay_t5_006','status','CONFIRMED','value',199.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'customer','cus_t5006')`;
     const resultado = registrarEAplicar("evt-t5-006", "pay_t5_006", conf);
     expect(resultado).toContain('"resultado": "aplicado"');
     expect(sql(`select alarme from public.asaas_webhook_events where event_id = 'evt-t5-006';`).trim()).toBe("pago_fora_do_prazo");
@@ -1537,7 +1537,7 @@ describe("0909 Tarefa 6 (D-086, 0916): estorno total corta o pacote e cancela a 
     const pedidoId = sql(`select id from public.billing_orders where organization_id = '${ORG_T6_ESTORNO_PACOTE}' and status = 'criado';`).trim();
     sql(`select public.fn_billing_pedido_registrar_cobranca('${ORG_T6_ESTORNO_PACOTE}'::uuid, '${pedidoId}'::uuid, 'pay_t6_001', null, null);`);
 
-    const confPagamento = `jsonb_build_object('id','pay_t6_001','status','RECEIVED','value',30.00,'dueDate','2026-10-01','externalReference','HC:ord:${pedidoId}')`;
+    const confPagamento = `jsonb_build_object('id','pay_t6_001','status','RECEIVED','value',30.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'externalReference','HC:ord:${pedidoId}')`;
     const pago = registrarEAplicarTipo("evt-t6-001a", "PAYMENT_RECEIVED", "pay_t6_001", confPagamento);
     expect(pago).toContain('"resultado": "aplicado"');
     expect(sql(`select creditado from public.billing_token_wallets where organization_id = '${ORG_T6_ESTORNO_PACOTE}' and fonte = 'avulso' and ciclo is null;`).trim()).toBe("50000");
@@ -1564,7 +1564,7 @@ describe("0909 Tarefa 6 (D-086, 0916): estorno total corta o pacote e cancela a 
     const pedidoId = sql(`select id from public.billing_orders where organization_id = '${ORG_T6_ESTORNO_ASSINATURA}' and status = 'criado';`).trim();
     sql(`select public.fn_billing_pedido_registrar_cobranca('${ORG_T6_ESTORNO_ASSINATURA}'::uuid, '${pedidoId}'::uuid, 'pay_t6_002', null, null);`);
 
-    const confPagamento = `jsonb_build_object('id','pay_t6_002','status','CONFIRMED','value',199.00,'dueDate','2026-10-01','externalReference','HC:ord:${pedidoId}')`;
+    const confPagamento = `jsonb_build_object('id','pay_t6_002','status','CONFIRMED','value',199.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'externalReference','HC:ord:${pedidoId}')`;
     registrarEAplicarTipo("evt-t6-002a", "PAYMENT_CONFIRMED", "pay_t6_002", confPagamento);
     const fimAntes = sql(`select current_period_end from public.billing_contracts where organization_id = '${ORG_T6_ESTORNO_ASSINATURA}';`).trim();
     expect(fimAntes.length).toBeGreaterThan(0);
@@ -1610,7 +1610,7 @@ describe("0909 Tarefa 6: chargeback e depois estorno real convivem (índice úni
     );
     const pedidoId = sql(`select id from public.billing_orders where organization_id = '${ORG_T6_CHARGEBACK_CONVIVE}' and status = 'criado';`).trim();
     sql(`select public.fn_billing_pedido_registrar_cobranca('${ORG_T6_CHARGEBACK_CONVIVE}'::uuid, '${pedidoId}'::uuid, 'pay_t6_004', null, null);`);
-    const confPagamento = `jsonb_build_object('id','pay_t6_004','status','RECEIVED','value',199.00,'dueDate','2026-10-01','externalReference','HC:ord:${pedidoId}')`;
+    const confPagamento = `jsonb_build_object('id','pay_t6_004','status','RECEIVED','value',199.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'externalReference','HC:ord:${pedidoId}')`;
     registrarEAplicarTipo("evt-t6-004a", "PAYMENT_RECEIVED", "pay_t6_004", confPagamento);
 
     const confChargeback = `jsonb_build_object('id','pay_t6_004','status','CHARGEBACK_REQUESTED','value',199.00)`;
@@ -1972,7 +1972,7 @@ describe("0909 PARTE 7, item 12: fn_billing_asaas_reprocessar_evento aceita sem_
   it("evento sem_vinculo reprocessa sem erro e volta a aguardando", () => {
     sql(`select public.fn_billing_asaas_registrar_evento('evt-p7-012', 'PAYMENT_CONFIRMED', 'pay_p7_012', 'sandbox', 'webhook', '{}'::jsonb);`);
     const { id, lease } = reservarPorEventId("evt-p7-012");
-    const conf = `jsonb_build_object('id','pay_p7_012','status','CONFIRMED','value',10.00,'dueDate','2026-10-01')`;
+    const conf = `jsonb_build_object('id','pay_p7_012','status','CONFIRMED','value',10.00,'dueDate',to_char(current_date,'YYYY-MM-DD'))`;
     sql(`select public.fn_billing_asaas_aplicar_evento('${id}'::uuid, '${lease}'::uuid, ${conf});`);
     expect(sql(`select resultado from public.asaas_webhook_events where id = '${id}';`).trim()).toBe("sem_vinculo");
 
@@ -2126,7 +2126,7 @@ describe("0909 PARTE 7, item 1: estorno forjado não estorna nem bloqueia o paga
     );
     const pedidoId = sql(`select id from public.billing_orders where organization_id = '${ORG_T6_ESTORNO_FORJADO}' and status = 'criado';`).trim();
     sql(`select public.fn_billing_pedido_registrar_cobranca('${ORG_T6_ESTORNO_FORJADO}'::uuid, '${pedidoId}'::uuid, 'pay_p7_001', null, null);`);
-    const confPagamento = `jsonb_build_object('id','pay_p7_001','status','RECEIVED','value',199.00,'dueDate','2026-10-01','externalReference','HC:ord:${pedidoId}')`;
+    const confPagamento = `jsonb_build_object('id','pay_p7_001','status','RECEIVED','value',199.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'externalReference','HC:ord:${pedidoId}')`;
     registrarEAplicarTipo("evt-p7-001a", "PAYMENT_RECEIVED", "pay_p7_001", confPagamento);
     const fimAntes = sql(`select current_period_end from public.billing_contracts where organization_id = '${ORG_T6_ESTORNO_FORJADO}';`).trim();
     expect(fimAntes.length).toBeGreaterThan(0);
@@ -2208,7 +2208,7 @@ describe("0909 PARTE 7, item 4 (primeira metade): assinatura Asaas duplicada nã
         select '${ORG_T6_ASSINATURA_DUPLICADA}', 'sandbox', 'assinatura', bc.plan_id, 'monthly', 'CREDIT_CARD', 19900, gen_random_uuid(), 'pay_p7_004', 'aguardando_pagamento'
         from public.billing_contracts bc where bc.organization_id = '${ORG_T6_ASSINATURA_DUPLICADA}';
     `);
-    const conf = `jsonb_build_object('id','pay_p7_004','status','CONFIRMED','value',199.00,'dueDate','2026-10-01','subscription','sub_p7_outra')`;
+    const conf = `jsonb_build_object('id','pay_p7_004','status','CONFIRMED','value',199.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'subscription','sub_p7_outra')`;
     const resultado = registrarEAplicarTipo("evt-p7-004", "PAYMENT_CONFIRMED", "pay_p7_004", conf);
     expect(resultado).toContain('"resultado": "divergente"');
     expect(resultado).toContain('"alarme": "assinatura_duplicada"');
@@ -2302,7 +2302,7 @@ describe("0909 PARTE 7, item 7: fn_billing_pedido_marcar, inconclusivo só a par
 
 describe("0909 PARTE 7, item 9: evento fechado outro_app poda o payload na hora", () => {
   it("externalReference de outro app: payload vira {} e payload_podado_em é gravado", () => {
-    const conf = `jsonb_build_object('id','pay_p7_009','status','CONFIRMED','value',10.00,'dueDate','2026-10-01','externalReference','HT:algumacoisa','dado_do_outro_produto','nao_deveria_ficar_aqui')`;
+    const conf = `jsonb_build_object('id','pay_p7_009','status','CONFIRMED','value',10.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'externalReference','HT:algumacoisa','dado_do_outro_produto','nao_deveria_ficar_aqui')`;
     const resultado = registrarEAplicar("evt-p7-009", "pay_p7_009", conf);
     expect(resultado).toContain('"resultado": "outro_app"');
     const linha = sql(`select payload::text, payload_podado_em is not null from public.asaas_webhook_events where event_id = 'evt-p7-009';`);
