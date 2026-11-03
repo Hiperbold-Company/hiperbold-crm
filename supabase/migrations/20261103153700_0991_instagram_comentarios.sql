@@ -27,9 +27,9 @@
 -- Repetido devolve null e não emite. A sessão tem de ser da organização.
 -- Revogada de public e anon (item 9 da doutrina), só service_role executa.
 --
--- RLS: policy `tenant_isolation_<tabela>_all` por `fn_user_org_ids()`. A
--- escrita é só do servidor: `authenticated` recebe apenas SELECT (sem grant,
--- a policy de escrita não alcança ninguém), anon nada.
+-- RLS: policy `tenant_isolation_<tabela>_select` por `fn_user_org_ids()`, só
+-- leitura (policy ALL só-tenancy é vetada por rbac-config-ia-canais). A escrita
+-- é só do servidor: `authenticated` recebe apenas SELECT, anon nada.
 -- Sem trigger e sem HTTP no banco: o envio é do cron.
 -- Idempotente: re-aplicável sem efeito novo.
 
@@ -100,18 +100,18 @@ alter table public.meta_social_comentarios enable row level security;
 alter table public.meta_social_fila_de_envio enable row level security;
 
 drop policy if exists tenant_isolation_meta_social_comentarios_all on public.meta_social_comentarios;
-create policy tenant_isolation_meta_social_comentarios_all on public.meta_social_comentarios
-  for all
+drop policy if exists tenant_isolation_meta_social_comentarios_select on public.meta_social_comentarios;
+create policy tenant_isolation_meta_social_comentarios_select on public.meta_social_comentarios
+  for select
   to authenticated
-  using (organization_id in (select public.fn_user_org_ids()))
-  with check (organization_id in (select public.fn_user_org_ids()));
+  using (organization_id in (select public.fn_user_org_ids()));
 
 drop policy if exists tenant_isolation_meta_social_fila_de_envio_all on public.meta_social_fila_de_envio;
-create policy tenant_isolation_meta_social_fila_de_envio_all on public.meta_social_fila_de_envio
-  for all
+drop policy if exists tenant_isolation_meta_social_fila_de_envio_select on public.meta_social_fila_de_envio;
+create policy tenant_isolation_meta_social_fila_de_envio_select on public.meta_social_fila_de_envio
+  for select
   to authenticated
-  using (organization_id in (select public.fn_user_org_ids()))
-  with check (organization_id in (select public.fn_user_org_ids()));
+  using (organization_id in (select public.fn_user_org_ids()));
 
 -- O default ACL do Supabase dá tudo aos três papéis em tabela nova de public:
 -- revoga explícito e devolve só o que cada um usa.

@@ -62,9 +62,9 @@ beforeAll(() => {
     insert into public.user_organizations (user_id, organization_id, role, accepted_at) values
       ('${USER_A}', '${ORG_A}', 'agent', now()), ('${USER_B}', '${ORG_B}', 'agent', now())
       on conflict do nothing;
-    insert into public.channel_sessions (id, organization_id, provider, meta_social_platform, meta_social_account_id) values
-      ('${SESSAO_A}', '${ORG_A}', 'meta_social', 'instagram', 'IG-0991-A'),
-      ('${SESSAO_B}', '${ORG_B}', 'meta_social', 'instagram', 'IG-0991-B')
+    insert into public.channel_sessions (id, organization_id, provider, meta_social_platform, meta_social_account_id, webhook_secret_encrypted) values
+      ('${SESSAO_A}', '${ORG_A}', 'meta_social', 'instagram', 'IG-0991-A', '\\x00'::bytea),
+      ('${SESSAO_B}', '${ORG_B}', 'meta_social', 'instagram', 'IG-0991-B', '\\x00'::bytea)
       on conflict (id) do nothing;
   `);
   registrar(ORG_A, SESSAO_A, "C-0991-A");
@@ -103,7 +103,7 @@ describe("isolamento entre organizações", () => {
               where table_schema='public' and table_name='${tabela}' and grantee='authenticated';`),
       ).toBe("SELECT");
       expect(sql(`select count(*) from pg_policies where schemaname='public' and tablename='${tabela}'
-                   and policyname='tenant_isolation_${tabela}_all';`)).toBe("1");
+                   and policyname='tenant_isolation_${tabela}_select' and cmd='SELECT';`)).toBe("1");
     });
   }
 });

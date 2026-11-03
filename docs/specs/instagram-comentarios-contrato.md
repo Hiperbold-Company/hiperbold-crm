@@ -28,28 +28,27 @@ reentrega não cria linha nem evento novo.
 O evento nasce `pending` e **nenhum consumidor o lê ainda**: o dreno genérico só
 pega tipo com handler registrado. O consumidor é a automação.
 
-O `payload` (tipo `EventoComentarioRecebido`):
+O `payload` (tipo `EventoComentarioRecebido`), snake_case, datas em ISO-8601 UTC:
 
 | Campo | Tipo | O que é |
 |---|---|---|
-| `versao` | `1` | versão do payload |
-| `comentario_id` | uuid | id da linha em `meta_social_comentarios` |
+| `organization_id` | uuid | a organização (a mesma da coluna) |
 | `channel_session_id` | uuid | a conexão do Instagram que recebeu |
 | `comment_id` | texto | id do comentário na Meta. **É o que as ações recebem.** |
 | `media_id` | texto ou null | o post ou reel comentado |
 | `media_product_type` | texto ou null | ex.: `FEED`, `REELS` (como a Meta mandar) |
-| `autor_id` | texto | IGSID de quem comentou: o mesmo id do Direct |
+| `autor_id` | texto | IGSID de quem comentou (ver a seção 4) |
 | `autor_usuario` | texto ou null | @ de quem comentou, sem a arroba |
 | `texto` | texto ou null | o comentário (a Meta só manda se tiver texto) |
 | `criado_na_meta_em` | ISO-8601 ou null | hora do **aviso** da Meta (`entry.time`); a hora exata do comentário não vem no aviso |
-| `recebido_em` | ISO-8601 | quando o CRM gravou |
+
+A linha do comentário (`meta_social_comentarios.id`) é o `entity_id` do evento.
 
 Exemplo:
 
 ```json
 {
-  "versao": 1,
-  "comentario_id": "5b0e8f0a-3c1d-4d1e-9a51-2f7c1b9e0a11",
+  "organization_id": "0c9a7d2e-1b3f-4c5d-8e6f-7a8b9c0d1e2f",
   "channel_session_id": "b7a1c9de-5f0e-4a8e-8b7d-1c2e3f4a5b6c",
   "comment_id": "17958276893123456",
   "media_id": "18034567890123456",
@@ -57,8 +56,7 @@ Exemplo:
   "autor_id": "6543210987654321",
   "autor_usuario": "maria.silva",
   "texto": "QUERO",
-  "criado_na_meta_em": "2026-11-03T12:00:00.000Z",
-  "recebido_em": "2026-11-03T12:00:01.204Z"
+  "criado_na_meta_em": "2026-11-03T12:00:00.000Z"
 }
 ```
 
@@ -79,9 +77,12 @@ automação, a sessão do usuário). Nunca a tirem de corpo de requisição. Tod
 consulta filtra por ela: comentário ou sessão de outra organização se comporta
 como inexistente.
 
-O segundo parâmetro, opcional, é `{ admin?, agora?, fetcher? }`, para teste.
+O primeiro parâmetro é o client de service role (`createAdminClient()`); o
+último, opcional, é `{ agora?, fetcher? }`, para teste.
 
-### 2.1 `pedirRespostaPrivada({ organizationId, commentId, texto, pedidoPor })`
+### 2.1 `pedirRespostaPrivada(admin, { organizationId, commentId, texto, pedidoPor })`
+
+`Promise<{ status: "na_fila" | "ja_pedida" | "expirada" | "nao_encontrado" }>`
 
 Manda uma mensagem no **Direct** de quem comentou. Vai para a fila; o cron envia.
 
@@ -91,25 +92,29 @@ Manda uma mensagem no **Direct** de quem comentou. Vai para a fila; o cron envia
 | `ja_pedida` | já houve um pedido de resposta privada para este comentário (qualquer desfecho). **Só existe uma por comentário.** |
 | `expirada` | o comentário tem 7 dias ou mais |
 | `nao_encontrado` | o comentário não existe nesta organização |
-| `texto_invalido` | texto vazio ou com mais de 1000 bytes (UTF-8) |
 
 `pedidoPor` é livre (até 200 caracteres): use o id da execução da automação.
 
-Erros: lança só em falha do banco (`meta_social_comment_lookup_failed`,
-`meta_social_queue_insert_failed`).
+Erros (lança `Error`): `meta_social_texto_invalido` quando o texto é vazio ou
+passa de 1000 bytes UTF-8 (nada entra na fila); `meta_social_comment_lookup_failed`
+e `meta_social_queue_insert_failed` em falha do banco.
 
-### 2.2 `responderNoComentario({ organizationId, commentId, texto, pedidoPor })`
+### 2.2 `responderNoComentario(admin, { organizationId, commentId, texto, pedidoPor })`
+
+`Promise<{ status: "na_fila" | "ja_pedida" | "nao_encontrado" }>`
 
 Responde **em público**, no próprio comentário. Também pela fila.
 
-Retornos: `na_fila`, `ja_pedida` (uma pública por comentário), `nao_encontrado`,
-`texto_invalido`.
+Retornos: `na_fila`, `ja_pedida` (uma pública por comentário), `nao_encontrado`.
+Erros: os mesmos da 2.1.
 
 **Ordem:** o cron só envia a pública depois que a privada do mesmo comentário
 saiu, falhou ou expirou. Se não houver privada pedida **no momento em que o cron
 olha**, a pública sai direto. Por isso: **peça a privada antes da pública**.
 
-### 2.3 `conferirSeSegue({ organizationId, channelSessionId, autorId })`
+### 2.3 `conferirSeSegue(admin, { organizationId, channelSessionId, autorId })`
+
+`Promise<{ segue: boolean | null }>`. Nunca lança.
 
 Pergunta à Meta se a pessoa segue a conta. Chamada direta, sem fila, e **não
 conta no teto** das respostas privadas.
@@ -171,11 +176,25 @@ A resposta chega pelo **fluxo normal do Direct**, que já existe: contato por
 `conversations.provider_conversation_id = <IGSID>`, mensagem em `messages`, e
 os efeitos de sempre (opt-out, lead, agente).
 
-**O que liga a conversa ao comentário é o `autor_id` (IGSID)**: o mesmo valor do
-`provider_conversation_id` da conversa e do fim da `social_identity` do contato,
-na mesma conexão (`channel_session_id`). Se a pessoa comentou em vários posts,
-o IGSID não diz qual comentário ela está respondendo: a automação precisa
-guardar qual pediu.
+**O que liga a conversa ao comentário é o `autor_id`**, procurado como
+`provider_conversation_id` da conversa (e fim da `social_identity` do contato)
+na mesma conexão (`channel_session_id`).
+
+`autor_id` é o mesmo IGSID que chega depois como remetente da DM?
+- A doc chama os dois de IGSID: `from.id` do comentário é o "Instagram-scoped ID
+  of the Instagram user who made the comment"
+  ([exemplos de webhook](https://developers.facebook.com/docs/instagram-platform/webhooks/examples)),
+  e `sender.id` da mensagem é o IGSID do Direct. A resposta da resposta privada
+  devolve `recipient_id`, "the Instagram-scoped ID", para quem a DM foi.
+- Que os dois são **o mesmo valor** para a mesma pessoa e a mesma conta:
+  **NÃO CONFIRMADO NA DOC** (nenhuma página diz isso com todas as letras, e não
+  foi medido em produção). Medir no primeiro caso real: comparar `autor_id` com o
+  `provider_conversation_id` da conversa criada quando a pessoa responde.
+- O canal hoje não guarda o `recipient_id` da resposta privada (só o `message_id`,
+  em `resposta_privada_mid`).
+
+Se a pessoa comentou em vários posts, o IGSID não diz qual comentário ela está
+respondendo: a automação precisa guardar qual pediu.
 
 A doc da Meta não diz se a mensagem da pessoa traz alguma referência ao
 comentário (NÃO CONFIRMADO NA DOC). O CRM não lê nenhuma.
