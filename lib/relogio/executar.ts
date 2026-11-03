@@ -1,4 +1,5 @@
 import { recoverStuckMessages } from "@/app/api/v1/cron/recover-stuck-messages/route";
+import { inboundContaComoResposta, inboundDentroDaEspera } from "@/lib/automacoes/conversa";
 import { criarExecutorDeEfeitos } from "@/lib/automacoes/efeitos";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
 import { drainEventLog } from "@/lib/event-log/drain";
@@ -74,10 +75,15 @@ export const PAGINA_DE_AGUARDANDO_RESPOSTA = 200;
 export const TETO_DE_AGUARDANDO_RESPOSTA = 2000;
 
 /**
- * Todos os `waiting_reply`, em páginas por id (ordem estável). Antes lia só 40
- * sem ordem: com mais de 40 aguardando, os mesmos 40 podiam ocupar a janela e o
- * resto nunca era visto por este relógio. O teto evita um tick sem fim; passar
- * dele fica no log, e o worker do follow-up cobre o resto.
+ * Todos os `waiting_reply`, em páginas por raia e id (ordem estável). Antes lia
+ * só 40 sem ordem: com mais de 40 aguardando, os mesmos 40 podiam ocupar a
+ * janela e o resto nunca era visto por este relógio. O teto evita um tick sem
+ * fim; passar dele fica no log, e o worker do follow-up cobre o resto.
+ *
+ * A raia `automacao` vem PRIMEIRO (`'automacao' < 'followup'`, as duas únicas
+ * do CHECK `followup_enrollments_lane_check`): a resposta a um bloco de
+ * conversa só é processada por este relógio — o follow-up tem o próprio
+ * worker —, e o corte do teto não pode deixá-la de fora.
  */
 export async function lerAguardandoResposta(admin: SupabaseClient): Promise<unknown[]> {
   const linhas: unknown[] = [];
@@ -86,6 +92,7 @@ export async function lerAguardandoResposta(admin: SupabaseClient): Promise<unkn
       .from("followup_enrollments")
       .select("*")
       .in("status", ["waiting_reply"])
+      .order("lane", { ascending: true })
       .order("id", { ascending: true })
       .range(de, de + PAGINA_DE_AGUARDANDO_RESPOSTA - 1);
     if (error) throw new Error(error.message);
@@ -105,6 +112,17 @@ async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps
   for (const row of aguardando) {
     const enrollment = row as EnrollmentRow;
     const ids = await idsDoContatoEGemeos(admin, enrollment.organization_id, enrollment.contact_id);
+    if (enrollment.lane === "automacao") {
+      // Automação esperando resposta (mensagem com opções, pergunta, "até
+      // responder"): não aplica o texto aqui, sem claim. Acorda a execução
+      // (`next_eval_at = agora`) e o `runFollowupTick` logo abaixo, neste mesmo
+      // tick, a reivindica e lê a resposta (com o id da opção tocada).
+      // Acorda pela EXISTÊNCIA da mensagem, com ou sem texto: áudio e imagem
+      // respondem ao "até responder" e são resposta inválida na pergunta.
+      const enviada = await ultimaRespostaDaAutomacao(admin, enrollment.organization_id, ids);
+      if (enviada && (await acordarAutomacaoEmEspera(admin, enrollment, enviada))) n++;
+      continue;
+    }
     const { data: msg, error: msgErr } = await admin
       .from("messages")
       .select("body, sent_at")
@@ -118,20 +136,36 @@ async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps
     const texto = typeof msg?.body === "string" ? msg.body.trim() : "";
     if (!texto) continue;
     const enviada = typeof msg?.sent_at === "string" ? msg.sent_at : "";
-    if (enrollment.lane === "automacao") {
-      if (!enviada) continue;
-      // Automação esperando resposta (mensagem com opções, pergunta, "até
-      // responder"): não aplica o texto aqui, sem claim. Acorda a execução
-      // (`next_eval_at = agora`) e o `runFollowupTick` logo abaixo, neste mesmo
-      // tick, a reivindica e lê a resposta (com o id da opção tocada).
-      if (await acordarAutomacaoEmEspera(admin, enrollment, enviada)) n++;
-      continue;
-    }
     if (enviada && !inboundEhDestaPergunta(enviada, enrollment.updated_at)) continue;
     await aplicarRespostaInbound(deps, enrollment, texto);
     n++;
   }
   return n;
+}
+
+/**
+ * Quando chegou a última mensagem do contato (e gêmeos) que conta como
+ * resposta a um bloco de conversa: reação e marca de tipo não suportado não
+ * contam (`inboundContaComoResposta`); mídia sem texto conta. `null` = nenhuma.
+ */
+export async function ultimaRespostaDaAutomacao(
+  admin: SupabaseClient,
+  organizationId: string,
+  contactIds: readonly string[],
+): Promise<{ sent_at: string; created_at: string | null } | null> {
+  const { data, error } = await admin
+    .from("messages")
+    .select("type, body, sent_at, created_at")
+    .eq("organization_id", organizationId)
+    .in("contact_id", [...contactIds])
+    .eq("direction", "inbound")
+    .neq("type", "reaction")
+    .order("sent_at", { ascending: false })
+    .limit(5);
+  if (error) throw new Error(error.message);
+  type Linha = { type: string | null; body: string | null; sent_at: string | null; created_at: string | null };
+  const m = ((data ?? []) as Linha[]).find(inboundContaComoResposta);
+  return m && typeof m.sent_at === "string" && m.sent_at ? { sent_at: m.sent_at, created_at: m.created_at ?? null } : null;
 }
 
 /**
@@ -143,11 +177,14 @@ async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps
  * mesmo inbound antigo acordaria a execução em todo tick. Cada nova espera (a
  * nova tentativa depois de uma resposta inválida) grava um `wait_started` novo,
  * e o inbound que já foi lido deixa de acordá-la.
+ *
+ * A comparação é a mesma do motor (`inboundDentroDaEspera`): 5 s de folga no
+ * `sent_at` (relógio do provedor), nenhuma no `created_at` (o nosso).
  */
 export async function acordarAutomacaoEmEspera(
   admin: SupabaseClient,
   enrollment: Pick<EnrollmentRow, "id" | "organization_id" | "next_eval_at" | "current_node_id">,
-  inboundEnviadoEm: string,
+  inbound: { sent_at: string | null; created_at?: string | null },
   agora: Date = new Date(),
 ): Promise<boolean> {
   const agoraIso = agora.toISOString();
@@ -163,8 +200,7 @@ export async function acordarAutomacaoEmEspera(
     .maybeSingle();
   if (esperaErr) throw new Error(esperaErr.message);
   const estacionou = (espera as { created_at?: string } | null)?.created_at;
-  const chegou = Date.parse(inboundEnviadoEm);
-  if (!estacionou || !Number.isFinite(chegou) || chegou < Date.parse(estacionou)) return false;
+  if (!estacionou || !inboundDentroDaEspera(inbound, estacionou)) return false;
   if (enrollment.next_eval_at && enrollment.next_eval_at <= agoraIso) return true;
   const { error } = await admin
     .from("followup_enrollments")

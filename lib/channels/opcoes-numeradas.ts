@@ -105,12 +105,21 @@ function numeroEscrito(normalizado: string): number | null {
   return Number(m[1]);
 }
 
+/** "2) Moradia", "2 - Moradia", "2. Moradia": o número e o resto, ou `null`. */
+function numeroComRotulo(normalizado: string): { numero: number; rotulo: string } | null {
+  const m = /^(\d{1,2})\s*[).\-]\s*(\S.*)$/u.exec(normalizado);
+  return m ? { numero: Number(m[1]), rotulo: m[2]!.trim() } : null;
+}
+
 /**
  * O id da opção que a resposta escolhe, ou `null` quando não dá para saber.
  *
  * Ordem: (1) `replyId` da resposta nativa, quando é de uma das opções; (2) o
- * número da opção (1 a N); (3) o rótulo normalizado, por igualdade exata.
- * Número fora da faixa, texto livre e rótulo no meio de uma frase dão `null`.
+ * número da opção (1 a N); (3) o rótulo normalizado, por igualdade exata —
+ * também quando o número está fora da faixa (rótulo "10" com três opções);
+ * (4) número e rótulo juntos ("2) Moradia", "2 - Moradia", "2. Moradia"), que
+ * só casam se CONCORDAREM (o rótulo é o da opção daquele número). Texto livre,
+ * rótulo no meio de uma frase e número que discorda do rótulo dão `null`.
  */
 export function casarRespostaComOpcao(
   resposta: { texto: string | null | undefined; replyId?: string | null },
@@ -127,13 +136,17 @@ export function casarRespostaComOpcao(
   if (!normalizado) return null;
 
   const numero = numeroEscrito(normalizado);
-  if (numero !== null) {
-    return numero >= 1 && numero <= items.length ? items[numero - 1]!.id : null;
-  }
+  if (numero !== null && numero >= 1 && numero <= items.length) return items[numero - 1]!.id;
 
   const porRotulo = items.filter((i) => normalizarRotulo(i.label) === normalizado);
   // Dois rótulos iguais depois de normalizar ("Sim" e "sim"): ambíguo, não casa.
-  return porRotulo.length === 1 ? porRotulo[0]!.id : null;
+  if (porRotulo.length === 1) return porRotulo[0]!.id;
+  if (porRotulo.length > 1 || numero !== null) return null;
+
+  const composto = numeroComRotulo(normalizado);
+  if (!composto || composto.numero < 1 || composto.numero > items.length) return null;
+  const opcao = items[composto.numero - 1]!;
+  return normalizarRotulo(opcao.label) === composto.rotulo ? opcao.id : null;
 }
 
 /**

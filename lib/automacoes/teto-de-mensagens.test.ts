@@ -30,6 +30,10 @@ function bancoCom(linhas: Linha[], erro: { message: string } | null = null): Sup
       filtros.push((l) => l[col] === val);
       return q;
     },
+    in: (col: keyof Linha, vals: unknown[]) => {
+      filtros.push((l) => vals.includes(l[col]));
+      return q;
+    },
     gte: (col: keyof Linha, val: string) => {
       filtros.push((l) => String(l[col]) >= val);
       return q;
@@ -85,7 +89,7 @@ describe("podeEnviarMensagemAutomatica", () => {
   it("29 automáticas na última hora: pode", async () => {
     const r = await podeEnviarMensagemAutomatica(bancoCom(automaticas(29)), {
       organizationId: ORG,
-      contactId: CONTATO,
+      contactIds: [CONTATO],
       agora: AGORA,
     });
     expect(r).toEqual({ pode: true, enviadasNaUltimaHora: 29 });
@@ -94,7 +98,7 @@ describe("podeEnviarMensagemAutomatica", () => {
   it("30 automáticas na última hora: não pode, com o motivo legível", async () => {
     const r = await podeEnviarMensagemAutomatica(bancoCom(automaticas(30)), {
       organizationId: ORG,
-      contactId: CONTATO,
+      contactIds: [CONTATO],
       agora: AGORA,
     });
     expect(r).toEqual({ pode: false, enviadasNaUltimaHora: 30, motivo: MOTIVO_TETO_EXCEDIDO });
@@ -111,7 +115,7 @@ describe("podeEnviarMensagemAutomatica", () => {
     ];
     const r = await podeEnviarMensagemAutomatica(bancoCom(linhas), {
       organizationId: ORG,
-      contactId: CONTATO,
+      contactIds: [CONTATO],
       agora: AGORA,
     });
     expect(r).toEqual({ pode: true, enviadasNaUltimaHora: 29 });
@@ -120,7 +124,7 @@ describe("podeEnviarMensagemAutomatica", () => {
   it("falha de leitura fecha: não envia sem saber a conta", async () => {
     const r = await podeEnviarMensagemAutomatica(bancoCom([], { message: "timeout" }), {
       organizationId: ORG,
-      contactId: CONTATO,
+      contactIds: [CONTATO],
       agora: AGORA,
     });
     expect(r).toEqual({ pode: false, enviadasNaUltimaHora: null, motivo: MOTIVO_TETO_INDISPONIVEL });

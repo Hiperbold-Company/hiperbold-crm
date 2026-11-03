@@ -93,26 +93,26 @@ const proximo = (e: Linha[], org: string) => e.find((l) => l.organization_id ===
 describe("acordarAutomacaoEmEspera", () => {
   it("inbound DEPOIS do último wait_started: next_eval_at vira agora", async () => {
     const { admin, enrollments, enr } = cenario();
-    expect(await acordarAutomacaoEmEspera(admin, enr, DEPOIS, AGORA)).toBe(true);
+    expect(await acordarAutomacaoEmEspera(admin, enr, { sent_at: DEPOIS, created_at: DEPOIS }, AGORA)).toBe(true);
     expect(proximo(enrollments, "org-1")).toBe(AGORA.toISOString());
   });
 
   it("inbound ANTERIOR ao wait_started (já lido): não acorda", async () => {
     const { admin, enrollments, enr } = cenario();
-    expect(await acordarAutomacaoEmEspera(admin, enr, ANTES, AGORA)).toBe(false);
+    expect(await acordarAutomacaoEmEspera(admin, enr, { sent_at: ANTES, created_at: ANTES }, AGORA)).toBe(false);
     expect(proximo(enrollments, "org-1")).toBe(FUTURO);
   });
 
   it("data do inbound vazia ou inválida: não acorda", async () => {
     const { admin, enrollments, enr } = cenario();
-    expect(await acordarAutomacaoEmEspera(admin, enr, "", AGORA)).toBe(false);
-    expect(await acordarAutomacaoEmEspera(admin, enr, "não é data", AGORA)).toBe(false);
+    expect(await acordarAutomacaoEmEspera(admin, enr, { sent_at: "" }, AGORA)).toBe(false);
+    expect(await acordarAutomacaoEmEspera(admin, enr, { sent_at: "não é data" }, AGORA)).toBe(false);
     expect(proximo(enrollments, "org-1")).toBe(FUTURO);
   });
 
   it("sem wait_started para o nó atual: não acorda", async () => {
     const { admin, enrollments, enr } = cenario();
-    expect(await acordarAutomacaoEmEspera(admin, { ...enr, current_node_id: "outro-no" }, DEPOIS, AGORA)).toBe(false);
+    expect(await acordarAutomacaoEmEspera(admin, { ...enr, current_node_id: "outro-no" }, { sent_at: DEPOIS, created_at: DEPOIS }, AGORA)).toBe(false);
     expect(proximo(enrollments, "org-1")).toBe(FUTURO);
   });
 
@@ -128,19 +128,19 @@ describe("acordarAutomacaoEmEspera", () => {
       ],
     });
     const enr = { id: "enr-1", organization_id: "org-1", next_eval_at: FUTURO, current_node_id: "message-1" };
-    expect(await acordarAutomacaoEmEspera(admin, enr, DEPOIS, AGORA)).toBe(false);
+    expect(await acordarAutomacaoEmEspera(admin, enr, { sent_at: DEPOIS, created_at: DEPOIS }, AGORA)).toBe(false);
     expect(enrollments[0]!.next_eval_at).toBe(FUTURO);
   });
 
   it("execução da lane followup não é tocada por esta função", async () => {
     const { admin, enrollments, enr } = cenario({ lane: "followup" });
-    await acordarAutomacaoEmEspera(admin, enr, DEPOIS, AGORA);
+    await acordarAutomacaoEmEspera(admin, enr, { sent_at: DEPOIS, created_at: DEPOIS }, AGORA);
     expect(proximo(enrollments, "org-1")).toBe(FUTURO);
   });
 
   it("outra organização com o mesmo id de execução não é tocada", async () => {
     const { admin, enrollments, enr } = cenario();
-    await acordarAutomacaoEmEspera(admin, enr, DEPOIS, AGORA);
+    await acordarAutomacaoEmEspera(admin, enr, { sent_at: DEPOIS, created_at: DEPOIS }, AGORA);
     expect(proximo(enrollments, "org-1")).toBe(AGORA.toISOString());
     expect(proximo(enrollments, "org-2")).toBe(FUTURO);
   });
@@ -149,7 +149,7 @@ describe("acordarAutomacaoEmEspera", () => {
     const { admin, enrollments, enr } = cenario();
     const vencida = { ...enr, next_eval_at: "2026-11-03T11:59:00.000Z" };
     enrollments[0]!.next_eval_at = vencida.next_eval_at;
-    expect(await acordarAutomacaoEmEspera(admin, vencida, DEPOIS, AGORA)).toBe(true);
+    expect(await acordarAutomacaoEmEspera(admin, vencida, { sent_at: DEPOIS, created_at: DEPOIS }, AGORA)).toBe(true);
     expect(proximo(enrollments, "org-1")).toBe(vencida.next_eval_at);
   });
 });

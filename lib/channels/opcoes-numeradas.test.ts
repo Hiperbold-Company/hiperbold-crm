@@ -97,6 +97,34 @@ describe("casarRespostaComOpcao", () => {
     expect(casarRespostaComOpcao({ texto: "1" }, [])).toBeNull();
   });
 
+  it("número fora da faixa tenta o rótulo: opção chamada \"10\" ou \"2024\"", () => {
+    const anos = [
+      { id: "a", label: "2024" },
+      { id: "b", label: "10" },
+    ];
+    expect(casarRespostaComOpcao({ texto: "2024" }, anos)).toBe("a");
+    expect(casarRespostaComOpcao({ texto: "10" }, anos)).toBe("b");
+    // Dentro da faixa, o número continua valendo pela posição.
+    expect(casarRespostaComOpcao({ texto: "1" }, anos)).toBe("a");
+  });
+
+  it.each([
+    ["2) Investimento", "investimento"],
+    ["2 - investimento", "investimento"],
+    ["2. INVESTIMENTO", "investimento"],
+    ["3)ainda nao sei", "nao_sei"],
+    ["1-Moradia", "moradia"],
+  ])("número e rótulo que concordam (%j) casam com %s", (texto, esperado) => {
+    expect(casarRespostaComOpcao({ texto }, ITENS)).toBe(esperado);
+  });
+
+  it.each(["1) Investimento", "2 - Moradia", "4. Moradia", "2) Investimento já"])(
+    "número e rótulo que discordam (%j) não casam",
+    (texto) => {
+      expect(casarRespostaComOpcao({ texto }, ITENS)).toBeNull();
+    },
+  );
+
   it("dois rótulos iguais depois de normalizar: ambíguo, não casa", () => {
     const dup = [
       { id: "a", label: "Sim" },

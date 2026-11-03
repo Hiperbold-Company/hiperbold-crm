@@ -20,12 +20,19 @@
  *
  * As variáveis são apagadas quando o contato é anonimizado
  * (`fn_contato_anonimizado_limpa_automacoes`, `vars = '{}'`), e os eventos da
- * execução NUNCA guardam o texto da resposta — só o tamanho e o id da opção.
+ * execução NUNCA guardam o texto da resposta — só o id da opção e o nome do
+ * campo. O motor tira o namespace `resposta` de `vars` antes de gravar o
+ * `effect_done` (`varsParaOEvento`) e, num replay, recalcula-o da decisão
+ * (`varsDaResposta`), que é determinística: as mesmas mensagens desde o mesmo
+ * piso dão a mesma resposta aceita.
+ *
+ * A espera "até responder" não guarda texto nenhum: nem no campo (não tem
+ * destino), nem nas variáveis, nem no evento.
  */
 import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
 import { isValidCpf } from "@/lib/legal/perfil-do-pais";
 import type { EnrollmentEventRef } from "@/lib/followup/node-handlers";
-import type { QuestionValidation } from "@/lib/followup/graph-schema";
+import type { FlowNode, QuestionValidation } from "@/lib/followup/graph-schema";
 
 import { EMAIL_RX, coagirPeloTipo, dataIso } from "./campos";
 
@@ -35,6 +42,41 @@ export const NAMESPACE_DA_RESPOSTA = "resposta";
 /** A chave do nó nas variáveis: `question-3` → `question_3`. */
 export function chaveDaResposta(nodeId: string): string {
   return nodeId.replace(/[^A-Za-z0-9_]/g, "_");
+}
+
+/**
+ * As variáveis que a resposta aceita deixa na execução: `{ resposta: {...} }`,
+ * somando às respostas anteriores. CPF e a espera "até responder" não guardam
+ * o valor; a opção guarda o id em `<chave>_opcao`. Pura: é o mesmo cálculo no
+ * efeito e no replay do motor.
+ */
+export function varsDaResposta(
+  node: Pick<FlowNode, "id" | "type" | "config">,
+  acao: { valor: string; opcao_id?: string },
+  varsAnteriores: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const chave = chaveDaResposta(node.id);
+  const guardaValor =
+    node.type !== "wait" && !(node.type === "question" && (node.config as { validation?: string }).validation === "cpf");
+  const bruto = varsAnteriores?.[NAMESPACE_DA_RESPOSTA];
+  const anteriores = bruto && typeof bruto === "object" && !Array.isArray(bruto) ? (bruto as Record<string, unknown>) : {};
+  return {
+    [NAMESPACE_DA_RESPOSTA]: {
+      ...anteriores,
+      ...(guardaValor ? { [chave]: acao.valor } : {}),
+      ...(acao.opcao_id ? { [`${chave}_opcao`]: acao.opcao_id } : {}),
+    },
+  };
+}
+
+/**
+ * O pedaço de `vars` que pode ir ao payload de um evento: tudo menos o
+ * namespace `resposta` (texto do contato). `undefined` quando não sobra nada.
+ */
+export function varsParaOEvento(vars: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!vars) return undefined;
+  const { [NAMESPACE_DA_RESPOSTA]: _fora, ...resto } = vars;
+  return Object.keys(resto).length > 0 ? resto : undefined;
 }
 
 /** Teto do texto de resposta guardado (campo e variável). */
@@ -78,6 +120,27 @@ export function conferirRespostaDaPergunta(validacao: QuestionValidation, bruto:
       return { ok: true, valor: canonicalPhoneBR(`+${comDdi}`) };
     }
   }
+}
+
+/**
+ * Começo da marca que a ingestão do oficial grava no lugar de um tipo que o
+ * CRM não sabe mostrar (`marcaDeNaoSuportado`, `lib/channels/meta/webhook.ts`).
+ * Repetido aqui porque este módulo vai ao navegador (o editor) e o webhook
+ * importa `node:crypto`; `conversa.test.ts` confere que os dois batem.
+ */
+export const PREFIXO_DA_MARCA_DE_NAO_SUPORTADO = "[tipo de mensagem não suportado:";
+
+/**
+ * A mensagem do contato conta como resposta de um bloco de conversa? Reação
+ * (👍 numa mensagem) não é resposta, nem a marca de tipo não suportado — as
+ * duas são gravadas como inbound mas o contato não respondeu nada. Mídia sem
+ * texto (áudio, imagem) CONTA: acorda a espera "até responder" e, na pergunta
+ * ou nas opções, é resposta inválida.
+ */
+export function inboundContaComoResposta(m: { type?: string | null; body?: string | null }): boolean {
+  if (m.type === "reaction") return false;
+  if (typeof m.body === "string" && m.body.trimStart().startsWith(PREFIXO_DA_MARCA_DE_NAO_SUPORTADO)) return false;
+  return true;
 }
 
 /** Uma mensagem do contato chegada depois do início da espera. */
@@ -128,9 +191,30 @@ export function estadoDaEspera(events: readonly EnrollmentEventRef[], nodeId: st
 }
 
 /**
+ * Folga de 5 s no piso, só no relógio do PROVEDOR: o `sent_at` do inbound vem
+ * do aparelho/da Meta (segundos, às vezes atrás do nosso), e o contato que
+ * responde no mesmo instante do envio não pode ficar de fora. A folga nunca
+ * vale para o NOSSO relógio: a mensagem também precisa ter CHEGADO
+ * (`created_at`) depois do início da espera. Sem essa segunda régua, a folga
+ * leria como resposta a mensagem que disparou a automação (o "Oi" que criou o
+ * negócio segundos antes da pergunta) ou a resposta inválida que acabou de
+ * provocar a nova tentativa.
+ */
+export const MARGEM_DO_PISO_MS = 5_000;
+
+/** A mensagem entra na espera que começou em `piso`? As duas réguas de `MARGEM_DO_PISO_MS`. */
+export function inboundDentroDaEspera(m: { sent_at?: string | null; created_at?: string | null }, piso: string): boolean {
+  const p = Date.parse(piso);
+  const enviada = Date.parse(m.sent_at ?? "");
+  const chegou = Date.parse(m.created_at ?? m.sent_at ?? "");
+  if (!Number.isFinite(p) || !Number.isFinite(enviada) || !Number.isFinite(chegou)) return false;
+  return chegou >= p && enviada >= p - MARGEM_DO_PISO_MS;
+}
+
+/**
  * Piso das respostas que contam para a espera em curso: o instante em que ela
  * começou (prazo − tempo limite). A resposta anterior ao envio (ou à nova
- * tentativa) nunca responde a esta pergunta.
+ * tentativa) nunca responde a esta pergunta (ver `inboundDentroDaEspera`).
  */
 export function pisoDaEspera(prazo: string | null, timeoutMs: number, fallback: string): string {
   if (!prazo) return fallback;

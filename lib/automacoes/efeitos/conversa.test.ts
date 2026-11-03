@@ -12,7 +12,14 @@ const { enviarMock } = vi.hoisted(() => ({ enviarMock: vi.fn() }));
 vi.mock("@/app/api/v1/messages/_handler", () => ({ sendMessageHandler: enviarMock }));
 
 import { ApiError } from "@/lib/api/types";
-import type { FlowNode } from "@/lib/followup/graph-schema";
+import {
+  avancarEnrollmentAtivo,
+  type AdminClient,
+  type ExecutorDeEfeitos,
+  type TickDeps,
+} from "@/lib/followup/engine";
+import { flowGraphSchema, type FlowNode } from "@/lib/followup/graph-schema";
+import type { EnrollmentEventRef, EnrollmentRow } from "@/lib/followup/node-handlers";
 
 import { TETO_DE_MENSAGENS_POR_HORA } from "../teto-de-mensagens";
 import { executarConversa, idDaMensagemDoPasso } from "./conversa";
@@ -241,6 +248,31 @@ describe("executarConversa: envio", () => {
     expect(enviarMock).not.toHaveBeenCalled();
   });
 
+  it("teto soma o contato e o GÊMEO de telefone: 15 + 15 = 30 e nada é enviado", async () => {
+    const FONE = "+5535991234567";
+    const recente = new Date(AGORA.getTime() - 5 * 60 * 1000).toISOString();
+    const marca = { origem_automacao: { enrollment_id: "outra", pointer_id: "p" } };
+    const para = (contato: string, n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `${contato}-${i}`, organization_id: ORG, contact_id: contato, direction: "outbound", created_at: recente, metadata: marca,
+      }));
+    const contatos = [
+      { id: CONTATO, organization_id: ORG, is_blocked: false, phone_number: FONE, is_merged_into: null },
+      { id: "gemeo", organization_id: ORG, is_blocked: false, phone_number: FONE, is_merged_into: null },
+    ];
+    const metade = TETO_DE_MENSAGENS_POR_HORA / 2;
+    const { admin } = criarBanco(tabelasBase({ contacts: contatos, messages: [...para(CONTATO, metade), ...para("gemeo", metade)] }));
+    const r = await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
+    expect(erroDe(r)).toBe("teto_por_hora");
+    expect(enviarMock).not.toHaveBeenCalled();
+
+    // Sem o gêmeo (outro telefone), as 15 dele não contam: envia.
+    const separados = [contatos[0]!, { ...contatos[1]!, phone_number: "+5511988887777" }];
+    const b2 = criarBanco(tabelasBase({ contacts: separados, messages: [...para(CONTATO, metade), ...para("gemeo", metade)] }));
+    const r2 = await executarConversa(contexto(b2.admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
+    expect(r2.desfecho.ok).toBe(true);
+  });
+
   it("29 mensagens na última hora, mais as que não contam (sem marca, fora da hora, outra org): ainda envia", async () => {
     const recente = new Date(AGORA.getTime() - 5 * 60 * 1000).toISOString();
     const marca = { origem_automacao: { enrollment_id: "x", pointer_id: "p" } };
@@ -356,5 +388,164 @@ describe("executarConversa: envio", () => {
     const msgs = consultas2.filter((c) => c.tabela === "messages");
     expect(msgs.length).toBeGreaterThan(0);
     for (const c of msgs) expect(c.eq).toContainEqual(["organization_id", ORG]);
+  });
+});
+
+/**
+ * LGPD: a resposta do contato vive só em `followup_enrollments.vars` (que a
+ * anonimização zera) e no campo do CRM — NUNCA num evento da execução. Pelo
+ * motor inteiro, com o efeito real (`executarConversa`); a borda simulada é o
+ * canal (`sendMessageHandler`) e a escrita do campo (`gravarCampo`).
+ */
+describe("resposta da pergunta: nenhum evento guarda o texto do contato", () => {
+  const EMAIL = "Maria.Silva@exemplo.com.br";
+  const GRAFO_PERGUNTA = flowGraphSchema.parse({
+    nodes: [
+      {
+        id: "t",
+        type: "trigger",
+        label: "Início",
+        position: pos,
+        config: { triggers: [{ kind: "manual" }], reentry: { policy: "skip_if_running", cooldown_minutes: 0 } },
+      },
+      {
+        id: "question-1",
+        type: "question",
+        label: "E-mail",
+        position: pos,
+        config: {
+          question: "Qual o seu e-mail?",
+          save_to: { scope: "contact", key: "email" },
+          validation: "email",
+          timeout_ms: 3_600_000,
+          retries: 0,
+        },
+      },
+      { id: "fim", type: "end", label: "Fim", position: pos, config: { outcome: "converted" } },
+    ],
+    edges: [
+      { id: "e0", source: "t", target: "question-1", condition: { type: "always" } },
+      { id: "e1", source: "question-1", target: "fim", condition: { type: "always" } },
+    ],
+  });
+
+  function montarMotor(opts: { falharGravacaoDoPasso?: number } = {}) {
+    let agora = new Date(AGORA);
+    const eventos: EnrollmentEventRef[] = [];
+    const recebidas: Array<{ texto: string; replyId: string | null; em: string }> = [];
+    const camposGravados: unknown[] = [];
+    let falhasRestantes = opts.falharGravacaoDoPasso === undefined ? 0 : 1;
+    let row: EnrollmentRow = {
+      id: "enr-1",
+      organization_id: ORG,
+      pointer_id: "ptr-1",
+      version_id: "ver-1",
+      contact_id: CONTATO,
+      conversation_id: null,
+      current_node_id: "t",
+      status: "active",
+      next_eval_at: agora.toISOString(),
+      claimed_until: null,
+      attempts: 0,
+      max_attempts: 5,
+      last_error: null,
+      steps_taken: 0,
+      outcome: null,
+      cancel_reason: null,
+      started_at: agora.toISOString(),
+      completed_at: null,
+      updated_at: agora.toISOString(),
+      lane: "automacao",
+      vars: {},
+    };
+    const { admin } = criarBanco(tabelasBase());
+    const db: AdminClient = {
+      claimDueEnrollments: async () => [],
+      loadFlowGraph: async () => GRAFO_PERGUNTA,
+      loadLeadFacts: async () => ({ lead_stage: null, tags: [] }),
+      loadEnrollmentEvents: async () => eventos.map((e) => ({ ...e })),
+      loadLastInboundBody: async () => null,
+      insertEnrollmentEvent: async (e) => {
+        if (eventos.some((x) => x.idempotency_key === e.idempotency_key)) return { inserted: false };
+        eventos.push({ node_id: e.node_id, idempotency_key: e.idempotency_key, event_type: e.event_type, payload: e.payload });
+        return { inserted: true };
+      },
+      updateEnrollment: async (_id, _org, patch) => {
+        // Simula a queda do tick DEPOIS do efeito e ANTES de gravar o passo.
+        if (falhasRestantes > 0 && row.steps_taken === opts.falharGravacaoDoPasso && patch.steps_taken !== undefined) {
+          falhasRestantes--;
+          throw new Error("queda simulada");
+        }
+        row = { ...row, ...patch } as EnrollmentRow;
+      },
+      loadFlowPointerName: async () => "Automação",
+      insertDeadInboxItem: async () => {},
+      persistirRespostaFollowup: async () => {},
+      loadFatosDaAutomacao: async (_o, _c, vars) => ({ contato: null, negocio: null, negocios: [], vars }),
+      loadRespostasDaEspera: async (_o, _c, desde) => recebidas.filter((r) => r.em >= desde),
+    };
+    const efeitos: ExecutorDeEfeitos = {
+      async executar(p) {
+        const c = contexto(admin, { agora, fatos: p.fatos, enrollmentId: p.enrollment.id });
+        return executarConversa(c, p.node as Extract<FlowNode, { type: "question" }>, p.acao!, p.chave, async (ops) => {
+          camposGravados.push(ops);
+          return { ok: true, detalhe: { tipo: "field_op" } };
+        });
+      },
+    };
+    const deps: TickDeps = { db, clock: () => agora, enqueueJob: async () => {}, efeitos };
+    return {
+      get row() {
+        return row;
+      },
+      eventos,
+      camposGravados,
+      avancar(ms: number) {
+        agora = new Date(agora.getTime() + ms);
+      },
+      contatoEscreve(texto: string) {
+        recebidas.push({ texto, replyId: null, em: agora.toISOString() });
+      },
+      tick: () => avancarEnrollmentAtivo(deps, row).catch(() => null),
+    };
+  }
+
+  beforeEach(() => {
+    enviarMock.mockReset();
+    enviarMock.mockResolvedValue({ id: "msg-1", status: "sent" });
+  });
+
+  it("responde o e-mail: campo e vars recebem o valor; nenhum evento contém o e-mail", async () => {
+    const m = montarMotor();
+    await m.tick();
+    expect(m.row.status).toBe("waiting_reply");
+    m.avancar(60_000);
+    m.contatoEscreve(EMAIL);
+    await m.tick();
+    expect(m.row.status).toBe("completed");
+    expect(m.camposGravados).toEqual([[{ target: { scope: "contact", key: "email" }, op: "set", value: EMAIL.toLowerCase() }]]);
+    expect(m.row.vars).toMatchObject({ resposta: { question_1: EMAIL.toLowerCase() } });
+    const tudo = JSON.stringify(m.eventos).toLowerCase();
+    expect(tudo).not.toContain("maria.silva");
+    expect(tudo).not.toContain("exemplo.com.br");
+  });
+
+  it("replay depois da queda: as vars da resposta voltam da decisão, o campo não é gravado de novo, e o evento segue sem o e-mail", async () => {
+    // Passo 1 = o registro da resposta (passo 0 foi o gatilho, depois a espera).
+    const m = montarMotor({ falharGravacaoDoPasso: 2 });
+    await m.tick();
+    expect(m.row.status).toBe("waiting_reply");
+    m.avancar(60_000);
+    m.contatoEscreve(EMAIL);
+    await m.tick(); // efeito feito e evento gravado; a gravação do passo caiu
+    expect(m.row.status).toBe("waiting_reply");
+    expect(m.camposGravados).toHaveLength(1);
+    await m.tick(); // replay: avança pelo ramo da resposta, sem refazer o efeito
+    expect(m.row.current_node_id).toBe("fim");
+    await m.tick();
+    expect(m.row.status).toBe("completed");
+    expect(m.camposGravados).toHaveLength(1);
+    expect(m.row.vars).toMatchObject({ resposta: { question_1: EMAIL.toLowerCase() } });
+    expect(JSON.stringify(m.eventos).toLowerCase()).not.toContain("exemplo.com.br");
   });
 });

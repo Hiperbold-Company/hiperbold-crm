@@ -61,15 +61,27 @@ export function decidirTeto(enviadas: number, teto = TETO_DE_MENSAGENS_POR_HORA)
  */
 export async function podeEnviarMensagemAutomatica(
   admin: SupabaseClient,
-  args: { organizationId: string; contactId: string; agora?: Date },
+  args: {
+    organizationId: string;
+    /**
+     * O contato e os GÊMEOS de telefone (`idsDoContatoEGemeos`) — os mesmos ids
+     * em que o envio procura a conversa. Contar só um id deixava a mesma pessoa
+     * receber 30 por hora por cadastro duplicado.
+     */
+    contactIds: readonly string[];
+    agora?: Date;
+  },
 ): Promise<DecisaoDoTeto> {
+  if (args.contactIds.length === 0) {
+    return { pode: false, enviadasNaUltimaHora: null, motivo: MOTIVO_TETO_INDISPONIVEL };
+  }
   const agora = args.agora ?? new Date();
   const desde = new Date(agora.getTime() - JANELA_DO_TETO_MS).toISOString();
   const { count, error } = await admin
     .from("messages")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", args.organizationId)
-    .eq("contact_id", args.contactId)
+    .in("contact_id", [...args.contactIds])
     .eq("direction", "outbound")
     .gte("created_at", desde)
     .not(`metadata->${CHAVE_DE_ORIGEM_AUTOMACAO}`, "is", null);

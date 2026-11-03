@@ -35,7 +35,7 @@ import type { ResultadoDoEfeito } from "@/lib/followup/engine";
 import type { FlowNode } from "@/lib/followup/graph-schema";
 import type { AcaoDeConversa } from "@/lib/followup/node-handlers";
 
-import { chaveDaResposta, NAMESPACE_DA_RESPOSTA } from "../conversa";
+import { varsDaResposta } from "../conversa";
 import type { FieldOp } from "../schemas";
 import { renderizar } from "../template-vars";
 import { metadataDeOrigemAutomacao, MOTIVO_TETO_EXCEDIDO, podeEnviarMensagemAutomatica } from "../teto-de-mensagens";
@@ -77,13 +77,12 @@ interface ConversaDoContato {
 }
 
 /** A conversa de WhatsApp (não grupo) mais recente do contato e dos gêmeos de telefone. */
-async function conversaDeWhatsapp(c: Contexto): Promise<ConversaDoContato | null> {
-  const ids = await idsDoContatoEGemeos(c.admin, c.org, c.contatoId);
+async function conversaDeWhatsapp(c: Contexto, ids: readonly string[]): Promise<ConversaDoContato | null> {
   const { data, error } = await c.admin
     .from("conversations")
     .select("id, last_inbound_at, is_group, channel_sessions:channel_session_id(provider)")
     .eq("organization_id", c.org)
-    .in("contact_id", ids)
+    .in("contact_id", [...ids])
     .eq("is_group", false)
     .order("last_inbound_at", { ascending: false, nullsFirst: false })
     .limit(20);
@@ -120,13 +119,15 @@ async function enviar(
   const corpo = renderizar(bruto, c.fatos, c.agora).trim();
   if (!corpo) return { ok: false, erro: "envio_falhou", detalhe: base };
 
-  const conversa = await conversaDeWhatsapp(c);
+  // Os mesmos ids (contato + gêmeos de telefone) para a conversa e para o teto.
+  const ids = await idsDoContatoEGemeos(c.admin, c.org, c.contatoId);
+  const conversa = await conversaDeWhatsapp(c, ids);
   if (!conversa) return { ok: false, erro: "sem_conversa_whatsapp", detalhe: base };
   if (await contatoBloqueado(c)) return { ok: false, erro: "contato_bloqueado", detalhe: base };
   if (estadoDaJanela(conversa.provider, conversa.last_inbound_at, c.agora).tipo === "fechada") {
     return { ok: false, erro: "janela_fechada", detalhe: base };
   }
-  const teto = await podeEnviarMensagemAutomatica(c.admin, { organizationId: c.org, contactId: c.contatoId, agora: c.agora });
+  const teto = await podeEnviarMensagemAutomatica(c.admin, { organizationId: c.org, contactIds: ids, agora: c.agora });
   if (!teto.pode) {
     return { ok: false, erro: teto.motivo === MOTIVO_TETO_EXCEDIDO ? "teto_por_hora" : "teto_indisponivel", detalhe: base };
   }
@@ -166,24 +167,16 @@ async function registrar(
   acao: Extract<AcaoDeConversa, { tipo: "registrar_resposta" }>,
   gravarCampo: (ops: FieldOp[]) => Promise<Passo>,
 ): Promise<Passo & { vars?: Record<string, unknown> }> {
-  const chave = chaveDaResposta(node.id);
   const base = { tipo: node.type, envio: "resposta", ...(acao.opcao_id ? { opcao_id: acao.opcao_id } : {}) };
   const destino = node.type === "message" || node.type === "question" ? node.config.save_to : undefined;
   if (destino) {
     const r = await gravarCampo([{ target: destino, op: "set", value: acao.valor }]);
     if (!r.ok) return { ok: false, erro: r.erro ?? "efeito_falhou", detalhe: base };
   }
-  // CPF fica só no campo escolhido: variável vai a texto de mensagem e aviso.
-  const guardaValor = !(node.type === "question" && node.config.validation === "cpf");
-  const anteriores = (c.fatos?.vars?.[NAMESPACE_DA_RESPOSTA] as Record<string, unknown> | undefined) ?? {};
-  const resposta = {
-    ...anteriores,
-    ...(guardaValor ? { [chave]: acao.valor } : {}),
-    ...(acao.opcao_id ? { [`${chave}_opcao`]: acao.opcao_id } : {}),
-  };
   return {
     ok: true,
-    vars: { [NAMESPACE_DA_RESPOSTA]: resposta },
+    // CPF e a espera "até responder" não guardam o valor (ver `varsDaResposta`).
+    vars: varsDaResposta(node, acao, c.fatos?.vars),
     detalhe: { ...base, ...(destino && "key" in destino ? { campo: destino.key } : {}) },
   };
 }

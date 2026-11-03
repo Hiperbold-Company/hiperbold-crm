@@ -52,11 +52,12 @@ const GRAFO = flowGraphSchema.parse({
   ],
 });
 
-function montar() {
+function montar(grafo = GRAFO) {
   let agora = new Date("2026-11-03T12:00:00.000Z");
   const eventos: EnrollmentEventRef[] = [];
   const recebidas: Array<RespostaRecebida & { em: string }> = [];
   const pedidos: PedidoDeEfeito[] = [];
+  const devolvidos: Array<{ enrollmentId: string; desde: string }> = [];
   let row: EnrollmentRow = {
     id: "enr-1",
     organization_id: "org-1",
@@ -82,7 +83,7 @@ function montar() {
   };
   const db: AdminClient = {
     claimDueEnrollments: async () => [],
-    loadFlowGraph: async () => GRAFO,
+    loadFlowGraph: async () => grafo,
     loadLeadFacts: async () => ({ lead_stage: null, tags: [] }),
     loadEnrollmentEvents: async () => eventos.map((e) => ({ ...e })),
     loadLastInboundBody: async () => null,
@@ -99,6 +100,9 @@ function montar() {
     persistirRespostaFollowup: async () => {},
     loadFatosDaAutomacao: async (_o, _c, vars) => ({ contato: null, negocio: null, negocios: [], vars }),
     loadRespostasDaEspera: async (_o, _c, desde) => recebidas.filter((r) => r.em >= desde),
+    devolverTurnoAoAgente: async (_o, enrollmentId, desde) => {
+      devolvidos.push({ enrollmentId, desde });
+    },
   };
   const efeitos: ExecutorDeEfeitos = {
     async executar(p) {
@@ -120,6 +124,7 @@ function montar() {
       return row;
     },
     pedidos,
+    devolvidos,
     eventos,
     avancar(ms: number) {
       agora = new Date(agora.getTime() + ms);
@@ -171,5 +176,73 @@ describe("bloco de mensagem com opções no motor", () => {
     await m.tick();
     expect(m.row.status).toBe("completed");
     expect(m.pedidos).toHaveLength(1);
+  });
+});
+
+/** Mesmo bloco, sem nova tentativa e com o ramo "Resposta inválida" solto. */
+const GRAFO_SEM_TENTATIVA = flowGraphSchema.parse({
+  ...GRAFO,
+  nodes: GRAFO.nodes.map((n) =>
+    n.id === "message-1" && n.type === "message"
+      ? { ...n, config: { ...n.config, invalid_reply: { attempts: 0 } } }
+      : n,
+  ),
+});
+
+describe("uma voz: a automação que descarta a resposta devolve o turno à IA", () => {
+  it("resposta inválida sem ramo ligado: a execução termina e o turno volta à IA, desde o início da espera", async () => {
+    const m = montar(GRAFO_SEM_TENTATIVA);
+    await m.tick();
+    const inicio = new Date(Date.parse(m.row.next_eval_at!) - 3_600_000).toISOString();
+    m.avancar(60_000);
+    m.contatoEscreve("quero falar com alguém");
+    await m.tick();
+    expect(m.row.status).toBe("completed");
+    expect(m.devolvidos).toEqual([{ enrollmentId: "enr-1", desde: inicio }]);
+  });
+
+  it("resposta aceita: a automação segue e NÃO devolve o turno", async () => {
+    const m = montar(GRAFO_SEM_TENTATIVA);
+    await m.tick();
+    m.avancar(60_000);
+    m.contatoEscreve("Moradia");
+    await m.tick();
+    expect(m.row.status).toBe("completed");
+    expect(m.devolvidos).toEqual([]);
+  });
+
+  it("resposta inválida com nova tentativa: a automação responde (reenvia) e NÃO devolve o turno", async () => {
+    const m = montar();
+    await m.tick();
+    m.avancar(60_000);
+    m.contatoEscreve("talvez");
+    await m.tick();
+    expect(m.row.status).toBe("waiting_reply");
+    expect(m.devolvidos).toEqual([]);
+  });
+
+  it("sem resposta até o prazo: nada a devolver (a IA não cedeu mensagem nenhuma)", async () => {
+    const m = montar(GRAFO_SEM_TENTATIVA);
+    await m.tick();
+    m.avancar(3_600_000);
+    await m.tick();
+    expect(m.row.status).toBe("completed");
+    expect(m.devolvidos).toEqual([]);
+  });
+
+  it("resposta inválida COM o ramo ligado: a automação segue por ele e não devolve", async () => {
+    const grafo = flowGraphSchema.parse({
+      ...GRAFO_SEM_TENTATIVA,
+      edges: [
+        ...GRAFO_SEM_TENTATIVA.edges,
+        { id: "e3", source: "message-1", target: "fim-moradia", condition: { type: "always" } },
+      ],
+    });
+    const m = montar(grafo);
+    await m.tick();
+    m.avancar(60_000);
+    m.contatoEscreve("talvez");
+    await m.tick();
+    expect(m.devolvidos).toEqual([]);
   });
 });
