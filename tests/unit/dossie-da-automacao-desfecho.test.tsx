@@ -102,6 +102,6 @@ describe("tela de execução — desfecho do bloco Fim", () => {
 
     expect(screen.getByTestId("dossie-timeline")).toHaveTextContent("Fluxo concluído");
     expect(screen.getByTestId("dossie-timeline")).toHaveTextContent("esgotou as tentativas");
-    expect(screen.getByTestId("dossie-onde-esta")).toHaveTextContent("Desfecho: exhausted");
+    expect(screen.getByTestId("dossie-onde-esta")).toHaveTextContent("Desfecho: Esgotado");
   });
 });
