@@ -225,6 +225,8 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   sem_responsavel: "nenhum atendente disponível",
   plano_limite_atingido: "o limite de negócios do plano foi atingido",
   campo_desconhecido: "o campo não existe no funil",
+  texto_longo_com_opcoes: "texto passou do limite de 1024 caracteres depois de preencher as variáveis",
+  texto_longo: "texto passou do limite de 4096 caracteres depois de preencher as variáveis",
 };
 
 export function fraseDoErro(codigo: string | undefined): string {

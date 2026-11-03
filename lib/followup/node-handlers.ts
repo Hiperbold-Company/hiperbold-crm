@@ -660,6 +660,9 @@ function regrasDaConversa(node: FlowNode): RegrasDaConversa | null {
       tentativas: 0,
       avisaTempoEsgotado: false,
       // Qualquer mensagem do contato é resposta (áudio e imagem inclusive, sem texto).
+      // Limite conhecido (não corrigido): duas automações esperando o MESMO
+      // contato leem a MESMA mensagem — cada uma lê as inbound desde o próprio
+      // piso, e nenhuma "consome" a mensagem para a outra. As duas seguem.
       conferir: (r) => ({ valor: r.texto.trim() }),
       ramoDaResposta: () => FALLBACK_BRANCH_ID,
       ramoInvalido: FALLBACK_BRANCH_ID,

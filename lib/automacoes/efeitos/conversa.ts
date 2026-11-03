@@ -43,6 +43,10 @@ import type { Contexto, Passo } from "./index";
 
 type NoDeConversa = Extract<FlowNode, { type: "message" | "question" | "wait" }>;
 
+/** Limites do WhatsApp para o corpo: com botões/lista nativos, e texto simples. */
+export const LIMITE_DO_CORPO_COM_OPCOES = 1024;
+export const LIMITE_DO_CORPO = 4096;
+
 /** Uuid estável a partir da execução e do passo: o replay acha a MESMA linha de `messages`. */
 export function idDaMensagemDoPasso(enrollmentId: string, chave: string, envio: string): string {
   const h = createHash("sha256").update(`automacao:${enrollmentId}:${chave}:${envio}`).digest("hex");
@@ -118,6 +122,12 @@ async function enviar(
   if (bruto === null) return { ok: false, erro: "efeito_falhou", detalhe: base };
   const corpo = renderizar(bruto, c.fatos, c.agora).trim();
   if (!corpo) return { ok: false, erro: "envio_falhou", detalhe: base };
+  // O limite vale para o texto que SAI: as variáveis podem crescer o corpo
+  // depois da validação do editor (1024 com opções nativas, 4096 sem).
+  const comOpcoes = envio !== "tempo_esgotado" && opcoesDoEnvio(node) !== undefined;
+  if (corpo.length > (comOpcoes ? LIMITE_DO_CORPO_COM_OPCOES : LIMITE_DO_CORPO)) {
+    return { ok: false, erro: comOpcoes ? "texto_longo_com_opcoes" : "texto_longo", detalhe: base };
+  }
 
   // Os mesmos ids (contato + gêmeos de telefone) para a conversa e para o teto.
   const ids = await idsDoContatoEGemeos(c.admin, c.org, c.contatoId);

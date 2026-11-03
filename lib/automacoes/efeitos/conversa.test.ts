@@ -299,6 +299,21 @@ describe("executarConversa: envio", () => {
     expect(erroDe(await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop))).toBe("envio_falhou");
   });
 
+  it("corpo que passa do limite DEPOIS de preencher as variáveis: ramo Erro com motivo próprio, nada enviado", async () => {
+    const { admin } = criarBanco(tabelasBase());
+    const fatos = { contato: null, negocio: null, negocios: [], vars: { resposta: { longa: "x".repeat(1100) } } } as unknown as Contexto["fatos"];
+    const comOpcoes = { ...NO_COM_OPCOES, config: { ...NO_COM_OPCOES.config, body: "Oi {{resposta.longa}}" } } as typeof NO_COM_OPCOES;
+    const r = await executarConversa(contexto(admin, { fatos }), comOpcoes, ENVIAR, "message-1", noop);
+    expect(erroDe(r)).toBe("texto_longo_com_opcoes");
+    expect(enviarMock).not.toHaveBeenCalled();
+
+    // Sem opções, o limite é 4096: 1100 cabem, 4100 não.
+    const semOpcoes = { ...NO_MENSAGEM, config: { body: "Oi {{resposta.longa}}" } } as typeof NO_MENSAGEM;
+    expect((await executarConversa(contexto(admin, { fatos }), semOpcoes, ENVIAR, "message-1", noop)).desfecho.ok).toBe(true);
+    const enorme = { contato: null, negocio: null, negocios: [], vars: { resposta: { longa: "x".repeat(4100) } } } as unknown as Contexto["fatos"];
+    expect(erroDe(await executarConversa(contexto(admin, { fatos: enorme }), semOpcoes, ENVIAR, "message-1", noop))).toBe("texto_longo");
+  });
+
   it("envio ok: handler chamado uma vez, com origem_automacao, conversa e texto", async () => {
     const { admin } = criarBanco(tabelasBase());
     const r = await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
