@@ -612,7 +612,7 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
     return { kind: "recheck", next_eval_at: new Date(clock().getTime() + ACTION_RECHECK_MS) };
   },
   wait: (input) => {
-    const { node, edges, enrollment, clock, lead, waitElapsed, wokeEarly } = input;
+    const { node, edges, enrollment, clock, waitElapsed, wokeEarly } = input;
     // Resposta do lead corta a espera: o timer é teto (ninguém respondeu),
     // não um atraso obrigatório depois de cada envio.
     if (wokeEarly) {
@@ -830,7 +830,7 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
     return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
   },
   action: (input) => {
-    const { node, edges, enrollment, clock, lead, actionEnqueued, actionRecheckCount, actionCompleted, proximo } = input;
+    const { node, edges, clock, lead, actionEnqueued, actionRecheckCount, actionCompleted, proximo } = input;
     // At-most-once send: enqueue the turn EXACTLY ONCE per occupancy. First entry
     // (no prior occupancy event) enqueues; a recheck fired while the turn is still in
     // flight — completeTurnForEnrollment (turn-bridge) hasn't advanced the enrollment

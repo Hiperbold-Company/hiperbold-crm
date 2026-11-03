@@ -11,7 +11,13 @@ import {
   type CrmActionConfig,
   type CrmActionType,
 } from "@/lib/automacoes/schemas";
-import { ACOES_DE_CRM, ALVOS, fraseDaAcao, SE_DER_ERRO, SE_JA_TEM_NEGOCIO } from "@/lib/automacoes/vocabulario";
+import {
+  ACOES_DE_CRM,
+  ALVOS,
+  fraseDaAcao,
+  SE_DER_ERRO,
+  SE_JA_TEM_NEGOCIO,
+} from "@/lib/automacoes/vocabulario";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useT } from "@/hooks/i18n/useT";
 import { Plus, Trash } from "@/lib/ui/icons";
@@ -93,7 +99,11 @@ export function CrmActionForm({
   return (
     <div className="space-y-4" data-testid="crm-action-form">
       {rascunho.actions.map((acao, i) => (
-        <div key={i} className="space-y-3 rounded-sm border border-border p-2" data-testid={`acao-${i}`}>
+        <div
+          key={i}
+          className="space-y-3 rounded-sm border border-border p-2"
+          data-testid={`acao-${i}`}
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-text-muted">
               {t("Ação")} {i + 1}
@@ -104,7 +114,9 @@ export function CrmActionForm({
                 variant="ghost"
                 size="icon"
                 aria-label={t("Remover ação")}
-                onClick={() => gravar({ ...rascunho, actions: rascunho.actions.filter((_, j) => j !== i) })}
+                onClick={() =>
+                  gravar({ ...rascunho, actions: rascunho.actions.filter((_, j) => j !== i) })
+                }
               >
                 <Trash size={14} aria-hidden />
               </Button>
@@ -128,7 +140,9 @@ export function CrmActionForm({
           variant="outline"
           size="sm"
           data-testid="adicionar-acao"
-          onClick={() => gravar({ ...rascunho, actions: [...rascunho.actions, acaoEmBranco("add_tags")] })}
+          onClick={() =>
+            gravar({ ...rascunho, actions: [...rascunho.actions, acaoEmBranco("add_tags")] })
+          }
         >
           <Plus size={14} aria-hidden className="mr-1" /> {t("Ação")}
         </Button>
@@ -157,8 +171,13 @@ function CamposDaAcao({
 }) {
   const t = useT();
   const { funis, etapas } = useFunis();
-  const membros = useAssignableMembers(acao.type === "set_owner" || acao.type === "notify" || acao.type === "create_task");
-  const opcoesDeMembro = (membros.data ?? []).map((m) => ({ valor: m.user_id, rotulo: m.full_name ?? m.user_id }));
+  const membros = useAssignableMembers(
+    acao.type === "set_owner" || acao.type === "notify" || acao.type === "create_task",
+  );
+  const opcoesDeMembro = (membros.data ?? []).map((m) => ({
+    valor: m.user_id,
+    rotulo: m.full_name ?? m.user_id,
+  }));
   const [tags, setTags] = useState("tags" in acao ? acao.tags.join(", ") : "");
 
   switch (acao.type) {
@@ -172,7 +191,13 @@ function CamposDaAcao({
               valor={acao.pipeline_id}
               vazio={t("Escolha o funil")}
               opcoes={funis.map((f) => ({ valor: f.id, rotulo: f.nome }))}
-              onChange={(v) => onChange({ ...acao, pipeline_id: v, stage_id: funis.find((f) => f.id === v)?.etapas[0]?.stageId ?? "" })}
+              onChange={(v) =>
+                onChange({
+                  ...acao,
+                  pipeline_id: v,
+                  stage_id: funis.find((f) => f.id === v)?.etapas[0]?.stageId ?? "",
+                })
+              }
             />
           </Campo>
           <Campo id={`${prefixo}-etapa`} rotulo={t("Etapa")}>
@@ -186,15 +211,24 @@ function CamposDaAcao({
           </Campo>
           {acao.type === "create_deal" && (
             <>
-              <Campo id={`${prefixo}-se-ja-tem`} rotulo={t("Se o contato já tem negócio aberto neste funil")}>
+              <Campo
+                id={`${prefixo}-se-ja-tem`}
+                rotulo={t("Se o contato já tem negócio aberto neste funil")}
+              >
                 <Seletor
                   id={`${prefixo}-se-ja-tem`}
                   valor={acao.if_open_exists}
                   opcoes={opcoesDe(SE_JA_TEM_NEGOCIO, t)}
-                  onChange={(v) => onChange({ ...acao, if_open_exists: v as typeof acao.if_open_exists })}
+                  onChange={(v) =>
+                    onChange({ ...acao, if_open_exists: v as typeof acao.if_open_exists })
+                  }
                 />
               </Campo>
-              <Campo id={`${prefixo}-titulo`} rotulo={t("Título (opcional)")} ajuda={t(AJUDA_DAS_VARIAVEIS)}>
+              <Campo
+                id={`${prefixo}-titulo`}
+                rotulo={t("Título (opcional)")}
+                ajuda={t(AJUDA_DAS_VARIAVEIS)}
+              >
                 <Input
                   id={`${prefixo}-titulo`}
                   maxLength={200}
@@ -213,7 +247,10 @@ function CamposDaAcao({
     case "win_deal":
     case "lose_deal":
       return (
-        <Campo id={`${prefixo}-motivo`} rotulo={acao.type === "lose_deal" ? t("Motivo da perda") : t("Observação (opcional)")}>
+        <Campo
+          id={`${prefixo}-motivo`}
+          rotulo={acao.type === "lose_deal" ? t("Motivo da perda") : t("Observação (opcional)")}
+        >
           <Input
             id={`${prefixo}-motivo`}
             maxLength={500}
@@ -221,7 +258,11 @@ function CamposDaAcao({
             onChange={(e) =>
               acao.type === "lose_deal"
                 ? onChange({ ...acao, reason: e.target.value })
-                : onChange(e.target.value ? { type: "win_deal", reason: e.target.value } : { type: "win_deal" })
+                : onChange(
+                    e.target.value
+                      ? { type: "win_deal", reason: e.target.value }
+                      : { type: "win_deal" },
+                  )
             }
           />
         </Campo>
@@ -257,9 +298,15 @@ function CamposDaAcao({
             <Seletor
               id={`${prefixo}-modo`}
               valor={acao.mode.m === "user" ? acao.mode.user_id : "__rodizio"}
-              opcoes={[{ valor: "__rodizio", rotulo: t("Rodízio entre os atendentes") }, ...opcoesDeMembro]}
+              opcoes={[
+                { valor: "__rodizio", rotulo: t("Rodízio entre os atendentes") },
+                ...opcoesDeMembro,
+              ]}
               onChange={(v) =>
-                onChange({ ...acao, mode: v === "__rodizio" ? { m: "round_robin" } : { m: "user", user_id: v } })
+                onChange({
+                  ...acao,
+                  mode: v === "__rodizio" ? { m: "round_robin" } : { m: "user", user_id: v },
+                })
               }
             />
           </Campo>
@@ -289,7 +336,11 @@ function CamposDaAcao({
     case "create_task":
       return (
         <>
-          <Campo id={`${prefixo}-tarefa`} rotulo={t("Título da tarefa")} ajuda={t(AJUDA_DAS_VARIAVEIS)}>
+          <Campo
+            id={`${prefixo}-tarefa`}
+            rotulo={t("Título da tarefa")}
+            ajuda={t(AJUDA_DAS_VARIAVEIS)}
+          >
             <Input
               id={`${prefixo}-tarefa`}
               maxLength={200}
@@ -306,7 +357,8 @@ function CamposDaAcao({
               defaultValue={acao.due_in_minutes}
               onChange={(e) => {
                 const n = Number(e.target.value);
-                if (Number.isInteger(n) && n >= 0 && n <= 525_600) onChange({ ...acao, due_in_minutes: n });
+                if (Number.isInteger(n) && n >= 0 && n <= 525_600)
+                  onChange({ ...acao, due_in_minutes: n });
               }}
             />
           </Campo>

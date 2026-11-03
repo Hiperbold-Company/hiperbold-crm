@@ -37,18 +37,27 @@ export function FieldOpForm({
     const r = fieldOpConfigSchema.safeParse(novo);
     if (!r.success) {
       const i = r.error.issues[0]?.path[1];
-      setErro(typeof i === "number" ? `${t("Complete a operação")} ${i + 1}.` : t("Adicione ao menos uma operação."));
+      setErro(
+        typeof i === "number"
+          ? `${t("Complete a operação")} ${i + 1}.`
+          : t("Adicione ao menos uma operação."),
+      );
       return;
     }
     setErro(null);
     onChange(r.data);
   };
-  const trocar = (i: number, op: FieldOp) => gravar({ ops: rascunho.ops.map((x, j) => (j === i ? op : x)) });
+  const trocar = (i: number, op: FieldOp) =>
+    gravar({ ops: rascunho.ops.map((x, j) => (j === i ? op : x)) });
 
   return (
     <div className="space-y-4" data-testid="field-op-form">
       {rascunho.ops.map((op, i) => (
-        <div key={i} className="space-y-3 rounded-sm border border-border p-2" data-testid={`operacao-${i}`}>
+        <div
+          key={i}
+          className="space-y-3 rounded-sm border border-border p-2"
+          data-testid={`operacao-${i}`}
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-text-muted">
               {t("Campo")} {i + 1}
@@ -83,7 +92,12 @@ export function FieldOpForm({
               }))}
               onChange={(v) => {
                 const nova = v as FieldOp["op"];
-                trocar(i, nova === "clear" ? { target: op.target, op: nova } : { ...op, op: nova, value: op.value ?? "" });
+                trocar(
+                  i,
+                  nova === "clear"
+                    ? { target: op.target, op: nova }
+                    : { ...op, op: nova, value: op.value ?? "" },
+                );
               }}
             />
           </Campo>
@@ -101,7 +115,12 @@ export function FieldOpForm({
         </div>
       ))}
       {rascunho.ops.length < 20 && (
-        <Button type="button" variant="outline" size="sm" onClick={() => gravar({ ops: [...rascunho.ops, operacaoEmBranco()] })}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => gravar({ ops: [...rascunho.ops, operacaoEmBranco()] })}
+        >
           <Plus size={14} aria-hidden className="mr-1" /> {t("Campo")}
         </Button>
       )}

@@ -14,7 +14,11 @@ import { useMemo, type ReactNode } from "react";
 import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api/client";
 import type { FieldRef } from "@/lib/automacoes/schemas";
-import { CAMPOS_PADRAO_DO_CONTATO, CAMPOS_PADRAO_DO_NEGOCIO, type NomesDaAutomacao } from "@/lib/automacoes/vocabulario";
+import {
+  CAMPOS_PADRAO_DO_CONTATO,
+  CAMPOS_PADRAO_DO_NEGOCIO,
+  type NomesDaAutomacao,
+} from "@/lib/automacoes/vocabulario";
 import type { CustomFieldDef } from "@/lib/schemas/settings";
 import { etapasPorFunil, nomeDaEtapa } from "@/hooks/followup/useEtapasDeGatilho";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
@@ -25,7 +29,17 @@ import { useEtapasDoFluxo } from "../../EtapasDoFluxo";
 export const CLASSE_DO_SELETOR =
   "h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm text-text disabled:opacity-60";
 
-export function Campo({ id, rotulo, children, ajuda }: { id: string; rotulo: string; children: ReactNode; ajuda?: string }) {
+export function Campo({
+  id,
+  rotulo,
+  children,
+  ajuda,
+}: {
+  id: string;
+  rotulo: string;
+  children: ReactNode;
+  ajuda?: string;
+}) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{rotulo}</Label>
@@ -97,7 +111,8 @@ export function useCamposPersonalizados(): CustomFieldDef[] {
   const consultas = useQueries({
     queries: funis.map((f) => ({
       queryKey: ["pipelines", f.id, "fields"],
-      queryFn: async () => apiClient.get<{ data: CustomFieldDef[] }>(`/api/v1/pipelines/${f.id}/fields`),
+      queryFn: async () =>
+        apiClient.get<{ data: CustomFieldDef[] }>(`/api/v1/pipelines/${f.id}/fields`),
       staleTime: 60_000,
     })),
   });
@@ -105,7 +120,8 @@ export function useCamposPersonalizados(): CustomFieldDef[] {
   return useMemo(() => {
     const vistos = new Map<string, CustomFieldDef>();
     for (const c of consultas) {
-      for (const campo of c.data?.data ?? []) if (!vistos.has(campo.key)) vistos.set(campo.key, campo);
+      for (const campo of c.data?.data ?? [])
+        if (!vistos.has(campo.key)) vistos.set(campo.key, campo);
     }
     return [...vistos.values()];
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,9 +140,13 @@ export function campoDoValor(valor: string): FieldRef | null {
   const key = valor.slice(i + 1);
   switch (scope) {
     case "contact":
-      return key in CAMPOS_PADRAO_DO_CONTATO ? { scope, key: key as keyof typeof CAMPOS_PADRAO_DO_CONTATO } : null;
+      return key in CAMPOS_PADRAO_DO_CONTATO
+        ? { scope, key: key as keyof typeof CAMPOS_PADRAO_DO_CONTATO }
+        : null;
     case "lead":
-      return key in CAMPOS_PADRAO_DO_NEGOCIO ? { scope, key: key as keyof typeof CAMPOS_PADRAO_DO_NEGOCIO } : null;
+      return key in CAMPOS_PADRAO_DO_NEGOCIO
+        ? { scope, key: key as keyof typeof CAMPOS_PADRAO_DO_NEGOCIO }
+        : null;
     case "contact_custom":
     case "lead_custom":
       return { scope, key };
@@ -173,7 +193,10 @@ export function SeletorDeCampo({
   const negocio = Object.entries(CAMPOS_PADRAO_DO_NEGOCIO)
     .filter(([k]) => !paraEscrita || !SO_LEITURA_DO_NEGOCIO.has(k))
     .map(([k, r]) => ({ valor: `lead:${k}`, rotulo: t(r) }));
-  const contato = Object.entries(CAMPOS_PADRAO_DO_CONTATO).map(([k, r]) => ({ valor: `contact:${k}`, rotulo: t(r) }));
+  const contato = Object.entries(CAMPOS_PADRAO_DO_CONTATO).map(([k, r]) => ({
+    valor: `contact:${k}`,
+    rotulo: t(r),
+  }));
   const custom = personalizados.map((c) => ({ valor: `lead_custom:${c.key}`, rotulo: c.label }));
   const variaveis = paraEscrita
     ? []
@@ -205,7 +228,9 @@ export function SeletorDeCampo({
       </option>
       {blocos}
       {/* Campo gravado que não está mais declarado em funil nenhum: continua visível. */}
-      {atual && !conhecidos.has(atual) && <option value={atual}>{atual.replace(/^[a-z_]+:/, "")}</option>}
+      {atual && !conhecidos.has(atual) && (
+        <option value={atual}>{atual.replace(/^[a-z_]+:/, "")}</option>
+      )}
     </select>
   );
 }
@@ -229,7 +254,14 @@ export function useNomesDaAutomacao(): NomesDaAutomacao {
 
 /** Lista "a, b, c" → array limpo (sem vazio, sem repetido). */
 export function listaDeTags(texto: string): string[] {
-  return [...new Set(texto.split(",").map((s) => s.trim()).filter((s) => s.length > 0))];
+  return [
+    ...new Set(
+      texto
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+    ),
+  ];
 }
 
 /** Ajuda curta sobre as variáveis aceitas nos textos. */

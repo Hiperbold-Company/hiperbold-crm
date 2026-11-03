@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Automações do CRM — o motor dos follow-ups mexendo no CRM",
+    "subtitle": "superfície automacao, raia própria (migration 0986)",
+    "output": "automacoes-crm.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "canal", "label": "Entrada" },
+    { "id": "ui", "label": "Tela" },
+    { "id": "motor", "label": "Motor" },
+    { "id": "dados", "label": "Banco" }
+  ],
+  "mainPath": ["evento", "gatilhos", "iniciar", "motor", "efeitos"],
+  "nodes": [
+    { "id": "cadastro", "lane": "canal", "col": 1, "type": "backend", "label": "createLeadHandler / moveLeadHandler", "sublabel": "manual, captação, API" },
+    { "id": "evento", "lane": "dados", "col": 2, "type": "database", "label": "event_log", "sublabel": "lead.created, lead.stage_changed" },
+    { "id": "editor", "lane": "ui", "col": 1, "type": "frontend", "label": "/app/automacoes/[id]", "sublabel": "editor visual, publica a versão" },
+    { "id": "gatilhos", "lane": "motor", "col": 3, "type": "backend", "label": "automacao-gatilhos.v1", "sublabel": "lib/automacoes/gatilhos.handler.ts" },
+    { "id": "manual", "lane": "ui", "col": 2, "type": "frontend", "label": "Testar com um contato", "sublabel": "POST /api/v1/automacoes/[id]/executar" },
+    { "id": "iniciar", "lane": "dados", "col": 3, "type": "database", "label": "fn_automacao_iniciar", "sublabel": "lane automacao, reentrada, teto por hora" },
+    { "id": "motor", "lane": "motor", "col": 4, "type": "backend", "label": "followup-flow-worker", "sublabel": "passos em sequência com orçamento" },
+    { "id": "efeitos", "lane": "motor", "col": 5, "type": "backend", "label": "criarExecutorDeEfeitos", "sublabel": "crm_action, field_op (uma vez por passo)" },
+    { "id": "execucoes", "lane": "ui", "col": 5, "type": "frontend", "label": "Execuções + dossiê", "sublabel": "eventos em português" }
+  ],
+  "edges": [
+    { "from": "cadastro", "to": "evento", "label": "emite" },
+    { "from": "editor", "to": "gatilhos", "label": "gatilhos no Início da versão publicada" },
+    { "from": "evento", "to": "gatilhos", "label": "drain do event_log" },
+    { "from": "gatilhos", "to": "iniciar", "label": "uma execução por evento (origin_event_id)" },
+    { "from": "manual", "to": "iniciar", "label": "gatilho manual" },
+    { "from": "iniciar", "to": "motor", "label": "followup_enrollments lane=automacao" },
+    { "from": "motor", "to": "efeitos", "label": "effect_started / effect_done" },
+    { "from": "efeitos", "to": "cadastro", "label": "request_id automacao:* (anti-laço)" },
+    { "from": "efeitos", "to": "execucoes", "label": "erro sai pela saída Erro e aparece na história" },
+    { "from": "execucoes", "to": "editor", "label": "quem lê a falha corrige o bloco" }
+  ]
+}

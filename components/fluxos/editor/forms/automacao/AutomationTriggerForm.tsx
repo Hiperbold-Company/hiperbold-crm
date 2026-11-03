@@ -11,7 +11,11 @@ import {
   type AutomacaoTriggerConfig,
   type AutomacaoTriggerKind,
 } from "@/lib/automacoes/schemas";
-import { GATILHOS_DA_AUTOMACAO, POLITICAS_DE_REENTRADA, VIAS_DA_ETAPA } from "@/lib/automacoes/vocabulario";
+import {
+  GATILHOS_DA_AUTOMACAO,
+  POLITICAS_DE_REENTRADA,
+  VIAS_DA_ETAPA,
+} from "@/lib/automacoes/vocabulario";
 import { useWebhookSources } from "@/hooks/webhooks/useWebhookSources";
 import { useT } from "@/hooks/i18n/useT";
 import { Plus, Trash } from "@/lib/ui/icons";
@@ -43,7 +47,9 @@ export function AutomationTriggerForm({
 }) {
   const t = useT();
   const inicial = automacaoTriggerConfigSchema.safeParse(config);
-  const [rascunho, setRascunho] = useState<AutomacaoTriggerConfig>(inicial.success ? inicial.data : GATILHO_PADRAO);
+  const [rascunho, setRascunho] = useState<AutomacaoTriggerConfig>(
+    inicial.success ? inicial.data : GATILHO_PADRAO,
+  );
   const [erro, setErro] = useState<string | null>(null);
   const { funis, etapas } = useFunis();
   const fontes = useWebhookSources();
@@ -67,7 +73,11 @@ export function AutomationTriggerForm({
         {t("A automação começa quando QUALQUER um destes gatilhos acontece.")}
       </p>
       {rascunho.triggers.map((g, i) => (
-        <div key={i} className="space-y-3 rounded-sm border border-border p-2" data-testid={`gatilho-${i}`}>
+        <div
+          key={i}
+          className="space-y-3 rounded-sm border border-border p-2"
+          data-testid={`gatilho-${i}`}
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-text-muted">
               {t("Gatilho")} {i + 1}
@@ -78,7 +88,9 @@ export function AutomationTriggerForm({
                 variant="ghost"
                 size="icon"
                 aria-label={t("Remover gatilho")}
-                onClick={() => gravar({ ...rascunho, triggers: rascunho.triggers.filter((_, j) => j !== i) })}
+                onClick={() =>
+                  gravar({ ...rascunho, triggers: rascunho.triggers.filter((_, j) => j !== i) })
+                }
               >
                 <Trash size={14} aria-hidden />
               </Button>
@@ -151,10 +163,12 @@ export function AutomationTriggerForm({
                 <Seletor
                   id={`gatilho-${i}-via`}
                   valor={g.via}
-                  opcoes={(Object.keys(VIAS_DA_ETAPA) as Array<keyof typeof VIAS_DA_ETAPA>).map((k) => ({
-                    valor: k,
-                    rotulo: t(VIAS_DA_ETAPA[k]),
-                  }))}
+                  opcoes={(Object.keys(VIAS_DA_ETAPA) as Array<keyof typeof VIAS_DA_ETAPA>).map(
+                    (k) => ({
+                      valor: k,
+                      rotulo: t(VIAS_DA_ETAPA[k]),
+                    }),
+                  )}
                   onChange={(v) => trocar(i, { ...g, via: v as keyof typeof VIAS_DA_ETAPA })}
                 />
               </Campo>
@@ -167,7 +181,9 @@ export function AutomationTriggerForm({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => gravar({ ...rascunho, triggers: [...rascunho.triggers, { kind: "lead_created" }] })}
+          onClick={() =>
+            gravar({ ...rascunho, triggers: [...rascunho.triggers, { kind: "lead_created" }] })
+          }
         >
           <Plus size={14} aria-hidden className="mr-1" /> {t("Gatilho")}
         </Button>
@@ -178,12 +194,17 @@ export function AutomationTriggerForm({
           <Seletor
             id="reentrada-politica"
             valor={rascunho.reentry.policy}
-            opcoes={(Object.keys(POLITICAS_DE_REENTRADA) as Array<keyof typeof POLITICAS_DE_REENTRADA>).map((k) => ({
+            opcoes={(
+              Object.keys(POLITICAS_DE_REENTRADA) as Array<keyof typeof POLITICAS_DE_REENTRADA>
+            ).map((k) => ({
               valor: k,
               rotulo: t(POLITICAS_DE_REENTRADA[k]),
             }))}
             onChange={(v) =>
-              gravar({ ...rascunho, reentry: { ...rascunho.reentry, policy: v as keyof typeof POLITICAS_DE_REENTRADA } })
+              gravar({
+                ...rascunho,
+                reentry: { ...rascunho.reentry, policy: v as keyof typeof POLITICAS_DE_REENTRADA },
+              })
             }
           />
         </Campo>

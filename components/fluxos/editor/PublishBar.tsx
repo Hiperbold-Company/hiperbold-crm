@@ -40,6 +40,7 @@ import { Trash, TreeStructure } from "@/lib/ui/icons";
 import { FlowStatusBadge } from "@/app/app/ai/followups/_components/FlowStatusBadge";
 import { DeleteFollowupFlowButton } from "@/app/app/ai/followups/_components/DeleteFollowupFlowButton";
 import { RenameFollowupFlowButton } from "@/app/app/ai/followups/_components/RenameFollowupFlowButton";
+import { TestarAutomacao } from "./TestarAutomacao";
 import { TriggerConfigControl } from "./TriggerConfigControl";
 
 interface Props {
@@ -83,6 +84,10 @@ export function PublishBar({
   const rollback = useRollbackFollowupFlow(flowId);
   const handoffPolicy = useUpdateHandoffPolicy(flowId);
   const deRoteiro = flow.surface === "atendimento";
+  // A automação leva os gatilhos no nó Início e não conversa com o cliente: nem
+  // o gatilho de relógio nem a política de handoff do follow-up valem para ela.
+  const deAutomacao = flow.surface === "automacao";
+  const listHref = deRoteiro ? "/app/ai/atendimento" : deAutomacao ? "/app/automacoes" : "/app/ai/followups";
 
   const onSave = () => {
     save.mutate(graph, { onSuccess: () => onSaved(graph) });
@@ -151,9 +156,10 @@ export function PublishBar({
             Início do grafo) e encerra quando um humano assume (0397): o gatilho
             de relógio e a política de handoff do follow-up não valem para ele —
             na prova do #1130 esta barra aparecia igual e confundia. */}
-        {!deRoteiro && <TriggerConfigControl flowId={flowId} triggerConfig={flow.trigger_config} />}
+        {deAutomacao && <TestarAutomacao flowId={flowId} publicada={flow.status === "active"} />}
+        {!deRoteiro && !deAutomacao && <TriggerConfigControl flowId={flowId} triggerConfig={flow.trigger_config} />}
 
-        {!deRoteiro && (
+        {!deRoteiro && !deAutomacao && (
           <Select value={flow.handoff_policy} onValueChange={(v) => handoffPolicy.mutate(v as FollowupFlowDetailRow["handoff_policy"])}>
             <SelectTrigger className="w-56" aria-label={t("Política de handoff")}>
               <SelectValue />
@@ -251,7 +257,7 @@ export function PublishBar({
             flowId={flowId}
             flowName={flow.name}
             redirectToList
-            listHref={deRoteiro ? "/app/ai/atendimento" : "/app/ai/followups"}
+            listHref={listHref}
           />
         )}
       </div>

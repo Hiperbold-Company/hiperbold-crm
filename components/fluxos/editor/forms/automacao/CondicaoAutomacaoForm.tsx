@@ -21,7 +21,16 @@ import { useT } from "@/hooks/i18n/useT";
 import { Plus, Trash } from "@/lib/ui/icons";
 
 import type { ConfigOf } from "../shared";
-import { Campo, listaDeTags, opcoesDeEtapa, Seletor, SeletorDeCampo, useFunis, useNomesDaAutomacao, type Opcao } from "./comum";
+import {
+  Campo,
+  listaDeTags,
+  opcoesDeEtapa,
+  Seletor,
+  SeletorDeCampo,
+  useFunis,
+  useNomesDaAutomacao,
+  type Opcao,
+} from "./comum";
 
 type ConditionConfig = ConfigOf<"condition">;
 type Kind = NovaConditionCheck["kind"];
@@ -73,14 +82,21 @@ export function CondicaoAutomacaoForm({
     const r = conditionConfigSchema.safeParse(novo);
     if (!r.success) {
       const i = r.error.issues[0]?.path[1];
-      setErro(typeof i === "number" ? `${t("Complete a condição")} ${i + 1}.` : t("Adicione ao menos uma condição."));
+      setErro(
+        typeof i === "number"
+          ? `${t("Complete a condição")} ${i + 1}.`
+          : t("Adicione ao menos uma condição."),
+      );
       return;
     }
     setErro(null);
     onChange(r.data);
   };
   const trocar = (i: number, regra: NovaConditionCheck) =>
-    gravar({ ...rascunho, checks: regras.map((x, j) => (j === i ? { ...regra, ...(x.id ? { id: x.id } : {}) } : x)) });
+    gravar({
+      ...rascunho,
+      checks: regras.map((x, j) => (j === i ? { ...regra, ...(x.id ? { id: x.id } : {}) } : x)),
+    });
 
   return (
     <div className="space-y-4" data-testid="condicao-automacao-form">
@@ -95,7 +111,11 @@ export function CondicaoAutomacaoForm({
         </Campo>
       )}
       {regras.map((regra, i) => (
-        <div key={regra.id ?? i} className="space-y-3 rounded-sm border border-border p-2" data-testid={`regra-${i}`}>
+        <div
+          key={regra.id ?? i}
+          className="space-y-3 rounded-sm border border-border p-2"
+          data-testid={`regra-${i}`}
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-text-muted">
               {t("Condição")} {i + 1}
@@ -157,7 +177,11 @@ function CamposDaRegra({
       return (
         <>
           <Campo id={`${prefixo}-campo`} rotulo={t("Campo")}>
-            <SeletorDeCampo id={`${prefixo}-campo`} valor={regra.field} onChange={(field) => onChange({ ...regra, field })} />
+            <SeletorDeCampo
+              id={`${prefixo}-campo`}
+              valor={regra.field}
+              onChange={(field) => onChange({ ...regra, field })}
+            />
           </Campo>
           <Campo id={`${prefixo}-op`} rotulo={t("Comparação")}>
             <Seletor
@@ -210,7 +234,10 @@ function CamposDaRegra({
               value={tags}
               onChange={(e) => {
                 setTags(e.target.value);
-                onChange({ ...regra, tags: listaDeTags(e.target.value).slice(0, 10) as typeof regra.tags });
+                onChange({
+                  ...regra,
+                  tags: listaDeTags(e.target.value).slice(0, 10) as typeof regra.tags,
+                });
               }}
             />
           </Campo>
@@ -233,7 +260,9 @@ function CamposDaRegra({
               valor={regra.stage_ids[0] ?? ""}
               vazio={t("Escolha a etapa")}
               opcoes={opcoesDeEtapa(etapas)}
-              onChange={(v) => onChange({ ...regra, stage_ids: (v ? [v] : []) as typeof regra.stage_ids })}
+              onChange={(v) =>
+                onChange({ ...regra, stage_ids: (v ? [v] : []) as typeof regra.stage_ids })
+              }
             />
           </Campo>
         </>
