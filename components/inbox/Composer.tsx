@@ -30,6 +30,7 @@ import {
   type MotivoDeRecusa,
 } from "@/lib/inbox/rascunho-sugerido";
 import { apiClient } from "@/lib/api/client";
+import { anexosOferecidos } from "@/lib/channels/capabilities";
 import { cn } from "@/lib/utils";
 
 export interface ComposerHandle {
@@ -97,6 +98,12 @@ interface Props {
    * `draft_id` que o consumo usa depois do clique.
    */
   rascunho?: AvisoDeRascunho | null;
+  /**
+   * Provider do canal da conversa. Decide QUAIS anexos e se o gravador de voz
+   * aparecem (`capabilitiesOf(provider)`): o composer não oferece o que o canal
+   * não envia. Ausente ou desconhecido = tudo, como era.
+   */
+  provider?: string | null;
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
@@ -114,10 +121,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     respondendo,
     onCancelarResposta,
     rascunho = null,
+    provider = null,
   },
   ref,
 ) {
   const t = useT();
+  const anexos = anexosOferecidos(provider);
+  const ofereceAnexo = anexos.imagem || anexos.video || anexos.documento || anexos.contato;
   const [text, setText] = useState(initialDraft);
   // O aviso some no primeiro ENVIO: depois do clique o rascunho foi usado, e
   // deixar a faixa prometendo texto que já saiu seria mentira de tela.
@@ -365,11 +375,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </div>
         )}
         <div className="flex items-end gap-2">
-          {mode === "reply" && (
+          {mode === "reply" && ofereceAnexo && (
             <AttachMenu
               disabled={respostaBarrada}
               onPick={setPendingFile}
-              onPickContact={() => setContactPickerOpen(true)}
+              onPickContact={anexos.contato ? () => setContactPickerOpen(true) : undefined}
+              aceita={anexos}
             />
           )}
           <EmojiButton
@@ -441,7 +452,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               <PaperPlaneTilt size={16} weight="fill" aria-hidden />
             </Button>
           ) : (
-            active && <AudioRecorder conversationId={conversationId} disabled={respostaBarrada} />
+            active && anexos.voz && <AudioRecorder conversationId={conversationId} disabled={respostaBarrada} />
           )}
         </div>
       </div>

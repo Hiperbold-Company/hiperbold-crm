@@ -13,6 +13,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 import { PipelinesClient, type EtapaDoFunil, type PipelineRow } from "./_client";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,7 @@ export default async function PipelinesSettingsPage() {
             : ""}
           .
         </p>
+        <LinkDeAjudaDaTela />
       </header>
       <PipelinesClient
         pipelines={pipelines}

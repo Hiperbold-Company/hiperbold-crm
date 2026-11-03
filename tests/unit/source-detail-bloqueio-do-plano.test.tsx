@@ -17,6 +17,9 @@ vi.mock("@/hooks/webhooks/useWebhookSources", () => ({
   useWebhookSourceEvents: () => ({ data: { data: [] }, refetch: vi.fn() }),
 }));
 
+// O interruptor só aparece para quem pode gerenciar (`automacoes.gerenciar`).
+vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true }));
+
 import { SourceDetail } from "@/app/app/webhooks/_components/SourceDetail";
 
 const FONTE_PAUSADA = {
@@ -69,6 +72,10 @@ describe("bloqueio do plano ao ligar uma fonte pausada", () => {
     const interruptor = screen.getByRole("switch");
     expect(interruptor).toBeEnabled();
     expect(interruptor).not.toHaveAttribute("title");
-    expect(screen.getByText("Pausada, ela para de aceitar novos envios.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Pausada, o endereço recusa os envios: nenhum lead novo entra, e os envios recusados não aparecem em Leads recebidos.",
+      ),
+    ).toBeInTheDocument();
   });
 });

@@ -43,6 +43,7 @@ import { aplicarEfeitosPosEntrada } from "../pos-entrada";
 
 import { completarLocalizacao } from "./localizacao";
 import { parseZernioInbound, type ZernioIdentity, type ZernioInboundMessage } from "./webhook";
+import { origemDaRedeSocial } from "@/lib/leads/nascimento-do-lead";
 
 export interface ZernioIngestResult {
   status: "ingested" | "duplicate" | "ignored" | "unknown_account";
@@ -311,7 +312,7 @@ export async function ingestZernioInbound(
  */
 async function efeitosDaEntrada(
   admin: SupabaseClient,
-  input: { organizationId: string; channelSessionId: string; requestId?: string },
+  input: { organizationId: string; channelSessionId: string; requestId?: string; socialMessage?: SocialMessage },
   msg: ZernioInboundMessage,
   contactId: string,
   conversationId: string,
@@ -341,6 +342,7 @@ async function efeitosDaEntrada(
     nomeDoContato: msg.identity.displayName,
     requestId: input.requestId,
     origem: "zernio_webhook",
+    canalDoNascimento: input.socialMessage ? origemDaRedeSocial(input.socialMessage.platform) : undefined,
   });
 }
 

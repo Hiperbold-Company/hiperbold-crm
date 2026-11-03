@@ -1,41 +1,37 @@
 /**
- * Fase F3, tarefa 9 (segunda parte) — em `RedesSociaisClient`, "Autorizar
- * conta" nunca cria `channel_sessions` (só devolve a URL de OAuth); quem cria é
- * "Receber no atendimento", e só quando a conta ainda não tem `account.channel`
- * — por isso só esse botão, por conta, recebe `bloqueio` (item "conexoes").
+ * Limite de Conexões do plano (D-188) na aba Redes sociais. Conectar conta NOVA
+ * cria canal, então "Conectar" fica travado com o motivo; "Reconectar" renova
+ * uma conta que já existe e não é barrado pelo teto.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 const getMock = vi.fn();
-const postMock = vi.fn();
 vi.mock("@/lib/api/client", () => ({
-  apiClient: {
-    get: (...a: unknown[]) => getMock(...a),
-    post: (...a: unknown[]) => postMock(...a),
-  },
+  apiClient: { get: (...a: unknown[]) => getMock(...a), delete: vi.fn() },
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock("@/components/connections/ChannelAiAccess", () => ({ ChannelAiAccess: () => null }));
-vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams() }));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams("aba=sociais"),
+  usePathname: () => "/app/connections",
+}));
 
 import { RedesSociaisClient } from "@/components/connections/RedesSociaisClient";
 
 const ESTADO = {
   data: {
-    label: "conectado",
-    configured: true,
-    networks: [{ id: "instagram", label: "Instagram", inbox: true }],
-    accounts: [
+    configurado: { instagram: true, messenger: true },
+    contas: [
       {
         id: "acc-1",
-        platform: "instagram",
-        username: "@empresa",
-        active: true,
-        inbox_supported: true,
-        channel: null,
+        plataforma: "instagram",
+        nome: "Empresa",
+        usuario: "empresa",
+        conectado_em: "2026-10-30T12:00:00Z",
+        token_expira_em: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        status: "ativo",
       },
     ],
   },
@@ -49,30 +45,33 @@ function comQuery(ui: ReactNode) {
 afterEach(() => {
   cleanup();
   getMock.mockReset();
-  postMock.mockReset();
 });
 
-describe("bloqueio do plano no botão «Receber no atendimento»", () => {
-  it("com o bloqueio valendo, o botão fica desabilitado e mostra o motivo", async () => {
+describe("bloqueio do plano no botão «Conectar»", () => {
+  it("com o bloqueio valendo, Conectar fica desabilitado e mostra o motivo; Reconectar segue", async () => {
     getMock.mockResolvedValue(ESTADO);
     render(
       comQuery(
-        <RedesSociaisClient bloqueio={{ desabilitado: true, motivo: "3 de 3 conexões do plano Starter", suspensa: false }} />,
+        <RedesSociaisClient
+          bloqueio={{ desabilitado: true, motivo: "3 de 3 conexões do plano Starter", suspensa: false }}
+        />,
       ),
     );
 
-    const botao = await screen.findByRole("button", { name: "Receber no atendimento" });
+    const instagram = await screen.findByTestId("cartao-instagram");
+    const botao = within(instagram).getByRole("button", { name: "Conectar" });
     expect(botao).toBeDisabled();
     expect(botao).toHaveAttribute("title", "3 de 3 conexões do plano Starter");
-    expect(screen.getByText("3 de 3 conexões do plano Starter")).toBeInTheDocument();
+    expect(within(instagram).getByText("3 de 3 conexões do plano Starter")).toBeInTheDocument();
+    expect(within(instagram).getByRole("link", { name: "Reconectar" })).toBeInTheDocument();
   });
 
-  it("sem a prop `bloqueio`, o botão continua habilitado como hoje", async () => {
+  it("sem a prop `bloqueio`, Conectar é um link para a conexão", async () => {
     getMock.mockResolvedValue(ESTADO);
     render(comQuery(<RedesSociaisClient />));
 
-    const botao = await screen.findByRole("button", { name: "Receber no atendimento" });
-    expect(botao).toBeEnabled();
-    expect(botao).not.toHaveAttribute("title");
+    const instagram = await screen.findByTestId("cartao-instagram");
+    expect(within(instagram).getByRole("link", { name: "Conectar" })).toBeInTheDocument();
+    expect(within(instagram).queryByRole("button", { name: "Conectar" })).toBeNull();
   });
 });

@@ -46,6 +46,21 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/legal/data-deletion")).toBe(true);
   });
 
+  it("libera a página de status da exclusão de dados da Meta, ancorada", () => {
+    expect(isPublicPath("/exclusao-de-dados")).toBe(true);
+    expect(isPublicPath("/exclusao-de-dados/x")).toBe(false);
+  });
+
+  it("libera só as duas voltas do OAuth social e o callback de exclusão", () => {
+    expect(isPublicPath("/api/v1/channels/meta-social/callback/instagram")).toBe(true);
+    expect(isPublicPath("/api/v1/channels/meta-social/callback/messenger")).toBe(true);
+    expect(isPublicPath("/api/v1/channels/meta-social/callback/outra")).toBe(false);
+    expect(isPublicPath("/api/v1/channels/meta-social/conectar")).toBe(false);
+    expect(isPublicPath("/api/v1/channels/meta-social")).toBe(false);
+    expect(isPublicPath("/api/v1/meta/exclusao-de-dados")).toBe(true);
+    expect(isPublicPath("/api/v1/meta/exclusao-de-dados/x")).toBe(false);
+  });
+
   it("e só esses três: /legal não é um portão aberto", () => {
     // Entrada larga aqui é furo de auth em toda a aplicação, não só nesta tela.
     expect(isPublicPath("/legal")).toBe(false);

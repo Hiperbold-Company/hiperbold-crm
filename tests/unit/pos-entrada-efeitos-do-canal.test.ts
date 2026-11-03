@@ -227,6 +227,26 @@ describe("a ordem dos três efeitos", () => {
   });
 });
 
+describe("canal do lead que nasce", () => {
+  it("sem canal informado, o lead nasce como WhatsApp (o padrão)", async () => {
+    await rodar();
+    expect(garantirLeadDaConversa).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ origem: undefined }));
+  });
+
+  it("conversa do Instagram faz o lead nascer como Instagram, não como WhatsApp", async () => {
+    const { origemDaRedeSocial } = await vi.importActual<typeof import("@/lib/leads/nascimento-do-lead")>(
+      "@/lib/leads/nascimento-do-lead",
+    );
+    await rodar({ canalDoNascimento: origemDaRedeSocial("instagram") });
+    expect(garantirLeadDaConversa).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ origem: expect.objectContaining({ rotulo: "Instagram", source: "instagram" }) }),
+    );
+    expect(origemDaRedeSocial("facebook")).toMatchObject({ rotulo: "Messenger", source: "messenger" });
+    expect(origemDaRedeSocial("tiktok")).toBeUndefined();
+  });
+});
+
 describe("opt-out", () => {
   it("bloqueia o contato quando a mensagem pede para sair", async () => {
     await rodar({ texto: "quero PARAR de receber" });

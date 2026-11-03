@@ -1,0 +1,276 @@
+{
+  "caso2_nao_configurado": {
+    "url": "http://localhost:3310/app/connections?aba=sociais",
+    "botoes_conectar": [
+      {
+        "disabled": true,
+        "aria": null
+      },
+      {
+        "disabled": true,
+        "aria": null
+      }
+    ],
+    "links_conectar": 0,
+    "trecho": [
+      "Configurações",
+      "Conectar",
+      "Conectar",
+      "O que é preciso para conectar"
+    ]
+  },
+  "caso1_admin_meta_url": "http://localhost:3310/admin/meta",
+  "caso1_admin_meta": {
+    "app_id": "1111111111",
+    "unified_config_id": "2222222222",
+    "app_secret_placeholder_depois_de_salvo": "••••••••  (já cadastrada)",
+    "app_secret_valor_no_campo_vazio": true,
+    "rotulos": [
+      "Instagram Direct e Messenger",
+      "URL do webhook (Instagram e Messenger)",
+      "URL de retorno do login do Instagram",
+      "URL de retorno do login do Facebook (Messenger)",
+      "URL de exclusão de dados",
+      "URL da política de privacidade"
+    ],
+    "urls": [
+      "http://localhost:3310/api/v1/webhooks/meta-social",
+      "http://localhost:3310/api/v1/channels/meta-social/callback/instagram",
+      "http://localhost:3310/api/v1/channels/meta-social/callback/messenger",
+      "http://localhost:3310/api/v1/meta/exclusao-de-dados",
+      "http://localhost:3310/legal/privacy"
+    ],
+    "token_gerado_tamanho": 43,
+    "mensagens": [
+      "Já existe uma chave cadastrada. Deixe em branco para mantê-la, ou digite uma nova para substituir.",
+      "Salvar",
+      "Gerado em 02/11/2026, 21:26.",
+      "Salvar",
+      "Configuração do Instagram e do Messenger salva.",
+      "Chave secreta salva."
+    ]
+  },
+  "caso1_admin_meta_recarregado": {
+    "app_secret_placeholder": "••••••••  (já cadastrada)",
+    "app_secret_valor_vazio": true,
+    "app_id": "1111111111",
+    "unified_config_id": "2222222222"
+  },
+  "caso1_legal_privacy_status": 200,
+  "caso3_configurado_sem_contas": {
+    "links_conectar": [
+      "/api/v1/channels/meta-social/conectar?plataforma=instagram",
+      "/api/v1/channels/meta-social/conectar?plataforma=messenger"
+    ],
+    "cartoes": [
+      "Instagram Direct",
+      "Nenhuma conta conectada.",
+      "Facebook Messenger",
+      "Nenhuma conta conectada."
+    ],
+    "requisitos_aberto_antes": false,
+    "requisitos_aberto_depois_do_clique": true,
+    "regra_24h_presente": true,
+    "requisitos_texto": "O que é preciso para conectar\n\nInstagram\n\nA conta precisa ser profissional (Empresa ou Criador de conteúdo).\nNo aplicativo do Instagram, ligue \"Permitir acesso às mensagens\" em Configurações > Mensagens e respostas de stories > Ferramentas conectadas.\nA conta precisa estar num portfólio de negócios da Meta. Se ainda não estiver, o login da Meta guia você nesse passo.\n\nMessenger\n\nVocê precisa ser administrador da Página do Facebook.\n\nA Meta só permite responder até 24 horas depois da última mensagem do cliente."
+  },
+  "caso4_urls_do_oauth": {
+    "instagram": {
+      "origem_e_caminho": "https://www.facebook.com/dialog/oauth",
+      "parametros": {
+        "client_id": "1111111111",
+        "config_id": "2222222222",
+        "redirect_uri": "http://localhost:3310/api/v1/channels/meta-social/callback/instagram",
+        "response_type": "code",
+        "override_default_response_type": "true"
+      },
+      "state_presente": true,
+      "state_tamanho": 332,
+      "status_da_rota_conectar": 307,
+      "cookie_de_state_gravado": "crm_meta_social_bind",
+      "state_parece_opaco": true
+    },
+    "messenger": {
+      "origem_e_caminho": "https://www.facebook.com/v26.0/dialog/oauth",
+      "parametros": {
+        "client_id": "1111111111",
+        "redirect_uri": "http://localhost:3310/api/v1/channels/meta-social/callback/messenger",
+        "response_type": "code",
+        "scope": "pages_show_list,pages_manage_metadata,pages_messaging,pages_read_engagement"
+      },
+      "state_presente": true,
+      "state_tamanho": 332,
+      "status_da_rota_conectar": 307,
+      "cookie_de_state_gravado": "crm_meta_social_bind",
+      "state_parece_opaco": true
+    }
+  },
+  "caso5_volta_do_oauth": {
+    "ok": {
+      "faixas": [
+        "Conta conectada. As novas mensagens passam a chegar no Chat.\n\nFechar"
+      ],
+      "url_depois": "http://localhost:3310/app/connections?aba=sociais"
+    },
+    "erro": {
+      "faixas": [
+        "Não encontramos nenhuma conta do Instagram para conectar. Confira se a conta é profissional, se está num portfólio de negócios da Meta e se você marcou a conta na hora de autorizar.\n\nFechar"
+      ],
+      "url_depois": "http://localhost:3310/app/connections?aba=sociais"
+    },
+    "parcial": {
+      "faixas": [
+        "1 conta conectada; 1 não pôde ser conectada: Seu plano chegou ao limite de conexões.\n\nVer planos\n\nFechar"
+      ],
+      "url_depois": "http://localhost:3310/app/connections?aba=sociais"
+    }
+  },
+  "caso4_state_analise": {
+    "partes_separadas_por_ponto": 1,
+    "parte_decodifica_em_texto_legivel": [
+      false
+    ],
+    "contem_id_da_org_legivel": false,
+    "contem_plataforma_legivel": false
+  },
+  "caso6_contas_conectadas": {
+    "linhas_antes": [
+      "Clínica Sorriso Demo",
+      "Clínica Sorriso Demo",
+      "@clinicasorrisodemo",
+      "Conectada desde 30/10/2026",
+      "Clínica Sorriso Demo (Página)",
+      "Conectada desde 31/10/2026",
+      "Reconecte para continuar recebendo mensagens.",
+      "Reconectar"
+    ],
+    "links_reconectar": [
+      "/api/v1/channels/meta-social/conectar?plataforma=messenger"
+    ],
+    "botoes_desconectar": 2,
+    "dialogo": "Desconectar esta conta?\n\nAs novas mensagens deixam de chegar. As mensagens já recebidas continuam no Chat.\n\nCancelar\nDesconectar",
+    "linhas_depois_de_cancelar": [
+      "Clínica Sorriso Demo",
+      "Clínica Sorriso Demo",
+      "@clinicasorrisodemo",
+      "Conectada desde 30/10/2026",
+      "Clínica Sorriso Demo (Página)",
+      "Conectada desde 31/10/2026",
+      "Reconecte para continuar recebendo mensagens.",
+      "Reconectar"
+    ],
+    "avisos_ao_desconectar": [
+      "Conta desconectada."
+    ],
+    "linhas_depois_de_desconectar_e_recarregar": [
+      "Clínica Sorriso Demo",
+      "Clínica Sorriso Demo",
+      "@clinicasorrisodemo",
+      "Conectada desde 30/10/2026",
+      "Nenhuma conta conectada."
+    ],
+    "banco_depois": [
+      {
+        "meta_social_platform": "instagram",
+        "status": "WORKING",
+        "arquivada": false
+      },
+      {
+        "meta_social_platform": "messenger",
+        "status": "STOPPED",
+        "arquivada": true
+      }
+    ]
+  },
+  "caso7_webhook": {
+    "post_messaging": {
+      "status": 200,
+      "corpo": "{\"received\":1,\"outcomes\":[\"ingested\"]}"
+    },
+    "post_changes": {
+      "status": 200,
+      "corpo": "{\"received\":1,\"outcomes\":[\"ingested\"]}"
+    },
+    "reenvio_mesmo_mid_messaging": {
+      "status": 200,
+      "corpo": "{\"received\":1,\"outcomes\":[\"duplicate\"]}"
+    },
+    "reenvio_mesmo_mid_changes": {
+      "status": 200,
+      "corpo": "{\"received\":1,\"outcomes\":[\"duplicate\"]}"
+    },
+    "assinatura_errada": {
+      "status": 401,
+      "corpo": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"invalid_signature\"}}"
+    },
+    "get_handshake_token_certo": {
+      "status": 200,
+      "corpo": "desafio-12345",
+      "content_type": "text/plain"
+    },
+    "get_handshake_token_errado": {
+      "status": 403,
+      "corpo": "forbidden"
+    },
+    "banco": {
+      "linhas_por_mid": {
+        "messaging": 1,
+        "changes": 1
+      },
+      "canais": [
+        "instagram"
+      ],
+      "conversas_distintas": 1,
+      "direcoes": [
+        "inbound"
+      ]
+    }
+  },
+  "caso7_chat": {
+    "url": "http://localhost:3310/app/inbox?c=850e1274-04da-4e15-a947-1206c775d74b",
+    "lista_tem_o_texto": true,
+    "ocorrencias_do_texto_na_tela_aberta": 1,
+    "elementos_rotulados_instagram": 2,
+    "linhas_relevantes": [
+      "Oi, quero saber o preço do clareamento",
+      "Instagram · @clinicasorrisodemo",
+      "clareamento",
+      "clareamento"
+    ]
+  },
+  "caso9_whatsapp_sem_conta_social": {
+    "instancia": {
+      "url": "http://localhost:3310/app/connections",
+      "menciona_clinicasorrisodemo": false,
+      "menciona_17841400000000001": false,
+      "menciona_Instagram": false
+    },
+    "oficial": {
+      "url": "http://localhost:3310/app/connections?aba=oficial",
+      "menciona_clinicasorrisodemo": false,
+      "menciona_17841400000000001": false,
+      "menciona_Instagram": false
+    }
+  },
+  "caso8_exclusao_publica": {
+    "status": 200,
+    "url_final": "http://localhost:3310/exclusao-de-dados?codigo=abc123",
+    "codigo_na_tela": true,
+    "texto": "HIPERBOLD CRM\n\nExclusão de dados\n\nRecebemos o pedido de exclusão dos dados ligados à sua conta do Instagram ou do Facebook.\n\nCódigo do pedido: abc123\n\nA exclusão é concluída em até 15 dias.\n\nDúvidas sobre o pedido? Fale com a empresa com quem você conversou pelo Instagram ou pelo Facebook."
+  },
+  "caso7_chat_aberta": {
+    "url": "http://localhost:3310/app/inbox?id=850e1274-04da-4e15-a947-1206c775d74b",
+    "ocorrencias_do_texto_com_lista_e_conversa": 3,
+    "linhas": [
+      "Sem nome",
+      "Oi, quero saber o preço do clareamento",
+      "Instagram · @clinicasorrisodemo",
+      "clareamento",
+      "clareamento",
+      "Sem nome",
+      "Janela 23h 58m",
+      "Oi, quero saber o preço do clareamento",
+      "Oi, quero saber o preço do clareamento",
+      "Sem nome"
+    ]
+  }
+}

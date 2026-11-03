@@ -10,6 +10,7 @@ import { canalGraphParceiroLigado, GRAPH_PARTNER_LABEL } from "@/lib/channels/gr
 import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Conexões" };
@@ -45,6 +46,7 @@ export default async function ConnectionsPage() {
             idioma,
           )}
         </p>
+        <LinkDeAjudaDaTela />
       </header>
       <ConexoesShell
         wahaConfigured={wahaConfigured}
@@ -56,6 +58,9 @@ export default async function ConnectionsPage() {
         podeEditarProtecao={ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager}
         // Só aparece com o servidor e o token de administrador configurados na instalação.
         pareamentoQr={await pareamentoQrDisponivel()}
+        // A aba de redes sociais segue oculta para o cliente até a Meta aprovar o app;
+        // o administrador da plataforma a vê para testar com a conta real.
+        adminDaPlataforma={user.is_platform_admin}
       />
     </div>
   );

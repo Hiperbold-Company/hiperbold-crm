@@ -32,6 +32,8 @@ import {
 import { Plus, Trash } from "@/lib/ui/icons";
 import { AgentMappingSection, ancoraDoMapeamento } from "./_mapping";
 import { StagesSection, ancoraDasEtapas } from "./_stages";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
+import { CAMINHO_CAMPOS_PERSONALIZADOS } from "@/lib/ajuda/artigos";
 
 export interface PipelineRow {
   id: string;
@@ -321,7 +323,13 @@ function PipelineEditor({
 
   return (
     <div className="space-y-4 border-t border-border pt-6">
-      <h3 className="text-sm font-semibold">{t("Vocabulário e campos")}</h3>
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold">{t("Vocabulário e campos")}</h3>
+        <LinkDeAjudaDaTela
+          caminho={CAMINHO_CAMPOS_PERSONALIZADOS}
+          rotulo={t("Como criar campos personalizados")}
+        />
+      </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <div className="space-y-1">

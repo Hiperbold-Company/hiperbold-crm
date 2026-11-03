@@ -4,6 +4,8 @@ import { loadAuthUser } from "@/lib/auth/server";
 import { appDaMetaDoAmbiente } from "@/lib/channels/meta/app";
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import type { Idioma } from "@/lib/i18n/idiomas";
+import { enderecosParaAMeta } from "@/lib/channels/meta-social/enderecos";
+import { env } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { FormularioDaMeta } from "./_form";
@@ -47,7 +49,8 @@ export default async function Page() {
 
   // Server-side only (RLS ligada, zero policies, grants revogados de
   // anon/authenticated): o admin client é o único caminho.
-  const { data, error } = await createAdminClient()
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("platform_meta_app")
     .select("app_secret_encrypted, verify_token_encrypted, verify_token_created_at, updated_at")
     .eq("id", 1)
@@ -61,6 +64,20 @@ export default async function Page() {
         updated_at: string | null;
       }
     | null;
+
+  // As colunas do canal social numa leitura À PARTE, uma por migration: um
+  // clone que ainda não aplicou a 0984 (ou a 0988) devolve 42703 aqui, e isso
+  // não pode derrubar a leitura do app do WhatsApp acima nem a do `app_id`.
+  // Nenhum dos dois é segredo e os dois voltam.
+  const { data: dadosSociais } = await admin.from("platform_meta_app").select("app_id").eq("id", 1).maybeSingle();
+  const { data: dadosUnificados } = await admin
+    .from("platform_meta_app")
+    .select("unified_config_id")
+    .eq("id", 1)
+    .maybeSingle();
+  const social = dadosSociais as { app_id: string | null } | null;
+  const unificado = dadosUnificados as { unified_config_id: string | null } | null;
+  const base = new URL(env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").origin;
 
   // O `.env` é o piso de rollback (`lib/channels/meta/app.ts`). Dizer que ele
   // existe é o que torna a precedência visível: sem isto, quem tem o par no
@@ -77,6 +94,11 @@ export default async function Page() {
       // Leitura que falhou não pode virar "nunca configurado": essa frase
       // levaria o dono a gerar um token por cima do que já está colado na Meta.
       leituraFalhou={Boolean(error)}
+      social={{
+        appId: social?.app_id ?? null,
+        configIdDoLoginUnificado: unificado?.unified_config_id ?? null,
+        enderecos: enderecosParaAMeta(base),
+      }}
     />
   );
 }
@@ -92,3 +114,4 @@ function formatar(iso: string | null, idioma: Idioma): string | null {
     timeStyle: "short",
   });
 }
+

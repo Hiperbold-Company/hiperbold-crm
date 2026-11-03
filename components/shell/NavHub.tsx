@@ -13,6 +13,7 @@ import { IDIOMA_PADRAO, type Idioma } from "@/lib/i18n/idiomas";
 import { hubSections, type NavGroupId } from "@/lib/navigation/registry";
 import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 import { BookOpen, Lightbulb, ListChecks, Warning } from "@/lib/ui/icons";
+import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
 interface NavHubProps {
   interfaceSettings?: InterfaceSettings;
@@ -89,6 +90,7 @@ export function NavHub({
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir(title, locale)}</h1>
         {subtitle && <p className="text-sm text-muted-foreground">{traduzir(subtitle, locale)}</p>}
+        <LinkDeAjudaDaTela />
       </header>
 
       {secoes.map(({ section, items }) => (

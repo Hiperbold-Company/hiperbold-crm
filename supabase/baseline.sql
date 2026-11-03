@@ -9136,15 +9136,27 @@ alter table public.channel_sessions
   add column if not exists datafy_waba_id text,
   add column if not exists datafy_token_encrypted bytea;
 
+-- meta_social (migration 0984, Instagram Direct e Messenger pela conexão
+-- oficial e direta com a Meta): colunas do sétimo provider, nullable e antes
+-- das constraints que as referenciam. CHECK da rede, índice único e comentários
+-- no bloco próprio da 0984, no fim do arquivo.
+alter table public.channel_sessions
+  add column if not exists meta_social_platform text,
+  add column if not exists meta_social_account_id text,
+  add column if not exists meta_social_username text,
+  add column if not exists meta_social_token_encrypted bytea,
+  add column if not exists meta_social_token_expires_at timestamptz,
+  add column if not exists meta_social_token_refreshed_at timestamptz;
+
 alter table public.channel_sessions
   drop constraint if exists channel_sessions_provider_check;
 
 alter table public.channel_sessions
   add constraint channel_sessions_provider_check
   -- 'wacalls' (0233), 'zernio_social' (0368), 'uazapi' (0261/0900, fork
-  -- Hiperbold) e 'datafy' (0387) somados AQUI: UM bloco só por constraint
-  -- (não duplicar drop+add por migration).
-  check (provider = any (array['waha'::text, 'meta_cloud'::text, 'zernio'::text, 'wacalls'::text, 'zernio_social'::text, 'uazapi'::text, 'datafy'::text]));
+  -- Hiperbold), 'datafy' (0387) e 'meta_social' (0984) somados AQUI: UM bloco
+  -- só por constraint (não duplicar drop+add por migration).
+  check (provider = any (array['waha'::text, 'meta_cloud'::text, 'zernio'::text, 'wacalls'::text, 'zernio_social'::text, 'uazapi'::text, 'datafy'::text, 'meta_social'::text]));
 
 alter table public.channel_sessions
   drop constraint if exists channel_sessions_provider_ref_check;
@@ -9159,7 +9171,9 @@ alter table public.channel_sessions
     (provider = 'wacalls'    and wacalls_session_id    is not null) or
     -- 'uazapi' (migration 0261/0900, fork Hiperbold): instância em servidor próprio.
     (provider = 'uazapi'     and uazapi_instance_id   is not null and uazapi_base_url is not null) or
-    (provider = 'datafy'     and datafy_phone_number_id is not null)
+    (provider = 'datafy'     and datafy_phone_number_id is not null) or
+    -- 'meta_social' (migration 0984): o webhook acha a sessão por (rede, conta).
+    (provider = 'meta_social' and meta_social_account_id is not null and meta_social_platform is not null)
   );
 
 comment on column public.channel_sessions.zernio_account_id is
@@ -71572,3 +71586,115 @@ comment on table public.user_preferences is
 
 -- As travas do modo somente leitura do suporte alcançam a tabela nova.
 do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;
+
+
+-- ---- Instagram Direct e Messenger pela conexão oficial da Meta (migration 0984) ----
+-- Espelho idempotente da 0984; racional completo no arquivo da migration. As
+-- colunas de channel_sessions e os dois CHECKs de provider foram somados ao
+-- bloco ÚNICO deles, lá em cima (doutrina "uma constraint, um bloco"). Aqui: o
+-- CHECK da rede, o índice único que impede a mesma conta ativa em duas
+-- organizações, as colunas do app em platform_meta_app e a tabela do pedido de
+-- exclusão de dados da Meta. Não cria função.
+alter table public.channel_sessions
+  drop constraint if exists channel_sessions_meta_social_platform_check;
+alter table public.channel_sessions
+  add constraint channel_sessions_meta_social_platform_check
+  check (meta_social_platform is null or meta_social_platform in ('instagram', 'messenger'));
+
+comment on column public.channel_sessions.meta_social_account_id is
+  'Id da conta profissional do Instagram (user_id de /me) ou da Página do Facebook. É o entry[].id do webhook da Meta e o sessionRef do provider meta_social.';
+comment on column public.channel_sessions.meta_social_token_encrypted is
+  'Token de acesso da conta (Instagram: token longo de 60 dias, renovado pelo cron meta-social-tokens; Messenger: token de Página, sem vencimento). Cifrado por fn_encrypt_oauth.';
+
+create unique index if not exists channel_sessions_meta_social_conta_ativa_uidx
+  on public.channel_sessions (meta_social_platform, meta_social_account_id)
+  where provider = 'meta_social' and archived_at is null;
+
+alter table public.platform_meta_app
+  add column if not exists app_id text,
+  add column if not exists instagram_app_id text,
+  add column if not exists instagram_app_secret_encrypted bytea;
+
+comment on column public.platform_meta_app.instagram_app_secret_encrypted is
+  'Segredo do app do Instagram (Instagram API com login do Instagram), cifrado por fn_encrypt_oauth. Troca o código do OAuth e pode assinar o webhook do Instagram.';
+
+create table if not exists public.meta_data_deletion_requests (
+  id uuid primary key default gen_random_uuid(),
+  confirmation_code text not null unique,
+  platform text not null check (platform in ('instagram', 'messenger')),
+  meta_user_id text not null,
+  status text not null default 'received' check (status in ('received', 'completed')),
+  issued_at timestamptz,
+  received_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+
+comment on table public.meta_data_deletion_requests is
+  'Pedido de exclusão de dados recebido pelo callback da Meta (POST /api/v1/meta/exclusao-de-dados). Da instalação, sem organização. Server-side only: RLS ligada sem policies e grants revogados de anon/authenticated.';
+
+alter table public.meta_data_deletion_requests enable row level security;
+revoke all on public.meta_data_deletion_requests from anon, authenticated;
+grant select, insert, update on public.meta_data_deletion_requests to service_role;
+
+-- ---- Eco do próprio envio e exclusão de dados idempotente do canal social oficial (migration 0987) ----
+-- Espelho idempotente da 0987; racional completo no arquivo da migration.
+
+create table if not exists public.meta_social_envios (
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  channel_session_id uuid not null references public.channel_sessions(id) on delete cascade,
+  mid text not null,
+  created_at timestamptz not null default now(),
+  primary key (organization_id, mid)
+);
+
+create index if not exists meta_social_envios_created_at_idx
+  on public.meta_social_envios (created_at);
+
+comment on table public.meta_social_envios is
+  '0987: mids devolvidos pela Meta nos envios desta instalação (canal meta_social), para reconhecer o eco do próprio envio. Retenção de 7 dias (cron meta-social-tokens). Server-side only.';
+
+alter table public.meta_social_envios enable row level security;
+
+-- Deny-all, como `platform_meta_app` e `ad_platform_connections`: RLS ligada,
+-- ZERO policies e nenhum grant a anon/authenticated. Nenhuma tela lê isto pelo
+-- client de sessão; o servidor filtra `organization_id` à mão.
+drop policy if exists tenant_isolation_meta_social_envios_all on public.meta_social_envios;
+
+revoke all on public.meta_social_envios from anon, authenticated;
+grant select, insert, delete on public.meta_social_envios to service_role;
+
+-- As travas do modo somente leitura do suporte alcançam a tabela nova.
+do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;
+
+delete from public.meta_data_deletion_requests r
+ where r.status = 'received'
+   and exists (
+     select 1 from public.meta_data_deletion_requests o
+      where o.status = 'received'
+        and o.platform = r.platform
+        and o.meta_user_id = r.meta_user_id
+        and (o.received_at, o.id) < (r.received_at, r.id)
+   );
+
+create unique index if not exists meta_data_deletion_requests_aberto_uidx
+  on public.meta_data_deletion_requests (platform, meta_user_id)
+  where status = 'received';
+
+notify pgrst, 'reload schema';
+
+-- ---- Instagram pelo login unificado da Meta (migration 0988) ----
+-- Espelho idempotente da 0988; racional completo no arquivo da migration.
+
+alter table public.platform_meta_app
+  add column if not exists unified_config_id text;
+
+comment on column public.platform_meta_app.unified_config_id is
+  '0988: id da configuração do login unificado do Instagram (Facebook Login para Empresas, token SUAT). Não é segredo.';
+
+comment on column public.platform_meta_app.instagram_app_id is
+  'OBSOLETA desde a 0988: o Instagram conecta pelo login unificado (app da Meta + unified_config_id). Mantida para rollback; o código não lê.';
+
+comment on column public.platform_meta_app.instagram_app_secret_encrypted is
+  'OBSOLETA desde a 0988: o Instagram conecta pelo login unificado (app da Meta + unified_config_id). Mantida para rollback; o código não lê.';
+
+notify pgrst, 'reload schema';

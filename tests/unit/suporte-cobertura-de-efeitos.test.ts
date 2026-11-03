@@ -45,6 +45,10 @@ it("todo handler mutante do app declara guarda de suporte ou é infraestrutura i
  const uncovered:string[]=[];
  for(const path of files("app/api/v1").filter(p=>p.endsWith("/route.ts"))){
   if(/app\/api\/v1\/(cron|webhooks)\//.test(path)||path==="app/api/v1/system/agent/route.ts")continue; // segredo de máquina, sem actor/session cookie
+  // Callback de exclusão de dados da Meta (0984): quem chama é a Meta, autenticada
+  // pelo `signed_request` (HMAC do segredo do app). Sem cookie nem ator, e o
+  // efeito é da INSTALAÇÃO (registrar o pedido), não de uma organização.
+  if(path==="app/api/v1/meta/exclusao-de-dados/route.ts")continue;
   // Provisionamento por sistema externo: Bearer do segredo da INSTALAÇÃO
   // (TENANT_PROVISIONING_SECRET), sem cookie nem ator — a mesma natureza das
   // linhas acima. Não há sessão de suporte para a guarda ler; chamá-la aqui

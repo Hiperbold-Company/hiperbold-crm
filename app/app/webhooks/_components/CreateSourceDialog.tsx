@@ -13,19 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  useCreateWebhookSource,
-  usePipelines,
-  usePipelineStages,
-  type WebhookSourceRow,
-} from "@/hooks/webhooks/useWebhookSources";
+import { useCreateWebhookSource, type WebhookSourceRow } from "@/hooks/webhooks/useWebhookSources";
+import { FunilEEtapa } from "./FunilEEtapa";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { useT } from "@/hooks/i18n/useT";
 
@@ -44,12 +33,7 @@ export function CreateSourceDialog({ open, onOpenChange, onCreated, bloqueio }: 
   const [stageId, setStageId] = React.useState<string>("");
   const [redirectTo, setRedirectTo] = React.useState("");
 
-  const { data: pipelinesRes, isLoading: pipelinesLoading } = usePipelines();
-  const { data: boardRes, isLoading: stagesLoading } = usePipelineStages(pipelineId || null);
   const create = useCreateWebhookSource();
-
-  const pipelines = pipelinesRes?.data ?? [];
-  const stages = boardRes?.data?.stages ?? [];
 
   React.useEffect(() => {
     if (!open) {
@@ -59,10 +43,6 @@ export function CreateSourceDialog({ open, onOpenChange, onCreated, bloqueio }: 
       setRedirectTo("");
     }
   }, [open]);
-
-  React.useEffect(() => {
-    setStageId("");
-  }, [pipelineId]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,42 +89,13 @@ export function CreateSourceDialog({ open, onOpenChange, onCreated, bloqueio }: 
               required
             />
           </div>
-          <div className="space-y-2">
-            <Label>{t("Funil de entrada")}</Label>
-            <Select value={pipelineId} onValueChange={setPipelineId} disabled={pipelinesLoading}>
-              <SelectTrigger>
-                <SelectValue placeholder={t("Escolha o funil")} />
-              </SelectTrigger>
-              <SelectContent>
-                {pipelines.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>{t("Estágio de entrada")}</Label>
-            <Select
-              value={stageId}
-              onValueChange={setStageId}
-              disabled={!pipelineId || stagesLoading}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={pipelineId ? t("Escolha o estágio") : t("Escolha o funil primeiro")}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {stages.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <FunilEEtapa
+            idPrefix="src"
+            pipelineId={pipelineId}
+            stageId={stageId}
+            onPipelineChange={setPipelineId}
+            onStageChange={setStageId}
+          />
           <div className="space-y-2">
             <Label htmlFor="src-redirect">{t("URL de obrigado (opcional)")}</Label>
             <Input
@@ -165,14 +116,12 @@ export function CreateSourceDialog({ open, onOpenChange, onCreated, bloqueio }: 
             <Button
               type="submit"
               disabled={create.isPending || bloqueio?.desabilitado}
-              title={bloqueio?.desabilitado ? bloqueio.motivo ?? undefined : undefined}
+              title={bloqueio?.desabilitado ? (bloqueio.motivo ?? undefined) : undefined}
             >
               {t("Criar fonte")}
             </Button>
           </DialogFooter>
-          {bloqueio?.desabilitado && (
-            <p className="text-xs text-destructive">{bloqueio.motivo}</p>
-          )}
+          {bloqueio?.desabilitado && <p className="text-xs text-destructive">{bloqueio.motivo}</p>}
         </form>
       </DialogContent>
     </Dialog>
