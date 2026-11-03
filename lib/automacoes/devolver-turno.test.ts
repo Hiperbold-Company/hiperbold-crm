@@ -8,7 +8,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 
-import { devolverTurnoAoAgente, EVENTO_DE_DESPACHO_DO_AGENTE } from "./devolver-turno";
+import { devolverTurnoAoAgente, devolverTurnoDoInicio, EVENTO_DE_DESPACHO_DO_AGENTE } from "./devolver-turno";
 
 type Linha = Record<string, unknown>;
 
@@ -225,5 +225,61 @@ describe("devolver o turno à IA", () => {
       await devolverTurnoAoAgente(antiga.admin, { ...pedido, desde: "2026-11-03T12:05:00.000Z" }),
     ).toBe("sem_inbound");
     expect(semEnvio.emitidos.length + antiga.emitidos.length).toBe(0);
+  });
+});
+
+describe("devolver o turno do INÍCIO (a mensagem que iniciou a automação)", () => {
+  // A mensagem do gatilho é a `in-1`; a execução nasceu dela e terminou.
+  const doInicio = {
+    organizationId: ORG,
+    enrollmentId: "enr-inicio",
+    conversationId: "conv-wa",
+    messageId: "in-1",
+  };
+
+  it("a execução terminou SEM falar na conversa: emite o despacho da última mensagem do contato", async () => {
+    const { admin, emitidos } = criarBanco(base());
+    expect(await devolverTurnoDoInicio(admin, doInicio)).toBe("emitido");
+    expect(emitidos).toHaveLength(1);
+    expect(emitidos[0]).toMatchObject({ p_entity_id: "in-1", p_organization_id: ORG });
+  });
+
+  it("a execução falou na conversa: não devolve (a automação respondeu)", async () => {
+    const t = base();
+    t.messages!.push({
+      id: "out-2",
+      organization_id: ORG,
+      conversation_id: "conv-wa",
+      direction: "outbound",
+      created_at: "2026-11-03T12:01:10.000Z",
+      metadata: { origem_automacao: { enrollment_id: "enr-inicio" } },
+    });
+    const { admin, emitidos } = criarBanco(t);
+    expect(await devolverTurnoDoInicio(admin, doInicio)).toBe("automacao_falou");
+    expect(emitidos).toHaveLength(0);
+  });
+
+  it("a IA já teve turno depois da mensagem (não tinha cedido): não devolve", async () => {
+    const { admin, emitidos } = criarBanco(
+      base({
+        job_queue: [
+          {
+            id: "j1",
+            organization_id: ORG,
+            contact_id: "c-1",
+            kind: "inbound_turn",
+            created_at: "2026-11-03T12:01:02.000Z",
+          },
+        ],
+      }),
+    );
+    expect(await devolverTurnoDoInicio(admin, doInicio)).toBe("ia_ja_atendeu");
+    expect(emitidos).toHaveLength(0);
+  });
+
+  it("mensagem de outra organização: não acha e não emite", async () => {
+    const { admin, emitidos } = criarBanco(base());
+    expect(await devolverTurnoDoInicio(admin, { ...doInicio, organizationId: "org-2" })).toBe("sem_inbound");
+    expect(emitidos).toHaveLength(0);
   });
 });

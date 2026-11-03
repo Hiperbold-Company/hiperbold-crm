@@ -16,10 +16,12 @@ import type { EventRow } from "@/lib/event-log/dispatcher";
 import { ORIGEM_DA_PLANILHA } from "@/lib/leads/planilha";
 import {
   automacaoTriggerConfigSchema,
+  normalizarParaPalavraChave,
   type AutomacaoTrigger,
   type AutomacaoTriggerConfig,
   type EventoDeAgendamento,
 } from "./schemas";
+import { VIA_ACAO_EM_MASSA } from "./chaves";
 import { inboundContaComoResposta } from "./conversa";
 import { flowGraphSchema } from "@/lib/followup/graph-schema";
 
@@ -49,6 +51,8 @@ export interface FatoDeMensagem extends ComumDoFato {
   texto: string;
   /** Preenchido pelo handler só quando um gatilho pede "só a primeira mensagem". */
   primeira_da_conversa?: boolean;
+  /** Preenchido pelo handler quando um gatilho pede "não disparar com humano no comando". */
+  humano_no_comando?: boolean;
 }
 
 export interface FatoDeTag extends ComumDoFato {
@@ -155,6 +159,8 @@ function tagsDoPayload(v: unknown): string[] {
 export function fatosDoEvento(row: EventRow): FatoDeGatilho[] {
   // Anti-laço com o motor antigo: o que uma regra causou não inicia automação.
   if (causadoPorRegra(row)) return [];
+  // Ação em massa (tag em lote) não dispara automação, como a planilha.
+  if (row.metadata?.via === VIA_ACAO_EM_MASSA) return [];
   const causado = automacaoQueCausou(row);
   const entidade = texto(row.entity_id);
 
@@ -275,18 +281,8 @@ export function fatosDoEvento(row: EventRow): FatoDeGatilho[] {
 // Palavra-chave
 // ---------------------------------------------------------------------------
 
-/**
- * Texto para comparar palavra-chave: sem acento, minúsculo, pontuação vira
- * espaço e espaços repetidos viram um. "Olá, QUERO o preço!" → "ola quero o preco".
- */
-export function normalizarParaPalavraChave(t: string): string {
-  return t
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
-}
+/** Ver `schemas.ts` (o schema recusa a palavra-chave que normaliza para vazio). */
+export { normalizarParaPalavraChave };
 
 /**
  * A mensagem casa a palavra-chave? Decisão: comparação por PALAVRA ou FRASE
@@ -311,8 +307,13 @@ export function palavraChaveCasa(
   });
 }
 
-function mesmaTag(a: string, b: string): boolean {
-  return normalizarParaPalavraChave(a) === normalizarParaPalavraChave(b);
+/**
+ * Tag compara por `trim` + minúsculas, NÃO pela normalização da palavra-chave:
+ * tag é rótulo exato ("pós-venda" e "pos venda" são tags diferentes no CRM),
+ * só a caixa e as bordas não contam.
+ */
+export function mesmaTag(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
 /**
@@ -351,6 +352,7 @@ export function casaGatilho(gatilho: AutomacaoTrigger, fato: FatoDeGatilho, font
         return false;
       }
       if (gatilho.only_first_message && fato.primeira_da_conversa !== true) return false;
+      if (gatilho.skip_if_human !== false && fato.humano_no_comando === true) return false;
       return palavraChaveCasa(gatilho.match, gatilho.keywords, fato.texto);
     }
     case "tag_added":

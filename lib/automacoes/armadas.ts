@@ -22,26 +22,31 @@ export interface AutomacaoArmada<K extends AutomacaoTriggerKind = AutomacaoTrigg
 }
 
 const LOTE = 100;
+/** Linhas por página na leitura dos pointers (abaixo do corte de 1000 do PostgREST). */
+export const PAGINA_DE_POINTERS = 500;
 
 export async function automacoesComGatilho<K extends AutomacaoTriggerKind>(
   admin: SupabaseClient,
   kind: K,
   orgId?: string,
 ): Promise<Array<AutomacaoArmada<K>>> {
-  let consulta = admin
-    .from("followup_flow_pointers")
-    .select("id, organization_id, active_version_id")
-    .eq("surface", "automacao")
-    .eq("status", "active")
-    .not("active_version_id", "is", null);
-  if (orgId) consulta = consulta.eq("organization_id", orgId);
-  const { data, error } = await consulta;
-  if (error) throw new Error(error.message);
-  const pointers = (data ?? []) as Array<{
-    id: string;
-    organization_id: string;
-    active_version_id: string;
-  }>;
+  // Paginado: o PostgREST corta em 1000 linhas sem avisar, e uma instalação com
+  // muitas organizações perderia as automações depois da milésima.
+  const pointers: Array<{ id: string; organization_id: string; active_version_id: string }> = [];
+  for (let de = 0; ; de += PAGINA_DE_POINTERS) {
+    let consulta = admin
+      .from("followup_flow_pointers")
+      .select("id, organization_id, active_version_id")
+      .eq("surface", "automacao")
+      .eq("status", "active")
+      .not("active_version_id", "is", null);
+    if (orgId) consulta = consulta.eq("organization_id", orgId);
+    const { data, error } = await consulta.order("id", { ascending: true }).range(de, de + PAGINA_DE_POINTERS - 1);
+    if (error) throw new Error(error.message);
+    const pagina = (data ?? []) as typeof pointers;
+    pointers.push(...pagina);
+    if (pagina.length < PAGINA_DE_POINTERS) break;
+  }
   const armadas: Array<AutomacaoArmada<K>> = [];
   for (let i = 0; i < pointers.length; i += LOTE) {
     const fatia = pointers.slice(i, i + LOTE);

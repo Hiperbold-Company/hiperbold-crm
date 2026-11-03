@@ -200,6 +200,21 @@ export const regrasNovasDeCondicao = {
 // Gatilhos (no nó `trigger` de uma automação)
 // ---------------------------------------------------------------------------
 
+/**
+ * Texto para comparar palavra-chave: sem acento, minúsculo, pontuação vira
+ * espaço e espaços repetidos viram um. "Olá, QUERO o preço!" → "ola quero o preco".
+ * Mora aqui (e não em `gatilhos.ts`) porque o schema recusa a palavra-chave
+ * que normaliza para vazio ("!!!", "😀"): ela nunca casaria nada.
+ */
+export function normalizarParaPalavraChave(t: string): string {
+  return t
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
 /** Como a palavra-chave da mensagem recebida é comparada. */
 export const MODOS_DA_PALAVRA_CHAVE = ["any", "contains", "equals", "starts_with"] as const;
 export type ModoDaPalavraChave = (typeof MODOS_DA_PALAVRA_CHAVE)[number];
@@ -245,11 +260,28 @@ export const automacaoTriggerSchema = z.discriminatedUnion("kind", [
     .strictObject({
       kind: z.literal("message_received"),
       match: z.enum(MODOS_DA_PALAVRA_CHAVE),
-      keywords: z.array(z.string().trim().min(1).max(100)).max(20),
+      keywords: z
+        .array(
+          z
+            .string()
+            .trim()
+            .min(1)
+            .max(100)
+            .refine((k) => normalizarParaPalavraChave(k).length > 0, {
+              message: "a palavra-chave precisa ter ao menos uma letra ou número",
+            }),
+        )
+        .max(20),
       /** Só mensagens que chegaram por estes números/canais (`channel_sessions.id`). */
       channel_session_ids: z.array(uuid).max(20).optional(),
       /** Só a primeira mensagem do contato naquela conversa. */
       only_first_message: z.boolean().optional(),
+      /**
+       * Não dispara quando há HUMANO no comando da conversa (atendente
+       * responsável, `force_human`, IA silenciada por handoff) — o mesmo
+       * critério do gate da IA. Ausente = sim.
+       */
+      skip_if_human: z.boolean().optional(),
     })
     .refine((g) => g.match === "any" || g.keywords.length > 0, {
       message: "informe ao menos uma palavra-chave",
@@ -276,6 +308,8 @@ export const automacaoTriggerSchema = z.discriminatedUnion("kind", [
     field: campoDeDataDoNegocioSchema,
     offset_days: z.number().int().min(-365).max(365),
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM"),
+    /** Só negócios ABERTOS (ausente = sim): ganho e perdido não iniciam. */
+    only_open: z.boolean().optional(),
   }),
   /** O contato não respondeu à última mensagem enviada há `after_minutes`. */
   z.strictObject({

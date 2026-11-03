@@ -7,10 +7,12 @@ import { describe, expect, it } from "vitest";
 
 import type { EventRow } from "@/lib/event-log/dispatcher";
 
-import { aplicarGatilhosDeAutomacao, type GatilhosDb } from "./gatilhos.handler";
+import { aplicarGatilhosDeAutomacao, IDADE_MAXIMA_DA_MENSAGEM_MS, type GatilhosDb } from "./gatilhos.handler";
+import { esperavaRespostaEm } from "./uma-voz";
 import {
   casaGatilho,
   fatosDoEvento,
+  mesmaTag,
   palavraChaveCasa,
   varsDoGatilho,
   type FatoDeGatilho,
@@ -354,8 +356,10 @@ function db(cfg: AutomacaoTriggerConfig, over: Partial<GatilhosDb> = {}) {
     contatoDoAgendamento: async () => CONTATO,
     contatoDaConversa: async () => CONTATO,
     conversaDeGrupo: async () => false,
+    mensagemDaConversa: async () => ({ created_at: new Date().toISOString() }),
     respostaAAutomacaoNaConversa: async () => false,
     primeiraMensagemDaConversa: async () => true,
+    humanoNaConversa: async () => false,
     fonteDeCaptacaoDaOrg: async () => false,
     iniciar: async (input) => {
       iniciadas.push(input);
@@ -434,5 +438,162 @@ describe("handler das automações", () => {
       }),
     );
     expect(d.iniciadas[0]?.contactId).toBe("da-linha");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Correções da revisão (itens 2, 3, 6, 7, 8, 10)
+// ---------------------------------------------------------------------------
+
+describe("ação em massa não dispara automação (item 3)", () => {
+  it("tag em lote (`via: bulk`) não vira fato; a mesma tag por um caminho comum vira", () => {
+    const tag = (metadata: Record<string, unknown>) =>
+      row({
+        event_type: "lead.tag_added",
+        entity_kind: "crm_lead",
+        entity_id: LEAD,
+        payload: { added_tags: ["Quente"] },
+        metadata,
+      });
+    expect(fatosDoEvento(tag({ request_id: "r", actor_user_id: "u", via: "bulk" }))).toEqual([]);
+    expect(fatosDoEvento(tag({ request_id: "r", actor_user_id: "u" }))).toHaveLength(1);
+  });
+  it("o handler não inicia nada para a tag em lote", async () => {
+    const d = db(config({ kind: "tag_added", target: "lead", tags: ["Quente"] }));
+    await aplicarGatilhosDeAutomacao(
+      d.fake,
+      row({
+        event_type: "lead.tag_added",
+        entity_kind: "crm_lead",
+        entity_id: LEAD,
+        payload: { added_tags: ["Quente"] },
+        metadata: { via: "bulk" },
+      }),
+    );
+    expect(d.iniciadas).toEqual([]);
+  });
+});
+
+describe("só a primeira mensagem considera só as ANTERIORES (item 2)", () => {
+  it("o handler pergunta pelas mensagens anteriores ao instante em que esta chegou", async () => {
+    const chegou = new Date(Date.now() - 30_000).toISOString();
+    const perguntas: string[] = [];
+    const d = db(config(msgGatilho({ only_first_message: true })), {
+      mensagemDaConversa: async () => ({ created_at: chegou }),
+      primeiraMensagemDaConversa: async (_o, _c, _m, antesDe) => {
+        perguntas.push(antesDe);
+        return true;
+      },
+    });
+    expect((await aplicarGatilhosDeAutomacao(d.fake, mensagem())).iniciadas).toBe(1);
+    expect(perguntas).toEqual([chegou]);
+  });
+});
+
+describe("não dispara com humano no comando (item 6)", () => {
+  it("padrão (ausente = sim): conversa com atendente não dispara; sem atendente, dispara", async () => {
+    const com = db(config(msgGatilho()), { humanoNaConversa: async () => true });
+    expect((await aplicarGatilhosDeAutomacao(com.fake, mensagem())).iniciadas).toBe(0);
+    const sem = db(config(msgGatilho()), { humanoNaConversa: async () => false });
+    expect((await aplicarGatilhosDeAutomacao(sem.fake, mensagem())).iniciadas).toBe(1);
+  });
+  it("skip_if_human: false dispara mesmo com humano no comando", async () => {
+    const d = db(config(msgGatilho({ skip_if_human: false })), { humanoNaConversa: async () => true });
+    expect((await aplicarGatilhosDeAutomacao(d.fake, mensagem())).iniciadas).toBe(1);
+  });
+  it("o schema aceita a opção", () => {
+    expect(
+      automacaoTriggerConfigSchema.safeParse({
+        triggers: [{ kind: "message_received", match: "any", keywords: [], skip_if_human: false }],
+        reentry: { policy: "skip_if_running", cooldown_minutes: 0 },
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe("resposta a automação decidida pela MENSAGEM (item 7)", () => {
+  const T = "2026-11-03T12:05:00.000Z";
+  const ev = (event_type: string, created_at: string, payload: Record<string, unknown> | null = null) => ({
+    event_type,
+    created_at,
+    payload,
+  });
+  it("esperava quando a mensagem chegou: wait_started antes, saída da espera depois", () => {
+    expect(
+      esperavaRespostaEm(
+        [
+          ev("effect_done", "2026-11-03T12:00:00.000Z"),
+          ev("wait_started", "2026-11-03T12:00:01.000Z", { wake_status: "waiting_reply" }),
+          ev("inbound_woke", "2026-11-03T12:05:01.000Z"),
+          ev("node_advanced", "2026-11-03T12:06:00.000Z"),
+        ],
+        T,
+      ),
+    ).toBe(true);
+  });
+  it("a espera já tinha saído antes da mensagem, ou era espera de tempo: não é resposta", () => {
+    expect(
+      esperavaRespostaEm(
+        [
+          ev("wait_started", "2026-11-03T12:00:01.000Z", { wake_status: "waiting_reply" }),
+          ev("node_advanced", "2026-11-03T12:03:00.000Z"),
+        ],
+        T,
+      ),
+    ).toBe(false);
+    expect(esperavaRespostaEm([ev("wait_started", "2026-11-03T12:00:01.000Z", {})], T)).toBe(false);
+    expect(
+      esperavaRespostaEm([ev("wait_started", "2026-11-03T12:06:00.000Z", { wake_status: "waiting_reply" })], T),
+    ).toBe(false);
+  });
+  it("o handler passa o instante da chegada e descarta a resposta", async () => {
+    const chegou = new Date(Date.now() - 5_000).toISOString();
+    const vistos: string[] = [];
+    const d = db(config(msgGatilho()), {
+      mensagemDaConversa: async () => ({ created_at: chegou }),
+      respostaAAutomacaoNaConversa: async (_o, _c, em) => {
+        vistos.push(em);
+        return true;
+      },
+    });
+    expect((await aplicarGatilhosDeAutomacao(d.fake, mensagem())).iniciadas).toBe(0);
+    expect(vistos).toEqual([chegou]);
+  });
+});
+
+describe("mensagem velha não dispara (item 8)", () => {
+  it("mais de 10 minutos desde que chegou: descartada; mensagem que não é da conversa também", async () => {
+    const agora = new Date("2026-11-03T12:30:00.000Z");
+    const velha = db(config(msgGatilho()), {
+      mensagemDaConversa: async () => ({
+        created_at: new Date(agora.getTime() - IDADE_MAXIMA_DA_MENSAGEM_MS - 1000).toISOString(),
+      }),
+    });
+    expect((await aplicarGatilhosDeAutomacao(velha.fake, mensagem(), agora)).iniciadas).toBe(0);
+    const nova = db(config(msgGatilho()), {
+      mensagemDaConversa: async () => ({ created_at: new Date(agora.getTime() - 60_000).toISOString() }),
+    });
+    expect((await aplicarGatilhosDeAutomacao(nova.fake, mensagem(), agora)).iniciadas).toBe(1);
+    const alheia = db(config(msgGatilho()), { mensagemDaConversa: async () => null });
+    expect((await aplicarGatilhosDeAutomacao(alheia.fake, mensagem(), agora)).iniciadas).toBe(0);
+  });
+});
+
+describe("palavra-chave vazia e tag (item 10)", () => {
+  const cfg = (g: unknown) =>
+    automacaoTriggerConfigSchema.safeParse({
+      triggers: [g],
+      reentry: { policy: "skip_if_running", cooldown_minutes: 0 },
+    });
+  it("o schema recusa palavra-chave que normaliza para vazio, com mensagem legível", () => {
+    const r = cfg({ kind: "message_received", match: "contains", keywords: ["!!!"] });
+    expect(r.success).toBe(false);
+    expect(JSON.stringify(r.error?.issues)).toContain("ao menos uma letra ou número");
+    expect(cfg({ kind: "message_received", match: "contains", keywords: ["preço!"] }).success).toBe(true);
+  });
+  it("tag compara por trim e minúsculas, não pela normalização da palavra-chave", () => {
+    expect(mesmaTag("  VIP ", "vip")).toBe(true);
+    expect(mesmaTag("pós-venda", "pos venda")).toBe(false);
+    expect(mesmaTag("Pós-venda", "pós-venda")).toBe(true);
   });
 });

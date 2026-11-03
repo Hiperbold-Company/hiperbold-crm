@@ -22,6 +22,7 @@ import { uuidDeterministico } from "../armadas";
 import { aceitaIniciador, gatilhosDoGrafo } from "../gatilhos";
 import { iniciarAutomacao, type ResultadoDoInicio } from "../iniciar";
 import { MAX_VALOR_DE_PARAMETRO, type CrmAction } from "../schemas";
+import { negocioDaExecucao } from "../fatos";
 import { renderizar } from "../template-vars";
 import type { Contexto, Passo } from "./index";
 
@@ -108,12 +109,22 @@ export async function executarIniciarAutomacao(
     param[p.key] = renderizar(p.value, c.fatos, c.agora).slice(0, MAX_VALOR_DE_PARAMETRO);
 
   const origem = origemDoInicio(c.enrollmentId, c.chave, indice, acao.pointer_id);
+  // O destino trabalha no MESMO negócio da origem (o que a origem carrega, ou o
+  // que ela resolveu), e não no aberto mais recente do contato: `_lead_id` é o
+  // negócio da execução que os blocos de CRM leem (`negocioDaExecucao`).
+  const negocio = c.fatos?.negocio?.id ?? negocioDaExecucao(c.fatos?.vars ?? {});
   const r = await iniciarAutomacao(c.admin, {
     organizationId: c.org,
     pointerId: acao.pointer_id,
     contactId: c.contatoId,
     vars: {
-      gatilho: { tipo: "started_by_automation", automacao_id: c.pointerId, event_id: origem },
+      ...(negocio ? { _lead_id: negocio } : {}),
+      gatilho: {
+        tipo: "started_by_automation",
+        automacao_id: c.pointerId,
+        event_id: origem,
+        ...(negocio ? { lead_id: negocio, _lead_id: negocio } : {}),
+      },
       param,
     },
     originEventId: origem,

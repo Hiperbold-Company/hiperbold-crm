@@ -18,6 +18,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { contaBloqueadaParaProduzir } from "@/lib/billing/assinatura/pode-produzir";
 import type { EventHandler, EventRow, HandlerResult } from "@/lib/event-log/dispatcher";
+import { humanoNoComando } from "@/lib/followup/gatilho-retorno";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { AUTOMACAO_GATILHOS_HANDLER_KEY } from "./chaves";
@@ -32,8 +33,8 @@ import {
   type FatoDeMensagem,
 } from "./gatilhos";
 import { iniciarAutomacao, type InicioDaAutomacao } from "./iniciar";
-import type { AutomacaoTriggerConfig } from "./schemas";
-import { automacaoEsperaRespostaNaConversaSupabase } from "./uma-voz";
+import type { AutomacaoTrigger, AutomacaoTriggerConfig } from "./schemas";
+import { IDADE_MAXIMA_DA_MENSAGEM_MS, automacaoEsperaRespostaNaConversaSupabase } from "./uma-voz";
 
 export { AUTOMACAO_GATILHOS_HANDLER_KEY } from "./chaves";
 export const EVENTOS_DOS_GATILHOS = [
@@ -56,10 +57,22 @@ export interface GatilhosDb {
   contatoDaConversa(orgId: string, conversationId: string): Promise<string | null>;
   /** `true` grupo, `false` conversa individual, `null` conversa não encontrada na organização. */
   conversaDeGrupo(orgId: string, conversationId: string): Promise<boolean | null>;
-  /** A mensagem é resposta a uma automação esperando NESTA conversa (`uma-voz.ts`)? */
-  respostaAAutomacaoNaConversa(orgId: string, conversationId: string): Promise<boolean>;
-  /** Nenhuma outra mensagem do contato nesta conversa além desta? */
-  primeiraMensagemDaConversa(orgId: string, conversationId: string, messageId: string): Promise<boolean>;
+  /** A linha da mensagem (organização e conversa conferidas): quando CHEGOU. `null` = não é desta conversa. */
+  mensagemDaConversa(orgId: string, conversationId: string, messageId: string): Promise<{ created_at: string } | null>;
+  /**
+   * A mensagem é resposta a uma automação NESTA conversa — esperando agora, ou
+   * esperando quando a mensagem chegou (`uma-voz.ts`)?
+   */
+  respostaAAutomacaoNaConversa(orgId: string, conversationId: string, chegadaEm: string): Promise<boolean>;
+  /** Nenhuma mensagem do contato nesta conversa ANTES desta (as mais novas não contam)? */
+  primeiraMensagemDaConversa(
+    orgId: string,
+    conversationId: string,
+    messageId: string,
+    chegadaEm: string,
+  ): Promise<boolean>;
+  /** Há humano no comando da conversa (atendente, `force_human`, IA silenciada)? Mesmo critério do gate da IA. */
+  humanoNaConversa(orgId: string, conversationId: string, agora: Date): Promise<boolean>;
   fonteDeCaptacaoDaOrg(orgId: string, fonteId: string): Promise<boolean>;
   iniciar(input: Parameters<typeof iniciarAutomacao>[1]): Promise<InicioDaAutomacao>;
   modoLeitura(orgId: string): Promise<boolean>;
@@ -97,27 +110,53 @@ async function contatoDoFato(db: GatilhosDb, orgId: string, fato: FatoDeGatilho)
 }
 
 /**
- * Mensagem recebida: as recusas que dependem do banco. Grupo nunca dispara; a
- * resposta a uma automação que espera nesta conversa é DELA, e não inicia
- * outras. Devolve `false` para descartar o evento.
+ * Mensagem com mais de `IDADE_MAXIMA_DA_MENSAGEM_MS` (desde que CHEGOU) não
+ * inicia automação: um dreno parado que acorda com o backlog não pode
+ * responder conversa de horas atrás — o espírito do anti-backlog do drain da IA.
+ */
+export { IDADE_MAXIMA_DA_MENSAGEM_MS };
+
+/**
+ * Mensagem recebida: as recusas que dependem do banco. Grupo nunca dispara;
+ * mensagem velha (backlog) também não; a resposta a uma automação desta
+ * conversa é DELA, e não inicia outras. Devolve `false` para descartar o evento.
  */
 async function mensagemPodeDisparar(
   db: GatilhosDb,
   orgId: string,
   fato: FatoDeMensagem,
   configs: AutomacaoTriggerConfig[],
+  agora: Date,
 ): Promise<boolean> {
-  const gatilhos = configs.flatMap((c) => c.triggers).filter((g) => g.kind === "message_received");
+  const gatilhos = configs
+    .flatMap((c) => c.triggers)
+    .filter((g): g is Extract<AutomacaoTrigger, { kind: "message_received" }> => g.kind === "message_received");
   if (gatilhos.length === 0) return false;
   if ((await db.conversaDeGrupo(orgId, fato.conversation_id)) !== false) return false;
-  if (await db.respostaAAutomacaoNaConversa(orgId, fato.conversation_id)) return false;
-  if (gatilhos.some((g) => g.kind === "message_received" && g.only_first_message)) {
-    fato.primeira_da_conversa = await db.primeiraMensagemDaConversa(orgId, fato.conversation_id, fato.message_id);
+  const linha = await db.mensagemDaConversa(orgId, fato.conversation_id, fato.message_id);
+  if (!linha) return false;
+  const chegou = Date.parse(linha.created_at);
+  if (!Number.isFinite(chegou) || agora.getTime() - chegou > IDADE_MAXIMA_DA_MENSAGEM_MS) return false;
+  if (await db.respostaAAutomacaoNaConversa(orgId, fato.conversation_id, linha.created_at)) return false;
+  if (gatilhos.some((g) => g.only_first_message)) {
+    fato.primeira_da_conversa = await db.primeiraMensagemDaConversa(
+      orgId,
+      fato.conversation_id,
+      fato.message_id,
+      linha.created_at,
+    );
+  }
+  if (gatilhos.some((g) => g.skip_if_human !== false)) {
+    fato.humano_no_comando = await db.humanoNaConversa(orgId, fato.conversation_id, agora);
   }
   return true;
 }
 
-export async function aplicarGatilhosDeAutomacao(db: GatilhosDb, row: EventRow): Promise<ResumoDosGatilhos> {
+export async function aplicarGatilhosDeAutomacao(
+  db: GatilhosDb,
+  row: EventRow,
+  agora: Date = new Date(),
+): Promise<ResumoDosGatilhos> {
   const resumo: ResumoDosGatilhos = { avaliadas: 0, iniciadas: 0, ignoradas: 0 };
   const fatos = fatosDoEvento(row);
   if (fatos.length === 0) return resumo;
@@ -135,7 +174,7 @@ export async function aplicarGatilhosDeAutomacao(db: GatilhosDb, row: EventRow):
   if (armadas.length === 0) return resumo;
 
   const mensagem = fatos.find((f): f is FatoDeMensagem => f.tipo === "message_received");
-  if (mensagem && !(await mensagemPodeDisparar(db, row.organization_id, mensagem, armadas.map((a) => a.cfg)))) {
+  if (mensagem && !(await mensagemPodeDisparar(db, row.organization_id, mensagem, armadas.map((a) => a.cfg), agora))) {
     return resumo;
   }
 
@@ -245,9 +284,23 @@ export function createSupabaseGatilhosDb(admin: SupabaseClient): GatilhosDb {
       if (error) throw new Error(error.message);
       return data ? (data as { is_group: boolean }).is_group === true : null;
     },
-    respostaAAutomacaoNaConversa: (orgId, conversationId) =>
-      automacaoEsperaRespostaNaConversaSupabase(admin, { organizationId: orgId, conversationId }),
-    async primeiraMensagemDaConversa(orgId, conversationId, messageId) {
+    async mensagemDaConversa(orgId, conversationId, messageId) {
+      const { data, error } = await admin
+        .from("messages")
+        .select("created_at")
+        .eq("organization_id", orgId)
+        .eq("conversation_id", conversationId)
+        .eq("id", messageId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      const c = (data as { created_at?: string } | null)?.created_at;
+      return c ? { created_at: c } : null;
+    },
+    respostaAAutomacaoNaConversa: (orgId, conversationId, chegadaEm) =>
+      automacaoEsperaRespostaNaConversaSupabase(admin, { organizationId: orgId, conversationId, chegadaEm }),
+    async primeiraMensagemDaConversa(orgId, conversationId, messageId, chegadaEm) {
+      // Só as ANTERIORES: a mensagem que chegou logo depois (o contato mandou
+      // "oi" e "tudo bem?" em sequência) não tira da primeira o posto dela.
       const { data, error } = await admin
         .from("messages")
         .select("id")
@@ -255,9 +308,36 @@ export function createSupabaseGatilhosDb(admin: SupabaseClient): GatilhosDb {
         .eq("conversation_id", conversationId)
         .eq("direction", "inbound")
         .neq("id", messageId)
+        .lt("created_at", chegadaEm)
         .limit(1);
       if (error) throw new Error(error.message);
       return (data ?? []).length === 0;
+    },
+    async humanoNaConversa(orgId, conversationId, agora) {
+      const { data, error } = await admin
+        .from("conversations")
+        .select("assignee_kind, bot_silenced_until, contacts:contact_id(force_human)")
+        .eq("organization_id", orgId)
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return false;
+      const c = data as unknown as {
+        assignee_kind: string | null;
+        bot_silenced_until: string | null;
+        contacts: { force_human: boolean | null } | null;
+      };
+      return humanoNoComando(
+        {
+          is_group: false,
+          is_blocked: false,
+          tags: [],
+          force_human: c.contacts?.force_human === true,
+          assignee_kind: c.assignee_kind,
+          bot_silenced_until: c.bot_silenced_until,
+        },
+        agora,
+      );
     },
     async fonteDeCaptacaoDaOrg(orgId, fonteId) {
       const { data, error } = await admin

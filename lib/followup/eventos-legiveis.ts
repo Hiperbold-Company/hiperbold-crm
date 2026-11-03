@@ -197,6 +197,21 @@ export function rotuloDoDesfechoDaAutomacao(outcome: string): string {
   return DESFECHO[outcome] ?? "Concluída";
 }
 
+/**
+ * O gatilho que começou a execução (lote 3), na frase "começou: …". Só o TIPO:
+ * nunca o texto da mensagem, a tag ou a data (LGPD — o evento `automacao_iniciada`
+ * guarda só `gatilho`, `fn_automacao_iniciar`).
+ */
+export const GATILHO_QUE_COMECOU = {
+  message_received: "mensagem recebida",
+  tag_added: "tag adicionada",
+  appointment: "agendamento",
+  birthday: "aniversário do contato",
+  date_field: "data de um campo do negócio",
+  no_reply: "contato sem resposta",
+  case_opened: "caso aberto na Central",
+} as const;
+
 /** O rótulo do tipo, para o cabeçalho do passo. */
 export function tipoDoNo(tipo: FlowNode["type"]): string {
   return TIPO_DO_NO[tipo] ?? "Passo";
@@ -598,7 +613,9 @@ export function descreveEvento(
               ? "alguém iniciou manualmente"
               : g === "started_by_automation"
                 ? "outra automação a iniciou"
-                : null;
+                : g && g in GATILHO_QUE_COMECOU
+                  ? `começou: ${GATILHO_QUE_COMECOU[g as keyof typeof GATILHO_QUE_COMECOU]}`
+                  : null;
       return {
         titulo: p.reiniciada === true ? "A automação recomeçou" : "A automação começou",
         detalhe: porque,
