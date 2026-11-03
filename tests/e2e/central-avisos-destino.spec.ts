@@ -96,7 +96,8 @@ test("agent abre contexto, volta ainda aberto, resolve e reabre; RLS e menu ocul
     for (const suffix of ["outro atendente", "outra organização"]) await expect(row(page, `${prefix} ${suffix}`).getByRole("link")).toHaveCount(0);
   }
   await expect(row(page, "Referência removida").getByRole("link")).toHaveCount(0);
-  await expect(row(page, "Conexão para revisar")).toContainText("Peça a quem administra");
+  // Desde 03/11/2026 o gerente também opera Conexões: o atendente é orientado a pedir ao gestor.
+  await expect(row(page, "Conexão para revisar")).toContainText("Peça ao gestor");
   const patches: string[] = [];
   page.on("request", req => { if (req.method() === "PATCH" && req.url().includes("/ai/inbox/")) patches.push(req.url()); });
   await evidence(page, info, "desktop");
@@ -147,10 +148,8 @@ for (const role of ["manager", "admin"]) test(`${role}: destinos conforme papel 
   await expect(page).toHaveURL(/\/app\/ai\/usage/);
   await expect(page.getByRole("heading", { name: /Uso de IA|Uso e custos/i }).first()).toBeVisible();
   await page.goBack(); await expect(row(page, "Conexão para revisar")).toBeVisible();
-  if (role === "manager") {
-    await expect(row(page, "Conexão para revisar").getByRole("link")).toHaveCount(0);
-    await expect(row(page, "Modelo do canal mudou").getByRole("link")).toHaveCount(0);
-  } else {
+  // Gerente e admin abrem Conexões pela Central (decisão do dono do produto, 03/11/2026).
+  {
     await row(page, "Conexão para revisar").getByRole("link").click();
     await expect(page).toHaveURL(/\/app\/connections/);
     await expect(page.getByRole("heading", { name: /Conexões/ }).first()).toBeVisible();
