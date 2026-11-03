@@ -12,6 +12,7 @@ import type {
   AutomacaoTriggerKind,
   EventoDeAgendamento,
   ModoDaPalavraChave,
+  ModoDoComentario,
   CrmAction,
   CrmActionType,
   FieldOp,
@@ -97,6 +98,13 @@ export const GATILHOS_DA_AUTOMACAO: Record<AutomacaoTriggerKind, string> = {
   no_reply: "Contato sem resposta",
   case_opened: "Caso aberto na Central",
   started_by_automation: "Iniciada por outra automação",
+  instagram_comment: "Comentário no Instagram",
+};
+
+/** Como a palavra-chave do comentário é comparada. */
+export const MODOS_DO_COMENTARIO_ROTULOS: Record<ModoDoComentario, string> = {
+  any: "Qualquer comentário",
+  contains: "Contém uma das palavras",
 };
 
 /** Como a palavra-chave da mensagem recebida é comparada. */
@@ -240,6 +248,31 @@ export const ENVIOS_DA_CONVERSA: Record<"mensagem" | "nova_tentativa" | "tempo_e
   resposta: "Resposta do contato",
 };
 
+/**
+ * O desfecho de cada bloco do Instagram, como o histórico da execução o lê.
+ * A chave é o `resultado` do detalhe do efeito (o status que o canal
+ * devolveu); `erro` prefixa a frase do erro. Nunca o texto do comentário.
+ */
+export const DESFECHOS_DO_INSTAGRAM = {
+  instagram_private_reply: {
+    na_fila: "Resposta privada enviada",
+    ja_pedida: "Resposta privada já tinha sido enviada para este comentário",
+    expirada: "Resposta privada não enviada: prazo de 7 dias vencido",
+    erro: "Resposta privada",
+  },
+  instagram_public_reply: {
+    na_fila: "Resposta pública enviada",
+    ja_pedida: "Resposta pública já tinha sido enviada para este comentário",
+    erro: "Resposta pública",
+  },
+  instagram_check_follow: {
+    segue: "Segue o perfil",
+    nao_segue: "Não segue o perfil",
+    indefinido: "Não deu para saber se segue o perfil",
+    erro: "Confere se segue",
+  },
+} as const;
+
 /** Códigos de erro dos efeitos em português (histórico da execução). */
 export const ERROS_DO_EFEITO: Record<string, string> = {
   janela_fechada: "janela de 24h fechada",
@@ -273,6 +306,10 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   automacao_limite_por_hora: "o contato já entrou 10 vezes na automação escolhida na última hora",
   automacao_limite_da_organizacao: "a conta passou de 5000 automações iniciadas na última hora",
   automacao_sem_inicio: "a automação escolhida não tem bloco de Início",
+  // Blocos do Instagram (comentários).
+  sem_comentario: "a execução não começou por um comentário do Instagram",
+  comentario_nao_encontrado: "o comentário não foi encontrado nesta conta (ou a conexão do Instagram não está ligada)",
+  texto_invalido: "o texto ficou vazio ou passou de 1000 caracteres depois de preencher as variáveis",
 };
 
 export function fraseDoErro(codigo: string | undefined): string {
@@ -334,6 +371,7 @@ export const MAPAS_DA_AUTOMACAO: ReadonlyArray<Record<string, string>> = [
   OPERACOES_DE_CAMPO,
   GATILHOS_DA_AUTOMACAO,
   MODOS_DA_PALAVRA_CHAVE_ROTULOS,
+  MODOS_DO_COMENTARIO_ROTULOS,
   EVENTOS_DE_AGENDAMENTO_ROTULOS,
   REGRAS_NOVAS,
   VIAS_DA_ETAPA,

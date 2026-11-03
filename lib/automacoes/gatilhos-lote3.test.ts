@@ -365,6 +365,9 @@ function db(cfg: AutomacaoTriggerConfig, over: Partial<GatilhosDb> = {}) {
     primeiraMensagemDaConversa: async () => true,
     humanoNaConversa: async () => false,
     fonteDeCaptacaoDaOrg: async () => false,
+    identidadeDoComentarista: async () => null,
+    contatoPelaIdentidade: async () => null,
+    criarContatoDoComentarista: async () => null,
     iniciar: async (input) => {
       iniciadas.push(input);
       return { resultado: "iniciada", enrollment_id: "enr-1" };

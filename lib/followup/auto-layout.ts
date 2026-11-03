@@ -48,6 +48,9 @@ const TYPE_ORDER: Record<NodeType, number> = {
   field_op: 8,
   message: 8,
   question: 8,
+  instagram_private_reply: 8,
+  instagram_public_reply: 8,
+  instagram_check_follow: 8,
   end: 9,
 };
 

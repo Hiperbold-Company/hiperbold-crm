@@ -29,9 +29,13 @@ import {
   fatosDoEvento,
   gatilhosDoGrafo,
   varsDoGatilho,
+  type FatoDeComentario,
   type FatoDeGatilho,
   type FatoDeMensagem,
 } from "./gatilhos";
+import { EVENTO_COMENTARIO_RECEBIDO, identidadeDoComentarista, type IdentidadeDoComentarista } from "./canal-de-comentarios";
+import { createContactHandler } from "@/app/api/v1/contacts/_handler";
+import { logger } from "@/lib/logger";
 import { iniciarAutomacao, type InicioDaAutomacao } from "./iniciar";
 import type { AutomacaoTrigger, AutomacaoTriggerConfig } from "./schemas";
 import { IDADE_MAXIMA_DA_MENSAGEM_MS, automacaoEsperaRespostaNaConversaSupabase } from "./uma-voz";
@@ -45,6 +49,7 @@ export const EVENTOS_DOS_GATILHOS = [
   "contact.birthday",
   "message.received",
   "ai.case_opened",
+  EVENTO_COMENTARIO_RECEBIDO,
   ...Object.keys(EVENTOS_DE_AGENDAMENTO_NO_LOG),
 ] as const;
 
@@ -74,6 +79,22 @@ export interface GatilhosDb {
   /** Há humano no comando da conversa (atendente, `force_human`, IA silenciada)? Mesmo critério do gate da IA. */
   humanoNaConversa(orgId: string, conversationId: string, agora: Date): Promise<boolean>;
   fonteDeCaptacaoDaOrg(orgId: string, fonteId: string): Promise<boolean>;
+  /** Comentário: a identidade social do autor pela sessão de canal da organização (`null` = sessão alheia ou não é Instagram). */
+  identidadeDoComentarista(
+    orgId: string,
+    channelSessionId: string,
+    autorId: string,
+  ): Promise<IdentidadeDoComentarista | null>;
+  /** O contato VIVO da organização com esta identidade social (o mesmo que o Direct usa). */
+  contatoPelaIdentidade(orgId: string, identidade: string): Promise<string | null>;
+  /**
+   * Cria o contato do comentarista pelo handler canônico (auditado) e grava a
+   * identidade social nele, para o Direct depois cair no MESMO contato.
+   */
+  criarContatoDoComentarista(
+    orgId: string,
+    input: { identidade: string; usuario: string | null; pointerId: string; requestId: string },
+  ): Promise<string | null>;
   iniciar(input: Parameters<typeof iniciarAutomacao>[1]): Promise<InicioDaAutomacao>;
   modoLeitura(orgId: string): Promise<boolean>;
 }
@@ -106,6 +127,9 @@ async function contatoDoFato(db: GatilhosDb, orgId: string, fato: FatoDeGatilho)
     case "birthday":
     case "message_received":
       return fato.contact_id;
+    // Resolvido à parte (pela identidade social, com criação opcional).
+    case "instagram_comment":
+      return null;
   }
 }
 
@@ -178,6 +202,21 @@ export async function aplicarGatilhosDeAutomacao(
     return resumo;
   }
 
+  const comentario = fatos.find((f): f is FatoDeComentario => f.tipo === "instagram_comment");
+  let identidade: IdentidadeDoComentarista | null = null;
+  if (comentario) {
+    const algum = armadas.some((a) => a.cfg.triggers.some((g) => g.kind === "instagram_comment"));
+    if (!algum) return resumo;
+    identidade = await db.identidadeDoComentarista(
+      row.organization_id,
+      comentario.channel_session_id,
+      comentario.autor_id,
+    );
+    // Sessão de outra organização (ou que não é Instagram) e comentário da
+    // PRÓPRIA conta (a resposta pública da automação volta como comentário) não disparam.
+    if (!identidade || identidade.propriaConta) return resumo;
+  }
+
   let contato: string | null | undefined;
   let fonteConfirmada: boolean | undefined;
   for (const a of armadas) {
@@ -195,7 +234,32 @@ export async function aplicarGatilhosDeAutomacao(
       (f) => f.causado_pela_automacao !== a.id && cfg.triggers.some((g) => casaGatilho(g, f, fonteConfirmada === true)),
     );
     if (!fato) continue;
-    if (contato === undefined) contato = await contatoDoFato(db, row.organization_id, fato);
+    if (fato.tipo === "instagram_comment" && identidade) {
+      // Contato do comentarista: o que o Direct já criou, ou um novo quando um
+      // gatilho que casou pede (`create_contact`, ausente = sim). Sem contato e
+      // sem pedido de criar, ESTA automação não inicia — outra pode criar.
+      if (!contato) contato = await db.contatoPelaIdentidade(row.organization_id, identidade.identidade);
+      const criar = cfg.triggers.some(
+        (g) => g.kind === "instagram_comment" && g.create_contact !== false && casaGatilho(g, fato, false),
+      );
+      if (!contato && criar) {
+        contato = await db.criarContatoDoComentarista(row.organization_id, {
+          identidade: identidade.identidade,
+          usuario: fato.autor_usuario,
+          pointerId: a.id,
+          requestId: `automacao:${a.id}:gatilho:${row.id}`,
+        });
+      }
+      if (!contato) {
+        logger.info("automacao: comentário sem contato no CRM e sem criar contato; não iniciada", {
+          organization_id: row.organization_id,
+          pointer_id: a.id,
+          event_id: row.id,
+        });
+        resumo.ignoradas++;
+        continue;
+      }
+    } else if (contato === undefined) contato = await contatoDoFato(db, row.organization_id, fato);
     if (!contato) {
       resumo.ignoradas++;
       continue;
@@ -348,6 +412,57 @@ export function createSupabaseGatilhosDb(admin: SupabaseClient): GatilhosDb {
         .maybeSingle();
       if (error) throw new Error(error.message);
       return Boolean(data);
+    },
+    identidadeDoComentarista: (orgId, channelSessionId, autorId) =>
+      identidadeDoComentarista(admin, { organizationId: orgId, channelSessionId, autorId }),
+    async contatoPelaIdentidade(orgId, identidade) {
+      const { data, error } = await admin
+        .from("contacts")
+        .select("id")
+        .eq("organization_id", orgId)
+        .eq("social_identity", identidade)
+        .is("is_merged_into", null)
+        .maybeSingle();
+      if (error) throw new Error("contato_do_comentario_indeterminado");
+      return (data as { id: string } | null)?.id ?? null;
+    },
+    async criarContatoDoComentarista(orgId, { identidade, usuario, pointerId, requestId }) {
+      const nome = usuario ? `@${usuario}` : undefined;
+      // Ator: a automação que pediu (o mesmo desenho dos efeitos); a organização
+      // é a da LINHA do evento, nunca do payload.
+      const { contact } = await createContactHandler(
+        admin,
+        { organization_id: orgId, actor: { type: "webhook_source", id: pointerId }, requestId },
+        {
+          ...(nome ? { name: nome, display_name: nome } : {}),
+          source: "social",
+          source_metadata: { origem: "comentario_instagram" },
+        },
+      );
+      const { error } = await admin
+        .from("contacts")
+        .update({ social_identity: identidade })
+        .eq("organization_id", orgId)
+        .eq("id", contact.id);
+      if (!error) return contact.id;
+      // O Direct do mesmo perfil criou o contato no meio do caminho (índice
+      // único da identidade): vale o dele. O que acabou de nascer fica sem
+      // identidade — registrado para a equipe poder mesclar.
+      if (error.code === "23505") {
+        logger.warn("automacao: contato do comentário criado em corrida com o Direct", {
+          organization_id: orgId,
+          contact_id: contact.id,
+        });
+        const { data } = await admin
+          .from("contacts")
+          .select("id")
+          .eq("organization_id", orgId)
+          .eq("social_identity", identidade)
+          .is("is_merged_into", null)
+          .maybeSingle();
+        return (data as { id: string } | null)?.id ?? contact.id;
+      }
+      throw new Error("contato_do_comentario_sem_identidade");
     },
     iniciar: (input) => iniciarAutomacao(admin, input),
     modoLeitura: (orgId) => contaBloqueadaParaProduzir(admin, orgId),

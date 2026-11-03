@@ -21,6 +21,7 @@
  */
 import {
   ACOES_DE_CRM,
+  DESFECHOS_DO_INSTAGRAM,
   ENVIOS_DA_CONVERSA,
   fraseDaAcao,
   fraseDaOperacao,
@@ -152,6 +153,9 @@ const TIPO_DO_NO: Record<FlowNode["type"], string> = {
   field_op: "Operação de campo",
   message: "Mensagem",
   question: "Pergunta",
+  instagram_private_reply: "Responder em privado",
+  instagram_public_reply: "Responder no comentário",
+  instagram_check_follow: "Confere se segue",
 };
 
 const DESFECHO: Record<string, string> = {
@@ -210,6 +214,7 @@ export const GATILHO_QUE_COMECOU = {
   date_field: "data de um campo do negócio",
   no_reply: "contato sem resposta",
   case_opened: "caso aberto na Central",
+  instagram_comment: "comentário no Instagram",
 } as const;
 
 /** O rótulo do tipo, para o cabeçalho do passo. */
@@ -286,6 +291,12 @@ export function resumoDoNo(node: FlowNode, raia: RaiaDoEnrollment = "followup"):
     }
     case "question":
       return { ...base, resumo: `pergunta e grava a resposta (${VALIDACOES_DA_PERGUNTA[node.config.validation]})` };
+    case "instagram_private_reply":
+      return { ...base, resumo: "responde o comentário no Direct de quem comentou" };
+    case "instagram_public_reply":
+      return { ...base, resumo: "responde em público, no próprio comentário" };
+    case "instagram_check_follow":
+      return { ...base, resumo: "confere se quem comentou segue o perfil" };
   }
 }
 
@@ -680,6 +691,12 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
         const nomeDoEnvio = ENVIOS_DA_CONVERSA[envio as keyof typeof ENVIOS_DA_CONVERSA] ?? envio;
         if (d.ok === false) return `${nomeDoEnvio}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
         return `${nomeDoEnvio}: ${envio === "resposta" ? (texto(d.opcao_rotulo) ? `escolheu “${texto(d.opcao_rotulo)}”` : texto(d.opcao_id) ? "escolheu uma opção" : "registrada") : "enviada"}`;
+      }
+      // Blocos do Instagram: o desfecho numa frase (nunca o texto do comentário).
+      if (tipo && Object.hasOwn(DESFECHOS_DO_INSTAGRAM, tipo)) {
+        const frases = DESFECHOS_DO_INSTAGRAM[tipo as keyof typeof DESFECHOS_DO_INSTAGRAM] as Record<string, string>;
+        if (d.ok === false) return `${frases.erro}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
+        return frases[texto(d.resultado) ?? ""] ?? frases.feito ?? "feito";
       }
       const nome = tipo === "field_op" ? "Campos" : tipo ? (ACOES_DE_CRM[tipo as keyof typeof ACOES_DE_CRM] ?? tipo) : "Ação";
       if (d.ok === false) return `${nome}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;

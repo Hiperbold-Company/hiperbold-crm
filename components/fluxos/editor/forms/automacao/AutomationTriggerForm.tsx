@@ -43,6 +43,7 @@ const FALTA_NO_GATILHO: Record<AutomacaoTriggerKind, string> = {
   no_reply: "O tempo sem resposta precisa ser de 5 minutos a 30 dias.",
   case_opened: "Complete o gatilho.",
   started_by_automation: "Complete o gatilho.",
+  instagram_comment: "Complete o gatilho: informe ao menos uma palavra-chave.",
 };
 
 /** A frase do primeiro gatilho incompleto, ou `null` quando todos servem. */

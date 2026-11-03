@@ -20,7 +20,7 @@ import { RAMOS_POR_TIPO, type BranchableNode, type FlowBranch, type NodeType } f
 import { DECISORES, type EntradaDoNo, type NodeResult } from "./node-handlers";
 
 /** Grupo da paleta de blocos (automações). */
-export type CategoriaDoNo = "inicio" | "crm" | "logica" | "mensagem" | "controle" | "atendimento";
+export type CategoriaDoNo = "inicio" | "crm" | "logica" | "mensagem" | "controle" | "atendimento" | "instagram";
 
 export interface DefinicaoDoNo {
   tipo: NodeType;
@@ -82,6 +82,26 @@ export const REGISTRO_DE_NOS: { readonly [K in NodeType]: DefinicaoDoNo } = {
   // efeito antes de decidir — a decisão diz QUAL efeito quer (`NodeResult.effect.acao`).
   message: definir("message", { superficies: ["automacao"], categoria: "mensagem", efeito: false, precisaEventos: true }),
   question: definir("question", { superficies: ["automacao"], categoria: "mensagem", efeito: false, precisaEventos: true }),
+  // Blocos do Instagram: efeito (uma vez por passo, desfecho relido num replay),
+  // só em automação cujo gatilho é "Comentário no Instagram" (o publish confere).
+  instagram_private_reply: definir("instagram_private_reply", {
+    superficies: ["automacao"],
+    categoria: "instagram",
+    efeito: true,
+    precisaEventos: true,
+  }),
+  instagram_public_reply: definir("instagram_public_reply", {
+    superficies: ["automacao"],
+    categoria: "instagram",
+    efeito: true,
+    precisaEventos: true,
+  }),
+  instagram_check_follow: definir("instagram_check_follow", {
+    superficies: ["automacao"],
+    categoria: "instagram",
+    efeito: true,
+    precisaEventos: true,
+  }),
 };
 
 /**
@@ -92,7 +112,19 @@ const ORDEM: Record<FollowupFlowSurface, readonly NodeType[]> = {
   followup: ["trigger", "wait", "condition", "ai_classify", "match_reply", "repeat", "action", "end"],
   crm_automation: ["trigger", "wait", "condition", "ai_classify", "match_reply", "repeat", "action", "end"],
   atendimento: ["trigger", "collect", "skill", "end"],
-  automacao: ["trigger", "message", "question", "crm_action", "field_op", "condition", "wait", "end"],
+  automacao: [
+    "trigger",
+    "message",
+    "question",
+    "crm_action",
+    "field_op",
+    "condition",
+    "wait",
+    "instagram_private_reply",
+    "instagram_check_follow",
+    "instagram_public_reply",
+    "end",
+  ],
 };
 
 /** As caixas que o motor de cada superfície executa — derivado do registro. */

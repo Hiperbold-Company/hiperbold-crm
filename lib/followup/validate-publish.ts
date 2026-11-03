@@ -52,6 +52,8 @@ export const PUBLISH_ERROR_CODES = [
   'mensagem_sem_contato',
   'automacao_iniciar_propria',
   'automacao_iniciar_inexistente',
+  'instagram_sem_gatilho_de_comentario',
+  'instagram_publica_antes_da_privada',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -173,6 +175,59 @@ function cicloDoEncadeamento(
 // Derivado do registro de nós (`registro-de-nos.ts`): uma entrada por tipo, exaustiva.
 export { NOS_DA_SUPERFICIE };
 
+const TIPOS_DO_INSTAGRAM: ReadonlySet<NodeType> = new Set<NodeType>([
+  'instagram_private_reply',
+  'instagram_public_reply',
+  'instagram_check_follow',
+]);
+
+/**
+ * Blocos do Instagram: só valem quando TODO gatilho da automação é "Comentário
+ * no Instagram" (é dele que vêm o comentário, a conta e o autor), e a resposta
+ * pública nunca vem antes da privada no mesmo caminho — o canal só envia a
+ * pública depois da privada, e responder em público primeiro deixa o
+ * comentário inelegível para a privada.
+ */
+function validarBlocosDoInstagram(graph: FlowGraph, errors: PublishValidationError[]): void {
+  const blocos = graph.nodes.filter((n) => TIPOS_DO_INSTAGRAM.has(n.type)).sort(byId);
+  if (blocos.length === 0) return;
+  const gatilhos = graph.nodes.flatMap((n) => (n.type === 'trigger' && 'triggers' in n.config ? n.config.triggers : []));
+  if (gatilhos.length > 0 && gatilhos.some((g) => g.kind !== 'instagram_comment')) {
+    for (const n of blocos) {
+      errors.push({
+        node_id: n.id,
+        code: 'instagram_sem_gatilho_de_comentario',
+        message: `"${n.label}": os blocos do Instagram só funcionam quando todos os gatilhos são "Comentário no Instagram".`,
+      });
+    }
+  }
+  const saidas = new Map<string, string[]>();
+  for (const e of graph.edges) saidas.set(e.source, [...(saidas.get(e.source) ?? []), e.target]);
+  const privadas = new Set(blocos.filter((n) => n.type === 'instagram_private_reply').map((n) => n.id));
+  if (privadas.size === 0) return;
+  for (const publica of blocos.filter((n) => n.type === 'instagram_public_reply')) {
+    // Alguma resposta privada é alcançável DEPOIS desta pública?
+    const vistos = new Set<string>();
+    const fila = [...(saidas.get(publica.id) ?? [])];
+    let depois: string | null = null;
+    while (fila.length > 0 && !depois) {
+      const id = fila.shift()!;
+      if (vistos.has(id)) continue;
+      vistos.add(id);
+      if (privadas.has(id)) depois = id;
+      else fila.push(...(saidas.get(id) ?? []));
+    }
+    if (depois) {
+      const privada = graph.nodes.find((n) => n.id === depois);
+      errors.push({
+        node_id: publica.id,
+        code: 'instagram_publica_antes_da_privada',
+        message: `"${publica.label}": a resposta em público está antes de "${privada?.label ?? 'Responder em privado'}". Ponha a resposta privada antes da pública no mesmo caminho.`,
+      });
+    }
+  }
+}
+
 /** Regras do roteiro de atendimento que o grafo sozinho não carrega. */
 function validarSuperficie(
   graph: FlowGraph,
@@ -192,7 +247,7 @@ function validarSuperficie(
             ? `A caixa "${n.label}" não é de roteiro de atendimento — use Pergunta, Skill e Fim.`
             : surface === 'automacao'
               ? `A caixa "${n.label}" não roda numa automação.`
-              : n.type === 'crm_action' || n.type === 'field_op' || n.type === 'message' || n.type === 'question'
+              : n.type === 'crm_action' || n.type === 'field_op' || n.type === 'message' || n.type === 'question' || TIPOS_DO_INSTAGRAM.has(n.type)
                 ? `A caixa "${n.label}" é de automação e não roda num follow-up.`
                 : `A caixa "${n.label}" é de roteiro de atendimento e não roda num follow-up.`,
       });
@@ -283,6 +338,7 @@ function validarSuperficie(
       }
     }
   }
+  if (surface === 'automacao') validarBlocosDoInstagram(graph, errors);
   // Os gatilhos de uma AUTOMAÇÃO moram no nó Início (vários por fluxo); nos
   // follow-ups, em `pointer.trigger_config`, e o Início fica sem configuração.
   for (const n of [...graph.nodes].sort(byId)) {

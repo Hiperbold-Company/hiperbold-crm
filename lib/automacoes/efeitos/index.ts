@@ -42,6 +42,7 @@ import { renderizar } from "../template-vars";
 import { CAMPOS_PADRAO_DO_CONTATO, CAMPOS_PADRAO_DO_NEGOCIO } from "../vocabulario";
 import { executarConversa } from "./conversa";
 import { executarIniciarAutomacao } from "./iniciar-automacao";
+import { ehNoDoInstagram, executarInstagram } from "./instagram";
 
 /** Evento que avisa a equipe (push) — consumido por `lib/notifications/push.handler.ts`. */
 export const EVENTO_DE_AVISO_DA_AUTOMACAO = "automacao.aviso";
@@ -459,6 +460,7 @@ export function criarExecutorDeEfeitos(
           return { desfecho: { ok: false, erro: codigoDoErro(err) }, detalhes: [{ tipo: "field_op" }] };
         }
       }
+      if (ehNoDoInstagram(node)) return executarInstagram(c, node);
       if (node.type !== "crm_action") return { desfecho: { ok: false, erro: "efeito_falhou" } };
 
       const detalhes: Array<Record<string, unknown>> = [];
