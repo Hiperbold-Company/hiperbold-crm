@@ -2,7 +2,7 @@
  * A aba "Redes sociais" segue oculta para o cliente (função `conexao-redes-sociais`
  * em `lib/hiperbold/funcoes-ocultas.ts`) até a Meta aprovar o app; o administrador
  * da plataforma a vê para testar com a conta real. O sinal vem do servidor
- * (`adminDaPlataforma`), nunca de consulta no cliente.
+ * (`redesSociaisLiberadas`), nunca de consulta no cliente.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -43,8 +43,18 @@ describe("aba Redes sociais e o administrador da plataforma", () => {
 
   it("administrador da plataforma vê a aba e abre o conteúdo por ?aba=sociais", () => {
     h.busca = "aba=sociais";
-    render(<ConexoesShell wahaConfigured={false} wacallsConfigured={false} adminDaPlataforma />);
+    render(<ConexoesShell wahaConfigured={false} wacallsConfigured={false} redesSociaisLiberadas />);
     expect(screen.getByRole("tab", { name: "Redes sociais" })).toBeInTheDocument();
     expect(screen.getByText("conteudo-sociais")).toBeInTheDocument();
+  });
+});
+
+describe("acesso antecipado à aba Redes sociais", () => {
+  it("só a organização da Hiperbold vê antes da liberação", async () => {
+    const { acessoAntecipado } = await import("@/lib/hiperbold/funcoes-ocultas");
+    expect(acessoAntecipado("conexao-redes-sociais", "d500642e-ccde-46e6-90bd-94868f35c11a")).toBe(true);
+    expect(acessoAntecipado("conexao-redes-sociais", "00000000-0000-0000-0000-000000000000")).toBe(false);
+    expect(acessoAntecipado("conexao-redes-sociais", null)).toBe(false);
+    expect(acessoAntecipado("prospeccao", "d500642e-ccde-46e6-90bd-94868f35c11a")).toBe(false);
   });
 });

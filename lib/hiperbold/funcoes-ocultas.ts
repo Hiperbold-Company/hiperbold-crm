@@ -71,6 +71,22 @@ export function funcaoOculta(id: FuncaoId): boolean {
   return FUNCOES_OCULTAS.includes(id);
 }
 
+/**
+ * Organizações que veem uma função oculta antes de ela ser liberada para todos.
+ * Para o resto, a função segue oculta.
+ */
+const ACESSO_ANTECIPADO: Partial<Record<FuncaoId, readonly string[]>> = {
+  // 03/11/2026 · análise do app na Meta: o revisor entra na organização
+  // Hiperbold Company e precisa ver Conexões › Redes sociais
+  // (hiperbold/analise-do-app-meta.md). Sai quando a função for liberada.
+  "conexao-redes-sociais": ["d500642e-ccde-46e6-90bd-94868f35c11a"],
+};
+
+/** A organização vê a função oculta antes dos outros. */
+export function acessoAntecipado(id: FuncaoId, organizationId: string | null | undefined): boolean {
+  return Boolean(organizationId && ACESSO_ANTECIPADO[id]?.includes(organizationId));
+}
+
 /** Caminhos de tela das funções ocultas. */
 export function rotasOcultas(): string[] {
   return FUNCOES_OCULTAS.flatMap((id) => [...FUNCOES[id].rotas]);

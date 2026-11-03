@@ -11,6 +11,7 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
+import { acessoAntecipado } from "@/lib/hiperbold/funcoes-ocultas";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Conexões" };
@@ -60,7 +61,7 @@ export default async function ConnectionsPage() {
         pareamentoQr={await pareamentoQrDisponivel()}
         // A aba de redes sociais segue oculta para o cliente até a Meta aprovar o app;
         // o administrador da plataforma a vê para testar com a conta real.
-        adminDaPlataforma={user.is_platform_admin}
+        redesSociaisLiberadas={user.is_platform_admin || acessoAntecipado("conexao-redes-sociais", activeOrg.orgId)}
       />
     </div>
   );

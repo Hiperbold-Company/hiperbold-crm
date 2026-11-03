@@ -48,7 +48,7 @@ export function ConexoesShell({
   graphParceiro = null,
   podeEditarProtecao,
   pareamentoQr = false,
-  adminDaPlataforma = false,
+  redesSociaisLiberadas = false,
 }: {
   /** Sem uso na Hiperbold (sem canal por QR); mantido para a página do autor não mudar. */
   wahaConfigured: boolean;
@@ -77,12 +77,12 @@ export function ConexoesShell({
    */
   pareamentoQr?: boolean;
   /**
-   * Quem vê é administrador da plataforma (calculado no servidor). Ele enxerga a
-   * aba "Redes sociais" mesmo com a função oculta, para testar a conexão com a
-   * Meta antes de o app ser aprovado. Para o cliente nada muda: a função segue
-   * oculta em `lib/hiperbold/funcoes-ocultas.ts`.
+   * A aba "Redes sociais" aparece mesmo com a função oculta (calculado no
+   * servidor): para o administrador da plataforma e para as organizações com
+   * acesso antecipado, como a do revisor da Meta. Para o resto dos clientes
+   * nada muda: a função segue oculta em `lib/hiperbold/funcoes-ocultas.ts`.
    */
-  adminDaPlataforma?: boolean;
+  redesSociaisLiberadas?: boolean;
 }) {
   const t = useT();
   const router = useRouter();
@@ -93,7 +93,7 @@ export function ConexoesShell({
   const mostrar = {
     parceiro: !funcaoOculta("conexao-provedor-parceiro"),
     telefonia: !funcaoOculta("conexao-telefone"),
-    sociais: !funcaoOculta("conexao-redes-sociais") || adminDaPlataforma,
+    sociais: !funcaoOculta("conexao-redes-sociais") || redesSociaisLiberadas,
     voz: !funcaoOculta("voz-whatsapp"),
   };
   const aba =
