@@ -38,6 +38,7 @@ import { createSupabaseFollowupGateDb } from "@/lib/followup/agent-followup-gate
 import { enviarTextoFixoPendente } from "@/lib/followup/enviar-texto-fixo";
 import { encerrarRoteirosVencidos } from "@/lib/followup/atendimento";
 import { createSupabaseSilenceSweepDb, runSilenceSweep } from "@/lib/followup/silence-sweep";
+import { createSupabaseSemRespostaDb, varrerSemResposta } from "@/lib/automacoes/varredura-sem-resposta";
 import { autorizaCron } from "@/lib/auth/cron-auth";
 import { contaBloqueadaParaProduzir, motivoDeNaoProduzir } from "@/lib/billing/assinatura/pode-produzir";
 import { encerrarEnrollmentPorAssinaturaSuspensa } from "@/lib/followup/encerrar-por-assinatura-suspensa";
@@ -169,6 +170,25 @@ async function handle(req: NextRequest): Promise<Response> {
     // resultado de runFollowupTick, que rodou (e foi auditado) antes disto.
     const detail = err instanceof Error ? err.message : String(err);
     logger.error("[followup-flow-worker.cron] runSilenceSweep threw", { error: detail, requestId });
+  }
+
+  // Automações com gatilho "Contato sem resposta" — a mesma ideia do silêncio,
+  // na raia das automações (`fn_automacao_iniciar`, idempotente pela origem
+  // determinística). Audita só quando iniciou alguma execução.
+  try {
+    const semResposta = await varrerSemResposta(createSupabaseSemRespostaDb(admin), new Date());
+    if (semResposta.iniciadas > 0) {
+      void audit({
+        action: "automacao.sem_resposta_sweep_run",
+        organizationId: null,
+        bypassedRls: true,
+        metadata: { ...semResposta },
+        requestId,
+      });
+    }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    logger.error("[followup-flow-worker.cron] varrerSemResposta threw", { error: detail, requestId });
   }
 
   // Roteiro de atendimento com o prazo vencido (0397). Audita só quando houve

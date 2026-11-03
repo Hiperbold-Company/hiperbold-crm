@@ -23,7 +23,7 @@ import { avisoDeEventoMorto, IA_QUE_NAO_RESPONDEU } from '@/lib/event-log/aviso-
 import { TIPOS_DERIVAVEIS, DERIVACAO_TERMINADA } from '@/lib/messaging/media/derivable';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
 import { TETO_DE_TURNOS_POR_CONTATO_POR_HORA_PADRAO } from '@/lib/ai/elegibilidade/laco-de-robos';
-import { automacaoEsperaRespostaNaConversa } from '@/lib/automacoes/uma-voz';
+import { automacaoEsperaRespostaNaConversa, decisaoDoGatilhoDeMensagem } from '@/lib/automacoes/uma-voz';
 import { deveCederTurnoAoRetorno } from '@/lib/followup/ceder-turno-ao-retorno';
 
 const DRAIN_CONSUMER = 'agent-engine';
@@ -385,6 +385,28 @@ async function processEvent(
       contact_id: p.contact_id,
     });
     return 'processado';
+  }
+
+  // UMA VOZ no início: esta mensagem iniciou uma automação com bloco de
+  // conversa (gatilho "mensagem recebida")? A automação responde; o LLM não.
+  // Enquanto o handler dos gatilhos ainda não decidiu e há automação armada,
+  // o turno espera alguns segundos (teto em `uma-voz.ts`, depois segue).
+  const gatilhoDeMensagem = await decisaoDoGatilhoDeMensagem(pool, {
+    organizationId: event.organization_id,
+    messageId: p.inbound_message_id,
+  });
+  if (gatilhoDeMensagem === 'ceder') {
+    log.info('drain: turno cedido à automação iniciada por esta mensagem — inbound_turn pulado', {
+      event_id: event.id,
+      contact_id: p.contact_id,
+    });
+    return 'processado';
+  }
+  if (gatilhoDeMensagem === 'esperar') {
+    log.info('drain: esperando o gatilho de mensagem das automações — turno adiado', {
+      event_id: event.id,
+    });
+    return 'adiar';
   }
 
   // UMA VOZ: se o gatilho "cliente voltou" enrollaria neste inbound, o LLM

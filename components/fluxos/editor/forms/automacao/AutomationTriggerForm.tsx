@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   automacaoTriggerConfigSchema,
+  GATILHO_EM_BRANCO,
   GATILHO_PADRAO,
   type AutomacaoTrigger,
   type AutomacaoTriggerConfig,
@@ -23,14 +24,7 @@ import { Plus, Trash } from "@/lib/ui/icons";
 import { Campo, opcoesDeEtapa, Seletor, useFunis } from "./comum";
 
 function gatilhoEmBranco(kind: AutomacaoTriggerKind): AutomacaoTrigger {
-  switch (kind) {
-    case "manual":
-      return { kind };
-    case "lead_created":
-      return { kind };
-    case "stage_entered":
-      return { kind, stage_ids: [], via: "any" };
-  }
+  return structuredClone(GATILHO_EM_BRANCO[kind]) as AutomacaoTrigger;
 }
 
 /**

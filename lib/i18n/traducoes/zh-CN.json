@@ -5717,5 +5717,20 @@
   "Até responder": "直到回复",
   "Tempo em segundos": "以秒计时",
   "Até o contato responder": "直到联系人回复",
-  "Fazer pergunta": "提问"
+  "Fazer pergunta": "提问",
+  "Mensagem recebida": "收到消息",
+  "Aniversário do contato": "联系人生日",
+  "Data de um campo do negócio": "商机字段中的日期",
+  "Contato sem resposta": "联系人未回复",
+  "Caso aberto na Central": "在中心打开的案例",
+  "Qualquer mensagem": "任何消息",
+  "Contém a palavra ou frase": "包含该词或短语",
+  "É exatamente": "完全等于",
+  "Começa com": "开头是",
+  "Horário marcado": "已预约时间",
+  "Horário confirmado": "时间已确认",
+  "Horário remarcado": "时间已改期",
+  "Horário cancelado": "时间已取消",
+  "Contato compareceu": "联系人已到场",
+  "Contato faltou": "联系人缺席"
 }

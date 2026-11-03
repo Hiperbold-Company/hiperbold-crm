@@ -10,6 +10,8 @@ import type { NovaConditionCheck, QuestionValidation } from "@/lib/followup/grap
 
 import type {
   AutomacaoTriggerKind,
+  EventoDeAgendamento,
+  ModoDaPalavraChave,
   CrmAction,
   CrmActionType,
   FieldOp,
@@ -84,6 +86,31 @@ export const GATILHOS_DA_AUTOMACAO: Record<AutomacaoTriggerKind, string> = {
   manual: "Manual (iniciar para um contato)",
   lead_created: "Negócio criado",
   stage_entered: "Entrou na etapa",
+  message_received: "Mensagem recebida",
+  tag_added: "Tag adicionada",
+  appointment: "Agendamento",
+  birthday: "Aniversário do contato",
+  date_field: "Data de um campo do negócio",
+  no_reply: "Contato sem resposta",
+  case_opened: "Caso aberto na Central",
+};
+
+/** Como a palavra-chave da mensagem recebida é comparada. */
+export const MODOS_DA_PALAVRA_CHAVE_ROTULOS: Record<ModoDaPalavraChave, string> = {
+  any: "Qualquer mensagem",
+  contains: "Contém a palavra ou frase",
+  equals: "É exatamente",
+  starts_with: "Começa com",
+};
+
+/** Os acontecimentos da agenda do gatilho "Agendamento". */
+export const EVENTOS_DE_AGENDAMENTO_ROTULOS: Record<EventoDeAgendamento, string> = {
+  created: "Horário marcado",
+  confirmed: "Horário confirmado",
+  rescheduled: "Horário remarcado",
+  cancelled: "Horário cancelado",
+  completed: "Contato compareceu",
+  no_show: "Contato faltou",
 };
 
 export const REGRAS_NOVAS: Record<NovaConditionCheck["kind"], string> = {
@@ -287,6 +314,8 @@ export const MAPAS_DA_AUTOMACAO: ReadonlyArray<Record<string, string>> = [
   ACOES_DE_CRM,
   OPERACOES_DE_CAMPO,
   GATILHOS_DA_AUTOMACAO,
+  MODOS_DA_PALAVRA_CHAVE_ROTULOS,
+  EVENTOS_DE_AGENDAMENTO_ROTULOS,
   REGRAS_NOVAS,
   VIAS_DA_ETAPA,
   POLITICAS_DE_REENTRADA,

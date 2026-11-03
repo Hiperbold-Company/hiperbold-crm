@@ -175,6 +175,25 @@ export const regrasNovasDeCondicao = {
 // Gatilhos (no nó `trigger` de uma automação)
 // ---------------------------------------------------------------------------
 
+/** Como a palavra-chave da mensagem recebida é comparada. */
+export const MODOS_DA_PALAVRA_CHAVE = ["any", "contains", "equals", "starts_with"] as const;
+export type ModoDaPalavraChave = (typeof MODOS_DA_PALAVRA_CHAVE)[number];
+
+/** Os acontecimentos da agenda que iniciam uma automação (`appointment.<evento>`). */
+export const EVENTOS_DE_AGENDAMENTO = ["created", "confirmed", "rescheduled", "cancelled", "completed", "no_show"] as const;
+export type EventoDeAgendamento = (typeof EVENTOS_DE_AGENDAMENTO)[number];
+
+/**
+ * O campo de DATA do negócio que o gatilho `date_field` lê: a previsão de
+ * fechamento, ou a chave de um campo personalizado do funil
+ * (`pipelines.settings.fields`). O mesmo `fieldRef` dos blocos, recortado.
+ */
+export const campoDeDataDoNegocioSchema = z.discriminatedUnion("scope", [
+  z.strictObject({ scope: z.literal("lead"), key: z.literal("expected_close_date") }),
+  z.strictObject({ scope: z.literal("lead_custom"), key: chaveDeCampo }),
+]);
+export type CampoDeDataDoNegocio = z.infer<typeof campoDeDataDoNegocioSchema>;
+
 export const automacaoTriggerSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("manual") }),
   z.strictObject({
@@ -190,6 +209,57 @@ export const automacaoTriggerSchema = z.discriminatedUnion("kind", [
     stage_ids: z.array(uuid).min(1).max(20),
     via: z.enum(["any", "created", "moved"]),
   }),
+  // ---- lote 3 ----
+  /**
+   * Mensagem recebida do contato. A palavra-chave é comparada sem acento e sem
+   * maiúsculas, por PALAVRA ou FRASE inteira (`contains`): "oi" não casa "oito"
+   * (ver `palavraChaveCasa` em `gatilhos.ts`). `keywords` só pode ficar vazia
+   * com `match: any`.
+   */
+  z
+    .strictObject({
+      kind: z.literal("message_received"),
+      match: z.enum(MODOS_DA_PALAVRA_CHAVE),
+      keywords: z.array(z.string().trim().min(1).max(100)).max(20),
+      /** Só mensagens que chegaram por estes números/canais (`channel_sessions.id`). */
+      channel_session_ids: z.array(uuid).max(20).optional(),
+      /** Só a primeira mensagem do contato naquela conversa. */
+      only_first_message: z.boolean().optional(),
+    })
+    .refine((g) => g.match === "any" || g.keywords.length > 0, {
+      message: "informe ao menos uma palavra-chave",
+      path: ["keywords"],
+    }),
+  z.strictObject({
+    kind: z.literal("tag_added"),
+    target: z.enum(["lead", "contact"]),
+    tags: z.array(z.string().trim().min(1).max(60)).min(1).max(20),
+  }),
+  z.strictObject({
+    kind: z.literal("appointment"),
+    events: z.array(z.enum(EVENTOS_DE_AGENDAMENTO)).min(1).max(6),
+  }),
+  /** No aniversário do contato (a varredura `contact-birthdays` emite `contact.birthday`). */
+  z.strictObject({ kind: z.literal("birthday") }),
+  /**
+   * Numa data guardada no negócio. `offset_days` é ASSINADO em relação à data:
+   * `-3` = três dias ANTES, `2` = dois dias DEPOIS, `0` = no dia. `time` é a
+   * hora local da organização a partir da qual a execução começa.
+   */
+  z.strictObject({
+    kind: z.literal("date_field"),
+    field: campoDeDataDoNegocioSchema,
+    offset_days: z.number().int().min(-365).max(365),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM"),
+  }),
+  /** O contato não respondeu à última mensagem enviada há `after_minutes`. */
+  z.strictObject({
+    kind: z.literal("no_reply"),
+    after_minutes: z.number().int().min(5).max(43_200),
+    only_if_last_was_outbound: z.literal(true),
+  }),
+  /** Caso aberto na Central (`ai.case_opened`). */
+  z.strictObject({ kind: z.literal("case_opened") }),
 ]);
 export type AutomacaoTrigger = z.infer<typeof automacaoTriggerSchema>;
 export type AutomacaoTriggerKind = AutomacaoTrigger["kind"];
@@ -213,6 +283,31 @@ export const GATILHO_TRAZ_CONTATO: Record<AutomacaoTriggerKind, boolean> = {
   manual: true,
   lead_created: true,
   stage_entered: true,
+  message_received: true,
+  tag_added: true,
+  appointment: true,
+  birthday: true,
+  date_field: true,
+  no_reply: true,
+  case_opened: true,
+};
+
+/**
+ * Config inicial de CADA gatilho (o editor usa ao trocar o tipo). Os que pedem
+ * escolha (etapa, tag, palavra-chave, campo) nascem incompletos de propósito:
+ * o schema recusa até a pessoa escolher.
+ */
+export const GATILHO_EM_BRANCO: { [K in AutomacaoTriggerKind]: Extract<AutomacaoTrigger, { kind: K }> } = {
+  manual: { kind: "manual" },
+  lead_created: { kind: "lead_created" },
+  stage_entered: { kind: "stage_entered", stage_ids: [], via: "any" },
+  message_received: { kind: "message_received", match: "any", keywords: [] },
+  tag_added: { kind: "tag_added", target: "lead", tags: [] },
+  appointment: { kind: "appointment", events: ["created"] },
+  birthday: { kind: "birthday" },
+  date_field: { kind: "date_field", field: { scope: "lead", key: "expected_close_date" }, offset_days: 0, time: "09:00" },
+  no_reply: { kind: "no_reply", after_minutes: 1440, only_if_last_was_outbound: true },
+  case_opened: { kind: "case_opened" },
 };
 
 /** Config inicial do gatilho de uma automação nova. */
