@@ -421,7 +421,7 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>{t("Cancelar este follow-up?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("O lead não receberá mais mensagens deste fluxo. Diferente de pausar, isto não pode ser desfeito.")}
+              {t("O contato não receberá mais mensagens deste fluxo. Diferente de pausar, isto não pode ser desfeito.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

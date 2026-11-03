@@ -82,7 +82,7 @@ export const OPERACOES_DE_CAMPO: Record<FieldOp["op"], string> = {
 
 export const GATILHOS_DA_AUTOMACAO: Record<AutomacaoTriggerKind, string> = {
   manual: "Manual (iniciar para um contato)",
-  lead_created: "Lead criado",
+  lead_created: "Negócio criado",
   stage_entered: "Entrou na etapa",
 };
 

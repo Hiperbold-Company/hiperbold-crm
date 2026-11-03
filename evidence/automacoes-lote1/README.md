@@ -14,13 +14,13 @@ CRM (tag "Facebook" no negócio + criar negócio no funil "Pós-venda") → Fim.
 | Imagem | O que mostra |
 |---|---|
 | `01-lista-vazia-ou-com-automacoes.png` | A porta: "Automações" no grupo CRM do menu leva à lista, com o botão "Nova automação". |
-| `02-gatilho-lead-criado.png` | Automação nova abre com Início → Fim; o Início escolhe o gatilho "Lead criado", "Qualquer funil", "Qualquer fonte de captação", e a regra de reentrada. A paleta vem agrupada (Início, CRM, Lógica, Controle). |
+| `02-gatilho-lead-criado.png` | Automação nova abre com Início → Fim; o Início escolhe o gatilho "Negócio criado", "Qualquer funil", "Qualquer fonte de captação", e a regra de reentrada. A paleta vem agrupada (Início, CRM, Lógica, Controle). |
 | `03-condicao-origem-contem-facebook.png` | Condição de campo escolhida na lista ("Origem", campo personalizado do funil), "contém", "facebook", com a frase da regra embaixo. |
 | `04-definir-campo-midia.png` | Operação de campo: "Mídia" = "Anúncio pago", com a ajuda das variáveis. |
 | `05-acoes-de-crm.png` | Duas ações em ordem: adicionar a tag "Facebook" no negócio e criar negócio no funil "Pós-venda" (etapa preenchida sozinha), e "Se uma ação falhar". |
 | `06-automacao-publicada.png` | Grafo organizado, publicado (status Ativo), sem erro em bloco; blocos de efeito com as saídas "Erro" e "Concluído". "Testar com um contato" fica habilitado. |
 | `07-execucoes.png` | Execuções da automação: o lead da Ana, concluído. |
-| `08-execucao-em-portugues.png` | A história da execução em português: "A automação começou — um lead foi criado", "Começou a executar as ações", "Ações executadas — Campos: midia", "Adicionar tags: feito; Criar negócio: negócio criado". Nenhum identificador cru (a spec mede). |
+| `08-execucao-em-portugues.png` | A história da execução em português: "A automação começou — um negócio foi criado", "Começou a executar as ações", "Ações executadas — Campos: midia", "Adicionar tags: feito; Criar negócio: negócio criado". Nenhum identificador cru (a spec mede). |
 | `09-negocio-criado-no-pos-venda.png` | O negócio novo da Ana no funil "Pós-venda". |
 
 O que a spec confere além das imagens (pela API e pelo banco local, só leitura):

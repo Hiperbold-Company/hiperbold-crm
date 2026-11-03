@@ -508,7 +508,7 @@ function cobrirRamos(
         node_id: node.id,
         code: 'missing_always_fallback',
         branch_id: branch.id,
-        message: `Nó "${node.id}" não tem a saída de escape: um lead que não se encaixar em nenhuma saída fica parado aqui.`,
+        message: `Nó "${node.id}" não tem a saída de escape: um negócio que não se encaixar em nenhuma saída fica parado aqui.`,
       });
       continue;
     }

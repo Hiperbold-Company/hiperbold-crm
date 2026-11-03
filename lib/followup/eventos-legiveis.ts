@@ -523,7 +523,7 @@ export function descreveEvento(
     case "automacao_iniciada": {
       const g = texto(p.gatilho);
       const porque =
-        g === "lead_created" ? "um lead foi criado" : g === "stage_entered" ? "o negócio entrou na etapa" : g === "manual" ? "alguém iniciou manualmente" : null;
+        g === "lead_created" ? "um negócio foi criado" : g === "stage_entered" ? "o negócio entrou na etapa" : g === "manual" ? "alguém iniciou manualmente" : null;
       return {
         titulo: p.reiniciada === true ? "A automação recomeçou" : "A automação começou",
         detalhe: porque,

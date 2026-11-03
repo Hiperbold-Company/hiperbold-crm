@@ -147,7 +147,7 @@ export async function enrollFollowupFlow(
       return {
         ok: false,
         code: "conflict",
-        message: "Este contato já está em um follow-up ativo (1 por lead na organização).",
+        message: "Este contato já está em um follow-up ativo (1 por contato na organização).",
         status: 409,
       };
     }

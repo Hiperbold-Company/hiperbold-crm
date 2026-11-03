@@ -2342,8 +2342,8 @@ export const DICIONARIO: Traducoes = {
   "O agente não voltará a falar com esta pessoa no horário combinado, e vai saber que você desmarcou.": {
     es: "El agente no volverá a hablar con esta persona en el horario acordado, y sabrá que cancelaste.",
   },
-  "O lead não receberá mais mensagens deste fluxo. Essa ação não pode ser desfeita.": {
-    es: "El lead no recibirá más mensajes de este flujo. Esta acción no se puede deshacer.",
+  "O contato não receberá mais mensagens deste fluxo. Essa ação não pode ser desfeita.": {
+    es: "El contacto no recibirá más mensajes de este flujo. Esta acción no se puede deshacer.",
   },
   "Aguardando resposta": { es: "Esperando respuesta" },
   "Pausado (atendimento humano)": { es: "Pausado (atención humana)" },
@@ -2572,7 +2572,7 @@ export const DICIONARIO: Traducoes = {
   "minutos.": { es: "minutos." },
   "Segmentos (tags, opcional)": { es: "Segmentos (tags, opcional)" },
   "ex: vip, carrinho-abandonado": { es: "Ej.: vip, carrito-abandonado" },
-  "Cancelar se o lead responder": { es: "Cancelar si el lead responde" },
+  "Cancelar se o contato responder": { es: "Cancelar si el contacto responde" },
   "Salvar gatilho": { es: "Guardar disparador" },
   "Fila de follow-ups": { es: "Cola de seguimientos" },
   "Fluxo removido": { es: "Flujo eliminado" },
@@ -2602,8 +2602,8 @@ export const DICIONARIO: Traducoes = {
     es: "El seguimiento se queda en el mismo paso y se reanuda a la hora que elijas.",
   },
   "Novo horário": { es: "Nuevo horario" },
-  "O lead não receberá mais mensagens deste fluxo. Diferente de pausar, isto não pode ser desfeito.": {
-    es: "El lead no recibirá más mensajes de este flujo. A diferencia de pausar, esto no se puede deshacer.",
+  "O contato não receberá mais mensagens deste fluxo. Diferente de pausar, isto não pode ser desfeito.": {
+    es: "El contacto no recibirá más mensajes de este flujo. A diferencia de pausar, esto no se puede deshacer.",
   },
   "Por onde seguir?": { es: "¿Por dónde seguir?" },
   "Este passo tem mais de um caminho no fluxo. Escolher por você seria decidir o rumo do atendimento sem perguntar.": {
@@ -8200,6 +8200,7 @@ export const DICIONARIO: Traducoes = {
   "Ex: Cliente desistiu por X motivo": { es: "Ej: El cliente desistió por X motivo" },
   "Confirmar": { es: "Confirmar" },
   "Lead criado": { es: "Lead creado" },
+  "Negócio criado": { es: "Negocio creado" },
   "O fluxo começa quando um negócio nasce: a primeira mensagem que abre o card, um formulário ou o cadastro manual. Negócios importados por planilha não entram. A entrada na fila leva poucos minutos, não é instantânea.":
     {
       es: "El flujo empieza cuando nace un negocio: el primer mensaje que abre la tarjeta, un formulario o el alta manual. Los negocios importados por planilla no entran. La entrada en la fila tarda unos minutos, no es instantánea.",
