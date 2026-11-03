@@ -5,7 +5,7 @@ Estado: **CONFIRMADO por código e testes**, não um simulador de mensagens.
 
 ## Comportamento
 
-- Administrador do tenant ou da plataforma configura cada canal em **Conexões › Configurar acesso da IA**.
+- Administrador ou gerente do tenant (desde 03/11/2026), ou administrador da plataforma, configura cada canal em **Conexões › Configurar acesso da IA**.
 - Novos canais criados por QR, onboarding, conexão oficial ou provedor parceiro nascem em teste com lista vazia. Reconexões e canais anteriores não são alterados.
 - Números são cadastrados com DDI antes de existir contato/conversa. A lista é normalizada, deduplicada e reconhece a variante brasileira com/sem nono dígito.
 - Em teste, somente a lista do canal autoriza respostas automáticas. Formulário, campanha, automação ou devolução ao automático NÃO autorizam quem está fora dela.

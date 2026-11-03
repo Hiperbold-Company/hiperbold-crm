@@ -33,6 +33,7 @@ import {
   savePartnerSession,
   validatePartnerCredentials,
 } from "@/lib/channels/connect";
+import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { basePublicaDaInstalacao } from "@/lib/webhooks/url-publica";
@@ -61,9 +62,9 @@ function urlDoWebhook(req: NextRequest, token: string): string {
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const requestId = randomUUID();
-  // Conectar um canal move dinheiro e expõe a conta da empresa: é decisão de
-  // dono, não de quem atende.
-  const authz = await requireRole("admin", { requestId, resource: "channels_partner" });
+  // Conectar um canal move dinheiro e expõe a conta da empresa: administrador ou
+  // gerente (decisão do dono do produto, 03/11/2026), não quem atende.
+  const authz = await requireRole("manager", { requestId, resource: "channels_partner" });
   if (!authz.ok) return authz.response;
   const orgId = authz.org.orgId;
 
@@ -95,9 +96,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  // Conectar um canal move dinheiro e expõe a conta da empresa: é decisão de
-  // dono, não de quem atende.
-  const authz = await requireRole("admin", { requestId, resource: "channels_partner" });
+  // Conectar um canal move dinheiro e expõe a conta da empresa: administrador ou
+  // gerente (decisão do dono do produto, 03/11/2026), não quem atende.
+  const authz = await requireRole("manager", { requestId, resource: "channels_partner" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const orgId = authz.org.orgId;
@@ -187,6 +188,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     return falhaInterna("internal_error", error, { requestId });
   }
+
+  // Desde que o gerente também conecta (03/11/2026), a troca de credencial do
+  // canal parceiro precisa deixar trilha: quem fez e quando.
+  void audit({
+    action: "channel.connected",
+    actorUserId: authz.user.id,
+    organizationId: orgId,
+    resourceType: "channel_session",
+    resourceId: existente?.id ?? null,
+    requestId,
+    metadata: { canal: "parceiro", reconexao: Boolean(existente) },
+  });
 
   return ok(
     {

@@ -27,7 +27,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * ─── Quem pode ──────────────────────────────────────────────────────────────
  *
  * Ler (`agent`): é a lista que o seletor do inbox usa, e quem atende precisa
- * dela. Sincronizar e criar (`admin`): escreve na conta da empresa na
+ * dela. Sincronizar e criar (`manager`, decisão do dono do produto de 03/11/2026): escreve na conta da empresa na
  * plataforma, como a gestão de modelos do canal oficial. Antes daqui a rota só
  * pedia login — qualquer membro, inclusive `viewer`, criava modelo, e o gate de
  * MFA (que mora em `requireRole`) não era consultado.
@@ -92,7 +92,7 @@ interface Contexto {
  */
 async function contexto(
   requestId: string,
-  papel: "agent" | "admin",
+  papel: "agent" | "manager",
 ): Promise<{ ok: true; ctx: Contexto } | { ok: false; res: Response }> {
   // O papel ANTES da conexão: o 404 de "sem conexão" diria a quem não pode
   // nada se a organização tem ou não o canal.
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const r = await contexto(requestId, "admin");
+  const r = await contexto(requestId, "manager");
   if (!r.ok) return r.res;
   const t = (texto: string) => traduzir(texto, r.ctx.idioma);
 

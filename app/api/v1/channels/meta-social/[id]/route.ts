@@ -29,7 +29,7 @@ export async function DELETE(_req: Request, ctx: RouteCtx): Promise<Response> {
   const requestId = randomUUID();
   const support = await requireSupportWrite();
   if (support) return support;
-  const auth = await requireRole("admin", { requestId, resource: "social_connections" });
+  const auth = await requireRole("manager", { requestId, resource: "social_connections" });
   if (!auth.ok) return auth.response;
   if (await mfaEmDivida())
     return fail("mfa_required", "Confirme a verificação em duas etapas.", 403, { requestId });

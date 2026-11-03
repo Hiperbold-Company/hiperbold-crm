@@ -61,7 +61,7 @@ function failure(error: unknown, requestId: string) {
 }
 export async function GET() {
   const requestId = randomUUID();
-  const auth = await requireRole("admin", { requestId, resource: "social_connections" });
+  const auth = await requireRole("manager", { requestId, resource: "social_connections" });
   if (!auth.ok) return auth.response;
   try {
     const db = createAdminClient();
@@ -96,7 +96,7 @@ export async function POST(req: Request) {
   const requestId = randomUUID();
   const support = await requireSupportWrite();
   if (support) return support;
-  const auth = await requireRole("admin", { requestId, resource: "social_connections" });
+  const auth = await requireRole("manager", { requestId, resource: "social_connections" });
   if (!auth.ok) return auth.response;
   if (await mfaEmDivida())
     return fail("mfa_required", "Confirme a verificação em duas etapas.", 403, {

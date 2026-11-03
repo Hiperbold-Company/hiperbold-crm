@@ -25,7 +25,7 @@ export const FRASES_DOS_MOTIVOS = {
   conexao_cancelada:
     "A conexão foi cancelada antes de terminar. Clique em Conectar para tentar de novo.",
   sem_permissao:
-    "Só quem administra a empresa no sistema pode conectar contas. Peça a um administrador para conectar.",
+    "Só um administrador ou gerente da empresa no sistema pode conectar contas. Peça a um deles para conectar.",
   conta_em_outra_organizacao:
     "Esta conta já está conectada em outra empresa neste sistema. Desconecte lá antes de conectar aqui.",
   nenhuma_pagina:

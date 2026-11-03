@@ -84,10 +84,10 @@ describe("ligado", () => {
     h.ligado.mockReturnValue(true);
   });
 
-  it("GET exige admin e diz que as credenciais existem, nunca quais são", async () => {
+  it("GET exige gerente (03/11/2026) e diz que as credenciais existem, nunca quais são", async () => {
     const r = await GET(req("GET"));
     expect(r.status).toBe(200);
-    expect(h.role).toHaveBeenCalledWith("admin", expect.anything());
+    expect(h.role).toHaveBeenCalledWith("manager", expect.anything());
     const texto = JSON.stringify(await r.json());
     expect(texto).not.toContain("whsec_do_painel");
     expect(texto).not.toContain("cifrado");

@@ -61,8 +61,9 @@ function naoExiste(requestId: string): NextResponse {
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const requestId = randomUUID();
   if (!canalGraphParceiroLigado()) return naoExiste(requestId);
-  // Conectar um canal move dinheiro e expõe a conta da empresa: decisão de dono.
-  const authz = await requireRole("admin", { requestId, resource: "channels_graph_partner" });
+  // Conectar um canal move dinheiro e expõe a conta da empresa: administrador ou gerente
+  // (decisão do dono do produto, 03/11/2026); atendente e leitor não.
+  const authz = await requireRole("manager", { requestId, resource: "channels_graph_partner" });
   if (!authz.ok) return authz.response;
 
   const admin = createAdminClient();
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const requestId = randomUUID();
   if (!canalGraphParceiroLigado()) return naoExiste(requestId);
-  const authz = await requireRole("admin", { requestId, resource: "channels_graph_partner" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_graph_partner" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const orgId = authz.org.orgId;
@@ -213,7 +214,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
 
   const requestId = randomUUID();
   if (!canalGraphParceiroLigado()) return naoExiste(requestId);
-  const authz = await requireRole("admin", { requestId, resource: "channels_graph_partner" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_graph_partner" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const orgId = authz.org.orgId;

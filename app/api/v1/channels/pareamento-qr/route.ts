@@ -7,7 +7,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * cita o provider (o `lint:channels` reprova); quem está do outro lado, as chaves
  * da instalação e a ordem dos passos moram em `lib/channels/pareamento-qr`.
  *
- * Exige admin da organização da sessão. Sem o servidor e o token de
+ * Exige administrador ou gerente da organização da sessão (decisão do dono do produto, 03/11/2026). Sem o servidor e o token de
  * administrador configurados na instalação, o GET diz `disponivel: false` e o
  * POST responde 404: o recurso não existe, e tudo segue como sempre.
  *
@@ -42,7 +42,7 @@ const iniciarSchema = z.object({
 
 export async function GET(): Promise<NextResponse> {
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "channels_pareamento_qr" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_pareamento_qr" });
   if (!authz.ok) return authz.response;
 
   if (!(await pareamentoQrDisponivel())) {
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "channels_pareamento_qr" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_pareamento_qr" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 

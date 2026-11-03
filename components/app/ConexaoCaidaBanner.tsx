@@ -45,8 +45,9 @@ export function ConexaoCaidaBanner({ caidas }: { caidas: ConexaoCaida[] }) {
   const { user, activeOrg } = useAuth();
   if (caidas.length === 0) return null;
 
+  // Mesmo piso da tela de Conexões: administrador ou gerente (decisão do dono do produto, 03/11/2026).
   const podeAbrirConexoes = (user.is_platform_admin && !user.support)
-    || (activeOrg !== null && ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin);
+    || (activeOrg !== null && ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager);
   const uma = caidas.length === 1 ? caidas[0] : null;
   const precisaEscanear = caidas.some((c) => c.status === "SCAN_QR_CODE");
 
@@ -80,7 +81,7 @@ export function ConexaoCaidaBanner({ caidas }: { caidas: ConexaoCaida[] }) {
         className="rounded-md border border-red-400 bg-white/70 px-3 py-1 font-medium text-red-950 hover:bg-white dark:border-red-700 dark:bg-red-900/40 dark:text-red-50 dark:hover:bg-red-900/70"
       >
         {precisaEscanear ? t("Escanear o QR") : t("Ver conexões")}
-      </Link> : <span>{t("Peça a quem administra para revisar a conexão do WhatsApp.")}</span>}
+      </Link> : <span>{t("Peça a um administrador ou gerente para revisar a conexão do WhatsApp.")}</span>}
     </div>
   );
 }
