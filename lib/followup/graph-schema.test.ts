@@ -41,6 +41,8 @@ describe('graph-schema', () => {
         'end',
         'crm_action',
         'field_op',
+        'message',
+        'question',
       ]);
     });
 

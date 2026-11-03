@@ -1,4 +1,5 @@
 import { campoSoLeitura } from '@/lib/automacoes/campos';
+import { GATILHO_TRAZ_CONTATO } from '@/lib/automacoes/schemas';
 import { nomeDoCampo } from '@/lib/automacoes/vocabulario';
 import type { FlowGraph, FlowEdge, FlowNode, NodeType } from './graph-schema';
 import type { FollowupFlowSurface } from './api-schemas';
@@ -47,6 +48,8 @@ export const PUBLISH_ERROR_CODES = [
   'regra_de_automacao',
   'campo_so_leitura',
   'espera_imune_na_automacao',
+  'espera_so_na_automacao',
+  'mensagem_sem_contato',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -179,7 +182,7 @@ function validarSuperficie(
             ? `A caixa "${n.label}" não é de roteiro de atendimento — use Pergunta, Skill e Fim.`
             : surface === 'automacao'
               ? `A caixa "${n.label}" não roda numa automação.`
-              : n.type === 'crm_action' || n.type === 'field_op'
+              : n.type === 'crm_action' || n.type === 'field_op' || n.type === 'message' || n.type === 'question'
                 ? `A caixa "${n.label}" é de automação e não roda num follow-up.`
                 : `A caixa "${n.label}" é de roteiro de atendimento e não roda num follow-up.`,
       });
@@ -200,6 +203,15 @@ function validarSuperficie(
           }
         }
       }
+      // Pergunta e mensagem gravam a resposta num campo: o mesmo limite da
+      // operação de campo (telefone, e-mail, etapa... não se escrevem).
+      if ((n.type === 'message' || n.type === 'question') && n.config.save_to && campoSoLeitura(n.config.save_to)) {
+        errors.push({
+          node_id: n.id,
+          code: 'campo_so_leitura',
+          message: `"${n.label}": ${nomeDoCampo(n.config.save_to)} não pode ser alterado por automação.`,
+        });
+      }
       // Espera "imune à resposta" deixa a execução em `dormente`, fora da vaga
       // de automação do contato (índice e trava da 0986): duas execuções da
       // mesma automação conviveriam. Na automação a espera não ouve resposta.
@@ -208,6 +220,34 @@ function validarSuperficie(
           node_id: n.id,
           code: 'espera_imune_na_automacao',
           message: `"${n.label}": na automação a espera não tem a opção "imune à resposta".`,
+        });
+      }
+    }
+  }
+  // Espera em segundos e "até responder" são da automação: o motor dos
+  // follow-ups não lê resposta assim nem tem o relógio para segundos.
+  if (surface !== 'automacao') {
+    for (const n of [...graph.nodes].sort(byId)) {
+      if (n.type === 'wait' && (n.config.mode === 'delay' || n.config.mode === 'until_reply')) {
+        errors.push({
+          node_id: n.id,
+          code: 'espera_so_na_automacao',
+          message: `"${n.label}": espera em segundos e "até responder" só existem nas automações.`,
+        });
+      }
+    }
+  }
+  if (surface === 'automacao') {
+    const conversa = graph.nodes.filter((n) => n.type === 'message' || n.type === 'question');
+    const gatilhos = graph.nodes.flatMap((n) =>
+      n.type === 'trigger' && 'triggers' in n.config ? n.config.triggers : [],
+    );
+    if (conversa.length > 0 && gatilhos.some((g) => !GATILHO_TRAZ_CONTATO[g.kind])) {
+      for (const n of [...conversa].sort(byId)) {
+        errors.push({
+          node_id: n.id,
+          code: 'mensagem_sem_contato',
+          message: `"${n.label}": um dos gatilhos não traz contato, e a mensagem precisa de alguém para receber.`,
         });
       }
     }
@@ -725,6 +765,36 @@ export function validateFlowForPublish(
 
   for (const node of [...nodes].sort(byId)) {
     if (node.type === 'condition') conferirRegras(node, contexto, errors);
+  }
+
+  // Blocos de conversa: cada OPÇÃO da mensagem leva a algum lugar (a escolha
+  // do contato não pode cair no escape), e a pergunta / "até responder" têm o
+  // caminho de quem respondeu. "Sem resposta", "Resposta inválida" e "Erro"
+  // soltos seguem pela saída comum — como o "Erro" dos blocos de CRM.
+  for (const node of [...nodes].sort(byId)) {
+    const outgoing = outEdges.get(node.id) ?? [];
+    const ligado = (id: string) => outgoing.some((e) => branchIdForCondition(node, e.condition) === id);
+    if (node.type === 'message' && node.config.options) {
+      for (const item of node.config.options.items) {
+        if (ligado(item.id)) continue;
+        errors.push({
+          node_id: node.id,
+          code: 'missing_branch_edge',
+          branch_id: item.id,
+          message: `Nó "${node.id}": a opção "${item.label}" não está ligada a nada.`,
+        });
+      }
+    }
+    if (node.type === 'question' || (node.type === 'wait' && node.config.mode === 'until_reply')) {
+      if (!ligado('else')) {
+        errors.push({
+          node_id: node.id,
+          code: 'missing_always_fallback',
+          branch_id: 'else',
+          message: `Nó "${node.id}": a saída "Respondeu" não está ligada a nada.`,
+        });
+      }
+    }
   }
 
   for (const node of [...nodes].sort(byId)) {

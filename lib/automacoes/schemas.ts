@@ -203,6 +203,18 @@ export const automacaoTriggerConfigSchema = z.strictObject({
 });
 export type AutomacaoTriggerConfig = z.infer<typeof automacaoTriggerConfigSchema>;
 
+/**
+ * O gatilho traz um CONTATO para a execução? Os blocos de mensagem e pergunta
+ * precisam dele (é a quem se escreve). Hoje todos trazem — a execução nasce
+ * sempre de um contato (`fn_automacao_iniciar`) —, e um gatilho novo sem
+ * contato tem de se declarar aqui para o publish recusar a mensagem.
+ */
+export const GATILHO_TRAZ_CONTATO: Record<AutomacaoTriggerKind, boolean> = {
+  manual: true,
+  lead_created: true,
+  stage_entered: true,
+};
+
 /** Config inicial do gatilho de uma automação nova. */
 export const GATILHO_PADRAO: AutomacaoTriggerConfig = {
   triggers: [{ kind: "manual" }],

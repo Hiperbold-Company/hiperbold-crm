@@ -23,6 +23,7 @@ import { avisoDeEventoMorto, IA_QUE_NAO_RESPONDEU } from '@/lib/event-log/aviso-
 import { TIPOS_DERIVAVEIS, DERIVACAO_TERMINADA } from '@/lib/messaging/media/derivable';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
 import { TETO_DE_TURNOS_POR_CONTATO_POR_HORA_PADRAO } from '@/lib/ai/elegibilidade/laco-de-robos';
+import { automacaoEsperaRespostaDoContato } from '@/lib/automacoes/uma-voz';
 import { deveCederTurnoAoRetorno } from '@/lib/followup/ceder-turno-ao-retorno';
 
 const DRAIN_CONSUMER = 'agent-engine';
@@ -365,6 +366,21 @@ async function processEvent(
       event_id: event.id,
       inbound_message_id: p.inbound_message_id,
       ultima_inbound_id: ultimaInbound[0].id,
+    });
+    return 'processado';
+  }
+
+  // UMA VOZ (automações): uma execução esperando a resposta deste contato num
+  // bloco de mensagem/pergunta fala por ele — o LLM não responde por cima.
+  if (
+    await automacaoEsperaRespostaDoContato(pool, {
+      organizationId: event.organization_id,
+      contactId: p.contact_id,
+    })
+  ) {
+    log.info('drain: turno cedido à automação que espera a resposta — inbound_turn pulado', {
+      event_id: event.id,
+      contact_id: p.contact_id,
     });
     return 'processado';
   }

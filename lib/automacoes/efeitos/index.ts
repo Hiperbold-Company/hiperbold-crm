@@ -39,13 +39,14 @@ import { lerCampo } from "../condicoes";
 import type { FatosDaAutomacao } from "../fatos";
 import type { CrmAction, FieldOp } from "../schemas";
 import { renderizar } from "../template-vars";
+import { executarConversa } from "./conversa";
 
 /** Evento que avisa a equipe (push) — consumido por `lib/notifications/push.handler.ts`. */
 export const EVENTO_DE_AVISO_DA_AUTOMACAO = "automacao.aviso";
 
-type Passo = { ok: boolean; erro?: string; vars?: Record<string, unknown>; detalhe: Record<string, unknown> };
+export type Passo = { ok: boolean; erro?: string; vars?: Record<string, unknown>; detalhe: Record<string, unknown> };
 
-interface Contexto {
+export interface Contexto {
   admin: SupabaseClient;
   org: string;
   pointerId: string;
@@ -298,7 +299,12 @@ const TIPO_PADRAO: Partial<Record<string, Pick<CustomFieldDef, "type">>> = {
 
 /** Campos padrão que a operação de campo NÃO escreve: têm bloco próprio (etapa, dono) ou são do sistema. */
 
-async function executarOperacoes(c: Contexto, ops: FieldOp[]): Promise<Passo> {
+/**
+ * `literal`: o valor é a RESPOSTA do contato, gravada como veio — nunca
+ * renderizada como template (um `{{...}}` digitado pelo contato não lê campo
+ * nenhum).
+ */
+export async function executarOperacoes(c: Contexto, ops: FieldOp[], literal = false): Promise<Passo> {
   const patchLead: Record<string, unknown> = {};
   const customLead: Record<string, unknown> = {};
   const patchContato: Record<string, unknown> = {};
@@ -320,7 +326,7 @@ async function executarOperacoes(c: Contexto, ops: FieldOp[]): Promise<Passo> {
     if (campoSoLeitura(alvo)) {
       return { ok: false, erro: `valor_invalido:${alvo.key}`, detalhe: { tipo: "field_op", campo: alvo.key } };
     }
-    const texto = op.value ? renderizar(op.value, c.fatos, c.agora) : "";
+    const texto = op.value ? (literal ? op.value : renderizar(op.value, c.fatos, c.agora)) : "";
     const atual =
       alvo.scope === "lead_custom" && alvo.key in customLead
         ? customLead[alvo.key]
@@ -411,6 +417,9 @@ export function criarExecutorDeEfeitos(
         return { desfecho: { ok: false, erro: "organizacao_bloqueada" }, detalhes: [{ tipo: node.type }] };
       }
       const c = contextoDe(admin, pedido, clock());
+      if (pedido.acao && (node.type === "message" || node.type === "question" || node.type === "wait")) {
+        return executarConversa(c, node, pedido.acao, pedido.chave, (ops) => executarOperacoes(c, ops, true));
+      }
       if (node.type === "field_op") {
         try {
           const r = await executarOperacoes(c, node.config.ops);

@@ -118,15 +118,16 @@ async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps
     const texto = typeof msg?.body === "string" ? msg.body.trim() : "";
     if (!texto) continue;
     const enviada = typeof msg?.sent_at === "string" ? msg.sent_at : "";
-    if (enviada && !inboundEhDestaPergunta(enviada, enrollment.updated_at)) continue;
     if (enrollment.lane === "automacao") {
+      if (!enviada) continue;
       // Automação esperando resposta (mensagem com opções, pergunta, "até
       // responder"): não aplica o texto aqui, sem claim. Acorda a execução
       // (`next_eval_at = agora`) e o `runFollowupTick` logo abaixo, neste mesmo
       // tick, a reivindica e lê a resposta (com o id da opção tocada).
-      if (await acordarAutomacaoEmEspera(admin, enrollment)) n++;
+      if (await acordarAutomacaoEmEspera(admin, enrollment, enviada)) n++;
       continue;
     }
+    if (enviada && !inboundEhDestaPergunta(enviada, enrollment.updated_at)) continue;
     await aplicarRespostaInbound(deps, enrollment, texto);
     n++;
   }
@@ -134,16 +135,35 @@ async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps
 }
 
 /**
- * Antecipa o próximo passo de uma automação em `waiting_reply`. Só mexe em
- * `next_eval_at`, e só se ainda estiver no futuro: o passo seguinte grava
- * `updated_at`, e é isso que impede o mesmo inbound de acordá-la de novo.
+ * Antecipa o próximo passo de uma automação em `waiting_reply` quando o
+ * contato escreveu DEPOIS que ela estacionou.
+ *
+ * A régua é o `created_at` do último `wait_started` do nó atual, e não
+ * `updated_at`: `fn_followup_patch` não regrava `updated_at`, então com ele o
+ * mesmo inbound antigo acordaria a execução em todo tick. Cada nova espera (a
+ * nova tentativa depois de uma resposta inválida) grava um `wait_started` novo,
+ * e o inbound que já foi lido deixa de acordá-la.
  */
 export async function acordarAutomacaoEmEspera(
   admin: SupabaseClient,
-  enrollment: Pick<EnrollmentRow, "id" | "organization_id" | "next_eval_at">,
+  enrollment: Pick<EnrollmentRow, "id" | "organization_id" | "next_eval_at" | "current_node_id">,
+  inboundEnviadoEm: string,
   agora: Date = new Date(),
 ): Promise<boolean> {
   const agoraIso = agora.toISOString();
+  const { data: espera, error: esperaErr } = await admin
+    .from("followup_enrollment_events")
+    .select("created_at")
+    .eq("organization_id", enrollment.organization_id)
+    .eq("enrollment_id", enrollment.id)
+    .eq("node_id", enrollment.current_node_id)
+    .eq("event_type", "wait_started")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (esperaErr) throw new Error(esperaErr.message);
+  const estacionou = (espera as { created_at?: string } | null)?.created_at;
+  if (!estacionou || Date.parse(inboundEnviadoEm) < Date.parse(estacionou)) return false;
   if (enrollment.next_eval_at && enrollment.next_eval_at <= agoraIso) return true;
   const { error } = await admin
     .from("followup_enrollments")
