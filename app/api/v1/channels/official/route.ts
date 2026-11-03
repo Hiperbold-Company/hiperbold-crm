@@ -120,7 +120,7 @@ async function tokenDeVerificacaoParaATela(): Promise<{
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "channels_official" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_official" });
   if (!authz.ok) return authz.response;
   const orgId = authz.org.orgId;
 
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "channels_official" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_official" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const orgId = authz.org.orgId;

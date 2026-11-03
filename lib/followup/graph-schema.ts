@@ -39,6 +39,10 @@ export const NODE_TYPES = [
   // Blocos de CONVERSA das automações (lote 2): mensagem (com botões ou lista) e pergunta.
   'message',
   'question',
+  // Blocos do INSTAGRAM (só automação cujo gatilho é "Comentário no Instagram").
+  'instagram_private_reply',
+  'instagram_public_reply',
+  'instagram_check_follow',
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
@@ -90,6 +94,16 @@ export const ERROR_BRANCH_ID = 'erro';
  * (`messageOptionIdSchema`).
  */
 export const INVALID_REPLY_BRANCH_ID = 'invalida';
+/**
+ * Saídas dos blocos do Instagram. Fora de `RESERVED_BRANCH_IDS` pelo mesmo
+ * motivo de `ERROR_BRANCH_ID`: estes blocos não têm ramo declarado pelo usuário.
+ * "Enviada" é a saída comum (`always`); "Não deu para saber" também, no
+ * "Confere se segue".
+ */
+export const JA_RESPONDIDO_BRANCH_ID = 'ja_respondido';
+export const PRAZO_VENCIDO_BRANCH_ID = 'prazo_vencido';
+export const SEGUE_BRANCH_ID = 'segue';
+export const NAO_SEGUE_BRANCH_ID = 'nao_segue';
 
 /** Branch ids the contract owns — a user-declared branch may not claim one. */
 export const RESERVED_BRANCH_IDS = [
@@ -615,6 +629,22 @@ export const questionConfigSchema = z.strictObject({
 });
 export type QuestionConfig = z.infer<typeof questionConfigSchema>;
 
+// ---------------------------------------------------------------------------
+// Blocos do INSTAGRAM (comentários): responder em privado, em público, conferir follow
+// ---------------------------------------------------------------------------
+
+/** Teto do texto de uma resposta a comentário (o canal confere em bytes UTF-8 depois de renderizar). */
+export const MAX_TEXTO_DA_RESPOSTA_AO_COMENTARIO = 1000;
+
+/** "Responder em privado" (Direct) e "Responder no comentário" (público): o texto, com variáveis. */
+export const instagramReplyConfigSchema = z.strictObject({
+  text: tpl(MAX_TEXTO_DA_RESPOSTA_AO_COMENTARIO).min(1),
+});
+export type InstagramReplyConfig = z.infer<typeof instagramReplyConfigSchema>;
+
+/** "Confere se segue": sem configuração (usa a conta e o autor do comentário do gatilho). */
+export const instagramCheckFollowConfigSchema = z.strictObject({});
+
 /**
  * Flow node schema — discriminated union based on node type.
  * Each node type has its specific config schema.
@@ -773,6 +803,28 @@ export const flowNodeSchema = z.discriminatedUnion('type', [
       y: z.number(),
     }),
     config: questionConfigSchema,
+  }),
+  // Instagram (automação de comentário): resposta privada, resposta pública, conferir follow.
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('instagram_private_reply'),
+    label: z.string().min(1).max(60),
+    position: z.strictObject({ x: z.number(), y: z.number() }),
+    config: instagramReplyConfigSchema,
+  }),
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('instagram_public_reply'),
+    label: z.string().min(1).max(60),
+    position: z.strictObject({ x: z.number(), y: z.number() }),
+    config: instagramReplyConfigSchema,
+  }),
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('instagram_check_follow'),
+    label: z.string().min(1).max(60),
+    position: z.strictObject({ x: z.number(), y: z.number() }),
+    config: instagramCheckFollowConfigSchema,
   }),
 ]);
 
@@ -1013,6 +1065,30 @@ function ramosDeEfeito(): FlowBranch[] {
 }
 
 
+function ramo(id: string, label: string): FlowBranch {
+  return { id, label, check: null, kind: 'match', condition: { type: 'branch', branch_id: id } };
+}
+
+/** "Responder em privado": Enviada (comum), Já respondido, Prazo de 7 dias vencido, Erro. */
+function ramosDaRespostaPrivada(): FlowBranch[] {
+  return [
+    ramo(JA_RESPONDIDO_BRANCH_ID, 'Já respondido'),
+    ramo(PRAZO_VENCIDO_BRANCH_ID, 'Prazo de 7 dias vencido'),
+    ramoDeErro(),
+    fallbackBranch('Enviada'),
+  ];
+}
+
+/** "Responder no comentário": Enviada (comum), Já respondido, Erro. */
+function ramosDaRespostaPublica(): FlowBranch[] {
+  return [ramo(JA_RESPONDIDO_BRANCH_ID, 'Já respondido'), ramoDeErro(), fallbackBranch('Enviada')];
+}
+
+/** "Confere se segue": Segue, Não segue, e "Não deu para saber" (comum). */
+function ramosDoConfereSeSegue(): FlowBranch[] {
+  return [ramo(SEGUE_BRANCH_ID, 'Segue'), ramo(NAO_SEGUE_BRANCH_ID, 'Não segue'), fallbackBranch('Não deu para saber')];
+}
+
 type RamosDe<K extends NodeType> = (node: Pick<Extract<FlowNode, { type: K }>, 'type' | 'config'>) => FlowBranch[];
 
 function saidaUnica(): FlowBranch[] {
@@ -1166,6 +1242,10 @@ export const RAMOS_POR_TIPO: { [K in NodeType]: RamosDe<K> } = {
     ramoDeErro(),
     fallbackBranch(RESPONDEU_LABEL),
   ],
+
+  instagram_private_reply: ramosDaRespostaPrivada,
+  instagram_public_reply: ramosDaRespostaPublica,
+  instagram_check_follow: ramosDoConfereSeSegue,
 
   trigger: saidaUnica,
   wait: (node) =>

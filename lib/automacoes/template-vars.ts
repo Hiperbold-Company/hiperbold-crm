@@ -1,7 +1,8 @@
 /**
  * O contexto de `renderTemplate` numa automação: `{{contact.*}}`, `{{lead.*}}`,
- * `{{campo.<chave>}}`, `{{gatilho.*}}`, `{{resposta.<chave do nó>}}` e
- * `{{sistema.agora|data|hora}}`.
+ * `{{campo.<chave>}}`, `{{gatilho.*}}`, `{{resposta.<chave do nó>}}`,
+ * `{{param.<chave>}}` (os dados que outra automação passou ao iniciar esta,
+ * `vars.param`) e `{{sistema.agora|data|hora}}`.
  *
  * `contact` e `lead` são as linhas AO VIVO (fatos do passo); `gatilho` é a
  * projeção do evento guardada em `vars.gatilho` quando a execução nasceu.
@@ -33,6 +34,8 @@ export function contextoDoTemplate(
     gatilho: (vars.gatilho as Record<string, unknown> | undefined) ?? {},
     // Respostas dos blocos de conversa: `{{resposta.<chave do nó>}}` (`lib/automacoes/conversa.ts`).
     resposta: (vars.resposta as Record<string, unknown> | undefined) ?? {},
+    // Dados da automação que iniciou esta (ação "Iniciar outra automação").
+    param: (vars.param as Record<string, unknown> | undefined) ?? {},
     sistema: {
       agora: agora.toISOString(),
       data: parte(agora, { day: "2-digit", month: "2-digit", year: "numeric" }, tz, idioma),

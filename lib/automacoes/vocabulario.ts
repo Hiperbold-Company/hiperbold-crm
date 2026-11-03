@@ -10,6 +10,9 @@ import type { NovaConditionCheck, QuestionValidation } from "@/lib/followup/grap
 
 import type {
   AutomacaoTriggerKind,
+  EventoDeAgendamento,
+  ModoDaPalavraChave,
+  ModoDoComentario,
   CrmAction,
   CrmActionType,
   FieldOp,
@@ -22,6 +25,8 @@ export interface NomesDaAutomacao {
   etapa?: (id: string) => string | null;
   funil?: (id: string) => string | null;
   pessoa?: (id: string) => string | null;
+  /** Nome de outra automação da organização (ação "Iniciar automação"). */
+  automacao?: (id: string) => string | null;
 }
 
 export const CAMPOS_PADRAO_DO_CONTATO: Record<Extract<FieldRef, { scope: "contact" }>["key"], string> = {
@@ -71,6 +76,7 @@ export const ACOES_DE_CRM: Record<CrmActionType, string> = {
   notify: "Avisar a equipe",
   create_task: "Criar tarefa",
   add_note: "Adicionar nota",
+  start_automation: "Iniciar outra automação",
 };
 
 export const OPERACOES_DE_CAMPO: Record<FieldOp["op"], string> = {
@@ -84,6 +90,39 @@ export const GATILHOS_DA_AUTOMACAO: Record<AutomacaoTriggerKind, string> = {
   manual: "Manual (iniciar para um contato)",
   lead_created: "Negócio criado",
   stage_entered: "Entrou na etapa",
+  message_received: "Mensagem recebida",
+  tag_added: "Tag adicionada",
+  appointment: "Agendamento",
+  birthday: "Aniversário do contato",
+  date_field: "Data de um campo do negócio",
+  no_reply: "Contato sem resposta",
+  case_opened: "Caso aberto na Central",
+  started_by_automation: "Iniciada por outra automação",
+  instagram_comment: "Comentário no Instagram",
+};
+
+/** Como a palavra-chave do comentário é comparada. */
+export const MODOS_DO_COMENTARIO_ROTULOS: Record<ModoDoComentario, string> = {
+  any: "Qualquer comentário",
+  contains: "Contém uma das palavras",
+};
+
+/** Como a palavra-chave da mensagem recebida é comparada. */
+export const MODOS_DA_PALAVRA_CHAVE_ROTULOS: Record<ModoDaPalavraChave, string> = {
+  any: "Qualquer mensagem",
+  contains: "Contém a palavra ou frase",
+  equals: "É exatamente",
+  starts_with: "Começa com",
+};
+
+/** Os acontecimentos da agenda do gatilho "Agendamento". */
+export const EVENTOS_DE_AGENDAMENTO_ROTULOS: Record<EventoDeAgendamento, string> = {
+  created: "Horário marcado",
+  confirmed: "Horário confirmado",
+  rescheduled: "Horário remarcado",
+  cancelled: "Horário cancelado",
+  completed: "Contato compareceu",
+  no_show: "Contato faltou",
 };
 
 export const REGRAS_NOVAS: Record<NovaConditionCheck["kind"], string> = {
@@ -166,6 +205,8 @@ export function fraseDaAcao(acao: CrmAction, nomes: NomesDaAutomacao = {}): stri
       return `Criar tarefa ${aspas(acao.title)}`;
     case "add_note":
       return "Adicionar nota";
+    case "start_automation":
+      return `Iniciar a automação ${aspas(nomes.automacao?.(acao.pointer_id) ?? "escolhida")}`;
   }
 }
 
@@ -207,6 +248,31 @@ export const ENVIOS_DA_CONVERSA: Record<"mensagem" | "nova_tentativa" | "tempo_e
   resposta: "Resposta do contato",
 };
 
+/**
+ * O desfecho de cada bloco do Instagram, como o histórico da execução o lê.
+ * A chave é o `resultado` do detalhe do efeito (o status que o canal
+ * devolveu); `erro` prefixa a frase do erro. Nunca o texto do comentário.
+ */
+export const DESFECHOS_DO_INSTAGRAM = {
+  instagram_private_reply: {
+    na_fila: "Resposta privada enviada",
+    ja_pedida: "Resposta privada já tinha sido enviada para este comentário",
+    expirada: "Resposta privada não enviada: prazo de 7 dias vencido",
+    erro: "Resposta privada",
+  },
+  instagram_public_reply: {
+    na_fila: "Resposta pública enviada",
+    ja_pedida: "Resposta pública já tinha sido enviada para este comentário",
+    erro: "Resposta pública",
+  },
+  instagram_check_follow: {
+    segue: "Segue o perfil",
+    nao_segue: "Não segue o perfil",
+    indefinido: "Não deu para saber se segue o perfil",
+    erro: "Confere se segue",
+  },
+} as const;
+
 /** Códigos de erro dos efeitos em português (histórico da execução). */
 export const ERROS_DO_EFEITO: Record<string, string> = {
   janela_fechada: "janela de 24h fechada",
@@ -225,8 +291,25 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   sem_responsavel: "nenhum atendente disponível",
   plano_limite_atingido: "o limite de negócios do plano foi atingido",
   campo_desconhecido: "o campo não existe no funil",
+  tag_vazia: "a tag ficou vazia depois de preencher as variáveis",
   texto_longo_com_opcoes: "texto passou do limite de 1024 caracteres depois de preencher as variáveis",
   texto_longo: "texto passou do limite de 4096 caracteres depois de preencher as variáveis",
+  // Ação "Iniciar outra automação" (lote 3): o que impediu o início.
+  automacao_propria: "a automação não pode iniciar a si mesma",
+  automacao_inexistente: "a automação escolhida não existe mais nesta conta",
+  automacao_inativa: "a automação escolhida não está ativa",
+  automacao_nao_aceita: "a automação escolhida só pode ser iniciada pelas automações da lista dela",
+  automacao_ciclo: "a automação escolhida já está nesta cadeia, e iniciá-la de novo fecharia um ciclo",
+  automacao_cadeia_longa: "a cadeia de automações passou de 5 passos e foi cortada",
+  automacao_contato_invalido: "o contato não pode entrar em automações (removido ou anonimizado)",
+  automacao_em_espera: "o contato está no tempo de espera da automação escolhida",
+  automacao_limite_por_hora: "o contato já entrou 10 vezes na automação escolhida na última hora",
+  automacao_limite_da_organizacao: "a conta passou de 5000 automações iniciadas na última hora",
+  automacao_sem_inicio: "a automação escolhida não tem bloco de Início",
+  // Blocos do Instagram (comentários).
+  sem_comentario: "a execução não começou por um comentário do Instagram",
+  comentario_nao_encontrado: "o comentário não foi encontrado nesta conta (ou a conexão do Instagram não está ligada)",
+  texto_invalido: "o texto ficou vazio ou passou de 1000 caracteres depois de preencher as variáveis",
 };
 
 export function fraseDoErro(codigo: string | undefined): string {
@@ -287,6 +370,9 @@ export const MAPAS_DA_AUTOMACAO: ReadonlyArray<Record<string, string>> = [
   ACOES_DE_CRM,
   OPERACOES_DE_CAMPO,
   GATILHOS_DA_AUTOMACAO,
+  MODOS_DA_PALAVRA_CHAVE_ROTULOS,
+  MODOS_DO_COMENTARIO_ROTULOS,
+  EVENTOS_DE_AGENDAMENTO_ROTULOS,
   REGRAS_NOVAS,
   VIAS_DA_ETAPA,
   POLITICAS_DE_REENTRADA,

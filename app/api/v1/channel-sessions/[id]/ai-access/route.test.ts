@@ -36,11 +36,11 @@ beforeEach(() => {
 });
 
 describe("configuração de acesso da IA", () => {
-  it("exige admin tanto para ler quanto para escrever e não consulta DB se negado", async () => {
+  it("exige gerente (piso desde 03/11/2026) tanto para ler quanto para escrever e não consulta DB se negado", async () => {
     vi.mocked(requireRole).mockResolvedValue({ ok: false, response: fail("forbidden", "Acesso negado.", 403) });
     expect((await GET(req(), context())).status).toBe(403);
     expect((await PATCH(req(), context())).status).toBe(403);
-    expect(requireRole).toHaveBeenCalledWith("admin", expect.objectContaining({ allowPlatformAdmin: true }));
+    expect(requireRole).toHaveBeenCalledWith("manager", expect.objectContaining({ allowPlatformAdmin: true }));
     expect(createAdminClient).not.toHaveBeenCalled();
   });
   it("suporte readonly nega a mutação antes de service role e auditoria", async () => {

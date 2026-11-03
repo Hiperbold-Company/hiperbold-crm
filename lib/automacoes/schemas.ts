@@ -56,6 +56,12 @@ export type FieldRef = z.infer<typeof fieldRefSchema>;
 
 const tags = z.array(z.string().trim().min(1).max(60)).min(1).max(10);
 
+/** Chave de um dado passado a outra automação (`{{param.<chave>}}`). */
+export const CHAVE_DE_PARAMETRO = /^[a-z0-9_]{1,40}$/;
+/** Quantos dados uma ação "Iniciar automação" passa, e o tamanho de cada valor já renderizado. */
+export const MAX_PARAMETROS = 10;
+export const MAX_VALOR_DE_PARAMETRO = 1000;
+
 // ---------------------------------------------------------------------------
 // Ações de CRM (bloco `crm_action`)
 // ---------------------------------------------------------------------------
@@ -95,6 +101,25 @@ export const crmActionSchema = z.discriminatedUnion("type", [
     assignee: z.union([z.literal("owner"), uuid]),
   }),
   z.strictObject({ type: z.literal("add_note"), body: tpl(2000).min(1), target: z.enum(["lead", "contact"]) }),
+  /**
+   * Iniciar OUTRA automação para o mesmo contato, passando dados: cada
+   * `params[].value` é renderizado com as variáveis desta execução e chega ao
+   * destino como `{{param.<key>}}`. A cadeia, o ciclo e a profundidade (5) são
+   * os do `fn_automacao_iniciar`; os eventos guardam só as CHAVES (LGPD).
+   */
+  z.strictObject({
+    type: z.literal("start_automation"),
+    pointer_id: uuid,
+    params: z
+      .array(
+        z.strictObject({
+          key: z.string().regex(CHAVE_DE_PARAMETRO, "Use letras minúsculas, números e underscore").max(40),
+          value: tpl(MAX_VALOR_DE_PARAMETRO),
+        }),
+      )
+      .max(MAX_PARAMETROS)
+      .refine((ps) => new Set(ps.map((p) => p.key)).size === ps.length, { message: "chave repetida" }),
+  }),
 ]);
 export type CrmAction = z.infer<typeof crmActionSchema>;
 export type CrmActionType = CrmAction["type"];
@@ -175,6 +200,60 @@ export const regrasNovasDeCondicao = {
 // Gatilhos (no nó `trigger` de uma automação)
 // ---------------------------------------------------------------------------
 
+/**
+ * Texto para comparar palavra-chave: sem acento, minúsculo, pontuação vira
+ * espaço e espaços repetidos viram um. "Olá, QUERO o preço!" → "ola quero o preco".
+ * Mora aqui (e não em `gatilhos.ts`) porque o schema recusa a palavra-chave
+ * que normaliza para vazio ("!!!", "😀"): ela nunca casaria nada.
+ */
+export function normalizarParaPalavraChave(t: string): string {
+  return t
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/** Como a palavra-chave da mensagem recebida é comparada. */
+export const MODOS_DA_PALAVRA_CHAVE = ["any", "contains", "equals", "starts_with"] as const;
+export type ModoDaPalavraChave = (typeof MODOS_DA_PALAVRA_CHAVE)[number];
+
+/** A palavra-chave que normaliza para vazio ("!!!", "😀") nunca casaria nada. */
+export const ERRO_PALAVRA_CHAVE_SEM_LETRA = "a palavra-chave precisa ter ao menos uma letra ou número";
+/** Quantas palavras-chave um gatilho "Mensagem recebida" aceita. */
+export const MAX_PALAVRAS_CHAVE = 20;
+/** Uma palavra-chave do gatilho "Mensagem recebida" (o editor confere antes de pôr na lista). */
+export const palavraChaveSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .refine((k) => normalizarParaPalavraChave(k).length > 0, { message: ERRO_PALAVRA_CHAVE_SEM_LETRA });
+
+/** Como a palavra-chave do comentário é comparada: qualquer comentário, ou contém uma das palavras. */
+export const MODOS_DO_COMENTARIO = ["any", "contains"] as const;
+export type ModoDoComentario = (typeof MODOS_DO_COMENTARIO)[number];
+/** Quantos posts um gatilho "Comentário no Instagram" lista. */
+export const MAX_PUBLICACOES = 50;
+/** Id de um post do Instagram (o `media_id` da Meta: só dígitos). */
+export const idDePublicacaoSchema = z.string().trim().regex(/^[0-9]{1,40}$/, "Use o id do post (só números)");
+
+/** Os acontecimentos da agenda que iniciam uma automação (`appointment.<evento>`). */
+export const EVENTOS_DE_AGENDAMENTO = ["created", "confirmed", "rescheduled", "cancelled", "completed", "no_show"] as const;
+export type EventoDeAgendamento = (typeof EVENTOS_DE_AGENDAMENTO)[number];
+
+/**
+ * O campo de DATA do negócio que o gatilho `date_field` lê: a previsão de
+ * fechamento, ou a chave de um campo personalizado do funil
+ * (`pipelines.settings.fields`). O mesmo `fieldRef` dos blocos, recortado.
+ */
+export const campoDeDataDoNegocioSchema = z.discriminatedUnion("scope", [
+  z.strictObject({ scope: z.literal("lead"), key: z.literal("expected_close_date") }),
+  z.strictObject({ scope: z.literal("lead_custom"), key: chaveDeCampo }),
+]);
+export type CampoDeDataDoNegocio = z.infer<typeof campoDeDataDoNegocioSchema>;
+
 export const automacaoTriggerSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("manual") }),
   z.strictObject({
@@ -190,6 +269,95 @@ export const automacaoTriggerSchema = z.discriminatedUnion("kind", [
     stage_ids: z.array(uuid).min(1).max(20),
     via: z.enum(["any", "created", "moved"]),
   }),
+  // ---- lote 3 ----
+  /**
+   * Mensagem recebida do contato. A palavra-chave é comparada sem acento e sem
+   * maiúsculas, por PALAVRA ou FRASE inteira (`contains`): "oi" não casa "oito"
+   * (ver `palavraChaveCasa` em `gatilhos.ts`). `keywords` só pode ficar vazia
+   * com `match: any`.
+   */
+  z
+    .strictObject({
+      kind: z.literal("message_received"),
+      match: z.enum(MODOS_DA_PALAVRA_CHAVE),
+      keywords: z.array(palavraChaveSchema).max(MAX_PALAVRAS_CHAVE),
+      /** Só mensagens que chegaram por estes números/canais (`channel_sessions.id`). */
+      channel_session_ids: z.array(uuid).max(20).optional(),
+      /** Só a primeira mensagem do contato naquela conversa. */
+      only_first_message: z.boolean().optional(),
+      /**
+       * Não dispara quando há HUMANO no comando da conversa (atendente
+       * responsável, `force_human`, IA silenciada por handoff) — o mesmo
+       * critério do gate da IA. Ausente = sim.
+       */
+      skip_if_human: z.boolean().optional(),
+    })
+    .refine((g) => g.match === "any" || g.keywords.length > 0, {
+      message: "informe ao menos uma palavra-chave",
+      path: ["keywords"],
+    }),
+  z.strictObject({
+    kind: z.literal("tag_added"),
+    target: z.enum(["lead", "contact"]),
+    tags: z.array(z.string().trim().min(1).max(60)).min(1).max(20),
+  }),
+  z.strictObject({
+    kind: z.literal("appointment"),
+    events: z.array(z.enum(EVENTOS_DE_AGENDAMENTO)).min(1).max(6),
+  }),
+  /** No aniversário do contato (a varredura `contact-birthdays` emite `contact.birthday`). */
+  z.strictObject({ kind: z.literal("birthday") }),
+  /**
+   * Numa data guardada no negócio. `offset_days` é ASSINADO em relação à data:
+   * `-3` = três dias ANTES, `2` = dois dias DEPOIS, `0` = no dia. `time` é a
+   * hora local da organização a partir da qual a execução começa.
+   */
+  z.strictObject({
+    kind: z.literal("date_field"),
+    field: campoDeDataDoNegocioSchema,
+    offset_days: z.number().int().min(-365).max(365),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM"),
+    /** Só negócios ABERTOS (ausente = sim): ganho e perdido não iniciam. */
+    only_open: z.boolean().optional(),
+  }),
+  /** O contato não respondeu à última mensagem enviada há `after_minutes`. */
+  z.strictObject({
+    kind: z.literal("no_reply"),
+    after_minutes: z.number().int().min(5).max(43_200),
+    only_if_last_was_outbound: z.literal(true),
+  }),
+  /** Caso aberto na Central (`ai.case_opened`). */
+  z.strictObject({ kind: z.literal("case_opened") }),
+  /**
+   * Iniciada por outra automação (ação "Iniciar automação"), ou pelo "Testar".
+   * Nenhum evento do log a casa. `from_pointer_ids` vazio ou ausente = qualquer
+   * automação da organização; com lista, só as listadas (`aceitaIniciador`).
+   */
+  z.strictObject({
+    kind: z.literal("started_by_automation"),
+    from_pointer_ids: z.array(uuid).max(20).optional(),
+  }),
+  /**
+   * Comentário num post do Instagram (`instagram.comentario_recebido`, gravado
+   * pelo canal). Contas e posts vazios = qualquer um. A palavra-chave segue a
+   * regra da mensagem recebida (`palavraChaveCasa`): palavra inteira, sem
+   * acento e sem maiúsculas, qualquer uma das listadas. `create_contact`
+   * (ausente = sim): o comentarista sem contato no CRM ganha um, com o nome
+   * `@usuario`; sem ele, a automação não inicia.
+   */
+  z
+    .strictObject({
+      kind: z.literal("instagram_comment"),
+      channel_session_ids: z.array(uuid).max(20).optional(),
+      media_ids: z.array(idDePublicacaoSchema).max(MAX_PUBLICACOES).optional(),
+      match: z.enum(MODOS_DO_COMENTARIO),
+      keywords: z.array(palavraChaveSchema).max(MAX_PALAVRAS_CHAVE),
+      create_contact: z.boolean().optional(),
+    })
+    .refine((g) => g.match === "any" || g.keywords.length > 0, {
+      message: "informe ao menos uma palavra-chave",
+      path: ["keywords"],
+    }),
 ]);
 export type AutomacaoTrigger = z.infer<typeof automacaoTriggerSchema>;
 export type AutomacaoTriggerKind = AutomacaoTrigger["kind"];
@@ -213,6 +381,35 @@ export const GATILHO_TRAZ_CONTATO: Record<AutomacaoTriggerKind, boolean> = {
   manual: true,
   lead_created: true,
   stage_entered: true,
+  message_received: true,
+  tag_added: true,
+  appointment: true,
+  birthday: true,
+  date_field: true,
+  no_reply: true,
+  case_opened: true,
+  started_by_automation: true,
+  instagram_comment: true,
+};
+
+/**
+ * Config inicial de CADA gatilho (o editor usa ao trocar o tipo). Os que pedem
+ * escolha (etapa, tag, palavra-chave, campo) nascem incompletos de propósito:
+ * o schema recusa até a pessoa escolher.
+ */
+export const GATILHO_EM_BRANCO: { [K in AutomacaoTriggerKind]: Extract<AutomacaoTrigger, { kind: K }> } = {
+  manual: { kind: "manual" },
+  lead_created: { kind: "lead_created" },
+  stage_entered: { kind: "stage_entered", stage_ids: [], via: "any" },
+  message_received: { kind: "message_received", match: "any", keywords: [] },
+  tag_added: { kind: "tag_added", target: "lead", tags: [] },
+  appointment: { kind: "appointment", events: ["created"] },
+  birthday: { kind: "birthday" },
+  date_field: { kind: "date_field", field: { scope: "lead", key: "expected_close_date" }, offset_days: 0, time: "09:00" },
+  no_reply: { kind: "no_reply", after_minutes: 1440, only_if_last_was_outbound: true },
+  case_opened: { kind: "case_opened" },
+  started_by_automation: { kind: "started_by_automation" },
+  instagram_comment: { kind: "instagram_comment", match: "any", keywords: [] },
 };
 
 /** Config inicial do gatilho de uma automação nova. */

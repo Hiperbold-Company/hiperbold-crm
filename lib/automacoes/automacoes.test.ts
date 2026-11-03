@@ -154,7 +154,7 @@ describe("gatilhos", () => {
     const [criado] = fatosDoEvento(
       evento({ metadata: { actor_type: "webhook_source", actor_id: FONTE, request_id: "req-1" } }),
     );
-    expect(criado!.fonte_id).toBe(FONTE);
+    expect(criado!.tipo === "lead_created" && criado!.fonte_id).toBe(FONTE);
     expect(casaGatilho({ kind: "lead_created", capture_source_ids: [FONTE] }, criado!, true)).toBe(true);
     // Fonte que o banco não confirmou não conta.
     expect(casaGatilho({ kind: "lead_created", only_capture: true }, criado!, false)).toBe(false);
@@ -240,7 +240,19 @@ function grafoDoCenario(valor = "facebook"): FlowGraph {
 describe("registro de nós e publish da automação", () => {
   it("a paleta da automação oferece só o que o motor dela executa", () => {
     expect([...NOS_DA_SUPERFICIE.automacao].sort()).toEqual(
-      ["condition", "crm_action", "end", "field_op", "message", "question", "trigger", "wait"].sort(),
+      [
+        "condition",
+        "crm_action",
+        "end",
+        "field_op",
+        "message",
+        "question",
+        "trigger",
+        "wait",
+        "instagram_private_reply",
+        "instagram_public_reply",
+        "instagram_check_follow",
+      ].sort(),
     );
     expect(NOS_DA_SUPERFICIE.followup).not.toContain("crm_action");
     expect(NOS_DA_SUPERFICIE.followup).not.toContain("message");

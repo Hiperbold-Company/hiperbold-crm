@@ -16,11 +16,15 @@ const UNICOS: Record<string, string[][]> = {
   contacts: [["organization_id", "social_identity"]],
   calendar_oauth_nonces: [["nonce"]],
   meta_social_envios: [["organization_id", "mid"]],
+  meta_social_comentarios: [["organization_id", "comment_id"]],
+  meta_social_fila_de_envio: [["organization_id", "tipo", "comment_id"]],
 };
 
 /** Defaults de coluna que o comportamento testado lê. */
 const PADROES: Record<string, Linha> = {
   meta_data_deletion_requests: { status: "received", completed_at: null },
+  meta_social_comentarios: { resposta_privada_status: "nao_pedida" },
+  meta_social_fila_de_envio: { status: "na_fila", tentativas: 0 },
 };
 
 /** Índices únicos PARCIAIS: só valem entre as linhas que o predicado aceita. */
@@ -94,6 +98,10 @@ export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
       },
       gt(c: string, v: string) {
         filtros.push((l) => typeof l[c] === "string" && (l[c] as string) > v);
+        return q;
+      },
+      gte(c: string, v: string) {
+        filtros.push((l) => typeof l[c] === "string" && (l[c] as string) >= v);
         return q;
       },
       lt(c: string, v: string) {
@@ -187,6 +195,45 @@ export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
     }
     if (nome === "fn_decrypt_oauth") {
       return { data: String(args.ciphertext).replace(/^\\x/, "").replace(/^cifrado:/, ""), error: null };
+    }
+    if (nome === "fn_meta_social_registrar_comentario") {
+      // O que a função da 0991 faz (provado contra o Postgres em
+      // tests/invariants/instagram-comentarios.test.ts): sessão da organização,
+      // linha única por (organização, comentário) e um evento só na primeira vez.
+      const sessao = t("channel_sessions").find(
+        (s) => s.id === args.p_channel_session_id && s.organization_id === args.p_organization_id,
+      );
+      if (!sessao) return { data: null, error: { code: "42501", message: "meta_social_sessao_de_outra_organizacao" } };
+      if (
+        t("meta_social_comentarios").some(
+          (c) => c.organization_id === args.p_organization_id && c.comment_id === args.p_comment_id,
+        )
+      )
+        return { data: null, error: null };
+      const id = randomUUID();
+      const recebido = new Date().toISOString();
+      t("meta_social_comentarios").push({
+        id,
+        organization_id: args.p_organization_id,
+        channel_session_id: args.p_channel_session_id,
+        comment_id: args.p_comment_id,
+        media_id: args.p_media_id,
+        media_product_type: args.p_media_product_type,
+        autor_id: args.p_autor_id,
+        autor_usuario: args.p_autor_usuario,
+        texto: args.p_texto,
+        criado_na_meta_em: args.p_criado_na_meta_em,
+        recebido_em: recebido,
+        resposta_privada_status: "nao_pedida",
+      });
+      t("event_log").push({
+        organization_id: args.p_organization_id,
+        event_type: "instagram.comentario_recebido",
+        entity_kind: "instagram_comment",
+        entity_id: id,
+        payload: { comentario_id: id, comment_id: args.p_comment_id, autor_id: args.p_autor_id },
+      });
+      return { data: id, error: null };
     }
     if (nome === "fn_encrypt_oauth") return { data: `cifrado:${String(args.plaintext)}`, error: null };
     return { data: null, error: null };

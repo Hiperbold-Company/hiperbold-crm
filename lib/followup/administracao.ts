@@ -39,6 +39,7 @@ import {
   algumCanalExigeModeloForaDaJanela,
   proximosDoGrafo,
   validateFlowForPublish,
+  type ContextoDoPublish,
   type RoteiroDoPublish,
 } from "./validate-publish";
 
@@ -556,8 +557,9 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
   const graph = pointer.draft_graph as unknown as FlowGraph;
   // Automação: todo funil e etapa citados têm de ser DESTA organização — o
   // motor executa com a service role.
+  let automacao: ContextoDoPublish["automacao"];
   if (surface === "automacao") {
-    const { funis, etapas, pessoas, fontes } = referenciasDoGrafo(graph);
+    const { funis, etapas, pessoas, fontes, automacoes } = referenciasDoGrafo(graph);
     const vazio = Promise.resolve({ data: [], error: null });
     const [rf, re, rp, rs] = await Promise.all([
       funis.length ? admin.from("crm_pipelines").select("id").eq("organization_id", orgId).in("id", funis) : vazio,
@@ -586,6 +588,21 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
     if ((rs.data ?? []).length !== fontes.length) {
       throw recusa(deps, 422, "validation_failed", t("Uma fonte de captação escolhida não existe mais. Escolha de novo na lista."));
     }
+    // "Iniciar outra automação": só automações DESTA organização (o motor inicia com a service role).
+    const outras = automacoes.filter((a) => a !== id);
+    const ra = outras.length
+      ? await admin
+          .from("followup_flow_pointers")
+          .select("id")
+          .eq("organization_id", orgId)
+          .eq("surface", "automacao")
+          .in("id", outras)
+      : { data: [], error: null };
+    if (ra.error) throw falhaInterna(deps, ra.error);
+    automacao = {
+      pointerId: id,
+      existentes: new Set((ra.data ?? []).map((r) => (r as { id: string }).id)),
+    };
   }
   // A regra de etapa guarda o `stage_id`, e só o banco diz se a etapa existe e está ativa.
   const citadas = await carregaEtapasCitadas(admin, orgId, graph.nodes);
@@ -639,6 +656,7 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
     surface,
     roteiro,
     exigeModeloForaDaJanela,
+    automacao,
   });
   if (!validation.ok) {
     throw recusa(deps, 422, "validation_failed", t("Fluxo reprovado na validação de publish."), {

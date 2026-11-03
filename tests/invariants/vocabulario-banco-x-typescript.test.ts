@@ -413,6 +413,26 @@ const PARES: Array<{
     arquivo: "lib/schemas/team.ts",
     simbolo: "ROLES",
   },
+  {
+    tabela: "meta_social_comentarios",
+    coluna: "resposta_privada_status",
+    // lib/channels/meta-social/comentarios-contrato.ts → STATUS_DA_RESPOSTA_PRIVADA
+    // (0991). É o vocabulário que a automação lê; nasce com o par.
+    arquivo: "lib/channels/meta-social/comentarios-contrato.ts",
+    simbolo: "STATUS_DA_RESPOSTA_PRIVADA",
+  },
+  {
+    tabela: "meta_social_fila_de_envio",
+    coluna: "tipo",
+    arquivo: "lib/channels/meta-social/comentarios-contrato.ts",
+    simbolo: "TIPOS_DA_FILA_DE_ENVIO",
+  },
+  {
+    tabela: "meta_social_fila_de_envio",
+    coluna: "status",
+    arquivo: "lib/channels/meta-social/comentarios-contrato.ts",
+    simbolo: "STATUS_DA_FILA_DE_ENVIO",
+  },
 ];
 
 /** Tira um nível de parênteses externos, se ele envolver a expressão inteira. */

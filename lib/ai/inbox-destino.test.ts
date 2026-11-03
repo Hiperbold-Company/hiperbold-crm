@@ -71,9 +71,14 @@ describe("destinos da Central", () => {
     expect(item?.destination.estado).toBe("indisponivel");
     expect(l.queries).toEqual([{ table: "crm_leads", org: ORG, ids: [ID] }, { table: "crm_pipelines", org: ORG, ids: [PIPELINE] }]);
   });
-  it.each(["agent", "manager"] as const)("%s não recebe conexão admin", async role => {
+  // Piso de Conexões é `manager` desde 03/11/2026 (decisão do dono do produto): atendente e leitor não.
+  it.each(["agent", "viewer"] as const)("%s não recebe o destino de Conexões", async role => {
     const l = leitor(); const [item] = await resolverDestinosDosAvisos(l.client, ORG, role, [aviso("qr_rescan", "channel_session")]);
     expect(item?.destination.estado).toBe("sem_permissao"); expect(l.queries).toHaveLength(0);
+  });
+  it("manager recebe o destino de Conexões no aviso de conexão caída", async () => {
+    const [item] = await resolverDestinosDosAvisos(leitor().client, ORG, "manager", [aviso("qr_rescan", "channel_session")]);
+    expect(item?.destination).toMatchObject({ estado: "disponivel", href: "/app/connections" });
   });
   it("manager recebe uso/acervo e agent apenas orientação", async () => {
     for (const role of ["agent", "manager"] as const) {

@@ -43,6 +43,9 @@ describe('graph-schema', () => {
         'field_op',
         'message',
         'question',
+        'instagram_private_reply',
+        'instagram_public_reply',
+        'instagram_check_follow',
       ]);
     });
 

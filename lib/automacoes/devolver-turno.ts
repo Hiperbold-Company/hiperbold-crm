@@ -49,6 +49,24 @@ export async function devolverTurnoAoAgente(
     const conversationId = (enviada as { conversation_id?: string } | null)?.conversation_id;
     if (!conversationId) return "sem_conversa";
 
+    return await pedirTurnoDeNovo(admin, org, conversationId, pedido.desde, pedido.enrollmentId);
+  } catch {
+    return "falhou";
+  }
+}
+
+/**
+ * Passos 2 a 5, comuns às duas devoluções: a conversa (da organização, não
+ * grupo), a última mensagem do contato desde `desde`, o despacho dela não
+ * pendente, nenhum turno da IA desde `desde` — e só então o despacho de novo.
+ */
+async function pedirTurnoDeNovo(
+  admin: SupabaseClient,
+  org: string,
+  conversationId: string,
+  desde: string,
+  enrollmentId: string,
+): Promise<DesfechoDaDevolucao> {
     const { data: conversa, error: e2 } = await admin
       .from("conversations")
       .select("id, contact_id, channel_session_id, is_group")
@@ -77,7 +95,7 @@ export async function devolverTurnoAoAgente(
       .maybeSingle();
     if (e3) return "falhou";
     const inbound = ultima as { id: string; created_at: string } | null;
-    if (!inbound || inbound.created_at < pedido.desde) return "sem_inbound";
+    if (!inbound || inbound.created_at < desde) return "sem_inbound";
 
     // 3. O despacho dela ainda vai rodar: o drain responde sozinho.
     const { data: despachos, error: e4 } = await admin
@@ -102,7 +120,7 @@ export async function devolverTurnoAoAgente(
       .eq("organization_id", org)
       .eq("contact_id", c.contact_id)
       .eq("kind", "inbound_turn")
-      .gte("created_at", pedido.desde);
+      .gte("created_at", desde);
     if (e5 || count === null) return "falhou";
     if (count > 0) return "ia_ja_atendeu";
 
@@ -119,11 +137,53 @@ export async function devolverTurnoAoAgente(
           channel_session_id: c.channel_session_id,
           inbound_message_id: inbound.id,
         },
-        p_metadata: { source: "automacao.devolve_turno", enrollment_id: pedido.enrollmentId },
+        p_metadata: { source: "automacao.devolve_turno", enrollment_id: enrollmentId },
         p_organization_id: org,
       } as never,
     );
     return e6 ? "falhou" : "emitido";
+}
+
+/**
+ * UMA VOZ no INÍCIO: a IA cedeu a mensagem que iniciou esta execução (gatilho
+ * "mensagem recebida" de automação com bloco de conversa, `uma-voz.ts`), e a
+ * execução TERMINOU sem enviar nada nesta conversa (um caminho sem Mensagem,
+ * uma condição que saiu antes). O contato ficaria sem resposta: pede-se de
+ * novo o turno da IA para a última mensagem dele, com as mesmas recusas da
+ * devolução comum (despacho em curso, IA que já atendeu desde a mensagem).
+ *
+ * `desde` é o instante em que a mensagem do gatilho CHEGOU (lido da linha,
+ * filtrando a organização e a conversa): o turno da IA que exista desde então
+ * é a IA na conversa, e nada se devolve.
+ */
+export async function devolverTurnoDoInicio(
+  admin: SupabaseClient,
+  pedido: { organizationId: string; enrollmentId: string; conversationId: string; messageId: string },
+): Promise<DesfechoDaDevolucao | "automacao_falou"> {
+  const org = pedido.organizationId;
+  try {
+    const { data: falou, error: e1 } = await admin
+      .from("messages")
+      .select("id")
+      .eq("organization_id", org)
+      .eq("conversation_id", pedido.conversationId)
+      .eq("direction", "outbound")
+      .eq(`metadata->${CHAVE_DE_ORIGEM_AUTOMACAO}->>enrollment_id`, pedido.enrollmentId)
+      .limit(1);
+    if (e1) return "falhou";
+    if ((falou ?? []).length > 0) return "automacao_falou";
+
+    const { data: gatilho, error: e2 } = await admin
+      .from("messages")
+      .select("created_at")
+      .eq("organization_id", org)
+      .eq("conversation_id", pedido.conversationId)
+      .eq("id", pedido.messageId)
+      .maybeSingle();
+    if (e2) return "falhou";
+    const desde = (gatilho as { created_at?: string } | null)?.created_at;
+    if (!desde) return "sem_inbound";
+    return await pedirTurnoDeNovo(admin, org, pedido.conversationId, desde, pedido.enrollmentId);
   } catch {
     return "falhou";
   }

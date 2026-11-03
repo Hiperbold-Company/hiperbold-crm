@@ -6726,6 +6726,81 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_social_comentarios: {
+        Row: {
+          autor_id: string
+          autor_usuario: string | null
+          channel_session_id: string
+          comment_id: string
+          criado_na_meta_em: string | null
+          id: string
+          media_id: string | null
+          media_product_type: string | null
+          organization_id: string
+          recebido_em: string
+          resposta_privada_em: string | null
+          resposta_privada_erro: string | null
+          resposta_privada_mid: string | null
+          resposta_privada_status: string
+          resposta_publica_em: string | null
+          resposta_publica_id: string | null
+          texto: string | null
+        }
+        Insert: {
+          autor_id: string
+          autor_usuario?: string | null
+          channel_session_id: string
+          comment_id: string
+          criado_na_meta_em?: string | null
+          id?: string
+          media_id?: string | null
+          media_product_type?: string | null
+          organization_id: string
+          recebido_em?: string
+          resposta_privada_em?: string | null
+          resposta_privada_erro?: string | null
+          resposta_privada_mid?: string | null
+          resposta_privada_status?: string
+          resposta_publica_em?: string | null
+          resposta_publica_id?: string | null
+          texto?: string | null
+        }
+        Update: {
+          autor_id?: string
+          autor_usuario?: string | null
+          channel_session_id?: string
+          comment_id?: string
+          criado_na_meta_em?: string | null
+          id?: string
+          media_id?: string | null
+          media_product_type?: string | null
+          organization_id?: string
+          recebido_em?: string
+          resposta_privada_em?: string | null
+          resposta_privada_erro?: string | null
+          resposta_privada_mid?: string | null
+          resposta_privada_status?: string
+          resposta_publica_em?: string | null
+          resposta_publica_id?: string | null
+          texto?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_social_comentarios_channel_session_id_fkey"
+            columns: ["channel_session_id"]
+            isOneToOne: false
+            referencedRelation: "channel_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_social_comentarios_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_social_envios: {
         Row: {
           channel_session_id: string
@@ -6755,6 +6830,75 @@ export type Database = {
           },
           {
             foreignKeyName: "meta_social_envios_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_social_fila_de_envio: {
+        Row: {
+          atualizado_em: string
+          channel_session_id: string
+          comment_id: string
+          criado_em: string
+          enviada_em: string | null
+          erro: string | null
+          id: string
+          organization_id: string
+          pedido_por: string | null
+          proxima_tentativa_em: string
+          resultado_id: string | null
+          status: string
+          tentativas: number
+          texto: string
+          tipo: string
+        }
+        Insert: {
+          atualizado_em?: string
+          channel_session_id: string
+          comment_id: string
+          criado_em?: string
+          enviada_em?: string | null
+          erro?: string | null
+          id?: string
+          organization_id: string
+          pedido_por?: string | null
+          proxima_tentativa_em?: string
+          resultado_id?: string | null
+          status?: string
+          tentativas?: number
+          texto: string
+          tipo: string
+        }
+        Update: {
+          atualizado_em?: string
+          channel_session_id?: string
+          comment_id?: string
+          criado_em?: string
+          enviada_em?: string | null
+          erro?: string | null
+          id?: string
+          organization_id?: string
+          pedido_por?: string | null
+          proxima_tentativa_em?: string
+          resultado_id?: string | null
+          status?: string
+          tentativas?: number
+          texto?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_social_fila_de_envio_channel_session_id_fkey"
+            columns: ["channel_session_id"]
+            isOneToOne: false
+            referencedRelation: "channel_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_social_fila_de_envio_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -9973,6 +10117,20 @@ export type Database = {
           p_organization_id: string
         }
         Returns: Json
+      }
+      fn_meta_social_registrar_comentario: {
+        Args: {
+          p_autor_id: string
+          p_autor_usuario: string | null
+          p_channel_session_id: string
+          p_comment_id: string
+          p_criado_na_meta_em: string | null
+          p_media_id: string | null
+          p_media_product_type: string | null
+          p_organization_id: string
+          p_texto: string | null
+        }
+        Returns: string | null
       }
       fn_mover_leads_em_lote: {
         Args: {

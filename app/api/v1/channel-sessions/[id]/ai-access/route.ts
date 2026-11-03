@@ -14,10 +14,10 @@ import {
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
 
-/** Só administradores podem ler os telefones de teste ou mudar o alcance da IA. */
+/** Só administrador ou gerente (decisão do dono do produto, 03/11/2026) lê os telefones de teste ou muda o alcance da IA. */
 export async function GET(_req: NextRequest, { params }: Context): Promise<Response> {
   const requestId = randomUUID();
-  const auth = await requireRole("admin", { requestId, resource: "channel_sessions", allowPlatformAdmin: true });
+  const auth = await requireRole("manager", { requestId, resource: "channel_sessions", allowPlatformAdmin: true });
   if (!auth.ok) return auth.response;
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) return fail("validation_failed", "Canal inválido.", 422, { requestId });
@@ -33,7 +33,7 @@ export async function PATCH(req: NextRequest, { params }: Context): Promise<Resp
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
   const requestId = randomUUID();
-  const auth = await requireRole("admin", { requestId, resource: "channel_sessions", allowPlatformAdmin: true });
+  const auth = await requireRole("manager", { requestId, resource: "channel_sessions", allowPlatformAdmin: true });
   if (!auth.ok) return auth.response;
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) return fail("validation_failed", "Canal inválido.", 422, { requestId });

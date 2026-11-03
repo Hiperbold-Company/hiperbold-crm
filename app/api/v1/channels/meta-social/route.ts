@@ -16,7 +16,7 @@ const headers = { "Cache-Control": "no-store" };
 
 export async function GET(): Promise<Response> {
   const requestId = randomUUID();
-  const auth = await requireRole("admin", { requestId, resource: "social_connections" });
+  const auth = await requireRole("manager", { requestId, resource: "social_connections" });
   if (!auth.ok) return auth.response;
   try {
     const cfg = await configMetaSocial();

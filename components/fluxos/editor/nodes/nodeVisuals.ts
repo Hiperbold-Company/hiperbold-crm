@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 
-import { Play, Clock, GitBranch, Brain, ChatCircle, ChatsCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Kanban, PencilSimple } from "@/lib/ui/icons";
-import { fraseDaAcao, fraseDaOperacao, GATILHOS_DA_AUTOMACAO } from "@/lib/automacoes/vocabulario";
+import { Play, Clock, GitBranch, Brain, ChatCircle, ChatsCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Kanban, PencilSimple, InstagramLogo, Users } from "@/lib/ui/icons";
+import { fraseDaAcao, fraseDaOperacao, GATILHOS_DA_AUTOMACAO, type NomesDaAutomacao } from "@/lib/automacoes/vocabulario";
 import type { FollowupFlowSurface } from "@/lib/followup/api-schemas";
 import type { FlowNode, NodeType } from "@/lib/followup/graph-schema";
 import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
@@ -208,6 +208,34 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
       retries: 1,
     }),
   },
+  // Blocos do Instagram (só automação de comentário): o formulário mora em forms/automacao/.
+  instagram_private_reply: {
+    type: "instagram_private_reply",
+    paletteLabel: "Responder em privado",
+    icon: InstagramLogo,
+    chipClassName: "bg-accent-soft text-accent",
+    borderClassName: "border-l-accent-500",
+    defaultLabel: "Responder em privado",
+    defaultConfig: () => ({ text: "Oi, @{{gatilho.autor_usuario}}! Te mandei aqui o que você pediu." }),
+  },
+  instagram_public_reply: {
+    type: "instagram_public_reply",
+    paletteLabel: "Responder no comentário",
+    icon: ChatCircle,
+    chipClassName: "bg-info-bg text-info-fg",
+    borderClassName: "border-l-info",
+    defaultLabel: "Responder no comentário",
+    defaultConfig: () => ({ text: "Te chamei no Direct!" }),
+  },
+  instagram_check_follow: {
+    type: "instagram_check_follow",
+    paletteLabel: "Confere se segue",
+    icon: Users,
+    chipClassName: "bg-warning-bg text-warning-fg",
+    borderClassName: "border-l-warning",
+    defaultLabel: "Confere se segue",
+    defaultConfig: () => ({}),
+  },
 };
 
 /**
@@ -241,6 +269,9 @@ export function describeNodeConfig(
   // Só o cartão Fim muda com a superfície: na automação o fim não tem "esgotado"
   // nem "convertido" para escolher, ele conclui. Ausente = follow-up.
   surface?: FollowupFlowSurface,
+  // Nomes (automação, etapa, pessoa) para a frase do card de Ações de CRM;
+  // ausente = a frase genérica ("escolhida").
+  nomes?: NomesDaAutomacao,
 ): string {
   switch (type) {
     case "trigger": {
@@ -308,7 +339,7 @@ export function describeNodeConfig(
       const c = config as ConfigOf<"crm_action">;
       const primeira = c.actions[0];
       const resto = c.actions.length > 1 ? ` +${c.actions.length - 1}` : "";
-      return primeira ? `${fraseDaAcao(primeira)}${resto}` : "";
+      return primeira ? `${fraseDaAcao(primeira, nomes)}${resto}` : "";
     }
     case "field_op": {
       const c = config as ConfigOf<"field_op">;
@@ -324,6 +355,13 @@ export function describeNodeConfig(
       const c = config as ConfigOf<"question">;
       return c.question.slice(0, 60);
     }
+    case "instagram_private_reply":
+    case "instagram_public_reply": {
+      const c = config as ConfigOf<"instagram_private_reply">;
+      return c.text.slice(0, 60);
+    }
+    case "instagram_check_follow":
+      return t("Segue o perfil?");
     default: {
       const exhaustive: never = type;
       return String(exhaustive);

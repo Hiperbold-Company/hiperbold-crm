@@ -32,7 +32,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * ─── Quem pode ──────────────────────────────────────────────────────────────
  *
  * Ler (`agent`): é a lista que o seletor do inbox usa, e quem atende precisa
- * dela. Sincronizar e criar (`admin`): escreve na conta da empresa na
+ * dela. Sincronizar e criar (`manager`, decisão do dono do produto de 03/11/2026): escreve na conta da empresa na
  * plataforma, como a gestão de modelos do canal oficial.
  *
  * A rota não nomeia o provider: pede o adapter da sessão e chama
@@ -104,7 +104,7 @@ interface Contexto {
  */
 async function contexto(
   requestId: string,
-  papel: "agent" | "admin",
+  papel: "agent" | "manager",
 ): Promise<{ ok: true; ctx: Contexto } | { ok: false; res: Response }> {
   if (!canalGraphParceiroLigado()) {
     return { ok: false, res: fail("not_found", "not found", 404, { requestId }) };
@@ -206,7 +206,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const r = await contexto(requestId, "admin");
+  const r = await contexto(requestId, "manager");
   if (!r.ok) return r.res;
   const t = (texto: string) => traduzir(texto, r.ctx.idioma);
 

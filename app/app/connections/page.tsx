@@ -20,7 +20,9 @@ export default async function ConnectionsPage() {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
-  if (!(user.is_platform_admin && !user.support) && ROLE_RANK[activeOrg.role] < ROLE_RANK.admin) {
+  // Decisão do dono do produto (03/11/2026): administrador ou gerente veem Conexões;
+  // atendente e leitor não. O mesmo piso do item do menu e das rotas da API da tela.
+  if (!(user.is_platform_admin && !user.support) && ROLE_RANK[activeOrg.role] < ROLE_RANK.manager) {
     redirect("/403");
   }
   const idioma = user.idioma;

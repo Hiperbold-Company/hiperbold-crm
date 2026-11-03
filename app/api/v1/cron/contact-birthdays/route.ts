@@ -39,6 +39,7 @@ import { audit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { autorizaCron } from "@/lib/auth/cron-auth";
+import { automacoesComGatilho } from "@/lib/automacoes/armadas";
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +104,20 @@ async function handle(req: NextRequest): Promise<Response> {
     return fail("internal_error", "Falha ao buscar regras.", 500, { requestId });
   }
 
-  const orgsComRegra = [...new Set((regras ?? []).map((r) => r.organization_id as string))];
+  // As organizações com AUTOMAÇÃO de aniversário (lote 3) também recebem o
+  // evento: o handler `automacao-gatilhos.v1` consome `contact.birthday`.
+  let orgsComAutomacao: string[] = [];
+  try {
+    orgsComAutomacao = (await automacoesComGatilho(admin, "birthday")).map((a) => a.organization_id);
+  } catch (err) {
+    logger.error("[contact-birthdays] consulta de automações falhou", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId,
+    });
+  }
+  const orgsComRegra = [
+    ...new Set([...(regras ?? []).map((r) => r.organization_id as string), ...orgsComAutomacao]),
+  ];
   if (orgsComRegra.length === 0) {
     return ok({ organizacoes: 0, examinados: 0, emitidos: 0, pulados: {} }, { requestId });
   }

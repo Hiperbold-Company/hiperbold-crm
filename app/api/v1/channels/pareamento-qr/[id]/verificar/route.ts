@@ -9,7 +9,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * poderia ser disparado por pré-busca, imagem ou link, sem a intenção de quem o recebe.
  * A tela chama a cada poucos segundos enquanto o cliente lê o QR.
  *
- * Exige admin da organização da sessão. A sessão é procurada SEMPRE com o `organization_id` da
+ * Exige administrador ou gerente da organização da sessão (decisão do dono do produto, 03/11/2026). A sessão é procurada SEMPRE com o `organization_id` da
  * sessão autenticada (nunca do path nem do corpo): o id de outra organização responde 404,
  * igual a um id que não existe.
  */
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: Contexto): Promise<Next
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "channels_pareamento_qr" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_pareamento_qr" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 

@@ -14,6 +14,8 @@ export interface ReferenciasDoGrafo {
   pessoas: string[];
   /** Fontes de captação (`webhook_sources`) do gatilho "lead criado". */
   fontes: string[];
+  /** Automações que a ação "Iniciar outra automação" inicia: desta organização e da superfície `automacao`. */
+  automacoes: string[];
 }
 
 export function referenciasDoGrafo(graph: FlowGraph): ReferenciasDoGrafo {
@@ -21,6 +23,7 @@ export function referenciasDoGrafo(graph: FlowGraph): ReferenciasDoGrafo {
   const etapas = new Set<string>();
   const pessoas = new Set<string>();
   const fontes = new Set<string>();
+  const automacoes = new Set<string>();
   for (const n of graph.nodes) {
     if (n.type === "crm_action") {
       for (const a of n.config.actions) {
@@ -34,6 +37,7 @@ export function referenciasDoGrafo(graph: FlowGraph): ReferenciasDoGrafo {
         }
         if (a.type === "notify" && Array.isArray(a.to)) a.to.forEach((id) => pessoas.add(id));
         if (a.type === "create_task" && a.assignee !== "owner") pessoas.add(a.assignee);
+        if (a.type === "start_automation") automacoes.add(a.pointer_id);
       }
     }
     if (n.type === "trigger" && "triggers" in n.config) {
@@ -53,7 +57,7 @@ export function referenciasDoGrafo(graph: FlowGraph): ReferenciasDoGrafo {
       }
     }
   }
-  return { funis: [...funis], etapas: [...etapas], pessoas: [...pessoas], fontes: [...fontes] };
+  return { funis: [...funis], etapas: [...etapas], pessoas: [...pessoas], fontes: [...fontes], automacoes: [...automacoes] };
 }
 
 /** Grafo com que uma automação nova nasce: Início (gatilho manual) → Fim. */

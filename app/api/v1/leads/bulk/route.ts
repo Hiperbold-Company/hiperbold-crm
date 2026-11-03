@@ -46,6 +46,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { observeServiceOrigin } from "@/lib/atendimento/origem";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { VIA_ACAO_EM_MASSA } from "@/lib/automacoes/chaves";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
@@ -657,7 +658,8 @@ export async function POST(req: NextRequest): Promise<Response> {
               p_entity_kind: "crm_lead",
               p_entity_id: row.id,
               p_payload: { added_tags: addedTags, tags: next, service_origin: tagServiceOrigin },
-              p_metadata: { request_id: requestId, actor_user_id: user.id },
+              // `via: bulk`: ação em massa não inicia automação (`lib/automacoes/gatilhos.ts`).
+              p_metadata: { request_id: requestId, actor_user_id: user.id, via: VIA_ACAO_EM_MASSA },
               p_organization_id: organizationId,
             })
             .then(({ error: emitError }) => {

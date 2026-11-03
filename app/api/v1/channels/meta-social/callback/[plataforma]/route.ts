@@ -7,7 +7,8 @@
  * identidade vem do `state` assinado (organização, usuário, sessão de login,
  * plataforma), somado ao cookie de vínculo `Lax` que prova que o navegador que
  * volta é o que saiu, ao nonce de uso único e a uma reconferência no banco de
- * que a pessoa AINDA administra a organização.
+ * que a pessoa AINDA é administrador ou gerente da organização (o mesmo piso de
+ * `conectar`, desde 03/11/2026).
  *
  * A ordem é contrato (molde do callback da agenda):
  *   1. `error` da Meta → a pessoa cancelou; volta sem barulho.
@@ -32,6 +33,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { audit } from "@/lib/audit";
+import { roleAtLeast } from "@/lib/auth/types";
 import { configMetaSocial } from "@/lib/channels/meta-social/config";
 import { PLATAFORMAS_META_SOCIAL, caminhoDoCallback, type PlataformaMetaSocial } from "@/lib/channels/meta-social/constantes";
 import { NOME_DO_VINCULO_META_SOCIAL, verificarEstadoMetaSocial, vinculoMetaSocialConfere } from "@/lib/channels/meta-social/estado";
@@ -66,7 +68,7 @@ interface RouteCtx {
 
 const erro = (motivo: MotivoDaVolta) => voltarParaConexoes({ meta_social: "erro", motivo, n: 0 });
 
-/** A pessoa do `state` ainda é admin da organização (ou admin de plataforma ativo)? */
+/** A pessoa do `state` ainda é administrador ou gerente da organização (ou admin de plataforma ativo)? */
 async function aindaAdministra(
   admin: ReturnType<typeof createAdminClient>,
   organizationId: string,
@@ -79,7 +81,8 @@ async function aindaAdministra(
     .eq("user_id", userId)
     .maybeSingle();
   const v = vinculo as { role: string; revoked_at: string | null } | null;
-  if (v && v.revoked_at === null && v.role === "admin") return true;
+  // Mesmo piso de `conectar` (`requireRole("manager")`): decisão do dono do produto, 03/11/2026.
+  if (v && v.revoked_at === null && roleAtLeast(v.role, "manager")) return true;
   const { data: plataforma } = await admin
     .from("platform_admins")
     .select("user_id")

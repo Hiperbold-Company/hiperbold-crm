@@ -27,13 +27,15 @@ function view(role: Role, locale: "pt-BR" | "es", who = baseUser, caidas: Conexa
   </AuthProvider>;
 }
 const copy = {
-  "pt-BR": { qr: "Escanear o QR", connections: "Ver conexões", help: "Peça a quem administra para revisar a conexão do WhatsApp.", outage: "nenhuma mensagem entra nem sai." },
-  es: { qr: "Escanear el QR", connections: "Ver conexiones", help: "Pide a quien administra que revise la conexión de WhatsApp.", outage: "ningún mensaje entra ni sale." },
+  "pt-BR": { qr: "Escanear o QR", connections: "Ver conexões", help: "Peça a um administrador ou gerente para revisar a conexão do WhatsApp.", outage: "nenhuma mensagem entra nem sai." },
+  es: { qr: "Escanear el QR", connections: "Ver conexiones", help: "Pide a un administrador o gerente que revise la conexión de WhatsApp.", outage: "ningún mensaje entra ni sale." },
 };
 
 describe.each(["pt-BR", "es"] as const)("alerta de conexão em %s", locale => {
   it.each([
     ["admin do tenant", "admin", baseUser],
+    // Decisão do dono do produto (03/11/2026): gerente também abre Conexões.
+    ["gerente", "manager", baseUser],
     ["plataforma fora do suporte", "agent", { ...baseUser, is_platform_admin: true }],
     ["suporte de edição", "admin", { ...baseUser, is_platform_admin: true, support: { ...support, access_mode: "full" } }],
   ] as const)("%s abre Conexões com a ação adequada ao estado", (_name, role, who) => {
@@ -48,7 +50,6 @@ describe.each(["pt-BR", "es"] as const)("alerta de conexão em %s", locale => {
 
   it.each([
     ["atendente", "agent", baseUser],
-    ["gerente", "manager", baseUser],
     ["viewer", "viewer", baseUser],
     ["plataforma em suporte somente leitura com vínculo físico admin", "viewer", { ...baseUser, is_platform_admin: true, support }],
   ] as const)("%s recebe o alerta e uma orientação, sem CTA proibida", (_name, role, who) => {

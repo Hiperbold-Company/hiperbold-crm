@@ -24,6 +24,7 @@ import { AutomationTriggerForm } from "./forms/automacao/AutomationTriggerForm";
 import { CondicaoAutomacaoForm } from "./forms/automacao/CondicaoAutomacaoForm";
 import { CrmActionForm } from "./forms/automacao/CrmActionForm";
 import { FieldOpForm } from "./forms/automacao/FieldOpForm";
+import { ConfereSeSegueForm, RespostaPrivadaForm, RespostaPublicaForm } from "./forms/automacao/InstagramForms";
 import { MessageForm } from "./forms/automacao/MessageForm";
 import { QuestionForm } from "./forms/automacao/QuestionForm";
 import type { RespostaDisponivel } from "./forms/automacao/comum";
@@ -114,6 +115,7 @@ export function NodeConfigPanel({
           <AutomationTriggerForm
             config={node.data.config as ConfigOf<"trigger">}
             onChange={(config) => onChange({ config })}
+            {...(flowId !== undefined ? { flowId } : {})}
           />
         )}
         {type === "trigger" && surface === "followup" && (
@@ -155,8 +157,28 @@ export function NodeConfigPanel({
           />
         )}
         {type === "crm_action" && (
-          <CrmActionForm config={node.data.config as ConfigOf<"crm_action">} onChange={(config) => onChange({ config })} />
+          <CrmActionForm
+            config={node.data.config as ConfigOf<"crm_action">}
+            onChange={(config) => onChange({ config })}
+            respostas={respostasAnteriores}
+            {...(flowId !== undefined ? { flowId } : {})}
+          />
         )}
+        {type === "instagram_private_reply" && (
+          <RespostaPrivadaForm
+            config={node.data.config as ConfigOf<"instagram_private_reply">}
+            onChange={(config) => onChange({ config })}
+            respostas={respostasAnteriores}
+          />
+        )}
+        {type === "instagram_public_reply" && (
+          <RespostaPublicaForm
+            config={node.data.config as ConfigOf<"instagram_public_reply">}
+            onChange={(config) => onChange({ config })}
+            respostas={respostasAnteriores}
+          />
+        )}
+        {type === "instagram_check_follow" && <ConfereSeSegueForm />}
         {type === "field_op" && (
           <FieldOpForm config={node.data.config as ConfigOf<"field_op">} onChange={(config) => onChange({ config })} />
         )}

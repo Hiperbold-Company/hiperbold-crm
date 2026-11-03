@@ -11,7 +11,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * ─── Ela NÃO pede a credencial de novo ───────────────────────────────────────
  * O token já está cifrado na sessão; pedir de novo faria o operador procurar um token
  * que ele talvez nem tenha mais à mão para repetir uma chamada que é do nosso lado. O
- * que ela exige é a sessão VIVA (não arquivada) e um admin — a mesma guarda da tela.
+ * que ela exige é a sessão VIVA (não arquivada) e um administrador ou gerente — a mesma guarda da tela (03/11/2026).
  *
  * O desfecho é o da tentativa de AGORA, e é gravado nas colunas da 0311: a tela
  * recarrega o GET e vê o estado novo, não o da tentativa anterior.
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "channels_official_webhook" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_official_webhook" });
   if (!authz.ok) return authz.response;
   const orgId = authz.org.orgId;
 

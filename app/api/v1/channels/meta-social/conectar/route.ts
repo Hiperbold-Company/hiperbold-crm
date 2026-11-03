@@ -1,7 +1,7 @@
 /**
  * GET /api/v1/channels/meta-social/conectar?plataforma=instagram|messenger
  *
- * Começa o OAuth: confere papel (admin), a verificação em duas etapas e o
+ * Começa o OAuth: confere papel (administrador ou gerente, desde 03/11/2026), a verificação em duas etapas e o
  * limite do plano, emite o `state` assinado e o cookie de vínculo, e manda o
  * navegador ao consentimento da Meta. Todo desfecho é REDIRECT para a tela de
  * conexões (`aba=sociais&meta_social=erro&motivo=<código>`), nunca JSON: quem
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   const requestId = req.headers.get("x-request-id") ?? randomUUID();
   const support = await requireSupportWrite();
   if (support) return support;
-  const auth = await requireRole("admin", { requestId, resource: "social_connections" });
+  const auth = await requireRole("manager", { requestId, resource: "social_connections" });
   if (!auth.ok) return auth.response;
   if (await mfaEmDivida()) return erro("mfa_required");
 

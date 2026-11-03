@@ -2,7 +2,7 @@
  * POST /api/v1/channels/official/registrar: registra o número `PENDING` na API oficial da Meta (D-174).
  *
  * `POST /{phone_number_id}/register` com `messaging_product: whatsapp` e um PIN de seis dígitos (a
- * verificação em duas etapas do número). Só admin da organização.
+ * verificação em duas etapas do número). Só administrador ou gerente da organização (03/11/2026).
  *
  * ─── O fluxo do PIN, e por que é este ────────────────────────────────────────
  * Sem `pin` no corpo, o CRM GERA um (aleatório criptográfico) e o devolve UMA vez nesta resposta, para
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "channels_official_registrar" });
+  const authz = await requireRole("manager", { requestId, resource: "channels_official_registrar" });
   if (!authz.ok) return authz.response;
 
   const bruto = await req.json().catch(() => ({}));

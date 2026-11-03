@@ -125,7 +125,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     .maybeSingle();
   if (vErr || !versao) return fail("internal_error", t("Erro ao ler a automação."), 500, { requestId });
   const gatilhos = gatilhosDoGrafo((versao as { graph: unknown }).graph);
-  if (!gatilhos?.triggers.some((g) => g.kind === "manual")) {
+  // "Iniciada por outra automação" também se testa à mão (o "Testar" do editor).
+  if (!gatilhos?.triggers.some((g) => g.kind === "manual" || g.kind === "started_by_automation")) {
     return fail(
       "trigger_not_manual",
       t("Esta automação não tem o gatilho Manual. Acrescente-o no Início e publique de novo."),

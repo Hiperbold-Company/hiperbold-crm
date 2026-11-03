@@ -182,9 +182,9 @@ beforeEach(() => {
 });
 
 describe("rota de modelos — editar e apagar", () => {
-  it("editar e apagar pedem admin, como criar", async () => {
+  it("editar e apagar pedem gerente, como criar (03/11/2026)", async () => {
     await post({ acao: "editar", name: "x", language: "es", components: [{ type: "BODY", text: "a" }] });
-    expect(h.role).toHaveBeenCalledWith("admin", expect.anything());
+    expect(h.role).toHaveBeenCalledWith("manager", expect.anything());
   });
 
   it("editar chama a plataforma e audita template.updated", async () => {
