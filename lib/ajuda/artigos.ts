@@ -56,7 +56,7 @@ export const ARTIGOS_POR_ROTA: Readonly<Record<string, string>> = {
   "/app/settings/billing": "/crm/assinatura/meu-plano/",
 
   // Receber leads (fontes de captação)
-  "/app/webhooks": "/crm/automacoes/criar-uma-automacao/",
+  "/app/webhooks": "/crm/automacoes/regras-em-automacoes-e-webhooks/",
 
   // Integrações e API
   "/app/settings/api-tokens": "/crm/integracoes-e-api/tokens-de-api/",
@@ -79,7 +79,7 @@ export const ARTIGOS_POR_ABA: Readonly<Record<string, Readonly<Record<string, st
   "/app/webhooks": {
     sources: "/crm/receber-leads/fontes-de-captacao/",
     capturas: "/crm/receber-leads/leads-recebidos/",
-    rules: "/crm/automacoes/criar-uma-automacao/",
+    rules: "/crm/automacoes/regras-em-automacoes-e-webhooks/",
   },
 };
 
