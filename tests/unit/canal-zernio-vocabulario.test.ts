@@ -36,6 +36,8 @@ describe("capabilities do canal intermediado", () => {
       costPerMessage: true,
       alteraMensagemEnviada: false,
       anexosDeSaida: { imagem: true, video: true, audio: true, documento: true, contato: true },
+      // Opções (botões/lista) saem como texto numerado: o adapter não as monta.
+      interactive: "none",
     });
   });
 

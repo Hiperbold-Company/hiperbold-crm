@@ -5638,5 +5638,8 @@
   "Nesta fase só o limite de Conexões bloqueia. Os demais itens apenas avisam.": "目前只有“连接”上限会拦截，其他项目仅作提醒。",
   "Conexões ilimitadas": "不限连接数",
   "Catálogo de Produtos E-commerce": "电商产品目录",
-  "Os produtos sincronizados da sua loja virtual, com preço, descrição e disponibilidade.": "从你的网店同步的产品，包含价格、描述和库存情况。"
+  "Os produtos sincronizados da sua loja virtual, com preço, descrição e disponibilidade.": "从你的网店同步的产品，包含价格、描述和库存情况。",
+  "Janela de 24 horas fechada: botões e lista só saem com a janela aberta.": "24 小时窗口已关闭：按钮和列表只能在窗口开启时发送。",
+  "Opções da mensagem inválidas.": "消息选项无效。",
+  "Mensagem com opções precisa de texto e não leva anexo.": "带选项的消息需要文字，且不能附带附件。"
 }

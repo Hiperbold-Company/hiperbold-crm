@@ -19,6 +19,7 @@ import { MediaRenderer } from "@/components/inbox/media/MediaRenderer";
 import { ContactCard } from "@/components/inbox/media/ContactCard";
 import { LocationCard } from "@/components/inbox/media/LocationCard";
 import { localizacaoDaMensagem } from "@/lib/messaging/localizacao";
+import { opcoesNativasDaMensagem } from "@/lib/channels/opcoes-numeradas";
 import {
   extractCitations,
   isAiGeneratedMessage,
@@ -121,6 +122,9 @@ export function MessageBubble({
   const temMenu = Boolean(onResponder || (podeEditar && onEditar) || podeApagar || podeOcultar);
   const aiGenerated = isAiGeneratedMessage(message.metadata);
   const citations = extractCitations(message.metadata);
+  // Botões ou lista que o canal desenhou para o contato. Texto numerado não
+  // entra aqui: as opções já estão no próprio corpo.
+  const opcoesNativas = opcoesNativasDaMensagem(message.metadata);
   const showCitationButton =
     isOutbound && aiGenerated && (debugCitations ?? false);
   // De quem saiu esta linha. `external_device` é a resposta pelo CELULAR — o
@@ -381,6 +385,24 @@ export function MessageBubble({
 
             {message.body && !isContact && !localizacao && (
               <p className="whitespace-pre-wrap wrap-anywhere leading-snug">{message.body}</p>
+            )}
+
+            {opcoesNativas && (
+              <div className="mt-1 space-y-1 border-t border-current/20 pt-1" data-testid="opcoes-da-mensagem">
+                {opcoesNativas.kind === "list" && (
+                  <p className="text-[11px] font-medium opacity-80">{opcoesNativas.button_label}</p>
+                )}
+                <ul className="space-y-1">
+                  {opcoesNativas.items.map((item) => (
+                    <li key={item.id} className="rounded-md border border-current/25 px-2 py-1 text-center text-xs">
+                      <span className="wrap-anywhere">{item.label}</span>
+                      {"description" in item && item.description && (
+                        <span className="block text-[10px] opacity-70 wrap-anywhere">{item.description}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </>
         )}
