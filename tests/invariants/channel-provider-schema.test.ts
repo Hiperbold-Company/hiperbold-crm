@@ -74,8 +74,16 @@ describe("0087 · o canal da sessão chega ao clone", () => {
     // As três `meta_webhook_override_*` (migration 0311) entraram de propósito: são o
     // desfecho do registro do webhook do número ao conectar o canal oficial. A cerca
     // continua valendo — ela existe para pegar coluna que entrou SEM querer.
+    // As seis `meta_social_*` (migration 0984) também são de propósito: são do
+    // provider `meta_social` (Instagram e Messenger oficiais), não do meta_cloud.
     expect(cols).toEqual([
       "meta_phone_number_id",
+      "meta_social_account_id",
+      "meta_social_platform",
+      "meta_social_token_encrypted",
+      "meta_social_token_expires_at",
+      "meta_social_token_refreshed_at",
+      "meta_social_username",
       "meta_token_encrypted",
       "meta_waba_id",
       "meta_webhook_override_em",

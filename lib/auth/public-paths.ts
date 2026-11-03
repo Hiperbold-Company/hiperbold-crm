@@ -97,6 +97,20 @@ export const PUBLIC_PATHS: RegExp[] = [
   // volta do Google não tem, e não pode ter, o cookie.
   /^\/api\/v1\/plataformas-de-anuncio\/google\/callback$/,
   /^\/api\/v1\/integrations\/nuvemshop\/callback$/,
+  // Volta do consentimento do Instagram e do Facebook (canal social oficial,
+  // migration 0984). Mesma natureza das voltas acima: navegação de outro site,
+  // sem o cookie `Strict`; a identidade vem do `state` assinado com domínio
+  // próprio, do cookie de vínculo `Lax`, do nonce de uso único e da
+  // reconferência do papel no banco (`lib/channels/meta-social/estado.ts`).
+  // Só as duas plataformas, ancorado.
+  /^\/api\/v1\/channels\/meta-social\/callback\/(instagram|messenger)$/,
+  // Callback de exclusão de dados da Meta: quem chama é a Meta, sem sessão. A
+  // autenticação é o `signed_request` (HMAC com o segredo do app), conferido
+  // dentro da rota. Ancorado.
+  /^\/api\/v1\/meta\/exclusao-de-dados$/,
+  // Status da exclusão de dados pedida pela Meta (Instagram e Messenger); quem
+  // chega não tem sessão; ancorado.
+  /^\/exclusao-de-dados$/,
   /^\/api\/internal\//,
   /^\/api\/mcp(\/.*)?$/,
   // GET /api/v1/contacts aceita SESSÃO ou Bearer `dsk_...` (api_tokens) — a

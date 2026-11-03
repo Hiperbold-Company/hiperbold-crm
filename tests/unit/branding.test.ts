@@ -865,6 +865,11 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "endpoint de token do OAuth do Google — o par de `accounts.google.com` no fluxo de autorização da agenda, e também do Google Ads (`lib/plataformas-de-anuncio/google/token.ts`).",
   },
+  "www.facebook.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "diálogo de consentimento do login do Facebook (`/<versão>/dialog/oauth`), que concede as Páginas do Messenger (0984), e do login unificado do Instagram (`/dialog/oauth` com `config_id`, 0988). Contrato da Meta.",
+  },
   "googleads.googleapis.com": {
     categoria: "FORNECEDOR",
     motivo:

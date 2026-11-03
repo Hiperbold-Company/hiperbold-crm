@@ -17,7 +17,7 @@ import {
   useChannelSessions,
   type ChannelSession,
 } from "@/hooks/channels/useChannelSessions";
-import { CHANNEL_PROVIDER_SOCIAL } from "@/lib/channels/capabilities";
+import { ehCanalSocial } from "@/lib/channels/capabilities";
 import { usePacingKnobs } from "@/hooks/channels/usePacingKnobs";
 import { AntiBanSheet } from "./AntiBanSheet";
 import { PairingOptions } from "./PairingOptions";
@@ -241,7 +241,8 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
     invalidate();
   }, [invalidate, t]);
 
-  const list = (sessions ?? []).filter((session) => session.provider !== CHANNEL_PROVIDER_SOCIAL);
+  // Contas de rede social (intermediada ou oficial) têm a aba própria; aqui é só WhatsApp.
+  const list = (sessions ?? []).filter((session) => !ehCanalSocial(session.provider));
 
   return (
     <div className="flex flex-col gap-4">

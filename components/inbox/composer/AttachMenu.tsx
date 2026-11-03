@@ -10,11 +10,21 @@ interface Props {
   disabled?: boolean;
   onPick: (file: File) => void;
   onPickContact?: () => void;
+  /**
+   * O que o canal da conversa envia (`capabilitiesOf(provider).anexosDeSaida`).
+   * Ausente = tudo, o comportamento dos canais de WhatsApp.
+   */
+  aceita?: { imagem: boolean; video: boolean; documento: boolean };
 }
 
 /** Menu "+" do composer (padrão WhatsApp): Fotos e vídeos / Documento / Contato. */
-export function AttachMenu({ disabled, onPick, onPickContact }: Props) {
+export function AttachMenu({ disabled, onPick, onPickContact, aceita }: Props) {
   const t = useT();
+  const imagem = aceita?.imagem ?? true;
+  const video = aceita?.video ?? true;
+  const documento = aceita?.documento ?? true;
+  const tiposDeMidia = [imagem ? "image/*" : null, video ? "video/*" : null].filter(Boolean).join(",");
+  const rotuloDeMidia = imagem && video ? t("Fotos e vídeos") : imagem ? t("Fotos") : t("Vídeos");
   const mediaRef = useRef<HTMLInputElement | null>(null);
   const docRef = useRef<HTMLInputElement | null>(null);
 
@@ -40,22 +50,26 @@ export function AttachMenu({ disabled, onPick, onPickContact }: Props) {
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" side="top" className="w-52 p-1">
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
-            onClick={() => mediaRef.current?.click()}
-          >
-            <ImageSquare size={18} weight="duotone" className="text-primary" aria-hidden />
-            {t("Fotos e vídeos")}
-          </button>
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
-            onClick={() => docRef.current?.click()}
-          >
-            <FileText size={18} weight="duotone" className="text-primary" aria-hidden />
-            {t("Documento")}
-          </button>
+          {tiposDeMidia && (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
+              onClick={() => mediaRef.current?.click()}
+            >
+              <ImageSquare size={18} weight="duotone" className="text-primary" aria-hidden />
+              {rotuloDeMidia}
+            </button>
+          )}
+          {documento && (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
+              onClick={() => docRef.current?.click()}
+            >
+              <FileText size={18} weight="duotone" className="text-primary" aria-hidden />
+              {t("Documento")}
+            </button>
+          )}
           {onPickContact && (
             <button
               type="button"
@@ -72,7 +86,7 @@ export function AttachMenu({ disabled, onPick, onPickContact }: Props) {
           popover ao fechar, e um input desmontado no meio do clique perde o
           file picker ("nada acontece"). Aqui os refs seguem válidos após o
           fechamento — o .click() síncrono no onClick preserva o user-gesture. */}
-      <input ref={mediaRef} type="file" accept="image/*,video/*" className="hidden" onChange={handle} />
+      <input ref={mediaRef} type="file" accept={tiposDeMidia || "image/*"} className="hidden" onChange={handle} />
       <input
         ref={docRef}
         type="file"

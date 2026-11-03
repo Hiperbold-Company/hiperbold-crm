@@ -39,7 +39,7 @@
  * dentro, com log, e o seguinte roda mesmo assim.
  */
 import { audit } from "@/lib/audit";
-import { garantirLeadDaConversa } from "@/lib/leads/nascimento-do-lead";
+import { garantirLeadDaConversa, type OrigemDoNascimento } from "@/lib/leads/nascimento-do-lead";
 import {
   ehAPrimeiraMensagemDoContato,
   estamparOrigemDaPagina,
@@ -111,6 +111,8 @@ export interface EntradaDeMensagem {
    * lendo o `event_log` meses depois, se saiba por onde a mensagem entrou.
    */
   origem: string;
+  /** Canal do lead que nascer desta conversa. Ausente = WhatsApp (o padrão de sempre). */
+  canalDoNascimento?: OrigemDoNascimento;
 }
 
 /**
@@ -282,6 +284,7 @@ async function abrirDemanda(admin: Admin, entrada: EntradaDeMensagem): Promise<v
       contactId: entrada.contactId,
       conversationId: entrada.conversationId,
       nomeDoContato: entrada.nomeDoContato,
+      origem: entrada.canalDoNascimento,
     });
 
     // Os DOIS desfechos viram log. Sem a linha do "não criou", o silêncio de

@@ -33,6 +33,20 @@ const FRASES: Record<string, string> = {
   waha_error: "Não conseguimos falar com o serviço de WhatsApp. Confira se ele está no ar.",
   meta_error: "O WhatsApp Oficial recusou o envio. Confira a conexão em Conexões.",
   zernio_error: "O canal recusou o envio. Confira a conexão em Conexões.",
+  // Instagram Direct e Messenger pela conexão oficial (`meta_social`). A
+  // mensagem da Meta nunca chega ao operador crua: o adapter traduz o erro
+  // num destes códigos (`codigoDaFalhaDeEnvio`).
+  meta_social_not_configured: "A conexão com o Instagram e o Messenger ainda não foi configurada nesta instalação.",
+  meta_social_send_failed: "A rede recusou o envio. Confira a conexão em Conexões › Redes sociais.",
+  meta_social_error: "Não conseguimos falar com a Meta agora. Tente de novo em alguns minutos.",
+  meta_social_token_invalid: "O acesso a esta conta venceu ou foi retirado. Reconecte em Conexões › Redes sociais.",
+  meta_social_outside_window:
+    "Passaram mais de 24 horas desde a última mensagem do cliente. A Meta só libera a resposta quando ele escrever de novo.",
+  meta_social_recipient_unavailable: "Esta pessoa não pode receber mensagens desta conta agora.",
+  meta_social_messages_access_off:
+    "O dono da conta desligou \"Permitir acesso às mensagens\" no Instagram. Peça para ligar em Configurações > Mensagens e respostas de stories > Ferramentas conectadas.",
+  meta_social_account_not_eligible:
+    "Esta conta do Instagram precisa ser profissional (Empresa ou Criador) e ter a permissão de mensagens. Ajuste e conecte de novo em Conexões › Redes sociais.",
   // Falha do NOSSO Storage ao preparar a mídia — não é do canal.
   storage_sign_failed: "Não conseguimos preparar o arquivo para envio.",
 };

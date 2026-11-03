@@ -65,6 +65,56 @@ interface Consulta {
   filtros: string[];
   /** Filtros da cadeia MAIS os do terminal. Ver o comentário abaixo. */
   filtrosComTerminal: string[];
+  /** Consulta declarada como exceção (ver `EXCECOES_DECLARADAS`). */
+  excecao: boolean;
+}
+
+/**
+ * Exceções DECLARADAS: um conjunto FECHADO de motivos, cada um amarrado ao
+ * arquivo onde pode aparecer, e só valem com a marca
+ * `// cerca-canal: <motivo>` na linha IMEDIATAMENTE acima do início da
+ * consulta (a linha do `.from(` ou, quando o `.from(` abre a linha, a linha de
+ * cima dela — o `const { data } = await admin`). Marca dois parágrafos acima,
+ * motivo fora da lista ou motivo em outro arquivo: não vale.
+ *
+ * O canal social oficial da Meta (migration 0984) tem UM webhook para a
+ * instalação inteira: a organização é DESCOBERTA pela conta (`entry.id`,
+ * assinado pelo segredo do app), então essa consulta não pode filtrar uma
+ * organização que ainda não conhece. O que a torna segura: o índice único
+ * parcial `channel_sessions_meta_social_conta_ativa_uidx` (uma conta viva em
+ * uma organização só), o recorte `archived_at is null`, e a recusa quando volta
+ * mais de uma linha. A segunda é a checagem "esta conta já está em OUTRA
+ * organização?" — a que protege esse índice. A terceira procura a linha
+ * ARQUIVADA da própria organização para reativar (o recorte é o inverso, de
+ * propósito, e o `organization_id` está lá). A quarta é o pedido de exclusão
+ * de dados da Meta (0987): ele chega com o id da PESSOA, sem organização, e a
+ * organização de cada sessão achada vem da própria linha, que é arquivada
+ * filtrando por ela.
+ *
+ * A lista só cresce com motivo escrito.
+ */
+export const MOTIVOS_DECLARADOS: ReadonlyMap<string, string> = new Map([
+  ["resolucao_pela_conta_assinada", "lib/channels/meta-social/ingest.ts"],
+  ["conta_viva_em_outra_organizacao", "lib/channels/meta-social/store.ts"],
+  ["linha_arquivada_da_propria_organizacao", "lib/channels/meta-social/store.ts"],
+  ["exclusao_pedida_pela_meta", "lib/channels/meta-social/exclusao.ts"],
+]);
+
+/**
+ * A consulta que começa em `indice` (posição do `.from(`) está marcada como
+ * exceção válida? Pura, para a própria cerca ser testada.
+ */
+export function excecaoDeclarada(fonte: string, indice: number, arquivo: string): boolean {
+  const linhas = fonte.slice(0, indice).split("\n");
+  // Linha do `.from(` (o pedaço antes dele) e as anteriores.
+  let i = linhas.length - 1;
+  // Se o `.from(` abre a linha, a consulta começa na linha de cima.
+  if (linhas[i]!.trim() === "") i -= 1;
+  const acima = linhas[i - 1];
+  if (acima === undefined) return false;
+  const m = /^\s*\/\/\s*cerca-canal:\s*([a-z_]+)(?:\s|$)/.exec(acima);
+  if (!m) return false;
+  return MOTIVOS_DECLARADOS.get(m[1]!) === arquivo;
 }
 
 /** `.eq("x", …)`, `.is(ARCHIVED_AT, null)` → nome da coluna filtrada. */
@@ -109,6 +159,7 @@ function consultas(fonte: string, arquivo: string): Consulta[] {
       linha: fonte.slice(0, i).split("\n").length,
       filtros: colunasFiltradas(cadeia),
       filtrosComTerminal: colunasFiltradas(comTerminal),
+      excecao: excecaoDeclarada(fonte, i, path.relative(RAIZ, arquivo)),
     });
     i = fonte.indexOf(marca, i + marca.length);
   }
@@ -131,6 +182,7 @@ describe("lib/channels: consulta a channel_sessions por identificador do provide
   it("quem filtra por identificador do provider filtra organization_id também", () => {
     const faltando = TODAS.filter(
       (c) =>
+        !c.excecao &&
         c.filtros.some((f) => COLUNAS_DE_REF.includes(f)) &&
         !c.filtros.includes("organization_id"),
     ).map((c) => `${c.arquivo}:${c.linha} (filtros: ${c.filtros.join(", ") || "nenhum"})`);
@@ -152,6 +204,7 @@ describe("lib/channels: consulta a channel_sessions por identificador do provide
     // linhas, justo no ponto em que o banco deixou de proteger.
     const semRecorte = TODAS.filter(
       (c) =>
+        !c.excecao &&
         c.filtros.some((f) => COLUNAS_DE_REF.includes(f)) &&
         !c.filtrosComTerminal.includes("archived_at"),
     ).map((c) => `${c.arquivo}:${c.linha}`);
@@ -163,6 +216,44 @@ describe("lib/channels: consulta a channel_sessions por identificador do provide
         "channel_sessions_meta_phone_number_id_ativo_unique e " +
         "channel_sessions_zernio_account_id_ativo_unique.",
     ).toEqual([]);
+  });
+});
+
+describe("a própria cerca: só a marca colada e com motivo da lista vale", () => {
+  const ARQ = "lib/channels/meta-social/store.ts";
+  const pos = (f: string) => f.indexOf('.from("channel_sessions")');
+
+  it("marca na linha imediatamente acima vale", () => {
+    const f = [
+      "  // cerca-canal: conta_viva_em_outra_organizacao (motivo)",
+      "  const { data } = await admin",
+      '    .from("channel_sessions")',
+      '    .eq("meta_social_account_id", x);',
+    ].join("\n");
+    expect(excecaoDeclarada(f, pos(f), ARQ)).toBe(true);
+  });
+
+  it("marca longe (uma linha no meio) reprova", () => {
+    const f = [
+      "  // cerca-canal: conta_viva_em_outra_organizacao",
+      "  const outra = 1;",
+      "  const { data } = await admin",
+      '    .from("channel_sessions")',
+    ].join("\n");
+    expect(excecaoDeclarada(f, pos(f), ARQ)).toBe(false);
+  });
+
+  it("motivo fora da lista, ou de outro arquivo, reprova", () => {
+    const inventado = ["  // cerca-canal: qualquer_coisa", "  const { data } = await admin", '    .from("channel_sessions")'].join("\n");
+    expect(excecaoDeclarada(inventado, pos(inventado), ARQ)).toBe(false);
+    const alheio = ["  // cerca-canal: resolucao_pela_conta_assinada", "  const { data } = await admin", '    .from("channel_sessions")'].join("\n");
+    expect(excecaoDeclarada(alheio, pos(alheio), ARQ)).toBe(false);
+    expect(excecaoDeclarada(alheio, pos(alheio), "lib/channels/meta-social/ingest.ts")).toBe(true);
+  });
+
+  it("toda exceção usada no código está na lista, e todo motivo da lista é usado", () => {
+    const usados = TODAS.filter((c) => c.excecao).length;
+    expect(usados).toBe(MOTIVOS_DECLARADOS.size);
   });
 });
 

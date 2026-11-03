@@ -33,6 +33,15 @@
 export const VERSAO_PADRAO_DA_GRAPH = "v22.0";
 
 /**
+ * A versão do canal social OFICIAL (Instagram Direct e Messenger, migration
+ * 0984). Separada da do WhatsApp de propósito: a Instagram API com login do
+ * Instagram foi conferida em v26.0, e subir a do WhatsApp para acompanhar seria
+ * um bump não medido no envio de template. Mora aqui para continuar havendo UM
+ * lugar onde se lê toda versão da Graph que o produto fala.
+ */
+export const VERSAO_DA_GRAPH_DO_CANAL_SOCIAL = "v26.0";
+
+/**
  * A versão com que a Graph API é chamada hoje.
  *
  * `META_GRAPH_VERSION` continua mandando quando existe — instalação que já
