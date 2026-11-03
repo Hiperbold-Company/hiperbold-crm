@@ -24,6 +24,7 @@ import {
 } from "@/lib/automacoes/vocabulario";
 import type { CustomFieldDef } from "@/lib/schemas/settings";
 import { etapasPorFunil, nomeDaEtapa } from "@/hooks/followup/useEtapasDeGatilho";
+import { useFollowupFlows } from "@/hooks/followup/useFollowupFlows";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useT } from "@/hooks/i18n/useT";
 
@@ -252,21 +253,32 @@ export function SeletorDeCampo({
   );
 }
 
-/** Nomes de etapa, funil e pessoa para as frases dos blocos. */
+/**
+ * As automações da organização (a mesma listagem da tela Automações), para a
+ * ação "Iniciar outra automação" e o gatilho "Iniciada por outra automação".
+ */
+export function useAutomacoesDaOrganizacao(enabled = true) {
+  return useFollowupFlows({ surface: "automacao", enabled });
+}
+
+/** Nomes de etapa, funil, pessoa e automação para as frases dos blocos. */
 export function useNomesDaAutomacao(): NomesDaAutomacao {
   const { etapas, funis, carregando, falhou } = useFunis();
   const membros = useAssignableMembers(true);
+  const automacoes = useAutomacoesDaOrganizacao();
   return useMemo(() => {
     const etapa = new Map(etapas.map((e) => [e.stageId, nomeDaEtapa(e)]));
     const funil = new Map(funis.map((f) => [f.id, f.nome]));
     const pessoa = new Map((membros.data ?? []).map((m) => [m.user_id, m.full_name ?? m.user_id]));
+    const automacao = new Map((automacoes.data ?? []).map((a) => [a.id, a.name]));
     const incerto = carregando || falhou ? "…" : null;
     return {
       etapa: (id) => etapa.get(id) ?? incerto,
       funil: (id) => funil.get(id) ?? incerto,
       pessoa: (id) => pessoa.get(id) ?? (membros.isLoading ? "…" : null),
+      automacao: (id) => automacao.get(id) ?? (automacoes.isLoading ? "…" : null),
     };
-  }, [etapas, funis, carregando, falhou, membros.data, membros.isLoading]);
+  }, [etapas, funis, carregando, falhou, membros.data, membros.isLoading, automacoes.data, automacoes.isLoading]);
 }
 
 /** Lista "a, b, c" → array limpo (sem vazio, sem repetido). */

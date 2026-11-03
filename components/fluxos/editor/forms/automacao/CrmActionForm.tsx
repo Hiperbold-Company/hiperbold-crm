@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  CHAVE_DE_PARAMETRO,
   crmActionConfigSchema,
+  MAX_PARAMETROS,
+  MAX_VALOR_DE_PARAMETRO,
   type CrmAction,
   type CrmActionConfig,
   type CrmActionType,
@@ -24,13 +27,16 @@ import { Plus, Trash } from "@/lib/ui/icons";
 
 import {
   AJUDA_DAS_VARIAVEIS,
+  AjudaDeVariaveis,
   Campo,
   listaDeTags,
   opcoesDeEtapa,
   Seletor,
+  useAutomacoesDaOrganizacao,
   useFunis,
   useNomesDaAutomacao,
   type Opcao,
+  type RespostaDisponivel,
 } from "./comum";
 
 /** Ação recém-escolhida: o mínimo que a tela precisa para mostrar os campos. */
@@ -60,12 +66,6 @@ export function acaoEmBranco(type: CrmActionType): CrmAction {
   }
 }
 
-/**
- * "Iniciar outra automação" ainda não tem formulário (escolher a automação e
- * os dados a passar): fica fora da lista, e só aparece quando o grafo já a traz.
- */
-const ACAO_SEM_FORMULARIO: CrmActionType = "start_automation";
-
 const opcoesDe = <K extends string>(mapa: Record<K, string>, t: (s: string) => string): Opcao[] =>
   (Object.keys(mapa) as K[]).map((k) => ({ valor: k, rotulo: t(mapa[k]) }));
 
@@ -77,9 +77,15 @@ const opcoesDe = <K extends string>(mapa: Record<K, string>, t: (s: string) => s
 export function CrmActionForm({
   config,
   onChange,
+  flowId,
+  respostas = [],
 }: {
   config: CrmActionConfig;
   onChange: (config: CrmActionConfig) => void;
+  /** A automação aberta: "Iniciar outra automação" não a oferece. */
+  flowId?: string;
+  /** Respostas dos blocos anteriores, para os valores dos dados passados. */
+  respostas?: RespostaDisponivel[];
 }) {
   const t = useT();
   const [rascunho, setRascunho] = useState<CrmActionConfig>(config);
@@ -134,13 +140,17 @@ export function CrmActionForm({
             <Seletor
               id={`acao-${i}-tipo`}
               valor={acao.type}
-              opcoes={opcoesDe(ACOES_DE_CRM, t).filter(
-                (o) => o.valor !== ACAO_SEM_FORMULARIO || acao.type === ACAO_SEM_FORMULARIO,
-              )}
+              opcoes={opcoesDe(ACOES_DE_CRM, t)}
               onChange={(v) => trocar(i, acaoEmBranco(v as CrmActionType))}
             />
           </Campo>
-          <CamposDaAcao prefixo={`acao-${i}`} acao={acao} onChange={(a) => trocar(i, a)} />
+          <CamposDaAcao
+            prefixo={`acao-${i}`}
+            acao={acao}
+            onChange={(a) => trocar(i, a)}
+            respostas={respostas}
+            {...(flowId !== undefined ? { flowId } : {})}
+          />
           <p className="text-xs text-text-muted">{fraseDaAcao(acao, nomes)}</p>
         </div>
       ))}
@@ -174,10 +184,14 @@ function CamposDaAcao({
   prefixo,
   acao,
   onChange,
+  flowId,
+  respostas,
 }: {
   prefixo: string;
   acao: CrmAction;
   onChange: (a: CrmAction) => void;
+  flowId?: string;
+  respostas: RespostaDisponivel[];
 }) {
   const t = useT();
   const { funis, etapas } = useFunis();
@@ -396,6 +410,150 @@ function CamposDaAcao({
         </>
       );
     case "start_automation":
-      return null;
+      return (
+        <CamposDeIniciarAutomacao
+          prefixo={prefixo}
+          acao={acao}
+          onChange={onChange}
+          respostas={respostas}
+          {...(flowId !== undefined ? { flowId } : {})}
+        />
+      );
   }
+}
+
+/** Por que a chave de um dado não serve (`null` = serve). */
+export function problemaDaChave(chave: string, outras: string[]): string | null {
+  if (!CHAVE_DE_PARAMETRO.test(chave))
+    return "Use letras minúsculas, números e underscore, até 40 caracteres.";
+  if (outras.includes(chave)) return "Esta chave já está na lista.";
+  return null;
+}
+
+/**
+ * "Iniciar outra automação": qual automação (as ATIVAS da organização, menos
+ * esta) e os dados que ela recebe como `{{param.<chave>}}`.
+ */
+function CamposDeIniciarAutomacao({
+  prefixo,
+  acao,
+  onChange,
+  flowId,
+  respostas,
+}: {
+  prefixo: string;
+  acao: Extract<CrmAction, { type: "start_automation" }>;
+  onChange: (a: CrmAction) => void;
+  flowId?: string;
+  respostas: RespostaDisponivel[];
+}) {
+  const t = useT();
+  const automacoes = useAutomacoesDaOrganizacao();
+  const nomes = useNomesDaAutomacao();
+  const [foco, setFoco] = useState<number | null>(null);
+  const opcoes: Opcao[] = (automacoes.data ?? [])
+    .filter((a) => a.status === "active" && a.id !== flowId)
+    .map((a) => ({ valor: a.id, rotulo: a.name }));
+  // A escolhida que saiu da lista (desativada): continua visível, o publish avisa.
+  if (acao.pointer_id && acao.pointer_id !== flowId && !opcoes.some((o) => o.valor === acao.pointer_id))
+    opcoes.push({
+      valor: acao.pointer_id,
+      rotulo: nomes.automacao?.(acao.pointer_id) ?? t("Automação escolhida"),
+    });
+  const params = acao.params;
+  const trocarParam = (j: number, p: { key: string; value: string }) =>
+    onChange({ ...acao, params: params.map((x, k) => (k === j ? p : x)) });
+  return (
+    <>
+      <Campo id={`${prefixo}-automacao`} rotulo={t("Qual automação")}>
+        <Seletor
+          id={`${prefixo}-automacao`}
+          valor={acao.pointer_id === flowId ? "" : acao.pointer_id}
+          vazio={t("Escolha a automação")}
+          opcoes={opcoes}
+          onChange={(v) => onChange({ ...acao, pointer_id: v })}
+        />
+      </Campo>
+      {!automacoes.isLoading && opcoes.length === 0 && (
+        <p className="text-xs text-text-muted">
+          {t("Nenhuma outra automação ativa. Publique a automação de destino primeiro.")}
+        </p>
+      )}
+      <div className="space-y-2" data-testid={`${prefixo}-dados`}>
+        <p className="text-sm font-medium text-text">{t("Dados para passar (opcional)")}</p>
+        <p className="text-xs text-text-muted">
+          {t("Na automação escolhida, cada dado se usa como {{param.chave}}.")}
+        </p>
+        {params.map((p, j) => {
+          const problema = problemaDaChave(
+            p.key,
+            params.filter((_, k) => k !== j).map((x) => x.key),
+          );
+          return (
+            <div key={j} className="space-y-1" data-testid={`${prefixo}-dado-${j}`}>
+              <div className="flex gap-2">
+                <Input
+                  id={`${prefixo}-dado-${j}-chave`}
+                  data-testid={`${prefixo}-dado-${j}-chave`}
+                  aria-label={t("Chave")}
+                  className="w-36 font-mono"
+                  maxLength={40}
+                  placeholder="chave"
+                  value={p.key}
+                  onChange={(e) => trocarParam(j, { ...p, key: e.target.value })}
+                />
+                <Input
+                  id={`${prefixo}-dado-${j}-valor`}
+                  data-testid={`${prefixo}-dado-${j}-valor`}
+                  aria-label={t("Valor")}
+                  maxLength={MAX_VALOR_DE_PARAMETRO}
+                  placeholder="{{contact.name}}"
+                  value={p.value}
+                  onFocus={() => setFoco(j)}
+                  onChange={(e) => trocarParam(j, { ...p, value: e.target.value })}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("Remover dado")}
+                  data-testid={`${prefixo}-dado-${j}-remover`}
+                  onClick={() => onChange({ ...acao, params: params.filter((_, k) => k !== j) })}
+                >
+                  <Trash size={14} aria-hidden />
+                </Button>
+              </div>
+              {p.key !== "" && problema && (
+                <p className="text-xs text-error-fg" data-testid={`${prefixo}-dado-${j}-erro`}>
+                  {t(problema)}
+                </p>
+              )}
+            </div>
+          );
+        })}
+        {params.length < MAX_PARAMETROS && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid={`${prefixo}-adicionar-dado`}
+            onClick={() => onChange({ ...acao, params: [...params, { key: "", value: "" }] })}
+          >
+            <Plus size={14} aria-hidden className="mr-1" /> {t("Dado")}
+          </Button>
+        )}
+        {params.length > 0 && (
+          <AjudaDeVariaveis
+            respostas={respostas}
+            testId={`${prefixo}-ajuda-variaveis`}
+            onInserir={(variavel) => {
+              const j = foco !== null && foco < params.length ? foco : params.length - 1;
+              const p = params[j];
+              if (p) trocarParam(j, { ...p, value: `${p.value}${variavel}` });
+            }}
+          />
+        )}
+      </div>
+    </>
+  );
 }

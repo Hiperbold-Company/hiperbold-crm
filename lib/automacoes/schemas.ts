@@ -219,6 +219,18 @@ export function normalizarParaPalavraChave(t: string): string {
 export const MODOS_DA_PALAVRA_CHAVE = ["any", "contains", "equals", "starts_with"] as const;
 export type ModoDaPalavraChave = (typeof MODOS_DA_PALAVRA_CHAVE)[number];
 
+/** A palavra-chave que normaliza para vazio ("!!!", "😀") nunca casaria nada. */
+export const ERRO_PALAVRA_CHAVE_SEM_LETRA = "a palavra-chave precisa ter ao menos uma letra ou número";
+/** Quantas palavras-chave um gatilho "Mensagem recebida" aceita. */
+export const MAX_PALAVRAS_CHAVE = 20;
+/** Uma palavra-chave do gatilho "Mensagem recebida" (o editor confere antes de pôr na lista). */
+export const palavraChaveSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .refine((k) => normalizarParaPalavraChave(k).length > 0, { message: ERRO_PALAVRA_CHAVE_SEM_LETRA });
+
 /** Os acontecimentos da agenda que iniciam uma automação (`appointment.<evento>`). */
 export const EVENTOS_DE_AGENDAMENTO = ["created", "confirmed", "rescheduled", "cancelled", "completed", "no_show"] as const;
 export type EventoDeAgendamento = (typeof EVENTOS_DE_AGENDAMENTO)[number];
@@ -260,18 +272,7 @@ export const automacaoTriggerSchema = z.discriminatedUnion("kind", [
     .strictObject({
       kind: z.literal("message_received"),
       match: z.enum(MODOS_DA_PALAVRA_CHAVE),
-      keywords: z
-        .array(
-          z
-            .string()
-            .trim()
-            .min(1)
-            .max(100)
-            .refine((k) => normalizarParaPalavraChave(k).length > 0, {
-              message: "a palavra-chave precisa ter ao menos uma letra ou número",
-            }),
-        )
-        .max(20),
+      keywords: z.array(palavraChaveSchema).max(MAX_PALAVRAS_CHAVE),
       /** Só mensagens que chegaram por estes números/canais (`channel_sessions.id`). */
       channel_session_ids: z.array(uuid).max(20).optional(),
       /** Só a primeira mensagem do contato naquela conversa. */
