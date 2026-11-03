@@ -204,7 +204,7 @@ describe("callback do Instagram (login unificado)", () => {
       "https://graph.facebook.com/v26.0/IG-2/subscribed_apps",
     ]);
     expect(new URLSearchParams(String(assinaturas[0]!.init?.body)).get("subscribed_fields")).toBe(
-      "messages,messaging_postbacks,messaging_seen",
+      "messages,messaging_postbacks,messaging_seen,comments",
     );
     expect((assinaturas[0]!.init?.headers as Record<string, string>).authorization).toBe("Bearer SUAT");
 

@@ -1173,6 +1173,9 @@ export const AUDIT_ACTIONS = [
   // O cron `meta-social-tokens` renovou (ou tentou e falhou) tokens do Instagram.
   // Só quando houve efeito.
   "channel.meta_social_tokens_renewed",
+  // O cron `meta-social-fila` enviou (ou expirou, ou desistiu de) respostas a
+  // comentários do Instagram (migration 0991). Só quando houve efeito.
+  "channel.meta_social_fila_processada",
   // A Meta pediu a exclusão dos dados de quem removeu o app (callback público).
   "meta.data_deletion_requested",
   // O pedido foi CUMPRIDO: as conexões autorizadas por essa pessoa foram

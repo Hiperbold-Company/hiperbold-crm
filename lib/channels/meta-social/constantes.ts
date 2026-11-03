@@ -42,7 +42,12 @@ export function canalDaConversa(plataforma: PlataformaMetaSocial): "instagram" |
  * que a configuração precisa ter.
  * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login/permissions
  */
-export const PERMISSOES_DA_CONFIGURACAO_INSTAGRAM = ["instagram_basic", "instagram_manage_messages"] as const;
+export const PERMISSOES_DA_CONFIGURACAO_INSTAGRAM = [
+  "instagram_basic",
+  "instagram_manage_messages",
+  // Comentários (0991): ler o comentário e responder em público.
+  "instagram_manage_comments",
+] as const;
 
 export const ESCOPOS_MESSENGER = [
   "pages_show_list",
@@ -57,8 +62,12 @@ export const ESCOPOS_MESSENGER = [
  * `message_reads` (Messenger) carimbam a leitura da mensagem de saída;
  * `message_echoes` é o eco do que a Página enviou (o Instagram manda o eco em
  * `messages`, com `is_echo`). Reação fica de fora: o parser não a lê.
+ * `comments` (Instagram, 0991): o comentário em post ou reel, lido por
+ * `comentarios.ts`; exige Acesso Avançado ao campo no app
+ * (https://developers.facebook.com/documentation/instagram-platform/webhooks/setup).
+ * Conta já conectada só passa a recebê-lo quando a assinatura é refeita (reconectar).
  */
-export const CAMPOS_DO_WEBHOOK_INSTAGRAM = "messages,messaging_postbacks,messaging_seen";
+export const CAMPOS_DO_WEBHOOK_INSTAGRAM = "messages,messaging_postbacks,messaging_seen,comments";
 export const CAMPOS_DO_WEBHOOK_MESSENGER =
   "messages,messaging_postbacks,message_echoes,message_reads";
 
