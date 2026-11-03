@@ -64,7 +64,7 @@ const TETOS: Record<string, { minutos: number; razao: string }> = {
   "ci.yml::verify-parte": {
     minutos: 15,
     razao:
-      "a suíte foi repartida em partes (#1185 via #1190; três desde 22/09/2026); cada parte roda uma fatia de uma suíte " +
+      "a suíte foi repartida em partes (#1185 via #1190; três desde 22/09/2026, quatro desde 03/11/2026); cada parte roda uma fatia de uma suíte " +
       "que custava 649s de unit num verde. 15 é guarda de travamento; quem denuncia crescimento " +
       "é o passo `Orçamento de tempo do verify-parte` (12 min por parte, medido em 19/09)",
   },
@@ -249,7 +249,7 @@ describe("o preâmbulo do CI não come o orçamento dos testes", () => {
   });
 
   it("o orçamento vale para TODAS as partes da matrix, não só para uma", () => {
-    // `verify-parte` é uma `matrix` (3 partes desde 22/09/2026), e o
+    // `verify-parte` é uma `matrix` (4 partes desde 03/11/2026), e o
     // `ORCAMENTO_MIN` vive num passo ÚNICO que todas as partes executam. Os passos vizinhos (`Cercas`,
     // `Typecheck`, `Lint`, `Kit self-host`) são todos `if: matrix.parte == N` —
     // então pôr um `if:` de parte neste aqui é uma edição de uma linha, natural
@@ -302,7 +302,7 @@ describe("o preâmbulo do CI não come o orçamento dos testes", () => {
   });
 
   it("a divisão do verify cobre cada arquivo uma vez: --shard e `if:` batem com a matrix", () => {
-    // Mexer na divisão (reequilibrar passos, criar a parte 3) tem dois erros
+    // Mexer na divisão (reequilibrar passos, criar a parte 3 ou a 4) tem dois erros
     // VERDES: `--shard=N/3` com matrix [1, 2] deixa um terço da suíte sem rodar,
     // e `if: matrix.parte == 3` com matrix [1, 2] deixa o passo sem parte.
     // Que o `--shard` do vitest corta em fatias disjuntas que somam tudo foi
