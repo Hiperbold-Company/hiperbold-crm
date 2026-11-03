@@ -204,7 +204,7 @@ export function ConversationListItem({
       className={cn(
         "group relative flex w-full items-start gap-3 border-b border-border/70 px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated",
         "focus-visible:outline-hidden focus-visible:bg-surface-elevated",
-        isSelected && "bg-accent-50 hover:bg-accent-50",
+        isSelected && "bg-accent-soft hover:bg-accent-soft",
       )}
       aria-current={isSelected ? "true" : undefined}
     >
@@ -235,7 +235,7 @@ export function ConversationListItem({
           )}
           aria-hidden
         />
-        <ChannelLogo channel={canal} size={16} className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-background ring-2 ring-background" />
+        <ChannelLogo channel={canal} size={16} className="absolute -bottom-1 -right-1 rounded-md bg-background ring-2 ring-background" />
       </div>
 
       <div className="min-w-0 flex-1">
