@@ -12,6 +12,8 @@ const { enviarMock } = vi.hoisted(() => ({ enviarMock: vi.fn() }));
 vi.mock("@/app/api/v1/messages/_handler", () => ({ sendMessageHandler: enviarMock }));
 
 import { ApiError } from "@/lib/api/types";
+import { capabilitiesOf, PROVIDERS_DE_MENSAGEM } from "@/lib/channels/capabilities";
+import { ehCanalDeWhatsapp } from "@/lib/channels/canal-de-whatsapp";
 import {
   avancarEnrollmentAtivo,
   type AdminClient,
@@ -105,6 +107,12 @@ function criarBanco(tabelas: Tabelas) {
   return { admin: admin as unknown as SupabaseClient, consultas };
 }
 
+// Os providers vêm da CAPACIDADE, não do nome (cerca lint:channels): um canal de
+// WhatsApp que aceita texto livre a qualquer hora e um que fecha a janela de 24h.
+const CANAIS_DE_WHATSAPP = PROVIDERS_DE_MENSAGEM.filter((p) => ehCanalDeWhatsapp(p));
+const CANAL_SEM_JANELA = CANAIS_DE_WHATSAPP.find((p) => capabilitiesOf(p).freeformOutsideWindow)!;
+const CANAL_COM_JANELA = CANAIS_DE_WHATSAPP.find((p) => !capabilitiesOf(p).freeformOutsideWindow)!;
+
 const ORG = "org-1";
 const OUTRA_ORG = "org-2";
 const CONTATO = "contato-1";
@@ -119,7 +127,7 @@ function conversa(over: Linha = {}): Linha {
     contact_id: CONTATO,
     is_group: false,
     last_inbound_at: HA_1H,
-    channel_sessions: { provider: "waha" },
+    channel_sessions: { provider: CANAL_SEM_JANELA },
     ...over,
   };
 }
@@ -210,7 +218,7 @@ describe("executarConversa: envio", () => {
   it("janela de 24h fechada no canal oficial: janela_fechada antes de tentar enviar", async () => {
     const { admin } = criarBanco(
       tabelasBase({
-        conversations: [conversa({ last_inbound_at: HA_2_DIAS, channel_sessions: { provider: "meta_cloud" } })],
+        conversations: [conversa({ last_inbound_at: HA_2_DIAS, channel_sessions: { provider: CANAL_COM_JANELA } })],
       }),
     );
     const r = await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop);

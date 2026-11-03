@@ -250,13 +250,22 @@ export async function executarTickDoRelogio(): Promise<{
       enqueueJob: enfileirarFollowup,
       efeitos: criarExecutorDeEfeitos(admin),
     };
-    const acordados = await aplicarRespostasQueChegaram(admin, deps);
-    if (acordados > 0) {
-      mexeu = true;
-      // Sem esta linha o SIM que a ingestão do canal gravou e nenhum tick
-      // processou some do radar — o sintoma é "Aguardando resposta" com
-      // mensagem na inbox.
-      logger.info("[relogio] follow-up avancou por resposta inbound", { acordados });
+    // Isolado: a leitura das respostas (e o acordar das automações em espera)
+    // pode falhar sem derrubar o resto do tick — o motor do follow-up e a
+    // varredura de silêncio abaixo seguem rodando, e a próxima rodada tenta de novo.
+    try {
+      const acordados = await aplicarRespostasQueChegaram(admin, deps);
+      if (acordados > 0) {
+        mexeu = true;
+        // Sem esta linha o SIM que a ingestão do canal gravou e nenhum tick
+        // processou some do radar — o sintoma é "Aguardando resposta" com
+        // mensagem na inbox.
+        logger.info("[relogio] follow-up avancou por resposta inbound", { acordados });
+      }
+    } catch (err) {
+      logger.warn("[relogio] respostas que chegaram falhou", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
     const summary = await runFollowupTick(deps);
     if (
