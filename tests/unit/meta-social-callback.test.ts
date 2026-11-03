@@ -39,8 +39,17 @@ const USER = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 type Chamada = { url: string; init?: RequestInit };
 
-/** A Meta do login unificado. `paginas` = as páginas de `assigned_instagram_accounts`. */
-function metaFalsa(paginas: { id: string; username: string }[][], granulares: string[] = []) {
+/**
+ * A Meta do login unificado. `paginas` = as páginas de `assigned_instagram_accounts`;
+ * `paginasDoFacebook` = o `/me/accounts` (undefined = a chamada falha, como sem permissão).
+ */
+function metaFalsa(
+  paginas: { id: string; username: string }[][],
+  granulares: string[] = [],
+  paginasDoFacebook?: Record<string, unknown>[],
+  /** Token de USUÁRIO (2ª configuração): `/me?fields=client_business_id` e `assigned_instagram_accounts` recusam. */
+  tokenDeUsuario = false,
+) {
   const chamadas: Chamada[] = [];
   const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
     const u = String(url);
@@ -50,9 +59,15 @@ function metaFalsa(paginas: { id: string; username: string }[][], granulares: st
       const corpo = new URLSearchParams(String(init?.body ?? ""));
       if (corpo.get("client_id") !== "12345678" || corpo.get("client_secret") !== "segredo-do-app-da-meta")
         return new Response(JSON.stringify({ error: { code: 101, message: "app errado" } }), { status: 400 });
+      if (corpo.get("grant_type") === "fb_exchange_token") return json({ access_token: "LONGO", token_type: "bearer" });
       return json({ access_token: "SUAT", token_type: "bearer" });
     }
+    const recusa = () => new Response(JSON.stringify({ error: { code: 100, message: "nonexisting field" } }), { status: 400 });
+    if (tokenDeUsuario && (u.includes("/me?fields=client_business_id") || u.includes("/me/assigned_instagram_accounts")))
+      return recusa();
     if (u.includes("/me?fields=client_business_id,id")) return json({ client_business_id: "BIZ-1", id: "SU-1" });
+    if (u.endsWith("/me?fields=id")) return json({ id: "FB-1" });
+    if (u.includes("/me/accounts") && paginasDoFacebook) return json({ data: paginasDoFacebook, paging: {} });
     if (u.includes("/me/assigned_instagram_accounts")) {
       const depois = new URL(u).searchParams.get("after");
       const i = depois ? Number(depois) : 0;
@@ -210,6 +225,134 @@ describe("callback do Instagram (login unificado)", () => {
     expect(new Headers(debug?.init?.headers).get("authorization")).toBe("Bearer 12345678|segredo-do-app-da-meta");
   });
 
+  it("assigned e debug_token vazios, mas a Página tem Instagram: conecta pela Página (plano C)", async () => {
+    const banco = novoBanco();
+    h.db = banco.db;
+    meta = metaFalsa(
+      [[]],
+      [],
+      [
+        {
+          id: "PAG-9",
+          name: "Loja Página",
+          access_token: "TOKEN-DA-PAGINA",
+          instagram_business_account: { id: "17841400000000009", username: "loja_ig" },
+        },
+        { id: "PAG-SEM-IG", name: "Outra", access_token: "TOKEN-OUTRA" },
+      ],
+    );
+    vi.stubGlobal("fetch", meta.fetcher);
+
+    const destino = await chamar("n-5c");
+    expect(destino).toContain("meta_social=ok");
+    expect(destino).toContain("n=1");
+    const sessoes = banco.t("channel_sessions");
+    expect(sessoes).toHaveLength(1);
+    expect(sessoes[0]).toMatchObject({
+      meta_social_platform: "instagram",
+      meta_social_account_id: "17841400000000009",
+      meta_social_page_id: "PAG-9",
+      meta_social_username: "loja_ig",
+      meta_social_token_encrypted: "cifrado:TOKEN-DA-PAGINA",
+      meta_social_token_expires_at: null,
+      status: "WORKING",
+    });
+    expect(sessoes[0]!.metadata).toMatchObject({ meta_autorizador_id: "FB-1", nome_da_conta: "Loja Página" });
+
+    // A listagem das Páginas usou o token LONGO, no header (nunca na URL).
+    const lista = meta.chamadas.find((c) => c.url.includes("/me/accounts"))!;
+    expect(lista.url).not.toContain("LONGO");
+    expect(new URL(lista.url).searchParams.get("fields")).toBe(
+      "id,name,access_token,instagram_business_account{id,username}",
+    );
+    expect((lista.init?.headers as Record<string, string>).authorization).toBe("Bearer LONGO");
+
+    // Assinatura na PÁGINA, com o token da Página e os campos da Página.
+    const assinaturas = meta.chamadas.filter((c) => c.url.includes("/subscribed_apps"));
+    expect(assinaturas.map((c) => c.url)).toEqual([
+      "https://graph.facebook.com/v26.0/PAG-9/subscribed_apps?subscribed_fields=messages,messaging_postbacks,message_echoes,message_reads",
+    ]);
+    expect(assinaturas[0]!.init?.method).toBe("POST");
+    expect((assinaturas[0]!.init?.headers as Record<string, string>).authorization).toBe("Bearer TOKEN-DA-PAGINA");
+  });
+
+  it("token de usuário: /me de empresa e assigned recusam, mas a Página conecta (sem empresa, autorizador do Facebook)", async () => {
+    const banco = novoBanco();
+    h.db = banco.db;
+    meta = metaFalsa(
+      [[]],
+      [],
+      [{ id: "PAG-9", name: "Loja", access_token: "TOKEN-DA-PAGINA", instagram_business_account: { id: "17841400000000009" } }],
+      true,
+    );
+    vi.stubGlobal("fetch", meta.fetcher);
+    expect(await chamar("n-5f")).toContain("meta_social=ok");
+    const [s] = banco.t("channel_sessions");
+    expect(s).toMatchObject({ meta_social_account_id: "17841400000000009", meta_social_page_id: "PAG-9" });
+    expect(s!.metadata).toMatchObject({ meta_autorizador_id: "FB-1" });
+    expect(s!.metadata).not.toHaveProperty("meta_client_business_id");
+    // Token de usuário vai direto à Página: assigned e debug_token são do SUAT.
+    expect(meta.chamadas.some((c) => c.url.includes("/me/assigned_instagram_accounts"))).toBe(false);
+    expect(meta.chamadas.some((c) => c.url.includes("/debug_token"))).toBe(false);
+    expect(meta.chamadas.some((c) => c.url.includes("/me/accounts"))).toBe(true);
+  });
+
+  it("tudo vazio com token de usuário: detalhe diz que assigned e debug_token não rodaram, e as paginas", async () => {
+    const banco = novoBanco();
+    h.db = banco.db;
+    meta = metaFalsa([[]], [], [], true);
+    vi.stubGlobal("fetch", meta.fetcher);
+    expect(await chamar("n-5g")).toContain("motivo=nenhuma_conta_instagram");
+    expect(h.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "channel.meta_social_connect_failed",
+        metadata: expect.objectContaining({
+          detalhe:
+            "assigned=- debug_token=- escopos= alvos=- paginas=0/0",
+        }),
+      }),
+    );
+  });
+
+  it("reconectar pelo SUAT uma conta que veio pela Página limpa o id da Página", async () => {
+    const banco = novoBanco();
+    banco.t("channel_sessions").push({
+      id: "pela-pagina",
+      organization_id: ORG,
+      provider: "meta_social",
+      meta_social_platform: "instagram",
+      meta_social_account_id: "IG-1",
+      meta_social_page_id: "PAG-9",
+      meta_social_token_encrypted: "cifrado:TOKEN-DA-PAGINA",
+      status: "WORKING",
+      archived_at: null,
+      metadata: {},
+    });
+    h.db = banco.db;
+    meta = metaFalsa([[{ id: "IG-1", username: "loja" }]]);
+    vi.stubGlobal("fetch", meta.fetcher);
+    expect(await chamar("n-5d")).toContain("meta_social=ok");
+    expect(banco.t("channel_sessions")[0]).toMatchObject({
+      id: "pela-pagina",
+      meta_social_page_id: null,
+      meta_social_token_encrypted: "cifrado:SUAT",
+    });
+  });
+
+  it("Páginas sem Instagram: nenhuma_conta_instagram com paginas=1/0 no detalhe, sem token", async () => {
+    const banco = novoBanco();
+    h.db = banco.db;
+    meta = metaFalsa([[]], [], [{ id: "PAG-SEM-IG", name: "Outra", access_token: "TOKEN-OUTRA" }]);
+    vi.stubGlobal("fetch", meta.fetcher);
+    expect(await chamar("n-5e")).toContain("motivo=nenhuma_conta_instagram");
+    expect(banco.t("channel_sessions")).toHaveLength(0);
+    const falha = (h.audit.mock.calls as unknown as [{ action: string; metadata: { detalhe?: string } }][])
+      .map(([a]) => a)
+      .find((a) => a.action === "channel.meta_social_connect_failed");
+    expect(falha?.metadata.detalhe).toContain("paginas=1/0");
+    expect(falha?.metadata.detalhe).not.toMatch(/TOKEN|SUAT|LONGO|segredo/);
+  });
+
   it("nenhuma conta concedida: motivo nenhuma_conta_instagram, nada conectado", async () => {
     const banco = novoBanco();
     h.db = banco.db;
@@ -217,6 +360,13 @@ describe("callback do Instagram (login unificado)", () => {
     vi.stubGlobal("fetch", meta.fetcher);
     expect(await chamar("n-5")).toContain("motivo=nenhuma_conta_instagram");
     expect(banco.t("channel_sessions")).toHaveLength(0);
+    // A listagem das Páginas recusada (sem `pages_show_list`) aparece no diagnóstico.
+    expect(h.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "channel.meta_social_connect_failed",
+        metadata: expect.objectContaining({ detalhe: expect.stringContaining("paginas=falhou") }),
+      }),
+    );
   });
 
   it("limite do plano numa das contas: volta parcial, a outra fica conectada", async () => {

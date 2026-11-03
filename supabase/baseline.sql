@@ -71698,3 +71698,14 @@ comment on column public.platform_meta_app.instagram_app_secret_encrypted is
   'OBSOLETA desde a 0988: o Instagram conecta pelo login unificado (app da Meta + unified_config_id). Mantida para rollback; o código não lê.';
 
 notify pgrst, 'reload schema';
+
+-- ---- Instagram conectado pela Página do Facebook (migration 0990) ----
+-- Espelho idempotente da 0990; racional completo no arquivo da migration.
+
+alter table public.channel_sessions
+  add column if not exists meta_social_page_id text;
+
+comment on column public.channel_sessions.meta_social_page_id is
+  'Instagram conectado pela Página (Facebook Login): id da Página dona da conta; o envio vai a /<page>/messages com o token da Página. Null = token do usuário do sistema (login unificado)';
+
+notify pgrst, 'reload schema';

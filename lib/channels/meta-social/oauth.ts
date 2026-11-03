@@ -245,14 +245,16 @@ export async function contasInstagramConcedidas(token: string, fetcher?: typeof 
  * contas concedidas ainda aparecem no `granular_scopes` do `debug_token` (os
  * `target_ids` de `instagram_basic` / `instagram_manage_messages`). Cada id é
  * conferido com `GET /<id>?fields=id,username` usando o token do cliente.
- * Devolve também os escopos concedidos, para o diagnóstico (não são segredo).
+ * Devolve também os escopos concedidos e quantos `target_ids` cada escopo do
+ * `granular_scopes` trouxe, para o diagnóstico (ids e escopos, não segredo).
+ * Os dois do Instagram aparecem sempre, com 0 quando ausentes.
  * https://developers.facebook.com/docs/graph-api/reference/debug_token
  */
 export async function contasInstagramPeloDebugToken(
   app: AppOAuth,
   token: string,
   fetcher?: typeof fetch,
-): Promise<{ contas: ContaDaMeta[]; escopos: string[] }> {
+): Promise<{ contas: ContaDaMeta[]; escopos: string[]; alvos: Record<string, number> }> {
   const u = new URL(`${GRAPH}/debug_token`);
   u.searchParams.set("input_token", token);
   const r = await chamarMeta("instagram_debug_token", u.toString(), { token: `${app.appId}|${app.appSecret}` }, fetcher);
@@ -260,7 +262,10 @@ export async function contasInstagramPeloDebugToken(
   const escopos = Array.isArray(dados.scopes) ? (dados.scopes as unknown[]).map(String) : [];
   const granulares = Array.isArray(dados.granular_scopes) ? (dados.granular_scopes as Record<string, unknown>[]) : [];
   const ids = new Set<string>();
+  const alvos: Record<string, number> = { instagram_basic: 0, instagram_manage_messages: 0 };
   for (const g of granulares) {
+    const escopo = str(g.scope);
+    if (escopo) alvos[escopo] = (alvos[escopo] ?? 0) + (Array.isArray(g.target_ids) ? g.target_ids.length : 0);
     if (g.scope !== "instagram_basic" && g.scope !== "instagram_manage_messages") continue;
     for (const alvo of Array.isArray(g.target_ids) ? (g.target_ids as unknown[]) : []) {
       const id = str(alvo);
@@ -276,7 +281,61 @@ export async function contasInstagramPeloDebugToken(
       contas.push({ id, usuario: null, nome: null });
     }
   }
-  return { contas, escopos };
+  return { contas, escopos, alvos };
+}
+
+/** Uma Página que possui uma conta profissional do Instagram, com o token DA PÁGINA. */
+export interface PaginaComInstagram {
+  paginaId: string;
+  /** A conta do Instagram: `id` é o IG_ID (17841…), o `entry.id` do webhook. */
+  conta: ContaDaMeta;
+  token: string;
+}
+
+/**
+ * Plano C da descoberta: a conta do Instagram pela Página que a possui —
+ * `GET /me/accounts?fields=id,name,access_token,instagram_business_account{id,username}`.
+ * A Instagram Messaging API exige o token da Página, que vem nesta mesma
+ * resposta. Precisa de `pages_show_list` (e `pages_read_engagement`) na
+ * configuração do login. Paginado pelo cursor `after`, como as outras
+ * listagens: a URL de `paging.next` não é seguida (o token fica no header).
+ * Devolve quantas Páginas foram vistas (para o diagnóstico) e só as que têm
+ * conta do Instagram E token.
+ * https://developers.facebook.com/docs/instagram-platform/instagram-api-with-facebook-login/get-started
+ */
+export async function paginasComInstagram(
+  token: string,
+  fetcher?: typeof fetch,
+): Promise<{ vistas: number; paginas: PaginaComInstagram[] }> {
+  const paginas: PaginaComInstagram[] = [];
+  const vistasIds = new Set<string>();
+  const contasIds = new Set<string>();
+  let depois: string | null = null;
+  for (let i = 0; i < TETO_DE_PAGINAS; i += 1) {
+    const u = new URL(`${GRAPH}/me/accounts`);
+    u.searchParams.set("fields", "id,name,access_token,instagram_business_account{id,username}");
+    u.searchParams.set("limit", "100");
+    if (depois) u.searchParams.set("after", depois);
+    const r = await chamarMeta("instagram_paginas", u.toString(), { token }, fetcher);
+    for (const p of Array.isArray(r.data) ? (r.data as Record<string, unknown>[]) : []) {
+      const paginaId = str(p.id);
+      if (!paginaId || vistasIds.has(paginaId)) continue;
+      vistasIds.add(paginaId);
+      const ig = (p.instagram_business_account && typeof p.instagram_business_account === "object"
+        ? p.instagram_business_account
+        : {}) as Record<string, unknown>;
+      const igId = str(ig.id);
+      const tokenDaPagina = str(p.access_token);
+      if (!igId || !tokenDaPagina || contasIds.has(igId)) continue;
+      contasIds.add(igId);
+      paginas.push({ paginaId, conta: { id: igId, usuario: str(ig.username), nome: str(p.name) }, token: tokenDaPagina });
+    }
+    const paging = (r.paging && typeof r.paging === "object" ? r.paging : {}) as Record<string, unknown>;
+    const cursores = (paging.cursors && typeof paging.cursors === "object" ? paging.cursors : {}) as Record<string, unknown>;
+    depois = paging.next ? str(cursores.after) : null;
+    if (!depois) break;
+  }
+  return { vistas: vistasIds.size, paginas };
 }
 
 // ─── Messenger ─────────────────────────────────────────────────────────────
@@ -378,35 +437,44 @@ export async function paginasMessenger(
  *  - Instagram (login unificado): POST graph.facebook.com/<IG_ID>/subscribed_apps
  *    com `subscribed_fields` no corpo do formulário e o SUAT.
  *    https://developers.facebook.com/documentation/instagram-platform/webhooks/setup
- *  - Messenger: POST /<PAGE_ID>/subscribed_apps com o token da Página.
+ *  - Instagram pela Página (`paginaId`, plano C do callback) e Messenger:
+ *    POST /<PAGE_ID>/subscribed_apps com o token da Página e os campos da
+ *    Página. Que os campos da Página (`messages`, …) bastem para os eventos do
+ *    objeto `instagram` chegarem é NÃO CONFIRMADO NA DOC: a página de webhooks
+ *    do Instagram pela Messenger Platform não nomeia o endpoint nem os campos.
  */
 export async function assinarWebhookDaConta(
   plataforma: PlataformaMetaSocial,
   contaId: string,
   token: string,
+  paginaId?: string | null,
   fetcher?: typeof fetch,
 ): Promise<void> {
-  const base = `${GRAPH}/${encodeURIComponent(contaId)}/subscribed_apps`;
+  const pelaPagina = plataforma === "messenger" || Boolean(paginaId);
+  const alvo = plataforma === "instagram" && paginaId ? paginaId : contaId;
+  const etapa = plataforma === "instagram" && paginaId ? "instagram_assinatura_pagina" : `${plataforma}_assinatura`;
+  const base = `${GRAPH}/${encodeURIComponent(alvo)}/subscribed_apps`;
   const r = await chamarMeta(
-    `${plataforma}_assinatura`,
-    plataforma === "instagram" ? base : `${base}?subscribed_fields=${CAMPOS_DO_WEBHOOK_MESSENGER}`,
-    plataforma === "instagram"
-      ? { token, form: { subscribed_fields: CAMPOS_DO_WEBHOOK_INSTAGRAM } }
-      : { method: "POST", token },
+    etapa,
+    pelaPagina ? `${base}?subscribed_fields=${CAMPOS_DO_WEBHOOK_MESSENGER}` : base,
+    pelaPagina ? { method: "POST", token } : { token, form: { subscribed_fields: CAMPOS_DO_WEBHOOK_INSTAGRAM } },
     fetcher,
   );
-  if (r.success !== true) throw new ErroDaMeta(`${plataforma}_assinatura`, 200, null, "success != true");
+  if (r.success !== true) throw new ErroDaMeta(etapa, 200, null, "success != true");
 }
 
+/** Tira a assinatura. Instagram pela Página: na Página, com o token dela. */
 export async function desassinarWebhookDaConta(
   plataforma: PlataformaMetaSocial,
   contaId: string,
   token: string,
+  paginaId?: string | null,
   fetcher?: typeof fetch,
 ): Promise<void> {
+  const alvo = plataforma === "instagram" && paginaId ? paginaId : contaId;
   await chamarMeta(
-    `${plataforma}_desassinatura`,
-    `${GRAPH}/${encodeURIComponent(contaId)}/subscribed_apps`,
+    plataforma === "instagram" && paginaId ? "instagram_desassinatura_pagina" : `${plataforma}_desassinatura`,
+    `${GRAPH}/${encodeURIComponent(alvo)}/subscribed_apps`,
     { method: "DELETE", token },
     fetcher,
   );
@@ -419,7 +487,8 @@ export async function desassinarWebhookDaConta(
  * Instagram: GET /<IGSID>?fields=name,username,profile_pic. A página do perfil
  * só documenta o host `graph.instagram.com` (login do Instagram); no login
  * unificado toda chamada vai a `graph.facebook.com` — NÃO CONFIRMADO NA DOC
- * para este endpoint especificamente.
+ * para este endpoint especificamente. Conta conectada pela Página: o token
+ * guardado (e recebido aqui) já é o da Página, o que a Messenger Platform pede.
  * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/user-profile
  */
 export async function perfilDoRemetente(
@@ -486,18 +555,27 @@ export function dividirTexto(texto: string, teto: number): string[] {
  * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api
  * https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login/authentication
  *
+ * Instagram conectado pela Página (`paginaId`): POST /<PAGE_ID>/messages com
+ * o token da Página e `recipient.id` = IGSID, sem `messaging_type` — é o que a
+ * Messenger Platform documenta para o Instagram (o exemplo de texto não leva
+ * `messaging_type`).
+ * https://developers.facebook.com/docs/messenger-platform/instagram/features/send-message
+ *
  * As requisições de um envio, sem token. O token vai no header na hora de
  * executar — nunca na URL, que um proxy ou log poderia guardar.
  */
 export function montarEnvios(input: {
   plataforma: PlataformaMetaSocial;
   contaId: string;
+  /** Instagram conectado pela Página: o envio vai à Página. */
+  paginaId?: string | null;
   destinatario: string;
   texto?: string | null;
   imagemUrl?: string | null;
   teto: number;
 }): RequisicaoDeEnvio[] {
-  const url = `${GRAPH}/${encodeURIComponent(input.contaId)}/messages`;
+  const alvo = input.plataforma === "instagram" && input.paginaId ? input.paginaId : input.contaId;
+  const url = `${GRAPH}/${encodeURIComponent(alvo)}/messages`;
   const base: Record<string, unknown> = {
     recipient: { id: input.destinatario },
     ...(input.plataforma === "messenger" ? { messaging_type: "RESPONSE" } : {}),

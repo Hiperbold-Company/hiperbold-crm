@@ -50,6 +50,8 @@ const ARTIGOS_DA_CENTRAL = new Set([
   "/crm/integracoes-e-api/referencia-da-api/",
   "/crm/privacidade/lgpd/",
   "/crm/automacoes/criar-uma-automacao/",
+  "/crm/automacoes/ver-execucoes/",
+  "/crm/automacoes/regras-em-automacoes-e-webhooks/",
 ]);
 
 describe("caminhoDoArtigo", () => {
@@ -62,7 +64,7 @@ describe("caminhoDoArtigo", () => {
     expect(caminhoDoArtigo("/app/agenda")).toBe("/crm/agenda/google-agenda/");
     expect(caminhoDoArtigo("/app/team")).toBe("/crm/equipe/convidar-pessoas/");
     expect(caminhoDoArtigo("/app/settings/plano")).toBe("/crm/assinatura/meu-plano/");
-    expect(caminhoDoArtigo("/app/webhooks")).toBe("/crm/automacoes/criar-uma-automacao/");
+    expect(caminhoDoArtigo("/app/webhooks")).toBe("/crm/automacoes/regras-em-automacoes-e-webhooks/");
     expect(caminhoDoArtigo("/app/settings/api-tokens")).toBe(
       "/crm/integracoes-e-api/tokens-de-api/",
     );
@@ -141,7 +143,7 @@ describe("artigoDaAba", () => {
   it("cada aba de Automações e webhooks leva ao seu artigo", () => {
     expect(artigoDaAba("/app/webhooks", "sources")).toBe("/crm/receber-leads/fontes-de-captacao/");
     expect(artigoDaAba("/app/webhooks", "capturas")).toBe("/crm/receber-leads/leads-recebidos/");
-    expect(artigoDaAba("/app/webhooks", "rules")).toBe("/crm/automacoes/criar-uma-automacao/");
+    expect(artigoDaAba("/app/webhooks", "rules")).toBe("/crm/automacoes/regras-em-automacoes-e-webhooks/");
   });
 
   it("aba sem artigo, aba desconhecida ou sem aba: null", () => {
@@ -172,7 +174,7 @@ describe("artigoProprio", () => {
   it("a aba vence a rota; aba sem artigo fica com a rota", () => {
     expect(artigoProprio("/app/webhooks", "capturas")).toBe("/crm/receber-leads/leads-recebidos/");
     expect(artigoProprio("/app/webhooks", "activity")).toBe(
-      "/crm/automacoes/criar-uma-automacao/",
+      "/crm/automacoes/regras-em-automacoes-e-webhooks/",
     );
   });
 
@@ -235,7 +237,7 @@ describe("urlDaAjuda", () => {
       "https://ajuda.exemplo.com/crm/receber-leads/leads-recebidos/",
     );
     expect(urlDaAjuda("https://ajuda.exemplo.com", "/app/webhooks", "activity")).toBe(
-      "https://ajuda.exemplo.com/crm/automacoes/criar-uma-automacao/",
+      "https://ajuda.exemplo.com/crm/automacoes/regras-em-automacoes-e-webhooks/",
     );
   });
 });

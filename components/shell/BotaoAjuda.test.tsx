@@ -70,7 +70,7 @@ describe("botão Ajuda", () => {
     render(<BotaoAjuda base="https://ajuda.exemplo.com" />);
     expect(screen.getByRole("link", { name: "Ajuda" })).toHaveAttribute(
       "href",
-      "https://ajuda.exemplo.com/crm/automacoes/criar-uma-automacao/",
+      "https://ajuda.exemplo.com/crm/automacoes/regras-em-automacoes-e-webhooks/",
     );
   });
 });

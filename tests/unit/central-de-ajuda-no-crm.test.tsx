@@ -113,9 +113,9 @@ describe("Automações e webhooks: o artigo de cada aba", () => {
       .map((a) => a.getAttribute("href"));
   }
 
-  it("Automações (aba inicial) leva a criar uma automação", () => {
+  it("Automações (aba inicial) leva às regras de automação", () => {
     abrir();
-    expect(linksDoPainel()).toEqual([`${BASE}/crm/automacoes/criar-uma-automacao/`]);
+    expect(linksDoPainel()).toEqual([`${BASE}/crm/automacoes/regras-em-automacoes-e-webhooks/`]);
   });
 
   it("Receber dados leva às fontes e a como conectar o formulário", async () => {

@@ -39,6 +39,7 @@ import {
   ErroDaMeta,
   contasInstagramConcedidas,
   contasInstagramPeloDebugToken,
+  paginasComInstagram,
   paginasMessenger,
   tokenLongoMessenger,
   trocarCodigoLoginUnificado,
@@ -171,30 +172,70 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     // Cada conta concedida vira um canal: no Instagram, cada conta do portfólio
     // marcada no login (todas com o MESMO token, o do usuário do sistema); no
     // Messenger, cada Página (com o token dela).
-    let contas: { conta: ContaDaMeta; token: string }[];
+    let contas: { conta: ContaDaMeta; token: string; paginaId?: string | null }[];
     let expiraEm: string | null = null;
     let autorizadorId: string | null;
     let empresaId: string | null = null;
     if (plataforma === "instagram") {
       const suat = await trocarCodigoLoginUnificado(app, code, redirectUri);
-      const sistema = await usuarioDoSistema(suat.token);
-      let concedidas = await contasInstagramConcedidas(suat.token);
-      if (concedidas.length === 0) {
-        const planoB = await contasInstagramPeloDebugToken(app, suat.token).catch(() => null);
+      // O mesmo callback recebe dois tipos de token: o SUAT (configuração de
+      // usuário do sistema) e o de USUÁRIO (configuração com as permissões de
+      // Página). Com token de usuário o `/me?fields=client_business_id` pode
+      // falhar; isso não derruba a conexão.
+      const sistema = await usuarioDoSistema(suat.token).catch(() => null);
+      empresaId = sistema?.clientBusinessId ?? null;
+      // Descoberta em três etapas, cada uma com a própria rede de proteção: a
+      // falha de uma não impede a próxima, e todas entram no diagnóstico.
+      // Só o SUAT tem `client_business_id`. Token de USUÁRIO vai direto à
+      // Página: o debug_token dele pode listar a conta do IG, mas um token de
+      // usuário não envia pelo /<IG_ID>/messages e vence em horas.
+      const ehSuat = Boolean(empresaId);
+      const assigned = ehSuat ? await contasInstagramConcedidas(suat.token).catch(() => null) : null;
+      let concedidas = assigned ?? [];
+      let planoB: Awaited<ReturnType<typeof contasInstagramPeloDebugToken>> | null = null;
+      let planoBFalhou = false;
+      if (ehSuat && concedidas.length === 0) {
+        planoB = await contasInstagramPeloDebugToken(app, suat.token).catch(() => {
+          planoBFalhou = true;
+          return null;
+        });
         concedidas = planoB?.contas ?? [];
-        if (concedidas.length === 0) {
+      }
+      if (concedidas.length > 0) {
+        contas = concedidas.map((conta) => ({ conta, token: suat.token }));
+        expiraEm = suat.expiraEmSegundos ? new Date(Date.now() + suat.expiraEmSegundos * 1000).toISOString() : null;
+        // O /me do SUAT é o usuário do sistema de integração, não a pessoa: a
+        // exclusão de dados casa por ele E pela conta (`exclusao.ts`).
+        autorizadorId = sistema?.id ?? (await usuarioDoFacebook(suat.token));
+      } else {
+        // Plano C: a conta pela Página que a possui (Instagram API com
+        // Facebook Login); o envio e o webhook passam a usar o token da Página.
+        // Token de Página derivado de token LONGO não vence; se o alongamento
+        // falhar (o token pode ser SUAT, que não se alonga), segue com o próprio.
+        const longo = await tokenLongoMessenger(app, suat.token).catch(() => suat.token);
+        const planoC = await paginasComInstagram(longo).catch(() => null);
+        if (!planoC || planoC.paginas.length === 0) {
+          const alvos = planoB
+            ? Object.entries(planoB.alvos)
+                .map(([escopo, n]) => `${escopo}:${n}`)
+                .join(",")
+                .slice(0, 300)
+            : "-";
           return falhou(
             "nenhuma_conta_instagram",
-            `assigned=0 debug_token=${planoB ? "ok" : "falhou"} escopos=${(planoB?.escopos ?? []).join(",").slice(0, 300)}`,
+            [
+              `assigned=${!ehSuat ? "-" : assigned ? assigned.length : "falhou"}`,
+              `debug_token=${planoB ? "ok" : planoBFalhou ? "falhou" : "-"}`,
+              `escopos=${(planoB?.escopos ?? []).join(",").slice(0, 300)}`,
+              `alvos=${alvos}`,
+              `paginas=${planoC ? `${planoC.vistas}/${planoC.paginas.length}` : "falhou"}`,
+            ].join(" "),
           );
         }
+        contas = planoC.paginas.map((p) => ({ conta: p.conta, token: p.token, paginaId: p.paginaId }));
+        expiraEm = null;
+        autorizadorId = await usuarioDoFacebook(longo);
       }
-      contas = concedidas.map((conta) => ({ conta, token: suat.token }));
-      expiraEm = suat.expiraEmSegundos ? new Date(Date.now() + suat.expiraEmSegundos * 1000).toISOString() : null;
-      // O /me do SUAT é o usuário do sistema de integração, não a pessoa: a
-      // exclusão de dados casa por ele E pela conta (`exclusao.ts`).
-      autorizadorId = sistema.id;
-      empresaId = sistema.clientBusinessId;
     } else {
       const curto = await trocarCodigoMessenger(app, code, redirectUri);
       const longo = await tokenLongoMessenger(app, curto);
@@ -220,6 +261,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
           ator,
           autorizadorId,
           empresaId,
+          paginaId: c.paginaId ?? null,
         });
         conectadas += 1;
       } catch (err) {
