@@ -3,21 +3,8 @@
  *
  * O resto das automações (gatilho `instagram_comment`, blocos "Responder em
  * privado", "Responder no comentário" e "Confere se segue") importa SÓ daqui.
- * O canal mora em `lib/channels/` e está sendo construído por outro trabalho;
- * enquanto `lib/channels/meta-social/comentarios.ts` não existe, as três
- * funções do contrato abaixo são um STUB com as assinaturas exatas: devolvem
- * "nao_encontrado" / `null` e registram no logger que o canal ainda não está
- * ligado. Os blocos saem por "Erro" / "Não deu para saber" — nunca fingem envio.
- *
- * TROCAR pelo import de @/lib/channels/meta-social/comentarios quando existir:
- *
- *   export { pedirRespostaPrivada, responderNoComentario, conferirSeSegue, ERRO_TEXTO_INVALIDO } from "@/lib/channels/meta-social/comentarios";
- *   export type { StatusDoPedido, PedidoDeResposta, OpcoesDaAcao } from "@/lib/channels/meta-social/comentarios";
- *   export { EVENTO_COMENTARIO_RECEBIDO, ENTIDADE_DO_EVENTO_COMENTARIO, TETO_DO_TEXTO_DA_RESPOSTA_BYTES } from "@/lib/channels/meta-social/comentarios-contrato";
- *   export type { EventoComentarioRecebido } from "@/lib/channels/meta-social/comentarios-contrato";
- *
- * e apagar o stub. Nada mais muda: os nomes e os tipos são os do contrato
- * (branch do canal, `docs/specs/instagram-comentarios-contrato.md`).
+ * O canal mora em `lib/channels/meta-social/comentarios.ts`; este arquivo só
+ * o reexporta (contrato em `docs/specs/instagram-comentarios-contrato.md`).
  *
  * `identidadeDoComentarista` NÃO é do contrato do canal: é a ponte para achar o
  * contato do comentarista pela identidade social que a ingestão do Direct já
@@ -27,86 +14,15 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
-// STUB — TROCAR pelo import de @/lib/channels/meta-social/comentarios quando existir
-// (nomes e tipos copiados do contrato: comentarios.ts e comentarios-contrato.ts)
+// O canal (lib/channels/meta-social): contrato em docs/specs/instagram-comentarios-contrato.md
 // ---------------------------------------------------------------------------
 
-/** O tipo do evento emitido no `event_log` a cada comentário novo. */
-export const EVENTO_COMENTARIO_RECEBIDO = "instagram.comentario_recebido";
-/** `event_log.entity_kind` desse evento; `entity_id` = `meta_social_comentarios.id`. */
-export const ENTIDADE_DO_EVENTO_COMENTARIO = "instagram_comment";
-/** Teto do texto de uma resposta, em bytes UTF-8 (o mesmo do Direct do Instagram). */
-export const TETO_DO_TEXTO_DA_RESPOSTA_BYTES = 1000;
-
-/** O payload do evento (snake_case, datas em ISO-8601). */
-export interface EventoComentarioRecebido {
-  organization_id: string;
-  channel_session_id: string;
-  comment_id: string;
-  media_id: string | null;
-  media_product_type: string | null;
-  /** IGSID de quem comentou. */
-  autor_id: string;
-  autor_usuario: string | null;
-  texto: string | null;
-  criado_na_meta_em: string | null;
-}
-
-export type StatusDoPedido = "na_fila" | "ja_pedida" | "expirada" | "nao_encontrado";
-
-/** Texto vazio ou acima de `TETO_DO_TEXTO_DA_RESPOSTA_BYTES`: as ações LANÇAM com esta mensagem. */
-export const ERRO_TEXTO_INVALIDO = "meta_social_texto_invalido";
-
-export interface PedidoDeResposta {
-  /** Resolvida de fonte confiável por quem chama; nunca de corpo de requisição. */
-  organizationId: string;
-  commentId: string;
-  texto: string;
-  /** Origem do pedido, livre (ex.: id da execução da automação). */
-  pedidoPor?: string | null;
-}
-
-/** Para teste. */
-export interface OpcoesDaAcao {
-  agora?: Date;
-  fetcher?: typeof fetch;
-}
-
-function avisarCanalDesligado(funcao: string, organizationId: string): void {
-  logger.warn("automacao: canal de comentários do Instagram ainda não está ligado", {
-    funcao,
-    organization_id: organizationId,
-  });
-}
-
-export async function pedirRespostaPrivada(
-  _admin: SupabaseClient,
-  pedido: PedidoDeResposta,
-  _opcoes: OpcoesDaAcao = {},
-): Promise<{ status: StatusDoPedido }> {
-  avisarCanalDesligado("pedirRespostaPrivada", pedido.organizationId);
-  return { status: "nao_encontrado" };
-}
-
-export async function responderNoComentario(
-  _admin: SupabaseClient,
-  pedido: PedidoDeResposta,
-): Promise<{ status: Exclude<StatusDoPedido, "expirada"> }> {
-  avisarCanalDesligado("responderNoComentario", pedido.organizationId);
-  return { status: "nao_encontrado" };
-}
-
-export async function conferirSeSegue(
-  _admin: SupabaseClient,
-  input: { organizationId: string; channelSessionId: string; autorId: string },
-  _opcoes: OpcoesDaAcao = {},
-): Promise<{ segue: boolean | null }> {
-  avisarCanalDesligado("conferirSeSegue", input.organizationId);
-  return { segue: null };
-}
+export { pedirRespostaPrivada, responderNoComentario, conferirSeSegue, ERRO_TEXTO_INVALIDO } from "@/lib/channels/meta-social/comentarios";
+export type { StatusDoPedido, PedidoDeResposta, OpcoesDaAcao } from "@/lib/channels/meta-social/comentarios";
+export { EVENTO_COMENTARIO_RECEBIDO, ENTIDADE_DO_EVENTO_COMENTARIO, TETO_DO_TEXTO_DA_RESPOSTA_BYTES } from "@/lib/channels/meta-social/comentarios-contrato";
+export type { EventoComentarioRecebido } from "@/lib/channels/meta-social/comentarios-contrato";
 
 // ---------------------------------------------------------------------------
 // Identidade do comentarista (não é stub: lê o que o canal já grava)
