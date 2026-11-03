@@ -30,6 +30,7 @@ import { JANELA_SEGUNDOS, TETO_DE_ESCRITA } from "@/lib/mcp/rate-limit";
 import { gatilhosDoGrafo } from "@/lib/automacoes/gatilhos";
 import { iniciarAutomacao } from "@/lib/automacoes/iniciar";
 import { entradaDeFluxo } from "@/lib/followup/porta";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -166,7 +167,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (chave === null) return responder(await executar());
 
   const desfecho = await comIdempotencia<Corpo>({
-    db: admin,
+    // Servidor, não a sessão: `idempotency_keys` não é legível nem gravável por `authenticated` (0969).
+    db: createAdminClient(),
     organizationId: orgId,
     endpoint: `/api/v1/automacoes/${id}/executar`,
     chave,

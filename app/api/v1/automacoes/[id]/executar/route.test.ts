@@ -22,6 +22,8 @@ vi.mock("@/lib/api/auth-dual", () => ({ tetoDeEscritaDoToken: vi.fn(async () => 
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({ checkRateLimit: vi.fn(async () => ({ allowed: true })) }));
 vi.mock("@/lib/billing/assinatura/pode-produzir", () => ({ motivoDeNaoProduzir: vi.fn(async () => null) }));
 vi.mock("@/lib/followup/porta", () => ({ entradaDeFluxo: vi.fn() }));
+const servidor = vi.hoisted(() => ({ db: null as unknown }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => servidor.db }));
 
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { motivoDeNaoProduzir } from "@/lib/billing/assinatura/pode-produzir";
@@ -104,10 +106,11 @@ beforeEach(() => {
   chamadasDaRpc = 0;
   vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true } as Awaited<ReturnType<typeof checkRateLimit>>);
   vi.mocked(motivoDeNaoProduzir).mockResolvedValue(null);
+  servidor.db = admin();
   vi.mocked(entradaDeFluxo).mockResolvedValue({
     requestId: "r1",
     authz: { via: "session", actor: { type: "user", id: "u1", role: "manager" }, organizationId: ORG },
-    deps: { admin: admin(), organizationId: ORG, responsavel: "u1", t: (s: string) => s },
+    deps: { admin: servidor.db, organizationId: ORG, responsavel: "u1", t: (s: string) => s },
   } as unknown as Awaited<ReturnType<typeof entradaDeFluxo>>);
 });
 
