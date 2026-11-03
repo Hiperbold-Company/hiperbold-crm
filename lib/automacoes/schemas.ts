@@ -56,6 +56,12 @@ export type FieldRef = z.infer<typeof fieldRefSchema>;
 
 const tags = z.array(z.string().trim().min(1).max(60)).min(1).max(10);
 
+/** Chave de um dado passado a outra automação (`{{param.<chave>}}`). */
+export const CHAVE_DE_PARAMETRO = /^[a-z0-9_]{1,40}$/;
+/** Quantos dados uma ação "Iniciar automação" passa, e o tamanho de cada valor já renderizado. */
+export const MAX_PARAMETROS = 10;
+export const MAX_VALOR_DE_PARAMETRO = 1000;
+
 // ---------------------------------------------------------------------------
 // Ações de CRM (bloco `crm_action`)
 // ---------------------------------------------------------------------------
@@ -95,6 +101,25 @@ export const crmActionSchema = z.discriminatedUnion("type", [
     assignee: z.union([z.literal("owner"), uuid]),
   }),
   z.strictObject({ type: z.literal("add_note"), body: tpl(2000).min(1), target: z.enum(["lead", "contact"]) }),
+  /**
+   * Iniciar OUTRA automação para o mesmo contato, passando dados: cada
+   * `params[].value` é renderizado com as variáveis desta execução e chega ao
+   * destino como `{{param.<key>}}`. A cadeia, o ciclo e a profundidade (5) são
+   * os do `fn_automacao_iniciar`; os eventos guardam só as CHAVES (LGPD).
+   */
+  z.strictObject({
+    type: z.literal("start_automation"),
+    pointer_id: uuid,
+    params: z
+      .array(
+        z.strictObject({
+          key: z.string().regex(CHAVE_DE_PARAMETRO, "Use letras minúsculas, números e underscore").max(40),
+          value: tpl(MAX_VALOR_DE_PARAMETRO),
+        }),
+      )
+      .max(MAX_PARAMETROS)
+      .refine((ps) => new Set(ps.map((p) => p.key)).size === ps.length, { message: "chave repetida" }),
+  }),
 ]);
 export type CrmAction = z.infer<typeof crmActionSchema>;
 export type CrmActionType = CrmAction["type"];
@@ -260,6 +285,15 @@ export const automacaoTriggerSchema = z.discriminatedUnion("kind", [
   }),
   /** Caso aberto na Central (`ai.case_opened`). */
   z.strictObject({ kind: z.literal("case_opened") }),
+  /**
+   * Iniciada por outra automação (ação "Iniciar automação"), ou pelo "Testar".
+   * Nenhum evento do log a casa. `from_pointer_ids` vazio ou ausente = qualquer
+   * automação da organização; com lista, só as listadas (`aceitaIniciador`).
+   */
+  z.strictObject({
+    kind: z.literal("started_by_automation"),
+    from_pointer_ids: z.array(uuid).max(20).optional(),
+  }),
 ]);
 export type AutomacaoTrigger = z.infer<typeof automacaoTriggerSchema>;
 export type AutomacaoTriggerKind = AutomacaoTrigger["kind"];
@@ -290,6 +324,7 @@ export const GATILHO_TRAZ_CONTATO: Record<AutomacaoTriggerKind, boolean> = {
   date_field: true,
   no_reply: true,
   case_opened: true,
+  started_by_automation: true,
 };
 
 /**
@@ -308,6 +343,7 @@ export const GATILHO_EM_BRANCO: { [K in AutomacaoTriggerKind]: Extract<Automacao
   date_field: { kind: "date_field", field: { scope: "lead", key: "expected_close_date" }, offset_days: 0, time: "09:00" },
   no_reply: { kind: "no_reply", after_minutes: 1440, only_if_last_was_outbound: true },
   case_opened: { kind: "case_opened" },
+  started_by_automation: { kind: "started_by_automation" },
 };
 
 /** Config inicial do gatilho de uma automação nova. */

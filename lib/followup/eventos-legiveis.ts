@@ -590,11 +590,28 @@ export function descreveEvento(
     case "automacao_iniciada": {
       const g = texto(p.gatilho);
       const porque =
-        g === "lead_created" ? "um negócio foi criado" : g === "stage_entered" ? "o negócio entrou na etapa" : g === "manual" ? "alguém iniciou manualmente" : null;
+        g === "lead_created"
+          ? "um negócio foi criado"
+          : g === "stage_entered"
+            ? "o negócio entrou na etapa"
+            : g === "manual"
+              ? "alguém iniciou manualmente"
+              : g === "started_by_automation"
+                ? "outra automação a iniciou"
+                : null;
       return {
         titulo: p.reiniciada === true ? "A automação recomeçou" : "A automação começou",
         detalhe: porque,
         ...(g === "manual" ? pessoa : motor),
+      };
+    }
+    case "iniciada_pela_automacao": {
+      // Só as CHAVES dos dados recebidos: os valores moram nas variáveis da execução (LGPD).
+      const chaves = Array.isArray(p.chaves) ? (p.chaves as unknown[]).filter((k): k is string => typeof k === "string") : [];
+      return {
+        titulo: `Iniciada pela automação “${texto(p.automacao_nome) ?? "outra automação"}”`,
+        detalhe: chaves.length > 0 ? `dados recebidos: ${chaves.map((k) => `{{param.${k}}}`).join(", ")}` : null,
+        ...motor,
       };
     }
     case "trigger_ignored_running":
@@ -618,6 +635,21 @@ export function descreveEvento(
   }
 }
 
+/** Na execução de ORIGEM: "Iniciou a automação “Y”" (e o que o banco respondeu). */
+function fraseDoInicioDeOutra(d: Record<string, unknown>): string {
+  const alvo = `“${texto(d.automacao_nome) ?? "escolhida"}”`;
+  switch (texto(d.resultado)) {
+    case "reiniciada":
+      return `Reiniciou a automação ${alvo}`;
+    case "ja_em_execucao":
+      return `A automação ${alvo} já estava em execução para o contato`;
+    case "duplicada":
+      return `A automação ${alvo} já tinha sido iniciada por este passo`;
+    default:
+      return `Iniciou a automação ${alvo}`;
+  }
+}
+
 /** O que cada ação do bloco fez, numa linha ("Adicionar tags: ok; Criar negócio: criado"). */
 function detalhesDoEfeito(p: Record<string, unknown>): string | null {
   const lista = Array.isArray(p.detalhes) ? (p.detalhes as Array<Record<string, unknown>>) : [];
@@ -634,6 +666,7 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
       }
       const nome = tipo === "field_op" ? "Campos" : tipo ? (ACOES_DE_CRM[tipo as keyof typeof ACOES_DE_CRM] ?? tipo) : "Ação";
       if (d.ok === false) return `${nome}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
+      if (tipo === "start_automation") return fraseDoInicioDeOutra(d);
       if (tipo === "field_op" && Array.isArray(d.campos)) return `${nome}: ${(d.campos as string[]).join(", ")}`;
       const r = texto(d.resultado);
       const resultado =

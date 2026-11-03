@@ -365,11 +365,30 @@ export function casaGatilho(gatilho: AutomacaoTrigger, fato: FatoDeGatilho, font
       return fato.tipo === "birthday";
     case "case_opened":
       return fato.tipo === "case_opened";
-    // Varreduras de relógio: nenhum evento do log os casa.
+    // Varreduras de relógio: nenhum evento do log os casa. "Iniciada por outra
+    // automação" só nasce da ação "Iniciar automação" (ou do "Testar").
     case "date_field":
     case "no_reply":
+    case "started_by_automation":
       return false;
   }
+}
+
+/**
+ * A automação de destino aceita ser iniciada pela automação `origem`?
+ *
+ * Decisão: a lista de `started_by_automation` só RESTRINGE quando todo gatilho
+ * desse tipo traz lista — um deles sem lista (ou com lista vazia) aceita
+ * qualquer automação. Destino sem gatilho `started_by_automation` também
+ * aceita: a ação aponta para uma automação ativa da organização, e a cadeia e
+ * o ciclo continuam sendo os do `fn_automacao_iniciar`. Sem gatilhos legíveis
+ * (`null`) quem decide é a função do banco (`sem_inicio`).
+ */
+export function aceitaIniciador(cfg: AutomacaoTriggerConfig | null, origem: string): boolean {
+  if (!cfg) return true;
+  const listas = cfg.triggers.flatMap((g) => (g.kind === "started_by_automation" ? [g.from_pointer_ids ?? []] : []));
+  if (listas.length === 0 || listas.some((l) => l.length === 0)) return true;
+  return listas.some((l) => l.includes(origem));
 }
 
 /** Os gatilhos declarados no Início de um grafo publicado, ou `null` se não é grafo de automação. */

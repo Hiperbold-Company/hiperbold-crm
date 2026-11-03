@@ -281,9 +281,12 @@ export function listaDeTags(texto: string): string[] {
   ];
 }
 
-/** Ajuda curta sobre as variáveis aceitas nos textos. */
+/**
+ * Ajuda curta sobre as variáveis aceitas nos textos. `{{param.chave}}`: o dado
+ * que a automação que iniciou esta passou (ação "Iniciar outra automação").
+ */
 export const AJUDA_DAS_VARIAVEIS =
-  "Aceita variáveis: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{sistema.data}}.";
+  "Aceita variáveis: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}.";
 
 /** Unidades de tempo dos formulários da automação. */
 export const UNIDADES_DE_TEMPO = {

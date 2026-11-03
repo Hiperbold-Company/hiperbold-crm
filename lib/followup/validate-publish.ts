@@ -50,6 +50,8 @@ export const PUBLISH_ERROR_CODES = [
   'espera_imune_na_automacao',
   'espera_so_na_automacao',
   'mensagem_sem_contato',
+  'automacao_iniciar_propria',
+  'automacao_iniciar_inexistente',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -90,6 +92,13 @@ export interface ContextoDoPublish {
    * canal não os tem. Ausente = exige (o comportamento de antes).
    */
   exigeModeloForaDaJanela?: boolean;
+  /**
+   * Automação: o id do que está sendo publicado e as automações DESTA
+   * organização que a ação "Iniciar outra automação" cita e existem
+   * (`surface = 'automacao'`, lidas filtrando a organização). Sem `existentes`,
+   * só a conferência de "iniciar a si mesma" roda.
+   */
+  automacao?: { pointerId: string; existentes?: ReadonlySet<string> };
 }
 
 /**
@@ -170,6 +179,7 @@ function validarSuperficie(
   surface: FollowupFlowSurface,
   errors: PublishValidationError[],
   roteiro?: RoteiroDoPublish,
+  automacao?: ContextoDoPublish['automacao'],
 ): void {
   const permitidos = new Set<NodeType>(NOS_DA_SUPERFICIE[surface]);
   for (const n of [...graph.nodes].sort(byId)) {
@@ -234,6 +244,27 @@ function validarSuperficie(
           code: 'espera_so_na_automacao',
           message: `"${n.label}": espera em segundos e "até responder" só existem nas automações.`,
         });
+      }
+    }
+  }
+  if (surface === 'automacao' && automacao) {
+    for (const n of [...graph.nodes].sort(byId)) {
+      if (n.type !== 'crm_action') continue;
+      for (const a of n.config.actions) {
+        if (a.type !== 'start_automation') continue;
+        if (a.pointer_id === automacao.pointerId) {
+          errors.push({
+            node_id: n.id,
+            code: 'automacao_iniciar_propria',
+            message: `"${n.label}": a automação não pode iniciar a si mesma — escolha outra.`,
+          });
+        } else if (automacao.existentes && !automacao.existentes.has(a.pointer_id)) {
+          errors.push({
+            node_id: n.id,
+            code: 'automacao_iniciar_inexistente',
+            message: `"${n.label}": a automação escolhida não existe mais — escolha outra na lista.`,
+          });
+        }
       }
     }
   }
@@ -662,7 +693,7 @@ export function validateFlowForPublish(
 ): PublishValidationResult {
   const { nodes, edges } = graph;
   const errors: PublishValidationError[] = [];
-  validarSuperficie(graph, contexto.surface ?? 'followup', errors, contexto.roteiro);
+  validarSuperficie(graph, contexto.surface ?? 'followup', errors, contexto.roteiro, contexto.automacao);
   const etapas = contexto.etapas;
   const nomes: NomesDeValor = etapas ? { etapa: (id) => etapas.get(id)?.nome ?? null } : {};
   const nodesById = new Map(nodes.map((n) => [n.id, n]));

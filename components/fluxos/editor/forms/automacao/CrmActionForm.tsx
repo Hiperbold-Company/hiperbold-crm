@@ -55,8 +55,16 @@ export function acaoEmBranco(type: CrmActionType): CrmAction {
       return { type, title: "", due_in_minutes: 60, assignee: "owner" };
     case "add_note":
       return { type, body: "", target: "lead" };
+    case "start_automation":
+      return { type, pointer_id: "", params: [] };
   }
 }
+
+/**
+ * "Iniciar outra automação" ainda não tem formulário (escolher a automação e
+ * os dados a passar): fica fora da lista, e só aparece quando o grafo já a traz.
+ */
+const ACAO_SEM_FORMULARIO: CrmActionType = "start_automation";
 
 const opcoesDe = <K extends string>(mapa: Record<K, string>, t: (s: string) => string): Opcao[] =>
   (Object.keys(mapa) as K[]).map((k) => ({ valor: k, rotulo: t(mapa[k]) }));
@@ -126,7 +134,9 @@ export function CrmActionForm({
             <Seletor
               id={`acao-${i}-tipo`}
               valor={acao.type}
-              opcoes={opcoesDe(ACOES_DE_CRM, t)}
+              opcoes={opcoesDe(ACOES_DE_CRM, t).filter(
+                (o) => o.valor !== ACAO_SEM_FORMULARIO || acao.type === ACAO_SEM_FORMULARIO,
+              )}
               onChange={(v) => trocar(i, acaoEmBranco(v as CrmActionType))}
             />
           </Campo>
@@ -385,5 +395,7 @@ function CamposDaAcao({
           </Campo>
         </>
       );
+    case "start_automation":
+      return null;
   }
 }

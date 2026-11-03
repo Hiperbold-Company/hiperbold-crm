@@ -24,6 +24,8 @@ export interface NomesDaAutomacao {
   etapa?: (id: string) => string | null;
   funil?: (id: string) => string | null;
   pessoa?: (id: string) => string | null;
+  /** Nome de outra automação da organização (ação "Iniciar automação"). */
+  automacao?: (id: string) => string | null;
 }
 
 export const CAMPOS_PADRAO_DO_CONTATO: Record<Extract<FieldRef, { scope: "contact" }>["key"], string> = {
@@ -73,6 +75,7 @@ export const ACOES_DE_CRM: Record<CrmActionType, string> = {
   notify: "Avisar a equipe",
   create_task: "Criar tarefa",
   add_note: "Adicionar nota",
+  start_automation: "Iniciar outra automação",
 };
 
 export const OPERACOES_DE_CAMPO: Record<FieldOp["op"], string> = {
@@ -93,6 +96,7 @@ export const GATILHOS_DA_AUTOMACAO: Record<AutomacaoTriggerKind, string> = {
   date_field: "Data de um campo do negócio",
   no_reply: "Contato sem resposta",
   case_opened: "Caso aberto na Central",
+  started_by_automation: "Iniciada por outra automação",
 };
 
 /** Como a palavra-chave da mensagem recebida é comparada. */
@@ -193,6 +197,8 @@ export function fraseDaAcao(acao: CrmAction, nomes: NomesDaAutomacao = {}): stri
       return `Criar tarefa ${aspas(acao.title)}`;
     case "add_note":
       return "Adicionar nota";
+    case "start_automation":
+      return `Iniciar a automação ${aspas(nomes.automacao?.(acao.pointer_id) ?? "escolhida")}`;
   }
 }
 
@@ -254,6 +260,18 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   campo_desconhecido: "o campo não existe no funil",
   texto_longo_com_opcoes: "texto passou do limite de 1024 caracteres depois de preencher as variáveis",
   texto_longo: "texto passou do limite de 4096 caracteres depois de preencher as variáveis",
+  // Ação "Iniciar outra automação" (lote 3): o que impediu o início.
+  automacao_propria: "a automação não pode iniciar a si mesma",
+  automacao_inexistente: "a automação escolhida não existe mais nesta conta",
+  automacao_inativa: "a automação escolhida não está ativa",
+  automacao_nao_aceita: "a automação escolhida só pode ser iniciada pelas automações da lista dela",
+  automacao_ciclo: "a automação escolhida já está nesta cadeia, e iniciá-la de novo fecharia um ciclo",
+  automacao_cadeia_longa: "a cadeia de automações passou de 5 passos e foi cortada",
+  automacao_contato_invalido: "o contato não pode entrar em automações (removido ou anonimizado)",
+  automacao_em_espera: "o contato está no tempo de espera da automação escolhida",
+  automacao_limite_por_hora: "o contato já entrou 10 vezes na automação escolhida na última hora",
+  automacao_limite_da_organizacao: "a conta passou de 5000 automações iniciadas na última hora",
+  automacao_sem_inicio: "a automação escolhida não tem bloco de Início",
 };
 
 export function fraseDoErro(codigo: string | undefined): string {

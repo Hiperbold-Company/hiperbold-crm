@@ -40,6 +40,7 @@ import type { FatosDaAutomacao } from "../fatos";
 import type { CrmAction, FieldOp } from "../schemas";
 import { renderizar } from "../template-vars";
 import { executarConversa } from "./conversa";
+import { executarIniciarAutomacao } from "./iniciar-automacao";
 
 /** Evento que avisa a equipe (push) — consumido por `lib/notifications/push.handler.ts`. */
 export const EVENTO_DE_AVISO_DA_AUTOMACAO = "automacao.aviso";
@@ -51,6 +52,8 @@ export interface Contexto {
   org: string;
   pointerId: string;
   enrollmentId: string;
+  /** `${node}:${passo}` do efeito — base das chaves idempotentes. */
+  chave: string;
   contatoId: string;
   fatos: FatosDaAutomacao | null;
   handler: HandlerCtx;
@@ -116,7 +119,7 @@ async function rodizio(c: Contexto, ids: string[] | undefined): Promise<string |
   return selectRoundRobin(candidatos.map((userId) => ({ userId, currentLoad: 0, lastAssignedAt: ultimo.get(userId) ?? null })));
 }
 
-async function executarAcao(c: Contexto, acao: CrmAction): Promise<Passo> {
+async function executarAcao(c: Contexto, acao: CrmAction, indice: number): Promise<Passo> {
   const base = { tipo: acao.type };
   switch (acao.type) {
     case "create_deal": {
@@ -270,6 +273,8 @@ async function executarAcao(c: Contexto, acao: CrmAction): Promise<Passo> {
       if (error) return { ok: false, erro: "efeito_falhou", detalhe: base };
       return { ok: true, detalhe: { ...base, lead_id: lead.id } };
     }
+    case "start_automation":
+      return executarIniciarAutomacao(c, acao, indice);
   }
 }
 
@@ -385,6 +390,7 @@ function contextoDe(admin: SupabaseClient, pedido: PedidoDeEfeito, agora: Date):
     org: enrollment.organization_id,
     pointerId: enrollment.pointer_id,
     enrollmentId: enrollment.id,
+    chave: pedido.chave,
     contatoId: enrollment.contact_id,
     fatos: pedido.fatos,
     agora,
@@ -433,10 +439,10 @@ export function criarExecutorDeEfeitos(
       const detalhes: Array<Record<string, unknown>> = [];
       let vars: Record<string, unknown> = {};
       let primeiroErro: string | undefined;
-      for (const acao of node.config.actions) {
+      for (const [indice, acao] of node.config.actions.entries()) {
         let passo: Passo;
         try {
-          passo = await executarAcao(c, acao);
+          passo = await executarAcao(c, acao, indice);
         } catch (err) {
           const codigo = codigoDoErro(err);
           if (codigo === "plano_limite_atingido") await avisarLimiteDeLeadsAtingido(admin, c.org);
