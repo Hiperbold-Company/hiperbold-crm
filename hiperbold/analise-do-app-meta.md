@@ -35,7 +35,7 @@ O `public_profile` já tem acesso avançado (concedido em 03/11/2026).
   - Exclusão de dados: `https://crm.hiperbold.com.br/exclusao-de-dados`
 - [ ] **Conta para o revisor no CRM**: um usuário só para a Meta (por exemplo `revisao-meta@hiperbold.com.br`), na organização Hiperbold Company, com papel `admin`.
   - A senha vai **só** no campo de instruções da análise, nunca em arquivo nem em chat.
-  - Apague a conta quando a análise terminar.
+  - **Não apague a conta depois da análise:** o Checkup de Uso de Dados (revisão anual da Meta) pede que as credenciais de teste fiquem ativas por 1 ano a partir do envio.
 - [ ] **A aba Conexões › Redes sociais precisa aparecer para o revisor.** Hoje ela está oculta para todos, exceto o administrador da plataforma (`lib/hiperbold/funcoes-ocultas.ts`). Sem isso, o revisor não vê a tela que o vídeo mostra (ver a seção 6).
 - [ ] O @hiperbold e a Página Hiperbold Company **conectados** no CRM (já estão, desde 03/11/2026).
 - [ ] O app em modo **Ao vivo** (já está).
@@ -109,7 +109,7 @@ Grave sem legendas. Me mande o arquivo e eu coloco as legendas da tabela no víd
 
 - A análise costuma levar de 2 a 10 dias úteis. A resposta chega em Análise do app › Solicitações e no e-mail do administrador.
 - Se a Meta recusar uma permissão, a recusa traz o motivo. Ajustamos o texto ou o vídeo só daquela permissão e reenviamos.
-- Aprovado: apague a conta de revisor e libere a aba Redes sociais para os clientes. Depois disso, peça ao chat `hiperbold-ajuda` o artigo de como conectar o Instagram e o Messenger.
+- Aprovado: libere a aba Redes sociais para os clientes (a conta de revisor fica ativa por 1 ano, por causa do Checkup de Uso de Dados). Depois disso, peça ao chat `hiperbold-ajuda` o artigo de como conectar o Instagram e o Messenger.
 
 ## 6. Decisão pendente: a aba Redes sociais para o revisor
 
