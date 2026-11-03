@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   descreveEvento,
+  desfechoLegivel,
   duracaoLegivel,
   refDoNo,
   resumoDoNo,
   rotuloDaAresta,
+  rotuloDoDesfechoDaAutomacao,
   rotuloDoStatus,
   type NoDoDossie,
 } from "./eventos-legiveis";
@@ -364,5 +366,86 @@ describe("os eventos que o plano de tempo trouxe", () => {
     const r = descreveEvento(evento({ event_type: "enrolled_by_inbound_after_silence" }), nos, "pt-BR");
     expect(r.titulo).toBe("Começou porque o cliente voltou a escrever");
     expect(r.autor).toBe("motor");
+  });
+});
+
+describe("resposta escolhida num bloco de mensagem", () => {
+  it("mostra o nome da opção, não o id interno", () => {
+    const r = descreveEvento(
+      evento({
+        event_type: "effect_done",
+        payload: { detalhes: [{ tipo: "message", envio: "resposta", opcao_id: "opcao_ab12cd", opcao_rotulo: "Investimento", ok: true }] },
+      }),
+      nos,
+      "pt-BR",
+    );
+    expect(r.detalhe).toBe("Resposta do contato: escolheu “Investimento”");
+    expect(r.detalhe).not.toContain("opcao_ab12cd");
+  });
+
+  it("evento antigo, sem o rótulo, também não mostra o id", () => {
+    const r = descreveEvento(
+      evento({
+        event_type: "effect_done",
+        payload: { detalhes: [{ tipo: "message", envio: "resposta", opcao_id: "opcao_ab12cd", ok: true }] },
+      }),
+      nos,
+      "pt-BR",
+    );
+    expect(r.detalhe).toBe("Resposta do contato: escolheu uma opção");
+  });
+});
+
+describe("o fim de uma AUTOMAÇÃO não esgota tentativa", () => {
+  const fim: FlowNode = {
+    id: "end-1",
+    type: "end",
+    label: "Fim",
+    position: { x: 0, y: 0 },
+    // O padrão do bloco Fim, que o editor grava e o schema aceita.
+    config: { outcome: "exhausted" },
+  };
+  const noFim = (raia?: "followup" | "automacao") => ({ "end-1": resumoDoNo(fim, raia) });
+  const concluido = (raia?: "followup" | "automacao") =>
+    descreveEvento(
+      evento({ node_id: "end-1", event_type: "flow_completed", payload: { outcome: "exhausted" } }),
+      noFim(raia),
+      "pt-BR",
+      raia,
+    );
+
+  it("na automação o evento diz que terminou", () => {
+    const r = concluido("automacao");
+    expect(r.titulo).toBe("Automação concluída");
+    expect(r.detalhe).toBe("terminou");
+  });
+
+  it("no follow-up segue dizendo que esgotou as tentativas (contrato do follow-up)", () => {
+    expect(concluido("followup").detalhe).toBe("esgotou as tentativas");
+    // Sem raia = follow-up: quem não informa continua com o texto de sempre.
+    expect(concluido().detalhe).toBe("esgotou as tentativas");
+    expect(concluido().titulo).toBe("Fluxo concluído");
+  });
+
+  it("o resumo do bloco Fim na automação não cita o desfecho do enum", () => {
+    expect(resumoDoNo(fim, "automacao").resumo).toBe("termina a automação");
+    expect(resumoDoNo(fim).resumo).toBe("encerra — esgotou as tentativas");
+  });
+
+  it.each(["converted", "exhausted", "custom"])("nenhum desfecho do bloco Fim (%s) vaza cru na automação", (outcome) => {
+    const r = descreveEvento(
+      evento({ node_id: "end-1", event_type: "flow_completed", payload: { outcome } }),
+      noFim("automacao"),
+      "pt-BR",
+      "automacao",
+    );
+    expect(r.detalhe).toBe("terminou");
+    expect(desfechoLegivel(outcome, "automacao")).toBe("terminou");
+    expect(rotuloDoDesfechoDaAutomacao(outcome)).toBe("Concluída");
+  });
+
+  it("desfecho desconhecido na automação também não vaza a palavra crua", () => {
+    expect(desfechoLegivel("algo_novo", "automacao")).toBe("terminou");
+    expect(rotuloDoDesfechoDaAutomacao("algo_novo")).toBe("Concluída");
   });
 });

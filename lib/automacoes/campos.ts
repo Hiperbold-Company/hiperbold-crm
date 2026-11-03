@@ -33,7 +33,7 @@ export function campoSoLeitura(ref: FieldRef): boolean {
 
 export type Coercao = { ok: true; valor: unknown } | { ok: false; erro: string };
 
-const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function numero(texto: string): number | null {
   const limpo = texto.trim().replace(/\s/g, "");

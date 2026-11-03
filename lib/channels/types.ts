@@ -83,7 +83,40 @@ export interface ChannelCapabilities {
   costPerMessage: boolean;
   /** O atendente pode editar e apagar para todos uma mensagem já enviada. */
   alteraMensagemEnviada: boolean;
+  /**
+   * Mensagem com opções (botões ou lista) que o contato toca para responder.
+   *
+   * `native` = o canal desenha botões/lista de verdade e devolve o id da opção
+   * tocada; `none` = não desenha, e quem envia converte as opções em texto
+   * numerado ("1) Moradia") antes de chegar ao adapter. A conversão mora em
+   * `lib/channels/opcoes-numeradas.ts`, e é a ÚNICA fallback: o adapter nunca
+   * recebe `interactive` de um canal `none`.
+   */
+  interactive: "native" | "none";
 }
+
+/** Botão de resposta: até 3 por mensagem, rótulo com até 20 caracteres. */
+export interface OpcaoDeBotao {
+  id: string;
+  label: string;
+}
+
+/** Linha de lista: até 10 por mensagem, rótulo com até 24 e descrição com até 72 caracteres. */
+export interface OpcaoDeLista {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+/**
+ * As opções de saída de uma mensagem, junto do corpo de texto (`body`).
+ *
+ * Os limites são os da plataforma oficial (os mais apertados entre os canais),
+ * validados por `interactiveSchema` em `lib/channels/opcoes-numeradas.ts`.
+ */
+export type OutboundInteractive =
+  | { kind: "buttons"; items: OpcaoDeBotao[] }
+  | { kind: "list"; button_label: string; items: OpcaoDeLista[] };
 
 /**
  * O vocabulário de tipo de mensagem de saída tem UMA fonte: o schema de entrada
@@ -185,6 +218,13 @@ export interface OutboundEnvelope extends ChannelTenantScope {
    * `undefined` = envio solto, que é o caso comum.
    */
   replyToExternalId?: string | null;
+  /**
+   * Opções nativas (botões ou lista) junto de `body`. Só chega preenchido em
+   * `kind: "text"` e só para canal com `interactive: "native"`: para os outros,
+   * quem envia já converteu em texto numerado. Adapter que não sabe desenhar
+   * opções nunca o recebe.
+   */
+  interactive?: OutboundInteractive;
 }
 
 /**

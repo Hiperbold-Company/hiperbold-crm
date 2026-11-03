@@ -4,8 +4,18 @@ import {
   automacaoTriggerConfigSchema,
   crmActionConfigSchema,
   fieldOpConfigSchema,
+  fieldRefSchema,
   regrasNovasDeCondicao,
+  tpl,
 } from '@/lib/automacoes/schemas';
+import {
+  MAX_BOTOES,
+  MAX_CORPO_COM_OPCOES,
+  MAX_DESCRICAO_DA_LISTA,
+  MAX_ITENS_DA_LISTA,
+  MAX_ROTULO_DA_LISTA,
+  MAX_ROTULO_DO_BOTAO,
+} from '@/lib/channels/opcoes-numeradas';
 
 /**
  * Flow graph schema for the follow-up automation system.
@@ -26,6 +36,9 @@ export const NODE_TYPES = [
   // Blocos das AUTOMAÇÕES (superfície `automacao`, lote 1). Ver `lib/automacoes/schemas.ts`.
   'crm_action',
   'field_op',
+  // Blocos de CONVERSA das automações (lote 2): mensagem (com botões ou lista) e pergunta.
+  'message',
+  'question',
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
@@ -69,6 +82,14 @@ export const REPEAT_DONE_BRANCH_ID = 'done';
  * blocos de efeito não têm ramo declarado, então não há colisão possível.
  */
 export const ERROR_BRANCH_ID = 'erro';
+/**
+ * Saída "Resposta inválida" dos blocos de conversa (`message` com opções,
+ * `question`): o contato respondeu, mas a resposta não serviu e as novas
+ * tentativas acabaram. Fora de `RESERVED_BRANCH_IDS` pelo mesmo motivo de
+ * `ERROR_BRANCH_ID`; a opção declarada do bloco de mensagem recusa os dois
+ * (`messageOptionIdSchema`).
+ */
+export const INVALID_REPLY_BRANCH_ID = 'invalida';
 
 /** Branch ids the contract owns — a user-declared branch may not claim one. */
 export const RESERVED_BRANCH_IDS = [
@@ -97,6 +118,13 @@ export const edgeBranchIdSchema = z
   .refine((id) => id !== FALLBACK_BRANCH_ID, {
     message: `the fallback branch "${FALLBACK_BRANCH_ID}" is spelled { type: 'always' } on an edge`,
   });
+
+/** 30 dias: o maior tempo limite de uma espera de resposta (mensagem, "até responder"). */
+export const TEMPO_MAXIMO_DE_ESPERA_DE_RESPOSTA_MS = 30 * 24 * 60 * 60_000;
+/** 7 dias: o maior tempo limite de uma pergunta. */
+export const TEMPO_MAXIMO_DA_PERGUNTA_MS = 7 * 24 * 60 * 60_000;
+/** 1 minuto: o menor tempo limite de qualquer espera de resposta. */
+export const TEMPO_MINIMO_DE_ESPERA_DE_RESPOSTA_MS = 60_000;
 
 /**
  * Wait node configuration schema.
@@ -135,11 +163,59 @@ export const waitConfigSchema = z
       max_ms: z.number().int().max(7_776_000_000),
       guidance: z.string().max(500).optional(),
     }),
+    /**
+     * Automação (lote 2): espera em SEGUNDOS, de 1 s a 90 dias. O relógio roda
+     * de minuto em minuto, então uma espera curta termina no tick seguinte (em
+     * até 1 minuto) — a execução não segue no mesmo tick. Só na superfície
+     * `automacao` (`validate-publish.ts`); o mínimo de 5 min do `fixed` fica.
+     */
+    z.strictObject({
+      mode: z.literal('delay'),
+      duration_s: z.number().int().min(1).max(7_776_000),
+    }),
+    /**
+     * Automação (lote 2): espera até o contato responder, com tempo limite de
+     * 1 min a 30 dias. Saídas "Respondeu" e "Sem resposta".
+     */
+    z.strictObject({
+      mode: z.literal('until_reply'),
+      timeout_ms: z.number().int().min(60_000).max(TEMPO_MAXIMO_DE_ESPERA_DE_RESPOSTA_MS),
+    }),
   ])
   .refine((c) => c.mode !== 'smart' || c.min_ms <= c.max_ms, {
     message: 'min_ms must be <= max_ms',
     path: ['min_ms'],
   });
+
+export type WaitConfig = z.infer<typeof waitConfigSchema>;
+
+/** O MAIOR tempo que uma espera pode segurar o contato (fixo, máximo do adaptativo, segundos ou tempo limite). */
+export function duracaoMaximaDaEspera(config: WaitConfig): number {
+  switch (config.mode) {
+    case 'fixed':
+      return config.duration_ms;
+    case 'smart':
+      return config.max_ms;
+    case 'delay':
+      return config.duration_s * 1000;
+    case 'until_reply':
+      return config.timeout_ms;
+  }
+}
+
+/** O MENOR tempo que uma espera segura o contato (a "até responder" pode acabar com a resposta). */
+export function duracaoMinimaDaEspera(config: WaitConfig): number {
+  switch (config.mode) {
+    case 'fixed':
+      return config.duration_ms;
+    case 'smart':
+      return config.min_ms;
+    case 'delay':
+      return config.duration_s * 1000;
+    case 'until_reply':
+      return config.timeout_ms;
+  }
+}
 
 /** A declared output of an `ai_classify` node: opaque id + the class name the LLM is asked to pick. */
 export const aiClassBranchSchema = z.strictObject({
@@ -426,6 +502,119 @@ export const endConfigSchema = z.strictObject({
   ao_finalizar: endFinishSchema.optional(),
 });
 
+// ---------------------------------------------------------------------------
+// Blocos de CONVERSA das automações (lote 2): `message` e `question`
+// ---------------------------------------------------------------------------
+
+/**
+ * Id de uma opção do bloco de mensagem. É o id do RAMO (a aresta o referencia)
+ * e o id que vai à plataforma oficial no botão/lista — a resposta nativa volta
+ * com ele em `metadata.reply.id`. Não pode tomar um id que o contrato já usa.
+ */
+export const messageOptionIdSchema = declaredBranchIdSchema.refine(
+  (id) => id !== ERROR_BRANCH_ID && id !== INVALID_REPLY_BRANCH_ID,
+  { message: `branch id is reserved: ${ERROR_BRANCH_ID}, ${INVALID_REPLY_BRANCH_ID}` },
+);
+
+/** Opções do bloco de mensagem: até 3 botões ou uma lista de até 10 itens (os limites da plataforma oficial). */
+export const messageOptionsSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('buttons'),
+    items: z
+      .array(z.strictObject({ id: messageOptionIdSchema, label: z.string().trim().min(1).max(MAX_ROTULO_DO_BOTAO) }))
+      .min(1)
+      .max(MAX_BOTOES),
+  }),
+  z.strictObject({
+    kind: z.literal('list'),
+    button_label: z.string().trim().min(1).max(MAX_ROTULO_DO_BOTAO),
+    items: z
+      .array(
+        z.strictObject({
+          id: messageOptionIdSchema,
+          label: z.string().trim().min(1).max(MAX_ROTULO_DA_LISTA),
+          description: z.string().trim().min(1).max(MAX_DESCRICAO_DA_LISTA).optional(),
+        }),
+      )
+      .min(1)
+      .max(MAX_ITENS_DA_LISTA),
+  }),
+]);
+export type MessageOptions = z.infer<typeof messageOptionsSchema>;
+
+/** O destino da resposta: um campo que o bloco pode escrever (variável é só leitura). */
+const destinoDaResposta = fieldRefSchema.refine((ref) => ref.scope !== 'var', {
+  message: 'variável é só leitura',
+});
+
+/** Resposta que não serviu: o texto da nova tentativa (ausente = repete a mensagem) e quantas vezes tentar. */
+export const invalidReplySchema = z.strictObject({
+  message: tpl(1000).min(1).optional(),
+  attempts: z.number().int().min(0).max(3),
+});
+
+/**
+ * Bloco de MENSAGEM (só automação). Texto com variáveis `{{...}}`, e opções
+ * opcionais: com opções, a execução espera a escolha (em até 1 minuto depois da
+ * resposta, pelo relógio) e sai por um caminho por opção, "Sem resposta",
+ * "Resposta inválida" ou "Erro"; sem opções, sai por "Concluído" ou "Erro".
+ */
+export const messageConfigSchema = z
+  .strictObject({
+    body: tpl(4000).min(1),
+    options: messageOptionsSchema.optional(),
+    /** Quanto esperar a escolha. Obrigatório com opções. */
+    reply_timeout_ms: z
+      .number()
+      .int()
+      .min(TEMPO_MINIMO_DE_ESPERA_DE_RESPOSTA_MS)
+      .max(TEMPO_MAXIMO_DE_ESPERA_DE_RESPOSTA_MS)
+      .optional(),
+    invalid_reply: invalidReplySchema.optional(),
+    /** Onde gravar o RÓTULO da opção escolhida. */
+    save_to: destinoDaResposta.optional(),
+  })
+  .refine((c) => !c.options || c.reply_timeout_ms !== undefined, {
+    message: 'mensagem com opções precisa do tempo de espera da resposta',
+    path: ['reply_timeout_ms'],
+  })
+  .refine((c) => !c.options || new Set(c.options.items.map((i) => i.id)).size === c.options.items.length, {
+    message: 'options.items[].id must be unique within the node',
+    path: ['options'],
+  })
+  .refine((c) => !c.options || c.body.length <= MAX_CORPO_COM_OPCOES, {
+    message: `mensagem com opções tem no máximo ${MAX_CORPO_COM_OPCOES} caracteres`,
+    path: ['body'],
+  })
+  .refine((c) => c.options !== undefined || (c.save_to === undefined && c.invalid_reply === undefined), {
+    message: 'sem opções, a mensagem não espera resposta: tire "salvar escolha" e "resposta inválida"',
+    path: ['options'],
+  });
+export type MessageConfig = z.infer<typeof messageConfigSchema>;
+
+/** Como a resposta de uma pergunta é conferida antes de ser gravada. */
+export const QUESTION_VALIDATIONS = ['text', 'phone', 'email', 'number', 'cpf', 'date'] as const;
+export type QuestionValidation = (typeof QUESTION_VALIDATIONS)[number];
+
+/**
+ * Bloco de PERGUNTA (só automação): envia a pergunta, espera a resposta,
+ * confere pelo tipo e grava no campo. Saídas: "Respondeu" (válida e gravada),
+ * "Resposta inválida" (tentativas esgotadas), "Sem resposta" e "Erro".
+ */
+export const questionConfigSchema = z.strictObject({
+  question: tpl(1000).min(1),
+  save_to: destinoDaResposta,
+  validation: z.enum(QUESTION_VALIDATIONS),
+  timeout_ms: z.number().int().min(TEMPO_MINIMO_DE_ESPERA_DE_RESPOSTA_MS).max(TEMPO_MAXIMO_DA_PERGUNTA_MS),
+  /** Novas tentativas depois de uma resposta inválida (0 = a primeira inválida já sai por "Resposta inválida"). */
+  retries: z.number().int().min(0).max(5),
+  /** Texto da nova tentativa; ausente = repete a pergunta. */
+  retry_message: tpl(1000).min(1).optional(),
+  /** Enviada quando o tempo acaba sem resposta, antes de sair por "Sem resposta". */
+  timeout_message: tpl(1000).min(1).optional(),
+});
+export type QuestionConfig = z.infer<typeof questionConfigSchema>;
+
 /**
  * Flow node schema — discriminated union based on node type.
  * Each node type has its specific config schema.
@@ -562,6 +751,28 @@ export const flowNodeSchema = z.discriminatedUnion('type', [
       y: z.number(),
     }),
     config: fieldOpConfigSchema,
+  }),
+  // Mensagem (automação): texto, com botões ou lista opcionais.
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('message'),
+    label: z.string().min(1).max(60),
+    position: z.strictObject({
+      x: z.number(),
+      y: z.number(),
+    }),
+    config: messageConfigSchema,
+  }),
+  // Pergunta (automação): pergunta, confere e grava a resposta num campo.
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('question'),
+    label: z.string().min(1).max(60),
+    position: z.strictObject({
+      x: z.number(),
+      y: z.number(),
+    }),
+    config: questionConfigSchema,
   }),
 ]);
 
@@ -773,18 +984,32 @@ function fallbackBranch(label: string): FlowBranch {
 
 const FALLBACK_DONE_LABEL = 'Concluído';
 
+const RESPONDEU_LABEL = 'Respondeu';
+const RESPOSTA_INVALIDA_LABEL = 'Resposta inválida';
+
+function ramoDeErro(): FlowBranch {
+  return {
+    id: ERROR_BRANCH_ID,
+    label: 'Erro',
+    check: null,
+    kind: 'match',
+    condition: { type: 'branch', branch_id: ERROR_BRANCH_ID },
+  };
+}
+
+function ramoSemResposta(): FlowBranch {
+  return {
+    id: NO_REPLY_BRANCH_ID,
+    label: NO_REPLY_LABEL,
+    check: null,
+    kind: 'match',
+    condition: { type: 'branch', branch_id: NO_REPLY_BRANCH_ID },
+  };
+}
+
 /** Os dois desfechos de um bloco de efeito: deu certo (o `else`) ou deu erro. */
 function ramosDeEfeito(): FlowBranch[] {
-  return [
-    {
-      id: ERROR_BRANCH_ID,
-      label: 'Erro',
-      check: null,
-      kind: 'match',
-      condition: { type: 'branch', branch_id: ERROR_BRANCH_ID },
-    },
-    fallbackBranch(FALLBACK_DONE_LABEL),
-  ];
+  return [ramoDeErro(), fallbackBranch(FALLBACK_DONE_LABEL)];
 }
 
 
@@ -909,8 +1134,42 @@ export const RAMOS_POR_TIPO: { [K in NodeType]: RamosDe<K> } = {
   crm_action: ramosDeEfeito,
   field_op: ramosDeEfeito,
 
+  // Sem opções a mensagem é um efeito como os outros (Concluído/Erro). Com
+  // opções: uma saída por opção, "Sem resposta", "Erro" e a de escape, que é
+  // "Resposta inválida" — a resposta que não casou com nenhuma opção.
+  message: (node) => {
+    const opcoes = node.config.options;
+    if (!opcoes) return ramosDeEfeito();
+    return [
+      ...opcoes.items.map((item) => ({
+        id: item.id,
+        label: item.label,
+        check: null,
+        kind: 'match' as const,
+        condition: { type: 'branch' as const, branch_id: item.id },
+      })),
+      ramoSemResposta(),
+      ramoDeErro(),
+      fallbackBranch(RESPOSTA_INVALIDA_LABEL),
+    ];
+  },
+  // A pergunta respondida (válida e gravada) é o caminho comum: a de escape.
+  question: () => [
+    ramoSemResposta(),
+    {
+      id: INVALID_REPLY_BRANCH_ID,
+      label: RESPOSTA_INVALIDA_LABEL,
+      check: null,
+      kind: 'match',
+      condition: { type: 'branch', branch_id: INVALID_REPLY_BRANCH_ID },
+    },
+    ramoDeErro(),
+    fallbackBranch(RESPONDEU_LABEL),
+  ],
+
   trigger: saidaUnica,
-  wait: saidaUnica,
+  wait: (node) =>
+    node.config.mode === 'until_reply' ? [ramoSemResposta(), fallbackBranch(RESPONDEU_LABEL)] : saidaUnica(),
   collect: saidaUnica,
   skill: saidaUnica,
   action: saidaUnica,

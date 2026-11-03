@@ -52,7 +52,24 @@ import { interpolarDestino, persistirRespostaFollowupSupabase } from "./persisti
 import { quandoDoRetornoVivo, reavaliarDepoisDoRetorno } from "./retorno-segura-o-fluxo";
 import { triggerConfigSchema } from "./api-schemas";
 import { definicaoDoNo } from "./registro-de-nos";
-import type { DesfechoDoEfeito } from "./node-handlers";
+import {
+  ehBlocoDeConversa,
+  tempoLimiteDaConversa,
+  type AcaoDeConversa,
+  type DesfechoDoEfeito,
+} from "./node-handlers";
+import {
+  estadoDaEspera,
+  inboundContaComoResposta,
+  inboundDentroDaEspera,
+  MARGEM_DO_PISO_MS,
+  pisoDaEspera,
+  varsDaResposta,
+  varsParaOEvento,
+  type EstadoDaEspera,
+  type RespostaRecebida,
+} from "@/lib/automacoes/conversa";
+import { devolverTurnoAoAgente } from "@/lib/automacoes/devolver-turno";
 import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
 import { carregarFatosDaAutomacao } from "@/lib/automacoes/carregar-fatos";
 import {
@@ -177,6 +194,19 @@ export interface AdminClient {
    * cada passo. Opcional — o motor de follow-up não precisa.
    */
   loadFatosDaAutomacao?(orgId: string, contactId: string, vars: Record<string, unknown>): Promise<FatosDaAutomacao>;
+  /**
+   * Bloco de conversa (automação): as mensagens do contato (e gêmeos de
+   * telefone) desde `desde`, da mais antiga à mais nova, no máximo 5, com o id
+   * da opção tocada na resposta nativa. Opcional: sem ele o motor usa
+   * `loadLastInboundBody` (sem id de opção).
+   */
+  loadRespostasDaEspera?(orgId: string, contactId: string, desde: string): Promise<RespostaRecebida[]>;
+  /**
+   * A automação consumiu a resposta do contato e terminou sem caminho ligado:
+   * pede de novo o turno da IA, que tinha cedido (`lib/automacoes/devolver-turno.ts`).
+   * Opcional: sem ele, nada é devolvido.
+   */
+  devolverTurnoAoAgente?(orgId: string, enrollmentId: string, desde: string): Promise<void>;
   persistirRespostaFollowup(input: {
     organization_id: string;
     contact_id: string;
@@ -190,6 +220,8 @@ export interface PedidoDeEfeito {
   enrollment: EnrollmentRow;
   node: FlowNode;
   fatos: FatosDaAutomacao | null;
+  /** Bloco de conversa: o que a decisão pediu (enviar, registrar a resposta). Ausente nos blocos de CRM. */
+  acao?: AcaoDeConversa;
   /** `${node}:${passo}` — identidade do efeito, para quem precisar de chave idempotente. */
   chave: string;
 }
@@ -740,7 +772,10 @@ async function processarUmPasso(
 
   const node = graph.nodes.find((n) => n.id === enrollment.current_node_id);
   if (!node) throw new Error("node_not_found");
-  if (inboundBodyOverride !== undefined && node.type !== "match_reply" && node.type !== "wait") {
+  // A automação não é aplicada pelo texto do inbound (o caminho sem claim): a
+  // resposta a um bloco de conversa é lida dos eventos e das mensagens pelo
+  // tick que reivindica a execução (o relógio a acorda — `lib/relogio/executar.ts`).
+  if (inboundBodyOverride !== undefined && (automacao || (node.type !== "match_reply" && node.type !== "wait"))) {
     return null;
   }
 
@@ -872,7 +907,34 @@ async function processarUmPasso(
     }
   }
 
-  const result = processNode({
+  // Bloco de conversa (automação): o que esta estadia já fez e, se já está
+  // esperando, as mensagens do contato desde o início da espera em curso.
+  let espera: EstadoDaEspera | undefined;
+  let respostas: RespostaRecebida[] | undefined;
+  let desdeDaEspera: string | null = null;
+  if (automacao && ehBlocoDeConversa(node)) {
+    // O `node_advanced` DESTE passo existe quando o tick caiu entre gravar o
+    // evento e gravar o passo: a estadia ainda não terminou — sem este filtro o
+    // replay recomeçava o bloco (reenviava) e a execução ficava presa.
+    const passoAtual = `${node.id}:${enrollment.steps_taken}`;
+    espera = estadoDaEspera(
+      events.filter((e) => !(e.event_type === "node_advanced" && e.idempotency_key === passoAtual)),
+      node.id,
+    );
+    const limite = tempoLimiteDaConversa(node);
+    if (espera.aguardando && limite !== null) {
+      const desde = pisoDaEspera(espera.prazo, limite, enrollment.updated_at);
+      desdeDaEspera = desde;
+      respostas = db.loadRespostasDaEspera
+        ? await db.loadRespostasDaEspera(enrollment.organization_id, enrollment.contact_id, desde)
+        : await (async () => {
+            const corpo = await db.loadLastInboundBody(enrollment.organization_id, enrollment.contact_id, null, desde);
+            return corpo === null ? [] : [{ texto: corpo, replyId: null }];
+          })();
+    }
+  }
+
+  const entrada = {
     node,
     edges: graph.edges,
     enrollment,
@@ -891,8 +953,19 @@ async function processarUmPasso(
     repeatTotal,
     proximo,
     ...(fatos ? { fatos } : {}),
-    efeito,
-  });
+    ...(espera ? { espera } : {}),
+    ...(respostas ? { respostas } : {}),
+  };
+  let result = processNode({ ...entrada, efeito });
+  // A decisão do bloco de conversa pediu UM efeito (enviar ou registrar): o
+  // motor o executa uma vez por passo e pergunta de novo, com o desfecho.
+  let registrouResposta = false;
+  if (automacao && result.kind === "effect" && result.acao) {
+    registrouResposta = result.acao.tipo === "registrar_resposta";
+    const resolvido = await resolverEfeito(deps, enrollment, node, events, fatos ?? null, result.acao);
+    if (resolvido.vars) varsNovas = { ...(enrollment.vars ?? {}), ...resolvido.vars };
+    result = processNode({ ...entrada, efeito: resolvido.desfecho });
+  }
   const aplicou = await applyResult(
     deps,
     enrollment,
@@ -904,6 +977,24 @@ async function processarUmPasso(
     node.type === "match_reply" && wokeEarly ? (lastInboundBody ?? "").trim() || null : null,
     varsNovas,
   );
+  // A automação leu a mensagem do contato, não aceitou nenhuma e terminou sem
+  // caminho ligado: a IA tinha cedido o turno (uma voz) e o contato ficaria sem
+  // resposta. Devolve o turno. Falha aqui não muda o passo, já gravado.
+  if (
+    automacao &&
+    aplicou &&
+    result.kind === "complete" &&
+    !registrouResposta &&
+    (respostas?.length ?? 0) > 0 &&
+    desdeDaEspera !== null &&
+    db.devolverTurnoAoAgente
+  ) {
+    try {
+      await db.devolverTurnoAoAgente(enrollment.organization_id, enrollment.id, desdeDaEspera);
+    } catch {
+      logger.warn("automacao: devolver o turno à IA falhou", { enrollment_id: enrollment.id });
+    }
+  }
   if (!automacao || !aplicou || result.kind !== "advance") return null;
   // O próximo bloco no MESMO tick: o estado que acabou de ser gravado.
   return {
@@ -934,6 +1025,7 @@ async function resolverEfeito(
   node: FlowNode,
   events: EnrollmentEventRef[],
   fatos: FatosDaAutomacao | null,
+  acao?: AcaoDeConversa,
 ): Promise<{ desfecho: DesfechoDoEfeito; vars?: Record<string, unknown> }> {
   const { db } = deps;
   const chave = `${node.id}:${enrollment.steps_taken}`;
@@ -952,8 +1044,16 @@ async function resolverEfeito(
     };
   };
 
+  // O evento não guarda a resposta do contato (`varsParaOEvento`): num replay
+  // da resposta aceita, as variáveis dela são recalculadas da decisão — a
+  // mesma, porque as mesmas mensagens desde o mesmo piso dão a mesma aceita.
+  const completar = <T extends { desfecho: DesfechoDoEfeito; vars?: Record<string, unknown> }>(r: T): T =>
+    acao?.tipo === "registrar_resposta" && r.desfecho.ok
+      ? { ...r, vars: { ...(r.vars ?? {}), ...varsDaResposta(node, acao, enrollment.vars) } }
+      : r;
+
   const jaFeito = lerFim(events);
-  if (jaFeito) return jaFeito;
+  if (jaFeito) return completar(jaFeito);
 
   const gravarFim = async (r: ResultadoDoEfeito) => {
     const { inserted } = await db.insertEnrollmentEvent({
@@ -961,7 +1061,8 @@ async function resolverEfeito(
       event_type: r.desfecho.ok ? "effect_done" : "effect_failed",
       payload: {
         desfecho: r.desfecho,
-        ...(r.vars ? { vars: r.vars } : {}),
+        // Nunca o texto do contato: o namespace `resposta` vive só em `enrollments.vars`.
+        ...(varsParaOEvento(r.vars) ? { vars: varsParaOEvento(r.vars) } : {}),
         ...(r.detalhes ? { detalhes: r.detalhes } : {}),
       },
       idempotency_key: chaveFim,
@@ -969,7 +1070,7 @@ async function resolverEfeito(
     if (!inserted) {
       // Outro tick gravou primeiro: vale o dele.
       const outro = lerFim(await db.loadEnrollmentEvents(enrollment.id, limiteDeEventos(enrollment)));
-      if (outro) return outro;
+      if (outro) return completar(outro);
     }
     return { desfecho: r.desfecho, ...(r.vars ? { vars: r.vars } : {}) };
   };
@@ -980,7 +1081,8 @@ async function resolverEfeito(
     : await db.insertEnrollmentEvent({
         ...base,
         event_type: "effect_started",
-        payload: { tipo: node.type },
+        // Só o TIPO da ação de conversa — nunca o valor (a resposta do contato).
+        payload: { tipo: node.type, ...(acao ? { acao: acao.tipo } : {}) },
         idempotency_key: chaveInicio,
       });
   if (!inserted) {
@@ -992,7 +1094,7 @@ async function resolverEfeito(
     resultado = { desfecho: { ok: false, erro: "efeitos_indisponiveis" } };
   } else {
     try {
-      resultado = await deps.efeitos.executar({ enrollment, node, fatos, chave });
+      resultado = await deps.efeitos.executar({ enrollment, node, fatos, chave, ...(acao ? { acao } : {}) });
     } catch (err) {
       // Só o CÓDIGO: a mensagem bruta de um erro de banco ou de handler pode
       // trazer o valor que o template montou (nome, telefone, texto do cliente).
@@ -1281,6 +1383,37 @@ export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
     },
     async loadFatosDaAutomacao(orgId, contactId, vars) {
       return carregarFatosDaAutomacao(admin, orgId, contactId, vars);
+    },
+    async devolverTurnoAoAgente(orgId, enrollmentId, desde) {
+      await devolverTurnoAoAgente(admin, { organizationId: orgId, enrollmentId, desde });
+    },
+    async loadRespostasDaEspera(orgId, contactId, desde) {
+      const ids = await idsDoContatoEGemeos(admin, orgId, contactId);
+      const { data, error } = await admin
+        .from("messages")
+        .select("type, body, metadata, sent_at, created_at")
+        .eq("organization_id", orgId)
+        .in("contact_id", ids)
+        .eq("direction", "inbound")
+        .neq("type", "reaction")
+        .gte("created_at", desde)
+        .gte("sent_at", new Date(Date.parse(desde) - MARGEM_DO_PISO_MS).toISOString())
+        .order("sent_at", { ascending: true })
+        .limit(10);
+      if (error) throw new Error(error.message);
+      // Reação e marca de tipo não suportado não são resposta (`inboundContaComoResposta`);
+      // o piso tem a folga só no relógio do provedor (`inboundDentroDaEspera`).
+      type Linha = { type: string | null; body: string | null; metadata: unknown; sent_at: string | null; created_at: string | null };
+      return ((data ?? []) as Linha[])
+        .filter((m) => inboundContaComoResposta(m) && inboundDentroDaEspera(m, desde))
+        .slice(0, 5)
+        .map((m) => {
+          const reply = (m.metadata as { reply?: { id?: unknown } } | null)?.reply;
+          return {
+            texto: typeof m.body === "string" ? m.body : "",
+            replyId: typeof reply?.id === "string" ? reply.id : null,
+          };
+        });
     },
   };
 }

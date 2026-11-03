@@ -24,6 +24,13 @@ describe("describeNodeConfig — nó final", () => {
   ] as const)("outcome '%s' aparece no card como '%s'", (outcome, esperado) => {
     expect(describeNodeConfig("end", { outcome }, pt)).toBe(esperado);
   });
+
+  it.each(["converted", "exhausted", "custom"] as const)(
+    "na automação o card diz 'Concluída' (outcome '%s' do grafo não aparece)",
+    (outcome) => {
+      expect(describeNodeConfig("end", { outcome }, pt, "automacao")).toBe("Concluída");
+    },
+  );
 });
 
 /**

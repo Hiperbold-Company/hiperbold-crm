@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { rotuloDoStatus, tomDoStatus } from "@/lib/followup/eventos-legiveis";
+import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 
@@ -47,11 +48,12 @@ export default async function ExecucoesDaAutomacaoPage({ params }: { params: Pro
   const { data: contatos } = idsDeContato.length
     ? await supabase
         .from("contacts")
-        .select("id, name, phone_number")
+        .select("id, name, display_name, phone_number")
         .eq("organization_id", activeOrg.orgId)
         .in("id", idsDeContato)
-    : { data: [] as Array<{ id: string; name: string | null; phone_number: string | null }> };
-  const nomeDoContato = new Map((contatos ?? []).map((c) => [c.id, c.name ?? c.phone_number ?? "—"]));
+    : { data: [] as Array<{ id: string; name: string | null; display_name: string | null; phone_number: string | null }> };
+  // Rótulo canônico (name, depois display_name do WhatsApp, depois o telefone).
+  const nomeDoContato = new Map((contatos ?? []).map((c) => [c.id, rotuloDoContato(c, t)]));
   const quando = (iso: string | null) =>
     iso ? new Date(iso).toLocaleString(user.idioma, { dateStyle: "short", timeStyle: "short" }) : "—";
 

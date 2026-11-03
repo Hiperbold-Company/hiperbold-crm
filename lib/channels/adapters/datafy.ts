@@ -35,7 +35,7 @@ import type {
   OutboundEnvelope,
   RecipientInput,
 } from "../types";
-import { contactPayload, mediaPayload, toE164Digits } from "./meta-cloud";
+import { contactPayload, interactivePayload, mediaPayload, toE164Digits } from "./meta-cloud";
 
 const NAO_CONFIGURADO = "datafy_not_configured";
 
@@ -156,6 +156,7 @@ export const datafyAdapter: ChannelAdapter = {
     const corpo =
       contactPayload(envelope) ??
       mediaPayload(envelope) ??
+      interactivePayload(envelope) ??
       { type: "text", text: { body: envelope.body ?? "" } };
 
     await envelope.beforeSend?.();

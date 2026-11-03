@@ -88,6 +88,22 @@ describe("adapter datafy", () => {
     expect(body.audio).toEqual({ link: "https://m/a.ogg", voice: true });
   });
 
+  it("opções saem no mesmo dialeto da Cloud API (type:interactive)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ messages: [{ id: "wamid.I" }] }), { status: 200 }),
+    );
+    await datafyAdapter.send(
+      envelope({ body: "Sim ou não?", interactive: { kind: "buttons", items: [{ id: "s", label: "Sim" }] } }),
+    );
+    const body = JSON.parse(String(fetchSpy.mock.calls[0]![1]?.body));
+    expect(body.type).toBe("interactive");
+    expect(body.interactive).toEqual({
+      type: "button",
+      body: { text: "Sim ou não?" },
+      action: { buttons: [{ type: "reply", reply: { id: "s", title: "Sim" } }] },
+    });
+  });
+
   it("sem credencial LANÇA o código de não configurado (o handler grava queued), nunca um sent sem id", async () => {
     vi.mocked(resolveGraphPartnerCreds).mockResolvedValue(null);
     await expect(datafyAdapter.send(envelope())).rejects.toThrow(/^datafy_not_configured/);

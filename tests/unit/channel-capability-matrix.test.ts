@@ -49,6 +49,7 @@ const CAPABILITIES = [
   "costPerMessage",
   "alteraMensagemEnviada",
   "anexosDeSaida",
+  "interactive",
 ] as const;
 
 describe("matriz capability × provider é exaustiva", () => {
@@ -85,6 +86,19 @@ describe("matriz capability × provider é exaustiva", () => {
     // imagem) também não serve para mandar recado.
     expect(transportaMensagem("telegram")).toBe(false);
     expect(transportaMensagem(null)).toBe(false);
+  });
+
+  it("opções nativas só onde a janela de 24h é da plataforma oficial", () => {
+    // `native` é promessa de que o adapter monta botões/lista; quem não monta
+    // declara `none` e recebe texto numerado. Canal sem janela (por QR) não é a
+    // API oficial, então nunca é `native`.
+    const nativos = PROVIDERS.filter(
+      (p) => CHANNEL_CAPABILITIES[p].interactive === "native",
+    ).sort();
+    expect(nativos).toEqual(["datafy", "meta_cloud"]);
+    for (const p of nativos) {
+      expect(CHANNEL_CAPABILITIES[p].freeformOutsideWindow, `${p} nativo sem janela`).toBe(false);
+    }
   });
 
   it("as duas famílias de restrição são mutuamente exclusivas por provider", () => {

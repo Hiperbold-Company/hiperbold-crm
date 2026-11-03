@@ -36,7 +36,15 @@ import {
 } from "@/lib/channels";
 import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
 import { conferirDefinicao } from "@/lib/channels/conferir-definicao";
+import { capabilitiesOf, transportaMensagem } from "@/lib/channels/capabilities";
 import { estadoDaJanela } from "@/lib/channels/janela";
+import {
+  interactiveSchema,
+  MAX_CORPO_COM_OPCOES,
+  textoComOpcoesNumeradas,
+  type OpcoesGravadas,
+} from "@/lib/channels/opcoes-numeradas";
+import type { ChannelProvider, OutboundInteractive } from "@/lib/channels/types";
 import { isMediaPathOwnedBy } from "@/lib/messaging/media/upload-validation";
 import {
   buildVcard,
@@ -174,6 +182,14 @@ export function origemDaMensagem(actor: Actor): "user" | "ai" | "automation" | "
     return "automation";
   }
   return "ai";
+}
+
+/** `metadata` do chamador sem a chave `interactive`, que só o handler grava. */
+function semOpcoesDoCliente(metadata: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!metadata || !("interactive" in metadata)) return metadata ?? {};
+  const { interactive: _descartado, ...resto } = metadata;
+  void _descartado;
+  return resto;
 }
 
 const MSG_COLS =
@@ -362,10 +378,22 @@ function extendBotSilence(current: string | null, now: string): string | undefin
   return candidate.toISOString();
 }
 
+/**
+ * A entrada do envio, mais as opções (botões ou lista) que SÓ chamador interno
+ * passa.
+ *
+ * `interactive` não está em `sendMessageSchema` de propósito: a rota REST e as
+ * tools MCP validam o corpo com aquele schema, que descarta chave desconhecida,
+ * então a opção não é contrato público. Quem a usa é o motor das automações
+ * (bloco de mensagem), com input tipado; o handler revalida com
+ * `interactiveSchema` mesmo assim.
+ */
+export type SendMessageHandlerInput = SendMessageInput & { interactive?: OutboundInteractive };
+
 export async function sendMessageHandler(
   supabase: SB,
   ctx: HandlerCtx,
-  input: SendMessageInput,
+  input: SendMessageHandlerInput,
 ): Promise<Message> {
   if (ctx.prospectingDelivery) await assertProspectingDelivery(supabase, ctx.prospectingDelivery);
   if (ctx.meetingDelivery) await assertMeetingDeliverySupabase(supabase, ctx.meetingDelivery);
@@ -531,6 +559,75 @@ export async function sendMessageHandler(
         ),
       );
     }
+  }
+
+  // ─── Opções (botões ou lista) ──────────────────────────────────────────────
+  //
+  // Canal que desenha opções (`interactive: "native"`) as recebe no envelope;
+  // os outros recebem o MESMO conteúdo como texto numerado, e é esse texto que
+  // a linha grava — é o que o contato leu. As opções ficam em
+  // `metadata.interactive`, com `entrega`, para a conversa desenhar e para a
+  // resposta ser casada depois.
+  //
+  // Janela fechada recusa ANTES de a linha nascer, para qualquer ator: fora da
+  // janela a plataforma só aceita modelo aprovado, e opção não é modelo. O
+  // mesmo código da recusa por token, para quem chama tratar um só.
+  let opcoes: OpcoesGravadas | null = null;
+  let opcoesDoEnvelope: OutboundInteractive | undefined;
+  let corpoDeSaida: string | null = input.body ?? null;
+  if (input.interactive !== undefined) {
+    const lidas = interactiveSchema.safeParse(input.interactive);
+    if (!lidas.success) {
+      throw new ApiError(
+        422,
+        "validation_error",
+        { issues: lidas.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })) },
+        ctx.requestId,
+        traduzir("Opções da mensagem inválidas.", ctx.idioma ?? "pt-BR"),
+      );
+    }
+    if (input.type !== "text" || input.media_storage_path || !input.body?.trim()) {
+      throw new ApiError(
+        422,
+        "validation_error",
+        undefined,
+        ctx.requestId,
+        traduzir("Mensagem com opções precisa de texto e não leva anexo.", ctx.idioma ?? "pt-BR"),
+      );
+    }
+    const provider = c.channel_sessions?.provider ?? DEFAULT_CHANNEL_PROVIDER;
+    const janela = estadoDaJanela(provider, c.last_inbound_at, new Date());
+    if (janela.tipo === "fechada") {
+      throw new ApiError(
+        422,
+        "janela_fechada",
+        {
+          codigo: "janela_fechada",
+          ultima_mensagem_do_cliente: c.last_inbound_at,
+          use: "template",
+          codigo_plataforma: "131047",
+        },
+        ctx.requestId,
+        traduzir(
+          "Janela de 24 horas fechada: botões e lista só saem com a janela aberta.",
+          ctx.idioma ?? "pt-BR",
+        ),
+      );
+    }
+    const nativa =
+      transportaMensagem(provider) && capabilitiesOf(provider as ChannelProvider).interactive === "native";
+    if (nativa && input.body.length > MAX_CORPO_COM_OPCOES) {
+      throw new ApiError(
+        422,
+        "validation_error",
+        { max_body: MAX_CORPO_COM_OPCOES },
+        ctx.requestId,
+        traduzir("Opções da mensagem inválidas.", ctx.idioma ?? "pt-BR"),
+      );
+    }
+    opcoes = { ...lidas.data, entrega: nativa ? "nativa" : "texto_numerado" };
+    if (nativa) opcoesDoEnvelope = lidas.data;
+    else corpoDeSaida = textoComOpcoesNumeradas(input.body, lidas.data);
   }
 
   if (
@@ -708,7 +805,7 @@ export async function sendMessageHandler(
     type: input.type,
     direction: "outbound" as const,
     status: "queued",
-    body: input.body ?? null,
+    body: corpoDeSaida,
     media_mime: input.media_mime ?? null,
     media_storage_path: input.media_storage_path ?? null,
     media_size_bytes: input.media_size_bytes ?? null,
@@ -719,7 +816,10 @@ export async function sendMessageHandler(
     sent_on_behalf_of_user_id: ctx.onBehalfOf?.userId ?? null,
     sent_at: now,
     metadata: {
-      ...(input.metadata ?? {}),
+      ...semOpcoesDoCliente(input.metadata),
+      // Depois de `input.metadata`: as opções gravadas são só as que o handler
+      // validou, nunca uma cópia que o cliente pôs no metadata.
+      ...(opcoes ? { interactive: opcoes } : {}),
       ...(ctx.actor.type === "ai_agent" ? { ai_actor_id: ctx.actor.id } : {}),
       // Os dois nomes viajam GRAVADOS porque o balão não faz join: "Fulano ·
       // via {token}" é desenhado da própria linha. Vêm DEPOIS de
@@ -1005,7 +1105,8 @@ export async function sendMessageHandler(
           to: chatId,
           providerConversationId: c.provider_conversation_id,
           kind: input.type,
-          body: input.body ?? "",
+          body: corpoDeSaida ?? "",
+          ...(opcoesDoEnvelope ? { interactive: opcoesDoEnvelope } : {}),
           replyToExternalId: citada?.external_id ?? null,
         }));
       }

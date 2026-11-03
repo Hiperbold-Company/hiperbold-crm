@@ -34,6 +34,9 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     costPerMessage: false,
     alteraMensagemEnviada: true,
     anexosDeSaida: TODOS_OS_ANEXOS,
+    // WhatsApp comum por QR: botão e lista não têm envio estável fora da API
+    // oficial, então as opções saem como texto numerado.
+    interactive: "none",
   },
   // Hetero-restrição: não me banem, mas a Meta me proíbe e me cobra.
   meta_cloud: {
@@ -49,6 +52,9 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     costPerMessage: true,
     alteraMensagemEnviada: false,
     anexosDeSaida: TODOS_OS_ANEXOS,
+    // A Cloud API desenha botões (até 3) e lista (até 10) dentro da janela de
+    // 24h e devolve o id da opção tocada (`button_reply`/`list_reply`).
+    interactive: "native",
   },
   // Mesma hetero-restrição do canal oficial, por baixo: é um BSP: a WABA é da
   // Meta, os templates são aprovados pela Meta e a janela de 24h é da Meta. O
@@ -84,6 +90,8 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     costPerMessage: true,
     alteraMensagemEnviada: false,
     anexosDeSaida: TODOS_OS_ANEXOS,
+    // Instagram/Messenger intermediado: sem envio de opções neste adapter.
+    interactive: "none",
   },
   // Instagram Direct e Messenger pela Meta, sem intermediário (0984). A mesma
   // física do canal social intermediado: só se responde dentro de 24h da
@@ -105,6 +113,8 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     costPerMessage: false,
     alteraMensagemEnviada: false,
     anexosDeSaida: { imagem: true, video: false, audio: false, documento: false, contato: false },
+    // O adapter deste canal envia texto e imagem; opções viram texto numerado.
+    interactive: "none",
   },
   zernio: {
     freeformOutsideWindow: false,
@@ -117,6 +127,11 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     costPerMessage: true,
     alteraMensagemEnviada: false,
     anexosDeSaida: TODOS_OS_ANEXOS,
+    // A WABA é da Meta e permite opções, mas o adapter deste intermediário fala
+    // outro dialeto (`message` no corpo) e não monta `interactive`. Declarar
+    // `native` sem o adapter cumprir faria o botão sumir no envio; até lá,
+    // texto numerado, que o contato lê igual.
+    interactive: "none",
   },
   // Parceiro homologado pela Meta que espelha a Cloud API (recorte do #1130):
   // a WABA, a janela de 24h e o custo são da Meta. O parceiro muda o TRANSPORTE
@@ -138,6 +153,9 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     costPerMessage: true,
     alteraMensagemEnviada: false,
     anexosDeSaida: TODOS_OS_ANEXOS,
+    // Espelha a Cloud API e reusa o MESMO montador de corpo do adapter oficial
+    // (`interactivePayload` de adapters/meta-cloud.ts): opções nativas.
+    interactive: "native",
   },
   // A mesma física do canal por QR, por outro transporte: a instância é um
   // aparelho pareado ao WhatsApp comum, sem WABA por trás. Não existe janela de
@@ -161,6 +179,9 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     // canal saber cumprir.
     alteraMensagemEnviada: false,
     anexosDeSaida: TODOS_OS_ANEXOS,
+    // Aparelho pareado, sem WABA: opções saem como texto numerado (o inbound
+    // deste canal também não trata resposta de botão).
+    interactive: "none",
   },
 };
 

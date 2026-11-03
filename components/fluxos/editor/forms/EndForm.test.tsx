@@ -156,3 +156,22 @@ describe("tradução das ações ao concluir", () => {
     expect(sem).toEqual([]);
   });
 });
+
+describe("EndForm — na automação o fim só conclui", () => {
+  it("não oferece Convertido/Esgotado e diz Concluída, sem gravar nada", () => {
+    const gravados: unknown[] = [];
+    render(<EndForm config={{ outcome: "exhausted" }} onChange={(c) => gravados.push(c)} surface="automacao" />);
+
+    expect(screen.queryByRole("combobox", { name: "Resultado" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Esgotado")).not.toBeInTheDocument();
+    expect(screen.queryByText("Convertido")).not.toBeInTheDocument();
+    expect(screen.getByTestId("end-desfecho-automacao")).toHaveTextContent("Desfecho: Concluída");
+    expect(gravados).toEqual([]);
+  });
+
+  it("o follow-up continua com o seletor de sempre", () => {
+    render(<EndForm config={{ outcome: "exhausted" }} onChange={() => {}} surface="followup" />);
+    expect(screen.getByRole("combobox", { name: "Resultado" })).toBeInTheDocument();
+    expect(screen.queryByTestId("end-desfecho-automacao")).not.toBeInTheDocument();
+  });
+});

@@ -24,6 +24,9 @@ import { AutomationTriggerForm } from "./forms/automacao/AutomationTriggerForm";
 import { CondicaoAutomacaoForm } from "./forms/automacao/CondicaoAutomacaoForm";
 import { CrmActionForm } from "./forms/automacao/CrmActionForm";
 import { FieldOpForm } from "./forms/automacao/FieldOpForm";
+import { MessageForm } from "./forms/automacao/MessageForm";
+import { QuestionForm } from "./forms/automacao/QuestionForm";
+import type { RespostaDisponivel } from "./forms/automacao/comum";
 import type { ConfigOf } from "./forms/shared";
 import { NODE_VISUALS } from "./nodes/nodeVisuals";
 
@@ -40,6 +43,8 @@ interface Props {
   /** Configurações do GRAFO, editadas no Início do roteiro. */
   settings?: FlowGraph["settings"];
   onSettingsChange?: (settings: FlowGraph["settings"]) => void;
+  /** Respostas dos blocos de conversa ANTES deste nó (`{{resposta.<chave>}}`) — quem sabe é o canvas. */
+  respostasAnteriores?: RespostaDisponivel[];
 }
 
 /**
@@ -60,6 +65,7 @@ export function NodeConfigPanel({
   flowId,
   settings,
   onSettingsChange,
+  respostasAnteriores = [],
 }: Props) {
   const t = useT();
   const type = node.type as FlowNode["type"];
@@ -121,7 +127,26 @@ export function NodeConfigPanel({
           <ConfiguracoesDoRoteiro settings={settings} onSettingsChange={onSettingsChange} />
         )}
         {type === "wait" && (
-          <WaitForm config={node.data.config as ConfigOf<"wait">} onChange={(config) => onChange({ config })} />
+          <WaitForm
+            config={node.data.config as ConfigOf<"wait">}
+            onChange={(config) => onChange({ config })}
+            surface={surface}
+          />
+        )}
+        {type === "message" && (
+          <MessageForm
+            config={node.data.config as ConfigOf<"message">}
+            onChange={(config) => onChange({ config })}
+            respostas={respostasAnteriores}
+          />
+        )}
+        {type === "question" && (
+          <QuestionForm
+            config={node.data.config as ConfigOf<"question">}
+            onChange={(config) => onChange({ config })}
+            nodeId={node.id}
+            respostas={respostasAnteriores}
+          />
         )}
         {type === "condition" && surface === "automacao" && (
           <CondicaoAutomacaoForm

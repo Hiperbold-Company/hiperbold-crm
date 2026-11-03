@@ -78,6 +78,10 @@ export const REGISTRO_DE_NOS: { readonly [K in NodeType]: DefinicaoDoNo } = {
   skill: definir("skill", { superficies: ["atendimento"], categoria: "atendimento", efeito: false, precisaEventos: false }),
   crm_action: definir("crm_action", { superficies: ["automacao"], categoria: "crm", efeito: true, precisaEventos: true }),
   field_op: definir("field_op", { superficies: ["automacao"], categoria: "crm", efeito: true, precisaEventos: true }),
+  // Blocos de conversa (lote 2). `efeito: false` de propósito: o motor não roda o
+  // efeito antes de decidir — a decisão diz QUAL efeito quer (`NodeResult.effect.acao`).
+  message: definir("message", { superficies: ["automacao"], categoria: "mensagem", efeito: false, precisaEventos: true }),
+  question: definir("question", { superficies: ["automacao"], categoria: "mensagem", efeito: false, precisaEventos: true }),
 };
 
 /**
@@ -88,7 +92,7 @@ const ORDEM: Record<FollowupFlowSurface, readonly NodeType[]> = {
   followup: ["trigger", "wait", "condition", "ai_classify", "match_reply", "repeat", "action", "end"],
   crm_automation: ["trigger", "wait", "condition", "ai_classify", "match_reply", "repeat", "action", "end"],
   atendimento: ["trigger", "collect", "skill", "end"],
-  automacao: ["trigger", "crm_action", "field_op", "condition", "wait", "end"],
+  automacao: ["trigger", "message", "question", "crm_action", "field_op", "condition", "wait", "end"],
 };
 
 /** As caixas que o motor de cada superfície executa — derivado do registro. */

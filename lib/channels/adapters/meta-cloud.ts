@@ -90,6 +90,51 @@ export function mediaPayload(env: OutboundEnvelope): Record<string, unknown> | n
   }
 }
 
+/**
+ * Texto com opções → objeto `interactive` da Cloud API.
+ *
+ * Botões viram `action.buttons[{type:"reply", reply:{id,title}}]`; lista vira
+ * `action.button` (o rótulo que abre a lista) + uma seção com as linhas. O
+ * corpo vai em `body.text` — a plataforma exige corpo nos dois formatos.
+ * Exportada porque o canal Datafy fala o MESMO dialeto (ver `contactPayload`).
+ */
+export function interactivePayload(env: OutboundEnvelope): Record<string, unknown> | null {
+  if (env.kind !== "text" || !env.interactive) return null;
+  const body = { text: env.body ?? "" };
+  const opcoes = env.interactive;
+  if (opcoes.kind === "buttons") {
+    return {
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body,
+        action: {
+          buttons: opcoes.items.map((i) => ({ type: "reply", reply: { id: i.id, title: i.label } })),
+        },
+      },
+    };
+  }
+  return {
+    type: "interactive",
+    interactive: {
+      type: "list",
+      body,
+      action: {
+        button: opcoes.button_label,
+        sections: [
+          {
+            rows: opcoes.items.map((i) => ({
+              id: i.id,
+              title: i.label,
+              ...(i.description ? { description: i.description } : {}),
+            })),
+          },
+        ],
+      },
+    },
+  };
+}
+
 export const metaCloudAdapter: ChannelAdapter = {
   provider: "meta_cloud",
 
@@ -293,6 +338,7 @@ export const metaCloudAdapter: ChannelAdapter = {
     const corpo =
       contactPayload(envelope) ??
       mediaPayload(envelope) ??
+      interactivePayload(envelope) ??
       { type: "text", text: { body: envelope.body ?? "" } };
 
     await envelope.beforeSend?.();

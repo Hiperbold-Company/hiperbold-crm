@@ -261,6 +261,85 @@ describe("adapter meta_cloud — envio", () => {
     expect(corpo.contacts[0]?.phones[0]?.wa_id).toBe("5511999887766");
   });
 
+  it("botões vão como type:interactive/button, com o corpo em body.text (fixture)", async () => {
+    configurar();
+    const spy = stubFetch({ messages: [{ id: "wamid.B" }] });
+    const r = await a().send({
+      organizationId: ORG,
+      sessionRef: "ignorado",
+      to: "5531991110001",
+      kind: "text",
+      body: "Qual o objetivo?",
+      interactive: {
+        kind: "buttons",
+        items: [
+          { id: "moradia", label: "Moradia" },
+          { id: "investimento", label: "Investimento" },
+        ],
+      },
+    });
+
+    expect(r).toEqual({ externalId: "wamid.B" });
+    expect(JSON.parse(spy.mock.calls[0]![1].body as string)).toEqual({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: "5531991110001",
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "Qual o objetivo?" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "moradia", title: "Moradia" } },
+            { type: "reply", reply: { id: "investimento", title: "Investimento" } },
+          ],
+        },
+      },
+    });
+  });
+
+  it("lista vai como type:interactive/list, com action.button e uma seção de linhas (fixture)", async () => {
+    configurar();
+    const spy = stubFetch({ messages: [{ id: "wamid.L" }] });
+    await a().send({
+      organizationId: ORG,
+      sessionRef: "ignorado",
+      to: "5531991110001",
+      kind: "text",
+      body: "Escolha o imóvel",
+      interactive: {
+        kind: "list",
+        button_label: "Ver opções",
+        items: [
+          { id: "ap", label: "Apartamento", description: "até 2 quartos" },
+          { id: "casa", label: "Casa" },
+        ],
+      },
+    });
+
+    expect(JSON.parse(spy.mock.calls[0]![1].body as string)).toEqual({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: "5531991110001",
+      type: "interactive",
+      interactive: {
+        type: "list",
+        body: { text: "Escolha o imóvel" },
+        action: {
+          button: "Ver opções",
+          sections: [
+            {
+              rows: [
+                { id: "ap", title: "Apartamento", description: "até 2 quartos" },
+                { id: "casa", title: "Casa" },
+              ],
+            },
+          ],
+        },
+      },
+    });
+  });
+
   it("resposta sem id devolve externalId null, sem estourar", async () => {
     configurar();
     stubFetch({ messages: [] });

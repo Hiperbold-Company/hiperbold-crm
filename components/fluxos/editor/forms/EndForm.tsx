@@ -46,13 +46,17 @@ export function EndForm({
   /**
    * No ROTEIRO o desfecho é do motor (concluído ou esgotado, PR 2), e o que
    * vale escolher é o que acontece ao concluir. No FOLLOW-UP é o contrário: o
-   * resultado é escolha, e "ao concluir" não existe para o relógio.
+   * resultado é escolha, e "ao concluir" não existe para o relógio. Na
+   * AUTOMAÇÃO não há escolha: o fim só diz "Concluída".
    */
   surface?: FollowupFlowSurface;
   /** O roteiro aberto — não se encadeia nele mesmo (o motor ignoraria calado). */
   flowId?: string;
 }) {
   const deRoteiro = surface === "atendimento";
+  // Na automação o fim não tem resultado a escolher: ela só termina. O desfecho
+  // guardado no grafo (o padrão do bloco) é detalhe do motor, não escolha da pessoa.
+  const deAutomacao = surface === "automacao";
   const t = useT();
   const [outcome, setOutcome] = useState(config.outcome);
   const [note, setNote] = useState(config.note ?? "");
@@ -105,7 +109,16 @@ export function EndForm({
 
   return (
     <div className="space-y-3">
-      {!deRoteiro && (
+      {deAutomacao && (
+        <div className="space-y-1" data-testid="end-desfecho-automacao">
+          <p className="text-sm font-medium">{`${t("Desfecho")}: ${t("Concluída")}`}</p>
+          <p className="text-xs text-text-muted">
+            {t("Quando a execução chega aqui, a automação termina para este contato.")}
+          </p>
+        </div>
+      )}
+
+      {!deRoteiro && !deAutomacao && (
         <div className="space-y-2">
           <Label htmlFor="end-outcome">{t("Resultado")}</Label>
           <Select
