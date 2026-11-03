@@ -1119,6 +1119,7 @@ jobs:
         followup-queue.spec.ts
         automacoes-crm-basico.spec.ts
         automacoes-botoes-e-pergunta.spec.ts
+        automacoes-gatilhos.spec.ts
         fluxo-de-atendimento.spec.ts
         qa-l12-funil.spec.ts
         i18n-espanhol-na-tela.spec.ts
