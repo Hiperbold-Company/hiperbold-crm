@@ -33,6 +33,7 @@ import {
   savePartnerSession,
   validatePartnerCredentials,
 } from "@/lib/channels/connect";
+import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { basePublicaDaInstalacao } from "@/lib/webhooks/url-publica";
@@ -187,6 +188,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     return falhaInterna("internal_error", error, { requestId });
   }
+
+  // Desde que o gerente também conecta (03/11/2026), a troca de credencial do
+  // canal parceiro precisa deixar trilha: quem fez e quando.
+  void audit({
+    action: "channel.connected",
+    actorUserId: authz.user.id,
+    organizationId: orgId,
+    resourceType: "channel_session",
+    resourceId: existente?.id ?? null,
+    requestId,
+    metadata: { canal: "parceiro", reconexao: Boolean(existente) },
+  });
 
   return ok(
     {

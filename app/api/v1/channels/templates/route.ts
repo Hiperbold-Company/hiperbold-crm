@@ -1,4 +1,5 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { audit } from "@/lib/audit";
 /**
  * GET  /api/v1/channels/templates — o espelho local + o CONTRATO derivado de cada um.
  * POST /api/v1/channels/templates — força um sync com a Graph API.
@@ -93,13 +94,13 @@ function textPreviews(components: unknown): Array<{ onde: string; text: string }
 }
 
 type OrgGate =
-  | { autorizado: true; orgId: string }
+  | { autorizado: true; orgId: string; userId: string }
   | { autorizado: false; resposta: NextResponse };
 
 async function orgOrFail(requestId: string): Promise<OrgGate> {
   const authz = await requireRole("manager", { requestId, resource: "channels_templates" });
   if (!authz.ok) return { autorizado: false, resposta: authz.response };
-  return { autorizado: true, orgId: authz.org.orgId };
+  return { autorizado: true, orgId: authz.org.orgId, userId: authz.user.id };
 }
 
 export async function GET(): Promise<NextResponse> {
@@ -210,6 +211,16 @@ export async function POST(_req: NextRequest): Promise<NextResponse> {
       token: creds.token,
       graphVersion: creds.graphVersion,
     });
+    // Gerente também sincroniza desde 03/11/2026: a mutação deixa trilha.
+    void audit({
+      action: "template.updated",
+      actorUserId: r.userId,
+      organizationId: r.orgId,
+      resourceType: "channel_session",
+      resourceId: sessao.id ?? null,
+      requestId,
+      metadata: { origem: "sincronizacao", waba_id: sessao.wabaId },
+    });
     return ok(counts);
   } catch (err) {
     // A falha da Graph API vira mensagem legível na tela, não 500 mudo — o
@@ -301,5 +312,14 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     if (erro) return falhaInterna("internal_error", erro, { requestId });
   }
 
+  void audit({
+    action: "template.updated",
+    actorUserId: r.userId,
+    organizationId: r.orgId,
+    resourceType: "meta_template",
+    resourceId: planos[0]?.id ?? null,
+    requestId,
+    metadata: { origem: "valores_salvos", modelos: planos.length },
+  });
   return ok({ savedValues: planos[0]!.valores });
 }
