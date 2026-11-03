@@ -14649,6 +14649,16 @@ export const DICIONARIO: Traducoes = {
   "é menor ou igual a": { es: "es menor o igual a" },
   "é menor que": { es: "es menor que" },
   "Regras que mexem no CRM sozinhas: criar negócio, pôr tag, preencher campo, definir responsável.": { es: "Reglas que actúan en el CRM solas: crear negocio, poner etiqueta, completar campo, definir responsable." },
+  "Muitos testes seguidos. Aguarde um minuto.": { es: "Demasiadas pruebas seguidas. Espera un minuto." },
+  "Esta organização está suspensa: as automações ficam paradas.": { es: "Esta organización está suspendida: las automatizaciones quedan detenidas." },
+  "Idempotency-Key deve ser um UUID.": { es: "Idempotency-Key debe ser un UUID." },
+  "Esta automação foi disparada por outra que ela mesma disparou; a volta foi cortada.": { es: "Esta automatización fue disparada por otra que ella misma disparó; el retorno fue cortado." },
+  "Automações disparando umas às outras passaram de 5 passos; a sequência foi cortada.": { es: "Automatizaciones disparándose entre sí pasaron de 5 pasos; la secuencia fue cortada." },
+  "Mais de 5000 automações começaram na última hora nesta organização; tente mais tarde.": { es: "Más de 5000 automatizaciones empezaron en la última hora en esta organización; intenta más tarde." },
+  "Uma pessoa escolhida não faz mais parte da equipe. Escolha de novo na lista.": { es: "Una persona elegida ya no forma parte del equipo. Elige de nuevo en la lista." },
+  "Uma fonte de captação escolhida não existe mais. Escolha de novo na lista.": { es: "Una fuente de captación elegida ya no existe. Elige de nuevo en la lista." },
+  "Esta execução é de uma automação: ela não se pausa, adia ou pula. Para pará-la, cancele a execução.": { es: "Esta ejecución es de una automatización: no se pausa, pospone ni salta. Para detenerla, cancela la ejecución." },
+  "Automação começa pelos gatilhos do bloco Início, não por gatilho de follow-up.": { es: "La automatización empieza por los disparadores del bloque Inicio, no por un disparador de seguimiento." },
 };
 
 /**

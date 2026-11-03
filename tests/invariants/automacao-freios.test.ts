@@ -11,7 +11,9 @@ import { sql } from "./gov-helpers";
  *     pelo teto por hora NÃO cancela a execução que estava viva (B7);
  *  2. automações em cadeia: A → B → A é cortada (`ciclo`), com UM aviso na
  *     Central por automação, sem duplicar (B6);
- *  3. cadeia de 5 passos é cortada (`cadeia_longa`).
+ *  3. cadeia de 5 passos é cortada (`cadeia_longa`);
+ *  4. anonimizar o contato redige o corpo do aviso à equipe no `event_log` e o
+ *     título da tarefa que a automação criou (C1).
  *
  * Namespace `0986ffff-…`: os arquivos de invariante rodam em paralelo contra o
  * MESMO container.
@@ -20,6 +22,9 @@ const ORG = "0986ffff-0000-4000-8000-000000000001";
 const CONTATO = "0986ffff-3333-4000-8000-000000000001";
 const CONTATO_TETO = "0986ffff-3333-4000-8000-000000000002";
 const CONTATO_CADEIA = "0986ffff-3333-4000-8000-000000000003";
+const CONTATO_LGPD = "0986ffff-3333-4000-8000-000000000004";
+const TAREFA = "0986ffff-7777-4000-8000-000000000001";
+const TAREFA_HUMANA = "0986ffff-7777-4000-8000-000000000002";
 const V_RESTART_ESPERA = "0986ffff-5555-4000-8000-000000000001";
 const V_RESTART = "0986ffff-5555-4000-8000-000000000002";
 const V_SIMPLES = "0986ffff-5555-4000-8000-000000000003";
@@ -70,7 +75,8 @@ beforeAll(() => {
     insert into public.contacts (id, organization_id, display_name) values
       ('${CONTATO}', '${ORG}', 'Contato freio 0986'),
       ('${CONTATO_TETO}', '${ORG}', 'Contato teto 0986'),
-      ('${CONTATO_CADEIA}', '${ORG}', 'Contato cadeia 0986')
+      ('${CONTATO_CADEIA}', '${ORG}', 'Contato cadeia 0986'),
+      ('${CONTATO_LGPD}', '${ORG}', 'Maria Titular 0986')
       on conflict do nothing;
     insert into public.followup_flow_versions (id, organization_id, graph) values
       ('${V_RESTART_ESPERA}', '${ORG}', '${grafo("restart", 60)}'::jsonb),
@@ -139,5 +145,25 @@ describe("0986 — freios do início de uma automação", () => {
       pai = r.enrollment_id!;
     }
     expect(iniciar(P_CADEIA[5]!, CONTATO_CADEIA, pai).resultado).toBe("cadeia_longa");
+  });
+
+  it("anonimizar redige o corpo do aviso e a tarefa que a automação criou", () => {
+    const exec = iniciar(P_A, CONTATO_LGPD).enrollment_id!;
+    sql(`
+      insert into public.crm_tasks (id, organization_id, title, contact_id) values
+        ('${TAREFA}', '${ORG}', 'Ligar para Maria Titular 11999990000', '${CONTATO_LGPD}'),
+        ('${TAREFA_HUMANA}', '${ORG}', 'Tarefa escrita pela equipe', '${CONTATO_LGPD}');
+      insert into public.followup_enrollment_events (organization_id, enrollment_id, node_id, event_type, payload, idempotency_key)
+        values ('${ORG}', '${exec}', 'a', 'effect_done',
+                '{"desfecho":{"ok":true},"detalhes":[{"tipo":"create_task","ok":true,"task_id":"${TAREFA}"}]}'::jsonb, 'a:1:efeito_fim');
+      select public.emit_event('automacao.aviso', 'contact', '${CONTATO_LGPD}',
+        '{"to_user_id":null,"body":"Maria Titular pediu orçamento"}'::jsonb, '{}'::jsonb, '${ORG}');
+      update public.contacts set is_anonymized = true, anonymized_at = now() where id = '${CONTATO_LGPD}';
+    `);
+    const titulos = sql(`select title from public.crm_tasks where id in ('${TAREFA}','${TAREFA_HUMANA}') order by id;`);
+    expect(titulos.split("\n").slice(-2)).toEqual(["Tarefa anonimizada", "Tarefa anonimizada"]);
+    const corpo = sql(`select count(*) from public.event_log where organization_id='${ORG}'
+      and event_type='automacao.aviso' and payload ? 'body';`);
+    expect(corpo.split("\n").at(-1)).toBe("0");
   });
 });

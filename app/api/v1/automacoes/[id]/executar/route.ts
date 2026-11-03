@@ -161,7 +161,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const responder = (r: { resposta: Corpo; status: number }): Response =>
     r.resposta.resultado === "contato_invalido"
       ? fail("not_found", t(MENSAGEM.contato_invalido!), 404, { requestId })
-      : ok(r.resposta, { requestId, status: r.status });
+      : ok(r.resposta, { requestId, status: r.status === 201 ? 201 : 200 });
 
   if (chave === null) return responder(await executar());
 

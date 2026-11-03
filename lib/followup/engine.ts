@@ -139,7 +139,11 @@ export interface AdminClient {
     contact_name?: string | null;
     custom_fields?: Record<string, unknown>;
   }>;
-  loadEnrollmentEvents(enrollmentId: string): Promise<EnrollmentEventRef[]>;
+  /**
+   * Eventos da inscrição em ordem cronológica. `limite` = só os N MAIS RECENTES (ainda em ordem
+   * cronológica): a automação passa `LIMITE_DE_EVENTOS_DA_AUTOMACAO`; o follow-up não passa nada.
+   */
+  loadEnrollmentEvents(enrollmentId: string, limite?: number): Promise<EnrollmentEventRef[]>;
   /** Latest inbound `messages.body` for the contact (optionally scoped to the enrollment conversation). */
   loadLastInboundBody(
     orgId: string,
@@ -468,7 +472,7 @@ async function applyResult(
   // perde o insert (replay) e AINDA assim reescrevia current_node_id pro action.
   // Se o evento que já existe é de OUTRO tipo, não aplicar o patch deste result.
   if (isReplay) {
-    const frescos = await db.loadEnrollmentEvents(enrollment.id);
+    const frescos = await db.loadEnrollmentEvents(enrollment.id, limiteDeEventos(enrollment));
     const prior = frescos.find((e) => e.idempotency_key === idemKey);
     if (prior?.event_type && prior.event_type !== wantedType) {
       // Evento do passo gravado; o update da inscrição pode ter se perdido.
@@ -774,7 +778,7 @@ async function processarUmPasso(
   const precisaEventos = vaiPlanejar || automacao || definicaoDoNo(node.type).precisaEventos;
 
   if (precisaEventos) {
-    events = await db.loadEnrollmentEvents(enrollment.id);
+    events = await db.loadEnrollmentEvents(enrollment.id, limiteDeEventos(enrollment));
   }
 
   if (node.type === "condition") {
@@ -964,7 +968,7 @@ async function resolverEfeito(
     });
     if (!inserted) {
       // Outro tick gravou primeiro: vale o dele.
-      const outro = lerFim(await db.loadEnrollmentEvents(enrollment.id));
+      const outro = lerFim(await db.loadEnrollmentEvents(enrollment.id, limiteDeEventos(enrollment)));
       if (outro) return outro;
     }
     return { desfecho: r.desfecho, ...(r.vars ? { vars: r.vars } : {}) };
@@ -997,6 +1001,18 @@ async function resolverEfeito(
     }
   }
   return gravarFim(resultado);
+}
+
+/**
+ * Teto de eventos lidos por tick numa execução de AUTOMAÇÃO (só os mais recentes). Uma execução
+ * morre em `MAX_PASSOS_DA_AUTOMACAO` passos, e cada passo grava no máximo `node_advanced`,
+ * `effect_started` e `effect_done|failed`: 4 por passo cobre toda execução viva. O que o teto corta
+ * é o acúmulo sem passo (`trigger_ignored_running` de gatilho repetido), que crescia sem limite.
+ */
+export const LIMITE_DE_EVENTOS_DA_AUTOMACAO = MAX_PASSOS_DA_AUTOMACAO * 4;
+
+function limiteDeEventos(enrollment: EnrollmentRow): number | undefined {
+  return ehAutomacao(enrollment) ? LIMITE_DE_EVENTOS_DA_AUTOMACAO : undefined;
 }
 
 /** Código estável de um erro lançado por efeito, sem a mensagem (que pode carregar dado pessoal). */
@@ -1130,14 +1146,17 @@ export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
       if (error) throw new Error(error.message);
       return typeof data?.body === "string" ? data.body : null;
     },
-    async loadEnrollmentEvents(enrollmentId) {
-      const { data, error } = await admin
+    async loadEnrollmentEvents(enrollmentId, limite) {
+      const base = admin
         .from("followup_enrollment_events")
         .select("node_id, idempotency_key, event_type, payload")
-        .eq("enrollment_id", enrollmentId)
-        .order("created_at", { ascending: true });
+        .eq("enrollment_id", enrollmentId);
+      const { data, error } = limite
+        ? await base.order("created_at", { ascending: false }).limit(limite)
+        : await base.order("created_at", { ascending: true });
       if (error) throw new Error(error.message);
-      return (data ?? []).map((row) => ({
+      const linhas = limite ? [...(data ?? [])].reverse() : (data ?? []);
+      return linhas.map((row) => ({
         node_id: row.node_id,
         idempotency_key: row.idempotency_key,
         event_type: row.event_type,

@@ -69654,6 +69654,30 @@ grant execute on function public.fn_automacao_iniciar(uuid, uuid, uuid, jsonb, u
 -- 6) LGPD: anonimizar o contato zera as variáveis de TODAS as execuções dele
 -- (guardam respostas e dados do gatilho) e encerra as automações vivas. O
 -- follow-up já é cancelado pela cascata; aqui é só a raia nova e o dado novo.
+-- O texto que a automação montou com dado do contato e gravou FORA das
+-- execuções: o corpo do aviso à equipe no `event_log` (`automacao.aviso`). A
+-- tarefa que ela cria já é redigida por `fn_redigir_tarefas_do_contato_anonimizado`
+-- (a automação sempre grava `contact_id` na tarefa). Mesmo desenho de
+-- `fn_limpar_rastro_do_titular`: o nome não anuncia anonimização de propósito,
+-- porque o aviso é cópia de transporte, não dado que a organização exporta.
+create or replace function public.fn_limpar_texto_de_automacao_do_titular(p_org uuid, p_contato uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  update public.event_log l set payload = l.payload - 'body'
+   where l.organization_id = p_org
+     and l.event_type = 'automacao.aviso'
+     and l.entity_kind = 'contact'
+     and l.entity_id = p_contato
+     and l.payload ? 'body';
+end
+$$;
+
+revoke execute on function public.fn_limpar_texto_de_automacao_do_titular(uuid, uuid) from public, anon, authenticated;
+
 create or replace function public.fn_contato_anonimizado_limpa_automacoes()
 returns trigger
 language plpgsql
@@ -69681,6 +69705,7 @@ begin
      and contact_id = new.id
      and (vars <> '{}'::jsonb or (lane = 'automacao'
           and status in ('active','waiting_reply','paused_handoff','paused_manual','dormente')));
+  perform public.fn_limpar_texto_de_automacao_do_titular(new.organization_id, new.id);
   return new;
 end
 $$;

@@ -375,7 +375,17 @@ export function createPgAdminClient(pool: pg.Pool): TurnBridgeAdminClient {
       const body = rows[0]?.body;
       return typeof body === "string" ? body : null;
     },
-    async loadEnrollmentEvents(enrollmentId) {
+    async loadEnrollmentEvents(enrollmentId, limite) {
+      if (limite) {
+        const { rows } = await pool.query(
+          `select node_id, idempotency_key, event_type, payload from (
+             select node_id, idempotency_key, event_type, payload, created_at from followup_enrollment_events
+              where enrollment_id = $1 order by created_at desc limit $2
+           ) recentes order by created_at asc`,
+          [enrollmentId, limite],
+        );
+        return rows;
+      }
       const { rows } = await pool.query(
         `select node_id, idempotency_key, event_type, payload from followup_enrollment_events where enrollment_id = $1 order by created_at asc`,
         [enrollmentId],

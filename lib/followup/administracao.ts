@@ -557,19 +557,34 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
   // Automação: todo funil e etapa citados têm de ser DESTA organização — o
   // motor executa com a service role.
   if (surface === "automacao") {
-    const { funis, etapas } = referenciasDoGrafo(graph);
-    const [rf, re] = await Promise.all([
-      funis.length
-        ? admin.from("crm_pipelines").select("id").eq("organization_id", orgId).in("id", funis)
-        : Promise.resolve({ data: [], error: null }),
-      etapas.length
-        ? admin.from("crm_stages").select("id").eq("organization_id", orgId).in("id", etapas)
-        : Promise.resolve({ data: [], error: null }),
+    const { funis, etapas, pessoas, fontes } = referenciasDoGrafo(graph);
+    const vazio = Promise.resolve({ data: [], error: null });
+    const [rf, re, rp, rs] = await Promise.all([
+      funis.length ? admin.from("crm_pipelines").select("id").eq("organization_id", orgId).in("id", funis) : vazio,
+      etapas.length ? admin.from("crm_stages").select("id").eq("organization_id", orgId).in("id", etapas) : vazio,
+      pessoas.length
+        ? admin
+            .from("user_organizations")
+            .select("user_id")
+            .eq("organization_id", orgId)
+            .in("user_id", pessoas)
+            .is("revoked_at", null)
+        : vazio,
+      fontes.length ? admin.from("webhook_sources").select("id").eq("organization_id", orgId).in("id", fontes) : vazio,
     ]);
     if (rf.error) throw falhaInterna(deps, rf.error);
     if (re.error) throw falhaInterna(deps, re.error);
+    if (rp.error) throw falhaInterna(deps, rp.error);
+    if (rs.error) throw falhaInterna(deps, rs.error);
     if ((rf.data ?? []).length !== funis.length || (re.data ?? []).length !== etapas.length) {
       throw recusa(deps, 422, "validation_failed", t("Uma etapa ou funil escolhido não existe mais. Escolha de novo na lista."));
+    }
+    // Pessoa e fonte de captação também: o motor grava dono, tarefa e aviso com a service role.
+    if (new Set((rp.data ?? []).map((r) => (r as { user_id: string }).user_id)).size !== pessoas.length) {
+      throw recusa(deps, 422, "validation_failed", t("Uma pessoa escolhida não faz mais parte da equipe. Escolha de novo na lista."));
+    }
+    if ((rs.data ?? []).length !== fontes.length) {
+      throw recusa(deps, 422, "validation_failed", t("Uma fonte de captação escolhida não existe mais. Escolha de novo na lista."));
     }
   }
   // A regra de etapa guarda o `stage_id`, e só o banco diz se a etapa existe e está ativa.

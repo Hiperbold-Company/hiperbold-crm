@@ -1,5 +1,5 @@
 /**
- * As referências a funil e etapa que um grafo de automação carrega (ações de
+ * As referências a funil, etapa, pessoa da equipe e fonte de captação que um grafo de automação carrega (ações de
  * CRM, gatilhos, condições). Puro — quem confere contra o banco é o publish.
  *
  * ⚠️ Conferir no publish não é cortesia: um id de etapa de OUTRA organização
@@ -7,9 +7,20 @@
  */
 import type { FlowGraph } from "@/lib/followup/graph-schema";
 
-export function referenciasDoGrafo(graph: FlowGraph): { funis: string[]; etapas: string[] } {
+export interface ReferenciasDoGrafo {
+  funis: string[];
+  etapas: string[];
+  /** Pessoas citadas (dono, rodízio, aviso, responsável da tarefa): membros ativos desta organização. */
+  pessoas: string[];
+  /** Fontes de captação (`webhook_sources`) do gatilho "lead criado". */
+  fontes: string[];
+}
+
+export function referenciasDoGrafo(graph: FlowGraph): ReferenciasDoGrafo {
   const funis = new Set<string>();
   const etapas = new Set<string>();
+  const pessoas = new Set<string>();
+  const fontes = new Set<string>();
   for (const n of graph.nodes) {
     if (n.type === "crm_action") {
       for (const a of n.config.actions) {
@@ -17,11 +28,20 @@ export function referenciasDoGrafo(graph: FlowGraph): { funis: string[]; etapas:
           funis.add(a.pipeline_id);
           etapas.add(a.stage_id);
         }
+        if (a.type === "set_owner") {
+          if (a.mode.m === "user") pessoas.add(a.mode.user_id);
+          if (a.mode.m === "round_robin") a.mode.user_ids?.forEach((id) => pessoas.add(id));
+        }
+        if (a.type === "notify" && Array.isArray(a.to)) a.to.forEach((id) => pessoas.add(id));
+        if (a.type === "create_task" && a.assignee !== "owner") pessoas.add(a.assignee);
       }
     }
     if (n.type === "trigger" && "triggers" in n.config) {
       for (const g of n.config.triggers) {
-        if (g.kind === "lead_created") g.pipeline_ids?.forEach((id) => funis.add(id));
+        if (g.kind === "lead_created") {
+          g.pipeline_ids?.forEach((id) => funis.add(id));
+          g.capture_source_ids?.forEach((id) => fontes.add(id));
+        }
         if (g.kind === "stage_entered") g.stage_ids.forEach((id) => etapas.add(id));
       }
     }
@@ -33,7 +53,7 @@ export function referenciasDoGrafo(graph: FlowGraph): { funis: string[]; etapas:
       }
     }
   }
-  return { funis: [...funis], etapas: [...etapas] };
+  return { funis: [...funis], etapas: [...etapas], pessoas: [...pessoas], fontes: [...fontes] };
 }
 
 /** Grafo com que uma automação nova nasce: Início (gatilho manual) → Fim. */
