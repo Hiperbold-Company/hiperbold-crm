@@ -13,6 +13,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EtapasDoFluxo } from "../EtapasDoFluxo";
+import { VALORES_DE_WIRE_NA_TELA_PROIBIDOS } from "@/tests/support/enums-do-grafo";
+
 import { ConditionForm } from "./ConditionForm";
 import type { ConfigOf } from "./shared";
 
@@ -173,7 +175,21 @@ describe("ConditionForm — a regra nasce e muda sem decidir sozinha", () => {
     await user.click(await screen.findByRole("option", { name: "Pago · Vendas" }));
 
     expect((gravados.at(-1)!.checks[0] as { value: unknown }).value).toBe(ID_PAGO);
-    expect(screen.getByText("O lead está na etapa “Pago · Vendas”")).toBeInTheDocument();
+    expect(screen.getByText("O negócio está na etapa “Pago · Vendas”")).toBeInTheDocument();
+  });
+
+  it("a regra que a paleta cria não mostra nenhum valor de wire — nem `lead`", () => {
+    // Espelho unitário de `tests/e2e/followup-linguagem.spec.ts`: com as
+    // automações, `lead` virou valor de wire (alvo das ações e regras), e a
+    // frase "O lead está na etapa…" passou a reprovar aquela varredura.
+    expect(VALORES_DE_WIRE_NA_TELA_PROIBIDOS).toContain("lead");
+    renderizar({ combinator: "and", checks: [{ field: "lead_stage", op: "eq", value: "" }] });
+
+    const texto = document.body.textContent ?? "";
+    const vazados = VALORES_DE_WIRE_NA_TELA_PROIBIDOS.filter((v) =>
+      new RegExp(`(^|[^\\p{L}\\p{N}_])${v}([^\\p{L}\\p{N}_]|$)`, "iu").test(texto),
+    );
+    expect(vazados).toEqual([]);
   });
 
   it("o nome digitado à mão num fluxo antigo aparece como AVISO, não como etapa escolhida", () => {

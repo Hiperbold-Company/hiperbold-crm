@@ -91,7 +91,7 @@ describe("NodeCard — regra que não aponta para etapa nenhuma se acusa no card
 
     const linha = screen.getByTestId("node-branch-c1-regra-1");
     expect(linha.dataset.regraSemEtapa).toBeUndefined();
-    expect(linha).toHaveTextContent("O lead está na etapa “Pago · Vendas”");
+    expect(linha).toHaveTextContent("O negócio está na etapa “Pago · Vendas”");
   });
 
   it("enquanto as etapas carregam, o card não acusa uma etapa que existe", () => {

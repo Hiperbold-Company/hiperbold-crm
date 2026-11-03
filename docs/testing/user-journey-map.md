@@ -2713,7 +2713,7 @@ um primeiro deploy. Cron drenado pelo endpoint, como em produção.
 
 | # | Caso | Expectativa | Resultado |
 |---|------|-------------|-----------|
-| J27.1 | A regra de etapa é escolhida numa lista, agrupada por funil | grava o `stage_id`; a saída do cartão lê «O lead está na etapa “Etapa · Funil”» | PASS |
+| J27.1 | A regra de etapa é escolhida numa lista, agrupada por funil | grava o `stage_id`; a saída do cartão lê «O negócio está na etapa “Etapa · Funil”» | PASS |
 | J27.2 | O cartão não mostra identificador interno | nenhum uuid no texto do cartão | PASS |
 | J27.3 | Nada de texto cortado no cartão | `scrollWidth ≤ clientWidth` e `scrollHeight ≤ clientHeight` em todo subtítulo e toda saída | PASS — medido, não olhado |
 | J27.4 | O passo de classificar fala português | "2 classes · espera 15 min"; saídas "Interessado", "Sem interesse", "Sem resposta", "Outros casos"; nenhum cartão com a palavra "grace" | PASS |

@@ -2,7 +2,7 @@
  * A PROVA EM TELA do print de 16/09/2026, em que o dono do produto mostrava o
  * construtor de fluxos e o cartão do nó dizia coisas que o motor não faz:
  *
- *   - "O lead está na etapa “PAGO”" — o motor compara o `stage_id`, então essa
+ *   - "O negócio está na etapa “PAGO”" — o motor compara o `stage_id`, então essa
  *     regra NUNCA era verdadeira. O campo era de texto livre;
  *   - "O fluxo já deu pelo menos 0 pas…" — a regra com que todo nó nascia é
  *     verdadeira para todo lead, e o texto ainda saía cortado no meio;
@@ -263,7 +263,7 @@ test.describe("o cartão do nó diz o que o motor faz", () => {
     const regra1 = painel.getByTestId("condition-check-0");
     await regra1.getByRole("combobox", { name: "Valor" }).click();
     await page.getByRole("option", { name: nomeDaEtapa }).click();
-    await expect(painel).toContainText(`O lead está na etapa “${nomeDaEtapa}”`);
+    await expect(painel).toContainText(`O negócio está na etapa “${nomeDaEtapa}”`);
 
     // A segunda regra é numérica: o formulário grava NÚMERO, e é o que o motor compara.
     await painel.getByRole("button", { name: "Condição", exact: true }).click();
@@ -283,7 +283,7 @@ test.describe("o cartão do nó diz o que o motor faz", () => {
     // ─── 2. o cartão: nome da etapa, sem identificador, sem corte ─────────
     const cartaoCondicao = page.locator(`[data-testid="node-card-${condicaoId}"]`);
     await expect(page.getByTestId(`node-branch-${condicaoId}-regra-1`)).toHaveText(
-      `O lead está na etapa “${nomeDaEtapa}”`,
+      `O negócio está na etapa “${nomeDaEtapa}”`,
     );
     await expect(page.getByTestId(`node-branch-${condicaoId}-regra-2`)).toHaveText(
       "O fluxo já deu pelo menos 3 passos",

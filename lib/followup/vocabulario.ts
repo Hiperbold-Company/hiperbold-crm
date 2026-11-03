@@ -161,33 +161,36 @@ function passos(valor: string | number): string {
  * primeiro), então mexer na ordem aqui mexe na tela.
  */
 const COMPARADORES: Record<CampoDaCondicao, Record<OperadorDaCondicao, Comparador>> = {
+  // "O negócio", nunca "o lead": `lead` é valor de wire do grafo (alvo das
+  // ações e regras das automações), e a varredura de `followup-linguagem.spec`
+  // reprova a palavra no painel. É também o nome que as automações usam.
   lead_stage: {
     eq: {
       rotulo: "está na etapa",
-      frase: (v) => `O lead está na etapa ${aspas(v)}`,
+      frase: (v) => `O negócio está na etapa ${aspas(v)}`,
       oferecido: true,
     },
     neq: {
       rotulo: "não está na etapa",
-      frase: (v) => `O lead não está na etapa ${aspas(v)}`,
+      frase: (v) => `O negócio não está na etapa ${aspas(v)}`,
       oferecido: true,
     },
     contains: {
       rotulo: "contém",
-      frase: (v) => `O identificador da etapa do lead contém ${aspas(v)}`,
+      frase: (v) => `O identificador da etapa do negócio contém ${aspas(v)}`,
       oferecido: false,
       aviso:
         "A etapa é comparada pelo identificador interno, não pelo nome — escolha a etapa em vez de digitar um pedaço dela.",
     },
     gte: {
       rotulo: "é pelo menos",
-      frase: (v) => `A etapa do lead é pelo menos ${aspas(v)}`,
+      frase: (v) => `A etapa do negócio é pelo menos ${aspas(v)}`,
       oferecido: false,
       aviso: AVISO_SO_NUMERO,
     },
     lte: {
       rotulo: "é no máximo",
-      frase: (v) => `A etapa do lead é no máximo ${aspas(v)}`,
+      frase: (v) => `A etapa do negócio é no máximo ${aspas(v)}`,
       oferecido: false,
       aviso: AVISO_SO_NUMERO,
     },

@@ -312,7 +312,7 @@ describe("rotuloDaAresta — o ramo nomeado do grafo v2", () => {
     const paraRegra = { id: "e", source: "c1", target: "x", priority: 0, condition: { type: "branch" as const, branch_id: "regra-1" } };
     const nomes = { etapa: (id: string) => (id === ID_DA_ETAPA ? "Pago · Vendas" : null) };
 
-    expect(rotuloDaAresta(paraRegra, condicao, nomes)).toBe("quando o lead está na etapa “Pago · Vendas”");
+    expect(rotuloDaAresta(paraRegra, condicao, nomes)).toBe("quando o negócio está na etapa “Pago · Vendas”");
   });
 
   it("os ramos reservados do contrato viram frase sem depender do nó", () => {

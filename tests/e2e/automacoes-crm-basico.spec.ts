@@ -182,6 +182,21 @@ test.describe("Automações do CRM — cenário Novo lead do Facebook", () => {
     }).data;
     const posVendaId = depois.find((f) => f.name === nomeDoPosVenda)!.id;
     expect(posVendaId).toMatch(UUID_RX);
+    // As etapas iniciais do funil novo ("Novo", "Em andamento", "Ganho",
+    // "Perdido") são chaves do dicionário. O banco do e2e é compartilhado, e o
+    // negócio que este teste cria no Pós-venda aparece em /app/metrics, onde
+    // `i18n-espanhol-na-tela.spec.ts` leria o nome da etapa (dado) como texto
+    // de interface sem tradução. Nome com o carimbo não colide com chave.
+    const etapasDoPosVenda = ((await (await page.request.get(`/api/v1/pipelines/${posVendaId}/stages`)).json()) as {
+      data: Array<{ id: string; name: string }>;
+    }).data;
+    expect(etapasDoPosVenda.length).toBeGreaterThan(0);
+    for (const etapa of etapasDoPosVenda) {
+      const r = await page.request.patch(`/api/v1/pipelines/${posVendaId}/stages/${etapa.id}`, {
+        data: { name: `${etapa.name} ${carimbo}` },
+      });
+      expect(r.ok(), `renomear etapa ${etapa.name}: ${r.status()} ${await r.text()}`).toBe(true);
+    }
     const etapasDoFunil = await page.request.get(`/api/v1/pipelines/${funil.id}/stages`);
     const etapaInicial = ((await etapasDoFunil.json()) as { data: Array<{ id: string }> }).data[0]!.id;
 
