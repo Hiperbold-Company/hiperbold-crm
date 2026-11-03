@@ -3778,6 +3778,7 @@ export type Database = {
           last_status_change_at: string
           meta_phone_number_id: string | null
           meta_social_account_id: string | null
+          meta_social_page_id: string | null
           meta_social_platform: string | null
           meta_social_token_encrypted: string | null
           meta_social_token_expires_at: string | null
@@ -3823,6 +3824,7 @@ export type Database = {
           last_status_change_at?: string
           meta_phone_number_id?: string | null
           meta_social_account_id?: string | null
+          meta_social_page_id?: string | null
           meta_social_platform?: string | null
           meta_social_token_encrypted?: string | null
           meta_social_token_expires_at?: string | null
@@ -3868,6 +3870,7 @@ export type Database = {
           last_status_change_at?: string
           meta_phone_number_id?: string | null
           meta_social_account_id?: string | null
+          meta_social_page_id?: string | null
           meta_social_platform?: string | null
           meta_social_token_encrypted?: string | null
           meta_social_token_expires_at?: string | null

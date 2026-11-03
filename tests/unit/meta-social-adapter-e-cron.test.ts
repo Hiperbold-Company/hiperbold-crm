@@ -36,6 +36,33 @@ describe("montagem do envio", () => {
     expect(r!.corpo).toEqual({ recipient: { id: "IGSID" }, message: { text: "oi" } });
   });
 
+  it("Instagram conectado pela Página: /<PAGE_ID>/messages, IGSID no recipient, sem messaging_type", () => {
+    const envios = montarEnvios({
+      plataforma: "instagram",
+      contaId: "17841400000000001",
+      paginaId: "PAG-9",
+      destinatario: "IGSID",
+      imagemUrl: "https://cdn.exemplo/a.jpg",
+      texto: "oi",
+      teto: 1000,
+    });
+    expect(envios.map((e) => e.url)).toEqual([
+      "https://graph.facebook.com/v26.0/PAG-9/messages",
+      "https://graph.facebook.com/v26.0/PAG-9/messages",
+    ]);
+    expect(envios[1]!.corpo).toEqual({ recipient: { id: "IGSID" }, message: { text: "oi" } });
+    // Sem Página (ou null), o caminho de antes: a própria conta do Instagram.
+    const [semPagina] = montarEnvios({
+      plataforma: "instagram",
+      contaId: "17841400000000001",
+      paginaId: null,
+      destinatario: "IGSID",
+      texto: "oi",
+      teto: 1000,
+    });
+    expect(semPagina!.url).toBe("https://graph.facebook.com/v26.0/17841400000000001/messages");
+  });
+
   it("Messenger leva messaging_type RESPONSE; imagem vai como attachment", () => {
     const envios = montarEnvios({
       plataforma: "messenger",
@@ -80,6 +107,26 @@ describe("adapter.send", () => {
     expect(url).not.toContain("TOKEN-SECRETO");
     expect((init.headers as Record<string, string>).authorization).toBe("Bearer TOKEN-SECRETO");
     expect(JSON.parse(String(init.body))).toEqual({ recipient: { id: "IGSID-1" }, message: { text: "olá" } });
+  });
+
+  it("conta do Instagram com Página: envia à Página com o token guardado (o da Página)", async () => {
+    h.db = bancoFalso({
+      channel_sessions: [{ ...sessao, meta_social_page_id: "PAG-9", meta_social_token_encrypted: "cifrado:TOKEN-DA-PAGINA" }],
+    }).db;
+    const fetchFalso = vi.fn(async () => new Response(JSON.stringify({ message_id: "mid.pg" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchFalso);
+    const r = await metaSocialAdapter.send({
+      organizationId: ORG,
+      sessionRef: "IG-A",
+      to: "provider-thread",
+      kind: "text",
+      body: "olá",
+      providerConversationId: "IGSID-1",
+    });
+    expect(r.externalId).toBe("mid.pg");
+    const [url, init] = fetchFalso.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://graph.facebook.com/v26.0/PAG-9/messages");
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer TOKEN-DA-PAGINA");
   });
 
   const enviarCom = async (resposta: unknown, status: number) => {
