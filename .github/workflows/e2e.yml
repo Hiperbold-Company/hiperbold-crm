@@ -1118,6 +1118,7 @@ jobs:
         followup-dossie.spec.ts
         followup-queue.spec.ts
         automacoes-crm-basico.spec.ts
+        automacoes-botoes-e-pergunta.spec.ts
         fluxo-de-atendimento.spec.ts
         qa-l12-funil.spec.ts
         i18n-espanhol-na-tela.spec.ts

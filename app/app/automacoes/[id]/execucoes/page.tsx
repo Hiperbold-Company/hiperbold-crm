@@ -47,11 +47,15 @@ export default async function ExecucoesDaAutomacaoPage({ params }: { params: Pro
   const { data: contatos } = idsDeContato.length
     ? await supabase
         .from("contacts")
-        .select("id, name, phone_number")
+        .select("id, name, display_name, phone_number")
         .eq("organization_id", activeOrg.orgId)
         .in("id", idsDeContato)
-    : { data: [] as Array<{ id: string; name: string | null; phone_number: string | null }> };
-  const nomeDoContato = new Map((contatos ?? []).map((c) => [c.id, c.name ?? c.phone_number ?? "—"]));
+    : { data: [] as Array<{ id: string; name: string | null; display_name: string | null; phone_number: string | null }> };
+  // `display_name` é o nome que o WhatsApp informa (o mesmo que o Inbox mostra):
+  // contato que chegou pela conversa não tem `name` até alguém editar a ficha.
+  const nomeDoContato = new Map(
+    (contatos ?? []).map((c) => [c.id, c.name ?? c.display_name ?? c.phone_number ?? "—"]),
+  );
   const quando = (iso: string | null) =>
     iso ? new Date(iso).toLocaleString(user.idioma, { dateStyle: "short", timeStyle: "short" }) : "—";
 

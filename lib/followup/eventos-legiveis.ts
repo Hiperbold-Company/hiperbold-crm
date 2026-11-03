@@ -594,7 +594,7 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
       if (envio) {
         const nomeDoEnvio = ENVIOS_DA_CONVERSA[envio as keyof typeof ENVIOS_DA_CONVERSA] ?? envio;
         if (d.ok === false) return `${nomeDoEnvio}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
-        return `${nomeDoEnvio}: ${envio === "resposta" ? (texto(d.opcao_id) ? `opção ${texto(d.opcao_id)}` : "registrada") : "enviada"}`;
+        return `${nomeDoEnvio}: ${envio === "resposta" ? (texto(d.opcao_rotulo) ? `escolheu “${texto(d.opcao_rotulo)}”` : texto(d.opcao_id) ? "escolheu uma opção" : "registrada") : "enviada"}`;
       }
       const nome = tipo === "field_op" ? "Campos" : tipo ? (ACOES_DE_CRM[tipo as keyof typeof ACOES_DE_CRM] ?? tipo) : "Ação";
       if (d.ok === false) return `${nome}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;

@@ -366,3 +366,30 @@ describe("os eventos que o plano de tempo trouxe", () => {
     expect(r.autor).toBe("motor");
   });
 });
+
+describe("resposta escolhida num bloco de mensagem", () => {
+  it("mostra o nome da opção, não o id interno", () => {
+    const r = descreveEvento(
+      evento({
+        event_type: "effect_done",
+        payload: { detalhes: [{ tipo: "message", envio: "resposta", opcao_id: "opcao_ab12cd", opcao_rotulo: "Investimento", ok: true }] },
+      }),
+      nos,
+      "pt-BR",
+    );
+    expect(r.detalhe).toBe("Resposta do contato: escolheu “Investimento”");
+    expect(r.detalhe).not.toContain("opcao_ab12cd");
+  });
+
+  it("evento antigo, sem o rótulo, também não mostra o id", () => {
+    const r = descreveEvento(
+      evento({
+        event_type: "effect_done",
+        payload: { detalhes: [{ tipo: "message", envio: "resposta", opcao_id: "opcao_ab12cd", ok: true }] },
+      }),
+      nos,
+      "pt-BR",
+    );
+    expect(r.detalhe).toBe("Resposta do contato: escolheu uma opção");
+  });
+});

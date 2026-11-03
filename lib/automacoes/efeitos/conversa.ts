@@ -177,7 +177,18 @@ async function registrar(
   acao: Extract<AcaoDeConversa, { tipo: "registrar_resposta" }>,
   gravarCampo: (ops: FieldOp[]) => Promise<Passo>,
 ): Promise<Passo & { vars?: Record<string, unknown> }> {
-  const base = { tipo: node.type, envio: "resposta", ...(acao.opcao_id ? { opcao_id: acao.opcao_id } : {}) };
+  // O rótulo vem da CONFIGURAÇÃO do bloco (escrito por quem montou a automação),
+  // nunca do texto do contato: é o que a tela de execuções mostra no lugar do id.
+  const rotulo =
+    acao.opcao_id && node.type === "message"
+      ? node.config.options?.items.find((i) => i.id === acao.opcao_id)?.label
+      : undefined;
+  const base = {
+    tipo: node.type,
+    envio: "resposta",
+    ...(acao.opcao_id ? { opcao_id: acao.opcao_id } : {}),
+    ...(rotulo ? { opcao_rotulo: rotulo } : {}),
+  };
   const destino = node.type === "message" || node.type === "question" ? node.config.save_to : undefined;
   if (destino) {
     const r = await gravarCampo([{ target: destino, op: "set", value: acao.valor }]);
