@@ -223,14 +223,16 @@ function motorComCiclo() {
   let n = 0;
   return {
     execucoes,
-    jaIniciadas: async (_o: string, _p: string, lista: string[]) => new Set(lista.filter((x) => origens.has(x))),
+    jaIniciadas: async (_o: string, _p: string, lista: string[]) =>
+      new Set(lista.filter((x) => origens.has(x))),
     iniciar: async (input: {
       pointerId: string;
       originEventId?: string | null;
       parentEnrollmentId?: string | null;
     }): Promise<InicioDaAutomacao> => {
       for (let m = input.parentEnrollmentId ?? null; m; m = execucoes.get(m)?.mae ?? null) {
-        if (execucoes.get(m)?.pointer === input.pointerId) return { resultado: "ciclo", enrollment_id: null };
+        if (execucoes.get(m)?.pointer === input.pointerId)
+          return { resultado: "ciclo", enrollment_id: null };
       }
       if (input.originEventId) origens.add(input.originEventId);
       const id = `b0000000-0000-4000-8000-00000000000${++n}`;
@@ -245,7 +247,9 @@ describe("sem resposta: laço A ↔ B (item 4)", () => {
     id,
     organization_id: ORG,
     active_version_id: "v",
-    gatilhos: [{ kind: "no_reply" as const, after_minutes: 60, only_if_last_was_outbound: true as const }],
+    gatilhos: [
+      { kind: "no_reply" as const, after_minutes: 60, only_if_last_was_outbound: true as const },
+    ],
   });
   const conversa: ConversaCandidata = {
     id: "c1",
@@ -266,7 +270,12 @@ describe("sem resposta: laço A ↔ B (item 4)", () => {
       automacoesArmadas: async () => [armada("ptr-B")],
       modoLeitura: async () => false,
       conversasCandidatas: async () => [conversa],
-      ultimasSaidas: saidaUnica({ id: "out-a", pointer_id: "ptr-A", enrollment_id: ENR_A, status: "sent" }),
+      ultimasSaidas: saidaUnica({
+        id: "out-a",
+        pointer_id: "ptr-A",
+        enrollment_id: ENR_A,
+        status: "sent",
+      }),
       jaIniciadas: m.jaIniciadas,
       iniciar,
     };
@@ -277,7 +286,12 @@ describe("sem resposta: laço A ↔ B (item 4)", () => {
     const rodada2: SemRespostaDb = {
       ...rodada1,
       automacoesArmadas: async () => [armada("ptr-A")],
-      ultimasSaidas: saidaUnica({ id: "out-b", pointer_id: "ptr-B", enrollment_id: execB, status: "sent" }),
+      ultimasSaidas: saidaUnica({
+        id: "out-b",
+        pointer_id: "ptr-B",
+        enrollment_id: execB,
+        status: "sent",
+      }),
     };
     const r = await varrerSemResposta(rodada2, AGORA);
     expect(pedidos[1]).toBe(execB);
@@ -301,10 +315,16 @@ describe("sem resposta: quem não entra, e a paginação (item 9)", () => {
     expect(conversaElegivelSemResposta({ ...base, assignee_kind: "user" }, AGORA)).toBe(false);
     expect(conversaElegivelSemResposta({ ...base, force_human: true }, AGORA)).toBe(false);
     expect(
-      conversaElegivelSemResposta({ ...base, bot_silenced_until: "2026-11-03T13:00:00.000Z" }, AGORA),
+      conversaElegivelSemResposta(
+        { ...base, bot_silenced_until: "2026-11-03T13:00:00.000Z" },
+        AGORA,
+      ),
     ).toBe(false);
     expect(
-      conversaElegivelSemResposta({ ...base, bot_silenced_until: "2026-11-03T12:00:00.000Z" }, AGORA),
+      conversaElegivelSemResposta(
+        { ...base, bot_silenced_until: "2026-11-03T12:00:00.000Z" },
+        AGORA,
+      ),
     ).toBe(true);
   });
   it("marca de campanha: source campaign/campaign_test ou campaign_id", () => {
@@ -314,7 +334,10 @@ describe("sem resposta: quem não entra, e a paginação (item 9)", () => {
     expect(saidaDeCampanha({ origem_automacao: { pointer_id: "p" } })).toBe(false);
     expect(saidaDeCampanha(null)).toBe(false);
   });
-  function dbSemResposta(conversas: ConversaCandidata[], saidas: (c: ConversaCandidata) => UltimaSaida) {
+  function dbSemResposta(
+    conversas: ConversaCandidata[],
+    saidas: (c: ConversaCandidata) => UltimaSaida,
+  ) {
     const m = motor();
     let leiturasDeSaida = 0;
     const d: SemRespostaDb = {
@@ -348,12 +371,22 @@ describe("sem resposta: quem não entra, e a paginação (item 9)", () => {
           : { id: "o3", pointer_id: null, status: "sent" },
     );
     expect((await varrerSemResposta(d, AGORA)).iniciadas).toBe(1);
-    expect(m.chamadas.map((c) => (c.vars.gatilho as { conversation_id: string }).conversation_id)).toEqual(["c3"]);
+    expect(
+      m.chamadas.map((c) => (c.vars.gatilho as { conversation_id: string }).conversation_id),
+    ).toEqual(["c3"]);
   });
   it("mais candidatas que uma página: todas iniciam (sem starvation) e a saída é lida uma vez por página", async () => {
     const total = TETO_DE_CONVERSAS_SEM_RESPOSTA * 2 + 50;
-    const conversas = Array.from({ length: total }, (_, i) => ({ ...base, id: `c${i}`, contact_id: `ct${i}` }));
-    const { d, m, leituras } = dbSemResposta(conversas, (c) => ({ id: `o-${c.id}`, pointer_id: null, status: "sent" }));
+    const conversas = Array.from({ length: total }, (_, i) => ({
+      ...base,
+      id: `c${i}`,
+      contact_id: `ct${i}`,
+    }));
+    const { d, m, leituras } = dbSemResposta(conversas, (c) => ({
+      id: `o-${c.id}`,
+      pointer_id: null,
+      status: "sent",
+    }));
     expect((await varrerSemResposta(d, AGORA)).iniciadas).toBe(total);
     expect(new Set(m.chamadas.map((c) => c.contactId)).size).toBe(total);
     expect(leituras()).toBe(3);
@@ -377,7 +410,12 @@ describe("data do negócio: paginação e só abertos (item 5)", () => {
           organization_id: ORG,
           active_version_id: "v1",
           gatilhos: [
-            { kind: "date_field", field: { scope: "lead", key: "expected_close_date" }, offset_days: -3, time: "09:00" },
+            {
+              kind: "date_field",
+              field: { scope: "lead", key: "expected_close_date" },
+              offset_days: -3,
+              time: "09:00",
+            },
           ],
         },
       ],

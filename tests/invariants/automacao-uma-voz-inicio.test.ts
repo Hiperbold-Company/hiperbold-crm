@@ -56,7 +56,13 @@ function grafo(palavra: string): string {
         },
       },
       { id: "m", type: "message", label: "Oi", position: { x: 0, y: 100 }, config: {} },
-      { id: "f", type: "end", label: "Fim", position: { x: 0, y: 200 }, config: { outcome: "converted" } },
+      {
+        id: "f",
+        type: "end",
+        label: "Fim",
+        position: { x: 0, y: 200 },
+        config: { outcome: "converted" },
+      },
     ],
     edges: [],
   });
@@ -133,7 +139,9 @@ describe("uma voz no início — o SQL de decisaoDoGatilhoDeMensagem", () => {
     // Uma execução de OUTRA organização com a mesma origem não cala a IA desta.
     expect(await decidir(VIZ, MSG_PRECO)).toBe("seguir");
 
-    sql(`update public.followup_enrollments set status='completed', completed_at=now() where id='${execucao}';`);
+    sql(
+      `update public.followup_enrollments set status='completed', completed_at=now() where id='${execucao}';`,
+    );
     expect(await decidir(ORG, MSG_PRECO)).toBe("seguir");
 
     sql(`insert into public.messages (organization_id, conversation_id, channel_session_id, contact_id, type, direction, status, body, metadata)

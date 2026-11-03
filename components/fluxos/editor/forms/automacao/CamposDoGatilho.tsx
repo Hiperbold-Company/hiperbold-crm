@@ -377,9 +377,7 @@ function CamposDoAgendamento({
             onChange({
               ...g,
               // Na ordem da lista, não na do clique: a config não muda por ordem de marcação.
-              events: EVENTOS_DE_AGENDAMENTO.filter((x) =>
-                x === ev ? m : g.events.includes(x),
-              ),
+              events: EVENTOS_DE_AGENDAMENTO.filter((x) => (x === ev ? m : g.events.includes(x))),
             })
           }
         />
@@ -425,10 +423,11 @@ function CamposDaData({
     ...personalizados.map((c) => ({ valor: `lead_custom:${c.key}`, rotulo: c.label })),
   ];
   // Campo gravado que não está mais declarado em funil nenhum: continua visível.
-  if (!opcoes.some((o) => o.valor === atual))
-    opcoes.push({ valor: atual, rotulo: g.field.key });
+  if (!opcoes.some((o) => o.valor === atual)) opcoes.push({ valor: atual, rotulo: g.field.key });
   const [dias, setDias] = useState(String(Math.abs(g.offset_days)));
-  const [sentido, setSentido] = useState<"antes" | "depois">(g.offset_days > 0 ? "depois" : "antes");
+  const [sentido, setSentido] = useState<"antes" | "depois">(
+    g.offset_days > 0 ? "depois" : "antes",
+  );
   const emitirDias = (texto: string, s: "antes" | "depois") => {
     const n = Number(texto);
     // Fora de 0..365 o schema recusa e o formulário mostra o aviso.

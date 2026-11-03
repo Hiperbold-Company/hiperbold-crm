@@ -2,10 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ChannelLogo } from "./ChannelLogo";
-import {
-  CHANNEL_PROVIDER_META,
-  CHANNEL_PROVIDER_META_SOCIAL,
-} from "@/lib/channels/capabilities";
+import { CHANNEL_PROVIDER_META, CHANNEL_PROVIDER_META_SOCIAL } from "@/lib/channels/capabilities";
 
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 

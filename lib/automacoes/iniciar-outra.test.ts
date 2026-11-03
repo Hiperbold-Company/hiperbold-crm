@@ -724,11 +724,22 @@ describe("o destino trabalha no MESMO negócio da origem (item 16)", () => {
   it("o negócio da execução de origem vai para `_lead_id` do destino", async () => {
     const { admin, t } = criarBanco({
       enrollments: [
-        { id: "e-a", organization_id: ORG, pointer_id: A, contact_id: CONTATO, status: "active", parent_enrollment_id: null },
+        {
+          id: "e-a",
+          organization_id: ORG,
+          pointer_id: A,
+          contact_id: CONTATO,
+          status: "active",
+          parent_enrollment_id: null,
+        },
       ],
     });
     const p = pedido({ id: "e-a", pointer_id: A }, [iniciarB]);
-    p.fatos = { ...FATOS, negocio: { id: LEAD_DA_ORIGEM }, vars: { _lead_id: LEAD_DA_ORIGEM } } as unknown as FatosDaAutomacao;
+    p.fatos = {
+      ...FATOS,
+      negocio: { id: LEAD_DA_ORIGEM },
+      vars: { _lead_id: LEAD_DA_ORIGEM },
+    } as unknown as FatosDaAutomacao;
     expect((await executor(admin).executar(p)).desfecho).toEqual({ ok: true });
     const nova = t.followup_enrollments!.find((e) => e.pointer_id === B)!;
     const vars = nova.vars as { _lead_id?: string; gatilho: Record<string, unknown> };
@@ -738,7 +749,14 @@ describe("o destino trabalha no MESMO negócio da origem (item 16)", () => {
   it("origem sem negócio: o destino não recebe `_lead_id`", async () => {
     const { admin, t } = criarBanco({
       enrollments: [
-        { id: "e-a", organization_id: ORG, pointer_id: A, contact_id: CONTATO, status: "active", parent_enrollment_id: null },
+        {
+          id: "e-a",
+          organization_id: ORG,
+          pointer_id: A,
+          contact_id: CONTATO,
+          status: "active",
+          parent_enrollment_id: null,
+        },
       ],
     });
     await executor(admin).executar(pedido({ id: "e-a", pointer_id: A }, [iniciarB]));
@@ -750,7 +768,13 @@ describe("o destino trabalha no MESMO negócio da origem (item 16)", () => {
 describe("frase do início para os gatilhos do lote 3 (item 17)", () => {
   const detalhe = (gatilho: string) =>
     descreveEvento(
-      { id: "x", node_id: null, event_type: "automacao_iniciada", payload: { gatilho }, created_at: AGORA.toISOString() },
+      {
+        id: "x",
+        node_id: null,
+        event_type: "automacao_iniciada",
+        payload: { gatilho },
+        created_at: AGORA.toISOString(),
+      },
       {},
       "pt-BR",
       "automacao",

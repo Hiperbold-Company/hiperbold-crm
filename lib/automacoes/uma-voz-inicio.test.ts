@@ -212,7 +212,14 @@ describe("uma voz no início: a execução cedida precisa estar viva ou ter fala
     const d = poolDoDrain({
       evento: CONSUMIDO,
       execucoes: [
-        { org: ORG, lane: "automacao", origin_event_id: "ev-msg", conversa: true, viva: false, falou: false },
+        {
+          org: ORG,
+          lane: "automacao",
+          origin_event_id: "ev-msg",
+          conversa: true,
+          viva: false,
+          falou: false,
+        },
       ],
     });
     await drainTick(d.pool, knobs, log);
@@ -223,7 +230,14 @@ describe("uma voz no início: a execução cedida precisa estar viva ou ter fala
     const d = poolDoDrain({
       evento: CONSUMIDO,
       execucoes: [
-        { org: ORG, lane: "automacao", origin_event_id: "ev-msg", conversa: true, viva: false, falou: true },
+        {
+          org: ORG,
+          lane: "automacao",
+          origin_event_id: "ev-msg",
+          conversa: true,
+          viva: false,
+          falou: true,
+        },
       ],
     });
     await drainTick(d.pool, knobs, log);
@@ -296,7 +310,9 @@ describe("uma voz no início: só espera se algum gatilho armado pode casar a me
         {
           org: ORG,
           conversa: true,
-          triggers: [{ kind: "message_received", match: "any", keywords: [], only_first_message: true }],
+          triggers: [
+            { kind: "message_received", match: "any", keywords: [], only_first_message: true },
+          ],
         },
       ],
       inboundAnterior: true,

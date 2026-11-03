@@ -107,9 +107,15 @@ describe("AutomationTriggerForm — gatilhos do lote 3", () => {
     const u = usuario();
 
     // "Qualquer mensagem" já serve, e a proteção do atendente nasce ligada.
-    expect(gatilhoGravado(onChange)).toEqual({ kind: "message_received", match: "any", keywords: [] });
+    expect(gatilhoGravado(onChange)).toEqual({
+      kind: "message_received",
+      match: "any",
+      keywords: [],
+    });
     expect(screen.getByTestId("gatilho-0-sem-atendente")).toBeChecked();
-    expect(screen.getByText("Compara palavras inteiras, sem acento e sem diferenciar maiúsculas.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Compara palavras inteiras, sem acento e sem diferenciar maiúsculas."),
+    ).toBeInTheDocument();
 
     // "Contém" sem palavra: o schema recusa, e nada sobe.
     const antes = onChange.mock.calls.length;
@@ -155,7 +161,9 @@ describe("AutomationTriggerForm — gatilhos do lote 3", () => {
   it("tag adicionada: tag existente e digitada, no contato, com o aviso das tags em massa", async () => {
     const onChange = await escolherGatilho("tag_added");
     const u = usuario();
-    expect(screen.getByText("Tags postas em massa (ação em lote ou planilha) não disparam a automação.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Tags postas em massa (ação em lote ou planilha) não disparam a automação."),
+    ).toBeInTheDocument();
 
     await u.selectOptions(screen.getByTestId("gatilho-0-alvo"), "contact");
     await u.selectOptions(screen.getByTestId("gatilho-0-tag-existente"), "VIP");
@@ -186,7 +194,9 @@ describe("AutomationTriggerForm — gatilhos do lote 3", () => {
     const antes = onChange.mock.calls.length;
     await u.click(screen.getByTestId("gatilho-0-evento-no_show"));
     expect(onChange.mock.calls.length).toBe(antes);
-    expect(screen.getByTestId("gatilho-erro")).toHaveTextContent("marque ao menos um acontecimento");
+    expect(screen.getByTestId("gatilho-erro")).toHaveTextContent(
+      "marque ao menos um acontecimento",
+    );
   });
 
   it("aniversário: sem campos, com o horário real da varredura", async () => {
@@ -234,7 +244,9 @@ describe("AutomationTriggerForm — gatilhos do lote 3", () => {
   it("sem resposta: tempo em horas vira minutos, e menos de 5 minutos é recusado", async () => {
     const onChange = await escolherGatilho("no_reply");
     const u = usuario();
-    expect(screen.getByText(/Conta a partir da última mensagem enviada ao contato/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Conta a partir da última mensagem enviada ao contato/),
+    ).toBeInTheDocument();
 
     await u.selectOptions(screen.getByTestId("gatilho-0-tempo-unidade"), "horas");
     await u.clear(screen.getByTestId("gatilho-0-tempo"));

@@ -117,7 +117,8 @@ export function semRespostaDesde(
 
 /** A conversa está aberta e sem humano no comando? Pura. */
 export function conversaElegivelSemResposta(c: ConversaCandidata, agora: Date): boolean {
-  if (c.status && (STATUS_DE_CONVERSA_FECHADA as readonly string[]).includes(c.status)) return false;
+  if (c.status && (STATUS_DE_CONVERSA_FECHADA as readonly string[]).includes(c.status))
+    return false;
   return !humanoNoComando(
     {
       is_group: false,
@@ -174,11 +175,18 @@ export async function varrerSemResposta(
         const ate = new Date(agora.getTime() - g.after_minutes * 60_000);
         const desde = new Date(ate.getTime() - JANELA_DA_VARREDURA_SEM_RESPOSTA_MIN * 60_000);
         for (let pagina = 0; pagina < PAGINAS_DA_VARREDURA_SEM_RESPOSTA; pagina++) {
-          const lidas = await db.conversasCandidatas(a.organization_id, desde.toISOString(), ate.toISOString(), {
-            offset: pagina * TETO_DE_CONVERSAS_SEM_RESPOSTA,
-            limite: TETO_DE_CONVERSAS_SEM_RESPOSTA,
-          });
-          const candidatas = lidas.filter((c) => semRespostaDesde(c) && conversaElegivelSemResposta(c, agora));
+          const lidas = await db.conversasCandidatas(
+            a.organization_id,
+            desde.toISOString(),
+            ate.toISOString(),
+            {
+              offset: pagina * TETO_DE_CONVERSAS_SEM_RESPOSTA,
+              limite: TETO_DE_CONVERSAS_SEM_RESPOSTA,
+            },
+          );
+          const candidatas = lidas.filter(
+            (c) => semRespostaDesde(c) && conversaElegivelSemResposta(c, agora),
+          );
           resumo.ignoradas += lidas.length - candidatas.length;
           resumo.candidatas += candidatas.length;
           await iniciarDaPagina(db, a, g.after_minutes, candidatas, resumo);
@@ -206,7 +214,12 @@ async function iniciarDaPagina(
   for (const c of candidatas) {
     const saida = saidas.get(c.id);
     // Sem saída, saída que falhou, de campanha, ou da PRÓPRIA automação (anti-laço).
-    if (!saida || saida.status === "failed" || saida.campanha === true || saida.pointer_id === a.id) {
+    if (
+      !saida ||
+      saida.status === "failed" ||
+      saida.campanha === true ||
+      saida.pointer_id === a.id
+    ) {
       resumo.ignoradas++;
       continue;
     }
@@ -220,7 +233,8 @@ async function iniciarDaPagina(
   );
   for (const p of prontas) {
     if (ja.has(p.origem)) continue;
-    const mae = p.saida.enrollment_id && UUID.test(p.saida.enrollment_id) ? p.saida.enrollment_id : null;
+    const mae =
+      p.saida.enrollment_id && UUID.test(p.saida.enrollment_id) ? p.saida.enrollment_id : null;
     const r = await db.iniciar({
       organizationId: a.organization_id,
       pointerId: a.id,
@@ -304,7 +318,9 @@ export function createSupabaseSemRespostaDb(admin: SupabaseClient): SemRespostaD
     async ultimasSaidas(orgId, conversas) {
       const mapa = new Map<string, UltimaSaida>();
       if (conversas.length === 0) return mapa;
-      const piso = Math.min(...conversas.map((c) => Date.parse(c.last_outbound_at)).filter(Number.isFinite));
+      const piso = Math.min(
+        ...conversas.map((c) => Date.parse(c.last_outbound_at)).filter(Number.isFinite),
+      );
       const { data, error } = await admin
         .from("messages")
         .select("id, conversation_id, status, metadata, created_at")
@@ -314,7 +330,10 @@ export function createSupabaseSemRespostaDb(admin: SupabaseClient): SemRespostaD
           "conversation_id",
           conversas.map((c) => c.id),
         )
-        .gte("created_at", new Date((Number.isFinite(piso) ? piso : Date.now()) - FOLGA_DA_LEITURA_MS).toISOString())
+        .gte(
+          "created_at",
+          new Date((Number.isFinite(piso) ? piso : Date.now()) - FOLGA_DA_LEITURA_MS).toISOString(),
+        )
         .order("created_at", { ascending: false })
         .limit(1000);
       if (error) throw new Error(error.message);
@@ -344,8 +363,7 @@ interface LinhaDeSaida {
 
 function paraUltimaSaida(m: LinhaDeSaida): UltimaSaida {
   const origem = m.metadata?.[CHAVE_DE_ORIGEM_AUTOMACAO] as
-    | { pointer_id?: unknown; enrollment_id?: unknown }
-    | undefined;
+    { pointer_id?: unknown; enrollment_id?: unknown } | undefined;
   return {
     id: m.id,
     pointer_id: typeof origem?.pointer_id === "string" ? origem.pointer_id : null,

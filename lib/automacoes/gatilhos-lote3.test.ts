@@ -7,7 +7,11 @@ import { describe, expect, it } from "vitest";
 
 import type { EventRow } from "@/lib/event-log/dispatcher";
 
-import { aplicarGatilhosDeAutomacao, IDADE_MAXIMA_DA_MENSAGEM_MS, type GatilhosDb } from "./gatilhos.handler";
+import {
+  aplicarGatilhosDeAutomacao,
+  IDADE_MAXIMA_DA_MENSAGEM_MS,
+  type GatilhosDb,
+} from "./gatilhos.handler";
 import { esperavaRespostaEm } from "./uma-voz";
 import {
   casaGatilho,
@@ -498,7 +502,9 @@ describe("não dispara com humano no comando (item 6)", () => {
     expect((await aplicarGatilhosDeAutomacao(sem.fake, mensagem())).iniciadas).toBe(1);
   });
   it("skip_if_human: false dispara mesmo com humano no comando", async () => {
-    const d = db(config(msgGatilho({ skip_if_human: false })), { humanoNaConversa: async () => true });
+    const d = db(config(msgGatilho({ skip_if_human: false })), {
+      humanoNaConversa: async () => true,
+    });
     expect((await aplicarGatilhosDeAutomacao(d.fake, mensagem())).iniciadas).toBe(1);
   });
   it("o schema aceita a opção", () => {
@@ -513,7 +519,11 @@ describe("não dispara com humano no comando (item 6)", () => {
 
 describe("resposta a automação decidida pela MENSAGEM (item 7)", () => {
   const T = "2026-11-03T12:05:00.000Z";
-  const ev = (event_type: string, created_at: string, payload: Record<string, unknown> | null = null) => ({
+  const ev = (
+    event_type: string,
+    created_at: string,
+    payload: Record<string, unknown> | null = null,
+  ) => ({
     event_type,
     created_at,
     payload,
@@ -543,7 +553,10 @@ describe("resposta a automação decidida pela MENSAGEM (item 7)", () => {
     ).toBe(false);
     expect(esperavaRespostaEm([ev("wait_started", "2026-11-03T12:00:01.000Z", {})], T)).toBe(false);
     expect(
-      esperavaRespostaEm([ev("wait_started", "2026-11-03T12:06:00.000Z", { wake_status: "waiting_reply" })], T),
+      esperavaRespostaEm(
+        [ev("wait_started", "2026-11-03T12:06:00.000Z", { wake_status: "waiting_reply" })],
+        T,
+      ),
     ).toBe(false);
   });
   it("o handler passa o instante da chegada e descarta a resposta", async () => {
@@ -571,7 +584,9 @@ describe("mensagem velha não dispara (item 8)", () => {
     });
     expect((await aplicarGatilhosDeAutomacao(velha.fake, mensagem(), agora)).iniciadas).toBe(0);
     const nova = db(config(msgGatilho()), {
-      mensagemDaConversa: async () => ({ created_at: new Date(agora.getTime() - 60_000).toISOString() }),
+      mensagemDaConversa: async () => ({
+        created_at: new Date(agora.getTime() - 60_000).toISOString(),
+      }),
     });
     expect((await aplicarGatilhosDeAutomacao(nova.fake, mensagem(), agora)).iniciadas).toBe(1);
     const alheia = db(config(msgGatilho()), { mensagemDaConversa: async () => null });
@@ -589,7 +604,9 @@ describe("palavra-chave vazia e tag (item 10)", () => {
     const r = cfg({ kind: "message_received", match: "contains", keywords: ["!!!"] });
     expect(r.success).toBe(false);
     expect(JSON.stringify(r.error?.issues)).toContain("ao menos uma letra ou número");
-    expect(cfg({ kind: "message_received", match: "contains", keywords: ["preço!"] }).success).toBe(true);
+    expect(cfg({ kind: "message_received", match: "contains", keywords: ["preço!"] }).success).toBe(
+      true,
+    );
   });
   it("tag compara por trim e minúsculas, não pela normalização da palavra-chave", () => {
     expect(mesmaTag("  VIP ", "vip")).toBe(true);

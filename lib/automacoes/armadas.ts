@@ -41,7 +41,9 @@ export async function automacoesComGatilho<K extends AutomacaoTriggerKind>(
       .eq("status", "active")
       .not("active_version_id", "is", null);
     if (orgId) consulta = consulta.eq("organization_id", orgId);
-    const { data, error } = await consulta.order("id", { ascending: true }).range(de, de + PAGINA_DE_POINTERS - 1);
+    const { data, error } = await consulta
+      .order("id", { ascending: true })
+      .range(de, de + PAGINA_DE_POINTERS - 1);
     if (error) throw new Error(error.message);
     const pagina = (data ?? []) as typeof pointers;
     pointers.push(...pagina);

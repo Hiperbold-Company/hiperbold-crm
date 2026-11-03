@@ -150,7 +150,9 @@ export async function varrerDatasDasAutomacoes(
             limite: TETO_POR_ORGANIZACAO,
             apenasAbertos,
           });
-          const casam = lidos.filter((n) => n.contact_id && casaNaData(n.valor, hoje, -g.offset_days));
+          const casam = lidos.filter(
+            (n) => n.contact_id && casaNaData(n.valor, hoje, -g.offset_days),
+          );
           resumo.candidatos += casam.length;
           if (casam.length > 0) {
             const comOrigem = casam.map((n) => ({ n, origem: origemDaData(a.id, n.id, dia, g) }));
@@ -221,7 +223,9 @@ export function createSupabaseDataDoNegocioDb(admin: SupabaseClient): DataDoNego
           .eq("organization_id", orgId)
           .eq("expected_close_date", dia);
         if (apenasAbertos) q = q.eq("status", "open");
-        const { data, error } = await q.order("id", { ascending: true }).range(offset, offset + limite - 1);
+        const { data, error } = await q
+          .order("id", { ascending: true })
+          .range(offset, offset + limite - 1);
         if (error) throw new Error(error.message);
         return (
           (data ?? []) as Array<{
@@ -244,7 +248,9 @@ export function createSupabaseDataDoNegocioDb(admin: SupabaseClient): DataDoNego
         .eq("organization_id", orgId)
         .or(`custom_fields->>${k}.like.*${dia}*,custom_fields->>${k}.like.*${diaBrasileiro(dia)}*`);
       if (apenasAbertos) q = q.eq("status", "open");
-      const { data, error } = await q.order("id", { ascending: true }).range(offset, offset + limite - 1);
+      const { data, error } = await q
+        .order("id", { ascending: true })
+        .range(offset, offset + limite - 1);
       if (error) throw new Error(error.message);
       return (
         (data ?? []) as Array<{
