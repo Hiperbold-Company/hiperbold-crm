@@ -231,6 +231,14 @@ export const palavraChaveSchema = z
   .max(100)
   .refine((k) => normalizarParaPalavraChave(k).length > 0, { message: ERRO_PALAVRA_CHAVE_SEM_LETRA });
 
+/** Como a palavra-chave do comentário é comparada: qualquer comentário, ou contém uma das palavras. */
+export const MODOS_DO_COMENTARIO = ["any", "contains"] as const;
+export type ModoDoComentario = (typeof MODOS_DO_COMENTARIO)[number];
+/** Quantos posts um gatilho "Comentário no Instagram" lista. */
+export const MAX_PUBLICACOES = 50;
+/** Id de um post do Instagram (o `media_id` da Meta: só dígitos). */
+export const idDePublicacaoSchema = z.string().trim().regex(/^[0-9]{1,40}$/, "Use o id do post (só números)");
+
 /** Os acontecimentos da agenda que iniciam uma automação (`appointment.<evento>`). */
 export const EVENTOS_DE_AGENDAMENTO = ["created", "confirmed", "rescheduled", "cancelled", "completed", "no_show"] as const;
 export type EventoDeAgendamento = (typeof EVENTOS_DE_AGENDAMENTO)[number];
@@ -329,6 +337,27 @@ export const automacaoTriggerSchema = z.discriminatedUnion("kind", [
     kind: z.literal("started_by_automation"),
     from_pointer_ids: z.array(uuid).max(20).optional(),
   }),
+  /**
+   * Comentário num post do Instagram (`instagram.comentario_recebido`, gravado
+   * pelo canal). Contas e posts vazios = qualquer um. A palavra-chave segue a
+   * regra da mensagem recebida (`palavraChaveCasa`): palavra inteira, sem
+   * acento e sem maiúsculas, qualquer uma das listadas. `create_contact`
+   * (ausente = sim): o comentarista sem contato no CRM ganha um, com o nome
+   * `@usuario`; sem ele, a automação não inicia.
+   */
+  z
+    .strictObject({
+      kind: z.literal("instagram_comment"),
+      channel_session_ids: z.array(uuid).max(20).optional(),
+      media_ids: z.array(idDePublicacaoSchema).max(MAX_PUBLICACOES).optional(),
+      match: z.enum(MODOS_DO_COMENTARIO),
+      keywords: z.array(palavraChaveSchema).max(MAX_PALAVRAS_CHAVE),
+      create_contact: z.boolean().optional(),
+    })
+    .refine((g) => g.match === "any" || g.keywords.length > 0, {
+      message: "informe ao menos uma palavra-chave",
+      path: ["keywords"],
+    }),
 ]);
 export type AutomacaoTrigger = z.infer<typeof automacaoTriggerSchema>;
 export type AutomacaoTriggerKind = AutomacaoTrigger["kind"];
@@ -360,6 +389,7 @@ export const GATILHO_TRAZ_CONTATO: Record<AutomacaoTriggerKind, boolean> = {
   no_reply: true,
   case_opened: true,
   started_by_automation: true,
+  instagram_comment: true,
 };
 
 /**
@@ -379,6 +409,7 @@ export const GATILHO_EM_BRANCO: { [K in AutomacaoTriggerKind]: Extract<Automacao
   no_reply: { kind: "no_reply", after_minutes: 1440, only_if_last_was_outbound: true },
   case_opened: { kind: "case_opened" },
   started_by_automation: { kind: "started_by_automation" },
+  instagram_comment: { kind: "instagram_comment", match: "any", keywords: [] },
 };
 
 /** Config inicial do gatilho de uma automação nova. */

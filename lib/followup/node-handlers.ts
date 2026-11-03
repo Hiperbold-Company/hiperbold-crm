@@ -161,6 +161,11 @@ export interface DesfechoDoEfeito {
   ok: boolean;
   /** Código curto do primeiro erro (nunca PII). */
   erro?: string;
+  /**
+   * Blocos do Instagram: o RAMO do desfecho (`ja_respondido`, `prazo_vencido`,
+   * `segue`, `nao_segue`). Ausente = a saída comum (`always`).
+   */
+  saida?: string;
 }
 
 /** Backoff ladder indexed by `attempts - 1` (clamped to the last slot) — 30s..1h. */
@@ -597,6 +602,26 @@ function decidirEfeito(input: EntradaDoNo): NodeResult {
   return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
 }
 
+/**
+ * Blocos do Instagram: como os de efeito, mas o desfecho escolhe o RAMO
+ * (`efeito.saida`). Sem aresta naquele ramo, segue pela saída comum — a mesma
+ * regra do "Erro" sem aresta (`selectEdge` cai no `always`).
+ */
+function decidirInstagram(input: EntradaDoNo): NodeResult {
+  const { node, edges, clock, efeito } = input;
+  if (!efeito) return { kind: "effect" };
+  const ramo = efeito.ok ? efeito.saida : ERROR_BRANCH_ID;
+  const edge = ramo
+    ? selectEdge(edges, node.id, { type: "branch", branch_id: ramo })
+    : selectEdge(edges, node.id, { type: "always" });
+  if (!edge) {
+    return efeito.ok || !efeito.erro
+      ? { kind: "complete", outcome: null }
+      : { kind: "complete", outcome: null, cancel_reason: efeito.erro };
+  }
+  return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
+}
+
 /** Como cada bloco de conversa se comporta — derivado da config do nó. */
 interface RegrasDaConversa {
   /** O bloco envia uma mensagem ao entrar (a espera "até responder" não envia). */
@@ -782,6 +807,9 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
   field_op: (input) => decidirEfeito(input),
   message: (input) => decidirConversa(input),
   question: (input) => decidirConversa(input),
+  instagram_private_reply: (input) => decidirInstagram(input),
+  instagram_public_reply: (input) => decidirInstagram(input),
+  instagram_check_follow: (input) => decidirInstagram(input),
   trigger: (input) => {
     const { node, edges, enrollment, clock, smartWaits, planEnqueued, planRecheckCount } = input;
     const edge = selectEdge(edges, node.id, { type: "always" });

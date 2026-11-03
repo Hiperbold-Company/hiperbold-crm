@@ -87,6 +87,12 @@ export function toFlowNode(n: RFNode): FlowNode {
       return { ...shared, type, config: n.data.config as ConfigOf<"message"> };
     case "question":
       return { ...shared, type, config: n.data.config as ConfigOf<"question"> };
+    case "instagram_private_reply":
+      return { ...shared, type, config: n.data.config as ConfigOf<"instagram_private_reply"> };
+    case "instagram_public_reply":
+      return { ...shared, type, config: n.data.config as ConfigOf<"instagram_public_reply"> };
+    case "instagram_check_follow":
+      return { ...shared, type, config: n.data.config as ConfigOf<"instagram_check_follow"> };
     default: {
       const exhaustive: never = type;
       throw new Error(`unknown node type: ${String(exhaustive)}`);

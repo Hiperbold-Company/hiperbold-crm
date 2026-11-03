@@ -24,6 +24,7 @@ import {
 import { VIA_ACAO_EM_MASSA } from "./chaves";
 import { inboundContaComoResposta } from "./conversa";
 import { flowGraphSchema } from "@/lib/followup/graph-schema";
+import { ENTIDADE_DO_EVENTO_COMENTARIO, EVENTO_COMENTARIO_RECEBIDO } from "./canal-de-comentarios";
 
 
 interface ComumDoFato {
@@ -87,7 +88,25 @@ export interface FatoDeCaso extends ComumDoFato {
   lead_id: string | null;
 }
 
+/**
+ * Comentário num post do Instagram (`instagram.comentario_recebido`). O
+ * comentarista pode não ter contato no CRM: quem resolve (ou cria) é o handler.
+ */
+export interface FatoDeComentario extends ComumDoFato {
+  tipo: "instagram_comment";
+  comment_id: string;
+  /** O post (pode faltar no aviso da Meta; aí só casa gatilho sem lista de posts). */
+  media_id: string | null;
+  channel_session_id: string;
+  /** Id do perfil na rede (IGSID). Só vai para `vars`, nunca para eventos da execução. */
+  autor_id: string;
+  autor_usuario: string | null;
+  /** Texto do comentário (até 280). Só vai para `vars` (LGPD). */
+  texto: string;
+}
+
 export type FatoDeGatilho =
+  | FatoDeComentario
   | FatoDeNegocio
   | FatoDeMensagem
   | FatoDeTag
@@ -262,6 +281,32 @@ export function fatosDoEvento(row: EventRow): FatoDeGatilho[] {
     ];
   }
 
+  // Comentário do Instagram (gravado pelo canal: `entity_kind =
+  // instagram_comment`, `entity_id` = a linha do comentário). A organização é
+  // a da LINHA do evento; payload que diz outra é descartado.
+  if (row.event_type === EVENTO_COMENTARIO_RECEBIDO && row.entity_kind === ENTIDADE_DO_EVENTO_COMENTARIO) {
+    const p = row.payload;
+    if (texto(p.organization_id) && p.organization_id !== row.organization_id) return [];
+    const commentId = texto(p.comment_id);
+    const mediaId = texto(p.media_id);
+    const sessao = uuidOuNulo(p.channel_session_id);
+    const autor = texto(p.autor_id);
+    if (!commentId || !sessao || !autor) return [];
+    const usuario = texto(p.autor_usuario);
+    return [
+      {
+        tipo: "instagram_comment",
+        comment_id: commentId.slice(0, 120),
+        media_id: mediaId ? mediaId.slice(0, 120) : null,
+        channel_session_id: sessao,
+        autor_id: autor.slice(0, 120),
+        autor_usuario: usuario ? usuario.replace(/^@+/, "").slice(0, 60) : null,
+        texto: typeof p.texto === "string" ? p.texto.slice(0, 280) : "",
+        causado_pela_automacao: causado,
+      },
+    ];
+  }
+
   if (row.entity_kind === "agent_case" && entidade && row.event_type === "ai.case_opened") {
     return [
       {
@@ -367,6 +412,14 @@ export function casaGatilho(gatilho: AutomacaoTrigger, fato: FatoDeGatilho, font
       return fato.tipo === "birthday";
     case "case_opened":
       return fato.tipo === "case_opened";
+    case "instagram_comment": {
+      if (fato.tipo !== "instagram_comment") return false;
+      if (gatilho.channel_session_ids?.length && !gatilho.channel_session_ids.includes(fato.channel_session_id)) {
+        return false;
+      }
+      if (gatilho.media_ids?.length && (!fato.media_id || !gatilho.media_ids.includes(fato.media_id))) return false;
+      return palavraChaveCasa(gatilho.match, gatilho.keywords, fato.texto);
+    }
     // Varreduras de relógio: nenhum evento do log os casa. "Iniciada por outra
     // automação" só nasce da ação "Iniciar automação" (ou do "Testar").
     case "date_field":
@@ -454,6 +507,16 @@ export function varsDoGatilho(fato: FatoDeGatilho, eventId: string): Record<stri
       });
     case "birthday":
       return comLead(null, { tipo: "birthday", data: fato.data });
+    case "instagram_comment":
+      return comLead(null, {
+        tipo: "instagram_comment",
+        comment_id: fato.comment_id,
+        media_id: fato.media_id,
+        channel_session_id: fato.channel_session_id,
+        autor_id: fato.autor_id,
+        autor_usuario: fato.autor_usuario,
+        texto: fato.texto.slice(0, 280),
+      });
     case "case_opened":
       return comLead(fato.lead_id, {
         tipo: "case_opened",
