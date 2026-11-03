@@ -87,12 +87,7 @@ export function textoComOpcoesNumeradas(corpo: string, interactive: OutboundInte
 
 /** Sem acento, minúsculas, espaços colapsados e aparados. */
 export function normalizarRotulo(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+  return s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -100,7 +95,9 @@ export function normalizarRotulo(s: string): string {
  * "opcao 2", "op 2", "nº 2", "#2" (com espaços em volta). Fora disso, `null`.
  */
 function numeroEscrito(normalizado: string): number | null {
-  const m = /^(?:(?:opcao|opc|op|numero|n[oº°]?|#)\s*[.:]?\s*)?(\d{1,2})\s*[).:\-]?$/u.exec(normalizado);
+  const m = /^(?:(?:opcao|opc|op|numero|n[oº°]?|#)\s*[.:]?\s*)?(\d{1,2})\s*[).:\-]?$/u.exec(
+    normalizado,
+  );
   if (!m) return null;
   return Number(m[1]);
 }

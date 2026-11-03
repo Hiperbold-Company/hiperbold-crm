@@ -28,7 +28,10 @@ const GRAFO = flowGraphSchema.parse({
       type: "trigger",
       label: "Início",
       position: pos,
-      config: { triggers: [{ kind: "manual" }], reentry: { policy: "skip_if_running", cooldown_minutes: 0 } },
+      config: {
+        triggers: [{ kind: "manual" }],
+        reentry: { policy: "skip_if_running", cooldown_minutes: 0 },
+      },
     },
     {
       id: "message-1",
@@ -37,18 +40,46 @@ const GRAFO = flowGraphSchema.parse({
       position: pos,
       config: {
         body: "Qual o seu interesse?",
-        options: { kind: "buttons", items: [{ id: "moradia", label: "Moradia" }, { id: "invest", label: "Investimento" }] },
+        options: {
+          kind: "buttons",
+          items: [
+            { id: "moradia", label: "Moradia" },
+            { id: "invest", label: "Investimento" },
+          ],
+        },
         reply_timeout_ms: 3_600_000,
         invalid_reply: { message: "Responda 1 ou 2.", attempts: 1 },
       },
     },
-    { id: "fim-moradia", type: "end", label: "Fim", position: pos, config: { outcome: "converted" } },
-    { id: "fim-invest", type: "end", label: "Fim", position: pos, config: { outcome: "custom", note: "investidor" } },
+    {
+      id: "fim-moradia",
+      type: "end",
+      label: "Fim",
+      position: pos,
+      config: { outcome: "converted" },
+    },
+    {
+      id: "fim-invest",
+      type: "end",
+      label: "Fim",
+      position: pos,
+      config: { outcome: "custom", note: "investidor" },
+    },
   ],
   edges: [
     { id: "e0", source: "t", target: "message-1", condition: { type: "always" } },
-    { id: "e1", source: "message-1", target: "fim-moradia", condition: { type: "branch", branch_id: "moradia" } },
-    { id: "e2", source: "message-1", target: "fim-invest", condition: { type: "branch", branch_id: "invest" } },
+    {
+      id: "e1",
+      source: "message-1",
+      target: "fim-moradia",
+      condition: { type: "branch", branch_id: "moradia" },
+    },
+    {
+      id: "e2",
+      source: "message-1",
+      target: "fim-invest",
+      condition: { type: "branch", branch_id: "invest" },
+    },
   ],
 });
 
@@ -89,7 +120,12 @@ function montar(grafo = GRAFO) {
     loadLastInboundBody: async () => null,
     insertEnrollmentEvent: async (e) => {
       if (eventos.some((x) => x.idempotency_key === e.idempotency_key)) return { inserted: false };
-      eventos.push({ node_id: e.node_id, idempotency_key: e.idempotency_key, event_type: e.event_type, payload: e.payload });
+      eventos.push({
+        node_id: e.node_id,
+        idempotency_key: e.idempotency_key,
+        event_type: e.event_type,
+        payload: e.payload,
+      });
       return { inserted: true };
     },
     updateEnrollment: async (_id, _org, patch) => {
@@ -98,7 +134,12 @@ function montar(grafo = GRAFO) {
     loadFlowPointerName: async () => "Automação",
     insertDeadInboxItem: async () => {},
     persistirRespostaFollowup: async () => {},
-    loadFatosDaAutomacao: async (_o, _c, vars) => ({ contato: null, negocio: null, negocios: [], vars }),
+    loadFatosDaAutomacao: async (_o, _c, vars) => ({
+      contato: null,
+      negocio: null,
+      negocios: [],
+      vars,
+    }),
     loadRespostasDaEspera: async (_o, _c, desde) => recebidas.filter((r) => r.em >= desde),
     devolverTurnoAoAgente: async (_o, enrollmentId, desde) => {
       devolvidos.push({ enrollmentId, desde });
@@ -114,7 +155,10 @@ function montar(grafo = GRAFO) {
           detalhes: [{ tipo: "message", envio: "resposta" }],
         };
       }
-      return { desfecho: { ok: true }, detalhes: [{ tipo: "message", envio: p.acao?.tipo === "enviar" ? p.acao.envio : "?" }] };
+      return {
+        desfecho: { ok: true },
+        detalhes: [{ tipo: "message", envio: p.acao?.tipo === "enviar" ? p.acao.envio : "?" }],
+      };
     },
   };
   const deps: TickDeps = { db, clock: () => agora, enqueueJob: async () => {}, efeitos };
@@ -161,10 +205,16 @@ describe("bloco de mensagem com opções no motor", () => {
     m.avancar(60_000);
     m.contatoEscreve("2");
     await m.tick();
-    expect(m.pedidos.at(-1)?.acao).toEqual({ tipo: "registrar_resposta", valor: "Investimento", opcao_id: "invest" });
+    expect(m.pedidos.at(-1)?.acao).toEqual({
+      tipo: "registrar_resposta",
+      valor: "Investimento",
+      opcao_id: "invest",
+    });
     expect(m.row.status).toBe("completed");
     expect(m.row.cancel_reason).toBe("investidor");
-    expect(m.row.vars).toMatchObject({ resposta: { message_1: "Investimento", message_1_opcao: "invest" } });
+    expect(m.row.vars).toMatchObject({
+      resposta: { message_1: "Investimento", message_1_opcao: "invest" },
+    });
     // Nenhum evento guarda o texto do contato.
     expect(JSON.stringify(m.eventos)).not.toContain("talvez");
   });

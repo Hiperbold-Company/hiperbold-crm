@@ -58,7 +58,9 @@ function loadCreds(): CredsE2E & { org_id: string } {
 
 const creds = loadCreds();
 const { url, serviceRole } = credenciaisSupabaseDeTeste();
-const banco = createClient(url, serviceRole, { auth: { autoRefreshToken: false, persistSession: false } });
+const banco = createClient(url, serviceRole, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
 
 async function foto(page: Page, nome: string, alvo?: ReturnType<Page["locator"]>): Promise<void> {
   fs.mkdirSync(EVIDENCIA, { recursive: true });
@@ -95,7 +97,9 @@ async function ligar(page: Page, origem: string, destino: string, ramo?: string)
   for (let tentativa = 0; tentativa < 3; tentativa++) {
     if ((await page.getByTestId("node-config-sheet").count()) > 0) await fecharPainel(page);
     const sBox = await page.locator(seletor).first().boundingBox();
-    const tBox = await page.locator(`.react-flow__node[data-id="${destino}"] .react-flow__handle.target`).boundingBox();
+    const tBox = await page
+      .locator(`.react-flow__node[data-id="${destino}"] .react-flow__handle.target`)
+      .boundingBox();
     if (!sBox || !tBox) throw new Error(`handle não encontrado: ${origem}[${ramo}] -> ${destino}`);
     await page.mouse.move(sBox.x + sBox.width / 2, sBox.y + sBox.height / 2);
     await page.mouse.down();
@@ -110,11 +114,16 @@ async function ligar(page: Page, origem: string, destino: string, ramo?: string)
 
 async function adicionar(page: Page, tipo: string): Promise<string> {
   const antes = new Set(
-    await page.locator(`.react-flow__node[data-id^="${tipo}-"]`).evaluateAll((els) => els.map((e) => e.getAttribute("data-id"))),
+    await page
+      .locator(`.react-flow__node[data-id^="${tipo}-"]`)
+      .evaluateAll((els) => els.map((e) => e.getAttribute("data-id"))),
   );
   await page.getByTestId(`palette-add-${tipo}`).click();
   await expect
-    .poll(async () => (await page.locator(`.react-flow__node[data-id^="${tipo}-"]`).count()) > antes.size)
+    .poll(
+      async () =>
+        (await page.locator(`.react-flow__node[data-id^="${tipo}-"]`).count()) > antes.size,
+    )
     .toBe(true);
   const depois = await page
     .locator(`.react-flow__node[data-id^="${tipo}-"]`)
@@ -153,7 +162,11 @@ async function subirReceptor(envios: EnvioRecebido[]): Promise<Server> {
       if (req.method === "POST" && req.url === "/api/sendText") {
         const b = JSON.parse(corpo || "{}") as { chatId?: string; text?: string };
         envios.push({ chatId: b.chatId ?? "", text: b.text ?? "" });
-        res.end(JSON.stringify({ id: `true_${b.chatId}_${randomUUID().replace(/-/g, "").slice(0, 20).toUpperCase()}` }));
+        res.end(
+          JSON.stringify({
+            id: `true_${b.chatId}_${randomUUID().replace(/-/g, "").slice(0, 20).toUpperCase()}`,
+          }),
+        );
         return;
       }
       res.end("{}");
@@ -171,7 +184,9 @@ test.describe("Automações — Qualificar contato (pergunta e botões)", () => 
   // Um clique que não acha o alvo falha em 30 s, não no teto de 8 min do teste.
   test.use({ actionTimeout: 30_000 });
 
-  test("monta pela tela, pergunta o nome, oferece os botões e segue o caminho escolhido", async ({ page }) => {
+  test("monta pela tela, pergunta o nome, oferece os botões e segue o caminho escolhido", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     const carimbo = Date.now().toString(36);
     const envios: EnvioRecebido[] = [];
@@ -199,9 +214,11 @@ test.describe("Automações — Qualificar contato (pergunta e botões)", () => 
       expect(sessao.error, "criar o número de WhatsApp").toBeNull();
 
       await loginComoAdmin(page, creds);
-      const funis = ((await (await page.request.get("/api/v1/pipelines")).json()) as {
-        data: Array<{ id: string; name: string; is_default?: boolean }>;
-      }).data;
+      const funis = (
+        (await (await page.request.get("/api/v1/pipelines")).json()) as {
+          data: Array<{ id: string; name: string; is_default?: boolean }>;
+        }
+      ).data;
       const { data: padrao } = await banco
         .from("crm_pipelines")
         .select("id")
@@ -213,7 +230,10 @@ test.describe("Automações — Qualificar contato (pergunta e botões)", () => 
       const campo = await page.request.post(`/api/v1/pipelines/${funilDeEntrada}/fields`, {
         data: { key: "nome_informado", label: "Nome informado", type: "text" },
       });
-      expect([200, 201, 409], `campo Nome informado: ${campo.status()} ${await campo.text()}`).toContain(campo.status());
+      expect(
+        [200, 201, 409],
+        `campo Nome informado: ${campo.status()} ${await campo.text()}`,
+      ).toContain(campo.status());
 
       // ── Os contatos escrevem primeiro (é o que abre a conversa). ──
       const inbound = async (telefone: string, nome: string, texto: string): Promise<void> => {
@@ -282,7 +302,10 @@ test.describe("Automações — Qualificar contato (pergunta e botões)", () => 
       await abrirNo(page, mensagem);
       await page.getByTestId("mensagem-texto").fill("Qual o propósito do imóvel?");
       await page.getByTestId("mensagem-tipo-buttons").click();
-      await expect(page.getByTestId("mensagem-tipo-buttons")).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId("mensagem-tipo-buttons")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       await page.getByTestId("opcao-0-rotulo").fill("Moradia");
       await page.getByTestId("opcao-1-rotulo").fill("Investimento");
       await page.getByTestId("mensagem-espera").fill("1");
@@ -292,11 +315,19 @@ test.describe("Automações — Qualificar contato (pergunta e botões)", () => 
       const idMoradia = (await page.getByTestId("opcao-0").getAttribute("data-opcao-id"))!;
       const idInvestimento = (await page.getByTestId("opcao-1").getAttribute("data-opcao-id"))!;
       expect(idMoradia).toMatch(/^opcao_/);
-      await foto(page, "03-formulario-da-mensagem-com-botoes", page.getByTestId("node-config-panel"));
+      await foto(
+        page,
+        "03-formulario-da-mensagem-com-botoes",
+        page.getByTestId("node-config-panel"),
+      );
       await fecharPainel(page);
       // Cada botão vira um caminho no card.
-      await expect(page.getByTestId(`node-branch-${mensagem}-${idMoradia}`)).toContainText("Moradia");
-      await expect(page.getByTestId(`node-branch-${mensagem}-${idInvestimento}`)).toContainText("Investimento");
+      await expect(page.getByTestId(`node-branch-${mensagem}-${idMoradia}`)).toContainText(
+        "Moradia",
+      );
+      await expect(page.getByTestId(`node-branch-${mensagem}-${idInvestimento}`)).toContainText(
+        "Investimento",
+      );
       await expect(page.getByTestId(`node-branch-${mensagem}-no_reply`)).toBeVisible();
 
       // ── Ações de CRM: uma tag por caminho ──
@@ -336,7 +367,10 @@ test.describe("Automações — Qualificar contato (pergunta e botões)", () => 
       const iniciarPara = async (telefone: string): Promise<void> => {
         await page.getByTestId("testar-automacao").click();
         await page.getByTestId("testar-busca").fill(telefone.slice(-8));
-        const linha = page.getByTestId("testar-resultados").locator("li").filter({ hasText: telefone.slice(-8) });
+        const linha = page
+          .getByTestId("testar-resultados")
+          .locator("li")
+          .filter({ hasText: telefone.slice(-8) });
         await expect(linha).toHaveCount(1, { timeout: PRAZO });
         await linha.getByRole("button", { name: "Iniciar" }).click();
         await expect(page.getByTestId("testar-busca")).toHaveCount(0, { timeout: PRAZO });
@@ -345,8 +379,11 @@ test.describe("Automações — Qualificar contato (pergunta e botões)", () => 
       await iniciarPara(telefoneJoao);
       await relogio(page);
 
-      const enviosPara = (telefone: string) => envios.filter((e) => e.chatId === `${telefone}@c.us`).map((e) => e.text);
-      await expect.poll(() => enviosPara(telefoneMaria), { timeout: PRAZO }).toContain("Qual é o seu nome?");
+      const enviosPara = (telefone: string) =>
+        envios.filter((e) => e.chatId === `${telefone}@c.us`).map((e) => e.text);
+      await expect
+        .poll(() => enviosPara(telefoneMaria), { timeout: PRAZO })
+        .toContain("Qual é o seu nome?");
       expect(enviosPara(telefoneJoao)).toContain("Qual é o seu nome?");
 
       // ── 5. As respostas entram pelo webhook; o relógio as processa ──
@@ -368,21 +405,30 @@ test.describe("Automações — Qualificar contato (pergunta e botões)", () => 
       // ── 6. A consequência, lida pelas rotas da tela ──
       const contatoDe = async (telefone: string): Promise<string> => {
         const r = await page.request.get(`/api/v1/contacts?search=${telefone.slice(-8)}&limit=5`);
-        const lista = ((await r.json()) as { data: Array<{ id: string; phone_number: string | null }> }).data;
-        const c = lista.find((x) => (x.phone_number ?? "").replace(/\D/g, "").endsWith(telefone.slice(-8)));
+        const lista = (
+          (await r.json()) as { data: Array<{ id: string; phone_number: string | null }> }
+        ).data;
+        const c = lista.find((x) =>
+          (x.phone_number ?? "").replace(/\D/g, "").endsWith(telefone.slice(-8)),
+        );
         expect(c, `contato ${telefone}`).toBeTruthy();
         return c!.id;
       };
       const mariaId = await contatoDe(telefoneMaria);
       const negocioDaMaria = async () => {
         const r = await page.request.get(`/api/v1/contacts/${mariaId}/crm-summary`);
-        const leads = ((await r.json()) as { data: { leads: Array<{ id: string; custom_fields: Record<string, unknown> | null }> } })
-          .data.leads;
+        const leads = (
+          (await r.json()) as {
+            data: { leads: Array<{ id: string; custom_fields: Record<string, unknown> | null }> };
+          }
+        ).data.leads;
         return leads[0]!;
       };
-      await expect.poll(async () => (await negocioDaMaria()).custom_fields?.nome_informado, { timeout: PRAZO }).toBe(
-        "Maria Souza",
-      );
+      await expect
+        .poll(async () => (await negocioDaMaria()).custom_fields?.nome_informado, {
+          timeout: PRAZO,
+        })
+        .toBe("Maria Souza");
       const leadDaMaria = (await negocioDaMaria()).id;
       const { data: tagsLidas } = await banco
         .from("crm_leads")
@@ -433,13 +479,20 @@ test.describe("Automações — Qualificar contato (pergunta e botões)", () => 
       const timeline = page.getByTestId("dossie-timeline");
       await expect(timeline).toBeVisible({ timeout: PRAZO });
       await expect(timeline.getByText("Resposta do contato: registrada").first()).toBeVisible();
-      await expect(timeline.getByText("Resposta do contato: escolheu “Investimento”")).toBeVisible();
+      await expect(
+        timeline.getByText("Resposta do contato: escolheu “Investimento”"),
+      ).toBeVisible();
       await expect(timeline.getByText("foi para Enviar mensagem").first()).toBeVisible();
       const historia = (await timeline.textContent()) ?? "";
-      expect(historia, "o nome digitado pelo contato não entra nos eventos").not.toContain("Maria Souza");
+      expect(historia, "o nome digitado pelo contato não entra nos eventos").not.toContain(
+        "Maria Souza",
+      );
       expect(historia.match(UUID_RX), "uuid na história da execução").toBeNull();
       expect(historia, "id interno da opção na tela").not.toMatch(/opcao_[a-z0-9]+/);
-      expect((await page.locator("main").textContent())?.match(UUID_RX) ?? null, "uuid na tela").toBeNull();
+      expect(
+        (await page.locator("main").textContent())?.match(UUID_RX) ?? null,
+        "uuid na tela",
+      ).toBeNull();
       await foto(page, "07-execucao-em-portugues");
 
       // ── 7. O João não escolhe nada: depois de 1 minuto, "Sem resposta". ──
@@ -458,14 +511,18 @@ test.describe("Automações — Qualificar contato (pergunta e botões)", () => 
       await expect
         .poll(
           async () =>
-            ((await banco.from("followup_enrollments").select("status").eq("id", joao.id).single()).data as { status: string })
-              .status,
+            (
+              (await banco.from("followup_enrollments").select("status").eq("id", joao.id).single())
+                .data as { status: string }
+            ).status,
           { timeout: PRAZO },
         )
         .not.toMatch(/^(active|waiting_reply)$/);
       await page.goto(`/app/ai/followups/enrollments/${joao.id}`);
       const timelineDoJoao = page.getByTestId("dossie-timeline");
-      await expect(timelineDoJoao.getByText("foi para Sem resposta do contato")).toBeVisible({ timeout: PRAZO });
+      await expect(timelineDoJoao.getByText("foi para Sem resposta do contato")).toBeVisible({
+        timeout: PRAZO,
+      });
       expect((await timelineDoJoao.textContent()) ?? "").not.toContain("João Pereira");
       await foto(page, "08-execucao-sem-resposta");
       // O João não ganhou tag nenhuma.

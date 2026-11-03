@@ -32,7 +32,12 @@ type Tabelas = Record<string, Linha[]>;
 
 function valorDoCaminho(linha: Linha, caminho: string): unknown {
   // "metadata->origem_automacao" lê o objeto aninhado.
-  return caminho.split("->").reduce<unknown>((acc, k) => (acc && typeof acc === "object" ? (acc as Linha)[k] : undefined), linha);
+  return caminho
+    .split("->")
+    .reduce<unknown>(
+      (acc, k) => (acc && typeof acc === "object" ? (acc as Linha)[k] : undefined),
+      linha,
+    );
 }
 
 function criarBanco(tabelas: Tabelas) {
@@ -49,7 +54,8 @@ function criarBanco(tabelas: Tabelas) {
         if (ordem) {
           const { col, asc } = ordem;
           linhas = [...linhas].sort((a, b) => {
-            const x = String(a[col] ?? ""), y = String(b[col] ?? "");
+            const x = String(a[col] ?? ""),
+              y = String(b[col] ?? "");
             return asc ? x.localeCompare(y) : y.localeCompare(x);
           });
         }
@@ -97,7 +103,9 @@ function criarBanco(tabelas: Tabelas) {
           consultas.push({ tabela, eq: eqs });
           const linhas = executar();
           return Promise.resolve(
-            contar ? { data: null, count: linhas.length, error: null } : { data: linhas, error: null },
+            contar
+              ? { data: null, count: linhas.length, error: null }
+              : { data: linhas, error: null },
           ).then(res, rej);
         },
       };
@@ -168,7 +176,13 @@ const NO_COM_OPCOES = {
   ...NO_MENSAGEM,
   config: {
     body: "Qual o seu interesse?",
-    options: { kind: "buttons", items: [{ id: "moradia", label: "Moradia" }, { id: "invest", label: "Investimento" }] },
+    options: {
+      kind: "buttons",
+      items: [
+        { id: "moradia", label: "Moradia" },
+        { id: "invest", label: "Investimento" },
+      ],
+    },
   },
 } as unknown as Extract<FlowNode, { type: "message" }>;
 
@@ -208,7 +222,9 @@ describe("executarConversa: envio", () => {
 
   it("contato bloqueado: contato_bloqueado, nada enviado", async () => {
     const { admin } = criarBanco(
-      tabelasBase({ contacts: [{ id: CONTATO, organization_id: ORG, is_blocked: true, phone_number: null }] }),
+      tabelasBase({
+        contacts: [{ id: CONTATO, organization_id: ORG, is_blocked: true, phone_number: null }],
+      }),
     );
     const r = await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
     expect(erroDe(r)).toBe("contato_bloqueado");
@@ -218,7 +234,12 @@ describe("executarConversa: envio", () => {
   it("janela de 24h fechada no canal oficial: janela_fechada antes de tentar enviar", async () => {
     const { admin } = criarBanco(
       tabelasBase({
-        conversations: [conversa({ last_inbound_at: HA_2_DIAS, channel_sessions: { provider: CANAL_COM_JANELA } })],
+        conversations: [
+          conversa({
+            last_inbound_at: HA_2_DIAS,
+            channel_sessions: { provider: CANAL_COM_JANELA },
+          }),
+        ],
       }),
     );
     const r = await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
@@ -262,21 +283,48 @@ describe("executarConversa: envio", () => {
     const marca = { origem_automacao: { enrollment_id: "outra", pointer_id: "p" } };
     const para = (contato: string, n: number) =>
       Array.from({ length: n }, (_, i) => ({
-        id: `${contato}-${i}`, organization_id: ORG, contact_id: contato, direction: "outbound", created_at: recente, metadata: marca,
+        id: `${contato}-${i}`,
+        organization_id: ORG,
+        contact_id: contato,
+        direction: "outbound",
+        created_at: recente,
+        metadata: marca,
       }));
     const contatos = [
-      { id: CONTATO, organization_id: ORG, is_blocked: false, phone_number: FONE, is_merged_into: null },
-      { id: "gemeo", organization_id: ORG, is_blocked: false, phone_number: FONE, is_merged_into: null },
+      {
+        id: CONTATO,
+        organization_id: ORG,
+        is_blocked: false,
+        phone_number: FONE,
+        is_merged_into: null,
+      },
+      {
+        id: "gemeo",
+        organization_id: ORG,
+        is_blocked: false,
+        phone_number: FONE,
+        is_merged_into: null,
+      },
     ];
     const metade = TETO_DE_MENSAGENS_POR_HORA / 2;
-    const { admin } = criarBanco(tabelasBase({ contacts: contatos, messages: [...para(CONTATO, metade), ...para("gemeo", metade)] }));
+    const { admin } = criarBanco(
+      tabelasBase({
+        contacts: contatos,
+        messages: [...para(CONTATO, metade), ...para("gemeo", metade)],
+      }),
+    );
     const r = await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
     expect(erroDe(r)).toBe("teto_por_hora");
     expect(enviarMock).not.toHaveBeenCalled();
 
     // Sem o gêmeo (outro telefone), as 15 dele não contam: envia.
     const separados = [contatos[0]!, { ...contatos[1]!, phone_number: "+5511988887777" }];
-    const b2 = criarBanco(tabelasBase({ contacts: separados, messages: [...para(CONTATO, metade), ...para("gemeo", metade)] }));
+    const b2 = criarBanco(
+      tabelasBase({
+        contacts: separados,
+        messages: [...para(CONTATO, metade), ...para("gemeo", metade)],
+      }),
+    );
     const r2 = await executarConversa(contexto(b2.admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
     expect(r2.desfecho.ok).toBe(true);
   });
@@ -286,12 +334,22 @@ describe("executarConversa: envio", () => {
     const marca = { origem_automacao: { enrollment_id: "x", pointer_id: "p" } };
     const base = { contact_id: CONTATO, direction: "outbound" };
     const contam = Array.from({ length: TETO_DE_MENSAGENS_POR_HORA - 1 }, (_, i) => ({
-      ...base, id: `c-${i}`, organization_id: ORG, created_at: recente, metadata: marca,
+      ...base,
+      id: `c-${i}`,
+      organization_id: ORG,
+      created_at: recente,
+      metadata: marca,
     }));
     const naoContam = [
       { ...base, id: "sem-marca", organization_id: ORG, created_at: recente, metadata: {} },
       { ...base, id: "velha", organization_id: ORG, created_at: HA_2_DIAS, metadata: marca },
-      { ...base, id: "outra-org", organization_id: OUTRA_ORG, created_at: recente, metadata: marca },
+      {
+        ...base,
+        id: "outra-org",
+        organization_id: OUTRA_ORG,
+        created_at: recente,
+        metadata: marca,
+      },
     ];
     const { admin } = criarBanco(tabelasBase({ messages: [...contam, ...naoContam] }));
     const r = await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
@@ -302,31 +360,75 @@ describe("executarConversa: envio", () => {
   it("envio que falha (status failed ou exceção qualquer): envio_falhou", async () => {
     const { admin } = criarBanco(tabelasBase());
     enviarMock.mockResolvedValueOnce({ id: "msg-1", status: "failed" });
-    expect(erroDe(await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop))).toBe("envio_falhou");
+    expect(
+      erroDe(await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop)),
+    ).toBe("envio_falhou");
     enviarMock.mockRejectedValueOnce(new Error("rede caiu"));
-    expect(erroDe(await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop))).toBe("envio_falhou");
+    expect(
+      erroDe(await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop)),
+    ).toBe("envio_falhou");
   });
 
   it("corpo que passa do limite DEPOIS de preencher as variáveis: ramo Erro com motivo próprio, nada enviado", async () => {
     const { admin } = criarBanco(tabelasBase());
-    const fatos = { contato: null, negocio: null, negocios: [], vars: { resposta: { longa: "x".repeat(1100) } } } as unknown as Contexto["fatos"];
-    const comOpcoes = { ...NO_COM_OPCOES, config: { ...NO_COM_OPCOES.config, body: "Oi {{resposta.longa}}" } } as typeof NO_COM_OPCOES;
-    const r = await executarConversa(contexto(admin, { fatos }), comOpcoes, ENVIAR, "message-1", noop);
+    const fatos = {
+      contato: null,
+      negocio: null,
+      negocios: [],
+      vars: { resposta: { longa: "x".repeat(1100) } },
+    } as unknown as Contexto["fatos"];
+    const comOpcoes = {
+      ...NO_COM_OPCOES,
+      config: { ...NO_COM_OPCOES.config, body: "Oi {{resposta.longa}}" },
+    } as typeof NO_COM_OPCOES;
+    const r = await executarConversa(
+      contexto(admin, { fatos }),
+      comOpcoes,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
     expect(erroDe(r)).toBe("texto_longo_com_opcoes");
     expect(enviarMock).not.toHaveBeenCalled();
 
     // Sem opções, o limite é 4096: 1100 cabem, 4100 não.
-    const semOpcoes = { ...NO_MENSAGEM, config: { body: "Oi {{resposta.longa}}" } } as typeof NO_MENSAGEM;
-    expect((await executarConversa(contexto(admin, { fatos }), semOpcoes, ENVIAR, "message-1", noop)).desfecho.ok).toBe(true);
-    const enorme = { contato: null, negocio: null, negocios: [], vars: { resposta: { longa: "x".repeat(4100) } } } as unknown as Contexto["fatos"];
-    expect(erroDe(await executarConversa(contexto(admin, { fatos: enorme }), semOpcoes, ENVIAR, "message-1", noop))).toBe("texto_longo");
+    const semOpcoes = {
+      ...NO_MENSAGEM,
+      config: { body: "Oi {{resposta.longa}}" },
+    } as typeof NO_MENSAGEM;
+    expect(
+      (await executarConversa(contexto(admin, { fatos }), semOpcoes, ENVIAR, "message-1", noop))
+        .desfecho.ok,
+    ).toBe(true);
+    const enorme = {
+      contato: null,
+      negocio: null,
+      negocios: [],
+      vars: { resposta: { longa: "x".repeat(4100) } },
+    } as unknown as Contexto["fatos"];
+    expect(
+      erroDe(
+        await executarConversa(
+          contexto(admin, { fatos: enorme }),
+          semOpcoes,
+          ENVIAR,
+          "message-1",
+          noop,
+        ),
+      ),
+    ).toBe("texto_longo");
   });
 
   it("envio ok: handler chamado uma vez, com origem_automacao, conversa e texto", async () => {
     const { admin } = criarBanco(tabelasBase());
     const r = await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
     expect(r.desfecho).toEqual({ ok: true });
-    expect(r.detalhes?.[0]).toMatchObject({ ok: true, message_id: "msg-1", tipo: "message", envio: "mensagem" });
+    expect(r.detalhes?.[0]).toMatchObject({
+      ok: true,
+      message_id: "msg-1",
+      tipo: "message",
+      envio: "mensagem",
+    });
     expect(enviarMock).toHaveBeenCalledTimes(1);
     const [, ctx, input] = enviarMock.mock.calls[0]!;
     expect(input).toMatchObject({
@@ -349,7 +451,10 @@ describe("executarConversa: envio", () => {
     const input = enviarMock.mock.calls[0]![2];
     expect(input.interactive).toEqual({
       kind: "buttons",
-      items: [{ id: "moradia", label: "Moradia" }, { id: "invest", label: "Investimento" }],
+      items: [
+        { id: "moradia", label: "Moradia" },
+        { id: "invest", label: "Investimento" },
+      ],
     });
 
     const comTimeout = {
@@ -358,7 +463,13 @@ describe("executarConversa: envio", () => {
     } as unknown as Extract<FlowNode, { type: "message" }>;
     // Bloco de mensagem não tem texto de tempo esgotado: nada a enviar, e sem interactive.
     enviarMock.mockClear();
-    const r = await executarConversa(contexto(admin), comTimeout, { tipo: "enviar", envio: "tempo_esgotado" }, "message-1", noop);
+    const r = await executarConversa(
+      contexto(admin),
+      comTimeout,
+      { tipo: "enviar", envio: "tempo_esgotado" },
+      "message-1",
+      noop,
+    );
     expect(r.desfecho.ok).toBe(false);
     expect(enviarMock).not.toHaveBeenCalled();
   });
@@ -429,7 +540,10 @@ describe("resposta da pergunta: nenhum evento guarda o texto do contato", () => 
         type: "trigger",
         label: "Início",
         position: pos,
-        config: { triggers: [{ kind: "manual" }], reentry: { policy: "skip_if_running", cooldown_minutes: 0 } },
+        config: {
+          triggers: [{ kind: "manual" }],
+          reentry: { policy: "skip_if_running", cooldown_minutes: 0 },
+        },
       },
       {
         id: "question-1",
@@ -489,13 +603,23 @@ describe("resposta da pergunta: nenhum evento guarda o texto do contato", () => 
       loadEnrollmentEvents: async () => eventos.map((e) => ({ ...e })),
       loadLastInboundBody: async () => null,
       insertEnrollmentEvent: async (e) => {
-        if (eventos.some((x) => x.idempotency_key === e.idempotency_key)) return { inserted: false };
-        eventos.push({ node_id: e.node_id, idempotency_key: e.idempotency_key, event_type: e.event_type, payload: e.payload });
+        if (eventos.some((x) => x.idempotency_key === e.idempotency_key))
+          return { inserted: false };
+        eventos.push({
+          node_id: e.node_id,
+          idempotency_key: e.idempotency_key,
+          event_type: e.event_type,
+          payload: e.payload,
+        });
         return { inserted: true };
       },
       updateEnrollment: async (_id, _org, patch) => {
         // Simula a queda do tick DEPOIS do efeito e ANTES de gravar o passo.
-        if (falhasRestantes > 0 && row.steps_taken === opts.falharGravacaoDoPasso && patch.steps_taken !== undefined) {
+        if (
+          falhasRestantes > 0 &&
+          row.steps_taken === opts.falharGravacaoDoPasso &&
+          patch.steps_taken !== undefined
+        ) {
           falhasRestantes--;
           throw new Error("queda simulada");
         }
@@ -504,16 +628,27 @@ describe("resposta da pergunta: nenhum evento guarda o texto do contato", () => 
       loadFlowPointerName: async () => "Automação",
       insertDeadInboxItem: async () => {},
       persistirRespostaFollowup: async () => {},
-      loadFatosDaAutomacao: async (_o, _c, vars) => ({ contato: null, negocio: null, negocios: [], vars }),
+      loadFatosDaAutomacao: async (_o, _c, vars) => ({
+        contato: null,
+        negocio: null,
+        negocios: [],
+        vars,
+      }),
       loadRespostasDaEspera: async (_o, _c, desde) => recebidas.filter((r) => r.em >= desde),
     };
     const efeitos: ExecutorDeEfeitos = {
       async executar(p) {
         const c = contexto(admin, { agora, fatos: p.fatos, enrollmentId: p.enrollment.id });
-        return executarConversa(c, p.node as Extract<FlowNode, { type: "question" }>, p.acao!, p.chave, async (ops) => {
-          camposGravados.push(ops);
-          return { ok: true, detalhe: { tipo: "field_op" } };
-        });
+        return executarConversa(
+          c,
+          p.node as Extract<FlowNode, { type: "question" }>,
+          p.acao!,
+          p.chave,
+          async (ops) => {
+            camposGravados.push(ops);
+            return { ok: true, detalhe: { tipo: "field_op" } };
+          },
+        );
       },
     };
     const deps: TickDeps = { db, clock: () => agora, enqueueJob: async () => {}, efeitos };
@@ -546,7 +681,9 @@ describe("resposta da pergunta: nenhum evento guarda o texto do contato", () => 
     m.contatoEscreve(EMAIL);
     await m.tick();
     expect(m.row.status).toBe("completed");
-    expect(m.camposGravados).toEqual([[{ target: { scope: "contact", key: "email" }, op: "set", value: EMAIL.toLowerCase() }]]);
+    expect(m.camposGravados).toEqual([
+      [{ target: { scope: "contact", key: "email" }, op: "set", value: EMAIL.toLowerCase() }],
+    ]);
     expect(m.row.vars).toMatchObject({ resposta: { question_1: EMAIL.toLowerCase() } });
     const tudo = JSON.stringify(m.eventos).toLowerCase();
     expect(tudo).not.toContain("maria.silva");

@@ -7,7 +7,13 @@
  */
 import { transportaMensagem } from "./capabilities";
 
-const PROVIDERS_DE_WHATSAPP: readonly string[] = ["waha", "meta_cloud", "zernio", "datafy", "uazapi"];
+const PROVIDERS_DE_WHATSAPP: readonly string[] = [
+  "waha",
+  "meta_cloud",
+  "zernio",
+  "datafy",
+  "uazapi",
+];
 
 export function ehCanalDeWhatsapp(provider: string | null | undefined): boolean {
   return transportaMensagem(provider) && PROVIDERS_DE_WHATSAPP.includes(provider ?? "");

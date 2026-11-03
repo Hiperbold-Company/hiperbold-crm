@@ -92,7 +92,9 @@ describe("matriz capability × provider é exaustiva", () => {
     // `native` é promessa de que o adapter monta botões/lista; quem não monta
     // declara `none` e recebe texto numerado. Canal sem janela (por QR) não é a
     // API oficial, então nunca é `native`.
-    const nativos = PROVIDERS.filter((p) => CHANNEL_CAPABILITIES[p].interactive === "native").sort();
+    const nativos = PROVIDERS.filter(
+      (p) => CHANNEL_CAPABILITIES[p].interactive === "native",
+    ).sort();
     expect(nativos).toEqual(["datafy", "meta_cloud"]);
     for (const p of nativos) {
       expect(CHANNEL_CAPABILITIES[p].freeformOutsideWindow, `${p} nativo sem janela`).toBe(false);

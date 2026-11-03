@@ -27,12 +27,7 @@ import { CHAVE_DE_ORIGEM_AUTOMACAO } from "./teto-de-mensagens";
 export const EVENTO_DE_DESPACHO_DO_AGENTE = "ai_agent.dispatch_requested";
 
 export type DesfechoDaDevolucao =
-  | "emitido"
-  | "sem_conversa"
-  | "sem_inbound"
-  | "despacho_em_curso"
-  | "ia_ja_atendeu"
-  | "falhou";
+  "emitido" | "sem_conversa" | "sem_inbound" | "despacho_em_curso" | "ia_ja_atendeu" | "falhou";
 
 export async function devolverTurnoAoAgente(
   admin: SupabaseClient,
@@ -61,7 +56,12 @@ export async function devolverTurnoAoAgente(
       .eq("id", conversationId)
       .maybeSingle();
     if (e2) return "falhou";
-    const c = conversa as { id: string; contact_id: string | null; channel_session_id: string | null; is_group: boolean } | null;
+    const c = conversa as {
+      id: string;
+      contact_id: string | null;
+      channel_session_id: string | null;
+      is_group: boolean;
+    } | null;
     if (!c || c.is_group || !c.contact_id || !c.channel_session_id) return "sem_conversa";
 
     // 2. A última mensagem do contato nessa conversa, desde o início da espera.
@@ -87,7 +87,11 @@ export async function devolverTurnoAoAgente(
       .eq("event_type", EVENTO_DE_DESPACHO_DO_AGENTE)
       .eq("entity_id", inbound.id);
     if (e4) return "falhou";
-    if (((despachos ?? []) as Array<{ status: string }>).some((d) => d.status === "pending" || d.status === "processing")) {
+    if (
+      ((despachos ?? []) as Array<{ status: string }>).some(
+        (d) => d.status === "pending" || d.status === "processing",
+      )
+    ) {
       return "despacho_em_curso";
     }
 
@@ -102,20 +106,23 @@ export async function devolverTurnoAoAgente(
     if (e5 || count === null) return "falhou";
     if (count > 0) return "ia_ja_atendeu";
 
-    const { error: e6 } = await admin.rpc("emit_event" as never, {
-      p_event_type: EVENTO_DE_DESPACHO_DO_AGENTE,
-      p_entity_kind: "message",
-      p_entity_id: inbound.id,
-      p_payload: {
-        organization_id: org,
-        conversation_id: c.id,
-        contact_id: c.contact_id,
-        channel_session_id: c.channel_session_id,
-        inbound_message_id: inbound.id,
-      },
-      p_metadata: { source: "automacao.devolve_turno", enrollment_id: pedido.enrollmentId },
-      p_organization_id: org,
-    } as never);
+    const { error: e6 } = await admin.rpc(
+      "emit_event" as never,
+      {
+        p_event_type: EVENTO_DE_DESPACHO_DO_AGENTE,
+        p_entity_kind: "message",
+        p_entity_id: inbound.id,
+        p_payload: {
+          organization_id: org,
+          conversation_id: c.id,
+          contact_id: c.contact_id,
+          channel_session_id: c.channel_session_id,
+          inbound_message_id: inbound.id,
+        },
+        p_metadata: { source: "automacao.devolve_turno", enrollment_id: pedido.enrollmentId },
+        p_organization_id: org,
+      } as never,
+    );
     return e6 ? "falhou" : "emitido";
   } catch {
     return "falhou";

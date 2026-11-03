@@ -97,7 +97,7 @@ describe("casarRespostaComOpcao", () => {
     expect(casarRespostaComOpcao({ texto: "1" }, [])).toBeNull();
   });
 
-  it("número fora da faixa tenta o rótulo: opção chamada \"10\" ou \"2024\"", () => {
+  it('número fora da faixa tenta o rótulo: opção chamada "10" ou "2024"', () => {
     const anos = [
       { id: "a", label: "2024" },
       { id: "b", label: "10" },
@@ -149,10 +149,12 @@ describe("interactiveSchema", () => {
 
   it("recusa 4 botões, rótulo de 21 e ids repetidos", () => {
     expect(
-      interactiveSchema.safeParse({ kind: "buttons", items: [...ITENS, { id: "x", label: "X" }] }).success,
+      interactiveSchema.safeParse({ kind: "buttons", items: [...ITENS, { id: "x", label: "X" }] })
+        .success,
     ).toBe(false);
     expect(
-      interactiveSchema.safeParse({ kind: "buttons", items: [{ id: "a", label: "x".repeat(21) }] }).success,
+      interactiveSchema.safeParse({ kind: "buttons", items: [{ id: "a", label: "x".repeat(21) }] })
+        .success,
     ).toBe(false);
     expect(
       interactiveSchema.safeParse({
@@ -166,14 +168,23 @@ describe("interactiveSchema", () => {
   });
 
   it("lista: até 10 itens, rótulo até 24, descrição até 72, botão até 20", () => {
-    const item = (i: number) => ({ id: `i${i}`, label: "x".repeat(24), description: "d".repeat(72) });
+    const item = (i: number) => ({
+      id: `i${i}`,
+      label: "x".repeat(24),
+      description: "d".repeat(72),
+    });
     const dez = Array.from({ length: 10 }, (_, i) => item(i));
-    expect(interactiveSchema.safeParse({ kind: "list", button_label: "b".repeat(20), items: dez }).success).toBe(true);
     expect(
-      interactiveSchema.safeParse({ kind: "list", button_label: "Ver", items: [...dez, item(10)] }).success,
+      interactiveSchema.safeParse({ kind: "list", button_label: "b".repeat(20), items: dez })
+        .success,
+    ).toBe(true);
+    expect(
+      interactiveSchema.safeParse({ kind: "list", button_label: "Ver", items: [...dez, item(10)] })
+        .success,
     ).toBe(false);
     expect(
-      interactiveSchema.safeParse({ kind: "list", button_label: "b".repeat(21), items: [item(0)] }).success,
+      interactiveSchema.safeParse({ kind: "list", button_label: "b".repeat(21), items: [item(0)] })
+        .success,
     ).toBe(false);
     expect(
       interactiveSchema.safeParse({
@@ -200,16 +211,22 @@ describe("interactiveSchema", () => {
 describe("opcoesNativasDaMensagem", () => {
   it("devolve as opções quando a entrega foi nativa", () => {
     expect(
-      opcoesNativasDaMensagem({ interactive: { kind: "buttons", items: ITENS, entrega: "nativa" } }),
+      opcoesNativasDaMensagem({
+        interactive: { kind: "buttons", items: ITENS, entrega: "nativa" },
+      }),
     ).toEqual({ kind: "buttons", items: ITENS });
   });
 
   it("texto numerado, metadata sem opções ou opções corrompidas: null", () => {
     expect(
-      opcoesNativasDaMensagem({ interactive: { kind: "buttons", items: ITENS, entrega: "texto_numerado" } }),
+      opcoesNativasDaMensagem({
+        interactive: { kind: "buttons", items: ITENS, entrega: "texto_numerado" },
+      }),
     ).toBeNull();
     expect(opcoesNativasDaMensagem({})).toBeNull();
     expect(opcoesNativasDaMensagem(null)).toBeNull();
-    expect(opcoesNativasDaMensagem({ interactive: { kind: "buttons", items: "x", entrega: "nativa" } })).toBeNull();
+    expect(
+      opcoesNativasDaMensagem({ interactive: { kind: "buttons", items: "x", entrega: "nativa" } }),
+    ).toBeNull();
   });
 });

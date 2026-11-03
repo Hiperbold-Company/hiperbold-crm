@@ -5,6 +5,7 @@ titulo: Automações conversam com o contato: mensagem com botões ou lista, per
 ---
 
 O editor de Automações ganhou três blocos:
+
 - **Mensagem:** texto com variáveis e, se quiser, até 3 botões ou uma lista de até 10 opções. Cada opção segue o seu próprio caminho, e há caminhos para "Sem resposta", "Resposta inválida" (com nova tentativa) e "Erro". No WhatsApp oficial o contato vê os botões; nos outros números as opções chegam numeradas (1, 2, 3), e ele pode responder com o número ou com o nome da opção.
 - **Pergunta:** grava a resposta num campo do negócio ou do contato e confere se ela é texto, telefone, e-mail, número, CPF ou data. Tem tempo limite e novas tentativas, e a resposta pode ser usada nos blocos seguintes como `{{resposta.<bloco>}}`.
 - **Aguardar:** passa a esperar a partir de 1 segundo, ou até o contato responder.

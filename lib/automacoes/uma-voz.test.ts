@@ -39,7 +39,13 @@ function responderUmaVoz(params: unknown[], execucoes: Execucao[], mensagens: Me
       e.org === org &&
       e.lane === "automacao" &&
       e.status === "waiting_reply" &&
-      mensagens.some((m) => m.org === org && m.conversa === conversa && m.direcao === "outbound" && m.enrollmentId === e.id),
+      mensagens.some(
+        (m) =>
+          m.org === org &&
+          m.conversa === conversa &&
+          m.direcao === "outbound" &&
+          m.enrollmentId === e.id,
+      ),
   );
   return { rows: achou ? [{ "?column?": 1 }] : [] };
 }
@@ -68,14 +74,28 @@ function poolDoDrain(conversa: string, execucoes: Execucao[], mensagens: Mensage
     if (sql.includes("insert into job_queue")) return { rows: [{ id: "job-1" }] };
     return { rows: [] };
   });
-  return { pool: { query } as unknown as pg.Pool, enfileirou: () => calls.some((s) => s.includes("insert into job_queue")) };
+  return {
+    pool: { query } as unknown as pg.Pool,
+    enfileirou: () => calls.some((s) => s.includes("insert into job_queue")),
+  };
 }
 
 const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as never;
-const knobs = { batchSize: 10, intervalMs: 0, idleIntervalMs: 0, debounceMs: 0, reapTimeoutMs: 60000 };
+const knobs = {
+  batchSize: 10,
+  intervalMs: 0,
+  idleIntervalMs: 0,
+  debounceMs: 0,
+  reapTimeoutMs: 60000,
+};
 
 const ESPERANDO: Execucao = { id: "enr-1", org: ORG, lane: "automacao", status: "waiting_reply" };
-const ENVIOU_NO_WA: Mensagem = { org: ORG, conversa: CONV_WA, direcao: "outbound", enrollmentId: "enr-1" };
+const ENVIOU_NO_WA: Mensagem = {
+  org: ORG,
+  conversa: CONV_WA,
+  direcao: "outbound",
+  enrollmentId: "enr-1",
+};
 
 describe("uma voz no drain do agente", () => {
   it("execução esperando e mensagem na conversa em que ela falou: a IA cede (sem turno)", async () => {
@@ -109,7 +129,16 @@ describe("uma voz no drain do agente", () => {
   });
 
   it("consulta que falha não cala a IA (fail-open)", async () => {
-    const quebrado = { query: (async () => { throw new Error("db fora"); }) as unknown as pg.Pool["query"] };
-    expect(await automacaoEsperaRespostaNaConversa(quebrado, { organizationId: ORG, conversationId: CONV_WA })).toBe(false);
+    const quebrado = {
+      query: (async () => {
+        throw new Error("db fora");
+      }) as unknown as pg.Pool["query"],
+    };
+    expect(
+      await automacaoEsperaRespostaNaConversa(quebrado, {
+        organizationId: ORG,
+        conversationId: CONV_WA,
+      }),
+    ).toBe(false);
   });
 });

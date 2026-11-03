@@ -57,9 +57,13 @@ export function varsDaResposta(
 ): Record<string, unknown> {
   const chave = chaveDaResposta(node.id);
   const guardaValor =
-    node.type !== "wait" && !(node.type === "question" && (node.config as { validation?: string }).validation === "cpf");
+    node.type !== "wait" &&
+    !(node.type === "question" && (node.config as { validation?: string }).validation === "cpf");
   const bruto = varsAnteriores?.[NAMESPACE_DA_RESPOSTA];
-  const anteriores = bruto && typeof bruto === "object" && !Array.isArray(bruto) ? (bruto as Record<string, unknown>) : {};
+  const anteriores =
+    bruto && typeof bruto === "object" && !Array.isArray(bruto)
+      ? (bruto as Record<string, unknown>)
+      : {};
   return {
     [NAMESPACE_DA_RESPOSTA]: {
       ...anteriores,
@@ -73,7 +77,9 @@ export function varsDaResposta(
  * O pedaço de `vars` que pode ir ao payload de um evento: tudo menos o
  * namespace `resposta` (texto do contato). `undefined` quando não sobra nada.
  */
-export function varsParaOEvento(vars: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+export function varsParaOEvento(
+  vars: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
   if (!vars) return undefined;
   const { [NAMESPACE_DA_RESPOSTA]: _fora, ...resto } = vars;
   return Object.keys(resto).length > 0 ? resto : undefined;
@@ -89,7 +95,10 @@ export type ConferenciaDaResposta = { ok: true; valor: string } | { ok: false };
  * normalizado (telefone canônico com `+`, CPF só dígitos, data AAAA-MM-DD,
  * número como o contato escreveu, sem espaços).
  */
-export function conferirRespostaDaPergunta(validacao: QuestionValidation, bruto: string): ConferenciaDaResposta {
+export function conferirRespostaDaPergunta(
+  validacao: QuestionValidation,
+  bruto: string,
+): ConferenciaDaResposta {
   const texto = bruto.trim();
   if (!texto) return { ok: false };
   switch (validacao) {
@@ -137,9 +146,16 @@ export const PREFIXO_DA_MARCA_DE_NAO_SUPORTADO = "[tipo de mensagem não suporta
  * texto (áudio, imagem) CONTA: acorda a espera "até responder" e, na pergunta
  * ou nas opções, é resposta inválida.
  */
-export function inboundContaComoResposta(m: { type?: string | null; body?: string | null }): boolean {
+export function inboundContaComoResposta(m: {
+  type?: string | null;
+  body?: string | null;
+}): boolean {
   if (m.type === "reaction") return false;
-  if (typeof m.body === "string" && m.body.trimStart().startsWith(PREFIXO_DA_MARCA_DE_NAO_SUPORTADO)) return false;
+  if (
+    typeof m.body === "string" &&
+    m.body.trimStart().startsWith(PREFIXO_DA_MARCA_DE_NAO_SUPORTADO)
+  )
+    return false;
   return true;
 }
 
@@ -168,7 +184,10 @@ export interface EstadoDaEspera {
 /** O envio que um bloco de conversa grava no detalhe do efeito (lido de volta aqui). */
 export const ENVIO_NOVA_TENTATIVA = "nova_tentativa";
 
-export function estadoDaEspera(events: readonly EnrollmentEventRef[], nodeId: string): EstadoDaEspera {
+export function estadoDaEspera(
+  events: readonly EnrollmentEventRef[],
+  nodeId: string,
+): EstadoDaEspera {
   let prazo: string | null = null;
   let aguardando = false;
   let novasTentativas = 0;
@@ -183,7 +202,9 @@ export function estadoDaEspera(events: readonly EnrollmentEventRef[], nodeId: st
     }
     if (e.event_type === "effect_done" || e.event_type === "effect_failed") {
       const detalhes = e.payload?.detalhes;
-      const primeiro = Array.isArray(detalhes) ? (detalhes[0] as Record<string, unknown> | undefined) : undefined;
+      const primeiro = Array.isArray(detalhes)
+        ? (detalhes[0] as Record<string, unknown> | undefined)
+        : undefined;
       if (primeiro?.envio === ENVIO_NOVA_TENTATIVA) novasTentativas++;
     }
   }
@@ -203,7 +224,10 @@ export function estadoDaEspera(events: readonly EnrollmentEventRef[], nodeId: st
 export const MARGEM_DO_PISO_MS = 5_000;
 
 /** A mensagem entra na espera que começou em `piso`? As duas réguas de `MARGEM_DO_PISO_MS`. */
-export function inboundDentroDaEspera(m: { sent_at?: string | null; created_at?: string | null }, piso: string): boolean {
+export function inboundDentroDaEspera(
+  m: { sent_at?: string | null; created_at?: string | null },
+  piso: string,
+): boolean {
   const p = Date.parse(piso);
   const enviada = Date.parse(m.sent_at ?? "");
   const chegou = Date.parse(m.created_at ?? m.sent_at ?? "");

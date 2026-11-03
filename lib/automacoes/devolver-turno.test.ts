@@ -16,7 +16,10 @@ function valor(linha: Linha, caminho: string): unknown {
   return caminho
     .replace(/->>/g, "->")
     .split("->")
-    .reduce<unknown>((acc, k) => (acc && typeof acc === "object" ? (acc as Linha)[k] : undefined), linha);
+    .reduce<unknown>(
+      (acc, k) => (acc && typeof acc === "object" ? (acc as Linha)[k] : undefined),
+      linha,
+    );
 }
 
 function criarBanco(tabelas: Record<string, Linha[]>) {
@@ -35,7 +38,8 @@ function criarBanco(tabelas: Record<string, Linha[]>) {
         let linhas = (tabelas[tabela] ?? []).filter((l) => filtros.every((f) => f(l)));
         linhas = [...linhas].sort((a, b) => {
           for (const { col, asc } of ordens) {
-            const x = String(a[col] ?? ""), y = String(b[col] ?? "");
+            const x = String(a[col] ?? ""),
+              y = String(b[col] ?? "");
             if (x !== y) return asc ? x.localeCompare(y) : y.localeCompare(x);
           }
           return 0;
@@ -68,7 +72,11 @@ function criarBanco(tabelas: Record<string, Linha[]>) {
         },
         then(res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) {
           const linhas = executar();
-          return Promise.resolve(contar ? { data: null, count: linhas.length, error: null } : { data: linhas, error: null }).then(res, rej);
+          return Promise.resolve(
+            contar
+              ? { data: null, count: linhas.length, error: null }
+              : { data: linhas, error: null },
+          ).then(res, rej);
         },
       };
       return b;
@@ -104,10 +112,22 @@ function base(over: Record<string, Linha[]> = {}): Record<string, Linha[]> {
       },
     ],
     conversations: [
-      { id: "conv-wa", organization_id: ORG, contact_id: "c-1", channel_session_id: "sess-1", is_group: false },
+      {
+        id: "conv-wa",
+        organization_id: ORG,
+        contact_id: "c-1",
+        channel_session_id: "sess-1",
+        is_group: false,
+      },
     ],
     event_log: [
-      { id: "ev-1", organization_id: ORG, event_type: EVENTO_DE_DESPACHO_DO_AGENTE, entity_id: "in-1", status: "done" },
+      {
+        id: "ev-1",
+        organization_id: ORG,
+        event_type: EVENTO_DE_DESPACHO_DO_AGENTE,
+        entity_id: "in-1",
+        status: "done",
+      },
     ],
     job_queue: [],
     ...over,
@@ -125,14 +145,27 @@ describe("devolver o turno à IA", () => {
       p_event_type: EVENTO_DE_DESPACHO_DO_AGENTE,
       p_entity_id: "in-1",
       p_organization_id: ORG,
-      p_payload: { conversation_id: "conv-wa", contact_id: "c-1", channel_session_id: "sess-1", inbound_message_id: "in-1" },
+      p_payload: {
+        conversation_id: "conv-wa",
+        contact_id: "c-1",
+        channel_session_id: "sess-1",
+        inbound_message_id: "in-1",
+      },
     });
   });
 
   it("o despacho daquela mensagem ainda está pendente: não emite (o drain responde sozinho)", async () => {
     const { admin, emitidos } = criarBanco(
       base({
-        event_log: [{ id: "ev-1", organization_id: ORG, event_type: EVENTO_DE_DESPACHO_DO_AGENTE, entity_id: "in-1", status: "pending" }],
+        event_log: [
+          {
+            id: "ev-1",
+            organization_id: ORG,
+            event_type: EVENTO_DE_DESPACHO_DO_AGENTE,
+            entity_id: "in-1",
+            status: "pending",
+          },
+        ],
       }),
     );
     expect(await devolverTurnoAoAgente(admin, pedido)).toBe("despacho_em_curso");
@@ -142,7 +175,15 @@ describe("devolver o turno à IA", () => {
   it("a IA já teve turno com o contato desde o início da espera: não emite", async () => {
     const { admin, emitidos } = criarBanco(
       base({
-        job_queue: [{ id: "j1", organization_id: ORG, contact_id: "c-1", kind: "inbound_turn", created_at: "2026-11-03T12:01:05.000Z" }],
+        job_queue: [
+          {
+            id: "j1",
+            organization_id: ORG,
+            contact_id: "c-1",
+            kind: "inbound_turn",
+            created_at: "2026-11-03T12:01:05.000Z",
+          },
+        ],
       }),
     );
     expect(await devolverTurnoAoAgente(admin, pedido)).toBe("ia_ja_atendeu");
@@ -153,8 +194,20 @@ describe("devolver o turno à IA", () => {
     const { admin, emitidos } = criarBanco(
       base({
         job_queue: [
-          { id: "j0", organization_id: ORG, contact_id: "c-1", kind: "inbound_turn", created_at: "2026-11-03T11:00:00.000Z" },
-          { id: "j2", organization_id: "org-2", contact_id: "c-1", kind: "inbound_turn", created_at: "2026-11-03T12:01:05.000Z" },
+          {
+            id: "j0",
+            organization_id: ORG,
+            contact_id: "c-1",
+            kind: "inbound_turn",
+            created_at: "2026-11-03T11:00:00.000Z",
+          },
+          {
+            id: "j2",
+            organization_id: "org-2",
+            contact_id: "c-1",
+            kind: "inbound_turn",
+            created_at: "2026-11-03T12:01:05.000Z",
+          },
         ],
       }),
     );
@@ -163,10 +216,14 @@ describe("devolver o turno à IA", () => {
   });
 
   it("a execução nunca falou numa conversa, ou a mensagem é de antes da espera: não emite", async () => {
-    const semEnvio = criarBanco(base({ messages: base().messages!.filter((m) => m.direction === "inbound") }));
+    const semEnvio = criarBanco(
+      base({ messages: base().messages!.filter((m) => m.direction === "inbound") }),
+    );
     expect(await devolverTurnoAoAgente(semEnvio.admin, pedido)).toBe("sem_conversa");
     const antiga = criarBanco(base());
-    expect(await devolverTurnoAoAgente(antiga.admin, { ...pedido, desde: "2026-11-03T12:05:00.000Z" })).toBe("sem_inbound");
+    expect(
+      await devolverTurnoAoAgente(antiga.admin, { ...pedido, desde: "2026-11-03T12:05:00.000Z" }),
+    ).toBe("sem_inbound");
     expect(semEnvio.emitidos.length + antiga.emitidos.length).toBe(0);
   });
 });

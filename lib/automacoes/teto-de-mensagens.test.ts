@@ -45,7 +45,11 @@ function bancoCom(linhas: Linha[], erro: { message: string } | null = null): Sup
       return q;
     },
     then: (resolve: (v: unknown) => void) =>
-      resolve(erro ? { count: null, error: erro } : { count: linhas.filter((l) => filtros.every((f) => f(l))).length, error: null }),
+      resolve(
+        erro
+          ? { count: null, error: erro }
+          : { count: linhas.filter((l) => filtros.every((f) => f(l))).length, error: null },
+      ),
   };
   return { from: (t: string) => (t === "messages" ? q : null) } as unknown as SupabaseClient;
 }
@@ -69,7 +73,9 @@ function automaticas(n: number, over: Partial<Linha> = {}): Linha[] {
 
 describe("metadataDeOrigemAutomacao", () => {
   it("marca a execução e o ponteiro em metadata.origem_automacao", () => {
-    expect(daAutomacao).toEqual({ origem_automacao: { enrollment_id: "enr-1", pointer_id: "ptr-1" } });
+    expect(daAutomacao).toEqual({
+      origem_automacao: { enrollment_id: "enr-1", pointer_id: "ptr-1" },
+    });
     expect(metadataDeOrigemAutomacao({ enrollmentId: "e" })).toEqual({
       origem_automacao: { enrollment_id: "e", pointer_id: null },
     });
@@ -80,7 +86,11 @@ describe("decidirTeto", () => {
   it("29 cabe mais uma; 30 não", () => {
     expect(TETO_DE_MENSAGENS_POR_HORA).toBe(30);
     expect(decidirTeto(29)).toEqual({ pode: true, enviadasNaUltimaHora: 29 });
-    expect(decidirTeto(30)).toEqual({ pode: false, enviadasNaUltimaHora: 30, motivo: MOTIVO_TETO_EXCEDIDO });
+    expect(decidirTeto(30)).toEqual({
+      pode: false,
+      enviadasNaUltimaHora: 30,
+      motivo: MOTIVO_TETO_EXCEDIDO,
+    });
     expect(MOTIVO_TETO_EXCEDIDO).toBe("limite de 30 mensagens por hora");
   });
 });
@@ -127,6 +137,10 @@ describe("podeEnviarMensagemAutomatica", () => {
       contactIds: [CONTATO],
       agora: AGORA,
     });
-    expect(r).toEqual({ pode: false, enviadasNaUltimaHora: null, motivo: MOTIVO_TETO_INDISPONIVEL });
+    expect(r).toEqual({
+      pode: false,
+      enviadasNaUltimaHora: null,
+      motivo: MOTIVO_TETO_INDISPONIVEL,
+    });
   });
 });

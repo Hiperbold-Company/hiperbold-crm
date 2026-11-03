@@ -10,7 +10,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/api/v1/cron/recover-stuck-messages/route", () => ({ recoverStuckMessages: vi.fn() }));
+vi.mock("@/app/api/v1/cron/recover-stuck-messages/route", () => ({
+  recoverStuckMessages: vi.fn(),
+}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
 import { criarBancoEmMemoria, type Linha } from "../../tests/helpers/banco-em-memoria";
@@ -29,15 +31,28 @@ const AGORA = new Date("2026-11-03T12:00:00.000Z");
 const seg = (s: number) => new Date(Date.parse(ESTACIONOU) + s * 1000).toISOString();
 
 function msg(over: Linha): Linha {
-  return { organization_id: ORG, contact_id: C, direction: "inbound", type: "text", body: "oi", metadata: {}, ...over };
+  return {
+    organization_id: ORG,
+    contact_id: C,
+    direction: "inbound",
+    type: "text",
+    body: "oi",
+    metadata: {},
+    ...over,
+  };
 }
 
 describe("ultimaRespostaDaAutomacao", () => {
   it("áudio sem texto conta: acorda pela existência", async () => {
     const b = criarBancoEmMemoria({
-      messages: [msg({ id: "a", type: "audio", body: null, sent_at: seg(10), created_at: seg(10) })],
+      messages: [
+        msg({ id: "a", type: "audio", body: null, sent_at: seg(10), created_at: seg(10) }),
+      ],
     });
-    expect(await ultimaRespostaDaAutomacao(b as unknown as SupabaseClient, ORG, [C])).toEqual({ sent_at: seg(10), created_at: seg(10) });
+    expect(await ultimaRespostaDaAutomacao(b as unknown as SupabaseClient, ORG, [C])).toEqual({
+      sent_at: seg(10),
+      created_at: seg(10),
+    });
   });
 
   it("reação e marca de tipo não suportado não contam: vale a mensagem anterior a elas (ou nenhuma)", async () => {
@@ -45,13 +60,23 @@ describe("ultimaRespostaDaAutomacao", () => {
       messages: [
         msg({ id: "t", body: "2", sent_at: seg(10), created_at: seg(10) }),
         msg({ id: "r", type: "reaction", body: "👍", sent_at: seg(20), created_at: seg(20) }),
-        msg({ id: "u", body: "[tipo de mensagem não suportado: order]", sent_at: seg(30), created_at: seg(30) }),
+        msg({
+          id: "u",
+          body: "[tipo de mensagem não suportado: order]",
+          sent_at: seg(30),
+          created_at: seg(30),
+        }),
       ],
     });
-    expect(await ultimaRespostaDaAutomacao(b as unknown as SupabaseClient, ORG, [C])).toEqual({ sent_at: seg(10), created_at: seg(10) });
+    expect(await ultimaRespostaDaAutomacao(b as unknown as SupabaseClient, ORG, [C])).toEqual({
+      sent_at: seg(10),
+      created_at: seg(10),
+    });
 
     const so = criarBancoEmMemoria({
-      messages: [msg({ id: "r", type: "reaction", body: "👍", sent_at: seg(20), created_at: seg(20) })],
+      messages: [
+        msg({ id: "r", type: "reaction", body: "👍", sent_at: seg(20), created_at: seg(20) }),
+      ],
     });
     expect(await ultimaRespostaDaAutomacao(so as unknown as SupabaseClient, ORG, [C])).toBeNull();
   });
@@ -63,38 +88,63 @@ describe("ultimaRespostaDaAutomacao", () => {
         msg({ id: "o", organization_id: "org-2", sent_at: seg(50), created_at: seg(50) }),
       ],
     });
-    expect(await ultimaRespostaDaAutomacao(b as unknown as SupabaseClient, ORG, [C, "gemeo"])).toEqual({ sent_at: seg(10), created_at: seg(10) });
+    expect(
+      await ultimaRespostaDaAutomacao(b as unknown as SupabaseClient, ORG, [C, "gemeo"]),
+    ).toEqual({ sent_at: seg(10), created_at: seg(10) });
   });
 });
 
 describe("acordarAutomacaoEmEspera: a folga de 5 s", () => {
   function cenario() {
     const enrollments: Linha[] = [
-      { id: "enr-1", organization_id: ORG, lane: "automacao", status: "waiting_reply", next_eval_at: "2026-11-04T00:00:00.000Z" },
+      {
+        id: "enr-1",
+        organization_id: ORG,
+        lane: "automacao",
+        status: "waiting_reply",
+        next_eval_at: "2026-11-04T00:00:00.000Z",
+      },
     ];
     const b = criarBancoEmMemoria({
       followup_enrollments: enrollments,
       followup_enrollment_events: [
-        { organization_id: ORG, enrollment_id: "enr-1", node_id: "q", event_type: "wait_started", created_at: ESTACIONOU },
+        {
+          organization_id: ORG,
+          enrollment_id: "enr-1",
+          node_id: "q",
+          event_type: "wait_started",
+          created_at: ESTACIONOU,
+        },
       ],
     });
-    const enr = { id: "enr-1", organization_id: ORG, next_eval_at: "2026-11-04T00:00:00.000Z", current_node_id: "q" };
+    const enr = {
+      id: "enr-1",
+      organization_id: ORG,
+      next_eval_at: "2026-11-04T00:00:00.000Z",
+      current_node_id: "q",
+    };
     return { admin: b as unknown as SupabaseClient, enr };
   }
 
   it("relógio do provedor 4 s atrás, chegada depois da espera: acorda", async () => {
     const { admin, enr } = cenario();
-    expect(await acordarAutomacaoEmEspera(admin, enr, { sent_at: seg(-4), created_at: seg(1) }, AGORA)).toBe(true);
+    expect(
+      await acordarAutomacaoEmEspera(admin, enr, { sent_at: seg(-4), created_at: seg(1) }, AGORA),
+    ).toBe(true);
   });
 
   it("relógio do provedor 6 s atrás: não acorda (mensagem escrita antes da pergunta)", async () => {
     const { admin, enr } = cenario();
-    expect(await acordarAutomacaoEmEspera(admin, enr, { sent_at: seg(-6), created_at: seg(1) }, AGORA)).toBe(false);
+    expect(
+      await acordarAutomacaoEmEspera(admin, enr, { sent_at: seg(-6), created_at: seg(1) }, AGORA),
+    ).toBe(false);
   });
 
   it("chegou ANTES da espera, mesmo dentro dos 5 s (a mensagem que disparou a automação): não acorda", async () => {
     const { admin, enr } = cenario();
-    expect(await acordarAutomacaoEmEspera(admin, enr, { sent_at: seg(-2), created_at: seg(-1) }, AGORA)).toBe(false);
+    expect(
+      await acordarAutomacaoEmEspera(admin, enr, { sent_at: seg(-2), created_at: seg(-1) }, AGORA),
+    ).toBe(false);
   });
 });
 
@@ -103,9 +153,14 @@ describe("lerAguardandoResposta: a raia automacao vem primeiro no corte", () => 
     const linhas: Linha[] = [];
     // ids dos follow-ups MENORES que os das automações: a ordem só por id as cortaria.
     for (let i = 0; i < TETO_DE_AGUARDANDO_RESPOSTA + 300; i++) {
-      linhas.push({ id: `a-${String(i).padStart(5, "0")}`, lane: "followup", status: "waiting_reply" });
+      linhas.push({
+        id: `a-${String(i).padStart(5, "0")}`,
+        lane: "followup",
+        status: "waiting_reply",
+      });
     }
-    for (let i = 0; i < 50; i++) linhas.push({ id: `z-${i}`, lane: "automacao", status: "waiting_reply" });
+    for (let i = 0; i < 50; i++)
+      linhas.push({ id: `z-${i}`, lane: "automacao", status: "waiting_reply" });
     const ordens: string[][] = [];
     const admin = {
       from: () => {
@@ -121,7 +176,8 @@ describe("lerAguardandoResposta: a raia automacao vem primeiro no corte", () => 
             ordens.push([...ordem]);
             const sorted = [...linhas].sort((x, y) => {
               for (const col of ordem) {
-                const a = String(x[col]), b = String(y[col]);
+                const a = String(x[col]),
+                  b = String(y[col]);
                 if (a !== b) return a < b ? -1 : 1;
               }
               return 0;

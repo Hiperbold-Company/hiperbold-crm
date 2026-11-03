@@ -10,10 +10,20 @@ import {
   type FlowGraph,
   type FlowNode,
 } from "@/lib/followup/graph-schema";
-import { decidirConversa, processNode, type EnrollmentEventRef, type EnrollmentRow } from "@/lib/followup/node-handlers";
+import {
+  decidirConversa,
+  processNode,
+  type EnrollmentEventRef,
+  type EnrollmentRow,
+} from "@/lib/followup/node-handlers";
 import { validateFlowForPublish } from "@/lib/followup/validate-publish";
 
-import { chaveDaResposta, conferirRespostaDaPergunta, estadoDaEspera, pisoDaEspera } from "./conversa";
+import {
+  chaveDaResposta,
+  conferirRespostaDaPergunta,
+  estadoDaEspera,
+  pisoDaEspera,
+} from "./conversa";
 import { renderizar } from "./template-vars";
 
 const AGORA = new Date("2026-11-03T12:00:00.000Z");
@@ -74,7 +84,12 @@ function enrollment(): EnrollmentRow {
   };
 }
 
-const aresta = (id: string, source: string, target: string, cond: FlowEdge["condition"]): FlowEdge => ({
+const aresta = (
+  id: string,
+  source: string,
+  target: string,
+  cond: FlowEdge["condition"],
+): FlowEdge => ({
   id,
   source,
   target,
@@ -102,46 +117,93 @@ function entrada(node: FlowNode, extra: Record<string, unknown> = {}, edges = ED
 }
 
 const PRAZO = new Date(AGORA.getTime() + 600_000).toISOString();
-const esperando = (novasTentativas = 0, prazo = PRAZO) => ({ aguardando: true, prazo, novasTentativas });
+const esperando = (novasTentativas = 0, prazo = PRAZO) => ({
+  aguardando: true,
+  prazo,
+  novasTentativas,
+});
 
 describe("schemas dos blocos de conversa", () => {
   it("mensagem com opções exige o tempo de espera e ids únicos", () => {
     expect(messageConfigSchema.safeParse({ body: "Oi", options: OPCOES }).success).toBe(false);
-    expect(messageConfigSchema.safeParse({ body: "Oi", options: OPCOES, reply_timeout_ms: 600_000 }).success).toBe(true);
-    const repetida = { kind: "buttons", items: [{ id: "a", label: "A" }, { id: "a", label: "B" }] };
-    expect(messageConfigSchema.safeParse({ body: "Oi", options: repetida, reply_timeout_ms: 600_000 }).success).toBe(false);
+    expect(
+      messageConfigSchema.safeParse({ body: "Oi", options: OPCOES, reply_timeout_ms: 600_000 })
+        .success,
+    ).toBe(true);
+    const repetida = {
+      kind: "buttons",
+      items: [
+        { id: "a", label: "A" },
+        { id: "a", label: "B" },
+      ],
+    };
+    expect(
+      messageConfigSchema.safeParse({ body: "Oi", options: repetida, reply_timeout_ms: 600_000 })
+        .success,
+    ).toBe(false);
   });
   it("opção não toma id do contrato, e botões são no máximo 3", () => {
     for (const id of ["erro", "invalida", "no_reply", "else"]) {
       const o = { kind: "buttons", items: [{ id, label: "X" }] };
-      expect(messageConfigSchema.safeParse({ body: "Oi", options: o, reply_timeout_ms: 600_000 }).success, id).toBe(false);
+      expect(
+        messageConfigSchema.safeParse({ body: "Oi", options: o, reply_timeout_ms: 600_000 })
+          .success,
+        id,
+      ).toBe(false);
     }
-    const quatro = { kind: "buttons", items: ["a", "b", "c", "d"].map((id) => ({ id, label: id })) };
-    expect(messageConfigSchema.safeParse({ body: "Oi", options: quatro, reply_timeout_ms: 600_000 }).success).toBe(false);
+    const quatro = {
+      kind: "buttons",
+      items: ["a", "b", "c", "d"].map((id) => ({ id, label: id })),
+    };
+    expect(
+      messageConfigSchema.safeParse({ body: "Oi", options: quatro, reply_timeout_ms: 600_000 })
+        .success,
+    ).toBe(false);
   });
   it("corpo com opções tem no máximo 1024 caracteres; sem opções, até 4000", () => {
     const longo = "x".repeat(1025);
-    expect(messageConfigSchema.safeParse({ body: longo, options: OPCOES, reply_timeout_ms: 600_000 }).success).toBe(false);
+    expect(
+      messageConfigSchema.safeParse({ body: longo, options: OPCOES, reply_timeout_ms: 600_000 })
+        .success,
+    ).toBe(false);
     expect(messageConfigSchema.safeParse({ body: longo }).success).toBe(true);
   });
   it("tempo limite: mensagem de 1 min a 30 dias, pergunta até 7 dias", () => {
-    expect(messageConfigSchema.safeParse({ body: "Oi", options: OPCOES, reply_timeout_ms: 59_000 }).success).toBe(false);
-    expect(questionConfigSchema.safeParse({ ...pergunta().config, timeout_ms: 8 * 86_400_000 }).success).toBe(false);
-    expect(questionConfigSchema.safeParse({ ...pergunta().config, retries: 6 }).success).toBe(false);
-    expect(questionConfigSchema.safeParse({ ...pergunta().config, save_to: { scope: "var", path: "resposta.x" } }).success).toBe(false);
+    expect(
+      messageConfigSchema.safeParse({ body: "Oi", options: OPCOES, reply_timeout_ms: 59_000 })
+        .success,
+    ).toBe(false);
+    expect(
+      questionConfigSchema.safeParse({ ...pergunta().config, timeout_ms: 8 * 86_400_000 }).success,
+    ).toBe(false);
+    expect(questionConfigSchema.safeParse({ ...pergunta().config, retries: 6 }).success).toBe(
+      false,
+    );
+    expect(
+      questionConfigSchema.safeParse({
+        ...pergunta().config,
+        save_to: { scope: "var", path: "resposta.x" },
+      }).success,
+    ).toBe(false);
   });
   it("espera em segundos e até responder; o fixo mantém o piso de 5 min", () => {
     expect(waitConfigSchema.safeParse({ mode: "delay", duration_s: 1 }).success).toBe(true);
     expect(waitConfigSchema.safeParse({ mode: "delay", duration_s: 0 }).success).toBe(false);
-    expect(waitConfigSchema.safeParse({ mode: "until_reply", timeout_ms: 60_000 }).success).toBe(true);
-    expect(waitConfigSchema.safeParse({ mode: "until_reply", timeout_ms: 31 * 86_400_000 }).success).toBe(false);
+    expect(waitConfigSchema.safeParse({ mode: "until_reply", timeout_ms: 60_000 }).success).toBe(
+      true,
+    );
+    expect(
+      waitConfigSchema.safeParse({ mode: "until_reply", timeout_ms: 31 * 86_400_000 }).success,
+    ).toBe(false);
     expect(waitConfigSchema.safeParse({ mode: "fixed", duration_ms: 60_000 }).success).toBe(false);
   });
 });
 
 describe("ramos dos blocos de conversa", () => {
   it("mensagem com opções: uma por opção, Sem resposta, Erro e Resposta inválida (escape)", () => {
-    const ramos = nodeBranches(mensagem({ body: "Oi", options: OPCOES, reply_timeout_ms: 600_000 }) as never);
+    const ramos = nodeBranches(
+      mensagem({ body: "Oi", options: OPCOES, reply_timeout_ms: 600_000 }) as never,
+    );
     expect(ramos.map((r) => [r.id, r.label])).toEqual([
       ["moradia", "Moradia"],
       ["invest", "Investimento"],
@@ -151,7 +213,10 @@ describe("ramos dos blocos de conversa", () => {
     ]);
   });
   it("mensagem sem opções: Erro e Concluído; pergunta: Sem resposta, Resposta inválida, Erro, Respondeu", () => {
-    expect(nodeBranches(mensagem({ body: "Oi" }) as never).map((r) => r.label)).toEqual(["Erro", "Concluído"]);
+    expect(nodeBranches(mensagem({ body: "Oi" }) as never).map((r) => r.label)).toEqual([
+      "Erro",
+      "Concluído",
+    ]);
     expect(nodeBranches(pergunta() as never).map((r) => r.label)).toEqual([
       "Sem resposta",
       "Resposta inválida",
@@ -160,9 +225,21 @@ describe("ramos dos blocos de conversa", () => {
     ]);
   });
   it("espera até responder: Sem resposta e Respondeu; em segundos: saída única", () => {
-    const ate = { id: "w", type: "wait", label: "W", position: pos, config: { mode: "until_reply", timeout_ms: 60_000 } };
+    const ate = {
+      id: "w",
+      type: "wait",
+      label: "W",
+      position: pos,
+      config: { mode: "until_reply", timeout_ms: 60_000 },
+    };
     expect(nodeBranches(ate as never).map((r) => r.label)).toEqual(["Sem resposta", "Respondeu"]);
-    const seg = { id: "w", type: "wait", label: "W", position: pos, config: { mode: "delay", duration_s: 5 } };
+    const seg = {
+      id: "w",
+      type: "wait",
+      label: "W",
+      position: pos,
+      config: { mode: "delay", duration_s: 5 },
+    };
     expect(nodeBranches(seg as never)).toHaveLength(1);
   });
 });
@@ -192,7 +269,11 @@ describe("conferência da resposta da pergunta", () => {
 });
 
 describe("estado da espera lido dos eventos", () => {
-  const ev = (event_type: string, payload: Record<string, unknown> = {}, node_id = "message-1"): EnrollmentEventRef => ({
+  const ev = (
+    event_type: string,
+    payload: Record<string, unknown> = {},
+    node_id = "message-1",
+  ): EnrollmentEventRef => ({
     node_id,
     idempotency_key: `${node_id}:${event_type}`,
     event_type,
@@ -222,10 +303,18 @@ describe("estado da espera lido dos eventos", () => {
 });
 
 describe("decisão do bloco de mensagem", () => {
-  const comOpcoes = mensagem({ body: "Qual?", options: OPCOES, reply_timeout_ms: 600_000, invalid_reply: { attempts: 1 } });
+  const comOpcoes = mensagem({
+    body: "Qual?",
+    options: OPCOES,
+    reply_timeout_ms: 600_000,
+    invalid_reply: { attempts: 1 },
+  });
 
   it("entrada pede o envio; enviado, espera em waiting_reply até o prazo", () => {
-    expect(decidirConversa(entrada(comOpcoes))).toEqual({ kind: "effect", acao: { tipo: "enviar", envio: "mensagem" } });
+    expect(decidirConversa(entrada(comOpcoes))).toEqual({
+      kind: "effect",
+      acao: { tipo: "enviar", envio: "mensagem" },
+    });
     expect(decidirConversa(entrada(comOpcoes, { efeito: { ok: true } }))).toEqual({
       kind: "wait",
       next_eval_at: new Date(PRAZO),
@@ -233,24 +322,40 @@ describe("decisão do bloco de mensagem", () => {
     });
   });
   it("envio falhou (janela, teto, sem conversa) sai por Erro com o motivo", () => {
-    const r = decidirConversa(entrada(comOpcoes, { efeito: { ok: false, erro: "janela_fechada" } }));
+    const r = decidirConversa(
+      entrada(comOpcoes, { efeito: { ok: false, erro: "janela_fechada" } }),
+    );
     expect(r).toMatchObject({ kind: "advance", next_node_id: "fim-erro" });
   });
   it("sem opções não espera: sai por Concluído", () => {
     const edges = [aresta("c", "message-1", "fim-ok", { type: "always" })];
-    expect(decidirConversa(entrada(mensagem({ body: "Oi" }), { efeito: { ok: true } }, edges))).toMatchObject({
+    expect(
+      decidirConversa(entrada(mensagem({ body: "Oi" }), { efeito: { ok: true } }, edges)),
+    ).toMatchObject({
       kind: "advance",
       next_node_id: "fim-ok",
     });
   });
   it("resposta nativa (id) e número escolhem a opção, e a escolha é registrada antes de sair", () => {
-    const nativa = entrada(comOpcoes, { espera: esperando(), respostas: [{ texto: "Investimento", replyId: "invest" }] });
+    const nativa = entrada(comOpcoes, {
+      espera: esperando(),
+      respostas: [{ texto: "Investimento", replyId: "invest" }],
+    });
     expect(decidirConversa(nativa)).toEqual({
       kind: "effect",
       acao: { tipo: "registrar_resposta", valor: "Investimento", opcao_id: "invest" },
     });
-    expect(decidirConversa({ ...nativa, efeito: { ok: true } })).toMatchObject({ kind: "advance", next_node_id: "fim-invest" });
-    const numero = entrada(comOpcoes, { espera: esperando(), respostas: [{ texto: "oi", replyId: null }, { texto: "1", replyId: null }] });
+    expect(decidirConversa({ ...nativa, efeito: { ok: true } })).toMatchObject({
+      kind: "advance",
+      next_node_id: "fim-invest",
+    });
+    const numero = entrada(comOpcoes, {
+      espera: esperando(),
+      respostas: [
+        { texto: "oi", replyId: null },
+        { texto: "1", replyId: null },
+      ],
+    });
     expect(decidirConversa(numero)).toMatchObject({ acao: { opcao_id: "moradia" } });
   });
   it("resposta inválida: nova tentativa enquanto houver, depois Resposta inválida", () => {
@@ -259,11 +364,17 @@ describe("decisão do bloco de mensagem", () => {
       kind: "effect",
       acao: { tipo: "enviar", envio: "nova_tentativa" },
     });
-    expect(decidirConversa(entrada(comOpcoes, { espera: esperando(0), ...invalida, efeito: { ok: true } }))).toMatchObject({
+    expect(
+      decidirConversa(
+        entrada(comOpcoes, { espera: esperando(0), ...invalida, efeito: { ok: true } }),
+      ),
+    ).toMatchObject({
       kind: "wait",
       wake_status: "waiting_reply",
     });
-    expect(decidirConversa(entrada(comOpcoes, { espera: esperando(1), ...invalida }))).toMatchObject({
+    expect(
+      decidirConversa(entrada(comOpcoes, { espera: esperando(1), ...invalida })),
+    ).toMatchObject({
       kind: "advance",
       next_node_id: "fim-invalida",
     });
@@ -275,14 +386,24 @@ describe("decisão do bloco de mensagem", () => {
       wake_status: "waiting_reply",
     });
     const vencido = new Date(AGORA.getTime() - 1).toISOString();
-    expect(decidirConversa(entrada(comOpcoes, { espera: esperando(0, vencido), respostas: [] }))).toMatchObject({
+    expect(
+      decidirConversa(entrada(comOpcoes, { espera: esperando(0, vencido), respostas: [] })),
+    ).toMatchObject({
       kind: "advance",
       next_node_id: "fim-sem",
     });
   });
   it("ramo sem aresta (e sem escape) termina a execução em vez de travar", () => {
-    const edges = [aresta("a1", "message-1", "fim-moradia", { type: "branch", branch_id: "moradia" })];
-    const r = decidirConversa(entrada(comOpcoes, { espera: esperando(1), respostas: [{ texto: "?", replyId: null }] }, edges));
+    const edges = [
+      aresta("a1", "message-1", "fim-moradia", { type: "branch", branch_id: "moradia" }),
+    ];
+    const r = decidirConversa(
+      entrada(
+        comOpcoes,
+        { espera: esperando(1), respostas: [{ texto: "?", replyId: null }] },
+        edges,
+      ),
+    );
     expect(r.kind).toBe("complete");
   });
 });
@@ -294,31 +415,80 @@ describe("decisão da pergunta e da espera", () => {
     aresta("q3", "question-2", "inv", { type: "branch", branch_id: "invalida" }),
   ];
   it("resposta válida é registrada já normalizada e sai por Respondeu", () => {
-    const e = entrada(pergunta(), { espera: esperando(), respostas: [{ texto: "Ana@X.com", replyId: null }] }, edges);
-    expect(decidirConversa(e)).toEqual({ kind: "effect", acao: { tipo: "registrar_resposta", valor: "ana@x.com" } });
-    expect(decidirConversa({ ...e, efeito: { ok: true } })).toMatchObject({ kind: "advance", next_node_id: "ok" });
+    const e = entrada(
+      pergunta(),
+      { espera: esperando(), respostas: [{ texto: "Ana@X.com", replyId: null }] },
+      edges,
+    );
+    expect(decidirConversa(e)).toEqual({
+      kind: "effect",
+      acao: { tipo: "registrar_resposta", valor: "ana@x.com" },
+    });
+    expect(decidirConversa({ ...e, efeito: { ok: true } })).toMatchObject({
+      kind: "advance",
+      next_node_id: "ok",
+    });
   });
   it("tentativas esgotadas saem por Resposta inválida", () => {
-    const e = entrada(pergunta({ retries: 0 }), { espera: esperando(), respostas: [{ texto: "não sei", replyId: null }] }, edges);
+    const e = entrada(
+      pergunta({ retries: 0 }),
+      { espera: esperando(), respostas: [{ texto: "não sei", replyId: null }] },
+      edges,
+    );
     expect(decidirConversa(e)).toMatchObject({ kind: "advance", next_node_id: "inv" });
   });
   it("tempo esgotado envia o aviso (se houver) e sai por Sem resposta", () => {
     const vencido = new Date(AGORA.getTime() - 1).toISOString();
-    const e = entrada(pergunta({ timeout_message: "Tudo bem, fica pra depois." }), { espera: esperando(0, vencido), respostas: [] }, edges);
-    expect(decidirConversa(e)).toEqual({ kind: "effect", acao: { tipo: "enviar", envio: "tempo_esgotado" } });
-    expect(decidirConversa({ ...e, efeito: { ok: false, erro: "envio_falhou" } })).toMatchObject({ next_node_id: "sem" });
+    const e = entrada(
+      pergunta({ timeout_message: "Tudo bem, fica pra depois." }),
+      { espera: esperando(0, vencido), respostas: [] },
+      edges,
+    );
+    expect(decidirConversa(e)).toEqual({
+      kind: "effect",
+      acao: { tipo: "enviar", envio: "tempo_esgotado" },
+    });
+    expect(decidirConversa({ ...e, efeito: { ok: false, erro: "envio_falhou" } })).toMatchObject({
+      next_node_id: "sem",
+    });
   });
   it("espera em segundos: estaciona por N s e depois segue", () => {
-    const no = { id: "w", type: "wait", label: "W", position: pos, config: { mode: "delay", duration_s: 5 } } as FlowNode;
+    const no = {
+      id: "w",
+      type: "wait",
+      label: "W",
+      position: pos,
+      config: { mode: "delay", duration_s: 5 },
+    } as FlowNode;
     const ed = [aresta("w1", "w", "prox", { type: "always" })];
-    expect(processNode(entrada(no, {}, ed))).toEqual({ kind: "wait", next_eval_at: new Date(AGORA.getTime() + 5000) });
-    expect(processNode(entrada(no, { waitElapsed: true }, ed))).toMatchObject({ kind: "advance", next_node_id: "prox" });
+    expect(processNode(entrada(no, {}, ed))).toEqual({
+      kind: "wait",
+      next_eval_at: new Date(AGORA.getTime() + 5000),
+    });
+    expect(processNode(entrada(no, { waitElapsed: true }, ed))).toMatchObject({
+      kind: "advance",
+      next_node_id: "prox",
+    });
   });
   it("até responder: qualquer mensagem é resposta e não envia nada", () => {
-    const no = { id: "w", type: "wait", label: "W", position: pos, config: { mode: "until_reply", timeout_ms: 600_000 } } as FlowNode;
-    const ed = [aresta("w1", "w", "resp", { type: "always" }), aresta("w2", "w", "sem", { type: "branch", branch_id: "no_reply" })];
-    expect(processNode(entrada(no, {}, ed))).toMatchObject({ kind: "wait", wake_status: "waiting_reply" });
-    const r = processNode(entrada(no, { espera: esperando(), respostas: [{ texto: "", replyId: null }] }, ed));
+    const no = {
+      id: "w",
+      type: "wait",
+      label: "W",
+      position: pos,
+      config: { mode: "until_reply", timeout_ms: 600_000 },
+    } as FlowNode;
+    const ed = [
+      aresta("w1", "w", "resp", { type: "always" }),
+      aresta("w2", "w", "sem", { type: "branch", branch_id: "no_reply" }),
+    ];
+    expect(processNode(entrada(no, {}, ed))).toMatchObject({
+      kind: "wait",
+      wake_status: "waiting_reply",
+    });
+    const r = processNode(
+      entrada(no, { espera: esperando(), respostas: [{ texto: "", replyId: null }] }, ed),
+    );
     expect(r).toEqual({ kind: "effect", acao: { tipo: "registrar_resposta", valor: "" } });
   });
 });
@@ -326,12 +496,16 @@ describe("decisão da pergunta e da espera", () => {
 describe("variáveis e publish", () => {
   it("a resposta fica em {{resposta.<chave do nó>}}", () => {
     expect(chaveDaResposta("question-2")).toBe("question_2");
-    const texto = renderizar("Anotado: {{resposta.question_2}}", {
-      contato: null,
-      negocio: null,
-      negocios: [],
-      vars: { resposta: { question_2: "ana@x.com" } },
-    }, AGORA);
+    const texto = renderizar(
+      "Anotado: {{resposta.question_2}}",
+      {
+        contato: null,
+        negocio: null,
+        negocios: [],
+        vars: { resposta: { question_2: "ana@x.com" } },
+      },
+      AGORA,
+    );
     expect(texto).toBe("Anotado: ana@x.com");
   });
 
@@ -343,9 +517,18 @@ describe("variáveis e publish", () => {
     type: "trigger",
     label: "Início",
     position: pos,
-    config: { triggers: [{ kind: "manual" }], reentry: { policy: "skip_if_running", cooldown_minutes: 0 } },
+    config: {
+      triggers: [{ kind: "manual" }],
+      reentry: { policy: "skip_if_running", cooldown_minutes: 0 },
+    },
   };
-  const fim = (id: string) => ({ id, type: "end", label: "Fim", position: pos, config: { outcome: "converted" } });
+  const fim = (id: string) => ({
+    id,
+    type: "end",
+    label: "Fim",
+    position: pos,
+    config: { outcome: "converted" },
+  });
 
   it("toda opção precisa de caminho", () => {
     const g = grafo(
@@ -358,7 +541,10 @@ describe("variáveis e publish", () => {
     );
     const r = validateFlowForPublish(g, { surface: "automacao" });
     expect(r.ok).toBe(false);
-    expect(r.ok ? [] : r.errors.map((e) => [e.code, e.branch_id])).toContainEqual(["missing_branch_edge", "invest"]);
+    expect(r.ok ? [] : r.errors.map((e) => [e.code, e.branch_id])).toContainEqual([
+      "missing_branch_edge",
+      "invest",
+    ]);
     const ligado = grafo(
       [gatilho, mensagem({ body: "Qual?", options: OPCOES, reply_timeout_ms: 600_000 }), fim("f1")],
       [
@@ -371,12 +557,25 @@ describe("variáveis e publish", () => {
   });
   it("pergunta não grava em campo só leitura, e os blocos não rodam no follow-up", () => {
     const g = grafo(
-      [gatilho, pergunta({ save_to: { scope: "contact", key: "phone_number" }, validation: "phone" }), fim("f1")],
-      [aresta("e0", "t", "question-2", { type: "always" }), aresta("e1", "question-2", "f1", { type: "always" })],
+      [
+        gatilho,
+        pergunta({ save_to: { scope: "contact", key: "phone_number" }, validation: "phone" }),
+        fim("f1"),
+      ],
+      [
+        aresta("e0", "t", "question-2", { type: "always" }),
+        aresta("e1", "question-2", "f1", { type: "always" }),
+      ],
     );
     const r = validateFlowForPublish(g, { surface: "automacao" });
     expect(r.ok ? [] : r.errors.map((e) => e.code)).toContain("campo_so_leitura");
-    const seg = { id: "w", type: "wait", label: "W", position: pos, config: { mode: "delay", duration_s: 5 } };
+    const seg = {
+      id: "w",
+      type: "wait",
+      label: "W",
+      position: pos,
+      config: { mode: "delay", duration_s: 5 },
+    };
     const follow = grafo(
       [{ ...gatilho, config: {} }, seg, fim("f1")],
       [aresta("e0", "t", "w", { type: "always" }), aresta("e1", "w", "f1", { type: "always" })],

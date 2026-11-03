@@ -27,7 +27,10 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     storage: {
       from: () => ({
-        createSignedUrl: async () => ({ data: { signedUrl: "https://signed.example/a.jpg" }, error: null }),
+        createSignedUrl: async () => ({
+          data: { signedUrl: "https://signed.example/a.jpg" },
+          error: null,
+        }),
       }),
     },
   }),
@@ -59,7 +62,12 @@ function conversa(opts: { provider?: string; lastInboundAt?: string | null } = {
     bot_silenced_until: null,
     provider_conversation_id: null,
     last_inbound_at: opts.lastInboundAt === undefined ? null : opts.lastInboundAt,
-    contacts: { phone_number: "+5531999998888", wa_identity: null, wa_lid: null, is_blocked: false },
+    contacts: {
+      phone_number: "+5531999998888",
+      wa_identity: null,
+      wa_lid: null,
+      is_blocked: false,
+    },
     channel_sessions: {
       id: SESSION,
       organization_id: ORG,
@@ -80,7 +88,13 @@ const BOTOES = {
 };
 
 function comOpcoes(over: Partial<SendMessageHandlerInput> = {}): SendMessageHandlerInput {
-  return { conversation_id: CONV, type: "text", body: "Qual o objetivo?", interactive: BOTOES, ...over };
+  return {
+    conversation_id: CONV,
+    type: "text",
+    body: "Qual o objetivo?",
+    interactive: BOTOES,
+    ...over,
+  };
 }
 
 function metaAceita() {
@@ -113,12 +127,18 @@ describe("mensagem com opções", () => {
     const linha = capturas.inserts.messages![0]!;
     expect(linha.type).toBe("text");
     expect(linha.body).toBe("Qual o objetivo?");
-    expect((linha.metadata as Record<string, unknown>).interactive).toEqual({ ...BOTOES, entrega: "nativa" });
+    expect((linha.metadata as Record<string, unknown>).interactive).toEqual({
+      ...BOTOES,
+      entrega: "nativa",
+    });
     expect(linha.sent_via).toBe("automation");
 
     const enviado = JSON.parse(spy.mock.calls[0]![1].body as string) as Record<string, unknown>;
     expect(enviado.type).toBe("interactive");
-    expect(enviado.interactive).toMatchObject({ type: "button", body: { text: "Qual o objetivo?" } });
+    expect(enviado.interactive).toMatchObject({
+      type: "button",
+      body: { text: "Qual o objetivo?" },
+    });
   });
 
   it("canal sem opções nativas: o corpo vira texto numerado e é isso que a linha grava", async () => {
@@ -166,8 +186,19 @@ describe("mensagem com opções", () => {
   });
 
   it.each([
-    ["4 botões", comOpcoes({ interactive: { kind: "buttons", items: [1, 2, 3, 4].map((i) => ({ id: `${i}`, label: `${i}` })) } })],
-    ["rótulo longo", comOpcoes({ interactive: { kind: "buttons", items: [{ id: "a", label: "x".repeat(21) }] } })],
+    [
+      "4 botões",
+      comOpcoes({
+        interactive: {
+          kind: "buttons",
+          items: [1, 2, 3, 4].map((i) => ({ id: `${i}`, label: `${i}` })),
+        },
+      }),
+    ],
+    [
+      "rótulo longo",
+      comOpcoes({ interactive: { kind: "buttons", items: [{ id: "a", label: "x".repeat(21) }] } }),
+    ],
     ["sem corpo", comOpcoes({ body: undefined })],
     ["com mídia", comOpcoes({ media_storage_path: `${ORG}/${CONV}/a.jpg`, type: "image" })],
   ])("opções inválidas (%s): 422 validation_error, sem linha", async (_nome, input) => {
@@ -187,9 +218,11 @@ describe("mensagem com opções", () => {
       conversation: conversa({ lastInboundAt: horasAtras(1) }),
     });
 
-    const erro = await sendMessageHandler(supabase, ctxAutomacao, comOpcoes({ body: "x".repeat(1025) })).catch(
-      (e) => e,
-    );
+    const erro = await sendMessageHandler(
+      supabase,
+      ctxAutomacao,
+      comOpcoes({ body: "x".repeat(1025) }),
+    ).catch((e) => e);
 
     expect((erro as ApiError).code).toBe("validation_error");
     expect(capturas.inserts.messages).toHaveLength(0);

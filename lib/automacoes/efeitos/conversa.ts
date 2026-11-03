@@ -38,7 +38,11 @@ import type { AcaoDeConversa } from "@/lib/followup/node-handlers";
 import { varsDaResposta } from "../conversa";
 import type { FieldOp } from "../schemas";
 import { renderizar } from "../template-vars";
-import { metadataDeOrigemAutomacao, MOTIVO_TETO_EXCEDIDO, podeEnviarMensagemAutomatica } from "../teto-de-mensagens";
+import {
+  metadataDeOrigemAutomacao,
+  MOTIVO_TETO_EXCEDIDO,
+  podeEnviarMensagemAutomatica,
+} from "../teto-de-mensagens";
 import type { Contexto, Passo } from "./index";
 
 type NoDeConversa = Extract<FlowNode, { type: "message" | "question" | "wait" }>;
@@ -49,13 +53,18 @@ export const LIMITE_DO_CORPO = 4096;
 
 /** Uuid estável a partir da execução e do passo: o replay acha a MESMA linha de `messages`. */
 export function idDaMensagemDoPasso(enrollmentId: string, chave: string, envio: string): string {
-  const h = createHash("sha256").update(`automacao:${enrollmentId}:${chave}:${envio}`).digest("hex");
+  const h = createHash("sha256")
+    .update(`automacao:${enrollmentId}:${chave}:${envio}`)
+    .digest("hex");
   // Formato v4 (versão e variante fixas) para passar em qualquer validação de uuid.
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${((parseInt(h[16]!, 16) & 0x3) | 0x8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
 /** O texto que sai neste envio, ainda sem renderizar. `null` = este bloco não tem o que enviar. */
-export function textoDoEnvio(node: NoDeConversa, envio: Extract<AcaoDeConversa, { tipo: "enviar" }>["envio"]): string | null {
+export function textoDoEnvio(
+  node: NoDeConversa,
+  envio: Extract<AcaoDeConversa, { tipo: "enviar" }>["envio"],
+): string | null {
   if (node.type === "message") {
     if (envio === "nova_tentativa") return node.config.invalid_reply?.message ?? node.config.body;
     return envio === "mensagem" ? node.config.body : null;
@@ -81,7 +90,10 @@ interface ConversaDoContato {
 }
 
 /** A conversa de WhatsApp (não grupo) mais recente do contato e dos gêmeos de telefone. */
-async function conversaDeWhatsapp(c: Contexto, ids: readonly string[]): Promise<ConversaDoContato | null> {
+async function conversaDeWhatsapp(
+  c: Contexto,
+  ids: readonly string[],
+): Promise<ConversaDoContato | null> {
   const { data, error } = await c.admin
     .from("conversations")
     .select("id, last_inbound_at, is_group, channel_sessions:channel_session_id(provider)")
@@ -97,7 +109,13 @@ async function conversaDeWhatsapp(c: Contexto, ids: readonly string[]): Promise<
     channel_sessions: { provider: string | null } | null;
   }>;
   const achada = linhas.find((l) => ehCanalDeWhatsapp(l.channel_sessions?.provider));
-  return achada ? { id: achada.id, provider: achada.channel_sessions?.provider ?? null, last_inbound_at: achada.last_inbound_at } : null;
+  return achada
+    ? {
+        id: achada.id,
+        provider: achada.channel_sessions?.provider ?? null,
+        last_inbound_at: achada.last_inbound_at,
+      }
+    : null;
 }
 
 async function contatoBloqueado(c: Contexto): Promise<boolean> {
@@ -137,9 +155,17 @@ async function enviar(
   if (estadoDaJanela(conversa.provider, conversa.last_inbound_at, c.agora).tipo === "fechada") {
     return { ok: false, erro: "janela_fechada", detalhe: base };
   }
-  const teto = await podeEnviarMensagemAutomatica(c.admin, { organizationId: c.org, contactIds: ids, agora: c.agora });
+  const teto = await podeEnviarMensagemAutomatica(c.admin, {
+    organizationId: c.org,
+    contactIds: ids,
+    agora: c.agora,
+  });
   if (!teto.pode) {
-    return { ok: false, erro: teto.motivo === MOTIVO_TETO_EXCEDIDO ? "teto_por_hora" : "teto_indisponivel", detalhe: base };
+    return {
+      ok: false,
+      erro: teto.motivo === MOTIVO_TETO_EXCEDIDO ? "teto_por_hora" : "teto_indisponivel",
+      detalhe: base,
+    };
   }
 
   const interactive = envio === "tempo_esgotado" ? undefined : opcoesDoEnvio(node);
@@ -156,15 +182,20 @@ async function enviar(
         conversation_id: conversa.id,
         type: "text",
         body: corpo,
-        metadata: metadataDeOrigemAutomacao({ enrollmentId: c.enrollmentId, pointerId: c.pointerId }),
+        metadata: metadataDeOrigemAutomacao({
+          enrollmentId: c.enrollmentId,
+          pointerId: c.pointerId,
+        }),
         ...(interactive ? { interactive } : {}),
       } as Parameters<typeof sendMessageHandler>[2],
     );
-    if ((msg as { status?: string }).status === "failed") return { ok: false, erro: "envio_falhou", detalhe: base };
+    if ((msg as { status?: string }).status === "failed")
+      return { ok: false, erro: "envio_falhou", detalhe: base };
     return { ok: true, detalhe: { ...base, message_id: (msg as { id?: string }).id ?? null } };
   } catch (err) {
     if (err instanceof ApiError) {
-      if (err.code === "janela_fechada") return { ok: false, erro: "janela_fechada", detalhe: base };
+      if (err.code === "janela_fechada")
+        return { ok: false, erro: "janela_fechada", detalhe: base };
       if (err.status === 403) return { ok: false, erro: "contato_bloqueado", detalhe: base };
     }
     return { ok: false, erro: "envio_falhou", detalhe: base };
@@ -189,7 +220,8 @@ async function registrar(
     ...(acao.opcao_id ? { opcao_id: acao.opcao_id } : {}),
     ...(rotulo ? { opcao_rotulo: rotulo } : {}),
   };
-  const destino = node.type === "message" || node.type === "question" ? node.config.save_to : undefined;
+  const destino =
+    node.type === "message" || node.type === "question" ? node.config.save_to : undefined;
   if (destino) {
     const r = await gravarCampo([{ target: destino, op: "set", value: acao.valor }]);
     if (!r.ok) return { ok: false, erro: r.erro ?? "efeito_falhou", detalhe: base };
@@ -211,9 +243,16 @@ export async function executarConversa(
 ): Promise<ResultadoDoEfeito> {
   let passo: Passo & { vars?: Record<string, unknown> };
   try {
-    passo = acao.tipo === "enviar" ? await enviar(c, node, acao.envio, chave) : await registrar(c, node, acao, gravarCampo);
+    passo =
+      acao.tipo === "enviar"
+        ? await enviar(c, node, acao.envio, chave)
+        : await registrar(c, node, acao, gravarCampo);
   } catch {
-    passo = { ok: false, erro: acao.tipo === "enviar" ? "envio_falhou" : "efeito_falhou", detalhe: { tipo: node.type } };
+    passo = {
+      ok: false,
+      erro: acao.tipo === "enviar" ? "envio_falhou" : "efeito_falhou",
+      detalhe: { tipo: node.type },
+    };
   }
   return {
     desfecho: passo.ok ? { ok: true } : { ok: false, erro: passo.erro ?? "efeito_falhou" },

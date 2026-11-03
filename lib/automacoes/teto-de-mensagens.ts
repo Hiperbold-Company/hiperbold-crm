@@ -37,7 +37,10 @@ export function metadataDeOrigemAutomacao(args: {
   pointerId?: string | null;
 }): { [CHAVE_DE_ORIGEM_AUTOMACAO]: OrigemAutomacao } {
   return {
-    [CHAVE_DE_ORIGEM_AUTOMACAO]: { enrollment_id: args.enrollmentId, pointer_id: args.pointerId ?? null },
+    [CHAVE_DE_ORIGEM_AUTOMACAO]: {
+      enrollment_id: args.enrollmentId,
+      pointer_id: args.pointerId ?? null,
+    },
   };
 }
 
