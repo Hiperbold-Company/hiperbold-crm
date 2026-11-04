@@ -6,8 +6,9 @@ nada**: responder ou não, o quê, quando, e o que exigir da pessoa é decisão 
 cada automação.
 
 Código: `lib/channels/meta-social/comentarios.ts` (entrada e ações),
-`lib/channels/meta-social/fila.ts` (envio), `lib/channels/meta-social/comentarios-contrato.ts`
-(vocabulário, tipos e limites). Banco: migration 0991.
+`lib/channels/meta-social/fila.ts` (envio e eventos de desfecho), `lib/channels/meta-social/comentarios-contrato.ts`
+(vocabulário, eventos, tipos e limites), `lib/channels/meta-social/posts.ts` (posts da conta),
+`lib/channels/meta-social/credencial.ts` (credencial da sessão). Banco: migration 0991.
 
 ---
 
@@ -209,6 +210,112 @@ A janela de 24 horas do Direct abre quando a pessoa responde. Antes disso, a
 
 ---
 
+## 4-A. Os eventos de desfecho da fila
+
+Quando o cron da fila (`processarFilaMetaSocial`, em `fila.ts`) leva uma linha
+de `meta_social_fila_de_envio` a um estado **final**, ele emite um evento no
+`event_log`, **depois** de gravar a linha e só se a gravação deu certo:
+
+| Evento | Quando | `motivo` |
+|---|---|---|
+| `instagram.resposta_enviada` (`EVENTO_RESPOSTA_ENVIADA`) | a linha virou `enviada` | — |
+| `instagram.resposta_falhou` (`EVENTO_RESPOSTA_FALHOU`) | a linha virou `falhou` | `conta_indisponivel`, `envio_sem_confirmacao` (travada em `enviando` há mais de 10 min), `<codigo>:<codigo da Meta>` (erro final da Meta) |
+| `instagram.resposta_falhou` | a linha virou `expirada` | `prazo_de_7_dias`, `comentario_desconhecido`, `inelegivel:2534025` |
+
+Reagendada (teto da conta, limite da Meta, rede, token recusado) e aguardando
+(a pública esperando a privada) **não emitem**: a linha ainda não acabou.
+
+- `entity_kind` = `instagram_comment_reply` (`ENTIDADE_DO_EVENTO_RESPOSTA`);
+  `entity_id` = `meta_social_fila_de_envio.id`.
+- Payload (`EventoDesfechoDaResposta`, chaves em `CAMPOS_DO_EVENTO_DESFECHO`):
+
+```json
+{
+  "organization_id": "uuid",
+  "channel_session_id": "uuid",
+  "comment_id": "17890000000000000",
+  "tipo": "resposta_privada",
+  "pedido_por": "automacao:<pointer>:<enrollment>:<passo>",
+  "motivo": "prazo_de_7_dias"
+}
+```
+
+- `tipo`: `resposta_privada` | `resposta_publica`.
+- `pedido_por`: o valor gravado na linha, **exatamente** como veio no pedido
+  (`pedidoPor` das ações 2.1 e 2.2, cortado em 200 caracteres ao enfileirar);
+  `null` se não houve. É por ele que a automação acha a execução e o passo.
+- `motivo`: só no `resposta_falhou`; é o código do campo `erro` da linha, nunca
+  texto do contato.
+- **Nunca** vai no payload o texto da resposta nem o do comentário.
+- A emissão não reverte nem reenvia: se ela falhar, o cron loga e segue (a linha
+  já está no estado final). Uma `enviada` cuja gravação falhou fica `enviando`,
+  é destravada como `falhou` (`envio_sem_confirmacao`) e é esse o evento emitido.
+- Os dois eventos nascem `pending` para o consumidor das Automações, ainda em
+  construção (declaração provisória em
+  `tests/unit/evento-de-fato-nao-fica-pendente.test.ts`).
+
+---
+
+## 4-B. A rede de cada conexão
+
+`GET /api/v1/channel-sessions` (e a tool MCP `crm_list_channel_sessions`, que usa
+a mesma leitura, `listarConexoesDeMensagem`) devolve em cada linha o campo
+`plataforma`:
+
+| `plataforma` | Quando |
+|---|---|
+| `instagram` / `messenger` | conexão social oficial (`channel_sessions.meta_social_platform`) |
+| `whatsapp` | canais de número (`waha`, `meta_cloud`, `zernio`, `uazapi`, `datafy`) |
+| `null` | social intermediado (a rede não está numa coluna) ou valor desconhecido |
+
+A coluna crua não sai. Banco sem a coluna `meta_social_platform`: a lista sai
+igual, `plataforma` do social vira `null` e a resposta leva `meta.schema_outdated`.
+Regra pura: `plataformaDaConexao(provider, metaSocialPlatform)` em
+`lib/channels/listar-conexoes.ts`.
+
+---
+
+## 4-C. Os posts da conta
+
+Em `lib/channels/meta-social/posts.ts` (exportados só pelo canal):
+
+### `listarPostsRecentes(admin, { organizationId, channelSessionId, limite? }, fetcher?)`
+
+`Promise<{ posts: PostDoInstagram[] } | { erro: "conta_indisponivel" | "meta_falhou" }>`
+
+`GET /<IG_ID>/media?fields=id,permalink,caption,media_type,media_product_type,thumbnail_url,media_url,timestamp&limit=<n>`
+com o token da sessão no header. Limite padrão 24, máximo 50.
+
+`PostDoInstagram`: `{ media_id, permalink, legenda_curta, miniatura, tipo, publicado_em }`.
+`legenda_curta` tem até 120 caracteres (`null` sem legenda); `miniatura` é o
+`thumbnail_url` em vídeo (ou o `media_url`, se faltar) e o `media_url` no resto;
+`tipo` é `REELS` quando `media_product_type` é REELS, senão o `media_type`
+(`IMAGE`, `VIDEO`, `CAROUSEL_ALBUM`); `publicado_em` é o `timestamp` da Meta.
+
+### `resolverPostPorLink(admin, { organizationId, channelSessionId, link }, fetcher?)`
+
+`Promise<{ media_id } | { erro: "link_invalido" | "post_nao_encontrado" | "conta_indisponivel" | "meta_falhou" }>`
+
+Aceita `instagram.com/p/<código>`, `/reel/`, `/reels/` e `/tv/`, com ou sem
+`www` e `https://`, com query e barra final (função pura `codigoDoLink(link)`,
+que devolve o código ou `null`). Percorre as mídias da conta (`fields=id,permalink,shortcode`)
+em até 4 páginas de 50, pelo cursor `after`, e compara o código com o
+`shortcode` e com o código do `permalink`.
+
+Nas duas: sessão de outra organização, arquivada, de Messenger ou sem token é
+`conta_indisponivel`, e a Meta nem é chamada.
+
+### Rota `GET /api/v1/channels/meta-social/posts?channel_session_id=<uuid>[&link=<url>]`
+
+- Gerente+ (a régua de editar automações). A organização vem da sessão, nunca do query; parâmetro a mais é 400.
+- Sem `link`: `{ data: { posts: [...] } }`. Com `link`: `{ data: { media_id } }`.
+- Erros: `validation_error` e `link_invalido` 400; `conta_indisponivel` e
+  `post_nao_encontrado` 404; `meta_falhou` 502; `rate_limited` 429 (30 por minuto
+  por organização, `Retry-After: 60`).
+- Só leitura: não audita.
+
+---
+
 ## 5. O que o canal NÃO faz (é da automação)
 
 - conferir palavra-chave no comentário;
@@ -230,3 +337,5 @@ A janela de 24 horas do Direct abre quando a pessoa responde. Antes disso, a
 - Se comentário da própria conta dispara o aviso; o canal ignora de qualquer forma.
 - Se o campo `comments` assinado na Página basta para a conta conectada pela Página receber os comentários (a assinatura da Página usa os campos do Messenger). Na conta pelo login unificado, `comments` foi acrescentado aos campos assinados; **conta já conectada só passa a receber depois de reconectar**.
 - O campo `comments` exige **Acesso Avançado** no app da Meta (revisão do app).
+- Posts da conta: a página de `GET /<IG_ID>/media` só documenta paginação por tempo (`since`/`until`); o cursor `after` é o padrão da Graph, não citado ali. A doc lista token de usuário; com o token da Página (ou do usuário do sistema) é NÃO CONFIRMADO.
+- Posts da conta: `caption` e `media_product_type` são "só com o login pelo Facebook"; na conta conectada por outro caminho podem não vir (o código aceita a ausência).

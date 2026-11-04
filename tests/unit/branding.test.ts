@@ -865,6 +865,16 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "endpoint de token do OAuth do Google — o par de `accounts.google.com` no fluxo de autorização da agenda, e também do Google Ads (`lib/plataformas-de-anuncio/google/token.ts`).",
   },
+  "instagram.com": {
+    categoria: "PLATAFORMA",
+    motivo:
+      "host do Instagram aceito na validação do link de post que o gerente cola (`codigoDoLink` em `lib/channels/meta-social/posts.ts`): é entrada que o produto CONFERE para extrair o código do post, não endereço que ele busca (a busca vai à Graph API). Sem a linha, qualquer host passaria por link de post.",
+  },
+  "www.instagram.com": {
+    categoria: "PLATAFORMA",
+    motivo:
+      "a forma com `www` do mesmo link de post do Instagram, aceita na mesma validação (`codigoDoLink`, `lib/channels/meta-social/posts.ts`); o `permalink` que a Graph devolve vem com `www`.",
+  },
   "www.facebook.com": {
     categoria: "FORNECEDOR",
     motivo:
@@ -1154,6 +1164,11 @@ describe("catraca de host de terceiro no código que embarca", () => {
       // CONSOLE — o link "Onde pegar a chave" da tela de Credenciais.
       "console.typesafe.ai",
       "deskcomm.app",
+      // Decisão escrita: link de post do Instagram que o gerente COLA para a
+      // automação achar o post (`codigoDoLink`, `lib/channels/meta-social/posts.ts`).
+      // Mesma natureza do `meet.google.com`: host conferido na entrada, não
+      // destino de chamada — a busca do post vai à Graph API.
+      "instagram.com",
       // Link que abre o pino que o CLIENTE mandou (`lib/messaging/localizacao.ts`).
       // Mesma natureza do `wa.me` abaixo: o produto não fala com o host, quem
       // abre é o celular do atendente. Crescimento escrito, como a regra pede.
@@ -1180,6 +1195,8 @@ describe("catraca de host de terceiro no código que embarca", () => {
       // aqui, e não em FORNECEDOR, porque o produto NÃO fala com esse host: quem
       // abre o link é o visitante do site. Crescimento escrito, como a regra pede.
       "wa.me",
+      // A forma com `www` do link de post do Instagram (ver `instagram.com` acima).
+      "www.instagram.com",
     ]);
   });
 
