@@ -28,6 +28,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { nomeDaCopia } from "@/lib/followup/nome-da-copia";
+import { randomId } from "@/lib/random-id";
 
 export interface FunilDeOrigem {
   id: string;
@@ -83,7 +84,7 @@ export function DialogoDuplicarFunil({
   const [editado, setEditado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [chave] = useState(() => crypto.randomUUID());
+  const [chave] = useState(() => randomId());
 
   const nomeLimpo = nome.trim();
   const podeSalvar = !!origemId && nomeLimpo.length > 0 && nomeLimpo.length <= MAX_NOME && !salvando;

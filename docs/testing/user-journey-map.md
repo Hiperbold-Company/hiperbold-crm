@@ -3093,3 +3093,9 @@ Evidência: `evidence/automacoes-lote1/` (README cita cada imagem). Medido local
 
 Fora desta rodada: gatilho "Entrou na etapa" e "Testar com um contato" pela tela
 (cobertos por unitários e pelo invariante `tests/invariants/automacao-engine.test.ts`).
+
+## Duplicar funil e acordeão das etapas `[P1]` (2026-11-04)
+
+Configurações › Etapas do funil: cada funil vira um acordeão (fechado quando há mais de um; abre pelo cabeçalho, por "Abrir todos" e por link `#etapas-<id>`/`#mapeamento-<id>`), e "Duplicar funil" copia etapas, motivos de perda e de ganho, campos do lead e o mapeamento do assistente para um funil novo com o nome escolhido. Negócios, automações e formulários não são copiados. Rota `POST /api/v1/pipelines/[id]/duplicate` (`lib/pipelines/duplicar.ts`). Spec: `tests/e2e/duplicar-funil.spec.ts` (job e2e, parte 3), com conferência no banco das etapas, motivos e campos da cópia.
+
+Evidência: `evidence/duplicar-funil/01-funis-fechados.png` (os funis fechados), `evidence/duplicar-funil/02-um-funil-aberto.png` (um aberto pelo cabeçalho), `evidence/duplicar-funil/03-aberto-pelo-hash.png` (aberto pelo link), `evidence/duplicar-funil/04-dialogo-origem-escolhida.png` (o diálogo de duplicar), `evidence/duplicar-funil/05-copia-pelo-topo-aberta.png` (a cópia aberta, igual à origem), `evidence/duplicar-funil/06-erro-nome-repetido.png` (o aviso de nome repetido) e `evidence/duplicar-funil/07-copia-pelo-card-aberta.png` (a cópia pelo botão do card).
