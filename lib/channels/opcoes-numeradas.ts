@@ -85,6 +85,22 @@ export function textoComOpcoesNumeradas(corpo: string, interactive: OutboundInte
   return cabeca ? `${cabeca}\n\n${linhas.join("\n")}` : linhas.join("\n");
 }
 
+/**
+ * Quantos BYTES (UTF-8) tem o texto que de fato sai: o corpo e, quando o canal
+ * não desenha as opções (`opcoesNativas === false`), as opções numeradas de
+ * `textoComOpcoesNumeradas`. É a medida do teto do Direct
+ * (`tetoDoTextoEmBytes`), usada no envio das automações (`efeitos/conversa.ts`)
+ * e na publicação (`validate-publish.ts`) — uma régua só nos dois lados.
+ */
+export function bytesDoTextoQueSai(
+  corpo: string,
+  opcoes: OutboundInteractive | undefined,
+  opcoesNativas: boolean,
+): number {
+  const saida = opcoes && !opcoesNativas ? textoComOpcoesNumeradas(corpo, opcoes) : corpo;
+  return new TextEncoder().encode(saida).length;
+}
+
 /** Sem acento, minúsculas, espaços colapsados e aparados. */
 export function normalizarRotulo(s: string): string {
   return s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();

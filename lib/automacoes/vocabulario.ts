@@ -296,7 +296,7 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   texto_longo_com_opcoes: "texto passou do limite de 1024 caracteres depois de preencher as variáveis",
   texto_longo: "texto passou do limite de 4096 caracteres depois de preencher as variáveis",
   texto_longo_instagram:
-    "texto passou do limite do Instagram (1000 caracteres, contando as opções numeradas)",
+    "texto passou do limite do Instagram (1000 bytes, contando as opções numeradas; acento e emoji contam mais de um)",
   // Ação "Iniciar outra automação" (lote 3): o que impediu o início.
   automacao_propria: "a automação não pode iniciar a si mesma",
   automacao_inexistente: "a automação escolhida não existe mais nesta conta",

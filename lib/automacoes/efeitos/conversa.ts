@@ -37,7 +37,7 @@ import { opcoesNativas, tetoDoTextoEmBytes } from "@/lib/channels/capabilities";
 import { ehCanalDeWhatsapp } from "@/lib/channels/canal-de-whatsapp";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
 import { estadoDaJanela } from "@/lib/channels/janela";
-import { textoComOpcoesNumeradas } from "@/lib/channels/opcoes-numeradas";
+import { bytesDoTextoQueSai } from "@/lib/channels/opcoes-numeradas";
 import type { OutboundInteractive } from "@/lib/channels/types";
 import type { ResultadoDoEfeito } from "@/lib/followup/engine";
 import type { FlowNode } from "@/lib/followup/graph-schema";
@@ -53,6 +53,9 @@ import {
   podeEnviarMensagemAutomatica,
 } from "../teto-de-mensagens";
 import type { Contexto, Passo } from "./index";
+
+/** A régua do teto do canal, a mesma da publicação (`validate-publish.ts`). */
+export { bytesDoTextoQueSai };
 
 type NoDeConversa = Extract<FlowNode, { type: "message" | "question" | "wait" }>;
 
@@ -176,9 +179,7 @@ async function enviar(
   const tetoDoCanal = tetoDoTextoEmBytes(conversa.provider);
   if (tetoDoCanal !== null) {
     const opcoes = envio === "tempo_esgotado" ? undefined : opcoesDoEnvio(node);
-    const saida =
-      opcoes && !opcoesNativas(conversa.provider) ? textoComOpcoesNumeradas(corpo, opcoes) : corpo;
-    if (new TextEncoder().encode(saida).length > tetoDoCanal) {
+    if (bytesDoTextoQueSai(corpo, opcoes, opcoesNativas(conversa.provider)) > tetoDoCanal) {
       return { ok: false, erro: "texto_longo_instagram", detalhe: base };
     }
   }

@@ -27,13 +27,13 @@ import { validateFlowForPublish } from "@/lib/followup/validate-publish";
 import { acordarAutomacaoEmEspera, ultimaRespostaDaAutomacao } from "@/lib/relogio/executar";
 
 import { criarBancoEmMemoria, type Linha } from "../../tests/helpers/banco-em-memoria";
-import { pisoDaRespostaNoDirect } from "./conversa";
+import { estadoDaEspera, pisoDaRespostaNoDirect } from "./conversa";
 import { escopoDoDirect } from "./conversa-do-direct";
 import { devolverTurnoAoAgente } from "./devolver-turno";
 import { executarConversa } from "./efeitos/conversa";
 import type { Contexto } from "./efeitos/index";
 import { createSupabaseGatilhosDb } from "./gatilhos.handler";
-import { automacaoEsperaRespostaNaConversa, automacaoEsperaRespostaNaConversaSupabase } from "./uma-voz";
+import { automacaoEsperaRespostaNaConversa, automacaoEsperaRespostaNaConversaSupabase, esperavaRespostaEm } from "./uma-voz";
 
 const CANAL_DO_DIRECT = PROVIDERS_DE_MENSAGEM.find((p) => ehCanalDoDirect(p))!;
 const CANAL_DE_WHATSAPP = PROVIDERS_DE_MENSAGEM.find((p) => ehCanalDeWhatsapp(p))!;
@@ -406,6 +406,45 @@ describe("publicação: no Instagram, Mensagem/Pergunta só depois de esperar a 
     );
   });
 
+  const longos = (g: FlowGraph) => {
+    const r = validateFlowForPublish(g, { surface: "automacao" });
+    return r.ok ? [] : r.errors.filter((e) => e.code === "instagram_texto_longo");
+  };
+  const fluxoCom = (msg: Record<string, unknown>, inicio: unknown = INICIO()) =>
+    grafo(
+      [inicio, PRIV, ESPERA, msg, FIM],
+      [a("1", "t", "priv"), a("2", "priv", "espera"), a("3", "espera", "msg"), a("4", "espera", "fim", "no_reply"), a("5", "msg", "fim")],
+    );
+
+  it("texto acima de 1000 bytes no Direct (acento conta 2; opções numeradas contam) é recusado na publicação", () => {
+    // 600 "ã" = 600 caracteres e 1200 bytes: o editor (em caracteres) deixava passar.
+    const acento = longos(fluxoCom({ ...MSG, config: { body: "ã".repeat(600) } }));
+    expect(acento.map((e) => e.node_id)).toEqual(["msg"]);
+    expect(acento[0]!.message).toContain(
+      "passa do limite do Instagram (1000 bytes; acento e emoji contam mais de um)",
+    );
+    // 990 bytes de corpo + "\n\n1) Moradia\n2) Investimento".
+    const comOpcoes = {
+      ...MSG,
+      config: {
+        body: "a".repeat(990),
+        options: { kind: "buttons", items: [{ id: "m", label: "Moradia" }, { id: "i", label: "Investimento" }] },
+        reply_timeout_ms: 3_600_000,
+      },
+    };
+    expect(longos(fluxoCom(comOpcoes))).toHaveLength(1);
+    // Dentro do teto: passa.
+    expect(longos(fluxoCom({ ...MSG, config: { body: "a".repeat(1000) } }))).toEqual([]);
+  });
+
+  it("o mesmo texto longo numa automação de WhatsApp não vira erro do Instagram", () => {
+    const g = grafo(
+      [INICIO("message_received"), { ...MSG, config: { body: "ã".repeat(600) } }, FIM],
+      [a("1", "t", "msg"), a("2", "msg", "fim")],
+    );
+    expect(longos(g)).toEqual([]);
+  });
+
   it("misturado SEM Mensagem/Pergunta, ou só com comentário: passa", () => {
     expect(
       misturados(grafo([INICIO_MISTO, PRIV, FIM], [a("1", "t", "priv"), a("2", "priv", "fim")])),
@@ -532,5 +571,60 @@ describe("corrida: o \"quero\" que chega antes de a espera estacionar", () => {
     expect(await db.loadRespostasDaEspera!(ORG, CONTATO, ESTACIONOU, escopo)).toEqual([]);
     const piso = pisoDaRespostaNoDirect(historico() as never, "espera", INICIO)!;
     expect(await db.loadRespostasDaEspera!(ORG, CONTATO, piso, escopo)).toEqual([{ texto: "QUERO", replyId: null }]);
+  });
+});
+
+describe("o recuo do piso é só da espera que não envia", () => {
+  const INICIO = seg(-60);
+  const ev = (over: Linha): Linha => ({ organization_id: ORG, enrollment_id: ENR, payload: {}, ...over });
+  // O Aguardar consumiu o "quero" em -30 s; a pessoa manda "oi?" em -28 s; a
+  // Pergunta seguinte só envia em -20 s e estaciona em -19 s.
+  const historico = (): Linha[] => [
+    ev({ node_id: "t", event_type: "automacao_iniciada", created_at: INICIO }),
+    ev({ node_id: "espera", event_type: "wait_started", payload: { wake_status: "waiting_reply" }, created_at: seg(-50) }),
+    ev({ node_id: "espera", event_type: "effect_done", payload: { detalhes: [{ tipo: "wait", envio: "resposta", ok: true }] }, created_at: seg(-30) }),
+    ev({ node_id: "espera", event_type: "node_advanced", created_at: seg(-30) }),
+    ev({ node_id: "pergunta", event_type: "effect_done", payload: { detalhes: [{ tipo: "question", envio: "mensagem", ok: true }] }, created_at: seg(-20) }),
+    ev({ node_id: "pergunta", event_type: "wait_started", payload: { wake_status: "waiting_reply" }, created_at: seg(-19) }),
+  ];
+
+  it("Pergunta que já enviou nesta estadia: sem recuo (null), o \"oi?\" de antes do envio não responde a ela", async () => {
+    expect(pisoDaRespostaNoDirect(historico() as never, "pergunta", INICIO)).toBeNull();
+    const b = bancoBase({
+      followup_enrollment_events: historico(),
+      followup_enrollments: [execucao({ started_at: INICIO, current_node_id: "pergunta" })],
+    });
+    const enr = b.tabelas.followup_enrollments![0]! as unknown as Parameters<typeof acordarAutomacaoEmEspera>[1];
+    expect(await acordarAutomacaoEmEspera(admin(b), enr, { sent_at: seg(-28), created_at: seg(-28) }, AGORA)).toBe(false);
+    // A resposta depois do envio da Pergunta, sim.
+    expect(await acordarAutomacaoEmEspera(admin(b), enr, { sent_at: seg(-10), created_at: seg(-10) }, AGORA)).toBe(true);
+  });
+
+  it("o Aguardar \"até responder\" (não envia) continua recuando até o início", () => {
+    const so = historico().slice(0, 2);
+    expect(pisoDaRespostaNoDirect(so as never, "espera", INICIO)).toBe(INICIO);
+  });
+});
+
+describe("o desfecho da resposta do Instagram é neutro dentro da espera", () => {
+  const ev = (event_type: string, created_at: string, payload: Record<string, unknown> = {}) => ({
+    node_id: "espera",
+    idempotency_key: null,
+    event_type,
+    payload,
+    created_at,
+  });
+  const eventos = [
+    ev("wait_started", seg(0), { wake_status: "waiting_reply", next_eval_at: seg(86_400) }),
+    ev("instagram_resposta_saiu", seg(5), { tipo: "resposta_privada", no_id: "priv" }),
+    ev("instagram_resposta_falhou", seg(6), { tipo: "resposta_publica", motivo: "prazo_de_7_dias" }),
+  ];
+
+  it("uma voz: a execução segue esperando a resposta depois do desfecho gravado no nó atual", () => {
+    expect(esperavaRespostaEm(eventos as never, seg(30))).toBe(true);
+  });
+
+  it("motor: estadoDaEspera continua vendo a espera estacionada (não reenvia nem recomeça)", () => {
+    expect(estadoDaEspera(eventos as never, "espera")).toMatchObject({ aguardando: true, prazo: seg(86_400), novasTentativas: 0 });
   });
 });

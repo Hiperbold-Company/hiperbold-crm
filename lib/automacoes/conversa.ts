@@ -265,7 +265,9 @@ export const ENVIO_RESPOSTA = "resposta";
  *    este.
  *
  * `null` quando não dá para afirmar nada (evento sem `created_at`, início
- * ilegível) — quem chama fica com o piso de sempre. A nova tentativa não passa
+ * ilegível) ou quando o bloco ENVIOU nesta estadia (Mensagem com opções,
+ * Pergunta: a resposta só vale depois da mensagem dele) — quem chama fica com
+ * o piso de sempre. A nova tentativa não passa
  * por aqui (o motor só chama com `novasTentativas === 0`): depois da primeira
  * leitura, o piso é o da espera em curso, e a resposta lida não é relida.
  */
@@ -282,6 +284,14 @@ export function pisoDaRespostaNoDirect(
     const e = events[i]!;
     if (e.node_id !== nodeId || e.event_type === "node_advanced") break;
     fimDasAnteriores = i;
+    // Bloco que ENVIOU nesta estadia (Mensagem com opções, Pergunta): a
+    // resposta é à mensagem dele, e só conta depois do envio — o piso de
+    // sempre. O recuo é só da espera que não manda nada ("até responder").
+    if (e.event_type === "effect_done" || e.event_type === "effect_failed") {
+      const d = e.payload?.detalhes;
+      const envio = Array.isArray(d) ? (d[0] as Record<string, unknown> | undefined)?.envio : undefined;
+      if (typeof envio === "string" && envio !== ENVIO_RESPOSTA) return null;
+    }
   }
   let piso = inicio;
   if (events.length > 0) {

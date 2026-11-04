@@ -14,7 +14,16 @@ import {
 import { NOS_DA_SUPERFICIE } from './registro-de-nos';
 import { rotuloDoRamo } from './rotulo-do-ramo';
 import type { NomesDeValor } from './vocabulario';
-import { capabilitiesOf, transportaMensagem, type ChannelProvider } from '../channels/capabilities';
+import {
+  capabilitiesOf,
+  opcoesNativas,
+  PROVIDERS_SOCIAIS,
+  TETO_DO_TEXTO_DO_DIRECT_BYTES,
+  transportaMensagem,
+  type ChannelProvider,
+} from '../channels/capabilities';
+import { bytesDoTextoQueSai } from '../channels/opcoes-numeradas';
+import type { OutboundInteractive } from '../channels/types';
 
 /**
  * Structural publish validator for follow-up flow graphs.
@@ -57,6 +66,7 @@ export const PUBLISH_ERROR_CODES = [
   'instagram_publica_antes_da_privada',
   'instagram_mensagem_antes_da_resposta',
   'instagram_gatilhos_misturados',
+  'instagram_texto_longo',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -239,6 +249,9 @@ function ehSaidaSemResposta(e: FlowEdge): boolean {
   );
 }
 
+export const TEXTO_LONGO_NO_INSTAGRAM =
+  'O texto (com as opções numeradas) passa do limite do Instagram (1000 bytes; acento e emoji contam mais de um).';
+
 export const GATILHOS_MISTURADOS_NO_INSTAGRAM =
   "Automação que começa por comentário do Instagram não pode ter outros gatilhos quando manda mensagens.";
 
@@ -267,6 +280,37 @@ function validarConversaNoDirect(graph: FlowGraph, errors: PublishValidationErro
       code: 'instagram_gatilhos_misturados',
       message: GATILHOS_MISTURADOS_NO_INSTAGRAM,
     });
+  }
+  // O teto do Direct é em BYTES, com as opções numeradas (o canal social não
+  // desenha botão): a mesma régua do envio (`bytesDoTextoQueSai`). O texto aqui
+  // ainda tem as variáveis cruas; o envio confere de novo depois de preenchê-las.
+  const opcoesNativasNoDirect = PROVIDERS_SOCIAIS.every((p) => opcoesNativas(p));
+  for (const n of [...conversa].sort(byId)) {
+    const textos: Array<{ texto: string | undefined; comOpcoes: boolean }> =
+      n.type === 'message'
+        ? [
+            { texto: n.config.body, comOpcoes: true },
+            { texto: n.config.invalid_reply?.message, comOpcoes: true },
+          ]
+        : [
+            { texto: n.config.question, comOpcoes: false },
+            { texto: n.config.retry_message, comOpcoes: false },
+            { texto: n.config.timeout_message, comOpcoes: false },
+          ];
+    const opcoes = n.type === 'message' ? (n.config.options as OutboundInteractive | undefined) : undefined;
+    const passou = textos.some(
+      ({ texto, comOpcoes }) =>
+        typeof texto === 'string' &&
+        bytesDoTextoQueSai(texto.trim(), comOpcoes ? opcoes : undefined, opcoesNativasNoDirect) >
+          TETO_DO_TEXTO_DO_DIRECT_BYTES,
+    );
+    if (passou) {
+      errors.push({
+        node_id: n.id,
+        code: 'instagram_texto_longo',
+        message: `"${n.label}": ${TEXTO_LONGO_NO_INSTAGRAM}`,
+      });
+    }
   }
   const porId = new Map(graph.nodes.map((n) => [n.id, n]));
   const saidas = new Map<string, FlowEdge[]>();

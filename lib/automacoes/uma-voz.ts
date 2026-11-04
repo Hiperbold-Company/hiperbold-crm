@@ -31,7 +31,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type pg from "pg";
 
-import { AUTOMACAO_GATILHOS_HANDLER_KEY } from "./chaves";
+import {
+  AUTOMACAO_GATILHOS_HANDLER_KEY,
+  EVENTO_DA_EXECUCAO_RESPOSTA_FALHOU,
+  EVENTO_DA_EXECUCAO_RESPOSTA_SAIU,
+} from "./chaves";
 import { inboundContaComoResposta } from "./conversa";
 import { casaGatilho, type FatoDeMensagem } from "./gatilhos";
 import { automacaoTriggerSchema, type AutomacaoTrigger } from "./schemas";
@@ -97,6 +101,10 @@ const EVENTOS_DENTRO_DA_ESPERA = new Set([
   "effect_done",
   "effect_failed",
   "action_recheck",
+  // O desfecho da resposta do Instagram (`desfecho-da-resposta.handler.ts`) é
+  // gravado no nó ATUAL, muitas vezes depois do `wait_started`: só história.
+  EVENTO_DA_EXECUCAO_RESPOSTA_SAIU,
+  EVENTO_DA_EXECUCAO_RESPOSTA_FALHOU,
 ]);
 
 /**

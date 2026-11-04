@@ -27,7 +27,10 @@ const IG = "44444444-4444-4444-8444-444444444444";
 const MESSENGER = "55555555-5555-4555-8555-555555555555";
 const WHATS = "66666666-6666-4666-8666-666666666666";
 
-const { getMock } = vi.hoisted(() => ({ getMock: vi.fn() }));
+const { getMock, contasMock } = vi.hoisted(() => ({
+  getMock: vi.fn(),
+  contasMock: { atual: null as unknown[] | null },
+}));
 vi.mock("@/lib/api/client", () => ({ apiClient: { get: getMock } }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   usePermission: () => false,
@@ -36,7 +39,7 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
 vi.mock("@/hooks/channels/useChannelSessions", async (original) => ({
   ...(await original<typeof Canais>()),
   useChannelSessions: () => ({
-    data: [
+    data: contasMock.atual ?? [
       { id: IG, display_name: "Loja no Instagram", phone_number: null, plataforma: "instagram" },
       {
         id: MESSENGER,
@@ -94,15 +97,17 @@ function ultimoGatilho(onChange: ReturnType<typeof vi.fn>): AutomacaoTrigger {
   return config.triggers[0]!;
 }
 
-async function abrir() {
+async function abrir(config: Partial<AutomacaoTriggerConfig> = {}) {
   const onChange = vi.fn();
-  montar(<AutomationTriggerForm config={{}} onChange={onChange} />);
+  montar(<AutomationTriggerForm config={config} onChange={onChange} />);
   const u = userEvent.setup({ delay: null });
-  await u.selectOptions(screen.getByTestId("gatilho-0-tipo"), "instagram_comment");
+  if (!config.triggers)
+    await u.selectOptions(screen.getByTestId("gatilho-0-tipo"), "instagram_comment");
   return { onChange, u };
 }
 
 beforeEach(() => {
+  contasMock.atual = null;
   getMock.mockReset();
   getMock.mockImplementation(async (url: string) => {
     if (url.includes("&link=")) {
@@ -123,13 +128,67 @@ describe("gatilho: comentário no Instagram", () => {
     expect(screen.queryByText("WhatsApp vendas")).not.toBeInTheDocument();
   });
 
-  it("sem conta escolhida: explica que precisa escolher a conta, e não chama a rota", async () => {
-    await abrir();
-    expect(screen.getByTestId("gatilho-0-posts-sem-conta")).toHaveTextContent(
-      "Escolha a conta acima para listar os posts dela.",
+  it("sem conta marcada (qualquer conta): lista os posts da única conta do Instagram, e o campo de colar aparece", async () => {
+    const { onChange, u } = await abrir();
+    await screen.findByTestId("gatilho-0-post-18000000000000001");
+    expect(getMock.mock.calls[0]![0]).toBe(
+      `/api/v1/channels/meta-social/posts?channel_session_id=${IG}`,
     );
+    expect(screen.queryByTestId("gatilho-0-posts-conta")).not.toBeInTheDocument();
+    expect(screen.getByTestId("gatilho-0-post-link")).toBeInTheDocument();
     expect(screen.getByText("Nenhum escolhido = qualquer post.")).toBeInTheDocument();
+    await u.click(screen.getByTestId("gatilho-0-post-18000000000000002"));
+    const g = ultimoGatilho(onChange);
+    expect(g).toMatchObject({ media_ids: ["18000000000000002"] });
+    expect(g).not.toHaveProperty("channel_session_ids");
+  });
+
+  it("várias contas do Instagram sem nenhuma marcada: seletor de conta acima da grade", async () => {
+    const OUTRA_IG = "77777777-7777-4777-8777-777777777777";
+    contasMock.atual = [
+      { id: IG, display_name: "Loja no Instagram", phone_number: null, plataforma: "instagram" },
+      {
+        id: OUTRA_IG,
+        display_name: "Outlet no Instagram",
+        phone_number: null,
+        plataforma: "instagram",
+      },
+    ];
+    const { u } = await abrir();
+    const seletor = await screen.findByTestId("gatilho-0-posts-conta");
+    await u.selectOptions(seletor, OUTRA_IG);
+    await waitFor(() =>
+      expect(getMock.mock.calls.at(-1)![0]).toBe(
+        `/api/v1/channels/meta-social/posts?channel_session_id=${OUTRA_IG}`,
+      ),
+    );
+  });
+
+  it("sem conta do Instagram conectada: avisa, e o id colado ainda vale", async () => {
+    contasMock.atual = [
+      { id: WHATS, display_name: "WhatsApp vendas", phone_number: null, plataforma: "whatsapp" },
+    ];
+    const { onChange, u } = await abrir();
+    expect(screen.getByTestId("gatilho-0-posts-sem-conta")).toHaveTextContent(
+      "Conecte uma conta do Instagram para listar os posts.",
+    );
     expect(getMock).not.toHaveBeenCalled();
+    await u.type(screen.getByTestId("gatilho-0-post-link"), "17895695668004550{Enter}");
+    expect(ultimoGatilho(onChange)).toMatchObject({ media_ids: ["17895695668004550"] });
+  });
+
+  it("conta já salva que não é do Instagram continua aparecendo marcada, e dá para desmarcar", async () => {
+    const { onChange, u } = await abrir({
+      triggers: [
+        { kind: "instagram_comment", match: "any", keywords: [], channel_session_ids: [MESSENGER] },
+      ],
+      reentry: { policy: "skip_if_running", cooldown_minutes: 0 },
+    } as AutomacaoTriggerConfig);
+    const marcada = screen.getByLabelText("Página no Messenger");
+    expect(marcada).toBeChecked();
+    expect(screen.queryByText("WhatsApp vendas")).not.toBeInTheDocument();
+    await u.click(marcada);
+    expect(ultimoGatilho(onChange)).not.toHaveProperty("channel_session_ids");
   });
 
   it("com a conta: lista os posts recentes e escolhe vários; desmarcar tira", async () => {

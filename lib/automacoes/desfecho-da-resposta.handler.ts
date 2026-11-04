@@ -31,12 +31,12 @@ import type { EventHandler, EventRow, HandlerResult } from "@/lib/event-log/disp
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { EVENTO_RESPOSTA_ENVIADA, EVENTO_RESPOSTA_FALHOU } from "./canal-de-comentarios";
+import { EVENTO_DA_EXECUCAO_RESPOSTA_FALHOU, EVENTO_DA_EXECUCAO_RESPOSTA_SAIU } from "./chaves";
 
 export const AUTOMACAO_DESFECHO_DA_RESPOSTA_HANDLER_KEY = "automacao-desfecho-da-resposta.v1";
 
 /** Os `event_type` que esta linha ganha em `followup_enrollment_events`. */
-export const EVENTO_DA_EXECUCAO_RESPOSTA_SAIU = "instagram_resposta_saiu";
-export const EVENTO_DA_EXECUCAO_RESPOSTA_FALHOU = "instagram_resposta_falhou";
+export { EVENTO_DA_EXECUCAO_RESPOSTA_FALHOU, EVENTO_DA_EXECUCAO_RESPOSTA_SAIU } from "./chaves";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

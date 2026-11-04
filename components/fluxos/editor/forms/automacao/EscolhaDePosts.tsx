@@ -6,8 +6,10 @@
  * link de um post. Nenhum escolhido = qualquer post.
  *
  * Os posts vêm de `GET /api/v1/channels/meta-social/posts` (a organização sai
- * da sessão; só gerente para cima). Sem conta escolhida no gatilho não há de
- * onde listar: a tela diz isso em vez de mostrar uma lista vazia.
+ * da sessão; só gerente para cima). As contas de onde listar são as marcadas
+ * no gatilho ou, sem nenhuma marcada ("qualquer conta"), as do Instagram
+ * conectadas. Sem conta nenhuma não há de onde listar: a tela diz isso, e o
+ * campo de colar continua aceitando o id do post.
  */
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -58,7 +60,7 @@ export function EscolhaDePosts({
   onChange,
 }: {
   prefixo: string;
-  /** As contas escolhidas no gatilho (id + rótulo), na ordem da tela. */
+  /** As contas de onde listar (id + rótulo), na ordem da tela. */
   contas: Array<{ id: string; rotulo: string }>;
   escolhidos: string[];
   max: number;
@@ -90,12 +92,16 @@ export function EscolhaDePosts({
 
   const colarLink = async () => {
     const texto = link.trim();
-    if (!texto || !conta) return;
+    if (!texto) return;
     setErroDoLink(null);
     // Id numérico colado direto continua valendo (automações antigas).
     if (/^\d{5,40}$/.test(texto)) {
       if (!escolhidos.includes(texto) && escolhidos.length < max) onChange([...escolhidos, texto]);
       setLink("");
+      return;
+    }
+    if (!conta) {
+      setErroDoLink(t("Sem conta do Instagram para achar o link. Cole o id do post (só números)."));
       return;
     }
     setResolvendo(true);
@@ -151,7 +157,7 @@ export function EscolhaDePosts({
 
       {!conta ? (
         <p className="text-xs text-text-muted" data-testid={`${prefixo}-posts-sem-conta`}>
-          {t("Escolha a conta acima para listar os posts dela.")}
+          {t("Conecte uma conta do Instagram para listar os posts.")}
         </p>
       ) : (
         <>
@@ -216,44 +222,44 @@ export function EscolhaDePosts({
               })}
             </ul>
           )}
-          <div className="space-y-1">
-            <div className="flex gap-2">
-              <Input
-                id={`${prefixo}-post-link`}
-                data-testid={`${prefixo}-post-link`}
-                value={link}
-                maxLength={2048}
-                placeholder={t("Ou cole o link do post")}
-                onChange={(e) => setLink(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void colarLink();
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={resolvendo || !link.trim()}
-                onClick={() => void colarLink()}
-              >
-                {t("Adicionar")}
-              </Button>
-            </div>
-            {erroDoLink && (
-              <p
-                className="text-xs text-error-fg"
-                role="alert"
-                data-testid={`${prefixo}-post-link-erro`}
-              >
-                {erroDoLink}
-              </p>
-            )}
-          </div>
         </>
       )}
+      <div className="space-y-1">
+        <div className="flex gap-2">
+          <Input
+            id={`${prefixo}-post-link`}
+            data-testid={`${prefixo}-post-link`}
+            value={link}
+            maxLength={2048}
+            placeholder={conta ? t("Ou cole o link do post") : t("Ou cole o id do post")}
+            onChange={(e) => setLink(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void colarLink();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={resolvendo || !link.trim()}
+            onClick={() => void colarLink()}
+          >
+            {t("Adicionar")}
+          </Button>
+        </div>
+        {erroDoLink && (
+          <p
+            className="text-xs text-error-fg"
+            role="alert"
+            data-testid={`${prefixo}-post-link-erro`}
+          >
+            {erroDoLink}
+          </p>
+        )}
+      </div>
     </fieldset>
   );
 }

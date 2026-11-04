@@ -14982,6 +14982,10 @@ export const DICIONARIO: Traducoes = {
     es: "la conversación de Direct aún no se abrió: la persona necesita responder primero",
   },
   // Direct no fluxo, parte 2.
+  "O texto (com as opções numeradas) passa do limite do Instagram (1000 bytes; acento e emoji contam mais de um).": { es: "El texto (con las opciones numeradas) supera el límite de Instagram (1000 bytes; los acentos y emojis cuentan más de uno)." },
+  "Ou cole o id do post": { es: "O pega el id de la publicación" },
+  "Sem conta do Instagram para achar o link. Cole o id do post (só números).": { es: "Sin cuenta de Instagram para encontrar el enlace. Pega el id de la publicación (solo números)." },
+  "Conta não encontrada": { es: "Cuenta no encontrada" },
   "Resposta privada saiu": { es: "Respuesta privada enviada" },
   "Resposta privada falhou": { es: "Respuesta privada fallida" },
   "Resposta pública saiu": { es: "Respuesta pública enviada" },
@@ -15022,18 +15026,14 @@ export const DICIONARIO: Traducoes = {
     es: "No fue posible leer las publicaciones de la cuenta.",
   },
   "Nenhum escolhido = qualquer post.": { es: "Ninguno elegido = cualquier publicación." },
-  "Escolha a conta acima para listar os posts dela.": {
-    es: "Elige la cuenta arriba para listar sus publicaciones.",
-  },
+  "Conecte uma conta do Instagram para listar os posts.": { es: "Conecta una cuenta de Instagram para listar las publicaciones." },
   "Conta dos posts": { es: "Cuenta de las publicaciones" },
   "Carregando os posts…": { es: "Cargando las publicaciones…" },
   "Esta conta ainda não tem posts.": { es: "Esta cuenta aún no tiene publicaciones." },
   "Sem legenda": { es: "Sin descripción" },
   "Ou cole o link do post": { es: "O pega el enlace de la publicación" },
   "A lista de posts está cheia.": { es: "La lista de publicaciones está llena." },
-  "texto passou do limite do Instagram (1000 caracteres, contando as opções numeradas)": {
-    es: "el texto superó el límite de Instagram (1000 caracteres, contando las opciones numeradas)",
-  },
+  "texto passou do limite do Instagram (1000 bytes, contando as opções numeradas; acento e emoji contam mais de um)": { es: "el texto superó el límite de Instagram (1000 bytes, contando las opciones numeradas; los acentos y emojis cuentan más de uno)" },
   "Enquanto espera, o agente de IA não responde nesta conversa.": {
     es: "Mientras espera, el agente de IA no responde en esta conversación.",
   },

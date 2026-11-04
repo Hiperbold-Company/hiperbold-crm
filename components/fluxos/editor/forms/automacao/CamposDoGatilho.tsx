@@ -327,10 +327,22 @@ function CamposDoComentario({
 }) {
   const t = useT();
   const canais = useChannelSessions();
-  // Só as conexões do Instagram (campo `plataforma` da lista de conexões):
-  // Messenger e o social intermediado não recebem comentário.
-  const contas = (canais.data ?? []).filter((c) => c.plataforma === "instagram");
   const escolhidas = g.channel_session_ids ?? [];
+  // Só as conexões do Instagram (campo `plataforma` da lista de conexões):
+  // Messenger e o social intermediado não recebem comentário. A conta que JÁ
+  // está salva no gatilho aparece mesmo que não seja (ou não exista mais),
+  // marcada, para poder ser desmarcada.
+  const doInstagram = (canais.data ?? []).filter((c) => c.plataforma === "instagram");
+  const salvasDeFora = escolhidas
+    .filter((id) => !doInstagram.some((c) => c.id === id))
+    .map((id) => {
+      const c = (canais.data ?? []).find((x) => x.id === id);
+      return { id, rotulo: c ? channelLabel(c, t) : t("Conta não encontrada") };
+    });
+  const contas = [...doInstagram.map((c) => ({ id: c.id, rotulo: channelLabel(c, t) })), ...salvasDeFora];
+  // De onde listar os posts: as marcadas; sem nenhuma ("qualquer conta"), as do Instagram.
+  const contasDosPosts =
+    escolhidas.length > 0 ? contas.filter((c) => escolhidas.includes(c.id)) : contas.filter((c) => !salvasDeFora.includes(c));
   const marcarConta = (id: string, marcado: boolean) => {
     const proximos = marcado ? [...escolhidas, id] : escolhidas.filter((x) => x !== id);
     const { channel_session_ids: _antes, ...resto } = g;
@@ -346,7 +358,7 @@ function CamposDoComentario({
           <Marcador
             key={c.id}
             id={`${prefixo}-conta-${c.id}`}
-            rotulo={channelLabel(c, t)}
+            rotulo={c.rotulo}
             marcado={escolhidas.includes(c.id)}
             onChange={(m) => marcarConta(c.id, m)}
           />
@@ -355,9 +367,7 @@ function CamposDoComentario({
       </fieldset>
       <EscolhaDePosts
         prefixo={prefixo}
-        contas={contas
-          .filter((c) => escolhidas.includes(c.id))
-          .map((c) => ({ id: c.id, rotulo: channelLabel(c, t) }))}
+        contas={contasDosPosts}
         escolhidos={posts}
         max={MAX_PUBLICACOES}
         onChange={(ids) => {

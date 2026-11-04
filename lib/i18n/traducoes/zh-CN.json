@@ -5866,13 +5866,17 @@
   "Muitas tentativas. Aguarde um minuto e tente de novo.": "尝试次数过多，请等待一分钟后重试。",
   "Não foi possível ler os posts da conta.": "无法读取该账号的帖子。",
   "Nenhum escolhido = qualquer post.": "未选择 = 任意帖子。",
-  "Escolha a conta acima para listar os posts dela.": "请先在上方选择账号以列出其帖子。",
   "Conta dos posts": "帖子所属账号",
   "Carregando os posts…": "正在加载帖子…",
   "Esta conta ainda não tem posts.": "该账号还没有帖子。",
   "Sem legenda": "无文案",
   "Ou cole o link do post": "或粘贴帖子链接",
   "A lista de posts está cheia.": "帖子列表已满。",
-  "texto passou do limite do Instagram (1000 caracteres, contando as opções numeradas)": "文本超出 Instagram 限制（1000 个字符，含编号选项）",
-  "Enquanto espera, o agente de IA não responde nesta conversa.": "等待期间，AI 助手不会在此对话中回复。"
+  "Enquanto espera, o agente de IA não responde nesta conversa.": "等待期间，AI 助手不会在此对话中回复。",
+  "texto passou do limite do Instagram (1000 bytes, contando as opções numeradas; acento e emoji contam mais de um)": "文本超出 Instagram 限制（1000 字节，含编号选项；带重音的字母和表情符号占多个字节）",
+  "Conecte uma conta do Instagram para listar os posts.": "请连接一个 Instagram 账号以列出帖子。",
+  "O texto (com as opções numeradas) passa do limite do Instagram (1000 bytes; acento e emoji contam mais de um).": "文本（含编号选项）超出 Instagram 限制（1000 字节；带重音的字母和表情符号占多个字节）。",
+  "Ou cole o id do post": "或粘贴帖子 ID",
+  "Sem conta do Instagram para achar o link. Cole o id do post (só números).": "没有可用于查找链接的 Instagram 账号。请粘贴帖子 ID（仅数字）。",
+  "Conta não encontrada": "未找到账号"
 }
