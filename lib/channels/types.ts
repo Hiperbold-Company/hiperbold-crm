@@ -99,6 +99,7 @@ export interface ChannelCapabilities {
    * recebe `interactive` de um canal `none`.
    */
   interactive: "native" | "none";
+  /**
    * O canal deixa LER, em bloco e paginado, a AGENDA DE CONTATOS do aparelho
    * pareado — o que o número da empresa salvou no celular?
    *

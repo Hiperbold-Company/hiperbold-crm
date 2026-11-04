@@ -166,6 +166,7 @@ export interface UserOrgMembership {
    * nome e idioma, sem consulta a mais. Ausente = padrão do catálogo.
    */
   permissoes?: PermissoesResolvidas;
+  /**
    * Moeda e país da organização (`organizations.currency` / `.country`).
    *
    * Mesma carona de `locale` e `timezone`, e pelo mesmo motivo: são as telas do

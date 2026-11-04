@@ -106,6 +106,7 @@ export interface PickToolsInput {
    * Operador. Só tem efeito com `contatoDoTurno` (ver `escopo-do-turno.ts`).
    */
   papelDoTurno?: PapelDoTurno;
+  /**
    * Servidor MCP externo REGISTRADO pela instalação, já com as ferramentas que
    * ele anunciou (#2147).
    *

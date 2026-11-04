@@ -78,6 +78,7 @@ export interface DrainKnobs {
    * Ausente = o padrão conservador (20); 0 = desligado.
    */
   maxAiTurnsPerContactPerHour?: number;
+  /**
    * Relógio da janela de RESPOSTA (#3383). Só é usado na pergunta "a janela
    * está aberta AGORA?" que o drain faz quando achar um job adiado esperando
    * carona — e é justamente aí que o teste precisa fixar a hora (22h11 para a

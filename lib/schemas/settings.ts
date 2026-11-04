@@ -192,6 +192,7 @@ export const customFieldSchema = z.object({
    * "Rastreamento", o resto para "Dados do lead". Funil antigo continua válido.
    */
   grupo: z.enum(["dados", "rastreamento"]).optional(),
+  /**
    * A QUE PERTENCE O CAMPO (issue #2791): ao NEGÓCIO (`negocio`) ou ao CONTATO
    * (`contato`).
    *
