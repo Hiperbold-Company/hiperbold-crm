@@ -341,9 +341,7 @@ function CamposDoComentario({
     <>
       <fieldset className="space-y-1.5" data-testid={`${prefixo}-contas`}>
         <legend className="text-sm font-medium text-text">{t("Em quais contas")}</legend>
-        <p className="text-xs text-text-muted">
-          {t("Nenhuma marcada = qualquer conta conectada.")}
-        </p>
+        <p className="text-xs text-text-muted">{t("Nenhuma marcada = qualquer conta conectada.")}</p>
         {contas.map((c) => (
           <Marcador
             key={c.id}
@@ -353,9 +351,7 @@ function CamposDoComentario({
             onChange={(m) => marcarConta(c.id, m)}
           />
         ))}
-        {canais.isError && (
-          <p className="text-xs text-error-fg">{t("Não foi possível carregar as contas.")}</p>
-        )}
+        {canais.isError && <p className="text-xs text-error-fg">{t("Não foi possível carregar as contas.")}</p>}
       </fieldset>
       <EscolhaDePosts
         prefixo={prefixo}
@@ -377,10 +373,7 @@ function CamposDoComentario({
         <Seletor
           id={`${prefixo}-modo`}
           valor={g.match}
-          opcoes={MODOS_DO_COMENTARIO.map((m) => ({
-            valor: m,
-            rotulo: t(MODOS_DO_COMENTARIO_ROTULOS[m]),
-          }))}
+          opcoes={MODOS_DO_COMENTARIO.map((m) => ({ valor: m, rotulo: t(MODOS_DO_COMENTARIO_ROTULOS[m]) }))}
           onChange={(v) => onChange({ ...g, match: v as ModoDoComentario })}
         />
       </Campo>

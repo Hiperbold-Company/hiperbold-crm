@@ -169,11 +169,7 @@ async function enviar(
     ? await conversaDoDirect(c.admin, c.org, escopo, ids)
     : await conversaDeWhatsapp(c, ids);
   if (!conversa) {
-    return {
-      ok: false,
-      erro: escopo ? "sem_conversa_direct" : "sem_conversa_whatsapp",
-      detalhe: base,
-    };
+    return { ok: false, erro: escopo ? "sem_conversa_direct" : "sem_conversa_whatsapp", detalhe: base };
   }
   // Teto do canal (o Direct do Instagram é menor que o do WhatsApp), medido no
   // texto que SAI: com as opções numeradas quando o canal não as desenha.

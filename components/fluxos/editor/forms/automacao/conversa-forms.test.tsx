@@ -407,9 +407,7 @@ describe("Mensagem e Pergunta numa automação que começa por comentário do In
   it("a Mensagem avisa que sai pelo Direct, que a conversa abre quando a pessoa responde e que as opções chegam numeradas", () => {
     montar(<MessageForm config={comOpcoes} onChange={vi.fn()} noInstagram />);
     const direct = screen.getByTestId("aviso-do-direct");
-    expect(direct).toHaveTextContent(
-      "No Instagram, esta mensagem sai pelo Direct de quem comentou.",
-    );
+    expect(direct).toHaveTextContent("No Instagram, esta mensagem sai pelo Direct de quem comentou.");
     expect(direct).toHaveTextContent("A conversa abre quando a pessoa responde");
     const canal = screen.getByTestId("mensagem-aviso-canal");
     expect(canal).toHaveTextContent("No Instagram, as opções chegam numeradas (1, 2, 3)");

@@ -6,12 +6,7 @@
  * nasce de uma diferença real e medida entre WAHA e Meta Cloud; capability que
  * ninguém consome é código morto, e o teste de matriz reprova.
  */
-import type {
-  AnexosDeSaida,
-  ChannelCapabilities,
-  ChannelProvider,
-  ProviderDeMensagem,
-} from "./types";
+import type { AnexosDeSaida, ChannelCapabilities, ChannelProvider, ProviderDeMensagem } from "./types";
 
 export type { AnexosDeSaida, ChannelProvider, ChannelCapabilities, ProviderDeMensagem };
 
@@ -23,13 +18,7 @@ export type { AnexosDeSaida, ChannelProvider, ChannelCapabilities, ProviderDeMen
  * `capabilitiesOf` segue falhando fechado para quem não está aqui.
  */
 /** O que os canais de WhatsApp enviam: tudo que o composer oferece. */
-const TODOS_OS_ANEXOS: AnexosDeSaida = {
-  imagem: true,
-  video: true,
-  audio: true,
-  documento: true,
-  contato: true,
-};
+const TODOS_OS_ANEXOS: AnexosDeSaida = { imagem: true, video: true, audio: true, documento: true, contato: true };
 
 export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilities> = {
   // Auto-restrição: falo quando quiser, mas o WhatsApp me bane se eu abusar.
@@ -232,10 +221,7 @@ export const CHANNEL_PROVIDER_META_SOCIAL: ChannelProvider = "meta_social";
  * não é "número", e os botões de lá (Reconectar por QR, Excluir pelo
  * transporte do WhatsApp) não servem para ela. Cada uma tem a própria aba.
  */
-export const PROVIDERS_SOCIAIS = [
-  "zernio_social",
-  "meta_social",
-] as const satisfies readonly ProviderDeMensagem[];
+export const PROVIDERS_SOCIAIS = ["zernio_social", "meta_social"] as const satisfies readonly ProviderDeMensagem[];
 
 /** `true` quando a sessão é de rede social, não de WhatsApp. */
 export function ehCanalSocial(provider: string | null | undefined): boolean {
@@ -332,9 +318,7 @@ export function capabilitiesOf(provider: ChannelProvider): ChannelCapabilities {
  * provider mais novo que esta imagem) oferece TUDO — é o comportamento de antes
  * desta capability, e o adapter segue recusando o que não cumpre.
  */
-export function anexosOferecidos(
-  provider: string | null | undefined,
-): AnexosDeSaida & { voz: boolean } {
+export function anexosOferecidos(provider: string | null | undefined): AnexosDeSaida & { voz: boolean } {
   if (!transportaMensagem(provider)) return { ...TODOS_OS_ANEXOS, voz: true };
   const c = capabilitiesOf(provider as ChannelProvider);
   return { ...c.anexosDeSaida, voz: c.voiceNote !== "none" && c.anexosDeSaida.audio };

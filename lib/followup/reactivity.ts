@@ -74,11 +74,7 @@ export const RESUME_GRACE_MS = 30 * 60_000;
  * INCLUI o dormente de propósito: 28 dias de gente invisível seria uma ilha.
  * Duas listas parecidas com significados diferentes; o nome daqui diz qual é.
  */
-export const LIVE_STATUSES: readonly EnrollmentStatus[] = [
-  "active",
-  "waiting_reply",
-  "paused_handoff",
-];
+export const LIVE_STATUSES: readonly EnrollmentStatus[] = ["active", "waiting_reply", "paused_handoff"];
 
 /**
  * O opt-out alcança o dormente também.
@@ -87,11 +83,7 @@ export const LIVE_STATUSES: readonly EnrollmentStatus[] = [
  * dias que sobrevivesse ao "pare de me mandar mensagem" voltaria a falar com
  * quem pediu silêncio — um mês depois, quando ninguém mais lembra por quê.
  */
-const STATUS_ALCANCADOS_PELO_OPT_OUT: readonly EnrollmentStatus[] = [
-  ...LIVE_STATUSES,
-  "dormente",
-  "coletando",
-];
+const STATUS_ALCANCADOS_PELO_OPT_OUT: readonly EnrollmentStatus[] = [...LIVE_STATUSES, "dormente", "coletando"];
 
 export interface LiveEnrollmentRef {
   id: string;
@@ -124,9 +116,7 @@ export interface LiveEnrollmentRef {
 
 /** Automação parada num "Esperar um tempo": a mensagem do contato não a acorda
  *  nem a cancela. Follow-up e os outros modos seguem a política de sempre. */
-export function esperaDeTempoPuro(
-  e: Pick<LiveEnrollmentRef, "lane" | "status" | "wait_mode">,
-): boolean {
+export function esperaDeTempoPuro(e: Pick<LiveEnrollmentRef, "lane" | "status" | "wait_mode">): boolean {
   return e.lane === "automacao" && e.status === "active" && e.wait_mode === "delay";
 }
 
@@ -224,11 +214,7 @@ async function applyStep(
   return true;
 }
 
-function cancelPatch(
-  clock: () => Date,
-  outcome: EnrollmentOutcome,
-  cancelReason: string,
-): EnrollmentPatch {
+function cancelPatch(clock: () => Date, outcome: EnrollmentOutcome, cancelReason: string): EnrollmentPatch {
   return {
     status: "cancelled",
     outcome,
@@ -253,15 +239,7 @@ async function cancelAll(
   let reacted = 0;
   for (const e of enrollments) {
     const key = `reactivity:${eventLogRowId}:${e.id}:${eventType}`;
-    const applied = await applyStep(
-      db,
-      orgId,
-      e,
-      key,
-      eventType,
-      { reason: cancelReason },
-      cancelPatch(clock, outcome, cancelReason),
-    );
+    const applied = await applyStep(db, orgId, e, key, eventType, { reason: cancelReason }, cancelPatch(clock, outcome, cancelReason));
     if (applied) reacted++;
   }
   return reacted;
@@ -291,16 +269,7 @@ async function reactToInbound(
     // STOP/opt-out (a regex já rodou em lib/waha/ingest.ts e setou is_blocked
     // ANTES de emitir este evento, na mesma request — ver header do arquivo).
     // Hard stop LGPD/anti-ban: cancela TUDO que está vivo, sem exceção de política.
-    const reacted = await cancelAll(
-      db,
-      row.organization_id,
-      row.id,
-      live,
-      "opted_out",
-      "stop_keyword",
-      "reactivity_opted_out",
-      clock,
-    );
+    const reacted = await cancelAll(db, row.organization_id, row.id, live, "opted_out", "stop_keyword", "reactivity_opted_out", clock);
     return { matched: true, reacted };
   }
 
@@ -417,8 +386,7 @@ async function reactToHandoffOpen(
   if (!conversationId) return { matched: false, reacted: 0 };
 
   const contactId =
-    strOrNull(row.payload.contact_id) ??
-    (await db.loadConversationContactId(row.organization_id, conversationId));
+    strOrNull(row.payload.contact_id) ?? (await db.loadConversationContactId(row.organization_id, conversationId));
   if (!contactId) return { matched: true, reacted: 0 };
 
   const live = await db.loadLiveEnrollmentsForContact(row.organization_id, contactId);
@@ -451,12 +419,7 @@ async function reactToHandoffOpen(
       key,
       "handoff_paused",
       { prior_status: e.status },
-      {
-        status: "paused_handoff",
-        next_eval_at: null,
-        claimed_until: null,
-        updated_at: clock().toISOString(),
-      },
+      { status: "paused_handoff", next_eval_at: null, claimed_until: null, updated_at: clock().toISOString() },
     );
     if (applied) reacted++;
   }
@@ -475,9 +438,7 @@ async function reactToHandoffClose(
   const conversationId = strOrNull(row.payload.conversation_id);
   const contactId =
     strOrNull(row.payload.contact_id) ??
-    (conversationId
-      ? await db.loadConversationContactId(row.organization_id, conversationId)
-      : null);
+    (conversationId ? await db.loadConversationContactId(row.organization_id, conversationId) : null);
   if (!contactId) return { matched: false, reacted: 0 };
 
   const live = await db.loadLiveEnrollmentsForContact(row.organization_id, contactId);
@@ -493,12 +454,7 @@ async function reactToHandoffClose(
       key,
       "handoff_resumed",
       {},
-      {
-        status: "active",
-        next_eval_at: nextEvalAt,
-        claimed_until: null,
-        updated_at: clock().toISOString(),
-      },
+      { status: "active", next_eval_at: nextEvalAt, claimed_until: null, updated_at: clock().toISOString() },
     );
     if (applied) reacted++;
   }
@@ -575,9 +531,7 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
       const ids = await idsDoContatoEGemeos(admin, orgId, contactId);
       let consulta = admin
         .from("followup_enrollments")
-        .select(
-          "id, status, current_node_id, steps_taken, pointer_id, updated_at, lane, version_id, vars",
-        )
+        .select("id, status, current_node_id, steps_taken, pointer_id, updated_at, lane, version_id, vars")
         .eq("organization_id", orgId)
         .in("contact_id", ids)
         .in("status", statuses);
@@ -603,9 +557,7 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
       // por versão, e só quando há automação ativa entre as inscrições.
       const versoes = [
         ...new Set(
-          enrollments
-            .filter((e) => e.lane === "automacao" && e.status === "active")
-            .map((e) => e.version_id as string),
+          enrollments.filter((e) => e.lane === "automacao" && e.status === "active").map((e) => e.version_id as string),
         ),
       ].filter((v) => typeof v === "string" && v.length > 0);
       const grafoPorVersao = new Map<string, unknown>();
@@ -648,11 +600,7 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
       return { inserted: true };
     },
     async updateEnrollment(id, orgId, patch) {
-      const { error } = await admin
-        .from("followup_enrollments")
-        .update(patch)
-        .eq("id", id)
-        .eq("organization_id", orgId);
+      const { error } = await admin.from("followup_enrollments").update(patch).eq("id", id).eq("organization_id", orgId);
       if (error) throw new Error(error.message);
     },
     async agoraNoBanco() {
@@ -669,9 +617,9 @@ export function modoDoWait(graph: unknown, nodeId: string): string | null {
   if (!graph || typeof graph !== "object") return null;
   const nodes = (graph as { nodes?: unknown }).nodes;
   if (!Array.isArray(nodes)) return null;
-  const no = nodes.find(
-    (n) => n && typeof n === "object" && (n as { id?: unknown }).id === nodeId,
-  ) as { type?: unknown; config?: { mode?: unknown } } | undefined;
+  const no = nodes.find((n) => n && typeof n === "object" && (n as { id?: unknown }).id === nodeId) as
+    | { type?: unknown; config?: { mode?: unknown } }
+    | undefined;
   if (!no || no.type !== "wait") return null;
   return typeof no.config?.mode === "string" ? no.config.mode : null;
 }

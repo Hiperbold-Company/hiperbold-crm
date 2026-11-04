@@ -1,8 +1,8 @@
-import { campoSoLeitura } from "@/lib/automacoes/campos";
-import { GATILHO_TRAZ_CONTATO } from "@/lib/automacoes/schemas";
-import { nomeDoCampo } from "@/lib/automacoes/vocabulario";
-import type { FlowGraph, FlowEdge, FlowNode, NodeType } from "./graph-schema";
-import type { FollowupFlowSurface } from "./api-schemas";
+import { campoSoLeitura } from '@/lib/automacoes/campos';
+import { GATILHO_TRAZ_CONTATO } from '@/lib/automacoes/schemas';
+import { nomeDoCampo } from '@/lib/automacoes/vocabulario';
+import type { FlowGraph, FlowEdge, FlowNode, NodeType } from './graph-schema';
+import type { FollowupFlowSurface } from './api-schemas';
 import {
   branchIdForCondition,
   duracaoMaximaDaEspera,
@@ -10,11 +10,11 @@ import {
   ehRegraNova,
   NO_REPLY_BRANCH_ID,
   nodeBranches,
-} from "./graph-schema";
-import { NOS_DA_SUPERFICIE } from "./registro-de-nos";
-import { rotuloDoRamo } from "./rotulo-do-ramo";
-import type { NomesDeValor } from "./vocabulario";
-import { capabilitiesOf, transportaMensagem, type ChannelProvider } from "../channels/capabilities";
+} from './graph-schema';
+import { NOS_DA_SUPERFICIE } from './registro-de-nos';
+import { rotuloDoRamo } from './rotulo-do-ramo';
+import type { NomesDeValor } from './vocabulario';
+import { capabilitiesOf, transportaMensagem, type ChannelProvider } from '../channels/capabilities';
 
 /**
  * Structural publish validator for follow-up flow graphs.
@@ -24,39 +24,39 @@ import { capabilitiesOf, transportaMensagem, type ChannelProvider } from "../cha
  */
 
 export const PUBLISH_ERROR_CODES = [
-  "no_trigger",
-  "multiple_triggers",
-  "unreachable_node",
-  "no_end_path",
-  "missing_class_edge",
-  "missing_branch_edge",
-  "missing_no_reply_edge",
-  "missing_always_fallback",
-  "empty_check_value",
-  "check_value_not_number",
-  "check_stage_not_found",
-  "check_stage_archived",
-  "grace_too_short",
-  "long_wait_needs_template",
-  "immune_wait_too_short",
-  "cycle_without_wait",
-  "max_steps_exceeded",
-  "no_fora_da_superficie",
-  "roteiro_ramificado",
-  "campo_repetido",
-  "roteiro_em_ciclo",
-  "gatilho_da_automacao",
-  "regra_de_automacao",
-  "campo_so_leitura",
-  "espera_imune_na_automacao",
-  "espera_so_na_automacao",
-  "mensagem_sem_contato",
-  "automacao_iniciar_propria",
-  "automacao_iniciar_inexistente",
-  "instagram_sem_gatilho_de_comentario",
-  "instagram_publica_antes_da_privada",
-  "instagram_mensagem_antes_da_resposta",
-  "instagram_gatilhos_misturados",
+  'no_trigger',
+  'multiple_triggers',
+  'unreachable_node',
+  'no_end_path',
+  'missing_class_edge',
+  'missing_branch_edge',
+  'missing_no_reply_edge',
+  'missing_always_fallback',
+  'empty_check_value',
+  'check_value_not_number',
+  'check_stage_not_found',
+  'check_stage_archived',
+  'grace_too_short',
+  'long_wait_needs_template',
+  'immune_wait_too_short',
+  'cycle_without_wait',
+  'max_steps_exceeded',
+  'no_fora_da_superficie',
+  'roteiro_ramificado',
+  'campo_repetido',
+  'roteiro_em_ciclo',
+  'gatilho_da_automacao',
+  'regra_de_automacao',
+  'campo_so_leitura',
+  'espera_imune_na_automacao',
+  'espera_so_na_automacao',
+  'mensagem_sem_contato',
+  'automacao_iniciar_propria',
+  'automacao_iniciar_inexistente',
+  'instagram_sem_gatilho_de_comentario',
+  'instagram_publica_antes_da_privada',
+  'instagram_mensagem_antes_da_resposta',
+  'instagram_gatilhos_misturados',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -69,7 +69,8 @@ export type PublishValidationError = {
 };
 
 export type PublishValidationResult =
-  { ok: true } | { ok: false; errors: PublishValidationError[] };
+  | { ok: true }
+  | { ok: false; errors: PublishValidationError[] };
 
 /**
  * O que só o banco sabe, lido por quem chama (a rota de publish). Ausente, a
@@ -112,7 +113,7 @@ export interface ContextoDoPublish {
  */
 export function algumCanalExigeModeloForaDaJanela(providers: readonly (string | null)[]): boolean {
   return providers.some(
-    (p) => transportaMensagem(p) && !capabilitiesOf(p as ChannelProvider).freeformOutsideWindow,
+    (p) => transportaMensagem(p) && !capabilitiesOf(p as ChannelProvider).freeformOutsideWindow
   );
 }
 
@@ -126,12 +127,9 @@ export function proximosDoGrafo(graph: unknown): string[] {
   const nodes = (graph as { nodes?: unknown } | null)?.nodes;
   if (!Array.isArray(nodes)) return [];
   return nodes.flatMap((n) => {
-    const fim = (
-      n as { type?: unknown; config?: { ao_finalizar?: { tipo?: unknown; fluxo?: unknown } } }
-    ).config?.ao_finalizar;
-    return (n as { type?: unknown }).type === "end" &&
-      fim?.tipo === "proximo_fluxo" &&
-      typeof fim.fluxo === "string"
+    const fim = (n as { type?: unknown; config?: { ao_finalizar?: { tipo?: unknown; fluxo?: unknown } } }).config
+      ?.ao_finalizar;
+    return (n as { type?: unknown }).type === 'end' && fim?.tipo === 'proximo_fluxo' && typeof fim.fluxo === 'string'
       ? [fim.fluxo]
       : [];
   });
@@ -142,7 +140,10 @@ export function proximosDoGrafo(graph: unknown): string[] {
  * mensagem), ou `null`. Sem isto dois roteiros que se apontam recomeçam um ao
  * outro a cada conclusão, e o cliente responde as mesmas perguntas sem fim.
  */
-function cicloDoEncadeamento(graph: FlowGraph, roteiro: RoteiroDoPublish): string[] | null {
+function cicloDoEncadeamento(
+  graph: FlowGraph,
+  roteiro: RoteiroDoPublish,
+): string[] | null {
   const visitados = new Set<string>();
   const busca = (id: string, caminho: string[]): string[] | null => {
     if (id === roteiro.pointerId) return caminho;
@@ -151,16 +152,13 @@ function cicloDoEncadeamento(graph: FlowGraph, roteiro: RoteiroDoPublish): strin
     const outro = roteiro.encadeamentos.get(id);
     if (!outro) return null;
     for (const prox of outro.proximos) {
-      const achou = busca(prox, [
-        ...caminho,
-        roteiro.encadeamentos.get(prox)?.nome ?? "este roteiro",
-      ]);
+      const achou = busca(prox, [...caminho, roteiro.encadeamentos.get(prox)?.nome ?? 'este roteiro']);
       if (achou) return achou;
     }
     return null;
   };
   for (const prox of proximosDoGrafo(graph)) {
-    const achou = busca(prox, [roteiro.encadeamentos.get(prox)?.nome ?? "este roteiro"]);
+    const achou = busca(prox, [roteiro.encadeamentos.get(prox)?.nome ?? 'este roteiro']);
     if (achou) return achou;
   }
   return null;
@@ -181,9 +179,9 @@ function cicloDoEncadeamento(graph: FlowGraph, roteiro: RoteiroDoPublish): strin
 export { NOS_DA_SUPERFICIE };
 
 const TIPOS_DO_INSTAGRAM: ReadonlySet<NodeType> = new Set<NodeType>([
-  "instagram_private_reply",
-  "instagram_public_reply",
-  "instagram_check_follow",
+  'instagram_private_reply',
+  'instagram_public_reply',
+  'instagram_check_follow',
 ]);
 
 /**
@@ -196,25 +194,21 @@ const TIPOS_DO_INSTAGRAM: ReadonlySet<NodeType> = new Set<NodeType>([
 function validarBlocosDoInstagram(graph: FlowGraph, errors: PublishValidationError[]): void {
   const blocos = graph.nodes.filter((n) => TIPOS_DO_INSTAGRAM.has(n.type)).sort(byId);
   if (blocos.length === 0) return;
-  const gatilhos = graph.nodes.flatMap((n) =>
-    n.type === "trigger" && "triggers" in n.config ? n.config.triggers : [],
-  );
-  if (gatilhos.length > 0 && gatilhos.some((g) => g.kind !== "instagram_comment")) {
+  const gatilhos = graph.nodes.flatMap((n) => (n.type === 'trigger' && 'triggers' in n.config ? n.config.triggers : []));
+  if (gatilhos.length > 0 && gatilhos.some((g) => g.kind !== 'instagram_comment')) {
     for (const n of blocos) {
       errors.push({
         node_id: n.id,
-        code: "instagram_sem_gatilho_de_comentario",
+        code: 'instagram_sem_gatilho_de_comentario',
         message: `"${n.label}": os blocos do Instagram só funcionam quando todos os gatilhos são "Comentário no Instagram".`,
       });
     }
   }
   const saidas = new Map<string, string[]>();
   for (const e of graph.edges) saidas.set(e.source, [...(saidas.get(e.source) ?? []), e.target]);
-  const privadas = new Set(
-    blocos.filter((n) => n.type === "instagram_private_reply").map((n) => n.id),
-  );
+  const privadas = new Set(blocos.filter((n) => n.type === 'instagram_private_reply').map((n) => n.id));
   if (privadas.size === 0) return;
-  for (const publica of blocos.filter((n) => n.type === "instagram_public_reply")) {
+  for (const publica of blocos.filter((n) => n.type === 'instagram_public_reply')) {
     // Alguma resposta privada é alcançável DEPOIS desta pública?
     const vistos = new Set<string>();
     const fila = [...(saidas.get(publica.id) ?? [])];
@@ -230,8 +224,8 @@ function validarBlocosDoInstagram(graph: FlowGraph, errors: PublishValidationErr
       const privada = graph.nodes.find((n) => n.id === depois);
       errors.push({
         node_id: publica.id,
-        code: "instagram_publica_antes_da_privada",
-        message: `"${publica.label}": a resposta em público está antes de "${privada?.label ?? "Responder em privado"}". Ponha a resposta privada antes da pública no mesmo caminho.`,
+        code: 'instagram_publica_antes_da_privada',
+        message: `"${publica.label}": a resposta em público está antes de "${privada?.label ?? 'Responder em privado'}". Ponha a resposta privada antes da pública no mesmo caminho.`,
       });
     }
   }
@@ -240,8 +234,8 @@ function validarBlocosDoInstagram(graph: FlowGraph, errors: PublishValidationErr
 /** A aresta é a saída "Sem resposta" (o tempo acabou e a pessoa não respondeu). */
 function ehSaidaSemResposta(e: FlowEdge): boolean {
   return (
-    (e.condition.type === "branch" && e.condition.branch_id === NO_REPLY_BRANCH_ID) ||
-    (e.condition.type === "class_match" && e.condition.value === NO_REPLY_BRANCH_ID)
+    (e.condition.type === 'branch' && e.condition.branch_id === NO_REPLY_BRANCH_ID) ||
+    (e.condition.type === 'class_match' && e.condition.value === NO_REPLY_BRANCH_ID)
   );
 }
 
@@ -260,26 +254,24 @@ export const MENSAGEM_ANTES_DA_RESPOSTA_NO_INSTAGRAM =
  * A saída "Sem resposta" da espera não conta: a pessoa não respondeu.
  */
 function validarConversaNoDirect(graph: FlowGraph, errors: PublishValidationError[]): void {
-  const gatilhos = graph.nodes.flatMap((n) =>
-    n.type === "trigger" && "triggers" in n.config ? n.config.triggers : [],
-  );
-  if (!gatilhos.some((g) => g.kind === "instagram_comment")) return;
+  const gatilhos = graph.nodes.flatMap((n) => (n.type === 'trigger' && 'triggers' in n.config ? n.config.triggers : []));
+  if (!gatilhos.some((g) => g.kind === 'instagram_comment')) return;
   // Mensagem e Pergunta saem pelo Direct quando a execução começou por
   // comentário, e pelo WhatsApp nas outras: com gatilhos misturados o mesmo
   // bloco mudaria de canal conforme quem o iniciou. Recusa.
-  const conversa = graph.nodes.filter((n) => n.type === "message" || n.type === "question");
-  if (conversa.length > 0 && gatilhos.some((g) => g.kind !== "instagram_comment")) {
-    const inicio = graph.nodes.find((n) => n.type === "trigger");
+  const conversa = graph.nodes.filter((n) => n.type === 'message' || n.type === 'question');
+  if (conversa.length > 0 && gatilhos.some((g) => g.kind !== 'instagram_comment')) {
+    const inicio = graph.nodes.find((n) => n.type === 'trigger');
     errors.push({
       node_id: inicio?.id ?? conversa[0]!.id,
-      code: "instagram_gatilhos_misturados",
+      code: 'instagram_gatilhos_misturados',
       message: GATILHOS_MISTURADOS_NO_INSTAGRAM,
     });
   }
   const porId = new Map(graph.nodes.map((n) => [n.id, n]));
   const saidas = new Map<string, FlowEdge[]>();
   for (const e of graph.edges) saidas.set(e.source, [...(saidas.get(e.source) ?? []), e]);
-  const fila = graph.nodes.filter((n) => n.type === "trigger").map((n) => n.id);
+  const fila = graph.nodes.filter((n) => n.type === 'trigger').map((n) => n.id);
   const vistos = new Set<string>();
   const acusados: FlowNode[] = [];
   while (fila.length > 0) {
@@ -288,11 +280,11 @@ function validarConversaNoDirect(graph: FlowGraph, errors: PublishValidationErro
     vistos.add(id);
     const n = porId.get(id);
     if (!n) continue;
-    if (n.type === "message" || n.type === "question") {
+    if (n.type === 'message' || n.type === 'question') {
       acusados.push(n);
       continue;
     }
-    const esperaResposta = n.type === "wait" && n.config.mode === "until_reply";
+    const esperaResposta = n.type === 'wait' && n.config.mode === 'until_reply';
     for (const e of saidas.get(id) ?? []) {
       if (esperaResposta && !ehSaidaSemResposta(e)) continue;
       fila.push(e.target);
@@ -301,7 +293,7 @@ function validarConversaNoDirect(graph: FlowGraph, errors: PublishValidationErro
   for (const n of acusados.sort(byId)) {
     errors.push({
       node_id: n.id,
-      code: "instagram_mensagem_antes_da_resposta",
+      code: 'instagram_mensagem_antes_da_resposta',
       message: `"${n.label}": ${MENSAGEM_ANTES_DA_RESPOSTA_NO_INSTAGRAM}`,
     });
   }
@@ -313,39 +305,35 @@ function validarSuperficie(
   surface: FollowupFlowSurface,
   errors: PublishValidationError[],
   roteiro?: RoteiroDoPublish,
-  automacao?: ContextoDoPublish["automacao"],
+  automacao?: ContextoDoPublish['automacao'],
 ): void {
   const permitidos = new Set<NodeType>(NOS_DA_SUPERFICIE[surface]);
   for (const n of [...graph.nodes].sort(byId)) {
     if (!permitidos.has(n.type)) {
       errors.push({
         node_id: n.id,
-        code: "no_fora_da_superficie",
+        code: 'no_fora_da_superficie',
         message:
-          surface === "atendimento"
+          surface === 'atendimento'
             ? `A caixa "${n.label}" não é de roteiro de atendimento — use Pergunta, Skill e Fim.`
-            : surface === "automacao"
+            : surface === 'automacao'
               ? `A caixa "${n.label}" não roda numa automação.`
-              : n.type === "crm_action" ||
-                  n.type === "field_op" ||
-                  n.type === "message" ||
-                  n.type === "question" ||
-                  TIPOS_DO_INSTAGRAM.has(n.type)
+              : n.type === 'crm_action' || n.type === 'field_op' || n.type === 'message' || n.type === 'question' || TIPOS_DO_INSTAGRAM.has(n.type)
                 ? `A caixa "${n.label}" é de automação e não roda num follow-up.`
                 : `A caixa "${n.label}" é de roteiro de atendimento e não roda num follow-up.`,
       });
     }
   }
-  if (surface === "automacao") {
+  if (surface === 'automacao') {
     for (const n of [...graph.nodes].sort(byId)) {
       // Telefone e e-mail do contato, etapa/funil/situação/responsável/origem do
       // negócio: a operação de campo não escreve (o motor recusa de novo).
-      if (n.type === "field_op") {
+      if (n.type === 'field_op') {
         for (const op of n.config.ops) {
           if (campoSoLeitura(op.target)) {
             errors.push({
               node_id: n.id,
-              code: "campo_so_leitura",
+              code: 'campo_so_leitura',
               message: `"${n.label}": ${nomeDoCampo(op.target)} não pode ser alterado por automação.`,
             });
           }
@@ -353,24 +341,20 @@ function validarSuperficie(
       }
       // Pergunta e mensagem gravam a resposta num campo: o mesmo limite da
       // operação de campo (telefone, e-mail, etapa... não se escrevem).
-      if (
-        (n.type === "message" || n.type === "question") &&
-        n.config.save_to &&
-        campoSoLeitura(n.config.save_to)
-      ) {
+      if ((n.type === 'message' || n.type === 'question') && n.config.save_to && campoSoLeitura(n.config.save_to)) {
         errors.push({
           node_id: n.id,
-          code: "campo_so_leitura",
+          code: 'campo_so_leitura',
           message: `"${n.label}": ${nomeDoCampo(n.config.save_to)} não pode ser alterado por automação.`,
         });
       }
       // Espera "imune à resposta" deixa a execução em `dormente`, fora da vaga
       // de automação do contato (índice e trava da 0986): duas execuções da
       // mesma automação conviveriam. Na automação a espera não ouve resposta.
-      if (n.type === "wait" && "immune_to_reply" in n.config && n.config.immune_to_reply) {
+      if (n.type === 'wait' && 'immune_to_reply' in n.config && n.config.immune_to_reply) {
         errors.push({
           node_id: n.id,
-          code: "espera_imune_na_automacao",
+          code: 'espera_imune_na_automacao',
           message: `"${n.label}": na automação a espera não tem a opção "imune à resposta".`,
         });
       }
@@ -378,85 +362,84 @@ function validarSuperficie(
   }
   // Espera em segundos e "até responder" são da automação: o motor dos
   // follow-ups não lê resposta assim nem tem o relógio para segundos.
-  if (surface !== "automacao") {
+  if (surface !== 'automacao') {
     for (const n of [...graph.nodes].sort(byId)) {
-      if (n.type === "wait" && (n.config.mode === "delay" || n.config.mode === "until_reply")) {
+      if (n.type === 'wait' && (n.config.mode === 'delay' || n.config.mode === 'until_reply')) {
         errors.push({
           node_id: n.id,
-          code: "espera_so_na_automacao",
+          code: 'espera_so_na_automacao',
           message: `"${n.label}": espera em segundos e "até responder" só existem nas automações.`,
         });
       }
     }
   }
-  if (surface === "automacao" && automacao) {
+  if (surface === 'automacao' && automacao) {
     for (const n of [...graph.nodes].sort(byId)) {
-      if (n.type !== "crm_action") continue;
+      if (n.type !== 'crm_action') continue;
       for (const a of n.config.actions) {
-        if (a.type !== "start_automation") continue;
+        if (a.type !== 'start_automation') continue;
         if (a.pointer_id === automacao.pointerId) {
           errors.push({
             node_id: n.id,
-            code: "automacao_iniciar_propria",
+            code: 'automacao_iniciar_propria',
             message: `"${n.label}": a automação não pode iniciar a si mesma — escolha outra.`,
           });
         } else if (automacao.existentes && !automacao.existentes.has(a.pointer_id)) {
           errors.push({
             node_id: n.id,
-            code: "automacao_iniciar_inexistente",
+            code: 'automacao_iniciar_inexistente',
             message: `"${n.label}": a automação escolhida não existe mais — escolha outra na lista.`,
           });
         }
       }
     }
   }
-  if (surface === "automacao") {
-    const conversa = graph.nodes.filter((n) => n.type === "message" || n.type === "question");
+  if (surface === 'automacao') {
+    const conversa = graph.nodes.filter((n) => n.type === 'message' || n.type === 'question');
     const gatilhos = graph.nodes.flatMap((n) =>
-      n.type === "trigger" && "triggers" in n.config ? n.config.triggers : [],
+      n.type === 'trigger' && 'triggers' in n.config ? n.config.triggers : [],
     );
     if (conversa.length > 0 && gatilhos.some((g) => !GATILHO_TRAZ_CONTATO[g.kind])) {
       for (const n of [...conversa].sort(byId)) {
         errors.push({
           node_id: n.id,
-          code: "mensagem_sem_contato",
+          code: 'mensagem_sem_contato',
           message: `"${n.label}": um dos gatilhos não traz contato, e a mensagem precisa de alguém para receber.`,
         });
       }
     }
   }
-  if (surface === "automacao") {
+  if (surface === 'automacao') {
     validarBlocosDoInstagram(graph, errors);
     validarConversaNoDirect(graph, errors);
   }
   // Os gatilhos de uma AUTOMAÇÃO moram no nó Início (vários por fluxo); nos
   // follow-ups, em `pointer.trigger_config`, e o Início fica sem configuração.
   for (const n of [...graph.nodes].sort(byId)) {
-    if (n.type !== "trigger") continue;
-    const temGatilhos = "triggers" in n.config;
-    if (surface === "automacao" && !temGatilhos) {
+    if (n.type !== 'trigger') continue;
+    const temGatilhos = 'triggers' in n.config;
+    if (surface === 'automacao' && !temGatilhos) {
       errors.push({
         node_id: n.id,
-        code: "gatilho_da_automacao",
-        message: "Escolha no Início quando a automação começa.",
+        code: 'gatilho_da_automacao',
+        message: 'Escolha no Início quando a automação começa.',
       });
     }
-    if (surface !== "automacao" && temGatilhos) {
+    if (surface !== 'automacao' && temGatilhos) {
       errors.push({
         node_id: n.id,
-        code: "gatilho_da_automacao",
-        message:
-          "Os gatilhos no Início são de automação; neste fluxo o disparo fica nas configurações.",
+        code: 'gatilho_da_automacao',
+        message: 'Os gatilhos no Início são de automação; neste fluxo o disparo fica nas configurações.',
       });
     }
   }
-  if (surface !== "atendimento") {
+  if (surface !== 'atendimento') {
     for (const n of [...graph.nodes].sort(byId)) {
-      if (n.type !== "condition" || surface === "automacao") continue;
+      if (n.type !== 'condition' || surface === 'automacao') continue;
       if (n.config.checks.some(ehRegraNova)) {
         errors.push({
           node_id: n.id,
-          code: "regra_de_automacao",
+          code: 'regra_de_automacao',
           message: `A condição "${n.label}" usa uma regra de automação, que o follow-up não sabe avaliar.`,
         });
       }
@@ -467,11 +450,11 @@ function validarSuperficie(
   const saidas = new Map<string, number>();
   for (const e of graph.edges) {
     saidas.set(e.source, (saidas.get(e.source) ?? 0) + 1);
-    if (e.condition.type !== "always") {
+    if (e.condition.type !== 'always') {
       errors.push({
         node_id: e.source,
-        code: "roteiro_ramificado",
-        message: "No roteiro de atendimento as caixas são ligadas direto, sem condição.",
+        code: 'roteiro_ramificado',
+        message: 'No roteiro de atendimento as caixas são ligadas direto, sem condição.',
       });
     }
   }
@@ -479,19 +462,19 @@ function validarSuperficie(
     if (n > 1) {
       errors.push({
         node_id: origem,
-        code: "roteiro_ramificado",
-        message: "O roteiro de atendimento segue uma linha só: cada caixa liga em uma próxima.",
+        code: 'roteiro_ramificado',
+        message: 'O roteiro de atendimento segue uma linha só: cada caixa liga em uma próxima.',
       });
     }
   }
   const chaves = new Map<string, string>();
   for (const n of [...graph.nodes].sort(byId)) {
-    if (n.type !== "collect") continue;
+    if (n.type !== 'collect') continue;
     const dona = chaves.get(n.config.key);
     if (dona !== undefined) {
       errors.push({
         node_id: n.id,
-        code: "campo_repetido",
+        code: 'campo_repetido',
         message: `O campo "${n.config.key}" já é perguntado em outra caixa — cada pergunta grava um campo diferente.`,
       });
     } else {
@@ -501,13 +484,11 @@ function validarSuperficie(
   if (roteiro) {
     const ciclo = cicloDoEncadeamento(graph, roteiro);
     if (ciclo) {
-      const fim = [...graph.nodes]
-        .sort(byId)
-        .find((n) => proximosDoGrafo({ nodes: [n] }).length > 0);
+      const fim = [...graph.nodes].sort(byId).find((n) => proximosDoGrafo({ nodes: [n] }).length > 0);
       errors.push({
         node_id: fim?.id ?? null,
-        code: "roteiro_em_ciclo",
-        message: `O "ao concluir" volta a este roteiro pela cadeia (${["este roteiro", ...ciclo].join(" → ")}) — o cliente responderia as mesmas perguntas sem fim. Escolha outro roteiro ou "Nada".`,
+        code: 'roteiro_em_ciclo',
+        message: `O "ao concluir" volta a este roteiro pela cadeia (${['este roteiro', ...ciclo].join(' → ')}) — o cliente responderia as mesmas perguntas sem fim. Escolha outro roteiro ou "Nada".`,
       });
     }
   }
@@ -517,7 +498,7 @@ const LONG_WAIT_THRESHOLD_MS = 86_400_000; // 24h
 const MIN_CYCLE_WAIT_MS = 300_000; // 5min
 const MAX_PATH_STEPS = 30;
 
-function waitMs(config: Extract<FlowNode, { type: "wait" }>["config"]): number {
+function waitMs(config: Extract<FlowNode, { type: 'wait' }>['config']): number {
   return duracaoMaximaDaEspera(config);
 }
 
@@ -530,11 +511,10 @@ function waitMs(config: Extract<FlowNode, { type: "wait" }>["config"]): number {
  * rajada (o teto de 30 por hora e as 20 visitas por bloco seguram o resto).
  */
 function isSufficientWaitNode(node: FlowNode): boolean {
-  if (node.type === "match_reply") return node.config.grace_timeout_ms >= MIN_CYCLE_WAIT_MS;
-  if (node.type === "question") return node.config.timeout_ms >= MIN_CYCLE_WAIT_MS;
-  if (node.type === "message")
-    return (node.config.reply_timeout_ms ?? 0) >= MIN_CYCLE_WAIT_MS && !!node.config.options;
-  if (node.type !== "wait") return false;
+  if (node.type === 'match_reply') return node.config.grace_timeout_ms >= MIN_CYCLE_WAIT_MS;
+  if (node.type === 'question') return node.config.timeout_ms >= MIN_CYCLE_WAIT_MS;
+  if (node.type === 'message') return (node.config.reply_timeout_ms ?? 0) >= MIN_CYCLE_WAIT_MS && !!node.config.options;
+  if (node.type !== 'wait') return false;
   return duracaoMinimaDaEspera(node.config) >= MIN_CYCLE_WAIT_MS;
 }
 
@@ -572,7 +552,7 @@ function bfsReachable(startIds: string[], outEdges: Map<string, FlowEdge[]>): Se
  */
 function stronglyConnectedComponents(
   nodeIds: string[],
-  outEdges: Map<string, FlowEdge[]>,
+  outEdges: Map<string, FlowEdge[]>
 ): string[][] {
   let index = 0;
   const indices = new Map<string, number>();
@@ -645,14 +625,14 @@ function analyzeCondensedPaths(
   startId: string,
   nodes: FlowNode[],
   nodesById: Map<string, FlowNode>,
-  outEdges: Map<string, FlowEdge[]>,
+  outEdges: Map<string, FlowEdge[]>
 ): { longWaitNodeIds: Set<string>; maxStepsExceeded: boolean } {
   const longWaitNodeIds = new Set<string>();
   let maxStepsExceeded = false;
 
   const components = stronglyConnectedComponents(
     nodes.map((n) => n.id),
-    outEdges,
+    outEdges
   );
   const componentIndexById = new Map<string, number>();
   components.forEach((comp, idx) => comp.forEach((id) => componentIndexById.set(id, idx)));
@@ -660,8 +640,8 @@ function analyzeCondensedPaths(
   const waitWeight = components.map((comp) =>
     comp.reduce((sum, id) => {
       const node = nodesById.get(id);
-      return node && node.type === "wait" ? sum + waitMs(node.config) : sum;
-    }, 0),
+      return node && node.type === 'wait' ? sum + waitMs(node.config) : sum;
+    }, 0)
   );
   const stepWeight = components.map((comp) => comp.length);
 
@@ -699,8 +679,8 @@ function analyzeCondensedPaths(
       const node = nodesById.get(id);
       if (
         node &&
-        node.type === "action" &&
-        node.config.mode === "ai_message" &&
+        node.type === 'action' &&
+        node.config.mode === 'ai_message' &&
         !node.config.fallback_template_id &&
         totalWait >= LONG_WAIT_THRESHOLD_MS
       ) {
@@ -721,6 +701,7 @@ function byId(a: { id: string }, b: { id: string }): number {
   return a.id.localeCompare(b.id);
 }
 
+
 /**
  * Toda saída declarada do nó precisa levar a algum lugar, e a mensagem nomeia
  * QUAL ficou solta. Serve tanto ao `condition` por regra quanto ao
@@ -732,14 +713,14 @@ function cobrirRamos(
   node: FlowNode,
   outgoing: FlowEdge[],
   errors: PublishValidationError[],
-  nomes: NomesDeValor,
+  nomes: NomesDeValor
 ): void {
   for (const branch of nodeBranches(node)) {
     if (outgoing.some((e) => branchIdForCondition(node, e.condition) === branch.id)) continue;
-    if (branch.kind === "fallback") {
+    if (branch.kind === 'fallback') {
       errors.push({
         node_id: node.id,
-        code: "missing_always_fallback",
+        code: 'missing_always_fallback',
         branch_id: branch.id,
         message: `Nó "${node.id}" não tem a saída de escape: um negócio que não se encaixar em nenhuma saída fica parado aqui.`,
       });
@@ -747,7 +728,7 @@ function cobrirRamos(
     }
     errors.push({
       node_id: node.id,
-      code: "missing_branch_edge",
+      code: 'missing_branch_edge',
       branch_id: branch.id,
       message: `Nó "${node.id}": a saída "${rotuloDoRamo(branch, nomes)}" não está ligada a nada.`,
     });
@@ -767,63 +748,53 @@ function cobrirRamos(
  * também, então recusá-las não reprova nada que esteja decidindo de verdade.
  */
 function conferirRegras(
-  node: Extract<FlowNode, { type: "condition" }>,
+  node: Extract<FlowNode, { type: 'condition' }>,
   contexto: ContextoDoPublish,
-  errors: PublishValidationError[],
+  errors: PublishValidationError[]
 ): void {
   node.config.checks.forEach((check, i) => {
     const regra = `Regra ${i + 1}`;
     const ancora = {
       node_id: node.id,
-      ...(node.config.branching === "per_check" && check.id !== undefined
-        ? { branch_id: check.id }
-        : {}),
+      ...(node.config.branching === 'per_check' && check.id !== undefined ? { branch_id: check.id } : {}),
     };
     if (ehRegraNova(check)) {
       // Regra de automação: o operador que compara precisa de valor; "tem valor"
       // e "está vazio" não. O resto (ids de etapa/funil) o schema já exige.
       if (
-        check.kind === "field" &&
-        check.op !== "has_value" &&
-        check.op !== "empty" &&
-        String(check.value ?? "").trim() === ""
+        check.kind === 'field' &&
+        check.op !== 'has_value' &&
+        check.op !== 'empty' &&
+        String(check.value ?? '').trim() === ''
       ) {
-        errors.push({
-          ...ancora,
-          code: "empty_check_value",
-          message: `${regra} sem valor: preencha ou remova a regra.`,
-        });
+        errors.push({ ...ancora, code: 'empty_check_value', message: `${regra} sem valor: preencha ou remova a regra.` });
       }
       return;
     }
     const valor = String(check.value).trim();
 
-    if (valor === "") {
-      errors.push({
-        ...ancora,
-        code: "empty_check_value",
-        message: `${regra} sem valor: preencha ou remova a regra.`,
-      });
+    if (valor === '') {
+      errors.push({ ...ancora, code: 'empty_check_value', message: `${regra} sem valor: preencha ou remova a regra.` });
       return;
     }
     // A pergunta é "o motor consegue comparar isto?", não "é inteiro?": ele
     // compara passos como número, e um valor que vira número (inclusive escrito
     // como texto) decide de verdade. Recusar 2.5 seria recusar o que funciona.
-    if (check.field === "steps_taken" && !Number.isFinite(Number(valor))) {
+    if (check.field === 'steps_taken' && !Number.isFinite(Number(valor))) {
       errors.push({
         ...ancora,
-        code: "check_value_not_number",
+        code: 'check_value_not_number',
         message: `${regra}: “${valor}” não é um número de passos.`,
       });
       return;
     }
-    if (check.field !== "lead_stage" || contexto.etapas === undefined) return;
+    if (check.field !== 'lead_stage' || contexto.etapas === undefined) return;
 
     const etapa = contexto.etapas.get(valor);
     if (etapa === undefined) {
       errors.push({
         ...ancora,
-        code: "check_stage_not_found",
+        code: 'check_stage_not_found',
         // Id que não existe mais não vira texto de tela; o nome digitado à mão,
         // sim — é a única pista de qual regra a pessoa escreveu.
         message: UUID_RX.test(valor)
@@ -835,7 +806,7 @@ function conferirRegras(
     if (etapa.arquivada) {
       errors.push({
         ...ancora,
-        code: "check_stage_archived",
+        code: 'check_stage_archived',
         // "está arquivada" é o que o banco disse; "nenhum negócio fica nela" era
         // afirmação que o produto NÃO garante (mover um lead de volta não é barrado).
         message: `${regra}: a etapa “${etapa.nome}” foi arquivada e não está mais no quadro — escolha uma etapa ativa.`,
@@ -848,36 +819,30 @@ const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export function validateFlowForPublish(
   graph: FlowGraph,
-  contexto: ContextoDoPublish = {},
+  contexto: ContextoDoPublish = {}
 ): PublishValidationResult {
   const { nodes, edges } = graph;
   const errors: PublishValidationError[] = [];
-  validarSuperficie(
-    graph,
-    contexto.surface ?? "followup",
-    errors,
-    contexto.roteiro,
-    contexto.automacao,
-  );
+  validarSuperficie(graph, contexto.surface ?? 'followup', errors, contexto.roteiro, contexto.automacao);
   const etapas = contexto.etapas;
   const nomes: NomesDeValor = etapas ? { etapa: (id) => etapas.get(id)?.nome ?? null } : {};
   const nodesById = new Map(nodes.map((n) => [n.id, n]));
   const outEdges = buildOutEdges(edges);
   const inEdges = buildOutEdges(edges.map((e) => ({ ...e, source: e.target, target: e.source })));
 
-  const triggers = nodes.filter((n) => n.type === "trigger");
+  const triggers = nodes.filter((n) => n.type === 'trigger');
   if (triggers.length === 0) {
     errors.push({
       node_id: null,
-      code: "no_trigger",
-      message: "O fluxo precisa de exatamente um nó trigger.",
+      code: 'no_trigger',
+      message: 'O fluxo precisa de exatamente um nó trigger.',
     });
   }
   if (triggers.length > 1) {
     for (const extra of triggers.slice(1)) {
       errors.push({
         node_id: extra.id,
-        code: "multiple_triggers",
+        code: 'multiple_triggers',
         message: `Nó trigger duplicado: "${extra.id}".`,
       });
     }
@@ -890,22 +855,19 @@ export function validateFlowForPublish(
       if (!reachable.has(node.id)) {
         errors.push({
           node_id: node.id,
-          code: "unreachable_node",
+          code: 'unreachable_node',
           message: `Nó "${node.id}" não é alcançável a partir do trigger.`,
         });
       }
     }
 
-    const endNodes = nodes.filter((n) => n.type === "end");
-    const canReachEnd = bfsReachable(
-      endNodes.map((n) => n.id),
-      inEdges,
-    );
+    const endNodes = nodes.filter((n) => n.type === 'end');
+    const canReachEnd = bfsReachable(endNodes.map((n) => n.id), inEdges);
     for (const node of [...nodes].sort(byId)) {
       if (reachable.has(node.id) && !canReachEnd.has(node.id)) {
         errors.push({
           node_id: node.id,
-          code: "no_end_path",
+          code: 'no_end_path',
           message: `Nó "${node.id}" não tem caminho até um nó de fim.`,
         });
       }
@@ -915,20 +877,20 @@ export function validateFlowForPublish(
       startTrigger.id,
       nodes,
       nodesById,
-      outEdges,
+      outEdges
     );
     const exigeModelo = contexto.exigeModeloForaDaJanela !== false;
     for (const id of exigeModelo ? [...longWaitNodeIds].sort() : []) {
       errors.push({
         node_id: id,
-        code: "long_wait_needs_template",
+        code: 'long_wait_needs_template',
         message: `Nó "${id}" acumula ≥24h de espera e precisa de fallback_template_id.`,
       });
     }
     if (maxStepsExceeded) {
       errors.push({
         node_id: null,
-        code: "max_steps_exceeded",
+        code: 'max_steps_exceeded',
         message: `O caminho mais longo a partir do trigger excede ${MAX_PATH_STEPS} passos.`,
       });
     }
@@ -939,13 +901,13 @@ export function validateFlowForPublish(
   // exatamente o que a imunidade promete, e exatamente o que ninguém quer num
   // intervalo curto. O piso é o mesmo 24h que já separa espera curta de longa.
   for (const node of [...nodes].sort(byId)) {
-    if (node.type !== "wait") continue;
+    if (node.type !== 'wait') continue;
     const cfg = node.config;
-    if (cfg.mode !== "fixed" || cfg.immune_to_reply !== true) continue;
+    if (cfg.mode !== 'fixed' || cfg.immune_to_reply !== true) continue;
     if (cfg.duration_ms < LONG_WAIT_THRESHOLD_MS) {
       errors.push({
         node_id: node.id,
-        code: "immune_wait_too_short",
+        code: 'immune_wait_too_short',
         message: `Nó "${node.id}" é imune à resposta e precisa de pelo menos 24h de espera.`,
       });
     }
@@ -956,14 +918,14 @@ export function validateFlowForPublish(
   // nó de condição, e passar a exigir reprovaria no publish fluxos v1 que estão
   // rodando. Regra nova só vale para a forma nova.
   for (const node of [...nodes].sort(byId)) {
-    if (node.type !== "condition" || node.config.branching !== "per_check") continue;
+    if (node.type !== 'condition' || node.config.branching !== 'per_check') continue;
     const outgoing = outEdges.get(node.id) ?? [];
 
     cobrirRamos(node, outgoing, errors, nomes);
   }
 
   for (const node of [...nodes].sort(byId)) {
-    if (node.type === "condition") conferirRegras(node, contexto, errors);
+    if (node.type === 'condition') conferirRegras(node, contexto, errors);
   }
 
   // Blocos de conversa: cada OPÇÃO da mensagem leva a algum lugar (a escolha
@@ -972,25 +934,24 @@ export function validateFlowForPublish(
   // soltos seguem pela saída comum — como o "Erro" dos blocos de CRM.
   for (const node of [...nodes].sort(byId)) {
     const outgoing = outEdges.get(node.id) ?? [];
-    const ligado = (id: string) =>
-      outgoing.some((e) => branchIdForCondition(node, e.condition) === id);
-    if (node.type === "message" && node.config.options) {
+    const ligado = (id: string) => outgoing.some((e) => branchIdForCondition(node, e.condition) === id);
+    if (node.type === 'message' && node.config.options) {
       for (const item of node.config.options.items) {
         if (ligado(item.id)) continue;
         errors.push({
           node_id: node.id,
-          code: "missing_branch_edge",
+          code: 'missing_branch_edge',
           branch_id: item.id,
           message: `Nó "${node.id}": a opção "${item.label}" não está ligada a nada.`,
         });
       }
     }
-    if (node.type === "question" || (node.type === "wait" && node.config.mode === "until_reply")) {
-      if (!ligado("else")) {
+    if (node.type === 'question' || (node.type === 'wait' && node.config.mode === 'until_reply')) {
+      if (!ligado('else')) {
         errors.push({
           node_id: node.id,
-          code: "missing_always_fallback",
-          branch_id: "else",
+          code: 'missing_always_fallback',
+          branch_id: 'else',
           message: `Nó "${node.id}": a saída "Respondeu" não está ligada a nada.`,
         });
       }
@@ -998,21 +959,16 @@ export function validateFlowForPublish(
   }
 
   for (const node of [...nodes].sort(byId)) {
-    if (node.type !== "ai_classify" && node.type !== "match_reply" && node.type !== "repeat")
-      continue;
+    if (node.type !== 'ai_classify' && node.type !== 'match_reply' && node.type !== 'repeat') continue;
     const outgoing = outEdges.get(node.id) ?? [];
 
-    if (
-      node.type === "match_reply" ||
-      node.type === "repeat" ||
-      node.config.branches !== undefined
-    ) {
+    if (node.type === 'match_reply' || node.type === 'repeat' || node.config.branches !== undefined) {
       cobrirRamos(node, outgoing, errors, nomes);
-      if (node.type === "repeat") continue;
+      if (node.type === 'repeat') continue;
       if (node.config.grace_timeout_ms < 900_000) {
         errors.push({
           node_id: node.id,
-          code: "grace_too_short",
+          code: 'grace_too_short',
           message: `Nó "${node.id}" tem grace_timeout_ms abaixo do mínimo de 15min.`,
         });
       }
@@ -1021,33 +977,33 @@ export function validateFlowForPublish(
 
     for (const cls of node.config.classes) {
       const hasEdge = outgoing.some(
-        (e) => e.condition.type === "class_match" && e.condition.value === cls,
+        (e) => e.condition.type === 'class_match' && e.condition.value === cls
       );
       if (!hasEdge) {
         errors.push({
           node_id: node.id,
-          code: "missing_class_edge",
+          code: 'missing_class_edge',
           message: `Nó "${node.id}" não tem edge class_match para a classe "${cls}".`,
         });
       }
     }
 
     const hasNoReply = outgoing.some(
-      (e) => e.condition.type === "class_match" && e.condition.value === "no_reply",
+      (e) => e.condition.type === 'class_match' && e.condition.value === 'no_reply'
     );
     if (!hasNoReply) {
       errors.push({
         node_id: node.id,
-        code: "missing_no_reply_edge",
+        code: 'missing_no_reply_edge',
         message: `Nó "${node.id}" não tem edge class_match para "no_reply".`,
       });
     }
 
-    const hasAlways = outgoing.some((e) => e.condition.type === "always");
+    const hasAlways = outgoing.some((e) => e.condition.type === 'always');
     if (!hasAlways) {
       errors.push({
         node_id: node.id,
-        code: "missing_always_fallback",
+        code: 'missing_always_fallback',
         message: `Nó "${node.id}" não tem edge "always" de fallback.`,
       });
     }
@@ -1055,7 +1011,7 @@ export function validateFlowForPublish(
     if (node.config.grace_timeout_ms < 900_000) {
       errors.push({
         node_id: node.id,
-        code: "grace_too_short",
+        code: 'grace_too_short',
         message: `Nó "${node.id}" tem grace_timeout_ms abaixo do mínimo de 15min.`,
       });
     }
@@ -1070,7 +1026,7 @@ export function validateFlowForPublish(
   const sufficientWaitIds = new Set(nodes.filter(isSufficientWaitNode).map((n) => n.id));
   const remainingIds = nodes.map((n) => n.id).filter((id) => !sufficientWaitIds.has(id));
   const remainingEdges = edges.filter(
-    (e) => !sufficientWaitIds.has(e.source) && !sufficientWaitIds.has(e.target),
+    (e) => !sufficientWaitIds.has(e.source) && !sufficientWaitIds.has(e.target)
   );
   const remainingOutEdges = buildOutEdges(remainingEdges);
   const cycleComponents = stronglyConnectedComponents(remainingIds, remainingOutEdges);
@@ -1079,7 +1035,7 @@ export function validateFlowForPublish(
     const nodeId = [...component].sort()[0]!;
     errors.push({
       node_id: nodeId,
-      code: "cycle_without_wait",
+      code: 'cycle_without_wait',
       message: `Ciclo sem espera mínima de 5min detectado (contém "${nodeId}").`,
     });
   }
@@ -1089,7 +1045,7 @@ export function validateFlowForPublish(
   errors.sort((a, b) => {
     const rankDiff = PUBLISH_ERROR_CODES.indexOf(a.code) - PUBLISH_ERROR_CODES.indexOf(b.code);
     if (rankDiff !== 0) return rankDiff;
-    return (a.node_id ?? "").localeCompare(b.node_id ?? "");
+    return (a.node_id ?? '').localeCompare(b.node_id ?? '');
   });
 
   return { ok: false, errors };

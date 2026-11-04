@@ -763,10 +763,7 @@ describe("executarConversa: envio pelo Direct", () => {
     );
     expect(r.desfecho.ok).toBe(true);
     expect(enviarMock).toHaveBeenCalledTimes(1);
-    const corpo = enviarMock.mock.calls[0]![2] as {
-      conversation_id: string;
-      interactive?: unknown;
-    };
+    const corpo = enviarMock.mock.calls[0]![2] as { conversation_id: string; interactive?: unknown };
     expect(corpo.conversation_id).toBe("conv-ig");
     // As opções seguem para o handler, que as numera no canal sem opções nativas.
     expect(corpo.interactive).toBeDefined();
@@ -919,9 +916,7 @@ describe("executarConversa: envio pelo Direct", () => {
       created_at: new Date(AGORA.getTime() - 60_000).toISOString(),
       metadata: { origem_automacao: { enrollment_id: "enr-x", pointer_id: "ptr-x" } },
     }));
-    const cheio = criarBanco(
-      tabelasBase({ conversations: [conversaDoDirect()], messages: recentes }),
-    );
+    const cheio = criarBanco(tabelasBase({ conversations: [conversaDoDirect()], messages: recentes }));
     expect(
       erroDe(
         await executarConversa(
@@ -940,9 +935,7 @@ describe("executarConversa: envio pelo Direct", () => {
     const { admin } = criarBanco(tabelasBase({ conversations: [conversaDoDirect(), conversa()] }));
     const r = await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
     expect(r.desfecho.ok).toBe(true);
-    expect((enviarMock.mock.calls[0]![2] as { conversation_id: string }).conversation_id).toBe(
-      "conv-1",
-    );
+    expect((enviarMock.mock.calls[0]![2] as { conversation_id: string }).conversation_id).toBe("conv-1");
     expect(r.detalhes?.[0]).not.toHaveProperty("canal");
   });
 });
