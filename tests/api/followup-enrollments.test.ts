@@ -445,9 +445,9 @@ describe("GET /api/v1/ai/followups/enrollments", () => {
   it("?contact_id= recorta pelo contato, junto do filtro de org", async () => {
     const OUTRO_CONTATO = "44444444-4444-4444-8444-999999999999";
     const rows = [
-      { id: "a", organization_id: ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, status: "waiting_reply", updated_at: "2026-01-01" },
-      { id: "b", organization_id: ORG_ID, pointer_id: POINTER_ID, contact_id: OUTRO_CONTATO, status: "active", updated_at: "2026-01-01" },
-      { id: "c", organization_id: OTHER_ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, status: "active", updated_at: "2026-01-01" },
+      { id: "a", organization_id: ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, lane: "followup", status: "waiting_reply", updated_at: "2026-01-01" },
+      { id: "b", organization_id: ORG_ID, pointer_id: POINTER_ID, contact_id: OUTRO_CONTATO, lane: "followup", status: "active", updated_at: "2026-01-01" },
+      { id: "c", organization_id: OTHER_ORG_ID, pointer_id: POINTER_ID, contact_id: CONTACT_ID, lane: "followup", status: "active", updated_at: "2026-01-01" },
     ];
     const db = makeDb([], [], [], rows);
     session("viewer", db);

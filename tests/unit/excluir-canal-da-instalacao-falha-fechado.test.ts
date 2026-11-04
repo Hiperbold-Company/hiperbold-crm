@@ -52,6 +52,8 @@ vi.mock("@/lib/supabase/admin", () => ({
         eq: () => q,
         update: () => ((op = "update"), q),
         delete: () => ((op = "delete"), q),
+        // A leitura de `criada_pelo_crm` (migration 0953): conexão que o cliente trouxe.
+        maybeSingle: async () => ({ data: { criada_pelo_crm: false }, error: null }),
         then: (ok: (r: unknown) => unknown) => {
           if (op !== "select") h.escritas.push(`admin:${op}`);
           return Promise.resolve({ count: 0, data: null, error: null }).then(ok);

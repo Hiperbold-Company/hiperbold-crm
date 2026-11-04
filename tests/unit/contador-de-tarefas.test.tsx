@@ -49,7 +49,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 
 import { ContadorDeTarefas } from "@/components/shell/ContadorDeTarefas";
-import { sidebarGroups } from "@/lib/navigation/registry";
+import { NAV_DESTINATIONS, sidebarGroups } from "@/lib/navigation/registry";
 
 function comStatus(...situacoes: Array<Tarefa["status"]>): Array<Pick<Tarefa, "id" | "status">> {
   return situacoes.map((status, i) => ({ id: `t${i}`, status }));
@@ -111,9 +111,13 @@ describe("contador de tarefas no menu", () => {
     expect(contador.className).toContain("w-2");
   });
 
-  it("Tarefas está no menu com o contador declarado", () => {
+  it("Tarefas declara o contador e, na Hiperbold, fica fora do menu lateral", () => {
+    // Hiperbold: sidebar só com o essencial (decisão do dono, 15/10/2026). A porta
+    // de Tarefas é o hub do CRM; o contador segue declarado no destino e anda com
+    // o item (ver `sidebar-grupos.test.tsx`).
+    expect(NAV_DESTINATIONS.find((d) => d.href === "/app/tasks")?.contador).toBe("tarefas");
     const crm = sidebarGroups(true, null).find((g) => g.group.id === "crm");
-    expect(crm?.items.find((i) => i.href === "/app/tasks")?.contador).toBe("tarefas");
+    expect(crm?.items.find((i) => i.href === "/app/tasks")).toBeUndefined();
   });
 });
 

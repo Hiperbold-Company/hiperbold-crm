@@ -47,6 +47,7 @@ vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 
 import { loadAuthUser, orgAtivaSemPortao } from "@/lib/auth/server";
+import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import { GET as getRetention } from "@/app/api/v1/conversations/[id]/retention/route";
 
@@ -111,6 +112,12 @@ describe("retenção: o 'aberta agora' usa a janela da RESPOSTA", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.mocked(loadAuthUser).mockResolvedValue({ idioma: "pt-BR" } as never);
     vi.mocked(orgAtivaSemPortao).mockResolvedValue({ orgId: ORG, org_status: "active" } as never);
+    // Nesta casa a leitura passa pelo gate único (D-092): o `requireRole` devolve a mesma sessão.
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      user: { idioma: "pt-BR" },
+      org: { orgId: ORG, org_status: "active" },
+    } as never);
   });
 
   it("resposta retida por outside_window some quando a janela de RESPOSTA está aberta (3h)", async () => {
@@ -158,6 +165,12 @@ describe("retenção: o tipo do envio decide qual janela avalia", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.mocked(loadAuthUser).mockResolvedValue({ idioma: "pt-BR" } as never);
     vi.mocked(orgAtivaSemPortao).mockResolvedValue({ orgId: ORG, org_status: "active" } as never);
+    // Nesta casa a leitura passa pelo gate único (D-092): o `requireRole` devolve a mesma sessão.
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      user: { idioma: "pt-BR" },
+      org: { orgId: ORG, org_status: "active" },
+    } as never);
   });
 
   it("disparo retido às 3h NÃO é resolvido pela janela de RESPOSTA aberta", async () => {

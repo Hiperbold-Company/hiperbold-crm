@@ -63,6 +63,13 @@ vi.mock("@/components/kanban/KanbanBoard", () => ({
     return <div data-testid="quadro" />;
   },
 }));
+// Hiperbold: contagem de "Eventos manuais" (0979) — fora do que este teste mede.
+vi.mock("@/hooks/kanban/useEventosManuais", () => ({ useEventosManuais: () => undefined }));
+// Hiperbold: a página lê a org ativa (permissões por perfil e fuso).
+vi.mock("@/hooks/auth/AuthProvider", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/auth/AuthProvider")>()),
+  useActiveOrg: () => ({ orgId: "org-1", role: "admin" }),
+}));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (texto: string) => texto }));
 
 const FUNIL_LEVE = {

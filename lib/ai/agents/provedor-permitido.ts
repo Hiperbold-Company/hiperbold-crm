@@ -12,6 +12,9 @@
  *  - `credential_id` preenchido: a credencial tem de ser desta organização, estar ativa e ser do mesmo
  *    provedor da versão (a validação da chave em si continua sendo da publicação, em SQL).
  *  - A variante `:batch` da OpenRouter (Batch API, assíncrona) não conversa: nunca é aceita.
+ *  - A assinatura (`PROVEDOR_POR_ASSINATURA`, login por empresa) não é a chave da instalação, mesmo com
+ *    `credential_id = null`: o leitor próprio acha a linha do login da organização. Se o módulo dela
+ *    está ligado na instalação é pergunta de `validarEscopoDaVersao` (`provedor_desligado`).
  *
  * `recusaDaChaveDaInstalacao` é pura (o publicar a usa; as credenciais ele já confere em SQL) e
  * `recusaDaVersao` acrescenta a conferência da credencial no salvar.
@@ -19,6 +22,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ehVarianteEmLote, modeloLiberado, PROVEDOR_DA_CHAVE_DA_INSTALACAO } from "@/lib/ai/modelos-da-instalacao";
+import { PROVEDOR_POR_ASSINATURA } from "@/lib/ai/pontos/provedores";
 
 export type CodigoDeRecusaDeProvedor = "provider_not_allowed" | "model_not_allowed";
 
@@ -44,6 +48,7 @@ export function recusaDaChaveDaInstalacao(
     };
   }
   if (v.credential_id !== null) return null;
+  if (v.provider === PROVEDOR_POR_ASSINATURA) return null;
   if (v.provider !== PROVEDOR_DA_CHAVE_DA_INSTALACAO) {
     return {
       code: "provider_not_allowed",

@@ -21,18 +21,6 @@ function AjudaDaAba({ aba }: { aba: AbaDeAutomacoes }) {
   return <LinkDeAjudaDaTela caminho={artigoDaAba("/app/webhooks", aba)} className="mb-3" />;
 }
 
-/**
- * As abas que um link do upstream pode abrir direto (`/app/webhooks?aba=automacoes`,
- * a volta do designer), traduzidas para o valor interno da aba. O `?tab=` da
- * Hiperbold (`abas.ts`) continua valendo; quem lê os dois é a página.
- */
-export const ABAS_DOS_WEBHOOKS = {
-  receber: "sources",
-  leads: "capturas",
-  automacoes: "rules",
-  atividade: "activity",
-} as const satisfies Record<string, AbaDeAutomacoes>;
-export type AbaDosWebhooks = keyof typeof ABAS_DOS_WEBHOOKS;
 
 export function WebhooksClient({
   bloqueio,

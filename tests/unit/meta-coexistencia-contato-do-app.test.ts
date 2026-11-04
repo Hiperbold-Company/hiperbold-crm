@@ -337,13 +337,15 @@ describe("a rota do webhook oficial entrega o contato do app à ingestão", () =
         },
       ]),
     );
+    // Requisição de verdade: a rota lê o corpo pelo fluxo, com teto (`lerCorpoDaRequisicao`).
     const res = await POST(
-      {
-        text: async () => cru,
-        headers: new Headers({
+      new Request("https://crm.test/api/v1/webhooks/meta/t", {
+        method: "POST",
+        body: cru,
+        headers: {
           "x-hub-signature-256": `sha256=${createHmac("sha256", segredo).update(cru, "utf8").digest("hex")}`,
-        }),
-      } as never,
+        },
+      }) as never,
       { params: Promise.resolve({ token: "t" }) } as never,
     );
 
@@ -393,7 +395,7 @@ describe("contato do app sem assinatura válida não chega à ingestão", () => 
 
       const { POST } = await import("@/app/api/v1/webhooks/meta/[token]/route");
       const res = await POST(
-        { text: async () => cru, headers: new Headers(headers) } as never,
+        new Request("https://crm.test/api/v1/webhooks/meta/t", { method: "POST", body: cru, headers }) as never,
         { params: Promise.resolve({ token: "t" }) } as never,
       );
 
@@ -406,7 +408,8 @@ describe("contato do app sem assinatura válida não chega à ingestão", () => 
 
 describe("canal parceiro: contato do app de OUTRO número não vaza", () => {
   const SEGREDO = "whsec_segredo_do_painel_123";
-  const TS = "1700000000";
+  // Carimbo de AGORA: a assinatura do parceiro só vale numa janela de 5 min (Hiperbold D-130).
+  const TS = String(Math.floor(Date.now() / 1000));
   const assinado = (corpo: string) =>
     new Headers({
       "x-datafy-signature-256": `sha256=${createHmac("sha256", SEGREDO).update(`${TS}.${corpo}`).digest("hex")}`,

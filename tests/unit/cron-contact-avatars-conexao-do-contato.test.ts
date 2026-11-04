@@ -30,6 +30,16 @@ vi.mock("@/lib/env", () => ({
   env: { INTERNAL_CRON_SECRET: "segredo-de-teste", INTERNAL_SECRET: "segredo-de-teste" },
 }));
 
+// O download da foto (régua de destino, assinatura de imagem) tem prova própria em
+// `cron-contact-avatars-ssrf.test.ts`; aqui o que se mede é DE QUAL conexão a foto vem.
+vi.mock("@/lib/channels/avatar-download", () => ({
+  baixarAvatar: async () => ({
+    ok: true,
+    buf: Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+    contentType: "image/jpeg",
+  }),
+}));
+
 vi.mock("@/lib/channels", () => ({
   DEFAULT_CHANNEL_PROVIDER: "waha",
   CHANNEL_SESSION_REF_COLUMNS:

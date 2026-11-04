@@ -33,6 +33,8 @@ vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({
 vi.mock("@/lib/contacts/cpf-do-contato", () => ({
   idsPorHashDeCpf: vi.fn(async () => ({ ids: [], error: null })),
   idsComCpf: vi.fn(async () => ({ ids: new Set<string>(), error: null })),
+  // Hiperbold: CPF exportado só para gerente+; nenhum contato daqui tem CPF.
+  cpfsDecifradosDosContatos: vi.fn(async () => new Map<string, string>()),
 }));
 
 const USER = "99999999-9999-4999-8999-999999999999";

@@ -113,8 +113,19 @@ function clienteStub(estado: Estado) {
         is() {
           return c;
         },
+        // A etapa é da org da sessão e do funil do lead: a rota confere os dois (D-150).
         maybeSingle: () =>
-          Promise.resolve({ data: { id: PERDIDO_ID, name: "Perdido", is_lost: true }, error: null }),
+          Promise.resolve({
+            data: {
+              id: PERDIDO_ID,
+              name: "Perdido",
+              is_lost: true,
+              is_won: false,
+              pipeline_id: PIPELINE_ID,
+              organization_id: ORG_SESSAO,
+            },
+            error: null,
+          }),
         then(onF: (v: unknown) => unknown) {
           return Promise.resolve({ data: null, error: null }).then(onF);
         },
@@ -215,8 +226,14 @@ describe("perdido em lote (#2484 F2) respeita a organização da sessão, por it
     expect(corpo.data?.updated_count).toBe(1);
     // 4) A timeline do lead perdido em lote diz o MOTIVO, na mesma frase da
     //    perda pelo card (`/lose`) — não só "Movido de X para Perdido" (#2868).
-    expect(vi.mocked(emitLeadActivity)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(emitLeadActivity).mock.calls[0]?.[1]).toMatchObject({
+    //    Hiperbold (#917): o lote também grava a linha `demand_closed` da perda
+    //    individual; esta asserção é sobre a linha de MOVIMENTO, então conta só ela.
+    const movimentos = vi
+      .mocked(emitLeadActivity)
+      .mock.calls.map((c) => c[1])
+      .filter((a) => a.type === "stage_changed");
+    expect(movimentos).toHaveLength(1);
+    expect(movimentos[0]).toMatchObject({
       leadId: LEAD_DA_ORG,
       type: "stage_changed",
       reason: "Perdido — preço alto",

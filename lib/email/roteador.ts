@@ -84,6 +84,14 @@ export async function transporteDeEmail(): Promise<TransporteDeEmail> {
   return isSmtpConfigured(await getSmtpConfig()) ? "smtp" : "resend";
 }
 
+/**
+ * A Resend está configurada? Só leitura de estado (a tarja de `lib/email/estado.ts`);
+ * mora aqui para que nenhum arquivo fora do roteador importe o módulo da Resend.
+ */
+export async function resendEstaConfigurada(): Promise<boolean> {
+  return resendConfigurada();
+}
+
 /** Existe algum caminho capaz de entregar? Usado por tela, nunca por envio. */
 export async function emailConfigurado(): Promise<boolean> {
   return (await transporteDeEmail()) === "smtp" ? true : await resendConfigurada();

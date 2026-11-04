@@ -1,4 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Hiperbold (D-216): a lista marca `cpf_available` perguntando ao cliente de
+// serviço quais contatos têm CPF (com `organization_id` explícito). Nenhum daqui tem.
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
+    from: () => {
+      const q: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "in", "not", "limit"]) q[m] = () => q;
+      q.then = (ok: (v: unknown) => unknown) => ok({ data: [], error: null });
+      return q;
+    },
+  }),
+}));
 
 import { listContactsHandler } from "@/app/api/v1/contacts/_handler";
 import { idsDeContatosPessoais } from "@/app/api/v1/conversations/_handler";

@@ -48,6 +48,9 @@ const showApiErrorMock = vi.hoisted(() => vi.fn());
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock, replace: vi.fn(), refresh: vi.fn() }),
+  // A lista de contatos lê a URL (filtros salvos na barra de endereço).
+  usePathname: () => "/app/contacts",
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useActiveOrg: () => ({ currency: "BRL", country: null }),
@@ -140,6 +143,9 @@ function rotear(
           metadata: {},
         })),
       });
+    // Hiperbold: a lista de contatos pede as opções dos filtros avançados.
+    if (caminho.includes("/api/v1/contacts/filter-options"))
+      return resposta({ data: { funis: [], campos: { contato: [], negocio: [] } } });
     if (caminho.includes("/api/v1/contacts")) {
       if (init?.method !== "POST") return resposta({ data: [], meta: { has_more: false } });
       if (opts.erroContato) {
@@ -268,7 +274,8 @@ describe("NewContactDialog · salvar e iniciar conversa (#3483)", () => {
         );
       }
       await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/app/inbox?id=conv-1"));
-      expect(criado).toHaveBeenCalledWith(CONTATO);
+      // O callback recebe o contato como a ROTA o devolveu (público: sem `cpf_hash`, com `cpf_available`, D-216).
+      expect(criado).toHaveBeenCalledWith(CONTATO_PUBLICO);
       expect(corpoDo(fetchMock, "/open-with-contact")).toMatchObject({
         contact_id: "ct-77",
         channel_session_id: `canal-${canais}`,

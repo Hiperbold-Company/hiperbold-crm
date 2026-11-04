@@ -52,7 +52,16 @@ vi.mock("@/lib/automation/outbound-url", async (importOriginal) => ({
 vi.mock("@/lib/automation/outbound-ip", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   assertDestinoResolvidoSeguro: async () => undefined,
+  // D-168: a conexão abre no IP que a conferência devolveu (não deixa o `fetch`
+  // resolver de novo). O receptor daqui é local.
+  resolverDestinoSeguro: async () => ["127.0.0.1"],
 }));
+// A entrega abre a conexão por `node:https` no IP validado; o receptor do
+// teste é HTTP local, então a mesma chamada vai por `node:http`.
+vi.mock("node:https", async (importOriginal) => {
+  const http = await import("node:http");
+  return { ...(await importOriginal<Record<string, unknown>>()), request: http.request };
+});
 
 import { runAutomationForEvent, buildContext } from "@/lib/automation/engine";
 import { automationRulesHandler } from "@/lib/automation/engine.handler";
@@ -167,7 +176,9 @@ function evento(eventType: string, payload: Linha, id: string, kind = "lead"): E
     metadata: {},
     consumed_by: [],
     attempts: 0,
-    created_at: "2026-10-03T12:00:00.000Z",
+    // Data relativa: o motor descarta evento velho demais (D-114, `eventoVelhoDemais`),
+    // e uma data fixa envelhece e faz a regra não rodar.
+    created_at: new Date().toISOString(),
   };
 }
 

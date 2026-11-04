@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { hashCpf } from "@/lib/contacts/cpf";
-import { gravarCpfDoContatoPorUsuario } from "@/lib/contacts/cpf-do-contato";
+import { cifrarCpfDoContato, gravarCpfDoContatoPorUsuario } from "@/lib/contacts/cpf-do-contato";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import type { PerfilDoPais } from "@/lib/legal/perfil-do-pais";
 import { PERFIS_DO_PAIS } from "@/lib/legal/perfil-do-pais";
@@ -19,7 +19,7 @@ vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 // D-216: o CPF não vai no INSERT do usuário; o servidor o grava à parte (cliente de serviço).
 vi.mock("@/lib/contacts/cpf-do-contato", () => ({
-  cifrarCpfDoContato: vi.fn(async (cpf: string) => `cifrado(${cpf})`),
+  cifrarCpfDoContato: vi.fn(async (_cpf: string): Promise<string | null> => "\\x01"),
   gravarCpfDoContatoPorUsuario: vi.fn(async () => null),
   idsPorHashDeCpf: vi.fn(async () => ({ ids: [], error: null })),
 }));
@@ -414,29 +414,34 @@ describe("POST /api/v1/contacts/import — o CPF grava os DOIS campos ou nenhum 
     return { status: resposta.status, corpo: await resposta.json() as { data?: Resumo } };
   }
 
-  it("com a RPC no schema a linha nasce com hash E ciphertext", async () => {
+  it("o contato nasce SEM CPF e o servidor grava hash E cifra juntos, à parte (Hiperbold D-216)", async () => {
     const db = banco();
     const { status, corpo } = await importarCpf([`Ana,${PHONE},${CPF}`]);
 
     expect(status).toBe(200);
     expect(corpo.data).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [] });
-    expect(db.tentativas[0]).toMatchObject({
-      cpf_hash: hashCpf(CPF),
-      cpf_encrypted: expect.anything(),
+    // Hiperbold D-216: o INSERT do usuário não leva o CPF; quem grava é o cliente de serviço, depois.
+    expect(db.tentativas[0]?.cpf_hash).toBeUndefined();
+    expect(db.tentativas[0]).not.toHaveProperty("cpf_encrypted");
+    expect(gravarCpfDoContatoPorUsuario).toHaveBeenCalledTimes(1);
+    expect(gravarCpfDoContatoPorUsuario).toHaveBeenCalledWith(ORG, "contato-1", {
+      hash: hashCpf(CPF),
+      cifrado: "\\x01",
     });
   });
 
-  it("sem cifra disponível a linha é salva SEM CPF — nunca cpf_hash sozinho (#2522)", async () => {
-    const db = banco({ cifraIndisponivel: true });
+  it("sem cifra disponível a linha vai para os erros e nada é gravado — nunca cpf_hash sozinho (#2522)", async () => {
+    const db = banco();
+    vi.mocked(cifrarCpfDoContato).mockResolvedValueOnce(null);
     const { status, corpo } = await importarCpf([`Ana,${PHONE},${CPF}`]);
 
-    // O defeito reportado: a linha voltava em `errors` com
-    // `violates check constraint "contacts_cpf_consistency"`. Agora ela entra.
+    // Hiperbold D-216: o par hash+cifra ou nenhum. Sem cifra, a linha não entra e o motivo diz por quê.
     expect(status).toBe(200);
-    expect(corpo.data).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [] });
-    // Os DOIS ausentes: é a paridade que o CHECK cobra.
-    expect(db.tentativas[0]).not.toHaveProperty("cpf_hash");
-    expect(db.tentativas[0]).not.toHaveProperty("cpf_encrypted");
+    expect(corpo.data).toMatchObject({ total_linhas: 1, imported: 0, skipped_duplicates: 0 });
+    expect(corpo.data?.errors).toHaveLength(1);
+    expect(corpo.data?.errors[0]?.motivo).toMatch(/CPF indispon/);
+    expect(db.tentativas).toHaveLength(0);
+    expect(gravarCpfDoContatoPorUsuario).not.toHaveBeenCalled();
   });
 });
 

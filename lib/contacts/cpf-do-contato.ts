@@ -44,6 +44,7 @@ export async function idsPorHashDeCpf(
     .select("id")
     .eq("organization_id", organizationId)
     .eq("cpf_hash", hash)
+    .is("is_merged_into", null)
     .limit(5);
   if (error) return { ids: [], error: { code: error.code ?? null, message: error.message } };
   return { ids: ((data ?? []) as Array<{ id: string }>).map((r) => r.id), error: null };

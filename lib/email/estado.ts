@@ -1,5 +1,5 @@
 import { lerSmtp } from "@/lib/email/config";
-import { isEmailConfigured } from "@/lib/email/resend";
+import { resendEstaConfigurada } from "@/lib/email/roteador";
 import { isSmtpConfigured } from "@/lib/email/smtp";
 
 /**
@@ -55,5 +55,5 @@ export async function semSmtpNaInstalacao(): Promise<boolean> {
  */
 export async function instalacaoSemSmtp(): Promise<boolean> {
   if (!(await semSmtpRespondido())) return false;
-  return process.env.SINGLE_SERVER === "1" || !(await isEmailConfigured());
+  return process.env.SINGLE_SERVER === "1" || !(await resendEstaConfigurada());
 }

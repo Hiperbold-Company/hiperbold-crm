@@ -233,8 +233,9 @@ describe("nenhum leitor genérico usa o JSON dos tokens como chave (item 9)", ()
         return { rows: [] };
       },
     };
+    // Regra Hiperbold: a chave da instalação é a da OpenRouter (a `openaiApiKey` não entra na escada).
     const cfg = {
-      openaiApiKey: "sk-plataforma",
+      openrouterApiKey: "sk-or-plataforma",
       cacheTtl: "1h",
       deepseekThinking: "provider",
       budgetEnforcement: "on",

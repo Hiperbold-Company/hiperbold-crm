@@ -42,6 +42,14 @@ let ordem: string[];
 let emitidos: Array<Record<string, unknown>>;
 
 const adminFalso = {
+  // Hiperbold (D-216): o CPF mora em colunas que só o cliente de serviço lê, e o
+  // handler pergunta "quais destes têm CPF?" por ele. Nenhum contato daqui tem.
+  from: () => {
+    const chain: Record<string, unknown> = {};
+    for (const m of ["select", "eq", "in", "not", "limit"]) chain[m] = () => chain;
+    chain.then = (r: (v: unknown) => unknown) => r({ data: [], error: null });
+    return chain;
+  },
   rpc: (fn: string, args: Record<string, unknown>) => {
     expect(fn).toBe("emit_event");
     ordem.push("emit:" + String(args.p_event_type));

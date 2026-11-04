@@ -199,6 +199,22 @@ const CHAVE_SEM_TENANT_LIBERADA: readonly { arquivo: string; tabela: string; mot
       "Mesma leitura da API de skills, feita no servidor da página.",
   },
   {
+    arquivo: "app/actions/admin/reembolsos.ts",
+    tabela: "billing_orders",
+    motivo:
+      "Hiperbold: tela de reembolsos do ADMIN DA PLATAFORMA (`autorizarAdminDaPlataforma`), " +
+      "que lista pedidos de todas as organizações. Os ids de pedido vêm das linhas de " +
+      "billing_refund_requests lidas logo acima, nunca do body.",
+  },
+  {
+    arquivo: "app/api/v1/health/route.ts",
+    tabela: "channel_sessions",
+    motivo:
+      "Hiperbold: o health da instalação só pergunta se ALGUMA conexão ativa usa o " +
+      "canal por QR (contagem `head: true`, sem ler linha). É pergunta da " +
+      "instalação, não de uma organização.",
+  },
+  {
     arquivo: "lib/extensions/service.ts",
     tabela: "extension_operations",
     motivo:

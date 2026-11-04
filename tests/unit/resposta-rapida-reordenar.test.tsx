@@ -39,6 +39,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { NextRequest } from "next/server";
+import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -170,6 +171,7 @@ function banco() {
 
   function consulta() {
     const filtros: Array<[string, unknown]> = [];
+    const predicados: Array<(l: Linha) => boolean> = [];
     const ordem: Array<[string, boolean]> = [];
     let patch: Record<string, unknown> | null = null;
     let novo: Record<string, unknown> | null = null;
@@ -177,14 +179,14 @@ function banco() {
     let teto = Number.POSITIVE_INFINITY;
 
     const casam = (base: Linha[]) =>
-      base.filter((l) => filtros.every(([coluna, valor]) => coluna === "midias"
+      base.filter((l) => predicados.every((p) => p(l)) && filtros.every(([coluna, valor]) => coluna === "midias"
         ? isDeepStrictEqual(l.midias, JSON.parse(String(valor)))
         : l[coluna as keyof Linha] === valor));
 
     /** O efeito da consulta: escrita (insert/update) ou leitura ordenada. */
     const executar = (): Array<Record<string, unknown>> => {
       if (novo) {
-        const criada = linha(`n${h.linhas.length + 1}`, 0, {
+        const criada = linha(randomUUID(), 0, {
           updated_at: new Date().toISOString(),
           ...(novo as Partial<Linha>),
         });
@@ -217,6 +219,15 @@ function banco() {
       },
       eq: (coluna: string, valor: unknown) => {
         filtros.push([coluna, valor]);
+        return builder;
+      },
+      is: (coluna: string, valor: unknown) => {
+        predicados.push((l) => (l[coluna as keyof Linha] ?? null) === valor);
+        return builder;
+      },
+      or: (expr: string) => {
+        const dono = /owner_user_id\.eq\.([^,]+)/.exec(expr)?.[1];
+        predicados.push((l) => (l.owner_user_id ?? null) === null || l.owner_user_id === dono);
         return builder;
       },
       update: (valores: Record<string, unknown>) => {

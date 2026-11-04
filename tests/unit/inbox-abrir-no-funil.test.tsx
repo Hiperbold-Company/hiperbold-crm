@@ -43,12 +43,17 @@ vi.mock("@/hooks/contacts/useUpdateContact", () => ({
   useUpdateContact: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 // O portão de "Levar para outro funil" é `pipeline.move_card` (agent+).
-vi.mock("@/hooks/auth/AuthProvider", () => ({
-  useAuth: () => ({
-    user: { support: null, is_platform_admin: false },
-    activeOrg: { orgId: "org-1", name: "Org", role: "agent" },
-  }),
-}));
+// Permissões por perfil (Hiperbold): `usePermission` resolve pelo catálogo real, com o papel do dublê.
+vi.mock("@/hooks/auth/AuthProvider", async () => {
+  const { papelPode } = await import("@/lib/permissoes/resolver");
+  return {
+    usePermission: (chave: Parameters<typeof papelPode>[1]) => papelPode("agent", chave),
+    useAuth: () => ({
+      user: { support: null, is_platform_admin: false },
+      activeOrg: { orgId: "org-1", name: "Org", role: "agent" },
+    }),
+  };
+});
 vi.mock("@/components/contacts/RoteirosDoContato", () => ({ RoteirosDoContato: () => null }));
 // O bloco Carteira (#3026) busca a própria rota; o dublê de `get` deste arquivo
 // devolve o resumo do painel para TODA URL, então o cartão sai da cena aqui.

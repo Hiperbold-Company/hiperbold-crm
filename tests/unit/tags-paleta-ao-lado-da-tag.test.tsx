@@ -89,37 +89,30 @@ beforeEach(() => {
   gets.mockImplementation(async (url: string) =>
     url === "/api/v1/tags/cores"
       ? { data: vocabulario.cor ? [{ tag: "vip", cor: vocabulario.cor }] : [] }
-      : { data: ["google"] },
+      : url === "/api/v1/tags/para-escolher"
+        ? // Hiperbold: o editor do CONTATO lê a lista da empresa (tag, cor, grupo).
+          { data: [{ tag: "vip", cor: vocabulario.cor, grupo: null }] }
+        : { data: ["google"] },
   );
 });
 
 afterEach(() => cleanup());
 
 describe("paleta ao lado da tag presente (#2771)", () => {
-  it("⭐ no editor do CONTATO: escolher um tom grava `definir_cor` e repinta na hora", async () => {
+  // Hiperbold: o editor do CONTATO é a lista de etiquetas da empresa (caixa de
+  // marcar, `SeletorDeEtiquetas`) e a cor é escolhida em Configurações › Tags,
+  // não ao lado da tag — decisão g8 #2 da junção de 04/11/2026 (ficou a nossa
+  // interface). O que este editor garante é mostrar a cor CADASTRADA e não
+  // oferecer escrita de cor nenhuma.
+  it("no editor do CONTATO (Hiperbold): a cor vem do cadastro e não há gatilho de cor", async () => {
     montar(<ContactTagsEditor entityId="c-1" orgId="org-1" tags={["vip"]} />);
 
-    // RED: o gatilho ainda não existe fora de Settings.
-    const gatilho = await screen.findByRole("button", { name: "Cor da etiqueta vip" }, { timeout: 5000 });
-    fireEvent.click(gatilho);
-    fireEvent.click(await screen.findByRole("button", { name: "Âmbar" }));
-
-    await waitFor(() =>
-      expect(posts).toHaveBeenCalledWith("/api/v1/tags/vocabulario", {
-        acao: "definir_cor",
-        tag: "vip",
-        destino: null,
-        cor: "#ffb224",
-      }),
-    );
-
-    // O chip da mesma tela lê o mapa: sem invalidação ele continuaria azul até
-    // o `staleTime` de 5 min — o "escolhi e não repintou".
-    await waitFor(() => expect(leiturasDeCores()).toBeGreaterThan(1), { timeout: 4000 });
-    await waitFor(
-      () => expect(screen.getAllByText("vip").some((el) => pintado(el).match(/rgb\(255,\s*178,\s*36\)|#ffb224/i))).toBe(true),
-      { timeout: 4000 },
-    );
+    await screen.findByRole("checkbox", { name: "vip" }, { timeout: 5000 });
+    const ponto = document.querySelector('[data-ponto-da-etiqueta="vip"]') as HTMLElement | null;
+    expect(ponto).not.toBeNull();
+    expect(pintado(ponto!)).toMatch(/rgb\(0,145,255\)|#0091ff/i);
+    expect(screen.queryByRole("button", { name: /Cor da etiqueta/ })).toBeNull();
+    expect(posts).not.toHaveBeenCalled();
   });
 
   it("no editor da CONVERSA, o mesmo gatilho e a mesma rota", async () => {
@@ -145,7 +138,7 @@ describe("paleta ao lado da tag presente (#2771)", () => {
 
     // Espera pela VOCABULÁRIO (que o editor busca) para não afirmar ausência
     // antes de a tela estar pronta.
-    await waitFor(() => expect(gets).toHaveBeenCalledWith("/api/v1/contact-tags"), { timeout: 5000 });
+    await waitFor(() => expect(gets).toHaveBeenCalledWith("/api/v1/tags/para-escolher"), { timeout: 5000 });
     expect(screen.queryByRole("button", { name: /Cor da etiqueta/ })).toBeNull();
     expect(posts).not.toHaveBeenCalled();
   });

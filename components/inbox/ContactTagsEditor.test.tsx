@@ -4,14 +4,26 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ContactTagsEditor } from "./ContactTagsEditor";
 import { apiClient } from "@/lib/api/client";
+import type { OpcaoDeEtiqueta } from "@/lib/tags/etiquetas-para-escolher";
 
-// Issue #2718 — o espelho do ConversationTagsEditor na aba do CONTATO: mesmo
-// gatilho, mesmo definir_cor, mesma recusa para papel abaixo de manager.
+/**
+ * Hiperbold: o editor de tags do contato é a LISTA de etiquetas da empresa
+ * (`SeletorDeEtiquetas`, caixa de marcar por etiqueta), não o campo de texto
+ * livre com chips "+ tag" do upstream. Este arquivo veio do upstream (#2718,
+ * #3180) e foi reescrito para a nossa interface na junção de 04/11/2026
+ * (decisão g8 #2 do merge): as intenções do #3180 continuam medidas — o filtro
+ * pelo digitado, sem caixa e sem acento, casando no meio da palavra; a ordem da
+ * fonte com o campo vazio; o Enter aplicando a existente; criar só o que não
+ * existe e por último. A cor da etiqueta (#2718) não é escolhida neste editor:
+ * mora em Configurações › Tags, e aqui só se mostra o ponto da cor cadastrada.
+ */
 
 let papel = "manager";
 const mutateSpy = vi.fn();
-/** O vocabulário que o hook devolve — a ORDEM dele é a das sugestões (#3180). */
-const vocabularioRef: { current: string[] } = { current: [] };
+/** O vocabulário que o hook devolve — a ORDEM dele é a da lista. */
+const vocabularioRef: { current: OpcaoDeEtiqueta[] } = { current: [] };
+const semGrupo = (...tags: string[]): OpcaoDeEtiqueta[] =>
+  tags.map((tag) => ({ tag, cor: null, grupo: null }));
 
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useAuth: () => ({ activeOrg: { role: papel } }),
@@ -19,8 +31,8 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
 vi.mock("@/hooks/contacts/useUpdateContact", () => ({
   useUpdateContact: () => ({ mutate: mutateSpy, isPending: false }),
 }));
-vi.mock("@/hooks/contacts/useContactTagVocabulary", () => ({
-  useContactTagVocabulary: () => ({ data: vocabularioRef.current }),
+vi.mock("@/hooks/contacts/useEtiquetasParaEscolher", () => ({
+  useEtiquetasParaEscolher: () => ({ data: vocabularioRef.current, isLoading: false, isError: false }),
 }));
 vi.mock("@/lib/api/client", () => ({
   apiClient: {
@@ -46,7 +58,11 @@ function renderEditor(tags: string[] = []) {
   );
 }
 
-describe("ContactTagsEditor — cor na criação (#2718)", () => {
+const campo = () => screen.getByLabelText("Adicionar tag ao contato");
+const caixa = (tag: string) => screen.queryByRole("checkbox", { name: tag });
+const opcaoDeCriar = () => screen.queryByRole("button", { name: /^Criar etiqueta/ });
+
+describe("ContactTagsEditor — cor (Hiperbold: a cor vem do cadastro)", () => {
   beforeEach(() => {
     papel = "manager";
     vi.clearAllMocks();
@@ -54,60 +70,37 @@ describe("ContactTagsEditor — cor na criação (#2718)", () => {
   });
   afterEach(() => cleanup());
 
-  it("sem cor: o “+” só anexa a tag no contato", async () => {
+  it("marcar uma etiqueta só a anexa no contato; nada vai ao vocabulário", async () => {
     const user = userEvent.setup();
+    vocabularioRef.current = semGrupo("vip");
     renderEditor();
-    await user.type(screen.getByLabelText("Adicionar tag ao contato"), "vip");
-    await user.click(screen.getByRole("button", { name: "Adicionar tag" }));
+    await user.click(caixa("vip") as HTMLElement);
     expect(mutateSpy).toHaveBeenCalledWith({ tags: ["vip"] });
     expect(apiClient.post).not.toHaveBeenCalled();
   });
 
-  it("com cor: anexa E grava definir_cor com a mesma grafia", async () => {
-    const user = userEvent.setup();
-    renderEditor();
-    await user.click(screen.getByRole("button", { name: "Cor da etiqueta" }));
-    await user.click(screen.getByRole("button", { name: "Azul" }));
-    await user.type(screen.getByLabelText("Adicionar tag ao contato"), "vip");
-    await user.click(screen.getByRole("button", { name: "Adicionar tag" }));
-    expect(mutateSpy).toHaveBeenCalledWith({ tags: ["vip"] });
-    expect(apiClient.post).toHaveBeenCalledWith("/api/v1/tags/vocabulario", {
-      acao: "definir_cor",
-      tag: "vip",
-      destino: null,
-      cor: "#0091ff",
-    });
+  it("a etiqueta com cor mostra o ponto da cor cadastrada, sem gatilho de cor aqui", () => {
+    vocabularioRef.current = [{ tag: "vip", cor: "#0091ff", grupo: null }];
+    const { container } = renderEditor();
+    const ponto = container.querySelector('[data-ponto-da-etiqueta="vip"]') as HTMLElement | null;
+    expect(ponto).not.toBeNull();
+    expect((ponto!.getAttribute("style") ?? "").replace(/\s/g, "")).toMatch(/rgb\(0,145,255\)|#0091ff/i);
+    expect(screen.queryByRole("button", { name: /Cor da etiqueta/ })).toBeNull();
   });
 
   it("para papel agent o gatilho de cor não existe", () => {
     papel = "agent";
+    vocabularioRef.current = semGrupo("vip");
     renderEditor();
-    expect(
-      screen.queryByRole("button", { name: "Cor da etiqueta" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Cor da etiqueta/ })).not.toBeInTheDocument();
   });
 });
 
 /**
- * AS SUGESTÕES FILTRAM PELO QUE SE DIGITA (#3180).
- *
- * ─── O defeito ──────────────────────────────────────────────────────────────
- *
- * As sugestões eram as oito primeiras do vocabulário em ordem alfabética, e o
- * `draft` não entrava no filtro. Com 73 etiquetas, digitar "carteira" não
- * sugeria `carteira-andreia`; a pessoa digitava o nome inteiro de memória e
- * qualquer diferença (acento, hífen, plural) criava uma etiqueta nova — o que o
- * vocabulário existe para evitar, na conversa e no contato/negócio.
- *
- * ─── A régua daqui ──────────────────────────────────────────────────────────
- *
- * A chave é a MESMA da busca (`lib/contacts/etiquetas`, #2732): sem caixa, sem
- * acento, casando no MEIO da palavra. Com o campo vazio, a lista sai na ordem
- * da FONTE — a de USO (`uso_em_contatos`, `uso_em_leads`) —, não a do alfabeto:
- * o vocabulário do caso das mais usadas está em ordem de uso, e o primeiro do
- * alfabeto é justamente o NONO.
+ * A LISTA FILTRA PELO QUE SE DIGITA (#3180): sem caixa, sem acento, casando no
+ * MEIO da palavra. Com o campo vazio, a ordem é a da FONTE, não a do alfabeto.
  */
-describe("ContactTagsEditor — sugestões filtram pelo digitado (#3180)", () => {
+describe("ContactTagsEditor — a lista filtra pelo digitado (#3180)", () => {
   beforeEach(() => {
     papel = "manager";
     vi.clearAllMocks();
@@ -115,103 +108,81 @@ describe("ContactTagsEditor — sugestões filtram pelo digitado (#3180)", () =>
   });
   afterEach(() => cleanup());
 
-  const campo = () => screen.getByLabelText("Adicionar tag ao contato");
-  const sugestao = (tag: string) => screen.queryByRole("button", { name: `+ ${tag}` });
-
   it("digitar “carteira” acha carteira-* com hífen e acento fora da conta", async () => {
     const user = userEvent.setup();
-    vocabularioRef.current = ["carteira-andreia", "carteira-danilo", "carteira-joão", "origem-site"];
+    vocabularioRef.current = semGrupo("carteira-andreia", "carteira-danilo", "carteira-joão", "origem-site");
     renderEditor();
 
     // Caixa alta de propósito: a chave é sem caixa, como a da busca.
     await user.type(campo(), "CARTEIRA");
 
-    expect(sugestao("carteira-andreia")).not.toBeNull();
-    expect(sugestao("carteira-danilo")).not.toBeNull();
-    // Acento: o vocabulário tem "joão", quem digita escreve "joao".
-    expect(sugestao("carteira-joão")).not.toBeNull();
-    expect(sugestao("origem-site")).toBeNull();
+    expect(caixa("carteira-andreia")).not.toBeNull();
+    expect(caixa("carteira-danilo")).not.toBeNull();
+    expect(caixa("carteira-joão")).not.toBeNull();
+    expect(caixa("origem-site")).toBeNull();
   });
 
   it("digitado sem acento acha a etiqueta com acento", async () => {
     const user = userEvent.setup();
-    vocabularioRef.current = ["carteira-andreia", "carteira-joão"];
+    vocabularioRef.current = semGrupo("carteira-andreia", "carteira-joão");
     renderEditor();
 
     await user.type(campo(), "joao");
 
-    expect(sugestao("carteira-joão")).not.toBeNull();
-    expect(sugestao("carteira-andreia")).toBeNull();
+    expect(caixa("carteira-joão")).not.toBeNull();
+    expect(caixa("carteira-andreia")).toBeNull();
   });
 
   it("casa no MEIO da palavra (“teira” em “carteira”), não só no começo", async () => {
     const user = userEvent.setup();
-    vocabularioRef.current = ["carteira-andreia", "carteira-danilo", "origem-site"];
+    vocabularioRef.current = semGrupo("carteira-andreia", "carteira-danilo", "origem-site");
     renderEditor();
 
     await user.type(campo(), "teira");
 
-    expect(sugestao("carteira-andreia")).not.toBeNull();
-    expect(sugestao("carteira-danilo")).not.toBeNull();
-    expect(sugestao("origem-site")).toBeNull();
+    expect(caixa("carteira-andreia")).not.toBeNull();
+    expect(caixa("carteira-danilo")).not.toBeNull();
+    expect(caixa("origem-site")).toBeNull();
   });
 
-  it("com o campo vazio mostra as mais usadas, não as primeiras do alfabeto", async () => {
-    // Ordem de USO (a que a rota entrega): "zebra-frequente" é a mais usada da
-    // organização e "aa-primeira-do-alfabeto" é a NONA em uso. Na ordem
-    // alfabética o bloco das oito seria outro — e a mais usada nem apareceria.
-    vocabularioRef.current = [
-      "zebra-frequente",
-      "yy-usada",
-      "xx-media",
-      "ww-media",
-      "vv-pouco",
-      "uu-pouco",
-      "tt-rara",
-      "ss-rara",
-      "aa-primeira-do-alfabeto",
-    ];
+  it("com o campo vazio a lista sai na ordem da fonte, não na do alfabeto", () => {
+    vocabularioRef.current = semGrupo("zebra-frequente", "yy-usada", "aa-primeira-do-alfabeto");
     renderEditor();
 
-    expect(sugestao("zebra-frequente")).not.toBeNull();
-    expect(sugestao("ss-rara")).not.toBeNull();
-    expect(sugestao("aa-primeira-do-alfabeto")).toBeNull();
+    expect(screen.getAllByRole("checkbox").map((c) => c.closest("label")?.textContent)).toEqual([
+      "zebra-frequente",
+      "yy-usada",
+      "aa-primeira-do-alfabeto",
+    ]);
   });
 
-  it("o filtro manda: sugere o que casa mesmo fora das oito primeiras", async () => {
+  it("o filtro manda: acha o que casa mesmo depois da oitava posição", async () => {
     const user = userEvent.setup();
-    // A etiqueta que casa é a DÉCIMA da lista: quem corta em oito antes de
-    // filtrar nunca a oferece — o defeito descrito na issue.
-    vocabularioRef.current = [
+    vocabularioRef.current = semGrupo(
       ...Array.from({ length: 9 }, (_, i) => `tag-${String(i).padStart(2, "0")}`),
       "carteira-alvo",
-    ];
+    );
     renderEditor();
 
     await user.type(campo(), "alvo");
 
-    expect(sugestao("carteira-alvo")).not.toBeNull();
+    expect(caixa("carteira-alvo")).not.toBeNull();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
   });
 
-  it("a etiqueta que o contato já tem continua fora, mesmo em outra caixa", async () => {
-    vocabularioRef.current = ["carteira-andreia", "carteira-danilo"];
-    // "Carteira-Andréia" é a mesma etiqueta (a chave ignora caixa e acento): o
-    // chip dela não pode voltar para a lista.
-    renderEditor(["Carteira-Andréia"]);
+  it("a etiqueta que o contato já tem, mesmo em outra caixa, aparece marcada e uma vez só", () => {
+    vocabularioRef.current = semGrupo("carteira-andreia", "carteira-danilo");
+    renderEditor(["Carteira-Andreia"]);
 
-    expect(sugestao("carteira-danilo")).not.toBeNull();
-    expect(sugestao("carteira-andreia")).toBeNull();
+    expect((caixa("carteira-andreia") as HTMLInputElement).checked).toBe(true);
+    expect((caixa("carteira-danilo") as HTMLInputElement).checked).toBe(false);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(2);
   });
 });
 
 /**
- * CRIAR É A ÚLTIMA OPÇÃO, E SÓ QUANDO O TEXTO NÃO EXISTE AINDA (#3180,
- * critério 3) — o espelho do editor da conversa no CONTATO/NEGÓCIO.
- *
- * A duplicação que a issue descreve nasce exatamente aqui: com
- * `carteira-andreia` na lista, quem digita "Carteira-Andréia" de memória e
- * aperta Enter criava a variante. A régua é a mesma dos dois editores, e é a
- * da ficha do contato (`etiquetaParaGravar`, #2732): a EXISTENTE vence.
+ * CRIAR É A ÚLTIMA OPÇÃO, E SÓ QUANDO O TEXTO NÃO EXISTE AINDA (#3180): a
+ * EXISTENTE vence quem digita a variante de memória.
  */
 describe("ContactTagsEditor — criar só o que não existe (#3180)", () => {
   beforeEach(() => {
@@ -221,19 +192,9 @@ describe("ContactTagsEditor — criar só o que não existe (#3180)", () => {
   });
   afterEach(() => cleanup());
 
-  const campo = () => screen.getByLabelText("Adicionar tag ao contato");
-  const sugestao = (tag: string) => screen.queryByRole("button", { name: `+ ${tag}` });
-  const opcaoDeCriar = () => screen.queryByRole("button", { name: /^Criar «/ });
-  /** Os chips da lista, na ordem em que a tela os desenha. */
-  const opcoes = () =>
-    screen
-      .getAllByRole("button")
-      .map((b) => (b.textContent ?? "").replace(/\s+/g, " ").trim())
-      .filter((rotulo) => rotulo.startsWith("+ ") || rotulo.startsWith("Criar «"));
-
   it("o Enter APLICA a etiqueta existente quando o texto casa por caixa e acento", async () => {
     const user = userEvent.setup();
-    vocabularioRef.current = ["carteira-andreia", "carteira-danilo"];
+    vocabularioRef.current = semGrupo("carteira-andreia", "carteira-danilo");
     renderEditor();
 
     await user.type(campo(), "CARTEIRA-ANDRÉIA{Enter}");
@@ -242,36 +203,32 @@ describe("ContactTagsEditor — criar só o que não existe (#3180)", () => {
     expect(mutateSpy).toHaveBeenCalledWith({ tags: ["carteira-andreia"] });
   });
 
-  it("a opção de criar vem por ÚLTIMO, depois das que casam", async () => {
+  it("com texto que não existe, as que casam continuam na lista e criar também é oferecido", async () => {
     const user = userEvent.setup();
-    vocabularioRef.current = ["carteira-andreia", "carteira-danilo"];
+    vocabularioRef.current = semGrupo("carteira-andreia", "carteira-danilo");
     renderEditor();
 
     await user.type(campo(), "carteira");
 
-    expect(sugestao("carteira-andreia")).not.toBeNull();
-    expect(sugestao("carteira-danilo")).not.toBeNull();
-    expect(opcoes()).toEqual([
-      "+ carteira-andreia",
-      "+ carteira-danilo",
-      "Criar «carteira»",
-    ]);
+    expect(caixa("carteira-andreia")).not.toBeNull();
+    expect(caixa("carteira-danilo")).not.toBeNull();
+    expect(opcaoDeCriar()?.textContent).toContain("“carteira”");
   });
 
   it("com correspondência exata a opção de criar não aparece", async () => {
     const user = userEvent.setup();
-    vocabularioRef.current = ["carteira-andreia"];
+    vocabularioRef.current = semGrupo("carteira-andreia");
     renderEditor();
 
     await user.type(campo(), "Carteira-Andreia");
 
-    expect(sugestao("carteira-andreia")).not.toBeNull();
+    expect(caixa("carteira-andreia")).not.toBeNull();
     expect(opcaoDeCriar()).toBeNull();
   });
 
-  it("clicar em Criar «…» grava a etiqueta nova, pela régua do banco", async () => {
+  it("clicar em Criar grava a etiqueta nova, pela régua do banco", async () => {
     const user = userEvent.setup();
-    vocabularioRef.current = ["carteira-andreia"];
+    vocabularioRef.current = semGrupo("carteira-andreia");
     renderEditor();
 
     await user.type(campo(), "Indicação de Parceiro");

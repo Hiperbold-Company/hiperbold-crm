@@ -270,9 +270,12 @@ describe("GET /api/v1/pipelines/[id]/stages", () => {
     const req = new NextRequest(`http://localhost/api/v1/pipelines/${PIPE}/stages`, { method: "GET" });
     const res = await GET(req, ctx);
 
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { data: Array<{ id: string }> };
-    expect(body.data).toEqual([]);
+    // Regra Hiperbold: funil de OUTRA organização é 404, não lista vazia 200
+    // (a lista vazia confirmaria que o id existe). Nenhuma etapa vaza.
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { data?: unknown; error?: { code: string } };
+    expect(body.data).toBeUndefined();
+    expect(body.error?.code).toBe("not_found");
   });
 });
 

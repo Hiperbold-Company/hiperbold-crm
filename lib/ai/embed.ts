@@ -140,7 +140,7 @@ async function prepararEmbedding(opts: EmbedOptions) {
         chave.provedor === "openrouter" ? modelId : modelId.replace(/^openai\//, ""),
       );
 
-  // Sem `gatewayHeaders`: o id da organização não vai ao provedor
+  // Sem cabeçalho de tenant do gateway: o id da organização não vai ao provedor
   // (`tests/unit/id-da-organizacao-nao-vai-ao-provedor.test.ts`).
 
   // O Gemini devolve 3072 dimensões por padrão; pedir 1536 é o que deixa a

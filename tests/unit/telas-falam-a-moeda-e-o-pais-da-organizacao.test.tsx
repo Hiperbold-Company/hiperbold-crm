@@ -29,6 +29,8 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   // derruba os casos deste arquivo. `null` desliga só a opção de definir cor,
   // que é o que o teste da moeda não exercita.
   useAuth: () => ({ activeOrg: null }),
+  // Itens do negócio (LeadFieldsForm): fora do que este teste mede.
+  usePermission: () => false,
 }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn() }));
@@ -235,7 +237,8 @@ describe("o documento e o exemplo de telefone seguem o país da organização", 
 describe("a organização ativa leva moeda e país ao cliente", () => {
   it("o embed da membership pede as duas colunas", () => {
     const fonte = readFileSync("lib/auth/server.ts", "utf8");
-    expect(fonte).toMatch(/organizations!user_organizations_organization_id_fkey\(display_name, locale, timezone, currency, country, status, suspended_kind\)/);
+    // O embed pode trazer colunas a mais depois destas (ex.: `permissoes`, da Hiperbold).
+    expect(fonte).toMatch(/organizations!user_organizations_organization_id_fkey\(display_name, locale, timezone, currency, country, status, suspended_kind(, [^)]*)?\)/);
     expect(fonte).toContain("currency: org?.currency ?? null");
     expect(fonte).toContain("country: org?.country ?? null");
   });

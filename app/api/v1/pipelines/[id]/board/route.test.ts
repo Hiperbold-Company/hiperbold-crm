@@ -25,6 +25,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+// A rota passa pelo gate único `requireRole("viewer")` (D-092, Hiperbold).
+vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(async () => ({
     id: "11111111-1111-4111-8111-111111111111",
@@ -32,7 +34,7 @@ vi.mock("@/lib/auth/server", () => ({
   })),
 }));
 
-import { PIPE, funilRow, makeDb, negocio } from "@/tests/helpers/stages-db-double";
+import { PIPE, authOk, funilRow, makeDb, negocio } from "@/tests/helpers/stages-db-double";
 
 const STAGE = "e2";
 const DIA = 24 * 60 * 60 * 1000;
@@ -87,6 +89,7 @@ function dbDoFunil(settings: Record<string, unknown>, leads = QUADRO) {
 }
 
 async function quadroDoBoard(qs = ""): Promise<{ status: number; ids: string[] }> {
+  authOk();
   const { GET } = await import("./route");
   const res = await GET(
     new NextRequest(`http://localhost/api/v1/pipelines/${PIPE}/board${qs}`),

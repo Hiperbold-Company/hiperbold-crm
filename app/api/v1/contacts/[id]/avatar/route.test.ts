@@ -134,6 +134,13 @@ function sessaoOk(): void {
     ok: true,
     org: { orgId: ORG_ID, name: "Org", role: "viewer" },
   } as never);
+  // Hiperbold D-092: a porta do navegador passa pelo gate único de leitura
+  // (`requireRole("viewer")`: papel efetivo e MFA da sessão).
+  vi.mocked(requireRole).mockResolvedValue({
+    ok: true,
+    user,
+    org: { orgId: ORG_ID, name: "Org", role: "viewer" },
+  } as never);
 }
 
 function tokenOk(
@@ -168,6 +175,11 @@ beforeEach(() => {
   // Padrão de uma integração: NENHUMA sessão de navegador por perto.
   vi.mocked(loadAuthUser).mockResolvedValue(null);
   vi.mocked(orgAtivaDaApi).mockResolvedValue({ ok: true, org: null } as never);
+  // Sem sessão, o gate de leitura (D-092) recusa como o `requireRole` real: 401.
+  vi.mocked(requireRole).mockResolvedValue({
+    ok: false,
+    response: Response.json({ error: { code: "unauthenticated", message: "Auth required." } }, { status: 401 }),
+  } as never);
   vi.mocked(createClient).mockResolvedValue({ session: true } as never);
   vi.mocked(createAdminClient).mockReturnValue(adminFake());
   vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true } as never);
@@ -289,19 +301,22 @@ describe("GET .../avatar — sessão do navegador (#3420, caso C: regressão zer
     expect(res.headers.get("Location")).toBe("https://storage.test/signed/contatos/foto.jpg");
     expect(res.headers.get("Cache-Control")).toBe("private, max-age=240");
     expect(FILTROS).toContainEqual(["organization_id", ORG_ID]);
-    expect(vi.mocked(loadAuthUser)).toHaveBeenCalledTimes(1);
+    // Hiperbold D-092: a sessão passa pelo gate único de leitura.
+    expect(requireRole).toHaveBeenCalledWith("viewer", expect.objectContaining({ resource: "contacts" }));
     expect(validateBearerToken).not.toHaveBeenCalled();
     // Sessão não paga teto de token, como em toda rota Dual.
     expect(checkRateLimit).not.toHaveBeenCalled();
   });
 
-  it("sem sessão e sem Bearer → 403 no_active_org, como antes da mudança", async () => {
+  // Hiperbold D-092: sem sessão, quem responde é o gate de leitura (401
+  // `unauthenticated`), não mais o 403 `no_active_org` do caminho antigo.
+  it("sem sessão e sem Bearer → recusa do gate de leitura, sem consultar contato", async () => {
     const { GET } = await import("./route");
     const res = await GET(reqSemBearer(), PARAMS);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
     const corpo = (await res.json()) as { error: { code: string } };
-    expect(corpo.error.code).toBe("no_active_org");
+    expect(corpo.error.code).toBe("unauthenticated");
     expect(FILTROS).toHaveLength(0);
   });
 
@@ -341,7 +356,9 @@ describe("GET .../avatar — PUBLIC_PATHS (borda do proxy)", () => {
     expect(isPublicPath(`/api/v1/contacts/${ID_FORA_DA_FORMA}/avatar`)).toBe(false);
     expect(isPublicPath(`/api/v1/contacts/${CONTATO_ID}/avatar/extra`)).toBe(false);
     expect(isPublicPath(`/api/v1/contacts/${CONTATO_ID}/person`)).toBe(false);
-    expect(isPublicPath(`/api/v1/contacts/${CONTATO_ID}`)).toBe(false);
+    // Hiperbold API fase 2 (17/10/2026): `/contacts/[id]` aceita Bearer e por isso
+    // está em PUBLIC_PATHS ("o proxy não decide"; a autorização mora na rota).
+    expect(isPublicPath(`/api/v1/contacts/${CONTATO_ID}`)).toBe(true);
     expect(isPublicPath("/api/v1/contacts/bulk/avatar")).toBe(false);
   });
 

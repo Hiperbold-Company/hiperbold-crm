@@ -159,14 +159,16 @@ describe("criar contato com CPF", () => {
     expect(contatos()).toHaveLength(0);
   });
 
-  it("CPF que já é de outro contato da organização: 500 como sempre foi e o contato novo é desfeito", async () => {
+  // Era "500 como sempre foi"; a correção #3084 do upstream (junção de 04/11/2026) faz o CPF repetido virar 409
+  // `contact_exists` com o id de quem já o tem.
+  it("CPF que já é de outro contato da organização: 409 contact_exists e nenhum contato novo", async () => {
     montar([
       { id: "existente", organization_id: ORG, name: "Ana", cpf_hash: hashCpf(CPF), cpf_encrypted: "cifrado(x)" },
     ]);
     const erro = await createContactHandler(usuario as never, ctx, { name: "Maria", cpf: CPF, source: "manual" } as never).catch(
       (e: unknown) => e,
     );
-    expect((erro as ApiError).status).toBe(500);
+    expect(erro).toMatchObject({ status: 409, code: "contact_exists", details: { contact_id: "existente" } });
     expect(contatos().map((c) => c.id)).toEqual(["existente"]);
     // Conferido ANTES: o caminho normal não cria o contato para depois apagá-lo.
     expect(insercoesDoUsuario).toBe(0);

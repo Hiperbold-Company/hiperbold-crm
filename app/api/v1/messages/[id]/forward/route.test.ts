@@ -14,11 +14,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+// O recibo de `idempotency_keys` é gravado pelo service role (Hiperbold, como em POST /messages).
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/inbox/encaminhar-mensagem", () => ({ encaminharMensagem: vi.fn() }));
 
 import { ApiError } from "@/lib/api/types";
 import { requireRole } from "@/lib/auth/require-role";
 import { encaminharMensagem } from "@/lib/inbox/encaminhar-mensagem";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "./route";
@@ -87,7 +90,9 @@ beforeEach(() => {
     user: { id: "u1", idioma: "pt-BR" },
     org: { orgId: ORG_ID },
   } as never);
-  vi.mocked(createClient).mockResolvedValue(bancoFalso() as never);
+  const banco = bancoFalso();
+  vi.mocked(createClient).mockResolvedValue(banco as never);
+  vi.mocked(createAdminClient).mockReturnValue(banco as never);
   mockedEncaminhar.mockResolvedValue({ id: "m-novo", status: "sent" } as never);
 });
 

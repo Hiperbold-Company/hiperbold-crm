@@ -56,6 +56,8 @@ vi.mock("@/hooks/kanban/useBoard", () => ({
 vi.mock("@/hooks/kanban/useBulkAction", () => ({
   useBulkAction: () => ({ mutate: vi.fn(), isPending: false }),
 }));
+// Hiperbold: contagem de "Eventos manuais" (0979) — fora do que este teste mede.
+vi.mock("@/hooks/kanban/useEventosManuais", () => ({ useEventosManuais: () => undefined }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useUser: () => ({ id: "u-1" }),
   useActiveOrg: () => ({ orgId: "org-1", role: "agent" }),

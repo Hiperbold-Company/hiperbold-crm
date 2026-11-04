@@ -19,6 +19,8 @@ const estado = vi.hoisted(() => ({
 
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useActiveOrg: () => ({ currency: estado.moeda, country: "BR", orgId: "org-1" }),
+  // A ficha do negócio pergunta se pode editar produtos; aqui se mede só o campo de moeda.
+  usePermission: () => false,
 }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (texto: string) => texto }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -44,6 +46,9 @@ vi.mock("@/hooks/contacts/useContactTagVocabulary", () => ({
 // Etiquetas gravam por outro caminho. O editor de campos e os três formulários
 // ficam reais: é o valor entregue por eles ao salvar que a issue #3428 descreve.
 vi.mock("@/components/inbox/ContactTagsEditor", () => ({ ContactTagsEditor: () => null }));
+// Os produtos do negócio (Hiperbold, migration 0972) leem react-query; sem produtos
+// o valor é o digitado, que é o assunto daqui.
+vi.mock("@/components/kanban/ItensDoNegocio", () => ({ ItensDoNegocio: () => null }));
 
 const FUNIL = "33333333-3333-4333-8333-333333333333";
 const ETAPA = "11111111-1111-4111-8111-111111111111";

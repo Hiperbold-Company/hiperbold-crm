@@ -89,6 +89,11 @@ vi.mock("@/components/kanban/FilterBar", () => ({
 vi.mock("@/components/kanban/NewLeadDialog", () => ({ NewLeadDialog: () => null }));
 vi.mock("@/components/kanban/BulkActionBar", () => ({ BulkActionBar: () => null }));
 vi.mock("@/components/kanban/LeadDossier", () => ({ LeadDossier: () => null }));
+// Hiperbold: a página lê a org ativa (permissões por perfil e fuso).
+vi.mock("@/hooks/auth/AuthProvider", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/auth/AuthProvider")>()),
+  useActiveOrg: () => ({ orgId: "org-1", role: "admin" }),
+}));
 vi.mock("@/hooks/inbox/useAssignableMembers", () => ({
   useAssignableMembers: () => ({ data: [] }),
 }));

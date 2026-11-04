@@ -12,7 +12,7 @@ const casos: { status: string }[] = [];
 vi.mock("@/hooks/ai/useCases", () => ({ useCases: () => ({ data: { cases: casos, open_count: casos.length } }) }));
 
 import { ContadorDeCasos } from "@/components/shell/ContadorDeCasos";
-import { sidebarGroups } from "@/lib/navigation/registry";
+import { NAV_DESTINATIONS, sidebarGroups } from "@/lib/navigation/registry";
 
 describe("contador de casos no menu", () => {
   it("conta só os que esperam uma pessoa", () => {
@@ -27,8 +27,12 @@ describe("contador de casos no menu", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("Casos está no menu da IA com o contador declarado", () => {
+  it("Casos declara o contador e, na Hiperbold, fica fora do menu lateral", () => {
+    // Hiperbold: sidebar só com o essencial (decisão do dono, 15/10/2026). A porta
+    // de Casos é o hub do Agente de IA; o contador segue declarado no destino e
+    // anda com o item (ver `sidebar-grupos.test.tsx`).
+    expect(NAV_DESTINATIONS.find((d) => d.href === "/app/ai/cases")?.contador).toBe("casos");
     const ia = sidebarGroups(true, null).find((g) => g.group.id === "ia");
-    expect(ia?.items.find((i) => i.href === "/app/ai/cases")?.contador).toBe("casos");
+    expect(ia?.items.find((i) => i.href === "/app/ai/cases")).toBeUndefined();
   });
 });

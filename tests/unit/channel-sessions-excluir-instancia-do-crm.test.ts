@@ -30,7 +30,11 @@ vi.mock("@/lib/automation/outbound-ip", () => ({ assertDestinoResolvidoSeguro: a
 vi.mock("@/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } }));
 vi.mock("@/lib/audit", () => ({ audit: h.audit }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: async () => null }));
-vi.mock("@/lib/auth/require-role", () => ({ requireRole: h.role }));
+vi.mock("@/lib/auth/require-role", () => ({
+  requireRole: h.role,
+  // O GET (diálogo de impacto) resolve a organização pela API: a mesma da sessão.
+  orgAtivaDaApi: async () => ({ ok: true, org: { orgId: ORG, name: "Org", role: "admin" } }),
+}));
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: h.load,
   resolveActiveOrg: h.org,
@@ -211,7 +215,9 @@ describe("DELETE de canal: a instância que o CRM criou", () => {
 });
 
 describe("DELETE de canal: a conexão que o cliente trouxe (não criada pelo CRM) segue como sempre", () => {
-  it("sem nada pendurado: apaga a linha pelo cliente do usuário e não fala com o servidor de WhatsApp", async () => {
+  // Upstream (migration 9104, só o servidor grava `meta_*`): a exclusão de canal de WhatsApp sai pelo
+  // service role, com o filtro de organização da sessão; o cliente do usuário não escreve nada.
+  it("sem nada pendurado: apaga a linha (pelo service role) e não fala com o servidor de WhatsApp", async () => {
     montar([linha({ criada_pelo_crm: false, pareamento_qr_estado: null })]);
 
     const res = await DELETE(reqDelete(), ctx);
@@ -219,7 +225,7 @@ describe("DELETE de canal: a conexão que o cliente trouxe (não criada pelo CRM
     expect(res.status).toBe(200);
     expect((await res.json()).data).toMatchObject({ archived: false });
     expect(banco.tabelas.channel_sessions).toHaveLength(0);
-    expect(escritasDoUsuario).toEqual(["delete:channel_sessions"]);
+    expect(escritasDoUsuario).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

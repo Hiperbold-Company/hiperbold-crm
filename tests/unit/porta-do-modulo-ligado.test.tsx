@@ -30,6 +30,7 @@ import { caminhoDaPorta, ondeOModuloAparece } from "@/lib/navigation/onde-o-modu
 import { MODULOS_NA_TELA } from "@/app/admin/(protected)/sistema/_form";
 import { combinarInterfaces, destinosDaInterface, permitidos } from "@/lib/navigation/interface";
 import { MODULOS_OPCIONAIS, type ModuloOpcional } from "@/lib/instalacao/modulos";
+import { hrefOculto } from "@/lib/hiperbold/funcoes-ocultas";
 
 /**
  * ⚠️ `NAV_CATALOG` é UNIÃO DE TIPOS LITERAIS, não `NavMetadata[]`: cada entrada tem só os
@@ -49,7 +50,11 @@ function portaDo(modulo: ModuloOpcional): string | null {
   return CATALOGO.find((d) => d.modulo === modulo)?.href ?? null;
 }
 
-const COM_PORTA = MODULOS_OPCIONAIS.filter((m) => portaDo(m) !== null);
+// Hiperbold 16/10/2026: porta de função oculta (Comandas) não aparece nem com o módulo ligado.
+const COM_PORTA = MODULOS_OPCIONAIS.filter((m) => {
+  const p = portaDo(m);
+  return p !== null && !hrefOculto(p);
+});
 
 describe("módulo ligado acende a porta mesmo no preset simplificada", () => {
   it("controle: há módulo com porta para medir (senão o resto é vácuo)", () => {
@@ -359,9 +364,10 @@ describe("nenhum caminho de menu é escrito à mão", () => {
   it("⭐ o painel do login por assinatura declara o caminho DERIVADO, com o passo do hub", () => {
     const onde = caminhoDaPorta("/app/ai/credentials");
     expect(onde).not.toBeNull();
-    expect(onde!.grupo).toBe("Agente de IA");
-    expect(onde!.hub).toBe("Ver tudo em IA");
-    expect(onde!.label).toBe("Credenciais");
+    // Hiperbold 16/10/2026: a credencial própria mora no rodapé (Configurações), não no hub de IA.
+    expect(onde!.grupo).toBe("Configurações");
+    expect(onde!.hub).toBeUndefined();
+    expect(onde!.label).toBe("Usar minha própria chave de IA (avançado)");
   });
 
   it("⭐ nenhum texto de `foraDoMenu` contém `›` — caminho ali seria escrito à mão", () => {

@@ -15,3 +15,18 @@ export function abaInicialDeAutomacoes(valor: string | null | undefined): AbaDeA
     ? (valor as AbaDeAutomacoes)
     : ABA_PADRAO_DE_AUTOMACOES;
 }
+
+/**
+ * As abas que um link do upstream pode abrir direto (`/app/webhooks?aba=automacoes`,
+ * a volta do designer), traduzidas para o valor interno da aba. O `?tab=` da
+ * Hiperbold continua valendo; quem lê os dois é a página. Mora aqui, e não no
+ * `WebhooksClient` ("use client"): a página de servidor lê o VALOR, e valor de
+ * módulo cliente chega ao servidor como referência, não como objeto.
+ */
+export const ABAS_DOS_WEBHOOKS = {
+  receber: "sources",
+  leads: "capturas",
+  automacoes: "rules",
+  atividade: "activity",
+} as const satisfies Record<string, AbaDeAutomacoes>;
+export type AbaDosWebhooks = keyof typeof ABAS_DOS_WEBHOOKS;

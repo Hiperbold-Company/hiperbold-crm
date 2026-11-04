@@ -182,6 +182,7 @@ describe("Novo negócio pelo funil — o lead nasce com contato", () => {
   });
 });
 
+// O botão virou «Criar negócio» com a #3811 do upstream (o card se chama Negócio), adotada na junção de 04/11/2026.
 describe("Fase F3, tarefa 9 — bloqueio do plano no botão «Criar lead»", () => {
   it("com o bloqueio valendo, o botão fica desabilitado e mostra o motivo", async () => {
     render(
@@ -195,7 +196,7 @@ describe("Fase F3, tarefa 9 — bloqueio do plano no botão «Criar lead»", () 
       />,
     );
 
-    const botao = await screen.findByRole("button", { name: "Criar lead" });
+    const botao = await screen.findByRole("button", { name: "Criar negócio" });
     expect(botao).toBeDisabled();
     expect(botao).toHaveAttribute("title", "3 de 3 leads do plano Starter");
     expect(screen.getByText("3 de 3 leads do plano Starter")).toBeInTheDocument();
@@ -213,7 +214,7 @@ describe("Fase F3, tarefa 9 — bloqueio do plano no botão «Criar lead»", () 
       />,
     );
 
-    const botao = await screen.findByRole("button", { name: "Criar lead" });
+    const botao = await screen.findByRole("button", { name: "Criar negócio" });
     expect(botao).toBeEnabled();
     expect(botao).not.toHaveAttribute("title");
   });

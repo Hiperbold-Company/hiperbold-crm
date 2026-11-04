@@ -559,19 +559,21 @@ describe("onboarding: publicação impossível não pode terminar em silêncio",
     expect(estado.agentes[0]?.published_version_id).toBe("versao-1");
   });
 
-  it("aba antiga do passo numa org já configurada: o agente publicado deixa estado, auditoria e evento", async () => {
-    // A guarda do #2113 é só das boas-vindas. Aqui o agente já foi criado e
-    // publicado antes de o passo ser registrado; recusar o registro deixaria
-    // um agente no ar sem rastro e a tela dizendo "Falha".
+  it("aba antiga do passo numa org já configurada: recusada ANTES de criar qualquer coisa", async () => {
+    // Regra Hiperbold (D-089/D-090, `app/actions/onboarding/_shared.ts`): depois de `onboarded_at`,
+    // nenhuma action do onboarding roda de novo — elas escrevem com service role. No upstream a
+    // guarda do #2113 é só das boas-vindas e este caso publicava; aqui a recusa vem no portão, antes
+    // do primeiro INSERT, então não sobra agente no ar sem rastro.
     const estado = montarBanco({ onboardedAt: "2026-01-01T00:00:00.000Z" });
     vi.mocked(audit).mockClear();
 
     const res = await clicar();
 
-    expect(res).toBe("redirecionou");
-    expect(estado.versoes).toHaveLength(1);
-    expect(estado.eventos).toHaveLength(1);
-    expect(vi.mocked(audit)).toHaveBeenCalled();
+    expect(res).toEqual({ ok: false, error: "forbidden" });
+    expect(estado.agentes).toHaveLength(0);
+    expect(estado.versoes).toHaveLength(0);
+    expect(estado.eventos).toHaveLength(0);
+    expect(vi.mocked(audit)).not.toHaveBeenCalled();
   });
 
   it("sem canal nenhum é rascunho CONHECIDO: segue o wizard e não alarma", async () => {

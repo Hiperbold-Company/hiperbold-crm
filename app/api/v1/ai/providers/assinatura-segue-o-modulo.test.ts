@@ -52,6 +52,12 @@ vi.mock("@/lib/supabase/admin", () => ({
       // `organizations` — o PATCH do padrão.
       return cadeia(tabela, [], { settings: {} });
     },
+    // D-132: o PATCH do padrão grava só a chave `llm` de `organizations.settings` pela RPC.
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      if (fn !== "fn_atualizar_setting_da_organizacao") return { data: null, error: { message: fn } };
+      banco.gravacoes.push({ tabela: "organizations", payload: args });
+      return { data: 1, error: null };
+    },
   }),
 }));
 

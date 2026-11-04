@@ -16,7 +16,7 @@
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { loadAuthUser, orgAtivaSemPortao, resolveActiveOrg } from "@/lib/auth/server";
 import type { AuthUser, Role } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
 import { searchable } from "@/lib/navigation/registry";
@@ -26,7 +26,7 @@ const PASSOU_DO_PORTAO = "passou-do-portao-de-papel";
 
 vi.mock("@/lib/auth/server", async (importOriginal) => {
   const real = await importOriginal<Record<string, unknown>>();
-  return { ...real, loadAuthUser: vi.fn(), resolveActiveOrg: vi.fn() };
+  return { ...real, loadAuthUser: vi.fn(), resolveActiveOrg: vi.fn(), orgAtivaSemPortao: vi.fn() };
 });
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: h.admin }));
@@ -82,9 +82,12 @@ function preparar(role: Role): void {
   } as unknown as AuthUser;
   vi.mocked(loadAuthUser).mockResolvedValue(user);
   vi.mocked(resolveActiveOrg).mockResolvedValue({ orgId: ORG_ID, name: "Org", role });
+  vi.mocked(orgAtivaSemPortao).mockResolvedValue({ orgId: ORG_ID, name: "Org", role, org_status: "active" });
   vi.mocked(createClient).mockResolvedValue({
     rpc: vi.fn(async () => ({ data: role, error: null })),
     auth: {
+      // `isMfaEnrolled` lê `user.factors` da mesma ida ao GoTrue do `getUser()`.
+      getUser: vi.fn(async () => ({ data: { user: { id: USER_ID, factors: [] } }, error: null })),
       mfa: {
         listFactors: vi.fn(async () => ({ data: { totp: [] }, error: null })),
         getAuthenticatorAssuranceLevel: vi.fn(async () => ({
@@ -156,9 +159,17 @@ beforeEach(() => {
   });
 });
 
+/**
+ * Leitura que o ATENDENTE faz fora da tela de Conexões (correção do upstream
+ * #2328): o seletor de modelos da janela fechada, no inbox, lê `GET templates`.
+ * O piso dela é `agent`; `viewer` segue recusado (o laço de baixo cobre).
+ */
+const LEITURA_DO_ATENDENTE = new Set(["GET templates"]);
+
 describe("rotas de Conexões: piso `manager`", () => {
   describe.each(["agent", "viewer"] as const)("%s é recusado", (role) => {
-    it.each(ROTAS)("%s → 403 forbidden_role, sem chegar ao banco", async (_nome, handler, method, params) => {
+    const rotas = role === "agent" ? ROTAS.filter(([nome]) => !LEITURA_DO_ATENDENTE.has(nome)) : ROTAS;
+    it.each(rotas)("%s → 403 forbidden_role, sem chegar ao banco", async (_nome, handler, method, params) => {
       preparar(role);
       const r = await chamar(handler, method, params);
       expect(r).toEqual({ passou: false, status: 403, codigo: "forbidden_role" });
@@ -173,6 +184,13 @@ describe("rotas de Conexões: piso `manager`", () => {
       expect(r.codigo).not.toBe("forbidden_role");
       expect(r.status === 403 && r.codigo === "forbidden_role").toBe(false);
     });
+  });
+
+  it("GET templates: o atendente passa do papel (seletor da janela fechada, #2328)", async () => {
+    preparar("agent");
+    const r = await chamar(h1(modelos.GET), "GET");
+    expect(r.codigo).not.toBe("forbidden_role");
+    expect(r.status === 403).toBe(false);
   });
 
   it("o início do OAuth das redes sociais: atendente volta com recusa, gerente passa do papel", async () => {

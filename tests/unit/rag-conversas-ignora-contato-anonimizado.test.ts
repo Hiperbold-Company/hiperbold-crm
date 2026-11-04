@@ -26,12 +26,14 @@ vi.mock("@/lib/ai/embed", () => ({
 }));
 vi.mock("@/lib/ai/embeddings/chave", () => ({
   resolverChaveDeEmbedding: vi.fn(async () => ({ chave: "x" })),
+  modeloDeEmbedding: vi.fn(() => "modelo-de-teste"),
 }));
 vi.mock("@/lib/legal/perfil-do-pais", () => ({
   perfilDaOrganizacao: vi.fn(async () => ({})),
 }));
 vi.mock("@/lib/ai/anonymize", () => ({
   padroesDePii: vi.fn(() => []),
+  padroesDaIngestao: vi.fn(() => []),
   anonymize: vi.fn((t: string) => ({ anonymized: t, hits: ["x"] })),
   detectResidualPii: vi.fn(() => null),
 }));

@@ -32,6 +32,7 @@ vi.mock("@/lib/ai/agents/legacy-notice", () => ({
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(async () => ({ id: USER, email: "u@example.com" })),
   resolveActiveOrg: vi.fn(async () => ({ orgId: ORG, name: "Org", role: "admin" })),
+  mfaEmDivida: vi.fn(async () => false),
 }));
 
 import { requireRole } from "@/lib/auth/require-role";
@@ -57,8 +58,8 @@ type Linha = Record<string, unknown>;
 function bancoFalso(escritas: Array<{ tabela: string; op: string; valor: Linha }>) {
   const tabelas: Record<string, Linha[]> = {
     ai_provider_credentials: [
-      { id: CRED_MINHA, organization_id: ORG },
-      { id: CRED_ALHEIA, organization_id: OUTRA_ORG },
+      { id: CRED_MINHA, organization_id: ORG, provider: "openai", is_active: true },
+      { id: CRED_ALHEIA, organization_id: OUTRA_ORG, provider: "openai", is_active: true },
     ],
     channel_sessions: [
       { id: CANAL_MEU, organization_id: ORG },
@@ -75,7 +76,16 @@ function bancoFalso(escritas: Array<{ tabela: string; op: string; valor: Linha }
       },
     ],
     ai_agent_versions: [
-      { id: VERSAO, organization_id: ORG, agent_id: AGENTE, status: "draft", followup: {} },
+      {
+        id: VERSAO,
+        organization_id: ORG,
+        agent_id: AGENTE,
+        status: "draft",
+        followup: {},
+        provider: "openai",
+        model: "gpt-4o-mini",
+        credential_id: null,
+      },
     ],
   };
   return {
@@ -192,8 +202,9 @@ describe("createMcpAgentAction (tela /ai/agents/new)", () => {
     name: "Recepção",
     version: {
       system_prompt: "Atenda bem.",
-      provider: "anthropic",
-      model: "claude-sonnet-4-6",
+      // Regra Hiperbold: sem credencial própria, a chave da instalação só sai pela OpenRouter.
+      provider: "openrouter",
+      model: "anthropic/claude-sonnet-4-6",
       credential_id: null,
       channel_session_id: canal,
     },

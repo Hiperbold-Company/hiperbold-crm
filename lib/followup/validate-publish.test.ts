@@ -469,6 +469,11 @@ describe('validateFlowForPublish', () => {
         'collect',
         'skill',
         'action',
+        // Blocos das automações visuais (Hiperbold) que falam com o cliente ou o fazem esperar.
+        'message',
+        'question',
+        'instagram_private_reply',
+        'instagram_public_reply',
       ]);
     });
   });

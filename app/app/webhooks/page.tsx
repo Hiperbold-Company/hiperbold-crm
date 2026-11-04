@@ -10,8 +10,8 @@ import {
 import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { abaInicialDeAutomacoes } from "./_components/abas";
-import { ABAS_DOS_WEBHOOKS, WebhooksClient } from "./_components/WebhooksClient";
+import { ABAS_DOS_WEBHOOKS, abaInicialDeAutomacoes } from "./_components/abas";
+import { WebhooksClient } from "./_components/WebhooksClient";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Automações e Webhooks" };

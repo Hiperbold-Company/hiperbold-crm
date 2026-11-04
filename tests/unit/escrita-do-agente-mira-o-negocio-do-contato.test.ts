@@ -34,6 +34,7 @@ const OUTRO_DA_CONVERSA = "55555555-5555-4555-8555-555555555555";
 const INVENTADO = "74a0238a-667e-4ee8-8106-86d1cb337fd4";
 const DE_OUTRO_CLIENTE = "66666666-6666-4666-8666-666666666666";
 const FUNIL = "44444444-4444-4444-8444-444444444444";
+const OUTRO_CONTATO = "77777777-7777-4777-8777-777777777777";
 
 type Negocio = { id: string; status: string };
 
@@ -53,8 +54,14 @@ function banco(doContato: Negocio[], opts: { erro?: boolean } = {}) {
           filtros[coluna] = valor;
           return q;
         },
+        // Por id: o funil (escopo do agente) e o contato dono (escopo do turno, D-096).
         maybeSingle: async () => ({
-          data: existentes.includes(filtros.id as string) ? { pipeline_id: FUNIL } : null,
+          data: existentes.includes(filtros.id as string)
+            ? {
+                pipeline_id: FUNIL,
+                contact_id: filtros.id === DE_OUTRO_CLIENTE ? OUTRO_CONTATO : CONTATO,
+              }
+            : null,
           error: null,
         }),
         then: (ok: (r: unknown) => unknown) =>
@@ -160,8 +167,16 @@ describe("a escrita do agente mira o negócio do contato da conversa", () => {
       handoffSignal: { triggered: false },
       contatoDoTurno: CONTATO,
     } as never);
-    await tools.crm_get_lead!.execute!({ lead_id: DE_OUTRO_CLIENTE }, { toolCallId: "c1", messages: [] } as never);
-    expect(vi.mocked(getLeadHandler).mock.calls.at(-1)?.[2]).toBe(DE_OUTRO_CLIENTE);
+    const r = await tools.crm_get_lead!.execute!(
+      { lead_id: DE_OUTRO_CLIENTE },
+      { toolCallId: "c1", messages: [] } as never,
+    );
+    // A conferência do negócio (troca do id pelo da conversa) é só de escrita: a
+    // leitura NÃO é redirecionada para o negócio da conversa. Quem barra a leitura
+    // do outro cliente é o escopo do turno (D-096, Hiperbold), que fica junto.
+    expect(vi.mocked(getLeadHandler).mock.calls.some((c) => c[2] === DA_CONVERSA)).toBe(false);
+    expect(r).toMatchObject({ permitido: false, motivo: "fora_do_contato_do_turno" });
+    expect(motivoAuditado()).toBe("escopo_do_turno:fora_do_contato_do_turno");
   });
 
   it("sem contato do turno (Operador, rota, automação), o id segue como veio", async () => {

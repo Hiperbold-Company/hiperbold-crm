@@ -28267,7 +28267,6 @@ export const DICIONARIO: Traducoes = {
   "Escolha um fallback público diferente dos agentes reservados.": {
     es: "Elija un fallback público diferente de los agentes reservados.",
   },
-  "há": { es: "hace" },
   "A conexão com o Instagram e o Messenger ainda não foi configurada nesta instalação.": {
     es: "La conexión con Instagram y Messenger todavía no se configuró en esta instalación.",
   },

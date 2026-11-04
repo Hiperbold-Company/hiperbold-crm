@@ -145,21 +145,25 @@ async function recusarCpfDeOutroContato(
   hash: string,
   exceto: string | null,
   requestId: string,
+  idioma: Idioma,
 ): Promise<void> {
   const donos = await idsPorHashDeCpf(organizationId, hash);
   if (donos.error) throw new ApiError(500, "internal_error", undefined, requestId, donos.error.message);
-  if (donos.ids.some((id) => id !== exceto)) {
+  const outro = donos.ids.find((id) => id !== exceto);
+  if (outro) {
+    // #3084 (upstream): CPF repetido é 409 `contact_exists` com o id de quem já o tem — nunca o 500 de antes.
+    // O id vem da consulta filtrada pela organização da sessão, não do corpo.
     throw new ApiError(
-      500,
-      "internal_error",
-      undefined,
+      409,
+      "contact_exists",
+      { contact_id: outro },
       requestId,
-      'duplicate key value violates unique constraint "uniq_contacts_org_cpf"',
+      traduzir("Já existe um contato com este CPF.", idioma),
     );
   }
 }
 
-/** A gravação do CPF não alterou linha (contato anonimizado ou sumido): 409; qualquer outra falha, o 500 de sempre. */
+/** A gravação do CPF não alterou linha (contato anonimizado ou sumido) ou o índice único barrou na corrida: 409; qualquer outra falha, o 500 de sempre. */
 function erroDaGravacaoDoCpf(erro: ErroDeCpf, requestId: string, idioma: Idioma): ApiError {
   if (erro.code === CPF_SEM_LINHA) {
     return new ApiError(
@@ -168,6 +172,17 @@ function erroDaGravacaoDoCpf(erro: ErroDeCpf, requestId: string, idioma: Idioma)
       undefined,
       requestId,
       traduzir("Não foi possível gravar o CPF: o contato foi anonimizado ou não existe mais.", idioma),
+    );
+  }
+  if (erro.code === "23505") {
+    // Corrida: outro pedido gravou o mesmo CPF entre a conferência e a gravação; o índice único barrou. Mesma
+    // resposta de `recusarCpfDeOutroContato` (409 `contact_exists`), sem o id — aqui não há quem apontar.
+    return new ApiError(
+      409,
+      "contact_exists",
+      undefined,
+      requestId,
+      traduzir("Já existe um contato com este CPF.", idioma),
     );
   }
   return new ApiError(500, "internal_error", undefined, requestId, erro.message);
@@ -662,7 +677,7 @@ export async function createContactHandler(
     const cifrado = await cifrarCpfDoContato(input.cpf);
     if (!cifrado) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
     // Confere o CPF repetido ANTES de inserir: o caminho normal não cria para depois apagar.
-    await recusarCpfDeOutroContato(ctx.organization_id, hash, null, ctx.requestId);
+    await recusarCpfDeOutroContato(ctx.organization_id, hash, null, ctx.requestId, ctx.idioma ?? "pt-BR");
     cpfParaGravar = { hash, cifrado };
   }
 
@@ -894,7 +909,7 @@ export async function patchContactHandler(
     if (!cifrado) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
     cpfParaGravar = { hash, cifrado };
     // Recusa antes de tocar em qualquer campo (PATCH tudo-ou-nada).
-    await recusarCpfDeOutroContato(ctx.organization_id, hash, contactId, ctx.requestId);
+    await recusarCpfDeOutroContato(ctx.organization_id, hash, contactId, ctx.requestId, ctx.idioma ?? "pt-BR");
   }
 
   if (Object.keys(patch).length === 0 && !cpfParaGravar) {

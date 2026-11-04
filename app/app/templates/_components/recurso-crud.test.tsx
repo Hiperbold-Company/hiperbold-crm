@@ -41,6 +41,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { NextRequest } from "next/server";
+import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
@@ -181,6 +182,10 @@ interface Linha {
   ordem: number;
 }
 
+/** Id de outra linha, em UUID: a rota recusa (400) id que não é UUID antes de procurar. */
+const PROPRIA = "bbbbbbbb-0000-4000-8000-0000000000bb";
+const ALHEIA = "aaaaaaaa-0000-4000-8000-0000000000aa";
+
 function linha(id: string, ordem: number, extra: Partial<Linha> = {}): Linha {
   return {
     id,
@@ -213,6 +218,7 @@ function banco() {
 
   function consulta() {
     const filtros: Array<[string, unknown]> = [];
+    const predicados: Array<(l: Linha) => boolean> = [];
     const ordenacao: Array<[string, boolean]> = [];
     let patch: Record<string, unknown> | null = null;
     let novo: Record<string, unknown> | null = null;
@@ -228,7 +234,11 @@ function banco() {
         ? JSON.stringify(atual) === valor
         : atual === valor;
     const casam = (base: Linha[]) =>
-      base.filter((l) => filtros.every(([coluna, valor]) => igual(l[coluna as keyof Linha], valor)));
+      base.filter(
+        (l) =>
+          filtros.every(([coluna, valor]) => igual(l[coluna as keyof Linha], valor)) &&
+          predicados.every((p) => p(l)),
+      );
 
     const executar = (): Array<Record<string, unknown>> => {
       if (apagar) {
@@ -237,7 +247,7 @@ function banco() {
         return alvos.map((l) => somente(l, colunasDeVolta));
       }
       if (novo) {
-        const criada = linha(`n${h.linhas.length + 1}`, 0, {
+        const criada = linha(randomUUID(), 0, {
           updated_at: new Date().toISOString(),
           ...(novo as Partial<Linha>),
         });
@@ -270,6 +280,15 @@ function banco() {
       },
       eq: (coluna: string, valor: unknown) => {
         filtros.push([coluna, valor]);
+        return builder;
+      },
+      is: (coluna: string, valor: unknown) => {
+        predicados.push((l) => (l[coluna as keyof Linha] ?? null) === valor);
+        return builder;
+      },
+      or: (expr: string) => {
+        const dono = /owner_user_id\.eq\.([^,]+)/.exec(expr)?.[1];
+        predicados.push((l) => (l.owner_user_id ?? null) === null || l.owner_user_id === dono);
         return builder;
       },
       order: (coluna: string, opcoes?: { ascending?: boolean }) => {
@@ -438,7 +457,7 @@ describe("criar o recurso pela tela (#2833)", () => {
 
 describe("editar e desativar pela tela (#2833)", () => {
   it("(3) editar muda o que a barra ENTREGA (o corpo interpolado é o novo)", async () => {
-    h.linhas = [linha("a", 1000, { title: "Saudação", body: "Oi {{primeiro_nome}}" })];
+    h.linhas = [linha(PROPRIA, 1000, { title: "Saudação", body: "Oi {{primeiro_nome}}" })];
     montarTela();
     await waitFor(() => expect(screen.getByText("Saudação")).toBeInTheDocument());
 
@@ -460,7 +479,7 @@ describe("editar e desativar pela tela (#2833)", () => {
   });
 
   it("(4) desativar: some da barra, a linha CONTINUA (e o `/` continua listando)", async () => {
-    h.linhas = [linha("a", 1000, { title: "Saudação" })];
+    h.linhas = [linha(PROPRIA, 1000, { title: "Saudação" })];
     montarTela();
     await waitFor(() => expect(screen.getByText("Saudação")).toBeInTheDocument());
 
@@ -487,7 +506,7 @@ describe("editar e desativar pela tela (#2833)", () => {
 describe("recurso de OUTRA organização (#2833: isolamento)", () => {
   it("(5) não aparece na lista da tela nem na barra", async () => {
     h.linhas = [
-      linha("alheia", 1000, {
+      linha(ALHEIA, 1000, {
         organization_id: OUTRA_ORG,
         owner_user_id: null,
         title: "Compartilhada da outra org",
@@ -506,7 +525,7 @@ describe("recurso de OUTRA organização (#2833: isolamento)", () => {
 
   it("(6) PATCH de outra organização: 404 e NADA gravado", async () => {
     h.linhas = [
-      linha("alheia", 1000, {
+      linha(ALHEIA, 1000, {
         organization_id: OUTRA_ORG,
         owner_user_id: null,
         title: "Compartilhada da outra org",
@@ -514,8 +533,8 @@ describe("recurso de OUTRA organização (#2833: isolamento)", () => {
     ];
 
     const resposta = await PATCH(
-      pedido("PATCH", "/api/v1/message-templates/alheia", { title: "Invadida" }),
-      parametros("alheia"),
+      pedido("PATCH", `/api/v1/message-templates/${ALHEIA}`, { title: "Invadida" }),
+      parametros(ALHEIA),
     );
 
     expect(resposta.status).toBe(404);
@@ -526,18 +545,18 @@ describe("recurso de OUTRA organização (#2833: isolamento)", () => {
 
   it("(7) DELETE de outra organização: 404 e a linha continua lá", async () => {
     h.linhas = [
-      linha("alheia", 1000, {
+      linha(ALHEIA, 1000, {
         organization_id: OUTRA_ORG,
         owner_user_id: null,
         title: "Compartilhada da outra org",
       }),
     ];
 
-    const resposta = await DELETE(pedido("DELETE", "/api/v1/message-templates/alheia"), parametros("alheia"));
+    const resposta = await DELETE(pedido("DELETE", `/api/v1/message-templates/${ALHEIA}`), parametros(ALHEIA));
 
     expect(resposta.status).toBe(404);
     expect(((await resposta.json()) as { error: { code: string } }).error.code).toBe("not_found");
-    expect(h.linhas.map((l) => l.id)).toEqual(["alheia"]);
+    expect(h.linhas.map((l) => l.id)).toEqual([ALHEIA]);
     expect(h.audit).not.toHaveBeenCalled();
   });
 });

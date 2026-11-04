@@ -33,13 +33,20 @@ const ROTULO = "OpenAI pela assinatura (ChatGPT)";
 const COM_ELA: readonly string[] = IDS_DE_PROVEDOR;
 const SEM_ELA: readonly string[] = IDS_DE_PROVEDOR.filter((id) => id !== PROVEDOR_POR_ASSINATURA);
 
+// Regra Hiperbold: o campo só oferece a chave do plano (OpenRouter) e os provedores que a empresa
+// CONECTOU (credencial ativa e validada). Para medir o portão do módulo, a empresa tem as duas.
+const CONECTADAS = [
+  { id: "cred-anthropic", provider: "anthropic", label: "a", is_active: true, validated_at: "2026-09-02T00:00:00Z", created_at: "2026-09-02T00:00:00Z" },
+  { id: "cred-assinatura", provider: PROVEDOR_POR_ASSINATURA, label: "b", is_active: true, validated_at: "2026-09-02T00:00:00Z", created_at: "2026-09-02T00:00:00Z" },
+];
+
 async function opcoesDoEditor(provedoresOferecidos?: readonly string[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const { container } = render(
     <QueryClientProvider client={qc}>
       <AgentForm
         mode="create"
-        credentials={[] as never}
+        credentials={CONECTADAS as never}
         channelSessions={[] as never}
         provedoresOferecidos={provedoresOferecidos}
       />

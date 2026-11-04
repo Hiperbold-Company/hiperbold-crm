@@ -28,9 +28,13 @@ const estado = vi.hoisted(() => ({
   banco: null as unknown,
   papel: "agent" as string,
   suporteNega: false,
+  trechosRemovidos: 0,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => estado.banco }));
+// Desmarcar tira os trechos já indexados pela RPC `fn_conversa_remove_trechos_do_rag` (#3042),
+// chamada com o cliente admin: o mesmo banco em memória responde.
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => estado.banco }));
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: async () => ({
     id: USER,
@@ -41,6 +45,12 @@ vi.mock("@/lib/auth/server", () => ({
     organizations: [],
   }),
   resolveActiveOrg: async () => ({ orgId: ORG_A, name: "A", role: "agent", status: "active" }),
+  orgAtivaSemPortao: async () => ({
+    orgId: ORG_A,
+    name: "A",
+    role: "agent",
+    org_status: "active",
+  }),
   mfaEmDivida: async () => false,
 }));
 vi.mock("@/lib/impersonate/support", () => ({
@@ -73,6 +83,7 @@ beforeEach(() => {
   vi.mocked(audit).mockClear();
   estado.papel = "agent";
   estado.suporteNega = false;
+  estado.trechosRemovidos = 0;
   banco = criarBancoEmMemoria(
     {
       conversations: [
@@ -81,7 +92,12 @@ beforeEach(() => {
         conversa(CONV_B, ORG_B, "closed"),
       ],
     },
-    { rpc: { fn_user_role_in_org: () => ({ data: estado.papel }) } },
+    {
+      rpc: {
+        fn_user_role_in_org: () => ({ data: estado.papel }),
+        fn_conversa_remove_trechos_do_rag: () => ({ data: estado.trechosRemovidos }),
+      },
+    },
   );
   estado.banco = banco;
 });
@@ -179,19 +195,23 @@ describe("rota usable-for-rag — o laço", () => {
     expect(marcada).toBeGreaterThanOrEqual(antes - 1000);
   });
 
-  it("desmarcar conversa já indexada mantém `ingested` — e remarcar não a põe na fila de novo", async () => {
+  // Mudou de propósito no upstream (#3042): desmarcar tira os trechos já indexados de `ai_chunks`,
+  // então o status não pode seguir "ingested"; remarcar põe a conversa no próximo lote, uma vez.
+  it("desmarcar conversa já indexada tira os trechos e zera o status — e remarcar a põe na fila de novo", async () => {
     Object.assign(linha(CONV_A), {
       usable_for_rag: true,
       usable_for_rag_marked_at: "2026-10-20T10:00:00Z",
       rag_review_status: "ingested",
     });
+    estado.trechosRemovidos = 3;
     const r = await marcar(CONV_A, false);
     expect(r.status).toBe(200);
-    expect(r.body.data).toMatchObject({ usable_for_rag: false, rag_review_status: "ingested" });
-    expect(linha(CONV_A)["rag_review_status"]).toBe("ingested");
+    expect(r.body.data).toMatchObject({ usable_for_rag: false, rag_review_status: null, trechos_removidos: 3 });
+    expect(linha(CONV_A)["rag_review_status"]).toBeNull();
 
-    await marcar(CONV_A, true);
-    expect(linha(CONV_A)["rag_review_status"]).toBe("ingested");
+    const r2 = await marcar(CONV_A, true);
+    expect(r2.status).toBe(200);
+    expect(linha(CONV_A)).toMatchObject({ usable_for_rag: true, rag_review_status: null });
   });
 
   it("desmarcar o que ainda não foi indexado tira da fila", async () => {

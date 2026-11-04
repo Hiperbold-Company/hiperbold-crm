@@ -54,12 +54,17 @@ vi.mock("@/hooks/contacts/useContactTagVocabulary", () => ({
 vi.mock("@/hooks/contacts/useUpdateContact", () => ({
   useUpdateContact: () => ({ mutate: vi.fn(), isPending: false }),
 }));
-vi.mock("@/hooks/auth/AuthProvider", () => ({
-  useAuth: () => ({
-    user: { support: null, is_platform_admin: false },
-    activeOrg: { orgId: "org-1", name: "Org", role: estado.papel },
-  }),
-}));
+// Permissões por perfil (Hiperbold): `usePermission` resolve pelo catálogo real, com o papel do dublê.
+vi.mock("@/hooks/auth/AuthProvider", async () => {
+  const { papelPode } = await import("@/lib/permissoes/resolver");
+  return {
+    usePermission: (chave: Parameters<typeof papelPode>[1]) => papelPode(estado.papel, chave),
+    useAuth: () => ({
+      user: { support: null, is_platform_admin: false },
+      activeOrg: { orgId: "org-1", name: "Org", role: estado.papel },
+    }),
+  };
+});
 // Busca o acervo por conta própria e não é o alvo desta fatia: fica fora da
 // conta para os GETs do resumo serem os únicos observáveis.
 vi.mock("@/components/contacts/RoteirosDoContato", () => ({ RoteirosDoContato: () => null }));

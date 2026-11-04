@@ -244,7 +244,8 @@ describe("criar contato com CPF", () => {
       (e: unknown) => e,
     );
 
-    expect((erro as ApiError).status).toBe(500);
+    expect((erro as ApiError).status).toBe(409);
+    expect((erro as ApiError).code).toBe("contact_exists");
     expect(usuario.inserts).toHaveLength(0);
     expect(usuario.deletes).toHaveLength(0);
   });
@@ -257,7 +258,9 @@ describe("criar contato com CPF", () => {
       (e: unknown) => e,
     );
 
-    expect((erro as ApiError).status).toBe(500);
+    // 23505 do índice único na corrida = CPF repetido: 409 `contact_exists` (não 500), e o contato novo é desfeito.
+    expect((erro as ApiError).status).toBe(409);
+    expect((erro as ApiError).code).toBe("contact_exists");
     expect(usuario.deletes).toEqual([CONTATO]);
   });
 
@@ -312,7 +315,8 @@ describe("alterar o CPF de um contato", () => {
       (e: unknown) => e,
     );
 
-    expect((erro as ApiError).status).toBe(500);
+    expect((erro as ApiError).status).toBe(409);
+    expect((erro as ApiError).code).toBe("contact_exists");
     expect(usuario.updates).toHaveLength(0);
     expect(servidor.gravacoes).toHaveLength(0);
   });

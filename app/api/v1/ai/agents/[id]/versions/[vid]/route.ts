@@ -119,6 +119,20 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
     });
   }
 
+  // Escopo ANTES do provedor permitido: referência de outra organização recebe a resposta de "não
+  // existe" (a mesma do id inexistente), e o provedor desligado na instalação o código próprio
+  // (`provedor_desligado`), como no PUT de `/ai/providers`.
+  const escopo = await validarEscopoDaVersao(admin, authz.organizationId, {
+    provider: patch.provider,
+    credential_id: patch.credential_id,
+    channel_session_id: patch.channel_session_id,
+    pipeline_ids: patch.pipeline_ids,
+    knowledge_source_ids: patch.knowledge_source_ids,
+  });
+  if (!escopo.ok) {
+    return fail(codigoDoEscopo(escopo), mensagemDoEscopo(escopo), 422, { requestId });
+  }
+
   // Provedor e modelo PERMITIDOS: só quando o pedido mexe num dos três campos (editar outra coisa de
   // uma versão antiga não pode ficar travado). Vale o par RESULTANTE: o que o pedido traz sobre o que
   // a linha já tem. Mesmos códigos do criar/publicar (lib/ai/agents/provedor-permitido.ts).
@@ -141,16 +155,6 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
       await modelosDaInstalacao(),
     );
     if (recusa) return fail(recusa.code, recusa.message, 422, { requestId });
-  }
-  const escopo = await validarEscopoDaVersao(admin, authz.organizationId, {
-    provider: patch.provider,
-    credential_id: patch.credential_id,
-    channel_session_id: patch.channel_session_id,
-    pipeline_ids: patch.pipeline_ids,
-    knowledge_source_ids: patch.knowledge_source_ids,
-  });
-  if (!escopo.ok) {
-    return fail(codigoDoEscopo(escopo), mensagemDoEscopo(escopo), 422, { requestId });
   }
 
   const update: Record<string, unknown> = {};

@@ -19,6 +19,11 @@ import type { Contact } from "@/lib/types/contacts";
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 vi.mock("@/components/feedback/ApiErrorToast", () => ({ showApiError: vi.fn() }));
+// O diálogo lê o país da organização ativa (perfil do CPF/telefone, upstream); fora do que se mede aqui.
+vi.mock("@/hooks/auth/AuthProvider", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/auth/AuthProvider")>()),
+  useActiveOrg: () => ({ orgId: "org-1", country: "BR", role: "admin" }),
+}));
 
 const CONTATO = {
   id: "ct-1",

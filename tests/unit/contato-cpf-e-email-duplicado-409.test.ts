@@ -30,12 +30,80 @@ vi.mock("@/lib/audit", () => ({
   hashEmail: (e: string) => e,
 }));
 
+/**
+ * Hiperbold (D-216): o CPF não vai no INSERT/UPDATE do usuário — `cpf_hash` e
+ * `cpf_encrypted` só o cliente de serviço lê e grava. O handler confere o CPF
+ * repetido ANTES do INSERT, por este cliente, com `organization_id` explícito.
+ * Este dublê enxerga as mesmas linhas que `clienteFalso` recebeu.
+ */
+const servidor = vi.hoisted(() => ({
+  contatos: [] as Array<Record<string, unknown>>,
+  buscas: [] as Array<Array<[string, unknown]>>,
+  /** Erro que a gravação do CPF (UPDATE do cliente de serviço) devolve; `null` = grava normal. */
+  falhaDaGravacao: null as { code: string; message: string } | null,
+}));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
+    from: () => {
+      const filtros: Array<[string, unknown]> = [];
+      let ids: unknown[] | null = null;
+      let soComCpf = false;
+      let soVivos = false;
+      let atualizando = false;
+      const cadeia: Record<string, unknown> = {
+        select: () => cadeia,
+        update: () => {
+          atualizando = true;
+          return cadeia;
+        },
+        eq: (coluna: string, valor: unknown) => {
+          filtros.push([coluna, valor]);
+          return cadeia;
+        },
+        in: (_coluna: string, valores: unknown[]) => {
+          ids = valores;
+          return cadeia;
+        },
+        not: () => {
+          soComCpf = true;
+          return cadeia;
+        },
+        // `idsPorHashDeCpf` só olha contato não mesclado (o índice único `uniq_contacts_org_cpf` também).
+        is: (coluna: string, valor: unknown) => {
+          if (coluna === "is_merged_into" && valor === null) soVivos = true;
+          return cadeia;
+        },
+        limit: () => cadeia,
+        then: (r: (v: unknown) => unknown) => {
+          servidor.buscas.push([...filtros]);
+          const casa = (c: Record<string, unknown>) =>
+            filtros.every(([coluna, valor]) => coluna === "is_anonymized" || c[coluna] === valor) &&
+            (ids === null || ids.includes(c.id)) &&
+            (!soComCpf || !!c.cpf_hash) &&
+            (!soVivos || !c.is_merged_into);
+          if (atualizando) {
+            if (servidor.falhaDaGravacao) return r({ data: null, error: servidor.falhaDaGravacao });
+            const alvo = filtros.find(([coluna]) => coluna === "id")?.[1];
+            return r({ data: [{ id: alvo }], error: null });
+          }
+          return r({ data: servidor.contatos.filter(casa).map((c) => ({ id: c.id })), error: null });
+        },
+      };
+      return cadeia;
+    },
+    rpc: (nome: string) =>
+      Promise.resolve({ data: nome === "fn_encrypt_oauth" ? "\\x010203" : null, error: null }),
+  }),
+}));
+
 const ORG = "d0849a00-0000-4000-8000-000000000001";
 const OUTRA_ORG = "d0849a00-0000-4000-8000-000000000002";
 const EXISTENTE = "d0849a00-0000-4000-8000-0000000000c1";
 const NOVO = "d0849a00-0000-4000-8000-0000000000c2";
 const USUARIO = "d0849a00-0000-4000-8000-0000000000a1";
 
+// Hiperbold: o hash do CPF é HMAC com o segredo do servidor; sem ele o handler recusa com 503 `cpf_indisponivel`.
+process.env.CPF_ENCRYPTION_KEY = "chave-de-teste-do-cpf";
 const CPF = "529.982.247-25";
 const CPF_HASH = hashCpf(CPF);
 const EMAIL = "ana@example.com";
@@ -67,6 +135,7 @@ interface Cadeia {
   select: (colunas?: string, opcoes?: unknown) => Cadeia;
   insert: (linha: Record<string, unknown>) => Cadeia;
   update: (linha: Record<string, unknown>) => Cadeia;
+  delete: () => Cadeia;
   eq: (coluna: string, valor: unknown) => Cadeia;
   in: (coluna: string, valores: unknown) => Cadeia;
   is: (coluna: string, valor: unknown) => Cadeia;
@@ -80,6 +149,8 @@ interface Cadeia {
 const buscas: Array<{ filtros: Filtro[] }> = [];
 const inserts: Array<Record<string, unknown>> = [];
 const updates: Array<Record<string, unknown>> = [];
+/** Quantos DELETEs o cliente do usuário recebeu (o desfazer do contato criado sem CPF). */
+let apagados = 0;
 
 /** Cadeia de qualquer tabela que não seja `contacts`: responde vazio. */
 function cadeiaQualquer(tabela: string): Cadeia {
@@ -171,6 +242,10 @@ function cadeiaDeContatos(opts: OpcoesFake = {}): Cadeia {
       updates.push(linha);
       return cadeia;
     },
+    delete: () => {
+      apagados += 1;
+      return cadeia;
+    },
     eq: (coluna, valor) => {
       filtros.push([coluna, valor]);
       return cadeia;
@@ -228,6 +303,7 @@ function cadeiaDeContatos(opts: OpcoesFake = {}): Cadeia {
 }
 
 function clienteFalso(opts: OpcoesFake = {}): unknown {
+  servidor.contatos = [...(opts.contatos ?? [])] as unknown as Array<Record<string, unknown>>;
   return {
     from: (tabela: string) =>
       tabela === "contacts" ? cadeiaDeContatos(opts) : cadeiaQualquer(tabela),
@@ -275,6 +351,9 @@ beforeEach(() => {
   buscas.length = 0;
   inserts.length = 0;
   updates.length = 0;
+  servidor.buscas.length = 0;
+  servidor.falhaDaGravacao = null;
+  apagados = 0;
 });
 
 describe("#3084 — POST com CPF repetido vira 409 contact_exists", () => {
@@ -293,43 +372,34 @@ describe("#3084 — POST com CPF repetido vira 409 contact_exists", () => {
       message: "Já existe um contato com este CPF.",
     });
 
-    // O insert levou o hash do CPF; a releitura repetiu o filtro por organização
-    // e por `is_merged_into` (o id NUNCA vem do corpo da requisição).
-    expect(inserts[0]?.cpf_hash).toBe(CPF_HASH);
-    const releitura = buscas.at(-1)!;
-    expect(releitura.filtros).toEqual([
+    // Hiperbold (D-216): recusado ANTES do INSERT — nada foi inserido — e a
+    // conferência filtrou pela organização da sessão (o id NUNCA vem do corpo).
+    expect(inserts).toHaveLength(0);
+    expect(servidor.buscas.at(-1)).toEqual([
       ["organization_id", ORG],
       ["cpf_hash", CPF_HASH],
-      ["is_merged_into", null],
     ]);
   });
 
   it("CONTROLE — o mesmo CPF em OUTRA organização não vira 409 daqui", async () => {
-    // O índice não dispara em outra organização; forçamos o 23505 de CPF para
-    // provar que é o FILTRO da releitura que impede o 409 indevido.
-    const erro = await erroDe(
-      criar(
-        clienteFalso({
-          contatos: [{ id: EXISTENTE, organization_id: OUTRA_ORG, cpf_hash: CPF_HASH }],
-          falhaDoInsert: {
-            code: "23505",
-            message: `duplicate key value violates unique constraint "${INDICE_CPF}"`,
-          },
-        }),
-        { name: "Ana", cpf: CPF },
-      ),
-    );
+    // Hiperbold (D-216): a conferência do CPF repetido é por organização; o CPF
+    // de outra organização não impede o cadastro aqui.
+    const out = (await criar(
+      clienteFalso({ contatos: [{ id: EXISTENTE, organization_id: OUTRA_ORG, cpf_hash: CPF_HASH }] }),
+      { name: "Ana", cpf: CPF },
+    )) as { action: string; contact: { id: string } };
 
-    expect(erro).toMatchObject({ status: 500, code: "internal_error" });
-    expect(erro.details).toBeUndefined();
-    expect(buscas.at(-1)!.filtros).toContainEqual(["organization_id", ORG]);
+    expect(out.action).toBe("created");
+    expect(out.contact.id).toBe(NOVO);
+    expect(servidor.buscas.some((f) => f.some(([c, v]) => c === "organization_id" && v === ORG))).toBe(true);
+    expect(servidor.buscas.some((f) => f.some(([c, v]) => c === "organization_id" && v === OUTRA_ORG))).toBe(false);
   });
 
   it("CONTROLE — 23505 de outra origem continua 500", async () => {
     const erro = await erroDe(
       criar(
         clienteFalso({
-          contatos: [{ id: EXISTENTE, organization_id: ORG, cpf_hash: CPF_HASH }],
+          contatos: [],
           falhaDoInsert: {
             code: "23505",
             message: 'duplicate key value violates unique constraint "contacts_pkey"',
@@ -340,6 +410,23 @@ describe("#3084 — POST com CPF repetido vira 409 contact_exists", () => {
     );
 
     expect(erro).toMatchObject({ status: 500, code: "internal_error" });
+  });
+
+  it("corrida: o índice único barra a gravação do CPF (23505) e vira 409 contact_exists, não 500", async () => {
+    // A conferência prévia achou o CPF livre; outro pedido o gravou antes deste.
+    servidor.falhaDaGravacao = {
+      code: "23505",
+      message: `duplicate key value violates unique constraint "${INDICE_CPF}"`,
+    };
+    const erro = await erroDe(criar(clienteFalso({ contatos: [] }), { name: "Ana", cpf: CPF }));
+
+    expect(erro).toMatchObject({
+      status: 409,
+      code: "contact_exists",
+      message: "Já existe um contato com este CPF.",
+    });
+    // O contato recém-criado sem CPF é desfeito: o resultado visível é erro e nenhum contato novo.
+    expect(apagados).toBe(1);
   });
 
   it("CPF livre: cria normalmente", async () => {

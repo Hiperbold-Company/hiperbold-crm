@@ -33,6 +33,8 @@ const orgAtiva = vi.hoisted(() => ({
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useActiveOrg: () => orgAtiva.atual,
   useAuth: () => ({ activeOrg: null }),
+  // Itens do negócio (LeadFieldsForm): fora do que este teste mede.
+  usePermission: () => false,
 }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));

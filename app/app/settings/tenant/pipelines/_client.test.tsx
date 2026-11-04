@@ -67,6 +67,10 @@ import {
  * só isso: o comportamento testado abaixo é o de sempre.
  */
 function abrirEditores(): void {
+  // Com mais de um funil, cada card nasce RECOLHIDO no acordeão (feat/duplicar-funil):
+  // o corpo fica `hidden` e o `getByRole` não o enxerga. Abre todos antes.
+  const todos = screen.queryByTestId("alternar-todos-os-funis");
+  if (todos && /Abrir todos/i.test(todos.textContent ?? "")) fireEvent.click(todos);
   const botoes = screen.queryAllByRole("button", {
     name: /Editar vocabulário e campos deste funil/i,
   });
@@ -697,10 +701,14 @@ describe("'Este campo pertence a' só no funil padrão (#2791)", () => {
       />,
     );
     abrirEditores();
+    // O título do card do acordeão traz nome, selo "Padrão" e a contagem de etapas.
     const cards = container.querySelectorAll("h2");
-    expect(cards[0]?.textContent).toBe("Vendas");
+    expect(cards[0]?.textContent).toContain("Vendas");
+    expect(cards[0]?.textContent).not.toContain("Padrão");
+    expect(cards[1]?.textContent).toContain("Pos");
+    expect(cards[1]?.textContent).toContain("Padrão");
     expect(screen.getAllByLabelText(/Escopo do campo 1/i)).toHaveLength(1);
-    const cardDoPos = cards[1]?.closest("div.space-y-6");
+    const cardDoPos = cards[1]?.closest('[data-testid^="funil-"]');
     expect(cardDoPos?.textContent).toContain("Este campo pertence a:");
   });
 

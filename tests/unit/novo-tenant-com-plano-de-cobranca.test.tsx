@@ -33,12 +33,14 @@ async function preencherEEnviar(): Promise<Record<string, unknown>> {
 }
 
 describe("/admin/tenants/new — os dois modos", () => {
-  it("cobrança desligada: o formulário de sempre, com o rótulo de plano", async () => {
+  it("cobrança desligada: sem seletor de plano; nem o rótulo antigo nem o plano de cobrança vão", async () => {
+    // Hiperbold (planos próprios, F1 tarefa 6): o rótulo antigo `plan` foi
+    // aposentado na criação; a organização nova nasce no plano do gatilho do banco.
     render(<NewTenantForm cobranca={{ ligada: false, planos: [] }} />);
-    expect(screen.getByRole("combobox", { name: "Plano" })).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Plano" })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Plano de cobrança" })).toBeNull();
     const enviado = await preencherEEnviar();
-    expect(enviado.plan).toBe("standard");
+    expect(enviado).not.toHaveProperty("plan");
     expect(enviado).not.toHaveProperty("plano_id");
   });
 

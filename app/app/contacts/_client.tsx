@@ -129,7 +129,7 @@ export function ContactsListClient() {
   const contagem = useContactCount(filtros);
   const opcoesDeFiltro = useContactFilterOptions();
   const totalDoFiltro = contagem.data;
-  const camposDoContato = useMemo(() => opcoesDeFiltro.data?.campos.contato ?? [], [opcoesDeFiltro.data]);
+  const camposDoContato = useMemo(() => opcoesDeFiltro.data?.campos?.contato ?? [], [opcoesDeFiltro.data]);
   const rotulosDeCampo = useMemo(
     () => new Map(camposDoContato.map((c) => [c.key, c.label] as const)),
     [camposDoContato],

@@ -27,6 +27,8 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
     user: { id: "u1", support: null, is_platform_admin: false },
     activeOrg: { orgId: "org-1", role: papel.atual },
   }),
+  // O cabeçalho pergunta por outras ações (ex.: ensinar o agente); fora do que se mede aqui.
+  usePermission: () => false,
 }));
 vi.mock("@/hooks/inbox/useClaimConversation", () => ({
   useClaimConversation: () => ({ mutate: vi.fn(), isPending: false }),

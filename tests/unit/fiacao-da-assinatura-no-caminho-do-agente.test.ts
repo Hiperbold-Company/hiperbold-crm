@@ -246,7 +246,9 @@ describe("1. a tela oferece e o runtime executa o MESMO id", () => {
 
 describe("2. resolveOrgLlmConfig: assinatura → reserva → erro antigo", () => {
   const cfg = { cacheTtl: "1h" } as never;
-  const cfgComReserva = { cacheTtl: "1h", ["openai" + "ApiKey"]: CHAVE_SENTINELA } as never;
+  // Regra Hiperbold: a chave da INSTALAÇÃO sai só pela OpenRouter (`OPENROUTER_API_KEY`); a reserva
+  // `openai` resolvida por ela sai pela OpenRouter.
+  const cfgComReserva = { cacheTtl: "1h", ["openrouter" + "ApiKey"]: CHAVE_SENTINELA } as never;
 
   it("com a assinatura utilizável, a chamada sai pela assinatura — sem tocar na query de chave", async () => {
     (estado.fake as FakeSupabase).linha = linhaDoLogin();
@@ -324,11 +326,14 @@ describe("3. a renovação automática do caminho do agente", () => {
 });
 
 describe("4. a queda no runModelCall: a reserva responde e o log conta quem", () => {
-  const cfgComReserva = { cacheTtl: "1h", ["openai" + "ApiKey"]: CHAVE_SENTINELA } as never;
+  // Regra Hiperbold: a chave da INSTALAÇÃO sai só pela OpenRouter (`OPENROUTER_API_KEY`); a reserva
+  // `openai` resolvida por ela sai pela OpenRouter.
+  const cfgComReserva = { cacheTtl: "1h", ["openrouter" + "ApiKey"]: CHAVE_SENTINELA } as never;
   const cfgSemReserva = { cacheTtl: "1h" } as never;
   // Sem chave DO PRÓPRIO provedor o resolvedor falha ANTES da chamada, e aí não
   // existe linha de `llm_calls` para contar o erro — é o degrau de sempre que falha.
-  const cfgDoNativo = { cacheTtl: "1h", ["anthropic" + "ApiKey"]: CHAVE_SENTINELA } as never;
+  // Regra Hiperbold: a chave da instalação do provedor nativo sai pela OpenRouter.
+  const cfgDoNativo = { cacheTtl: "1h", ["openrouter" + "ApiKey"]: CHAVE_SENTINELA } as never;
   const erroDeLimite = () => Object.assign(new Error("429 rate limit"), { statusCode: 429 });
 
   it("a assinatura falha (429) e a chamada é REFEITA na reserva", async () => {
@@ -337,6 +342,7 @@ describe("4. a queda no runModelCall: a reserva responde e o log conta quem", ()
     const registro = {
       [PROVEDOR_POR_ASSINATURA]: registroQueFalha(erroDeLimite()),
       openai: registroOk,
+      openrouter: registroOk,
       anthropic: registroOk,
       fake: registroOk,
     } as never;
@@ -348,10 +354,11 @@ describe("4. a queda no runModelCall: a reserva responde e o log conta quem", ()
       { registry: registro },
     );
 
-    expect(r.provider, "a chamada não caiu na reserva").toBe("openai");
+    // A reserva `openai` pela chave da instalação sai pela OpenRouter (regra Hiperbold).
+    expect(r.provider, "a chamada não caiu na reserva").toBe("openrouter");
     const ok = inserts.find((i) => i.sql.includes("'ok'"));
     expect(ok, "sem linha de sucesso o log mentiria sobre quem respondeu").toBeDefined();
-    expect(ok!.params).toContain("openai");
+    expect(ok!.params).toContain("openrouter");
     expect(inserts.find((i) => i.sql.includes("'erro'"))).toBeUndefined();
   });
 
@@ -361,6 +368,7 @@ describe("4. a queda no runModelCall: a reserva responde e o log conta quem", ()
     const registro = {
       [PROVEDOR_POR_ASSINATURA]: registroQueFalha(erroDeLimite()),
       openai: registroOk,
+      openrouter: registroOk,
       anthropic: registroOk,
       fake: registroOk,
     } as never;
@@ -398,6 +406,7 @@ describe("4. a queda no runModelCall: a reserva responde e o log conta quem", ()
     const registro = {
       [PROVEDOR_POR_ASSINATURA]: registroQueFalha(erroDeCota()),
       openai: registroOk,
+      openrouter: registroOk,
       anthropic: registroOk,
       fake: registroOk,
     } as never;
@@ -410,7 +419,7 @@ describe("4. a queda no runModelCall: a reserva responde e o log conta quem", ()
     );
 
     expect(r.provider, "o 400 de cota estourada não caiu na reserva — o turno ficaria calado").toBe(
-      "openai",
+      "openrouter",
     );
   });
 
@@ -419,6 +428,7 @@ describe("4. a queda no runModelCall: a reserva responde e o log conta quem", ()
     const registro = {
       [PROVEDOR_POR_ASSINATURA]: registroQueFalha(erroDeLimite()),
       openai: registroOk,
+      openrouter: registroQueFalha(erroDeLimite()),
       anthropic: registroQueFalha(erroDeLimite()),
       fake: registroOk,
     } as never;

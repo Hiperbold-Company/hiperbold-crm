@@ -102,6 +102,8 @@ describe("tela de execução — desfecho do bloco Fim", () => {
 
     expect(screen.getByTestId("dossie-timeline")).toHaveTextContent("Fluxo concluído");
     expect(screen.getByTestId("dossie-timeline")).toHaveTextContent("esgotou as tentativas");
-    expect(screen.getByTestId("dossie-onde-esta")).toHaveTextContent("Desfecho: Esgotado");
+    // Upstream: o desfecho do acompanhamento lê "Encerrado sem conversão"
+    // (`DESFECHOS`); o nó Fim segue "Esgotado" (`RESULTADOS_DO_FIM`).
+    expect(screen.getByTestId("dossie-onde-esta")).toHaveTextContent("Desfecho: Encerrado sem conversão");
   });
 });

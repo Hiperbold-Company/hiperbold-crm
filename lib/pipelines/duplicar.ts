@@ -34,6 +34,7 @@ import { logger } from "@/lib/logger";
 import { autoriaDaMudanca } from "@/lib/operacao/autoria";
 import { lerFunisDaOrganizacao, type DepsDeFunis } from "@/lib/pipelines/administracao";
 import { posicaoEntre, slugDeFunil, validarNomeDeFunil } from "@/lib/pipelines/pipeline-editing";
+import { randomId } from "@/lib/random-id";
 import { pipelineConfigPatchSchema } from "@/lib/schemas/settings";
 
 /**
@@ -267,12 +268,12 @@ export async function duplicarFunil(
 
   // Os ids nascem AQUI, não no banco: assim o `settings` já sai remapeado no INSERT do funil e não existe
   // um passo de UPDATE no meio (que, falhando, deixava um funil com ids de etapa da origem).
-  const novoId = crypto.randomUUID();
+  const novoId = randomId();
   row.id = novoId;
   // `troca` começa com o próprio funil: autorreferência no settings continua autorreferência.
   const troca = new Map<string, string>([[origemId, novoId]]);
   const idsNovos = vivas.map((e) => {
-    const id = crypto.randomUUID();
+    const id = randomId();
     troca.set(e.id, id);
     return id;
   });
