@@ -76,10 +76,14 @@ export function funcaoOculta(id: FuncaoId): boolean {
  * Para o resto, a função segue oculta.
  */
 const ACESSO_ANTECIPADO: Partial<Record<FuncaoId, readonly string[]>> = {
-  // 03/11/2026 · análise do app na Meta: o revisor entra na organização
-  // Hiperbold Company e precisa ver Conexões › Redes sociais
-  // (hiperbold/analise-do-app-meta.md). Sai quando a função for liberada.
-  "conexao-redes-sociais": ["d500642e-ccde-46e6-90bd-94868f35c11a"],
+  // 03/11/2026 · análise do app na Meta: o revisor precisa ver Conexões ›
+  // Redes sociais (hiperbold/analise-do-app-meta.md). Hiperbold Company e o
+  // tenant "Meta Developers" (conta do revisor, criado em 04/11/2026). Sai
+  // quando a função for liberada.
+  "conexao-redes-sociais": [
+    "d500642e-ccde-46e6-90bd-94868f35c11a",
+    "06718d56-c02b-40d9-bbdc-1811aad652a2",
+  ],
 };
 
 /** A organização vê a função oculta antes dos outros. */
