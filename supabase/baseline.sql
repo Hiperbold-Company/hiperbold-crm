@@ -84727,11 +84727,11 @@ begin
  perform set_config('lock_timeout','3s',true);
  drop policy if exists tenant_isolation_sales_all on public.sales;
  drop policy if exists tenant_isolation_sales_select on public.sales;
- create policy tenant_isolation_sales_select on public.sales for select using ((organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()));
+ execute format('create policy %I on public.%I for select using ((organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()))', 'tenant_isolation_sales_select', 'sales');
  drop policy if exists tenant_isolation_sales_insert on public.sales;
- create policy tenant_isolation_sales_insert on public.sales for insert with check ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent'))));
+ execute format('create policy %I on public.%I for insert with check ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, ''agent''))))', 'tenant_isolation_sales_insert', 'sales');
  drop policy if exists tenant_isolation_sales_update on public.sales;
- create policy tenant_isolation_sales_update on public.sales for update using (public.fn_is_platform_admin() or ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent')) and status = 'open')) with check ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent'))));
+ execute format('create policy %I on public.%I for update using (public.fn_is_platform_admin() or ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, ''agent'')) and status = ''open'')) with check ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, ''agent''))))', 'tenant_isolation_sales_update', 'sales');
 end
 $t_sales$;
 do $t_sale_items$
@@ -84741,13 +84741,13 @@ begin
  perform set_config('lock_timeout','3s',true);
  drop policy if exists tenant_isolation_sale_items_all on public.sale_items;
  drop policy if exists tenant_isolation_sale_items_select on public.sale_items;
- create policy tenant_isolation_sale_items_select on public.sale_items for select using ((organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()));
+ execute format('create policy %I on public.%I for select using ((organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()))', 'tenant_isolation_sale_items_select', 'sale_items');
  drop policy if exists tenant_isolation_sale_items_insert on public.sale_items;
- create policy tenant_isolation_sale_items_insert on public.sale_items for insert with check (public.fn_is_platform_admin() or ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent')) and exists (select 1 from public.sales s where s.id = sale_items.sale_id and s.organization_id = sale_items.organization_id and s.status = 'open')));
+ execute format('create policy %I on public.%I for insert with check (public.fn_is_platform_admin() or ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, ''agent'')) and exists (select 1 from public.sales s where s.id = sale_items.sale_id and s.organization_id = sale_items.organization_id and s.status = ''open'')))', 'tenant_isolation_sale_items_insert', 'sale_items');
  drop policy if exists tenant_isolation_sale_items_update on public.sale_items;
- create policy tenant_isolation_sale_items_update on public.sale_items for update using (public.fn_is_platform_admin() or ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent')) and exists (select 1 from public.sales s where s.id = sale_items.sale_id and s.organization_id = sale_items.organization_id and s.status = 'open'))) with check (public.fn_is_platform_admin() or ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent')) and exists (select 1 from public.sales s where s.id = sale_items.sale_id and s.organization_id = sale_items.organization_id and s.status = 'open')));
+ execute format('create policy %I on public.%I for update using (public.fn_is_platform_admin() or ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, ''agent'')) and exists (select 1 from public.sales s where s.id = sale_items.sale_id and s.organization_id = sale_items.organization_id and s.status = ''open''))) with check (public.fn_is_platform_admin() or ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, ''agent'')) and exists (select 1 from public.sales s where s.id = sale_items.sale_id and s.organization_id = sale_items.organization_id and s.status = ''open'')))', 'tenant_isolation_sale_items_update', 'sale_items');
  drop policy if exists tenant_isolation_sale_items_delete on public.sale_items;
- create policy tenant_isolation_sale_items_delete on public.sale_items for delete using (public.fn_is_platform_admin() or ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent')) and exists (select 1 from public.sales s where s.id = sale_items.sale_id and s.organization_id = sale_items.organization_id and s.status = 'open')));
+ execute format('create policy %I on public.%I for delete using (public.fn_is_platform_admin() or ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, ''agent'')) and exists (select 1 from public.sales s where s.id = sale_items.sale_id and s.organization_id = sale_items.organization_id and s.status = ''open'')))', 'tenant_isolation_sale_items_delete', 'sale_items');
 end
 $t_sale_items$;
 do $t_commission_rules$
@@ -84757,11 +84757,11 @@ begin
  perform set_config('lock_timeout','3s',true);
  drop policy if exists tenant_isolation_commission_rules_all on public.commission_rules;
  drop policy if exists tenant_isolation_commission_rules_select on public.commission_rules;
- create policy tenant_isolation_commission_rules_select on public.commission_rules for select using ((organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()));
+ execute format('create policy %I on public.%I for select using ((organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()))', 'tenant_isolation_commission_rules_select', 'commission_rules');
  drop policy if exists tenant_isolation_commission_rules_insert on public.commission_rules;
- create policy tenant_isolation_commission_rules_insert on public.commission_rules for insert with check ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'manager'))));
+ execute format('create policy %I on public.%I for insert with check ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, ''manager''))))', 'tenant_isolation_commission_rules_insert', 'commission_rules');
  drop policy if exists tenant_isolation_commission_rules_update on public.commission_rules;
- create policy tenant_isolation_commission_rules_update on public.commission_rules for update using ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'manager')))) with check ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'manager'))));
+ execute format('create policy %I on public.%I for update using ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, ''manager'')))) with check ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, ''manager''))))', 'tenant_isolation_commission_rules_update', 'commission_rules');
 end
 $t_commission_rules$;
 do $t_financial_accounts$
@@ -84807,7 +84807,7 @@ begin
  perform set_config('lock_timeout','3s',true);
  drop policy if exists tenant_isolation_commissions_all on public.commissions;
  drop policy if exists tenant_isolation_commissions_select on public.commissions;
- create policy tenant_isolation_commissions_select on public.commissions for select using ((organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()));
+ execute format('create policy %I on public.%I for select using ((organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()))', 'tenant_isolation_commissions_select', 'commissions');
 end
 $t_commissions$;
 do $t_financial_entries$
@@ -84831,9 +84831,9 @@ begin
  perform set_config('lock_timeout','3s',true);
  drop policy if exists tenant_isolation_loyalty_ledger_all on public.loyalty_ledger;
  drop policy if exists tenant_isolation_loyalty_ledger_select on public.loyalty_ledger;
- create policy tenant_isolation_loyalty_ledger_select on public.loyalty_ledger for select using ((organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()));
+ execute format('create policy %I on public.%I for select using ((organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()))', 'tenant_isolation_loyalty_ledger_select', 'loyalty_ledger');
  drop policy if exists tenant_isolation_loyalty_ledger_insert on public.loyalty_ledger;
- create policy tenant_isolation_loyalty_ledger_insert on public.loyalty_ledger for insert with check ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent'))));
+ execute format('create policy %I on public.%I for insert with check ((public.fn_is_platform_admin() or (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, ''agent''))))', 'tenant_isolation_loyalty_ledger_insert', 'loyalty_ledger');
 end
 $t_loyalty_ledger$;
 
