@@ -27,6 +27,7 @@ import { validateFlowForPublish } from "@/lib/followup/validate-publish";
 import { acordarAutomacaoEmEspera, ultimaRespostaDaAutomacao } from "@/lib/relogio/executar";
 
 import { criarBancoEmMemoria, type Linha } from "../../tests/helpers/banco-em-memoria";
+import { pisoDaRespostaNoDirect } from "./conversa";
 import { escopoDoDirect } from "./conversa-do-direct";
 import { devolverTurnoAoAgente } from "./devolver-turno";
 import { executarConversa } from "./efeitos/conversa";
@@ -416,5 +417,70 @@ describe("histórico: envios e resposta pelo Direct, sem o texto do contato", ()
     );
     expect(r.detalhes?.[0]).toMatchObject({ envio: "resposta", canal: "direct", ok: true });
     expect(JSON.stringify(r.detalhes)).not.toContain("QUERO");
+  });
+});
+
+describe("corrida: o \"quero\" que chega antes de a espera estacionar", () => {
+  const INICIO = seg(-60);
+  const ev = (over: Linha): Linha => ({ organization_id: ORG, enrollment_id: ENR, payload: {}, ...over });
+  const historico = (extra: Linha[] = []): Linha[] => [
+    ev({ node_id: "t", event_type: "automacao_iniciada", created_at: INICIO }),
+    ev({ node_id: "privada", event_type: "effect_done", payload: { detalhes: [{ tipo: "instagram_private_reply", ok: true }] }, created_at: seg(-59) }),
+    ev({ node_id: "privada", event_type: "node_advanced", created_at: seg(-59) }),
+    ...extra,
+    ev({ node_id: "espera", event_type: "wait_started", payload: { wake_status: "waiting_reply" }, created_at: ESTACIONOU }),
+  ];
+
+  it("pisoDaRespostaNoDirect: o início da execução; o registro de resposta de outro bloco empurra o piso; sem created_at, nada se afirma", () => {
+    const eventos = historico() as unknown as Parameters<typeof pisoDaRespostaNoDirect>[0];
+    expect(pisoDaRespostaNoDirect(eventos, "espera", INICIO)).toBe(INICIO);
+    const comResposta = historico([
+      ev({ node_id: "pergunta", event_type: "effect_done", payload: { detalhes: [{ tipo: "question", envio: "resposta", ok: true }] }, created_at: seg(-30) }),
+      ev({ node_id: "pergunta", event_type: "node_advanced", created_at: seg(-30) }),
+    ]) as unknown as Parameters<typeof pisoDaRespostaNoDirect>[0];
+    expect(pisoDaRespostaNoDirect(comResposta, "espera", INICIO)).toBe(seg(-30));
+    const semData = [{ node_id: "t", idempotency_key: null, event_type: "automacao_iniciada" }];
+    expect(pisoDaRespostaNoDirect(semData, "espera", INICIO)).toBeNull();
+  });
+
+  it("relógio: o \"quero\" de antes da espera (depois do início) acorda a execução do Direct; a de WhatsApp segue a régua de sempre", async () => {
+    const antes = { sent_at: seg(-20), created_at: seg(-20) };
+    const b = bancoBase({ followup_enrollment_events: historico(), followup_enrollments: [execucao({ started_at: INICIO })] });
+    const enr = b.tabelas.followup_enrollments![0]! as unknown as Parameters<typeof acordarAutomacaoEmEspera>[1];
+    expect(await acordarAutomacaoEmEspera(admin(b), enr, antes, AGORA)).toBe(true);
+
+    const w = bancoBase({
+      followup_enrollment_events: historico(),
+      followup_enrollments: [execucao({ started_at: INICIO, vars: {} })],
+    });
+    const enrW = w.tabelas.followup_enrollments![0]! as unknown as Parameters<typeof acordarAutomacaoEmEspera>[1];
+    expect(await acordarAutomacaoEmEspera(admin(w), enrW, antes, AGORA)).toBe(false);
+
+    // Mensagem de ANTES do início da execução (outro comentário, outra conversa) não conta.
+    const b2 = bancoBase({ followup_enrollment_events: historico(), followup_enrollments: [execucao({ started_at: INICIO })] });
+    const enr2 = b2.tabelas.followup_enrollments![0]! as unknown as Parameters<typeof acordarAutomacaoEmEspera>[1];
+    expect(await acordarAutomacaoEmEspera(admin(b2), enr2, { sent_at: seg(-120), created_at: seg(-120) }, AGORA)).toBe(false);
+  });
+
+  it("nova tentativa: o piso volta ao da espera em curso, e a resposta já lida não acorda de novo", async () => {
+    const eventos = historico();
+    // Primeira leitura: resposta inválida → nova tentativa (e nova espera).
+    eventos.push(
+      ev({ node_id: "espera", event_type: "effect_done", payload: { detalhes: [{ tipo: "question", envio: "nova_tentativa", ok: true }] }, created_at: seg(10) }),
+      ev({ node_id: "espera", event_type: "wait_started", payload: { wake_status: "waiting_reply" }, created_at: seg(11) }),
+    );
+    const b = bancoBase({ followup_enrollment_events: eventos, followup_enrollments: [execucao({ started_at: INICIO })] });
+    const enr = b.tabelas.followup_enrollments![0]! as unknown as Parameters<typeof acordarAutomacaoEmEspera>[1];
+    expect(await acordarAutomacaoEmEspera(admin(b), enr, { sent_at: seg(-20), created_at: seg(-20) }, AGORA)).toBe(false);
+    expect(await acordarAutomacaoEmEspera(admin(b), enr, { sent_at: seg(20), created_at: seg(20) }, AGORA)).toBe(true);
+  });
+
+  it("motor: a primeira leitura no Direct lê o \"quero\" de antes da espera pelo piso recuado", async () => {
+    const b = bancoBase({ conversations: [conversaIg()], messages: [inbound({ sent_at: seg(-20), created_at: seg(-20) })] });
+    const db = createSupabaseAdminClient(admin(b));
+    const escopo = escopoDoDirect(VARS);
+    expect(await db.loadRespostasDaEspera!(ORG, CONTATO, ESTACIONOU, escopo)).toEqual([]);
+    const piso = pisoDaRespostaNoDirect(historico() as never, "espera", INICIO)!;
+    expect(await db.loadRespostasDaEspera!(ORG, CONTATO, piso, escopo)).toEqual([{ texto: "QUERO", replyId: null }]);
   });
 });

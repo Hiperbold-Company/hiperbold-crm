@@ -161,7 +161,7 @@ async function enviar(
   // Os mesmos ids (contato + gêmeos de telefone) para a conversa e para o teto.
   const ids = await idsDoContatoEGemeos(c.admin, c.org, c.contatoId);
   const conversa = escopo
-    ? await conversaDoDirect(c.admin, c.org, escopo)
+    ? await conversaDoDirect(c.admin, c.org, escopo, ids)
     : await conversaDeWhatsapp(c, ids);
   if (!conversa) {
     return { ok: false, erro: escopo ? "sem_conversa_direct" : "sem_conversa_whatsapp", detalhe: base };

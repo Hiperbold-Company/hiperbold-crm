@@ -812,6 +812,21 @@ describe("executarConversa: envio pelo Direct", () => {
     expect(erroDe(r)).toBe("sem_conversa_direct");
   });
 
+  it("conversa do Direct (mesma conexão e IGSID) de OUTRO contato não serve: sem_conversa_direct", async () => {
+    const { admin } = criarBanco(
+      tabelasBase({ conversations: [conversaDoDirect({ contact_id: "contato-de-outra-pessoa" })] }),
+    );
+    const r = await executarConversa(
+      contexto(admin, { vars: VARS_DO_COMENTARIO }),
+      NO_MENSAGEM,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r)).toBe("sem_conversa_direct");
+    expect(enviarMock).not.toHaveBeenCalled();
+  });
+
   it("contato bloqueado e teto de 30/h continuam valendo no Direct", async () => {
     const bloqueado = criarBanco(
       tabelasBase({

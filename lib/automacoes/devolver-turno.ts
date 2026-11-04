@@ -22,6 +22,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
+
 import { conversaDoDirect, escopoDoDirect } from "./conversa-do-direct";
 import { CHAVE_DE_ORIGEM_AUTOMACAO } from "./teto-de-mensagens";
 
@@ -67,14 +69,16 @@ async function conversaDoDirectDaExecucao(
 ): Promise<string | undefined> {
   const { data, error } = await admin
     .from("followup_enrollments")
-    .select("vars")
+    .select("vars, contact_id")
     .eq("organization_id", org)
     .eq("id", enrollmentId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  const escopo = escopoDoDirect((data as { vars?: Record<string, unknown> } | null)?.vars);
-  if (!escopo) return undefined;
-  return (await conversaDoDirect(admin, org, escopo))?.id;
+  const linha = data as { vars?: Record<string, unknown>; contact_id?: string | null } | null;
+  const escopo = escopoDoDirect(linha?.vars);
+  if (!escopo || !linha?.contact_id) return undefined;
+  const ids = await idsDoContatoEGemeos(admin, org, linha.contact_id);
+  return (await conversaDoDirect(admin, org, escopo, ids))?.id;
 }
 
 /**

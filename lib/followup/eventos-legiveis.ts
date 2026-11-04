@@ -27,6 +27,8 @@ import {
   fraseDaOperacao,
   fraseDaRegraNova,
   fraseDoErro,
+  fraseDoMotivoDaResposta,
+  TITULOS_DO_DESFECHO_DA_RESPOSTA,
   VALIDACOES_DA_PERGUNTA,
 } from "@/lib/automacoes/vocabulario";
 import {
@@ -657,6 +659,23 @@ export function descreveEvento(
       const erro = fraseDoErro(texto(d.erro) ?? undefined);
       const feito = detalhesDoEfeito(p);
       return { titulo: "Uma ação falhou", detalhe: feito ? `${erro} — ${feito}` : erro, ...motor };
+    }
+    // Desfecho da resposta do Instagram que a fila do canal levou ao fim
+    // (`desfecho-da-resposta.handler.ts`). O nó é o do bloco que pediu.
+    case "instagram_resposta_saiu":
+    case "instagram_resposta_falhou": {
+      const tipo = texto(p.tipo) === "resposta_publica" ? "resposta_publica" : "resposta_privada";
+      const titulos = TITULOS_DO_DESFECHO_DA_RESPOSTA[tipo];
+      const onDoBloco = texto(p.no_id) ? refDoNo(texto(p.no_id), nos) : onde;
+      if (evento.event_type === "instagram_resposta_saiu") {
+        return { titulo: titulos.saiu, detalhe: null, onde: onDoBloco, autor: "motor" };
+      }
+      return {
+        titulo: titulos.falhou,
+        detalhe: fraseDoMotivoDaResposta(texto(p.motivo)),
+        onde: onDoBloco,
+        autor: "motor",
+      };
     }
     default:
       return { titulo: "Passo registrado pelo motor", detalhe: `código: ${evento.event_type}`, ...motor };

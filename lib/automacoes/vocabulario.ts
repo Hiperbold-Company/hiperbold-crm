@@ -313,6 +313,34 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   texto_invalido: "o texto ficou vazio ou passou de 1000 caracteres depois de preencher as variáveis",
 };
 
+/**
+ * O DESFECHO da resposta (privada ou pública) que a fila do canal mandou ou
+ * desistiu de mandar (`instagram.resposta_enviada` / `instagram.resposta_falhou`),
+ * como o histórico da execução o lê. A chave é a base do `motivo` (antes do `:`).
+ */
+export const TITULOS_DO_DESFECHO_DA_RESPOSTA = {
+  resposta_privada: { saiu: "Resposta privada saiu", falhou: "Resposta privada falhou" },
+  resposta_publica: { saiu: "Resposta pública saiu", falhou: "Resposta pública falhou" },
+} as const;
+
+export const MOTIVOS_DO_DESFECHO_DA_RESPOSTA: Record<string, string> = {
+  prazo_de_7_dias: "passou o prazo de 7 dias do comentário",
+  comentario_desconhecido: "o comentário não existe mais no Instagram",
+  inelegivel: "o Instagram não aceita resposta privada para este comentário",
+  conta_indisponivel: "a conexão do Instagram não está disponível",
+  envio_sem_confirmacao: "o Instagram não confirmou o envio, e ele não foi repetido para não chegar duas vezes",
+};
+
+/** O motivo do `instagram.resposta_falhou` em português; código da Meta desconhecido vira "o Instagram recusou (código N)". */
+export function fraseDoMotivoDaResposta(motivo: string | null | undefined): string {
+  if (!motivo) return "o Instagram não informou o motivo";
+  const base = motivo.split(":")[0] ?? motivo;
+  const frase = MOTIVOS_DO_DESFECHO_DA_RESPOSTA[base];
+  if (frase) return frase;
+  const codigo = motivo.includes(":") ? motivo.slice(motivo.lastIndexOf(":") + 1) : null;
+  return codigo ? `o Instagram recusou o envio (código ${codigo})` : "o Instagram recusou o envio";
+}
+
 export function fraseDoErro(codigo: string | undefined): string {
   if (!codigo) return "erro";
   const base = codigo.split(":")[0] ?? codigo;

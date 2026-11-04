@@ -15,6 +15,11 @@
  * Execução que não começou por comentário devolve `null` e segue a regra de
  * sempre (a conversa de WhatsApp do contato).
  *
+ * A conversa também tem de ser DO CONTATO da execução (ou de um gêmeo dele,
+ * `idsDoContatoEGemeos`): conexão e IGSID dizem de quem é o Direct, e o
+ * `contact_id` garante que a execução de um contato nunca fala — nem lê
+ * resposta — na conversa de outro, mesmo que uma linha fique com IGSID trocado.
+ *
  * ⚠️ Service role: toda consulta filtra `organization_id` da EXECUÇÃO.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -51,8 +56,9 @@ export async function idsDasConversasDoDirect(
   admin: SupabaseClient,
   organizationId: string,
   escopo: EscopoDoDirect,
+  contactIds: readonly string[],
 ): Promise<string[]> {
-  const c = await conversaDoDirect(admin, organizationId, escopo);
+  const c = await conversaDoDirect(admin, organizationId, escopo, contactIds);
   return c ? [c.id] : [];
 }
 
@@ -64,13 +70,17 @@ export async function conversaDoDirect(
   admin: SupabaseClient,
   organizationId: string,
   escopo: EscopoDoDirect,
+  /** O contato da execução e os gêmeos dele. Vazio = nenhuma conversa serve. */
+  contactIds: readonly string[],
 ): Promise<ConversaDoDirect | null> {
+  if (contactIds.length === 0) return null;
   const { data, error } = await admin
     .from("conversations")
     .select("id, last_inbound_at, is_group, channel_sessions:channel_session_id(provider)")
     .eq("organization_id", organizationId)
     .eq("channel_session_id", escopo.channelSessionId)
     .eq("provider_conversation_id", escopo.autorId)
+    .in("contact_id", [...contactIds])
     .eq("is_group", false)
     .order("last_inbound_at", { ascending: false, nullsFirst: false })
     .limit(1);
