@@ -76,11 +76,28 @@ const PALAVRAS_DO_PORTUGUES = new Set(
  * Dado que o banco grava em português e a tela cita como é: o nome que a
  * anonimização dá ao contato (`fn_lgpd_cascade_redact_contact`, no baseline).
  */
-const DADO_GRAVADO_EM_PORTUGUES = ["Cliente Anonimizado #N"];
+const DADO_GRAVADO_EM_PORTUGUES = [
+  "Cliente Anonimizado #N",
+  // Nome que o usuário digita literalmente no Asaas: não se traduz.
+  "Cobrança do sistema",
+  // Exemplos literais que a tela mostra como são (endereço, nome de campo, parâmetro de URL).
+  "contato@suaempresa.com",
+  "contato_celular",
+  "?cliente=",
+];
+
+/**
+ * Placeholder `{nome}` / `{{nome}}`: o NOME dele é contrato com o código (a chave em
+ * português e o `{empresa}` da tradução têm de ser idênticos), então não é texto traduzível.
+ */
+const PLACEHOLDER = /\{+[^{}]*\}+/g;
 
 /** As palavras em português que a tradução carrega sem serem nome próprio nem dado citado. */
 function sobraDePortugues(valor: string): string[] {
-  const semDado = DADO_GRAVADO_EM_PORTUGUES.reduce((texto, dado) => texto.split(dado).join(" "), valor);
+  const semDado = DADO_GRAVADO_EM_PORTUGUES.reduce(
+    (texto, dado) => texto.split(dado).join(" "),
+    valor.replace(PLACEHOLDER, " "),
+  );
   return palavras(semDado).filter(
     (palavra) =>
       (LETRA_DO_PORTUGUES.test(palavra) && !NOMES_PROPRIOS_COM_ACENTO.has(palavra)) ||
@@ -104,6 +121,9 @@ describe("o catálogo em inglês", () => {
     // Nome próprio e dado citado passam.
     expect(sobraDePortugues("São Paulo (Brazil)")).toEqual([]);
     expect(sobraDePortugues('The name becomes "Cliente Anonimizado #N".')).toEqual([]);
+    // O nome do placeholder é contrato com o código, não texto: passa; a palavra solta ao lado não.
+    expect(sobraDePortugues("{empresa} has used {conversas} chats")).toEqual([]);
+    expect(sobraDePortugues("{empresa} has conversas")).toEqual(["conversas"]);
   });
 
   it("nenhuma tradução carrega palavra em português", () => {

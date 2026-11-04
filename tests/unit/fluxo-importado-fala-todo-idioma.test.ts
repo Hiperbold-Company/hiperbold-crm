@@ -21,14 +21,19 @@ const ARQUIVO_DE_OUTRO_FORMATO = { format: "outro", version: 1, flow: {} };
 /** As palavras das mensagens genéricas do Zod sem locale (inglês). */
 const PALAVRA_EM_INGLES = /\b(Invalid|expected|received)\b/;
 
+/** Idioma cuja língua É o inglês: lá, mensagem em inglês é o certo e a régua acima não se aplica. */
+const IDIOMA_QUE_FALA_INGLES = (idioma: string) => idioma === "en" || idioma.startsWith("en-");
+
 describe("importar fluxo: os problemas saem no idioma de quem lê", () => {
-  it.each(IDIOMAS)("%s tem locale do Zod, e nenhuma linha fica em inglês", (idioma) => {
+  it.each(IDIOMAS)("%s tem locale do Zod, e (fora o inglês) nenhuma linha fica em inglês", (idioma) => {
     const r = arquivoDeFluxoSchema.safeParse(ARQUIVO_DE_OUTRO_FORMATO, zodNoIdioma(idioma));
     expect(r.success).toBe(false);
     if (!r.success) {
       const problemas = problemasDoArquivo(r.error);
       expect(problemas.length).toBeGreaterThan(0);
-      expect(problemas.filter((linha) => PALAVRA_EM_INGLES.test(linha))).toEqual([]);
+      if (!IDIOMA_QUE_FALA_INGLES(idioma)) {
+        expect(problemas.filter((linha) => PALAVRA_EM_INGLES.test(linha))).toEqual([]);
+      }
     }
   });
 });

@@ -13,7 +13,13 @@ describe("idiomaDelNavegador", () => {
   });
 
   it("usa o primeiro idioma servido na ordem do navegador", () => {
-    expect(idiomaDelNavegador(["en-US", "es-AR"])).toBe("es");
+    expect(idiomaDelNavegador(["fr-FR", "es-AR"])).toBe("es");
+  });
+
+  it("o inglês é servido: escolhido quando vem na frente, ignorado quando vem depois", () => {
+    expect(idiomaDelNavegador(["en-US", "es-AR"])).toBe("en");
+    expect(idiomaDelNavegador(["en-GB", "en"])).toBe("en");
+    expect(idiomaDelNavegador(["fr-FR", "es", "en"])).toBe("es");
   });
 
   it("cai no padrão sem idioma servido ou com lista vazia", () => {
