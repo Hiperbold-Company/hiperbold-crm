@@ -8,6 +8,7 @@ import {
   duracaoMaximaDaEspera,
   duracaoMinimaDaEspera,
   ehRegraNova,
+  NO_REPLY_BRANCH_ID,
   nodeBranches,
 } from './graph-schema';
 import { NOS_DA_SUPERFICIE } from './registro-de-nos';
@@ -54,6 +55,7 @@ export const PUBLISH_ERROR_CODES = [
   'automacao_iniciar_inexistente',
   'instagram_sem_gatilho_de_comentario',
   'instagram_publica_antes_da_privada',
+  'instagram_mensagem_antes_da_resposta',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -228,6 +230,59 @@ function validarBlocosDoInstagram(graph: FlowGraph, errors: PublishValidationErr
   }
 }
 
+/** A aresta é a saída "Sem resposta" (o tempo acabou e a pessoa não respondeu). */
+function ehSaidaSemResposta(e: FlowEdge): boolean {
+  return (
+    (e.condition.type === 'branch' && e.condition.branch_id === NO_REPLY_BRANCH_ID) ||
+    (e.condition.type === 'class_match' && e.condition.value === NO_REPLY_BRANCH_ID)
+  );
+}
+
+export const MENSAGEM_ANTES_DA_RESPOSTA_NO_INSTAGRAM =
+  "No Instagram, a conversa só abre quando a pessoa responde. Ponha um 'Aguardar o contato responder' antes.";
+
+/**
+ * Automação que começa por comentário: a conversa do Direct só existe depois
+ * que a pessoa responde (a resposta privada é o único primeiro envio possível,
+ * e não abre conversa no CRM). Mensagem ou Pergunta alcançável a partir do
+ * Início sem passar pela saída "Respondeu" de um "Aguardar até responder" sai
+ * sempre por "Erro" — recusa na publicação, com a frase que diz o que fazer.
+ * A saída "Sem resposta" da espera não conta: a pessoa não respondeu.
+ */
+function validarConversaNoDirect(graph: FlowGraph, errors: PublishValidationError[]): void {
+  const gatilhos = graph.nodes.flatMap((n) => (n.type === 'trigger' && 'triggers' in n.config ? n.config.triggers : []));
+  if (!gatilhos.some((g) => g.kind === 'instagram_comment')) return;
+  const porId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const saidas = new Map<string, FlowEdge[]>();
+  for (const e of graph.edges) saidas.set(e.source, [...(saidas.get(e.source) ?? []), e]);
+  const fila = graph.nodes.filter((n) => n.type === 'trigger').map((n) => n.id);
+  const vistos = new Set<string>();
+  const acusados: FlowNode[] = [];
+  while (fila.length > 0) {
+    const id = fila.shift()!;
+    if (vistos.has(id)) continue;
+    vistos.add(id);
+    const n = porId.get(id);
+    if (!n) continue;
+    if (n.type === 'message' || n.type === 'question') {
+      acusados.push(n);
+      continue;
+    }
+    const esperaResposta = n.type === 'wait' && n.config.mode === 'until_reply';
+    for (const e of saidas.get(id) ?? []) {
+      if (esperaResposta && !ehSaidaSemResposta(e)) continue;
+      fila.push(e.target);
+    }
+  }
+  for (const n of acusados.sort(byId)) {
+    errors.push({
+      node_id: n.id,
+      code: 'instagram_mensagem_antes_da_resposta',
+      message: `"${n.label}": ${MENSAGEM_ANTES_DA_RESPOSTA_NO_INSTAGRAM}`,
+    });
+  }
+}
+
 /** Regras do roteiro de atendimento que o grafo sozinho não carrega. */
 function validarSuperficie(
   graph: FlowGraph,
@@ -338,7 +393,10 @@ function validarSuperficie(
       }
     }
   }
-  if (surface === 'automacao') validarBlocosDoInstagram(graph, errors);
+  if (surface === 'automacao') {
+    validarBlocosDoInstagram(graph, errors);
+    validarConversaNoDirect(graph, errors);
+  }
   // Os gatilhos de uma AUTOMAÇÃO moram no nó Início (vários por fluxo); nos
   // follow-ups, em `pointer.trigger_config`, e o Início fica sem configuração.
   for (const n of [...graph.nodes].sort(byId)) {

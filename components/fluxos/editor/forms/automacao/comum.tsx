@@ -413,3 +413,26 @@ export function AjudaDeVariaveis({
     </div>
   );
 }
+
+/**
+ * Aviso fixo de Mensagem e Pergunta numa automação que começa por comentário do
+ * Instagram: a conversa do Direct só abre quando a pessoa responde (a resposta
+ * privada é o único primeiro envio). A publicação recusa o bloco que vem antes
+ * de um "Aguardar o contato responder".
+ */
+export function AvisoDoDirect() {
+  const t = useT();
+  return (
+    <div
+      className="space-y-1 rounded-sm border border-border bg-muted p-2 text-xs text-text-muted"
+      data-testid="aviso-do-direct"
+    >
+      <p>{t("No Instagram, esta mensagem sai pelo Direct de quem comentou.")}</p>
+      <p>
+        {t(
+          "A conversa abre quando a pessoa responde: ponha antes deste bloco um “Aguardar” em “Esperar o contato responder”.",
+        )}
+      </p>
+    </div>
+  );
+}

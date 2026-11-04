@@ -279,6 +279,7 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   teto_por_hora: "limite de 30 mensagens por hora",
   teto_indisponivel: "não foi possível conferir o limite de mensagens por hora",
   sem_conversa_whatsapp: "contato sem conversa de WhatsApp",
+  sem_conversa_direct: "a conversa do Direct ainda não abriu: a pessoa precisa responder primeiro",
   contato_bloqueado: "o contato pediu para não receber mensagens",
   envio_falhou: "o envio da mensagem falhou",
   organizacao_bloqueada: "a conta não pode enviar nem mudar o CRM agora",

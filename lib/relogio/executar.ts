@@ -1,5 +1,10 @@
 import { recoverStuckMessages } from "@/app/api/v1/cron/recover-stuck-messages/route";
 import { inboundContaComoResposta, inboundDentroDaEspera } from "@/lib/automacoes/conversa";
+import {
+  escopoDoDirect,
+  idsDasConversasDoDirect,
+  type EscopoDoDirect,
+} from "@/lib/automacoes/conversa-do-direct";
 import { criarExecutorDeEfeitos } from "@/lib/automacoes/efeitos";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
 import { drainEventLog } from "@/lib/event-log/drain";
@@ -119,7 +124,14 @@ async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps
       // tick, a reivindica e lê a resposta (com o id da opção tocada).
       // Acorda pela EXISTÊNCIA da mensagem, com ou sem texto: áudio e imagem
       // respondem ao "até responder" e são resposta inválida na pergunta.
-      const enviada = await ultimaRespostaDaAutomacao(admin, enrollment.organization_id, ids);
+      // Começou por comentário: só a resposta no Direct de quem comentou, nesta
+      // conexão, acorda — mesmo que a conversa tenha nascido depois da espera.
+      const enviada = await ultimaRespostaDaAutomacao(
+        admin,
+        enrollment.organization_id,
+        ids,
+        escopoDoDirect(enrollment.vars),
+      );
       if (enviada && (await acordarAutomacaoEmEspera(admin, enrollment, enviada))) n++;
       continue;
     }
@@ -144,7 +156,8 @@ async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps
 }
 
 /**
- * Quando chegou a última mensagem do contato (e gêmeos) que conta como
+ * Quando chegou a última mensagem do contato (e gêmeos) — ou, com `escopo`, da
+ * conversa do Direct de quem comentou — que conta como
  * resposta a um bloco de conversa: reação e marca de tipo não suportado não
  * contam (`inboundContaComoResposta`); mídia sem texto conta. `null` = nenhuma.
  */
@@ -152,12 +165,20 @@ export async function ultimaRespostaDaAutomacao(
   admin: SupabaseClient,
   organizationId: string,
   contactIds: readonly string[],
+  escopo?: EscopoDoDirect | null,
 ): Promise<{ sent_at: string; created_at: string | null } | null> {
-  const { data, error } = await admin
+  let consulta = admin
     .from("messages")
     .select("type, body, sent_at, created_at")
-    .eq("organization_id", organizationId)
-    .in("contact_id", [...contactIds])
+    .eq("organization_id", organizationId);
+  if (escopo) {
+    const conversas = await idsDasConversasDoDirect(admin, organizationId, escopo);
+    if (conversas.length === 0) return null;
+    consulta = consulta.in("conversation_id", conversas);
+  } else {
+    consulta = consulta.in("contact_id", [...contactIds]);
+  }
+  const { data, error } = await consulta
     .eq("direction", "inbound")
     .neq("type", "reaction")
     .order("sent_at", { ascending: false })

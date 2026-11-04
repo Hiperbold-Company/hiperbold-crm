@@ -689,8 +689,19 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
       const envio = texto(d.envio);
       if (envio) {
         const nomeDoEnvio = ENVIOS_DA_CONVERSA[envio as keyof typeof ENVIOS_DA_CONVERSA] ?? envio;
+        // Direct (execução que começou por comentário): diz por onde saiu e por onde veio.
+        const direct = texto(d.canal) === "direct";
         if (d.ok === false) return `${nomeDoEnvio}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
-        return `${nomeDoEnvio}: ${envio === "resposta" ? (texto(d.opcao_rotulo) ? `escolheu “${texto(d.opcao_rotulo)}”` : texto(d.opcao_id) ? "escolheu uma opção" : "registrada") : "enviada"}`;
+        if (envio === "resposta") {
+          const escolha = texto(d.opcao_rotulo)
+            ? `escolheu “${texto(d.opcao_rotulo)}”`
+            : texto(d.opcao_id)
+              ? "escolheu uma opção"
+              : "registrada";
+          if (direct) return escolha === "registrada" ? "Respondeu no Direct" : `Respondeu no Direct: ${escolha}`;
+          return `${nomeDoEnvio}: ${escolha}`;
+        }
+        return `${nomeDoEnvio}: ${direct ? "enviada pelo Direct" : "enviada"}`;
       }
       // Blocos do Instagram: o desfecho numa frase (nunca o texto do comentário).
       if (tipo && Object.hasOwn(DESFECHOS_DO_INSTAGRAM, tipo)) {

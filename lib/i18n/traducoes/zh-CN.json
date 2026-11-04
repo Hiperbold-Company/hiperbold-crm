@@ -5839,5 +5839,12 @@
   "Não deu para saber se segue o perfil": "无法确定是否关注主页",
   "a execução não começou por um comentário do Instagram": "此执行并非由 Instagram 评论启动",
   "o comentário não foi encontrado nesta conta (ou a conexão do Instagram não está ligada)": "在此账号中未找到该评论（或 Instagram 连接未启用）",
-  "o texto ficou vazio ou passou de 1000 caracteres depois de preencher as variáveis": "填入变量后文本为空或超过 1000 个字符"
+  "o texto ficou vazio ou passou de 1000 caracteres depois de preencher as variáveis": "填入变量后文本为空或超过 1000 个字符",
+  "No Instagram, as opções chegam numeradas (1, 2, 3) e a pessoa responde com o número.": "在 Instagram 上，选项以编号形式送达（1、2、3），对方回复编号即可。",
+  "No Instagram, esta mensagem sai pelo Direct de quem comentou.": "在 Instagram 上，此消息通过私信发送给评论者。",
+  "A conversa abre quando a pessoa responde: ponha antes deste bloco um “Aguardar” em “Esperar o contato responder”.": "对方回复后对话才会开启：请在此模块之前放置一个“等待”，并选择“等待联系人回复”。",
+  "No Instagram, a conversa só abre quando a pessoa responde. Ponha um 'Aguardar o contato responder' antes.": "在 Instagram 上，只有对方回复后对话才会开启。请先放置一个“等待联系人回复”。",
+  "Respondeu no Direct": "已在私信中回复",
+  "enviada pelo Direct": "已通过私信发送",
+  "a conversa do Direct ainda não abriu: a pessoa precisa responder primeiro": "私信对话尚未开启：需要对方先回复"
 }

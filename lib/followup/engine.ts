@@ -71,6 +71,11 @@ import {
 } from "@/lib/automacoes/conversa";
 import { devolverTurnoAoAgente, devolverTurnoDoInicio } from "@/lib/automacoes/devolver-turno";
 import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
+import {
+  escopoDoDirect,
+  idsDasConversasDoDirect,
+  type EscopoDoDirect,
+} from "@/lib/automacoes/conversa-do-direct";
 import { carregarFatosDaAutomacao } from "@/lib/automacoes/carregar-fatos";
 import {
   MAX_PASSOS_DA_AUTOMACAO,
@@ -199,8 +204,17 @@ export interface AdminClient {
    * telefone) desde `desde`, da mais antiga à mais nova, no máximo 5, com o id
    * da opção tocada na resposta nativa. Opcional: sem ele o motor usa
    * `loadLastInboundBody` (sem id de opção).
+   *
+   * `escopo` (execução que começou por comentário): só as mensagens da conversa
+   * do Direct de quem comentou, na conexão do comentário — achada pela consulta
+   * a cada leitura, porque ela pode nascer depois de a espera começar.
    */
-  loadRespostasDaEspera?(orgId: string, contactId: string, desde: string): Promise<RespostaRecebida[]>;
+  loadRespostasDaEspera?(
+    orgId: string,
+    contactId: string,
+    desde: string,
+    escopo?: EscopoDoDirect | null,
+  ): Promise<RespostaRecebida[]>;
   /**
    * A automação consumiu a resposta do contato e terminou sem caminho ligado:
    * pede de novo o turno da IA, que tinha cedido (`lib/automacoes/devolver-turno.ts`).
@@ -958,7 +972,12 @@ async function processarUmPasso(
       const desde = pisoDaEspera(espera.prazo, limite, enrollment.updated_at);
       desdeDaEspera = desde;
       respostas = db.loadRespostasDaEspera
-        ? await db.loadRespostasDaEspera(enrollment.organization_id, enrollment.contact_id, desde)
+        ? await db.loadRespostasDaEspera(
+            enrollment.organization_id,
+            enrollment.contact_id,
+            desde,
+            escopoDoDirect(enrollment.vars),
+          )
         : await (async () => {
             const corpo = await db.loadLastInboundBody(enrollment.organization_id, enrollment.contact_id, null, desde);
             return corpo === null ? [] : [{ texto: corpo, replyId: null }];
@@ -1423,13 +1442,21 @@ export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
     async devolverTurnoDoInicio(orgId, enrollmentId, conversationId, messageId) {
       await devolverTurnoDoInicio(admin, { organizationId: orgId, enrollmentId, conversationId, messageId });
     },
-    async loadRespostasDaEspera(orgId, contactId, desde) {
-      const ids = await idsDoContatoEGemeos(admin, orgId, contactId);
-      const { data, error } = await admin
+    async loadRespostasDaEspera(orgId, contactId, desde, escopo) {
+      let base = admin
         .from("messages")
         .select("type, body, metadata, sent_at, created_at")
-        .eq("organization_id", orgId)
-        .in("contact_id", ids)
+        .eq("organization_id", orgId);
+      if (escopo) {
+        // Direct: a conversa de quem comentou nesta conexão — nunca outra conta
+        // nem outro canal do contato. Ainda sem conversa = ainda sem resposta.
+        const conversas = await idsDasConversasDoDirect(admin, orgId, escopo);
+        if (conversas.length === 0) return [];
+        base = base.in("conversation_id", conversas);
+      } else {
+        base = base.in("contact_id", await idsDoContatoEGemeos(admin, orgId, contactId));
+      }
+      const { data, error } = await base
         .eq("direction", "inbound")
         .neq("type", "reaction")
         .gte("created_at", desde)

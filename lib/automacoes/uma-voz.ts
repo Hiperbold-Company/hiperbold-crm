@@ -13,6 +13,14 @@
  * A espera "até responder" sem nenhum envio da execução naquela conversa não
  * cala a IA: não há pergunta da automação a que a IA estaria respondendo por cima.
  *
+ * Exceção, o DIRECT: a execução que começou por um comentário fala primeiro
+ * pela resposta privada, que não vira linha de `messages` (contrato do canal,
+ * seção 4), e a conversa só nasce quando a pessoa responde. Por isso (b) vale
+ * também quando a conversa é a do Direct de quem comentou — mesma conexão
+ * (`vars.gatilho.channel_session_id`) e mesmo IGSID
+ * (`provider_conversation_id` = `vars.gatilho.autor_id`), ver
+ * `conversa-do-direct.ts`. Outra conta do Instagram ou outra pessoa não cala a IA.
+ *
  * Contato sem resposta: quando a automação consome a mensagem e termina sem
  * caminho ligado ("Resposta inválida" solta), o motor devolve o turno à IA
  * (`devolver-turno.ts`).
@@ -49,12 +57,22 @@ export async function automacaoEsperaRespostaNaConversa(
       `select 1 from followup_enrollments e
         where e.organization_id = $1
           and e.lane = 'automacao' and e.status = 'waiting_reply'
-          and exists (
-            select 1 from messages m
-             where m.organization_id = $1
-               and m.conversation_id = $2
-               and m.direction = 'outbound'
-               and m.metadata->'origem_automacao'->>'enrollment_id' = e.id::text
+          and (
+            exists (
+              select 1 from messages m
+               where m.organization_id = $1
+                 and m.conversation_id = $2
+                 and m.direction = 'outbound'
+                 and m.metadata->'origem_automacao'->>'enrollment_id' = e.id::text
+            )
+            or exists (
+              select 1 from conversations c
+               where c.organization_id = $1
+                 and c.id = $2
+                 and e.vars->'gatilho'->>'tipo' = 'instagram_comment'
+                 and c.channel_session_id::text = e.vars->'gatilho'->>'channel_session_id'
+                 and c.provider_conversation_id = e.vars->'gatilho'->>'autor_id'
+            )
           )
         limit 1`,
       [pedido.organizationId, pedido.conversationId],
@@ -124,6 +142,10 @@ export function esperavaRespostaEm(
  *  - estava esperando resposta quando a mensagem chegou (`esperavaRespostaEm`
  *    no `created_at` dela: `wait_started` antes, a saída da espera depois) —
  *    é ela que consumiu a mensagem como resposta.
+ * Mais as execuções que começaram por comentário e cuja conversa do Direct é
+ * esta (`execucoesDoDirectNaConversa`): o "quero" que a pessoa manda depois da
+ * resposta privada é delas, mesmo sem envio anterior nesta conversa (que nem
+ * existia quando a espera começou).
  *
  * Diferente da versão do drain, aqui erro LANÇA: o handler devolve `error` e o
  * evento volta para a fila. Falhar aberto iniciaria automação em cima de uma
@@ -151,16 +173,29 @@ export async function automacaoEsperaRespostaNaConversaSupabase(
       }),
     ),
   ];
-  if (ids.length === 0) return false;
-  const { data: execucoes, error: e2 } = await admin
-    .from("followup_enrollments")
-    .select("id, status")
-    .eq("organization_id", pedido.organizationId)
-    .eq("lane", "automacao")
-    .in("id", ids);
-  if (e2) throw new Error(e2.message);
-  const lista = (execucoes ?? []) as Array<{ id: string; status: string }>;
+  const doDirect = await execucoesDoDirectNaConversa(admin, pedido);
+  if (ids.length === 0 && doDirect.length === 0) return false;
+  let lista: Array<{ id: string; status: string }> = [];
+  if (ids.length > 0) {
+    const { data: execucoes, error: e2 } = await admin
+      .from("followup_enrollments")
+      .select("id, status")
+      .eq("organization_id", pedido.organizationId)
+      .eq("lane", "automacao")
+      .in("id", ids);
+    if (e2) throw new Error(e2.message);
+    lista = (execucoes ?? []) as Array<{ id: string; status: string }>;
+  }
   if (lista.some((e) => e.status === "waiting_reply")) return true;
+  // Direct: a execução que nasceu DEPOIS da mensagem não a tem como resposta.
+  if (
+    doDirect.some(
+      (e) => e.status === "waiting_reply" && (!pedido.chegadaEm || Date.parse(e.created_at) <= Date.parse(pedido.chegadaEm)),
+    )
+  ) {
+    return true;
+  }
+  for (const e of doDirect) if (!lista.some((l) => l.id === e.id)) lista.push(e);
   if (!pedido.chegadaEm || lista.length === 0) return false;
 
   const { data: eventos, error: e3 } = await admin
@@ -187,6 +222,39 @@ export async function automacaoEsperaRespostaNaConversaSupabase(
     porExecucao.set(ev.enrollment_id, l);
   }
   return [...porExecucao.values()].some((l) => esperavaRespostaEm(l, pedido.chegadaEm!));
+}
+
+/**
+ * As execuções de automação que começaram por um comentário cuja conversa do
+ * Direct é ESTA (mesma conexão, mesmo IGSID — `conversa-do-direct.ts`). Elas
+ * não têm envio nesta conversa antes da resposta: a resposta privada não vira
+ * linha de `messages`. Lança em falha do banco, como a função que a chama.
+ */
+async function execucoesDoDirectNaConversa(
+  admin: SupabaseClient,
+  pedido: { organizationId: string; conversationId: string },
+): Promise<Array<{ id: string; status: string; created_at: string }>> {
+  const { data: conversa, error } = await admin
+    .from("conversations")
+    .select("channel_session_id, provider_conversation_id")
+    .eq("organization_id", pedido.organizationId)
+    .eq("id", pedido.conversationId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const c = conversa as { channel_session_id: string | null; provider_conversation_id: string | null } | null;
+  if (!c?.channel_session_id || !c.provider_conversation_id) return [];
+  const { data, error: e2 } = await admin
+    .from("followup_enrollments")
+    .select("id, status, created_at")
+    .eq("organization_id", pedido.organizationId)
+    .eq("lane", "automacao")
+    .eq("vars->gatilho->>tipo", "instagram_comment")
+    .eq("vars->gatilho->>channel_session_id", c.channel_session_id)
+    .eq("vars->gatilho->>autor_id", c.provider_conversation_id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (e2) throw new Error(e2.message);
+  return (data ?? []) as Array<{ id: string; status: string; created_at: string }>;
 }
 
 /**

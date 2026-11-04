@@ -14971,6 +14971,14 @@ export const DICIONARIO: Traducoes = {
   "a execução não começou por um comentário do Instagram": { es: "la ejecución no empezó por un comentario de Instagram" },
   "o comentário não foi encontrado nesta conta (ou a conexão do Instagram não está ligada)": { es: "el comentario no se encontró en esta cuenta (o la conexión de Instagram no está activa)" },
   "o texto ficou vazio ou passou de 1000 caracteres depois de preencher as variáveis": { es: "el texto quedó vacío o superó los 1000 caracteres después de completar las variables" },
+  // Direct no fluxo das automações.
+  "No Instagram, as opções chegam numeradas (1, 2, 3) e a pessoa responde com o número.": { es: "En Instagram, las opciones llegan numeradas (1, 2, 3) y la persona responde con el número." },
+  "No Instagram, esta mensagem sai pelo Direct de quem comentou.": { es: "En Instagram, este mensaje sale por el Direct de quien comentó." },
+  "A conversa abre quando a pessoa responde: ponha antes deste bloco um “Aguardar” em “Esperar o contato responder”.": { es: "La conversación se abre cuando la persona responde: pon antes de este bloque un “Aguardar” en “Esperar a que el contacto responda”." },
+  "No Instagram, a conversa só abre quando a pessoa responde. Ponha um 'Aguardar o contato responder' antes.": { es: "En Instagram, la conversación solo se abre cuando la persona responde. Pon un 'Esperar a que el contacto responda' antes." },
+  "Respondeu no Direct": { es: "Respondió en Direct" },
+  "enviada pelo Direct": { es: "enviada por Direct" },
+  "a conversa do Direct ainda não abriu: a pessoa precisa responder primeiro": { es: "la conversación de Direct aún no se abrió: la persona necesita responder primero" },
 };
 
 /**

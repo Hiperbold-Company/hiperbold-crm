@@ -217,6 +217,22 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
     [selectedNode, nodes, edges],
   );
 
+  // Automação que começa por comentário do Instagram: os formulários de
+  // Mensagem e Pergunta avisam que a conversa só abre quando a pessoa responde.
+  const comecaPorComentario = useMemo(
+    () =>
+      surface === "automacao" &&
+      nodes.some((n) => {
+        if (n.type !== "trigger") return false;
+        const gatilhos = (n.data.config as { triggers?: unknown } | undefined)?.triggers;
+        return (
+          Array.isArray(gatilhos) &&
+          gatilhos.some((g) => (g as { kind?: unknown } | null)?.kind === "instagram_comment")
+        );
+      }),
+    [surface, nodes],
+  );
+
   const onConnect = useCallback(
     (connection: Connection) => {
       // A bolinha de onde o usuário arrastou É a saída escolhida: o React Flow
@@ -447,6 +463,7 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
                 settings={settings}
                 onSettingsChange={setSettings}
                 respostasAnteriores={respostasDoSelecionado}
+                comecaPorComentario={comecaPorComentario}
               />
             </div>
           </aside>

@@ -22,6 +22,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { conversaDoDirect, escopoDoDirect } from "./conversa-do-direct";
 import { CHAVE_DE_ORIGEM_AUTOMACAO } from "./teto-de-mensagens";
 
 export const EVENTO_DE_DESPACHO_DO_AGENTE = "ai_agent.dispatch_requested";
@@ -46,13 +47,34 @@ export async function devolverTurnoAoAgente(
       .limit(1)
       .maybeSingle();
     if (e1) return "falhou";
-    const conversationId = (enviada as { conversation_id?: string } | null)?.conversation_id;
+    let conversationId = (enviada as { conversation_id?: string } | null)?.conversation_id;
+    // Direct: a execução que começou por comentário pode não ter falado na
+    // conversa (a resposta privada não vira linha de `messages`); a conversa
+    // é a do Direct de quem comentou (`conversa-do-direct.ts`).
+    if (!conversationId) conversationId = await conversaDoDirectDaExecucao(admin, org, pedido.enrollmentId);
     if (!conversationId) return "sem_conversa";
 
     return await pedirTurnoDeNovo(admin, org, conversationId, pedido.desde, pedido.enrollmentId);
   } catch {
     return "falhou";
   }
+}
+
+async function conversaDoDirectDaExecucao(
+  admin: SupabaseClient,
+  org: string,
+  enrollmentId: string,
+): Promise<string | undefined> {
+  const { data, error } = await admin
+    .from("followup_enrollments")
+    .select("vars")
+    .eq("organization_id", org)
+    .eq("id", enrollmentId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const escopo = escopoDoDirect((data as { vars?: Record<string, unknown> } | null)?.vars);
+  if (!escopo) return undefined;
+  return (await conversaDoDirect(admin, org, escopo))?.id;
 }
 
 /**
