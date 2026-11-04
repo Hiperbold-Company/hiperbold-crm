@@ -68,6 +68,11 @@ export const REGISTRO_DE_NOS: { readonly [K in NodeType]: DefinicaoDoNo } = {
   match_reply: definir("match_reply", { superficies: FOLLOWUP, categoria: "logica", efeito: false, precisaEventos: true }),
   repeat: definir("repeat", { superficies: FOLLOWUP, categoria: "controle", efeito: false, precisaEventos: true }),
   action: definir("action", { superficies: FOLLOWUP, categoria: "mensagem", efeito: false, precisaEventos: true }),
+  // Nós internos do upstream (#1540, #2065). `efeito: false`: o motor grava a tarefa,
+  // a etapa ou a tag DEPOIS do evento do passo (`engine.ts`), não pelo par effect_started/done.
+  internal_task: definir("internal_task", { superficies: FOLLOWUP, categoria: "crm", efeito: false, precisaEventos: true }),
+  move_lead: definir("move_lead", { superficies: FOLLOWUP, categoria: "crm", efeito: false, precisaEventos: true }),
+  edit_lead_tag: definir("edit_lead_tag", { superficies: FOLLOWUP, categoria: "crm", efeito: false, precisaEventos: true }),
   end: definir("end", {
     superficies: ["followup", "crm_automation", "atendimento", "automacao"],
     categoria: "controle",
@@ -109,8 +114,8 @@ export const REGISTRO_DE_NOS: { readonly [K in NodeType]: DefinicaoDoNo } = {
  * o publish aceita). A ordem dos follow-ups e do atendimento é a que já existia.
  */
 const ORDEM: Record<FollowupFlowSurface, readonly NodeType[]> = {
-  followup: ["trigger", "wait", "condition", "ai_classify", "match_reply", "repeat", "action", "end"],
-  crm_automation: ["trigger", "wait", "condition", "ai_classify", "match_reply", "repeat", "action", "end"],
+  followup: ["trigger", "wait", "condition", "ai_classify", "match_reply", "repeat", "action", "internal_task", "move_lead", "edit_lead_tag", "end"],
+  crm_automation: ["trigger", "wait", "condition", "ai_classify", "match_reply", "repeat", "action", "internal_task", "move_lead", "edit_lead_tag", "end"],
   atendimento: ["trigger", "collect", "skill", "end"],
   automacao: [
     "trigger",

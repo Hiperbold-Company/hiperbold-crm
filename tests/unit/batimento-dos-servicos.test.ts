@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { rodarLoopDaFila } from "@/lib/agent-engine/queue/loop";
 import type { Logger } from "@/lib/agent-engine/obs/logger";
+import type { SonecaDaFila } from "@/lib/agent-engine/queue/soneca";
 import {
   avaliarBatimento,
   criarBatedor,
@@ -130,6 +131,11 @@ describe("gravarBatimentoPg", () => {
   });
 });
 
+/** A espera do laço é do teste: sem wake (o wake tem teste próprio em `fila-acorda-quando-chega-trabalho`). */
+function soneca(dormir: SonecaDaFila["dormir"]): SonecaDaFila {
+  return { acordar: () => undefined, geracao: () => 0, dormir };
+}
+
 function logSpy(): Logger {
   const noop = (): void => undefined;
   return { info: noop, warn: noop, error: noop } as unknown as Logger;
@@ -145,7 +151,7 @@ describe("o batimento do worker está amarrado à volta do laço da fila", () =>
       relogio: async () => null,
       claimar: async () => [],
       aoClaimar: () => void voltas++,
-      dormir: async (ms) => void (t += ms),
+      soneca: soneca(async (ms) => void (t += ms)),
       deveParar: () => voltas >= 40,
       aoCadaVolta: tocar,
       intervalos: { ociosoMs: 2_000, retryMs: 250 },
@@ -165,7 +171,7 @@ describe("o batimento do worker está amarrado à volta do laço da fila", () =>
       relogio: async () => null,
       claimar: () => new Promise<never[]>(() => undefined),
       aoClaimar: () => undefined,
-      dormir: async () => undefined,
+      soneca: soneca(async () => undefined),
       deveParar: () => false,
       aoCadaVolta: tocar,
       intervalos: { ociosoMs: 2_000, retryMs: 250 },
@@ -184,7 +190,7 @@ describe("o batimento do worker está amarrado à volta do laço da fila", () =>
       relogio: async () => null,
       claimar: async () => [],
       aoClaimar: () => void voltas++,
-      dormir: async () => undefined,
+      soneca: soneca(async () => undefined),
       deveParar: () => voltas >= 3,
       aoCadaVolta: () => {
         throw new Error("batimento quebrado");

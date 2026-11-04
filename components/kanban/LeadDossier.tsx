@@ -122,6 +122,21 @@ export function LeadDossier({
   const campos = useRef<HTMLDivElement | null>(null);
   const formulario = useRef<ControleDosCamposDoNegocio | null>(null);
   const timeline = useLeadTimeline(open ? lead.id : null, lead.contact_id);
+  const { fechadas, alternar, abrir } = useSecoesRecolhidas();
+  const timelineRecolhida = fechadas.has("linha-do-tempo");
+  // As três MAIS RECENTES: a rota devolve `performed_at` decrescente, então o
+  // corte é no início da lista, não no fim.
+  const itensDaTimeline = timelineRecolhida
+    ? timeline.itens.slice(0, ENTRADAS_COM_A_LINHA_RECOLHIDA)
+    : timeline.itens;
+  const temMaisNaTimeline = timeline.itens.length > ENTRADAS_COM_A_LINHA_RECOLHIDA;
+  // O atalho do cabeçalho precisa rolar DEPOIS de a seção estar aberta: rolar
+  // num mesmo tique mediria a altura de antes, com os campos ainda escondidos.
+  const [pedidoDeRolagem, setPedidoDeRolagem] = useState(0);
+  useEffect(() => {
+    if (pedidoDeRolagem === 0) return;
+    campos.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [pedidoDeRolagem]);
   // Mesmo piso da rota (agent): viewer e acompanhamento somente-leitura não
   // veem um botão que só devolveria 403.
   const fuso = useFusoDaOrganizacao();

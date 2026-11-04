@@ -46,6 +46,7 @@ function produto(over: Partial<Produto> = {}): Produto {
     marca: null,
     categoria: null,
     preco_cents: 24990,
+    tipo_de_preco: "fixo",
     moeda: "BRL",
     custo_cents: null,
     controla_estoque: false,

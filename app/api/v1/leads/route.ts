@@ -123,7 +123,7 @@ export async function POST(req: NextRequest): Promise<Response> {
           donoDaCarteira: carteira.qualificado ? carteira.dono : null,
         })
       ) {
-        return fail("carteira_de_outro_vendedor", traduzir(MOTIVO_DA_RECUSA, authz.actor.idioma), 403, {
+        return fail("carteira_de_outro_vendedor", traduzir(MOTIVO_DA_RECUSA, authz.idioma ?? "pt-BR"), 403, {
           requestId,
         });
       }

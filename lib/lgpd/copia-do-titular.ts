@@ -129,6 +129,7 @@ export const O_QUE_FICA = {
   contact_field_proposals: "o dado dele que a IA ouviu na conversa e propôs gravar, e o que se decidiu",
   lead_attachments: "os documentos anexados aos negócios dele: nome, tipo, tamanho e data (o arquivo não vai no relatório)",
   lead_notes: "a memória que a IA guarda sobre ele (LGPD art. 20)",
+  knowledge_chunks: "os trechos da base de conhecimento nascidos das conversas dele (Hiperbold, D-104)",
   ai_agent_runs:
     "o que a IA fez na conversa com ele e quando: o nome de cada ação, sem o que ela digitou (#1965, revisto no doc 110, 1A)",
   lead_state: "o próximo passo e a qualificação dele, por máquina (LGPD art. 20)",

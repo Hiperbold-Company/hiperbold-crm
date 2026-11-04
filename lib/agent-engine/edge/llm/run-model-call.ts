@@ -16,7 +16,7 @@ import { guardServiceTools } from "@/lib/atendimento/fronteira-server";
  * cacheWriteTokens}. Validado no ai@7 via scripts/smoke-llm.sh (modelo real) —
  * upgrade de major re-valida esses paths pelo mesmo gate (regra dura 16).
  */
-import { generateText, stepCountIs, streamText, type ModelMessage, type ToolSet } from 'ai';
+import { generateText, stepCountIs, streamText, type LanguageModelUsage, type ModelMessage, type ToolSet } from 'ai';
 import type pg from 'pg';
 import { z } from 'zod';
 
@@ -1456,7 +1456,7 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
           : input.pararQuando === undefined
             ? stepCountIs(input.maxSteps)
             : [stepCountIs(input.maxSteps), input.pararQuando],
-      onStepFinish: (passo) => {
+      onStepFinish: (passo: { usage?: LanguageModelUsage }) => {
         pagos.inputTokens += passo.usage?.inputTokens ?? 0;
         pagos.outputTokens += passo.usage?.outputTokens ?? 0;
         pagos.cacheReadTokens += passo.usage?.inputTokenDetails?.cacheReadTokens ?? 0;

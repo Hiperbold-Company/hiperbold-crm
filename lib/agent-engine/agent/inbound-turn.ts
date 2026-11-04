@@ -288,7 +288,6 @@ import { blocoDoFeriado, lerFeriadoDoTurno } from './feriado-nacional';
 import { renderAgora } from '@/lib/tempo/agora';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
 import { TETO_DE_TURNOS_POR_CONTATO_POR_HORA_PADRAO } from '@/lib/ai/elegibilidade/laco-de-robos';
-import { anotarUltimaInboundVista, ultimaInboundJaRespondida } from './turno-ja-respondido';
 import {
   anotarUltimaInboundVista,
   respostaFicouObsoleta,

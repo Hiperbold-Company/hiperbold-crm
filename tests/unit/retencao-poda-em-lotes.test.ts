@@ -454,13 +454,15 @@ describe("podarHistorico — o laço de lotes", () => {
         chamadas.push("rascunhos");
         return { data: null, error: { message: "permission denied for table conversation_drafts" } };
       },
+      async enfileirarMidia() {
+        chamadas.push("midia");
+        return { data: { vencidas: 0, orfas: 0 }, error: null };
+      },
     };
-    const erro = await podarHistorico(db, {}).then(
-      () => null,
-      (e: Error) => e,
-    );
-    expect(erro?.message).toMatch(/deadlock detected/);
-    expect(erro?.message).toMatch(/conversation_drafts/);
+    // Desde o upstream a poda não lança: devolve as falhas em `falhas` (quem chama decide o status).
+    const r = await podarHistorico(db, {});
+    expect(r.falhas.some((f) => /deadlock detected/.test(f))).toBe(true);
+    expect(r.falhas.some((f) => /conversation_drafts/.test(f))).toBe(true);
     // A falha da primeira não cortou a auditoria, o espelho, os nonces nem o resto.
     expect(chamadas).toEqual(
       expect.arrayContaining([

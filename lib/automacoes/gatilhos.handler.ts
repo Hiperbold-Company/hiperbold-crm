@@ -471,6 +471,8 @@ export function createSupabaseGatilhosDb(admin: SupabaseClient): GatilhosDb {
 
 export const automacaoGatilhosHandler: EventHandler = {
   key: AUTOMACAO_GATILHOS_HANDLER_KEY,
+  // Inicia automação (envia mensagem, custa IA): com a org parada, pula — como os gatilhos de fluxo.
+  naOrgParada: "pula",
   events: [...EVENTOS_DOS_GATILHOS],
   async handle(row): Promise<HandlerResult> {
     try {

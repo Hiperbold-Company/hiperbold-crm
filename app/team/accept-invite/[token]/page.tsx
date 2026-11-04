@@ -19,6 +19,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AcceptInviteForm } from "./AcceptInviteForm";
 import { ReenviarVerificacaoNoConvite } from "./ReenviarVerificacaoNoConvite";
 import { emailVerificado } from "@/lib/auth/verificacao-email";
+import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
 import type { Idioma } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -147,7 +148,7 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
   // chegou POR E-MAIL (com `v` válido): ele é a prova, e o aceite carimba o endereço.
   if (!emailVerificado(user.app_metadata) && !prova) {
     return (
-      <Shell>
+      <Shell idioma={idioma}>
         <h1 className="text-xl font-semibold">{t("Confirme seu e-mail para aceitar o convite")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {t("Enviamos um link de confirmação para")} <strong>{user.email}</strong>.{" "}

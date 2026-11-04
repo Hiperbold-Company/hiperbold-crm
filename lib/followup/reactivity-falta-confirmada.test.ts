@@ -20,7 +20,7 @@
  *
  * O que este arquivo não prova: qual caminho de código gravou o
  * `trigger_config`. Isso é a tela, medida em
- * `app/app/ai/followups/[id]/_components/TriggerConfigControl-falta.test.tsx`.
+ * `components/fluxos/editor/TriggerConfigControl-falta.test.tsx`.
  */
 
 import { describe, expect, it } from "vitest";

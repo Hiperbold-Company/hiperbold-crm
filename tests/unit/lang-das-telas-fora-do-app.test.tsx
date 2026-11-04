@@ -94,6 +94,7 @@ const TELAS: Array<[string, () => Promise<ReactElement>]> = [
     async () =>
       (await import("@/app/team/accept-invite/[token]/page")).default({
         params: Promise.resolve({ token: "qualquer" }),
+        searchParams: Promise.resolve({}),
       }),
   ],
 ];

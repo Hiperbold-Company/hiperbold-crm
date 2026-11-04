@@ -15,7 +15,7 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { chaveDaRequisicao, comIdempotencia, type DesfechoIdempotente } from "@/lib/api/idempotency";
+import { chaveDaRequisicao, comIdempotencia, identidadeDoAtor, type DesfechoIdempotente } from "@/lib/api/idempotency";
 import { ApiError } from "@/lib/api/types";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
@@ -93,6 +93,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
             organizationId: authz.org.orgId,
             endpoint: ENDPOINT,
             chave,
+            ator: identidadeDoAtor({ type: "user", id: authz.user.id }),
             // A mensagem de origem vem do path: ela faz parte da identidade.
             corpo: { message_id: id, conversation_id: corpo.conversation_id },
             executar: async () => ({ resposta: await encaminhar(), status: 201 }),

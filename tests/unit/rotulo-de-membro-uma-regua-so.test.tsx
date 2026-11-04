@@ -49,7 +49,7 @@ vi.mock("@/hooks/contacts/useCarteiraDoContato", () => ({
   useDefinirCarteira: deps.definir,
 }));
 
-import { InternalTaskForm } from "@/app/app/ai/followups/[id]/_components/forms/InternalTaskForm";
+import { InternalTaskForm } from "@/components/fluxos/editor/forms/InternalTaskForm";
 import { ActionConfigForm } from "@/app/app/webhooks/_components/ActionConfigForm";
 import { CartaoDaCarteira } from "@/components/contacts/CartaoDaCarteira";
 import { rotuloDoMembro, sufixoDoMembro } from "@/lib/users/rotulo-do-atendente";
@@ -210,7 +210,7 @@ describe("a cerca: nenhuma tela volta a montar o rótulo por conta própria", ()
       "components/inbox/composer/MentionMenu.tsx",
       "components/contacts/CartaoDaCarteira.tsx",
       "components/inbox/ParticipantesDaConversa.tsx",
-      "app/app/ai/followups/[id]/_components/forms/InternalTaskForm.tsx",
+      "components/fluxos/editor/forms/InternalTaskForm.tsx",
       "app/app/tasks/planos/_client.tsx",
       "app/app/webhooks/_components/ActionConfigForm.tsx",
       "app/app/settings/tenant/agenda/page.tsx",

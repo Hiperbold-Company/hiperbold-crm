@@ -78,7 +78,8 @@ async function centavos(
   model: string,
   tokens: { promptTokens?: number; completionTokens?: number },
   em?: Date,
-): Promise<number> {
+): Promise<number | null> {
+  // `null` = preço desconhecido (Hiperbold: o gasto não vira zero inventado).
   return computeCost({ model, ...tokens, ...(em ? { em } : {}) });
 }
 

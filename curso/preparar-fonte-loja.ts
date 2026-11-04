@@ -37,7 +37,7 @@ async function main() {
   if (!permitido.ok) throw new Error("host da fonte recusado pela política do aplicativo");
   const url = new URL(exigirBancoLocal(process.env.SUPABASE_DB_URL));
   const senha = randomBytes(24).toString("hex");
-  const cifrada = cifrarSenha(senha); // valida a chave antes de alterar qualquer banco
+  const cifrada = cifrarSenha(senha, { organizationId: ctx.org, connectionId: CONEXAO }); // valida a chave antes de alterar qualquer banco
   const admin = new pg.Client({ connectionString: url.href });
   await admin.connect();
   try {

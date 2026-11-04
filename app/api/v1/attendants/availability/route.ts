@@ -93,7 +93,7 @@ export async function GET(_req: NextRequest): Promise<Response> {
     try {
       setores = await setoresPorAtendente(supabase, activeOrg.orgId);
     } catch (err) {
-      return fail("internal_error", err instanceof Error ? err.message : "setores", 500, { requestId });
+      return falhaInterna("internal_error", err, { requestId });
     }
     return ok(
       rows.map((r) => ({

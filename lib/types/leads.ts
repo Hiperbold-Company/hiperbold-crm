@@ -172,8 +172,6 @@ export interface Lead {
    */
   anexos?: AnexosDoCampoNoCard[];
   created_at: string;
-  /** Quando entrou na etapa atual (trigger); nulo em dado antigo — a tela cai em `created_at`. */
-  stage_changed_at?: string | null;
   updated_at: string;
   created_by_user_id: string | null;
 }

@@ -20,7 +20,7 @@ import { CHANNEL_PROVIDER_META_SOCIAL, PROVIDERS_DE_MENSAGEM, ehCanalSocial } fr
 import { ehPlataformaMetaSocial } from "@/lib/channels/meta-social/constantes";
 
 export const CHANNEL_COLUMNS =
-  "id, provider, waha_session_name, display_name, phone_number, status, status_reason, last_health_check_at, last_status_change_at, daily_message_limit, is_warmup_complete, created_at";
+  "id, provider, waha_session_name, display_name, phone_number, status, status_reason, last_health_check_at, last_status_change_at, daily_message_limit, is_warmup_complete, created_at, metadata";
 
 /** Lida só para derivar `plataforma`; não sai na resposta. */
 const COLUNA_DA_PLATAFORMA = "meta_social_platform";
@@ -53,6 +53,11 @@ export interface ConexaoDeMensagem {
   daily_message_limit: number;
   is_warmup_complete: boolean | null;
   created_at: string;
+  /**
+   * Só `disabled` (o selo "Pausado", #2318). O `metadata` cru guarda configuração que não é de todo membro
+   * (`ai_test_phone_numbers`), então a listagem o reduz AQUI — vale para a rota e para a tool MCP.
+   */
+  metadata: { disabled: boolean };
   plataforma: PlataformaDaConexao;
 }
 
@@ -89,9 +94,11 @@ export async function listarConexoesDeMensagem(
   }
   if (r.error) return { data: null, error: r.error, schemaOutdated: r.schemaOutdated };
   const data = ((r.data ?? []) as unknown as Record<string, unknown>[]).map((linha): ConexaoDeMensagem => {
-    const { [COLUNA_DA_PLATAFORMA]: plataformaMeta, ...resto } = linha;
+    const { [COLUNA_DA_PLATAFORMA]: plataformaMeta, metadata: bruto, ...resto } = linha;
+    const m = bruto && typeof bruto === "object" ? (bruto as Record<string, unknown>) : undefined;
     return {
-      ...(resto as Omit<ConexaoDeMensagem, "plataforma">),
+      ...(resto as Omit<ConexaoDeMensagem, "plataforma" | "metadata">),
+      metadata: { disabled: m?.disabled === true },
       plataforma: plataformaDaConexao(resto.provider as string | null, plataformaMeta),
     };
   });

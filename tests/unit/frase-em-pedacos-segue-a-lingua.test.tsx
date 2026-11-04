@@ -28,7 +28,7 @@ vi.mock("@/hooks/followup/useModelosAprovadosDoFluxo", () => ({
   useModelosAprovadosDoFluxo: () => ({ isLoading: false, isError: false, data: [] }),
 }));
 
-import { ActionForm } from "@/app/app/ai/followups/[id]/_components/forms/ActionForm";
+import { ActionForm } from "@/components/fluxos/editor/forms/ActionForm";
 import { SuspendedBanner } from "@/components/admin/tenants/SuspendedBanner";
 import { DICIONARIO } from "@/lib/i18n/dicionario";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";

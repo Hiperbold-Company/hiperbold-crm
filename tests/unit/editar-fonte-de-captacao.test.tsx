@@ -59,18 +59,30 @@ const FONTE: WebhookSourceRow = {
   name: "Landing page",
   path_token: "tok123",
   is_active: true,
+  authorize_ai_on_capture: false,
+  update_existing_lead_on_capture: false,
+  reuse_open_lead_on_capture: false,
   kind: "form",
   last_received_at: null,
   default_pipeline_id: "p1",
   default_stage_id: "s1",
   redirect_to: "https://site.com/obrigado",
   field_map: { phone: ["form_fields[phone]", "zap"] },
+  form_fields: [],
   has_secret: false,
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
   last_change_actor_kind: null,
   last_change_at: null,
 };
+
+/**
+ * O interruptor que liga/pausa a FONTE. Desde o upstream a tela tem outros três
+ * (opções da captação, com `id`); o da fonte é o único sem `id`.
+ */
+function interruptorDaFonte(): HTMLElement | undefined {
+  return screen.queryAllByRole("switch").find((el) => !el.id);
+}
 
 const ETAPAS: Record<string, { id: string; name: string }[]> = {
   p1: [
@@ -298,7 +310,9 @@ describe("detalhe da fonte: editar, pausar e excluir", () => {
   it("pausar manda is_active=false", async () => {
     const user = userEvent.setup();
     comQuery(<SourceDetail source={FONTE} open onOpenChange={() => {}} />);
-    await user.click(screen.getByRole("switch"));
+    const interruptor = interruptorDaFonte();
+    if (!interruptor) throw new Error("o interruptor da fonte não apareceu");
+    await user.click(interruptor);
     await waitFor(() =>
       expect(patch).toHaveBeenCalledWith("/api/v1/webhook-sources/src-1", { is_active: false }),
     );
@@ -308,7 +322,9 @@ describe("detalhe da fonte: editar, pausar e excluir", () => {
     podeGerenciar = false;
     comQuery(<SourceDetail source={FONTE} open onOpenChange={() => {}} />);
     expect(screen.queryByRole("button", { name: "Editar" })).toBeNull();
-    expect(screen.queryByRole("switch")).toBeNull();
+    expect(interruptorDaFonte()).toBeUndefined();
+    // As opções da captação continuam à vista, mas nenhuma muda nada.
+    for (const opcao of screen.queryAllByRole("switch")) expect(opcao).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Excluir fonte" })).toBeNull();
     // O que não muda nada continua: copiar o endereço.
     expect(screen.getByText("Endereço da fonte")).toBeInTheDocument();

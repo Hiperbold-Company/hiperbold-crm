@@ -1492,6 +1492,10 @@ export const RAMOS_POR_TIPO: { [K in NodeType]: RamosDe<K> } = {
   collect: saidaUnica,
   skill: saidaUnica,
   action: saidaUnica,
+  // Nós internos do upstream (#1540, #2065): avançam pela aresta única.
+  internal_task: saidaUnica,
+  move_lead: saidaUnica,
+  edit_lead_tag: saidaUnica,
   end: saidaUnica,
 };
 

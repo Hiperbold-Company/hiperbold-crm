@@ -29,7 +29,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CreateContactResult } from "@/app/api/v1/contacts/_handler";
+import type { ContatoPublico, CreateContactResult } from "@/app/api/v1/contacts/_handler";
 import type { ApiSuccess } from "@/lib/api/wrappers";
 import type { Contact } from "@/lib/types/contacts";
 import { DEFAULT_CHANNEL_PROVIDER } from "@/lib/channels";
@@ -87,8 +87,14 @@ const CONTATO = {
   ai_opt_out: false,
 } satisfies Contact;
 
+// A rota devolve o contato PÚBLICO: sem `cpf_hash`, com o booleano `cpf_available`.
+const CONTATO_PUBLICO: ContatoPublico = (({ cpf_hash, ...resto }) => ({
+  ...resto,
+  cpf_available: cpf_hash !== null,
+}))(CONTATO);
+
 const CORPO_DA_ROTA: ApiSuccess<CreateContactResult> = {
-  data: { contact: CONTATO, action: "created" },
+  data: { contact: CONTATO_PUBLICO, action: "created" },
 };
 
 function envolver(ui: ReactNode) {

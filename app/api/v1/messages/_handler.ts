@@ -425,6 +425,7 @@ export async function listMessagesHandler(
 
 export function previewFrom(input: {
   body?: string;
+  media_url?: string;
   media_storage_path?: string;
   type?: string;
 }): string {
@@ -464,7 +465,16 @@ function extendBotSilence(current: string | null, now: string): string | undefin
  * (bloco de mensagem), com input tipado; o handler revalida com
  * `interactiveSchema` mesmo assim.
  */
-export type SendMessageHandlerInput = SendMessageInput & { interactive?: OutboundInteractive };
+/**
+ * `media_url` NÃO está no schema público (`sendMessageSchema`, D-095): a rota
+ * nunca aceita URL livre do cliente. Ela só entra por chamador do servidor que
+ * gerou a URL ele mesmo (o PDF da proposta, URL assinada do nosso storage), e
+ * mesmo assim passa por `assertUrlDeMidiaSegura` antes de o gateway baixar.
+ */
+export type SendMessageHandlerInput = SendMessageInput & {
+  interactive?: OutboundInteractive;
+  media_url?: string;
+};
 
 export async function sendMessageHandler(
   supabase: SB,

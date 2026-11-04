@@ -107,6 +107,8 @@ export async function resolverVozDoTurno(
 ): Promise<VozResolvidaDoTurno | null> {
   if (!input.vozEnabled) return null;
   if (!deveFalar(input.vozQuando, input.inboundType)) return null;
+  // Canal sem nota de voz (`voiceNote: 'none'`, ex.: Instagram/Messenger) responde sempre em texto.
+  if (input.voiceNote === 'none') return null;
 
   try {
     const { rows } = await input.pool.query<{ settings: Record<string, unknown> | null }>(

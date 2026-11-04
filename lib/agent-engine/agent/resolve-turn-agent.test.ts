@@ -96,7 +96,6 @@ function makeDeps(overrides: {
   agenteDaCampanha?: ReturnType<typeof vi.fn>;
   consultarJev?: ReturnType<typeof vi.fn>;
   temIaDeSempre?: ReturnType<typeof vi.fn>;
-  agenteDaCampanha?: ReturnType<typeof vi.fn>;
 }) {
   return {
     log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -113,7 +112,6 @@ function makeDeps(overrides: {
     consultarJev: overrides.consultarJev ?? jevFalso().consultarJev,
     // A empresa tem a IA de sempre, salvo o caso que prova o contrário (decisão B).
     temIaDeSempre: overrides.temIaDeSempre ?? vi.fn().mockResolvedValue(true),
-    ...(overrides.agenteDaCampanha ? { agenteDaCampanha: overrides.agenteDaCampanha } : {}),
   } as never;
 }
 

@@ -150,6 +150,7 @@ const CHAVE_ANTHROPIC = "chave-anthropic-de-controle";
 function configResolvida(over: Partial<OrgLlmConfig> = {}): OrgLlmConfig {
   return {
     provider: "google",
+    providerPedido: "google",
     apiKey: CHAVE_GOOGLE,
     origemDaChave: "credencial_da_organizacao",
     defaultModel: "gemini-3.5-flash",

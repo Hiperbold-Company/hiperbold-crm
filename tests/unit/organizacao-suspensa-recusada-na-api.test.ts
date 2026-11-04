@@ -3,16 +3,17 @@
  *
  * O único portão era o layout de `/app` (redirect para /account-suspended); a
  * rota `/api/v1/*` com o cookie e o bearer `dsk_` seguiam respondendo. Agora:
- *  - `requireRole` recusa 403 `tenant_suspended` para membro de organização
- *    suspensa, em qualquer papel;
- *  - o admin de plataforma (escopo full, MFA em dia) segue entrando pelo atalho
- *    `allowPlatformAdmin`, senão ninguém reativaria o cliente;
- *  - `resolveApiToken` recusa o token de organização suspensa (`tenant_suspended`).
+ *  - `requireRole` recusa 403 `org_suspended` (código do upstream, que substituiu o
+ *    nosso `tenant_suspended`) para membro de organização suspensa, em qualquer papel;
+ *  - desde o upstream nem o admin de plataforma passa pelo atalho `allowPlatformAdmin`
+ *    em org parada: só a rota que declara `permiteOrgSuspensa` (LGPD, cobrança). A
+ *    reativação tem portão próprio (`requirePlatformAdminEscrita`), que não depende da org;
+ *  - `resolveApiToken` recusa o token de organização suspensa (`org_suspended`).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { requireRole } from "@/lib/auth/require-role";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { loadAuthUser, orgAtivaSemPortao, resolveActiveOrg } from "@/lib/auth/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ApiTokenError, McpAuthError, resolveApiToken, validateBearerToken } from "@/lib/mcp/auth";
@@ -20,10 +21,13 @@ import type { AuthUser, Role } from "@/lib/auth/types";
 
 vi.mock("@/lib/auth/server", () => ({
   mfaEmDivida: vi.fn(async () => false),
+  mfaEmDividaEstrita: vi.fn(async () => false),
   sessionAal: vi.fn(async () => "aal2"),
   loadAuthUser: vi.fn(),
   resolveActiveOrg: vi.fn(),
+  orgAtivaSemPortao: vi.fn(),
 }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
@@ -42,13 +46,14 @@ function sessao(status: string | undefined, role: Role = "admin", platformAdmin 
     full_name: null,
     avatar_url: null,
     is_platform_admin: platformAdmin,
+    ...(platformAdmin ? { platform_admin_scope: "full" as const } : {}),
     idioma: "pt-BR",
-    organizations: [
-      { organization_id: ORG_ID, organization_name: "Org", role, organization_status: status },
-    ],
+    organizations: [{ organization_id: ORG_ID, organization_name: "Org", role, org_status: status }],
   };
+  const ativa = { orgId: ORG_ID, name: "Org", role, org_status: status };
   vi.mocked(loadAuthUser).mockResolvedValue(user);
-  vi.mocked(resolveActiveOrg).mockResolvedValue({ orgId: ORG_ID, name: "Org", role, status });
+  vi.mocked(resolveActiveOrg).mockResolvedValue(ativa);
+  vi.mocked(orgAtivaSemPortao).mockResolvedValue(ativa);
   vi.mocked(createClient).mockResolvedValue({
     rpc: vi.fn(async () => ({ data: role, error: null })),
     from: () => {
@@ -63,13 +68,13 @@ function sessao(status: string | undefined, role: Role = "admin", platformAdmin 
 beforeEach(() => vi.clearAllMocks());
 
 describe("D-091 requireRole", () => {
-  it("organização suspensa: 403 tenant_suspended, mesmo para admin", async () => {
+  it("organização suspensa: 403 org_suspended, mesmo para admin", async () => {
     sessao("suspended");
     const r = await requireRole("viewer");
     expect(r.ok).toBe(false);
     if (r.ok) throw new Error("unreachable");
     expect(r.response.status).toBe(403);
-    expect((await r.response.json()).error.code).toBe("tenant_suspended");
+    expect((await r.response.json()).error.code).toBe("org_suspended");
   });
 
   it("organização arquivada ou anonimizada também é recusada", async () => {
@@ -80,17 +85,23 @@ describe("D-091 requireRole", () => {
     }
   });
 
-  it("organização ativa passa; status ausente no snapshot não derruba (vazio de teste)", async () => {
+  it("organização ativa passa; status ausente falha FECHADO (regra do upstream)", async () => {
     sessao("active");
     expect((await requireRole("viewer")).ok).toBe(true);
     sessao(undefined);
-    expect((await requireRole("viewer")).ok).toBe(true);
+    expect((await requireRole("viewer")).ok).toBe(false);
   });
 
-  it("admin de plataforma full entra na organização suspensa pelo atalho (precisa reativar)", async () => {
+  it("admin de plataforma full: em rota comum também é recusado; com `permiteOrgSuspensa` entra", async () => {
     sessao("suspended", "admin", true);
-    const r = await requireRole("admin", { allowPlatformAdmin: true, organizationId: ORG_ID });
-    expect(r.ok).toBe(true);
+    const comum = await requireRole("admin", { allowPlatformAdmin: true, organizationId: ORG_ID });
+    expect(comum.ok).toBe(false);
+    const declarada = await requireRole("admin", {
+      allowPlatformAdmin: true,
+      organizationId: ORG_ID,
+      permiteOrgSuspensa: true,
+    });
+    expect(declarada.ok).toBe(true);
   });
 
   it("o override organizationId também respeita a suspensão do membro", async () => {
@@ -108,7 +119,12 @@ function adminDeTokens(linha: Record<string, unknown>) {
         c.select = () => c;
         c.eq = () => c;
         c.maybeSingle = async () => ({ data: linha, error: null });
-        c.update = () => ({ eq: () => ({ then: (r: (v: unknown) => unknown) => r({ error: null }) }) });
+        // `update(...).eq(...)` com quantos filtros a escrita do `last_used_at` encadear.
+        const escrita: Record<string, unknown> = {
+          then: (r: (v: unknown) => unknown) => r({ error: null }),
+        };
+        for (const m of ["eq", "is", "or", "lt"]) escrita[m] = () => escrita;
+        c.update = () => escrita;
         return c;
       }
       // user_organizations / platform_admins do criador: sempre em dia aqui.
@@ -136,18 +152,18 @@ function linha(statusDaOrg: string | undefined) {
 }
 
 describe("D-091 token de API", () => {
-  it("token de organização suspensa: recusa com reason tenant_suspended", async () => {
+  it("token de organização suspensa: recusa com reason org_suspended", async () => {
     adminDeTokens(linha("suspended"));
     await expect(resolveApiToken(PLAINTEXT)).rejects.toMatchObject({
       name: "ApiTokenError",
-      reason: "tenant_suspended",
+      reason: "org_suspended",
     });
   });
 
   it("pela casca MCP vira a MESMA recusa neutra de qualquer token que não vale (401), sem dizer que a conta está suspensa", async () => {
     // Era 403 ("a conta existe, está suspensa"). Auditoria de 17/10/2026, achado baixo 5:
     // quem tem um `dsk_` roubado ou chutado não pode sondar o estado da empresa pela
-    // resposta; o motivo (`tenant_suspended`) fica no log e em `resolveApiToken`.
+    // resposta; o motivo (`org_suspended`) fica no log e em `resolveApiToken`.
     adminDeTokens(linha("suspended"));
     const erro = await validateBearerToken(`Bearer ${PLAINTEXT}`).catch((e) => e);
     expect(erro).toBeInstanceOf(McpAuthError);
@@ -163,6 +179,6 @@ describe("D-091 token de API", () => {
   });
 
   it("ApiTokenError é exportada com o reason novo", () => {
-    expect(new ApiTokenError("tenant_suspended", "x").reason).toBe("tenant_suspended");
+    expect(new ApiTokenError("org_suspended", "x").reason).toBe("org_suspended");
   });
 });

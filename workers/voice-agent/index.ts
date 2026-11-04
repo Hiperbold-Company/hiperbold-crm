@@ -278,7 +278,6 @@ interface ActiveAudioSocketCall {
   agentId: string;
   contactId: string | null;
   answeredAt: string;
-  organizationId: string;
   voiceModel: string;
   origemDaChave: "chave_da_instalacao" | "credencial_da_organizacao";
   transcript: { speaker: string; text: string; ts: string }[];

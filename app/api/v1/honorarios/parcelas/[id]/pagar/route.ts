@@ -18,7 +18,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { chaveDaRequisicao, comIdempotencia } from "@/lib/api/idempotency";
+import { chaveDaRequisicao, comIdempotencia, identidadeDoAtor } from "@/lib/api/idempotency";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
@@ -111,6 +111,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
       organizationId: orgId,
       endpoint: ENDPOINT,
       chave,
+      ator: identidadeDoAtor({ type: "user", id: authz.user.id }),
       corpo: { parcela_id: parcelaId, ...corpo },
       executar: async () => ({ resposta: await pagar(), status: 200 }),
     });

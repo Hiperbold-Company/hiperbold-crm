@@ -21,6 +21,10 @@ export const ROTULO_DO_TIPO_DE_CAMPO: Record<TipoDeCampoPersonalizado, string> =
   email: "E-mail",
   phone: "Telefone",
   url: "Link",
+  // Tipos que vieram do upstream (mesmas chaves de `lib/schemas/rotulos-do-campo.ts`).
+  currency: "Moeda",
+  searchable_select: "Lista pesquisável",
+  file: "Arquivo",
 };
 
 /** Rótulo de um tipo vindo do banco; valor desconhecido volta como veio. */

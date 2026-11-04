@@ -73,6 +73,8 @@ describe("a prévia roda a ferramenta MCP de consulta que a montagem deixou pass
       () => [],
       undefined,
       undefined,
+      undefined, // prepararMidia
+      undefined, // conferirAfirmacoes
       new Set(["mcp_n8n__buscar"]),
     );
     const resultado = await executar(tools, "mcp_n8n__buscar", { bairro: "Centro" });
@@ -96,6 +98,8 @@ describe("a prévia roda a ferramenta MCP de consulta que a montagem deixou pass
       () => [],
       undefined,
       undefined,
+      undefined, // prepararMidia
+      undefined, // conferirAfirmacoes
       new Set(["mcp_n8n__outra"]),
     );
     await executar(tools, "mcp_n8n__buscar");
@@ -126,6 +130,8 @@ describe("a prévia roda a ferramenta MCP de consulta que a montagem deixou pass
       () => [],
       undefined,
       undefined,
+      undefined, // prepararMidia
+      undefined, // conferirAfirmacoes
       new Set(["mcp_sem_apelido_valido"]),
     );
     await executar(tools, "mcp_sem_apelido_valido");

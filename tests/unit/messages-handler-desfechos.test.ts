@@ -15,10 +15,9 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { sendMessageHandler } from '@/app/api/v1/messages/_handler';
+import { sendMessageHandler, type SendMessageHandlerInput } from '@/app/api/v1/messages/_handler';
 import type { HandlerCtx } from '@/lib/api/handlers/types';
 import { deriveActor } from '@/lib/mcp/auth';
-import type { SendMessageInput } from '@/lib/schemas';
 import { criarDubleDoHandler } from '@/tests/helpers/duble-do-handler';
 import { env } from '@/lib/env';
 
@@ -105,8 +104,9 @@ function dubleDo(
 
 const ctx: HandlerCtx = { organization_id: ORG, actor: { type: 'user', id: USER }, requestId: 'req-1' };
 
-function textInput(over: Partial<SendMessageInput> = {}): SendMessageInput {
-  return { conversation_id: CONV, type: 'text', body: 'oi', ...over } as SendMessageInput;
+// `media_url` não é contrato público (D-095): só entra pelo input do handler, de chamador do servidor.
+function textInput(over: Partial<SendMessageHandlerInput> = {}): SendMessageHandlerInput {
+  return { conversation_id: CONV, type: 'text', body: 'oi', ...over } as SendMessageHandlerInput;
 }
 
 function wahaConfigured(configured: boolean) {

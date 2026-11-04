@@ -80,6 +80,11 @@ function agentConfig(toolIds: string[]): PublishedAgentConfig {
     janelaDeAtendimento: null,
     versionCreatedBy: null,
     agentCreatedBy: null,
+    proposalAiDraftEnabled: false,
+    inboundDebounceMs: null,
+    replyMinIntervalMs: null,
+    vozEnabled: false,
+    vozQuando: "nunca",
   };
 }
 

@@ -453,6 +453,7 @@ describe("lista, contagem, lote e exportação concordam", () => {
         cliente,
         { organization_id: ORG_A, actor: { type: "user", id: USER }, requestId: "r" },
         { ...caso.filtro, limit: 100 },
+        undefined,
         { timezone: "America/Sao_Paulo" },
       );
       expect(lista.contacts.map((c) => c.id).sort()).toEqual(esperadoIds);

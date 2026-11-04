@@ -26,10 +26,10 @@ vi.mock("@/hooks/webhooks/useWebhookSources", async (original) => ({
   usePipelines: () => ({ data: { data: [] } }),
 }));
 
-import { ActionForm } from "@/app/app/ai/followups/[id]/_components/forms/ActionForm";
-import { CollectForm } from "@/app/app/ai/followups/[id]/_components/forms/CollectForm";
-import { MatchReplyForm } from "@/app/app/ai/followups/[id]/_components/forms/MatchReplyForm";
-import { NodePalette } from "@/app/app/ai/followups/[id]/_components/NodePalette";
+import { ActionForm } from "@/components/fluxos/editor/forms/ActionForm";
+import { CollectForm } from "@/components/fluxos/editor/forms/CollectForm";
+import { MatchReplyForm } from "@/components/fluxos/editor/forms/MatchReplyForm";
+import { NodePalette } from "@/components/fluxos/editor/NodePalette";
 import { ActionConfigForm, defaultActionConfig } from "@/app/app/webhooks/_components/ActionConfigForm";
 import { CaixaDaAutomacao } from "@/app/app/webhooks/automacoes/[id]/_components/CaixaDaAutomacao";
 import { PaletaDaAutomacao } from "@/app/app/webhooks/automacoes/[id]/_components/PaletaDaAutomacao";

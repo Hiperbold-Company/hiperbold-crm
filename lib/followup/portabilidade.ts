@@ -38,7 +38,7 @@
 import { z } from "zod";
 
 import { triggerConfigSchema, FOLLOWUP_FLOW_SURFACES, type TriggerConfig } from "./api-schemas";
-import { flowGraphSchema, type FlowGraph, type FlowNode } from "./graph-schema";
+import { ehRegraNova, flowGraphSchema, type FlowGraph, type FlowNode } from "./graph-schema";
 import { randomId } from "@/lib/random-id";
 import type { Idioma } from "@/lib/i18n/idiomas";
 
@@ -134,6 +134,7 @@ export function idsCitados(graph: FlowGraph, trigger: TriggerConfig | null): Ids
       case "condition":
         for (const check of node.config.checks) {
           if (
+            !ehRegraNova(check) &&
             check.field === "lead_stage" &&
             typeof check.value === "string" &&
             UUID_RX.test(check.value)
@@ -366,7 +367,9 @@ export function reconciliarComAConta(
       case "condition": {
         let mudou = false;
         const checks = node.config.checks.map((check) => {
+          // Regra nova das automações (`kind`) não é remapeada aqui (PENDENTE: `stage_ids`).
           if (
+            ehRegraNova(check) ||
             check.field !== "lead_stage" ||
             typeof check.value !== "string" ||
             !UUID_RX.test(check.value)

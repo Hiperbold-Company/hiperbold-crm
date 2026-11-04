@@ -50,6 +50,15 @@ export const CUSTO_NO_MOTOR: Record<NodeType, number> = {
   // este preço que a publicação multiplica pelas voltas que o `repeat` permite
   // (`custoNoMotorDoFluxo`, #2977).
   repeat: 1,
+  // Blocos das automações visuais (Hiperbold, superfície `automacao`). Piso:
+  // efeito ou envio avança em um tick; a pergunta arma a espera e resolve depois.
+  crm_action: 1,
+  field_op: 1,
+  message: 1,
+  question: 2,
+  instagram_private_reply: 1,
+  instagram_public_reply: 1,
+  instagram_check_follow: 1,
 };
 
 /**

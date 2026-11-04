@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { tagsPageQuerySchema, tagsPageResultSchema } from "@/lib/schemas/tags";
 import type { NextRequest } from "next/server";
 
-import { ok, falhaInterna } from "@/lib/api/wrappers";
+import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { logger } from "@/lib/logger";
 import { canonicalConversationTagsSchema } from "@/lib/schemas/settings";

@@ -43,7 +43,6 @@ import {
 } from "@/components/ui/dialog";
 import { rotuloDoPapel } from "@/lib/auth/types";
 import { ROLES, type Role } from "@/lib/schemas/team";
-import { rotuloDoPapel } from "@/lib/auth/types";
 import { DotsThree } from "@/lib/ui/icons";
 import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 

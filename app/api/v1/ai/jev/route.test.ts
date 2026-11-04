@@ -124,12 +124,14 @@ function cliente(tipo: Consulta["cliente"]) {
       estado.consultas.push({
         cliente: tipo,
         tabela: "organizations",
+        colunas: null,
         eq: [["id", args.p_org]],
         nao: [],
         neq: [],
         gte: [],
         range: null,
         patch: { settings: novo },
+        head: false,
       });
       return { data: 1, error: null };
     },

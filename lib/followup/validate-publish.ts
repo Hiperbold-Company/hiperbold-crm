@@ -748,6 +748,14 @@ export const CONTA_NO_TETO: Record<NodeType, boolean> = {
   move_lead: false, // move o card no funil
   edit_lead_tag: false, // grava tag no lead
   end: false, // desfecho
+  // Blocos das automações visuais (Hiperbold, superfície `automacao`).
+  message: true, // mensagem ao cliente
+  question: true, // pergunta ao cliente (e espera a resposta)
+  instagram_private_reply: true, // resposta privada no Direct
+  instagram_public_reply: true, // resposta pública no comentário
+  crm_action: false, // efeito no CRM
+  field_op: false, // grava campo
+  instagram_check_follow: false, // consulta se segue
 };
 
 function waitMs(config: Extract<FlowNode, { type: 'wait' }>['config']): number {

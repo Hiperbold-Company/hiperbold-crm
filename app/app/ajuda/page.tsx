@@ -14,5 +14,5 @@ export const dynamic = "force-dynamic";
 export default async function AjudaPage() {
   await requireAuth();
   const base = baseDaCentralDeAjuda(env.HELP_CENTER_URL);
-  redirect(base ? urlNaCentral(base, CAMINHO_PADRAO_DA_AJUDA) : "/app");
+  redirect(urlNaCentral(base, CAMINHO_PADRAO_DA_AJUDA) ?? "/app");
 }

@@ -126,7 +126,8 @@ function chaveDoBinding(baseUrl: string | null): ChaveDeEmbedding {
   return {
     apiKey: "sk-da-organizacao",
     baseUrl,
-    viaOpenRouter: false,
+    provedor: "openai",
+    viaGateway: false,
     origem: "binding_do_ponto",
     rotulo: "Chave da empresa",
     avisos: [],

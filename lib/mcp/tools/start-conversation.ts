@@ -99,7 +99,6 @@ export const crmStartConversationAndSend: McpToolDefinition<typeof inputShape> =
       conversation_id: "00000000-0000-0000-0000-000000000000",
       type: input.type,
       body: input.body,
-      media_url: input.media_url,
       media_mime: input.media_mime,
     });
 

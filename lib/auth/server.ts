@@ -554,7 +554,6 @@ export const orgAtivaSemPortao = cache(async (authUser: AuthUser): Promise<Activ
     orgId: ativo.organization_id,
     name: ativo.organization_name,
     role: ativo.role,
-    status: ativo.organization_status ?? null,
     interface_settings: ativo.interface_settings,
     timezone: ativo.timezone ?? null,
     currency: ativo.currency ?? null,
@@ -607,11 +606,10 @@ export async function requireAuth(): Promise<AuthUser> {
  * fator `totp` com `status === "verified"`.
  */
 export const isMfaEnrolled = cache(async (): Promise<boolean> => {
-  const {
-    resposta: { data, error },
-  } = await sessaoDaRequisicao();
-  if (error) throw error;
-  return !!data.user?.factors?.some((f) => f.factor_type === "totp" && f.status === "verified");
+  // Hiperbold: a sessão vem do `getUserResiliente` (`resultado`, não a `resposta` crua).
+  const { resultado } = await sessaoDaRequisicao();
+  if (resultado.erro) throw resultado.erro;
+  return !!resultado.user?.factors?.some((f) => f.factor_type === "totp" && f.status === "verified");
 });
 
 /**

@@ -397,6 +397,7 @@ export async function resolveOrgLlmConfig(
     if (tokens !== null) {
       return {
         provider,
+        providerPedido: provider,
         apiKey: tokens.access_token,
         baseUrl: null,
         origemDaChave: 'credencial_da_organizacao',

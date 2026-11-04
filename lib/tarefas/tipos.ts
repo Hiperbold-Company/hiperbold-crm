@@ -86,7 +86,9 @@ export interface Tarefa {
 }
 
 /** A tarefa com o negócio junto (`GET /api/v1/tasks?com_negocio=true`). */
-export interface TarefaComNegocio extends Tarefa {
+// `Omit`: o `lead` derivado do upstream (`NegocioDaTarefa`, id + título) e este
+// (título + funil, do sino de tarefas) são duas formas do mesmo embutido.
+export interface TarefaComNegocio extends Omit<Tarefa, "lead"> {
   /** `null` quando não há negócio ou quem pergunta não o enxerga. */
   lead: { title: string; pipeline_id: string | null } | null;
 }

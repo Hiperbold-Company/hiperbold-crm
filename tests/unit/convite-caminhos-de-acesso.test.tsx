@@ -42,7 +42,7 @@ const destino = `/team/accept-invite/${token}`;
 describe("convite acompanha os dois caminhos", () => {
   it("destaca criar conta e preserva o token nas duas opções", async () => {
     const Page = (await import("@/app/team/accept-invite/[token]/page")).default;
-    const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ token }) }));
+    const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ token }), searchParams: Promise.resolve({}) }));
     const doc = new DOMParser().parseFromString(html, "text/html");
     const links = doc.querySelectorAll("a");
     expect(links[0]?.textContent).toBe("Criar minha conta");
@@ -92,7 +92,7 @@ describe("convite acompanha os dois caminhos", () => {
     visitante.idioma = "es";
     const Page = (await import("@/app/team/accept-invite/[token]/page")).default;
     const doc = new DOMParser().parseFromString(
-      renderToStaticMarkup(await Page({ params: Promise.resolve({ token }) })),
+      renderToStaticMarkup(await Page({ params: Promise.resolve({ token }), searchParams: Promise.resolve({}) })),
       "text/html",
     );
     expect(doc.querySelectorAll("a")[0]?.textContent).toBe("Crear mi cuenta");

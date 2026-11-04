@@ -87,9 +87,9 @@ describe("origem da chave do embedding no vocabulário de llm_calls", () => {
 
 describe("D-053 item 3: provedor e modelo reais", () => {
   it("o provedor do embedding é o caminho real: OpenRouter (instalação), endereço próprio ou OpenAI direto", () => {
-    expect(provedorDoEmbedding({ viaOpenRouter: true, baseUrl: "https://openrouter.ai/api/v1" })).toBe("openrouter");
-    expect(provedorDoEmbedding({ viaOpenRouter: false, baseUrl: "https://x.exemplo/v1" })).toBe("custom");
-    expect(provedorDoEmbedding({ viaOpenRouter: false, baseUrl: null })).toBe("openai");
+    expect(provedorDoEmbedding({ provedor: "openrouter", origem: "chave_da_instalacao", baseUrl: "https://openrouter.ai/api/v1" })).toBe("openrouter");
+    expect(provedorDoEmbedding({ provedor: "openai", origem: "binding_do_ponto", baseUrl: "https://x.exemplo/v1" })).toBe("custom");
+    expect(provedorDoEmbedding({ provedor: "openai", origem: "credencial_da_organizacao", baseUrl: null })).toBe("openai");
   });
 
   it("o modelo da visão nunca sai vazio: configurado, senão o que o provedor devolveu, senão `desconhecido`", () => {

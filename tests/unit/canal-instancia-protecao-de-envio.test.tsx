@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-import type { PacingKnobs } from "@/lib/agent-engine/pacing/defaults";
+import { PACING_DEFAULTS, type PacingKnobs } from "@/lib/agent-engine/pacing/defaults";
 import type { PacingKnobsItem } from "@/hooks/channels/usePacingKnobs";
 
 const getMock = vi.fn();
@@ -30,7 +30,9 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: v
 
 import { CanalInstanciaClient } from "@/components/connections/CanalInstanciaClient";
 
+// O que o teste não fixa (atraso humano, janela de resposta, dias de prospecção) é o padrão do produto.
 const KNOBS: PacingKnobs = {
+  ...PACING_DEFAULTS,
   throttleMs: 1_200,
   jitterMaxMs: 800,
   windowStartHour: 7,
@@ -60,6 +62,8 @@ function itemDePacing(id: string, nome: string): PacingKnobsItem {
     defaults: KNOBS,
     bounds: {
       intervalMaxMs: 600_000,
+      msPorCaractereMax: 200,
+      atrasoMaximoMsMax: 60_000,
       hourLastStart: 23,
       hourEnd: 24,
       daily_limit: { min: 1, max: 2_000 },

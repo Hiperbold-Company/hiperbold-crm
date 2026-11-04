@@ -24,7 +24,7 @@ import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
 import { portaDaAplicacao } from "@/lib/db";
 import { logger } from "@/lib/logger";
 
-import { flowGraphSchema, type FlowGraph, type FlowNode, type ReplySaveTo } from "./graph-schema";
+import { ehRegraNova, flowGraphSchema, type FlowGraph, type FlowNode, type ReplySaveTo } from "./graph-schema";
 import { TETO_DE_PASSOS_DO_MOTOR } from "./custo-no-motor";
 import {
   ACTION_RECHECK_MS,
@@ -1263,7 +1263,7 @@ async function processarUmPasso(
   // calendário em UTC adiantaria o disparo em três horas num fuso a oeste, e
   // disparar cedo é o dano que a regra de data existe para evitar.
   const temRegraDeData = graph.nodes.some(
-    (n) => n.type === "condition" && n.config.checks.some((c) => c.field === "lead_date"),
+    (n) => n.type === "condition" && n.config.checks.some((c) => !ehRegraNova(c) && c.field === "lead_date"),
   );
   // A espera com horário (`ate_o_horario`) também pergunta pelo relógio da
   // organização: "9h às 18h" sem fuso seria 9h às 18h em UTC — 6h às 15h em

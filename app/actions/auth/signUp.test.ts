@@ -462,7 +462,7 @@ describe("signUp — o idioma e o fuso de quem se cadastra viajam até a empresa
 
   it("⭐ grava as pistas saneadas em chaves PRÓPRIAS (não em `locale`, que é preferência pessoal)", async () => {
     const { signUp } = await import("./signUp");
-    const res = await signUp(entrada(), undefined, { idioma: "es", fuso: "America/Mexico_City" });
+    const res = await signUp(entrada(), undefined, undefined, { idioma: "es", fuso: "America/Mexico_City" });
     expect(res).toMatchObject({ ok: true });
     const dados = dadosGravados();
     expect(dados.idioma_do_cadastro).toBe("es");
@@ -473,7 +473,7 @@ describe("signUp — o idioma e o fuso de quem se cadastra viajam até a empresa
 
   it("pista adulterada não passa: idioma que o produto não serve e fuso inexistente somem", async () => {
     const { signUp } = await import("./signUp");
-    await signUp(entrada(), undefined, { idioma: "xx-<script>", fuso: "America/Ciudad de México" });
+    await signUp(entrada(), undefined, undefined, { idioma: "xx-<script>", fuso: "America/Ciudad de México" });
     const dados = dadosGravados();
     expect(dados).not.toHaveProperty("idioma_do_cadastro");
     expect(dados).not.toHaveProperty("fuso_do_cadastro");

@@ -28,7 +28,7 @@
  * falham fechado, e os leitores genéricos nem chegam aqui — eles recusam o
  * provider. Nada decifra o JSON dos tokens e o manda como chave de API.
  */
-import { byteaToBuffer, decryptKey } from "@/lib/crypto/aes_gcm";
+import { decifrarColunasDaCredencial } from "@/lib/ai/credenciais/cifra";
 import { guardarCredencialDoLogin, rotacionarCredencial } from "@/lib/ai/credenciais/guardar";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { PROVEDOR_POR_ASSINATURA } from "@/lib/ai/pontos/provedores";
@@ -134,17 +134,14 @@ export async function lerLoginCodex(p: {
     if (!(await moduloLigado(p.admin, "login_codex"))) return null;
     const { data } = await p.admin
       .from("ai_provider_credentials")
-      .select("api_key_encrypted, api_key_iv, api_key_tag, validated_at, is_active")
+      .select("id, api_key_encrypted, api_key_iv, api_key_tag, validated_at, is_active")
       .eq("organization_id", p.orgId)
       .eq("provider", PROVEDOR_POR_ASSINATURA)
       .eq("is_active", true)
       .maybeSingle();
     if (!data?.validated_at) return null;
-    const bruto = decryptKey({
-      ciphertext: byteaToBuffer(data.api_key_encrypted),
-      iv: byteaToBuffer(data.api_key_iv),
-      tag: byteaToBuffer(data.api_key_tag),
-    });
+    // D-168 (Hiperbold): a cifra é presa à organização e à linha (AAD).
+    const bruto = decifrarColunasDaCredencial(data, p.orgId);
     const json = JSON.parse(bruto) as Partial<TokensDoCodex>;
     if (
       typeof json.access_token !== "string" ||
@@ -237,7 +234,7 @@ export async function renovarComTravaDeBanco(p: {
 
   const { data: atual } = await p.admin
     .from("ai_provider_credentials")
-    .select("api_key_encrypted, api_key_iv, api_key_tag, validated_at, updated_at")
+    .select("id, api_key_encrypted, api_key_iv, api_key_tag, validated_at, updated_at")
     .eq("id", p.credentialId)
     .eq("organization_id", p.orgId)
     .eq("provider", PROVEDOR_POR_ASSINATURA)
@@ -260,11 +257,8 @@ export async function renovarComTravaDeBanco(p: {
 
   let renovados: TokensDoCodex;
   try {
-    const atuais = decryptKey({
-      ciphertext: byteaToBuffer(atual.api_key_encrypted),
-      iv: byteaToBuffer(atual.api_key_iv),
-      tag: byteaToBuffer(atual.api_key_tag),
-    });
+    // D-168 (Hiperbold): a cifra é presa à organização e à linha (AAD).
+    const atuais = decifrarColunasDaCredencial(atual, p.orgId);
     const json = JSON.parse(atuais) as Partial<TokensDoCodex>;
     if (typeof json.refresh_token !== "string" || typeof json.client_id !== "string") {
       return { ok: false, motivo: "falha" };

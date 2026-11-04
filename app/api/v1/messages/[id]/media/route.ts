@@ -129,7 +129,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const baixar = consulta.data.baixar === "1" && !paraTocar;
   if (paraTocar) {
     const porUsuario = await checkRateLimit(
-      `midia-aac:${user.id}`,
+      `midia-aac:${authz.user.id}`,
       TETO_CONVERSAO_POR_USUARIO,
       JANELA_CONVERSAO_S,
     );

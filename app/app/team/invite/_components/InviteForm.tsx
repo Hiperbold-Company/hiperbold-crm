@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/select";
 import { rotuloDoPapel } from "@/lib/auth/types";
 import { ROLES, type Role } from "@/lib/schemas/team";
-import { rotuloDoPapel } from "@/lib/auth/types";
 import { descreverMotivoDaFalha } from "./motivo-da-falha";
 import { ApiError } from "@/lib/api/types";
 

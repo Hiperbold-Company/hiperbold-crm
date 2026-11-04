@@ -204,7 +204,7 @@ describe("aplicarConvite consulta a LINHA, não só o token", () => {
     // pessoas é no ACEITE. Sem este ramo, quem aceita lia "o convite pode ter
     // vencido" e pedia um link novo — que falharia igual.
     const { createAdminClient } = await import("@/lib/supabase/admin");
-    const admin = adminComConvite({ revoked_at: null });
+    const admin = adminComConvite({ revoked_at: null, role: "manager" });
     admin.rpc = vi.fn(async () => ({
       data: null,
       error: { code: "PT402", message: "limite_do_plano:assentos:3" },

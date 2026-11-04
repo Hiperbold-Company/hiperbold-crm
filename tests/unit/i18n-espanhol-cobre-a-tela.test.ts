@@ -986,37 +986,37 @@ const DADO_DO_OPERADOR_CONGELADO: { arquivo: string; expressao: string; motivo: 
       "explica por que esta chamada passa por t()",
   },
   {
-    arquivo: "app/app/ai/followups/[id]/_components/forms/ActionForm.tsx",
+    arquivo: "components/fluxos/editor/forms/ActionForm.tsx",
     expressao: "rotulo",
     motivo:
       "rótulo de opção de MODOS_DA_ACAO, tabela fechada do módulo, iterada via opcoes() na linha 181",
   },
   {
-    arquivo: "app/app/ai/followups/[id]/_components/forms/ClassifyForm.tsx",
+    arquivo: "components/fluxos/editor/forms/ClassifyForm.tsx",
     expressao: "rotulo",
     motivo:
       "rótulo de opção de ALVOS_DA_CLASSIFICACAO, tabela fechada do módulo, iterada via opcoes() na linha 125",
   },
   {
-    arquivo: "app/app/ai/followups/[id]/_components/forms/CollectForm.tsx",
+    arquivo: "components/fluxos/editor/forms/CollectForm.tsx",
     expressao: "rotulo",
     motivo:
       "rótulo de opção de TIPOS_DE_CAMPO, tabela fechada do módulo, iterada via opcoes() na linha 127",
   },
   {
-    arquivo: "app/app/ai/followups/[id]/_components/forms/ConditionForm.tsx",
+    arquivo: "components/fluxos/editor/forms/ConditionForm.tsx",
     expressao: "rotulo",
     motivo:
       "rótulo de opção de COMBINADORES, tabela fechada do módulo, iterada via opcoes() nas linhas 212 e 297",
   },
   {
-    arquivo: "app/app/ai/followups/[id]/_components/forms/EndForm.tsx",
+    arquivo: "components/fluxos/editor/forms/EndForm.tsx",
     expressao: "rotulo",
     motivo:
       "rótulo de opção de RESULTADOS_DO_FIM, tabela fechada do módulo, iterada via opcoes() nas linhas 123 e 161",
   },
   {
-    arquivo: "app/app/ai/followups/[id]/_components/forms/WaitForm.tsx",
+    arquivo: "components/fluxos/editor/forms/WaitForm.tsx",
     expressao: "rotulo",
     motivo:
       "rótulo de opção de MODOS_DE_ESPERA, tabela fechada do módulo, iterada via opcoes() na linha 79",

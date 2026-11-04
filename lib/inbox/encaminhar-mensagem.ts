@@ -54,7 +54,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { sendMessageHandler } from "@/app/api/v1/messages/_handler";
+import { sendMessageHandler, type SendMessageHandlerInput } from "@/app/api/v1/messages/_handler";
 import { ApiError } from "@/lib/api/types";
 import type { HandlerCtx } from "@/lib/api/handlers/types";
 import { canalDesativado } from "@/lib/channels/desativado";
@@ -169,9 +169,11 @@ export function montarEntradaDeEncaminhamento(
   origem: MensagemDeOrigem,
   conversationIdDestino: string,
   midia: MidiaParaEncaminhar,
-): SendMessageInput {
+): SendMessageHandlerInput {
   const temMidia = midia.tipo === "copia" || midia.tipo === "externa";
-  const entrada: SendMessageInput = {
+  // `SendMessageHandlerInput`: a URL externa (já conferida pela guarda anti-SSRF)
+  // é entrada do SERVIDOR, nunca do schema público (D-095).
+  const entrada: SendMessageHandlerInput = {
     conversation_id: conversationIdDestino,
     // Com mídia, o tipo é o da origem (image/video/…); só texto é `text`. Um
     // balão sem tipo certo sairia como texto com URL dentro.

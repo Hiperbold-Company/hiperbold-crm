@@ -36,7 +36,6 @@ import {
 import { ArrowsClockwise, Copy, DotsThree, Warning } from "@/lib/ui/icons";
 import { copyToClipboard } from "@/lib/clipboard";
 import type { StatusConvite } from "@/lib/team/convite-status";
-import { rotuloDoPapel } from "@/lib/auth/types";
 
 interface Props {
   /** admin: mostra as ações de reenviar/revogar. Manager só lê. */

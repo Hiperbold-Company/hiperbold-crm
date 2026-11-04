@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
  * (`lib/ui/rodape-ocupado.tsx`); o painel sobe essa altura. Em `lg` é `static`,
  * e o `bottom` não vale nada. A prova medida é `tests/e2e/ia-no-celular.spec.ts`.
  */
-const FONTE = readFileSync("app/app/ai/followups/[id]/_components/FlowCanvas.tsx", "utf8");
+const FONTE = readFileSync("components/fluxos/editor/FlowCanvas.tsx", "utf8");
 
 describe("painéis do construtor acima da barra inferior", () => {
   it("as duas folhas sobem a altura que o rodapé ocupa", () => {

@@ -37,6 +37,8 @@ vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: async () => ({ id: USUARIO, is_platform_admin: false, support: null, idioma: "pt-BR" }),
   requireAuth: async () => ({ id: USUARIO, is_platform_admin: false, support: null, idioma: "pt-BR" }),
   resolveActiveOrg: async () => ({ orgId: ORG, role: "admin" }),
+  // Sem fator cadastrado: nada a provar na sessão.
+  mfaEmDivida: async () => false,
 }));
 vi.mock("@/lib/auth/portao-de-escrita", () => ({
   portaoDeAdminDaOrganizacao: async () => ({ ok: true }),
@@ -91,7 +93,7 @@ describe("/app/settings/marca", () => {
 });
 
 describe("updateMarcaDaOrganizacao", () => {
-  const entrada = { app_name: "Clínica da Ana", accent_hex: "#b3261e" };
+  const entrada = { app_name: "Clínica da Ana", accent_hex: "#b3261e", accent_dark_hex: null, email_from_name: null, email_reply_to: null };
 
   it("DESLIGADO: recusa, não chama o banco de marca e não audita", async () => {
     const r = await updateMarcaDaOrganizacao(entrada);
@@ -101,7 +103,7 @@ describe("updateMarcaDaOrganizacao", () => {
   });
 
   it("DESLIGADO: limpar a marca também é recusado", async () => {
-    const r = await updateMarcaDaOrganizacao({ app_name: null, accent_hex: null });
+    const r = await updateMarcaDaOrganizacao({ app_name: null, accent_hex: null, accent_dark_hex: null, email_from_name: null, email_reply_to: null });
     expect(r).toEqual({ ok: false, error: "modulo_desligado" });
     expect(deps.rpc).not.toHaveBeenCalled();
   });

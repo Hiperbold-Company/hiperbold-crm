@@ -1,4 +1,4 @@
-import type { FlowEdge, FlowNode } from "./graph-schema";
+import { ehRegraNova, type FlowEdge, type FlowNode } from "./graph-schema";
 import { evaluateCondition, selectEdge, type LeadFacts } from "./node-handlers";
 
 /**
@@ -85,7 +85,8 @@ export function condicaoQueGoverna(
       //  - `last_outcome` o motor só carrega no nó `condition` — no envio é `null`;
       //  - `lead_date` é relativo ao relógio: "falta 3 dias → espera 3 dias"
       //    deixa de valer pela própria espera.
-      if (origem.config.checks.some((c) => !CAMPOS_REAVALIADOS.has(c.field))) return null;
+      // Regra nova das automações (tem `kind`) não é reavaliada aqui.
+      if (origem.config.checks.some((c) => ehRegraNova(c) || !CAMPOS_REAVALIADOS.has(c.field))) return null;
       return { condicao: origem, esperado: entrada.condition.value };
     }
 

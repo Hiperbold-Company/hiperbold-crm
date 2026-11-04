@@ -250,16 +250,8 @@ export function segundosAteFimDaJanela(windowSec: number, agora: number = Date.n
   return windowSec - (Math.floor(agora / 1000) % windowSec);
 }
 
-export async function mfaBloqueadoPorFalhas(userId: string): Promise<boolean> {
-  const atual = await peekRateLimit(mfaKey(userId), MFA_FAILURE_LIMITS.windowSec);
-  return atual >= MFA_FAILURE_LIMITS.max;
-}
-
-/** Registra um código errado e devolve quantos já foram na janela. */
-export async function registrarFalhaDeMfa(userId: string): Promise<number> {
-  const r = await checkRateLimit(mfaKey(userId), MFA_FAILURE_LIMITS.max, MFA_FAILURE_LIMITS.windowSec);
-  return r.count;
-}
+// `mfaBloqueadoPorFalhas` e `registrarFalhaDeMfa` (mais abaixo) consultam e
+// alimentam este balde de 15 minutos junto com as janelas do upstream.
 
 /**
  * Bloqueio por falha de TOKEN DE API (`dsk_...`) — o MCP não tinha nenhum
@@ -402,6 +394,9 @@ export async function mfaBloqueadoPorFalhas(
     const atualId = await peekRateLimit(`auth:mfa_fail:id:${opaque(userId)}`, limits.windowSec);
     if (atualId >= limits.id) return true;
   }
+  // D-102 (Hiperbold): 5 falhas em 15 minutos por usuário, somado às janelas acima.
+  const atual15 = await peekRateLimit(mfaKey(userId), MFA_FAILURE_LIMITS.windowSec);
+  if (atual15 >= MFA_FAILURE_LIMITS.max) return true;
   const atualDia = await peekRateLimit(`auth:mfa_fail_daily:id:${opaque(userId)}`, diario.windowSec);
   return atualDia >= diario.id;
 }
@@ -419,5 +414,6 @@ export async function registrarFalhaDeMfa(
   if (limits.id !== undefined) {
     await checkRateLimit(`auth:mfa_fail:id:${opaque(userId)}`, limits.id, limits.windowSec);
   }
+  await checkRateLimit(mfaKey(userId), MFA_FAILURE_LIMITS.max, MFA_FAILURE_LIMITS.windowSec);
   await checkRateLimit(`auth:mfa_fail_daily:id:${opaque(userId)}`, diario.id, diario.windowSec);
 }

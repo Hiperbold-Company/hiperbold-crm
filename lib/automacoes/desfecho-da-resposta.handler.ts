@@ -138,6 +138,8 @@ export function createSupabaseDesfechoDb(admin: SupabaseClient): DesfechoDb {
 
 export const automacaoDesfechoDaRespostaHandler: EventHandler = {
   key: AUTOMACAO_DESFECHO_DA_RESPOSTA_HANDLER_KEY,
+  // Só grava uma linha de histórico (escrita interna): roda com a org parada.
+  naOrgParada: "roda",
   events: [EVENTO_RESPOSTA_ENVIADA, EVENTO_RESPOSTA_FALHOU],
   async handle(row): Promise<HandlerResult> {
     try {

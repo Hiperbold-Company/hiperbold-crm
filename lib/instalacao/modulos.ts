@@ -86,6 +86,8 @@ const MODULOS_DE_TABELA = ["honorarios", "financeiro"] as const satisfies readon
 export const MODULOS_OPCIONAIS_POR_FLAG = [
   "banco_externo",
   "fluxos_atendimento",
+  // Hiperbold (D-178): marca por organização.
+  "marca_por_organizacao",
   "propostas",
   "crm_b2b",
   "cobranca",

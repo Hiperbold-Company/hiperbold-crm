@@ -55,6 +55,7 @@ function produto(over: Partial<Produto> = {}): Produto {
     marca: null,
     categoria: null,
     preco_cents: 24990,
+    tipo_de_preco: "fixo",
     moeda: "BRL",
     custo_cents: null,
     controla_estoque: false,
@@ -156,6 +157,7 @@ describe("a linha do produto quebra em vez de transbordar no celular", () => {
     expect(nome).toHaveClass("truncate");
 
     // O preço é irmão da coluna do nome, não filho: continua na fileira de cima.
+    if (p.preco_cents === null) throw new Error("o produto deste caso tem preço fixo");
     const esperado = formatCents(p.preco_cents, p.moeda).replace(/\s/g, " ");
     const preco = screen.getByText(
       (_, el) =>

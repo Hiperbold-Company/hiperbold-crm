@@ -53,8 +53,9 @@ export async function GET(req: NextRequest): Promise<Response> {
  * `ai-access` só mostra a quem pode editá-la, e o que mais entrar ali depois.
  * Daqui sai só o que a tela usa: `disabled` (o selo "Pausado", #2318).
  */
-function semConfiguracaoInterna<T extends { metadata?: unknown }>(canal: T): T {
-  const m = canal.metadata as Record<string, unknown> | null | undefined;
+function semConfiguracaoInterna<T extends object>(canal: T) {
+  const bruto = "metadata" in canal ? canal.metadata : undefined;
+  const m = bruto && typeof bruto === "object" ? (bruto as Record<string, unknown>) : undefined;
   return { ...canal, metadata: { disabled: m?.disabled === true } };
 }
 

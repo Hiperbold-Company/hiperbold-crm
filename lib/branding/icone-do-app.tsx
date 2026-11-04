@@ -89,10 +89,9 @@ export async function gerarIconeDoApp(
             width={Math.round(caixa * 0.78)}
             height={Math.round(caixa * 0.78)}
           >
-            <g fill={CORES_DA_MARCA.claro.simbolo} transform={SIMBOLO.transform}>
-              <path d={SIMBOLO.d} />
-              <rect {...SIMBOLO.modulo} />
-            </g>
+            {/* Símbolo do Hiperbold CRM: ladrilho azul com a marca branca (`lib/branding/desenho.ts`). */}
+            <rect {...SIMBOLO.ladrilho} fill={CORES_DA_MARCA.ladrilho} />
+            <path d={SIMBOLO.d} fill={CORES_DA_MARCA.marca} />
           </svg>
         ) : (
           (letraDoIcone(marca.nome) ?? "")

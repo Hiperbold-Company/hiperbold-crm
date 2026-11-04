@@ -20,10 +20,14 @@ import type { ConexaoExterna, TipoBanco } from "./types";
 export type { ResultadoDeTeste };
 
 export interface DriverDeBanco {
-  /** O dialeto de leitura da conexão, já com a regra de fontes liberadas aplicada. */
-  abrirDialeto(conexao: ConexaoExterna): Dialeto;
+  /**
+   * O dialeto de leitura da conexão, já com a regra de fontes liberadas aplicada.
+   * `enderecoValidado` é o IP que a guarda de rede validou para `conexao.host`
+   * (D-084, Hiperbold): o pool conecta nele, sem resolver o nome de novo.
+   */
+  abrirDialeto(conexao: ConexaoExterna, enderecoValidado: string): Dialeto;
   /** Testa a conexão com um cliente descartável (não polui o cache de pools). */
-  testar(conexao: ConexaoExterna): Promise<ResultadoDeTeste>;
+  testar(conexao: ConexaoExterna, enderecoValidado: string): Promise<ResultadoDeTeste>;
   /** Derruba o pool da conexão, se houver (editar credencial, desativar, apagar). */
   fecharPool(connectionId: string): Promise<void>;
   /** Encerra todos os pools do motor (testes e desligamento do processo). */
@@ -38,13 +42,15 @@ export class DriverIndisponivelError extends Error {
 }
 
 const postgres: DriverDeBanco = {
-  abrirDialeto: (conexao) =>
-    criarDialetoPostgres(obterPool(conexao), { modo: conexao.sourceMode, fontes: conexao.fontes }),
-  testar: (conexao) => testarPostgres(conexao),
+  abrirDialeto: (conexao, enderecoValidado) =>
+    criarDialetoPostgres(obterPool(conexao, enderecoValidado), { modo: conexao.sourceMode, fontes: conexao.fontes }),
+  testar: (conexao, enderecoValidado) => testarPostgres(conexao, enderecoValidado),
   fecharPool: (connectionId) => fecharPoolPostgres(connectionId),
   fecharTodosOsPools: () => fecharTodosPostgres(),
 };
 
+// PENDENTE (D-084): o driver MySQL ainda conecta pelo nome (`c.host`), sem fixar o
+// IP validado; o `enderecoValidado` chega aqui mas não é usado.
 const mysql: DriverDeBanco = {
   abrirDialeto: (conexao) => criarDialetoMysql(conexao, { modo: conexao.sourceMode, fontes: conexao.fontes }),
   testar: (conexao) => testarConexaoMysql(conexao),
@@ -65,12 +71,12 @@ export function driverDe(tipo: TipoBanco): DriverDeBanco {
   return driver;
 }
 
-export function abrirDialeto(conexao: ConexaoExterna): Dialeto {
-  return driverDe(conexao.dbType).abrirDialeto(conexao);
+export function abrirDialeto(conexao: ConexaoExterna, enderecoValidado: string): Dialeto {
+  return driverDe(conexao.dbType).abrirDialeto(conexao, enderecoValidado);
 }
 
-export function testarConexao(conexao: ConexaoExterna): Promise<ResultadoDeTeste> {
-  return driverDe(conexao.dbType).testar(conexao);
+export function testarConexao(conexao: ConexaoExterna, enderecoValidado: string): Promise<ResultadoDeTeste> {
+  return driverDe(conexao.dbType).testar(conexao, enderecoValidado);
 }
 
 /** Fecha o pool dessa conexão em TODOS os drivers: quem chama só tem o id, não sabe o motor. */

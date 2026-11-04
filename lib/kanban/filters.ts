@@ -1,5 +1,4 @@
 import type { Lead } from "@/lib/types/leads";
-import { cardTemMarcador } from "@/lib/kanban/marcadores-do-card";
 import {
   dentroDoFiltroDeData,
   filtroDeDataFromParams,

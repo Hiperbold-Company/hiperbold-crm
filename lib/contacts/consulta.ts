@@ -30,6 +30,7 @@ import { chaveSensivelDeCampo } from "@/lib/contacts/campos-sensiveis";
 import { hashCpf } from "@/lib/contacts/cpf";
 import { idsPorHashDeCpf } from "@/lib/contacts/cpf-do-contato";
 import { intervaloEmInstantes, periodoDoFiltro } from "@/lib/contacts/filtros";
+import { arrayDeUmValorParaOr } from "@/lib/inbox/marcador-da-conversa";
 import { CHAVE_DE_CAMPO_FILTRAVEL, type FiltrosDeContatos } from "@/lib/schemas/contacts";
 
 export interface ContextoDaConsulta {
@@ -199,7 +200,17 @@ export async function consultaDeContatos(
     query = query.or(orParts.join(","));
   }
 
-  if (f.tag) query = query.contains("tags", [f.tag]);
+  // E/OU entre etiquetas (#1274, upstream): E = `contains` com a lista; OU = um
+  // `or=` com um `ov` por etiqueta (`overlaps` repetido viraria E no PostgREST).
+  if (f.tag && f.tag.length > 1 && f.modo === "ou") {
+    query = query.or(f.tag.map((marcador) => `tags.ov.${arrayDeUmValorParaOr(marcador)}`).join(","));
+  } else if (f.tag) {
+    query = query.contains("tags", f.tag);
+  }
+  // Só o opt-out do titular (`yes`/`no`); ausente = todos.
+  if (f.blocked) query = query.eq("is_blocked", f.blocked === "yes");
+  // Pessoal fora por padrão; `pessoais=true` lista SÓ pessoais (spec 21, etapa 13).
+  query = query.eq("is_personal", f.pessoais === true);
   if (f.source) query = query.eq("source", f.source);
 
   const agora = ctx.agora ?? new Date();

@@ -85,6 +85,12 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
   const moedaDoValor = lead.currency ?? org?.currency ?? MOEDA_PADRAO;
   const edit = useEditLead(pipelineId);
   const [customFields, setCustomFields] = useState<Record<string, unknown>>(lead.custom_fields ?? {});
+  // A RÉGUA do diff (issue #2132): o valor carregado ao abrir. Só o que a
+  // pessoa mudar daqui vai viajar — devolver o objeto inteiro sobrescrevia o
+  // que outra pessoa (ou o MCP `crm_update_lead`) mudou com a ficha aberta.
+  const [camposCarregados, setCamposCarregados] = useState<Record<string, unknown>>(
+    lead.custom_fields ?? {},
+  );
   // O VALOR É A SOMA DOS PRODUTOS quando o negócio tem produtos (gatilho do banco,
   // migration 0972). `null` = sem produtos (ou a lista ainda não chegou): o valor é
   // o que a pessoa digita, como sempre foi.

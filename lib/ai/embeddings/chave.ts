@@ -92,7 +92,6 @@ import type { OrigemDaChaveLlm } from "@/lib/agent-engine/edge/llm/credentials";
 import { decifrarColunasDaCredencial } from "@/lib/ai/credenciais/cifra";
 import { OPENROUTER_BASE_URL } from "@/lib/ai/gateway";
 import { env } from "@/lib/env";
-import { OPENROUTER_BASE_URL } from "@/lib/ai/gateway";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 

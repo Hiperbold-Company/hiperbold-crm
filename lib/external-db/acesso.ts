@@ -68,8 +68,6 @@ export async function abrirAcesso(
     ok: true,
     conexao: leitura.conexao,
     // Hiperbold (D-084, M2): o pool conecta pelo IP que a guarda validou.
-    // PENDENTE: `abrirDialeto` (drivers.ts) precisa receber e repassar este
-    // endereço a `obterPool(conexao, enderecoValidado)`.
     dialeto: abrirDialeto(leitura.conexao, enderecoValidado),
   };
 }

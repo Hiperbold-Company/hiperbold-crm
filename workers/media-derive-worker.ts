@@ -379,7 +379,8 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
     // transcrição da instalação (degrau 1) não valer.
     const chaveOpenai = async (): Promise<string | null> => {
       // Hiperbold: a chave da instalação é a OpenRouter e nunca vai para api.openai.com.
-      if (llm.provider === "openai" && llm.origemDaChave === "credencial_da_organizacao") return llm.apiKey;
+      // `llm?.`: dentro da closure o `let` perde o estreitamento (já não é nulo aqui).
+      if (llm?.provider === "openai" && llm.origemDaChave === "credencial_da_organizacao") return llm.apiKey;
       try {
         const oa = await resolveOrgLlmConfig(derivePool(), llmCfg, row.organization_id, {
           provider: "openai",

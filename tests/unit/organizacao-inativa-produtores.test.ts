@@ -1,5 +1,5 @@
 /**
- * D-091: os produtores automáticos (IA do motor e a legada, automação, follow-up e prospecção) não
+ * D-091: os produtores automáticos (IA do motor, automação, follow-up e prospecção) não
  * rodam para organização com `organizations.status` diferente de `active`. A checagem mora na
  * leitura da organização que cada produtor JÁ fazia (nenhuma consulta a mais por mensagem), e o
  * modo `avisar` do plano segue sem consulta nenhuma (os testes de assinatura não mudam).
@@ -17,10 +17,8 @@ vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
 import { drainTick } from "@/lib/agent-engine/edge/crm/drain";
-import { dispatchAgents } from "@/lib/ai/dispatcher";
 import { limparCacheDoStatusDaOrganizacao, runAutomationForEvent } from "@/lib/automation/engine";
 import { tickProspecting } from "@/lib/prospecting/worker";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const EVENTO = "33333333-3333-4333-8333-333333333333";
@@ -83,64 +81,6 @@ describe("IA do motor (dreno): organização suspensa", () => {
     const { pool, sqls } = poolDoDreno("active");
     await drainTick(pool as never, KNOBS as never, LOG).catch(() => undefined);
     expect(sqls.some((s) => s.includes("from conversations"))).toBe(true);
-  });
-});
-
-// ─── IA legada: o dispatcher ───────────────────────────────────────────────
-
-function adminDoDispatcher(statusDaOrg: string, atualizacoes: Array<Record<string, unknown>>) {
-  const from = (table: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chain: any = {
-      select: () => chain,
-      eq: () => chain,
-      or: () => chain,
-      in: () => chain,
-      order: () => chain,
-      update: (payload: Record<string, unknown>) => {
-        if (table === "event_log") atualizacoes.push(payload);
-        return chain;
-      },
-      limit: () =>
-        Promise.resolve({
-          data:
-            table === "event_log"
-              ? [{ id: EVENTO, organization_id: ORG, payload: { organization_id: ORG, ...PAYLOAD }, metadata: null, consumed_by: [], attempts: 0, next_attempt_at: null, status: "pending" }]
-              : [],
-          error: null,
-        }),
-      maybeSingle: () => Promise.resolve({ data: table === "event_log" ? { id: EVENTO } : null, error: null }),
-      then: (resolve: (v: unknown) => unknown) =>
-        Promise.resolve({
-          data: table === "organizations" ? [{ id: ORG, settings: {}, status: statusDaOrg }] : [],
-          error: null,
-        }).then(resolve),
-    };
-    return chain;
-  };
-  return { from };
-}
-
-describe("IA legada (dispatcher): organização suspensa", () => {
-  it("consome o evento com o desfecho próprio e não processa", async () => {
-    const atualizacoes: Array<Record<string, unknown>> = [];
-    vi.mocked(createAdminClient).mockReturnValue(adminDoDispatcher("suspended", atualizacoes) as never);
-
-    const resumo = await dispatchAgents({});
-
-    expect(resumo.outcomes.skipped_org_inativa).toBe(1);
-    expect(resumo.batch_size).toBe(0);
-    expect(atualizacoes).toHaveLength(1);
-    expect(atualizacoes[0]).toMatchObject({ status: "done" });
-    expect((atualizacoes[0]!.metadata as Record<string, unknown>).outcome).toBe("skipped_org_inativa");
-  });
-
-  it("organização ativa não é barrada", async () => {
-    const atualizacoes: Array<Record<string, unknown>> = [];
-    vi.mocked(createAdminClient).mockReturnValue(adminDoDispatcher("active", atualizacoes) as never);
-    const resumo = await dispatchAgents({});
-    expect(resumo.outcomes.skipped_org_inativa).toBe(0);
-    expect(resumo.batch_size).toBe(1);
   });
 });
 
@@ -208,8 +148,13 @@ describe("prospecção: organização suspensa", () => {
     };
     await tickProspecting(pool as never, {} as never);
 
-    expect(consultas).toHaveLength(1);
-    expect(consultas[0]).toMatch(/from prospecting_campaigns where \(status='running' or search_status in \('starting','running'\)\)/);
-    expect(consultas[0]).toMatch(/not exists \(select 1 from organizations o where o\.id=prospecting_campaigns\.organization_id and o\.status<>'active'\)/);
+    // Desde o upstream o tick faz DUAS consultas de organização (a que roda e a que só prepara
+    // candidato), e a régua de "ativa" é a SQL `fn_org_operante`. As duas cortam a organização
+    // parada no próprio SQL, antes do `limit 20`.
+    expect(consultas).toHaveLength(2);
+    expect(consultas[0]).toMatch(/from prospecting_campaigns pc where \(pc\.status='running' or pc\.search_status in \('starting','running'\)\)/);
+    for (const sql of consultas) {
+      expect(sql).toMatch(/public\.fn_org_operante\(pc\.organization_id\)[\s\S]*limit 20/);
+    }
   });
 });

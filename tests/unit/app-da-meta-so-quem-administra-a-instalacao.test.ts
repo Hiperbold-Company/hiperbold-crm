@@ -45,7 +45,6 @@ vi.mock("@/lib/supabase/server", () => ({
         // Sem fator cadastrado: `mfaEmDivida()` (real) é falso.
         listFactors: async () => ({ data: { totp: [] }, error: null }),
         getAuthenticatorAssuranceLevel: async () => ({ data: { currentLevel: "aal2" }, error: null }),
-        listFactors: async () => ({ data: { totp: [] }, error: null }),
       },
     },
     from: (tabela: string) => {

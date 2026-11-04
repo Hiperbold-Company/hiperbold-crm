@@ -80,7 +80,8 @@ function devolvePaginas(contatos: Contact[]): void {
     const proximo = inicio + fatia.length;
     const has_more = proximo < contatos.length;
     return {
-      contacts: fatia,
+      // O handler devolve o contato PÚBLICO: sem `cpf_hash`, com o booleano `cpf_available`.
+      contacts: fatia.map(({ cpf_hash, ...resto }) => ({ ...resto, cpf_available: !!cpf_hash })),
       cursor: has_more ? String(proximo) : null,
       has_more,
     };

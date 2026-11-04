@@ -113,6 +113,11 @@ const TEXTO_DO_MODULO: Record<ModuloOpcional, { nome: string; oQueFaz: string }>
     nome: "Fluxos de atendimento",
     oQueFaz: "A IA conduz um roteiro de perguntas na conversa e grava as respostas na ficha do cliente.",
   },
+  // Hiperbold (D-178).
+  marca_por_organizacao: {
+    nome: "Marca própria de cada empresa",
+    oQueFaz: "O administrador de cada empresa troca o nome, a cor e o logo que ela mostra dentro do sistema.",
+  },
   propostas: {
     nome: "Propostas comerciais",
     oQueFaz: "A IA monta a proposta pelos modelos da empresa e o PDF sai pelo WhatsApp.",

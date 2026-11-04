@@ -1,4 +1,3 @@
-import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * O logo da marca — subir do computador, sem colar URL.

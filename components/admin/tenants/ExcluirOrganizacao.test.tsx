@@ -30,6 +30,7 @@ vi.mock("@/components/admin/ImpersonateButton", () => ({ ImpersonateButton: () =
 import { toast } from "sonner";
 
 import type { AdminTenantRow } from "@/hooks/useAdminTenants";
+import type { TenantCounts, TenantOrganization } from "@/hooks/useTenantDetail";
 
 import { ExcluirOrganizacaoDialog } from "./ExcluirOrganizacaoDialog";
 import { TenantActions } from "./TenantActions";
@@ -54,16 +55,39 @@ beforeEach(() => {
 });
 
 describe("TenantActions (página do tenant)", () => {
-  const props = { organizationId: ORG, displayName: "Acme Ltda", slug: "acme-ltda" };
+  const COUNTS = {} as TenantCounts;
+  function org(status: TenantOrganization["status"]): TenantOrganization {
+    return {
+      id: ORG,
+      slug: "acme-ltda",
+      display_name: "Acme Ltda",
+      legal_name: null,
+      cnpj: null,
+      status,
+      onboarded_at: "2026-01-01T00:00:00.000Z",
+      suspended_at: status === "suspended" ? "2026-10-01T00:00:00.000Z" : null,
+      suspended_kind: status === "suspended" ? "administrativa" : null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      settings: null,
+      country: null,
+      timezone: null,
+      locale: null,
+      currency: null,
+      media_retention_days: null,
+      media_retention_enforced: true,
+      dpo_email: null,
+      privacy_policy_url: null,
+    };
+  }
 
   it("tenant ativo: o botão existe desabilitado, com a dica 'Suspenda antes de excluir'", () => {
-    render(comProvider(<TenantActions {...props} status="active" />));
+    render(comProvider(<TenantActions organization={org("active")} counts={COUNTS} />));
     expect(screen.getByTestId("excluir-organizacao")).toBeDisabled();
     expect(screen.getByText("Suspenda antes de excluir")).toBeInTheDocument();
   });
 
   it("tenant suspenso: o botão habilita e abre o modal com as duas opções", async () => {
-    render(comProvider(<TenantActions {...props} status="suspended" />));
+    render(comProvider(<TenantActions organization={org("suspended")} counts={COUNTS} />));
     const botao = screen.getByTestId("excluir-organizacao");
     expect(botao).toBeEnabled();
     await userEvent.click(botao);
@@ -72,7 +96,7 @@ describe("TenantActions (página do tenant)", () => {
   });
 
   it("tenant redigido: não oferece excluir", () => {
-    render(comProvider(<TenantActions {...props} status="redacted" />));
+    render(comProvider(<TenantActions organization={org("redacted")} counts={COUNTS} />));
     expect(screen.queryByTestId("excluir-organizacao")).not.toBeInTheDocument();
   });
 });
@@ -87,6 +111,7 @@ describe("TenantsTable (lista)", () => {
     status,
     onboarded_at: "2026-01-01T00:00:00.000Z",
     suspended_at: status === "suspended" ? "2026-10-01T00:00:00.000Z" : null,
+    suspended_kind: null,
     created_at: "2026-01-01T00:00:00.000Z",
     user_count: null,
     conversations_count: null,
