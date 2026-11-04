@@ -36,6 +36,26 @@ export interface FunilDeOrigem {
   is_default?: boolean;
 }
 
+/**
+ * A frase do erro, sempre em português. A da API já vem pronta (e traduzida pelo idioma da pessoa) nos casos
+ * que esta tela alcança: 402 do plano, 403 de permissão, 409/422 de nome. Quando não vem (`HTTP 500` cru, ou
+ * um 403 de outra origem, como o do token de agente, que fala inglês), a tela diz o que houve com as palavras
+ * dela.
+ */
+export function fraseDoErro(e: unknown, t: (texto: string) => string): string {
+  if (!(e instanceof ApiError)) return t("Não consegui duplicar o funil agora. Tente de novo.");
+  const daApi = e.message && !/^HTTP \d+$/.test(e.message) && e.message !== e.code ? e.message : null;
+  if (e.status === 403) {
+    return e.code === "forbidden_permission" && daApi
+      ? daApi
+      : t("Seu perfil não pode duplicar funis nesta organização. Peça a um administrador.");
+  }
+  if (e.status === 402) {
+    return daApi ?? t("O plano desta organização chegou ao limite de funis ou de etapas. Fale com quem cuida da assinatura.");
+  }
+  return daApi ?? t("Não consegui duplicar o funil agora. Tente de novo.");
+}
+
 /** O mesmo teto do nome de funil na API. */
 const MAX_NOME = 80;
 
@@ -82,9 +102,7 @@ export function DialogoDuplicarFunil({
       router.refresh();
       onDuplicado(r.data.id);
     } catch (e) {
-      // A frase da API já sai em português (e traduzida pelo idioma da pessoa); `HTTP 500` cru não é frase.
-      const daApi = e instanceof ApiError && e.message && !/^HTTP \d+$/.test(e.message) ? e.message : null;
-      setErro(daApi ?? t("Não consegui duplicar o funil agora. Tente de novo."));
+      setErro(fraseDoErro(e, t));
       setSalvando(false);
     }
   }

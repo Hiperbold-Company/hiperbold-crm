@@ -15050,6 +15050,10 @@ export const DICIONARIO: Traducoes = {
   "Outro funil acabou de ocupar esse nome. Recarregue a página e tente de novo.": { es: "Otro embudo acaba de ocupar ese nombre. Recarga la página e inténtalo de nuevo." },
   "Não consegui copiar as etapas do funil. Nada foi salvo — tente de novo.": { es: "No pude copiar las etapas del embudo. No se guardó nada; inténtalo de nuevo." },
   "Dê um nome ao novo funil (até 80 caracteres).": { es: "Ponle un nombre al nuevo embudo (hasta 80 caracteres)." },
+  "Não consegui copiar as etapas, e o funil": { es: "No pude copiar las etapas, y el embudo" },
+  "pode ter ficado incompleto. Exclua-o e tente de novo.": { es: "puede haber quedado incompleto. Elimínalo e inténtalo de nuevo." },
+  "Seu perfil não pode duplicar funis nesta organização. Peça a um administrador.": { es: "Tu perfil no puede duplicar embudos en esta organización. Pídeselo a un administrador." },
+  "O plano desta organização chegou ao limite de funis ou de etapas. Fale com quem cuida da assinatura.": { es: "El plan de esta organización llegó al límite de embudos o de etapas. Habla con quien gestiona la suscripción." },
 };
 
 /**

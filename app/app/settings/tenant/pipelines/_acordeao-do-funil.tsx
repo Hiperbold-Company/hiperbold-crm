@@ -9,14 +9,20 @@
  * - a URL aponta para uma âncora dentro dele (`#etapas-<id>`, `#mapeamento-<id>`), na abertura e quando o
  *   hash muda — os links "ir para as etapas" / "ir para o mapeamento" de `_stages.tsx` e `_mapping.tsx`
  *   continuam levando ao lugar certo;
- * - é o funil que acabou de ser duplicado.
+ * - é o funil que acabou de ser duplicado;
+ * - alguém clica num link da página para uma dessas âncoras — inclusive com o MESMO hash já na URL, caso em
+ *   que o navegador não dispara `hashchange`.
+ *
+ * Com um funil só não há o que recolher: o cabeçalho aparece sem a seta e sem o clique.
+ *
+ * Os botões de duplicar só aparecem para quem tem `funis.editar` (a rota recusa o resto com 403).
  *
  * ⚠️ RECOLHER SÓ ESCONDE (`hidden`), NÃO DESMONTA: desmontar apagaria em silêncio o que foi editado e ainda
  * não salvo nas seções de dentro.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Badge } from "@/components/ui/badge";
+import { badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useT } from "@/hooks/i18n/useT";
@@ -41,7 +47,10 @@ export function funilDoHash(hash: string, ids: readonly string[]): string | null
 interface EstadoDoAcordeao {
   aberto: (id: string) => boolean;
   alternar: (id: string) => void;
-  duplicar: (origemId: string) => void;
+  /** `null` quando a pessoa não pode duplicar: o botão do card não aparece. */
+  duplicar: ((origemId: string) => void) | null;
+  /** Um funil só: nada a recolher. */
+  sozinho: boolean;
 }
 
 const Contexto = createContext<EstadoDoAcordeao | null>(null);
@@ -56,9 +65,12 @@ function rolarAte(id: string) {
 
 export function AcordeaoDosFunis({
   pipelines: funis,
+  podeDuplicar,
   children,
 }: {
   pipelines: FunilDeOrigem[];
+  /** `funis.editar` da pessoa (`papelPode`), o mesmo critério da rota de duplicar. */
+  podeDuplicar: boolean;
   children: ReactNode;
 }) {
   const t = useT();
@@ -85,9 +97,31 @@ export function AcordeaoDosFunis({
       abrir(id);
       rolarAte(window.location.hash.slice(1));
     };
+    // O clique num link para a âncora: com o MESMO hash já na URL não há `hashchange`, e o card seguiria
+    // fechado. Com hash diferente o `hashchange` também vem; abrir duas vezes não muda nada.
+    const segueOClique = (ev: MouseEvent) => {
+      const link = ev.target instanceof Element ? ev.target.closest("a[href]") : null;
+      const href = link?.getAttribute("href");
+      if (!href || !href.includes("#")) return;
+      let destino: URL;
+      try {
+        destino = new URL(href, window.location.href);
+      } catch {
+        return;
+      }
+      if (destino.pathname !== window.location.pathname) return;
+      const id = funilDoHash(destino.hash, idsRef.current);
+      if (!id) return;
+      abrir(id);
+      if (destino.hash === window.location.hash) rolarAte(destino.hash.slice(1));
+    };
     segueOHash();
     window.addEventListener("hashchange", segueOHash);
-    return () => window.removeEventListener("hashchange", segueOHash);
+    document.addEventListener("click", segueOClique);
+    return () => {
+      window.removeEventListener("hashchange", segueOHash);
+      document.removeEventListener("click", segueOClique);
+    };
   }, [abrir]);
 
   // O funil recém-duplicado: quando o refresh o traz, a página rola até ele (já está aberto: `onDuplicado`).
@@ -113,9 +147,10 @@ export function AcordeaoDosFunis({
           else novo.add(id);
           return novo;
         }),
-      duplicar: (origemId) => setDialogo({ origemId }),
+      duplicar: podeDuplicar ? (origemId) => setDialogo({ origemId }) : null,
+      sozinho: ids.length === 1,
     }),
-    [estaAberto],
+    [estaAberto, podeDuplicar, ids.length],
   );
 
   return (
@@ -133,21 +168,23 @@ export function AcordeaoDosFunis({
               {todosAbertos ? t("Fechar todos") : t("Abrir todos")}
             </Button>
           )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-testid="duplicar-funil"
-            onClick={() => setDialogo({ origemId: ids[0] ?? "" })}
-          >
-            <Copy size={14} aria-hidden className="mr-1" />
-            {t("Duplicar funil")}
-          </Button>
+          {podeDuplicar && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid="duplicar-funil"
+              onClick={() => setDialogo({ origemId: ids[0] ?? "" })}
+            >
+              <Copy size={14} aria-hidden className="mr-1" />
+              {t("Duplicar funil")}
+            </Button>
+          )}
         </div>
         {children}
       </div>
       {/* Montado só quando aberto: o diálogo usa o roteador, e a lista não precisa dele para existir. */}
-      {dialogo && (
+      {podeDuplicar && dialogo && (
         <DialogoDuplicarFunil
           funis={funis}
           origemInicial={dialogo.origemId}
@@ -184,46 +221,59 @@ export function AcordeaoDoFunil({
   const t = useT();
   const estado = useContext(Contexto);
   const aberto = estado ? estado.aberto(pipeline.id) : true;
+  // Sem o provedor (uso isolado) ou com um funil só, não há o que recolher.
+  const recolhivel = !!estado && !estado.sozinho;
   const corpo = `corpo-do-funil-${pipeline.id}`;
+  const duplicar = estado?.duplicar ?? null;
+
+  // O que o cabeçalho diz: nome, selo e contagem. Só `span` — vai dentro de `<button>` e de `<h2>`.
+  const rotulo = (
+    <span className="flex min-w-0 flex-wrap items-center gap-2">
+      <span>{pipeline.name}</span>
+      {pipeline.is_default && (
+        <span className={badgeVariants({ variant: "secondary", className: "text-[10px]" })}>{t("Padrão")}</span>
+      )}
+      <span className="text-xs font-normal text-muted-foreground">
+        {numeroDeEtapas === 1 ? t("1 etapa") : `${numeroDeEtapas} ${t("etapas")}`}
+      </span>
+    </span>
+  );
 
   return (
     <Card id={ancoraDoFunil(pipeline.id)} className="p-6" data-testid={`funil-${pipeline.id}`}>
       <header className="flex items-start justify-between gap-3">
-        <button
-          type="button"
-          aria-expanded={aberto}
-          aria-controls={corpo}
-          onClick={() => estado?.alternar(pipeline.id)}
-          className="flex min-w-0 flex-1 items-start gap-2 rounded-md text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-          data-testid={`alternar-funil-${pipeline.id}`}
-        >
-          <CaretDown
-            size={16}
-            aria-hidden
-            className={`mt-0.5 shrink-0 text-muted-foreground transition-transform ${aberto ? "" : "-rotate-90"}`}
-          />
-          <span className="min-w-0">
-            <span className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-semibold">{pipeline.name}</h2>
-              {pipeline.is_default && (
-                <Badge variant="secondary" className="text-[10px]">
-                  {t("Padrão")}
-                </Badge>
-              )}
-              <span className="text-xs text-muted-foreground">
-                {numeroDeEtapas === 1 ? t("1 etapa") : `${numeroDeEtapas} ${t("etapas")}`}
-              </span>
-            </span>
-            <span className="block text-xs text-muted-foreground">/{pipeline.slug}</span>
-          </span>
-        </button>
-        {estado && (
+        <div className="min-w-0 flex-1">
+          {/* O padrão acessível do acordeão: o botão DENTRO do título, não o título dentro do botão. */}
+          <h2 className="text-base font-semibold">
+            {recolhivel ? (
+              <button
+                type="button"
+                aria-expanded={aberto}
+                aria-controls={corpo}
+                onClick={() => estado?.alternar(pipeline.id)}
+                className="flex w-full min-w-0 items-start gap-2 rounded-md text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                data-testid={`alternar-funil-${pipeline.id}`}
+              >
+                <CaretDown
+                  size={16}
+                  aria-hidden
+                  className={`mt-0.5 shrink-0 text-muted-foreground transition-transform ${aberto ? "" : "-rotate-90"}`}
+                />
+                {rotulo}
+              </button>
+            ) : (
+              rotulo
+            )}
+          </h2>
+          <p className={`text-xs text-muted-foreground ${recolhivel ? "pl-6" : ""}`}>/{pipeline.slug}</p>
+        </div>
+        {duplicar && (
           <Button
             type="button"
             variant="ghost"
             size="sm"
             data-testid={`duplicar-funil-${pipeline.id}`}
-            onClick={() => estado.duplicar(pipeline.id)}
+            onClick={() => duplicar(pipeline.id)}
           >
             <Copy size={14} aria-hidden className="mr-1" />
             {t("Duplicar")}

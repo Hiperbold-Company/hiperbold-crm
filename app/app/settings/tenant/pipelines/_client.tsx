@@ -168,6 +168,7 @@ export function PipelinesClient({
   pipelines,
   etapas = {},
   podeEditarConfig,
+  podeDuplicar = false,
   bloqueioPorFunil,
 }: {
   pipelines: PipelineRow[];
@@ -179,6 +180,8 @@ export function PipelinesClient({
   etapas?: Record<string, EtapaDoFunil[]>;
   /** Vocabulário/custom fields são admin (a server action recusa o resto). */
   podeEditarConfig: boolean;
+  /** `funis.editar` (`papelPode`): os botões de duplicar funil. A rota recusa o resto com 403. */
+  podeDuplicar?: boolean;
   /** Fase F3, tarefa 9: um `BloqueioDoBotao` de "etapas_por_funil" por `pipeline.id`. */
   bloqueioPorFunil?: Record<string, BloqueioDoBotao>;
 }) {
@@ -200,7 +203,7 @@ export function PipelinesClient({
     );
   }
   return (
-    <AcordeaoDosFunis pipelines={pipelines}>
+    <AcordeaoDosFunis pipelines={pipelines} podeDuplicar={podeDuplicar}>
       {pipelines.map((p) => (
         <AcordeaoDoFunil
           key={p.id}

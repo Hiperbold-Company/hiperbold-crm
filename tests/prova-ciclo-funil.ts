@@ -97,7 +97,8 @@ async function login(page: Page): Promise<void> {
  * aqui conhece `stage_id` — é exatamente o que o dono da clínica tem à mão.
  */
 async function escolherNaTela(page: Page, nomeDaEtapa: string): Promise<void> {
-  await page.goto(`${APP}/app/settings/tenant/pipelines`);
+  // O hash abre o card do funil (a página recolhe os funis quando há mais de um).
+  await page.goto(`${APP}/app/settings/tenant/pipelines#mapeamento-${CLINICA}`);
   const secao = page.locator(`[data-testid="mapeamento-${CLINICA}"]`);
   await secao.locator(`[data-testid="etapa-${PASSO}"]`).waitFor({ state: "visible" });
   await secao.locator(`[data-testid="etapa-${PASSO}"]`).click();

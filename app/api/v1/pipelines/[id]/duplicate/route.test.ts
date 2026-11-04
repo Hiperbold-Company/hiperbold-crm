@@ -25,6 +25,7 @@ import {
   type DbOpts,
   type Registro,
 } from "@/tests/helpers/stages-db-double";
+import { permissoesPadrao } from "@/lib/permissoes/resolver";
 
 const OUTRO = "55555555-5555-4555-8555-555555555555";
 
@@ -46,7 +47,7 @@ const SETTINGS = {
   won_reasons: ["Fechou"],
   reabertura: "novo_negocio",
   // Chave que nenhum código conhece: a troca percorre o JSON inteiro, não uma lista de chaves.
-  chave_inventada: { atalho: "e3", lista: ["e1", "e4"], fixo: "texto" },
+  chave_inventada: { atalho: "e3", lista: ["e1", "e4"], fixo: "texto", de_outro_funil: "x1" },
   entrada_do_inbox: { stage_id: "e-velha" },
 };
 
@@ -111,7 +112,11 @@ describe("POST /api/v1/pipelines/[id]/duplicate", () => {
     expect(etapas.find((e) => e.name === "Matriculado")).toMatchObject({ is_won: true, agent_stage_hint: "won", slug: "matriculado" });
     // Estado não vem da origem: a autoria é de quem duplicou, e ninguém nasce arquivado.
     expect(etapas[0]).toMatchObject({ last_change_actor_kind: "user" });
-    expect(etapas.some((e) => "id" in e || "is_archived" in e)).toBe(false);
+    expect(etapas.some((e) => "is_archived" in e)).toBe(false);
+    // Os ids nascem no código (o settings já sai remapeado no INSERT do funil): novos, e nunca os da origem.
+    const ids = etapas.map((e) => e.id as string);
+    expect(new Set(ids).size).toBe(4);
+    expect(ids.some((id) => ["e1", "e2", "e3", "e4"].includes(id))).toBe(false);
 
     const body = (await res.json()) as { data: { id: string; stages: Array<{ name: string }> } };
     expect(body.data.id).toBe(novo.id);
@@ -131,7 +136,13 @@ describe("POST /api/v1/pipelines/[id]/duplicate", () => {
 
     // Etapa arquivada não é copiada: o id dela sai do array.
     expect(s.fields[0]!.obrigatorio_em).toEqual({ etapas: [idNovo("proposta")], ao_ganhar: true });
-    expect(s.chave_inventada).toEqual({ atalho: idNovo("matriculado"), lista: [idNovo("novo"), idNovo("desistiu")], fixo: "texto" });
+    // A etapa de OUTRO funil (x1) não é da origem: o id fica intacto.
+    expect(s.chave_inventada).toEqual({
+      atalho: idNovo("matriculado"),
+      lista: [idNovo("novo"), idNovo("desistiu")],
+      fixo: "texto",
+      de_outro_funil: "x1",
+    });
     // `stage_id` aceita ausência no schema: a chave que apontava para a arquivada some.
     expect(s.entrada_do_inbox).toEqual({});
     expect(s.lost_reasons).toEqual(SETTINGS.lost_reasons);
@@ -235,14 +246,60 @@ describe("POST /api/v1/pipelines/[id]/duplicate", () => {
     expect(audit).not.toHaveBeenCalled();
   });
 
-  it("settings remapeado falha ao gravar → o funil criado é apagado", async () => {
+  it("o funil nasce com o settings FINAL: são só dois INSERTs, sem UPDATE no meio", async () => {
     authOk();
-    const db = cenario({ writeError: (n) => (n === 3 ? { code: "XX000", message: "boom" } : null) });
+    const db = cenario();
+    const { POST } = await import("./route");
+    await POST(req({ name: "PMA 2028" }), ctx());
+    expect(db.escritas.map((e) => `${e.tipo}:${e.table}`)).toEqual(["insert:crm_pipelines", "insert:crm_stages"]);
+    const insert = db.escritas[0]!.patch as { id: string; settings: typeof SETTINGS };
+    const etapas = insercaoDeEtapas(db)!;
+    const idDe = (slug: string) => etapas.find((e) => e.slug === slug)!.id;
+    expect(insert.settings.fields[0]!.obrigatorio_em).toEqual({ etapas: [idDe("proposta")], ao_ganhar: true });
+    expect(etapas.every((e) => e.pipeline_id === insert.id)).toBe(true);
+  });
+
+  it("etapas falham E o DELETE da compensação falha → log e frase dizendo qual funil excluir", async () => {
+    authOk();
+    const { logger } = await import("@/lib/logger");
+    const erroDoLog = vi.spyOn(logger, "error");
+    // O DELETE é a 3ª escrita (insert do funil, insert das etapas, delete).
+    const db = cenario({
+      writeError: (n, table) => (table === "crm_stages" || n === 3 ? { code: "XX000", message: "boom" } : null),
+    });
     const { POST } = await import("./route");
     const res = await POST(req({ name: "PMA 2028" }), ctx());
     expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toContain("«PMA 2028»");
+    expect(body.error.message).toContain("pode ter ficado incompleto");
     expect(db.escritas.at(-1)).toMatchObject({ tipo: "delete", table: "crm_pipelines" });
-    expect(novoFunil(db)).toBeUndefined();
+    expect(erroDoLog).toHaveBeenCalledWith("pipeline.duplicar.compensacao_falhou", expect.objectContaining({ causa: "boom" }));
+    expect(audit).not.toHaveBeenCalled();
+    erroDoLog.mockRestore();
+  });
+
+  it("manager sem `funis.editar` (permissão retirada) → 403, sem escrita", async () => {
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      user: {
+        id: "u",
+        email: "a@example.com",
+        full_name: null,
+        avatar_url: null,
+        is_platform_admin: false,
+        idioma: "pt-BR" as const,
+        organizations: [{ organization_id: ORG_ID, organization_name: "Org", role: "manager" }],
+      },
+      org: { orgId: ORG_ID, name: "Org", role: "manager", permissoes: { ...permissoesPadrao(), "funis.editar": [] } },
+    } as never);
+    const db = cenario();
+    const { POST } = await import("./route");
+    const res = await POST(req({ name: "PMA 2028" }), ctx());
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("forbidden_permission");
+    expect(db.escritas).toEqual([]);
   });
 
   it("teto de funis do plano (PT402) → 402 com a frase fixa, sem etapas", async () => {

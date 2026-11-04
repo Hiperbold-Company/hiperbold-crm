@@ -17,9 +17,11 @@
  * do settings EXIGE aquela chave, ela fica `null` em vez de sumir (`ajustarAoSchema`). O id do próprio funil de
  * origem também vira o do novo: autorreferência continua autorreferência.
  *
- * ⚠️ SEM TRANSAÇÃO, COM COMPENSAÇÃO (como `criarFunil`): insere o funil, insere as etapas em lote, grava o
- * `settings` remapeado. Se qualquer passo falhar, o funil criado é apagado — `crm_stages.pipeline_id` cascateia
- * e o funil recém-nascido ainda não tem negócio para o `ON DELETE RESTRICT` de `crm_leads` recusar.
+ * ⚠️ SEM TRANSAÇÃO, COM COMPENSAÇÃO (como `criarFunil`): os ids do funil e das etapas nascem no código, o
+ * `settings` é remapeado ANTES, e são só dois INSERTs — o funil já com o `settings` final, depois as etapas em
+ * lote. Se as etapas falharem, o funil criado é apagado — `crm_stages.pipeline_id` cascateia e o funil
+ * recém-nascido ainda não tem negócio para o `ON DELETE RESTRICT` de `crm_leads` recusar. Se até o DELETE
+ * falhar, o erro registra no log e diz à pessoa qual funil pode ter ficado incompleto, para ela excluir.
  */
 import type { ZodType } from "zod";
 
@@ -261,15 +263,28 @@ export async function duplicarFunil(
     is_archived: false,
   };
   // `vocabulary`/`settings` são NOT NULL com default: uma origem estranha não manda `null` para o banco.
-  // O settings definitivo (com os ids remapeados) só existe depois das etapas; até lá vai o da origem.
   if (o.vocabulary != null) row.vocabulary = o.vocabulary;
-  if (o.settings != null) row.settings = o.settings;
 
-  const { data: criado, error: criadoErr } = await deps.supabase
-    .from("crm_pipelines")
-    .insert(row)
-    .select("id")
-    .single();
+  // Os ids nascem AQUI, não no banco: assim o `settings` já sai remapeado no INSERT do funil e não existe
+  // um passo de UPDATE no meio (que, falhando, deixava um funil com ids de etapa da origem).
+  const novoId = crypto.randomUUID();
+  row.id = novoId;
+  // `troca` começa com o próprio funil: autorreferência no settings continua autorreferência.
+  const troca = new Map<string, string>([[origemId, novoId]]);
+  const idsNovos = vivas.map((e) => {
+    const id = crypto.randomUUID();
+    troca.set(e.id, id);
+    return id;
+  });
+
+  let settings: Record<string, unknown> | null = null;
+  if (o.settings) {
+    const r = remapearIds(o.settings, troca, arquivadas);
+    settings = ajustarAoSchema(r.valor as Record<string, unknown>, r.chavesRemovidas);
+    row.settings = settings;
+  }
+
+  const { error: criadoErr } = await deps.supabase.from("crm_pipelines").insert(row).select("id").single();
   if (criadoErr) {
     // O gatilho de plano recusa ANTES do conflito de nome (mesma ordem do banco).
     const plano = limiteDoPlano(deps, criadoErr);
@@ -284,36 +299,47 @@ export async function duplicarFunil(
     }
     throw falhaInterna(deps, "inserir_funil", criadoErr);
   }
-  const novoId = (criado as { id: string }).id;
 
-  const desfazer = async () => {
+  /** Apaga o funil recém-criado. `false` quando nem isso deu: o funil pode ter ficado pela metade. */
+  const desfazer = async (): Promise<boolean> => {
     const { error } = await deps.supabase
       .from("crm_pipelines")
       .delete()
       .eq("id", novoId)
       .eq("organization_id", orgId);
     if (error) {
-      logger.error("pipeline.duplicar.compensacao_falhou", { request_id: deps.requestId, novo_id: novoId });
+      logger.error("pipeline.duplicar.compensacao_falhou", {
+        request_id: deps.requestId,
+        novo_id: novoId,
+        causa: (error as { message?: string }).message ?? "desconhecido",
+      });
+      return false;
     }
+    return true;
   };
 
-  // `troca` começa com o próprio funil: autorreferência no settings continua autorreferência.
-  const troca = new Map<string, string>([[origemId, novoId]]);
   let stages: EtapaDuplicada[] = [];
-
   if (vivas.length > 0) {
     const autoria = autoriaDaMudanca(deps.actor);
-    const linhas = vivas.map((e) => {
+    const linhas = vivas.map((e, i) => {
       const copia: Record<string, unknown> = {};
       for (const c of COLUNAS_DA_ETAPA.COPIA) copia[c] = e[c];
-      return { ...copia, organization_id: orgId, pipeline_id: novoId, ...autoria };
+      return { ...copia, id: idsNovos[i], organization_id: orgId, pipeline_id: novoId, ...autoria };
     });
     const { data: inseridas, error: etapasErr } = await deps.supabase
       .from("crm_stages")
       .insert(linhas)
       .select(COLUNAS_DA_RESPOSTA_DA_ETAPA);
     if (etapasErr || !inseridas) {
-      await desfazer();
+      const desfeito = await desfazer();
+      if (!desfeito) {
+        throw recusa(
+          deps,
+          500,
+          "internal_error",
+          `${t("Não consegui copiar as etapas, e o funil")} «${name}» ${t("pode ter ficado incompleto. Exclua-o e tente de novo.")}`,
+        );
+      }
       const plano = limiteDoPlano(deps, etapasErr);
       if (plano) throw plano;
       throw recusa(
@@ -326,29 +352,6 @@ export async function duplicarFunil(
     stages = (inseridas as unknown as EtapaDuplicada[])
       .slice()
       .sort((a, b) => Number(a.position) - Number(b.position));
-    // Pelo slug: `uniq_crm_stages_pipeline_slug` garante um por funil, e a ordem de retorno não é contrato.
-    const novaPorSlug = new Map(stages.map((s) => [s.slug, s.id]));
-    for (const e of vivas) {
-      const nova = novaPorSlug.get(e.slug);
-      if (nova) troca.set(e.id, nova);
-    }
-  }
-
-  let settings: Record<string, unknown> | null = null;
-  if (o.settings) {
-    const r = remapearIds(o.settings, troca, arquivadas);
-    settings = ajustarAoSchema(r.valor as Record<string, unknown>, r.chavesRemovidas);
-  }
-  if (settings && JSON.stringify(settings) !== JSON.stringify(o.settings)) {
-    const { error: settingsErr } = await deps.supabase
-      .from("crm_pipelines")
-      .update({ settings })
-      .eq("id", novoId)
-      .eq("organization_id", orgId);
-    if (settingsErr) {
-      await desfazer();
-      throw falhaInterna(deps, "gravar_settings", settingsErr);
-    }
   }
 
   void audit({

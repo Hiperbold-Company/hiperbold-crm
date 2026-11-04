@@ -5891,5 +5891,9 @@
   "Outro funil acabou de ocupar esse nome. Recarregue a página e tente de novo.": "另一个销售漏斗刚刚占用了这个名称。请刷新页面后重试。",
   "Não consegui copiar as etapas do funil. Nada foi salvo — tente de novo.": "无法复制销售漏斗的阶段。未保存任何内容，请重试。",
   "Dê um nome ao novo funil (até 80 caracteres).": "请为新销售漏斗命名（最多 80 个字符）。",
+  "Não consegui copiar as etapas, e o funil": "无法复制阶段，销售漏斗",
+  "pode ter ficado incompleto. Exclua-o e tente de novo.": "可能不完整。请删除后重试。",
+  "Seu perfil não pode duplicar funis nesta organização. Peça a um administrador.": "你的角色无法在此组织中复制销售漏斗。请联系管理员。",
+  "O plano desta organização chegou ao limite de funis ou de etapas. Fale com quem cuida da assinatura.": "该组织的套餐已达到销售漏斗或阶段数量上限。请联系负责订阅的人员。",
   "etapas": "个阶段"
 }

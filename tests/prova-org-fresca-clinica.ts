@@ -195,7 +195,7 @@ async function main(): Promise<void> {
 
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     await login(page, email);
-    await page.goto(`${APP}/app/settings/tenant/pipelines`);
+    await page.goto(`${APP}/app/settings/tenant/pipelines#etapas-${pipelineId}`);
     const secaoEtapas = page.locator(`[data-testid="etapas-${pipelineId}"]`);
     await secaoEtapas.waitFor({ state: "visible", timeout: 30_000 });
     await page.screenshot({ path: `${EVID}/org-fresca-1-ecommerce.png`, fullPage: true });
@@ -397,7 +397,7 @@ async function main(): Promise<void> {
       linhas.map((a) => `${a.reason} [${a.payload?.passo_do_agente}]`).join(" | "),
     );
 
-    await page.goto(`${APP}/app/settings/tenant/pipelines`);
+    await page.goto(`${APP}/app/settings/tenant/pipelines#etapas-${pipelineId}`);
     await secaoEtapas.waitFor({ state: "visible", timeout: 30_000 });
     await page.screenshot({ path: `${EVID}/org-fresca-4-final.png`, fullPage: true });
   } finally {

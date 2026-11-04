@@ -28,9 +28,9 @@ import { AcordeaoDoFunil, AcordeaoDosFunis } from "./_acordeao-do-funil";
 const A = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "PMA 2027", slug: "pma-2027" };
 const B = { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", name: "Imersão", slug: "imersao" };
 
-function Tela({ funis = [A, B] }: { funis?: Array<typeof A> }) {
+function Tela({ funis = [A, B], podeDuplicar = true }: { funis?: Array<typeof A>; podeDuplicar?: boolean }) {
   return (
-    <AcordeaoDosFunis pipelines={funis}>
+    <AcordeaoDosFunis pipelines={funis} podeDuplicar={podeDuplicar}>
       {funis.map((p) => (
         <AcordeaoDoFunil key={p.id} pipeline={p} numeroDeEtapas={3}>
           <div>corpo</div>
@@ -105,6 +105,38 @@ describe("diálogo Duplicar funil", () => {
     fireEvent.click(screen.getByTestId("duplicar-salvar"));
     expect(await screen.findByTestId("duplicar-erro")).toHaveTextContent("chegou ao limite de funis");
     expect(screen.getByTestId("dialogo-duplicar-funil")).toBeVisible();
+  });
+
+  it("sem `funis.editar`, nem o botão do topo nem o do card aparecem — o acordeão continua", () => {
+    render(<Tela podeDuplicar={false} />);
+    expect(screen.queryByTestId("duplicar-funil")).toBeNull();
+    expect(screen.queryByTestId(`duplicar-funil-${A.id}`)).toBeNull();
+    expect(screen.queryByTestId(`duplicar-funil-${B.id}`)).toBeNull();
+    expect(screen.getByTestId("alternar-todos-os-funis")).toBeVisible();
+  });
+
+  it("403 de permissão mostra a frase da API; 403 de outra origem (em inglês) vira frase da tela", async () => {
+    post.mockRejectedValueOnce(
+      new ApiError(403, "forbidden_permission", undefined, "r", "Seu perfil não tem permissão para isto nesta organização."),
+    );
+    render(<Tela />);
+    fireEvent.click(screen.getByTestId("duplicar-funil"));
+    fireEvent.click(screen.getByTestId("duplicar-salvar"));
+    expect(await screen.findByTestId("duplicar-erro")).toHaveTextContent("Seu perfil não tem permissão");
+
+    post.mockRejectedValueOnce(new ApiError(403, "forbidden", undefined, "r", "AI agent tokens cannot perform administration operations."));
+    fireEvent.click(screen.getByTestId("duplicar-salvar"));
+    await waitFor(() =>
+      expect(screen.getByTestId("duplicar-erro")).toHaveTextContent("Seu perfil não pode duplicar funis nesta organização"),
+    );
+  });
+
+  it("402 sem frase da API (HTTP cru) ainda explica o limite do plano em português", async () => {
+    post.mockRejectedValue(new ApiError(402, "payment_required", undefined, "r", "HTTP 402"));
+    render(<Tela />);
+    fireEvent.click(screen.getByTestId("duplicar-funil"));
+    fireEvent.click(screen.getByTestId("duplicar-salvar"));
+    expect(await screen.findByTestId("duplicar-erro")).toHaveTextContent("chegou ao limite de funis ou de etapas");
   });
 
   it("nome vazio não deixa salvar", () => {

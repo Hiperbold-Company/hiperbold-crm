@@ -24,6 +24,17 @@ describe("remapearIds", () => {
     expect(r.chavesRemovidas).toEqual([["alvo", "stage_id"]]);
   });
 
+  it("id de etapa de OUTRO funil (fora da troca e de `remover`) fica intacto", () => {
+    // `troca` só tem as etapas da origem; um atalho para a etapa de outro funil continua apontando para ela.
+    const r = remapearIds(
+      { atalho: "etapa-do-outro-funil", lista: ["velho-1", "etapa-do-outro-funil"] },
+      troca,
+      new Set(["arq"]),
+    );
+    expect(r.valor).toEqual({ atalho: "etapa-do-outro-funil", lista: ["novo-1", "etapa-do-outro-funil"] });
+    expect(r.chavesRemovidas).toEqual([]);
+  });
+
   it("não muta a entrada", () => {
     const entrada = { a: ["velho-1"] };
     remapearIds(entrada, troca);
