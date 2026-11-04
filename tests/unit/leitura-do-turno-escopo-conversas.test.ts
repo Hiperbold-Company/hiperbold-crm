@@ -57,6 +57,19 @@ const DE_OUTRO_CLIENTE = "66666666-6666-4666-8666-666666666666";
 const CONVERSA_DA_CONVERSA = "aaaaaaaa-1111-4111-8111-111111111111";
 const CONVERSA_DE_B = "aaaaaaaa-2222-4222-8222-222222222222";
 const FUNIL = "44444444-4444-4444-8444-444444444444";
+/** De quem é cada conversa — o que a guarda D-096 pergunta ao banco. */
+const DONO_DA_CONVERSA: Record<string, string> = {
+  [CONVERSA_DA_CONVERSA]: DA_CONVERSA,
+  [CONVERSA_DE_B]: DE_OUTRO_CLIENTE,
+};
+/**
+ * Hiperbold D-096: a leitura de UM recurso de outro cliente é recusada pela guarda
+ * do turno (`lib/mcp/escopo-do-turno.ts`) antes do handler, com este motivo e este
+ * registro no audit. A guarda do handler do upstream (#2178) continua no código,
+ * atrás desta: defesa dupla.
+ */
+const RECUSA_DO_TURNO = "fora_do_contato_do_turno";
+const AUDIT_DA_RECUSA = `escopo_do_turno:${RECUSA_DO_TURNO}`;
 
 const TELEFONE_DE_B = "(11) 98888-7777";
 const EMAIL_DE_B = "maria.souza@exemplo.com";
@@ -154,6 +167,13 @@ function supabaseFalso() {
     };
     cadeia.order = () => cadeia as never;
     cadeia.limit = () => cadeia as never;
+    // A consulta de DONO da guarda D-096 (`lib/mcp/dono-do-recurso.ts`): de quem
+    // é a conversa apontada, sempre com `organization_id`.
+    (cadeia as unknown as { maybeSingle: () => Promise<unknown> }).maybeSingle = async () => {
+      if (registro.filtros.organization_id !== ORG) return { data: null, error: null };
+      const dono = tabela === "conversations" ? DONO_DA_CONVERSA[String(registro.filtros.id)] : undefined;
+      return { data: dono ? { contact_id: dono } : null, error: null };
+    };
     cadeia.then = (ok) =>
       Promise.resolve({ data: tabela === "orders" ? [PEDIDO_DE_B] : [], error: null }).then(ok);
     return cadeia;
@@ -254,7 +274,7 @@ describe("com contato do turno, a leitura de conversa só alcança o contato del
 
   it("crm_get_conversation de OUTRO cliente é recusada com motivo em texto", async () => {
     const r = await executar(["crm_get_conversation"], { conversation_id: CONVERSA_DE_B }, DA_CONVERSA);
-    expect(r).toMatchObject({ permitido: false, motivo: "fora_da_conversa" });
+    expect(r).toMatchObject({ permitido: false, motivo: RECUSA_DO_TURNO });
     const motivo = (r as { motivo?: unknown }).motivo;
     const mensagem = (r as { mensagem?: unknown }).mensagem;
     expect(typeof motivo).toBe("string");
@@ -271,7 +291,7 @@ describe("com contato do turno, a leitura de conversa só alcança o contato del
     expect(vi.mocked(auditMcpToolCall).mock.calls[0]![0]).toMatchObject({
       toolName: "crm_get_conversation",
       success: false,
-      errorMessage: "contato_da_conversa:fora_da_conversa",
+      errorMessage: AUDIT_DA_RECUSA,
     });
   });
 
@@ -295,7 +315,7 @@ describe("com contato do turno, a leitura de conversa só alcança o contato del
       DA_CONVERSA,
     );
     expect(listMessagesHandler).not.toHaveBeenCalled();
-    expect(r).toMatchObject({ permitido: false, motivo: "fora_da_conversa" });
+    expect(r).toMatchObject({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(JSON.stringify(r)).not.toContain(MENSAGEM_DE_B);
     expect(JSON.stringify(r)).not.toContain(EMAIL_DE_B);
   });
@@ -305,7 +325,7 @@ describe("com contato do turno, a leitura de conversa só alcança o contato del
     expect(vi.mocked(auditMcpToolCall).mock.calls[0]![0]).toMatchObject({
       toolName: "crm_get_conversation_history",
       success: false,
-      errorMessage: "contato_da_conversa:fora_da_conversa",
+      errorMessage: AUDIT_DA_RECUSA,
     });
   });
 
@@ -327,7 +347,7 @@ describe("com contato do turno, a leitura de conversa só alcança o contato del
   it("crm_list_contact_orders de OUTRO cliente é recusada e a consulta não roda", async () => {
     const r = await executar(["crm_list_contact_orders"], { contact_id: DE_OUTRO_CLIENTE }, DA_CONVERSA);
     expect(supabase.consultas.some((c) => c.tabela === "orders")).toBe(false);
-    expect(r).toMatchObject({ permitido: false, motivo: "fora_da_conversa" });
+    expect(r).toMatchObject({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(JSON.stringify(r)).not.toContain(RASTREIO_DE_B);
   });
 
@@ -336,7 +356,7 @@ describe("com contato do turno, a leitura de conversa só alcança o contato del
     expect(vi.mocked(auditMcpToolCall).mock.calls[0]![0]).toMatchObject({
       toolName: "crm_list_contact_orders",
       success: false,
-      errorMessage: "contato_da_conversa:fora_da_conversa",
+      errorMessage: AUDIT_DA_RECUSA,
     });
   });
 
@@ -390,7 +410,7 @@ describe("crm_get_conversation: o 404 não abre um estado distinto no turno", ()
       { conversation_id: "aaaaaaaa-9999-4999-8999-999999999999" },
       DA_CONVERSA,
     );
-    expect(deOutro).toMatchObject({ permitido: false, motivo: "fora_da_conversa" });
+    expect(deOutro).toMatchObject({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(inexistente).toEqual(deOutro);
   });
 
@@ -398,8 +418,10 @@ describe("crm_get_conversation: o 404 não abre um estado distinto no turno", ()
     vi.mocked(getConversationHandler).mockRejectedValue(
       new ApiError(500, "internal_error", undefined, "req-1", "banco caiu"),
     );
-    const r = await executar(["crm_get_conversation"], { conversation_id: CONVERSA_DE_B }, DA_CONVERSA);
+    // A conversa DO turno: passa a guarda D-096 e chega ao handler, que falha.
+    const r = await executar(["crm_get_conversation"], { conversation_id: CONVERSA_DA_CONVERSA }, DA_CONVERSA);
     expect(r).not.toMatchObject({ motivo: "fora_da_conversa" });
+    expect(r).not.toMatchObject({ motivo: RECUSA_DO_TURNO });
     expect(r).toHaveProperty("error");
   });
 

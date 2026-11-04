@@ -126,7 +126,8 @@ describe("alvos em espanhol das fotografias do curso", () => {
     ["^Conecte um banco de dados de outro sistema", "Conecte um banco de dados de outro sistema — o seu segundo CRM, um ERP, uma planilha num banco PostgreSQL ou MySQL — e o agente passa a consultá-lo em tempo real. A conexão é sempre somente leitura: nada que o agente faz altera o banco de origem."],
     ["^A senha é cifrada antes de gravar", "A senha é cifrada antes de gravar e nunca é mostrada de volta. A conexão é somente leitura e só aceita TLS por padrão."],
     ["Este modelo quase não pede nada ao cliente", "Este modelo quase não pede nada ao cliente: a IA não saberá o que perguntar. Troque por {{campo}} o que muda de um projeto para outro."],
-    ["O plano escolhido e seus limites passam a valer na próxima renovação", "O plano escolhido e seus limites passam a valer na próxima renovação. A fatura atual mantém o valor e o vencimento."],
+    // Hiperbold: o caso "O plano escolhido e seus limites passam a valer na próxima renovação" saiu com a
+    // lição do upstream que o fotografava (/app/settings/billing). No fork a tela é "Meu plano", sem esse texto.
   ])("encontra o prefixo %s na frase completa traduzida pelo CRM", (original, frase) => {
     expect(padrao(original).test(t(frase))).toBe(true);
   });

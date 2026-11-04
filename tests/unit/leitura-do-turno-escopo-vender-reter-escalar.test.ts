@@ -43,9 +43,17 @@ vi.mock("@/lib/escalacao/continuidade", () => ({
   }),
 }));
 
+// "Tem CPF?" é lido com o cliente de serviço (D-216), fora do dublê: aqui ninguém tem CPF.
+vi.mock("@/lib/contacts/cpf-do-contato", async (original) => ({
+  ...(await original<typeof import("@/lib/contacts/cpf-do-contato")>()),
+  idsComCpf: vi.fn(async () => ({ ids: new Set<string>(), error: null })),
+}));
+
 const { listaAgendamentos } = await import("@/lib/agenda/consulta");
 const { listaRetornosNoCrm } = await import("@/lib/followup/retorno-crm");
 const { pickToolsFromMcp } = await import("@/lib/ai/runtime/tools");
+const { getToolByName } = await import("@/lib/mcp/tools");
+const { z } = await import("zod");
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const DA_CONVERSA = "22222222-2222-4222-8222-222222222222";
@@ -59,6 +67,13 @@ const CONVERSA_DO_TURNO = "aaaaaaaa-1111-4111-8111-111111111111";
 const CONVERSA_DE_B = "aaaaaaaa-2222-4222-8222-222222222222";
 const CASO_DO_TURNO = "bbbbbbbb-1111-4111-8111-111111111111";
 const CASO_DE_B = "bbbbbbbb-2222-4222-8222-222222222222";
+
+/**
+ * Hiperbold D-096: a leitura de UM recurso de outro cliente é recusada pela guarda do
+ * turno (`lib/mcp/escopo-do-turno.ts`) antes do handler, com este motivo. A guarda do
+ * handler do upstream segue no código, atrás desta: defesa dupla.
+ */
+const RECUSA_DO_TURNO = "fora_do_contato_do_turno";
 
 type Linha = Record<string, unknown>;
 interface Consulta {
@@ -125,9 +140,11 @@ function bancoFalso(tabelas: Record<string, Linha[]>) {
 
 let supabase = bancoFalso({});
 
-async function executar(nome: string, args: Record<string, unknown>, contatoDoTurno?: string) {
-  const ator = { type: "ai_agent", id: "ag-1", role: "ai_operator" };
-  const ferramentas = pickToolsFromMcp({
+const ATOR = { type: "ai_agent", id: "ag-1", role: "ai_operator" };
+
+function montar(nome: string, contatoDoTurno?: string) {
+  const ator = ATOR;
+  return pickToolsFromMcp({
     toolIds: [nome],
     auth: {
       organizationId: ORG,
@@ -150,10 +167,40 @@ async function executar(nome: string, args: Record<string, unknown>, contatoDoTu
     handoffSignal: { triggered: false },
     ...(contatoDoTurno ? { contatoDoTurno } : {}),
   } as never);
+}
+
+async function executar(nome: string, args: Record<string, unknown>, contatoDoTurno?: string) {
+  const ferramentas = montar(nome, contatoDoTurno);
   return (await ferramentas[nome]!.execute!(args, { toolCallId: "c1", messages: [] } as never)) as Record<
     string,
     unknown
   >;
+}
+
+/**
+ * O HANDLER chamado direto, fora do turno, com `ctx.contatoDoTurno` como o turno o
+ * injeta. É como a guarda do handler do upstream segue medida nas ferramentas
+ * amplas, que o turno do Conversador nem monta (Hiperbold D-096).
+ */
+async function noHandler(nome: string, args: Record<string, unknown>, contatoDoTurno: string) {
+  const def = getToolByName(nome)!;
+  const entrada = z.object(def.inputSchema).parse(args);
+  return (await def.handler(entrada as never, {
+    organizationId: ORG,
+    role: "ai_operator",
+    actor: ATOR,
+    apiTokenId: "tok-1",
+    requestId: "req-1",
+    supabase,
+    contatoDoTurno,
+  } as never)) as Record<string, unknown>;
+}
+
+/** Hiperbold D-096: ferramenta ampla fora do turno do Conversador. */
+function naoMontadaNoTurno(nome: string) {
+  expect(montar(nome, DA_CONVERSA)[nome], `${nome} montada no turno`).toBeUndefined();
+  // Controle: a mesma ferramenta é montada sem contato do turno.
+  expect(montar(nome)[nome], `${nome} não montada nem fora do turno`).toBeDefined();
 }
 
 const recusa = (r: unknown) => ({
@@ -196,9 +243,13 @@ describe("crm_list_leads: só os negócios do contato do turno, filtrados antes 
     crm_leads: [negocio(NEGOCIO_DE_B, DE_OUTRO_CLIENTE), negocio(NEGOCIO_DE_B_2, DE_OUTRO_CLIENTE), negocio(NEGOCIO_DO_TURNO, DA_CONVERSA)],
   });
 
-  it("⭐ com turno, nenhum negócio de outro cliente sai, e o do turno sai mesmo com limite 1", async () => {
+  it("Hiperbold D-096: ferramenta ampla fora do turno — crm_list_leads não é montada", () => {
+    naoMontadaNoTurno("crm_list_leads");
+  });
+
+  it("⭐ no handler, com contato do turno, nenhum negócio de outro cliente sai, e o do turno sai mesmo com limite 1", async () => {
     supabase = bancoFalso(tabelas());
-    const r = await executar("crm_list_leads", { limit: 1 }, DA_CONVERSA);
+    const r = await noHandler("crm_list_leads", { limit: 1 }, DA_CONVERSA);
     const leads = r.leads as Linha[];
     expect(leads.map((l) => l.id)).toEqual([NEGOCIO_DO_TURNO]);
   });
@@ -218,7 +269,7 @@ describe("crm_get_lead: uma recusa só para outro cliente e para inexistente", (
   it("⭐ negócio de outro cliente é recusado, e nada dele sai", async () => {
     supabase = bancoFalso(tabelas());
     const r = await executar("crm_get_lead", { lead_id: NEGOCIO_DE_B }, DA_CONVERSA);
-    expect(recusa(r)).toEqual({ permitido: false, motivo: "fora_da_conversa" });
+    expect(recusa(r)).toEqual({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(JSON.stringify(r)).not.toContain(DE_OUTRO_CLIENTE);
   });
 
@@ -257,7 +308,7 @@ describe("crm_list_appointments: a agenda, no turno, é a do contato da conversa
   it("⭐ contact_id de outro cliente é recusado e a agenda não é lida", async () => {
     supabase = bancoFalso(tabelas());
     const r = await executar("crm_list_appointments", { contact_id: DE_OUTRO_CLIENTE }, DA_CONVERSA);
-    expect(recusa(r)).toEqual({ permitido: false, motivo: "fora_da_conversa" });
+    expect(recusa(r)).toEqual({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(listaAgendamentos).not.toHaveBeenCalled();
   });
 
@@ -265,7 +316,7 @@ describe("crm_list_appointments: a agenda, no turno, é a do contato da conversa
     supabase = bancoFalso(tabelas());
     const deOutro = await executar("crm_list_appointments", { lead_id: NEGOCIO_DE_B }, DA_CONVERSA);
     const inexistente = await executar("crm_list_appointments", { lead_id: INEXISTENTE }, DA_CONVERSA);
-    expect(recusa(deOutro)).toEqual({ permitido: false, motivo: "fora_da_conversa" });
+    expect(recusa(deOutro)).toEqual({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(JSON.stringify(inexistente)).toBe(JSON.stringify(deOutro));
     expect(listaAgendamentos).not.toHaveBeenCalled();
   });
@@ -304,9 +355,13 @@ describe("crm_search_contacts: o contato do turno é filtrado ANTES da página",
     contacts: [contato(DE_OUTRO_CLIENTE, "Maria B"), contato(DA_CONVERSA, "Maria A")],
   });
 
-  it("⭐ com limite 1, o contato do turno vem mesmo quando outro casa antes", async () => {
+  it("Hiperbold D-096: ferramenta ampla fora do turno — crm_search_contacts não é montada", () => {
+    naoMontadaNoTurno("crm_search_contacts");
+  });
+
+  it("⭐ no handler, com limite 1, o contato do turno vem mesmo quando outro casa antes", async () => {
     supabase = bancoFalso(tabelas());
-    const r = await executar("crm_search_contacts", { query: "Maria", limit: 1 }, DA_CONVERSA);
+    const r = await noHandler("crm_search_contacts", { query: "Maria", limit: 1 }, DA_CONVERSA);
     expect((r.contacts as Linha[]).map((c) => c.id)).toEqual([DA_CONVERSA]);
   });
 
@@ -338,7 +393,7 @@ describe("crm_list_followups: os retornos, no turno, são os do contato da conve
   it("⭐ contact_id de outro cliente é recusado e nada é lido", async () => {
     supabase = bancoFalso(tabelas());
     const r = await executar("crm_list_followups", { contact_id: DE_OUTRO_CLIENTE }, DA_CONVERSA);
-    expect(recusa(r)).toEqual({ permitido: false, motivo: "fora_da_conversa" });
+    expect(recusa(r)).toEqual({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(listaRetornosNoCrm).not.toHaveBeenCalled();
   });
 
@@ -346,7 +401,7 @@ describe("crm_list_followups: os retornos, no turno, são os do contato da conve
     supabase = bancoFalso(tabelas());
     const deOutro = await executar("crm_list_followups", { lead_id: NEGOCIO_DE_B }, DA_CONVERSA);
     const inexistente = await executar("crm_list_followups", { lead_id: INEXISTENTE }, DA_CONVERSA);
-    expect(recusa(deOutro)).toEqual({ permitido: false, motivo: "fora_da_conversa" });
+    expect(recusa(deOutro)).toEqual({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(JSON.stringify(inexistente)).toBe(JSON.stringify(deOutro));
     expect(listaRetornosNoCrm).not.toHaveBeenCalled();
   });
@@ -399,9 +454,13 @@ describe("crm_list_at_risk_leads: o radar, no turno, cobre só o contato da conv
     ],
   });
 
-  it("⭐ com turno, nada de outro cliente sai — negócio, demanda ou proposta", async () => {
+  it("Hiperbold D-096: ferramenta ampla fora do turno — crm_list_at_risk_leads não é montada", () => {
+    naoMontadaNoTurno("crm_list_at_risk_leads");
+  });
+
+  it("⭐ no handler, com contato do turno, nada de outro cliente sai — negócio, demanda ou proposta", async () => {
     supabase = bancoFalso(tabelas());
-    const r = await executar("crm_list_at_risk_leads", { limit: 50 }, DA_CONVERSA);
+    const r = await noHandler("crm_list_at_risk_leads", { limit: 50 }, DA_CONVERSA);
     const texto = JSON.stringify(r);
     expect(texto).not.toContain(DE_OUTRO_CLIENTE);
     expect(texto).not.toContain("Bruno");
@@ -410,7 +469,7 @@ describe("crm_list_at_risk_leads: o radar, no turno, cobre só o contato da conv
 
   it("⭐ o contato vai NA CONSULTA das três fontes, e não depois", async () => {
     supabase = bancoFalso(tabelas());
-    await executar("crm_list_at_risk_leads", { limit: 50 }, DA_CONVERSA);
+    await noHandler("crm_list_at_risk_leads", { limit: 50 }, DA_CONVERSA);
     for (const tabela of ["crm_leads", "demandas", "crm_proposals"]) {
       const consulta = supabase.consultas.find(
         (c) => c.tabela === tabela && c.filtros["contact_id"] !== undefined,
@@ -441,7 +500,7 @@ describe("crm_list_at_risk_leads: o radar, no turno, cobre só o contato da conv
       ref_id: PROPOSTA_ANTIGA,
     });
     supabase = bancoFalso(t);
-    const r = await executar("crm_list_at_risk_leads", { limit: 50 }, DA_CONVERSA);
+    const r = await noHandler("crm_list_at_risk_leads", { limit: 50 }, DA_CONVERSA);
     expect(r.propostas_esperando_revisao).toEqual([]);
     expect(JSON.stringify(r)).not.toContain(NEGOCIO_DE_B);
   });
@@ -478,9 +537,13 @@ describe("crm_list_human_cases / crm_get_human_case: só os casos do contato do 
     agent_case_events: [],
   });
 
-  it("⭐ a lista e o open_count são do contato do turno", async () => {
+  it("Hiperbold D-096: ferramenta ampla fora do turno — crm_list_human_cases não é montada", () => {
+    naoMontadaNoTurno("crm_list_human_cases");
+  });
+
+  it("⭐ no handler, a lista e o open_count são do contato do turno", async () => {
     supabase = bancoFalso(tabelas());
-    const r = await executar("crm_list_human_cases", { state: "abertos", limit: 20 }, DA_CONVERSA);
+    const r = await noHandler("crm_list_human_cases", { state: "abertos", limit: 20 }, DA_CONVERSA);
     expect((r.cases as Linha[]).map((c) => c.id)).toEqual([CASO_DO_TURNO]);
     expect(r.open_count).toBe(1);
   });
@@ -489,7 +552,7 @@ describe("crm_list_human_cases / crm_get_human_case: só os casos do contato do 
     supabase = bancoFalso(tabelas());
     const deOutro = await executar("crm_get_human_case", { case_id: CASO_DE_B }, DA_CONVERSA);
     const inexistente = await executar("crm_get_human_case", { case_id: INEXISTENTE }, DA_CONVERSA);
-    expect(recusa(deOutro)).toEqual({ permitido: false, motivo: "fora_da_conversa" });
+    expect(recusa(deOutro)).toEqual({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(JSON.stringify(inexistente)).toBe(JSON.stringify(deOutro));
     expect(JSON.stringify(deOutro)).not.toContain("Bruno");
   });

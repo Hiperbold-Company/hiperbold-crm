@@ -42,6 +42,8 @@ const { listContactsHandler, getContactHandler } = await import("@/app/api/v1/co
 const { auditMcpToolCall } = await import("@/lib/mcp/audit");
 const { updateLeadHandler } = await import("@/app/api/v1/leads/_handler");
 const { pickToolsFromMcp } = await import("@/lib/ai/runtime/tools");
+const { getToolByName } = await import("@/lib/mcp/tools");
+const { z } = await import("zod");
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 /** Quem está do outro lado DO LADO DE CÁ — o contato que este turno atende. */
@@ -103,6 +105,26 @@ async function executar(toolIds: string[], args: Record<string, unknown>, contat
   return ferramenta.execute!(args, { toolCallId: "c1", messages: [] } as never);
 }
 
+/**
+ * O HANDLER chamado direto, fora do turno, com `ctx.contatoDoTurno` como o turno o
+ * injeta: `crm_search_contacts` é ampla e o turno do Conversador nem a monta
+ * (Hiperbold D-096), então é assim que a guarda do handler do upstream (#2158)
+ * segue medida.
+ */
+async function noHandler(nome: string, args: Record<string, unknown>, contatoDoTurno: string) {
+  const def = getToolByName(nome)!;
+  const ator = { type: "ai_agent", id: "ag-1", role: "ai_operator" };
+  return def.handler(z.object(def.inputSchema).parse(args) as never, {
+    organizationId: ORG,
+    role: "ai_operator",
+    actor: ator,
+    apiTokenId: "tok-1",
+    requestId: "req-1",
+    supabase: bancoSemTelefones(),
+    contatoDoTurno,
+  } as never);
+}
+
 /** Varredura da ORGANIZAÇÃO: a busca devolve os dois — é o defeito em forma de retorno. */
 function buscaOrg() {
   return {
@@ -143,27 +165,33 @@ beforeEach(() => {
 describe("na conversa, a leitura de contato só alcança o contato do turno", () => {
   // O caso da issue: conversa com A, busca por texto de B, telefone de B na
   // resposta. Antes da mudança a resposta traz o telefone inteiro.
-  it("busca por texto de OUTRO cliente não devolve o telefone do cliente B", async () => {
-    const r = await executar(["crm_search_contacts"], { query: "Maria" }, DA_CONVERSA);
+  it("Hiperbold D-096: ferramenta ampla fora do turno — crm_search_contacts não é montada", () => {
+    expect(montar(["crm_search_contacts"], DA_CONVERSA).crm_search_contacts).toBeUndefined();
+    // Controle: sem contato do turno ela é montada.
+    expect(montar(["crm_search_contacts"]).crm_search_contacts).toBeDefined();
+  });
+
+  it("no handler: busca por texto de OUTRO cliente não devolve o telefone do cliente B", async () => {
+    const r = await noHandler("crm_search_contacts", { query: "Maria" }, DA_CONVERSA);
     expect(idsDe(r)).not.toContain(DE_OUTRO_CLIENTE);
     expect(JSON.stringify(r)).not.toContain(TELEFONE_DE_B);
     expect(JSON.stringify(r)).not.toContain(EMAIL_DE_B);
   });
 
-  it("o contato DA conversa continua na resposta — a ferramenta segue servindo ao propósito dela", async () => {
-    const r = await executar(["crm_search_contacts"], { query: "João Pereira" }, DA_CONVERSA);
+  it("no handler: o contato DA conversa continua na resposta — a ferramenta segue servindo ao propósito dela", async () => {
+    const r = await noHandler("crm_search_contacts", { query: "João Pereira" }, DA_CONVERSA);
     expect(idsDe(r)).toEqual([DA_CONVERSA]);
   });
 
   // Escopo, não tradução: a paginação é da varredura da ORGANIZAÇÃO, e a
   // próxima página voltaria a ser varredura.
-  it("busca que só acha outro cliente volta vazia, sem cursor para a varredura da organização", async () => {
+  it("no handler: busca que só acha outro cliente volta vazia, sem cursor para a varredura da organização", async () => {
     vi.mocked(listContactsHandler).mockResolvedValue({
       contacts: [contato(DE_OUTRO_CLIENTE, "Maria Souza", TELEFONE_DE_B, EMAIL_DE_B)],
       cursor: "cur-9",
       has_more: true,
     } as never);
-    const r = await executar(["crm_search_contacts"], { query: "Maria" }, DA_CONVERSA);
+    const r = await noHandler("crm_search_contacts", { query: "Maria" }, DA_CONVERSA);
     expect(r).toMatchObject({ contacts: [], cursor: null, has_more: false });
   });
 
@@ -188,7 +216,8 @@ describe("na conversa, a leitura de contato só alcança o contato do turno", ()
     expect(vi.mocked(auditMcpToolCall).mock.calls[0]![0]).toMatchObject({
       toolName: "crm_get_contact",
       success: false,
-      errorMessage: "contato_da_conversa:fora_da_conversa",
+      // Hiperbold D-096: a guarda do turno recusa antes do handler, e é ela que audita.
+      errorMessage: "escopo_do_turno:fora_do_contato_do_turno",
     });
   });
 
@@ -247,7 +276,14 @@ describe("a escrita continua mirando só o negócio do contato da conversa", () 
             filtros[coluna] = valor;
             return q;
           },
-          maybeSingle: async () => ({ data: { pipeline_id: FUNIL }, error: null }),
+          // O dono vai junto: a guarda D-096 confere que o negócio escrito é deste contato.
+          maybeSingle: async () => ({
+            data: {
+              pipeline_id: FUNIL,
+              contact_id: doContato.some((n) => n.id === filtros.id) ? DA_CONVERSA : null,
+            },
+            error: null,
+          }),
           then: (ok: (r: unknown) => unknown) =>
             ok({ data: filtros.contact_id === DA_CONVERSA ? doContato : [], error: null }),
         };

@@ -73,6 +73,15 @@ const FUNIL = "77777777-7777-4777-8777-777777777777";
 const CONVERSA_DA_CONVERSA = "aaaaaaaa-1111-4111-8111-111111111111";
 const CONVERSA_DE_B = "aaaaaaaa-2222-4222-8222-222222222222";
 
+/**
+ * Hiperbold D-096: a leitura de UM recurso apontado por `contact_id`, `lead_id` ou
+ * `conversation_id` é recusada pela guarda do turno (`lib/mcp/escopo-do-turno.ts`)
+ * antes do handler, com este motivo. A guarda do handler do upstream (#2184) segue no
+ * código, atrás desta; `crm_list_honorarios_parcelas` (alvo `contrato_id`, fora da
+ * tabela) continua recusada por ela, com `fora_da_conversa`.
+ */
+const RECUSA_DO_TURNO = "fora_do_contato_do_turno";
+
 interface Consulta {
   tabela: string;
   filtros: Record<string, unknown>;
@@ -186,7 +195,7 @@ describe("crm_list_privacy_requests: os pedidos LGPD seguem o contato do turno",
       { limite: 10, contact_id: DE_OUTRO_CLIENTE },
       DA_CONVERSA,
     );
-    expect(recusa(r)).toMatchObject({ permitido: false, motivo: "fora_da_conversa" });
+    expect(recusa(r)).toMatchObject({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(supabase.consultas.some((c) => c.tabela === "lgpd_requests")).toBe(false);
   });
 
@@ -210,7 +219,7 @@ describe("crm_get_honorarios_contrato: o contrato é do caso, e o caso tem dono"
   it("⭐ com turno, o caso de OUTRO cliente é recusado ANTES do contrato ser lido", async () => {
     supabase = supabaseFalso({ crm_leads: { id: CASO_DE_B, contact_id: DE_OUTRO_CLIENTE } });
     const r = await executar(["crm_get_honorarios_contrato"], { lead_id: CASO_DE_B }, DA_CONVERSA);
-    expect(recusa(r)).toMatchObject({ permitido: false, motivo: "fora_da_conversa" });
+    expect(recusa(r)).toMatchObject({ permitido: false, motivo: RECUSA_DO_TURNO });
     // O contrato não foi lido — recusa ANTES da consulta, como no #2178.
     expect(supabase.consultas.some((c) => c.tabela === "honorarios_contratos")).toBe(false);
   });
@@ -218,7 +227,7 @@ describe("crm_get_honorarios_contrato: o contrato é do caso, e o caso tem dono"
   it("⭐ caso INEXISTENTE recebe a MESMA recusa — o uuid não vira oráculo", async () => {
     supabase = supabaseFalso({ crm_leads: null });
     const r = await executar(["crm_get_honorarios_contrato"], { lead_id: INEXISTENTE }, DA_CONVERSA);
-    expect(recusa(r)).toMatchObject({ permitido: false, motivo: "fora_da_conversa" });
+    expect(recusa(r)).toMatchObject({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(supabase.consultas.some((c) => c.tabela === "honorarios_contratos")).toBe(false);
   });
 
@@ -328,7 +337,7 @@ describe("crm_get_conversation_history: o 404 não abre dois estados distintos",
       { conversation_id: INEXISTENTE },
       DA_CONVERSA,
     );
-    expect(recusa(r)).toMatchObject({ permitido: false, motivo: "fora_da_conversa" });
+    expect(recusa(r)).toMatchObject({ permitido: false, motivo: RECUSA_DO_TURNO });
     expect(listMessagesHandler).not.toHaveBeenCalled();
   });
 
@@ -355,7 +364,8 @@ describe("crm_get_conversation_history: o 404 não abre dois estados distintos",
   });
 
   it("a conversa DO contato do turno continua vindo", async () => {
-    supabase = supabaseFalso({});
+    // A guarda D-096 pergunta ao banco de quem é a conversa.
+    supabase = supabaseFalso({ conversations: { contact_id: DA_CONVERSA } });
     vi.mocked(getConversationHandler).mockResolvedValue({
       id: CONVERSA_DA_CONVERSA,
       contact_id: DA_CONVERSA,

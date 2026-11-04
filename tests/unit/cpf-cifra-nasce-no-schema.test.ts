@@ -159,23 +159,38 @@ describe("o código grava os DOIS campos ou NENHUM (#2522)", () => {
     expect(semChave).toEqual({});
   });
 
-  it("os TRÊS call sites passam por `camposCpfParaGravar` e nenhum grava hash sozinho", () => {
+  // Hiperbold D-216: no fork o CPF não vai no INSERT/UPDATE da sessão (o papel `authenticated` não grava
+  // `cpf_hash`/`cpf_encrypted`). Os três call sites (importação, create e patch) cifram pelo helper do servidor
+  // (`cifrarCpfDoContato`, que devolve `null` sem a chave) e gravam o PAR pelo `gravarCpfDoContatoPorUsuario`,
+  // em vez de `camposCpfParaGravar` do upstream. A garantia cobrada é a mesma: os dois campos ou nenhum.
+  it("os TRÊS call sites cifram e gravam o CPF pelo helper do fork (D-216) e nenhum grava hash sozinho", () => {
     const callSites = [
       "app/api/v1/contacts/import/route.ts",
       "app/api/v1/contacts/_handler.ts",
     ];
     for (const caminho of callSites) {
       const fonte = readFileSync(join(process.cwd(), caminho), "utf8");
-      expect(fonte, `${caminho}: sem chamada a camposCpfParaGravar`).toContain(
-        "camposCpfParaGravar(",
+      expect(fonte, `${caminho}: não importa o helper de CPF do fork`).toMatch(
+        /from "@\/lib\/contacts\/cpf-do-contato"/,
       );
+      expect(fonte, `${caminho}: sem cifrar o CPF pelo helper`).toContain("cifrarCpfDoContato(");
+      expect(fonte, `${caminho}: sem gravar o par pelo helper`).toContain("gravarCpfDoContatoPorUsuario(");
+      // Sem a chave de cifra, a linha não grava CPF nenhum (nem só o hash): falha fechada.
+      expect(fonte, `${caminho}: não recusa quando a cifra falha`).toMatch(/if \(!cifrado\)/);
       expect(
         fonte,
         `${caminho}: alguém grava cpf_hash sem passar pela paridade dos dois campos`,
-      ).not.toMatch(/cpf_hash\s*=\s*hashCpf/);
+      ).not.toMatch(/cpf_hash\s*[=:]\s*hashCpf/);
     }
-    // O handler tem dOIS sítios (create e patch) — contados, não presumidos.
+    // O handler tem DOIS sítios (create e patch) — contados, não presumidos. A importação, um.
     const handler = readFileSync(join(process.cwd(), "app/api/v1/contacts/_handler.ts"), "utf8");
-    expect(handler.match(/camposCpfParaGravar\(/g)).toHaveLength(2);
+    expect(handler.match(/\bcifrarCpfDoContato\(/g)).toHaveLength(2);
+    expect(handler.match(/gravarCpfDoContatoPorUsuario\(/g)).toHaveLength(2);
+    const importacao = readFileSync(join(process.cwd(), "app/api/v1/contacts/import/route.ts"), "utf8");
+    expect(importacao.match(/\bcifrarCpfDoContato\(/g)).toHaveLength(1);
+    expect(importacao.match(/gravarCpfDoContatoPorUsuario\(/g)).toHaveLength(1);
+    // E o helper grava os dois campos no MESMO update, nunca um só.
+    const helper = readFileSync(join(process.cwd(), "lib/contacts/cpf-do-contato.ts"), "utf8");
+    expect(helper).toMatch(/\.update\(\{ cpf_hash: cpf\.hash, cpf_encrypted: cpf\.cifrado \}\)/);
   });
 });

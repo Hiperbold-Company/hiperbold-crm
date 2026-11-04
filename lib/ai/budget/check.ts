@@ -29,14 +29,12 @@
  */
 import {
   LIMIAR_PADRAO_PCT,
-  normalizarChaveDeOrcamento,
   normalizarModoDeOrcamento,
   type ChaveDeOrcamento,
   type ModoDeOrcamento,
 } from "@/lib/agent-engine/edge/llm/orcamento";
 import { PONTO_TRANSCRICAO_DE_AUDIO } from "@/lib/ai/pontos/registro";
 import { ORIGENS_DA_TRANSCRICAO_POR_SERVICO } from "@/lib/messaging/media/transcription";
-import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { carregarComportamentoDaInstalacao } from "@/lib/instalacao/comportamento-servidor";
