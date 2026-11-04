@@ -29,7 +29,10 @@ export interface NomesDaAutomacao {
   automacao?: (id: string) => string | null;
 }
 
-export const CAMPOS_PADRAO_DO_CONTATO: Record<Extract<FieldRef, { scope: "contact" }>["key"], string> = {
+export const CAMPOS_PADRAO_DO_CONTATO: Record<
+  Extract<FieldRef, { scope: "contact" }>["key"],
+  string
+> = {
   name: "Nome do contato",
   email: "E-mail do contato",
   phone_number: "Telefone do contato",
@@ -37,17 +40,18 @@ export const CAMPOS_PADRAO_DO_CONTATO: Record<Extract<FieldRef, { scope: "contac
   tags: "Tags do contato",
 };
 
-export const CAMPOS_PADRAO_DO_NEGOCIO: Record<Extract<FieldRef, { scope: "lead" }>["key"], string> = {
-  title: "Título do negócio",
-  value_cents: "Valor do negócio (centavos)",
-  stage_id: "Etapa do negócio",
-  pipeline_id: "Funil do negócio",
-  status: "Situação do negócio",
-  owner_user_id: "Responsável do negócio",
-  source: "Origem do negócio",
-  tags: "Tags do negócio",
-  expected_close_date: "Previsão de fechamento",
-};
+export const CAMPOS_PADRAO_DO_NEGOCIO: Record<Extract<FieldRef, { scope: "lead" }>["key"], string> =
+  {
+    title: "Título do negócio",
+    value_cents: "Valor do negócio (centavos)",
+    stage_id: "Etapa do negócio",
+    pipeline_id: "Funil do negócio",
+    status: "Situação do negócio",
+    owner_user_id: "Responsável do negócio",
+    source: "Origem do negócio",
+    tags: "Tags do negócio",
+    expected_close_date: "Previsão de fechamento",
+  };
 
 export const OPERADORES: Record<OperadorDeCampo, string> = {
   eq: "é igual a",
@@ -241,7 +245,10 @@ export const TIPOS_DE_OPCAO: Record<"buttons" | "list", string> = {
 };
 
 /** O que um bloco de conversa fez num passo (histórico da execução). */
-export const ENVIOS_DA_CONVERSA: Record<"mensagem" | "nova_tentativa" | "tempo_esgotado" | "resposta", string> = {
+export const ENVIOS_DA_CONVERSA: Record<
+  "mensagem" | "nova_tentativa" | "tempo_esgotado" | "resposta",
+  string
+> = {
   mensagem: "Mensagem",
   nova_tentativa: "Nova tentativa",
   tempo_esgotado: "Aviso de tempo esgotado",
@@ -293,14 +300,18 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   plano_limite_atingido: "o limite de negócios do plano foi atingido",
   campo_desconhecido: "o campo não existe no funil",
   tag_vazia: "a tag ficou vazia depois de preencher as variáveis",
-  texto_longo_com_opcoes: "texto passou do limite de 1024 caracteres depois de preencher as variáveis",
+  texto_longo_com_opcoes:
+    "texto passou do limite de 1024 caracteres depois de preencher as variáveis",
   texto_longo: "texto passou do limite de 4096 caracteres depois de preencher as variáveis",
+  texto_longo_instagram:
+    "texto passou do limite do Instagram (1000 caracteres, contando as opções numeradas)",
   // Ação "Iniciar outra automação" (lote 3): o que impediu o início.
   automacao_propria: "a automação não pode iniciar a si mesma",
   automacao_inexistente: "a automação escolhida não existe mais nesta conta",
   automacao_inativa: "a automação escolhida não está ativa",
   automacao_nao_aceita: "a automação escolhida só pode ser iniciada pelas automações da lista dela",
-  automacao_ciclo: "a automação escolhida já está nesta cadeia, e iniciá-la de novo fecharia um ciclo",
+  automacao_ciclo:
+    "a automação escolhida já está nesta cadeia, e iniciá-la de novo fecharia um ciclo",
   automacao_cadeia_longa: "a cadeia de automações passou de 5 passos e foi cortada",
   automacao_contato_invalido: "o contato não pode entrar em automações (removido ou anonimizado)",
   automacao_em_espera: "o contato está no tempo de espera da automação escolhida",
@@ -309,8 +320,10 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   automacao_sem_inicio: "a automação escolhida não tem bloco de Início",
   // Blocos do Instagram (comentários).
   sem_comentario: "a execução não começou por um comentário do Instagram",
-  comentario_nao_encontrado: "o comentário não foi encontrado nesta conta (ou a conexão do Instagram não está ligada)",
-  texto_invalido: "o texto ficou vazio ou passou de 1000 caracteres depois de preencher as variáveis",
+  comentario_nao_encontrado:
+    "o comentário não foi encontrado nesta conta (ou a conexão do Instagram não está ligada)",
+  texto_invalido:
+    "o texto ficou vazio ou passou de 1000 caracteres depois de preencher as variáveis",
 };
 
 /**
@@ -328,7 +341,8 @@ export const MOTIVOS_DO_DESFECHO_DA_RESPOSTA: Record<string, string> = {
   comentario_desconhecido: "o comentário não existe mais no Instagram",
   inelegivel: "o Instagram não aceita resposta privada para este comentário",
   conta_indisponivel: "a conexão do Instagram não está disponível",
-  envio_sem_confirmacao: "o Instagram não confirmou o envio, e ele não foi repetido para não chegar duas vezes",
+  envio_sem_confirmacao:
+    "o Instagram não confirmou o envio, e ele não foi repetido para não chegar duas vezes",
 };
 
 /** O motivo do `instagram.resposta_falhou` em português; código da Meta desconhecido vira "o Instagram recusou (código N)". */

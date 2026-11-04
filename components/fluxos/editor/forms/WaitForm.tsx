@@ -53,10 +53,13 @@ export function WaitForm({
   config,
   onChange,
   surface = "followup",
+  noInstagram = false,
 }: {
   config: ConfigOf<"wait">;
   onChange: (c: ConfigOf<"wait">) => void;
   surface?: FollowupFlowSurface;
+  /** A automação começa por comentário do Instagram: a espera é no Direct, e a IA cede a vez. */
+  noInstagram?: boolean;
 }) {
   const t = useT();
   const naAutomacao = surface === "automacao";
@@ -178,6 +181,14 @@ export function WaitForm({
             onChange={(ms) => commit({ replyMs: ms })}
           />
         </Campo>
+      )}
+      {mode === "until_reply" && naAutomacao && noInstagram && (
+        <p
+          className="rounded-sm border border-border bg-muted p-2 text-xs text-text-muted"
+          data-testid="aviso-espera-no-direct"
+        >
+          {t("Enquanto espera, o agente de IA não responde nesta conversa.")}
+        </p>
       )}
 
       {mode === "fixed" && (

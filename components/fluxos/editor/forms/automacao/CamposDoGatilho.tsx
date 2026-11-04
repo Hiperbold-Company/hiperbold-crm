@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useActiveOrg } from "@/hooks/auth/AuthProvider";
 import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSessions";
-import { ehCanalSocial } from "@/lib/channels/capabilities";
 import { useEtiquetasParaEscolher } from "@/hooks/contacts/useEtiquetasParaEscolher";
 import { useT } from "@/hooks/i18n/useT";
 import {
@@ -37,6 +36,8 @@ import {
   MODOS_DO_COMENTARIO_ROTULOS,
 } from "@/lib/automacoes/vocabulario";
 import { X } from "@/lib/ui/icons";
+
+import { EscolhaDePosts } from "./EscolhaDePosts";
 
 import {
   Campo,
@@ -326,8 +327,9 @@ function CamposDoComentario({
 }) {
   const t = useT();
   const canais = useChannelSessions();
-  // Contas de rede social (a lista de canais não diz qual rede; a capability é o que existe).
-  const contas = (canais.data ?? []).filter((c) => ehCanalSocial(c.provider));
+  // Só as conexões do Instagram (campo `plataforma` da lista de conexões):
+  // Messenger e o social intermediado não recebem comentário.
+  const contas = (canais.data ?? []).filter((c) => c.plataforma === "instagram");
   const escolhidas = g.channel_session_ids ?? [];
   const marcarConta = (id: string, marcado: boolean) => {
     const proximos = marcado ? [...escolhidas, id] : escolhidas.filter((x) => x !== id);
@@ -339,7 +341,9 @@ function CamposDoComentario({
     <>
       <fieldset className="space-y-1.5" data-testid={`${prefixo}-contas`}>
         <legend className="text-sm font-medium text-text">{t("Em quais contas")}</legend>
-        <p className="text-xs text-text-muted">{t("Nenhuma marcada = qualquer conta conectada.")}</p>
+        <p className="text-xs text-text-muted">
+          {t("Nenhuma marcada = qualquer conta conectada.")}
+        </p>
         {contas.map((c) => (
           <Marcador
             key={c.id}
@@ -349,30 +353,22 @@ function CamposDoComentario({
             onChange={(m) => marcarConta(c.id, m)}
           />
         ))}
-        {canais.isError && <p className="text-xs text-error-fg">{t("Não foi possível carregar as contas.")}</p>}
+        {canais.isError && (
+          <p className="text-xs text-error-fg">{t("Não foi possível carregar as contas.")}</p>
+        )}
       </fieldset>
-      <Campo
-        id={`${prefixo}-post`}
-        rotulo={t("Em quais posts")}
-        ajuda={t("Cole o id do post (só números). Nenhum = qualquer post.")}
-      >
-        <ListaDeChips
-          id={`${prefixo}-post`}
-          itens={posts}
-          max={MAX_PUBLICACOES}
-          placeholder={t("Ex.: 17895695668004550")}
-          onChange={(ids) => {
-            const { media_ids: _antes, ...resto } = g;
-            onChange(ids.length > 0 ? { ...resto, media_ids: ids } : resto);
-          }}
-          validar={(texto) => {
-            const id = idDoPostColado(texto);
-            if (!id) return t("Use o id do post (só números). O link do post não traz o id.");
-            if (posts.includes(id)) return t("Esse post já está na lista.");
-            return null;
-          }}
-        />
-      </Campo>
+      <EscolhaDePosts
+        prefixo={prefixo}
+        contas={contas
+          .filter((c) => escolhidas.includes(c.id))
+          .map((c) => ({ id: c.id, rotulo: channelLabel(c, t) }))}
+        escolhidos={posts}
+        max={MAX_PUBLICACOES}
+        onChange={(ids) => {
+          const { media_ids: _antes, ...resto } = g;
+          onChange(ids.length > 0 ? { ...resto, media_ids: ids } : resto);
+        }}
+      />
       <Campo
         id={`${prefixo}-modo`}
         rotulo={t("Qual comentário")}
@@ -381,7 +377,10 @@ function CamposDoComentario({
         <Seletor
           id={`${prefixo}-modo`}
           valor={g.match}
-          opcoes={MODOS_DO_COMENTARIO.map((m) => ({ valor: m, rotulo: t(MODOS_DO_COMENTARIO_ROTULOS[m]) }))}
+          opcoes={MODOS_DO_COMENTARIO.map((m) => ({
+            valor: m,
+            rotulo: t(MODOS_DO_COMENTARIO_ROTULOS[m]),
+          }))}
           onChange={(v) => onChange({ ...g, match: v as ModoDoComentario })}
         />
       </Campo>

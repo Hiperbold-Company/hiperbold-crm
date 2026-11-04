@@ -24,7 +24,11 @@ import { AutomationTriggerForm } from "./forms/automacao/AutomationTriggerForm";
 import { CondicaoAutomacaoForm } from "./forms/automacao/CondicaoAutomacaoForm";
 import { CrmActionForm } from "./forms/automacao/CrmActionForm";
 import { FieldOpForm } from "./forms/automacao/FieldOpForm";
-import { ConfereSeSegueForm, RespostaPrivadaForm, RespostaPublicaForm } from "./forms/automacao/InstagramForms";
+import {
+  ConfereSeSegueForm,
+  RespostaPrivadaForm,
+  RespostaPublicaForm,
+} from "./forms/automacao/InstagramForms";
 import { MessageForm } from "./forms/automacao/MessageForm";
 import { QuestionForm } from "./forms/automacao/QuestionForm";
 import type { RespostaDisponivel } from "./forms/automacao/comum";
@@ -92,7 +96,9 @@ export function NodeConfigPanel({
     <div className="flex h-full flex-col gap-5 overflow-y-auto" data-testid="node-config-panel">
       <div className="space-y-1">
         <h2 className="flex items-center gap-2 text-base font-semibold text-text">
-          <span className={`flex h-6 w-6 items-center justify-center rounded-full ${visual.chipClassName}`}>
+          <span
+            className={`flex h-6 w-6 items-center justify-center rounded-full ${visual.chipClassName}`}
+          >
             <Icon size={14} aria-hidden />
           </span>
           {t(visual.paletteLabel)}
@@ -136,6 +142,7 @@ export function NodeConfigPanel({
             config={node.data.config as ConfigOf<"wait">}
             onChange={(config) => onChange({ config })}
             surface={surface}
+            noInstagram={comecaPorComentario}
           />
         )}
         {type === "message" && (
@@ -185,7 +192,10 @@ export function NodeConfigPanel({
         )}
         {type === "instagram_check_follow" && <ConfereSeSegueForm />}
         {type === "field_op" && (
-          <FieldOpForm config={node.data.config as ConfigOf<"field_op">} onChange={(config) => onChange({ config })} />
+          <FieldOpForm
+            config={node.data.config as ConfigOf<"field_op">}
+            onChange={(config) => onChange({ config })}
+          />
         )}
         {type === "condition" && surface !== "automacao" && (
           <ConditionForm
@@ -213,13 +223,22 @@ export function NodeConfigPanel({
           />
         )}
         {type === "collect" && (
-          <CollectForm config={node.data.config as ConfigOf<"collect">} onChange={(config) => onChange({ config })} />
+          <CollectForm
+            config={node.data.config as ConfigOf<"collect">}
+            onChange={(config) => onChange({ config })}
+          />
         )}
         {type === "skill" && (
-          <SkillForm config={node.data.config as ConfigOf<"skill">} onChange={(config) => onChange({ config })} />
+          <SkillForm
+            config={node.data.config as ConfigOf<"skill">}
+            onChange={(config) => onChange({ config })}
+          />
         )}
         {type === "action" && (
-          <ActionForm config={node.data.config as ConfigOf<"action">} onChange={(config) => onChange({ config })} />
+          <ActionForm
+            config={node.data.config as ConfigOf<"action">}
+            onChange={(config) => onChange({ config })}
+          />
         )}
         {type === "end" && (
           <EndForm
@@ -263,7 +282,8 @@ function ConfiguracoesDoRoteiro({
   const t = useT();
   const atual = { max_tentativas_pergunta: settings?.max_tentativas_pergunta ?? 3, ...settings };
   const [gatilhos, setGatilhos] = useState((settings?.gatilhos ?? []).join(", "));
-  const gravar = (patch: Partial<NonNullable<FlowGraph["settings"]>>) => onSettingsChange?.({ ...atual, ...patch });
+  const gravar = (patch: Partial<NonNullable<FlowGraph["settings"]>>) =>
+    onSettingsChange?.({ ...atual, ...patch });
   const inteiro = (valor: string, min: number, max: number): number | null => {
     const n = Number(valor);
     return Number.isInteger(n) && n >= min && n <= max ? n : null;
@@ -307,11 +327,15 @@ function ConfiguracoesDoRoteiro({
           }}
         />
         <p className="text-xs text-text-muted">
-          {t("Depois de tantas vezes sem resposta, a pergunta é encerrada como não respondida e deixa de ser feita.")}
+          {t(
+            "Depois de tantas vezes sem resposta, a pergunta é encerrada como não respondida e deixa de ser feita.",
+          )}
         </p>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="roteiro-prazo">{t("Encerrar o roteiro depois de quantas horas sem resposta")}</Label>
+        <Label htmlFor="roteiro-prazo">
+          {t("Encerrar o roteiro depois de quantas horas sem resposta")}
+        </Label>
         <Input
           id="roteiro-prazo"
           type="number"
@@ -329,9 +353,10 @@ function ConfiguracoesDoRoteiro({
             if (n !== null) gravar({ expira_em_horas: n });
           }}
         />
-        <p className="text-xs text-text-muted">{t("Em branco, o roteiro encerra depois de 72 horas sem resposta.")}</p>
+        <p className="text-xs text-text-muted">
+          {t("Em branco, o roteiro encerra depois de 72 horas sem resposta.")}
+        </p>
       </div>
     </div>
   );
 }
-

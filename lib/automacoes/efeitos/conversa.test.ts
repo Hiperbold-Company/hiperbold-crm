@@ -25,6 +25,7 @@ import { flowGraphSchema, type FlowNode } from "@/lib/followup/graph-schema";
 import type { EnrollmentEventRef, EnrollmentRow } from "@/lib/followup/node-handlers";
 
 import { TETO_DE_MENSAGENS_POR_HORA } from "../teto-de-mensagens";
+import { fraseDoErro } from "../vocabulario";
 import { executarConversa, idDaMensagemDoPasso } from "./conversa";
 import type { Contexto } from "./index";
 
@@ -762,7 +763,10 @@ describe("executarConversa: envio pelo Direct", () => {
     );
     expect(r.desfecho.ok).toBe(true);
     expect(enviarMock).toHaveBeenCalledTimes(1);
-    const corpo = enviarMock.mock.calls[0]![2] as { conversation_id: string; interactive?: unknown };
+    const corpo = enviarMock.mock.calls[0]![2] as {
+      conversation_id: string;
+      interactive?: unknown;
+    };
     expect(corpo.conversation_id).toBe("conv-ig");
     // As opções seguem para o handler, que as numera no canal sem opções nativas.
     expect(corpo.interactive).toBeDefined();
@@ -827,6 +831,67 @@ describe("executarConversa: envio pelo Direct", () => {
     expect(enviarMock).not.toHaveBeenCalled();
   });
 
+  it("texto acima do limite do Instagram (1000 bytes, contando as opções numeradas): Erro legível, nada enviado; no WhatsApp o mesmo texto sai", async () => {
+    const comCorpo = (body: string, opcoes = false) =>
+      ({
+        ...(opcoes ? NO_COM_OPCOES : NO_MENSAGEM),
+        config: { ...(opcoes ? NO_COM_OPCOES : NO_MENSAGEM).config, body },
+      }) as unknown as Extract<FlowNode, { type: "message" }>;
+    const direct = () => criarBanco(tabelasBase({ conversations: [conversaDoDirect()] })).admin;
+
+    // 1001 bytes de corpo: recusa.
+    const r1 = await executarConversa(
+      contexto(direct(), { vars: VARS_DO_COMENTARIO }),
+      comCorpo("a".repeat(1001)),
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r1)).toBe("texto_longo_instagram");
+    expect(fraseDoErro("texto_longo_instagram")).toMatch(/^texto passou do limite do Instagram/);
+
+    // 990 bytes cabem sozinhos, mas não com "\n\n1) Moradia\n2) Investimento".
+    const r2 = await executarConversa(
+      contexto(direct(), { vars: VARS_DO_COMENTARIO }),
+      comCorpo("a".repeat(990), true),
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r2)).toBe("texto_longo_instagram");
+    // Acentos contam em bytes (ã = 2 bytes): 501 × "ã" = 1002 bytes.
+    const r3 = await executarConversa(
+      contexto(direct(), { vars: VARS_DO_COMENTARIO }),
+      comCorpo("ã".repeat(501)),
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r3)).toBe("texto_longo_instagram");
+    expect(enviarMock).not.toHaveBeenCalled();
+
+    // Dentro do teto: sai.
+    const r4 = await executarConversa(
+      contexto(direct(), { vars: VARS_DO_COMENTARIO }),
+      comCorpo("a".repeat(1000)),
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(r4.desfecho.ok).toBe(true);
+
+    // WhatsApp: 1001 caracteres saem como antes (o teto dele é 4096).
+    const { admin } = criarBanco(tabelasBase());
+    const r5 = await executarConversa(
+      contexto(admin),
+      comCorpo("a".repeat(1001)),
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(r5.desfecho.ok).toBe(true);
+  });
+
   it("contato bloqueado e teto de 30/h continuam valendo no Direct", async () => {
     const bloqueado = criarBanco(
       tabelasBase({
@@ -854,7 +919,9 @@ describe("executarConversa: envio pelo Direct", () => {
       created_at: new Date(AGORA.getTime() - 60_000).toISOString(),
       metadata: { origem_automacao: { enrollment_id: "enr-x", pointer_id: "ptr-x" } },
     }));
-    const cheio = criarBanco(tabelasBase({ conversations: [conversaDoDirect()], messages: recentes }));
+    const cheio = criarBanco(
+      tabelasBase({ conversations: [conversaDoDirect()], messages: recentes }),
+    );
     expect(
       erroDe(
         await executarConversa(
@@ -873,7 +940,9 @@ describe("executarConversa: envio pelo Direct", () => {
     const { admin } = criarBanco(tabelasBase({ conversations: [conversaDoDirect(), conversa()] }));
     const r = await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
     expect(r.desfecho.ok).toBe(true);
-    expect((enviarMock.mock.calls[0]![2] as { conversation_id: string }).conversation_id).toBe("conv-1");
+    expect((enviarMock.mock.calls[0]![2] as { conversation_id: string }).conversation_id).toBe(
+      "conv-1",
+    );
     expect(r.detalhes?.[0]).not.toHaveProperty("canal");
   });
 });

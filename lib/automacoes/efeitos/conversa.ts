@@ -12,9 +12,12 @@
  *      Direct de quem comentou, na conexão do comentário (`conversa-do-direct.ts`;
  *      sem ela: `sem_conversa_direct` — a pessoa ainda não respondeu); nas
  *      demais, a de WhatsApp do contato (sem ela: `sem_conversa_whatsapp`);
- *   2. o contato bloqueado (opt-out): `contato_bloqueado`;
- *   3. a janela de 24h fechada no canal oficial: `janela_fechada`;
- *   4. o teto de 30 mensagens automáticas por hora: `teto_por_hora`.
+ *   2. o texto que sai (com as opções numeradas, se o canal não as desenha)
+ *      dentro do teto do canal (`tetoDoTextoEmBytes`; Direct: 1000 bytes):
+ *      `texto_longo_instagram`;
+ *   3. o contato bloqueado (opt-out): `contato_bloqueado`;
+ *   4. a janela de 24h fechada no canal oficial: `janela_fechada`;
+ *   5. o teto de 30 mensagens automáticas por hora: `teto_por_hora`.
  * A linha nasce marcada `metadata.origem_automacao` (é o que o teto conta) e
  * com id determinístico por execução+passo: o replay do mesmo passo não cria
  * uma segunda linha.
@@ -30,9 +33,11 @@ import { createHash } from "node:crypto";
 
 import { sendMessageHandler } from "@/app/api/v1/messages/_handler";
 import { ApiError } from "@/lib/api/types";
+import { opcoesNativas, tetoDoTextoEmBytes } from "@/lib/channels/capabilities";
 import { ehCanalDeWhatsapp } from "@/lib/channels/canal-de-whatsapp";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
 import { estadoDaJanela } from "@/lib/channels/janela";
+import { textoComOpcoesNumeradas } from "@/lib/channels/opcoes-numeradas";
 import type { OutboundInteractive } from "@/lib/channels/types";
 import type { ResultadoDoEfeito } from "@/lib/followup/engine";
 import type { FlowNode } from "@/lib/followup/graph-schema";
@@ -164,7 +169,22 @@ async function enviar(
     ? await conversaDoDirect(c.admin, c.org, escopo, ids)
     : await conversaDeWhatsapp(c, ids);
   if (!conversa) {
-    return { ok: false, erro: escopo ? "sem_conversa_direct" : "sem_conversa_whatsapp", detalhe: base };
+    return {
+      ok: false,
+      erro: escopo ? "sem_conversa_direct" : "sem_conversa_whatsapp",
+      detalhe: base,
+    };
+  }
+  // Teto do canal (o Direct do Instagram é menor que o do WhatsApp), medido no
+  // texto que SAI: com as opções numeradas quando o canal não as desenha.
+  const tetoDoCanal = tetoDoTextoEmBytes(conversa.provider);
+  if (tetoDoCanal !== null) {
+    const opcoes = envio === "tempo_esgotado" ? undefined : opcoesDoEnvio(node);
+    const saida =
+      opcoes && !opcoesNativas(conversa.provider) ? textoComOpcoesNumeradas(corpo, opcoes) : corpo;
+    if (new TextEncoder().encode(saida).length > tetoDoCanal) {
+      return { ok: false, erro: "texto_longo_instagram", detalhe: base };
+    }
   }
   if (await contatoBloqueado(c)) return { ok: false, erro: "contato_bloqueado", detalhe: base };
   if (estadoDaJanela(conversa.provider, conversa.last_inbound_at, c.agora).tipo === "fechada") {
