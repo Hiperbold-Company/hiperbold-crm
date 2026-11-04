@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { GOV_ADMIN, GOV_ORG, GOV_VIEWER, lastLine, seedGov, sql } from "./gov-helpers";
+import { GOV_ADMIN, GOV_AGENT_A, GOV_ORG, GOV_VIEWER, lastLine, seedGov, sql } from "./gov-helpers";
 
 /**
  * O PEDIDO DE DADOS NASCE E ANDA SÓ PELO CAMINHO DO SERVIDOR (migration 0672, doc 134).
@@ -78,8 +78,11 @@ beforeAll(() => {
 
 describe("os eventos que acordam os workers de LGPD nascem só do servidor", () => {
   for (const tipo of TIPOS_DO_SERVIDOR) {
+    // Hiperbold (0927, D-129): no fork, emit_event pela sessão pede agent ou acima, então o
+    // gatilho é medido com o agent (o papel mais baixo que chega até ele) e o admin; o viewer é
+    // recusado antes, pela própria emit_event, e tem caso próprio.
     for (const [papel, usuario] of [
-      ["viewer", GOV_VIEWER],
+      ["agent", GOV_AGENT_A],
       ["admin", GOV_ADMIN],
     ] as const) {
       it(`⭐ ${papel} não emite ${tipo} pela sessão`, () => {
@@ -90,6 +93,13 @@ describe("os eventos que acordam os workers de LGPD nascem só do servidor", () 
         expect(eventos(tipo, PEDIDO)).toBe(antes);
       });
     }
+
+    it(`⭐ viewer não emite ${tipo} pela sessão (recusado antes, D-129)`, () => {
+      const antes = eventos(tipo, PEDIDO);
+      const e = erroDe(comoUsuario(GOV_VIEWER, emitir(tipo, PEDIDO)));
+      expect(e, `viewer emitiu ${tipo}`).toContain("caller_not_authorized_for_org");
+      expect(eventos(tipo, PEDIDO)).toBe(antes);
+    });
 
     it(`controle positivo: o servidor (service_role) emite ${tipo}`, () => {
       const antes = eventos(tipo, PEDIDO);

@@ -44,6 +44,21 @@ const EVENTO_B = "cccccccc-1915-4000-8000-000000000023";
 // Marca dos eventos que o próprio teste insere, para limpar numa nova rodada.
 const MARCA = "rls-1915";
 
+/**
+ * Hiperbold (0924): no fork a trilha é append-only também pelo PRIVILÉGIO — `authenticated`
+ * não tem UPDATE nem DELETE em `followup_enrollment_events`. A recusa chega como `permission denied`,
+ * antes da RLS; soma com a RLS por operação do upstream, e conta como 0 linha escrita.
+ */
+function escritaNaTrilha(usuario: string, dml: string): number {
+  try {
+    return writeCountAs(usuario, dml);
+  } catch (err) {
+    const stderr = (err as { stderr?: string }).stderr ?? String(err);
+    if (stderr.includes("permission denied for table followup_enrollment_events")) return 0;
+    throw err;
+  }
+}
+
 function existe(tabela: string, id: string): boolean {
   return lastLine(sql(`select exists(select 1 from public.${tabela} where id = '${id}')::text;`)) === "true";
 }
@@ -98,9 +113,9 @@ describe("viewer e agent leem, mas não escrevem", () => {
     ["agent", GOV_AGENT_A],
   ] as const) {
     it(`⭐ ${papel} não apaga nem reescreve a trilha`, () => {
-      expect(writeCountAs(usuario, `delete from public.followup_enrollment_events where id = '${EVENTO}'`)).toBe(0);
+      expect(escritaNaTrilha(usuario, `delete from public.followup_enrollment_events where id = '${EVENTO}'`)).toBe(0);
       expect(
-        writeCountAs(usuario, `update public.followup_enrollment_events set event_type = 'cancelled_manual' where id = '${EVENTO}'`),
+        escritaNaTrilha(usuario, `update public.followup_enrollment_events set event_type = 'cancelled_manual' where id = '${EVENTO}'`),
       ).toBe(0);
       expect(lastLine(sql(`select event_type from public.followup_enrollment_events where id = '${EVENTO}';`))).toBe(
         "paused_manual",
@@ -134,9 +149,9 @@ describe("a trilha é append-only para a equipe inteira", () => {
     ["admin", GOV_ADMIN],
   ] as const) {
     it(`⭐ ${papel} não apaga nem reescreve evento; também não cria nem altera versão`, () => {
-      expect(writeCountAs(usuario, `delete from public.followup_enrollment_events where id = '${EVENTO}'`)).toBe(0);
+      expect(escritaNaTrilha(usuario, `delete from public.followup_enrollment_events where id = '${EVENTO}'`)).toBe(0);
       expect(
-        writeCountAs(usuario, `update public.followup_enrollment_events set event_type = 'cancelled_manual' where id = '${EVENTO}'`),
+        escritaNaTrilha(usuario, `update public.followup_enrollment_events set event_type = 'cancelled_manual' where id = '${EVENTO}'`),
       ).toBe(0);
       expect(writeCountAs(usuario, versaoNova(GOV_ORG))).toBe(0);
       expect(

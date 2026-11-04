@@ -22,7 +22,7 @@ import { criarOrg, criarUsuarios, erroDe, numero, uuid, valor, vincular } from "
 
 const P = "c0b3a001-0000-4000-8000";
 const ORG_A = uuid(P, 1);
-const VIEWER_A = uuid(P, 11);
+const VIEWER_A = uuid(P, 11); // Hiperbold: vinculado como manager (ver beforeAll)
 
 /** INSERT de uma linha do arquivo na forma que a rota de cobrança grava (§2.4). SEM `;`. */
 function evento(provider: string, externalId: string, org: string | null = null): string {
@@ -34,7 +34,10 @@ function evento(provider: string, externalId: string, org: string | null = null)
 beforeAll(() => {
   criarUsuarios([[VIEWER_A, "viewer-a-0601@invariant.test"]]);
   criarOrg(ORG_A, "cob-webhook-a");
-  vincular(VIEWER_A, ORG_A, "viewer");
+  // Hiperbold (0902): ler webhook_events_log pede manager ou acima; o viewer não lê nem a linha
+  // de canal da própria org, e o controle abaixo não enxergaria nada. O membro que mede é gerente
+  // (o papel mais alto que a régua do arquivo mede como leitor da tela).
+  vincular(VIEWER_A, ORG_A, "manager");
 });
 
 describe("webhook_events_log aceita os provedores de cobrança", () => {
@@ -85,7 +88,7 @@ describe("inv. 8 — um evento de cobrança, uma linha", () => {
 });
 
 describe("inv. 1 (parte do arquivo) — o tenant não lê a linha de cobrança", () => {
-  it("⭐ viewer de A lê 0 linhas com provider stripe ou asaas", () => {
+  it("⭐ gerente de A lê 0 linhas com provider stripe ou asaas", () => {
     sql(`${evento("stripe", "evt_invisivel")}; ${evento("asaas", "evt_invisivel")};`);
     expect(
       numero(`select count(*) from public.webhook_events_log where provider in ('stripe', 'asaas');`),
@@ -95,7 +98,7 @@ describe("inv. 1 (parte do arquivo) — o tenant não lê a linha de cobrança",
     ).toBe(0);
   });
 
-  it("controle: o mesmo viewer lê a linha de canal da própria org (a sonda enxerga)", () => {
+  it("controle: o mesmo gerente lê a linha de canal da própria org (a sonda enxerga)", () => {
     sql(`${evento("generic", "evt_visivel", ORG_A)};`);
     expect(countAs(VIEWER_A, `select count(*) from public.webhook_events_log where external_id = 'evt_visivel';`)).toBe(1);
   });

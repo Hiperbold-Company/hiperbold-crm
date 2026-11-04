@@ -58,7 +58,8 @@ async function audio(contato: string, body: string | null = null, metadata: obje
     `insert into messages(id,organization_id,conversation_id,channel_session_id,contact_id,type,direction,status,
                           sent_via,body,media_storage_path,media_derived_text,media_derived_status,sent_at,metadata)
      values($1,$2,$3,$4,$5,'audio','inbound','delivered','external_device',$6,$7,$8,'ready',now(),$9::jsonb)`,
-    [id, ORG, conversaDe.get(contato), SESSAO, contato, body, `${ORG}/${id}.ogg`, TRANSCRICAO, JSON.stringify(metadata)],
+    // Hiperbold (0919): o caminho da mídia fica sob <organização>/<conversa>/, conferido no banco.
+    [id, ORG, conversaDe.get(contato), SESSAO, contato, body, `${ORG}/${conversaDe.get(contato)}/${id}.ogg`, TRANSCRICAO, JSON.stringify(metadata)],
   );
   return id;
 }

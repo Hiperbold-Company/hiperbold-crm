@@ -62,9 +62,13 @@ describe("0755 — user_recovery_codes só pelo servidor", () => {
   }
 
   it("nenhuma policy da tabela abre escrita", () => {
+    // Só policy PERMISSIVE abre escrita. As `user_recovery_codes_mfa_*` do fork Hiperbold
+    // (0949, D-092) são RESTRICTIVE: só estreitam (exigem o segundo fator) e somam com esta
+    // regra; contá-las aqui leria trava como abertura.
     const abertas = sql(`
       select coalesce(string_agg(policyname || ':' || cmd, ','), '') from pg_policies
        where schemaname = 'public' and tablename = 'user_recovery_codes'
+         and permissive = 'PERMISSIVE'
          and cmd in ('ALL', 'INSERT', 'UPDATE', 'DELETE');`);
     expect(abertas).toBe("");
   });

@@ -188,7 +188,9 @@ describe("0921: anonimizar alcança o que sobrava do titular", () => {
     expect(
       sql(`select count(*) from public.messages where conversation_id = '${CONVERSA[VIA_TELA]}';`),
     ).toBe("1");
-    expect(sql(`select body from public.lead_notes where contact_id = '${VIA_TELA}';`)).toBe("[nota anonimizada]");
+    // Merge de 04/11/2026: a cascata do upstream (0494, vence em LGPD) grava '(anonimizado)' na
+    // nota do negócio (headline e corpo); o conteúdo sai do mesmo jeito, só o marcador mudou.
+    expect(sql(`select body from public.lead_notes where contact_id = '${VIA_TELA}';`)).toBe("(anonimizado)");
     expect(
       sql(`select body || '|' || created_by_name from public.conversation_notes where conversation_id = '${CONVERSA[VIA_TELA]}';`),
     ).toBe("[nota anonimizada]|Atendente Ana");

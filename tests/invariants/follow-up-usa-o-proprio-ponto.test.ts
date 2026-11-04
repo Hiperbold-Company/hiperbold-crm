@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import pg from "pg";
 
 import type * as InboundTurn from "@/lib/agent-engine/agent/inbound-turn";
@@ -60,6 +60,14 @@ const VERSION = "eeeeeeee-0000-4000-8000-0000000000f6";
 const MODELO_DO_AGENTE = "claude-do-agente-publicado";
 const MODELO_DO_FOLLOWUP = "claude-barato-do-follow-up";
 
+/**
+ * Na chave da instalação (a do teste: só OpenRouter) o modelo sai escrito como a OpenRouter o
+ * entende, `fabricante/modelo`: o nome puro do agente (provedor `anthropic`) ganha o prefixo.
+ * Por isso a lista da instalação é aberta (`*`) no `beforeAll` — o freio de custo trocaria os
+ * dois modelos de teste pelo Luna e o teste não mediria mais a escolha entre eles.
+ */
+const NA_ROTA = (id: string) => `anthropic/${id}`;
+
 /** Sexta, 14:30 em São Paulo — dentro da janela anti-ban de disparo (7h-22h). */
 const INSTANTE = new Date("2026-09-04T17:30:00Z");
 
@@ -119,7 +127,7 @@ function modeloQueMandaUmaMensagem(texto: string) {
 function deps(texto: string) {
   return {
     crmCfg: { supabase: {} as never },
-    llmCfg: { anthropicApiKey: "fake" } as never,
+    llmCfg: { openrouterApiKey: "fake" } as never,
     knobs: {
       historyLimit: 10,
       maxContextTokens: 1000,
@@ -238,6 +246,8 @@ beforeAll(async () => {
     readCurrentServiceBoundary: (await import("@/lib/atendimento/fronteira-server")).readCurrentServiceBoundary,
   };
 
+  await pool.query("delete from platform_config where chave = 'MODELOS_DA_INSTALACAO'");
+  await pool.query("insert into platform_config(chave, valor, eh_segredo) values('MODELOS_DA_INSTALACAO', '*', false)");
   await pool.query(
     `insert into organizations (id, slug, legal_name, display_name)
      values ($1,'seguimento-proprio','Seguimento Proprio','Seguimento Proprio') on conflict (id) do nothing`,
@@ -283,6 +293,10 @@ beforeAll(async () => {
   await pool.query(`update ai_agents set published_version_id = $1 where id = $2`, [VERSION, AGENT]);
 });
 
+afterAll(async () => {
+  await pool.query("delete from platform_config where chave = 'MODELOS_DA_INSTALACAO'");
+});
+
 beforeEach(async () => {
   enviados = [];
   await pool.query(`delete from ai_purpose_bindings where organization_id = $1`, [ORG]);
@@ -293,7 +307,7 @@ describe("o follow-up chama o modelo como `followup_turn`; a resposta, como `age
     const resposta = await responder();
     expect(resposta.erro).toBeNull();
     expect(await chamadaPrincipal(resposta.jobId)).toEqual([
-      { purpose: "agent_turn", model: MODELO_DO_AGENTE, origem_da_escolha: "agente_publicado", agent_id: AGENT },
+      { purpose: "agent_turn", model: NA_ROTA(MODELO_DO_AGENTE), origem_da_escolha: "agente_publicado", agent_id: AGENT },
     ]);
 
     const retomada = await retomar();
@@ -301,7 +315,7 @@ describe("o follow-up chama o modelo como `followup_turn`; a resposta, como `age
     expect(await chamadaPrincipal(retomada.jobId)).toEqual([
       // O mesmo modelo e a mesma origem de antes do ponto existir — só o
       // `purpose` muda, e é ele que separa o custo do follow-up.
-      { purpose: "followup_turn", model: MODELO_DO_AGENTE, origem_da_escolha: "agente_publicado", agent_id: AGENT },
+      { purpose: "followup_turn", model: NA_ROTA(MODELO_DO_AGENTE), origem_da_escolha: "agente_publicado", agent_id: AGENT },
     ]);
   });
 
@@ -315,7 +329,7 @@ describe("o follow-up chama o modelo como `followup_turn`; a resposta, como `age
     const retomada = await retomar();
     expect(retomada.erro).toBeNull();
     expect(await chamadaPrincipal(retomada.jobId)).toEqual([
-      { purpose: "followup_turn", model: MODELO_DO_FOLLOWUP, origem_da_escolha: "binding", agent_id: AGENT },
+      { purpose: "followup_turn", model: NA_ROTA(MODELO_DO_FOLLOWUP), origem_da_escolha: "binding", agent_id: AGENT },
     ]);
     // O follow-up SAIU — trocar o modelo não pode custar a mensagem.
     expect(enviados).toHaveLength(1);
@@ -324,7 +338,7 @@ describe("o follow-up chama o modelo como `followup_turn`; a resposta, como `age
     const resposta = await responder();
     expect(resposta.erro).toBeNull();
     expect(await chamadaPrincipal(resposta.jobId)).toEqual([
-      { purpose: "agent_turn", model: MODELO_DO_AGENTE, origem_da_escolha: "agente_publicado", agent_id: AGENT },
+      { purpose: "agent_turn", model: NA_ROTA(MODELO_DO_AGENTE), origem_da_escolha: "agente_publicado", agent_id: AGENT },
     ]);
   });
 
@@ -337,7 +351,7 @@ describe("o follow-up chama o modelo como `followup_turn`; a resposta, como `age
     const retomada = await retomar();
     expect(retomada.erro).toBeNull();
     expect(await chamadaPrincipal(retomada.jobId)).toEqual([
-      { purpose: "followup_turn", model: MODELO_DO_AGENTE, origem_da_escolha: "agente_publicado", agent_id: AGENT },
+      { purpose: "followup_turn", model: NA_ROTA(MODELO_DO_AGENTE), origem_da_escolha: "agente_publicado", agent_id: AGENT },
     ]);
   });
 });

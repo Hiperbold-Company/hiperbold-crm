@@ -92,17 +92,21 @@ describe("9093: o admin da organização não grava a ligação do canal com o p
     expect(erro).toContain(RECUSA);
   });
 
+  // Hiperbold (merge de 04/11/2026): no fork, trocar `organization_id` de qualquer tabela pela
+  // sessão já é recusado antes, pelo gatilho `fn_billing_trava_organization_id` (cobrança
+  // própria). As duas travas somam; a que dispara primeiro é a do fork, com a mensagem dela.
+  const RECUSA_DO_FORK_ORGANIZACAO = "organization_id só pode ser alterado pelo servidor";
   it.each([
-    ["desarquivar (archived_at = null)", "archived_at = null"],
-    ["mudar o arquivamento", "archived_at = now() - interval '1 day'"],
-    ["trocar o provedor", "provider = 'zernio_social'"],
-    ["trocar a organização", `organization_id = '${OUTRA_ORG}'`],
-  ])("linha da instalação: %s pela API do banco: 42501", (_rotulo, atribuicao) => {
+    ["desarquivar (archived_at = null)", "archived_at = null", RECUSA],
+    ["mudar o arquivamento", "archived_at = now() - interval '1 day'", RECUSA],
+    ["trocar o provedor", "provider = 'zernio_social'", RECUSA],
+    ["trocar a organização", `organization_id = '${OUTRA_ORG}'`, RECUSA_DO_FORK_ORGANIZACAO],
+  ])("linha da instalação: %s pela API do banco: 42501", (_rotulo, atribuicao, recusa) => {
     const erro = erroDe(() =>
       comoAdmin(`update public.channel_sessions set ${atribuicao} where id = '${CANAL}'`),
     );
     expect(erro, `o admin conseguiu ${_rotulo} SEM erro`).not.toBeNull();
-    expect(erro).toContain(RECUSA);
+    expect(erro).toContain(recusa);
   });
 
   it("linha da instalação: DELETE pela API do banco: 42501", () => {

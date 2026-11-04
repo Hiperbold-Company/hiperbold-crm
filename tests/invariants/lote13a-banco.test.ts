@@ -197,15 +197,23 @@ describe("D-160: dois compromissos ativos do mesmo dono não se sobrepõem", () 
     expect(sql(`select count(*) from public.calendar_appointments where organization_id = '${ORG_AG}' and owner_user_id = '${DONO1}' and starts_at >= '${hora("05:00")}' and starts_at < '${hora("07:00")}';`)).toBe("1");
   });
 
-  it("controle positivo da corrida: donos diferentes não esperam um pelo outro", async () => {
+  it("controle positivo da corrida: donos diferentes no mesmo horário não se recusam (ambos gravam)", async () => {
+    // O guard do upstream (fn_calendar_service_appointment_guard) pega fn_calendar_service_lock(org),
+    // trava por ORGANIZAÇÃO: donos diferentes da mesma org podem esperar um pelo outro, e isso é
+    // aceito (serializa curto e é seguro). O que este controle prova é que a espera termina em
+    // gravação, não em recusa: a trava por dono do D-160 não confunde donos diferentes.
     const a = await pool.connect();
     const b = await pool.connect();
     try {
       await a.query("begin");
       await b.query("begin");
       await a.query(`${compromisso(DONO1, "03:00", "04:00")}`);
-      await b.query(`${compromisso(DONO2, "03:00", "04:00")}`);
+      const segunda = b
+        .query(`${compromisso(DONO2, "03:00", "04:00")}`)
+        .then(() => ({ ok: true as const, code: "" }))
+        .catch((err: { code?: string }) => ({ ok: false as const, code: err.code ?? "" }));
       await a.query("commit");
+      expect(await segunda).toEqual({ ok: true, code: "" });
       await b.query("commit");
     } finally {
       a.release();
@@ -479,7 +487,9 @@ describe("D-147: a visibilidade por atendente vale nas tabelas filhas", () => {
 
   it("a escrita não mudou: viewer barrado, agent escreve onde escrevia (nota e ligação)", () => {
     modo("own_and_unassigned");
-    const nota = (conversa: string) => `insert into public.conversation_notes (organization_id, conversation_id, body) values ('${GOV_ORG}', '${conversa}', 'nova nota');`;
+    // Desde a 0509 do upstream a nota nasce com o autor: created_by_user_id = auth.uid() (soma com a
+    // visibilidade do D-147). Sem o autor, até quem escreve onde escrevia seria recusado.
+    const nota = (conversa: string) => `insert into public.conversation_notes (organization_id, conversation_id, body, created_by_user_id) values ('${GOV_ORG}', '${conversa}', 'nova nota', auth.uid());`;
     expect(comoTenta(GOV_VIEWER, nota(GOV_CONV_UNASSIGNED))).toContain(RLS);
     expect(comoTenta(GOV_AGENT_A, nota(CONV_A))).toBe("");
     const ligacao = `insert into public.voice_calls (organization_id, direction, peer_phone, status, lead_id) values ('${GOV_ORG}', 'outbound', '+5511999990003', 'starting', '${LEAD_A}');`;
@@ -489,11 +499,18 @@ describe("D-147: a visibilidade por atendente vale nas tabelas filhas", () => {
 
   it("agent não edita nem apaga nota de conversa que não enxerga; na própria, sim", () => {
     modo("own");
+    // Desde a 0509 do upstream editar e apagar é do AUTOR (ou manager+): a nota da conversa
+    // própria tem de ser dele. A nota do colega na conversa que ele não vê leva o autor dele
+    // mesmo, para a recusa abaixo vir da visibilidade (D-147) e não da autoria.
+    sql(`insert into public.conversation_notes (organization_id, conversation_id, body, created_by_user_id) values
+      ('${GOV_ORG}', '${CONV_A}', 'nota do agent A', '${GOV_AGENT_A}'),
+      ('${GOV_ORG}', '${GOV_CONV_AGENT_B}', 'nota que A forjou', '${GOV_AGENT_A}');`);
     expect(linhas(GOV_AGENT_A, `update public.conversation_notes set body = 'golpe' where conversation_id = '${GOV_CONV_AGENT_B}'`)).toBe(0);
     expect(linhas(GOV_AGENT_A, `delete from public.conversation_notes where conversation_id = '${GOV_CONV_AGENT_B}'`)).toBe(0);
     expect(linhas(GOV_AGENT_A, `update public.conversation_notes set body = 'ajustada' where conversation_id = '${CONV_A}'`)).toBeGreaterThan(0);
     expect(linhas(GOV_AGENT_A, `delete from public.conversation_notes where conversation_id = '${CONV_A}'`)).toBeGreaterThan(0);
     expect(sql(`select count(*) from public.conversation_notes where conversation_id = '${GOV_CONV_AGENT_B}' and body = 'nota interna';`)).toBe("1");
+    expect(sql(`select count(*) from public.conversation_notes where conversation_id = '${GOV_CONV_AGENT_B}' and body = 'nota que A forjou';`)).toBe("1");
   });
 
   it("a função de apoio é de quem está logado, nunca da chave anônima", () => {

@@ -598,6 +598,8 @@ beforeAll(() => {
         if not exists (select 1 from public.billing_plan_adjustments where organization_id = v_org) then
           insert into public.billing_plan_adjustments (organization_id, limits)
             values (v_org, '{"leads": 100}'::jsonb);
+        end if;
+
         -- migration 0448 (metade B2B do #1621): empresa, pessoa que decide, o
         -- vínculo entre as duas e o lote de planilha com a sua linha. A linha
         -- importada guarda o texto cru da planilha (nome e telefone de gente),

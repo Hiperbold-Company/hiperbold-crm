@@ -71,10 +71,15 @@ async function comUsuario<T>(user: string, run: (db: pg.PoolClient) => Promise<T
   }
 }
 
-/** Um compromisso de hoje à frente: desfecho não entra, só o título. */
+/**
+ * Um compromisso de hoje à frente: desfecho não entra, só o título. Cada chamada ocupa uma hora
+ * própria (de 2 em 2 horas): o dono é o mesmo em todos os casos e o banco recusa dois
+ * compromissos dele no mesmo período (`fn_agenda_sem_sobreposicao`).
+ */
+let proximoHorario = 0;
 async function compromisso(titulo = TITULO_DA_CRIACAO): Promise<string> {
   const id = randomUUID();
-  const inicio = new Date(Date.now() + 3 * 3_600_000);
+  const inicio = new Date(Date.now() + (3 + 2 * proximoHorario++) * 3_600_000);
   await pool.query(
     "insert into calendar_appointments(id,organization_id,contact_id,owner_user_id,title,starts_at,ends_at,status,time_zone) values($1,$2,$3,$4,$5,$6,$7,'confirmed','America/Sao_Paulo')",
     [id, org, contact, manager, titulo, inicio, new Date(inicio.getTime() + 3_600_000)],

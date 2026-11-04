@@ -258,6 +258,13 @@ describe("serviços opt-in e disponibilidade factual", () => {
     const a = await book(id, await contact()); const b = await book(id, await contact());
     expect(a.owner_user_id).toBe(owner); expect(b.owner_user_id).toBe(owner); expect(b.service_occurrence_id).toBe(a.service_occurrence_id);
     expect(await check(another)).toMatchObject({ available: false, reason: "professional_unavailable" });
+    // A trava de sobreposição do dono (0937/0996) só dispensa a MESMA ocorrência: um compromisso comum
+    // do mesmo profissional em cima da turma, inteiro ou parcial, segue recusado.
+    const comum = (inicio: string, fim: string) => pool.query("insert into calendar_appointments(organization_id,owner_user_id,title,starts_at,ends_at,status) values($1,$2,'Individual fictício',$3,$4,'confirmed')", [tenants[0].org, owner, inicio, fim]);
+    await expect(comum(at, em("17:40:00Z"))).rejects.toMatchObject({ code: expect.stringMatching(/^(23P01|PT409)$/) });
+    await expect(comum(em("17:20:00Z"), em("18:00:00Z"))).rejects.toMatchObject({ code: expect.stringMatching(/^(23P01|PT409)$/) });
+    // Controle: logo depois da turma o mesmo profissional está livre (a recusa acima é pela sobreposição).
+    await expect(comum(em("17:40:00Z"), em("18:20:00Z"))).resolves.toBeDefined();
   });
   it("oferece uma turma sem limite e sem responsável fictício", async () => {
     const id = await service();

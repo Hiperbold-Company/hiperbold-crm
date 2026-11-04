@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { GOV_ORG, GOV_SESSION, GOV_VIEWER, lastLine, seedGov, sql } from "./gov-helpers";
+import { GOV_AGENT_A, GOV_ORG, GOV_SESSION, GOV_VIEWER, lastLine, seedGov, sql } from "./gov-helpers";
 import { motivoDoErro } from "./psql-transporte";
 
 /**
@@ -69,13 +69,15 @@ describe("0670 — contact.phone_added alcança a origem (#2812)", () => {
     expect(erro).toContain("reserved_message_received");
   });
 
-  it("CONTROLE: o MESMO viewer emite um tipo não reservado", () => {
+  it("CONTROLE: um atendente emite um tipo não reservado", () => {
     // Sem isto, um 42501 de outra origem (membership, suporte somente leitura)
-    // leria como "a reserva funcionou".
+    // leria como "a reserva funcionou". O Hiperbold CRM exige, no próprio `emit_event`, atendente
+    // ou acima (`caller_not_authorized_for_org`): o viewer não emite NENHUM tipo, então o controle
+    // é um papel que pode emitir.
     const saida = sql(`
       begin;
       set local role authenticated;
-      select set_config('request.jwt.claims', '{"sub":"${GOV_VIEWER}"}', true) is not null;
+      select set_config('request.jwt.claims', '{"sub":"${GOV_AGENT_A}"}', true) is not null;
       select 'EMITIU:' || public.emit_event('contact.tag_added', 'contact', '${CONTATO}'::uuid,
         '{}'::jsonb, '{}'::jsonb, '${GOV_ORG}'::uuid);
       rollback;`);

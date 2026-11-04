@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { GOV_CONTACT_1, GOV_ORG, GOV_VIEWER, seedGov, sql } from "./gov-helpers";
+import { GOV_AGENT_A, GOV_CONTACT_1, GOV_ORG, GOV_VIEWER, seedGov, sql } from "./gov-helpers";
 import { motivoDoErro } from "./psql-transporte";
 
 /**
@@ -13,11 +13,14 @@ import { motivoDoErro } from "./psql-transporte";
  * organização com `emit_event('contact.birthday', ...)`.
  */
 
-function comoViewer(tipo: string): string {
+// Hiperbold (0927, D-129): no fork, emit_event pela sessão pede papel agent ou acima; o
+// viewer só lê e é recusado antes de qualquer reserva. Por isso a reserva e o controle usam
+// o MESMO agent, e um caso próprio prova a recusa do viewer.
+function comoSessao(tipo: string, usuario: string = GOV_AGENT_A): string {
   return `
     begin;
     set local role authenticated;
-    select set_config('request.jwt.claims', '{"sub":"${GOV_VIEWER}"}', true) is not null;
+    select set_config('request.jwt.claims', '{"sub":"${usuario}"}', true) is not null;
     select 'EMITIU:' || public.emit_event('${tipo}', 'contact', '${GOV_CONTACT_1}'::uuid,
       '{}'::jsonb, '{}'::jsonb, '${GOV_ORG}'::uuid);
     rollback;`;
@@ -28,22 +31,33 @@ beforeAll(() => {
 });
 
 describe("0551 — emit_event reserva contact.birthday ao servidor", () => {
-  it("um viewer NÃO emite contact.birthday — 42501", () => {
+  it("um agent NÃO emite contact.birthday — 42501", () => {
     let erro: string | null = null;
     try {
-      sql(comoViewer("contact.birthday"));
+      sql(comoSessao("contact.birthday"));
     } catch (err) {
       erro = motivoDoErro(err);
     }
-    expect(erro, "um viewer emitiu contact.birthday SEM erro").not.toBeNull();
+    expect(erro, "um agent emitiu contact.birthday SEM erro").not.toBeNull();
     // Nome herdado da reserva original (0279): renomear é mudança de contrato.
     expect(erro).toContain("reserved_message_received");
   });
 
-  it("CONTROLE: o MESMO viewer emite um tipo não reservado", () => {
+  it("CONTROLE: o MESMO agent emite um tipo não reservado", () => {
     // Sem isto, um 42501 vindo de outro lugar (membership, suporte somente
     // leitura) leria exatamente como "a reserva funcionou".
-    expect(sql(comoViewer("contact.tag_added"))).toContain("EMITIU:");
+    expect(sql(comoSessao("contact.tag_added"))).toContain("EMITIU:");
+  });
+
+  it("Hiperbold (D-129): o viewer não emite nem o tipo não reservado", () => {
+    let erro: string | null = null;
+    try {
+      sql(comoSessao("contact.tag_added", GOV_VIEWER));
+    } catch (err) {
+      erro = motivoDoErro(err);
+    }
+    expect(erro, "um viewer emitiu SEM erro").not.toBeNull();
+    expect(erro).toContain("caller_not_authorized_for_org");
   });
 
   it("o cron (sem sessão) segue emitindo contact.birthday", () => {

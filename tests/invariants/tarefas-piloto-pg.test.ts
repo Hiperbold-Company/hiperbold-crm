@@ -160,8 +160,11 @@ beforeAll(async () => {
        ($1, $2, 'manager', now(), null),
        ($3, $2, 'viewer',  now(), null),
        ($4, $2, 'agent',   now(), now()),
-       ($5, $6, 'manager', now(), null)`,
-    [DONO_A, ORG_A, VIEWER_A, REVOGADO_A, USER_B, ORG_B],
+       ($5, $6, 'manager', now(), null),
+       ($7, $2, 'agent',   now(), null)`,
+    // OUTRO é membro ativo de A: no Hiperbold CRM o banco só aceita tarefa atribuída a quem é da
+    // organização (0938, D-165, `trg_crm_tasks_vinculos_da_organizacao`).
+    [DONO_A, ORG_A, VIEWER_A, REVOGADO_A, USER_B, ORG_B, OUTRO],
   );
 
   await pool.query(

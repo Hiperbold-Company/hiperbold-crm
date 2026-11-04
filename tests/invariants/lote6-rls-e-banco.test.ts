@@ -58,6 +58,11 @@ const contagem = (tabela: string, onde: string) =>
   Number(sql(`select count(*) from public.${tabela} where ${onde};`));
 
 beforeAll(() => {
+  // Desde a 0619 do upstream a comanda (sales, sale_items, commission_rules, commissions,
+  // loyalty_ledger) é do módulo financeiro e só existe onde ele está instalado. Provisionar aqui
+  // é o caminho real de quem liga o módulo depois do baseline, e a 0995 faz a régua da 0923
+  // valer também nele.
+  sql(`select public.fn_financeiro_provisionar();`);
   sql(`
     insert into auth.users (id, email) values
       ('${VIEWER}', 'viewer-0923@invariant.test'),
@@ -170,6 +175,17 @@ describe("D-138: financeiro no papel da rota", () => {
     expect(linhas(VIEWER, `update public.sales set notes = 'x' where id = '${COMANDA_ABERTA}'`)).toBe(0);
   });
 
+  it("0995: com o módulo provisionado depois do baseline, viewer não abre comanda, agent abre, ninguém apaga", () => {
+    const abrir = (n: number) => `insert into public.sales (organization_id, number, status) values ('${ORG}', ${n}, 'open');`;
+    expect(recusado(() => como(VIEWER, abrir(99231)))).toContain("row-level security");
+    expect(recusado(() => como(AGENT, abrir(99232)))).toBe("");
+    expect(linhas(MANAGER, `delete from public.sales where organization_id = '${ORG}'`)).toBe(0);
+    expect(linhas(AGENT, `delete from public.sales where organization_id = '${ORG}'`)).toBe(0);
+    // e o par amplo da 0619 não sobrou ao lado da régua do fork
+    expect(sql(`select count(*) from pg_policies where schemaname = 'public' and tablename in
+      ('sales','sale_items','commission_rules','commissions','loyalty_ledger') and policyname ~ '_(read|write|all)$';`)).toBe("0");
+  });
+
   it("D-127: item só entra em comanda aberta e da mesma organização", () => {
     const item = (venda: string) => `insert into public.sale_items (organization_id, sale_id, description, unit_price_cents, total_cents)
       values ('${ORG}', '${venda}', 'Item', 100, 100);`;
@@ -236,7 +252,9 @@ describe("D-111 e D-112: números de telefone da voz", () => {
     expect(
       sql(`set role service_role; select organization_id from public.fn_resolve_inbound_number('+5511900009230');`).split("\n").pop(),
     ).toBe(ORG);
-    expect(sql(`select count(*) from pg_proc where proname = 'fn_resolve_inbound_number' and proconfig::text like '%search_path=public%';`)).toBe("1");
+    // search_path fixo. O fork fixava `public`; a 0521 do upstream (Security Advisor) fixou `''`,
+    // mais restrito. O que importa aqui é não ficar mutável.
+    expect(sql(`select count(*) from pg_proc where proname = 'fn_resolve_inbound_number' and proconfig::text like '%search_path=%';`)).toBe("1");
   });
 
   it("D-111 vizinho: fn_colegas_podem_mexer_na_agenda só responde por quem é da organização", () => {

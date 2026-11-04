@@ -107,6 +107,13 @@ interface Mensagem {
    * organização separado do filtro de contato.
    */
   organizacaoDeOutra?: boolean;
+  /**
+   * Só vale com `organizacaoDeOutra`. O Hiperbold CRM tem um gatilho a mais na `messages`
+   * (`trg_messages_vinculos_da_organizacao`, 0933) que recusa a linha incoerente já no INSERT. Por
+   * padrão a bancada o desliga NA TRANSAÇÃO (revertida) para que a sonda continue medindo o filtro
+   * de organização do gatilho do negócio; com `true` ele fica ligado e a linha é recusada.
+   */
+  mantemOGatilhoDeVinculos?: boolean;
 }
 
 /** Os ids sorteados da bancada. Viajam para o Node, então nada vem de `returning`. */
@@ -194,7 +201,9 @@ function bancadaSQL(b: Ids, relogioA: string, relogioB: string): string {
 
 /** A fala do vendedor — a mensagem que dispara o gatilho (ou não, pelo `when`). */
 function mensagemSQL(b: Ids, m: Mensagem): string {
+  const sondaDeOutraOrg = m.organizacaoDeOutra && !m.mantemOGatilhoDeVinculos;
   return `
+    ${sondaDeOutraOrg ? "alter table public.messages disable trigger trg_messages_vinculos_da_organizacao;" : ""}
     insert into public.messages
       (organization_id, conversation_id, channel_session_id, contact_id, type, direction, status, sent_via, created_at, metadata)
     values ('${m.organizacaoDeOutra ? b.outraOrg : b.org}', '${b.conversa}', '${b.sessao}', '${b.contato}',
@@ -393,6 +402,12 @@ describe("0686 · a mensagem do vendedor é atividade do negócio", () => {
     // por um envio de B — a escrita cross-tenant que este repo persegue.
     const outra = medir({ sentVia: "user", direction: "outbound", organizacaoDeOutra: true });
     conferir(outra, []);
+
+    // No Hiperbold CRM a linha incoerente nem chega a existir: o gatilho de vínculos da `messages`
+    // a recusa no INSERT (23503), antes do gatilho do negócio. Soma das duas defesas.
+    expect(() =>
+      medir({ sentVia: "user", direction: "outbound", organizacaoDeOutra: true, mantemOGatilhoDeVinculos: true }),
+    ).toThrow(/Registro vinculado não encontrado/);
 
     // A mesma bancada com o envio de A continua carimbando: a sonda acima é
     // viva, o que ela mede não é "o gatilho não funciona neste arquivo".

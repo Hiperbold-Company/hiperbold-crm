@@ -253,7 +253,7 @@ async function rodarJob(
   expect(claimed?.id).toBe(jobId);
   const handler = m.createInboundTurnHandler({
     crmCfg: { supabase: {} as never },
-    llmCfg: { anthropicApiKey: "chave-de-teste" } as never,
+    llmCfg: { openrouterApiKey: "chave-de-teste" } as never,
     knobs: {
       historyLimit: 10,
       maxContextTokens: 1000,

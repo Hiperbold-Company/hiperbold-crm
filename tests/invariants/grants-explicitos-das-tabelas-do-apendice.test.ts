@@ -75,6 +75,8 @@ const DML = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
 const LE_E_CRIA = ["SELECT", "INSERT"] as const;
 const SO_LE = ["SELECT"] as const;
 const NADA = [] as const;
+/** Hiperbold (0948, D-128): escrita por tabela; a leitura é por COLUNA, sem `path_token` (ver abaixo). */
+const ESCREVE_SEM_LER_A_TABELA = ["INSERT", "UPDATE", "DELETE"] as const;
 
 /** O contrato: privilégio de `authenticated` por tabela. `service_role` tem as quatro em todas; `anon`, nada. */
 const MAPA: Record<string, readonly string[]> = {
@@ -88,10 +90,14 @@ const MAPA: Record<string, readonly string[]> = {
   contact_field_proposals: DML,
   crm_lead_attachments: DML,
   crm_lead_reactivations: DML,
-  crm_lead_risk_states: DML,
-  crm_lead_scores: DML,
-  demanda_conversas: DML,
-  demandas: DML,
+  // Hiperbold (0926, D-113, D-163; reafirmado pela 0992 depois do merge): quem grava estas
+  // quatro é o servidor, então a sessão do membro só lê. A 9037 do upstream as abria às quatro
+  // operações; a soma das duas regras é a 9037 (sem TRUNCATE/REFERENCES/TRIGGER, sem anon) com a
+  // escrita da sessão fechada.
+  crm_lead_risk_states: SO_LE,
+  crm_lead_scores: SO_LE,
+  demanda_conversas: SO_LE,
+  demandas: SO_LE,
   external_db_connections: DML,
   financial_accounts: DML,
   financial_entries: DML,
@@ -104,7 +110,9 @@ const MAPA: Record<string, readonly string[]> = {
   recurring_entries: DML,
   voice_calls: DML,
   voip_trunk_settings: DML,
-  webhook_sources: DML,
+  // Hiperbold (0948, D-128; reafirmado pela 0992): a leitura é por coluna e não inclui
+  // `path_token`; `revoke all` da 9037 apagaria esse recorte.
+  webhook_sources: ESCREVE_SEM_LER_A_TABELA,
   automation_rule_runs: DML, // excesso declarado: ver EXCESSO_DECLARADO
   calendar_locations: LE_E_CRIA,
   calendar_connection_calendars: SO_LE,
@@ -150,6 +158,13 @@ const EXCECOES: Record<string, string> = {
 const EXCESSO_DECLARADO: Record<string, string> = {
   automation_rule_runs:
     "webhooks-rls.test.ts mede a recusa de escrita pela RLS, não pelo privilégio",
+  // Hiperbold (0923, D-138; 0995): o caixa não tem DELETE pela sessão — a régua da 0923 só dá
+  // insert/update a manager, e a 0995 tirou o `_write` `for all` do upstream que somava por OR.
+  // O privilégio de DELETE fica como estava no fork antes do merge; quem recusa é a RLS (0 linha),
+  // e é isso que `lote6-rls-e-banco.test.ts` mede ("manager não apaga conta").
+  account_plans: "lote6-rls-e-banco.test.ts mede a recusa de DELETE pela RLS (0923), não pelo privilégio",
+  financial_accounts: "lote6-rls-e-banco.test.ts mede a recusa de DELETE pela RLS (0923), não pelo privilégio",
+  payment_methods: "lote6-rls-e-banco.test.ts mede a recusa de DELETE pela RLS (0923), não pelo privilégio",
 };
 
 // ── régua derivada do baseline (do #3612, @webtecnica) ─────────────────────────
@@ -200,6 +215,39 @@ function blocoDoApendice(): string {
   const fim = SQL_DO_BASELINE.indexOf("\n-- ---- ", inicio + rotulo.length);
   if (fim === -1) throw new Error("nenhum bloco depois do da 9037 no baseline.");
   return SQL_DO_BASELINE.slice(inicio, fim);
+}
+
+/**
+ * Hiperbold: o bloco da 0992 que repõe, depois da 9037, as restrições do fork nas tabelas do
+ * mapa (escrita só do servidor em quatro delas, leitura por coluna em `webhook_sources`). Extraído
+ * do baseline (última ocorrência, a que vale), não copiado. A atualização roda os dois, nessa ordem.
+ */
+function blocoDoFork(): string {
+  const abre = "do $hb_0992_grants$";
+  const fecha = "$hb_0992_grants$;";
+  const inicio = SQL_DO_BASELINE.lastIndexOf(abre);
+  if (inicio === -1) throw new Error(`bloco ${abre} da 0992 não encontrado no baseline.`);
+  const fim = SQL_DO_BASELINE.indexOf(fecha, inicio);
+  if (fim === -1) throw new Error(`fim do bloco ${abre} não encontrado no baseline.`);
+  return SQL_DO_BASELINE.slice(inicio, fim + fecha.length);
+}
+
+/** A leitura por coluna de `webhook_sources` para `authenticated`: todas menos `path_token`. */
+function leituraDeWebhookSources(db: string): string {
+  return psql(
+    db,
+    `select (count(*) filter (where has_column_privilege('authenticated', 'public.webhook_sources', attname, 'select')))::text
+         || '|' || (count(*) filter (where attname <> 'path_token'))::text
+         || '|' || has_column_privilege('authenticated', 'public.webhook_sources', 'path_token', 'select')::text
+       from pg_attribute
+      where attrelid = 'public.webhook_sources'::regclass and attnum > 0 and not attisdropped;`,
+  );
+}
+
+function confereLeituraDeWebhookSources(db: string): void {
+  const [lidas, semToken, token] = leituraDeWebhookSources(db).split("|");
+  expect(lidas, "authenticated lê exatamente as colunas de webhook_sources menos path_token").toBe(semToken);
+  expect(token, "authenticated não lê webhook_sources.path_token").toBe("false");
 }
 
 // ── banco ───────────────────────────────────────────────────────────────────────
@@ -261,7 +309,7 @@ function colunasComAcl(db: string): string {
     `select count(*) from pg_attribute at
        join pg_class c on c.oid = at.attrelid
        join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
-      where c.relname in (${LISTA_SQL}) and at.attacl is not null;`,
+      where c.relname in (${LISTA_SQL}) and c.relname <> 'webhook_sources' and at.attacl is not null;`,
   );
 }
 
@@ -330,12 +378,14 @@ describe("grants explícitos das tabelas do apêndice (9037)", () => {
     ).toBe("1");
     expect(aclMedido(BANCO_UMA_APLICACAO)).toEqual(aclEsperado());
     expect(colunasComAcl(BANCO_UMA_APLICACAO)).toBe("0");
+    confereLeituraDeWebhookSources(BANCO_UMA_APLICACAO);
   });
 
   it("atualização (baseline aplicado DUAS vezes): o ACL é exatamente o do mapa", () => {
     expect(sql("select count(*) from test_db.aplicacoes_do_baseline;")).toBe("2");
     expect(aclMedido("postgres")).toEqual(aclEsperado());
     expect(colunasComAcl("postgres")).toBe("0");
+    confereLeituraDeWebhookSources("postgres");
   });
 
   it("controle negativo: depois do corte, sem o bloco, authenticated e service_role não alcançam nada", () => {
@@ -351,17 +401,23 @@ describe("grants explícitos das tabelas do apêndice (9037)", () => {
   it("⭐ o ARQUIVO da migration devolve, depois do corte, exatamente o mapa — e reaplicado também", () => {
     simulaOCorte();
     sql(SQL_DA_MIGRATION);
+    sql(blocoDoFork());
     expect(aclMedido("postgres")).toEqual(aclEsperado());
     sql(SQL_DA_MIGRATION);
+    sql(blocoDoFork());
     expect(aclMedido("postgres")).toEqual(aclEsperado());
+    confereLeituraDeWebhookSources("postgres");
   });
 
   it("⭐ o BLOCO do apêndice (extraído do baseline) devolve, depois do corte, exatamente o mapa", () => {
     simulaOCorte();
     sql(blocoDoApendice());
+    sql(blocoDoFork());
     expect(aclMedido("postgres")).toEqual(aclEsperado());
     sql(blocoDoApendice());
+    sql(blocoDoFork());
     expect(aclMedido("postgres")).toEqual(aclEsperado());
+    confereLeituraDeWebhookSources("postgres");
   });
 
   it("anon é negado no comportamento: select como anon recebe permission denied", () => {
@@ -418,6 +474,7 @@ describe("grants explícitos das tabelas do apêndice (9037)", () => {
     beforeAll(() => {
       simulaOCorte();
       sql(SQL_DA_MIGRATION);
+      sql(blocoDoFork());
       sql(`
         insert into auth.users (id, email) values
           ('${GERENTE_A}', 'grants-9037-a@invariant.test'), ('${GERENTE_B}', 'grants-9037-b@invariant.test')

@@ -688,11 +688,20 @@ describe("presença e recuperação transacionais", () => {
       // Desde a 0490 (#1915) a trilha não tem policy de DELETE para a sessão: a
       // RLS esconde a linha antes do gatilho, e o DELETE apaga ZERO em vez de
       // levantar 42501. A contagem explícita é a recusa — "não lançou" não é.
-      const apagou = await c.query(
-        "delete from followup_enrollment_events where enrollment_id=$1 and idempotency_key='t:2'",
-        [enr],
-      );
-      expect(apagou.rowCount).toBe(0);
+      // No Hiperbold CRM o DELETE nem é concedido à sessão (D-1xx, "só o servidor grava": o
+      // REVOKE da trilha na `authenticated`), então a recusa chega antes da RLS, como 42501. As
+      // duas formas são recusa; o que não pode acontecer é apagar.
+      const apagou = await c
+        .query(
+          "delete from followup_enrollment_events where enrollment_id=$1 and idempotency_key='t:2'",
+          [enr],
+        )
+        .then(
+          (r) => ({ apagadas: r.rowCount ?? 0, codigo: null as string | null }),
+          (e: { code?: string }) => ({ apagadas: 0, codigo: e.code ?? null }),
+        );
+      expect(apagou.apagadas).toBe(0);
+      expect([null, "42501"]).toContain(apagou.codigo);
     } finally {
       await c.query("rollback");
       c.release();

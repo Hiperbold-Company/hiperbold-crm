@@ -150,7 +150,7 @@ function deps(prompts: string[], cenario: CenarioDoModelo = {}): InboundTurnDeps
       SUPABASE_URL: "http://127.0.0.1:1",
       SUPABASE_SERVICE_ROLE_KEY: "test-key",
     }),
-    llmCfg: { ...llmEdgeConfigFromEnv(ambiente), anthropicApiKey: "test-key" },
+    llmCfg: { ...llmEdgeConfigFromEnv(ambiente), openrouterApiKey: "test-key" },
     knobs,
     log: createLogger(),
     // Relógio REAL: as mensagens do cenário nascem com `now()`. Fixar o relógio

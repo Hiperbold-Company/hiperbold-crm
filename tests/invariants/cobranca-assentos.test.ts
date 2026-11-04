@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { sql, writeCountAs } from "./gov-helpers";
+import { sql } from "./gov-helpers";
 import {
   assentosOcupados, assinar, chaveDeCobranca, comoServidor, comoUsuario, corrida, criarOrg, criarPlano,
-  criarUsuarios, erroDe, insercaoDeVinculo, tornarPlatformAdmin, uuid, valor, vincular,
+  criarUsuarios, erroDe, insercaoDeVinculo, numero, tornarPlatformAdmin, uuid, valor, vincular,
 } from "./cobranca-helpers";
 
 /**
@@ -23,6 +23,7 @@ const PLANO_1 = uuid(P, 902);
 const PLANO_SEM_TETO = uuid(P, 903);
 const DONO = uuid(P, 950);
 const CHAVE_DO_TENANT = uuid(P, 960);
+const PROVISORIO_RECUSADO = /membro_provisorio_so_pelo_servidor|provisional_until_handover só pode ser gravado pelo servidor/;
 
 beforeAll(() => {
   const gente: Array<readonly [string, string]> = [[DONO, "dono-assentos-0510@invariant.test"]];
@@ -72,16 +73,19 @@ describe("inv. 5 — assentos", () => {
     expect(valor(`select count(*) from public.user_organizations where organization_id = '${org(3)}' and user_id = '${pessoa(8)}';`)).toBe("0");
   });
 
-  it("⭐ o provisório de fn_create_tenant_with_owner não ocupa vaga; torná-lo definitivo acima do teto é recusado", () => {
+  it("⭐ o criador de fn_create_tenant_with_owner entra como membro da agência e não ocupa vaga (0974)", () => {
+    // Regra do fork (0974): quando o dono informado é outra pessoa, o criador nasce
+    // `membro_da_agencia` (antes: provisório). Ele não conta vaga do plano e não é apagado
+    // na entrega; por isso não há mais "torná-lo definitivo" para conferir aqui.
     const nova = valor(comoServidor(`select public.fn_create_tenant_with_owner('${DONO}', '${CHAVE_DO_TENANT}',
       '{"display_name":"Cob Assentos Provisorio","slug":"cob-assentos-provisorio","owner_email":"dono-real-0510@invariant.test"}'::jsonb,
       'abcd')->>'id'`));
-    expect(valor(`select provisional_until_handover::text from public.user_organizations where organization_id = '${nova}' and user_id = '${DONO}';`)).toBe("true");
+    expect(valor(`select membro_da_agencia::text from public.user_organizations where organization_id = '${nova}' and user_id = '${DONO}';`)).toBe("true");
     assinar(nova, PLANO_1);
     vincular(pessoa(9), nova, "admin");
     expect(erroDe(`${insercaoDeVinculo(pessoa(10), nova)};`)).toContain("PT402");
-    expect(erroDe(`update public.user_organizations set provisional_until_handover = false
-                    where organization_id = '${nova}' and user_id = '${DONO}';`)).toContain("PT402");
+    expect(numero(`select count(*) from public.user_organizations
+                    where organization_id = '${nova}' and revoked_at is null and not membro_da_agencia;`)).toBe(1);
   });
 
   it("⭐ a sessão não cria vínculo provisório, nem o admin do tenant pelo PostgREST", () => {
@@ -90,20 +94,27 @@ describe("inv. 5 — assentos", () => {
       `insert into public.user_organizations (user_id, organization_id, role, accepted_at, provisional_until_handover)
          values ('${pessoa(12)}', '${org(5)}', 'agent', now(), true)`));
     expect(insercao).toContain("42501");
-    expect(insercao).toContain("membro_provisorio_so_pelo_servidor");
+    // Dois gatilhos recusam; o do fork (trg_billing_trava_user_organizations_provisorio) dispara
+    // primeiro pela ordem alfabética, com a própria mensagem. Qualquer um dos dois é a recusa certa.
+    expect(insercao).toMatch(PROVISORIO_RECUSADO);
     vincular(pessoa(13), org(5));
     const promocao = erroDe(comoUsuario(pessoa(11),
       `update public.user_organizations set provisional_until_handover = true where organization_id = '${org(5)}' and user_id = '${pessoa(13)}'`));
-    expect(promocao).toContain("membro_provisorio_so_pelo_servidor");
+    expect(promocao).toContain("42501");
+    expect(promocao).toMatch(PROVISORIO_RECUSADO);
     expect(valor(`select count(*) from public.user_organizations where organization_id = '${org(5)}' and provisional_until_handover;`)).toBe("0");
   });
 
-  it("controle: pela sessão o admin ainda inclui membro comum e revoga o provisório existente (rotas de Equipe)", () => {
-    expect(writeCountAs(pessoa(11), insercaoDeVinculo(pessoa(14), org(5)))).toBe(1);
+  it("controle: a sessão não grava vínculo de outra pessoa (0929); o servidor, que as rotas de Equipe usam, inclui e revoga", () => {
+    // Regra do fork (0929, D-125): quem não é o servidor só insere vínculo para si mesmo e não
+    // muda revoked_at. As rotas de Equipe gravam com o cliente de serviço depois de conferir o admin.
+    expect(erroDe(comoUsuario(pessoa(11), insercaoDeVinculo(pessoa(14), org(5))))).toContain("42501");
+    expect(valor(comoServidor(`with x as (${insercaoDeVinculo(pessoa(14), org(5))} returning 1) select count(*) from x`))).toBe("1");
     sql(`insert into public.user_organizations (user_id, organization_id, role, accepted_at, provisional_until_handover)
            values ('${pessoa(15)}', '${org(5)}', 'admin', now(), true);`);
-    expect(writeCountAs(pessoa(11),
-      `update public.user_organizations set revoked_at = now() where organization_id = '${org(5)}' and user_id = '${pessoa(15)}'`)).toBe(1);
+    const revogar = `update public.user_organizations set revoked_at = now() where organization_id = '${org(5)}' and user_id = '${pessoa(15)}'`;
+    expect(erroDe(comoUsuario(pessoa(11), revogar))).toContain("42501");
+    expect(valor(comoServidor(`with x as (${revogar} returning 1) select count(*) from x`))).toBe("1");
   });
 
   it("mudar a organização de um vínculo ativo conta no destino", () => {

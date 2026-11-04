@@ -128,7 +128,9 @@ describe("UPDATE direto da sessão também obedece à barreira de anonimização
   it("controle real: ACL/policy permitem a própria org e escondem a vizinha",async()=>{
     const f=await fixture(),other=await fixture(),session=await pool.connect();
     try{
-      expect((await pool.query("select has_table_privilege('authenticated','public.contacts','UPDATE') as allowed")).rows[0].allowed).toBe(true);
+      // Hiperbold (0967): o UPDATE da sessão em contacts é por coluna (sem as do CPF), então a
+      // pergunta é pela coluna que este caso escreve, não pela tabela inteira.
+      expect((await pool.query("select has_column_privilege('authenticated','public.contacts','is_anonymized','UPDATE') and has_column_privilege('authenticated','public.contacts','anonymized_at','UPDATE') as allowed")).rows[0].allowed).toBe(true);
       expect(await anonymizeDirect(session,f,false)).toBe(1);
       expect((await session.query("update contacts set is_anonymized=true,anonymized_at=clock_timestamp() where id=$1 returning id",[other.contact])).rowCount).toBe(0);
       await session.query("commit");

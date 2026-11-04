@@ -191,8 +191,10 @@ describe("estado novo, enqueue e lease", () => {
   });
   it("scheduler real não promove snapshot copiado de cron ao enqueue", async () => {
     const t=tenants[0]!, id=randomUUID();
-    await asRole("authenticated",t.users.manager,`insert into cron_jobs(id,organization_id,contact_id,kind,job_kind,payload,next_run_at,max_attempts)
-      values($1,$2,$3,'at','inbound_turn',$4,'1800-01-01',1)`,[id,t.org,t.contact,{catalog_presentation_snapshot:snapshot(t.org)}],true);
+    // Desde a D-1xx a sessão `authenticated` só insere cron `at` de `followup_turn` (RLS do Hiperbold CRM);
+    // o `inbound_turn` com snapshot copiado é o dado que este caso fabrica, então entra como o dono do banco.
+    await pool.query(`insert into cron_jobs(id,organization_id,contact_id,kind,job_kind,payload,next_run_at,max_attempts)
+      values($1,$2,$3,'at','inbound_turn',$4,'1800-01-01',1)`,[id,t.org,t.contact,{catalog_presentation_snapshot:snapshot(t.org)}]);
     expect((await pool.query("select id from cron_jobs where enabled and next_run_at<=now() order by next_run_at,id limit 1")).rows[0].id).toBe(id);
     await tickCron(pool,{batchSize:1,staggerWindowMs:0,retryBaseMs:1},log);
     expect((await pool.query("select count(*)::int as n from job_queue where organization_id=$1 and payload ? 'catalog_presentation_snapshot' and kind='inbound_turn'",[t.org])).rows[0].n).toBe(0);

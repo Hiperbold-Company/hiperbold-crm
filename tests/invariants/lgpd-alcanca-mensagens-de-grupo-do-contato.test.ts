@@ -144,7 +144,8 @@ const DO_TITULAR_POR_TELEFONE = randomUUID(); // grafia SEM o nono dígito
 const DO_TITULAR_POR_LID = randomUUID(); // sem telefone no rótulo, com mídia
 const DE_OUTRO_PARTICIPANTE = randomUUID();
 const DE_QUEM_FOI_PELA_TELA = randomUUID();
-const MIDIA = `${ORG}/grupo-titular.jpg`;
+// Hiperbold (0919): o caminho da mídia fica sob <organização>/<conversa>/, conferido no banco.
+const MIDIA = `${ORG}/${CONVERSA_GRUPO}/grupo-titular.jpg`;
 
 async function mensagemDeGrupo(id: string, body: string, sender: object, mediaPath: string | null = null) {
   await q(

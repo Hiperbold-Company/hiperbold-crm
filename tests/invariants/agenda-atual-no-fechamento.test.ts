@@ -68,7 +68,7 @@ describe("o fechamento do motor recebe a reserva atual e a persiste", () => {
     const enviados: string[] = [];
     const handler = createInboundTurnHandler({
       crmCfg: { supabase: {} as never },
-      llmCfg: { anthropicApiKey: "fake" },
+      llmCfg: { openrouterApiKey: "fake" },
       knobs: {
         historyLimit: 10,
         maxContextTokens: 2000,

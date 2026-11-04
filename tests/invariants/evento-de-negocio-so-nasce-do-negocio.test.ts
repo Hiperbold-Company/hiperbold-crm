@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { GOV_LEAD, GOV_MANAGER, GOV_ORG, GOV_VIEWER, seedGov, sql } from "./gov-helpers";
+import { GOV_AGENT_A, GOV_LEAD, GOV_MANAGER, GOV_ORG, GOV_VIEWER, seedGov, sql } from "./gov-helpers";
 import { motivoDoErro } from "./psql-transporte";
 
 /**
@@ -16,6 +16,11 @@ import { motivoDoErro } from "./psql-transporte";
  */
 
 const RESERVADOS = ["lead.won", "lead.lost", "lead.reopened", "lead.assigned"] as const;
+
+// Hiperbold (0927, D-129): no fork, emit_event pela sessão pede papel agent ou acima; o
+// viewer só lê e é recusado antes de qualquer reserva. Por isso a reserva e o controle usam
+// o MESMO agent, e um caso próprio prova a recusa do viewer.
+const MEMBRO = GOV_AGENT_A;
 
 function comoSessao(usuario: string, corpo: string): string {
   return `
@@ -46,8 +51,8 @@ beforeAll(() => {
 
 describe("eventos de desfecho do negócio são do gatilho do negócio", () => {
   it.each(RESERVADOS)("um membro NÃO emite %s por emit_event — 42501", (tipo) => {
-    const erro = erroDe(comoSessao(GOV_VIEWER, emitePorEmitEvent(tipo)));
-    expect(erro, `um viewer emitiu ${tipo} SEM erro`).not.toBeNull();
+    const erro = erroDe(comoSessao(MEMBRO, emitePorEmitEvent(tipo)));
+    expect(erro, `um agent emitiu ${tipo} SEM erro`).not.toBeNull();
     // Nome herdado da reserva original (0279): renomear é mudança de contrato.
     expect(erro).toContain("reserved_message_received");
   });
@@ -55,7 +60,7 @@ describe("eventos de desfecho do negócio são do gatilho do negócio", () => {
   it("nem pelo fn_log_event, que delega a emit_event", () => {
     const erro = erroDe(
       comoSessao(
-        GOV_VIEWER,
+        MEMBRO,
         `select 'EMITIU:' || public.fn_log_event('${GOV_ORG}'::uuid, 'lead.won',
           jsonb_build_object('lead_id', '${GOV_LEAD}'));`,
       ),
@@ -64,10 +69,16 @@ describe("eventos de desfecho do negócio são do gatilho do negócio", () => {
     expect(erro).toContain("reserved_message_received");
   });
 
-  it("CONTROLE: o MESMO viewer emite lead.stage_changed, que a rota de mover emite pela sessão", () => {
+  it("CONTROLE: o MESMO agent emite lead.stage_changed, que a rota de mover emite pela sessão", () => {
     // Sem isto, um 42501 vindo de outro lugar (membership, suporte somente
     // leitura) leria exatamente como "a reserva funcionou".
-    expect(sql(comoSessao(GOV_VIEWER, emitePorEmitEvent("lead.stage_changed")))).toContain("EMITIU:");
+    expect(sql(comoSessao(MEMBRO, emitePorEmitEvent("lead.stage_changed")))).toContain("EMITIU:");
+  });
+
+  it("Hiperbold (D-129): o viewer não emite nem lead.stage_changed", () => {
+    const erro = erroDe(comoSessao(GOV_VIEWER, emitePorEmitEvent("lead.stage_changed")));
+    expect(erro, "um viewer emitiu SEM erro").not.toBeNull();
+    expect(erro).toContain("caller_not_authorized_for_org");
   });
 
   it("ganhar o negócio pela sessão segue emitindo lead.won — e a janela fecha em seguida", () => {
