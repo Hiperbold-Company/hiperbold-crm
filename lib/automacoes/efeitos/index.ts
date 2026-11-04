@@ -58,6 +58,8 @@ export interface Contexto {
   chave: string;
   contatoId: string;
   fatos: FatosDaAutomacao | null;
+  /** `followup_enrollments.vars` da execução (o gatilho mora aqui). */
+  vars?: Record<string, unknown>;
   handler: HandlerCtx;
   agora: Date;
 }
@@ -419,6 +421,7 @@ function contextoDe(admin: SupabaseClient, pedido: PedidoDeEfeito, agora: Date):
     chave: pedido.chave,
     contatoId: enrollment.contact_id,
     fatos: pedido.fatos,
+    vars: enrollment.vars ?? pedido.fatos?.vars,
     agora,
     handler: {
       organization_id: enrollment.organization_id,

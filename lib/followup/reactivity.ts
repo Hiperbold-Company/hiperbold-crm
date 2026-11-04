@@ -58,6 +58,7 @@ import type { EnrollmentPatch } from "./engine";
 import { triggerConfigSchema } from "./api-schemas";
 import type { EnrollmentOutcome, EnrollmentStatus } from "./node-handlers";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
+import { escopoDoDirect, type EscopoDoDirect } from "@/lib/automacoes/conversa-do-direct";
 
 /** Grace pós-resume (spec §4: "grace configurável, default 30min, knob"). */
 export const RESUME_GRACE_MS = 30 * 60_000;
@@ -105,6 +106,12 @@ export interface LiveEnrollmentRef {
    * `until_reply`, que estaciona em `waiting_reply`.
    */
   wait_mode?: string | null;
+  /**
+   * Automação que começou por comentário do Instagram: a conexão e o IGSID do
+   * Direct de quem comentou (`escopoDoDirect`). Ela espera a resposta SÓ
+   * nessa conversa — a mensagem do mesmo contato por outro canal não a acorda.
+   */
+  escopo_direct?: EscopoDoDirect | null;
 }
 
 /** Automação parada num "Esperar um tempo": a mensagem do contato não a acorda
@@ -119,6 +126,15 @@ export function esperaDeTempoPuro(e: Pick<LiveEnrollmentRef, "lane" | "status" |
 export interface ReactivityAdminClient {
   loadConversationContactId(orgId: string, conversationId: string): Promise<string | null>;
   loadContactBlocked(orgId: string, contactId: string): Promise<boolean>;
+  /**
+   * Conexão e id do provedor da conversa (para conferir se é o Direct de uma
+   * execução que começou por comentário). Opcional: adapter que não o tem
+   * trata toda conversa como "não é o Direct dela".
+   */
+  loadConversationRef?(
+    orgId: string,
+    conversationId: string,
+  ): Promise<{ channel_session_id: string | null; provider_conversation_id: string | null } | null>;
   /**
    * `statuses` existe só para o ramo de opt-out, que precisa alcançar o
    * `dormente`. As demais reações usam o default e seguem sem enxergá-lo — em
@@ -261,8 +277,24 @@ async function reactToInbound(
   // `waiting_reply` e `active`, e ele não é nenhum dos dois. É assim que a
   // espera imune sobrevive — não por um `if` de imunidade, mas por não estar
   // no conjunto que reage.
-  const waitingReply = live.filter((e) => e.status === "waiting_reply");
-  const esperaAtiva = live.filter((e) => e.status === "active" && !esperaDeTempoPuro(e));
+  // Execução do Direct: só a mensagem da conversa do Direct de quem comentou
+  // conta como resposta dela. As outras (o mesmo contato pelo WhatsApp, outra
+  // conta) não a acordam nem a cancelam — nada de "O cliente respondeu" falso.
+  const doDirect = live.some((e) => e.escopo_direct);
+  const conversationId = strOrNull(row.payload.conversation_id);
+  const conversa =
+    doDirect && conversationId && db.loadConversationRef
+      ? await db.loadConversationRef(row.organization_id, conversationId)
+      : null;
+  const reageAEsta = (e: LiveEnrollmentRef) =>
+    !e.escopo_direct ||
+    (conversa !== null &&
+      conversa.channel_session_id === e.escopo_direct.channelSessionId &&
+      conversa.provider_conversation_id === e.escopo_direct.autorId);
+  const waitingReply = live.filter((e) => e.status === "waiting_reply" && reageAEsta(e));
+  const esperaAtiva = live.filter(
+    (e) => e.status === "active" && !esperaDeTempoPuro(e) && reageAEsta(e),
+  );
   let reacted = 0;
   for (const e of waitingReply) {
     if (parseCancelOnReply(e.trigger_config)) {
@@ -470,6 +502,21 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
       if (error) throw new Error(error.message);
       return data?.contact_id ?? null;
     },
+    async loadConversationRef(orgId, conversationId) {
+      const { data, error } = await admin
+        .from("conversations")
+        .select("channel_session_id, provider_conversation_id")
+        .eq("id", conversationId)
+        .eq("organization_id", orgId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return (
+        (data as {
+          channel_session_id: string | null;
+          provider_conversation_id: string | null;
+        } | null) ?? null
+      );
+    },
     async loadContactBlocked(orgId, contactId) {
       const { data, error } = await admin
         .from("contacts")
@@ -484,7 +531,7 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
       const ids = await idsDoContatoEGemeos(admin, orgId, contactId);
       let consulta = admin
         .from("followup_enrollments")
-        .select("id, status, current_node_id, steps_taken, pointer_id, updated_at, lane, version_id")
+        .select("id, status, current_node_id, steps_taken, pointer_id, updated_at, lane, version_id, vars")
         .eq("organization_id", orgId)
         .in("contact_id", ids)
         .in("status", statuses);
@@ -537,6 +584,10 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
           updated_at: typeof e.updated_at === "string" ? e.updated_at : undefined,
           lane: e.lane === "automacao" ? "automacao" : "followup",
           wait_mode: modoDoWait(grafoPorVersao.get(e.version_id as string), e.current_node_id),
+          escopo_direct:
+            e.lane === "automacao"
+              ? escopoDoDirect((e as { vars?: Record<string, unknown> | null }).vars)
+              : null,
         };
       });
     },

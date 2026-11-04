@@ -235,6 +235,20 @@ export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
       });
       return { data: id, error: null };
     }
+    if (nome === "emit_event") {
+      // O que importa do `emit_event` do baseline para o canal: uma linha no
+      // `event_log` com tipo, entidade e payload como vieram.
+      t("event_log").push({
+        id: randomUUID(),
+        organization_id: args.p_organization_id,
+        event_type: args.p_event_type,
+        entity_kind: args.p_entity_kind,
+        entity_id: args.p_entity_id,
+        payload: args.p_payload,
+        metadata: args.p_metadata,
+      });
+      return { data: null, error: null };
+    }
     if (nome === "fn_encrypt_oauth") return { data: `cifrado:${String(args.plaintext)}`, error: null };
     return { data: null, error: null };
   };

@@ -245,3 +245,69 @@ export function pisoDaEspera(prazo: string | null, timeoutMs: number, fallback: 
   const t = Date.parse(prazo) - timeoutMs;
   return Number.isFinite(t) ? new Date(t).toISOString() : fallback;
 }
+
+/** O envio que o registro de uma resposta grava no detalhe do efeito (`efeitos/conversa.ts`). */
+export const ENVIO_RESPOSTA = "resposta";
+
+/**
+ * Piso da PRIMEIRA leitura de uma espera numa execução que começou por
+ * comentário (Direct). Quem pede a resposta privada não espera nada: ela sai
+ * pelo cron do canal, e o "quero" pode chegar antes de a execução estacionar no
+ * "Aguardar". Pela régua de sempre (o instante da espera) esse "quero" nunca
+ * contaria, e a execução esperaria por uma resposta que já veio.
+ *
+ * O piso é o mais novo entre:
+ *  - o início da execução (`started_at`);
+ *  - o evento mais antigo que se leu dela (a lista pode vir cortada: nada antes
+ *    do que foi lido pode ser afirmado como "ainda não consumido");
+ *  - o último registro de resposta (`effect_done` com `envio = "resposta"`) de
+ *    OUTRA estadia: a mensagem que respondeu ao bloco anterior não responde a
+ *    este.
+ *
+ * `null` quando não dá para afirmar nada (evento sem `created_at`, início
+ * ilegível) ou quando o bloco ENVIOU nesta estadia (Mensagem com opções,
+ * Pergunta: a resposta só vale depois da mensagem dele) — quem chama fica com
+ * o piso de sempre. A nova tentativa não passa
+ * por aqui (o motor só chama com `novasTentativas === 0`): depois da primeira
+ * leitura, o piso é o da espera em curso, e a resposta lida não é relida.
+ */
+export function pisoDaRespostaNoDirect(
+  events: readonly EnrollmentEventRef[],
+  nodeId: string,
+  inicioDaExecucao: string | null | undefined,
+): string | null {
+  const inicio = Date.parse(inicioDaExecucao ?? "");
+  if (!Number.isFinite(inicio)) return null;
+  // A estadia atual: a sequência final de eventos deste nó (como `estadoDaEspera`).
+  let fimDasAnteriores = events.length;
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]!;
+    if (e.node_id !== nodeId || e.event_type === "node_advanced") break;
+    fimDasAnteriores = i;
+    // Bloco que ENVIOU nesta estadia (Mensagem com opções, Pergunta): a
+    // resposta é à mensagem dele, e só conta depois do envio — o piso de
+    // sempre. O recuo é só da espera que não manda nada ("até responder").
+    if (e.event_type === "effect_done" || e.event_type === "effect_failed") {
+      const d = e.payload?.detalhes;
+      const envio = Array.isArray(d) ? (d[0] as Record<string, unknown> | undefined)?.envio : undefined;
+      if (typeof envio === "string" && envio !== ENVIO_RESPOSTA) return null;
+    }
+  }
+  let piso = inicio;
+  if (events.length > 0) {
+    const primeiro = Date.parse(events[0]!.created_at ?? "");
+    if (!Number.isFinite(primeiro)) return null;
+    piso = Math.max(piso, primeiro);
+  }
+  for (let i = 0; i < fimDasAnteriores; i++) {
+    const e = events[i]!;
+    if (e.event_type !== "effect_done") continue;
+    const detalhes = e.payload?.detalhes;
+    const primeiro = Array.isArray(detalhes) ? (detalhes[0] as Record<string, unknown> | undefined) : undefined;
+    if (primeiro?.envio !== ENVIO_RESPOSTA) continue;
+    const t = Date.parse(e.created_at ?? "");
+    if (!Number.isFinite(t)) return null;
+    piso = Math.max(piso, t);
+  }
+  return new Date(piso).toISOString();
+}

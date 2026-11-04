@@ -1257,7 +1257,8 @@ describe("conexões de canal e credenciais de IA — só leitura por token", () 
     comoToken("viewer", ["mcp:read"]);
     const res = await GET(req(`/api/v1/channel-sessions?organization_id=${ORG_OUTRA}`, "GET"));
     expect(res.status).toBe(200);
-    expect((await res.json()).data).toEqual([canal]);
+    // `plataforma` é derivada no servidor (provider + meta_social_platform), não uma coluna lida crua.
+    expect((await res.json()).data).toEqual([{ ...canal, plataforma: "whatsapp" }]);
     expect(db.chamadas[0]!.filtros.organization_id).toBe(ORG_TOKEN);
     const colunas = JSON.stringify(db.chamadas);
     expect(colunas).not.toMatch(/token|secret|webhook/i);

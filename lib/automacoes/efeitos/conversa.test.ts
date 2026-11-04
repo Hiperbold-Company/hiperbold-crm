@@ -14,6 +14,7 @@ vi.mock("@/app/api/v1/messages/_handler", () => ({ sendMessageHandler: enviarMoc
 import { ApiError } from "@/lib/api/types";
 import { capabilitiesOf, PROVIDERS_DE_MENSAGEM } from "@/lib/channels/capabilities";
 import { ehCanalDeWhatsapp } from "@/lib/channels/canal-de-whatsapp";
+import { ehCanalDoDirect } from "@/lib/channels/canal-do-direct";
 import {
   avancarEnrollmentAtivo,
   type AdminClient,
@@ -24,6 +25,7 @@ import { flowGraphSchema, type FlowNode } from "@/lib/followup/graph-schema";
 import type { EnrollmentEventRef, EnrollmentRow } from "@/lib/followup/node-handlers";
 
 import { TETO_DE_MENSAGENS_POR_HORA } from "../teto-de-mensagens";
+import { fraseDoErro } from "../vocabulario";
 import { executarConversa, idDaMensagemDoPasso } from "./conversa";
 import type { Contexto } from "./index";
 
@@ -708,5 +710,232 @@ describe("resposta da pergunta: nenhum evento guarda o texto do contato", () => 
     expect(m.camposGravados).toHaveLength(1);
     expect(m.row.vars).toMatchObject({ resposta: { question_1: EMAIL.toLowerCase() } });
     expect(JSON.stringify(m.eventos).toLowerCase()).not.toContain("exemplo.com.br");
+  });
+});
+
+// ─── Direct (execução que começou por comentário do Instagram) ─────────────
+// O canal do Direct vem da CAPACIDADE (cerca lint:channels), nunca do nome.
+const CANAL_DO_DIRECT = PROVIDERS_DE_MENSAGEM.find((p) => ehCanalDoDirect(p))!;
+const SESSAO_IG = "sessao-ig";
+const IGSID = "6543210987654321";
+const VARS_DO_COMENTARIO = {
+  gatilho: {
+    tipo: "instagram_comment",
+    comment_id: "17958276893123456",
+    channel_session_id: SESSAO_IG,
+    autor_id: IGSID,
+  },
+};
+
+function conversaDoDirect(over: Linha = {}): Linha {
+  return conversa({
+    id: "conv-ig",
+    channel_session_id: SESSAO_IG,
+    provider_conversation_id: IGSID,
+    channel_sessions: { provider: CANAL_DO_DIRECT },
+    ...over,
+  });
+}
+
+describe("executarConversa: envio pelo Direct", () => {
+  beforeEach(() => {
+    enviarMock.mockReset();
+    enviarMock.mockResolvedValue({ id: "msg-ig", status: "sent" });
+  });
+
+  it("envia pela conversa do Direct de quem comentou (mesma conexão e IGSID), não pela de WhatsApp", async () => {
+    const { admin } = criarBanco(
+      tabelasBase({
+        conversations: [
+          conversa({ id: "conv-wa" }),
+          conversaDoDirect({ id: "outra-conta", channel_session_id: "outra-sessao" }),
+          conversaDoDirect({ id: "outra-pessoa", provider_conversation_id: "999" }),
+          conversaDoDirect(),
+        ],
+      }),
+    );
+    const r = await executarConversa(
+      contexto(admin, { vars: VARS_DO_COMENTARIO }),
+      NO_COM_OPCOES,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(r.desfecho.ok).toBe(true);
+    expect(enviarMock).toHaveBeenCalledTimes(1);
+    const corpo = enviarMock.mock.calls[0]![2] as { conversation_id: string; interactive?: unknown };
+    expect(corpo.conversation_id).toBe("conv-ig");
+    // As opções seguem para o handler, que as numera no canal sem opções nativas.
+    expect(corpo.interactive).toBeDefined();
+    expect(capabilitiesOf(CANAL_DO_DIRECT).interactive).toBe("none");
+    expect(r.detalhes?.[0]).toMatchObject({ canal: "direct", ok: true });
+  });
+
+  it("a pessoa ainda não respondeu (sem conversa do Direct): sem_conversa_direct, nada enviado — mesmo com WhatsApp", async () => {
+    const { admin } = criarBanco(tabelasBase({ conversations: [conversa({ id: "conv-wa" })] }));
+    const r = await executarConversa(
+      contexto(admin, { vars: VARS_DO_COMENTARIO }),
+      NO_MENSAGEM,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r)).toBe("sem_conversa_direct");
+    expect(enviarMock).not.toHaveBeenCalled();
+  });
+
+  it("janela de 24h do Direct fechada: janela_fechada antes de tentar enviar", async () => {
+    const { admin } = criarBanco(
+      tabelasBase({ conversations: [conversaDoDirect({ last_inbound_at: HA_2_DIAS })] }),
+    );
+    const r = await executarConversa(
+      contexto(admin, { vars: VARS_DO_COMENTARIO }),
+      NO_MENSAGEM,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r)).toBe("janela_fechada");
+    expect(enviarMock).not.toHaveBeenCalled();
+  });
+
+  it("conversa do Direct de outra organização não serve", async () => {
+    const { admin } = criarBanco(
+      tabelasBase({ conversations: [conversaDoDirect({ organization_id: OUTRA_ORG })] }),
+    );
+    const r = await executarConversa(
+      contexto(admin, { vars: VARS_DO_COMENTARIO }),
+      NO_MENSAGEM,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r)).toBe("sem_conversa_direct");
+  });
+
+  it("conversa do Direct (mesma conexão e IGSID) de OUTRO contato não serve: sem_conversa_direct", async () => {
+    const { admin } = criarBanco(
+      tabelasBase({ conversations: [conversaDoDirect({ contact_id: "contato-de-outra-pessoa" })] }),
+    );
+    const r = await executarConversa(
+      contexto(admin, { vars: VARS_DO_COMENTARIO }),
+      NO_MENSAGEM,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r)).toBe("sem_conversa_direct");
+    expect(enviarMock).not.toHaveBeenCalled();
+  });
+
+  it("texto acima do limite do Instagram (1000 bytes, contando as opções numeradas): Erro legível, nada enviado; no WhatsApp o mesmo texto sai", async () => {
+    const comCorpo = (body: string, opcoes = false) =>
+      ({
+        ...(opcoes ? NO_COM_OPCOES : NO_MENSAGEM),
+        config: { ...(opcoes ? NO_COM_OPCOES : NO_MENSAGEM).config, body },
+      }) as unknown as Extract<FlowNode, { type: "message" }>;
+    const direct = () => criarBanco(tabelasBase({ conversations: [conversaDoDirect()] })).admin;
+
+    // 1001 bytes de corpo: recusa.
+    const r1 = await executarConversa(
+      contexto(direct(), { vars: VARS_DO_COMENTARIO }),
+      comCorpo("a".repeat(1001)),
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r1)).toBe("texto_longo_instagram");
+    expect(fraseDoErro("texto_longo_instagram")).toMatch(/^texto passou do limite do Instagram/);
+
+    // 990 bytes cabem sozinhos, mas não com "\n\n1) Moradia\n2) Investimento".
+    const r2 = await executarConversa(
+      contexto(direct(), { vars: VARS_DO_COMENTARIO }),
+      comCorpo("a".repeat(990), true),
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r2)).toBe("texto_longo_instagram");
+    // Acentos contam em bytes (ã = 2 bytes): 501 × "ã" = 1002 bytes.
+    const r3 = await executarConversa(
+      contexto(direct(), { vars: VARS_DO_COMENTARIO }),
+      comCorpo("ã".repeat(501)),
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r3)).toBe("texto_longo_instagram");
+    expect(enviarMock).not.toHaveBeenCalled();
+
+    // Dentro do teto: sai.
+    const r4 = await executarConversa(
+      contexto(direct(), { vars: VARS_DO_COMENTARIO }),
+      comCorpo("a".repeat(1000)),
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(r4.desfecho.ok).toBe(true);
+
+    // WhatsApp: 1001 caracteres saem como antes (o teto dele é 4096).
+    const { admin } = criarBanco(tabelasBase());
+    const r5 = await executarConversa(
+      contexto(admin),
+      comCorpo("a".repeat(1001)),
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(r5.desfecho.ok).toBe(true);
+  });
+
+  it("contato bloqueado e teto de 30/h continuam valendo no Direct", async () => {
+    const bloqueado = criarBanco(
+      tabelasBase({
+        conversations: [conversaDoDirect()],
+        contacts: [{ id: CONTATO, organization_id: ORG, is_blocked: true, phone_number: null }],
+      }),
+    );
+    expect(
+      erroDe(
+        await executarConversa(
+          contexto(bloqueado.admin, { vars: VARS_DO_COMENTARIO }),
+          NO_MENSAGEM,
+          ENVIAR,
+          "message-1",
+          noop,
+        ),
+      ),
+    ).toBe("contato_bloqueado");
+
+    const recentes = Array.from({ length: TETO_DE_MENSAGENS_POR_HORA }, (_, i) => ({
+      id: `m${i}`,
+      organization_id: ORG,
+      contact_id: CONTATO,
+      direction: "outbound",
+      created_at: new Date(AGORA.getTime() - 60_000).toISOString(),
+      metadata: { origem_automacao: { enrollment_id: "enr-x", pointer_id: "ptr-x" } },
+    }));
+    const cheio = criarBanco(tabelasBase({ conversations: [conversaDoDirect()], messages: recentes }));
+    expect(
+      erroDe(
+        await executarConversa(
+          contexto(cheio.admin, { vars: VARS_DO_COMENTARIO }),
+          NO_MENSAGEM,
+          ENVIAR,
+          "message-1",
+          noop,
+        ),
+      ),
+    ).toBe("teto_por_hora");
+    expect(enviarMock).not.toHaveBeenCalled();
+  });
+
+  it("execução que não começou por comentário segue sem o canal do Direct (WhatsApp, sem `canal`)", async () => {
+    const { admin } = criarBanco(tabelasBase({ conversations: [conversaDoDirect(), conversa()] }));
+    const r = await executarConversa(contexto(admin), NO_MENSAGEM, ENVIAR, "message-1", noop);
+    expect(r.desfecho.ok).toBe(true);
+    expect((enviarMock.mock.calls[0]![2] as { conversation_id: string }).conversation_id).toBe("conv-1");
+    expect(r.detalhes?.[0]).not.toHaveProperty("canal");
   });
 });

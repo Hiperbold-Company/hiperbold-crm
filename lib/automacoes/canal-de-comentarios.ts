@@ -23,6 +23,12 @@ export { pedirRespostaPrivada, responderNoComentario, conferirSeSegue, ERRO_TEXT
 export type { StatusDoPedido, PedidoDeResposta, OpcoesDaAcao } from "@/lib/channels/meta-social/comentarios";
 export { EVENTO_COMENTARIO_RECEBIDO, ENTIDADE_DO_EVENTO_COMENTARIO, TETO_DO_TEXTO_DA_RESPOSTA_BYTES } from "@/lib/channels/meta-social/comentarios-contrato";
 export type { EventoComentarioRecebido } from "@/lib/channels/meta-social/comentarios-contrato";
+export {
+  EVENTO_RESPOSTA_ENVIADA,
+  EVENTO_RESPOSTA_FALHOU,
+  ENTIDADE_DO_EVENTO_RESPOSTA,
+} from "@/lib/channels/meta-social/comentarios-contrato";
+export type { EventoDesfechoDaResposta } from "@/lib/channels/meta-social/comentarios-contrato";
 
 // ---------------------------------------------------------------------------
 // Identidade do comentarista (não é stub: lê o que o canal já grava)

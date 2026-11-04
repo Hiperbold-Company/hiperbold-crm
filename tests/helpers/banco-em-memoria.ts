@@ -16,8 +16,11 @@ type Filtro = (linha: Linha) => boolean;
 
 function valorDa(linha: Linha, coluna: string): unknown {
   if (coluna.includes("->>")) {
-    const [base, chave] = coluna.split("->>") as [string, string];
-    const obj = linha[base];
+    const [caminho, chave] = coluna.split("->>") as [string, string];
+    // `a->b->>c`: desce pelos objetos de `a->b` antes de ler `c` como texto.
+    const obj = caminho
+      .split("->")
+      .reduce<unknown>((acc, k) => (acc && typeof acc === "object" ? (acc as Linha)[k] : undefined), linha);
     if (obj && typeof obj === "object") {
       const v = (obj as Record<string, unknown>)[chave];
       return v === undefined || v === null ? null : String(v);
@@ -94,6 +97,13 @@ class Consulta implements PromiseLike<ResultadoDoBanco> {
     this.filtros.push((l) => {
       const v = valorDa(l, coluna);
       return v !== null && v !== undefined && (v as string | number) < (valor as string | number);
+    });
+    return this;
+  }
+  lte(coluna: string, valor: unknown): this {
+    this.filtros.push((l) => {
+      const v = valorDa(l, coluna);
+      return v !== null && v !== undefined && (v as string | number) <= (valor as string | number);
     });
     return this;
   }

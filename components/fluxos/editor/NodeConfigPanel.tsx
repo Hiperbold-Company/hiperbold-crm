@@ -46,6 +46,8 @@ interface Props {
   onSettingsChange?: (settings: FlowGraph["settings"]) => void;
   /** Respostas dos blocos de conversa ANTES deste nó (`{{resposta.<chave>}}`) — quem sabe é o canvas. */
   respostasAnteriores?: RespostaDisponivel[];
+  /** A automação começa por comentário do Instagram (a conversa só abre quando a pessoa responde). */
+  comecaPorComentario?: boolean;
 }
 
 /**
@@ -67,6 +69,7 @@ export function NodeConfigPanel({
   settings,
   onSettingsChange,
   respostasAnteriores = [],
+  comecaPorComentario = false,
 }: Props) {
   const t = useT();
   const type = node.type as FlowNode["type"];
@@ -133,6 +136,7 @@ export function NodeConfigPanel({
             config={node.data.config as ConfigOf<"wait">}
             onChange={(config) => onChange({ config })}
             surface={surface}
+            noInstagram={comecaPorComentario}
           />
         )}
         {type === "message" && (
@@ -140,6 +144,7 @@ export function NodeConfigPanel({
             config={node.data.config as ConfigOf<"message">}
             onChange={(config) => onChange({ config })}
             respostas={respostasAnteriores}
+            noInstagram={comecaPorComentario}
           />
         )}
         {type === "question" && (
@@ -148,6 +153,7 @@ export function NodeConfigPanel({
             onChange={(config) => onChange({ config })}
             nodeId={node.id}
             respostas={respostasAnteriores}
+            noInstagram={comecaPorComentario}
           />
         )}
         {type === "condition" && surface === "automacao" && (

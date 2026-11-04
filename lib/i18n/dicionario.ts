@@ -14971,6 +14971,72 @@ export const DICIONARIO: Traducoes = {
   "a execução não começou por um comentário do Instagram": { es: "la ejecución no empezó por un comentario de Instagram" },
   "o comentário não foi encontrado nesta conta (ou a conexão do Instagram não está ligada)": { es: "el comentario no se encontró en esta cuenta (o la conexión de Instagram no está activa)" },
   "o texto ficou vazio ou passou de 1000 caracteres depois de preencher as variáveis": { es: "el texto quedó vacío o superó los 1000 caracteres después de completar las variables" },
+  // Direct no fluxo das automações.
+  "No Instagram, as opções chegam numeradas (1, 2, 3) e a pessoa responde com o número.": { es: "En Instagram, las opciones llegan numeradas (1, 2, 3) y la persona responde con el número." },
+  "No Instagram, esta mensagem sai pelo Direct de quem comentou.": { es: "En Instagram, este mensaje sale por el Direct de quien comentó." },
+  "A conversa abre quando a pessoa responde: ponha antes deste bloco um “Aguardar” em “Esperar o contato responder”.": { es: "La conversación se abre cuando la persona responde: pon antes de este bloque un “Aguardar” en “Esperar a que el contacto responda”." },
+  "No Instagram, a conversa só abre quando a pessoa responde. Ponha um 'Aguardar o contato responder' antes.": { es: "En Instagram, la conversación solo se abre cuando la persona responde. Pon un 'Esperar a que el contacto responda' antes." },
+  "Respondeu no Direct": { es: "Respondió en Direct" },
+  "enviada pelo Direct": { es: "enviada por Direct" },
+  "a conversa do Direct ainda não abriu: a pessoa precisa responder primeiro": {
+    es: "la conversación de Direct aún no se abrió: la persona necesita responder primero",
+  },
+  // Direct no fluxo, parte 2.
+  "O texto (com as opções numeradas) passa do limite do Instagram (1000 bytes; acento e emoji contam mais de um).": { es: "El texto (con las opciones numeradas) supera el límite de Instagram (1000 bytes; los acentos y emojis cuentan más de uno)." },
+  "Ou cole o id do post": { es: "O pega el id de la publicación" },
+  "Sem conta do Instagram para achar o link. Cole o id do post (só números).": { es: "Sin cuenta de Instagram para encontrar el enlace. Pega el id de la publicación (solo números)." },
+  "Conta não encontrada": { es: "Cuenta no encontrada" },
+  "Resposta privada saiu": { es: "Respuesta privada enviada" },
+  "Resposta privada falhou": { es: "Respuesta privada fallida" },
+  "Resposta pública saiu": { es: "Respuesta pública enviada" },
+  "Resposta pública falhou": { es: "Respuesta pública fallida" },
+  "passou o prazo de 7 dias do comentário": { es: "pasó el plazo de 7 días del comentario" },
+  "o comentário não existe mais no Instagram": { es: "el comentario ya no existe en Instagram" },
+  "o Instagram não aceita resposta privada para este comentário": {
+    es: "Instagram no acepta respuesta privada para este comentario",
+  },
+  "a conexão do Instagram não está disponível": {
+    es: "la conexión de Instagram no está disponible",
+  },
+  "o Instagram não confirmou o envio, e ele não foi repetido para não chegar duas vezes": {
+    es: "Instagram no confirmó el envío, y no se repitió para que no llegue dos veces",
+  },
+  "o Instagram não informou o motivo": { es: "Instagram no informó el motivo" },
+  "o Instagram recusou o envio": { es: "Instagram rechazó el envío" },
+  "Automação que começa por comentário do Instagram não pode ter outros gatilhos quando manda mensagens.":
+    {
+      es: "Una automatización que empieza por un comentario de Instagram no puede tener otros disparadores cuando envía mensajes.",
+    },
+  "Esse link não é de um post ou reel do Instagram (instagram.com/p/… ou /reel/…).": {
+    es: "Ese enlace no es de una publicación o reel de Instagram (instagram.com/p/… o /reel/…).",
+  },
+  "Não achamos esse post entre os recentes desta conta.": {
+    es: "No encontramos esa publicación entre las recientes de esta cuenta.",
+  },
+  "A conta do Instagram não está disponível. Confira a conexão.": {
+    es: "La cuenta de Instagram no está disponible. Revisa la conexión.",
+  },
+  "O Instagram não respondeu. Tente de novo em instantes.": {
+    es: "Instagram no respondió. Inténtalo de nuevo en unos instantes.",
+  },
+  "Muitas tentativas. Aguarde um minuto e tente de novo.": {
+    es: "Demasiados intentos. Espera un minuto e inténtalo de nuevo.",
+  },
+  "Não foi possível ler os posts da conta.": {
+    es: "No fue posible leer las publicaciones de la cuenta.",
+  },
+  "Nenhum escolhido = qualquer post.": { es: "Ninguno elegido = cualquier publicación." },
+  "Conecte uma conta do Instagram para listar os posts.": { es: "Conecta una cuenta de Instagram para listar las publicaciones." },
+  "Conta dos posts": { es: "Cuenta de las publicaciones" },
+  "Carregando os posts…": { es: "Cargando las publicaciones…" },
+  "Esta conta ainda não tem posts.": { es: "Esta cuenta aún no tiene publicaciones." },
+  "Sem legenda": { es: "Sin descripción" },
+  "Ou cole o link do post": { es: "O pega el enlace de la publicación" },
+  "A lista de posts está cheia.": { es: "La lista de publicaciones está llena." },
+  "texto passou do limite do Instagram (1000 bytes, contando as opções numeradas; acento e emoji contam mais de um)": { es: "el texto superó el límite de Instagram (1000 bytes, contando las opciones numeradas; los acentos y emojis cuentan más de uno)" },
+  "Enquanto espera, o agente de IA não responde nesta conversa.": {
+    es: "Mientras espera, el agente de IA no responde en esta conversación.",
+  },
 };
 
 /**

@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 
 import {
   AjudaDeVariaveis,
+  AvisoDoDirect,
   Campo,
   Seletor,
   SeletorDeCampo,
@@ -163,11 +164,14 @@ export function MessageForm({
   config,
   onChange,
   respostas = [],
+  noInstagram = false,
 }: {
   config: MessageConfig;
   onChange: (config: MessageConfig) => void;
   /** Respostas dos blocos anteriores, oferecidas como variável. */
   respostas?: RespostaDisponivel[];
+  /** A automação começa por comentário do Instagram: a mensagem sai pelo Direct. */
+  noInstagram?: boolean;
 }) {
   const t = useT();
   const [r, setR] = useState<Rascunho>(() => rascunhoDe(config, t));
@@ -268,6 +272,8 @@ export function MessageForm({
         </div>
       </div>
 
+      {noInstagram && <AvisoDoDirect />}
+
       {comOpcoes && (
         <>
           <div
@@ -275,9 +281,11 @@ export function MessageForm({
             data-testid="mensagem-aviso-canal"
           >
             <p>
-              {t(
-                "No WhatsApp oficial o contato vê botões; nos outros números, as opções chegam numeradas (1, 2, 3) e ele responde com o número.",
-              )}
+              {noInstagram
+                ? t("No Instagram, as opções chegam numeradas (1, 2, 3) e a pessoa responde com o número.")
+                : t(
+                    "No WhatsApp oficial o contato vê botões; nos outros números, as opções chegam numeradas (1, 2, 3) e ele responde com o número.",
+                  )}
             </p>
             <p>{t("A resposta é processada em até 1 minuto.")}</p>
           </div>

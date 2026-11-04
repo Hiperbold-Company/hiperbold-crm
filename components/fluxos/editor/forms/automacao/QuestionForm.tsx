@@ -17,6 +17,7 @@ import { useT } from "@/hooks/i18n/useT";
 
 import {
   AjudaDeVariaveis,
+  AvisoDoDirect,
   Campo,
   Seletor,
   SeletorDeCampo,
@@ -73,11 +74,14 @@ export function QuestionForm({
   onChange,
   nodeId,
   respostas = [],
+  noInstagram = false,
 }: {
   config: QuestionConfig;
   onChange: (config: QuestionConfig) => void;
   nodeId: string;
   respostas?: RespostaDisponivel[];
+  /** A automação começa por comentário do Instagram: a pergunta sai pelo Direct. */
+  noInstagram?: boolean;
 }) {
   const t = useT();
   const [r, setR] = useState<Rascunho>({
@@ -111,6 +115,7 @@ export function QuestionForm({
 
   return (
     <div className="space-y-4" data-testid="question-form">
+      {noInstagram && <AvisoDoDirect />}
       <Campo id="pergunta-texto" rotulo={t("Pergunta")}>
         <Textarea
           id="pergunta-texto"

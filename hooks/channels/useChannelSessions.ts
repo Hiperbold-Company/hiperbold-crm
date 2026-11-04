@@ -22,6 +22,12 @@ export interface ChannelSession {
   daily_message_limit: number;
   is_warmup_complete: boolean | null;
   created_at: string;
+  /**
+   * A rede da conexão: `whatsapp`, `instagram` ou `messenger` (canal social
+   * oficial), `null` quando a linha não diz (social intermediado). Opcional:
+   * resposta de servidor anterior não traz o campo.
+   */
+  plataforma?: "whatsapp" | "instagram" | "messenger" | null;
 }
 
 export type ConnectionHealth = "connected" | "connecting" | "down" | "none" | "unknown";

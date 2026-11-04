@@ -117,6 +117,8 @@ export interface EnrollmentEventRef {
   idempotency_key: string | null;
   event_type?: string | null;
   payload?: Record<string, unknown> | null;
+  /** Quando o evento foi gravado. Opcional: só o piso da resposta no Direct o lê (`pisoDaRespostaNoDirect`). */
+  created_at?: string | null;
 }
 
 export type NodeResult =

@@ -8,12 +8,22 @@ import {
   duracaoMaximaDaEspera,
   duracaoMinimaDaEspera,
   ehRegraNova,
+  NO_REPLY_BRANCH_ID,
   nodeBranches,
 } from './graph-schema';
 import { NOS_DA_SUPERFICIE } from './registro-de-nos';
 import { rotuloDoRamo } from './rotulo-do-ramo';
 import type { NomesDeValor } from './vocabulario';
-import { capabilitiesOf, transportaMensagem, type ChannelProvider } from '../channels/capabilities';
+import {
+  capabilitiesOf,
+  opcoesNativas,
+  PROVIDERS_SOCIAIS,
+  TETO_DO_TEXTO_DO_DIRECT_BYTES,
+  transportaMensagem,
+  type ChannelProvider,
+} from '../channels/capabilities';
+import { bytesDoTextoQueSai } from '../channels/opcoes-numeradas';
+import type { OutboundInteractive } from '../channels/types';
 
 /**
  * Structural publish validator for follow-up flow graphs.
@@ -54,6 +64,9 @@ export const PUBLISH_ERROR_CODES = [
   'automacao_iniciar_inexistente',
   'instagram_sem_gatilho_de_comentario',
   'instagram_publica_antes_da_privada',
+  'instagram_mensagem_antes_da_resposta',
+  'instagram_gatilhos_misturados',
+  'instagram_texto_longo',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -228,6 +241,108 @@ function validarBlocosDoInstagram(graph: FlowGraph, errors: PublishValidationErr
   }
 }
 
+/** A aresta é a saída "Sem resposta" (o tempo acabou e a pessoa não respondeu). */
+function ehSaidaSemResposta(e: FlowEdge): boolean {
+  return (
+    (e.condition.type === 'branch' && e.condition.branch_id === NO_REPLY_BRANCH_ID) ||
+    (e.condition.type === 'class_match' && e.condition.value === NO_REPLY_BRANCH_ID)
+  );
+}
+
+export const TEXTO_LONGO_NO_INSTAGRAM =
+  'O texto (com as opções numeradas) passa do limite do Instagram (1000 bytes; acento e emoji contam mais de um).';
+
+export const GATILHOS_MISTURADOS_NO_INSTAGRAM =
+  "Automação que começa por comentário do Instagram não pode ter outros gatilhos quando manda mensagens.";
+
+export const MENSAGEM_ANTES_DA_RESPOSTA_NO_INSTAGRAM =
+  "No Instagram, a conversa só abre quando a pessoa responde. Ponha um 'Aguardar o contato responder' antes.";
+
+/**
+ * Automação que começa por comentário: a conversa do Direct só existe depois
+ * que a pessoa responde (a resposta privada é o único primeiro envio possível,
+ * e não abre conversa no CRM). Mensagem ou Pergunta alcançável a partir do
+ * Início sem passar pela saída "Respondeu" de um "Aguardar até responder" sai
+ * sempre por "Erro" — recusa na publicação, com a frase que diz o que fazer.
+ * A saída "Sem resposta" da espera não conta: a pessoa não respondeu.
+ */
+function validarConversaNoDirect(graph: FlowGraph, errors: PublishValidationError[]): void {
+  const gatilhos = graph.nodes.flatMap((n) => (n.type === 'trigger' && 'triggers' in n.config ? n.config.triggers : []));
+  if (!gatilhos.some((g) => g.kind === 'instagram_comment')) return;
+  // Mensagem e Pergunta saem pelo Direct quando a execução começou por
+  // comentário, e pelo WhatsApp nas outras: com gatilhos misturados o mesmo
+  // bloco mudaria de canal conforme quem o iniciou. Recusa.
+  const conversa = graph.nodes.filter((n) => n.type === 'message' || n.type === 'question');
+  if (conversa.length > 0 && gatilhos.some((g) => g.kind !== 'instagram_comment')) {
+    const inicio = graph.nodes.find((n) => n.type === 'trigger');
+    errors.push({
+      node_id: inicio?.id ?? conversa[0]!.id,
+      code: 'instagram_gatilhos_misturados',
+      message: GATILHOS_MISTURADOS_NO_INSTAGRAM,
+    });
+  }
+  // O teto do Direct é em BYTES, com as opções numeradas (o canal social não
+  // desenha botão): a mesma régua do envio (`bytesDoTextoQueSai`). O texto aqui
+  // ainda tem as variáveis cruas; o envio confere de novo depois de preenchê-las.
+  const opcoesNativasNoDirect = PROVIDERS_SOCIAIS.every((p) => opcoesNativas(p));
+  for (const n of [...conversa].sort(byId)) {
+    const textos: Array<{ texto: string | undefined; comOpcoes: boolean }> =
+      n.type === 'message'
+        ? [
+            { texto: n.config.body, comOpcoes: true },
+            { texto: n.config.invalid_reply?.message, comOpcoes: true },
+          ]
+        : [
+            { texto: n.config.question, comOpcoes: false },
+            { texto: n.config.retry_message, comOpcoes: false },
+            { texto: n.config.timeout_message, comOpcoes: false },
+          ];
+    const opcoes = n.type === 'message' ? (n.config.options as OutboundInteractive | undefined) : undefined;
+    const passou = textos.some(
+      ({ texto, comOpcoes }) =>
+        typeof texto === 'string' &&
+        bytesDoTextoQueSai(texto.trim(), comOpcoes ? opcoes : undefined, opcoesNativasNoDirect) >
+          TETO_DO_TEXTO_DO_DIRECT_BYTES,
+    );
+    if (passou) {
+      errors.push({
+        node_id: n.id,
+        code: 'instagram_texto_longo',
+        message: `"${n.label}": ${TEXTO_LONGO_NO_INSTAGRAM}`,
+      });
+    }
+  }
+  const porId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const saidas = new Map<string, FlowEdge[]>();
+  for (const e of graph.edges) saidas.set(e.source, [...(saidas.get(e.source) ?? []), e]);
+  const fila = graph.nodes.filter((n) => n.type === 'trigger').map((n) => n.id);
+  const vistos = new Set<string>();
+  const acusados: FlowNode[] = [];
+  while (fila.length > 0) {
+    const id = fila.shift()!;
+    if (vistos.has(id)) continue;
+    vistos.add(id);
+    const n = porId.get(id);
+    if (!n) continue;
+    if (n.type === 'message' || n.type === 'question') {
+      acusados.push(n);
+      continue;
+    }
+    const esperaResposta = n.type === 'wait' && n.config.mode === 'until_reply';
+    for (const e of saidas.get(id) ?? []) {
+      if (esperaResposta && !ehSaidaSemResposta(e)) continue;
+      fila.push(e.target);
+    }
+  }
+  for (const n of acusados.sort(byId)) {
+    errors.push({
+      node_id: n.id,
+      code: 'instagram_mensagem_antes_da_resposta',
+      message: `"${n.label}": ${MENSAGEM_ANTES_DA_RESPOSTA_NO_INSTAGRAM}`,
+    });
+  }
+}
+
 /** Regras do roteiro de atendimento que o grafo sozinho não carrega. */
 function validarSuperficie(
   graph: FlowGraph,
@@ -338,7 +453,10 @@ function validarSuperficie(
       }
     }
   }
-  if (surface === 'automacao') validarBlocosDoInstagram(graph, errors);
+  if (surface === 'automacao') {
+    validarBlocosDoInstagram(graph, errors);
+    validarConversaNoDirect(graph, errors);
+  }
   // Os gatilhos de uma AUTOMAÇÃO moram no nó Início (vários por fluxo); nos
   // follow-ups, em `pointer.trigger_config`, e o Início fica sem configuração.
   for (const n of [...graph.nodes].sort(byId)) {

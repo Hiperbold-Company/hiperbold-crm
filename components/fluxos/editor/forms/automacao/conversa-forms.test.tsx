@@ -270,6 +270,29 @@ describe("QuestionForm", () => {
 });
 
 describe("WaitForm na automação", () => {
+  it('"até responder" numa automação por comentário avisa que a IA não responde enquanto espera; fora dela, não', () => {
+    const { unmount } = montar(
+      <WaitForm
+        config={{ mode: "until_reply", timeout_ms: 7_200_000 }}
+        onChange={vi.fn()}
+        surface="automacao"
+        noInstagram
+      />,
+    );
+    expect(screen.getByTestId("aviso-espera-no-direct")).toHaveTextContent(
+      "Enquanto espera, o agente de IA não responde nesta conversa.",
+    );
+    unmount();
+    montar(
+      <WaitForm
+        config={{ mode: "until_reply", timeout_ms: 7_200_000 }}
+        onChange={vi.fn()}
+        surface="automacao"
+      />,
+    );
+    expect(screen.queryByTestId("aviso-espera-no-direct")).not.toBeInTheDocument();
+  });
+
   it("espera em segundos abre no modo dela, com o número que estava no nó", () => {
     montar(
       <WaitForm
@@ -371,5 +394,41 @@ describe("respostasAntesDe", () => {
       "{{resposta.question_1}}",
     ]);
     expect(respostasAntesDe("question-1", nodes, edges)).toEqual([]);
+  });
+});
+
+describe("Mensagem e Pergunta numa automação que começa por comentário do Instagram", () => {
+  const comOpcoes: MessageConfig = {
+    body: "Escolha",
+    options: { kind: "buttons", items: [{ id: "opcao_a", label: "Quero" }] },
+    reply_timeout_ms: 86_400_000,
+  } as MessageConfig;
+
+  it("a Mensagem avisa que sai pelo Direct, que a conversa abre quando a pessoa responde e que as opções chegam numeradas", () => {
+    montar(<MessageForm config={comOpcoes} onChange={vi.fn()} noInstagram />);
+    const direct = screen.getByTestId("aviso-do-direct");
+    expect(direct).toHaveTextContent("No Instagram, esta mensagem sai pelo Direct de quem comentou.");
+    expect(direct).toHaveTextContent("A conversa abre quando a pessoa responde");
+    const canal = screen.getByTestId("mensagem-aviso-canal");
+    expect(canal).toHaveTextContent("No Instagram, as opções chegam numeradas (1, 2, 3)");
+    expect(canal).not.toHaveTextContent("WhatsApp");
+  });
+
+  it("a Pergunta também avisa; fora do Instagram nenhum dos dois aviso aparece", () => {
+    const pergunta: QuestionConfig = questionConfigSchema.parse({
+      question: "Qual o seu e-mail?",
+      save_to: { scope: "contact", key: "email" },
+      validation: "email",
+      timeout_ms: 86_400_000,
+      retries: 1,
+    });
+    const { unmount } = montar(
+      <QuestionForm config={pergunta} onChange={vi.fn()} nodeId="q1" noInstagram />,
+    );
+    expect(screen.getByTestId("aviso-do-direct")).toBeInTheDocument();
+    unmount();
+    montar(<MessageForm config={comOpcoes} onChange={vi.fn()} />);
+    expect(screen.queryByTestId("aviso-do-direct")).toBeNull();
+    expect(screen.getByTestId("mensagem-aviso-canal")).toHaveTextContent("No WhatsApp oficial");
   });
 });

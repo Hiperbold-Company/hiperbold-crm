@@ -1,5 +1,15 @@
 import { recoverStuckMessages } from "@/app/api/v1/cron/recover-stuck-messages/route";
-import { inboundContaComoResposta, inboundDentroDaEspera } from "@/lib/automacoes/conversa";
+import {
+  estadoDaEspera,
+  inboundContaComoResposta,
+  inboundDentroDaEspera,
+  pisoDaRespostaNoDirect,
+} from "@/lib/automacoes/conversa";
+import {
+  escopoDoDirect,
+  idsDasConversasDoDirect,
+  type EscopoDoDirect,
+} from "@/lib/automacoes/conversa-do-direct";
 import { criarExecutorDeEfeitos } from "@/lib/automacoes/efeitos";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
 import { drainEventLog } from "@/lib/event-log/drain";
@@ -15,7 +25,7 @@ import {
 } from "@/lib/followup/engine";
 import { encerrarRoteirosVencidos } from "@/lib/followup/atendimento";
 import { enviarTextoFixoPendente } from "@/lib/followup/enviar-texto-fixo";
-import type { EnrollmentRow } from "@/lib/followup/node-handlers";
+import type { EnrollmentEventRef, EnrollmentRow } from "@/lib/followup/node-handlers";
 import { createSupabaseSilenceSweepDb, runSilenceSweep } from "@/lib/followup/silence-sweep";
 import { logger } from "@/lib/logger";
 import { runRoutingWorker } from "@/lib/routing/worker";
@@ -119,7 +129,14 @@ async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps
       // tick, a reivindica e lê a resposta (com o id da opção tocada).
       // Acorda pela EXISTÊNCIA da mensagem, com ou sem texto: áudio e imagem
       // respondem ao "até responder" e são resposta inválida na pergunta.
-      const enviada = await ultimaRespostaDaAutomacao(admin, enrollment.organization_id, ids);
+      // Começou por comentário: só a resposta no Direct de quem comentou, nesta
+      // conexão, acorda — mesmo que a conversa tenha nascido depois da espera.
+      const enviada = await ultimaRespostaDaAutomacao(
+        admin,
+        enrollment.organization_id,
+        ids,
+        escopoDoDirect(enrollment.vars),
+      );
       if (enviada && (await acordarAutomacaoEmEspera(admin, enrollment, enviada))) n++;
       continue;
     }
@@ -144,7 +161,8 @@ async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps
 }
 
 /**
- * Quando chegou a última mensagem do contato (e gêmeos) que conta como
+ * Quando chegou a última mensagem do contato (e gêmeos) — ou, com `escopo`, da
+ * conversa do Direct de quem comentou — que conta como
  * resposta a um bloco de conversa: reação e marca de tipo não suportado não
  * contam (`inboundContaComoResposta`); mídia sem texto conta. `null` = nenhuma.
  */
@@ -152,12 +170,20 @@ export async function ultimaRespostaDaAutomacao(
   admin: SupabaseClient,
   organizationId: string,
   contactIds: readonly string[],
+  escopo?: EscopoDoDirect | null,
 ): Promise<{ sent_at: string; created_at: string | null } | null> {
-  const { data, error } = await admin
+  let consulta = admin
     .from("messages")
     .select("type, body, sent_at, created_at")
-    .eq("organization_id", organizationId)
-    .in("contact_id", [...contactIds])
+    .eq("organization_id", organizationId);
+  if (escopo) {
+    const conversas = await idsDasConversasDoDirect(admin, organizationId, escopo, contactIds);
+    if (conversas.length === 0) return null;
+    consulta = consulta.in("conversation_id", conversas);
+  } else {
+    consulta = consulta.in("contact_id", [...contactIds]);
+  }
+  const { data, error } = await consulta
     .eq("direction", "inbound")
     .neq("type", "reaction")
     .order("sent_at", { ascending: false })
@@ -183,7 +209,8 @@ export async function ultimaRespostaDaAutomacao(
  */
 export async function acordarAutomacaoEmEspera(
   admin: SupabaseClient,
-  enrollment: Pick<EnrollmentRow, "id" | "organization_id" | "next_eval_at" | "current_node_id">,
+  enrollment: Pick<EnrollmentRow, "id" | "organization_id" | "next_eval_at" | "current_node_id"> &
+    Partial<Pick<EnrollmentRow, "vars" | "started_at">>,
   inbound: { sent_at: string | null; created_at?: string | null },
   agora: Date = new Date(),
 ): Promise<boolean> {
@@ -199,8 +226,15 @@ export async function acordarAutomacaoEmEspera(
     .limit(1)
     .maybeSingle();
   if (esperaErr) throw new Error(esperaErr.message);
-  const estacionou = (espera as { created_at?: string } | null)?.created_at;
-  if (!estacionou || !inboundDentroDaEspera(inbound, estacionou)) return false;
+  let estacionou = (espera as { created_at?: string } | null)?.created_at;
+  if (!estacionou) return false;
+  // Direct: o "quero" que chegou antes de a espera estacionar também acorda (o
+  // mesmo piso do motor, `pisoDaRespostaNoDirect`), só na primeira leitura.
+  if (escopoDoDirect(enrollment.vars) && !inboundDentroDaEspera(inbound, estacionou)) {
+    const doDirect = await pisoDoDirectDaExecucao(admin, enrollment);
+    if (doDirect && Date.parse(doDirect) < Date.parse(estacionou)) estacionou = doDirect;
+  }
+  if (!inboundDentroDaEspera(inbound, estacionou)) return false;
   if (enrollment.next_eval_at && enrollment.next_eval_at <= agoraIso) return true;
   const { error } = await admin
     .from("followup_enrollments")
@@ -211,6 +245,24 @@ export async function acordarAutomacaoEmEspera(
     .eq("status", "waiting_reply");
   if (error) throw new Error(error.message);
   return true;
+}
+
+/** O piso da primeira leitura no Direct, pelos eventos da execução (`null` = fica o de sempre). */
+async function pisoDoDirectDaExecucao(
+  admin: SupabaseClient,
+  enrollment: Pick<EnrollmentRow, "id" | "organization_id" | "current_node_id"> & Partial<Pick<EnrollmentRow, "started_at">>,
+): Promise<string | null> {
+  const { data, error } = await admin
+    .from("followup_enrollment_events")
+    .select("node_id, idempotency_key, event_type, payload, created_at")
+    .eq("organization_id", enrollment.organization_id)
+    .eq("enrollment_id", enrollment.id)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  const eventos = [...((data ?? []) as EnrollmentEventRef[])].reverse();
+  if (estadoDaEspera(eventos, enrollment.current_node_id).novasTentativas > 0) return null;
+  return pisoDaRespostaNoDirect(eventos, enrollment.current_node_id, enrollment.started_at);
 }
 
 /**

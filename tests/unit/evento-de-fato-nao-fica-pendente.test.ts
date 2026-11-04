@@ -143,6 +143,16 @@ const EMISSOES_DINAMICAS: Record<string, { onde: string[]; porque: string }> = {
     onde: ["app/api/v1/leads/bulk/route.ts"],
     porque: "mesmo mapa de `input.action` no bulk de leads.",
   },
+  "instagram.resposta_enviada": {
+    onde: ["lib/channels/meta-social/comentarios-contrato.ts"],
+    porque:
+      "constante EVENTO_RESPOSTA_ENVIADA; lib/channels/meta-social/fila.ts (emitirDesfecho) escolhe " +
+      "entre ela e EVENTO_RESPOSTA_FALHOU por ternário sobre o desfecho da linha da fila.",
+  },
+  "instagram.resposta_falhou": {
+    onde: ["lib/channels/meta-social/comentarios-contrato.ts"],
+    porque: "constante EVENTO_RESPOSTA_FALHOU; mesmo ternário de emitirDesfecho (falhou ou expirada).",
+  },
 };
 
 /**

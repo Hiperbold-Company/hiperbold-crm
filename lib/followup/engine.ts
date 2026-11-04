@@ -64,6 +64,7 @@ import {
   inboundDentroDaEspera,
   MARGEM_DO_PISO_MS,
   pisoDaEspera,
+  pisoDaRespostaNoDirect,
   varsDaResposta,
   varsParaOEvento,
   type EstadoDaEspera,
@@ -71,6 +72,11 @@ import {
 } from "@/lib/automacoes/conversa";
 import { devolverTurnoAoAgente, devolverTurnoDoInicio } from "@/lib/automacoes/devolver-turno";
 import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
+import {
+  escopoDoDirect,
+  idsDasConversasDoDirect,
+  type EscopoDoDirect,
+} from "@/lib/automacoes/conversa-do-direct";
 import { carregarFatosDaAutomacao } from "@/lib/automacoes/carregar-fatos";
 import {
   MAX_PASSOS_DA_AUTOMACAO,
@@ -199,8 +205,17 @@ export interface AdminClient {
    * telefone) desde `desde`, da mais antiga à mais nova, no máximo 5, com o id
    * da opção tocada na resposta nativa. Opcional: sem ele o motor usa
    * `loadLastInboundBody` (sem id de opção).
+   *
+   * `escopo` (execução que começou por comentário): só as mensagens da conversa
+   * do Direct de quem comentou, na conexão do comentário — achada pela consulta
+   * a cada leitura, porque ela pode nascer depois de a espera começar.
    */
-  loadRespostasDaEspera?(orgId: string, contactId: string, desde: string): Promise<RespostaRecebida[]>;
+  loadRespostasDaEspera?(
+    orgId: string,
+    contactId: string,
+    desde: string,
+    escopo?: EscopoDoDirect | null,
+  ): Promise<RespostaRecebida[]>;
   /**
    * A automação consumiu a resposta do contato e terminou sem caminho ligado:
    * pede de novo o turno da IA, que tinha cedido (`lib/automacoes/devolver-turno.ts`).
@@ -955,10 +970,24 @@ async function processarUmPasso(
     );
     const limite = tempoLimiteDaConversa(node);
     if (espera.aguardando && limite !== null) {
-      const desde = pisoDaEspera(espera.prazo, limite, enrollment.updated_at);
+      const escopo = escopoDoDirect(enrollment.vars);
+      let desde = pisoDaEspera(espera.prazo, limite, enrollment.updated_at);
+      // Direct: o "quero" pode chegar ANTES de a espera estacionar (a resposta
+      // privada sai pelo cron do canal, e a pessoa responde em segundos). Na
+      // primeira leitura da estadia o piso recua até o início da execução (ou a
+      // última resposta já consumida); na nova tentativa volta ao de sempre.
+      if (escopo && espera.novasTentativas === 0) {
+        const doDirect = pisoDaRespostaNoDirect(events, node.id, enrollment.started_at);
+        if (doDirect && Date.parse(doDirect) < Date.parse(desde)) desde = doDirect;
+      }
       desdeDaEspera = desde;
       respostas = db.loadRespostasDaEspera
-        ? await db.loadRespostasDaEspera(enrollment.organization_id, enrollment.contact_id, desde)
+        ? await db.loadRespostasDaEspera(
+            enrollment.organization_id,
+            enrollment.contact_id,
+            desde,
+            escopo,
+          )
         : await (async () => {
             const corpo = await db.loadLastInboundBody(enrollment.organization_id, enrollment.contact_id, null, desde);
             return corpo === null ? [] : [{ texto: corpo, replyId: null }];
@@ -1284,7 +1313,7 @@ export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
     async loadEnrollmentEvents(enrollmentId, limite) {
       const base = admin
         .from("followup_enrollment_events")
-        .select("node_id, idempotency_key, event_type, payload")
+        .select("node_id, idempotency_key, event_type, payload, created_at")
         .eq("enrollment_id", enrollmentId);
       const { data, error } = limite
         ? await base.order("created_at", { ascending: false }).limit(limite)
@@ -1299,6 +1328,7 @@ export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
           row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
             ? (row.payload as Record<string, unknown>)
             : null,
+        created_at: typeof row.created_at === "string" ? row.created_at : null,
       }));
     },
     async insertEnrollmentEvent(event) {
@@ -1423,13 +1453,26 @@ export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
     async devolverTurnoDoInicio(orgId, enrollmentId, conversationId, messageId) {
       await devolverTurnoDoInicio(admin, { organizationId: orgId, enrollmentId, conversationId, messageId });
     },
-    async loadRespostasDaEspera(orgId, contactId, desde) {
-      const ids = await idsDoContatoEGemeos(admin, orgId, contactId);
-      const { data, error } = await admin
+    async loadRespostasDaEspera(orgId, contactId, desde, escopo) {
+      let base = admin
         .from("messages")
         .select("type, body, metadata, sent_at, created_at")
-        .eq("organization_id", orgId)
-        .in("contact_id", ids)
+        .eq("organization_id", orgId);
+      if (escopo) {
+        // Direct: a conversa de quem comentou nesta conexão — nunca outra conta
+        // nem outro canal do contato. Ainda sem conversa = ainda sem resposta.
+        const conversas = await idsDasConversasDoDirect(
+          admin,
+          orgId,
+          escopo,
+          await idsDoContatoEGemeos(admin, orgId, contactId),
+        );
+        if (conversas.length === 0) return [];
+        base = base.in("conversation_id", conversas);
+      } else {
+        base = base.in("contact_id", await idsDoContatoEGemeos(admin, orgId, contactId));
+      }
+      const { data, error } = await base
         .eq("direction", "inbound")
         .neq("type", "reaction")
         .gte("created_at", desde)

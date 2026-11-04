@@ -20,6 +20,7 @@ import { followupGatilhoEtapaHandler } from "@/lib/followup/gatilho-etapa.handle
 import { followupGatilhoLeadHandler } from "@/lib/followup/gatilho-lead.handler";
 import { followupGatilhoCasoHandler } from "@/lib/followup/gatilho-caso.handler";
 import { automacaoGatilhosHandler } from "@/lib/automacoes/gatilhos.handler";
+import { automacaoDesfechoDaRespostaHandler } from "@/lib/automacoes/desfecho-da-resposta.handler";
 import { casoNaCentralHandler } from "@/lib/escalacao/caso-na-central.handler";
 import { mediaPersistHandler } from "@/workers/media-persist-worker.handler";
 import { mediaDeriveHandler } from "@/workers/media-derive-worker.handler";
@@ -61,6 +62,9 @@ export function ensureHandlersRegistered(): void {
   // Automações do CRM (0986): lead criado e entrou na etapa iniciam execuções.
   // Escrita curta no banco (uma RPC por automação armada), vizinha dos gatilhos de follow-up.
   registerHandler(automacaoGatilhosHandler);
+  // Desfecho das respostas do Instagram (fila do canal): uma linha no histórico
+  // da execução. Escrita curta no banco, vizinha do gatilho das automações.
+  registerHandler(automacaoDesfechoDaRespostaHandler);
   // O caso aberto na Central, na hora — escrita curta no banco (um item), ao
   // lado do outro consumidor de `ai.case_opened` que só escreve no banco, e
   // longe do aviso ao suporte, que sai por rede de terceiro.

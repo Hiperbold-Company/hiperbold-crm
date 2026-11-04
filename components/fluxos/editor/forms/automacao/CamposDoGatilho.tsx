@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useActiveOrg } from "@/hooks/auth/AuthProvider";
 import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSessions";
-import { ehCanalSocial } from "@/lib/channels/capabilities";
 import { useEtiquetasParaEscolher } from "@/hooks/contacts/useEtiquetasParaEscolher";
 import { useT } from "@/hooks/i18n/useT";
 import {
@@ -37,6 +36,8 @@ import {
   MODOS_DO_COMENTARIO_ROTULOS,
 } from "@/lib/automacoes/vocabulario";
 import { X } from "@/lib/ui/icons";
+
+import { EscolhaDePosts } from "./EscolhaDePosts";
 
 import {
   Campo,
@@ -326,9 +327,22 @@ function CamposDoComentario({
 }) {
   const t = useT();
   const canais = useChannelSessions();
-  // Contas de rede social (a lista de canais não diz qual rede; a capability é o que existe).
-  const contas = (canais.data ?? []).filter((c) => ehCanalSocial(c.provider));
   const escolhidas = g.channel_session_ids ?? [];
+  // Só as conexões do Instagram (campo `plataforma` da lista de conexões):
+  // Messenger e o social intermediado não recebem comentário. A conta que JÁ
+  // está salva no gatilho aparece mesmo que não seja (ou não exista mais),
+  // marcada, para poder ser desmarcada.
+  const doInstagram = (canais.data ?? []).filter((c) => c.plataforma === "instagram");
+  const salvasDeFora = escolhidas
+    .filter((id) => !doInstagram.some((c) => c.id === id))
+    .map((id) => {
+      const c = (canais.data ?? []).find((x) => x.id === id);
+      return { id, rotulo: c ? channelLabel(c, t) : t("Conta não encontrada") };
+    });
+  const contas = [...doInstagram.map((c) => ({ id: c.id, rotulo: channelLabel(c, t) })), ...salvasDeFora];
+  // De onde listar os posts: as marcadas; sem nenhuma ("qualquer conta"), as do Instagram.
+  const contasDosPosts =
+    escolhidas.length > 0 ? contas.filter((c) => escolhidas.includes(c.id)) : contas.filter((c) => !salvasDeFora.includes(c));
   const marcarConta = (id: string, marcado: boolean) => {
     const proximos = marcado ? [...escolhidas, id] : escolhidas.filter((x) => x !== id);
     const { channel_session_ids: _antes, ...resto } = g;
@@ -344,35 +358,23 @@ function CamposDoComentario({
           <Marcador
             key={c.id}
             id={`${prefixo}-conta-${c.id}`}
-            rotulo={channelLabel(c, t)}
+            rotulo={c.rotulo}
             marcado={escolhidas.includes(c.id)}
             onChange={(m) => marcarConta(c.id, m)}
           />
         ))}
         {canais.isError && <p className="text-xs text-error-fg">{t("Não foi possível carregar as contas.")}</p>}
       </fieldset>
-      <Campo
-        id={`${prefixo}-post`}
-        rotulo={t("Em quais posts")}
-        ajuda={t("Cole o id do post (só números). Nenhum = qualquer post.")}
-      >
-        <ListaDeChips
-          id={`${prefixo}-post`}
-          itens={posts}
-          max={MAX_PUBLICACOES}
-          placeholder={t("Ex.: 17895695668004550")}
-          onChange={(ids) => {
-            const { media_ids: _antes, ...resto } = g;
-            onChange(ids.length > 0 ? { ...resto, media_ids: ids } : resto);
-          }}
-          validar={(texto) => {
-            const id = idDoPostColado(texto);
-            if (!id) return t("Use o id do post (só números). O link do post não traz o id.");
-            if (posts.includes(id)) return t("Esse post já está na lista.");
-            return null;
-          }}
-        />
-      </Campo>
+      <EscolhaDePosts
+        prefixo={prefixo}
+        contas={contasDosPosts}
+        escolhidos={posts}
+        max={MAX_PUBLICACOES}
+        onChange={(ids) => {
+          const { media_ids: _antes, ...resto } = g;
+          onChange(ids.length > 0 ? { ...resto, media_ids: ids } : resto);
+        }}
+      />
       <Campo
         id={`${prefixo}-modo`}
         rotulo={t("Qual comentário")}

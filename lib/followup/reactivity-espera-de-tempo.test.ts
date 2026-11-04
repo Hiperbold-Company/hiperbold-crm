@@ -117,6 +117,64 @@ describe("reatividade — Esperar um tempo da automação", () => {
   });
 });
 
+describe("reatividade — execução que começou por comentário (Direct)", () => {
+  const SESSAO = "sessao-ig";
+  const IGSID = "6543210987654321";
+  const conversas: Record<
+    string,
+    { channel_session_id: string | null; provider_conversation_id: string | null }
+  > = {
+    "conv-direct": { channel_session_id: SESSAO, provider_conversation_id: IGSID },
+    "conv-whatsapp": { channel_session_id: "sessao-wa", provider_conversation_id: null },
+    "conv-outra-conta": { channel_session_id: "outra-sessao", provider_conversation_id: IGSID },
+  };
+  const doDirect = () =>
+    inscricao({
+      lane: "automacao",
+      status: "waiting_reply",
+      wait_mode: null,
+      escopo_direct: { channelSessionId: SESSAO, autorId: IGSID },
+    });
+  const comConversas = (inscricoes: LiveEnrollmentRef[]) => {
+    const m = montarDb(inscricoes);
+    m.db.loadConversationRef = async (_o, id) => conversas[id] ?? null;
+    return m;
+  };
+  const chegou = (conversation_id: string): EventRow => ({
+    ...inbound,
+    payload: { ...inbound.payload, conversation_id },
+  });
+
+  it("mensagem do mesmo contato pelo WhatsApp (ou por outra conta) não grava inbound_woke na execução do Direct", async () => {
+    const { db, eventos, patches } = comConversas([doDirect()]);
+    expect(
+      (await applyReactivityEvent(db, () => new Date(AGORA), chegou("conv-whatsapp"))).reacted,
+    ).toBe(0);
+    expect(
+      (await applyReactivityEvent(db, () => new Date(AGORA), chegou("conv-outra-conta"))).reacted,
+    ).toBe(0);
+    expect((await applyReactivityEvent(db, () => new Date(AGORA), inbound)).reacted).toBe(0);
+    expect(eventos).toEqual([]);
+    expect(patches).toEqual([]);
+  });
+
+  it("a resposta na conversa do Direct dela acorda (inbound_woke)", async () => {
+    const { db, eventos } = comConversas([doDirect()]);
+    expect(
+      (await applyReactivityEvent(db, () => new Date(AGORA), chegou("conv-direct"))).reacted,
+    ).toBe(1);
+    expect(eventos).toEqual(["inbound_woke"]);
+  });
+
+  it("execução de WhatsApp do mesmo contato segue acordando por qualquer conversa, como antes", async () => {
+    const { db, eventos } = comConversas([
+      inscricao({ lane: "automacao", status: "waiting_reply", wait_mode: null }),
+    ]);
+    await applyReactivityEvent(db, () => new Date(AGORA), chegou("conv-whatsapp"));
+    expect(eventos).toEqual(["inbound_woke"]);
+  });
+});
+
 describe("modoDoWait", () => {
   const grafo = {
     nodes: [
