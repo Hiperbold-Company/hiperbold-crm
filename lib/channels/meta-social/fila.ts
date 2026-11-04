@@ -17,15 +17,27 @@
  *     crescente e não é falha. Comentário com 7 dias ou mais, ou 2534025, vira
  *     `expirada`. Token recusado marca a sessão para reconectar (o mesmo
  *     tratamento do envio do Direct) e a linha espera.
+ *  5. Todo desfecho FINAL (`enviada`, `falhou`, `expirada`) emite um evento no
+ *     `event_log` (`instagram.resposta_enviada` / `instagram.resposta_falhou`),
+ *     DEPOIS de gravar a linha, e só se a gravação deu certo (o evento espelha
+ *     a linha: uma `enviada` que não gravou vira `falhou` sem confirmação na
+ *     destrava, e é esse o desfecho emitido). Se a emissão falhar, loga e segue:
+ *     a linha já está no estado final, e nada é revertido nem reenviado.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logger } from "@/lib/logger";
-import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
-import { CHANNEL_PROVIDER_META_SOCIAL } from "../capabilities";
 import { codigoDaFalhaDeEnvio, marcarTokenInvalido } from "./adapter";
 import { comentarioVencido } from "./comentarios";
-import { TETO_DE_RESPOSTAS_PRIVADAS_POR_HORA, type TipoDaFilaDeEnvio } from "./comentarios-contrato";
+import {
+  ENTIDADE_DO_EVENTO_RESPOSTA,
+  EVENTO_RESPOSTA_ENVIADA,
+  EVENTO_RESPOSTA_FALHOU,
+  TETO_DE_RESPOSTAS_PRIVADAS_POR_HORA,
+  type EventoDesfechoDaResposta,
+  type TipoDaFilaDeEnvio,
+} from "./comentarios-contrato";
+import { credencialDaSessao, type CredencialDoInstagram } from "./credencial";
 import { HOST_GRAPH_FACEBOOK, VERSAO_DA_GRAPH_SOCIAL } from "./constantes";
 import { registrarEnvio } from "./envios";
 import { ErroDaMeta, chamarMeta } from "./oauth";
@@ -113,13 +125,11 @@ interface LinhaDaFila {
   texto: string;
   tentativas: number;
   criado_em: string;
+  /** Quem pediu (a automação grava `automacao:<pointer>:<enrollment>:<passo>`). */
+  pedido_por: string | null;
 }
 
-interface Credencial {
-  contaId: string;
-  paginaId: string | null;
-  token: string;
-}
+type Credencial = CredencialDoInstagram;
 
 interface ContextoDaSessao {
   credencial: Credencial | null | undefined;
@@ -129,35 +139,6 @@ interface ContextoDaSessao {
   liberaEm: string | null;
   /** Até quando cada tipo desta sessão está parado nesta rodada. */
   pausa: Partial<Record<TipoDaFilaDeEnvio, string>>;
-}
-
-async function credencialDaSessao(
-  admin: SupabaseClient,
-  organizationId: string,
-  sessionId: string,
-): Promise<Credencial | null> {
-  const { data, error } = await admin
-    .from("channel_sessions")
-    .select("id, meta_social_platform, meta_social_account_id, meta_social_token_encrypted, meta_social_page_id")
-    .eq("organization_id", organizationId)
-    .eq("id", sessionId)
-    .eq("provider", CHANNEL_PROVIDER_META_SOCIAL)
-    .is("archived_at", null)
-    .limit(1);
-  if (error) throw new Error("meta_social_session_lookup_failed");
-  const s = (
-    (data ?? []) as {
-      meta_social_platform: string;
-      meta_social_account_id: string | null;
-      meta_social_token_encrypted: string | null;
-      meta_social_page_id?: string | null;
-    }[]
-  )[0];
-  if (!s || s.meta_social_platform !== "instagram" || !s.meta_social_account_id || !s.meta_social_token_encrypted)
-    return null;
-  const token = await decryptWebhookSecret(admin, s.meta_social_token_encrypted);
-  if (!token) return null;
-  return { contaId: s.meta_social_account_id, paginaId: s.meta_social_page_id ?? null, token };
 }
 
 /** Privadas que esta sessão enviou nos últimos 60 minutos, e quando a mais velha sai da janela. */
@@ -186,7 +167,13 @@ async function medirAJanela(
   };
 }
 
-async function atualizarLinha(admin: SupabaseClient, linha: LinhaDaFila, campos: Record<string, unknown>, agora: Date) {
+/** `false` = a gravação falhou (já logada); a linha ficou como estava. */
+async function atualizarLinha(
+  admin: SupabaseClient,
+  linha: LinhaDaFila,
+  campos: Record<string, unknown>,
+  agora: Date,
+): Promise<boolean> {
   const { error } = await admin
     .from("meta_social_fila_de_envio")
     .update({ ...campos, atualizado_em: agora.toISOString() })
@@ -197,7 +184,9 @@ async function atualizarLinha(admin: SupabaseClient, linha: LinhaDaFila, campos:
       organization_id: linha.organization_id,
       codigo: error.code,
     });
+    return false;
   }
+  return true;
 }
 
 async function atualizarComentario(
@@ -214,6 +203,49 @@ async function atualizarComentario(
     logger.warn("[meta-social.fila] estado do comentário não gravado", {
       organization_id: linha.organization_id,
       codigo: error.code,
+    });
+  }
+}
+
+type LinhaDoDesfecho = Pick<LinhaDaFila, "id" | "organization_id" | "channel_session_id" | "tipo" | "comment_id" | "pedido_por">;
+
+/**
+ * Emite o evento de desfecho da linha. Chamado só DEPOIS de a linha ir ao
+ * estado final: falhar aqui loga e segue, sem reverter nem reenviar. O payload
+ * nunca leva texto (nem da resposta nem do comentário).
+ */
+async function emitirDesfecho(
+  admin: SupabaseClient,
+  linha: LinhaDoDesfecho,
+  desfecho: { enviada: true } | { enviada: false; motivo: string },
+): Promise<void> {
+  const payload: EventoDesfechoDaResposta = {
+    organization_id: linha.organization_id,
+    channel_session_id: linha.channel_session_id,
+    comment_id: linha.comment_id,
+    tipo: linha.tipo,
+    pedido_por: linha.pedido_por ?? null,
+    ...(desfecho.enviada ? {} : { motivo: desfecho.motivo }),
+  };
+  try {
+    const { error } = await admin.rpc("emit_event", {
+      p_event_type: desfecho.enviada ? EVENTO_RESPOSTA_ENVIADA : EVENTO_RESPOSTA_FALHOU,
+      p_entity_kind: ENTIDADE_DO_EVENTO_RESPOSTA,
+      p_entity_id: linha.id,
+      p_payload: payload,
+      p_metadata: { actor_kind: "system", source: "cron/meta-social-fila" },
+      p_organization_id: linha.organization_id,
+    });
+    if (error) {
+      logger.error("[meta-social.fila] evento de desfecho não emitido", {
+        organization_id: linha.organization_id,
+        codigo: error.code,
+      });
+    }
+  } catch (err) {
+    logger.error("[meta-social.fila] evento de desfecho não emitido", {
+      organization_id: linha.organization_id,
+      detalhe: err instanceof Error ? err.message.slice(0, 200) : "erro",
     });
   }
 }
@@ -238,15 +270,17 @@ async function destravar(admin: SupabaseClient, agora: Date): Promise<number> {
     .update({ status: "falhou", erro: "envio_sem_confirmacao", atualizado_em: agora.toISOString() })
     .eq("status", "enviando")
     .lt("atualizado_em", limite)
-    .select("id, organization_id, tipo, comment_id");
+    .select("id, organization_id, channel_session_id, tipo, comment_id, pedido_por");
   if (error) throw new Error("meta_social_queue_unstick_failed");
-  const linhas = (data ?? []) as Pick<LinhaDaFila, "id" | "organization_id" | "tipo" | "comment_id">[];
+  const linhas = (data ?? []) as LinhaDoDesfecho[];
   for (const l of linhas) {
-    if (l.tipo !== "resposta_privada") continue;
-    await atualizarComentario(admin, l as LinhaDaFila, {
-      resposta_privada_status: "falhou",
-      resposta_privada_erro: "envio_sem_confirmacao",
-    });
+    if (l.tipo === "resposta_privada") {
+      await atualizarComentario(admin, l as LinhaDaFila, {
+        resposta_privada_status: "falhou",
+        resposta_privada_erro: "envio_sem_confirmacao",
+      });
+    }
+    await emitirDesfecho(admin, l, { enviada: false, motivo: "envio_sem_confirmacao" });
   }
   return linhas.length;
 }
@@ -274,7 +308,7 @@ export async function processarFilaMetaSocial(
 
   const { data, error } = await admin
     .from("meta_social_fila_de_envio")
-    .select("id, organization_id, channel_session_id, tipo, comment_id, texto, tentativas, criado_em")
+    .select("id, organization_id, channel_session_id, tipo, comment_id, texto, tentativas, criado_em, pedido_por")
     .eq("status", "na_fila")
     .lte("proxima_tentativa_em", agora.toISOString())
     .order("criado_em", { ascending: true })
@@ -340,8 +374,9 @@ async function processarLinha(
     if (ec) throw new Error("meta_social_comment_lookup_failed");
     const c = ((cs ?? []) as { criado_na_meta_em: string | null; recebido_em: string }[])[0];
     if (!c || comentarioVencido(c, agora)) {
-      await atualizarLinha(admin, linha, { status: "expirada", erro: c ? "prazo_de_7_dias" : "comentario_desconhecido" }, agora);
+      const gravou = await atualizarLinha(admin, linha, { status: "expirada", erro: c ? "prazo_de_7_dias" : "comentario_desconhecido" }, agora);
       if (c) await atualizarComentario(admin, linha, { resposta_privada_status: "expirada" });
+      if (gravou) await emitirDesfecho(admin, linha, { enviada: false, motivo: c ? "prazo_de_7_dias" : "comentario_desconhecido" });
       return "expirada";
     }
     if (ctx.orcamento === undefined) {
@@ -379,9 +414,10 @@ async function processarLinha(
   }
   const cred = ctx.credencial;
   if (!cred) {
-    await atualizarLinha(admin, linha, { status: "falhou", erro: "conta_indisponivel" }, agora);
+    const gravou = await atualizarLinha(admin, linha, { status: "falhou", erro: "conta_indisponivel" }, agora);
     if (privada)
       await atualizarComentario(admin, linha, { resposta_privada_status: "falhou", resposta_privada_erro: "conta_indisponivel" });
+    if (gravou) await emitirDesfecho(admin, linha, { enviada: false, motivo: "conta_indisponivel" });
     return "falhou";
   }
 
@@ -414,7 +450,7 @@ async function processarLinha(
         ? resposta.id
         : null;
   const quando = agora.toISOString();
-  await atualizarLinha(admin, linha, { status: "enviada", enviada_em: quando, resultado_id: idDaMeta, erro: null }, agora);
+  const gravou = await atualizarLinha(admin, linha, { status: "enviada", enviada_em: quando, resultado_id: idDaMeta, erro: null }, agora);
   if (privada) {
     ctx.orcamento = (ctx.orcamento ?? 1) - 1;
     ctx.liberaEm ??= new Date(agora.getTime() + HORA_MS).toISOString();
@@ -436,6 +472,7 @@ async function processarLinha(
   } else {
     await atualizarComentario(admin, linha, { resposta_publica_id: idDaMeta, resposta_publica_em: quando });
   }
+  if (gravou) await emitirDesfecho(admin, linha, { enviada: true });
   return "enviada";
 }
 
@@ -459,8 +496,9 @@ async function tratarErroDaMeta(
     return "reagendada";
   }
   if (privada && err.codigoDaMeta === CODIGO_COMENTARIO_INELEGIVEL) {
-    await atualizarLinha(admin, linha, { status: "expirada", erro: `inelegivel:${CODIGO_COMENTARIO_INELEGIVEL}` }, agora);
+    const gravou = await atualizarLinha(admin, linha, { status: "expirada", erro: `inelegivel:${CODIGO_COMENTARIO_INELEGIVEL}` }, agora);
     await atualizarComentario(admin, linha, { resposta_privada_status: "expirada" });
+    if (gravou) await emitirDesfecho(admin, linha, { enviada: false, motivo: `inelegivel:${CODIGO_COMENTARIO_INELEGIVEL}` });
     return "expirada";
   }
   const codigo = codigoDaFalhaDeEnvio(err, "instagram");
@@ -476,7 +514,8 @@ async function tratarErroDaMeta(
     return "reagendada";
   }
   const erro = `${codigo}:${err.codigoDaMeta ?? err.status ?? "rede"}`;
-  await atualizarLinha(admin, linha, { status: "falhou", erro }, agora);
+  const gravou = await atualizarLinha(admin, linha, { status: "falhou", erro }, agora);
   if (privada) await atualizarComentario(admin, linha, { resposta_privada_status: "falhou", resposta_privada_erro: erro });
+  if (gravou) await emitirDesfecho(admin, linha, { enviada: false, motivo: erro });
   return "falhou";
 }

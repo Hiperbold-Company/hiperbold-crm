@@ -102,6 +102,19 @@ const CONSUMIDORES_FORA_DO_REGISTRY: Record<string, string> = {
   "conversation.routing_requested":
     "lib/routing/worker.ts — o worker de distribuição roda pelo cron " +
     "`/api/v1/cron/routing-worker` e drena este tipo direto do event_log (migration 0040).",
+  // ⚠️ DECLARAÇÃO PROVISÓRIA (03/11/2026): o consumidor destes dois é das
+  // Automações (o passo "Responder em privado" / "Responder no comentário" que
+  // espera o desfecho), e está sendo escrito em paralelo. Os eventos nascem
+  // `pending` DE PROPÓSITO, para o handler que chegar drená-los; pô-los na lista
+  // de registro os faria nascer `done` e o handler nunca os veria. Quando o
+  // handler entrar em lib/event-log/register-handlers.ts, estas linhas SAEM.
+  // (Mesma saída que `instagram.comentario_recebido` teve até ganhar consumidor.)
+  "instagram.resposta_enviada":
+    "lib/channels/meta-social/fila.ts (processarFilaMetaSocial) — consumidor: Automações, em " +
+    "construção; contrato em docs/specs/instagram-comentarios-contrato.md.",
+  "instagram.resposta_falhou":
+    "lib/channels/meta-social/fila.ts (processarFilaMetaSocial) — consumidor: Automações, em " +
+    "construção; contrato em docs/specs/instagram-comentarios-contrato.md.",
 };
 
 /**
@@ -142,6 +155,16 @@ const EMISSOES_DINAMICAS: Record<string, { onde: string[]; porque: string }> = {
   "lead.bulk_deleted": {
     onde: ["app/api/v1/leads/bulk/route.ts"],
     porque: "mesmo mapa de `input.action` no bulk de leads.",
+  },
+  "instagram.resposta_enviada": {
+    onde: ["lib/channels/meta-social/comentarios-contrato.ts"],
+    porque:
+      "constante EVENTO_RESPOSTA_ENVIADA; lib/channels/meta-social/fila.ts (emitirDesfecho) escolhe " +
+      "entre ela e EVENTO_RESPOSTA_FALHOU por ternário sobre o desfecho da linha da fila.",
+  },
+  "instagram.resposta_falhou": {
+    onde: ["lib/channels/meta-social/comentarios-contrato.ts"],
+    porque: "constante EVENTO_RESPOSTA_FALHOU; mesmo ternário de emitirDesfecho (falhou ou expirada).",
   },
 };
 

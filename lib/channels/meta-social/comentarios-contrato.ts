@@ -58,6 +58,53 @@ export const CAMPOS_DO_EVENTO_COMENTARIO = [
 ] as const satisfies readonly (keyof EventoComentarioRecebido)[];
 
 /**
+ * Os eventos de DESFECHO de uma resposta da fila (`meta_social_fila_de_envio`),
+ * emitidos pelo cron da fila (`processarFilaMetaSocial`) quando a linha chega a
+ * um estado FINAL. `enviada` → `EVENTO_RESPOSTA_ENVIADA`; `falhou` ou
+ * `expirada` → `EVENTO_RESPOSTA_FALHOU`, com o `motivo`. Reagendar ou esperar a
+ * privada não emite nada: a linha ainda não acabou.
+ */
+export const EVENTO_RESPOSTA_ENVIADA = "instagram.resposta_enviada";
+export const EVENTO_RESPOSTA_FALHOU = "instagram.resposta_falhou";
+/** `event_log.entity_kind` dos dois; `entity_id` = `meta_social_fila_de_envio.id`. */
+export const ENTIDADE_DO_EVENTO_RESPOSTA = "instagram_comment_reply";
+
+/**
+ * O payload dos dois eventos de desfecho. Nunca leva o texto da resposta nem o
+ * do comentário.
+ */
+export interface EventoDesfechoDaResposta {
+  organization_id: string;
+  channel_session_id: string;
+  comment_id: string;
+  tipo: TipoDaFilaDeEnvio;
+  /**
+   * `meta_social_fila_de_envio.pedido_por` exatamente como foi gravado (a
+   * automação manda `automacao:<pointer>:<enrollment>:<passo>`; o canal corta
+   * em 200 caracteres ao enfileirar). `null` se ninguém o informou.
+   */
+  pedido_por: string | null;
+  /**
+   * Só no `instagram.resposta_falhou`: o código gravado em
+   * `meta_social_fila_de_envio.erro` (ex.: `conta_indisponivel`,
+   * `envio_sem_confirmacao`, `prazo_de_7_dias`, `comentario_desconhecido`,
+   * `inelegivel:2534025`, `<codigo>:<codigo da Meta>`). É código, nunca texto
+   * do contato.
+   */
+  motivo?: string;
+}
+
+/** As chaves do payload de desfecho (`motivo` só aparece no falhou). */
+export const CAMPOS_DO_EVENTO_DESFECHO = [
+  "organization_id",
+  "channel_session_id",
+  "comment_id",
+  "tipo",
+  "pedido_por",
+  "motivo",
+] as const satisfies readonly (keyof EventoDesfechoDaResposta)[];
+
+/**
  * A Meta aceita resposta privada a comentário de post ou reel em até 7 dias da
  * criação do comentário.
  * https://developers.facebook.com/documentation/business-messaging/instagram-messaging/features/private-replies
