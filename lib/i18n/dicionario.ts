@@ -14720,7 +14720,6 @@ export const DICIONARIO: Traducoes = {
   "Devolve este contato à operação: a conversa volta ao inbox.": {
     es: "Devuelve este contacto a la operación: la conversación vuelve al inbox.",
   },
-  Pessoais: { es: "Personales" },
   "Contato marcado como pessoal.": { es: "Contacto marcado como personal." },
   "Contato marcado como pessoal": { es: "Contacto marcado como personal" },
   "Não foi possível marcar o contato como pessoal.": {
