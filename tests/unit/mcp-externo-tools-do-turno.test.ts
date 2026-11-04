@@ -670,7 +670,7 @@ describe("montarFerramentasDoTurno", () => {
 
     const r = await montarFerramentasDoTurno(
       { supabase: {} as never },
-      { organizationId: "org-1", jobId: "job-1" },
+      { organizationId: "org-1", jobId: "job-1", contactId: null },
       agentConfig(["crm_move_lead_stage", "mcp_n8n__buscar"]),
       fakeLog(),
       undefined,
@@ -697,7 +697,7 @@ describe("montarFerramentasDoTurno", () => {
 
     const vazio = await montarFerramentasDoTurno(
       { supabase: {} as never },
-      { organizationId: "org-1", jobId: "job-1" },
+      { organizationId: "org-1", jobId: "job-1", contactId: null },
       agentConfig([]),
       fakeLog(),
     );
@@ -723,7 +723,7 @@ describe("montarFerramentasDoTurno", () => {
 
     const r = await montarFerramentasDoTurno(
       { supabase: {} as never },
-      { organizationId: "org-1", jobId: "job-1" },
+      { organizationId: "org-1", jobId: "job-1", contactId: null },
       agentConfig(["crm_move_lead_stage", "mcp_n8n__buscar", "mcp_n8n__cadastrar"]),
       fakeLog(),
       undefined,
@@ -755,7 +755,7 @@ describe("montarFerramentasDoTurno", () => {
 
     const r = await montarFerramentasDoTurno(
       { supabase: {} as never },
-      { organizationId: "org-1", jobId: "job-1" },
+      { organizationId: "org-1", jobId: "job-1", contactId: null },
       agentConfig(["mcp_n8n__buscar"]),
       fakeLog(),
       undefined,
@@ -789,7 +789,7 @@ describe("montarFerramentasDoTurno", () => {
 
       const r = await montarFerramentasDoTurno(
         { supabase: {} as never },
-        { organizationId: "org-1", jobId: "job-1" },
+        { organizationId: "org-1", jobId: "job-1", contactId: null },
         config,
         fakeLog(),
         undefined,
@@ -813,7 +813,7 @@ describe("montarFerramentasDoTurno", () => {
       // O Conversador: `entregaAoOperador` presente.
       const doConversador = await montarFerramentasDoTurno(
         { supabase: {} as never },
-        { organizationId: "org-1", jobId: "job-1" },
+        { organizationId: "org-1", jobId: "job-1", contactId: null },
         config,
         fakeLog(),
         undefined,
@@ -827,7 +827,7 @@ describe("montarFerramentasDoTurno", () => {
       // 7º argumento. Ele precisa da ferramenta INTEIRA, é ele quem escreve.
       const doOperador = await montarFerramentasDoTurno(
         { supabase: {} as never },
-        { organizationId: "org-1", jobId: "job-1" },
+        { organizationId: "org-1", jobId: "job-1", contactId: null },
         { ...config, toolIds: config.operatorToolIds },
         fakeLog(),
         undefined,
@@ -848,7 +848,7 @@ describe("montarFerramentasDoTurno", () => {
 
       const r = await montarFerramentasDoTurno(
         { supabase: {} as never },
-        { organizationId: "org-1", jobId: "job-1" },
+        { organizationId: "org-1", jobId: "job-1", contactId: null },
         config,
         fakeLog(),
         undefined,
@@ -871,7 +871,7 @@ describe("montarFerramentasDoTurno", () => {
 
       const r = await montarFerramentasDoTurno(
         { supabase: {} as never },
-        { organizationId: "org-1", jobId: "job-1" },
+        { organizationId: "org-1", jobId: "job-1", contactId: null },
         config,
         fakeLog(),
         undefined,

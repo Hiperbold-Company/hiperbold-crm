@@ -35,17 +35,18 @@ const COUNTS: TenantCounts = {
   user_count: 1, conversations_count: 0, messages_count: 0, leads_count: 0, orders_count: 0,
   lgpd_requests_pending: 0, ai_invocations_30d: 0, waha_sessions_count: 0,
 };
+const PLANO = { name: "pro", leituraFalhou: false };
 const INTEGRACOES = { nuvemshop_status: null, nuvemshop_connected_at: null };
 afterEach(cleanup);
 
 describe("TenantOverview — o badge Plano e a chave da cobrança", () => {
   it("desligada (padrão): o badge do rótulo antigo segue igual", () => {
-    const { container } = render(<TenantOverview organization={ORG} counts={COUNTS} integrations={INTEGRACOES} />);
+    const { container } = render(<TenantOverview organization={ORG} counts={COUNTS} integrations={INTEGRACOES} plano={PLANO} />);
     expect(within(container).getByText("Plano").nextElementSibling?.textContent).toBe("pro");
   });
 
   it("⭐ ligada: nenhuma linha 'Plano' no overview", () => {
-    const { container } = render(<TenantOverview organization={ORG} counts={COUNTS} integrations={INTEGRACOES} cobrancaLigada />);
+    const { container } = render(<TenantOverview organization={ORG} counts={COUNTS} integrations={INTEGRACOES} plano={PLANO} cobrancaLigada />);
     expect(within(container).queryByText("Plano")).toBeNull();
   });
 });

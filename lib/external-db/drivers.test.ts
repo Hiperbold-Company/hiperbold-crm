@@ -61,25 +61,27 @@ beforeEach(() => {
   fecharTodosMysql.mockClear();
 });
 
+const IP = "203.0.113.10";
+
 describe("registro de drivers", () => {
   it("abrirDialeto (postgres) devolve o dialeto de leitura ligado ao pool da conexão", () => {
-    const dialeto = abrirDialeto(CONEXAO);
+    const dialeto = abrirDialeto(CONEXAO, IP);
     expect(obterPoolMock).toHaveBeenCalledTimes(1);
-    expect(obterPoolMock).toHaveBeenCalledWith(CONEXAO);
+    expect(obterPoolMock).toHaveBeenCalledWith(CONEXAO, IP);
     for (const metodo of ["listarTabelas", "colunasDaTabela", "lerTabela", "catalogoCompleto"] as const) {
       expect(typeof dialeto[metodo]).toBe("function");
     }
   });
 
   it("a regra de fontes vem da conexão: em modo lista, fonte fora da lista nem chega ao banco", async () => {
-    const dialeto = abrirDialeto({ ...CONEXAO, sourceMode: "list", fontes: [] });
+    const dialeto = abrirDialeto({ ...CONEXAO, sourceMode: "list", fontes: [] }, IP);
     // O pool de mentira não tem `connect`: se o dialeto consultasse o banco, isto lançaria TypeError.
     await expect(dialeto.colunasDaTabela("public", "pedidos")).resolves.toBeNull();
   });
 
   it("testarConexao delega ao driver da conexão", async () => {
-    await expect(testarConexao(CONEXAO)).resolves.toEqual({ ok: true });
-    expect(testarPg).toHaveBeenCalledWith(CONEXAO);
+    await expect(testarConexao(CONEXAO, IP)).resolves.toEqual({ ok: true });
+    expect(testarPg).toHaveBeenCalledWith(CONEXAO, IP);
   });
 
   it("fecharPool delega ao driver instalado", async () => {
@@ -93,14 +95,14 @@ describe("registro de drivers", () => {
   });
 
   it("abrirDialeto de uma conexão mysql chama criarDialetoMysql com a conexão e a regra, sem tocar no pool do PostgreSQL", () => {
-    const dialeto = abrirDialeto({ ...CONEXAO, dbType: "mysql" });
+    const dialeto = abrirDialeto({ ...CONEXAO, dbType: "mysql" }, IP);
     expect(dialeto).toEqual({ marca: "dialeto-mysql" });
     expect(criarDialetoMysqlMock).toHaveBeenCalledWith({ ...CONEXAO, dbType: "mysql" }, { modo: "all", fontes: [] });
     expect(obterPoolMock).not.toHaveBeenCalled();
   });
 
   it("testarConexao de uma conexão mysql devolve o que o driver devolveu, com aviso, sem chamar o teste do PostgreSQL", async () => {
-    await expect(testarConexao({ ...CONEXAO, dbType: "mysql" })).resolves.toEqual({ ok: true, aviso: "cuidado" });
+    await expect(testarConexao({ ...CONEXAO, dbType: "mysql" }, IP)).resolves.toEqual({ ok: true, aviso: "cuidado" });
     expect(testarMysql).toHaveBeenCalledWith({ ...CONEXAO, dbType: "mysql" });
     expect(testarPg).not.toHaveBeenCalled();
   });
