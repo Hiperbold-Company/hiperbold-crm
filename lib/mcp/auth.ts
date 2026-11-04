@@ -224,16 +224,6 @@ export async function resolveApiToken(
   if (data.expires_at && new Date(data.expires_at) < new Date()) {
     throw new ApiTokenError("expired", "Token expired.");
   }
-  // Token vivo de empresa parada: a integração não opera enquanto a conta está
-  // suspensa (spec da cobrança §4 item 6). Antes do `last_used_at`: recusa não é uso.
-  // Exceção: quem pede `permiteOrgSuspensa` recebe o token MARCADO e recusa por
-  // ferramenta (o `/api/mcp`, para a de privacidade).
-  const orgDoToken = Array.isArray(data.organizations) ? data.organizations[0] : data.organizations;
-  const orgSuspensa = !ehOperante(orgDoToken?.status);
-  if (orgSuspensa && !opcoes.permiteOrgSuspensa) {
-    throw new ApiTokenError("org_suspended", "Organization suspended.");
-  }
-
   // A chave vale enquanto quem a criou ainda pode o que ela pode (D-101). Sem
   // isto, o admin desligado ou rebaixado levava a chave `role:admin` consigo.
   const scopes = parseScopes(data.scopes);
@@ -245,6 +235,17 @@ export async function resolveApiToken(
   );
   if (!criadorEmDia) {
     throw new ApiTokenError("creator_inactive", "Token creator no longer has access.");
+  }
+
+  // Token vivo de empresa parada: a integração não opera enquanto a conta está
+  // suspensa (spec da cobrança §4 item 6). Antes do `last_used_at`: recusa não é uso.
+  // DEPOIS do criador: chave de quem já saiu da empresa não descobre a suspensão.
+  // Exceção: quem pede `permiteOrgSuspensa` recebe o token MARCADO e recusa por
+  // ferramenta (o `/api/mcp`, para a de privacidade).
+  const orgDoToken = Array.isArray(data.organizations) ? data.organizations[0] : data.organizations;
+  const orgSuspensa = !ehOperante(orgDoToken?.status);
+  if (orgSuspensa && !opcoes.permiteOrgSuspensa) {
+    throw new ApiTokenError("org_suspended", "Organization suspended.");
   }
 
   supabase
@@ -314,7 +315,8 @@ export async function validateBearerToken(
         });
       }
       // Uma resposta só para tudo o que é "este token não vale": desconhecido,
-      // revogado, expirado, criador sem acesso e organização suspensa. Mensagens
+      // revogado, expirado e criador sem acesso (organização suspensa, com token
+      // válido, sai acima no 403 `org_suspended`). Mensagens
       // distintas deixavam quem tem um `dsk_` roubado ou chutado sondar o estado
       // da chave e da empresa (a chave existe? foi revogada? a conta está
       // suspensa?). O motivo real fica no log, nunca na resposta.

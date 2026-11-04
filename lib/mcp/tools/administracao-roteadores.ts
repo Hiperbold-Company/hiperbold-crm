@@ -5,7 +5,8 @@
  * ⚠️ AQUI HÁ TRADUÇÃO DE ARGUMENTO E NADA MAIS. A regra vive em `lib/ai/agents/roteadores.ts`, o MESMO núcleo
  * das rotas `/api/v1/ai/routers/**`, com os schemas da tela.
  *
- * ⚠️ O PAPEL É O DA TELA: `agent` para ler, `admin` para escrever. Todas `apenasHumano` no catálogo. O
+ * ⚠️ O PAPEL É O DA REST: `admin` para ler e para escrever (`tokenRole: "admin"` em
+ * `lib/ai/agents/roteadores-porta.ts`). Todas `apenasHumano` no catálogo. O
  * roteador decide para QUAL agente cada conversa vai: mexer nele muda quem atende o cliente.
  */
 import { z } from "zod";
@@ -50,7 +51,7 @@ export const crmListAiRouters: McpToolDefinition<typeof listShape> = {
     "quantas intenções tem). Cada número tem no máximo um roteador ativo.",
   inputSchema: listShape,
   category: "read",
-  requiresRole: "manager",
+  requiresRole: "admin",
   requiresScope: "mcp:read",
   handler: async (_input, ctx) => listarRoteadores(depsDoRoteador(ctx)),
 };
@@ -64,7 +65,7 @@ export const crmGetAiRouter: McpToolDefinition<typeof idShape> = {
     "atendimento vinculado).",
   inputSchema: idShape,
   category: "read",
-  requiresRole: "manager",
+  requiresRole: "admin",
   requiresScope: "mcp:read",
   handler: async (input, ctx) => lerRoteador(depsDoRoteador(ctx), input.router_id),
 };
