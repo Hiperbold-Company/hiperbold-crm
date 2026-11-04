@@ -158,6 +158,7 @@ function cadeiaQualquer(tabela: string): Cadeia {
     select: () => cadeia,
     insert: () => cadeia,
     update: () => cadeia,
+    delete: () => cadeia,
     eq: () => cadeia,
     in: () => cadeia,
     is: () => cadeia,
