@@ -35,6 +35,13 @@ vi.mock("@/lib/impersonate/support", async (importOriginal) => ({
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 vi.mock("@/app/api/v1/leads/_handler", () => ({ createLeadHandler: vi.fn() }));
+// Modo leitura e bloqueio do plano leem a cobrança pela rede; aqui não são o assunto.
+vi.mock("@/lib/billing/assinatura/recusa-de-escrita", () => ({
+  recusarEscritaEmModoLeitura: vi.fn(async () => null),
+}));
+vi.mock("@/lib/billing/planos/bloqueio-vale", () => ({
+  bloqueioValeParaOrganizacao: vi.fn(async () => false),
+}));
 
 const ORG = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const USER = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";

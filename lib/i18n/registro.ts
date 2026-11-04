@@ -105,9 +105,9 @@ export const REGISTRO_DE_IDIOMAS = [
     tagBcp47: "en",
     subtagsDoNavegador: ["en"],
     // Catálogo em `lib/i18n/traducoes/en.json`, lido por `catalogos.ts` (fatia 4
-    // do PROG-022). Aparece quando o nível for promovido.
-    nivel: "em_construcao",
-    mantenedor: null,
+    // do PROG-022). Promovido a `completo` no Hiperbold CRM em 04/11/2026 (D-225).
+    nivel: "completo",
+    mantenedor: "Hiperbold",
   },
 ] as const satisfies readonly IdiomaRegistrado[];
 
