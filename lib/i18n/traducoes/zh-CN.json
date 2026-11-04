@@ -5878,5 +5878,18 @@
   "O texto (com as opções numeradas) passa do limite do Instagram (1000 bytes; acento e emoji contam mais de um).": "文本（含编号选项）超出 Instagram 限制（1000 字节；带重音的字母和表情符号占多个字节）。",
   "Ou cole o id do post": "或粘贴帖子 ID",
   "Sem conta do Instagram para achar o link. Cole o id do post (só números).": "没有可用于查找链接的 Instagram 账号。请粘贴帖子 ID（仅数字）。",
-  "Conta não encontrada": "未找到账号"
+  "Conta não encontrada": "未找到账号",
+  "Fechar todos": "全部收起",
+  "Abrir todos": "全部展开",
+  "Duplicar funil": "复制销售漏斗",
+  "1 etapa": "1 个阶段",
+  "foi criado com as etapas e a configuração do funil de origem.": "已创建，包含源销售漏斗的阶段和配置。",
+  "Não consegui duplicar o funil agora. Tente de novo.": "暂时无法复制销售漏斗。请重试。",
+  "Copia as etapas, os motivos de perda e de ganho, os campos do lead e o mapeamento do assistente. Negócios, automações e formulários não são copiados.": "复制阶段、流失和成交原因、线索字段以及助手映射。商机、自动化和表单不会被复制。",
+  "Funil de origem": "源销售漏斗",
+  "Este funil está arquivado. Tire-o do arquivo antes de duplicar, ou escolha outro funil de origem.": "该销售漏斗已归档。请先取消归档再复制，或选择其他源销售漏斗。",
+  "Outro funil acabou de ocupar esse nome. Recarregue a página e tente de novo.": "另一个销售漏斗刚刚占用了这个名称。请刷新页面后重试。",
+  "Não consegui copiar as etapas do funil. Nada foi salvo — tente de novo.": "无法复制销售漏斗的阶段。未保存任何内容，请重试。",
+  "Dê um nome ao novo funil (até 80 caracteres).": "请为新销售漏斗命名（最多 80 个字符）。",
+  "etapas": "个阶段"
 }

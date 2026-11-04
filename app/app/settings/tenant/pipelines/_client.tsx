@@ -32,6 +32,7 @@ import {
 import { Plus, Trash } from "@/lib/ui/icons";
 import { AgentMappingSection, ancoraDoMapeamento } from "./_mapping";
 import { StagesSection, ancoraDasEtapas } from "./_stages";
+import { AcordeaoDoFunil, AcordeaoDosFunis } from "./_acordeao-do-funil";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 import { CAMINHO_CAMPOS_PERSONALIZADOS } from "@/lib/ajuda/artigos";
 
@@ -41,6 +42,8 @@ export interface PipelineRow {
   slug: string;
   vocabulary: Record<string, string> | null;
   settings: Record<string, unknown> | null;
+  /** Opcional só para os testes; a página sempre manda (o selo "Padrão" do acordeão). */
+  is_default?: boolean;
 }
 
 /**
@@ -197,13 +200,13 @@ export function PipelinesClient({
     );
   }
   return (
-    <div className="flex flex-col gap-4">
+    <AcordeaoDosFunis pipelines={pipelines}>
       {pipelines.map((p) => (
-        <Card key={p.id} className="space-y-6 p-6">
-          <header>
-            <h2 className="text-base font-semibold">{p.name}</h2>
-            <p className="text-xs text-muted-foreground">/{p.slug}</p>
-          </header>
+        <AcordeaoDoFunil
+          key={p.id}
+          pipeline={p}
+          numeroDeEtapas={(etapas[p.id] ?? []).filter((e) => !e.is_archived).length}
+        >
           {/* As ETAPAS vêm primeiro, e a ordem é a do raciocínio de quem
               configura: primeiro o quadro existe do jeito da sua operação,
               depois se decide o que o assistente faz com ele. Invertido, a
@@ -218,9 +221,9 @@ export function PipelinesClient({
             <AgentMappingSection pipelineId={p.id} ancoraEtapas={ancoraDasEtapas(p.id)} />
           </div>
           {podeEditarConfig && <PipelineEditor pipeline={p} etapas={etapas[p.id] ?? []} />}
-        </Card>
+        </AcordeaoDoFunil>
       ))}
-    </div>
+    </AcordeaoDosFunis>
   );
 }
 

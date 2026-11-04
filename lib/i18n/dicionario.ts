@@ -15037,6 +15037,19 @@ export const DICIONARIO: Traducoes = {
   "Enquanto espera, o agente de IA não responde nesta conversa.": {
     es: "Mientras espera, el agente de IA no responde en esta conversación.",
   },
+  // ─── ETAPAS DO FUNIL: duplicar funil e acordeão ───
+  "Fechar todos": { es: "Cerrar todos" },
+  "Abrir todos": { es: "Abrir todos" },
+  "Duplicar funil": { es: "Duplicar embudo" },
+  "1 etapa": { es: "1 etapa" },
+  "foi criado com as etapas e a configuração do funil de origem.": { es: "se creó con las etapas y la configuración del embudo de origen." },
+  "Não consegui duplicar o funil agora. Tente de novo.": { es: "No pude duplicar el embudo ahora. Inténtalo de nuevo." },
+  "Copia as etapas, os motivos de perda e de ganho, os campos do lead e o mapeamento do assistente. Negócios, automações e formulários não são copiados.": { es: "Copia las etapas, los motivos de pérdida y de ganancia, los campos del lead y el mapeo del asistente. Los negocios, las automatizaciones y los formularios no se copian." },
+  "Funil de origem": { es: "Embudo de origen" },
+  "Este funil está arquivado. Tire-o do arquivo antes de duplicar, ou escolha outro funil de origem.": { es: "Este embudo está archivado. Sácalo del archivo antes de duplicarlo, o elige otro embudo de origen." },
+  "Outro funil acabou de ocupar esse nome. Recarregue a página e tente de novo.": { es: "Otro embudo acaba de ocupar ese nombre. Recarga la página e inténtalo de nuevo." },
+  "Não consegui copiar as etapas do funil. Nada foi salvo — tente de novo.": { es: "No pude copiar las etapas del embudo. No se guardó nada; inténtalo de nuevo." },
+  "Dê um nome ao novo funil (até 80 caracteres).": { es: "Ponle un nombre al nuevo embudo (hasta 80 caracteres)." },
 };
 
 /**

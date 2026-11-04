@@ -894,6 +894,9 @@ export const AUDIT_ACTIONS = [
   // meio dos renames — e "quem trouxe este funil de volta, e quando" é a
   // pergunta que o painel de auditoria só responde filtrando por `action`.
   "pipeline.unarchived",
+  // O funil nascido de outro ("Duplicar funil"): o metadata leva `origem_id`, `novo_id` e quantas etapas
+  // vieram — sem isso o funil novo seria indistinguível de um `pipeline.created`.
+  "pipeline.duplicated",
 
   // O banco de dados externo do agente (migration 0372). Dado de terceiro pode
   // ter PII: a configuração da conexão é auditada, e a LEITURA também — mas o
