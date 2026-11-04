@@ -1,8 +1,9 @@
 /**
- * D-097: o push de mensagem recebida entrega ao envio quem é o dono da conversa e o
- * modo de visibilidade da organização, para o envio filtrar quem não a veria. O envio
- * é falso aqui (a regra em si está em `push-so-para-quem-pode-ver.test.ts`); o que
- * se mede é o que o handler LEU do banco e passou adiante.
+ * D-097: o push de mensagem recebida só vai a quem pode ver a conversa. Desde o merge
+ * do upstream (04/11/2026) quem decide é o banco (`fn_can_view_conversation`, via
+ * `enviarPushAQuemVeAConversa`): o handler não remonta mais a regra com o dono e o
+ * modo lidos aqui. O envio é falso; o que se mede é que o handler NUNCA cai no envio
+ * à organização inteira e entrega a conversa certa ao envio filtrado.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,10 +13,11 @@ vi.mock("@/lib/branding/saida", () => ({ marcaDaSaida: async () => ({ nome: "Mar
 vi.mock("@/lib/notifications/web_push", () => ({
   enviarPushDaOrg: vi.fn().mockResolvedValue({ sent: 1, gone: 0 }),
   enviarPushAoUsuario: vi.fn().mockResolvedValue({ sent: 1, gone: 0 }),
+  enviarPushAQuemVeAConversa: vi.fn().mockResolvedValue({ sent: 1, gone: 0 }),
 }));
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { enviarPushDaOrg } from "@/lib/notifications/web_push";
+import { enviarPushAQuemVeAConversa, enviarPushDaOrg } from "@/lib/notifications/web_push";
 import { webPushInboundHandler } from "@/lib/notifications/push.handler";
 import type { EventRow } from "@/lib/event-log/dispatcher";
 
@@ -51,10 +53,11 @@ const evento = (payload: Record<string, unknown>): EventRow =>
 
 beforeEach(() => {
   vi.mocked(enviarPushDaOrg).mockClear();
+  vi.mocked(enviarPushAQuemVeAConversa).mockClear();
 });
 
 describe("push de mensagem recebida × visibilidade", () => {
-  it("passa o dono da conversa e o modo da organização ao envio", async () => {
+  it("envia pelo filtro de quem vê a conversa, nunca à organização inteira", async () => {
     vi.mocked(createAdminClient).mockReturnValue(
       banco({
         conversations: { assigned_to_user_id: "dono-1" },
@@ -62,15 +65,16 @@ describe("push de mensagem recebida × visibilidade", () => {
       }) as never,
     );
     await webPushInboundHandler.handle(evento({ conversation_id: CONVERSA, body_preview: "oi", type: "text" }));
-    const opcoes = vi.mocked(enviarPushDaOrg).mock.calls[0]![3];
-    expect(opcoes).toEqual({ conversa: { assignedToUserId: "dono-1", modoDeVisibilidade: "own" } });
+    expect(enviarPushDaOrg).not.toHaveBeenCalled();
+    expect(enviarPushAQuemVeAConversa).toHaveBeenCalledTimes(1);
+    const [org, conversa] = vi.mocked(enviarPushAQuemVeAConversa).mock.calls[0]!;
+    expect([org, conversa]).toEqual([ORG, CONVERSA]);
   });
 
-  it("conversa que não se acha entra como a mais fechada (só quem vê a empresa inteira)", async () => {
+  it("conversa que não se acha também passa pelo filtro do banco (nunca vai a todos)", async () => {
     vi.mocked(createAdminClient).mockReturnValue(banco({ organizations: { settings: {} } }) as never);
     await webPushInboundHandler.handle(evento({ conversation_id: CONVERSA, body_preview: "oi", type: "text" }));
-    expect(vi.mocked(enviarPushDaOrg).mock.calls[0]![3]).toEqual({
-      conversa: { assignedToUserId: null, modoDeVisibilidade: "own" },
-    });
+    expect(enviarPushDaOrg).not.toHaveBeenCalled();
+    expect(vi.mocked(enviarPushAQuemVeAConversa).mock.calls[0]!.slice(0, 2)).toEqual([ORG, CONVERSA]);
   });
 });

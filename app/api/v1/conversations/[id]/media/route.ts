@@ -57,10 +57,6 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   // O ramo do token não carrega idioma de usuário: cai no padrão do produto.
   const t = (texto: string) => traduzir(texto, authz.idioma ?? IDIOMA_PADRAO);
 
-  // D-155: o que não é contado na rota não é contado em lugar nenhum. Sem o teto,
-  // uma chave em laço subia 50 MB por chamada no bucket, sem limite (órfãos e custo).
-  const tetoEstourado = await tetoDeEscritaDoToken(authz, "media", requestId);
-  if (tetoEstourado) return tetoEstourado;
   const activeOrg = { orgId: authz.organizationId };
   // O client vem de `authz`, não de `createClient()`: no ramo do token NÃO HÁ
   // cookie de sessão, então um client de sessão seria anônimo e a RLS devolveria

@@ -427,11 +427,13 @@ describe("auth dual dos routers", () => {
     expect(createAdminClient).not.toHaveBeenCalled();
   });
 
-  // #2194: token já emitido não ganha poder na atualização — nem a lista, que
-  // expõe channel_session_id e fallback_agent_id.
+  // #2194: a lista expõe channel_session_id e fallback_agent_id — token abaixo de admin não lista.
+  // Hiperbold (merge de 04/11/2026): `mcp:read` de admin (tokens já emitidos pelo fork) VALE, ao lado do
+  // `config:read`; o que recusa é o papel e o escopo de escrita sozinho.
   it.each([
-    { nome: "mcp:read de admin", scopes: ["mcp:read"], role: "admin" as const },
+    { nome: "mcp:read sem papel de admin", scopes: ["mcp:read"], role: "agent" as const },
     { nome: "config:read sem papel de admin", scopes: ["config:read"], role: "agent" as const },
+    { nome: "só escopo de escrita (mcp:write) de admin", scopes: ["mcp:write"], role: "admin" as const },
   ])("Bearer com $nome não lista (403)", async ({ scopes, role }) => {
     dualDeps.validateBearerToken.mockResolvedValue(token(scopes, role) as never);
     const { GET } = await import("./route");

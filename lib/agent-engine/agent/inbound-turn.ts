@@ -5546,11 +5546,11 @@ async function executarTurnoDoAgente(
   // 2B-tools: tools do catálogo MCP habilitadas NA TELA entram no run (audit +
   // role/scope da ponte nativa; envio e handoff do catálogo são bloqueados —
   // ver edge/crm/mcp-tools.ts). As 8 tools do engine têm precedência de nome.
-  let mcpCleanup: (() => Promise<void>) | null = null;
   // (H) ids externos que a montagem aprovou como CONSULTA
   // (`somente_leitura_confirmado === true`) — é o único conjunto que a
   // prévia pode liberar; ela nunca decide sozinha (ver preview.ts).
   let mcpExternasDeConsulta: Set<string> = new Set();
+  let mcpCleanup: (() => Promise<void>) | null = null;
   try {
     // "digitando…" do INÍCIO do trabalho até a 1ª bolha, renovado a cada 10s.
     // Antes ele acendia uma vez, só na chamada principal ao modelo: os

@@ -38,7 +38,7 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { autorizaCron } from "@/lib/auth/cron-auth";
 import { fecharAvisosDeClienteRespondido } from "@/lib/channels/historico/avisos-da-queda";
@@ -172,7 +172,7 @@ async function handle(req: NextRequest): Promise<Response> {
     .limit(LOTE);
   if (error) {
     logger.error("[historico-import] leitura falhou", { detail: error.message, requestId });
-    return fail("internal_error", error.message, 500, { requestId });
+    return falhaInterna("internal_error", error, { requestId });
   }
 
   const linhas = ((data ?? []) as Linha[]).filter((l) => ehOperante(statusDaOrgEmbutida(l.organizations)));

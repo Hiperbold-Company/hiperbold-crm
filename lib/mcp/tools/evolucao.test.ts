@@ -119,7 +119,8 @@ describe("crm_save_org_memory e o prazo do aprendizado", () => {
       ctx,
     );
 
-    expect(chamadas.insert).toMatchObject({ valid_until: "2026-11-01", source: "agent", status: "active" });
+    // D-145 (Hiperbold): a anotação da IA entra `proposed`, nunca `active` — uma pessoa aprova.
+    expect(chamadas.insert).toMatchObject({ valid_until: "2026-11-01", source: "agent", status: "proposed" });
   });
 
   it("sem prazo, grava null — o comportamento de antes continua igual", async () => {

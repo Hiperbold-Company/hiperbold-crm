@@ -48,9 +48,14 @@ vi.mock("@/lib/supabase/server", () => ({
           data: { vocabulary: {}, settings: h.settings, organization_id: ORG },
           error: null,
         });
+        // A gravação vai pelo núcleo (`aplicarConfiguracaoDoFunil`): filtra id +
+        // organização (+ `updated_at` da trava otimista) e confirma com `.select("id")`.
         cadeia.update = (payload: unknown) => {
           h.gravou = payload;
-          return { eq: async () => ({ error: null }) };
+          const escrita: Record<string, unknown> = {};
+          escrita.eq = () => escrita;
+          escrita.select = async () => ({ data: [{ id: FUNIL }], error: null });
+          return escrita;
         };
         return cadeia;
       }

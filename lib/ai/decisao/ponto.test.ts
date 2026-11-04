@@ -515,7 +515,10 @@ describe("a chave do Jev: a da empresa, depois a da instalação, depois nada", 
   it("ponto sem tarefa do Jev: nem a chave da instalação sai", async () => {
     const fetchImpl = vi.fn();
     const r = await decidirNoPonto(
-      { ponto: "stage_classifier", organizationId: ORG, estado: "x", perguntas: PERGUNTAS },
+      // A pergunta não pode ter o id de uma tarefa do Jev: desde o upstream, a
+      // pergunta `clima` no pacote leva a tarefa dela junto, e o ponto deixaria
+      // de ser "sem tarefa".
+      { ponto: "stage_classifier", organizationId: ORG, estado: "x", perguntas: { etapa: PERGUNTAS.clima } },
       { fetchImpl, chaveDaInstalacao: () => DA_INSTALACAO },
     );
     expect(r.ok === false && r.motivo).toBe("sem_credencial");

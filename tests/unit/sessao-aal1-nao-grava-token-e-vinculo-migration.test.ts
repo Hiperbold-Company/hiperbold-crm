@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
  */
 
 const MIGRATION = readFileSync(
-  join(process.cwd(), "supabase/migrations/20260930160000_0918_sessao_aal1_nao_grava_token_e_vinculo.sql"),
+  join(process.cwd(), "supabase/migrations/20260930160030_0918_sessao_aal1_nao_grava_token_e_vinculo.sql"),
   "utf8",
 );
 const BASELINE = readFileSync(join(process.cwd(), "supabase/baseline.sql"), "utf8");

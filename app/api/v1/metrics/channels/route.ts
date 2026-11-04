@@ -34,7 +34,7 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { montarLinhas, type LinhaCanalBruta } from "@/lib/metrics/canais";
 import { createClient } from "@/lib/supabase/server";
@@ -121,7 +121,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     p_to: to.toISOString(),
     p_owner: parsed.data.owner_user_id,
   });
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
 
   const metrics = (data ?? { channels: [] }) as unknown as MetricsPayload;
 

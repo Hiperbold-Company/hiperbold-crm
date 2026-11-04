@@ -27,7 +27,13 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
 vi.mock("next/navigation", () => ({
   usePathname: () => rotaAtual,
   useSearchParams: () => new URLSearchParams(),
+  // A barra lateral do upstream pré-carrega o destino por intenção (`usePrefetchPorIntencao`).
+  useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
+// Os contadores da barra lateral do upstream (casos, fila e tarefas) consultam o servidor; aqui ficam fora.
+vi.mock("@/components/shell/ContadorDeCasos", () => ({ ContadorDeCasos: () => null }));
+vi.mock("@/components/shell/ContadorDaFila", () => ({ ContadorDaFila: () => null }));
+vi.mock("@/components/shell/ContadorDeTarefas", () => ({ ContadorDeTarefas: () => null }));
 vi.mock("@/components/connections/ConnectionHealthDot", () => ({
   ConnectionHealthDot: () => null,
 }));

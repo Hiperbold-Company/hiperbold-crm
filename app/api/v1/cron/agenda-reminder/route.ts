@@ -830,14 +830,14 @@ async function handle(req: NextRequest): Promise<Response> {
     // seguinte. Agora o envio falhado NÃO reenvia — perder um lembrete é melhor
     // que repetir um em sequência. O carimbo é da TENTATIVA, não da entrega: o
     // desfecho da entrega vive na mensagem. Se o carimbo não grava, a rodada NÃO envia.
-    const { reservado } = await reservarDegraus(admin, {
+    const { reservado, falhou } = await reservarDegraus(admin, {
       appointmentId: linha.id,
       organizationId: org,
       lidos: linha.reminder_sent_offsets_minutes,
       pendentes,
     });
     if (!reservado) {
-      pular("reservado_por_outra_rodada");
+      pular(falhou ? "carimbo_falhou" : "reservado_por_outra_rodada");
       continue;
     }
 

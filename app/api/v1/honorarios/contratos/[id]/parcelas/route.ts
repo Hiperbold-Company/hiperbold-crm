@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ok, fail } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { moedaDaOrganizacao } from "@/lib/catalogo/moeda-da-org";
@@ -51,7 +51,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
     if (moduloNaoInstalado(error)) {
       return fail("module_not_installed", MODULO_NAO_INSTALADO, 409, { requestId });
     }
-    return fail("internal_error", error.message, 500, { requestId });
+    return falhaInterna("internal_error", error, { requestId });
   }
 
   return ok(data ?? [], { requestId });
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
         requestId,
       });
     }
-    return fail("internal_error", error.message, 500, { requestId });
+    return falhaInterna("internal_error", error, { requestId });
   }
 
   await audit({

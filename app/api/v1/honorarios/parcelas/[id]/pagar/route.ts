@@ -23,6 +23,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -107,7 +108,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     // devolve o recibo gravado em vez de "já paga". O corpo do hash leva a
     // parcela: a mesma chave numa parcela diferente é conflito, não replay.
     const desfecho = await comIdempotencia({
-      db: supabase,
+      db: createAdminClient(),
       organizationId: orgId,
       endpoint: ENDPOINT,
       chave,

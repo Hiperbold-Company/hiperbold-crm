@@ -41,6 +41,12 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/auth/server", () => ({ loadAuthUser: async () => ({ id: GERENTE }) }));
 vi.mock("@/lib/auth/require-role", () => ({
   orgAtivaDaApi: async () => ({ ok: true, org: { orgId: ORG, role: "manager" } }),
+  // A rota passa pelo gate único de leitura (D-092, fork Hiperbold).
+  requireRole: async () => ({
+    ok: true,
+    user: { id: GERENTE, idioma: "pt-BR" },
+    org: { orgId: ORG, role: "manager" },
+  }),
 }));
 vi.mock("@/lib/channels/desativado", () => ({ idsDosCanaisDesativados: async () => [] }));
 vi.mock("@/lib/ai/agents/org-tem-automatico", () => ({ orgTemAutomatico: async () => false }));

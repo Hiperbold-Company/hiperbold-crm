@@ -113,7 +113,8 @@ async function importar(entrada: {
 }) {
   vi.mocked(requireRole).mockResolvedValue({
     ok: true,
-    org: { orgId: ORG },
+    // O papel efetivo entra na régua de `contatos.importar` (permissões por perfil).
+    org: { orgId: ORG, role: "agent" },
     user: { id: USER, idioma: "pt-BR" },
   } as never);
   const fake = supabaseFake({ contatosComNegocio: entrada.contatosComNegocio ?? [] });

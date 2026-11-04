@@ -178,7 +178,7 @@ describe("adapter meta_cloud — envio", () => {
   it("texto vai como type:text e o phone_number_id entra na URL, não no corpo", async () => {
     configurar();
     const spy = stubFetch({ messages: [{ id: "wamid.T" }] });
-    const r = await a().send({ organizationId: ORG, sessionRef: NUMERO_DO_ENV, to: "5531998966398", kind: "text", body: "oi" });
+    const r = await a().send({ organizationId: ORG, sessionRef: NUMERO_DO_ENV, to: "5531991110001", kind: "text", body: "oi" });
 
     expect(r).toEqual({ externalId: "wamid.T" });
     const [url, init] = spy.mock.calls[0]!;
@@ -192,7 +192,7 @@ describe("adapter meta_cloud — envio", () => {
     configurar();
     const spy = stubFetch({ messages: [{ id: "wamid.A" }] });
     await a().send({
-      organizationId: ORG, sessionRef: NUMERO_DO_ENV, to: "5531998966398", kind: "audio",
+      organizationId: ORG, sessionRef: NUMERO_DO_ENV, to: "5531991110001", kind: "audio",
       media: { url: "https://x/a.ogg", mime: "audio/ogg" },
     });
     const corpo = JSON.parse(spy.mock.calls[0]![1].body as string) as {
@@ -246,7 +246,7 @@ describe("adapter meta_cloud — envio", () => {
     const r = await a().send({
       organizationId: "org-1",
       sessionRef: NUMERO_DO_ENV,
-      to: "5531998966398",
+      to: "5531991110001",
       kind: "contact",
       contact: {
         fullName: "Maria Silva",
@@ -271,7 +271,7 @@ describe("adapter meta_cloud — envio", () => {
     const spy = stubFetch({ messages: [{ id: "wamid.B" }] });
     const r = await a().send({
       organizationId: ORG,
-      sessionRef: "ignorado",
+      sessionRef: NUMERO_DO_ENV,
       to: "5531991110001",
       kind: "text",
       body: "Qual o objetivo?",
@@ -308,7 +308,7 @@ describe("adapter meta_cloud — envio", () => {
     const spy = stubFetch({ messages: [{ id: "wamid.L" }] });
     await a().send({
       organizationId: ORG,
-      sessionRef: "ignorado",
+      sessionRef: NUMERO_DO_ENV,
       to: "5531991110001",
       kind: "text",
       body: "Escolha o imóvel",
@@ -604,7 +604,7 @@ describe("adapter meta_cloud — digitando", () => {
   const SINAL = {
     organizationId: ORG,
     sessionRef: NUMERO_DO_ENV,
-    recipient: "5531998966398",
+    recipient: "5531991110001",
     inboundExternalId: "wamid.RECEBIDA",
   };
 

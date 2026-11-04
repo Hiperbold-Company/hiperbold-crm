@@ -84,7 +84,9 @@ describe("ContactTagsEditor no contexto de NEGÓCIO (#2979)", () => {
     // O rótulo também diz de QUEM é a etiqueta — "ao contato" num formulário de
     // negócio ensinaria o operador a esperar o destino errado.
     await userEvent.type(screen.getByLabelText("Adicionar tag ao negócio"), "recompra");
-    await userEvent.click(screen.getByRole("button", { name: "Adicionar tag" }));
+    // Hiperbold: o editor é o `SeletorDeEtiquetas` (a lista da empresa); o texto
+    // que não casa com nenhuma etiqueta vira o botão "Criar etiqueta".
+    await userEvent.click(await screen.findByRole("button", { name: /Criar etiqueta/ }));
 
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
     expect(patch).toHaveBeenCalledWith("/api/v1/leads/l-9", { tags: ["recompra"] });
@@ -96,7 +98,7 @@ describe("ContactTagsEditor no contexto de NEGÓCIO (#2979)", () => {
     montar(<ContactTagsEditor entityId="c-9" orgId={ORG} tags={[]} />);
 
     await userEvent.type(screen.getByLabelText("Adicionar tag ao contato"), "vip");
-    await userEvent.click(screen.getByRole("button", { name: "Adicionar tag" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Criar etiqueta/ }));
 
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
     expect(patch).toHaveBeenCalledWith("/api/v1/contacts/c-9", { tags: ["vip"] });
@@ -107,7 +109,8 @@ describe("ContactTagsEditor no contexto de NEGÓCIO (#2979)", () => {
     // Papel `agent`: quem pode pintar etiqueta passa pela caixa de cor antes de
     // gravar (#2789) — aqui a pergunta é o DESTINO, então o clique grava direto.
     sessao.papel = "agent";
-    get.mockResolvedValue({ data: ["vip"] });
+    // A lista da empresa (`/api/v1/tags/para-escolher`) chega como opções.
+    get.mockResolvedValue({ data: [{ tag: "vip", cor: null, grupo: null }] });
     montar(
       <ContactTagsEditor
         entityType="lead"
@@ -118,7 +121,7 @@ describe("ContactTagsEditor no contexto de NEGÓCIO (#2979)", () => {
       />,
     );
 
-    const sugestao = await screen.findByRole("button", { name: "+ vip" }, { timeout: 5000 });
+    const sugestao = await screen.findByRole("checkbox", { name: "vip" }, { timeout: 5000 });
     await userEvent.click(sugestao);
 
     await waitFor(() =>
@@ -138,7 +141,8 @@ describe("ContactTagsEditor no contexto de NEGÓCIO (#2979)", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Remover tag recompra" }));
+    // Desmarcar a etiqueta na lista é o "remover" do seletor.
+    await userEvent.click(await screen.findByRole("checkbox", { name: "recompra" }));
 
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/api/v1/leads/l-9", { tags: ["vip"] }));
     expect(urlsChamadas().some((u) => u.startsWith("/api/v1/contacts/"))).toBe(false);

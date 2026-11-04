@@ -143,7 +143,7 @@ export function AguardandoPagamento({
         </Button>
         {erroDaTroca && (
           <p role="alert" data-testid="trocar-forma-de-pagamento-erro" className="text-sm text-destructive">
-            {t(erroDaTroca)}
+            {erroDaTroca}
           </p>
         )}
       </div>

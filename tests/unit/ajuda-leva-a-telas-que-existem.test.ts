@@ -53,9 +53,9 @@ describe("a ajuda dentro do produto", () => {
     if (!item) throw new Error("o item /app/ajuda não existe em NAV_CATALOG");
 
     expect(item.group, "Ajuda tem de viver no rodapé fixo").toBe(GRUPO_NO_RODAPE);
-    expect("sidebar" in item && item.sidebar, "sem `sidebar: true` o rodapé não a desenha").toBe(
-      true,
-    );
+    // Decisão do Filipe (04/11/2026): a ajuda do menu é só a Central da Hiperbold
+    // (HELP_CENTER_URL); `/app/ajuda` fica no catálogo, FORA do menu, e redireciona.
+    expect("sidebar" in item && item.sidebar, "/app/ajuda não pode voltar ao menu").toBe(false);
     expect(
       NAV_CATALOG.indexOf(item),
       "Ajuda é o ÚLTIMO item: é o que se procura quando o resto falhou",

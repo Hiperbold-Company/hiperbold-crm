@@ -48,7 +48,8 @@ vi.mock("@/lib/supabase/admin", () => ({
       c.then = (r: (v: unknown) => unknown) =>
         Promise.resolve(
           ehCarimbo
-            ? { data: null, error: mocks.erroNoCarimbo }
+            ? // A reserva do degrau (D-115) é compare-and-swap: gravou uma linha = reservou.
+              { data: mocks.erroNoCarimbo ? null : [{ id: compromisso.id }], error: mocks.erroNoCarimbo }
             : {
                 data:
                   tabela === "calendar_appointments"

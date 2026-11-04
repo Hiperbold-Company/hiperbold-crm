@@ -29,6 +29,12 @@ vi.mock("@/lib/supabase/admin", () => ({
         return { eq: async () => ({ error: null }) };
       },
     }),
+    // D-132 (Hiperbold): a política grava só `settings.security`, pela função do
+    // banco (`fn_atualizar_setting_da_organizacao`), e não por UPDATE do objeto.
+    rpc: async (fn: string, args: unknown) => {
+      if (fn === "fn_atualizar_setting_da_organizacao") deps.update(args);
+      return { data: 1, error: null };
+    },
   }),
 }));
 

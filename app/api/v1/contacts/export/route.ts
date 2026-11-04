@@ -29,6 +29,8 @@ import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { ApiError } from "@/lib/api/types";
 import { fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { roleAtLeast } from "@/lib/auth/types";
+import { cpfsDecifradosDosContatos } from "@/lib/contacts/cpf-do-contato";
 import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { resolverAlvoDeLote } from "@/lib/contacts/alvo-de-lote";
 import {
@@ -41,7 +43,6 @@ import {
 import { montarCsvDeContatos, type ContatoParaCsv } from "@/lib/contacts/exportar-csv";
 import { resumoDoFiltroParaAuditoria } from "@/lib/contacts/filtros";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { logger } from "@/lib/logger";
 import {
   contactListQuerySchema,
   contactsExportSchema,
@@ -49,9 +50,7 @@ import {
   validateRequest,
 } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
-import type { Contact } from "@/lib/types/contacts";
-
-import { listContactsHandler } from "../_handler";
+import { listContactsHandler, type ContatoPublico } from "../_handler";
 
 export const dynamic = "force-dynamic";
 
@@ -128,6 +127,18 @@ export async function POST(req: NextRequest): Promise<Response> {
       return fail("not_found", t("Nenhum contato para exportar."), 404, { requestId });
     }
 
+    // CPF em claro, pelo MESMO caminho da ficha (cliente de serviço + `fn_decrypt_oauth`, D-216) e o
+    // MESMO papel mínimo dela (manager): a permissão de exportar é liberável até o Leitor, e o
+    // Leitor não vê CPF na ficha. O audit abaixo registra se o CPF saiu — nunca o valor.
+    const comCpf = podeVerCpf(authz.org.role);
+    if (comCpf) {
+      const cpfs = await cpfsDecifradosDosContatos(
+        organizationId,
+        contatos.map((c) => c.id),
+      );
+      for (const c of contatos) c.cpf = cpfs.get(c.id) ?? null;
+    }
+
     const [funis, etapas] = await Promise.all([
       supabase.from("crm_pipelines").select("id, name, settings").eq("organization_id", organizationId),
       supabase.from("crm_stages").select("id, name").eq("organization_id", organizationId),
@@ -150,6 +161,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       funis: new Map((funis.data ?? []).map((f) => [f.id as string, f.name as string])),
       etapas: new Map((etapas.data ?? []).map((e) => [e.id as string, e.name as string])),
       rotulosDeCampo,
+      comCpf,
     });
 
     await audit({
@@ -161,6 +173,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       metadata: {
         modo: alvo.modo,
         linhas: contatos.length,
+        cpf_incluido: comCpf,
         ...("filtro" in corpo ? { filtro: resumoDoFiltroParaAuditoria(corpo.filtro) } : { pedidos: corpo.ids.length }),
       },
     });
@@ -182,34 +195,16 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 }
 
+/** O CPF sai só para quem o vê na ficha do contato (manager+, `getContactHandler`). */
+function podeVerCpf(role: string | null | undefined): boolean {
+  return roleAtLeast(role, "manager");
+}
+
 /** A página da lista é esta: é o teto do `limit` do `contactListQuerySchema`. */
 const TAMANHO_DA_PAGINA = 100;
 /** Mesmo teto do export de auditoria — cabe na memória do processo que serve o CRM. */
 const TETO_DO_EXPORT = 10_000;
 const FORMATOS: readonly FormatoDeExport[] = ["csv", "vcf"];
-
-/**
- * O CPF em claro de quem tem cifra, um por contato.
- *
- * A RPC `decrypt_cpf` (migration 0597) valida org + papel por dentro e audita
- * cada chamada; falha aqui degrada para coluna VAZIA, como o próprio get do
- * contato faz — CPF que não sai não pode derrubar o arquivo inteiro.
- */
-async function decifraCpfs(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  contatos: readonly Contact[],
-  destino: Map<string, string>,
-): Promise<void> {
-  for (const contato of contatos) {
-    if (!contato.cpf_hash) continue;
-    const { data, error } = await supabase.rpc("decrypt_cpf", { p_contact_id: contato.id });
-    if (error) {
-      logger.warn("[contacts.export] decrypt_cpf RPC indisponível", { detail: error.message });
-      continue;
-    }
-    if (typeof data === "string" && data !== "") destino.set(contato.id, data);
-  }
-}
 
 /**
  * GET /api/v1/contacts/export — a base de contatos DE VOLTA para quem opera
@@ -239,17 +234,17 @@ async function decifraCpfs(
  *
  * ─── Papel ──────────────────────────────────────────────────────────────────
  *
- * `manager`, o mesmo do export de auditoria: exportar a base inteira é
- * vazamento de base, não rotina de atendimento (`agent` importa porque
- * cadastro é rotina; levar a base embora não é). O `decrypt_cpf` também exige
- * `manager`, então as duas portas batem e ninguém toma 403 no meio do arquivo.
+ * Hiperbold: a permissão por perfil `contatos.exportar` (padrão `manager`, a
+ * mesma do POST). O CPF sai só para manager+ (o mesmo papel que abre o CPF na
+ * ficha), decifrado no servidor por `cpfsDecifradosDosContatos` (D-216: a
+ * sessão do usuário não lê `cpf_encrypted`, e a lista não traz `cpf_hash`).
+ * Rate limit por usuário igual ao do POST.
  *
  * ─── LGPD ───────────────────────────────────────────────────────────────────
  *
  * O audit registra QUEM, QUANDO e QUANTOS registros saíram — nunca o termo de
- * busca nem o conteúdo (mesma régua do export de conversa em PDF, #1982). O
- * CPF viaja só para quem tem papel, decifrado pela RPC que já audita cada
- * chamada própria.
+ * busca nem o conteúdo (mesma régua do export de conversa em PDF, #1982), e
+ * se o CPF foi incluído (`cpf_incluido`), nunca o valor.
  */
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
@@ -258,6 +253,15 @@ export async function GET(req: NextRequest): Promise<Response> {
   const authz = await exigirPermissao("contatos.exportar", { requestId, resource: "contacts" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
+
+  // O MESMO balde do POST: as duas portas levam a base para fora.
+  const limite = await checkRateLimit(`contacts:export:${authz.user.id}`, CHAMADAS_POR_JANELA, JANELA_EM_SEGUNDOS);
+  if (!limite.allowed) {
+    return fail("rate_limited", t("Muitas exportações em pouco tempo. Tente de novo em instantes."), 429, {
+      requestId,
+      headers: { "Retry-After": String(JANELA_EM_SEGUNDOS) },
+    });
+  }
 
   const url = new URL(req.url);
   // 422 em formato desconhecido, igual ao export de conversa: silenciar o
@@ -304,8 +308,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     idioma: authz.user.idioma,
   };
 
-  const lidos: Contact[] = [];
-  const cpfs = new Map<string, string>();
+  const lidos: ContatoPublico[] = [];
   let cursor: string | undefined;
   let truncado = false;
 
@@ -318,7 +321,6 @@ export async function GET(req: NextRequest): Promise<Response> {
       );
       if (contacts.length === 0) break;
       lidos.push(...contacts);
-      if (formato === "csv") await decifraCpfs(supabase, contacts, cpfs);
       if (lidos.length >= TETO_DO_EXPORT) {
         truncado = has_more || lidos.length > TETO_DO_EXPORT;
         break;
@@ -333,7 +335,16 @@ export async function GET(req: NextRequest): Promise<Response> {
     throw err;
   }
 
-  const contatos: ContatoParaExportar[] = lidos.slice(0, TETO_DO_EXPORT).map((c) => ({
+  const exportados = lidos.slice(0, TETO_DO_EXPORT);
+  const comCpf = podeVerCpf(authz.org.role);
+  let cpfs = new Map<string, string>();
+  if (comCpf) {
+    cpfs = await cpfsDecifradosDosContatos(
+      authz.org.orgId,
+      exportados.filter((c) => c.cpf_available).map((c) => c.id),
+    );
+  }
+  const contatos: ContatoParaExportar[] = exportados.map((c) => ({
     name: c.name,
     display_name: c.display_name,
     email: c.email,
@@ -357,6 +368,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       formato,
       total: contatos.length,
       truncado,
+      // Se o CPF foi incluído (papel manager+), nunca o valor.
+      cpf_incluido: comCpf,
       // O FILTRO, nunca o TEXTO do filtro: termo de busca é dado de quem foi
       // buscado, e o audit de export existe para provar que saiu QUANTO, não
       // para guardar quem a pessoa estava procurando.

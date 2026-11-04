@@ -188,7 +188,8 @@ describe("crm_start_conversation_and_send", () => {
         { channel_session_id: SESSION_ID, phone_number: "+5511999990000", ...mensagem } as never,
         makeCtx({ cached: null, inserts: [] }),
       ),
-    ).rejects.toThrow(/body, media_url/);
+    // D-095 (Hiperbold): sem `media_url` livre, a mídia só vai por `media_storage_path`.
+    ).rejects.toThrow(/body, media_storage_path/);
 
     expect(mockedSegurar).not.toHaveBeenCalled();
     expect(mockedOpen).not.toHaveBeenCalled();

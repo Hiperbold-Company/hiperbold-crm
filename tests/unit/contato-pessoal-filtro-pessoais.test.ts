@@ -1,7 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Hiperbold (D-216): o handler pergunta "este contato tem CPF?" pelo cliente de SERVIÇO
+// (`lib/contacts/cpf-do-contato.ts`), fora do dublê de banco deste arquivo. Sem esta troca a
+// pergunta iria à rede. Ninguém aqui tem CPF.
+vi.mock("@/lib/contacts/cpf-do-contato", () => ({
+  idsComCpf: async () => ({ ids: new Set<string>(), error: null }),
+  idsPorHashDeCpf: async () => ({ ids: [], error: null }),
+}));
 
 import { listContactsHandler } from "@/app/api/v1/contacts/_handler";
 import { contactListQuerySchema } from "@/lib/schemas/contacts";
@@ -164,7 +172,10 @@ describe("o schema entende os dois mundos (URL e MCP)", () => {
 describe("o parâmetro atravessa a rota e o hook", () => {
   it("a rota GET repassa ?pessoais ao handler", () => {
     const src = semComentarios(fonte("app", "api", "v1", "contacts", "route.ts"));
-    expect(src).toMatch(/pessoais/);
+    // Hiperbold: a rota repassa TODOS os parâmetros da URL ao schema (`Object.fromEntries` de
+    // `searchParams`), em vez de um por um — o filtro chega por essa porta.
+    expect(src).toMatch(/Object\.fromEntries\(\[\.\.\.url\.searchParams\.entries\(\)\]/);
+    expect(src).toMatch(/contactListQuerySchema\.safeParse/);
   });
 
   it("o hook manda ?pessoais=true só quando ligado", () => {

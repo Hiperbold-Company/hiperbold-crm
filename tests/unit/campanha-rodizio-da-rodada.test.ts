@@ -32,6 +32,7 @@ interface Campanha {
   teto_horario: null;
   started_at: string;
   last_tick_at: string | null;
+  organizations: { status: string };
 }
 
 function campanha(id: string, org: string, numero: string, minuto: number): Campanha {
@@ -49,6 +50,8 @@ function campanha(id: string, org: string, numero: string, minuto: number): Camp
     teto_horario: null,
     started_at: new Date(Date.UTC(2026, 8, 1, 0, minuto)).toISOString(),
     last_tick_at: null,
+    // A busca do upstream embute `organizations(status)` e só roda campanha de organização operante.
+    organizations: { status: "active" },
   };
 }
 
@@ -127,7 +130,23 @@ function banco(campanhas: Campanha[]) {
           resposta = { data: ordenadas.slice(0, e.limite), error: null };
         } else if (tabela === "campaign_recipients" && e.op === "select") {
           if (e.eqs.campaign_id) avaliadas.push(e.eqs.campaign_id as string);
-          resposta = e.head ? { data: null, error: null, count: 2 } : { data: [], error: null };
+          // Cada campanha tem um destinatário na vez, que a revalidação pula (pediu
+          // para parar). Pular É a vez da campanha e ocupa o número; "aguardando"
+          // não ocupa mais (regra do upstream, `ocupaONumero`, #3107), e com ele a
+          // rodada seguiria pela janela inteira.
+          resposta = e.head
+            ? { data: null, error: null, count: 2 }
+            : {
+                data: [
+                  {
+                    id: `r-${String(e.eqs.campaign_id)}`,
+                    contact_id: "k1",
+                    recipient_address: "5511999990000",
+                    contacts: { id: "k1", phone_number: "5511999990000", is_blocked: true },
+                  },
+                ],
+                error: null,
+              };
         } else {
           resposta = { data: [], error: null };
         }

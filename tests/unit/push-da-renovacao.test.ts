@@ -62,6 +62,8 @@ describe("aviso de renovação → celular", () => {
     expect(vi.mocked(enviarPushDaOrg).mock.calls[0]![1]).toEqual({
       title: "Falta 1 dia para o fim do seu plano Pro",
       body: "O acesso vai até 06/11/2026.",
+      // Upstream: o texto para a tela bloqueada sem prévia (o aviso não tem dado de cliente).
+      corpoSemPrevia: "O acesso vai até 06/11/2026.",
       tag: "aviso:i1",
       href: "/app/settings/plano",
     });

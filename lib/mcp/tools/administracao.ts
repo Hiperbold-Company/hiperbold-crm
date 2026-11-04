@@ -44,6 +44,7 @@ import {
 import {
   aplicarConfiguracaoDoFunil,
   lerConfiguracaoDoFunil,
+  REGRAS_PERDEM_O_CAMPO,
 } from "@/lib/pipelines/configuracao-do-funil";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
@@ -75,7 +76,9 @@ export const crmGetPipelineConfig: McpToolDefinition<typeof getPipelineConfigSha
   name: "crm_get_pipeline_config",
   description:
     "Devolve a configuração de UM pipeline: vocabulário (lead/deal/won/lost), campos personalizados (fields), " +
-    "motivos de perda (lost_reasons) e de ganho (won_reasons, won_reason_required) e a política de reabertura. " +
+    "motivos de perda (lost_reasons) e de ganho (won_reasons, won_reason_required), a política de reabertura, " +
+    "a comanda no ganho (comanda_no_ganho), a etapa de entrada do Inbox (entrada_do_inbox), o recorte de " +
+    "encerrados (ocultar_encerrados_dias, 0 = desligado) e os atalhos do card (atalhos). " +
     "Use antes de crm_update_pipeline_config para não sobrescrever o que já existe.",
   inputSchema: getPipelineConfigShape,
   category: "read",
@@ -107,7 +110,8 @@ export const crmUpdatePipelineConfig: McpToolDefinition<typeof updatePipelineCon
   description:
     "Grava a configuração de um pipeline. `config` aceita: vocabulary (merge por chave), fields (SUBSTITUI a lista " +
     "inteira de campos personalizados — leia antes com crm_get_pipeline_config), lost_reasons, won_reasons, " +
-    "won_reason_required, reabertura e reabertura_campos. Chave ausente não muda. Exige papel admin.",
+    "won_reason_required, reabertura, reabertura_campos, comanda_no_ganho, entrada_do_inbox, " +
+    "ocultar_encerrados_dias e atalhos. Chave ausente não muda. Exige papel admin.",
   inputSchema: updatePipelineConfigShape,
   category: "write",
   requiresRole: "admin",
@@ -127,6 +131,10 @@ export const crmUpdatePipelineConfig: McpToolDefinition<typeof updatePipelineCon
       }
       if (r.error === "validation_failed") {
         throw recusa(ctx, 422, "unprocessable_entity", "Não entendi o que mudar na configuração deste funil.");
+      }
+      // #2791: a frase já vem pronta e nomeia a regra que deixaria de disparar (o 422 da rota REST).
+      if ((r.details as Record<string, unknown> | undefined)?.[REGRAS_PERDEM_O_CAMPO]) {
+        throw recusa(ctx, 422, "unprocessable_entity", r.error);
       }
       throw recusa(ctx, 500, "internal_error", r.error);
     }
@@ -354,6 +362,8 @@ const updateOrgShape = {
   locale: z.string().optional(),
   currency: z.string().optional(),
   media_retention_days: z.number().int().min(30).max(3650).optional(),
+  // Interruptor da limpeza automática de mídia antiga (#1534): o mesmo campo da tela.
+  media_retention_enforced: z.boolean().optional(),
   dpo_email: z.string().email().max(200).nullable().optional(),
   privacy_policy_url: z.string().url().max(2048).nullable().optional(),
   o_que_faz: z.string().min(2).max(280).optional(),
@@ -369,7 +379,7 @@ export const crmUpdateOrganizationSettings: McpToolDefinition<typeof updateOrgSh
   name: "crm_update_organization_settings",
   description:
     "Atualiza dados da empresa (display_name, legal_name, cnpj, country, timezone, locale, currency, " +
-    "media_retention_days, dpo_email, privacy_policy_url), o texto o_que_faz e/ou interface_settings. " +
+    "media_retention_days, media_retention_enforced, dpo_email, privacy_policy_url), o texto o_que_faz e/ou interface_settings. " +
     "Campo ausente não muda. Exige papel admin; o país precisa ter perfil legal revisado.",
   inputSchema: updateOrgShape,
   category: "write",
@@ -397,6 +407,10 @@ export const crmUpdateOrganizationSettings: McpToolDefinition<typeof updateOrgSh
     const falha = (r: { ok: boolean; error?: string }) => {
       if (r.ok) return;
       const e = r.error ?? "internal_error";
+      // CNPJ é único na instalação: conflito com outra organização, como o 409 da rota REST.
+      if (e === "cnpj_em_uso") {
+        throw recusa(ctx, 409, "state_conflict", "Este CNPJ já pertence a outra organização.");
+      }
       const status = e === "sem_area" || e.startsWith("País sem perfil") ? 422 : 500;
       throw recusa(ctx, status, status === 422 ? "unprocessable_entity" : "internal_error", e);
     };

@@ -25,10 +25,11 @@ import type { Actor } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { lerAmbiente } from "@/lib/instalacao/ambiente";
+import { ehToolIdRemoto } from "@/lib/mcp/servidor-externo/ids";
 
 import { capacidadesDesconhecidas } from "./capacidades-conhecidas";
 import { mcpAgentDraftRecords } from "./create-draft";
-import { mensagemDoEscopo, validarEscopoDaVersao } from "./escopo";
+import { codigoDoEscopo, mensagemDoEscopo, validarEscopoDaVersao } from "./escopo";
 import { publishAgentVersion } from "./publish";
 import { modelosDaInstalacao } from "@/lib/ai/modelos-da-instalacao-leitura";
 import { recusaDaVersao } from "./provedor-permitido";
@@ -64,7 +65,7 @@ export const COLUNAS_DO_AGENTE_NA_LISTA =
   "id, organization_id, name, description, model, system_prompt, is_active, is_default, kind, priority, published_version_id, paused_at, operation_mode, operation_revision, archived_at, config, guardrails, active_kb_version_id, created_at, updated_at, versao_publicada:ai_agent_versions!ai_agents_published_version_id_fkey(provider, model), versoes_rascunho:ai_agent_versions!ai_agent_versions_agent_id_fkey(provider, model, version_number, status)";
 
 const VERSION_COLUMNS =
-  "id, organization_id, agent_id, version_number, system_prompt, provider, model, credential_id, tool_ids, trigger_config, channel_session_id, max_steps, token_budget, cost_budget_cents, history_message_window, history_token_window, handoff_keywords, handoff_tool_enabled, cases_enabled, split_messages, split_max_chars, followup, operator_enabled, operator_model, operator_tool_ids, status, published_at, superseded_at, created_at, created_by,pipeline_ids,knowledge_source_ids,provisioning_origin";
+  "id, organization_id, agent_id, version_number, system_prompt, provider, model, credential_id, tool_ids, trigger_config, channel_session_id, max_steps, token_budget, cost_budget_cents, history_message_window, history_token_window, handoff_keywords, handoff_tool_enabled, handoff_legal_enabled, proposal_ai_draft_enabled, cases_enabled, split_messages, split_max_chars, followup, voz_enabled, voz_quando, operator_enabled, operator_model, operator_tool_ids, status, published_at, superseded_at, created_at, created_by,pipeline_ids,knowledge_source_ids,provisioning_origin,inbound_debounce_ms,reply_min_interval_ms";
 
 function recusa(deps: DepsDeAgentes, status: number, code: string, message: string, details?: Record<string, unknown>) {
   return new ApiError(status, code, details, deps.requestId, message);
@@ -131,6 +132,7 @@ export async function lerAgenteComVersoes(
 export async function criarAgenteMcp(
   deps: DepsDeAgentes,
   entrada: unknown,
+  opts: { formato?: "legado" | "version" } = {},
 ): Promise<{ agent: { id: string }; version: { id: string } }> {
   const parsed = agentMcpCreateSchema.safeParse(entrada);
   if (!parsed.success) {
@@ -142,7 +144,7 @@ export async function criarAgenteMcp(
   }
 
   const escopo = await validarEscopoDaVersao(deps.admin, deps.organizationId, input.version);
-  if (!escopo.ok) throw recusa(deps, 422, "validation_failed", mensagemDoEscopo(escopo));
+  if (!escopo.ok) throw recusa(deps, 422, codigoDoEscopo(escopo), mensagemDoEscopo(escopo));
 
   const records = mcpAgentDraftRecords({ orgId: deps.organizationId, userId: deps.responsavel }, input);
   const { data: agentRow, error: agentError } = await deps.admin
@@ -175,7 +177,12 @@ export async function criarAgenteMcp(
     resourceType: "ai_agent",
     resourceId: agent.id,
     requestId: deps.requestId,
-    metadata: { kind: "mcp_agent", first_version_id: version.id, priority: input.priority },
+    metadata: {
+      kind: "mcp_agent",
+      first_version_id: version.id,
+      priority: input.priority,
+      formato: opts.formato ?? "version",
+    },
   });
   return { agent: agentRow as never, version: versionRow as never };
 }
@@ -235,12 +242,15 @@ export async function criarVersaoDoAgente(
   // organização (ou de um material apagado) entra no array, a versão é publicada, e o assistente não
   // acha nada — sem erro, com a tela mostrando a marcação como se estivesse valendo.
   const escopo = await validarEscopoDaVersao(deps.admin, deps.organizationId, {
+    provider: v.provider,
     pipeline_ids: v.pipeline_ids,
     knowledge_source_ids: v.knowledge_source_ids,
     tool_ids: v.tool_ids,
     operator_tool_ids: v.operator_tool_ids,
+    credential_id: v.credential_id,
+    channel_session_id: v.channel_session_id,
   });
-  if (!escopo.ok) throw recusa(deps, 422, "validation_failed", mensagemDoEscopo(escopo));
+  if (!escopo.ok) throw recusa(deps, 422, codigoDoEscopo(escopo), mensagemDoEscopo(escopo));
 
   // Insert com retentativa em 23505 (corrida com unique(agent_id, version_number)).
   for (let tentativa = 0; tentativa < 3; tentativa++) {
@@ -274,10 +284,16 @@ export async function criarVersaoDoAgente(
         history_token_window: v.history_token_window,
         handoff_keywords: v.handoff_keywords,
         handoff_tool_enabled: v.handoff_tool_enabled,
+        handoff_legal_enabled: v.handoff_legal_enabled,
+        proposal_ai_draft_enabled: v.proposal_ai_draft_enabled,
         cases_enabled: v.cases_enabled,
         split_messages: v.split_messages,
         split_max_chars: v.split_max_chars,
+        inbound_debounce_ms: v.inbound_debounce_ms,
+        reply_min_interval_ms: v.reply_min_interval_ms,
         followup: v.followup,
+        voz_enabled: v.voz_enabled,
+        voz_quando: v.voz_quando,
         operator_enabled: v.operator_enabled,
         operator_model: v.operator_model,
         operator_tool_ids: v.operator_tool_ids,
@@ -340,7 +356,9 @@ export async function publicarVersaoDoAgente(
   }
 
   const tools = (alvo.tool_ids ?? []) as string[];
-  const invalidas = capacidadesDesconhecidas(tools);
+  // Catálogo/conexão MCP da organização (`capacidadesDesconhecidas`) OU ferramenta remota escolhida no
+  // prefixo `mcp_externo:` (#2147 item 6) — a mesma régua do Zod da versão.
+  const invalidas = capacidadesDesconhecidas(tools).filter((t) => !ehToolIdRemoto(t));
   if (invalidas.length > 0) {
     throw recusa(deps, 422, "tool_id_invalid", "tool_ids contém ids inexistentes no catálogo MCP.", {
       invalid: invalidas,
@@ -353,12 +371,15 @@ export async function publicarVersaoDoAgente(
     tool_ids: tools,
     operator_tool_ids: (alvo.operator_tool_ids ?? []) as string[],
   });
-  if (!escopo.ok) throw recusa(deps, 422, "validation_failed", mensagemDoEscopo(escopo));
+  if (!escopo.ok) throw recusa(deps, 422, codigoDoEscopo(escopo), mensagemDoEscopo(escopo));
 
   const r = await publishAgentVersion(deps.admin, {
     orgId: deps.organizationId,
     agentId,
     versionId,
+    // #2156: com quem publicou, a chave por assunto jurídico que muda vira
+    // `ai_agent.legal_handoff_changed` com ator e requestId preenchidos.
+    quemPublicou: { ...colunasDeAtorNoAudit(deps.actor), requestId: deps.requestId },
   });
   if (!r.ok) {
     if (PUBLISH_ERROR_CODES.has(r.code as string)) {

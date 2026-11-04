@@ -10,6 +10,7 @@ import {
   periodoDoFiltro,
   resumoDoFiltroParaAuditoria,
 } from "@/lib/contacts/filtros";
+import { padraoRegexDeBusca } from "@/lib/contacts/busca-regex";
 import { etapasDoFiltro, filtrosFromParams, filtrosParaCorpo, filtrosToParams } from "@/lib/contacts/filtros-url";
 import { contactListQuerySchema, filtrosDeContatosSchema } from "@/lib/schemas";
 
@@ -103,7 +104,7 @@ describe("esquema dos filtros", () => {
 
   it("a lista continua aceitando os parâmetros de antes", () => {
     const q = contactListQuerySchema.parse({ search: "ana", tag: "VIP", source: "site", limit: "25" });
-    expect(q).toMatchObject({ search: "ana", tag: "vip", source: "site", limit: 25, order_by: "last_activity_at" });
+    expect(q).toMatchObject({ search: "ana", tag: ["vip"], source: "site", limit: 25, order_by: "last_activity_at" });
   });
 });
 
@@ -217,8 +218,12 @@ describe("consulta de contatos (o que vai ao banco)", () => {
     const busca = gravador();
     await consultaDeContatos(busca.supabase, "id", filtros({ search: "a*b" }), ctx);
     const ou = busca.chamadas.find((c) => c[0] === "or")![1] as string;
-    expect(ou).toContain("name.ilike.%a_b%");
-    expect(ou).not.toContain("*");
+    // Na BUSCA a régua é a do upstream (#1835, F2): o termo vira regex (`imatch`), e o `*`
+    // digitado é o curinga da régua única (`lib/inbox/termo-de-busca.ts`), virando `.*`.
+    // O texto literal "a*b" não chega ao filtro como LIKE.
+    expect(ou).toContain("name.imatch.");
+    expect(ou).not.toContain("ilike.%a*b%");
+    expect(ou).toContain(`name.imatch.${padraoRegexDeBusca("a*b")}`);
   });
 
   it("só o que o lote opera: somenteOperaveis tira o anonimizado", async () => {
@@ -262,6 +267,18 @@ describe("filtros na URL", () => {
     expect(f).toMatchObject({ search: "ana", criado: "7d", ativ_de: "2026-10-01", funil: FUNIL, campo_escopo: "negocio", campo_op: "contem" });
     expect(filtrosFromParams(filtrosToParams(f))).toEqual(f);
     expect(filtrosParaCorpo(f)).toMatchObject({ search: "ana", funil: FUNIL });
+  });
+
+  it("várias etiquetas com E/OU, pessoais e bloqueados: vão e voltam, e o corpo é o que o servidor lê", () => {
+    const f = filtrosFromParams(new URLSearchParams("tag=vip&tag=orcamento&tag=vip&modo=ou&pessoais=true&blocked=yes"));
+    expect(f).toMatchObject({ tag: ["vip", "orcamento"], modo: "ou", pessoais: true, blocked: "yes" });
+    const qs = filtrosToParams(f);
+    expect(qs.getAll("tag")).toEqual(["vip", "orcamento"]);
+    expect(filtrosFromParams(qs)).toEqual(f);
+    const corpo = filtrosDeContatosSchema.parse(filtrosParaCorpo(f));
+    expect(corpo).toMatchObject({ tag: ["vip", "orcamento"], modo: "ou", pessoais: true, blocked: "yes" });
+    // Com UMA etiqueta o modo é ruído e não é guardado; `pessoais=false` e `blocked` inventado somem.
+    expect(filtrosFromParams(new URLSearchParams("tag=vip&modo=ou&pessoais=false&blocked=x"))).toEqual({ tag: ["vip"] });
   });
 
   it("URL editada à mão não vira 422: valores inválidos somem", () => {

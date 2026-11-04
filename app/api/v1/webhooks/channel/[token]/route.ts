@@ -35,11 +35,7 @@ import type { NextRequest } from "next/server";
 import { fail, ok } from "@/lib/api/wrappers";
 import { CHANNEL_SESSION_REF_COLUMNS, resolveSessionRef, type ChannelSessionRef } from "@/lib/channels";
 import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
-import {
-  abrirArquivoDoWebhook,
-  fecharArquivoDoWebhook,
-} from "@/lib/channels/arquivo-de-webhook";
-import { acceptsInboundWebhook, verifyInboundWebhookSignature } from "@/lib/channels/inbound";
+import { acceptsInboundWebhook } from "@/lib/channels/inbound";
 import { carregarComportamentoDaInstalacao } from "@/lib/instalacao/comportamento-servidor";
 import { lerCorpoDaRequisicao } from "@/lib/http/corpo-com-limite";
 import { logger } from "@/lib/logger";
@@ -146,42 +142,9 @@ export async function POST(
   // disto no máximo uma leitura por janela, e nunca lança.
   await carregarComportamentoDaInstalacao();
 
-  // ─── A assinatura é conferida ANTES de o corpo ir para o arquivo ───────────
-  //
-  // O corpo cru só é arquivado depois que a assinatura conferiu: quem conhece apenas
-  // o TOKEN (público o bastante para estar numa URL) não pode escrever payload
-  // arbitrário, de até o teto, na tabela de arquivo. A recusa continua deixando
-  // rastro de si mesma — era o conserto de uma auditoria anterior, e uma recusa de
-  // segurança sem rastro é pior que não ter a recusa —, mas o rastro é o fato (qual
-  // conexão, quando, quantos bytes, quais cabeçalhos), não o conteúdo.
-  if (!verifyInboundWebhookSignature(sessao.provider, rawBody, req.headers, secret)) {
-    const arquivoDaRecusa = await abrirArquivoDoWebhook(admin, {
-      organizationId: sessao.organization_id,
-      channelSessionId: sessao.id,
-      provider: sessao.provider,
-      rawBody: "",
-      corpoOmitido: { motivo: "assinatura recusada", bytes: Buffer.byteLength(rawBody, "utf8") },
-      headers: req.headers,
-    });
-    await fecharArquivoDoWebhook(admin, arquivoDaRecusa, {
-      status: "error",
-      validSignature: false,
-      erro: "bad_signature",
-    });
-    // E DEIXA RASTRO NO LOG, que é onde quem opera olha primeiro. `warn` e não
-    // `error`: uma tentativa isolada não é incidente, mas uma sequência delas é
-    // — e sem esta linha nem a sequência aparecia.
-    logger.warn("[webhook-canal] assinatura recusada", {
-      organization_id: sessao.organization_id,
-      channel_session_id: sessao.id,
-      provider: sessao.provider,
-      request_id: requestId,
-    });
-    return fail("unauthorized", "bad_signature", 401, { requestId });
-  }
-
-  // Assinatura conferida: o resto (arquivo do corpo, conta certa, ingestão e o
-  // desfecho no arquivo) é o caminho único de `processarEntradaDoCanal`.
+  // Assinatura, arquivo do corpo (só depois de a assinatura conferir), conta
+  // certa, ingestão e o desfecho no arquivo: o caminho único de
+  // `processarEntradaDoCanal`, o mesmo da entrada da instalação.
   return processarEntradaDoCanal(admin, {
     sessao,
     rawBody,

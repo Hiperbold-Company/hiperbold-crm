@@ -9,19 +9,26 @@ import type { Lead } from "@/lib/types/leads";
 /**
  * As TAGS DO NEGÓCIO na ficha: a mesma lista de etiquetas da empresa que o Inbox
  * usa para o contato (vocabulário, cor, grupos, busca, criar nova), mas aqui o
- * alvo é `crm_leads.tags` e marcar NÃO grava: entra no estado do formulário e
- * vai no "Salvar", como o campo de texto fazia.
+ * alvo é `crm_leads.tags`. Desde a junção com o upstream (04/11/2026, #2979 do autor) a
+ * etiqueta do negócio GRAVA NA HORA, pelo mesmo `ContactTagsEditor` do Inbox, e fica fora do
+ * "Salvar" da ficha (decisão da junção: regra do upstream). Antes ela entrava no estado do
+ * formulário e ia no "Salvar".
  */
 const mutateAsync = vi.fn(async () => ({}));
+const mutate = vi.fn();
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (texto: string) => texto }));
 vi.mock("@/hooks/kanban/useUpdateLead", () => ({
-  useEditLead: () => ({ mutateAsync, isPending: false }),
+  useEditLead: () => ({ mutateAsync, mutate, isPending: false }),
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 // Os produtos do negócio (migration 0972) têm teste próprio (`ficha-produtos-do-negocio.test.tsx`);
 // aqui a seção sai da ficha para este arquivo continuar falando só do que fala.
 vi.mock("@/components/kanban/ItensDoNegocio", () => ({ ItensDoNegocio: () => null }));
-vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({
+  usePermission: () => true,
+  useActiveOrg: () => ({ orgId: "org-1" }),
+  useFusoDaOrganizacao: () => null,
+}));
 
 const get = vi.fn();
 vi.mock("@/lib/api/client", () => ({
@@ -62,8 +69,12 @@ function monta(tags: string[]) {
 
 const espera = { timeout: 5000 };
 const salvar = () => userEvent.click(screen.getByRole("button", { name: /Salvar/ }));
-const tagsEnviadas = () =>
-  (mutateAsync.mock.calls[0] as unknown as [{ patch: { tags: string[] } }])[0].patch.tags;
+const LEAD_ID = "11111111-1111-4111-8111-111111111111";
+/** O que a gravação na hora mandou para o negócio, na ordem. */
+const gravadas = () =>
+  (mutate.mock.calls as unknown as [{ leadId: string; patch: { tags: string[] } }][]).map(
+    ([arg]) => arg,
+  );
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -79,53 +90,43 @@ describe("ficha do negócio — seletor de etiquetas", () => {
     expect(get).toHaveBeenCalledWith("/api/v1/tags/para-escolher");
   });
 
-  it("marcar não grava na hora; vai no Salvar, na grafia do cadastro", async () => {
+  it("marcar grava na hora no NEGÓCIO, na grafia do cadastro, sem passar pelo Salvar", async () => {
     monta(["vip"]);
     await userEvent.click(await screen.findByRole("checkbox", { name: "Novo Paciente" }, espera));
-    expect(mutateAsync).not.toHaveBeenCalled();
-
-    await salvar();
-
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
     // O negócio guarda "Novo Paciente" como cadastrado (o contato é que normaliza).
-    expect(tagsEnviadas()).toEqual(["vip", "Novo Paciente"]);
+    expect(gravadas()).toEqual([{ leadId: LEAD_ID, patch: { tags: ["vip", "Novo Paciente"] } }]);
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("desmarcar tira do envio, inclusive a variante em outra caixa", async () => {
+  it("desmarcar grava na hora sem ela, inclusive a variante em outra caixa", async () => {
     monta(["VIP", "NOVO PACIENTE", "Google Ads"]);
     await userEvent.click(await screen.findByRole("checkbox", { name: "Novo Paciente" }, espera));
-    await salvar();
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-    expect(tagsEnviadas()).toEqual(["VIP", "Google Ads"]);
+    expect(gravadas()).toEqual([{ leadId: LEAD_ID, patch: { tags: ["VIP", "Google Ads"] } }]);
   });
 
-  it("criar etiqueta nova digitando entra no envio e não envia o formulário sozinho", async () => {
+  it("criar etiqueta nova digitando grava na hora e não envia o formulário sozinho", async () => {
     monta([]);
     await screen.findByRole("checkbox", { name: "Google Ads" }, espera);
     await userEvent.type(screen.getByLabelText("Adicionar tag ao negócio"), "Retorno 2026{Enter}");
     // O Enter do campo de busca não pode submeter a ficha inteira.
     expect(mutateAsync).not.toHaveBeenCalled();
-    expect((screen.getByRole("checkbox", { name: "Retorno 2026" }) as HTMLInputElement).checked).toBe(true);
-
-    await salvar();
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-    expect(tagsEnviadas()).toEqual(["Retorno 2026"]);
+    expect(gravadas()).toEqual([{ leadId: LEAD_ID, patch: { tags: ["Retorno 2026"] } }]);
   });
 
-  it("sem mexer nas etiquetas, Salvar reenvia as que o negócio já tinha (nada se perde)", async () => {
+  it("o Salvar da ficha não reenvia as etiquetas (quem grava é o seletor)", async () => {
     monta(["vip", "recompra"]);
     await screen.findByRole("checkbox", { name: "Google Ads" }, espera);
     await salvar();
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-    expect(tagsEnviadas()).toEqual(["vip", "recompra"]);
+    const [{ patch }] = mutateAsync.mock.calls[0] as unknown as [{ patch: Record<string, unknown> }];
+    expect(patch).not.toHaveProperty("tags");
+    expect(mutate).not.toHaveBeenCalled();
   });
 
   it("não duplica por caixa: digitar a variante de uma etiqueta que o negócio já tem não a repete", async () => {
     monta(["Google Ads"]);
     await screen.findByRole("checkbox", { name: "Google Ads" }, espera);
     await userEvent.type(screen.getByLabelText("Adicionar tag ao negócio"), "google ads{Enter}");
-    await salvar();
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-    expect(tagsEnviadas()).toEqual(["Google Ads"]);
+    for (const { patch } of gravadas()) expect(patch.tags).toEqual(["Google Ads"]);
   });
 });

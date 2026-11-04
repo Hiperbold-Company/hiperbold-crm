@@ -23,6 +23,10 @@ vi.mock("@/hooks/channels/useChannelSessions", () => ({
 vi.mock("@/hooks/ai/useAutomaticoAtivo", () => ({
   useAutomaticoAtivo: () => ({ data: true }),
 }));
+// O "exemplo para a IA" (#3006 do upstream) mora na lista; aqui não há QueryClient.
+vi.mock("@/hooks/inbox/useMarcarComoExemplo", () => ({
+  useMarcarComoExemplo: () => ({ alternar: () => undefined, salvando: false }),
+}));
 const recebidas: Array<{ id: string; queuePosition?: number; naFila?: boolean }> = [];
 vi.mock("@/components/inbox/ConversationListItem", () => ({
   ConversationListItem: (p: {

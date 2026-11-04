@@ -17,6 +17,7 @@ import {
   PAPEIS_CONFIGURAVEIS,
   SO_ADMINISTRADOR,
   motivoDaTrava,
+  type CategoriaDePermissao,
   type ChaveDePermissao,
   type PapelConfiguravel,
 } from "@/lib/permissoes/catalogo";
@@ -26,6 +27,15 @@ import {
   type PermissoesResolvidas,
 } from "@/lib/permissoes/resolver";
 import { Lock, ShieldCheck } from "@/lib/ui/icons";
+
+// Rótulo em tabela de topo: a cerca de i18n resolve t(TABELA[chave]) e cobra o espanhol de cada valor.
+const ROTULO_DA_CATEGORIA: Record<CategoriaDePermissao, string> = {
+  Contatos: "Contatos",
+  Pipeline: "Pipeline",
+  Chat: "Chat",
+  "Relatórios": "Relatórios",
+  "Automações": "Automações",
+};
 
 interface Props {
   /** Só o administrador edita; o gerente vê o quadro em modo leitura. */
@@ -144,7 +154,7 @@ export function PermissoesPorPerfilClient({ podeEditar }: Props) {
                     scope="colgroup"
                     className="bg-background px-4 pt-4 pb-1 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase"
                   >
-                    {t(categoria)}
+                    {t(ROTULO_DA_CATEGORIA[categoria])}
                   </th>
                 </tr>
                 {CAPACIDADES.filter((c) => c.categoria === categoria).map((c) => (

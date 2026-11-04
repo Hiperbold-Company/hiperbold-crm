@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * A rota GLOBAL do webhook do canal (sem token) só atende a rede interna.
@@ -15,6 +15,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * preenche —, e 5 da rota por token via Traefik, com `x-real-ip`,
  * `x-forwarded-server` e `https`.
  */
+
+// Hiperbold (D-108): a rota global do WAHA é fechada por padrão (410). Esta suíte
+// mede a régua da borda com ela LIGADA, como na instalação que a usa.
+vi.hoisted(() => {
+  process.env.WAHA_GLOBAL_WEBHOOK_ENABLED = "true";
+});
+
+afterAll(() => {
+  delete process.env.WAHA_GLOBAL_WEBHOOK_ENABLED;
+});
 
 let clientesCriados = 0;
 const arquivados: Record<string, unknown>[] = [];
@@ -76,6 +86,8 @@ const EVENTO = {
 const pedido = (cabecalhos: Record<string, string>) =>
   ({
     text: async () => JSON.stringify(EVENTO),
+    // A rota por token lê o corpo pelo fluxo, com teto (`lerCorpoDaRequisicao`).
+    body: new Response(JSON.stringify(EVENTO)).body,
     headers: new Headers({ "x-webhook-hmac": "sha512=abc", ...cabecalhos }),
   }) as never;
 

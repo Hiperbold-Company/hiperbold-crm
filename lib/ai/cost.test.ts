@@ -76,10 +76,10 @@ describe("computeCost, ai_pricing continua com prioridade (comportamento de hoje
       { provider: "openai", model_id: "gpt-4o-mini", input_price_per_million_cents: 999, output_price_per_million_cents: 999 },
     ];
     const cents = await computeCost({ model: "gpt-4o-mini", promptTokens: 1000, completionTokens: 200 });
-    // (1000*15 + 200*60)/1e6 = 0,027 → arredondado para cima = 1. Se tivesse
-    // usado o catálogo (999/999), o resultado seria muito maior, a asserção
-    // de igualdade é o que prova a prioridade.
-    expect(cents).toBe(1);
+    // (1000*15 + 200*60)/1e6 = 0,027 centavo, FRACIONADO (upstream: o
+    // arredondamento para cima gravava 100× o real). Se tivesse usado o
+    // catálogo (999/999), o resultado seria muito maior; a igualdade prova a prioridade.
+    expect(cents).toBeCloseTo(0.027, 10);
   });
 });
 
@@ -89,8 +89,8 @@ describe("computeCost, Luna (fora de ai_pricing) ganha custo pelo catálogo", ()
       { provider: "openai", model_id: "gpt-5.6-luna", input_price_per_million_cents: 20, output_price_per_million_cents: 120 },
     ];
     const cents = await computeCost({ model: "gpt-5.6-luna", promptTokens: 1000, completionTokens: 200 });
-    // (1000*20 + 200*120)/1e6 = 0,044 → arredondado para cima = 1.
-    expect(cents).toBe(1);
+    // (1000*20 + 200*120)/1e6 = 0,044 centavo, fracionado.
+    expect(cents).toBeCloseTo(0.044, 10);
   });
 
   it("também resolve quando o id chega com o prefixo do provedor colado", async () => {
@@ -98,7 +98,7 @@ describe("computeCost, Luna (fora de ai_pricing) ganha custo pelo catálogo", ()
       { provider: "openai", model_id: "gpt-5.6-luna", input_price_per_million_cents: 20, output_price_per_million_cents: 120 },
     ];
     const cents = await computeCost({ model: "openai/gpt-5.6-luna", promptTokens: 1000, completionTokens: 200 });
-    expect(cents).toBe(1);
+    expect(cents).toBeCloseTo(0.044, 10);
   });
 });
 

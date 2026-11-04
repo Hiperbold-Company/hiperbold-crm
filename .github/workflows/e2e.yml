@@ -822,7 +822,6 @@ jobs:
         agenda-tela-do-produto.spec.ts
         notificacoes-diz-o-que-falta.spec.ts
         notificacoes-tela-bloqueada.spec.ts
-        cobranca-asaas.spec.ts
         relogio-http-cron-externo.spec.ts
         j20-elegibilidade-respondi.spec.ts j20-elegibilidade-followup.spec.ts
         j20-elegibilidade-atendimento-manual.spec.ts
@@ -935,7 +934,6 @@ jobs:
         central-de-avisos-capacidades.spec.ts
         escalacao-ciclo.spec.ts
         distribuicao-atendimento.spec.ts
-        cobranca-revendedor.spec.ts
         escopo-de-funil-do-agente.spec.ts
         followup-tempo-adaptativo.spec.ts
         gatilho-de-etapa.spec.ts
@@ -1598,6 +1596,12 @@ jobs:
       # em `cobranca-revendedor`, contra o dublê que assina os avisos de
       # verdade. Só esta prova que a Stripe real ainda responde o contrato da
       # versão fixada. Sem a chave, ela pula; o cabeçalho tem a receita.
+      #
+      # `cobranca-revendedor` e `cobranca-asaas` saíram das partes em 2026-11-04.
+      # Hiperbold: módulo de cobrança do upstream não é ligável (cobrança própria).
+      # As duas ligam o interruptor "Cobrança dos seus clientes" pela tela de
+      # /admin/sistema, e no fork esse módulo está em `MODULOS_AINDA_NAO_LIGAVEIS`
+      # (`lib/instalacao/modulos.ts`): a cobrança da instalação é a da Hiperbold.
       FORA_DO_CI: >-
         cadastro-sem-confirmacao-de-email.spec.ts
         aviso-de-caso-chega-no-whatsapp.spec.ts
@@ -1605,6 +1609,8 @@ jobs:
         modelos-do-parceiro-editar-apagar.spec.ts
         entrada-pagar-primeiro.spec.ts
         cobranca-stripe-teste.spec.ts
+        cobranca-revendedor.spec.ts
+        cobranca-asaas.spec.ts
     steps:
       # ── O RELÓGIO DESTA PARTE: ONDE O TETO DE 30 MIN COMEÇA A CONTAR ──────
       #

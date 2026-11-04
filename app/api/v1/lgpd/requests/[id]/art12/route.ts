@@ -36,7 +36,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ok, fail } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { ApiErrorCodes } from "@/lib/api/errors";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
@@ -152,7 +152,7 @@ export async function POST(
     .maybeSingle();
 
   if (error) {
-    return fail("internal_error", error.message, 500, { requestId });
+    return falhaInterna("internal_error", error, { requestId });
   }
   const pedido = data as PedidoLinha | null;
   if (!pedido) {
@@ -280,7 +280,7 @@ export async function POST(
     .eq("id", pedido.id);
 
   if (updErr) {
-    return fail("internal_error", updErr.message, 500, { requestId });
+    return falhaInterna("internal_error", updErr, { requestId });
   }
 
   void audit({

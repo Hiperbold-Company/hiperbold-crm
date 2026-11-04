@@ -27,7 +27,7 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
 import {
@@ -124,7 +124,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       .order("closed_at", { ascending: false })
       .order("id", { ascending: false })
       .range(inicio, inicio + TAMANHO_DA_PAGINA - 1);
-    if (error) return fail("internal_error", error.message, 500, { requestId });
+    if (error) return falhaInterna("internal_error", error, { requestId });
     if (pagina === 0) totalNaJanela = count;
     const lote = (data ?? []) as FechamentoDeGanho[];
     ganhos.push(...lote);

@@ -122,7 +122,15 @@ function clienteStub(estado: Estado) {
           // A etapa de DESTINO do lote.
           maybeSingle: () =>
             Promise.resolve({
-              data: { id: PERDIDO_ID, name: "Perdido", is_lost: true, is_won: false },
+              // Hiperbold (D-150): a rota confere a org e o funil da etapa de destino.
+              data: {
+                id: PERDIDO_ID,
+                name: "Perdido",
+                is_lost: true,
+                is_won: false,
+                organization_id: ORG_ID,
+                pipeline_id: PIPELINE_ID,
+              },
               error: null,
             }),
           // Os NOMES das etapas envolvidas (origem de cada card + destino).

@@ -143,6 +143,10 @@ export function vcardDoContato(contato: ContatoParaExportar): string | null {
   const linhas = ["BEGIN:VCARD", "VERSION:3.0", `FN:${identidade}`];
   if (telefone) linhas.push(`TEL;TYPE=CELL,VOICE:${telefone}`);
   if (email) linhas.push(`EMAIL;TYPE=INTERNET:${email}`);
+  // CPF (decisão do dono do produto, 04/11/2026: a exportação leva todos os dados). vCard 3.0 não
+  // tem campo de documento; `NOTE` é o que Android e iOS mostram na ficha.
+  const cpf = valorDeCartao(contato.cpf);
+  if (cpf) linhas.push(`NOTE:CPF ${cpf}`);
   linhas.push("END:VCARD");
   return `${linhas.join("\n")}\n`;
 }

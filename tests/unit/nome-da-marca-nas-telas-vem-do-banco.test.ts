@@ -129,11 +129,16 @@ describe("o nome em texto das páginas públicas vem do BANCO", () => {
     // onboarding, mais o `/legal` do #2511).
     expect(comResolvedor.length).toBeGreaterThanOrEqual(7);
     expect(comResolvedor).toContain("app/legal/layout.tsx");
-    expect(comResolvedor).toContain("app/page.tsx");
+    // Fork Hiperbold: a raiz é a página de vendas estática (rewrite para public/site) e
+    // app/page.tsx só redireciona para /app, sem nome de marca em texto: fica fora do resolvedor.
+    expect(comResolvedor).not.toContain("app/page.tsx");
 
     for (const relativo of comResolvedor) {
       expect(
-        codigo(relativo).includes(`import { ${RESOLVEDOR} } from "@/lib/branding/saida"`),
+        // Aceita outros nomes no mesmo import (ex.: `emailDeSuporte`, página de exclusão de dados do fork).
+        new RegExp(`import \\{[^}]*\\b${RESOLVEDOR}\\b[^}]*\\} from "@/lib/branding/saida"`).test(
+          codigo(relativo),
+        ),
         `${relativo} deve importar ${RESOLVEDOR} de lib/branding/saida para o nome em texto`,
       ).toBe(true);
     }

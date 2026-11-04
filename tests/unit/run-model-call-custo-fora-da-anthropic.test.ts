@@ -48,6 +48,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 import { _resetRuntimeCostCacheForTests } from "@/lib/ai/runtime/cost";
+import { _esquecerPrecosDoCatalogoParaTestes } from "@/lib/agent-engine/edge/llm/pricing-do-catalogo";
 import { runModelCall } from "@/lib/agent-engine/edge/llm/run-model-call";
 
 const ORG = "33333333-3333-4333-8333-333333333333";
@@ -76,6 +77,25 @@ function poolComProvedorOpenAI() {
     // 23/09/2026): mesma tabela, mesmas colunas do carregador HTTP acima,
     // agora servida pelo pool em vez do admin do Supabase.
     if (sql.includes("from ai_models")) return { rows: catalogoLinhas };
+    // Upstream: o preço sai de `pricing-do-catalogo.ts`, uma consulta só por todos os
+    // candidatos do id (CTE `candidatos_de_preco`), na forma { id, ordem, provider, entrada, saida, origem }.
+    if (sql.includes("candidatos_de_preco")) {
+      const candidatos = (params[0] as string[] | undefined) ?? [];
+      return {
+        rows: candidatos.flatMap((id, i) =>
+          catalogoLinhas
+            .filter((l) => l.model_id === id)
+            .map((l) => ({
+              id,
+              ordem: i + 1,
+              provider: l.provider,
+              entrada: l.input_price_per_million_cents,
+              saida: l.output_price_per_million_cents,
+              origem: "catalogo",
+            })),
+        ),
+      };
+    }
     if (sql.includes("insert into llm_calls")) {
       inserts.push({ sql, params });
       return { rows: [{ id: "call-1" }] };
@@ -96,6 +116,8 @@ describe("runModelCall grava cost_cents pelo catálogo para modelo fora da Anthr
       },
     ];
     _resetRuntimeCostCacheForTests();
+    // O preço do catálogo tem memória própria por processo (upstream).
+    _esquecerPrecosDoCatalogoParaTestes();
 
     const { pool, inserts } = poolComProvedorOpenAI();
     const cfg = { openrouterApiKey: "sk-or-de-teste", cacheTtl: "1h" as const };
@@ -151,6 +173,8 @@ describe("runModelCall grava cost_cents pelo catálogo para modelo fora da Anthr
       },
     ];
     _resetRuntimeCostCacheForTests();
+    // O preço do catálogo tem memória própria por processo (upstream).
+    _esquecerPrecosDoCatalogoParaTestes();
 
     const { pool } = poolComProvedorOpenAI();
     const cfg = { openrouterApiKey: "sk-or-de-teste", cacheTtl: "1h" as const };
@@ -185,7 +209,8 @@ describe("runModelCall grava cost_cents pelo catálogo para modelo fora da Anthr
       // consultado, o que esconderia uma regressão diferente (custo sempre
       // nulo).
       const chamadasAoPool = (pool as { query: ReturnType<typeof vi.fn> }).query.mock.calls as unknown[][];
-      expect(chamadasAoPool.some((args) => String(args[0]).includes("from ai_models"))).toBe(true);
+      // Upstream: a consulta é a de `pricing-do-catalogo.ts` (`join public.ai_models`).
+      expect(chamadasAoPool.some((args) => String(args[0]).includes("public.ai_models"))).toBe(true);
     } finally {
       fetchEspiao.mockRestore();
     }

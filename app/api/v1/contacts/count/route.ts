@@ -28,8 +28,12 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
+  const sp = new URL(req.url).searchParams;
+  const entradas = Object.fromEntries([...sp.entries()].filter(([, v]) => v !== ""));
+  // `getAll` (#1274): a etiqueta repetida (`?tag=a&tag=b`) chega como lista, como na lista.
+  const etiquetas = sp.getAll("tag").filter((v) => v !== "");
   const parsed = filtrosDeContatosSchema.safeParse(
-    Object.fromEntries([...new URL(req.url).searchParams.entries()].filter(([, v]) => v !== "")),
+    etiquetas.length > 1 ? { ...entradas, tag: etiquetas } : entradas,
   );
   if (!parsed.success) {
     return fail("validation_failed", t("Query inválida."), 422, {

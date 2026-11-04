@@ -984,8 +984,12 @@ describe("tick × preparo automático (B2)", () => {
   });
 
   it("a segunda consulta é barata, filtra operante e limita 20, e a primeira ficou como era", async () => {
-    const { pool, sqls } = montar({ segundaConsulta: [ORG_B] });
+    const { pool, sqls: todas } = montar({ segundaConsulta: [ORG_B] });
     await tickProspecting(pool as never, {} as never);
+    // Hiperbold: o tick também lê o modo de cobrança pelo pool (`contaEmModoLeituraPeloPool`,
+    // `billing_settings`) antes de abordar. As consultas de ORGANIZAÇÕES seguem sendo duas.
+    const sqls = todas.filter((sql) => !sql.includes("billing_settings"));
+    expect(todas.length - sqls.length).toBe(1);
     expect(sqls).toHaveLength(2);
     expect(sqls[0]).toMatch(/pc\.status='running' or pc\.search_status in \('starting','running'\)/);
     expect(sqls[0]).not.toContain("'draft'");

@@ -19,7 +19,7 @@ import { randomUUID } from "node:crypto";
 
 import type { NextRequest } from "next/server";
 
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -42,7 +42,7 @@ export async function GET(): Promise<Response> {
     .select("settings")
     .eq("id", authz.org.orgId)
     .maybeSingle();
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
 
   return ok(
     { planos: lePlanosDoSettings((data as LinhaDeOrganizacao)?.settings) },
@@ -85,7 +85,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     .select("settings")
     .eq("id", authz.org.orgId)
     .maybeSingle();
-  if (erroLeitura) return fail("internal_error", erroLeitura.message, 500, { requestId });
+  if (erroLeitura) return falhaInterna("internal_error", erroLeitura, { requestId });
 
   const settings = ((atual as { settings?: Record<string, unknown> } | null)?.settings ??
     {}) as Record<string, unknown>;
@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     .from("organizations")
     .update({ settings: { ...settings, task_plans: parsed.data } })
     .eq("id", authz.org.orgId);
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
 
   void audit({
     action: "task_plans.settings_updated",

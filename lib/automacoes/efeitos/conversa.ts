@@ -228,6 +228,9 @@ async function enviar(
     if (err instanceof ApiError) {
       if (err.code === "janela_fechada")
         return { ok: false, erro: "janela_fechada", detalhe: base };
+      // Organização parada (`OrgNaoOperanteError`, 403 `org_suspended`): não é o
+      // contato que pediu para parar, é a conta que não envia agora.
+      if (err.code === "org_suspended") return { ok: false, erro: "organizacao_bloqueada", detalhe: base };
       if (err.status === 403) return { ok: false, erro: "contato_bloqueado", detalhe: base };
     }
     return { ok: false, erro: "envio_falhou", detalhe: base };

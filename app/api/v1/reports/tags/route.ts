@@ -80,7 +80,7 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { STATUS_ENCERRADOS } from "@/lib/inbox/comando-da-conversa";
 import { fusoValido } from "@/lib/reports/atividades";
@@ -218,7 +218,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     "fn_tags_de_conversa_em_uso",
     { p_org: activeOrg.orgId },
   );
-  if (erroDimensao) return fail("internal_error", erroDimensao.message, 500, { requestId });
+  if (erroDimensao) return falhaInterna("internal_error", erroDimensao, { requestId });
   const dimensaoDoBanco = ((emUso ?? []) as Array<{ tag: string }>)
     .map((linha) => linha.tag)
     .filter((tag) => typeof tag === "string" && tag.length > 0);
@@ -258,7 +258,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(inicio, inicio + TAMANHO_DA_PAGINA - 1);
-    if (error) return fail("internal_error", error.message, 500, { requestId });
+    if (error) return falhaInterna("internal_error", error, { requestId });
 
     if (totalNoBanco === null) totalNoBanco = count;
     const lote = (data ?? []) as unknown as ConversaBruta[];

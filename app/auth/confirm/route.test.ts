@@ -282,6 +282,8 @@ describe("GET /auth/confirm", () => {
   });
 
   // ─── D-204: recuperação de senha sobre conta cadastrada por e-mail sem verificação ───
+  // O GET com `token_hash` só leva a `/login/continuar` (upstream, links pré-visitados);
+  // quem gasta o token é o POST do botão, e é por ele que os casos abaixo entram.
 
   const CONTA_PENDENTE = { ...USUARIO, app_metadata: { email_verificacao: PEDIDO_EM_ABERTO } };
 
@@ -293,8 +295,8 @@ describe("GET /auth/confirm", () => {
       getUser: { data: { user: null } },
     });
 
-    const { GET } = await import("./route");
-    const res = await GET(requisicao("type=recovery&token_hash=abc"));
+    const { POST } = await import("./route");
+    const res = await POST(envio("type=recovery&token_hash=abc"));
 
     expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
     expect(falso.admin.auth.admin.signOut).toHaveBeenCalledWith("jwt-recuperacao", "others");
@@ -314,8 +316,8 @@ describe("GET /auth/confirm", () => {
       getUser: { data: { user: null } },
     });
 
-    const { GET } = await import("./route");
-    const res = await GET(requisicao("type=recovery&token_hash=abc"));
+    const { POST } = await import("./route");
+    const res = await POST(envio("type=recovery&token_hash=abc"));
 
     expect(destino(res)).toBe("/login/reset");
     expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
@@ -329,8 +331,8 @@ describe("GET /auth/confirm", () => {
       getUser: { data: { user: null } },
     });
 
-    const { GET } = await import("./route");
-    const res = await GET(requisicao("type=recovery&token_hash=abc"));
+    const { POST } = await import("./route");
+    const res = await POST(envio("type=recovery&token_hash=abc"));
 
     expect(destino(res)).toBe("/login?error=conta_protegida");
     expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
@@ -344,8 +346,8 @@ describe("GET /auth/confirm", () => {
       getUser: { data: { user: null } },
     });
 
-    const { GET } = await import("./route");
-    const res = await GET(requisicao("type=recovery&token_hash=abc"));
+    const { POST } = await import("./route");
+    const res = await POST(envio("type=recovery&token_hash=abc"));
 
     expect(falso.chamadas).toEqual([]);
     expect(destino(res)).toBe("/login/reset");
@@ -360,8 +362,8 @@ describe("GET /auth/confirm", () => {
       getUser: { data: { user: CONTA_PENDENTE } },
     });
 
-    const { GET } = await import("./route");
-    await GET(requisicao("type=recovery&token_hash=gasto"));
+    const { POST } = await import("./route");
+    await POST(envio("type=recovery&token_hash=gasto"));
 
     expect(falso.chamadas).toEqual([]);
   });
@@ -376,8 +378,8 @@ describe("GET /auth/confirm", () => {
         getUser: { data: { user: null } },
       });
 
-      const { GET } = await import("./route");
-      const res = await GET(requisicao("type=recovery&token_hash=abc"));
+      const { POST } = await import("./route");
+      const res = await POST(envio("type=recovery&token_hash=abc"));
       const cliente = await vi.mocked(createClient).mock.results.at(-1)!.value;
 
       expect(destino(res)).toBe("/login?error=link_invalido");
@@ -399,8 +401,8 @@ describe("GET /auth/confirm", () => {
       });
       vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
 
-      const { GET } = await import("./route");
-      const res = await GET(requisicao(`type=${tipo}&token_hash=abc`));
+      const { POST } = await import("./route");
+      const res = await POST(envio(`type=${tipo}&token_hash=abc`));
 
       expect(falso.chamadas).toEqual(["sessoes", "fatores", "senha", "revogacao", "carimbo"]);
       expect(destino(res)).toBe("/onboarding");
@@ -419,8 +421,8 @@ describe("GET /auth/confirm", () => {
     });
     vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
 
-    const { GET } = await import("./route");
-    const res = await GET(requisicao("type=signup&token_hash=abc"));
+    const { POST } = await import("./route");
+    const res = await POST(envio("type=signup&token_hash=abc"));
 
     // Nada de senha, sessões, fatores nem revogação: é quem acabou de se cadastrar.
     expect(falso.chamadas).toEqual(["carimbo"]);
@@ -440,8 +442,8 @@ describe("GET /auth/confirm", () => {
     });
     vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
 
-    const { GET } = await import("./route");
-    await GET(requisicao("type=signup&token_hash=gasto"));
+    const { POST } = await import("./route");
+    await POST(envio("type=signup&token_hash=gasto"));
 
     expect(falso.chamadas).toEqual([]);
   });
@@ -455,8 +457,8 @@ describe("GET /auth/confirm", () => {
     });
     vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
 
-    const { GET } = await import("./route");
-    await GET(requisicao("type=signup&token_hash=abc"));
+    const { POST } = await import("./route");
+    await POST(envio("type=signup&token_hash=abc"));
 
     expect(falso.chamadas).toEqual([]);
   });
@@ -470,8 +472,8 @@ describe("GET /auth/confirm", () => {
     });
     vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
 
-    const { GET } = await import("./route");
-    const res = await GET(requisicao("type=signup&token_hash=abc"));
+    const { POST } = await import("./route");
+    const res = await POST(envio("type=signup&token_hash=abc"));
 
     expect(destino(res)).toBe("/onboarding");
   });

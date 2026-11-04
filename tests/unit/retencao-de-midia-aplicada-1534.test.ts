@@ -234,6 +234,12 @@ describe("a rota messages/[id]/media não re-busca do provedor o que expirou", (
   vi.mock("@/lib/auth/server", () => ({ loadAuthUser: async () => ({ idioma: "pt-BR" }) }));
   vi.mock("@/lib/auth/require-role", () => ({
     orgAtivaDaApi: async () => ({ ok: true, org: { orgId: "org-1" } }),
+    // Hiperbold (D-092): a rota passou ao gate único de leitura `requireRole("viewer")`.
+    requireRole: async () => ({
+      ok: true,
+      user: { id: "usuario-1", idioma: "pt-BR" },
+      org: { orgId: "org-1", role: "viewer" },
+    }),
   }));
   vi.mock("@/lib/channels", () => ({
     CHANNEL_SESSION_REF_COLUMNS: "id",

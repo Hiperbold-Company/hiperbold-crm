@@ -35,7 +35,7 @@ import {
 import { listPipelinesHandler } from "@/app/api/v1/pipelines/_handler";
 import type { HandlerCtx } from "@/lib/api/handlers/types";
 import { ApiError } from "@/lib/api/types";
-import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -150,7 +150,7 @@ export async function GET(
           .eq("is_archived", false)
           .order("position", { ascending: true });
 
-  if (stagesErr) return fail("internal_error", stagesErr.message, 500, { requestId });
+  if (stagesErr) return falhaInterna("internal_error", stagesErr, { requestId });
 
   const etapasPorFunil = new Map<string, EtapaNaResposta[]>();
   for (const etapa of (etapas ?? []) as EtapaDeDestino[]) {

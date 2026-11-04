@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * D-155: o upload de mídia e a abertura de conversa por telefone, quando chamados
  * por chave de API, passam pelo teto de escrita por token. Antes nenhuma das duas
@@ -45,7 +46,13 @@ vi.mock("@/lib/api/auth-dual", async (original) => ({
     idioma: "pt-BR",
   })),
 }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+// O ramo da sessão segue até o Storage: aqui a subida falha e a rota encerra (o que
+// se mede nesse caso é só o contador).
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
+    storage: { from: () => ({ upload: async () => ({ error: { message: "sem storage no teste" } }) }) },
+  }),
+}));
 vi.mock("@/lib/messaging/open-shared-contact-conversation", () => ({
   openSharedContactConversation: vi.fn(async (_a: unknown, _o: unknown, input: unknown) => {
     abertas.push(input);
@@ -80,7 +87,8 @@ describe("upload de mídia por chave de API", () => {
     permitido = false;
     const r = await upload(reqUpload(), { params: Promise.resolve({ id: CONV }) });
     expect(r.status).toBe(429);
-    expect(baldes[0]).toBe("media:tok:tok-1");
+    // O balde é o do upstream (o D-155 nosso contava a mesma chamada duas vezes).
+    expect(baldes).toEqual(["conversation_media:tok:tok-1"]);
   });
 
   it("sessão de pessoa não é contada (devolve sem tocar no contador)", async () => {
@@ -97,7 +105,7 @@ describe("abertura de conversa por chave de API", () => {
     const r = await abrir(reqAbrir());
     expect(r.status).toBe(429);
     expect(abertas).toEqual([]);
-    expect(baldes[0]).toBe("open:tok:tok-1");
+    expect(baldes).toEqual(["conversations.open:tok:tok-1"]);
   });
 
   it("CONTROLE POSITIVO: dentro do teto abre a conversa", async () => {

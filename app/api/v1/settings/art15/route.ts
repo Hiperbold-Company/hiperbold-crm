@@ -27,7 +27,7 @@ import { randomUUID } from "node:crypto";
 
 import type { NextRequest } from "next/server";
 
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -69,14 +69,14 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     .select("settings")
     .eq("id", authz.org.orgId)
     .maybeSingle();
-  if (readErr) return fail("internal_error", readErr.message, 500, { requestId });
+  if (readErr) return falhaInterna("internal_error", readErr, { requestId });
 
   const currentSettings = (orgRow?.settings as Record<string, unknown> | null) ?? {};
   const { error: updErr } = await supabase
     .from("organizations")
     .update({ settings: { ...currentSettings, art15: alineas } })
     .eq("id", authz.org.orgId);
-  if (updErr) return fail("internal_error", updErr.message, 500, { requestId });
+  if (updErr) return falhaInterna("internal_error", updErr, { requestId });
 
   void audit({
     action: "org.art15_updated",

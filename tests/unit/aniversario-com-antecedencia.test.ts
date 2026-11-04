@@ -164,12 +164,29 @@ class ConsultaFalsa implements PromiseLike<{ data: Linha[] | null; error: null }
     return this;
   }
 
+  // D-131 (Hiperbold): a varredura dos contatos é paginada por id.
+  private ordem: string | null = null;
+
+  order(caminho: string): this {
+    this.ordem = caminho;
+    return this;
+  }
+
+  gt(caminho: string, valor: string): this {
+    this.filtros.push((l) => String(valorNoCaminho(l, caminho) ?? "") > valor);
+    return this;
+  }
+
   then<TResult>(
     onfulfilled?: ((v: { data: Linha[] | null; error: null }) => TResult | PromiseLike<TResult>) | null,
   ): PromiseLike<TResult> {
     const casam = this.mundo
       .linhas(this.tabela)
       .filter((l) => this.filtros.every((f) => f(l)));
+    if (this.ordem !== null) {
+      const c = this.ordem;
+      casam.sort((a, b) => String(valorNoCaminho(a, c) ?? "").localeCompare(String(valorNoCaminho(b, c) ?? "")));
+    }
     const data = this.teto === null ? casam : casam.slice(0, this.teto);
     return Promise.resolve({ data, error: null }).then(
       onfulfilled ?? ((v) => v as unknown as TResult),

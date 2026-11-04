@@ -195,7 +195,10 @@ async function dataJson(country: string | null, timezone: string, pais?: string 
  * sobe é `copiaDoTitular(data)` (`lgpd-copia-do-titular.test.ts`); estes
  * fixtures travam o payload de onde saem o PDF e essa cópia.
  */
-const comoGravado = (p: ExportPayload) => JSON.stringify({ ...p, generated_at: "X" }, null, 2);
+// A fixture é o data.json de ANTES: a chave `knowledge_chunks` (fork Hiperbold, D-104: os trechos
+// da base de conhecimento nascidos das conversas do titular) veio depois e é conferida à parte.
+const comoGravado = ({ knowledge_chunks: _k, ...p }: ExportPayload) =>
+  JSON.stringify({ ...p, generated_at: "X" }, null, 2);
 
 /** O payload brasileiro menos as duas chaves que o doc 110 (2A) acrescentou — ver o cabeçalho. */
 const semAsChavesDoDoc110 = ({ messages_completas: _m, secoes_no_limite: _s, ...resto }: ExportPayload) =>
@@ -328,6 +331,7 @@ describe("data.json e PDF de acesso", () => {
     // Doc 110, 2A: as duas chaves que a trava do doc 88 segurava, e só elas.
     expect(cheio.messages_completas).toEqual([]);
     expect(cheio.secoes_no_limite).toEqual([]);
+    expect(cheio.knowledge_chunks).toEqual([]);
     const gravadas = Object.keys(JSON.parse(fixture("data-cheio.json")));
     expect(Object.keys(JSON.parse(comoGravado(cheio))).filter((k) => !gravadas.includes(k))).toEqual([
       "messages_completas",

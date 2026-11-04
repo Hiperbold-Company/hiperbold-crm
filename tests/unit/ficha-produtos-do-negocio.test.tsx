@@ -21,7 +21,11 @@ vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (texto: string) => texto }));
 vi.mock("@/hooks/kanban/useUpdateLead", () => ({
   useEditLead: () => ({ mutateAsync, isPending: false }),
 }));
-vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({
+  usePermission: () => true,
+  useActiveOrg: () => null,
+  useFusoDaOrganizacao: () => null,
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/components/feedback/ApiErrorToast", () => ({ showApiError: vi.fn() }));
 vi.mock("@/hooks/contacts/useEtiquetasParaEscolher", () => ({

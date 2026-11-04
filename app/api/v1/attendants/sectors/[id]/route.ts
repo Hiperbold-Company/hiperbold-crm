@@ -16,7 +16,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ok, fail } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
 import { seSetoresDesligado } from "@/lib/atendimento/setores-modulo";
@@ -76,7 +76,7 @@ export async function PATCH(
       .eq("organization_id", authz.org.orgId)
       .eq("id", id)
       .maybeSingle();
-    if (atualError) return fail("internal_error", atualError.message, 500, { requestId });
+    if (atualError) return falhaInterna("internal_error", atualError, { requestId });
     if (!atual) return fail("not_found", t("Setor não encontrado."), 404, { requestId });
     corAnterior = (atual as { color: string | null }).color;
   }
@@ -93,7 +93,7 @@ export async function PATCH(
     if (error.code === "23505") {
       return fail("sector_name_taken", t("Já existe um setor com este nome."), 409, { requestId });
     }
-    return fail("internal_error", error.message, 500, { requestId });
+    return falhaInterna("internal_error", error, { requestId });
   }
   if (!row) return fail("not_found", t("Setor não encontrado."), 404, { requestId });
 
@@ -143,7 +143,7 @@ export async function DELETE(
     .select("user_id")
     .eq("organization_id", authz.org.orgId)
     .eq("sector_id", id);
-  if (membersError) return fail("internal_error", membersError.message, 500, { requestId });
+  if (membersError) return falhaInterna("internal_error", membersError, { requestId });
 
   const { data: row, error } = await admin
     .from("attendant_sectors")
@@ -152,7 +152,7 @@ export async function DELETE(
     .eq("id", id)
     .select("id, name")
     .maybeSingle();
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
   if (!row) return fail("not_found", t("Setor não encontrado."), 404, { requestId });
 
   void audit({

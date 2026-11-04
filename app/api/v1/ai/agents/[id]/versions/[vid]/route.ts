@@ -41,6 +41,9 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
     resource: "ai_agents",
     role: "manager",
     escrita: false,
+    // Configuração do agente: `config:*` (upstream, #2194) OU `mcp:*` (tokens Hiperbold), token admin.
+    configuracao: true,
+    tokenRole: "admin",
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);
@@ -74,6 +77,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
     resource: "ai_agents",
     role: "admin",
     escrita: true,
+    // Configuração do agente: `config:*` (upstream, #2194) OU `mcp:*` (tokens Hiperbold), token admin.
+    configuracao: true,
+    tokenRole: "admin",
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);

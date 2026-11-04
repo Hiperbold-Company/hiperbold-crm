@@ -5,7 +5,9 @@
  *
  *  - aqui: admin da plataforma com escopo `full` e MFA de sessão; a organização
  *    precisa estar SUSPENSA, e não por cobrança (409
- *    `exclusao_com_cobranca_pendente`); o corpo traz o slug digitado como
+ *    `exclusao_com_cobranca_pendente`), nem no meio da régua de cobrança
+ *    Hiperbold (409 `exclusao_na_regua_de_cobranca`; leitura que falha, 503
+ *    `cobranca_ilegivel`); o corpo traz o slug digitado como
  *    confirmação e o motivo (vai para a lápide da auditoria);
  *  - no banco (`fn_excluir_organizacao`, migration 0614): as mesmas três
  *    condições conferidas de novo, dentro da transação.
@@ -50,6 +52,8 @@ const STATUS_DA_RECUSA: Record<ExclusaoRecusada["codigo"], number> = {
   state_conflict: 409,
   exclusao_com_cobranca_pendente: 409,
   exclusao_com_assinatura_viva: 409,
+  exclusao_na_regua_de_cobranca: 409,
+  cobranca_ilegivel: 503,
   provedor_indisponivel: 503,
   confirmacao_divergente: 400,
   motivo_curto: 400,

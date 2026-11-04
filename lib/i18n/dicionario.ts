@@ -9070,6 +9070,9 @@ export const DICIONARIO: Traducoes = {
   "Mover card de etapa": { es: "Mover tarjeta de etapa" },
   "Editar tag do lead": { es: "Editar etiqueta del lead" },
   "Gravar tag no lead": { es: "Grabar etiqueta en el lead" },
+  "Mover negócio no funil": { es: "Mover negocio en el embudo" },
+  "Editar tag do negócio": { es: "Editar etiqueta del negocio" },
+  "Gravar tag no negócio": { es: "Grabar etiqueta en el negocio" },
   "move o card para outra etapa do funil": { es: "mueve la tarjeta a otra etapa del embudo" },
   "sem etapa de destino": { es: "sin etapa de destino" },
   "sem tag escolhida": { es: "sin etiqueta elegida" },
@@ -10426,8 +10429,8 @@ export const DICIONARIO: Traducoes = {
     {
       es: "Todavía no tienes ningún embudo. Mientras tanto, el agente atiende con normalidad, pero no puede mover la tarjeta de nadie porque no hay etapas.",
     },
-  "Crie o primeiro na tela Funis": {
-    es: "Crea el primero en la pantalla Embudos",
+  "Crie o primeiro na tela Pipeline": {
+    es: "Crea el primero en la pantalla Pipeline",
   },
   ": ele já nasce com etapas, e depois aparece aqui para você escolher a etapa de cada passo.": {
     es: ": ya nace con etapas, y después aparece aquí para que elijas la etapa de cada paso.",
@@ -14672,6 +14675,7 @@ export const DICIONARIO: Traducoes = {
   // Contato pessoal (spec 21): botão no cabeçalho da conversa e na ficha,
   // selo na lista e filtro "Pessoais".
   "Marcar como pessoal": { es: "Marcar como personal" },
+  "Pessoais": { es: "Personales" },
   // Issue 2379 — a marca PERMANENTE "sempre atendimento humano".
   "Sempre atendimento humano": { es: "Siempre atención humana" },
   "Marcar como sempre humano": { es: "Marcar como siempre atención humana" },
@@ -28247,6 +28251,50 @@ export const DICIONARIO: Traducoes = {
     },
   "Enquanto espera, o agente de IA não responde nesta conversa.": {
     es: "Mientras espera, el agente de IA no responde en esta conversación.",
+  },
+  // Junção com o upstream (04/11/2026): frases do fork que a cerca passou a medir.
+  "Esta sessão precisa da verificação em duas etapas. Entre novamente com o código do aplicativo.": {
+    es: "Esta sesión necesita la verificación en dos pasos. Vuelva a entrar con el código de la aplicación.",
+  },
+  "Regras por remetente inválidas.": { es: "Reglas por remitente no válidas." },
+  "Escolha um fallback público diferente dos agentes reservados.": {
+    es: "Elija un fallback público diferente de los agentes reservados.",
+  },
+  "há": { es: "hace" },
+  "A conexão com o Instagram e o Messenger ainda não foi configurada nesta instalação.": {
+    es: "La conexión con Instagram y Messenger todavía no se configuró en esta instalación.",
+  },
+  "A rede recusou o envio. Confira a conexão em Conexões › Redes sociais.": {
+    es: "La red rechazó el envío. Revise la conexión en Conexiones › Redes sociales.",
+  },
+  "Não conseguimos falar com a Meta agora. Tente de novo em alguns minutos.": {
+    es: "No pudimos comunicarnos con Meta ahora. Inténtelo de nuevo en unos minutos.",
+  },
+  "O acesso a esta conta venceu ou foi retirado. Reconecte em Conexões › Redes sociais.": {
+    es: "El acceso a esta cuenta venció o fue retirado. Vuelva a conectar en Conexiones › Redes sociales.",
+  },
+  "Passaram mais de 24 horas desde a última mensagem do cliente. A Meta só libera a resposta quando ele escrever de novo.": {
+    es: "Pasaron más de 24 horas desde el último mensaje del cliente. Meta solo permite responder cuando vuelva a escribir.",
+  },
+  "Esta pessoa não pode receber mensagens desta conta agora.": {
+    es: "Esta persona no puede recibir mensajes de esta cuenta ahora.",
+  },
+  "Lógica": { es: "Lógica" },
+  "Controle": { es: "Control" },
+  "Título do negócio": { es: "Título del negocio" },
+  "Valor do negócio (centavos)": { es: "Valor del negocio (centavos)" },
+  "Etapa do negócio": { es: "Etapa del negocio" },
+  "Funil do negócio": { es: "Embudo del negocio" },
+  "Situação do negócio": { es: "Situación del negocio" },
+  "Origem do negócio": { es: "Origen del negocio" },  // Hiperbold: régua de cobrança na exclusão (lib/tenants/regua-de-cobranca.ts, useReguaDaExclusao).
+  "Esta empresa está na régua de cobrança; a exclusão só é liberada quando a régua termina.": {
+    es: "Esta empresa está en el proceso de cobro; la eliminación solo se habilita cuando el proceso termina.",
+  },
+  "Não foi possível conferir a cobrança desta empresa agora. Tente de novo.": {
+    es: "No fue posible verificar el cobro de esta empresa ahora. Inténtelo de nuevo.",
+  },
+  "Conferindo a cobrança desta empresa…": {
+    es: "Verificando el cobro de esta empresa…",
   },
 };
 

@@ -7,7 +7,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { contaPodeCriarArtefatos, recusaSeEmailNaoVerificado } from "@/lib/auth/exigir-email-verificado";
-import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
+import { loadAuthUser, mfaEmDivida, orgAtivaSemPortao, resolveActiveOrg } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { AuthUser } from "@/lib/auth/types";
@@ -18,6 +18,9 @@ vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(),
   resolveActiveOrg: vi.fn(),
   mfaEmDivida: vi.fn(),
+  mfaEmDividaEstrita: vi.fn(async () => false),
+  // O `requireRole` do upstream lê a org ativa por aqui (sem o redirect do `resolveActiveOrg`).
+  orgAtivaSemPortao: vi.fn(),
   sessionAal: vi.fn(async () => "aal1"),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
@@ -66,6 +69,12 @@ function sessaoAdmin() {
   };
   vi.mocked(loadAuthUser).mockResolvedValue(user);
   vi.mocked(resolveActiveOrg).mockResolvedValue({ orgId: ORG_ID, name: "Org", role: "admin" });
+  vi.mocked(orgAtivaSemPortao).mockResolvedValue({
+    orgId: ORG_ID,
+    name: "Org",
+    role: "admin",
+    org_status: "active",
+  } as never);
   vi.mocked(mfaEmDivida).mockResolvedValue(false);
   vi.mocked(createClient).mockResolvedValue({
     rpc: async (fn: string) => (fn === "fn_user_role_in_org" ? { data: "admin", error: null } : { data: null, error: null }),

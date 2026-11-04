@@ -26,7 +26,8 @@ describe("Ajuda respeita a mesma interface do menu", () => {
   it.each([
     ["viewer", [...basicos, equipe]],
     ["agent", [...basicos, equipe, casos]],
-    ["manager", [...basicos, equipe, casos, ...montagem, etapas]],
+    // Hiperbold: gerente vê Conexões (só o agent não).
+    ["manager", [...basicos, equipe, casos, ...montagem, etapas, conexoes]],
     ["admin", [...basicos, equipe, casos, ...montagem, etapas, conexoes]],
   ] as const)("%s recebe só os atalhos permitidos pelo catálogo", (role, esperados) => {
     expect(hrefs(blocos(role))).toEqual([...esperados].sort());

@@ -206,7 +206,12 @@ describe("POST /api/v1/marca/logo — escopo organizacao nunca toca platform_bra
     const { POST } = await import("./route");
     const res = await POST(new NextRequest("http://localhost/api/v1/marca/logo", { method: "POST", body: form }));
     expect(res.status).toBe(403);
-    expect(espiao.fromChamadas).toHaveLength(0);
+    // D-178 (Hiperbold): a leitura do módulo da instalação (`platform_config` e
+    // `modulos_instalados`, por `moduloLigado`) vem antes do papel; fora ela,
+    // nenhuma tabela é tocada e nenhuma RPC sai.
+    const leiturasDoModulo = new Set(["platform_config", "modulos_instalados"]);
+    expect(espiao.fromChamadas.filter((t) => !leiturasDoModulo.has(t))).toHaveLength(0);
+    expect(espiao.rpcChamadas).toHaveLength(0);
   });
 });
 

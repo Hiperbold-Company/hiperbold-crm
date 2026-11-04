@@ -44,7 +44,7 @@ import { z } from "zod";
 import { updateLeadHandler } from "@/app/api/v1/leads/_handler";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { camposDoFunil, camposPorEscopo } from "@/lib/leads/campos-do-funil";
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("organization_id", orgId)
     .maybeSingle();
 
-  if (erroLeitura) return fail("internal_error", erroLeitura.message, 500, { requestId });
+  if (erroLeitura) return falhaInterna("internal_error", erroLeitura, { requestId });
   if (!proposta) return fail("not_found", t("Sugestão não encontrada."), 404, { requestId });
   const p = proposta as PropostaLida;
 
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
       .eq("status", "pending")
       .select("id")
       .maybeSingle();
-    if (error) return fail("internal_error", error.message, 500, { requestId });
+    if (error) return falhaInterna("internal_error", error, { requestId });
     if (!decidida) {
       return fail("proposal_not_pending", t("Esta sugestão já foi decidida."), 409, { requestId });
     }
@@ -262,7 +262,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("organization_id", orgId)
     .eq("id", leadId)
     .maybeSingle();
-  if (leadErr) return fail("internal_error", leadErr.message, 500, { requestId });
+  if (leadErr) return falhaInterna("internal_error", leadErr, { requestId });
   if (!lead) return fail("not_found", t("Negócio não encontrado."), 404, { requestId });
 
   const settings = await settingsDoFunil(supabase, (lead as { pipeline_id?: string | null }).pipeline_id);
@@ -314,7 +314,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .select("id")
     .maybeSingle();
 
-  if (erroDecisao) return fail("internal_error", erroDecisao.message, 500, { requestId });
+  if (erroDecisao) return falhaInterna("internal_error", erroDecisao, { requestId });
   if (!decidida) {
     const { data: existe } = await supabase
       .from("lead_field_proposals")

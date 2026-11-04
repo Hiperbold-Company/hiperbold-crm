@@ -3,7 +3,7 @@
  * a por sessão (`channel/[token]`, que resolve a sessão pelo token do caminho)
  * e a da instalação (`canal-da-instalacao`, que resolve pela conta do evento).
  *
- * Um caminho só, de propósito: arquivo do corpo cru, assinatura, conta, ingestão
+ * Um caminho só, de propósito: assinatura, arquivo do corpo cru, conta, ingestão
  * e as respostas que o provedor lê. Duas cópias divergiriam na primeira mudança
  * — e a divergência apareceria como mensagem que entra por um caminho e some
  * pelo outro.
@@ -32,36 +32,32 @@ export async function processarEntradaDoCanal(
 ): Promise<Response> {
   const { sessao, rawBody, secret, requestId } = entrada;
   const req = { headers: entrada.headers };
-  // ─── O corpo cru vai para o arquivo ANTES de qualquer processamento ────────
+  // ─── A assinatura é conferida ANTES de o corpo ir para o arquivo ───────────
   //
-  // Se o processo morrer no meio — exceção, OOM, deploy no instante errado — o
-  // payload continua gravado, que é justamente quando alguém vai querer lê-lo.
-  // Este caminho não gravava NADA, enquanto a rota do outro canal grava desde
-  // sempre: era o único canal sem instrumento para investigar o que chegou.
+  // Auditoria Hiperbold de 17/10/2026: o corpo cru só é arquivado depois que a
+  // assinatura conferiu. Quem conhece apenas o TOKEN (público o bastante para
+  // estar numa URL) não pode escrever payload arbitrário, de até o teto, na
+  // tabela de arquivo.
   //
-  // ⚠️ ANTES DA CONFERÊNCIA DE ASSINATURA, e isso é o conserto: a recusa por
-  // assinatura saía com `return` LOGO ACIMA desta linha. Consequência dupla —
-  // o payload recusado não era arquivado em lugar nenhum, e o ramo que grava
-  // `valid_signature: false` (mais abaixo) ficava INALCANÇÁVEL, porque a única
-  // recusa por assinatura já tinha saído antes. Uma recusa de segurança que não
-  // deixa rastro de si mesma é pior que não ter a recusa: ninguém descobre que
-  // está sendo tentada.
-  //
-  // Pela rota por sessão, quem chega aqui já apresentou o TOKEN certo (a sessão
-  // foi resolvida por ele) e errou o SEGREDO de assinatura. Isso não é ruído de
-  // internet: é alguém com metade das credenciais. Arquivar é o que permite
-  // descobrir isso. (A entrada da instalação confere a assinatura antes de
-  // achar a sessão, então aqui ela sempre passa.)
-  const arquivo = await abrirArquivoDoWebhook(admin, {
-    organizationId: sessao.organization_id,
-    channelSessionId: sessao.id,
-    provider: sessao.provider,
-    rawBody,
-    headers: req.headers,
-  });
-
+  // A recusa continua deixando rastro de si mesma — era o conserto anterior: a
+  // recusa por assinatura saía com `return` antes de qualquer arquivo, e o ramo
+  // que grava `valid_signature: false` ficava INALCANÇÁVEL. Uma recusa de
+  // segurança que não deixa rastro é pior que não ter a recusa. Pela rota por
+  // sessão, quem chega aqui já apresentou o TOKEN certo e errou o SEGREDO: é
+  // alguém com metade das credenciais. Mas o rastro é o FATO (qual conexão,
+  // quando, quantos bytes, quais cabeçalhos), não o conteúdo. (A entrada da
+  // instalação confere a assinatura antes de achar a sessão, então aqui ela
+  // sempre passa.)
   if (!verifyInboundWebhookSignature(sessao.provider, rawBody, req.headers, secret)) {
-    await fecharArquivoDoWebhook(admin, arquivo, {
+    const arquivoDaRecusa = await abrirArquivoDoWebhook(admin, {
+      organizationId: sessao.organization_id,
+      channelSessionId: sessao.id,
+      provider: sessao.provider,
+      rawBody: "",
+      corpoOmitido: { motivo: "assinatura recusada", bytes: Buffer.byteLength(rawBody, "utf8") },
+      headers: req.headers,
+    });
+    await fecharArquivoDoWebhook(admin, arquivoDaRecusa, {
       status: "error",
       validSignature: false,
       erro: "bad_signature",
@@ -77,6 +73,18 @@ export async function processarEntradaDoCanal(
     });
     return fail("unauthorized", "bad_signature", 401, { requestId });
   }
+
+  // ─── Assinatura conferida: o corpo cru vai para o arquivo ANTES de processar ─
+  //
+  // Se o processo morrer no meio — exceção, OOM, deploy no instante errado — o
+  // payload continua gravado, que é justamente quando alguém vai querer lê-lo.
+  const arquivo = await abrirArquivoDoWebhook(admin, {
+    organizationId: sessao.organization_id,
+    channelSessionId: sessao.id,
+    provider: sessao.provider,
+    rawBody,
+    headers: req.headers,
+  });
 
   if (
     !(await inboundPayloadBelongsToSession(admin, {

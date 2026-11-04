@@ -111,3 +111,49 @@ export async function decifrarCpfDoContato(organizationId: string, contactId: st
   if (dec.error || typeof dec.data !== "string" || dec.data === "") return null;
   return dec.data;
 }
+
+/** Contatos por consulta ao ler os cifrados de uma exportação (o `in` vai na URL do PostgREST). */
+const BLOCO_DE_CPFS = 100;
+/** Decifragens em voo ao mesmo tempo: uma exportação de milhares não abre milhares de chamadas. */
+const DECIFRAGENS_EM_PARALELO = 10;
+
+/**
+ * Os CPFs em claro (só dígitos) de vários contatos da organização, para a EXPORTAÇÃO — o mesmo caminho de
+ * `decifrarCpfDoContato` (cliente de serviço + `fn_decrypt_oauth`), em lote: lê os cifrados em blocos e decifra
+ * com paralelismo limitado. Contato sem CPF, anonimizado ou cujo cifrado o banco não abre fica FORA do mapa (a
+ * coluna sai vazia; um CPF que não abre não derruba o arquivo).
+ *
+ * Como em `decifrarCpfDoContato`, aqui não há decisão de acesso: quem chama confere o papel antes e audita.
+ */
+export async function cpfsDecifradosDosContatos(
+  organizationId: string,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  const saida = new Map<string, string>();
+  if (ids.length === 0) return saida;
+  const admin = createAdminClient();
+  const cifrados: Array<{ id: string; cifrado: string }> = [];
+  for (let i = 0; i < ids.length; i += BLOCO_DE_CPFS) {
+    const { data, error } = await admin
+      .from("contacts")
+      .select("id, cpf_encrypted")
+      .eq("organization_id", organizationId)
+      .eq("is_anonymized", false)
+      .in("id", ids.slice(i, i + BLOCO_DE_CPFS))
+      .not("cpf_encrypted", "is", null);
+    if (error) continue;
+    for (const linha of (data ?? []) as Array<{ id: string; cpf_encrypted: string | null }>) {
+      if (linha.cpf_encrypted) cifrados.push({ id: linha.id, cifrado: linha.cpf_encrypted });
+    }
+  }
+  for (let i = 0; i < cifrados.length; i += DECIFRAGENS_EM_PARALELO) {
+    await Promise.all(
+      cifrados.slice(i, i + DECIFRAGENS_EM_PARALELO).map(async ({ id, cifrado }) => {
+        const normalizado = cifrado.startsWith("\\x") ? cifrado : `\\x${cifrado}`;
+        const dec = await admin.rpc("fn_decrypt_oauth", { ciphertext: normalizado });
+        if (!dec.error && typeof dec.data === "string" && dec.data !== "") saida.set(id, dec.data);
+      }),
+    );
+  }
+  return saida;
+}

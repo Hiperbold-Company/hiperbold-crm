@@ -14,6 +14,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -42,6 +44,7 @@ import {
   filtrosToParams,
   quantidadeDeFiltros,
   type FiltrosDaTela,
+  type MudancaDeFiltros,
 } from "@/lib/contacts/filtros-url";
 import { queryDaExportacao, type FormatoDeExport } from "@/lib/contacts/exportar";
 import { ORIGEM_AGENDA_DO_CELULAR } from "@/lib/leads/origem-do-contato";
@@ -74,11 +77,13 @@ export function ContactsListClient() {
     () => filtrosFromParams(new URLSearchParams(chaveDaUrl)),
     [chaveDaUrl],
   );
-  const { search, tag, source } = filtros;
-  // Uma etiqueta por vez: o filtro mora na URL (`?tag=`) e a contagem, a
-  // exclusão e a exportação de "todos do filtro" falam o mesmo objeto. O gatilho
-  // abaixo lê a lista para mostrar o resumo.
-  const tags = useMemo(() => (tag ? [tag] : []), [tag]);
+  const { search, source } = filtros;
+  // VÁRIAS etiquetas com E/OU (#1274, upstream) e "só pessoais" (spec 21, etapa 15),
+  // morando na URL como os outros filtros (`?tag=a&tag=b&modo=ou&pessoais=true`): a
+  // lista, a contagem, a exclusão e a exportação de "todos do filtro" falam o mesmo objeto.
+  const tags = useMemo(() => filtros.tag ?? [], [filtros.tag]);
+  const tagMode = filtros.modo;
+  const soPessoais = filtros.pessoais === true;
   const [orderBy, setOrderBy] = useState<ContactOrderBy>("last_activity_at");
   const [orderDir, setOrderDir] = useState<"asc" | "desc">("desc");
   const [limit, setLimit] = useState<number>(25);
@@ -102,7 +107,7 @@ export function ContactsListClient() {
 
   /** Troca parte dos filtros na URL (`undefined` apaga a chave). */
   const mudarFiltros = useCallback(
-    (mudanca: Partial<Record<keyof FiltrosDaTela, string | undefined>>) => {
+    (mudanca: MudancaDeFiltros) => {
       const proximo = filtrosToParams({ ...filtros, ...mudanca } as FiltrosDaTela);
       const qs = proximo.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
@@ -117,8 +122,8 @@ export function ContactsListClient() {
   // Os UTMs vêm dos negócios: só são buscados quando alguma coluna de UTM está na tela.
   const comUtm = pedeUtm(colunas);
   const listFilters = useMemo(
-    () => ({ ...filtros, order_by: orderBy, order_dir: orderDir, limit, com_utm: comUtm }),
-    [filtros, orderBy, orderDir, limit, comUtm],
+    () => ({ ...filtros, tagMode, order_by: orderBy, order_dir: orderDir, limit, com_utm: comUtm }),
+    [filtros, tagMode, orderBy, orderDir, limit, comUtm],
   );
   const q = useContactList(listFilters);
   const contagem = useContactCount(filtros);
@@ -175,8 +180,8 @@ export function ContactsListClient() {
   const tagOptions = useMemo(() => {
     const set = new Set<string>();
     for (const c of allContacts) for (const tag of c.tags) set.add(tag);
-    // A etiqueta filtrada na URL continua na lista mesmo que a página carregada não a mostre.
-    if (filtros.tag) set.add(filtros.tag);
+    // As etiquetas filtradas na URL continuam na lista mesmo que a página carregada não as mostre.
+    for (const tag of tags) set.add(tag);
     // `cliente` na lista mesmo que nenhum contato da página carregada a tenha —
     // COM A REGRA LIGADA. As demais opções saem do que já foi paginado — o que
     // basta para etiqueta que a equipe criou e usa em bloco, e falha justamente
@@ -186,7 +191,7 @@ export function ContactsListClient() {
     // roda; quem já tem a etiqueta continua aparecendo pela linha de cima.
     if (clientesLigado) set.add(TAG_DE_CLIENTE);
     return Array.from(set).sort();
-  }, [allContacts, clientesLigado, filtros.tag]);
+  }, [allContacts, clientesLigado, tags]);
 
   const handleSort = useCallback(
     (column: ContactOrderBy) => {
@@ -301,18 +306,21 @@ export function ContactsListClient() {
 
   /**
    * O arquivo do conjunto filtrado inteiro (CSV ou vCard), sem precisar
-   * selecionar: os filtros simples da lista viajam na query (busca, etiqueta,
-   * origem). Com filtro avançado ligado o menu some — a rota não os conhece, e
-   * o arquivo sairia maior que a lista; aí vale "selecionar todos do filtro".
+   * selecionar: os filtros simples da lista viajam na query (busca, etiquetas em
+   * E/OU, origem, pessoais). Com filtro avançado ligado o menu some — a rota não
+   * os conhece, e o arquivo sairia maior que a lista; aí vale "selecionar todos
+   * do filtro".
    */
   const filtrosAvancadosLigados =
-    quantidadeDeFiltros(filtros) - [search, tag, source].filter(Boolean).length > 0;
+    quantidadeDeFiltros(filtros) - [search, tags.length > 0, source, soPessoais].filter(Boolean).length > 0;
   const exportarArquivo = useCallback(
     (formato: FormatoDeExport) => {
       const qs = queryDaExportacao(formato, {
         search,
         tags,
+        tagMode,
         source,
+        pessoais: soPessoais,
         order_by: orderBy,
         order_dir: orderDir,
       });
@@ -320,7 +328,7 @@ export function ContactsListClient() {
       // não navegar — o mesmo gesto do "Exportar CSV" da tela de auditoria.
       window.location.href = `/api/v1/contacts/export?${qs}`;
     },
-    [search, tags, source, orderBy, orderDir],
+    [search, tags, tagMode, source, soPessoais, orderBy, orderDir],
   );
 
   return (
@@ -441,12 +449,43 @@ export function ContactsListClient() {
           <DropdownMenuContent align="start">
             <DropdownMenuLabel>{t("Tag")}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => mudarFiltros({ tag: undefined })}>{t("Todas")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => mudarFiltros({ tag: undefined, modo: undefined })}>
+              {t("Todas")}
+            </DropdownMenuItem>
+            {/* O E/OU só aparece com DUAS etiquetas: com uma só o parâmetro não
+                muda o resultado, e um controle que não muda nada é pior do que
+                nenhum. */}
+            {tags.length > 1 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuRadioGroup
+                  value={tagMode === "ou" ? "ou" : "e"}
+                  onValueChange={(modo) => mudarFiltros({ modo: modo === "ou" ? "ou" : undefined })}
+                >
+                  <DropdownMenuRadioItem value="e">{t("Todas (E)")}</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="ou">{t("Qualquer uma (OU)")}</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </>
+            )}
+            <DropdownMenuSeparator />
+            {/* `DropdownMenuCheckboxItem` marca e NÃO fecha o menu (o `onSelect`
+                com `preventDefault` trava isso): escolher a segunda etiqueta não
+                exige reabrir o menu. */}
             {tagOptions.map((tagOption) => (
               <DropdownMenuCheckboxItem
                 key={tagOption}
-                checked={tag === tagOption}
-                onCheckedChange={() => mudarFiltros({ tag: tag === tagOption ? undefined : tagOption })}
+                checked={tags.includes(tagOption)}
+                onCheckedChange={() => {
+                  const proximas = tags.includes(tagOption)
+                    ? tags.filter((et) => et !== tagOption)
+                    : [...tags, tagOption];
+                  mudarFiltros({
+                    tag: proximas.length > 0 ? proximas : undefined,
+                    // O modo só faz sentido com DUAS: com uma, `&modo=ou` seria ruído.
+                    modo: proximas.length > 1 ? tagMode : undefined,
+                  });
+                }}
+                onSelect={(e) => e.preventDefault()}
               >
                 <PontoDaEtiqueta tag={tagOption} className="mr-2" />
                 {tagOption}
@@ -469,6 +508,18 @@ export function ContactsListClient() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Só pessoais: o filtro que acha quem saiu da operação. O
+            `data-testid` é contrato do e2e da spec. */}
+        <Button
+          variant={soPessoais ? "default" : "outline"}
+          size="sm"
+          data-testid="filtro-pessoais"
+          aria-pressed={soPessoais}
+          onClick={() => mudarFiltros({ pessoais: soPessoais ? undefined : true })}
+        >
+          {t("Pessoais")}
+        </Button>
 
         <FiltrosAvancadosDeContatos
           filtros={filtros}

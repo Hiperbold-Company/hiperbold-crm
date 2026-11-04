@@ -123,6 +123,8 @@ function condicao(l: LinhaDeLlmCalls, col: string, op: string, val: unknown): bo
 
 function passa(l: LinhaDeLlmCalls, f: Filtro): boolean {
   if (f.metodo === "select") return true;
+  // `.not(coluna, "in", "(a,b)")` → o mesmo `not.in` do termo de `or`.
+  if (f.metodo === "not") return condicao(l, String(f.args[0]), `not.${String(f.args[1])}`, f.args[2]);
   if (f.metodo !== "or") return condicao(l, String(f.args[0]), f.metodo, f.args[1]);
   // Vírgulas DENTRO de parênteses são da lista do `in`, não do `or`.
   const termos = String(f.args[0]).split(/,(?![^(]*\))/);
@@ -194,6 +196,7 @@ describe("o furo de medição é medido, não presumido", () => {
           const outro: any = {
             select: () => outro,
             eq: () => outro,
+            or: () => outro,
             maybeSingle: async () => ({ data: null, error: null }),
             then: (res: (v: unknown) => unknown) => Promise.resolve({ count: 0, error: null }).then(res),
           };
@@ -212,6 +215,9 @@ describe("o furo de medição é medido, não presumido", () => {
             return chain;
           },
           is: () => chain, // fixture já só tem `cost_cents: null`
+          // O corte da transcrição por origem (`purpose.neq…,origem_da_escolha…`):
+          // as linhas desta fixture não têm origem, e a exclusão medida aqui é a do `not`.
+          or: () => chain,
           not: (coluna: string, _op: string, valor: string) => {
             if (coluna === "purpose") excluidos = String(valor).replace(/^\(|\)$/g, "").split(",");
             return chain;

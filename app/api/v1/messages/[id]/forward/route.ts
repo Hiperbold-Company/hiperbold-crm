@@ -22,6 +22,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { encaminharMensagem } from "@/lib/inbox/encaminhar-mensagem";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Message } from "@/lib/types/messaging";
 
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
       chave === null
         ? { tipo: "executou", resposta: await encaminhar(), status: 201 }
         : await comIdempotencia({
-            db: supabase,
+            db: createAdminClient(),
             organizationId: authz.org.orgId,
             endpoint: ENDPOINT,
             chave,

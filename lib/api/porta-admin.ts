@@ -19,7 +19,15 @@ export type EntradaDeAdministracao =
 
 export async function entradaDeAdministracao(
   req: NextRequest,
-  opts: { resource: string; role: Role; escrita: boolean; tokenRole?: Role; id?: string; permissao?: ChaveDePermissao },
+  opts: {
+    resource: string;
+    role: Role;
+    escrita: boolean;
+    tokenRole?: Role;
+    id?: string;
+    permissao?: ChaveDePermissao;
+    configuracao?: boolean;
+  },
 ): Promise<EntradaDeAdministracao> {
   const requestId = crypto.randomUUID();
   if (opts.id !== undefined && !UUID_RX.test(opts.id)) {
@@ -32,6 +40,7 @@ export async function entradaDeAdministracao(
     escrita: opts.escrita,
     tokenRole: opts.tokenRole,
     permissao: opts.permissao,
+    configuracao: opts.configuracao,
   });
   if (!authz.ok) return { resposta: authz.response };
   return { authz, requestId };

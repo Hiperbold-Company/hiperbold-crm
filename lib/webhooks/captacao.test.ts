@@ -51,6 +51,12 @@ describe("motivoDaRecusaDaCriacao (#2297, caminho 4)", () => {
         "erro_inesperado",
         "recusa_da_regra",
         "sem_campo_mapeavel",
+        // Hiperbold: segredo, limite do plano, Turnstile e corpo do envio.
+        "segredo_indisponivel",
+        "limite_do_plano",
+        "verificacao_de_seguranca",
+        "corpo_invalido",
+        "corpo_grande_demais",
       ].sort(),
     );
     for (const motivo of Object.keys(MOTIVO_DA_RECUSA_LABEL) as MotivoDaRecusa[]) {

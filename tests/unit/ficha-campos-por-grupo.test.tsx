@@ -20,9 +20,16 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 // Os produtos do negócio (migration 0972) têm teste próprio (`ficha-produtos-do-negocio.test.tsx`);
 // aqui a seção sai da ficha para este arquivo continuar falando só do que fala.
 vi.mock("@/components/kanban/ItensDoNegocio", () => ({ ItensDoNegocio: () => null }));
-vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({
+  usePermission: () => true,
+  useActiveOrg: () => null,
+  useFusoDaOrganizacao: () => null,
+}));
 // O seletor de etiquetas lê o vocabulário da rede; este arquivo não trata de
 // etiquetas (isso é de `ficha-tags-seletor.test.tsx`), então a leitura fica vazia.
+// Desde a junção com o upstream as etiquetas do negócio gravam na hora pelo editor do Inbox,
+// que fala com a API por conta própria; este arquivo não trata delas.
+vi.mock("@/components/inbox/ContactTagsEditor", () => ({ ContactTagsEditor: () => null }));
 vi.mock("@/hooks/contacts/useEtiquetasParaEscolher", () => ({
   useEtiquetasParaEscolher: () => ({ data: [], isLoading: false, isError: false }),
 }));
@@ -102,11 +109,11 @@ describe("campos do funil na ficha", () => {
 
     expect(mutateAsync).toHaveBeenCalledTimes(1);
     const arg = (mutateAsync.mock.calls[0] as unknown as [{ patch: { custom_fields: Record<string, unknown> } }])[0];
-    expect(arg.patch.custom_fields).toMatchObject({
-      empresa: "ACME",
+    // Desde o #2132 do upstream o Salvar manda só o que a pessoa alterou (o servidor faz o merge):
+    // o campo do bloco recolhido vai junto, e o que ninguém mexeu (empresa, gclid) não é reenviado.
+    expect(arg.patch.custom_fields).toEqual({
       cargo: "Diretora",
       utm_source: "meta",
-      gclid: "abc123",
     });
   });
 

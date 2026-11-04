@@ -34,6 +34,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useActiveOrg: () => ({ currency: "BRL", country: null, role: "agent", orgId: "org-1" }),
   useAuth: () => ({ user: { id: "usuario-eu" }, activeOrg: null }),
+  usePermission: () => true,
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
@@ -104,11 +105,11 @@ beforeEach(() => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: unknown) => {
-      const corpo = String(url).includes("/api/v1/leads")
-        ? { data: { id: LEAD_ID, title: "Plano clínica" } }
-        : { data: [] };
+      // Os produtos do negócio (`/api/v1/leads/:id/itens`) são lista, como o catálogo.
+      const ehLead = String(url).includes("/api/v1/leads") && !String(url).includes("/itens");
+      const corpo = ehLead ? { data: { id: LEAD_ID, title: "Plano clínica" } } : { data: [] };
       return new Response(JSON.stringify(corpo), {
-        status: String(url).includes("/api/v1/leads") ? 201 : 200,
+        status: ehLead ? 201 : 200,
         headers: { "content-type": "application/json" },
       });
     }),

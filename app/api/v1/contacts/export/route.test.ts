@@ -16,9 +16,16 @@ import { mapHeader, mapLinha, parseCsv } from "@/lib/contacts/csv";
 import { createClient } from "@/lib/supabase/server";
 import type { Contact } from "@/lib/types/contacts";
 
+import { cpfsDecifradosDosContatos } from "@/lib/contacts/cpf-do-contato";
+
 import { listContactsHandler } from "../_handler";
 
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
+// Hiperbold: o rate limit é colaborador trocado (o contador em memória vazaria de um caso para o
+// outro), e o CPF sai pelo caminho da ficha (`cpfsDecifradosDosContatos`, cliente de serviço — D-216).
+const limite = vi.fn(async () => ({ allowed: true }));
+vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({ checkRateLimit: () => limite() }));
+vi.mock("@/lib/contacts/cpf-do-contato", () => ({ cpfsDecifradosDosContatos: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("../_handler", () => ({ listContactsHandler: vi.fn() }));
@@ -108,6 +115,8 @@ beforeEach(() => {
     org: { orgId: ORG_ID, name: "Org", role: "manager" },
   } as never);
   RPC.mockResolvedValue({ data: null, error: null });
+  limite.mockResolvedValue({ allowed: true });
+  vi.mocked(cpfsDecifradosDosContatos).mockResolvedValue(new Map());
   vi.mocked(createClient).mockResolvedValue({ rpc: RPC } as never);
 });
 
@@ -210,33 +219,75 @@ describe("o CSV de contatos", () => {
     });
   });
 
-  it("decifra o CPF de quem tem cifra — e só dele", async () => {
+  it("decifra o CPF de quem tem cifra — e só dele — e o CPF sai no CSV", async () => {
     devolvePaginas([
       contato(1, { cpf_hash: "hash-1" }),
       contato(2),
       contato(3, { cpf_hash: "hash-3" }),
     ]);
-    RPC.mockImplementation(async (_funcao: string, { p_contact_id }: { p_contact_id: string }) => ({
-      data: p_contact_id.endsWith("000001") ? "52998224725" : "39053344705",
-      error: null,
-    }));
+    vi.mocked(cpfsDecifradosDosContatos).mockResolvedValue(
+      new Map([
+        ["00000000-0000-4000-8000-000001", "52998224725"],
+        ["00000000-0000-4000-8000-000003", "39053344705"],
+      ]),
+    );
 
     const csv = await (await chamar()).text();
 
-    expect(RPC).toHaveBeenCalledTimes(2);
-    const decifrados = RPC.mock.calls.map(([, params]) => (params as { p_contact_id: string }).p_contact_id);
-    expect(decifrados).not.toContain("00000000-0000-4000-8000-000002");
-    expect(decifrados).toContain("00000000-0000-4000-8000-000001");
-    expect(csv).toContain("52998224725");
-    expect(csv).toContain("39053344705");
+    expect(cpfsDecifradosDosContatos).toHaveBeenCalledTimes(1);
+    const [org, ids] = vi.mocked(cpfsDecifradosDosContatos).mock.calls[0]!;
+    expect(org).toBe(ORG_ID);
+    expect(ids).toEqual(["00000000-0000-4000-8000-000001", "00000000-0000-4000-8000-000003"]);
+    const linhas = dadosDoCsv(csv);
+    expect(linhas[0]).toContain("52998224725");
+    expect(linhas[1]).not.toContain("52998224725");
+    expect(linhas[1]).not.toContain("39053344705");
+    expect(linhas[2]).toContain("39053344705");
+    // A sessão do usuário não decifra nada: nenhuma RPC pelo cliente dela.
+    expect(RPC).not.toHaveBeenCalled();
   });
 
-  it("o vCard NÃO decifra CPF — cartão não tem documento", async () => {
+  it("o vCard leva o CPF na NOTE (a exportação leva todos os dados)", async () => {
+    devolvePaginas([contato(1, { cpf_hash: "hash-1" })]);
+    vi.mocked(cpfsDecifradosDosContatos).mockResolvedValue(
+      new Map([["00000000-0000-4000-8000-000001", "52998224725"]]),
+    );
+
+    const vcf = await (await chamar("?formato=vcf")).text();
+
+    expect(vcf).toContain("NOTE:CPF 52998224725");
+  });
+
+  it("perfil abaixo de gerente com a exportação liberada: exporta, mas SEM CPF (a ficha também não mostra)", async () => {
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      user: usuario(),
+      org: {
+        orgId: ORG_ID,
+        name: "Org",
+        role: "agent",
+        permissoes: { "contatos.exportar": ["manager", "agent"] },
+      },
+    } as never);
     devolvePaginas([contato(1, { cpf_hash: "hash-1" })]);
 
-    await chamar("?formato=vcf");
+    const res = await chamar();
 
-    expect(RPC).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(cpfsDecifradosDosContatos).not.toHaveBeenCalled();
+    expect(vi.mocked(audit).mock.calls[0]![0].metadata).toMatchObject({ cpf_incluido: false });
+  });
+
+  it("rate limit por usuário: acima do teto é 429 e nada é lido", async () => {
+    limite.mockResolvedValue({ allowed: false });
+    devolvePaginas([contato(1)]);
+
+    const res = await chamar();
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("60");
+    expect(listContactsHandler).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
   });
 });
 
@@ -295,8 +346,10 @@ describe("bordas", () => {
 
     await chamar();
 
+    // Hiperbold: `exigirPermissao("contatos.exportar")` pede o PISO da capacidade ao
+    // `requireRole` (viewer) e confere a capacidade em seguida (padrão: manager).
     const [papel, opcoes] = vi.mocked(requireRole).mock.calls[0]!;
-    expect(papel).toBe("manager");
+    expect(papel).toBe("viewer");
     expect(Object.keys(opcoes ?? {}).sort()).toEqual(["requestId", "resource"]);
   });
 });
@@ -318,6 +371,8 @@ describe("a trilha de auditoria", () => {
         formato: "csv",
         total: 3,
         truncado: false,
+        // O CPF saiu (gerente) — o audit diz QUE saiu, nunca o valor.
+        cpf_incluido: true,
         filtros: { busca: true, etiquetas: 1, origem: "whatsapp", pessoais: false },
       },
     });

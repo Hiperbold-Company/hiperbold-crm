@@ -72,6 +72,9 @@ interface Cenario {
   /** Linhas de `api_audit_log` da org (a lápide e o registro final), para a retomada. */
   auditoria?: Array<{ action: string; metadata: Record<string, unknown> }>;
   semVinculo?: string[];
+  /** Hiperbold: o contrato da régua própria (`billing_contracts`). Ausente = sem contrato. */
+  contrato?: { status: string } | null;
+  contratoIlegivel?: boolean;
 }
 
 function adminFalso(c: Cenario) {
@@ -115,6 +118,22 @@ function adminFalso(c: Cenario) {
           webhook_subscriptions: { "order/created": { id: 77 } },
         });
       }
+      if (tabela === "billing_contracts") {
+        passos.push("regua.leitura");
+        if (c.contratoIlegivel) {
+          const b: Record<string, unknown> = {};
+          b.select = () => b;
+          b.eq = () => b;
+          b.maybeSingle = async () => ({ data: null, error: { message: "timeout" } });
+          return b;
+        }
+        return leituraSimples(
+          c.contrato
+            ? { ...c.contrato, cycle: "mensal", current_period_end: "2026-11-01T03:00:00.000Z", billing_plans: null }
+            : null,
+        );
+      }
+      if (tabela === "billing_settings") return leituraSimples({ modo: "avisar" });
       if (tabela === "cobranca_assinaturas") {
         // Empresa sem linha de cobrança (isenta): a releitura de #2626 lê a
         // linha, não acha, e não chama o provedor.
@@ -215,6 +234,35 @@ describe("recusas — nada é tocado", () => {
       excluirOrganizacao(admin as never, { ...entrada, confirmacao: "outra" }),
     ).rejects.toMatchObject({ codigo: "confirmacao_divergente" });
     expect(passos).toEqual([]);
+  });
+
+  // Hiperbold: no meio da régua de cobrança própria a exclusão manual é recusada antes de tudo.
+  it.each(["atrasada", "suspensa"])(
+    "contrato %s (régua de cobrança em curso): exclusao_na_regua_de_cobranca, sem releitura, inventário, banco nem transporte",
+    async (status) => {
+      const admin = adminFalso({ status: "suspended", contrato: { status } });
+      await expect(excluirOrganizacao(admin as never, entrada)).rejects.toMatchObject({
+        codigo: "exclusao_na_regua_de_cobranca",
+        message: "Esta empresa está na régua de cobrança; a exclusão só é liberada quando a régua termina.",
+      });
+      expect(passos).toEqual(["regua.leitura"]);
+      expect(admin.rpc).not.toHaveBeenCalled();
+    },
+  );
+
+  it("contrato ilegível: cobranca_ilegivel, nada é tocado", async () => {
+    const admin = adminFalso({ status: "suspended", contratoIlegivel: true });
+    await expect(excluirOrganizacao(admin as never, entrada)).rejects.toMatchObject({
+      codigo: "cobranca_ilegivel",
+    });
+    expect(passos).toEqual(["regua.leitura"]);
+    expect(admin.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each(["cancelada", "ativa"])("contrato %s (régua terminou ou sem inadimplência): a exclusão segue", async (status) => {
+    const admin = adminFalso({ status: "suspended", contrato: { status } });
+    await excluirOrganizacao(admin as never, entrada);
+    expect(passos).toContain("rpc:fn_excluir_organizacao");
   });
 
   it("organização inexistente: not_found", async () => {

@@ -412,8 +412,9 @@ describe("todo INSERT de versão leva todas as chaves de versionShapeSchema", ()
     // Caminhos que já se perderam ou que a cerca passaria a cobrir agora. Uma
     // allowlist órfã (arquivo que não é mais descoberto) também cai aqui.
     for (const esperado of [
-      "app/api/v1/ai/agents/route.ts",
-      "app/api/v1/ai/agents/[id]/versions/route.ts",
+      // Hiperbold: as rotas `POST /ai/agents` e `POST /ai/agents/:id/versions` são transporte; o
+      // INSERT das duas (e das tools MCP) mora no núcleo de administração.
+      "lib/ai/agents/administracao.ts",
       "app/app/ai/agents/[id]/_actions.ts",
       "lib/ai/agents/duplicate.ts",
       "lib/ai/apply-proposal.ts",

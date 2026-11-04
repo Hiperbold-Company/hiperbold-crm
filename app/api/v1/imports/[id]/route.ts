@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 
+import { falhaInterna } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import {
   fail,
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest, { params }: Ctx): Promise<Response> 
       .eq("organization_id", authz.org.orgId)
       .eq("id", id)
       .maybeSingle();
-    if (error) return fail("internal_error", error.message, 500, { requestId });
+    if (error) return falhaInterna("internal_error", error, { requestId });
     if (!batch) return fail("not_found", "Importação não encontrada.", 404, { requestId });
 
     const statusFilter = req.nextUrl.searchParams.get("status");

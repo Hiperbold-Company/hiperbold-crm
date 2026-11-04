@@ -141,7 +141,8 @@ describe("TeamMembersClient — seletor de papel (G2-02)", () => {
 
     const trigger = await screen.findByRole("combobox", { name: /Papel de Agente/i });
     await user.click(trigger);
-    await user.click(await screen.findByRole("option", { name: "Somente leitura" }));
+    // D-213 (Hiperbold): o papel `viewer` se chama "Visualizador" (lib/auth/types.ts).
+    await user.click(await screen.findByRole("option", { name: "Visualizador" }));
 
     // Rollback: volta ao papel original após o erro.
     await waitFor(() => expect(trigger).toHaveTextContent("Atendente"));

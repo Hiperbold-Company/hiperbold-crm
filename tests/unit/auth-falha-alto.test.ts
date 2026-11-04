@@ -143,14 +143,13 @@ describe("loadAuthUser — falha de permissão não vira 'sem organização'", (
         role: "admin",
         locale: null,
         timezone: null,
-        // D-091: o status da organização viaja junto; sem a coluna, `null`.
-        organization_status: null,
         // Mesma carona, mesmo contrato: quando a consulta não traz, chega
         // `null`, e não um padrão inventado no meio do caminho.
         currency: null,
         country: null,
-        // Status e tipo da suspensão da organização (spec da cobrança §4):
-        // mesma carona, mesmo contrato — sem a coluna, `null`.
+        // Status e tipo da suspensão da organização (spec da cobrança §4; o
+        // `organization_status` do D-091 virou este `org_status` na junção com o
+        // upstream): mesma carona, mesmo contrato — sem a coluna, `null`.
         org_status: null,
         suspended_kind: null,
         interface_settings: { preset: "completa" },

@@ -231,6 +231,19 @@ describe("fatos de cada emissor", () => {
       }),
     );
     expect(b).toMatchObject({ tipo: "birthday", contact_id: CONTATO, data: "2026-11-03" });
+    const aniversario = (payload: Record<string, unknown>) =>
+      fatosDoEvento(
+        row({
+          event_type: "contact.birthday",
+          entity_kind: "contact",
+          entity_id: CONTATO,
+          payload,
+          metadata: { actor_kind: "system" },
+        }),
+      );
+    // O evento das automações (`rule_id` "automacao") vale; o de uma regra do motor antigo, não.
+    expect(aniversario({ local_date: "2026-11-03", rule_id: "automacao" })).toHaveLength(1);
+    expect(aniversario({ local_date: "2026-11-03", rule_id: "3f1c0a8e-0000-4000-8000-000000000001" })).toEqual([]);
     const [k] = fatosDoEvento(
       row({
         event_type: "ai.case_opened",

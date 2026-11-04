@@ -28,9 +28,17 @@ vi.mock("@/lib/atendimento/origem", () => ({
   observeServiceOrigin: vi.fn(async () => null),
 }));
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: vi.fn(() => ({
-    rpc: vi.fn(async () => ({ data: null, error: null })),
-  })),
+  createAdminClient: vi.fn(() => {
+    // Hiperbold: a resposta do contato marca `cpf_available` lendo `contacts` com o
+    // admin (lib/contacts/cpf-do-contato.ts). Aqui nenhum contato tem CPF.
+    const q: Record<string, unknown> = {};
+    for (const m of ["select", "eq", "in", "not"]) q[m] = () => q;
+    q.then = (ok: (r: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(ok);
+    return {
+      rpc: vi.fn(async () => ({ data: null, error: null })),
+      from: () => q,
+    };
+  }),
 }));
 vi.mock("@/lib/leads/activity-emitter", () => ({
   emitLeadActivity: vi.fn(async () => ({ ok: true })),

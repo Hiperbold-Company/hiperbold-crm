@@ -110,10 +110,6 @@ export async function POST(req: NextRequest): Promise<Response> {
   // O ramo do token não carrega idioma de usuário: cai no padrão do produto.
   const t = (texto: string) => traduzir(texto, authz.idioma ?? IDIOMA_PADRAO);
 
-  // D-155: a abertura cria contato e conversa por telefone; sem teto, uma chave em
-  // laço cria contatos sem limite. A sessão não passa por aqui (devolve null).
-  const tetoEstourado = await tetoDeEscritaDoToken(authz, "open", requestId);
-  if (tetoEstourado) return tetoEstourado;
 
   let input;
   try {

@@ -59,6 +59,14 @@ describe("CommandPalette", () => {
     expect(screen.getByRole("option", { name: /Radar/ })).toBeTruthy();
   });
 
+  it("busca também nos termos do destino, que não estão no rótulo nem na descrição", async () => {
+    const user = userEvent.setup();
+    abrir();
+    // "gatilho" só está nos `termos` de Automações.
+    await user.type(screen.getByRole("combobox"), "gatilho");
+    expect(screen.getByRole("option", { name: /^Automações/ })).toBeTruthy();
+  });
+
   it("Provedores (onde mora o Jev) está oculto nesta instalação e não aparece na busca", async () => {
     const user = userEvent.setup();
     abrir();

@@ -30,12 +30,21 @@ vi.mock("@/lib/auth/exigir-email-verificado", () => ({
   recusaSeEmailNaoVerificado: vi.fn(async () => null),
   contaPodeCriarArtefatos: vi.fn(async () => true),
 }));
-vi.mock("@/lib/auth/server", () => ({
-  loadAuthUser: vi.fn(),
-  resolveActiveOrg: vi.fn(),
-  mfaEmDivida: vi.fn(),
-  sessionAal: vi.fn(async () => "aal1"),
-}));
+vi.mock("@/lib/auth/server", () => {
+  const resolveActiveOrg = vi.fn();
+  return {
+    loadAuthUser: vi.fn(),
+    resolveActiveOrg,
+    // O `requireRole` do upstream lê a org por `orgAtivaSemPortao`: segue o que o
+    // teste configurou em `resolveActiveOrg`, como organização operante.
+    orgAtivaSemPortao: vi.fn(async (u: unknown) => {
+      const org = await resolveActiveOrg(u);
+      return org ? { org_status: "active", ...org } : org;
+    }),
+    mfaEmDivida: vi.fn(),
+    sessionAal: vi.fn(async () => "aal1"),
+  };
+});
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));

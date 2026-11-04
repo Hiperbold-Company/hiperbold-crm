@@ -36,6 +36,12 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/auth/server", () => ({ loadAuthUser: async () => ({ idioma: "pt-BR" }) }));
 vi.mock("@/lib/auth/require-role", () => ({
   orgAtivaDaApi: async () => ({ ok: true, org: { orgId: "11111111-1111-4111-8111-111111111111" } }),
+  // A rota passa pelo gate único de leitura (D-092, fork Hiperbold).
+  requireRole: async () => ({
+    ok: true,
+    user: { id: "usuario", idioma: "pt-BR" },
+    org: { orgId: "11111111-1111-4111-8111-111111111111", role: "viewer" },
+  }),
 }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({

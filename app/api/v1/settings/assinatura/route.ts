@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 
 import type { NextRequest } from "next/server";
 
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -37,7 +37,7 @@ export async function GET(): Promise<Response> {
   if (!authz.ok) return authz.response;
 
   const lido = await lerSettings(authz.org.orgId);
-  if ("error" in lido) return fail("internal_error", lido.error?.message ?? "", 500, { requestId });
+  if ("error" in lido) return falhaInterna("internal_error", lido.error ?? "", { requestId });
   const c = configAssinatura(lido.settings);
   return ok({ humanos: c.humanos, ia: c.ia, nome_ia: c.nomeIa, por_agente: c.porAgente }, { requestId });
 }
@@ -59,7 +59,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     });
   }
   const lido = await lerSettings(authz.org.orgId);
-  if ("error" in lido) return fail("internal_error", lido.error?.message ?? "", 500, { requestId });
+  if ("error" in lido) return falhaInterna("internal_error", lido.error ?? "", { requestId });
   // `por_agente` ausente (cliente anterior ao #3310) mantém o que está gravado.
   const nova = { ...parsed.data, por_agente: parsed.data.por_agente ?? configAssinatura(lido.settings).porAgente };
 
@@ -68,7 +68,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     .from("organizations")
     .update({ settings: { ...lido.settings, assinatura_mensagens: nova } })
     .eq("id", authz.org.orgId);
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
 
   void audit({
     action: "settings.message_signature_updated",

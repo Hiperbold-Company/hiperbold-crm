@@ -48,7 +48,7 @@
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { donoDoFiltro, lerFiltrosDaLista } from "@/lib/kanban/filtros-da-lista";
@@ -124,7 +124,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("organization_id", orgId)
     .maybeSingle();
   if (funilErr) {
-    return fail("internal_error", funilErr.message, 500, { requestId });
+    return falhaInterna("internal_error", funilErr, { requestId });
   }
   if (!funil) {
     return fail("resource_not_found", t("Funil não encontrado."), 404, { requestId });
@@ -172,7 +172,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .order("id")
     .range(de, de + porPagina);
   if (error) {
-    return fail("internal_error", error.message, 500, { requestId });
+    return falhaInterna("internal_error", error, { requestId });
   }
 
   const linhas = (data ?? []) as Lead[];

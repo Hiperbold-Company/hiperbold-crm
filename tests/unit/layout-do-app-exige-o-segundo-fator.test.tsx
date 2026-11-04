@@ -33,7 +33,13 @@ const adminClient = {
 
 vi.mock("@/lib/channels/health", () => ({ listarConexoesCaidas: async () => [] }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ from: adminClient.from }) }));
-vi.mock("@/lib/auth/server", () => ({
+vi.mock("@/lib/auth/server", async (importOriginal) => ({
+  // O portão do layout é o `exigirProvaDeMfa` de verdade (redirect e caminho de volta). Só a
+  // régua é do teste: tem fator e a sessão não é aal2 (nenhum dispositivo confiável aqui).
+  exigirProvaDeMfa: async () =>
+    (await importOriginal<typeof import("@/lib/auth/server")>()).exigirProvaDeMfa(
+      async () => estado.matriculado && estado.nivel !== "aal2",
+    ),
   loadAuthUser: async () => ({
     id: "user-1",
     idioma: "pt-BR",
@@ -56,7 +62,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("next/headers", () => ({
-  cookies: async () => ({ get: () => undefined }),
+  cookies: async () => ({ get: () => undefined, getAll: () => [], set: () => undefined }),
   headers: async () => new Headers({ "x-pathname": estado.caminho }),
 }));
 vi.mock("@/lib/branding/instalacao", () => ({ marcaDaInstalacao: async () => ({}) }));

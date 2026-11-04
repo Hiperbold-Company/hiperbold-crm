@@ -60,7 +60,10 @@ describe("o valor escondido segue dentro do estado de cada editor", () => {
   const CASOS: Array<{ arquivo: string; valor: RegExp }> = [
     { arquivo: "components/contacts/EditContactDialog.tsx", valor: /value=\{customFields/ },
     { arquivo: "components/inbox/CRMSidePanel.tsx", valor: /value=\{customFields/ },
-    { arquivo: "components/kanban/LeadFieldsForm.tsx", valor: /value=\{customFields/ },
+    // Hiperbold: os campos do negócio são desenhados por grupo (`agruparCampos`); cada
+    // grupo recebe o objeto de valores INTEIRO (`valores={customFields}`) e o repassa
+    // ao CustomFieldsEditor como `value={valores}`.
+    { arquivo: "components/kanban/LeadFieldsForm.tsx", valor: /valores=\{customFields\}[\s\S]*value=\{valores\}/ },
   ];
 
   for (const caso of CASOS) {

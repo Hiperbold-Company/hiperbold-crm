@@ -234,31 +234,20 @@ export async function listContactsHandler(
   const sortCol = q.order_by;
   const asc = q.order_dir === "asc";
 
+  // A busca (regex que ignora acento, nome da agenda, telefones extras), as etiquetas em E/OU,
+  // pessoais, bloqueados, os filtros ampliados, o `kind = person` e a lápide de fusão moram em
+  // `consultaDeContatos` (lib/contacts/consulta.ts): a MESMA régua da contagem, do lote e da
+  // exportação. Pessoal fica fora por padrão; `?pessoais=true` lista SÓ pessoais (spec 21, etapa 13).
   const { query: consulta } = await consultaDeContatos(supabase, SELECT_COLS, q, {
     organizationId: ctx.organization_id,
     requestId: ctx.requestId,
     timezone: opcoes?.timezone,
+    soContato,
   });
-  // A busca, a etiqueta, os filtros ampliados e a lápide de fusão moram em `consultaDeContatos`
-  // (lib/contacts/consulta.ts), a MESMA régua da seleção em lote e da exportação. Os filtros abaixo
-  // vieram do upstream e ainda não estão lá.
   let query = consulta
-    // O placeholder de GRUPO (`kind='whatsapp_group'`) não é uma pessoa da
-    // base: é o registro técnico que a conversa do grupo pendura para caber no
-    // mesmo esquema de `contacts`.
-    .eq("kind", "person")
     .order(sortCol, { ascending: asc, nullsFirst: false })
     .order("id", { ascending: asc })
     .limit(q.limit + 1);
-
-  // `yes` responde "quem pediu para não ser incomodado"; `no`, quem não pediu
-  // opt-out. Só o opt-out: exclusão de campanha e anonimizados não entram aqui.
-  if (q.blocked) query = query.eq("is_blocked", q.blocked === "yes");
-  if (soContato) query = query.eq("id", soContato);
-  // Pessoal fora da lista por padrão; `?pessoais=true` lista SÓ pessoais
-  // (spec 21, etapa 13 — a tela do filtro e o desmarcar).
-  if (q.pessoais) query = query.eq("is_personal", true);
-  else query = query.eq("is_personal", false);
 
   if (q.cursor) {
     const c = decodeCursor(q.cursor);

@@ -19,7 +19,23 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   usePermission: () => podeEditar,
 }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
+  // Hiperbold: os filtros da tela moram na URL.
+  usePathname: () => "/app/contacts",
+  useSearchParams: () => new URLSearchParams(),
+}));
+// Hiperbold: contagem do filtro, opções dos filtros avançados e colunas escolhidas vêm do
+// servidor; aqui ficam paradas, sem rede.
+vi.mock("@/hooks/contacts/useContactCount", () => ({ useContactCount: () => ({ data: 2 }) }));
+vi.mock("@/hooks/contacts/useContactFilterOptions", () => ({
+  useContactFilterOptions: () => ({ data: undefined }),
+}));
+vi.mock("@/hooks/contacts/useColunasDeContatos", async () => {
+  const { COLUNAS_PADRAO } = await import("@/lib/contacts/colunas-da-lista");
+  return { useColunasDeContatos: () => ({ colunas: [...COLUNAS_PADRAO] }) };
+});
+vi.mock("@/components/contacts/SyncPhoneContactsDialog", () => ({ SyncPhoneContactsDialog: () => null }));
 vi.mock("@/components/channels/SeletorDeCanalParaConversa", () => ({
   useConversaNovaComEscolhaDeCanal: () => ({ iniciarConversa: vi.fn(), abrindo: false, seletor: null }),
 }));
@@ -104,6 +120,8 @@ describe("caixas de seleção da lista de contatos", () => {
     renderLista();
     await user.click(screen.getByRole("button", { name: "Selecionar todos os contatos visíveis" }));
     expect(caixas()).toHaveLength(3);
-    for (const caixa of caixas()) expect(caixa).toHaveAttribute("aria-checked", "true");
+    // `toBeChecked` vale para a caixa nativa (Hiperbold: `<input type="checkbox">`) e para o
+    // `role="checkbox"` com `aria-checked` do upstream.
+    for (const caixa of caixas()) expect(caixa).toBeChecked();
   });
 });

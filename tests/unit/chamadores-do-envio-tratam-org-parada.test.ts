@@ -33,6 +33,8 @@ const CHAMADORES: Record<string, string> = {
   "lib/agent-engine/agent/aviso-fora-do-horario.ts":
     "propaga ao chamador; o inbound-turn engole e só perde o aviso — nada gravado, sem retentativa, e o turno da org parada já é negado antes",
   "lib/ai/runtime/finalize.ts": "devolve null ao turno; o gate já nega a org parada antes de existir turno",
+  "lib/automacoes/efeitos/conversa.ts":
+    "o passo da automação visual falha com `organizacao_bloqueada` no histórico da execução; registro do instante, sem retentativa",
   "lib/automation/actions/send-ai-message.ts": "o desfecho vira failed na execução da regra; registro do instante, sem retentativa",
   "lib/automation/actions/send-whatsapp.ts": "o desfecho vira failed na execução da regra; registro do instante, sem retentativa",
   "lib/campanhas/acoes.ts": "ação disparada da tela: o erro sobe para quem clicou, sem estado gravado",

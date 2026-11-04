@@ -40,7 +40,7 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ok, fail } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { loadAuthUser } from "@/lib/auth/server";
@@ -124,7 +124,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .select("id, organization_id")
     .eq("id", leadId)
     .maybeSingle();
-  if (leadErr) return fail("internal_error", leadErr.message, 500, { requestId });
+  if (leadErr) return falhaInterna("internal_error", leadErr, { requestId });
   if (!lead) return fail("not_found", t("Negócio não encontrado."), 404, { requestId });
   const orgId = (lead as { organization_id: string }).organization_id;
 
@@ -142,7 +142,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     // Ordem explícita: sem ela, a ordem da lista e o papel que vence na
     // deduplicação ficariam por conta da ordem física da tabela.
     .order("created_at", { ascending: true });
-  if (linksErr) return fail("internal_error", linksErr.message, 500, { requestId });
+  if (linksErr) return falhaInterna("internal_error", linksErr, { requestId });
 
   const linhasDeLink = (links ?? []) as unknown as { target_id: string; metadata: unknown }[];
   const alvos = [...new Set(linhasDeLink.map((l) => l.target_id))];
@@ -152,7 +152,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .from("contacts")
     .select("id, organization_id, name, display_name, is_merged_into, is_anonymized, phone_number")
     .in("id", alvos);
-  if (contatosErr) return fail("internal_error", contatosErr.message, 500, { requestId });
+  if (contatosErr) return falhaInterna("internal_error", contatosErr, { requestId });
 
   const porId = new Map<string, LinhaDeContato>();
   for (const c of (contatos ?? []) as unknown as LinhaDeContato[]) porId.set(c.id, c);
@@ -173,7 +173,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
       .from("contacts")
       .select("id, organization_id, name, display_name, is_merged_into, is_anonymized, phone_number")
       .in("id", ponteiros);
-    if (vencedoresErr) return fail("internal_error", vencedoresErr.message, 500, { requestId });
+    if (vencedoresErr) return falhaInterna("internal_error", vencedoresErr, { requestId });
     const novos = (vencedores ?? []) as unknown as LinhaDeContato[];
     if (novos.length === 0) break;
     for (const v of novos) porId.set(v.id, v);
@@ -313,7 +313,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const supabase = await createClient();
 
   const busca = await negocioDoCaller(supabase, leadId);
-  if (!busca.ok) return fail("internal_error", busca.message, 500, { requestId });
+  if (!busca.ok) return falhaInterna("internal_error", busca, { requestId });
   const lead = busca.lead;
   if (!lead) return fail("not_found", t("Negócio não encontrado."), 404, { requestId });
 
@@ -341,7 +341,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .select("id, organization_id")
     .eq("id", contactId)
     .maybeSingle();
-  if (contatoErr) return fail("internal_error", contatoErr.message, 500, { requestId });
+  if (contatoErr) return falhaInterna("internal_error", contatoErr, { requestId });
   if (
     !contato ||
     (contato as { organization_id: string }).organization_id !== lead.organization_id
@@ -368,7 +368,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     },
     { onConflict: "lead_id,target_kind,target_id,link_kind" },
   );
-  if (upsertErr) return fail("internal_error", upsertErr.message, 500, { requestId });
+  if (upsertErr) return falhaInterna("internal_error", upsertErr, { requestId });
 
   // O papel é texto livre: a trilha guarda só SE havia papel, nunca o texto.
   await audit({
@@ -409,7 +409,7 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
   const supabase = await createClient();
 
   const busca = await negocioDoCaller(supabase, leadId);
-  if (!busca.ok) return fail("internal_error", busca.message, 500, { requestId });
+  if (!busca.ok) return falhaInterna("internal_error", busca, { requestId });
   const lead = busca.lead;
   if (!lead) return fail("not_found", t("Negócio não encontrado."), 404, { requestId });
 
@@ -424,7 +424,7 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
     .eq("link_kind", VINCULO_DE_CONTATO)
     .eq("target_id", contactId)
     .select("target_id");
-  if (delErr) return fail("internal_error", delErr.message, 500, { requestId });
+  if (delErr) return falhaInterna("internal_error", delErr, { requestId });
 
   // DELETE de vínculo que não existe não é mutação: não audita, e a resposta
   // não afirma uma remoção que não houve.

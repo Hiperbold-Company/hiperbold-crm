@@ -85,8 +85,8 @@ test("sem a chave, nada da cobrança aparece e o que existia segue igual", async
 
     await page.goto("/admin/sistema");
     await expect(page.getByRole("switch", { name: "Banco de dados externo" })).toBeVisible();
-    // PR 3a: a chave saiu de MODULOS_AINDA_NAO_LIGAVEIS — o interruptor aparece para todo dono, DESLIGADO.
-    await expect(page.getByRole("switch", { name: "Cobrança dos seus clientes" })).toHaveAttribute("aria-checked", "false");
+    // Hiperbold: cobrança própria. A chave voltou para MODULOS_AINDA_NAO_LIGAVEIS: desligada, o interruptor não aparece.
+    await expect(page.getByRole("switch", { name: "Cobrança dos seus clientes" })).toHaveCount(0);
 
     // ── A empresa: Billing como antes, nenhuma faixa, recursos sem cobrança ─
     await page.goto("/app/settings/billing");

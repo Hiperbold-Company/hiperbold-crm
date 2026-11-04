@@ -49,6 +49,12 @@ export type ResultadoAuthAdmin = AuthAdminOk | { ok: false; response: Response }
 
 export const ESCOPO_DE_LEITURA = "mcp:read";
 export const ESCOPO_DE_ESCRITA = "mcp:write";
+/**
+ * Configuração da IA (agentes e roteadores): o upstream exige o escopo próprio `config:*` (PR #2194); a
+ * Hiperbold já emitiu tokens `mcp:*` para essas mesmas portas. Os dois valem — leitura nunca escreve.
+ */
+export const ESCOPOS_DE_LEITURA_DA_CONFIGURACAO = ["config:read", ESCOPO_DE_LEITURA] as const;
+export const ESCOPOS_DE_ESCRITA_DA_CONFIGURACAO = ["config:write", ESCOPO_DE_ESCRITA] as const;
 
 export interface OpcoesAuthAdmin {
   requestId: string;
@@ -64,17 +70,27 @@ export interface OpcoesAuthAdmin {
   tokenRole?: Role;
   /** Permissão por perfil, só no caminho de SESSÃO (ver `AuthDualOptions.permissao`). */
   permissao?: ChaveDePermissao;
+  /** Porta de CONFIGURAÇÃO da IA: aceita `config:*` além de `mcp:*` (ver `ESCOPOS_DE_*_DA_CONFIGURACAO`). */
+  configuracao?: boolean;
+  /** Balde do teto de escrita, quando difere de `resource` (ex.: `ai_agents_publish`). */
+  balde?: string;
 }
 
 export async function autorizarAdministracao(
   req: NextRequest,
-  { requestId, resource, role, escrita, comDono, tokenRole, permissao }: OpcoesAuthAdmin,
+  { requestId, resource, role, escrita, comDono, tokenRole, permissao, configuracao, balde }: OpcoesAuthAdmin,
 ): Promise<ResultadoAuthAdmin> {
   const authz = await resolveAuthDual(req, {
     requestId,
     resource,
     role,
-    scope: escrita ? ESCOPO_DE_ESCRITA : ESCOPO_DE_LEITURA,
+    scope: configuracao
+      ? escrita
+        ? ESCOPOS_DE_ESCRITA_DA_CONFIGURACAO
+        : ESCOPOS_DE_LEITURA_DA_CONFIGURACAO
+      : escrita
+        ? ESCOPO_DE_ESCRITA
+        : ESCOPO_DE_LEITURA,
     comDono,
     tokenRole,
     permissao,
@@ -94,7 +110,7 @@ export async function autorizarAdministracao(
   }
 
   if (escrita) {
-    const teto = await tetoDeEscritaDoToken(authz, resource, requestId);
+    const teto = await tetoDeEscritaDoToken(authz, balde ?? resource, requestId);
     if (teto) return { ok: false, response: teto };
   }
   return authz;

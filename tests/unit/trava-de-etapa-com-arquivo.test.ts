@@ -123,8 +123,10 @@ function bancoFalso(
     if (tabela === "crm_stages") {
       const chain = {
         select: () => chain,
-        eq: (_coluna: string, id: string) => {
-          (chain as { id?: string }).id = id;
+        // Só a coluna `id` decide a etapa: a rota também filtra `organization_id`
+        // (escrita pelo token usa o admin, sem RLS).
+        eq: (coluna: string, id: string) => {
+          if (coluna === "id") (chain as { id?: string }).id = id;
           return chain;
         },
         maybeSingle: async () => ({
@@ -161,6 +163,16 @@ function bancoFalso(
         },
       };
     }
+    if (tabela === "organizations") {
+      // Hiperbold: o interruptor "assumir ao mover" (lib/leads/assumir-ao-mover.ts),
+      // desligado aqui — o que se mede é a trava da etapa, não o dono.
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        maybeSingle: async () => ({ data: { settings: {} }, error: null }),
+      };
+      return chain;
+    }
     throw new Error(`tabela inesperada: ${tabela}`);
   };
 
@@ -190,7 +202,7 @@ beforeEach(() => {
   vi.mocked(requireRole).mockResolvedValue({
     ok: true,
     user: { id: USER_ID, idioma: "pt-BR" },
-    org: { orgId: ORG_ID },
+    org: { orgId: ORG_ID, role: "agent" },
   } as never);
   vi.mocked(createClient).mockResolvedValue(bancoFalso() as never);
 });

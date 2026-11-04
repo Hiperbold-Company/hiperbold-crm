@@ -1,3 +1,4 @@
+import { lerMultipartComTeto } from "@/lib/api/multipart-com-teto";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * POST /api/v1/conversations/[id]/notes/media — upload do ANEXO DA NOTA INTERNA
@@ -84,7 +85,13 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     return fail("payload_too_large", t("Arquivo acima de 50MB."), 413, { requestId });
   }
 
-  const form = await req.formData().catch(() => null);
+  // D-105: lê o corpo pelo fluxo com teto, como a rota irmã ../media/route.ts
+  // (o Content-Length acima não vem no envio em pedaços).
+  const leitura = await lerMultipartComTeto(req, MAX_MEDIA_BYTES);
+  if (!leitura.ok && leitura.motivo === "grande") {
+    return fail("payload_too_large", t("Arquivo acima de 50MB."), 413, { requestId });
+  }
+  const form = leitura.ok ? leitura.form : null;
   const file = form?.get("file");
   if (!(file instanceof File)) {
     return fail("validation_failed", t("Campo 'file' (multipart) obrigatório."), 422, { requestId });

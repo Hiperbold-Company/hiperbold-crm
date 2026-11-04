@@ -46,6 +46,8 @@ const adminClient = {
 };
 
 vi.mock("@/lib/channels/health", () => ({ listarConexoesCaidas: async () => [] }));
+// O layout lê as conexões caídas com o cliente da SESSÃO (upstream); a leitura está dublada acima.
+vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({}) }));
 // Um cliente novo a cada chamada: o modo de billing é cacheado por cliente, e o teste o troca.
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ from: adminClient.from }) }));
 vi.mock("@/lib/auth/server", () => ({
@@ -62,6 +64,7 @@ vi.mock("@/lib/auth/server", () => ({
   // D-092: quem tem fator precisa tê-lo provado; aqui a sessão está em aal2.
   sessionAal: async () => "aal2",
   requiresMfa: async () => false,
+  exigirProvaDeMfa: async () => undefined,
 }));
 vi.mock("@/lib/auth/vinculo-revogado", () => ({ acessoFoiRevogado: async () => false }));
 vi.mock("@/lib/navigation/interface", () => ({ homeDaInterface: () => "/app/inbox" }));

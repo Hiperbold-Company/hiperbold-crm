@@ -10,7 +10,7 @@ import { type NextRequest } from "next/server";
 
 import { moveLeadHandler } from "@/app/api/v1/leads/_handler";
 import { ApiError } from "@/lib/api/types";
-import { ok, fail } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import {
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     .eq("id", leadId)
     .eq("organization_id", orgId)
     .maybeSingle();
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
   if (!lead) return fail("not_found", t("Lead não encontrado."), 404, { requestId });
 
   const funil = lead.crm_pipelines as unknown as { settings: unknown } | null;
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       .eq("id", lead.contact_id)
       .eq("organization_id", orgId)
       .maybeSingle();
-    if (erroContato) return fail("internal_error", erroContato.message, 500, { requestId });
+    if (erroContato) return falhaInterna("internal_error", erroContato, { requestId });
     const motivo = motivoParaNaoLigar(contato);
     if (motivo === "bloqueado") return fail("forbidden", t("Contato bloqueou o atendimento."), 403, { requestId });
     if (motivo === "pessoal") return fail("forbidden", t("Contato marcado como pessoal."), 403, { requestId });
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         .eq("pipeline_id", lead.pipeline_id)
         .eq("slug", regra.etapa)
         .maybeSingle();
-      if (erroEtapa) return fail("internal_error", erroEtapa.message, 500, { requestId });
+      if (erroEtapa) return falhaInterna("internal_error", erroEtapa, { requestId });
       if (!etapa) {
         return fail("unprocessable_entity", `${t("Falta a etapa no funil:")} ${t(regra.rotulo)}`, 422, { requestId });
       }

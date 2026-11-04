@@ -17,6 +17,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { audit } from "@/lib/audit";
 import {
+  mensagemDasRegrasQuePerdemOCampo,
+  regrasDeDataQuePerdemOCampo,
+} from "@/lib/automation/campo-do-gatilho-de-data";
+import type { Idioma } from "@/lib/i18n/idiomas";
+import { diasDeRecorte } from "@/lib/kanban/recorte-de-encerrados";
+import { entradaDoInboxDeclarada, type EntradaDoInboxDeclarada } from "@/lib/leads/entrada-do-inbox";
+import {
   pipelineConfigPatchSchema,
   type PipelineConfigPatch,
 } from "@/lib/schemas/settings";
@@ -36,12 +43,32 @@ export interface ConfiguracaoDoFunil {
     won_reason_required: boolean;
     reabertura: "mesmo_registro" | "novo_negocio";
     reabertura_campos: string[] | null;
+    /** Só o `true` explícito liga (a régua do handler da comanda). */
+    comanda_no_ganho: boolean;
+    /** A etapa de entrada do Inbox (#3011), lida pela régua de `lib/leads/entrada-do-inbox.ts`. */
+    entrada_do_inbox: EntradaDoInboxDeclarada;
+    /** Recorte de encerrados (#2995). `0` = desligado, o mesmo valor que a gravação aceita para desligar. */
+    ocultar_encerrados_dias: number;
+    /** Os atalhos do card (#3487) como gravados; ausente = nenhum. A tela revalida cada um ao desenhar. */
+    atalhos: unknown[];
   };
+}
+
+/**
+ * O erro do Postgres numa falha de leitura ou gravação, para quem mostra a falha a uma pessoa
+ * passar por `respostaParaOperador` (#3747) em vez de exibir `error` (o texto cru) no toast.
+ */
+export interface ErroDoBancoNaConfiguracao {
+  etapa: "leitura" | "gravacao";
+  erro: { code?: string; message: string; details?: string | null; hint?: string | null };
 }
 
 export type ResultadoDaConfiguracao<T> =
   | { ok: true; dados: T }
-  | { ok: false; error: string; details?: unknown };
+  | { ok: false; error: string; details?: unknown; erroDoBanco?: ErroDoBancoNaConfiguracao };
+
+/** `details.regras_perdem_o_campo`: a recusa de #2791, com os nomes das regras. `error` já é a frase. */
+export const REGRAS_PERDEM_O_CAMPO = "regras_perdem_o_campo";
 
 type Linha = {
   id: string;
@@ -65,6 +92,10 @@ function paraConfiguracao(row: Linha): ConfiguracaoDoFunil {
       reabertura_campos: Array.isArray(settings.reabertura_campos)
         ? (settings.reabertura_campos as string[])
         : null,
+      comanda_no_ganho: settings.comanda_no_ganho === true,
+      entrada_do_inbox: entradaDoInboxDeclarada(settings),
+      ocultar_encerrados_dias: diasDeRecorte(settings) ?? 0,
+      atalhos: Array.isArray(settings.atalhos) ? settings.atalhos : [],
     },
   };
 }
@@ -118,6 +149,8 @@ export async function aplicarConfiguracaoDoFunil(
     editarCampos?: EdicaoDeCampos;
     /** Acrescentado ao `metadata` do audit (ex.: qual campo mudou). Nunca valor de dado de contato. */
     detalheDoAudit?: Record<string, unknown>;
+    /** Idioma da frase de recusa (#2791). Padrão `pt-BR`. */
+    idioma?: Idioma;
     autor: AutorDaConfiguracao;
     requestId?: string | null;
   },
@@ -144,7 +177,9 @@ export async function aplicarConfiguracaoDoFunil(
       .eq("id", pipelineId)
       .eq("organization_id", organizationId)
       .maybeSingle();
-    if (readErr) return { ok: false, error: readErr.message };
+    if (readErr) {
+      return { ok: false, error: readErr.message, erroDoBanco: { etapa: "leitura", erro: readErr } };
+    }
     if (!row) return { ok: false, error: "not_found" };
 
     const nextVocabulary = parsed.data.vocabulary
@@ -168,9 +203,48 @@ export async function aplicarConfiguracaoDoFunil(
     if (parsed.data.won_reason_required !== undefined) {
       nextSettings.won_reason_required = parsed.data.won_reason_required;
     }
+    if (parsed.data.comanda_no_ganho !== undefined) {
+      nextSettings.comanda_no_ganho = parsed.data.comanda_no_ganho;
+    }
     if (parsed.data.reabertura !== undefined) nextSettings.reabertura = parsed.data.reabertura;
     if (parsed.data.reabertura_campos !== undefined) {
       nextSettings.reabertura_campos = parsed.data.reabertura_campos;
+    }
+    // A entrada do Inbox (issue #3011): a ETAPA em que a conversa nova vira card neste funil.
+    // Grava o bloco inteiro, e não campo a campo, porque `ativa` e `stage_id` são uma decisão só.
+    if (parsed.data.entrada_do_inbox !== undefined) {
+      nextSettings.entrada_do_inbox = parsed.data.entrada_do_inbox;
+    }
+    // #2995 — o recorte de encerrados antigos do quadro. `0` é um valor com significado
+    // ("desliguei") e por isso a chave é gravada como veio.
+    if (parsed.data.ocultar_encerrados_dias !== undefined) {
+      nextSettings.ocultar_encerrados_dias = parsed.data.ocultar_encerrados_dias;
+    }
+    // OS ATALHOS DO CARD (#3487). Gravada como veio, inclusive a lista VAZIA: `[]` é o
+    // "apaguei todos". Quem barrou o `javascript:` foi o schema.
+    if (parsed.data.atalhos !== undefined) {
+      nextSettings.atalhos = parsed.data.atalhos;
+    }
+
+    // Campo que passa a ser do Contato e que uma regra ativa do gatilho por data lê (#2791):
+    // a regra seguiria ligada e pararia de disparar em silêncio. Confere a cada tentativa,
+    // sobre o `settings` lido nesta tentativa.
+    if (parsed.data.fields !== undefined || input.editarCampos) {
+      const perdem = await regrasDeDataQuePerdemOCampo(
+        supabase,
+        organizationId,
+        pipelineId,
+        currentSettings,
+        nextSettings,
+      );
+      if ("erro" in perdem) return { ok: false, error: perdem.erro };
+      if (perdem.nomes.length > 0) {
+        return {
+          ok: false,
+          error: mensagemDasRegrasQuePerdemOCampo(perdem.nomes, input.idioma ?? "pt-BR"),
+          details: { [REGRAS_PERDEM_O_CAMPO]: perdem.nomes },
+        };
+      }
     }
 
     let escrita = supabase
@@ -181,7 +255,7 @@ export async function aplicarConfiguracaoDoFunil(
     const versaoLida = (row as { updated_at?: string | null }).updated_at;
     if (versaoLida) escrita = escrita.eq("updated_at", versaoLida);
     const { data: gravadas, error } = await escrita.select("id");
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: error.message, erroDoBanco: { etapa: "gravacao", erro: error } };
     aplicou = (gravadas ?? []).length > 0;
   }
   if (!aplicou) return { ok: false, error: "conflict" };
@@ -201,6 +275,11 @@ export async function aplicarConfiguracaoDoFunil(
       won_reasons_count: parsed.data.won_reasons?.length ?? null,
       won_reason_required: parsed.data.won_reason_required ?? null,
       reabertura: parsed.data.reabertura ?? null,
+      entrada_do_inbox_ativa: parsed.data.entrada_do_inbox?.ativa ?? null,
+      // #2995: quantos cards o quadro deixa de mostrar é decisão de quem opera.
+      ocultar_encerrados_dias: parsed.data.ocultar_encerrados_dias ?? null,
+      // #3487: quantos atalhos. O CONTEÚDO não entra: o link montado carrega dado do cliente.
+      atalhos_count: parsed.data.atalhos?.length ?? null,
       ...(input.detalheDoAudit ?? {}),
     },
   });

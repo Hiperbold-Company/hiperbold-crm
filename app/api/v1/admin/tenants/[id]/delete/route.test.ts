@@ -74,6 +74,24 @@ describe("POST /admin/tenants/[id]/delete", () => {
     expect((await res.json()).error.code).toBe("exclusao_com_cobranca_pendente");
   });
 
+  // Hiperbold: no meio da régua de cobrança própria a rota recusa com 409 e a mensagem pronta para a tela.
+  it("régua de cobrança em curso: 409 exclusao_na_regua_de_cobranca com a mensagem", async () => {
+    const msg = "Esta empresa está na régua de cobrança; a exclusão só é liberada quando a régua termina.";
+    h.excluir.mockRejectedValue(new ExclusaoRecusada("exclusao_na_regua_de_cobranca", msg));
+    const res = await POST(pedido(), ctx);
+    expect(res.status).toBe(409);
+    const corpo = await res.json();
+    expect(corpo.error.code).toBe("exclusao_na_regua_de_cobranca");
+    expect(corpo.error.message).toBe(msg);
+  });
+
+  it("cobrança ilegível: 503 cobranca_ilegivel", async () => {
+    h.excluir.mockRejectedValue(new ExclusaoRecusada("cobranca_ilegivel", "Não foi possível conferir a cobrança."));
+    const res = await POST(pedido(), ctx);
+    expect(res.status).toBe(503);
+    expect((await res.json()).error.code).toBe("cobranca_ilegivel");
+  });
+
   it("interrompida depois do commit: 500 que NÃO diz 'nada foi apagado' e manda tentar de novo", async () => {
     h.excluir.mockRejectedValue(new ExclusaoInterrompida("exclusao_banco_sem_resposta: fetch failed"));
     const res = await POST(pedido(), ctx);

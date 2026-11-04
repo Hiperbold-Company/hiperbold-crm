@@ -8,7 +8,8 @@
  *
  * ─── Segurança ──────────────────────────────────────────────────────────────
  *  - Nenhum SQL é montado com texto do usuário. Tudo passa pelos operadores do
- *    PostgREST (`eq`, `ilike`, `contains`, `gte`, `lt`), que parametrizam o valor.
+ *    PostgREST (`eq`, `ilike`, `imatch`, `contains`, `gte`, `lt`), que parametrizam o valor.
+ *    A busca vira regex por `padraoRegexDeBusca` (ignora acento; `lib/contacts/busca-regex.ts`).
  *  - A chave de campo personalizado vira caminho JSON (`custom_fields->>chave`) e
  *    por isso é revalidada AQUI por `CHAVE_DE_CAMPO_FILTRAVEL`, mesmo já tendo
  *    passado pelo Zod: esta função é chamada também com objeto montado em código.
@@ -30,6 +31,8 @@ import { chaveSensivelDeCampo } from "@/lib/contacts/campos-sensiveis";
 import { hashCpf } from "@/lib/contacts/cpf";
 import { idsPorHashDeCpf } from "@/lib/contacts/cpf-do-contato";
 import { intervaloEmInstantes, periodoDoFiltro } from "@/lib/contacts/filtros";
+import { padraoRegexDeBusca } from "@/lib/contacts/busca-regex";
+import { buscaValeConsulta } from "@/lib/inbox/termo-de-busca";
 import { arrayDeUmValorParaOr } from "@/lib/inbox/marcador-da-conversa";
 import { CHAVE_DE_CAMPO_FILTRAVEL, type FiltrosDeContatos } from "@/lib/schemas/contacts";
 
@@ -45,6 +48,11 @@ export interface ContextoDaConsulta {
    * por isso que concordam entre si.
    */
   somenteOperaveis?: boolean;
+  /**
+   * Só este contato — o escopo do turno do agente (`crm_search_contacts`). Também tira da busca o
+   * nome da agenda do celular, que é rótulo interno da equipe.
+   */
+  soContato?: string;
 }
 
 /**
@@ -149,30 +157,37 @@ export async function consultaDeContatos(
     .from("contacts")
     .select(colunasComJuncoes(colunas, f), opcoes)
     .eq("organization_id", ctx.organizationId)
+    // O placeholder de GRUPO (`kind='whatsapp_group'`) não é uma pessoa da base: a lista, a
+    // contagem, o lote e a exportação concordam em operar só pessoa.
+    .eq("kind", "person")
     // A LÁPIDE DE FUSÃO NÃO É UM CONTATO VIVO — ver o histórico em
     // `app/api/v1/contacts/_handler.ts` (a lista foi a única superfície que não
     // filtrava). Lote e exportação herdam a mesma regra por passar por aqui.
     .is("is_merged_into", null);
   if (ctx.somenteOperaveis) query = query.eq("is_anonymized", false);
 
-  const busca = f.search?.trim();
-  if (busca) {
-    // ⚠️ `%` e `_` são curingas do LIKE, e `,`/`(`/`)` são delimitadores do DSL
-    // do `.or()` — um nome com vírgula ("Silva, Maria") injetaria uma condição
-    // extra na string do filtro. Mesmo escape de conversations/_handler.ts.
-    const s = busca
-      .replace(/[%_]/g, (m) => `\\${m}`)
-      .replace(/\*/g, "_") // `*` é curinga do PostgREST e não tem escape: ver `escaparLike`
-      .replace(/[,()]/g, " ");
-    const digits = busca.replace(/\D/g, "");
+  // Só este contato — o escopo do turno do agente (`crm_search_contacts`). Vai no WHERE, antes do limite.
+  if (ctx.soContato) query = query.eq("id", ctx.soContato);
+
+  // ─── A busca do upstream (#1835, F2): regex, não LIKE ───────────────────────
+  // O termo passa pela régua única de `lib/inbox/termo-de-busca.ts` e vira regex
+  // (`padraoRegexDeBusca`): "Joao" acha "João" e vice-versa (o banco não tem
+  // `unaccent`), espaço/vírgula viram curinga, `%`/`_` digitados ficam literais.
+  // Os PARÊNTESES saem antes: são delimitador do DSL do `.or()` do PostgREST.
+  const termoDeTexto = f.search ? f.search.replace(/[()]/g, " ") : undefined;
+  if (f.search && termoDeTexto !== undefined && termoDeTexto.trim()) {
+    const s = padraoRegexDeBusca(termoDeTexto);
+    const digits = f.search.replace(/\D/g, "");
     const orParts = [
-      `name.ilike.%${s}%`,
+      `name.imatch.${s}`,
       // `display_name` é a coluna que a tela MOSTRA, e a ÚNICA preenchida em
       // metade da base (contato que entra pelo WhatsApp nasce só com o pushName).
-      // Buscar sem ela devolve zero para quem existe.
-      `display_name.ilike.%${s}%`,
-      `email.ilike.%${s}%`,
-      `phone_number.ilike.%${s}%`,
+      `display_name.imatch.${s}`,
+      // O nome da agenda do celular (#2439) é SÓ DA EQUIPE: na busca do agente
+      // (`soContato`) casar nele vazaria o rótulo interno ao cliente aos pedaços.
+      ...(ctx.soContato ? [] : [`address_book_name.imatch.${s}`]),
+      `email.imatch.${s}`,
+      `phone_number.imatch.${s}`,
     ];
     if (digits.length >= 8) {
       // 10/11 dígitos sem DDI: no Brasil é DDD+local. Sem o 55, `3284793302`
@@ -181,13 +196,32 @@ export async function consultaDeContatos(
         !digits.startsWith("55") && (digits.length === 10 || digits.length === 11)
           ? `55${digits}`
           : digits;
+      const criteriosDeTelefone = [`phone_number.imatch.${s}`];
       for (const v of phoneLookupVariants(base)) {
         const d = v.replace(/\D/g, "");
-        if (d && d !== digits) orParts.push(`phone_number.ilike.%${d}%`);
+        if (d && d !== digits) {
+          orParts.push(`phone_number.ilike.%${d}%`);
+          criteriosDeTelefone.push(`phone_number.ilike.%${d}%`);
+        }
+      }
+      // Ficha cujo TELEFONE EXTRA (`contact_phones`) casa o termo também entra. Só
+      // quando o termo tem cara de telefone: texto com letras e dígitos não é busca
+      // de número, e uma consulta a mais por termo hostil é o que a cerca conta.
+      if (/^[\d\s()+.-]+$/.test(f.search.trim())) {
+        const { data: extras } = await supabase
+          .from("contact_phones")
+          .select("contact_id")
+          .eq("organization_id", ctx.organizationId)
+          .or(criteriosDeTelefone.join(","));
+        const idsDeExtras = [
+          ...new Set(((extras ?? []) as { contact_id: string }[]).map((r) => r.contact_id)),
+        ];
+        if (idsDeExtras.length > 0) orParts.push(`id.in.(${idsDeExtras.join(",")})`);
       }
     }
     if (digits.length === 11) {
-      // A consulta do usuário não enxerga `cpf_hash`: o contato do CPF é achado pelo servidor e entra na busca por id.
+      // A consulta do usuário não enxerga `cpf_hash` (D-216): o contato do CPF é achado pelo
+      // servidor e entra na busca por id.
       const hash = hashCpf(digits);
       if (hash) {
         const achados = await idsPorHashDeCpf(ctx.organizationId, hash);
@@ -256,12 +290,23 @@ export async function consultaDeContatos(
   return { query };
 }
 
+/**
+ * A busca abaixo do piso (#1835: menos de dois caracteres úteis) não vai ao banco — a lista responde
+ * vazio. Contagem, lote e exportação seguem a mesma régua, senão "selecionar todos os N" com `a`
+ * digitado alcançaria a base inteira que a lista não mostrou.
+ */
+export function buscaAbaixoDoPiso(f: Pick<FiltrosDeContatos, "search">): boolean {
+  if (f.search === undefined) return false;
+  return !buscaValeConsulta(f.search.replace(/[()]/g, " "));
+}
+
 /** Quantos contatos o filtro alcança (a conta do "Selecionar todos os N"). */
 export async function contarContatos(
   supabase: SupabaseClient,
   f: FiltrosDeContatos,
   ctx: ContextoDaConsulta,
 ): Promise<number> {
+  if (buscaAbaixoDoPiso(f)) return 0;
   const { query } = await consultaDeContatos(supabase, "id", f, ctx, { count: "exact", head: true });
   const { count, error } = await query;
   if (error) throw new ApiError(500, "internal_error", undefined, ctx.requestId, error.message);
@@ -280,6 +325,7 @@ export async function idsDoFiltro(
   ctx: ContextoDaConsulta,
   teto: number,
 ): Promise<{ ids: string[]; excedeu: boolean }> {
+  if (buscaAbaixoDoPiso(f)) return { ids: [], excedeu: false };
   const ids: string[] = [];
   for (let de = 0; ids.length <= teto; de += TAMANHO_DA_PAGINA) {
     const { query } = await consultaDeContatos(supabase, "id", f, ctx);

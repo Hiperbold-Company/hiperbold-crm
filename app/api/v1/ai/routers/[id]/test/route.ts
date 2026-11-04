@@ -30,6 +30,7 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { resolveAuthDual, tetoDeEscritaDoToken } from "@/lib/api/auth-dual";
+import { ESCOPOS_DE_ESCRITA_DA_CONFIGURACAO } from "@/lib/api/auth-dual-admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSkillsPool } from "@/lib/ai/skills/db";
@@ -67,7 +68,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     resource: "ai_routers",
     role: "manager",
     // A prévia persiste custo em llm_calls e pode registrar a execução do Jev.
-    scope: "config:write",
+    // `config:write` (upstream) OU `mcp:write` (tokens Hiperbold já emitidos).
+    scope: ESCOPOS_DE_ESCRITA_DA_CONFIGURACAO,
     tokenRole: "admin",
   });
   if (!authz.ok) return authz.response;

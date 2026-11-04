@@ -52,6 +52,14 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/auth/server", () => ({ loadAuthUser: async () => ({ idioma: "pt-BR" }) }));
 vi.mock("@/lib/auth/require-role", () => ({
   orgAtivaDaApi: async () => ({ ok: true, org: { orgId: "org-1" } }),
+  // A rota passa pelo gate único de leitura (D-092, fork Hiperbold): sem sessão, 401.
+  requireRole: async () =>
+    estado.usuario
+      ? { ok: true, user: { id: estado.usuario.id, idioma: "pt-BR" }, org: { orgId: "org-1", role: "viewer" } }
+      : {
+          ok: false,
+          response: Response.json({ error: { code: "unauthorized", message: "x" } }, { status: 401 }),
+        },
 }));
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({
   checkRateLimit: async (balde: string): Promise<RateLimitResult> => {

@@ -28,6 +28,7 @@ import {
 } from "@/lib/retencao/exclusao-de-organizacao/datas";
 import { excluirOrganizacao } from "@/lib/retencao/exclusao-de-organizacao/rodada";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { reguaDaCobrancaPermiteExcluir } from "@/lib/tenants/regua-de-cobranca";
 
 const MENSAGEM_MFA = "Confirme a verificação em duas etapas.";
 const MENSAGEM_DADOS_INVALIDOS = "Dados inválidos.";
@@ -211,6 +212,10 @@ export async function programarExclusao(input: {
   }
 
   const admin = createAdminClient();
+  // Hiperbold: programar à mão uma data dentro da régua de cobrança encurtaria a régua; recusa como "Excluir
+  // agora". Leitura que falha recusa (lib/tenants/regua-de-cobranca.ts).
+  const regua = await reguaDaCobrancaPermiteExcluir(admin, parsed.data.organizationId);
+  if (!regua.liberada) return { ok: false, error: regua.mensagem };
   const { error } = await admin.rpc("fn_exclusao_programar" as never, {
     p_org: parsed.data.organizationId,
     p_quando: quando.toISOString(),
@@ -319,6 +324,11 @@ export async function excluirAgora(input: {
     // O nome EXATO, sem aparar e sem ignorar maiúsculas: quem digita precisa estar olhando para o nome.
     return { ok: false, error: "O nome digitado não confere com o da organização." };
   }
+
+  // Hiperbold: no meio da régua de cobrança (contrato atrasada ou suspensa) a exclusão manual é recusada; quem
+  // exclui no fim da régua é a rodada programada. Leitura que falha recusa (lib/tenants/regua-de-cobranca.ts).
+  const regua = await reguaDaCobrancaPermiteExcluir(admin, parsed.data.organizationId);
+  if (!regua.liberada) return { ok: false, error: regua.mensagem };
 
   const { requestId, ip, userAgent } = await contextoDaRequisicao();
   // Antes: a exclusão apaga a organização, e a linha de quem pediu precisa existir. A auditoria final

@@ -200,13 +200,16 @@ export function SeletorDeCampo({
   };
   const negocio = Object.entries(CAMPOS_PADRAO_DO_NEGOCIO)
     .filter(([k]) => !paraEscrita || !CAMPOS_SO_LEITURA.lead.has(k))
-    .map(([k, r]) => ({ valor: `lead:${k}`, rotulo: t(r) }));
+    .map(([k]) => ({
+      valor: `lead:${k}`,
+      rotulo: t(CAMPOS_PADRAO_DO_NEGOCIO[k as keyof typeof CAMPOS_PADRAO_DO_NEGOCIO]),
+    }));
   const contato = Object.entries(CAMPOS_PADRAO_DO_CONTATO)
     .filter(([k]) => !paraEscrita || !CAMPOS_SO_LEITURA.contact.has(k))
-    .map(([k, r]) => ({
-    valor: `contact:${k}`,
-    rotulo: t(r),
-  }));
+    .map(([k]) => ({
+      valor: `contact:${k}`,
+      rotulo: t(CAMPOS_PADRAO_DO_CONTATO[k as keyof typeof CAMPOS_PADRAO_DO_CONTATO]),
+    }));
   const custom = personalizados.map((c) => ({ valor: `lead_custom:${c.key}`, rotulo: c.label }));
   const variaveis = paraEscrita
     ? []

@@ -244,16 +244,19 @@ describe("requireRole — helper único (spec 13 §4)", () => {
     it("⭐ com organizationId explícito, support_readonly NÃO age em empresa da qual não é membro", async () => {
       const OUTRA = "33333333-3333-4333-8333-333333333333";
       session("viewer", { platformAdmin: true, scope: "support_readonly", dbRole: null });
-      const res = await requireRole("admin", { allowPlatformAdmin: true, organizationId: OUTRA });
+      // Sem membership o status da empresa é desconhecido e falha fechado (upstream);
+      // o único chamador (LGPD) passa `permiteOrgSuspensa`, e é assim que se mede o escopo.
+      const res = await requireRole("admin", { allowPlatformAdmin: true, organizationId: OUTRA, permiteOrgSuspensa: true });
       expect(res.ok).toBe(false);
       if (res.ok) throw new Error("unreachable");
-      expect((await res.response.json()).error.code).toBe("forbidden_tenant");
+      // Upstream: sem membership ele entra como `viewer` da empresa e cai no rank.
+      expect((await res.response.json()).error.code).toBe("forbidden_role");
     });
 
     it("com organizationId explícito, o full em dia segue alcançando a empresa (controle positivo)", async () => {
       const OUTRA = "33333333-3333-4333-8333-333333333333";
       session("viewer", { platformAdmin: true, scope: "full", dbRole: null });
-      const res = await requireRole("admin", { allowPlatformAdmin: true, organizationId: OUTRA });
+      const res = await requireRole("admin", { allowPlatformAdmin: true, organizationId: OUTRA, permiteOrgSuspensa: true });
       expect(res.ok).toBe(true);
       if (!res.ok) throw new Error("unreachable");
       expect(res.org.orgId).toBe(OUTRA);

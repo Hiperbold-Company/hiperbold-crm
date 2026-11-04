@@ -33,8 +33,7 @@ import type * as Channels from "@/lib/channels";
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
-vi.mock("@/lib/auth/server", () => ({ loadAuthUser: vi.fn() }));
-vi.mock("@/lib/auth/require-role", () => ({ orgAtivaDaApi: vi.fn() }));
+vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({ checkRateLimit: vi.fn() }));
 vi.mock("@/lib/messaging/media/voice-transcode", () => ({
   ConversorOcupado: class extends Error {},
@@ -52,8 +51,7 @@ vi.mock("@/lib/channels", async () => {
 });
 
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
-import { orgAtivaDaApi } from "@/lib/auth/require-role";
-import { loadAuthUser } from "@/lib/auth/server";
+import { requireRole } from "@/lib/auth/require-role";
 import { DEFAULT_CHANNEL_PROVIDER, getAdapter } from "@/lib/channels";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -153,9 +151,11 @@ beforeEach(() => {
     auth: { getUser: async () => ({ data: { user: { id: USER_ID } }, error: null }) },
     from: () => consultaDeMensagens(),
   } as never);
-  vi.mocked(loadAuthUser).mockResolvedValue({ id: USER_ID, idioma: "pt-BR" } as never);
-  vi.mocked(orgAtivaDaApi).mockResolvedValue({
+  // D-092: a rota lê pelo portão único (`requireRole("viewer")`), que já
+  // devolve o usuário e a organização ativa da sessão.
+  vi.mocked(requireRole).mockResolvedValue({
     ok: true,
+    user: { id: USER_ID, idioma: "pt-BR" },
     org: { orgId: ORG_ID, name: "Org", role: "agent" },
   } as never);
   vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, limit: 30, count: 1 } as never);
@@ -195,7 +195,9 @@ describe("?baixar=1 sem nome original", () => {
     const res = await GET(new NextRequest(url("?baixar=1")), PARAMS);
 
     expect(res.status).toBe(302);
-    expect(ASSINATURAS[0]?.opcoes).toBeUndefined();
+    // D-095 (Hiperbold): tipo que o navegador pode executar (planilha, PDF) sai
+    // como `attachment` — `download: true`, SEM nome: nenhum nome é inventado.
+    expect(ASSINATURAS[0]?.opcoes).toEqual({ download: true });
   });
 
   it("metadata sem a chave (anexo antigo) também não vira nome", async () => {
@@ -203,7 +205,9 @@ describe("?baixar=1 sem nome original", () => {
 
     await GET(new NextRequest(url("?baixar=1")), PARAMS);
 
-    expect(ASSINATURAS[0]?.opcoes).toBeUndefined();
+    // D-095 (Hiperbold): tipo que o navegador pode executar (planilha, PDF) sai
+    // como `attachment` — `download: true`, SEM nome: nenhum nome é inventado.
+    expect(ASSINATURAS[0]?.opcoes).toEqual({ download: true });
   });
 });
 
@@ -214,7 +218,9 @@ describe("sem ?baixar=1", () => {
     const res = await GET(new NextRequest(url()), PARAMS);
 
     expect(res.status).toBe(302);
-    expect(ASSINATURAS[0]?.opcoes).toBeUndefined();
+    // D-095 (Hiperbold): sem `?baixar=1` o nome original não entra; o tipo que
+    // não é imagem/áudio/vídeo continua `attachment` sem nome.
+    expect(ASSINATURAS[0]?.opcoes).toEqual({ download: true });
   });
 });
 
@@ -253,7 +259,8 @@ describe("janela do worker (bytes ainda no canal)", () => {
     const res = await GET(new NextRequest(url("?baixar=1")), PARAMS);
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-disposition")).toBeNull();
+    // D-095 (Hiperbold): `attachment` puro, sem `filename` inventado.
+    expect(res.headers.get("content-disposition")).toBe("attachment");
   });
 });
 
@@ -294,13 +301,15 @@ describe("o nome atravessa o SDK instalado sem codificação duplicada", () => {
     usarSdkReal({ media_filename: "Relatório sintético.xlsx" });
     const res = await GET(new NextRequest(url()), PARAMS);
     const destino = new URL(res.headers.get("location")!);
-    expect(destino.searchParams.has("download")).toBe(false);
+    // D-095 (Hiperbold): planilha sai como download, mas sem o nome do preview.
+    expect(destino.searchParams.get("download")).toBe("");
     expect(destino.searchParams.get("token")).toBe(token);
   });
 
   it("download sem nome continua sem nome inventado", async () => {
     usarSdkReal(null);
     const res = await GET(new NextRequest(url("?baixar=1")), PARAMS);
-    expect(new URL(res.headers.get("location")!).searchParams.has("download")).toBe(false);
+    // D-095 (Hiperbold): `download` vazio, nunca um nome inventado.
+    expect(new URL(res.headers.get("location")!).searchParams.get("download")).toBe("");
   });
 });

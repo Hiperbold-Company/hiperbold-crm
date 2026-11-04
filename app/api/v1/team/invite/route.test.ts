@@ -18,6 +18,8 @@ vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async (
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: h.role }));
 vi.mock("@/lib/audit", () => ({ isServiceRoleConfigured: () => true, audit: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => h.admin }));
+// A porta da equipe (`lib/team/porta.ts`, sessão OU token) leva o cliente da sessão ao núcleo.
+vi.mock("@/lib/supabase/server", () => ({ createClient: async () => h.admin }));
 vi.mock("@/lib/team/convites", () => ({ emitirConvite: h.emitir }));
 vi.mock("@/lib/auth/issue-invite", () => ({ issueInvite: vi.fn() }));
 vi.mock("@/lib/logger", () => ({ logger: { warn: h.warn, info: vi.fn(), error: vi.fn() } }));
@@ -35,6 +37,8 @@ function adminCom(o: {
     select: () => cadeia,
     eq: () => cadeia,
     is: async () => ({ data: o.membros, error: null }),
+    // O nome da organização no e-mail do convite (`nomeDaOrganizacao`).
+    maybeSingle: async () => ({ data: { display_name: "Empresa" }, error: null }),
   };
   return {
     from: () => cadeia,
@@ -65,7 +69,7 @@ beforeEach(() => {
   h.role.mockResolvedValue({
     ok: true,
     user: { id: "admin", email: "admin@x.test", full_name: "Admin", idioma: "pt-BR" },
-    org: { orgId: ORG, name: "Empresa" },
+    org: { orgId: ORG, name: "Empresa", role: "admin" },
   });
   h.emitir.mockResolvedValue({
     convite: { id: "conv-1", expires_at: "2026-10-01T00:00:00Z" },

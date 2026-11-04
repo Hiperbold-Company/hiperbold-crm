@@ -46,6 +46,11 @@ describe("randomId — UUID v4 dentro E fora de secure context", () => {
     "lib/followup/nome-da-copia.ts":
       "nomeDaCopia só é chamado em app/api/v1/ai/followup-flows/[id]/duplicate",
     "lib/schemas/_validate.ts": "validação de body das rotas de app/api",
+    "app/actions/admin/carteiraDeTokens.ts":
+      "server action (\"use server\"); só o comentário cita o randomUUID que o formulário chama no cliente",
+    "lib/api/porta-admin.ts": "porta REST de administração, só importada por rotas de app/api",
+    "lib/followup/porta.ts": "porta REST dos fluxos de follow-up, só importada por rotas de app/api",
+    "lib/team/porta.ts": "porta REST da equipe, só importada por rotas de app/api",
   };
 
   it("nenhum arquivo que chega ao navegador usa crypto.randomUUID cru", () => {

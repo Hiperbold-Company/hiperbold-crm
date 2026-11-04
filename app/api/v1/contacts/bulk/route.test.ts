@@ -176,6 +176,13 @@ function clienteFalso(estado: Estado) {
 /** Mutável por teste, lido de dentro do mock (hoisted: nasce antes dos imports). */
 const auth = vi.hoisted(() => ({ negar: false }));
 
+// Hiperbold (D-216): "este contato tem CPF?" é perguntado pelo cliente de SERVIÇO
+// (`lib/contacts/cpf-do-contato.ts`), fora do dublê de banco deste arquivo. Ninguém aqui tem CPF.
+vi.mock("@/lib/contacts/cpf-do-contato", async (original) => ({
+  ...(await original<typeof import("@/lib/contacts/cpf-do-contato")>()),
+  idsComCpf: async () => ({ ids: new Set<string>(), error: null }),
+  idsPorHashDeCpf: async () => ({ ids: [], error: null }),
+}));
 vi.mock("@/lib/auth/require-role", () => ({
   requireRole: vi.fn(() =>
     auth.negar

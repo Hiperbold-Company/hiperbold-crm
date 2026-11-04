@@ -56,7 +56,10 @@ vi.mock("@/lib/supabase/admin", () => ({
         conversations: mocks.conversas,
       };
       c.then = (r: (v: unknown) => unknown) =>
-        Promise.resolve(ehCarimbo ? { data: null, error: null } : { data: lista[tabela] ?? null, error: null }).then(r);
+        Promise.resolve(
+          // A reserva do degrau (D-115) é compare-and-swap: gravou uma linha = reservou.
+          ehCarimbo ? { data: [{ id: "reservado" }], error: null } : { data: lista[tabela] ?? null, error: null },
+        ).then(r);
       return c;
     },
   }),

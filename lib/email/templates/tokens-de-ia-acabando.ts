@@ -54,14 +54,18 @@ export function buildTokensDeIaAcabandoEmail(opts: TokensDeIaAcabandoEmailOption
       : "Seus tokens de IA estão acabando",
     idioma,
   );
-  const chaveDoTexto = soAvisa
-    ? esgotou
-      ? "A {empresa} já usou 100% dos tokens de IA do mês. Para manter o uso dentro do plano, compre um pacote extra."
-      : "A {empresa} já usou 80% dos tokens de IA do mês. Para manter o uso dentro do plano, compre um pacote extra."
-    : esgotou
-      ? "A {empresa} já usou 100% dos tokens de IA do mês. A IA parou de responder e volta em {data} ou assim que um pacote extra for comprado."
-      : "A {empresa} já usou 80% dos tokens de IA do mês. Ao chegar a 100%, a IA para de responder até {data} ou até a compra de um pacote extra.";
-  const texto = preencher(traduzir(chaveDoTexto, idioma), { empresa: opts.empresa, data });
+  // O ternário vai inteiro para dentro de traduzir(): cada ramo é literal e a cerca de i18n cobra o espanhol de cada um.
+  const textoTraduzido = traduzir(
+    soAvisa
+      ? esgotou
+        ? "A {empresa} já usou 100% dos tokens de IA do mês. Para manter o uso dentro do plano, compre um pacote extra."
+        : "A {empresa} já usou 80% dos tokens de IA do mês. Para manter o uso dentro do plano, compre um pacote extra."
+      : esgotou
+        ? "A {empresa} já usou 100% dos tokens de IA do mês. A IA parou de responder e volta em {data} ou assim que um pacote extra for comprado."
+        : "A {empresa} já usou 80% dos tokens de IA do mês. Ao chegar a 100%, a IA para de responder até {data} ou até a compra de um pacote extra.",
+    idioma,
+  );
+  const texto = preencher(textoTraduzido, { empresa: opts.empresa, data });
 
   // A barra mostra o limiar que cruzou (80 ou 100), o mesmo que o texto diz. O uso do momento em que o aviso
   // foi enfileirado aparece em "usados de total"; a razão dos dois pode divergir por pouco (um pacote comprado

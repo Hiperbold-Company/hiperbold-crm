@@ -16,6 +16,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useActiveOrg: () => ({ orgId: "org-1", currency: "BRL" }),
   useAuth: () => ({ activeOrg: { orgId: "org-1", role: "agent" } }),
+  // `agent` registra itens do negócio (`lead.items.edit` → negocios.registrar).
+  usePermission: () => true,
 }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 const api = vi.hoisted(() => ({
@@ -48,7 +50,8 @@ describe("o + do editor de etiquetas dentro do formulario do negocio (#3021)", (
     montar(<EditLeadDialog open onOpenChange={onOpenChange} lead={LEAD} pipelineId="p-1" />);
     const u = userEvent.setup();
     await u.type(screen.getByLabelText("Adicionar tag ao negócio"), "vip");
-    await u.click(screen.getByRole("button", { name: "Adicionar tag" }));
+    // Hiperbold: o "+" do editor é o "Criar etiqueta" do `SeletorDeEtiquetas`.
+    await u.click(await screen.findByRole("button", { name: /Criar etiqueta/ }));
     await waitFor(() => expect(api.patch).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 100));
     expect(corpos()).toEqual([{ tags: ["vip"] }]);
@@ -60,7 +63,8 @@ describe("o + do editor de etiquetas dentro do formulario do negocio (#3021)", (
     montar(<LeadFieldsForm lead={LEAD} pipelineId="p-1" onSaved={onSaved} />);
     const u = userEvent.setup();
     await u.type(screen.getByLabelText("Adicionar tag ao negócio"), "vip");
-    await u.click(screen.getByRole("button", { name: "Adicionar tag" }));
+    // Hiperbold: o "+" do editor é o "Criar etiqueta" do `SeletorDeEtiquetas`.
+    await u.click(await screen.findByRole("button", { name: /Criar etiqueta/ }));
     await waitFor(() => expect(api.patch).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 100));
     expect(corpos()).toEqual([{ tags: ["vip"] }]);

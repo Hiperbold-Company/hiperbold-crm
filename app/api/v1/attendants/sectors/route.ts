@@ -16,7 +16,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
 import { seSetoresDesligado } from "@/lib/atendimento/setores-modulo";
@@ -56,9 +56,9 @@ export async function GET(_req: NextRequest): Promise<Response> {
     admin.from("user_organizations").select("user_id, role")
       .eq("organization_id", orgId).is("revoked_at", null),
   ]);
-  if (sectors.error) return fail("internal_error", sectors.error.message, 500, { requestId });
-  if (members.error) return fail("internal_error", members.error.message, 500, { requestId });
-  if (active.error) return fail("internal_error", active.error.message, 500, { requestId });
+  if (sectors.error) return falhaInterna("internal_error", sectors.error, { requestId });
+  if (members.error) return falhaInterna("internal_error", members.error, { requestId });
+  if (active.error) return falhaInterna("internal_error", active.error, { requestId });
 
   const activeUserIds = new Set(
     ((active.data ?? []) as Array<{ user_id: string; role: Role }>)
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (error.code === "23505") {
       return fail("sector_name_taken", t("Já existe um setor com este nome."), 409, { requestId });
     }
-    return fail("internal_error", error.message, 500, { requestId });
+    return falhaInterna("internal_error", error, { requestId });
   }
 
   void audit({

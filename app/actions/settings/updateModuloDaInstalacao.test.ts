@@ -99,12 +99,15 @@ describe("updateModuloDaInstalacao", () => {
 });
 
 describe("a chave da cobrança", () => {
-  it("ligar grava a chave e não libera nada (a liberação é só do desligar)", async () => {
-    expect(await updateModuloDaInstalacao({ modulo: "cobranca", ligado: true })).toEqual({ ok: true });
-    expect(deps.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ chave: "MODULO_COBRANCA", valor: "ligado" }),
-      expect.anything(),
-    );
+  // Hiperbold: cobrança própria. O módulo `cobranca` do upstream está em
+  // MODULOS_AINDA_NAO_LIGAVEIS (lib/instalacao/modulos.ts): ligar é recusado e
+  // nada é gravado. Desligar (casos abaixo) continua valendo.
+  it("ligar é recusado: nada é gravado nem liberado", async () => {
+    expect(await updateModuloDaInstalacao({ modulo: "cobranca", ligado: true })).toEqual({
+      ok: false,
+      error: "modulo_ainda_nao_disponivel",
+    });
+    expect(deps.upsert).not.toHaveBeenCalled();
     expect(deps.rpc).not.toHaveBeenCalled();
   });
 

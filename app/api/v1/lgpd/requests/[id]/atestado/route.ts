@@ -25,7 +25,7 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { BUCKET_DO_ATESTADO } from "@/lib/lgpd/emitir-atestado";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -69,7 +69,7 @@ export async function GET(
     .eq("id", id)
     .maybeSingle();
 
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
   if (!pedido) return fail("not_found", "Solicitação não encontrada.", 404, { requestId });
 
   const resultado =
@@ -94,9 +94,7 @@ export async function GET(
     .createSignedUrl(atestado.path, EXPIRA_EM_SEGUNDOS);
 
   if (errAssinatura || !assinada?.signedUrl) {
-    return fail("internal_error", errAssinatura?.message ?? "não foi possível assinar a URL", 500, {
-      requestId,
-    });
+    return falhaInterna("internal_error", errAssinatura ?? "não foi possível assinar a URL", { requestId });
   }
 
   return ok(

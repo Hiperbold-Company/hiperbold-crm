@@ -75,6 +75,7 @@ import {
   type InventarioDeCanais,
 } from "@/lib/channels/desligar-da-organizacao";
 import { sincronizar } from "@/lib/cobranca/sincronizar";
+import { reguaDaCobrancaPermiteExcluir } from "@/lib/tenants/regua-de-cobranca";
 import { logger } from "@/lib/logger";
 import { NuvemshopApiClient } from "@/lib/nuvemshop/api-client";
 import { desligarSessaoDeVozNoTransporte } from "@/lib/voice/desparear";
@@ -101,6 +102,8 @@ export class ExclusaoRecusada extends Error {
       | "state_conflict"
       | "exclusao_com_cobranca_pendente"
       | "exclusao_com_assinatura_viva"
+      | "exclusao_na_regua_de_cobranca"
+      | "cobranca_ilegivel"
       | "provedor_indisponivel"
       | "confirmacao_divergente"
       | "motivo_curto",
@@ -354,6 +357,12 @@ export async function excluirOrganizacao(
       "A confirmação não confere com o identificador da organização.",
     );
   }
+
+  // Hiperbold: a régua de cobrança própria (`billing_contracts`). Contrato `atrasada` ou `suspensa` está no
+  // meio da régua, e quem exclui no fim dela é a rodada programada, não o admin. Leitura que falha recusa.
+  // Ver `lib/tenants/regua-de-cobranca.ts`.
+  const regua = await reguaDaCobrancaPermiteExcluir(admin, entrada.orgId);
+  if (!regua.liberada) throw new ExclusaoRecusada(regua.codigo, regua.mensagem);
 
   // 0. RELER O PROVEDOR ANTES DA RPC — a trava da migration 0601 lê a linha de
   //    `cobranca_assinaturas` (o que a última releitura gravou), e sem esta

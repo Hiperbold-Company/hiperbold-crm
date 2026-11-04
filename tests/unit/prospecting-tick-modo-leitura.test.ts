@@ -38,7 +38,11 @@ vi.mock("@/lib/ai/elegibilidade/autorizacao", () => ({ autorizarContatoParaIA: m
 vi.mock("@/lib/ai/elegibilidade/consulta-pre-go-live", () => ({
   decidirPreGoLiveDoCanalViaSupabase: mocks.preflight,
 }));
-vi.mock("@/lib/prospecting/guard", () => ({ assertProspectingDelivery: mocks.guard }));
+// Upstream: as bolhas seguintes passam pela conferência leve (`assertProspectingContinuation`).
+vi.mock("@/lib/prospecting/guard", () => ({
+  assertProspectingDelivery: mocks.guard,
+  assertProspectingContinuation: mocks.guard,
+}));
 vi.mock("@/lib/agent-engine/pacing/store", () => ({
   loadChannelKnobs: mocks.knobs,
   loadPacingState: vi.fn().mockResolvedValue({ sentToday: 0 }),
@@ -46,8 +50,11 @@ vi.mock("@/lib/agent-engine/pacing/store", () => ({
 }));
 vi.mock("@/lib/agent-engine/pacing/engine", () => ({
   janelaDeEnvioAberta: mocks.open,
+  // Upstream: a prospecção lê o portão próprio (dias + horas, 0642).
+  janelaDeProspeccaoAberta: mocks.open,
   decidePacing: () => ({ allow: true, waitMs: 0 }),
   proximaAberturaDaJanela: () => new Date(Date.now() + 3600000),
+  proximaAberturaDaProspeccao: () => new Date(Date.now() + 3600000),
   warmupCapFor: (_idade: number, degraus: Array<{ minAgeDays: number; cap: number | null }>) => {
     let cap: number | null = degraus[0]?.cap ?? null;
     for (const d of degraus) if (_idade >= d.minAgeDays) cap = d.cap;
@@ -87,7 +94,8 @@ function dbQueryImpl(sql: string) {
   if (sql.startsWith("select * from prospecting_candidates where organization_id=$1 and campaign_id=$2"))
     return { rows: [candidate] };
   if (sql.startsWith("select locale from organizations")) return { rows: [{ locale: null }] };
-  if (sql.startsWith("select published_version_id"))
+  // Upstream: o agente vem com o estilo da versão publicada (`select a.published_version_id,...`).
+  if (/^select (a\.)?published_version_id/.test(sql))
     return { rows: [{ published_version_id: id, operation_revision: 1 }] };
   return { rows: [] };
 }
@@ -96,6 +104,11 @@ vi.mock("@/lib/prospecting/store", () => ({
     fn({ query: vi.fn(async (sql: string) => dbQueryImpl(sql)) }),
   synchronizeSearch: vi.fn(),
   validateConfig: vi.fn().mockResolvedValue(undefined),
+  prepararCandidatoNoEnvio: vi.fn(async (_db: unknown, _a: unknown, _c: unknown, _cfg: unknown, q: unknown) => q),
+}));
+// O preparo automático (B2) roda fora do bloqueio e tem suíte própria.
+vi.mock("@/lib/prospecting/preparo", () => ({
+  prepararCandidatos: vi.fn(async () => ({ sites: 0, previas: 0, pulou: false })),
 }));
 
 import { tickProspecting } from "@/lib/prospecting/worker";
@@ -132,7 +145,8 @@ const candidate = {
 
 const pool = {
   query: vi.fn(async (sql: string) => {
-    if (sql.includes("group by organization_id")) return { rows: [{ organization_id: id }] };
+    // Upstream: a consulta das organizações do tick usa o alias `pc.` (`SQL_ORGANIZACOES_DO_TICK`).
+    if (/group by (pc\.)?organization_id/.test(sql)) return { rows: [{ organization_id: id }] };
     return { rows: [] };
   }),
 };

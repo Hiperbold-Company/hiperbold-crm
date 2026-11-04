@@ -24,6 +24,7 @@ import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
 import {
   aplicarConfiguracaoDoFunil,
   lerConfiguracaoDoFunil,
+  REGRAS_PERDEM_O_CAMPO,
 } from "@/lib/pipelines/configuracao-do-funil";
 import { pipelineConfigPatchSchema } from "@/lib/schemas/settings";
 
@@ -91,6 +92,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     patch: parsed.data,
     autor: atorDoAudit(authz),
     requestId,
+    idioma: authz.idioma,
   });
   if (!aplicado.ok) {
     if (aplicado.error === "not_found") {
@@ -99,6 +101,13 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     if (aplicado.error === "conflict") {
       return fail("conflict", t("Outra pessoa alterou este funil ao mesmo tempo. Recarregue e tente de novo."), 409, {
         requestId,
+      });
+    }
+    // #2791: a frase já vem pronta (e no idioma de quem chama) e diz qual regra deixaria de disparar.
+    if ((aplicado.details as Record<string, unknown> | undefined)?.[REGRAS_PERDEM_O_CAMPO]) {
+      return fail("unprocessable_entity", aplicado.error, 422, {
+        requestId,
+        details: aplicado.details as Record<string, unknown>,
       });
     }
     if (aplicado.error === "validation_failed" || aplicado.error === "invalid_request") {

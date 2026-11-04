@@ -31,13 +31,15 @@ const ORG = "11111111-1111-4111-8111-111111111111";
 const CONVERSA = "22222222-2222-4222-8222-222222222222";
 
 let chamadasRpc: Array<{ funcao: string; args: Record<string, unknown> }> = [];
+/** A conversa como está no banco ANTES do pedido (marcar no estado atual não muda nada). */
+let linhaAtual: Record<string, unknown> = {};
 
 function fakeUserClient() {
   const q = {
     select: () => q,
     update: () => q,
     eq: () => q,
-    maybeSingle: async () => ({ data: { id: CONVERSA, usable_for_rag: true }, error: null }),
+    maybeSingle: async () => ({ data: linhaAtual, error: null }),
   };
   return { from: () => q };
 }
@@ -55,6 +57,7 @@ const enviar = (enabled: boolean) =>
 beforeEach(() => {
   vi.clearAllMocks();
   chamadasRpc = [];
+  linhaAtual = { id: CONVERSA, status: "closed", usable_for_rag: true };
   vi.mocked(requireSupportWrite).mockResolvedValue(null);
   vi.mocked(requireRole).mockResolvedValue({
     ok: true,
@@ -89,6 +92,9 @@ describe("usable-for-rag: desmarcar tira os trechos já aprendidos", () => {
   });
 
   it("marcar não remove nada", async () => {
+    // Hiperbold: marcar o que já está marcado é no-op sem auditoria; aqui a
+    // conversa encerrada ainda não ensinava.
+    linhaAtual = { id: CONVERSA, status: "closed", usable_for_rag: false };
     const resposta = await enviar(true);
     expect(resposta.status).toBe(200);
     expect(chamadasRpc).toEqual([]);

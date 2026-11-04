@@ -45,11 +45,16 @@ vi.mock("@/lib/supabase/admin", () => ({
       const q = {
         select: () => q,
         eq(k: string, v: unknown) {
-          if (!k.includes(".")) filtros.push((r) => r[k] === v);
+          // A reserva do degrau (D-115) compara a coluna int[] com o literal `{a,b}` do Postgres.
+          if (!k.includes("."))
+            filtros.push((r) =>
+              Array.isArray(r[k]) && typeof v === "string" ? `{${(r[k] as unknown[]).join(",")}}` === v : r[k] === v,
+            );
           return q;
         },
         is(k: string, v: unknown) {
-          filtros.push((r) => r[k] === v);
+          // Coluna ausente da fixture é NULL no banco.
+          filtros.push((r) => (r[k] ?? null) === v);
           return q;
         },
         in(k: string, v: unknown[]) {

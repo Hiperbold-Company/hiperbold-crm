@@ -289,8 +289,16 @@ export function esquecerMemoDosModulos(): void {
  * (a capacidade chega em partes e o que a torna usável ainda não entrou).
  * Vazia desde a PR 3a da cobrança do revendedor, que trouxe o provedor de
  * pagamento. O mecanismo fica: a próxima capacidade entregue em partes o usa.
+ *
+ * Hiperbold: cobrança própria. O módulo `cobranca` do upstream fica aqui de
+ * propósito: a cobrança da instalação é a da Hiperbold (`lib/billing/**`,
+ * `billing_contracts`, Asaas). Efeito: /admin/sistema não oferece o interruptor
+ * (só o mostra, para desligar, se o banco já o tiver ligado) e
+ * `updateModuloDaInstalacao` recusa ligá-lo (`modulo_ainda_nao_disponivel`).
+ * O código do módulo continua no repositório; nada da cobrança Hiperbold
+ * depende dele estar ligado.
  */
-export const MODULOS_AINDA_NAO_LIGAVEIS: readonly ModuloOpcional[] = [];
+export const MODULOS_AINDA_NAO_LIGAVEIS: readonly ModuloOpcional[] = ["cobranca"];
 
 /**
  * Módulos que são decisão SÓ de quem administra o servidor e não aparecem para a

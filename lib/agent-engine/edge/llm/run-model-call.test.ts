@@ -43,6 +43,13 @@ vi.mock("ai", () => ({
   tool: (t: unknown) => t,
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({})) }));
+// Hiperbold: a chave da INSTALAÇÃO sai sempre pela OpenRouter. Os casos que medem
+// o preço da própria Anthropic/OpenAI entram pela credencial BYOK da organização
+// (a cifra é a única peça dublada: o caminho de resolução é o real).
+vi.mock("@/lib/ai/credenciais/cifra", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ai/credenciais/cifra")>()),
+  decifrarColunasDaCredencial: () => "chave-byok-de-teste",
+}));
 vi.mock("@/lib/ai/credenciais/login-codex", () => ({
   // #3371, fatia 4: o seam passou a renovar no 401 — o dublê do módulo tem de
   // cobrir o símbolo novo, senão o import das duas funções quebra o teste.
@@ -233,6 +240,9 @@ function poolDaAnthropic(provider = "anthropic", model = "claude-sonnet-5") {
     if (sql.includes("insert into llm_calls")) {
       inserts.push({ params });
       return { rows: [{ id: "call-2" }] };
+    }
+    if (sql.includes("from ai_provider_credentials") && sql.includes("provider = $2")) {
+      return { rows: [{ id: "cred-byok", api_key_encrypted: null, api_key_iv: null, api_key_tag: null }] };
     }
     return { rows: [] };
   });

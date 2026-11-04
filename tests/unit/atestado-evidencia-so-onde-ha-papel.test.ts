@@ -45,18 +45,24 @@ const h = vi.hoisted(() => {
           }
           return { data: null, error: null };
         };
+        let atualizou = false;
         const cadeia: Record<string, unknown> = {
           select: () => cadeia,
           eq: () => cadeia,
           insert: () => cadeia,
           update: (payload: Record<string, unknown>) => {
-            if (tabela === "lgpd_requests") estado.atualizacoes.push(payload);
+            if (tabela === "lgpd_requests") {
+              estado.atualizacoes.push(payload);
+              atualizou = true;
+            }
             return cadeia;
           },
           maybeSingle: async () => resposta(),
           single: async () => ({ data: { id: "k1" }, error: null }),
+          // A rota reivindica o pedido com `update … eq(status, received).select("id")`
+          // (trava contra aprovação dupla): o dublê devolve a linha reivindicada.
           then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
-            Promise.resolve({ data: null, error: null }).then(res, rej),
+            Promise.resolve({ data: atualizou ? [{ id: "pedido-1" }] : null, error: null }).then(res, rej),
         };
         return cadeia;
       },

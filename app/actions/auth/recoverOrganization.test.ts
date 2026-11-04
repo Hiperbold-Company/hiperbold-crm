@@ -164,7 +164,8 @@ describe("recoverOrganization", () => {
     comUsuario({ org_name: "Velho", cobranca_plan_id: "44444444-4444-4444-8444-444444444444" });
     const { recoverOrganization } = await import("./recoverOrganization");
 
-    await expect(recoverOrganization("Clínica Boa Vista", PLANO)).rejects.toThrow("NEXT_REDIRECT:/onboarding/welcome");
+    // Hiperbold (pagar primeiro): o roteador do wizard escolhe o passo (pagamento ou boas-vindas).
+    await expect(recoverOrganization("Clínica Boa Vista", PLANO)).rejects.toThrow(/NEXT_REDIRECT:\/onboarding$/);
     expect(vi.mocked(ensureTenantForUser).mock.calls[0]![0].user_metadata).toMatchObject({
       org_name: "Clínica Boa Vista", cobranca_plan_id: PLANO,
     });

@@ -74,6 +74,14 @@ vi.mock("@/hooks/contacts/usePersonalContact", () => ({
 vi.mock("@/hooks/ai/useAutomaticoAtivo", () => ({
   useAutomaticoAtivo: () => ({ data: estado.automaticoDaOrg }),
 }));
+// Hiperbold: "Usar para ensinar o agente" aparece na conversa encerrada. O hook
+// lê a marcação pela rota; aqui a conversa ainda não ensina.
+vi.mock("@/hooks/inbox/useEnsinarAgente", () => ({
+  useEnsinarAgente: () => ({
+    estado: { data: { usable_for_rag: false, rag_review_status: null, pode_marcar: true } },
+    alternar: { mutate: vi.fn(), isPending: false },
+  }),
+}));
 vi.mock("@/components/kanban/OwnerBadge", () => ({ OwnerBadge: () => null }));
 vi.mock("@/components/inbox/FaixaDaCarteira", () => ({ FaixaDaCarteira: () => null }));
 vi.mock("@/components/inbox/ReassignDialog", () => ({ ReassignDialog: () => null }));
@@ -109,6 +117,7 @@ const INVENTARIO = [
   "Marcar como pessoal",
   "Desmarcar pessoal",
   "Ver contato",
+  "Usar para ensinar o agente",
 ] as const;
 
 /**
@@ -208,13 +217,13 @@ const CENARIOS: Cenario[] = [
     nome: "encerrada — o par Fechar/Reabrir vira Reabrir",
     conversa: { status: "closed" },
     ancora: "Reabrir",
-    esperadas: ["Assumir", "Reabrir", "Arquivar", "Marcar como pessoal", "Ver contato"],
+    esperadas: ["Assumir", "Reabrir", "Arquivar", "Marcar como pessoal", "Ver contato", "Usar para ensinar o agente"],
   },
   {
     nome: "arquivada — arquivar de novo não é gesto que exista",
     conversa: { status: "archived" },
     ancora: "Reabrir",
-    esperadas: ["Assumir", "Reabrir", "Marcar como pessoal", "Ver contato"],
+    esperadas: ["Assumir", "Reabrir", "Marcar como pessoal", "Ver contato", "Usar para ensinar o agente"],
   },
   {
     nome: "contato marcado como pessoal — o par inverte",

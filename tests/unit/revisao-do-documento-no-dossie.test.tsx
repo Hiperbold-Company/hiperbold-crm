@@ -33,6 +33,7 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   // `agent`: pode confirmar o que o documento disse (a régua da rota).
   useActiveOrg: () => ({ role: "agent" }),
   usePermission: () => false,
+  useFusoDaOrganizacao: () => null,
 }));
 vi.mock("@/hooks/leads/useLeadTimeline", () => ({
   useLeadTimeline: () => ({
@@ -71,6 +72,8 @@ const LEAD = {
   owner_user_id: null,
   owner_agent_id: null,
   owner_agent: null,
+  // Hiperbold: o dossiê mostra a criação e a última movimentação do negócio.
+  created_at: "2026-10-01T12:00:00.000Z",
 } as unknown as Lead;
 
 const PROPOSTA = {

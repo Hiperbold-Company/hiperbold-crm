@@ -80,7 +80,9 @@ describe("POST /api/v1/conversations/[id]/media — teto de escrita do Bearer", 
 
     expect(res.status).toBe(429);
     expect(res.headers.get("Retry-After")).toBeTruthy();
-    expect(admin.from).not.toHaveBeenCalled();
+    // A leitura da visibilidade da empresa (D-148, `comDono`) vem antes do teto;
+    // a CONVERSA é que não pode ser consultada.
+    expect(admin.from).not.toHaveBeenCalledWith("conversations");
     expect(vi.mocked(checkRateLimit).mock.calls[0]?.[0]).toBe("conversation_media:tok:tok-1");
   });
 
@@ -93,7 +95,9 @@ describe("POST /api/v1/conversations/[id]/media — teto de escrita do Bearer", 
     const res = await POST(postReq({ authorization: "Bearer dsk_abc_def" }), ctx);
 
     expect(res.status).toBe(429);
-    expect(admin.from).not.toHaveBeenCalled();
+    // A leitura da visibilidade da empresa (D-148, `comDono`) vem antes do teto;
+    // a CONVERSA é que não pode ser consultada.
+    expect(admin.from).not.toHaveBeenCalledWith("conversations");
     expect(vi.mocked(checkRateLimit).mock.calls[1]?.[0]).toBe(`conversation_media:org:${ORG_ID}`);
   });
 

@@ -13,6 +13,7 @@ import {
   suggestColumnMapping,
   type MappingField,
 } from "@/lib/crm-b2b/spreadsheet";
+import { falhaInterna } from "@/lib/api/wrappers";
 import {
   fail,
   handleRouteError,
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       .eq("organization_id", authz.org.orgId)
       .order("created_at", { ascending: false })
       .limit(50);
-    if (error) return fail("internal_error", error.message, 500, { requestId });
+    if (error) return falhaInterna("internal_error", error, { requestId });
     return ok(data ?? [], { requestId });
   } catch (e) {
     return handleRouteError(e, requestId);
@@ -114,9 +115,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       .single();
 
     if (batchErr || !batch) {
-      return fail("internal_error", batchErr?.message ?? "Falha ao criar lote.", 500, {
-        requestId,
-      });
+      return falhaInterna("internal_error", batchErr ?? "Falha ao criar lote.", { requestId });
     }
 
     const summary = await processCompaniesPeopleImport(supabase, {

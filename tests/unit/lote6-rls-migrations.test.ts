@@ -15,7 +15,7 @@ const MANIFEST = readFileSync(join(process.cwd(), "supabase/migrations/MANIFEST.
 const MIGRACOES = [
   { n: "0923", arquivo: "20260930174000_0923_financeiro_escrita_por_papel.sql" },
   { n: "0924", arquivo: "20260930175000_0924_roteiros_de_followup_so_manager_grava.sql" },
-  { n: "0925", arquivo: "20260930180000_0925_voz_numeros_so_manager_e_resolucao_so_servico.sql" },
+  { n: "0925", arquivo: "20260930180030_0925_voz_numeros_so_manager_e_resolucao_so_servico.sql" },
   { n: "0926", arquivo: "20260930181000_0926_tabelas_do_servidor_sem_escrita_de_membro.sql" },
   { n: "0927", arquivo: "20260930182000_0927_emit_event_agent_e_organizacao_obrigatoria.sql" },
 ] as const;
@@ -56,7 +56,15 @@ describe("0923 a 0927: posição, igualdade e registro", () => {
     });
 
     it(`${n}: o SQL da migration e o do bloco são iguais, ignorando comentários`, () => {
-      expect(codigo(extraiBloco(n))).toBe(codigo(migration));
+      // A 0992 (junção com o upstream) pôs no bloco do baseline, e só nele, a guarda de
+      // tabela do módulo financeiro: desde a 0619 do upstream essas tabelas só existem
+      // onde o módulo está instalado. Fora essa linha, o SQL tem de ser o mesmo.
+      const guarda = /^if to_regclass\('public\.\w+'\) is null then return; end if;$/;
+      const bloco = codigo(extraiBloco(n))
+        .split("\n")
+        .filter((linha) => !guarda.test(linha))
+        .join("\n");
+      expect(bloco).toBe(codigo(migration));
     });
 
     it(`${n}: registrada no MANIFEST`, () => {

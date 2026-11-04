@@ -423,10 +423,14 @@ function CamposDaAcao({
 }
 
 /** Por que a chave de um dado não serve (`null` = serve). */
-export function problemaDaChave(chave: string, outras: string[]): string | null {
+export function problemaDaChave(
+  chave: string,
+  outras: string[],
+  t: (texto: string) => string,
+): string | null {
   if (!CHAVE_DE_PARAMETRO.test(chave))
-    return "Use letras minúsculas, números e underscore, até 40 caracteres.";
-  if (outras.includes(chave)) return "Esta chave já está na lista.";
+    return t("Use letras minúsculas, números e underscore, até 40 caracteres.");
+  if (outras.includes(chave)) return t("Esta chave já está na lista.");
   return null;
 }
 
@@ -488,6 +492,7 @@ function CamposDeIniciarAutomacao({
           const problema = problemaDaChave(
             p.key,
             params.filter((_, k) => k !== j).map((x) => x.key),
+            t,
           );
           return (
             <div key={j} className="space-y-1" data-testid={`${prefixo}-dado-${j}`}>
@@ -525,7 +530,7 @@ function CamposDeIniciarAutomacao({
               </div>
               {p.key !== "" && problema && (
                 <p className="text-xs text-error-fg" data-testid={`${prefixo}-dado-${j}-erro`}>
-                  {t(problema)}
+                  {problema}
                 </p>
               )}
             </div>

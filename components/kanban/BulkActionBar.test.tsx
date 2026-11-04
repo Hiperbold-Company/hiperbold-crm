@@ -21,6 +21,8 @@ vi.mock("sonner", () => ({ toast: { success: toastSuccess, warning: vi.fn(), err
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useUser: () => ({ id: "u1", is_platform_admin: false }),
   useActiveOrg: () => ({ role: "manager" }),
+  // Gerente move negócio (régua `negocios.mover` do papel manager).
+  usePermission: () => true,
 }));
 vi.mock("@/hooks/inbox/useAssignableMembers", () => ({ useAssignableMembers: () => ({ data: [] }) }));
 vi.mock("@/hooks/kanban/useBulkAction", () => ({

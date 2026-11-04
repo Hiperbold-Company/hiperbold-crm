@@ -2757,7 +2757,7 @@
   "Sair de todos os dispositivos": "退出所有设备",
   "A verificação em duas etapas da sua conta, os códigos de recuperação e as sessões abertas.": "您账号的两步验证、恢复代码和已打开的会话。",
   "Você ainda não tem nenhum funil. Enquanto for assim, o agente atende normalmente, mas não tem para onde levar o card de ninguém — não há etapas para onde mover.": "你还没有任何销售漏斗。在此之前，智能体会正常接待，但无法移动任何人的卡片——没有可移动到的阶段。",
-  "Crie o primeiro na tela Funis": "在“销售漏斗”页面创建第一个",
+  "Crie o primeiro na tela Pipeline": "在“Pipeline”页面创建第一个",
   ": ele já nasce com etapas, e depois aparece aqui para você escolher a etapa de cada passo.": "：它创建时就自带阶段，之后会出现在这里，供你为每个步骤选择阶段。",
   "Custom fields: JSON inválido. Esperado um array.": "自定义字段：JSON 无效。应为数组。",
   "atualizado.": "已更新。",
@@ -6460,5 +6460,9 @@
   "O texto (com as opções numeradas) passa do limite do Instagram (1000 bytes; acento e emoji contam mais de um).": "文本（含编号选项）超出 Instagram 限制（1000 字节；带重音的字母和表情符号占多个字节）。",
   "Ou cole o id do post": "或粘贴帖子 ID",
   "Sem conta do Instagram para achar o link. Cole o id do post (só números).": "没有可用于查找链接的 Instagram 账号。请粘贴帖子 ID（仅数字）。",
-  "Conta não encontrada": "未找到账号"
+  "Conta não encontrada": "未找到账号",
+  "Mover negócio no funil": "在销售漏斗中移动商机",
+  "Editar tag do negócio": "编辑商机标签",
+  "Gravar tag no negócio": "为商机保存标签",
+  "Pessoais": "个人"
 }

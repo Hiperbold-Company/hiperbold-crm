@@ -380,7 +380,8 @@ describe("fluxos de follow-up (ai/followup-flows)", () => {
     }
     expect(isPublicPath(`${base}/${FLUXO}/enroll`)).toBe(false);
     expect(isPublicPath(`${base}/nao-e-uuid`)).toBe(false);
-    expect(isPublicPath(`${base}/from-model`)).toBe(false);
+    // O upstream converteu /from-model para sessão ou Bearer (auth-dual): é público para o proxy.
+    expect(isPublicPath(`${base}/from-model`)).toBe(true);
   });
 
   it("GET: sem credencial 401; sem mcp:read 403; agente de IA 403; viewer+mcp:read lê só a organização do token", async () => {
@@ -648,7 +649,8 @@ describe("roteadores de intenção (ai/routers)", () => {
     expect(isPublicPath(base)).toBe(true);
     expect(isPublicPath(`${base}/${ROTEADOR}`)).toBe(true);
     expect(isPublicPath(`${base}/${ROTEADOR}/members`)).toBe(true);
-    expect(isPublicPath(`${base}/${ROTEADOR}/test`)).toBe(false);
+    // O upstream converteu /test para sessão ou Bearer (auth-dual): é público para o proxy.
+    expect(isPublicPath(`${base}/${ROTEADOR}/test`)).toBe(true);
     expect(isPublicPath(`${base}/nao-e-uuid`)).toBe(false);
   });
 
@@ -665,11 +667,17 @@ describe("roteadores de intenção (ai/routers)", () => {
       ai_router_members: () => [{ router_id: ROTEADOR }, { router_id: ROTEADOR }],
     });
     vi.mocked(createAdminClient).mockReturnValue(db as never);
+    // Merge 04/11/2026: roteador é configuração da IA — o TOKEN precisa de papel admin (upstream, #2194),
+    // com `config:read` OU `mcp:read`. A sessão continua no piso `agent` da tela.
     comoToken("agent", ["mcp:read"]);
+    expect((await GET(req(base, "GET"))).status).toBe(403);
+    comoToken("admin", ["mcp:read"]);
     const res = await GET(req(`${base}?organization_id=${ORG_OUTRA}`, "GET"));
     expect(res.status).toBe(200);
     expect((await res.json()).data.routers[0]).toMatchObject({ id: ROTEADOR, member_count: 2 });
     expect(db.chamadas.every((c) => c.filtros.organization_id === ORG_TOKEN)).toBe(true);
+    comoToken("admin", ["config:read"]);
+    expect((await GET(req(base, "GET"))).status).toBe(200);
   });
 
   it("POST: piso admin (manager → 403); sem mcp:write 403; agente de IA 403; 401 sem credencial", async () => {
@@ -743,6 +751,9 @@ describe("roteadores de intenção (ai/routers)", () => {
 
     const fora = bancoFalso({ ai_routers: () => null });
     vi.mocked(createAdminClient).mockReturnValue(fora as never);
+    // Leitura por token pede papel admin (upstream, #2194); abaixo disso, 403 antes de tocar no banco.
+    expect((await GET(req(url, "GET"), ctxDe({ id: ROTEADOR }))).status).toBe(403);
+    comoToken("admin", ["mcp:read"]);
     expect((await GET(req(url, "GET"), ctxDe({ id: ROTEADOR }))).status).toBe(404);
     comoToken("admin", ["mcp:write"]);
     expect((await PATCH(req(url, "PATCH", { name: "N" }), ctxDe({ id: ROTEADOR }))).status).toBe(404);
@@ -1258,7 +1269,8 @@ describe("conexões de canal e credenciais de IA — só leitura por token", () 
     const res = await GET(req(`/api/v1/channel-sessions?organization_id=${ORG_OUTRA}`, "GET"));
     expect(res.status).toBe(200);
     // `plataforma` é derivada no servidor (provider + meta_social_platform), não uma coluna lida crua.
-    expect((await res.json()).data).toEqual([{ ...canal, plataforma: "whatsapp" }]);
+    // `metadata` sai projetado em só `disabled` (o selo "Pausado" do upstream, #2318); o cru nunca sai.
+    expect((await res.json()).data).toEqual([{ ...canal, plataforma: "whatsapp", metadata: { disabled: false } }]);
     expect(db.chamadas[0]!.filtros.organization_id).toBe(ORG_TOKEN);
     const colunas = JSON.stringify(db.chamadas);
     expect(colunas).not.toMatch(/token|secret|webhook/i);

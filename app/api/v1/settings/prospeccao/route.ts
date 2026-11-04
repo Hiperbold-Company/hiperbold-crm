@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 
 import type { NextRequest } from "next/server";
 
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -34,7 +34,7 @@ export async function GET(): Promise<Response> {
     .select("settings")
     .eq("id", authz.org.orgId)
     .maybeSingle();
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
 
   return ok(
     { personalizacao: lerPersonalizacao((data as { settings?: unknown } | null)?.settings) },
@@ -65,7 +65,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     .select("settings")
     .eq("id", authz.org.orgId)
     .maybeSingle();
-  if (erroLeitura) return fail("internal_error", erroLeitura.message, 500, { requestId });
+  if (erroLeitura) return falhaInterna("internal_error", erroLeitura, { requestId });
 
   const settings = ((atual as { settings?: Record<string, unknown> } | null)?.settings ??
     {}) as Record<string, unknown>;
@@ -73,7 +73,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     .from("organizations")
     .update({ settings: { ...settings, prospeccao: parsed.data } })
     .eq("id", authz.org.orgId);
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
 
   void audit({
     action: "prospecting.settings_updated",

@@ -272,8 +272,10 @@ describe("GET /api/v1/metrics/lost", () => {
 
     const res = await chamar();
     expect(res.status).toBe(500);
-    const erro = (await res.json()) as { error: { message: string } };
-    expect(erro.error.message).toContain("falhou");
+    const erro = (await res.json()) as { error: { code: string; message: string } };
+    // D-135 (Hiperbold): o 500 não devolve a mensagem do banco ao cliente.
+    expect(erro.error.code).toBe("internal_error");
+    expect(erro.error.message).not.toContain("falhou");
   });
 
   it("leitura recusada para quem não é manager não toca no banco", async () => {

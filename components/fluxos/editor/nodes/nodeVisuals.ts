@@ -173,7 +173,7 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
   // a escolha (`etapa_destino_ausente`, `tag_ausente`).
   move_lead: {
     type: "move_lead",
-    paletteLabel: "Mover lead no funil",
+    paletteLabel: "Mover negócio no funil",
     icon: Funnel,
     chipClassName: "bg-info-bg text-info-fg",
     borderClassName: "border-l-info",
@@ -182,11 +182,11 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
   },
   edit_lead_tag: {
     type: "edit_lead_tag",
-    paletteLabel: "Editar tag do lead",
+    paletteLabel: "Editar tag do negócio",
     icon: Tag,
     chipClassName: "bg-accent-soft text-accent",
     borderClassName: "border-l-accent-500",
-    defaultLabel: "Gravar tag no lead",
+    defaultLabel: "Gravar tag no negócio",
     defaultConfig: () => ({ tags: [] }),
   },
   end: {

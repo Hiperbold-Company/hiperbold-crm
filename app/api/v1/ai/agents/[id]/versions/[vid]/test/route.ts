@@ -29,6 +29,7 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { resolveAuthDual, tetoDeEscritaDoToken } from "@/lib/api/auth-dual";
+import { ESCOPOS_DE_ESCRITA_DA_CONFIGURACAO } from "@/lib/api/auth-dual-admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -94,7 +95,8 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     requestId,
     resource: "ai_agents",
     role: "admin",
-    scope: "config:write",
+    // `config:write` (upstream) OU `mcp:write` (tokens Hiperbold já emitidos).
+    scope: ESCOPOS_DE_ESCRITA_DA_CONFIGURACAO,
     tokenRole: "admin",
   });
   if (!authz.ok) return authz.response;

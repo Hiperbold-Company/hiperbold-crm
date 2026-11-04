@@ -72,6 +72,8 @@ const CANDIDATO_BASE = {
   campaign_id: CAMPAIGN_ID,
   data: { key: "place-1", name: "Padaria Teste", phone: null, website: null, category: null },
   status: "new",
+  // Upstream: só a empresa que o operador deixou marcada entra na fila (`selected`).
+  selected: true,
   phone: "+5511999990000",
   contact_id: null,
   lead_id: null,

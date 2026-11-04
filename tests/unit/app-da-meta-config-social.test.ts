@@ -10,7 +10,11 @@ const USUARIO = "11111111-1111-4111-8111-111111111111";
 const gravacoes: Record<string, unknown>[] = [];
 const h = vi.hoisted(() => ({ portao: vi.fn(), invalidar: vi.fn() }));
 
-vi.mock("@/lib/auth/portao-de-escrita", () => ({ requirePlatformAdminFull: h.portao }));
+// A ação passou ao portão do upstream (`escritaDeAdminOuRecusa`, que exige escopo full):
+// o dublê segue o `h.portao` — o que ele resolve é o contexto, o que ele rejeita sobe.
+vi.mock("@/lib/auth/escritaDeAdminOuRecusa", () => ({
+  escritaDeAdminOuRecusa: async () => ({ ok: true, ctx: await h.portao() }),
+}));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("@/lib/channels/meta-social/config", () => ({ invalidarConfigMetaSocial: h.invalidar }));
 vi.mock("@/lib/supabase/admin", () => ({

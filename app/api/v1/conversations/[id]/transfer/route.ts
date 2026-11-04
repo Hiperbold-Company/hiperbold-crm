@@ -17,7 +17,7 @@ import { audit, isServiceRoleConfigured } from "@/lib/audit";
 import { registrarTrocaDeComando } from "@/lib/inbox/atividade-de-comando";
 import { sincronizarNegocioAbertoDoContato } from "@/lib/inbox/negocio-aberto-do-contato";
 import { ApiError } from "@/lib/api/types";
-import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { transferConversationSchema, validateRequest } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
@@ -240,7 +240,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("id", id)
     .eq("organization_id", orgId)
     .maybeSingle();
-  if (erroConversa) return fail("internal_error", erroConversa.message, 500, { requestId });
+  if (erroConversa) return falhaInterna("internal_error", erroConversa, { requestId });
   if (!conversa) return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
 
   if (!isServiceRoleConfigured()) return ok({ numero: null }, { requestId });
@@ -251,7 +251,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     p_conversation_id: id,
     p_to_user_id: parsed.data.to_user_id,
   });
-  if (erroNumero) return fail("internal_error", erroNumero.message, 500, { requestId });
+  if (erroNumero) return falhaInterna("internal_error", erroNumero, { requestId });
   if (!numeroId) return ok({ numero: null }, { requestId });
 
   const { data: sessao, error: erroSessao } = await admin
@@ -260,7 +260,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("organization_id", orgId)
     .eq("id", numeroId as string)
     .maybeSingle();
-  if (erroSessao) return fail("internal_error", erroSessao.message, 500, { requestId });
+  if (erroSessao) return falhaInterna("internal_error", erroSessao, { requestId });
 
   const linha = sessao as { id: string; display_name: string | null; phone_number: string | null } | null;
   return ok(

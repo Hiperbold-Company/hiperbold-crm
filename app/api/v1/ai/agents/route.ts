@@ -248,7 +248,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   // agente e continua recebendo-a (agora com `kind = "mcp_agent"`; a v1 nasce
   // RASCUNHO, então `published_version_id` fica null até publicar).
   try {
-    const criado = await criarAgenteMcp(deps, corpo);
+    const criado = await criarAgenteMcp(deps, corpo, { formato: "legado" });
     return ok(criado.agent, { status: 201, requestId });
   } catch (err) {
     return respostaDeRecusa(err, requestId);

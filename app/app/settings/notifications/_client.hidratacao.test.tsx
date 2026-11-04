@@ -79,7 +79,8 @@ async function hidratar(permissao: NotificationPermissionState) {
 describe("Configurações › Notificações hidrata sem divergir da permissão do navegador", () => {
   it("permissão concedida: depois de recarregar, os interruptores de Push ficam habilitados", async () => {
     const { errosDeHidratacao, divergencias, pushes } = await hidratar("granted");
-    expect(pushes).toHaveLength(6);
+    // 6 categorias do upstream + "Tarefa vencendo" (task_due, Hiperbold).
+    expect(pushes).toHaveLength(7);
     expect(
       pushes.filter((b) => b.disabled).map((b) => b.getAttribute("aria-label")),
       "interruptor de Push preso em `disabled`: o HTML do servidor venceu a hidratação",

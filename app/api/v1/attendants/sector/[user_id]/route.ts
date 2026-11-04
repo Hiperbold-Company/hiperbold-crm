@@ -28,7 +28,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
 import { seSetoresDesligado } from "@/lib/atendimento/setores-modulo";
@@ -81,7 +81,7 @@ export async function PUT(
     .eq("user_id", targetUserId)
     .is("revoked_at", null)
     .maybeSingle();
-  if (memberErr) return fail("internal_error", memberErr.message, 500, { requestId });
+  if (memberErr) return falhaInterna("internal_error", memberErr, { requestId });
   if (!member) return fail("not_found", t("Atendente não encontrado na organização."), 404, { requestId });
 
   // Todas as filas pedidas têm de ser DESTA organização. Uma consulta só, e a
@@ -93,7 +93,7 @@ export async function PUT(
       .select("id")
       .eq("organization_id", orgId)
       .in("id", desejadas);
-    if (setoresErr) return fail("internal_error", setoresErr.message, 500, { requestId });
+    if (setoresErr) return falhaInterna("internal_error", setoresErr, { requestId });
     if ((setores ?? []).length !== desejadas.length) {
       return fail("not_found", t("Setor não encontrado."), 404, { requestId });
     }
@@ -104,7 +104,7 @@ export async function PUT(
     .select("sector_id")
     .eq("organization_id", orgId)
     .eq("user_id", targetUserId);
-  if (anterioresErr) return fail("internal_error", anterioresErr.message, 500, { requestId });
+  if (anterioresErr) return falhaInterna("internal_error", anterioresErr, { requestId });
   const antes = (anteriores ?? []).map((r) => r.sector_id).sort();
 
   const depois = [...desejadas].sort();
@@ -124,7 +124,7 @@ export async function PUT(
           })),
           { onConflict: "organization_id,user_id,sector_id" },
         );
-      if (upsertErr) return fail("internal_error", upsertErr.message, 500, { requestId });
+      if (upsertErr) return falhaInterna("internal_error", upsertErr, { requestId });
     }
 
     // O que sobra sai: a lista recebida é a verdade. Lista vazia = apaga todos
@@ -138,7 +138,7 @@ export async function PUT(
       remocao = remocao.not("sector_id", "in", `(${desejadas.join(",")})`);
     }
     const { error: deleteErr } = await remocao;
-    if (deleteErr) return fail("internal_error", deleteErr.message, 500, { requestId });
+    if (deleteErr) return falhaInterna("internal_error", deleteErr, { requestId });
 
     void audit({
       action: "attendant.sector_assigned",

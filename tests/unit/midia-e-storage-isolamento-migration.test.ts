@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
  */
 
 const MIGRATION = readFileSync(
-  join(process.cwd(), "supabase/migrations/20260930170000_0919_midia_e_storage_isolamento_entre_membros.sql"),
+  join(process.cwd(), "supabase/migrations/20260930170030_0919_midia_e_storage_isolamento_entre_membros.sql"),
   "utf8",
 );
 const BASELINE = readFileSync(join(process.cwd(), "supabase/baseline.sql"), "utf8");
@@ -49,7 +49,7 @@ describe("0919: posição e igualdade", () => {
   });
 
   it("está registrada no MANIFEST, depois da 0918", () => {
-    expect(MANIFEST).toMatch(/\| `20260930170000` \| `0919_midia_e_storage_isolamento_entre_membros` \|/);
+    expect(MANIFEST).toMatch(/\| `20260930170030` \| `0919_midia_e_storage_isolamento_entre_membros` \|/);
     expect(MANIFEST.indexOf("`0918_sessao_aal1")).toBeLessThan(MANIFEST.indexOf("`0919_midia_e_storage"));
   });
 

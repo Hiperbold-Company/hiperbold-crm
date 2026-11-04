@@ -387,6 +387,9 @@ describe("webPushInboundHandler", () => {
         const q = {
           select: () => q,
           eq: () => q,
+          // `assumiuAoMoverAgora`: quem assumiu ao mover não recebe o aviso; aqui ninguém assumiu.
+          gte: () => q,
+          limit: async () => ({ data: [], error: null }),
           maybeSingle: async () => ({ data: { title: "Pedido da Ana", owner_user_id: "u-dono", pipeline_id: "p1" }, error: null }),
         };
         return q;

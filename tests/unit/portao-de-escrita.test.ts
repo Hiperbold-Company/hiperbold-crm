@@ -93,16 +93,28 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 /** O guarda de LEITURA da plataforma: devolve o escopo da linha (ou redireciona, como o real). */
-vi.mock("@/lib/auth/requirePlatformAdmin", () => ({
-  requirePlatformAdmin: vi.fn(async () => {
+vi.mock("@/lib/auth/requirePlatformAdmin", async () => {
+  const { EscritaDePlatformAdminNegada } = await import("@/lib/auth/recusa-de-escrita-de-admin");
+  const requirePlatformAdmin = vi.fn(async () => {
     if (!h.escopo) throw new Error("NEXT_REDIRECT:/admin/forbidden");
     if (h.mfaEmDivida) throw new Error("NEXT_REDIRECT:/login/mfa?next=/admin");
     return {
       user: { id: USER },
       platformAdmin: { user_id: USER, scope: h.escopo, mfa_required: false },
     };
-  }),
-}));
+  });
+  return {
+    requirePlatformAdmin,
+    // O guarda de ESCRITA do upstream: o mesmo contrato do real (leitura primeiro, e as
+    // duas recusas nomeadas LANÇAM `EscritaDePlatformAdminNegada`).
+    requirePlatformAdminEscrita: vi.fn(async () => {
+      const ctx = await requirePlatformAdmin();
+      if (ctx.platformAdmin.scope !== "full") throw new EscritaDePlatformAdminNegada("forbidden_scope");
+      if (h.mfaEmDivida) throw new EscritaDePlatformAdminNegada("mfa_required");
+      return ctx;
+    }),
+  };
+});
 vi.mock("@/lib/auth/politica-de-cadastro", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/auth/politica-de-cadastro")>();
   return {
@@ -259,7 +271,8 @@ describe("as actions, chamadas como a auditoria chamou", () => {
   it("Nuvemshop: sessão aal1 de quem tem fator não desconecta a loja", async () => {
     h.papel = "admin";
     h.mfaEmDivida = true;
-    expect(await disconnectNuvemshop()).toEqual({ ok: false, error: "forbidden" });
+    // Upstream: a dívida de MFA tem o seu código (`mfa_required`), como nas demais actions.
+    expect(await disconnectNuvemshop()).toEqual({ ok: false, error: "mfa_required" });
     expect(h.escritasNoBanco).toEqual([]);
   });
 
@@ -273,7 +286,11 @@ describe("as actions, chamadas como a auditoria chamou", () => {
 
   it("⭐ cadastro da instalação: support_readonly não muda o modo", async () => {
     h.escopo = "support_readonly";
-    await expect(updateSignupMode({ signup_mode: "fechado" as never })).rejects.toThrow("NEXT_REDIRECT");
+    // Upstream: a escrita de admin devolve a recusa nomeada em vez de redirecionar.
+    expect(await updateSignupMode({ signup_mode: "fechado" as never })).toEqual({
+      ok: false,
+      error: "forbidden_scope",
+    });
     expect(h.modoGravado).toEqual([]);
   });
 
@@ -295,7 +312,7 @@ describe("as actions, chamadas como a auditoria chamou", () => {
       from_name: "X",
     };
     h.escopo = "support_readonly";
-    await expect(updateSmtp(entrada)).rejects.toThrow("NEXT_REDIRECT:/admin/forbidden");
+    expect(await updateSmtp(entrada)).toEqual({ ok: false, error: "forbidden_scope" });
     h.escopo = "full";
     h.mfaEmDivida = true;
     await expect(updateSmtp(entrada)).rejects.toThrow("NEXT_REDIRECT:/login/mfa");

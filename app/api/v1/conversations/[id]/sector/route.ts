@@ -34,7 +34,7 @@ import { type NextRequest } from "next/server";
 
 import { audit } from "@/lib/audit";
 import { ApiError } from "@/lib/api/types";
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { seSetoresDesligado } from "@/lib/atendimento/setores-modulo";
 import { requireRole } from "@/lib/auth/require-role";
 import { conversationSectorSchema, validateRequest } from "@/lib/schemas";
@@ -86,7 +86,7 @@ export async function PUT(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("id", id)
     .eq("organization_id", orgId)
     .maybeSingle();
-  if (erroConversa) return fail("internal_error", erroConversa.message, 500, { requestId });
+  if (erroConversa) return falhaInterna("internal_error", erroConversa, { requestId });
   if (!conversa) return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
 
   // A fila tem de existir NESTA organização. A FK composta do banco também
@@ -100,7 +100,7 @@ export async function PUT(req: NextRequest, ctx: RouteCtx): Promise<Response> {
       .eq("organization_id", orgId)
       .eq("id", input.sector_id)
       .maybeSingle();
-    if (erroSetor) return fail("internal_error", erroSetor.message, 500, { requestId });
+    if (erroSetor) return falhaInterna("internal_error", erroSetor, { requestId });
     if (!setor) {
       return fail("unprocessable_entity", t("Setor inexistente nesta organização."), 422, {
         requestId,
@@ -115,7 +115,7 @@ export async function PUT(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("organization_id", orgId)
     .select("id, sector_id, assigned_to_user_id, status")
     .maybeSingle();
-  if (erroUpdate) return fail("internal_error", erroUpdate.message, 500, { requestId });
+  if (erroUpdate) return falhaInterna("internal_error", erroUpdate, { requestId });
   if (!atualizada) return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
 
   // Sem dono e em aberto: o vínculo novo pede distribuição. A RPC é a MESMA que
@@ -178,7 +178,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("id", id)
     .eq("organization_id", orgId)
     .maybeSingle();
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
   if (!data) return fail("not_found", "Conversa não encontrada.", 404, { requestId });
 
   const sectorId = (data as { sector_id: string | null }).sector_id;

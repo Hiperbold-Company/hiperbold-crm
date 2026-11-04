@@ -35,7 +35,8 @@ import {
   precisaRenovar,
   proximaRenovacaoEm,
 } from "@/lib/ai/pontos/renovacao-da-assinatura";
-import { bufToBytea, byteaToBuffer, decryptKey, encryptKey } from "@/lib/crypto/aes_gcm";
+import { decifrarColunasDaCredencial } from "@/lib/ai/credenciais/cifra";
+import { bufToBytea, encryptKey } from "@/lib/crypto/aes_gcm";
 import { fecharAvisoDaAssinatura } from "@/lib/ai/credenciais/aviso-da-assinatura";
 
 import { FakeSupabase } from "./helpers/fake-ai-credentials";
@@ -106,11 +107,9 @@ function passarTrintaECincoSegundos(fake: FakeSupabase) {
 
 /** O par que está GRAVADO na credencial, decifrado. */
 function guardadoNaLinha(fake: FakeSupabase): Record<string, unknown> {
-  const bruto = decryptKey({
-    ciphertext: byteaToBuffer(fake.linha!.api_key_encrypted),
-    iv: byteaToBuffer(fake.linha!.api_key_iv),
-    tag: byteaToBuffer(fake.linha!.api_key_tag),
-  });
+  // A gravação cifra com o contexto da credencial (organização + id); a
+  // leitura usa o mesmo decifrador do módulo.
+  const bruto = decifrarColunasDaCredencial(fake.linha!, ORG);
   return JSON.parse(bruto) as Record<string, unknown>;
 }
 

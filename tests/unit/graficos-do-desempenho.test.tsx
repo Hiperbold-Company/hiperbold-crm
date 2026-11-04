@@ -34,6 +34,13 @@ vi.mock("next/link", () => ({
   ),
 }));
 vi.mock("@/hooks/i18n/useLocaleDeData", () => ({ useTagDeIdioma: () => "pt-BR" }));
+// O painel do fork lê os filtros da URL (aba, funil, atendente, período): rota fixa e sem filtro.
+const urlDoPainel = vi.hoisted(() => ({ busca: "" }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: () => undefined, push: () => undefined }),
+  usePathname: () => "/app/metrics",
+  useSearchParams: () => new URLSearchParams(urlDoPainel.busca),
+}));
 
 let serie: SerieTemporal;
 vi.mock("@/hooks/metrics/useSerieTemporal", () => ({

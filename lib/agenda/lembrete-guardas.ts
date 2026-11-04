@@ -43,7 +43,7 @@ export interface ReservaDoLembrete {
 export async function reservarDegraus(
   admin: SupabaseClient,
   reserva: ReservaDoLembrete,
-): Promise<{ reservado: boolean; gravados: number[] }> {
+): Promise<{ reservado: boolean; gravados: number[]; falhou: boolean }> {
   const gravados = [...new Set([...(reserva.lidos ?? []), ...reserva.pendentes])];
   let q = admin
     .from("calendar_appointments")
@@ -63,9 +63,10 @@ export async function reservarDegraus(
       appointmentId: reserva.appointmentId,
       error: error.message,
     });
-    return { reservado: false, gravados };
+    // `falhou` separa o banco que recusou (carimbo_falhou) da corrida perdida para outra rodada.
+    return { reservado: false, gravados, falhou: true };
   }
-  return { reservado: (data ?? []).length > 0, gravados };
+  return { reservado: (data ?? []).length > 0, gravados, falhou: false };
 }
 
 /**

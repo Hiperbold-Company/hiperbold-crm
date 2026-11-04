@@ -58,6 +58,11 @@ function montarAdmin(
           filtros.push([`not:${campo}:${op}`, valor]);
           return cadeia;
         },
+        // Hiperbold (CBEXS): o radar só olha negócios recentes (`.or` de datas).
+        or: (expr: string) => {
+          filtros.push(["or", expr]);
+          return cadeia;
+        },
         order: () => cadeia,
         limit: () => cadeia,
         is: () => cadeia,

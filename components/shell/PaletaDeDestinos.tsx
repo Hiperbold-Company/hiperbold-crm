@@ -41,6 +41,8 @@ export interface DestinoDaPaleta {
   /** Id do grupo; a ordem e o rótulo vêm de `grupos`. */
   group: string;
   icon: PhosphorIcon;
+  /** Palavras a mais que acham o destino na busca (ex.: "webhook" acha Automações). */
+  termos?: readonly string[];
 }
 
 export interface GrupoDaPaleta {
@@ -157,9 +159,9 @@ function Resultados({
       const casaCategoria = categoriaAtiva === "todos" || d.group === categoriaAtiva;
       if (!casaCategoria) return false;
       if (!termo) return true;
-      return normalizar(`${d.label} ${d.description} ${rotuloGrupo.get(d.group) ?? ""}`).includes(
-        termo,
-      );
+      return normalizar(
+        `${d.label} ${d.description} ${(d.termos ?? []).join(" ")} ${rotuloGrupo.get(d.group) ?? ""}`,
+      ).includes(termo);
     });
     if (termo) return filtrados;
     // O catálogo não é contíguo por grupo (a Prospecção, de CRM, vem antes do

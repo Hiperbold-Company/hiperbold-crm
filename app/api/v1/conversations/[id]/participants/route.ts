@@ -43,7 +43,7 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { audit, isServiceRoleConfigured } from "@/lib/audit";
-import { ok, fail } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { requireRole, orgAtivaDaApi } from "@/lib/auth/require-role";
 import { loadAuthUser } from "@/lib/auth/server";
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("id", id)
     .eq("organization_id", orgId)
     .maybeSingle();
-  if (convErr) return fail("internal_error", convErr.message, 500, { requestId });
+  if (convErr) return falhaInterna("internal_error", convErr, { requestId });
   if (!conv || ehConversaPessoal(conv)) return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
 
   const { data: participantes, error } = await admin
@@ -119,7 +119,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("conversation_id", id)
     .is("left_at", null)
     .order("joined_at", { ascending: true });
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
 
   return ok({ participantes: participantes ?? [] }, { requestId });
 }
@@ -162,7 +162,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("id", id)
     .eq("organization_id", orgId)
     .maybeSingle();
-  if (convErr) return fail("internal_error", convErr.message, 500, { requestId });
+  if (convErr) return falhaInterna("internal_error", convErr, { requestId });
   if (!conv || ehConversaPessoal(conv)) return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
 
   // Convida o DONO da conversa ou um gestor. A segunda chamada ao `requireRole`
@@ -189,7 +189,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("user_id", input.user_id)
     .is("revoked_at", null)
     .maybeSingle();
-  if (membroErr) return fail("internal_error", membroErr.message, 500, { requestId });
+  if (membroErr) return falhaInterna("internal_error", membroErr, { requestId });
   if (!membro || membro.role === "viewer") {
     return fail("unprocessable_entity", t("Destino não é um atendente desta organização."), 422, {
       requestId,
@@ -213,7 +213,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     )
     .select("id, user_id, invited_by, joined_at, left_at")
     .maybeSingle();
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
 
   await audit({
     action: "conversation.invited",
@@ -266,7 +266,7 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
     .eq("id", id)
     .eq("organization_id", orgId)
     .maybeSingle();
-  if (convErr) return fail("internal_error", convErr.message, 500, { requestId });
+  if (convErr) return falhaInterna("internal_error", convErr, { requestId });
   if (!conv || ehConversaPessoal(conv)) return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
 
   // Sair da conversa é de quem participa; REMOVER um colega é do dono ou de um
@@ -294,7 +294,7 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
     .eq("user_id", input.user_id)
     .is("left_at", null)
     .select("id");
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
 
   const removidos = encerradas?.length ?? 0;
   if (removidos > 0) {

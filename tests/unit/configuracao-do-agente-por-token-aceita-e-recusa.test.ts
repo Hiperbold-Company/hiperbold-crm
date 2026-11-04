@@ -18,6 +18,10 @@
  *     `mcp:read`/`mcp:write` + `role:admin` — não ganha nada na atualização:
  *     403 em toda porta desta issue. Só um token NOVO com `config:write` edita,
  *     testa, publica, pausa e arquiva, e a auditoria grava o id do token.
+ *     ⚠️ HIPERBOLD (merge de 04/11/2026): o fork já emitiu tokens `mcp:*` +
+ *     `role:admin` para estas portas (API da fase 2). Decisão do dono: valem os
+ *     DOIS — `config:*` OU `mcp:*` —, sempre com o papel admin do upstream, e
+ *     escopo de leitura nunca escreve.
  *  3. Sem `Authorization`, o caminho é a SESSÃO de sempre: `requireRole` manda
  *     e, sem sessão, 401 — igual antes desta issue.
  *
@@ -236,22 +240,41 @@ const PORTAS_DE_LEITURA: Porta[] = [
   { nome: "GET /agents/:id/versions/:vid", chamar: () => get({ authorization: "Bearer dsk_abc_def" }) },
 ];
 
-describe("token que JÁ existe não ganha poder de configuração (decisão do PR #2194)", () => {
-  it.each(PORTAS_DE_ESCRITA)("$nome: mcp:write + role:admin → 403", async ({ chamar }) => {
+// Hiperbold (merge de 04/11/2026): o token `mcp:*` já emitido pelo fork continua valendo nestas portas,
+// ao lado do `config:*` do upstream — com o mesmo papel admin e a mesma fronteira leitura/escrita.
+describe("token mcp:* da Hiperbold vale ao lado do config:* (decisão do merge)", () => {
+  it.each(PORTAS_DE_ESCRITA)("$nome: mcp:write + role:admin passa da auth", async ({ chamar }) => {
     token({ scopes: ["mcp:read", "mcp:write", "role:admin"], role: "admin" });
+
+    const res = await chamar();
+
+    expect([401, 403]).not.toContain(res.status);
+    expect(validateBearerToken).toHaveBeenCalled();
+    expect(requireRole).not.toHaveBeenCalled();
+  });
+
+  it.each(PORTAS_DE_LEITURA)("$nome: mcp:read + role:admin passa da auth", async ({ chamar }) => {
+    token({ scopes: ["mcp:read", "role:admin"], role: "admin" });
+
+    const res = await chamar();
+
+    expect([401, 403]).not.toContain(res.status);
+    expect(requireRole).not.toHaveBeenCalled();
+  });
+
+  it.each(PORTAS_DE_ESCRITA)("$nome: mcp:read + role:admin não escreve → 403", async ({ chamar }) => {
+    token({ scopes: ["mcp:read", "role:admin"], role: "admin" });
 
     const res = await chamar();
 
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("forbidden_role");
-    expect(validateBearerToken).toHaveBeenCalled();
-    expect(requireRole).not.toHaveBeenCalled();
     // Recusado antes do banco: nada foi lido nem gravado.
     expect(filtros).toEqual([]);
   });
 
-  it.each(PORTAS_DE_LEITURA)("$nome: mcp:read + role:admin → 403", async ({ chamar }) => {
-    token({ scopes: ["mcp:read", "mcp:write", "role:admin"], role: "admin" });
+  it.each(PORTAS_DE_ESCRITA)("$nome: mcp:write sem papel admin → 403", async ({ chamar }) => {
+    token({ scopes: ["mcp:write", "role:manager"], role: "manager" });
 
     const res = await chamar();
 

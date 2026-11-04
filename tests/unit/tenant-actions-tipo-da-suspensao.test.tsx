@@ -5,14 +5,19 @@
  * com `suspensao_de_cobranca`, e um botão que sempre falha é o "o botão não
  * funciona" que a D-6 quer evitar.
  */
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render as renderCru, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/admin/tenants/SuspendDialog", () => ({ SuspendDialog: () => null }));
 vi.mock("@/components/admin/tenants/ReactivateDialog", () => ({ ReactivateDialog: () => null }));
 vi.mock("@/components/admin/tenants/DeleteTenantDialog", () => ({ DeleteTenantDialog: () => null }));
 vi.mock("@/components/admin/tenants/EditTenantDialog", () => ({ EditTenantDialog: () => null }));
 vi.mock("@/components/admin/ImpersonateButton", () => ({ ImpersonateButton: () => null }));
+// Hiperbold: TenantActions navega depois de excluir (useRouter) e pergunta a régua de cobrança própria pela rede.
+vi.mock("@/components/admin/tenants/ExcluirOrganizacaoDialog", () => ({ ExcluirOrganizacaoDialog: () => null }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
 import { TenantActions } from "@/components/admin/tenants/TenantActions";
 import type { TenantCounts, TenantOrganization } from "@/hooks/useTenantDetail";
@@ -29,7 +34,20 @@ function org(status: TenantOrganization["status"], suspended_kind?: TenantOrgani
   };
 }
 const COUNTS = {} as TenantCounts;
-afterEach(cleanup);
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return renderCru(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ data: { liberada: true } }), { status: 200 })),
+  );
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("TenantActions — o tipo da suspensão decide a saída", () => {
   it("⭐ suspensa por cobrança: diz o tipo, esconde 'Reativar tenant' e aponta o card Cobrança", () => {

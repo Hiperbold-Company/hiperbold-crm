@@ -151,6 +151,8 @@ function responder(c: Cadeia): Resposta {
   if (c.tabela === "api_audit_log") return { data: [] };
   if (c.tabela === "tenant_integrations") return { data: null };
   if (c.tabela === "agent_inbox_items") return { data: null };
+  // Hiperbold: a régua própria (`billing_contracts`) sem contrato libera; o assunto aqui é a releitura do upstream.
+  if (c.tabela === "billing_contracts" || c.tabela === "billing_settings") return { data: null };
   if (c.tabela !== "cobranca_assinaturas") throw new Error(`tabela inesperada: ${c.tabela}`);
   if (operacao(c) === "select") return { data: m.linha };
   // A gravação da releitura (compare-and-set, ou só `ultimo_erro` quando o

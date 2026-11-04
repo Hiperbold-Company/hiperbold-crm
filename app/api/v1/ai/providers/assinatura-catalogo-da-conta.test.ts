@@ -55,6 +55,12 @@ vi.mock("@/lib/supabase/admin", () => ({
       if (tabela === "ai_provider_credentials") return cadeia(tabela, [], null);
       return cadeia(tabela, [], { settings: {} });
     },
+    // D-132 (Hiperbold): o provedor padrão grava só a sua chave de `settings`,
+    // pela função do banco; 1 = a organização existe e foi atualizada.
+    rpc: async (fn: string, args: unknown) => {
+      if (fn === "fn_atualizar_setting_da_organizacao") banco.gravacoes.push({ tabela: "organizations", payload: args });
+      return { data: 1, error: null };
+    },
   }),
 }));
 

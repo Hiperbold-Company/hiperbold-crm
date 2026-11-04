@@ -9,7 +9,11 @@ type Org = { display_name: string; slug: string; status: string; suspended_at: s
 let org: Org | null;
 let programacao: { origem: string; estado: string; excluir_em: string } | null;
 let diasConfigurados = "";
+/** Hiperbold: o contrato da régua de cobrança própria (`billing_contracts`); `null` = sem contrato. */
+let contrato: { status: string; cycle: string; current_period_end: string; billing_plans: null } | null;
+const PERIODO = { cycle: "mensal", current_period_end: "2026-11-01T03:00:00.000Z", billing_plans: null };
 const excluir = vi.fn();
+const rpcs: string[] = [];
 
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -30,15 +34,24 @@ vi.mock("@/lib/supabase/admin", () => ({
       select: () => ({
         eq: () => ({
           maybeSingle: async () =>
-            tabela === "organizations" ? { data: org, error: null } : { data: programacao, error: null },
+            tabela === "organizations"
+              ? { data: org, error: null }
+              : tabela === "billing_contracts"
+                ? { data: contrato, error: null }
+                : tabela === "billing_settings"
+                  ? { data: { modo: "avisar" }, error: null }
+                  : { data: programacao, error: null },
         }),
       }),
     }),
-    rpc: async () => ({ data: null, error: null }),
+    rpc: async (nome: string) => {
+      rpcs.push(nome);
+      return { data: null, error: null };
+    },
   }),
 }));
 
-import { excluirAgora, situacaoDaExclusaoDaOrganizacao } from "@/app/actions/admin/exclusoes";
+import { excluirAgora, programarExclusao, situacaoDaExclusaoDaOrganizacao } from "@/app/actions/admin/exclusoes";
 
 const ORG = "11111111-2222-4333-8444-555555555555";
 const DIA = 86_400_000;
@@ -47,6 +60,8 @@ beforeEach(() => {
   excluir.mockReset();
   excluir.mockResolvedValue({ ok: true, resumo: {} });
   programacao = null;
+  contrato = null;
+  rpcs.length = 0;
   diasConfigurados = "";
   org = { display_name: "Acme Ltda", slug: "acme-ltda", status: "suspended", suspended_at: new Date().toISOString() };
 });
@@ -73,12 +88,59 @@ describe("excluirAgora pelo slug (painel de tenants)", () => {
     expect(excluir).toHaveBeenCalledWith(expect.anything(), ORG, "admin-1", { forcar: true });
   });
 
+  // Hiperbold: no meio da régua de cobrança própria a exclusão manual é recusada; no fim dela, liberada.
+  it.each(["atrasada", "suspensa"])("contrato %s (régua em curso): recusa com a mensagem e não executa", async (status) => {
+    contrato = { status, ...PERIODO };
+    const r = await excluirAgora({ organizationId: ORG, slugDigitado: "acme-ltda", confirmar: true });
+    expect(r).toEqual({
+      ok: false,
+      error: "Esta empresa está na régua de cobrança; a exclusão só é liberada quando a régua termina.",
+    });
+    expect(excluir).not.toHaveBeenCalled();
+  });
+
+  it("régua em curso também recusa pela tela de Exclusões (nome digitado)", async () => {
+    contrato = { status: "suspensa", ...PERIODO };
+    const r = await excluirAgora({ organizationId: ORG, nomeDigitado: "Acme Ltda", confirmar: true });
+    expect(r.ok).toBe(false);
+    expect(excluir).not.toHaveBeenCalled();
+  });
+
+  it("contrato cancelado (a régua terminou): executa", async () => {
+    contrato = { status: "cancelada", ...PERIODO };
+    const r = await excluirAgora({ organizationId: ORG, slugDigitado: "acme-ltda", confirmar: true });
+    expect(r).toEqual({ ok: true });
+    expect(excluir).toHaveBeenCalled();
+  });
+
   it("sem nome nem slug, ou com os dois: dados inválidos", async () => {
     expect((await excluirAgora({ organizationId: ORG, confirmar: true })).ok).toBe(false);
     expect(
       (await excluirAgora({ organizationId: ORG, nomeDigitado: "Acme Ltda", slugDigitado: "acme-ltda", confirmar: true })).ok,
     ).toBe(false);
     expect(excluir).not.toHaveBeenCalled();
+  });
+});
+
+// Hiperbold: programar à mão também respeita a régua de cobrança própria, no servidor.
+describe("programarExclusao e a régua de cobrança", () => {
+  const amanha = () => new Date(Date.now() + 2 * DIA).toISOString().slice(0, 10);
+
+  it.each(["atrasada", "suspensa"])("contrato %s (régua em curso): recusa e não programa", async (status) => {
+    contrato = { status, ...PERIODO };
+    const r = await programarExclusao({ organizationId: ORG, data: amanha() });
+    expect(r).toEqual({
+      ok: false,
+      error: "Esta empresa está na régua de cobrança; a exclusão só é liberada quando a régua termina.",
+    });
+    expect(rpcs).not.toContain("fn_exclusao_programar");
+  });
+
+  it("contrato cancelado (a régua terminou): programa", async () => {
+    contrato = { status: "cancelada", ...PERIODO };
+    const r = await programarExclusao({ organizationId: ORG, data: amanha() });
+    expect(r).toEqual({ ok: true });
+    expect(rpcs).toContain("fn_exclusao_programar");
   });
 });
 

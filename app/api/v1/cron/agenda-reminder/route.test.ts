@@ -416,7 +416,9 @@ describe("a rota escolhe o canal ANTES do carimbo e registra o pulo (#2595)", ()
     // do carimbo devolveria o defeito da issue — o degrau consumido sem ter
     // saído, e a próxima rodada sem o que tentar.
     const escolha = fonte.indexOf("const escolha = await resolverRemetenteDoLembrete");
-    const carimbo = fonte.indexOf("reminder_sent_at: new Date()");
+    // D-115 (Hiperbold): o carimbo é a reserva por compare-and-swap, que grava
+    // `reminder_sent_at` em `lib/agenda/lembrete-guardas.ts`.
+    const carimbo = fonte.indexOf("await reservarDegraus(");
     expect(escolha).toBeGreaterThan(-1);
     expect(carimbo).toBeGreaterThan(-1);
     expect(escolha).toBeLessThan(carimbo);
@@ -424,7 +426,8 @@ describe("a rota escolhe o canal ANTES do carimbo e registra o pulo (#2595)", ()
 
   it("o pular do motivo também vem ANTES do carimbo e usa o motivo devolvido pela escolha", () => {
     const pular = fonte.indexOf("pular(escolha.motivo)");
-    const carimbo = fonte.indexOf("reminder_sent_at: new Date()");
+    const carimbo = fonte.indexOf("await reservarDegraus(");
+    expect(carimbo).toBeGreaterThan(-1);
     expect(pular).toBeGreaterThan(-1);
     expect(pular).toBeLessThan(carimbo);
     // E com `continue`: sem ele, o resto da rodada enviaria de qualquer jeito.

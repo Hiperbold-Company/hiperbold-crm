@@ -49,7 +49,15 @@ vi.mock("@/lib/automation/outbound-url", async (importOriginal) => ({
 vi.mock("@/lib/automation/outbound-ip", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   assertDestinoResolvidoSeguro: async () => undefined,
+  // Hiperbold: o envio resolve o DNS uma vez e fixa o endereço (anti-rebinding).
+  resolverDestinoSeguro: async () => ["127.0.0.1"],
 }));
+// Hiperbold: o envio sai por `node:https` com o endereço fixado; o receptor deste
+// teste é HTTP local, então a mesma chamada vai por `node:http`.
+vi.mock("node:https", async (importOriginal) => {
+  const http = await import("node:http");
+  return { ...(await importOriginal<Record<string, unknown>>()), request: http.request };
+});
 
 import "@/lib/automation/actions/call-webhook";
 import { idDaEntrega } from "@/lib/automation/actions/call-webhook";
@@ -63,6 +71,13 @@ const REGRA = "33333333-3333-4333-8333-333333333333";
 const EVENTO = "44444444-4444-4444-8444-444444444444";
 
 type Linha = Record<string, unknown>;
+
+/**
+ * A hora do FATO: uma hora antes do teste. Era 2026-01-01 fixo; a proteção de laço
+ * da Hiperbold (`eventoVelhoDemais`, lib/automation/protecao-de-laco.ts) não dispara
+ * regra para evento velho demais, e o motor não chegava a enviar.
+ */
+const FATO = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
 /**
  * Supabase em memória: `from(tabela)` filtra por `.eq`, `insert` grava e
@@ -134,7 +149,12 @@ beforeEach(() => {
   recebidas.length = 0;
   corpos.length = 0;
   deps.support.mockResolvedValue(null);
-  deps.role.mockResolvedValue({ ok: true, user: { id: EU, idioma: "pt-BR" }, org: { orgId: ORG } });
+  // Papel de quem gerencia automações (`automacoes.gerenciar`, permissões por perfil).
+  deps.role.mockResolvedValue({
+    ok: true,
+    user: { id: EU, idioma: "pt-BR" },
+    org: { orgId: ORG, role: "manager" },
+  });
 });
 
 function evento(): EventRow & Linha {
@@ -148,7 +168,7 @@ function evento(): EventRow & Linha {
     metadata: {},
     consumed_by: [],
     attempts: 0,
-    created_at: "2026-01-01T00:00:00.000Z",
+    created_at: FATO,
   };
 }
 
@@ -200,7 +220,7 @@ describe("webhook de saída: o Reenviar é a mesma entrega (#1529)", () => {
     const resultadoOriginal = (original.actions_result as Array<{ detail?: Linha }>)[1];
     expect(resultadoOriginal?.detail).toMatchObject({ delivery_id: entrega, attempt: 1 });
 
-    // 2. O Reenviar do run original — meses depois do fato (created_at em 2026-01-01).
+    // 2. O Reenviar do run original — depois do fato (`FATO`, uma hora antes).
     const antesDoReenvio = Date.now();
     const primeiro = await reenviar(original.id as string);
     const depoisDoReenvio = Date.now();
@@ -210,7 +230,7 @@ describe("webhook de saída: o Reenviar é a mesma entrega (#1529)", () => {
     expect(recebidas[1]?.["x-webhook-attempt"]).toBe("2");
     // `occurred_at` segue sendo a hora do ENVIO (contrato público); a do fato
     // vai em `happened_at` e é a mesma no disparo e no Reenviar.
-    expect(corpos.map((c) => c.happened_at)).toEqual(["2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z"]);
+    expect(corpos.map((c) => c.happened_at)).toEqual([FATO, FATO]);
     const reenviadoEm = Date.parse(corpos[1]?.occurred_at ?? "");
     expect(reenviadoEm).toBeGreaterThanOrEqual(antesDoReenvio);
     expect(reenviadoEm).toBeLessThanOrEqual(depoisDoReenvio);

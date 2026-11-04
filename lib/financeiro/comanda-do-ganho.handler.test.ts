@@ -321,7 +321,8 @@ async function fecharPeloArrasto(banco: BancoFalso): Promise<void> {
   vi.mocked(requireRole).mockResolvedValue({
     ok: true,
     user: { id: USER, idioma: "pt-BR" },
-    org: { orgId: ORG },
+    // O papel efetivo entra na régua de mover negócio (permissões por perfil).
+    org: { orgId: ORG, role: "agent" },
   } as never);
   const { POST } = await import("../../app/api/v1/leads/[id]/move/route");
   const req = new NextRequest(`http://localhost/api/v1/leads/${LEAD}/move`, {

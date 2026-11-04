@@ -205,7 +205,9 @@ describe("os caminhos de envio passam pelo proxy", () => {
     // UUID (ou um sufixo qualquer) não entra de carona em cima de um que entra.
     expect(isPublicPath("/api/v1/ai/agents/assignable")).toBe(false);
     expect(isPublicPath("/api/v1/ai/agents/abc")).toBe(false);
-    expect(isPublicPath(`/api/v1/ai/agents/${AGENTE}/pause`)).toBe(false);
+    // Hiperbold (fase 2): `/pause` também aceita Bearer — o handler autentica por `autorizarAdministracao`
+    // (token validado, papel admin, organização da linha do token). Coberto em api-fase2-admin-por-token.
+    expect(isPublicPath(`/api/v1/ai/agents/${AGENTE}/pause`)).toBe(true);
     expect(isPublicPath(`/api/v1/ai/agents/${AGENTE}/versions/${VERSAO}/rollback`)).toBe(false);
     expect(isPublicPath(`/api/v1/ai/agents/${AGENTE}/versions/`)).toBe(false);
   });

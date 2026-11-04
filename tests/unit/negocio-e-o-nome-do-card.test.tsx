@@ -59,6 +59,7 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   useAuth: () => ({ user: { id: "usuario-eu" } }),
   usePermission: () => true,
   useUser: () => ({ id: "usuario-eu" }),
+  useFusoDaOrganizacao: () => null,
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
 vi.mock("@/components/feedback/ApiErrorToast", () => ({ showApiError: vi.fn() }));

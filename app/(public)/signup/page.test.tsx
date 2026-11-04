@@ -11,7 +11,10 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/i18n/idiomaAnonimo", () => ({ idiomaDoVisitante: async () => "pt-BR" }));
-vi.mock("@/lib/branding", () => ({ branding: () => ({ name: "CRM" }) }));
+vi.mock("@/lib/branding", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/branding")>()),
+  branding: () => ({ name: "CRM" }),
+}));
 vi.mock("@/lib/security/turnstile", () => ({ turnstileSiteKey: () => null }));
 vi.mock("@/lib/auth/politica-de-cadastro", () => ({ modoDeCadastro: async () => "aberto" }));
 vi.mock("@/lib/onboarding/precisa-pagar", () => ({ compraPeloClienteDisponivel: async () => false }));

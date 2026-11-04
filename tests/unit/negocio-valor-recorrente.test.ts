@@ -522,6 +522,8 @@ describe("o painel lateral do atendimento", () => {
       user: { is_platform_admin: false, support: null },
       activeOrg: { orgId: "org-1", role: "agent", cliente_pela_agenda: false },
     }),
+    usePermission: () => true,
+    useFusoDaOrganizacao: () => null,
   }));
   vi.mock("@/hooks/contacts/useHierarquiaDoAnuncio", () => ({ useHierarquiaDoAnuncio: () => ({ data: null }) }));
   vi.mock("@/hooks/contacts/useUnblockContact", () => ({ useUnblockContact: () => ({ mutate: vi.fn(), isPending: false }) }));

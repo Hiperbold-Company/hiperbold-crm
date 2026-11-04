@@ -1,7 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Hiperbold (D-216): "este contato tem CPF?" é perguntado pelo cliente de SERVIÇO
+// (`lib/contacts/cpf-do-contato.ts`), fora do dublê de banco deste arquivo. Ninguém aqui tem CPF.
+vi.mock("@/lib/contacts/cpf-do-contato", async (original) => ({
+  ...(await original<typeof import("@/lib/contacts/cpf-do-contato")>()),
+  idsComCpf: async () => ({ ids: new Set<string>(), error: null }),
+  idsPorHashDeCpf: async () => ({ ids: [], error: null }),
+}));
 
 import { ApiError } from "@/lib/api/types";
 import {

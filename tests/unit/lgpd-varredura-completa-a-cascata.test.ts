@@ -229,7 +229,10 @@ function banco(linhas: Linha[]) {
             }
             // O PostgREST corta em `max_rows` mesmo quando o `.limit()` pede mais.
             achadas = achadas.slice(0, Math.min(teto ?? MAX_ROWS_DO_POSTGREST, MAX_ROWS_DO_POSTGREST));
-            if (modo === "select" && tabela === "contacts") leiturasDeContatos.push(achadas.map((l) => l.id));
+            // Só a PÁGINA da varredura (`is_anonymized = true`): a leitura de `social_identity` por bloco
+            // (fork Hiperbold, Instagram/Messenger) também lê `contacts`, mas não é página.
+            if (modo === "select" && tabela === "contacts" && filtros.some(([col]) => col === "is_anonymized"))
+              leiturasDeContatos.push(achadas.map((l) => l.id));
             if (modo === "update") {
               aplicar(tabela, patch, achadas);
               return Promise.resolve({ error: null }).then(r);

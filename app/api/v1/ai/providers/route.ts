@@ -199,7 +199,14 @@ export async function GET(): Promise<Response> {
             baseUrl: null,
           }
         : null,
-    chaveOpenai: async () => chaveExiste("openai"),
+    // Hiperbold: a transcrição da instalação é a EXCEÇÃO à regra "chave da instalação =
+    // OpenRouter" — o worker (`workers/media-derive-worker.ts`) usa a credencial OpenAI da
+    // organização ou `OPENAI_API_KEY` do ambiente, que `lerAmbiente` não conta como chave de IA.
+    chaveOpenai: async () =>
+      credenciais.some((c) => c.provider === "openai" && c.validated_at) ||
+      (process.env.OPENAI_API_KEY ?? "").trim() !== ""
+        ? "chave-existente"
+        : null,
     // Degrau 0: o mesmo critério do worker — binding ligado no Scribe E chave
     // do ElevenLabs existente. Sem a chave, a tela anuncia o degrau seguinte,
     // que é o que o worker de fato roda.

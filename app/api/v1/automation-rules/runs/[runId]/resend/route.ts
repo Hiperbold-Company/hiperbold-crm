@@ -17,7 +17,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { createClient } from "@/lib/supabase/server";
@@ -155,7 +155,7 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
     .eq("organization_id", activeOrg.orgId)
     .eq("rule_id", rule.id)
     .eq("event_id", typedEvent.id);
-  if (runsErr) return fail("internal_error", runsErr.message, 500, { requestId });
+  if (runsErr) return falhaInterna("internal_error", runsErr, { requestId });
 
   // Admin real no ctx: o executor decifra config.secret_enc via RPC
   // fn_decrypt_oauth (grant só service_role) — client de sessão falharia e o

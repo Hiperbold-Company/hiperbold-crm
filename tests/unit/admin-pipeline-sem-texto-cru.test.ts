@@ -63,21 +63,27 @@ vi.mock("@/lib/auth/server", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({
-            data: { vocabulary: null, settings: {}, organization_id: ORG },
-            error: h.erroDaLeitura,
-          }),
-        }),
-      }),
-      update: (valores: Record<string, unknown>) => ({
-        eq: async () => {
+      // A leitura e a gravação vão pelo núcleo (`aplicarConfiguracaoDoFunil`), que
+      // filtra id + organização e confirma a gravação com `.select("id")`.
+      select: () => {
+        const leitura: Record<string, unknown> = {};
+        leitura.eq = () => leitura;
+        leitura.maybeSingle = async () => ({
+          data: { vocabulary: null, settings: {}, organization_id: ORG },
+          error: h.erroDaLeitura,
+        });
+        return leitura;
+      },
+      update: (valores: Record<string, unknown>) => {
+        void valores;
+        const escrita: Record<string, unknown> = {};
+        escrita.eq = () => escrita;
+        escrita.select = async () => {
           h.gravacoes += 1;
-          void valores;
-          return { error: h.erroDaGravacao };
-        },
-      }),
+          return { data: h.erroDaGravacao ? null : [{ id: PIPELINE }], error: h.erroDaGravacao };
+        };
+        return escrita;
+      },
     }),
   }),
 }));

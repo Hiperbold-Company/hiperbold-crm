@@ -40,6 +40,11 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (texto: string) => texto }));
+// Hiperbold: o card pergunta a permissão por perfil (`negocios.mover`) para arrastar.
+vi.mock("@/hooks/auth/AuthProvider", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/auth/AuthProvider")>()),
+  usePermission: () => true,
+}));
 // O card é um `Draggable`: o dnd entra como casca oca (mesma técnica de
 // `funil-deep-link-abre-o-negocio`), e o menu de ações — que abre diálogos e lê
 // permissões — sai de cena: o que este arquivo mede é o CONTEÚDO do card.
@@ -96,6 +101,8 @@ function negocios(...ids: string[]): Lead[] {
         title: `Negócio ${id.slice(0, 4)}`,
         custom_fields: {},
         tags: [],
+        // O card Hiperbold mostra "movido há N dias" (a criação, sem carimbo de etapa).
+        created_at: "2026-10-22T09:00:00Z",
       }) as unknown as Lead,
   );
 }

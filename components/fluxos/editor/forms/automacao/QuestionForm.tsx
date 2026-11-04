@@ -52,15 +52,15 @@ export function configDaPergunta(r: Rascunho): unknown {
   };
 }
 
-function problemaDa(r: Rascunho): string | null {
-  if (r.question.trim() === "") return "Escreva a pergunta.";
-  if (!r.saveTo) return "Escolha o campo que guarda a resposta.";
+function problemaDa(r: Rascunho, t: (texto: string) => string): string | null {
+  if (r.question.trim() === "") return t("Escreva a pergunta.");
+  if (!r.saveTo) return t("Escolha o campo que guarda a resposta.");
   if (
     r.timeoutMs === null ||
     r.timeoutMs < TEMPO_MINIMO_DE_ESPERA_DE_RESPOSTA_MS ||
     r.timeoutMs > TEMPO_MAXIMO_DA_PERGUNTA_MS
   )
-    return "O tempo limite vai de 1 minuto a 7 dias.";
+    return t("O tempo limite vai de 1 minuto a 7 dias.");
   return null;
 }
 
@@ -98,9 +98,9 @@ export function QuestionForm({
   const gravar = (patch: Partial<Rascunho>) => {
     const novo = { ...r, ...patch };
     setR(novo);
-    const problema = problemaDa(novo);
+    const problema = problemaDa(novo, t);
     if (problema) {
-      setErro(t(problema));
+      setErro(problema);
       return;
     }
     const parsed = questionConfigSchema.safeParse(configDaPergunta(novo));

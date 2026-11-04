@@ -47,6 +47,7 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   useActiveOrg: () => ({ role: "agent" }),
   // O seletor de etapa do cabeçalho (#3272) lê a régua de mover card.
   usePermission: () => false,
+  useFusoDaOrganizacao: () => null,
 }));
 vi.mock("@/hooks/leads/useLeadTimeline", () => ({
   useLeadTimeline: () => ({
@@ -92,6 +93,8 @@ const LEAD = {
   owner_user_id: null,
   owner_agent_id: null,
   owner_agent: null,
+  // O cabeçalho do dossiê mostra "Criado em" (o tipo Lead exige a data).
+  created_at: "2026-10-01T12:00:00.000Z",
 } as unknown as Lead;
 
 function montarDossie() {

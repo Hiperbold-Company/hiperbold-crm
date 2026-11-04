@@ -30,6 +30,8 @@ beforeEach(() => {
   deps.support.mockResolvedValue(null);
 });
 
+// Hiperbold (merge de 04/11/2026): o escopo é "qualquer um destes" — `config:*` do upstream OU o `mcp:*`
+// dos tokens já emitidos pelo fork —, sempre com token de admin.
 describe("contrato de autorização dual das sete operações de routers", () => {
   it.each([
     {
@@ -38,7 +40,7 @@ describe("contrato de autorização dual das sete operações de routers", () =>
       path: "",
       method: "GET",
       role: "agent",
-      scope: "config:read",
+      scope: ["config:read", "mcp:read"],
       tokenRole: "admin",
     },
     {
@@ -47,7 +49,7 @@ describe("contrato de autorização dual das sete operações de routers", () =>
       path: `/${ROUTER_ID}`,
       method: "GET",
       role: "agent",
-      scope: "config:read",
+      scope: ["config:read", "mcp:read"],
       tokenRole: "admin",
     },
     {
@@ -56,7 +58,7 @@ describe("contrato de autorização dual das sete operações de routers", () =>
       path: "",
       method: "POST",
       role: "admin",
-      scope: "config:write",
+      scope: ["config:write", "mcp:write"],
       tokenRole: "admin",
     },
     {
@@ -65,7 +67,7 @@ describe("contrato de autorização dual das sete operações de routers", () =>
       path: `/${ROUTER_ID}`,
       method: "PATCH",
       role: "admin",
-      scope: "config:write",
+      scope: ["config:write", "mcp:write"],
       tokenRole: "admin",
     },
     {
@@ -74,7 +76,7 @@ describe("contrato de autorização dual das sete operações de routers", () =>
       path: `/${ROUTER_ID}`,
       method: "DELETE",
       role: "admin",
-      scope: "config:write",
+      scope: ["config:write", "mcp:write"],
       tokenRole: "admin",
     },
     {
@@ -83,7 +85,7 @@ describe("contrato de autorização dual das sete operações de routers", () =>
       path: `/${ROUTER_ID}/members`,
       method: "PUT",
       role: "admin",
-      scope: "config:write",
+      scope: ["config:write", "mcp:write"],
       tokenRole: "admin",
     },
     {
@@ -92,7 +94,7 @@ describe("contrato de autorização dual das sete operações de routers", () =>
       path: `/${ROUTER_ID}/test`,
       method: "POST",
       role: "manager",
-      scope: "config:write",
+      scope: ["config:write", "mcp:write"],
       tokenRole: "admin",
     },
   ])("$nome preserva o papel e exige $scope com token de admin", async ({ chamar, path, method, role, scope, tokenRole }) => {

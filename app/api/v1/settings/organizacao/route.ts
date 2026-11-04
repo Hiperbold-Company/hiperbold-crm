@@ -109,7 +109,9 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   const falhou = (error: string) =>
     error === "sem_area"
       ? fail("unprocessable_entity", t("Selecione ao menos uma área além das essenciais."), 422, { requestId })
-      : error.startsWith("País sem perfil revisado")
+      : error === "cnpj_em_uso"
+        ? fail("state_conflict", "Este CNPJ já pertence a outra organização.", 409, { requestId })
+        : error.startsWith("País sem perfil revisado")
         ? fail("unprocessable_entity", error, 422, { requestId })
         : fail("internal_error", t("Não foi possível concluir agora. Tente novamente em instantes."), 500, { requestId });
 

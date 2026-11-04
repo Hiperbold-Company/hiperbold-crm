@@ -3,11 +3,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
+import type { CorpoDoFiltro } from "@/lib/contacts/filtros-url";
 
 /** O que se exclui: a seleção da tela (ids) OU "todos do filtro" (o servidor resolve; `esperado` é o N que a pessoa viu). */
 export type AlvoDaExclusao =
   | { ids: string[] }
-  | { filtro: Record<string, string>; esperado: number };
+  | { filtro: CorpoDoFiltro; esperado: number };
 
 export interface ResultadoDaExclusao {
   excluidos: number;

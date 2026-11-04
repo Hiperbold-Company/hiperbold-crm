@@ -48,7 +48,15 @@ function interceptarSaida(): Array<Record<string, unknown>> {
   return corpos;
 }
 
-/** `pg.Pool` fingido: a org usa `provider`/`modelo`, sem binding nem credencial própria. */
+// Hiperbold: a chave da INSTALAÇÃO sai sempre pela OpenRouter, então o pedido
+// nativo de cada provedor só existe pela credencial BYOK da organização. A cifra é
+// a única peça dublada; a resolução e o registry são os reais.
+vi.mock("@/lib/ai/credenciais/cifra", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ai/credenciais/cifra")>()),
+  decifrarColunasDaCredencial: () => "chave-byok-de-teste",
+}));
+
+/** `pg.Pool` fingido: a org usa `provider`/`modelo`, sem binding, com a credencial BYOK do provedor. */
 function poolDaOrg(provider: string, modelo: string) {
   return {
     query: vi.fn(async (sql: string) => {
@@ -62,6 +70,9 @@ function poolDaOrg(provider: string, modelo: string) {
         };
       }
       if (sql.includes("insert into llm_calls")) return { rows: [{ id: "call-1" }] };
+      if (sql.includes("from ai_provider_credentials") && sql.includes("provider = $2")) {
+        return { rows: [{ id: "cred-byok", api_key_encrypted: null, api_key_iv: null, api_key_tag: null }] };
+      }
       return { rows: [] };
     }),
   } as never;

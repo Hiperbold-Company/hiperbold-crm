@@ -157,24 +157,27 @@ describe("resolverChaveDeEmbedding", () => {
   // A chave OpenRouter da organização costuma estar ali para a CONVERSA. Se ela
   // passasse na frente da OpenAI ou do gateway da instalação, a atualização
   // trocaria em silêncio o fornecedor de quem já indexava.
-  it("OPENAI_API_KEY da instalação vence a credencial OpenRouter da organização", async () => {
+  // Hiperbold (decisão do dono, 20/10/2026): a chave da INSTALAÇÃO sai sempre
+  // pela OpenRouter. `OPENAI_API_KEY` e o gateway da Vercel no servidor não são
+  // caminho de embedding; a credencial OpenRouter da organização segue valendo.
+  it("OPENAI_API_KEY da instalação não é caminho: vale a credencial OpenRouter da organização", async () => {
     state.env.OPENAI_API_KEY = "chave-ficticia-env-openai";
     state.credentials = [credential({})];
 
     expect(await resolverChaveDeEmbedding("org-1")).toMatchObject({
-      apiKey: "chave-ficticia-env-openai",
-      provedor: "openai",
-      origem: "chave_da_instalacao",
+      apiKey: "chave-ficticia-openrouter",
+      provedor: "openrouter",
+      origem: "credencial_da_organizacao",
     });
   });
 
-  it("o gateway da instalação vence a credencial OpenRouter da organização", async () => {
+  it("o gateway da instalação não é caminho: vale a credencial OpenRouter da organização", async () => {
     state.env.AI_GATEWAY_API_KEY = "gateway-ficticio";
     state.credentials = [credential({})];
 
     expect(await resolverChaveDeEmbedding("org-1")).toMatchObject({
-      provedor: "gateway",
-      origem: "gateway_da_instalacao",
+      provedor: "openrouter",
+      origem: "credencial_da_organizacao",
     });
   });
 
@@ -220,7 +223,8 @@ describe("resolverChaveDeEmbedding", () => {
         base_url: null,
       },
     ];
-    state.env.OPENAI_API_KEY = "chave-ficticia-env-openai";
+    // Hiperbold: a chave da instalação é a OpenRouter (serve a família OpenAI).
+    state.env.OPENROUTER_API_KEY = "chave-ficticia-instalacao";
     state.credentials = [
       credential({ id: "cred-google", provider: "google", api_key_encrypted: "chave-ficticia-google" }),
     ];
@@ -238,7 +242,7 @@ describe("resolverChaveDeEmbedding", () => {
     // pergunta antes de oferecer "Trocar para a OpenAI".
     expect(
       await resolverChaveDeEmbedding("org-1", "embedding_consultar", { familia: "openai" }),
-    ).toMatchObject({ provedor: "openai", origem: "chave_da_instalacao" });
+    ).toMatchObject({ provedor: "openrouter", origem: "chave_da_instalacao" });
   });
 
   it("credencial do Google sem escolha só vale quando não há NENHUMA via OpenAI", async () => {

@@ -109,7 +109,8 @@ describe("savePartnerSession pela instalação", () => {
       phoneNumber: "+5511987650000",
       displayName: "Loja",
     });
-    expect(r).toEqual({ error: null, id: "sessao-1" });
+    // `errorRaw` (Hiperbold): o erro cru vai junto para a recusa do plano (`recusaDoPlano`).
+    expect(r).toEqual({ error: null, errorRaw: null, id: "sessao-1" });
     const update = escritas.find((e) => e.tabela === "channel_sessions" && e.op === "update");
     expect(update?.valor).toMatchObject({
       zernio_token_encrypted: null,

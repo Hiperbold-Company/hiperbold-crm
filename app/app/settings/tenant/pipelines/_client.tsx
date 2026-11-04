@@ -338,7 +338,7 @@ export function PipelinesClient({
       <Card className="p-6 text-sm leading-relaxed text-muted-foreground" data-testid="sem-funil-configuracao">
         {t("Você ainda não tem nenhum funil. Enquanto for assim, o agente atende normalmente, mas não tem para onde levar o card de ninguém — não há etapas para onde mover.")}{" "}
         <Link href="/app/kanban" className="font-medium text-foreground underline underline-offset-2" data-testid="link-criar-funil">
-          {t("Crie o primeiro na tela Funis")}
+          {t("Crie o primeiro na tela Pipeline")}
         </Link>
         {t(": ele já nasce com etapas, e depois aparece aqui para você escolher a etapa de cada passo.")}
       </Card>
@@ -1299,7 +1299,7 @@ function PipelineEditor({
                 (o gravado ou, na falta dele, o inferido pela chave): o seletor
                 nunca aparece em branco para um funil antigo, e escolher grava
                 `grupo` explícito. */}
-            <div className="flex items-center gap-2 md:col-span-4">
+            <div className="flex items-center gap-2 lg:col-span-4">
               <Label className="text-xs">{t("Categoria")}</Label>
               <Select
                 value={grupoDoCampo(f)}

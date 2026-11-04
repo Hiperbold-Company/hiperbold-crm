@@ -36,20 +36,18 @@ vi.mock("@/app/api/v1/external-db/_falha", () => ({
   seModuloDesligado: vi.fn(async () => null),
   respostaDeAcesso: vi.fn(),
 }));
+// O acesso do upstream devolve o `dialeto` do motor (listar, colunas e leitura moram nele).
 vi.mock("@/lib/external-db/acesso", () => ({
-  abrirAcesso: vi.fn(async () => ({ ok: true, pool: {}, conexao: { maxRows: 100 } })),
+  abrirAcesso: vi.fn(async () => ({
+    ok: true,
+    conexao: { maxRows: 100, sourceMode: "todas" },
+    dialeto: {
+      listarTabelas: vi.fn(async () => [{ schema: "public", tabela: "clientes" }]),
+      colunasDaTabela: vi.fn(async () => new Set(["cpf"])),
+      lerTabela: vi.fn(async () => ({ colunas: ["cpf"], linhas: [{ cpf: "123" }], limite: 10, offset: 0 })),
+    },
+  })),
 }));
-vi.mock("@/lib/external-db/introspeccao", () => ({
-  listarTabelas: vi.fn(async () => [{ schema: "public", tabela: "clientes" }]),
-  colunasDaTabela: vi.fn(async () => [{ nome: "cpf", tipo: "text" }]),
-}));
-vi.mock("@/lib/external-db/leitura", async () => {
-  const real = (await vi.importActual("@/lib/external-db/leitura")) as Record<string, unknown>;
-  return {
-    ...real,
-    lerTabela: vi.fn(async () => ({ colunas: ["cpf"], linhas: [{ cpf: "123" }], limite: 10, offset: 0 })),
-  };
-});
 
 import { abrirAcesso } from "@/lib/external-db/acesso";
 import { GET as lerDados } from "@/app/api/v1/external-db/connections/[id]/tables/[schema]/[tabela]/route";

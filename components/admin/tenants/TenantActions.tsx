@@ -9,6 +9,7 @@ import { EditTenantDialog } from "./EditTenantDialog";
 import { ImpersonateButton } from "@/components/admin/ImpersonateButton";
 import type { TenantCounts, TenantOrganization } from "@/hooks/useTenantDetail";
 import { useT } from "@/hooks/i18n/useT";
+import { useReguaDaExclusao } from "./useReguaDaExclusao";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -31,7 +32,9 @@ interface TenantActionsProps {
  *
  * Hiperbold: a exclusão é a de Sistema › Exclusões (programar ou excluir agora,
  * `ExcluirOrganizacaoDialog`), não o `DeleteTenantDialog` do upstream. `counts`
- * segue nas props porque a página já o entrega.
+ * segue nas props porque a página já o entrega. No meio da régua de cobrança
+ * própria (contrato atrasada ou suspensa) o botão fica desabilitado com o motivo
+ * (`useReguaDaExclusao`, `lib/tenants/regua-de-cobranca.ts`).
  */
 export function TenantActions({ organization }: TenantActionsProps) {
   const t = useT();
@@ -48,6 +51,14 @@ export function TenantActions({ organization }: TenantActionsProps) {
   // cobrança não se exclui: a assinatura seguiria cobrando no provedor.
   const suspensaPorCobranca = isSuspended && organization.suspended_kind === "cobranca";
   const isRedacted = status === "redacted";
+  // Hiperbold: a régua de cobrança própria decide se a exclusão manual está liberada (só se pergunta quando o
+  // resto já permitiria). O servidor confere de novo ao excluir.
+  const { motivo: motivoDaRegua } = useReguaDaExclusao(organizationId, isSuspended && !suspensaPorCobranca);
+  const motivoParaNaoExcluir = !isSuspended
+    ? t("Suspenda antes de excluir")
+    : suspensaPorCobranca
+      ? t("Suspensa por falta de pagamento: não pode ser excluída enquanto houver cobrança pendente.")
+      : motivoDaRegua;
 
   return (
     <>
@@ -110,21 +121,24 @@ export function TenantActions({ organization }: TenantActionsProps) {
           </Button>
         )}
 
-        {/* Excluir: só depois de suspender. Em tenant ativo fica desabilitado com a dica. */}
+        {/* Excluir: só depois de suspender, nunca por cobrança, e (Hiperbold) só fora da régua de cobrança.
+            Bloqueado, o botão fica desabilitado com o motivo embaixo. */}
         {!isRedacted && (
           <div className="space-y-1">
             <Button
               className="w-full"
               variant="destructive"
-              disabled={!isSuspended}
+              disabled={motivoParaNaoExcluir !== null}
               onClick={() => setExcluirOpen(true)}
               data-testid="excluir-organizacao"
-              title={!isSuspended ? t("Suspenda antes de excluir") : undefined}
+              title={motivoParaNaoExcluir ?? undefined}
             >
               {t("Excluir organização")}
             </Button>
-            {!isSuspended && (
-              <p className="text-xs text-muted-foreground text-center">{t("Suspenda antes de excluir")}</p>
+            {motivoParaNaoExcluir !== null && (
+              <p className="text-xs text-muted-foreground text-center" data-testid="motivo-para-nao-excluir">
+                {motivoParaNaoExcluir}
+              </p>
             )}
           </div>
         )}
@@ -154,7 +168,7 @@ export function TenantActions({ organization }: TenantActionsProps) {
         organization={organization}
       />
 
-      {isSuspended && (
+      {isSuspended && motivoParaNaoExcluir === null && (
         <ExcluirOrganizacaoDialog
           open={excluirOpen}
           onClose={() => setExcluirOpen(false)}

@@ -201,7 +201,8 @@ const SITES: { arquivo: string; fronteira: string; papel?: "gerador" | "validado
   // O anexo de lead (#2829): anexo em campo customizado do lead, bucket `internal-media`.
   { arquivo: "app/api/v1/leads/[id]/attachments/route.ts", fronteira: "storage.chave-de-objeto" },
   { arquivo: "app/api/v1/ai/knowledge/sources/upload/route.ts", fronteira: "storage.chave-de-objeto" },
-  { arquivo: "app/api/v1/ai/knowledge/sources/route.ts", fronteira: "storage.chave-de-objeto" },
+  // Fork Hiperbold: a rota é transporte; o upload do material mora no núcleo que a API e o MCP usam.
+  { arquivo: "lib/ai/rag/administracao-fontes.ts", fronteira: "storage.chave-de-objeto" },
   // O PDF da proposta comercial (#1832): `<org>/<proposta>.pdf`, dois uuids.
   { arquivo: "lib/propostas/storage.ts", fronteira: "storage.chave-de-objeto" },
   // A foto do produto por URL na planilha (#3587, fatia 1): a chave é
@@ -211,7 +212,8 @@ const SITES: { arquivo: string; fronteira: string; papel?: "gerador" | "validado
   // texto da planilha entra na chave — a URL do cliente só escolhe o conteúdo.
   { arquivo: "lib/catalogo/fotos-por-url.ts", fronteira: "storage.chave-de-objeto" },
   // Chave de idempotência: os geradores (manda UUID) e os validadores (exige UUID).
-  { arquivo: "app/onboarding/connect-whatsapp/_client.tsx", fronteira: "api.idempotency-key", papel: "gerador" },
+  // Fork Hiperbold: o onboarding conecta pela UAZAPI e não chama mais POST /api/v1/onboarding/whatsapp/session
+  // (WAHA); a tela deixou de gerar chave de idempotência.
   { arquivo: "components/extensions/ExtensionsManager.tsx", fronteira: "api.idempotency-key", papel: "gerador" },
   { arquivo: "components/modulos/ModulosManager.tsx", fronteira: "api.idempotency-key", papel: "gerador" },
   { arquivo: "hooks/ai/useSkills.ts", fronteira: "api.idempotency-key", papel: "gerador" },

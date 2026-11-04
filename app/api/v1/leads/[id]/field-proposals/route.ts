@@ -17,7 +17,7 @@
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { camposDoFunil, camposPorEscopo } from "@/lib/leads/campos-do-funil";
 import { settingsDoFunil } from "@/lib/leads/campos-exigidos";
@@ -78,7 +78,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("id", leadId)
     .maybeSingle();
 
-  if (leadErr) return fail("internal_error", leadErr.message, 500, { requestId });
+  if (leadErr) return falhaInterna("internal_error", leadErr, { requestId });
   if (!lead) return fail("not_found", t("Negócio não encontrado."), 404, { requestId });
 
   const settings = await settingsDoFunil(supabase, (lead as { pipeline_id?: string | null }).pipeline_id);
@@ -111,7 +111,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .gt("expires_at", agora.toISOString())
     .order("proposed_at", { ascending: true });
 
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
 
   const gravados = ((lead as { custom_fields?: unknown }).custom_fields ??
     {}) as Record<string, unknown>;

@@ -29,6 +29,7 @@ import { KanbanCard } from "./KanbanCard";
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (texto: string) => texto }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   usePermission: () => true,
+  useFusoDaOrganizacao: () => null,
   useUser: () => ({ id: "u-1" }),
   useActiveOrg: () => ({ orgId: "o-1", currency: "BRL" }),
 }));

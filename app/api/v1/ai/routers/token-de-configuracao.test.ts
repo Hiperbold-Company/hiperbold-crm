@@ -13,6 +13,11 @@ import type * as McpAuthModule from "@/lib/mcp/auth";
  * O caso que importa é o token que JÁ existia antes desta porta abrir:
  * "AGIR no CRM" + "Tratar como administrador", sem a permissão de configurar.
  * Ele não pode ganhar o poder de apagar roteador nem trocar quem atende.
+ *
+ * ⚠️ HIPERBOLD (merge de 04/11/2026): o fork já emitiu tokens `mcp:*` +
+ * `role:admin` para estas portas (API da fase 3). Decisão do dono: valem os
+ * DOIS — `config:*` OU `mcp:*` —, com o papel admin do upstream; leitura nunca
+ * escreve e papel abaixo de admin recusa.
  */
 
 const deps = vi.hoisted(() => ({ validateBearerToken: vi.fn() }));
@@ -98,23 +103,34 @@ const PORTAS = [
   },
 ];
 
-const TOKENS_QUE_JA_EXISTEM = [
-  ["mcp:write", "role:admin"],
-  ["mcp:read", "mcp:write", "role:admin"],
-];
-
 describe("roteador por token exige a permissão de configurar a IA (#2194)", () => {
-  it.each(PORTAS.flatMap((p) => TOKENS_QUE_JA_EXISTEM.map((scopes) => ({ ...p, scopes }))))(
-    "$nome: token já emitido $scopes recebe 403",
-    async ({ chamar, scopes }) => {
-      comToken(scopes, "admin");
+  // Hiperbold: o token `mcp:*` + admin já emitido pelo fork segue valendo, ao lado do `config:*`.
+  it("token mcp:write + role:admin da Hiperbold apaga o roteador (200)", async () => {
+    comToken(["mcp:read", "mcp:write", "role:admin"], "admin");
+    vi.mocked(createAdminClient).mockReturnValue(bancoDoDelete() as never);
 
-      const res = await chamar();
+    const res = await deleteRouter(bearer(`/${ROUTER_ID}`, "DELETE"), ctx);
 
-      expect(res.status).toBe(403);
-      expect(createAdminClient).not.toHaveBeenCalled();
-    },
-  );
+    expect(res.status).toBe(200);
+  });
+
+  it.each(PORTAS.filter((p) => !p.leitura))("$nome: mcp:read + role:admin não escreve (403)", async ({ chamar }) => {
+    comToken(["mcp:read", "role:admin"], "admin");
+
+    const res = await chamar();
+
+    expect(res.status).toBe(403);
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it.each(PORTAS)("$nome: mcp:* sem role:admin recebe 403", async ({ chamar, leitura }) => {
+    comToken([leitura ? "mcp:read" : "mcp:write", "role:manager"], "manager");
+
+    const res = await chamar();
+
+    expect(res.status).toBe(403);
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
 
   it.each(PORTAS)("$nome: permissão de configurar sem role:admin recebe 403", async ({ chamar, leitura }) => {
     comToken([leitura ? "config:read" : "config:write", "role:manager"], "manager");

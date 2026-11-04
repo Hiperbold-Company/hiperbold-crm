@@ -339,8 +339,10 @@ export async function editarFonte(
   const ksRow = existing as { id: string; source_type: string; agent_id: string | null };
   const tipo = canonizarTipoDeFonte(ksRow.source_type);
 
-  // Itens mandados a um tipo que não os ingere eram DESCARTADOS em silêncio — e antes de qualquer escrita.
-  if (input.items !== undefined && tipo !== null && !aceitaTextoColado(tipo)) {
+  // `items` SÓ tem efeito em `faq`, e a conferência vem antes de QUALQUER escrita. `documento` aceita texto
+  // colado na CRIAÇÃO (vira arquivo), mas no PATCH os itens passavam pela recusa, não entravam no ramo do FAQ
+  // e terminavam em `200 { id }`: quem integra por API achava que tinha trocado o conteúdo e nada mudou.
+  if (input.items !== undefined && tipo !== "faq") {
     throw recusa(
       deps,
       422,

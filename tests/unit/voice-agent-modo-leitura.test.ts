@@ -102,6 +102,15 @@ function adminStub(opts: {
           }),
         };
       }
+      if (tabela === "organizations") {
+        // Organização operante: o portão de status (org parada não atende) passa,
+        // e o que se mede aqui é o do modo leitura.
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: { status: "active" }, error: null }) }),
+          }),
+        };
+      }
       throw new Error(`tabela inesperada no dublê admin: ${tabela}`);
     },
     rpc: async (nome: string) => {

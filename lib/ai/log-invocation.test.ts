@@ -278,7 +278,9 @@ describe("o provedor efetivo do binding vence o palpite por barra (#3098)", () =
     // outro caminho.
     organizacao.linha = { settings: { llm: { provider: "openrouter" } } };
     credenciais.linha = null;
-    envDaInstalacao.ANTHROPIC_API_KEY = "sk-ant-da-instalacao";
+    // Hiperbold: a chave da INSTALAÇÃO sai sempre pela OpenRouter (lib/ai/gateway.ts);
+    // a `ANTHROPIC_API_KEY` do install.sh não é caminho aqui.
+    envDaInstalacao.OPENROUTER_API_KEY = "sk-or-da-instalacao";
 
     const resolvido = await resolverModeloDoPonto("bot_respond", ORG, "anthropic/claude-sonnet-4-6");
 

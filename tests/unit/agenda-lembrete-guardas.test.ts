@@ -233,7 +233,9 @@ describe("D-115: fuso e portões", () => {
     expect(fonte.indexOf("reservarDegraus(")).toBeGreaterThan(0);
     expect(fonte.indexOf("reservarDegraus(")).toBeLessThan(fonte.indexOf("sendMessageHandler("));
     expect(fonte).toContain("contaEmModoLeitura(");
-    expect(fonte).toContain("organizacaoPodeReceberLembrete(");
+    // O portão de status da org na rota é o comum do upstream (`ehOperante`, só
+    // `active`), a mesma regra de `organizacaoPodeReceberLembrete` acima.
+    expect(fonte).toContain("ehOperante(statusDaOrgEmbutida(");
     expect(fonte).toContain("fusoDoLembrete(linha.time_zone");
     expect(fonte).toMatch(/starts_at, time_zone,/);
   });
