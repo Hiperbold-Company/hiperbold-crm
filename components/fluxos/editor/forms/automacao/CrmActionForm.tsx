@@ -23,6 +23,7 @@ import {
 } from "@/lib/automacoes/vocabulario";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useT } from "@/hooks/i18n/useT";
+import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 import { Plus, Trash } from "@/lib/ui/icons";
 
 import {
@@ -200,7 +201,7 @@ function CamposDaAcao({
   );
   const opcoesDeMembro = (membros.data ?? []).map((m) => ({
     valor: m.user_id,
-    rotulo: m.full_name ?? m.user_id,
+    rotulo: rotuloDoMembro(m, t),
   }));
   const [tags, setTags] = useState("tags" in acao ? acao.tags.join(", ") : "");
 

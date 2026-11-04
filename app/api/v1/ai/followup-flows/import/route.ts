@@ -20,7 +20,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ok, fail } from "@/lib/api/wrappers";
+import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -133,14 +133,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   try {
     conta = await contextoDaConta(supabase, createAdminClient(), activeOrg.orgId);
   } catch (err) {
-    return fail(
-      "internal_error",
-      err instanceof Error ? err.message : "import_context_failed",
-      500,
-      {
-        requestId,
-      },
-    );
+    return falhaInterna("internal_error", err, { requestId });
   }
 
   const resultado = reconciliarComAConta(arquivo.data, conta);
@@ -164,9 +157,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (insErr?.code === "23505") {
       return fail("conflict", t("Já existe um fluxo com este nome."), 409, { requestId });
     }
-    return fail("internal_error", insErr?.message ?? "followup_flow_import_failed", 500, {
-      requestId,
-    });
+    return falhaInterna("internal_error", insErr ?? "followup_flow_import_failed", { requestId });
   }
 
   void audit({

@@ -81,6 +81,8 @@ function adminCom(total: number) {
       const chain = {
         select: () => chain,
         in: () => chain,
+        // A org parada fica de fora no banco (`organizations.status`, upstream).
+        eq: () => chain,
         order: () => chain,
         range: async (de: number, ate: number) => {
           faixas.push([de, ate]);
@@ -122,7 +124,7 @@ describe("lerAguardandoResposta (relógio HTTP, D-131)", () => {
   it("erro de leitura sobe (o relógio registra a tarefa como falha)", async () => {
     const admin = {
       from: () => {
-        const chain = { select: () => chain, in: () => chain, order: () => chain, range: async () => ({ data: null, error: { message: "x" } }) };
+        const chain = { select: () => chain, in: () => chain, eq: () => chain, order: () => chain, range: async () => ({ data: null, error: { message: "x" } }) };
         return chain;
       },
     };

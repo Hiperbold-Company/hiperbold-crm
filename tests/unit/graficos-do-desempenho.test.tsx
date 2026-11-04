@@ -128,6 +128,22 @@ describe("a evolução dos ganhos no Desempenho", () => {
 
 function responderPainel() {
   vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+    // Hiperbold: no painel do fork o ranking e "Por canal" moram na aba
+    // Atendimento, que antes lê o resumo dela; sem atendentes ali, para o nome
+    // da linha aparecer só na tabela de performance (a do upstream).
+    if (url.startsWith("/api/v1/metrics/atendimento")) {
+      return {
+        data: {
+          janela: { from: "2026-09-23T00:00:00.000Z", to: "2026-10-23T00:00:00.000Z" },
+          fuso: "America/Sao_Paulo",
+          cartoes: { atendimentos: 0, atendimentos_anterior: 0, finalizados: 0, em_aberto: 0, aguardando: 0 },
+          tempos: { primeira_resposta_seg: null, resposta_seg: null, respostas: 0 },
+          diario: [],
+          mapa_de_calor: [],
+          atendentes: [],
+        },
+      };
+    }
     if (url.startsWith("/api/v1/metrics/attendants")) {
       return {
         data: {
@@ -176,6 +192,7 @@ function responderPainel() {
 
 function montarPainel() {
   serie = serieDeExemplo();
+  urlDoPainel.busca = "aba=atendimento";
   responderPainel();
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(

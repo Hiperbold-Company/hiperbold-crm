@@ -241,7 +241,13 @@ describe("perder em lote (#2887) não sobrescreve o motivo de quem já estava pe
     const res = await POST(pedido());
     expect(res.status).toBe(200);
 
-    const atividades = vi.mocked(emitLeadActivity).mock.calls.map((c) => c[1]);
+    // Hiperbold (#917): a perda em lote também grava a linha `demand_closed`
+    // ("Perdido — motivo") que a perda individual grava; esta asserção é sobre
+    // a linha de MOVIMENTO (`stage_changed`) do upstream, então conta só ela.
+    const atividades = vi
+      .mocked(emitLeadActivity)
+      .mock.calls.map((c) => c[1])
+      .filter((a) => a.type === "stage_changed");
     expect(atividades).toHaveLength(2);
 
     // O TIPO segue `stage_changed`: ele é a fonte de `lib/metrics/taxa-da-etapa.ts`

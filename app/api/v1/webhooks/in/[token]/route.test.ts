@@ -168,6 +168,11 @@ function casaNosFiltros(c: Cadeia, linha: Record<string, unknown> | null): boole
   });
 }
 
+/** A leitura do recadastro pede `last_activity_at`; a do reuso (#3101), não. */
+function ehLeituraDoRecadastro(c: Cadeia): boolean {
+  return String(argumentos(c, "select")?.[0] ?? "").includes("last_activity_at");
+}
+
 function responder(c: Cadeia): Resposta {
   if (c.tabela === "webhook_sources") return { data: m.fonte };
   if (c.tabela === "contacts") {
@@ -186,6 +191,14 @@ function responder(c: Cadeia): Resposta {
     // `external_id` — e agora também respeitam o que veio junto.
     if (valorDoFiltro(c, "eq", "external_id") !== undefined)
       return { data: casaNosFiltros(c, m.porExternalId) ? m.porExternalId : null };
+    // A leitura do RECADASTRO (Hiperbold, `lib/webhooks/recadastro.ts`): a LISTA
+    // dos leads abertos do contato no funil. É o mesmo card aberto do mundo.
+    if (ehLeituraDoRecadastro(c))
+      return {
+        data: m.cardAberto
+          ? [{ id: m.cardAberto.id, status: "open", last_activity_at: null, created_at: "2026-11-01T00:00:00Z" }]
+          : [],
+      };
     return { data: m.cardAberto };
   }
   return { data: null };
@@ -200,13 +213,17 @@ async function enviar(corpo: Record<string, unknown>): Promise<Response> {
   return (await POST(req, { params: Promise.resolve({ token: TOKEN }) })) as Response;
 }
 
-/** As leituras do card aberto do contato — a pergunta do #3101. */
+/**
+ * As leituras do card aberto do contato — a pergunta do #3101. A do recadastro
+ * (Hiperbold) também filtra `status = open`, mas é outra pergunta e fica fora.
+ */
 const leiturasDoCardAberto = () =>
   h.banco.cadeias.filter(
     (c) =>
       c.tabela === "crm_leads" &&
       operacao(c) === "select" &&
-      valorDoFiltro(c, "eq", "status") === "open",
+      valorDoFiltro(c, "eq", "status") === "open" &&
+      !ehLeituraDoRecadastro(c),
   );
 
 /** Os UPDATE que carimbam o id do envio no card (a coluna só existe neles). */
@@ -355,8 +372,26 @@ describe("regressões do caminho com external_id (#3357)", () => {
     expect(res.status).toBe(200);
   });
 
+  // Regra Hiperbold (recadastro, 16/10/2026): com a opção desligada e card ABERTO
+  // do contato no funil, o envio não abre segundo card — vira recadastro no card
+  // que existe, sem reuso nem carimbo. Sem card aberto, cria como hoje (abaixo).
+  it("⭐ opção DESLIGADA com card aberto: nem reuso nem carimbo — o recadastro registra no card que existe", async () => {
+    m.fonte = { ...FONTE, reuse_open_lead_on_capture: false };
+
+    const res = await enviar(ENVIO_DO_TRIAL);
+
+    expect(leiturasDoCardAberto()).toHaveLength(0);
+    expect(carimbos()).toHaveLength(0);
+    expect(h.atualizarLead).not.toHaveBeenCalled();
+    expect(h.moverLead).not.toHaveBeenCalled();
+    expect(h.criarLead).not.toHaveBeenCalled();
+    expect(desfecho()).toBe("recadastro");
+    expect(await res.json()).toEqual({ data: { lead_id: CARD_DA_CONVERSA } });
+  });
+
   it("⭐ opção DESLIGADA: o primeiro envio com id inédito cria o card como hoje", async () => {
     m.fonte = { ...FONTE, reuse_open_lead_on_capture: false };
+    m.cardAberto = null;
 
     const res = await enviar(ENVIO_DO_TRIAL);
 
@@ -383,17 +418,18 @@ describe("regressões do caminho com external_id (#3357)", () => {
 
     const res = await enviar({ ...ENVIO_DO_TRIAL, external_id: "conta-9999" });
 
-    // O card do id A não é adotado pelo id B: cada id tem o seu card e a sua
-    // idempotência (#2316). Sem este portão o envio de B atualizava o card de A
-    // sem ser gravado nele, e o evento seguinte do id B ia atrás do card
-    // aberto mais novo do contato.
-    expect(h.criarLead).toHaveBeenCalledTimes(1);
-    expect((h.criarLead.mock.calls[0]?.[2] as Record<string, unknown>).external_id).toBe("conta-9999");
+    // O card do id A não é adotado pelo id B (#2316, portão 3): o envio de B não
+    // atualiza nem recarimba o card de A.
+    expect(h.atualizarLead).not.toHaveBeenCalled();
     expect(
       carimbos(),
       "o carimbo tentou trocar a identidade do card que já respondia por outro id",
     ).toHaveLength(0);
-    expect(desfecho()).toBe("criado");
+    // Regra Hiperbold (recadastro): o contato já tem card ABERTO no funil, então
+    // o id B não abre o segundo card do upstream — vira recadastro no card que
+    // existe (e o gatilho `trg_crm_leads_captacao_repetida` recusaria o segundo).
+    expect(h.criarLead).not.toHaveBeenCalled();
+    expect(desfecho()).toBe("recadastro");
     expect(res.status).toBe(200);
   });
 
@@ -408,12 +444,14 @@ describe("regressões do caminho com external_id (#3357)", () => {
 
     // Escrever por cima do card de outra fonte seria a fonte A reescrever o
     // card que a B identifica — a mesma pergunta do portão 2 do reenvio.
-    expect(h.criarLead).toHaveBeenCalledTimes(1);
+    expect(h.atualizarLead).not.toHaveBeenCalled();
     expect(carimbos()).toHaveLength(0);
-    expect(desfecho()).toBe("criado");
+    // Regra Hiperbold: card aberto no funil = recadastro, não segundo card.
+    expect(h.criarLead).not.toHaveBeenCalled();
+    expect(desfecho()).toBe("recadastro");
   });
 
-  it("⭐ coluna AUSENTE (instalação sem a migration): também cria o card como hoje", async () => {
+  it("⭐ coluna AUSENTE (instalação sem a migration): também segue como hoje, sem reuso", async () => {
     const semColuna = { ...FONTE } as Record<string, unknown>;
     delete semColuna.reuse_open_lead_on_capture;
     m.fonte = semColuna;
@@ -422,8 +460,10 @@ describe("regressões do caminho com external_id (#3357)", () => {
 
     expect(leiturasDoCardAberto()).toHaveLength(0);
     expect(carimbos()).toHaveLength(0);
-    expect(h.criarLead).toHaveBeenCalledTimes(1);
-    expect(desfecho()).toBe("criado");
+    expect(h.atualizarLead).not.toHaveBeenCalled();
+    // "Como hoje" no Hiperbold: card aberto no funil vira recadastro.
+    expect(h.criarLead).not.toHaveBeenCalled();
+    expect(desfecho()).toBe("recadastro");
   });
 
   it("⭐ contato sem card aberto no funil da fonte: cria o card como hoje", async () => {
@@ -473,9 +513,10 @@ describe("as bordas do portão 3 (#3366)", () => {
 
     await enviar(semId);
 
-    expect(h.criarLead).toHaveBeenCalledTimes(1);
     expect(h.atualizarLead).not.toHaveBeenCalled();
-    expect(desfecho()).toBe("criado");
+    // Regra Hiperbold: card aberto no funil = recadastro, não segundo card.
+    expect(h.criarLead).not.toHaveBeenCalled();
+    expect(desfecho()).toBe("recadastro");
   });
 
   it("envio COM id não adota card de OUTRA fonte nem quando o card ainda não tem id", async () => {
@@ -483,9 +524,11 @@ describe("as bordas do portão 3 (#3366)", () => {
 
     await enviar(ENVIO_DO_TRIAL);
 
-    expect(h.criarLead).toHaveBeenCalledTimes(1);
+    expect(h.atualizarLead).not.toHaveBeenCalled();
     expect(carimbos()).toHaveLength(0);
-    expect(desfecho()).toBe("criado");
+    // Regra Hiperbold: card aberto no funil = recadastro, não segundo card.
+    expect(h.criarLead).not.toHaveBeenCalled();
+    expect(desfecho()).toBe("recadastro");
   });
 
   it("⭐ card aberto que já tem ESTE id (o vencedor da corrida carimbou entre as duas leituras) é adotado, não duplicado", async () => {

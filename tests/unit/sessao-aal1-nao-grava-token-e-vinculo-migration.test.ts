@@ -51,7 +51,7 @@ describe("0918: posição e igualdade", () => {
   });
 
   it("está registrada no MANIFEST, depois da 0917", () => {
-    expect(MANIFEST).toMatch(/\| `20260930160000` \| `0918_sessao_aal1_nao_grava_token_e_vinculo` \|/);
+    expect(MANIFEST).toMatch(/\| `20260930160030` \| `0918_sessao_aal1_nao_grava_token_e_vinculo` \|/);
     expect(MANIFEST.indexOf("`0917_anonimizar_contato")).toBeLessThan(
       MANIFEST.indexOf("`0918_sessao_aal1"),
     );
@@ -104,6 +104,7 @@ describe("0918: reaplicável com o app no ar", () => {
   }
 
   it("fn_session_mfa_proven existe no baseline ANTES do bloco que a usa", () => {
+    // sonda-do-baseline: primeira-de-proposito — mede ORDEM: a primeira definição tem de vir antes do bloco que a usa.
     const definicao = BASELINE.indexOf("create or replace function public.fn_session_mfa_proven()");
     expect(definicao).toBeGreaterThan(-1);
     expect(definicao).toBeLessThan(BASELINE.lastIndexOf(MARCADOR_0918));

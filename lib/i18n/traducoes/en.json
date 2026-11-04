@@ -9661,5 +9661,10 @@
   "Mover negócio no funil": "Move deal in the pipeline",
   "Editar tag do negócio": "Edit deal tag",
   "Gravar tag no negócio": "Save tag on the deal",
-  "Pessoais": "Personal"
+  "Pessoais": "Personal",
+  "O envio chegou, mas o CRM não conseguiu abrir o segredo desta fonte (a chave da instalação está ausente ou foi trocada). Fale com quem administra a instalação; tente reenviar depois.": "The submission arrived, but the CRM could not open this source's secret (the installation key is missing or was changed). Talk to whoever administers the installation; try resending later.",
+  "Os dados chegaram, mas o plano desta organização já está no limite de leads. Fale com o suporte para ampliar.": "The data arrived, but this organization's plan is already at its lead limit. Contact support to increase it.",
+  "O envio não passou na verificação de segurança (Turnstile): faltou o token do widget no formulário, ele estava inválido ou a Cloudflare não respondeu.": "The submission failed the security check (Turnstile): the widget token was missing from the form, it was invalid, or Cloudflare did not respond.",
+  "O corpo do envio não é um JSON válido — confira se a ferramenta que envia manda o formato certo.": "The submission body is not valid JSON — check that the sending tool uses the right format.",
+  "O corpo do envio passou do tamanho máximo aceito (64 KB).": "The submission body exceeded the maximum accepted size (64 KB)."
 }

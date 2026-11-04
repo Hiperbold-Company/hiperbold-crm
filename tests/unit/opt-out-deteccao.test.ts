@@ -498,8 +498,11 @@ describe("cancelar o PLANO escala sem bloquear — a palavra de duas caras (#288
     }
   });
 
-  it("`cancelar` SOZINHO, sem objeto, continua bloqueando", () => {
-    expect(ehPedidoDeOptOut("cancelar")).toBe(true);
+  // Hiperbold (D-116) vence o upstream aqui: "Cancelar" sozinho costuma responder a outra
+  // pergunta ("Cancelar" a consulta), então NÃO bloqueia — escala ao humano, que confirma.
+  it("`cancelar` SOZINHO, sem objeto, escala sem bloquear (Hiperbold, D-116)", () => {
+    expect(ehPedidoDeOptOut("cancelar")).toBe(false);
+    expect(ehOptOutProvavel("cancelar")).toBe(true);
   });
 });
 

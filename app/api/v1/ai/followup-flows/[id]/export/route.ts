@@ -17,7 +17,7 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail } from "@/lib/api/wrappers";
+import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import { flowGraphSchema } from "@/lib/followup/graph-schema";
@@ -55,7 +55,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("id", id)
     .eq("organization_id", activeOrg.orgId)
     .maybeSingle();
-  if (fetchErr) return fail("internal_error", fetchErr.message, 500, { requestId });
+  if (fetchErr) return falhaInterna("internal_error", fetchErr, { requestId });
   if (!origem) return fail("not_found", t("Fluxo não encontrado."), 404, { requestId });
 
   const bruto = await rascunhoDoFluxo(
@@ -88,9 +88,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
       idsCitados(grafo.data, gatilho.success ? gatilho.data : null),
     );
   } catch (err) {
-    return fail("internal_error", err instanceof Error ? err.message : "export_names_failed", 500, {
-      requestId,
-    });
+    return falhaInterna("internal_error", err, { requestId });
   }
 
   const arquivo = montarArquivoDeFluxo(

@@ -10,7 +10,6 @@ import type pg from "pg";
 import { extractPdfText } from "@/lib/ai/rag/extractors/pdf";
 import { provedorDaChamada } from "@/lib/ai/log-invocation";
 import { visaoEmVigor } from "@/lib/ai/pontos/capacidade-em-vigor";
-import { modeloRealDaChamada, registrarTelemetriaSemCusto } from "@/lib/ai/telemetria-sem-custo";
 import { modeloPermitidoNaChave } from "@/lib/ai/modelos-da-instalacao-leitura";
 import { idNaRotaDaInstalacao } from "@/lib/ai/modelos-da-instalacao";
 import { PONTO_TRANSCRICAO_DE_AUDIO, PONTO_VISAO_DE_IMAGEM } from "@/lib/ai/pontos/registro";
@@ -26,6 +25,7 @@ import {
   resolveOrgLlmConfig,
   type LlmEdgeConfig,
   type OrgLlmConfig,
+  type OrigemDaChaveLlm,
 } from "@/lib/agent-engine/edge/llm/credentials";
 import { createDefaultRegistry } from "@/lib/agent-engine/edge/llm/providers";
 import { createPool } from "@/lib/agent-engine/db/pool";
@@ -377,17 +377,28 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
 
     // Thunk, não valor: a credencial OpenAI só é LIDA se o serviço de
     // transcrição da instalação (degrau 1) não valer.
+    // 0906 (carteira de tokens): de QUEM é a chave que cada degrau da escada usa.
+    // Os thunks abaixo anotam a origem quando entregam uma chave; o degrau que a
+    // escada escolher leva a dele para a linha de `llm_calls`.
+    let origemDaChaveOpenai: OrigemDaChaveLlm | null = null;
+    let origemDaChaveElevenlabs: OrigemDaChaveLlm | null = null;
     const chaveOpenai = async (): Promise<string | null> => {
       // Hiperbold: a chave da instalação é a OpenRouter e nunca vai para api.openai.com.
       // `llm?.`: dentro da closure o `let` perde o estreitamento (já não é nulo aqui).
-      if (llm?.provider === "openai" && llm.origemDaChave === "credencial_da_organizacao") return llm.apiKey;
+      if (llm?.provider === "openai" && llm.origemDaChave === "credencial_da_organizacao") {
+        origemDaChaveOpenai = llm.origemDaChave;
+        return llm.apiKey;
+      }
       try {
         const oa = await resolveOrgLlmConfig(derivePool(), llmCfg, row.organization_id, {
           provider: "openai",
         });
         // Só a credencial OpenAI da PRÓPRIA organização serve ao Whisper. Se o resolvedor caiu na chave
         // da instalação, o que veio é a OpenRouter — que NÃO pode ir para api.openai.com.
-        if (oa.origemDaChave === "credencial_da_organizacao") return oa.apiKey;
+        if (oa.origemDaChave === "credencial_da_organizacao") {
+          origemDaChaveOpenai = oa.origemDaChave;
+          return oa.apiKey;
+        }
       } catch {
         // Sem chave nenhuma no resolvedor: segue para a chave OpenAI da instalação, se houver.
       }
@@ -396,7 +407,9 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
       // `resolveOrgLlmConfig` não devolve essa chave (a escada da instalação é só OpenRouter),
       // então ela é lida do ambiente aqui, e só aqui.
       const daInstalacao = (process.env.OPENAI_API_KEY ?? "").trim();
-      return daInstalacao === "" ? null : daInstalacao; // sem nenhuma: nenhum degrau OpenAI
+      if (daInstalacao === "") return null; // sem nenhuma: nenhum degrau OpenAI
+      origemDaChaveOpenai = "chave_da_instalacao";
+      return daInstalacao;
     };
 
     // A escada roda SEMPRE: `deps.transcriber` existe para todo tipo (vídeo
@@ -424,6 +437,7 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
             provider: "elevenlabs",
             credentialId: binding.credential_id,
           });
+          origemDaChaveElevenlabs = el.origemDaChave;
           return { apiKey: el.apiKey, modelId: binding.model_id || "scribe_v1" };
         } catch (err) {
           logger.warn("[media-derive] ElevenLabs escolhido para transcrever, sem credencial utilizável; seguindo a escada", {
@@ -499,7 +513,28 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
 
     // O 5º argumento é a `base_url` do binding: o factory precisa dela para não
     // cair no endpoint padrão do provedor (ver o comentário lá em cima).
-    const deps = buildDeriveDeps(llm, decisao, row.organization_id, admin, baseUrlDaVisao, chaveEhDaInstalacao, origemDoModelo);
+    // De quem é a chave do degrau que a escada escolheu (0906). `as`: os thunks
+    // atribuem dentro de closure, e o TS manteria aqui o estreitamento para `null`.
+    const origemDaChaveDaTranscricao: OrigemDaChaveLlm | null =
+      decisao.origem === "servico_da_instalacao"
+        ? "chave_da_instalacao" // TRANSCRIPTION_API_KEY é do .env da instalação (D-057)
+        : decisao.origem === "padrao_openai_compativel"
+          ? (origemDaChaveOpenai as OrigemDaChaveLlm | null)
+          : decisao.origem === "elevenlabs_escolhido"
+            ? (origemDaChaveElevenlabs as OrigemDaChaveLlm | null)
+            : decisao.origem === "padrao_openrouter" || decisao.origem === "modelo_da_organizacao"
+              ? (conversa?.origemDaChave ?? null)
+              : null;
+    const deps = buildDeriveDeps(
+      llm,
+      decisao,
+      row.organization_id,
+      admin,
+      baseUrlDaVisao,
+      chaveEhDaInstalacao,
+      origemDoModelo,
+      origemDaChaveDaTranscricao,
+    );
 
     const text = await deriveMediaText(msg.type, buffer, msg.media_mime ?? "application/octet-stream", deps);
 
@@ -707,6 +742,8 @@ function buildDeriveDeps(
   // De onde veio o MODELO (issue #2377): o log da recusa de par precisa dizer
   // se veio do binding do ponto ou do padrao da organizacao.
   origemDoModelo = "padrao",
+  // De quem é a chave do degrau de transcrição escolhido (0906); `null` = não sabida.
+  origemDaChaveDaTranscricao: OrigemDaChaveLlm | null = null,
 ): DeriveDeps {
   const registry = createDefaultRegistry();
   // Thunk, não consulta: nada vai ao banco até a visão ser de fato perguntada,
@@ -912,16 +949,24 @@ function buildDeriveDeps(
       });
     } catch (err) {
       registrarChamadaDeMidia(admin, orgId, () =>
-        linhaDeFalha(err, { purpose: PONTO_VISAO_DE_IMAGEM, provider: llm.provider, model: modelo, inicio }),
+        linhaDeFalha(err, {
+          purpose: PONTO_VISAO_DE_IMAGEM,
+          provider: llm.provider,
+          model: modelo,
+          inicio,
+          origemDaChave: llm.origemDaChave,
+        }),
       );
       throw err;
     }
     registrarChamadaDeMidia(admin, orgId, () => {
       const uso = {
-        inputTokens: res.usage.inputTokens ?? 0,
-        outputTokens: res.usage.outputTokens ?? 0,
-        cacheReadTokens: res.usage.inputTokenDetails.cacheReadTokens ?? 0,
-        cacheWriteTokens: res.usage.inputTokenDetails.cacheWriteTokens ?? 0,
+        // `?.`: a linha não pode se perder por um `usage` incompleto (a falha
+        // de montagem descarta a linha inteira, e a visão some da tela de uso).
+        inputTokens: res.usage?.inputTokens ?? 0,
+        outputTokens: res.usage?.outputTokens ?? 0,
+        cacheReadTokens: res.usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+        cacheWriteTokens: res.usage?.inputTokenDetails?.cacheWriteTokens ?? 0,
       };
       return {
         purpose: PONTO_VISAO_DE_IMAGEM,
@@ -933,27 +978,13 @@ function buildDeriveDeps(
         cache_write_tokens: uso.cacheWriteTokens,
         cost_cents: costCents(modelo, uso),
         latency_ms: Date.now() - inicio,
+        // 0906 (carteira de tokens): de quem é a chave que pagou a visão.
+        origem_da_chave: llm.origemDaChave,
       };
     });
-    // Telemetria (Tarefa 8, Frente 2 dos planos): este é o ponto de chamada
-    // real de "Ver a imagem do cliente": a organização, o provedor e o
-    // modelo já estão todos resolvidos aqui em cima. Nunca lança.
-    await registrarTelemetriaSemCusto({
-      organizationId: orgId,
-      purpose: "visao_de_imagem",
-      provider: llm.provider,
-      // O modelo REAL da chamada (D-053 item 3). `defaultModel` é o que o
-      // factory recebeu; sem ele (nulo ou vazio) o que vale é o id que o
-      // provedor devolveu na resposta, e só na falta dos dois a lacuna sai
-      // declarada como `desconhecido`, nunca como string vazia.
-      model: modeloRealDaChamada(llm.defaultModel, res.response?.modelId),
-      // `?.`: alguns testes deste worker mockam `generateText` sem `usage`,
-      // a produção sempre devolve o objeto, mas nada aqui depende disso.
-      inputTokens: res.usage?.inputTokens ?? 0,
-      outputTokens: res.usage?.outputTokens ?? 0,
-      // 0906 (carteira de tokens): `llm` já está resolvido aqui em cima.
-      origemDaChave: llm.origemDaChave,
-    });
+    // Uma linha só por chamada: a de cima já leva tokens, custo e a origem da
+    // chave (antes, `registrarTelemetriaSemCusto` gravava uma segunda linha
+    // igual para a mesma visão e a tela de uso somava as duas).
     return res.text;
   };
   // Sem chave OpenAI não há como transcrever: devolver string vazia é honesto
@@ -1016,12 +1047,16 @@ function buildDeriveDeps(
     comCustoRegistrado(servico, {
       admin,
       orgId,
+      // Hiperbold: o serviço próprio da instalação leva o rótulo estável
+      // `transcricao_propria`, nunca a `base_url` (pode levar credencial ou
+      // apontar para endereço interno) e nunca um palpite de fornecedor.
       provider:
         decisao.origem === "servico_da_instalacao" && env.TRANSCRIPTION_BASE_URL
-          ? "desconhecido"
+          ? "transcricao_propria"
           : decisao.anuncio.provider,
       model: decisao.anuncio.modelId ?? "desconhecido",
       origem: decisao.origem,
+      origemDaChave: origemDaChaveDaTranscricao,
     });
   // O degrau 4 é o modelo de conversa da organização: chamada de LLM cobrada
   // por token, então passa pelo teto antes de o áudio sair, como a visão.
@@ -1076,6 +1111,8 @@ interface ChamadaDeMidia {
    * desconhecido (degrau 4), que acende o aviso.
    */
   origem_da_escolha?: OrigemDaTranscricao;
+  /** 0906 (carteira de tokens): de quem é a chave; nula quando não sabida. */
+  origem_da_chave?: OrigemDaChaveLlm | null;
   /** Ausente = `ok`. */
   status?: "erro";
   error_code?: string;
@@ -1097,6 +1134,7 @@ function linhaDeFalha(
     model: string;
     inicio: number;
     origem?: OrigemDaTranscricao;
+    origemDaChave?: OrigemDaChaveLlm | null;
   },
 ): ChamadaDeMidia {
   return {
@@ -1104,6 +1142,7 @@ function linhaDeFalha(
     provider: d.provider,
     model: d.model,
     ...(d.origem ? { origem_da_escolha: d.origem } : {}),
+    origem_da_chave: d.origemDaChave ?? null,
     input_tokens: 0,
     output_tokens: 0,
     cache_read_tokens: 0,
@@ -1193,6 +1232,7 @@ function comCustoRegistrado(
     provider: string;
     model: string;
     origem: OrigemDaTranscricao;
+    origemDaChave: OrigemDaChaveLlm | null;
   },
 ): TranscriptionProvider {
   return {
@@ -1217,6 +1257,7 @@ function comCustoRegistrado(
             model: ctx.model,
             inicio,
             origem: ctx.origem,
+            origemDaChave: ctx.origemDaChave,
           }),
         );
         throw err;
@@ -1226,6 +1267,7 @@ function comCustoRegistrado(
         provider: ctx.provider,
         model: ctx.model,
         origem_da_escolha: ctx.origem,
+        origem_da_chave: ctx.origemDaChave,
         input_tokens: uso?.inputTokens ?? 0,
         output_tokens: uso?.outputTokens ?? 0,
         cache_read_tokens: uso?.cacheReadTokens ?? 0,

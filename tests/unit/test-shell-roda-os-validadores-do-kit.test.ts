@@ -50,6 +50,14 @@ describe("test:shell", () => {
     expect(todos.length).toBeGreaterThan(50);
 
     const ci = readFileSync(join(process.cwd(), ".github/workflows/ci.yml"), "utf8");
+    // Hiperbold (merge de 04/11/2026): o ci.yml é o NOSSO, com o verify em 4 partes, e o
+    // passo roda `pnpm test:shell` INTEIRO numa parte só — por construção nenhum elo
+    // fica de fora nem se repete. Só o corte do upstream (partes 7 e 8) precisa da conta abaixo.
+    const inteiro = ci.match(/- name: Kit self-host \(bash\)\n\s+if: (matrix\.parte == \d+)\n\s+run: (.*)\n/);
+    if (inteiro) {
+      expect(inteiro[2], "o passo do kit tem de rodar o test:shell inteiro").toBe("pnpm test:shell");
+      return;
+    }
     const passo = ci.match(
       /- name: Kit self-host \(bash\)\n\s+if: (.*)\n\s+env:\n\s+KIT_PESADO: (\S+)\n\s+run: (.*)\n/,
     );

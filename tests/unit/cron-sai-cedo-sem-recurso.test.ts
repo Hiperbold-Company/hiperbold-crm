@@ -83,6 +83,13 @@ vi.mock("@/lib/followup/enviar-texto-fixo", () => ({
   },
 }));
 vi.mock("@/lib/followup/atendimento", () => ({ encerrarRoteirosVencidos: async () => 0 }));
+// Raia das automações (Hiperbold): o "Contato sem resposta" roda fora do gate
+// dos três recursos de follow-up, como o encerramento de roteiros acima. O que
+// este arquivo mede é o gate do motor de follow-up, não essa varredura.
+vi.mock("@/lib/automacoes/varredura-sem-resposta", () => ({
+  createSupabaseSemRespostaDb: () => ({}) as never,
+  varrerSemResposta: async () => ({ automacoes: 0, candidatas: 0, iniciadas: 0, ignoradas: 0, falhas: 0 }),
+}));
 vi.mock("@/lib/channels/aviso-do-agendador", () => ({ sincronizarAvisoDoAgendador: async () => undefined }));
 vi.mock("@/lib/channels/central-de-pausa", () => ({ sincronizarAvisoDePausa: async () => undefined }));
 

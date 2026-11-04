@@ -125,7 +125,7 @@ const LEAD_GANHO = {
 };
 
 /** Uma resposta por tabela, no formato do PostgREST. */
-function resposta(tabela: string): { data: unknown; error: unknown } {
+function resposta(tabela: string, colunas = ""): { data: unknown; error: unknown } {
   const inseriu = (t: string) => h.inseridos.some((i) => i.tabela === t);
   if (tabela === "webhook_sources") return { data: FONTE, error: null };
   if (tabela === "contacts") {
@@ -134,6 +134,10 @@ function resposta(tabela: string): { data: unknown; error: unknown } {
     // INSERT, o id que o banco devolveu.
     return inseriu("contacts") ? { data: { id: CONTATO }, error: null } : { data: null, error: null };
   }
+  // A leitura do RECADASTRO (Hiperbold, `lib/webhooks/recadastro.ts`) é uma LISTA
+  // dos leads abertos do contato no funil: o contato desta captação acabou de
+  // nascer, então não tem nenhum.
+  if (tabela === "crm_leads" && colunas.includes("last_activity_at")) return { data: [], error: null };
   if (tabela === "crm_leads") return { data: LEAD_GANHO, error: null };
   if (tabela === "ad_platform_connections") return { data: CONEXAO_ATIVA, error: null };
   return { data: null, error: null };
@@ -145,9 +149,16 @@ function resposta(tabela: string): { data: unknown; error: unknown } {
  * teste sabe que o contato nasceu antes de a RPC carimbar).
  */
 function cadeia(tabela: string): unknown {
+  let colunas = "";
   const proxy: unknown = new Proxy(() => undefined, {
     get(_alvo, prop) {
-      if (prop === "then") return (ok: (v: unknown) => unknown) => ok(resposta(tabela));
+      if (prop === "then") return (ok: (v: unknown) => unknown) => ok(resposta(tabela, colunas));
+      if (prop === "select") {
+        return (c?: unknown) => {
+          colunas = String(c ?? "");
+          return proxy;
+        };
+      }
       if (prop === "insert") {
         return (valores: Record<string, unknown>) => {
           h.inseridos.push({ tabela, valores });

@@ -23,7 +23,14 @@
  *     própria função (as actions de cobrança, que já faziam), ou está na lista
  *     de leitura abaixo, com o motivo.
  *  3. As actions de organização que a auditoria listou chamam
- *     `portaoDeAdminDaOrganizacao()` (uma vez por função exportada que escreve).
+ *     `portaoDeAdminDaOrganizacao()`, ou a forma do upstream adotada no merge
+ *     de 04/11/2026: `podeAdministrarEmpresa()` + `mfaEmDivida()` (uma vez por
+ *     função exportada que escreve).
+ *
+ *  Portão comum de escrita da instalação, depois do merge de 04/11/2026:
+ *  `requirePlatformAdminFull()` (o nosso) ou `escritaDeAdminOuRecusa()` /
+ *  `requirePlatformAdminEscrita()` (o do upstream; os dois cobram escopo `full`
+ *  e MFA em dia).
  *  4. Toda action do onboarding passa por `requireOnboardingCtx()`, e ele mesmo
  *     confere papel.
  *
@@ -70,9 +77,12 @@ const ACTIONS_DE_CONFIGURACAO = ACTIONS.filter(
  * Funções que chamam o guarda de LEITURA de propósito. Toda entrada tem motivo;
  * acrescentar uma aqui é decisão de revisão, não de conveniência.
  */
-const SO_LEITURA: Record<string, string> = {
-  "app/actions/settings/smtp.ts#checkSmtp": "testa a conexão SMTP já salva e não grava nada; o support_readonly pode olhar",
-};
+// `checkSmtp` saiu daqui no merge de 04/11/2026: o upstream passou a exigir o
+// portão de escrita também no teste de conexão (mais estrito, não menos).
+const SO_LEITURA: Record<string, string> = {};
+
+/** Portão de escrita da instalação: o nosso e o do upstream (merge de 04/11/2026). */
+const PORTAO_DE_ESCRITA_DA_INSTALACAO = /\brequirePlatformAdminFull\(|\bescritaDeAdminOuRecusa\(|\brequirePlatformAdminEscrita\(/;
 
 describe("nenhuma action escreve o atalho de plataforma na mão", () => {
   for (const f of ACTIONS) {
@@ -91,9 +101,9 @@ describe("actions de configuração da instalação exigem escopo full e MFA em 
   for (const f of ACTIONS_DE_CONFIGURACAO) {
     const fonte = ler(f);
     for (const fn of funcoesExportadas(fonte)) {
-      if (!/\brequirePlatformAdmin\(|\brequirePlatformAdminFull\(/.test(fn.corpo)) continue;
+      if (!/\brequirePlatformAdmin\(/.test(fn.corpo) && !PORTAO_DE_ESCRITA_DA_INSTALACAO.test(fn.corpo)) continue;
       it(`${f}#${fn.nome}`, () => {
-        if (/\brequirePlatformAdminFull\(/.test(fn.corpo)) return;
+        if (PORTAO_DE_ESCRITA_DA_INSTALACAO.test(fn.corpo)) return;
         if (SO_LEITURA[`${f}#${fn.nome}`]) return;
         // As actions de cobrança conferem inline, na própria função.
         expect(fn.corpo, `${fn.nome} usa o guarda de LEITURA sem conferir o escopo full`).toMatch(
@@ -113,7 +123,7 @@ describe("actions de configuração da instalação exigem escopo full e MFA em 
     }
   });
 
-  it("as actions de escrita da instalação que a auditoria listou usam requirePlatformAdminFull", () => {
+  it("as actions de escrita da instalação que a auditoria listou usam o portão de escrita (requirePlatformAdminFull ou o do upstream)", () => {
     const esperadas = [
       "app/actions/settings/smtp.ts",
       "app/actions/settings/updateSignupMode.ts",
@@ -127,7 +137,7 @@ describe("actions de configuração da instalação exigem escopo full e MFA em 
       "app/actions/registration/decide.ts",
     ];
     for (const f of esperadas) {
-      expect(semComentarios(ler(f)), f).toMatch(/\brequirePlatformAdminFull\(/);
+      expect(semComentarios(ler(f)), f).toMatch(PORTAO_DE_ESCRITA_DA_INSTALACAO);
     }
   });
 });
@@ -147,15 +157,20 @@ describe("actions de organização usam o portão de admin da empresa", () => {
     ["app/actions/integrations/disconnectNuvemshop.ts", 1],
   ];
   for (const [f, minimo] of COM_PORTAO) {
-    it(`${f} chama portaoDeAdminDaOrganizacao (${minimo}x)`, () => {
-      const chamadas = semComentarios(ler(f)).match(/\bportaoDeAdminDaOrganizacao\(/g) ?? [];
-      expect(chamadas.length).toBeGreaterThanOrEqual(minimo);
+    it(`${f} chama portaoDeAdminDaOrganizacao, ou podeAdministrarEmpresa + mfaEmDivida (${minimo}x)`, () => {
+      const codigo = semComentarios(ler(f));
+      const nosso = codigo.match(/\bportaoDeAdminDaOrganizacao\(/g)?.length ?? 0;
+      const papel = codigo.match(/\bpodeAdministrarEmpresa\(/g)?.length ?? 0;
+      const mfa = codigo.match(/\bmfaEmDivida\(/g)?.length ?? 0;
+      // Forma do upstream: cada conferência de papel vem com a sua de MFA.
+      expect(mfa, `${f}: podeAdministrarEmpresa sem mfaEmDivida ao lado`).toBeGreaterThanOrEqual(papel);
+      expect(nosso + papel).toBeGreaterThanOrEqual(minimo);
     });
   }
 
   it("apagar dados exige o segundo fator provado (aal2), sempre", () => {
     expect(semComentarios(ler("app/actions/settings/apagarDadosOperacionaisDaOrganizacao.ts"))).toMatch(
-      /portaoDeAdminDaOrganizacao\([^)]*exigirAal2:\s*true/,
+      /portaoDeAdminDaOrganizacao\([^)]*exigirAal2:\s*true|\(await sessionAal\(\)\)\s*!==\s*"aal2"/,
     );
   });
 

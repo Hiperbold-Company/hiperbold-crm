@@ -17,21 +17,32 @@ const ler = (f: string) => readFileSync(path.join(process.cwd(), f), "utf8");
 
 const ORIGEM = "https://crm.exemplo.com.br";
 
-/** Reproduz o trecho do service worker que decide a URL de destino. */
-function destinoDoServiceWorker(href: string): string {
+/**
+ * Reproduz o trecho do service worker que decide a URL de destino.
+ * Desde o merge do upstream (04/11/2026) o SW é o do upstream: aviso SEM destino
+ * devolve `null` (só traz a janela à frente, sem navegar); com destino, só a
+ * mesma origem passa e o resto cai na caixa de entrada.
+ */
+function destinoDoServiceWorker(href: string): string | null {
   const fonte = ler("public/notify-sw.js");
-  const ini = fonte.indexOf("let destino = null;");
-  const fim = fonte.indexOf("const alvo = clientes.find");
+  const ini = fonte.indexOf("let url = href ?");
+  const fim = fonte.indexOf("event.waitUntil(", ini);
   expect(ini, "o trecho de destino sumiu do notify-sw.js").toBeGreaterThan(-1);
+  expect(fim, "o trecho de destino sumiu do notify-sw.js").toBeGreaterThan(ini);
+  const padrao = fonte.match(/^const PADRAO = .*;$/m)?.[0];
+  expect(padrao, "a constante PADRAO sumiu do notify-sw.js").toBeTruthy();
   const trecho = fonte.slice(ini, fim);
-  return new Function("href", "origem", `${trecho}\nreturn url;`)(href, ORIGEM) as string;
+  return new Function("href", "origem", `${padrao}\n${trecho}\nreturn url;`)(href, ORIGEM) as
+    | string
+    | null;
 }
 
 describe("notify-sw.js: destino do clique", () => {
   it.each([
     ["/app/inbox?c=1", `${ORIGEM}/app/inbox?c=1`],
     [`${ORIGEM}/app/leads`, `${ORIGEM}/app/leads`],
-    ["", `${ORIGEM}/app/inbox`],
+    // Sem destino: só foca a janela (upstream, "Alertas ligados" não tira a pessoa da tela).
+    ["", null],
   ])("%j abre %j", (href, esperado) => {
     expect(destinoDoServiceWorker(href)).toBe(esperado);
   });

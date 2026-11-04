@@ -186,6 +186,8 @@ describe("a precedência com o degrau econômico", () => {
 // ─── o seam ──────────────────────────────────────────────────────────────────
 
 const ORG = "11111111-1111-4111-8111-111111111111";
+/** O id na rota da chave da instalação (OpenRouter): fabricante + id do catálogo. */
+const naRota = (id: string) => `anthropic/${id}`;
 
 function poolFalso(opts: { catalogo?: ModeloDoCatalogoEconomico[]; erroNoCatalogo?: boolean } = {}) {
   const inserts: Array<{ sql: string; params: unknown[] }> = [];
@@ -220,12 +222,15 @@ function poolFalso(opts: { catalogo?: ModeloDoCatalogoEconomico[]; erroNoCatalog
 
 function registrySpiao(falhaEm: ReadonlySet<string> = new Set(), instavelEm: ReadonlySet<string> = new Set()) {
   const chamadas: string[] = [];
-  const fabrica = (provider: string) => (_apiKey: string, modelId: string) => {
-    chamadas.push(modelId);
+  // Pela OpenRouter o id chega à fábrica com o fabricante ("anthropic/claude-haiku-4-5"): é o que
+  // se registra, e é o que `llm_calls` grava. A falha é armada pelo id do catálogo.
+  const fabrica = (provider: string) => (_apiKey: string, idNaFabrica: string) => {
+    chamadas.push(idNaFabrica);
+    const modelId = idNaFabrica.replace(/^anthropic\//, "");
     return {
       specificationVersion: "v3",
       provider,
-      modelId,
+      modelId: idNaFabrica,
       doGenerate: async () => {
         if (falhaEm.has(modelId)) throw Object.assign(new Error(`model not found: ${modelId}`), { statusCode: 404 });
         if (instavelEm.has(modelId)) throw Object.assign(new Error("overloaded"), { statusCode: 503 });
@@ -241,10 +246,15 @@ function registrySpiao(falhaEm: ReadonlySet<string> = new Set(), instavelEm: Rea
       },
     } as never;
   };
-  return { chamadas, registry: { anthropic: fabrica("anthropic"), openai: fabrica("openai") } };
+  return {
+    chamadas,
+    registry: { anthropic: fabrica("anthropic"), openai: fabrica("openai"), openrouter: fabrica("openrouter") },
+  };
 }
 
-const cfg = { anthropicApiKey: "chave-anthropic", openaiApiKey: "chave-openai", cacheTtl: "1h" as const };
+// Regra Hiperbold (20/10/2026): a chave da INSTALAÇÃO sai sempre pela OpenRouter — `anthropicApiKey`
+// e `openaiApiKey` nunca entram no turno. O provedor pedido continua anthropic.
+const cfg = { openrouterApiKey: "chave-da-instalacao", cacheTtl: "1h" as const };
 
 async function rodar(
   purpose: string,
@@ -275,31 +285,31 @@ describe("o seam aplica o econômico e tem reserva", () => {
   it("o classificador herdado chega à fábrica no modelo econômico", async () => {
     const pool = poolFalso();
     const { r, chamadas } = await rodar("jailbreak_detect", pool);
-    expect(chamadas).toEqual(["claude-haiku-4-5"]);
+    expect(chamadas).toEqual([naRota("claude-haiku-4-5")]);
     expect(r.origem).toBe("economico_do_provedor");
-    expect(pool.inserts[0]!.params).toContain("claude-haiku-4-5");
+    expect(pool.inserts[0]!.params).toContain(naRota("claude-haiku-4-5"));
   });
 
   it("o turno do agente nem consulta o catálogo", async () => {
     const pool = poolFalso();
     const { chamadas } = await rodar("agent_turn", pool);
-    expect(chamadas).toEqual(["claude-sonnet-5"]);
+    expect(chamadas).toEqual([naRota("claude-sonnet-5")]);
     expect(pool.query.mock.calls.some((c: unknown[]) => String(c[0]).includes("from ai_models"))).toBe(false);
   });
 
   it("o econômico falhou ⇒ repete no modelo de antes, e llm_calls grava quem respondeu", async () => {
     const pool = poolFalso();
     const { r, chamadas, log } = await rodar("stage_classifier", pool, new Set(["claude-haiku-4-5"]));
-    expect(chamadas).toEqual(["claude-haiku-4-5", "claude-sonnet-5"]);
-    expect(r.model).toBe("claude-sonnet-5");
+    expect(chamadas).toEqual([naRota("claude-haiku-4-5"), naRota("claude-sonnet-5")]);
+    expect(r.model).toBe(naRota("claude-sonnet-5"));
     expect(r.origem).toBe("herdado_de_quem_chamou");
     const sucesso = pool.inserts.find((i) => i.sql.includes("'ok'"));
-    expect(sucesso?.params).toContain("claude-sonnet-5");
+    expect(sucesso?.params).toContain(naRota("claude-sonnet-5"));
     // A falha coberta é registrada com origem própria — Execuções não mostra a
     // consequência de negócio de uma falha que não aconteceu para o cliente —
     // e não vira log de erro.
     const falha = pool.query.mock.calls.find(
-      (c: unknown[]) => String(c[0]).includes("insert into llm_calls") && (c[1] as unknown[]).includes("claude-haiku-4-5"),
+      (c: unknown[]) => String(c[0]).includes("insert into llm_calls") && (c[1] as unknown[]).includes(naRota("claude-haiku-4-5")),
     );
     expect(falha?.[1]).toContain("economico_coberto_pela_reserva");
     expect(log.error).not.toHaveBeenCalled();
@@ -310,7 +320,7 @@ describe("o seam aplica o econômico e tem reserva", () => {
     await rodar("stage_classifier", pool, new Set(["claude-haiku-4-5"]));
     const { chamadas } = await rodar("jailbreak_detect", pool, new Set(["claude-haiku-4-5"]));
     // Sem o castigo, toda classificação pagaria a recusa antes da reserva.
-    expect(chamadas).toEqual(["claude-sonnet-5"]);
+    expect(chamadas).toEqual([naRota("claude-sonnet-5")]);
   });
 
   it("a reserva também falhou ⇒ o erro sobe (quem chama decide, como antes)", async () => {
@@ -320,7 +330,7 @@ describe("o seam aplica o econômico e tem reserva", () => {
     ).rejects.toThrow(/claude-sonnet-5/);
     // Aqui sim é erro de verdade: a linha da reserva leva a origem de sempre.
     const daReserva = pool.query.mock.calls.find(
-      (c: unknown[]) => String(c[0]).includes("insert into llm_calls") && (c[1] as unknown[]).includes("claude-sonnet-5"),
+      (c: unknown[]) => String(c[0]).includes("insert into llm_calls") && (c[1] as unknown[]).includes(naRota("claude-sonnet-5")),
     );
     expect(daReserva?.[1]).toContain("herdado_de_quem_chamou");
   });
@@ -332,13 +342,13 @@ describe("o seam aplica o econômico e tem reserva", () => {
     );
     const { chamadas } = await rodar("jailbreak_detect", pool);
     // Uma chamada só no instável, e nenhum castigo: o próximo turno volta ao econômico.
-    expect(chamadas).toEqual(["claude-haiku-4-5"]);
+    expect(chamadas).toEqual([naRota("claude-haiku-4-5")]);
   });
 
   it("sem catálogo legível, segue no modelo herdado — mais caro, nunca quebrado", async () => {
     const pool = poolFalso({ erroNoCatalogo: true });
     const { chamadas, r } = await rodar("stage_classifier", pool);
-    expect(chamadas).toEqual(["claude-sonnet-5"]);
+    expect(chamadas).toEqual([naRota("claude-sonnet-5")]);
     expect(r.origem).toBe("herdado_de_quem_chamou");
   });
 

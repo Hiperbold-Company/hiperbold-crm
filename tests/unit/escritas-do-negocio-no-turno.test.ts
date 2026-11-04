@@ -135,6 +135,8 @@ function banco({ segurarEdicao = false } = {}) {
               error: null,
             };
           }
+          // Negócio com contato: o handler confere se o contato é pessoal (spec 21).
+          if (tabela === "contacts") return { data: { is_personal: false }, error: null };
           if (tabela !== "crm_leads") throw new Error(`consulta inesperada: ${tabela}`);
           if (filtros.organization_id && filtros.organization_id !== ORG)
             return { data: null, error: null };
@@ -226,6 +228,10 @@ describe("reprodução com os handlers nativos", () => {
   it("id do contato traduzido e id do negócio compartilham a mesma fila", async () => {
     const sb = banco();
     dublês.banco = sb;
+    // O negócio é do contato do turno: a guarda D-096 do Hiperbold CRM
+    // (`lib/mcp/escopo-do-turno.ts`) recusa escrita em negócio de outra pessoa,
+    // e negócio sem contato não é de quem está conversando.
+    sb.lead.contact_id = CONTATO;
     const tools = montar(sb, CONTATO);
     const movimento = tools.crm_move_lead_stage!.execute!({ ...mover, lead_id: CONTATO }, options);
     await sb.leuEtapa.espera;

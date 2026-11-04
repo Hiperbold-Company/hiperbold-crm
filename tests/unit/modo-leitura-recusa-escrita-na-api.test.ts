@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * D-154: o modo leitura da assinatura só valia na tela e nos produtores
  * automáticos. As rotas de escrita em massa e do financeiro seguiam gravando
@@ -27,19 +28,28 @@ vi.mock("@/lib/billing/assinatura/modo-leitura", () => ({
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 
 function bancoQueRegistra() {
-  const proxy: unknown = new Proxy(() => proxy, {
-    get(_t, prop) {
-      if (prop === "then") {
-        return (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(ok);
-      }
-      return () => proxy;
-    },
-    apply: () => proxy,
-  });
+  // Uma cadeia por `from`: o INSERT devolve a linha criada (com id), como o
+  // banco real; o resto devolve vazio. A importação de contatos lê o id do
+  // contato criado depois do INSERT (abrirConversaDoContatoNovo, upstream #3718).
+  const cadeia = () => {
+    let inseriu = false;
+    const proxy: unknown = new Proxy(() => proxy, {
+      get(_t, prop) {
+        if (prop === "then") {
+          const data = inseriu ? { id: "44444444-4444-4444-8444-444444444444" } : null;
+          return (ok: (v: unknown) => unknown) => Promise.resolve({ data, error: null }).then(ok);
+        }
+        if (prop === "insert") inseriu = true;
+        return () => proxy;
+      },
+      apply: () => proxy,
+    });
+    return proxy;
+  };
   return {
     from: (tabela: string) => {
       estado.consultas.push(tabela);
-      return proxy;
+      return cadeia();
     },
     rpc: async (fn: string) => {
       estado.consultas.push(`rpc:${fn}`);

@@ -1,6 +1,6 @@
 /**
  * As ferramentas de conexões MCP entram na MESMA tela de capacidades do
- * agente, contam no MESMO teto de 25 e usam a MESMA ficha — mas vêm de uma
+ * agente, contam no MESMO teto (`TETO_TOOLS_POR_AGENTE`) e usam a MESMA ficha — mas vêm de uma
  * consulta separada (`/api/v1/ai/mcp/ferramentas`), então precisam se
  * comportar bem quando essa segunda consulta falha ou ainda não terminou.
  *
@@ -19,6 +19,7 @@ vi.mock("@/lib/api/client", () => ({
 }));
 
 import { ToolPicker } from "@/app/app/ai/agents/[id]/_components/ToolPicker";
+import { TETO_TOOLS_POR_AGENTE as TETO } from "@/lib/mcp/tools/selecao-por-pacote";
 
 const FERRAMENTA_CATALOGO = {
   id: "crm_move_lead_stage",
@@ -105,20 +106,20 @@ describe("Seção Conexões MCP", () => {
     expect(screen.getByTestId("capacidade-mcp_n8n__criar_lead")).toBeInTheDocument();
   });
 
-  it("marcar uma ferramenta externa sobe o contador de N de 25 para N+1 de 25", async () => {
+  it("marcar uma ferramenta externa sobe o contador de N de TETO para N+1 de TETO", async () => {
     mockarRotas({ externas: [ferramentaExterna()] });
     render(wrap(<Controlado inicial={[]} />));
 
     await screen.findByTestId("capacidade-mcp_n8n__listar_leads");
-    expect(screen.getByTestId("consumo-teto")).toHaveTextContent("0 de 25");
+    expect(screen.getByTestId("consumo-teto")).toHaveTextContent(`0 de ${TETO}`);
 
     fireEvent.click(screen.getByTestId("capacidade-mcp_n8n__listar_leads"));
 
-    expect(await screen.findByTestId("consumo-teto")).toHaveTextContent("1 de 25");
+    expect(await screen.findByTestId("consumo-teto")).toHaveTextContent(`1 de ${TETO}`);
   });
 
-  it("com 25 ligadas, a ficha externa desmarcada fica bloqueada", async () => {
-    const cheias = Array.from({ length: 25 }, (_, i) => `crm_tool_${i}`);
+  it("com o teto cheio, a ficha externa desmarcada fica bloqueada", async () => {
+    const cheias = Array.from({ length: TETO }, (_, i) => `crm_tool_${i}`);
     mockarRotas({ externas: [ferramentaExterna()] });
     render(wrap(<Controlado inicial={cheias} />));
 
@@ -196,7 +197,7 @@ describe("Estado de aprovação da ferramenta externa", () => {
     expect(checkbox).not.toBeDisabled();
 
     fireEvent.click(checkbox);
-    expect(await screen.findByTestId("consumo-teto")).toHaveTextContent("1 de 25");
+    expect(await screen.findByTestId("consumo-teto")).toHaveTextContent(`1 de ${TETO}`);
   });
 });
 
@@ -230,7 +231,7 @@ describe("Contador soma catálogo e externas", () => {
       ),
     );
 
-    expect(await screen.findByTestId("consumo-teto")).toHaveTextContent("2 de 25");
+    expect(await screen.findByTestId("consumo-teto")).toHaveTextContent(`2 de ${TETO}`);
   });
 });
 

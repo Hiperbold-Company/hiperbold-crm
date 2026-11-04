@@ -4041,11 +4041,12 @@ ALTER TABLE "public"."api_audit_log" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."api_tokens" ENABLE ROW LEVEL SECURITY;
 
 
+-- Hiperbold (0962, 0992): o par api_tokens_tenant_read/_admin_write do upstream (0508) não entra; a única
+-- policy é a api_tokens_admin_only, que o bloco da 0962 reescreve (só o servidor escreve, created_by obrigatório).
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
-                WHERE polname = 'api_tokens_tenant_read' AND polrelid = '"public"."api_tokens"'::regclass) THEN
-CREATE POLICY "api_tokens_tenant_read" ON "public"."api_tokens" FOR SELECT USING (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin"()));
-CREATE POLICY "api_tokens_admin_write" ON "public"."api_tokens" FOR ALL USING (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin_full"())) WITH CHECK (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin_full"()));
+                WHERE polname = 'api_tokens_admin_only' AND polrelid = '"public"."api_tokens"'::regclass) THEN
+CREATE POLICY "api_tokens_admin_only" ON "public"."api_tokens" USING (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin"())) WITH CHECK (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin"()));
 END IF; END $baseline_guard$;
 
 
@@ -4509,6 +4510,11 @@ GRANT ALL ON TABLE "public"."ai_invocations" TO "anon";
 GRANT ALL ON TABLE "public"."ai_invocations" TO "authenticated";
 GRANT ALL ON TABLE "public"."ai_invocations" TO "service_role";
 
+-- Hiperbold: I/U/D/T/R/T de `anon` e `authenticated` saem junto dos grants. A decisão mora no bloco
+-- da 0926 (tabelas do servidor sem escrita de membro), que repete esta revogação; colada aqui, a
+-- chave anon não recupera a escrita a cada passada até lá (tests/unit/baseline-nao-constroi-o-que-derruba).
+revoke insert, update, delete, truncate, references, trigger on public.ai_invocations from authenticated, anon;
+
 
 
 GRANT ALL ON TABLE "public"."ai_knowledge_sources" TO "authenticated";
@@ -4561,11 +4567,21 @@ GRANT ALL ON TABLE "public"."api_tokens" TO "anon";
 GRANT ALL ON TABLE "public"."api_tokens" TO "authenticated";
 GRANT ALL ON TABLE "public"."api_tokens" TO "service_role";
 
+-- Hiperbold: `anon` e `authenticated` perdem tudo junto dos grants. A decisão mora no bloco da 0962
+-- (api_tokens: só o servidor escreve), que repete esta revogação; colada aqui, a chave anon não
+-- recupera o acesso a cada passada até lá (tests/unit/baseline-nao-constroi-o-que-derruba).
+revoke all on public.api_tokens from public, anon, authenticated;
+
 
 
 GRANT ALL ON TABLE "public"."channel_session_warmup" TO "anon";
 GRANT ALL ON TABLE "public"."channel_session_warmup" TO "authenticated";
 GRANT ALL ON TABLE "public"."channel_session_warmup" TO "service_role";
+
+-- Hiperbold: I/U/D/T/R/T de `anon` e `authenticated` saem junto dos grants. A decisão mora no bloco
+-- da 0926 (tabelas do servidor sem escrita de membro), que repete esta revogação; colada aqui, a
+-- chave anon não recupera a escrita a cada passada até lá (tests/unit/baseline-nao-constroi-o-que-derruba).
+revoke insert, update, delete, truncate, references, trigger on public.channel_session_warmup from authenticated, anon;
 
 
 
@@ -4671,11 +4687,21 @@ GRANT ALL ON TABLE "public"."nuvemshop_products" TO "anon";
 GRANT ALL ON TABLE "public"."nuvemshop_products" TO "authenticated";
 GRANT ALL ON TABLE "public"."nuvemshop_products" TO "service_role";
 
+-- Hiperbold: I/U/D/T/R/T de `anon` e `authenticated` saem junto dos grants. A decisão mora no bloco
+-- da 0926 (tabelas do servidor sem escrita de membro), que repete esta revogação; colada aqui, a
+-- chave anon não recupera a escrita a cada passada até lá (tests/unit/baseline-nao-constroi-o-que-derruba).
+revoke insert, update, delete, truncate, references, trigger on public.nuvemshop_products from authenticated, anon;
+
 
 
 GRANT ALL ON TABLE "public"."orders" TO "anon";
 GRANT ALL ON TABLE "public"."orders" TO "authenticated";
 GRANT ALL ON TABLE "public"."orders" TO "service_role";
+
+-- Hiperbold: I/U/D/T/R/T de `anon` e `authenticated` saem junto dos grants. A decisão mora no bloco
+-- da 0926 (tabelas do servidor sem escrita de membro), que repete esta revogação; colada aqui, a
+-- chave anon não recupera a escrita a cada passada até lá (tests/unit/baseline-nao-constroi-o-que-derruba).
+revoke insert, update, delete, truncate, references, trigger on public.orders from authenticated, anon;
 
 
 
@@ -4742,6 +4768,11 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
+
+-- Hiperbold: o TRUNCATE padrão de `anon` e `authenticated` sai junto do grant. A decisão mora no bloco
+-- da 0910 (saneamento do módulo de planos), que repete esta revogação; colada aqui, as tabelas criadas
+-- no apêndice antes da 0910 não nascem com TRUNCATE (tests/unit/baseline-nao-constroi-o-que-derruba).
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE TRUNCATE ON TABLES FROM "anon", "authenticated";
 
 
 
@@ -6133,24 +6164,9 @@ drop policy if exists "crm_lead_links_delete" on public.crm_lead_links;
 -- sem custo por linha), com o par drop+create colado. Recriar aqui a versão anterior faria cada
 -- update.sh reinstalá-la até a 0975 chegar (tests/unit/baseline-nao-constroi-o-que-derruba).
 
-create policy "crm_lead_links_insert" on public.crm_lead_links
-  for insert with check (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin_full()
-  );
-create policy "crm_lead_links_update" on public.crm_lead_links
-  for update using (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin_full()
-  ) with check (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin_full()
-  );
-create policy "crm_lead_links_delete" on public.crm_lead_links
-  for delete using (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin_full()
-  );
+-- Hiperbold: a versão em vigor de crm_lead_links_insert/_update/_delete mora no bloco da migration
+-- 0932 (escrita por papel), com o par drop+create colado. Recriar aqui a versão org-scope faria cada
+-- update.sh reinstalá-la até a 0932 chegar (tests/unit/baseline-nao-constroi-o-que-derruba).
 
 
 -- ---- user_organizations SELECT org-wide para manager+ (migration 0044) ----
@@ -94735,21 +94751,9 @@ reset lock_timeout;
 -- Entra ANTES da VARREDURA anon porque recria uma função.
 
 -- 1. O desfecho "recadastro" no histórico de captação.
-do $outcome_recadastro$
-begin
-  if not exists (
-    select 1 from pg_constraint
-     where conname = 'webhook_lead_captures_outcome_check'
-       and conrelid = 'public.webhook_lead_captures'::regclass
-       and pg_get_constraintdef(oid) like '%recadastro%'
-  ) then
-    alter table public.webhook_lead_captures drop constraint if exists webhook_lead_captures_outcome_check;
-    alter table public.webhook_lead_captures
-      add constraint webhook_lead_captures_outcome_check
-      check (outcome in ('criado', 'duplicado', 'recusado', 'recadastro'));
-  end if;
-end
-$outcome_recadastro$;
+-- (migration 0993) O CHECK de webhook_lead_captures.outcome vive num bloco só, o da 0683
+-- mais abaixo, com o vocabulário final ('recadastro' incluído). Dois blocos fariam o
+-- update.sh de um clone com dados falhar no primeiro e o segundo apagar 'recadastro'.
 
 comment on column public.webhook_lead_captures.outcome is
   'criado = virou lead novo; duplicado = mesmo external_id já capturado antes (retry da ferramenta); recusado = não entrou (reject_reason diz por quê); recadastro = a pessoa já tinha lead ABERTO no funil da fonte, então nenhum lead foi criado e o recadastro foi registrado na timeline dele (lead_id aponta para ele).';
@@ -102279,11 +102283,10 @@ do $f$ begin perform public.fn_proteger_tabelas_de_organizacao(); end $f$;
 -- as policies na forma antiga. Leitura (`for select`) CONTINUA com `fn_is_platform_admin()`
 -- — support_readonly segue lendo, só não escreve mais.
 
-drop policy if exists "api_tokens_admin_only" on "public"."api_tokens";
-drop policy if exists "api_tokens_tenant_read" on "public"."api_tokens";
-create policy "api_tokens_tenant_read" on "public"."api_tokens" for select using (public.fn_role_at_least("organization_id",'admin') or public.fn_is_platform_admin());
-drop policy if exists "api_tokens_admin_write" on "public"."api_tokens";
-create policy "api_tokens_admin_write" on "public"."api_tokens" for all using (public.fn_role_at_least("organization_id",'admin') or public.fn_is_platform_admin_full()) with check (public.fn_role_at_least("organization_id",'admin') or public.fn_is_platform_admin_full());
+-- Hiperbold (0962, 0992): api_tokens fica de fora deste self-heal. O upstream trocava a api_tokens_admin_only
+-- pelo par _tenant_read/_admin_write, que devolve a escrita ao admin de plataforma full sem created_by e a
+-- leitura a qualquer admin de plataforma. No fork só o servidor escreve (0962); a 0992 derruba o par para quem
+-- aplicou a cadeia de migrations e garante a admin_only na forma da 0962.
 
 drop policy if exists "nuvemshop_products_tenant" on "public"."nuvemshop_products";
 drop policy if exists "nuvemshop_products_read" on "public"."nuvemshop_products";
@@ -102317,7 +102320,9 @@ drop policy if exists "warmup_tenant_isolation_write" on "public"."channel_sessi
 
 drop policy if exists "orgs_write_platform_admin" on "public"."organizations";
 drop policy if exists "orgs_write_platform_admin" on "public"."organizations";
-create policy "orgs_write_platform_admin" on "public"."organizations" for all using (public.fn_is_platform_admin_full()) with check (public.fn_is_platform_admin_full());
+-- Hiperbold: sem `for all` explícito (é o padrão), para o texto ser o mesmo do bloco da 0910 do fork,
+-- que cria a mesma policy (tests/unit/baseline-nao-constroi-o-que-derruba).
+create policy "orgs_write_platform_admin" on "public"."organizations" using (public.fn_is_platform_admin_full()) with check (public.fn_is_platform_admin_full());
 
 drop policy if exists "audit_log_insert_tenant_member" on "public"."api_audit_log";
 drop policy if exists "audit_log_insert_tenant_member" on "public"."api_audit_log";
@@ -104407,19 +104412,21 @@ begin
      where conrelid = 'public.webhook_lead_captures'::regclass
        and conname = 'webhook_lead_captures_outcome_check'
        and pg_get_constraintdef(oid) like '%''atualizado''%'
+       and pg_get_constraintdef(oid) like '%''recadastro''%'
   ) then
     -- Drop e add na MESMA transação: se o add falhar, o drop desfaz junto.
+    -- Bloco único deste CHECK (0683 do upstream + 'recadastro' da 0958 do fork, reunidos pela 0993).
     alter table public.webhook_lead_captures
       drop constraint if exists webhook_lead_captures_outcome_check;
     alter table public.webhook_lead_captures
       add constraint webhook_lead_captures_outcome_check
       check (outcome = any (array['criado'::text, 'duplicado'::text, 'recusado'::text,
-                                  'atualizado'::text]));
+                                  'atualizado'::text, 'recadastro'::text]));
   end if;
 end $$;
 
 comment on column public.webhook_lead_captures.outcome is
-  'criado = virou lead novo; duplicado = envio repetido, nada mudou no card; atualizado = o card da mesma fonte recebeu o dado novo (issue #2316, só com a opção da fonte ligada); recusado = não entrou (reject_reason diz por quê).';
+  'criado = virou lead novo; duplicado = envio repetido, nada mudou no card; atualizado = o card da mesma fonte recebeu o dado novo (issue #2316, só com a opção da fonte ligada); recusado = não entrou (reject_reason diz por quê); recadastro = a pessoa já tinha lead ABERTO no funil da fonte, então nenhum lead foi criado e o recadastro foi registrado na timeline dele (lead_id aponta para ele).';
 
 notify pgrst, 'reload schema';
 
@@ -106049,3 +106056,29 @@ begin
   execute format('grant select (%s) on table public.webhook_sources to authenticated', v_colunas);
 end
 $hb_0992_grants$;
+
+-- api_tokens: só o servidor escreve (0962) vence o par do upstream (0508). Na cadeia de migrations a
+-- 0508 (01/10) derruba a api_tokens_admin_only e cria api_tokens_tenant_read (leitura para qualquer
+-- admin de plataforma, support_readonly inclusive) e api_tokens_admin_write (escrita para admin de
+-- plataforma full sem created_by); a 0962 (17/10) recria a admin_only, mas o par seguia somando por OR.
+-- Aqui o par sai, os privilégios de sessão saem de novo e a admin_only fica exatamente como na 0962.
+-- Reaplicável: drop if exists; a admin_only é trocada com alter policy (sem janela sem policy) e criada
+-- só se faltar.
+revoke all on public.api_tokens from public, anon, authenticated;
+
+do $hb_0992_api_tokens$
+begin
+  perform set_config('lock_timeout','3s',true);
+  drop policy if exists api_tokens_tenant_read on public.api_tokens;
+  drop policy if exists api_tokens_admin_write on public.api_tokens;
+  if exists (select 1 from pg_policy where polname = 'api_tokens_admin_only' and polrelid = 'public.api_tokens'::regclass) then
+    alter policy api_tokens_admin_only on public.api_tokens
+      using (public.fn_role_at_least(organization_id, 'admin'))
+      with check (public.fn_role_at_least(organization_id, 'admin') and created_by = (select auth.uid()));
+  else
+    create policy api_tokens_admin_only on public.api_tokens
+      using (public.fn_role_at_least(organization_id, 'admin'))
+      with check (public.fn_role_at_least(organization_id, 'admin') and created_by = (select auth.uid()));
+  end if;
+end
+$hb_0992_api_tokens$;

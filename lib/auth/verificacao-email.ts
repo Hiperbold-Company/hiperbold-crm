@@ -36,6 +36,8 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
+
 /** Validade do link, em dias. */
 export const VALIDADE_DO_LINK_EM_DIAS = 7;
 const VALIDADE_EM_MS = VALIDADE_DO_LINK_EM_DIAS * 24 * 60 * 60 * 1000;
@@ -118,6 +120,8 @@ async function alterarAppMetadata(
   for (const k of Object.keys(antes)) if (!(k in enviado)) enviado[k] = null;
   const gravado = await admin.auth.admin.updateUserById(userId, { app_metadata: enviado });
   if (gravado.error) return { ok: false, motivo: "gravacao_falhou" };
+  // O `app_metadata` (e-mail verificado) está no snapshot do cache curto: as outras sessões veem na hora.
+  invalidarUsuario(userId);
   return { ok: true, email: usuario.email ?? null, antes };
 }
 

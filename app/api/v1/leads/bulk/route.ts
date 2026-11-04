@@ -521,27 +521,9 @@ export async function POST(req: NextRequest): Promise<Response> {
               requestId,
             });
           }
-          if (perdaNova) {
-            // A auditoria da PERDA, por lead (#2887), como a `/lose` faz
-            // (`encerraDemanda`): o negócio perdido entra no audit log com o
-            // motivo COM QUE foi perdido. O `lead.bulk_action` agregado — no
-            // fim da rota — continua, porque ele é o registro da OPERAÇÃO, não
-            // o da perda de cada negócio.
-            await audit({
-              action: "lead.lost",
-              actorUserId: user.id,
-              organizationId,
-              resourceType: "crm_lead",
-              resourceId: row.lead_id,
-              requestId,
-              metadata: {
-                actor_type: "user",
-                from_stage_id: row.from_stage_id,
-                to_stage_id: input.params.stage_id,
-                lost_reason: motivo,
-              },
-            });
-          }
+          // A auditoria `lead.lost` por negócio (#2887 no upstream) sai do bloco
+          // "A PERDA EM LOTE GRAVA O QUE A PERDA INDIVIDUAL GRAVA" abaixo, com
+          // `bulk: true` (Hiperbold #917): gravar aqui também duplicava a linha.
         }),
       );
       // ── A PERDA EM LOTE GRAVA O QUE A PERDA INDIVIDUAL GRAVA ────────────────

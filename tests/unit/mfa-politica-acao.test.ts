@@ -28,6 +28,15 @@ vi.mock("@/lib/supabase/admin", () => ({
       select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { settings: estado.settings }, error: null }) }) }),
       update: (v: unknown) => ({ eq: async () => { estado.updates.push(v); return { error: null }; } }),
     }),
+    // A gravação passa pelo banco, só no caminho pedido (D-132, `atualizarSettingDaOrganizacao`): registra
+    // como se fosse o `settings` resultante daquele caminho.
+    rpc: async (nome: string, args: { p_caminho: string[]; p_valor: unknown }) => {
+      if (nome !== "fn_atualizar_setting_da_organizacao") throw new Error(`rpc inesperada: ${nome}`);
+      const [chave, ...resto] = args.p_caminho;
+      if (resto.length > 0) throw new Error(`caminho inesperado: ${args.p_caminho.join(".")}`);
+      estado.updates.push({ settings: { [chave as string]: args.p_valor } });
+      return { data: 1, error: null };
+    },
   }),
 }));
 

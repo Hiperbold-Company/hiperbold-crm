@@ -61,7 +61,7 @@ import {
 import { garantirLeadDaConversa } from "@/lib/leads/nascimento-do-lead";
 import { buscarConhecimento, resolverAcervoDoAgente } from "@/lib/ai/knowledge/busca";
 import { contaEmModoLeitura } from "@/lib/billing/assinatura/modo-leitura";
-import { MOTIVO_LIMITE_DE_DURACAO, registrarUsoDaVoz, verificarAtendimentoDaVoz } from "@/lib/ai/voz/limites-da-voz";
+import { MOTIVO_LIMITE_DE_DURACAO, verificarAtendimentoDaVoz } from "@/lib/ai/voz/limites-da-voz";
 import { ehOperante } from "@/lib/organizacao/operante";
 import { registrarChamadaDeIa } from "@/lib/ai/usage/registrar-chamada";
 import { logger } from "@/lib/logger";
@@ -317,14 +317,9 @@ async function finalizeAudioSocketCall(uuid: string, reason?: string) {
     })
     .eq("id", call.callRowId);
 
-  // Uma linha em llm_calls por ligação: origem da chave e duração (D-117).
-  await registrarUsoDaVoz(supabaseAdmin, {
-    organizationId: call.organizationId,
-    model: call.voiceModel,
-    origemDaChave: call.origemDaChave,
-    duracaoMs: durationMs,
-  });
-
+  // UMA linha em llm_calls por ligação (D-117): a de baixo leva tokens,
+  // duração E a origem da chave. Antes, `registrarUsoDaVoz` gravava uma segunda
+  // linha para a mesma ligação e a tela de uso contava a voz em dobro.
   // ─── O uso da sessão vai para `llm_calls` ───────────────────────────────
   //
   // Sem isto a voz — o gasto mais caro por minuto do produto — não aparecia
@@ -342,6 +337,7 @@ async function finalizeAudioSocketCall(uuid: string, reason?: string) {
       uso: sessao.uso,
       duracaoMs: durationMs,
       erro: sessao.erro,
+      origemDaChave: call.origemDaChave,
     }),
   );
   logger.info("[voice-agent] uso da ligação registrado", {

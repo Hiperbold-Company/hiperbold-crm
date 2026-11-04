@@ -49,6 +49,8 @@ export type MotivoDeDiagnostico =
   | "chave_mestra"
   /** Fica gravada dentro do programa quando ele é montado; trocar depois não move nada. */
   | "gravada_na_montagem"
+  /** Hiperbold: a cobrança própria (lib/billing/asaas) lê do ambiente, não do banco. */
+  | "lida_do_ambiente_pela_cobranca"
   /** O par dela vive em OUTRO contêiner: trocar aqui não bastaria. */
   | "pareada_com_conteiner"
   /** Lida quando o processo liga, e o processo que a lê não é este. */
@@ -316,7 +318,12 @@ export const CATALOGO_DA_INSTALACAO: readonly ChaveDaInstalacao[] = [
       "A chave que deixa o sistema criar assinaturas e ler pagamentos na sua conta Asaas. Comece pela do sandbox, que começa com $aact_hmlg_.",
     grupo: "integracao",
     natureza: "segredo",
-    controle: "edita",
+    // Hiperbold: a cobrança da Hiperbold (lib/billing/asaas/config.ts e o webhook
+    // do Asaas) lê esta chave do ambiente; um campo editável na tela não mudaria nada.
+    controle: "diagnostico",
+    motivo: "lida_do_ambiente_pela_cobranca",
+    comoTrocar:
+      "A cobrança da Hiperbold lê esta chave do arquivo de instalação do servidor. Troca-se lá, e o sistema é reiniciado.",
     telaDona: "cobranca",
   },
   {
@@ -326,7 +333,12 @@ export const CATALOGO_DA_INSTALACAO: readonly ChaveDaInstalacao[] = [
       "Confere que um aviso de pagamento veio mesmo do Asaas. É criado quando você conecta a chave; se o Asaas pedir o cadastro manual do aviso, a tela mostra o token uma única vez.",
     grupo: "integracao",
     natureza: "segredo",
-    controle: "edita",
+    // Hiperbold: a cobrança da Hiperbold (lib/billing/asaas/config.ts e o webhook
+    // do Asaas) lê esta chave do ambiente; um campo editável na tela não mudaria nada.
+    controle: "diagnostico",
+    motivo: "lida_do_ambiente_pela_cobranca",
+    comoTrocar:
+      "A cobrança da Hiperbold lê esta chave do arquivo de instalação do servidor. Troca-se lá, e o sistema é reiniciado.",
     telaDona: "cobranca",
   },
 

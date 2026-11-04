@@ -82,7 +82,7 @@ beforeEach(() => {
 
 describe("requirePlatformAdmin e o segundo fator", () => {
   it("⭐ mfa_required desligado, mas com fator verificado e sessão aal1: vai para /login/mfa", async () => {
-    expect(await destino()).toBe("/login/mfa?next=/admin");
+    expect(await destino()).toBe("/login/mfa?next=%2Fadmin"); // upstream: next = caminho atual, codificado
   });
 
   it("não consegue ler a sessão (nem os fatores): falha fechado, vai para o login e nunca libera", async () => {
@@ -93,7 +93,7 @@ describe("requirePlatformAdmin e o segundo fator", () => {
   it("mfa_required ligado e aal1: continua indo para /login/mfa, mesmo sem fator na lista", async () => {
     estado.mfaRequired = true;
     estado.fatores = [];
-    expect(await destino()).toBe("/login/mfa?next=/admin");
+    expect(await destino()).toBe("/login/mfa?next=%2Fadmin"); // upstream: next = caminho atual, codificado
   });
 
   it("CONTROLE: com aal2 entra", async () => {

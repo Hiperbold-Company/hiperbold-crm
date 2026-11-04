@@ -31,6 +31,8 @@ import { randomBytes } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
+
 import { removerTodosOsFatores } from "./fatores-mfa-admin";
 import { carimbarEmailVerificado } from "./verificacao-email";
 
@@ -159,6 +161,7 @@ export async function reassumirConta(p: {
     ? await p.admin.auth.admin.updateUserById(userId, { password: senha })
     : await p.trocarSenhaDaSessao(senha);
   if (trocada.error) return { ok: false, etapa: "senha" };
+  invalidarUsuario(userId);
 
   const revogados = await revogarCriadosPelaConta(p.admin, userId, agora);
   if (!revogados) return { ok: false, etapa: "revogacao" };

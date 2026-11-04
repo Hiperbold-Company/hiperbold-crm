@@ -98,12 +98,15 @@ function envelopeDeReacao(reaction: Record<string, unknown> | undefined) {
 
 function pedido(corpo: unknown) {
   const cru = JSON.stringify(corpo);
-  return {
-    text: async () => cru,
-    headers: new Headers({
+  // `Request` de verdade: a rota lê o corpo como STREAM, com teto de tamanho antes
+  // da assinatura (`lerCorpoDaRequisicao`), e não por `text()`.
+  return new Request("https://crm.exemplo/api/v1/webhooks/meta/token-de-teste", {
+    method: "POST",
+    body: cru,
+    headers: {
       "x-hub-signature-256": `sha256=${createHmac("sha256", APP_SECRET).update(cru, "utf8").digest("hex")}`,
-    }),
-  } as never;
+    },
+  }) as never;
 }
 
 const ctx = { params: Promise.resolve({ token: "token-de-teste" }) } as never;

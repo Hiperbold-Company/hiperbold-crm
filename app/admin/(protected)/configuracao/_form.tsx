@@ -33,6 +33,7 @@ const MOTIVO_CURTO: Record<MotivoDeDiagnostico, string> = {
   gravada_na_montagem: "Gravada quando o programa foi montado",
   pareada_com_conteiner: "Tem um par em outro programa do servidor",
   lida_no_boot_de_outro_processo: "Lida por outro programa ao ligar",
+  lida_do_ambiente_pela_cobranca: "Lida do arquivo de instalação pela cobrança",
 };
 
 function CampoDeDiagnostico({ linha, idioma }: { linha: LinhaDaTela; idioma: Idioma }) {

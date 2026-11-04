@@ -81,10 +81,15 @@ function registrySpiao() {
       }),
     } as never;
   };
-  return { chamadas, registry: { anthropic: fabrica("anthropic"), openai: fabrica("openai") } };
+  return { chamadas, registry: { anthropic: fabrica("anthropic"), openai: fabrica("openai"), openrouter: fabrica("openrouter") } };
 }
 
-const CFG = { anthropicApiKey: "chave-anthropic", openaiApiKey: "chave-openai", cacheTtl: "1h" as const };
+const CFG = {
+  anthropicApiKey: "chave-anthropic",
+  openaiApiKey: "chave-openai",
+  openrouterApiKey: "chave-openrouter",
+  cacheTtl: "1h" as const,
+};
 
 async function chamar(purpose: string, bindings: Record<string, LinhaDeBinding> = {}) {
   const { registry, chamadas } = registrySpiao();
@@ -98,6 +103,17 @@ async function chamar(purpose: string, bindings: Record<string, LinhaDeBinding> 
   return { r, chamadas, linhas };
 }
 
+/**
+ * Hiperbold: a chave da INSTALAÇÃO sai sempre pela OpenRouter (decisão do dono,
+ * 20/10/2026), com o id escrito com o fabricante. O que o caso mede continua o
+ * mesmo: QUAL modelo chega à fábrica (o do painel ou o da versão publicada).
+ */
+const DO_AGENTE_PELA_OPENROUTER = {
+  provider: "openrouter",
+  apiKey: "chave-openrouter",
+  modelId: "anthropic/claude-sonnet-5",
+};
+
 /** As colunas do INSERT de sucesso em `run-model-call.ts`: purpose é a 5ª, provider a 6ª, model a 7ª, origem a 14ª. */
 const coluna = { purpose: 4, provider: 5, model: 6, origem: 13 } as const;
 
@@ -106,21 +122,21 @@ describe("followup_turn no seam", () => {
     const { r, chamadas, linhas } = await chamar("followup_turn", { followup_turn: ESCOLHA_DO_PAINEL });
 
     expect(chamadas).toHaveLength(1);
-    expect(chamadas[0]).toEqual({ provider: "openai", apiKey: "chave-openai", modelId: "gpt-5.6-luna" });
+    expect(chamadas[0]).toEqual({ provider: "openrouter", apiKey: "chave-openrouter", modelId: "openai/gpt-5.6-luna" });
     expect(r.origem).toBe("binding");
     // A linha de custo sai no ponto próprio — é o que separa o gasto do
     // follow-up do da resposta na tela e na consulta por `purpose`.
     expect(linhas).toHaveLength(1);
     expect(linhas[0]![coluna.purpose]).toBe("followup_turn");
-    expect(linhas[0]![coluna.provider]).toBe("openai");
-    expect(linhas[0]![coluna.model]).toBe("gpt-5.6-luna");
+    expect(linhas[0]![coluna.provider]).toBe("openrouter");
+    expect(linhas[0]![coluna.model]).toBe("openai/gpt-5.6-luna");
     expect(linhas[0]![coluna.origem]).toBe("binding");
   });
 
   it("sem escolha: o modelo da versão publicada, com a origem de sempre", async () => {
     const { r, chamadas, linhas } = await chamar("followup_turn");
 
-    expect(chamadas).toEqual([{ provider: "anthropic", apiKey: "chave-anthropic", modelId: "claude-sonnet-5" }]);
+    expect(chamadas).toEqual([DO_AGENTE_PELA_OPENROUTER]);
     expect(r.origem).toBe("agente_publicado");
     expect(linhas[0]![coluna.purpose]).toBe("followup_turn");
     expect(linhas[0]![coluna.origem]).toBe("agente_publicado");
@@ -130,7 +146,7 @@ describe("followup_turn no seam", () => {
     const { chamadas, r } = await chamar("followup_turn", {
       followup_turn: { ...ESCOLHA_DO_PAINEL, is_enabled: false },
     });
-    expect(chamadas).toEqual([{ provider: "anthropic", apiKey: "chave-anthropic", modelId: "claude-sonnet-5" }]);
+    expect(chamadas).toEqual([DO_AGENTE_PELA_OPENROUTER]);
     expect(r.origem).toBe("agente_publicado");
   });
 
@@ -141,7 +157,7 @@ describe("followup_turn no seam", () => {
       agent_turn: { ...ESCOLHA_DO_PAINEL, purpose: "agent_turn" },
       followup_turn: ESCOLHA_DO_PAINEL,
     });
-    expect(chamadas).toEqual([{ provider: "anthropic", apiKey: "chave-anthropic", modelId: "claude-sonnet-5" }]);
+    expect(chamadas).toEqual([DO_AGENTE_PELA_OPENROUTER]);
     expect(r.origem).toBe("agente_publicado");
     expect(linhas[0]![coluna.purpose]).toBe("agent_turn");
   });
@@ -150,6 +166,6 @@ describe("followup_turn no seam", () => {
     // O cenário real: o painel tem a escolha SÓ do follow-up. A resposta lê o
     // binding do PRÓPRIO ponto e não acha nada.
     const { chamadas } = await chamar("agent_turn", { followup_turn: ESCOLHA_DO_PAINEL });
-    expect(chamadas).toEqual([{ provider: "anthropic", apiKey: "chave-anthropic", modelId: "claude-sonnet-5" }]);
+    expect(chamadas).toEqual([DO_AGENTE_PELA_OPENROUTER]);
   });
 });

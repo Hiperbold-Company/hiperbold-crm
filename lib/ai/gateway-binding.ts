@@ -158,8 +158,14 @@ export async function resolverModeloDoPonto(
   // organização. Sem esta linha, uma empresa em OpenAI classificava o clima
   // com um Claude que a tela nunca anunciava, pelo caminho que respondia
   // sozinho (item (a) da mesma issue).
+  //
+  // Hiperbold: a chave da INSTALAÇÃO sai sempre pela OpenRouter (`./gateway.ts`),
+  // que é agregador. Sem binding e sem credencial utilizável da organização, quem
+  // executa é ela, e o provedor gravado em `settings.llm` não decide o destino.
+  const providerQueExecuta =
+    binding !== null ? binding.provider : credencialUtilizavel(daOrg)?.provider ?? null;
   const defaultNaoExecutaAqui =
-    ehODefaultAnthropicDoProduto(idPadrao) && provedorDiretoNaoAnthropic(providerEfetivo);
+    ehODefaultAnthropicDoProduto(idPadrao) && provedorDiretoNaoAnthropic(providerQueExecuta);
 
   /**
    * O fallback comum aos TRÊS pontos em que o resolvedor precisava escolher
@@ -462,7 +468,7 @@ async function padraoDaInstalacao(
   providerEfetivo: string | null,
   padrao: ModelId,
   contexto: { purpose: string; organizationId: string },
-): Promise<LanguageModel | null> {
+): Promise<{ model: LanguageModel; modelId: string } | null> {
   const id = String(padrao);
   const recusar = (provider: string, motivo: string): null => {
     // O buraco da issue #2377: o prefixo desta linha era sintetizado AQUI, a
@@ -513,14 +519,16 @@ async function padraoDaInstalacao(
   // dono, 20/10/2026), que só entende o id com fabricante: id BARE nunca vai cru.
   if (recusaDoProvider === null && !ehBare) {
     const peloId = resolveLanguageModel(id);
-    if (peloId !== null) return peloId;
+    if (peloId !== null) return { model: peloId, modelId: id };
   }
   if (!ehBare) return cobrarRecusa();
 
   // Degrau 2 — a rota sintetizada com o provedor da configuração.
   if (recusaDoProvider === null && podeRotearPeloProvider) {
-    const peloProvider = resolveLanguageModel(idNaRotaDaInstalacao(provider, id));
-    if (peloProvider !== null) return peloProvider;
+    // Hiperbold: o id do log de custo é o MESMO que a OpenRouter recebe (com o fabricante).
+    const naRota = idNaRotaDaInstalacao(provider, id);
+    const peloProvider = resolveLanguageModel(naRota);
+    if (peloProvider !== null) return { model: peloProvider, modelId: naRota };
   }
   // A CONTA NÃO TEM CHAVE PARA ESTE ID — e a instalação tem. A rota de cima
   // sintetiza o prefixo a partir do provedor que a ORGANIZAÇÃO escolheu (ou do
@@ -541,8 +549,9 @@ async function padraoDaInstalacao(
     // O mesmo provedor da configuração já foi tentado no degrau 2 — repetir é
     // custo de leitura sem resposta nova.
     if (provedorDoModelo !== provider) {
-      const peloCatalogo = resolveLanguageModel(idNaRotaDaInstalacao(provedorDoModelo, id));
-      if (peloCatalogo !== null) return peloCatalogo;
+      const naRota = idNaRotaDaInstalacao(provedorDoModelo, id);
+      const peloCatalogo = resolveLanguageModel(naRota);
+      if (peloCatalogo !== null) return { model: peloCatalogo, modelId: naRota };
     }
   }
   // Nenhum degrau achou endereço para este id: se o par com a configuração
@@ -574,10 +583,9 @@ async function padraoDaInstalacaoGuardado(
   });
   if (decisao.trocado) {
     const trocado = await padraoDaInstalacao(providerEfetivo, decisao.modelId as ModelId, contexto);
-    if (trocado !== null) return { model: trocado, modelId: decisao.modelId };
+    if (trocado !== null) return trocado;
   }
-  const model = await padraoDaInstalacao(providerEfetivo, padrao, contexto);
-  return model === null ? null : { model, modelId: String(padrao) };
+  return padraoDaInstalacao(providerEfetivo, padrao, contexto);
 }
 
 /**

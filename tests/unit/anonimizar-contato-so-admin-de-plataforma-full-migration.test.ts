@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
  */
 
 const MIGRATION = readFileSync(
-  join(process.cwd(), "supabase/migrations/20260930150000_0917_anonimizar_contato_so_admin_de_plataforma_full.sql"),
+  join(process.cwd(), "supabase/migrations/20260930150030_0917_anonimizar_contato_so_admin_de_plataforma_full.sql"),
   "utf8",
 );
 const BASELINE = readFileSync(join(process.cwd(), "supabase/baseline.sql"), "utf8");
@@ -52,7 +52,7 @@ describe("0917: posição e igualdade", () => {
   });
 
   it("está registrada no MANIFEST, depois da 0916", () => {
-    expect(MANIFEST).toMatch(/\| `20260930150000` \| `0917_anonimizar_contato_so_admin_de_plataforma_full` \|/);
+    expect(MANIFEST).toMatch(/\| `20260930150030` \| `0917_anonimizar_contato_so_admin_de_plataforma_full` \|/);
     expect(MANIFEST.indexOf("`0916_estorno_total")).toBeLessThan(MANIFEST.indexOf("`0917_anonimizar_contato"));
   });
 
@@ -104,6 +104,7 @@ describe("0917: o portão", () => {
   }
 
   it("fn_is_platform_admin_full existe no baseline ANTES do bloco que a usa", () => {
+    // sonda-do-baseline: primeira-de-proposito — mede ORDEM: a primeira definição tem de vir antes do bloco que a usa.
     const definicao = BASELINE.indexOf("create or replace function public.fn_is_platform_admin_full()");
     expect(definicao).toBeGreaterThan(-1);
     expect(definicao).toBeLessThan(BASELINE.lastIndexOf(MARCADOR_0917));

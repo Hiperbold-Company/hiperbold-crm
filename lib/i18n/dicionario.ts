@@ -2120,6 +2120,11 @@ export const DICIONARIO: Traducoes = {
     es: "Tiene un par en otro programa del servidor",
   },
   "Lida por outro programa ao ligar": { es: "La lee otro programa al arrancar" },
+  // Hiperbold: chaves do Asaas lidas do ambiente pela cobrança própria.
+  "Lida do arquivo de instalação pela cobrança": { es: "La lee la facturación desde el archivo de instalación" },
+  "A cobrança da Hiperbold lê esta chave do arquivo de instalação do servidor. Troca-se lá, e o sistema é reiniciado.": {
+    es: "La facturación de Hiperbold lee esta clave del archivo de instalación del servidor. Se cambia allí y se reinicia el sistema.",
+  },
 
   // Painel de configuração da instalação — a tela, o formulário e a porta do
   // modo administrador no menu do usuário.
@@ -26510,6 +26515,9 @@ export const DICIONARIO: Traducoes = {
     es: "Todavía no recibimos la confirmación. Actualiza la página más tarde.",
   },
   "Marca própria de cada empresa": { es: "Marca propia de cada empresa" },
+  "O administrador de cada empresa troca o nome, a cor e o logo que ela mostra dentro do sistema.": {
+    es: "El administrador de cada empresa cambia el nombre, el color y el logo que ella muestra dentro del sistema.",
+  },
   "Ligado, o administrador de cada empresa pode trocar o nome, a cor e o logo que a empresa dele mostra dentro do sistema (Configurações, Marca). Desligado, o sistema mostra sempre a marca da instalação: a tela some, a gravação é recusada e o que cada empresa já tinha salvo não é aplicado (continua guardado e volta se você religar).":
     {
       es: "Activado, el administrador de cada empresa puede cambiar el nombre, el color y el logo que su empresa muestra dentro del sistema (Configuración, Marca). Desactivado, el sistema muestra siempre la marca de la instalación: la pantalla desaparece, el guardado se rechaza y lo que cada empresa ya tenía guardado no se aplica (sigue guardado y vuelve si lo reactivas).",
@@ -28296,6 +28304,23 @@ export const DICIONARIO: Traducoes = {
   "Conferindo a cobrança desta empresa…": {
     es: "Verificando el cobro de esta empresa…",
   },
+  // ─── lib/webhooks/captacao.ts (motivos de recusa do fork: segredo, plano, corpo) ───
+  "O envio chegou, mas o CRM não conseguiu abrir o segredo desta fonte (a chave da instalação está ausente ou foi trocada). Fale com quem administra a instalação; tente reenviar depois.":
+    {
+      es: "El envío llegó, pero el CRM no pudo abrir el secreto de esta fuente (la clave de la instalación falta o fue cambiada). Habla con quien administra la instalación; intenta reenviar después.",
+    },
+  "Os dados chegaram, mas o plano desta organização já está no limite de leads. Fale com o suporte para ampliar.":
+    {
+      es: "Los datos llegaron, pero el plan de esta organización ya está en el límite de leads. Habla con soporte para ampliarlo.",
+    },
+  "O corpo do envio não é um JSON válido — confira se a ferramenta que envia manda o formato certo.":
+    {
+      es: "El cuerpo del envío no es un JSON válido — verifica que la herramienta que envía use el formato correcto.",
+    },
+  "O corpo do envio passou do tamanho máximo aceito (64 KB).":
+    {
+      es: "El cuerpo del envío superó el tamaño máximo aceptado (64 KB).",
+    },
 };
 
 /**

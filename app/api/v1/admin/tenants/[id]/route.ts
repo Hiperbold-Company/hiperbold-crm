@@ -11,7 +11,7 @@ import { logger } from "@/lib/logger";
 import { tenantSchema } from "@/lib/schemas/settings";
 import { gravarDadosCadastrais } from "@/lib/tenants/dados-cadastrais";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ok, fail } from "@/lib/api/wrappers";
+import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { randomUUID } from "node:crypto";
 import { createLogger } from "@/lib/agent-engine/obs/logger";
@@ -239,7 +239,7 @@ export async function PATCH(
     .select("id, slug")
     .eq("id", id)
     .maybeSingle();
-  if (orgError) return fail("internal_error", orgError.message, 500, { requestId });
+  if (orgError) return falhaInterna("internal_error", orgError, { requestId });
   if (!org) return fail("not_found", "Tenant not found", 404, { requestId });
 
   const gravado = await gravarDadosCadastrais(admin, id, parsed.data);

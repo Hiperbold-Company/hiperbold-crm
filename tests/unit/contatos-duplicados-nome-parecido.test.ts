@@ -112,8 +112,8 @@ describe("nome parecido: o nome que a varredura lê", () => {
 describe("nome parecido: não se mistura com o grupo forte", () => {
   it("6. mesmo telefone (com e sem o nono dígito) e nomes parecidos: não é par de nome, e o forte segue", () => {
     // Sabotagem: não excluir quem já é forte faria este par aparecer como nome também.
-    const a = contato("a", { name: "Clínica Santos Odontologia", phone_number: "+553198966398" });
-    const b = contato("b", { name: "Santos Odontologia Clínica", phone_number: "+5531998966398" });
+    const a = contato("a", { name: "Clínica Santos Odontologia", phone_number: "+553192220002" });
+    const b = contato("b", { name: "Santos Odontologia Clínica", phone_number: "+5531992220002" });
 
     expect(encontrarParecidosPorNome([a, b])).toEqual([]);
     const fortes = encontrarContatosDuplicados([a, b]);

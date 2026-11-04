@@ -63,6 +63,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       inviterName: await nomeDeQuemAgiu(e.authz),
       ocultarLink: e.authz.via === "token",
       comServiceRole: isServiceRoleConfigured(),
+      idioma: e.authz.idioma ?? undefined,
     });
     return ok(resultado, { status: 201, requestId: e.requestId });
   } catch (err) {

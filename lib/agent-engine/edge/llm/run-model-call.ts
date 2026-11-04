@@ -1226,12 +1226,14 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
   // organização (BYOK) passa intacta e nem lê a configuração. É este o ponto único
   // do motor: toda chamada (turno, resumo, classificador, operador) passa por aqui,
   // com a origem da chave já decidida por `resolveOrgLlmConfig`.
-  if (config.origemDaChave === 'chave_da_instalacao') {
+  // Também a RESERVA do classificador (abaixo) passa por aqui: sem isso ela sairia pela
+  // OpenRouter com o id puro (`claude-sonnet-5`), que a OpenRouter não entende, e fora do freio.
+  const modeloNaChaveDaInstalacao = async (pedido: string): Promise<string> => {
     const lista = await modelosDaInstalacaoPeloDb(db);
     // A chave da instalação sai SEMPRE pela OpenRouter (`config.provider`), que só entende o id
     // com fabricante (`openai/gpt-6-luna`). Id puro do catálogo de um provedor direto
     // (`claude-sonnet-5`, pedido ao `anthropic`) ganha o prefixo do provedor que foi pedido.
-    const pedidoNaRota = idNaRotaDaInstalacao(config.providerPedido, modeloDecidido);
+    const pedidoNaRota = idNaRotaDaInstalacao(config.providerPedido, pedido);
     const guarda = decidirModeloDaChave({
       lista,
       origemDaChave: config.origemDaChave,
@@ -1239,7 +1241,7 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
       modelId: pedidoNaRota,
     });
     if (guarda.trocado || guarda.semTraducao) {
-      if (primeiraVezDoModelo(input.tenantId, modeloDecidido)) {
+      if (primeiraVezDoModelo(input.tenantId, pedido)) {
         deps.log?.warn(
           guarda.trocado
             ? 'llm: modelo fora de MODELOS_DA_INSTALACAO na chave da instalação — usando o padrão'
@@ -1248,13 +1250,16 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
             organization_id: input.tenantId,
             purpose,
             provider: config.provider,
-            pedido: modeloDecidido,
+            pedido,
             usado: guarda.modelId,
           },
         );
       }
     }
-    model = guarda.modelId;
+    return guarda.modelId;
+  };
+  if (config.origemDaChave === 'chave_da_instalacao') {
+    model = await modeloNaChaveDaInstalacao(modeloDecidido);
   }
 
   // ═══ O PAR (PROVEDOR, MODELO) ANTES DE QUALQUER BYTE ═══
@@ -1794,14 +1799,20 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
     deps.log?.warn('llm: chamada falhou', camposDaFalha);
     // Os próximos turnos desta organização param de tentar este econômico por
     // um tempo — senão cada classificação pagaria a recusa antes da reserva.
-    marcarEconomicoQueFalhou(input.tenantId, config.provider, model, Date.now());
+    // A chave é a MESMA da consulta em `binding-do-ponto.ts`: o provedor da DECISÃO e o id do
+    // catálogo. `config.provider`/`model` seriam os da saída (pela OpenRouter, `openrouter` e
+    // `anthropic/…`), e o castigo nunca seria encontrado.
+    marcarEconomicoQueFalhou(input.tenantId, decisao.provider, modeloDecidido, Date.now());
     deps.log?.warn('llm: o modelo econômico falhou — repetindo no modelo de antes', {
       organization_id: input.tenantId,
       purpose,
       modelo_economico: model,
       modelo_de_reserva: reservaDoModelo.modelId,
     });
-    model = reservaDoModelo.modelId;
+    model =
+      config.origemDaChave === 'chave_da_instalacao'
+        ? await modeloNaChaveDaInstalacao(reservaDoModelo.modelId)
+        : reservaDoModelo.modelId;
     origem = reservaDoModelo.origem;
     startedAt = Date.now();
     try {

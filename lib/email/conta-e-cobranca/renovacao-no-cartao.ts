@@ -43,6 +43,7 @@ import { dataSaoPaulo } from "@/lib/billing/asaas/dinheiro";
 import { logger } from "@/lib/logger";
 
 import { enfileirarEmailDeConta, type Enfileirador } from "./fila";
+import { ehOperante } from "@/lib/organizacao/operante";
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 /** Quantos dias antes da cobrança o aviso passa a valer. */
@@ -180,7 +181,7 @@ export async function avisarRenovacoesNoCartao(
         .eq("id", contrato.organization_id)
         .maybeSingle();
       if (erroOrg) throw new Error(`organizations: ${erroOrg.message}`);
-      if ((org as { status: string } | null)?.status !== "active") {
+      if (!ehOperante((org as { status: string } | null)?.status)) {
         resumo.pulados++;
         continue;
       }

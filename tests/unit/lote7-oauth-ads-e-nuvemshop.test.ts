@@ -24,6 +24,7 @@ vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/impersonate/support", () => ({
   requireSupportWrite: vi.fn(async () => null),
+  authenticatedSessionId: vi.fn(async () => "sessao-do-admin"),
   supportCallbackWriteAllowed: vi.fn(async () => true),
 }));
 vi.mock("@/lib/auth/require-role", () => ({
@@ -34,6 +35,7 @@ vi.mock("@/lib/auth/require-role", () => ({
   })),
 }));
 vi.mock("@/lib/plataformas-de-anuncio/google/config", () => ({
+  CAMINHO_DO_CALLBACK: "/api/v1/plataformas-de-anuncio/google/callback",
   configuracaoDoGoogleAds: vi.fn(() => ({ clientId: "cid", clientSecret: "cs", redirectUri: "http://x/cb" })),
 }));
 vi.mock("@/lib/plataformas-de-anuncio/google/oauth", () => ({

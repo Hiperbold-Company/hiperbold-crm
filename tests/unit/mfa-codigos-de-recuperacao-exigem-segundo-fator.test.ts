@@ -99,7 +99,16 @@ function tabela(nome: string) {
 function clienteDeSessao() {
   return {
     auth: {
-      getUser: async () => ({ data: { user: { id: USER_ID, email: EMAIL } } }),
+      // `isMfaEnrolled` lê os fatores do próprio usuário da sessão (getUser), não do listFactors.
+      getUser: async () => ({
+        data: {
+          user: {
+            id: USER_ID,
+            email: EMAIL,
+            factors: h.temFator ? [{ id: "f1", status: "verified", factor_type: "totp" }] : [],
+          },
+        },
+      }),
       mfa: {
         listFactors: async () => ({
           data: {
@@ -161,6 +170,8 @@ const sobreCodigos = () => h.chamadas.filter((c) => c.tabela === "user_recovery_
 const escritas = () => sobreCodigos().filter((c) => c.op !== "select");
 
 beforeEach(() => {
+  // O hash do código de recuperação é HMAC com o segredo da instalação (upstream): sem ele o fluxo recusa.
+  vi.stubEnv("INTERNAL_SECRET", "segredo-de-teste-com-mais-de-32-caracteres");
   h.aal = "aal1";
   h.temFator = true;
   h.chamadas.length = 0;
@@ -237,8 +248,10 @@ describe("useRecoveryCode: usar um código encerra todos os códigos da conta", 
 
 describe("os códigos de um cadastro não sobrevivem ao seguinte", () => {
   it("confirmMfaEnroll apaga os códigos antigos ANTES de gravar o conjunto novo", async () => {
+    // Quem já tem fator verificado só cadastra outro com a sessão provada (aal2, upstream).
+    h.aal = "aal2";
     const r = await confirmMfaEnroll("123456", "f1");
-    expect(r.ok).toBe(true);
+    expect(r).toMatchObject({ ok: true });
     expect(escritas().map((c) => c.op)).toEqual(["delete", "insert"]);
     expect(escritas()[0]!.filtros).toEqual({ user_id: USER_ID });
   });

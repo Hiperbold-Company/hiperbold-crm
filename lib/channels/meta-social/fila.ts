@@ -27,6 +27,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logger } from "@/lib/logger";
+import { idsDeOrgsParadas } from "@/lib/organizacao/operante";
 import { codigoDaFalhaDeEnvio, marcarTokenInvalido } from "./adapter";
 import { comentarioVencido } from "./comentarios";
 import {
@@ -320,8 +321,13 @@ export async function processarFilaMetaSocial(
     (a, b) => Number(a.tipo === "resposta_publica") - Number(b.tipo === "resposta_publica"),
   );
 
+  // Org parada (suspensa, em exclusão) não fala com o cliente: o que já estava na
+  // fila quando ela parou fica esperando (expira pela regra de sempre) em vez de sair.
+  const paradas = linhas.length > 0 ? new Set(await idsDeOrgsParadas(admin)) : new Set<string>();
+
   const contextos = new Map<string, ContextoDaSessao>();
   for (const linha of linhas) {
+    if (paradas.has(linha.organization_id)) continue;
     resumo.examinadas += 1;
     let ctx = contextos.get(linha.channel_session_id);
     if (!ctx) {

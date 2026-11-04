@@ -187,8 +187,9 @@ describe("o worker responde com a chave da instalação (sempre a OpenRouter)", 
     // teste descreve (chave Anthropic no ambiente). Com `openai` gravado, o par
     // `openai + anthropic/claude-haiku-4-5` é recusado de propósito pela régua
     // nova da issue #2377 — e este teste não é sobre a régua.
+    // Hiperbold: a chave da instalação é só a OpenRouter (ANTHROPIC_API_KEY sozinha não atende).
     estado.settings = { llm: { provider: "anthropic" } };
-    envMock.ANTHROPIC_API_KEY = "sk-ant";
+    envMock.OPENROUTER_API_KEY = "sk-or";
 
     const resolvido = await resolverModeloDoPonto("sentiment_classify", ORG, LUNA);
 
@@ -236,9 +237,10 @@ describe("o worker responde com a chave da instalação (sempre a OpenRouter)", 
 describe("o default de classificação numa VPS já instalada (#2377)", () => {
   const HAIKU = "anthropic/claude-haiku-4-5";
 
-  it("org em openai SEM par próprio executável e só a chave Anthropic: classifica com o piso, não para", async () => {
+  // Hiperbold: a chave da instalação é só a OpenRouter (agregador), então o piso sai por ela.
+  it("org em openai SEM par próprio executável e só a chave da instalação: classifica com o piso, não para", async () => {
     estado.settings = { llm: { provider: "openai" } };
-    envMock.ANTHROPIC_API_KEY = "sk-ant";
+    envMock.OPENROUTER_API_KEY = "sk-or";
 
     const r = await resolverModeloDoPonto("sentiment_classify", ORG, HAIKU, { naFaltaUsarOPadraoDaOrganizacao: true });
 
@@ -246,10 +248,11 @@ describe("o default de classificação numa VPS já instalada (#2377)", () => {
     expect(r?.origem).toBe("padrao");
   });
 
+  // Hiperbold: OPENAI_API_KEY no servidor não atende; o par próprio executável é a CREDENCIAL da org.
   it("org em openai COM par próprio executável: classifica com o par dela, não com o Claude", async () => {
     estado.settings = { llm: { provider: "openai", default_model: MODELO_PADRAO_DA_OPENAI } };
-    envMock.ANTHROPIC_API_KEY = "sk-ant";
-    envMock.OPENAI_API_KEY = "sk-openai";
+    estado.credencial = { api_key_encrypted: "x", api_key_iv: "y", api_key_tag: "z" };
+    envMock.OPENROUTER_API_KEY = "sk-or";
 
     const r = await resolverModeloDoPonto("sentiment_classify", ORG, HAIKU, { naFaltaUsarOPadraoDaOrganizacao: true });
 

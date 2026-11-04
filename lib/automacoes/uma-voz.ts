@@ -31,6 +31,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type pg from "pg";
 
+import { instanteDoBanco } from "@/lib/tempo/agora";
 import {
   AUTOMACAO_GATILHOS_HANDLER_KEY,
   EVENTO_DA_EXECUCAO_RESPOSTA_FALHOU,
@@ -39,6 +40,11 @@ import {
 import { inboundContaComoResposta } from "./conversa";
 import { casaGatilho, type FatoDeMensagem } from "./gatilhos";
 import { automacaoTriggerSchema, type AutomacaoTrigger } from "./schemas";
+
+/** Instante de coluna do banco em ms: string (PostgREST) ou `Date` (driver `pg`); NaN se inválido. */
+function msDoBanco(valor: unknown): number {
+  return Date.parse(instanteDoBanco(valor) ?? "");
+}
 
 /** Mensagem com mais tempo que isto (desde que chegou) não inicia automação (`gatilhos.handler.ts`). */
 export const IDADE_MAXIMA_DA_MENSAGEM_MS = 10 * 60_000;
@@ -120,8 +126,8 @@ export function esperavaRespostaEm(
   const limite = Date.parse(t);
   if (!Number.isFinite(limite)) return false;
   const ate = eventos
-    .filter((e) => Date.parse(e.created_at) <= limite)
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+    .filter((e) => msDoBanco(e.created_at) <= limite)
+    .sort((a, b) => msDoBanco(b.created_at) - msDoBanco(a.created_at));
   for (const e of ate) {
     if (e.event_type === "wait_started") return e.payload?.wake_status === "waiting_reply";
     if (!EVENTOS_DENTRO_DA_ESPERA.has(e.event_type)) return false;
@@ -198,7 +204,7 @@ export async function automacaoEsperaRespostaNaConversaSupabase(
   // Direct: a execução que nasceu DEPOIS da mensagem não a tem como resposta.
   if (
     doDirect.some(
-      (e) => e.status === "waiting_reply" && (!pedido.chegadaEm || Date.parse(e.created_at) <= Date.parse(pedido.chegadaEm)),
+      (e) => e.status === "waiting_reply" && (!pedido.chegadaEm || msDoBanco(e.created_at) <= Date.parse(pedido.chegadaEm)),
     )
   ) {
     return true;

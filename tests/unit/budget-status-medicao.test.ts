@@ -174,8 +174,15 @@ describe("o furo de medição é medido, não presumido", () => {
       // `telemetria-sem-custo.ts`, não uma cópia das strings.
       const exclusao = llm.find((f) => f.metodo === "not" && f.args[0] === "purpose");
       expect(exclusao, "sem `.not(\"purpose\", \"in\", ...)`: telemetria sem custo por decisão vira furo").toBeDefined();
+      // A transcrição é a exceção: sai pela ORIGEM (degraus 1 a 3), não pelo
+      // `purpose` — senão o degrau 4, LLM cobrado por token, nunca acende
+      // (correção do upstream, junção de 04/11/2026; ver o bloco abaixo).
       for (const proposito of PROPOSITOS_SEM_CUSTO_POR_DECISAO) {
-        expect(String(exclusao?.args[2])).toContain(proposito);
+        if (proposito === PONTO_TRANSCRICAO_DE_AUDIO) {
+          expect(String(exclusao?.args[2])).not.toContain(proposito);
+        } else {
+          expect(String(exclusao?.args[2])).toContain(proposito);
+        }
       }
     });
   });
@@ -252,7 +259,8 @@ describe("o furo de medição é medido, não presumido", () => {
       fazerAdminComLinhas([
         { organization_id: ORG, cost_cents: null, purpose: "embedding_indexar", created_at: agora },
         { organization_id: ORG, cost_cents: null, purpose: "embedding_consultar", created_at: agora },
-        { organization_id: ORG, cost_cents: null, purpose: "transcricao_de_audio", created_at: agora },
+        // `transcricao_de_audio` não está aqui: o corte dela é pela origem, e
+        // este dublê não aplica o `.or` — ver "o que é furo e o que é custo nulo".
         { organization_id: ORG, cost_cents: null, purpose: "visao_de_imagem", created_at: agora },
       ]);
 

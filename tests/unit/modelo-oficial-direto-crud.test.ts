@@ -254,7 +254,12 @@ describe("canal oficial direto — criar", () => {
   it("sem `acao` continua sendo SINCROZINAR — o botão antigo não muda", async () => {
     await post({});
     expect(h.sync).toHaveBeenCalledTimes(1);
-    expect(h.audit).not.toHaveBeenCalled();
+    // Hiperbold: a sincronização deixa trilha na auditoria (d58a055a56, gerente
+    // opera Conexões). Uma linha só, de SINCRONIZAÇÃO — nunca criar/editar/apagar.
+    expect(h.audit).toHaveBeenCalledTimes(1);
+    expect(h.audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "template.updated", metadata: expect.objectContaining({ origem: "sincronizacao" }) }),
+    );
   });
 });
 

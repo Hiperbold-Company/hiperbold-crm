@@ -137,7 +137,9 @@ describe("encaminhar mídia recebida — objeto copiado, nunca a media_url crua"
     // 3. A linha criada carrega o PATH, e não a URL crua do WAHA.
     const linhaGravada = (capturas.inserts.messages ?? [])[0] as Record<string, unknown>;
     expect(linhaGravada.media_storage_path).toBe(OBJETO_NO_DESTINO);
-    expect(linhaGravada.media_url).toBeNull();
+    // D-095 (Hiperbold CRM): o envio nem escreve a coluna `media_url` — ausente na
+    // linha, o banco grava null. Ausente ou null, a URL crua do WAHA não está lá.
+    expect(linhaGravada.media_url ?? null).toBeNull();
     // 4. E a mídia saiu de verdade: o canal de imagem do WAHA foi chamado.
     expect(fetchMock.mock.calls.some(([url]) => String(url) === `${WAHA_BASE}/api/sendImage`)).toBe(
       true,

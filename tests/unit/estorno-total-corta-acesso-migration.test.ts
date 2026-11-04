@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
  */
 
 const MIGRATION = readFileSync(
-  join(process.cwd(), "supabase/migrations/20260930140000_0916_estorno_total_do_asaas_corta_acesso_e_tokens.sql"),
+  join(process.cwd(), "supabase/migrations/20260930140030_0916_estorno_total_do_asaas_corta_acesso_e_tokens.sql"),
   "utf8",
 );
 const BASELINE = readFileSync(join(process.cwd(), "supabase/baseline.sql"), "utf8");
@@ -62,7 +62,7 @@ describe("0916: posição e igualdade", () => {
   });
 
   it("está registrada no MANIFEST, depois da 0915", () => {
-    expect(MANIFEST).toMatch(/\| `20260930140000` \| `0916_estorno_total_do_asaas_corta_acesso_e_tokens` \|/);
+    expect(MANIFEST).toMatch(/\| `20260930140030` \| `0916_estorno_total_do_asaas_corta_acesso_e_tokens` \|/);
     expect(MANIFEST.indexOf("`0915_ai_binding")).toBeLessThan(MANIFEST.indexOf("`0916_estorno_total"));
   });
 

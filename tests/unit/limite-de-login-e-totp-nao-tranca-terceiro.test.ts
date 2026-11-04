@@ -97,13 +97,18 @@ describe("D-102 login: bloqueio por conta+origem e teto da conta inteira", () =>
 });
 
 describe("D-102 TOTP: o contador é do servidor, por usuário", () => {
-  it("5 códigos errados trancam, mesmo com o cookie apagado a cada tentativa; o 6º nem chega ao GoTrue", async () => {
+  // Desde a junção com o upstream vale também a janela curta dele por usuário
+  // (`AUTH_LIMITS.mfa.id` falhas por minuto), mais apertada que as 5 em 15 min do D-102:
+  // tranca na primeira das duas que estourar.
+  it("códigos errados trancam no teto do servidor, mesmo com o cookie apagado a cada tentativa; o seguinte nem chega ao GoTrue", async () => {
     const { verifyMfa } = await import("@/app/actions/auth/verifyMfa");
-    for (let i = 0; i < 4; i++) {
+    const { AUTH_LIMITS, MFA_FAILURE_LIMITS } = await import("@/lib/auth/rate-limit");
+    const teto = Math.min(AUTH_LIMITS.mfa.id ?? MFA_FAILURE_LIMITS.max, MFA_FAILURE_LIMITS.max);
+    for (let i = 0; i < teto; i++) {
       expect(await verifyMfa("000000")).toEqual({ ok: false, error: "mfa_invalid" });
     }
-    const quinto = await verifyMfa("000000");
-    expect(quinto).toMatchObject({ ok: false, error: "mfa_locked" });
+    const trancado = await verifyMfa("000000");
+    expect(trancado).toMatchObject({ ok: false, error: "mfa_locked" });
 
     estado.verify.mockClear();
     estado.challenge.mockClear();

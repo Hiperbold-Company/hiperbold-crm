@@ -436,7 +436,7 @@ describe("o membro da equipe que também é cliente (#3900)", () => {
       estado({
         config: {
           channel_session_id: CANAL_QR,
-          telefone: "+5531998966398",
+          telefone: "+5531992220002",
           rotulo: "Plantão da Ana",
           ligado: true,
           resposta_whatsapp_habilitada: false,

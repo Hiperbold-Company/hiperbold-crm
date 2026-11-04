@@ -24,7 +24,7 @@
 // Os quatro CONTROLES, e o que cada um prova:
 //
 //   1. opção DESLIGADA (o padrão da coluna) com contato casado e card aberto:
-//      continua criando card novo — o comportamento de hoje, byte a byte;
+//      não reescreve nem move o card — no fork, segue o recadastro de hoje;
 //   2. opção LIGADA, contato casado e card aberto no funil da fonte: ATUALIZA os
 //      campos que mudaram e MOVE o card para a etapa da fonte, que está à frente
 //      — não cria. Card que já está ADIANTE da etapa da fonte não volta: a etapa
@@ -178,9 +178,18 @@ beforeEach(() => {
 });
 
 describe("a captação por webhook reusa o card aberto do contato (#3101)", () => {
-  it("⭐ CONTROLE 1 — opção DESLIGADA: contato casado com card aberto continua ganhando card NOVO", async () => {
+  // Regra Hiperbold (recadastro, 16/10/2026): com a opção DESLIGADA o comportamento
+  // de hoje no fork é o RECADASTRO — o contato com card aberto no funil não ganha
+  // card novo, e o card que existe não é reescrito nem movido (só a timeline).
+  it("⭐ CONTROLE 1 — opção DESLIGADA: o card aberto não é reescrito nem movido; segue o recadastro de hoje", async () => {
     h.leituras.set("webhook_sources", [{ data: FONTE_DESLIGADA, error: null }]);
-    h.leituras.set("crm_leads", [{ data: CARD_ABERTO, error: null }]);
+    // A leitura do recadastro é uma LISTA dos leads abertos do contato no funil.
+    h.leituras.set("crm_leads", [
+      {
+        data: [{ id: CARD_ABERTO.id, status: "open", last_activity_at: null, created_at: "2026-11-01T00:00:00Z" }],
+        error: null,
+      },
+    ]);
 
     const res = await enviar(ENVIO_SEM_EXTERNAL_ID);
 
@@ -189,10 +198,10 @@ describe("a captação por webhook reusa o card aberto do contato (#3101)", () =
       "com a opção desligada a captação reescreveu o card aberto do contato — quem nunca ligou a opção mudou de comportamento",
     ).not.toHaveBeenCalled();
     expect(h.moverLead).not.toHaveBeenCalled();
-    expect(h.criarLead, "a captação deixou de criar o card que sempre criou").toHaveBeenCalledTimes(1);
-    expect(desfecho()).toBe("criado");
+    expect(h.criarLead, "o contato com card aberto ganhou um segundo card").not.toHaveBeenCalled();
+    expect(desfecho()).toBe("recadastro");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ data: { lead_id: "lead-novo" } });
+    expect(await res.json()).toEqual({ data: { lead_id: "lead-aberto" } });
   });
 
   it("⭐ CONTROLE 2 — opção LIGADA: ATUALIZA o card aberto (só o que mudou) e MOVE, em vez de criar", async () => {

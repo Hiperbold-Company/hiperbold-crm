@@ -1261,3 +1261,29 @@ begin
   execute format('grant select (%s) on table public.webhook_sources to authenticated', v_colunas);
 end
 $hb_0992_grants$;
+
+-- api_tokens: só o servidor escreve (0962) vence o par do upstream (0508). Na cadeia de migrations a
+-- 0508 (01/10) derruba a api_tokens_admin_only e cria api_tokens_tenant_read (leitura para qualquer
+-- admin de plataforma, support_readonly inclusive) e api_tokens_admin_write (escrita para admin de
+-- plataforma full sem created_by); a 0962 (17/10) recria a admin_only, mas o par seguia somando por OR.
+-- Aqui o par sai, os privilégios de sessão saem de novo e a admin_only fica exatamente como na 0962.
+-- Reaplicável: drop if exists; a admin_only é trocada com alter policy (sem janela sem policy) e criada
+-- só se faltar.
+revoke all on public.api_tokens from public, anon, authenticated;
+
+do $hb_0992_api_tokens$
+begin
+  perform set_config('lock_timeout','3s',true);
+  drop policy if exists api_tokens_tenant_read on public.api_tokens;
+  drop policy if exists api_tokens_admin_write on public.api_tokens;
+  if exists (select 1 from pg_policy where polname = 'api_tokens_admin_only' and polrelid = 'public.api_tokens'::regclass) then
+    alter policy api_tokens_admin_only on public.api_tokens
+      using (public.fn_role_at_least(organization_id, 'admin'))
+      with check (public.fn_role_at_least(organization_id, 'admin') and created_by = (select auth.uid()));
+  else
+    create policy api_tokens_admin_only on public.api_tokens
+      using (public.fn_role_at_least(organization_id, 'admin'))
+      with check (public.fn_role_at_least(organization_id, 'admin') and created_by = (select auth.uid()));
+  end if;
+end
+$hb_0992_api_tokens$;

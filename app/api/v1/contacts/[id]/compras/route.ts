@@ -16,7 +16,7 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
-import { ok, fail } from "@/lib/api/wrappers";
+import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { montarCompras, type LeadGanhoRow } from "@/lib/leads/compras-do-contato";
 import { camposDeCompraDaInterface } from "@/lib/navigation/interface";
 
@@ -52,7 +52,7 @@ export async function GET(
     .select("organization_id")
     .eq("id", contactId)
     .maybeSingle();
-  if (scopeError) return fail("internal_error", scopeError.message, 500, { requestId });
+  if (scopeError) return falhaInterna("internal_error", scopeError, { requestId });
   if (!contactScope) return fail("not_found", "Contato não encontrado.", 404, { requestId });
 
   const { data: org, error: orgError } = await supabase
@@ -60,7 +60,7 @@ export async function GET(
     .select("interface_settings")
     .eq("id", contactScope.organization_id)
     .maybeSingle();
-  if (orgError) return fail("internal_error", orgError.message, 500, { requestId });
+  if (orgError) return falhaInterna("internal_error", orgError, { requestId });
   const chaves = camposDeCompraDaInterface(org?.interface_settings);
 
   const { data, error } = await supabase
@@ -75,7 +75,7 @@ export async function GET(
 
   // A falha SOBE: engolir aqui devolveria lista vazia ao cliente — e "o cliente
   // não comprou nada" é uma afirmação sobre o negócio, não sobre a leitura.
-  if (error) return fail("internal_error", error.message, 500, { requestId });
+  if (error) return falhaInterna("internal_error", error, { requestId });
 
   const compras = montarCompras((data ?? []) as unknown as LeadGanhoRow[], chaves);
   return ok({ compras }, { requestId });

@@ -27,6 +27,7 @@ import { etapasPorFunil, nomeDaEtapa } from "@/hooks/followup/useEtapasDeGatilho
 import { useFollowupFlows } from "@/hooks/followup/useFollowupFlows";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useT } from "@/hooks/i18n/useT";
+import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 
 import { useEtapasDoFluxo } from "../../EtapasDoFluxo";
 
@@ -269,10 +270,11 @@ export function useNomesDaAutomacao(): NomesDaAutomacao {
   const { etapas, funis, carregando, falhou } = useFunis();
   const membros = useAssignableMembers(true);
   const automacoes = useAutomacoesDaOrganizacao();
+  const t = useT();
   return useMemo(() => {
     const etapa = new Map(etapas.map((e) => [e.stageId, nomeDaEtapa(e)]));
     const funil = new Map(funis.map((f) => [f.id, f.nome]));
-    const pessoa = new Map((membros.data ?? []).map((m) => [m.user_id, m.full_name ?? m.user_id]));
+    const pessoa = new Map((membros.data ?? []).map((m) => [m.user_id, rotuloDoMembro(m, t)]));
     const automacao = new Map((automacoes.data ?? []).map((a) => [a.id, a.name]));
     const incerto = carregando || falhou ? "…" : null;
     return {
@@ -281,7 +283,7 @@ export function useNomesDaAutomacao(): NomesDaAutomacao {
       pessoa: (id) => pessoa.get(id) ?? (membros.isLoading ? "…" : null),
       automacao: (id) => automacao.get(id) ?? (automacoes.isLoading ? "…" : null),
     };
-  }, [etapas, funis, carregando, falhou, membros.data, membros.isLoading, automacoes.data, automacoes.isLoading]);
+  }, [etapas, funis, carregando, falhou, membros.data, membros.isLoading, automacoes.data, automacoes.isLoading, t]);
 }
 
 /** Lista "a, b, c" → array limpo (sem vazio, sem repetido). */

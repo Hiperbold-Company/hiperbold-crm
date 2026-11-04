@@ -8,7 +8,7 @@ import { ESPERA_MAXIMA_DO_GRUPO_MS, enviarTesteDoAvisoDeAgendamento } from "./te
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const CANAL = "22222222-2222-4222-8222-222222222222";
-const TELEFONE = "+5531998966398";
+const TELEFONE = "+5531992220002";
 const GRUPO = "120363000000000001@g.us";
 const AGORA = new Date("2026-10-25T12:00:00.000Z");
 
@@ -65,7 +65,7 @@ describe("'Enviar teste' do aviso de agendamento manda também para o grupo (iss
 
     expect(r.enviado).toBe(true);
     expect(r.grupo).toBeNull();
-    expect(enviados).toEqual(["5531998966398@c.us"]);
+    expect(enviados).toEqual(["5531992220002@c.us"]);
   });
 
   it("com grupo escolhido, manda ao número e ao grupo, e diz que os dois saíram", async () => {
@@ -74,7 +74,7 @@ describe("'Enviar teste' do aviso de agendamento manda também para o grupo (iss
 
     expect(r.enviado).toBe(true);
     expect(r.grupo).toEqual({ enviado: true });
-    expect(enviados).toEqual(["5531998966398@c.us", GRUPO]);
+    expect(enviados).toEqual(["5531992220002@c.us", GRUPO]);
     expect(deps.pacing.registraEnvio).toHaveBeenCalledTimes(2);
     // O endereço do grupo não volta na resposta.
     expect(JSON.stringify(r)).not.toContain("120363");
@@ -89,7 +89,7 @@ describe("'Enviar teste' do aviso de agendamento manda também para o grupo (iss
 
     expect(esperar).toHaveBeenCalledWith(1_500);
     expect(r.grupo).toEqual({ enviado: true });
-    expect(enviados).toEqual(["5531998966398@c.us", GRUPO]);
+    expect(enviados).toEqual(["5531992220002@c.us", GRUPO]);
   });
 
   it("o jitter sorteado de novo a cada consulta não derruba o grupo: espera até liberar, sem furar o espaçamento", async () => {
@@ -121,7 +121,7 @@ describe("'Enviar teste' do aviso de agendamento manda também para o grupo (iss
     const r = await enviarTesteDoAvisoDeAgendamento(deps, entrada(GRUPO), esperar);
 
     expect(r.grupo).toEqual({ enviado: true });
-    expect(enviados).toEqual(["5531998966398@c.us", GRUPO]);
+    expect(enviados).toEqual(["5531992220002@c.us", GRUPO]);
     expect(esperar.mock.calls.map(([ms]) => ms)).toEqual([1_280, 640]);
     // O grupo só saiu quando a regra liberou: nunca antes de 1,2 s do número.
     expect(liberadoEm).toEqual([0, 1_920]);
@@ -149,6 +149,6 @@ describe("'Enviar teste' do aviso de agendamento manda também para o grupo (iss
 
     expect(r.enviado).toBe(true);
     expect(r.grupo).toEqual({ enviado: false, codigo: "falha_no_envio" });
-    expect(enviados).toEqual(["5531998966398@c.us"]);
+    expect(enviados).toEqual(["5531992220002@c.us"]);
   });
 });

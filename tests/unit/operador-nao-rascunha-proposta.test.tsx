@@ -121,12 +121,18 @@ describe("a tela do Operador", () => {
   let client: QueryClient;
   beforeEach(() => {
     client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    api.get.mockResolvedValue({
-      data: {
-        tools: [meta(BUSCA, "Buscar contatos"), meta(DRAFT, "Rascunhar proposta")],
-        desligadas_pela_organizacao: [],
-      },
-    });
+    // Hiperbold: o seletor também consulta as conexões MCP externas
+    // (`/api/v1/ai/mcp/ferramentas`); aqui a organização não tem nenhuma.
+    api.get.mockImplementation(async (url: string) =>
+      url === "/api/v1/ai/mcp/ferramentas"
+        ? { data: { tools: [] } }
+        : {
+            data: {
+              tools: [meta(BUSCA, "Buscar contatos"), meta(DRAFT, "Rascunhar proposta")],
+              desligadas_pela_organizacao: [],
+            },
+          },
+    );
   });
   afterEach(() => {
     cleanup();

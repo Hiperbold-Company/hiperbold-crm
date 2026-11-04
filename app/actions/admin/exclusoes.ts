@@ -19,6 +19,7 @@ import { mfaEmDivida } from "@/lib/auth/server";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { logger } from "@/lib/logger";
+import { estaSuspensa } from "@/lib/organizacao/operante";
 import { valorDaInstalacao } from "@/lib/instalacao/config";
 import {
   DIAS_DE_GUARDA_PADRAO,
@@ -316,7 +317,7 @@ export async function excluirAgora(input: {
   const linhaDaOrg = org as { display_name: string | null; slug: string | null; status: string | null };
   if (parsed.data.slugDigitado !== undefined) {
     // Pelo painel de tenants a exclusão vem DEPOIS da suspensão, e o que se digita é o slug, exato.
-    if (linhaDaOrg.status !== "suspended") return { ok: false, error: MENSAGEM_SO_SUSPENSA };
+    if (!estaSuspensa(linhaDaOrg.status)) return { ok: false, error: MENSAGEM_SO_SUSPENSA };
     if (parsed.data.slugDigitado !== linhaDaOrg.slug) {
       return { ok: false, error: "O identificador digitado não confere com o da organização." };
     }

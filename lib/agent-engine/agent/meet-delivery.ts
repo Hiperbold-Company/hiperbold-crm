@@ -17,6 +17,7 @@ import {
 import { meetVideoUrl } from "@/lib/agenda/google/meet";
 import { textoDoCompromisso, type MotivoDaEntrega } from "@/lib/agenda/texto-do-compromisso";
 import { normalizarIdioma, type Idioma } from "@/lib/i18n/idiomas";
+import { ehOperante } from "@/lib/organizacao/operante";
 
 export function createMeetDeliveryHandler(deps: {
   crmCfg: CrmEdgeConfig;
@@ -85,7 +86,7 @@ export function createMeetDeliveryHandler(deps: {
         // M2 (D-091): organização suspensa (ou arquivada) não manda a entrega do compromisso. O
         // status vem da leitura (o join com organizations) que já existia. O job fecha como falho
         // e o aviso do compromisso vai para a Central, como em qualquer entrega que não saiu.
-        if (typeof row?.org_status === "string" && row.org_status !== "active") {
+        if (typeof row?.org_status === "string" && !ehOperante(row.org_status)) {
           deps.log.warn("entrega do compromisso não enviada: organização não está ativa (D-091)", {
             job_id: job.id,
             tenant_id: job.organization_id,

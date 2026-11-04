@@ -10,7 +10,7 @@ import { identidadeDoRemetente, parseChatId, type WahaPayload } from "@/lib/waha
 const ORG = "11111111-1111-4111-8111-111111111111";
 const SESSION = "22222222-2222-4222-8222-222222222222";
 const SESSAO_DE_VENDAS = "33333333-3333-4333-8333-333333333333";
-const PHONE = "+5531998966398";
+const PHONE = "+5531992220002";
 const CASE = "02920000-5555-4000-8000-000000000001";
 
 const mocks = vi.hoisted(() => ({
@@ -178,7 +178,7 @@ describe("confirmações de comando pelo WhatsApp", () => {
   // Payload na forma que o WAHA entrega (ver `telefone-alternativo-do-payload`):
   // `from` opaco em `@lid` e o telefone em `_data.key.remoteJidAlt`. O
   // `destino_jid` é o que o transporte grava — sempre `<tel>@c.us`, nunca `@lid`.
-  function payloadLid(body: string, remoteJidAlt = "5531998966398@s.whatsapp.net"): WahaPayload {
+  function payloadLid(body: string, remoteJidAlt = "5531992220002@s.whatsapp.net"): WahaPayload {
     return {
       id: "false_100000000000777@lid_3A60443E83484256AF03",
       from: "100000000000777@lid",
@@ -199,7 +199,7 @@ describe("confirmações de comando pelo WhatsApp", () => {
   const identidadeDe = (p: WahaPayload) => identidadeDoRemetente(p, parseChatId(p.from ?? ""));
 
   it("número em modo privacidade (@lid) responde pelo telefone do remoteJidAlt", async () => {
-    const lid = db({ jid: "5531998966398@c.us" });
+    const lid = db({ jid: "5531992220002@c.us" });
     const p = payloadLid(`RESPONDER ${CASE} Resolvido`);
     const result = await consumirComResultado(lid.db, {
       ...entry(p.body ?? null, p.id ?? ""),
@@ -213,7 +213,7 @@ describe("confirmações de comando pelo WhatsApp", () => {
   });
 
   it("@lid de OUTRO telefone não é o número de avisos: segue o caminho de cliente", async () => {
-    const lid = db({ jid: "5531998966398@c.us" });
+    const lid = db({ jid: "5531992220002@c.us" });
     const p = payloadLid(`RESPONDER ${CASE} Resolvido`, "5511900000001@s.whatsapp.net");
     await expect(consumirRespostaDoSuporteNoWhatsApp(lid.db, {
       ...entry(p.body ?? null, p.id ?? ""),
@@ -223,7 +223,7 @@ describe("confirmações de comando pelo WhatsApp", () => {
   });
 
   it("mensagem comum do @lid continua contada como ignorada", async () => {
-    const lid = db({ jid: "5531998966398@c.us" });
+    const lid = db({ jid: "5531992220002@c.us" });
     const p = payloadLid("bom dia");
     const result = await consumirComResultado(lid.db, {
       ...entry(p.body ?? null, p.id ?? ""),

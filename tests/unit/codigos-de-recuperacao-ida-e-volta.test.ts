@@ -79,7 +79,16 @@ async function postgrest(entrada: RequestInfo | URL, init?: RequestInit): Promis
     }
     if (metodo === "PATCH") {
       const mudanca = JSON.parse(String(init?.body)) as { used_at: string };
-      for (const l of banco.linhas.filter(casa)) l.used_at = mudanca.used_at;
+      const queimadas = banco.linhas.filter(casa);
+      for (const l of queimadas) l.used_at = mudanca.used_at;
+      // A queima do Hiperbold é condicional (`.is("used_at", null).select("id")`): devolve as linhas
+      // que ela de fato queimou, como o PostgREST faz com `Prefer: return=representation`.
+      if (url.searchParams.has("select")) {
+        return new Response(JSON.stringify(queimadas.map((l) => ({ id: l.id }))), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
       return new Response(null, { status: 204 });
     }
     const achadas = banco.linhas.filter(casa).map((l) => ({ id: l.id, used_at: l.used_at }));
@@ -98,6 +107,13 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: vi.fn(async () => ({ get: () => null })) }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined), isServiceRoleConfigured: () => true }));
 vi.mock("@/lib/auth/server", () => ({ sessionAal: async () => "aal2" }));
+// O teto de tentativas do Hiperbold (AUTH_LIMITS.recovery_code: 5 por conta por hora) não é o que este arquivo
+// mede: os casos somam mais de 5 usos da mesma conta, e o contador em memória atravessa os casos. Ele tem prova
+// própria (lote7-conta-e-login.test.ts); aqui o limitador fica neutro.
+vi.mock("@/lib/auth/rate-limit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/auth/rate-limit")>()),
+  authRateLimited: async () => false,
+}));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
@@ -147,7 +163,9 @@ describe("código de recuperação: gerar e usar", () => {
 
     expect(await usar(digitar(codigos[3]!))).toBeUndefined();
     expect(entrou()).toBe(true);
-    expect(banco.linhas.filter((l) => l.used_at !== null)).toHaveLength(1);
+    // Regra Hiperbold (auditoria lote 7): usar um código apaga o conjunto inteiro da pessoa
+    // (os outros 9 e qualquer um vazado deixam de valer); o upstream só queimava o usado.
+    expect(banco.linhas).toHaveLength(0);
 
     vi.mocked(redirect).mockClear();
     expect(await usar(digitar(codigos[3]!))).toEqual({ ok: false, error: "invalid_or_used" });

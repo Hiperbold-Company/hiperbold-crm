@@ -232,7 +232,12 @@ describe("a janela do lote é o momento da elegibilidade (#3044)", () => {
     expect(estado.chunks.map((c) => (c.metadata as Linha).conversation_id)).toEqual(["cC"]);
   });
 
-  it("marcada E resolvida há mais de 24 h fica de fora; já `ingested` e `open` também", async () => {
+  // Hiperbold: o lote não tem janela de tempo (`lib/ai/rag/ingest/conversations.ts`,
+  // commit e4f4fde9f0): quem decide se a conversa ainda falta é
+  // `rag_review_status is null`. Com janela, uma rodada que falhasse (sem chave de
+  // embedding, acima do teto) deixava a conversa marcada fora para sempre. Então a
+  // marcada E resolvida há mais de 24 h ENTRA; `ingested` e `open` seguem fora.
+  it("marcada E resolvida há mais de 24 h ainda entra (sem janela); já `ingested` e `open` ficam fora", async () => {
     const { admin, estado } = criarBancoFalso(
       [
         conversa("cFora", { usable_for_rag_marked_at: horasAtras(25), status_changed_at: horasAtras(25) }),
@@ -246,10 +251,10 @@ describe("a janela do lote é o momento da elegibilidade (#3044)", () => {
 
     const r = await rodarLote();
 
-    expect(r.processed).toBe(1);
+    expect(r.processed).toBe(2);
     const ingeridas = estado.chunks.map((c) => (c.metadata as Linha).conversation_id);
-    expect(ingeridas).toEqual(["cD"]);
-    expect(estado.conversas.find((c) => c.id === "cFora")!.rag_review_status).toBeNull();
+    expect([...new Set(ingeridas)].sort()).toEqual(["cD", "cFora"]);
+    expect(estado.conversas.find((c) => c.id === "cFora")!.rag_review_status).toBe("ingested");
     expect(estado.conversas.find((c) => c.id === "cAberta")!.rag_review_status).toBeNull();
   });
 });

@@ -31,6 +31,7 @@ vi.mock("@/lib/supabase/admin", () => ({
         not: () => chain,
         order: () => chain,
         limit: () => chain,
+        abortSignal: () => chain,
         maybeSingle: async () => {
           if (tabela === "platform_config") {
             return {

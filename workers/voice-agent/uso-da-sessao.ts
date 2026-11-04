@@ -40,7 +40,12 @@ import type { ChamadaDeIa } from "@/lib/ai/usage/registrar-chamada";
  * ⚠️ PENDENTE: ainda não é ponto de `lib/ai/pontos/registro.ts` — a tela de
  * Execuções o mostra cru até o ponto existir lá (com `registraEm: "llm_calls"`).
  */
-export const PURPOSE_DA_VOZ = "voz_ao_vivo";
+//
+// Hiperbold: o MESMO valor de `PURPOSE_VOZ` (`lib/ai/voz/limites-da-voz.ts`),
+// que é por onde a carteira e o orçamento da voz leem `llm_calls` (D-117) e o
+// que as linhas já gravadas em produção levam. Literal, e não import, para este
+// módulo continuar puro; `./uso-da-sessao.test.ts` cobra o par.
+export const PURPOSE_DA_VOZ = "voz_em_tempo_real";
 
 export interface UsoDaSessao {
   /** Quantos `response.done` trouxeram uso. */
@@ -111,6 +116,8 @@ export function linhaDaLigacao(entrada: {
   uso: UsoDaSessao;
   duracaoMs: number;
   erro: { message: string; status?: number } | null;
+  /** 0906/D-117: de quem é a chave que pagou a ligação. Ausente = coluna fica nula. */
+  origemDaChave?: "chave_da_instalacao" | "credencial_da_organizacao";
 }): ChamadaDeIa {
   return {
     organization_id: entrada.organizationId,
@@ -125,5 +132,6 @@ export function linhaDaLigacao(entrada: {
     cost_cents: null,
     latency_ms: entrada.duracaoMs,
     erro: entrada.erro,
+    ...(entrada.origemDaChave !== undefined ? { origem_da_chave: entrada.origemDaChave } : {}),
   };
 }

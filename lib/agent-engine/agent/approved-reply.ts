@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { StaleServiceBoundaryError } from "@/lib/atendimento/fronteira";
 import { withServiceJob } from "@/lib/atendimento/fronteira-server";
 import type { InboundTurnDeps } from "./inbound-turn";
+import { ehOperante } from "@/lib/organizacao/operante";
 export function createApprovedReplyHandler(
   deps: Pick<InboundTurnDeps, "crmCfg" | "log" | "sleep"> & {
     channel?: (pool: pg.Pool) => RuntimeSendChannel;
@@ -88,7 +89,7 @@ export function createApprovedReplyHandler(
         // M2 (D-091): resposta já aprovada por humano, mas a organização foi suspensa (ou
         // arquivada) depois: não sai. O status vem da leitura que já existia aqui. Só um status
         // explícito diferente de 'active' barra.
-        if (typeof rows[0].org_status === "string" && rows[0].org_status !== "active") {
+        if (typeof rows[0].org_status === "string" && !ehOperante(rows[0].org_status)) {
           deps.log.warn("approved_reply não enviada: organização não está ativa (D-091)", {
             job_id: job.id,
             tenant_id: job.organization_id,

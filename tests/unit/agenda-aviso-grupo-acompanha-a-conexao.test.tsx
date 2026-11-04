@@ -45,7 +45,7 @@ function estado(): EstadoDaTelaDoAvisoDeAgendamento {
     config: {
       usa_numero_do_aviso_de_caso: false,
       channel_session_id: CONEXAO_PROPRIA,
-      telefone: "+5531998966398",
+      telefone: "+5531992220002",
       grupo: GRUPO_DA_PROPRIA,
       ligado: true,
       atualizado_em: "2026-10-25T12:00:00.000Z",

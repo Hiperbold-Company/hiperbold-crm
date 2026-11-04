@@ -94,10 +94,10 @@ describe("ehOChatDoAviso — a regra pura", () => {
     // O transporte resolve o destino por telefone (`<tel>@c.us`): `destino_jid`
     // nunca vira `@lid`, e o reconhecimento vem do `remoteJidAlt`.
     expect(
-      ehOChatDoAviso({ kind: "lid", phone: "+5531998966398", lid: "224466" }, { destino: "+5531998966398", jid: "5531998966398@c.us" }),
+      ehOChatDoAviso({ kind: "lid", phone: "+5531992220002", lid: "224466" }, { destino: "+5531992220002", jid: "5531992220002@c.us" }),
     ).toBe(true);
     expect(
-      ehOChatDoAviso({ kind: "lid", phone: "+5511988887777", lid: "777" }, { destino: "+5531998966398", jid: "5531998966398@c.us" }),
+      ehOChatDoAviso({ kind: "lid", phone: "+5511988887777", lid: "777" }, { destino: "+5531992220002", jid: "5531992220002@c.us" }),
     ).toBe(false);
   });
 
@@ -138,7 +138,7 @@ describe("lerNumeroInternoDeAviso — a leitura quente", () => {
       destinoModo: null,
       whatsappsDaEquipe: null,
     });
-    expect(await ehNumeroInternoDeAviso(db, ORG, { kind: "phone", phone: "+5531998966398", lid: null })).toBe(
+    expect(await ehNumeroInternoDeAviso(db, ORG, { kind: "phone", phone: "+5531992220002", lid: null })).toBe(
       false,
     );
   });

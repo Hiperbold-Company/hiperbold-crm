@@ -26,6 +26,13 @@ const CASO_ALHEIO = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 const NEGOCIO_ALHEIO = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 const RETORNO_ALHEIO = "99999999-9999-4999-8999-999999999999";
 const FUNIL = "44444444-4444-4444-8444-444444444444";
+/**
+ * A ESCRITA passa por duas guardas do contato do turno, e a do upstream vem
+ * primeiro (`lib/ai/runtime/escopo-das-escritas.ts`, junção de 04/11/2026): o
+ * recurso de outra pessoa é recusado ali, com este motivo, antes da tabela do
+ * D-096. A leitura só passa pela tabela do D-096 (`fora_do_contato_do_turno`).
+ */
+const RECUSA_DA_ESCRITA = "fora_da_conversa";
 
 /** `tabela -> id -> linha`. Só o que a ponte pergunta: `contact_id` por id. */
 const LINHAS: Record<string, Record<string, Record<string, unknown>>> = {
@@ -46,17 +53,35 @@ function banco(opts: { falhaEm?: string } = {}) {
   return {
     from(tabela: string) {
       const filtros: Record<string, unknown> = {};
+      const listas: Record<string, unknown[]> = {};
+      // As linhas da tabela que casam com TODOS os filtros pedidos (`eq` e `in`).
+      // A guarda das escritas do upstream (`escopo-das-escritas.ts`, junção de
+      // 04/11/2026) pergunta por `contact_id` e por `in("conversation_id", …)`.
+      const casam = () =>
+        Object.entries(LINHAS[tabela] ?? {})
+          .map(([id, linha]) => ({ id, ...linha }) as Record<string, unknown>)
+          .filter((l) => Object.entries(filtros).every(([c, v]) => c === "organization_id" || l[c] === v))
+          .filter((l) => Object.entries(listas).every(([c, vs]) => vs.includes(l[c])));
       const q = {
         select: () => q,
         eq: (coluna: string, valor: unknown) => {
           filtros[coluna] = valor;
           return q;
         },
+        in: (coluna: string, valores: unknown[]) => {
+          listas[coluna] = valores;
+          return q;
+        },
         maybeSingle: async () => {
           if (opts.falhaEm === tabela) return { data: null, error: { message: "timeout" } };
           // Sempre filtrado por organização: o teste confere que a ponte pergunta assim.
           if (filtros.organization_id !== ORG) return { data: null, error: null };
-          return { data: LINHAS[tabela]?.[String(filtros.id)] ?? null, error: null };
+          return { data: casam()[0] ?? null, error: null };
+        },
+        then: (resolve: (v: unknown) => unknown) => {
+          if (opts.falhaEm === tabela) return Promise.resolve({ data: null, error: { message: "timeout" } }).then(resolve);
+          if (filtros.organization_id !== ORG) return Promise.resolve({ data: [], error: null }).then(resolve);
+          return Promise.resolve({ data: casam(), error: null }).then(resolve);
         },
       };
       return q;
@@ -66,7 +91,12 @@ function banco(opts: { falhaEm?: string } = {}) {
 
 function montar(
   toolIds: string[],
-  extra: { papelDoTurno?: "conversador" | "operador"; contatoDoTurno?: string | null; supabase?: unknown } = {},
+  extra: {
+    papelDoTurno?: "conversador" | "operador";
+    contatoDoTurno?: string | null;
+    supabase?: unknown;
+    modulosLigados?: string[];
+  } = {},
 ) {
   const supabase = extra.supabase ?? banco();
   const ator = { type: "ai_agent", id: "ag-1", role: "ai_operator" };
@@ -80,6 +110,7 @@ function montar(
     handoffSignal: { triggered: false },
     ...(extra.contatoDoTurno === null ? {} : { contatoDoTurno: extra.contatoDoTurno ?? EU }),
     ...(extra.papelDoTurno ? { papelDoTurno: extra.papelDoTurno } : {}),
+    ...(extra.modulosLigados ? { modulosLigados: extra.modulosLigados } : {}),
   } as never);
 }
 
@@ -132,7 +163,7 @@ describe("recurso de OUTRO contato é recusado antes do handler", () => {
     for (const nome of ["crm_reschedule_appointment", "crm_confirm_appointment", "crm_cancel_appointment"]) {
       const h = espiar(nome);
       const r = await chamar(montar([nome]), nome, { appointment_id: COMPROMISSO_ALHEIO, para: "2026-10-02T10:00:00Z" });
-      expect(r, nome).toMatchObject({ permitido: false, motivo: "fora_do_contato_do_turno" });
+      expect(r, nome).toMatchObject({ permitido: false, motivo: RECUSA_DA_ESCRITA });
       expect(h, nome).not.toHaveBeenCalled();
     }
   });
@@ -144,18 +175,20 @@ describe("recurso de OUTRO contato é recusado antes do handler", () => {
   });
 
   it("caso humano, negócio e retorno de outra pessoa", async () => {
-    const casos: Array<[string, Record<string, unknown>]> = [
-      ["crm_close_human_case", { case_id: CASO_ALHEIO, outcome: "resolvido", note: "x" }],
-      ["crm_add_case_note", { case_id: CASO_ALHEIO, note: "x" }],
-      ["crm_get_human_case", { case_id: CASO_ALHEIO }],
-      ["crm_move_lead_stage", { lead_id: NEGOCIO_ALHEIO, to_stage_id: FUNIL }],
-      ["crm_update_lead", { lead_id: NEGOCIO_ALHEIO, value_cents: 1 }],
-      ["crm_cancel_followup", { followup_id: RETORNO_ALHEIO, reason: "x" }],
+    const casos: Array<[string, Record<string, unknown>, string]> = [
+      ["crm_close_human_case", { case_id: CASO_ALHEIO, outcome: "resolvido", note: "x" }, RECUSA_DA_ESCRITA],
+      ["crm_add_case_note", { case_id: CASO_ALHEIO, note: "x" }, RECUSA_DA_ESCRITA],
+      ["crm_get_human_case", { case_id: CASO_ALHEIO }, "fora_do_contato_do_turno"],
+      // Escrita com `lead_id` vai primeiro ao negócio aberto do contato do turno
+      // (`negocioDaEscritaDoTurno`); este contato não tem nenhum, então nada é escrito.
+      ["crm_move_lead_stage", { lead_id: NEGOCIO_ALHEIO, to_stage_id: FUNIL }, "sem_negocio"],
+      ["crm_update_lead", { lead_id: NEGOCIO_ALHEIO, value_cents: 1 }, "sem_negocio"],
+      ["crm_cancel_followup", { followup_id: RETORNO_ALHEIO, reason: "x" }, RECUSA_DA_ESCRITA],
     ];
-    for (const [nome, args] of casos) {
+    for (const [nome, args, motivo] of casos) {
       const h = espiar(nome);
       const r = await chamar(montar([nome]), nome, args);
-      expect(r, nome).toMatchObject({ permitido: false, motivo: "fora_do_contato_do_turno" });
+      expect(r, nome).toMatchObject({ permitido: false, motivo });
       expect(h, nome).not.toHaveBeenCalled();
     }
   });
@@ -270,7 +303,10 @@ describe("o contexto das ferramentas carrega o cliente do turno (D-146)", () => 
   it("o handler recebe o contato do turno em `escopoDoTurno`, igual para todas as ferramentas do turno", async () => {
     const h = espiar("crm_query_external_data");
     const g = espiar("crm_describe_external_data");
-    const tools = montar(["crm_query_external_data", "crm_describe_external_data"]);
+    // As duas são do módulo opcional `banco_externo`: desligado, nem são montadas.
+    const tools = montar(["crm_query_external_data", "crm_describe_external_data"], {
+      modulosLigados: ["banco_externo"],
+    });
     await chamar(tools, "crm_query_external_data", { tabela: "produtos" });
     await chamar(tools, "crm_describe_external_data", {});
     const ctxA = h.mock.calls[0]![1] as { escopoDoTurno?: { contatoId: string } };
@@ -281,9 +317,11 @@ describe("o contexto das ferramentas carrega o cliente do turno (D-146)", () => 
 
   it("sem contato do turno, não há escopo no contexto", async () => {
     const h = espiar("crm_query_external_data");
-    await chamar(montar(["crm_query_external_data"], { contatoDoTurno: null }), "crm_query_external_data", {
-      tabela: "produtos",
-    });
+    await chamar(
+      montar(["crm_query_external_data"], { contatoDoTurno: null, modulosLigados: ["banco_externo"] }),
+      "crm_query_external_data",
+      { tabela: "produtos" },
+    );
     expect((h.mock.calls[0]![1] as { escopoDoTurno?: unknown }).escopoDoTurno).toBeUndefined();
   });
 });

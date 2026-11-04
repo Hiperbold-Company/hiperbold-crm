@@ -292,7 +292,11 @@ describe("a ordem dos três efeitos", () => {
 describe("canal do lead que nasce", () => {
   it("sem canal informado, o lead nasce como WhatsApp (o padrão)", async () => {
     await rodar();
-    expect(garantirLeadDaConversa).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ origem: undefined }));
+    // Desde o upstream (origemDoNegocioPeloCanal) a origem vai EXPLÍCITA, e sem canal é a do WhatsApp.
+    expect(garantirLeadDaConversa).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ origem: expect.objectContaining({ source: "whatsapp" }) }),
+    );
   });
 
   it("conversa do Instagram faz o lead nascer como Instagram, não como WhatsApp", async () => {

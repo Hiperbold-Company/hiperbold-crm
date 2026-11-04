@@ -12,7 +12,11 @@ import { executarTickDoRelogio } from "@/lib/relogio/executar";
 
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
-vi.mock("@/lib/auth/server", () => ({ loadAuthUser: vi.fn(async () => null) }));
+vi.mock("@/lib/auth/server", () => ({
+  loadAuthUser: vi.fn(async () => null),
+  // O portão de escrita de plataforma (requirePlatformAdminEscrita) pergunta pela dívida de MFA.
+  mfaEmDividaEstrita: vi.fn(async () => false),
+}));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => ({
@@ -69,27 +73,51 @@ describe("captura Meta: query_raw só guarda o que normalizarUtm aceitou", () =>
   });
 });
 
-describe("relógio da instalação: sessão só de admin da plataforma", () => {
+describe("relógio da instalação: sessão só de admin da plataforma com scope full", () => {
   const tick = () => new NextRequest("http://local/api/v1/system/relogio/tick", { method: "POST" });
 
+  /**
+   * Sessão vista pelo portão REAL (requirePlatformAdminEscrita): getUser e a linha de
+   * platform_admins. `linha: null` é quem não é admin de plataforma (admin de organização).
+   */
+  function sessao(linha: { scope: string } | null) {
+    const q: Record<string, unknown> = {
+      select: () => q,
+      eq: () => q,
+      is: () => q,
+      maybeSingle: async () => ({
+        data: linha ? { user_id: "u", scope: linha.scope, mfa_required: false, revoked_at: null } : null,
+        error: null,
+      }),
+    };
+    return {
+      auth: {
+        getUser: async () => ({ data: { user: { id: "u", factors: [] } }, error: null }),
+        mfa: { getAuthenticatorAssuranceLevel: async () => ({ data: { currentLevel: "aal1" } }) },
+      },
+      from: () => q,
+    };
+  }
+
   it("admin de uma organização (não da plataforma) é recusado e o tick não roda", async () => {
-    vi.mocked(requireRole).mockResolvedValue({
-      ok: true,
-      user: { id: "u", is_platform_admin: false },
-      org: { orgId: ORG, role: "admin" },
-    } as never);
+    vi.mocked(createClient).mockResolvedValue(sessao(null) as never);
     const { POST } = await import("@/app/api/v1/system/relogio/tick/route");
     const res = await POST(tick());
     expect(res.status).toBe(403);
     expect(executarTickDoRelogio).not.toHaveBeenCalled();
   });
 
-  it("admin da plataforma passa", async () => {
-    vi.mocked(requireRole).mockResolvedValue({
-      ok: true,
-      user: { id: "u", is_platform_admin: true },
-      org: { orgId: ORG, role: "admin" },
-    } as never);
+  it("admin da plataforma support_readonly é recusado com forbidden_scope e o tick não roda", async () => {
+    vi.mocked(createClient).mockResolvedValue(sessao({ scope: "support_readonly" }) as never);
+    const { POST } = await import("@/app/api/v1/system/relogio/tick/route");
+    const res = await POST(tick());
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("forbidden_scope");
+    expect(executarTickDoRelogio).not.toHaveBeenCalled();
+  });
+
+  it("admin da plataforma full passa", async () => {
+    vi.mocked(createClient).mockResolvedValue(sessao({ scope: "full" }) as never);
     const { POST } = await import("@/app/api/v1/system/relogio/tick/route");
     const res = await POST(tick());
     expect(res.status).toBe(200);

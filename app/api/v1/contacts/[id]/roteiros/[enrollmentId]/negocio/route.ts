@@ -18,7 +18,7 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { ok, fail } from "@/lib/api/wrappers";
+import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("organization_id", authz.org.orgId)
     .eq("contact_id", id)
     .maybeSingle();
-  if (enrollmentErr) return fail("internal_error", enrollmentErr.message, 500, { requestId });
+  if (enrollmentErr) return falhaInterna("internal_error", enrollmentErr, { requestId });
   if (!enrollment) return fail("not_found", t("Roteiro não encontrado."), 404, { requestId });
   if (enrollment.status !== "coletando") {
     // Execução encerrada não escolhe nada: a próxima resolve de novo.
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .eq("id", leadId)
     .eq("organization_id", authz.org.orgId)
     .maybeSingle();
-  if (leadErr) return fail("internal_error", leadErr.message, 500, { requestId });
+  if (leadErr) return falhaInterna("internal_error", leadErr, { requestId });
   if (!lead || lead.contact_id !== id || lead.status !== "open") {
     return fail("invalid_lead", t("Negócio inválido para este contato."), 422, { requestId });
   }
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  if (vinculoErr) return fail("internal_error", vinculoErr.message, 500, { requestId });
+  if (vinculoErr) return falhaInterna("internal_error", vinculoErr, { requestId });
   const jaFixado = (existente?.payload as { lead_id?: unknown } | null | undefined)?.lead_id;
   if (typeof jaFixado === "string" && jaFixado !== "") {
     return ok({ lead_id: jaFixado }, { requestId });
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     // recusa o segundo e o vínculo gravado é o primeiro. Devolver 23505 seria
     // dizer "falhou" para quem só perdeu a corrida por milissegundos.
     if (insertErr.code !== "23505") {
-      return fail("internal_error", insertErr.message, 500, { requestId });
+      return falhaInterna("internal_error", insertErr, { requestId });
     }
     const { data: gravado } = await supabase
       .from("followup_enrollment_events")

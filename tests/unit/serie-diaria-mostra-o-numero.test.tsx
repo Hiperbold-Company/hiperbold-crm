@@ -23,6 +23,18 @@ vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 vi.mock("@/lib/api/client", () => ({
   apiClient: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
+// A tela guarda o recorte na URL (useRouter/usePathname/useSearchParams);
+// aqui não há App Router montado.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/app/activities",
+  useSearchParams: () => new URLSearchParams(),
+}));
+// O filtro por atendente (upstream) lista a equipe por outra rota; aqui a
+// equipe não é o objeto do caso.
+vi.mock("@/hooks/inbox/useAssignableMembers", () => ({
+  useAssignableMembers: () => ({ data: [], isLoading: false, isError: false }),
+}));
 vi.mock("next/link", () => ({
   default: ({
     href,

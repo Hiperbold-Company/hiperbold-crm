@@ -70,6 +70,8 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/auth/server", () => ({ loadAuthUser: async () => ({ id: CONVIDADA }) }));
 vi.mock("@/lib/auth/require-role", () => ({
   orgAtivaDaApi: async () => ({ ok: true, org: { orgId: ORG, role: "manager" } }),
+  // Upstream (D-092): a leitura das contagens passa pelo gate único.
+  requireRole: async () => ({ ok: true, user: { id: CONVIDADA }, org: { orgId: ORG, role: "manager" } }),
 }));
 vi.mock("@/lib/channels/desativado", () => ({ idsDosCanaisDesativados: async () => [] }));
 vi.mock("@/lib/ai/agents/org-tem-automatico", () => ({ orgTemAutomatico: async () => false }));

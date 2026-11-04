@@ -211,13 +211,20 @@ describe("medição da folga (pergunta de aceite da issue #1341)", () => {
     expect(itensNoMenuLateral(combinarInterfaces(completa, completa))).toBe(TETO);
   });
 
-  it("configuração SIMPLIFICADA (empresa escolhe o preset): 5 itens, folga 4", () => {
-    // Inbox, Agenda, Funis, Contatos e Conexões: nos grupos SEM hub (Atendimento e
-    // Canais) a escolha explícita da empresa põe a tela no menu; Tarefas mora em
-    // CRM, que tem hub, e só sobe com `sidebar` — que ela deixou de ter em 15/10/2026.
+  it("configuração SIMPLIFICADA (empresa escolhe o preset): 3 itens, folga 6", () => {
+    // Inbox, Funis e Contatos. Desde o upstream (#3295 e "preset sobrevive à
+    // combinação" em `combinarInterfaces`), o preset NÃO vira `destinos`: é lista
+    // do produto, não escolha item a item, então só sobe ao menu o que tem
+    // `sidebar`. Hiperbold (menu enxuto, 15/10/2026): Agenda, Conexões e Tarefas
+    // não têm `sidebar` no nosso catálogo, então ficam no hub/⌘K, não na lateral.
     const itens = itensNoMenuLateral(combinarInterfaces(simplificada, completa));
-    expect(itens).toBe(5);
-    expect(TETO - itens).toBe(4);
+    expect(itens).toBe(3);
+    expect(TETO - itens).toBe(6);
+    expect(
+      sidebarGroups(false, "admin", combinarInterfaces(simplificada, completa))
+        .filter((grupo) => grupo.group.id !== GRUPO_NO_RODAPE)
+        .flatMap((grupo) => grupo.items.map((i) => i.href)),
+    ).toEqual(["/app/inbox", "/app/kanban", "/app/contacts"]);
   });
 
   it("configuração MÍNIMA (empresa escolhe 1 porta): 1 item, folga 8", () => {

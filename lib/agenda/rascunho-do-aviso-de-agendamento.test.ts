@@ -75,7 +75,7 @@ describe("o número sem +55 ganha um aviso que não bloqueia (ajuste do dono, is
   const BRASIL = "+5511999998888";
 
   it("número que começa com +55 não ganha aviso", () => {
-    expect(numeroPareceDeForaDoBrasil("+5531998966398", BRASIL)).toBe(false);
+    expect(numeroPareceDeForaDoBrasil("+5531992220002", BRASIL)).toBe(false);
   });
 
   it("número com outro código de país ganha o aviso", () => {

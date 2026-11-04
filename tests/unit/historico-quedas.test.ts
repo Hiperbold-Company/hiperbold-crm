@@ -46,7 +46,7 @@ function evento(id: string, em: string, de: string, para: string, conexao = CONE
     organization_id: org,
     event_type: "channel_session.status_changed",
     created_at: em,
-    payload: { channel_session_id: conexao, from_status: de, to_status: para, phone_number: "5531998966398" },
+    payload: { channel_session_id: conexao, from_status: de, to_status: para, phone_number: "5531992220002" },
   };
 }
 
@@ -56,7 +56,7 @@ function quedaPadrao(idSaida = "ev-saida", idVolta = "ev-volta"): Linha[] {
 }
 
 function sessao(id: string, extra: Linha = {}): Linha {
-  return { id, organization_id: ORG, provider: "waha", phone_number: "553198966398", metadata: { guardar_historico: true }, archived_at: null, waha_session_name: "sessao-1", ...extra };
+  return { id, organization_id: ORG, provider: "waha", phone_number: "553192220002", metadata: { guardar_historico: true }, archived_at: null, waha_session_name: "sessao-1", ...extra };
 }
 
 /** Lista em memória com as regras que o contrato usa: filtros, ordem, faixa e os índices únicos. */
@@ -184,7 +184,7 @@ describe("abrirRecuperacoesDasQuedas (Spec 32, item 2)", () => {
     h.tabelas.event_log = quedaPadrao();
     h.tabelas.channel_sessions = [sessao(CONEXAO, { phone_number: "5511912345678" })];
     await abrirRecuperacoesDasQuedas(admin() as never, AGORA);
-    expect(importacoes()[0]).toMatchObject({ numero_esperado: "5531998966398" });
+    expect(importacoes()[0]).toMatchObject({ numero_esperado: "5531992220002" });
   });
 
   it("cria 1 importação aguardando com desde = saída − 10 min e ate = volta, e audita como sistema", async () => {
@@ -200,7 +200,7 @@ describe("abrirRecuperacoesDasQuedas (Spec 32, item 2)", () => {
       escopo: "so_crm",
       origem: "queda",
       evento_de_saida_id: "ev-saida",
-      numero_esperado: "5531998966398",
+      numero_esperado: "5531992220002",
       criada_por: null,
     });
     expect(imp!.desde).toBe(new Date(Date.parse(minutos(120)) - MARGEM_ANTES_MS).toISOString());
@@ -280,7 +280,7 @@ describe("prepararRecuperacoesAguardando (Spec 32, item 2)", () => {
       channel_session_id: CONEXAO,
       status: "aguardando",
       origem: "queda",
-      numero_esperado: "553198966398",
+      numero_esperado: "553192220002",
       desde: minutos(130),
       ate: minutos(60),
       created_at: minutos(5),
@@ -292,7 +292,7 @@ describe("prepararRecuperacoesAguardando (Spec 32, item 2)", () => {
 
   it("número ao vivo igual ao esperado (com e sem o nono dígito) promove a rodando", async () => {
     h.tabelas.importacoes_de_historico = [aguardando()];
-    h.verificar.mockResolvedValue(viva("5531998966398"));
+    h.verificar.mockResolvedValue(viva("5531992220002"));
     const r = await prepararRecuperacoesAguardando(admin() as never, AGORA);
     expect(r).toEqual({ promovidas: 1, canceladas: 0 });
     expect(importacoes()[0]!.status).toBe("rodando");
@@ -301,7 +301,7 @@ describe("prepararRecuperacoesAguardando (Spec 32, item 2)", () => {
 
   it("23505 na promoção (outra rodando na conexão): continua aguardando, sem lançar e sem contar", async () => {
     h.tabelas.importacoes_de_historico = [aguardando(), { id: "outra", organization_id: ORG, channel_session_id: CONEXAO, status: "rodando", origem: "manual" }];
-    h.verificar.mockResolvedValue(viva("5531998966398"));
+    h.verificar.mockResolvedValue(viva("5531992220002"));
     const r = await prepararRecuperacoesAguardando(admin() as never, AGORA);
     expect(r).toEqual({ promovidas: 0, canceladas: 0 });
     expect(importacoes()[0]!.status).toBe("aguardando");
@@ -338,7 +338,7 @@ describe("prepararRecuperacoesAguardando (Spec 32, item 2)", () => {
 
   it("conexão sem número gravado é ilegível, não igual a nada", async () => {
     h.tabelas.importacoes_de_historico = [aguardando({ numero_esperado: null, created_at: minutos(90) })];
-    h.verificar.mockResolvedValue(viva("5531998966398"));
+    h.verificar.mockResolvedValue(viva("5531992220002"));
     expect((await prepararRecuperacoesAguardando(admin() as never, AGORA)).promovidas).toBe(0);
     expect(importacoes()[0]!.status).toBe("cancelada");
   });

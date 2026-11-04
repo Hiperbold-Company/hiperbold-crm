@@ -10,6 +10,7 @@
  * nada.
  */
 import { useT } from "@/hooks/i18n/useT";
+import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 import { useTeamMembers } from "@/hooks/team/useTeamMembers";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -150,7 +151,7 @@ export function FiltrosDeDesempenho({
                 .filter((m) => m.role !== "viewer" && !m.revoked_at)
                 .map((m) => (
                   <SelectItem key={m.user_id} value={m.user_id}>
-                    {m.full_name ?? m.email ?? m.user_id.slice(0, 8)}
+                    {rotuloDoMembro(m, t)}
                     {m.user_id === currentUserId ? ` ${t("(você)")}` : ""}
                   </SelectItem>
                 ))}

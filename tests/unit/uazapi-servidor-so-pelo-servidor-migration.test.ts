@@ -54,7 +54,7 @@ describe("0914: posição e igualdade", () => {
   });
 
   it("está registrada no MANIFEST", () => {
-    expect(MANIFEST).toMatch(/\| `20260930120000` \| `0914_uazapi_servidor_so_pelo_servidor` \|/);
+    expect(MANIFEST).toMatch(/\| `20260930120030` \| `0914_uazapi_servidor_so_pelo_servidor` \|/);
   });
 
   it("nenhuma linha da migração usa travessão (U+2014)", () => {

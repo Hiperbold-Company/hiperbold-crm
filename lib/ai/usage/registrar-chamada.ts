@@ -51,6 +51,11 @@ export interface ChamadaDeIa {
   latency_ms: number;
   /** Presente = a chamada falhou. `status` HTTP opcional, lido por `codigoDoErro`. */
   erro?: { message: string; status?: number } | null;
+  /**
+   * 0906 (carteira de tokens): de quem é a chave. Ausente = a coluna fica nula
+   * (não debita a carteira).
+   */
+  origem_da_chave?: "chave_da_instalacao" | "credencial_da_organizacao" | null;
 }
 
 export async function registrarChamadaDeIa(admin: Admin, chamada: ChamadaDeIa): Promise<void> {
@@ -74,6 +79,7 @@ export async function registrarChamadaDeIa(admin: Admin, chamada: ChamadaDeIa): 
       status: erro ? "erro" : "ok",
       error_code: erro ? codigoDoErro({ ...erro }) : null,
       error_message: erro ? erro.message.slice(0, 500) : null,
+      ...(chamada.origem_da_chave !== undefined ? { origem_da_chave: chamada.origem_da_chave } : {}),
     });
     if (error) {
       logger.warn("[llm-calls] insert failed", {

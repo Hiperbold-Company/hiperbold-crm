@@ -20,7 +20,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadAuthUser } from "@/lib/auth/server";
-import { orgAtivaDaApi } from "@/lib/auth/require-role";
+import { requireRole } from "@/lib/auth/require-role";
 import { parDeContatos } from "@/lib/contacts/duplicados";
 import { createClient } from "@/lib/supabase/server";
 
@@ -33,7 +33,8 @@ import { createClient } from "@/lib/supabase/server";
 const dispensa = vi.hoisted(() => ({ pares: new Set<string>() }));
 
 vi.mock("@/lib/auth/server", () => ({ loadAuthUser: vi.fn() }));
-vi.mock("@/lib/auth/require-role", () => ({ orgAtivaDaApi: vi.fn() }));
+// Hiperbold D-092: a rota lê pelo portão único de leitura (requireRole).
+vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/contacts/dispensar-par", () => ({
@@ -160,7 +161,7 @@ beforeEach(() => {
     idioma: "pt-BR",
     organizations: [{ organization_id: ORG_ID, organization_name: "Org", role: "manager" }],
   } as never);
-  vi.mocked(orgAtivaDaApi).mockResolvedValue({ ok: true, org: { orgId: ORG_ID, name: "Org" } } as never);
+  vi.mocked(requireRole).mockResolvedValue({ ok: true, org: { orgId: ORG_ID, name: "Org" } } as never);
 });
 
 describe("a varredura de duplicados responde ao que foi LIDO", () => {
@@ -168,8 +169,8 @@ describe("a varredura de duplicados responde ao que foi LIDO", () => {
     const linhas = base(2500);
     // Par DENTRO da janela varrida (contatos 5 e 1500): mesma pessoa, grafias do
     // nono dígito — é o caso que a tela existe para achar.
-    linhas[4] = contato(5, { phone_number: "+553198966398" });
-    linhas[1499] = contato(1500, { phone_number: "+5531998966398" });
+    linhas[4] = contato(5, { phone_number: "+553192220002" });
+    linhas[1499] = contato(1500, { phone_number: "+5531992220002" });
     // Par FORA da janela (2100 e 2200): não pode aparecer no resultado.
     linhas[2099] = contato(2100, { phone_number: "+553191234567" });
     linhas[2199] = contato(2200, { phone_number: "+5531991234567" });
@@ -201,8 +202,8 @@ describe("a varredura de duplicados responde ao que foi LIDO", () => {
 
   it("controle: base pequena continua varrida por inteiro, com o par achado", async () => {
     const linhas = base(500);
-    linhas[4] = contato(5, { phone_number: "+553198966398" });
-    linhas[399] = contato(400, { phone_number: "+5531998966398" });
+    linhas[4] = contato(5, { phone_number: "+553192220002" });
+    linhas[399] = contato(400, { phone_number: "+5531992220002" });
     const { client } = fakeSupabase({ contacts: linhas });
     vi.mocked(createClient).mockResolvedValue(client as never);
 
@@ -230,8 +231,8 @@ describe("a varredura de duplicados responde ao que foi LIDO", () => {
     // lida como "acabou" (a doutrina de `lib/agenda/protecao-followup.ts`). O
     // fim continua sendo o `count` exato — e o total de 2.500 segue truncado.
     const linhas = base(2500);
-    linhas[4] = contato(5, { phone_number: "+553198966398" });
-    linhas[1499] = contato(1500, { phone_number: "+5531998966398" });
+    linhas[4] = contato(5, { phone_number: "+553192220002" });
+    linhas[1499] = contato(1500, { phone_number: "+5531992220002" });
     const { client } = fakeSupabase({ contacts: linhas }, 300);
     vi.mocked(createClient).mockResolvedValue(client as never);
 
@@ -248,8 +249,8 @@ describe("o repetido pelo nome: sugestão depois dos fortes, e dispensa que vale
   /** Um grupo forte (o mesmo celular, com e sem o nono dígito) e um par só pelo nome. */
   function cenario(): Linha[] {
     const linhas = base(60);
-    linhas[4] = contato(5, { phone_number: "+553198966398" });
-    linhas[5] = contato(6, { phone_number: "+5531998966398" });
+    linhas[4] = contato(5, { phone_number: "+553192220002" });
+    linhas[5] = contato(6, { phone_number: "+5531992220002" });
     linhas[9] = contato(10, { name: "Clínica Santos Odontologia", phone_number: "+553191110010" });
     linhas[19] = contato(20, {
       name: "Santos Odontologia Clínica Avançada",

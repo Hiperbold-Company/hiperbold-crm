@@ -19,6 +19,13 @@ vi.mock("@/hooks/pipelines/useStages", () => ({
   useArquivarEtapa: () => ({ isPending: false, mutate: arquivar }),
 }));
 
+// As taxas por etapa (upstream) leem pelo React Query; aqui não há provider e
+// a taxa não é o objeto destes casos.
+vi.mock("@/hooks/pipelines/useWinRates", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useTaxasDasEtapas: () => ({ data: undefined, isError: false, isFetching: false }),
+}));
+
 const MAPEAMENTO_VAZIO = Object.fromEntries(LEAD_STAGES.map((passo) => [passo, null]));
 
 vi.mock("@/hooks/pipelines/useAgentMapping", () => ({

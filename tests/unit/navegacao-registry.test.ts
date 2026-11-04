@@ -1,10 +1,11 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ModuloOpcional } from "@/lib/instalacao/modulos";
 import type { CapacidadeDaOrganizacao } from "@/lib/organizacao/capacidades";
+import type * as FuncoesOcultas from "@/lib/hiperbold/funcoes-ocultas";
 import {
   NAV_DESTINATIONS,
   NAV_GROUPS,
@@ -13,6 +14,22 @@ import {
   searchable,
   sidebarGroups,
 } from "@/lib/navigation/registry";
+
+// Hiperbold: Chamadas (`/app/calls`) é função oculta desde 16/10/2026
+// (lib/hiperbold/funcoes-ocultas.ts), então some do menu com ou sem telefonia.
+// Para o bloco #1290 do upstream seguir medindo o filtro por CAPACIDADE, ele
+// libera só essa função enquanto roda; fora dele vale a regra de sempre.
+const ocultas = vi.hoisted(() => ({ liberarChamadas: false }));
+vi.mock("@/lib/hiperbold/funcoes-ocultas", async (importOriginal) => {
+  const real = await importOriginal<typeof FuncoesOcultas>();
+  return {
+    ...real,
+    hrefOculto: (href: string) =>
+      ocultas.liberarChamadas && (href === "/app/calls" || href.startsWith("/app/calls/"))
+        ? false
+        : real.hrefOculto(href),
+  };
+});
 
 /**
  * O registro é a fonte única da navegação. Estes testes cobrem as projeções
@@ -267,7 +284,7 @@ describe("hubSections", () => {
     // tela nova entrar sem que ninguém decidisse de que lado dela ela cai.
     const secoes = hubSections("crm", true, null);
     expect(secoes.map((s) => s.section)).toEqual(["O dia a dia da venda", "Preparar a venda", "Fechar a venda"]);
-    // Prospecção, Chamadas, Ligações ativas e Comandas: ocultas em 16/10/2026 (hiperbold/FUNCOES.md).
+    // Prospecção, Chamadas e Comandas: ocultas em 16/10/2026 (hiperbold/FUNCOES.md).
     expect(secoes.flatMap((s) => s.items.map((i) => i.href))).toEqual([
       "/app/kanban",
       "/app/campaigns",
@@ -279,6 +296,9 @@ describe("hubSections", () => {
       // rotina do dia, não preparação nem fechamento. `sidebar: false` deixa o
       // menu do dia a dia com os itens de sempre; a porta é o hub e o ⌘K.
       "/app/tasks/planos",
+      // Cold Call (upstream #3933): módulo da instalação, desligado por padrão;
+      // sem a lista de módulos (`undefined`) o hub não filtra por módulo.
+      "/app/cold-call",
       "/app/automacoes",
       "/app/products",
       "/app/imports",
@@ -407,6 +427,13 @@ describe("searchable", () => {
  * `voip_trunk_settings`: ele prova a projeção, que é o que o usuário vê.
  */
 describe("capacidade da organização (#1290): Chamadas só com a telefonia em uso", () => {
+  beforeEach(() => {
+    ocultas.liberarChamadas = true;
+  });
+  afterEach(() => {
+    ocultas.liberarChamadas = false;
+  });
+
   /** As três projeções que desenham menu, com a lista de capacidades da organização. */
   function menu(capacidades: readonly CapacidadeDaOrganizacao[]) {
     return {
@@ -456,6 +483,14 @@ describe("capacidade da organização (#1290): Chamadas só com a telefonia em u
     // PAPEL; módulo desligado esconde para todos.
     const doAdminDaPlataforma = searchable(true, null, undefined, [], []).map((d) => d.href);
     expect(doAdminDaPlataforma).not.toContain("/app/calls");
+  });
+
+  it("Hiperbold: com a função oculta, nem a telefonia em uso traz Chamadas de volta ao menu", () => {
+    ocultas.liberarChamadas = false;
+    const com = menu(["telefonia"]);
+    expect(com.hub).not.toContain("/app/calls");
+    expect(com.busca).not.toContain("/app/calls");
+    expect(com.sidebar).not.toContain("/app/calls");
   });
 
   it("esconder do menu não apaga a porta: a URL direta continua existindo", () => {

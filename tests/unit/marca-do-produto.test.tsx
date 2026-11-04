@@ -174,7 +174,15 @@ describe("o cabeçalho do onboarding segue a mesma regra do favicon", () => {
   });
 
   it("o ícone é decorativo: o nome já está escrito ao lado", () => {
-    const img = layout.slice(layout.indexOf("<img"), layout.indexOf("/>", layout.indexOf("<img")));
+    // Hiperbold: o cabeçalho tem antes um <img> do LOGO da instalação (marca
+    // Hiperbold CRM), que ocupa o lugar do nome escrito; esse leva o nome no
+    // alt. O ícone decorativo é o <img> do ramo sem logo, depois do símbolo.
+    const inicioDoIcone = layout.indexOf("<img", layout.indexOf("simboloDoProduto ? ("));
+    const img = layout.slice(inicioDoIcone, layout.indexOf("/>", inicioDoIcone));
     expect(img).toMatch(/alt=""/);
+    const inicioDoLogo = layout.indexOf("<img");
+    const logo = layout.slice(inicioDoLogo, layout.indexOf("/>", inicioDoLogo));
+    expect(logo).toMatch(/data-testid="logo-do-onboarding"/);
+    expect(logo).toMatch(/alt=\{marcaDoIcone\.nome\}/);
   });
 });

@@ -12,6 +12,7 @@ const CODIGOS_DAS_ACOES = new Set([
   "aguardando_o_canal",
   "ai_decide_desligado_na_empresa",
   "ai_decide_interruptor_ilegivel",
+  "assinatura_suspensa",
   "banco_do_roteiro_indisponivel",
   "canal_da_equipe_nao_encontrado",
   "canal_nao_suportado",

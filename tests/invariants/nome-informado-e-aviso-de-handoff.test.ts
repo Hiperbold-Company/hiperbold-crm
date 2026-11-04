@@ -42,7 +42,7 @@ const nada = async () => undefined;
 function flag(v: boolean, chave = "nome_informado_no_atendimento") {
   sql(`update public.organizations set settings = coalesce(settings,'{}'::jsonb) || jsonb_build_object('crm', coalesce(settings->'crm','{}'::jsonb) || jsonb_build_object('${chave}', ${v})) where id = '${GOV_ORG}';`);
 }
-const AVISO_LIGADO = `insert into public.config_aviso_de_caso (organization_id, channel_session_id, telefone_destino, ligado) values ('${GOV_ORG}','${GOV_SESSION}','+5531998966398',true) on conflict (organization_id) do update set ligado=true;`;
+const AVISO_LIGADO = `insert into public.config_aviso_de_caso (organization_id, channel_session_id, telefone_destino, ligado) values ('${GOV_ORG}','${GOV_SESSION}','+5531992220002',true) on conflict (organization_id) do update set ligado=true;`;
 async function nome(id: string) {
   const { rows } = await pool.query<{ name: string | null }>(`select name from contacts where id=$1`, [id]);
   return rows[0]?.name ?? null;

@@ -364,7 +364,8 @@ export const NAV_CATALOG = [
     group: "crm",
     section: "O dia a dia da venda",
     configuracoes: "Atendimento",
-    sidebar: true,
+    // Hiperbold: fora do menu lateral (sidebar só com o essencial, decisão do
+    // dono em 15/10/2026); a porta é o hub do CRM e Configurações.
     // As tarefas em aberto DE QUEM ESTÁ LOGADO. Automação, follow-up e aviso de
     // carteira criam tarefa para cada atendente; sem número no menu, a tarefa
     // atrasada só existia para quem abrisse a tela por conta própria (#3938).
@@ -807,7 +808,8 @@ export const NAV_CATALOG = [
     // Uso diário: a IA abre caso quando precisa de uma pessoa e segue
     // atendendo enquanto espera. Escondido no hub, o caso só era visto por quem
     // fosse procurar — medido numa loja que vende pelo WhatsApp.
-    sidebar: true,
+    // Hiperbold: fora do menu lateral (sidebar só com o essencial, decisão do
+    // dono em 15/10/2026); a porta é o hub do Agente de IA.
     contador: "casos",
   },
   {

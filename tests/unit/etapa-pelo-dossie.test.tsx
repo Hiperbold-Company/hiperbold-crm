@@ -41,6 +41,10 @@ vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (texto: string) => texto }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   usePermission: (chave: string) => chave === "pipeline.move_card" && papel.podeMover,
   useMoedaDaOrgAtiva: () => null,
+  // A ficha lê o usuário, a org ativa e o fuso; o que este arquivo mede é o mover.
+  useUser: () => ({ id: "u1", is_platform_admin: false, support: false }),
+  useActiveOrg: () => ({ role: "agent" }),
+  useFusoDaOrganizacao: () => null,
 }));
 vi.mock("@/hooks/inbox/useAssignableMembers", () => ({ useAssignableMembers: () => ({ data: [] }) }));
 vi.mock("@/hooks/kanban/useAssignableAgents", () => ({ useAssignableAgents: () => ({ data: [] }) }));

@@ -160,7 +160,7 @@ function envelopeMeta(mensagens: unknown[], campo = "messages") {
             value: {
               messaging_product: "whatsapp",
               metadata: { display_phone_number: "5511300000000", phone_number_id: "phone-1" },
-              contacts: [{ profile: { name: "Cliente" }, wa_id: "553198966398" }],
+              contacts: [{ profile: { name: "Cliente" }, wa_id: "553192220002" }],
               ...(campo === "messages" ? { messages: mensagens } : { message_echoes: mensagens }),
             },
           },
@@ -171,7 +171,7 @@ function envelopeMeta(mensagens: unknown[], campo = "messages") {
 }
 
 const DOCUMENTO_META = {
-  from: "553198966398",
+  from: "553192220002",
   id: "wamid.HBgMNTUzMTk4OTY2Mzk4FQIAEhgUM0I2MkZBNDk5ODZGQTU1MTI4N0MA",
   timestamp: "1785342036",
   type: "document",
@@ -264,7 +264,7 @@ describe("Meta: o parser de mídia e a ingestão gravam metadata.media_filename"
 
   it("imagem sem `filename` na Cloud API → a chave não nasce", async () => {
     const linha = await ingerirMetaInbound({
-      from: "553198966398",
+      from: "553192220002",
       id: "wamid.HBgMNTUzMTk4OTY2Mzk4FQIAEhgUM0I2MkZBNDk5",
       timestamp: "1785342036",
       type: "image",
@@ -276,7 +276,7 @@ describe("Meta: o parser de mídia e a ingestão gravam metadata.media_filename"
 
   it("eco do app com documento → o segundo INSERT da Meta grava também", async () => {
     const eco = {
-      to: "553198966398",
+      to: "553192220002",
       id: "wamid.ECO2619",
       timestamp: "1790000000",
       type: "document",

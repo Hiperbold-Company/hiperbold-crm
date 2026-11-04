@@ -36,7 +36,8 @@ describe("opcoesDeEtiqueta", () => {
       "legada",
     ]);
     expect(r[2]).toEqual({ tag: "Novo Paciente", cor: "#ffb224", grupo: "Situação do paciente" });
-    expect(r[4]).toEqual({ tag: "Sem grupo", cor: "#e54d2e", grupo: null });
+    // O tom antigo da #2373 é lido como o tom novo (lib/tags/cor-da-etiqueta.ts, TONS_SUBSTITUIDOS).
+    expect(r[4]).toEqual({ tag: "Sem grupo", cor: "#cf3716", grupo: null });
     // A forma antiga (string) é lida, sem cor e sem grupo.
     expect(r[5]).toEqual({ tag: "legada", cor: null, grupo: null });
   });

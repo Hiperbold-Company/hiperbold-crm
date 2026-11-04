@@ -19,6 +19,8 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   // `agent`: pode confirmar o que o documento disse (a régua da rota).
   useActiveOrg: () => ({ role: "agent" }),
   usePermission: () => false,
+  useFusoDaOrganizacao: () => null,
+  useMoedaDaOrgAtiva: () => null,
 }));
 vi.mock("@/hooks/leads/useLeadTimeline", () => ({
   useLeadTimeline: () => ({
@@ -34,6 +36,7 @@ vi.mock("@/hooks/leads/useLeadTimeline", () => ({
 vi.mock("@/components/kanban/ContatoDoNegocio", () => ({ ContatoDoNegocio: () => null }));
 vi.mock("@/components/kanban/TarefasDoNegocio", () => ({ TarefasDoNegocio: () => null }));
 vi.mock("@/components/kanban/PropostasDoNegocio", () => ({ PropostasDoNegocio: () => null }));
+vi.mock("@/components/kanban/ItensDoNegocio", () => ({ ItensDoNegocio: () => null }));
 vi.mock("@/components/kanban/ConversaNoDossie", () => ({ ConversaNoDossie: () => null }));
 vi.mock("@/components/kanban/ScoreSlot", () => ({ ScoreSlot: () => null }));
 vi.mock("@/components/kanban/OwnerBadge", () => ({ OwnerBadge: () => null }));
@@ -53,6 +56,8 @@ const LEAD = {
   score: null,
   conversa: null,
   custom_fields: { medida: 0, localizador: "ANTES" },
+  // A ficha mostra "Criado em" perto da etapa (lib/kanban/datas-do-lead.ts).
+  created_at: "2026-10-01T12:00:00.000Z",
   owner_kind: null,
   owner_user_id: null,
   owner_agent_id: null,

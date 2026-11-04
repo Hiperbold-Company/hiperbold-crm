@@ -31,7 +31,18 @@ const CREDENCIAL = "11111111-1111-4111-8111-111111111111";
 const CANAL = "22222222-2222-4222-8222-222222222222";
 
 const CREDENCIAIS = [
-  { id: CREDENCIAL, provider: "anthropic", label: "chave da casa", is_active: true },
+  // Validada: no Hiperbold CRM o campo de provedor só oferece a chave do plano e as
+  // credenciais CONECTADAS (`lib/ai/agents/opcoes-de-provedor.ts`); sem `validated_at` a
+  // versão aponta para um par "não disponível no seu plano" e o salvar fica travado.
+  {
+    id: CREDENCIAL,
+    provider: "anthropic",
+    label: "chave da casa",
+    is_active: true,
+    validated_at: "2026-01-01T00:00:00Z",
+    validation_error: null,
+    created_at: "2026-01-01T00:00:00Z",
+  },
 ];
 
 const acoes = vi.hoisted(() => ({ salvar: vi.fn(), publicar: vi.fn(), criar: vi.fn() }));

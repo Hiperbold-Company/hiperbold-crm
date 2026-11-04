@@ -40,6 +40,11 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 vi.mock("@/lib/users/nome-do-atendente", () => ({ nomesDosAtendentes: async () => new Map() }));
+// D-092 (junção com o upstream): a leitura passa pelo gate único antes do banco. O papel e o
+// MFA têm testes próprios; aqui o gate libera e o que se mede é o resumo.
+vi.mock("@/lib/auth/require-role", () => ({
+  requireRole: async () => ({ ok: true, user: { id: "user-a" }, organizationId: "org-a", role: "viewer" }),
+}));
 
 import { GET } from "@/app/api/v1/contacts/[id]/crm-summary/route";
 

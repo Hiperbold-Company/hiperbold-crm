@@ -45,6 +45,28 @@ const EXCECOES: Record<string, string> = {
     "abrir acompanhamento é o trabalho do support_readonly: fn_support_context rebaixa scope diferente de full a support_readonly, e a rota já confere mfaEmDivida",
   "app/actions/auth/politicaDeMfa.ts#B:flag":
     "lê is_platform_admin só para saber se a política de MFA da PLATAFORMA vale para a própria conta; não é atalho de papel nem escrita em nome de outro",
+  "app/actions/admin/assinaturaDaOrganizacao.ts#B:use-server":
+    "Hiperbold (cobrança do revendedor): toda escrita confere scope full e mfaEmDivida inline, com mensagem própria na tela; cobrado função a função por acoes-de-escrita-usam-o-portao-comum.test.ts. Entrou no merge do upstream de 04/11/2026",
+  "app/actions/admin/bloqueioDosPlanos.ts#B:use-server":
+    "Hiperbold (cobrança do revendedor): toda escrita confere scope full e mfaEmDivida inline, com mensagem própria na tela; cobrado função a função por acoes-de-escrita-usam-o-portao-comum.test.ts. Entrou no merge do upstream de 04/11/2026",
+  "app/actions/admin/carteiraDeTokens.ts#B:use-server":
+    "Hiperbold (cobrança do revendedor): toda escrita confere scope full e mfaEmDivida inline, com mensagem própria na tela; cobrado função a função por acoes-de-escrita-usam-o-portao-comum.test.ts. Entrou no merge do upstream de 04/11/2026",
+  "app/actions/admin/cobrancaAsaas.ts#B:use-server":
+    "Hiperbold (cobrança do revendedor): toda escrita confere scope full e mfaEmDivida inline, com mensagem própria na tela; cobrado função a função por acoes-de-escrita-usam-o-portao-comum.test.ts. Entrou no merge do upstream de 04/11/2026",
+  "app/actions/admin/cupons.ts#B:use-server":
+    "Hiperbold (cobrança do revendedor): toda escrita confere scope full e mfaEmDivida inline, com mensagem própria na tela; cobrado função a função por acoes-de-escrita-usam-o-portao-comum.test.ts. Entrou no merge do upstream de 04/11/2026",
+  "app/actions/admin/exclusoes.ts#B:use-server":
+    "Hiperbold (cobrança do revendedor): toda escrita confere scope full e mfaEmDivida inline, com mensagem própria na tela; cobrado função a função por acoes-de-escrita-usam-o-portao-comum.test.ts. Entrou no merge do upstream de 04/11/2026",
+  "app/actions/admin/membrosDaAgencia.ts#B:use-server":
+    "Hiperbold (cobrança do revendedor): toda escrita confere scope full e mfaEmDivida inline, com mensagem própria na tela; cobrado função a função por acoes-de-escrita-usam-o-portao-comum.test.ts. Entrou no merge do upstream de 04/11/2026",
+  "app/actions/admin/pacotesDeTokens.ts#B:use-server":
+    "Hiperbold (cobrança do revendedor): toda escrita confere scope full e mfaEmDivida inline, com mensagem própria na tela; cobrado função a função por acoes-de-escrita-usam-o-portao-comum.test.ts. Entrou no merge do upstream de 04/11/2026",
+  "app/actions/admin/planoDaOrganizacao.ts#B:use-server":
+    "Hiperbold (cobrança do revendedor): toda escrita confere scope full e mfaEmDivida inline, com mensagem própria na tela; cobrado função a função por acoes-de-escrita-usam-o-portao-comum.test.ts. Entrou no merge do upstream de 04/11/2026",
+  "app/actions/admin/reembolsos.ts#B:use-server":
+    "Hiperbold (cobrança do revendedor): toda escrita confere scope full e mfaEmDivida inline, com mensagem própria na tela; cobrado função a função por acoes-de-escrita-usam-o-portao-comum.test.ts. Entrou no merge do upstream de 04/11/2026",
+  "app/actions/settings/compraDoPlano.ts#B:flag":
+    "Hiperbold (compra do plano): o bypass da plataforma lê platform_admins.scope no banco e exige full, e mfaEmDivida vale para todo efeito de cobrança; provado em asaas-compra-acoes.test.ts. Entrou no merge do upstream de 04/11/2026",
 };
 
 export interface Violacao {

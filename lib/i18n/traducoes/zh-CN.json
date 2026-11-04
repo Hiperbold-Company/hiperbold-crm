@@ -6464,5 +6464,9 @@
   "Mover negócio no funil": "在销售漏斗中移动商机",
   "Editar tag do negócio": "编辑商机标签",
   "Gravar tag no negócio": "为商机保存标签",
-  "Pessoais": "个人"
+  "Pessoais": "个人",
+  "O envio chegou, mas o CRM não conseguiu abrir o segredo desta fonte (a chave da instalação está ausente ou foi trocada). Fale com quem administra a instalação; tente reenviar depois.": "提交已收到，但 CRM 无法打开此来源的密钥（安装密钥缺失或已被更换）。请联系安装的管理员；稍后再尝试重新发送。",
+  "Os dados chegaram, mas o plano desta organização já está no limite de leads. Fale com o suporte para ampliar.": "数据已收到，但此组织的套餐已达到线索上限。请联系支持团队扩容。",
+  "O corpo do envio não é um JSON válido — confira se a ferramenta que envia manda o formato certo.": "提交内容不是有效的 JSON —— 请检查发送工具是否使用了正确的格式。",
+  "O corpo do envio passou do tamanho máximo aceito (64 KB).": "提交内容超过了允许的最大大小（64 KB）。"
 }

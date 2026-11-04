@@ -42,6 +42,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { carregarComportamentoDaInstalacao } from "@/lib/instalacao/comportamento-servidor";
 import { PROPOSITOS_SEM_CUSTO_POR_DECISAO } from "@/lib/ai/telemetria-sem-custo";
 
+/**
+ * Os propósitos sem custo por decisão que saem da medição pelo `purpose`. A
+ * transcrição não entra: o corte dela é pela origem gravada (degraus 1 a 3 da
+ * escada), porque o degrau 4 é LLM cobrado por token e sem preço é furo.
+ */
+const PROPOSITOS_CORTADOS_PELO_PURPOSE = PROPOSITOS_SEM_CUSTO_POR_DECISAO.filter(
+  (p) => p !== PONTO_TRANSCRICAO_DE_AUDIO,
+);
+
 export interface BudgetStatus {
   organization_id: string;
   /** Centavo de DÓLAR — `llm_calls.cost_cents` vem de `pricing.ts`, que calcula em USD. */
@@ -203,8 +212,10 @@ export async function getBudgetStatus(orgId: string): Promise<BudgetStatus> {
     // filtro; `head: true` não traz linha nenhuma.
     //
     // `.not("purpose", "in", ...)` tira os propósitos da Tarefa 8 (embedding,
-    // transcrição, visão): `cost_cents` nulo ali é decisão (D-050), não preço
-    // desconhecido; ver o comentário de `gasto_incompleto` acima.
+    // visão): `cost_cents` nulo ali é decisão (D-050), não preço desconhecido;
+    // ver o comentário de `gasto_incompleto` acima. A TRANSCRIÇÃO fica fora
+    // desse corte e é cortada pela origem, no `.or` abaixo: tirá-la pelo
+    // `purpose` apagava o degrau 4 (junção com o upstream, 04/11/2026).
     // Duas linhas têm `cost_cents` nulo sem que o modelo seja desconhecido, e o
     // aviso diria a quem lê que é: a de FALHA (o provedor recusou, zero token
     // cobrado) e a de transcrição pelo SERVIÇO (degraus 1 a 3 da escada), quando
@@ -218,7 +229,7 @@ export async function getBudgetStatus(orgId: string): Promise<BudgetStatus> {
       .select("id", { count: "exact", head: true })
       .eq("organization_id", orgId)
       .is("cost_cents", null)
-      .not("purpose", "in", `(${PROPOSITOS_SEM_CUSTO_POR_DECISAO.join(",")})`)
+      .not("purpose", "in", `(${PROPOSITOS_CORTADOS_PELO_PURPOSE.join(",")})`)
       .eq("status", "ok")
       .or(
         `purpose.neq.${PONTO_TRANSCRICAO_DE_AUDIO},origem_da_escolha.is.null,` +

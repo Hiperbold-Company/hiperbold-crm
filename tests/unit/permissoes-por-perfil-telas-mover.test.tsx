@@ -108,7 +108,7 @@ describe("menu do card — ganhar/perder é negocios.mover; atribuir/excluir é 
   async function abrir() {
     const user = userEvent.setup();
     comQuery(<KanbanCardActions lead={LEAD} pipelineId="p-1" />);
-    await user.click(screen.getByRole("button", { name: "Ações do lead" }));
+    await user.click(screen.getByRole("button", { name: "Ações do negócio" }));
   }
 
   it("sem negocios.mover: some ganho/perdido; Responsável e Excluir ficam", async () => {

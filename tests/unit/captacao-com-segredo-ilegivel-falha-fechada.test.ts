@@ -96,20 +96,21 @@ describe("segredo da fonte que esta instalação não consegue ler", () => {
     ["sem assinatura", undefined],
     ["com uma assinatura qualquer", assinar(SEGREDO)],
   ] as const) {
-    it(`recusa ${caso}: 401, nenhum lead, motivo na tela e aviso no log`, async () => {
+    // Hiperbold (D-215, e1743b1d9c): segredo que não decifra é falha da INSTALAÇÃO, não do remetente.
+    // Responde 503 com Retry-After (quem integra reenvia quando a chave for consertada, nenhum lead se
+    // perde) em vez do 401 do upstream. Continua falha fechada: nenhum lead, nada passa do portão.
+    it(`recusa ${caso}: 503, nenhum lead, motivo na tela e aviso no log`, async () => {
       h.segredo = null;
       const res = await enviar(assinatura);
 
       expect(h.criarLead, "lead criado sem assinatura conferida").not.toHaveBeenCalled();
       expect(h.inseridos, "a requisição passou do portão de assinatura").not.toContain("webhook_events_log");
       expect(res).toBeInstanceOf(Response);
-      expect((res as Response).status).toBe(401);
+      expect((res as Response).status).toBe(503);
+      expect((res as Response).headers.get("Retry-After")).toBe("60");
       expect(h.registrar).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ outcome: "recusado", rejectReason: "assinatura_indecifravel" }),
-      );
-      expect(h.audit).toHaveBeenCalledWith(
-        expect.objectContaining({ action: "webhook.inbound_invalid_signature", metadata: { reason: "assinatura_indecifravel" } }),
+        expect.objectContaining({ outcome: "recusado", rejectReason: "segredo_indisponivel" }),
       );
       expect(logger.error).toHaveBeenCalled();
     });

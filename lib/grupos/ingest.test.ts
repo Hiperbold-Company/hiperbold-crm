@@ -348,7 +348,7 @@ describe("criarIngestDeGrupoDb — rótulo das menções (#3566)", () => {
             // `name` vazio: o rótulo vem do `display_name` pela `nomeDoContato`.
             { name: null, display_name: "Maria Exemplo", phone_number: "+5511999990000", wa_lid: "75235009282237" },
             // Celular gravado SEM o nono dígito — a menção chegou COM ele.
-            { name: "João", display_name: null, phone_number: "+553198966398", wa_lid: null },
+            { name: "João", display_name: null, phone_number: "+553192220002", wa_lid: null },
           ],
           error: null,
         },
@@ -356,18 +356,18 @@ describe("criarIngestDeGrupoDb — rótulo das menções (#3566)", () => {
     });
     const r = await criarIngestDeGrupoDb(admin as never).rotulosDasMencoes(ORG, [
       { lid: "75235009282237", phone: null, name: null },
-      { lid: null, phone: "+5531998966398", name: null },
+      { lid: null, phone: "+5531992220002", name: null },
       { lid: "11111111111111", phone: null, name: null },
     ]);
     expect(r).toEqual([
       { lid: "75235009282237", phone: null, name: "Maria Exemplo" },
-      { lid: null, phone: "+5531998966398", name: "João" },
+      { lid: null, phone: "+5531992220002", name: "João" },
       { lid: "11111111111111", phone: null, name: null },
     ]);
     const leituras = comandos.filter((c) => c.tabela === "contacts" && c.op === "select");
     expect(leituras.map((c) => c.filtros.find(([k]) => k === "wa_lid" || k === "phone_number"))).toEqual([
       ["wa_lid", ["75235009282237", "11111111111111"]],
-      ["phone_number", ["+5531998966398", "+553198966398"]],
+      ["phone_number", ["+5531992220002", "+553192220002"]],
     ]);
     for (const c of leituras) {
       expect(c.filtros).toContainEqual(["organization_id", ORG]);

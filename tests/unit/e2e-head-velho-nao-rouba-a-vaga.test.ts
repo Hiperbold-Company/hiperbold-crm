@@ -236,7 +236,8 @@ describe("o passo inicial compara o head do evento com o head atual do PR e sai 
     expect(passo, "o passo que confere o head não está no workflow").toBeGreaterThan(inicioJob);
     // O primeiro `checkout` do arquivo é o do próprio e2e-alcance: o passo do
     // head vem ANTES — ele não lê código nenhum, só a API do PR.
-    const checkout = workflow.indexOf("uses: actions/checkout@v7");
+    // Hiperbold: o fork fixa as actions por SHA (`actions/checkout@<sha> # v7`), então a âncora é o prefixo.
+    const checkout = workflow.indexOf("uses: actions/checkout@");
     expect(checkout, "o passo do head veio depois do checkout — deixou de ser o inicial").toBeGreaterThan(passo);
     const alcance = workflow.indexOf("name: O PR alcança o que o e2e mede?");
     expect(alcance).toBeGreaterThan(passo);

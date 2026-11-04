@@ -140,6 +140,16 @@ const REMOCOES_DELIBERADAS: Record<string, { valores: string[]; porque: string }
       "depois de toda a cadeia do autor), que reafirma a UNIÃO final (`uazapi` " +
       "e `datafy` juntos), igual ao bloco único do apêndice em `baseline.sql`.",
   },
+  "20261008111858_0601_cobranca_webhook_e_avisos.sql::webhook_events_log_provider_check": {
+    valores: ["uazapi"],
+    porque:
+      "MESMA FORMA da entrada da 0387, agora no merge do upstream de 2026-11-04. A 0601 " +
+      "(autor, cobrança do revendedor) somou `stripe` e `asaas` a partir da lista que " +
+      "ENXERGAVA, sem `uazapi` (da 0900/0911, que viviam só no fork). Com timestamp " +
+      "depois da 0911, a cadeia aplica a 0601 por cima e perde `uazapi`. Migration " +
+      "aplicada não se edita: a forward-fix é a 0993 (`vocabulario_de_check_depois_do_merge`, " +
+      "fork Hiperbold), que reafirma a UNIÃO, igual ao bloco único do apêndice em `baseline.sql`.",
+  },
 };
 
 /** Uma reconstrução de constraint encontrada na cadeia. */

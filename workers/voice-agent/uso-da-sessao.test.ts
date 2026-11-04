@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { PURPOSE_VOZ } from "@/lib/ai/voz/limites-da-voz";
+
 import { PURPOSE_DA_VOZ, linhaDaLigacao, somarUsoDaResposta, usoVazio } from "./uso-da-sessao";
 
 /** Formato de `response.done.response.usage` da OpenAI Realtime. */
@@ -77,5 +79,22 @@ describe("uso da sessão de voz", () => {
     });
     expect(linha.erro).toEqual({ message: "handshake rejeitado: invalid_api_key", status: 401 });
     expect(linha.input_tokens).toBe(0);
+  });
+
+  it("Hiperbold: uma linha só por ligação, no ponto que a carteira e o orçamento da voz leem, com a origem da chave", () => {
+    // A carteira e o orçamento da voz consultam `llm_calls` por `PURPOSE_VOZ`
+    // (D-117): a linha da ligação tem de cair nesse mesmo ponto.
+    expect(PURPOSE_DA_VOZ).toBe(PURPOSE_VOZ);
+    const linha = linhaDaLigacao({
+      organizationId: "org1",
+      agentId: "ag1",
+      contactId: null,
+      modelo: "gpt-realtime",
+      uso: usoVazio(),
+      duracaoMs: 1_000,
+      erro: null,
+      origemDaChave: "chave_da_instalacao",
+    });
+    expect(linha.origem_da_chave).toBe("chave_da_instalacao");
   });
 });

@@ -82,7 +82,7 @@ export async function retomarContaPeloGoogle(p: {
   usuario: UsuarioDoRetorno;
   /** O `access_token` da sessão que o Google acabou de abrir: é a sessão que SOBREVIVE ao `others`. */
   accessToken: string | null | undefined;
-  /** Troca a senha pela sessão nova (`supabase.auth.updateUser({ password })`). */
+  /** Troca a senha pela sessão nova (o `updateUser` de senha do cliente de cookie; quem invalida o cache curto é `reassumirConta`). */
   trocarSenhaDaSessao: (senha: string) => Promise<{ error: unknown }>;
   agora?: Date;
   gerarSenha?: () => string;

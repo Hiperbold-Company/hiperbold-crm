@@ -122,7 +122,7 @@ beforeAll(() => {
 
     -- O aviso de caso de A e de B existe: é a referência do padrão.
     insert into public.config_aviso_de_caso (organization_id, channel_session_id, telefone_destino, ligado)
-      values ('${ORG_A}', '${SESSAO_A}', '+5531998966398', true),
+      values ('${ORG_A}', '${SESSAO_A}', '+5531992220002', true),
              ('${ORG_B}', '${SESSAO_B}', '+5511988887777', true)
       on conflict (organization_id) do nothing;
 
@@ -132,7 +132,7 @@ beforeAll(() => {
       values ('${ORG_A}', true, true), ('${ORG_B}', true, true)
       on conflict (organization_id) do nothing;
     insert into public.entregas_de_aviso_de_agendamento (organization_id, tipo, dia, destino, status)
-      values ('${ORG_A}', 'resumo', '2026-10-21', '+5531998966398', 'enviado'),
+      values ('${ORG_A}', 'resumo', '2026-10-21', '+5531992220002', 'enviado'),
              ('${ORG_B}', 'resumo', '2026-10-21', '+5511988887777', 'enviado')
       on conflict do nothing;
   `);
@@ -263,10 +263,10 @@ describe("9060 — o grupo é destino extra, com entrega própria", () => {
     });`;
   const entregaDoEvento = (alvo: string) =>
     `insert into public.entregas_de_aviso_de_agendamento (organization_id, tipo, event_id, evento, alvo, destino, status)
-       values ('${ORG_A}', 'aviso', '${EVENTO}', 'appointment.created', '${alvo}', '${alvo === "grupo" ? GRUPO : "+5531998966398"}', 'pendente');`;
+       values ('${ORG_A}', 'aviso', '${EVENTO}', 'appointment.created', '${alvo}', '${alvo === "grupo" ? GRUPO : "+5531992220002"}', 'pendente');`;
   const resumoDoDia = (alvo: string) =>
     `insert into public.entregas_de_aviso_de_agendamento (organization_id, tipo, dia, alvo, destino, status)
-       values ('${ORG_A}', 'resumo', '2026-10-25', '${alvo}', '${alvo === "grupo" ? GRUPO : "+5531998966398"}', 'pendente');`;
+       values ('${ORG_A}', 'resumo', '2026-10-25', '${alvo}', '${alvo === "grupo" ? GRUPO : "+5531992220002"}', 'pendente');`;
 
   it("CONTROLE POSITIVO: o admin salva um grupo, e `null` o tira", () => {
     sql(`${comoMembro(ADMIN_A)}\n${definirComGrupo(GRUPO)}`);
@@ -278,9 +278,9 @@ describe("9060 — o grupo é destino extra, com entrega própria", () => {
   });
 
   it("grupo que não é um chatId de grupo é recusado pela RPC e pelo CHECK", () => {
-    expect(erroDe(`${comoMembro(ADMIN_A)}\n${definirComGrupo("+5531998966398")}`)).toMatch(/aviso_de_agendamento_grupo_invalido/i);
+    expect(erroDe(`${comoMembro(ADMIN_A)}\n${definirComGrupo("+5531992220002")}`)).toMatch(/aviso_de_agendamento_grupo_invalido/i);
     expect(
-      erroDe(`update public.config_aviso_de_agendamento set grupo_destino = '5531998966398@c.us' where organization_id = '${ORG_A}';`),
+      erroDe(`update public.config_aviso_de_agendamento set grupo_destino = '5531992220002@c.us' where organization_id = '${ORG_A}';`),
     ).toMatch(/config_aviso_de_agendamento_grupo_check/i);
   });
 

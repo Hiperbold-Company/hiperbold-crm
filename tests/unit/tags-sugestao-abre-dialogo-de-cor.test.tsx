@@ -3,7 +3,6 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-import { ContactTagsEditor } from "@/components/inbox/ContactTagsEditor";
 import { ConversationTagsEditor } from "@/components/inbox/ConversationTagsEditor";
 import { ProvedorDeCoresDasEtiquetas } from "@/components/tags/CoresDasEtiquetas";
 
@@ -34,10 +33,6 @@ const get = vi.fn();
 vi.mock("@/lib/api/client", () => ({
   apiClient: { get: (...args: unknown[]) => get(...args), post: vi.fn(), patch: vi.fn() },
 }));
-const mutate = vi.fn();
-vi.mock("@/hooks/contacts/useUpdateContact", () => ({
-  useUpdateContact: () => ({ mutate, isPending: false }),
-}));
 // O editor da CONVERSA lê vocabulário e grava por outro gancho; o mesmo diálogo
 // tem de valer lá, senão a #2789 fica consertada só numa das duas telas.
 const mutateConversa = vi.fn();
@@ -53,12 +48,16 @@ vi.mock("@/hooks/tags/useDefinirCorDaEtiqueta", () => ({
 const ORG = "org-1";
 const dialogo = () => screen.getByRole("dialog");
 
+// Hiperbold: as etiquetas do CONTATO são escolhidas na caixa de seleção nossa
+// (`SeletorDeEtiquetas`, coberto em `components/inbox/ContactTagsEditor.test.tsx`)
+// e não têm chip de sugestão. A sugestão com o diálogo de cor continua no
+// editor da CONVERSA, e é lá que estes casos medem o mesmo comportamento.
 function montar(tags: string[] = ["vip"]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <ProvedorDeCoresDasEtiquetas>
-        <ContactTagsEditor entityId="c-1" orgId={ORG} tags={tags} />
+        <ConversationTagsEditor conversationId="conv-1" orgId={ORG} tags={tags} />
       </ProvedorDeCoresDasEtiquetas>
     </QueryClientProvider>,
   );
@@ -66,7 +65,6 @@ function montar(tags: string[] = ["vip"]) {
 
 beforeEach(() => {
   get.mockReset();
-  mutate.mockReset();
   mutateConversa.mockReset();
   definirCor.mockReset();
   estado.papel = "manager";
@@ -87,7 +85,7 @@ describe("sugestão de etiqueta — caixa de diálogo antes de enviar", () => {
     // depois da escolha da cor. Sem esta asserção o teste passaria hoje também
     // só que pelo motivo errado (grava direto e o diálogo nunca aparece).
     expect(dialogo()).toBeTruthy();
-    expect(mutate).not.toHaveBeenCalled();
+    expect(mutateConversa).not.toHaveBeenCalled();
   });
 
   it("confirmar grava a tag E define o tom escolhido no vocabulário", async () => {
@@ -100,7 +98,7 @@ describe("sugestão de etiqueta — caixa de diálogo antes de enviar", () => {
     await userEvent.click(within(caixa).getByRole("button", { name: "Índigo" }));
     await userEvent.click(within(caixa).getByRole("button", { name: "Adicionar tag" }));
 
-    expect(mutate).toHaveBeenCalledWith({ tags: ["vip", "google"] });
+    expect(mutateConversa).toHaveBeenCalledWith({ conversation_id: "conv-1", tags: ["vip", "google"] });
     // Sem esta linha o clique poderia gravar a tag SÓ sem cor — o defeito
     // original disfarçado de corrigido.
     expect(definirCor).toHaveBeenCalledWith("google", "#3e63dd");
@@ -115,7 +113,7 @@ describe("sugestão de etiqueta — caixa de diálogo antes de enviar", () => {
 
     await userEvent.click(within(dialogo()).getByRole("button", { name: "Cancelar" }));
 
-    expect(mutate).not.toHaveBeenCalled();
+    expect(mutateConversa).not.toHaveBeenCalled();
     expect(definirCor).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -150,7 +148,7 @@ describe("sugestão de etiqueta — caixa de diálogo antes de enviar", () => {
     const caixa = dialogo();
     await userEvent.click(within(caixa).getByRole("button", { name: "Sem cor" }));
     await userEvent.click(within(caixa).getByRole("button", { name: "Adicionar tag" }));
-    expect(mutate).toHaveBeenCalledWith({ tags: ["vip", "google"] });
+    expect(mutateConversa).toHaveBeenCalledWith({ conversation_id: "conv-1", tags: ["vip", "google"] });
     expect(definirCor).toHaveBeenCalledWith("google", null);
   });
 
@@ -179,7 +177,7 @@ describe("sugestão de etiqueta — caixa de diálogo antes de enviar", () => {
     montar();
     await userEvent.click(await screen.findByRole("button", { name: "+ google" }, { timeout: 5000 }));
     await userEvent.click(within(dialogo()).getByRole("button", { name: "Adicionar tag" }));
-    expect(mutate).toHaveBeenCalledWith({ tags: ["vip", "google"] });
+    expect(mutateConversa).toHaveBeenCalledWith({ conversation_id: "conv-1", tags: ["vip", "google"] });
     expect(definirCor).not.toHaveBeenCalled();
   });
 
@@ -206,7 +204,7 @@ describe("sugestão de etiqueta — caixa de diálogo antes de enviar", () => {
     );
 
     await userEvent.click(within(caixa).getByRole("button", { name: "Adicionar tag" }));
-    expect(mutate).toHaveBeenCalledWith({ tags: ["vip", "google"] });
+    expect(mutateConversa).toHaveBeenCalledWith({ conversation_id: "conv-1", tags: ["vip", "google"] });
     expect(definirCor).not.toHaveBeenCalled();
   });
 
@@ -220,7 +218,7 @@ describe("sugestão de etiqueta — caixa de diálogo antes de enviar", () => {
     // POST /api/v1/tags/vocabulario exige manager + MFA: a tela não oferece o
     // que a escrita recusa (#2718). Aqui a tag entra sem tom, como antes.
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(mutate).toHaveBeenCalledWith({ tags: ["vip", "google"] });
+    expect(mutateConversa).toHaveBeenCalledWith({ conversation_id: "conv-1", tags: ["vip", "google"] });
   });
 });
 

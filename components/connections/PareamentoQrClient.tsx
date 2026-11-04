@@ -11,6 +11,7 @@ import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { useT } from "@/hooks/i18n/useT";
+import { useTelefoneExemplo } from "@/hooks/contacts/useTelefoneExemplo";
 import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
 
 /**
@@ -345,6 +346,8 @@ function CodigoNoCelular({
   acao: () => void;
 }) {
   const t = useT();
+  // O exemplo é do país da organização (upstream): só dígitos, como o campo pede.
+  const telefoneExemplo = useTelefoneExemplo().replace(/\D/g, "");
   return (
     <div className="flex flex-col gap-2">
       <button
@@ -363,7 +366,7 @@ function CodigoNoCelular({
               id="pareamento-telefone"
               value={telefone}
               onChange={(e) => setTelefone(e.target.value)}
-              placeholder="5511999999999"
+              placeholder={telefoneExemplo}
               inputMode="numeric"
               autoComplete="off"
             />

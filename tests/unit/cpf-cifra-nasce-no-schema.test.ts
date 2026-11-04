@@ -33,9 +33,18 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { camposCpfParaGravar, hashCpf } from "@/lib/contacts/cpf";
+
+// Hiperbold: o hash do CPF é HMAC com a chave do servidor (`CPF_ENCRYPTION_KEY`; sem ela `hashCpf`
+// devolve null) e a cifra sai pelo cliente admin (`fn_encrypt_oauth`, só service_role), não pelo
+// cliente recebido. O dublê de `supabaseCom` responde pelos dois.
+let clienteAdmin: unknown = null;
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => clienteAdmin }));
+beforeEach(() => {
+  vi.stubEnv("CPF_ENCRYPTION_KEY", "chave-de-teste-do-cpf");
+});
 
 const SUPABASE = join(process.cwd(), "supabase");
 const MIGRACOES = join(SUPABASE, "migrations");
@@ -55,7 +64,8 @@ const APENDICE = INICIO_APENDICE > 0 ? BASELINE.slice(INICIO_APENDICE, FIM_APEND
 
 /** Falso supabase: só o `.rpc` que `encryptCpfSql` usa. */
 function supabaseCom(resposta: { data?: unknown; error?: { message: string } | null }) {
-  return { rpc: async () => resposta } as never;
+  clienteAdmin = { rpc: async () => resposta };
+  return clienteAdmin as never;
 }
 
 const ORIGENS = [MIGRACAO, APENDICE];

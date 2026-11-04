@@ -126,8 +126,8 @@ function CorpoDoPainel({
   /**
    * O número digitado já é de alguém da base? Então a ficha é DELA.
    *
-   * A comparação é por `samePhone`, que enxerga o nono dígito: `+5531998966398` e
-   * `+553198966398` são a mesma pessoa, e tratá-las como duas criaria o segundo
+   * A comparação é por `samePhone`, que enxerga o nono dígito: `+5531992220002` e
+   * `+553192220002` são a mesma pessoa, e tratá-las como duas criaria o segundo
    * contato que a issue veio evitar.
    */
   const contatoDoTelefone = useMemo(() => {

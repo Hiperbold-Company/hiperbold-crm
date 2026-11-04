@@ -160,8 +160,8 @@ describe("dispensarParDeContatos: só ficha viva, e só par que é de nome", () 
 
   it("(f) par com o mesmo telefone (grafia com e sem o nono dígito) → par_forte, 0 linhas", async () => {
     // Sabotagem: não recusar o par forte deixa a dispensa de um par de telefone gravar.
-    const a = await criarContato(ORG, { nome: "Mesmo Número", telefone: "+553198966398" });
-    const b = await criarContato(ORG, { nome: "Mesmo Número Dois", telefone: "+5531998966398" });
+    const a = await criarContato(ORG, { nome: "Mesmo Número", telefone: "+553192220002" });
+    const b = await criarContato(ORG, { nome: "Mesmo Número Dois", telefone: "+5531992220002" });
 
     const r = await dispensar(ORG, a, b);
 

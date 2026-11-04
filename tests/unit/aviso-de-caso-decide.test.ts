@@ -352,7 +352,7 @@ describe("aviso ao suporte — o que impede o envio", () => {
     const CFG = {
       organization_id: ORG,
       channel_session_id: CANAL,
-      telefone_destino: "+5531998966398",
+      telefone_destino: "+5531992220002",
       destino_jid: null,
       ligado: true,
       modelo_id: MODELO_ID,
@@ -623,7 +623,7 @@ describe("aviso ao suporte — RESPONDER/PERGUNTAR só para o número da empresa
       cfg: {
         organization_id: ORG,
         channel_session_id: CANAL,
-        telefone_destino: "+5531998966398",
+        telefone_destino: "+5531992220002",
         destino_jid: null,
         ligado: true,
         resposta_whatsapp_habilitada: true,
@@ -653,7 +653,7 @@ describe("aviso ao suporte — RESPONDER/PERGUNTAR só para o número da empresa
     const { deps, estado } = comResposta("fixo");
     const r = await aplicaAvisoDeCaso(deps, evento());
     expect(r.status).toBe("ok");
-    expect(estado.enviados[0]?.to).toBe("5531998966398@c.us");
+    expect(estado.enviados[0]?.to).toBe("5531992220002@c.us");
     expect(estado.enviados[0]?.body).toContain(`RESPONDER ${CASO}`);
   });
 });

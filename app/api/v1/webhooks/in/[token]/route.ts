@@ -751,6 +751,41 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   };
 
   /**
+   * ENCAIXE NOS CAMPOS DO FUNIL: o formulário manda o RÓTULO ("Empresa", "Cargo / Posição") e as UTMs,
+   * e a ficha do negócio lê pela `key` do campo do funil. Sem o encaixe o dado fica gravado sob a chave
+   * crua e não aparece em "Dados do lead" nem em "Rastreamento". Devolve objeto NOVO: o histórico de
+   * captação (`dadosDaCaptacao`) segue guardando o que chegou, como chegou. Falha ABERTA: sem ler o
+   * funil, os campos seguem crus, como antes — perder a captação é pior que perder o encaixe.
+   *
+   * Serve aos DOIS caminhos que gravam `custom_fields` num card: o lead novo e o reenvio que atualiza o
+   * card existente (`fecharReenvio`). O card guarda as chaves encaixadas; comparar o envio cru com ele
+   * daria "mudou" em todo retry e gravaria a chave crua ao lado da encaixada. O funil é lido uma vez.
+   */
+  let camposDoFunilDaFonte: Promise<ReturnType<typeof camposDoFunil>> | undefined;
+  const encaixarNoFunil = async (campos: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    camposDoFunilDaFonte ??= (async () => {
+      const { data: funil, error: erroDoFunil } = await admin
+        .from("crm_pipelines")
+        .select("settings")
+        .eq("organization_id", source.organization_id)
+        .eq("id", source.default_pipeline_id)
+        .maybeSingle();
+      if (erroDoFunil) {
+        logger.warn("[webhooks.inbound] não li os campos do funil; lead entra com os campos como vieram", {
+          webhookSourceId: source.id,
+          organizationId: source.organization_id,
+          errorCode: erroDoFunil.code,
+        });
+        return [];
+      }
+      return funil ? camposDoFunil(settingsDoEmbed({ settings: funil.settings })) : [];
+    })();
+    const funil = await camposDoFunilDaFonte;
+    if (funil.length === 0) return campos;
+    return encaixarCamposNoFunil({ campos, rastreamento: mapped.source_metadata, funil }).custom_fields;
+  };
+
+  /**
    * O fecho de um reenvio: o `external_id` já aponta para um card (#2316).
    *
    * A régua tem DUAS perguntas antes da terceira, e as duas são portões:
@@ -825,7 +860,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       if (erroTitular || titular?.is_anonymized === true) return fecharComoReenvio();
     }
 
-    const campos = camposQueMudaram(lead.customFields, mapped.custom_fields);
+    const campos = camposQueMudaram(lead.customFields, await encaixarNoFunil(mapped.custom_fields));
     // O título vem do nome só nos caminhos que usam o mapeador genérico (RD
     // Station e Elementor também): o Respondi tem formato próprio de título,
     // e compará-lo com o nome de hoje faria TODO retry do Respondi virar
@@ -1459,7 +1494,11 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
    * etapa/ganho/perda nasce; o relógio do negócio anda pela própria atividade
    * (trigger `fn_update_last_activity_at`).
    */
-  if (contactId) {
+  // O que o envio trouxe, ANTES da classificação inicial escrever nele: é o que a atividade do
+  // recadastro guarda, em qualquer das duas posições em que ele roda.
+  const camposRecebidosNoEnvio: Record<string, unknown> = { ...mapped.custom_fields };
+  const tentarRecadastro = async (): Promise<NextResponse | null> => {
+    if (!contactId) return null;
     const decisao = await decidirRecadastroDoContato(admin, {
       organizationId: source.organization_id as string,
       contactId,
@@ -1529,7 +1568,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
             nome: mapped.name,
             telefone: mapped.phone,
             email: mapped.email,
-            campos: limitarCampos(mapped.custom_fields),
+            campos: limitarCampos(camposRecebidosNoEnvio),
             origem: mapped.source_metadata,
           },
           ...(consentDoEnvio && respondiMapped && !respondiMapped.consent.granted
@@ -1577,6 +1616,14 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
 
       return respondWithLead(leadExistenteId);
     }
+    return null;
+  };
+  // Com a opção "Reaproveitar o card aberto" ligada, o reuso do card (abaixo) vem ANTES do
+  // recadastro (decisão da junção com o upstream, 04/11/2026): o recadastro achava o mesmo card
+  // aberto primeiro e o reuso nunca era alcançado. Desligada, o recadastro roda aqui, como sempre.
+  if (!source.reuse_open_lead_on_capture) {
+    const recadastro = await tentarRecadastro();
+    if (recadastro) return recadastro;
   }
 
   // Classificação inicial (só Respondi por ora — os motivos de
@@ -1613,36 +1660,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     }
   }
 
-  // ENCAIXE NOS CAMPOS DO FUNIL: o formulário manda o RÓTULO ("Empresa", "Cargo / Posição") e as UTMs,
-  // e a ficha do negócio lê pela `key` do campo do funil. Sem o encaixe o dado fica gravado sob a chave
-  // crua e não aparece em "Dados do lead" nem em "Rastreamento". Objeto NOVO: o histórico de captação
-  // (`dadosDaCaptacao`) segue guardando o que chegou, como chegou. Falha ABERTA: sem ler o funil, o lead
-  // entra com os campos crus, como antes — perder a captação é pior que perder o encaixe.
-  let camposParaOLead: Record<string, unknown> = mapped.custom_fields;
-  {
-    const { data: funil, error: erroDoFunil } = await admin
-      .from("crm_pipelines")
-      .select("settings")
-      .eq("organization_id", source.organization_id)
-      .eq("id", source.default_pipeline_id)
-      .maybeSingle();
-    if (erroDoFunil) {
-      logger.warn("[webhooks.inbound] não li os campos do funil; lead entra com os campos como vieram", {
-        webhookSourceId: source.id,
-        organizationId: source.organization_id,
-        errorCode: erroDoFunil.code,
-      });
-    } else if (funil) {
-      const campos = camposDoFunil(settingsDoEmbed({ settings: funil.settings }));
-      if (campos.length > 0) {
-        camposParaOLead = encaixarCamposNoFunil({
-          campos: mapped.custom_fields,
-          rastreamento: mapped.source_metadata,
-          funil: campos,
-        }).custom_fields;
-      }
-    }
-  }
+  // Encaixe nos campos do funil (`encaixarNoFunil`, lá em cima), já com a classificação inicial.
+  const camposParaOLead = await encaixarNoFunil(mapped.custom_fields);
 
   /**
    * ── O CONTATO CASADO JÁ TEM CARD ABERTO NESTE FUNIL: A CAPTAÇÃO O REUSA (#3101, #3357) ──
@@ -1836,6 +1855,13 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       outcome: "atualizado",
     });
     return respondWithLead(cardAberto.id);
+  }
+
+  // Opção ligada e o card aberto não pôde ser reusado (outra fonte, outro id, ou nenhum card que a
+  // régua do reuso alcance): o recadastro nosso decide, na posição de depois do reuso.
+  if (source.reuse_open_lead_on_capture) {
+    const recadastro = await tentarRecadastro();
+    if (recadastro) return recadastro;
   }
 
   const leadInput: CreateLeadInput & {

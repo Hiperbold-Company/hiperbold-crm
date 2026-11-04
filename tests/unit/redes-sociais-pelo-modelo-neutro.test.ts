@@ -136,12 +136,15 @@ describe("CONTROLE: os canais que já existiam continuam declarados", () => {
   });
 
   it("a matriz de capabilities segue respondendo por todos os canais de mensagem", () => {
+    // Hiperbold: `uazapi` (WhatsApp por QR) e `meta_social` (Instagram e Messenger oficiais).
     expect([...PROVIDERS_DE_MENSAGEM]).toEqual([
       "waha",
       "meta_cloud",
       "zernio",
+      "uazapi",
       "zernio_social",
       "datafy",
+      "meta_social",
     ]);
     for (const provider of PROVIDERS_DE_MENSAGEM) {
       const caps = capabilitiesOf(provider);

@@ -18,7 +18,10 @@ describe("grupos: quem escuta e quem não escuta", () => {
   });
 
   it("listagem de contatos e audiência de campanha excluem o contato de grupo", () => {
-    for (const arquivo of ["app/api/v1/contacts/_handler.ts", "lib/campanhas/consulta-de-audiencia.ts"]) {
+    // A listagem monta a consulta por `consultaDeContatos` (lib/contacts/consulta.ts), a MESMA
+    // régua da contagem, do lote e da exportação: é lá que o `kind = person` mora agora.
+    expect(readFileSync("app/api/v1/contacts/_handler.ts", "utf8")).toMatch(/consultaDeContatos\(/);
+    for (const arquivo of ["lib/contacts/consulta.ts", "lib/campanhas/consulta-de-audiencia.ts"]) {
       expect(readFileSync(arquivo, "utf8"), arquivo).toMatch(/\.eq\(\s*["']kind["']\s*,\s*["']person["']\s*\)/);
     }
   });

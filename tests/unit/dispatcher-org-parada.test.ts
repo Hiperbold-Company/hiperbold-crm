@@ -26,6 +26,8 @@ import { drainEventLog } from "@/lib/event-log/drain";
 import { ensureHandlersRegistered } from "@/lib/event-log/register-handlers";
 import { pinoReintentoHandler } from "@/lib/channels/zernio/pino-reintento.handler";
 import { automationRulesHandler } from "@/lib/automation/engine.handler";
+import { automacaoDesfechoDaRespostaHandler } from "@/lib/automacoes/desfecho-da-resposta.handler";
+import { automacaoGatilhosHandler } from "@/lib/automacoes/gatilhos.handler";
 import { campanhaRespostaHandler } from "@/lib/campanhas/resposta.handler";
 import { cobrancaSinalHandler } from "@/lib/cobranca/sinal.handler";
 import { conversaoDeVendaHandler } from "@/lib/conversoes/envio.handler";
@@ -75,6 +77,8 @@ const RODA: EventHandler[] = [
   // e o lado SEGURO de uma organização parada (toque armado voltaria em rajada
   // na reativação, fora de contexto).
   followupSaidaDaEtapaHandler,
+  // Automação visual: o desfecho da resposta só grava uma linha de histórico.
+  automacaoDesfechoDaRespostaHandler,
 ];
 
 const PULA: EventHandler[] = [
@@ -100,6 +104,8 @@ const PULA: EventHandler[] = [
   conversaoDeNascimentoMetaHandler,
   conversaoDeCliqueMetaHandler,
   pinoReintentoHandler,
+  // Automação visual: inicia automação (envia mensagem, custa IA).
+  automacaoGatilhosHandler,
 ];
 
 const PREFIXO_DE_TESTE = "teste-org-parada";

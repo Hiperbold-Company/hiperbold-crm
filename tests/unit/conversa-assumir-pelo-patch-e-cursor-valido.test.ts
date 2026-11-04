@@ -54,6 +54,10 @@ function banco() {
         rpcArgs = args;
         return { data: rpcDevolveLinha ? [{ id: CONVERSA }] : [], error: null };
       }
+      // Régua de controle da conversa (lib/inbox/controle-da-conversa.ts): o ator
+      // destes casos é atendente com controle; a recusa de quem só foi convidado
+      // é outra pergunta.
+      if (nome === "fn_can_view_conversation") return { data: true, error: null };
       return { data: null, error: null };
     },
   };

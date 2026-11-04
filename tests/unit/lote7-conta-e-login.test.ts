@@ -91,6 +91,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 const APP_URL = "https://crm.exemplo.test";
 
 beforeEach(() => {
+  // O hash do código de recuperação é HMAC com o segredo da instalação (upstream): sem ele o fluxo recusa.
+  vi.stubEnv("INTERNAL_SECRET", "segredo-de-teste-com-mais-de-32-caracteres");
   vi.resetModules();
   vi.stubEnv("NEXT_PUBLIC_APP_URL", APP_URL);
   h.papelDoUsuario = "viewer";
@@ -330,7 +332,7 @@ describe("D-107: CSV da auditoria sem injeção de fórmula", () => {
     vi.mocked(createClient).mockResolvedValue({
       from: () => {
         const c: Record<string, unknown> = {};
-        for (const m of ["select", "eq", "order", "limit", "ilike", "gte", "lte"]) c[m] = () => c;
+        for (const m of ["select", "eq", "order", "limit", "range", "ilike", "gte", "lte"]) c[m] = () => c;
         c.then = (resolve: (v: unknown) => unknown) => resolve({ data: h.linhasDaAuditoria, error: null });
         return c;
       },
