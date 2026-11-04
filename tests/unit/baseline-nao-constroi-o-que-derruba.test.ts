@@ -489,6 +489,82 @@ const CONCESSOES_ACEITAS = new Map<string, string>([
       "organizacoes-recibo-confiavel prova o contrato final com TRUNCATE negado. A revogação passou a " +
       "acompanhar a concessão (issue #2251): a forma fica, com esta justificativa, e a janela some.",
   ],
+  [
+    "ai_invocations :: anon",
+    "Hiperbold: o snapshot concede ALL e a 0926 do fork revoga a escrita de anon/authenticated (tabela do servidor). A revogação fica colada no grant (7 linhas) e o bloco da 0926 a repete; estreitar o grant do snapshot divergiria do dump.",
+  ],
+  [
+    "channel_session_warmup :: anon",
+    "Hiperbold: o snapshot concede ALL e a 0926 do fork revoga a escrita de anon/authenticated (tabela do servidor). A revogação fica colada no grant (7 linhas) e o bloco da 0926 a repete; estreitar o grant do snapshot divergiria do dump.",
+  ],
+  [
+    "nuvemshop_products :: anon",
+    "Hiperbold: o snapshot concede ALL e a 0926 do fork revoga a escrita de anon/authenticated (tabela do servidor). A revogação fica colada no grant (7 linhas) e o bloco da 0926 a repete; estreitar o grant do snapshot divergiria do dump.",
+  ],
+  [
+    "orders :: anon",
+    "Hiperbold: o snapshot concede ALL e a 0926 do fork revoga a escrita de anon/authenticated (tabela do servidor). A revogação fica colada no grant (7 linhas) e o bloco da 0926 a repete; estreitar o grant do snapshot divergiria do dump.",
+  ],
+  [
+    "api_tokens :: anon",
+    "Hiperbold: o snapshot concede ALL e a 0962 do fork revoga a escrita de anon/authenticated (tabela do servidor). A revogação fica colada no grant (7 linhas) e o bloco da 0962 a repete; estreitar o grant do snapshot divergiria do dump.",
+  ],
+  [
+    "tables :: anon",
+    "Hiperbold: o default ACL do Supabase concede ALL em tabelas novas e a 0910 do fork revoga TRUNCATE de anon/authenticated. A revogação do default fica colada no grant (7 linhas), para tabela criada no apêndice antes da 0910 não nascer com TRUNCATE.",
+  ],
+  [
+    "asaas_webhook_events :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_avisos_de_renovacao :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_cancel_feedback :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_contract_eventos :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_customers :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_emails_enviados :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_orders :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_payments :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_refund_requests :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_token_avisos_emitidos :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_token_ledger :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_token_pacotes :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
+  [
+    "billing_trigger_alarmes :: service_role",
+    "Hiperbold (cobrança própria): o bloco concede ao serviço só os privilégios que ele usa e revoga, na linha seguinte, os de escrita destrutiva (o default ACL os daria). Grant e revoke são de privilégios diferentes e colados: não há janela; o bloco é cópia da migration aplicada.",
+  ],
 ]);
 
 /**
