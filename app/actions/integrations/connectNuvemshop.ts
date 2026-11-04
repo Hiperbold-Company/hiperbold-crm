@@ -11,14 +11,14 @@
 
 import { supportWriteError, authenticatedSessionId } from "@/lib/impersonate/support";
 import { redirect } from "next/navigation";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
-import { portaoDeAdminDaOrganizacao } from "@/lib/auth/portao-de-escrita";
+import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
+import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 import { buildAuthorizeUrl } from "@/lib/nuvemshop/oauth";
 import { getConfig } from "@/lib/nuvemshop/config";
 import { issueState } from "@/lib/nuvemshop/state";
 
 export type ConnectResult =
-  | { ok: false; error: "auth_required" | "no_active_org" | "forbidden" | "not_configured" };
+  | { ok: false; error: "auth_required" | "no_active_org" | "forbidden" | "mfa_required" | "not_configured" };
 
 export async function connectNuvemshop(): Promise<ConnectResult> {
   const user = await loadAuthUser();
@@ -30,8 +30,13 @@ export async function connectNuvemshop(): Promise<ConnectResult> {
 
   // Only `admin` can wire up integrations (RBAC). `manager`/`agent`/`viewer`
   // see the UI read-only.
-  const portao = await portaoDeAdminDaOrganizacao(user, activeOrg);
-  if (!portao.ok) return { ok: false, error: "forbidden" };
+  if (!podeAdministrarEmpresa(user, activeOrg)) {
+    return { ok: false, error: "forbidden" };
+  }
+  // A mesma régua de `updateMarcaDaOrganizacao`: depois do papel, a prova do
+  // segundo fator de quem o tem (e o código, para quem age pelo poder de
+  // plataforma — `mfaEmDivida`).
+  if (await mfaEmDivida()) return { ok: false, error: "mfa_required" };
 
   const cfg = getConfig();
   if (!cfg) return { ok: false, error: "not_configured" };

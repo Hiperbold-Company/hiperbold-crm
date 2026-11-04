@@ -17,6 +17,7 @@ import { automationRulesHandler } from "@/lib/automation/engine.handler";
 import { followupReactivityHandler } from "@/lib/followup/reactivity.handler";
 import { campanhaRespostaHandler } from "@/lib/campanhas/resposta.handler";
 import { followupGatilhoEtapaHandler } from "@/lib/followup/gatilho-etapa.handler";
+import { followupSaidaDaEtapaHandler } from "@/lib/followup/saida-da-etapa.handler";
 import { followupGatilhoLeadHandler } from "@/lib/followup/gatilho-lead.handler";
 import { followupGatilhoCasoHandler } from "@/lib/followup/gatilho-caso.handler";
 import { automacaoGatilhosHandler } from "@/lib/automacoes/gatilhos.handler";
@@ -24,11 +25,21 @@ import { automacaoDesfechoDaRespostaHandler } from "@/lib/automacoes/desfecho-da
 import { casoNaCentralHandler } from "@/lib/escalacao/caso-na-central.handler";
 import { mediaPersistHandler } from "@/workers/media-persist-worker.handler";
 import { mediaDeriveHandler } from "@/workers/media-derive-worker.handler";
+import { CONSUMIDORES_DOS_CANAIS } from "@/lib/channels/consumidores";
 import { webPushInboundHandler } from "@/lib/notifications/push.handler";
 import { conversaoDeQualificacaoHandler } from "@/lib/conversoes/qualificacao.handler";
+import { conversaoDeEtapaMetaHandler } from "@/lib/conversoes/etapa-meta.handler";
+import { conversaoDeNascimentoMetaHandler } from "@/lib/conversoes/nascimento-meta.handler";
+import { conversaoDeCliqueMetaHandler } from "@/lib/conversoes/clique-meta.handler";
 import { conversaoDeVendaHandler } from "@/lib/conversoes/envio.handler";
 import { avisoDeEtapaHandler } from "@/lib/leads/aviso-de-etapa.handler";
+import { avisoAoDonoDaCarteira } from "@/lib/carteira/aviso-ao-dono";
+import { comandaDoGanhoHandler } from "@/lib/financeiro/comanda-do-ganho.handler";
 import { avisoDeCasoAoSuporteHandler } from "@/lib/escalacao/aviso-ao-suporte.handler";
+import { avisoDeHandoffHandler } from "@/lib/escalacao/aviso-de-handoff.handler";
+import { avisoDePropostaNoWhatsAppHandler } from "@/lib/propostas/aviso-no-whatsapp.handler";
+import { avisoDeAgendamentoNoWhatsAppHandler } from "@/lib/agenda/aviso-de-agendamento.handler";
+import { cobrancaSinalHandler } from "@/lib/cobranca/sinal.handler";
 import { registerHandler } from "@/lib/event-log/dispatcher";
 
 let _registered = false;
@@ -53,10 +64,22 @@ export function ensureHandlersRegistered(): void {
   registerHandler(lgpdExportHandler);
   registerHandler(lgpdRedactHandler);
   registerHandler(automationRulesHandler);
+  // A outra metade do mesmo evento: saiu da etapa, o toque que ela armou morre
+  // (escrita curta no banco, idempotente pela linha do event_log). A ORDEM IMPORTA:
+  // a saída roda ANTES do gatilho porque o índice `idx_followup_enrollments_one_live`
+  // admite um único toque vivo por contato. Na ordem inversa, o card que vai de uma
+  // etapa com fluxo para outra etapa com fluxo bate no índice ao armar o fluxo novo
+  // (o antigo ainda vivo), e logo depois a saída cancela o antigo: o contato fica
+  // sem follow-up nenhum. Vigiado em `tests/unit/followup-por-etapa.test.ts`.
+  registerHandler(followupSaidaDaEtapaHandler);
   registerHandler(followupGatilhoEtapaHandler);
   // Escrita curta no banco (um item na Central), vizinha do gatilho de etapa
   // que consome o mesmo evento.
   registerHandler(avisoDeEtapaHandler);
+  // Aviso ao vendedor dono (#2591): escrita curta no banco (uma tarefa com
+  // push ao responsável), ao lado do outro consumidor que só escreve, e antes
+  // de tudo que sai por rede de terceiro.
+  registerHandler(avisoAoDonoDaCarteira);
   registerHandler(followupGatilhoLeadHandler);
   registerHandler(followupGatilhoCasoHandler);
   // Automações do CRM (0986): lead criado e entrou na etapa iniciam execuções.
@@ -69,20 +92,39 @@ export function ensureHandlersRegistered(): void {
   // lado do outro consumidor de `ai.case_opened` que só escreve no banco, e
   // longe do aviso ao suporte, que sai por rede de terceiro.
   registerHandler(casoNaCentralHandler);
+  // Escrita curta no banco, idempotente pelo vínculo do lead: abre a comanda
+  // do negócio ganho (#1477). Antes de todo consumidor que sai por rede de
+  // terceiro, pelo mesmo critério dos vizinhos de cima.
+  registerHandler(comandaDoGanhoHandler);
   registerHandler(followupGatilhoPresencaHandler);
   registerHandler(mediaPersistHandler);
   registerHandler(mediaDeriveHandler);
+  // Os consumidores dos canais (ex.: o pino que entrou sem coordenadas).
+  for (const consumidor of CONSUMIDORES_DOS_CANAIS) registerHandler(consumidor);
   registerHandler(webPushInboundHandler);
+  // A cobrança do revendedor: relê o provedor (rede de terceiro) e só então
+  // escreve. Consome um evento só dela, então a posição não atrasa ninguém.
+  registerHandler(cobrancaSinalHandler);
   // Penúltimo, pelo MESMO critério do último: o aviso ao suporte sai por rede de
   // terceiro (o transporte de WhatsApp) e nunca pode atrasar quem escreve no
   // banco — inclusive o `followupGatilhoCasoHandler`, que consome o MESMO evento
   // e cuja falha custa um follow-up perdido. Ele também é o único handler que
   // adia a si mesmo quando o dreno está rodando dentro de uma requisição.
   registerHandler(avisoDeCasoAoSuporteHandler);
+  registerHandler(avisoDeHandoffHandler);
+  // Mesmo critério do de cima: sai por rede de terceiro, depois de quem só
+  // escreve no banco. Consome o MESMO evento que a notificação do navegador.
+  registerHandler(avisoDePropostaNoWhatsAppHandler);
+  // Mesmo critério: o aviso de agendamento ao dono sai por rede de terceiro e
+  // consome os mesmos `appointment.*` das automações, que escrevem no banco.
+  registerHandler(avisoDeAgendamentoNoWhatsAppHandler);
   // Por último: reportar a venda ao anúncio é o consumidor mais externo do
   // fechamento — depende de rede de terceiro e não pode atrasar quem escreve
   // no banco. Falha dele nunca segura os handlers acima.
   registerHandler(conversaoDeVendaHandler);
   registerHandler(conversaoDeQualificacaoHandler);
+  registerHandler(conversaoDeEtapaMetaHandler);
+  registerHandler(conversaoDeNascimentoMetaHandler);
+  registerHandler(conversaoDeCliqueMetaHandler);
   _registered = true;
 }

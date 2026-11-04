@@ -53,10 +53,13 @@ export interface ResumoDaImportacao {
 export function ImportarLeads({
   funis,
   bloqueio,
+  onImportado,
 }: {
   funis: FunilDaLista[];
   /** Fase F3, tarefa 9: item "leads" da matriz do plano, no botão que de fato cria os leads. */
   bloqueio?: BloqueioDoBotao;
+  /** Depois de uma importação aceita. O quadro não precisa (ele mesmo recarrega); a fila do Cold Call sim. */
+  onImportado?: () => void;
 }) {
   const t = useT();
   const [aberto, setAberto] = useState(false);
@@ -88,6 +91,7 @@ export function ImportarLeads({
       // O resumo fica NA TELA, não num toast que some em quatro segundos: quem
       // importou 300 linhas precisa ler quais foram recusadas e por quê.
       setResumo(json.data);
+      onImportado?.();
     } catch {
       setErro(t("Não consegui enviar o arquivo."));
     } finally {

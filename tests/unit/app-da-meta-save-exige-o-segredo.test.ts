@@ -43,6 +43,7 @@ const gravacoes: Record<string, unknown>[] = [];
 
 vi.mock("@/lib/auth/requirePlatformAdmin", () => ({
   requirePlatformAdmin: async () => ({ user: { id: USUARIO }, platformAdmin: { scope: "full" } }),
+  requirePlatformAdminEscrita: async () => ({ user: { id: USUARIO } }),
 }));
 vi.mock("@/lib/auth/server", () => ({ mfaEmDivida: async () => false, sessionAal: async () => "aal2" }));
 

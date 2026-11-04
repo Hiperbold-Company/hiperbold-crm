@@ -50,6 +50,8 @@ const NAV_ALLOWLIST: Record<string, string> = {
     "subtela de Meu plano, alcançada pelo botão Assinar do cartão Assinatura e pagamento",
   "/app/settings/billing":
     "redirect para /app/settings/plano (Meu plano, que é a porta) desde 15/10/2026 — a antiga tela Billing era placeholder do produto de origem; o endereço fica só para link salvo não dar 404",
+  "/app/proposals/novo":
+    "sub-fluxo de criação de proposta, alcançado pelo botão 'Nova proposta' em /app/proposals",
 };
 
 /** Deriva as rotas estáticas a partir dos arquivos de página que existem. */

@@ -39,6 +39,9 @@ const TODAS = "__todas__";
 export const DESFECHO_LABEL: Record<DesfechoDaCaptacao, string> = {
   criado: "Virou lead",
   duplicado: "Reenvio",
+  // `atualizado` (#2316) só aparece em fonte com a opção ligada, e é o único
+  // desfecho em que o envio MUDOU o card que já existia — "Reenvio" mentiria.
+  atualizado: "Card atualizado",
   recusado: "Não entrou",
   recadastro: "Recadastro",
 };
@@ -46,6 +49,8 @@ export const DESFECHO_LABEL: Record<DesfechoDaCaptacao, string> = {
 const DESFECHO_VARIANTE: Record<DesfechoDaCaptacao, "success" | "neutral" | "error"> = {
   criado: "success",
   duplicado: "neutral",
+  // O card recebeu o dado novo: é o meio-termo — deu certo, mas não é lead novo.
+  atualizado: "neutral",
   recusado: "error",
   recadastro: "neutral",
 };
@@ -162,6 +167,7 @@ export function CapturasTab() {
                 <SelectItem value={TODAS}>{t("Todos")}</SelectItem>
                 <SelectItem value="criado">{t(DESFECHO_LABEL.criado)}</SelectItem>
                 <SelectItem value="duplicado">{t(DESFECHO_LABEL.duplicado)}</SelectItem>
+                <SelectItem value="atualizado">{t(DESFECHO_LABEL.atualizado)}</SelectItem>
                 <SelectItem value="recusado">{t(DESFECHO_LABEL.recusado)}</SelectItem>
                 <SelectItem value="recadastro">{t(DESFECHO_LABEL.recadastro)}</SelectItem>
               </SelectContent>

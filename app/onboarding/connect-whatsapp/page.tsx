@@ -7,6 +7,7 @@ import { nomeCurtoDaSessao } from "@/lib/channels/nome-da-sessao";
 import { ConnectWhatsappClient } from "./_client";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { exigirPlanoPagoParaSeguir } from "@/lib/onboarding/contexto";
+import { perfilDoPais } from "@/lib/legal/perfil-do-pais";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,7 @@ export default async function ConnectWhatsappPage() {
         sessionName={nomeCurtoDaSessao(activeOrg.orgId)}
         oficialPodeReceber={oficialPodeReceber}
         pareamentoQr={pareamentoQr}
+        telefoneExemplo={perfilDoPais(activeOrg.country).telefoneExemplo}
       />
     </div>
   );

@@ -20,8 +20,8 @@
  */
 
 import { embedText } from "@/lib/ai/embed";
-import { resolverChaveDeEmbedding } from "@/lib/ai/embeddings/chave";
-import { anonymize, detectResidualPii, padroesDePii } from "@/lib/ai/anonymize";
+import { modeloDeEmbedding, resolverChaveDeEmbedding } from "@/lib/ai/embeddings/chave";
+import { anonymize, detectResidualPii, padroesDaIngestao } from "@/lib/ai/anonymize";
 import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
 import { chunkText, computeContentHash } from "@/lib/ai/rag/chunker";
 import {
@@ -41,7 +41,10 @@ const VALIDATOR_MIN_MSGS = 10;
 export interface IngestConversationsArgs {
   organizationId: string;
   agentId: string;
-  /** Only conversations marked after this timestamp are considered. */
+  /**
+   * A janela do lote: a conversa entra se o momento em que ficou ELEGÍVEL
+   * (marcada em `usable_for_rag` e resolvida) está depois disto.
+   */
   sinceTs: Date;
   /** Max conversations processed per call. Default 50. */
   cap?: number;
@@ -133,6 +136,31 @@ function buildTranscript(messages: MsgRow[]): string {
   return lines.join("\n");
 }
 
+/**
+ * Tira do lote as conversas de contatos pessoais (spec 21, etapa 9).
+ *
+ * Uma leitura a mais por lote, e não por conversa: os contatos do lote são
+ * poucos (teto `cap`) e a pergunta é uma só.
+ */
+async function semConversasDePessoal(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+  convs: ConvRow[],
+): Promise<ConvRow[]> {
+  if (convs.length === 0) return convs;
+  const ids = [...new Set(convs.map((c) => c.contact_id).filter((x): x is string => !!x))];
+  if (ids.length === 0) return convs;
+  const { data } = await admin
+    .from("contacts")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("is_personal", true)
+    .in("id", ids);
+  const pessoais = new Set(((data ?? []) as Array<{ id: string }>).map((c) => c.id));
+  if (pessoais.size === 0) return convs;
+  return convs.filter((c) => !c.contact_id || !pessoais.has(c.contact_id));
+}
+
 export async function ingestConversationsBatch(
   args: IngestConversationsArgs,
 ): Promise<IngestConversationsResult> {
@@ -202,7 +230,7 @@ export async function ingestConversationsBatch(
       .in("id", contatoIds);
     for (const r of (anon ?? []) as Array<{ id: string }>) anonimizados.add(r.id);
   }
-  const conversations = todas.filter((c) => !c.contact_id || !anonimizados.has(c.contact_id));
+  const semAnonimizado = todas.filter((c) => !c.contact_id || !anonimizados.has(c.contact_id));
   const deAnonimizado = todas.filter((c) => c.contact_id && anonimizados.has(c.contact_id));
   if (deAnonimizado.length > 0) {
     await admin
@@ -215,6 +243,15 @@ export async function ingestConversationsBatch(
       );
   }
 
+  // Contato pessoal nunca é ingerido (spec 21, etapa 9): a conversa some do
+  // acervo junto com o resto. O lote que já passou continua respondível se
+  // nada for feito — por isso o marcar zera `usable_for_rag` na hora
+  // (`contacts/[id]/personal/route.ts`); aqui cai quem é pessoal agora.
+  const conversations = await semConversasDePessoal(
+    admin,
+    organizationId,
+    semAnonimizado,
+  );
   if (conversations.length === 0) {
     return { processed: 0, flaggedReview: 0, skipped: deAnonimizado.length, embeddingSkipped: false };
   }
@@ -227,6 +264,7 @@ export async function ingestConversationsBatch(
       knowledgeSourceId: sourceId,
       agentId,
       sourceType: "conversas",
+      embeddingModel: modeloDeEmbedding(chave.provedor),
     });
     versionId = v.versionId;
   } catch (err) {
@@ -244,8 +282,9 @@ export async function ingestConversationsBatch(
 
   // O perfil do PAÍS da organização (issue #1033): o mesmo conjunto de padrões
   // anonimiza e vigia. Resolvido UMA vez por rodada — ler por conversa daria o
-  // mesmo resultado e uma consulta por conversa.
-  const padroes = padroesDePii([await perfilDaOrganizacao(admin, organizationId)]);
+  // mesmo resultado e uma consulta por conversa. O Brasil vai por baixo de
+  // qualquer país: ver `padroesDaIngestao`.
+  const padroes = padroesDaIngestao(await perfilDaOrganizacao(admin, organizationId));
 
   for (const conv of conversations) {
     // Defense in depth: re-check org id.

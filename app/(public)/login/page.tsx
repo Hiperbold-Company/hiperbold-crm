@@ -3,15 +3,18 @@ import Link from "next/link";
 import { EntrarComGoogle } from "@/components/auth/EntrarComGoogle";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
-import { branding } from "@/lib/branding";
+import { verifyInviteToken } from "@/lib/auth/invite-token";
+import { marcaDaSaida } from "@/lib/branding/saida";
 import { turnstileSiteKey } from "@/lib/security/turnstile";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { destinoDoLoginComSessao } from "@/lib/auth/login-com-sessao";
 import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { tituloDaTelaPublica } from "@/lib/i18n/titulo-da-tela-publica";
 
-export const metadata = { title: "Entrar" };
+// A aba no idioma do visitante, como o corpo (`lib/i18n/titulo-da-tela-publica.ts`).
+export const generateMetadata = () => tituloDaTelaPublica((t) => t("Entrar"));
 
 export default async function LoginPage({
   searchParams,
@@ -19,6 +22,8 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string; reset?: string; error?: string; recovery_used?: string }>;
 }) {
   const { next, reset, error, recovery_used } = await searchParams;
+  const invite = typeof next === "string" ? next.match(/^\/team\/accept-invite\/([^/?#]+)$/)?.[1] : undefined;
+  const convite = invite ? verifyInviteToken(invite) : null;
   // Fora da árvore de `app/app/layout.tsx` — sem `IdiomaProvider` do lado do
   // servidor (o cliente já tem o seu, montado em `app/(public)/layout.tsx`).
   // Com sessão válida a pessoa nem vê o formulário (redirect logo abaixo);
@@ -39,12 +44,13 @@ export default async function LoginPage({
   const t = (texto: string) => traduzir(texto, idioma);
   // Em `so_convite` o `/signup` sem convite só recusa: oferecer o link seria mandar a pessoa para um beco.
   const cadastroAberto = (await modoDeCadastro()) === "aberto";
+  const marca = await marcaDaSaida(null);
 
   return (
     <div className="space-y-6">
       <div className="space-y-1.5 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">{t("Entrar")}</h1>
-        <p className="text-sm text-muted-foreground">{branding().name}</p>
+        <p className="text-sm text-muted-foreground">{marca.nome}</p>
       </div>
       {reset === "success" && (
         <div
@@ -176,7 +182,7 @@ export default async function LoginPage({
         </div>
       )}
       {/* A chave pública do Turnstile é lida aqui, em runtime: a imagem é construída sem ela (D-173). */}
-      <LoginForm next={next} turnstileSiteKey={turnstileSiteKey()} />
+      <LoginForm next={next} email={convite?.email} turnstileSiteKey={turnstileSiteKey()} />
       <EntrarComGoogle next={next} />
       <div className="space-y-2 text-center text-sm">
         <p>
@@ -187,11 +193,12 @@ export default async function LoginPage({
             {t("Esqueci minha senha")}
           </Link>
         </p>
-        {cadastroAberto && (
+        {/* Com convite válido o `/signup` aceita mesmo em `so_convite`: o link leva o convite junto. */}
+        {(cadastroAberto || (convite && invite)) && (
           <p className="text-muted-foreground">
             {t("Não tem conta?")}{" "}
             <Link
-              href="/signup"
+              href={convite && invite ? `/signup?invite=${encodeURIComponent(invite)}` : "/signup"}
               className="font-medium text-foreground underline underline-offset-4"
             >
               {t("Criar conta")}

@@ -4,51 +4,56 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { FormularioDeTarefa } from "@/app/app/tasks/_components/FormularioDeTarefa";
-import { Button } from "@/components/ui/button";
-import { useFusoDaOrganizacao, usePermission, useUser } from "@/hooks/auth/AuthProvider";
-import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
+import { ListaDeTarefas } from "@/app/app/tasks/_components/ListaDeTarefas";
+import { useUser } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useTasks } from "@/hooks/tasks/useTasks";
-import { formataDataNoFuso } from "@/lib/kanban/datas-do-lead";
-import { estaAtrasada, type NovaTarefa, type Tarefa } from "@/lib/tarefas/tipos";
+import { resumoDasTarefas, type NovaTarefa, type Tarefa } from "@/lib/tarefas/tipos";
 import { Plus } from "@/lib/ui/icons";
 
-/**
- * As tarefas do negócio, dentro do painel lateral do quadro: as abertas, com
- * prazo e um clique para marcar como feita, e o botão "Criar tarefa".
- *
- * Reaproveita tudo o que a tela de Tarefas já tem: a rota (`/api/v1/tasks`), o
- * hook (`useTasks`, filtrado pelo negócio) e o formulário, no modo curto (o que
- * fazer, detalhes, dia, horário e responsável). A tarefa nasce presa ao negócio
- * e ao contato dele; a rota grava `task_created` na linha do tempo, e concluir
- * grava `task_completed` (`lib/tarefas/atividade.ts`).
- *
- * O responsável vem marcado com quem cria — o caso de todo dia é "eu me lembro
- * de ligar" — e pode ser trocado por outra pessoa da equipe. Quando vencer, o
- * aviso vai a quem criou e ao responsável (migration 0980).
- */
-export function TarefasDoNegocio({
-  leadId,
-  contactId,
-}: {
+interface Props {
   leadId: string;
+  /** O contato do negócio vai junto na tarefa nova: a tarefa nasce presa aos dois. */
   contactId: string | null;
-}) {
+  /** Quem pode criar, concluir, editar e apagar — `agent`+, a mesma régua da rota. */
+  podeEditar: boolean;
+  /** O dossiê aberto. Fechado, a consulta não sai. */
+  aberto: boolean;
+}
+
+/**
+ * A seção "Tarefas" do dossiê: o que ficou combinado PARA ESTE negócio.
+ *
+ * A tabela, a rota e a lista já existiam (`crm_tasks`, `/api/v1/tasks`, tela de
+ * Tarefas), e a tarefa já sabia ser presa a um negócio (`lead_id`) — mas a única
+ * porta de criação era a tela de Tarefas, que não pergunta de qual negócio a
+ * tarefa é. Na prática toda tarefa nascia avulsa, e as presas a um negócio só
+ * vinham de automação. Aqui a tarefa nasce de dentro do card, já presa a ele.
+ *
+ * Nada de componente novo para a linha nem para o formulário: são OS MESMOS da
+ * tela de Tarefas, para a régua de prazo, a confirmação de apagar e a regra de
+ * reabrir (#2549) não divergirem entre os dois lugares.
+ *
+ * Hiperbold (migration 0980): o responsável vem marcado com quem cria — o caso
+ * de todo dia é "eu me lembro de ligar" — e pode ser trocado por outra pessoa
+ * da equipe. Quando vencer, o aviso vai a quem criou e ao responsável. A rota
+ * grava `task_created` na linha do tempo, e concluir grava `task_completed`.
+ */
+export function TarefasDoNegocio({ leadId, contactId, podeEditar, aberto }: Props) {
   const t = useT();
   const usuario = useUser();
-  const fuso = useFusoDaOrganizacao();
-  const idioma = useTagDeIdioma();
-  const podeCriar = usePermission("task.create");
-  const { tarefas, carregando, criarTarefa, alternarConcluida } = useTasks({
-    lead_id: leadId,
-    aberto: true,
-  });
-  const { data: membros } = useAssignableMembers(podeCriar);
-  const [aberto, setAberto] = useState(false);
-  const [abertura, setAbertura] = useState(0);
-  const [concluindo, setConcluindo] = useState<string | null>(null);
+  const [formAberto, setFormAberto] = useState(false);
+  const [emEdicao, setEmEdicao] = useState<Tarefa | null>(null);
+  // A chave de remontagem do formulário — o motivo está no `TarefasClient`.
+  const [aberturas, setAberturas] = useState(0);
 
+  const { tarefas, carregando, falhou, criarTarefa, editarTarefa, apagarTarefa, alternarConcluida } =
+    useTasks({ lead_id: leadId }, { enabled: aberto });
+
+  const resumo = resumoDasTarefas(tarefas);
+
+  const { data: membros } = useAssignableMembers(podeEditar);
   const responsaveis = useMemo(() => {
     const lista = (membros ?? []).map((m) => ({ id: m.user_id, nome: m.full_name ?? t("Sem nome") }));
     // Quem cria sempre aparece, mesmo fora da lista de atribuíveis (o admin da
@@ -59,96 +64,99 @@ export function TarefasDoNegocio({
     return lista;
   }, [membros, usuario.id, usuario.full_name, usuario.email, t]);
 
-  async function criar(entrada: NovaTarefa) {
-    await criarTarefa({ ...entrada, lead_id: leadId, contact_id: contactId });
-    toast.success(t("Tarefa criada"));
+  function abrirNova() {
+    setEmEdicao(null);
+    setAberturas((n) => n + 1);
+    setFormAberto(true);
   }
 
-  async function concluir(tarefa: Tarefa) {
-    setConcluindo(tarefa.id);
-    try {
-      await alternarConcluida(tarefa);
-      toast.success(t("Tarefa concluída"));
-    } catch (falha) {
-      toast.error(falha instanceof Error ? falha.message : t("Não foi possível salvar a tarefa."));
-    } finally {
-      setConcluindo(null);
+  function abrirEdicao(tarefa: Tarefa) {
+    setEmEdicao(tarefa);
+    setAberturas((n) => n + 1);
+    setFormAberto(true);
+  }
+
+  async function salvar(entrada: NovaTarefa) {
+    if (emEdicao) await editarTarefa(emEdicao.id, entrada);
+    else {
+      await criarTarefa({ ...entrada, lead_id: leadId, contact_id: contactId });
+      toast.success(t("Tarefa criada"));
     }
   }
 
   return (
-    <section className="border-b border-border py-3" data-testid="tarefas-do-negocio">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-text-muted">{t("Tarefas")}</h3>
-        {podeCriar && (
-          <Button
+    <section
+      className="border-b border-border py-3"
+      aria-labelledby="dossie-tarefas"
+      data-testid="tarefas-do-negocio"
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3
+          id="dossie-tarefas"
+          className="text-xs font-medium uppercase tracking-wide text-text-muted"
+        >
+          {t("Tarefas")}
+          {resumo.abertas > 0 ? (
+            <span className="ml-1.5 normal-case tracking-normal">
+              · {resumo.abertas} {resumo.abertas === 1 ? t("aberta") : t("abertas")}
+              {resumo.atrasadas > 0 ? (
+                <span className="font-semibold text-destructive">
+                  {" "}
+                  · {resumo.atrasadas}{" "}
+                  {resumo.atrasadas === 1 ? t("atrasada") : t("atrasadas")}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+        </h3>
+        {podeEditar ? (
+          <button
             type="button"
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            onClick={() => {
-              setAbertura((n) => n + 1);
-              setAberto(true);
-            }}
+            onClick={abrirNova}
+            className="flex items-center gap-1 text-xs font-medium text-accent hover:underline"
           >
-            <Plus size={12} weight="bold" className="mr-1" aria-hidden />
-            {t("Criar tarefa")}
-          </Button>
-        )}
+            <Plus size={12} aria-hidden />
+            {t("Nova tarefa")}
+          </button>
+        ) : null}
       </div>
 
-      {carregando ? (
-        <p className="text-xs text-text-muted">{t("Carregando…")}</p>
+      {falhou ? (
+        <p className="text-xs text-destructive">{t("Não foi possível carregar as tarefas.")}</p>
+      ) : carregando ? (
+        <p className="text-xs text-text-muted" aria-busy>
+          {t("Carregando…")}
+        </p>
       ) : tarefas.length === 0 ? (
-        <p className="text-xs text-text-muted">{t("Nenhuma tarefa em aberto neste negócio.")}</p>
+        // Vazio CURTO, e não o quadro tracejado da tela de Tarefas: no painel
+        // estreito do dossiê ele empurraria a linha do tempo para baixo da dobra.
+        <p className="text-xs text-text-muted">
+          {t("Nenhuma tarefa neste negócio. Anote o próximo passo combinado, com prazo e responsável.")}
+        </p>
       ) : (
-        <ul className="space-y-1.5">
-          {tarefas.map((tarefa) => {
-            const atrasada = estaAtrasada(tarefa);
-            return (
-              <li
-                key={tarefa.id}
-                data-testid="tarefa-do-negocio"
-                className="flex items-start gap-2 rounded-md border border-border px-2 py-1.5"
-              >
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 shrink-0"
-                  aria-label={`${t("Marcar como feita")}: ${tarefa.title}`}
-                  checked={false}
-                  disabled={!podeCriar || concluindo === tarefa.id}
-                  onChange={() => void concluir(tarefa)}
-                />
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-medium text-text">{tarefa.title}</p>
-                  {tarefa.due_date ? (
-                    <p className={atrasada ? "text-[11px] text-error-fg" : "text-[11px] text-text-muted"}>
-                      {formataDataNoFuso(tarefa.due_date, fuso, idioma, true)}
-                      {atrasada ? ` · ${t("Atrasada")}` : ""}
-                    </p>
-                  ) : (
-                    <p className="text-[11px] text-text-muted">{t("Sem prazo")}</p>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="-mx-3">
+          <ListaDeTarefas
+            tarefas={tarefas}
+            podeEditar={podeEditar}
+            aoAlternarConcluida={alternarConcluida}
+            aoEditar={abrirEdicao}
+            aoApagar={(tarefa) => apagarTarefa(tarefa.id)}
+            mostrarNegocio={false}
+          />
+        </div>
       )}
 
-      {podeCriar && (
-        <FormularioDeTarefa
-          key={abertura}
-          aberto={aberto}
-          aoMudarAbertura={setAberto}
-          aoSalvar={criar}
-          leadId={leadId}
-          contactId={contactId}
-          responsaveis={responsaveis}
-          responsavelPadrao={usuario.id}
-          compacto
-        />
-      )}
+      <FormularioDeTarefa
+        key={aberturas}
+        aberto={formAberto}
+        aoMudarAbertura={setFormAberto}
+        tarefa={emEdicao}
+        aoSalvar={salvar}
+        leadId={leadId}
+        contactId={contactId}
+        responsaveis={responsaveis}
+        responsavelPadrao={usuario.id}
+      />
     </section>
   );
 }

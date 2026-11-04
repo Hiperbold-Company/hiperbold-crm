@@ -23,7 +23,9 @@ import {
 } from "@/components/ui/select";
 import { rotuloDoPapel } from "@/lib/auth/types";
 import { ROLES, type Role } from "@/lib/schemas/team";
+import { rotuloDoPapel } from "@/lib/auth/types";
 import { descreverMotivoDaFalha } from "./motivo-da-falha";
+import { ApiError } from "@/lib/api/types";
 
 interface ResultState {
   sent: Array<{ email: string; accept_url: string; email_dispatched: boolean; expires_at: string }>;
@@ -36,6 +38,7 @@ export function InviteForm({ bloqueio }: { bloqueio?: BloqueioDoBotao } = {}) {
   const [settings, setSettings] = useState(INTERFACE_COMPLETA);
   const [role, setRole] = useState<Role>("agent");
   const [result, setResult] = useState<ResultState | null>(null);
+  const [limiteDoPlano, setLimiteDoPlano] = useState<string | null>(null);
   const invite = useInviteMembers();
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -53,6 +56,7 @@ export function InviteForm({ bloqueio }: { bloqueio?: BloqueioDoBotao } = {}) {
       toast.error(t("Máximo 20 emails por convite."));
       return;
     }
+    setLimiteDoPlano(null);
     try {
       const res = await invite.mutateAsync({
         invitations: unique.map((email) => ({ email, role, interface_settings: settings })),
@@ -64,8 +68,10 @@ export function InviteForm({ bloqueio }: { bloqueio?: BloqueioDoBotao } = {}) {
         `${ok} ${t("convite(s) enviado(s)")}${ko > 0 ? `, ${ko} ${t("falha(s).")}` : "."}`,
       );
       setEmailsRaw("");
-    } catch {
-      /* showApiError handled */
+    } catch (err) {
+      // showApiError já mostrou o toast. O limite do plano FICA na tela: a frase
+      // (já no idioma de quem clicou) é a saída — remover alguém ou pedir a troca.
+      if (err instanceof ApiError && err.code === "plan_limit_reached") setLimiteDoPlano(err.message);
     }
   };
 
@@ -117,6 +123,11 @@ export function InviteForm({ bloqueio }: { bloqueio?: BloqueioDoBotao } = {}) {
         </Button>
         {bloqueio?.desabilitado && (
           <p className="text-xs text-destructive">{bloqueio.motivo}</p>
+        )}
+        {limiteDoPlano && (
+          <p role="alert" data-testid="convite-limite-do-plano" className="rounded-md border p-3 text-sm text-warning-fg">
+            {limiteDoPlano}
+          </p>
         )}
       </form>
 

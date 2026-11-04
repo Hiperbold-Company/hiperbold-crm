@@ -1,14 +1,14 @@
 "use server";
 
+import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { supportWriteError } from "@/lib/impersonate/support";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { audit } from "@/lib/audit";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
-import { portaoDeAdminDaOrganizacao } from "@/lib/auth/portao-de-escrita";
+import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
+import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 import { normalizarHex } from "@/lib/branding/rampa";
-import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import {
   marcaDaOrganizacaoSchema,
   type MarcaDaOrganizacaoInput,
@@ -101,12 +101,21 @@ export async function updateMarcaDaOrganizacao(
   if (supportWriteError(authUser.support)) return { ok: false, error: "forbidden_role" };
   const activeOrg = await resolveActiveOrg(authUser);
   if (!activeOrg) return { ok: false, error: "forbidden_tenant" };
-  // O portão confere o papel ANTES do segundo fator, de propósito: quem nem tem
-  // o papel recebe `forbidden_role`, que é a verdade sobre ele. Só quem passaria
-  // pelo papel é cobrado por `mfaEmDivida()` (quem TEM fator prova, qualquer que
-  // seja o papel): a ordem é o que faz cada código dizer a coisa certa.
-  const portao = await portaoDeAdminDaOrganizacao(authUser, activeOrg);
-  if (!portao.ok) return { ok: false, error: portao.erro };
+  if (!podeAdministrarEmpresa(authUser, activeOrg)) {
+    return { ok: false, error: "forbidden_role" };
+  }
+  // DEPOIS do papel, de propósito: quem nem tem o papel recebe `forbidden_role`,
+  // que é a verdade sobre ele. Só quem passaria pelo papel é cobrado pelo
+  // segundo fator — a ordem é o que faz cada código dizer a coisa certa.
+  //
+  // ⚠️ `mfaEmDivida()` DEIXOU DE RECEBER PAPEL, no merge com a frente que tornou
+  // a verificação em duas etapas opcional. Ele consultava a política antes de
+  // olhar a sessão; agora não consulta — quem TEM fator prova, qualquer que seja
+  // o papel. A cobrança aqui fica MAIS abrangente, não menos: um manager com
+  // fator e sessão `aal1` passava por este ponto e agora é barrado.
+  if (await mfaEmDivida()) {
+    return { ok: false, error: "mfa_required" };
+  }
 
   // D-178: a personalização por empresa é um módulo da INSTALAÇÃO, desligado por
   // padrão. Esconder a tela não basta: a action é invocável por POST direto, e
@@ -123,10 +132,15 @@ export async function updateMarcaDaOrganizacao(
   const ip = ipDoCliente(hdrs);
   const userAgent = hdrs.get("user-agent") ?? null;
 
-  // Os dois campos vazios significam "volte ao que vem da instalação", e é `null`
+  // Os campos vazios significam "volte ao que vem da instalação", e é `null`
   // que a função entende como apagar a chave `branding` — gravar `{}` deixaria um
   // envelope vazio que o resolvedor teria de aprender a ignorar.
-  const limpar = parsed.data.app_name === null && parsed.data.accent_hex === null;
+  const limpar =
+    parsed.data.app_name === null &&
+    parsed.data.accent_hex === null &&
+    parsed.data.accent_dark_hex === null &&
+    parsed.data.email_from_name === null &&
+    parsed.data.email_reply_to === null;
   const marca = limpar
     ? null
     : {
@@ -137,6 +151,18 @@ export async function updateMarcaDaOrganizacao(
         // "mudou?" ser uma pergunta com resposta.
         accent_hex:
           parsed.data.accent_hex === null ? null : normalizarHex(parsed.data.accent_hex),
+        // O par da cor (#2482): mesma normalização, mesma regex da função SQL.
+        accent_dark_hex:
+          parsed.data.accent_dark_hex === null
+            ? null
+            : normalizarHex(parsed.data.accent_dark_hex),
+        // O remetente da automação (#3287, fatia 1). Texto livre: a função SQL
+        // não os valida (só `accent_hex`), então quem garantiu a forma foi o
+        // `marcaDaOrganizacaoSchema` acima — o endereço de resposta, inclusive.
+        // Vão no MESMO objeto `branding` porque é a mesma prancheta da tela e o
+        // merge da função preserva só o `logo_path`, que tem escritor próprio.
+        email_from_name: parsed.data.email_from_name,
+        email_reply_to: parsed.data.email_reply_to,
         updated_by: authUser.id,
         updated_at: new Date().toISOString(),
       };
@@ -191,6 +217,10 @@ export async function updateMarcaDaOrganizacao(
       fields_changed: Object.keys(parsed.data),
       accent_definido: parsed.data.accent_hex !== null,
       nome_definido: parsed.data.app_name !== null,
+      // Forma, nunca identidade: o endereço de resposta NÃO entra na trilha —
+      // só o fato de a organização ter definido um remetente (#3287).
+      remetente_da_automacao_definido:
+        parsed.data.email_from_name !== null || parsed.data.email_reply_to !== null,
     },
   });
 

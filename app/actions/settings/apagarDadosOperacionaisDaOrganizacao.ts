@@ -1,18 +1,18 @@
 "use server";
 
+import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { supportWriteError } from "@/lib/impersonate/support";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { audit } from "@/lib/audit";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
-import { portaoDeAdminDaOrganizacao } from "@/lib/auth/portao-de-escrita";
+import { loadAuthUser, mfaEmDivida, resolveActiveOrg, sessionAal } from "@/lib/auth/server";
+import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 import {
   apagarDadosOperacionaisDaOrg,
   type ContagensApagadas,
 } from "@/lib/settings/apagar-dados-operacionais";
-import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const entradaSchema = z.object({ confirmNome: z.string().min(1).max(200) });
@@ -65,10 +65,17 @@ export async function apagarDadosOperacionaisDaOrganizacao(input: {
   if (supportWriteError(authUser.support)) return { ok: false, error: "forbidden_role" };
   const activeOrg = await resolveActiveOrg(authUser);
   if (!activeOrg) return { ok: false, error: "forbidden_tenant" };
-  // Apagar é irreversível: além do portão comum (papel admin ou plataforma de
-  // escopo full, MFA em dia), exige o segundo fator PROVADO nesta sessão.
-  const portao = await portaoDeAdminDaOrganizacao(authUser, activeOrg, { exigirAal2: true });
-  if (!portao.ok) return { ok: false, error: portao.erro };
+  if (!podeAdministrarEmpresa(authUser, activeOrg)) {
+    return { ok: false, error: "forbidden_role" };
+  }
+  if (await mfaEmDivida()) {
+    return { ok: false, error: "mfa_required" };
+  }
+  // Apagar é irreversível: além do papel e do MFA em dia, exige o segundo fator
+  // PROVADO nesta sessão, mesmo de quem nunca cadastrou um.
+  if ((await sessionAal()) !== "aal2") {
+    return { ok: false, error: "mfa_required" };
+  }
 
   const supabase = createAdminClient();
 
@@ -103,6 +110,7 @@ export async function apagarDadosOperacionaisDaOrganizacao(input: {
     actingAsPlatformAdmin: authUser.is_platform_admin,
     metadata: {
       counts: resultado.counts,
+      pdfs_removidos: resultado.pdfsRemovidos,
       ...(resultado.ok ? {} : { falhou_em: resultado.falha.tabela }),
     },
   });

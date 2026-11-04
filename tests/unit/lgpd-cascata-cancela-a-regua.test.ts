@@ -135,6 +135,9 @@ function banco(linhas: Linha[]) {
             ordem = col;
             return q;
           },
+          // `.not(col, "is", null)` do passo da transcrição (0497): este arquivo
+          // não planta mensagem, então a tabela nunca casa e o filtro só precisa existir.
+          not: () => q,
           limit: (n: number) => {
             teto = n;
             return q;

@@ -10,8 +10,10 @@
  *                 `settings.sons_de_aviso` — renomeá-la apagaria o som de quem
  *                 já escolheu um;
  *   - `pessoa` — a IA precisa de alguém: passou a conversa para uma pessoa
- *                 (`handoff`) ou ficou sem saldo no provedor e as respostas
- *                 estão esperando a recarga (`espera-de-saldo.ts`).
+ *                 (`handoff`), ficou sem saldo no provedor e as respostas
+ *                 estão esperando a recarga (`espera-de-saldo.ts`), ou rascunhou
+ *                 uma proposta que só uma pessoa pode revisar e enviar
+ *                 (`lib/propostas/aviso-de-revisao.ts`).
  *
  * O arquivo vive no bucket PRIVADO `org-sounds` (migration 0441), em
  * `<organization_id>/<tipo>-<uuid>.<ext>`; o caminho fica em
@@ -66,6 +68,10 @@ export function extensaoDoAudio(tipo: TipoDeAudio): string {
  */
 export function somDoAviso(aviso: { kind: string; ref_kind: string | null; title?: string | null }): TipoDeSom | null {
   if (aviso.kind === "handoff") return "pessoa";
+  // A IA preparou uma proposta e só uma pessoa pode revisar e enviar: conferir
+  // o modelo, os itens e os preços é decisão de quem responde ao cliente. Sem
+  // este som o rascunho ficava esperando, e o aviso não existia fora da Central.
+  if (aviso.kind === "proposta_pronta_para_revisao") return "pessoa";
   if (ehAvisoDeEtapa(aviso)) return "venda";
   // A IA ficou sem saldo no provedor (`espera-de-saldo.ts`): as respostas estão
   // paradas até alguém recarregar — é o aviso que mais pede uma pessoa.

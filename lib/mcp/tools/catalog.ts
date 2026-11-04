@@ -29,4 +29,5 @@ export {
   declararTools,
   deModuloDesligado,
   eToolDeAdministracao,
+  deCapacidadeDesligada,
 } from "./catalogo";

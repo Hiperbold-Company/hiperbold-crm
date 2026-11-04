@@ -102,7 +102,7 @@ export function CampoEditavel({ linha, idioma }: { linha: LinhaDaInstalacao; idi
         toast.success(t("Pronto, já está valendo."));
         if (r.aviso) toast.warning(r.aviso);
       } else {
-        toast.error(r.erro);
+        toast.error(t(r.erro));
       }
     });
   }
@@ -114,7 +114,7 @@ export function CampoEditavel({ linha, idioma }: { linha: LinhaDaInstalacao; idi
         setEstado(r.estado);
         toast.success(t("Voltou para o valor do arquivo de instalação."));
       } else {
-        toast.error(r.erro);
+        toast.error(t(r.erro));
       }
     });
   }

@@ -3,14 +3,12 @@
  * organização com o Google Ads.
  *
  * Manda o admin ao consentimento do Google com um `state` assinado que carrega
- * de qual ORGANIZAÇÃO é a conexão. Irmã de `app/api/v1/agenda/google/connect/route.ts`.
- * A conexão é da organização, não da pessoa (a linha em `ad_platform_connections` é
- * `unique (organization_id, platform)`), mas o `state` sozinho não prova QUEM volta do
- * consentimento: um admin captura a URL com o `state` dele e a manda a uma vítima com
- * Google Ads, e o refresh token da vítima seria gravado na organização do atacante. Por
- * isso o nonce do `state` também assina um cookie de vínculo (httpOnly, Lax, preso ao
- * caminho do callback), igual ao da Agenda: só o navegador que saiu daqui consegue voltar
- * (D-119).
+ * de qual ORGANIZAÇÃO é a conexão. Irmã de `app/api/v1/agenda/google/connect/route.ts`,
+ * mais simples: a conexão é da organização, não da pessoa (a linha em
+ * `ad_platform_connections` é `unique (organization_id, platform)`). Grava o
+ * mesmo cookie de vínculo da Agenda (`lib/agenda/google/vinculo.ts`), restrito
+ * ao caminho do callback daqui: na volta, ele prova que o navegador que
+ * retorna é o que saiu.
  *
  * Piso de papel: `admin`, mesmo piso de `updateAdPlatformConnection.ts` (a
  * conexão da Meta) — é a conta de anúncios do negócio, não uma preferência de
@@ -21,19 +19,17 @@
  * clique de botão.
  */
 import { randomBytes } from "node:crypto";
+
 import { z } from "zod";
-import { requireSupportWrite } from "@/lib/impersonate/support";
+import { authenticatedSessionId, requireSupportWrite } from "@/lib/impersonate/support";
 import { NextResponse, type NextRequest } from "next/server";
 
-import {
-  assinarVinculo,
-  NOME_DO_VINCULO,
-  VALIDADE_DO_VINCULO_S,
-} from "@/lib/agenda/google/vinculo";
+import { assinarVinculo, NOME_DO_VINCULO, VALIDADE_DO_VINCULO_S } from "@/lib/agenda/google/vinculo";
+
 import { requireRole } from "@/lib/auth/require-role";
 import { env } from "@/lib/env";
-import { configuracaoDoGoogleAds } from "@/lib/plataformas-de-anuncio/google/config";
-import { CAMINHO_DO_CALLBACK_DE_ADS, emitirEstado } from "@/lib/plataformas-de-anuncio/google/estado";
+import { CAMINHO_DO_CALLBACK, configuracaoDoGoogleAds } from "@/lib/plataformas-de-anuncio/google/config";
+import { emitirEstado } from "@/lib/plataformas-de-anuncio/google/estado";
 import { montarUrlDeConsentimento } from "@/lib/plataformas-de-anuncio/google/oauth";
 import { cookieSecure } from "@/lib/supabase/cookie-secure";
 
@@ -65,15 +61,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return voltarComErro("google_ads_nao_configurado");
   }
 
-  // O nonce é conhecido duas vezes: dentro do `state`, que viaja pela URL do Google, e
-  // assinando o cookie de vínculo, que fica no navegador. É o par que prova, na volta,
-  // que quem voltou é quem saiu.
-  const nonce = randomBytes(16).toString("hex");
+  // O nonce nasce aqui porque é usado duas vezes: dentro do `state` e na
+  // assinatura do cookie de vínculo — o par que o callback confere.
+  const nonce = randomBytes(16).toString("base64url");
 
   let state: string;
   try {
     state = emitirEstado(
-      { organizationId: org.orgId, userId: user.id, api },
+      { organizationId: org.orgId, userId: user.id, api, authSessionId: await authenticatedSessionId() },
       { segredo: env.INTERNAL_SECRET, agora: new Date(), nonce },
     );
   } catch {
@@ -84,13 +79,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // ler campanhas pela API do Google Ads (0436).
   const incluirGoogleAds = Boolean(env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim());
   const resposta = NextResponse.redirect(montarUrlDeConsentimento(app, { state, api, incluirGoogleAds }));
-  // `lax`, não `strict`: a volta do consentimento é uma navegação vinda de outro site, e o
-  // `strict` não viajaria (ver `lib/agenda/google/vinculo.ts`). `secure` por `cookieSecure()`.
+  // `lax` e `cookieSecure()` pelos mesmos motivos do connect da Agenda: strict
+  // não viaja na volta do Google, e `secure: true` literal perderia o cookie em
+  // instalação servida por http.
   resposta.cookies.set(NOME_DO_VINCULO, assinarVinculo(nonce, env.INTERNAL_SECRET), {
     httpOnly: true,
     sameSite: "lax",
     secure: cookieSecure(),
-    path: CAMINHO_DO_CALLBACK_DE_ADS,
+    path: CAMINHO_DO_CALLBACK,
     maxAge: VALIDADE_DO_VINCULO_S,
   });
   return resposta;

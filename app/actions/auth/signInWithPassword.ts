@@ -5,16 +5,18 @@ import { redirect } from "next/navigation";
 
 import { safeNext } from "@/lib/auth/safe-next";
 
+import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { createClient } from "@/lib/supabase/server";
 import { loginSchema, type LoginInput } from "@/lib/auth/schemas";
 import { audit, hashEmail } from "@/lib/audit";
+import { reconhecerDispositivoConfiavel } from "@/lib/auth/dispositivo-confiavel";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 import {
   authRateLimited,
   motivoDoBloqueioDeLogin,
   registrarFalhaDeLogin,
   AUTH_LIMITS,
 } from "@/lib/auth/rate-limit";
-import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { captchaRecusadoPeloGoTrue } from "@/lib/security/turnstile";
 
 export type SignInResult = {
@@ -118,18 +120,25 @@ export async function signInWithPassword(
     return { ok: false, error: "invalid_credentials" };
   }
 
+  // Entrar de novo é o jeito que a pessoa tem de "atualizar" o que vê. O cache
+  // curto de autorização só é derrubado por quem escreve PELO APP; vínculo
+  // gravado por fora (seed, worker, SQL) esperaria o TTL. Um MISS por login.
+  invalidarUsuario(data.user.id);
+
   // MFA gating — if the user has any verified TOTP factor enrolled, they must
   // complete the challenge in /login/mfa before reaching the app.
   const { data: factorsData } = await supabase.auth.mfa.listFactors();
   const verifiedTotp = factorsData?.totp?.find((f) => f.status === "verified");
-  if (verifiedTotp) {
+  const confiavel =
+    !!verifiedTotp && !!data.session && (await reconhecerDispositivoConfiavel(data.user.id, verifiedTotp.id, data.session.access_token));
+  if (verifiedTotp && !confiavel) {
     return { ok: false, error: "mfa_required", challengeId: verifiedTotp.id };
   }
 
   await audit({
     action: "auth.login_success",
     actorUserId: data.user.id,
-    metadata: {},
+    metadata: confiavel ? { mfa: "dispositivo_confiavel" } : {},
     requestId,
     ip,
     userAgent,

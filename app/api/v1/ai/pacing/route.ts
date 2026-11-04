@@ -17,6 +17,9 @@ import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { PROVIDERS_DE_MENSAGEM } from "@/lib/channels/capabilities";
+import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
+import { soltarAdiadosDaSessao } from "@/lib/agent-engine/pacing/adiados-da-janela";
+import { logger } from "@/lib/logger";
 import {
   pacingKnobsUpdateSchema,
   knobsView,
@@ -29,7 +32,9 @@ import {
 export const dynamic = "force-dynamic";
 
 const KNOB_COLUMNS =
-  "throttle_ms, jitter_max_ms, window_start_hour, window_end_hour, allow_sunday, timezone, warmup_daily_caps, number_activated_at";
+  // As duas janelas entram no SELECT: sem `resposta_*` aqui, a ficha Anti-ban
+  // mostraria 7h-22h como se fosse a janela da resposta — e é a de DISPARO.
+  "throttle_ms, jitter_max_ms, window_start_hour, window_end_hour, resposta_start_hour, resposta_end_hour, allow_sunday, prospeccao_dias, timezone, warmup_daily_caps, number_activated_at, atraso_notar_ms, ms_por_caractere, atraso_minimo_ms, atraso_maximo_ms";
 
 /**
  * `organizations.timezone`, para a tela mostrar o fuso em que o motor avalia a
@@ -163,7 +168,14 @@ export async function PUT(req: NextRequest): Promise<Response> {
       jitter_max_ms: null,
       window_start_hour: null,
       window_end_hour: null,
+      resposta_start_hour: null,
+      resposta_end_hour: null,
+      atraso_notar_ms: null,
+      ms_por_caractere: null,
+      atraso_minimo_ms: null,
+      atraso_maximo_ms: null,
       allow_sunday: null,
+      prospeccao_dias: null,
       timezone: null,
       warmup_daily_caps: null,
     }),
@@ -174,6 +186,30 @@ export async function PUT(req: NextRequest): Promise<Response> {
     return fail(
       "validation_failed",
       `Janela inválida: início (${eff.windowStartHour}h) precisa ser antes do fim (${eff.windowEndHour}h).`,
+      422,
+      { requestId },
+    );
+  }
+  // A janela da RESPOSTA é validada pelo mesmo par-resultante (0495). Sem isto,
+  // a tela aceitaria `resposta_start_hour=22, end=7`, que o motor traduz em
+  // "nunca responde" — e o operador só descobriria quando o cliente parasse de
+  // receber resposta, que é o sintoma que ele não consegue ligar para a tela.
+  // `0..24` passa por `windowIsValid` (0 < 24): é assim que se declara "responde 24h".
+  if (!windowIsValid(eff.respostaStartHour, eff.respostaEndHour)) {
+    return fail(
+      "validation_failed",
+      `Janela de resposta inválida: início (${eff.respostaStartHour}h) precisa ser antes do fim (${eff.respostaEndHour}h). Use 0 e 24 para responder a qualquer hora.`,
+      422,
+      { requestId },
+    );
+  }
+  // Atraso humano (0499), pelo mesmo par-resultante: com os dois gravados o
+  // CHECK do banco recusaria e a tela leria um 500 genérico; com só o mínimo
+  // acima do teto padrão, o clamp ignoraria o mínimo sem aviso.
+  if (eff.atrasoMinimoMs > eff.atrasoMaximoMs) {
+    return fail(
+      "validation_failed",
+      `Atraso humano inválido: o mínimo (${eff.atrasoMinimoMs} ms) precisa ser menor ou igual ao máximo (${eff.atrasoMaximoMs} ms).`,
       422,
       { requestId },
     );
@@ -195,6 +231,42 @@ export async function PUT(req: NextRequest): Promise<Response> {
       return fail("internal_error", t("Falha ao salvar os knobs."), 500, {
         requestId,
         details: { motivo: upErr.message },
+      });
+    }
+
+    // #3383 — A JANELA MUDA AGORA, NÃO NO PRÓXIMO CONTATO.
+    //
+    // Quem estava na fila esperando a abertura ANTIGA (job adiado pelas 7h
+    // enquanto o administrador abre para 0h–24h) só seria relido quando outro
+    // contato escrevesse — e a mensagem desse contato, pior, viajava de carona
+    // justamente no job adiado (drain: "rajada coalescida em job pendente").
+    // A reavaliação acontece AQUI, no salvar: `soltarAdiadosDaSessao` lê o par
+    // `resposta_start_hour`/`resposta_end_hour` que acabou de ser gravado (a
+    // mesma régua do motor, fuso do tenant) e, se ele está ABERTO, põe
+    // `run_after = now()` nos jobs pendentes dessa conexão.
+    //
+    // Janela fechada = ninguém mexe: o adiamento de hoje segue valendo, com o
+    // MESMO horário que o motor calculou. Falha aqui nunca derruba o PUT — os
+    // knobs já foram salvos, e o próximo contato (ou a abertura no relógio)
+    // completa o serviço com um warn no log.
+    try {
+      const soltos = await soltarAdiadosDaSessao(getRequestPool(), {
+        organizationId: org.orgId,
+        channelSessionId: channel_session_id,
+      });
+      if (soltos > 0) {
+        logger.info("[pacing] turnos adiados soltos pela janela de resposta que acabou de abrir", {
+          organization_id: org.orgId,
+          channel_session_id,
+          soltos,
+          resposta: `${eff.respostaStartHour}h-${eff.respostaEndHour}h`,
+        });
+      }
+    } catch (err) {
+      logger.warn("[pacing] não consegui reavaliar os turnos adiados pela janela de resposta", {
+        organization_id: org.orgId,
+        channel_session_id,
+        error: (err instanceof Error ? err.message : String(err)).slice(0, 160),
       });
     }
   }

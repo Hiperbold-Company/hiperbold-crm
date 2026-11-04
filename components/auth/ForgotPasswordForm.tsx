@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTransition, useState } from "react";
+import { useState } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
 import { forgotPasswordSchema, type ForgotPasswordInput } from "@/lib/auth/schemas";
@@ -11,11 +11,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { requestPasswordReset } from "@/app/actions/auth/requestPasswordReset";
 import { TurnstileWidget, useCaptcha } from "@/components/auth/TurnstileWidget";
+import { AvisoSemResposta, useEnvioComTeto } from "@/components/auth/teto-da-espera";
 
 export function ForgotPasswordForm({ turnstileSiteKey }: { turnstileSiteKey?: string | null }) {
   const t = useT();
   const captcha = useCaptcha(turnstileSiteKey);
-  const [isPending, startTransition] = useTransition();
+  const { pendente: isPending, semResposta, enviar } = useEnvioComTeto();
   const [serverError, setServerError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
@@ -31,8 +32,7 @@ export function ForgotPasswordForm({ turnstileSiteKey }: { turnstileSiteKey?: st
   const onSubmit = (values: ForgotPasswordInput) => {
     if (!captcha.pronto) return;
     setServerError(null);
-    startTransition(async () => {
-      const res = await requestPasswordReset(values, captcha.token ?? undefined);
+    void enviar(() => requestPasswordReset(values, captcha.token ?? undefined), (res) => {
       if (res.ok) {
         setSent(true);
         return;
@@ -45,6 +45,15 @@ export function ForgotPasswordForm({ turnstileSiteKey }: { turnstileSiteKey?: st
         setServerError(t("Muitas tentativas. Aguarde alguns minutos."));
       } else if (res.error === "validation_error") {
         setServerError(t("Email inválido. Confira o campo."));
+      } else if (res.error === "smtp_not_configured") {
+        // #2755 — sem SMTP a instalação não envia e-mail NENHUM: dizer
+        // "tente novamente" mandava quem esqueceu a senha repetir um gesto que
+        // nunca vai funcionar. Dizemos o que é, e quem resolve é o administrador.
+        setServerError(
+          t(
+            "A recuperação de senha não está disponível nesta instalação: sem SMTP configurado não sai e-mail nenhum. Contate o administrador para configurar em /admin/email.",
+          ),
+        );
       } else {
         setServerError(t("Não foi possível enviar o e-mail. Tente novamente."));
       }
@@ -68,7 +77,7 @@ export function ForgotPasswordForm({ turnstileSiteKey }: { turnstileSiteKey?: st
   return (
     <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
       <div className="space-y-1.5">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">{t("Email")}</Label>
         <Input
           id="email"
           type="email"
@@ -96,6 +105,7 @@ export function ForgotPasswordForm({ turnstileSiteKey }: { turnstileSiteKey?: st
           resetKey={captcha.resetKey}
         />
       )}
+      {semResposta && <AvisoSemResposta />}
       <Button type="submit" className="w-full" disabled={isPending || !captcha.pronto}>
         {isPending ? t("Enviando...") : t("Enviar link de redefinição")}
       </Button>

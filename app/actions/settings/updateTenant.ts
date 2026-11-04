@@ -1,15 +1,17 @@
 "use server";
 
+import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { supportWriteError } from "@/lib/impersonate/support";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { atualizarDadosDaEmpresa } from "@/lib/organizacao/configuracao";
+import { invalidarOrg } from "@/lib/auth/cache-curto";
+import { audit } from "@/lib/audit";
 import { tenantSchema, type TenantInput } from "@/lib/schemas/settings";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
-import { portaoDeAdminDaOrganizacao } from "@/lib/auth/portao-de-escrita";
-import { ipDoCliente } from "@/lib/http/ip-do-cliente";
+import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
+import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
+import { gravarDadosCadastrais } from "@/lib/tenants/dados-cadastrais";
 
 export type UpdateTenantResult =
   | { ok: true }
@@ -26,8 +28,10 @@ export async function updateTenant(input: TenantInput): Promise<UpdateTenantResu
   if (supportWriteError(authUser.support)) return { ok: false, error: "forbidden" };
   const activeOrg = await resolveActiveOrg(authUser);
   if (!activeOrg) return { ok: false, error: "forbidden_tenant" };
-  const portao = await portaoDeAdminDaOrganizacao(authUser, activeOrg);
-  if (!portao.ok) return { ok: false, error: portao.erro };
+  if (!podeAdministrarEmpresa(authUser, activeOrg)) {
+    return { ok: false, error: "forbidden_role" };
+  }
+  if (await mfaEmDivida()) return { ok: false, error: "mfa_required" };
 
 /**
  * A ESCRITA EM `organizations` VAI PELO ADMIN CLIENT — e não é preguiça.
@@ -51,20 +55,52 @@ export async function updateTenant(input: TenantInput): Promise<UpdateTenantResu
   const supabase = createAdminClient();
   const hdrs = await headers();
   const requestId = hdrs.get("x-request-id");
-  // D-036: o primeiro salto do `x-forwarded-for` é forjável pelo cliente;
-  // `ipDoCliente` lê o salto confiável (ver `lib/http/ip-do-cliente.ts`).
   const ip = ipDoCliente(hdrs);
   const userAgent = hdrs.get("user-agent") ?? null;
 
-  // O núcleo é o mesmo da rota `PATCH /api/v1/settings/organizacao` e das tools MCP
-  // (`lib/organizacao/configuracao.ts`): o portão acima é o desta porta.
-  const gravado = await atualizarDadosDaEmpresa(supabase, activeOrg.orgId, parsed.data, {
+  // País revisado, CNPJ único e a lista de colunas: a gravação mora em
+  // `lib/tenants/dados-cadastrais.ts`, compartilhada com a gestão de tenants do
+  // admin da plataforma.
+  // #3696: nome, idioma, fuso, moeda e país da empresa viajam no snapshot de
+  // permissões de cada membro — e o idioma decide a tela inteira. A escrita aqui
+  // derruba o snapshot de todos os membros da organização (antes e depois: uma
+  // requisição concorrente pode regravar o valor velho no meio do UPDATE).
+  invalidarOrg(activeOrg.orgId);
+  const gravado = await gravarDadosCadastrais(supabase, activeOrg.orgId, parsed.data);
+  if (!gravado.ok) {
+    if (gravado.erro === "cnpj_em_uso") {
+      return { ok: false, error: "Este CNPJ já pertence a outra organização." };
+    }
+    return { ok: false, error: gravado.erro };
+  }
+  invalidarOrg(activeOrg.orgId);
+
+  await audit({
+    action: "org.updated",
     actorUserId: authUser.id,
+    organizationId: activeOrg.orgId,
+    resourceType: "organization",
+    resourceId: activeOrg.orgId,
     requestId,
     ip,
     userAgent,
+    metadata: {
+      fields_changed: Object.keys(parsed.data),
+    },
   });
-  if (!gravado.ok) return gravado;
+
+  await supabase
+    .rpc("emit_event", {
+      p_event_type: "org.updated",
+      p_entity_kind: "organization",
+      p_entity_id: activeOrg.orgId,
+      p_payload: { organization_id: activeOrg.orgId },
+      p_metadata: { request_id: requestId },
+      p_organization_id: activeOrg.orgId,
+    })
+    .then(({ error: e }) => {
+      if (e) console.error("[updateTenant] emit_event failed", e.message);
+    });
 
   revalidatePath("/app/settings/tenant");
   return { ok: true };

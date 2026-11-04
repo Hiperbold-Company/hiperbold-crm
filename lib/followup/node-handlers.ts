@@ -24,7 +24,9 @@ import {
   nodeBranches,
 } from "./graph-schema";
 import type { ConditionCheck, FlowEdge, FlowNode, NodeType, ReplySaveTo } from "./graph-schema";
+import { avaliarDataRelativa, ehOpDeData } from "./condicao-por-data";
 import { parseReplyCount } from "./parse-count";
+import { janelaDaEspera, primeiroInstanteNoHorario } from "./espera-no-horario";
 import { clampEspera, esperaPlanejadaDe, type EsperaAdaptativa } from "./timing-plan";
 import { fraseDeConfirmacao } from "./vocabulario";
 
@@ -41,6 +43,14 @@ export type EnrollmentStatus =
    */
   | "dormente"
   | "paused_handoff"
+  /**
+   * Pausa pedida por uma pessoa (0145, `STATUS_PAUSA_MANUAL` em `intervencao.ts`).
+   * Sem relógio e fora de `LIVE_STATUSES`: a mensagem comum não a acorda — quem a
+   * retoma é quem pausou. O opt-out a alcança (`reactivity.ts`). Faltava neste
+   * tipo desde a 0145, e foi por isso que a lista do opt-out pôde esquecê-la sem
+   * o compilador ter como apontar.
+   */
+  | "paused_manual"
   /**
    * Roteiro de atendimento em andamento (0394). Conduzido pelo TURNO, não pelo
    * relógio: o motor de follow-up nunca o reclama (o claim filtra
@@ -98,6 +108,13 @@ export interface EnrollmentRow {
 
 /** Minimal typed facts a `condition` node can check — loaded by the engine, never guessed. */
 export interface LeadFacts {
+  /**
+   * Fuso da ORGANIZAÇÃO, para a condição por data comparar dia de calendário —
+   * ver `condicao-por-data.ts` — e para a espera com horário (`ate_o_horario`,
+   * `espera-no-horario.ts`). Ausente cai no padrão do produto; o motor só o
+   * resolve quando o grafo tem regra de data ou espera com horário.
+   */
+  fuso?: string | null;
   lead_stage: string | null;
   tags: string[];
   steps_taken: number;
@@ -125,7 +142,12 @@ export type NodeResult =
   // `reason` só aparece quando o avanço NÃO é o avanço comum: hoje, o trigger
   // desistindo do plano de tempo (o turno nunca voltou). Vira event_type próprio
   // no engine — seguir sem plano é um fato que o operador precisa poder ler.
-  | { kind: "advance"; next_node_id: string; next_eval_at: Date; reason?: "plan_timeout"; repeat?: { index: number; total: number } }
+  //
+  // `class` só aparece quando o avanço É uma classificação decidida pelo motor:
+  // o `ai_classify` que sai por "sem resposta" porque a carência venceu. Vai para
+  // o payload do evento e é o que `ultimoDesfechoDe` lê — o desfecho não pode
+  // depender de QUEM tirou o lead do classificar.
+  | { kind: "advance"; next_node_id: string; next_eval_at: Date; reason?: "plan_timeout"; repeat?: { index: number; total: number }; class?: string }
   // stays on the node. `wake_status` parks `match_reply` in waiting_reply without a job.
   | { kind: "wait"; next_eval_at: Date; wake_status?: "active" | "waiting_reply" | "dormente" }
   | {
@@ -253,6 +275,15 @@ export function atrasoDoRecheck(rechecksJaFeitos: number): number {
 export const EVENTO_ACAO_ADIADA = "action_deferred";
 
 /**
+ * O turno de classificar rodou e o cliente ainda não tinha respondido ao envio
+ * do fluxo — o nó segue esperando até a carência. Sem esta linha, o dossiê
+ * mostrava "Pediu ao agente para interpretar a resposta" e mais nada por até a
+ * carência inteira: parecia travado. Não é passo (a chave não é `${nó}:${passo}`),
+ * então nenhum guarda de ocupação do motor a conta.
+ */
+export const EVENTO_CLASSIFICACAO_ESPERANDO = "classify_waiting";
+
+/**
  * Rechecks ociosos da ação NESTA estadia — o número que o dead-man deve medir.
  *
  * Idêntico a `occupancyEventCount` enquanto não houver adiamento (o dead-man
@@ -265,10 +296,30 @@ export function rechecksOciososDaAcao(events: EnrollmentEventRef[], nodeId: stri
   for (let i = events.length - 1; i >= 0; i--) {
     const evento = events[i]!;
     if (evento.node_id !== nodeId) break;
-    if (evento.event_type === EVENTO_ACAO_ADIADA) return n;
+    if (evento.event_type === EVENTO_ACAO_ADIADA || evento.event_type === EVENTO_TURNO_DESCARTADO) return n;
     n++;
   }
   return n;
+}
+
+/**
+ * O turno de envio desta estadia saiu da fila SEM rodar: a organização foi
+ * suspensa e `fn_org_parada_descarta_fila` (migration 0501) o falhou, gravando
+ * este evento. Não é defeito do worker, então não conta para o dead-man (ver
+ * `rechecksOciososDaAcao`), e o motor enfileira um turno novo na reativação —
+ * o claim não entrega a inscrição enquanto a org está parada.
+ */
+export const EVENTO_TURNO_DESCARTADO = "turn_discarded";
+
+/** O último turno desta estadia no `action` foi descartado e nenhum outro o substituiu. */
+export function turnoDaAcaoDescartado(events: EnrollmentEventRef[], nodeId: string): boolean {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const evento = events[i]!;
+    if (evento.node_id !== nodeId) return false;
+    if (evento.event_type === EVENTO_TURNO_DESCARTADO) return true;
+    if (evento.event_type === "turn_enqueued") return false;
+  }
+  return false;
 }
 
 /**
@@ -442,16 +493,23 @@ function valorDePassos(value: string | number): string | number {
 }
 
 /**
- * O evento que registra a classe que o `ai_classify` escolheu — a fonte do
- * "Desfecho do passo anterior" (é o mesmo evento que a tela de histórico lê).
+ * Os eventos que gravam a classe com que o lead SAIU de um `ai_classify` — a
+ * fonte do "Desfecho do passo anterior". São dois escritores e um só campo
+ * (`payload.class`):
+ *   - `ai_classified`: a ponte, quando o modelo classificou a resposta;
+ *   - `node_advanced` com `class`: o motor, quando a carência venceu sem
+ *     resposta e o lead saiu por `no_reply` (`case "ai_classify"` abaixo).
+ * Até o turno de classificar parar de concluir `no_reply` sozinho, só o
+ * primeiro existia; sem o segundo, "Sem resposta" deixava o desfecho `null` (ou
+ * o de uma volta anterior) e a condição mudava de ramo em silêncio.
  */
-const EVENTO_DE_CLASSIFICACAO = "ai_classified";
+const EVENTOS_DE_DESFECHO = new Set(["ai_classified", "node_advanced"]);
 
 /**
- * O desfecho do último passo que DECIDIU algo: a classe escolhida pelo
- * `ai_classify` mais recente da inscrição. `null` quando ainda não houve
- * classificação (fluxo que nunca passou por um `ai_classify`, ou classificação
- * que terminou sem classe).
+ * O desfecho do último passo que DECIDIU algo: a classe com que o lead saiu do
+ * `ai_classify` mais recente da inscrição — pelo modelo ou pela carência vencida.
+ * `null` quando ainda não houve classificação (fluxo que nunca passou por um
+ * `ai_classify`, ou classificação que terminou sem classe).
  *
  * ⚠️ Este dado existia como CONTRATO (o rótulo "Desfecho do passo anterior" está
  * em `vocabulario.ts`, o campo está no enum do `graph-schema.ts` e a tela o
@@ -465,16 +523,38 @@ const EVENTO_DE_CLASSIFICACAO = "ai_classified";
  */
 export function ultimoDesfechoDe(events: EnrollmentEventRef[]): string | null {
   for (const evento of [...events].reverse()) {
-    if (evento.event_type !== EVENTO_DE_CLASSIFICACAO) continue;
+    if (!EVENTOS_DE_DESFECHO.has(evento.event_type ?? "")) continue;
     const classe = evento.payload?.class;
     if (typeof classe === "string" && classe.length > 0) return classe;
   }
   return null;
 }
 
-function evaluateCheck(check: ConditionCheck, lead: LeadFacts, fatos?: FatosDaAutomacao): boolean {
+function evaluateCheck(
+  check: ConditionCheck,
+  lead: LeadFacts,
+  agora: Date,
+  fatos?: FatosDaAutomacao,
+): boolean {
   // Regra das automações: lê os fatos ao vivo do contato/negócio (`lib/automacoes/condicoes.ts`).
   if (ehRegraNova(check)) return avaliarRegraNova(check, fatos);
+  // A regra de data sai ANTES de tudo: ela não tem valor "atual" comparável
+  // pelos operadores comuns, e `custom_fields` é jsonb — qualquer coisa pode
+  // estar lá. Campo ausente ou ilegível responde `false`, nunca `true`.
+  if (check.field === "lead_date") {
+    if (!ehOpDeData(check.op) || !check.key) return false;
+    return avaliarDataRelativa({
+      valor: lead.custom_fields?.[check.key],
+      op: check.op,
+      dias: check.value,
+      agora,
+      fuso: lead.fuso,
+    });
+  }
+  // Operador de data em campo que não é de data: o schema recusa no publish, e
+  // aqui responde `false` em vez de cair num `switch` que não o conhece.
+  if (ehOpDeData(check.op)) return false;
+
   const actual: string | number | null | string[] =
     check.field === "lead_stage" ? lead.lead_stage
     : check.field === "tag" ? lead.tags
@@ -517,12 +597,19 @@ function evaluateCheck(check: ConditionCheck, lead: LeadFacts, fatos?: FatosDaAu
   }
 }
 
-function evaluateCondition(
+/**
+ * Exportada para a revalidação imediatamente antes do envio
+ * (`condicao-antes-do-envio.ts`): a mesma função, nunca uma segunda régua —
+ * duas avaliações da mesma condição que pudessem divergir seriam pior que
+ * nenhuma revalidação.
+ */
+export function evaluateCondition(
   config: Extract<FlowNode, { type: "condition" }>["config"],
   lead: LeadFacts,
+  agora: Date,
   fatos?: FatosDaAutomacao,
 ): boolean {
-  const results = config.checks.map((check) => evaluateCheck(check, lead, fatos));
+  const results = config.checks.map((check) => evaluateCheck(check, lead, agora, fatos));
   return config.combinator === "and" ? results.every(Boolean) : results.some(Boolean);
 }
 
@@ -839,7 +926,7 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
     return { kind: "recheck", next_eval_at: new Date(clock().getTime() + ACTION_RECHECK_MS) };
   },
   wait: (input) => {
-    const { node, edges, enrollment, clock, waitElapsed, wokeEarly } = input;
+    const { node, edges, enrollment, clock, lead, waitElapsed, wokeEarly } = input;
     // Automação: "até responder" é bloco de conversa; "em segundos" é o
     // `fixed` com outra unidade e sem piso de 5 min — sem acordar por resposta.
     if (node.config.mode === "until_reply") return decidirConversa(input);
@@ -851,12 +938,15 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
     }
     const config = node.config;
     // Resposta do lead corta a espera: o timer é teto (ninguém respondeu),
-    // não um atraso obrigatório depois de cada envio.
+    // não um atraso obrigatório depois de cada envio. Vale também com horário
+    // (`ate_o_horario`): ele segura o toque PROATIVO, não a resposta a quem
+    // acabou de escrever.
     if (wokeEarly) {
       const edge = selectEdge(edges, node.id, { type: "always" });
       if (!edge) return { kind: "fail", error: `wait node "${node.id}" has no outbound edge after elapsing` };
       return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
     }
+    const janelaDoNo = config.mode === "fixed" ? janelaDaEspera(config.ate_o_horario, lead.fuso) : null;
     if (!waitElapsed) {
       // Adaptativo: o instante vem do plano decidido no acionamento. Sem plano
       // legível para ESTE nó (enrollment anterior à feature, fluxo v1, jsonb
@@ -880,11 +970,24 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
       // slot único anti-spam enquanto ela espera. Quem a acorda continua sendo
       // o `next_eval_at` abaixo, pelo mesmo claim — não há segundo agendador.
       const imune = config.mode === "fixed" && config.immune_to_reply === true;
+      // Horário da espera (`ate_o_horario`): o fim que cai de noite ou num dia
+      // fechado vai para a próxima abertura JÁ AQUI, na entrada — a fila mostra
+      // o instante verdadeiro do próximo passo, não as 24 h cruas.
       return {
         kind: "wait",
-        next_eval_at: new Date(clock().getTime() + durationMs),
+        next_eval_at: primeiroInstanteNoHorario(new Date(clock().getTime() + durationMs), janelaDoNo),
         ...(imune ? { wake_status: "dormente" as const } : {}),
       };
+    }
+    // E é conferido de novo na SAÍDA. O fim calculado na entrada não é a única
+    // origem do relógio: retomar uma pausa devolve o restante, e adiar grava a
+    // hora que a pessoa escolheu — os dois podem cair fora do horário. Fora
+    // dele, a espera continua até a abertura (custa um tick, como um recheck).
+    const agora = clock();
+    const abertura = primeiroInstanteNoHorario(agora, janelaDoNo);
+    if (abertura.getTime() > agora.getTime()) {
+      const imune = config.mode === "fixed" && config.immune_to_reply === true;
+      return { kind: "wait", next_eval_at: abertura, ...(imune ? { wake_status: "dormente" as const } : {}) };
     }
     const edge = selectEdge(edges, node.id, { type: "always" });
     if (!edge) return { kind: "fail", error: `wait node "${node.id}" has no outbound edge after elapsing` };
@@ -897,7 +1000,7 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
       // lista é a precedência — a mesma ordem que o usuário vê no formulário.
       // Duas regras verdadeiras não podem sortear caminho; `combinator` não
       // é consultado aqui, porque nesse modo a regra não vota, ela roteia.
-      const hitId = node.config.checks.find((c) => c.id !== undefined && evaluateCheck(c, lead, fatos))?.id;
+      const hitId = node.config.checks.find((c) => c.id !== undefined && evaluateCheck(c, lead, clock(), fatos))?.id;
       // Nenhuma regra passou -> o ramo obrigatório 'else', que na aresta é `always`.
       // `selectEdge` também cai nele quando o usuário deixou um ramo sem ligar:
       // sair pela saída de escape é ruim, ficar preso no nó é pior.
@@ -913,7 +1016,7 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
       }
       return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
     }
-    const result = evaluateCondition(node.config, lead, fatos);
+    const result = evaluateCondition(node.config, lead, clock(), fatos);
     const edge = selectEdge(edges, node.id, { type: "cond_result", value: result });
     if (!edge) return { kind: "fail", error: `condition node "${node.id}" has no matching edge for result ${result}` };
     return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
@@ -932,7 +1035,7 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
     // no fallback 'always' se não houver aresta 'no_reply' explícita.
     const edge = selectEdge(edges, node.id, classEdgeMatch(node, NO_REPLY_BRANCH_ID));
     if (!edge) return { kind: "fail", error: `ai_classify node "${node.id}" has no edge for class "no_reply" (fallback also missing)` };
-    return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
+    return { kind: "advance", next_node_id: edge.target, next_eval_at: clock(), class: NO_REPLY_BRANCH_ID };
   },
   match_reply: (input) => {
     const { node, edges, clock, lead, waitElapsed, wokeEarly, lastInboundBody } = input;
@@ -1107,6 +1210,39 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
       kind: "recheck",
       next_eval_at: new Date(clock().getTime() + atrasoDoRecheck(actionRecheckCount ?? 0)),
     };
+  },
+  internal_task: (input) => {
+    const { node, edges, clock } = input;
+    // Lembrete interno (#1540): este nó NÃO enfileira turno de envio — é a
+    // diferença inteira da feature. Ele avança, e quem grava a tarefa é o
+    // engine ao aplicar o `advance` (`criarTarefaInterna`), guardado pelo
+    // MESMO idempotency_key do evento do passo: replay do tick não cria a
+    // segunda tarefa, e um fluxo "somente interno" não tem mensagem nenhuma
+    // para sair.
+    const edge = selectEdge(edges, node.id, { type: "always" });
+    if (!edge) return { kind: "fail", error: `internal_task node "${node.id}" has no outbound edge` };
+    return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
+  },
+  move_lead: (input) => {
+    const { node, edges, clock } = input;
+    // #2065 — mover o card de etapa é PASSAGEM no relógio, como o
+    // `internal_task`: o nó avança pela aresta única e quem ESCREVE a etapa é
+    // o motor ao aplicar o `advance` (`db.moverLeadNoFunil`, que chama o
+    // `moveLeadHandler` da casa com o `lost_reason` do bloco, sem padrão
+    // escondido), guardado pelo idempotency_key do evento do
+    // passo — replay do tick não move o card duas vezes.
+    const edge = selectEdge(edges, node.id, { type: "always" });
+    if (!edge) return { kind: "fail", error: `move_lead node "${node.id}" has no outbound edge` };
+    return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
+  },
+  edit_lead_tag: (input) => {
+    const { node, edges, clock } = input;
+    // #2065 — mesma passagem do `move_lead`: a tag nasce no motor, depois do
+    // evento do passo, com a MESMA trava. Nenhuma mensagem sai daqui (por isso
+    // este nó não está em `NOS_QUE_ENVIAM`).
+    const edge = selectEdge(edges, node.id, { type: "always" });
+    if (!edge) return { kind: "fail", error: `edit_lead_tag node "${node.id}" has no outbound edge` };
+    return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
   },
   end: (input) => {
     const { node } = input;

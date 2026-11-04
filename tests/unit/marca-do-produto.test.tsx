@@ -19,12 +19,19 @@ import { CORES_DA_MARCA, LOGOTIPO } from "@/lib/branding/desenho";
  * evidência de símbolo, não de comportamento).
  */
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/app/inbox" }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/app/inbox", useRouter: () => ({ prefetch: vi.fn() }) }));
 vi.mock("@/app/actions/shell/toggleSidebar", () => ({ toggleSidebar: vi.fn() }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (chave: string) => chave }));
 vi.mock("@/components/connections/ConnectionHealthDot", () => ({
   ConnectionHealthDot: () => null,
 }));
+// O contador de casos lê a fila pelo React Query; aqui não há provider, e o
+// número não é o objeto destes casos (o dele mora em contador-de-casos.test.tsx).
+vi.mock("@/components/shell/ContadorDeCasos", () => ({ ContadorDeCasos: () => null }));
+vi.mock("@/components/shell/ContadorDaFila", () => ({ ContadorDaFila: () => null }));
+// O de tarefas lê a lista pelo React Query, e sem provider ele lança: o número
+// dele mora em contador-de-tarefas.test.tsx.
+vi.mock("@/components/shell/ContadorDeTarefas", () => ({ ContadorDeTarefas: () => null }));
 vi.mock("@/components/shell/VersionFooter", () => ({ VersionFooter: () => null }));
 
 const usuario = {
@@ -150,5 +157,24 @@ describe("o favicon segue a mesma regra", () => {
     expect(icone).toMatch(/marcaEhADoProduto\(\{ name: marca\.nome, logoUrl: marca\.logoUrl \}\)/);
     expect(icone).toMatch(/<path d=\{SIMBOLO\.d\}/);
     expect(icone).toMatch(/letraDoIcone\(marca\.nome\)/);
+  });
+});
+
+describe("o cabeçalho do onboarding segue a mesma regra do favicon", () => {
+  const layout = fs.readFileSync(path.join(process.cwd(), "app/onboarding/layout.tsx"), "utf8");
+
+  it("a marca padrão segue com o SVG que acompanha o tema, e o <img> só vale para marca própria", () => {
+    // O `/icon` é um PNG sempre claro: desenhá-lo para a marca padrão punha um
+    // ladrilho creme no tema escuro (PR #1942). A escolha passa pela MESMA regra
+    // de `app/icon.tsx`, e o SVG vem antes do <img>.
+    expect(layout).toMatch(
+      /iconeUrl === ICONE_DESENHADO &&\s*marcaEhADoProduto\(\{ name: marcaDoIcone\.nome, logoUrl: marcaDoIcone\.logoUrl \}\)/,
+    );
+    expect(layout).toMatch(/simboloDoProduto \? \(\s*<SimboloDoProduto[^>]*decorativo/);
+  });
+
+  it("o ícone é decorativo: o nome já está escrito ao lado", () => {
+    const img = layout.slice(layout.indexOf("<img"), layout.indexOf("/>", layout.indexOf("<img")));
+    expect(img).toMatch(/alt=""/);
   });
 });

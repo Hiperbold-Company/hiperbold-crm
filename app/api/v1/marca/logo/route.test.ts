@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { loadAuthUser, orgAtivaSemPortao } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 import type { AuthUser } from "@/lib/auth/types";
@@ -40,9 +40,24 @@ import type { AuthUser } from "@/lib/auth/types";
 
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(),
-  resolveActiveOrg: vi.fn(),
+  orgAtivaSemPortao: vi.fn(),
   mfaEmDivida: vi.fn(async () => false),
 }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+vi.mock("@/lib/auth/requirePlatformAdmin", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/auth/requirePlatformAdmin")>();
+  const { loadAuthUser: usuarioDoCaso } = await import("@/lib/auth/server");
+  return {
+    ...real,
+    // Segue o usuário do caso: o dono do servidor passa; os demais levam o
+    // redirect que o helper real faria. Scope e MFA: lib/auth/requirePlatformAdmin.test.ts.
+    requirePlatformAdminEscrita: async () => {
+      const u = await usuarioDoCaso();
+      if (!u?.is_platform_admin) throw new Error("NEXT_REDIRECT;/admin/forbidden");
+      return { user: { id: u.id }, platformAdmin: { user_id: u.id, scope: "full", mfa_required: false } };
+    },
+  };
+});
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({
   checkRateLimit: vi.fn(async () => ({ allowed: true })),
@@ -77,6 +92,7 @@ function criarAdminEspiao(
   const fromChamadas: string[] = [];
   const rpcChamadas: Array<{ nome: string; args: unknown }> = [];
   const removeChamadas: string[] = [];
+  const upsertChamadas: Array<Record<string, unknown>> = [];
 
   const client = {
     from: (tabela: string) => {
@@ -99,7 +115,10 @@ function criarAdminEspiao(
               : [],
           error: null,
         }),
-        upsert: async () => ({ error: null }),
+        upsert: async (valores: Record<string, unknown>) => {
+          upsertChamadas.push(valores);
+          return { error: null };
+        },
       };
       return builder;
     },
@@ -118,7 +137,7 @@ function criarAdminEspiao(
     },
   };
 
-  return { client, fromChamadas, rpcChamadas, removeChamadas };
+  return { client, fromChamadas, rpcChamadas, removeChamadas, upsertChamadas };
 }
 
 function usuarioAdminDeOrganizacao(): AuthUser {
@@ -147,7 +166,7 @@ function usuarioDonoDoServidor(): AuthUser {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(resolveActiveOrg).mockResolvedValue({ orgId: ORG_ID, name: "Org", role: "admin" } as never);
+  vi.mocked(orgAtivaSemPortao).mockResolvedValue({ orgId: ORG_ID, name: "Org", role: "admin", org_status: "active" } as never);
 });
 
 describe("POST /api/v1/marca/logo — escopo organizacao nunca toca platform_branding", () => {
@@ -173,6 +192,21 @@ describe("POST /api/v1/marca/logo — escopo organizacao nunca toca platform_bra
     // Controle POSITIVO: a escrita aconteceu pelo caminho certo — sem isto,
     // "não chamou platform_branding" seria indistinguível de "não escreveu nada".
     expect(espiao.rpcChamadas.map((r) => r.nome)).toContain("fn_definir_logo_por_tema_da_organizacao");
+  });
+  it("platform admin support_readonly, viewer na org, NÃO troca o logo da organização", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue({
+      ...usuarioAdminDeOrganizacao(), is_platform_admin: true, platform_admin_scope: "support_readonly",
+    } as AuthUser);
+    vi.mocked(orgAtivaSemPortao).mockResolvedValue({ orgId: ORG_ID, name: "Org", role: "viewer", org_status: "active" } as never);
+    const espiao = criarAdminEspiao();
+    vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
+    const form = new FormData();
+    form.set("escopo", "organizacao");
+    form.set("file", arquivoPng());
+    const { POST } = await import("./route");
+    const res = await POST(new NextRequest("http://localhost/api/v1/marca/logo", { method: "POST", body: form }));
+    expect(res.status).toBe(403);
+    expect(espiao.fromChamadas).toHaveLength(0);
   });
 });
 
@@ -338,5 +372,93 @@ describe("escopo=organizacao com o módulo marca_por_organizacao DESLIGADO (D-17
 
     expect(res.status, await res.clone().text()).toBe(200);
     expect(espiao.fromChamadas).toContain("platform_branding");
+  });
+});
+
+/**
+ * O ÍCONE DA ABA (migration 0443) reusa esta rota com `peca=icone`. O que tem de
+ * valer: grava SÓ `favicon_path` (nunca o logo), e só na instalação — pedido com
+ * `escopo=organizacao` é recusado antes de qualquer ida ao banco ou ao storage.
+ */
+describe("peca=icone — o ícone da aba grava favicon_path, e só na instalação", () => {
+  it("dono do servidor sobe o ícone: grava favicon_path e não toca o logo", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(usuarioDonoDoServidor());
+    const espiao = criarAdminEspiao();
+    vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
+
+    const form = new FormData();
+    form.set("escopo", "instalacao");
+    form.set("peca", "icone");
+    form.set("file", arquivoPng());
+
+    const { POST } = await import("./route");
+    const res = await POST(
+      new NextRequest("http://localhost/api/v1/marca/logo", { method: "POST", body: form }),
+    );
+
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(espiao.upsertChamadas).toHaveLength(1);
+    const gravado = espiao.upsertChamadas[0] ?? {};
+    expect(gravado.favicon_path).toMatch(/^platform\/[0-9a-f-]{36}\.png$/);
+    expect(gravado, "o ícone sobrescreveu o logo").not.toHaveProperty("logo_path");
+    expect(gravado).not.toHaveProperty("logo_dark_path");
+  });
+
+  it("DELETE do ícone zera favicon_path e não toca o logo", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(usuarioDonoDoServidor());
+    const espiao = criarAdminEspiao();
+    vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
+
+    const { DELETE } = await import("./route");
+    const res = await DELETE(
+      new NextRequest("http://localhost/api/v1/marca/logo?escopo=instalacao&peca=icone", {
+        method: "DELETE",
+      }),
+    );
+
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(espiao.upsertChamadas).toEqual([
+      expect.objectContaining({ favicon_path: null }),
+    ]);
+    expect(espiao.upsertChamadas[0]).not.toHaveProperty("logo_path");
+  });
+
+  it("escopo=organizacao com peca=icone é recusado com 422, sem banco nem storage", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(usuarioAdminDeOrganizacao());
+    const espiao = criarAdminEspiao();
+    vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
+
+    const form = new FormData();
+    form.set("escopo", "organizacao");
+    form.set("peca", "icone");
+    form.set("file", arquivoPng());
+
+    const { POST } = await import("./route");
+    const res = await POST(
+      new NextRequest("http://localhost/api/v1/marca/logo", { method: "POST", body: form }),
+    );
+
+    expect(res.status).toBe(422);
+    expect(espiao.fromChamadas).toHaveLength(0);
+    expect(espiao.rpcChamadas).toHaveLength(0);
+  });
+
+  it("peca desconhecida é recusada com 422", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(usuarioDonoDoServidor());
+    const espiao = criarAdminEspiao();
+    vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
+
+    const form = new FormData();
+    form.set("escopo", "instalacao");
+    form.set("peca", "fundo");
+    form.set("file", arquivoPng());
+
+    const { POST } = await import("./route");
+    const res = await POST(
+      new NextRequest("http://localhost/api/v1/marca/logo", { method: "POST", body: form }),
+    );
+
+    expect(res.status).toBe(422);
+    expect(espiao.upsertChamadas).toHaveLength(0);
   });
 });

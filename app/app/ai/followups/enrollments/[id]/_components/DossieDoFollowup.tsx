@@ -31,7 +31,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CaretLeft, Clock, Pause, Play, SkipForward, Trash, Warning } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
-import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
 import {
   descreveEvento,
   rotuloDoDesfechoDaAutomacao,
@@ -42,10 +41,8 @@ import {
   type NoDoDossie,
   type RaiaDoEnrollment,
 } from "@/lib/followup/eventos-legiveis";
-import {
-  useFollowupEnrollment,
-  useIntervirNoFollowup,
-} from "@/hooks/followup/useFollowupEnrollment";
+import { DESFECHOS, statusCancelavel } from "@/lib/followup/vocabulario";
+import { useFollowupEnrollment, useIntervirNoFollowup } from "@/hooks/followup/useFollowupEnrollment";
 import { useCancelFollowupEnrollment } from "@/hooks/followup/useFollowupQueue";
 import { useT } from "@/hooks/i18n/useT";
 
@@ -57,8 +54,9 @@ interface Props {
 }
 
 const PAUSAVEL = new Set(["active", "waiting_reply"]);
-/** Pausado por uma pessoa também se cancela — sem ter de retomar antes só para encerrar. */
-const CANCELAVEL = new Set(["active", "waiting_reply", "paused_handoff", "paused_manual"]);
+// Pausado por uma pessoa também se cancela — sem ter de retomar antes só para
+// encerrar. A lista (e `dormente`/`coletando`, que a fila e a rota já aceitavam)
+// mora em `STATUS_CANCELAVEIS`: era aqui que a terceira cópia ficava para trás.
 
 function absoluta(iso: string | null, locale: Locale): string {
   if (!iso) return "—";
@@ -205,7 +203,7 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
   const podePausar = canWrite && PAUSAVEL.has(data.status);
   const podeRetomar = canWrite && data.status === "paused_manual";
   const podeMexerNoRelogio = canWrite && PAUSAVEL.has(data.status);
-  const podeCancelar = canWrite && CANCELAVEL.has(data.status);
+  const podeCancelar = canWrite && statusCancelavel(data.status);
 
   const pular = (edgeId?: string) => {
     intervir.mutate({ id, acao: "skip", body: edgeId ? { edge_id: edgeId } : {} });
@@ -231,7 +229,7 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
           <Campo rotulo={t("Fluxo")}>{data.flow.name ?? t("Fluxo removido")}</Campo>
           <Campo rotulo={t("Agente")}>{data.agent_name ?? t("Nenhum agente fixado")}</Campo>
           <Campo rotulo={t("Começou")}>{absoluta(data.started_at, localeDaData)}</Campo>
-          <Campo rotulo={t("Passos dados")}>{data.steps_taken}</Campo>
+          <Campo rotulo={t("Etapas executadas")}>{data.steps_taken}</Campo>
         </div>
       </header>
 
@@ -273,21 +271,21 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
               {t("Desfecho")}:{" "}
               {data.lane === "automacao"
                 ? t(rotuloDoDesfechoDaAutomacao(data.outcome))
-                : t(
-                    RESULTADOS_DO_FIM[data.outcome as keyof typeof RESULTADOS_DO_FIM] ??
-                      data.outcome,
-                  )}
+                : t(DESFECHOS[data.outcome as keyof typeof DESFECHOS] ?? data.outcome)}
             </p>
           )}
           {data.cancel_reason && (
             <p className="text-sm text-text-muted">
-              {t("Motivo")}: {data.cancel_reason}
+              {/* `t()` devolve o próprio texto quando não há tradução: motivo gravado
+                  como código cru continua aparecendo como antes, e o que tem entrada no
+                  dicionário (ex.: MOTIVO_DA_VAGA_OCUPADA_DEMAIS) sai no idioma da tela. */}
+              {t("Motivo")}: {t(data.cancel_reason)}
             </p>
           )}
           {data.last_error && (
             <p className="flex items-center gap-1.5 text-sm text-warning-fg">
-              <Warning size={14} aria-hidden /> {t("Última falha")}: {data.last_error} (
-              {t("tentativa")} {data.attempts} {t("de")} {data.max_attempts})
+              <Warning size={14} aria-hidden /> {t("Falha ao processar a etapa")}: {data.last_error} ({t("nova tentativa automática")}{" "}
+              {data.attempts} {t("de")} {data.max_attempts})
             </p>
           )}
           {motorOcupado && (

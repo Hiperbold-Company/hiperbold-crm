@@ -27,7 +27,8 @@ export type AcceptInviteResult =
         | "not_authenticated"
         | "internal_error"
         /** A conta ainda tem a verificação de e-mail do CRM em aberto: o vínculo espera por ela (D-204). */
-        | "email_nao_verificado";
+        | "email_nao_verificado"
+        | "limite_do_plano";
       message?: string;
       expectedEmail?: string;
     };

@@ -1,14 +1,14 @@
 "use server";
 
+import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { supportWriteError } from "@/lib/impersonate/support";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { audit } from "@/lib/audit";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
-import { portaoDeAdminDaOrganizacao } from "@/lib/auth/portao-de-escrita";
-import { ipDoCliente } from "@/lib/http/ip-do-cliente";
+import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
+import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MODOS_DE_VALOR_DA_VENDA, VALORES_DE_CATEGORIA } from "@/lib/conversoes/regras-google";
 
@@ -77,8 +77,10 @@ export async function updateGoogleAdsConnection(
   if (supportWriteError(authUser.support)) return { ok: false, error: "forbidden_role" };
   const activeOrg = await resolveActiveOrg(authUser);
   if (!activeOrg) return { ok: false, error: "forbidden_tenant" };
-  const portao = await portaoDeAdminDaOrganizacao(authUser, activeOrg);
-  if (!portao.ok) return { ok: false, error: portao.erro };
+  if (!podeAdministrarEmpresa(authUser, activeOrg)) {
+    return { ok: false, error: "forbidden_role" };
+  }
+  if (await mfaEmDivida()) return { ok: false, error: "mfa_required" };
 
   const admin = createAdminClient();
 

@@ -1,100 +1,117 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
-import { mfaEmDivida } from "@/lib/auth/server";
-import { requireSupportWrite } from "@/lib/impersonate/support";
-import { createAdminClient } from "@/lib/supabase/admin";
+const h = vi.hoisted(() => ({
+  ator: "aaaaaaaa-0000-4000-8000-000000000001",
+  linhaDoAdmin: null as Record<string, unknown> | null,
+  org: null as Record<string, unknown> | null,
+  escritasDiretas: [] as string[],
+  rpc: vi.fn(),
+  audit: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  redirect: (destino: string) => {
+    throw new Error(`redirect:${destino}`);
+  },
+}));
+vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: async () => null }));
+vi.mock("@/lib/auth/server", () => ({ mfaEmDivida: async () => false, mfaEmDividaEstrita: async () => false }));
+vi.mock("@/lib/audit", () => ({ audit: h.audit }));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({
+    auth: {
+      getUser: async () => ({ data: { user: { id: h.ator } } }),
+      mfa: { getAuthenticatorAssuranceLevel: async () => ({ data: { currentLevel: "aal2" } }) },
+    },
+    from: () => {
+      const c: Record<string, unknown> = {};
+      c.select = () => c;
+      c.eq = () => c;
+      c.is = () => c;
+      c.maybeSingle = async () => ({ data: h.linhaDoAdmin, error: null });
+      return c;
+    },
+  }),
+}));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
+    from: (tabela: string) => {
+      const c: Record<string, unknown> = {};
+      c.select = () => c;
+      c.eq = () => c;
+      c.maybeSingle = async () => ({ data: h.org, error: null });
+      c.insert = () => (h.escritasDiretas.push(tabela), c);
+      c.update = () => (h.escritasDiretas.push(tabela), c);
+      return c;
+    },
+    rpc: (...args: unknown[]) => h.rpc(...args),
+  }),
+}));
 
-/**
- * Achado da auditoria: esta rota escrevia em `organizations` (suspensão) só
- * com `requirePlatformAdmin()`, que aceita QUALQUER escopo. Um admin
- * `support_readonly` suspendia qualquer organização. O portão de escopo
- * segue o mesmo padrão de `POST /api/v1/admin/tenants`.
- */
+import { POST } from "./route";
 
-vi.mock("@/lib/auth/requirePlatformAdmin", () => ({ requirePlatformAdmin: vi.fn() }));
-vi.mock("@/lib/auth/server", () => ({ mfaEmDivida: vi.fn() }));
-vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn() }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
-vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
-
-const ADMIN_ID = "11111111-1111-4111-8111-111111111111";
-const ORG_ID = "22222222-2222-4222-8222-222222222222";
-
-const ADMIN_FULL = {
-  user: { id: ADMIN_ID },
-  platformAdmin: { user_id: ADMIN_ID, scope: "full", mfa_required: true },
-} as never;
-
-const ADMIN_SUPPORT_READONLY = {
-  user: { id: ADMIN_ID },
-  platformAdmin: { user_id: ADMIN_ID, scope: "support_readonly", mfa_required: true },
-} as never;
-
-function orgBuilder(status: string) {
-  const builder: Record<string, unknown> = {};
-  builder.select = () => builder;
-  builder.eq = () => builder;
-  builder.update = () => builder;
-  builder.maybeSingle = async () => ({
-    data: { id: ORG_ID, slug: "org", display_name: "Org", status },
-    error: null,
+const TENANT = "bbbbbbbb-0000-4000-8000-000000000001";
+const MOTIVO = "Fraude confirmada no cartão do cliente";
+const ctx = { params: Promise.resolve({ id: TENANT }) };
+const pedido = (body: unknown) =>
+  new NextRequest(`http://localhost/api/v1/admin/tenants/${TENANT}/suspend`, {
+    method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" },
   });
-  builder.then = (resolve: (v: unknown) => unknown) =>
-    Promise.resolve({ error: null }).then(resolve);
-  return builder;
-}
-
-function makeAdminStub(status = "active") {
-  return {
-    from: (table: string) => (table === "organizations" ? orgBuilder(status) : { insert: () => Promise.resolve({ error: null }) }),
-  };
-}
-
-function request() {
-  return new NextRequest(`http://localhost/api/v1/admin/tenants/${ORG_ID}/suspend`, {
-    method: "POST",
-    body: JSON.stringify({ reason: "Inadimplência confirmada" }),
-  });
-}
+const admin = (scope: string) => ({ user_id: h.ator, scope, mfa_required: false, revoked_at: null });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(requireSupportWrite).mockResolvedValue(null);
-  vi.mocked(requirePlatformAdmin).mockResolvedValue(ADMIN_FULL);
-  vi.mocked(mfaEmDivida).mockResolvedValue(false);
-  vi.mocked(createAdminClient).mockReturnValue(makeAdminStub() as never);
+  h.linhaDoAdmin = admin("full");
+  h.org = { id: TENANT, slug: "acme" };
+  h.escritasDiretas = [];
+  h.rpc.mockResolvedValue({ data: { changed: true }, error: null });
 });
 
-describe("POST /api/v1/admin/tenants/[id]/suspend", () => {
-  it("admin com escopo support_readonly é recusado antes de qualquer escrita", async () => {
-    vi.mocked(requirePlatformAdmin).mockResolvedValue(ADMIN_SUPPORT_READONLY);
-    const { POST } = await import("./route");
-
-    const res = await POST(request(), { params: Promise.resolve({ id: ORG_ID }) });
-
+describe("POST /admin/tenants/[id]/suspend", () => {
+  it("support_readonly vê o erro: 403 forbidden_scope, nada escrito", async () => {
+    h.linhaDoAdmin = admin("support_readonly");
+    const res = await POST(pedido({ reason: MOTIVO }), ctx);
     expect(res.status).toBe(403);
-    const body = (await res.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("forbidden");
+    expect((await res.json()).error.code).toBe("forbidden_scope");
+    expect(h.rpc).not.toHaveBeenCalled();
   });
 
-  it("admin com escopo full e MFA em dia consegue suspender", async () => {
-    const { POST } = await import("./route");
-
-    const res = await POST(request(), { params: Promise.resolve({ id: ORG_ID }) });
-
+  it("full suspende pela função, sempre 'administrativa', sem UPDATE nem event_log soltos", async () => {
+    const res = await POST(pedido({ reason: MOTIVO, tipo: "cobranca" }), ctx);
     expect(res.status).toBe(200);
+    expect((await res.json()).data).toEqual({ changed: true });
+    expect(h.rpc).toHaveBeenCalledWith("fn_suspender_organizacao", {
+      p_org: TENANT, p_kind: "administrativa", p_motivo: MOTIVO, p_ator: h.ator,
+    });
+    expect(h.escritasDiretas).toEqual([]);
+    expect(h.audit).toHaveBeenCalledTimes(1);
+    expect(h.audit.mock.calls[0]?.[0]).toMatchObject({ action: "tenant.suspended", organizationId: TENANT });
   });
 
-  it("admin com escopo full mas MFA em dívida é recusado", async () => {
-    vi.mocked(mfaEmDivida).mockResolvedValue(true);
-    const { POST } = await import("./route");
+  it("changed:false devolve 200 com o jsonb e NÃO audita", async () => {
+    h.rpc.mockResolvedValue({ data: { changed: false, motivo: "ja_suspensa" }, error: null });
+    const res = await POST(pedido({ reason: MOTIVO }), ctx);
+    expect((await res.json()).data).toEqual({ changed: false, motivo: "ja_suspensa" });
+    expect(h.audit).not.toHaveBeenCalled();
+  });
 
-    const res = await POST(request(), { params: Promise.resolve({ id: ORG_ID }) });
+  it("motivo curto → 400; tenant inexistente → 404; erro da função → 500", async () => {
+    expect((await POST(pedido({ reason: "curto" }), ctx)).status).toBe(400);
+    h.org = null;
+    expect((await POST(pedido({ reason: MOTIVO }), ctx)).status).toBe(404);
+    h.org = { id: TENANT, slug: "acme" };
+    h.rpc.mockResolvedValue({ data: null, error: { message: "boom" } });
+    expect((await POST(pedido({ reason: MOTIVO }), ctx)).status).toBe(500);
+  });
 
-    expect(res.status).toBe(403);
-    const body = (await res.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("mfa_required");
+  it("trava do aviso do Meet (40001 appointment_notice_busy) → 409 retry_later, sem audit", async () => {
+    h.rpc.mockResolvedValue({ data: null, error: { code: "40001", message: "appointment_notice_busy" } });
+    const res = await POST(pedido({ reason: MOTIVO }), ctx);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatchObject({
+      code: "retry_later",
+      message: "Outra operação está em andamento para esta empresa. Tente de novo em instantes.",
+    });
+    expect(h.audit).not.toHaveBeenCalled();
   });
 });

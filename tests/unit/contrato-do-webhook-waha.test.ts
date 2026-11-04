@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // A rota global do WAHA vem fechada (410, D-108); estes casos exercitam o contrato dela.
 vi.hoisted(() => {
@@ -67,6 +67,10 @@ vi.mock("@/lib/waha/ingest", async (original) => ({
 import { conferirContratoWaha, lerRoteamentoWaha } from "@/lib/waha/envelope";
 import { parseChatId } from "@/lib/waha/ingest";
 import { POST } from "@/app/api/v1/webhooks/waha/route";
+import { limparMemoriaDeSessoes } from "@/lib/waha/sessao-do-webhook";
+
+// A sessão `default` é reutilizada entre casos.
+beforeEach(() => limparMemoriaDeSessoes());
 
 /**
  * Transcrição de `webhook_events_log` da produção (2026-08-06) — a mesma fonte

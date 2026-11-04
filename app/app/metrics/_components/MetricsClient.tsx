@@ -13,7 +13,7 @@
  * atendente (Atendimento) e Atrito.
  */
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -31,6 +31,11 @@ import { AbaNegocios } from "./AbaNegocios";
 import { AbaOrigens } from "./AbaOrigens";
 import { AtritoPanel } from "./AtritoPanel";
 import { FiltrosDeDesempenho, type FunilDoFiltro } from "./FiltrosDeDesempenho";
+import { CanaisPanel } from "./CanaisPanel";
+import { MetaDoMesPanel, type EstadoDaMeta } from "./MetaDoMesPanel";
+import { SeriePanel } from "./SeriePanel";
+import { useMetasDoMes } from "@/hooks/metrics/useMetasDoMes";
+import { janelaDoMes, mesLocal } from "@/lib/metas/periodo";
 
 interface Props {
   canCompare: boolean;
@@ -57,6 +62,19 @@ export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentU
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chaveDosFiltros]);
 
+  // A meta é MENSAL e a janela é o mês corrente de quem está olhando a tela
+  // (o mês é o dele, não um instante UTC — ver `lib/metas/periodo.ts`). Fixada
+  // uma vez por montagem; NÃO segue o filtro de período: o alvo é um só.
+  const [janelaDaMeta] = useState(() => janelaDoMes(mesLocal()));
+  const metasDoMes = useMetasDoMes(janelaDaMeta);
+  const estadoDaMeta: EstadoDaMeta = metasDoMes.isLoading
+    ? "carregando"
+    : metasDoMes.isError || !metasDoMes.data
+      ? "erro"
+      : metasDoMes.data.data.motivo === "sem_meta"
+        ? "vazio"
+        : "ok";
+
   const mudar = (f: FiltrosDaTela) => router.replace(`${pathname}${filtrosParaUrl(f)}`, { scroll: false });
 
   return (
@@ -79,14 +97,25 @@ export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentU
 
         <TabsContent value="negocios" className="mt-4">
           {filtros.aba === "negocios" ? (
-            <AbaNegocios
+            <div className="flex flex-col gap-4">
+              {/* A meta do mês (upstream #3025): o ALVO da empresa, acima do
+                  funil; não segue o filtro de período nem de atendente. */}
+              <MetaDoMesPanel
+                estado={estadoDaMeta}
+                periodo={metasDoMes.data?.data.periodo ?? null}
+                metas={metasDoMes.data?.data.metas ?? []}
+                podeConfigurar={canCompare}
+                valores={metasDoMes.data?.data.valores_do_periodo ?? null}
+              />
+              <AbaNegocios
               query={query}
               janela={janela}
               funilEscolhido={!!efetivos.funil}
               podeVerPerdas={podeVerPerdas}
               perdasDaEmpresaToda={!canCompare}
               currentUserId={currentUserId}
-            />
+              />
+            </div>
           ) : null}
         </TabsContent>
         <TabsContent value="origens" className="mt-4">
@@ -94,13 +123,19 @@ export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentU
         </TabsContent>
         <TabsContent value="atendimento" className="mt-4">
           {filtros.aba === "atendimento" ? (
-            <AbaAtendimento
-              query={query}
-              janela={janela}
-              atendente={efetivos.atendente}
-              canCompare={canCompare}
-              currentUserId={currentUserId}
-            />
+            <div className="flex flex-col gap-4">
+              <AbaAtendimento
+                query={query}
+                janela={janela}
+                atendente={efetivos.atendente}
+                canCompare={canCompare}
+                currentUserId={currentUserId}
+              />
+              {/* Relatório "Por canal" (upstream #2390), pelo atendente do filtro;
+                  fora dele a RLS escopa. E a série no tempo (upstream). */}
+              <CanaisPanel owner={efetivos.atendente} />
+              <SeriePanel />
+            </div>
           ) : null}
         </TabsContent>
         <TabsContent value="atrito" className="mt-4">

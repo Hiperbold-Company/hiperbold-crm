@@ -8,6 +8,7 @@ export const NOTIFY_KINDS = {
   call_inbound: { sound: "attention", tagPrefix: "call-inbound" },
   // A tarefa venceu (migration 0980): o sino de tarefas da barra do topo.
   task_due: { sound: "attention", tagPrefix: "task-due" },
+  aviso: { sound: "attention", tagPrefix: "aviso" },
 } as const;
 
 export type NotifyKind = keyof typeof NOTIFY_KINDS;

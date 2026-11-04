@@ -89,13 +89,15 @@ interface TenantOverviewProps {
   counts: TenantCounts;
   integrations: TenantIntegrations;
   plano: TenantPlano;
+  /** Chave `cobranca` ligada: o card Cobrança mostra plano e "Rótulo antigo"; o badge daqui some (spec §9). */
+  cobrancaLigada?: boolean;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function TenantOverview({ organization, counts, integrations, plano }: TenantOverviewProps) {
+export function TenantOverview({ organization, counts, integrations, plano, cobrancaLigada = false }: TenantOverviewProps) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
   // Fonte do "Plano" desde a Tarefa 6 da fase F1 dos planos de assinatura: o
@@ -122,7 +124,9 @@ export function TenantOverview({ organization, counts, integrations, plano }: Te
           {t("Informações")}
         </h2>
         <div>
-          <InfoRow label={t("Plano")} value={<Badge variant="neutral" className="capitalize">{planLabel}</Badge>} />
+          {!cobrancaLigada && (
+            <InfoRow label={t("Plano")} value={<Badge variant="neutral" className="capitalize">{planLabel}</Badge>} />
+          )}
           <InfoRow label={t("Razão social")} value={organization.legal_name} />
           <InfoRow label="CNPJ" value={organization.cnpj} />
           <InfoRow label={t("Onboarding concluído")} value={formatDate(organization.onboarded_at, tagDoIdioma)} />

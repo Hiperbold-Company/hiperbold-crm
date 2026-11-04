@@ -13,7 +13,9 @@
  * ─── Por que esta rota é tão curta ──────────────────────────────────────────
  *
  * Ela não sabe de quem é o payload. Resolve o token, decifra o segredo e
- * entrega tudo a `handleInboundWebhook` — a verificação de assinatura e a
+ * entrega tudo a `processarEntradaDoCanal` (`../../_entrada-do-canal.ts`, o
+ * mesmo caminho da entrada da instalação), que chama `handleInboundWebhook` —
+ * a verificação de assinatura e a
  * leitura moram lá porque o esquema é do CANAL (header, algoritmo e formato
  * mudam por provider). A primeira versão desta rota fazia isso aqui e o
  * `lint:channels` reprovou, que é a catraca funcionando: uma rota que verifica
@@ -28,7 +30,6 @@
  * queremos, porque o evento era bom e nós é que não gravamos.
  */
 import { randomUUID } from "node:crypto";
-import { logger } from "@/lib/logger";
 import type { NextRequest } from "next/server";
 
 import { fail, ok } from "@/lib/api/wrappers";
@@ -38,11 +39,14 @@ import {
   abrirArquivoDoWebhook,
   fecharArquivoDoWebhook,
 } from "@/lib/channels/arquivo-de-webhook";
-import { acceptsInboundWebhook, handleInboundWebhook, verifyInboundWebhookSignature, inboundPayloadBelongsToSession } from "@/lib/channels/inbound";
+import { acceptsInboundWebhook, verifyInboundWebhookSignature } from "@/lib/channels/inbound";
 import { carregarComportamentoDaInstalacao } from "@/lib/instalacao/comportamento-servidor";
 import { lerCorpoDaRequisicao } from "@/lib/http/corpo-com-limite";
+import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
+
+import { processarEntradaDoCanal } from "../../_entrada-do-canal";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -176,80 +180,13 @@ export async function POST(
     return fail("unauthorized", "bad_signature", 401, { requestId });
   }
 
-  // O corpo cru vai para o arquivo ANTES de qualquer processamento: se o processo
-  // morrer no meio — exceção, OOM, deploy no instante errado — o payload continua
-  // gravado, que é justamente quando alguém vai querer lê-lo.
-  const arquivo = await abrirArquivoDoWebhook(admin, {
-    organizationId: sessao.organization_id,
-    channelSessionId: sessao.id,
-    provider: sessao.provider,
+  // Assinatura conferida: o resto (arquivo do corpo, conta certa, ingestão e o
+  // desfecho no arquivo) é o caminho único de `processarEntradaDoCanal`.
+  return processarEntradaDoCanal(admin, {
+    sessao,
     rawBody,
     headers: req.headers,
+    secret,
+    requestId,
   });
-
-  if (!await inboundPayloadBelongsToSession(admin, { session: sessao, rawBody, headers: req.headers, secret })) {
-    // Assinatura BOA, conta errada: `validSignature: true` de propósito. Marcar
-    // `false` aqui mandaria quem investiga procurar um problema de segredo que
-    // não existe — o segredo está certo, o evento é que é de outra conta.
-    await fecharArquivoDoWebhook(admin, arquivo, {
-      status: "error",
-      validSignature: true,
-      erro: "evento_de_outra_conta",
-    });
-    return ok({ status: "ignored", reason: "evento_de_outra_conta" }, { requestId });
-  }
-
-  try {
-    const r = await handleInboundWebhook(admin, {
-      session: sessao,
-      rawBody,
-      headers: req.headers,
-      secret,
-    });
-
-    if (r.ok) {
-      await fecharArquivoDoWebhook(admin, arquivo, {
-        status: "processed",
-        validSignature: true,
-        // O desfecho do seam vai junto: é ele que distingue "ingerido" de
-        // "ignorado por falta de identidade" quando alguém for contar depois.
-        erro: typeof r.body.reason === "string" ? r.body.reason : null,
-      });
-      return ok(r.body, { requestId });
-    }
-
-    const status = r.code === "unauthorized" ? 401 : 400;
-    await fecharArquivoDoWebhook(admin, arquivo, {
-      status: "error",
-      // `false` SÓ quando a recusa foi por assinatura. Um payload bem assinado
-      // que o parser recusou não é problema de segredo, e marcá-lo como se
-      // fosse mandaria quem investiga procurar no lugar errado.
-      validSignature: r.code === "unauthorized" ? false : null,
-      erro: r.message,
-    });
-    return fail(
-      r.code === "unauthorized" ? "unauthorized" : "invalid_request",
-      r.message,
-      status,
-      { requestId },
-    );
-  } catch (err) {
-    // O motivo real fica no arquivo e no log, que são nossos; a resposta ao provedor
-    // (quem sabe o token e errou algo) leva só um código genérico — `err.message`
-    // de uma exceção de ingestão pode citar tabela, coluna e valor.
-    const detalhe = err instanceof Error ? err.message : "ingest_failed";
-    await fecharArquivoDoWebhook(admin, arquivo, {
-      status: "error",
-      validSignature: null,
-      erro: detalhe,
-    });
-    logger.error("[webhook-canal] ingestão falhou", {
-      organization_id: sessao.organization_id,
-      channel_session_id: sessao.id,
-      provider: sessao.provider,
-      request_id: requestId,
-      detail: detalhe.slice(0, 200),
-    });
-    return fail("internal_error", "ingest_failed", 500, { requestId });
-  }
 }

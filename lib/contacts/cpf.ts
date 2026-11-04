@@ -7,9 +7,14 @@
  * bruta em minutos por quem tenha acesso à coluna ou à resposta da API. Sem a chave, `hashCpf` devolve `null` e
  * quem chama NÃO grava o CPF (falha fechada). A migração dos hashes antigos é
  * `hiperbold/scripts/recalcular-cpf-hash.mts`.
+ *
+ * ⚠️ As duas colunas são um PAR (#2522, upstream): `contacts_cpf_consistency` exige
+ * `(cpf_encrypted IS NULL) = (cpf_hash IS NULL)`. Use `camposCpfParaGravar`, nunca `hashCpf` sozinho.
  */
 import { createHmac } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export function normalizeCpf(raw: string): string {
   return raw.replace(/\D/g, "");
@@ -59,4 +64,30 @@ export async function cifrarCpfDaInstalacao(
   const { data, error } = await admin.rpc("fn_encrypt_oauth", { plaintext: digitos });
   if (error || !data) return null;
   return data as unknown as string;
+}
+
+/**
+ * The CPF columns for an insert/patch row — BOTH or NEITHER (#2522).
+ *
+ * `contacts_cpf_consistency` is `(cpf_encrypted IS NULL) = (cpf_hash IS NULL)`:
+ * writing `cpf_hash` while encryption is unavailable made the database refuse
+ * the WHOLE row (CSV import, POST /api/v1/contacts and edit alike). Saving the
+ * contact without the CPF is the degradation documented in the issue; losing
+ * CPF search for that one row is the price, losing the row never was.
+ *
+ * Returns `{}` when the CPF cannot be encrypted, so spreading the result into
+ * the row touches nothing.
+ */
+export async function camposCpfParaGravar(
+  _supabase: SupabaseClient,
+  raw: string,
+): Promise<{ cpf_hash?: string; cpf_encrypted?: string }> {
+  // Hiperbold: o hash é o HMAC com a chave do servidor e a cifra é a da
+  // instalação (`fn_encrypt_oauth`, só `service_role` — por isso o admin, e não
+  // o cliente de quem chama). Sem um dos dois, nenhum: a linha grava sem CPF.
+  const hash = hashCpf(raw);
+  if (!hash) return {};
+  const enc = await cifrarCpfDaInstalacao(createAdminClient(), normalizeCpf(raw));
+  if (!enc) return {};
+  return { cpf_hash: hash, cpf_encrypted: enc };
 }

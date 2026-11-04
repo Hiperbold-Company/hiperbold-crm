@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { InterfaceEditor } from "@/components/team/InterfaceEditor";
@@ -16,6 +16,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { type CreateTenantResponse, useCreateTenant } from "@/hooks/useCreateTenant";
 import { ApiError } from "@/lib/api/types";
 import { useT } from "@/hooks/i18n/useT";
@@ -62,7 +69,35 @@ function maskCnpj(value: string): string {
 // Form component
 // ---------------------------------------------------------------------------
 
-export function NewTenantForm() {
+/** Um plano ativo de `cobranca_planos`, como o formulário o oferece. */
+export interface PlanoParaEscolher {
+  id: string;
+  nome: string;
+  preco_cents: number;
+  intervalo: string;
+  trial_dias: number;
+}
+
+/** Valor do item "Sem cobrança": o Select do Radix não aceita valor vazio. */
+const ISENTA = "isenta";
+
+function formatarPreco(cents: number, idioma: string): string {
+  return new Intl.NumberFormat(idioma, { style: "currency", currency: "BRL" }).format(cents / 100);
+}
+
+export function NewTenantForm({
+  cobranca,
+  moldeDeIa = null,
+}: {
+  /** Spec da cobrança §9: ligada, o plano de cobrança substitui o rótulo antigo (D-2). */
+  cobranca: { ligada: boolean; planos: readonly PlanoParaEscolher[] };
+  /**
+   * O molde de IA da instalação (migration 9096), quando há um: a empresa que
+   * nascer deste formulário recebe a IA dele. Dito AQUI, no momento de criar,
+   * e não só em Recursos opcionais — é aqui que a pessoa decide criar.
+   */
+  moldeDeIa?: { nome: string } | null;
+}) {
   const t = useT();
   const idioma = useIdioma();
   const router = useRouter();
@@ -78,6 +113,7 @@ export function NewTenantForm() {
       slug: "",
       legal_name: "",
       cnpj: "",
+      plano_id: undefined,
       owner_email: "",
     },
   });
@@ -114,6 +150,10 @@ export function NewTenantForm() {
         slug: values.slug,
         legal_name: values.legal_name || undefined,
         cnpj: values.cnpj || undefined,
+        // Ligada: o plano de cobrança do módulo `cobranca` (ausente = isenta).
+        // Desligada, nada: o rótulo antigo (`plan`) foi aposentado na criação
+        // (planos Hiperbold, F1 tarefa 6); o plano vem do gatilho do banco.
+        ...(cobranca.ligada ? { plano_id: values.plano_id } : {}),
         owner_email: values.owner_email,
         owner_interface_settings: ownerInterface,
       });
@@ -132,6 +172,8 @@ export function NewTenantForm() {
       }
     }
   });
+
+  const planoIdValue = useWatch({ control: form.control, name: "plano_id" });
 
   if (created)
     return (
@@ -274,6 +316,35 @@ export function NewTenantForm() {
               )}
             </div>
 
+            {/* plano: só com a cobrança ligada (o rótulo antigo foi aposentado, planos Hiperbold F1 tarefa 6) */}
+            {cobranca.ligada ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="plano_id">{t("Plano de cobrança")}</Label>
+                <Select
+                  value={planoIdValue ?? ISENTA}
+                  onValueChange={(v) => setValue("plano_id", v === ISENTA ? undefined : v)}
+                >
+                  <SelectTrigger id="plano_id" aria-label={t("Plano de cobrança")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ISENTA}>{t("Sem cobrança (isenta)")}</SelectItem>
+                    {cobranca.planos.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.nome} · {formatarPreco(p.preco_cents, idioma)}{" "}
+                        {p.intervalo === "mes" ? t("por mês") : t("por ano")} · {p.trial_dias} {t("dias de teste")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {cobranca.planos.length === 0
+                    ? t("Nenhum plano criado ainda: a empresa nasce isenta. Crie planos em Cobrança e atribua um no painel da empresa.")
+                    : t("Com um plano, a empresa começa em teste grátis pelos dias do plano. Isenta, ela não paga e não tem limites.")}
+                </p>
+              </div>
+            ) : null}
+
             {/* owner_email */}
             <div className="space-y-1.5">
               <Label htmlFor="owner_email">
@@ -297,6 +368,13 @@ export function NewTenantForm() {
               role="admin"
               disabled={isSubmitting}
             />
+            {moldeDeIa && (
+              <p className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground" data-testid="aviso-molde-de-ia">
+                {t(
+                  "A IA desta empresa vai nascer copiada de {empresa}, o molde escolhido em Recursos opcionais: o modelo de cada função e o modelo padrão, com a chave de IA desta instalação.",
+                ).replace("{empresa}", moldeDeIa.nome)}
+              </p>
+            )}
             {/* Actions */}
             <div className="flex items-center gap-3 pt-2">
               <Button

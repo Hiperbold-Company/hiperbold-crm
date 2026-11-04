@@ -50,6 +50,7 @@ const CAPABILITIES = [
   "alteraMensagemEnviada",
   "anexosDeSaida",
   "interactive",
+  "phonebook",
 ] as const;
 
 describe("matriz capability × provider é exaustiva", () => {

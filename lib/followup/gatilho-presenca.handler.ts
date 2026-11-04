@@ -4,6 +4,7 @@ import { motivoDeNaoProduzir } from "@/lib/billing/assinatura/pode-produzir";
 
 export const followupGatilhoPresencaHandler: EventHandler = {
   key: "followup-gatilho-presenca.v1",
+  naOrgParada: "pula",
   events: ["appointment.outcome_confirmed"],
   async handle(row) {
     const admin = createAdminClient();

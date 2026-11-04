@@ -1,6 +1,10 @@
-// Flat config (ESLint 9 / eslint-config-next 16 — `next lint` foi removido no
-// Next 16; o script `lint` chama o eslint CLI direto). Migração 1:1 do antigo
-// .eslintrc.json.
+// Flat config (`next lint` foi removido no Next 16; o script `lint` chama o
+// eslint CLI direto). Migração 1:1 do antigo .eslintrc.json.
+// Carrega o @next/eslint-plugin-next DIRETO, nunca o preset do
+// eslint-config-next: os plugins que ele traz (react 7.37.5, import 2.32.0,
+// jsx-a11y 6.10.2) só declaram peer eslint até ^9, e o react quebra no ESLint
+// 10 — importar "eslint-config-next/core-web-vitals" aqui derruba o lint com
+// "contextOrFilename.getFilename is not a function" (#297).
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextPlugin from "@next/eslint-plugin-next";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -28,6 +32,17 @@ export default defineConfig([
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/consistent-type-imports": ["warn", { prefer: "type-imports" }],
+      // `no-console` fica em `warn`, e não em `error`: a conta que sustenta isso
+      // foi medida na issue #297. `npx eslint . -f json` na main de 03/11/2026
+      // (eslint 10.13.0, o do lockfile) dá 652 avisos e 0 erros; 223 deles são
+      // desta regra, em 52 arquivos, e todos fora do bundle — `scripts/` 152,
+      // `tests/` 48, `evidence/` 20, `loop/` 3 — isto é, CLI e teste, onde o
+      // stdout É a saída. Nenhuma ocorrência em `app/`, `components/` ou `lib/`,
+      // que é o que a regra existe para proteger. Promover a `error` — ou pôr
+      // `--max-warnings 0` no passo `Lint` de `.github/workflows/ci.yml` -
+      // reprovaria a main hoje, pelo motivo errado; o passivo é anterior e
+      // mora fora do produto. Quando chegar a zero, a trava vale, e o lugar
+      // dela é aquele passo.
       "no-console": ["warn", { allow: ["warn", "error", "info"] }],
       // react-hooks 7 introduziu esta regra como error; o padrão setState-em-
       // effect é pré-existente em 14 componentes — warn até o mutirão de refactor.

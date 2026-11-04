@@ -42,6 +42,7 @@ function linha(over: Record<string, unknown> = {}) {
     assignee_kind: "ai",
     contacts: { force_human: false, ai_authorized_at: null, phone_number: null },
     channel_sessions: { metadata: {} },
+    organizations: { status: "active" },
     ...over,
   };
 }
@@ -54,7 +55,14 @@ describe("decidirElegibilidadeDaConversaViaSupabase", () => {
       agora: AGORA,
       ttlMs: TTL,
     });
-    expect(d).toEqual({ permite: true, motivo: "gate_aberto", bloqueioPorAllowlist: false });
+    // #3534: a decisão do transporte carrega também `contatoDaEquipe` (a régua
+    // que o medidor de clima precisa). Aqui o contato não tem etiqueta de equipe.
+    expect(d).toEqual({
+      permite: true,
+      motivo: "gate_aberto",
+      bloqueioPorAllowlist: false,
+      contatoDaEquipe: false,
+    });
   });
 
   it("canal 'allowlist' + contato NÃO autorizado: NÃO permite (bloqueioPorAllowlist)", async () => {
@@ -191,6 +199,27 @@ describe("decidirElegibilidadeDaConversaViaSupabase", () => {
       { organizationId: ORG, conversationId: CONV, agora: AGORA, ttlMs: TTL },
     );
     expect(d).toMatchObject({ permite: true, motivo: "gate_aberto" });
+  });
+
+  it("org suspensa: NÃO permite, com org_nao_operante", async () => {
+    const d = await decidirElegibilidadeDaConversaViaSupabase(
+      adminStub({ data: linha({ organizations: { status: "suspended" } }), error: null }),
+      { organizationId: ORG, conversationId: CONV, agora: AGORA, ttlMs: TTL },
+    );
+    expect(d).toEqual({
+      permite: false,
+      motivo: "org_nao_operante",
+      bloqueioPorAllowlist: false,
+      contatoDaEquipe: false,
+    });
+  });
+
+  it("embed da org ausente: NÃO permite (falha fechada)", async () => {
+    const d = await decidirElegibilidadeDaConversaViaSupabase(
+      adminStub({ data: linha({ organizations: null }), error: null }),
+      { organizationId: ORG, conversationId: CONV, agora: AGORA, ttlMs: TTL },
+    );
+    expect(d?.motivo).toBe("org_nao_operante");
   });
 
   it("conversa inexistente → null", async () => {

@@ -41,6 +41,10 @@ import {
   vagasRestantes,
   type CapacidadeSelecionavel,
 } from "@/lib/mcp/tools/selecao-por-pacote";
+// Id de ferramenta do servidor MCP externo (`mcp_externo:*`, #3586) não é
+// capacidade deste catálogo — é escolha do cartão do servidor externo, e este
+// seletor só a carrega adiante.
+import { ehToolIdRemoto } from "@/lib/mcp/servidor-externo/ids";
 
 /**
  * O que a rota `/api/v1/mcp/tools` serve (snake_case no wire).
@@ -74,10 +78,22 @@ interface Props {
   value: string[];
   onChange: (ids: string[]) => void;
   disabled?: boolean;
+  /**
+   * Capacidades que ESTE papel não recebe no runtime, marcadas ou não (ex.:
+   * `FORA_DO_OPERADOR`). Somem do catálogo em vez de aparecerem marcáveis:
+   * uma caixa que se marca e não faz nada é promessa que a tela não cumpre.
+   * Id já salvo com um destes valores é ignorado aqui (e pelo runtime), e sai
+   * da versão na próxima vez que a lista for alterada.
+   */
+  ocultar?: readonly string[];
 }
 
 interface ApiResponse {
-  data: { tools: Array<Omit<McpToolMeta, "name">> };
+  data: {
+    tools: Array<Omit<McpToolMeta, "name">>;
+    /** Capacidades que a ORGANIZAÇÃO desligou (ex.: Propostas) — não são órfãs. */
+    desligadas_pela_organizacao?: string[];
+  };
 }
 
 const TODOS_OS_PACOTES: ReadonlyArray<ToolBundle> = PACOTES.map((p) => p.id);
@@ -231,8 +247,12 @@ function AvisoTeto({ texto }: { texto: string }) {
   );
 }
 
-export function ToolPicker({ value, onChange, disabled }: Props) {
+export function ToolPicker({ value: valorSalvo, onChange, disabled, ocultar }: Props) {
   const t = useT();
+  const value = React.useMemo(
+    () => (ocultar === undefined ? valorSalvo : valorSalvo.filter((id) => !ocultar.includes(id))),
+    [valorSalvo, ocultar],
+  );
   const [avancado, setAvancado] = React.useState(false);
   // `pacote` diz ONDE a recusa aconteceu. O aviso nascia só no topo do seletor,
   // e quem clicava num pacote lá embaixo (com a tela rolada) via o interruptor
@@ -247,7 +267,10 @@ export function ToolPicker({ value, onChange, disabled }: Props) {
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse>("/api/v1/mcp/tools");
       // `name` é o mesmo `id` — a regra de seleção fala em `name`, o wire em `id`.
-      return res.data.tools.map((t) => ({ ...t, name: t.id })) as McpToolMeta[];
+      return {
+        tools: res.data.tools.map((t) => ({ ...t, name: t.id })) as McpToolMeta[],
+        desligadas: res.data.desligadas_pela_organizacao ?? [],
+      };
     },
     staleTime: 60_000,
   });
@@ -266,7 +289,10 @@ export function ToolPicker({ value, onChange, disabled }: Props) {
     staleTime: 60_000,
   });
 
-  const doCatalogo = React.useMemo<McpToolMeta[]>(() => query.data ?? [], [query.data]);
+  const doCatalogo = React.useMemo<McpToolMeta[]>(
+    () => (query.data?.tools ?? []).filter((c) => !(ocultar ?? []).includes(c.name)),
+    [query.data, ocultar],
+  );
   const externas = React.useMemo<McpToolMeta[]>(() => queryExternas.data ?? [], [queryExternas.data]);
 
   /**
@@ -280,6 +306,10 @@ export function ToolPicker({ value, onChange, disabled }: Props) {
   const catalogo = React.useMemo<McpToolMeta[]>(
     () => [...doCatalogo, ...externas],
     [doCatalogo, externas],
+  );
+  const desligadasPelaOrg = React.useMemo(
+    () => new Set(query.data?.desligadas ?? []),
+    [query.data],
   );
   const porNome = React.useMemo(
     () => new Map(catalogo.map((c) => [c.name, c])),
@@ -311,7 +341,21 @@ export function ToolPicker({ value, onChange, disabled }: Props) {
   const cheio = vagas <= 0;
 
   /** Ids salvos que o servidor não oferece mais — some da tela seria mentir. */
-  const orfas = value.filter((id) => !porNome.has(id));
+  const orfas = value.filter(
+    (id) => !ehToolIdRemoto(id) && !porNome.has(id) && !desligadasPelaOrg.has(id),
+  );
+  /**
+   * Escolhas de ferramenta do SERVIDOR MCP EXTERNO (`mcp_externo:*`, #3586).
+   *
+   * Elas moram no mesmo `tool_ids` e NÃO pertencem a este catálogo: quem as
+   * oferece é o servidor da instalação, e quem as marca é o cartão do servidor
+   * externo. Aqui elas são só carregadas adiante — tratar uma delas como "não
+   * existe mais nesta versão do sistema" inventaria um aviso falso (o nome é de
+   * um ERP, não do produto) com um botão que apagaria a escolha de verdade.
+   */
+  const remotas = value.filter((id) => ehToolIdRemoto(id));
+  /** Ids salvos de capacidade que a organização desligou — voltam a valer ao ligar. */
+  const desligadasSalvas = value.filter((id) => desligadasPelaOrg.has(id));
 
   /**
    * `vagasExigidas` é o que DECIDE, e por padrão é o tamanho do resultado.
@@ -369,7 +413,7 @@ export function ToolPicker({ value, onChange, disabled }: Props) {
       return;
     }
     aplicar(
-      [...catalogo.map((c) => c.name), ...orfas].filter(
+      [...catalogo.map((c) => c.name), ...remotas, ...orfas].filter(
         (n) => value.includes(n) || n === name,
       ),
       `${t("Você já ligou")} ${TETO_TOOLS_POR_AGENTE} ${t("capacidades. Desligue uma antes de ligar outra.")}`,
@@ -577,6 +621,17 @@ export function ToolPicker({ value, onChange, disabled }: Props) {
         ) : null}
       </div>
 
+      {desligadasSalvas.length > 0 ? (
+        <p
+          data-testid="capacidades-desligadas-pela-organizacao"
+          className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground"
+        >
+          {t(
+            "Propostas está desligada nesta organização: o rascunho automático de proposta fica guardado e volta a valer quando alguém ligar em Configurações › Propostas.",
+          )}
+        </p>
+      ) : null}
+
       {orfas.length > 0 ? (
         <div
           data-testid="capacidades-orfas"
@@ -596,7 +651,9 @@ export function ToolPicker({ value, onChange, disabled }: Props) {
             disabled={disabled}
             onClick={() => {
               setRecusa(null);
-              onChange(value.filter((id) => porNome.has(id)));
+              // As remotas (#3586) não são do catálogo e também não são órfãs:
+              // "desligar as órfãs" não pode levá-las junto.
+              onChange(value.filter((id) => porNome.has(id) || remotas.includes(id)));
             }}
             className="font-medium underline underline-offset-4 disabled:opacity-50"
           >

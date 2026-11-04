@@ -28,6 +28,12 @@ export interface OrgMemoryEntryRow {
   /** `proposed`: sugestão do agente aguardando uma pessoa aprovar; nenhum agente a lê antes. */
   status: "active" | "archived" | "proposed";
   created_at: string;
+  /**
+   * Último dia em que o aprendizado vale (`YYYY-MM-DD`, no fuso da
+   * organização). `null` = sem prazo. Vencido, ele deixa de entrar no prompt
+   * dos agentes — é o que faz a programação da semana passada sair sozinha.
+   */
+  valid_until: string | null;
 }
 export interface OrgMemoryState {
   document: OrgMemoryDocument | null;
@@ -63,7 +69,7 @@ export function usePublishOrgMemory() {
 export function useCreateOrgMemoryEntry() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { title: string; body: string }) =>
+    mutationFn: (input: { title: string; body: string; valid_until?: string | null }) =>
       apiClient.post<{ data: { id: string } }>("/api/v1/ai/memory/entries", input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
   });
@@ -74,6 +80,22 @@ export function useSetOrgMemoryEntryStatus() {
   return useMutation({
     mutationFn: (input: { id: string; status: "archived" | "active" }) =>
       apiClient.patch<{ data: { id: string; status: string } }>(`/api/v1/ai/memory/entries/${input.id}`, { status: input.status }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+/**
+ * #2369 — o prazo do aprendizado. `null` tira o prazo (o aprendizado volta a
+ * valer para sempre), que é o que a tela faz ao limpar o campo.
+ */
+export function useSetOrgMemoryEntryValidity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; valid_until: string | null }) =>
+      apiClient.patch<{ data: { id: string; valid_until: string | null } }>(
+        `/api/v1/ai/memory/entries/${input.id}`,
+        { valid_until: input.valid_until },
+      ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
   });
 }

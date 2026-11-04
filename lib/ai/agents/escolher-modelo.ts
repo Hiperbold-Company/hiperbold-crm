@@ -23,7 +23,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { ehVarianteEmLote, idNoProvedor } from "@/lib/ai/modelos-da-instalacao";
+import { idNoProvedor } from "@/lib/ai/modelos-da-instalacao";
+import { ehVarianteEmLote } from "@/lib/ai/catalogo/variante-em-lote";
 
 export interface ModeloDoCatalogo {
   model_id: string;
@@ -42,9 +43,12 @@ export type EscolhaDeModelo =
  * tool calling não dá erro: responde um texto plausível e nada chega ao funil —
  * o pior desfecho do produto. Por isso `supports_tools` não é preferência, é
  * requisito, e é a mesma régua que `validarBinding` aplica no painel.
+ *
+ * A variante `:batch` declara ferramentas e custa a metade — então, sem esta
+ * guarda, a escolha automática cai nela, e ela devolve 404 no chat. É a mesma
+ * régua que o seletor de modelo do agente aplica.
  */
 function serve(m: ModeloDoCatalogo): boolean {
-  // A variante `:batch` é assíncrona (Batch API) e não conversa: nunca é o modelo escolhido.
   return m.supports_tools === true && !ehVarianteEmLote(m.model_id);
 }
 

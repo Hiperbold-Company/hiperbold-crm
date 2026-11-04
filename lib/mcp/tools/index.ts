@@ -25,6 +25,7 @@ import {
   crmUpdateLead,
   crmMoveLeadStage,
   crmRetomarLead,
+  crmProposeLeadFieldsFromDocument,
 } from "./leads";
 import {
   crmCreatePipelineField,
@@ -118,8 +119,11 @@ import {
   crmSaveOrgMemory,
 } from "./evolucao";
 import { crmListContactOrders, crmSearchProducts } from "./comercio";
+import { crmGetHonorariosContrato, crmListHonorariosParcelas } from "./honorarios";
 import { crmDescribeExternalData, crmQueryExternalData } from "./dados-externos";
+import { crmConsultarReceita } from "./receitas-externas";
 import { crmListPrivacyRequests } from "./privacidade";
+import { crmGetProspectingSiteAudit } from "./prospeccao-site";
 import {
   crmArchiveStage,
   crmCreateStage,
@@ -157,6 +161,7 @@ import {
   crmCloseDemand,
   crmProposeReactivation,
 } from "./retencao";
+import { crmDraftProposal, crmPrepararProposta } from "./propostas";
 
 // Cast via `unknown` porque McpToolDefinition<TInput> nao e covariante
 // em TInput (handler usa TInput em posicao contravariante). Coletar
@@ -186,9 +191,14 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmSaveOrgMemory,
   crmListContactOrders,
   crmSearchProducts,
+  crmGetHonorariosContrato,
+  crmListHonorariosParcelas,
+  crmPrepararProposta,
   crmDescribeExternalData,
   crmQueryExternalData,
+  crmConsultarReceita,
   crmListPrivacyRequests,
+  crmGetProspectingSiteAudit,
   // read — organizar a operação (W4)
   crmListStages,
   crmListTags,
@@ -230,6 +240,7 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmUpdateLead,
   crmMoveLeadStage,
   crmRetomarLead,
+  crmProposeLeadFieldsFromDocument,
   crmSendWhatsappMessage,
   crmStartConversationAndSend,
   crmCreateConversationDraft,
@@ -290,6 +301,7 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmAddCaseNote,
   crmCloseHumanCase,
   crmResumeAiAttendance,
+  crmDraftProposal,
   // handoff (special)
   crmRequestHumanHandoff,
 ] as unknown as ReadonlyArray<McpToolDefinition>;

@@ -25,8 +25,10 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { listarModelosDaAssinaturaOuVazio } from "@/lib/ai/catalogo/modelos-da-assinatura";
 import { ehProvedorSuportado } from "@/lib/ai/pontos/provedores";
 import { PROVEDOR_DA_CHAVE_DA_INSTALACAO, modeloLiberado } from "@/lib/ai/modelos-da-instalacao";
+import { PROVEDOR_POR_ASSINATURA } from "@/lib/ai/pontos/provedores";
 
 /** Um modelo oferecível, já com o provedor que precisa viajar junto dele. */
 export interface ClassifierModelOption {
@@ -85,7 +87,7 @@ export async function listClassifierModels(
     .order("display_name", { ascending: true });
   if (modelErr) throw new Error(`classifier_models_catalog_failed: ${modelErr.message}`);
 
-  return ((models ?? []) as Array<{ provider: string; model_id: string; display_name: string | null }>)
+  const fromCatalog = ((models ?? []) as Array<{ provider: string; model_id: string; display_name: string | null }>)
     // Na chave da instalação, só o que o plano roda: o resto o freio trocaria em silêncio.
     .filter(
       (m) =>
@@ -99,4 +101,18 @@ export async function listClassifierModels(
       origem: origemPorProvider.get(m.provider) ?? "plataforma",
     }),
   );
+
+  if (!origemPorProvider.has(PROVEDOR_POR_ASSINATURA)) return fromCatalog;
+  // Falha na consulta do catálogo SIWC aqui vira lista vazia + log: o
+  // classificador sugere o catálogo global, não derruba a sessão de chat.
+  const accountModels = await listarModelosDaAssinaturaOuVazio(organizationId);
+  return [
+    ...fromCatalog,
+    ...accountModels.map((m) => ({
+      provider: m.provider,
+      model_id: m.model_id,
+      display_name: m.display_name,
+      origem: "org" as const,
+    })),
+  ];
 }

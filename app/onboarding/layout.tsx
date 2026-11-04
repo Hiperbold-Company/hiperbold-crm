@@ -1,14 +1,17 @@
 import { redirect } from "next/navigation";
 
-import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
+import { exigirProvaDeMfa, requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { loadOnboardingState } from "@/app/actions/onboarding/_shared";
 import { Stepper } from "./_components/Stepper";
 import { OutrasOrganizacoes } from "./_components/OutrasOrganizacoes";
 import { SairDoOnboarding } from "./_components/SairDoOnboarding";
 import { SkipToEnd } from "./_components/SkipToEnd";
 import { SimboloDoProduto } from "@/components/branding/MarcaDoProduto";
-import { branding, marcaEhADoProduto } from "@/lib/branding";
+import { marcaEhADoProduto } from "@/lib/branding";
+import { marcaDaInstalacao } from "@/lib/branding/instalacao";
+import { ICONE_DESENHADO, iconeDaAba } from "@/lib/branding/icone";
 import { marcaDaSaida } from "@/lib/branding/saida";
+import { baseDoStorage } from "@/lib/branding/logo";
 import { passosVisiveis } from "@/lib/onboarding/passos";
 import { contextoDoOnboarding } from "@/lib/onboarding/contexto";
 import { destinoSeJaConcluido } from "@/lib/onboarding/destino";
@@ -30,6 +33,9 @@ export default async function OnboardingLayout({ children }: { children: React.R
   if (onboardedAt) {
     redirect(destinoSeJaConcluido(await compraPeloClienteDisponivel(createAdminClient())));
   }
+  // A mesma regra de sessão do layout de `/app`: quem tem fator prova antes do
+  // wizard. Depois dos redirects, para só quem vai VER o wizard pagar a leitura.
+  await exigirProvaDeMfa();
 
   // Os passos que ESTA instalação oferece, com o que já foi resolvido. O
   // indicador não decide mais nada sozinho — ele desenha o que recebe.
@@ -40,10 +46,26 @@ export default async function OnboardingLayout({ children }: { children: React.R
   }));
 
   const isDev = process.env.NODE_ENV !== "production";
-  const marca = branding();
+  // Ícone pequeno de REFORÇO, nunca o logotipo completo: o nome já é escrito
+  // como legenda ao lado (`marca.name`), então usar o logo inteiro aqui duplica
+  // a marca em dois formatos ao mesmo tempo. `iconeDaAba` é a mesma resolução
+  // de `app/icon.tsx` — arquivo subido em Marca › ícone da aba, com fallback
+  // para o ladrilho desenhado quando não há upload.
+  //
+  // Sem ícone subido e sem marca própria, o `/icon` desenharia o símbolo do
+  // produto num PNG sempre claro. Aí vale o SVG inline, que acompanha o tema:
+  // a marca padrão não muda de cara. A condição é a MESMA de `app/icon.tsx`
+  // (`marcaDaSaida(null)`, banco acima do `.env`). Nenhuma das duas lança.
+  const linhaDaMarca = await marcaDaInstalacao();
+  const iconeUrl = iconeDaAba(linhaDaMarca?.favicon_path, baseDoStorage());
+  const marcaDoIcone = await marcaDaSaida(null);
+  const simboloDoProduto =
+    iconeUrl === ICONE_DESENHADO &&
+    marcaEhADoProduto({ name: marcaDoIcone.nome, logoUrl: marcaDoIcone.logoUrl });
   // Hiperbold: a logo da INSTALAÇÃO (a mesma da tela de login), não a da
-  // organização, que ainda está sendo criada neste wizard.
-  const logoDaInstalacao = (await marcaDaSaida(null)).logoUrl;
+  // organização, que ainda está sendo criada neste wizard. Sem logo, o ícone
+  // de reforço do upstream.
+  const logoDaInstalacao = marcaDoIcone.logoUrl;
 
   return (
     <IdiomaProvider locale={user.idioma}>
@@ -58,7 +80,7 @@ export default async function OnboardingLayout({ children }: { children: React.R
                   <img
                     data-testid="logo-do-onboarding"
                     src={logoDaInstalacao}
-                    alt={marca.name}
+                    alt={marcaDoIcone.nome}
                     className="h-9 w-auto max-w-[11rem] object-contain"
                   />
                   <span aria-hidden className="h-8 w-px bg-border" />
@@ -66,14 +88,26 @@ export default async function OnboardingLayout({ children }: { children: React.R
                 </>
               ) : (
                 <>
-                  {/* O nome está escrito logo abaixo — o símbolo é reforço, não legenda. */}
-                  {marcaEhADoProduto(marca) && (
-                    <SimboloDoProduto nome={marca.name} decorativo className="h-9 w-9" />
-                  )}
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-muted-foreground">{marca.name}</p>
-                    <h1 className="text-lg font-semibold tracking-tight">{activeOrg.name}</h1>
-                  </div>
+                {/* O nome está escrito logo abaixo — o símbolo é reforço, não legenda. */}
+                {simboloDoProduto ? (
+                  <SimboloDoProduto nome={marcaDoIcone.nome} decorativo className="h-9 w-9" />
+                ) : (
+                  // <img> em vez de next/image de propósito, mesmo motivo de
+                  // `components/shell/Sidebar.tsx`: a URL vem de quem hospeda (banco),
+                  // fora da allowlist de domínios fechada no build da imagem pré-buildada.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={iconeUrl}
+                    alt=""
+                    aria-hidden
+                    decoding="async"
+                    className="h-9 w-9 rounded-md object-contain"
+                  />
+                )}
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">{marcaDoIcone.nome}</p>
+                  <h1 className="text-lg font-semibold tracking-tight">{activeOrg.name}</h1>
+                </div>
                 </>
               )}
             </div>

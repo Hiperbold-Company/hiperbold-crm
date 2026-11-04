@@ -141,7 +141,7 @@ describe("TeamMembersClient — seletor de papel (G2-02)", () => {
 
     const trigger = await screen.findByRole("combobox", { name: /Papel de Agente/i });
     await user.click(trigger);
-    await user.click(await screen.findByRole("option", { name: "Visualizador" }));
+    await user.click(await screen.findByRole("option", { name: "Somente leitura" }));
 
     // Rollback: volta ao papel original após o erro.
     await waitFor(() => expect(trigger).toHaveTextContent("Atendente"));
@@ -194,5 +194,25 @@ describe("TeamMembersClient — membro da agência (migration 0974)", () => {
     renderClient();
     expect(await screen.findByText("agente@example.com")).toBeInTheDocument();
     expect(screen.queryByText("Agência")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * No celular a tabela vira cartão só por classes `max-md:` (ADR-0006, F4). O
+ * jsdom não aplica media query: o que se mede aqui é o contrato das classes, e
+ * a geometria a 390px fica com `tests/e2e/equipe-no-celular.spec.ts`.
+ */
+describe("TeamMembersClient — cartão no celular", () => {
+  it("o cabeçalho some abaixo de md e Última atividade leva o rótulo no atributo", async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: members().map((m) => ({ ...m, last_sign_in_at: "2026-10-20T12:00:00Z" })),
+    });
+    const { container } = renderClient();
+    await screen.findByText("agente@example.com");
+
+    expect(container.querySelector("thead")).toHaveClass("max-md:hidden");
+    const comRotulo = container.querySelectorAll('td[data-rotulo="Última atividade"]');
+    expect(comRotulo).toHaveLength(2);
+    expect(comRotulo[0]).toHaveClass("max-md:before:content-[attr(data-rotulo)]");
   });
 });

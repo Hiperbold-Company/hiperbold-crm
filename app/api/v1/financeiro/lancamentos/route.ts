@@ -23,6 +23,7 @@ import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { recusarEscritaEmModoLeitura } from "@/lib/billing/assinatura/recusa-de-escrita";
+import { moedaDaOrganizacao } from "@/lib/catalogo/moeda-da-org";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createClient } from "@/lib/supabase/server";
 
@@ -91,10 +92,22 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   const supabase = await createClient();
+
+  // ─── A MOEDA É DA ORGANIZAÇÃO, NUNCA DO CORPO (#3379) ──────────────────
+  //
+  // `financial_entries.currency` tem `default 'BRL'` e este insert não mandava
+  // nada: numa organização em dólar o lançamento manual de `1,300` gravava
+  // 130000 centavos em BRL — o número certo depois do #3378, com o rótulo de
+  // outra unidade na lista, que é o pior desfecho porque parece certo. Mesmo
+  // leitor da comanda (`moedaDaOrganizacao`), e o corpo nem declara o campo: o
+  // Zod o descarta antes de chegar aqui.
+  const moeda = await moedaDaOrganizacao(supabase, authz.org.orgId);
+
   const { data, error } = await supabase
     .from("financial_entries")
     .insert({
       organization_id: authz.org.orgId,
+      currency: moeda,
       account_id: lido.data.account_id,
       account_plan_id: lido.data.account_plan_id ?? null,
       direction: lido.data.direction,
@@ -110,7 +123,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       origin: "manual",
       created_by_user_id: authz.user.id,
     })
-    .select("id, direction, amount_cents, status, entry_date")
+    .select("id, direction, amount_cents, currency, status, entry_date")
     .single();
 
   if (error) {

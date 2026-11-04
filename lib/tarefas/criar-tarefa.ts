@@ -1,0 +1,317 @@
+/**
+ * CRIAR TAREFA — o lembrete interno que nunca vira mensagem ao cliente (#1540).
+ *
+ * Um módulo, DUAS portas: a ação de automação `create_task`
+ * (`lib/automation/actions/create-task.ts`) e o nó `internal_task` dos fluxos
+ * de follow-up (`lib/followup/node-handlers.ts` → `criarTarefaInterna` no
+ * adapter do engine). As duas precisam gravar, auditar e avisar do mesmo jeito —
+ * regras escritas duas vezes divergem no primeiro ajuste, e a divergência aqui
+ * é invisível: as duas rotinas "criam tarefa", só que uma delas esquece o audit
+ * ou o aviso.
+ *
+ * ═══ O QUE ESTE MÓDULO NÃO FAZ ═══
+ *
+ * Não manda nada ao cliente. Não existe `send_*` aqui dentro: o título da tarefa
+ * é lido por uma pessoa na tela, e o push vai só para o RESPONSÁVEL. É a
+ * diferença que a issue pede — advocacia, saúde e serviços regulados precisam
+ * que o sistema LEMBRE a equipe e não que o sistema fale.
+ *
+ * ═══ O BANCO VEM PELA PORTA (#3715) ═══
+ *
+ * As três consultas (negócio, contato, INSERT da tarefa) deixaram de ser a
+ * cadeia do PostgREST e são SQL com parâmetros em `lib/db`. Quem chama passa a
+ * PORTA (`portaDaAplicacao()`), não mais o cliente do SDK: aceitar os dois
+ * seria aceitar um cliente que a função ignora — e o chamador acharia que a
+ * escrita foi por ele. Os quatro chamadores (as duas ações de automação, o nó
+ * `internal_task` do follow-up e o aviso de carteira) foram adaptados junto.
+ * A organização é filtro de SQL em toda leitura: o pool não passa por RLS.
+ */
+import type { Db } from "@/lib/db";
+
+import { audit } from "@/lib/audit";
+import { logger } from "@/lib/logger";
+import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { truncar } from "@/lib/notifications/push_payload";
+import { enviarPushAoUsuario } from "@/lib/notifications/web_push";
+import { registraAtividadeDaTarefa } from "@/lib/tarefas/atividade";
+import { HREF_MINHAS_TAREFAS, PRIORIDADES_DA_TAREFA, type PrioridadeDaTarefa } from "@/lib/tarefas/tipos";
+
+/**
+ * Quem fica com a tarefa: o dono do negócio, ou uma pessoa escolhida na regra.
+ *
+ * `dono_do_lead` é a forma nominal — quem monta a regra não sabe (nem deve
+ * saber) o uuid de quem vai atender amanhã; o dono muda, a regra não.
+ */
+export type AtribuicaoDaTarefa = "dono_do_lead" | { usuario_id: string };
+
+export interface PedidoDeTarefa {
+  organizationId: string;
+  /** Título com placeholders `{{lead.title}}` e `{{contact.name}}`. */
+  titulo: string;
+  /** De quantos dias o prazo cai a partir de agora. `0` = vence hoje. */
+  venceEmDias: number;
+  atribuirA: AtribuicaoDaTarefa;
+  prioridade: PrioridadeDaTarefa;
+  leadId?: string | null;
+  contactId?: string | null;
+  descricao?: string | null;
+  /** De onde veio: `automation:create_task`, `followup:internal_task`, … */
+  origem: string;
+  requestId?: string;
+  agora?: Date;
+}
+
+export type ResultadoDaTarefa =
+  | { ok: true; tarefa_id: string; assigned_to: string | null }
+  | { ok: false; codigo: "sem_alvo" | "sem_dono" | "titulo_vazio" | "falha"; erro?: string };
+
+export type LeadDoPedido = {
+  id: string;
+  title?: string | null;
+  contact_id?: string | null;
+  owner_user_id?: string | null;
+};
+
+export type ContatoDoPedido = {
+  id: string;
+  name?: string | null;
+  display_name?: string | null;
+};
+
+/**
+ * Os placeholders que o título entende, na forma em que o operador os escreve.
+ *
+ * `{{contact.name}}` segue a MESMA cadeia do resto do produto
+ * (`nomeDoContato`): `name` primeiro, e `display_name` só quando o nome de
+ * cadastro está vazio ou é identificador técnico — para o título não mostrar
+ * o identificador técnico de WhatsApp no meio do nome. Inverter essa ordem
+ * aqui seria inverter em todo o produto (a ressalva está escrita em
+ * `lib/contacts/rotulo-do-contato.ts`, que é de onde esta função puxa o nome).
+ *
+ * Placeholder sem dado NÃO é apagado: `{{lead.title}}` vazio viraria título em
+ * branco (o CHECK `crm_tasks_titulo_nao_vazio` recusaria a linha sem dizer
+ * por quê), e apagar esconderia do operador que falta preencher o campo.
+ */
+export function interpolarTitulo(
+  titulo: string,
+  valores: { lead?: LeadDoPedido | null; contact?: ContatoDoPedido | null },
+): string {
+  const leadTitle = valores.lead?.title?.trim() ?? "";
+  const contatoNome = nomeDoContato(valores.contact) ?? "";
+  return titulo
+    .replaceAll("{{lead.title}}", leadTitle)
+    .replaceAll("{{contact.name}}", contatoNome)
+    .trim();
+}
+
+/**
+ * A recusa de CONFIGURAÇÃO de UM passo — sem escrever nada.
+ *
+ * Esta função É a regra `sem_dono`/`titulo_vazio`, num sítio só: quem chama
+ * duas vezes com a mesma entrada tem de recusar do mesmo jeito. O portão novo
+ * é o do plano (`lib/tarefas/plano.ts`), que confere TODOS os passos antes do
+ * primeiro INSERT; sem esta função, a validação do plano seria uma cópia das
+ * linhas abaixo e as duas divergiriam no primeiro ajuste — os dois "validam o
+ * mesmo passo", só que um deixa passar o que o outro recusa.
+ *
+ * `sem_alvo` NÃO é daqui: ele depende de não haver lead nem contato, que é uma
+ * pergunta do pedido, não do passo.
+ */
+export function recusaDeConfiguracao(
+  atribuirA: AtribuicaoDaTarefa,
+  titulo: string,
+  valores: { lead?: LeadDoPedido | null; contact?: ContatoDoPedido | null },
+): "sem_dono" | "titulo_vazio" | null {
+  const atribuido =
+    typeof atribuirA === "object" ? atribuirA.usuario_id : (valores.lead?.owner_user_id ?? null);
+  if (!atribuido) return "sem_dono";
+  if (!interpolarTitulo(titulo, valores)) return "titulo_vazio";
+  return null;
+}
+
+/**
+ * Leitura de UMA linha que já tolerava erro — e continua tolerando.
+ *
+ * Com o PostgREST, `.maybeSingle()` devolvia `{ data: null, error }` e este
+ * módulo olhava só `data`: um erro de leitura virava "não achei", e a recusa
+ * saía como `sem_alvo` (configuração) e não como `falha` (infra). Preservar
+ * isso é preservar o contrato visível de quem chama — inclusive o desfecho
+ * FECHADO (nunca cria tarefa com um alvo que não conseguiu ler). Distinguir os
+ * dois casos é decisão de produto, não de migração.
+ */
+async function lerLinha<T>(
+  db: Db,
+  sql: string,
+  parametros: readonly unknown[],
+): Promise<T | null> {
+  try {
+    return await db.queryOne<T>(sql, parametros);
+  } catch {
+    return null;
+  }
+}
+
+/** Mensagem crua do driver, sem SQL montado — é o que vira `erro` no resultado. */
+function mensagemDoErro(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Grava a tarefa, audita, registra na linha do tempo do negócio e (se houver
+ * responsável) manda o push.
+ *
+ * A ordem importa: INSERT → audit → atividade → push. Se cair no meio, sobra a
+ * tarefa sem o aviso — o cenário recuperável (a pessoa vê a tarefa na lista); a
+ * ordem contrária deixaria push apontando para tarefa que não existe.
+ *
+ * `sem_dono` não é erro de infraestrutura: a regra pediu "dono do negócio" e o
+ * negócio não tem dono. Não criamos tarefa órfã — ela não lembra ninguém, e a
+ * lista de tarefas sem responsável vira ruído que ensina o time a ignorar.
+ */
+export async function criarTarefaInterna(
+  db: Db,
+  pedido: PedidoDeTarefa,
+): Promise<ResultadoDaTarefa> {
+  const agora = pedido.agora ?? new Date();
+
+  const lead = pedido.leadId
+    ? await lerLinha<LeadDoPedido>(
+        db,
+        `select id, title, contact_id, owner_user_id
+           from crm_leads
+          where id = $1
+            and organization_id = $2
+          limit 1`,
+        [pedido.leadId, pedido.organizationId],
+      )
+    : null;
+
+  const contactId = pedido.contactId ?? lead?.contact_id ?? null;
+  const contact = contactId
+    ? await lerLinha<ContatoDoPedido>(
+        db,
+        `select id, name, display_name
+           from contacts
+          where id = $1
+            and organization_id = $2
+          limit 1`,
+        [contactId, pedido.organizationId],
+      )
+    : null;
+
+  if (!lead && !contact) {
+    return { ok: false, codigo: "sem_alvo" };
+  }
+
+  const recusa = recusaDeConfiguracao(pedido.atribuirA, pedido.titulo, { lead, contact });
+  if (recusa) return { ok: false, codigo: recusa };
+
+  const assignedTo =
+    typeof pedido.atribuirA === "object" ? pedido.atribuirA.usuario_id : (lead?.owner_user_id ?? null);
+  const titulo = interpolarTitulo(pedido.titulo, { lead, contact });
+
+  const dueDate = new Date(agora.getTime() + pedido.venceEmDias * 86_400_000).toISOString();
+
+  // INSERT … RETURNING id: o `.insert().select("id").maybeSingle()` do
+  // PostgREST devolvia a linha criada numa segunda ida (Prefer: return=
+  // representation); aqui o id vem na MESMA ida.
+  let tarefaId: string;
+  try {
+    const criadas = await db.query<{ id: string }>(
+      `insert into crm_tasks
+         (organization_id, title, description, due_date, priority, status,
+          lead_id, contact_id, assigned_to, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       returning id`,
+      [
+        pedido.organizationId,
+        titulo,
+        pedido.descricao ?? null,
+        dueDate,
+        pedido.prioridade,
+        "pending",
+        lead?.id ?? null,
+        contactId,
+        assignedTo,
+        null,
+      ],
+    );
+
+    // `RETURNING id` devolve exatamente a linha inserida; se o driver não
+    // devolveu nada, o INSERT não aconteceu — e isso é `falha`, nunca `ok`.
+    const criada = criadas[0];
+    if (!criada) return { ok: false, codigo: "falha" };
+    tarefaId = criada.id;
+  } catch (err) {
+    return { ok: false, codigo: "falha", erro: mensagemDoErro(err) };
+  }
+
+  // Fire-and-forget quanto a erro: perder o audit ou o push não pode desfazer a
+  // tarefa que já existe (lei do CLAUDE.md §Audit log — mesma razão dos crons
+  // que só auditam quando há efeito).
+  await audit({
+    action: "crm_task.created",
+    resourceType: "crm_task",
+    resourceId: tarefaId,
+    organizationId: pedido.organizationId,
+    metadata: {
+      origem: pedido.origem,
+      lead_id: lead?.id ?? null,
+      contact_id: contactId,
+      assigned_to: assignedTo,
+      prioridade: pedido.prioridade,
+      vence_em_dias: pedido.venceEmDias,
+    },
+    ...(pedido.requestId ? { requestId: pedido.requestId } : {}),
+  });
+
+  // O LAÇO DE RETORNO (#1540): a tarefa automática entra na linha do tempo do
+  // negócio do MESMO jeito que a criada pela tela (`POST /api/v1/tasks` →
+  // `registraAtividadeDaTarefa`). Sem esta chamada, o card do lead mostrava a
+  // conversa parada sem sinal nenhum de que o sistema marcou um retorno — e o
+  // operador perguntava se o follow-up tinha parado. O ator é `system`
+  // (`webhook_source` com a origem, o padrão de `nascimento-do-lead.ts`):
+  // quem criou foi a regra, não uma pessoa.
+  await registraAtividadeDaTarefa(db, {
+    organizationId: pedido.organizationId,
+    tarefa: {
+      id: tarefaId,
+      title: titulo,
+      due_date: dueDate,
+      priority: pedido.prioridade,
+      lead_id: lead?.id ?? null,
+      contact_id: contactId,
+    },
+    tipo: "task_created",
+    actor: { type: "webhook_source", id: pedido.origem },
+  });
+
+  if (assignedTo) {
+    try {
+      await enviarPushAoUsuario(pedido.organizationId, assignedTo, {
+        title: "Nova tarefa",
+        body: truncar(titulo),
+        tag: `task:${tarefaId}`,
+        href: HREF_MINHAS_TAREFAS,
+      });
+    } catch (err) {
+      logger.warn("task_push_failed", {
+        organization_id: pedido.organizationId,
+        task_id: tarefaId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return { ok: true, tarefa_id: tarefaId, assigned_to: assignedTo };
+}
+
+/** Rótulo do resultado para o `detail` da ação — código, nunca frase solta. */
+export function motivoDoResultado(resultado: ResultadoDaTarefa): string | null {
+  return resultado.ok ? null : resultado.codigo;
+}
+
+/** Conferência defensiva: a prioridade vem do banco, não do operador. */
+export function prioridadeValida(v: unknown): v is PrioridadeDaTarefa {
+  return typeof v === "string" && (PRIORIDADES_DA_TAREFA as readonly string[]).includes(v);
+}

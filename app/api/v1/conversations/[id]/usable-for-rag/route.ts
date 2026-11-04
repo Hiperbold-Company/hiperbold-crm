@@ -9,16 +9,19 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *
  * Auth: sessão de cookie, papel >= agent — o mesmo piso de encerrar a conversa
  * (`/close`). Organização sempre da sessão, nunca do corpo.
- * Audit: `conversation.usable_for_rag_toggled`, só quando o estado muda.
+ * Audit: `conversation.usable_for_rag_toggled`, só quando o estado muda (com
+ * `trechos_removidos` ao desmarcar).
  *
  * Três regras que a tela promete e a rota cumpre:
  *  - só conversa ENCERRADA (`conversaPodeEnsinar`) pode ser marcada: o lote só
  *    lê encerradas, e uma marcação em conversa aberta ficava parada na fila;
  *  - marcar ou desmarcar duas vezes não muda nada nem gera auditoria nova;
- *  - `rag_review_status = 'ingested'` NUNCA é apagado por aqui. Desmarcar não
- *    tira da base o que o lote já indexou (nenhum código remove esses trechos),
- *    e zerar o status fazia a conversa ser indexada de novo, em dobro, se
- *    alguém a marcasse outra vez.
+ *  - desmarcar (enabled=false) também tira de `ai_chunks` os trechos que a
+ *    ingestão já gravou desta conversa (#3042, migration 0688): só zerar a flag
+ *    impede as ingestões futuras, e o retriever continuaria trazendo o que já foi
+ *    aprendido. Como os trechos saem, o `rag_review_status` volta a vazio: marcar
+ *    de novo não reingere na hora, a conversa volta ao acervo no próximo lote, uma
+ *    vez só.
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -29,6 +32,7 @@ import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { validateRequest } from "@/lib/schemas/_validate";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { conversaPodeEnsinar, type EstadoDoEnsino } from "@/lib/ai/rag/conversa-que-ensina";
@@ -147,7 +151,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
         usable_for_rag: false,
         usable_for_rag_marked_at: null,
         usable_for_rag_marked_by: null,
-        rag_review_status: jaNaBase ? "ingested" : null,
+        // Os trechos saem logo abaixo (`fn_conversa_remove_trechos_do_rag`): o status não pode seguir "ingested".
+        rag_review_status: null,
       };
 
   const { data, error } = await supabase
@@ -165,6 +170,20 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
   }
 
+  // O org vem da sessão (requireRole), nunca do corpo; a função confere que a
+  // conversa é dele antes de apagar.
+  let trechosRemovidos: number | undefined;
+  if (!input.enabled) {
+    const { data: removidos, error: trechosErro } = await createAdminClient().rpc(
+      "fn_conversa_remove_trechos_do_rag",
+      { p_org: activeOrg.orgId, p_conversation: id },
+    );
+    if (trechosErro) {
+      return falhaInterna("internal_error", trechosErro, { requestId });
+    }
+    trechosRemovidos = (removidos as number | null) ?? 0;
+  }
+
   await audit({
     action: "conversation.usable_for_rag_toggled",
     actorUserId: authUser.id,
@@ -176,9 +195,15 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
       enabled: input.enabled,
       prev: atual.usable_for_rag,
       ja_na_base: jaNaBase,
+      ...(trechosRemovidos === undefined ? {} : { trechos_removidos: trechosRemovidos }),
     },
     requestId,
   });
 
-  return ok(estado(data as LinhaDaConversa), { requestId });
+  return ok(
+    trechosRemovidos === undefined
+      ? estado(data as LinhaDaConversa)
+      : { ...estado(data as LinhaDaConversa), trechos_removidos: trechosRemovidos },
+    { requestId },
+  );
 }

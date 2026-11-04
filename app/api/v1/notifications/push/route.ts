@@ -1,6 +1,7 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
- * GET  — chave VAPID pública (ou enabled=false se o operador não configurou).
+ * GET  — chave VAPID pública (ou enabled=false se o operador não configurou) e a
+ *        opção da empresa para a tela bloqueada, que a bandeja do app aberto aplica.
  * PUT  — grava a inscrição deste navegador.
  * DELETE — remove a inscrição pelo endpoint.
  */
@@ -11,7 +12,9 @@ import { z } from "zod";
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { lerTelaBloqueada } from "@/lib/notifications/tela-bloqueada";
 import { vapidPronto, vapidPublica } from "@/lib/notifications/vapid";
 import { endpointDePushPermitido } from "@/lib/notifications/endpoint-de-push";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -37,10 +40,8 @@ export async function GET(): Promise<Response> {
   const requestId = randomUUID();
   const authz = await requireRole("viewer", { requestId, resource: "push_subscriptions" });
   if (!authz.ok) return authz.response;
-  return ok(
-    { enabled: vapidPronto(), public_key: vapidPublica() },
-    { requestId },
-  );
+  const { modo } = await lerTelaBloqueada(createAdminClient(), authz.org.orgId);
+  return ok({ enabled: vapidPronto(), public_key: vapidPublica(), conteudo: modo }, { requestId });
 }
 
 export async function PUT(req: NextRequest): Promise<Response> {
@@ -123,12 +124,25 @@ export async function DELETE(req: NextRequest): Promise<Response> {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("push_subscriptions" as never)
     .delete()
     .eq("endpoint" as never, parsed.data.endpoint)
-    .eq("user_id" as never, authz.user.id);
+    .eq("user_id" as never, authz.user.id)
+    .select("organization_id");
 
   if (error) return falhaInterna("internal_error", error, { requestId });
+  // Sem linha removida não houve mutação, e não há o que auditar.
+  const removida = (data as Array<{ organization_id: string }> | null)?.[0];
+  if (removida) {
+    void audit({
+      action: "notification_prefs.push_subscription_removed",
+      actorUserId: authz.user.id,
+      organizationId: removida.organization_id,
+      resourceType: "push_subscription",
+      requestId,
+      metadata: { channel: "web_push", escopo: "aparelho" },
+    });
+  }
   return ok({ ok: true }, { requestId });
 }

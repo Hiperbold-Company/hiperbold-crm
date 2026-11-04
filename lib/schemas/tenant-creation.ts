@@ -18,6 +18,8 @@ export const tenantCreationFields = {
   // toda organização nova nasce no plano Ilimitado pelo gatilho do banco. A
   // rota da API continua aceitando o campo para não quebrar quem já chama.
   plan: z.enum(["standard", "pro", "enterprise"]).optional(),
+  /** Spec da cobrança §9: com a chave `cobranca` ligada, o plano de cobrança (ausente = isenta). */
+  plano_id: z.string().uuid().optional(),
   owner_interface_settings: interfaceSettingsSchema.optional(),
   owner_email: z.string().trim().email(),
 };

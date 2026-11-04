@@ -5,18 +5,23 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import type { FlowGraph, FlowNode } from "@/lib/followup/graph-schema";
 import type { FollowupFlowSurface } from "@/lib/followup/api-schemas";
 import type { RFNode, RFNodeData } from "@/lib/followup/graph-mappers";
 import { Trash } from "@/lib/ui/icons";
 import { useT } from "@/hooks/i18n/useT";
+import { etapasPorFunil, nomeDaEtapa, useEtapasDeGatilho } from "@/hooks/followup/useEtapasDeGatilho";
 
 import { ActionForm } from "./forms/ActionForm";
 import { ClassifyForm } from "./forms/ClassifyForm";
 import { CollectForm } from "./forms/CollectForm";
 import { ConditionForm } from "./forms/ConditionForm";
 import { EndForm } from "./forms/EndForm";
+import { InternalTaskForm } from "./forms/InternalTaskForm";
 import { MatchReplyForm } from "./forms/MatchReplyForm";
+import { MoveLeadForm } from "./forms/MoveLeadForm";
+import { EditLeadTagForm } from "./forms/EditLeadTagForm";
 import { RepeatForm } from "./forms/RepeatForm";
 import { SkillForm } from "./forms/SkillForm";
 import { WaitForm } from "./forms/WaitForm";
@@ -122,11 +127,14 @@ export function NodeConfigPanel({
           />
         )}
         {type === "trigger" && surface === "followup" && (
-          <p className="text-sm text-text-muted">
-            {t(
-              "Início do fluxo — sem configuração adicional. O disparo (manual, mudança de etapa, silêncio ou fim de conversa) é definido nas configurações do fluxo.",
-            )}
-          </p>
+          <div className="space-y-4">
+            <p className="text-sm text-text-muted">
+              {t(
+                "Início do fluxo — sem configuração adicional. O disparo (manual, mudança de etapa, silêncio ou fim de conversa) é definido nas configurações do fluxo.",
+              )}
+            </p>
+            <MarcadorDeSomenteInterno settings={settings} onSettingsChange={onSettingsChange} />
+          </div>
         )}
         {type === "trigger" && surface === "atendimento" && (
           <ConfiguracoesDoRoteiro settings={settings} onSettingsChange={onSettingsChange} />
@@ -222,6 +230,22 @@ export function NodeConfigPanel({
         {type === "action" && (
           <ActionForm config={node.data.config as ConfigOf<"action">} onChange={(config) => onChange({ config })} />
         )}
+        {type === "internal_task" && (
+          <InternalTaskForm
+            config={node.data.config as ConfigOf<"internal_task">}
+            onChange={(config) => onChange({ config })}
+          />
+        )}
+        {/* #2065 — os dois nós de ação que não falam com o cliente. */}
+        {type === "move_lead" && (
+          <MoveLeadForm config={node.data.config as ConfigOf<"move_lead">} onChange={(config) => onChange({ config })} />
+        )}
+        {type === "edit_lead_tag" && (
+          <EditLeadTagForm
+            config={node.data.config as ConfigOf<"edit_lead_tag">}
+            onChange={(config) => onChange({ config })}
+          />
+        )}
         {type === "end" && (
           <EndForm
             config={node.data.config as ConfigOf<"end">}
@@ -250,6 +274,63 @@ export function NodeConfigPanel({
 }
 
 /**
+ * SOMENTE INTERNO (#1540) — a marca que diz ao `validate-publish` que este fluxo
+ * não fala com o cliente.
+ *
+ * A guarda já existia (`validarSomenteInterno` recusa nó de envio num fluxo com
+ * a marca) e a mensagem de recusa mandava o operador "tirar a marca" — mas não
+ * havia lugar nenhum na tela onde pôr ou tirar: o campo só vivia no jsonb, à
+ * mão, via API. Sem o controle, a única via de quem queria um fluxo interno era
+ * editar o rascunho por fora; e quem nunca o marcou nunca foi recusado — a
+ * garantia valia para quem não usava a tela.
+ *
+ * Vai no INÍCIO do fluxo (o nó `trigger`), junto com as outras configurações de
+ * grafo, e não no nó `internal_task`: o fluxo é que é interno, uma caixa só
+ * não decide isso.
+ */
+function MarcadorDeSomenteInterno({
+  settings,
+  onSettingsChange,
+}: {
+  settings?: FlowGraph["settings"];
+  onSettingsChange?: (settings: FlowGraph["settings"]) => void;
+}) {
+  const t = useT();
+  const marcado = settings?.somente_interno === true;
+  // `max_tentativas_pergunta` é OBRIGATÓRIO no schema do grafo: um rascunho
+  // gravado sem ele não pode virar `{}` aqui — o fluxo perderia a trava de
+  // tentativas do roteiro no ato de marcar uma caixa.
+  const base: NonNullable<FlowGraph["settings"]> = {
+    max_tentativas_pergunta: settings?.max_tentativas_pergunta ?? 3,
+    ...settings,
+  };
+  return (
+    <div className="space-y-1" data-testid="somente-interno">
+      <label className="flex cursor-pointer items-center gap-2" htmlFor="fluxo-somente-interno">
+        <Switch
+          id="fluxo-somente-interno"
+          checked={marcado}
+          onCheckedChange={(v) => {
+            if (v) {
+              onSettingsChange?.({ ...base, somente_interno: true });
+              return;
+            }
+            const { somente_interno: _anterior, ...resto } = base;
+            onSettingsChange?.(resto);
+          }}
+        />
+        <span className="text-sm font-medium text-text">{t("Somente interno")}</span>
+      </label>
+      <p className="text-xs text-text-muted">
+        {t(
+          "O fluxo inteiro não fala com o cliente: a publicação recusa qualquer nó que envie mensagem.",
+        )}
+      </p>
+    </div>
+  );
+}
+
+/**
  * O Início do ROTEIRO de atendimento: como ele começa e quanto ele insiste.
  * Porte do painel do autor (#1130) com o prazo do PR 2 (`expira_em_horas`).
  * Grava no nível do grafo (`settings`), não num nó.
@@ -265,6 +346,22 @@ function ConfiguracoesDoRoteiro({
   const atual = { max_tentativas_pergunta: settings?.max_tentativas_pergunta ?? 3, ...settings };
   const [gatilhos, setGatilhos] = useState((settings?.gatilhos ?? []).join(", "));
   const gravar = (patch: Partial<NonNullable<FlowGraph["settings"]>>) => onSettingsChange?.({ ...atual, ...patch });
+  // #2630 — AS ETAPAS DO FUNIL. O seletor mostra «Etapa · Funil» (o funil viaja
+  // no texto do item, como no gatilho de etapa: dois funis já bastam para quatro
+  // etapas homônimas) e o `settings` guarda o id da etapa, que é o que
+  // `crm_leads.stage_id` traz no turno.
+  const { etapas, carregando: etapasCarregando, falhou: etapasFalhou } = useEtapasDeGatilho();
+  const funis = etapasPorFunil(etapas);
+  const etapasDoFunil = settings?.etapas_do_funil ?? [];
+  const alternarEtapa = (stageId: string) => {
+    const lista = etapasDoFunil.includes(stageId)
+      ? etapasDoFunil.filter((id) => id !== stageId)
+      : [...etapasDoFunil, stageId].slice(0, 30);
+    const { etapas_do_funil: _anterior, ...resto } = atual;
+    // Sem nenhuma etapa marcada a chave SAI do grafo (volta ao padrão), como as
+    // palavras-gatilho: guardar `[]` só encheria o jsonb de nada.
+    onSettingsChange?.(lista.length > 0 ? { ...resto, etapas_do_funil: lista } : resto);
+  };
   const inteiro = (valor: string, min: number, max: number): number | null => {
     const n = Number(valor);
     return Number.isInteger(n) && n >= min && n <= max ? n : null;
@@ -274,7 +371,7 @@ function ConfiguracoesDoRoteiro({
     <div className="space-y-4" data-testid="configuracoes-do-roteiro">
       <p className="text-sm text-text-muted">
         {t(
-          "O roteiro começa quando a mensagem do cliente tem uma palavra-gatilho, ou quando um roteador de intenção o aponta.",
+          "O roteiro começa quando a mensagem do cliente tem uma palavra-gatilho, quando um roteador de intenção o aponta ou quando o card do cliente entra numa etapa escolhida abaixo — uma vez por entrada na etapa, e não enquanto ele fica lá.",
         )}
       </p>
       <div className="space-y-2">
@@ -293,6 +390,42 @@ function ConfiguracoesDoRoteiro({
             onSettingsChange?.(lista.length > 0 ? { ...resto, gatilhos: lista } : resto);
           }}
         />
+      </div>
+      <div className="space-y-2 border-t border-border pt-4" data-testid="roteiro-etapas-do-funil">
+        <p className="text-sm font-medium text-text">{t("Começar quando o card entrar na etapa")}</p>
+        <p className="text-xs text-text-muted">
+          {t(
+            "Marque as etapas do funil em que este roteiro deve começar sozinho. Vale do próximo turno da conversa daquele cliente em diante — não é instantâneo. Os cards que já estão na etapa quando você a marca também começam, na próxima mensagem do cliente.",
+          )}
+        </p>
+        {etapasCarregando && <p className="text-xs text-text-muted">{t("Carregando etapas…")}</p>}
+        {!etapasCarregando && etapasFalhou && (
+          <p role="alert" className="text-xs text-error-fg">
+            {t("Não foi possível carregar as etapas do funil. Recarregue a página para escolher uma etapa.")}
+          </p>
+        )}
+        {!etapasCarregando && !etapasFalhou && etapas.length === 0 && (
+          <p className="text-xs text-text-muted">
+            {t("Nenhuma etapa ativa encontrada — crie o funil antes de escolher uma etapa aqui.")}
+          </p>
+        )}
+        <div className="max-h-56 space-y-3 overflow-y-auto">
+          {funis.map((funil) => (
+            <div key={funil.id} className="space-y-1">
+              <p className="text-xs font-medium text-text">{funil.nome}</p>
+              {funil.etapas.map((etapa) => (
+                <label key={etapa.stageId} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={etapasDoFunil.includes(etapa.stageId)}
+                    onChange={() => alternarEtapa(etapa.stageId)}
+                  />
+                  {nomeDaEtapa(etapa)}
+                </label>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
       <div className="space-y-2">
         <Label htmlFor="roteiro-tentativas">{t("Máximo de tentativas por pergunta")}</Label>
@@ -331,6 +464,31 @@ function ConfiguracoesDoRoteiro({
           }}
         />
         <p className="text-xs text-text-muted">{t("Em branco, o roteiro encerra depois de 72 horas sem resposta.")}</p>
+      </div>
+      {/* #1130 (@vgamkt): o padrão é NÃO recomeçar para quem já concluiu. */}
+      <div className="space-y-1" data-testid="roteiro-pode-recomecar">
+        <label className="flex cursor-pointer items-center gap-2" htmlFor="roteiro-recomeca">
+          <Switch
+            id="roteiro-recomeca"
+            checked={settings?.pode_recomecar === true}
+            onCheckedChange={(v) => {
+              if (v) {
+                gravar({ pode_recomecar: true });
+                return;
+              }
+              const { pode_recomecar: _anterior, ...resto } = atual;
+              onSettingsChange?.(resto);
+            }}
+          />
+          <span className="text-sm font-medium text-text">
+            {t("Pode recomeçar para quem já concluiu")}
+          </span>
+        </label>
+        <p className="text-xs text-text-muted">
+          {t(
+            "Desligado, o cliente que já respondeu tudo não recebe as mesmas perguntas de novo, mesmo repetindo a palavra-gatilho. Ligue para roteiros que se repetem, como agendamento.",
+          )}
+        </p>
       </div>
     </div>
   );

@@ -2,9 +2,12 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookieSecure } from "@/lib/supabase/cookie-secure";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
+import { fetchDoServidor } from "@/lib/supabase/fetch-do-servidor";
+import { urlDoSupabaseNoServidor } from "@/lib/supabase/url-do-servidor";
 import { isPublicPath } from "@/lib/auth/public-paths";
 import { getUserResiliente } from "@/lib/auth/get-user-resiliente";
 import type { User } from "@supabase/supabase-js";
+import { CABECALHO_SEM_CSS, PARAMETRO_SEM_CSS } from "@/lib/branding/sem-css-personalizado";
 import {
   verifyImpersonateCookieEdge,
   IMPERSONATE_COOKIE_NAME_EDGE,
@@ -58,6 +61,17 @@ function respostaDeAuthIndisponivel(
 }
 
 export async function proxy(request: NextRequest) {
+  // Saída de emergência do CSS personalizado. ANTES do `NextResponse.next`: ele
+  // copia os cabeçalhos da requisição no momento em que é criado, e o que for
+  // posto depois não chega aos Server Components. Sempre gravado, para um
+  // cabeçalho forjado pelo cliente não valer.
+  request.headers.set(
+    CABECALHO_SEM_CSS,
+    request.nextUrl.searchParams.has(PARAMETRO_SEM_CSS) ? "1" : "0",
+  );
+  // O caminho atual, para os Server Components (o `next` do desafio de MFA em
+  // `exigirProvaDeMfa`). Mesma regra: antes do `next`, e sempre gravado.
+  request.headers.set("x-pathname", request.nextUrl.pathname);
   // Inject X-Request-Id for downstream correlation (audit log, error wrappers). O que o
   // cliente manda só vale em formato UUID: o valor é gravado no audit de ~25 rotas e vai
   // para o CSV da auditoria, e um texto livre ali era injeção de fórmula na planilha (D-107).
@@ -84,10 +98,6 @@ export async function proxy(request: NextRequest) {
     landing.headers.set("Referrer-Policy", "no-referrer");
     return landing;
   }
-  // Expose pathname to Server Components via header (used by onboarding layout).
-  response.headers.set("x-pathname", pathname);
-  request.headers.set("x-pathname", pathname);
-
   // EPIC-11: the admin surface is reached by PATH (`/admin/*`) — the self-host kit
   // points `NEXT_PUBLIC_ADMIN_URL` at the same host as the app and maps no `admin.`
   // sub-domain. The host-based branch below stays a NOOP today and only exists as
@@ -105,6 +115,15 @@ export async function proxy(request: NextRequest) {
   // refresh que deu certo numa tentativa chega à seguinte pelo `request.cookies`.
   const criarCliente = () =>
     createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+      // #1082: base na URL pública, endereço interno só no transporte (ver
+      // `lib/supabase/fetch-do-servidor.ts`). O middleware não gera link, mas
+      // segue a mesma regra dos outros dois clients — um desenho só.
+      global: {
+        fetch: fetchDoServidor(
+          urlDoSupabaseNoServidor(env.SUPABASE_SERVER_URL, env.NEXT_PUBLIC_SUPABASE_URL),
+          env.NEXT_PUBLIC_SUPABASE_URL,
+        ),
+      },
       cookies: {
         getAll() {
           return request.cookies.getAll();

@@ -63,8 +63,18 @@ const TABELAS_NA_CASCATA = [
   "agent_inbox_items", //  0280 — o aviso da Central que embute o texto do caso
   "contacts", //           0019 — a linha do titular
   "conversations", //      0019 — metadata e prévia da última mensagem
+  // 0483 — a nota interna da conversa: `body` é texto escrito SOBRE a pessoa
+  // durante o atendimento, e `media_storage_path`/`media_mime` apontam o anexo
+  // dela. Sem FK para `contacts` (só para `conversations`), então o catálogo de
+  // `lgpd-cascata-alcanca-quem-guarda-pessoa.test.ts` não a alcança — é ESTA
+  // catraca que segura o passo 6d de não sumir.
+  "conversation_notes",
   "crm_lead_activities", //0071 — payload, metadata e `reason` escrito por LLM
   "crm_leads", //          0019 — título, descrição, campos personalizados, tags
+  // 0477 — destinatario_nome (nome impresso no PDF), briefing_json e
+  // resumo_comercial. O número, os valores, os itens, as datas e o status
+  // FICAM: é o documento comercial que a organização precisa poder auditar.
+  "crm_proposals",
   "demandas", //           0280 — o assunto do pedido
   // 0292 — `erro_detalhe` do registro de entrega do aviso: é o texto CRU que o
   // transporte devolveu, e um provedor que recusa um envio costuma devolver o
@@ -78,11 +88,22 @@ const TABELAS_NA_CASCATA = [
   // 0291 — o briefing da passagem: title/body/notes/content e as tentativas.
   // `body` é `not null` e recebe o RÓTULO, não `null`.
   "passagens_de_atendimento",
-  // 0359 — o texto livre da comanda: `notes`, `cancel_reason` e
-  // `reverse_reason`. O valor, o status, as datas e o vínculo com o contato
-  // FICAM: a venda é registro financeiro da organização, e desligá-la faria o
-  // relatório por cliente deixar de fechar com o faturamento do período.
-  "sales",
+  // 0359 — texto livre da comanda. `sales` SAIU da cascata por decisão
+  // deliberada (PR #1907, migration 0620): o passo 6c alterava a comanda pelo
+  // NOME, e as cinco tabelas da comanda saíram do `baseline.sql` para nascerem
+  // só na instalação do módulo (ADR-0002 D2/D3) — sem o módulo a alteração
+  // abortava a ANONIMIZAÇÃO INTEIRA com `relation "sales" does not exist` (68
+  // ocorrências no CI do #1907, item 1 do mantenedor), e a D8 (0485) proíbe o
+  // núcleo nomear tabela de módulo. A redação NÃO sumiu: ela passou para a
+  // SEÇÃO declarada `financeiro/sales` em `modulo_secoes_lgpd`, que
+  // `trg_lgpd_secoes_de_modulo` aplica nos dois caminhos de anonimização e que
+  // `lgpd-redact-unificado-alcanca-pelo-catalogo.test.ts` mede como caminho
+  // `secao`. Esta lista é a catraca do que o NÚCLEO redige com o corpo na mão;
+  // tabela de módulo vive no mecanismo declarado, não aqui. Na seção o efeito é
+  // o MESMO do passo 6c antigo: `notes` some (NULO), `cancel_reason` e
+  // `reverse_reason` viram '[redigido]' só onde havia texto (nulo continua nulo),
+  // `updated_at` = now(), e o valor/status/datas e o vínculo com o contato FICAM
+  // (medido em `comanda-anonimizada-pela-secao.test.ts`).
   // 0345 — nome, telefone, endereço e `maps_url` do negócio raspado antes de
   // existir conversa. O passo alcança por vínculo OU POR TELEFONE (variantes do
   // nono dígito): quando o número já era de um contato conhecido, o candidato
@@ -92,6 +113,22 @@ const TABELAS_NA_CASCATA = [
   // `lgpd-alcanca-prospeccao-de-quem-ja-era-contato.test.ts`.
   "prospecting_candidates",
   "voice_calls", //        0235 — o telefone de quem falou ao telefone
+  // 0482 — `subject` é o NOME do grupo de WhatsApp. `contact_id` aponta para o
+  // placeholder do grupo (contacts.kind = 'whatsapp_group'), nunca para o
+  // titular real deste caminho, mas casa o padrão automático de
+  // `lgpd-cascata-alcanca-quem-guarda-pessoa.test.ts` (FK para `contacts` +
+  // coluna de nome-de-PII), e nulificar não perde nada operacional.
+  "channel_session_groups",
+  // 0772 (#3316) — a fila de proposta de campo do card lida num documento. O
+  // passo 5b redige `trecho`, `valor_proposto` e `valor_anterior` (o mesmo
+  // tratamento do `custom_fields` do próprio negócio, passo 5): campo, status
+  // e decisão permanecem, o conteúdo identificável sai. Alcança por vínculo do
+  // lead com o contato (crm_leads + crm_lead_links), como os passos 4 e 5.
+  "lead_field_proposals",
+  // 9043 (Spec 31 §B8) — os telefones extras da ficha, com o `lid` do WhatsApp
+  // de cada um. A linha sai inteira (passo 1b): número de telefone não tem
+  // versão anonimizada que ainda sirva para alguma coisa.
+  "contact_phones",
 ] as const;
 
 /**
@@ -105,6 +142,10 @@ const TIPOS_RESERVADOS = [
   "ai.case_closed", //               0279
   "ai.case_opened", //               0279
   "appointment.outcome_confirmed", //herdado
+  "contact.birthday", //             0551
+  "contact.phone_added", //          0670
+  "conversation.autonomous_turn_revoked", //0594 — revogação nativa, sessão não pode forjar
+  "lead.date_field_due", //          0743
   "message.received", //             herdado
 ] as const;
 

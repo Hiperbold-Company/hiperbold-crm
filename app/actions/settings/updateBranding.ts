@@ -3,10 +3,10 @@
 import { headers } from "next/headers";
 
 import { audit } from "@/lib/audit";
-import { ehFalhaDaSessao, MENSAGEM_SESSAO_INVALIDA } from "@/lib/auth/falha-de-sessao";
-import { requirePlatformAdminFull } from "@/lib/auth/portao-de-escrita";
+import { escritaDeAdminOuRecusa } from "@/lib/auth/escritaDeAdminOuRecusa";
 import { invalidarMarcaDaInstalacao } from "@/lib/branding/instalacao";
 import { normalizarHex } from "@/lib/branding/rampa";
+import { respostaParaOperador } from "@/lib/erros/para-operador";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { platformBrandingSchema, type PlatformBrandingInput } from "@/lib/schemas/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -44,7 +44,7 @@ export type UpdateBrandingResult =
  * tabela não é tenant-aware — o filtro equivalente é `id = 1`, que a constraint
  * `platform_branding_singleton` torna o único valor possível.
  *
- * ── Por que `requirePlatformAdmin()` e não `loadAuthUser()` + a flag ─────────
+ * ── Por que `requirePlatformAdminEscrita()` e não `loadAuthUser()` + a flag ─────────
  *
  * Server Action NÃO é rota: não passa por `requireRole` (cujo `mfaEmDivida` tem
  * um call site só, `lib/auth/require-role.ts`, que serve apenas `/api/v1`) e não
@@ -55,15 +55,15 @@ export type UpdateBrandingResult =
  * por organização, aqui o banco NÃO tem como fechar o buraco — a escrita vai
  * pelo `service_role`, e o Postgres não enxerga o AAL de uma sessão do GoTrue.
  *
- * `requirePlatformAdmin()` já checa as três coisas (JWT, linha ativa em
+ * `requirePlatformAdminEscrita()` já checa as três coisas (JWT, linha ativa em
  * `platform_admins`, e `aal2` quando `mfa_required`) e é o MESMO gate do layout
  * de `/admin` — então, para quem chega pela tela, nada muda: essa pessoa já
  * passou por ele para ver o formulário. O que muda é o caminho que não passa
- * pela tela. A ESCRITA usa `requirePlatformAdminFull()`, que acrescenta o que o
- * layout não cobra: escopo `full` (o `support_readonly` só olha) e
- * `mfaEmDivida()` (sessão aal1 de quem tem fator não grava). Ele redireciona em vez de devolver `{ ok: false }`, e o formulário
- * não embrulha a chamada em `try/catch`, então o `NEXT_REDIRECT` sobe para o
- * runtime como deve.
+ * pela tela. Quem não é platform admin é redirecionado, e o formulário não
+ * embrulha a chamada em `try/catch`, então o `NEXT_REDIRECT` sobe para o runtime
+ * como deve. Só-leitura e MFA pendente voltam como `{ ok: false, error }` pelo
+ * `escritaDeAdminOuRecusa()`, para a tela dizer o motivo em vez de cair no
+ * error boundary.
  *
  * ── Por que NÃO emite `event_log` ───────────────────────────────────────────
  *
@@ -81,26 +81,12 @@ export async function updateBranding(
     return { ok: false, error: "validation_failed", details: parsed.error.flatten() };
   }
 
-  let authUser: Awaited<ReturnType<typeof requirePlatformAdminFull>>["user"];
-
-  try {
-
-    ({ user: authUser } = await requirePlatformAdminFull());
-
-  } catch (err) {
-
-    // GoTrue fora do ar ou sessão sem o fator: o guarda lança (falha fechado); a tela recebe uma frase, não o digest opaco.
-
-    if (ehFalhaDaSessao(err)) return { ok: false, error: MENSAGEM_SESSAO_INVALIDA };
-
-    throw err;
-
-  }
+  const escrita = await escritaDeAdminOuRecusa();
+  if (!escrita.ok) return escrita;
+  const { user: authUser } = escrita.ctx;
 
   const hdrs = await headers();
   const requestId = hdrs.get("x-request-id");
-  // D-036: o primeiro salto do `x-forwarded-for` é forjável pelo cliente;
-  // `ipDoCliente` lê o salto confiável (ver `lib/http/ip-do-cliente.ts`).
   const ip = ipDoCliente(hdrs);
   const userAgent = hdrs.get("user-agent") ?? null;
 
@@ -112,6 +98,11 @@ export async function updateBranding(
     // dois passa pelo banco. Normalizar aqui é o que faz "mudou?" ser uma
     // pergunta com resposta — duas grafias da mesma cor mentiriam.
     accent_hex: parsed.data.accent_hex === null ? null : normalizarHex(parsed.data.accent_hex),
+    // Mesma normalização e MESMO CHECK da irmã (#2482): `#FFF` passa pelo
+    // domínio e não passa pelo banco, e normalizar aqui é o que faz "mudou?"
+    // ser uma pergunta com resposta.
+    accent_dark_hex:
+      parsed.data.accent_dark_hex === null ? null : normalizarHex(parsed.data.accent_dark_hex),
     show_powered_by: parsed.data.show_powered_by,
     // A linha passa a ser HUMANA. É o que impede a semeadura do `.env` de
     // reescrever a escolha no render seguinte — inclusive quando a escolha foi
@@ -134,7 +125,13 @@ export async function updateBranding(
     // e nada seria gravado. É o mesmo modo de falha que a issue #144 mediu em
     // `organizations`, e a única defesa é não escrever a query que o permite.
     .upsert({ id: 1, ...valores }, { onConflict: "id" });
-  if (error) return { ok: false, error: error.message };
+  // #3747: `platform_branding_accent_hex` e `_accent_dark_hex` têm frase própria
+  // no mapeador (a cor precisa ser hexadecimal); o cru fica no log.
+  if (error) {
+    return respostaParaOperador(error, {
+      contexto: "[marca] falha ao gravar a marca da instalação",
+    });
+  }
 
   // No MESMO processo que renderiza (na VPS há um processo de app só), então a
   // troca aparece no próximo render sem esperar o TTL.
