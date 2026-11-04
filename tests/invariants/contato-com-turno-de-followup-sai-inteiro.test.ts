@@ -161,16 +161,17 @@ delete from public.job_queue where id = '${TURNO_A}';`);
     expect(doTurno).toContain("permission denied for table job_queue");
 
     // O outro alvo: o evento interno (idempotency_key 'nó:1'). Desde a 0490
-    // (#1915) a trilha não tem policy de DELETE para a sessão, então a recusa
-    // chega ANTES do gatilho: a RLS esconde a linha e o DELETE apaga zero.
-    // Medido como contagem explícita — "sem erro" sozinho não prova recusa.
-    const apagados = lastLine(
-      comoUsuario(
-        GOV_AGENT_A,
-        `with d as (delete from public.followup_enrollment_events where id = '${EVENTO_A}' returning 1) select count(*) from d;`,
-      ),
+    // (#1915) a trilha não tem policy de DELETE para a sessão; no Hiperbold CRM
+    // a 0924 (D-139) foi além e revogou o DELETE de `authenticated` — a soma
+    // das duas restrições. A recusa chega ANTES da RLS e do gatilho: 42501 da
+    // ACL. A contagem explícita do fim do caso prova que a linha ficou.
+    const doEvento = stderrDe(
+      GOV_AGENT_A,
+      `\\set VERBOSITY verbose
+delete from public.followup_enrollment_events where id = '${EVENTO_A}';`,
     );
-    expect(apagados).toBe("0");
+    expect(doEvento).toContain("42501");
+    expect(doEvento).toContain("permission denied for table followup_enrollment_events");
 
     // A guarda do gatilho segue viva onde a sessão ainda alcança a trilha: o
     // INSERT de `manager` (a policy deixa, as rotas de intervenção usam). Evento

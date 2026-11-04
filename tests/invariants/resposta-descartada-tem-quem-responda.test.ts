@@ -177,7 +177,7 @@ async function rodarJob(jobId: string, fake: ReturnType<typeof modelo>): Promise
   expect(claimed?.id).toBe(jobId);
   const handler = m.createInboundTurnHandler({
     crmCfg: { supabase: {} as never },
-    llmCfg: { anthropicApiKey: "fake" } as never,
+    llmCfg: { openrouterApiKey: "fake" } as never,
     knobs: {
       historyLimit: 10,
       maxContextTokens: 1000,

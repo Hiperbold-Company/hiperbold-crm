@@ -217,7 +217,7 @@ function turno(c: Cenario, deps: { classifyIntent: ReturnType<typeof iaDeSempre>
 function turnoComIaDeSempre(c: Cenario, deps: { classifyIntent: ReturnType<typeof iaDeSempre>; jev: ReturnType<typeof jevDuble>["deps"] }) {
   return resolveConversationTurn(
     pool,
-    { anthropicApiKey: "chave-da-instalacao-de-teste" } as never,
+    { openrouterApiKey: "chave-da-instalacao-de-teste" } as never,
     {
       tenantId: c.org,
       leadId: c.contato,

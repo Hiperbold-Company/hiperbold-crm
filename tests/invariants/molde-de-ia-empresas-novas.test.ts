@@ -76,10 +76,18 @@ function llm(org: string): string {
                   from public.organizations where id = '${org}';`);
 }
 
+/**
+ * O padrão do produto no Hiperbold CRM (0973): sem molde, a empresa nova nasce na chave da
+ * instalação, que é só OpenRouter, com o primeiro modelo de `MODELOS_DA_INSTALACAO` (sem lista,
+ * ou com `*`, o literal Luna). O upstream esperava Anthropic + o default do catálogo.
+ */
 function padraoDoProduto(): string {
-  return valor(`select 'anthropic|' || coalesce((select model_id from public.ai_models
-                   where provider = 'anthropic' and is_default_for_provider and deprecated_at is null limit 1),
-                   'claude-sonnet-4-6');`);
+  return valor(`select 'openrouter|' || coalesce(
+                   nullif(nullif(btrim(split_part(regexp_replace(coalesce(
+                     (select valor from public.platform_config
+                       where chave = 'MODELOS_DA_INSTALACAO' and not eh_segredo limit 1), ''),
+                     '[;' || chr(10) || ']', ',', 'g'), ',', 1)), ''), '*'),
+                   'openai/gpt-6-luna');`);
 }
 
 function auditoriasDoMolde(org: string): number {

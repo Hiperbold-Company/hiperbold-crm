@@ -506,7 +506,7 @@ describe("resposta obsoleta — a porta: o handler real não envia o que ficou d
     expect(claimed?.id).toBe(job.id);
     const handler = m.createInboundTurnHandler({
       crmCfg: { supabase: {} as never },
-      llmCfg: { anthropicApiKey: "fake" } as never,
+      llmCfg: { openrouterApiKey: "fake" } as never,
       knobs: {
         historyLimit: 10,
         maxContextTokens: 1000,

@@ -96,7 +96,8 @@ async function conversaCom(passos: readonly Passo[]): Promise<{ contato: string;
         m.direcao === "inbound" ? "delivered" : "sent",
         m.corpo,
         m.direcao === "inbound" ? "external_device" : "ai",
-        audio ? `${ORG}/audio-${i}.ogg` : null,
+        // Caminho no formato da 0919 (fork, D-099): organização/conversa/arquivo.
+        audio ? `${ORG}/${conversa}/audio-${i}.ogg` : null,
         m.transcricao ?? null,
       ],
     );

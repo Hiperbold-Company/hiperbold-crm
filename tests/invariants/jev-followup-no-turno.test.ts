@@ -145,7 +145,7 @@ type DepsDoJev = ReturnType<typeof jevDuble>["deps"];
 function handlerCom(jev: DepsDoJev, opts: { concluirFalha?: boolean } = {}) {
   const deps: FollowupTurnDeps = {
     crmCfg: { supabase: {} as never } as never,
-    llmCfg: { anthropicApiKey: "fake" } as never,
+    llmCfg: { openrouterApiKey: "fake" } as never,
     knobs: {
       historyLimit: 20,
       maxContextTokens: 4000,
