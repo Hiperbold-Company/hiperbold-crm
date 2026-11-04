@@ -59,6 +59,7 @@ import {
 } from "@/lib/leads/grupo-do-campo";
 import { AgentMappingSection, ancoraDoMapeamento } from "./_mapping";
 import { StagesSection, ancoraDasEtapas } from "./_stages";
+import { AcordeaoDoFunil, AcordeaoDosFunis } from "./_acordeao-do-funil";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 import { CAMINHO_CAMPOS_PERSONALIZADOS } from "@/lib/ajuda/artigos";
 
@@ -303,6 +304,7 @@ export function PipelinesClient({
   pipelines,
   etapas = {},
   podeEditarConfig,
+  podeDuplicar = false,
   bloqueioPorFunil,
   comandaDisponivel = false,
 }: {
@@ -315,6 +317,8 @@ export function PipelinesClient({
   etapas?: Record<string, EtapaDoFunil[]>;
   /** Vocabulário/custom fields são admin (a server action recusa o resto). */
   podeEditarConfig: boolean;
+  /** `funis.editar` (`papelPode`): os botões de duplicar funil. A rota recusa o resto com 403. */
+  podeDuplicar?: boolean;
   /** Fase F3, tarefa 9: um `BloqueioDoBotao` de "etapas_por_funil" por `pipeline.id`. */
   bloqueioPorFunil?: Record<string, BloqueioDoBotao>;
   /**
@@ -345,19 +349,24 @@ export function PipelinesClient({
     );
   }
   return (
-    <div className="flex flex-col gap-4">
+    <AcordeaoDosFunis pipelines={pipelines} podeDuplicar={podeDuplicar}>
       {pipelines.map((p) => (
-        <CardDoFunil
+        <AcordeaoDoFunil
           key={p.id}
           pipeline={p}
-          etapas={etapas[p.id] ?? []}
-          podeEditarConfig={podeEditarConfig}
-          comandaDisponivel={comandaDisponivel}
-          bloqueio={bloqueioPorFunil?.[p.id]}
-          ehFunilPadrao={p.id === (pipelines.find((x) => x.is_default) ?? pipelines[0])?.id}
-        />
+          numeroDeEtapas={(etapas[p.id] ?? []).filter((e) => !e.is_archived).length}
+        >
+          <CardDoFunil
+            pipeline={p}
+            etapas={etapas[p.id] ?? []}
+            podeEditarConfig={podeEditarConfig}
+            comandaDisponivel={comandaDisponivel}
+            bloqueio={bloqueioPorFunil?.[p.id]}
+            ehFunilPadrao={p.id === (pipelines.find((x) => x.is_default) ?? pipelines[0])?.id}
+          />
+        </AcordeaoDoFunil>
       ))}
-    </div>
+    </AcordeaoDosFunis>
   );
 }
 
@@ -400,11 +409,8 @@ function CardDoFunil({
   // apagaria em silêncio o que foi editado e ainda não salvo.
   const [editorMontado, setEditorMontado] = useState(false);
   return (
-    <Card className="space-y-6 p-6">
-      <header>
-        <h2 className="text-base font-semibold">{pipeline.name}</h2>
-        <p className="text-xs text-muted-foreground">/{pipeline.slug}</p>
-      </header>
+    // O Card e o cabeçalho (nome, selo, etapas) são do AcordeaoDoFunil que envolve este corpo.
+    <div className="space-y-6">
       {/* As ETAPAS vêm primeiro, e a ordem é a do raciocínio de quem
           configura: primeiro o quadro existe do jeito da sua operação,
           depois se decide o que o assistente faz com ele. Invertido, a
@@ -452,7 +458,7 @@ function CardDoFunil({
           )}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 

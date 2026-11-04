@@ -76,6 +76,13 @@ test.describe("QA — o selo de autoria com o funil já vivido", () => {
     await login(page);
     await page.goto(`${APP_URL}/app/settings/tenant/pipelines`);
     await page.waitForLoadState("networkidle");
+    // Com mais de um funil os cards nascem fechados (acordeão), e a medida de altura abaixo daria 0.
+    // A pergunta é "quanto da lista é selo quando o dono olha tudo": abre todos antes de medir.
+    const abrirTodos = page.getByTestId("alternar-todos-os-funis");
+    if ((await abrirTodos.count()) > 0 && (await abrirTodos.textContent())?.includes("Abrir todos")) {
+      await abrirTodos.click();
+      await expect(abrirTodos).toHaveText("Fechar todos");
+    }
 
     const doAgente = page.locator('[data-autoria="ai"]');
     const doHumano = page.locator('[data-autoria="user"]');

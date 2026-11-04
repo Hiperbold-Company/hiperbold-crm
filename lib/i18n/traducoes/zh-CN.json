@@ -6468,5 +6468,22 @@
   "O envio chegou, mas o CRM não conseguiu abrir o segredo desta fonte (a chave da instalação está ausente ou foi trocada). Fale com quem administra a instalação; tente reenviar depois.": "提交已收到，但 CRM 无法打开此来源的密钥（安装密钥缺失或已被更换）。请联系安装的管理员；稍后再尝试重新发送。",
   "Os dados chegaram, mas o plano desta organização já está no limite de leads. Fale com o suporte para ampliar.": "数据已收到，但此组织的套餐已达到线索上限。请联系支持团队扩容。",
   "O corpo do envio não é um JSON válido — confira se a ferramenta que envia manda o formato certo.": "提交内容不是有效的 JSON —— 请检查发送工具是否使用了正确的格式。",
-  "O corpo do envio passou do tamanho máximo aceito (64 KB).": "提交内容超过了允许的最大大小（64 KB）。"
+  "O corpo do envio passou do tamanho máximo aceito (64 KB).": "提交内容超过了允许的最大大小（64 KB）。",
+  "Fechar todos": "全部收起",
+  "Abrir todos": "全部展开",
+  "Duplicar funil": "复制销售漏斗",
+  "1 etapa": "1 个阶段",
+  "foi criado com as etapas e a configuração do funil de origem.": "已创建，包含源销售漏斗的阶段和配置。",
+  "Não consegui duplicar o funil agora. Tente de novo.": "暂时无法复制销售漏斗。请重试。",
+  "Copia as etapas, os motivos de perda e de ganho, os campos do lead e o mapeamento do assistente. Negócios, automações e formulários não são copiados.": "复制阶段、流失和成交原因、线索字段以及助手映射。商机、自动化和表单不会被复制。",
+  "Funil de origem": "源销售漏斗",
+  "Este funil está arquivado. Tire-o do arquivo antes de duplicar, ou escolha outro funil de origem.": "该销售漏斗已归档。请先取消归档再复制，或选择其他源销售漏斗。",
+  "Outro funil acabou de ocupar esse nome. Recarregue a página e tente de novo.": "另一个销售漏斗刚刚占用了这个名称。请刷新页面后重试。",
+  "Não consegui copiar as etapas do funil. Nada foi salvo — tente de novo.": "无法复制销售漏斗的阶段。未保存任何内容，请重试。",
+  "Dê um nome ao novo funil (até 80 caracteres).": "请为新销售漏斗命名（最多 80 个字符）。",
+  "Não consegui copiar as etapas, e o funil": "无法复制阶段，销售漏斗",
+  "pode ter ficado incompleto. Exclua-o e tente de novo.": "可能不完整。请删除后重试。",
+  "Seu perfil não pode duplicar funis nesta organização. Peça a um administrador.": "你的角色无法在此组织中复制销售漏斗。请联系管理员。",
+  "O plano desta organização chegou ao limite de funis ou de etapas. Fale com quem cuida da assinatura.": "该组织的套餐已达到销售漏斗或阶段数量上限。请联系负责订阅的人员。",
+  "etapas": "个阶段"
 }

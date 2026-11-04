@@ -12,6 +12,7 @@ import { moduloLigado } from "@/lib/instalacao/modulos";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
+import { papelPode } from "@/lib/permissoes/resolver";
 import { PipelinesClient, type EtapaDoFunil, type PipelineRow } from "./_client";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
@@ -40,6 +41,10 @@ export default async function PipelinesSettingsPage() {
   }
   const podeEditarConfig =
     (user.is_platform_admin && !user.support) || ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin;
+
+  // Duplicar funil cria funil: a mesma chave (`funis.editar`) que a rota exige e que o Kanban usa para
+  // "Novo funil". Esconder o botão de quem receberia 403 é honestidade, não permissão nova.
+  const podeDuplicar = papelPode(activeOrg.role, "funis.editar", activeOrg.permissoes);
 
   const supabase = await createClient();
   const { data } = await supabase
@@ -118,6 +123,7 @@ export default async function PipelinesSettingsPage() {
         pipelines={pipelines}
         etapas={etapasPorFunil}
         podeEditarConfig={podeEditarConfig}
+        podeDuplicar={podeDuplicar}
         bloqueioPorFunil={bloqueioPorFunil}
         comandaDisponivel={comandaDisponivel}
       />

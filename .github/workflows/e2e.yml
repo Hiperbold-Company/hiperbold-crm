@@ -1170,6 +1170,7 @@ jobs:
         agenda-servicos.spec.ts
         passagem-com-contexto.spec.ts
         pipelines-gestao.spec.ts
+        duplicar-funil.spec.ts
         qa-agente-usa-as-maos.spec.ts
         qa-selo-no-funil-usado.spec.ts
         qa-telas-descobertas-w4.spec.ts

@@ -219,7 +219,8 @@ test.describe("o agente organiza a operação e a tela conta quem foi", () => {
       expect(criada.etapas.map((e) => e.name)).toContain(ETAPA);
 
       // ---- a etapa aparece NA TELA, marcada como mudança do assistente ----
-      await page.goto(`${APP_URL}/app/settings/tenant/pipelines`);
+      // Com mais de um funil a página abre os cards fechados: o hash abre o funil da etapa criada.
+      await page.goto(`${APP_URL}/app/settings/tenant/pipelines#etapas-${funil.id}`);
       const linhaDaEtapa = page.getByTestId(`etapa-${stageId}`);
       await expect(linhaDaEtapa).toBeVisible({ timeout: 15_000 });
       // O nome mora num campo editável (clique para renomear), então `toContainText`
