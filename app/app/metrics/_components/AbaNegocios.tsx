@@ -30,6 +30,15 @@ import {
 import { PerdasPanel } from "./PerdasPanel";
 import { PrevisaoPanel } from "./PrevisaoPanel";
 
+/**
+ * Célula que, no celular, vira "Rótulo valor" dentro do cartão — o mesmo
+ * padrão de `AbaAtendimento.tsx`: o cabeçalho some abaixo de `md` e o rótulo
+ * vem do `data-rotulo` da própria célula. Só classes `max-md:`; no computador a
+ * tabela não muda.
+ */
+const CELULA_DE_NUMERO = "text-right tabular-nums max-md:p-0 max-md:text-left max-md:before:mr-1 max-md:before:text-muted-foreground max-md:before:content-[attr(data-rotulo)]";
+const CELULA_ROTULADA = "max-md:p-0 max-md:before:mr-1 max-md:before:text-muted-foreground max-md:before:content-[attr(data-rotulo)]";
+
 type Medida = "quantidade" | "valor";
 
 function dinheiro(cents: number, moeda: string, semCentavos = false): string {
@@ -149,8 +158,8 @@ export function AbaNegocios({
           {d.atendentes.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("Sem negócios no período.")}</p>
           ) : (
-            <Table>
-              <TableHeader>
+            <Table className="max-md:block">
+              <TableHeader className="max-md:hidden">
                 <TableRow>
                   <TableHead>{t("Atendente")}</TableHead>
                   <TableHead className="text-right">{t("Criados")}</TableHead>
@@ -159,16 +168,22 @@ export function AbaNegocios({
                   <TableHead className="text-right">{t("Total")}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="max-md:block">
                 {d.atendentes.map((a) => (
-                  <TableRow key={a.user_id ?? "sem"}>
-                    <TableCell className="font-medium">{nomeDe(a, t, currentUserId)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{a.criados}</TableCell>
-                    <TableCell className="text-right tabular-nums">{a.ganhos}</TableCell>
-                    <TableCell className="text-right tabular-nums">
+                  <TableRow key={a.user_id ?? "sem"} className="max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:py-2">
+                    <TableCell className="font-medium max-md:col-span-2 max-md:p-0">{nomeDe(a, t, currentUserId)}</TableCell>
+                    <TableCell data-rotulo={t("Criados")} className={CELULA_DE_NUMERO}>
+                      {a.criados}
+                    </TableCell>
+                    <TableCell data-rotulo={t("Ganhos")} className={CELULA_DE_NUMERO}>
+                      {a.ganhos}
+                    </TableCell>
+                    <TableCell data-rotulo={t("Ticket médio")} className={CELULA_DE_NUMERO}>
                       {a.ticket_medio_cents == null ? "—" : dinheiro(a.ticket_medio_cents, moeda)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{dinheiro(a.valor_ganho_cents, moeda)}</TableCell>
+                    <TableCell data-rotulo={t("Total")} className={CELULA_DE_NUMERO}>
+                      {dinheiro(a.valor_ganho_cents, moeda)}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -287,8 +302,8 @@ function TabelaDeNegocios({ query, tipo, titulo }: { query: string; tipo: TipoDa
         <p className="text-sm text-muted-foreground">{t("Nenhum negócio neste recorte.")}</p>
       ) : (
         <div className="overflow-x-auto" data-testid="desempenho-tabela-negocios">
-          <Table>
-            <TableHeader>
+          <Table className="max-md:block">
+            <TableHeader className="max-md:hidden">
               <TableRow>
                 <TableHead>{t("Negócio")}</TableHead>
                 <TableHead>{t("Valor")}</TableHead>
@@ -298,10 +313,10 @@ function TabelaDeNegocios({ query, tipo, titulo }: { query: string; tipo: TipoDa
                 <TableHead className="text-right">{t("Dias na etapa")}</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="max-md:block">
               {lista.negocios.map((n) => (
-                <TableRow key={n.id}>
-                  <TableCell className="max-w-64">
+                <TableRow key={n.id} className="max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:gap-y-1 max-md:py-2">
+                  <TableCell className="max-w-64 max-md:col-span-2 max-md:max-w-none max-md:min-w-0 max-md:p-0">
                     <a href={`/app/leads/${n.id}`} className="block truncate font-medium hover:underline">
                       {n.contato ?? n.titulo}
                     </a>
@@ -316,11 +331,11 @@ function TabelaDeNegocios({ query, tipo, titulo }: { query: string; tipo: TipoDa
                       </span>
                     ) : null}
                   </TableCell>
-                  <TableCell className="tabular-nums">
+                  <TableCell data-rotulo={t("Valor")} className={`tabular-nums ${CELULA_ROTULADA}`}>
                     {n.value_cents == null || !n.currency ? "—" : dinheiro(n.value_cents, n.currency)}
                   </TableCell>
-                  <TableCell className="truncate">{n.owner_name ?? (n.owner_user_id ? n.owner_user_id.slice(0, 8) : t("Sem responsável"))}</TableCell>
-                  <TableCell className="min-w-36">
+                  <TableCell data-rotulo={t("Atendente")} className={`truncate max-md:min-w-0 ${CELULA_ROTULADA}`}>{n.owner_name ?? (n.owner_user_id ? n.owner_user_id.slice(0, 8) : t("Sem responsável"))}</TableCell>
+                  <TableCell className="min-w-36 max-md:col-span-2 max-md:min-w-0 max-md:p-0">
                     <span className="block truncate text-sm">
                       {n.status === "won" ? t("Ganho") : n.status === "lost" ? t("Perdido") : (n.etapa ?? "—")}
                     </span>
@@ -333,8 +348,12 @@ function TabelaDeNegocios({ query, tipo, titulo }: { query: string; tipo: TipoDa
                       </span>
                     ) : null}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{n.dias_em_aberto}</TableCell>
-                  <TableCell className="text-right tabular-nums">{n.dias_na_etapa ?? "—"}</TableCell>
+                  <TableCell data-rotulo={t("Dias em aberto")} className={CELULA_DE_NUMERO}>
+                    {n.dias_em_aberto}
+                  </TableCell>
+                  <TableCell data-rotulo={t("Dias na etapa")} className={CELULA_DE_NUMERO}>
+                    {n.dias_na_etapa ?? "—"}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

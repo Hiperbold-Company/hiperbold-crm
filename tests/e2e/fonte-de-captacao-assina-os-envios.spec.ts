@@ -89,6 +89,9 @@ test.describe("fonte de captação — assinatura pela tela", () => {
     try {
       await login(page, creds.users.manager!.email);
       await page.goto(`${APP_URL}/app/webhooks`);
+      // No fork a tela abre em "Automações" (abas.ts, ABA_PADRAO_DE_AUTOMACOES);
+      // as fontes moram na aba "Receber dados".
+      await page.getByRole("tab", { name: "Receber dados" }).click();
 
       // --- cria a fonte, como o guia de instalação manda ---
       await page.getByRole("button", { name: /Nova fonte|Criar primeira fonte/ }).click();
@@ -206,6 +209,7 @@ test.describe("fonte de captação — assinatura pela tela", () => {
       try {
         if (sourceId) {
           await page.goto(`${APP_URL}/app/webhooks`);
+          await page.getByRole("tab", { name: "Receber dados" }).click();
           const titulo = page.getByText(SOURCE_NAME, { exact: true });
           const visivel = await titulo
             .waitFor({ state: "visible", timeout: 10_000 })

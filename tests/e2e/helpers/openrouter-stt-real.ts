@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { expect, type Page, type TestInfo } from "./test";
 
 import { bufToBytea, encryptKey } from "@/lib/crypto/aes_gcm";
+import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 import { PONTO_TRANSCRICAO_DE_AUDIO } from "@/lib/ai/pontos/registro";
 import { isMediaPathInOrganization } from "@/lib/messaging/media/upload-validation";
 
@@ -98,6 +99,10 @@ export async function provarTranscricaoOpenRouter(page: Page, info: TestInfo): P
     await info.attach("contrato real com fornecedor sintético", { path: recibo, contentType: "application/json" });
 
     // Manager pode LER o anúncio; editar provedores continua exigindo admin/MFA.
+    // No fork, IA › Provedores é função oculta (hiperbold/FUNCOES.md) e a tela
+    // redireciona para /app: a prova do pipeline acima vale sozinha, e o anúncio
+    // volta a ser conferido quando a função for religada.
+    if (funcaoOculta("provedores-ia")) return;
     await page.context().clearCookies();
     await page.goto("/login");
     await page.locator("#email").fill(email);

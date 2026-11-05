@@ -6,6 +6,10 @@ import { createClient } from "@supabase/supabase-js";
 
 import { carregarEnvLocal, destinoEhLocal } from "../../scripts/lib/env-de-teste";
 import { lerCreds, loginComoAdmin } from "./helpers/login-admin";
+import { pularSeOculta } from "./helpers/funcao-oculta";
+
+// A tela /app/prospecting é de função oculta no fork (hiperbold/FUNCOES.md): redireciona para /app.
+pularSeOculta(test, "prospeccao");
 
 /**
  * PROSPECÇÃO A PARTIR DA PRÓPRIA PLANILHA (spec 30).

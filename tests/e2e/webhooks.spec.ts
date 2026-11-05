@@ -465,6 +465,11 @@ testSemGravacao.describe("#3267 — uma vez por contato e o mesmo recibo nos doi
     };
     try {
       conferir(await admin.from("organizations").insert({ id: outroOrg, slug: `uma-vez-${outroOrg}`, legal_name: "Empresa sintética B", display_name: "Empresa sintética B" }));
+      // No fork a chave só vale se quem a criou tem vínculo ativo na organização dela
+      // (lib/mcp/auth.ts, criadorAindaPodeOQueATokenPode, migration 0962). O manager
+      // vira membro da empresa B, com o mesmo papel, para a chave B ser uma chave válida
+      // de OUTRA organização — que é o isolamento que esta prova mede.
+      conferir(await admin.from("user_organizations").insert({ organization_id: outroOrg, user_id: base.users.manager!.id, role: "manager", accepted_at: new Date().toISOString() }));
       conferir(await admin.from("crm_pipelines").insert({ id: pipeline, organization_id: org, name: nome, slug: slugDeFunil(nome) }));
       conferir(await admin.from("crm_stages").insert({ id: stage, organization_id: org, pipeline_id: pipeline, name: "Entrada", slug: "entrada", position: 1 }));
       conferir(await admin.from("contacts").insert(contatos.map((id, i) => ({ id, organization_id: org, name: `Contato sintético ${i}` }))));
@@ -542,7 +547,8 @@ testSemGravacao.describe("#3267 — uma vez por contato e o mesmo recibo nos doi
       expect(listaB.isError).not.toBe(true);
       expect(JSON.parse(listaB.content[0]!.text).execucoes).toEqual([]);
       expect((await lerMcp(tokenB, regra)).isError).toBe(true);
-      await page.getByRole("tab", { name: "Atividade", exact: true }).click();
+      // No fork a aba se chama "Registro de atividade" (WebhooksClient.tsx).
+      await page.getByRole("tab", { name: "Registro de atividade", exact: true }).click();
       await expect(page.getByText("Detalhe técnico: TypeError · ECONNRESET", { exact: false })).toBeVisible();
       await expect(page.getByText(/este contato já passou por ela/)).toBeVisible();
       await expect(page.locator("body")).not.toContainText(pessoal);

@@ -20,6 +20,7 @@
  * de 77 e a parte inteira passou.
  */
 import { expect, test } from "./helpers/test";
+import { funcaoOculta } from "../../lib/hiperbold/funcoes-ocultas";
 
 import { lerCreds, loginComoDono } from "./helpers/login-admin";
 import { afirmarDonoDoServidor } from "./utils/precondicao";
@@ -57,10 +58,20 @@ test.describe("Honorários: instalar e registrar um pagamento", () => {
 
     // 3a. Uma conta no caixa, pela tela do financeiro.
     const nomeDaConta = `Conta honorários e2e ${Date.now()}`;
-    await page.goto("/app/settings/tenant/financeiro");
-    await page.getByLabel(/nome da conta/i).fill(nomeDaConta);
-    await page.getByRole("button", { name: /adicionar conta/i }).click();
-    await expect(page.getByText(nomeDaConta).first()).toBeVisible();
+    if (funcaoOculta("contas-e-recebimentos")) {
+      // No fork a tela Configurações › Contas e recebimentos é função oculta
+      // (hiperbold/FUNCOES.md) e redireciona para /app. A conta vem da MESMA API
+      // que aquela tela chama; o que está sob teste é o pagamento sem duplicar.
+      const criada = await page.request.post("/api/v1/financeiro/catalogo/contas", {
+        data: { name: nomeDaConta, kind: "cash" },
+      });
+      expect(criada.ok(), `a conta não foi criada: ${criada.status()} ${await criada.text()}`).toBe(true);
+    } else {
+      await page.goto("/app/settings/tenant/financeiro");
+      await page.getByLabel(/nome da conta/i).fill(nomeDaConta);
+      await page.getByRole("button", { name: /adicionar conta/i }).click();
+      await expect(page.getByText(nomeDaConta).first()).toBeVisible();
+    }
 
     // 3b. Contrato de valor fixo e uma parcela.
     await page.goto("/app/honorarios");

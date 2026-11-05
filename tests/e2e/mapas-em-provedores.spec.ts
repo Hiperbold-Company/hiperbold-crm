@@ -15,6 +15,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { expect, test } from "./helpers/test";
+import { funcaoOculta } from "../../lib/hiperbold/funcoes-ocultas";
 import { generateTotp, msUntilNextTotpWindow } from "./utils/totp";
 import { corpoDaLocalizacao } from "../../lib/messaging/localizacao";
 import { abreConversa, admin, captura, creds, insere, login, registra } from "./qa-l12-comum";
@@ -55,6 +56,8 @@ test.describe("Mapas em Provedores", () => {
   test.describe.configure({ timeout: 300_000 });
 
   test("grava a chave cifrada, mostra só os 4 últimos, explica a recusa do Google e remove", async ({ page }) => {
+    // O cartão de mapas mora em IA › Provedores, função oculta no fork (hiperbold/FUNCOES.md).
+    test.skip(funcaoOculta("provedores-ia"), "IA › Provedores oculta (hiperbold/FUNCOES.md): reativar junto com a função");
     const c = creds();
     await admin.from("map_provider_credentials").delete().eq("organization_id", c.org_id);
 

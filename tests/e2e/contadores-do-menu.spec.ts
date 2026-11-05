@@ -31,6 +31,7 @@ import * as path from "node:path";
 
 import { createClient } from "@supabase/supabase-js";
 
+import { NAV_CATALOG } from "../../lib/navigation/catalogo";
 import { carregarEnvLocal } from "../../scripts/lib/env-de-teste";
 import { lerCreds, loginComoAdmin } from "./helpers/login-admin";
 import { expect, test, type Page } from "./helpers/test";
@@ -222,6 +223,13 @@ test.describe("contadores do menu", () => {
   test("Casos mostra quantos esperam uma pessoa — o mesmo número da tela, e acompanha o caso", async ({
     page,
   }) => {
+    // No fork, Casos saiu do menu lateral (lib/navigation/catalogo.ts, "SIDEBAR = SÓ O
+    // ESSENCIAL", 15/10/2026): sem o item, não há onde o selo apareça. Volta sozinho se
+    // a entrada ganhar `sidebar: true` de novo.
+    const casosNoMenu = NAV_CATALOG.some(
+      (item) => item.href === "/app/ai/cases" && "sidebar" in item && item.sidebar === true,
+    );
+    test.skip(!casosNoMenu, "Casos fora do menu lateral no fork (catalogo.ts, decisão de 15/10/2026)");
     await page.setViewportSize({ width: 1280, height: 900 });
     await loginComoAdmin(page, lerCreds());
 
