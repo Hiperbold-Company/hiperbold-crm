@@ -69,6 +69,20 @@ function derivePool(): pg.Pool {
   return _pool;
 }
 
+/**
+ * Deps do documento: só a extração local. Transcrição e visão lançam porque o
+ * documento nunca chega a elas em `deriveMediaText` — se chegar, é defeito, e
+ * o erro vai para o catch do worker em vez de sair para um provedor.
+ */
+const semModelo = (oQue: string) => async (): Promise<never> => {
+  throw new Error(`documento não usa ${oQue}: extração local, sem modelo`);
+};
+const DEPS_DE_EXTRACAO_LOCAL: DeriveDeps = {
+  transcriber: { transcribe: semModelo("transcrição") },
+  describeImage: semModelo("visão"),
+  extractPdf: (buffer) => extractPdfText(buffer),
+};
+
 interface MessageRow {
   id: string;
   organization_id: string;
@@ -253,10 +267,55 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
       .filter("body", "isdistinct", MENSAGEM_REDIGIDA);
   };
 
+  // Grava o texto derivado (`ready`) e reage à conclusão. Devolve o resultado
+  // quando a gravação não aconteceu; `null` quando gravou. Um caminho só para a
+  // extração local (PDF) e para a derivação por modelo, com a mesma guarda LGPD.
+  const gravarDerivado = async (text: string): Promise<HandlerResult | null> => {
+    const { data: gravados, error: erroDaGravacao } = await admin
+      .from("messages")
+      .update({ media_derived_text: text, media_derived_status: "ready" })
+      .eq("id", msg.id)
+      .eq("organization_id", msg.organization_id)
+      .filter("body", "isdistinct", MENSAGEM_REDIGIDA)
+      .select("id");
+    if (erroDaGravacao) return { consumer_key, status: "error", detail: erroDaGravacao.message };
+    if (!gravados || gravados.length === 0) {
+      return { consumer_key, status: "skipped", detail: "message_redacted" };
+    }
+    // #2210 — o texto chegou. Se o turno já tiver rodado SEM ele e tiver
+    // passado a conversa para humano por "não há transcrição de texto", é aqui
+    // que a falha transitória deixa de ser permanente: a reação corrige o
+    // motivo gravado (o banco já o desmentiu), devolve pela MESMA função do
+    // botão "Devolver ao automático" e reenfileira o turno tardio.
+    await reagirAConclusaoDeDerivacao(admin, {
+      organizationId: msg.organization_id,
+      conversationId: msg.conversation_id,
+      messageId: msg.id,
+      requestId: row.id,
+    });
+    return null;
+  };
+
   try {
     const dl = await admin.storage.from("whatsapp-media").download(msg.media_storage_path);
     if (dl.error || !dl.data) throw new Error(`storage_download_failed: ${dl.error?.message ?? "no_data"}`);
     const buffer = Buffer.from(await dl.data.arrayBuffer());
+
+    // Hiperbold: documento é extração LOCAL (PDF pelo extrator; outro documento
+    // não deriva texto) e não chama modelo nenhum. Por isso não resolve
+    // credencial: a chave da instalação é só a da OpenRouter, e uma instalação
+    // sem ela (ou uma organização sem credencial própria) fazia o resolvedor
+    // lançar `LlmNotConfiguredError` antes da extração — o PDF caía em `error`,
+    // e na quinta tentativa em `failed`, sem ter precisado de IA nenhuma.
+    if (msg.type === "document") {
+      const textoLocal = await deriveMediaText(
+        msg.type,
+        buffer,
+        msg.media_mime ?? "application/octet-stream",
+        DEPS_DE_EXTRACAO_LOCAL,
+      );
+      return (await gravarDerivado(textoLocal)) ?? { consumer_key, status: "ok" };
+    }
 
     // Credencial BYOK da org p/ visão (imagem).
     const llmCfg: LlmEdgeConfig = {
@@ -569,28 +628,8 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
     //
     // `isdistinct`, nunca `neq`: áudio sem legenda tem body NULL, e
     // `NULL <> '...'` é NULL — o `neq` recusaria TODA nota de voz.
-    const { data: gravados, error: erroDaGravacao } = await admin
-      .from("messages")
-      .update({ media_derived_text: text, media_derived_status: "ready" })
-      .eq("id", msg.id)
-      .eq("organization_id", msg.organization_id)
-      .filter("body", "isdistinct", MENSAGEM_REDIGIDA)
-      .select("id");
-    if (erroDaGravacao) return { consumer_key, status: "error", detail: erroDaGravacao.message };
-    if (!gravados || gravados.length === 0) {
-      return { consumer_key, status: "skipped", detail: "message_redacted" };
-    }
-    // #2210 — o texto chegou. Se o turno já tiver rodado SEM ele e tiver
-    // passado a conversa para humano por "não há transcrição de texto", é aqui
-    // que a falha transitória deixa de ser permanente: a reação corrige o
-    // motivo gravado (o banco já o desmentiu), devolve pela MESMA função do
-    // botão "Devolver ao automático" e reenfileira o turno tardio.
-    await reagirAConclusaoDeDerivacao(admin, {
-      organizationId: msg.organization_id,
-      conversationId: msg.conversation_id,
-      messageId: msg.id,
-      requestId: row.id,
-    });
+    const recusaDaGravacao = await gravarDerivado(text);
+    if (recusaDaGravacao) return recusaDaGravacao;
     // ─── O pedido DITO no áudio, agora que ele virou texto (#2233) ──────────
     //
     // A cascata da onda 3 sobre a transcrição — a regra de hoje e, só onde ela

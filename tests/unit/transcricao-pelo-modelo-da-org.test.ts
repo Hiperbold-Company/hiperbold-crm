@@ -363,5 +363,29 @@ describe("transcricao_de_audio — quem ouve o áudio (#2171)", () => {
         }),
       );
     });
+
+    // Hiperbold: a chave da instalação é só a da OpenRouter. Uma instalação sem ela, e uma
+    // organização sem credencial própria, não têm chave nenhuma — e o PDF, que é extração
+    // local, tem de derivar mesmo assim, sem perguntar credencial a ninguém.
+    it("PDF deriva sem chave de IA nenhuma: o resolvedor não é consultado", async () => {
+      messageRow.type = "document";
+      messageRow.media_mime = "application/pdf";
+      resolveMock.mockReset().mockRejectedValue(new Error("LLM não configurado para esta organização"));
+
+      const r = await deriveMessageMedia(eventRow());
+
+      expect(r.status, `detail=${r.detail}`).toBe("ok");
+      expect(resolveMock).not.toHaveBeenCalled();
+      expect(downloadMock).toHaveBeenCalledTimes(1);
+      expect(extractPdfMock).toHaveBeenCalledTimes(1);
+      expect(generateTextMock).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(updateEqMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          media_derived_status: "ready",
+          media_derived_text: "NF: 120 Contrato: 9912492178",
+        }),
+      );
+    });
   });
 });

@@ -57,9 +57,10 @@ async function main(): Promise<void> {
   const servidor = process.env.SUPABASE_SERVER_URL || url;
   assert(destinoEhLocal(servidor), "o transporte Supabase precisa ser local");
 
-  // O PDF não usa visão/ASR. O resolvedor real ainda exige uma credencial:
-  // apenas este processo recebe chave sintética, e HTTP fora do Supabase é negado.
-  process.env.OPENAI_API_KEY = "sk-sintetica-prova-sem-provedor";
+  // O PDF não usa visão/ASR nem resolve credencial (Hiperbold: a chave da instalação é só a
+  // OpenRouter, e documento é extração local). Este processo roda SEM chave de IA nenhuma,
+  // e HTTP fora do Supabase é negado.
+  delete process.env.OPENAI_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.OPENROUTER_API_KEY;
   const origens = new Set([new URL(url).origin, new URL(servidor).origin]);
@@ -263,7 +264,8 @@ async function main(): Promise<void> {
   }
 }
 
-main().then(() => process.exit(0), () => {
-  process.stderr.write(`Falhou a prova real de isolamento da derivação (fase: ${fase}).\n`);
+main().then(() => process.exit(0), (err: unknown) => {
+  const mensagem = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`Falhou a prova real de isolamento da derivação (fase: ${fase}): ${mensagem}\n`);
   process.exit(1);
 });

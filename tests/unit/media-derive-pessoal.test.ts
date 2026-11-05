@@ -255,7 +255,10 @@ describe("#3592 — mídia de contato pessoal não é transcrita, descrita nem e
 
       expect(resultado).toEqual({ consumer_key: "media_derive_v1", status: "ok" });
       expect(downloadMock).toHaveBeenCalledTimes(1);
-      expect(resolveOrgLlmConfig).toHaveBeenCalled();
+      // Documento é extração local: não resolve credencial (Hiperbold, chave da instalação só
+      // OpenRouter). Os tipos que chamam modelo continuam resolvendo.
+      if (tipo === "document") expect(resolveOrgLlmConfig).not.toHaveBeenCalled();
+      else expect(resolveOrgLlmConfig).toHaveBeenCalled();
       expect(deriveMediaText).toHaveBeenCalledWith(tipo, expect.anything(), MIME[tipo], expect.anything());
       expect(updateEqMock).toHaveBeenCalledWith(
         expect.objectContaining({ media_derived_text: "transcrição da nota de voz", media_derived_status: "ready" }),
