@@ -41,17 +41,6 @@ const DINAMICAS = [
   "loyalty_ledger",
 ] as const;
 
-/** USING/WITH CHECK vivos da policy, direto de `pg_policies`. */
-function expressaoViva(tabela: string, policy: string): string {
-  const out = sql(`
-    select coalesce(qual, '(sem using)') || ' :: ' || coalesce(with_check, '(sem with check)')
-      from pg_policies
-     where schemaname = 'public' and tablename = '${tabela}' and policyname = '${policy}';
-  `);
-  if (!out) throw new Error(`policy ${policy} não existe em public.${tabela}`);
-  return out;
-}
-
 beforeAll(() => {
   // #1907 — o módulo financeiro INSTALADO antes de medir: as cinco tabelas da comanda
   // (`sales`, `sale_items`, `commission_rules`, `commissions`, `loyalty_ledger`) saíram do
@@ -79,20 +68,38 @@ beforeAll(() => {
 });
 
 describe("0533 — support_readonly não escreve nas 9 dinâmicas de 0350/0351", () => {
-  it("catálogo: _write com _full, _read com a pura, sem _all", () => {
+  // O fork (0923, D-138/D-127) trocou o par `_read`/`_write` por uma policy por operação
+  // (select de membro; insert/update/delete por papel). A garantia medida é a mesma: TODA
+  // policy permissiva de escrita exige `_full`, a leitura mantém a pura e o `_all` não volta.
+  it("catálogo: toda escrita com _full, a leitura com a pura, sem _all", () => {
     const faltando: string[] = [];
     for (const tabela of DINAMICAS) {
-      const escrita = expressaoViva(tabela, `tenant_isolation_${tabela}_write`);
-      if (!escrita.includes("fn_is_platform_admin_full")) faltando.push(`${tabela}_write: sem _full`);
-      if (/fn_is_platform_admin\s*\(/.test(escrita)) faltando.push(`${tabela}_write: ainda aceita a pura`);
-      const leitura = expressaoViva(tabela, `tenant_isolation_${tabela}_read`);
-      if (!/fn_is_platform_admin\s*\(/.test(leitura)) faltando.push(`${tabela}_read: perdeu a pura`);
+      const escritas = sql(
+        `select string_agg(policyname || '|' || regexp_replace(coalesce(qual,'') || ' ' || coalesce(with_check,''), '\\s+', ' ', 'g'), '§')
+           from pg_policies
+          where schemaname = 'public' and tablename = '${tabela}' and permissive = 'PERMISSIVE'
+            and cmd in ('INSERT','UPDATE','DELETE','ALL');`,
+      )
+        .split("§")
+        .filter(Boolean);
+      // Zero policy de escrita é o mais estreito (ex.: `commissions`, só leitura no fork: quem grava
+      // é `fn_finalizar_comanda`, definer). O controle positivo de escrita é o caso de `financial_accounts`.
+      for (const linha of escritas) {
+        const [nome, expr = ""] = linha.split("|");
+        if (!expr.includes("fn_is_platform_admin_full")) faltando.push(`${nome}: sem _full`);
+        if (/fn_is_platform_admin\s*\(/.test(expr)) faltando.push(`${nome}: ainda aceita a pura`);
+      }
+      const leituras = sql(
+        `select coalesce(qual,'') from pg_policies where schemaname = 'public' and tablename = '${tabela}'
+            and permissive = 'PERMISSIVE' and cmd = 'SELECT';`,
+      );
+      if (!/fn_is_platform_admin\s*\(/.test(leituras)) faltando.push(`${tabela}: leitura perdeu a pura`);
       const sobra = sql(
         `select count(*) from pg_policies where schemaname = 'public' and tablename = '${tabela}' and policyname = 'tenant_isolation_${tabela}_all';`,
       );
       if (sobra !== "0") faltando.push(`${tabela}: _all ainda existe`);
     }
-    expect(faltando, "dinâmica de 0350/0351 fora do par da 0533").toEqual([]);
+    expect(faltando, "dinâmica de 0350/0351 com escrita aberta ao support_readonly").toEqual([]);
   });
 
   it("financial_accounts: support_readonly LÊ; UPDATE 0 como support_readonly; 1 como full", () => {

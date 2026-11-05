@@ -940,7 +940,7 @@ begin
     media_size_bytes = null,
     media_storage_path = null,
     media_derived_text = null,
-    media_derived_status = null,
+    media_derived_status = case when media_derived_status is null then null else 'ready' end,  -- vocabulário (0497): diz ao drain que terminou
     metadata = '{}'::jsonb,
     updated_at = now()
   where organization_id = new.organization_id
