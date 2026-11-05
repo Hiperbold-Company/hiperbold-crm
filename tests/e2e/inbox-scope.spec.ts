@@ -188,17 +188,33 @@ test.describe("G4-02 — inbox com escopo", () => {
       };
       await conferirA();
 
-      const trocarCaminho = async (caminho: string) => {
+      // Hiperbold (D-099, migration 0919): o banco recusa, para qualquer papel, caminho de mídia fora
+      // de `<org>/<conversa>/`. O caminho hostil é provado nas duas camadas: a sessão leva 23514 e
+      // a linha não muda; depois ele é plantado pelo dono do banco com o gatilho desligado só nesta
+      // transação (a linha antiga, anterior à trava), e a rota de mídia tem de recusá-lo igual.
+      const trocarCaminho = async (caminho: string, hostil = false) => {
         const alteracao = await sessao.from("messages")
           .update({ media_storage_path: caminho })
           .eq("id", mensagem)
           .eq("organization_id", creds.org_id)
-          .select("media_storage_path")
-          .single();
-        expect(alteracao.error).toBeNull();
-        expect(alteracao.data?.media_storage_path).toBe(caminho);
+          .select("media_storage_path");
+        if (!hostil) {
+          expect(alteracao.error).toBeNull();
+          expect(alteracao.data?.[0]?.media_storage_path).toBe(caminho);
+          return;
+        }
+        expect(alteracao.error?.code, "o banco precisa recusar caminho fora do prefixo (D-099)").toBe("23514");
+        const literal = "$caminho$";
+        expect(caminho.includes(literal)).toBe(false);
+        expect(process.env.SUPABASE_DB_URL, "SUPABASE_DB_URL do .env.e2e").toBeTruthy();
+        execFileSync("psql", [process.env.SUPABASE_DB_URL!, "-v", "ON_ERROR_STOP=1", "-qAt", "-c",
+          `begin; alter table public.messages disable trigger trg_messages_media_path_update; ` +
+          `update public.messages set media_storage_path = ${literal}${caminho}${literal} ` +
+          `where id = '${mensagem}' and organization_id = '${creds.org_id}'; ` +
+          `alter table public.messages enable trigger trg_messages_media_path_update; commit;`,
+        ], { encoding: "utf8" });
       };
-      await trocarCaminho(caminhoB);
+      await trocarCaminho(caminhoB, true);
       for (const url of [endpoint, `${endpoint}?formato=aac`]) {
         const resposta = await page.request.get(url, { maxRedirects: 0 });
         expect(resposta.status()).toBe(404);
