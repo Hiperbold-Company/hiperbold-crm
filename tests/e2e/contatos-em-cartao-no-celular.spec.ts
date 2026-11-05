@@ -122,24 +122,34 @@ test.describe("contatos em cartão no celular", () => {
     }
 
     const caixaDaAna = linhaDaAna.getByRole("checkbox");
-    const toque = await caixaDaAna.evaluate((el) => {
+    const medirToque = () => caixaDaAna.evaluate((el) => {
+      // A linha pode nascer rente à barra de navegação de baixo (medido: topo em 839 de 844 px),
+      // e aí o toque cai na barra, não na caixa. O dedo de verdade rola antes de tocar.
+      el.scrollIntoView({ block: "center", behavior: "instant" });
       const r = el.getBoundingClientRect();
       const cx = r.left + r.width / 2;
       const cy = r.top + r.height / 2;
       const acerta = (x: number, y: number) => {
         const alvo = document.elementFromPoint(x, y);
-        return alvo !== null && (alvo === el || el.contains(alvo));
+        // Hiperbold: a caixa do fork é um <input> dentro do próprio <label> (o Safari não
+        // desenha ::before em input); tocar no rótulo da caixa é tocar na caixa.
+        const rotuloDaCaixa = el.closest("label");
+        return alvo !== null && (alvo === el || el.contains(alvo) || (rotuloDaCaixa !== null && rotuloDaCaixa.contains(alvo)));
       };
       return { cx, cy, acertos: [acerta(cx - 20, cy), acerta(cx + 20, cy), acerta(cx, cy - 20), acerta(cx, cy + 20)] };
     });
-    expect(toque.acertos, "o toque a 20 px do centro da caixa (esq, dir, cima, baixo)").toEqual([
-      true,
-      true,
-      true,
-      true,
-    ]);
+    // A lista de cartões ainda se acomoda logo depois de carregar: mede até a tela parar.
+    await expect
+      .poll(async () => (await medirToque()).acertos, {
+        message: "o toque a 20 px do centro da caixa (esq, dir, cima, baixo)",
+        timeout: 10_000,
+      })
+      .toEqual([true, true, true, true]);
+    const toque = await medirToque();
     await page.touchscreen.tap(toque.cx + 20, toque.cy);
-    await expect(caixaDaAna).toHaveAttribute("aria-checked", "true");
+    // Hiperbold CRM: a caixa da linha é a da seleção com exportação (`<input type="checkbox">`,
+    // `CaixaDeSelecao`), que não carrega `aria-checked`; `toBeChecked` mede o mesmo estado.
+    await expect(caixaDaAna).toBeChecked();
     const barra = page.getByTestId("barra-de-contatos-em-lote");
     await expect(barra).toBeVisible();
     await page.getByTestId("lote-limpar").tap();
@@ -151,7 +161,7 @@ test.describe("contatos em cartão no celular", () => {
     await todos.tap();
     await expect(barra).toBeVisible();
     for (const linha of await linhas.all()) {
-      await expect(linha.getByRole("checkbox")).toHaveAttribute("aria-checked", "true");
+      await expect(linha.getByRole("checkbox")).toBeChecked();
     }
     await page.screenshot({ path: path.join(EVIDENCIA, "02-todos-selecionados.png") });
 

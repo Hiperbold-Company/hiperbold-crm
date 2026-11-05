@@ -61,7 +61,9 @@ export async function proximaAcaoNoTurno(
     };
   };
   const handler = createInboundTurnHandler({
-    crmCfg: { supabase: {} as never }, llmCfg: { anthropicApiKey: "fake" } as never,
+    crmCfg: { supabase: {} as never },
+    // Fork Hiperbold: a chave da instalação sai sempre pela OpenRouter (hiperbold/FUNCOES.md).
+    llmCfg: { openrouterApiKey: "fake" } as never,
     knobs: {
       historyLimit: 10, maxContextTokens: 2000, notesIndexMaxTokens: 500, maxSteps: 8,
       queuedRetryDelayMs: 1000,

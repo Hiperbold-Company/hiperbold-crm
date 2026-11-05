@@ -130,8 +130,8 @@ export function AbaAtendimento({
             <p className="text-sm text-muted-foreground">{t("Nenhum atendimento no período.")}</p>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
+              <Table className="max-md:block">
+                <TableHeader className="max-md:hidden">
                   <TableRow>
                     <TableHead>{t("Atendente")}</TableHead>
                     <TableHead className="text-right">{t("Atendimentos")}</TableHead>
@@ -141,15 +141,15 @@ export function AbaAtendimento({
                     <TableHead className="text-right">{t("Resposta")}</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="max-md:block">
                   {d.atendentes.map((a) => (
-                    <TableRow key={a.user_id ?? "sem"}>
-                      <TableCell className="font-medium">{nome(a, t, currentUserId)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{a.atendimentos}</TableCell>
-                      <TableCell className="text-right tabular-nums">{a.finalizados}</TableCell>
-                      <TableCell className="text-right tabular-nums">{a.em_aberto}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatarDuracao(a.primeira_resposta_seg)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatarDuracao(a.resposta_seg)}</TableCell>
+                    <TableRow key={a.user_id ?? "sem"} className="max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:py-2">
+                      <TableCell className="font-medium max-md:col-span-2 max-md:p-0">{nome(a, t, currentUserId)}</TableCell>
+                      <TableCell data-rotulo={t("Atendimentos")} className={CELULA_DE_NUMERO}>{a.atendimentos}</TableCell>
+                      <TableCell data-rotulo={t("Finalizados")} className={CELULA_DE_NUMERO}>{a.finalizados}</TableCell>
+                      <TableCell data-rotulo={t("Em aberto")} className={CELULA_DE_NUMERO}>{a.em_aberto}</TableCell>
+                      <TableCell data-rotulo={t("1ª resposta")} className={CELULA_DE_NUMERO}>{formatarDuracao(a.primeira_resposta_seg)}</TableCell>
+                      <TableCell data-rotulo={t("Resposta")} className={CELULA_DE_NUMERO}>{formatarDuracao(a.resposta_seg)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

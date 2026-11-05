@@ -306,6 +306,8 @@ describe("CERCA — quem escreve vínculo, papel ou estado de org invalida", () 
     "lib/auth/provision.ts",
     // Colunas da empresa que viajam no snapshot (nome, idioma, fuso, moeda, país).
     "lib/tenants/dados-cadastrais.ts",
+    // Permissões por perfil (`settings.permissoes`, fork Hiperbold) também viajam no snapshot.
+    "app/actions/settings/salvarPermissoesPorPerfil.ts",
     "app/actions/onboarding/_shared.ts",
     // Metadata da pessoa (idioma, nome, e-mail) — o `getUser` também está no cache.
     "app/actions/settings/trocarIdioma.ts",

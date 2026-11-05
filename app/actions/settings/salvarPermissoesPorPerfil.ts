@@ -19,6 +19,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { audit } from "@/lib/audit";
+import { invalidarOrg } from "@/lib/auth/cache-curto";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { portaoDeAdminDaOrganizacao } from "@/lib/auth/portao-de-escrita";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
@@ -76,12 +77,19 @@ export async function salvarPermissoesPorPerfil(entrada: unknown): Promise<Resul
   const diferencas = diferencasDoPadrao(depois);
   const valor = Object.keys(diferencas).length > 0 ? diferencas : null;
 
+  // `settings.permissoes` viaja no snapshot de permissões de cada membro, que o
+  // cache curto (#3696) guarda por até 30 s: sem derrubá-lo, o atendente seguiria
+  // com a escolha antiga (sem o botão, ou com a rota ainda liberada). Antes e
+  // depois, como `lib/organizacao/configuracao.ts`: uma leitura concorrente pode
+  // regravar o valor velho no meio da escrita.
+  invalidarOrg(activeOrg.orgId);
   const gravado = await atualizarSettingDaOrganizacao(
     admin,
     activeOrg.orgId,
     ["permissoes"],
     valor,
   );
+  invalidarOrg(activeOrg.orgId);
   if (!gravado.ok) {
     logger.error("[permissoes] gravação falhou", {
       organization_id: activeOrg.orgId,

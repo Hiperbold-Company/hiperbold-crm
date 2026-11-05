@@ -453,11 +453,19 @@ test.describe("Jev — os pedidos do cliente, pela tela", () => {
     // Ver o cabeçalho: sem a IA de sempre, o cartão fica "sozinho" antes e
     // depois do clique, e o selo do cartão não teria como errar.
     await test.step("a IA de sempre da empresa: uma chave de conversa cadastrada e validada", async () => {
+      // A IA de sempre é a do provedor que a ORGANIZAÇÃO escolheu, lido do banco (como na
+      // `jev-roteador`): no Hiperbold CRM a organização nasce `openrouter` (migration 0973), e uma
+      // chave `anthropic` não é a IA de sempre dela — o cartão ficava "sozinho".
+      const { data: org } = await admin.from("organizations").select("settings").eq("id", orgId).single();
+      const provedor = (org?.settings as { llm?: { provider?: string } } | null)?.llm?.provider || "anthropic";
       const criou = await page.request.post("/api/v1/ai/credentials", {
         data: {
-          provider: "anthropic",
+          provider: provedor,
           label: `IA de sempre ${base}`,
-          api_key: "sk-ant-e2e-ia-de-sempre-0000000000000000000000",
+          api_key:
+            provedor === "openrouter"
+              ? "sk-or-v1-e2e-ia-de-sempre-0000000000000000000000"
+              : "sk-ant-e2e-ia-de-sempre-0000000000000000000000",
         },
       });
       expect(criou.status(), "a IA de sempre não foi cadastrada").toBe(201);

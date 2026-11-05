@@ -165,17 +165,25 @@ function CaixaDeSelecao({
   useEffect(() => {
     if (ref.current) ref.current.indeterminate = indeterminada && !marcada;
   }, [indeterminada, marcada]);
+  // No toque, a área que pega o dedo passa a 44px sem mudar o desenho (a mesma régua
+  // da caixa do lote do upstream). O alvo é o `::before` do <label> que envolve a
+  // caixa, e não o do <input>: o Safari do iPhone não desenha pseudo-elemento em
+  // input. Tocar no rótulo marca a caixa em qualquer navegador.
   return (
-    <input
-      ref={ref}
-      type="checkbox"
-      className="h-4 w-4 cursor-pointer rounded-sm border-border accent-[var(--color-accent,currentColor)]"
-      checked={marcada}
-      disabled={desabilitada}
-      aria-label={rotulo}
-      onChange={(e) => onChange(e.target.checked)}
+    <label
+      className="relative inline-flex cursor-pointer pointer-coarse:before:absolute pointer-coarse:before:-inset-3.5 pointer-coarse:before:content-['']"
       onClick={(e) => e.stopPropagation()}
-    />
+    >
+      <input
+        ref={ref}
+        type="checkbox"
+        className="h-4 w-4 cursor-pointer rounded-sm border-border accent-[var(--color-accent,currentColor)]"
+        checked={marcada}
+        disabled={desabilitada}
+        aria-label={rotulo}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+    </label>
   );
 }
 

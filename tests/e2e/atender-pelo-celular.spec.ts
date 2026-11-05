@@ -583,7 +583,21 @@ test.describe("atender pelo celular", () => {
     // área de acerto no toque é de 44. A medida é `elementFromPoint` a 20px do
     // centro nas quatro direções: a caixa do botão não enxerga o `::before`.
     const opcoes = page.getByTestId("message-bubble").first().getByRole("button", { name: "Opções da mensagem" });
-    await opcoes.evaluate((b) => b.scrollIntoView({ block: "center" }));
+    // A conversa ainda pode estar rolando sozinha para o fim (o composer acabou de
+    // esvaziar e a caixa mudou de tamanho): um `scrollIntoView` só é sobrescrito
+    // por essa rolagem e a medida cairia fora da tela. Repete até a setinha parar
+    // dentro da tela — a régua dos 44px continua a mesma.
+    await expect
+      .poll(
+        () =>
+          opcoes.evaluate((b) => {
+            b.scrollIntoView({ block: "center" });
+            const r = b.getBoundingClientRect();
+            return r.top >= 0 && r.bottom <= window.innerHeight;
+          }),
+        { message: "a setinha das opções não parou dentro da tela" },
+      )
+      .toBe(true);
     const acerto = await opcoes.evaluate((b) => {
       const r = b.getBoundingClientRect();
       const cx = r.left + r.width / 2;
@@ -821,10 +835,12 @@ test.describe("documentos recebidos: rótulo e arquivo salvo (#2613)", () => {
         await expect(page.getByText(arquivo.nome, { exact: true })).toHaveAttribute("title", arquivo.nome);
         const baixar = page.getByRole("link", { name: new RegExp(`^Baixar ${arquivo.nome.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) });
         await expect(baixar).toHaveAttribute("href", `/api/v1/messages/${mensagens[i]}/media?baixar=1`);
-        // Controle do preview pela rota real: não pede o Content-Disposition de download.
+        // Controle do preview pela rota real. Hiperbold CRM (D-095, hiperbold/DEBITO.md): PDF e
+        // XLSX não são tipos que o navegador exibe sem executar, então a URL assinada força o
+        // attachment (`download` vazio) — mas SEM o nome original, que só o `?baixar=1` pede.
         const preview = await page.request.get(`/api/v1/messages/${mensagens[i]}/media`, { maxRedirects: 0 });
         expect(preview.status()).toBe(302);
-        expect(new URL(preview.headers()["location"]!).searchParams.has("download")).toBe(false);
+        expect(new URL(preview.headers()["location"]!).searchParams.get("download")).toBe("");
         const contexto = page.context();
         const medirAlvo = () => baixar.evaluate((link) => {
           const r = link.getBoundingClientRect();
