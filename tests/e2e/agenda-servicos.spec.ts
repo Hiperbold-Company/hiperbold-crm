@@ -247,6 +247,13 @@ test("responsáveis da agenda usam nome ou e-mail, mantêm IDs e isolam membros 
   const unchanged = await db.from("calendar_event_types").select("default_owner_user_id, is_active").eq("id", type).single();
   expect(unchanged.error).toBeNull(); expect(unchanged.data).toEqual({ default_owner_user_id: unnamed.id, is_active: false });
   // Mesmas permissões da rota: agent lê; viewer continua recusado.
+  // Hiperbold: a organização não pode ficar sem admin (gatilho `organizacao_sem_admin`, 23514). Um
+  // segundo admin entra antes de rebaixar o dono, para o rebaixamento ser o que está sob teste.
+  {
+    const reserva = await db.auth.admin.createUser({ email: `admin-reserva-${randomUUID()}@example.test`, password, email_confirm: true });
+    if (reserva.error || !reserva.data.user) throw reserva.error; users.push(reserva.data.user.id);
+    await insert("user_organizations", { organization_id: f.org, user_id: reserva.data.user.id, role: "admin", accepted_at: new Date().toISOString() });
+  }
   for (const [role, status] of [["agent", 200], ["viewer", 403]] as const) {
     const change = await db.from("user_organizations").update({ role }).eq("organization_id", f.org).eq("user_id", f.user);
     expect(change.error).toBeNull(); expect((await page.request.get("/api/v1/agenda/pessoas")).status()).toBe(status);

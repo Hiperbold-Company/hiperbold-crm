@@ -12,6 +12,7 @@
  * no arquivo venceria a variável do runner só no servidor. O workflow deve
  * recusar essa colisão antes de iniciar Playwright.
  */
+import { funcaoOculta } from "../../lib/hiperbold/funcoes-ocultas";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -727,6 +728,10 @@ test.describe("LeadSubmitted causal pelo webhook WAHA", () => {
     for (const campo of ["claim_token", "claimed_until", "detail", "first_message_id", "event_id"])
       expect(payload.meta_ctwa_click_dispatches?.[0]).not.toHaveProperty(campo);
 
+    // Hiperbold: Configurações › Conversões está oculta (lib/hiperbold/funcoes-ocultas.ts,
+    // "conversoes"); o envio causal acima segue provado, e a parte pela tela volta sozinha
+    // quando a função for religada.
+    if (funcaoOculta("conversoes")) return;
     await loginComoAdmin(page, lerCreds());
     await page.goto("/app/settings/conversoes");
     const chave = page.getByRole("switch", { name: "Enviar LeadSubmitted por clique CTWA à Meta" });
