@@ -60,9 +60,17 @@ describe("0923 a 0927: posição, igualdade e registro", () => {
       // tabela do módulo financeiro: desde a 0619 do upstream essas tabelas só existem
       // onde o módulo está instalado. Fora essa linha, o SQL tem de ser o mesmo.
       const guarda = /^if to_regclass\('public\.\w+'\) is null then return; end if;$/;
+      // E, nas cinco tabelas do módulo, a policy vai por `format()`: o update.sh da v1.63.0
+      // (sem filtro por tabela) lia `create policy <nome> on public.<t>` literal e a cobrava
+      // num banco sem o módulo. Mesmo SQL; aqui ele volta à forma literal para comparar.
+      const porFormat = /^execute format\('create policy %I on public\.%I(.*)', '(\w+)', '(\w+)'\);$/;
       const bloco = codigo(extraiBloco(n))
         .split("\n")
         .filter((linha) => !guarda.test(linha))
+        .map((linha) => {
+          const m = porFormat.exec(linha);
+          return m ? `create policy ${m[2]} on public.${m[3]}${m[1]!.replace(/''/g, "'")};` : linha;
+        })
         .join("\n");
       expect(bloco).toBe(codigo(migration));
     });

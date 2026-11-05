@@ -131,6 +131,8 @@ const QUEM_LE_A_AGENDA: Record<string, string> = {
   "hooks/contacts/useContactDuplicates.ts": "tipo da lista de duplicados (tela da equipe)",
   "hooks/contacts/useCompararFichas.ts": "tipo da comparação lado a lado (tela da equipe)",
   "components/contacts/ComparacaoDeFichas.tsx": "a comparação mostra o nome da agenda à equipe, ao lado do nome da ficha",
+  "lib/contacts/colunas.ts":
+    "a lista de colunas do contato que o motor de automação lê sem `select *`; a saída ao cliente é barrada por SO_DA_EQUIPE em lib/automation/template.ts",
   "lib/contacts/consulta.ts": "a busca da lista de contatos da equipe casa no nome da agenda; desligada na busca do agente (soContato), que não pode vazar o rótulo interno",
 };
 

@@ -101053,6 +101053,131 @@ $f$;
 revoke execute on function public.fn_financeiro_provisionar() from public, anon, authenticated;
 grant execute on function public.fn_financeiro_provisionar() to service_role;
 
+-- ---- agenda: turma não conflita consigo mesma (migration 0996, fork Hiperbold, D-160) ----
+-- 0996, a turma não conflita consigo mesma na trava de agenda (D-160) (fork Hiperbold).
+--
+-- Faixa 09xx reservada ao fork (ver 0901).
+--
+-- A trava da 0937 (`fn_agenda_sem_sobreposicao`) recusa dois compromissos ativos do mesmo dono no
+-- mesmo período. Depois do merge com o upstream (serviços e turmas, `fn_calendar_service_book`) isso
+-- barrava o segundo participante de uma turma: os participantes de uma ocorrência dividem o dono, o
+-- horário e o `service_occurrence_id`, e a turma ocupa o profissional UMA vez. A condição agora
+-- ignora a linha da MESMA ocorrência; toda outra sobreposição (compromisso comum, outra ocorrência,
+-- outra turma no mesmo horário) segue recusada com 23P01. Só a condição muda: gatilho, security
+-- definer, search_path e revokes ficam como na 0937. Reaplicável: `create or replace`.
+
+create or replace function public.fn_agenda_sem_sobreposicao()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.owner_user_id is null or new.status not in ('pending', 'confirmed') then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE'
+     and new.starts_at is not distinct from old.starts_at
+     and new.ends_at is not distinct from old.ends_at
+     and new.owner_user_id is not distinct from old.owner_user_id
+     and new.organization_id is not distinct from old.organization_id
+  then
+    return new;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('agenda_dono:' || new.organization_id::text || ':' || new.owner_user_id::text, 0));
+
+  if exists (
+    select 1 from public.calendar_appointments o
+     where o.organization_id = new.organization_id
+       and o.owner_user_id = new.owner_user_id
+       and o.id <> new.id
+       -- Participantes da MESMA turma (`service_occurrence_id`) são um só compromisso do profissional.
+       and not (new.service_occurrence_id is not null
+                and o.service_occurrence_id is not distinct from new.service_occurrence_id)
+       and o.status in ('pending', 'confirmed')
+       and o.starts_at < new.ends_at
+       and o.ends_at > new.starts_at
+  )
+  then
+    raise exception 'Horário indisponível: o responsável já tem um compromisso nesse período.' using errcode = '23P01';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke execute on function public.fn_agenda_sem_sobreposicao() from public, anon, authenticated;
+
+-- ---- assentos do plano: o membro da agência não ocupa vaga (migration 0997, fork Hiperbold) ----
+-- O merge do upstream de 04/11/2026 trouxe a trava de assentos da 0583
+-- (`fn_trava_assentos_do_plano`), que conta todo vínculo ativo e não provisório. A 0974 do
+-- fork diz que o membro da agência não ocupa vaga, e tirou ele da conta das funções de
+-- cobrança que existiam no fork; a trava do upstream não estava entre elas. Resultado medido:
+-- o criador de `fn_create_tenant_with_owner` (que desde a 0974 nasce `membro_da_agencia`, não
+-- provisório) tomava a única vaga do plano, e o admin real da cliente era recusado com PT402.
+-- Soma das duas regras: a trava do upstream continua igual e passa a pular o membro da agência,
+-- na linha nova e na contagem; o vínculo que DEIXA de ser da agência sem ser revogado passa a
+-- ser conferido como quem passa a ocupar vaga, por isso a coluna entra na lista do gatilho.
+-- Idempotente: create or replace da função e do gatilho; lock_timeout de sessão (D-084).
+create or replace function public.fn_trava_assentos_do_plano()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_limite integer;
+  v_em_uso integer;
+begin
+  if new.revoked_at is not null or new.provisional_until_handover or new.membro_da_agencia then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' then
+    if old.revoked_at is null
+       and not old.provisional_until_handover
+       and not old.membro_da_agencia
+       and new.organization_id is not distinct from old.organization_id then
+      return new;
+    end if;
+  end if;
+
+  v_limite := public.fn_limite_do_plano(new.organization_id, 'assentos');
+  if v_limite is null then
+    return new;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(new.organization_id::text, 2282));
+
+  select count(*) into v_em_uso
+    from public.user_organizations uo
+   where uo.organization_id = new.organization_id
+     and uo.revoked_at is null
+     and not uo.provisional_until_handover
+     and not uo.membro_da_agencia
+     and uo.user_id <> new.user_id;
+
+  if v_em_uso >= v_limite then
+    raise exception 'limite_do_plano:assentos:%', v_limite
+      using errcode = 'PT402',
+            detail = jsonb_build_object('recurso', 'assentos', 'limite', v_limite, 'em_uso', v_em_uso)::text;
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.fn_trava_assentos_do_plano() from public, anon, authenticated;
+
+set lock_timeout = '5s';
+
+create or replace trigger trg_trava_assentos_do_plano
+  before insert or update of revoked_at, provisional_until_handover, organization_id, membro_da_agencia
+  on public.user_organizations
+  for each row execute function public.fn_trava_assentos_do_plano();
+
+reset lock_timeout;
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
@@ -106540,71 +106665,14 @@ begin
 end
 $hb_0992_api_tokens$;
 
--- ---- agenda: turma não conflita consigo mesma (migration 0996, fork Hiperbold, D-160) ----
--- 0996, a turma não conflita consigo mesma na trava de agenda (D-160) (fork Hiperbold).
---
--- Faixa 09xx reservada ao fork (ver 0901).
---
--- A trava da 0937 (`fn_agenda_sem_sobreposicao`) recusa dois compromissos ativos do mesmo dono no
--- mesmo período. Depois do merge com o upstream (serviços e turmas, `fn_calendar_service_book`) isso
--- barrava o segundo participante de uma turma: os participantes de uma ocorrência dividem o dono, o
--- horário e o `service_occurrence_id`, e a turma ocupa o profissional UMA vez. A condição agora
--- ignora a linha da MESMA ocorrência; toda outra sobreposição (compromisso comum, outra ocorrência,
--- outra turma no mesmo horário) segue recusada com 23P01. Só a condição muda: gatilho, security
--- definer, search_path e revokes ficam como na 0937. Reaplicável: `create or replace`.
-
-create or replace function public.fn_agenda_sem_sobreposicao()
-returns trigger
-language plpgsql
-security definer
-set search_path = public, pg_temp
-as $$
-begin
-  if new.owner_user_id is null or new.status not in ('pending', 'confirmed') then
-    return new;
-  end if;
-
-  if tg_op = 'UPDATE'
-     and new.starts_at is not distinct from old.starts_at
-     and new.ends_at is not distinct from old.ends_at
-     and new.owner_user_id is not distinct from old.owner_user_id
-     and new.organization_id is not distinct from old.organization_id
-  then
-    return new;
-  end if;
-
-  perform pg_advisory_xact_lock(hashtextextended('agenda_dono:' || new.organization_id::text || ':' || new.owner_user_id::text, 0));
-
-  if exists (
-    select 1 from public.calendar_appointments o
-     where o.organization_id = new.organization_id
-       and o.owner_user_id = new.owner_user_id
-       and o.id <> new.id
-       -- Participantes da MESMA turma (`service_occurrence_id`) são um só compromisso do profissional.
-       and not (new.service_occurrence_id is not null
-                and o.service_occurrence_id is not distinct from new.service_occurrence_id)
-       and o.status in ('pending', 'confirmed')
-       and o.starts_at < new.ends_at
-       and o.ends_at > new.starts_at
-  )
-  then
-    raise exception 'Horário indisponível: o responsável já tem um compromisso nesse período.' using errcode = '23P01';
-  end if;
-
-  return new;
-end;
-$$;
-
-revoke execute on function public.fn_agenda_sem_sobreposicao() from public, anon, authenticated;
-
 -- ---- o merge do upstream de 04/11/2026: o que a cadeia de migrations reabria (migration 0995, fork Hiperbold) ----
 --
 -- Na cadeia de migrations, duas do upstream rodam DEPOIS das do fork e desfazem a régua dele:
 -- a 0508 (01/10) recria pares _read/_write que o fork tinha trocado por SELECT de membro e
 -- escrita por papel (0926, 0932), e a 0529/0533 (03 e 04/10) redefinem a escrita de
 -- messages, crm_lead_activities e crm_lead_links só por pertencer à organização, sem o papel
--- da 0932. Aqui os pares saem e as policies voltam à forma da instalação (0932 com o admin de
--- plataforma só no escopo full). No baseline é no-op: as linhas já estão assim.
+-- da 0932. Aqui os pares saem. A volta das policies à forma da instalação mora só na migration:
+-- no baseline elas já são as da 0932, e o laço `_full` da 0992 as estreita.
 -- O mesmo par saía de volta nas quatro tabelas do caixa (financial_entries e afins).
 -- Por último, as travas do suporte de novo: a 0992 tirou a escrita da sessão de quatro tabelas
 -- DEPOIS da última chamada, e as `support_write_*` delas sobravam.
@@ -106623,38 +106691,6 @@ begin
  drop policy if exists orders_tenant_write on public.orders;
 end
 $hb_0995_pares_da_0508$;
-
-do $hb_0995_messages$
-begin
- perform set_config('lock_timeout','3s',true);
- drop policy if exists messages_insert on public.messages;
- create policy messages_insert on public.messages for insert with check ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent')) or public.fn_is_platform_admin_full());
- drop policy if exists messages_update on public.messages;
- create policy messages_update on public.messages for update using ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent')) or public.fn_is_platform_admin_full()) with check ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent')) or public.fn_is_platform_admin_full());
- drop policy if exists messages_delete on public.messages;
- create policy messages_delete on public.messages for delete using ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent')) or public.fn_is_platform_admin_full());
-end
-$hb_0995_messages$;
-
-do $hb_0995_crm_lead_activities$
-begin
- perform set_config('lock_timeout','3s',true);
- drop policy if exists crm_lead_activities_insert on public.crm_lead_activities;
- create policy crm_lead_activities_insert on public.crm_lead_activities for insert with check ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent')) or public.fn_is_platform_admin_full());
-end
-$hb_0995_crm_lead_activities$;
-
-do $hb_0995_crm_lead_links$
-begin
- perform set_config('lock_timeout','3s',true);
- drop policy if exists crm_lead_links_insert on public.crm_lead_links;
- create policy crm_lead_links_insert on public.crm_lead_links for insert with check ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent')) or public.fn_is_platform_admin_full());
- drop policy if exists crm_lead_links_update on public.crm_lead_links;
- create policy crm_lead_links_update on public.crm_lead_links for update using ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'manager')) or public.fn_is_platform_admin_full()) with check ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'manager')) or public.fn_is_platform_admin_full());
- drop policy if exists crm_lead_links_delete on public.crm_lead_links;
- create policy crm_lead_links_delete on public.crm_lead_links for delete using ((organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'manager')) or public.fn_is_platform_admin_full());
-end
-$hb_0995_crm_lead_links$;
 
 -- As quatro tabelas do caixa que ficaram no núcleo também ganharam do upstream (0533) o par
 -- _read/_write: o _write é `for all` com USING só de membro, e somava por OR com as policies por
@@ -106676,71 +106712,3 @@ $hb_0995_caixa$;
 do $hb_0995_financeiro$ begin perform public.fn_financeiro_policies_por_papel(); end $hb_0995_financeiro$;
 
 do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;
-
--- ---- assentos do plano: o membro da agência não ocupa vaga (migration 0997, fork Hiperbold) ----
--- O merge do upstream de 04/11/2026 trouxe a trava de assentos da 0583
--- (`fn_trava_assentos_do_plano`), que conta todo vínculo ativo e não provisório. A 0974 do
--- fork diz que o membro da agência não ocupa vaga, e tirou ele da conta das funções de
--- cobrança que existiam no fork; a trava do upstream não estava entre elas. Resultado medido:
--- o criador de `fn_create_tenant_with_owner` (que desde a 0974 nasce `membro_da_agencia`, não
--- provisório) tomava a única vaga do plano, e o admin real da cliente era recusado com PT402.
--- Soma das duas regras: a trava do upstream continua igual e passa a pular o membro da agência,
--- na linha nova e na contagem; o vínculo que DEIXA de ser da agência sem ser revogado passa a
--- ser conferido como quem passa a ocupar vaga, por isso a coluna entra na lista do gatilho.
--- Idempotente: create or replace da função e do gatilho; lock_timeout de sessão (D-084).
-create or replace function public.fn_trava_assentos_do_plano()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_limite integer;
-  v_em_uso integer;
-begin
-  if new.revoked_at is not null or new.provisional_until_handover or new.membro_da_agencia then
-    return new;
-  end if;
-  if tg_op = 'UPDATE' then
-    if old.revoked_at is null
-       and not old.provisional_until_handover
-       and not old.membro_da_agencia
-       and new.organization_id is not distinct from old.organization_id then
-      return new;
-    end if;
-  end if;
-
-  v_limite := public.fn_limite_do_plano(new.organization_id, 'assentos');
-  if v_limite is null then
-    return new;
-  end if;
-
-  perform pg_advisory_xact_lock(hashtextextended(new.organization_id::text, 2282));
-
-  select count(*) into v_em_uso
-    from public.user_organizations uo
-   where uo.organization_id = new.organization_id
-     and uo.revoked_at is null
-     and not uo.provisional_until_handover
-     and not uo.membro_da_agencia
-     and uo.user_id <> new.user_id;
-
-  if v_em_uso >= v_limite then
-    raise exception 'limite_do_plano:assentos:%', v_limite
-      using errcode = 'PT402',
-            detail = jsonb_build_object('recurso', 'assentos', 'limite', v_limite, 'em_uso', v_em_uso)::text;
-  end if;
-  return new;
-end;
-$$;
-
-revoke execute on function public.fn_trava_assentos_do_plano() from public, anon, authenticated;
-
-set lock_timeout = '5s';
-
-create or replace trigger trg_trava_assentos_do_plano
-  before insert or update of revoked_at, provisional_until_handover, organization_id, membro_da_agencia
-  on public.user_organizations
-  for each row execute function public.fn_trava_assentos_do_plano();
-
-reset lock_timeout;
