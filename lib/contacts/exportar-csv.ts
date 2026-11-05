@@ -8,9 +8,11 @@
  *    sem isso um número de 13 dígitos vira "5,5E+12";
  *  - datas "dd/mm/aaaa hh:mm" no FUSO DA ORGANIZAÇÃO.
  *
- * NUNCA sai CPF: as colunas de CPF (hash e cifrado) nem são lidas pela rota, e campo
- * personalizado com chave de documento (cpf, cnpj, rg, documento, passaporte —
- * `lib/contacts/campos-sensiveis.ts`) é descartado aqui por garantia.
+ * CPF: sai na coluna "CPF" só quando a rota o decifrou (`ref.comCpf`, papel manager+, decisão do
+ * dono do produto em 04/11/2026) — em claro, pelo mesmo caminho da ficha
+ * (`cpfsDecifradosDosContatos`). Campo personalizado com chave de documento (cpf, cnpj, rg,
+ * documento, passaporte — `lib/contacts/campos-sensiveis.ts`) continua descartado aqui: o CPF
+ * oficial é o da coluna cifrada, não um texto solto num campo.
  *
  * Planilha interpreta como fórmula a célula que começa com `=`, `@`, tab ou CR (e `+`/`-`
  * seguidos de algo que não é número): o valor leva um `'` na frente. Telefone e número
@@ -33,6 +35,8 @@ export interface ContatoParaCsv {
   created_at: string | null;
   last_activity_at: string | null;
   custom_fields: Record<string, unknown> | null;
+  /** CPF em claro (só dígitos), já decifrado pela rota. Só sai com `ReferenciasDoCsv.comCpf`. */
+  cpf?: string | null;
   /** Negócios do contato: só funil e etapa interessam. */
   leads?: Array<{ pipeline_id: string; stage_id: string }> | null;
 }
@@ -44,6 +48,8 @@ export interface ReferenciasDoCsv {
   etapas: Map<string, string>;
   /** Rótulo amigável por chave de campo personalizado (cabeçalho da coluna). */
   rotulosDeCampo?: Map<string, string>;
+  /** Inclui a coluna "CPF" (a rota decifrou e o ator pode ver CPF). */
+  comCpf?: boolean;
 }
 
 /** Máximo de colunas de campo personalizado: uma base bagunçada não pode gerar 500 colunas. */
@@ -113,6 +119,7 @@ export function montarCsvDeContatos(contatos: ContatoParaCsv[], ref: Referencias
     "Nome",
     "E-mail",
     "Telefone",
+    ...(ref.comCpf ? ["CPF"] : []),
     "Tags",
     "Origem",
     "Entrou no CRM",
@@ -135,6 +142,7 @@ export function montarCsvDeContatos(contatos: ContatoParaCsv[], ref: Referencias
       nomeDoContato(c) ?? "",
       c.email ?? "",
       telefoneParaPlanilha(c.phone_number),
+      ...(ref.comCpf ? [c.cpf ?? ""] : []),
       (c.tags ?? []).join("; "),
       rotuloDaOrigem(c.source),
       dataHora(c.created_at, ref.timezone),

@@ -10,7 +10,7 @@ import {
 import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { abaInicialDeAutomacoes } from "./_components/abas";
+import { ABAS_DOS_WEBHOOKS, abaInicialDeAutomacoes } from "./_components/abas";
 import { WebhooksClient } from "./_components/WebhooksClient";
 
 export const dynamic = "force-dynamic";
@@ -19,15 +19,22 @@ export const metadata: Metadata = { title: "Automações e Webhooks" };
 export default async function WebhooksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string | string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   const canManage = !!activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
   if (!canManage) redirect("/app/inbox");
   const idioma = user.idioma;
-  const { tab } = await searchParams;
-  const abaInicial = abaInicialDeAutomacoes(Array.isArray(tab) ? tab[0] : tab);
+  const { tab, aba } = await searchParams;
+  // Dois formatos de link: `?aba=automacoes` (upstream, a volta do designer) e
+  // `?tab=rules` (Hiperbold). O `aba` conhecido vence; o resto cai no `tab`.
+  const pedida = Array.isArray(aba) ? aba[0] : aba;
+  const abaDoLink =
+    pedida && Object.hasOwn(ABAS_DOS_WEBHOOKS, pedida)
+      ? ABAS_DOS_WEBHOOKS[pedida as keyof typeof ABAS_DOS_WEBHOOKS]
+      : null;
+  const abaInicial = abaDoLink ?? abaInicialDeAutomacoes(Array.isArray(tab) ? tab[0] : tab);
 
   // Fase F3, tarefa 9: item "integracoes_webhook" para "Nova fonte"/"Criar
   // primeira fonte" e para reativar uma fonte pausada.

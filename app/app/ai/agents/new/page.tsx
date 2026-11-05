@@ -4,6 +4,8 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { listSelectableChannels } from "@/lib/channels/selectable";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { idsDosProvedoresOferecidos } from "@/lib/ai/pontos/provedores-oferecidos";
 import type { CredentialRow } from "@/hooks/ai/useCredentials";
 
 import { lerAmbiente } from "@/lib/instalacao/ambiente";
@@ -52,7 +54,7 @@ export default async function NewAgentPage() {
     listSelectableChannels(supabase, activeOrg.orgId),
   ]);
 
-  const credentials = (credentialsRes.data ?? []) as unknown as CredentialRow[];
+  const credentials = (credentialsRes.data ?? []) as CredentialRow[];
   const llmDaOrg = (
     orgRes.data?.settings as { llm?: { provider?: string } } | null
   )?.llm;
@@ -63,6 +65,7 @@ export default async function NewAgentPage() {
         mode="create"
         credentials={credentials}
         provedoresDaInstalacao={provedoresDaInstalacao()}
+        provedoresOferecidos={await idsDosProvedoresOferecidos(createAdminClient())}
         provedorPadrao={llmDaOrg?.provider}
         channelSessions={channelSessions}
         organizationTimezone={fusoUtilizavel(activeOrg.timezone)}

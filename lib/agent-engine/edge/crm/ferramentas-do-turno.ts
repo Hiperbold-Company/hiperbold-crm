@@ -9,7 +9,6 @@
 import type { Tool } from "ai";
 
 import { separarFerramentas } from "@/lib/ai/mcp-externo/ids";
-import type { PapelDoTurno } from "@/lib/mcp/escopo-do-turno";
 
 import type { Logger } from "../../obs/logger";
 import type { PublishedAgentConfig } from "../../agent/agent-config";
@@ -22,11 +21,12 @@ export type MotivoDaPuladaNoTurno = MotivoDaPulada | "entregue_ao_operador";
 
 export async function montarFerramentasDoTurno(
   cfg: CrmEdgeConfig,
-  /** `contactId` é repassado como está para `interno` (`buildMcpTurnTools`), que o aceita. */
-  ids: { organizationId: string; jobId: string; contactId?: string; conversationId?: string; papel?: PapelDoTurno },
+  /** `contactId` é repassado como está para `interno` (`buildMcpTurnTools`), que o exige (`null` só sem cliente). */
+  ids: Parameters<typeof buildMcpTurnTools>[1],
   agentConfig: PublishedAgentConfig,
   log: Logger,
-  options?: { readOnly: boolean },
+  /** As MESMAS opções da ponte — inclusive o coletor `efeitos` do turno (#3333). */
+  options?: Parameters<typeof buildMcpTurnTools>[4],
   deps: { interno?: typeof buildMcpTurnTools; externo?: typeof buildExternalMcpTools } = {},
   /**
    * (F) Presente só quando ESTA chamada é a do CONVERSADOR e o Operador está

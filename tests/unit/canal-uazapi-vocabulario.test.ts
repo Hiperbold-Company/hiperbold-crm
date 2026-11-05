@@ -38,6 +38,8 @@ describe("capabilities da instância em servidor próprio", () => {
       anexosDeSaida: { imagem: true, video: true, audio: true, documento: true, contato: true },
       // Opções (botões/lista) saem como texto numerado: o adapter não as monta.
       interactive: "none",
+      // Agenda do aparelho (capability nova do upstream): o adapter da UAZAPI não lê.
+      phonebook: false,
     });
   });
 

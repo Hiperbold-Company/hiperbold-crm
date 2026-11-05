@@ -33,6 +33,8 @@
  */
 import type pg from 'pg';
 
+import { DERIVACAO_TERMINADA, TIPOS_DERIVAVEIS } from '@/lib/messaging/media/derivable';
+
 type Queryable = Pick<pg.Pool, 'query'>;
 
 export interface AlvoDoTurno {
@@ -42,20 +44,60 @@ export interface AlvoDoTurno {
   jobId: string;
 }
 
+export interface OpcoesDaAnotacao {
+  /**
+   * A anotação só pode prometer mídia cujo TEXTO já existe (#3845).
+   *
+   * A anotação é uma promessa: "tudo até este carimbo eu vi". Ela é lida pela
+   * régua `ultimaInboundJaRespondida`, que CALA o turno da mensagem nova — então
+   * prometer mais do que se viu faz o cliente receber uma resposta escrita sem o
+   * conteúdo E ficar sem a resposta ao áudio (#3845, medido em
+   * `tests/invariants/midia-tardia-depois-da-leitura.test.ts`).
+   *
+   * A janela que isto fecha é de UM round-trip: entre a última checagem de
+   * derivação do turno (que volta "nada pendente") e este UPDATE, uma mídia pode
+   * ser gravada, e ela entra na conversa sem texto derivado — o turno a lê como
+   * `[audio]`. Era a janela declarada no próprio #3841 ("fica coberto sem texto
+   * — janela rara, aceita; fecha com o UPDATE filtrando `media_derived_status`
+   * se um dia for medida").
+   *
+   * Só vale quando a derivação CONCLUIU: quem chama já sabe que nada estava
+   * pendente na checagem, e o que a filtragem exclui é exatamente o que chegou
+   * depois dela. Na anotação do começo do turno (antes da espera) a filtragem
+   * seria um defeito: a mídia pendente ali SERÁ lida com texto depois da espera,
+   * e não prometê-la faria o turno dela responder de novo.
+   */
+  apenasMidiaComTexto?: boolean;
+}
+
 /**
  * Anota no job a inbound mais nova visível AGORA — chamar antes de o turno ler
  * a conversa. Um statement: o `||` do jsonb não pisa em chave alheia do payload
  * (`held_run_after` do session-watchdog, por exemplo).
  */
-export async function anotarUltimaInboundVista(db: Queryable, alvo: AlvoDoTurno): Promise<void> {
+export async function anotarUltimaInboundVista(
+  db: Queryable,
+  alvo: AlvoDoTurno,
+  opcoes: OpcoesDaAnotacao = {},
+): Promise<void> {
   await db.query(
     `update job_queue
         set payload = payload || jsonb_build_object(
           'ultima_inbound_vista_em',
           (select max(m.created_at) from messages m
-            where m.organization_id = $1 and m.conversation_id = $2 and m.direction = 'inbound'))
+            where m.organization_id = $1 and m.conversation_id = $2 and m.direction = 'inbound'
+              and ($4::boolean is not true or not (
+                m.type = any($5::text[]) and m.media_url is not null
+                and coalesce(m.media_derived_status, '') <> all($6::text[])))))
       where organization_id = $1 and id = $3`,
-    [alvo.organizationId, alvo.conversationId, alvo.jobId],
+    [
+      alvo.organizationId,
+      alvo.conversationId,
+      alvo.jobId,
+      opcoes.apenasMidiaComTexto === true,
+      [...TIPOS_DERIVAVEIS],
+      [...DERIVACAO_TERMINADA],
+    ],
   );
 }
 
@@ -90,4 +132,74 @@ export async function ultimaInboundJaRespondida(
     [alvo.organizationId, alvo.conversationId, alvo.contactId, alvo.jobId],
   );
   return rows[0]?.respondida === true;
+}
+
+/**
+ * RESPOSTA OBSOLETA — o cliente escreveu de novo enquanto este turno pensava.
+ *
+ * ## O defeito (medido numa VPS, 17–25/09/2026)
+ *
+ * 39% das respostas de um agente de oficina (232 de 589) saíram a menos de 3
+ * minutos de outra resposta ao mesmo cliente. O caso típico: "Oi" / "Boa tarde"
+ * / "Tudo bem?" com 4–5 s entre si, e a pergunta real 20 s depois. O turno lê a
+ * conversa no começo, leva 10–40 s no modelo e envia "Como posso te ajudar?" —
+ * com a pergunta já na conversa. O turno seguinte, que viu a pergunta, responde
+ * de novo. `ultimaInboundJaRespondida` (acima) não cala esse segundo turno, e
+ * está certo: o primeiro nunca viu a pergunta. O defeito está no PRIMEIRO envio,
+ * que sai desatualizado.
+ *
+ * ## A régua
+ *
+ * A inbound mais nova da conversa foi gravada DEPOIS de `ultima_inbound_vista_em`
+ * (a anotação que o turno fez antes de ler a conversa)? Então a resposta foi
+ * escrita sem ela, e a mensagem nova tem job próprio, que lê a conversa inteira
+ * e responde a tudo de uma vez. Este turno não envia.
+ *
+ * "Mais nova" é pela MESMA ordem do anti-backlog do drain
+ * (`coalesce(sent_at, created_at)`, o relógio do aparelho): é o drain quem
+ * decide qual mensagem ganha turno. Uma mensagem reentregue com atraso (webhook
+ * que voltou 503, replay) chega DEPOIS da anotação com relógio ANTERIOR ao da
+ * última lida; o drain pula o evento dela como superado, e descartar a resposta
+ * por causa dela deixaria o cliente sem ninguém respondendo.
+ *
+ * ## O teto
+ *
+ * Um cliente que escreve sem parar faria todo turno ficar obsoleto antes de
+ * enviar. Por isso a régua só vale enquanto a mensagem mais antiga sem resposta
+ * (desde a última outbound) tem menos de `tetoMs`: passado o teto, a resposta
+ * sai mesmo desatualizada — uma resposta atrasada é ruim, silêncio é pior.
+ * `tetoMs <= 0` desliga.
+ */
+export async function respostaFicouObsoleta(
+  db: Queryable,
+  alvo: Pick<AlvoDoTurno, 'organizationId' | 'conversationId' | 'jobId'>,
+  tetoMs: number,
+): Promise<boolean> {
+  if (!(tetoMs > 0)) return false;
+  const { rows } = await db.query<{ obsoleta: boolean }>(
+    `with vista as (
+       select (payload->>'ultima_inbound_vista_em')::timestamptz as em
+         from job_queue where organization_id = $1 and id = $3
+     ),
+     ultima_out as (
+       select max(created_at) as em from messages
+        where organization_id = $1 and conversation_id = $2 and direction = 'outbound'
+     ),
+     pendente as (
+       select min(m.created_at) as em from messages m cross join ultima_out o
+        where m.organization_id = $1 and m.conversation_id = $2 and m.direction = 'inbound'
+          and (o.em is null or m.created_at > o.em)
+     ),
+     mais_nova as (
+       select created_at as em from messages
+        where organization_id = $1 and conversation_id = $2 and direction = 'inbound'
+        order by coalesce(sent_at, created_at) desc, created_at desc, id desc
+        limit 1
+     )
+     select coalesce((select m.em > v.em from mais_nova m cross join vista v), false)
+            and coalesce((select em from pendente) > now() - ($4 * interval '1 millisecond'), false)
+            as obsoleta`,
+    [alvo.organizationId, alvo.conversationId, alvo.jobId, tetoMs],
+  );
+  return rows[0]?.obsoleta === true;
 }

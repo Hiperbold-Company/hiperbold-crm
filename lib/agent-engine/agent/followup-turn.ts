@@ -2,6 +2,7 @@ import {claimOfJob,type JobClaim} from "../queue/claim";
 import {resultadoDoEnvioDoFollowup} from "../edge/crm/send-ledger";
 import { parseServiceBoundary } from "@/lib/atendimento/fronteira";
 import { requireCurrentServiceBoundary } from "@/lib/atendimento/fronteira-server";
+import { OrgNaoOperanteError } from "@/lib/organizacao/operante";
 /**
  * Handler do job `followup_turn` (F3-03; blueprint 1.3) — a peça BUILD da
  * continuidade. A F3-01 (cron persistente) dispara e a F3-02 (tool schedule_followup)
@@ -11,10 +12,16 @@ import { requireCurrentServiceBoundary } from "@/lib/atendimento/fronteira-serve
  * em OpenClaw/Hermes que transforma continuação fria em retomada natural.
  *
  * Reusa runAgentTurn (F2-09) por inteiro — sessão fresca, loop de tools, checkpoint,
- * veto. A ÚNICA diferença é a abertura: o bloco temporal entra no SUFIXO (messages),
+ * veto. A diferença no PROMPT é a abertura: o bloco temporal entra no SUFIXO (messages),
  * DEPOIS do prefixo cacheável (system do playbook + tools — F2-17), então não
  * invalida o cache org-wide. O delta é RELATIVO ao now do run (clock injetável),
  * nunca persistido estático.
+ *
+ * A outra diferença é o PONTO DE IA: a chamada principal de um job `followup_turn`
+ * sai como `followup_turn`, não `agent_turn` (o turno decide pelo `kind` do job, em
+ * `executarTurnoDoAgente`). É o que deixa o painel de provedores escolher um modelo
+ * só para o follow-up — sem escolha, vale o da versão publicada, como antes — e o
+ * que separa o custo dele em `llm_calls`.
  *
  * Ids de envio (conversa + número) vêm da ROW do lead no harness (fonte confiável),
  * NUNCA do payload do modelo — o cron só carrega o snapshot da promessa (F3-02).
@@ -24,18 +31,33 @@ import type pg from 'pg';
 
 import { withFields } from '../obs/logger';
 import type { JobRow } from '../queue/queue';
-import { getLeadContext, type LeadContext } from '../edge/crm/get-lead-context';
+import {
+  getLeadContext,
+  textoDoClienteNaUltimaMensagem,
+  type LeadContext,
+  type LeadContextMessage,
+} from '../edge/crm/get-lead-context';
 import { WahaChannelAdapter } from '../edge/channel/waha-adapter';
 import { applySendOutcome } from '../edge/crm/send-message';
 import { runBeforeSend } from '../guardrails/before-send';
 import { definicaoNaConexao } from '@/lib/channels/linha-do-espelho';
 import { estadoDaJanela } from '@/lib/channels/janela';
 import { renderTemplateBody } from '@/lib/channels/meta/render-template';
+import { contextoDoContato, renderizarTextoDeFollowup } from '@/lib/automation/texto-do-followup';
+import { classificarMidiaComLegenda, type TipoDeMidiaComLegenda } from '@/lib/messaging/media/midia-com-legenda';
 import { isStatusSendable } from '@/lib/channels/meta/template-binding';
 import { deriveTemplateContract } from '@/lib/channels/meta/template-contract';
+import {
+  resolverVariaveisDoModelo,
+  variaveisDoModeloSchema,
+  type VariaveisDoModelo,
+} from '@/lib/channels/meta/variaveis-do-fluxo';
+import { nomeDoContato } from '@/lib/contacts/rotulo-do-contato';
 import { camadaLigada, lerCamadasDaOrg } from '../guardrails/camadas-da-org';
 import { classifyPromise } from '../guardrails/promise/semantic';
 import { scheduleCronJob } from '../cron/scheduler';
+import { janelaDeEnvioAberta, proximaAberturaDaJanela } from '../pacing/engine';
+import { loadChannelKnobs } from '../pacing/store';
 import {
   JobSettledError,
   ritualBlocks,
@@ -44,6 +66,10 @@ import {
   type LeadCheckpointRow,
 } from './inbound-turn';
 import { isLeadInHandoff } from './human-handoff';
+import { AgendaPuladoError, MOTIVO_DO_PULO, decidirNoEnvio } from '@/lib/agenda/escolha-no-envio';
+import { escolhaDoFluxoPg } from '@/lib/agenda/escolha-no-envio-leitura';
+import { protecaoAgendaPg } from '@/lib/agenda/protecao-followup';
+import { aplicarPessoaNoComandoAoTurno } from '@/lib/followup/pessoa-no-comando-no-turno';
 import { fusoDaOrganizacao } from './fuso-da-org';
 import {
   followupPublicadoDoEnrollment,
@@ -58,6 +84,9 @@ import {
   type PropostaDeEsperaBruta,
 } from './followup-flow-classify';
 import { contaEmModoLeituraPeloPool } from '@/lib/billing/assinatura/modo-leitura';
+import { consultarJevNoFollowup } from '@/lib/ai/decisao/followup';
+import { enviarComSaidaConfiguravel } from "@/lib/prospecting/saida-configuravel";
+
 
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
@@ -88,8 +117,16 @@ export const followupTurnPayloadSchema = z
     prompt_hint: z.string().optional(),
     /** action mode `text` — enviado pela cadeia de guardrails, sem LLM. */
     fixed_body: z.string().min(1).max(4000).optional(),
+    /**
+     * #2734 — mídia OPCIONAL (imagem, vídeo, áudio ou documento, #2972) por URL
+     * do passo `action`/`text`; o `fixed_body` vira a LEGENDA. Opcional: payloads
+     * antigos seguem válidos.
+     */
+    fixed_media_url: z.string().url().max(2000).optional(),
     /** action mode `template` — `message_templates` (texto) ou `meta_templates` (modelo aprovado do canal). */
     template_id: z.string().uuid().optional(),
+    /** action mode `template` — de onde sai cada variável do modelo aprovado (nome do contato, campo do negócio). */
+    template_values: variaveisDoModeloSchema.optional(),
     /** action mode `ai_message` — modelo aprovado que sai no lugar da IA com a janela de 24 h fechada. */
     fallback_template_id: z.string().uuid().optional(),
     volta_index: z.number().int().optional(),
@@ -117,6 +154,8 @@ export type FollowupFlowTurnResult =
   | { kind: 'sent' }
   | { kind: 'skipped'; reason: string }
   | { kind: 'classified'; class: string }
+  /** Classificar sem resposta ao envio do fluxo: nada a concluir, só o rastro da espera. */
+  | { kind: 'awaiting_reply' }
   /** O envio ficou estacionado até `until` (janela fechada) — nem saiu, nem foi recusado. */
   | { kind: 'deferred'; until: Date; reason: string }
   | { kind: 'planned'; propostas: PropostaDeEsperaBruta[]; modelo: string };
@@ -232,7 +271,7 @@ function lastInboundOf(context: LeadContext): { body: string; sentAt: string } |
  * desde a última vez que falamos" vira `null` (onda 5: o classify SÓ tem algo
  * pra classificar quando o lead respondeu DEPOIS do nosso último envio).
  */
-function lastInboundSinceLastOutbound(context: LeadContext): string | null {
+function lastInboundSinceLastOutbound(context: LeadContext): LeadContextMessage | null {
   let lastOutboundAt: number | null = null;
   for (const m of context.messages) {
     if (m.direction === 'outbound') lastOutboundAt = Date.parse(m.sent_at);
@@ -241,7 +280,7 @@ function lastInboundSinceLastOutbound(context: LeadContext): string | null {
     const m = context.messages[i]!;
     if (m.direction === 'inbound') {
       const at = Date.parse(m.sent_at);
-      return lastOutboundAt === null || at > lastOutboundAt ? m.body : null;
+      return lastOutboundAt === null || at > lastOutboundAt ? m : null;
     }
   }
   return null;
@@ -276,6 +315,78 @@ async function encerrarEnrollmentPorAssinaturaSuspensaViaPool(
        and status not in ('completed','cancelled','dead')`,
     [organizationId, enrollmentId],
   );
+}
+
+/**
+ * Quando o fluxo fechou o seu último envio (`action_sent`) — o marco a partir do
+ * qual o que o lead escreve é RESPOSTA ao fluxo. `null` quando o fluxo ainda não
+ * mandou nada (classificar logo depois do acionamento).
+ */
+async function envioDoFluxoFechadoEm(pool: pg.Pool, orgId: string, enrollmentId: string): Promise<Date | null> {
+  const { rows } = await pool.query<{ fechado_em: Date | null }>(
+    `select max(created_at) as fechado_em from followup_enrollment_events
+      where organization_id = $1 and enrollment_id = $2 and event_type = 'action_sent'`,
+    [orgId, enrollmentId],
+  );
+  return rows[0]?.fechado_em ?? null;
+}
+
+/**
+ * A resposta do lead ao envio DO FLUXO: a última inbound com texto depois da
+ * mensagem que o fluxo mandou — mesmo que o agente ou uma pessoa tenha
+ * respondido no meio. "Depois do último outbound de qualquer um"
+ * (`lastInboundSinceLastOutbound`) perdia exatamente o caso comum numa
+ * organização com agente ativo: o lead responde, o agente responde antes de o
+ * job de classificar rodar, e a resposta some — o fluxo saía por "sem resposta"
+ * com o cliente tendo respondido.
+ *
+ * A mensagem do fluxo é o último outbound até `envioFechadoEm` (o passo de envio
+ * fecha DEPOIS de a mensagem sair). A POSIÇÃO no histórico decide, não o
+ * horário: `sent_at` aqui vem truncado no segundo, e a resposta que chega no
+ * mesmo segundo do fechamento continua depois da mensagem na lista.
+ *
+ * Mídia usa o corpo que o contexto já compõe (transcrição/descrição quando
+ * houver); inbound sem texto nenhum não vira pergunta ao modelo.
+ *
+ * ponytail: se a mensagem do fluxo saiu da janela do histórico (`historyLimit`),
+ * vale o horário, no segundo — a resposta que chegou entre o envio e o
+ * fechamento do passo fica de fora só nesse caso.
+ */
+function respostaAoEnvioDoFluxo(context: LeadContext, envioFechadoEm: Date): LeadContextMessage | null {
+  const limite = envioFechadoEm.getTime();
+  const envio = context.messages.findLastIndex((m) => m.direction === 'outbound' && Date.parse(m.sent_at) <= limite);
+  const piso = Math.floor(limite / 1000) * 1000;
+  const resposta = context.messages
+    .slice(envio + 1)
+    .findLast((m) => m.direction === 'inbound' && m.body.trim() !== '' && (envio >= 0 || Date.parse(m.sent_at) >= piso));
+  return resposta ?? null;
+}
+
+/**
+ * O id, em `messages`, da resposta que o contexto escolheu — o contexto não o
+ * carrega (ele vai inteiro ao modelo, e um id por mensagem seria ruído pago).
+ * Pela conversa do contexto, pelo texto e pelo segundo em que chegou: o
+ * `sent_at` do contexto vem truncado no segundo (`isoLocalComOffset`). Duas
+ * respostas iguais no mesmo segundo são a mesma resposta para quem compara, e a
+ * ordem é a do histórico (`sent_at desc, id desc`). `null` quando não acha — a
+ * única mensagem que não cabe no orçamento sai do contexto cortada ao meio.
+ */
+async function idDaResposta(
+  pool: pg.Pool,
+  orgId: string,
+  conversationId: string | null,
+  resposta: LeadContextMessage,
+): Promise<string | null> {
+  if (conversationId === null) return null;
+  const { rows } = await pool.query<{ id: string }>(
+    `select id from messages
+      where organization_id = $1 and conversation_id = $2 and direction = 'inbound' and body = $3
+        and sent_at >= $4::timestamptz and sent_at < $4::timestamptz + interval '1 second'
+      order by sent_at desc, id desc
+      limit 1`,
+    [orgId, conversationId, resposta.body, resposta.sent_at],
+  );
+  return rows[0]?.id ?? null;
 }
 
 /**
@@ -314,9 +425,11 @@ export function createFollowupTurnHandler(deps: FollowupTurnDeps) {
     const { rows: targetRows } = await pool.query<{
       channel_session_id: string;
       archived_at: string | null;
+      canal_desativado: string | null;
       org_status?: string | null;
     }>(
-      `select c.channel_session_id, to_jsonb(cs)->>'archived_at' as archived_at, o.status as org_status
+      `select c.channel_session_id, to_jsonb(cs)->>'archived_at' as archived_at,
+              to_jsonb(cs)->'metadata'->>'disabled' as canal_desativado, o.status as org_status
        from conversations c
        join channel_sessions cs on cs.id=c.channel_session_id and cs.organization_id=c.organization_id
        join organizations o on o.id=c.organization_id
@@ -345,7 +458,157 @@ export function createFollowupTurnHandler(deps: FollowupTurnDeps) {
       return;
     }
     if (targetRows[0].archived_at) throw new Error('canal arquivado');
+    // Canal DESATIVADO (#2329): consumir SEM ERRO, em vez de `throw`.
+    //
+    // `throw` mandava o job para a fila de retentativa: 5 tentativas gastas para
+    // descartar uma mensagem que não pode sair, e no fim um `dead` com o aviso
+    // CRÍTICO "Job descartado" na Central — UM por follow-up, sem ninguém poder
+    // fazer nada (o canal continua desligado). O desfecho próprio é este: o job
+    // termina `done`, com o motivo no log, sem pagar o turno de modelo nem
+    // acender alerta.
+    //
+    // `turn_discarded` NÃO é gravado aqui, ao contrário do descarte por
+    // organização parada (migration 0501): lá a reativação reenfileira porque o
+    // `claim` não entrega inscrição com a org parada; com o CANAL pausado não há
+    // essa barreira, e o evento enfileiraria um turno novo a cada recheck até o
+    // operador religar — justamente a reação que esta issue está barrando.
+    if (targetRows[0].canal_desativado === 'true') {
+      deps.log?.info('followup_turn: canal desativado — turno consumido sem rodar', {
+        job_id: job.id,
+        tenant_id: tenantId,
+        lead_id: leadId,
+        motivo: 'canal_desativado',
+      });
+      return;
+    }
     const target: ReentrySendTarget = { tenantId, leadId, conversationId: boundary!.conversation_id, channelSessionId: targetRows[0]!.channel_session_id };
+
+    // A INSCRIÇÃO PRECISA ESTAR VIVA ANTES DE QUALQUER EFEITO. O turno já
+    // enfileirado sobrevive ao fluxo: apagar o fluxo pela rota apaga as
+    // inscrições (#1913) e o `cron_jobs` do adiamento para a janela continua de
+    // pé, mas a checagem de atualidade só rodava no `complete` — DEPOIS do
+    // envio. A mensagem de um fluxo apagado saía calada, e o job terminava
+    // `done`. A MESMA régua do caminho inline (`enviarTextoFixoPendente`,
+    // `lib/followup/enviar-texto-fixo.ts`): inscrição existente, no MESMO nó, e
+    // em estado que anda (`active`/`waiting_reply`). Fora disso o turno termina
+    // sem tocar a cadeia; o worker fecha o job como `done` no caminho normal.
+    //
+    // `node_id` ausente NÃO é descartado aqui de propósito: payload de fluxo
+    // sem nó é defeito de programação e segue falhando alto em
+    // `runFlowDrivenTurn`, como falhava.
+    if (payload.followup_enrollment_id !== undefined && payload.node_id !== undefined) {
+      // PESSOA NO COMANDO: a política de handoff do fluxo vale também para a
+      // conversa assumida à mão, que não emite `ai.handoff_triggered`. Com
+      // `pause` o passo é ADIADO e confere de novo (o mesmo `deferred` da janela
+      // de envio, abaixo); cancelada, a inscrição cai no descarte logo abaixo.
+      if (payload.purpose === 'send_message') {
+        const agora = (deps.clock ?? ((): Date => new Date()))();
+        const pessoa = await aplicarPessoaNoComandoAoTurno(
+          pool,
+          {
+            organizationId: tenantId,
+            enrollmentId: payload.followup_enrollment_id,
+            nodeId: payload.node_id,
+            contactId: leadId,
+          },
+          agora,
+        );
+        if (pessoa !== null) {
+          withFields(deps.log, {
+            job_id: job.id,
+            tenant_id: tenantId,
+            lead_id: leadId,
+            enrollment_id: payload.followup_enrollment_id,
+          }).info('turno de fluxo não fala por cima de quem assumiu a conversa', {
+            inscricao: pessoa.kind,
+            ...(pessoa.kind === 'adiada' ? { next_run_at: pessoa.ate.toISOString() } : {}),
+          });
+        }
+        if (pessoa?.kind === 'adiada') {
+          const complete = deps.completeFollowupTurn;
+          if (!complete) {
+            throw new Error(
+              'passo adiado por pessoa no comando sem completeFollowupTurn — o enrollment não saberia do adiamento',
+            );
+          }
+          await rescheduleReentry(pool, { tenantId, leadId, jobId: job.id, at: pessoa.ate, payload: job.payload });
+          await complete(pool, {
+            jobId: job.id,
+            jobClaim: claimOfJob(job),
+            organizationId: tenantId,
+            enrollmentId: payload.followup_enrollment_id,
+            nodeId: payload.node_id,
+            result: { kind: 'deferred', until: pessoa.ate, reason: 'pessoa_no_comando' },
+          });
+          return;
+        }
+      }
+      const { rows: inscricaoRows } = await pool.query<{ current_node_id: string; status: string }>(
+        `select current_node_id, status from followup_enrollments where organization_id = $1 and id = $2 limit 1`,
+        [tenantId, payload.followup_enrollment_id],
+      );
+      const inscricao = inscricaoRows[0];
+      const viva =
+        inscricao !== undefined &&
+        inscricao.current_node_id === payload.node_id &&
+        (inscricao.status === 'active' || inscricao.status === 'waiting_reply');
+      if (!viva) {
+        withFields(deps.log, {
+          job_id: job.id,
+          tenant_id: tenantId,
+          lead_id: leadId,
+          enrollment_id: payload.followup_enrollment_id,
+        }).info('turno de fluxo descartado — a inscrição não está mais viva', {
+          motivo: inscricao === undefined ? 'inscricao_ausente' : 'fora_do_no_ou_encerrada',
+          status: inscricao?.status ?? null,
+          no_do_payload: payload.node_id,
+          no_atual: inscricao?.current_node_id ?? null,
+        });
+        // #2262 — O DESCARTE DURANTE A PAUSA NÃO PODE SER SILÉNCIO.
+        //
+        // Apagada, encerrada ou em outro nó: não há nada a reenfileirar, e o
+        // silêncio acima está certo. PAUSADA é o caso oposto — a inscrição
+        // continua viva no MESMO nó (`paused_handoff` do handoff humano,
+        // `paused_manual` da intervenção), com um consumidor de retomada em
+        // `lib/followup/reactivity.ts` / `lib/followup/intervencao.ts`. Sem
+        // rastro, o último evento da estadia continua sendo o `turn_enqueued`
+        // deste job: na retomada o motor lê `actionEnqueued = waitElapsed &&
+        // !turnoDaAcaoDescartado(...)` como "turno em voo", não enfileira nada
+        // (só recheca) e a sequência fica parada no nó até o dead-man marcá-la
+        // `dead` com `action_turn_never_completed` — motivo falso, porque quem
+        // descartou foi a pausa.
+        //
+        // `turn_discarded` é o rastro que JÁ existe para isto (migration 0501,
+        // mesma chave `…:descartado` que não conta como passo em
+        // `fn_followup_job_current`): o motor enfileira um turno novo no
+        // primeiro tick depois da retomada. Escrito aqui pelo worker — sem
+        // `auth.uid()`, o gatilho `fn_followup_generation_write` deixa o
+        // servidor gravar; pela sessão, um manager continuaria recusado.
+        if (
+          inscricao !== undefined &&
+          inscricao.current_node_id === payload.node_id &&
+          (inscricao.status === 'paused_handoff' || inscricao.status === 'paused_manual') &&
+          payload.purpose === 'send_message'
+        ) {
+          await pool.query(
+            `insert into followup_enrollment_events
+               (organization_id, enrollment_id, node_id, event_type, payload, idempotency_key)
+             values ($1, $2, $3, 'turn_discarded', $4, $5)
+             on conflict (enrollment_id, idempotency_key) where idempotency_key is not null do nothing`,
+            [
+              tenantId,
+              payload.followup_enrollment_id,
+              payload.node_id,
+              { job_id: job.id, motivo: 'inscricao_pausada' },
+              `${typeof job.payload.source_step_key === 'string' && job.payload.source_step_key !== ''
+                ? job.payload.source_step_key
+                : job.id}:descartado`,
+            ],
+          );
+        }
+        return;
+      }
+    }
 
     const clock = deps.clock ?? ((): Date => new Date());
 
@@ -413,20 +676,34 @@ export function createFollowupTurnHandler(deps: FollowupTurnDeps) {
     // Onda 5 (Task 5.1): turno DIRIGIDO POR FLUXO — guard exclusivo, nunca cai nos
     // caminhos legados abaixo (F3-03/F3-04 seguem intocados quando o campo falta).
     if (payload.followup_enrollment_id !== undefined) {
-      await runFlowDrivenTurn(deps, job, pool, ctx, clock, target, {
-        enrollmentId: payload.followup_enrollment_id,
-        nodeId: payload.node_id,
-        purpose: payload.purpose,
-        promptHint: payload.prompt_hint,
-        fixedBody: payload.fixed_body,
-        templateId: payload.template_id,
-        fallbackTemplateId: payload.fallback_template_id,
-        voltaIndex: payload.volta_index,
-        voltaTotal: payload.volta_total,
-        classes: payload.classes,
-        hint: payload.hint,
-        waits: payload.waits,
-      });
+      try {
+        await runFlowDrivenTurn(deps, job, pool, ctx, clock, target, {
+          enrollmentId: payload.followup_enrollment_id,
+          nodeId: payload.node_id,
+          purpose: payload.purpose,
+          promptHint: payload.prompt_hint,
+          fixedBody: payload.fixed_body,
+          fixedMediaUrl: payload.fixed_media_url,
+          templateId: payload.template_id,
+          templateValues: payload.template_values,
+          fallbackTemplateId: payload.fallback_template_id,
+          voltaIndex: payload.volta_index,
+          voltaTotal: payload.volta_total,
+          classes: payload.classes,
+          hint: payload.hint,
+          waits: payload.waits,
+        });
+      } catch (err) {
+        // A organização parou com este turno JÁ rodando: a suspensão só descarta o
+        // `pending`, e o envio foi barrado aqui. O erro segue para a fila cancelar o
+        // job (`terminal`), mas antes o motor precisa saber que o turno saiu sem
+        // enviar — senão a reativação lê o cancelamento como worker morto e o
+        // dead-man mata a inscrição com `action_turn_never_completed`.
+        if (err instanceof OrgNaoOperanteError && payload.purpose === 'send_message') {
+          await pool.query('select public.fn_followup_turno_descartado($1, $2)', [tenantId, job.id]);
+        }
+        throw err;
+      }
       return;
     }
 
@@ -497,7 +774,10 @@ async function runFlowDrivenTurn(
     purpose: 'send_message' | 'classify' | 'plan_timing' | undefined;
     promptHint: string | undefined;
     fixedBody: string | undefined;
+    /** #2734 — mídia opcional (imagem, vídeo, áudio ou documento) do passo `action`/`text`. */
+    fixedMediaUrl: string | undefined;
     templateId: string | undefined;
+    templateValues: VariaveisDoModelo | undefined;
     fallbackTemplateId: string | undefined;
     voltaIndex: number | undefined;
     voltaTotal: number | undefined;
@@ -519,7 +799,45 @@ async function runFlowDrivenTurn(
   const runLog = withFields(deps.log, { job_id: job.id, tenant_id: target.tenantId, lead_id: target.leadId, enrollment_id: enrollmentId });
 
   if (input.purpose === 'send_message') {
-    let passo = await resolveFlowSendBody(pool, target.tenantId, target.channelSessionId, input);
+    // #3813 — O PULO PELA AGENDA ACONTECE ANTES DE QUALQUER GASTO, E TEM NOME.
+    //
+    // A escolha do FLUXO (`quando_ha_compromisso` na configuração publicada do
+    // follow-up) vale aqui como vale no caminho inline (`enviar-texto-fixo.ts`).
+    // Sem esta leitura o worker `pg` seguia no padrão `adiar` e um fluxo em
+    // `nao_enviar` nunca pulava — e, quando pulasse pela guarda do envio, o
+    // `AgendaPuladoError` subia como falha do run (o passo não tem desfecho).
+    //
+    // A leitura da proteção só é paga pela escolha que pode pular: em `adiar`
+    // (padrão) e em `enviar` esta decisão NUNCA é `pular`, então o caminho de
+    // hoje — inclusive o adiamento, que continua acontecendo na guarda do envio
+    // e re-agendando o job — não muda nem custa uma consulta a mais.
+    const escolhaDaAgenda = await escolhaDoFluxoPg(pool, target.tenantId, enrollmentId);
+    if (escolhaDaAgenda === 'nao_enviar') {
+      const decisaoDaAgenda = decidirNoEnvio(
+        await protecaoAgendaPg(pool, target.tenantId, target.leadId, clock()),
+        escolhaDaAgenda,
+      );
+      if (decisaoDaAgenda.acao === 'pular') {
+        runLog.info('passo do fluxo pulado — o contato tem horário marcado', {
+          motivo: MOTIVO_DO_PULO,
+          appointment_id: decisaoDaAgenda.appointment_id,
+          node_id: nodeId,
+        });
+        // O desfecho NOMEADO do pulo: o mesmo canal dos outros pulos deste
+        // arquivo (mídia recusada, modelo que não pode sair) — um `skipped`
+        // com o motivo, nunca um envio que não aconteceu em silêncio.
+        await complete(pool, {
+          jobId: job.id,
+          jobClaim: claimOfJob(job),
+          organizationId: target.tenantId,
+          enrollmentId,
+          nodeId,
+          result: { kind: 'skipped', reason: MOTIVO_DO_PULO },
+        });
+        return;
+      }
+    }
+    let passo = await resolveFlowSendBody(pool, target.tenantId, target.channelSessionId, target.leadId, input);
     // O PLANO B DA MENSAGEM POR IA. Com a janela de 24 h fechada, o canal recusa
     // qualquer texto livre — o da IA inclusive —, e o passo terminava sem mandar
     // nada. A tela prometia "se a IA não conseguir escrever, mandar este modelo"
@@ -531,7 +849,11 @@ async function runFlowDrivenTurn(
       input.fallbackTemplateId !== undefined &&
       (await janelaFechada(pool, target, clock()))
     ) {
-      passo = await resolveModeloAprovado(pool, target.tenantId, target.channelSessionId, input.fallbackTemplateId);
+      // O plano B não tem mapa de variáveis: modelo com `{{1}}` segue recusado aqui.
+      passo = await resolveModeloAprovado(pool, target.tenantId, target.channelSessionId, input.fallbackTemplateId, {
+        contactId: target.leadId,
+        variaveis: undefined,
+      });
     }
     if (passo !== null && passo.tipo === 'recusado') {
       runLog.info('passo do fluxo pulado — o modelo não pode sair', { motivo: passo.motivo });
@@ -539,11 +861,55 @@ async function runFlowDrivenTurn(
       return;
     }
     if (passo !== null) {
+      // #2734 — CANAL OFICIAL, JANELA FECHADA: mídia com legenda é mensagem LIVRE e
+      // não sai fora da janela de 24 h, e o texto NÃO sai sozinho no lugar dela — o
+      // cliente receberia a legenda de uma imagem que não veio. `janelaFechada` é a
+      // MESMA régua que o plano B por modelo aprovado consulta logo acima. Só o passo
+      // COM mídia passa por aqui: o texto puro segue com o contrato de antes.
+      if (passo.tipo === 'texto' && passo.midia !== undefined && (await janelaFechada(pool, target, clock()))) {
+        runLog.info('passo do fluxo pulado — mídia fora da janela de 24 h', { media_url: passo.midia.url });
+        await complete(pool, {
+          jobId: job.id,
+          jobClaim: claimOfJob(job),
+          organizationId: target.tenantId,
+          enrollmentId,
+          nodeId,
+          result: {
+            kind: 'skipped',
+            reason: 'A janela de 24 horas deste canal está fechada: fora dela só um modelo aprovado pode sair, e mídia com legenda é mensagem livre. A mídia não foi enviada, e o texto não saiu sozinho.',
+          },
+        });
+        return;
+      }
       // Texto do operador: sem camada semântica (ver o cabeçalho de sendFixedOutbound).
-      const desfecho = await sendFixedOutbound(
-        deps, job, pool, ctx, clock, target, passo.body, false,
-        passo.tipo === 'modelo_aprovado' ? passo.modelo : undefined,
-      );
+      let desfecho: EnvioFixoDesfecho;
+      try {
+        desfecho = await sendFixedOutbound(
+          deps, job, pool, ctx, clock, target, passo.body, false,
+          passo.tipo === 'modelo_aprovado' ? passo.modelo : undefined,
+          passo.tipo === 'texto' ? passo.midia : undefined,
+        );
+      } catch (err) {
+        // #3813 — CORRIDA: o compromisso nasceu entre a leitura acima e o
+        // envio, e a guarda do envio (`sendTurnMessage`) pulou por `nao_enviar`.
+        // O desfecho continua sendo o PULO NOMEADO — o erro do pulo não vira
+        // falha de job (o dead-man leria worker morto onde houve decisão).
+        if (!(err instanceof AgendaPuladoError)) throw err;
+        runLog.info('passo do fluxo pulado na guarda do envio — o contato tem horário marcado', {
+          motivo: MOTIVO_DO_PULO,
+          appointment_id: err.protection.appointment_id,
+          node_id: nodeId,
+        });
+        await complete(pool, {
+          jobId: job.id,
+          jobClaim: claimOfJob(job),
+          organizationId: target.tenantId,
+          enrollmentId,
+          nodeId,
+          result: { kind: 'skipped', reason: MOTIVO_DO_PULO },
+        });
+        return;
+      }
       // TODO OS TRÊS DESFECHOS VOLTAM PARA O ENROLLMENT. O adiado era o que não
       // voltava, e o silêncio dele custava o enrollment inteiro: o motor ficava
       // rechecando um turno que ninguém ia fechar e, esgotado o orçamento do
@@ -558,6 +924,35 @@ async function runFlowDrivenTurn(
       } else {
         await complete(pool,{jobId:job.id,jobClaim:claimOfJob(job),organizationId:target.tenantId,enrollmentId,nodeId,result:{kind:'deferred',until:desfecho.until,reason:desfecho.reason}});
       }
+      return;
+    }
+    // #3103 — A JANELA ANTI-BAN DO CANAL, ANTES DO TURNO DA IA. `runAgentTurn`
+    // também adia fora da janela, mas só reagenda o job e lança
+    // `JobSettledError`: o enrollment não fica sabendo, o motor lê a espera
+    // como worker morto e o dead-man (~11h) mata a inscrição com
+    // `action_turn_never_completed` antes da abertura. Medido em produção:
+    // passo de IA enfileirado 21h com janela 9h–18h morria às 8h30. O adiamento
+    // volta para o enrollment como o do texto fixo acima e o da janela própria.
+    const aberturaAntiBan = await aberturaDaJanelaDeDisparo(pool, target, clock(), runLog);
+    if (aberturaAntiBan !== null) {
+      await rescheduleReentry(pool, {
+        tenantId: target.tenantId,
+        leadId: target.leadId,
+        jobId: job.id,
+        at: aberturaAntiBan,
+        payload: job.payload,
+      });
+      runLog.info('passo de IA do fluxo adiado pela janela anti-ban de envio', {
+        next_run_at: aberturaAntiBan.toISOString(),
+      });
+      await complete(pool, {
+        jobId: job.id,
+        jobClaim: claimOfJob(job),
+        organizationId: target.tenantId,
+        enrollmentId,
+        nodeId,
+        result: { kind: 'deferred', until: aberturaAntiBan, reason: 'outside_window' },
+      });
       return;
     }
     await runAgentTurn(deps, job, pool, ctx, {
@@ -585,19 +980,73 @@ async function runFlowDrivenTurn(
     if (!context.ok) {
       throw new Error(`turno de classificação do fluxo falhou em get_lead_context (${context.error.code})`);
     }
+    const envioFechadoEm = await envioDoFluxoFechadoEm(pool, target.tenantId, enrollmentId);
+    // Sem envio do fluxo antes deste nó, vale a regra de antes: a última inbound
+    // que ninguém respondeu ainda.
+    const resposta =
+      envioFechadoEm === null
+        ? lastInboundSinceLastOutbound(context.context)
+        : respostaAoEnvioDoFluxo(context.context, envioFechadoEm);
+    if (resposta === null) {
+      // O lead ainda não respondeu ao envio do fluxo: não há o que classificar
+      // AGORA, e isso não é "sem resposta". O turno não conclui o passo — o
+      // enrollment segue em `waiting_reply` com a carência inteira; só deixa o
+      // rastro da espera no dossiê. Quem decide daqui é o motor: a resposta que
+      // chegar acorda o nó (reactivity → novo turno de classify) e a carência
+      // vencida roteia `no_reply` sem LLM (`case "ai_classify"` em
+      // lib/followup/node-handlers.ts). Concluir aqui com `no_reply` avançava o
+      // fluxo segundos depois do envio.
+      runLog.info('classificação adiada — o lead ainda não respondeu; o nó segue esperando a resposta ou a carência', {
+        node_id: nodeId,
+      });
+      await complete(pool, { jobId: job.id, jobClaim: claimOfJob(job), organizationId: target.tenantId, enrollmentId, nodeId, result: { kind: 'awaiting_reply' } });
+      return;
+    }
+    // O Jev lê a MESMA resposta, ao mesmo tempo, e só observa: a saída que move
+    // o fluxo é sempre a da IA de sempre, e ninguém espera por ele. Vai só o que
+    // o cliente digitou — resposta em mídia (transcrição, texto lido) não sai.
+    const conversaDaResposta = context.context.conversation_id;
+    const jev = consultarJevNoFollowup(
+      pool,
+      {
+        organizationId: target.tenantId,
+        contactId: target.leadId,
+        jobId: job.id,
+        conversationId: conversaDaResposta,
+        mensagem: textoDoClienteNaUltimaMensagem([resposta]),
+        classes,
+        ...(input.hint !== undefined ? { dica: input.hint } : {}),
+        idDaMensagem: () => idDaResposta(pool, target.tenantId, conversaDaResposta, resposta),
+      },
+      deps.jev,
+    );
     const cls = await classifyFollowupReply(
       pool,
       deps.llmCfg,
       { tenantId: target.tenantId, leadId: target.leadId, jobId: job.id },
       {
-        candidateText: lastInboundSinceLastOutbound(context.context),
+        candidateText: resposta.body,
         classes,
         ...(input.hint !== undefined ? { hint: input.hint } : {}),
         ...(deps.knobs.followupAi?.model !== undefined ? { model: deps.knobs.followupAi.model } : {}),
       },
       { ...(deps.registry !== undefined ? { registry: deps.registry } : {}), log: runLog },
-    );
-    await complete(pool, { jobId:job.id,jobClaim:claimOfJob(job), organizationId: target.tenantId, enrollmentId, nodeId, result: { kind: 'classified', class: cls } });
+    ).catch((erro: unknown) => {
+      // Sem a saída dela o job vai ser repetido: o Jev fica sem par agora, e a
+      // repetição completa o par (`registrarFollowupDoJev`).
+      jev.observar(null);
+      throw erro;
+    });
+    // O par só leva a saída DEPOIS de ela concluir o passo: se a conclusão cair,
+    // o retry classifica de novo — e pode escolher outra —, e o par tem de ser
+    // com a saída que moveu o fluxo, não com a desta tentativa.
+    // ponytail: a conclusão que o motor descarta calada (o nó já andou por
+    // outro job) ainda observa; o par que fica é o de quem gravou primeiro.
+    await complete(pool, { jobId:job.id,jobClaim:claimOfJob(job), organizationId: target.tenantId, enrollmentId, nodeId, result: { kind: 'classified', class: cls } }).catch((erro: unknown) => {
+      jev.observar(null);
+      throw erro;
+    });
+    jev.observar(cls);
     return;
   }
 
@@ -669,9 +1118,25 @@ async function runDeterministicReentry(
   );
 }
 
-function interpolarVoltaDoPayload(texto: string, index: number | undefined, total: number | undefined): string {
-  if (index === undefined || total === undefined) return texto;
-  return texto.replaceAll('{{volta}}', String(index)).replaceAll('{{voltas}}', String(total));
+/**
+ * `{{volta}}`/`{{voltas}}` PRIMEIRO e, com o contexto do contato e do negócio
+ * (#2528), o resto pelo MESMO renderizador das automações: `{{nome}}`,
+ * `{{primeiro_nome}}`, `{{contact.*}}` e `{{lead.*}}` saem preenchidos, e
+ * marcação sem valor sai da frase junto com o espaço vizinho — nunca `{{...}}`
+ * cru ao cliente. Sem contexto (chamador que não leu) o comportamento é o de
+ * antes: só a volta.
+ */
+function interpolarVoltaDoPayload(
+  texto: string,
+  index: number | undefined,
+  total: number | undefined,
+  contexto?: Record<string, unknown> | null,
+): string {
+  const comVolta =
+    index === undefined || total === undefined
+      ? texto
+      : texto.replaceAll('{{volta}}', String(index)).replaceAll('{{voltas}}', String(total));
+  return contexto ? renderizarTextoDeFollowup(comVolta, contexto) : comVolta;
 }
 
 /**
@@ -683,7 +1148,7 @@ function interpolarVoltaDoPayload(texto: string, index: number | undefined, tota
  * vez de a fila re-tentar até matar a inscrição por algo que tempo não conserta.
  */
 type PassoSemIa =
-  | { tipo: 'texto'; body: string }
+  | { tipo: 'texto'; body: string; midia?: MidiaComLegenda }
   | {
       tipo: 'modelo_aprovado';
       body: string;
@@ -691,19 +1156,43 @@ type PassoSemIa =
     }
   | { tipo: 'recusado'; motivo: string };
 
+/** #2734 — mídia do passo: imagem, vídeo, áudio ou documento, por URL, com o `body` como LEGENDA. */
+export type MidiaComLegenda = { url: string; type: TipoDeMidiaComLegenda; mime: string };
+
 async function resolveFlowSendBody(
   pool: pg.Pool,
   tenantId: string,
   channelSessionId: string,
+  /** `job.contact_id` — de quem é este texto (#2528). */
+  contactId: string,
   input: {
     fixedBody: string | undefined;
+    /** #2734 — mídia opcional do passo (`media_url` do nó de ação). */
+    fixedMediaUrl: string | undefined;
     templateId: string | undefined;
+    templateValues: VariaveisDoModelo | undefined;
     voltaIndex: number | undefined;
     voltaTotal: number | undefined;
   },
 ): Promise<PassoSemIa | null> {
+  // O `fixed_body` já chega renderizado do enfileiramento (`lib/followup/engine.ts`),
+  // ou é a confirmação, que é dado do contato. Renderizar de novo leria o que veio
+  // do cadastro como modelo — por isso aqui ele só ganha a volta, nunca o contexto.
   if (input.fixedBody !== undefined) {
-    return { tipo: 'texto', body: interpolarVoltaDoPayload(input.fixedBody, input.voltaIndex, input.voltaTotal) };
+    const body = interpolarVoltaDoPayload(input.fixedBody, input.voltaIndex, input.voltaTotal);
+    // #2734 — MÍDIA DO PASSO. O que não é um arquivo identificável é recusa de
+    // CONFIGURAÇÃO: o passo é pulado com o motivo (mesmo desfecho do modelo que
+    // não pode sair) em vez de a fila re-tentar algo que tempo não conserta — e
+    // em vez de mandar o texto solto, que era o comportamento equivalente a
+    // prometer uma imagem que não vem.
+    if (input.fixedMediaUrl !== undefined) {
+      const url = input.fixedMediaUrl.trim();
+      if (url.length === 0) return { tipo: 'texto', body };
+      const classificada = classificarMidiaComLegenda(url);
+      if (!classificada.ok) return { tipo: 'recusado', motivo: classificada.motivo };
+      return { tipo: 'texto', body, midia: { url, type: classificada.type, mime: classificada.mime } };
+    }
+    return { tipo: 'texto', body };
   }
   if (input.templateId === undefined) return null;
   const { rows } = await pool.query<{ body: string }>(
@@ -712,13 +1201,18 @@ async function resolveFlowSendBody(
   );
   const body = rows[0]?.body;
   if (body !== undefined && body.length > 0) {
-    return { tipo: 'texto', body: interpolarVoltaDoPayload(body, input.voltaIndex, input.voltaTotal) };
+    // #2528 — o corpo de `message_templates` só existe aqui: esta é a passada única dele.
+    const contexto = await contextoDoContato(pool, tenantId, contactId);
+    return { tipo: 'texto', body: interpolarVoltaDoPayload(body, input.voltaIndex, input.voltaTotal, contexto) };
   }
   // Não é texto pronto: pode ser um modelo APROVADO do canal. Até aqui o passo só
   // lia `message_templates`, e um fluxo apontado para um modelo aprovado — o único
   // envio que passa com a janela de 24 h fechada — morria neste `throw` no primeiro
   // disparo, depois de o editor ter aceitado e publicado o grafo.
-  const aprovado = await resolveModeloAprovado(pool, tenantId, channelSessionId, input.templateId);
+  const aprovado = await resolveModeloAprovado(pool, tenantId, channelSessionId, input.templateId, {
+    contactId,
+    variaveis: input.templateValues,
+  });
   if (aprovado === null) {
     throw new Error('followup_turn sem modelo de mensagem — o template_id do passo não existe nesta organização');
   }
@@ -733,14 +1227,19 @@ async function resolveFlowSendBody(
  * (`definicaoNaConexao`, a mesma regra do `send_template` do agente): dois números
  * podem espelhar o mesmo nome, e disparar a linha de outra conta é recusa certa.
  *
- * O fluxo não tem de onde tirar valor para variável, então modelo com `{{1}}` é
- * recusado com o motivo — mandar o marcador cru ao cliente seria pior.
+ * VARIÁVEIS (`{{1}}`, `{{2}}`…) saem do mapa do passo (`variaveis`): nome do
+ * contato ou campo do negócio, lidos AGORA — um passo que sai horas depois usa o
+ * dado de agora (`lib/channels/meta/variaveis-do-fluxo.ts`). Variável sem origem
+ * ou vazia neste contato recusa o passo com o motivo: mandar o marcador cru ou
+ * um parâmetro em branco ao cliente seria pior. E a recusa é AQUI, e não no
+ * envio: lá ela viraria envio falho e re-tentativa por algo que tempo não conserta.
  */
 async function resolveModeloAprovado(
   pool: pg.Pool,
   tenantId: string,
   channelSessionId: string,
   metaTemplateId: string,
+  alvoDasVariaveis: { contactId: string; variaveis: VariaveisDoModelo | undefined },
 ): Promise<PassoSemIa | null> {
   const { rows } = await pool.query<{ name: string; language: string }>(
     `select name, language from meta_templates where organization_id = $1 and id = $2 limit 1`,
@@ -769,16 +1268,49 @@ async function resolveModeloAprovado(
     parameter_format: linha.parameter_format,
     components: linha.components as never,
   });
+  let values: Record<string, string> = {};
   if (contrato.slots.length > 0) {
-    return {
-      tipo: 'recusado',
-      motivo: `O modelo "${alvo.name}" tem variáveis, e o fluxo não tem de onde tirar os valores. Use um modelo sem variáveis.`,
-    };
+    const dados = await dadosParaVariaveis(pool, tenantId, alvoDasVariaveis.contactId);
+    const resolucao = resolverVariaveisDoModelo(contrato, alvoDasVariaveis.variaveis, dados);
+    if (!resolucao.ok) {
+      return {
+        tipo: 'recusado',
+        motivo: `O modelo "${alvo.name}" não pode sair: ${resolucao.problemas.join('; ')}.`,
+      };
+    }
+    values = resolucao.values;
   }
   return {
     tipo: 'modelo_aprovado',
-    body: renderTemplateBody(linha.components, {}, meta),
-    modelo: { name: alvo.name, language: alvo.language, values: {} },
+    body: renderTemplateBody(linha.components, values, meta),
+    modelo: { name: alvo.name, language: alvo.language, values },
+  };
+}
+
+/**
+ * O nome do contato e os campos do negócio MAIS RECENTE dele — o mesmo negócio
+ * que o motor do fluxo lê para as condições (`loadLeadFacts`, em
+ * `lib/followup/turn-bridge.ts`). Só roda quando o modelo tem variável.
+ */
+async function dadosParaVariaveis(
+  pool: pg.Pool,
+  tenantId: string,
+  contactId: string,
+): Promise<{ nomeDoContato: string | null; camposDoNegocio: Record<string, unknown> }> {
+  const [contatos, negocios] = await Promise.all([
+    pool.query<{ name: string | null; display_name: string | null }>(
+      `select name, display_name from contacts where organization_id = $1 and id = $2`,
+      [tenantId, contactId],
+    ),
+    pool.query<{ custom_fields: Record<string, unknown> | null }>(
+      `select custom_fields from crm_leads where organization_id = $1 and contact_id = $2
+       order by updated_at desc limit 1`,
+      [tenantId, contactId],
+    ),
+  ]);
+  return {
+    nomeDoContato: nomeDoContato(contatos.rows[0] ?? null),
+    camposDoNegocio: negocios.rows[0]?.custom_fields ?? {},
   };
 }
 
@@ -849,14 +1381,39 @@ async function sendFixedOutbound(
    * passar, que é o que um modelo aprovado é — como no `send_template` do agente.
    */
   modelo?: { name: string; language: string; values: Record<string, string> },
+  /**
+   * #2734 — presente = o envio sai como MÍDIA (imagem, vídeo, áudio ou documento,
+   * #2972) e o `body` é a LEGENDA.
+   * O caminho é o de sempre: `channel.send` → `sendTurnMessage` → `sendMessageHandler`,
+   * o MESMO que o Inbox e as campanhas usam. `storagePath` (foto de produto) e `url`
+   * (mídia do passo) convivem no mesmo campo — ver `ChannelSendInput`.
+   */
+  midia?: MidiaComLegenda,
 ): Promise<EnvioFixoDesfecho> {
   const { tenantId, leadId, channelSessionId, conversationId } = target;
   const runLog = withFields(deps.log, { job_id: job.id, tenant_id: tenantId, lead_id: leadId });
 
   if (await isLeadInHandoff(pool, tenantId, leadId)) {
-    runLog.info('envio fixo pulado — lead silenciado (handoff/opt-out)', { kind: job.kind });
+    // Três causas no MESMO veto (#2353): handoff humano (`force_human`), a marca
+    // permanente "sempre atendimento humano" (`ai_opt_out`) e a etiqueta de
+    // contato interno. O texto nomeia as três — dizer só "opt-out" atribuía a
+    // parada a um motivo que pode não ser o do contato.
+    runLog.info(
+      'envio fixo pulado — contato silenciado para o envio automático (handoff humano, opt-out de IA ou etiqueta de contato interno)',
+      { kind: job.kind },
+    );
     return { kind: "skipped" };
   }
+
+  // SEM gate near-dup AQUI (#2996, item 2 — pedido da triagem após medir os
+  // caminhos reais): follow-up de promessa NÃO passa por `sendFixedOutbound` —
+  // ele roda por `runAgentTurn` e cai no `send_message`, cujo gate em memória do
+  // turno (com a janela desde a última inbound) já cobre a re-resposta quase
+  // idêntica. Quem passa por aqui é texto fixo escrito pelo OPERADOR no passo do
+  // fluxo e o modelo da re-entrada: bloquear a 2ª/3ª bolha de um laço com
+  // `{{volta}}` ou a re-resposta de re-entrada sem resposta do lead seria sumir
+  // com o follow-up sem aviso. Se um dia aparecer um caso concreto em que a
+  // trava aqui é necessária, ele vira decisão de produto — não regra implícita.
 
   const context = await getLeadContext(
     pool,
@@ -908,10 +1465,28 @@ async function sendFixedOutbound(
         }
       : {}),
     send: (finalBody) =>
-      channel.send({
-        tenantId, leadId, jobId: job.id, jobClaim: claimOfJob(job), seq: 1, conversationId, body: finalBody,
-        ...(modelo !== undefined ? { template: modelo } : {}),
-      }),
+      // SAÍDA CONFIGURÁVEL: template (modelo) não conta nem leva — o corpo aprovado pelo canal não se altera.
+      enviarComSaidaConfiguravel(
+        {
+          db: pool,
+          organizationId: tenantId,
+          // template (modelo) não conta nem leva: o corpo aprovado pelo canal não se altera.
+          conversationId: modelo === undefined ? conversationId : null,
+          via: "followup",
+          // A mesma intenção do `channel.send` abaixo: o `queued` lança no `switch`
+          // mais abaixo e o retry genérico da fila re-roda este job (gasta tentativa).
+          mensagem: { jobId: job.id, seq: 1 },
+          avisar: (m, c) => runLog.warn(m, c),
+        },
+        finalBody,
+        (finalBody) =>
+          channel.send({
+            tenantId, leadId, jobId: job.id, jobClaim: claimOfJob(job), seq: 1, conversationId, body: finalBody,
+            ...(modelo !== undefined ? { template: modelo } : {}),
+            // #2734 — mídia do passo: o `body` acima é a LEGENDA dela.
+            ...(midia !== undefined ? { media: { url: midia.url, mime: midia.mime, type: midia.type } } : {}),
+          }),
+      ),
   });
 
   if (chain.status === 'vetoed') {
@@ -951,6 +1526,23 @@ async function sendFixedOutbound(
     case 'unavailable':
       throw new Error(`envio fixo: canal indisponível (${outcome.reason}) — run re-tentado pela fila`);
   }
+}
+
+/**
+ * Próxima abertura da janela de DISPARO do canal quando ela está fechada agora;
+ * `null` quando o envio pode sair. É a mesma régua de `runAgentTurn` para a
+ * retomada (`janelaDeEnvioAberta(agora, knobs, false)`), lida antes do turno
+ * para que o adiamento volte ao enrollment (#3103).
+ */
+async function aberturaDaJanelaDeDisparo(
+  pool: pg.Pool,
+  target: ReentrySendTarget,
+  agora: Date,
+  log: Parameters<typeof loadChannelKnobs>[3],
+): Promise<Date | null> {
+  const { knobs } = await loadChannelKnobs(pool, target.tenantId, target.channelSessionId, log);
+  if (janelaDeEnvioAberta(agora, knobs, false)) return null;
+  return proximaAberturaDaJanela(agora, knobs, false);
 }
 
 /**

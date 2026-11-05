@@ -48,6 +48,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       details: parsed.error.flatten(),
     });
   }
+  // Fonte da própria empresa e #2791 são conferidas em `criarRegra`: valem para a tela,
+  // o token `dsk_` e as tools MCP.
   try {
     return ok(await criarRegra(e.deps, parsed.data), { requestId: e.requestId, status: 201 });
   } catch (err) {

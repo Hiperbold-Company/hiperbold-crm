@@ -2,15 +2,15 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * POST /api/v1/system/relogio/tick — uma batida do relógio.
  *
- * Auth: sessão de admin da PLATAFORMA OU Bearer INTERNAL_SECRET (GitHub Actions / cron externo).
+ * Auth: sessão de admin da PLATAFORMA com scope `full` (e sem dívida de MFA) OU Bearer
+ * INTERNAL_SECRET (GitHub Actions / cron externo).
  */
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { NextRequest } from "next/server";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { loadAuthUser } from "@/lib/auth/server";
-import { requireRole } from "@/lib/auth/require-role";
+import { falhaDaEscritaDePlatformAdmin, requirePlatformAdminEscrita } from "@/lib/auth/requirePlatformAdmin";
 import { env } from "@/lib/env";
 import { executarTickDoRelogio } from "@/lib/relogio/executar";
 
@@ -43,41 +43,32 @@ function bearerValido(req: NextRequest): boolean {
   });
 }
 
-/**
- * Via `requireRole`, e não a comparação manual de antes: ganha o gate de MFA
- * de graça — uma sessão admin `aal1` não deve conseguir disparar manualmente
- * um tick de produção só porque tem o rank. `allowPlatformAdmin` replica o
- * bypass que já existia aqui.
- */
-async function sessaoAdmin(requestId: string): Promise<boolean> {
-  const authz = await requireRole("admin", {
-    requestId,
-    resource: "system_relogio_tick",
-    allowPlatformAdmin: true,
-  });
-  // D-132: o tick roda a fila, o follow-up, o roteamento e a recuperação de
-  // TODAS as organizações e devolve o `detalhe` dos erros delas. Admin de uma
-  // organização não pode dispará-lo: pela sessão só entra admin de PLATAFORMA.
-  return authz.ok && authz.user.is_platform_admin === true;
-}
-
 export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
   const porSegredo = bearerValido(req);
-  if (!porSegredo && !(await sessaoAdmin(requestId))) {
-    return fail("forbidden", "Cron secret missing or invalid.", 403, { requestId });
+  // D-132: o tick roda a fila, o follow-up, o roteamento e a recuperação de
+  // TODAS as organizações e devolve o `detalhe` dos erros delas. Admin de uma
+  // organização não pode dispará-lo: pela sessão só entra admin de PLATAFORMA,
+  // e só com scope `full` (o `support_readonly` não dispara efeito) e sem
+  // dívida de MFA (quem tem fator prova nesta sessão).
+  let atorUserId: string | undefined;
+  if (!porSegredo) {
+    try {
+      atorUserId = (await requirePlatformAdminEscrita()).user.id;
+    } catch (err) {
+      return falhaDaEscritaDePlatformAdmin(err, requestId, "Cron secret missing or invalid.");
+    }
   }
 
   try {
     const resultado = await executarTickDoRelogio();
     if (resultado.mexeu) {
-      const user = porSegredo ? null : await loadAuthUser();
       void audit({
         action: "relogio.tick_run",
-        actorUserId: user?.id,
+        actorUserId: atorUserId,
         organizationId: null,
         bypassedRls: true,
         requestId,

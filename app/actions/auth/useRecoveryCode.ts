@@ -6,12 +6,13 @@ import { redirect } from "next/navigation";
 import { safeNext } from "@/lib/auth/safe-next";
 import { z } from "zod";
 
+import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit, isServiceRoleConfigured } from "@/lib/audit";
-import { hashRecoveryCode } from "@/lib/auth/recovery-codes";
+import { hashRecoveryCode, normalizeRecoveryCode } from "@/lib/auth/recovery-codes";
 import { authRateLimited, AUTH_LIMITS } from "@/lib/auth/rate-limit";
 import { avisarSobreCodigosDeRecuperacao } from "@/lib/auth/aviso-de-codigos-de-recuperacao";
-import { ipDoCliente } from "@/lib/http/ip-do-cliente";
+import { esquecerDispositivosConfiaveis } from "@/lib/auth/dispositivo-confiavel";
 
 export type UseRecoveryCodeResult =
   | { ok: false; error: "invalid_or_used" }
@@ -29,7 +30,7 @@ const inputSchema = z.object({
  *
  * Security:
  *  - 200ms artificial delay on miss (timing leak protection).
- *  - hashRecoveryCode = sha256 → bytea match.
+ *  - hashRecoveryCode: the same bytea literal the actions write (see the helper).
  *  - Audit emits with masked code (`AB****YZ`).
  */
 export async function useRecoveryCode(
@@ -45,7 +46,7 @@ export async function useRecoveryCode(
 
   const parsed = inputSchema.safeParse({
     email: rawInput.email?.trim().toLowerCase(),
-    code: rawInput.code?.trim().toUpperCase(),
+    code: normalizeRecoveryCode(String(rawInput.code ?? "")),
   });
   if (!parsed.success) {
     await delay(200);
@@ -123,6 +124,9 @@ export async function useRecoveryCode(
     // um conjunto novo. Só depois de os fatores saírem de fato: se a remoção
     // falhou, a pessoa ainda precisa deles.
     await admin.from("user_recovery_codes").delete().eq("user_id", targetUser.id);
+    // O banco já não aceita confiança de fator removido; apagar as linhas é
+    // para a lista de Segurança não mostrar dispositivo morto quando o fator voltar.
+    await esquecerDispositivosConfiaveis(targetUser.id);
   } catch (err) {
     console.error("[useRecoveryCode] failed to delete factors", err);
     // Non-fatal: user still gets a recovery_used redirect; on next login the

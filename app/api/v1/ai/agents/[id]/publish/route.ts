@@ -46,6 +46,11 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     resource: "ai_agents",
     role: "admin",
     escrita: true,
+    // Configuração do agente: `config:*` (upstream, #2194) OU `mcp:*` (tokens Hiperbold), token admin.
+    configuracao: true,
+    tokenRole: "admin",
+    // Publicar tem balde próprio no teto de escrita do token (upstream).
+    balde: "ai_agents_publish",
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);

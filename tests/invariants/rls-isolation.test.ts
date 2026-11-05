@@ -88,6 +88,12 @@ function seedOrg(org: string, user: string, sess: string, tag: string): string {
 }
 
 beforeAll(() => {
+  // O módulo financeiro INSTALADO antes de semear (#1907, item 3): as cinco
+  // tabelas da comanda saíram do `baseline.sql` e nascem na provisionadora
+  // (ADR-0002 D2/D3). Sem esta chamada as linhas de `sales`/`sale_items` do
+  // seed morrem com `relation "sales" does not exist` — e a D8 manda a
+  // varredura rodar num banco COM o módulo, não perder a cobertura.
+  sql("select public.fn_financeiro_provisionar();");
   sql(seedOrg(ORG_A, USER_A, SESS_A, "a") + seedOrg(ORG_B, USER_B, SESS_B, "b"));
   // Contact → conversation → message + pipeline → stage → lead, per org.
   sql(`
@@ -103,6 +109,7 @@ beforeAll(() => {
       v_version uuid;
       v_case uuid;
       v_boundary jsonb;
+      v_proposta uuid;
       v_attendant uuid;
       v_account uuid;
       v_method uuid;
@@ -110,6 +117,10 @@ beforeAll(() => {
       v_sale uuid;
       v_camp    uuid;
       v_sale_item uuid;
+      v_empresa uuid;
+      v_pessoa uuid;
+      v_lote uuid;
+      v_regra uuid;
     begin
       foreach v_org in array array['${ORG_A}'::uuid, '${ORG_B}'::uuid] loop
         select id into v_sess from public.channel_sessions where organization_id = v_org limit 1;
@@ -167,6 +178,22 @@ beforeAll(() => {
               (select reply_context_revision from public.conversations where organization_id = v_org and id = v_conv),
               (select operation_revision from public.ai_agents where organization_id = v_org and id = v_agent),
               'pending', 'RLS invariant private reply');
+        end if;
+
+        -- 0665 (#2796): o vínculo versão↔número. O agente passa a declarar em
+        -- quais números atende; o número PRINCIPAL segue em
+        -- ai_agent_versions.channel_session_id. A linha abaixo vincula a versão
+        -- publicada acima ao número da organização, para o caso de isolamento
+        -- desta lista (o agent semeado é controle positivo legítimo: a leitura
+        -- é org-scoped sem gate de papel).
+        if not exists (select 1 from public.ai_agent_version_channels where organization_id = v_org) then
+          insert into public.ai_agent_version_channels
+            (organization_id, agent_version_id, channel_session_id)
+          select v_org, v.id, v_sess
+            from public.ai_agent_versions v
+           where v.organization_id = v_org
+           order by v.version_number desc
+           limit 1;
         end if;
 
         -- 0281: a conversa INTERNA da equipe com a IA sobre um caso. Guarda o
@@ -237,6 +264,45 @@ beforeAll(() => {
             values (v_org, v_pipe, v_stage, 'RLS invariant lead');
         end if;
 
+        -- crm_proposals/crm_proposal_items (migration 0464): a proposta comercial.
+        -- crm_proposal_items tem organization_id próprio, com trigger de
+        -- consistência contra crm_proposals.organization_id
+        -- (fn_verificar_org_do_item_da_proposta) — o insert abaixo usa v_org nos
+        -- dois lados de propósito, para não bater na trava. Select-then-if-null-
+        -- insert, mesmo padrão de v_pipe/v_stage acima: precisa de v_proposta
+        -- preenchido em toda passada do loop (o seed roda 2x, uma por org), não
+        -- só na primeira.
+        select id into v_proposta from public.crm_proposals
+          where organization_id = v_org and titulo = 'RLS invariant proposal';
+        if v_proposta is null then
+          insert into public.crm_proposals
+            (organization_id, lead_id, contact_id, titulo, total_cents)
+          select v_org, id, v_contact, 'RLS invariant proposal', 1000
+          from public.crm_leads where organization_id = v_org limit 1
+          returning id into v_proposta;
+        end if;
+
+        if not exists (
+          select 1 from public.crm_proposal_items where proposal_id = v_proposta
+        ) then
+          insert into public.crm_proposal_items
+            (proposal_id, organization_id, descricao, quantidade, preco_unitario_cents, position)
+          values (v_proposta, v_org, 'RLS invariant item', 1, 1000, 1000);
+        end if;
+
+        -- 0772 (#3316) — a fila de proposta de campo do card lida num documento:
+        -- o trecho e os valores sao o dado que a IA leu sobre a PESSOA, e a
+        -- linha existe so ate alguem confirmar em revisao. Os DOIS tenants
+        -- recebem uma linha real (o cross-tenant de org A lendo org B vale
+        -- porque org B tambem tem, nao porque esta vazia).
+        if not exists (select 1 from public.lead_field_proposals where organization_id = v_org) then
+          insert into public.lead_field_proposals
+            (organization_id, lead_id, campo, valor_proposto, trecho, expires_at)
+          select v_org, id, 'telefone', '"valor da proposta"'::jsonb,
+                 'RLS invariant proposta lida num documento', now() + interval '7 days'
+          from public.crm_leads where organization_id = v_org limit 1;
+        end if;
+
         if not exists (select 1 from public.org_guardrail_layers where organization_id = v_org) then
           insert into public.org_guardrail_layers (organization_id, layer, enabled)
             values (v_org, 'jailbreak', true);
@@ -281,6 +347,15 @@ beforeAll(() => {
           insert into public.contact_field_proposals
             (organization_id, contact_id, campo, valor_proposto, expires_at)
             values (v_org, v_contact, 'email', 'rls-invariant@exemplo.test', now() + interval '7 days');
+        end if;
+
+        -- contact_phones (migration 9043): o segundo telefone da ficha. Número
+        -- diferente por organização (a regra "um número, uma ficha" é por
+        -- organização, então o mesmo número nas duas também passaria).
+        if not exists (select 1 from public.contact_phones where organization_id = v_org) then
+          insert into public.contact_phones (organization_id, contact_id, phone_number)
+            values (v_org, v_contact,
+                    '+55119' || lpad((abs(hashtext(v_org::text)) % 100000000)::text, 8, '0'));
         end if;
 
         if not exists (select 1 from public.catalog_products where organization_id = v_org) then
@@ -471,11 +546,15 @@ beforeAll(() => {
         if not exists (select 1 from public.external_db_connections where organization_id = v_org) then
           insert into public.external_db_connections
             (organization_id, label, host, port, database_name, username,
-             password_encrypted, password_iv, password_tag)
+             password_encrypted, password_iv, password_tag,
+             receitas)
             values (v_org, 'RLS invariant fonte externa', 'db.invariante.interno', 5432,
                     'outro_crm', 'leitor',
                     '\\x00'::bytea, '\\x000000000000000000000000'::bytea,
-                    '\\x00000000000000000000000000000000'::bytea);
+                    '\\x00000000000000000000000000000000'::bytea,
+                    case when v_org = 'aaaaaaaa-0000-4000-8000-000000000001'::uuid
+                      then '[{"id":"00000000-0000-4000-8000-000000000001","receita":"woocommerce-produtos","rotulo":"Invariante loja","descricao":"Apenas org A","fixos":{"prefixo":"wp_"},"ativa":true}]'::jsonb
+                      else '[]'::jsonb end);
         end if;
 
         -- migrations 0374/0375 -- a campanha e quem ela alcancou. A tabela
@@ -519,6 +598,94 @@ beforeAll(() => {
         if not exists (select 1 from public.billing_plan_adjustments where organization_id = v_org) then
           insert into public.billing_plan_adjustments (organization_id, limits)
             values (v_org, '{"leads": 100}'::jsonb);
+        end if;
+
+        -- migration 0448 (metade B2B do #1621): empresa, pessoa que decide, o
+        -- vínculo entre as duas e o lote de planilha com a sua linha. A linha
+        -- importada guarda o texto cru da planilha (nome e telefone de gente),
+        -- e a pessoa é gente: vazar qualquer uma entrega ao vizinho a carteira
+        -- de clientes B2B da organização. Select-then-insert: o seed roda uma
+        -- vez por organização e cada passada precisa das próprias ids.
+        select id into v_empresa from public.companies
+          where organization_id = v_org and trade_name = 'RLS invariant empresa';
+        if v_empresa is null then
+          insert into public.companies (organization_id, trade_name)
+            values (v_org, 'RLS invariant empresa') returning id into v_empresa;
+        end if;
+        select id into v_pessoa from public.people
+          where organization_id = v_org and full_name = 'RLS invariant pessoa';
+        if v_pessoa is null then
+          insert into public.people (organization_id, full_name)
+            values (v_org, 'RLS invariant pessoa') returning id into v_pessoa;
+        end if;
+        insert into public.company_people (organization_id, company_id, person_id)
+          values (v_org, v_empresa, v_pessoa)
+          on conflict (company_id, person_id) do nothing;
+        select id into v_lote from public.import_batches
+          where organization_id = v_org and filename = 'rls-invariant.csv';
+        if v_lote is null then
+          insert into public.import_batches (organization_id, filename)
+            values (v_org, 'rls-invariant.csv') returning id into v_lote;
+        end if;
+        insert into public.import_rows (organization_id, batch_id, row_number, raw_data)
+          values (v_org, v_lote, 2, '{"nome": "RLS invariant"}'::jsonb)
+          on conflict (batch_id, row_number) do nothing;
+
+        -- migration 0626 (#2388): a janela de manutencao de conexoes. Vazar a
+        -- linha entrega ao vizinho os horarios em que o outro vai mexer nas
+        -- conexoes dele e o canal alvo da janela — e a retomada programada
+        -- passaria a ser do vizinho. Select-then-insert, como as irmas acima.
+        if not exists (select 1 from public.channel_schedules where organization_id = v_org) then
+          insert into public.channel_schedules
+            (organization_id, channel_session_id, starts_at, ends_at)
+          values
+            (v_org, v_sess, timestamptz '2030-01-01 03:00:00+00', timestamptz '2030-01-01 05:00:00+00');
+        end if;
+
+        -- migration 0730 (#3025, fatia 1): a meta mensal da empresa por
+        -- indicador. A leitura e org-scoped sem gate de papel, entao o agent
+        -- semeado e controle positivo legitimo; a escrita exige manager e e
+        -- medida na action (fora desta lista, pelo mesmo eixo de
+        -- catalog_products). pipeline_id fica nulo nesta semente: e a meta
+        -- da EMPRESA, o escopo da fatia 1.
+        if not exists (select 1 from public.crm_metas where organization_id = v_org) then
+          insert into public.crm_metas
+            (organization_id, periodo, indicador, alvo, created_by)
+          values
+            (v_org, date_trunc('month', current_date)::date, 'vendas_ganhas', 20,
+             (select uo.user_id from public.user_organizations uo
+               where uo.organization_id = v_org limit 1));
+        end if;
+
+        -- migration 0692 (#2041): o historico do rodizio da acao assign_owner.
+        -- Semeado pelo ESCRITOR de producao (a funcao), com uma regra cuja fila
+        -- e o usuario semeado (agent, elegivel). A leitura e org-scoped sem gate
+        -- de papel, entao o agent e controle positivo legitimo; a escrita nao e
+        -- concedida a authenticated (medido em rodizio-da-acao-atribuir.test.ts).
+        if not exists (select 1 from public.automation_rodizio_atribuicoes where organization_id = v_org) then
+          insert into public.automation_rules (organization_id, name, trigger_event, actions)
+          select v_org, 'RLS invariant rodizio', 'lead.created',
+                 jsonb_build_array(jsonb_build_object('type', 'assign_owner', 'config',
+                   jsonb_build_object('modo', 'rodizio', 'fila',
+                     jsonb_build_array(jsonb_build_object('user_id', uo.user_id, 'pausado', false)))))
+            from public.user_organizations uo
+           where uo.organization_id = v_org
+           limit 1
+          returning id into v_regra;
+          perform public.fn_automation_rodizio_atribuir(v_org, v_regra,
+            (select id from public.crm_leads where organization_id = v_org limit 1));
+        end if;
+
+        -- migration 0721 (#2869): o traco do turno do agente. Semeado pelo
+        -- harness (service_role) com a chave da PREVIA: a linha de turno real
+        -- exige job_id, e um job de verdade nao cabe numa semente que roda
+        -- duas vezes. A leitura e org-scoped sem gate de papel -- o agent
+        -- semeado e controle positivo legitimo (quem investiga o turno na tela
+        -- e a equipe) --, e a escrita e so do motor: a sessao tem so select.
+        if not exists (select 1 from public.agent_turn_traces where organization_id = v_org) then
+          insert into public.agent_turn_traces
+            (organization_id, preview_run_id, conversation_id, contact_id, is_dry_run, status, messages_sent)
+          values (v_org, 'rls-invariant-' || v_org::text, v_conv, v_contact, true, 'completed', 0);
         end if;
       end loop;
     end
@@ -577,6 +744,14 @@ export const TABLES = [
   // controle positivo passaria por acerto. Quem mede a escrita é a rota, em
   // `tests/unit/tarefas-rota-nao-tem-porta-dos-fundos.test.ts`.
   "crm_tasks",
+  // migration 0464 — a proposta comercial. Read/write org-scoped sem gate de
+  // papel além de fn_role_at_least('agent'); o gate de ENVIO (manager) é
+  // medido na rota, não aqui (mesmo eixo separado de catalog_products acima).
+  "crm_proposals",
+  // crm_proposal_items tem organization_id próprio, com trigger de
+  // consistência contra crm_proposals.organization_id. Confirmado com o
+  // insert do seed acima, que usa a mesma org nos dois lados.
+  "crm_proposal_items",
   // 0227 — texto de sugestões: org + visibilidade da conversa por authenticated.
   "ai_reply_drafts",
   // migration 0349 — credenciais do trunk SIP por organizacao. Leitura e
@@ -656,6 +831,13 @@ export const TABLES = [
   // provar isso pediria um usuário abaixo de admin escrevendo. Fica declarado
   // em vez de parecer coberto.
   "external_db_connections",
+  // 0772 (#3316) — a fila de proposta de campo do card lida num documento. A
+  // leitura é org-scoped + vínculo com o negócio (a policy de select cobra a FK
+  // coerente com a org); a ESCRITA (policy `for all`) cobra
+  // fn_role_at_least('agent') e é medida em
+  // `tests/unit/capacidade-alcancavel-pelo-agente.test.ts`, não aqui. O seed
+  // acima grava uma linha real nos DOIS tenants.
+  "lead_field_proposals",
   // ⚠️ `webhook_lead_captures` (migration 0174) NÃO entra nesta lista, e a
   // ausência é deliberada: a policy dela exige `manager`, e o usuário semeado
   // aqui é `agent` — o controle positivo falharia por ACERTO, e a "correção"
@@ -677,6 +859,60 @@ export const TABLES = [
   // entrada abre por `?rascunho=`), então o `agent` semeado aqui é controle
   // positivo legítimo e a policy `for all` cobre também o UPDATE do consumo.
   "conversation_drafts",
+  // migration 0448 (metade B2B do #1621) — as cinco tabelas do módulo de
+  // empresas. Leitura org-flat; a escrita por papel (manager cria, agent
+  // edita) é medida em tests/invariants/companies-people-rls.test.ts.
+  "companies",
+  "people",
+  "company_people",
+  "import_batches",
+  "import_rows",
+  // migration 0626 (#2388) — a janela de manutenção de conexões: horários e
+  // canal alvo. Leitura org-flat (o dono enxerga as próprias janelas na tela
+  // de Conexões); a escrita é do admin e do servidor, e o cron aplica pela
+  // RPC. Vazar a linha entrega ao vizinho quando o outro vai mexer nas
+  // conexões dele — e a retomada programada passaria a ser do vizinho.
+  "channel_schedules",
+  // migration 0665 (#2796, fatia 1) — o vínculo versão↔número: em quais números
+  // uma versão de agente atende. A LEITURA é org-scoped pela policy `select`
+  // (fn_user_org_ids) sem gate de papel, então o `agent` semeado é controle
+  // positivo legítimo; a ESCRITA é `for all` com fn_role_at_least(admin),
+  // medida em vinculo-do-agente-ao-numero.test.ts. O número PRINCIPAL segue em
+  // ai_agent_versions.channel_session_id — esta tabela só acrescenta vínculos.
+  "ai_agent_version_channels",
+  // migration 0692 (#2041) — o histórico do rodízio da ação "Atribuir a um
+  // atendente": quem recebeu cada lead e em que posição da fila. Vazar a linha
+  // entrega ao vizinho quem atende qual negócio e o ritmo de distribuição da
+  // equipe. A LEITURA é org-scoped sem gate de papel (o `agent` semeado é
+  // controle positivo legítimo); a ESCRITA não é concedida a `authenticated` —
+  // só a função `fn_automation_rodizio_atribuir`, com service_role, grava. Esse
+  // segundo eixo é medido em rodizio-da-acao-atribuir.test.ts.
+  "automation_rodizio_atribuicoes",
+  // migration 0721 (#2869) — o traço do turno do agente: o que aconteceu numa
+  // execução (ferramentas chamadas, skills ativadas, custo, erro). Vazar a linha
+  // entrega ao vizinho o texto do erro e os ids das fontes de conhecimento do
+  // outro. A LEITURA é org-scoped sem gate de papel (o `agent` semeado é
+  // controle positivo legítimo: quem investiga o turno é a equipe); a ESCRITA é
+  // só do motor, e `authenticated` tem só `select` (o molde da 0692).
+  "agent_turn_traces",
+  // migration 0730 (#3025, fatia 1) — a meta mensal da empresa por indicador.
+  // Vazar a linha entrega ao vizinho o alvo que a outra empresa combinou com o
+  // time e o percentual que ela persegue: é o número pelo qual o dono cobra o
+  // próprio time. A LEITURA é org-scoped sem gate de papel (a tela de
+  // Desempenho mostra a meta da empresa a qualquer membro), então o `agent`
+  // semeado aqui é controle positivo legítimo. A ESCRITA tem um segundo eixo
+  // que este seed NÃO mede: exige `manager` (a policy `for all` chama
+  // fn_role_at_least), e provar isso pediria um usuário abaixo de manager
+  // escrevendo — mesmo eixo separado de `catalog_products` e
+  // `external_db_connections`.
+  "crm_metas",
+  // migration 9043 — o segundo telefone da ficha (Spec 31 B1). Leitura por
+  // organização; a escrita exige `agent`, o papel semeado aqui.
+  "contact_phones",
+  // ⚠️ `cobranca_assinaturas` (migration 0583) NÃO entra nesta lista, pelo mesmo
+  // motivo de `webhook_lead_captures`: a leitura é só do `admin` e o usuário
+  // semeado aqui é `agent`, então o controle positivo falharia por ACERTO. A
+  // prova vive em `tests/invariants/cobranca-isolamento.test.ts`.
 ] as const;
 
 describe("RLS tenant isolation (fn_user_org_ids pattern)", () => {
@@ -705,6 +941,49 @@ describe("RLS tenant isolation (fn_user_org_ids pattern)", () => {
     expect(countAs(USER_B,
       `select count(*) from public.ai_reply_drafts where organization_id = '${ORG_A}';`,
     )).toBe(0);
+  });
+
+  it("external_db_connections: org B lê 0 linhas de org A (cross-tenant, RLS)", () => {
+    // A pergunta certa: USER_B (agent da org B) tentando ler a linha de org A
+    // na tabela-base. Sem RLS isso vazaria; com RLS é 0. Ler a própria org B
+    // com `[]` dá 0 sem RLS — não prova nada.
+    const crossTenant = countAs(USER_B,
+      `select count(*) from public.external_db_connections
+       where organization_id = '${ORG_A}';`);
+    expect(crossTenant).toBe(0);
+
+    // Controle positivo: USER_A lê a própria linha na tabela-base (≥ 1, pois
+    // a semente a gravou com receitas não vazias).
+    const own = countAs(USER_A,
+      `select count(*) from public.external_db_connections
+       where organization_id = '${ORG_A}';`);
+    expect(own).toBeGreaterThanOrEqual(1);
+  });
+
+  it("external_db_connections_safe: receitas não sai pela view, receitas_count sim", () => {
+    // A coluna `receitas` NÃO existe na view _safe (D3 da Spec 23 / D3 da Spec 25).
+    const colunas = sql(`
+      select column_name from information_schema.columns
+      where table_schema = 'public' and table_name = 'external_db_connections_safe'
+      order by ordinal_position;
+    `);
+    const nomes = colunas.split("\n").map((l) => l.trim()).filter(Boolean);
+    expect(nomes).not.toContain("receitas");
+    expect(nomes).toContain("receitas_count");
+  });
+
+  it("external_db_connections_safe: org B lê 0 de org A; org A lê receitas_count ≥ 1", () => {
+    // Cross-tenant na view: USER_B não vê a linha de org A.
+    const crossTenant = countAs(USER_B,
+      `select count(*) from public.external_db_connections_safe
+       where organization_id = '${ORG_A}';`);
+    expect(crossTenant).toBe(0);
+
+    // Controle positivo: USER_A vê `receitas_count` da própria linha na view.
+    const countA = countAs(USER_A,
+      `select receitas_count from public.external_db_connections_safe
+       where organization_id = '${ORG_A}';`);
+    expect(Number(countA)).toBeGreaterThanOrEqual(1);
   });
 
   it("ai_reply_drafts: os dois tenants têm linhas antes de testar as cercas", () => {

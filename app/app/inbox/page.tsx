@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { bloqueioDoBotao, estadoDoBloqueio } from "@/lib/billing/planos/estado-do-bloqueio";
@@ -9,6 +10,7 @@ import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { lerRascunho, type AvisoDeRascunho } from "@/lib/inbox/rascunho-sugerido";
+import { carregarModulosDaLateral } from "@/app/actions/inbox/modulosDaLateral";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Chat" };
@@ -45,6 +47,17 @@ export default async function InboxPage({
   // Fase F3, tarefa 9: item "leads" para o "Novo Lead" do painel lateral.
   const estado = await estadoDoBloqueio(createAdminClient(), activeOrg.orgId, {}, logger);
   const bloqueio = bloqueioDoBotao(estado, "leads");
+  // A preferência do painel do contato recolhido é lida AQUI, no servidor, pelo
+  // mesmo motivo do `sidebar_collapsed` (`app/app/layout.tsx`): sem isto o
+  // primeiro render traz o painel aberto e a grade só se ajusta depois da
+  // hidratação — a conversa nasce estreita e pula para larga.
+  const painelRecolhido = (await cookies()).get("inbox_painel_recolhido")?.value === "1";
+  // A LATERAL DESTA PESSOA (#3008): quais módulos e em que ordem. Vem do
+  // metadata da própria pessoa, lido no servidor pela mesma razão do recolhido
+  // acima — a lateral não pode nascer completa e "pular" para a escolhida
+  // depois da hidratação. Sem preferência gravada (o caso comum), devolve o
+  // padrão do produto, que é exatamente a lateral de hoje.
+  const { modulos: modulosDaLateral } = await carregarModulosDaLateral();
   // ?rascunho= é a ponta da caixa de entrada da issue #1611: o texto mora no
   // servidor, e a URL só carrega o ID. Aqui a leitura acontece com a SESSÃO do
   // atendente (RLS), então um rascunho de outra organização vira
@@ -64,6 +77,12 @@ export default async function InboxPage({
     };
   }
   return (
-    <InboxLayout initialSelectedId={id ?? null} bloqueio={bloqueio} rascunho={avisoDeRascunho} />
+    <InboxLayout
+      initialSelectedId={id ?? null}
+      bloqueio={bloqueio}
+      rascunho={avisoDeRascunho}
+      painelRecolhidoInicial={painelRecolhido}
+      modulosDaLateral={modulosDaLateral}
+    />
   );
 }

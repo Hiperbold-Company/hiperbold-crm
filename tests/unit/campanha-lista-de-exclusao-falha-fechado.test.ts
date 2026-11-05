@@ -26,6 +26,8 @@ const CAMPANHA = {
   teto_horario: null,
   started_at: "2026-09-01T00:00:00Z",
   last_tick_at: null,
+  // A busca do upstream embute `organizations(status)` e só roda campanha de organização operante.
+  organizations: { status: "active" },
 };
 const ALVO = {
   id: "r1",

@@ -17,6 +17,7 @@ import { createMcpServer } from "@/lib/mcp/server";
 import { McpAuthError, validateBearerToken } from "@/lib/mcp/auth";
 import { modulosLigados } from "@/lib/instalacao/modulos";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { capacidadesDaOrganizacao } from "@/lib/organizacao/capacidades";
 import { chaveDaRequisicao } from "@/lib/api/idempotency";
 import { z } from "zod";
 
@@ -42,7 +43,9 @@ async function handle(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   let auth;
   try {
-    auth = await validateBearerToken(req.headers.get("authorization"));
+    // Empresa suspensa entra marcada: o servidor só deixa a privacidade
+    // responder (LGPD nunca é bloqueada — decisão do dono, 30/09).
+    auth = await validateBearerToken(req.headers.get("authorization"), { permiteOrgSuspensa: true });
   } catch (err) {
     if (err instanceof McpAuthError) {
       return jsonRpcError(err.mcpCode, err.message, err.httpStatus);
@@ -57,10 +60,12 @@ async function handle(req: NextRequest): Promise<Response> {
   }
 
   const transport = new WebStandardStreamableHTTPServerTransport({});
+  const admin = createAdminClient();
   const server = createMcpServer(
     auth,
     requestId,
-    await modulosLigados(createAdminClient()),
+    await modulosLigados(admin),
+    await capacidadesDaOrganizacao(admin, auth.organizationId),
     idempotencyKey ?? undefined,
   );
 

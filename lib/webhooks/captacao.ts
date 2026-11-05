@@ -13,11 +13,26 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { ApiError } from "@/lib/api/types";
 import { logger } from "@/lib/logger";
 import { avisarRecusaDaFonte } from "@/lib/webhooks/aviso-de-recusa";
 
-/** No que a captação deu. Espelha o CHECK de `webhook_lead_captures.outcome`. */
-export type DesfechoDaCaptacao = "criado" | "duplicado" | "recusado" | "recadastro";
+/**
+ * No que a captação deu.
+ *
+ * Os valores são o vocabulário do CHECK de
+ * `webhook_lead_captures.outcome` (migration 0683, que alargou o da 0174), e a
+ * tela "Leads recebidos" (`lib/schemas/lead-captures.ts`) espelha a mesma
+ * lista: as três listas — coluna, aqui e lá — não podem divergir, e é a
+ * `desfecho-da-captacao-um-vocabulario-so` que cobra isso.
+ *
+ * `atualizado` é o desfecho do card que a integração REESCREVEU (#2316), e ele
+ * só existe com a opção `update_existing_lead_on_capture` ligada na fonte.
+ *
+ * `recadastro` (Hiperbold): o mesmo contato mandou o formulário de novo e o
+ * card existente recebeu os dados (`lib/webhooks/recadastro.ts`).
+ */
+export type DesfechoDaCaptacao = "criado" | "duplicado" | "recusado" | "atualizado" | "recadastro";
 
 /**
  * Por que uma captação foi recusada. Vocabulário só do TypeScript — a coluna
@@ -30,6 +45,7 @@ export type MotivoDaRecusa =
   | "assinatura_invalida"
   // A fonte tem segredo mas ele não decifra (chave da instalação ausente/trocada): recusa 503, nunca aceita como pública.
   | "segredo_indisponivel"
+  | "assinatura_indecifravel"
   | "erro_ao_criar_lead"
   // F3, decisão 5 (Tarefa 7): o gatilho de crm_leads recusou por PT402 (teto
   // de leads do plano). Motivo próprio: "erro_ao_criar_lead" sugeriria falha
@@ -42,7 +58,12 @@ export type MotivoDaRecusa =
   // O corpo não é JSON válido, ou passou do teto de tamanho. Antes não deixavam
   // rastro nenhum: a batida chegava, recebia 400/413 e sumia.
   | "corpo_invalido"
-  | "corpo_grande_demais";
+  | "corpo_grande_demais"
+  /** A régua de campos obrigatórios barrou a criação (#2297, caminho 4). */
+  | "recusa_da_regra"
+  /** Recusa que não é nem do funil nem da etapa da fonte — o rótulo não mente. */
+  | "erro_inesperado"
+  | "campo_numerico_invalido";
 
 /** O que a tela mostra para cada motivo, em português de gente. */
 export const MOTIVO_DA_RECUSA_LABEL: Record<MotivoDaRecusa, string> = {
@@ -52,6 +73,8 @@ export const MOTIVO_DA_RECUSA_LABEL: Record<MotivoDaRecusa, string> = {
     "A assinatura não conferiu. Quem enviou não usou o segredo configurado nesta fonte.",
   segredo_indisponivel:
     "O envio chegou, mas o CRM não conseguiu abrir o segredo desta fonte (a chave da instalação está ausente ou foi trocada). Fale com quem administra a instalação; tente reenviar depois.",
+  assinatura_indecifravel:
+    "O segredo de assinatura desta fonte não pôde ser lido nesta instalação, então nada entra por ela. Cadastre a assinatura de novo na fonte.",
   erro_ao_criar_lead:
     "Os dados chegaram, mas o lead não pôde ser criado — confira se o funil e a etapa da fonte ainda existem.",
   limite_do_plano:
@@ -62,7 +85,35 @@ export const MOTIVO_DA_RECUSA_LABEL: Record<MotivoDaRecusa, string> = {
     "O corpo do envio não é um JSON válido — confira se a ferramenta que envia manda o formato certo.",
   corpo_grande_demais:
     "O corpo do envio passou do tamanho máximo aceito (64 KB).",
+  recusa_da_regra:
+    "Os dados chegaram, mas a régua de campos obrigatórios recusou o negócio: a etapa do funil exige um campo que o formulário não trouxe.",
+  erro_inesperado:
+    "Os dados chegaram, mas a criação do negócio falhou por outro motivo — não é nem o funil nem a etapa da fonte.",
+  campo_numerico_invalido:
+    "Uma resposta numérica não estava no formato aceito pelo formulário. Confira se o campo contém apenas números e use o formato BRL na pergunta de moeda.",
 };
+
+/**
+ * O motivo CERTO para uma recusa de `createLeadHandler` (#2297, caminho 4).
+ *
+ * O rótulo de `erro_ao_criar_lead` promete "funil e etapa da fonte", e essa
+ * promessa só é verdadeira para os códigos que SÃO sobre funil e etapa. Qualquer
+ * outra recusa — a régua de campos obrigatórios na frente, uma falha interna —
+ * mostrava a frase errada na tela "Leads recebidos", que é justamente onde quem
+ * depura a fonte procura por que nada entrou.
+ *
+ * A isenção da rota (`exigirCamposDaEtapa: false`, decisão do #2295) continua
+ * intacta: isto é vocabulário do rótulo, não da régua. O vocabulário da coluna
+ * `reject_reason` é ABERTO por decisão escrita no cabeçalho deste arquivo —
+ * nenhum CHECK a validar —, então um código novo cai em `erro_inesperado` até
+ * ser nomeado aqui.
+ */
+export function motivoDaRecusaDaCriacao(erro: unknown): MotivoDaRecusa {
+  const codigo = erro instanceof ApiError ? erro.code : "";
+  if (codigo === "required_fields_missing") return "recusa_da_regra";
+  if (codigo === "not_found" || codigo === "stage_pipeline_mismatch") return "erro_ao_criar_lead";
+  return "erro_inesperado";
+}
 
 export interface CaptacaoParaRegistrar {
   organizationId: string;
@@ -174,7 +225,7 @@ export async function registrarCaptacao(
   admin: SupabaseClient,
   captacao: CaptacaoParaRegistrar,
 ): Promise<void> {
-  const { error } = await admin.from("webhook_lead_captures").insert({
+  const linha = {
     organization_id: captacao.organizationId,
     webhook_source_id: captacao.webhookSourceId,
     source_name: captacao.sourceName,
@@ -192,7 +243,8 @@ export async function registrarCaptacao(
     origin: captacao.origin ?? null,
     request_id: captacao.requestId ?? null,
     external_id: captacao.externalId ?? null,
-  });
+  };
+  const { error } = await admin.from("webhook_lead_captures").insert(linha);
 
   // Falha ABERTA na ação (o lead entra de qualquer jeito) e ABERTA na
   // informação: a causa vai para o log nomeada. Um "não gravou o histórico" em

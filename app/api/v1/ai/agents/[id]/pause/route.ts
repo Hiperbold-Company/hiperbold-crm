@@ -2,9 +2,10 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * POST /api/v1/ai/agents/:id/pause (admin)
  *
- * Spec 10 §4.3. Limpa published_version_id (agente não responde gatilhos),
- * mas mantém archived_at=null. Versão antes-published vira 'superseded' pra
- * preservar continuidade do versionamento.
+ * Spec 10 §4.3. Grava só `paused_at`: a versão segue publicada e
+ * `published_version_id` fica (nada vira 'superseded'). Quem cala o agente
+ * pausado é quem lê `paused_at` — `lib/ai/agents/no-ar.ts` e o turno
+ * (`inbound-turn.ts`, `pausedAt`).
  *
  * Auth: sessão OU token `dsk_…` (`lib/api/auth-dual-admin.ts`): `admin` + `mcp:write`, o MESMO piso da
  * sessão; organização da sessão/da linha do token, nunca do body. A regra vive em

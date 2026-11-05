@@ -29,10 +29,15 @@ import { ApiError } from "@/lib/api/types";
 import { MENSAGEM_DE_FALHA_INTERNA } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
+import {
+  MENSAGEM_CAMPO_DE_DATA_DO_CONTATO,
+  campoDoGatilhoDeDataEhDoContato,
+} from "@/lib/automation/campo-do-gatilho-de-data";
 import { logger } from "@/lib/logger";
 import { autoriaDaMudanca } from "@/lib/operacao/autoria";
 import type { DepsDaOperacao } from "@/lib/operacao/entradas-automaticas";
 import type { CreateAutomationRuleInput, UpdateAutomationRuleInput } from "@/lib/schemas";
+import { acoesQueFechamLaco, MENSAGEM_DO_LACO_DE_LEAD } from "@/lib/schemas/webhooks";
 import { encryptRuleActionSecrets } from "@/lib/webhooks/secrets";
 
 export interface DepsDeRegras extends DepsDaOperacao {
@@ -159,6 +164,43 @@ export function preservarSegredosDeWebhook(
   });
 }
 
+/**
+ * A fonte de webhook escolhida no gatilho TEM de ser desta organização. O cliente de uma chave é service
+ * role e bypassa a RLS: sem esta conferência, uma regra apontaria para a fonte de outra empresa.
+ */
+async function conferirFonteDoWebhook(deps: DepsDeRegras, triggerConfig: unknown): Promise<void> {
+  const webhookSourceId = (triggerConfig as { webhook_source_id?: unknown } | null | undefined)?.webhook_source_id;
+  if (typeof webhookSourceId !== "string") return;
+  const { data: source, error } = await deps.supabase
+    .from("webhook_sources")
+    .select("id")
+    .eq("id", webhookSourceId)
+    .eq("organization_id", deps.organizationId)
+    .maybeSingle();
+  if (error) throw falhaInterna(deps, error);
+  if (!source) {
+    throw recusa(deps, 422, "invalid_request", tr(deps)("A fonte escolhida não pertence a esta empresa."));
+  }
+}
+
+/** Gatilho por data num campo do CONTATO (#2791) nunca dispara: a regra que chega assim é recusada. */
+async function conferirCampoDoGatilhoDeData(
+  deps: DepsDeRegras,
+  triggerEvent: string,
+  triggerConfig: unknown,
+): Promise<void> {
+  const campoDeData = await campoDoGatilhoDeDataEhDoContato(
+    deps.supabase,
+    deps.organizationId,
+    triggerEvent,
+    triggerConfig,
+  );
+  if ("erro" in campoDeData) throw falhaInterna(deps, campoDeData.erro);
+  if (campoDeData.doContato) {
+    throw recusa(deps, 422, "invalid_request", tr(deps)(MENSAGEM_CAMPO_DE_DATA_DO_CONTATO));
+  }
+}
+
 export async function listarRegrasCompletas(deps: DepsDeRegras): Promise<unknown[]> {
   const { data, error } = await deps.supabase
     .from("automation_rules")
@@ -171,6 +213,10 @@ export async function listarRegrasCompletas(deps: DepsDeRegras): Promise<unknown
 
 /** A regra nasce PAUSADA, qualquer que seja o corpo. */
 export async function criarRegra(deps: DepsDeRegras, input: CreateAutomationRuleInput) {
+  // Conferências que valem para a tela, o token `dsk_` e o MCP: fonte da própria empresa e #2791.
+  await conferirFonteDoWebhook(deps, input.trigger_config);
+  await conferirCampoDoGatilhoDeData(deps, input.trigger_event, input.trigger_config);
+
   // Secrets de call_webhook nunca ficam em claro no jsonb (migration 0041).
   const safeActions = await encryptRuleActionSecrets(
     deps.admin,
@@ -210,12 +256,38 @@ export async function criarRegra(deps: DepsDeRegras, input: CreateAutomationRule
 export async function alterarRegra(deps: DepsDeRegras, id: string, entrada: UpdateAutomationRuleInput) {
   const { data: existing, error: fetchErr } = await deps.supabase
     .from("automation_rules")
-    .select("id, actions")
+    .select("id, trigger_event, trigger_config, actions")
     .eq("id", id)
     .eq("organization_id", deps.organizationId)
     .maybeSingle();
   if (fetchErr) throw falhaInterna(deps, fetchErr);
   if (!existing) throw recusa(deps, 404, "not_found", tr(deps)("Regra não encontrada."));
+  const gravada = existing as {
+    trigger_event: string;
+    trigger_config: unknown;
+    actions: { type: string }[] | null;
+  };
+
+  // O PATCH parcial (só o gatilho, ou só as ações) monta o laço de #1528 pela porta do lado: o schema só o
+  // vê quando os dois vêm juntos. Desligar a regra (só `is_active`) nunca é barrado.
+  if (
+    (entrada.trigger_event !== undefined || entrada.actions !== undefined) &&
+    acoesQueFechamLaco(entrada.trigger_event ?? gravada.trigger_event, entrada.actions ?? gravada.actions ?? [])
+      .length
+  ) {
+    throw recusa(deps, 400, "invalid_request", tr(deps)(MENSAGEM_DO_LACO_DE_LEAD));
+  }
+
+  await conferirFonteDoWebhook(deps, entrada.trigger_config);
+
+  // #2791: vale também para a regra antiga sendo regravada ou religada. Desligar e renomear não passam aqui.
+  if (entrada.trigger_event !== undefined || entrada.trigger_config !== undefined || entrada.is_active === true) {
+    await conferirCampoDoGatilhoDeData(
+      deps,
+      entrada.trigger_event ?? gravada.trigger_event,
+      entrada.trigger_config ?? gravada.trigger_config,
+    );
+  }
 
   // A autoria vai junto de TODA escrita: a tela precisa dizer quem ligou a regra (migration 0101).
   const patch: Record<string, unknown> = {

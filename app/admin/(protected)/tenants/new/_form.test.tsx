@@ -21,7 +21,7 @@ function renderForm() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <NewTenantForm />
+      <NewTenantForm cobranca={{ ligada: false, planos: [] }} />
     </QueryClientProvider>,
   );
 }

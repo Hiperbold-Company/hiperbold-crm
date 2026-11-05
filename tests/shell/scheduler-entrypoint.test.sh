@@ -20,7 +20,13 @@
 #    tests/unit/cron-routes-scheduled.test.ts; esta aqui pega o caso em que o
 #    arquivo GERADO diverge da lista escrita, que aquele teste não vê.)
 #
-# 3. FALHA FECHADA SEM SEGREDO. Sem INTERNAL_SECRET os crons responderiam 401 e
+# 3. O SEGREDO NÃO ENTRA NA LINHA DE COMANDO. Cada linha do crontab vira o
+#    argumento de um `/bin/sh -c`, e argumento de processo é visível no `ps` do
+#    host a qualquer usuário local enquanto o job roda (o curl vive até o `-m`).
+#    O header vai num arquivo 600 dentro de um diretório 700, e o curl o lê com
+#    `-H @arquivo` — o mesmo padrão do `.env.cron-drain` do kit.
+#
+# 4. FALHA FECHADA SEM SEGREDO. Sem INTERNAL_SECRET os crons responderiam 401 e
 #    nada aconteceria — sem erro, sem log, sem sintoma. O script recusa subir.
 #    Segredo com quebra de linha também é recusado (injetaria cabeçalho).
 #
@@ -77,6 +83,19 @@ check "as $ROTAS_CODIGO rotas do código estão no crontab (achei $ROTAS_CRONTAB
 check "uma linha por cron, nenhuma vazia" \
   test "$(grep -c . "$TMP/crontab")" -eq "$(wc -l < "$TMP/crontab" | tr -d ' ')"
 
+echo "scheduler: o segredo fica fora da linha de comando dos jobs"
+MARCADOR='marcador-do-segredo-7f3a9c'
+RC="$(rodar "$MARCADOR")"
+check "gerou o crontab" test "$RC" -eq 0
+check "o crontab tem linhas (controle: o grep abaixo não passa por vacuidade)" \
+  test "$(grep -c 'api/v1/cron/' "$TMP/crontab")" -gt 0
+check "nenhuma linha do crontab contém o segredo" \
+  test "$(grep -cF "$MARCADOR" "$TMP/crontab")" -eq 0
+check "o arquivo do cabeçalho é 600" \
+  sh -c "ls -l '$TMP/auth.header' | grep -q '^-rw-------'"
+check "o arquivo tem exatamente o cabeçalho" \
+  test "$(cat "$TMP/auth.header" 2>/dev/null)" = "Authorization: Bearer $MARCADOR"
+
 echo "scheduler: o segredo atravessa o sh do crond intacto e fora da linha de comando"
 # Os três caracteres que quebram interpolação ingênua, de uma vez só.
 HOSTIL='seg`whoami`redo$HOME-com'\''aspa-e-"aspas"'
@@ -130,6 +149,10 @@ fi
 # arquivo conteria a saída de `whoami` no lugar dela, não o texto literal.
 check "a crase NÃO foi executada (está literal no arquivo)" \
   grep -q 'whoami' "$TMP/auth.header"
+# Só o trecho ANTES da aspa simples: o escape antigo reescrevia a aspa, e o
+# valor inteiro nunca casaria — o check passaria por vacuidade.
+check "o segredo hostil também não está no crontab" \
+  test "$(grep -cF 'seg`whoami`redo$HOME-com' "$TMP/crontab")" -eq 0
 
 echo "scheduler: quebra de linha no segredo é recusada"
 RC="$(rodar $'abc\nX-Injetado: 1')"

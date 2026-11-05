@@ -8,6 +8,7 @@
  *  - `ilike` com `%`, `_` e `\` (escape); `*` vira `%` ANTES de casar (é assim no PostgREST, e é
  *    o que `consulta.ts` precisa neutralizar);
  *  - caminho JSON `custom_fields->>chave`;
+ *  - `imatch` (regex sem caixa, `~*`) dentro do `or`: é por ele que sai a busca de texto;
  *  - `or("coluna.ilike.valor,coluna.eq.valor")`, com valor entre aspas (`"a,b"`, `\"` e `\\`
  *    escapados) e `apelido.not.is.null` (a junção opcional achou algum registro);
  *  - junção `apelido:tabela!fk!inner(id)` + predicados `apelido.coluna`: o contato passa se ALGUM
@@ -205,7 +206,9 @@ export function clienteEmMemoria(banco: BancoEmMemoria): never {
             partes.some(({ col, op, val }) =>
               op === "ilike"
                 ? ilikeCasa(valorDe(l, col), val)
-                : op === "eq"
+                : op === "imatch"
+                  ? valorDe(l, col) != null && new RegExp(val, "i").test(String(valorDe(l, col)))
+                  : op === "eq"
                   ? String(valorDe(l, col)) === val
                   : op === "not" && val === "is.null"
                     ? juncaoAchou(col, l)

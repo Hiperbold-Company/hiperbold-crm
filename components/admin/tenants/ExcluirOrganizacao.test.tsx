@@ -3,8 +3,11 @@
  * "Excluir agora" só habilita com o slug exato, e cada botão chama a ação certa da tela de Exclusões.
  * As ações do servidor são o limite do teste (já cobertas em tests/unit/exclusao-*.test.ts): aqui vale o que
  * quem opera vê e clica.
+ *
+ * Hiperbold: a régua de cobrança própria (`GET /api/v1/admin/tenants/[id]/exclusao`, a rede é a fronteira) bloqueia
+ * "Programar" e "Excluir agora" enquanto o contrato está atrasado ou suspenso.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -30,6 +33,7 @@ vi.mock("@/components/admin/ImpersonateButton", () => ({ ImpersonateButton: () =
 import { toast } from "sonner";
 
 import type { AdminTenantRow } from "@/hooks/useAdminTenants";
+import type { TenantCounts, TenantOrganization } from "@/hooks/useTenantDetail";
 
 import { ExcluirOrganizacaoDialog } from "./ExcluirOrganizacaoDialog";
 import { TenantActions } from "./TenantActions";
@@ -44,9 +48,22 @@ function comProvider(ui: ReactNode) {
 }
 
 const SEM_PROGRAMACAO = { ok: true, programada: null, dataPadrao: "2027-01-18", diasDeGuarda: 90 };
+const NA_REGUA = "Esta empresa está na régua de cobrança; a exclusão só é liberada quando a régua termina.";
+const REGUA_EM_CURSO = {
+  data: { liberada: false, codigo: "exclusao_na_regua_de_cobranca", mensagem: NA_REGUA, estado: "suspensa" },
+};
+
+let regua: unknown;
+const fetchFalso = vi.fn(async () =>
+  new Response(JSON.stringify(regua), { status: 200, headers: { "content-type": "application/json" } }),
+);
+
+afterEach(() => vi.unstubAllGlobals());
 
 beforeEach(() => {
   vi.clearAllMocks();
+  regua = { data: { liberada: true } };
+  vi.stubGlobal("fetch", fetchFalso);
   acoes.situacao.mockResolvedValue(SEM_PROGRAMACAO);
   acoes.programar.mockResolvedValue({ ok: true });
   acoes.cancelar.mockResolvedValue({ ok: true });
@@ -54,25 +71,55 @@ beforeEach(() => {
 });
 
 describe("TenantActions (página do tenant)", () => {
-  const props = { organizationId: ORG, displayName: "Acme Ltda", slug: "acme-ltda" };
+  const COUNTS = {} as TenantCounts;
+  function org(status: TenantOrganization["status"]): TenantOrganization {
+    return {
+      id: ORG,
+      slug: "acme-ltda",
+      display_name: "Acme Ltda",
+      legal_name: null,
+      cnpj: null,
+      status,
+      onboarded_at: "2026-01-01T00:00:00.000Z",
+      suspended_at: status === "suspended" ? "2026-10-01T00:00:00.000Z" : null,
+      suspended_kind: status === "suspended" ? "administrativa" : null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      settings: null,
+      country: null,
+      timezone: null,
+      locale: null,
+      currency: null,
+      media_retention_days: null,
+      media_retention_enforced: true,
+      dpo_email: null,
+      privacy_policy_url: null,
+    };
+  }
 
   it("tenant ativo: o botão existe desabilitado, com a dica 'Suspenda antes de excluir'", () => {
-    render(comProvider(<TenantActions {...props} status="active" />));
+    render(comProvider(<TenantActions organization={org("active")} counts={COUNTS} />));
     expect(screen.getByTestId("excluir-organizacao")).toBeDisabled();
     expect(screen.getByText("Suspenda antes de excluir")).toBeInTheDocument();
   });
 
   it("tenant suspenso: o botão habilita e abre o modal com as duas opções", async () => {
-    render(comProvider(<TenantActions {...props} status="suspended" />));
+    render(comProvider(<TenantActions organization={org("suspended")} counts={COUNTS} />));
     const botao = screen.getByTestId("excluir-organizacao");
-    expect(botao).toBeEnabled();
+    await waitFor(() => expect(botao).toBeEnabled());
     await userEvent.click(botao);
     expect(await screen.findByTestId("programar-exclusao-da-organizacao")).toBeInTheDocument();
     expect(screen.getByTestId("excluir-organizacao-agora")).toBeInTheDocument();
   });
 
+  it("Hiperbold: tenant suspenso no meio da régua de cobrança: botão desabilitado com o motivo", async () => {
+    regua = REGUA_EM_CURSO;
+    render(comProvider(<TenantActions organization={org("suspended")} counts={COUNTS} />));
+    expect(await screen.findByText(NA_REGUA)).toBeInTheDocument();
+    expect(screen.getByTestId("excluir-organizacao")).toBeDisabled();
+  });
+
   it("tenant redigido: não oferece excluir", () => {
-    render(comProvider(<TenantActions {...props} status="redacted" />));
+    render(comProvider(<TenantActions organization={org("redacted")} counts={COUNTS} />));
     expect(screen.queryByTestId("excluir-organizacao")).not.toBeInTheDocument();
   });
 });
@@ -87,6 +134,7 @@ describe("TenantsTable (lista)", () => {
     status,
     onboarded_at: "2026-01-01T00:00:00.000Z",
     suspended_at: status === "suspended" ? "2026-10-01T00:00:00.000Z" : null,
+    suspended_kind: null,
     created_at: "2026-01-01T00:00:00.000Z",
     user_count: null,
     conversations_count: null,
@@ -145,7 +193,7 @@ describe("ExcluirOrganizacaoDialog", () => {
     expect(botao).toBeDisabled();
     await userEvent.clear(campo);
     await userEvent.type(campo, "acme-ltda");
-    expect(botao).toBeEnabled();
+    await waitFor(() => expect(botao).toBeEnabled());
 
     await userEvent.click(botao);
     await waitFor(() =>
@@ -166,6 +214,39 @@ describe("ExcluirOrganizacaoDialog", () => {
     await userEvent.click(screen.getByTestId("excluir-organizacao-agora"));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Suspenda a organização antes de excluir."));
     expect(onExcluida).not.toHaveBeenCalled();
+  });
+
+  it("Hiperbold: régua de cobrança em curso: mostra o motivo e não deixa programar nem excluir", async () => {
+    regua = REGUA_EM_CURSO;
+    abrir();
+    expect(await screen.findByTestId("exclusao-bloqueada-pela-regua")).toHaveTextContent(NA_REGUA);
+    await screen.findByTestId("data-que-vai-valer");
+    await userEvent.type(screen.getByTestId("excluir-organizacao-slug"), "acme-ltda");
+    expect(screen.getByTestId("excluir-organizacao-agora")).toBeDisabled();
+    expect(screen.getByTestId("programar-exclusao-da-organizacao")).toBeDisabled();
+    expect(acoes.excluir).not.toHaveBeenCalled();
+    expect(acoes.programar).not.toHaveBeenCalled();
+  });
+
+  it("Hiperbold: régua em curso com exclusão já programada: cancelar continua possível", async () => {
+    regua = REGUA_EM_CURSO;
+    acoes.situacao.mockResolvedValue({
+      ...SEM_PROGRAMACAO,
+      programada: { excluirEm: "2027-02-10T05:00:00.000Z", origem: "automatica" },
+    });
+    abrir();
+    await screen.findByTestId("exclusao-bloqueada-pela-regua");
+    await userEvent.click(await screen.findByTestId("cancelar-exclusao-programada"));
+    await waitFor(() => expect(acoes.cancelar).toHaveBeenCalledWith({ organizationId: ORG }));
+  });
+
+  it("Hiperbold: régua terminou (liberada): sem aviso, a exclusão segue habilitada pelo slug", async () => {
+    abrir();
+    await screen.findByTestId("data-que-vai-valer");
+    await waitFor(() => expect(fetchFalso).toHaveBeenCalled());
+    await userEvent.type(screen.getByTestId("excluir-organizacao-slug"), "acme-ltda");
+    await waitFor(() => expect(screen.getByTestId("excluir-organizacao-agora")).toBeEnabled());
+    expect(screen.queryByTestId("exclusao-bloqueada-pela-regua")).toBeNull();
   });
 
   it("já programada: mostra a data e o cancelar chama cancelarExclusao", async () => {

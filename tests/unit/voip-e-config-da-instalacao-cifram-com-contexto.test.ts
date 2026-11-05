@@ -23,6 +23,8 @@ vi.mock("@/lib/supabase/admin", () => ({
         chave = valor;
         return cadeia;
       };
+      // A leitura passa `abortSignal` (fora da deduplicação de fetch do Next, #1218).
+      cadeia.abortSignal = () => cadeia;
       cadeia.maybeSingle = async () => ({ data: tabela.get(chave) ?? null, error: null });
       cadeia.upsert = async (linha: Record<string, unknown>) => {
         tabela.set(String(linha.chave), linha);

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +16,7 @@ import {
 import { Buildings } from "@/lib/ui/icons";
 import { ExcluirOrganizacaoDialog } from "./ExcluirOrganizacaoDialog";
 import type { AdminTenantRow } from "@/hooks/useAdminTenants";
+import { TenantRowActions } from "./TenantRowActions";
 import { useT } from "@/hooks/i18n/useT";
 
 // ---------------------------------------------------------------------------
@@ -164,7 +164,9 @@ export function TenantsTable({
               <TableHead className="w-[70px] text-right">{t("Users")}</TableHead>
               <TableHead className="w-[90px] text-right">{t("Conversas")}</TableHead>
               <TableHead className="w-[90px]">{t("Criado em")}</TableHead>
-              <TableHead className="w-[190px]" />
+              <TableHead className="w-[190px]">
+                <span className="sr-only">{t("Ações")}</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -189,12 +191,7 @@ export function TenantsTable({
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <Link
-                      href={`/admin/tenants/${row.id}`}
-                      className="text-xs font-medium text-accent hover:underline"
-                    >
-                      {t("Ver")}
-                    </Link>
+                    <TenantRowActions row={row} />
                     {row.status === "suspended" && (
                       <button
                         type="button"

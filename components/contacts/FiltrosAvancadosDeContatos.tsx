@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { FiltroDeDataPopover } from "@/components/kanban/FiltroDeDataPopover";
 import type { OpcoesDeFiltroDeContatos } from "@/hooks/contacts/useContactFilterOptions";
 import { useT } from "@/hooks/i18n/useT";
-import { etapasDoFiltro, type FiltrosDaTela } from "@/lib/contacts/filtros-url";
+import { etapasDoFiltro, type FiltrosDaTela, type MudancaDeTexto } from "@/lib/contacts/filtros-url";
 import type { FiltroDeData } from "@/lib/kanban/datas-do-lead";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +38,7 @@ export function FiltrosAvancadosDeContatos({
   filtros: FiltrosDaTela;
   opcoes: OpcoesDeFiltroDeContatos | undefined;
   /** Aplica uma mudança parcial; chave com `undefined` apaga o filtro. */
-  onChange: (mudanca: Partial<Record<keyof FiltrosDaTela, string | undefined>>) => void;
+  onChange: (mudanca: MudancaDeTexto) => void;
 }) {
   const t = useT();
 
@@ -93,7 +93,7 @@ function FiltroDeFunil({
 }: {
   filtros: FiltrosDaTela;
   opcoes: OpcoesDeFiltroDeContatos | undefined;
-  onChange: (mudanca: Partial<Record<keyof FiltrosDaTela, string | undefined>>) => void;
+  onChange: (mudanca: MudancaDeTexto) => void;
 }) {
   const t = useT();
   const funis = opcoes?.funis ?? [];
@@ -208,7 +208,7 @@ function FiltroDeCampo({
 }: {
   filtros: FiltrosDaTela;
   opcoes: OpcoesDeFiltroDeContatos | undefined;
-  onChange: (mudanca: Partial<Record<keyof FiltrosDaTela, string | undefined>>) => void;
+  onChange: (mudanca: MudancaDeTexto) => void;
 }) {
   const t = useT();
   const [aberto, setAberto] = useState(false);

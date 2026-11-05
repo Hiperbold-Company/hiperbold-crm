@@ -2,13 +2,27 @@
  * Cost computation for AI invocations.
  *
  * Looks up `ai_pricing` (rarely changing global table) and converts token
- * usage to cost in *cents* (rounded up to integer to err on the side of
- * over-billing rather than free usage).
+ * usage to cost in *cents*, FRACIONADO — igual ao `costCents` do seam
+ * (`lib/agent-engine/edge/llm/pricing.ts`) e às colunas `numeric` de
+ * `llm_calls`/`ai_invocations`.
+ *
+ * Exceção: os ids com promoção datada (Gemini 3.6/3.7/3.8 Flash, migration
+ * 0649; Gemini 4 Argon, migration 0703 — e o prefixo `provider/`) não usam a
+ * linha. Ela já guarda a tarifa POSTERIOR à promo, para a lista mostrá-la. O
+ * gasto sai de `costCentsComVirada`, o mesmo corte de `costCents`.
+ *
+ * Arredondava para cima até o centavo inteiro "para errar cobrando a mais".
+ * Numa chamada de classificador (~250 tokens de entrada no gpt-5.6-luna, custo
+ * real ≈ 0,01 centavo) isso gravava 1 centavo: 100× o real. Medido numa VPS em
+ * set/2026: o `sentiment_classify` somava 5.278 de 5.714 centavos do mês — o
+ * teto de orçamento via um gasto que não existiu, e ligado teria travado a IA
+ * da organização por um número falso.
  */
 
 import { providerDoModelo } from "@/lib/ai/log-invocation";
 import { precoDoCatalogoOuNull } from "@/lib/ai/runtime/cost";
 import { logger } from "@/lib/logger";
+import { costCentsComVirada } from "@/lib/agent-engine/edge/llm/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 interface PricingRow {
@@ -62,6 +76,11 @@ export interface ComputeCostInput {
   completionTokens?: number;
   /** For embedding-only models, treat tokens as embedding tokens. */
   embeddingTokens?: number;
+  /**
+   * Instante da chamada. Sem ele, agora. Os ids com promoção datada (e o
+   * prefixo `provider/`) usam o corte de `costCents`, não a linha da tabela.
+   */
+  em?: Date;
 }
 
 /**
@@ -108,14 +127,27 @@ async function precoDoCatalogo(
 }
 
 /**
- * Returns cost in **cents**, rounded up. `null` quando o preço é desconhecido:
- * nem `ai_pricing` nem o catálogo `ai_models` sabem o modelo, ou a leitura
- * do catálogo falhou. D-050 (`hiperbold/DEBITO.md`): antes devolvia 0, que o
+ * Returns cost in **cents** (fracionado, sem arredondar). `null` quando o preço é
+ * desconhecido: nem `ai_pricing` nem o catálogo `ai_models` sabem o modelo, ou a
+ * leitura do catálogo falhou. D-050 (`hiperbold/DEBITO.md`): antes devolvia 0, que o
  * orçamento de IA soma como "gasto zero". 0 é uma afirmação (de graça), null
  * é "não sei", e as duas nunca podem ser a mesma coisa numa tabela de
  * auditoria de custo.
  */
 export async function computeCost(input: ComputeCostInput): Promise<number | null> {
+  // Ids com promoção datada guardam no catálogo a tarifa posterior à promo
+  // (0649, 0703). O gasto gravado em llm_calls tem de seguir `costCents`
+  // (promo estritamente antes do corte). Outro modelo segue a linha de ai_pricing.
+  const pelaVirada = costCentsComVirada(
+    input.model,
+    {
+      inputTokens: input.promptTokens ?? 0,
+      outputTokens: input.completionTokens ?? 0,
+    },
+    input.em ?? new Date(),
+  );
+  if (pelaVirada !== null) return pelaVirada;
+
   const pricing = await loadPricing();
   const row = pricing.get(input.model);
   if (!row) {
@@ -127,7 +159,7 @@ export async function computeCost(input: ComputeCostInput): Promise<number | nul
     const cents =
       ((input.promptTokens ?? 0) * doCatalogo.prompt) / 1_000_000 +
       ((input.completionTokens ?? 0) * doCatalogo.completion) / 1_000_000;
-    return Math.ceil(cents);
+    return cents;
   }
 
   const promptRate = toNumber(row.prompt_cents_per_million_tokens);
@@ -143,7 +175,7 @@ export async function computeCost(input: ComputeCostInput): Promise<number | nul
     (completionTokens * completionRate) / 1_000_000 +
     (embeddingTokens * embeddingRate) / 1_000_000;
 
-  return Math.ceil(cents);
+  return cents;
 }
 
 /** Test-only: drop the in-memory pricing cache. */

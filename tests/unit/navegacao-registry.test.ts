@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { ModuloOpcional } from "@/lib/instalacao/modulos";
+import type { CapacidadeDaOrganizacao } from "@/lib/organizacao/capacidades";
+import type * as FuncoesOcultas from "@/lib/hiperbold/funcoes-ocultas";
 import {
   NAV_DESTINATIONS,
   NAV_GROUPS,
@@ -8,6 +14,22 @@ import {
   searchable,
   sidebarGroups,
 } from "@/lib/navigation/registry";
+
+// Hiperbold: Chamadas (`/app/calls`) é função oculta desde 16/10/2026
+// (lib/hiperbold/funcoes-ocultas.ts), então some do menu com ou sem telefonia.
+// Para o bloco #1290 do upstream seguir medindo o filtro por CAPACIDADE, ele
+// libera só essa função enquanto roda; fora dele vale a regra de sempre.
+const ocultas = vi.hoisted(() => ({ liberarChamadas: false }));
+vi.mock("@/lib/hiperbold/funcoes-ocultas", async (importOriginal) => {
+  const real = await importOriginal<typeof FuncoesOcultas>();
+  return {
+    ...real,
+    hrefOculto: (href: string) =>
+      ocultas.liberarChamadas && (href === "/app/calls" || href.startsWith("/app/calls/"))
+        ? false
+        : real.hrefOculto(href),
+  };
+});
 
 /**
  * O registro é a fonte única da navegação. Estes testes cobrem as projeções
@@ -261,17 +283,36 @@ describe("hubSections", () => {
     // dia contra o que se define uma vez. Lista EXATA: `toContain` deixaria uma
     // tela nova entrar sem que ninguém decidisse de que lado dela ela cai.
     const secoes = hubSections("crm", true, null);
-    expect(secoes.map((s) => s.section)).toEqual(["O dia a dia da venda", "Preparar a venda"]);
+    expect(secoes.map((s) => s.section)).toEqual(["O dia a dia da venda", "Preparar a venda", "Fechar a venda"]);
     // Prospecção, Chamadas e Comandas: ocultas em 16/10/2026 (hiperbold/FUNCOES.md).
     expect(secoes.flatMap((s) => s.items.map((i) => i.href))).toEqual([
       "/app/kanban",
       "/app/campaigns",
       "/app/contacts",
+      "/app/companies",
+      "/app/people",
       "/app/tasks",
+      // #1752: os planos caem embaixo de Tarefas, NA MESMA seção — um plano é
+      // rotina do dia, não preparação nem fechamento. `sidebar: false` deixa o
+      // menu do dia a dia com os itens de sempre; a porta é o hub e o ⌘K.
+      "/app/tasks/planos",
+      // Cold Call (upstream #3933): módulo da instalação, desligado por padrão;
+      // sem a lista de módulos (`undefined`) o hub não filtra por módulo.
+      "/app/cold-call",
       "/app/automacoes",
       "/app/products",
+      "/app/imports",
       "/app/settings/tenant/pipelines",
+      "/app/proposals",
     ]);
+  });
+
+  it("empresas, pessoas e importação só existem com o módulo crm_b2b ligado (doc 68)", () => {
+    const B2B = ["/app/companies", "/app/people", "/app/imports"];
+    const hrefs = (modulos: readonly ModuloOpcional[]) =>
+      hubSections("crm", true, null, undefined, modulos).flatMap((s) => s.items.map((i) => i.href));
+    expect(hrefs([]).filter((h) => B2B.includes(h))).toEqual([]);
+    expect(hrefs(["crm_b2b"]).filter((h) => B2B.includes(h))).toEqual(B2B);
   });
 
   it("agrupa a IA nas três etapas da jornada, na ordem", () => {
@@ -371,5 +412,91 @@ describe("searchable", () => {
   it("respeita o papel", () => {
     const hrefs = searchable(AGENT.platform, AGENT.role).map((d) => d.href);
     expect(hrefs).not.toContain("/app/audit");
+  });
+});
+
+/**
+ * #1290 — o item de menu de um módulo OPCIONAL só aparece para quem tem o módulo
+ * em uso, e isso vale para TODAS as projeções do menu.
+ *
+ * O caso que abriu a issue é Chamadas (`/app/calls`, telefonia por SIP do #677):
+ * a tela aparecia no hub e no ⌘K de toda instalação e levava a um histórico
+ * vazio para quem nunca ligou a telefonia.
+ *
+ * A régua é a MESMA de Propostas — `capacidadesLigadas()`. Este bloco não conhece
+ * `voip_trunk_settings`: ele prova a projeção, que é o que o usuário vê.
+ */
+describe("capacidade da organização (#1290): Chamadas só com a telefonia em uso", () => {
+  beforeEach(() => {
+    ocultas.liberarChamadas = true;
+  });
+  afterEach(() => {
+    ocultas.liberarChamadas = false;
+  });
+
+  /** As três projeções que desenham menu, com a lista de capacidades da organização. */
+  function menu(capacidades: readonly CapacidadeDaOrganizacao[]) {
+    return {
+      sidebar: sidebarGroups(true, null, undefined, [], capacidades).flatMap((g) =>
+        g.items.map((i) => i.href),
+      ),
+      hub: hubSections("crm", true, null, undefined, [], capacidades).flatMap((s) =>
+        s.items.map((i) => i.href),
+      ),
+      busca: searchable(true, null, undefined, [], capacidades).map((d) => d.href),
+    };
+  }
+
+  it("telefonia desligada para a organização: o item não existe em menu nenhum", () => {
+    const sem = menu([]);
+    expect(sem.hub, "o hub é menu: item de módulo desligado não pode estar nele").not.toContain(
+      "/app/calls",
+    );
+    expect(sem.busca, "⌘K também é menu").not.toContain("/app/calls");
+    expect(sem.sidebar).not.toContain("/app/calls");
+  });
+
+  it("⭐ telefonia em uso: o item aparece (controle — o filtro não esconde módulo ligado)", () => {
+    const com = menu(["telefonia"]);
+    expect(com.hub).toContain("/app/calls");
+    expect(com.busca).toContain("/app/calls");
+  });
+
+  it("o filtro é cirúrgico: o resto do menu do CRM não se move", () => {
+    // Se o filtro por capacidade derrubasse o grupo ou vizinhos, o teste acima
+    // passaria e o menu teria encolhido inteiro. A DIFERENÇA exata é a régua:
+    // ligar a telefonia acrescenta UMA porta, e não reorganiza as outras.
+    const sem = menu([]);
+    const com = menu(["telefonia"]);
+    expect(com.hub.filter((h) => !sem.hub.includes(h))).toEqual(["/app/calls"]);
+    expect(com.busca.filter((h) => !sem.busca.includes(h))).toEqual(["/app/calls"]);
+    expect(sem.hub.filter((h) => !com.hub.includes(h))).toEqual([]);
+    // Vizinhos sem condição declarada continuam no lugar — a régua deles é
+    // outra (`modulo`, papel, destinos da empresa) e este filtro não a toca.
+    expect(sem.hub).toContain("/app/kanban");
+    expect(sem.hub).toContain("/app/products");
+  });
+
+  it("nem o administrador da instalação ganha a porta de módulo desligado", () => {
+    // Medição, não escolha nova: `permitidos()` aplica `capacidade` DEPOIS de
+    // `canSee()`, que é o único ponto com bypass de plataforma. Bypass é para
+    // PAPEL; módulo desligado esconde para todos.
+    const doAdminDaPlataforma = searchable(true, null, undefined, [], []).map((d) => d.href);
+    expect(doAdminDaPlataforma).not.toContain("/app/calls");
+  });
+
+  it("Hiperbold: com a função oculta, nem a telefonia em uso traz Chamadas de volta ao menu", () => {
+    ocultas.liberarChamadas = false;
+    const com = menu(["telefonia"]);
+    expect(com.hub).not.toContain("/app/calls");
+    expect(com.busca).not.toContain("/app/calls");
+    expect(com.sidebar).not.toContain("/app/calls");
+  });
+
+  it("esconder do menu não apaga a porta: a URL direta continua existindo", () => {
+    // "Não é autorização" é contrato do registro: o item sai do menu, a tela
+    // fica. Quem tem o link chega, e `/app/calls` decide lá o que fazer.
+    expect(NAV_DESTINATIONS.map((d) => d.href)).toContain("/app/calls");
+    expect(existsSync(join(process.cwd(), "app/app/calls/page.tsx"))).toBe(true);
   });
 });

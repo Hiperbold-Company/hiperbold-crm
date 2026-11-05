@@ -98,6 +98,11 @@ export const ESCOPO_DO_TURNO: Readonly<Record<string, RegraDoTurno>> = {
   crm_retomar_lead: { modo: "recursos", recursos: [negocio()] },
   crm_close_demand: { modo: "recursos", recursos: [negocio()] },
   crm_propose_reactivation: { modo: "recursos", recursos: [negocio()] },
+  // Vindas do upstream na junção de 04/11/2026: o alvo é o NEGÓCIO do cliente do turno.
+  // `crm_get_honorarios_contrato` já recusa no handler (#2184); o gate é a mesma recusa, antes.
+  crm_get_honorarios_contrato: { modo: "recursos", recursos: [negocio()] },
+  crm_propose_lead_fields_from_document: { modo: "recursos", recursos: [negocio()] },
+  crm_draft_proposal: { modo: "recursos", recursos: [negocio(), conversa()] },
 
   // ---- agenda ----
   crm_list_appointments: { modo: "recursos", recursos: [contato(), negocio()], impoeContato: true },

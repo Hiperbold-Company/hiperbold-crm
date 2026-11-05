@@ -58,16 +58,22 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   if (!(await supportCallbackWriteAllowed(state.orgId, state.userId, state.authSessionId))) return redirectTo("/app/integrations/nuvemshop?error=invalid_state");
 
-  // Uso único do state (D-119): o nonce é gravado em `calendar_oauth_nonces` ANTES de
-  // gastar o código, e o replay do mesmo state dentro dos dez minutos viola a chave
-  // primária. Falha de gravação também recusa: sem o guarda não há uso único.
   const admin = createAdminClient();
-  const { error: erroDoNonce } = await admin.from("calendar_oauth_nonces").insert({
-    nonce: state.nonce,
-    organization_id: state.orgId,
-    user_id: state.userId,
-    expira_em: new Date(state.expMs).toISOString(),
-  });
+
+  // O retorno vale UMA vez (D-119): o nonce do `state` é queimado ANTES da troca,
+  // na mesma tabela e pela mesma razão do callback do Google Agenda
+  // (`app/api/v1/agenda/google/callback/route.ts`): o replay do mesmo state
+  // dentro dos dez minutos viola a chave primária. Todo `state` emitido hoje
+  // carrega a pessoa (`connectNuvemshop`); sem ela não há linha a gravar, e
+  // sem gravar não há uso único a garantir — recusa, como qualquer outro erro.
+  const { error: erroDoNonce } = state.userId
+    ? await admin.from("calendar_oauth_nonces").insert({
+        nonce: state.nonce,
+        organization_id: state.orgId,
+        user_id: state.userId,
+        expira_em: new Date(state.expMs).toISOString(),
+      })
+    : { error: { code: "sem_pessoa" } };
   if (erroDoNonce) {
     await audit({
       action: "nuvemshop.oauth_failed",
@@ -170,6 +176,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     .update({ webhook_subscriptions: subscriptions })
     .eq("organization_id", state.orgId)
     .eq("provider", "nuvemshop");
+
+  // CARGA INICIAL DO CATÁLOGO. Sem ela, a loja recém-conectada só ganhava
+  // material quando alguém editasse um produto — e o acervo do agente ficava
+  // vazio enquanto a tela dizia "conectado". O worker trata este evento
+  // listando a loja inteira, que é o único modo que `pedacosDeCatalogo` tem.
+  const { error: backfillErr } = await admin.rpc("emit_event", {
+    p_event_type: "nuvemshop.product_synced",
+    p_entity_kind: "nuvemshop_integration",
+    p_entity_id: null,
+    p_payload: { catalogo_inteiro: true, store_id: storeId },
+    p_metadata: { origem: "conexao" },
+    p_organization_id: state.orgId,
+  });
+  if (backfillErr) {
+    // Não derruba a conexão: ela está feita, e o catálogo pode ser
+    // sincronizado depois. O que não pode é a falha passar em silêncio.
+    console.error("[nuvemshop.callback] carga inicial não enfileirada", backfillErr.message);
+  }
 
   await audit({
     actorUserId: state.userId,

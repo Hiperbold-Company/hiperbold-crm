@@ -26,6 +26,9 @@ import { inboundContaComoResposta } from "./conversa";
 import { flowGraphSchema } from "@/lib/followup/graph-schema";
 import { ENTIDADE_DO_EVENTO_COMENTARIO, EVENTO_COMENTARIO_RECEBIDO } from "./canal-de-comentarios";
 
+/** `rule_id` que o cron `contact-birthdays` carimba no evento das automações visuais. */
+const REGRA_DO_ANIVERSARIO_DAS_AUTOMACOES = "automacao";
+
 
 interface ComumDoFato {
   /** O pointer que causou o evento, quando foi uma automação (anti-laço). */
@@ -234,6 +237,13 @@ export function fatosDoEvento(row: EventRow): FatoDeGatilho[] {
       ];
     }
     if (row.event_type === "contact.birthday") {
+      // O cron `contact-birthdays` emite UM evento por regra (`rule_id` no
+      // payload). As automações visuais recebem o delas, com `rule_id`
+      // "automacao"; os das regras do motor antigo não são nossos, e reagir a
+      // eles dispararia a automação uma vez por regra. Evento sem `rule_id`
+      // vem da versão anterior do cron e continua valendo.
+      const regra = row.payload.rule_id;
+      if (regra !== undefined && regra !== null && regra !== REGRA_DO_ANIVERSARIO_DAS_AUTOMACOES) return [];
       return [{ tipo: "birthday", contact_id: entidade, data: texto(row.payload.local_date), causado_pela_automacao: causado }];
     }
     return [];

@@ -10,10 +10,21 @@
 import { PERIODOS_PREDEFINIDOS } from "@/lib/kanban/datas-do-lead";
 import { DIA_MAXIMO_DO_FILTRO, DIA_MINIMO_DO_FILTRO } from "@/lib/schemas/contacts";
 import { chaveSensivelDeCampo } from "@/lib/contacts/campos-sensiveis";
+import { MAXIMO_DE_ETIQUETAS_NO_FILTRO, marcadoresEscolhidos } from "@/lib/inbox/marcador-da-conversa";
 
 export interface FiltrosDaTela {
   search?: string;
-  tag?: string;
+  /**
+   * Uma ou VÁRIAS etiquetas (#1274, upstream). Na URL saem repetidas (`?tag=a&tag=b`), a forma que
+   * o servidor lê com `getAll`; no corpo de "excluir/exportar todos do filtro", como lista.
+   */
+  tag?: string[];
+  /** E/OU entre as etiquetas: só `ou` é guardado (E é o padrão) e só com duas ou mais. */
+  modo?: "ou";
+  /** Só pessoais (spec 21, etapa 13). Desligado é o padrão do servidor: pessoal fica fora. */
+  pessoais?: boolean;
+  /** Só quem pediu opt-out (`yes`) ou só quem não pediu (`no`). Ausente = todos. */
+  blocked?: "yes" | "no";
   source?: string;
   criado?: string;
   criado_de?: string;
@@ -30,9 +41,9 @@ export interface FiltrosDaTela {
   campo_valor?: string;
 }
 
-export const CHAVES_DE_FILTRO = [
+/** Os filtros que são UM texto (a URL guarda `chave=valor`). Etiquetas, modo, pessoais e bloqueados à parte. */
+export const CHAVES_DE_TEXTO = [
   "search",
-  "tag",
   "source",
   "criado",
   "criado_de",
@@ -47,6 +58,24 @@ export const CHAVES_DE_FILTRO = [
   "campo_op",
   "campo_valor",
 ] as const satisfies ReadonlyArray<keyof FiltrosDaTela>;
+export type ChaveDeTexto = (typeof CHAVES_DE_TEXTO)[number];
+
+export const CHAVES_DE_FILTRO = [
+  ...CHAVES_DE_TEXTO,
+  "tag",
+  "modo",
+  "pessoais",
+  "blocked",
+] as const satisfies ReadonlyArray<keyof FiltrosDaTela>;
+
+/** Troca de filtros de TEXTO (`undefined` apaga a chave) — o que os filtros avançados produzem. */
+export type MudancaDeTexto = Partial<Record<ChaveDeTexto, string | undefined>>;
+/** Qualquer troca de filtro da tela. */
+export type MudancaDeFiltros = MudancaDeTexto &
+  Partial<Pick<FiltrosDaTela, "tag" | "modo" | "pessoais" | "blocked">>;
+
+/** O objeto de "excluir/exportar todos do filtro" (o servidor o valida por `filtrosDeContatosSchema`). */
+export type CorpoDoFiltro = Record<string, string | string[] | boolean>;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
@@ -67,7 +96,10 @@ export function etapasDoFiltro(f: Pick<FiltrosDaTela, "etapa">): string[] {
   return f.etapa ? f.etapa.split(",").filter(Boolean) : [];
 }
 
-export function filtrosFromParams(sp: { get(chave: string): string | null }): FiltrosDaTela {
+export function filtrosFromParams(sp: {
+  get(chave: string): string | null;
+  getAll(chave: string): string[];
+}): FiltrosDaTela {
   const texto = (chave: string, max: number): string | undefined => {
     const v = sp.get(chave)?.trim();
     return v ? v.slice(0, max) : undefined;
@@ -93,10 +125,19 @@ export function filtrosFromParams(sp: { get(chave: string): string | null }): Fi
   const campo = sp.get("campo");
   const valor = texto("campo_valor", 200);
   const comCampo = campo && CHAVE_DE_CAMPO.test(campo) && !chaveSensivelDeCampo(campo) && valor;
+  const tags = marcadoresEscolhidos(sp.getAll("tag").map((t) => t.slice(0, 80))).slice(
+    0,
+    MAXIMO_DE_ETIQUETAS_NO_FILTRO,
+  );
+  const blocked = sp.get("blocked");
 
   return {
     ...(texto("search", 200) ? { search: texto("search", 200) } : {}),
-    ...(texto("tag", 80) ? { tag: texto("tag", 80) } : {}),
+    ...(tags.length > 0 ? { tag: tags } : {}),
+    // O modo só faz sentido com DUAS etiquetas: com uma, `&modo=ou` seria ruído.
+    ...(tags.length > 1 && sp.get("modo") === "ou" ? { modo: "ou" as const } : {}),
+    ...(sp.get("pessoais") === "true" ? { pessoais: true } : {}),
+    ...(blocked === "yes" || blocked === "no" ? { blocked } : {}),
     ...(texto("source", 80) ? { source: texto("source", 80) } : {}),
     ...periodo("criado"),
     ...periodo("ativ"),
@@ -115,20 +156,29 @@ export function filtrosFromParams(sp: { get(chave: string): string | null }): Fi
 
 /** Só o que tem valor: URL curta, e o servidor aplica os padrões. */
 export function filtrosToParams(f: FiltrosDaTela, para: URLSearchParams = new URLSearchParams()): URLSearchParams {
-  for (const chave of CHAVES_DE_FILTRO) {
+  for (const chave of CHAVES_DE_TEXTO) {
     const v = f[chave];
     if (v) para.set(chave, v);
   }
+  const tags = f.tag ?? [];
+  for (const marcador of tags) para.append("tag", marcador);
+  if (tags.length > 1 && f.modo === "ou") para.set("modo", "ou");
+  if (f.pessoais) para.set("pessoais", "true");
+  if (f.blocked) para.set("blocked", f.blocked);
   return para;
 }
 
 /** O objeto como vai no corpo de "excluir/exportar todos do filtro" (campos sem valor saem). */
-export function filtrosParaCorpo(f: FiltrosDaTela): Record<string, string> {
-  const corpo: Record<string, string> = {};
-  for (const chave of CHAVES_DE_FILTRO) {
+export function filtrosParaCorpo(f: FiltrosDaTela): CorpoDoFiltro {
+  const corpo: CorpoDoFiltro = {};
+  for (const chave of CHAVES_DE_TEXTO) {
     const v = f[chave];
     if (v) corpo[chave] = v;
   }
+  if (f.tag && f.tag.length > 0) corpo.tag = [...f.tag];
+  if (f.tag && f.tag.length > 1 && f.modo === "ou") corpo.modo = "ou";
+  if (f.pessoais) corpo.pessoais = true;
+  if (f.blocked) corpo.blocked = f.blocked;
   return corpo;
 }
 
@@ -136,7 +186,9 @@ export function filtrosParaCorpo(f: FiltrosDaTela): Record<string, string> {
 export function quantidadeDeFiltros(f: FiltrosDaTela): number {
   return [
     f.search,
-    f.tag,
+    f.tag && f.tag.length > 0,
+    f.pessoais,
+    f.blocked,
     f.source,
     f.criado || f.criado_de || f.criado_ate,
     f.ativ || f.ativ_de || f.ativ_ate,

@@ -11,17 +11,30 @@ const estado = {
   nivel: "aal1" as string,
   fatores: [{ status: "verified" }] as Array<{ status: string }>,
   erroNosFatores: false,
+  ultimoRedirect: null as string | null,
 };
 
 vi.mock("next/navigation", () => ({
   redirect: (destino: string) => {
+    estado.ultimoRedirect = destino;
     throw new Error(`REDIRECT:${destino}`);
   },
 }));
+// O desafio leva de volta à página do painel pelo `x-pathname`; sem ele, `/admin`.
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: {
-      getUser: async () => ({ data: { user: { id: "u1" } } }),
+      // Os fatores vêm do próprio `getUser()` (validado no GoTrue), sem leitura a mais
+      // (upstream). Sessão ilegível = sem usuário.
+      getUser: async () =>
+        estado.erroNosFatores
+          ? { data: { user: null }, error: new Error("rede") }
+          : {
+              data: {
+                user: { id: "u1", factors: estado.fatores.map((f) => ({ factor_type: "totp", ...f })) },
+              },
+            },
       mfa: {
         getAuthenticatorAssuranceLevel: async () => ({ data: { currentLevel: estado.nivel } }),
         listFactors: async () =>
@@ -45,11 +58,14 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 async function destino(): Promise<string | null> {
-  const { requirePlatformAdmin } = await import("@/lib/auth/requirePlatformAdmin");
+  const { requirePlatformAdmin, EscritaDePlatformAdminNegada } = await import("@/lib/auth/requirePlatformAdmin");
   try {
     await requirePlatformAdmin();
     return null;
   } catch (err) {
+    // O desafio de MFA embrulha o redirect numa recusa nomeada (a rota responde
+    // 403 `mfa_required`); a tela vai a `/login/mfa`, que é o que se mede aqui.
+    if (err instanceof EscritaDePlatformAdminNegada && err.code === "mfa_required") return estado.ultimoRedirect;
     const m = err instanceof Error ? err.message : String(err);
     if (!m.startsWith("REDIRECT:")) throw err;
     return m.slice("REDIRECT:".length);
@@ -61,22 +77,23 @@ beforeEach(() => {
   estado.nivel = "aal1";
   estado.fatores = [{ status: "verified" }];
   estado.erroNosFatores = false;
+  estado.ultimoRedirect = null;
 });
 
 describe("requirePlatformAdmin e o segundo fator", () => {
   it("⭐ mfa_required desligado, mas com fator verificado e sessão aal1: vai para /login/mfa", async () => {
-    expect(await destino()).toBe("/login/mfa?next=/admin");
+    expect(await destino()).toBe("/login/mfa?next=%2Fadmin"); // upstream: next = caminho atual, codificado
   });
 
-  it("não consegue ler os fatores: falha fechado (lança, nunca libera)", async () => {
+  it("não consegue ler a sessão (nem os fatores): falha fechado, vai para o login e nunca libera", async () => {
     estado.erroNosFatores = true;
-    await expect(destino()).rejects.toThrow("rede");
+    expect(await destino()).toBe("/login?next=/admin");
   });
 
   it("mfa_required ligado e aal1: continua indo para /login/mfa, mesmo sem fator na lista", async () => {
     estado.mfaRequired = true;
     estado.fatores = [];
-    expect(await destino()).toBe("/login/mfa?next=/admin");
+    expect(await destino()).toBe("/login/mfa?next=%2Fadmin"); // upstream: next = caminho atual, codificado
   });
 
   it("CONTROLE: com aal2 entra", async () => {

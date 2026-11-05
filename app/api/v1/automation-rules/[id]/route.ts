@@ -41,6 +41,8 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
       details: parsed.error.flatten(),
     });
   }
+  // O laço de #1528, a fonte da própria empresa e #2791 são conferidos em `alterarRegra`:
+  // valem para a tela, o token `dsk_` e as tools MCP.
   try {
     return ok(await alterarRegra(e.deps, id, parsed.data), { requestId: e.requestId });
   } catch (err) {

@@ -33,10 +33,20 @@
  * 3. COMPORTAMENTO, na tabela do escopo criada por último. Ela é escolhida pelo
  *    catálogo, nunca por nome: maior `pg_class.oid` entre as tabelas que a regra
  *    alcança, em que `authenticated` pode inserir, alterar e apagar, e que aceitam
- *    uma linha só com `organization_id` (nenhuma outra coluna NOT NULL sem default).
+ *    uma linha só com `organization_id` (nenhuma outra coluna NOT NULL sem default)
+ *    e que tem ao menos um caminho permissivo de insert que não exige papel
+ *    (`fn_role_at_least`).
  *    A sessão de suporte em modo somente leitura não insere, não altera e não apaga;
  *    a mesma sessão, o mesmo ator e a mesma tabela em modo completo fazem os três.
  *    A única variável entre os dois lados é o modo.
+ *
+ *    Quando NENHUMA tabela do catálogo serve de cobaia (medido no merge do upstream de
+ *    04/11/2026: toda tabela que aceita linha só com `organization_id` passou a exigir
+ *    papel no insert, pelas RLS por papel do fork e do upstream), a cobaia é uma tabela
+ *    criada pelo próprio teste dentro da transação que sofre rollback — a criada por
+ *    último de verdade —, com uma policy permissiva por organização, e as travas vêm da
+ *    MESMA `fn_aplicar_travas_de_suporte()` que o baseline chama. A cobertura do
+ *    baseline segue provada pelo catálogo (itens 1 e 2); aqui se prova o comportamento.
  */
 import { execFileSync } from "node:child_process";
 
@@ -113,6 +123,19 @@ const TABELA_CRIADA_POR_ULTIMO = `
                       where a.attrelid = alvo.oid and a.attnum > 0 and not a.attisdropped
                         and a.attnotnull and not a.atthasdef and a.attidentity = '' and a.attgenerated = ''
                         and a.attname <> 'organization_id')
+     -- A precondição do caso de INSERT: a TRAVA tem de ser a única coisa que
+     -- pode recusar. Em support_readonly o ator é 'viewer' (fn_user_role_in_org);
+     -- numa tabela em que TODA policy PERMISSIVA de insert exige papel
+     -- (fn_role_at_least), a recusa viria do papel e o caso mediria a recusa
+     -- errada. Por isso a cobaia precisa de ao menos UM caminho permissivo de
+     -- insert sem papel (permissivas se somam por OR). As tabelas só com papel
+     -- seguem medidas pelo catálogo acima (as três travas presentes); só não
+     -- servem de cobaia aqui. (Achado com a 0448, a primeira tabela assim a ser
+     -- a última criada.)
+     and exists (select 1 from pg_policy p
+                  where p.polrelid = alvo.oid and p.polpermissive and p.polcmd in ('a', '*')
+                    and coalesce(pg_get_expr(p.polwithcheck, p.polrelid), pg_get_expr(p.polqual, p.polrelid), '')
+                        not like '%fn_role_at_least(%')
    order by alvo.oid desc
    limit 1;`;
 
@@ -193,19 +216,29 @@ describe("travas do modo somente leitura do suporte — baseline aplicado UMA ve
     const orgA = "f2740000-0000-4000-8000-000000000004";
     const orgB = "f2740000-0000-4000-8000-000000000005";
 
+    const COBAIA_DO_TESTE = "zz_cobaia_travas_de_suporte";
     let tabelaMemo: string | undefined;
-    /** `public.<nome citado>` da tabela escolhida pelo catálogo; lança se não houver nenhuma. */
+    /** `public.<nome citado>` da tabela escolhida pelo catálogo, ou a cobaia criada pelo teste se nenhuma servir. */
     function tabela(): string {
-      tabelaMemo ??= psql(BANCO, TABELA_CRIADA_POR_ULTIMO);
-      if (tabelaMemo === "") {
-        throw new Error(
-          "nenhuma tabela do escopo aceita uma linha só com organization_id e é gravável por authenticated",
-        );
-      }
+      tabelaMemo ??= psql(BANCO, TABELA_CRIADA_POR_ULTIMO) || COBAIA_DO_TESTE;
       return `public.${tabelaMemo}`;
     }
 
-    const semente = `begin;
+    /** Só quando a cobaia é a do teste: criada na transação (rollback no fim) e travada pela função do baseline. */
+    const criarCobaia = () =>
+      tabela() !== `public.${COBAIA_DO_TESTE}`
+        ? ""
+        : `
+create table public.${COBAIA_DO_TESTE} (id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade);
+alter table public.${COBAIA_DO_TESTE} enable row level security;
+grant select, insert, update, delete on public.${COBAIA_DO_TESTE} to authenticated;
+create policy cobaia_por_organizacao on public.${COBAIA_DO_TESTE} for all to authenticated
+  using (organization_id in (select public.fn_user_org_ids()))
+  with check (organization_id in (select public.fn_user_org_ids()));
+select public.fn_aplicar_travas_de_suporte();`;
+
+    const sementeBase = `begin;
 insert into auth.users(id,email) values('${ator}','support-trava@invariant.test');
 insert into auth.sessions(id,user_id,aal) values('${sessao}','${ator}','aal1');
 insert into organizations(id,slug,display_name,legal_name) values('${orgA}','trava-a','A','A'),('${orgB}','trava-b','B','B');
@@ -223,12 +256,15 @@ end $$;
 set local role authenticated;`;
 
     function provar(corpo: string) {
-      expect(psql(BANCO, `${semente}\n${corpo}\nrollback;\nselect 'provado';`)).toContain("provado");
+      expect(psql(BANCO, `${sementeBase}${criarCobaia()}\n${corpo}\nrollback;\nselect 'provado';`)).toContain("provado");
     }
 
-    it("a tabela do escopo criada por último é encontrada pelo catálogo", () => {
-      expect(tabela()).toMatch(/^public\./);
-    });
+    it("a cobaia (a do catálogo criada por último, ou a criada pelo teste) tem as três travas corretas", () =>
+      provar(`do $$ begin
+  if (select count(*) from (${TRAVA_CORRETA}) t where t.polrelid = '${tabela()}'::regclass) <> 3 then
+    raise exception 'a cobaia % não tem as três travas support_write corretas', '${tabela()}';
+  end if;
+end $$;`));
 
     it("modo somente leitura: insert é recusado pela trava", () =>
       provar(`${entrar("support_readonly")}

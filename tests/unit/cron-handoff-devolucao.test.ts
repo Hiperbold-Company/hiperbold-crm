@@ -137,7 +137,14 @@ vi.mock("@/lib/supabase/admin", () => ({
       // que os casos de cima vigiam.
       const resolver = () =>
         Promise.resolve({
-          data: tabela === "organizations" ? aplicar(filtros, banco.organizations) : banco[tabela],
+          data:
+            tabela === "organizations"
+              ? aplicar(filtros, banco.organizations)
+              : tabela === "conversations"
+                ? // Aplica os filtros modelados (org, status, is_group); o `.or`
+                  // segue no-op — quem corta a faixa é `selecionarVencidas`.
+                  aplicar(filtros, banco.conversations)
+                : banco[tabela],
           error: null,
         });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -182,6 +189,7 @@ function conversa(id: string, minutosParada: number): Record<string, unknown> {
     last_handoff_at: min(minutosParada),
     last_outbound_at: null,
     status_changed_at: min(minutosParada),
+    is_group: false,
   };
 }
 
@@ -233,12 +241,55 @@ describe("GET /api/v1/cron/handoff-devolucao", () => {
     });
   });
 
+  it("I4: grupo de WhatsApp com humano, vencido, NÃO é devolvido ao automático", async () => {
+    const GRUPO_VENCIDO = "cccccccc-0000-4000-8000-0000000000a1";
+    banco.conversations = [{ ...conversa(GRUPO_VENCIDO, 600), is_group: true }];
+    const res = await chamar();
+    expect(res.status).toBe(200);
+    expect(filtrosPorTabela.conversations).toContainEqual({ metodo: "eq", args: ["is_group", false] });
+    expect(devolver).not.toHaveBeenCalled();
+    const corpo = (await res.json()) as { data: Record<string, number> };
+    expect(corpo.data.examinadas).toBe(0);
+  });
+
   it("nada vencido: nenhuma devolução e nenhuma linha de auditoria", async () => {
     banco.conversations = [conversa(RECENTE, 20)];
     const res = await chamar();
     expect(res.status).toBe(200);
     expect(devolver).not.toHaveBeenCalled();
     expect(auditar).not.toHaveBeenCalled();
+  });
+
+  /**
+   * PRAZO LIVRE ACIMA DE 24 HORAS (#3313, item 3) — o fim da cadeia.
+   *
+   * A cadeia inteira do cron tem de aceitar o prazo que a tela salva: o
+   * predicado jsonb escolhe a organização, `lerPrazoDeDevolucaoMinutos` a aceita
+   * e `avaliarDevolucao` devolve a conversa parada há mais que o prazo. Um teto
+   * de 24 h em QUALQUER elo apaga a organização da varredura sem log e sem
+   * auditoria, com a rodada respondendo `organizacoes: 0` — falha que não parece
+   * falha. 5.000 minutos são três dias e meio; a conversa parada há 5 dias é o
+   * caso medido pela agência que abriu a issue.
+   *
+   * ─── SABOTAGEM ────────────────────────────────────────────────────────────
+   *   - voltar o teto de 24 h no leitor: `organizacoes` cai para 0, `devolvidas`
+   *     para 0 e a rodada nem audita — os três expects abaixo acusam.
+   */
+  it("prazo de 5.000 minutos (mais de três dias): a conversa parada há 5 dias é devolvida", async () => {
+    banco.organizations = [{ id: ORG, settings: { routing: { handoff_return_after_minutes: 5000 } } }];
+    banco.conversations = [conversa(VENCIDA, 5 * 24 * 60)];
+
+    const res = await chamar();
+    expect(res.status).toBe(200);
+    const corpo = (await res.json()) as { data: Record<string, number> };
+    expect(corpo.data).toMatchObject({ organizacoes: 1, devolvidas: 1, falhas: 0 });
+
+    expect(devolver).toHaveBeenCalledTimes(1);
+    expect(devolver.mock.calls[0]?.[1]).toEqual({
+      conversationId: VENCIDA,
+      origem: { automatica: { minutos: 5000 } },
+    });
+    expect(auditar).toHaveBeenCalledTimes(1);
   });
 
   it("organização sem o prazo: nem lê as conversas (IA-06 de sempre)", async () => {
@@ -298,6 +349,18 @@ describe("GET /api/v1/cron/handoff-devolucao", () => {
       detalhe: "deadlock detected",
     });
   });
+
+  // #2379: o contato "sempre atendimento humano" recusa a devolução a cada tick,
+  // de propósito. Contá-lo como falha faria o cron reclamar para sempre de um
+  // estado que a operação pediu.
+  it("contato 'sempre atendimento humano' é recusa esperada: não é falha, não loga erro, não audita", async () => {
+    devolver.mockResolvedValue({ ok: false, erro: "contato_sempre_humano" });
+    const corpo = (await (await chamar()).json()) as { data: Record<string, number> };
+    expect(devolver).toHaveBeenCalledTimes(1);
+    expect(corpo.data).toMatchObject({ devolvidas: 0, falhas: 0 });
+    expect(auditar).not.toHaveBeenCalled();
+    expect(erroDeLog).not.toHaveBeenCalled();
+  });
 });
 
 /**
@@ -330,7 +393,19 @@ describe("o predicado que escolhe as organizações", () => {
   const ACEITAS_PELO_LEITOR: Array<{ nome: string; settings: unknown }> = [
     { nome: "prazo no piso da faixa", settings: { routing: { handoff_return_after_minutes: 5 } } },
     { nome: "prazo no meio da faixa", settings: { routing: { handoff_return_after_minutes: 60 } } },
-    { nome: "prazo no teto da faixa", settings: { routing: { handoff_return_after_minutes: 1440 } } },
+    { nome: "prazo valendo 24 horas", settings: { routing: { handoff_return_after_minutes: 1440 } } },
+    {
+      // #3313: o teto de 24 h saiu do prazo de devolução — o predicado do banco
+      // NÃO PODE cortar a organização que escolheu dias. Este caso é o que
+      // prende o outro lado do conserto: o leitor aceita (`lerPrazo...` abaixo)
+      // e o predicado entrega a linha.
+      nome: "prazo livre, acima das 24 horas do teto antigo",
+      settings: { routing: { handoff_return_after_minutes: 5000 } },
+    },
+    {
+      nome: "prazo no teto novo, 30 dias",
+      settings: { routing: { handoff_return_after_minutes: 30 * 24 * 60 } },
+    },
     {
       nome: "prazo ao lado de outras chaves de routing",
       settings: { routing: { handoff_return_after_minutes: 30, modo: "round_robin" }, branding: {} },

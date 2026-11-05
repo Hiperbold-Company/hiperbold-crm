@@ -8,6 +8,7 @@
  */
 import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fecharAvisoDePausaDoCanalArquivado } from "@/lib/channels/central-de-pausa";
 
 import { audit } from "@/lib/audit";
 import { metadataInicialDoCanal } from "@/lib/ai/elegibilidade/pre-go-live";
@@ -391,6 +392,9 @@ export async function arquivarConta(
     .eq("organization_id", organizationId)
     .eq("id", id);
   if (error) throw new Error("meta_social_archive_failed");
+  // A conta pode ter sido pausada em Conexões: o aviso de pausa resolve aqui
+  // (best-effort, nunca lança; issue #2389 do upstream).
+  await fecharAvisoDePausaDoCanalArquivado(admin, { id, organization_id: organizationId });
   return { plataforma: linha.meta_social_platform, contaId: linha.meta_social_account_id, desassinado };
 }
 

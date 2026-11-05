@@ -119,18 +119,16 @@ export function lerAviso(params: URLSearchParams, t: (s: string) => string): Avi
   return null;
 }
 
-const CARTOES: { plataforma: PlataformaSocial; titulo: string; descricao: string }[] = [
-  {
-    plataforma: "instagram",
-    titulo: "Instagram Direct",
-    descricao: "Receba e responda as mensagens do Direct no Chat do CRM.",
-  },
-  {
-    plataforma: "messenger",
-    titulo: "Facebook Messenger",
-    descricao: "Receba e responda as mensagens da sua Página do Facebook no Chat do CRM.",
-  },
+const CARTOES: { plataforma: PlataformaSocial; titulo: string }[] = [
+  { plataforma: "instagram", titulo: "Instagram Direct" },
+  { plataforma: "messenger", titulo: "Facebook Messenger" },
 ];
+
+// Rótulo em tabela de topo: a cerca de i18n resolve t(TABELA[chave]) e cobra o espanhol de cada valor.
+const DESCRICAO_DO_CARTAO: Record<PlataformaSocial, string> = {
+  instagram: "Receba e responda as mensagens do Direct no Chat do CRM.",
+  messenger: "Receba e responda as mensagens da sua Página do Facebook no Chat do CRM.",
+};
 
 export function RedesSociaisClient({
   bloqueio,
@@ -229,7 +227,7 @@ export function RedesSociaisClient({
 
       {estado && (
         <div className="grid gap-4 xl:grid-cols-2">
-          {CARTOES.map(({ plataforma, titulo, descricao }) => {
+          {CARTOES.map(({ plataforma, titulo }) => {
             const configurado = !!estado.configurado?.[plataforma];
             const contas = (estado.contas ?? []).filter((c) => c.plataforma === plataforma);
             return (
@@ -241,7 +239,7 @@ export function RedesSociaisClient({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="font-semibold">{titulo}</h3>
-                    <p className="text-sm text-muted-foreground">{t(descricao)}</p>
+                    <p className="text-sm text-muted-foreground">{t(DESCRICAO_DO_CARTAO[plataforma])}</p>
                   </div>
                   {configurado && !bloqueado ? (
                     <Button asChild>

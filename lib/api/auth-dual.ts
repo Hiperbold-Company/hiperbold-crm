@@ -85,8 +85,12 @@ export interface AuthDualOptions {
   resource: string;
   /** Rank mínimo exigido nos DOIS modos (salvo `tokenRole`). */
   role: Role;
-  /** Scope exigido do token. Rotas de escrita usam `mcp:write`. */
-  scope: string;
+  /**
+   * Scope exigido do token. Rotas de escrita usam `mcp:write`. Uma LISTA quer dizer "qualquer um destes":
+   * a configuração da IA aceita o escopo próprio do upstream (`config:*`) e o `mcp:*` que os tokens da
+   * Hiperbold já emitidos carregam (decisão do merge de 04/11/2026).
+   */
+  scope: string | readonly string[];
   /**
    * Rank mínimo do TOKEN, quando a tool MCP da mesma escrita exige mais que a
    * sessão. Sem isto a rota REST vira atalho: o token que leva 403 pela tool
@@ -138,7 +142,7 @@ export async function resolveAuthDual(
         return {
           ok: false,
           response: fail(
-            err.httpStatus === 401 ? "unauthenticated" : "forbidden",
+            err.codigo ?? (err.httpStatus === 401 ? "unauthenticated" : "forbidden"),
             err.message,
             err.httpStatus,
             { requestId },
@@ -149,7 +153,9 @@ export async function resolveAuthDual(
     }
 
     try {
-      ensureScope(auth.scopes, scope);
+      const aceitos = typeof scope === "string" ? [scope] : scope;
+      const atendido = aceitos.find((s) => auth.scopes.includes(s));
+      ensureScope(auth.scopes, atendido ?? aceitos[0] ?? "");
       ensureRole(auth.role, tokenRole ?? role);
     } catch (err) {
       if (err instanceof McpAuthError) {

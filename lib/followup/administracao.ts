@@ -29,8 +29,9 @@ import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { logger } from "@/lib/logger";
 
-import type { FollowupFlowSurface } from "./api-schemas";
+import { triggerConfigSchema, type FollowupFlowSurface } from "./api-schemas";
 import { carregaEtapasCitadas } from "./etapas-citadas";
+import { carregaModelosCitados } from "./modelos-citados";
 import type { FlowGraph } from "./graph-schema";
 import { nomeDaCopia } from "./nome-da-copia";
 import { publishFollowupFlowVersion } from "./publish";
@@ -607,6 +608,10 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
   // A regra de etapa guarda o `stage_id`, e só o banco diz se a etapa existe e está ativa.
   const citadas = await carregaEtapasCitadas(admin, orgId, graph.nodes);
   if (!citadas.ok) throw falhaInterna(deps, citadas.mensagem);
+  // O motor lança a cada envio quando o modelo do passo não existe NESTA org
+  // (fluxo importado de outra conta, ou modelo apagado) — seguimento do #3056.
+  const modelos = await carregaModelosCitados(admin, orgId, graph.nodes);
+  if (!modelos.ok) throw falhaInterna(deps, modelos.mensagem);
 
   // Roteiro: para onde os OUTROS roteiros ativos encadeiam — recusa a publicação que fecharia um ciclo A → B → A.
   let roteiro: RoteiroDoPublish | undefined;
@@ -641,7 +646,9 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
     };
   }
 
-  // O plano B da mensagem por IA só existe para canal com janela de 24 h.
+  // O plano B da mensagem por IA só existe para canal que EXIGE modelo aprovado fora da janela: precisa da
+  // regra da janela E de um catálogo aprovado para oferecer (#1729). A régua inteira mora em
+  // `algumCanalExigeModeloForaDaJanela` — inclusive o #3109, canal social que fecha a janela sem catálogo.
   const { data: conexoes, error: conexoesErr } = await admin
     .from("channel_sessions")
     .select("provider")
@@ -651,16 +658,22 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
   const exigeModeloForaDaJanela = algumCanalExigeModeloForaDaJanela(
     (conexoes ?? []).map((c) => c.provider as string | null),
   );
+  // O gatilho entra só pelos AVISOS (`avisosDoGatilho`): nenhuma recusa depende dele, e um `trigger_config`
+  // que não parseia não pode travar a publicação de um grafo válido — vira ausência, "nada a avisar".
+  const gatilho = triggerConfigSchema.safeParse(pointer.trigger_config);
   const validation = validateFlowForPublish(graph, {
     etapas: citadas.etapas,
     surface,
     roteiro,
     exigeModeloForaDaJanela,
     automacao,
+    modelos: modelos.modelos,
+    ...(gatilho.success ? { trigger: gatilho.data } : {}),
   });
   if (!validation.ok) {
     throw recusa(deps, 422, "validation_failed", t("Fluxo reprovado na validação de publish."), {
-      errors: validation.errors,
+      // `t()` degrada para o português quando a frase não tem tradução.
+      errors: validation.errors.map((e) => ({ ...e, message: t(e.message) })),
     });
   }
 
@@ -684,5 +697,6 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
   if (reloadErr || !updatedPointer) throw falhaInterna(deps, reloadErr ?? "followup_flow_reload_failed");
 
   auditar(deps, "followup_flow.published", id, { version_id: result.version_id });
-  return updatedPointer;
+  // Os avisos viajam com o sucesso: publicar é o momento em que a pessoa está olhando.
+  return { ...updatedPointer, avisos: validation.warnings ?? [] };
 }

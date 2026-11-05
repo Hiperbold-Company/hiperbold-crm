@@ -49,6 +49,8 @@ vi.mock("@/lib/env", () => ({
 
 vi.mock("@/lib/channels", () => ({
   DEFAULT_CHANNEL_PROVIDER: "waha",
+  CHANNEL_SESSION_REF_COLUMNS: "waha_session_name, provider",
+  resolveSessionRef: (s: { waha_session_name?: string | null }) => s.waha_session_name ?? null,
   getAdapter: () => ({ fetchProfilePictureUrl: async () => urlDaFoto }),
 }));
 
@@ -59,7 +61,15 @@ vi.mock("@/lib/supabase/admin", () => ({
         const dados =
           tabela === "contacts"
             ? [{ id: CONTATO, organization_id: ORG, wa_identity: "phone:+5511999990000", avatar_storage_path: null }]
-            : { waha_session_name: "sessao-de-teste", provider: "waha" };
+            : // A foto vem da conexão da conversa do contato (upstream): a conversa traz a sessão.
+              {
+                channel_sessions: {
+                  waha_session_name: "sessao-de-teste",
+                  provider: "waha",
+                  status: "WORKING",
+                  archived_at: null,
+                },
+              };
         const proxy: Record<string, unknown> = new Proxy(
           {},
           {

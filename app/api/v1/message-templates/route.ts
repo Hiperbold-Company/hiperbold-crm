@@ -24,6 +24,8 @@ import { criarRespostaPronta, listarRespostasProntas } from "@/lib/operacao/resp
 import { createTemplateSchema } from "@/lib/schemas/templates";
 
 export const dynamic = "force-dynamic";
+/** Tag do endpoint no recibo de idempotência. Muda de rota muda de recibo. */
+const ENDPOINT = "/api/v1/message-templates";
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
@@ -34,6 +36,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     escrita: false,
   });
   if (!authz.ok) return authz.response;
+  // Sessão e token pela MESMA regra (grupo, ordem e mídias da resposta, #3244/#3245/#2526).
   try {
     return ok(
       await listarRespostasProntas({
@@ -73,11 +76,13 @@ export async function POST(req: NextRequest): Promise<Response> {
       details: parsed.error.flatten().fieldErrors as Record<string, unknown>,
     });
   }
-
+  // Sessão e token pela MESMA regra (`lib/operacao/respostas-prontas.ts`): token só cria
+  // COMPARTILHADA; compartilhada exige manager+; grupo da organização; nasce no topo da ordem;
+  // `midias` nasce vazia. `Idempotency-Key` opcional, com o recibo de `lib/api/criacao-idempotente.ts`.
   try {
     return await criarComChaveOpcional(req, authz, {
       requestId,
-      endpoint: "/api/v1/message-templates",
+      endpoint: ENDPOINT,
       corpo: parsed.data,
       t,
       executar: () =>
@@ -87,6 +92,7 @@ export async function POST(req: NextRequest): Promise<Response> {
             organizationId: authz.organizationId,
             actor: authz.actor,
             requestId,
+            t,
           },
           parsed.data,
           pessoaResponsavel(authz),

@@ -2,7 +2,11 @@
 
 import { headers } from "next/headers";
 
+import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { moduloLigado } from "@/lib/instalacao/modulos";
+import { cadastroExigeEscolhaDePlano, lerPlanosDoCadastro } from "@/lib/cobranca/cadastro";
 import {
   signupSchemaDe,
   signupComConviteSchema,
@@ -17,7 +21,6 @@ import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
 import { audit, hashEmail } from "@/lib/audit";
 import { authRateLimited, AUTH_LIMITS } from "@/lib/auth/rate-limit";
 import { env } from "@/lib/env";
-import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { captchaRecusadoPeloGoTrue } from "@/lib/security/turnstile";
 import { enviarVerificacaoDeEmail } from "@/lib/auth/enviar-verificacao-email";
 import { gravarNoAppMetadata } from "@/lib/auth/verificacao-email";
@@ -25,8 +28,21 @@ import { sanitizarPlano } from "@/lib/auth/plano-escolhido";
 import { contaRecemCriada } from "@/lib/auth/conta-recem-criada";
 import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
 import { normalizarIdioma, parseAcceptLanguage } from "@/lib/i18n/idiomas";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
+import {
+  CHAVE_FUSO_DO_CADASTRO,
+  CHAVE_IDIOMA_DO_CADASTRO,
+  pistasParaGuardar,
+} from "@/lib/auth/perfil-da-empresa-nova";
+
+/** As pistas saneadas, nas chaves que o provisionamento lê. */
+function metadadosDasPistas(pistas: { idioma?: string; fuso?: string } | undefined): Record<string, string> {
+  const limpas = pistasParaGuardar(pistas ?? {});
+  return {
+    ...(limpas.idioma ? { [CHAVE_IDIOMA_DO_CADASTRO]: limpas.idioma } : {}),
+    ...(limpas.fuso ? { [CHAVE_FUSO_DO_CADASTRO]: limpas.fuso } : {}),
+  };
+}
 
 export type SignUpResult =
   | {
@@ -61,6 +77,11 @@ export type SignUpResult =
        * anti-enumeração abaixo. Os dois convivem sem se confundir: a recusa por
        * política é decidida ANTES de tocar no GoTrue, então numa instalação
        * fechada quem chega sem convite nunca chega a saber se o e-mail existe.
+       *
+       * `email_indisponivel`: o provedor de auth não conseguiu mandar o e-mail
+       * de confirmação — é a instalação sem e-mail configurado no serviço de
+       * login, não um soluço. Tentar de novo nunca funciona; quem resolve é
+       * quem administra.
        */
       error:
         | "validation_error"
@@ -68,7 +89,8 @@ export type SignUpResult =
         | "signup_failed"
         | "somente_convite"
         | "conta_ja_existe"
-        | "captcha_failed";
+        | "captcha_failed"
+        | "email_indisponivel";
       details?: Record<string, unknown>;
     };
 
@@ -132,6 +154,13 @@ export async function signUp(
   inviteToken?: string,
   /** Token do Turnstile (D-173). Só o GoTrue o confere, e só com a proteção ligada nele. */
   captchaToken?: string,
+  /**
+   * O idioma em que a tela de cadastro foi desenhada e o fuso do navegador.
+   * Viajam no `user_metadata` até `/auth/confirm`, onde a empresa NASCE com eles
+   * (`lib/auth/perfil-da-empresa-nova.ts`). São pistas, não autoridade: só
+   * idioma servido e fuso que o `Intl` reconhece passam do saneamento.
+   */
+  pistas?: { idioma?: string; fuso?: string },
 ): Promise<SignUpResult> {
   const temConvite = typeof inviteToken === "string" && inviteToken.trim() !== "";
   // Hiperbold: o aceite dos Termos e o pedido de verificação de e-mail do CRM só existem no caminho
@@ -195,6 +224,26 @@ export async function signUp(
     return { ok: false, error: "somente_convite" };
   }
 
+  const planoEscolhido = !convite && "cobranca_plan_id" in parsed.data ? parsed.data.cobranca_plan_id : undefined;
+  if (!convite) {
+    const admin = createAdminClient();
+    if (await moduloLigado(admin, "cobranca")) {
+      // Recusa ANTES de criar a conta no GoTrue o que o gatilho da 0679 recusaria
+      // depois — senão o usuário ficaria órfão, sem organização. Leitura dos
+      // PLANOS que falha recusa: é ação, não informação. A da CHAVE do módulo, não:
+      // `moduloLigado` trata a falha como "desligado", e aí a conta nasce e quem
+      // decide é o gatilho; se ele recusar, a saída é /get-started, que pede o plano.
+      const planos = await lerPlanosDoCadastro(admin);
+      if (planoEscolhido) {
+        if (!planos?.oferecidos.some((p) => p.id === planoEscolhido)) {
+          return { ok: false, error: "validation_error", details: { cobranca_plan_id: ["plano_indisponivel"] } };
+        }
+      } else if (!planos || cadastroExigeEscolhaDePlano(planos)) {
+        return { ok: false, error: "validation_error", details: { cobranca_plan_id: ["plano_obrigatorio"] } };
+      }
+    }
+  }
+
   // ── O GoTrue com o cadastro público FECHADO (#1653) ──────────────────────────
   //
   // Com `disable_signup` ligado no GoTrue — é o que fecha `POST /auth/v1/signup`
@@ -236,6 +285,7 @@ export async function signUp(
       if (criada.motivo === "conta_ja_existe") return { ok: false, error: "conta_ja_existe" };
       if (criada.motivo === "rate_limited") return { ok: false, error: "rate_limited" };
       if (criada.motivo === "captcha_failed") return { ok: false, error: "captcha_failed" };
+      if (criada.motivo === "email_de_confirmacao_falhou") return { ok: false, error: "email_indisponivel" };
       return { ok: false, error: "signup_failed" };
     }
 
@@ -277,6 +327,8 @@ export async function signUp(
             // Só uma dica para a tela de pagamento pré-selecionar o plano; nunca preço. Sanitizada aqui de
             // novo: a ação é chamável direto.
             ...(plano ? { plano_escolhido: plano } : {}),
+            ...(planoEscolhido ? { cobranca_plan_id: planoEscolhido } : {}),
+            ...metadadosDasPistas(pistas),
           },
     },
   });
@@ -330,6 +382,11 @@ export async function signUp(
       ip,
       userAgent,
     });
+    // Medido numa VPS v1.85.0: GoTrue sem SMTP devolve 500 "Error sending
+    // confirmation email", e a tela mandava "Tente novamente" — seis vezes na
+    // trilha, nenhuma podia dar certo. Não fura a anti-enumeração: conta que já
+    // existe recebe sucesso ofuscado sem e-mail, então nunca chega aqui.
+    if (/error sending/i.test(error.message)) return { ok: false, error: "email_indisponivel" };
     return { ok: false, error: "signup_failed" };
   }
 

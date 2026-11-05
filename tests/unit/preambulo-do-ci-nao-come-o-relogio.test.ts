@@ -72,8 +72,10 @@ const TETOS: Record<string, { minutos: number; razao: string }> = {
   // lê o desfecho de `needs`. O teto que denuncia a suíte crescendo vive na perna
   // que a roda.
   "ci.yml::invariants-majors": {
-    minutos: 30,
+    minutos: 45,
     razao:
+      "Hiperbold, 04/11/2026, MEDIDO: depois do merge do upstream 1.58–1.100 a perna do pg17 levou " +
+      "29,5 min e a do pg15 foi cortada aos 30 com 465 arquivos verdes (run 41945878527). Antes: " +
       "a perna deixou de ser UMA passada: agora é `test:db` + `test:db:update`, e cada uma sobe " +
       "Postgres e aplica o baseline (p90 medido de uma passada: 325s). O 30 é DECLARADO, não " +
       "medido — não há Docker onde esta matriz foi escrita; mantido em 20, a perna morreria por " +
@@ -305,6 +307,12 @@ describe("o preâmbulo do CI não come o orçamento dos testes", () => {
     // Mexer na divisão (reequilibrar passos, criar a parte 3 ou a 4) tem dois erros
     // VERDES: `--shard=N/3` com matrix [1, 2] deixa um terço da suíte sem rodar,
     // e `if: matrix.parte == 3` com matrix [1, 2] deixa o passo sem parte.
+    // Desde 08/10/2026 há parte SEM unit (a última — 4 até 23/10/2026, 7 até 03/11/2026; hoje 7 e 8:
+    // cercas + as duas fatias do kit), excluídas por
+    // `if: matrix.parte != 7 && matrix.parte != 8` no passo de unit — então o N do shard é o número de
+    // partes que RODAM unit, não o tamanho da matrix. Os dois erros verdes novos:
+    // tirar a exclusão (a parte 7 roda `--shard=7/6`, que o vitest recusa ou
+    // duplica) e excluir uma parte do meio (um sexto da suíte sem rodar).
     // Que o `--shard` do vitest corta em fatias disjuntas que somam tudo foi
     // provado com o sequenciador dele no PR que moveu o lint (1108 = 554 + 554).
     const texto = readFileSync(join(DIR_WORKFLOWS, "ci.yml"), "utf8");
@@ -321,10 +329,27 @@ describe("o preâmbulo do CI não come o orçamento dos testes", () => {
     expect(partes, "a matrix `parte: [...]` não foi encontrada").toBeDefined();
     expect(partes, "as partes têm de ser 1..N, sem buraco").toEqual(partes!.map((_, i) => i + 1));
 
-    const shards = [...job.matchAll(/--shard=\$\{\{ matrix\.parte \}\}\/(\d+)/g)].map((m) => Number(m[1]));
-    expect(shards, "o passo de unit tem de recortar com --shard=${{ matrix.parte }}/N").toEqual([partes!.length]);
+    // As partes que rodam unit: a matrix MENOS as que o `if:` do passo de unit exclui.
+    const passoUnit = job.match(/^\s+- name: Unit tests[^\n]*\n((?:(?!\s+- (?:name|uses):)[^\n]*\n)*)/m)?.[1];
+    expect(passoUnit, "o passo `Unit tests` não foi encontrado — esta guarda cegou").toBeDefined();
+    const condicaoUnit = passoUnit!.match(/^\s+if: (.*)$/m)?.[1] ?? "";
+    const excluidas = [...condicaoUnit.matchAll(/matrix\.parte != (\d+)/g)].map((m) => Number(m[1]));
+    expect(
+      condicaoUnit.replace(/\s*matrix\.parte != \d+\s*(&&\s*)?/g, "").trim(),
+      "o `if:` do passo de unit só pode EXCLUIR partes (`matrix.parte != N`): outra condição o pula sem a conta abaixo ver",
+    ).toBe("");
+    const comUnit = partes!.filter((n) => !excluidas.includes(n));
+    expect(
+      comUnit,
+      "as partes que rodam unit têm de ser 1..N: `--shard=${{ matrix.parte }}/N` só cobre a suíte se a parte for o índice do shard",
+    ).toEqual(comUnit.map((_, i) => i + 1));
 
-    const alvos = [...job.matchAll(/matrix\.parte == (\d+)/g)].map((m) => Number(m[1]));
+    const shards = [...job.matchAll(/--shard=\$\{\{ matrix\.parte \}\}\/(\d+)/g)].map((m) => Number(m[1]));
+    expect(shards, "o passo de unit tem de recortar com --shard=${{ matrix.parte }}/N, N = partes que rodam unit").toEqual([
+      comUnit.length,
+    ]);
+
+    const alvos = [...job.matchAll(/matrix\.parte [!=]= (\d+)/g)].map((m) => Number(m[1]));
     expect(alvos.length, "nenhum `if: matrix.parte == N` — o regex cegou").toBeGreaterThan(0);
     expect(alvos.filter((n) => !partes!.includes(n)), "passo preso a uma parte que não existe").toEqual([]);
   });

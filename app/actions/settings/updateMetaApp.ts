@@ -7,10 +7,10 @@ import { z } from "zod";
 import { invalidarAppDaMeta } from "@/lib/channels/meta/app";
 import { invalidarConfigMetaSocial } from "@/lib/channels/meta-social/config";
 import { audit } from "@/lib/audit";
+import { respostaParaOperador } from "@/lib/erros/para-operador";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { logger } from "@/lib/logger";
-import { ehFalhaDaSessao, MENSAGEM_SESSAO_INVALIDA } from "@/lib/auth/falha-de-sessao";
-import { requirePlatformAdminFull } from "@/lib/auth/portao-de-escrita";
+import { escritaDeAdminOuRecusa } from "@/lib/auth/escritaDeAdminOuRecusa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 
@@ -113,7 +113,13 @@ async function gravar(
     // tela diria "salvo" e nada seria gravado. É o modo de falha que a issue #144
     // mediu em `organizations`, e a defesa é não escrever a query que o permite.
     .upsert({ id: 1, ...valores }, { onConflict: "id" });
-  if (error) return { ok: false, error: error.message };
+  // #3747: mesma régua da irmã `updateGoogleOAuth` — a tela recebe a frase do
+  // operador e o cru fica no log.
+  if (error) {
+    return respostaParaOperador(error, {
+      contexto: "[meta.app] falha ao gravar o app da instalação",
+    });
+  }
 
   // No MESMO processo que renderiza (na VPS há um processo de app só), então a
   // credencial nova vale na próxima entrega sem esperar o TTL de 30s.
@@ -199,14 +205,9 @@ const SEM_SEGREDO: UpdateMetaAppResult = { ok: false, error: "app_secret_obrigat
  * que o produto oferece desse valor.
  */
 export async function updateMetaApp(input: MetaAppInput): Promise<UpdateMetaAppResult> {
-  let authUser: Awaited<ReturnType<typeof requirePlatformAdminFull>>["user"];
-  try {
-    ({ user: authUser } = await requirePlatformAdminFull());
-  } catch (err) {
-    // GoTrue fora do ar ou sessão sem o fator: o guarda lança (falha fechado); a tela recebe uma frase, não o digest opaco.
-    if (ehFalhaDaSessao(err)) return { ok: false, error: MENSAGEM_SESSAO_INVALIDA };
-    throw err;
-  }
+  const escrita = await escritaDeAdminOuRecusa();
+  if (!escrita.ok) return escrita;
+  const { user: authUser } = escrita.ctx;
 
   const parsed = entradaSchema.safeParse(input);
   if (!parsed.success) {
@@ -278,14 +279,9 @@ export async function updateMetaApp(input: MetaAppInput): Promise<UpdateMetaAppR
  * avisa em vez de trocar sozinha.
  */
 export async function rotacionarVerifyTokenDaMeta(): Promise<UpdateMetaAppResult> {
-  let authUser: Awaited<ReturnType<typeof requirePlatformAdminFull>>["user"];
-  try {
-    ({ user: authUser } = await requirePlatformAdminFull());
-  } catch (err) {
-    // GoTrue fora do ar ou sessão sem o fator: o guarda lança (falha fechado); a tela recebe uma frase, não o digest opaco.
-    if (ehFalhaDaSessao(err)) return { ok: false, error: MENSAGEM_SESSAO_INVALIDA };
-    throw err;
-  }
+  const escrita = await escritaDeAdminOuRecusa();
+  if (!escrita.ok) return escrita;
+  const { user: authUser } = escrita.ctx;
 
   const gravado = await oQueEstaGravado();
   if (!gravado.ok) return gravado.recusa;
@@ -344,13 +340,9 @@ export interface MetaSocialAppInput {
 }
 
 export async function updateAppSocialDaMeta(input: MetaSocialAppInput): Promise<UpdateMetaAppResult> {
-  let authUser: Awaited<ReturnType<typeof requirePlatformAdminFull>>["user"];
-  try {
-    ({ user: authUser } = await requirePlatformAdminFull());
-  } catch (err) {
-    if (ehFalhaDaSessao(err)) return { ok: false, error: MENSAGEM_SESSAO_INVALIDA };
-    throw err;
-  }
+  const escrita = await escritaDeAdminOuRecusa();
+  if (!escrita.ok) return escrita;
+  const { user: authUser } = escrita.ctx;
 
   const parsed = entradaSocialSchema.safeParse(input);
   if (!parsed.success) {

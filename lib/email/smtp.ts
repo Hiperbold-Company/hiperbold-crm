@@ -3,6 +3,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 import { env } from "@/lib/env";
 import { getSmtpConfig, type SmtpConfig } from "@/lib/email/config";
 import { PRAZO_DE_CONEXAO_SMTP_MS, PRAZO_DE_SILENCIO_SMTP_MS } from "@/lib/email/prazo";
+import { remetenteComNome } from "@/lib/email/remetente";
 
 interface SendArgs {
   to: string | string[];
@@ -34,8 +35,7 @@ export function isSmtpConfigured(config: SmtpConfig): boolean {
 
 export function formatFromAddress(config: SmtpConfig, override?: string): string | null {
   if (!config.fromEmail) return null;
-  const name = (override ?? config.fromName).replace(/[<>"\r\n]/g, "").trim();
-  return name ? `${name} <${config.fromEmail}>` : config.fromEmail;
+  return remetenteComNome(config.fromEmail, override ?? config.fromName);
 }
 /** A URL já é validada por lib/env; em desenvolvimento mantemos o padrão local. */
 function smtpClientName(): string | undefined {

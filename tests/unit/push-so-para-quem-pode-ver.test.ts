@@ -28,28 +28,60 @@ vi.mock("@/lib/notifications/vapid", () => ({
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
-import { enviarPushDaOrg, papelPodeVerConversa } from "@/lib/notifications/web_push";
+import { enviarPushAQuemVeAConversa, enviarPushDaOrg } from "@/lib/notifications/web_push";
 import { endpointDePushPermitido } from "@/lib/notifications/endpoint-de-push";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
+const CONVERSA = "33333333-3333-4333-8333-333333333333";
 const FCM = (n: string) => `https://fcm.googleapis.com/fcm/send/${n}`;
 
 interface Sub { id: string; user_id: string; endpoint: string; p256dh: string; auth: string }
 interface Vinculo { user_id: string; role: string; revoked_at: string | null }
 
-function banco(subs: Sub[], vinculos: Vinculo[] | "erro") {
+/**
+ * Banco falso: `push_subscriptions` (com o filtro por usuário que o aviso pessoal aplica),
+ * `user_organizations` (só os vínculos NÃO revogados, como o `.is("revoked_at", null)` real),
+ * `organizations` (sem linha: a tela bloqueada fica no padrão) e a RPC de quem vê a conversa.
+ */
+function banco(
+  subs: Sub[],
+  vinculos: Vinculo[] | "erro",
+  opts: { quemVe?: Sub[] | "erro" } = {},
+) {
   return {
-    from: (tabela: string) => ({
-      select: () => ({
-        eq: async () =>
-          tabela === "push_subscriptions"
-            ? { data: subs, error: null }
-            : vinculos === "erro"
-              ? { data: null, error: { message: "falhou" } }
-              : { data: vinculos, error: null },
-      }),
-      delete: () => ({ eq: async () => ({ error: null }) }),
-    }),
+    from: (tabela: string) => {
+      const filtros: Array<[string, unknown]> = [];
+      const q: Record<string, unknown> = {
+        select: () => q,
+        eq: (c: string, v: unknown) => {
+          filtros.push([c, v]);
+          return q;
+        },
+        is: () => q,
+        maybeSingle: async () => ({ data: null, error: null }),
+        delete: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
+        then: (r: (v: unknown) => unknown) => {
+          if (tabela === "push_subscriptions") {
+            const doUsuario = filtros.find(([c]) => c === "user_id")?.[1];
+            return r({ data: subs.filter((x) => !doUsuario || x.user_id === doUsuario), error: null });
+          }
+          if (tabela === "user_organizations") {
+            return r(
+              vinculos === "erro"
+                ? { data: null, error: { message: "falhou" } }
+                : { data: vinculos.filter((v) => v.revoked_at === null), error: null },
+            );
+          }
+          return r({ data: [], error: null });
+        },
+      };
+      return q;
+    },
+    rpc: async (nome: string) => {
+      if (nome !== "fn_push_inscricoes_que_veem_a_conversa") throw new Error(`rpc inesperada: ${nome}`);
+      const quemVe = opts.quemVe ?? subs;
+      return quemVe === "erro" ? { data: null, error: { message: "falhou" } } : { data: quemVe, error: null };
+    },
   };
 }
 
@@ -62,7 +94,7 @@ beforeEach(() => {
 
 describe("enviarPushDaOrg: quem ainda pertence à organização", () => {
   it("CONTROLE POSITIVO: membro ativo recebe", async () => {
-    const r = await enviarPushDaOrg(ORG, payload, banco([sub("ativo")], [{ user_id: "ativo", role: "agent", revoked_at: null }]) as never);
+    const r = await enviarPushDaOrg(ORG, payload, {}, banco([sub("ativo")], [{ user_id: "ativo", role: "agent", revoked_at: null }]) as never);
     expect(r.sent).toBe(1);
     expect(enviados).toEqual([FCM("ativo")]);
   });
@@ -71,6 +103,7 @@ describe("enviarPushDaOrg: quem ainda pertence à organização", () => {
     const r = await enviarPushDaOrg(
       ORG,
       payload,
+      {},
       banco(
         [sub("revogado"), sub("estranho"), sub("ativo")],
         [
@@ -88,59 +121,60 @@ describe("enviarPushDaOrg: quem ainda pertence à organização", () => {
       { user_id: "a", role: "agent", revoked_at: null },
       { user_id: "b", role: "agent", revoked_at: "2026-09-01T00:00:00Z" },
     ];
-    await enviarPushDaOrg(ORG, payload, banco([sub("a"), sub("b")], vinculos) as never, { userId: "a" });
+    await enviarPushDaOrg(ORG, payload, { soUsuario: "a" }, banco([sub("a"), sub("b")], vinculos) as never);
     expect(enviados).toEqual([FCM("a")]);
     enviados.length = 0;
-    await enviarPushDaOrg(ORG, payload, banco([sub("a"), sub("b")], vinculos) as never, { userId: "b" });
+    await enviarPushDaOrg(ORG, payload, { soUsuario: "b" }, banco([sub("a"), sub("b")], vinculos) as never);
     expect(enviados).toEqual([]);
   });
 
   it("falha ao consultar os vínculos: não manda para ninguém (falha fechada)", async () => {
-    const r = await enviarPushDaOrg(ORG, payload, banco([sub("a")], "erro") as never);
+    const r = await enviarPushDaOrg(ORG, payload, {}, banco([sub("a")], "erro") as never);
     expect(r.sent).toBe(0);
     expect(enviados).toEqual([]);
   });
 });
 
-describe("enviarPushDaOrg: quem pode ver a conversa", () => {
+/**
+ * Quem PODE VER a conversa, desde o upstream, é decidido no banco: a RPC
+ * `fn_push_inscricoes_que_veem_a_conversa` aplica `fn_can_view_conversation` (a RLS
+ * de `conversations`), e os modos `own` / `own_and_unassigned` / `all` são provados em
+ * `tests/invariants/push-so-a-quem-ve-a-conversa.test.ts`. Aqui se mede o que o envio
+ * faz com o que a RPC devolve.
+ */
+describe("enviarPushAQuemVeAConversa: só quem pode ver a conversa", () => {
   const vinculos: Vinculo[] = [
     { user_id: "dono", role: "agent", revoked_at: null },
     { user_id: "outro-agent", role: "agent", revoked_at: null },
-    { user_id: "viewer", role: "viewer", revoked_at: null },
     { user_id: "gerente", role: "manager", revoked_at: null },
   ];
-  const subs = () => ["dono", "outro-agent", "viewer", "gerente"].map((u) => sub(u));
+  const todos = () => ["dono", "outro-agent", "gerente"].map((u) => sub(u));
 
-  it("⭐ conversa de outro atendente no modo own_and_unassigned: o outro agent não recebe", async () => {
-    await enviarPushDaOrg(ORG, payload, banco(subs(), vinculos) as never, {
-      conversa: { assignedToUserId: "dono", modoDeVisibilidade: "own_and_unassigned" },
-    });
-    expect(enviados.sort()).toEqual([FCM("dono"), FCM("gerente"), FCM("viewer")].sort());
+  it("⭐ só recebe quem a RPC diz que vê: o outro atendente fica de fora", async () => {
+    const quemVe = [sub("dono"), sub("gerente")];
+    await enviarPushAQuemVeAConversa(ORG, CONVERSA, payload, undefined, banco(todos(), vinculos, { quemVe }) as never);
+    expect(enviados.sort()).toEqual([FCM("dono"), FCM("gerente")].sort());
   });
 
-  it("modo own: conversa sem dono só vai para quem vê a empresa inteira", async () => {
-    await enviarPushDaOrg(ORG, payload, banco(subs(), vinculos) as never, {
-      conversa: { assignedToUserId: null, modoDeVisibilidade: "own" },
-    });
-    expect(enviados.sort()).toEqual([FCM("gerente"), FCM("viewer")].sort());
+  it("a RPC não alarga a membresia: quem vê mas foi revogado não recebe", async () => {
+    const revogado: Vinculo[] = [...vinculos.filter((v) => v.user_id !== "dono"), { user_id: "dono", role: "agent", revoked_at: "2026-09-01T00:00:00Z" }];
+    await enviarPushAQuemVeAConversa(ORG, CONVERSA, payload, undefined, banco(todos(), revogado, { quemVe: [sub("dono"), sub("gerente")] }) as never);
+    expect(enviados).toEqual([FCM("gerente")]);
   });
 
-  it("modo all: todos os agents recebem; conversa sem dono no padrão: todos recebem", async () => {
-    await enviarPushDaOrg(ORG, payload, banco(subs(), vinculos) as never, {
-      conversa: { assignedToUserId: "dono", modoDeVisibilidade: "all" },
-    });
-    expect(enviados).toHaveLength(4);
+  it("a lista de quem deve ser avisado só estreita, nunca alarga além de quem vê", async () => {
+    await enviarPushAQuemVeAConversa(ORG, CONVERSA, payload, ["dono", "outro-agent"], banco(todos(), vinculos, { quemVe: [sub("dono"), sub("gerente")] }) as never);
+    expect(enviados).toEqual([FCM("dono")]);
     enviados.length = 0;
-    await enviarPushDaOrg(ORG, payload, banco(subs(), vinculos) as never, {
-      conversa: { assignedToUserId: null, modoDeVisibilidade: null },
-    });
-    expect(enviados).toHaveLength(4);
+    const r = await enviarPushAQuemVeAConversa(ORG, CONVERSA, payload, [], banco(todos(), vinculos) as never);
+    expect(r.sent).toBe(0);
+    expect(enviados).toEqual([]);
   });
 
-  it("papelPodeVerConversa espelha fn_can_view_conversation e nega papel desconhecido", () => {
-    expect(papelPodeVerConversa("agent", "u", { assignedToUserId: "u", modoDeVisibilidade: "own" })).toBe(true);
-    expect(papelPodeVerConversa("agent", "u", { assignedToUserId: "x", modoDeVisibilidade: "own" })).toBe(false);
-    expect(papelPodeVerConversa("outro", "u", { assignedToUserId: null, modoDeVisibilidade: "all" })).toBe(false);
+  it("falha ao perguntar quem vê: não manda para ninguém (falha fechada)", async () => {
+    const r = await enviarPushAQuemVeAConversa(ORG, CONVERSA, payload, undefined, banco(todos(), vinculos, { quemVe: "erro" }) as never);
+    expect(r.sent).toBe(0);
+    expect(enviados).toEqual([]);
   });
 });
 
@@ -150,6 +184,7 @@ describe("D-097 vizinho: o servidor só chama serviços de push de navegador", (
     await enviarPushDaOrg(
       ORG,
       payload,
+      {},
       banco(
         [
           sub("a", "http://169.254.169.254/latest/meta-data"),

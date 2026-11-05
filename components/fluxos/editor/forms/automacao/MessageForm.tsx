@@ -125,33 +125,33 @@ export function configDoRascunho(r: Rascunho): unknown {
 const normalizar = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
 /** O primeiro problema do rascunho, em português de quem usa a tela; `null` = pronto. */
-function problemaDo(r: Rascunho): string | null {
+function problemaDo(r: Rascunho, t: (texto: string) => string): string | null {
   const limite = r.tipo === "none" ? MAX_CORPO : MAX_CORPO_COM_OPCOES;
-  if (r.body.trim() === "") return "Escreva a mensagem.";
-  if (r.body.length > limite) return "A mensagem passou do limite de caracteres.";
+  if (r.body.trim() === "") return t("Escreva a mensagem.");
+  if (r.body.length > limite) return t("A mensagem passou do limite de caracteres.");
   if (r.tipo === "none") return null;
-  if (r.itens.length === 0) return "Adicione ao menos uma opção.";
+  if (r.itens.length === 0) return t("Adicione ao menos uma opção.");
   const maximo = r.tipo === "buttons" ? MAX_BOTOES : MAX_ITENS_DA_LISTA;
   if (r.itens.length > maximo)
     return r.tipo === "buttons"
-      ? "Botões aceitam até 3 opções. Tire uma ou use Lista."
-      : "A lista aceita até 10 opções.";
+      ? t("Botões aceitam até 3 opções. Tire uma ou use Lista.")
+      : t("A lista aceita até 10 opções.");
   const tetoDoRotulo = r.tipo === "buttons" ? MAX_ROTULO_DO_BOTAO : MAX_ROTULO_DA_LISTA;
-  if (r.itens.some((i) => i.label.trim() === "")) return "Dê um nome a cada opção.";
+  if (r.itens.some((i) => i.label.trim() === "")) return t("Dê um nome a cada opção.");
   if (r.itens.some((i) => i.label.trim().length > tetoDoRotulo))
     return r.tipo === "buttons"
-      ? "O nome de um botão tem no máximo 20 caracteres."
-      : "O nome de uma opção da lista tem no máximo 24 caracteres.";
+      ? t("O nome de um botão tem no máximo 20 caracteres.")
+      : t("O nome de uma opção da lista tem no máximo 24 caracteres.");
   if (new Set(r.itens.map((i) => normalizar(i.label))).size !== r.itens.length)
-    return "Duas opções têm o mesmo nome.";
+    return t("Duas opções têm o mesmo nome.");
   if (r.tipo === "list" && r.botaoDaLista.trim() === "")
-    return "Escreva o texto do botão da lista.";
+    return t("Escreva o texto do botão da lista.");
   if (
     r.esperaMs === null ||
     r.esperaMs < TEMPO_MINIMO_DE_ESPERA_DE_RESPOSTA_MS ||
     r.esperaMs > TEMPO_MAXIMO_DE_ESPERA_DE_RESPOSTA_MS
   )
-    return "O tempo de espera vai de 1 minuto a 30 dias.";
+    return t("O tempo de espera vai de 1 minuto a 30 dias.");
   return null;
 }
 
@@ -180,9 +180,9 @@ export function MessageForm({
   const gravar = (patch: Partial<Rascunho>) => {
     const novo = { ...r, ...patch };
     setR(novo);
-    const problema = problemaDo(novo);
+    const problema = problemaDo(novo, t);
     if (problema) {
-      setErro(t(problema));
+      setErro(problema);
       return;
     }
     const parsed = messageConfigSchema.safeParse(configDoRascunho(novo));

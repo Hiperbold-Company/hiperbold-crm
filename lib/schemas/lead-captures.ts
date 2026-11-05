@@ -8,8 +8,14 @@
  */
 import { z } from "zod";
 
-/** Espelha o CHECK de `webhook_lead_captures.outcome` (migrations 0174 e 0958). */
-export const DESFECHOS_DA_CAPTACAO = ["criado", "duplicado", "recusado", "recadastro"] as const;
+/**
+ * Espelha o CHECK de `webhook_lead_captures.outcome` (migrations 0174, 0683 e 0958).
+ *
+ * `atualizado` entrou junto com a opção por fonte do #2316 — o desfecho do card
+ * que a integração reescreveu. Ele é o único que NÃO é um envio isolado: depende
+ * de a fonte ter a opção ligada. `recadastro` é da Hiperbold (migration 0958).
+ */
+export const DESFECHOS_DA_CAPTACAO = ["criado", "duplicado", "atualizado", "recusado", "recadastro"] as const;
 
 export const leadCapturesQuerySchema = z.object({
   source_id: z.string().uuid().optional(),

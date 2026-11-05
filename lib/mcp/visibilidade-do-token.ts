@@ -60,6 +60,12 @@ export const FERRAMENTAS_COM_DONO: ReadonlySet<string> = new Set([
   "crm_list_followups",
   "crm_enroll_followup_flow",
   "crm_propose_reactivation",
+  // Do upstream (merge de 04/11/2026): leem ou escrevem a partir de um negócio (`lead_id`).
+  "crm_get_honorarios_contrato",
+  "crm_list_honorarios_parcelas",
+  "crm_preparar_proposta",
+  "crm_draft_proposal",
+  "crm_propose_lead_fields_from_document",
 ]);
 
 /** Capacidades sem dono por atendente: catálogo, agenda, conhecimento, configuração. */
@@ -109,6 +115,9 @@ export const FERRAMENTAS_SEM_DONO: ReadonlySet<string> = new Set([
   "crm_list_team_members",
   "crm_list_pipelines",
   "crm_list_privacy_requests",
+  // Do upstream (merge de 04/11/2026): banco externo e análise do site do contato do turno.
+  "crm_consultar_receita",
+  "crm_get_prospecting_site_audit",
   // Administração por chave de API (fases 2 e 3): configuração da casa, sem dono por atendente.
   "crm_list_followup_flows",
   "crm_get_followup_flow",

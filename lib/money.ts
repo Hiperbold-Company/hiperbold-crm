@@ -1,5 +1,5 @@
 /**
- * Conversão de valor digitado (reais) para centavos.
+ * Conversão de valor digitado (na moeda da ORGANIZAÇÃO) para centavos.
  *
  * A versão anterior vivia copiada em três formulários de lead e fazia
  * `reais.replace(/\./g, "").replace(",", ".")` — ou seja, tratava TODO ponto
@@ -7,8 +7,8 @@
  * teclado numérico) tinha o valor gravado como R$ 24.990,00: cem vezes maior,
  * sem erro na tela, alimentando funil e relatórios com número errado.
  *
- * A regra aqui desambigua sem adivinhação, porque em pt-BR grupo de milhar tem
- * SEMPRE 3 dígitos:
+ * A regra aqui desambigua sem adivinhação, porque grupo de milhar tem SEMPRE
+ * 3 dígitos — nas duas convenções:
  *
  *   "249,90"      → vírgula é decimal                       → 24990
  *   "249.90"      → ponto seguido de 2 dígitos é decimal    → 24990
@@ -17,26 +17,80 @@
  *   "1,234.56"    → formato en: o último separador é decimal→ 123456
  *   "1.234.567"   → todos os grupos com 3 dígitos           → 123456700
  *
+ * ─── ⚠️ QUAL dos dois sinais é o decimal é fato da MOEDA (#3331) ──────────
+ *
+ * Medido numa instalação real, organização com `currency = USD`: quem digitava
+ * `1,300` no campo de valor do funil gravava **1,30** — porque o parser não
+ * sabia a moeda e tratava a vírgula como decimal, que é a regra do pt-BR. Em
+ * en-US a vírgula é separador de MILHAR: eram mil e trezentos dólares, cem
+ * vezes menos do que o negócio valia. O rótulo do campo já dizia `Valor ($)`:
+ * a moeda chegava ao desenho e parava antes daqui.
+ *
+ * O segundo parâmetro é a fonte disso, e ele é OPCIONAL de propósito:
+ *
+ *   parseReaisToCents("1,300", "USD")  → 130000   (vírgula é milhar)
+ *   parseReaisToCents("1.300", "USD")  → 130      (ponto é o decimal da moeda)
+ *   parseReaisToCents("1.300", "BRL")  → 130000   (a leitura de sempre)
+ *
+ * Quem chama sem moeda — preço de catálogo, honorário, comanda, faturamento —
+ * fica com a régua do padrão (`MOEDA_PADRAO`), que é exatamente a de antes
+ * deste parâmetro existir: nenhum chamador atual muda de comportamento,
+ * exceto num caso: sinal repetido (`1,234,567`) passa a ser lido como milhar
+ * também na régua do real, onde antes virava 1.234,57.
+ *
+ * O papel de cada sinal sai do MESMO `Intl` que escreve o preço em
+ * `formatCents` (ver `separadoresDaMoeda`), e não de uma tabela na mão: se o
+ * formatador escreve `$1,300.00`, o parser lê `1,300` como mil e trezentos.
+ * A régua dos 3 dígitos do grupo de milhar segue sendo o desempate do sinal
+ * solitário — é ela que resolve `1,30` e `1.300` nas duas convenções.
+ *
  * Devolve null quando não dá para ler um número — quem chama decide a mensagem.
  */
-export function parseReaisToCents(input: string): number | null {
+export function parseReaisToCents(input: string, moeda: string = MOEDA_PADRAO): number | null {
   const raw = input.trim();
   if (raw.length === 0) return null;
   if (!/^[\d.,\s]+$/.test(raw)) return null;
 
   const s = raw.replace(/\s/g, "");
+  const { decimal: decimalDaMoeda, grupo: grupoDaMoeda } = separadoresDaMoeda(moeda);
   const lastComma = s.lastIndexOf(",");
   const lastDot = s.lastIndexOf(".");
+
+  /**
+   * O papel de um sinal SOLITÁRIO vem da moeda:
+   *
+   *   "decimal"  — é o separador decimal dela: decimal, sempre.
+   *   "grupo"    — é o milhar dela: milhar só quando o grupo final tem
+   *                exatamente 3 dígitos (a régua de sempre). Com 2 dígitos
+   *                depois não é grupo em convenção nenhuma — ver o caso
+   *                ambíguo declarado em `lib/money.test.ts`.
+   *   "semRegra" — sinal que a moeda nem usa («.» em EUR, cujo milhar é
+   *                espaço): fica a leitura generosa de antes, para nenhum
+   *                texto legível virar null.
+   */
+  const papelDoSinal = (sinal: "," | "."): "decimal" | "grupo" | "semRegra" =>
+    sinal === decimalDaMoeda ? "decimal" : sinal === grupoDaMoeda ? "grupo" : "semRegra";
 
   let decimalSep = "";
   if (lastComma >= 0 && lastDot >= 0) {
     // Os dois presentes: o que vem por último é o decimal (pt-BR ou en).
     decimalSep = lastComma > lastDot ? "," : ".";
-  } else if (lastComma >= 0) {
-    decimalSep = ",";
-  } else if (lastDot >= 0) {
-    // Só ponto: é milhar apenas se o grupo final tiver exatamente 3 dígitos.
-    decimalSep = s.length - lastDot - 1 === 3 ? "" : ".";
+  } else if (lastComma >= 0 || lastDot >= 0) {
+    const sinal: "," | "." = lastComma >= 0 ? "," : ".";
+    const pos = lastComma >= 0 ? lastComma : lastDot;
+    const digitosDepois = s.length - pos - 1;
+    // Sinal que aparece MAIS DE UMA VEZ nunca é o decimal (só há um decimal):
+    // `1.234.567` em dólar é milhar, não 1.234,57.
+    const papel = s.indexOf(sinal) !== pos ? "grupo" : papelDoSinal(sinal);
+    if (papel === "grupo") {
+      // O grupo de milhar tem sempre 3 dígitos; fora disso a leitura que
+      // sobra é a decimal (o "1,30" em dólar, que não é grupo em lugar algum).
+      decimalSep = digitosDepois === 3 ? "" : sinal;
+    } else if (papel === "decimal") {
+      decimalSep = sinal;
+    } else {
+      decimalSep = sinal === "," ? "," : digitosDepois === 3 ? "" : ".";
+    }
   }
 
   let normalized: string;
@@ -227,6 +281,48 @@ function casasDaMoeda(moeda: string): number {
 }
 
 /**
+ * Os dois sinais que a MOEDA usa — o decimal e o de milhar —, tirados do MESMO
+ * formatador que escreve o preço (`formatadorDa`), para ler e escrever nunca
+ * discordarem.
+ *
+ * É o que permite `parseReaisToCents` saber que em dólar o decimal é «.» e o
+ * milhar é «,» (o inverso do pt-BR) sem tabela na mão e sem lista para
+ * envelhecer: a moeda que o `Intl` conhece já chega com os sinais dela.
+ *
+ * Medido no ICU do Node 22: USD e MXN `decimal="." grupo=","`; BRL
+ * `decimal="," grupo="."`; EUR (pt-PT) e AOA (pt-AO) `decimal="," grupo=" "` —
+ * o milhar é ESPAÇO, que o parser descarta antes de olhar, e por isso o sinal
+ * que sobra fica sem papel declarado (`semRegra`).
+ *
+ * Moeda sem subunidade (JPY, PYG) não emite parte decimal em `formatToParts`;
+ * aí o complemento do milhar é a resposta certa — é o ponto decimal daquela
+ * região. Moeda que o `Intl` recusa cai na régua do PADRÃO, que é a mesma rede
+ * de `formatCents`.
+ */
+const separadoresPorMoeda = new Map<string, { decimal: string; grupo: string }>();
+
+function separadoresDaMoeda(moeda: string): { decimal: string; grupo: string } {
+  const cacheado = separadoresPorMoeda.get(moeda);
+  if (cacheado) return cacheado;
+
+  let par: { decimal: string; grupo: string };
+  try {
+    const partes = formatadorDa(moeda).formatToParts(12345.6);
+    const grupo = partes.find((p) => p.type === "group")?.value ?? ",";
+    par = {
+      grupo,
+      decimal: partes.find((p) => p.type === "decimal")?.value ?? (grupo === "," ? "." : ","),
+    };
+  } catch {
+    // Código malformado (o `Intl` lança): quem decide é o padrão. O `if` corta
+    // a recursão infinita se o próprio padrão for um código que o ICU recusa.
+    par = moeda === MOEDA_PADRAO ? { decimal: ",", grupo: "." } : separadoresDaMoeda(MOEDA_PADRAO);
+  }
+  separadoresPorMoeda.set(moeda, par);
+  return par;
+}
+
+/**
  * ⚠️ `formatCents` é EXPORTADA e roda em client component (a lista de
  * produtos). `new Intl.NumberFormat(locale, {style:"currency", currency})`
  * LANÇA para moeda malformada — medido: `""`, `"BR"` (2 letras), `undefined`,
@@ -298,6 +394,85 @@ export function formatValorDoNegocio(
  */
 export function precoDoCatalogoParaValorDoNegocio(precoCents: number, moeda: string): number {
   return Math.round(precoCents * 10 ** (2 - casasDaMoeda(moeda)));
+}
+
+/**
+ * SOMA POR MOEDA — cada moeda no seu balde, nunca uma soma entre elas (#1531).
+ *
+ * R$ 5.000 mais 5.000 € não são 10.000 de nada: somar `_cents` de moedas
+ * diferentes produz um número que não existe em moeda nenhuma, e escrevê-lo no
+ * símbolo de uma delas o faz parecer verdade. O total da coluna do funil fazia
+ * isso — somava tudo e escrevia na moeda do primeiro negócio. A regra já valia
+ * em dois lugares (`lib/leads/previsao.ts` e `lib/metrics/perdas.ts`, cada um
+ * com o seu balde interno); esta é a versão exportada, para o próximo total não
+ * reinventar a terceira.
+ *
+ * Item com `cents` `null`/`undefined` não entra e NÃO cria a moeda — "sem valor"
+ * não é "zero". Zero entra e cria: é valor declarado, e é o que mantém o
+ * ponderado de uma etapa de perda (chance 0) com as mesmas moedas do total.
+ * Nada é convertido.
+ */
+export function somaPorMoeda<T>(
+  itens: readonly T[],
+  cents: (item: T) => number | null | undefined,
+  moeda: (item: T) => string,
+): Map<string, number> {
+  const soma = new Map<string, number>();
+  for (const item of itens) {
+    const valor = cents(item);
+    if (valor == null) continue;
+    const m = moeda(item);
+    soma.set(m, (soma.get(m) ?? 0) + valor);
+  }
+  return soma;
+}
+
+/**
+ * Escreve uma soma por moeda como texto: `"R$ 5.000,00 + 5000,00 €"`.
+ *
+ * ⚠️ O FORMATADOR É OBRIGATÓRIO, e não um padrão escondido, por causa das duas
+ * réguas de `_cents` (ver `formatValorDoNegocio`): valor de negócio é ×100 em
+ * qualquer moeda, preço e lançamento financeiro são unidades menores. Um padrão
+ * serviria a uma e mostraria a outra cem vezes maior em guarani — o defeito que
+ * o total da coluna já pagou uma vez.
+ *
+ * - Com UMA moeda, o texto é exatamente `formatar(cents, moeda)`: quem somava
+ *   uma moeda só não vê diferença nenhuma.
+ * - Ordem: `primeira` (quando está na soma), depois as demais em ordem
+ *   alfabética do código ISO — determinística, para o texto não mudar de lugar
+ *   a cada render.
+ * - Peso mexicano e dólar escrevem os dois `$` (e também CLP, COP e ARS), e
+ *   `"$1,500.00 + $100.00"` não diz qual é qual. Só quando o símbolo se repete
+ *   DENTRO da soma, cada parcela afetada leva o código: `"$1,500.00 MXN +
+ *   $100.00 USD"`. Símbolo único fica limpo — `"5000,00 € EUR"` seria ruído.
+ * - Soma vazia devolve `""`.
+ */
+export function formatSomaPorMoeda(
+  soma: ReadonlyMap<string, number>,
+  formatar: (cents: number, moeda: string) => string,
+  opcoes: { primeira?: string } = {},
+): string {
+  const moedas = [...soma.keys()].sort((a, b) =>
+    a === opcoes.primeira ? -1 : b === opcoes.primeira ? 1 : a.localeCompare(b),
+  );
+  // `simboloDaMoeda` lança para código malformado; aí o próprio código é o
+  // símbolo — é o que `formatCents` escreve nesse caso.
+  const simbolo = (moeda: string) => {
+    try {
+      return simboloDaMoeda(moeda);
+    } catch {
+      return moeda;
+    }
+  };
+  const simbolos = moedas.map(simbolo);
+  return moedas
+    .map((moeda) => {
+      const texto = formatar(soma.get(moeda) ?? 0, moeda);
+      const s = simbolo(moeda);
+      const repetido = simbolos.filter((outro) => outro === s).length > 1;
+      return repetido ? `${texto} ${moeda}` : texto;
+    })
+    .join(" + ");
 }
 
 /**

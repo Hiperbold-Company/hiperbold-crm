@@ -19,9 +19,11 @@ import {
   waitConfigSchema,
 } from "@/lib/followup/graph-schema";
 import { MODOS_DE_ESPERA, opcoes, type ModoDeEspera } from "@/lib/followup/vocabulario";
+import type { HorarioDaEspera } from "@/lib/followup/espera-no-horario";
 import { useT } from "@/hooks/i18n/useT";
 
 import { Campo, Seletor, TempoComUnidade } from "./automacao/comum";
+import { HorarioDaEsperaEditor } from "./HorarioDaEsperaEditor";
 import { msToMin, minToMs, type ConfigOf } from "./shared";
 
 /** Os modos que os follow-ups oferecem: segundos e "até responder" são só da automação. */
@@ -47,6 +49,8 @@ interface Estado {
   /** `null` = o número digitado não serve. */
   delayMs: number | null;
   replyMs: number | null;
+  /** O horário em que a espera fixa pode terminar (`ate_o_horario`); `null` = desligado. */
+  horario: HorarioDaEspera | null;
 }
 
 export function WaitForm({
@@ -73,8 +77,16 @@ export function WaitForm({
     guidance: config.mode === "smart" ? (config.guidance ?? "") : "",
     delayMs: config.mode === "delay" ? config.duration_s * 1000 : 60_000,
     replyMs: config.mode === "until_reply" ? config.timeout_ms : 86_400_000,
+    horario: config.mode === "fixed" ? (config.ate_o_horario ?? null) : null,
   });
   const [error, setError] = useState<string | null>(null);
+
+  // ⚠️ O QUE ESTE FORMULÁRIO NÃO EDITA, ELE CONSERVA. `commit` remontava a
+  // config só com o que a tela mostra, e qualquer campo sem controle aqui
+  // sumia no primeiro clique: `immune_to_reply` (a espera imune, que o grafo
+  // importado ou montado por modelo traz) virava espera comum ao mudar a
+  // duração. Ela não tem controle nesta tela; continua viajando intacta.
+  const imune = config.mode === "fixed" && config.immune_to_reply === true;
 
   const commit = (patch: Partial<Estado>) => {
     const next = { ...estado, ...patch };
@@ -97,7 +109,12 @@ export function WaitForm({
     }
     const candidate =
       next.mode === "fixed"
-        ? { mode: "fixed" as const, duration_ms: minToMs(next.durationMin) }
+        ? {
+            mode: "fixed" as const,
+            duration_ms: minToMs(next.durationMin),
+            ...(imune ? { immune_to_reply: true } : {}),
+            ...(next.horario ? { ate_o_horario: next.horario } : {}),
+          }
         : next.mode === "smart"
           ? {
               mode: "smart" as const,
@@ -201,6 +218,7 @@ export function WaitForm({
             value={durationMin}
             onChange={(e) => commit({ durationMin: Number(e.target.value) })}
           />
+          <HorarioDaEsperaEditor value={estado.horario} onChange={(h) => commit({ horario: h })} />
         </div>
       )}
 

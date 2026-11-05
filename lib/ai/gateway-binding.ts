@@ -35,14 +35,38 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { escolherModeloNoCatalogo } from "./agents/escolher-modelo";
 import { modeloPermitidoNaChave } from "./modelos-da-instalacao-leitura";
 import { idNaRotaDaInstalacao } from "./modelos-da-instalacao";
-import { OPENROUTER_BASE_URL, resolveLanguageModel, type ModelId } from "./gateway";
+import { DEFAULT_CLASSIFIER_MODEL, OPENROUTER_BASE_URL, resolveLanguageModel, type ModelId } from "./gateway";
+import { logarResolucaoDeModelo, provedorNaturalDoModelo, validarParProvedorModelo } from "./par-provedor-modelo";
 
 export interface ModeloResolvido {
   model: LanguageModel;
   /** Para o log: qual modelo e de onde veio a decisão. */
   modelId: string;
   origem: "binding" | "credencial_da_organizacao" | "padrao";
+  /**
+   * O provedor do binding ou da credencial da organização; vazio quando quem
+   * atende é a chave da instalação (origem `padrao`). Nesse caso quem escolhe o
+   * endereço é o ambiente (`resolveLanguageModel`: gateway, OpenRouter, ou o
+   * fornecedor direto pelo prefixo), não o provedor configurado na organização,
+   * e o vazio devolve a decisão ao palpite de `provedorDaChamada`.
+   *
+   * Existe para quem chama pelo gateway ENTREGAR este valor ao log de invocação
+   * (issue #3098). Antes, quem logava só tinha o id do modelo, e o palpite por
+   * barra de `providerDoModelo` carimbava `openrouter` numa chamada ao provedor
+   * personalizado da empresa (`qwen/qwen3.8-27b` no Groq) — a divisão de custo
+   * por provedor ficava errada e a instalação parecia usar um provedor que ela
+   * tinha decidido não usar. É o MESMO valor que vai para o log estruturado da
+   * resolução (`logarResolucaoDeModelo`) nas origens `binding` e
+   * `credencial_da_organizacao`.
+   */
+  provider: string;
 }
+
+/**
+ * O que os degraus internos montam antes de o provedor ser anexado: só
+ * `devolver` sabe o provedor do endereço, e é dele que o par sai completo.
+ */
+type ResolucaoSemProvedor = Omit<ModeloResolvido, "provider">;
 
 /**
  * Resolve o modelo de um ponto, honrando o painel quando há binding.
@@ -80,36 +104,204 @@ export async function resolverModeloDoPonto(
   padrao: ModelId,
   opcoes: OpcoesDoResolvedor = {},
 ): Promise<ModeloResolvido | null> {
+  const idPadrao = String(padrao);
   const binding = await lerBinding(purpose, organizationId);
 
+  // O provedor do ENDEREÇO vem de quem vai receber a chamada: o binding, ou a
+  // credencial da própria organização — cuja leitura já abre `settings.llm`,
+  // então conferir o par não custa consulta nenhuma.
+  const daOrg = binding === null ? await credencialDaOrganizacao(organizationId) : null;
+  const providerEfetivo = binding !== null ? binding.provider : daOrg?.provider ?? null;
+
+  const devolver = (
+    resolvido: ResolucaoSemProvedor | null,
+    provider: string,
+    model: string,
+    origem: string,
+    motivo?: string,
+  ): ModeloResolvido | null => {
+    // O log da execução: provedor, modelo, propósito e origem da configuração,
+    // em TODO ponto — é o que a tela e o operador usam para dizer qual modelo
+    // efetivamente rodou em cada finalidade (issue #2377).
+    logarResolucaoDeModelo(logger, {
+      organization_id: organizationId,
+      purpose,
+      provider,
+      model,
+      origem,
+      motivo,
+    });
+    // O provedor EFETIVO entra aqui, e não em cada degrau (#3098): é o MESMO
+    // valor que acabou de ir para o log da resolução, que é o que o worker
+    // confirma ao operador ("provider: custom, origem_da_configuracao: binding").
+    // Quem chama pelo gateway entrega este campo ao log de invocação, e é ele
+    // que impede `llm_calls` de carimbar `openrouter` numa chamada ao provedor
+    // personalizado cujo id de modelo tem barra.
+    //
+    // Só nas origens em que o provedor É o executor. Com origem `padrao` quem
+    // atende é a chave do `.env`, e o provedor configurado na organização não
+    // decide o destino: uma org em `openrouter` sem credencial, numa instalação
+    // só com `ANTHROPIC_API_KEY`, faz chamada Anthropic direta, e gravar
+    // `openrouter` ali seria o mesmo sintoma da #3098 por outro caminho.
+    return resolvido === null
+      ? null
+      : { ...resolvido, provider: resolvido.origem === "padrao" ? "" : provider };
+  };
+
+  // ── O DEFAULT DO PRODUTO NÃO CRUZA PROVEDOR ─────────────────────────────
+  //
+  // `DEFAULT_CLASSIFIER_MODEL` nasceu Anthropic quando a Anthropic era a
+  // única chave que o instalador pedia: é compatibilidade EXPLÍCITA (item (c)
+  // da issue #2377), não fallback oculto. Enquanto o provedor efetivo for a
+  // Anthropic ou um agregador, ele segue valendo. Quando o provedor efetivo é
+  // OUTRO provedor direto, ele não é executado aqui — vale o par coerente da
+  // organização. Sem esta linha, uma empresa em OpenAI classificava o clima
+  // com um Claude que a tela nunca anunciava, pelo caminho que respondia
+  // sozinho (item (a) da mesma issue).
+  //
+  // Hiperbold: a chave da INSTALAÇÃO sai sempre pela OpenRouter (`./gateway.ts`),
+  // que é agregador. Sem binding e sem credencial utilizável da organização, quem
+  // executa é ela, e o provedor gravado em `settings.llm` não decide o destino.
+  const providerQueExecuta =
+    binding !== null ? binding.provider : credencialUtilizavel(daOrg)?.provider ?? null;
+  const defaultNaoExecutaAqui =
+    ehODefaultAnthropicDoProduto(idPadrao) && provedorDiretoNaoAnthropic(providerQueExecuta);
+
+  /**
+   * O fallback comum aos TRÊS pontos em que o resolvedor precisava escolher
+   * algo para executar: o padrão do ponto, ou — quando aquele padrão é o
+   * default da Anthropic e o provedor efetivo é outro provedor direto — o par
+   * coerente da organização.
+   *
+   * Recusa não é logada aqui: `padraoDaInstalacao` e `padraoDaOrganizacao`
+   * já registram o motivo, e dois logs para um mesmo motivo só poluem o
+   * filtro de quem procura a causa.
+   */
+  const padraoExecutavel = async (
+    motivoDeQueda?: string,
+    // `true` quando o BINDING foi descartado (sem chave utilizavel ou par
+    // invalido): o provedor daquela linha nao manda mais em nada, e o padrao do
+    // ponto volta a valer com o PROPRIO provedor do id — que e sempre coerente.
+    // Sem isto, um binding morto apontando para a OpenAI deixaria o ponto em
+    // silencio (a recusa da issue #2377 e do PAR, nao do ponto inteiro).
+    bindingDescartado = false,
+  ): Promise<ModeloResolvido | null> => {
+    const providerDoPadrao = bindingDescartado
+      ? provedorNaturalDoModelo(idPadrao) ?? providerEfetivo
+      : providerEfetivo;
+    if (defaultNaoExecutaAqui && !bindingDescartado) {
+      const motivo =
+        `o padrão deste ponto é o default da Anthropic ("${idPadrao}") e o provedor efetivo ` +
+        `é "${providerEfetivo}" — o default do produto não é executado sob outro provedor`;
+      // Quem NÃO pediu a queda continua recebendo `null` (a mesma regra da
+      // opção `naFaltaUsarOPadraoDaOrganizacao`): o agente que responde o
+      // cliente não passa a ter um modelo que ninguém escolheu para ele. O
+      // que muda é que agora ele não ganha um Claude silencioso — ganha um
+      // `null` com o motivo no log.
+      if (opcoes.naFaltaUsarOPadraoDaOrganizacao !== true) {
+        logarResolucaoDeModelo(logger, {
+          organization_id: organizationId,
+          purpose,
+          provider: providerEfetivo ?? "",
+          model: idPadrao,
+          origem: "padrao",
+          motivo: `${motivo} — e este ponto não pede queda para o par da organização`,
+        });
+        return null;
+      }
+      const coerente = await padraoDaOrganizacao(organizationId, credencialUtilizavel(daOrg), purpose);
+      if (coerente !== null) return devolver(coerente, providerEfetivo ?? "", coerente.modelId, coerente.origem, motivo);
+      // PISO, não silêncio: sem par próprio executável, o default do produto
+      // segue rodando pelo PRÓPRIO provedor dele, como antes da régua — uma
+      // VPS que classificava com a chave Anthropic da instalação não para de
+      // classificar ao atualizar. O aviso vai no log com o motivo.
+      const piso = await padraoDaInstalacaoGuardado(provedorNaturalDoModelo(idPadrao), padrao, { purpose, organizationId });
+      return devolver(
+        piso === null ? null : { ...piso, origem: "padrao" },
+        provedorNaturalDoModelo(idPadrao) ?? "",
+        idPadrao,
+        "padrao",
+        `${motivo} — e a organização não tem par próprio executável: o default do produto roda como piso`,
+      );
+    }
+    const daInstalacao = await padraoDaInstalacaoGuardado(providerDoPadrao, padrao, { purpose, organizationId });
+    if (daInstalacao === null) return null;
+    return devolver(
+      { ...daInstalacao, origem: "padrao" },
+      providerDoPadrao ?? "",
+      daInstalacao.modelId,
+      "padrao",
+      motivoDeQueda,
+    );
+  };
+
   if (binding === null) {
+    // Sem modelo nenhum para servir de padrão: nada é inventado. Um agente sem
+    // `model` (ou um chamador que não sabe qual usar) cai no par da
+    // organização em vez de ganhar um Claude silencioso.
+    if (idPadrao.trim() === "") {
+      const coerente = opcoes.naFaltaUsarOPadraoDaOrganizacao === true
+        ? await padraoDaOrganizacao(organizationId, credencialUtilizavel(daOrg), purpose)
+        : null;
+      if (coerente !== null) return devolver(coerente, providerEfetivo ?? "", coerente.modelId, coerente.origem);
+      return devolver(
+        null,
+        providerEfetivo ?? "",
+        "",
+        "padrao",
+        "o resolvedor não recebeu modelo algum para este ponto e a organização não tem par próprio",
+      );
+    }
+
+    if (defaultNaoExecutaAqui) return padraoExecutavel();
+
     // Antes da chave da instalação vem a credencial da PRÓPRIA organização —
     // o degrau do meio de `resolveOrgLlmConfig`, que esta pilha pulava.
-    const daOrg = await credencialDaOrganizacao(organizationId);
-    const idNoProvider =
-      daOrg === null ? null : idParaOProvider(daOrg.provider, String(padrao));
-    if (daOrg !== null && idNoProvider !== null) {
-      const model = instanciar(daOrg.provider, daOrg.apiKey, idNoProvider, null);
-      if (model !== null) {
-        // `modelId` continua sendo o id CANÔNICO, não o traduzido: é ele que
-        // casa com o catálogo de preço no log de custo.
-        return { model, modelId: String(padrao), origem: "credencial_da_organizacao" };
+    if (daOrg !== null && daOrg.apiKey !== null) {
+      const idNoProvider = idParaOProvider(daOrg.provider ?? "", idPadrao);
+      if (daOrg.provider !== null && idNoProvider !== null) {
+        const par = validarParProvedorModelo(daOrg.provider, idNoProvider);
+        const model =
+          par.valido ? instanciar(daOrg.provider, daOrg.apiKey, idNoProvider, null) : null;
+        if (model !== null) {
+          return devolver(
+            { model, modelId: idPadrao, origem: "credencial_da_organizacao" },
+            daOrg.provider,
+            idPadrao,
+            "credencial_da_organizacao",
+          );
+        }
+        if (!par.valido) {
+          logarResolucaoDeModelo(logger, {
+            organization_id: organizationId,
+            purpose,
+            provider: daOrg.provider,
+            model: idPadrao,
+            origem: "credencial_da_organizacao",
+            motivo: par.motivo,
+          });
+        }
       }
     }
     // Sem credencial cadastrada sobra a chave da INSTALAÇÃO, e quem diz de QUEM
     // é essa chave é o provedor que a organização escolheu (issue #1181). A
     // leitura desse provedor é preguiçosa: id que já traz rota resolve sem ela,
     // e é esse o caminho de toda instalação padrão.
-    const daInstalacao = await padraoDaInstalacaoGuardado(
-      organizationId,
-      purpose,
-      () => (daOrg !== null ? Promise.resolve(daOrg.provider) : providerDaOrganizacao(organizationId)),
-      padrao,
+    const instalacao = await padraoExecutavel(
+      "nenhuma chave desta instalação atende o par provedor+modelo do ponto",
     );
-    if (daInstalacao !== null) return { ...daInstalacao, origem: "padrao" };
-    return opcoes.naFaltaUsarOPadraoDaOrganizacao === true
-      ? padraoDaOrganizacao(organizationId, daOrg)
-      : null;
+    if (instalacao !== null) return instalacao;
+    if (opcoes.naFaltaUsarOPadraoDaOrganizacao === true) {
+      const coerente = await padraoDaOrganizacao(organizationId, credencialUtilizavel(daOrg), purpose);
+      return devolver(
+        coerente,
+        providerEfetivo ?? "",
+        coerente?.modelId ?? "",
+        coerente?.origem ?? "padrao_da_organizacao",
+        coerente === null ? "o provedor efetivo não executa o padrão do ponto e a organização não tem par próprio" : undefined,
+      );
+    }
+    return devolver(null, providerEfetivo ?? "", idPadrao, "padrao", "nenhuma chave desta instalação atende o par provedor+modelo do ponto");
   }
 
   const apiKey = await decifrarChave(binding.credential_id, organizationId);
@@ -121,32 +313,59 @@ export async function resolverModeloDoPonto(
       organization_id: organizationId,
       purpose,
     });
-    const daInstalacao = await padraoDaInstalacaoGuardado(
-      organizationId,
-      purpose,
-      () => Promise.resolve(binding.provider),
-      padrao,
-    );
-    return daInstalacao === null ? null : { ...daInstalacao, origem: "padrao" };
+    return padraoExecutavel("o provedor do binding não executa o padrão do ponto", true);
   }
 
-  const model = instanciar(binding.provider, apiKey, binding.model_id, binding.base_url);
-  if (model === null) {
-    logger.warn("[gateway-binding] provider do binding é desconhecido — usando o padrão", {
-      organization_id: organizationId,
-      purpose,
-      provider: binding.provider,
-    });
-    const fallback = await padraoDaInstalacaoGuardado(
-      organizationId,
-      purpose,
-      () => Promise.resolve(binding.provider),
-      padrao,
+  // O PAR DO BINDING também é conferido antes de instanciar: a tela valida na
+  // escrita, mas uma linha gravada antes da validação (ou um provedor que
+  // mudou de catálogo) não pode virar chamada com id que o endpoint não conhece.
+  const parDoBinding = validarParProvedorModelo(binding.provider, binding.model_id);
+  const model =
+    parDoBinding.valido ? instanciar(binding.provider, apiKey, binding.model_id, binding.base_url) : null;
+  if (model !== null) {
+    return devolver(
+      { model, modelId: binding.model_id, origem: "binding" },
+      binding.provider,
+      binding.model_id,
+      "binding",
     );
-    return fallback === null ? null : { ...fallback, origem: "padrao" };
   }
+  logger.warn("[gateway-binding] provider do binding é desconhecido — usando o padrão", {
+    organization_id: organizationId,
+    purpose,
+    provider: binding.provider,
+    ...(parDoBinding.valido ? {} : { motivo: parDoBinding.motivo }),
+  });
+  return padraoExecutavel(
+    parDoBinding.valido
+      ? "o provedor do binding não executa o padrão do ponto"
+      : parDoBinding.motivo,
+    true,
+  );
+}
 
-  return { model, modelId: binding.model_id, origem: "binding" };
+/**
+ * O default de CLASSIFICAÇÃO do produto — o único que sobrou como constante.
+ *
+ * Compatibilidade explícita (issue #2377): nasceu Anthropic quando era a única
+ * chave que o instalador pedia, e continua valendo como padrão do ponto. Quem
+ * impede de virar fallback oculto é a conferência de par em
+ * `resolverModeloDoPonto`: sob provedor direto diferente da Anthropic ele não
+ * executa.
+ */
+function ehODefaultAnthropicDoProduto(id: string): boolean {
+  return id === DEFAULT_CLASSIFIER_MODEL;
+}
+
+function provedorDiretoNaoAnthropic(provider: string | null): boolean {
+  return provider !== null && ["openai", "google", "deepseek"].includes(provider);
+}
+
+function credencialUtilizavel(
+  daOrg: { provider: string | null; apiKey: string | null } | null,
+): { provider: string; apiKey: string } | null {
+  if (daOrg === null || daOrg.provider === null || daOrg.apiKey === null) return null;
+  return { provider: daOrg.provider, apiKey: daOrg.apiKey };
 }
 
 interface LinhaBinding {
@@ -222,25 +441,123 @@ function idParaOProvider(provider: string, id: string): string | null {
  * falta dele no catálogo, do provedor que a organização escolheu. Nada é adivinhado: sem uma das
  * duas respostas devolve `null`, em vez de mandar um id para um endpoint que não o conhece.
  *
- * O provedor da configuração chega como função e só é lido quando o id é BARE e o catálogo não o
- * conhece: o id prefixado — o de toda instalação padrão — resolve sem nenhuma consulta.
+ * O prefixo sintetizado aqui vem do provedor que a ORGANIZAÇÃO escolheu, e é só
+ * isso que ele é: ROTA. O nome do modelo que chega ao SDK continua sendo o do
+ * catálogo, como em `idParaOProvider`. Id que já traz rota não passa por aqui:
+ * quem o roteia (ou recusa) é o próprio `resolveLanguageModel`, acima — e é o
+ * mesmo freio do PR #151, que impede id de outro provedor de virar chamada com
+ * a chave desta organização.
+ *
+ * O provedor chega PRONTO, como string, e não como função: ele sai da mesma
+ * leitura de `settings.llm` que a procura de credencial já fazia — conferir o
+ * par antes de executar não custa consulta nenhuma. Id que já traz rota não
+ * passa pela síntese de prefixo: o prefixo É o endereço dele, e o par é
+ * coerente por construção.
+ *
+ * O degrau de BAIXO é a conta SEM chave: quando a rota do provedor que a
+ * organização escolheu não acha chave no ambiente (o `anthropic` que o gatilho
+ * semeia numa instalação onde o instalador coletou `OPENAI_API_KEY`, por
+ * exemplo), o id BARE é resolvido pelo provedor do MODELO no catálogo
+ * `ai_models` — a mesma fonte que o resto do produto usa para o id BARE, e o
+ * que a própria mensagem de `LlmNotConfiguredError` já declara ("fallback de
+ * plataforma, conforme o provider do modelo"). Sem linha no catálogo, nada é
+ * adivinhado: devolve `null` e o chamador PULA com motivo claro, em vez de
+ * mandar um id para o endpoint de outro provedor.
  */
 async function padraoDaInstalacao(
-  providerDaConfiguracao: () => Promise<string | null>,
+  providerEfetivo: string | null,
   padrao: ModelId,
+  contexto: { purpose: string; organizationId: string },
 ): Promise<{ model: LanguageModel; modelId: string } | null> {
-  // Sem OPENROUTER_API_KEY não há rota, qualquer que seja o id.
-  if (resolveLanguageModel(padrao) === null) return null;
-  let id = String(padrao);
-  if (!id.includes("/")) {
-    const doCatalogo = await provedorDoModeloNoCatalogo(id);
-    const fabricante =
-      doCatalogo ?? (await providerDaConfiguracao().catch(() => null));
-    if (fabricante === null || fabricante === "openrouter") return null;
-    id = idNaRotaDaInstalacao(fabricante, id);
+  const id = String(padrao);
+  const recusar = (provider: string, motivo: string): null => {
+    // O buraco da issue #2377: o prefixo desta linha era sintetizado AQUI, a
+    // partir do provedor da configuração, e um id BARE como `claude-sonnet-5`
+    // saía para o endpoint da OpenAI. A recusa vem antes de qualquer byte e
+    // leva o par inteiro no log.
+    logarResolucaoDeModelo(logger, {
+      organization_id: contexto.organizationId,
+      purpose: contexto.purpose,
+      provider,
+      model: id,
+      origem: "padrao",
+      motivo,
+    });
+    return null;
+  };
+
+  const provider = providerEfetivo;
+  const ehBare = !id.includes("/");
+  const podeRotearPeloProvider = provider !== null && provider !== "openrouter";
+
+  // ── O PAR É CONFERIDO ONDE O ENDEREÇO É ESCOLHIDO POR NÓS ───────────────
+  //
+  // Id BARE: quem decide o destino desta linha é ESTA função (degrau 1, o id
+  // cru; degrau 2, `${providerEfetivo}/${id}` sintetizado aqui). É por isso
+  // que `{openai, claude-sonnet-5}` mandava um id da Anthropic para o
+  // endpoint da OpenAI — o prefixo nasce nesta função (issue #2377).
+  //
+  // A recusa não é imediata: o CATÁLOGO é quem diz de quem é o id de fato, e
+  // o degrau 3 existe justamente para uma organização em Anthropic sem chave
+  // da Anthropic resolver o `gpt-5.6-terra` pela `OPENAI_API_KEY` (issue
+  // #1181). Então o par errado com a configuração vira MOTIVO PENDENTE, e só
+  // é cobrado se nenhum degrau seguinte achar um provedor coerente.
+  let recusaDoProvider: string | null = null;
+  if (ehBare && podeRotearPeloProvider) {
+    const par = validarParProvedorModelo(provider, id);
+    if (!par.valido) recusaDoProvider = par.motivo;
   }
-  const model = resolveLanguageModel(id);
-  return model === null ? null : { model, modelId: id };
+  const cobrarRecusa = (): null => {
+    if (recusaDoProvider === null || provider === null) return null;
+    return recusar(provider, recusaDoProvider);
+  };
+
+  // Degrau 1 — o id cru. Pulado quando a configuração já prova que este id não
+  // é deste endereço: mandá-lo ao gateway ou ao OpenRouter assim seria trocar
+  // um 400 do provedor por um 404 igualmente mudo.
+  // A chave da instalação sai SEMPRE pela OpenRouter (`./gateway.ts`, decisão do
+  // dono, 20/10/2026), que só entende o id com fabricante: id BARE nunca vai cru.
+  if (recusaDoProvider === null && !ehBare) {
+    const peloId = resolveLanguageModel(id);
+    if (peloId !== null) return { model: peloId, modelId: id };
+  }
+  if (!ehBare) return cobrarRecusa();
+
+  // Degrau 2 — a rota sintetizada com o provedor da configuração.
+  if (recusaDoProvider === null && podeRotearPeloProvider) {
+    // Hiperbold: o id do log de custo é o MESMO que a OpenRouter recebe (com o fabricante).
+    const naRota = idNaRotaDaInstalacao(provider, id);
+    const peloProvider = resolveLanguageModel(naRota);
+    if (peloProvider !== null) return { model: peloProvider, modelId: naRota };
+  }
+  // A CONTA NÃO TEM CHAVE PARA ESTE ID — e a instalação tem. A rota de cima
+  // sintetiza o prefixo a partir do provedor que a ORGANIZAÇÃO escolheu (ou do
+  // `anthropic` que `fn_seed_org_llm_defaults` semeia), e quando esse provedor
+  // não tem chave no `.env` o ponto pedia silêncio com
+  // `reason: "ai_gateway_key_missing"` enquanto `OPENAI_API_KEY` estava lá — a
+  // instalação que responde pelo teste do agente e pelo "Sugerir resposta" ficava
+  // muda só no caminho que responde sozinho (issue #1181).
+  //
+  // Quem diz de QUEM é o id é o CATÁLOGO (`ai_models`), não a vontade de usar
+  // qualquer chave que exista: é a mesma fonte que serve o id BARE e o mesmo
+  // predicado que `resolveOrgLlmConfig` declara. Id que o catálogo não conhece,
+  // ou cujo provedor é exatamente o que já tentamos, segue sem resposta.
+  const provedorDoModelo = await provedorDoModeloNoCatalogo(id);
+  if (provedorDoModelo !== null) {
+    const parDoCatalogo = validarParProvedorModelo(provedorDoModelo, id);
+    if (!parDoCatalogo.valido) return recusar(provedorDoModelo, parDoCatalogo.motivo);
+    // O mesmo provedor da configuração já foi tentado no degrau 2 — repetir é
+    // custo de leitura sem resposta nova.
+    if (provedorDoModelo !== provider) {
+      const naRota = idNaRotaDaInstalacao(provedorDoModelo, id);
+      const peloCatalogo = resolveLanguageModel(naRota);
+      if (peloCatalogo !== null) return { model: peloCatalogo, modelId: naRota };
+    }
+  }
+  // Nenhum degrau achou endereço para este id: se o par com a configuração
+  // estava errado, agora sim ele é cobrado — com provedor, modelo e motivo no
+  // log, antes de qualquer byte.
+  return cobrarRecusa();
 }
 
 /**
@@ -251,25 +568,24 @@ async function padraoDaInstalacao(
  * EFETIVO, que é o que vai para o log de custo.
  */
 async function padraoDaInstalacaoGuardado(
-  organizationId: string,
-  purpose: string,
-  providerDaConfiguracao: () => Promise<string | null>,
+  providerEfetivo: string | null,
   padrao: ModelId,
+  contexto: { purpose: string; organizationId: string },
 ): Promise<{ model: LanguageModel; modelId: string } | null> {
   // "openrouter" aqui é só a regra de escrita do id (canônico, com o prefixo de
   // fabricante): a chave da instalação resolve o id inteiro, como `resolveLanguageModel`.
   const decisao = await modeloPermitidoNaChave({
-    organizationId,
+    organizationId: contexto.organizationId,
     origemDaChave: "chave_da_instalacao",
     provedor: "openrouter",
     modelId: String(padrao),
-    ponto: purpose,
+    ponto: contexto.purpose,
   });
   if (decisao.trocado) {
-    const trocado = await padraoDaInstalacao(providerDaConfiguracao, decisao.modelId as ModelId);
+    const trocado = await padraoDaInstalacao(providerEfetivo, decisao.modelId as ModelId, contexto);
     if (trocado !== null) return trocado;
   }
-  return padraoDaInstalacao(providerDaConfiguracao, padrao);
+  return padraoDaInstalacao(providerEfetivo, padrao, contexto);
 }
 
 /**
@@ -313,8 +629,9 @@ async function provedorDoModeloNoCatalogo(modelId: string): Promise<string | nul
  */
 async function padraoDaOrganizacao(
   organizationId: string,
-  daOrg: { provider: string; apiKey: string } | null,
-): Promise<ModeloResolvido | null> {
+  daOrg: { provider: string; apiKey: string | null } | null,
+  purpose: string,
+): Promise<ResolucaoSemProvedor | null> {
   const llm = await llmDaOrganizacao(organizationId);
   if (llm === null || llm.defaultModel === null) return null;
   const defaultModel = await modeloDoProvedor(organizationId, llm.provider, llm.defaultModel);
@@ -325,17 +642,33 @@ async function padraoDaOrganizacao(
     defaultModel.startsWith(`${llm.provider}/`)
       ? defaultModel
       : `${llm.provider}/${defaultModel}`;
-  if (daOrg !== null && daOrg.provider === llm.provider) {
+  // O ÚLTIMO freio do par (issue #2377): `modeloDoProvedor` conserta o par
+  // lido no caminho normal, mas o degrau `oGravado` — catálogo ilegível,
+  // banco indisponível — devolve o que está GRAVADO, e era por ali que
+  // `{provider: 'openai', default_model: 'claude-sonnet-5'}` chegava inteiro
+  // ao endpoint da OpenAI. Recusa aqui é `null` com o motivo no log, nunca
+  // chamada com id que o provedor não conhece.
+  const par = validarParProvedorModelo(llm.provider, modelId);
+  if (!par.valido) {
+    logarResolucaoDeModelo(logger, {
+      organization_id: organizationId,
+      purpose,
+      provider: llm.provider,
+      model: modelId,
+      origem: "padrao_da_organizacao",
+      motivo: par.motivo,
+    });
+    return null;
+  }
+  if (daOrg !== null && daOrg.provider === llm.provider && daOrg.apiKey !== null) {
     const id = idParaOProvider(llm.provider, modelId);
     const model = id === null ? null : instanciar(llm.provider, daOrg.apiKey, id, null);
     if (model !== null) return { model, modelId, origem: "credencial_da_organizacao" };
   }
-  const daInstalacao = await padraoDaInstalacaoGuardado(
+  const daInstalacao = await padraoDaInstalacaoGuardado(llm.provider, modelId as ModelId, {
+    purpose,
     organizationId,
-    "padrao_da_organizacao",
-    () => Promise.resolve(llm.provider),
-    modelId as ModelId,
-  );
+  });
   return daInstalacao === null ? null : { ...daInstalacao, origem: "padrao" };
 }
 
@@ -405,15 +738,14 @@ async function modeloDoProvedor(
 /**
  * O provedor que a organização escolheu (Configurações › IA).
  *
- * `credencialDaOrganizacao` já o leu quando havia credencial cadastrada; esta
- * leitura só acontece no caminho em que não havia — e é este provedor que diz
- * de QUEM é a chave da instalação que atende o ponto. Nunca lança: leitura que
- * falha devolve `null`, e a escada termina no mesmo desfecho de antes.
+ * `credencialDaOrganizacao` já o leu na MESMA ida a `organizations`, e é ele
+ * que diz de QUEM é a chave da instalação que atende o ponto — e também o
+ * endereço contra o qual o par provedor+modelo é conferido antes de executar
+ * (issue #2377). Ter lido junto é o que faz a conferência não custar consulta.
+ *
+ * (Existia uma segunda leitura, `providerDaOrganizacao`, só para o id BARE.
+ * Ela saiu junto com a mudança: o provedor já vem pronto.)
  */
-async function providerDaOrganizacao(organizationId: string): Promise<string | null> {
-  return (await llmDaOrganizacao(organizationId))?.provider ?? null;
-}
-
 async function llmDaOrganizacao(
   organizationId: string,
 ): Promise<{ provider: string; defaultModel: string | null } | null> {
@@ -465,7 +797,12 @@ async function llmDaOrganizacao(
  */
 async function credencialDaOrganizacao(
   organizationId: string,
-): Promise<{ provider: string; apiKey: string } | null> {
+): Promise<{ provider: string | null; apiKey: string | null }> {
+  // O PROVEDOR sai desta leitura mesmo sem credencial utilizável: ele é a
+  // metade que diz qual endereço a organização escolheu, e é contra ele que o
+  // par provedor+modelo é conferido antes de qualquer chamada (issue #2377).
+  // Antes, o `null` de "sem credencial" jogava fora as duas metades, e a
+  // conferência do padrão do produto só passou a existir porque elas ficam.
   try {
     const admin = createAdminClient();
     const { data: org } = await admin
@@ -474,7 +811,8 @@ async function credencialDaOrganizacao(
       .eq("id", organizationId)
       .maybeSingle();
     const provider = (org?.settings as { llm?: { provider?: string } } | null)?.llm?.provider;
-    if (typeof provider !== "string" || provider === "") return null;
+    const provedorEscolhido = typeof provider === "string" && provider !== "" ? provider : null;
+    if (provedorEscolhido === null) return { provider: null, apiKey: null };
 
     // Admin client bypassa RLS: filtro por organização é PROGRAMÁTICO e
     // obrigatório (CLAUDE.md, anti-pattern 10).
@@ -482,16 +820,16 @@ async function credencialDaOrganizacao(
       .from("ai_provider_credentials")
       .select("id, api_key_encrypted, api_key_iv, api_key_tag")
       .eq("organization_id", organizationId)
-      .eq("provider", provider)
+      .eq("provider", provedorEscolhido)
       .eq("is_active", true)
       .not("validated_at", "is", null)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (!data) return null;
+    if (!data) return { provider: provedorEscolhido, apiKey: null };
 
     return {
-      provider,
+      provider: provedorEscolhido,
       apiKey: decifrarColunasDaCredencial(data, organizationId),
     };
   } catch (erro) {
@@ -505,7 +843,7 @@ async function credencialDaOrganizacao(
       organizationId,
       erro: erro instanceof Error ? erro.name : typeof erro,
     });
-    return null;
+    return { provider: null, apiKey: null };
   }
 }
 

@@ -49,7 +49,7 @@ function monta(tags: string[], vocabulario: unknown = VOCABULARIO) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ContactTagsEditor contactId="c-1" orgId={ORG} tags={tags} />
+      <ContactTagsEditor entityId="c-1" orgId={ORG} tags={tags} />
     </QueryClientProvider>,
   );
 }
@@ -215,7 +215,7 @@ describe("ContactTagsEditor — limite e estados", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <ContactTagsEditor contactId="c-1" orgId={ORG} tags={["vip"]} />
+        <ContactTagsEditor entityId="c-1" orgId={ORG} tags={["vip"]} />
       </QueryClientProvider>,
     );
     const alerta = await screen.findByRole("alert", {}, espera);

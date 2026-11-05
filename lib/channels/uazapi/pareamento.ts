@@ -61,6 +61,7 @@
  */
 import { randomBytes, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fecharAvisoDePausaDoCanalArquivado } from "@/lib/channels/central-de-pausa";
 
 import { metadataInicialDoCanal } from "@/lib/ai/elegibilidade/pre-go-live";
 import { fetchParaDestinoDaOrganizacao } from "@/lib/automation/destinos-internos-autorizados";
@@ -442,11 +443,13 @@ async function arquivarSessao(
   organizationId: string,
   id: string,
 ): Promise<void> {
-  await atualizarSessao(admin, organizationId, id, {
+  const erro = await atualizarSessao(admin, organizationId, id, {
     archived_at: new Date().toISOString(),
     status: "STOPPED",
     pareamento_qr_estado: null,
   });
+  // Fecha o aviso de pausa do canal arquivado (best-effort, nunca lança; issue #2389 do upstream).
+  if (!erro) await fecharAvisoDePausaDoCanalArquivado(admin, { id, organization_id: organizationId });
 }
 
 async function tokenDaSessao(

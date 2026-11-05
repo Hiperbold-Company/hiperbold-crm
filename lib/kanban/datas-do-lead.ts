@@ -217,6 +217,6 @@ export function rotuloDeIdade(
   if (dias === null) return null;
   if (dias === 0) return t("hoje");
   if (dias === 1) return t("ontem");
-  if (dias < 60) return `${t("há")} ${dias} ${t("dias")}`;
-  return `${t("há")} ${Math.floor(dias / 30)} ${t("meses")}`;
+  if (dias < 60) return t("há {tempo}").replace("{tempo}", `${dias} ${t("dias")}`);
+  return t("há {tempo}").replace("{tempo}", `${Math.floor(dias / 30)} ${t("meses")}`);
 }

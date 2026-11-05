@@ -21,6 +21,7 @@ function AjudaDaAba({ aba }: { aba: AbaDeAutomacoes }) {
   return <LinkDeAjudaDaTela caminho={artigoDaAba("/app/webhooks", aba)} className="mb-3" />;
 }
 
+
 export function WebhooksClient({
   bloqueio,
   abaInicial = ABA_PADRAO_DE_AUTOMACOES,
@@ -44,16 +45,22 @@ export function WebhooksClient({
     // skeleton estreito demais faz a página saltar no primeiro paint.
     // Ao acrescentar ou renomear aba, MEDIR de novo — este número não se
     // estima a olho.
+    //
+    // Abaixo de `lg` a aba tem 44px (`min-h-11` do trigger) e a lista quebra
+    // linha (`flex-wrap` abaixo): uma fila = 44 + 8 do `p-1` = 52px. Abaixo de
+    // `sm` (a 390px sobram ~310px úteis) as quatro abas viram DUAS filas, 96px.
+    // Contas pelas classes, não medidas; o `max-w-full` impede que os 432px
+    // empurrem o <main> para o lado no celular.
     return (
       <div className="flex-1">
-        <Skeleton className="h-9 w-[540px]" />
+        <Skeleton className="h-24 w-[432px] max-w-full sm:h-[52px] lg:h-9" />
       </div>
     );
   }
 
   return (
     <Tabs defaultValue={abaInicial} className="flex-1">
-      <TabsList>
+      <TabsList className="h-auto flex-wrap justify-start">
         <TabsTrigger value="rules">{t("Automações")}</TabsTrigger>
         <TabsTrigger value="sources">{t("Receber dados")}</TabsTrigger>
         <TabsTrigger value="capturas">{t("Leads recebidos")}</TabsTrigger>

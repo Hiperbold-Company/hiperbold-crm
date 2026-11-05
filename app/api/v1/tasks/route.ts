@@ -31,15 +31,31 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { portaDaAplicacao } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { registraAtividadeDaTarefa } from "@/lib/tarefas/atividade";
-import { PRIORIDADES_DA_TAREFA, SITUACOES_DA_TAREFA, type Tarefa } from "@/lib/tarefas/tipos";
+import { conferirDemanda } from "@/lib/tarefas/demanda";
+import { conferirResponsavel } from "@/lib/tarefas/responsavel";
+import {
+  PRIORIDADES_DA_TAREFA,
+  SITUACOES_ABERTAS_DA_TAREFA,
+  SITUACOES_DA_TAREFA,
+  type Tarefa,
+} from "@/lib/tarefas/tipos";
 
 export const dynamic = "force-dynamic";
 
 /** As colunas que a tela lê. Explícitas para o `select *` não vazar coluna nova. */
 const COLUNAS =
-  "id, organization_id, title, description, due_date, priority, status, lead_id, contact_id, assigned_to, created_by, created_at, updated_at";
+  "id, organization_id, title, description, due_date, priority, status, lead_id, contact_id, demanda_id, assigned_to, created_by, created_at, updated_at, lead:crm_leads(id, title)";
+
+/**
+ * Com o filtro de funil o `lead` vira INNER JOIN: o PostgREST só filtra pela coluna de um
+ * recurso embutido se o embutido for obrigatório; com o join comum a tarefa de outro funil
+ * continuaria na lista, só que com `lead: null`. Sem o filtro a consulta é a de sempre — o
+ * join obrigatório esconderia as tarefas soltas (sem negócio), que são caso real.
+ */
+const COLUNAS_NO_FUNIL = COLUNAS.replace("lead:crm_leads(", "lead:crm_leads!inner(");
 
 const criacaoSchema = z.object({
   title: z.string().trim().min(1).max(255),
@@ -49,6 +65,10 @@ const criacaoSchema = z.object({
   status: z.enum(SITUACOES_DA_TAREFA).default("pending"),
   lead_id: z.string().uuid().nullable().optional(),
   contact_id: z.string().uuid().nullable().optional(),
+  // O vínculo com o ASSUNTO do atendimento (#2818): é o que faz a tarefa
+  // criada de dentro da conversa voltar para a tela de quem precisa cumpri-la.
+  // Opcional como os outros dois — a tarefa avulsa é caso real.
+  demanda_id: z.string().uuid().nullable().optional(),
   assigned_to: z.string().uuid().nullable().optional(),
 });
 
@@ -57,6 +77,8 @@ const listaSchema = z.object({
   priority: z.enum(PRIORIDADES_DA_TAREFA).optional(),
   lead_id: z.string().uuid().optional(),
   contact_id: z.string().uuid().optional(),
+  /** As tarefas de UMA demanda — a seção "Tarefas desta demanda" do inbox. */
+  demanda_id: z.string().uuid().optional(),
   due_from: z.string().datetime({ offset: true }).optional(),
   due_to: z.string().datetime({ offset: true }).optional(),
   /** "abertas" = o que ainda pede ação. É o default da tela. */
@@ -75,6 +97,22 @@ const listaSchema = z.object({
    * negócio recebe `lead: null`, e o link cai na tela de Tarefas.
    */
   com_negocio: z.enum(["true", "false"]).optional(),
+  /**
+   * De QUEM é a tarefa: `me` (o usuário da sessão, resolvido aqui), `ninguem`
+   * (sem responsável) ou o id de um membro. Sem isto a tela de Tarefas misturava
+   * a equipe inteira numa lista só (a lista corta em 500 — filtrar na tela
+   * esconderia as que ficaram fora do corte). Um id de terceiro vindo do
+   * navegador só ESTREITA uma lista que viewer+ já vê inteira; a organização sai
+   * da sessão e a RLS segura o resto.
+   */
+  assigned_to: z.union([z.literal("me"), z.literal("ninguem"), z.string().uuid()]).optional(),
+  /**
+   * Só as tarefas de negócios DESTE funil (`crm_leads.pipeline_id`). A tarefa não tem funil
+   * próprio: ela herda o do negócio a que está presa, então tarefa solta fica de fora quando
+   * o filtro está ligado. Um id de outra organização não devolve nada — o `organization_id`
+   * da consulta e a RLS continuam valendo.
+   */
+  pipeline_id: z.string().uuid().optional(),
 });
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -97,8 +135,10 @@ export async function GET(req: NextRequest): Promise<Response> {
   // ⚠️ `organization_id` à mão mesmo com RLS ligada: é a regra do CLAUDE.md, e
   // ela não é redundante — o dia em que esta rota trocar para o admin client
   // (que bypassa RLS) o filtro já está aqui.
+  const base = filtros.pipeline_id ? COLUNAS_NO_FUNIL : COLUNAS;
+  // `com_negocio`: o sino leva direto ao card, então precisa também do funil do negócio.
   const colunas =
-    filtros.com_negocio === "true" ? `${COLUNAS}, lead:crm_leads(title, pipeline_id)` : COLUNAS;
+    filtros.com_negocio === "true" ? base.replace("(id, title)", "(id, title, pipeline_id)") : base;
   let query = supabase
     .from("crm_tasks")
     .select(colunas)
@@ -111,17 +151,22 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (filtros.priority) query = query.eq("priority", filtros.priority);
   if (filtros.lead_id) query = query.eq("lead_id", filtros.lead_id);
   if (filtros.contact_id) query = query.eq("contact_id", filtros.contact_id);
+  if (filtros.demanda_id) query = query.eq("demanda_id", filtros.demanda_id);
   if (filtros.due_from) query = query.gte("due_date", filtros.due_from);
   if (filtros.due_to) query = query.lte("due_date", filtros.due_to);
-  if (filtros.aberto === "true") query = query.in("status", ["pending", "in_progress"]);
+  if (filtros.aberto === "true") query = query.in("status", [...SITUACOES_ABERTAS_DA_TAREFA]);
   if (filtros.para_mim === "true") {
     // `authz.user.id` é uuid validado pela sessão: interpolar no `or` não abre
     // injeção de filtro, que é o risco de montar `or` com texto do cliente.
     query = query.or(`assigned_to.eq.${authz.user.id},created_by.eq.${authz.user.id}`);
   }
   if (filtros.vencidas === "true") {
-    query = query.in("status", ["pending", "in_progress"]).lte("due_date", new Date().toISOString());
+    query = query.in("status", [...SITUACOES_ABERTAS_DA_TAREFA]).lte("due_date", new Date().toISOString());
   }
+  if (filtros.assigned_to === "me") query = query.eq("assigned_to", authz.user.id);
+  else if (filtros.assigned_to === "ninguem") query = query.is("assigned_to", null);
+  else if (filtros.assigned_to) query = query.eq("assigned_to", filtros.assigned_to);
+  if (filtros.pipeline_id) query = query.eq("lead.pipeline_id", filtros.pipeline_id);
 
   const { data, error } = await query;
   if (error) {
@@ -150,7 +195,51 @@ export async function POST(req: NextRequest): Promise<Response> {
     });
   }
 
+  if (parsed.data.assigned_to) {
+    // A chave estrangeira de `assigned_to` é só para `auth.users`: sem esta conferência, um id de
+    // outra organização (ou de quem saiu da equipe) gravaria sem erro. A régua
+    // e o porquê do filtro de organização estão em `lib/tarefas/responsavel.ts`
+    // (SQL direto na porta de `lib/db` — o pool NÃO passa por RLS).
+    const veredito = await conferirResponsavel(
+      portaDaAplicacao(),
+      authz.org.orgId,
+      parsed.data.assigned_to,
+    );
+    if (veredito === "falha_na_consulta") {
+      return fail("internal_error", t("Erro ao salvar a tarefa."), 500, { requestId });
+    }
+    if (veredito === "fora_da_equipe") {
+      return fail("validation_failed", t("O responsável escolhido não faz parte da equipe."), 422, {
+        requestId,
+      });
+    }
+  }
+
   const supabase = await createClient();
+
+  if (parsed.data.demanda_id) {
+    // A chave estrangeira não passa pela RLS: sem esta conferência, a demanda
+    // de outra organização gravaria sem erro. A régua está em `lib/tarefas/demanda.ts`.
+    const veredito = await conferirDemanda(
+      portaDaAplicacao(),
+      authz.org.orgId,
+      parsed.data.demanda_id,
+    );
+    if (veredito === "falha_na_consulta") {
+      return fail("internal_error", t("Erro ao salvar a tarefa."), 500, { requestId });
+    }
+    if (veredito === "fora_da_organizacao") {
+      return fail("validation_failed", t("O negócio, o contato ou a demanda vinculada não existe."), 422, {
+        requestId,
+      });
+    }
+    if (veredito === "encerrada") {
+      return fail("state_conflict", t("Esta demanda já foi encerrada. Crie a tarefa numa demanda em andamento."), 409, {
+        requestId,
+      });
+    }
+  }
+
   const { data, error } = await supabase
     .from("crm_tasks")
     .insert({
@@ -162,10 +251,10 @@ export async function POST(req: NextRequest): Promise<Response> {
     .single();
 
   if (error) {
-    // 23503 = lead, contato ou responsável de outra organização (gatilho da 0938) ou
-    // apagado no meio. O erro é genérico de propósito: a recusa nomeia os três campos.
+    // 23503 = negócio, contato, responsável ou demanda de outra organização (gatilho da 0938) ou
+    // apagado no meio, entre a escolha e a gravação. A recusa nomeia os campos.
     if (error.code === "23503") {
-      return fail("validation_failed", t("O negócio, o contato ou o responsável vinculado não existe."), 422, {
+      return fail("validation_failed", t("O negócio, o contato, o responsável ou a demanda vinculada não existe."), 422, {
         requestId,
       });
     }
@@ -185,11 +274,11 @@ export async function POST(req: NextRequest): Promise<Response> {
   });
 
   // O laço de retorno: tarefa presa a um negócio aparece na linha do tempo dele.
-  await registraAtividadeDaTarefa(supabase, {
+  await registraAtividadeDaTarefa(portaDaAplicacao(), {
     organizationId: authz.org.orgId,
     tarefa,
     tipo: "task_created",
-    actorUserId: authz.user.id,
+    actor: { type: "user", id: authz.user.id },
   });
 
   return ok({ task: tarefa }, { requestId, status: 201 });

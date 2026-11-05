@@ -1,7 +1,7 @@
 /**
  * Abre o acesso ao banco externo para uma leitura: carrega a conexão (com a
  * organização no filtro), revalida o destino contra a guarda de rede e devolve o
- * pool da conexão.
+ * dialeto de leitura da conexão (que embrulha o pool e aplica a lista de fontes liberadas), escolhido pelo motor da conexão (registro de drivers).
  *
  * ─── Por que a guarda roda AQUI, e não só no cadastro ───────────────────────
  *
@@ -19,20 +19,20 @@
  * nome original vai só no `ssl.servername` (ver `conexao.ts`).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type pg from "pg";
 
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { logger } from "@/lib/logger";
 
 import { carregarConexao, type MotivoSemConexao } from "./credenciais";
-import { obterPool } from "./conexao";
+import type { Dialeto } from "./dialeto";
+import { abrirDialeto } from "./drivers";
 import { validarHostDeBanco } from "./guardas";
 import type { ConexaoExterna } from "./types";
 
 export type MotivoAcesso = MotivoSemConexao | "host_bloqueado" | "modulo_desligado";
 
 export type Acesso =
-  | { ok: true; conexao: ConexaoExterna; pool: pg.Pool }
+  | { ok: true; conexao: ConexaoExterna; dialeto: Dialeto }
   | { ok: false; motivo: MotivoAcesso };
 
 export async function abrirAcesso(
@@ -64,5 +64,10 @@ export async function abrirAcesso(
   const [enderecoValidado] = alvo.enderecos;
   if (enderecoValidado === undefined) return { ok: false, motivo: "host_bloqueado" };
 
-  return { ok: true, conexao: leitura.conexao, pool: obterPool(leitura.conexao, enderecoValidado) };
+  return {
+    ok: true,
+    conexao: leitura.conexao,
+    // Hiperbold (D-084, M2): o pool conecta pelo IP que a guarda validou.
+    dialeto: abrirDialeto(leitura.conexao, enderecoValidado),
+  };
 }

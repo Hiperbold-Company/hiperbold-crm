@@ -31,7 +31,9 @@ import {
 } from "@/lib/leads/motivo-da-perda";
 import { RECUSA_DE_TROCA_DE_FUNIL } from "@/lib/leads/clonar-para-funil";
 import { modoDeReabertura, recusaReabertura } from "@/lib/leads/reabertura";
+import { ocultarProvaMetaNaResposta } from "@/lib/leads/prova-meta-lead-submitted";
 import {
+  camposComAnexo,
   recusaDeCamposObrigatorios,
   recusaDeMotivoDoGanho,
   settingsDoFunil,
@@ -178,6 +180,7 @@ export async function POST(
     : validaCamposExigidos({
         lead: lead as Record<string, unknown>,
         settingsDoFunil: settings,
+        camposComAnexo: await camposComAnexo(supabase, settings, lead.organization_id, lead.id),
         destino: {
           stageId: stage.id,
           desfecho: stage.is_won ? "won" : stage.is_lost ? "lost" : null,
@@ -417,5 +420,5 @@ export async function POST(
     },
   });
 
-  return ok(finalLead, { requestId });
+  return ok(ocultarProvaMetaNaResposta(finalLead as Record<string, unknown>), { requestId });
 }

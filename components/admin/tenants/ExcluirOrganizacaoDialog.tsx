@@ -23,12 +23,18 @@ import { Label } from "@/components/ui/label";
 import { useT } from "@/hooks/i18n/useT";
 import { dataBr } from "@/lib/retencao/exclusao-de-organizacao/datas";
 
+import { useReguaDaExclusao } from "./useReguaDaExclusao";
+
 /**
  * "Excluir organização" do painel de tenants (`/admin/tenants`). Só se chega aqui com o tenant SUSPENSO.
  *
  * Não reinventa a exclusão: programar, cancelar e excluir agora são as ações da tela Sistema › Exclusões
  * (migration 0959). A frase de erro vem pronta da ação e vai direto ao toast. "Excluir agora" só habilita o
  * botão com o slug IGUAL ao da organização; a ação confere de novo no servidor, e lá exige a suspensão.
+ *
+ * Hiperbold: no meio da régua de cobrança própria (contrato atrasada ou suspensa) "Programar" e "Excluir agora"
+ * ficam desabilitados com o motivo; cancelar uma programação continua possível. `excluirAgora` recusa do mesmo
+ * jeito no servidor (`lib/tenants/regua-de-cobranca.ts`).
  */
 export interface OrganizacaoParaExcluir {
   id: string;
@@ -81,6 +87,8 @@ function Conteudo({
   const [erroDeLeitura, setErroDeLeitura] = useState<string | null>(null);
   const [dia, setDia] = useState("");
   const [slug, setSlug] = useState("");
+  const { motivo: motivoDaRegua } = useReguaDaExclusao(organizacao.id, true);
+  const bloqueadaPelaRegua = motivoDaRegua !== null;
 
   function carregar() {
     void situacaoDaExclusaoDaOrganizacao({ organizationId: organizacao.id }).then((r) => {
@@ -161,6 +169,16 @@ function Conteudo({
         </p>
       )}
 
+      {bloqueadaPelaRegua && (
+        <p
+          className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-sm text-warning-fg"
+          role="status"
+          data-testid="exclusao-bloqueada-pela-regua"
+        >
+          {motivoDaRegua}
+        </p>
+      )}
+
       {programada && (
         <div
           className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning bg-warning-bg px-3 py-2 text-sm text-warning-fg"
@@ -202,7 +220,7 @@ function Conteudo({
           </div>
           <Button
             variant="outline"
-            disabled={pendente || !situacao || !dia}
+            disabled={pendente || !situacao || !dia || bloqueadaPelaRegua}
             onClick={programar}
             data-testid="programar-exclusao-da-organizacao"
           >
@@ -245,7 +263,7 @@ function Conteudo({
         </div>
         <Button
           variant="destructive"
-          disabled={pendente || !confere}
+          disabled={pendente || !confere || bloqueadaPelaRegua}
           onClick={excluir}
           data-testid="excluir-organizacao-agora"
         >

@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 
 import { audit } from "@/lib/audit";
-import { requirePlatformAdminFull } from "@/lib/auth/portao-de-escrita";
 import { sessionAal } from "@/lib/auth/server";
 import {
   CHAVE_MODELOS_DA_INSTALACAO,
@@ -11,6 +10,8 @@ import {
   lerModelosDaInstalacao,
 } from "@/lib/ai/modelos-da-instalacao";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { escritaDeAdminOuRecusa } from "@/lib/auth/escritaDeAdminOuRecusa";
+import { MENSAGEM_DA_RECUSA_DE_ESCRITA } from "@/lib/auth/recusa-de-escrita-de-admin";
 import { acharChave } from "@/lib/instalacao/catalogo";
 import {
   estadoParaTela,
@@ -44,7 +45,7 @@ export type ResultadoDaGravacao =
 /**
  * Grava uma chave da instalação pela tela.
  *
- * ── O gate é `requirePlatformAdminFull()`, e a razão é a mesma de `updateBranding` ─
+ * ── O gate é `requirePlatformAdminEscrita()`, e a razão é a mesma de `updateBranding` ─
  *
  * Server Action não é rota: não passa por `requireRole` nem pelo layout de
  * `/admin`. Um POST direto na action, com sessão de um platform admin, entraria
@@ -74,12 +75,18 @@ export async function salvarConfiguracaoDaInstalacao(
   chave: string,
   valor: string,
 ): Promise<ResultadoDaGravacao> {
-  const { user } = await requirePlatformAdminFull();
+  const escrita = await escritaDeAdminOuRecusa();
+  if (!escrita.ok) return { ok: false, erro: MENSAGEM_DA_RECUSA_DE_ESCRITA[escrita.error] };
+  const { user } = escrita.ctx;
 
   const doCatalogo = acharChave(chave);
-  if (!doCatalogo || doCatalogo.controle !== "edita") {
+  if (!doCatalogo || doCatalogo.controle !== "edita" || doCatalogo.telaDona === "cobranca") {
     // Falha fechada: chave fora do catálogo, ou que a tela mostra só como
-    // diagnóstico, não é editável nem por caminho alternativo.
+    // diagnóstico, não é editável nem por caminho alternativo. As da cobrança
+    // (`telaDona: "cobranca"`) têm escritora própria — a Conexão confere a chave
+    // com o provedor, registra o webhook e recusa trocar o provedor de quem tem
+    // assinatura viva; a Régua valida 5–30 dias. Por aqui passariam sem nada
+    // disso (spec da cobrança do revendedor §7a, §10).
     return { ok: false, erro: "Esta configuração não pode ser alterada por aqui." };
   }
 
@@ -92,7 +99,7 @@ export async function salvarConfiguracaoDaInstalacao(
   // grava passa a poder criar e apagar WhatsApp pago de toda empresa da instalação. O mesmo
   // vale para o endereço desse servidor (`exigeSegundoFator`): quem o troca decide para onde
   // o token de administrador viaja.
-  // `requirePlatformAdminFull` só barra a sessão em dívida com o segundo fator; aqui se
+  // `escritaDeAdminOuRecusa` só barra a sessão em dívida com o segundo fator; aqui se
   // exige o segundo fator PROVADO nesta sessão (aal2), também de quem ainda não cadastrou
   // um (aí precisa ativar a verificação em duas etapas antes).
   if (doCatalogo.exigeSegundoFator || (doCatalogo.natureza === "segredo" && doCatalogo.grupo === "whatsapp")) {
@@ -203,10 +210,12 @@ export async function salvarConfiguracaoDaInstalacao(
  * padrão". Sem linha, o resolvedor lê o `.env` de novo e pode semear outra vez.
  */
 export async function voltarConfiguracaoAoPadrao(chave: string): Promise<ResultadoDaGravacao> {
-  const { user } = await requirePlatformAdminFull();
+  const escrita = await escritaDeAdminOuRecusa();
+  if (!escrita.ok) return { ok: false, erro: MENSAGEM_DA_RECUSA_DE_ESCRITA[escrita.error] };
+  const { user } = escrita.ctx;
 
   const doCatalogo = acharChave(chave);
-  if (!doCatalogo || doCatalogo.controle !== "edita") {
+  if (!doCatalogo || doCatalogo.controle !== "edita" || doCatalogo.telaDona === "cobranca") {
     return { ok: false, erro: "Esta configuração não pode ser alterada por aqui." };
   }
 

@@ -9,18 +9,23 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createLeadHandler } from "@/app/api/v1/leads/_handler";
+import { createLeadHandler, moveLeadHandler, updateLeadHandler } from "@/app/api/v1/leads/_handler";
+import type { HandlerCtx } from "@/lib/api/handlers/types";
 import { emitLeadActivity } from "@/lib/leads/activity-emitter";
+import { estamparAtribuicaoDoContato } from "@/lib/leads/atribuicao-de-anuncio";
 import { classificarLeadInicial, type ResultadoClassificacaoInicial } from "@/lib/leads/classificacao-inicial";
 import type { CreateLeadInput } from "@/lib/schemas";
 import {
   conferirAssinaturaDaCaptacao,
   corpoSemDocumento,
+  extrairAtribuicaoDoInbound,
   lerCorpoJsonObjeto,
   lerDocumentoReservado,
   lerTagsReservadas,
@@ -30,6 +35,7 @@ import {
   type DocumentoDoEnvio,
   type FieldMap,
 } from "@/lib/webhooks/inbound";
+import { HEADER_ASSINATURA_DE_ENTRADA } from "@/lib/webhooks/assinatura";
 import { gravarCpfDoContato } from "@/lib/webhooks/cpf-da-captacao";
 import { encontrarContatoPorTelefoneComNome } from "@/lib/channels/contato-por-telefone";
 import {
@@ -47,7 +53,13 @@ import {
   mapRdStationPayload,
   type RdStationMapped,
 } from "@/lib/webhooks/rdstation";
-import { limitarCampos, origemDaPagina, registrarCaptacao } from "@/lib/webhooks/captacao";
+import { isElementorPayload, mapElementorPayload, type ElementorMapped } from "@/lib/webhooks/elementor";
+import {
+  limitarCampos,
+  motivoDaRecusaDaCriacao,
+  origemDaPagina,
+  registrarCaptacao,
+} from "@/lib/webhooks/captacao";
 import { encaixarCamposNoFunil } from "@/lib/webhooks/encaixar-campos";
 import { camposDoFunil, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
 import { decidirRecadastroDoContato, mesclarTagsNoLead } from "@/lib/webhooks/recadastro";
@@ -63,11 +75,17 @@ import {
   verificarTurnstile,
 } from "@/lib/security/turnstile";
 import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
+import { cardAbertoQueACaptacaoReusa } from "@/lib/automation/captacao-reusa-card-aberto";
 import { ApiError } from "@/lib/api/types";
 import { STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import { avisarLimiteDeLeadsAtingido } from "@/lib/leads/aviso-limite-de-leads";
+import { autorizarCaptacaoParaIA, camposDaCaptacao } from "@/lib/ai/elegibilidade/formulario";
 import { autorizarContatoParaIA } from "@/lib/ai/elegibilidade/autorizacao";
 import { kickLocalPipeline } from "@/lib/dev/kick-local-pipeline";
+import {
+  normalizarCamposNumericos,
+  webhookFormFieldsSchema,
+} from "@/lib/webhooks/formulario";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -139,6 +157,84 @@ function findRawPhoneIfUnnormalized(payload: Record<string, unknown>, fieldMap: 
   return null;
 }
 
+/**
+ * O que um lead JÁ GRAVADO tem de diferente do que este envio trouxe (#2316).
+ *
+ * Por CHAVE, e com o mesmo tratamento do merge atômico (`fn_lead_anotar_campos`):
+ * o banco guarda `custom_fields` com tipos mistos — o campo numérico vira
+ * número na coluna e string no envio —, então a comparação é pelo texto dos
+ * dois lados. `100` gravado e `"100"` reenviado são o MESMO dado: um envio
+ * assim é reenvio, não atualização.
+ */
+function camposQueMudaram(
+  atuais: Record<string, unknown>,
+  novos: Record<string, unknown>,
+): Record<string, unknown> {
+  const mudou: Record<string, unknown> = {};
+  for (const [chave, valor] of Object.entries(novos)) {
+    if (String(atuais[chave] ?? "") !== String(valor)) mudou[chave] = valor;
+  }
+  return mudou;
+}
+
+/**
+ * A etapa que este envio PEDIU (#2316), resolvida no funil do PRÓPRIO lead.
+ *
+ * `stage` é campo reservado do corpo (id ou nome — o nome é o que quem integra
+ * tem em mãos), e só devolve o que anda para FRENTE: o webhook é um evento de
+ * fora, e um evento velho (ou um campo fixo no formulário, que manda a mesma
+ * etapa em todo envio) não pode puxar o card para trás. `null` = nada a mover.
+ *
+ * Uma leitura só, e ela faz as duas coisas: resolve o alvo (id ou nome) e
+ * ordena os dois — `position` de `crm_stages` é a única régua de "para frente"
+ * que o produto tem.
+ *
+ * O filtro de `organization_id` usa a organização JÁ resolvida pela fonte
+ * (`path_token`, fonte confiável — nunca o body): o service role contorna a RLS
+ * por desenho, então o escopo do tenant é declarado aqui (anti-pattern 10,
+ * régua da R3 do gate de tenant).
+ */
+async function etapaAlvoDoEnvio(
+  admin: SupabaseClient,
+  organizationId: string,
+  pipelineId: string,
+  stageAtualId: string | null,
+  indicado: string | null,
+): Promise<string | null> {
+  if (!indicado || !pipelineId) return null;
+  const { data, error } = await admin
+    .from("crm_stages")
+    .select("id, name, position")
+    .eq("organization_id", organizationId)
+    .eq("pipeline_id", pipelineId)
+    .order("position", { ascending: true });
+  if (error) {
+    // Abrir o card não pode morrer por causa de um campo de etapa: o resto do
+    // envio continua sendo aplicado e a recusa fica no log.
+    logger.error("[webhooks.in] não foi possível ler as etapas do funil do lead", {
+      pipelineId,
+      errorCode: error.code,
+      errorMessage: error.message,
+    });
+    return null;
+  }
+  const etapas = (data ?? []) as Array<{ id: string; name: string | null; position: number | null }>;
+  const alvo =
+    etapas.find((e) => e.id === indicado) ??
+    etapas.find((e) => (e.name ?? "").trim().toLowerCase() === indicado.trim().toLowerCase());
+  if (!alvo) {
+    logger.warn("[webhooks.in] etapa pedida no envio não existe no funil do lead", {
+      pipelineId,
+      etapa: indicado,
+    });
+    return null;
+  }
+  const indiceAtual = etapas.findIndex((e) => e.id === stageAtualId);
+  const indiceAlvo = etapas.findIndex((e) => e.id === alvo.id);
+  if (indiceAtual < 0 || indiceAlvo <= indiceAtual) return null;
+  return alvo.id;
+}
+
 export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextResponse> {
   const requestId = randomUUID();
   const { token } = await ctx.params;
@@ -172,7 +268,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   const { data: source, error: srcErr } = await admin
     .from("webhook_sources")
     .select(
-      "id, name, organization_id, secret_encrypted, exige_carimbo, default_pipeline_id, default_stage_id, field_map, redirect_to, is_active",
+      "id, name, organization_id, secret_encrypted, exige_carimbo, default_pipeline_id, default_stage_id, field_map, form_fields, redirect_to, is_active, authorize_ai_on_capture, update_existing_lead_on_capture, reuse_open_lead_on_capture",
     )
     .eq("path_token", token)
     .maybeSingle();
@@ -241,7 +337,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     payload = objeto;
   }
 
-  const sigHeader = req.headers.get("x-hipercrm-signature") ?? req.headers.get("x-deskcomm-signature");
+  // O cabeçalho da marca primeiro; o do upstream (`HEADER_ASSINATURA_DE_ENTRADA`) segue aceito na entrada.
+  const sigHeader = req.headers.get("x-hipercrm-signature") ?? req.headers.get(HEADER_ASSINATURA_DE_ENTRADA);
   // secret cifrado at-rest (migration 0041). A fonte TEM segredo, então ela não é pública: se o segredo não
   // decifra (chave da GUC ausente/trocada), recusar com 503 neutro. Aceitar o envio como se a fonte fosse pública
   // desligaria, em silêncio, a prova de origem (etiqueta, CPF e consentimento só valem com ela) justo quando a
@@ -451,6 +548,15 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       ? mapRdStationPayload(payload)
       : null;
 
+  // Elementor Pro manda `fields[<id>][value]` (colchetes, uma linha por
+  // propriedade) — mesmo problema: nenhuma chave de topo chama `nome`. Fica por
+  // último na precedência porque a detecção é por forma estrita, e nenhum
+  // payload é de duas origens.
+  const elementorMapped: ElementorMapped | null =
+    respondiMapped === null && rdStationMapped === null && isElementorPayload(payload)
+      ? mapElementorPayload(payload)
+      : null;
+
   // Idempotência (spec §5): `external_id` é campo reservado do envio — quem
   // integra via sistema (Zapier/n8n/loja) manda o ID único do disparo e o
   // reenvio automático (retry por timeout) NUNCA duplica o lead. O índice
@@ -489,28 +595,100 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     });
   };
 
-  // Traz o CONTATO junto, e não só o id do lead: a linha de captação precisa do
-  // vínculo para a LGPD alcançá-la. O gatilho de anonimização casa por
-  // `contact_id` — uma captação `duplicado` gravada sem ele guarda nome,
-  // telefone e o formulário inteiro de alguém que pediu anonimização, por 365
-  // dias, enquanto o produto afirma que a pessoa foi anonimizada.
-  const findLeadByExternalId = async (): Promise<{ id: string; contactId: string | null } | null> => {
+  /**
+   * O lead que já existe com este `external_id` — com o que o reenvio precisa
+   * para decidir entre ATUALIZAR (#2316) e reenvio comum: os campos que o card
+   * já tem, o funil e a etapa onde ele está.
+   *
+   * Traz o CONTATO junto, e não só o id do lead: a linha de captação precisa do
+   * vínculo para a LGPD alcançá-la. O gatilho de anonimização casa por
+   * `contact_id` — uma captação gravada sem ele guarda nome, telefone e o
+   * formulário inteiro de alguém que pediu anonimização, por 365 dias, enquanto
+   * o produto afirma que a pessoa foi anonimizada.
+   */
+  type LeadExistente = {
+    id: string;
+    contactId: string | null;
+    /**
+     * A fonte que CRIOU este card (#2316). É a coluna durável
+     * `crm_leads.webhook_source_id` (migration 0683), e não o histórico de
+     * captação nem o `source_metadata`: o primeiro é podado em 365 dias e não
+     * existe para os cards antigos, e o segundo é jsonb de terceiros.
+     */
+    webhookSourceId: string | null;
+    title: string | null;
+    customFields: Record<string, unknown>;
+    pipelineId: string;
+    stageId: string | null;
+  };
+
+  const COLUNAS_DO_CARD_POR_ID =
+    "id, contact_id, webhook_source_id, title, custom_fields, pipeline_id, stage_id";
+  const montarCardPorId = (data: Record<string, unknown>): LeadExistente => ({
+    id: data.id as string,
+    contactId: (data.contact_id as string | null) ?? null,
+    webhookSourceId: (data.webhook_source_id as string | null) ?? null,
+    title: (data.title as string | null) ?? null,
+    customFields: (data.custom_fields as Record<string, unknown> | null) ?? {},
+    pipelineId: (data.pipeline_id as string) ?? "",
+    stageId: (data.stage_id as string | null) ?? null,
+  });
+  /**
+   * O card que este `external_id` JÁ IDENTIFICA (#2316) — a régua que manda no
+   * reenvio e no `stage` reservado.
+   *
+   * Duas leituras, nesta ordem (review do #3366):
+   *
+   * 1. `source = "webhook"`: o card que ESTA rota criou, com o índice único
+   *    `uniq_crm_leads_org_source_external` por trás. É a busca de sempre e ela
+   *    não muda;
+   * 2. `webhook_source_id = <ESTA fonte>`: o card de OUTRA origem que ESTA
+   *    fonte ADOPTOU e carimbou (#3357). O card da conversa nasce com
+   *    `source = "whatsapp"` (`ORIGEM_DO_WHATSAPP`, em
+   *    `lib/channels/origem-do-negocio.ts`), e o carimbo grava nele o `id` e a
+   *    fonte — então o id gravado NUNCA é achado pela leitura 1. Sem esta
+   *    segunda leitura o segundo envio do mesmo id não acha o card adotado, o
+   *    envio cai na procura de card aberto de novo e, se o contato tiver outro
+   *    card aberto mais novo, atualiza o card errado; o `stage` reservado
+   *    (#2316) também morria ignorado neste caminho.
+   *
+   * A leitura 2 só roda quando a 1 devolve `null`, e é restrita à ESTA fonte:
+   * `webhook_source_id` é justamente o que diz de quem é o carimbo, então um
+   * card `source = "webhook"` de OUTRA fonte com o mesmo id não ganha da
+   * ordenação.
+   */
+  const findLeadByExternalId = async (): Promise<LeadExistente | null> => {
     if (!externalId) return null;
     const { data } = await admin
       .from("crm_leads")
-      .select("id, contact_id")
+      .select(COLUNAS_DO_CARD_POR_ID)
       .eq("organization_id", source.organization_id)
       .eq("source", "webhook")
       .eq("external_id", externalId)
       .maybeSingle();
-    if (!data) return null;
-    return { id: data.id as string, contactId: (data.contact_id as string | null) ?? null };
+    if (data) return montarCardPorId(data);
+    const { data: carimbado } = await admin
+      .from("crm_leads")
+      .select(COLUNAS_DO_CARD_POR_ID)
+      .eq("organization_id", source.organization_id)
+      .eq("webhook_source_id", source.id)
+      .eq("external_id", externalId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return carimbado ? montarCardPorId(carimbado) : null;
   };
 
   const fieldMap = (source.field_map ?? {}) as FieldMap;
   // external_id não é dado do lead — sai do payload antes do mapeamento pra
   // não virar custom_field (o log de recebimento acima preserva o original).
-  const { external_id: _reservedExternalId, ...payloadForMapping } = payload;
+  // `stage` é o OUTRO campo reservado (#2316): é o jeito de quem integra pedir
+  // movimento de etapa no card que o `external_id` aponta, e ele só existe
+  // nesse caminho — fora dele o envio não tem card para onde apontar.
+  const { external_id: _reservedExternalId, stage: _reservedStage, ...payloadForMapping } = payload;
+  /** O que o envio pediu de etapa, lido do corpo CRU. */
+  const etapaPedida =
+    typeof _reservedStage === "string" && _reservedStage.trim() ? _reservedStage.trim() : null;
   // O mapeamento vem ANTES da deduplicação (era depois) porque o histórico
   // registra os DADOS também do envio repetido — sem isso, o retry de uma
   // ferramenta apareceria na tela como uma linha sem nome nem telefone, e quem
@@ -520,39 +698,243 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   // O `respondiMapped ??` é do PR #326: sem ele o payload aninhado do Respondi
   // volta a cair no mapeador genérico, que é o defeito que aquele PR conserta.
   // O `rdStationMapped ??` é a mesma figura para o envelope `leads[]` do RD
-  // Station (achado 2026-09-08). Ordem: Respondi, RD Station, genérico.
+  // Station (achado 2026-09-08), e o `elementorMapped ??` para os campos em
+  // colchetes do Elementor. Ordem: Respondi, RD Station, Elementor, genérico.
   const mapped =
     respondiMapped ??
     rdStationMapped ??
+    elementorMapped ??
     mapInboundPayload(externalId ? payloadForMapping : payload, fieldMap);
   if (!mapped.phone) {
     const rawPhone = findRawPhoneIfUnnormalized(payload, fieldMap);
     if (rawPhone) mapped.source_metadata.raw_phone = rawPhone;
   }
 
+  const camposConfigurados = webhookFormFieldsSchema.safeParse(source.form_fields ?? []);
+  const tipagem = normalizarCamposNumericos(payload, camposConfigurados.success ? camposConfigurados.data : []);
+  if (tipagem.invalidKeys.length > 0) {
+    await registrarCaptacao(admin, {
+      ...fonteDaCaptacao,
+      ...origemDaCaptacao,
+      capturedName: mapped.name,
+      capturedPhone: mapped.phone,
+      capturedEmail: mapped.email,
+      fields: camposDaCaptacao(mapped.custom_fields, payload, source.authorize_ai_on_capture),
+      utm: mapped.source_metadata,
+      leadId: null,
+      contactId: null,
+      outcome: "recusado",
+      rejectReason: "campo_numerico_invalido",
+    });
+    return fail("invalid_request", "A resposta de um campo numérico tem formato inválido.", 422, {
+      requestId,
+      details: { fields: tipagem.invalidKeys },
+    });
+  }
+  Object.assign(mapped.custom_fields, tipagem.values);
+
   /** O que o formulário trouxe, do jeito que a tela de histórico mostra. */
+  // O aceite é evidência de captação, não resposta comercial no card.
+  if (source.authorize_ai_on_capture) {
+    for (const key of ["ai_service_consent", "submission_status", "ai_service_consent_version"]) {
+      delete mapped.custom_fields[key];
+    }
+  }
+
   const dadosDaCaptacao = {
     externalId,
     capturedName: mapped.name,
     capturedPhone: mapped.phone,
     capturedEmail: mapped.email,
-    fields: mapped.custom_fields,
+    fields: camposDaCaptacao(mapped.custom_fields, payload, source.authorize_ai_on_capture),
     utm: mapped.source_metadata,
   };
 
-  const deduped = await findLeadByExternalId();
-  if (deduped) {
-    // Mesmo envio repetido: 200 com o lead existente, nada é recriado — a
-    // ferramenta que reenviou recebe sucesso e para de tentar.
+  /**
+   * ENCAIXE NOS CAMPOS DO FUNIL: o formulário manda o RÓTULO ("Empresa", "Cargo / Posição") e as UTMs,
+   * e a ficha do negócio lê pela `key` do campo do funil. Sem o encaixe o dado fica gravado sob a chave
+   * crua e não aparece em "Dados do lead" nem em "Rastreamento". Devolve objeto NOVO: o histórico de
+   * captação (`dadosDaCaptacao`) segue guardando o que chegou, como chegou. Falha ABERTA: sem ler o
+   * funil, os campos seguem crus, como antes — perder a captação é pior que perder o encaixe.
+   *
+   * Serve aos DOIS caminhos que gravam `custom_fields` num card: o lead novo e o reenvio que atualiza o
+   * card existente (`fecharReenvio`). O card guarda as chaves encaixadas; comparar o envio cru com ele
+   * daria "mudou" em todo retry e gravaria a chave crua ao lado da encaixada. O funil é lido uma vez.
+   */
+  let camposDoFunilDaFonte: Promise<ReturnType<typeof camposDoFunil>> | undefined;
+  const encaixarNoFunil = async (campos: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    camposDoFunilDaFonte ??= (async () => {
+      const { data: funil, error: erroDoFunil } = await admin
+        .from("crm_pipelines")
+        .select("settings")
+        .eq("organization_id", source.organization_id)
+        .eq("id", source.default_pipeline_id)
+        .maybeSingle();
+      if (erroDoFunil) {
+        logger.warn("[webhooks.inbound] não li os campos do funil; lead entra com os campos como vieram", {
+          webhookSourceId: source.id,
+          organizationId: source.organization_id,
+          errorCode: erroDoFunil.code,
+        });
+        return [];
+      }
+      return funil ? camposDoFunil(settingsDoEmbed({ settings: funil.settings })) : [];
+    })();
+    const funil = await camposDoFunilDaFonte;
+    if (funil.length === 0) return campos;
+    return encaixarCamposNoFunil({ campos, rastreamento: mapped.source_metadata, funil }).custom_fields;
+  };
+
+  /**
+   * O fecho de um reenvio: o `external_id` já aponta para um card (#2316).
+   *
+   * A régua tem DUAS perguntas antes da terceira, e as duas são portões:
+   *
+   * 1. a fonte tem a OPÇÃO LIGADA? Ela nasce DESLIGADA (`update_existing_lead_on_capture`,
+   *    migration 0683) — atualizar card é integração entre sistemas, e a issue
+   *    #2316 pediu a opção por fonte justamente por isto. Desligada, o envio
+   *    repetido é o que sempre foi: `duplicado`, card intocado;
+   * 2. o card é DESTA fonte? A busca é por organização + `external_id`, então
+   *    sem esta pergunta a fonte A reescreveria o card que nasceu na B. `null`
+   *    (card sem origem carimbada) também não deixa passar: na dúvida, não
+   *    escreve.
+   *
+   * Passados os dois, a régua é o DADO, não o id:
+   * - o envio trouxe campo NOVO (valor pago, área, etapa mais à frente) → o
+   *   card é ATUALIZADO com o mesmo merge atômico do `updateLeadHandler` e a
+   *   mesma etapa do `moveLeadHandler`, e o desfecho é `atualizado`;
+   * - o envio repetiu o que já estava gravado → idempotência de sempre: nada
+   *   muda, `duplicado`, 200 com o lead existente. A ferramenta que reenviou
+   *   por timeout recebe sucesso e para de tentar.
+   *
+   * O portão 1 é o que protege a edição MANUAL: sem ele, o vendedor que corrige
+   * o título ou um campo à mão e depois recebe um retry (ou um evento antigo)
+   * da ferramenta tem a correção sobrescrita — a comparação é com o valor
+   * atual, então o envio conta como "dado novo". Com a opção desligada, quem
+   * não liga continua exatamente como antes do #2316.
+   *
+   * Serve para os DOIS caminhos que encontram o card — o fast-path de
+   * deduplicação e a corrida do retry, em que o índice único derruba o segundo
+   * INSERT. E nos DOIS o histórico é gravado com o vínculo do lead e do
+   * contato: é a linha de captação que o gatilho de anonimização alcança.
+   */
+  const fecharReenvio = async (
+    lead: LeadExistente,
+    contactIdDoEnvio: string | null,
+  ): Promise<NextResponse> => {
+    /** O reenvio de sempre: nada muda no card, 200 com o lead existente. */
+    const fecharComoReenvio = async (): Promise<NextResponse> => {
+      await registrarCaptacao(admin, {
+        ...fonteDaCaptacao,
+        ...origemDaCaptacao,
+        ...dadosDaCaptacao,
+        leadId: lead.id,
+        contactId: contactIdDoEnvio ?? lead.contactId,
+        outcome: "duplicado",
+      });
+      return respondWithLead(lead.id);
+    };
+
+    // PORTÃO 1 — a opção é da fonte, e nasce desligada.
+    if (!source.update_existing_lead_on_capture) return fecharComoReenvio();
+    // PORTÃO 2 — só o card que ESTA fonte criou.
+    if (lead.webhookSourceId !== source.id) return fecharComoReenvio();
+    // PORTÃO 3 — card de titular ANONIMIZADO não recebe dado de volta. A
+    // `fn_lgpd_cascade_redact_contact` limpa título, campos e tags do card, mas
+    // mantém `external_id` e `webhook_source_id`: sem esta pergunta, o próximo
+    // envio da integração passaria pelos portões 1 e 2, tudo pareceria "novo" e
+    // o nome e os campos do titular voltariam — a anonimização é irreversível.
+    // Leitura que falha também fecha como reenvio: na dúvida, não escreve.
+    //
+    // Fronteira: a anonimização também alcança o card por `crm_lead_links`
+    // (`target_kind='contact'`), e este portão só olha o `contact_id`. Hoje
+    // nada no produto grava esse vínculo; se passar a gravar, a causa raiz é
+    // zerar `webhook_source_id` no passo 5 da `fn_lgpd_cascade_redact_contact`.
+    if (lead.contactId) {
+      const { data: titular, error: erroTitular } = await admin
+        .from("contacts")
+        .select("is_anonymized")
+        .eq("organization_id", source.organization_id)
+        .eq("id", lead.contactId)
+        .maybeSingle();
+      if (erroTitular || titular?.is_anonymized === true) return fecharComoReenvio();
+    }
+
+    const campos = camposQueMudaram(lead.customFields, await encaixarNoFunil(mapped.custom_fields));
+    // O título vem do nome só nos caminhos que usam o mapeador genérico (RD
+    // Station e Elementor também): o Respondi tem formato próprio de título,
+    // e compará-lo com o nome de hoje faria TODO retry do Respondi virar
+    // "atualizado".
+    const tituloMudou = !respondiMapped && !!mapped.name && mapped.name !== lead.title;
+    const etapaAlvo = await etapaAlvoDoEnvio(
+      admin,
+      source.organization_id as string,
+      lead.pipelineId,
+      lead.stageId,
+      etapaPedida,
+    );
+
+    // Mesmo envio repetido: nada é recriado — a ferramenta que reenviou recebe
+    // sucesso e para de tentar.
+    if (Object.keys(campos).length === 0 && !tituloMudou && etapaAlvo === null) {
+      return fecharComoReenvio();
+    }
+
+    const ctxDoLead: HandlerCtx = {
+      organization_id: source.organization_id,
+      actor: { type: "webhook_source", id: source.id },
+      requestId,
+    };
+    try {
+      if (Object.keys(campos).length > 0 || tituloMudou) {
+        await updateLeadHandler(
+          admin,
+          ctxDoLead,
+          lead.id,
+          {
+            ...(tituloMudou && mapped.name ? { title: mapped.name } : {}),
+            ...(Object.keys(campos).length > 0 ? { custom_fields: campos } : {}),
+          },
+          // #3508: o formulário é de terceiro e a lista do funil é nossa — o
+          // valor que não casa entra como veio, em vez de transformar o card
+          // num loop de retry de quem integra.
+          { manterForaDaLista: true },
+        );
+      }
+      if (etapaAlvo) {
+        await moveLeadHandler(admin, ctxDoLead, lead.id, { to_stage_id: etapaAlvo });
+      }
+    } catch (err) {
+      // O card JÁ existe e este envio veio de uma ferramenta que reenvia: a
+      // recusa do UPDATE (régua de campos, contato de pessoal, etapa que o
+      // funil não deixa) transformaria este card num loop de retry sem que
+      // nada do dado novo chegasse. O que não pôde ser aplicado fica no log —
+      // e o PRÓXIMO evento tenta de novo, porque o desfecho é do envio, não da
+      // escrita. `registrarCaptacao` não lança, então a linha sai de qualquer
+      // jeito, com o vínculo.
+      logger.error("[webhooks.in] reenvio com dado novo não pôde atualizar o card", {
+        organizationId: source.organization_id,
+        webhookSourceId: source.id,
+        leadId: lead.id,
+        requestId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     await registrarCaptacao(admin, {
       ...fonteDaCaptacao,
       ...origemDaCaptacao,
       ...dadosDaCaptacao,
-      leadId: deduped.id,
-      contactId: deduped.contactId,
-      outcome: "duplicado",
+      leadId: lead.id,
+      contactId: contactIdDoEnvio ?? lead.contactId,
+      outcome: "atualizado",
     });
-    return respondWithLead(deduped.id);
+    return respondWithLead(lead.id);
+  };
+
+  const deduped = await findLeadByExternalId();
+  if (deduped) {
+    return fecharReenvio(deduped, null);
   }
 
   // RECADASTRO JÁ REGISTRADO: o `external_id` de um recadastro não mora em lead nenhum
@@ -637,8 +1019,27 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   // Nasceu neste request? O INSERT já grava o consentimento com a forma certa;
   // a reconciliação abaixo existe só para quem JÁ era contato.
   let contatoNasceuAqui = false;
-  /** O que os caminhos de busca (telefone e e-mail) devolvem — um tipo só. */
+
+  /** O que os dois caminhos (telefone e e-mail) devolvem — um tipo só. */
   type ContatoAchado = { data: { id: string; name: string | null } | null };
+
+  // Os dois índices de busca ficam FORA do `if (mapped.phone)` porque o e-mail
+  // também é identificador de contato (#3719). Antes desta divisão o bloco
+  // inteiro só existia com telefone, e um formulário que coleta nome e e-mail
+  // criava o card com `contact_id = null` — a pessoa não aparecia em Contatos.
+
+  // ⚠️ QUAL GRAFIA VENCE é decidido por `escolherContatoCanonico`, e não pelo
+  // banco. Isto era `.in(variantes).limit(1)` SEM `order by`: com as duas
+  // grafias do mesmo celular ainda vivas — estado que a migration `0198`
+  // admite ao chamar o próprio passo 3 de "piso de segurança para o unique" —
+  // o Postgres devolvia qualquer uma das duas. A resposta do cliente entrava
+  // no cadastro errado, o follow-up não a reconhecia, e a mesma pergunta saía
+  // de novo.
+  const selectActiveByPhone = async (): Promise<ContatoAchado> => ({
+    data: mapped.phone
+      ? await encontrarContatoPorTelefoneComNome(admin, source.organization_id, mapped.phone)
+      : null,
+  });
 
   // uniq_contacts_org_email (baseline.sql) é um SEGUNDO índice único parcial,
   // independente de uniq_contacts_org_phone — um INSERT pode colidir nele
@@ -656,43 +1057,132 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       .maybeSingle();
   };
 
-  if (mapped.phone) {
-    // ⚠️ QUAL GRAFIA VENCE é decidido por `escolherContatoCanonico`, e não pelo
-    // banco. Isto era `.in(variantes).limit(1)` SEM `order by`: com as duas
-    // grafias do mesmo celular ainda vivas — estado que a migration `0198`
-    // admite ao chamar o próprio passo 3 de "piso de segurança para o unique" —
-    // o Postgres devolvia qualquer uma das duas. A resposta do cliente entrava
-    // no cadastro errado, o follow-up não a reconhecia, e a mesma pergunta saía
-    // de novo.
-    const selectActiveByPhone = async (): Promise<ContatoAchado> => ({
-      data: await encontrarContatoPorTelefoneComNome(
-        admin,
-        source.organization_id,
-        mapped.phone!,
-      ),
-    });
+  /**
+   * O ENVIO COMPLETA O CONTATO QUE REAPROVEITA (#3719).
+   *
+   * A captação só sabia preencher contato na hora de CRIÁ-LO. Quem chegava
+   * depois — o segundo formulário da mesma pessoa, o contato que a tela ou a
+   * importação criou antes — era reaproveitado e ficava como estava: o
+   * telefone do envio era DESCARTADO quando o vencedor vinha pelo índice de
+   * e-mail, e o card novo caía num contato sem número. Daí para frente nada
+   * que dependa de WhatsApp (envio pelo CRM, agente de IA, follow-up,
+   * confirmação de agendamento) funcionava para esse lead.
+   *
+   * As quatro guardas são o desenho, não zelo:
+   *
+   *  - `is(coluna, null)`: só o que FALTA é preenchido. Um número existente
+   *    nunca é trocado por outro do formulário — quem digitou o número na tela
+   *    sabe mais do que o campo de uma landing page.
+   *  - `organization_id`: mesma régua do resto da rota. Telefone e e-mail são
+   *    únicos POR ORGANIZAÇÃO; sem este filtro o UPDATE alcançaria a ficha de
+   *    outro tenant, que é o pior erro possível aqui.
+   *  - `is_personal = false` e `is_anonymized = false`: contato marcado como
+   *    pessoal está FORA da operação — o card dele é recusado logo adiante
+   *    (`createLeadHandler`), e completar a ficha antes disso deixaria o
+   *    contato pessoal alterado por uma captação que nem entrou. Anonimizado
+   *    é titular de LGPD: nada de formulário volta a preencher a ficha dele.
+   *  - o erro NÃO é engolido em silêncio: `23505` significa que o valor já é
+   *    de OUTRO contato ativo da mesma organização (os dois índices únicos
+   *    parciais de `contacts`) — a captação segue com o vínculo que já tinha,
+   *    ninguém é sobrescrito, e o desfecho fica no log com o código.
+   */
+  const completarDoEnvio = async (
+    contato: string,
+    coluna: "phone_number" | "email",
+    valor: string,
+  ): Promise<boolean> => {
+    const { data: gravado, error: erroDeGravacao } = await admin
+      .from("contacts")
+      .update({ [coluna]: valor })
+      .eq("id", contato)
+      .eq("organization_id", source.organization_id)
+      .eq("is_personal", false)
+      .eq("is_anonymized", false)
+      .is(coluna, null)
+      .select("id")
+      .maybeSingle();
+    if (erroDeGravacao) {
+      logger.error("[webhooks.inbound] contact fill failed", {
+        webhookSourceId: source.id,
+        organizationId: source.organization_id,
+        contactId: contato,
+        column: coluna,
+        errorCode: erroDeGravacao.code,
+        errorMessage: erroDeGravacao.message,
+      });
+      return false;
+    }
+    // `null` = o contato já tinha valor e a guarda `is(coluna, null)` não casou
+    // nenhuma linha. Não houve transição, então não há evento a emitir.
+    return Boolean(gravado);
+  };
 
+  /**
+   * O CONTATO GANHOU TELEFONE POR ESTE ENVIO — e a automação precisa saber.
+   *
+   * `contact.phone_added` é a transição que as regras com esse gatilho esperam
+   * (`lib/schemas/webhooks.ts`), com a MESMA forma do PATCH de contato
+   * (`app/api/v1/contacts/_handler.ts`, bloco do #2812): emitido DEPOIS da
+   * gravação, porque a guarda `checarGuardasDeContato` mata com `no_phone`
+   * quem chega sem número — emitir antes entregaria à regra um contato ainda
+   * vazio, e o defeito seria mudo (sem erro, sem log, sem run).
+   */
+  const completarTelefoneDoEnvio = async (contato: string): Promise<void> => {
+    if (!mapped.phone) return;
+    if (!(await completarDoEnvio(contato, "phone_number", mapped.phone))) return;
+    const { error: erroDoEvento } = await admin.rpc("emit_event", {
+      p_event_type: "contact.phone_added",
+      p_entity_kind: "contact",
+      p_entity_id: contato,
+      p_payload: { phone_number: mapped.phone },
+      p_metadata: { request_id: requestId },
+      p_organization_id: source.organization_id,
+    });
+    if (erroDoEvento) {
+      logger.error("[webhooks.inbound] emit_event contact.phone_added failed", {
+        webhookSourceId: source.id,
+        organizationId: source.organization_id,
+        contactId: contato,
+        errorMessage: erroDoEvento.message,
+      });
+    }
+  };
+
+  // Consentimento explícito só quando o Respondi confirmou concessão — recusa
+  // NUNCA vira concessão por omissão. E a recusa é GRAVADA, não omitida: o
+  // DEFAULT da coluna já é `granted_at: null`, então omitir deixava "nunca
+  // perguntamos" e "disse não" com a mesma forma no banco, e quem lê para
+  // decidir envio não tinha como separar os dois (ver
+  // buildContactConsentDenial). Vale para os DOIS INSERTs abaixo.
+  // O TENANT É DECLARADO ONDE A LINHA NASCE, não escondido no helper: a régua
+  // de R1 (`tests/unit/admin-client-exige-filtro-de-tenant.test.ts`) lê a
+  // cadeia e a declaração do payload, e um `camposDoContatoNovo(…)` dentro do
+  // `insert` é opaco para ela — foi assim que os dois INSERTs abaixo passaram a
+  // criar contato em tabela tenant-aware sem `organization_id` visível.
+  const camposDoContatoNovo = (nome: string) => ({
+    name: nome,
+    email: mapped.email,
+    source: "webhook",
+    source_metadata: { ...mapped.source_metadata, webhook_source_id: source.id },
+    ...(consentDoEnvio ? { consent: consentDoEnvio } : {}),
+  });
+
+  if (mapped.phone) {
     const { data: existing } = await selectActiveByPhone();
     if (existing) {
       contactId = existing.id as string;
       existingContactName = existing.name as string | null;
+      // Achado pelo TELEFONE: ele é o identificador e manda. O e-mail do envio
+      // só completa a ficha se ela não tiver nenhum — e nunca troca o que já
+      // existe.
+      if (mapped.email) await completarDoEnvio(contactId, "email", mapped.email);
     } else {
       const { data: created, error: insertErr } = await admin
         .from("contacts")
         .insert({
           organization_id: source.organization_id,
-          name: mapped.name ?? mapped.phone,
+          ...camposDoContatoNovo(mapped.name ?? mapped.phone),
           phone_number: mapped.phone,
-          email: mapped.email,
-          source: "webhook",
-          source_metadata: { webhook_source_id: source.id, ...mapped.source_metadata },
-          // Consentimento explícito só quando o Respondi confirmou concessão —
-          // recusa NUNCA vira concessão por omissão. E a recusa agora é
-          // GRAVADA, não omitida: o DEFAULT da coluna já é `granted_at: null`,
-          // então omitir deixava "nunca perguntamos" e "disse não" com a mesma
-          // forma no banco, e quem lê para decidir envio não tinha como separar
-          // os dois (ver buildContactConsentDenial).
-          ...(consentDoEnvio ? { consent: consentDoEnvio } : {}),
         })
         .select("id")
         .maybeSingle();
@@ -709,11 +1199,18 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
           if (winnerByPhone) {
             contactId = winnerByPhone.id as string;
             existingContactName = winnerByPhone.name as string | null;
+            if (mapped.email) await completarDoEnvio(contactId, "email", mapped.email);
           } else {
             const byEmail = selectActiveByEmail();
             const { data: winnerByEmail } = byEmail ? await byEmail : { data: null };
             contactId = (winnerByEmail?.id as string | undefined) ?? undefined;
             existingContactName = (winnerByEmail?.name as string | null | undefined) ?? undefined;
+            // ⭐ O SEGUNDO DEFEITO DO #3719 ESTAVA AQUI. O vencedor veio pelo
+            // índice de E-MAIL, e o telefone DESTE envio era inédito: sem a
+            // linha abaixo ele era descartado, e o card novo ficava ligado a
+            // um contato sem número — justamente o lead que pediu material e
+            // depois preencheu o formulário de orçamento com o mesmo e-mail.
+            if (contactId) await completarTelefoneDoEnvio(contactId);
           }
         } else {
           logger.error("[webhooks.inbound] contact insert failed", {
@@ -729,47 +1226,76 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       }
     }
   } else if (mapped.email) {
-    // Envio SÓ com e-mail (formulário sem telefone): o contato é achado — ou criado —
-    // pelo e-mail normalizado, para o recadastro, as etiquetas e o CPF funcionarem
-    // também para quem não informa telefone. Sem isto o lead nascia sem contato e a
-    // mesma pessoa virava um lead novo a cada envio.
-    const porEmail = selectActiveByEmail();
-    const { data: existente } = porEmail ? await porEmail : { data: null };
-    if (existente) {
-      contactId = existente.id as string;
-      existingContactName = existente.name as string | null;
+    // Sem telefone, o E-MAIL é o único identificador do envio — e é o caso
+    // mais comum de uma isca (material, newsletter, e-book). Antes disto o
+    // bloco inteiro de contato era pulado e o card nascia com
+    // `contact_id = null`: a pessoa não aparecia em Contatos, não entrava em
+    // segmentação e não tinha histórico unificado.
+    const byEmail = selectActiveByEmail();
+    const { data: existing } = byEmail ? await byEmail : { data: null };
+    if (existing) {
+      contactId = existing.id as string;
+      existingContactName = existing.name as string | null;
     } else {
-      const { data: criado, error: erroDoInsert } = await admin
+      const { data: created, error: insertErr } = await admin
         .from("contacts")
         .insert({
           organization_id: source.organization_id,
-          name: mapped.name ?? mapped.email,
-          email: mapped.email,
-          source: "webhook",
-          source_metadata: { webhook_source_id: source.id, ...mapped.source_metadata },
-          ...(consentDoEnvio ? { consent: consentDoEnvio } : {}),
+          ...camposDoContatoNovo(mapped.name ?? mapped.email),
         })
         .select("id")
         .maybeSingle();
-      if (erroDoInsert) {
-        if (erroDoInsert.code === "23505") {
-          // Corrida: outro envio criou o contato com este e-mail entre a busca e o INSERT.
-          const reler = selectActiveByEmail();
-          const { data: vencedor } = reler ? await reler : { data: null };
-          contactId = (vencedor?.id as string | undefined) ?? undefined;
-          existingContactName = (vencedor?.name as string | null | undefined) ?? undefined;
+      if (insertErr) {
+        if (insertErr.code === "23505") {
+          // Dois envios simultâneos do mesmo e-mail sem telefone: o índice
+          // uniq_contacts_org_email derruba o segundo INSERT e o contato do
+          // primeiro é o vencedor — o card não pode ficar sem contato por
+          // causa de uma corrida.
+          const concorrente = selectActiveByEmail();
+          const { data: winner } = concorrente ? await concorrente : { data: null };
+          contactId = (winner?.id as string | undefined) ?? undefined;
+          existingContactName = (winner?.name as string | null | undefined) ?? undefined;
         } else {
-          logger.error("[webhooks.inbound] contact insert (e-mail) failed", {
+          logger.error("[webhooks.inbound] contact insert failed", {
             webhookSourceId: source.id,
             organizationId: source.organization_id,
-            errorCode: erroDoInsert.code,
-            errorMessage: erroDoInsert.message,
+            errorCode: insertErr.code,
+            errorMessage: insertErr.message,
           });
         }
       } else {
-        contactId = (criado?.id as string | undefined) ?? undefined;
+        contactId = (created?.id as string | undefined) ?? undefined;
         contatoNasceuAqui = contactId !== undefined;
       }
+    }
+  }
+
+  /**
+   * A ATRIBUIÇÃO DE ANÚNCIO do lead de formulário (issues #2317 e #3149).
+   *
+   * Quem anuncia para uma landing page com formulário não tinha a origem
+   * estampada no contato: `fbclid`, `fbc`, `fbp`, `gclid`, `ad_id`, `adset_id` e
+   * `campaign_id` viravam campo personalizado do card, e `lib/conversoes` não
+   * sabia de que clique veio a venda.
+   *
+   * A entrada é `mapped.source_metadata`, e não o payload cru, para haver UM
+   * caminho só: o mapeador GENÉRICO e os DEDICADOS (Elementor, RD Station,
+   * Respondi) já entregam as chaves de anúncio ali — cada um lendo na forma do
+   * seu fornecedor. Assim o extrator (`extrairAtribuicaoDoInbound`) é o mesmo
+   * nos três, e um fornecedor novo não precisa de uma segunda regra aqui.
+   *
+   * A gravação é a MESMA função do clique-pro-WhatsApp
+   * (`estamparAtribuicaoDoContato` → `fn_estampar_atribuicao_de_anuncio`), com a
+   * guarda de primeiro toque no banco — sem regra paralela. A falha é tolerada
+   * dentro dela: perder a atribuição é ruim, perder a captação é pior.
+   *
+   * Sem contato resolvido não há onde carimbar: o envio sem telefone (e sem
+   * e-mail) segue criando o lead sem contato, como sempre.
+   */
+  if (contactId) {
+    const atribuicao = extrairAtribuicaoDoInbound(mapped.source_metadata);
+    if (atribuicao) {
+      await estamparAtribuicaoDoContato(admin, source.organization_id, contactId, atribuicao);
     }
   }
 
@@ -911,6 +1437,48 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   };
 
   /**
+   * A autorização da IA de um envio, nos dois caminhos que fecham com lead (o lead novo e o recadastro).
+   *
+   * Com `authorize_ai_on_capture` ligado na fonte, quem decide é o consentimento explícito do formulário
+   * (`autorizarCaptacaoParaIA`, atômico no banco, e só com segredo conferido); a decisão vira nota na
+   * timeline do lead. Desligado, vale a régua do Respondi, só de origem provada (`autorizarIASeProvado`).
+   */
+  const autorizarIADaCaptacao = async (leadId: string, contato: string): Promise<void> => {
+    if (!source.authorize_ai_on_capture) {
+      await autorizarIASeProvado(contato);
+      return;
+    }
+    const autorizou =
+      sourceSecret !== null &&
+      (await autorizarCaptacaoParaIA(admin, {
+        organizationId: source.organization_id,
+        sourceId: source.id,
+        leadId,
+        contactId: contato,
+        requestId,
+      }));
+    const atividadeIA = await emitLeadActivity(admin, {
+      organizationId: source.organization_id,
+      leadId,
+      contactId: contato,
+      type: "note",
+      sourceModule: "webhook",
+      sourceId: source.id,
+      actor: { type: "webhook_source", id: source.id },
+      reason: autorizou
+        ? "Atendimento por IA autorizado pelo consentimento explícito deste formulário."
+        : "Este envio não concedeu nova autorização de IA. Confira o consentimento e o estado do contato antes de configurar o atendimento.",
+      payload: { webhook_source_id: source.id, request_id: requestId, ai_authorized: autorizou },
+    });
+    if (!atividadeIA.ok) {
+      logger.warn("[webhooks.inbound] autorização por formulário sem atividade", {
+        organization_id: source.organization_id,
+        request_id: requestId,
+      });
+    }
+  };
+
+  /**
    * RECADASTRO (decisão do dono do produto, 16/10/2026): quem já tem um lead
    * ABERTO no funil desta fonte não ganha um segundo. O CRM registra o
    * recadastro na linha do tempo do lead que existe, mantém a etapa e responde
@@ -926,7 +1494,11 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
    * etapa/ganho/perda nasce; o relógio do negócio anda pela própria atividade
    * (trigger `fn_update_last_activity_at`).
    */
-  if (contactId) {
+  // O que o envio trouxe, ANTES da classificação inicial escrever nele: é o que a atividade do
+  // recadastro guarda, em qualquer das duas posições em que ele roda.
+  const camposRecebidosNoEnvio: Record<string, unknown> = { ...mapped.custom_fields };
+  const tentarRecadastro = async (): Promise<NextResponse | null> => {
+    if (!contactId) return null;
     const decisao = await decidirRecadastroDoContato(admin, {
       organizationId: source.organization_id as string,
       contactId,
@@ -996,7 +1568,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
             nome: mapped.name,
             telefone: mapped.phone,
             email: mapped.email,
-            campos: limitarCampos(mapped.custom_fields),
+            campos: limitarCampos(camposRecebidosNoEnvio),
             origem: mapped.source_metadata,
           },
           ...(consentDoEnvio && respondiMapped && !respondiMapped.consent.granted
@@ -1018,7 +1590,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       await admin
         .from("webhook_sources")
         .update({ last_received_at: new Date().toISOString() })
-        .eq("id", source.id);
+        .eq("id", source.id)
+        .eq("organization_id", source.organization_id);
 
       await audit({
         action: "webhook.lead_reregistered",
@@ -1040,10 +1613,18 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
 
       // A autorização da IA é do CONTATO (o formulário provado o autoriza a ser
       // atendido), não do lead: vale também no recadastro, como valia antes.
-      await autorizarIASeProvado(contactId);
+      await autorizarIADaCaptacao(leadExistenteId, contactId);
 
       return respondWithLead(leadExistenteId);
     }
+    return null;
+  };
+  // Com a opção "Reaproveitar o card aberto" ligada, o reuso do card (abaixo) vem ANTES do
+  // recadastro (decisão da junção com o upstream, 04/11/2026): o recadastro achava o mesmo card
+  // aberto primeiro e o reuso nunca era alcançado. Desligada, o recadastro roda aqui, como sempre.
+  if (!source.reuse_open_lead_on_capture) {
+    const recadastro = await tentarRecadastro();
+    if (recadastro) return recadastro;
   }
 
   // Classificação inicial (só Respondi por ora — os motivos de
@@ -1080,35 +1661,208 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     }
   }
 
-  // ENCAIXE NOS CAMPOS DO FUNIL: o formulário manda o RÓTULO ("Empresa", "Cargo / Posição") e as UTMs,
-  // e a ficha do negócio lê pela `key` do campo do funil. Sem o encaixe o dado fica gravado sob a chave
-  // crua e não aparece em "Dados do lead" nem em "Rastreamento". Objeto NOVO: o histórico de captação
-  // (`dadosDaCaptacao`) segue guardando o que chegou, como chegou. Falha ABERTA: sem ler o funil, o lead
-  // entra com os campos crus, como antes — perder a captação é pior que perder o encaixe.
-  let camposParaOLead: Record<string, unknown> = mapped.custom_fields;
-  {
-    const { data: funil, error: erroDoFunil } = await admin
-      .from("crm_pipelines")
-      .select("settings")
-      .eq("organization_id", source.organization_id)
-      .eq("id", source.default_pipeline_id)
-      .maybeSingle();
-    if (erroDoFunil) {
-      logger.warn("[webhooks.inbound] não li os campos do funil; lead entra com os campos como vieram", {
-        webhookSourceId: source.id,
-        organizationId: source.organization_id,
-        errorCode: erroDoFunil.code,
-      });
-    } else if (funil) {
-      const campos = camposDoFunil(settingsDoEmbed({ settings: funil.settings }));
-      if (campos.length > 0) {
-        camposParaOLead = encaixarCamposNoFunil({
-          campos: mapped.custom_fields,
-          rastreamento: mapped.source_metadata,
-          funil: campos,
-        }).custom_fields;
+  // Encaixe nos campos do funil (`encaixarNoFunil`, lá em cima), já com a classificação inicial.
+  const camposParaOLead = await encaixarNoFunil(mapped.custom_fields);
+
+  /**
+   * ── O CONTATO CASADO JÁ TEM CARD ABERTO NESTE FUNIL: A CAPTAÇÃO O REUSA (#3101, #3357) ──
+   *
+   * O defeito medido em v1.86.0: a captação criava card NOVO em todo envio sem
+   * `external_id`, mesmo quando o contato casado (por telefone ou e-mail) já
+   * tinha negócio ABERTO no MESMO funil — um contato chegou a TRÊS cards
+   * abertos no mesmo funil, e quem olha três cards do mesmo cliente não sabe
+   * qual dos três a equipe está tocando.
+   *
+   * A régua é a MESMA que a ação `create_or_move_lead` já usa para o gatilho de
+   * contato (#958): o negócio ABERTO do contato no funil da fonte é ATUALIZADO
+   * com o que este envio trouxe e MOVIDO para a etapa da fonte quando ela está
+   * à frente, em vez de nascer outro. O degrau é o mesmo módulo (`negocioAbertoDoContato`) — duas
+   * implementações de "card aberto do contato" divergiriam na primeira mudança
+   * de uma delas.
+   *
+   * Três portões, nesta ordem:
+   *
+   * 1. **é uma OPÇÃO DA FONTE, e nasce DESLIGADA** (migration 0722). Desligada,
+   *    o comportamento de hoje não muda um byte — o envio cria o card como
+   *    sempre criou. É o critério de aceite da issue: quem nunca ligar não vê
+   *    diferença nenhuma;
+   * 2. **o `external_id` QUE JÁ EXISTE manda** (#3357). Quando o id do envio já
+   *    aponta para um card, quem responde é o `findLeadByExternalId` lá de cima
+   *    e a régua de #2316 continua sendo a única: nem se chega a procurar card
+   *    aberto. O id identifica o card, e é esse card que a atualização alcança —
+   *    reusar OUTRO card ali trocaria a idempotência por envio (um lead por
+   *    `external_id`) por uma atualização inesperada;
+   * 3. **o card aberto é desta fonte (ou de nenhuma) e não responde por OUTRO
+   *    id** (#3366; a pergunta do id só existe no envio COM id). Dois ids
+   *    para o mesmo contato são DOIS cards por desenho (#2316): cada id tem a
+   *    sua idempotência e o seu card. Um card carimbado com o id A não é
+   *    adotado pelo envio do id B — o envio de B cria o card de B, como criava
+   *    antes deste PR. Sem este portão o envio de B atualizava o card de A sem
+   *    nunca ser gravado nele (o carimbo é compare-and-set) e o evento
+   *    seguinte do id B ia atrás do card aberto MAIS NOVO do contato: o mesmo
+   *    id podia trocar de alvo a cada card novo;
+   * 4. **o card é o do contato NESTE funil** — escrever por cima do card aberto
+   *    em OUTRO funil seria trocar de quadro sem passar pela transferência
+   *    (#992), que encerra a origem com motivo próprio.
+   *
+   * O PRIMEIRO envio de um `external_id` INÉDITO é o caso que o #3357 mediu: o id
+   * ainda não aponta para card nenhum, o contato tem o card da conversa aberto no
+   * funil da fonte, e a captação abria um SEGUNDO card — um contato com dois
+   * negócios abertos, o da conversa parado, e os eventos seguintes do mesmo id
+   * mexendo só no card novo. Agora esse card aberto é adotado como qualquer
+   * outro e o `external_id` é CARIMBADO nele (o bloco abaixo): daí em diante o id
+   * aponta para o card que a equipe já está tocando, os envios seguintes caem no
+   * fast-path do #2316 e a idempotência por id continua valendo. Sem o carimbo o
+   * próximo evento abriria o segundo card de novo, um turno depois.
+   *
+   * Ligar a opção exige assinatura configurada na fonte — a mesma régua da
+   * opção irmã (`lib/webhooks/assinatura-autorizacao.ts`), conferida no PATCH.
+   *
+   * Não há aqui o portão de titular anonimizado da opção irmã: o card é achado
+   * pelo contato que ESTE envio casou, e a anonimização apaga telefone e e-mail
+   * do contato (`fn_lgpd_cascade_redact_contact`) — um titular anonimizado não
+   * casa com envio nenhum.
+   *
+   * O desfecho é `atualizado` — o mesmo vocabulário do #2316, que a migration
+   * 0683 já aceita no CHECK —, e a linha de captação sai com o vínculo do lead e
+   * do contato: é ela que o gatilho de anonimização alcança.
+   */
+  const cardAberto = await cardAbertoQueACaptacaoReusa(admin, {
+    opcaoDaFonteLigada: Boolean(source.reuse_open_lead_on_capture),
+    organizationId: source.organization_id as string,
+    contactId: contactId ?? null,
+    pipelineId: source.default_pipeline_id as string,
+  });
+  // O portão 3 do comentário acima, em duas perguntas (colunas lidas pelo
+  // `negocioAbertoDoContato`):
+  // - o card é desta fonte ou de nenhuma? Card de OUTRA fonte de webhook não é
+  //   reusado — com ou sem id no envio;
+  // - com id no envio: o card ainda não tem identidade de integração, ou já
+  //   responde por ESTE id (a corrida de dois primeiros envios: o vencedor
+  //   carimbou entre o `findLeadByExternalId` e esta leitura).
+  const daFonteOuDeNenhuma =
+    !cardAberto?.webhook_source_id || cardAberto.webhook_source_id === source.id;
+  if (
+    cardAberto &&
+    daFonteOuDeNenhuma &&
+    (!externalId || !cardAberto.external_id || cardAberto.external_id === externalId)
+  ) {
+    /**
+     * O `external_id` DO ENVIO VAI PARA O CARD ADOTADO (#3357).
+     *
+     * Só se chega aqui com id INÉDITO: o `findLeadByExternalId` da linha de cima
+     * já respondeu `null` para este id, e é este o PRIMEIRO envio que o traz. Sem
+     * o carimbo, o card adotado ficaria sem identidade de integração e o evento
+     * seguinte — o mesmo id — abriria o SEGUNDO card que a issue mediu: o card
+     * da conversa parado ao lado do card do teste, um contato com dois negócios
+     * abertos no mesmo funil.
+     *
+     * Carimbado, o vínculo fica igual ao de um card criado por esta rota: o
+     * próximo envio cai no fast-path do #2316 e ATUALIZA este card em vez de
+     * abrir outro. O desfecho deste envio não muda (`atualizado`).
+     *
+     * Compare-and-set (`.is("external_id", null)`): com o portão 3 lá de cima o
+     * card já SEMPRE nasce aqui sem id — o que sobra é a CORRIDA de dois
+     * primeiros envios simultâneos, que acham o mesmo card aberto ainda sem
+     * identidade. O perdedor não reescreve o id do vencedor: trocar a
+     * identidade faria o retry DO OUTRO abrir um terceiro card.
+     *
+     * Falha aqui é tolerada, como nas demais bordas desta rota: o card já está
+     * adotado e o dado do envio entra nele logo abaixo. O que se perde, e só no
+     * caso do índice único recusar (outra requisição carimbou primeiro), é a
+     * idempotência DESTE id — o próximo envio casa no card do vencedor. Derrubar
+     * a captação por causa do carimbo seria pior que perdê-lo.
+     */
+    if (externalId) {
+      const { error: erroDoCarimbo } = await admin
+        .from("crm_leads")
+        .update({ external_id: externalId, webhook_source_id: source.id })
+        .eq("organization_id", source.organization_id)
+        .eq("id", cardAberto.id)
+        .is("external_id", null);
+      if (erroDoCarimbo) {
+        logger.error("[webhooks.in] external_id do envio não pôde ser carimbado no card adotado", {
+          organizationId: source.organization_id,
+          webhookSourceId: source.id,
+          leadId: cardAberto.id,
+          requestId,
+          error: erroDoCarimbo.message,
+        });
       }
     }
+    // Só o que MUDOU vai para o card — a MESMA comparação do reenvio (#2316).
+    // O objeto inteiro desfaria a correção que a equipe fez à mão num campo
+    // que este envio nem trouxe.
+    const campos = camposQueMudaram(cardAberto.custom_fields, camposParaOLead);
+    // O título segue a régua da opção irmã: escrito só quando o nome do envio
+    // difere do que o card tem, e nunca no Respondi, que tem formato próprio
+    // de título ("Empresa — Nome", `respondiLeadTitle`) — compará-lo com o nome
+    // reescreveria o título a cada envio.
+    const tituloMudou = !respondiMapped && !!mapped.name && mapped.name !== cardAberto.title;
+    // A etapa é a MESMA em que o card novo nasceria (`default_stage_id`), e só
+    // para a FRENTE: a etapa da fonte é fixa e chega em todo envio, e um card
+    // que a equipe já levou adiante não pode voltar para o começo do funil.
+    const etapaDestino = await etapaAlvoDoEnvio(
+      admin,
+      source.organization_id as string,
+      source.default_pipeline_id as string,
+      cardAberto.stage_id,
+      source.default_stage_id as string | null,
+    );
+    const ctxDoCard: HandlerCtx = {
+      organization_id: source.organization_id,
+      actor: { type: "webhook_source", id: source.id },
+      requestId,
+    };
+    try {
+      if (Object.keys(campos).length > 0 || tituloMudou) {
+        await updateLeadHandler(
+          admin,
+          ctxDoCard,
+          cardAberto.id,
+          {
+            ...(tituloMudou && mapped.name ? { title: mapped.name } : {}),
+            ...(Object.keys(campos).length > 0 ? { custom_fields: campos } : {}),
+          },
+          // #3508: mesma exceção do reenvio — o card que já existe é atualizado
+          // sem recusar o valor que não está na lista do funil.
+          { manterForaDaLista: true },
+        );
+      }
+      if (etapaDestino) {
+        await moveLeadHandler(admin, ctxDoCard, cardAberto.id, { to_stage_id: etapaDestino });
+      }
+    } catch (err) {
+      // O card JÁ existe e o envio veio de uma ferramenta que reenvia: a
+      // recusa do UPDATE (régua de campos, contato de pessoal, etapa que o
+      // funil não deixa) transformaria o card num loop de retry de quem
+      // integra sem que o dado novo chegasse. Mesma régua do reenvio (#2316):
+      // o que não pôde ser aplicado fica no log, e `registrarCaptacao` não
+      // lança — a linha sai de qualquer jeito, com o vínculo.
+      logger.error("[webhooks.in] captação que reusa o card aberto não pôde atualizá-lo", {
+        organizationId: source.organization_id,
+        webhookSourceId: source.id,
+        leadId: cardAberto.id,
+        requestId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    await registrarCaptacao(admin, {
+      ...fonteDaCaptacao,
+      ...origemDaCaptacao,
+      ...dadosDaCaptacao,
+      leadId: cardAberto.id,
+      contactId: contactId ?? cardAberto.contact_id,
+      outcome: "atualizado",
+    });
+    return respondWithLead(cardAberto.id);
+  }
+
+  // Opção ligada e o card aberto não pôde ser reusado (outra fonte, outro id, ou nenhum card que a
+  // régua do reuso alcance): o recadastro nosso decide, na posição de depois do reuso.
+  if (source.reuse_open_lead_on_capture) {
+    const recadastro = await tentarRecadastro();
+    if (recadastro) return recadastro;
   }
 
   const leadInput: CreateLeadInput & {
@@ -1116,6 +1870,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     source_metadata?: Record<string, unknown>;
     external_id?: string;
     origin_proven?: boolean;
+    webhook_source_id?: string;
   } = {
     pipeline_id: source.default_pipeline_id,
     stage_id: source.default_stage_id,
@@ -1126,8 +1881,14 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     tags: tagsDoEnvio,
     origin_proven: fonteComOrigemProvada,
     source: "webhook",
+    // O encaixe nos campos do funil (rótulo ou chave, UTMs no Rastreamento), calculado acima.
     custom_fields: camposParaOLead,
-    source_metadata: { webhook_source_id: source.id, ...mapped.source_metadata },
+    source_metadata: { ...mapped.source_metadata, webhook_source_id: source.id },
+    // A coluna que responde "de quem é este card" para a atualização por
+    // integração (migration 0683). Vai junto do `source_metadata` porque é o
+    // MESMO fato em dois lugares: o jsonb é o registro histórico do envio, e a
+    // coluna é o que a régua lê — durável, tipada e indexada.
+    webhook_source_id: source.id,
     ...(externalId ? { external_id: externalId } : {}),
   };
 
@@ -1141,27 +1902,26 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
         requestId,
       },
       leadInput,
+      // O lead de formulário entra no funil mesmo com campo exigido em branco
+      // (#2295) e mesmo com valor fora do `padrao` do campo (#2730): ver as
+      // duas opções no handler. E `manterForaDaLista` (#3508) é a terceira: o
+      // valor que não casa com a opção entra como veio; o que casa vira o
+      // `value` da opção.
+      { exigirCamposDaEtapa: false, exigirPadraoDoCampo: false, manterForaDaLista: true },
     );
   } catch (err) {
     if (err instanceof ApiError) {
       // Corrida do retry: dois POSTs simultâneos com o mesmo external_id
       // passam ambos pelo fast-path; o índice único derruba o segundo INSERT
-      // (23505) — re-seleciona o vencedor e responde idempotente.
+      // (23505) — re-seleciona o vencedor e fecha com a MESMA régua de #2316:
+      // dado novo atualiza o vencedor, payload idêntico segue idempotente.
       if (externalId && err.message?.includes("uniq_crm_leads_org_source_external")) {
         const vencedor = await findLeadByExternalId();
         if (vencedor) {
-          await registrarCaptacao(admin, {
-            ...fonteDaCaptacao,
-            ...origemDaCaptacao,
-            ...dadosDaCaptacao,
-            leadId: vencedor.id,
-            // O contato desta requisição quando existe (foi resolvido acima);
-            // o do lead vencedor como plano B — o que importa é a linha ter
-            // vínculo, para o gatilho de anonimização alcançá-la.
-            contactId: contactId ?? vencedor.contactId,
-            outcome: "duplicado",
-          });
-          return respondWithLead(vencedor.id);
+          // O contato desta requisição quando existe (foi resolvido acima);
+          // o do vencedor como plano B — o que importa é a linha ter vínculo,
+          // para o gatilho de anonimização alcançá-la.
+          return fecharReenvio(vencedor, contactId ?? null);
         }
       }
       // Corrida do clique duplo (27/10/2026, CBEXS): dois envios do mesmo
@@ -1214,7 +1974,10 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
         ...dadosDaCaptacao,
         contactId: contactId ?? null,
         outcome: "recusado",
-        rejectReason: ehLimiteDoPlano ? "limite_do_plano" : "erro_ao_criar_lead",
+        // O rótulo diz o que REALMENTE falhou (#2297, caminho 4): o mesmo
+        // `erro_ao_criar_lead` para tudo mentia sobre qualquer recusa que não
+        // fosse de funil ou de etapa. O teto do plano (F3) tem motivo próprio.
+        rejectReason: ehLimiteDoPlano ? "limite_do_plano" : motivoDaRecusaDaCriacao(err),
       });
       return fail(err.code, err.message ?? "erro", err.status, { requestId });
     }
@@ -1224,6 +1987,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   await admin
     .from("webhook_sources")
     .update({ last_received_at: new Date().toISOString() })
+    .eq("organization_id", source.organization_id)
     .eq("id", source.id);
 
   await audit({
@@ -1304,8 +2068,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     outcome: "criado",
   });
 
-  // ELEGIBILIDADE DA IA (caso 1): ver `autorizarIASeProvado`, definido acima.
-  if (contactId) await autorizarIASeProvado(contactId);
+  // ELEGIBILIDADE DA IA (caso 1): ver `autorizarIADaCaptacao`, definido acima.
+  if (contactId) await autorizarIADaCaptacao(String(lead.id), contactId);
 
   // Captação: drena lead.created e inscreve no fluxo neste mesmo request.
   // Sem isto, numa instalação sem cron de 1 min (relógio HTTP), o gatilho fica pending.

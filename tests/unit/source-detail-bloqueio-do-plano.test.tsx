@@ -28,18 +28,30 @@ const FONTE_PAUSADA = {
   name: "Landing page",
   path_token: "tok123",
   is_active: false,
+  authorize_ai_on_capture: false,
+  update_existing_lead_on_capture: false,
+  reuse_open_lead_on_capture: false,
   kind: "form",
   last_received_at: null,
   default_pipeline_id: "p1",
   default_stage_id: "s1",
   redirect_to: null,
   field_map: {},
+  form_fields: [],
   has_secret: false,
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
   last_change_actor_kind: null,
   last_change_at: null,
 };
+
+/**
+ * O interruptor que liga/pausa a FONTE. Desde o upstream a tela tem outros três
+ * (opções da captação, com `id`); o da fonte é o único sem `id`.
+ */
+function interruptorDaFonte(): HTMLElement | undefined {
+  return screen.queryAllByRole("switch").find((el) => !el.id);
+}
 
 afterEach(() => {
   cleanup();
@@ -58,7 +70,8 @@ describe("bloqueio do plano ao ligar uma fonte pausada", () => {
       />,
     );
 
-    const interruptor = screen.getByRole("switch");
+    const interruptor = interruptorDaFonte();
+    if (!interruptor) throw new Error("o interruptor da fonte não apareceu");
     expect(interruptor).toBeDisabled();
     expect(interruptor).toHaveAttribute("title", "2 de 2 integrações de webhook do plano Starter");
     expect(
@@ -69,7 +82,8 @@ describe("bloqueio do plano ao ligar uma fonte pausada", () => {
   it("sem a prop `bloqueio`, o interruptor continua habilitado como hoje", () => {
     render(<SourceDetail source={FONTE_PAUSADA} open onOpenChange={() => {}} />);
 
-    const interruptor = screen.getByRole("switch");
+    const interruptor = interruptorDaFonte();
+    if (!interruptor) throw new Error("o interruptor da fonte não apareceu");
     expect(interruptor).toBeEnabled();
     expect(interruptor).not.toHaveAttribute("title");
     expect(

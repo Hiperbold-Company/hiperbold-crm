@@ -40,5 +40,8 @@ ENV NODE_ENV=production
 # Sem root: o worker só lê o código e fala pela rede. A imagem node já traz o
 # usuário `node`.
 USER node
+# Só a porta AudioSocket: não afirma saúde de ARI, tronco, áudio ou chamada.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["node", "scripts/voice-agent-healthcheck.mjs"]
 
 CMD ["pnpm", "exec", "tsx", "workers/voice-agent/index.ts"]

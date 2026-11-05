@@ -29,8 +29,9 @@ vi.mock("@/lib/env", () => ({ env: { IA_DESTINOS_INTERNOS_PERMITIDOS: "" } }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } }));
 vi.mock("@/lib/audit", () => ({ audit: h.audit }));
-vi.mock("@/lib/auth/portao-de-escrita", () => ({
-  requirePlatformAdminFull: async () => ({ user: { id: "admin-plataforma" } }),
+// Portão de escrita do upstream (escritaDeAdminOuRecusa): admin de plataforma com escopo `full`.
+vi.mock("@/lib/auth/escritaDeAdminOuRecusa", () => ({
+  escritaDeAdminOuRecusa: async () => ({ ok: true, ctx: { user: { id: "admin-plataforma" } } }),
 }));
 vi.mock("@/lib/auth/server", () => ({ sessionAal: h.aal }));
 vi.mock("@/lib/instalacao/config", () => ({

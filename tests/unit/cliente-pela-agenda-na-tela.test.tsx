@@ -25,8 +25,8 @@ const USER = { id: "u-1", is_platform_admin: false, support: null };
 
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useActiveOrg: () => ({ ...ORG, cliente_pela_agenda: ligada }),
-  useAuth: () => ({ user: USER, activeOrg: { ...ORG, cliente_pela_agenda: ligada } }),
   usePermission: () => true,
+  useAuth: () => ({ user: USER, activeOrg: { ...ORG, cliente_pela_agenda: ligada } }),
 }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 vi.mock("next/navigation", () => ({
@@ -77,6 +77,7 @@ const CONTATO = {
   cpf_hash: null,
   birthdate: null,
   is_blocked: false,
+  is_personal: false,
   blocked_reason: null,
   is_anonymized: false,
   anonymized_at: null,
@@ -91,6 +92,7 @@ const CONTATO = {
   updated_at: "2026-01-01T10:00:00.000Z",
   last_activity_at: null,
   first_service_at: "2025-03-12T14:00:00.000Z",
+  ai_opt_out: false,
 } satisfies Contact;
 
 function comQuery(ui: ReactNode) {

@@ -23,6 +23,12 @@ interface Props {
   oficialPodeReceber: boolean;
   /** A instalação tem o servidor de WhatsApp configurado: ler um QR Code vira a primeira escolha. */
   pareamentoQr?: boolean;
+  /**
+   * O exemplo do telefone do pareamento, do país da organização (upstream). Hoje
+   * sem uso nesta tela: o pareamento da Hiperbold é o `PareamentoQrClient` de
+   * Conexões, que não pede telefone aqui.
+   */
+  telefoneExemplo?: string;
 }
 
 /**

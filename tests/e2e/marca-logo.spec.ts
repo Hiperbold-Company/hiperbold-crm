@@ -331,10 +331,10 @@ interface LogoNaTela {
  * Mede um `<img>` DEPOIS de o navegador terminar com ele.
  *
  * ⚠️ Quem prova o download é `naturalWidth`, e NÃO a altura na tela — o contrário
- * do que esta spec afirmou. Os dois `<img>` de marca do produto têm altura fixada
- * por CSS (`h-7` em `components/shell/Sidebar.tsx:82`, `h-10` em
- * `app/(public)/layout.tsx:54`), e altura fixa mede o mesmo para quem baixou e
- * para quem não baixou. MEDIDO em chromium, dois `<img>` sob `height: 1.75rem`
+ * do que esta spec afirmou. A barra lateral fixa a altura
+ * por CSS (`h-7` em `components/shell/Sidebar.tsx`); a fachada limita o tamanho
+ * sem ampliar arquivos pequenos (`app/(public)/layout.tsx`). Altura renderizada
+ * não comprova o download. MEDIDO em chromium, dois `<img>` sob `height: 1.75rem`
  * (o `h-7`), um com PNG válido e outro apontando para um endereço morto:
  *
  *   boa={"nat":1,"altura":28}   quebrada={"nat":0,"altura":28}
@@ -618,6 +618,67 @@ function evidencia(nome: string): string {
   return path.join(EVIDENCIA, nome);
 }
 
+/** Mede só a apresentação; trocar src no navegador não grava arquivos no banco. */
+async function provarTamanhosNaFachada(browser: Browser): Promise<void> {
+  for (const tema of ["light", "dark"] as const) {
+    for (const larguraDaTela of [360, 1280]) {
+      const contexto = await browser.newContext({
+        viewport: { width: larguraDaTela, height: 900 },
+        colorScheme: tema,
+      });
+      try {
+        await contexto.addInitScript(
+          (valor) => localStorage.setItem("deskcomm-theme", valor),
+          tema,
+        );
+        const pagina = await contexto.newPage();
+        await pagina.goto("/login");
+        const img = pagina.getByTestId("logo-da-fachada");
+        await expect(img).toBeVisible();
+        for (const [largura, altura] of [
+          [368, 182],
+          [256, 256],
+          [640, 80],
+          [64, 512],
+          [32, 16],
+        ]) {
+          const medida = await img.evaluate(
+            async (elemento, tamanho) => {
+              const canvas = document.createElement("canvas");
+              canvas.width = tamanho.largura;
+              canvas.height = tamanho.altura;
+              const pincel = canvas.getContext("2d")!;
+              pincel.fillStyle = "#276ba4";
+              pincel.fillRect(0, 0, canvas.width, canvas.height);
+              const imagem = elemento as HTMLImageElement;
+              imagem.src = canvas.toDataURL("image/png");
+              await imagem.decode();
+              const caixa = imagem.getBoundingClientRect();
+              return { largura: caixa.width, altura: caixa.height };
+            },
+            { largura: largura!, altura: altura! },
+          );
+          const escala = Math.min(1, 192 / largura!, 80 / altura!);
+          expect(
+            medida.largura,
+            `${tema}/${larguraDaTela}: largura de ${largura}×${altura}`,
+          ).toBeCloseTo(largura! * escala, 1);
+          expect(
+            medida.altura,
+            `${tema}/${larguraDaTela}: altura de ${largura}×${altura}`,
+          ).toBeCloseTo(altura! * escala, 1);
+          expect(
+            await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          ).toBe(true);
+        }
+        await pagina.screenshot({ path: evidencia(`tamanho-logo-${tema}-${larguraDaTela}.png`) });
+      } finally {
+        await contexto.close();
+      }
+    }
+  }
+}
+
 // ── A spec ──────────────────────────────────────────────────────────────────
 
 /**
@@ -683,6 +744,95 @@ test.describe("o logo subido pela tela chega à tela", () => {
   // padrão no `afterAll`, DEPOIS da limpeza que ainda abre a tela.
   test.beforeAll(async () => {
     await ligarModuloNoE2e("marca_por_organizacao", creds.users.dono!.id);
+  });
+
+  test("o CSS personalizado salvo na tela aparece no login e pode ser removido", async ({
+    page,
+    browser,
+  }) => {
+    const secret = creds.dono_totp?.secret;
+    expect(secret, "sem `dono_totp` no .e2e-creds.json — rode seed-e2e-credentials.ts").toBeTruthy();
+    await loginComTotp(page, creds.users.dono!.email, secret!);
+    await page.goto("/admin/marca");
+
+    const editor = page.locator("#custom_css");
+    await expect(editor).toBeVisible();
+    await editor.fill(".text-muted-foreground { color: rgb(1, 2, 3); }");
+    await page.getByRole("button", { name: "Salvar CSS", exact: true }).click();
+    await expect(page.getByText("CSS personalizado salvo.")).toBeVisible({ timeout: 15_000 });
+
+    const visitante = await browser.newContext();
+    try {
+      const paginaLogin = await visitante.newPage();
+      await paginaLogin.goto("/login");
+      // `toContainText` lê o texto VISÍVEL, e o Playwright ignora o conteúdo de
+      // <style>: o elemento estava lá com a folha inteira e a asserção recebia "".
+      // O texto da folha se lê pelo DOM; o efeito, pela cor computada abaixo.
+      await expect
+        .poll(() =>
+          paginaLogin.locator("#marca-css-personalizado").evaluate((element) => element.textContent ?? ""),
+        )
+        .toContain(":root:root .text-muted-foreground");
+      await expect
+        .poll(() =>
+          paginaLogin.locator(".text-muted-foreground").first().evaluate((element) =>
+            getComputedStyle(element).color,
+          ),
+        )
+        .toBe("rgb(1, 2, 3)");
+    } finally {
+      await visitante.close();
+      await page.goto("/admin/marca");
+      await page.locator("#custom_css").fill("");
+      await page.getByRole("button", { name: "Salvar CSS", exact: true }).click();
+      await expect(page.getByText("CSS personalizado salvo.")).toBeVisible({ timeout: 15_000 });
+    }
+  });
+
+  /**
+   * O cruzamento com verdade INDEPENDENTE. O texto sob "Entrar" e o título da
+   * aba passaram a ler a MESMA pilha (`marcaDaSaida(null)` → `marcaDaInstalacao()`),
+   * então `icone-da-marca.spec.ts`, que compara um com o outro, fica verde com o
+   * resolvedor compartilhado quebrado. Aqui a verdade é o literal que ESTE caso
+   * digita na tela de marca, e o login de quem não entrou tem de mostrá-lo.
+   */
+  test("o nome trocado em /admin/marca chega ao login e à aba de quem não entrou", async ({
+    page,
+    browser,
+  }) => {
+    const secret = creds.dono_totp?.secret;
+    expect(secret, "sem `dono_totp` no .e2e-creds.json — rode seed-e2e-credentials.ts").toBeTruthy();
+    const nome = `Marca E2E ${Date.now().toString(36)}`;
+    const hidratado = page.locator("[data-campo-de-logo='instalacao'][data-hidratado]");
+
+    await loginComTotp(page, creds.users.dono!.email, secret!);
+    await page.goto("/admin/marca");
+    await expect(hidratado, "o formulário de marca não hidratou").toBeVisible({ timeout: 15_000 });
+    const anterior = await page.locator("#app_name").inputValue();
+
+    try {
+      await page.locator("#app_name").fill(nome);
+      await page.getByRole("button", { name: "Salvar", exact: true }).click();
+      await expect(page.getByText("Marca salva.")).toBeVisible({ timeout: 15_000 });
+
+      const visitante = await browser.newContext();
+      try {
+        const login = await visitante.newPage();
+        await login.goto("/login");
+        await expect(login).toHaveTitle(`Entrar · ${nome}`);
+        await expect(login.getByText(nome, { exact: true }).first()).toBeVisible();
+      } finally {
+        await visitante.close();
+      }
+    } finally {
+      // O nome volta pela TELA, nunca por SQL: quem invalida o memo da marca é
+      // o código do produto (`invalidarMarcaDaInstalacao`).
+      await page.goto("/admin/marca");
+      await expect(hidratado).toBeVisible({ timeout: 15_000 });
+      await page.locator("#app_name").fill(anterior);
+      await page.getByRole("button", { name: "Salvar", exact: true }).click();
+      await expect(page.getByText("Marca salva.")).toBeVisible({ timeout: 15_000 });
+    }
   });
 
   test("(1) o dono do servidor sobe o logo e ele aparece na barra lateral", async ({ page }) => {
@@ -781,6 +931,8 @@ test.describe("o logo subido pela tela chega à tela", () => {
     // indistinguíveis daqui, e o caso reprovava por causa de outro.
     await entrarNaCamada(page, "instalacao");
     await subirLogoDaCamada(page, "instalacao");
+
+    await provarTamanhosNaFachada(browser);
 
     const fachada = await logoDoLogin(browser);
     expect(fachada, "a tela de acesso não renderizou logo nenhum").not.toBeNull();
@@ -1088,6 +1240,54 @@ test.describe("o logo subido pela tela chega à tela", () => {
     // NOTA DO TETO no caso (1).
   });
 
+  test("o ícone enviado pela tela identifica também o aplicativo instalado", async ({ page }) => {
+    await entrarNaCamada(page, "instalacao");
+    await page.goto("/admin/marca");
+    await expect(page.locator("[data-campo-de-logo='instalacao'][data-hidratado]")).toBeVisible({
+      timeout: 15_000,
+    });
+    const campo = page.locator("[data-campo-do-icone-da-aba]");
+    await expect(
+      campo.getByText("Ícone do aplicativo e do navegador", { exact: true }),
+    ).toBeVisible();
+    try {
+      await campo
+        .locator("input[type=file]")
+        .setInputFiles({
+          name: "icone-do-app.png",
+          mimeType: "image/png",
+          buffer: PNG_DA_PLATAFORMA,
+        });
+      await expect(page.getByText("Ícone da aba atualizado.", { exact: true })).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(campo.locator("[data-previa-do-icone='arquivo'] img")).toBeVisible();
+      const manifest = await (await page.request.get("/manifest.webmanifest")).json();
+      for (const [indice, lado] of [192, 512].entries()) {
+        expect(manifest.icons[indice].src).toContain("?v=platform%2F");
+        const resposta = await page.request.get(manifest.icons[indice].src);
+        expect(resposta.status()).toBe(200);
+        const png = await resposta.body();
+        expect(png.readUInt32BE(16)).toBe(lado);
+        expect(png.readUInt32BE(20)).toBe(lado);
+        const imagem = lerPng(png);
+        const centro = 4 * (Math.floor(lado / 2) * lado + Math.floor(lado / 2));
+        expect([...imagem.rgba.subarray(centro, centro + 3)]).toEqual([0x1d, 0x4e, 0xd8]);
+      }
+      await page.screenshot({ path: path.join(EVIDENCIA, "icone-app-pela-tela.png") });
+    } finally {
+      const remover = campo.getByRole("button", { name: "Remover ícone", exact: true });
+      if (await remover.count()) {
+        await remover.click();
+        await expect(page.getByText("Ícone da aba removido.", { exact: true })).toBeVisible({
+          timeout: 15_000,
+        });
+      }
+    }
+    const manifest = await (await page.request.get("/manifest.webmanifest")).json();
+    expect(manifest.icons[0].src).toBe("/app-icon/192");
+  });
+
   /**
    * A RESTAURAÇÃO — e ela é um `afterAll`, ao contrário do que este arquivo
    * afirmou.
@@ -1129,6 +1329,13 @@ test.describe("o logo subido pela tela chega à tela", () => {
     try {
       const pagina = await contexto.newPage();
       await loginComTotp(pagina, creds.users.dono!.email, creds.dono_totp!.secret);
+      await pagina.goto("/admin/marca");
+      const cssPersonalizado = pagina.locator("#custom_css");
+      if ((await cssPersonalizado.inputValue()) !== "") {
+        await cssPersonalizado.fill("");
+        await pagina.getByRole("button", { name: "Salvar CSS", exact: true }).click();
+        await expect(pagina.getByText("CSS personalizado salvo.")).toBeVisible({ timeout: 15_000 });
+      }
       await removerLogoSeHouver(pagina, "/app/settings/marca", "organizacao");
       await removerLogoSeHouver(pagina, "/admin/marca", "instalacao");
     } finally {

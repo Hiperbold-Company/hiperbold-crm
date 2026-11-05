@@ -19,7 +19,14 @@ export async function entradaDeRoteador(
   req: NextRequest,
   opts: { escrita: boolean; role: Role; id?: string },
 ): Promise<EntradaDeRoteador> {
-  const e = await entradaDeAdministracao(req, { resource: "ai_routers", ...opts });
+  // Configuração da IA: token precisa de papel `admin` e de `config:*` OU `mcp:*` (o upstream pede `config:*`,
+  // os tokens da Hiperbold já emitidos têm `mcp:*`). A sessão segue no piso da tela.
+  const e = await entradaDeAdministracao(req, {
+    resource: "ai_routers",
+    ...opts,
+    configuracao: true,
+    tokenRole: "admin",
+  });
   if (e.resposta) return { resposta: e.resposta };
   const t = traducaoDe(e.authz);
   return {

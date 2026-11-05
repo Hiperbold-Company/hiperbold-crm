@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { frameMediaBody, textoDoClienteNaUltimaMensagem } from "@/lib/agent-engine/edge/crm/get-lead-context";
+import { falaDoClienteSemMoldura } from "@/lib/agent-engine/edge/crm/moldura-de-midia";
 
 /**
  * D-166: o texto derivado de mídia (PDF, imagem, áudio) é do CLIENTE. Ele entra
@@ -57,5 +58,11 @@ describe("frameMediaBody delimita o que é do cliente", () => {
   it("o texto de uma mídia continua não valendo como o que o cliente digitou", () => {
     const msg = { direction: "inbound", body: frameMediaBody("image", null, "uma receita"), sent_at: "2026-10-01T00:00:00Z" };
     expect(textoDoClienteNaUltimaMensagem([msg as never])).toBe("");
+  });
+
+  it("os delimitadores não chegam a quem lê a fala (cartão da passagem)", () => {
+    expect(falaDoClienteSemMoldura(frameMediaBody("audio", null, "quero 2 unidades"))).toBe("[áudio] quero 2 unidades");
+    expect(falaDoClienteSemMoldura(frameMediaBody("image", "segue o print", "uma receita"))).toBe("[imagem] segue o print");
+    expect(falaDoClienteSemMoldura(frameMediaBody("document", null, "texto do pdf"))).toBe("[documento]");
   });
 });

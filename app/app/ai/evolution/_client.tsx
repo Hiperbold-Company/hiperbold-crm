@@ -263,8 +263,8 @@ function GraficoDiario({
                   contentStyle={{
                     borderRadius: "8px",
                     fontSize: "12px",
-                    border: "1px solid hsl(var(--border))",
-                    background: "hsl(var(--popover))",
+                    border: "1px solid var(--color-border)",
+                    background: "var(--color-surface)",
                   }}
                 />
                 <Line type="monotone" dataKey="value" stroke={cor} strokeWidth={2} dot={false} />
@@ -525,6 +525,23 @@ function Conteudo({ payload }: { payload: NonNullable<ReturnType<typeof useEvolu
             }
           />
         </div>
+        {/* Série SEPARADA de propósito (#1877): a busca de quem atende não é
+            trabalho do agente nem pergunta de cliente, e somá-la ao gráfico
+            acima faria o painel mentir sobre os dois. */}
+        <GraficoDiario
+          titulo={t("Consultas da equipe ao acervo")}
+          significa={t(
+            "Quantas vezes alguém da equipe perguntou ao acervo pela caixa ao lado da conversa. Não entra nos números do agente.",
+          )}
+          dados={activity.series.knowledge_searches_equipe}
+          cor="hsl(32 95% 44%)"
+          vazio={
+            <Vazio
+              texto={t("Ninguém da equipe consultou o acervo pela conversa neste período.")}
+              acoes={[{ href: "/app/inbox", label: t("Ver conversas") }]}
+            />
+          }
+        />
         <div className="grid gap-3 md:grid-cols-2">
           <Ranking
             titulo={t("Habilidades mais usadas")}

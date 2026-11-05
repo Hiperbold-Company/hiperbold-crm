@@ -168,6 +168,8 @@ describe("lerAguardandoResposta: a raia automacao vem primeiro no corte", () => 
         const q = {
           select: () => q,
           in: () => q,
+          // corte das organizações paradas (embed `!inner` + status): todas operantes aqui.
+          eq: () => q,
           order: (col: string) => {
             ordem.push(col);
             return q;

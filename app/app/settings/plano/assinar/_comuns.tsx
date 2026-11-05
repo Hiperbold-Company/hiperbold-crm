@@ -11,7 +11,12 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useT } from "@/hooks/i18n/useT";
-import { erroDoDocumento, formatarDocumento } from "@/lib/documentos/cpf-cnpj";
+import {
+  erroDoDocumento,
+  formatarDocumento,
+  MENSAGEM_CNPJ_INVALIDO,
+  MENSAGEM_CPF_INVALIDO,
+} from "@/lib/documentos/cpf-cnpj";
 
 import type { CamposDoFormularioDoPagador } from "../_logica-compra";
 
@@ -96,7 +101,11 @@ export function FormularioDoPagador({
         />
         {erroDocumento !== null && (
           <p id={`${idPrefixo}-documento-erro`} className="text-xs text-destructive">
-            {t(erroDocumento)}
+            {erroDocumento === MENSAGEM_CPF_INVALIDO
+              ? t("CPF inválido")
+              : erroDocumento === MENSAGEM_CNPJ_INVALIDO
+                ? t("CNPJ inválido")
+                : t("Informe um CPF (11 dígitos) ou CNPJ (14 dígitos)")}
           </p>
         )}
       </div>

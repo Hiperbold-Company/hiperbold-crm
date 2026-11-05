@@ -1,4 +1,5 @@
 import type { ModuloOpcional } from "@/lib/instalacao/modulos";
+import type { CapacidadeDaOrganizacao } from "@/lib/organizacao/capacidades";
 import type { InterfaceSettings } from "@/lib/navigation/interface";
 import Link from "next/link";
 
@@ -23,6 +24,8 @@ interface NavHubProps {
    * módulo desligado — o clique dava 404 (revisão do #1573, B1).
    */
   modulosLigados: readonly ModuloOpcional[];
+  /** Capacidades que a organização ligou. Ausente = o hub não filtra por capacidade. */
+  capacidadesLigadas?: readonly CapacidadeDaOrganizacao[];
   group: NavGroupId;
   isPlatformAdmin: boolean;
   role: Role | null;
@@ -79,11 +82,12 @@ export function NavHub({
   subtitle,
   interfaceSettings,
   modulosLigados,
+  capacidadesLigadas,
   locale = IDIOMA_PADRAO,
   extensionGuides = [],
   extensionsUnavailable = false,
 }: NavHubProps) {
-  const secoes = hubSections(group, isPlatformAdmin, role, interfaceSettings, modulosLigados);
+  const secoes = hubSections(group, isPlatformAdmin, role, interfaceSettings, modulosLigados, capacidadesLigadas);
 
   return (
     <div className="flex h-full flex-col gap-8 p-6">
@@ -179,7 +183,9 @@ export function NavHub({
           ) : (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
               {extensionGuides.flatMap((guide) =>
-                guide.manifest.contributions.crm_cards.map((contribution) => {
+                // `?? []`: módulo de DADOS não contribui card; ele aparece na ficha do contato,
+                // não no hub. Sem a guarda, o hub quebraria ao encontrar um instalado.
+                (guide.manifest.contributions.crm_cards ?? []).map((contribution) => {
                   const Icon = EXTENSION_ICONS[contribution.icon];
                   const compact = guide.configuration.density === "compact";
                   return (

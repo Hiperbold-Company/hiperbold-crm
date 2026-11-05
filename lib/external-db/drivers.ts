@@ -1,0 +1,89 @@
+/**
+ * REGISTRO DE DRIVERS: o único lugar que sabe qual motor fala com qual banco.
+ *
+ * Quem abre, testa ou fecha uma conexão de banco externo passa por aqui e nunca
+ * importa o driver de um motor (`pg`, e amanhã `mysql2`) diretamente. A conexão
+ * traz o seu motor (`dbType`); o registro escolhe o driver. Trocar ou acrescentar
+ * um motor é acrescentar UMA entrada em `DRIVERS` — nenhum chamador muda.
+ *
+ * Só o PostgreSQL está instalado. Pedir um motor sem driver falha ALTO
+ * (`DriverIndisponivelError`): cair no PostgreSQL por engano leria o banco errado
+ * com o protocolo errado e esconderia o defeito.
+ */
+import { fecharPool as fecharPoolPostgres, fecharTodosOsPools as fecharTodosPostgres, obterPool, testarConexao as testarPostgres } from "./conexao";
+import type { ResultadoDeTeste } from "./conexao";
+import { criarDialetoPostgres, type Dialeto } from "./dialeto";
+import { criarDialetoMysql } from "./dialetos/mysql/dialeto";
+import { fecharPoolMysql, fecharTodosOsPoolsMysql, testarConexaoMysql } from "./dialetos/mysql/conexao";
+import type { ConexaoExterna, TipoBanco } from "./types";
+
+export type { ResultadoDeTeste };
+
+export interface DriverDeBanco {
+  /**
+   * O dialeto de leitura da conexão, já com a regra de fontes liberadas aplicada.
+   * `enderecoValidado` é o IP que a guarda de rede validou para `conexao.host`
+   * (D-084, Hiperbold): o pool conecta nele, sem resolver o nome de novo.
+   */
+  abrirDialeto(conexao: ConexaoExterna, enderecoValidado: string): Dialeto;
+  /** Testa a conexão com um cliente descartável (não polui o cache de pools). */
+  testar(conexao: ConexaoExterna, enderecoValidado: string): Promise<ResultadoDeTeste>;
+  /** Derruba o pool da conexão, se houver (editar credencial, desativar, apagar). */
+  fecharPool(connectionId: string): Promise<void>;
+  /** Encerra todos os pools do motor (testes e desligamento do processo). */
+  fecharTodosOsPools(): Promise<void>;
+}
+
+export class DriverIndisponivelError extends Error {
+  constructor(tipo: TipoBanco) {
+    super(`driver do motor "${tipo}" não está instalado`);
+    this.name = "DriverIndisponivelError";
+  }
+}
+
+const postgres: DriverDeBanco = {
+  abrirDialeto: (conexao, enderecoValidado) =>
+    criarDialetoPostgres(obterPool(conexao, enderecoValidado), { modo: conexao.sourceMode, fontes: conexao.fontes }),
+  testar: (conexao, enderecoValidado) => testarPostgres(conexao, enderecoValidado),
+  fecharPool: (connectionId) => fecharPoolPostgres(connectionId),
+  fecharTodosOsPools: () => fecharTodosPostgres(),
+};
+
+// PENDENTE (D-084): o driver MySQL ainda conecta pelo nome (`c.host`), sem fixar o
+// IP validado; o `enderecoValidado` chega aqui mas não é usado.
+const mysql: DriverDeBanco = {
+  abrirDialeto: (conexao) => criarDialetoMysql(conexao, { modo: conexao.sourceMode, fontes: conexao.fontes }),
+  testar: (conexao) => testarConexaoMysql(conexao),
+  fecharPool: (connectionId) => fecharPoolMysql(connectionId),
+  fecharTodosOsPools: () => fecharTodosOsPoolsMysql(),
+};
+
+/** Os drivers instalados. */
+const DRIVERS: Partial<Record<TipoBanco, DriverDeBanco>> = { postgres, mysql };
+
+function instalados(): DriverDeBanco[] {
+  return Object.values(DRIVERS).filter((d): d is DriverDeBanco => d !== undefined);
+}
+
+export function driverDe(tipo: TipoBanco): DriverDeBanco {
+  const driver = DRIVERS[tipo];
+  if (!driver) throw new DriverIndisponivelError(tipo);
+  return driver;
+}
+
+export function abrirDialeto(conexao: ConexaoExterna, enderecoValidado: string): Dialeto {
+  return driverDe(conexao.dbType).abrirDialeto(conexao, enderecoValidado);
+}
+
+export function testarConexao(conexao: ConexaoExterna, enderecoValidado: string): Promise<ResultadoDeTeste> {
+  return driverDe(conexao.dbType).testar(conexao, enderecoValidado);
+}
+
+/** Fecha o pool dessa conexão em TODOS os drivers: quem chama só tem o id, não sabe o motor. */
+export async function fecharPool(connectionId: string): Promise<void> {
+  await Promise.all(instalados().map((d) => d.fecharPool(connectionId)));
+}
+
+export async function fecharTodosOsPools(): Promise<void> {
+  await Promise.all(instalados().map((d) => d.fecharTodosOsPools()));
+}

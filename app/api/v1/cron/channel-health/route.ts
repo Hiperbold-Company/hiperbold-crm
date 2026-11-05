@@ -54,9 +54,11 @@ import {
 } from "@/lib/channels";
 import { falhasSeguidasDepois, sincronizarSaudeDaConexao } from "@/lib/channels/health";
 import { pareamentoQrPendente } from "@/lib/channels/pareamento-qr";
+import { ehNomeDeSessaoE2E } from "@/lib/channels/sessoes-e2e";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { autorizaCron } from "@/lib/auth/cron-auth";
+import { recursoOcioso } from "@/lib/cron/piso-ocioso";
 
 export const dynamic = "force-dynamic";
 
@@ -74,12 +76,40 @@ type LinhaDeSessao = ChannelSessionRef & {
   consecutive_health_fails: number | null;
 };
 
+/**
+ * O QUE RODA DEPOIS DO PORTÃO DO PISO OCIOSO (#3773), na ordem do arquivo.
+ *
+ * O portão abaixo é saída antecipada da ROTA INTEIRA: em instalação ociosa a
+ * rota sai antes de tudo isto. `tests/unit/cron-passa-pelo-portao.test.ts` lê o
+ * AST deste arquivo e reprova quando o que está de fato abaixo do portão diverge
+ * desta lista — passo novo que não roda na instalação parada não pode nascer
+ * sem alguém ver.
+ */
+const PASSOS_DEPOIS_DO_PORTAO = [
+  "const admin",
+  "const {data, error}",
+  "if (error)",
+  "const sessoes",
+  "let verificadas",
+  "const desfechos",
+  "let ignoradas",
+  "for (s of sessoes)",
+  "return",
+] as const;
+void PASSOS_DEPOIS_DO_PORTAO;
+
 async function handle(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
 
   if (!autorizaCron(req)) {
     return fail("forbidden", "Cron secret missing or invalid.", 403, { requestId });
   }
+
+  // O PISO OCIOSO (#3731): Sem sessão de canal ativa não há saúde de canal a vigiar.
+  // A saída vem antes de qualquer consulta da rodada, e o portão responde de um
+  // retrato em memória (`lib/cron/piso-ocioso.ts`): esta rota ia ao PostgREST a
+  // cada batida só para descobrir que a fila está vazia.
+  if (await recursoOcioso("canal_vigiado")) return ok({ pulado: "recurso_ocioso" }, { requestId });
 
   const admin = createAdminClient();
 
@@ -127,6 +157,23 @@ async function handle(req: NextRequest): Promise<Response> {
     }
 
     try {
+      // Sessão de teste não é conexão de ninguém (#1032): os seeds do e2e
+      // gravam em `channel_sessions` e nada apaga a linha, então ela continua
+      // aqui entre uma suíte e outra — parada, num status que abre aviso. A
+      // pergunta abaixo transformaria esse resíduo de teste em alarme
+      // permanente na Central de quem opera, e é o alarme que ninguém lê que
+      // faz o alarme verdadeiro deixar de ser lido.
+      //
+      // O nome vem do seam (`resolveSessionRef`), como no resto do vigia: a
+      // rota continua sem nomear coluna nem provedor, e a lista é a MESMA que a
+      // limpeza de fim de suíte apaga — uma segunda cópia envelheceria ao lado
+      // da primeira e passaria verde sozinha.
+      const sessionRef = resolveSessionRef(s);
+      if (ehNomeDeSessaoE2E(sessionRef)) {
+        ignoradas++;
+        continue;
+      }
+
       // Pergunta ao CANAL, não ao provider: quem tem sessão para consultar
       // implementa `checkHealth`; quem não tem simplesmente não o expõe, e o
       // vigia segue adiante sem nunca perguntar QUEM ele é — o invariante 1 da
@@ -140,7 +187,6 @@ async function handle(req: NextRequest): Promise<Response> {
       // TODOS os tenants seguintes daquela rodada ficavam sem vigia, e o
       // operador via 500 no cron sem nenhuma pista de qual linha o derrubou.
       const adapter = getAdapter((s.provider ?? DEFAULT_CHANNEL_PROVIDER) as ChannelProvider);
-      const sessionRef = resolveSessionRef(s);
       if (!adapter.checkHealth || !sessionRef) continue;
 
       const saude = await adapter.checkHealth({

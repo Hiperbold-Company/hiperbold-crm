@@ -3,16 +3,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
-import { Columns, Plus, MagnifyingGlass, UploadSimple, UsersThree } from "@/lib/ui/icons";
+import { ArrowsClockwise, Columns, DownloadSimple, Plus, MagnifyingGlass, UploadSimple, UsersThree } from "@/lib/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -21,10 +24,13 @@ import { useContactCount } from "@/hooks/contacts/useContactCount";
 import { useContactFilterOptions } from "@/hooks/contacts/useContactFilterOptions";
 import { useBulkDeleteContacts } from "@/hooks/contacts/useBulkDeleteContacts";
 import { useBuscaNaUrl } from "@/hooks/contacts/useBuscaNaUrl";
+import { useBulkContacts, type AcaoEmLoteDeContatos } from "@/hooks/contacts/useBulkContacts";
 import { ContactsTable } from "@/components/contacts/ContactsTable";
+import { BarraDeContatosEmLote } from "@/components/contacts/BarraDeContatosEmLote";
 import { PontoDaEtiqueta } from "@/components/tags/PontoDaEtiqueta";
 import { NewContactDialog } from "@/components/contacts/NewContactDialog";
 import { ImportContactsDialog } from "@/components/contacts/ImportContactsDialog";
+import { SyncPhoneContactsDialog } from "@/components/contacts/SyncPhoneContactsDialog";
 import { TAG_DE_CLIENTE } from "@/lib/contacts/cliente";
 import { useActiveOrg, usePermission } from "@/hooks/auth/AuthProvider";
 import { FiltrosAvancadosDeContatos } from "@/components/contacts/FiltrosAvancadosDeContatos";
@@ -38,7 +44,10 @@ import {
   filtrosToParams,
   quantidadeDeFiltros,
   type FiltrosDaTela,
+  type MudancaDeFiltros,
 } from "@/lib/contacts/filtros-url";
+import { queryDaExportacao, type FormatoDeExport } from "@/lib/contacts/exportar";
+import { ORIGEM_AGENDA_DO_CELULAR } from "@/lib/leads/origem-do-contato";
 import { MergeDialog } from "@/components/contacts/MergeDialog";
 import { PersonalizarColunasDialog } from "@/components/contacts/PersonalizarColunasDialog";
 import { useColunasDeContatos } from "@/hooks/contacts/useColunasDeContatos";
@@ -50,6 +59,7 @@ import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 const SOURCE_OPTIONS: Array<{ value: string | undefined; label: string }> = [
   { value: undefined, label: "Todas as origens" },
   ...ORIGENS_DE_CONTATO,
+  { value: ORIGEM_AGENDA_DO_CELULAR, label: "Agenda do celular" },
 ];
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
@@ -67,12 +77,19 @@ export function ContactsListClient() {
     () => filtrosFromParams(new URLSearchParams(chaveDaUrl)),
     [chaveDaUrl],
   );
-  const { search, tag, source } = filtros;
+  const { search, source } = filtros;
+  // VÁRIAS etiquetas com E/OU (#1274, upstream) e "só pessoais" (spec 21, etapa 15),
+  // morando na URL como os outros filtros (`?tag=a&tag=b&modo=ou&pessoais=true`): a
+  // lista, a contagem, a exclusão e a exportação de "todos do filtro" falam o mesmo objeto.
+  const tags = useMemo(() => filtros.tag ?? [], [filtros.tag]);
+  const tagMode = filtros.modo;
+  const soPessoais = filtros.pessoais === true;
   const [orderBy, setOrderBy] = useState<ContactOrderBy>("last_activity_at");
   const [orderDir, setOrderDir] = useState<"asc" | "desc">("desc");
   const [limit, setLimit] = useState<number>(25);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
   const [duplicadosOpen, setDuplicadosOpen] = useState(false);
   const [colunasOpen, setColunasOpen] = useState(false);
   // As colunas que ESTE usuário escolheu (salvas no servidor, `user_preferences`).
@@ -90,7 +107,7 @@ export function ContactsListClient() {
 
   /** Troca parte dos filtros na URL (`undefined` apaga a chave). */
   const mudarFiltros = useCallback(
-    (mudanca: Partial<Record<keyof FiltrosDaTela, string | undefined>>) => {
+    (mudanca: MudancaDeFiltros) => {
       const proximo = filtrosToParams({ ...filtros, ...mudanca } as FiltrosDaTela);
       const qs = proximo.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
@@ -105,14 +122,14 @@ export function ContactsListClient() {
   // Os UTMs vêm dos negócios: só são buscados quando alguma coluna de UTM está na tela.
   const comUtm = pedeUtm(colunas);
   const listFilters = useMemo(
-    () => ({ ...filtros, order_by: orderBy, order_dir: orderDir, limit, com_utm: comUtm }),
-    [filtros, orderBy, orderDir, limit, comUtm],
+    () => ({ ...filtros, tagMode, order_by: orderBy, order_dir: orderDir, limit, com_utm: comUtm }),
+    [filtros, tagMode, orderBy, orderDir, limit, comUtm],
   );
   const q = useContactList(listFilters);
   const contagem = useContactCount(filtros);
   const opcoesDeFiltro = useContactFilterOptions();
   const totalDoFiltro = contagem.data;
-  const camposDoContato = useMemo(() => opcoesDeFiltro.data?.campos.contato ?? [], [opcoesDeFiltro.data]);
+  const camposDoContato = useMemo(() => opcoesDeFiltro.data?.campos?.contato ?? [], [opcoesDeFiltro.data]);
   const rotulosDeCampo = useMemo(
     () => new Map(camposDoContato.map((c) => [c.key, c.label] as const)),
     [camposDoContato],
@@ -125,6 +142,36 @@ export function ContactsListClient() {
     setTodosDoFiltro(false);
   }, [chaveDosFiltros]);
 
+  // LOTE (#2484, fatia F3): a seleção múltipla e a barra de ações dos contatos.
+  // O portão de tela é o MESMO piso da edição individual (`contact.update` —
+  // agent+); quem só lê nem vê a barra. (A rota ainda valida por conta própria:
+  // este portão é de tela, a fonte da regra é a API.)
+  const podeAgirEmLote = usePermission("contact.update");
+  const podeMudarResponsavel = usePermission("contact.carteira");
+  const lote = useBulkContacts();
+
+  // Uma seleção só na tela (a de excluir/exportar, que conhece "todos do
+  // filtro"); as ações em lote do upstream usam os ids explícitos dela.
+  const rodarLote = useCallback(
+    (args: AcaoEmLoteDeContatos) => {
+      const ids = Array.from(selecionados);
+      if (ids.length === 0) return;
+      lote.mutate(
+        { ids, ...args },
+        {
+          // A seleção é limpa depois do lote, aconteça o que acontecer: manter
+          // marcados os contatos recusados (de outra organização, inexistentes)
+          // deixaria a barra no lugar mensageando um lote que não existe mais.
+          onSuccess: () => {
+            setSelecionados(new Set());
+            setTodosDoFiltro(false);
+          },
+        },
+      );
+    },
+    [lote, selecionados],
+  );
+
   const allContacts = useMemo(
     () => q.data?.pages.flatMap((p) => p.data) ?? [],
     [q.data],
@@ -133,8 +180,8 @@ export function ContactsListClient() {
   const tagOptions = useMemo(() => {
     const set = new Set<string>();
     for (const c of allContacts) for (const tag of c.tags) set.add(tag);
-    // A etiqueta filtrada na URL continua na lista mesmo que a página carregada não a mostre.
-    if (filtros.tag) set.add(filtros.tag);
+    // As etiquetas filtradas na URL continuam na lista mesmo que a página carregada não as mostre.
+    for (const tag of tags) set.add(tag);
     // `cliente` na lista mesmo que nenhum contato da página carregada a tenha —
     // COM A REGRA LIGADA. As demais opções saem do que já foi paginado — o que
     // basta para etiqueta que a equipe criou e usa em bloco, e falha justamente
@@ -144,7 +191,7 @@ export function ContactsListClient() {
     // roda; quem já tem a etiqueta continua aparecendo pela linha de cima.
     if (clientesLigado) set.add(TAG_DE_CLIENTE);
     return Array.from(set).sort();
-  }, [allContacts, clientesLigado, filtros.tag]);
+  }, [allContacts, clientesLigado, tags]);
 
   const handleSort = useCallback(
     (column: ContactOrderBy) => {
@@ -159,7 +206,7 @@ export function ContactsListClient() {
   );
 
   // ── Seleção em lote ───────────────────────────────────────────────────────
-  const selecaoDisponivel = podeExcluirEmLote || podeExportar;
+  const selecaoDisponivel = podeExcluirEmLote || podeExportar || podeAgirEmLote;
   // Contato anonimizado (LGPD) aparece na lista, com o selo, mas não entra no lote nem na exportação.
   const idsCarregados = useMemo(
     () => allContacts.filter((c) => !c.is_anonymized).map((c) => c.id),
@@ -257,9 +304,36 @@ export function ContactsListClient() {
     }
   }
 
+  /**
+   * O arquivo do conjunto filtrado inteiro (CSV ou vCard), sem precisar
+   * selecionar: os filtros simples da lista viajam na query (busca, etiquetas em
+   * E/OU, origem, pessoais). Com filtro avançado ligado o menu some — a rota não
+   * os conhece, e o arquivo sairia maior que a lista; aí vale "selecionar todos
+   * do filtro".
+   */
+  const filtrosAvancadosLigados =
+    quantidadeDeFiltros(filtros) - [search, tags.length > 0, source, soPessoais].filter(Boolean).length > 0;
+  const exportarArquivo = useCallback(
+    (formato: FormatoDeExport) => {
+      const qs = queryDaExportacao(formato, {
+        search,
+        tags,
+        tagMode,
+        source,
+        pessoais: soPessoais,
+        order_by: orderBy,
+        order_dir: orderDir,
+      });
+      // `Content-Disposition: attachment` na resposta faz o navegador baixar,
+      // não navegar — o mesmo gesto do "Exportar CSV" da tela de auditoria.
+      window.location.href = `/api/v1/contacts/export?${qs}`;
+    },
+    [search, tags, tagMode, source, soPessoais, orderBy, orderDir],
+  );
+
   return (
-    <div className="space-y-4 p-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+    <div className="space-y-4 md:p-6">
+      <header className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">{t("Contatos")}</h1>
           <p className="text-sm text-muted-foreground">
@@ -268,11 +342,17 @@ export function ContactsListClient() {
           <LinkDeAjudaDaTela />
         </div>
         {/*
-          A estrutura é a da main (o "Importar CSV" do PR #313); o `shrink-0`
-          vem do PR #267, e vale para os DOIS botões agora: numa tela de 390px
-          uma linha de dois botões sem isso comprime os rótulos.
+          A estrutura é a da main (o "Importar CSV" do PR #313). Os botões
+          QUEBRAM linha em vez de passar da tela: o `whitespace-nowrap` do
+          Button impede o rótulo de comprimir, e sem `flex-wrap` a fila
+          estourava em 390px (medido: "Novo contato" em 446–585). O `shrink-0`
+          do PR #267 saiu por outro motivo: com o header em linha (sm+), ele
+          esmagava o título até largura 0. O `flex-wrap` do header faz o mesmo
+          um nível acima: quando título e botões não cabem lado a lado, os
+          botões descem de linha e o título não é espremido. Onde cabem
+          (1280px), nada muda.
         */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/*
             A porta do recurso de duplicados fica AQUI, na tela que já existe, e
             não num item de menu novo: quem descobre que tem contato repetido
@@ -293,6 +373,42 @@ export function ContactsListClient() {
               <span>{t("Importar CSV")}</span>
             </Button>
           ) : null}
+          {/*
+            O lado de cá do mesmo gesto (#2736): a base que a equipe já tem
+            mora na agenda do celular pareado, e ela não passa por CSV nenhum.
+            Colado ao "Importar CSV" de propósito — os dois são "trazer base de
+            fora", e separá-los em cantos diferentes da tela faria cada um
+            parecer um recurso que o outro não é.
+          */}
+          <Button variant="outline" onClick={() => setSyncOpen(true)}>
+            <ArrowsClockwise size={16} weight="bold" aria-hidden />
+            <span>{t("Sincronizar agenda")}</span>
+          </Button>
+          {/*
+            A porta de VOLTA do mesmo dado: importar sem exportar deixava o CRM
+            como saída única (SSH + psql), e o celular nem importa CSV — importa
+            vCard. Os dois formatos moram num menu porque são dois arquivos
+            diferentes para dois destinos diferentes, e um botão por formato
+            dobraria a largura do header numa tela de 390px.
+          */}
+          {podeExportar && !filtrosAvancadosLigados && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <DownloadSimple size={16} weight="bold" aria-hidden />
+                  <span>{t("Exportar")}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => exportarArquivo("csv")}>
+                  {t("Exportar CSV")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportarArquivo("vcf")}>
+                  {t("Exportar vCard")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Button onClick={() => setCreateOpen(true)}>
             <Plus size={16} weight="bold" aria-hidden />
             <span>{t("Novo contato")}</span>
@@ -319,19 +435,61 @@ export function ContactsListClient() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" disabled={tagOptions.length === 0}>
-              {tag ? <PontoDaEtiqueta tag={tag} className="mr-2" /> : null}
-              {tag ? `${t("Tag")}: ${tag}` : `${t("Tag")}: ${t("todas")}`}
+              {tags[0] ? <PontoDaEtiqueta tag={tags[0]} className="mr-2" /> : null}
+              {/* Resumo, e não a lista inteira: o gatilho tem a largura do filtro de
+                  origem ao lado. Uma etiqueta mostra o nome; duas mostram a
+                  primeira e o resto em contagem. */}
+              {tags.length === 0
+                ? `${t("Tag")}: ${t("todas")}`
+                : tags.length === 1
+                  ? `${t("Tag")}: ${tags[0]}`
+                  : `${t("Tag")}: ${tags[0]} +${tags.length - 1}`}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuLabel>{t("Tag")}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => mudarFiltros({ tag: undefined })}>{t("Todas")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => mudarFiltros({ tag: undefined, modo: undefined })}>
+              {t("Todas")}
+            </DropdownMenuItem>
+            {/* O E/OU só aparece com DUAS etiquetas: com uma só o parâmetro não
+                muda o resultado, e um controle que não muda nada é pior do que
+                nenhum. */}
+            {tags.length > 1 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuRadioGroup
+                  value={tagMode === "ou" ? "ou" : "e"}
+                  onValueChange={(modo) => mudarFiltros({ modo: modo === "ou" ? "ou" : undefined })}
+                >
+                  <DropdownMenuRadioItem value="e">{t("Todas (E)")}</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="ou">{t("Qualquer uma (OU)")}</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </>
+            )}
+            <DropdownMenuSeparator />
+            {/* `DropdownMenuCheckboxItem` marca e NÃO fecha o menu (o `onSelect`
+                com `preventDefault` trava isso): escolher a segunda etiqueta não
+                exige reabrir o menu. */}
             {tagOptions.map((tagOption) => (
-              <DropdownMenuItem key={tagOption} onClick={() => mudarFiltros({ tag: tagOption })}>
+              <DropdownMenuCheckboxItem
+                key={tagOption}
+                checked={tags.includes(tagOption)}
+                onCheckedChange={() => {
+                  const proximas = tags.includes(tagOption)
+                    ? tags.filter((et) => et !== tagOption)
+                    : [...tags, tagOption];
+                  mudarFiltros({
+                    tag: proximas.length > 0 ? proximas : undefined,
+                    // O modo só faz sentido com DUAS: com uma, `&modo=ou` seria ruído.
+                    modo: proximas.length > 1 ? tagMode : undefined,
+                  });
+                }}
+                onSelect={(e) => e.preventDefault()}
+              >
                 <PontoDaEtiqueta tag={tagOption} className="mr-2" />
                 {tagOption}
-              </DropdownMenuItem>
+              </DropdownMenuCheckboxItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -350,6 +508,18 @@ export function ContactsListClient() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Só pessoais: o filtro que acha quem saiu da operação. O
+            `data-testid` é contrato do e2e da spec. */}
+        <Button
+          variant={soPessoais ? "default" : "outline"}
+          size="sm"
+          data-testid="filtro-pessoais"
+          aria-pressed={soPessoais}
+          onClick={() => mudarFiltros({ pessoais: soPessoais ? undefined : true })}
+        >
+          {t("Pessoais")}
+        </Button>
 
         <FiltrosAvancadosDeContatos
           filtros={filtros}
@@ -431,6 +601,25 @@ export function ContactsListClient() {
         </div>
       )}
 
+      {/* Ações em lote do upstream (#2484): etiqueta, responsável e campo, sobre
+          a MESMA seleção. Pedem ids: no modo "todos do filtro" a barra some. */}
+      {podeAgirEmLote && !todosDoFiltro && selecionados.size > 0 && (
+        <BarraDeContatosEmLote
+          quantidade={selecionados.size}
+          pendente={lote.isPending}
+          onAdicionarEtiqueta={(tag) => rodarLote({ action: "tag", op: "add", tag })}
+          onRemoverEtiqueta={(tag) => rodarLote({ action: "tag", op: "remove", tag })}
+          onMudarResponsavel={
+            podeMudarResponsavel
+              ? (donoUserId) =>
+                  rodarLote({ action: "carteira", dono_user_id: donoUserId, origem: "manual" })
+              : undefined
+          }
+          onPreencherCampo={(chave, valor) => rodarLote({ action: "custom-field", chave, valor })}
+          onLimpar={limparSelecao}
+        />
+      )}
+
       {q.isLoading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4, 5].map((i) => (
@@ -455,6 +644,18 @@ export function ContactsListClient() {
         </Card>
       ) : (
         <>
+          {/* Abaixo de `md` a tabela vira cartão e o cabeçalho some, levando a
+              caixa "selecionar todas": este botão é a porta que a substitui. */}
+          {selecaoDisponivel && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="md:hidden"
+              onClick={() => alternarPagina(true)}
+            >
+              {t("Selecionar todos os contatos visíveis")}
+            </Button>
+          )}
           <Card className="overflow-hidden">
             <ContactsTable
               contacts={allContacts}
@@ -493,6 +694,7 @@ export function ContactsListClient() {
 
       <NewContactDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ImportContactsDialog open={importOpen} onOpenChange={setImportOpen} />
+      <SyncPhoneContactsDialog open={syncOpen} onOpenChange={setSyncOpen} />
       <MergeDialog open={duplicadosOpen} onOpenChange={setDuplicadosOpen} />
       {colunasOpen && (
         <PersonalizarColunasDialog open onOpenChange={setColunasOpen} camposDoContato={camposDoContato} />

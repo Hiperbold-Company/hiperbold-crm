@@ -30,6 +30,8 @@ const CAMPANHA = {
   janela_fim_hora: null,
   teto_diario: null,
   teto_horario: null,
+  // A busca do upstream embute `organizations(status)` e só roda campanha de organização operante.
+  organizations: { status: "active" },
 };
 
 /** Supabase falso: `organizations`/`campaigns` no molde do irmão de suspensão,

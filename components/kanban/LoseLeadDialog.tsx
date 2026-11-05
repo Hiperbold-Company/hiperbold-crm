@@ -20,22 +20,32 @@ import { OUTRO, motivoDePerdaAceito, opcoesDeMotivoDePerda } from "@/lib/leads/m
 interface LoseLeadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** O card do menu. Ausente quando quem confirma é `aoConfirmar` (o lote). */
-  leadId?: string;
   pipelineId: string;
   /**
-   * A MESMA janela para o lote: a barra de seleção, ao mover vários negócios
-   * para a etapa de perda, abre esta janela antes e aplica o motivo escolhido a
-   * todos (`POST /api/v1/leads/bulk` com `lost_reason`). Uma janela só, para a
-   * lista de motivos, o "Outro" e a recusa fora do vocabulário nunca divergirem
-   * entre perder um e perder vários. Quem passa isto cuida do erro (toast) e do
-   * resultado; a janela só fecha quando a promessa resolve.
+   * Modo CARD: perde UM negócio pela rota individual (`/leads/{id}/lose`).
+   * Ausente no modo lote.
    */
-  aoConfirmar?: (motivo: string) => Promise<void>;
-  /** Quantos negócios a confirmação alcança — muda só o texto da janela. */
+  leadId?: string;
+  /**
+   * Modo LOTE (#2484 F2): recebe o motivo escolhido e quem chamou decide a
+   * escrita — a `leads/bulk` que já sabe decidir o motivo da perda (#917). O
+   * diálogo é o MESMO do card: uma segunda janela de motivo seria a mesma
+   * pergunta com duas respostas possíveis, e o funil passaria a ter duas listas.
+   */
+  onConfirm?: (lostReason: string) => void | Promise<void>;
+  /**
+   * Modo LOTE: quem chamou informa se a escrita em lote está em voo. Este
+   * diálogo não conhece a mutação de lote (`useBulkAction`) — então não pode
+   * perguntar `isPending` a ela; sem este sinal o botão "Confirmar" ficaria
+   * clicável durante a escrita e um segundo clique dobraria o lote.
+   */
+  submitting?: boolean;
+  /** Depois de a perda gravar — para quem mora fora do quadro (ex.: painel da conversa) recarregar o que mostra. */
+  onPerdido?: () => void;
+  /** Motivos do funil quando o quadro não está em cache (painel da conversa); sem isto, lê do cache do quadro. */
+  motivos?: string[];
+  /** Modo LOTE: quantos negócios a confirmação alcança — muda só o texto da janela. */
   quantidade?: number;
-  /** Trava o botão enquanto o lote não responde. */
-  pendente?: boolean;
 }
 
 const MAX_LEN = 500;
@@ -45,18 +55,24 @@ export function LoseLeadDialog({
   onOpenChange,
   leadId,
   pipelineId,
-  aoConfirmar,
+  onConfirm,
+  submitting = false,
   quantidade,
-  pendente = false,
+  onPerdido,
+  motivos,
 }: LoseLeadDialogProps) {
   const t = useT();
   const [reasonCode, setReasonCode] = useState<string>("");
   const [otherText, setOtherText] = useState("");
   const mutation = useLoseLead(pipelineId);
+  // O diálogo vale para os DOIS modos: a escrita individual (card) ou a do
+  // chamador (lote). "em voo" é a mutação individual OU o sinal externo.
+  const emVoo = mutation.isPending || submitting;
 
   // O funil deste card manda na lista: o que ele tem cadastrado substitui o
   // padrão do produto — ver lib/leads/motivos-de-perda-do-funil.ts.
-  const cadastrados = useMotivosDePerdaDoFunil(pipelineId);
+  const doQuadro = useMotivosDePerdaDoFunil(pipelineId);
+  const cadastrados = motivos ?? doQuadro;
   const opcoes = useMemo(() => opcoesDeMotivoDePerda(cadastrados), [cadastrados]);
   const funilConfigurado = cadastrados.length > 0;
 
@@ -100,14 +116,17 @@ export function LoseLeadDialog({
     finalReason.length === 0 ||
     finalReason.length > MAX_LEN ||
     outroRecusado ||
-    mutation.isPending ||
-    pendente;
+    emVoo;
 
   const handleSubmit = async () => {
     if (disabled) return;
     try {
-      if (aoConfirmar) {
-        await aoConfirmar(finalReason);
+      // Modo LOTE (#2484 F2): o motivo vai para quem chamou, que escreve pela
+      // `leads/bulk`. Modo CARD: a rota individual. Sem `leadId` NEM `onConfirm`
+      // não há escrita nenhuma a fazer — o `disabled` já cobre o caso de uso,
+      // e este guarda evita um clique pendurado em arranjo inválido.
+      if (onConfirm) {
+        await onConfirm(finalReason);
       } else if (leadId) {
         await mutation.mutateAsync({ leadId, lostReason: finalReason });
       } else {
@@ -116,6 +135,7 @@ export function LoseLeadDialog({
       setReasonCode("");
       setOtherText("");
       onOpenChange(false);
+      onPerdido?.();
     } catch {
       // error already toasted
     }
@@ -195,7 +215,7 @@ export function LoseLeadDialog({
               */}
               {(funilConfigurado || outroRecusado) && (
                 <p className="text-xs text-muted-foreground">
-                  {t("Para usar um motivo que não está aqui, cadastre em Configurações › Funis.")}
+                  {t("Para usar um motivo que não está aqui, cadastre em CRM › Ver tudo em CRM › Etapas do funil.")}
                 </p>
               )}
             </div>
@@ -206,12 +226,12 @@ export function LoseLeadDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={mutation.isPending || pendente}
+            disabled={emVoo}
           >
             {t("Cancelar")}
           </Button>
           <Button onClick={handleSubmit} disabled={disabled}>
-            {mutation.isPending || pendente ? t("Salvando...") : t("Confirmar")}
+            {emVoo ? t("Salvando...") : t("Confirmar")}
           </Button>
         </DialogFooter>
       </DialogContent>

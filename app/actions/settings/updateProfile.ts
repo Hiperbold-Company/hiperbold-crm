@@ -3,6 +3,8 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
+import { respostaParaOperador } from "@/lib/erros/para-operador";
+import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { createClient } from "@/lib/supabase/server";
 import { audit } from "@/lib/audit";
 import {
@@ -10,8 +12,8 @@ import {
   SEM_PREFERENCIA_DE_IDIOMA,
   type ProfileInput,
 } from "@/lib/schemas/settings";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 import { resolveActiveOrg, loadAuthUser } from "@/lib/auth/server";
-import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 
 export type UpdateProfileResult =
   | { ok: true }
@@ -44,8 +46,15 @@ export async function updateProfile(input: ProfileInput): Promise<UpdateProfileR
       avatar_url: parsed.data.avatar_url ?? null,
     },
   });
+  // #3696: o `getUser` vai para o cache curto; outra sessão da pessoa leria o metadata velho.
+  invalidarUsuario(authUser.id);
   if (error) {
-    return { ok: false, error: error.message };
+    // #3747: `auth.updateUser` devolve erro SEM `code` — o mapeador reconhece a
+    // sessão vencida pelo texto e o resto cai na genérica. O cru vai para o log.
+    return respostaParaOperador(error, {
+      contexto: "[perfil] falha ao gravar os dados do usuário",
+      idioma: authUser.idioma,
+    });
   }
 
   const activeOrg = await resolveActiveOrg(authUser);

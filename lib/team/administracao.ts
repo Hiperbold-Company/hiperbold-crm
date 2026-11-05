@@ -21,11 +21,14 @@ import type { Actor } from "@/lib/api/handlers/types";
 import { ApiError } from "@/lib/api/types";
 import { MENSAGEM_DE_FALHA_INTERNA } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { contaPodeCriarArtefatos } from "@/lib/auth/exigir-email-verificado";
 import { issueInvite } from "@/lib/auth/issue-invite";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import { reservarVagaDeConvite } from "@/lib/api/auth-dual-admin";
+import { lerLimiteDoPlano, mensagemDoLimite } from "@/lib/cobranca/limites";
+import type { Idioma } from "@/lib/i18n/idiomas";
 import type { EmailDeliveryError } from "@/lib/email/roteador";
 import { registrarTrocaDeComando } from "@/lib/inbox/atividade-de-comando";
 import { logger } from "@/lib/logger";
@@ -142,6 +145,8 @@ export async function mudarPapelDoMembro(
     }
     throw falhaInterna(deps, error);
   }
+  // O papel viaja no cache curto da autorização: sem isto, o rebaixado segue com o papel antigo até 30 s.
+  invalidarUsuario(target.user_id);
 
   await audit({
     action: "team.role_changed",
@@ -201,6 +206,8 @@ export async function revogarAcessoDoMembro(
     }
     throw falhaInterna(deps, updErr);
   }
+  // Revogação vale na hora, não depois do TTL do cache curto.
+  invalidarUsuario(target.user_id);
 
   const ator = colunasDeAtorNoAudit(deps.actor);
 
@@ -299,6 +306,7 @@ export async function reativarAcessoDoMembro(
     if (limite) throw recusa(deps, STATUS_RECUSA_DO_PLANO, "plano_limite_atingido", limite.mensagem);
     throw falhaInterna(deps, updErr);
   }
+  invalidarUsuario(target.user_id);
 
   await audit({
     action: "member.reactivated",
@@ -350,6 +358,8 @@ export async function convidarMembros(
     ocultarLink: boolean;
     /** Sem service role configurado, o convite degrada para só-token. */
     comServiceRole: boolean;
+    /** Idioma da frase do limite do plano (upstream, `mensagemDoLimite`). Padrão: pt-BR. */
+    idioma?: Idioma;
   },
 ): Promise<{ sent: ConviteEnviado[]; failed: ConviteFalho[] }> {
   if (!deps.responsavel) throw recusa(deps, 403, "forbidden", "Token sem dono ativo.");
@@ -370,9 +380,36 @@ export async function convidarMembros(
   if (contexto.comServiceRole) {
     const { data: members } = await deps.admin
       .from("user_organizations")
-      .select("user_id")
+      .select("user_id, provisional_until_handover")
       .eq("organization_id", deps.organizationId)
       .is("revoked_at", null);
+
+    // Plano cheio (cobrança do upstream, `fn_limite_do_plano`): RECUSA antes do e-mail (spec cobrança §5, D-10),
+    // com a saída na frase. A trava do que já foi convidado segue no gatilho de assentos, no ACEITE. Convite
+    // pendente não conta, e o provisório do handover também não — a mesma contagem do gatilho. Ler o limite falhou
+    // → segue: falhou a informação, e a trava continua no banco. Com a cobrança do upstream desligada a função
+    // devolve `null` e nada muda; o teto dos planos Hiperbold segue por item, mais abaixo (`recusaDoPlano`).
+    const ativos = (members ?? []).filter((m) => !m.provisional_until_handover).length;
+    let limite: number | null = null;
+    try {
+      limite = await lerLimiteDoPlano(deps.admin, deps.organizationId, "assentos");
+    } catch (err) {
+      logger.warn("team.invite: limite do plano não pôde ser lido — o convite segue", {
+        organization_id: deps.organizationId,
+        request_id: deps.requestId,
+        causa: err instanceof Error ? err.message : String(err),
+      });
+    }
+    if (limite !== null && ativos >= limite) {
+      throw new ApiError(
+        409,
+        "plan_limit_reached",
+        { recurso: "assentos", limite },
+        deps.requestId,
+        mensagemDoLimite("assentos", limite, contexto.idioma ?? "pt-BR"),
+      );
+    }
+
     for (const m of members ?? []) {
       const { data: u } = await deps.admin.auth.admin.getUserById(m.user_id as string);
       const memberEmail = u?.user?.email?.trim().toLowerCase();

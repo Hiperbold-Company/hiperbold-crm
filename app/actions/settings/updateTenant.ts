@@ -1,5 +1,6 @@
 "use server";
 
+import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { supportWriteError } from "@/lib/impersonate/support";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -7,9 +8,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { atualizarDadosDaEmpresa } from "@/lib/organizacao/configuracao";
 import { tenantSchema, type TenantInput } from "@/lib/schemas/settings";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
-import { portaoDeAdminDaOrganizacao } from "@/lib/auth/portao-de-escrita";
-import { ipDoCliente } from "@/lib/http/ip-do-cliente";
+import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
+import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 
 export type UpdateTenantResult =
   | { ok: true }
@@ -26,8 +26,10 @@ export async function updateTenant(input: TenantInput): Promise<UpdateTenantResu
   if (supportWriteError(authUser.support)) return { ok: false, error: "forbidden" };
   const activeOrg = await resolveActiveOrg(authUser);
   if (!activeOrg) return { ok: false, error: "forbidden_tenant" };
-  const portao = await portaoDeAdminDaOrganizacao(authUser, activeOrg);
-  if (!portao.ok) return { ok: false, error: portao.erro };
+  if (!podeAdministrarEmpresa(authUser, activeOrg)) {
+    return { ok: false, error: "forbidden_role" };
+  }
+  if (await mfaEmDivida()) return { ok: false, error: "mfa_required" };
 
 /**
  * A ESCRITA EM `organizations` VAI PELO ADMIN CLIENT — e não é preguiça.
@@ -51,20 +53,24 @@ export async function updateTenant(input: TenantInput): Promise<UpdateTenantResu
   const supabase = createAdminClient();
   const hdrs = await headers();
   const requestId = hdrs.get("x-request-id");
-  // D-036: o primeiro salto do `x-forwarded-for` é forjável pelo cliente;
-  // `ipDoCliente` lê o salto confiável (ver `lib/http/ip-do-cliente.ts`).
   const ip = ipDoCliente(hdrs);
   const userAgent = hdrs.get("user-agent") ?? null;
 
   // O núcleo é o mesmo da rota `PATCH /api/v1/settings/organizacao` e das tools MCP
-  // (`lib/organizacao/configuracao.ts`): o portão acima é o desta porta.
+  // (`lib/organizacao/configuracao.ts`): país revisado, CNPJ único, `invalidarOrg`
+  // (#3696), audit e evento moram lá. O portão acima é o desta porta.
   const gravado = await atualizarDadosDaEmpresa(supabase, activeOrg.orgId, parsed.data, {
     actorUserId: authUser.id,
     requestId,
     ip,
     userAgent,
   });
-  if (!gravado.ok) return gravado;
+  if (!gravado.ok) {
+    if (gravado.error === "cnpj_em_uso") {
+      return { ok: false, error: "Este CNPJ já pertence a outra organização." };
+    }
+    return gravado;
+  }
 
   revalidatePath("/app/settings/tenant");
   return { ok: true };

@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
+import { loadAuthUser, mfaEmDivida, orgAtivaSemPortao, resolveActiveOrg } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { AuthUser } from "@/lib/auth/types";
@@ -25,6 +25,8 @@ import type { AuthUser } from "@/lib/auth/types";
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(),
   resolveActiveOrg: vi.fn(),
+  // O gate único (requireRole) lê a organização ativa por aqui desde a junção com o upstream.
+  orgAtivaSemPortao: vi.fn(),
   mfaEmDivida: vi.fn(),
   sessionAal: vi.fn(async () => "aal1"),
 }));
@@ -54,6 +56,7 @@ function sessao() {
   };
   vi.mocked(loadAuthUser).mockResolvedValue(user);
   vi.mocked(resolveActiveOrg).mockResolvedValue({ orgId: ORG_ID, name: "Org", role: "admin" });
+  vi.mocked(orgAtivaSemPortao).mockResolvedValue({ orgId: ORG_ID, name: "Org", role: "admin", org_status: "active" });
   const stub = {
     auth: { getUser: async () => ({ data: { user: { id: USER_ID } }, error: null }) },
     rpc: async (fn: string) =>

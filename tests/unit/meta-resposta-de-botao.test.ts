@@ -208,9 +208,13 @@ describe("parser: resposta de botão e de lista vira texto com a opção escolhi
     expect(recebida({ type: "text", text: { body: "oi" } })).toMatchObject({ type: "text", text: "oi" });
     expect(recebida({ type: "image", image: { id: "m1", mime_type: "image/jpeg" } }).type).toBe("image");
     expect(recebida({ type: "location", location: { latitude: 1, longitude: 2 } }).type).toBe("location");
-    expect(recebida({ type: "reaction", reaction: { message_id: "wamid.A", emoji: "👍" } }).type).toBe(
-      "reaction",
+    // Upstream #2797: a reação deixou de ser `inbound_message` e virou evento próprio
+    // (`kind: "reaction"`), ligado à mensagem alvo.
+    const reacao = parseMetaWebhook(
+      envelope("messages", { type: "reaction", reaction: { message_id: "wamid.A", emoji: "👍" } }),
     );
+    expect(reacao.some((e) => e.kind === "inbound_message")).toBe(false);
+    expect(reacao.find((e) => e.kind === "reaction")).toMatchObject({ kind: "reaction" });
   });
 
   it("todo tipo que o parser produz está no vocabulário do CHECK", () => {

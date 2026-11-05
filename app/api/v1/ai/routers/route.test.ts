@@ -6,26 +6,43 @@ import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fail } from "@/lib/api/wrappers";
 import type { AuthUser } from "@/lib/auth/types";
+import { McpAuthError } from "@/lib/mcp/auth";
+import type * as McpAuthModule from "@/lib/mcp/auth";
 
 /**
  * Task 6 (Fase 3 — Intent Router) — GET/POST /api/v1/ai/routers:
  *  - GET lista routers da org com member_count agregado de ai_router_members;
- *  - POST cria router com organization_id de requireRole (nunca do body);
+ *  - POST cria router com organization_id da sessão/token (nunca do body);
  *  - body inválido → 422 validation_failed;
  *  - violação do índice único parcial (channel_session já tem router ativo)
  *    → 409 tratado, nunca 500 cru.
  */
 
+const dualDeps = vi.hoisted(() => ({
+  validateBearerToken: vi.fn(),
+  checkRateLimit: vi.fn(),
+}));
+
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn(async () => ({})) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 // A porta de autorização (sessão OU token) abre o cliente da sessão; estas rotas só usam o de servidor.
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn(async () => ({})) }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
+vi.mock("@/lib/mcp/auth", async () => {
+  const actual = await vi.importActual<typeof McpAuthModule>("@/lib/mcp/auth");
+  return { ...actual, validateBearerToken: dualDeps.validateBearerToken };
+});
+vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({
+  checkRateLimit: dualDeps.checkRateLimit,
+}));
 
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_ORG_ID = "33333333-3333-4333-8333-333333333333";
 const SESSION_ID = "44444444-4444-4444-8444-444444444444";
+let lastInserted: Record<string, unknown> | null = null;
+let lastFilters: Array<{ table: string; column: string; value: unknown }> = [];
 
 function mockAuthzOk(role: "agent" | "admin" = "admin") {
   const user: AuthUser = {
@@ -68,7 +85,8 @@ function makeAdminStub(cfg: AdminCfg) {
           select() {
             return builder;
           },
-          eq() {
+          eq(column: string, value: unknown) {
+            lastFilters.push({ table, column, value });
             return builder;
           },
           is() {
@@ -101,7 +119,8 @@ function makeAdminStub(cfg: AdminCfg) {
           select() {
             return builder;
           },
-          eq() {
+          eq(column: string, value: unknown) {
+            lastFilters.push({ table, column, value });
             return builder;
           },
           order() {
@@ -109,6 +128,7 @@ function makeAdminStub(cfg: AdminCfg) {
           },
           insert(row: Record<string, unknown>) {
             insertedRow = row;
+            lastInserted = row;
             return {
               select() {
                 return {
@@ -128,7 +148,8 @@ function makeAdminStub(cfg: AdminCfg) {
           select() {
             return builder;
           },
-          eq() {
+          eq(column: string, value: unknown) {
+            lastFilters.push({ table, column, value });
             return Promise.resolve(cfg.membersSelect ?? { data: [], error: null });
           },
         };
@@ -150,8 +171,32 @@ function postReq(body: unknown) {
   });
 }
 
+function bearerReq(method: "GET" | "POST", body?: unknown) {
+  return new NextRequest("http://localhost/api/v1/ai/routers?organization_id=ignorada", {
+    method,
+    headers: {
+      authorization: "Bearer dsk_router",
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+function token(scopes: string[], role: "agent" | "admin" = "admin") {
+  return {
+    organizationId: OTHER_ORG_ID,
+    scopes,
+    role,
+    actor: { type: "api_token", id: "tok-router" },
+    apiTokenId: "tok-router",
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  lastInserted = null;
+  lastFilters = [];
+  dualDeps.checkRateLimit.mockResolvedValue({ allowed: true });
 });
 
 describe("GET /api/v1/ai/routers", () => {
@@ -201,6 +246,17 @@ describe("GET /api/v1/ai/routers", () => {
 });
 
 describe("POST /api/v1/ai/routers", () => {
+  it("roteador novo começa com oito mensagens; valor fora de 0–16 é recusado", async () => {
+    mockAuthzOk("admin");
+    vi.mocked(createAdminClient).mockReturnValue(makeAdminStub({ insertResult: { data: { id: "new-router-1" }, error: null } }) as never);
+    const { POST } = await import("./route");
+    expect((await POST(postReq({ name: "Roteador", channel_session_id: SESSION_ID }))).status).toBe(201);
+    expect(lastInserted?.config).toMatchObject({ context_message_count: 8 });
+    lastInserted = null;
+    expect((await POST(postReq({ name: "Roteador", channel_session_id: SESSION_ID,
+      config: { context_message_count: 17 } }))).status).toBe(422);
+    expect(lastInserted).toBeNull();
+  });
   it("cria router; organization_id vem de requireRole mesmo que o body mande outro", async () => {
     mockAuthzOk("admin");
     const admin = makeAdminStub({ insertResult: { data: { id: "new-router-1" }, error: null } });
@@ -304,6 +360,113 @@ describe("POST /api/v1/ai/routers", () => {
     expect(res.status).toBe(409);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("router_already_exists");
+    expect(audit).not.toHaveBeenCalled();
+  });
+});
+
+describe("auth dual dos routers", () => {
+  it("Bearer válido com config:read lista somente a organização do token", async () => {
+    dualDeps.validateBearerToken.mockResolvedValue(token(["config:read"]) as never);
+    vi.mocked(createAdminClient).mockReturnValue(makeAdminStub({}) as never);
+
+    const { GET } = await import("./route");
+    const res = await GET(bearerReq("GET"));
+
+    expect(res.status).toBe(200);
+    expect(requireRole).not.toHaveBeenCalled();
+    expect(lastFilters).toContainEqual({
+      table: "ai_routers",
+      column: "organization_id",
+      value: OTHER_ORG_ID,
+    });
+    expect(lastFilters).toContainEqual({
+      table: "ai_router_members",
+      column: "organization_id",
+      value: OTHER_ORG_ID,
+    });
+  });
+
+  it("Bearer válido com config:write cria na organização do token e audita o token", async () => {
+    dualDeps.validateBearerToken.mockResolvedValue(token(["config:write"]) as never);
+    vi.mocked(createAdminClient).mockReturnValue(
+      makeAdminStub({ insertResult: { data: { id: "new-router-token" }, error: null } }) as never,
+    );
+
+    const { POST } = await import("./route");
+    const res = await POST(
+      bearerReq("POST", {
+        name: "Via API",
+        channel_session_id: SESSION_ID,
+        organization_id: ORG_ID,
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(lastInserted).toMatchObject({
+      organization_id: OTHER_ORG_ID,
+      created_by: null,
+    });
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: null,
+        actorApiTokenId: "tok-router",
+        organizationId: OTHER_ORG_ID,
+      }),
+    );
+  });
+
+  it("scope insuficiente responde 403 antes de consultar o banco", async () => {
+    dualDeps.validateBearerToken.mockResolvedValue(token(["config:read"]) as never);
+    const { POST } = await import("./route");
+
+    const res = await POST(
+      bearerReq("POST", { name: "Sem poder", channel_session_id: SESSION_ID }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  // #2194: a lista expõe channel_session_id e fallback_agent_id — token abaixo de admin não lista.
+  // Hiperbold (merge de 04/11/2026): `mcp:read` de admin (tokens já emitidos pelo fork) VALE, ao lado do
+  // `config:read`; o que recusa é o papel e o escopo de escrita sozinho.
+  it.each([
+    { nome: "mcp:read sem papel de admin", scopes: ["mcp:read"], role: "agent" as const },
+    { nome: "config:read sem papel de admin", scopes: ["config:read"], role: "agent" as const },
+    { nome: "só escopo de escrita (mcp:write) de admin", scopes: ["mcp:write"], role: "admin" as const },
+  ])("Bearer com $nome não lista (403)", async ({ scopes, role }) => {
+    dualDeps.validateBearerToken.mockResolvedValue(token(scopes, role) as never);
+    const { GET } = await import("./route");
+
+    const res = await GET(bearerReq("GET"));
+
+    expect(res.status).toBe(403);
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it.each(["inválido", "revogado"])("Bearer %s responde 401", async () => {
+    dualDeps.validateBearerToken.mockRejectedValue(
+      new McpAuthError(-32001, 401, "Token inválido ou revogado."),
+    );
+    const { GET } = await import("./route");
+
+    const res = await GET(bearerReq("GET"));
+
+    expect(res.status).toBe(401);
+    expect(requireRole).not.toHaveBeenCalled();
+  });
+
+  it("escrita por Bearer respeita o teto antes de qualquer efeito", async () => {
+    dualDeps.validateBearerToken.mockResolvedValue(token(["config:write"]) as never);
+    dualDeps.checkRateLimit.mockResolvedValueOnce({ allowed: false });
+    const { POST } = await import("./route");
+
+    const res = await POST(
+      bearerReq("POST", { name: "Acima do teto", channel_session_id: SESSION_ID }),
+    );
+
+    expect(res.status).toBe(429);
+    expect(lastInserted).toBeNull();
     expect(audit).not.toHaveBeenCalled();
   });
 });

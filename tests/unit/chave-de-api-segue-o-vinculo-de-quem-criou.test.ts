@@ -36,7 +36,12 @@ function armar({ escopos, vinculo, erroDoVinculo, plataforma = false }: Cenario)
       consultadas.push(tabela);
       const c: Record<string, unknown> = {};
       for (const m of ["select", "eq", "is"]) c[m] = () => c;
-      c.update = () => ({ eq: () => ({ then: (r: (v: unknown) => unknown) => r({ error: null }) }) });
+      // `last_used_at`: o update filtra a organização E o id (upstream), dois `.eq`.
+      const atualizacao: Record<string, unknown> = {
+        eq: () => atualizacao,
+        then: (r: (v: unknown) => unknown) => r({ error: null }),
+      };
+      c.update = () => atualizacao;
       c.maybeSingle = async () => {
         if (tabela === "api_tokens") {
           return {

@@ -19,6 +19,28 @@ vi.mock("node:dns/promises", () => {
   return { lookup, default: { lookup } };
 });
 
+// O pool do `pg` de verdade, com espião no construtor: a prova é a configuração
+// com que o pool NASCE (o IP a que ele conecta), não um dublê do nosso código.
+// Desde o upstream, `abrirAcesso` devolve o dialeto e não o pool; a config é
+// lida aqui, na fronteira com o driver.
+const pools = vi.hoisted(() => ({ criados: [] as Array<{ host?: string; ssl?: unknown }> }));
+vi.mock("pg", async (original) => {
+  const real = await original<typeof import("pg")>();
+  const Base = real.default.Pool;
+  class PoolEspiao extends Base {
+    constructor(config?: ConstructorParameters<typeof Base>[0]) {
+      super(config);
+      pools.criados.push({ host: config?.host, ssl: config?.ssl });
+    }
+  }
+  return { ...real, Pool: PoolEspiao, default: { ...real.default, Pool: PoolEspiao } };
+});
+
+/** A configuração do último pool aberto para a conexão. */
+function ultimoPool(): { host?: string; ssl?: unknown } | undefined {
+  return pools.criados[pools.criados.length - 1];
+}
+
 const estado = vi.hoisted(() => ({ host: "banco.cliente.exemplo", sslMode: "require" as string }));
 vi.mock("@/lib/instalacao/modulos", () => ({ moduloLigado: vi.fn(async () => true) }));
 vi.mock("./credenciais", () => ({
@@ -27,6 +49,7 @@ vi.mock("./credenciais", () => ({
     conexao: {
       id: "conn-1",
       organizationId: "org-1",
+      dbType: "postgres",
       label: "X",
       host: estado.host,
       port: 5432,
@@ -37,6 +60,9 @@ vi.mock("./credenciais", () => ({
       maxRows: 200,
       maxFilters: 20,
       maxResponseBytes: 30_000,
+      chaveDoCliente: null,
+      sourceMode: "all",
+      fontes: [],
       versao: "2026-09-11T00:00:00.000Z",
     },
   })),
@@ -50,6 +76,7 @@ const admin = {} as SupabaseClient;
 beforeEach(() => {
   dns.respostas = [];
   dns.chamadas = 0;
+  pools.criados = [];
   estado.host = "banco.cliente.exemplo";
   estado.sslMode = "require";
 });
@@ -68,8 +95,8 @@ describe("abrirAcesso: o pool conecta pelo IP que a guarda validou (D-084, M2)",
 
     expect(acesso.ok).toBe(true);
     if (!acesso.ok) return;
-    expect(acesso.pool.options.host).toBe("8.8.8.8");
-    expect(acesso.pool.options.ssl).toMatchObject({ servername: "banco.cliente.exemplo" });
+    expect(ultimoPool()?.host).toBe("8.8.8.8");
+    expect(ultimoPool()?.ssl).toMatchObject({ servername: "banco.cliente.exemplo" });
     // Uma resolução só: nada depois da guarda resolve o nome outra vez.
     expect(dns.chamadas).toBe(1);
   });
@@ -88,10 +115,13 @@ describe("abrirAcesso: o pool conecta pelo IP que a guarda validou (D-084, M2)",
     dns.respostas = [["8.8.8.8"], ["1.1.1.1"]];
 
     const primeira = await abrirAcesso(admin, "org-1", "conn-1");
+    const hostDaPrimeira = ultimoPool()?.host;
     const segunda = await abrirAcesso(admin, "org-1", "conn-1");
 
-    expect(primeira.ok && primeira.pool.options.host).toBe("8.8.8.8");
-    expect(segunda.ok && segunda.pool.options.host).toBe("1.1.1.1");
+    expect(primeira.ok).toBe(true);
+    expect(hostDaPrimeira).toBe("8.8.8.8");
+    expect(segunda.ok).toBe(true);
+    expect(ultimoPool()?.host).toBe("1.1.1.1");
   });
 });
 

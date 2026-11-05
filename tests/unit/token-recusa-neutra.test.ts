@@ -5,9 +5,10 @@
  * "Organization suspended." com 403), e quem segura um `dsk_` roubado ou chutado
  * sondava o estado da chave e da empresa.
  *
- * Agora desconhecido, revogado, expirado, criador sem acesso e organização suspensa
- * devolvem a MESMA resposta (código MCP, status HTTP e mensagem); o motivo real fica
- * no log. Falha de infraestrutura segue 500 (não é token inválido) e formato torto
+ * Agora desconhecido, revogado, expirado e criador sem acesso devolvem a MESMA
+ * resposta (código MCP, status HTTP e mensagem); o motivo real fica no log. A
+ * organização suspensa saiu da lista no merge do upstream (04/11/2026): o token é
+ * válido e a recusa é o 403 `org_suspended`, que a tela leva ao hub. Falha de infraestrutura segue 500 (não é token inválido) e formato torto
  * segue com a mensagem própria (não revela nada sobre token existente).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,7 +43,11 @@ function armar({ token, vinculo = "admin", erroDoToken }: Cenario) {
     from: (tabela: string) => {
       const c: Record<string, unknown> = {};
       for (const m of ["select", "eq", "is"]) c[m] = () => c;
-      c.update = () => ({ eq: () => ({ then: (r: (v: unknown) => unknown) => r({ error: null }) }) });
+      // `last_used_at`: o upstream filtra `organization_id` e `id` (dois `.eq`).
+      const atualizacao: Record<string, unknown> = {};
+      atualizacao.eq = () => atualizacao;
+      atualizacao.then = (r: (v: unknown) => unknown) => r({ error: null });
+      c.update = () => atualizacao;
       c.maybeSingle = async () => {
         if (tabela === "api_tokens") {
           if (erroDoToken) return { data: null, error: { message: erroDoToken } };
@@ -90,7 +95,6 @@ const CASOS: Array<[string, Cenario, string]> = [
   ["expirado", { token: { expires_at: "2020-01-01T00:00:00.000Z" } }, "expired"],
   ["criador sem vínculo ativo", { token: {}, vinculo: null }, "creator_inactive"],
   ["criador rebaixado abaixo do papel da chave", { token: {}, vinculo: "agent" }, "creator_inactive"],
-  ["organização suspensa", { token: { org_status: "suspended" } }, "tenant_suspended"],
 ];
 
 describe("recusa neutra de bearer", () => {
@@ -113,7 +117,18 @@ describe("recusa neutra de bearer", () => {
     });
   }
 
-  it("as seis recusas são idênticas entre si (nenhuma distingue o motivo)", async () => {
+  // Upstream (merge de 04/11/2026): o token de organização suspensa é VÁLIDO, então
+  // não entra na recusa neutra. Responde 403 `org_suspended` (a tela leva ao hub) e
+  // não debita o balde de falhas — ver `validateBearerToken` em lib/mcp/auth.ts.
+  it("organização suspensa: 403 org_suspended, fora da recusa neutra (token válido)", async () => {
+    armar({ token: { org_status: "suspended" } });
+    const r = await recusa();
+    expect(r.mcpCode).toBe(-32002);
+    expect(r.httpStatus).toBe(403);
+    expect(r.message).not.toContain(PLAINTEXT);
+  });
+
+  it("as cinco recusas são idênticas entre si (nenhuma distingue o motivo)", async () => {
     const respostas = new Set<string>();
     for (const [, cenario] of CASOS) {
       armar(cenario);

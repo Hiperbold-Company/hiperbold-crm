@@ -35,6 +35,18 @@ export function getAdapter(provider: ChannelProvider): ChannelAdapter {
   return adapter;
 }
 
+/**
+ * Os providers cujo adapter sabe perguntar se um número TEM conta
+ * (`numeroTemConta`). Derivado dos adapters, não de uma lista à mão: quem
+ * implementar o método entra sozinho. É o que o SQL usa para escolher uma
+ * conexão capaz de perguntar, sem nomear provider fora deste diretório.
+ */
+export function provedoresQueConferemNumero(): ProviderDeMensagem[] {
+  return (Object.keys(ADAPTERS) as ProviderDeMensagem[]).filter(
+    (p) => typeof ADAPTERS[p]?.numeroTemConta === "function",
+  );
+}
+
 export {
   capabilitiesOf,
   CHANNEL_CAPABILITIES,
@@ -50,6 +62,7 @@ export type {
   ChannelAdapter,
   ChannelCapabilities,
   ChannelProvider,
+  ContatoDoAparelho,
   ProviderDeMensagem,
   OutboundEnvelope,
   OutboundKind,

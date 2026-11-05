@@ -120,6 +120,14 @@ const ADMIN_DA_INSTALACAO = {
 };
 
 describe("updateMetaApp — o gate da instalação", () => {
+  it("support_readonly TEM a linha e mesmo assim não grava: a escrita exige scope full", async () => {
+    linhaDeAdmin = { ...ADMIN_DA_INSTALACAO, scope: "support_readonly" };
+    const { updateMetaApp } = await acoes();
+    // A recusa VOLTA como resultado (a tela diz "somente leitura"), não lança ao error boundary.
+    await expect(updateMetaApp({ app_secret: SEGREDO })).resolves.toEqual({ ok: false, error: "forbidden_scope" });
+    expect(tabelasDoServiceRole).toEqual([]);
+  });
+
   it("⭐ sessão SEM linha em platform_admins é mandada para /admin/forbidden antes de tocar o banco", async () => {
     const { updateMetaApp } = await acoes();
 

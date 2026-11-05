@@ -120,11 +120,26 @@ export const MAX_PAGINAS_DO_PDF = 500;
 export const MAX_CARACTERES_DO_PDF = 3_000_000;
 const TEMPO_MAXIMO_MS = 60_000;
 
-/** `processo-a-parte` só sob o `tsx` — é o único lugar onde o custo existe. */
+/**
+ * `processo-a-parte` só sob o `tsx` — é o único lugar onde o custo existe.
+ *
+ * O `tsx` aparece no `execArgv` de duas formas, e as duas já foram produção:
+ *
+ * - pela CLI (`pnpm exec tsx`, o CMD antigo da imagem): caminhos absolutos,
+ *   `.../node_modules/tsx/dist/loader.mjs`;
+ * - pelo hook (`node --import tsx`, o CMD desde o #2823): o especificador CRU,
+ *   `tsx` — ou `tsx/esm`, ou `--import=tsx`. Sem barra antes.
+ *
+ * Até 21/10/2026 só a primeira forma era reconhecida. O #2823 trocou o CMD, a
+ * estratégia caiu para `em-processo` em silêncio, e o primeiro PDF recebido
+ * derrubou o worker com `heap limit` — o incidente de 15/09 de volta.
+ */
 export function estrategiaPadrao(
   execArgv: readonly string[] = process.execArgv,
 ): EstrategiaDeExtracao {
-  return execArgv.some((arg) => /[\\/]tsx[\\/]/.test(arg)) ? "processo-a-parte" : "em-processo";
+  return execArgv.some((arg) => /(^|[\\/=])tsx([\\/]|$)/.test(arg))
+    ? "processo-a-parte"
+    : "em-processo";
 }
 
 /**

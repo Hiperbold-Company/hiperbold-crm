@@ -1,7 +1,8 @@
 "use client";
 
+import { useActiveOrg } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -13,20 +14,36 @@ import { usePermission } from "@/hooks/auth/AuthProvider";
 import { useEditLead } from "@/hooks/kanban/useUpdateLead";
 import type { Lead } from "@/lib/types/leads";
 import { updateLeadSchema, type UpdateLeadInput } from "@/lib/schemas/leads";
-import { parseReaisToCents } from "@/lib/money";
+import { MOEDA_PADRAO, parseReaisToCents, simboloDaMoeda } from "@/lib/money";
+import { soChavesAlteradas } from "@/lib/leads/custom-fields-so-diff";
 import { CustomFieldsEditor, type CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
 import { agruparCampos, ROTULO_DO_GRUPO, type GrupoDeCampo } from "@/lib/leads/grupo-do-campo";
-import { SeletorDeEtiquetas } from "@/components/tags/SeletorDeEtiquetas";
-import { TETO_DE_TAGS, TETO_DO_TAMANHO_DA_TAG_DO_LEAD } from "@/lib/schemas/tetos";
+import { ContactTagsEditor } from "@/components/inbox/ContactTagsEditor";
+import { lerRecorrenciaDoFormulario } from "@/lib/leads/valor-recorrente";
 import { CaretDown, CaretRight } from "@/lib/ui/icons";
 import { EcoDoValor } from "./EcoDoValor";
 import { ItensDoNegocio } from "./ItensDoNegocio";
+import type { CampoConfirmadoDoDocumento } from "./RevisaoDoDocumento";
 
+/**
+ * As etiquetas do negócio SAÍRAM deste formulário (#2979): quem as edita é o
+ * `ContactTagsEditor`, que grava na hora em `crm_leads.tags`. Manter um
+ * `tagsRaw` aqui seria pior do que redundância — "Salvar" reenviaria a lista
+ * carregada na abertura do dossiê e DESFARIA em silêncio a etiqueta que a
+ * pessoa acabou de criar no editor.
+ */
 interface FormShape {
   title: string;
   description: string;
   valueReais: string;
+  /** Mensalidade e duração do contrato (fatia 1 da #3602), em texto. */
+  valorRecorrenteReais: string;
+  recorrenciaMeses: string;
   expected_close_date: string;
+}
+
+export interface ControleDosCamposDoNegocio {
+  confirmarCampo: (confirmado: CampoConfirmadoDoDocumento) => void;
 }
 
 interface Props {
@@ -37,11 +54,18 @@ interface Props {
   onSaved?: () => void;
   /** O dossiê não tem "cancelar"; o diálogo tem. */
   onCancel?: () => void;
+  /** Confirmação externa do próprio card: preserva os outros campos em edição. */
+  controle?: Ref<ControleDosCamposDoNegocio>;
 }
 
 function centsToReais(cents: number | null | undefined): string {
   if (cents === null || cents === undefined) return "";
   return (cents / 100).toFixed(2).replace(".", ",");
+}
+
+/** Duração em meses como texto (`null` = sem prazo, que é o campo vazio). */
+function mesesComoTexto(meses: number | null | undefined): string {
+  return meses === null || meses === undefined ? "" : String(meses);
 }
 
 /**
@@ -53,13 +77,20 @@ function centsToReais(cents: number | null | undefined): string {
  * registro justamente de quem o produziu — a funcionalidade que prova "sua ação
  * fica registrada" provaria isso para todo mundo menos para o autor.
  */
-export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCancel }: Props) {
+export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCancel, controle }: Props) {
   const t = useT();
+  const org = useActiveOrg();
+  // A moeda do negócio JÁ GRAVADO vence: trocar a moeda da empresa não
+  // reescreve o que nasceu antes, e o cartão e o dossiê mostram a persistida.
+  const moedaDoValor = lead.currency ?? org?.currency ?? MOEDA_PADRAO;
   const edit = useEditLead(pipelineId);
   const [customFields, setCustomFields] = useState<Record<string, unknown>>(lead.custom_fields ?? {});
-  // As etiquetas do NEGÓCIO moram no estado do formulário (não gravam ao marcar):
-  // entram no patch do "Salvar", como o campo de texto fazia.
-  const [tags, setTags] = useState<string[]>(lead.tags ?? []);
+  // A RÉGUA do diff (issue #2132): o valor carregado ao abrir. Só o que a
+  // pessoa mudar daqui vai viajar — devolver o objeto inteiro sobrescrevia o
+  // que outra pessoa (ou o MCP `crm_update_lead`) mudou com a ficha aberta.
+  const [camposCarregados, setCamposCarregados] = useState<Record<string, unknown>>(
+    lead.custom_fields ?? {},
+  );
   // O VALOR É A SOMA DOS PRODUTOS quando o negócio tem produtos (gatilho do banco,
   // migration 0972). `null` = sem produtos (ou a lista ainda não chegou): o valor é
   // o que a pessoa digita, como sempre foi.
@@ -72,6 +103,8 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
       title: lead.title,
       description: lead.description ?? "",
       valueReais: centsToReais(lead.value_cents),
+      valorRecorrenteReais: centsToReais(lead.recurring_value_cents),
+      recorrenciaMeses: mesesComoTexto(lead.recurring_months),
       expected_close_date: lead.expected_close_date ?? "",
     },
   });
@@ -81,12 +114,26 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
       title: lead.title,
       description: lead.description ?? "",
       valueReais: centsToReais(lead.value_cents),
+      valorRecorrenteReais: centsToReais(lead.recurring_value_cents),
+      recorrenciaMeses: mesesComoTexto(lead.recurring_months),
       expected_close_date: lead.expected_close_date ?? "",
     });
     setCustomFields(lead.custom_fields ?? {});
-    setTags(lead.tags ?? []);
+    setCamposCarregados(lead.custom_fields ?? {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
+
+  useImperativeHandle(controle, () => ({
+    confirmarCampo(confirmacao) {
+      // A confirmação pode terminar depois de a pessoa abrir outro card.
+      if (confirmacao.leadId !== lead.id) return;
+      const { campo, valor } = confirmacao;
+      // O evento já gravou este valor: atualiza o campo e a régua do diff,
+      // preservando os outros rascunhos. Não remonta o formulário (#2132).
+      setCustomFields((atuais) => ({ ...atuais, [campo]: valor }));
+      setCamposCarregados((atuais) => ({ ...atuais, [campo]: valor }));
+    },
+  }), [lead.id]);
 
   /**
    * O total dos produtos mudou. Com produtos, o campo mostra a soma; quando o
@@ -104,11 +151,38 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
     const reais = values.valueReais.trim();
     let valueCents: number | null = null;
     if (somaDosProdutos === null && reais.length > 0) {
-      valueCents = parseReaisToCents(reais);
+      // A MESMA moeda que o rótulo do campo mostra ao lado («Valor ($)»): é ela
+      // que decide se a vírgula é decimal ou separador de milhar (#3331).
+      valueCents = parseReaisToCents(reais, moedaDoValor);
       if (valueCents === null) {
         form.setError("valueReais", { message: t("Valor inválido") });
         return;
       }
+    }
+
+    // O RECORRENTE (fatia 1 da #3602) — a régua compartilhada com o diálogo de
+    // criação e com o de edição; aqui também vai sempre, para apagar o campo
+    // significar "não tem mais mensalidade".
+    // Apagar a mensalidade de um negócio que a TINHA leva a duração junto: é a
+    // regra 1 do trio, a mesma do servidor (`recorrenciaParaGravar`). Duração
+    // digitada num negócio que nunca teve mensalidade segue sendo recusa.
+    const apagouAMensalidade =
+      lead.recurring_value_cents != null && values.valorRecorrenteReais.trim() === "";
+    const leitura = lerRecorrenciaDoFormulario(
+      values.valorRecorrenteReais,
+      apagouAMensalidade ? "" : values.recorrenciaMeses,
+      moedaDoValor,
+    );
+    if (!leitura.ok) {
+      form.setError(leitura.campo === "valor" ? "valorRecorrenteReais" : "recorrenciaMeses", {
+        message:
+          leitura.motivo === "valor_invalido"
+            ? t("Valor inválido")
+            : leitura.motivo === "duracao_invalida"
+              ? t("Duração inválida")
+              : t("Informe a mensalidade para usar a duração"),
+      });
+      return;
     }
 
     const patch: Record<string, unknown> = {
@@ -116,9 +190,12 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
       description: values.description.trim() ? values.description.trim() : null,
       // Com produtos o valor é a soma deles, que o banco mantém: não se envia.
       ...(somaDosProdutos === null ? { value_cents: valueCents } : {}),
-      tags,
+      ...leitura.trio,
       expected_close_date: values.expected_close_date || null,
-      ...(fieldDefs.length > 0 ? { custom_fields: customFields } : {}),
+      // Só o que a pessoa alterou (issue #2132) — o merge continua do servidor.
+      ...(fieldDefs.length > 0
+        ? { custom_fields: soChavesAlteradas(camposCarregados, customFields) }
+        : {}),
     };
 
     const parsed = updateLeadSchema.safeParse(patch);
@@ -133,7 +210,10 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
         leadId: lead.id,
         patch: parsed.data as UpdateLeadInput,
       });
-      toast.success(t("Lead atualizado"));
+      // O que acabou de gravar vira a nova régua: o segundo salvamento não
+      // reenvia o primeiro, e uma limpeza alheia no intervalo não é atropelada.
+      setCamposCarregados({ ...customFields });
+      toast.success(t("Negócio atualizado"));
       onSaved?.();
     } catch {
       // toast already shown
@@ -166,7 +246,9 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label htmlFor="valueReais">{t("Valor (R$)")}</Label>
+            {/* O rótulo segue a moeda do NEGÓCIO (a organização é a reserva):
+                  `R$` em duro mentia para quem opera em euro. */}
+            <Label htmlFor="valueReais">{t("Valor")} ({simboloDaMoeda(moedaDoValor)})</Label>
             <Input
               id="valueReais"
               inputMode="decimal"
@@ -180,7 +262,7 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
                 {t("Soma dos produtos deste negócio.")}
               </p>
             ) : (
-              <EcoDoValor control={form.control} />
+              <EcoDoValor control={form.control} moeda={moedaDoValor} />
             )}
             {form.formState.errors.valueReais && (
               <p className="text-xs text-error-fg">
@@ -198,19 +280,60 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
           </div>
         </div>
 
+        {/* A MENSALIDADE (fatia 1 da #3602) no dossiê: o mesmo par de campos do
+            diálogo do funil, com a mesma leitura — quem edita o negócio da
+            conversa não deveria precisar abrir o quadro para corrigir o
+            contrato. */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="valorRecorrenteReais">
+              {t("Valor recorrente (mensal)")} ({simboloDaMoeda(moedaDoValor)})
+            </Label>
+            <Input
+              id="valorRecorrenteReais"
+              inputMode="decimal"
+              placeholder="0,00"
+              {...form.register("valorRecorrenteReais")}
+            />
+            <EcoDoValor
+              control={form.control}
+              moeda={moedaDoValor}
+              campo="valorRecorrenteReais"
+            />
+            {form.formState.errors.valorRecorrenteReais && (
+              <p className="text-xs text-error-fg">
+                {form.formState.errors.valorRecorrenteReais.message}
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="recorrenciaMeses">{t("Duração (meses)")}</Label>
+            <Input
+              id="recorrenciaMeses"
+              inputMode="numeric"
+              placeholder={t("sem prazo")}
+              {...form.register("recorrenciaMeses")}
+            />
+            {form.formState.errors.recorrenciaMeses && (
+              <p className="text-xs text-error-fg">
+                {form.formState.errors.recorrenciaMeses.message}
+              </p>
+            )}
+          </div>
+        </div>
+
         <div className="space-y-2">
-          <Label>{t("Tags")}</Label>
-          <SeletorDeEtiquetas
-            orgId={lead.organization_id}
-            value={tags}
-            onChange={setTags}
-            limite={TETO_DE_TAGS}
-            tamanhoMaximo={TETO_DO_TAMANHO_DA_TAG_DO_LEAD}
-            // O negócio guarda a grafia do cadastro ("Novo Paciente"), só aparada.
-            paraGravar={(tag) => tag.trim().slice(0, TETO_DO_TAMANHO_DA_TAG_DO_LEAD)}
-            rotuloDoCampo={t("Adicionar tag ao negócio")}
-            disabled={edit.isPending}
-            className="space-y-2 rounded-md border border-border p-2"
+          {/* A etiqueta do NEGÓCIO (#2979): o MESMO editor do Inbox, gravando
+              na OUTRA caixa — `crm_leads.tags` por `PATCH /api/v1/leads/{id}`,
+              nunca o perfil do contato. Ele grava na hora; por isso o dossiê
+              não carrega mais o campo de texto livre que substituía a lista. */}
+          <p className="text-sm font-medium">{t("Tags do negócio")}</p>
+          <ContactTagsEditor
+            entityType="lead"
+            entityId={lead.id}
+            pipelineId={pipelineId}
+            orgId={org?.orgId ?? ""}
+            tags={lead.tags ?? []}
           />
         </div>
 
@@ -223,6 +346,7 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
             campos={bloco.campos}
             valores={customFields}
             onChange={setCustomFields}
+            leadId={lead.id}
           />
         ))}
 
@@ -264,11 +388,14 @@ function BlocoDeCampos({
   campos,
   valores,
   onChange,
+  leadId,
 }: {
   grupo: GrupoDeCampo;
   campos: CustomFieldDef[];
   valores: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
+  /** O negócio dono dos campos (campo de arquivo sobe para ele). */
+  leadId: string;
 }) {
   const t = useT();
   const recolhivel = grupo === "rastreamento";
@@ -302,7 +429,7 @@ function BlocoDeCampos({
         <p className="text-sm font-medium">{t(ROTULO_DO_GRUPO[grupo])}</p>
       )}
       {aberto && (
-        <CustomFieldsEditor fields={campos} value={valores} onChange={onChange} mode="lead" />
+        <CustomFieldsEditor fields={campos} value={valores} onChange={onChange} mode="lead" leadId={leadId} />
       )}
     </section>
   );

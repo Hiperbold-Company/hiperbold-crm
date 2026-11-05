@@ -56,6 +56,18 @@ function fakeSweepDb(opts: {
     async loadContatosComRetornoVivo() {
       return new Set<string>();
     },
+    async loadEncerramentosDoFluxo() {
+      return new Map();
+    },
+    async loadContatosComPessoaNoComando() {
+      return new Set<string>();
+    },
+    async loadContactIdsEmCooldown() {
+      return new Set<string>();
+    },
+    async loadContatosComInscricaoViva() {
+      return new Set<string>();
+    },
     async loadTriggerNode() {
       return { id: "trigger-node", pedeAgente: false };
     },

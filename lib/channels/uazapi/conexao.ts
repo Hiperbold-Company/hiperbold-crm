@@ -21,6 +21,7 @@
  * `action: "delete"` e o id do NOSSO webhook, e nada aqui escreve sem `action`.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fecharAvisoDePausaDoCanalArquivado } from "@/lib/channels/central-de-pausa";
 
 import { metadataInicialDoCanal } from "@/lib/ai/elegibilidade/pre-go-live";
 import {
@@ -457,5 +458,8 @@ export async function arquivarConexaoUazapi(
     .update({ archived_at: new Date().toISOString(), status: "STOPPED" })
     .eq("organization_id", organizationId)
     .eq("id", id);
-  return error?.message ?? null;
+  if (error) return error.message;
+  // Fecha o aviso de pausa do canal arquivado (best-effort, nunca lança; issue #2389 do upstream).
+  await fecharAvisoDePausaDoCanalArquivado(admin, { id, organization_id: organizationId });
+  return null;
 }

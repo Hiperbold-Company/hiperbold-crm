@@ -8,14 +8,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 vi.mock("@/lib/external-db/acesso", () => ({ abrirAcesso: vi.fn() }));
-vi.mock("@/lib/external-db/introspeccao", () => ({
-  listarTabelas: vi.fn(),
-  colunasDaTabela: vi.fn(),
+
+// O banco externo é o limite do teste: desde o upstream o handler fala com ele
+// pelo DIALETO que `abrirAcesso` devolve (não mais por `introspeccao`/`leitura`
+// com o pool). O dublê é esse dialeto; o que se mede é o que chega até ele.
+const motor = vi.hoisted(() => ({
+  listarTabelas: vi.fn<Dialeto["listarTabelas"]>(),
+  colunasDaTabela: vi.fn<Dialeto["colunasDaTabela"]>(),
+  lerTabela: vi.fn<Dialeto["lerTabela"]>(),
 }));
-vi.mock("@/lib/external-db/leitura", async () => {
-  const real = (await vi.importActual("@/lib/external-db/leitura")) as Record<string, unknown>;
-  return { ...real, lerTabela: vi.fn() };
-});
+const { colunasDaTabela, lerTabela } = motor;
 
 import { abrirAcesso } from "@/lib/external-db/acesso";
 import {
@@ -23,8 +25,7 @@ import {
   mesmoTelefone,
   tabelaTemDadoDePessoa,
 } from "@/lib/external-db/escopo-do-contato";
-import { colunasDaTabela } from "@/lib/external-db/introspeccao";
-import { lerTabela } from "@/lib/external-db/leitura";
+import type { Dialeto } from "@/lib/external-db/dialeto";
 import type { ConexaoExterna } from "@/lib/external-db/types";
 import type { McpContext } from "@/lib/mcp/types";
 import { crmQueryExternalData } from "@/lib/mcp/tools/dados-externos";
@@ -34,6 +35,7 @@ const CONTATO = "22222222-2222-4222-8222-222222222222";
 const CONEXAO: ConexaoExterna = {
   id: "conn-1",
   organizationId: "org-1",
+  dbType: "postgres",
   label: "Loja",
   host: "db.exemplo.com",
   port: 5432,
@@ -44,6 +46,9 @@ const CONEXAO: ConexaoExterna = {
   maxRows: 200,
   maxFilters: 20,
   maxResponseBytes: 30_000,
+  chaveDoCliente: null,
+  sourceMode: "all",
+  fontes: [],
   versao: "v1",
 };
 
@@ -85,7 +90,7 @@ async function consultar(ctx: McpContext, input: Record<string, unknown>) {
 }
 
 beforeEach(() => {
-  vi.mocked(abrirAcesso).mockReset().mockResolvedValue({ ok: true, conexao: CONEXAO, pool: {} as never });
+  vi.mocked(abrirAcesso).mockReset().mockResolvedValue({ ok: true, conexao: CONEXAO, dialeto: motor as unknown as Dialeto });
   vi.mocked(colunasDaTabela).mockReset();
   vi.mocked(lerTabela).mockReset().mockResolvedValue({ colunas: [], linhas: [], limite: 20, offset: 0 });
 });

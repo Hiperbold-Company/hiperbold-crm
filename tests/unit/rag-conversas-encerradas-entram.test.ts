@@ -22,14 +22,16 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => banco }));
 vi.mock("@/lib/ai/embed", () => ({
   embedText: vi.fn(async () => ({ embedding: [0.1, 0.2] })),
 }));
-vi.mock("@/lib/ai/embeddings/chave", () => ({
-  resolverChaveDeEmbedding: vi.fn(async () => ({ chave: "x" })),
+vi.mock("@/lib/ai/embeddings/chave", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ai/embeddings/chave")>()),
+  resolverChaveDeEmbedding: vi.fn(async () => ({ chave: "x", provedor: "openrouter" })),
 }));
 vi.mock("@/lib/legal/perfil-do-pais", () => ({
   perfilDaOrganizacao: vi.fn(async () => ({})),
 }));
 vi.mock("@/lib/ai/anonymize", () => ({
   padroesDePii: vi.fn(() => []),
+  padroesDaIngestao: vi.fn(() => []),
   anonymize: vi.fn((t: string) => ({ anonymized: t, hits: ["x"] })),
   detectResidualPii: vi.fn(() => null),
 }));

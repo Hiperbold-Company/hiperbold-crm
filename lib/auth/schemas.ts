@@ -21,6 +21,8 @@ export const organizationNameSchema = z
 
 const signupBase = {
   org_name: organizationNameSchema,
+  /** Plano da cobrança do revendedor escolhido no link de cadastro (upstream). */
+  cobranca_plan_id: z.string().uuid().optional(),
   email: z.string().email("Email inválido"),
   password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
   password_confirm: z.string(),

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { hashCpf } from "@/lib/contacts/cpf";
-import { gravarCpfDoContatoPorUsuario } from "@/lib/contacts/cpf-do-contato";
+import { cifrarCpfDoContato, gravarCpfDoContatoPorUsuario } from "@/lib/contacts/cpf-do-contato";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import type { PerfilDoPais } from "@/lib/legal/perfil-do-pais";
 import { PERFIS_DO_PAIS } from "@/lib/legal/perfil-do-pais";
@@ -19,7 +19,7 @@ vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 // D-216: o CPF não vai no INSERT do usuário; o servidor o grava à parte (cliente de serviço).
 vi.mock("@/lib/contacts/cpf-do-contato", () => ({
-  cifrarCpfDoContato: vi.fn(async (cpf: string) => `cifrado(${cpf})`),
+  cifrarCpfDoContato: vi.fn(async (_cpf: string): Promise<string | null> => "\\x01"),
   gravarCpfDoContatoPorUsuario: vi.fn(async () => null),
   idsPorHashDeCpf: vi.fn(async () => ({ ids: [], error: null })),
 }));
@@ -37,13 +37,27 @@ interface Resumo {
 
 /** Só as fronteiras externas são dubladas; multipart, CSV e schemas são reais. */
 function banco(opcoes: {
-  existentes?: Array<{ phone_number?: string; email_normalized?: string }>;
+  existentes?: Array<{
+    phone_number?: string;
+    email_normalized?: string;
+    organization_id?: string;
+    is_merged_into?: string | null;
+  }>;
   falhas?: Array<{ code: string; message: string } | null>;
   /** O país declarado pela organização; ausente/`null` é o Brasil. */
   pais?: string | null;
+  /** A RPC `encrypt_cpf` não responde — banco sem a migration 0597 ou sem a chave. */
+  cifraIndisponivel?: boolean;
 } = {}) {
   const tentativas: Record<string, unknown>[] = [];
-  const rpc = vi.fn().mockResolvedValue({ error: null });
+  // `encrypt_cpf` (migration 0597) devolve o ciphertext; sem ele,
+  // `camposCpfParaGravar` grava a linha SEM CPF. `cifraIndisponivel` encena o
+  // banco em que a RPC ainda não existe ou a chave não foi semeada (#2522).
+  const rpc = vi.fn(async (nome: string) => {
+    if (nome !== "encrypt_cpf") return { error: null };
+    if (opcoes.cifraIndisponivel) return { error: { message: "encrypt_cpf RPC unavailable" } };
+    return { data: new Uint8Array([1, 2, 3]), error: null };
+  });
   const from = vi.fn((tabela: string) => {
     // A régua do documento vem do PAÍS da organização (issue #1033): a rota lê a
     // organização UMA vez, na entrada. O dublê libera só essa leitura e segue
@@ -55,15 +69,30 @@ function banco(opcoes: {
         maybeSingle: vi.fn(async () => ({ data: { country: opcoes.pais ?? null }, error: null })),
       };
     }
+    // Spec 31 B1: a pré-checagem de telefone extra lê `contact_phones`. Sem
+    // extra no banco do teste a lista volta vazia — o mesmo que a base antiga.
+    if (tabela === "contact_phones") {
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn(async () => ({ data: [], error: null })),
+      };
+    }
     expect(tabela).toBe("contacts");
     const consulta = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       not: vi.fn().mockReturnThis(),
       in: vi.fn(async (coluna: "phone_number" | "email_normalized", valores: string[]) => {
         expect(consulta.eq).toHaveBeenCalledWith("organization_id", ORG);
+        const filtroDeMescla = consulta.is.mock.calls.find(([campo]) => campo === "is_merged_into");
         return {
-          data: (opcoes.existentes ?? []).filter((r) => valores.includes(r[coluna] ?? "")),
+          data: (opcoes.existentes ?? []).filter((r) =>
+            (r.organization_id ?? ORG) === ORG
+            && valores.includes(r[coluna] ?? "")
+            && (!filtroDeMescla || (r.is_merged_into ?? null) === filtroDeMescla[1]),
+          ),
           error: null,
         };
       }),
@@ -79,7 +108,7 @@ function banco(opcoes: {
     return consulta;
   });
   vi.mocked(createClient).mockResolvedValue({ from, rpc } as never);
-  return { tentativas, rpc };
+  return { tentativas, rpc, from };
 }
 
 async function importar(linhas: string[]): Promise<Resumo> {
@@ -206,6 +235,68 @@ describe("POST /api/v1/contacts/import — desfecho por linha", () => {
   });
 });
 
+describe("POST /api/v1/contacts/import — identificadores depois da mesclagem", () => {
+  const PRINCIPAL = "33333333-3333-4333-8333-333333333333";
+  const CASOS = [
+    {
+      campo: "telefone",
+      linha: `Pessoa,${PHONE},`,
+      identificador: { phone_number: PHONE },
+      principal: { phone_number: "+5521999998888" },
+    },
+    {
+      campo: "e-mail",
+      linha: "Pessoa,,secundario@example.com",
+      identificador: { email_normalized: "secundario@example.com" },
+      principal: { email_normalized: "principal@example.com" },
+    },
+  ];
+
+  it.each(CASOS)("importa $campo que ficou só na ficha absorvida", async ({ linha, identificador, principal }) => {
+    // A fusão só preenche o que o principal não tem. Quando os dois já têm
+    // valores diferentes, o secundário conserva o seu fora do índice único.
+    const db = banco({ existentes: [
+      { ...principal, is_merged_into: null },
+      { ...identificador, is_merged_into: PRINCIPAL },
+    ] });
+
+    const resumo = await importar([linha]);
+
+    expect(resumo).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [] });
+    expect(db.tentativas).toHaveLength(1);
+    expect(db.rpc).toHaveBeenCalledExactlyOnceWith("emit_event", expect.objectContaining({
+      p_event_type: "contact.created", p_organization_id: ORG,
+    }));
+  });
+
+  it.each(CASOS)("continua pulando $campo herdado por um contato ativo", async ({ linha, identificador }) => {
+    const db = banco({ existentes: [
+      { ...identificador, is_merged_into: null },
+      { ...identificador, is_merged_into: PRINCIPAL },
+    ] });
+
+    const resumo = await importar([linha]);
+
+    expect(resumo).toEqual({ total_linhas: 1, imported: 0, skipped_duplicates: 1, errors: [] });
+    expect(db.tentativas).toHaveLength(0);
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each(CASOS)("não reserva $campo de outra organização", async ({ linha, identificador }) => {
+    const db = banco({ existentes: [{
+      ...identificador,
+      organization_id: "44444444-4444-4444-8444-444444444444",
+      is_merged_into: null,
+    }] });
+
+    const resumo = await importar([linha]);
+
+    expect(resumo).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [] });
+    expect(db.tentativas).toHaveLength(1);
+    expect(db.tentativas[0]).toMatchObject({ organization_id: ORG });
+  });
+});
+
 describe("POST /api/v1/contacts/import — a planilha segue o PAÍS da organização (issue #1033)", () => {
   /**
    * País sintético, e não um país de verdade: a issue #1033 proíbe publicar
@@ -216,6 +307,11 @@ describe("POST /api/v1/contacts/import — a planilha segue o PAÍS da organiza�
   const PERFIL_DO_XISTAO: PerfilDoPais = {
     codigo: "XI",
     nome: "Xistão",
+    // País sintético declara os SEUS rótulos de organização (#1946, item 4).
+    empresa: { rotuloNomeLegal: "Razão do Xistão", rotuloNumero: "Registro do Xistão" },
+    // País sintético declara os SEUS papéis legais (#2344).
+    papel: { controlador: "Controlador do Xistão", encarregado: "Encarregado do Xistão" },
+    telefoneExemplo: "+999000000000",
     documento: {
       rotulo: "Bilhete",
       exemplo: "123456789XI000",
@@ -226,6 +322,8 @@ describe("POST /api/v1/contacts/import — a planilha segue o PAÍS da organiza�
       valida: (valor) => /^\d{9}[A-Z]{2}\d{3}$/.test(valor),
       normaliza: (valor) => valor.toUpperCase().replace(/[^0-9A-Z]/g, ""),
     },
+    idioma: "xi-XI",
+    fusoDoSugerido: "UTC",
     lei: { nome: "Lei do Xistão", numero: "Lei nº 1/2020", artigo: "Art. 5º", revisada: false },
     calendario: { feriados: [], rotulo: "feriados do Xistão" },
     padroesDePii: [],
@@ -295,5 +393,95 @@ describe("POST /api/v1/contacts/import — a planilha segue o PAÍS da organiza�
 
     expect(corpo.data?.errors[0]?.motivo).toContain("CPF inválido");
     expect(db.tentativas).toHaveLength(0);
+  });
+});
+
+describe("POST /api/v1/contacts/import — o CPF grava os DOIS campos ou nenhum (#2522)", () => {
+  /** CPF do próprio exemplo da issue: dígitos verificadores válidos. */
+  const CPF = "529.982.247-25";
+
+  async function importarCpf(linhas: string[]) {
+    const form = new FormData();
+    form.set("file", new File(
+      [["nome,telefone,cpf", ...linhas].join("\n")],
+      "contatos.csv",
+      { type: "text/csv" },
+    ));
+    const resposta = await POST(new NextRequest("http://localhost/api/v1/contacts/import", {
+      method: "POST",
+      body: form,
+    }));
+    return { status: resposta.status, corpo: await resposta.json() as { data?: Resumo } };
+  }
+
+  it("o contato nasce SEM CPF e o servidor grava hash E cifra juntos, à parte (Hiperbold D-216)", async () => {
+    const db = banco();
+    const { status, corpo } = await importarCpf([`Ana,${PHONE},${CPF}`]);
+
+    expect(status).toBe(200);
+    expect(corpo.data).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [] });
+    // Hiperbold D-216: o INSERT do usuário não leva o CPF; quem grava é o cliente de serviço, depois.
+    expect(db.tentativas[0]?.cpf_hash).toBeUndefined();
+    expect(db.tentativas[0]).not.toHaveProperty("cpf_encrypted");
+    expect(gravarCpfDoContatoPorUsuario).toHaveBeenCalledTimes(1);
+    expect(gravarCpfDoContatoPorUsuario).toHaveBeenCalledWith(ORG, "contato-1", {
+      hash: hashCpf(CPF),
+      cifrado: "\\x01",
+    });
+  });
+
+  it("sem cifra disponível a linha vai para os erros e nada é gravado — nunca cpf_hash sozinho (#2522)", async () => {
+    const db = banco();
+    vi.mocked(cifrarCpfDoContato).mockResolvedValueOnce(null);
+    const { status, corpo } = await importarCpf([`Ana,${PHONE},${CPF}`]);
+
+    // Hiperbold D-216: o par hash+cifra ou nenhum. Sem cifra, a linha não entra e o motivo diz por quê.
+    expect(status).toBe(200);
+    expect(corpo.data).toMatchObject({ total_linhas: 1, imported: 0, skipped_duplicates: 0 });
+    expect(corpo.data?.errors).toHaveLength(1);
+    expect(corpo.data?.errors[0]?.motivo).toMatch(/CPF indispon/);
+    expect(db.tentativas).toHaveLength(0);
+    expect(gravarCpfDoContatoPorUsuario).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #3718 — CRIAR CONTATO ABRE CONVERSA? ESTA PORTA NÃO, E ISSO É REGRA.
+ *
+ * A criação unitária (`POST /api/v1/contacts`) abre a conversa do contato novo.
+ * A importação em lote não abre — a decisão é uma só e mora em
+ * `lib/contacts/conversa-ao-criar.ts`, consultada aqui com a porta
+ * `importacao_csv`. O que se mede: a consulta acontece e responde ANTES de
+ * qualquer leitura, então a planilha cheia custa ZERO por este caminho. Se
+ * alguém "consertar" a importação abrindo conversa para todos, este teste cai —
+ * e cai junto o `expect(tabela).toBe("contacts")` do banco falso, que não
+ * conhece `channel_sessions` de propósito.
+ *
+ * O preço que a regra evita, para ficar registrado no teste que o protege: até
+ * 500 linhas por arquivo (`CSV_MAX_DATA_ROWS`), cada uma custaria 1–2 SELECT em
+ * `channel_sessions` + RPC `fn_service_begin` (lock, leituras e INSERT em
+ * `conversations`) — ~2.500 statements e 500 conversas `open` na caixa de
+ * entrada.
+ */
+describe("POST /api/v1/contacts/import — não abre conversa para o lote (#3718)", () => {
+  it("contato importado com telefone: nenhuma leitura de sessão e nenhuma abertura de conversa", async () => {
+    const db = banco();
+
+    const resumo = await importar([`Ana,${PHONE},`]);
+
+    expect(resumo).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [] });
+    // O falso só conhece `organizations`, `contact_phones` e `contacts` — uma
+    // consulta a `channel_sessions` estouraria dentro do `from`, aqui.
+    const tabelas = db.from.mock.calls.map(([tabela]) => tabela);
+    expect(tabelas).not.toContain("channel_sessions");
+    // E nenhuma conversa é aberta: a única RPC do caminho é o `emit_event`.
+    expect(db.rpc.mock.calls.map(([nome]) => nome)).toEqual(["emit_event"]);
+  });
+
+  it("a regra é a MESMA das duas portas: só a porta unitária responde que abre", async () => {
+    const { abreConversaAoCriar } = await import("@/lib/contacts/conversa-ao-criar");
+
+    expect(abreConversaAoCriar("importacao_csv")).toBe(false);
+    expect(abreConversaAoCriar("manual")).toBe(true);
   });
 });

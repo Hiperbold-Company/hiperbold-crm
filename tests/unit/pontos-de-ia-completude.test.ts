@@ -27,6 +27,12 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import {
+  CONFERENCIA_DE_CAMPO,
+  PEDIDOS_DO_CLIENTE,
+  rotuloDaChamadaDoJev,
+  SINAL_DE_URGENCIA,
+} from "@/lib/ai/decisao/tarefas";
+import {
   PONTOS_DE_IA,
   pontosPorPapel,
   type PontoDeIa,
@@ -54,7 +60,13 @@ function purposesDoTexto(texto: string, arquivo = "source.ts"): string[] {
       const enqueueResult = ts.isObjectLiteralExpression(object) && ts.isReturnStatement(object.parent) &&
         object.properties.some(p => ts.isPropertyAssignment(p) && p.name.getText(ast) === "kind" &&
           ts.isStringLiteralLike(p.initializer) && p.initializer.text === "enqueue_turn");
-      if (!enqueueResult) result.push(...literals(node.initializer));
+      // Ícone do manifest (`{ src, sizes, purpose: "maskable" }`, ImageResource
+      // da especificação do Web App Manifest) também não é chamada: mesma régua
+      // de forma, pelas propriedades irmãs.
+      const temIrma = (nome: string) => ts.isObjectLiteralExpression(object) &&
+        object.properties.some(p => ts.isPropertyAssignment(p) && p.name.getText(ast).replace(/["']/g, "") === nome);
+      const iconeDoManifest = temIrma("src") && temIrma("sizes");
+      if (!enqueueResult && !iconeDoManifest) result.push(...literals(node.initializer));
     }
     ts.forEachChild(node, visit);
   };
@@ -117,6 +129,24 @@ const FORA_DO_SEAM: Record<string, { arquivo: string; marcador: string }> = {
   },
 };
 
+/**
+ * `purpose` que NÃO é ponto do registro, de propósito: a chamada do Jev que
+ * pergunta as tarefas sem ponto (`lib/ai/decisao/pedidos.ts`). Não há modelo
+ * para escolher ali — o Jev não se escolhe por ponto, e a regra que ele
+ * acompanha não usa IA —, então um ponto no registro seria o botão que não
+ * controla nada que o segundo caso abaixo reprova. Quem a nomeia é outra tela:
+ * IA › Execuções e o cartão do Jev, por `rotuloDaChamadaDoJev` — e o caso
+ * "a chamada do Jev sem ponto" confere que ela tem nome e é de fato emitida.
+ */
+const CHAMADAS_DO_JEV_SEM_PONTO: ReadonlySet<string> = new Set([
+  PEDIDOS_DO_CLIENTE.purpose,
+  // A conferência de campo (#2234): as perguntas são por CAMPO, não por tarefa.
+  CONFERENCIA_DE_CAMPO.purpose,
+  // O sinal de urgência da mensagem represada (#2232): a pergunta é do turno,
+  // e quem decide se ela vale é a regra léxica, sem modelo nenhum.
+  SINAL_DE_URGENCIA.purpose,
+]);
+
 describe("registro de pontos de IA × código", () => {
   const emitidos = purposesEmitidosNoCodigo();
   it("instrumento lê os dois ramos e aspas distintas sem contar tipos/comentários", () => {
@@ -129,6 +159,8 @@ describe("registro de pontos de IA × código", () => {
     expect(purposesDoTexto(`const a = { purpose: payload.purpose };`)).toEqual([]);
     expect(purposesDoTexto(`function queue() { return { kind: "enqueue_turn", purpose: "send_message" }; }`)).toEqual([]);
     expect(purposesDoTexto(`runModelCall(db, cfg, { purpose: "send_message" });`)).toEqual(["send_message"]);
+    expect(purposesDoTexto(`const icons = [{ src: "/i", sizes: "512x512", purpose: "maskable" }];`)).toEqual([]);
+    expect(purposesDoTexto(`runModelCall(db, cfg, { src: "x", purpose: "agent_turn" });`)).toEqual(["agent_turn"]);
   });
 
   it("a varredura enxerga o código (controle positivo)", () => {
@@ -145,7 +177,7 @@ describe("registro de pontos de IA × código", () => {
     const registrados = new Set(PONTOS_DE_IA.map((p) => p.id));
 
     const orfaos = [...emitidos.entries()]
-      .filter(([purpose]) => !registrados.has(purpose))
+      .filter(([purpose]) => !registrados.has(purpose) && !CHAMADAS_DO_JEV_SEM_PONTO.has(purpose))
       .map(([purpose, arquivos]) => `${purpose} (emitido em ${arquivos.join(", ")})`);
 
     expect(
@@ -153,6 +185,14 @@ describe("registro de pontos de IA × código", () => {
       "purpose que o código emite mas a tela de provedores não mostra — " +
         "ponto oculto, que é justamente o que este registro existe para acabar",
     ).toEqual([]);
+  });
+
+  it("a chamada do Jev sem ponto é emitida, tem nome de gente e não é ponto do registro", () => {
+    for (const purpose of CHAMADAS_DO_JEV_SEM_PONTO) {
+      expect(emitidos.has(purpose), `${purpose} não é emitido: a exceção ficou sem objeto`).toBe(true);
+      expect(PONTOS_DE_IA.some((p) => p.id === purpose), `${purpose} virou ponto: tire-o da exceção`).toBe(false);
+      expect(rotuloDaChamadaDoJev(purpose), `${purpose} apareceria cru em Execuções`).not.toBeNull();
+    }
   });
 
   it("todo ponto do registro é emitido por algum código", () => {
@@ -233,6 +273,10 @@ describe("capacidade exigida", () => {
     // tela. É o defeito que o painel precisa tornar impossível de configurar.
     expect(porId("agent_turn").exige.tools).toBe(true);
     expect(porId("operator_turn").exige.tools).toBe(true);
+    // O follow-up é o MESMO turno do agente, com as mesmas ferramentas na mão
+    // do modelo: se o ponto não exigisse, o painel deixaria escolher para ele o
+    // modelo que escreve bem e não opera o CRM.
+    expect(porId("followup_turn").exige.tools).toBe(true);
   });
 
   it("os pontos de embedding declaram a dimensão do contrato", () => {

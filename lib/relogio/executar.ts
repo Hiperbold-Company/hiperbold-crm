@@ -28,6 +28,7 @@ import { enviarTextoFixoPendente } from "@/lib/followup/enviar-texto-fixo";
 import type { EnrollmentEventRef, EnrollmentRow } from "@/lib/followup/node-handlers";
 import { createSupabaseSilenceSweepDb, runSilenceSweep } from "@/lib/followup/silence-sweep";
 import { logger } from "@/lib/logger";
+import { STATUS_OPERANTE, ehOperante, statusDaOrgEmbutida } from "@/lib/organizacao/operante";
 import { runRoutingWorker } from "@/lib/routing/worker";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -94,14 +95,21 @@ export const TETO_DE_AGUARDANDO_RESPOSTA = 2000;
  * do CHECK `followup_enrollments_lane_check`): a resposta a um bloco de
  * conversa só é processada por este relógio — o follow-up tem o próprio
  * worker —, e o corte do teto não pode deixá-la de fora.
+ *
+ * Org parada não avança fluxo (migration 0501 — o claim do motor também a pula).
+ * O corte é no banco, ANTES da paginação: o embed `!inner` + o filtro de
+ * status. Filtrar só em memória deixaria as linhas da org parada (suspender não
+ * mexe nelas) ocuparem a janela. Nunca uma lista de ids negada na URL — ela
+ * cortaria em `max_rows` sem aviso e a org parada voltaria a avançar fluxo.
  */
 export async function lerAguardandoResposta(admin: SupabaseClient): Promise<unknown[]> {
   const linhas: unknown[] = [];
   for (let de = 0; de < TETO_DE_AGUARDANDO_RESPOSTA; de += PAGINA_DE_AGUARDANDO_RESPOSTA) {
     const { data, error } = await admin
       .from("followup_enrollments")
-      .select("*")
+      .select("*, organizations:organization_id!inner(status)")
       .in("status", ["waiting_reply"])
+      .eq("organizations.status", STATUS_OPERANTE)
       .order("lane", { ascending: true })
       .order("id", { ascending: true })
       .range(de, de + PAGINA_DE_AGUARDANDO_RESPOSTA - 1);
@@ -116,11 +124,31 @@ export async function lerAguardandoResposta(admin: SupabaseClient): Promise<unkn
   return linhas;
 }
 
-async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps): Promise<number> {
+export async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: TickDeps): Promise<number> {
   const aguardando = await lerAguardandoResposta(admin);
   let n = 0;
-  for (const row of aguardando) {
+  // ponytail: cinto — o banco já cortou; isto só segura quem tirar o filtro acima.
+  const linhas = aguardando.filter((row) =>
+    ehOperante(
+      statusDaOrgEmbutida(
+        (row as { organizations?: { status?: string | null } | Array<{ status?: string | null }> | null })
+          .organizations,
+      ),
+    ),
+  );
+  for (const row of linhas) {
     const enrollment = row as EnrollmentRow;
+    // Contato pessoal (spec 21, caminho 5 — follow-up morno): a resposta dele
+    // não move enrollment nenhum. Uma leitura por linha, e não um join: são no
+    // máximo 40 por tick, e o filtro já cortou a org parada no banco.
+    const { data: contato, error: contatoErr } = await admin
+      .from("contacts")
+      .select("is_personal")
+      .eq("organization_id", enrollment.organization_id)
+      .eq("id", enrollment.contact_id)
+      .maybeSingle();
+    if (contatoErr) throw new Error(contatoErr.message);
+    if ((contato as { is_personal?: boolean } | null)?.is_personal === true) continue;
     const ids = await idsDoContatoEGemeos(admin, enrollment.organization_id, enrollment.contact_id);
     if (enrollment.lane === "automacao") {
       // Automação esperando resposta (mensagem com opções, pergunta, "até

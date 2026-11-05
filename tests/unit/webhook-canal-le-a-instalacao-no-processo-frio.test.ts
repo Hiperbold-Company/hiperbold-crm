@@ -46,12 +46,17 @@ vi.mock("@/lib/supabase/admin", () => ({
       if (tabela === "platform_settings") {
         return {
           select: () => ({
-            eq: () => ({
-              maybeSingle: async () => {
-                leiturasDaInstalacao.n += 1;
-                return { data: linhaDaInstalacao.atual, error: null };
-              },
-            }),
+            eq: () => {
+              const leitura = {
+                // A leitura passa `abortSignal` (fora da deduplicação de fetch do Next, #1218).
+                abortSignal: () => leitura,
+                maybeSingle: async () => {
+                  leiturasDaInstalacao.n += 1;
+                  return { data: linhaDaInstalacao.atual, error: null };
+                },
+              };
+              return leitura;
+            },
           }),
         };
       }

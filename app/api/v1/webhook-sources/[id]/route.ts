@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
 import { autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
-import { ok, fail, noContent } from "@/lib/api/wrappers";
+import { ok, fail, falhaInterna, noContent } from "@/lib/api/wrappers";
 import { respostaDeRecusa } from "@/lib/api/recusa";
 import {
   atualizarEntradaAutomatica,
@@ -22,9 +22,27 @@ import {
 } from "@/lib/operacao/entradas-automaticas";
 import { updateWebhookSourceSchema } from "@/lib/schemas";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { opcaoSemAssinatura } from "@/lib/webhooks/assinatura-autorizacao";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * A frase de cada opção que exige assinatura (#2316).
+ *
+ * Literal e no arquivo, e não montada com `opcao`: a chave do dicionário de i18n
+ * é o TEXTO em português. Uma frase interpolada existiria só neste ponto do
+ * código e a varredura de tradução não a veria — a tela em espanhol mostraria
+ * português, e `i18n-espanhol-cobre-a-tela` só acusaria se alguém compusesse a
+ * string em JSX.
+ */
+const FRASE_DA_OPCAO_SEM_ASSINATURA = {
+  ai: "Configure a assinatura da fonte antes de autorizar IA. Para remover a assinatura, desligue primeiro a autorização de IA.",
+  update_lead:
+    "Configure a assinatura da fonte antes de deixar a integração atualizar o card. Para remover a assinatura, desligue primeiro a atualização pelo external_id.",
+  reuse_lead:
+    "Configure a assinatura da fonte antes de reaproveitar o card aberto do contato. Para remover a assinatura, desligue primeiro o reaproveitamento do card aberto.",
+} as const;
 
 interface RouteCtx {
   params: Promise<{ id: string }>;
@@ -58,6 +76,31 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
       requestId,
       details: parsed.error.flatten(),
     });
+  }
+
+  // Conferência do upstream (#2316, #3101) antes da regra de `atualizarEntradaAutomatica`: vale para a
+  // sessão e para o token `dsk_`. Lida pelo cliente da porta, presa à organização dela.
+  const { data: existing, error: fetchErr } = await authz.supabase
+    .from("webhook_sources")
+    .select("id, authorize_ai_on_capture, update_existing_lead_on_capture, reuse_open_lead_on_capture, secret_encrypted")
+    .eq("id", id)
+    .eq("organization_id", authz.organizationId)
+    .maybeSingle();
+  if (fetchErr) return falhaInterna("internal_error", fetchErr, { requestId });
+  if (!existing) return fail("not_found", t("Fonte não encontrada."), 404, { requestId });
+
+  // As opções que dependem de prova de origem (#2316, #3101) recusam pelo mesmo
+  // lugar — e cada uma com a própria frase: uma mensagem só para todas faria
+  // quem ligou a atualização de card ler "autorizar IA" e procurar o problema
+  // na tela errada.
+  const opcaoQuePedeAssinatura = opcaoSemAssinatura(existing, parsed.data);
+  if (opcaoQuePedeAssinatura) {
+    return fail(
+      "signature_required",
+      t(FRASE_DA_OPCAO_SEM_ASSINATURA[opcaoQuePedeAssinatura]),
+      422,
+      { requestId },
+    );
   }
 
   // secret plaintext do input vira secret_encrypted (migration 0041); a coluna

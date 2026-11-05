@@ -2,19 +2,20 @@
 
 import { headers } from "next/headers";
 
+import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { createClient } from "@/lib/supabase/server";
 import { forgotPasswordSchema, type ForgotPasswordInput } from "@/lib/auth/schemas";
 import { audit, hashEmail } from "@/lib/audit";
 import { authRateLimited, AUTH_LIMITS } from "@/lib/auth/rate-limit";
 import { env } from "@/lib/env";
-import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { captchaRecusadoPeloGoTrue } from "@/lib/security/turnstile";
+import { semSmtpNaInstalacao } from "@/lib/email/estado";
 
 export type RequestPasswordResetResult =
   | { ok: true }
   | {
       ok: false;
-      error: "validation_error" | "rate_limited" | "request_failed" | "captcha_failed";
+      error: "validation_error" | "rate_limited" | "smtp_not_configured" | "request_failed" | "captcha_failed";
       details?: Record<string, unknown>;
     };
 
@@ -53,6 +54,12 @@ export async function requestPasswordReset(
   if (await authRateLimited("reset", parsed.data.email, AUTH_LIMITS.reset)) {
     return { ok: false, error: "rate_limited" };
   }
+
+  // #2755 — decidido ANTES de chamar o GoTrue, sem olhar o que ele responde:
+  // assim a resposta depende só da instalação, nunca do e-mail digitado. A
+  // régua é compartilhada com quem AVISA (o painel de atualização), em
+  // `lib/email/estado.ts`.
+  if (await semSmtpNaInstalacao()) return { ok: false, error: "smtp_not_configured" };
 
   const supabase = await createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {

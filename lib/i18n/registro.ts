@@ -74,6 +74,18 @@ export const REGISTRO_DE_IDIOMAS = [
     mantenedor: "mantenedores do projeto",
   },
   {
+    codigo: "tr",
+    nomeNativo: "Türkçe",
+    rotuloCurto: "TR",
+    tagBcp47: "tr",
+    subtagsDoNavegador: ["tr"],
+    // O primeiro idioma com catálogo completo (`lib/i18n/traducoes/tr.json`).
+    // Entra em construção, como o chinês (doc de decisão 198): aparece quando
+    // houver a carga por idioma e a régua de telas principais (fatia 5).
+    nivel: "em_construcao",
+    mantenedor: "Agenterix (@nusretbayindir-stack)",
+  },
+  {
     codigo: "zh-CN",
     nomeNativo: "简体中文",
     rotuloCurto: "中",
@@ -83,6 +95,19 @@ export const REGISTRO_DE_IDIOMAS = [
     // catálogo é o que deixa o catálogo entrar sem aparecer para ninguém.
     nivel: "em_construcao",
     mantenedor: null,
+  },
+  {
+    codigo: "en",
+    nomeNativo: "English",
+    rotuloCurto: "EN",
+    // `en` e não `en-US`, pela mesma razão do `es`: com a tag pura o navegador
+    // resolve pela região de quem lê (data, número), em vez de impor os EUA.
+    tagBcp47: "en",
+    subtagsDoNavegador: ["en"],
+    // Catálogo em `lib/i18n/traducoes/en.json`, lido por `catalogos.ts` (fatia 4
+    // do PROG-022). Promovido a `completo` no Hiperbold CRM em 04/11/2026 (D-225).
+    nivel: "completo",
+    mantenedor: "Hiperbold",
   },
 ] as const satisfies readonly IdiomaRegistrado[];
 

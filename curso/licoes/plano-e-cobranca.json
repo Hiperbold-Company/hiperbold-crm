@@ -1,0 +1,197 @@
+{
+  "id": "plano-e-cobranca",
+  "titulo": "Meu plano",
+  "tela": "/app/settings/plano",
+  "resumo": "Onde você vê o plano da sua empresa, a situação da assinatura, quanto do plano já usa, o consumo de IA do mês e onde assina, compra tokens ou cancela.",
+  "licoes": [
+    {
+      "id": "conhecendo-seu-plano",
+      "titulo": "Conhecendo seu plano",
+      "objetivo": "Achar a tela, ler o plano contratado, a situação da assinatura e quanto de cada item do plano a empresa já usa.",
+      "papel": "admin",
+      "busca": [
+        "meu plano",
+        "plano e cobrança",
+        "assinatura",
+        "mensalidade",
+        "quanto eu pago",
+        "limite do plano",
+        "vencimento",
+        "tokens de ia",
+        "pagamento do sistema"
+      ],
+      "passos": [
+        {
+          "id": "p1",
+          "titulo": "Onde fica a tela",
+          "texto": "Abra \"Configurações\", no rodapé do menu lateral. Na parte \"Sua empresa\" está o cartão \"Meu plano\". Clique nele.",
+          "dica": "Administrador e gerente abrem esta tela. O atendente que digitar o endereço cai na página \"Sem permissão\".",
+          "rota": "/app/settings",
+          "antes": [],
+          "destaques": [
+            {
+              "alvo": {
+                "css": "a[href='/app/settings/plano']"
+              },
+              "rotulo": "Meu plano",
+              "tipo": "seta"
+            }
+          ],
+          "clicar": {
+            "css": "a[href='/app/settings/plano']"
+          }
+        },
+        {
+          "id": "p2",
+          "titulo": "Seu plano e a situação da assinatura",
+          "texto": "No alto, abaixo do título, aparece o nome do plano que a sua empresa assina. O quadro \"Assinatura\" mostra a situação em um selo: \"Em dia\" quer dizer que está tudo pago. Os outros selos são \"Em avaliação\" (período de teste, com a data em que termina), \"Atrasada\" (com a data em que o sistema passa a modo leitura), \"Suspensa\" e \"Cancelada\". Logo abaixo vem a data do próximo vencimento.",
+          "dica": "Em modo leitura, o mesmo quadro explica o que para (a IA, as automações, as campanhas de disparo, os follow-ups e a criação de funil, etapa, integração e convite) e o que continua (receber mensagem, responder à mão, ler tudo e criar lead).",
+          "antes": [
+            {
+              "acao": "click",
+              "alvo": {
+                "css": "a[href='/app/settings/plano']"
+              }
+            },
+            {
+              "acao": "aguardar",
+              "alvo": {
+                "role": "heading",
+                "nome": "Meu plano",
+                "exato": true
+              }
+            }
+          ],
+          "destaques": [
+            {
+              "alvo": {
+                "texto": "Em dia",
+                "exato": true
+              },
+              "rotulo": "Situação da assinatura",
+              "tipo": "seta"
+            },
+            {
+              "alvo": {
+                "texto": "Próximo vencimento"
+              },
+              "rotulo": "Próximo vencimento",
+              "tipo": "caixa"
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "titulo": "Quanto do plano você já usa",
+          "texto": "O quadro de uso compara, item por item, o que a empresa usa com o limite do plano: \"Funis\", \"Etapas por funil\" (o número é do funil com mais etapas ativas), \"Membros\", \"Conexões\" (WhatsApp, Instagram e Messenger somados), \"Integrações webhook\" e \"Leads\". A barra enche conforme o uso, e o item que chegou ao limite ganha o selo \"No teto\". Quando o plano não tem limite para um item, aparece \"sem limite\".",
+          "dica": "A faixa amarela acima do quadro diz o que bloqueia hoje: só o limite de Conexões impede conectar mais um canal; os outros itens apenas avisam. Para crescer, assine um plano maior, como mostra a próxima lição.",
+          "antes": [],
+          "destaques": [
+            {
+              "alvo": {
+                "css": "div.divide-y:has([role='progressbar'][aria-label='Funis'])"
+              },
+              "rotulo": "Uso contra o limite do plano",
+              "tipo": "caixa"
+            },
+            {
+              "alvo": {
+                "texto": "Nesta fase só o limite de Conexões bloqueia. Os demais itens apenas avisam.",
+                "exato": true
+              },
+              "rotulo": "O que bloqueia",
+              "tipo": "seta"
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "titulo": "Tokens de IA do mês",
+          "texto": "No fim da tela, \"Tokens de IA\" mostra o consumo do mês contra o que está disponível, o saldo de cada fonte (\"Do plano contratado\", \"Assinatura adicional\" e \"Pacote avulso\") e uma estimativa de quantas respostas da IA ainda cabem. O \"Extrato do mês\" separa o consumo por dia e por agente.",
+          "dica": "Enquanto ainda não há consumo suficiente, a estimativa usa uma média de referência, e a tela avisa isso logo abaixo do número.",
+          "antes": [],
+          "destaques": [
+            {
+              "alvo": {
+                "texto": "Tokens de IA",
+                "exato": true
+              },
+              "rotulo": "Consumo de IA do mês",
+              "tipo": "seta"
+            },
+            {
+              "alvo": {
+                "texto": "Extrato do mês",
+                "exato": true
+              },
+              "rotulo": "Por dia e por agente",
+              "tipo": "numero"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "assinatura-e-pagamento",
+      "titulo": "Assinar, comprar tokens e cancelar",
+      "objetivo": "Saber onde se assina um plano, compra um pacote de tokens e cancela a assinatura, e o que acontece depois de cancelar.",
+      "papel": "admin",
+      "busca": [
+        "trocar de plano",
+        "assinar plano",
+        "plano maior",
+        "comprar tokens",
+        "pacote de tokens",
+        "cancelar assinatura",
+        "cancelar plano",
+        "reembolso",
+        "até quando tenho acesso"
+      ],
+      "passos": [
+        {
+          "id": "p1",
+          "titulo": "O quadro Assinatura e pagamento",
+          "texto": "Só o administrador da empresa vê o quadro \"Assinatura e pagamento\". Quando a compra pela tela está ligada, ele traz os botões \"Assinar um plano\" e \"Comprar pacote de tokens\", que abrem a página de compra com os planos e os pacotes à venda. Quando não está, o quadro diz \"A compra pela tela ainda não está disponível. Fale com o suporte.\"",
+          "dica": "Plano pago parcelado no cartão não renova sozinho: o quadro mostra até que dia vai o acesso e pede uma nova compra antes do fim do período.",
+          "rota": "/app/settings/plano",
+          "antes": [
+            {
+              "acao": "aguardar",
+              "alvo": {
+                "role": "heading",
+                "nome": "Meu plano",
+                "exato": true
+              }
+            }
+          ],
+          "destaques": [
+            {
+              "alvo": {
+                "texto": "Assinatura e pagamento",
+                "exato": true
+              },
+              "rotulo": "Assinar, comprar e cancelar",
+              "tipo": "caixa"
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "titulo": "Cancelar e o que acontece depois",
+          "texto": "Com uma assinatura paga pela tela, o mesmo quadro mostra o botão \"Cancelar assinatura\". Ele abre uma confirmação que pede o motivo e avisa: o cancelamento vale a partir do fim do período já pago, e o acesso continua até lá. Depois de confirmar, o quadro diz \"Assinatura cancelada, acesso até\" a data, e o quadro \"Assinatura\" avisa que a assinatura cancela no fim do período.",
+          "dica": "Se o último pagamento tiver até 7 dias, aparece o botão para pedir o reembolso depois de cancelar. Passado esse prazo, a tela avisa que a garantia de 7 dias já passou.",
+          "antes": [],
+          "destaques": [
+            {
+              "alvo": {
+                "texto": "Próximo vencimento"
+              },
+              "rotulo": "O acesso vai até o fim do período",
+              "tipo": "caixa"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

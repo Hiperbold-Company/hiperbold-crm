@@ -86,15 +86,21 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
       "Ela é SEM `if:` de propósito — pulada, ela deixaria `build-and-push` pulado junto " +
       "e o `imagens-ok` leria `skipped` como reprovação.",
   },
-  // Em pull_request ele só construía e descartava as MESMAS três imagens que os
-  // dois jobs `*-sobe` já constroem — 3 builds Docker por push de PR sem medir
+  // Em pull_request ele só construía e descartava as MESMAS quatro imagens que os
+  // dois jobs `*-sobe` já constroem — 4 builds Docker por push de PR sem medir
   // nada a mais. A condição tira só o PR; o `imagens-ok` exige `success` dele
   // em todo outro evento e aceita `skipped` só em pull_request.
   "publish-image.yml::build-and-push": {
     condicao: "github.event_name != 'pull_request'",
     efeito:
-      "Este job PUBLICA as três imagens no GHCR — é o artefato que o self-hoster instala. " +
+      "Este job PUBLICA as quatro imagens no GHCR — é o artefato que o self-hoster instala. " +
       "Desligá-lo faz a tag existir sem imagem por trás dela.",
+  },
+  "publish-image.yml::juntar-manifestos": {
+    condicao: "github.event_name != 'pull_request'",
+    efeito:
+      "Este job junta os builds nativos AMD64 e ARM64 em cada tag que o cliente puxa. " +
+      "Desligá-lo deixa as tags finais sem um manifesto multi-arquitetura utilizável.",
   },
   // A condição só é falsa em pull_request que não alcança imagem nenhuma
   // (scripts/pr-mexe-na-imagem.sh); fora de PR o output é sempre `sim`. O
@@ -212,11 +218,22 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
       "rodam e o agregador `e2e` reprova — o PORTAO dele exige `success` aqui.",
   },
   "e2e.yml::e2e-parte": {
-    condicao: "needs.e2e-alcance.outputs.e2e == 'sim'",
+    // #2449: ganhou um segundo pulo deliberado. O passo inicial do `e2e-alcance`
+    // compara o `head.sha` do evento com o head ATUAL do PR pela API; sendo
+    // velho, entrega `head_velho=sim` e este job nem nasce — é o pulo que tira
+    // o run superado da fila do grupo de concorrência, onde ele cancelou as
+    // partes do head novo no #2437 (run 37491737771). O agregador `e2e` NÃO
+    // aceita esse pulo: ele REPROVA o run de head superado, com mensagem
+    // própria, porque o check daquele run está num SHA que já não é o head
+    // (vigiado por e2e-so-aceita-pulo-declarado.test.ts e por
+    // e2e-head-velho-nao-rouba-a-vaga.test.ts).
+    condicao:
+      "needs.e2e-alcance.outputs.e2e == 'sim' && needs.e2e-alcance.outputs.head_velho != 'sim'",
     efeito:
-      "São as partes da matriz Playwright. Só pulam em PR que não alcança nada que o " +
-      "e2e mede (scripts/pr-alcanca-o-e2e.sh), e o agregador `e2e` só aceita o pulo com " +
-      "`e2e=nao` — vigiado por e2e-so-aceita-pulo-declarado.test.ts.",
+      "São as partes da matriz Playwright. Pulam em PR que não alcança nada que o " +
+      "e2e mede (scripts/pr-alcanca-o-e2e.sh) — único pulo que o agregador `e2e` aceita — " +
+      "ou em run de head já superado (#2449), e nesse caso o agregador REPROVA de propósito: " +
+      "vigia em e2e-so-aceita-pulo-declarado.test.ts.",
   },
   "e2e.yml::e2e": {
     condicao: "always()",
@@ -227,6 +244,19 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   "perf.yml::build-and-size": {
     condicao: null,
     efeito: "Este é o check obrigatório `build-and-size` (`pnpm build` em Node 22).",
+  },
+  "mysql-integracao.yml::integracao-mysql": {
+    condicao: null,
+    efeito:
+      "Este job roda o dialeto MySQL contra um MySQL 8 de verdade (somente-leitura, catálogo, TLS, " +
+      "trava de metadados). É INFORMATIVO — não é check obrigatório. Se não rodar, o suporte a MySQL " +
+      "volta a ser provado só por teste com driver simulado, sem nenhum erro visível.",
+  },
+  "mysql-integracao.yml::standalone-leva-mysql2": {
+    condicao: null,
+    efeito:
+      "Este job confere que o build `standalone` do app leva o `mysql2`. É INFORMATIVO — não é check " +
+      "obrigatório. Se não rodar, uma imagem sem o driver só aparece quando alguém conecta um MySQL na VPS.",
   },
 
   // --- e o que legitimamente tem interruptor -----------------------------------

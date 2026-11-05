@@ -14,6 +14,28 @@ vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: async () => ({ id: "u1", is_platform_admin: true, idioma: "pt-BR", organizations: [] }),
   resolveActiveOrg: async () => ({ orgId: "o1", role: "admin" }),
   mfaEmDivida: async () => estado.emDivida,
+  // A rota de atualização passa pelo portão do upstream (`requirePlatformAdminEscrita`), que pergunta
+  // pela régua estrita; a dívida é a mesma.
+  mfaEmDividaEstrita: async () => estado.emDivida,
+}));
+// `requirePlatformAdmin` (real) lê a sessão e a linha de `platform_admins` pelo cliente de cookie:
+// um dono da instalação de escopo `full`, sem fator e sem política que exija.
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => {
+    const consulta = {
+      select: () => consulta,
+      eq: () => consulta,
+      is: () => consulta,
+      maybeSingle: async () => ({
+        data: { user_id: "u1", scope: "full", mfa_required: false, revoked_at: null },
+        error: null,
+      }),
+    };
+    return {
+      auth: { getUser: async () => ({ data: { user: { id: "u1", factors: [] } }, error: null }) },
+      from: () => consulta,
+    };
+  },
 }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => {

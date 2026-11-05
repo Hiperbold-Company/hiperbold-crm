@@ -1,11 +1,16 @@
 import webpush from "web-push";
 
+import { roleAtLeast, type Role } from "@/lib/auth/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 import { env } from "@/lib/env";
 import { endpointDePushPermitido } from "./endpoint-de-push";
 import { vapidPronto, vapidPublica, vapidSubject } from "./vapid";
+import { ehServicoDePushConhecido } from "./servicos-de-push";
 import type { PushPayload } from "./push_payload";
+import { lerTelaBloqueada, redigirParaATelaBloqueada } from "./tela-bloqueada";
+
+type Admin = ReturnType<typeof createAdminClient>;
 
 export type PushSubRow = {
   id: string;
@@ -15,113 +20,69 @@ export type PushSubRow = {
   auth: string;
 };
 
-type Linha = Record<string, unknown>;
+type Inscricao = PushSubRow & { user_id: string };
 
-type AdminLike = {
-  from: (table: string) => {
-    select: (cols: string) => {
-      eq: (col: string, val: string) => Promise<{ data: Linha[] | null; error: { message: string } | null }>;
-    };
-    delete: () => {
-      eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
-    };
-  };
-};
+const NADA = { sent: 0, gone: 0 } as const;
 
 /**
- * Quem pode receber. A inscrição é só um endereço de entrega: o direito de ver o
- * conteúdo vem do vínculo ATIVO com a organização e do papel, e o envio roda com a
- * chave de serviço, que ignora a RLS (D-097).
+ * Quem tem vínculo ativo na organização — e, com `papelMinimo`, o papel que o
+ * alcança. `null` quando a leitura falha: ninguém recebe.
  */
-export type DestinatariosDoPush = {
-  /** Só este usuário (aviso pessoal: menção, negócio atribuído). */
-  userId?: string;
-  /**
-   * A conversa a que o push se refere, para respeitar quem pode vê-la. Sem isto o
-   * push só exige vínculo ativo (avisos da Central não são de uma conversa).
-   */
-  conversa?: { assignedToUserId: string | null; modoDeVisibilidade: string | null };
-};
-
-/** Mesma regra de `fn_can_view_conversation`: só o papel `agent` é restrito. */
-export function papelPodeVerConversa(
-  papel: string,
-  userId: string,
-  conversa: { assignedToUserId: string | null; modoDeVisibilidade: string | null },
-): boolean {
-  if (papel === "viewer" || papel === "manager" || papel === "admin") return true;
-  if (papel !== "agent") return false;
-  if (conversa.assignedToUserId === userId) return true;
-  switch (conversa.modoDeVisibilidade ?? "own_and_unassigned") {
-    case "all":
-      return true;
-    case "own_and_unassigned":
-      return conversa.assignedToUserId === null;
-    default:
-      return false;
-  }
-}
-
-function store(admin: AdminLike) {
-  return admin.from("push_subscriptions");
-}
-
-export async function enviarPushDaOrg(
+async function membrosAtivos(
+  admin: Admin,
   organizationId: string,
-  payload: PushPayload,
-  admin: AdminLike = createAdminClient() as unknown as AdminLike,
-  destinatarios: DestinatariosDoPush = {},
-): Promise<{ sent: number; gone: number }> {
-  if (!vapidPronto()) return { sent: 0, gone: 0 };
-
-  const { data, error } = await store(admin)
-    .select("id, user_id, endpoint, p256dh, auth")
-    .eq("organization_id", organizationId);
-  if (error) {
-    logger.warn("push_subscriptions_list_failed", { detail: error.message });
-    return { sent: 0, gone: 0 };
-  }
-  let rows = ((data ?? []) as unknown as PushSubRow[]).filter(
-    (r) => destinatarios.userId === undefined || r.user_id === destinatarios.userId,
-  );
-  if (rows.length === 0) return { sent: 0, gone: 0 };
-
-  // Vínculo ativo e papel de cada dono de inscrição. Falha FECHADA: sem saber quem
-  // ainda pertence à organização, não manda para ninguém.
-  const { data: vinculos, error: vinculosErr } = await admin
+  papelMinimo?: Role,
+): Promise<Set<string> | null> {
+  const { data, error } = await admin
     .from("user_organizations")
-    .select("user_id, role, revoked_at")
-    .eq("organization_id", organizationId);
-  if (vinculosErr) {
-    logger.warn("push_membership_list_failed", { detail: vinculosErr.message });
-    return { sent: 0, gone: 0 };
+    .select("user_id, role")
+    .eq("organization_id", organizationId)
+    .is("revoked_at", null);
+  if (error) {
+    logger.warn("push_membros_ativos_falhou", { detail: error.message });
+    return null;
   }
-  const papelDoUsuario = new Map<string, string>();
-  for (const v of vinculos ?? []) {
-    if (v.revoked_at === null || v.revoked_at === undefined) {
-      papelDoUsuario.set(String(v.user_id), String(v.role));
-    }
-  }
-  rows = rows.filter((r) => {
-    const papel = papelDoUsuario.get(r.user_id);
-    if (!papel) return false;
-    if (destinatarios.conversa && !papelPodeVerConversa(papel, r.user_id, destinatarios.conversa)) return false;
-    return true;
-  });
-  // O endereço também é conferido na hora de chamar: a linha pode ter sido gravada
-  // quando a regra de inscrição ainda aceitava qualquer URL.
-  rows = rows.filter((r) => {
-    if (endpointDePushPermitido(r.endpoint)) return true;
-    logger.warn("web_push_endpoint_recusado", { id: r.id });
-    return false;
-  });
-  if (rows.length === 0) return { sent: 0, gone: 0 };
+  const membros = (data ?? []) as Array<{ user_id: string; role: string | null }>;
+  return new Set(
+    membros.filter((m) => !papelMinimo || roleAtLeast(m.role, papelMinimo)).map((m) => m.user_id),
+  );
+}
+
+/**
+ * O FUNIL: todo push do produto sai daqui, e só daqui (vigiado por
+ * `tests/unit/push-sai-so-pelo-funil.test.ts`). Só sai para inscrições de quem
+ * tem vínculo ativo na organização (e o papel mínimo, quando pedido), e só para
+ * serviço de push conhecido (`servicos-de-push.ts`). A regra de host mora no
+ * envio, não só na rota de inscrição: vale para toda linha gravada, qualquer
+ * que seja a origem. O conteúdo segue a opção da empresa sobre o que aparece
+ * com a tela bloqueada (`./tela-bloqueada.ts`). Inscrição morta (404/410) é
+ * apagada.
+ */
+async function enviarAsInscricoes(
+  admin: Admin,
+  organizationId: string,
+  inscricoes: Inscricao[],
+  payload: PushPayload,
+  papelMinimo?: Role,
+): Promise<{ sent: number; gone: number }> {
+  // `endpointDePushPermitido` (Hiperbold, D-097): além do host conhecido, só
+  // https na porta padrão e sem credencial na URL — vale para linha antiga também.
+  const conhecidas = inscricoes.filter(
+    (i) => ehServicoDePushConhecido(i.endpoint) && endpointDePushPermitido(i.endpoint),
+  );
+  if (conhecidas.length === 0) return NADA;
+  const membros = await membrosAtivos(admin, organizationId, papelMinimo);
+  if (!membros) return NADA;
+  const rows = conhecidas.filter((i) => membros.has(i.user_id));
+  if (rows.length === 0) return NADA;
+
+  const { modo, idioma } = await lerTelaBloqueada(admin, organizationId);
+  const body = JSON.stringify(redigirParaATelaBloqueada(payload, modo, idioma));
 
   webpush.setVapidDetails(await vapidSubject(), vapidPublica()!, env.VAPID_PRIVATE_KEY.trim());
 
   let sent = 0;
   let gone = 0;
-  const body = JSON.stringify(payload);
 
   await Promise.all(
     rows.map(async (row) => {
@@ -135,7 +96,11 @@ export async function enviarPushDaOrg(
         const status = (err as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) {
           gone += 1;
-          await store(admin).delete().eq("id", row.id);
+          await admin
+            .from("push_subscriptions")
+            .delete()
+            .eq("id", row.id)
+            .eq("organization_id", organizationId);
           return;
         }
         logger.warn("web_push_send_failed", { status: status ?? 0 });
@@ -146,10 +111,66 @@ export async function enviarPushDaOrg(
   return { sent, gone };
 }
 
+export type DestinoDoPush = { soUsuario?: string; papelMinimo?: Role };
+
+/** Push às inscrições da organização — ou só às de `soUsuario`, e só a quem alcança `papelMinimo`. */
+export async function enviarPushDaOrg(
+  organizationId: string,
+  payload: PushPayload,
+  quem: DestinoDoPush = {},
+  admin: Admin = createAdminClient(),
+): Promise<{ sent: number; gone: number }> {
+  if (!vapidPronto()) return NADA;
+
+  let query = admin
+    .from("push_subscriptions")
+    .select("id, user_id, endpoint, p256dh, auth")
+    .eq("organization_id", organizationId);
+  if (quem.soUsuario) query = query.eq("user_id", quem.soUsuario);
+  const { data, error } = await query;
+  if (error) {
+    logger.warn("push_subscriptions_list_failed", { detail: error.message });
+    return NADA;
+  }
+  return enviarAsInscricoes(admin, organizationId, (data ?? []) as Inscricao[], payload, quem.papelMinimo);
+}
+
 export async function enviarPushAoUsuario(
   organizationId: string,
   userId: string,
   payload: PushPayload,
 ): Promise<{ sent: number; gone: number }> {
-  return enviarPushDaOrg(organizationId, payload, undefined, { userId });
+  return enviarPushDaOrg(organizationId, payload, { soUsuario: userId });
+}
+
+/**
+ * Push de mensagem recebida: só às inscrições de quem PODE VER a conversa.
+ *
+ * Quem decide é `fn_can_view_conversation` (a RLS de `conversations`), avaliada
+ * para cada inscrito por `fn_push_inscricoes_que_veem_a_conversa` — a regra não
+ * é repetida aqui. Falha na leitura não envia a ninguém.
+ *
+ * `soUsuarios` é a lista de quem DEVE ser avisado (`./destinatarios-da-mensagem.ts`);
+ * ela só estreita o conjunto, nunca alarga além de quem pode ver.
+ */
+export async function enviarPushAQuemVeAConversa(
+  organizationId: string,
+  conversationId: string,
+  payload: PushPayload,
+  soUsuarios?: ReadonlyArray<string>,
+  admin: Admin = createAdminClient(),
+): Promise<{ sent: number; gone: number }> {
+  if (!vapidPronto() || soUsuarios?.length === 0) return NADA;
+  const { data, error } = await admin.rpc("fn_push_inscricoes_que_veem_a_conversa", {
+    p_org: organizationId,
+    p_conversation: conversationId,
+  });
+  if (error) {
+    logger.warn("push_subscriptions_visible_list_failed", { detail: error.message });
+    return NADA;
+  }
+  // O admin client não é tipado pelo schema: a forma vem de `lib/database.types.ts`.
+  const visiveis: Inscricao[] = data ?? [];
+  const linhas = visiveis.filter((l) => !soUsuarios || soUsuarios.includes(l.user_id));
+  return enviarAsInscricoes(admin, organizationId, linhas, payload);
 }

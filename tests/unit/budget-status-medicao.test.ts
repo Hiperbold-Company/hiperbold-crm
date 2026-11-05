@@ -22,6 +22,7 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { getBudgetStatus } from "@/lib/ai/budget/check";
+import { PONTO_TRANSCRICAO_DE_AUDIO } from "@/lib/ai/pontos/registro";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PROPOSITOS_SEM_CUSTO_POR_DECISAO } from "@/lib/ai/telemetria-sem-custo";
@@ -56,6 +57,8 @@ function fazerAdmin(opts: {
   itensBloqueio?: number;
   chamadasSemPreco?: number;
   erroSemPreco?: string;
+  /** Linhas de `llm_calls`: a contagem passa a ser a dos FILTROS aplicados a elas. */
+  linhasDeLlmCalls?: LinhaDeLlmCalls[];
 }) {
   const filtros: Record<string, Filtro[]> = {};
 
@@ -69,6 +72,8 @@ function fazerAdmin(opts: {
     const chain: any = {
       select: (...a: unknown[]) => registra("select", a),
       eq: (...a: unknown[]) => registra("eq", a),
+      neq: (...a: unknown[]) => registra("neq", a),
+      or: (...a: unknown[]) => registra("or", a),
       is: (...a: unknown[]) => registra("is", a),
       not: (...a: unknown[]) => registra("not", a),
       gte: (...a: unknown[]) => registra("gte", a),
@@ -77,7 +82,9 @@ function fazerAdmin(opts: {
         Promise.resolve(
           tabela === "llm_calls"
             ? {
-                count: opts.chamadasSemPreco ?? 0,
+                count: opts.linhasDeLlmCalls
+                  ? opts.linhasDeLlmCalls.filter((l) => filtros[tabela]!.every((f) => passa(l, f))).length
+                  : (opts.chamadasSemPreco ?? 0),
                 error: opts.erroSemPreco ? { message: opts.erroSemPreco } : null,
               }
             : { count: opts.itensBloqueio ?? 0, error: null },
@@ -92,6 +99,40 @@ function fazerAdmin(opts: {
       : { data: opts.gastoDaRegua ?? 0, error: null };
 
   return { cliente: { from, rpc }, filtros };
+}
+
+type LinhaDeLlmCalls = Record<string, string | number | null>;
+
+/**
+ * Os filtros do PostgREST com a semântica do SQL, só nas formas que a consulta
+ * usa — inclusive o `NULL` que não casa com `neq` nem com `not.in`, que é onde
+ * um filtro de exclusão some com linhas sem ninguém ver.
+ */
+function condicao(l: LinhaDeLlmCalls, col: string, op: string, val: unknown): boolean {
+  const v = l[col] ?? null;
+  if (op === "is") return val === null || val === "null" ? v === null : v === val;
+  if (v === null) return false;
+  if (op === "eq") return v === val;
+  if (op === "neq") return v !== val;
+  if (op === "gte") return String(v) >= String(val);
+  const lista = String(val).replace(/^\(|\)$/g, "").split(",");
+  if (op === "in") return lista.includes(String(v));
+  if (op === "not.in") return !lista.includes(String(v));
+  throw new Error(`filtro não suportado pelo dublê: ${op}`);
+}
+
+function passa(l: LinhaDeLlmCalls, f: Filtro): boolean {
+  if (f.metodo === "select") return true;
+  // `.not(coluna, "in", "(a,b)")` → o mesmo `not.in` do termo de `or`.
+  if (f.metodo === "not") return condicao(l, String(f.args[0]), `not.${String(f.args[1])}`, f.args[2]);
+  if (f.metodo !== "or") return condicao(l, String(f.args[0]), f.metodo, f.args[1]);
+  // Vírgulas DENTRO de parênteses são da lista do `in`, não do `or`.
+  const termos = String(f.args[0]).split(/,(?![^(]*\))/);
+  return termos.some((t) => {
+    const m = /^([a-z_]+)\.(not\.in|in|is|eq|neq)\.(.*)$/.exec(t);
+    if (!m) throw new Error(`termo de or não suportado pelo dublê: ${t}`);
+    return condicao(l, m[1]!, m[2]!, m[3]);
+  });
 }
 
 function instalar(opts: Parameters<typeof fazerAdmin>[0]) {
@@ -133,8 +174,15 @@ describe("o furo de medição é medido, não presumido", () => {
       // `telemetria-sem-custo.ts`, não uma cópia das strings.
       const exclusao = llm.find((f) => f.metodo === "not" && f.args[0] === "purpose");
       expect(exclusao, "sem `.not(\"purpose\", \"in\", ...)`: telemetria sem custo por decisão vira furo").toBeDefined();
+      // A transcrição é a exceção: sai pela ORIGEM (degraus 1 a 3), não pelo
+      // `purpose` — senão o degrau 4, LLM cobrado por token, nunca acende
+      // (correção do upstream, junção de 04/11/2026; ver o bloco abaixo).
       for (const proposito of PROPOSITOS_SEM_CUSTO_POR_DECISAO) {
-        expect(String(exclusao?.args[2])).toContain(proposito);
+        if (proposito === PONTO_TRANSCRICAO_DE_AUDIO) {
+          expect(String(exclusao?.args[2])).not.toContain(proposito);
+        } else {
+          expect(String(exclusao?.args[2])).toContain(proposito);
+        }
       }
     });
   });
@@ -155,6 +203,7 @@ describe("o furo de medição é medido, não presumido", () => {
           const outro: any = {
             select: () => outro,
             eq: () => outro,
+            or: () => outro,
             maybeSingle: async () => ({ data: null, error: null }),
             then: (res: (v: unknown) => unknown) => Promise.resolve({ count: 0, error: null }).then(res),
           };
@@ -173,6 +222,9 @@ describe("o furo de medição é medido, não presumido", () => {
             return chain;
           },
           is: () => chain, // fixture já só tem `cost_cents: null`
+          // O corte da transcrição por origem (`purpose.neq…,origem_da_escolha…`):
+          // as linhas desta fixture não têm origem, e a exclusão medida aqui é a do `not`.
+          or: () => chain,
           not: (coluna: string, _op: string, valor: string) => {
             if (coluna === "purpose") excluidos = String(valor).replace(/^\(|\)$/g, "").split(",");
             return chain;
@@ -207,7 +259,8 @@ describe("o furo de medição é medido, não presumido", () => {
       fazerAdminComLinhas([
         { organization_id: ORG, cost_cents: null, purpose: "embedding_indexar", created_at: agora },
         { organization_id: ORG, cost_cents: null, purpose: "embedding_consultar", created_at: agora },
-        { organization_id: ORG, cost_cents: null, purpose: "transcricao_de_audio", created_at: agora },
+        // `transcricao_de_audio` não está aqui: o corte dela é pela origem, e
+        // este dublê não aplica o `.or` — ver "o que é furo e o que é custo nulo".
         { organization_id: ORG, cost_cents: null, purpose: "visao_de_imagem", created_at: agora },
       ]);
 
@@ -219,6 +272,62 @@ describe("o furo de medição é medido, não presumido", () => {
       fazerAdminComLinhas([{ organization_id: ORG, cost_cents: null, purpose: "chat", created_at: agora }]);
 
       expect((await getBudgetStatus(ORG)).gasto_incompleto).toBe(true);
+    });
+  });
+
+  describe("o que é furo e o que é custo nulo por construção", () => {
+    // Linha do mês, `ok`, sem custo: o que varia é o QUE a gerou.
+    const semCusto = (extra: LinhaDeLlmCalls): LinhaDeLlmCalls => ({
+      organization_id: ORG,
+      cost_cents: null,
+      status: "ok",
+      purpose: "agent_reply",
+      origem_da_escolha: null,
+      created_at: new Date().toISOString(),
+      ...extra,
+    });
+    const avisa = async (linha: LinhaDeLlmCalls): Promise<boolean> => {
+      instalar({ linhasDeLlmCalls: [linha] });
+      return (await getBudgetStatus(ORG)).gasto_incompleto;
+    };
+
+    it("controle positivo: chamada do turno sem preço conhecido acende o aviso", async () => {
+      expect(await avisa(semCusto({}))).toBe(true);
+    });
+
+    it("a falha não acende: o provedor recusou, nenhum token foi cobrado", async () => {
+      expect(await avisa(semCusto({ status: "erro" }))).toBe(false);
+    });
+
+    it("transcrição pelos serviços (degraus 1 a 3) não acende: preço próprio, sem tokens", async () => {
+      // Contá-las fazia o card dizer "o produto não sabe o preço do modelo em
+      // uso... a parada pode não acontecer" a toda organização que recebeu um
+      // áudio no mês — com o modelo do turno precificado e a parada funcionando.
+      // `padrao_openrouter` (#3382) é o degrau 3: a própria OpenRouter
+      // transcreve em `/audio/transcriptions`; neste controle não informou custo.
+      for (const origem of ["servico_da_instalacao", "padrao_openai_compativel", "padrao_openrouter"]) {
+        expect(
+          await avisa(semCusto({ purpose: PONTO_TRANSCRICAO_DE_AUDIO, origem_da_escolha: origem })),
+          `degrau ${origem} acendeu o aviso`,
+        ).toBe(false);
+      }
+    });
+
+    it("transcrição pelo modelo da organização (degrau 4) SEM preço ACENDE: é LLM cobrado por token", async () => {
+      // Excluir o `purpose` inteiro apagava o aviso justamente aqui: o gasto
+      // desse áudio não entra na soma do teto, e o card dizia que entrava.
+      expect(
+        await avisa(semCusto({ purpose: PONTO_TRANSCRICAO_DE_AUDIO, origem_da_escolha: "modelo_da_organizacao" })),
+      ).toBe(true);
+    });
+
+    it("transcrição sem origem gravada acende: na dúvida, a medição avisa", async () => {
+      expect(await avisa(semCusto({ purpose: PONTO_TRANSCRICAO_DE_AUDIO }))).toBe(true);
+    });
+
+    it("linha de outra organização ou de outro mês não acende", async () => {
+      expect(await avisa(semCusto({ organization_id: "outra" }))).toBe(false);
+      expect(await avisa(semCusto({ created_at: "2001-01-01T00:00:00.000Z" }))).toBe(false);
     });
   });
 
@@ -267,5 +376,19 @@ describe("o número exibido é o número que decide", () => {
     expect((await getBudgetStatus(ORG)).blocked_now).toBe(true);
     instalar({ itensBloqueio: 0 });
     expect((await getBudgetStatus(ORG)).blocked_now).toBe(false);
+  });
+
+  it("`blocked_now` fala só do orçamento da ORG: o aviso do teto do PLANO não entra na conta", async () => {
+    // O budget_exceeded com ref_kind='plano' (cobrança) não é deste card: contá-lo
+    // mandaria o admin mexer num teto que não destrava nada, e o PATCH do
+    // orçamento devolveria blocked_now:false com a IA ainda parada pelo plano.
+    // Mesma régua do retratarAvisos da rota.
+    const filtros = instalar({ itensBloqueio: 0 });
+    await getBudgetStatus(ORG);
+    const bloqueio = filtros["agent_inbox_items"] ?? [];
+    expect(bloqueio.some((f) => f.metodo === "eq" && f.args[0] === "kind" && f.args[1] === "budget_exceeded")).toBe(true);
+    expect(bloqueio.filter((f) => f.metodo === "or").map((f) => f.args[0])).toEqual([
+      "ref_kind.is.null,ref_kind.eq.ai_budget",
+    ]);
   });
 });

@@ -48,6 +48,9 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     resource: "ai_agents",
     role: "manager",
     escrita: false,
+    // Configuração do agente: `config:*` (upstream, #2194) OU `mcp:*` (tokens Hiperbold), token admin.
+    configuracao: true,
+    tokenRole: "admin",
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);
@@ -90,6 +93,9 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     resource: "ai_agents",
     role: "admin",
     escrita: true,
+    // Configuração do agente: `config:*` (upstream, #2194) OU `mcp:*` (tokens Hiperbold), token admin.
+    configuracao: true,
+    tokenRole: "admin",
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);
@@ -157,8 +163,14 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   //
   // Sem versão publicada, `ai_agents.system_prompt` É a fonte legítima (é o que
   // `workers/ai-response-worker.ts` lê), e continua editável. (issue #456)
+  //
+  // Voz fica fora da regra pelo mesmo critério: `getActiveVoiceAgent` lê
+  // `ai_agents.system_prompt` e ignora a versão, e o editor do ramo de voz em
+  // `page.tsx` grava nesta coluna. Sem a exceção, o agente de voz publicado não
+  // tinha caminho nenhum para mudar o prompt, e a mensagem abaixo apontava uma
+  // versão que o motor de voz nunca executa.
   const CONTEUDO_DA_VERSAO = ["system_prompt", "model"] as const;
-  if (existing.published_version_id != null) {
+  if (existing.published_version_id != null && existing.channel !== "voice") {
     const barrados = CONTEUDO_DA_VERSAO.filter((c) => patch[c] !== undefined);
     if (barrados.length > 0) {
       return fail(
@@ -215,6 +227,18 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     return fail("internal_error", "Erro ao atualizar agent.", 500, { requestId });
   }
 
+  // Pausar e alterar o agente que atende clientes, por token ou pela sessão,
+  // deixa rastro com quem fez: o id do TOKEN quando a chamada veio por Bearer.
+  void audit({
+    action: update.paused_at ? "ai_agent.paused" : "ai_agent.updated",
+    ...atorDoAudit(authz),
+    organizationId: authz.organizationId,
+    resourceType: "ai_agent",
+    resourceId: id,
+    requestId,
+    metadata: { fields: Object.keys(update), via: authz.via },
+  });
+
   return ok(updated, { requestId });
 }
 
@@ -238,6 +262,9 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
     resource: "ai_agents",
     role: "admin",
     escrita: true,
+    // Configuração do agente: `config:*` (upstream, #2194) OU `mcp:*` (tokens Hiperbold), token admin.
+    configuracao: true,
+    tokenRole: "admin",
   });
   if (!authz.ok) return authz.response;
   const t = traducaoDe(authz);

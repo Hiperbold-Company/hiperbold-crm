@@ -27,6 +27,7 @@ import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recu
 import { logger } from "@/lib/logger";
 import {
   ETAPAS_INICIAIS,
+  nomeOcupadoPorAtivo,
   podeExcluirDeVez,
   posicaoEntre,
   slugDeFunil,
@@ -332,7 +333,22 @@ export async function editarFunil(deps: DepsDeFunis, pipelineId: string, pedido:
 
   // Tirar do arquivo é update SIMPLES. Pedir de novo em quem já está fora é pedido já atendido (sem linha de audit vazia).
   const tiraDoArquivo = pedido.is_archived === false && alvo.is_archived;
-  if (tiraDoArquivo) patchDoAlvo.is_archived = false;
+  if (tiraDoArquivo) {
+    patchDoAlvo.is_archived = false;
+    // #2559 — tirar do arquivo também confere o nome: se outro funil ATIVO ganhou o mesmo nome enquanto este
+    // estava arquivado, a volta deixaria dois iguais na lista. 409 com o conselho, sem renomear sozinho.
+    const ocupado = nomeOcupadoPorAtivo(funis, pipelineId);
+    if (ocupado) {
+      throw recusa(
+        deps,
+        409,
+        "state_conflict",
+        tr(deps)(
+          "Já existe um funil ativo chamado «{nome}». Renomeie um dos dois antes de tirar este funil do arquivo.",
+        ).replace("{nome}", ocupado),
+      );
+    }
+  }
 
   if (pedido.depois_de !== undefined) {
     // Só os ativos compõem a régua: arquivado não ocupa lugar na lista.
@@ -425,7 +441,9 @@ export async function excluirOuArquivarFunil(deps: DepsDeFunis, pipelineId: stri
     : validarArquivamento(funis, pipelineId, dependencias);
   if (!veredito.ok) {
     // A CONTAGEM VAI EM `details`, não só dentro da frase: a tela mostra "este funil tem N negócios" sem regex.
-    throw recusa(deps, 422, "unprocessable_entity", veredito.erro, {
+    // `t()` + `replace("{nome}")`: a recusa do funil de clientes (#2559) volta com `{nome}` por preencher, para a
+    // frase casar a chave do dicionário. As outras já vêm com o nome colado e passam pelo `t` sem mudar.
+    throw recusa(deps, 422, "unprocessable_entity", tr(deps)(veredito.erro).replace("{nome}", alvo.name), {
       negocios: dependencias.negocios,
       fontes_de_webhook: dependencias.fontesDeWebhook,
       automacoes: dependencias.regrasAtivas,

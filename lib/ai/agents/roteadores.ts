@@ -26,7 +26,10 @@ import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
 import { logger } from "@/lib/logger";
 
+import { MAX_CLASSIFIER_CONTEXT_MESSAGES, NEW_ROUTER_CONTEXT_MESSAGES } from "@/lib/ai/classifier-context";
+
 import { writeRouterMembers } from "./router-members";
+import { senderRoutesSchema } from "./sender-routes";
 import { replaceRouterMembersHttp } from "./router-members-http";
 
 export interface DepsDeRoteadores {
@@ -44,13 +47,28 @@ export interface DepsDeRoteadores {
 
 const ROUTER_LIST_COLUMNS = "id, name, channel_session_id, is_active, fallback_agent_id, updated_at";
 const ROUTER_DETAIL_COLUMNS = "id, name, channel_session_id, is_active, config, fallback_agent_id";
-const MEMBER_COLUMNS = "id, agent_id, intent_name, intent_description, examples, position, flow_pointer_id";
+const MEMBER_COLUMNS =
+  "id, agent_id, intent_name, intent_description, examples, position, flow_pointer_id, pipeline_id, stage_id";
+
+/** Quantas mensagens o classificador lê: inteiro de 0 a `MAX_CLASSIFIER_CONTEXT_MESSAGES`, ou ausente. */
+const configDoRoteadorSchema = z
+  .record(z.string(), z.unknown())
+  .optional()
+  .refine(
+    (c) =>
+      c?.context_message_count === undefined ||
+      (typeof c.context_message_count === "number" &&
+        Number.isInteger(c.context_message_count) &&
+        c.context_message_count >= 0 &&
+        c.context_message_count <= MAX_CLASSIFIER_CONTEXT_MESSAGES),
+    "context_message_count deve ser inteiro entre 0 e 16",
+  );
 
 export const criarRoteadorSchema = z.object({
   name: z.string().min(1).max(120),
   channel_session_id: z.string().uuid(),
   fallback_agent_id: z.string().uuid().nullable().optional(),
-  config: z.record(z.string(), z.unknown()).optional(),
+  config: configDoRoteadorSchema,
 });
 export type NovoRoteador = z.infer<typeof criarRoteadorSchema>;
 
@@ -58,18 +76,27 @@ export const alterarRoteadorSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   is_active: z.boolean().optional(),
   fallback_agent_id: z.string().uuid().nullable().optional(),
-  config: z.record(z.string(), z.unknown()).optional(),
+  config: configDoRoteadorSchema,
 });
 export type AlteracaoDeRoteador = z.infer<typeof alterarRoteadorSchema>;
 
-const membroSchema = z.object({
-  agent_id: z.string().uuid(),
-  intent_name: z.string().min(1).max(120),
-  intent_description: z.string().min(1).max(2000),
-  examples: z.array(z.string()).default([]),
-  // Sem esta linha o Zod descartava o campo em silêncio e o vínculo intenção → roteiro nunca era gravado.
-  flow_pointer_id: z.string().uuid().nullable().default(null),
-});
+const membroSchema = z
+  .object({
+    agent_id: z.string().uuid(),
+    intent_name: z.string().min(1).max(120),
+    intent_description: z.string().min(1).max(2000),
+    examples: z.array(z.string()).default([]),
+    // Sem esta linha o Zod descartava o campo em silêncio e o vínculo intenção → roteiro nunca era gravado.
+    flow_pointer_id: z.string().uuid().nullable().default(null),
+    // #2155 — funil/etapa de DESTINO quando a intenção casa. Sem destino, o roteamento continua só
+    // escolhendo o agente (comportamento de antes).
+    pipeline_id: z.string().uuid().nullable().default(null),
+    stage_id: z.string().uuid().nullable().default(null),
+  })
+  .refine((m) => m.stage_id === null || m.pipeline_id !== null, {
+    message: "stage_id exige pipeline_id",
+    path: ["stage_id"],
+  });
 export const membrosDoRoteadorSchema = z.object({ members: z.array(membroSchema) });
 
 const tr = (deps: DepsDeRoteadores) => deps.t ?? ((texto: string) => texto);
@@ -188,7 +215,11 @@ export async function criarRoteador(deps: DepsDeRoteadores, input: NovoRoteador)
       name: input.name,
       channel_session_id: input.channel_session_id,
       fallback_agent_id: input.fallback_agent_id ?? null,
-      ...(input.config !== undefined ? { config: input.config } : {}),
+      // Roteador novo lê mais contexto que o padrão antigo (`NEW_ROUTER_CONTEXT_MESSAGES`), salvo escolha explícita.
+      config: {
+        ...input.config,
+        context_message_count: input.config?.context_message_count ?? NEW_ROUTER_CONTEXT_MESSAGES,
+      },
       created_by: deps.responsavel,
     })
     .select("id")
@@ -224,7 +255,7 @@ export async function alterarRoteador(
 ): Promise<{ id: string }> {
   const { data: existing, error: loadErr } = await deps.admin()
     .from("ai_routers")
-    .select("id, config")
+    .select("id, config, fallback_agent_id")
     .eq("id", id)
     .eq("organization_id", deps.organizationId)
     .maybeSingle();
@@ -242,6 +273,37 @@ export async function alterarRoteador(
     const currentConfig = ((existing as { config?: unknown }).config ?? {}) as Record<string, unknown>;
     update.config = { ...currentConfig, ...patch.config };
   }
+
+  // Regras por remetente: agentes reservados a certos números. O fallback público tem de existir e ser
+  // diferente deles, e todo agente citado tem de ser DESTA organização e não arquivado.
+  const atual = existing as { config?: unknown; fallback_agent_id?: string | null };
+  const mergedConfig = (update.config ?? atual.config ?? {}) as Record<string, unknown>;
+  if (mergedConfig.sender_routes !== undefined) {
+    const t = tr(deps);
+    const routes = senderRoutesSchema.safeParse(mergedConfig.sender_routes);
+    if (!routes.success) throw recusa(deps, 422, "validation_failed", t("Regras por remetente inválidas."));
+    const fallback = patch.fallback_agent_id !== undefined ? patch.fallback_agent_id : (atual.fallback_agent_id ?? null);
+    if (routes.data.length && (!fallback || routes.data.some((r) => r.agent_id === fallback))) {
+      throw recusa(deps, 422, "validation_failed", t("Escolha um fallback público diferente dos agentes reservados."));
+    }
+    const ids = [
+      ...new Set([...routes.data.map((r) => r.agent_id), ...(routes.data.length && fallback ? [fallback] : [])]),
+    ];
+    if (ids.length) {
+      const found = await deps.admin()
+        .from("ai_agents")
+        .select("id")
+        .eq("organization_id", deps.organizationId)
+        .is("archived_at", null)
+        .in("id", ids);
+      if (found.error) throw falhaInterna(deps, found.error);
+      if (found.data?.length !== ids.length) {
+        throw recusa(deps, 422, "validation_failed", t("Agente não encontrado nesta organização."));
+      }
+    }
+    if (update.config) update.config = { ...mergedConfig, sender_routes: routes.data };
+  }
+
   if (Object.keys(update).length === 0) return { id };
 
   const { error: updErr } = await deps.admin()
@@ -287,6 +349,10 @@ export async function definirMembrosDoRoteador(
   members: z.infer<typeof membrosDoRoteadorSchema>["members"],
 ): Promise<{ count: number }> {
   let db: PoolClient | undefined;
+  // #2624: consulta que estoura o query_timeout rejeita a promessa SEM destruir o socket. Liberado com
+  // release() sem erro, o cliente volta ao pool com a transação antiga de pé — o catch marca o erro e o
+  // finally o entrega ao pool, que descarta o cliente.
+  let erroNaTransacao: Error | undefined;
   try {
     if (process.env.SUPABASE_DB_URL) {
       db = await getRequestPool().connect();
@@ -297,6 +363,8 @@ export async function definirMembrosDoRoteador(
       await replaceRouterMembersHttp(deps.admin(), deps.organizationId, id, members);
     }
   } catch (error) {
+    // Marcado ANTES do rollback: se o próprio rollback estourar, o cliente ainda sai com erro.
+    erroNaTransacao = error instanceof Error ? error : new Error(String(error));
     if (db) await db.query("rollback");
     const message = error instanceof Error ? error.message : "";
     const code = (error as { code?: string }).code;
@@ -308,12 +376,17 @@ export async function definirMembrosDoRoteador(
     if (message === "member_flow_not_found") {
       throw recusa(deps, 422, "validation_failed", t("O fluxo de atendimento escolhido não existe nesta organização."));
     }
+    // As FKs compostas da 0542 recusam funil/etapa de outra empresa (ou já excluído). Agente e roteiro
+    // são conferidos antes, então o 23503 aqui é o destino — erro de quem configura, não do servidor.
+    if (code === "23503") {
+      throw recusa(deps, 422, "validation_failed", t("O funil ou a etapa de destino não existe nesta organização."));
+    }
     if (message === "duplicate_intent_name" || code === "23505") {
       throw recusa(deps, 409, "duplicate_intent_name", t("Duas intenções não podem ter o mesmo nome no router."));
     }
     throw falhaInterna(deps, error);
   } finally {
-    db?.release();
+    db?.release(erroNaTransacao);
   }
   auditar(deps, "ai.router_members_updated", id, { count: members.length });
   return { count: members.length };

@@ -17,6 +17,7 @@ import {
 import { meetVideoUrl } from "@/lib/agenda/google/meet";
 import { textoDoCompromisso, type MotivoDaEntrega } from "@/lib/agenda/texto-do-compromisso";
 import { normalizarIdioma, type Idioma } from "@/lib/i18n/idiomas";
+import { ehOperante } from "@/lib/organizacao/operante";
 
 export function createMeetDeliveryHandler(deps: {
   crmCfg: CrmEdgeConfig;
@@ -85,7 +86,7 @@ export function createMeetDeliveryHandler(deps: {
         // M2 (D-091): organização suspensa (ou arquivada) não manda a entrega do compromisso. O
         // status vem da leitura (o join com organizations) que já existia. O job fecha como falho
         // e o aviso do compromisso vai para a Central, como em qualquer entrega que não saiu.
-        if (typeof row?.org_status === "string" && row.org_status !== "active") {
+        if (typeof row?.org_status === "string" && !ehOperante(row.org_status)) {
           deps.log.warn("entrega do compromisso não enviada: organização não está ativa (D-091)", {
             job_id: job.id,
             tenant_id: job.organization_id,
@@ -149,14 +150,7 @@ export function createMeetDeliveryHandler(deps: {
           },
         });
         if (result.status === "vetoed") {
-          const reason =
-            result.code === "contato_bloqueado"
-              ? "opt_out"
-              : result.code.startsWith("lgpd_")
-                ? "lgpd"
-                : result.code === "messaging_window_closed"
-                  ? "limits"
-                  : "guardrail";
+          const reason = motivoDoBloqueioDaEntrega(result.code);
           await settle(result.nextAllowedAt ? "queued" : `blocked:${reason}`, result.nextAllowedAt);
           return;
         }
@@ -187,6 +181,22 @@ export function createMeetDeliveryHandler(deps: {
       );
     }
   };
+}
+
+/**
+ * O código do veto do `runBeforeSend` no vocabulário de `fn_meet_delivery_settle`
+ * (`blocked:<motivo>`). A lista do banco é FECHADA: motivo fora dela lança
+ * `meet_reason_invalid`, o settle cai no `retry` e a entrega termina `failed`.
+ */
+export function motivoDoBloqueioDaEntrega(code: string): string {
+  if (code === "contato_bloqueado") return "opt_out";
+  // #3310: a pausa por handoff não é opt-out. "opt_out" mandava quem opera a
+  // entrega procurar um descadastro que não existe; `force_human` é o nome
+  // exato, e já está na lista do banco.
+  if (code === "atendimento_com_humano") return "force_human";
+  if (code.startsWith("lgpd_")) return "lgpd";
+  if (code === "messaging_window_closed") return "limits";
+  return "guardrail";
 }
 
 /**

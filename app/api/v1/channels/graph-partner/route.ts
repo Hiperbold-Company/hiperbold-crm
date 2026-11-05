@@ -42,6 +42,7 @@ import {
 import { validateGraphPartnerCredentials } from "@/lib/channels/graph-parceiro/validate-credentials";
 import { PREFIXO_DO_SEGREDO } from "@/lib/channels/graph-parceiro/webhook";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { traduzirLimiteDoPlano } from "@/lib/cobranca/limites";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptWebhookSecret, encryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { basePublicaDaInstalacao } from "@/lib/webhooks/url-publica";
@@ -161,7 +162,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const phoneNumber = validacao.displayPhoneNumber
     ? `+${validacao.displayPhoneNumber.replace(/\D/g, "")}`
     : null;
-  const displayName = validacao.verifiedName ?? GRAPH_PARTNER_LABEL;
+  // O nome do provedor só batiza a conexão; depois dela o nome é do operador
+  // (Renomear), e salvar o token de novo não o apaga.
+  const displayName = existente?.displayName || (validacao.verifiedName ?? GRAPH_PARTNER_LABEL);
 
   const { error, errorRaw, channelSessionId } = await saveGraphPartnerSession(admin, {
     organizationId: orgId,
@@ -185,6 +188,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const mensagem = await mensagemDaRecusaDoPlano(recusa, admin, orgId, authz.user.idioma);
       return fail("plano_limite_atingido", mensagem, STATUS_RECUSA_DO_PLANO, { requestId });
     }
+    // O limite do módulo de cobrança do upstream (quando ligado): `saveGraphPartnerSession` devolve a mensagem.
+    const limite = traduzirLimiteDoPlano(error, authz.user.idioma);
+    if (limite) return fail(limite.code, limite.message, 409, { requestId, details: limite.details });
     return falhaInterna("internal_error", error, { requestId });
   }
 

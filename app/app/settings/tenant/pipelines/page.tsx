@@ -8,9 +8,11 @@ import {
   MOTIVO_CONTA_SUSPENSA_ASSINATURA,
   type BloqueioDoBotao,
 } from "@/lib/billing/planos/estado-do-bloqueio";
+import { moduloLigado } from "@/lib/instalacao/modulos";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
+import { papelPode } from "@/lib/permissoes/resolver";
 import { PipelinesClient, type EtapaDoFunil, type PipelineRow } from "./_client";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
@@ -40,10 +42,14 @@ export default async function PipelinesSettingsPage() {
   const podeEditarConfig =
     (user.is_platform_admin && !user.support) || ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin;
 
+  // Duplicar funil cria funil: a mesma chave (`funis.editar`) que a rota exige e que o Kanban usa para
+  // "Novo funil". Esconder o botão de quem receberia 403 é honestidade, não permissão nova.
+  const podeDuplicar = papelPode(activeOrg.role, "funis.editar", activeOrg.permissoes);
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("crm_pipelines")
-    .select("id, name, slug, vocabulary, settings")
+    .select("id, name, slug, vocabulary, settings, is_default, is_client_pipeline")
     .eq("organization_id", activeOrg.orgId)
     .eq("is_archived", false)
     .order("position");
@@ -54,9 +60,13 @@ export default async function PipelinesSettingsPage() {
   // sem elas a tela não tem o que oferecer como "exigir ao entrar aqui". A
   // leitura é a mesma da página (mesmo cliente, mesma organização) e vem PRONTA
   // do servidor: o editor não espera rede nenhuma para renderizar.
+  //
+  // `is_won`/`is_lost` entram POR CAUSA DA ENTRADA DO INBOX (#3011): card novo
+  // não nasce em "Ganho", então a tela precisa saber quais etapas são de
+  // FECHAMENTO para não oferecê-las como etapa de entrada.
   const { data: etapas } = await supabase
     .from("crm_stages")
-    .select("id, pipeline_id, name, is_archived")
+    .select("id, pipeline_id, name, is_archived, is_won, is_lost")
     .eq("organization_id", activeOrg.orgId)
     .order("position", { ascending: true });
   const etapasPorFunil: Record<string, EtapaDoFunil[]> = {};
@@ -64,6 +74,8 @@ export default async function PipelinesSettingsPage() {
     (etapasPorFunil[e.pipeline_id] ??= []).push(e);
   }
   const idioma = user.idioma;
+  // #1907: sem o módulo `financeiro` não há comanda, e o interruptor do ganho some.
+  const comandaDisponivel = podeEditarConfig && (await moduloLigado(createAdminClient(), "financeiro"));
 
   // Fase F3, tarefa 9: "etapas_por_funil" é o único item POR FUNIL da matriz
   // (ver o comentário de `estado-do-bloqueio.ts`) — só entram os funis que
@@ -111,7 +123,9 @@ export default async function PipelinesSettingsPage() {
         pipelines={pipelines}
         etapas={etapasPorFunil}
         podeEditarConfig={podeEditarConfig}
+        podeDuplicar={podeDuplicar}
         bloqueioPorFunil={bloqueioPorFunil}
+        comandaDisponivel={comandaDisponivel}
       />
     </div>
   );

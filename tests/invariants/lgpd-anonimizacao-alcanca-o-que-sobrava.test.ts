@@ -119,7 +119,8 @@ function residuo(contato: string): string {
     select string_agg(onde, ',' order by onde) from (
       select 'media_derived' as onde from public.messages
        where conversation_id = '${CONVERSA[contato]}'
-         and (media_derived_text is not null or media_derived_status is not null)
+         -- O status é vocabulário (0497 do upstream: fica 'ready' para o drain não refazer); o dado é o texto.
+         and media_derived_text is not null
       union
       select 'lead_notes' from public.lead_notes
        where contact_id = '${contato}'
@@ -188,7 +189,9 @@ describe("0921: anonimizar alcança o que sobrava do titular", () => {
     expect(
       sql(`select count(*) from public.messages where conversation_id = '${CONVERSA[VIA_TELA]}';`),
     ).toBe("1");
-    expect(sql(`select body from public.lead_notes where contact_id = '${VIA_TELA}';`)).toBe("[nota anonimizada]");
+    // Merge de 04/11/2026: a cascata do upstream (0494, vence em LGPD) grava '(anonimizado)' na
+    // nota do negócio (headline e corpo); o conteúdo sai do mesmo jeito, só o marcador mudou.
+    expect(sql(`select body from public.lead_notes where contact_id = '${VIA_TELA}';`)).toBe("(anonimizado)");
     expect(
       sql(`select body || '|' || created_by_name from public.conversation_notes where conversation_id = '${CONVERSA[VIA_TELA]}';`),
     ).toBe("[nota anonimizada]|Atendente Ana");

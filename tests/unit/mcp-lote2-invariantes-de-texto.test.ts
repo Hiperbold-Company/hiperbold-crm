@@ -53,18 +53,30 @@ describe("(A) puladas de ferramenta MCP nunca vira impediment de prévia", () =>
     expect(sabotado).toContain("impediments.push");
   });
 
+  // Desde o #3093 do upstream a guarda mora na função pura `desfechoSemCandidato`
+  // (desfecho-da-previa.ts), e inbound-turn.ts lhe passa a contagem de impediments.
+  // O contrato é o mesmo: `no_candidate` só sai com impediments vazio.
+  const PURA = readFileSync(join(process.cwd(), "lib/agent-engine/agent/desfecho-da-previa.ts"), "utf8");
+  const GUARDA = "if (s.candidatos > 0 || s.impedimentos > 0) return null;";
+  const REPASSE = "impedimentos: p.result.impediments.length,";
+
   it("no_candidate continua condicionado a impediments vazio — é o contrato que a ausência acima protege", () => {
-    const marcador = "if (p.result.candidates.length === 0 && p.result.impediments.length === 0)";
-    expect(FONTE).toContain(marcador);
-    const idx = FONTE.indexOf(marcador);
-    expect(FONTE.slice(idx, idx + 250)).toContain("no_candidate");
+    expect(FONTE).toContain("desfechoSemCandidato({");
+    const idx = FONTE.indexOf("desfechoSemCandidato({");
+    expect(FONTE.slice(idx, idx + 250)).toContain(REPASSE);
+    expect(PURA).toContain(GUARDA);
+    const g = PURA.indexOf(GUARDA);
+    expect(g).toBeGreaterThan(-1);
+    expect(g).toBeLessThan(PURA.indexOf("code: 'no_candidate'"));
   });
 
   it("controle negativo: o detector acusa a guarda de no_candidate enfraquecida (sem checar impediments)", () => {
-    const marcador = "if (p.result.candidates.length === 0 && p.result.impediments.length === 0)";
-    const enfraquecido = FONTE.replace(marcador, "if (p.result.candidates.length === 0)");
-    expect(enfraquecido).not.toBe(FONTE);
-    expect(enfraquecido).not.toContain(marcador);
+    const enfraquecida = PURA.replace(GUARDA, "if (s.candidatos > 0) return null;");
+    expect(enfraquecida).not.toBe(PURA);
+    expect(enfraquecida).not.toContain(GUARDA);
+    const semRepasse = FONTE.replace(REPASSE, "impedimentos: 0,");
+    expect(semRepasse).not.toBe(FONTE);
+    expect(semRepasse).not.toContain(REPASSE);
   });
 });
 

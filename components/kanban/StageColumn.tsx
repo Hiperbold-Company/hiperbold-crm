@@ -7,7 +7,7 @@ import type { Lead } from "@/lib/types/leads";
 import type { Stage } from "@/lib/kanban/types";
 import { buildCardInput } from "@/lib/kanban/card-state";
 import { intervaloDaColuna } from "@/lib/kanban/selecao";
-import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
+import { formatSomaPorMoeda, formatValorDoNegocio, MOEDA_PADRAO, somaPorMoeda } from "@/lib/money";
 import { KanbanCard, type GestoDeSelecao } from "./KanbanCard";
 
 interface StageColumnProps {
@@ -34,9 +34,20 @@ interface StageColumnProps {
   onSelectMany?: (leadIds: string[], marcar: boolean) => void;
   /** Abrir o dossiê — atravessa o board até o card, como `pulses`. */
   onOpen?: (leadId: string) => void;
+  /** "Mover para…" do menu do card — atravessa a coluna como `onOpen`. */
+  etapas?: Stage[];
+  onMoverPara?: (lead: Lead, stageId: string) => void;
   /** `manager`+ — mesmo corte de papel da rota que renomeia a etapa. */
   podeRenomear?: boolean;
   onRenomear?: (nome: string) => void;
+  /** Densidade dos cards (issue #3461, item 2) — atravessa como `pulses`. */
+  denso?: boolean;
+  /**
+   * Quadro de um funil ARQUIVADO (#1298): abre para OLHAR, e nada aqui grava.
+   * Sem arraste, sem menu de ações de card, sem seleção (a barra em lote é
+   * escrita) e sem abrir o dossiê, que tem ações próprias.
+   */
+  somenteLeitura?: boolean;
 }
 
 export function StageColumn({
@@ -51,33 +62,63 @@ export function StageColumn({
   pulses,
   onSelectMany,
   onOpen,
+  etapas,
+  onMoverPara,
   podeRenomear = false,
   onRenomear,
+  denso = false,
+  somenteLeitura = false,
 }: StageColumnProps) {
   const t = useT();
-  const totalCents = leads.reduce((sum, l) => sum + (l.value_cents ?? 0), 0);
-  // O total saía SEMPRE em R$: a coluna tinha a sexta cópia do formatador de
-  // dinheiro (`formatBRL`, locale e moeda em duro), e a moeda em duro é o que a
-  // cópia escondia. Numa organização em peso ou dólar o número estava certo e o
-  // símbolo mentia — o mesmo defeito que `formatCents` existe para acabar.
+  // O TOTAL É POR MOEDA (#1531). Antes ele somava todos os `value_cents` e
+  // escrevia o resultado na moeda do primeiro negócio: R$ 5.000 e 5.000 € saíam
+  // "R$ 10.000,00", um valor que não existe. Agora cada moeda tem o seu total,
+  // lado a lado e sem conversão ("R$ 5.000,00 + 5000,00 €"). Com uma moeda só o
+  // texto é exatamente o de antes — é o caso comum, e nele nada muda. (Antes
+  // disso, o total saía SEMPRE em R$ por um `formatBRL` local com a moeda em
+  // duro; `formatValorDoNegocio` é a fonte única e a régua ×100 do negócio.)
   //
-  // A moeda vem do primeiro lead COM valor, não de um padrão: é o dado real da
-  // coluna. Somar moedas diferentes num total só já era limitação de hoje (nada
-  // agrupa por moeda, nem antes nem agora); o que muda é que o rótulo passa a
-  // dizer a verdade no caso comum, que é o board de moeda única. `MOEDA_PADRAO`
-  // só cobre a coluna sem nenhum lead com valor — onde o total nem aparece.
-  const moedaDoTotal = leads.find((l) => l.value_cents != null)?.currency ?? MOEDA_PADRAO;
+  // `currency` NULL conta como `MOEDA_PADRAO`, porque é o que o card mostra
+  // (`KanbanCard`): o total não pode discordar do card que está logo abaixo.
+  const moedaDoLead = (l: Lead) => l.currency ?? MOEDA_PADRAO;
+  const totais = somaPorMoeda(leads, (l) => l.value_cents, moedaDoLead);
+  // A ordem: primeiro a moeda com MAIS NEGÓCIOS COM VALOR na coluna (empate em
+  // ordem alfabética), depois as demais em ordem alfabética. Conta negócios, não
+  // soma valores — "mais valor" compararia centavos de moedas diferentes, o
+  // mesmo erro que esta regra acaba. E não depende da posição dos cards: mover
+  // um card na coluna não embaralha o cabeçalho.
+  //
+  // ponytail: o ideal é a moeda da ORGANIZAÇÃO primeiro, mas ela não chega ao
+  // quadro (`ActiveOrg` traz o fuso e não a moeda). Como o negócio nasce na
+  // moeda da organização (API e conversa), a mais frequente é, na prática, ela;
+  // numa organização anterior a isso, os negócios antigos em BRL podem ganhar.
+  // Upgrade: `currency` no embed `organizations(...)` de `lib/auth/server.ts`,
+  // em `ActiveOrg`, e daí page → `PipelinePageClient` → `KanbanBoard` → uma prop
+  // aqui que substitui `primeira`.
+  const primeira = [
+    ...somaPorMoeda(leads, (l) => (l.value_cents == null ? null : 1), moedaDoLead),
+  ].sort(([ma, na], [mb, nb]) => nb - na || ma.localeCompare(mb))[0]?.[0];
+  // A faixa aparece quando alguma moeda soma mais de zero — o `total > 0` de
+  // antes, por moeda. Coluna sem valor nenhum não mostra "R$ 0,00".
+  const temTotal = [...totais.values()].some((cents) => cents > 0);
 
   // A linha "ponderado" (issue #1535): o que ESTA coluna representa quando a
   // etapa tem chance calibrada. Ganho e perda valem 100 e 0 NA REGRA
   // (`lib/leads/previsao.ts`), não na coluna. `null` = etapa sem calibração, e
   // aí a linha não aparece: exibir "R$ 0,00" seria um número que ninguém
   // calibrou lendo como uma promessa de zero.
-  const probDaColuna = stage.is_won ? 100 : stage.is_lost ? 0 : stage.win_probability ?? null;
-  const ponderadoCents =
+  //
+  // Também por moeda, com a mesma função de moeda e a mesma `primeira` do total:
+  // mesmas moedas, na mesma ordem. Arredonda por negócio, como antes.
+  const probDaColuna = stage.is_won ? 100 : stage.is_lost ? 0 : (stage.win_probability ?? null);
+  const ponderados =
     probDaColuna === null
       ? null
-      : leads.reduce((sum, l) => sum + Math.round(((l.value_cents ?? 0) * probDaColuna) / 100), 0);
+      : somaPorMoeda(
+          leads,
+          (l) => (l.value_cents == null ? null : Math.round((l.value_cents * probDaColuna) / 100)),
+          moedaDoLead,
+        );
 
   const idsVisiveis = leads.map((l) => l.id);
   const selecionadosAqui = idsVisiveis.filter((id) => selectedLeadIds?.has(id)).length;
@@ -109,15 +150,40 @@ export function StageColumn({
 
   return (
     <div
-      className="bg-surface-muted/40 flex min-h-full w-80 shrink-0 flex-col rounded-lg border border-border"
+      /*
+        `w-[85vw] max-w-80 snap-center md:w-80` — a coluna cabe na tela do
+        celular, e uma por vez.
+
+        Com `w-80` fixo (320px) numa tela de 360px a coluna ocupava 89% da
+        largura útil e a de ao lado aparecia como uma fatia de poucos pixels: um
+        quadro que parece CORTADO em vez de rolável, sem pista de que há mais
+        etapa adiante. 85vw deixa uma sobra, que é onde a coluna seguinte se
+        anuncia — e `snap-center` faz a rolagem parar nela em vez de deixar o
+        dedo no meio de duas.
+
+        `max-w-80` segura o crescimento no tablet: 85% de 1023px seriam 870px, e
+        coluna de etapa não vira painel. De `md` para cima volta o `w-80` de
+        sempre, onde a graça é justamente ver várias etapas ao mesmo tempo.
+      */
+      className="bg-surface-elevated/40 flex min-h-full w-[85vw] max-w-80 shrink-0 snap-center flex-col rounded-lg border border-border md:w-80"
       data-etapa-do-quadro={stage.id}
     >
       {/* Cabeçalho e total PRESOS no alto do quadro enquanto os cards rolam: com
           uma etapa comprida, é o que diz em que etapa se está olhando. O fundo
           opaco (`bg-background`) é o que impede os cards de aparecerem por baixo;
-          por dentro, a mesma camada translúcida da coluna, para o tom não mudar. */}
-      <div className="sticky top-0 z-10 rounded-t-lg bg-background" data-cabecalho-da-etapa>
-        <div className="bg-surface-muted/40 rounded-t-lg">
+          por dentro, a mesma camada translúcida da coluna, para o tom não mudar.
+
+          A BORDA DE CIMA É DO CABEÇALHO, não da coluna (#3030): a coluna tem
+          `border` e o cabeçalho `sticky top-0`, então ao rolar a borda da coluna
+          saía da tela e o cabeçalho ficava solto, sem contorno em cima. Com
+          `border-x border-t` aqui e `-mx-px -mt-px` (1px para cima e para os
+          lados), o contorno de cima cobre exatamente a borda da coluna e viaja
+          junto com o cabeçalho preso. */}
+      <div
+        className="sticky top-0 z-10 -mx-px -mt-px rounded-t-lg border-x border-t border-border bg-background"
+        data-cabecalho-da-etapa
+      >
+        <div className="bg-surface-elevated/40 rounded-t-lg">
           <div className="group/etapa flex items-center gap-2 border-b border-border px-3 py-2.5">
             {/* "Selecionar a etapa inteira" é o gesto que faz a ação em lote valer a
             pena: sem ele, mover trinta cards deixa de ser trinta arrastes e vira
@@ -126,25 +192,34 @@ export function StageColumn({
             Indeterminado quando a seleção é parcial: "alguns" e "nenhum" não
             podem ter a mesma aparência num controle que o próximo clique
             inverte. */}
-            <input
-              type="checkbox"
-              checked={todosSelecionados}
-              ref={(el) => {
-                if (el) el.indeterminate = selecionadosAqui > 0 && !todosSelecionados;
-              }}
-              disabled={idsVisiveis.length === 0}
-              onChange={alternarEtapa}
-              aria-label={
-                todosSelecionados
-                  ? `${t("Desmarcar todos em")} ${stage.name}`
-                  : `${t("Selecionar todos em")} ${stage.name}`
-              }
-              className={cn(
-                "h-4 w-4 shrink-0 cursor-pointer accent-accent transition-opacity",
-                "focus:opacity-100 disabled:cursor-default",
-                selecionadosAqui > 0 ? "opacity-100" : "opacity-0 group-hover/etapa:opacity-100",
-              )}
-            />
+            {!somenteLeitura && (
+              <input
+                type="checkbox"
+                checked={todosSelecionados}
+                ref={(el) => {
+                  if (el) el.indeterminate = selecionadosAqui > 0 && !todosSelecionados;
+                }}
+                disabled={idsVisiveis.length === 0}
+                onChange={alternarEtapa}
+                aria-label={
+                  todosSelecionados
+                    ? `${t("Desmarcar todos em")} ${stage.name}`
+                    : `${t("Selecionar todos em")} ${stage.name}`
+                }
+                className={cn(
+                  "h-4 w-4 shrink-0 cursor-pointer accent-accent transition-opacity",
+                  "focus:opacity-100 disabled:cursor-default",
+                  // `pointer-coarse:opacity-100` pelo mesmo motivo da caixa do
+                  // card (ver `components/kanban/KanbanCard.tsx`): no toque o
+                  // hover nunca acontece, e "selecionar a etapa inteira" é o gesto
+                  // que faz a ação em lote valer a pena. Sem ele, mover trinta
+                  // cards no celular eram trinta arrastes.
+                  selecionadosAqui > 0
+                    ? "opacity-100"
+                    : "opacity-0 group-hover/etapa:opacity-100 pointer-coarse:opacity-100",
+                )}
+              />
+            )}
             <span
               className={cn("h-2 w-2 rounded-full", !stage.color && "bg-text-muted/40")}
               style={accentStyle}
@@ -168,12 +243,13 @@ export function StageColumn({
             </span>
           </div>
 
-          {totalCents > 0 && (
+          {temTotal && (
             <div className="border-b border-border px-3 py-1.5 text-[11px] text-text-muted tabular-nums">
-              {formatValorDoNegocio(totalCents, moedaDoTotal)}
-              {ponderadoCents !== null && (
+              {formatSomaPorMoeda(totais, formatValorDoNegocio, { primeira })}
+              {ponderados !== null && (
                 <span className="ml-2">
-                  · {t("ponderado")} {formatValorDoNegocio(ponderadoCents, moedaDoTotal)}
+                  · {t("ponderado")}{" "}
+                  {formatSomaPorMoeda(ponderados, formatValorDoNegocio, { primeira })}
                 </span>
               )}
             </div>
@@ -207,8 +283,12 @@ export function StageColumn({
                 isSelected={selectedLeadIds?.has(lead.id)}
                 isSelecting={(selectedLeadIds?.size ?? 0) > 0}
                 pulseCount={pulses?.get(lead.id) ?? 0}
-                onSelect={aoSelecionar}
-                onOpen={onOpen}
+                onSelect={somenteLeitura ? undefined : aoSelecionar}
+                onOpen={somenteLeitura ? undefined : onOpen}
+                etapas={etapas}
+                onMoverPara={onMoverPara}
+                denso={denso}
+                somenteLeitura={somenteLeitura}
               />
             ))}
             {provided.placeholder}

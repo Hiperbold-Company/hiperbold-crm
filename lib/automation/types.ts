@@ -20,6 +20,26 @@ export interface ActionCtx {
   event: EventRow;
   context: Record<string, unknown>; // mesmo objeto avaliado pelas condições
   requestId: string;
+  /**
+   * Posição da ação em `rule.actions` (a lista inteira, não uma filtrada). Compõe
+   * o id da entrega do webhook de saída (#1529). Opcional porque as fixtures de
+   * teste montam `ActionCtx` sem ela; o motor e o Reenviar sempre a passam.
+   */
+  actionIndex?: number;
+  /**
+   * A lista inteira `rule.actions`, como gravada. Também compõe o id da entrega
+   * (#1529): sem ela, depois de uma ação removida outra herdaria a posição e o
+   * id. Opcional pelo mesmo motivo de `actionIndex`.
+   */
+  ruleActions?: ReadonlyArray<{ type: string; config?: Record<string, unknown> }>;
+  /**
+   * Na pré-checagem: o envio avisa que a agenda o faria PULAR (`nao_enviar`
+   * com compromisso). O motor congela essa decisão se outra regra adiar o
+   * evento — ver `registrarAdiamento` em engine.ts.
+   */
+  anotarPuloPelaAgenda?: (appointmentId: string | null) => void;
+  /** Na execução: a decisão de pular congelada na primeira avaliação do evento. */
+  puloCongeladoPelaAgenda?: { appointment_id: string | null };
 }
 
 export interface ActionExecutor {

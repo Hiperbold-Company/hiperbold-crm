@@ -15,6 +15,7 @@ import type { NextRequest } from "next/server";
 import { ApiError } from "@/lib/api/types";
 import { respostaDeRecusa } from "@/lib/api/recusa";
 import { fail, ok } from "@/lib/api/wrappers";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 import { changeRoleSchema, validateRequest } from "@/lib/schemas";
 import { mudarPapelDoMembro } from "@/lib/team/administracao";
 import { entradaDeEquipe } from "@/lib/team/porta";
@@ -40,8 +41,14 @@ export async function changeMemberRole(
     }
     throw err;
   }
+  // #3696 (upstream): o snapshot em cache curto da pessoa cai ANTES da escrita (fecha a janela em que
+  // uma tela "ao vivo" guarda o valor velho no meio do UPDATE) e DEPOIS dela (o papel/acesso novo vale
+  // na próxima requisição; acesso revogado não sobrevive ao cache).
+  invalidarUsuario(targetUserId);
   try {
-    return ok(await mudarPapelDoMembro(e.deps, targetUserId, input.role), { requestId: e.requestId });
+    const resultado = await mudarPapelDoMembro(e.deps, targetUserId, input.role);
+    invalidarUsuario(targetUserId);
+    return ok(resultado, { requestId: e.requestId });
   } catch (err) {
     return respostaDeRecusa(err, e.requestId);
   }

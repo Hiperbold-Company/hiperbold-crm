@@ -26,6 +26,7 @@ import { audit } from "@/lib/audit";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import { autoriaDaMudanca } from "@/lib/operacao/autoria";
+import type { WebhookFormField } from "@/lib/webhooks/formulario";
 
 /**
  * Fase F3, decisão 3: o erro PT402 de `webhook_sources` (criar ou ativar
@@ -64,12 +65,18 @@ export interface FonteVisivel {
   organization_id: string;
   name: string;
   is_active: boolean;
+  authorize_ai_on_capture: boolean;
+  /** Opção do #2316 — o que a tela usa para pintar o switch da fonte. */
+  update_existing_lead_on_capture: boolean;
+  /** Opção do #3101 — reusar o card aberto do contato no funil da fonte. */
+  reuse_open_lead_on_capture: boolean;
   kind: string;
   path_token: string;
   default_pipeline_id: string;
   default_stage_id: string;
   redirect_to: string | null;
   field_map: Record<string, unknown>;
+  form_fields: WebhookFormField[];
   last_received_at: string | null;
   has_secret: boolean;
   created_at: string;
@@ -91,8 +98,9 @@ export interface FonteVisivel {
  */
 export const COLUNAS_DA_FONTE =
   "id, organization_id, name, is_active, kind, default_pipeline_id, default_stage_id, " +
-  "redirect_to, field_map, last_received_at, secret_encrypted, created_at, updated_at, " +
-  "last_change_actor_kind, last_change_at";
+  "redirect_to, field_map, form_fields, last_received_at, secret_encrypted, created_at, updated_at, " +
+  "last_change_actor_kind, last_change_at, authorize_ai_on_capture, update_existing_lead_on_capture, " +
+  "reuse_open_lead_on_capture";
 
 /** O `path_token` das fontes DESTA organização, lido pelo servidor. */
 export async function tokensDasFontes(deps: DepsDaOperacao, ids: string[]): Promise<Map<string, string>> {
@@ -111,8 +119,9 @@ export async function tokensDasFontes(deps: DepsDaOperacao, ids: string[]): Prom
 function semSegredo(linha: Record<string, unknown>, pathToken: string): FonteVisivel {
   const { secret_encrypted, ...resto } = linha;
   return {
-    ...(resto as unknown as Omit<FonteVisivel, "has_secret" | "path_token">),
+    ...(resto as unknown as Omit<FonteVisivel, "has_secret" | "path_token" | "form_fields">),
     path_token: pathToken,
+    form_fields: Array.isArray(resto.form_fields) ? (resto.form_fields as WebhookFormField[]) : [],
     has_secret: secret_encrypted !== null,
   };
 }
@@ -228,6 +237,7 @@ export interface NovaEntradaAutomatica {
   default_stage_id: string;
   redirect_to?: string | null;
   field_map?: Record<string, string[]>;
+  form_fields?: WebhookFormField[];
   /** Já CIFRADO pelo chamador. A operação nunca vê plaintext de segredo. */
   secret_encrypted?: string | null;
 }
@@ -258,6 +268,7 @@ export async function criarEntradaAutomatica(
       default_pipeline_id: input.default_pipeline_id,
       default_stage_id: input.default_stage_id,
       field_map: input.field_map ?? {},
+      form_fields: input.form_fields ?? [],
       redirect_to: input.redirect_to ?? null,
       ...autoriaDaMudanca(deps.actor),
     })

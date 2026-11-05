@@ -11,7 +11,10 @@
 import { createClient } from "@supabase/supabase-js";
 
 import { credenciaisSupabaseDeTeste } from "../../../scripts/lib/env-de-teste";
-import { CHAVE_DO_MODULO, gravarModulo, type ModuloOpcional } from "../../../lib/instalacao/modulos";
+import { CHAVE_DO_MODULO, gravarModulo, type MODULOS_OPCIONAIS_POR_FLAG } from "../../../lib/instalacao/modulos";
+
+/** Só os módulos por FLAG (`platform_config`); os de tabela se instalam por `fn_modulo_instalar`. */
+type ModuloPorFlag = (typeof MODULOS_OPCIONAIS_POR_FLAG)[number];
 
 function bancoDoE2e() {
   const credenciais = credenciaisSupabaseDeTeste();
@@ -19,14 +22,14 @@ function bancoDoE2e() {
 }
 
 /** Liga o módulo. `ator` é o id de quem "liga" (aparece em `updated_by`). */
-export async function ligarModuloNoE2e(modulo: ModuloOpcional, ator: string): Promise<void> {
+export async function ligarModuloNoE2e(modulo: ModuloPorFlag, ator: string): Promise<void> {
   if (!(await gravarModulo(bancoDoE2e(), modulo, true, ator))) {
     throw new Error(`não consegui ligar o módulo ${modulo} no banco do e2e`);
   }
 }
 
 /** Devolve o módulo ao padrão de fábrica: linha ausente = desligado. */
-export async function desligarModuloNoE2e(modulo: ModuloOpcional): Promise<void> {
+export async function desligarModuloNoE2e(modulo: ModuloPorFlag): Promise<void> {
   const { error } = await bancoDoE2e()
     .from("platform_config")
     .delete()

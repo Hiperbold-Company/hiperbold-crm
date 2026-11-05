@@ -20,13 +20,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useUser } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
+import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import type {
   NovaTarefa,
   PrioridadeDaTarefa,
   SituacaoDaTarefa,
   Tarefa,
 } from "@/lib/tarefas/tipos";
+import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 
 interface Props {
   aberto: boolean;
@@ -39,16 +42,29 @@ interface Props {
   leadId?: string | null;
   contactId?: string | null;
   /**
-   * Quem pode ser responsável. Com a lista, o formulário mostra o campo
-   * "Responsável" (o painel do negócio usa); sem ela, a tarefa nasce sem
-   * responsável, como sempre foi na tela de Tarefas.
+   * A demanda do atendimento a que a tarefa nova fica presa (#2818). Quem cria
+   * de dentro do inbox passa a demanda vigente da conversa: a tarefa nasce no
+   * assunto que a originou, e volta para a lista de quem precisa cumpri-la.
+   */
+  demandaId?: string | null;
+  /**
+   * Quem nasce como responsável numa tarefa NOVA. O dossiê do negócio passa o
+   * próprio usuário: quem anota "ligar sexta" no card quase sempre é quem vai
+   * ligar. Ausente = ninguém, como antes.
+   */
+  responsavelPadrao?: string | null;
+  /**
+   * Quem pode ser responsável (Hiperbold, painel do negócio). Mantido para os
+   * chamadores: desde o merge com o upstream o campo "Responsável" aparece
+   * sempre, com a equipe que pode receber tarefa (`useAssignableMembers`).
    */
   responsaveis?: Array<{ id: string; nome: string }>;
-  /** O responsável que já vem marcado ao criar (o painel passa quem cria). */
-  responsavelPadrao?: string | null;
   /** Esconde prioridade e situação: o formulário curto do painel do negócio. */
   compacto?: boolean;
 }
+
+/** O valor do "ninguém" no Select — o Radix não aceita item com valor vazio. */
+const NINGUEM = "__ninguem__";
 
 /**
  * ISO → os dois campos que a pessoa preenche, no fuso DELA.
@@ -75,12 +91,16 @@ export function FormularioDeTarefa({
   aoSalvar,
   leadId,
   contactId,
-  responsaveis,
+  demandaId,
   responsavelPadrao,
   compacto = false,
 }: Props) {
   const t = useT();
+  const usuario = useUser();
   const editando = Boolean(tarefa);
+  // As opções vêm da MESMA régua que a rota usa para aceitar o responsável
+  // (`lib/tarefas/responsavel.ts`): o que a lista oferece, o servidor grava.
+  const membros = useAssignableMembers(aberto);
 
   // ⚠️ O ESTADO NASCE DAS PROPS, e não de um `useEffect` que dá setState no
   // corpo — que era o do original e o que o `react-hooks/set-state-in-effect`
@@ -95,9 +115,8 @@ export function FormularioDeTarefa({
   const [hora, setHora] = useState(tarefa?.due_date ? prazo.hora : "09:00");
   const [prioridade, setPrioridade] = useState<PrioridadeDaTarefa>(tarefa?.priority ?? "medium");
   const [situacao, setSituacao] = useState<SituacaoDaTarefa>(tarefa?.status ?? "pending");
-  const [responsavel, setResponsavel] = useState<string>(
-    tarefa?.assigned_to ?? responsavelPadrao ?? "",
-  );
+  const responsavelInicial = (editando ? tarefa?.assigned_to : responsavelPadrao) ?? NINGUEM;
+  const [responsavel, setResponsavel] = useState<string>(responsavelInicial);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -123,7 +142,17 @@ export function FormularioDeTarefa({
         status: situacao,
         lead_id: tarefa?.lead_id ?? leadId ?? null,
         contact_id: tarefa?.contact_id ?? contactId ?? null,
-        ...(responsaveis ? { assigned_to: responsavel || null } : {}),
+        // A demanda só viaja em CRIAÇÃO. Ao editar uma tarefa existente,
+        // reenviar o vínculo o sobrescreveria com o do formulário — e o
+        // formulário de edição não é onde se re-vincula (a tela de Tarefas não
+        // ganhou esse campo). Criar de dentro do inbox, sim: nasce presa.
+        ...(editando ? {} : { demanda_id: demandaId ?? null }),
+        // Só vai quando MUDOU. Uma tarefa antiga pode ter como responsável
+        // alguém que saiu da equipe: reenviar o mesmo id faria a rota recusar a
+        // edição do título por causa de um campo em que ninguém mexeu.
+        ...(responsavel !== responsavelInicial || !editando
+          ? { assigned_to: responsavel === NINGUEM ? null : responsavel }
+          : {}),
       });
       aoMudarAbertura(false);
     } catch (falha) {
@@ -187,24 +216,6 @@ export function FormularioDeTarefa({
             </div>
           </div>
 
-          {responsaveis ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="tarefa-responsavel">{t("Responsável")}</Label>
-              <Select value={responsavel} onValueChange={setResponsavel}>
-                <SelectTrigger id="tarefa-responsavel">
-                  <SelectValue placeholder={t("Escolha quem vai fazer")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {responsaveis.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : null}
-
           {compacto ? null : (
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -241,6 +252,38 @@ export function FormularioDeTarefa({
             </div>
           </div>
           )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="tarefa-responsavel">{t("Responsável")}</Label>
+            <Select value={responsavel} onValueChange={setResponsavel}>
+              <SelectTrigger id="tarefa-responsavel">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NINGUEM}>{t("Ninguém")}</SelectItem>
+                {(membros.data ?? []).map((membro) => (
+                  <SelectItem key={membro.user_id} value={membro.user_id}>
+                    {membro.user_id === usuario.id
+                      ? t("Eu")
+                      : rotuloDoMembro(membro, t)}
+                  </SelectItem>
+                ))}
+                {/* O responsável de hoje pode não estar mais na lista (saiu da
+                    equipe): ele continua como opção para o Select não ficar em
+                    branco, e quem abre vê que a tarefa tem dono. */}
+                {responsavelInicial !== NINGUEM &&
+                !(membros.data ?? []).some((m) => m.user_id === responsavelInicial) ? (
+                  <SelectItem value={responsavelInicial}>
+                    {responsavelInicial === usuario.id
+                      ? t("Eu")
+                      : membros.isSuccess
+                        ? t("Fora da equipe")
+                        : t("Carregando…")}
+                  </SelectItem>
+                ) : null}
+              </SelectContent>
+            </Select>
+          </div>
 
           {erro ? (
             <p role="alert" className="rounded-md bg-destructive/10 p-2 text-xs font-medium text-destructive">

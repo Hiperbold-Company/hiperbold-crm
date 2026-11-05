@@ -49,13 +49,13 @@ permissions:
 # ATUAL deixaria `invariants`/`e2e`/`imagens-ok` verdes sem ter medido nada.
 #
 #   pull_request   → cancela o job superado. Medição de head velho não vale nada.
-#   push na main   → não cancela (a rodada da main é a medição da árvore
-#                    integrada). Com grupo, um job PENDENTE da main é substituído
-#                    pelo mais novo — que roda e mede um superconjunto.
+#   push na main   → cancela também o job de teste substituído no mesmo grupo.
+#                    A medição integrada válida continua sendo a do head atual,
+#                    com os cinco checks obrigatórios SUCCESS; cancelado não prova.
 #   tag            → nunca. É a publicação da versão.
 #
-# Exceção: publish-image também cancela no push da main (lá o produto é
-# `latest`, que a rodada seguinte sobrescreve) — o porquê está no arquivo dele.
+# publish-image tem política própria para `latest`/tags, descrita no arquivo
+# dele. Esta mudança só alcança os quatro jobs pesados de TESTE; não a publicação.
 # O grupo é por PR (e não por branch) para reabrir um PR não colidir com o run
 # de outro que aponte para a mesma ref. Vigiado por
 # tests/unit/concorrencia-so-nos-jobs-pesados.test.ts.
@@ -84,6 +84,11 @@ permissions:
 # MESMO head continuam dividindo um grupo só. O custo é o run velho aprovado
 # rodar até o fim em paralelo, em vez de ser cancelado. A primeira tentativa
 # segue no grupo do PR, e o push novo continua cancelando o velho.
+#
+# Na main, tentativa >= 2 também usa o SHA do próprio evento no sufixo: rerun
+# antigo não cancela o head novo. A primeira tentativa conserva o grupo anterior
+# por workflow/job/perna/ref. Concurrency ordena entrada no grupo, não ancestrais;
+# esta política não converte cancelamento em prova nem dispensa os cinco gates.
 
 jobs:
   # A suíte de unit em QUATRO partes paralelas (duas até 22/09/2026, três até
@@ -153,13 +158,16 @@ jobs:
     # porquê e a guarda contra fork: comentário do e2e-parte no e2e.yml.
     runs-on: ${{ vars.EXECUTOR_PROPRIO == 'ligado' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'deskcomm-proprio' || 'ubuntu-latest' }}
     concurrency:
-      group: ${{ github.workflow }}-verify-parte${{ matrix.parte }}-${{ github.event.pull_request.number || github.ref }}${{ github.event_name == 'pull_request' && github.run_attempt != '1' && format('-reentrada-{0}', github.event.pull_request.head.sha) || '' }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      group: ${{ github.workflow }}-verify-parte${{ matrix.parte }}-${{ github.event.pull_request.number || github.ref }}${{ github.event_name == 'pull_request' && github.run_attempt != '1' && format('-reentrada-{0}', github.event.pull_request.head.sha) || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.run_attempt != '1' && format('-reentrada-{0}', github.sha) || '' }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     strategy:
       # Sem fail-fast: um vermelho numa parte não esconde o da outra.
       fail-fast: false
       matrix:
-        parte: [1, 2, 3, 4]
+        # Hiperbold, 04/11/2026: a junção do upstream 1.58–1.100 dobrou a suíte unitária e a
+        # parte 1 foi a 15 min (teto 15, orçamento 12) com tudo verde. Seis partes, não quatro;
+        # os passos fixos seguem nas partes 1 a 4.
+        parte: [1, 2, 3, 4, 5, 6, 7, 8, 9]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -250,9 +258,13 @@ jobs:
       - name: Typecheck
         if: matrix.parte == 1
         # Hiperbold (15/10/2026): o tsc sem incremental passou de 4 GB (medido 4,57 GB
-        # no Mac) e estourou o heap padrão do Node no runner. 6 GB cabe na máquina.
+        # no Mac) e estourou o heap padrão do Node no runner. 6 GB cabia na máquina.
+        # 04/11/2026, depois da junção do upstream 1.58–1.100: com 6 GB o tsc morre
+        # (exit 134, medido no Mac e no runner); com 7 GB passa, RSS 7,66 GB. O runner
+        # privado tem 8 GB de RAM e swap: 7 GB é o teto. Se voltar a estourar, dividir
+        # o typecheck em dois programas (ou runner maior) — não subir mais o heap.
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=7168
         run: pnpm typecheck
 
       # Na parte 2, não na 1: o porquê e a conta estão no cabeçalho do job.
@@ -343,8 +355,22 @@ jobs:
       # rodaram acima; `--shard` divide os arquivos entre as quatro partes. Juntos
       # são a suíte inteira, uma vez só. Localmente o comando continua sendo
       # `pnpm test:unit`, sem recorte.
-      - name: Unit tests (parte ${{ matrix.parte }}/4)
-        run: pnpm test:unit --project produto --shard=${{ matrix.parte }}/4
+      # Hiperbold, 05/11/2026: a parte 9 não roda unit; ela é só do kit self-host (abaixo).
+      - name: Unit tests (parte ${{ matrix.parte }}/8)
+        if: matrix.parte != 9
+        run: pnpm test:unit --project produto --shard=${{ matrix.parte }}/8
+
+      # O MAPA DA SKILL COBRE O MENU? — aviso, nunca reprova.
+      #
+      # A skill deskcomm-operacao ensinava só parte das telas do menu
+      # porque nada comparava o menu (lib/navigation/catalogo.ts) com o
+      # mapa dela.
+      # Este passo confere e AVISA (::warning); continue-on-error garante
+      # o verde. Transformar em bloqueio é decisão do dono do produto.
+      - name: Mapa da skill de operação cobre as telas do menu? (aviso)
+        if: matrix.parte == 1 && github.event_name == 'pull_request'
+        continue-on-error: true
+        run: bash .agents/skills/deskcomm-operacao/scripts/conferir-mapa.sh --ci
 
       # O ACERVO DE `.changes/` CABE NA TELA DA VPS? — e por que fora de PR.
       #
@@ -390,8 +416,11 @@ jobs:
       # escolher OpenRouter travava o instalador num laço, escolher OpenAI
       # deixava o .env pela metade — passaram por todos os checks verdes. Era 15s;
       # medido 98–234 s em 03/11/2026, e por isso tem a parte 4 só para ele.
+      # Hiperbold, 05/11/2026: depois do merge do upstream o kit mediu 393 s e a parte 4 passou do
+      # orçamento (13 min) com tudo verde; foi para a 8, e a 8 também passou (13 min, run 42052968298):
+      # o kit ganha a parte 9, sem unit.
       - name: Kit self-host (bash)
-        if: matrix.parte == 4
+        if: matrix.parte == 9
         run: pnpm test:shell
 
       - name: Orçamento de tempo do verify-parte
@@ -464,11 +493,11 @@ jobs:
             exit 0
           fi
           decorrido=$(( ($(date +%s) - VERIFY_INICIO) / 60 ))
-          echo "verify parte ${{ matrix.parte }}/4: ${decorrido} min (orçamento ${ORCAMENTO_MIN} min, teto de travamento 15 min)"
+          echo "verify parte ${{ matrix.parte }}/9: ${decorrido} min (orçamento ${ORCAMENTO_MIN} min, teto de travamento 15 min)"
           if [ "$decorrido" -le "${ORCAMENTO_MIN}" ]; then
             exit 0
           fi
-          echo "::error::A parte ${{ matrix.parte }}/4 do verify levou ${decorrido} min contra um orçamento de ${ORCAMENTO_MIN} min."
+          echo "::error::A parte ${{ matrix.parte }}/9 do verify levou ${decorrido} min contra um orçamento de ${ORCAMENTO_MIN} min."
           echo "::error::Isto NÃO é defeito do seu PR: a suíte unitária cresceu. Em 18/09/2026, \`Unit tests\` já era 10,3 dos 13,2 min do job."
           echo "::error::O conserto é mais uma parte em \`verify-parte\` (matrix + --shard), não subir este número."
           exit 1
@@ -575,14 +604,16 @@ jobs:
     # medido — não há Docker onde esta matriz foi escrita —, e existe para o
     # vermelho continuar falando de schema: mantido em 20, a perna morreria por
     # relógio no meio da segunda passada.
-    timeout-minutes: 30
+    timeout-minutes: 45
+    # Hiperbold, 04/11/2026: depois do merge do upstream 1.58–1.100 a perna do pg17 levou 29,5 min
+    # e a do pg15 foi cortada aos 30 com 465 arquivos verdes. Medido, não declarado: o teto vai a 45.
     # Executor próprio para trabalho nosso quando EXECUTOR_PROPRIO=ligado; o
     # porquê e a guarda contra fork: comentário do e2e-parte no e2e.yml.
     runs-on: ${{ vars.EXECUTOR_PROPRIO == 'ligado' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'deskcomm-proprio' || 'ubuntu-latest' }}
     needs: [invariants-alcance]
     concurrency:
-      group: ${{ github.workflow }}-invariants-majors-pg${{ matrix.pg }}-${{ github.event.pull_request.number || github.ref }}${{ github.event_name == 'pull_request' && github.run_attempt != '1' && format('-reentrada-{0}', github.event.pull_request.head.sha) || '' }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      group: ${{ github.workflow }}-invariants-majors-pg${{ matrix.pg }}-${{ github.event.pull_request.number || github.ref }}${{ github.event_name == 'pull_request' && github.run_attempt != '1' && format('-reentrada-{0}', github.event.pull_request.head.sha) || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.run_attempt != '1' && format('-reentrada-{0}', github.sha) || '' }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     strategy:
       # `false` e não o padrão (`true`): com `fail-fast`, a primeira major que
       # reprovasse CANCELARIA a outra e o relatório diria "cancelled" em vez de
@@ -606,6 +637,11 @@ jobs:
         timeout-minutes: 5
 
       - name: RLS isolation + governance invariants (pg${{ matrix.pg }})
+        # O token é só para `gh release view`: o test:db confere o update.sh da
+        # última release publicada (issue #1909), e a API anônima tem teto de 60
+        # consultas/hora por IP — o executor próprio é um IP só.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:db
 
       # O `update.sh` do cliente roda sobre um banco COM DADOS, e nenhum gate

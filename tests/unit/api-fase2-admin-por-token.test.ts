@@ -800,6 +800,9 @@ describe("public-paths da fase 2", () => {
     `/api/v1/ai/agents/${U}/publish`,
     `/api/v1/ai/agents/${U}/pause`,
     `/api/v1/ai/agents/${U}/versions/${U}`,
+    // O upstream converteu o teste da versão para sessão ou Bearer (`resolveAuthDual`, `config:write` OU
+    // `mcp:write`, token admin) com a organização da linha do token: o proxy deixa o handler decidir.
+    `/api/v1/ai/agents/${U}/versions/${U}/test`,
   ])("libera %s", (caminho) => {
     expect(isPublicPath(caminho)).toBe(true);
   });
@@ -807,7 +810,6 @@ describe("public-paths da fase 2", () => {
   it.each([
     "/api/v1/ai/agents/assignable",
     `/api/v1/ai/agents/${U}/runs`,
-    `/api/v1/ai/agents/${U}/versions/${U}/test`,
     `/api/v1/ai/agents/${U}/proposals/${U}/apply`,
     `/api/v1/pipelines/${U}/fields/origem/extra`,
     `/api/v1/pipelines/${U}/fields/1invalida`,

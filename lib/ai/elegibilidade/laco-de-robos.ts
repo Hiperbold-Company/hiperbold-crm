@@ -78,7 +78,7 @@ export async function numeroEhDeCanalDaInstalacao(
  * `dígitos`, as duas que os conectores gravam.
  */
 export async function numeroEhDeCanalDaInstalacaoViaSupabase(
-  admin: SupabaseClient,
+  admin: Pick<SupabaseClient, "from">,
   telefone: string | null | undefined,
 ): Promise<boolean> {
   const digitos = digitosDasVariantes(telefone);

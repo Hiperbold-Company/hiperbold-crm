@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
-import { mfaEmDivida } from "@/lib/auth/server";
+import { mfaEmDividaEstrita } from "@/lib/auth/server";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -13,8 +12,26 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * de escopo segue o mesmo padrão de `POST /api/v1/admin/tenants`.
  */
 
-vi.mock("@/lib/auth/requirePlatformAdmin", () => ({ requirePlatformAdmin: vi.fn() }));
-vi.mock("@/lib/auth/server", () => ({ mfaEmDivida: vi.fn() }));
+// O portão real (`requirePlatformAdminEscrita`) roda: só a sessão e a linha de
+// `platform_admins` vêm do dublê, e a dívida de MFA estrita é o interruptor.
+const sessao = vi.hoisted(() => ({ scope: "full" }));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => {
+    const consulta: Record<string, unknown> = {};
+    consulta.select = () => consulta;
+    consulta.eq = () => consulta;
+    consulta.is = () => consulta;
+    consulta.maybeSingle = async () => ({
+      data: { user_id: ADMIN_ID, scope: sessao.scope, mfa_required: false, revoked_at: null },
+      error: null,
+    });
+    return {
+      auth: { getUser: async () => ({ data: { user: { id: ADMIN_ID, factors: [] } } }) },
+      from: () => consulta,
+    };
+  },
+}));
+vi.mock("@/lib/auth/server", () => ({ mfaEmDividaEstrita: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
@@ -22,16 +39,6 @@ vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 const ADMIN_ID = "11111111-1111-4111-8111-111111111111";
 const INCIDENT_ID = "33333333-3333-4333-8333-333333333333";
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
-
-const ADMIN_FULL = {
-  user: { id: ADMIN_ID },
-  platformAdmin: { user_id: ADMIN_ID, scope: "full", mfa_required: true },
-} as never;
-
-const ADMIN_SUPPORT_READONLY = {
-  user: { id: ADMIN_ID },
-  platformAdmin: { user_id: ADMIN_ID, scope: "support_readonly", mfa_required: true },
-} as never;
 
 function incidentsBuilder() {
   const builder: Record<string, unknown> = {};
@@ -70,21 +77,22 @@ function request() {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(requireSupportWrite).mockResolvedValue(null);
-  vi.mocked(requirePlatformAdmin).mockResolvedValue(ADMIN_FULL);
-  vi.mocked(mfaEmDivida).mockResolvedValue(false);
+  sessao.scope = "full";
+  vi.mocked(mfaEmDividaEstrita).mockResolvedValue(false);
   vi.mocked(createAdminClient).mockReturnValue(makeAdminStub() as never);
 });
 
 describe("POST /api/v1/admin/incidents/[id]/resolve", () => {
   it("admin com escopo support_readonly é recusado antes de qualquer escrita", async () => {
-    vi.mocked(requirePlatformAdmin).mockResolvedValue(ADMIN_SUPPORT_READONLY);
+    sessao.scope = "support_readonly";
     const { POST } = await import("./route");
 
     const res = await POST(request(), { params: Promise.resolve({ id: INCIDENT_ID }) });
 
     expect(res.status).toBe(403);
     const body = (await res.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("forbidden");
+    // O portão comum da escrita (upstream) nomeia a recusa de escopo.
+    expect(body.error.code).toBe("forbidden_scope");
   });
 
   it("admin com escopo full e MFA em dia consegue resolver", async () => {
@@ -96,7 +104,7 @@ describe("POST /api/v1/admin/incidents/[id]/resolve", () => {
   });
 
   it("admin com escopo full mas MFA em dívida é recusado", async () => {
-    vi.mocked(mfaEmDivida).mockResolvedValue(true);
+    vi.mocked(mfaEmDividaEstrita).mockResolvedValue(true);
     const { POST } = await import("./route");
 
     const res = await POST(request(), { params: Promise.resolve({ id: INCIDENT_ID }) });

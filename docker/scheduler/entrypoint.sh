@@ -64,25 +64,33 @@ chmod 600 "$ARQUIVO_DO_CABECALHO"
 # já deixaria o token vencer. É barata: só toca conexão perto de expirar, e
 # rodada vazia não audita.
 #
-# SYNC a cada 15 min, e NÃO na mesma cadência. Os custos são diferentes: renovar
-# é uma requisição por conexão que está vencendo; sincronizar é uma por
-# calendário, sempre. Colar as duas obrigaria a escolher entre renovar raro
-# demais (e a agenda morre) ou sincronizar caro demais (e gasta cota do cliente).
+# SYNC a cada minuto. Uma página incompleta deixa o próximo passo imediatamente
+# elegível no banco; esse cron frequente drena a paginação sem esperar 15 min por
+# página. Calendários sem trabalho continuam espaçados pela própria RPC, que
+# agenda a próxima leitura em 15 min após concluir. A renovação permanece a cada
+# 10 min: ela tem outro custo e outro prazo.
 #
 # ⚠️ E o comentário fica AQUI, fora da string: dentro de CRONS= ele não seria
 # comentário, seria DADO — e crase em prosa dentro de aspas duplas o shell
 # EXECUTA. Foi o que quebrou o entrypoint na primeira tentativa desta linha.
+#
+# A DEVOLUÇÃO AO RODÍZIO (issue #2985) entra na MESMA cadência do irmão
+# `handoff-devolucao`, 5 em 5 minutos, pelo mesmo motivo: o piso do prazo é
+# 5 min e uma varredura por minuto seriam 60 varreduras/h em toda instalação
+# para um prazo que a maioria deixa em dezenas de minutos.
 CRONS="
 * * * * *|240|api/v1/cron/prospecting
 * * * * *|25|api/v1/cron/agent-dispatcher
 * * * * *|25|api/v1/cron/followup-flow-worker
 * * * * *|45|api/v1/cron/event-log-drain
 * * * * *|25|api/v1/cron/routing-worker
-* * * * *|25|api/v1/cron/recover-stuck-messages
+*/5 * * * *|25|api/v1/cron/recover-stuck-messages
+* * * * *|25|api/v1/cron/proposta-travada
 * * * * *|45|api/v1/cron/webhook-replay
 */5 * * * *|25|api/v1/cron/storage-redaction?limit=50
 */5 * * * *|25|api/v1/cron/snooze-watcher
 */5 * * * *|60|api/v1/cron/handoff-devolucao
+*/5 * * * *|60|api/v1/cron/rodizio-devolucao
 # A CAMPANHA. Minuto a minuto, e a rodada manda no máximo uma mensagem por
 # número: é o cron que dá a cadência base, e o ritmo da campanha e do canal
 # (channel_knobs + pacing_ledger) só sabem torná-la mais lenta.
@@ -96,14 +104,24 @@ CRONS="
 # rodadas). Sem ASAAS_ENABLED a rodada não reserva nada e é barata.
 * * * * *|45|api/v1/cron/processar-eventos-asaas
 */5 * * * *|60|api/v1/cron/webhook-log-retention
+# OAuth por contato dos servidores MCP do agente (migration 9095): revoga no
+# terceiro o acesso cuja conversa encerrou (ou cujo contato foi anonimizado).
+*/5 * * * *|60|api/v1/cron/mcp-oauth-revogacao
 */5 * * * *|45|api/v1/cron/channel-health
 # O PAREAMENTO POR QR CODE que ficou pela metade (cliente leu o QR e fechou a aba, ou desistiu): conclui o que
 # conectou e apaga no servidor o que não conectou em 30 minutos, liberando a vaga do plano. A cada 5 minutos,
 # varredura curta (sem pendência é uma consulta ao banco). Sem o recurso configurado, a rodada não acha nada.
 */5 * * * *|60|api/v1/cron/pareamento-qr-limpeza
+# A JANELA DE MANUTENÇÃO (#2388). Minuto a minuto porque o que ela decide é a
+# borda de um horário ESCOLHIDO POR UMA PESSOA: perder a abertura ou a retomada
+# por causa de uma varredura a cada 5 minutos seria o defeito inteiro. Barata:
+# só lê as duas linhas vivas da agenda, e quem não tem janela não é escrito.
+# Quando escreve, escreve pela MESMA peça da pausa manual — não existe estado
+# paralelo.
+* * * * *|25|api/v1/cron/channel-pause-scheduler
 */10 * * * *|60|api/v1/cron/contact-avatars
 */10 * * * *|60|api/v1/cron/agenda-google-refresh
-*/15 * * * *|90|api/v1/cron/agenda-google-sync
+* * * * *|90|api/v1/cron/agenda-google-sync
 # A IDA. Cadência mais curta que a volta de propósito: quem marcou pela tela
 # espera ver o compromisso no celular dele em minutos, e a ida é barata (só
 # manda o que mudou). A volta é cara — varre calendário inteiro — e por isso
@@ -119,12 +137,30 @@ CRONS="
 # num índice parcial das tarefas abertas com prazo; quem não tem nada vencendo não
 # gera evento nem auditoria.
 * * * * *|45|api/v1/cron/tarefas-vencidas
+# O LEMBRETE DE TAREFA. A cada 5 minutos porque a antecedência é escolhida
+# pela PESSOA (15 min, 1 h que é o padrão, ou 1 dia): uma varredura mais lenta
+# transformaria avisar 15 minutos antes em avisar até 20. Barato: só tarefa
+# com prazo na janela, com responsável, e que ainda não virou item da Central.
+*/5 * * * *|45|api/v1/cron/task-reminder
 */15 * * * *|45|api/v1/cron/agenda-expira-pendentes
 */15 * * * *|60|api/v1/cron/risk-watcher
 # O CASO PARADO. De hora em hora, e não a cada 5 minutos: o prazo é de 24h, e
 # uma varredura mais frequente só gastaria consulta para descobrir o mesmo nada.
 7 * * * *|60|api/v1/cron/case-stale-watcher
 */30 * * * *|60|api/v1/cron/contact-phones
+# O NOME DA AGENDA. O webhook não traz o nome salvo no celular; esta varredura
+# pergunta ao canal e preenche a ficha. Dez em dez minutos porque quem acabou
+# de conectar o número está olhando a inbox agora. Lote de 5 e prazo de 45 s
+# dentro da rota: o pior caso cabe nos 60 s com folga.
+*/10 * * * *|60|api/v1/cron/contact-names
+# O HISTÓRICO DO WHATSAPP (#999). A cada minuto: a importação anda em rodadas
+# curtas (3 conversas OU 300 mensagens OU 20 chamadas ao canal) e quem pediu
+# está olhando o andamento. Barato quando não há importação rodando: uma
+# leitura e nada mais. A rota trava cada importação antes de rodar, então uma
+# rodada lenta que passe do minuto não roda em dobro. O -m (60) fica acima do
+# prazo da chamada (45 s, lib/channels/historico/prazo.ts) com folga para o
+# banco; tests/unit/historico-cron.test.ts recusa se os dois se aproximarem.
+* * * * *|60|api/v1/cron/historico-import
 17 * * * *|60|api/v1/cron/contact-proposals-watcher
 23 * * * *|60|api/v1/cron/followup-sem-agente
 # O ANIVERSÁRIO. De hora em hora, e não uma vez ao dia, porque quem decide o
@@ -133,11 +169,25 @@ CRONS="
 # no dia errado metade do mundo e de madrugada boa parte do resto. Barato: quem
 # não configurou a automação não chega a ser varrido.
 7 * * * *|60|api/v1/cron/contact-birthdays
+# O RESUMO DAS 7H DO AVISO DE AGENDAMENTO (0707). De dez em dez minutos pelo
+# mesmo motivo do aniversário — a hora é a do relógio de CADA organização —, e
+# mais curto porque a janela é 7h–10h: se o número estiver parado às 7h, o
+# resumo sai assim que ele voltar. Quem não ligou o aviso não chega a ser varrido.
+*/10 * * * *|60|api/v1/cron/agenda-resumo-do-dia
 # A DATA DO FUNIL (#989). Mesma cadência e mesmo motivo do aniversário: de hora
 # em hora, e quem decide o momento é o relógio de parede de CADA organização —
 # a rodada só age naquela que marca a hora da varredura. Minuto diferente do
 # aniversário para as duas não disputarem a mesma batida num self-host pequeno.
 23 * * * *|60|api/v1/cron/lead-date-field-due
+# #1540 — silêncio e etapa parada: gatilhos por TEMPO (ausência de evento), então
+# rodam de hora em hora e a trava no event_log (regra:negócio:âncora) segura a
+# repetição enquanto a âncora não mudar. Minuto 37, e não o 23 da data do funil:
+# as duas varrem crm_leads e não devem disputar a mesma batida num self-host pequeno.
+37 * * * *|60|api/v1/cron/lead-time-triggers
+# A COBRANCA DOS SEUS CLIENTES. De hora em hora: a reativacao chega pelo aviso
+# do provedor, em segundos, e a hora so pesa na regua, que conta em dias. Minuto
+# 43, longe das outras varreduras horarias. Chave desligada: sai na hora.
+43 * * * *|120|api/v1/cron/cobranca
 # O canal mudo (doc 11, decisão B): varredura de banco, sem rede, com régua em
 # DIAS. Diária e de madrugada porque o estado que ela lê muda em dias — de 5 em
 # 5 minutos seriam 288 varreduras para nada, e o aviso chegaria na mesma hora.
@@ -165,6 +215,9 @@ CRONS="
 # 05:25, 05:40). Sem ASAAS_ENABLED a rodada não toca banco nem rede.
 30 4 * * *|120|api/v1/cron/conciliar-asaas
 40 4 * * *|120|api/v1/cron/data-retention
+0 8 * * *|60|api/v1/cron/proposal-expiry
+30 8 * * *|60|api/v1/cron/proposal-promised-not-created
+0 6 * * 0|60|api/v1/cron/proposal-acceptance-rate
 55 4 * * *|60|api/v1/cron/conferir-contadores-de-plano
 # A CARTEIRA DE TOKENS (F2-B, Tarefa 8). 05:25 UTC (este container roda com
 # TZ: UTC, docker-compose.prod.yml), que são 02:25 em América/São_Paulo:

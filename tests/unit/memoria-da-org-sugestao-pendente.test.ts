@@ -24,8 +24,19 @@ function tabelaEmMemoria(linhas: Linha[]) {
   return {
     linhas,
     from(nome: string) {
+      // O prazo da anotação (#2369) se decide no fuso da organização: a leitura passa por aqui.
+      if (nome === "organizations") {
+        const org: Record<string, unknown> = {
+          select: () => org,
+          eq: () => org,
+          maybeSingle: async () => ({ data: { timezone: "America/Sao_Paulo" }, error: null }),
+        };
+        return org;
+      }
       if (nome !== "org_memory_entries") throw new Error(`tabela inesperada: ${nome}`);
       const filtros: Array<[string, unknown]> = [];
+      // `.or("col.is.null,col.gte.AAAA-MM-DD")` — o único `or` que as ferramentas montam (prazo).
+      const prazos: Array<{ coluna: string; desde: string }> = [];
       let modo: "select" | "insert" = "select";
       let aInserir: Linha | null = null;
       let contar = false;
@@ -43,6 +54,12 @@ function tabelaEmMemoria(linhas: Linha[]) {
           filtros.push([c, v]);
           return q;
         },
+        or: (expr: string) => {
+          const m = /^(\w+)\.is\.null,\1\.gte\.(.+)$/.exec(expr);
+          if (!m) throw new Error(`or inesperado: ${expr}`);
+          prazos.push({ coluna: m[1]!, desde: m[2]! });
+          return q;
+        },
         order: () => q,
         limit: () => q,
         single: async () => {
@@ -52,7 +69,14 @@ function tabelaEmMemoria(linhas: Linha[]) {
           return { data: nova, error: null };
         },
         then: (ok: (r: unknown) => unknown) => {
-          const achadas = linhas.filter((l) => filtros.every(([c, v]) => l[c] === v));
+          const achadas = linhas.filter(
+            (l) =>
+              filtros.every(([c, v]) => l[c] === v) &&
+              prazos.every(({ coluna, desde }) => {
+                const v = l[coluna];
+                return v === null || v === undefined || String(v) >= desde;
+              }),
+          );
           return ok(contar ? { count: achadas.length, data: null, error: null } : { data: achadas, error: null });
         },
       };
@@ -143,7 +167,7 @@ describe("o prompt só recebe entrada aprovada", () => {
   });
 
   it("o bloco renderizado carrega o que veio de loadOrgMemory e nada além", () => {
-    const bloco = renderOrgMemory({ content: null, entries: [{ id: "1", title: "Troca", body: "30 dias." }] });
+    const bloco = renderOrgMemory({ content: null, entries: [{ id: "1", title: "Troca", body: "30 dias.", valid_until: null }] });
     expect(bloco).toContain("Troca: 30 dias.");
     expect(bloco).not.toContain("desconto");
   });

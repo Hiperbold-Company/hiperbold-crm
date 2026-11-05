@@ -717,7 +717,17 @@ describe("0905 parte 4 (revisão fase F2, achados M1 e M2 da auditoria de segura
     // zero, achado só provado rodando pnpm test:db (INSTALL mode) contra o
     // baseline inteiro, não contra um banco já migrado.
     for (const sql of [MIGRATION, BASELINE]) {
-      expect(sql).not.toMatch(/before insert or update of[^;]*provisional_until_handover/);
+      // Só os DOIS gatilhos da 0905 (`trg_billing_trava_user_organizations*`). O upstream
+      // tem gatilhos próprios com `update of ... provisional_until_handover`
+      // (`trg_membro_provisorio_so_pelo_servidor`, `trg_trava_assentos_do_plano`), e eles
+      // acrescentam a coluna logo antes de si: no install do zero não quebram.
+      const daNossa = [...sql.matchAll(/create trigger\s+trg_billing_trava_user_organizations\w*[^;]*;/g)].map(
+        (m) => m[0],
+      );
+      expect(daNossa.length).toBeGreaterThanOrEqual(2);
+      for (const gatilho of daNossa) {
+        expect(gatilho).not.toMatch(/before insert or update of[^;]*provisional_until_handover/);
+      }
       expect(sql).toMatch(
         /create trigger\s+trg_billing_trava_user_organizations_provisorio\s+before insert or update on public\.user_organizations/,
       );

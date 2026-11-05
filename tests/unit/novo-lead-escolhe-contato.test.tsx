@@ -1,5 +1,5 @@
 /**
- * "Novo Lead" pelo funil nasce sem contato (#852, fatia S2).
+ * "Novo negócio" pelo funil nasce sem contato (#852, fatia S2).
  *
  * Medido em `main@174cd0da`: `NewLeadDialog` pede título, descrição, etapa,
  * valor, fechamento e tags — e nada mais. O `contact_id` só vai quando o
@@ -22,8 +22,8 @@
  *
  * O contato fica OPCIONAL, com aviso. O defeito relatado é a ausência do campo,
  * não a permissão de criar sem ele: com o campo na tela e o título nascendo com
- * o nome da pessoa, o caminho fácil já é o certo. Obrigar custaria um major
- * (`exige_acao` em `lib/release/fragmento.ts:44`) e quebraria o hábito de abrir
+ * o nome da pessoa, o caminho fácil já é o certo. Obrigar exigiria ação do
+ * operador (`exige_acao`, então major; minor desde 07/10) e quebraria o hábito de abrir
  * o card no meio da ligação — decisão do dono da instalação em 16/09, depois de
  * medir os dois custos. Se o quadro continuar juntando card órfão, a trava se
  * decide com dado.
@@ -45,6 +45,9 @@ vi.mock("@/hooks/contacts/useContactList", () => ({
   useContactList: (filtros: { search?: string }) => busca(filtros),
 }));
 
+vi.mock("@/hooks/auth/AuthProvider", () => ({
+  useActiveOrg: () => ({ currency: "BRL", country: null }),
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { NewLeadDialog } from "@/components/kanban/NewLeadDialog";
@@ -76,7 +79,7 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe("Novo Lead pelo funil — o lead nasce com contato", () => {
+describe("Novo negócio pelo funil — o lead nasce com contato", () => {
   it("escolher um contato da base manda o contact_id na criação", async () => {
     const user = userEvent.setup();
     render(
@@ -92,7 +95,7 @@ describe("Novo Lead pelo funil — o lead nasce com contato", () => {
     await user.click(await screen.findByRole("button", { name: /Michelle/ }));
 
     await user.type(screen.getByLabelText("Título"), "Consulta trabalhista");
-    await user.click(screen.getByRole("button", { name: "Criar lead" }));
+    await user.click(screen.getByRole("button", { name: "Criar negócio" }));
 
     await waitFor(() => expect(criarLead).toHaveBeenCalledTimes(1));
     expect(criarLead.mock.calls[0]?.[0]).toMatchObject({ contact_id: MICHELLE.id });
@@ -134,7 +137,7 @@ describe("Novo Lead pelo funil — o lead nasce com contato", () => {
     );
 
     await user.type(await screen.findByLabelText("Título"), "Outro assunto");
-    await user.click(screen.getByRole("button", { name: "Criar lead" }));
+    await user.click(screen.getByRole("button", { name: "Criar negócio" }));
 
     await waitFor(() => expect(criarLead).toHaveBeenCalledTimes(1));
     expect(criarLead.mock.calls[0]?.[0]).not.toHaveProperty("contact_id");
@@ -154,7 +157,7 @@ describe("Novo Lead pelo funil — o lead nasce com contato", () => {
     expect(await screen.findByText(/não recebe WhatsApp/i)).toBeTruthy();
 
     await user.type(screen.getByLabelText("Título"), "Consulta trabalhista");
-    await user.click(screen.getByRole("button", { name: "Criar lead" }));
+    await user.click(screen.getByRole("button", { name: "Criar negócio" }));
 
     await waitFor(() => expect(criarLead).toHaveBeenCalledTimes(1));
     expect(criarLead.mock.calls[0]?.[0]).not.toHaveProperty("contact_id");
@@ -179,6 +182,7 @@ describe("Novo Lead pelo funil — o lead nasce com contato", () => {
   });
 });
 
+// O botão virou «Criar negócio» com a #3811 do upstream (o card se chama Negócio), adotada na junção de 04/11/2026.
 describe("Fase F3, tarefa 9 — bloqueio do plano no botão «Criar lead»", () => {
   it("com o bloqueio valendo, o botão fica desabilitado e mostra o motivo", async () => {
     render(
@@ -192,7 +196,7 @@ describe("Fase F3, tarefa 9 — bloqueio do plano no botão «Criar lead»", () 
       />,
     );
 
-    const botao = await screen.findByRole("button", { name: "Criar lead" });
+    const botao = await screen.findByRole("button", { name: "Criar negócio" });
     expect(botao).toBeDisabled();
     expect(botao).toHaveAttribute("title", "3 de 3 leads do plano Starter");
     expect(screen.getByText("3 de 3 leads do plano Starter")).toBeInTheDocument();
@@ -210,7 +214,7 @@ describe("Fase F3, tarefa 9 — bloqueio do plano no botão «Criar lead»", () 
       />,
     );
 
-    const botao = await screen.findByRole("button", { name: "Criar lead" });
+    const botao = await screen.findByRole("button", { name: "Criar negócio" });
     expect(botao).toBeEnabled();
     expect(botao).not.toHaveAttribute("title");
   });

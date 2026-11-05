@@ -15,8 +15,9 @@
  * filtra `organization_id`.
  */
 import { audit } from "@/lib/audit";
+import { invalidarOrg } from "@/lib/auth/cache-curto";
 import { paisesOferecidos } from "@/lib/legal/perfil-do-pais";
-import { interfaceTemDestino, type InterfaceSettings } from "@/lib/navigation/interface";
+import { interfaceTemDestino, lerInterface, type InterfaceSettings } from "@/lib/navigation/interface";
 import type { Role } from "@/lib/auth/types";
 import type { TenantInput } from "@/lib/schemas/settings";
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -43,6 +44,7 @@ export interface ConfiguracaoDaOrganizacao {
   locale: string;
   currency: string;
   media_retention_days: number;
+  media_retention_enforced: boolean;
   dpo_email: string | null;
   privacy_policy_url: string | null;
   o_que_faz: string | null;
@@ -50,7 +52,7 @@ export interface ConfiguracaoDaOrganizacao {
 }
 
 const COLUNAS =
-  "display_name, legal_name, cnpj, country, timezone, locale, currency, media_retention_days, dpo_email, privacy_policy_url, onboarding_state, interface_settings";
+  "display_name, legal_name, cnpj, country, timezone, locale, currency, media_retention_days, media_retention_enforced, dpo_email, privacy_policy_url, onboarding_state, interface_settings";
 
 export async function lerConfiguracaoDaOrganizacao(
   admin: ClienteAdmin,
@@ -124,6 +126,7 @@ export async function atualizarDadosDaEmpresa(
     "locale",
     "currency",
     "media_retention_days",
+    "media_retention_enforced",
     "dpo_email",
     "privacy_policy_url",
   ] as const;
@@ -137,8 +140,18 @@ export async function atualizarDadosDaEmpresa(
   const alteradas = Object.keys(patch);
   if (alteradas.length === 0) return { ok: true };
 
+  // #3696: nome, idioma, fuso, moeda e país viajam no snapshot de permissões de
+  // cada membro, e o idioma decide a tela inteira. Derruba o snapshot de todos os
+  // membros antes e depois: uma requisição concorrente pode regravar o valor velho
+  // no meio do UPDATE. Aqui, e não em quem chama: tela, API e MCP passam por este ponto.
+  invalidarOrg(organizationId);
   const { error } = await admin.from("organizations").update(patch).eq("id", organizationId);
-  if (error) return { ok: false, error: error.message };
+  invalidarOrg(organizationId);
+  if (error) {
+    // CNPJ é único na instalação: a mensagem precisa dizer isso, não o texto do Postgres.
+    if (error.code === "23505") return { ok: false, error: "cnpj_em_uso" };
+    return { ok: false, error: error.message };
+  }
 
   await audit({
     action: "org.updated",
@@ -186,7 +199,64 @@ export async function atualizarPerfilDaOrganizacao(
   return { ok: true };
 }
 
-/** As portas do menu da empresa (`atualizarInterfaceDaEmpresa`). `settings` já passou pelo schema. */
+/**
+ * Lê `interface_settings`, aplica `mesclar` sobre o gravado e grava, com audit e evento.
+ *
+ * A coluna é dividida entre o menu e a trava do Inbox (#3012): cada porta só troca a
+ * SUA parte, por isso a leitura antes da gravação. Ler-e-gravar não é atômico; dois
+ * admins salvando no mesmo segundo ainda disputam (merge em SQL se isso aparecer).
+ */
+export async function gravarInterfaceDaOrganizacao(
+  admin: ClienteAdmin,
+  organizationId: string,
+  mesclar: (gravada: unknown) => InterfaceSettings,
+  autor: AutorDaOrganizacao,
+): Promise<ResultadoDaOrganizacao> {
+  const { data: atual, error: erroLeitura } = await admin
+    .from("organizations")
+    .select("interface_settings")
+    .eq("id", organizationId)
+    .maybeSingle<{ interface_settings: unknown }>();
+  if (erroLeitura) return { ok: false, error: "internal_error" };
+  const novo = mesclar(atual?.interface_settings);
+
+  // #3696: `interface_settings` da empresa viaja dentro do snapshot de permissões de
+  // CADA membro (o menu lateral sai dele), e o cache curto é por usuário. Antes e
+  // depois da escrita, como em `atualizarDadosDaEmpresa`.
+  invalidarOrg(organizationId);
+  const { error } = await admin
+    .from("organizations")
+    .update({ interface_settings: novo })
+    .eq("id", organizationId);
+  if (error) return { ok: false, error: "internal_error" };
+  invalidarOrg(organizationId);
+
+  await audit({
+    action: "org.interface_changed",
+    ...metaDoAudit(autor),
+    organizationId,
+    resourceType: "organization",
+    resourceId: organizationId,
+    metadata: { fields_changed: ["interface_settings"], interface_settings: novo },
+  });
+  // Mesmo TIPO de evento de `updateTenant`: um tipo novo não teria assinante.
+  await emitirOrgAtualizada(admin, organizationId, autor.requestId);
+  return { ok: true };
+}
+
+function travaGravada(raw: unknown): boolean {
+  return typeof raw === "object" && raw !== null && (raw as Record<string, unknown>).bloquearAteAssumir === true;
+}
+
+/**
+ * As portas do menu da empresa (`atualizarInterfaceDaEmpresa`, rota e MCP). `settings` já
+ * passou pelo schema.
+ *
+ * O MENU NUNCA GRAVA A TRAVA DO INBOX (#3012): as duas moram no mesmo campo, e quem salva o
+ * menu carrega o `bloquearAteAssumir` que leu antes (ou monta o objeto do zero). O valor de
+ * entrada é descartado SEMPRE, e o gravado fica. Quem liga e desliga a trava é
+ * `atualizarBloqueioAteAssumirDaOrganizacao`.
+ */
 export async function atualizarInterfaceDaOrganizacao(
   admin: ClienteAdmin,
   organizationId: string,
@@ -197,21 +267,29 @@ export async function atualizarInterfaceDaOrganizacao(
   // Recusa a seleção que deixaria a empresa sem NENHUMA área além das essenciais.
   if (!interfaceTemDestino(settings, papel)) return { ok: false, error: "sem_area" };
 
-  const { error } = await admin
-    .from("organizations")
-    .update({ interface_settings: settings })
-    .eq("id", organizationId);
-  if (error) return { ok: false, error: "internal_error" };
-
-  await audit({
-    action: "org.interface_changed",
-    ...metaDoAudit(autor),
+  const { bloquearAteAssumir: _doInput, ...menu } = settings;
+  return gravarInterfaceDaOrganizacao(
+    admin,
     organizationId,
-    resourceType: "organization",
-    resourceId: organizationId,
-    metadata: { fields_changed: ["interface_settings"], interface_settings: settings },
-  });
-  // Mesmo TIPO de evento de `updateTenant`: um tipo novo não teria assinante.
-  await emitirOrgAtualizada(admin, organizationId, autor.requestId);
-  return { ok: true };
+    (gravada) => ({ ...menu, ...(travaGravada(gravada) ? { bloquearAteAssumir: true } : {}) }),
+    autor,
+  );
+}
+
+/** Liga e desliga SÓ a trava do Inbox (#3012). Desligar REMOVE a chave: ausente = desligado. */
+export async function atualizarBloqueioAteAssumirDaOrganizacao(
+  admin: ClienteAdmin,
+  organizationId: string,
+  ligado: boolean,
+  autor: AutorDaOrganizacao,
+): Promise<ResultadoDaOrganizacao> {
+  return gravarInterfaceDaOrganizacao(
+    admin,
+    organizationId,
+    (gravada) => {
+      const { bloquearAteAssumir: _anterior, ...menu } = lerInterface(gravada).settings;
+      return ligado ? { ...menu, bloquearAteAssumir: true } : menu;
+    },
+    autor,
+  );
 }

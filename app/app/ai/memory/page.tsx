@@ -53,7 +53,7 @@ export default async function OrgMemoryPage() {
 
   const { data: entriesRaw } = await supabase
     .from("org_memory_entries")
-    .select("id, title, body, source, status, created_at")
+    .select("id, title, body, source, status, created_at, valid_until")
     .eq("organization_id", activeOrg.orgId)
     // As sugestões do agente (`proposed`) aparecem para aprovação (D-145); `proposed` de outra origem segue oculto.
     .or("status.neq.proposed,source.eq.agent")

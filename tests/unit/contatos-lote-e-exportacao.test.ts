@@ -29,9 +29,16 @@ vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({
   checkRateLimit: (b: string, n: number, s: number) => limite(b, n, s),
 }));
 
+// O CPF da exportação sai pelo caminho da ficha (cliente de serviço + `fn_decrypt_oauth`), fora do
+// banco em memória: o dublê devolve o CPF já decifrado do contato 1.
+const CPF_DO_1 = "52998224725";
+const cpfsDecifrados = vi.fn(async (_org: string, ids: readonly string[]) =>
+  new Map(ids.includes(uid(1)) ? [[uid(1), CPF_DO_1] as const] : []),
+);
 vi.mock("@/lib/contacts/cpf-do-contato", () => ({
   idsPorHashDeCpf: vi.fn(async () => ({ ids: [], error: null })),
   idsComCpf: vi.fn(async () => ({ ids: new Set<string>(), error: null })),
+  cpfsDecifradosDosContatos: (org: string, ids: readonly string[]) => cpfsDecifrados(org, ids),
 }));
 
 const ORG_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -56,6 +63,10 @@ const contato = (n: number, extra: Linha = {}): Linha => ({
   source: "manual",
   is_merged_into: null,
   is_anonymized: false,
+  // Os padrões das colunas no banco: a consulta filtra `kind = person` e `is_personal = false`.
+  kind: "person",
+  is_personal: false,
+  is_blocked: false,
   created_at: "2026-10-10T12:00:00Z",
   last_activity_at: "2026-10-10T12:00:00Z",
   custom_fields: {},
@@ -330,8 +341,10 @@ describe("POST /api/v1/contacts/export", () => {
     expect(csv).toContain("Contato A1");
     expect(csv).toContain("Diretora");
     expect(csv).not.toContain("Contato B1"); // outra organização
-    // CPF, RG, documento e passaporte guardados como campo livre nunca saem
-    expect(csv).not.toMatch(/cpf|111\.222\.333-44|MG-1|passaporte|documento|\brg\b/i);
+    // CPF, RG, documento e passaporte guardados como campo LIVRE nunca saem. O CPF oficial
+    // (cifrado, decifrado no servidor) sai na coluna "CPF" — uma só, a do cadastro.
+    expect(csv).not.toMatch(/111\.222\.333-44|MG-1|passaporte|documento|\brg\b/i);
+    expect(csv.match(/cpf/gi)).toEqual(["CPF"]);
   });
 
   it("não exporta anonimizado nem lápide de fusão", async () => {
@@ -383,8 +396,24 @@ describe("POST /api/v1/contacts/export", () => {
     const entrada = auditSpy.mock.calls[0]![0] as { action: string; actorUserId: string; metadata: Record<string, unknown> };
     expect(entrada.action).toBe("contacts.exported");
     expect(entrada.actorUserId).toBe(USER);
-    expect(entrada.metadata).toMatchObject({ modo: "filtro", linhas: 4, filtro: { origem: "manual" } });
+    expect(entrada.metadata).toMatchObject({ modo: "filtro", linhas: 4, filtro: { origem: "manual" }, cpf_incluido: true });
     expect(JSON.stringify(entrada.metadata)).not.toContain("a1@exemplo.com");
+    // O audit diz QUE o CPF saiu, nunca o valor.
+    expect(JSON.stringify(entrada.metadata)).not.toContain(CPF_DO_1);
+  });
+
+  it("o CSV leva o CPF decifrado (coluna CPF), só da organização e só de quem tem", async () => {
+    const { POST } = await import("@/app/api/v1/contacts/export/route");
+    const res = await POST(post("/api/v1/contacts/export", { ids: [uid(1), uid(2)] }));
+    expect(res.status).toBe(200);
+    const [cabecalho, ...linhas] = (await res.text()).replace(/^\uFEFF/, "").trimEnd().split("\r\n");
+    const colunas = cabecalho!.split(",");
+    const iCpf = colunas.indexOf("CPF");
+    expect(iCpf).toBeGreaterThan(-1);
+    const doContato = (n: number) => linhas.find((l) => l.includes(`a${n}@exemplo.com`))!.split(",");
+    expect(doContato(1)[iCpf]).toBe(CPF_DO_1);
+    expect(doContato(2)[iCpf]).toBe("");
+    expect(cpfsDecifrados).toHaveBeenCalledWith(ORG_A, expect.arrayContaining([uid(1), uid(2)]));
   });
 
   it("acima de 20.000 ids → 422", async () => {
@@ -453,6 +482,7 @@ describe("lista, contagem, lote e exportação concordam", () => {
         cliente,
         { organization_id: ORG_A, actor: { type: "user", id: USER }, requestId: "r" },
         { ...caso.filtro, limit: 100 },
+        undefined,
         { timezone: "America/Sao_Paulo" },
       );
       expect(lista.contacts.map((c) => c.id).sort()).toEqual(esperadoIds);

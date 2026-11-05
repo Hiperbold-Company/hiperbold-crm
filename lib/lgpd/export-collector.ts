@@ -7,10 +7,23 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { citacaoDaLei, perfilDoPais } from "@/lib/legal/perfil-do-pais";
+import { agenteAtende } from "@/lib/ai/agents/no-ar";
+import {
+  art15DoControlador,
+  type Art15DoControlador,
+} from "@/lib/legal/art15";
+import {
+  citacaoDaLei,
+  PAIS_PADRAO,
+  perfilDoPais,
+  type AutoridadeDeSupervisao,
+  type PerfilDoPais,
+} from "@/lib/legal/perfil-do-pais";
 import { logger } from "@/lib/logger";
+import { textoLegivelDeMencao } from "@/lib/notifications/mentions";
 import { camposLegiveis, perguntasDosGrafos, type CampoLegivel } from "@/lib/lgpd/campos-personalizados";
 import { maskPhone } from "@/lib/lgpd/mask";
+import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import type { Json } from "@/lib/database.types";
 
 // ---------------------------------------------------------------------------
@@ -21,6 +34,26 @@ export interface ContactSnapshot {
   id: string;
   name: string | null;
   display_name: string | null;
+  /**
+   * O nome que a equipe salvou na agenda do celular (PR #2439). Só a equipe o
+   * vê na tela, mas é dado pessoal do titular: a anonimização o apaga
+   * (`trg_contato_anonimizado_esquece_a_agenda`), então o `data.json` o leva.
+   * Quem RECEBE o `data.json` é o titular fora do Brasil: o worker só assina a
+   * ligação dele quando o país não é o padrão (`lgpd-export-worker.ts`). No
+   * Brasil o arquivo fica guardado sem ser enviado, e o PDF não lê este campo.
+   */
+  address_book_name: string | null;
+  /**
+   * Endereço da pessoa física (issue #3494). A anonimização o apaga
+   * (`trg_contato_anonimizado_esquece_o_endereco`), então o titular o recebe.
+   */
+  zip_code: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  district: string | null;
+  city: string | null;
+  state: string | null;
   email: string | null;
   phone_number: string | null;
   cpf_present: boolean;
@@ -36,6 +69,12 @@ export interface ContactSnapshot {
   /** Primeiro atendimento marcado. Sobrevive à anonimização: é registro de operação. */
   first_service_at: string | null;
   /**
+   * Os telefones EXTRAS da ficha (Spec 31, B1), com o `lid` do WhatsApp de cada
+   * número. Ausente quando a ficha não tem extra: o `data.json` dela sai como saía
+   * antes (a chave só aparece quando há o que entregar).
+   */
+  additional_phones?: ContactPhoneSnapshot[];
+  /**
    * Campos personalizados — onde os roteiros de atendimento gravam o que o
    * cliente respondeu (CPF inclusive). A anonimização já os zera; sem esta
    * linha o titular pedia acesso e não recebia o que o roteiro coletou.
@@ -45,6 +84,18 @@ export interface ContactSnapshot {
   campos_legiveis: CampoLegivel[];
   /** Um roteiro guardou o CPF nos campos (texto, não a coluna cifrada). */
   cpf_informado_na_conversa: boolean;
+}
+
+/** Um telefone extra da ficha, como o titular o recebe (Spec 31, B1). */
+export interface ContactPhoneSnapshot {
+  phone_number: string;
+  tipo: string;
+  whatsapp: string;
+  rotulo: string | null;
+  origem: string;
+  /** O `lid` do WhatsApp DAQUELE número: é o que casa a mensagem de grupo dele. */
+  wa_lid: string | null;
+  created_at: string;
 }
 
 export interface ConsentRow {
@@ -73,12 +124,14 @@ export interface MessageRow {
   body: string | null;
   has_media: boolean;
   /**
-   * A transcrição do áudio ou a leitura da imagem/documento (`media_derived_text`).
-   * É texto sobre o titular, e a anonimização o zera (0921): o que se apaga a
-   * pedido dele é o que se entrega a pedido dele. Opcional: o tipo é montado à
-   * mão nos testes de PDF.
+   * Transcrição do áudio / texto extraído da mídia (OCR de imagem) que a IA
+   * leu (migration 0497). A anonimização o APAGA quando o titular pede
+   * eliminação (#1989/#1990); o Art. 18 II exige o oposto — quem pede os
+   * próprios dados recebe o texto que a organização leu da mídia dele. O
+   * binário nunca vai no pacote (só `has_media`); sem esta coluna o export não
+   * trazia nem o texto que a IA efetivamente processou.
    */
-  media_derived_text?: string | null;
+  media_derived_text: string | null;
   sent_at: string | null;
   created_at: string;
 }
@@ -113,18 +166,77 @@ export interface ActivityRow {
 }
 
 /**
+ * A proposta de campo lida num documento do negócio (`lead_field_proposals`,
+ * migration 0772).
+ *
+ * Entra porque a anonimização a REDIGE: `trecho`, `valor_proposto` e
+ * `valor_anterior` são conteúdo do documento de quem pediu o acesso. Sem esta
+ * coleta, o Art. 18 II devolveria um export sem exatamente o dado que a casa
+ * apaga — e a régua de `lgpd-exporta-o-que-redige` reprova por isso.
+ */
+export interface LeadFieldProposalRow {
+  id: string;
+  lead_id: string;
+  campo: string;
+  valor_proposto: unknown;
+  valor_anterior: unknown;
+  trecho: string | null;
+  attachment_id: string | null;
+  status: string;
+  proposed_at: string;
+  expires_at: string;
+  decided_at: string | null;
+}
+
+/**
  * O resumo que o agente guarda sobre o titular (`lead_checkpoints`).
  *
  * Entra porque a anonimização o REDIGE (migration 0391): o resumo corrido, os
  * compromissos e a próxima ação são texto que o modelo escreveu SOBRE a pessoa,
  * e o que se apaga a pedido do titular é o que se entrega a pedido dele.
  */
+/**
+ * Os acessos que o titular deu a servidores MCP externos (OAuth por contato,
+ * migration 9095): os pedidos de autorização (apagados na anonimização) e as
+ * credenciais. Entra o QUE ele autorizou, a quem e quando — nunca o token, o
+ * `code_verifier` nem o `state`, que são segredo e não dado dele.
+ */
+export interface AcessoMcpRow {
+  servidor_id: string;
+  escopos: string[];
+  criado_em: string | null;
+  expira_em?: string | null;
+  usado_em?: string | null;
+  ultimo_uso_em?: string | null;
+  revogado_em?: string | null;
+}
+
 export interface CheckpointRow {
   id: string;
   rolling_summary: string;
   commitments: unknown;
   objections: unknown;
   next_action: string | null;
+  created_at: string;
+}
+
+/**
+ * Vínculo do titular com um grupo de WhatsApp (migration 0482).
+ *
+ * A FK `channel_session_groups.contact_id` só aponta para o CONTATO PLACEHOLDER
+ * do grupo (`contacts.kind = 'whatsapp_group'`), nunca para uma pessoa real — é
+ * por isso que a redação (`fn_lgpd_cascade_redact_contact`) nulifica `subject`
+ * comentando explicitamente que "nulificar não perde nada operacional: número,
+ * conversa e liga/desliga ficam". Este bloco espelha a mesma chave
+ * (`contact_id = p_contact_id`): quando o titular do pedido É o placeholder do
+ * grupo, o Art. 18 II entrega o mesmo `subject` que a anonimização apagaria.
+ */
+export interface ChannelSessionGroupRow {
+  id: string;
+  group_chat_id: string;
+  subject: string | null;
+  enabled: boolean;
+  enabled_at: string | null;
   created_at: string;
 }
 
@@ -183,6 +295,36 @@ export interface SaleRow {
 }
 
 /**
+ * Proposta comercial SOBRE a pessoa.
+ *
+ * A migration 0477 liga `destinatario_nome`, `briefing_json` e
+ * `resumo_comercial` à cascata de anonimização, e este bloco é a outra
+ * metade — o que se apaga a pedido do titular é o que se entrega a pedido
+ * dele.
+ */
+export interface ProposalRow {
+  id: string;
+  numero: number | null;
+  ano: number | null;
+  titulo: string;
+  status: string;
+  total_cents: number;
+  moeda: string;
+  valid_until: string | null;
+  sent_at: string | null;
+  decided_at: string | null;
+  destinatario_nome: string | null;
+  resumo_comercial: string | null;
+  /**
+   * Houve um PDF gerado e enviado. O ARQUIVO não vai no pacote — mesma regra
+   * de `has_media` das mensagens: o titular o recebeu no WhatsApp, e a
+   * anonimização o expurga do Storage (0477). O caminho interno não sai.
+   */
+  tem_pdf: boolean;
+  created_at: string;
+}
+
+/**
  * Tarefa combinada SOBRE a pessoa (migration 0210).
  *
  * ⚠️ ESTE BLOCO NASCEU COM A OUTRA METADE, e não depois dela. A migration liga o
@@ -231,6 +373,36 @@ export interface CaptureRow {
   remote_ip: string | null;
   user_agent: string | null;
   received_at: string;
+}
+
+/**
+ * Contrato de honorários (advocacia) — módulo opcional, ADR-0002 D8: todo
+ * módulo com dados declara sua seção de export, mesmo sem estar na cascata de
+ * redação (achado da revisão do PR #1578). O vínculo é `lead_id`, não
+ * `contact_id` direto — o contrato pertence ao CASO, não à pessoa em geral —
+ * por isso deriva dos ids de `leads` já coletados acima, e não de uma consulta
+ * própria por contato.
+ */
+export interface HonorariosContratoRow {
+  id: string;
+  lead_id: string | null;
+  modelo: string;
+  valor_fixo_cents: number | null;
+  percentual_exito: number | null;
+  repasse_advogado_pct: number | null;
+  created_at: string;
+}
+
+/** O calendário de parcelas do contrato acima — o titular tem direito de ver
+ * o que foi combinado e o que já foi pago, do mesmo jeito que vê `sales`. */
+export interface HonorariosParcelaRow {
+  id: string;
+  contrato_id: string;
+  numero: number;
+  vencimento: string;
+  valor_cents: number;
+  status: string;
+  financial_entry_id: string | null;
 }
 
 export interface AuditRow {
@@ -301,6 +473,9 @@ export interface CaseEventRow {
  *
  * O vínculo é a FK DIRETA `contact_id`, e não a conversa: ela existe nesta
  * tabela exatamente para isso.
+ *
+ * Coletada, mas FORA do `data.json` que o titular recebe: é conversa interna da
+ * equipe (doc 103, A — `lib/lgpd/copia-do-titular.ts`).
  */
 export interface CaseChatMessageRow {
   id: string;
@@ -409,6 +584,15 @@ export interface ProspectingCandidateRow {
   updated_at: string;
 }
 
+/** O clique do próprio titular e o resultado do envio à plataforma de anúncios. */
+export interface MetaCtwaClickRow {
+  ctwa_clid: string;
+  captured_at: string;
+  status: string;
+  attempted_at: string | null;
+  created_at: string;
+}
+
 /**
  * Uma campanha que falou com este titular (migration 0374).
  *
@@ -446,6 +630,27 @@ export interface CampaignSuppressionRow {
   created_at: string;
 }
 
+/**
+ * O que o relatório entrega além do corpo do documento — o art. 15.º, n.º 1
+ * alínea a alínea (issue #2340). Os valores VARIÁVEIS moram aqui; o texto fixo
+ * da lei (al. e) e a linha do n.º 3 vêm de `lib/legal/art15.ts` no render.
+ */
+export interface Art15NoDocumento {
+  /** a) finalidades do tratamento — preenchido pelo responsável. */
+  finalidades: string | null;
+  /** c) destinatários ou categorias de destinatários — idem. */
+  destinatarios: string | null;
+  /** d) prazo de conservação — idem. */
+  prazo_conservacao: string | null;
+  /** f) a quem reclamar: vem do `autoridadeDeSupervisao` do perfil do país. */
+  autoridade: AutoridadeDeSupervisao;
+  /**
+   * h) decisões automatizadas: o texto que descreve a lógica e a consequência
+   * prevista, montado a partir dos agentes de IA NO AR (`agenteAtende`).
+   */
+  decisoes_automatizadas: string;
+}
+
 export interface ExportPayload {
   request_id: string;
   organization_id: string;
@@ -468,6 +673,56 @@ export interface ExportPayload {
    * citação revisada em vez de inventar uma.
    */
   lei_citada: string | null;
+  /**
+   * Como o documento rotula a citação ("Direito exercido" em Portugal e,
+   * desde a issue #2344, no Brasil também). AUSENTE no Brasil — o
+   * renderizador lê o rótulo do PERFIL PADRÃO — para o `data.json` brasileiro
+   * sair igual byte a byte (doc 88).
+   */
+  lei_rotulo?: string;
+  /**
+   * O papel do responsável pelos dados, no vocabulário do país: "Responsável
+   * pelo tratamento" em Portugal (RGPD art. 4.º, n.º 7). AUSENTE no Brasil —
+   * o renderizador usa o rótulo do PERFIL PADRÃO ("Controlador"), pela mesma
+   * régua do `lei_rotulo`: nenhuma chave nova no `data.json` brasileiro.
+   */
+  papel_controlador?: string;
+  /**
+   * O papel de quem recebe os pedidos do titular: "Encarregado da proteção de
+   * dados" em Portugal (RGPD art. 37.º). Ausente no Brasil, que segue com
+   * "Encarregado (DPO)" pelo perfil padrão.
+   */
+  papel_encarregado?: string;
+  /**
+   * Fuso IANA da organização, para as datas do documento. Ausente no Brasil,
+   * que segue no formato de sempre (`America/Sao_Paulo`, sem nome de fuso).
+   */
+  fuso?: string;
+  /**
+   * As alíneas a), c), d), e), f) e h) do art. 15.º, n.º 1, e a declaração da
+   * cópia do n.º 3 (issue #2340). AUSENTE no Brasil e em país sem
+   * autoridade revisada no perfil — mesma régua do `lei_rotulo`: a lista do
+   * RGPD não é a da LGPD, e acrescentar a chave ao `data.json` brasileiro
+   * mudaria os fixtures byte a byte do doc 88.
+   */
+  art15?: Art15NoDocumento;
+  /**
+   * TODAS as mensagens do titular — o que `messages_recent` (recorte de 100,
+   * a amostra do PDF) não entrega. Portugal pela cópia do art. 15.º, n.º 3
+   * (#2340); o Brasil pela declaração completa da LGPD (art. 19, II — doc 110,
+   * 2A, que solta só aqui a trava "byte a byte" do doc 88).
+   */
+  messages_completas?: MessageRow[];
+  /**
+   * As seções deste `data.json` cuja consulta voltou no teto de linhas — pode
+   * haver mais registros do que os entregues. Lista vazia = nenhuma bateu no
+   * teto. Em todo país, junto de `messages_completas` (doc 110, 2A); fora do
+   * Brasil é a ressalva que o PDF cita na linha do n.º 3 (o PDF brasileiro não
+   * muda). Entra também a seção cuja PAGINAÇÃO foi interrompida por erro
+   * (#2576): o arquivo sai com o que chegou, e a lista é o que avisa o titular
+   * de que pode haver mais do que o entregue.
+   */
+  secoes_no_limite?: string[];
   /** O rótulo do documento do titular no país ("CPF", "Documento"). */
   documento_rotulo: string;
   generated_at: string;
@@ -478,11 +733,24 @@ export interface ExportPayload {
   messages_count_total: number;
   messages_recent: MessageRow[];
   leads: LeadRow[];
+  /**
+   * Módulo opcional de honorários (advocacia, ADR-0002). Vazio nas instalações
+   * que não o instalaram, ou quando o titular não tem contrato — nunca ausente:
+   * campo obrigatório é o que faz um caminho de export novo não compilar se
+   * esquecer, a mesma razão de `case_chat_messages`.
+   */
+  honorarios_contratos: HonorariosContratoRow[];
+  honorarios_parcelas: HonorariosParcelaRow[];
+  lead_field_proposals: LeadFieldProposalRow[];
   orders: OrderRow[];
   activities: ActivityRow[];
   checkpoints: CheckpointRow[];
+  /** Opcionais: payload gerado antes da 9095 não os tem. */
+  mcp_pedidos_de_acesso?: AcessoMcpRow[];
+  mcp_acessos?: AcessoMcpRow[];
   appointments: AppointmentRow[];
   sales: SaleRow[];
+  proposals: ProposalRow[];
   tasks: TaskRow[];
   webhook_captures: CaptureRow[];
   audit_log_extract: AuditRow[];
@@ -499,6 +767,12 @@ export interface ExportPayload {
    */
   voice_calls: VoiceCallRow[];
   prospecting_candidates: ProspectingCandidateRow[];
+  /**
+   * O registro por clique é apagado na anonimização (0806), então também entra
+   * no acesso. Ausente quando vazio para preservar a cópia anterior de quem
+   * não tem cliques; tokens de claim e detalhes internos não são coletados.
+   */
+  meta_ctwa_click_dispatches?: MetaCtwaClickRow[];
   /**
    * Casos, linha do tempo do caso e demandas (migration 0280).
    *
@@ -546,6 +820,22 @@ export interface ExportPayload {
    * se entrega a pedido dele (Art. 18 II).
    */
   campaign_suppressions: CampaignSuppressionRow[];
+  /**
+   * Grupos de WhatsApp vinculados ao titular (migration 0482) — ver o
+   * docstring de `ChannelSessionGroupRow`. Obrigatório, não opcional, pela
+   * mesma razão de `case_chat_messages`: campo obrigatório faz um caminho de
+   * export novo NÃO COMPILAR se esquecer.
+   */
+  channel_session_groups: ChannelSessionGroupRow[];
+  /**
+   * Mensagens que o titular escreveu em GRUPOS de WhatsApp (migration 0482).
+   * Moram na conversa do placeholder do grupo, não na dele, então
+   * `messages_recent` não as vê. Casadas pelo autor em `metadata.group_sender`
+   * — telefone (grafias com e sem o nono dígito) ou lid (`contacts.wa_lid`) —,
+   * a mesma chave que a anonimização usa em `fn_redigir_conversas_ao_anonimizar`.
+   * Só alcança quem JÁ É contato: o participante sem ficha não tem titular.
+   */
+  group_messages_authored: MessageRow[];
   /** Rascunhos escritos PARA o titular por outro sistema (0419), apagados na
    *  anonimização. Opcional como `reply_drafts`: o tipo é montado à mão nos testes de PDF. */
   conversation_drafts?: Array<{
@@ -555,6 +845,31 @@ export interface ExportPayload {
     source: string;
     consumed_at: string | null;
     created_at: string;
+  }>;
+  /**
+   * Notas internas das conversas do titular (#1863, F3) — o texto que a equipe
+   * escreveu SOBRE ele e a mídia que anexou junto. Sem FK para `contacts` (só
+   * para `conversations`), nenhuma outra leitura alcançaria a tabela; é o mesmo
+   * motivo de `conversation_drafts`. A migration 0483 redige `body`, zera
+   * `media_storage_path`/`media_mime`/`media_size_bytes` e enfileira o arquivo
+   * com o bucket `internal-media` quando ele pede anonimização — o que se apaga
+   * a pedido dele é o que se entrega a pedido dele (Art. 18 II). A mídia vem
+   * como METADADO (caminho, MIME, bytes): o export é `data.json` + `report.pdf`,
+   * e nenhum binário trafega por ele.
+   *
+   * No `data.json` que o titular recebe (`lib/lgpd/copia-do-titular.ts`):
+   * fora no Brasil, por ser nota da equipe (doc 103, A); em Portugal vão só
+   * `body` e `created_at` — sem o nome de quem escreveu nem o anexo (doc 110, 3A).
+   */
+  conversation_notes?: Array<{
+    id: string;
+    conversation_id: string;
+    body: string;
+    media_storage_path: string | null;
+    media_mime: string | null;
+    media_size_bytes: number | null;
+    created_at: string;
+    created_by_name: string | null;
   }>;
   /** Propostas de campo do contato (0123), também APAGADAS na anonimização. */
   contact_field_proposals?: Array<{
@@ -569,16 +884,6 @@ export interface ExportPayload {
     decided_at: string | null;
     motivo_recusa: string | null;
   }>;
-  /** Notas do agente sobre o titular (`lead_notes`), mascaradas na anonimização (0921). */
-  lead_notes?: Array<{ id: string; headline: string; body: string; created_at: string }>;
-  /** Notas internas da equipe nas conversas dele (`conversation_notes`), mascaradas na anonimização (0921). */
-  conversation_notes?: Array<{
-    id: string;
-    conversation_id: string;
-    body: string;
-    created_by_name: string | null;
-    created_at: string;
-  }>;
   /**
    * Trechos da base de conhecimento nascidos das conversas dele (`ai_chunks`),
    * apagados na anonimização (0921). Trechos de conversa já passaram pelo
@@ -586,6 +891,91 @@ export interface ExportPayload {
    * que ele disse.
    */
   knowledge_chunks?: Array<{ id: string; conversation_id: string; content: string; created_at: string }>;
+  /**
+   * Memória da IA sobre o titular (#1957): `lead_notes` guarda `headline` +
+   * `body` — o nome e trechos do que a pessoa escreveu. A cascata redige os
+   * dois quando ele pede anonimização; o que se apaga a pedido dele é o que se
+   * entrega a pedido dele (Art. 18 II). Mesmo escopo da cascata: org + contato.
+   */
+  /**
+   * Anexos dos negócios dele (#3229): o documento que ele mandou (voucher,
+   * comprovante) é dado dele, e a cascata o apaga a pedido dele — então sai aqui
+   * a pedido dele. Vai o registro (nome, tipo, tamanho, data), não o binário.
+   */
+  lead_attachments?: Array<{
+    id: string;
+    lead_id: string;
+    field_key: string;
+    file_name: string;
+    mime_type: string;
+    file_size: number;
+    created_at: string;
+  }>;
+  lead_notes?: Array<{
+    id: string;
+    headline: string | null;
+    body: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+  }>;
+  /**
+   * Registro de execução da IA (#1957): de `ai_agent_runs.tool_calls` (jsonb)
+   * saem só o nome e os argumentos de cada ferramenta — nome do titular e
+   * trechos do que escreveu. O `result` e o texto do passo ficam de fora
+   * (podem trazer dado de OUTROS contatos; ver `toolCallsParaOTitular`).
+   * Redigido na cascata; entregue no acesso. Org + contato.
+   */
+  ai_agent_runs?: Array<{
+    id: string;
+    tool_calls: unknown;
+    created_at: string | null;
+  }>;
+  /**
+   * Estado da lead (#1957): `lead_state.next_action` (texto) e `qualification`
+   * (jsonb) descrevem o titular por máquina. Redigidos na cascata; entregues
+   * no acesso. Org + contato.
+   */
+  lead_state?: Array<{
+    id: string;
+    next_action: string | null;
+    qualification: unknown;
+    updated_at: string | null;
+  }>;
+  /**
+   * Empresas e pessoas (migrations 0448/0449, metade B2B do #1621): a PESSOA
+   * para quem o contato aponta, os vínculos dela com empresas e as linhas de
+   * planilha que falaram dela. A 0449 redige as três quando o titular pede
+   * anonimização; o que se apaga a pedido dele é o que se entrega a pedido dele
+   * (Art. 18 II). Opcional como `reply_drafts`: o tipo é montado à mão nos
+   * testes de PDF, e quem vigia o esquecimento é
+   * `tests/unit/lgpd-exporta-o-que-redige.test.ts`, que lê o catálogo.
+   */
+  b2b?: {
+    pessoa: {
+      id: string;
+      full_name: string;
+      email: string | null;
+      notes: string | null;
+      created_at: string;
+    } | null;
+    vinculos: Array<{
+      company_id: string;
+      job_title: string | null;
+      department: string | null;
+      is_decision_maker: boolean;
+      notes: string | null;
+    }>;
+    linhas_importadas: Array<{
+      id: string;
+      batch_id: string;
+      row_number: number;
+      status: string;
+      raw_data: unknown;
+      normalized_data: unknown;
+      error: string | null;
+      created_at: string;
+    }>;
+  };
   reply_drafts?: Array<{
     id: string;
     status: string;
@@ -619,9 +1009,22 @@ interface CollectArgs {
    * instalação; resolver mais esta ali não custa visita nenhuma aqui.
    */
   dpoDaInstalacao?: string | null;
+  /**
+   * O país que quem chama JÁ resolveu (o worker, que manda o e-mail com o mesmo
+   * perfil). Quando vem, vale sobre o lido aqui: duas leituras do país divergem
+   * no dia em que só uma falhar e cair no Brasil — e o titular receberia o PDF
+   * com uma lei e o e-mail com outra. Ausente, o país é o lido com o controlador.
+   */
+  pais?: string | null;
 }
 
 const RECENT_MESSAGES_LIMIT = 100;
+/**
+ * Página da cópia COMPLETA do art. 15.º, n.º 3 (`messages_completas`). Só o
+ * tamanho da requisição: o laço vai até a página vir vazia, então isto não é
+ * teto — teto aqui seria a amostra de 100 com outro nome.
+ */
+const MENSAGENS_POR_PAGINA = 500;
 const AUDIT_LIMIT = 200;
 
 /** A identidade JURÍDICA da organização — quem responde pelos dados. */
@@ -637,6 +1040,14 @@ interface Controlador {
    * titular, afirmando a lei de um país com o rótulo de outro.
    */
   country: string | null;
+  /** `organizations.timezone` (NOT NULL no schema); só sai no documento fora do BR. */
+  timezone: string | null;
+  /**
+   * As alíneas a), c) e d) do art. 15.º que o RESPONSÁVEL preencheu em
+   * `organizations.settings.art15`. `null` em quem não preencheu — o
+   * documento imprime "não informado pelo controlador" (issue #2340).
+   */
+  art15: Art15DoControlador;
 }
 
 /**
@@ -656,10 +1067,12 @@ async function lerControlador(
     display_name: "",
     dpo_email: dpoDaInstalacao,
     country: null,
+    timezone: null,
+    art15: { finalidades: null, destinatarios: null, prazo_conservacao: null },
   };
   const { data, error } = await admin
     .from("organizations")
-    .select("legal_name, display_name, dpo_email, country")
+    .select("legal_name, display_name, dpo_email, country, timezone, settings")
     .eq("id", organizationId)
     .maybeSingle();
   if (error || !data) {
@@ -674,7 +1087,44 @@ async function lerControlador(
     display_name: data.display_name ?? "",
     dpo_email: data.dpo_email?.trim() || dpoDaInstalacao,
     country: (data as { country?: string | null }).country ?? null,
+    timezone: (data as { timezone?: string | null }).timezone ?? null,
+    art15: art15DoControlador((data as { settings?: unknown }).settings),
   };
+}
+
+/**
+ * O que o titular recebe de `ai_agent_runs.tool_calls` (#1965): por passo, o
+ * nome e os argumentos de cada ferramenta — o que o agente fez com o que a
+ * pessoa escreveu. Saem o `result` de cada chamada e o `text` do passo (forma
+ * em `lib/ai/runtime/serialize.ts`): o `result` de `crm_search_contacts` traz
+ * nome, telefone e e-mail de até 50 OUTROS contatos, e o de
+ * `crm_list_appointments` a agenda da organização — entregá-los seria dar ao
+ * titular A o dado do titular B. O texto do modelo pode repetir esse resultado.
+ * Passo já redigido pela cascata (`redacted: true`, sem `args`) sai como está.
+ */
+export function toolCallsParaOTitular(toolCalls: unknown): unknown[] {
+  const passos = Array.isArray(toolCalls) ? (toolCalls as unknown[]) : [];
+  return passos.map((p) => {
+    const passo = (p ?? {}) as {
+      step?: unknown;
+      tool_name?: unknown;
+      redacted?: unknown;
+      tool_calls?: unknown;
+    };
+    const chamadas = Array.isArray(passo.tool_calls) ? (passo.tool_calls as unknown[]) : [];
+    return {
+      ...(passo.step !== undefined ? { step: passo.step } : {}),
+      ...(typeof passo.tool_name === "string" ? { tool_name: passo.tool_name } : {}),
+      ...(passo.redacted === true ? { redacted: true } : {}),
+      tool_calls: chamadas.map((c) => {
+        const chamada = (c ?? {}) as { tool_name?: unknown; args?: unknown };
+        return {
+          tool_name: typeof chamada.tool_name === "string" ? chamada.tool_name : "unknown",
+          ...(chamada.args !== undefined ? { args: chamada.args } : {}),
+        };
+      }),
+    };
+  });
 }
 
 export async function collectExportData(args: CollectArgs): Promise<ExportPayload> {
@@ -682,7 +1132,8 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
   const { organizationId, requestId, externalCustomerId } = args;
   // ANTES do primeiro `return`: o caminho "nenhum dado localizado" também gera
   // um relatório entregue ao titular, e ele precisa nomear o controlador igual.
-  const controlador = await lerControlador(admin, organizationId, requestId, args.dpoDaInstalacao ?? null);
+  const lido = await lerControlador(admin, organizationId, requestId, args.dpoDaInstalacao ?? null);
+  const controlador = args.pais === undefined ? lido : { ...lido, country: args.pais };
   let contactId = args.contactId;
 
   // Resolve contact_id when only external customer id is provided.
@@ -708,14 +1159,40 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     return emptyPayload(requestId, organizationId, controlador);
   }
 
+  // O país é lido UMA vez, logo depois do ponto que separa o caminho vazio do
+  // caminho com dado: as alíneas do art. 15.º e a cópia do n.º 3
+  // decidem aqui, e o renderizador decide pelo que veio no payload — duas
+  // leituras diferentes dariam ao titular um PDF que promete o que o
+  // `data.json` não entrega (mesma doutrina da leitura única do worker, doc 88).
+  const perfil = perfilDoPais(controlador.country);
+  // Alínea h) do art. 15.º — lida dos agentes de IA NO AR da organização,
+  // DEPOIS do ponto que devolve o payload vazio: a coleta sem identificador
+  // visita só `organizations` (tests/invariants/agenda-meet-export), e é neste
+  // caminho que há pedido para entregar.
+  const decisoes_automatizadas =
+    perfil.codigo === PAIS_PADRAO
+      ? ""
+      : await descreveDecisoesAutomatizadas(admin, organizationId, requestId);
+
+  // Seções cuja consulta voltou no TETO de linhas (`.limit()`): pode haver mais
+  // do que o `data.json` entrega, e o titular tem de saber quais são. É o que
+  // impede o relatório de chamar a cópia de "completa" — ela não é, e paginar
+  // as dezenove seções seria trocar a ressalva por memória sem teto no worker.
+  // Sai em todo país (`corpoDaCopiaCompleta`, doc 110, 2A).
+  const secoes_no_limite: string[] = [];
+  const conferirTeto = (secao: string, linhas: readonly unknown[] | null, teto: number) => {
+    if ((linhas?.length ?? 0) >= teto && !secoes_no_limite.includes(secao)) secoes_no_limite.push(secao);
+  };
+
   // Contact snapshot (PII intentionally retained — this report is the data
   // owner's right of access; only logs/metadata stay sanitized).
   let contact: ContactSnapshot | null = null;
+  let contactLid: string | null = null;
   if (contactId) {
     const { data, error } = await admin
       .from("contacts")
       .select(
-        "id, name, display_name, email, phone_number, cpf_encrypted, birthdate, is_blocked, is_anonymized, consent, tags, source, source_metadata, custom_fields, created_at, last_activity_at, first_service_at",
+        "id, name, display_name, address_book_name, zip_code, street, number, complement, district, city, state, email, phone_number, wa_lid, cpf_encrypted, birthdate, is_blocked, is_anonymized, consent, tags, source, source_metadata, custom_fields, created_at, last_activity_at, first_service_at",
       )
       .eq("organization_id", organizationId)
       .eq("id", contactId)
@@ -764,10 +1241,19 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         });
       }
       const legiveis = camposLegiveis(customFields, perguntasDosGrafos(grafos));
+      contactLid = data.wa_lid ?? null;
       contact = {
         id: data.id,
         name: data.name ?? null,
         display_name: data.display_name ?? null,
+        address_book_name: data.address_book_name ?? null,
+        zip_code: data.zip_code ?? null,
+        street: data.street ?? null,
+        number: data.number ?? null,
+        complement: data.complement ?? null,
+        district: data.district ?? null,
+        city: data.city ?? null,
+        state: data.state ?? null,
         email: data.email ?? null,
         phone_number: data.phone_number ?? null,
         cpf_present: Boolean(data.cpf_encrypted),
@@ -787,6 +1273,35 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       };
     }
   }
+
+  // (9043) Os telefones extras da ficha, com o `lid` de cada número. Vêm ANTES da
+  // busca de mensagens de grupo, que casa pelo número e pelo `lid` de cada um. A
+  // consulta filtra organização e ficha: o cliente é o administrador (sem RLS).
+  let telefonesExtras: ContactPhoneSnapshot[] = [];
+  if (contactId) {
+    const { data, error } = await admin
+      .from("contact_phones")
+      .select("phone_number, tipo, whatsapp, rotulo, origem, wa_lid, created_at")
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: true });
+    if (error) {
+      logger.warn("[lgpd-export-worker] contact phones load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    }
+    telefonesExtras = (data ?? []).map((t) => ({
+      phone_number: t.phone_number,
+      tipo: t.tipo,
+      whatsapp: t.whatsapp,
+      rotulo: t.rotulo ?? null,
+      origem: t.origem,
+      wa_lid: t.wa_lid ?? null,
+      created_at: t.created_at,
+    }));
+  }
+  if (contact && telefonesExtras.length > 0) contact.additional_phones = telefonesExtras;
 
   // No `consents` table in current schema; legal basis is in contacts.consent JSONB.
   const consents: ConsentRow[] = [];
@@ -826,6 +1341,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("conversations", data, 500);
       conversations = data.map((c) => ({
         id: c.id,
         status: c.status,
@@ -839,8 +1355,37 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
   }
 
   // Messages — count total + sample recent.
+  const paraMensagem = (m: {
+    id: string;
+    conversation_id: string;
+    direction: string;
+    type: string;
+    status: string;
+    body: string | null;
+    media_url: string | null;
+    media_derived_text: string | null;
+    sent_at: string | null;
+    created_at: string;
+  }): MessageRow => ({
+    id: m.id,
+    conversation_id: m.conversation_id,
+    direction: m.direction,
+    type: m.type,
+    status: m.status,
+    body: m.body,
+    has_media: Boolean(m.media_url),
+    media_derived_text: m.media_derived_text ?? null,
+    sent_at: m.sent_at,
+    created_at: m.created_at,
+  });
   let messages_count_total = 0;
   let messages_recent: MessageRow[] = [];
+  /**
+   * As mensagens da cópia — TODAS, em páginas de 500, e não as 100 de
+   * `RECENT_MESSAGES_LIMIT`. Em todo país: Portugal pelo art. 15.º, n.º 3
+   * (#2340), o Brasil pela declaração completa da LGPD (doc 110, 2A).
+   */
+  let messages_completas: MessageRow[] | null = null;
   if (contactId) {
     const { count, error: countErr } = await admin
       .from("messages")
@@ -858,9 +1403,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
 
     const { data, error } = await admin
       .from("messages")
-      .select(
-        "id, conversation_id, direction, type, status, body, media_url, media_derived_text, sent_at, created_at",
-      )
+      .select("id, conversation_id, direction, type, status, body, media_url, media_derived_text, sent_at, created_at")
       .eq("organization_id", organizationId)
       .eq("contact_id", contactId)
       .order("created_at", { ascending: false })
@@ -871,19 +1414,44 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
-      messages_recent = data.map((m) => ({
-        id: m.id,
-        conversation_id: m.conversation_id,
-        direction: m.direction,
-        type: m.type,
-        status: m.status,
-        body: m.body,
-        has_media: Boolean(m.media_url),
-        media_derived_text: m.media_derived_text ?? null,
-        sent_at: m.sent_at,
-        created_at: m.created_at,
-      }));
+      messages_recent = data.map(paraMensagem);
     }
+
+    // Mensagens da cópia, em todo país. Páginas de 500 até a última vir vazia:
+    // limite fixo aqui seria entregar uma amostra com outro nome, que é
+    // exatamente o defeito da issue #2340.
+    const completas: MessageRow[] = [];
+    for (let de = 0; ; de += MENSAGENS_POR_PAGINA) {
+      const { data, error } = await admin
+        .from("messages")
+        .select(
+          "id, conversation_id, direction, type, status, body, media_url, media_derived_text, sent_at, created_at",
+        )
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .order("created_at", { ascending: false })
+        .range(de, de + MENSAGENS_POR_PAGINA - 1);
+      if (error) {
+        logger.warn("[lgpd-export-worker] messages completas load failed", {
+          request_id: requestId,
+          error: error.message,
+        });
+        // Página falhou NO MEIO da paginação (#2576): o arquivo sai com as
+        // mensagens até aqui, e sem esta linha o titular receberia um arquivo
+        // PARCIAL calado — sem dizer que pode haver mais. Registrar a seção
+        // como incompleta é o que `secoes_no_limite` existe para; falhar o
+        // pedido inteiro trocaria um aviso por uma tentativa de novo que leria
+        // a mesma página que acabou de falhar.
+        if (!secoes_no_limite.includes("messages_completas")) {
+          secoes_no_limite.push("messages_completas");
+        }
+        break;
+      }
+      const linhas = data ?? [];
+      completas.push(...linhas.map(paraMensagem));
+      if (linhas.length < MENSAGENS_POR_PAGINA) break;
+    }
+    messages_completas = completas;
   }
 
   // Leads (direct contact_id FK on crm_leads).
@@ -902,7 +1470,100 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("leads", data, 200);
       leads = data;
+    }
+  }
+
+  // Anexos dos negócios dele (#3229) — pelos ids de `leads` já coletados.
+  let lead_attachments: NonNullable<ExportPayload["lead_attachments"]> = [];
+  if (leads.length > 0) {
+    const { data, error } = await admin
+      .from("crm_lead_attachments")
+      .select("id, lead_id, field_key, file_name, mime_type, file_size, created_at")
+      .eq("organization_id", organizationId)
+      .in(
+        "lead_id",
+        leads.map((l) => l.id),
+      )
+      .order("created_at", { ascending: true })
+      .limit(500);
+    if (error) {
+      logger.warn("[lgpd-export-worker] lead attachments load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    } else if (data) {
+      conferirTeto("lead_attachments", data, 500);
+      lead_attachments = data;
+    }
+  }
+
+  // Honorários — módulo opcional (ADR-0002/D8). Deriva dos ids de `leads` já
+  // coletados: o contrato é `lead_id`, não `contact_id` direto.
+  //
+  // Módulo pode não estar instalado nesta instalação — a tabela então não
+  // existe (42P01 no SQL, PGRST205 no PostgREST) — e o bloco sai vazio, sem falhar o export
+  // inteiro por causa de um módulo que a organização nem ligou.
+  let honorarios_contratos: HonorariosContratoRow[] = [];
+  let honorarios_parcelas: HonorariosParcelaRow[] = [];
+  const leadIds = leads.map((l) => l.id);
+
+  // Propostas de campos lidos no documento — a cascata da 0772 redige `trecho`
+  // e os valores, então o Art. 18 II tem de alcançá-las pela mesma porta dos
+  // outros dados do negócio: o `lead_id` já coletado. Tabela de módulo: num
+  // clone sem a migration ela não existe (42P01) e o bloco sai vazio.
+  let lead_field_proposals: LeadFieldProposalRow[] = [];
+  if (leadIds.length > 0) {
+    const { data, error } = await admin
+      .from("lead_field_proposals")
+      .select(
+        "id, lead_id, campo, valor_proposto, valor_anterior, trecho, attachment_id, status, proposed_at, expires_at, decided_at",
+      )
+      .eq("organization_id", organizationId)
+      .in("lead_id", leadIds)
+      .order("proposed_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      if (error.code !== "42P01") {
+        throw new Error(`lead_field_proposals_load_failed: ${error.message}`);
+      }
+    } else if (data) {
+      conferirTeto("lead_field_proposals", data, 500);
+      lead_field_proposals = data;
+    }
+  }
+  if (leadIds.length > 0) {
+    const { data, error } = await admin
+      .from("honorarios_contratos")
+      .select(
+        "id, lead_id, modelo, valor_fixo_cents, percentual_exito, repasse_advogado_pct, created_at",
+      )
+      .eq("organization_id", organizationId)
+      .in("lead_id", leadIds);
+    // Qualquer OUTRO erro lança: o worker marca a tentativa como falha e tenta de
+    // novo, em vez de entregar ao titular um export sem o contrato como se fosse
+    // completo (ADR-0002 D8 — seção de módulo ilegível nunca sai como completa).
+    if (error) {
+      if (error.code !== "42P01" && error.code !== "PGRST205") {
+        throw new Error(`honorarios_contratos_load_failed: ${error.message}`);
+      }
+    } else if (data) {
+      honorarios_contratos = data;
+      const contratoIds = data.map((c) => c.id);
+      if (contratoIds.length > 0) {
+        const { data: parcelas, error: erroParcelas } = await admin
+          .from("honorarios_parcelas")
+          .select("id, contrato_id, numero, vencimento, valor_cents, status, financial_entry_id")
+          .eq("organization_id", organizationId)
+          .in("contrato_id", contratoIds)
+          .order("numero", { ascending: true });
+        if (erroParcelas) {
+          throw new Error(`honorarios_parcelas_load_failed: ${erroParcelas.message}`);
+        } else if (parcelas) {
+          honorarios_parcelas = parcelas;
+        }
+      }
     }
   }
 
@@ -929,6 +1590,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("orders", data, 500);
       orders = data.map((o) => ({
         id: o.id,
         external_id: o.external_id,
@@ -957,6 +1619,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("activities", data, 500);
       activities = data;
     }
   }
@@ -977,7 +1640,53 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("checkpoints", data, 500);
       checkpoints = data;
+    }
+  }
+
+  // Acessos a servidores MCP externos (OAuth por contato, 9095). A anonimização
+  // APAGA os pedidos e revoga as credenciais: o que se apaga a pedido dele é o
+  // que se entrega a pedido dele. Só metadado — nenhuma coluna cifrada.
+  let mcpPedidos: AcessoMcpRow[] = [];
+  let mcpAcessos: AcessoMcpRow[] = [];
+  if (contactId) {
+    const pedidos = await admin
+      .from("mcp_oauth_pedidos")
+      .select("servidor_id, escopos, created_at, expira_em, usado_em")
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (pedidos.error) {
+      logger.warn("[lgpd-export-worker] mcp_oauth_pedidos load failed", { request_id: requestId, error: pedidos.error.message });
+    } else if (pedidos.data) {
+      conferirTeto("mcp_pedidos_de_acesso", pedidos.data, 500);
+      mcpPedidos = (pedidos.data as Array<Record<string, unknown>>).map((l) => ({
+        servidor_id: String(l.servidor_id),
+        escopos: (l.escopos as string[]) ?? [],
+        criado_em: (l.created_at as string) ?? null,
+        expira_em: (l.expira_em as string) ?? null,
+        usado_em: (l.usado_em as string) ?? null,
+      }));
+    }
+    const acessos = await admin
+      .from("contato_mcp_credenciais")
+      .select("servidor_id, escopos, criado_em, ultimo_uso_em, revogado_em")
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .limit(500);
+    if (acessos.error) {
+      logger.warn("[lgpd-export-worker] contato_mcp_credenciais load failed", { request_id: requestId, error: acessos.error.message });
+    } else if (acessos.data) {
+      conferirTeto("mcp_acessos", acessos.data, 500);
+      mcpAcessos = (acessos.data as Array<Record<string, unknown>>).map((l) => ({
+        servidor_id: String(l.servidor_id),
+        escopos: (l.escopos as string[]) ?? [],
+        criado_em: (l.criado_em as string) ?? null,
+        ultimo_uso_em: (l.ultimo_uso_em as string) ?? null,
+        revogado_em: (l.revogado_em as string) ?? null,
+      }));
     }
   }
 
@@ -1006,6 +1715,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("appointments", data, 500);
       appointments = data;
     }
   }
@@ -1028,13 +1738,94 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       .eq("contact_id", contactId)
       .order("created_at", { ascending: false })
       .limit(500);
-    if (error) {
+    // #1907: a comanda é tabela do módulo `financeiro`. Sem ele instalado, `sales`
+    // não existe (42P01 no Postgres, PGRST205 pelo PostgREST) e o bloco sai vazio
+    // sem registrar falha. Instalado, a leitura acontece mesmo com o módulo
+    // suspenso: o titular tem direito ao que já está gravado.
+    if (error && error.code !== "42P01" && error.code !== "PGRST205") {
       logger.warn("[lgpd-export-worker] sales load failed", {
         request_id: requestId,
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("sales", data, 500);
       sales = data;
+    }
+  }
+
+  // Propostas comerciais — contact_id direto em crm_proposals. A 0477
+  // acrescentou destinatario_nome/briefing_json/resumo_comercial à cascata de
+  // redação; este bloco é a outra metade — sem ele, o titular pediria acesso
+  // e receberia um relatório que não menciona nenhuma proposta que recebeu.
+  let proposals: ProposalRow[] = [];
+  if (contactId) {
+    const { data, error } = await admin
+      .from("crm_proposals")
+      .select(
+        "id, numero, ano, titulo, status, total_cents, moeda, valid_until, sent_at, decided_at, destinatario_nome, resumo_comercial, pdf_path, created_at",
+      )
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      logger.warn("[lgpd-export-worker] proposals load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    } else if (data) {
+      conferirTeto("proposals", data, 500);
+      proposals = data.map(({ pdf_path, ...p }) => ({ ...p, tem_pdf: Boolean(pdf_path) }));
+    }
+  }
+
+  // Empresas e pessoas (0448/0449) — ver o comentário do campo `b2b` no tipo.
+  // A pessoa vem de `contacts.person_id`; as linhas de planilha casam pelo
+  // contato OU pela pessoa, o MESMO escopo da redação da 0449. Erro lança:
+  // um relatório sem este bloco diria ao titular que não guardamos o que
+  // guardamos.
+  let b2b: ExportPayload["b2b"];
+  if (contactId) {
+    const { data: vinculo, error: eVinculo } = await admin
+      .from("contacts")
+      .select("person_id")
+      .eq("organization_id", organizationId)
+      .eq("id", contactId)
+      .maybeSingle();
+    if (eVinculo) throw eVinculo;
+    const personId = vinculo?.person_id ?? null;
+    let pessoa: NonNullable<ExportPayload["b2b"]>["pessoa"] = null;
+    let vinculos: NonNullable<ExportPayload["b2b"]>["vinculos"] = [];
+    if (personId) {
+      const { data: p, error: eP } = await admin
+        .from("people")
+        .select("id, full_name, email, notes, created_at")
+        .eq("organization_id", organizationId)
+        .eq("id", personId)
+        .maybeSingle();
+      if (eP) throw eP;
+      pessoa = p;
+      const { data: v, error: eV } = await admin
+        .from("company_people")
+        .select("company_id, job_title, department, is_decision_maker, notes")
+        .eq("organization_id", organizationId)
+        .eq("person_id", personId)
+        .limit(500);
+      if (eV) throw eV;
+      conferirTeto("b2b.vinculos", v, 500);
+      vinculos = v ?? [];
+    }
+    const { data: linhas, error: eL } = await admin
+      .from("import_rows")
+      .select("id, batch_id, row_number, status, raw_data, normalized_data, error, created_at")
+      .eq("organization_id", organizationId)
+      .or(personId ? `contact_id.eq.${contactId},person_id.eq.${personId}` : `contact_id.eq.${contactId}`)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (eL) throw eL;
+    conferirTeto("b2b.linhas_importadas", linhas, 500);
+    if (pessoa || vinculos.length > 0 || (linhas ?? []).length > 0) {
+      b2b = { pessoa, vinculos, linhas_importadas: linhas ?? [] };
     }
   }
 
@@ -1058,6 +1849,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("tasks", data, 500);
       tasks = data;
     }
   }
@@ -1084,6 +1876,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("voice_calls", data, 500);
       voice_calls = data as VoiceCallRow[];
     }
   }
@@ -1106,6 +1899,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("campaign_recipients", data, 500);
       campaign_recipients = data as unknown as CampaignRecipientRow[];
     }
   }
@@ -1126,9 +1920,90 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("campaign_suppressions", data, 100);
       campaign_suppressions = data as unknown as CampaignSuppressionRow[];
     }
   }
+
+  // Grupos de WhatsApp — `contact_id` direto em `channel_session_groups`
+  // (migration 0482). Ver o docstring de `ChannelSessionGroupRow`: a FK só
+  // aponta para o CONTATO PLACEHOLDER do grupo, então este bloco só devolve
+  // linha quando o titular do pedido é esse placeholder — o mesmo escopo que a
+  // redação usa (`fn_lgpd_cascade_redact_contact`, `contact_id = p_contact_id`).
+  let channel_session_groups: ChannelSessionGroupRow[] = [];
+  if (contactId) {
+    const { data, error } = await admin
+      .from("channel_session_groups")
+      .select("id, group_chat_id, subject, enabled, enabled_at, created_at")
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      logger.warn("[lgpd-export-worker] channel session groups load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    } else if (data) {
+      conferirTeto("channel_session_groups", data, 500);
+      channel_session_groups = data;
+    }
+  }
+
+  // Mensagens de grupo escritas pelo titular — ver `group_messages_authored`.
+  // Duas consultas (telefone, lid) em vez de um `or` sobre caminho JSON: cada
+  // uma é um filtro simples, e a união por id desfaz a mensagem que casa as duas.
+  const porId = new Map<string, MessageRow>();
+  // (9043) O principal E os extras, cada um com as variantes do nono dígito; e o
+  // `lid` do principal junto com o de cada extra. Sem extra, é a busca de antes.
+  const telefones = [
+    ...new Set([
+      ...(contact?.phone_number ? phoneLookupVariants(contact.phone_number) : []),
+      ...telefonesExtras.flatMap((t) => phoneLookupVariants(t.phone_number)),
+    ]),
+  ];
+  const lids = [
+    ...new Set(
+      [contactLid, ...telefonesExtras.map((t) => t.wa_lid)].filter((l): l is string => Boolean(l)),
+    ),
+  ];
+  const buscas = [
+    telefones.length > 0 ? { campo: "metadata->group_sender->>phone", valores: telefones } : null,
+    lids.length > 0 ? { campo: "metadata->group_sender->>lid", valores: lids } : null,
+  ];
+  for (const busca of buscas) {
+    if (!busca) continue;
+    const { data, error } = await admin
+      .from("messages")
+      .select("id, conversation_id, direction, type, status, body, media_url, media_derived_text, sent_at, created_at")
+      .eq("organization_id", organizationId)
+      .in(busca.campo, busca.valores)
+      .order("created_at", { ascending: false })
+      .limit(RECENT_MESSAGES_LIMIT);
+    if (error) {
+      logger.warn("[lgpd-export-worker] group messages load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+      continue;
+    }
+    conferirTeto("group_messages_authored", data, RECENT_MESSAGES_LIMIT);
+    for (const m of data ?? []) {
+      porId.set(m.id, {
+        id: m.id,
+        conversation_id: m.conversation_id,
+        direction: m.direction,
+        type: m.type,
+        status: m.status,
+        body: m.body,
+        has_media: Boolean(m.media_url),
+        media_derived_text: m.media_derived_text ?? null,
+        sent_at: m.sent_at,
+        created_at: m.created_at,
+      });
+    }
+  }
+  const group_messages_authored = [...porId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   // Captação por webhook — a MESMA classe do bloco acima, achada pelo gate.
   let webhook_captures: CaptureRow[] = [];
@@ -1148,6 +2023,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("webhook_captures", data, 500);
       webhook_captures = data;
     }
   }
@@ -1178,6 +2054,25 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     }
   }
 
+  // O clique liga o titular ao anúncio. A 0806 o apaga na anonimização; no
+  // acesso ele precisa aparecer, inclusive além da primeira página. A chave
+  // id ordena empates sem entregar o identificador interno no arquivo.
+  const meta_ctwa_click_dispatches: MetaCtwaClickRow[] = [];
+  if (contactId) {
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await admin
+        .from("meta_ctwa_click_dispatches")
+        .select("ctwa_clid, captured_at, status, attempted_at, created_at")
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .order("id")
+        .range(offset, offset + 499);
+      if (error) throw error;
+      meta_ctwa_click_dispatches.push(...(data ?? []));
+      if (!data || data.length < 500) break;
+    }
+  }
+
   // Audit log extract (best-effort: rows where metadata.contact_id matches).
   let audit_log_extract: AuditRow[] = [];
   if (contactId) {
@@ -1194,6 +2089,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("audit_log_extract", data, AUDIT_LIMIT);
       audit_log_extract = data.map((a) => ({
         id: a.id,
         action: a.action,
@@ -1244,6 +2140,73 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       if (!data || data.length < 500) break;
     }
   }
+  // Memória da IA, registros de execução e estado da lead — o que a cascata
+  // (#1957) redige a pedido de eliminação, e que o acesso entrega de volta.
+  //
+  // as três têm `contact_id` + `organization_id` na própria linha, então o
+  // escopo sai do mesmo `eq` que a cascata usa — sem depender de derivação
+  // por conversa ou lead. `lead_state.qualification` sai íntegro; de
+  // `ai_agent_runs.tool_calls` saem os argumentos, não o resultado das
+  // ferramentas, que pode trazer dado de outras pessoas (`toolCallsParaOTitular`).
+  const lead_notes: NonNullable<ExportPayload["lead_notes"]> = [];
+  const ai_agent_runs: NonNullable<ExportPayload["ai_agent_runs"]> = [];
+  const lead_state: NonNullable<ExportPayload["lead_state"]> = [];
+  if (contactId) {
+    // A tabela entra por `.from("<nome>")` literal em quem chama, não por
+    // parâmetro: `tests/unit/lgpd-exporta-o-que-redige.test.ts` só reconhece a
+    // tabela exportada pelo literal, e um `.from(tabela)` a deixava invisível.
+    const lePaginado = async (
+      pagina: (
+        de: number,
+        ate: number,
+      ) => PromiseLike<{ data: unknown[] | null; error: unknown }>,
+    ): Promise<Record<string, unknown>[]> => {
+      const linhas: Record<string, unknown>[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await pagina(offset, offset + 499);
+        if (error) throw error;
+        linhas.push(...((data ?? []) as unknown as Record<string, unknown>[]));
+        if (!data || data.length < 500) break;
+      }
+      return linhas;
+    };
+    for (const nota of await lePaginado((de, ate) =>
+      admin
+        .from("lead_notes")
+        .select("id, headline, body, created_at, updated_at")
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .order("id")
+        .range(de, ate),
+    )) {
+      lead_notes.push(nota as NonNullable<ExportPayload["lead_notes"]>[number]);
+    }
+    for (const run of await lePaginado((de, ate) =>
+      admin
+        .from("ai_agent_runs")
+        .select("id, tool_calls, created_at")
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .order("id")
+        .range(de, ate),
+    )) {
+      ai_agent_runs.push({
+        ...(run as NonNullable<ExportPayload["ai_agent_runs"]>[number]),
+        tool_calls: toolCallsParaOTitular(run.tool_calls),
+      });
+    }
+    for (const estado of await lePaginado((de, ate) =>
+      admin
+        .from("lead_state")
+        .select("id, next_action, qualification, updated_at")
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .order("id")
+        .range(de, ate),
+    )) {
+      lead_state.push(estado as NonNullable<ExportPayload["lead_state"]>[number]);
+    }
+  }
   // Casos, linha do tempo do caso e demandas — o que a 0280 pôs na cascata.
   //
   // O escopo do CASO é a CONVERSA do titular: `agent_cases` não tem FK para
@@ -1258,24 +2221,9 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
   const passagens: PassagemDeAtendimentoRow[] = [];
   const avisos_de_caso: AvisoDeCasoEntregaRow[] = [];
   const conversation_drafts: NonNullable<ExportPayload["conversation_drafts"]> = [];
-  const lead_notes: NonNullable<ExportPayload["lead_notes"]> = [];
   const conversation_notes: NonNullable<ExportPayload["conversation_notes"]> = [];
   const knowledge_chunks: NonNullable<ExportPayload["knowledge_chunks"]> = [];
   if (contactId) {
-    // Nota do agente: FK direta para o contato. Falha propaga: um relatório que
-    // omite a nota por erro de leitura diria que não guardamos o que guardamos.
-    for (let offset = 0; ; offset += 500) {
-      const { data, error } = await admin
-        .from("lead_notes")
-        .select("id, headline, body, created_at")
-        .eq("organization_id", organizationId)
-        .eq("contact_id", contactId)
-        .order("id")
-        .range(offset, offset + 499);
-      if (error) throw error;
-      lead_notes.push(...(data ?? []));
-      if (!data || data.length < 500) break;
-    }
     const pageSize = 500;
     const refBatchSize = 100; // Mantém o filtro IN abaixo dos limites de URL dos proxies.
     const conversationIds: string[] = [];
@@ -1359,6 +2307,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         error: error.message,
       });
     } else if (data) {
+      conferirTeto("demandas", data, 500);
       demandas = data;
     }
     // A conversa interna sobre o caso (migration 0281). FK direta para o
@@ -1424,20 +2373,9 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         conversation_drafts.push(...(data ?? []));
         if (!data || data.length < pageSize) break;
       }
-      // Nota interna da equipe e trechos de base de conhecimento: mesmo escopo
-      // (a conversa do titular), que é o que a anonimização usa (0921).
-      for (let offset = 0; ; offset += pageSize) {
-        const { data, error } = await admin
-          .from("conversation_notes")
-          .select("id, conversation_id, body, created_by_name, created_at")
-          .eq("organization_id", organizationId)
-          .in("conversation_id", conversationIds.slice(batch, batch + refBatchSize))
-          .order("id")
-          .range(offset, offset + pageSize - 1);
-        if (error) throw error;
-        conversation_notes.push(...(data ?? []));
-        if (!data || data.length < pageSize) break;
-      }
+      // Trechos de base de conhecimento: mesmo escopo (a conversa do titular),
+      // que é o que a anonimização usa (0921). As notas internas da equipe
+      // saem no bloco próprio logo abaixo (migration 0483).
       for (let offset = 0; ; offset += pageSize) {
         const { data, error } = await admin
           .from("ai_chunks")
@@ -1456,6 +2394,33 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
             created_at: c.created_at,
           });
         }
+        if (!data || data.length < pageSize) break;
+      }
+    }
+    // As NOTAS INTERNAS das conversas do titular (migration 0483) — MESMO
+    // escopo dos rascunhos, pelos mesmos ids já paginados: `conversation_notes`
+    // não tem FK para `contacts`, e sem este bloco o Art. 18 II entregaria um
+    // relatório que omita o que a equipe anotou sobre a pessoa. É a outra
+    // metade do par que `tests/unit/lgpd-exporta-o-que-redige.test.ts` deriva
+    // da fonte (a cascata 0483 passa a redigir esta tabela) e reprova quem
+    // redige e não exporta. A mídia entra como metadado — caminho, MIME e
+    // bytes — porque o export é `data.json` + `report.pdf`.
+    for (let batch = 0; batch < conversationIds.length; batch += refBatchSize) {
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await admin
+          .from("conversation_notes")
+          // Literal, sem concatenação: o supabase-js lê as colunas do TIPO da
+          // string para inferir a linha, e string montada volta como
+          // `GenericStringError` e não compila (mesma pegadinha logo acima).
+          .select("id, conversation_id, body, media_storage_path, media_mime, media_size_bytes, created_at, created_by_name")
+          .eq("organization_id", organizationId)
+          .in("conversation_id", conversationIds.slice(batch, batch + refBatchSize))
+          .order("id")
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        // Corpo legível: o token de menção (#2372) leva o UUID do atendente,
+        // que não é dado do titular.
+        conversation_notes.push(...(data ?? []).map((n) => ({ ...n, body: textoLegivelDeMencao(n.body) })));
         if (!data || data.length < pageSize) break;
       }
     }
@@ -1550,7 +2515,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
           .from("agent_inbox_items")
           .select("id,ref_id,title,body,status,created_at,resolved_at")
           .eq("organization_id", organizationId)
-          .eq("ref_kind", "appointment")
+          .in("ref_kind", ["appointment", "agenda_reminder_sender"])
           .in("kind", ["other", "appointment_outcome_required", "appointment_recovery_review"])
           .in("ref_id", ids.slice(batch, batch + refBatchSize))
           .order("id")
@@ -1576,8 +2541,6 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     }
   }
 
-  const perfil = perfilDoPais(controlador.country);
-
   return {
     request_id: requestId,
     organization_id: organizationId,
@@ -1585,6 +2548,9 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     organization_display_name: controlador.display_name,
     dpo_email: controlador.dpo_email,
     lei_citada: citacaoDaLei(perfil),
+    ...foraDoBrasil(perfil, controlador),
+    ...blocoArt15(perfil, controlador, decisoes_automatizadas),
+    ...corpoDaCopiaCompleta(messages_completas, secoes_no_limite),
     documento_rotulo: perfil.documento.rotulo,
     generated_at: new Date().toISOString(),
     no_local_footprint:
@@ -1598,11 +2564,17 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     messages_count_total,
     messages_recent,
     leads,
+    lead_field_proposals,
+    honorarios_contratos,
+    honorarios_parcelas,
     orders,
     activities,
     checkpoints,
+    mcp_pedidos_de_acesso: mcpPedidos,
+    mcp_acessos: mcpAcessos,
     appointments,
     sales,
+    proposals,
     tasks,
     webhook_captures,
     audit_log_extract,
@@ -1611,6 +2583,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     appointment_notices,
     voice_calls,
     prospecting_candidates,
+    ...(meta_ctwa_click_dispatches.length > 0 ? { meta_ctwa_click_dispatches } : {}),
     cases,
     case_events,
     demandas,
@@ -1619,11 +2592,145 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     avisos_de_caso,
     campaign_recipients,
     campaign_suppressions,
+    channel_session_groups,
+    group_messages_authored,
     conversation_drafts,
-    lead_notes,
     conversation_notes,
     knowledge_chunks,
     contact_field_proposals,
+    lead_attachments,
+    lead_notes,
+    ai_agent_runs,
+    lead_state,
+    b2b,
+  };
+}
+
+/**
+ * O que só existe no documento FORA do Brasil: o rótulo da citação, os papéis
+ * e o fuso. Para o Brasil devolve `{}` — nenhuma chave nova no `data.json`
+ * (doc 88). O rótulo brasileiro ("Direito exercido", issue #2344) e os papéis
+ * brasileiros saem do PERFIL PADRÃO no renderizador, não daqui.
+ */
+function foraDoBrasil(
+  perfil: PerfilDoPais,
+  controlador: Controlador,
+): Pick<ExportPayload, "lei_rotulo" | "papel_controlador" | "papel_encarregado" | "fuso"> {
+  if (perfil.codigo === PAIS_PADRAO) return {};
+  return {
+    ...(perfil.lei?.rotuloNoDocumento ? { lei_rotulo: perfil.lei.rotuloNoDocumento } : {}),
+    papel_controlador: perfil.papel.controlador,
+    papel_encarregado: perfil.papel.encarregado,
+    ...(controlador.timezone ? { fuso: controlador.timezone } : {}),
+  };
+}
+
+/**
+ * A alínea h) — decisões automatizadas, descritas SÓ com o que o sistema sabe:
+ * quais agentes de IA estão no ar e em que modo.
+ *
+ * "No ar" é `agenteAtende` (`lib/ai/agents/no-ar.ts`), a régua da tela e dos
+ * workers — NUNCA `is_active`: "Novo agente" grava `is_active: false` e
+ * publicar não religa, então filtrar por `is_active` deixava de fora o caso
+ * comum (agente criado pela tela, publicado, respondendo sozinho) e dizia ao
+ * titular que não havia IA nenhuma. Ver `app/api/v1/ai/agents/assignable`.
+ *
+ * O modo é o fato que separa as duas frases: `automatic` responde ao titular
+ * sem passar por uma pessoa; `assisted` propõe e uma pessoa decide. Se há
+ * decisão com efeito jurídico (art. 22.º), o sistema não sabe — quem informa é
+ * o controlador, e o texto diz isso em vez de afirmar que não há.
+ *
+ * Nunca lança: leitura falhou, a alínea diz que não foi possível determinar —
+ * silenciar h) seria entregar um relatório que omite uma alínea que a lei exige.
+ */
+async function descreveDecisoesAutomatizadas(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+  requestId: string,
+): Promise<string> {
+  const { data, error } = await admin
+    .from("ai_agents")
+    .select("id, name, operation_mode, paused_at, published_version_id, archived_at, created_at")
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: true })
+    .limit(100);
+  if (error) {
+    logger.warn("[lgpd-export-worker] ai_agents load failed", {
+      request_id: requestId,
+      error: error.message,
+    });
+    return "Não foi possível determinar neste relatório: a leitura dos agentes de IA do controlador falhou.";
+  }
+  const noAr = (data ?? []).filter((a) => agenteAtende(a));
+  if (noAr.length === 0) {
+    return "Não há assistente de IA a responder às suas mensagens nesta organização.";
+  }
+  const nomes = (modo: string) =>
+    noAr.filter((a) => a.operation_mode === modo).map((a) => a.name);
+  const automaticos = nomes("automatic");
+  const assistidos = nomes("assisted");
+  const frases: string[] = [];
+  if (automaticos.length > 0) {
+    frases.push(
+      `Responde(m) automaticamente às suas mensagens ${automaticos.length} assistente(s) de IA: ${automaticos.join(", ")}.`,
+    );
+  }
+  if (assistidos.length > 0) {
+    frases.push(
+      `Sugere(m) respostas que uma pessoa revê e decide enviar ${assistidos.length} assistente(s) de IA: ${assistidos.join(", ")}.`,
+    );
+  }
+  frases.push(
+    "Lógica: modelo de linguagem sobre as suas mensagens, a base de conhecimento da organização e, conforme a " +
+      "configuração de cada assistente, dados do CRM.",
+    "Se deste tratamento resulta alguma decisão tomada exclusivamente por meios automatizados que produza efeitos " +
+      "na sua esfera jurídica ou que o afete significativamente de forma similar (art. 22.º), quem o informa é o " +
+      "controlador.",
+  );
+  return frases.join(" ");
+}
+
+/**
+ * O bloco do art. 15.º para o `data.json` e o PDF (issue #2340).
+ *
+ * Sai FORA do Brasil, com lei revisada e com autoridade declarada no perfil —
+ * três condições para uma: o Brasil segue a LGPD (art. 18, II), cuja lista não
+ * é esta, e o `data.json` brasileiro é travado byte a byte pelo doc 88; país sem
+ * citação revisada não ganha a de um outro (mesma régua de `citacaoDaLei`).
+ */
+function blocoArt15(
+  perfil: PerfilDoPais,
+  controlador: Controlador,
+  decisoes: string,
+): Pick<ExportPayload, "art15"> {
+  const autoridade = perfil.autoridadeDeSupervisao;
+  if (perfil.codigo === PAIS_PADRAO || !autoridade || !perfil.lei?.revisada || !decisoes) {
+    return {};
+  }
+  return {
+    art15: {
+      finalidades: controlador.art15.finalidades,
+      destinatarios: controlador.art15.destinatarios,
+      prazo_conservacao: controlador.art15.prazo_conservacao,
+      autoridade,
+      decisoes_automatizadas: decisoes,
+    },
+  };
+}
+
+/**
+ * A cópia: as mensagens TODAS, e não as 100 de `RECENT_MESSAGES_LIMIT`, e a
+ * lista das seções que bateram no teto. `null` (não coletado) não vira chave —
+ * o caminho sem contato fica sem `messages_completas`. Em todo país desde o
+ * doc 110 (2A); antes o Brasil ficava sem as duas pela trava do doc 88.
+ */
+function corpoDaCopiaCompleta(
+  mensagens: MessageRow[] | null,
+  secoesNoLimite: string[],
+): Pick<ExportPayload, "messages_completas" | "secoes_no_limite"> {
+  return {
+    ...(mensagens === null ? {} : { messages_completas: mensagens }),
+    secoes_no_limite: secoesNoLimite,
   };
 }
 
@@ -1639,6 +2746,15 @@ function emptyPayload(
     organization_display_name: controlador.display_name,
     dpo_email: controlador.dpo_email,
     lei_citada: citacaoDaLei(perfilDoPais(controlador.country)),
+    ...foraDoBrasil(perfilDoPais(controlador.country), controlador),
+    // Sem identificador não há como ler `ai_agents` (o invariant de coleta
+    // vaza é só `organizations`); o que a alínea h) pode dizer com verdade é
+    // que não existe dado localizado — e portanto não existe decisão sobre ele.
+    ...blocoArt15(
+      perfilDoPais(controlador.country),
+      controlador,
+      "Nenhum dado pessoal seu foi localizado nos sistemas internos, pelo que este relatório não tem tratamento automatizado de dados seus a descrever.",
+    ),
     documento_rotulo: perfilDoPais(controlador.country).documento.rotulo,
     generated_at: new Date().toISOString(),
     no_local_footprint: true,
@@ -1648,11 +2764,17 @@ function emptyPayload(
     messages_count_total: 0,
     messages_recent: [],
     leads: [],
+    lead_field_proposals: [],
+    honorarios_contratos: [],
+    honorarios_parcelas: [],
     orders: [],
     activities: [],
     checkpoints: [],
+    mcp_pedidos_de_acesso: [],
+    mcp_acessos: [],
     appointments: [],
     sales: [],
+    proposals: [],
     tasks: [],
     webhook_captures: [],
     audit_log_extract: [],
@@ -1668,5 +2790,11 @@ function emptyPayload(
     avisos_de_caso: [],
     campaign_recipients: [],
     campaign_suppressions: [],
+    channel_session_groups: [],
+    group_messages_authored: [],
+    lead_attachments: [],
+    lead_notes: [],
+    ai_agent_runs: [],
+    lead_state: [],
   };
 }

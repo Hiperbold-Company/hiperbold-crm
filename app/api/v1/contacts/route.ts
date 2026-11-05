@@ -83,7 +83,7 @@ async function resolveContactsAuth(req: NextRequest, requestId: string): Promise
         return {
           ok: false,
           response: fail(
-            err.httpStatus === 401 ? "unauthenticated" : "forbidden",
+            err.codigo ?? (err.httpStatus === 401 ? "unauthenticated" : "forbidden"),
             err.message,
             err.httpStatus,
             { requestId },
@@ -138,8 +138,12 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const url = new URL(req.url);
   // Os filtros têm os MESMOS nomes na URL da tela e aqui (`filtrosDeContatosSchema`).
+  const entradas = Object.fromEntries([...url.searchParams.entries()].filter(([, v]) => v !== ""));
+  // `getAll` (#1274): a etiqueta repetida na URL (`?tag=a&tag=b`) chega como lista; o
+  // `fromEntries` acima guardaria só a última.
+  const etiquetas = url.searchParams.getAll("tag").filter((v) => v !== "");
   const qsParsed = contactListQuerySchema.safeParse(
-    Object.fromEntries([...url.searchParams.entries()].filter(([, v]) => v !== "")),
+    etiquetas.length > 1 ? { ...entradas, tag: etiquetas } : entradas,
   );
   if (!qsParsed.success) {
     return fail("validation_failed", t("Query inválida."), 422, {
@@ -177,6 +181,7 @@ export async function GET(req: NextRequest): Promise<Response> {
         idioma,
       },
       qsParsed.data,
+      undefined,
       { timezone },
     );
     return ok(contacts, { requestId, meta: { cursor, has_more } });

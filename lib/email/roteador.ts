@@ -31,9 +31,10 @@
  * ── O que NÃO muda ──────────────────────────────────────────────────────────
  *
  * Instalação sem nenhum dos dois continua devolvendo `not_configured`, que é o
- * que joga o fluxo no caminho bom que já existe: `pending_review` no worker de
- * LGPD (`workers/lgpd-export-worker.ts`) e o link de aceite mostrado na tela do
- * convite. Nenhum chamador precisa saber qual transporte respondeu.
+ * que joga o fluxo no caminho próprio dele: `pending_review` no worker de LGPD
+ * (`workers/lgpd-export-worker.ts`; funciona desde a migration 0651, que pôs o
+ * estado no CHECK do banco) e o link de aceite mostrado na tela do convite.
+ * Nenhum chamador precisa saber qual transporte respondeu.
  */
 import { getSmtpConfig } from "@/lib/email/config";
 import { isEmailConfigured as resendConfigurada, sendEmail as enviarPelaResend } from "@/lib/email/resend";
@@ -81,6 +82,14 @@ interface SendArgs {
  */
 export async function transporteDeEmail(): Promise<TransporteDeEmail> {
   return isSmtpConfigured(await getSmtpConfig()) ? "smtp" : "resend";
+}
+
+/**
+ * A Resend está configurada? Só leitura de estado (a tarja de `lib/email/estado.ts`);
+ * mora aqui para que nenhum arquivo fora do roteador importe o módulo da Resend.
+ */
+export async function resendEstaConfigurada(): Promise<boolean> {
+  return resendConfigurada();
 }
 
 /** Existe algum caminho capaz de entregar? Usado por tela, nunca por envio. */

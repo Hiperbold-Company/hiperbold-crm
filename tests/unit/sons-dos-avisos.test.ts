@@ -73,6 +73,23 @@ describe("qual som cada aviso pede", () => {
     expect(somDoAviso({ kind: "other", ref_kind: "ai_provider_credential" })).toBe("pessoa");
   });
 
+  it("proposta rascunhada pela IA → som de pessoa (só uma pessoa revisa e envia)", () => {
+    expect(somDoAviso({ kind: "proposta_pronta_para_revisao", ref_kind: "proposal" })).toBe("pessoa");
+    // E o aviso de proposta TRAVADA continua fora: ele pede conferir, não uma
+    // pessoa agora — o cron devolve a rascunho sozinho.
+    expect(somDoAviso({ kind: "proposta_travada", ref_kind: "proposal" })).toBeNull();
+  });
+
+  it("a proposta nova entre os sons que tocam — e um aviso já visto não repete", () => {
+    const vistos = new Set(["a"]);
+    expect(
+      sonsNovos(vistos, [
+        { id: "a", kind: "proposta_pronta_para_revisao", ref_kind: "proposal" },
+        { id: "p1", kind: "proposta_pronta_para_revisao", ref_kind: "proposal" },
+      ]),
+    ).toEqual(["pessoa"]);
+  });
+
   it("abrir a página com avisos antigos não toca nada", () => {
     expect(sonsNovos(null, [{ id: "a", kind: "handoff", ref_kind: null }])).toEqual([]);
   });

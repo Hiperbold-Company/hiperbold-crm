@@ -24,7 +24,10 @@ vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async (
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
-vi.mock("@/lib/automation/actions/call-webhook", () => ({ executeCallWebhook: vi.fn() }));
+vi.mock("@/lib/automation/actions/call-webhook", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/automation/actions/call-webhook")>()),
+  executeCallWebhook: vi.fn(),
+}));
 vi.mock("@/lib/automation/engine", () => ({ buildContext: vi.fn(async () => ({})) }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 
@@ -84,6 +87,8 @@ function supabaseSessaoStub() {
                   data: { id: RUN_ID, rule_id: RULE_ID, event_id: EVENT_ID },
                   error: null,
                 }),
+                // Os runs do par (regra, evento), lidos para numerar o Attempt do reenvio.
+                eq: async () => ({ data: [{ actions_result: [] }], error: null }),
               }),
             }),
           }),

@@ -10,15 +10,27 @@ import { REGISTRO_DE_NOS, type CategoriaDoNo } from "@/lib/followup/registro-de-
 import { NODE_VISUALS } from "./nodes/nodeVisuals";
 
 /** Grupos da paleta da automação, na ordem em que aparecem. */
-const GRUPOS: Array<{ categoria: CategoriaDoNo; rotulo: string }> = [
-  { categoria: "inicio", rotulo: "Início" },
-  { categoria: "crm", rotulo: "CRM" },
-  { categoria: "logica", rotulo: "Lógica" },
-  { categoria: "controle", rotulo: "Controle" },
-  { categoria: "mensagem", rotulo: "Mensagens" },
+type GrupoDaPaleta = Exclude<CategoriaDoNo, "atendimento">;
+
+const GRUPOS: Array<{ categoria: GrupoDaPaleta }> = [
+  { categoria: "inicio" },
+  { categoria: "crm" },
+  { categoria: "logica" },
+  { categoria: "controle" },
+  { categoria: "mensagem" },
   // Só a automação tem blocos nesta categoria (registro de nós).
-  { categoria: "instagram", rotulo: "Instagram" },
+  { categoria: "instagram" },
 ];
+
+// Rótulo em tabela de topo: a cerca de i18n resolve t(TABELA[chave]) e cobra o espanhol de cada valor.
+const ROTULO_DO_GRUPO: Record<GrupoDaPaleta, string> = {
+  inicio: "Início",
+  crm: "CRM",
+  logica: "Lógica",
+  controle: "Controle",
+  mensagem: "Mensagens",
+  instagram: "Instagram",
+};
 
 interface Props {
   onAdd: (type: NodeType) => void;
@@ -78,7 +90,7 @@ export function NodePalette({ onAdd, variant = "desktop", surface = "followup" }
         {t("Adicionar nó")}
       </h2>
       {surface === "automacao"
-        ? GRUPOS.map(({ categoria, rotulo }) => {
+        ? GRUPOS.map(({ categoria }) => {
             const tipos = NOS_DA_SUPERFICIE[surface].filter(
               (tipo) => REGISTRO_DE_NOS[tipo].categoria === categoria,
             );
@@ -89,7 +101,7 @@ export function NodePalette({ onAdd, variant = "desktop", surface = "followup" }
                 className="flex flex-col gap-1.5 pb-2"
                 data-testid={`palette-grupo-${categoria}`}
               >
-                <h3 className="px-1 text-[11px] font-medium text-text-muted">{t(rotulo)}</h3>
+                <h3 className="px-1 text-[11px] font-medium text-text-muted">{t(ROTULO_DO_GRUPO[categoria])}</h3>
                 {tipos.map(botao)}
               </div>
             );

@@ -27,6 +27,12 @@ vi.mock("@/lib/audit", () => ({
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
+// O financeiro é módulo de tabela (#1907): a rota só existe com o módulo ligado.
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({})) }));
+vi.mock("@/lib/instalacao/modulos", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/instalacao/modulos")>()),
+  moduloLigado: vi.fn(async () => true),
+}));
 vi.mock("@/lib/billing/assinatura/recusa-de-escrita", () => ({
   recusarEscritaEmModoLeitura: vi.fn(async () => null),
 }));

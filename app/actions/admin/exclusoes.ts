@@ -19,6 +19,7 @@ import { mfaEmDivida } from "@/lib/auth/server";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { logger } from "@/lib/logger";
+import { estaSuspensa } from "@/lib/organizacao/operante";
 import { valorDaInstalacao } from "@/lib/instalacao/config";
 import {
   DIAS_DE_GUARDA_PADRAO,
@@ -28,6 +29,7 @@ import {
 } from "@/lib/retencao/exclusao-de-organizacao/datas";
 import { excluirOrganizacao } from "@/lib/retencao/exclusao-de-organizacao/rodada";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { reguaDaCobrancaPermiteExcluir } from "@/lib/tenants/regua-de-cobranca";
 
 const MENSAGEM_MFA = "Confirme a verificação em duas etapas.";
 const MENSAGEM_DADOS_INVALIDOS = "Dados inválidos.";
@@ -211,6 +213,10 @@ export async function programarExclusao(input: {
   }
 
   const admin = createAdminClient();
+  // Hiperbold: programar à mão uma data dentro da régua de cobrança encurtaria a régua; recusa como "Excluir
+  // agora". Leitura que falha recusa (lib/tenants/regua-de-cobranca.ts).
+  const regua = await reguaDaCobrancaPermiteExcluir(admin, parsed.data.organizationId);
+  if (!regua.liberada) return { ok: false, error: regua.mensagem };
   const { error } = await admin.rpc("fn_exclusao_programar" as never, {
     p_org: parsed.data.organizationId,
     p_quando: quando.toISOString(),
@@ -311,7 +317,7 @@ export async function excluirAgora(input: {
   const linhaDaOrg = org as { display_name: string | null; slug: string | null; status: string | null };
   if (parsed.data.slugDigitado !== undefined) {
     // Pelo painel de tenants a exclusão vem DEPOIS da suspensão, e o que se digita é o slug, exato.
-    if (linhaDaOrg.status !== "suspended") return { ok: false, error: MENSAGEM_SO_SUSPENSA };
+    if (!estaSuspensa(linhaDaOrg.status)) return { ok: false, error: MENSAGEM_SO_SUSPENSA };
     if (parsed.data.slugDigitado !== linhaDaOrg.slug) {
       return { ok: false, error: "O identificador digitado não confere com o da organização." };
     }
@@ -319,6 +325,11 @@ export async function excluirAgora(input: {
     // O nome EXATO, sem aparar e sem ignorar maiúsculas: quem digita precisa estar olhando para o nome.
     return { ok: false, error: "O nome digitado não confere com o da organização." };
   }
+
+  // Hiperbold: no meio da régua de cobrança (contrato atrasada ou suspensa) a exclusão manual é recusada; quem
+  // exclui no fim da régua é a rodada programada. Leitura que falha recusa (lib/tenants/regua-de-cobranca.ts).
+  const regua = await reguaDaCobrancaPermiteExcluir(admin, parsed.data.organizationId);
+  if (!regua.liberada) return { ok: false, error: regua.mensagem };
 
   const { requestId, ip, userAgent } = await contextoDaRequisicao();
   // Antes: a exclusão apaga a organização, e a linha de quem pediu precisa existir. A auditoria final

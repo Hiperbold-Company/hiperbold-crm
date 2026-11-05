@@ -21,7 +21,7 @@ export async function retomarContaPelaRecuperacao(p: {
   admin: Pick<SupabaseClient, "auth" | "from">;
   usuario: UsuarioParaReassumir & { app_metadata?: unknown };
   accessToken: string | null | undefined;
-  /** Troca a senha pela sessão nova (`supabase.auth.updateUser({ password })`). */
+  /** Troca a senha pela sessão nova (o `updateUser` de senha do cliente de cookie; quem invalida o cache curto é `reassumirConta`). */
   trocarSenhaDaSessao: (senha: string) => Promise<{ error: unknown }>;
   agora?: Date;
   gerarSenha?: () => string;

@@ -130,7 +130,8 @@ test("a etapa marcada avisa a equipe na Central; a vizinha, sem a marca, não", 
   await entrar(page);
 
   // ---- 1. a chave, pela tela ----
-  await page.goto("/app/settings/tenant/pipelines");
+  // Com mais de um funil a página abre os cards fechados: o hash abre o deste teste (é o link "ir para as etapas").
+  await page.goto(`/app/settings/tenant/pipelines#etapas-${funilId}`);
   const chave = page.getByTestId(`avisar-${etapaConfirmado}`);
   await expect(chave).toBeVisible({ timeout: ESPERA });
   await expect(chave, "vem desligada").toHaveAttribute("aria-checked", "false");
