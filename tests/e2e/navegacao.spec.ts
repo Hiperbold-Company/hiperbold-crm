@@ -196,7 +196,8 @@ test.describe("navegação agrupada", () => {
     await loginAdmin(page);
 
     for (const nome of ["Início", "Chat", "Radar", "Pipeline", "Contatos", "Agentes", "Desempenho", "Atividades"]) {
-      await expect(sidebar(page).getByRole("link", { name: nome, exact: true })).toBeVisible();
+      // O upstream pôs o contador da fila no nome do link ("Chat 32 conversas esperando…").
+      await expect(sidebar(page).getByRole("link", { name: new RegExp(`^${nome}( |$)`) })).toBeVisible();
     }
     for (const nome of ["Agenda", "Respostas rápidas", "Tarefas", "Comandas", "Follow-ups", "Roteadores", "Provedores", "Conexões", "Automações e Webhooks", "Meta Ads"]) {
       await expect(sidebar(page).getByRole("link", { name: nome, exact: true })).toHaveCount(0);
@@ -334,6 +335,9 @@ test.describe("navegação agrupada", () => {
   test("a equipe carregada no Inbox continua legível em Financeiro e Faturamento sem recarregar", async ({
     page,
   }) => {
+    // "Contas e recebimentos" está oculto no Hiperbold CRM por decisão do Filipe
+    // (hiperbold/FUNCOES.md, contas-e-recebimentos): o card que esta jornada clica não existe.
+    test.skip(true, "Contas e recebimentos oculto no Hiperbold CRM (hiperbold/FUNCOES.md, contas-e-recebimentos)");
     await page.setViewportSize({ width: 1280, height: 900 });
     // Comissão só existe com o módulo instalado. Usa a porta canônica do dono,
     // como a spec de Honorários; instalar no banco efêmero não se desfaz.
@@ -351,6 +355,8 @@ test.describe("navegação agrupada", () => {
 
     // A jornada medida é de administrador de tenant, com autenticação real.
     // Depois do Inbox só há cliques em Link, mantendo o QueryClient da casca.
+    // O /login do Hiperbold manda quem já tem sessão para o app: sai a do dono antes.
+    await page.context().clearCookies();
     await loginAdmin(page);
     const equipeRecebida = page.waitForResponse(
       (r) =>

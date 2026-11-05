@@ -106,6 +106,9 @@ async function valoresDoCard(card: Locator): Promise<string[]> {
 /** O que o card mostra: as etapas (em ordem), os motivos e os rótulos dos campos. */
 async function configuracaoNaTela(page: Page, id: string) {
   const card = page.getByTestId(`funil-${id}`);
+  // O upstream (#3176) só monta o editor do funil depois do clique em "abrir editor".
+  await card.getByTestId(`abrir-editor-${id}`).click();
+  await expect(card.getByTestId(`area-do-editor-${id}`)).toBeVisible({ timeout: ESPERA });
   // As etapas chegam por fetch depois que o card aparece: esperar a lista, não ler o "carregando".
   await expect(card.locator('[data-testid^="nome-"]')).toHaveCount(ETAPAS.length, { timeout: ESPERA });
   const etapas = await card

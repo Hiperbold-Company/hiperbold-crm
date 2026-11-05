@@ -599,7 +599,9 @@ jobs:
     # medido — não há Docker onde esta matriz foi escrita —, e existe para o
     # vermelho continuar falando de schema: mantido em 20, a perna morreria por
     # relógio no meio da segunda passada.
-    timeout-minutes: 30
+    timeout-minutes: 45
+    # Hiperbold, 04/11/2026: depois do merge do upstream 1.58–1.100 a perna do pg17 levou 29,5 min
+    # e a do pg15 foi cortada aos 30 com 465 arquivos verdes. Medido, não declarado: o teto vai a 45.
     # Executor próprio para trabalho nosso quando EXECUTOR_PROPRIO=ligado; o
     # porquê e a guarda contra fork: comentário do e2e-parte no e2e.yml.
     runs-on: ${{ vars.EXECUTOR_PROPRIO == 'ligado' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'deskcomm-proprio' || 'ubuntu-latest' }}

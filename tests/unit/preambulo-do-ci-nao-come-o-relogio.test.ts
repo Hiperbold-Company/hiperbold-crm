@@ -72,8 +72,10 @@ const TETOS: Record<string, { minutos: number; razao: string }> = {
   // lê o desfecho de `needs`. O teto que denuncia a suíte crescendo vive na perna
   // que a roda.
   "ci.yml::invariants-majors": {
-    minutos: 30,
+    minutos: 45,
     razao:
+      "Hiperbold, 04/11/2026, MEDIDO: depois do merge do upstream 1.58–1.100 a perna do pg17 levou " +
+      "29,5 min e a do pg15 foi cortada aos 30 com 465 arquivos verdes (run 41945878527). Antes: " +
       "a perna deixou de ser UMA passada: agora é `test:db` + `test:db:update`, e cada uma sobe " +
       "Postgres e aplica o baseline (p90 medido de uma passada: 325s). O 30 é DECLARADO, não " +
       "medido — não há Docker onde esta matriz foi escrita; mantido em 20, a perna morreria por " +
