@@ -12,304 +12,136 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ### Adicionado
 
-- **Tela Atividades ganha filtro por atendente** Ao lado do período, a tela Atividades agora tem o filtro "Atendente": "Todos" (padrão) ou uma pessoa da equipe. Com uma pessoa escolhida, o total, o gráfico "Quando", "Quem fez", "O que foi feito" e a linha do tempo mostram só o que ela fez. A escolha fica na URL (`?atendente=`), então o link pode ser compartilhado.
+- **Tela Atividades ganha filtro por atendente** Ao lado do período, o filtro "Atendente" mostra "Todos" (padrão) ou uma pessoa da equipe. Com uma pessoa escolhida, o total, os gráficos e a linha do tempo mostram só o que ela fez. A escolha fica na URL (`?atendente=`), então o link pode ser compartilhado.
 
-- **Automações por comentário do Instagram conversam pelo Direct** Uma automação que começa por um comentário no Instagram agora conversa com a pessoa pelo Direct:
+- **Automações por comentário do Instagram conversam pelo Direct** Uma automação que começa por comentário no Instagram agora conversa com a pessoa pelo Direct:
 
-  - **Mensagem, Pergunta e Aguardar pelo Direct.** Depois da resposta privada ("Responda QUERO para receber o link"), a automação espera a pessoa responder e então manda o conteúdo, faz perguntas e guarda as respostas nos campos, tudo pela conversa do Direct. As opções chegam numeradas, e a pessoa responde com o número.
-  - **Esperar o "quero".** A conversa do Direct só abre quando a pessoa responde. Por isso a automação precisa de um "Aguardar o contato responder" antes da primeira Mensagem ou Pergunta, e a publicação avisa quando falta. A resposta que chega logo depois da resposta privada também vale, mesmo antes de a espera começar. Enquanto a automação espera, o agente de IA não responde nessa conversa.
-  - **A resposta saiu ou falhou, no histórico.** O histórico da execução mostra quando a resposta privada ou a pública saiu e, quando falhou, o motivo em português (prazo de 7 dias vencido, comentário apagado, conta desconectada).
-  - **Escolher o post pela lista ou pelo link.** No gatilho, depois de escolher a conta, aparecem os posts recentes com a miniatura, o começo da legenda e a data, e dá para marcar vários. Também dá para colar o link do post. Sem nenhum post marcado, vale qualquer post.
+  - **Mensagem, Pergunta e Aguardar pelo Direct.** Depois da resposta privada ("Responda QUERO para receber o link"), a automação espera a pessoa responder, manda o conteúdo, faz perguntas e guarda as respostas nos campos. As opções chegam numeradas, e a pessoa responde com o número.
+  - **Esperar o "quero".** A conversa do Direct só abre quando a pessoa responde. Por isso a automação precisa de um "Aguardar o contato responder" antes da primeira Mensagem ou Pergunta, e a publicação avisa quando falta. Enquanto a automação espera, o agente de IA não responde nessa conversa.
+  - **A resposta saiu ou falhou, no histórico.** O histórico mostra quando a resposta privada ou a pública saiu e, se falhou, o motivo em português (prazo de 7 dias vencido, comentário apagado, conta desconectada).
+  - **Escolher o post pela lista ou pelo link.** No gatilho, depois de escolher a conta, aparecem os posts recentes (miniatura, começo da legenda e data) e dá para marcar vários. Também dá para colar o link do post. Sem nenhum post marcado, vale qualquer post.
   - **Só contas do Instagram** aparecem no gatilho de comentário.
 
-  Mudou um comportamento: numa automação que começa por comentário, a Mensagem e a Pergunta saem pelo Direct de quem comentou, não mais pelo WhatsApp. Uma automação assim não pode ter outros gatilhos quando manda mensagens. O texto passa a ter o limite do Instagram (1000 caracteres, contando as opções numeradas). Não há migration nesta versão.
+  Mudou um comportamento: numa automação que começa por comentário, a Mensagem e a Pergunta saem pelo Direct de quem comentou, não mais pelo WhatsApp. Uma automação assim não pode ter outros gatilhos quando manda mensagens. O texto tem o limite do Instagram (1000 caracteres, contando as opções numeradas). Não há migration nesta versão.
 
-- **Automações do CRM, com editor visual** Nova tela Automações (menu CRM e Configurações, para gerente e administrador). Uma automação começa quando um lead é criado (por qualquer origem ou só pelas fontes de captação), quando um negócio entra numa etapa, ou manualmente para um contato pelo botão "Testar com um contato". No editor visual ela verifica condições (campo padrão ou personalizado, tag, etapa, negócio aberto no funil, situação do negócio) e age no CRM: criar, mover, ganhar ou perder negócio, pôr e tirar tags, definir responsável (inclusive por rodízio), avisar a equipe, criar tarefa, adicionar nota e preencher campos. Os textos aceitam variáveis como `{{contact.name}}` e `{{campo.chave}}`. Cada execução aparece em Execuções, contada passo a passo em português. Os follow-ups continuam iguais e um contato pode estar numa automação e num follow-up ao mesmo tempo. A atualização aplica sozinha a migration 0986.
+- **Automações do CRM, com editor visual** Nova tela Automações (menu CRM e Configurações, para gerente e administrador). Uma automação começa quando um lead é criado (por qualquer origem ou só pelas fontes de captação), quando um negócio entra numa etapa, ou manualmente pelo botão "Testar com um contato". No editor visual ela verifica condições (campo, tag, etapa, negócio aberto no funil, situação do negócio) e age no CRM: criar, mover, ganhar ou perder negócio, pôr e tirar tags, definir responsável (inclusive por rodízio), avisar a equipe, criar tarefa, adicionar nota e preencher campos. Os textos aceitam variáveis como `{{contact.name}}` e `{{campo.chave}}`. Cada execução aparece em Execuções, passo a passo. A atualização aplica sozinha a migration 0986.
 
 - **Automações conversam com o contato: mensagem com botões ou lista, pergunta e espera** O editor de Automações ganhou três blocos:
 
-  - **Mensagem:** texto com variáveis e, se quiser, até 3 botões ou uma lista de até 10 opções. Cada opção segue o seu próprio caminho, e há caminhos para "Sem resposta", "Resposta inválida" (com nova tentativa) e "Erro". No WhatsApp oficial o contato vê os botões; nos outros números as opções chegam numeradas (1, 2, 3), e ele pode responder com o número ou com o nome da opção.
-  - **Pergunta:** grava a resposta num campo do negócio ou do contato e confere se ela é texto, telefone, e-mail, número, CPF ou data. Tem tempo limite e novas tentativas, e a resposta pode ser usada nos blocos seguintes como `{{resposta.<bloco>}}`.
-  - **Aguardar:** passa a esperar a partir de 1 segundo, ou até o contato responder.
+  - **Mensagem:** texto com variáveis e, se quiser, até 3 botões ou uma lista de até 10 opções. Cada opção segue o seu caminho, e há caminhos para "Sem resposta", "Resposta inválida" (com nova tentativa) e "Erro". No WhatsApp oficial o contato vê os botões; nos outros números as opções chegam numeradas, e ele responde com o número ou o nome da opção.
+  - **Pergunta:** grava a resposta num campo do negócio ou do contato e confere se é texto, telefone, e-mail, número, CPF ou data. Tem tempo limite e novas tentativas, e a resposta vale nos blocos seguintes como `{{resposta.<bloco>}}`.
+  - **Aguardar:** espera a partir de 1 segundo, ou até o contato responder.
 
-  A resposta é processada em até 1 minuto. Enquanto uma automação espera a resposta numa conversa, o agente de IA não responde por cima naquela conversa; se a automação recusar a resposta e não tiver caminho para ela, a mensagem volta para o agente.
+  A resposta é processada em até 1 minuto. Enquanto a automação espera a resposta, o agente de IA não responde por cima; se ela recusar a resposta e não tiver caminho para ela, a mensagem volta para o agente.
 
-  Cada contato recebe no máximo 30 mensagens automáticas por hora. Contato bloqueado, contato sem conversa de WhatsApp e janela de 24 horas fechada no número oficial levam o fluxo ao caminho "Erro", com o motivo escrito em Execuções. Não há migration nesta versão.
+  Cada contato recebe no máximo 30 mensagens automáticas por hora. Contato bloqueado, sem conversa de WhatsApp ou com a janela de 24 horas fechada no número oficial leva o fluxo ao caminho "Erro", com o motivo em Execuções. Não há migration nesta versão.
 
-- **Automações começam por mensagem, tag, agendamento, datas e silêncio, e uma automação inicia outra** As automações ganharam gatilhos novos:
+- **Automações começam por mensagem, tag, agendamento, datas e silêncio, e uma automação inicia outra** Gatilhos novos:
 
-  - **Mensagem recebida:** qualquer mensagem, ou só as que contêm, são exatamente ou começam com as palavras-chave escolhidas. A comparação é por palavra inteira, sem acento e sem diferenciar maiúsculas. Dá para escolher o número de WhatsApp e limitar à primeira mensagem da conversa. Não dispara em mensagem de grupo, na resposta a uma automação que está esperando nem, por padrão, quando um atendente cuida da conversa.
+  - **Mensagem recebida:** qualquer mensagem, ou só as que contêm, são exatamente ou começam com as palavras-chave escolhidas (palavra inteira, sem acento, sem diferenciar maiúsculas). Dá para escolher o número de WhatsApp e limitar à primeira mensagem da conversa. Não dispara em grupo, na resposta a uma automação que espera nem, por padrão, quando um atendente cuida da conversa.
   - **Tag adicionada** no negócio ou no contato. Tags postas em massa, por ação em lote ou planilha, não disparam.
   - **Agendamento:** marcado, confirmado, remarcado, cancelado, compareceu ou faltou.
   - **Aniversário do contato**, às 9h no fuso da organização.
-  - **Data de um campo do negócio**, com antecedência ou atraso em dias e horário, só para negócios abertos por padrão. A automação começa na primeira rodada depois do horário, e as rodadas acontecem de hora em hora.
+  - **Data de um campo do negócio**, com antecedência ou atraso em dias e horário, só para negócios abertos por padrão. As rodadas acontecem de hora em hora.
   - **Sem resposta do contato** há um tempo escolhido, contado da última mensagem enviada. Conversas encerradas, com atendente ou de campanha ficam de fora.
   - **Caso aberto na Central.**
   - **Iniciada por outra automação.**
 
-  A nova ação **Iniciar outra automação** passa dados à automação iniciada, que os usa como `{{param.chave}}`, e ela continua no mesmo negócio. A proteção contra ciclo e cadeia longa continua valendo, e o histórico da execução guarda só o nome dos dados, nunca o valor.
+  A nova ação **Iniciar outra automação** passa dados à automação iniciada (`{{param.chave}}`), que continua no mesmo negócio. A proteção contra ciclo e cadeia longa continua valendo, e o histórico guarda só o nome dos dados, nunca o valor.
 
   Quando uma mensagem inicia uma automação que conversa com o contato, o agente de IA não responde àquela mensagem. Se a automação terminar sem mandar nada, a mensagem volta para o agente.
 
-  No bloco Aguardar das automações, "Esperar um tempo" não é mais interrompido quando o contato manda mensagem; para reagir à resposta, use "Esperar o contato responder". A ação Adicionar tag passa a aceitar variáveis. Não há migration nesta versão.
+  No bloco Aguardar, "Esperar um tempo" não é mais interrompido quando o contato manda mensagem; para reagir à resposta, use "Esperar o contato responder". A ação Adicionar tag aceita variáveis. Não há migration nesta versão.
 
-- **Aviso de nova versão disponível nas abas abertas** Depois de uma atualização do CRM, quem ficou com a aba aberta vê no topo "Nova versão disponível",
-  com o botão "Atualizar" para recarregar a página. Nada a configurar.
+- **Aviso de nova versão disponível nas abas abertas** Depois de uma atualização do CRM, quem ficou com a aba aberta vê no topo "Nova versão disponível", com o botão "Atualizar". Nada a configurar.
 
-- **Central de ajuda na barra lateral e em cada tela** Quando a instalação configura a central de ajuda (`HELP_CENTER_URL`), a barra lateral ganha o item "Central de ajuda", logo acima de Configurações, que abre a página do CRM na central em nova aba (também no menu do celular). As telas que têm artigo próprio mostram, abaixo do título, a linha "Dúvidas? Veja como usar esta tela na central de ajuda". Em Automações e webhooks, cada aba mostra o seu artigo, e "Receber dados" traz também o passo a passo para conectar o formulário do site. O botão "Ajuda" do topo respeita a aba aberta pelo endereço (`?tab=`). Sem a variável, nada disso aparece.
+- **Central de ajuda na barra lateral e em cada tela** Quando a instalação configura a central de ajuda (`HELP_CENTER_URL`), a barra lateral ganha o item "Central de ajuda", acima de Configurações (também no menu do celular). As telas com artigo próprio mostram, abaixo do título, a linha "Dúvidas? Veja como usar esta tela na central de ajuda". Em Automações e webhooks, cada aba mostra o seu artigo, e "Receber dados" traz também o passo a passo do formulário do site. Sem a variável, nada disso aparece.
 
-- **Contatos — colunas de UTM na lista** "Personalizar colunas", na tela de Contatos, passou a oferecer cinco colunas de UTM: origem (`utm_source`), mídia (`utm_medium`), campanha (`utm_campaign`), conteúdo (`utm_content`) e termo (`utm_term`). Como a captação grava o UTM no negócio e não no contato, cada coluna mostra o valor do negócio mais recente do contato que tem aquela informação preenchida. Contato sem negócio com UTM mostra "—". Nada a fazer na VPS.
+- **Contatos — colunas de UTM na lista** "Personalizar colunas", em Contatos, oferece cinco colunas de UTM: origem (`utm_source`), mídia (`utm_medium`), campanha (`utm_campaign`), conteúdo (`utm_content`) e termo (`utm_term`). Como a captação grava o UTM no negócio, cada coluna mostra o valor do negócio mais recente do contato que o tem preenchido. Sem negócio com UTM, mostra "—". Nada a fazer na VPS.
 
-- **O menu mostra quantas tarefas em aberto são suas** O item Tarefas do menu lateral passou a trazer um número: quantas tarefas em
-  aberto são do usuário logado. Contam as que ainda pedem ação (pendente e em
-  andamento) e cujo responsável é ele. Concluídas e canceladas não entram, e a
-  tarefa de um colega também não — gerente e administrador continuam vendo só as
-  próprias no menu; a visão da equipe segue na tela de Tarefas, sem mudança.
+- **O menu mostra quantas tarefas em aberto são suas** O item Tarefas do menu lateral passou a trazer um número: as tarefas pendentes e em andamento do usuário logado. Concluídas, canceladas e as de colegas não entram (gerente e administrador também veem só as próprias no menu; a visão da equipe segue na tela de Tarefas). O número se atualiza a cada minuto e, com o menu recolhido, vira um ponto.
 
-  O número se atualiza sozinho a cada minuto, para a tarefa que uma automação ou um
-  follow-up acabou de criar aparecer sem precisar recarregar a página. Sem nada em
-  aberto, nada é desenhado ao lado do item. Com o menu recolhido, o contador vira
-  um ponto, como os de Casos e Inbox.
+- **Contatos — filtro de campo acha o valor do negócio, várias etapas no filtro de funil e colunas personalizadas** O filtro "Campo" de Contatos agora procura no cadastro do contato e nos negócios dele (respeitando o funil escolhido), então um campo como `utm_source`, gravado no negócio, é achado. Dá para restringir a "Do contato" ou "Do negócio". O filtro "Funil" aceita várias etapas ao mesmo tempo. "Personalizar colunas" deixa cada pessoa escolher quais colunas a lista mostra (até 12, incluindo data de entrada, origem, aniversário, última mensagem e campos personalizados) e a ordem. A escolha fica salva por usuário, e "Restaurar padrão" volta às colunas de sempre. A atualização cria a tabela `user_preferences` sozinha; nada a fazer na VPS.
 
-- **Contatos — filtro de campo acha o valor do negócio, várias etapas no filtro de funil e colunas personalizadas** O filtro "Campo" da tela de Contatos passou a procurar, por padrão, no cadastro do contato e nos negócios dele (respeitando o funil escolhido). Antes ele olhava só o contato, e um campo como `utm_source`, que a captação grava no negócio, nunca era achado. Dá para restringir a "Do contato" ou "Do negócio".
+- **Desempenho ganha filtros de período, funil e atendente e as abas Negócios, Origens e Atendimento** O filtro no topo (período com atalhos ou datas, funil e atendente) vale para todas as abas e fica no endereço da página. Negócios mostra criados, ganhos, perdidos, em aberto e a carteira, com gráfico diário, negócios por etapa, movimentações, ranking de vendas e lista de negócios. Origens mostra os negócios por utm_source, utm_medium e utm_campaign, com ganhos e taxa de ganho. Atendimento mostra atendimentos com a variação contra o período anterior, finalizados, em aberto, aguardando, tempos de resposta, o mapa de calor de mensagens recebidas e o ranking por atendente. O atendente continua vendo só os próprios números. Perdas, Previsão, Atrito e a performance por atendente continuam na tela.
 
-  O filtro "Funil" aceita várias etapas ao mesmo tempo: aparecem os contatos com negócio em qualquer das etapas marcadas.
+- **Duplicar funil e funis recolhíveis em Etapas do funil** Em Configurações › Etapas do funil, o botão "Duplicar funil" (no topo e no cabeçalho de cada funil) cria um funil novo a partir de outro: escolha a origem, dê o nome e salve. A cópia leva as etapas (cor, papel, chance de fechamento e aviso na Central), os motivos de perda e de ganho, os campos do lead com as regras de obrigatoriedade e o mapeamento do assistente. Negócios, automações, follow-ups e formulários não são copiados. Cada funil agora é recolhível: fechado por padrão, aberto quando há um só, quando o link aponta para ele ou logo depois de duplicar. "Abrir todos / Fechar todos" fica no topo.
 
-  O botão "Personalizar colunas" deixa cada pessoa escolher quais colunas a lista mostra (até 12, incluindo data de entrada, origem, aniversário, última mensagem e campos personalizados do contato) e em que ordem. A escolha fica salva no servidor, por usuário, e "Restaurar padrão" volta às colunas de sempre. A atualização cria a tabela `user_preferences` sozinha; nada a fazer na VPS.
+- **Fonte de captação pode ser editada depois de criada** Em Automações e webhooks › Receber dados, o detalhe de uma fonte ganhou o botão "Editar": nome, funil e etapa de entrada, página de obrigado e nomes dos campos do formulário que viram Nome, Telefone e E-mail (vários, separados por vírgula). Em branco, o CRM reconhece os nomes comuns. O endereço da fonte não muda. Os avisos de pausar e excluir dizem o que acontece com os leads já recebidos.
 
-- **Desempenho ganha filtros de período, funil e atendente e as abas Negócios, Origens e Atendimento** A tela Desempenho passa a ter um filtro no topo (período com atalhos ou datas, funil e atendente) que vale para todas as abas e fica no endereço da página. Negócios mostra criados, ganhos, perdidos, em aberto e a carteira, com gráfico diário em quantidade ou valor, negócios por etapa, movimentações de etapa, ranking de vendas e a lista de negócios. Origens mostra os negócios por utm_source, utm_medium e utm_campaign, com ganhos e taxa de ganho. Atendimento mostra atendimentos com a variação contra o período anterior, finalizados, em aberto, aguardando, tempos de primeira resposta e de resposta, o mapa de calor de mensagens recebidas e o ranking por atendente. O atendente continua vendo só os próprios números. Perdas, Previsão, Atrito e a performance por atendente continuam na tela.
+- **Quadro do funil filtra por eventos manuais e perde vários negócios de uma vez com motivo** A barra de filtros do funil ganhou "Eventos manuais": menor que, igual a ou maior que um número, contando os eventos de "Registrar evento". Mover vários negócios para a etapa de perda abre antes a janela do motivo, aplica o mesmo motivo a todos e registra a perda na linha do tempo de cada um. O aviso "0 de N já haviam sido alterados" deixou de aparecer quando nada foi alterado.
 
-- **Duplicar funil e funis recolhíveis em Etapas do funil** Em Configurações › Etapas do funil, o botão "Duplicar funil" (no topo, e "Duplicar" no cabeçalho de cada funil) cria um funil novo a partir de outro: escolha o funil de origem, dê o nome e salve. A cópia leva as etapas (com cor, papel, chance de fechamento e aviso na Central), os motivos de perda e de ganho, os campos do lead com as regras de obrigatoriedade e o mapeamento do assistente. Negócios, automações, follow-ups e formulários não são copiados. A página também passou a mostrar cada funil recolhível: fechado por padrão, aberto quando há um funil só, quando o link aponta para ele, ou logo depois de duplicar. "Abrir todos / Fechar todos" fica no topo.
+- **O CRM passa a guardar os comentários do Instagram** Os comentários nos posts e reels de uma conta do Instagram conectada passam a ser guardados, e o canal fica pronto para responder automaticamente (Direct para quem comentou, resposta no comentário e conferência se a pessoa segue o perfil), com limite de envios por hora abaixo do que a Meta permite. Nada muda na tela por enquanto: as respostas só saem quando uma automação pedir, e essa parte ainda não foi liberada.
 
-- **Fonte de captação pode ser editada depois de criada** Em Automações e webhooks › Receber dados, o detalhe de uma fonte ganhou o botão "Editar". Dá para trocar o nome, o funil e a etapa de entrada, a página de obrigado e os nomes dos campos do formulário que viram Nome, Telefone e E-mail (vários, separados por vírgula). Em branco, o CRM reconhece os nomes comuns sozinho. O endereço da fonte não muda. Os avisos de pausar e de excluir agora dizem o que acontece com os envios e com os leads que já chegaram.
+- **Instagram oficial avisa o desfecho das respostas a comentários e lista os posts da conta** Cada resposta a comentário (no Direct ou no comentário) registra quando foi enviada ou por que não saiu (conta desconectada, recusa da Meta, prazo de 7 dias vencido ou envio sem confirmação). A lista de conexões diz a rede de cada uma (WhatsApp, Instagram ou Messenger). A conta do Instagram lista os posts recentes e acha um post pelo link colado, para escolher em qual post uma automação vale. Nada muda para quem não usa o Instagram oficial.
 
-- **Quadro do funil filtra por eventos manuais e perde vários negócios de uma vez com motivo** A barra de filtros do funil ganhou "Eventos manuais": menor que, igual a ou maior que um número, contando os eventos lançados em "Registrar evento". Mover vários negócios para a etapa de perda agora abre antes a janela do motivo, aplica o mesmo motivo a todos e registra a perda na linha do tempo de cada um. O aviso "0 de N já haviam sido alterados" deixou de aparecer quando nada foi alterado.
+- **Instagram Direct e Messenger pela conexão oficial da Meta** Agora dá para conectar o Instagram Direct e o Messenger da Página do Facebook direto com a Meta, sem serviço intermediário. Em Conexões › Redes sociais, "Conectar" leva ao login da Meta: no Instagram, cada conta profissional escolhida vira uma conexão (não precisa de Página); no Messenger, cada Página escolhida vira uma conexão. As mensagens entram no inbox como as do WhatsApp, e o agente responde dentro da janela de 24 horas. Para usar, a instalação precisa do app da Meta configurado (id e chave secreta do app e id da configuração do login unificado do Instagram) e do webhook `/api/v1/webhooks/meta-social` cadastrado no painel da Meta. A conexão pelo intermediário continua funcionando.
 
-- **O CRM passa a guardar os comentários do Instagram** Os comentários feitos nos posts e reels de uma conta do Instagram conectada passam a ser guardados pelo CRM, e o canal fica pronto para responder a eles automaticamente: uma mensagem no Direct para quem comentou, uma resposta no próprio comentário e a conferência de se a pessoa segue o perfil, com um limite de envios por hora abaixo do que a Meta permite. Nada muda na tela por enquanto: as respostas só saem quando uma automação pedir, e essa parte ainda não foi liberada.
+- **Pausa entre uma resposta da IA e a próxima** Na tela de cada agente, em "Limites do atendimento", o campo "Pausa entre uma resposta e a próxima (segundos)" define quanto a IA espera antes de responder de novo à mesma conversa, de 1 a 600 segundos. O que o cliente escrever nesse meio-tempo é respondido junto, numa resposta só. Vazio ou 0 mantém o comportamento de sempre. A atualização acrescenta a coluna `reply_min_interval_ms` em `ai_agent_versions`, aplicada pelo `update.sh` sem edição manual.
 
-- **Instagram oficial avisa o desfecho das respostas a comentários e lista os posts da conta** Cada resposta a comentário do Instagram (no Direct ou no próprio comentário) agora registra quando foi enviada ou quando não saiu (conta desconectada, recusa da Meta, prazo de 7 dias vencido ou envio sem confirmação), para as automações saberem o que aconteceu. A lista de conexões passa a dizer a rede de cada uma (WhatsApp, Instagram ou Messenger). E a conta conectada do Instagram oferece os posts recentes e acha um post pelo link colado (`instagram.com/p/…` ou `/reel/…`), para escolher em qual post uma automação vale. Nada muda para quem não usa o Instagram oficial.
+- **A prospecção pode buscar empresas do Google Maps pela API da Scavio** Quem tem conta na Scavio pode apontar a busca da prospecção para ela, sem a Apify. A organização escolhe `scavio` em `organizations.settings.prospecting.provider` (ainda por SQL, sem tela) e salva a chave da Scavio no campo de chave da tela de prospecção. A chave é conferida sem gastar crédito e fica cifrada. A busca devolve até 20 empresas por página. O passo a passo está em `docs/features/prospeccao-nativa.md`. A Apify continua sendo o provedor padrão, e nenhuma variável nova é necessária na VPS.
 
-- **Instagram Direct e Messenger pela conexão oficial da Meta** Agora dá para conectar o Instagram Direct e o Messenger da Página do Facebook direto com a Meta, sem serviço intermediário. Em Conexões › Redes sociais, "Conectar" leva ao login da Meta: no Instagram, pelo login unificado, cada conta profissional escolhida do portfólio de negócios vira uma conexão (não precisa de Página); no Messenger, cada Página escolhida vira uma conexão. As mensagens entram no inbox como as do WhatsApp e o agente responde dentro da janela de 24 horas da última mensagem do cliente. Se o acesso do Instagram tiver validade, a conexão pede para reconectar 7 dias antes de vencer. Para usar, a instalação precisa do app da Meta configurado (id e chave secreta do app, e o id da configuração do login unificado do Instagram) e do endereço do webhook `/api/v1/webhooks/meta-social` cadastrado no painel da Meta. A conexão pelo intermediário continua funcionando.
+- **Criar tarefa direto no negócio, com aviso na hora em que ela vence** O painel do negócio no quadro ganhou a seção "Tarefas": "Criar tarefa" (o que fazer, dia, horário e responsável), a lista das tarefas abertas do negócio e a caixinha para marcar como feita. Criar e concluir aparecem na linha do tempo. Quando o prazo chega, quem criou e o responsável são avisados: com o CRM aberto, por um aviso na tela e pelo novo sino de tarefas no topo; com o CRM fechado, por notificação no celular (para quem ativou).
 
-- **Pausa entre uma resposta da IA e a próxima** Na tela de cada agente, em "Limites do atendimento", o campo "Pausa entre uma resposta e a próxima (segundos)" define quanto tempo a IA espera antes de responder de novo à mesma conversa, de 1 a 600 segundos. O que o cliente escrever nesse meio-tempo é respondido junto, numa resposta só. Vazio ou 0 mantém o comportamento de sempre: nada muda para quem não preencher.
+- **A tela de Tarefas ganha o filtro por funil** Ao lado de situação e responsável, o seletor "Funil" mostra "Todos os funis" (padrão) ou um funil da organização, na lista e no calendário. O filtro é aplicado na consulta (`GET /api/v1/tasks?pipeline_id=`), então vale mesmo com mais de 500 tarefas, e combina com o de responsável. A tarefa herda o funil do negócio; tarefa solta só aparece com "Todos os funis". O seletor só aparece com dois ou mais funis. Crédito: @flaviosiq.
 
-  A atualização acrescenta a coluna `reply_min_interval_ms` em `ai_agent_versions`, aplicada pelo `update.sh` sem edição manual.
-
-- **A prospecção pode buscar empresas do Google Maps pela API da Scavio** Quem tem conta na Scavio agora pode apontar a busca da prospecção para ela, sem depender da Apify. São dois passos: a organização escolhe `scavio` em `organizations.settings.prospecting.provider` (ainda por SQL, sem tela) e salva a chave da Scavio no mesmo campo de chave da tela de prospecção. A chave é conferida sem gastar crédito e fica cifrada como a da Apify. A busca devolve até 20 empresas por página e as empresas entram na campanha pelo mesmo caminho de sempre, com avaliação de site e prévia. O passo a passo está em `docs/features/prospeccao-nativa.md`.
-
-  Nada muda para quem não escolheu: a Apify continua sendo o provedor padrão, e nenhuma variável nova é necessária na VPS.
-
-- **Criar tarefa direto no negócio, com aviso na hora em que ela vence** O painel do negócio no quadro ganhou a seção "Tarefas": "Criar tarefa" (o que fazer, dia, horário e responsável), a lista das tarefas abertas daquele negócio e a caixinha para marcar como feita. Criar e concluir aparecem na linha do tempo.
-  Quando o prazo chega, quem criou e o responsável são avisados: com o CRM aberto, um aviso na tela e o novo sino de tarefas no topo, com link para o negócio; com o CRM fechado, notificação no celular (para quem ativou as notificações).
-
-- **A tela de Tarefas ganha o filtro por funil** A tela de Tarefas ganha, ao lado de situação e responsável, o seletor "Funil": "Todos os funis" (como a tela abre) ou um funil da organização, e só as tarefas dos negócios daquele funil aparecem, na lista e no calendário. O filtro é aplicado na consulta (`GET /api/v1/tasks?pipeline_id=`), então vale mesmo com mais de 500 tarefas, e combina com o de responsável. A tarefa herda o funil do negócio a que está presa: tarefa solta, sem negócio, só aparece com "Todos os funis". O seletor só aparece quando a organização tem dois ou mais funis. Crédito: @flaviosiq.
-
-- **No Chat, a conversa encerrada ganhou o botão "Usar para ensinar o agente"** A conversa marcada entra em Conhecimento › "Conversas anteriores" na rodada noturna, sem dados pessoais.
-  Antes não havia onde marcar, e as conversas fechadas pelo Chat nunca entravam nessa base.
-  Retirar a marcação de uma conversa que já entrou não apaga o que o agente aprendeu com ela.
+- **No Chat, a conversa encerrada ganhou o botão "Usar para ensinar o agente"** A conversa marcada entra em Conhecimento › "Conversas anteriores" na rodada noturna, sem dados pessoais. Antes não havia onde marcar, e as conversas fechadas pelo Chat nunca entravam nessa base. Retirar a marcação de uma conversa que já entrou não apaga o que o agente aprendeu.
 
 ### Alterado
 
-- **O cron das filas vazias para de consultar o banco — instalação ociosa gasta menos cota** Numa instalação parada, nove rotas de cron batiam no PostgREST a cada 5 minutos
-  só para descobrir que a fila estava vazia: soneca vencida, mensagem presa, fila
-  de redação de objeto, devolução de handoff, devolução ao rodízio, saúde de
-  canal, revogação de acesso MCP vencido, lembrete de tarefa e lembrete de
-  agenda. Juntas eram 15 consultas por batida — 2,4 requisições por minuto
-  (144/h) que consumiam a cota do banco sem ninguém usando o produto, e no
-  plano grátis do Supabase isso é o caminho para a instalação cair em `PGRST002`.
+- **O cron das filas vazias para de consultar o banco — instalação ociosa gasta menos cota** Numa instalação parada, nove rotas de cron (soneca vencida, mensagem presa, fila de redação, devolução de handoff, devolução ao rodízio, saúde de canal, revogação de acesso MCP vencido, lembrete de tarefa e lembrete de agenda) consultavam o PostgREST a cada 5 minutos só para descobrir que a fila estava vazia. Eram 2,4 requisições por minuto que gastavam a cota do banco sem ninguém usando o produto, e no plano grátis do Supabase isso leva a instalação a cair em `PGRST002`. Agora cada rota consulta antes um retrato em memória do piso ocioso (`lib/cron/piso-ocioso.ts`), pelo pool do Postgres, e sai na hora quando a fila está vazia. Nada muda para quem usa o recurso. Medido com o banco vazio: o crontab, fora o `event_log`, cai de 7,7 para 5,3 req/min. Refs #3731.
 
-  Agora cada uma dessas rotas consulta o retrato em memória do piso ocioso
-  (`lib/cron/piso-ocioso.ts`) antes de qualquer outra coisa e sai na hora quando a
-  fila está vazia. O retrato é uma consulta só, compartilhada pelas rotas, e vai
-  pelo pool do Postgres — não gasta requisição do PostgREST, que é a cota que
-  estoura. Nada muda para quem usa o recurso: a rodada roda igual, e o recurso
-  que passa a ter trabalho volta na batida seguinte. Se a leitura do retrato
-  falhar, a rota roda — o portão economiza cota, não decide se um recurso
-  funciona.
+- **Respostas rápidas do Inbox em uma linha, com os grupos em popup** A barra de respostas rápidas quebrava linha, e cada grupo despejava todas as respostas na mesma área. Numa agência com dezenas de respostas, a seção comia a altura da conversa (176px em tela de 375px). Agora a barra é uma linha só (26px), com rolagem lateral, e cada grupo é um botão com o nome dele que abre as respostas num painel flutuante. Resposta sem grupo continua a um clique. Contribuição de @webtecnica (#3875).
 
-  Medido no crontab inteiro, com o banco vazio e as mesmas rotas: o piso das
-  rotas de fila cai de 3,0 para 0,6 req/min (as 0,6 são da poda de log de webhook,
-  que fica para outra fatia). A soma do crontab, fora o `event_log`, cai de 7,7
-  para 5,3 req/min.
+- **Em Conhecimento, o tipo de material do catálogo agora se chama "Catálogo de Produtos E-commerce"** O cartão de "Ensinar algo novo ao agente" deixa claro que o catálogo vem da loja virtual sincronizada, e não de conteúdo digitado na tela.
 
-  Refs #3731.
+- **No Chat, todas as abas mostram a conversa mais recente primeiro** A Fila passou a seguir a mesma ordem das outras abas. O número "1º, 2º…" continua dizendo quem atender primeiro: o 1º é quem espera há mais tempo, mesmo aparecendo mais embaixo.
 
-- **Respostas rápidas do Inbox em uma linha, com os grupos em popup** A barra de respostas rápidas do Inbox empilhava: ela quebrava linha, então cada
-  resposta a mais virava mais uma linha acima do campo de digitação — e cada grupo
-  despejava TODAS as suas respostas na mesma área, com um rótulo em cima. Numa
-  agência com dezenas de respostas e três grupos, a seção comia a altura da
-  conversa. Medido no Chromium desta VPS, com 3 grupos de 4 respostas: 176px de
-  altura em 375px de tela, 86px em 768px e 56px em 1280px.
+- **Filtro de eventos manuais do funil vira um botão compacto** Na barra de filtros do funil, "Eventos manuais" agora é um botão como os outros. O clique abre a escolha entre maior que, igual a ou menor que, o número e um botão para limpar. Com o filtro aplicado, o botão mostra o valor, por exemplo "Eventos manuais > 1". O filtro funciona igual a antes.
 
-  Agora a barra é uma linha só, com rolagem lateral quando não couber, e o grupo
-  virou um botão com o nome dele: as respostas do grupo abrem num painel flutuante,
-  o mesmo popup que o compositor já usa. A mesma medição dá 26px nas três larguras
-  — uma linha —, e o espaço recuperado é da conversa. Resposta sem grupo continua a
-  um clique, sem popup no caminho; grupo vazio não vira botão.
+- **Gerente também acessa Conexões** A tela Conexões, que era só do administrador, agora abre também para o gerente: ele vê o item no menu, conecta e desconecta números (por QR Code ou API oficial da Meta), vê a saúde de cada conexão, cuida dos modelos de mensagem e configura o acesso da IA de cada canal. Atendente e leitor continuam sem acesso. O aviso de conexão caída mostra o botão "Ver conexões" ao gerente. A configuração da instalação (app da Meta em /admin) continua só com o administrador da plataforma.
 
-  Quem nunca criou grupo não vê diferença de conteúdo na barra: os mesmos botões,
-  na mesma ordem, um pouco mais largos porque não quebram mais linha.
-
-  Contribuição de @webtecnica (#3875).
-
-- **Em Conhecimento, o tipo de material do catálogo agora se chama "Catálogo de Produtos E-commerce"** O cartão de "Ensinar algo novo ao agente" deixa claro que o catálogo vem da loja virtual sincronizada,
-  e não de conteúdo digitado na tela.
-
-- **No Chat, todas as abas mostram a conversa mais recente primeiro** A Fila passou a seguir a mesma ordem das outras abas: quem acabou de escrever aparece no topo.
-  O número "1º, 2º…" continua dizendo quem atender primeiro: o 1º é quem espera há mais tempo, mesmo aparecendo mais embaixo.
-
-- **Filtro de eventos manuais do funil vira um botão compacto** Na barra de filtros do funil, "Eventos manuais" agora é um botão como os outros filtros. O clique abre a escolha entre maior que, igual a ou menor que, o número e um botão para limpar. Com o filtro aplicado, o botão mostra o que está valendo, por exemplo "Eventos manuais > 1". O filtro funciona igual a antes.
-
-- **Gerente também acessa Conexões** A tela Conexões, que era só do administrador, agora abre também para o gerente. O gerente vê o item no menu e pode conectar e desconectar números (pelo QR Code ou pela API oficial da Meta), ver a saúde de cada conexão, cuidar dos modelos de mensagem e configurar o acesso da IA de cada canal. Atendente e leitor continuam sem acesso. O aviso de conexão caída também passa a mostrar o botão "Ver conexões" ao gerente. A configuração da instalação (app da Meta em /admin) continua só com o administrador da plataforma.
-
-- **Ícones novos do WhatsApp, do Instagram e do Messenger no Chat** Cada conversa do Chat mostra, no canto da foto do contato, um ícone quadrado com a cor do canal: verde no WhatsApp, o degradê do Instagram no Direct e o do Messenger nas mensagens da Página. As conversas do WhatsApp conectado pela UAZAPI, que antes apareciam com um balão cinza, também ganham o ícone do WhatsApp.
-
-  No tema escuro, a conversa selecionada na lista do Chat ficava com fundo cinza claro e texto claro por cima, difícil de ler. Agora ela ganha um fundo escuro tingido, como o resto da tela.
+- **Ícones novos do WhatsApp, do Instagram e do Messenger no Chat** Cada conversa mostra, no canto da foto do contato, um ícone quadrado com a cor do canal: verde no WhatsApp, o degradê do Instagram no Direct e o do Messenger nas mensagens da Página. As conversas do WhatsApp pela UAZAPI, que tinham um balão cinza, também ganham o ícone do WhatsApp. No tema escuro, a conversa selecionada na lista tinha fundo cinza claro com texto claro, difícil de ler. Agora ganha um fundo escuro tingido, como o resto da tela.
 
 - **Página de vendas usa o nome Hiperbold CRM** A página de vendas, a de preços, os Termos de Uso e a Política de Privacidade passam a chamar o produto de Hiperbold CRM, no lugar de "HiperCRM". O botão "Assinar o Scale" leva a `/signup?plano=scale`. Como o texto dos Termos mudou, a versão vigente passou a ser 2026-10-29.
 
-- **Radar mostra só negócios parados há até 90 dias** O Radar de risco deixa de listar negócios parados há mais de 90 dias, como os que vieram de uma migração e nunca foram fechados. Eles continuam abertos no funil, só saem do Radar. Antes, esse acervo ocupava a lista inteira e tomava o lugar dos negócios recentes, que podiam nem ser lidos.
+- **Radar mostra só negócios parados há até 90 dias** O Radar de risco deixa de listar negócios parados há mais de 90 dias, como os de uma migração que nunca foram fechados. Eles continuam abertos no funil, só saem do Radar. Antes, esse acervo ocupava a lista inteira e tomava o lugar dos negócios recentes.
 
 ### Corrigido
 
-- **Contato da equipe continua sendo atendido e não é mais passado a humano nem silenciado pelo medidor de clima** O medidor de clima roda antes do turno do agente e passava para uma pessoa
-  qualquer conversa medida como irritada — inclusive a do sócio que testa o
-  agente pelo próprio número. O sócio cobrava uma resposta por texto, a nota saía
-  baixa, a conversa ia para `pending` com `bot_silenced_until = infinity` e o dono
-  da empresa recebia «já acionei o time», sendo ele o time. Marcar o contato como
-  interno resolvia o repasse ao custo de o agente parar de falar com ele, e baixar
-  o limiar tirava a proteção de todo cliente irritado de verdade.
+- **Contato da equipe continua sendo atendido e não é mais passado a humano nem silenciado pelo medidor de clima** O medidor de clima passava para uma pessoa qualquer conversa medida como irritada, inclusive a do sócio que testa o agente pelo próprio número: a conversa ia para `pending` com `bot_silenced_until = infinity` e o dono recebia «já acionei o time», sendo ele o time. Agora existe a lista **Equipe**, em Configurações › Tags, ao lado dos contatos internos (`organizations.settings.crm.team_contact_tags`). Contato com uma dessas etiquetas continua sendo atendido pela IA, medido e registrado pelo clima, mas não é passado a humano por clima nem silenciado, e os pedidos de cliente que o medidor lê no texto («quero falar com uma pessoa», «pare de me mandar mensagem») não abrem aviso na Central para ele. Ele não vira card no funil. Cliente comum com o mesmo texto continua sendo passado e silenciado como antes. Nenhuma migration; quem não configurar nada mantém o comportamento anterior.
 
-  Agora existe a lista **Equipe**, em Configurações › Tags, ao lado dos contatos
-  internos: `organizations.settings.crm.team_contact_tags`. Contato marcado com
-  uma dessas etiquetas continua sendo atendido pela IA como qualquer contato — a
-  etiqueta não abre canal em modo de teste: ali, quem autoriza continua sendo a
-  lista de teste do canal —, continua sendo medido e registrado pelo clima, e não
-  é passado a humano por clima nem silenciado. Os pedidos de cliente que o medidor
-  lê nas mensagens de texto («quero falar com uma pessoa», «pare de me mandar
-  mensagem») também não abrem aviso na Central para ele. O
-  repasse por clima também é recusado no próprio orquestrador de handoff, para
-  que nenhum alerta antigo na fila cale a conversa. Como o contato interno, ele
-  não vira card no funil — o sócio que testa o agente não é oportunidade de
-  captação. Cliente comum com o mesmo texto continua sendo passado e silenciado
-  como antes.
+- **A menção em grupo mostra o nome do contato também na lista da Inbox** Em conversa de grupo, o texto chegava com o identificador de privacidade do WhatsApp (`@75235009282237`) no lugar do nome de quem foi mencionado. A bolha já resolvia isso, mas a lista da Inbox mostrava o código, e a busca não achava o nome. Agora a prévia da lista usa a mesma regra da bolha: cada `@<identificador>` cujo contato está no CRM aparece com o nome dele. Contribuição de @webtecnica (#3566).
 
-  Nenhuma migration: a lista mora no mesmo `settings.crm` das etiquetas internas,
-  e quem não configurar nada mantém exatamente o comportamento anterior.
+- **A hora de cada mensagem no caso humano** Quando a equipe conversava com a IA sobre um caso aberto, as mensagens que deram origem ao caso chegavam todas com o horário da abertura do caso, e não com o de cada troca. Agora o horário de cada mensagem é guardado com o caso, e a IA volta a ler a hora certa, no fuso da organização. Nada a fazer na atualização.
 
-- **A menção em grupo mostra o nome do contato também na lista da Inbox** Em conversa de grupo, o texto da mensagem chegava com o identificador de
-  privacidade do WhatsApp (`@75235009282237`) no lugar do nome de quem foi
-  mencionado. A bolha da conversa já resolvia isso desde que a lista de menções
-  passou a ser guardada — mas a linha da LISTA da Inbox continuava mostrando o
-  código, e a busca por conteúdo da conversa não encontrava o nome mencionado.
+- **A lista de produtos cabe no celular — o nome do produto e o botão Desativar aparecem** No celular, a linha de cada produto era mais larga que a tela: o nome do produto encolhia até zero e o botão «Desativar» saía cortado. Agora, abaixo de `md`, a linha quebra em duas: nome e preço em cima, as ações embaixo, alinhadas à direita. O nome aparece, com reticências se for longo. No computador nada muda. Contribuição de @webtecnica (#3922).
 
-  Agora a prévia da lista usa a mesma regra da bolha: cada `@<identificador>` cujo
-  contato está no CRM aparece com o nome dele. Quem não está no CRM continua com o
-  identificador (não é o telefone), como hoje — nada é apagado nem vira texto
-  vazio —, e mensagem sem menção sai exatamente igual.
+- **Atribuir a conversa não derruba mais o turno que atribuiu** Quando o agente passava a conversa para uma pessoa e, no mesmo turno, registrava a passagem e movia o card de etapa, só a atribuição aparecia: o cartão "Por que a IA passou para você" não nascia e a etapa não mudava. O banco lia a atribuição do próprio turno como "uma pessoa assumiu" e cancelava o turno no meio. Agora a ferramenta informa ao banco qual turno pediu a mudança, e o banco poupa só esse turno. A ordem das ações no turno deixou de importar.
 
-  Contribuição de @webtecnica (#3566).
+- **No celular, o cabeçalho dos cartões de Provedores de IA usa a largura toda e o título não quebra mais palavra por palavra** Em Provedores de IA, a 375 px, o título e a descrição de cada ponto de IA ficavam espremidos numa coluna estreita, porque o cabeçalho reservava a linha inteira para o modelo e a origem. Agora, abaixo de `md`, título e descrição ocupam a largura do cartão, e o modelo, a origem e os selos descem para a linha de baixo. No computador nada muda.
 
-- **A hora de cada mensagem no caso humano** Quando a equipe conversava com a IA sobre um caso aberto, as mensagens que deram origem ao caso chegavam à IA todas com o mesmo horário — o da abertura do caso — em vez do horário em que cada uma foi trocada. O carimbo de cada mensagem passou a ser guardado com o caso e a ser lido de volta aceitando as duas formas que o banco entrega uma data (texto e data nativa), então a IA volta a ler a hora de cada mensagem, no fuso da organização.
-
-  Nada a fazer na atualização.
-
-- **A lista de produtos cabe no celular — o nome do produto e o botão Desativar aparecem** No celular, a linha de cada produto em Produtos era mais larga que a tela: o
-  preço e os três botões de ação não encolhem, e a coluna do nome — a única que
-  podia ceder — encolhia até zero. O nome do produto não aparecia e o botão
-  «Desativar» saía cortado pela borda, sem que a página rolasse para o lado (quem
-  transbordava era a linha, não a tela).
-
-  Agora, abaixo de `md` a linha quebra em duas: nome e preço em cima, as ações
-  embaixo, alinhadas à direita e com quebra própria se ainda faltar espaço. O
-  nome volta a aparecer, encurtado com reticências quando é longo. No computador
-  nada muda: o conserto inteiro está sob `max-md:`, e a lista de lá para cima é
-  exatamente a mesma de antes.
-
-  Contribuição de @webtecnica (#3922).
-
-- **Atribuir a conversa não derruba mais o turno que atribuiu** Quando o agente passava a conversa para uma pessoa e, no mesmo turno, registrava
-  a passagem e movia o card de etapa, só a atribuição aparecia: o cartão "Por que
-  a IA passou para você" não nascia e a etapa não mudava. A atribuição feita pelo
-  próprio turno era lida pelo banco como "uma pessoa assumiu" e cancelava o turno
-  no meio, e todo efeito seguinte era recusado sem aviso.
-
-  Agora a ferramenta de atribuir informa ao banco qual turno pediu a mudança, e o
-  banco poupa exatamente esse turno — os outros turnos da conversa continuam sendo
-  cancelados. A ordem das ações no mesmo turno deixou de importar.
-
-  Uma pessoa assumindo pela tela continua interrompendo o agente na hora, como
-  antes: a proteção não foi afrouxada, e a atribuição de uma pessoa não tem como
-  se declarar "turno" — o banco recusa.
-
-- **No celular, o cabeçalho dos cartões de Provedores de IA usa a largura toda e o título não quebra mais palavra por palavra** Em Provedores de IA, com a tela a 375 px, o título e a descrição de cada ponto de
-  IA ficavam espremidos numa coluna estreita — o título quebrava palavra por
-  palavra, e a descrição virava uma tira de texto. A tela não rolava para o lado,
-  então não parecia um defeito de largura: o culpado era o cabeçalho do cartão, que
-  reservava a linha inteira para o modelo e a origem e deixava o resto para o
-  texto.
-
-  Agora, abaixo de `md`, o título e a descrição ocupam a largura do cartão e o
-  modelo, a origem e os selos descem para a linha de baixo, alinhados à esquerda.
-  No computador nada muda: as duas colunas continuam dividindo a linha, como antes.
-  Vale para todos os pontos, incluindo os do turno do agente, do operador e os de
-  proposta. O seletor de modelo não foi tocado.
-
-- **Salvar o aviso de caso sem configuração salva não apaga mais o WhatsApp da equipe** Em Casos › Avisos › "Avisar no WhatsApp", quando ainda não havia configuração
-  salva, a tela abria com os campos dos números da equipe em branco e o salvamento
-  mandava esses campos vazios como "esta pessoa não tem número" — e o número
-  gravado de cada pessoa era apagado do banco. Quem tinha cadastrado o próprio
-  WhatsApp precisava cadastrar de novo, sem aviso nenhum. O caso mais comum era
-  remover o destinatário e configurar de novo.
-
-  Agora o rascunho da tela parte sempre dos números já gravados, mesmo sem
-  configuração salva, então a pessoa vê o que está salvando. E o salvamento só
-  apaga o número de quem a tela efetivamente mostrou: membro que a tela não exibiu
-  (por exemplo quando a leitura dos números da equipe falha) fica intacto, e a tela
-  diz que não conseguiu ler em vez de sugerir que ninguém tem número. Limpar o
-  campo de propósito continua apagando o número daquela pessoa.
+- **Salvar o aviso de caso sem configuração salva não apaga mais o WhatsApp da equipe** Em Casos › Avisos › "Avisar no WhatsApp", sem configuração salva, a tela abria com os números da equipe em branco, e salvar apagava do banco o número de cada pessoa, sem aviso. Agora o rascunho parte sempre dos números já gravados, e o salvamento só apaga o número de quem a tela mostrou. Se a leitura dos números falhar, a tela diz que não conseguiu ler. Limpar o campo de propósito continua apagando o número daquela pessoa.
 
 - **Nome com emoji não aparece mais com um símbolo quebrado no círculo do avatar** Um contato como "Rejeane 🧡" mostrava "R�" no círculo. As iniciais agora usam só letras e números; nome feito só de emoji mostra o símbolo padrão.
 
-- **Resposta por botão ou lista no canal oficial do WhatsApp não se perde mais** Quando o cliente respondia tocando num botão de template, num botão de mensagem interativa ou num item de lista, a resposta não era gravada e sumia da conversa. Agora ela entra como mensagem de texto com o nome da opção escolhida, aparece no Chat e na lista de conversas, e o agente e as automações a recebem como qualquer outra resposta. Tipo de mensagem que o CRM ainda não sabe mostrar (pedido do catálogo, por exemplo) entra como "[tipo de mensagem não suportado: ...]", em vez de se perder.
+- **Resposta por botão ou lista no canal oficial do WhatsApp não se perde mais** Quando o cliente tocava num botão de template, num botão de mensagem interativa ou num item de lista, a resposta não era gravada. Agora ela entra como texto com o nome da opção, aparece no Chat e na lista de conversas, e o agente e as automações a recebem como qualquer resposta. Tipo ainda não suportado entra como "[tipo de mensagem não suportado: ...]".
 
-- **Formulário enviado duas vezes seguidas não cria mais dois negócios** Quando a mesma pessoa enviava o formulário duas vezes em poucos segundos (clique duplo), o CRM reconhecia o contato mas abria dois negócios no mesmo funil. Agora o segundo envio, se chegar até 10 minutos depois do primeiro e o negócio ainda estiver aberto, é registrado em "Leads recebidos" como repetido e aponta para o negócio que já existe.
+- **Formulário enviado duas vezes seguidas não cria mais dois negócios** Quando a mesma pessoa enviava o formulário duas vezes em poucos segundos (clique duplo), o CRM abria dois negócios no mesmo funil. Agora o segundo envio, se chegar até 10 minutos depois e o negócio ainda estiver aberto, é registrado em "Leads recebidos" como repetido e aponta para o negócio existente.
 
-- **A credencial do número oficial passa a ser gravada só pelo servidor** O número, a conta e o token do canal oficial da Meta (`meta_phone_number_id`,
-  `meta_waba_id` e `meta_token_encrypted` em `channel_sessions`) passam a ser
-  gravados só pelo servidor, como a ligação com o provedor parceiro desde a
-  migration 9093. Conectar e excluir o canal oficial pela tela continua igual: as
-  duas rotas já gravavam pelo servidor, e a exclusão passa a zerar o token pelo
-  mesmo caminho. Renomear a conexão continua liberado para o admin.
+- **A credencial do número oficial passa a ser gravada só pelo servidor** O número, a conta e o token do canal oficial da Meta (`meta_phone_number_id`, `meta_waba_id` e `meta_token_encrypted` em `channel_sessions`) passam a ser gravados só pelo servidor. Conectar e excluir o canal pela tela continua igual (a exclusão agora zera o token pelo mesmo caminho), e renomear a conexão continua liberado para o admin. Migration 9104, aplicada pelo `update.sh`. Nada a fazer.
 
-  Migration 9104, aplicada pelo `update.sh` como as demais. Nada a fazer.
+- **Telas de conversa e de negócio mais rápidas para gerente em organização grande** Notas, casos, demandas, pontuações, ligações e as demais informações de conversas e negócios, além de mover ou apagar negócios em lote, deixaram de conferir a permissão de gerentes e leitores linha a linha. Quem vê e quem altera o quê não mudou.
 
-- **Telas de conversa e de negócio mais rápidas para gerente em organização grande** Notas, casos, demandas, pontuações, ligações e as demais informações ligadas a conversas e negócios, além
-  de mover ou apagar negócios em lote, deixaram de conferir a permissão de gerentes e leitores linha a linha.
-  Quem vê e quem altera o quê não mudou.
+- **Servidores MCP por agente conferem os dados de autorização e respeitam o tempo do atendimento** Vale só para quem ligou o módulo opcional de servidores MCP por agente. Ao cadastrar ou testar um servidor com OAuth, a descoberta confere que os dados de autorização são do servidor informado e do emissor que ele indicou; se não são, o cadastro é recusado com mensagem em "Testar conexão". No atendimento, esses servidores têm o mesmo limite de tempo do servidor MCP da organização: 8 segundos para listar as ferramentas e 8 por chamada. Se o servidor não responder, o agente segue sem aquela ferramenta. Você não precisa mudar nada.
 
-- **Servidores MCP por agente conferem os dados de autorização e respeitam o tempo do atendimento** Vale só para quem ligou o módulo opcional de servidores MCP por agente.
-
-  Ao cadastrar ou testar a conexão de um servidor com OAuth, a descoberta agora confere que os dados de autorização devolvidos são do servidor informado e do emissor que ele indicou. Quando não são, o cadastro é recusado com uma mensagem na própria tela de "Testar conexão".
-
-  No atendimento, esses servidores passam a ter o mesmo limite de tempo que o servidor MCP da organização já tinha: 8 segundos para listar as ferramentas e 8 segundos por chamada. Se o servidor não responder, o agente segue a conversa sem aquela ferramenta.
-
-  Você não precisa mudar nada.
-
-- **Publicar uma versão nova do CRM não obriga mais a equipe a entrar de novo** Durante a troca de versão, quem estava logado caía na tela de entrar e precisava digitar a senha. Agora o
-  sistema tenta de novo por alguns instantes e, se ainda não conseguir, mostra a página de manutenção sem
-  encerrar a sessão. Quem abre a tela de entrar já estando logado segue direto para o CRM.
+- **Publicar uma versão nova do CRM não obriga mais a equipe a entrar de novo** Durante a troca de versão, quem estava logado caía na tela de entrar e precisava digitar a senha. Agora o sistema tenta de novo por alguns instantes e, se não conseguir, mostra a página de manutenção sem encerrar a sessão. Quem abre a tela de entrar já logado segue direto para o CRM.
 
 - **Radar volta a carregar em organizações com muitos negócios abertos** O Radar (negócios em risco) voltou a carregar em organizações com milhares de negócios abertos: a consulta à agenda agora vai em blocos de contatos, em vez de uma lista única que estourava o tamanho do pedido.
 
-- **O atendimento deixa de esperar até 30 segundos por um servidor MCP externo que não responde** Quando a organização tem um servidor MCP externo (o sistema da loja, da clínica, do prontuário) e ele para de responder — firewall, deploy travado, DNS errado —, o turno do atendimento esperava o tempo padrão do cliente MCP em cada passo da conversa com o servidor: até 15 segundos para abrir a conexão e mais 15 para listar ou chamar a ferramenta. Com o cliente esperando no WhatsApp, isso é tempo que o agente passa calado antes de começar a responder; com mais de uma ferramenta remota no mesmo turno, o pior caso passava de um minuto.
+- **O atendimento deixa de esperar até 30 segundos por um servidor MCP externo que não responde** Quando um servidor MCP externo (o sistema da loja, da clínica, do prontuário) parava de responder, o turno do atendimento esperava até 15 segundos para abrir a conexão e mais 15 para listar ou chamar a ferramenta, e com várias ferramentas remotas o pior caso passava de um minuto, com o cliente esperando no WhatsApp. Agora o turno tem orçamento próprio: 8 segundos para descobrir as ferramentas e 8 por chamada. Estourou, o turno segue com as ferramentas do CRM e responde ao cliente, sem erro técnico na conversa. A tela de cadastro (Configurações › Servidor MCP externo) e o cartão do agente mantêm o tempo maior de antes. Você não precisa mudar nada.
 
-  Agora o turno tem orçamento próprio, curto: 8 segundos para descobrir as ferramentas e 8 segundos por chamada. Estourou, o turno segue com as ferramentas do CRM e responde ao cliente — o mesmo comportamento de quando o servidor está fora do ar, sem erro técnico na conversa. A tela de cadastro (Configurações › Servidor MCP externo) e o cartão do agente continuam com o tempo maior de antes: ali quem espera é quem está administrando, e um servidor lento merece o benefício da dúvida.
-
-  Você não precisa mudar nada.
-
-- **O aviso "Não foi possível verificar a conexão" só sai depois de 3 checagens seguidas sem resposta** Uma falha passageira de rede com o servidor de WhatsApp não manda mais e-mail de queda e de "voltou".
-  QR para escanear, conexão parada e chave recusada continuam avisando na hora.
+- **O aviso "Não foi possível verificar a conexão" só sai depois de 3 checagens seguidas sem resposta** Uma falha passageira de rede com o servidor de WhatsApp não manda mais e-mail de queda e de "voltou". QR para escanear, conexão parada e chave recusada continuam avisando na hora.
 
 ## [2.0.0] — 2026-10-22
 
