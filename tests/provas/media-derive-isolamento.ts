@@ -177,11 +177,24 @@ async function main(): Promise<void> {
     const evento = await admin.from("event_log").select("*").eq("id", eventoId).eq("organization_id", orgA).single();
     assert.equal(evento.error, null);
     const { deriveMessageMedia } = await import("@/workers/media-derive-worker");
+    // Hiperbold (D-099, migration 0919): o banco já recusa, para QUALQUER papel, caminho de mídia
+    // fora de `<org>/<conversa>/`. A prova mede as duas camadas: (1) o JWT próprio tenta gravar o
+    // caminho hostil e leva 23514, sem mudar a linha; (2) o caminho é plantado pelo dono do banco
+    // com a trava desligada só dentro de uma transação (simula a linha antiga anterior a ela), e o
+    // worker tem de recusá-lo do mesmo jeito.
     const trocarCaminho = async (caminho: string) => {
-      const alteracao = await sessao.from("messages").update({ media_storage_path: caminho, media_derived_status: null })
-        .eq("id", msgA).eq("organization_id", orgA).select("id").single();
-      assert.equal(alteracao.error, null, "JWT próprio precisa alterar só a linha própria");
-      assert.equal(alteracao.data?.id, msgA);
+      const antesDaTentativa = await lerMensagem(msgA, orgA);
+      const tentativa = await sessao.from("messages").update({ media_storage_path: caminho, media_derived_status: null })
+        .eq("id", msgA).eq("organization_id", orgA).select("id");
+      assert.equal(tentativa.error?.code, "23514", "o banco precisa recusar caminho fora do prefixo da conversa (D-099)");
+      assert.deepEqual(await lerMensagem(msgA, orgA), antesDaTentativa, "a recusa do banco não pode mudar a linha");
+      const literal = "$caminho$";
+      assert(!caminho.includes(literal));
+      execFileSync("psql", [dbUrl, "-v", "ON_ERROR_STOP=1", "-qAt", "-c",
+        "begin; alter table public.messages disable trigger trg_messages_media_path_update; " +
+          `update public.messages set media_storage_path = ${literal}${caminho}${literal}, media_derived_status = null where id = '${msgA}' and organization_id = '${orgA}'; ` +
+          "alter table public.messages enable trigger trg_messages_media_path_update; commit;",
+      ], { encoding: "utf8" });
     };
     fase = "negativos-sem-efeitos";
     for (const caminho of [objetos[1]!, `${orgA}/../${objetos[1]}`, `${orgA}/%2e%2e/${objetos[1]}`]) {

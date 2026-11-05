@@ -31,6 +31,8 @@ sonda_voice_imagem() { # <imagem local já construída no runner nativo>
   case "$probe" in
     ''|null|'[]'|'["NONE"]') printf 'Imagem de voz sem healthcheck do listener AudioSocket\n' >&2; return 1 ;;
   esac
+  # A imagem do Hiperbold roda com NODE_ENV=production (D-135), e aí `lib/env.ts` cobra
+  # todas as chaves obrigatórias: a sonda passa valores de mentira (sem rede, nada é usado).
   docker run -d --network none --name "$nome" \
     -e NEXT_PUBLIC_SUPABASE_URL=https://exemplo.invalid \
     -e NEXT_PUBLIC_SUPABASE_ANON_KEY=chave-anon-de-mentira \
@@ -40,6 +42,13 @@ sonda_voice_imagem() { # <imagem local já construída no runner nativo>
     -e ARI_USERNAME=usuario-de-mentira \
     -e ARI_PASSWORD=senha-de-mentira \
     -e OPENAI_API_KEY=sk-chave-de-mentira \
+    -e AI_CRED_AES_KEY=0000000000000000000000000000000000000000000000000000000000000000 \
+    -e SUPABASE_DB_URL=postgresql://usuario:senha@127.0.0.1:5432/postgres \
+    -e WAHA_API_BASE_URL=http://127.0.0.1:3001 \
+    -e WAHA_API_KEY=chave-de-mentira \
+    -e WAHA_WEBHOOK_BASE_URL=http://127.0.0.1:3000 \
+    -e UPSTASH_REDIS_REST_URL=http://127.0.0.1:8079 \
+    -e UPSTASH_REDIS_REST_TOKEN=token-de-mentira \
     "$imagem" >/dev/null
   for _ in $(seq 1 30); do
     logs="$(docker logs "$nome" 2>&1 || true)"

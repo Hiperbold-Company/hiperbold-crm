@@ -502,8 +502,14 @@ describe.skipIf(!temAwk)("recriar o que falta: o comando INTEIRO, nunca o nome",
       // A metade que importa: prova que o caso acima sabe ficar vermelho. Se
       // aqui der vazio, este ambiente não exercita o defeito — e o verde do
       // caso anterior não é prova de nada nele.
-      const regras = esperadas();
-      const noBanco = todasAsPoliticasDePublic();
+      // O par `sale_items`/`sales` é o que a colação de um locale com acento ordena diferente
+      // do byte a byte (ela ignora o `_` no primeiro nível). Ele vinha do baseline; desde
+      // que as policies do módulo financeiro saem por `format()` (o update.sh da v1.63.0 as
+      // cobrava num banco sem o módulo), o arquivo real pode não trazer par nenhum assim.
+      // Entra como sonda nas DUAS listas: é regra que "existe", e o alarme falso aparece nela.
+      const sonda = ["sonda_sale_items_x|sonda_sale_items", "sonda_sales_x|sonda_sales"];
+      const regras = [...esperadas(), ...sonda];
+      const noBanco = [...todasAsPoliticasDePublic(), ...sonda];
       const hostil = localeHostil(regras, noBanco);
       if (!hostil) return; // declarado no PR: sem locale hostil, não medido
 
