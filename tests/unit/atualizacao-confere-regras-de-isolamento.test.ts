@@ -446,7 +446,11 @@ describe.skipIf(!temAwk)("recriar o que falta: o comando INTEIRO, nunca o nome",
       for (const loc of disponiveis) {
         // Sonda: a mesma comparação SEM o pin, com o locale candidato.
         const r = comparar(esperadas, existentes, "sort -u", semPin(linhaDeComparacao()), loc);
-        if (reclamou(r.stderr) || r.faltando.length > 0) return loc;
+        // Hostil é o locale que produz o ALARME FALSO (regra que existe dada como faltando).
+        // Só texto no stderr não basta: no runner do GitHub (Ubuntu 24.04, GNU coreutils) há
+        // locale que escreve aviso sem que `sort` e `comm` discordem — medido em 04/11/2026
+        // com o baseline de antes e de depois da 0992: zero faltando em en_US, pt_BR e C.UTF-8.
+        if (r.faltando.length > 0) return loc;
       }
       return undefined;
     }
@@ -502,29 +506,8 @@ describe.skipIf(!temAwk)("recriar o que falta: o comando INTEIRO, nunca o nome",
       // A metade que importa: prova que o caso acima sabe ficar vermelho. Se
       // aqui der vazio, este ambiente não exercita o defeito — e o verde do
       // caso anterior não é prova de nada nele.
-      // O par `sale_items`/`sales` é o que a colação de um locale com acento ordena diferente
-      // do byte a byte (ela ignora o `_` no primeiro nível). Ele vinha do baseline; desde
-      // que as policies do módulo financeiro saem por `format()` (o update.sh da v1.63.0 as
-      // cobrava num banco sem o módulo), o arquivo real pode não trazer par nenhum assim.
-      // As 13 que o arquivo trazia literais entram como sonda nas DUAS listas, exatamente como
-      // a régua as lia antes: é regra que "existe", e o alarme falso aparece nela.
-      const sonda = [
-        "tenant_isolation_commission_rules_insert|commission_rules",
-        "tenant_isolation_commission_rules_select|commission_rules",
-        "tenant_isolation_commission_rules_update|commission_rules",
-        "tenant_isolation_commissions_select|commissions",
-        "tenant_isolation_loyalty_ledger_insert|loyalty_ledger",
-        "tenant_isolation_loyalty_ledger_select|loyalty_ledger",
-        "tenant_isolation_sale_items_delete|sale_items",
-        "tenant_isolation_sale_items_insert|sale_items",
-        "tenant_isolation_sale_items_select|sale_items",
-        "tenant_isolation_sale_items_update|sale_items",
-        "tenant_isolation_sales_insert|sales",
-        "tenant_isolation_sales_select|sales",
-        "tenant_isolation_sales_update|sales",
-      ];
-      const regras = [...esperadas(), ...sonda];
-      const noBanco = [...todasAsPoliticasDePublic(), ...sonda];
+      const regras = esperadas();
+      const noBanco = todasAsPoliticasDePublic();
       const hostil = localeHostil(regras, noBanco);
       if (!hostil) return; // declarado no PR: sem locale hostil, não medido
 
