@@ -4,6 +4,7 @@ import { test, expect } from "./helpers/test";
 import { createClient } from "@supabase/supabase-js";
 import { metadataInicialDoCanal } from "../../lib/ai/elegibilidade/pre-go-live";
 import { nomeDaSessaoCabeNoWaha, nomeDaSessaoNovo } from "../../lib/channels/nome-da-sessao";
+import { ROTULO_DA_ABA_INSTANCIA } from "../../lib/channels/rotulo-da-aba-instancia";
 
 // Banco e auth reais, sem interceptar a API da feature. Não envia WhatsApp real.
 test.use({ locale: "pt-BR" });
@@ -50,8 +51,9 @@ test("admin configura testes, remove número, confirma abertura e volta a restri
   await page.goto("/app/connections");
   // O canal nasce STOPPED, então a faixa de conexão caída também mostra este nome. Sem o recorte,
   // o teste passava pela faixa enquanto a lista carregava e reprovava quando a lista chegava antes.
+  // Hiperbold: a aba da instância se chama "UAZAPI" (ROTULO_DA_ABA_INSTANCIA), não "Números por QR" do upstream.
   await expect(
-    page.getByRole("tabpanel", { name: "Números por QR" }).getByText("Canal de validação", { exact: true }),
+    page.getByRole("tabpanel", { name: ROTULO_DA_ABA_INSTANCIA }).getByText("Canal de validação", { exact: true }),
   ).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("IA em modo de teste", { exact: true })).toBeVisible();
   const openPanel = () => page.getByRole("button", { name: "Configurar acesso da IA" }).click();

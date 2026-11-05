@@ -12,9 +12,10 @@
  *  3. cria uma empresa em Painel › Empresas › Nova, e o formulário avisa que
  *     ela vai nascer com a IA do molde;
  *  4. a página da empresa nova diz "IA copiada do molde", lida da auditoria;
- *  5. entra na empresa nova e, em Agente de IA › Provedores, vê os modelos do
- *     molde nas funções copiadas e o padrão do molde nas que herdam — e a
- *     função com endereço próprio NÃO veio.
+ *  5. (upstream) entra na empresa nova e, em Agente de IA › Provedores, vê os
+ *     modelos do molde. Hiperbold: Provedores é função oculta
+ *     (hiperbold/FUNCOES.md, provedores-ia); no lugar, o banco confirma as duas
+ *     funções copiadas, sem a chave do molde e sem a de endereço próprio.
  *
  * ═══ O QUE ESTA SPEC NÃO PROVA ═══
  *
@@ -190,36 +191,11 @@ test("escolher o molde, criar a empresa e ver a IA copiada — pela tela", async
   await foto(page, "04-pagina-da-empresa");
 
   // ── 5. Dentro da empresa nova, em Agente de IA › Provedores ─────────────
-  // O assistente de primeira configuração é de outra spec; aqui a empresa já
-  // está configurada para o painel abrir direto.
-  const pronto = await db.from("organizations").update({ onboarded_at: new Date().toISOString() }).eq("id", novaId);
-  if (pronto.error) throw new Error(`onboarded_at: ${pronto.error.message}`);
-  await page.goto("/app");
-  await page.getByTestId("tenant-switcher").click();
-  await page.getByTestId(`tenant-switcher-item-${novaId}`).click();
-  // A troca é uma server action: `/app` já redireciona para o inbox, então
-  // esperar a URL não separa "a troca aconteceu" de "a troca foi atirada" — e
-  // o painel abria ainda no molde. Espera-se o seletor terminar e mostrar a
-  // empresa nova, como em `aba-e-cookie-divergentes.spec.ts`.
-  const seletor = page.getByTestId("tenant-switcher");
-  await expect(seletor, "a troca para a empresa nova não terminou").toBeEnabled({ timeout: 60_000 });
-  await expect(seletor, "a troca para a empresa nova não pegou").toContainText(NOME_DA_NOVA, { timeout: 20_000 });
+  // Hiperbold: a tela de Provedores é função oculta (hiperbold/FUNCOES.md, provedores-ia); o endereço
+  // cai no Início. O que a empresa nova recebeu do molde fica provado pela página da empresa (passo 4)
+  // e pelo banco, abaixo.
 
-  await page.goto("/app/ai/providers");
-  await page.waitForSelector('[data-testid="painel-de-provedores"]', { timeout: 30_000 });
-
-  await page.getByTestId("avancado-entender").click();
-  await expect(page.getByTestId("ponto-stage_classifier")).toContainText("claude-haiku-4-5");
-
-  await page.getByTestId("avancado-lembrar").click();
-  await expect(page.getByTestId("ponto-compaction")).toContainText("gpt-5-mini");
-  // A função com endereço próprio NÃO veio: o ponto herda o padrão — que é o do molde.
-  await expect(page.getByTestId("ponto-checkpoint")).not.toContainText("gpt-do-gateway");
-  await expect(page.getByTestId("ponto-checkpoint")).toContainText("gpt-5-mini");
-  await page.getByTestId("ponto-compaction").scrollIntoViewIfNeeded();
-  await foto(page, "05-provedores-da-empresa-nova");
-
-  // O banco confirma o que a tela mostrou: duas funções, nenhuma com a chave do molde.
+  // O banco confirma o que a tela mostrou no passo 4: duas funções, nenhuma com a chave do molde.
   const { data: copiadas } = await db
     .from("ai_purpose_bindings")
     .select("purpose, provider, model_id, credential_id, base_url")

@@ -84,6 +84,10 @@ test("o dono cria o plano, os limites valem pela tela, e prazo e desligar a chav
   page,
   browser,
 }) => {
+  // Hiperbold: a cobrança da instalação é a da Hiperbold (lib/billing/**, Asaas próprio). O módulo `cobranca`
+  // do upstream está em MODULOS_AINDA_NAO_LIGAVEIS (lib/instalacao/modulos.ts) e não liga pela tela, então
+  // esta jornada (/admin/cobranca, plano e card Cobrança do upstream) não existe no Hiperbold CRM.
+  test.skip(true, "cobrança do upstream não liga no Hiperbold CRM (lib/instalacao/modulos.ts, MODULOS_AINDA_NAO_LIGAVEIS)");
   test.setTimeout(300_000);
   page.setDefaultTimeout(20_000);
   mkdirSync(EVIDENCIA, { recursive: true });

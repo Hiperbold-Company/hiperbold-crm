@@ -303,7 +303,13 @@ test.describe("A aba do papel que organiza o sistema", () => {
     // O mesmo defeito que a spec 16 existe para matar, um nível acima: se o
     // vocabulário interno vaza para quem CONFIGURA, ele vaza de novo para quem
     // é atendido — o dono do negócio copia o que lê.
-    const corpo = (await pagina.locator("main").innerText()).toLowerCase();
+    let corpo = (await pagina.locator("main").innerText()).toLowerCase();
+    // Hiperbold: "Conexões MCP" é o NOME da função na tela (hiperbold/FUNCOES.md, funções ativas;
+    // seção `secao-mcp-externo` do ToolPicker, 9aa733b8c). Ela sai da varredura; o resto da tela
+    // continua proibido de dizer "mcp".
+    for (const trecho of await pagina.getByTestId("secao-mcp-externo").allInnerTexts()) {
+      corpo = corpo.replace(trecho.toLowerCase(), "");
+    }
     for (const jargao of ["operator_", "tool_ids", "mcp", "payload", "job_queue"]) {
       expect(corpo, `vocabulário interno na tela: ${jargao}`).not.toContain(jargao);
     }

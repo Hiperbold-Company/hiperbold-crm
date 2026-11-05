@@ -208,6 +208,28 @@ export async function PATCH(
   }
   const avisosNaCentral = (itens as Array<{ id: string }>).map((i) => i.id);
 
+  // Hiperbold (D-204, migration 0966): o gatilho de auth.users recusa troca de e-mail sem a
+  // aprovação do servidor. Aqui quem aprova é o admin de plataforma `full` (guarda (c) acima,
+  // com aal2 quando tem fator), e a troca já ficou registrada na Central de cada empresa. A
+  // aprovação é de uso único, para ESTE usuário e ESTE endereço, e vence em 1 hora.
+  const { error: aprovacaoErr } = await admin.rpc("fn_aprovar_troca_de_email", {
+    p_user: userId,
+    p_novo_email: email,
+  });
+  if (aprovacaoErr) {
+    const { error: desfazerErr } = await admin
+      .from("agent_inbox_items")
+      .delete()
+      .in("id", avisosNaCentral);
+    logger.error("[admin.members.email] aprovação da troca (D-204) falhou; e-mail NÃO trocado", {
+      requestId,
+      organization_id: id,
+      erro: aprovacaoErr.message,
+      ...(desfazerErr ? { erro_ao_desfazer_avisos: desfazerErr.message } : {}),
+    });
+    return fail("internal_error", "Não foi possível trocar o e-mail agora.", 500, { requestId });
+  }
+
   const { error } = await admin.auth.admin.updateUserById(userId, {
     email,
     email_confirm: true,

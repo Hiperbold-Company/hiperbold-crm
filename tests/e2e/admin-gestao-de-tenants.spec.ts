@@ -12,10 +12,11 @@
  *  2. A EMPRESA FICA SABENDO: a Central do tenant, vista pelo membro, mostra o
  *     aviso da troca com o nome e sem nenhum endereço.
  *  3. Os dados cadastrais se editam pela tela e o cabeçalho reflete o nome novo.
- *  4. Suspensa por COBRANÇA não se exclui: sem o botão, com a explicação, e a
+ *  4. Suspensa por COBRANÇA não se exclui: botão desabilitado, com a explicação, e a
  *     API responde 409 `exclusao_com_cobranca_pendente`.
  *  5. Excluir uma suspensa ADMINISTRATIVA (suspensa pela tela da main) pede
- *     motivo e o identificador digitado, e apaga: a organização some do banco,
+ *     o identificador digitado (Hiperbold: diálogo de Sistema › Exclusões, sem
+ *     motivo), e apaga: a organização some do banco,
  *     a lápide fica e o login que só pertencia a ela também sai.
  *
  * ═══ O QUE ESTA SPEC NÃO PROVA ═══
@@ -117,9 +118,11 @@ test("corrigir o e-mail, ver o aviso na Central, editar, recusar a exclusão por
   await admin.goto(`/admin/tenants/${orgId}`);
   await expect(admin.getByRole("heading", { level: 1, name: NOME })).toBeVisible();
   await expect(admin.getByTestId("membro-email")).toHaveText(EMAIL_ERRADO);
-  // Excluir não existe para tenant ativo — só a instrução.
+  // Hiperbold: a exclusão é a de Sistema › Exclusões (ea94f4912, TenantActions.tsx). Para tenant ativo o
+  // botão "Excluir organização" existe DESABILITADO, com o motivo embaixo.
   await expect(admin.getByRole("button", { name: "Excluir tenant" })).toHaveCount(0);
-  await expect(admin.getByText("Para excluir um tenant, suspenda-o primeiro.")).toBeVisible();
+  await expect(admin.getByTestId("excluir-organizacao")).toBeDisabled();
+  await expect(admin.getByTestId("motivo-para-nao-excluir")).toHaveText("Suspenda antes de excluir");
   await foto(admin, "01-ativo");
 
   // ── 1. Corrigir o e-mail de acesso ──────────────────────────────────────
@@ -178,6 +181,7 @@ test("corrigir o e-mail, ver o aviso na Central, editar, recusar a exclusão por
   await expect(admin.getByTestId("tipo-da-suspensao")).toHaveText("Suspensa por falta de pagamento", { timeout: 15_000 });
   await expect(admin.getByRole("button", { name: "Reativar tenant" })).toHaveCount(0);
   await expect(admin.getByRole("button", { name: "Excluir tenant" })).toHaveCount(0);
+  await expect(admin.getByTestId("excluir-organizacao")).toBeDisabled();
   await expect(
     admin.getByText("Suspensa por falta de pagamento: não pode ser excluída enquanto houver cobrança pendente."),
   ).toBeVisible();
@@ -200,13 +204,15 @@ test("corrigir o e-mail, ver o aviso na Central, editar, recusar a exclusão por
   await admin.locator("#suspend-reason").fill("Encerramento do contrato — teste e2e");
   await admin.getByRole("button", { name: "Confirmar suspensão" }).click();
   await expect(admin.getByRole("dialog")).toHaveCount(0);
-  await admin.getByRole("button", { name: "Excluir tenant" }).click();
-  const excluir = admin.getByRole("button", { name: "Excluir definitivamente" });
-  await expect(admin.getByText("Esta ação é irreversível.", { exact: false })).toBeVisible();
-  await admin.locator("#delete-reason").fill("Contrato encerrado a pedido do cliente");
-  await admin.locator("#delete-confirm").fill("slug-errado");
+  // Hiperbold: o diálogo é o `ExcluirOrganizacaoDialog` (programar ou excluir agora), sem campo de motivo;
+  // "Excluir agora" pede o slug digitado.
+  await expect(admin.getByTestId("excluir-organizacao")).toBeEnabled({ timeout: 15_000 });
+  await admin.getByTestId("excluir-organizacao").click();
+  const excluir = admin.getByTestId("excluir-organizacao-agora");
+  await expect(admin.getByText("Não tem volta.", { exact: false })).toBeVisible();
+  await admin.getByTestId("excluir-organizacao-slug").fill("slug-errado");
   await expect(excluir).toBeDisabled();
-  await admin.locator("#delete-confirm").fill(SLUG);
+  await admin.getByTestId("excluir-organizacao-slug").fill(SLUG);
   await foto(admin, "06-confirmacao-da-exclusao");
   await expect(excluir).toBeEnabled();
   await excluir.click();
@@ -219,7 +225,8 @@ test("corrigir o e-mail, ver o aviso na Central, editar, recusar a exclusão por
     .from("api_audit_log")
     .select("action")
     .eq("resource_id", orgId)
-    .eq("action", "organization.deleted");
+    // Hiperbold: a lápide da exclusão de Sistema › Exclusões é `org.data_purged` (fn_exclusao_executar).
+    .eq("action", "org.data_purged");
   expect(lapide ?? []).toHaveLength(1);
   // O login pertencia só a este tenant: foi removido junto.
   const { data: login } = await db.auth.admin.getUserById(membroId);

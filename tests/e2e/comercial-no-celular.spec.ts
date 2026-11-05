@@ -5,9 +5,9 @@
  * pequeno demais para o dedo. O conserto é só de classes `max-md:`/`sm:` (o DOM
  * é o mesmo do computador). O que esta spec mede, tela a tela:
  *
- * 1. Conexões: o `<main>` não rola para o lado e "Conectar novo WhatsApp" fica
- *    dentro da tela (a fila de botões quebra linha); o link de responsáveis tem
- *    44px. Sem WAHA no CI: só o que aparece sem canal conectado de verdade.
+ * 1. Conexões: o `<main>` não rola para o lado e o botão de conectar fica
+ *    dentro da tela. Hiperbold: a aba da instância (UAZAPI), sem a lista do WAHA
+ *    do upstream ("Conectar novo WhatsApp", pausa, responsáveis).
  * 2. Webhooks: as quatro abas ficam visíveis (antes rolavam escondidas dentro da
  *    própria fila) e a borda de cima de cada uma recebe o toque.
  * 3. Radar: "Assumir" fica na tela, o título do item mantém largura legível, e o
@@ -16,6 +16,7 @@
  *    lado) e o título, que é o link, tem 44px.
  * 5. Detalhe da proposta enviada: aceitar, recusar e revisar ficam na tela.
  * 6. Meta Ads: o `-m-6` acompanha o `p-4` do `<main>` e a página não alarga.
+ *    Hiperbold: não medida, Meta Ads é função oculta (hiperbold/FUNCOES.md, meta-ads).
  * 7. Faturamento: "Pagar" e "×" são dois alvos de 44px que não se cobrem, e no
  *    computador voltam ao tamanho de sempre.
  *
@@ -40,6 +41,7 @@ import * as path from "node:path";
 
 import { test, type Locator, type Page } from "./helpers/test";
 import { lerCreds, loginComoAdmin } from "./helpers/login-admin";
+import { ROTULO_DA_ABA_INSTANCIA } from "../../lib/channels/rotulo-da-aba-instancia";
 
 import { admin, creds, expect, insere, type Creds } from "./qa-l12-comum";
 
@@ -215,14 +217,17 @@ test.describe("vendas e dinheiro no celular", () => {
       info.attach(nome, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 
     // 1. Conexões.
+    // Hiperbold: sem canal por QR do WAHA (components/connections/ConexoesShell.tsx, `wahaConfigured`
+    // sem uso). A lista do upstream com "Conectar novo WhatsApp", "Agendar pausa" e o link de
+    // responsáveis não é montada; a entrada é a aba da instância (ROTULO_DA_ABA_INSTANCIA), e o que
+    // se mede no celular é o botão de conectar dela dentro da tela e o <main> sem rolar de lado.
     await page.goto("/app/connections");
-    const conectar = page.getByRole("button", { name: "Conectar novo WhatsApp" });
+    const conectar = page
+      .getByRole("tabpanel", { name: ROTULO_DA_ABA_INSTANCIA })
+      .getByRole("button", { name: "Conectar", exact: true });
     await expect(conectar).toBeVisible({ timeout: 30_000 });
     await semRolagemNoMain(page, "Conexões");
-    await dentroDaTela(conectar, "Conectar novo WhatsApp");
-    await dentroDaTela(page.getByRole("button", { name: "Agendar pausa" }), "Agendar pausa");
-    const responsaveis = page.getByRole("link", { name: "Configurar responsáveis por número" });
-    expect((await medir(responsaveis)).height, "link de responsáveis").toBeGreaterThanOrEqual(PISO_DE_TOQUE);
+    await dentroDaTela(conectar, "Conectar");
     await foto("01-conexoes");
 
     // 2. Webhooks: as quatro abas na tela, nenhuma rolando escondida.
@@ -304,11 +309,8 @@ test.describe("vendas e dinheiro no celular", () => {
     await semRolagemNoMain(page, "Detalhe da proposta");
     await foto("05-proposta-enviada");
 
-    // 6. Meta Ads, sem conta conectada.
-    await page.goto("/app/ads/meta");
-    await expect(page.getByRole("heading", { name: "Meta Ads" })).toBeVisible({ timeout: 30_000 });
-    await semRolagemNoMain(page, "Meta Ads");
-    await foto("06-meta-ads");
+    // 6. Meta Ads: função oculta no Hiperbold CRM (hiperbold/FUNCOES.md, meta-ads); o endereço cai
+    // no Início, então não há tela para medir.
 
     // 7. Faturamento: Pagar e × lado a lado, cada um com 44px, sem se cobrir.
     await page.goto("/app/faturamento");

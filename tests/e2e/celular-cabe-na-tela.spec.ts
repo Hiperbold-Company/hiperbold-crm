@@ -125,6 +125,10 @@ const SUPERFICIES = [
   { rota: "/app/kanban", nome: "funis" },
   { rota: "/app/agenda", nome: "agenda" },
   { rota: "/app/metrics", nome: "painel" },
+  // Hiperbold: o Desempenho é em abas (9cd84c16c, `MetricsClient.tsx`). O ranking por atendente e o
+  // "Por canal" moram em Atendimento, e a régua de abandono em Atrito: cada aba é uma superfície.
+  { rota: "/app/metrics?aba=atendimento", nome: "painel-atendimento" },
+  { rota: "/app/metrics?aba=atrito", nome: "painel-atrito" },
   { rota: "/app/activities", nome: "relatorios" },
 ] as const;
 
@@ -424,12 +428,12 @@ test("as superfícies não estouram a tela em 360 nem em 390px", async ({ page }
       if (estouro > 1) {
         estouros.push(`${rota} em ${largura}px: passa ${estouro}px de ${janela} (body ${body}, main ${main})`);
       }
-      if (nome === "painel" || nome === "relatorios") {
+      if (nome.startsWith("painel") || nome === "relatorios") {
         for (const tabela of await tabelasQueRolamNaPropriaCaixa(page)) {
           estouros.push(`${rota} em ${largura}px: a tabela "${tabela}" rola para o lado dentro da própria caixa`);
         }
       }
-      if (nome === "painel" && largura === 390) await conferirOsCartoesDoPainel(page);
+      if (nome === "painel-atendimento" && largura === 390) await conferirOsCartoesDoPainel(page);
     }
   }
 
@@ -455,7 +459,8 @@ test("nenhum controle do painel fica abaixo de 44px de altura em 360px", async (
   // uma superfície limpa e uma catraca: se o painel regredir, reprova.
   await loginComoAdmin(page, creds);
   await page.setViewportSize({ width: 360, height: 844 });
-  await abrir(page, "/app/metrics");
+  // Hiperbold: a régua de abandono mora na aba Atrito do Desempenho (9cd84c16c).
+  await abrir(page, "/app/metrics?aba=atrito");
 
   // O "Salvar" da régua de abandono só aparece com o campo alterado, e era ele
   // o controle de 28px (`h-7` derrubava o `h-11` do botão). Sem alterar o

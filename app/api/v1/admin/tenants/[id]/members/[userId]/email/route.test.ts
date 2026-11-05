@@ -96,6 +96,7 @@ function adminFalso(opts: {
   erroNoUpdate?: { code?: string; message: string } | null;
   erroNaCentral?: boolean;
   erroEmPlatformAdmins?: boolean;
+  erroNaAprovacao?: boolean;
 }) {
   const updateUserById = vi.fn(async () => {
     passos.push("gotrue.update");
@@ -103,6 +104,15 @@ function adminFalso(opts: {
   });
   const insercoes: Array<Record<string, unknown>> = [];
   const remocoes: string[] = [];
+  const aprovacoes: Array<Record<string, unknown>> = [];
+  const rpc = vi.fn(async (nome: string, args: Record<string, unknown>) => {
+    if (nome !== "fn_aprovar_troca_de_email") throw new Error(`rpc inesperada: ${nome}`);
+    passos.push("aprovacao");
+    aprovacoes.push(args);
+    return opts.erroNaAprovacao
+      ? { data: null, error: { message: "boom" } }
+      : { data: "aprovacao-1", error: null };
+  });
   const leitura = (data: unknown, error: { message: string } | null = null) => {
     const b: Record<string, unknown> = {};
     b.select = () => b;
@@ -168,6 +178,7 @@ function adminFalso(opts: {
     return b;
   };
   const admin = {
+    rpc,
     from: (t: string) => {
       if (t === "user_organizations") return leituraDeVinculos();
       if (t === "organizations") {
@@ -212,7 +223,7 @@ function adminFalso(opts: {
     },
   };
   vi.mocked(createAdminClient).mockReturnValue(admin as never);
-  return { updateUserById, insercoes, remocoes };
+  return { updateUserById, insercoes, remocoes, aprovacoes };
 }
 
 function pedir(email: unknown) {
@@ -413,10 +424,26 @@ describe("troca de e-mail de membro", () => {
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
+  it("D-204 (Hiperbold): a aprovação do servidor é para ESTE usuário e ESTE endereço, antes do GoTrue", async () => {
+    const { aprovacoes, updateUserById } = adminFalso({});
+    expect((await pedir("novo@exemplo.com")).status).toBe(200);
+    expect(aprovacoes).toEqual([{ p_user: ALVO, p_novo_email: "novo@exemplo.com" }]);
+    expect(passos.indexOf("aprovacao")).toBeLessThan(passos.indexOf("gotrue.update"));
+    expect(updateUserById).toHaveBeenCalledTimes(1);
+  });
+
+  it("D-204 (Hiperbold): sem a aprovação, nada é trocado (500) e o aviso recém-criado é desfeito", async () => {
+    const { remocoes, updateUserById } = adminFalso({ erroNaAprovacao: true });
+    expect((await pedir("novo@exemplo.com")).status).toBe(500);
+    expect(updateUserById).not.toHaveBeenCalled();
+    expect(remocoes).toEqual(["item-1"]);
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
   it("(b) o endereço ANTIGO é avisado, depois da troca, com a marca da instalação no remetente", async () => {
     adminFalso({ emailAtual: "antigo@exemplo.com" });
     await pedir("novo@exemplo.com");
-    expect(passos).toEqual(["central.insert", "gotrue.update", "email.antigo"]);
+    expect(passos).toEqual(["central.insert", "aprovacao", "gotrue.update", "email.antigo"]);
     expect(sendEmail).toHaveBeenCalledTimes(1);
     const envio = vi.mocked(sendEmail).mock.calls[0]![0];
     expect(envio.to).toBe("antigo@exemplo.com");

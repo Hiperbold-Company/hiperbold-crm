@@ -171,6 +171,15 @@ beforeAll(() => {
       ('${USUARIO_LIVRE}', '${ORG_FORCADA}', 'agent', now())
     on conflict do nothing;
   `);
+  // 0999: dados da PRÓPRIA conta (MFA, aparelho confiável, troca de e-mail aprovada) não são "linha de fora":
+  // a conta que só pertence à pagante tem os três e mesmo assim sai (caso "o usuário só dela sai").
+  sql(`
+    insert into public.user_recovery_codes (user_id, code_hash) values ('${SO_DA_PAGANTE}', 'i959-hash');
+    insert into public.mfa_trusted_devices (user_id, factor_id, token_hash, expires_at)
+      values ('${SO_DA_PAGANTE}', gen_random_uuid(), 'i959-token', now() + interval '30 days');
+    insert into public.email_trocas_aprovadas (user_id, novo_email, usado_em)
+      values ('${SO_DA_PAGANTE}', 'i959-so-novo@invariant.test', now());
+  `);
 });
 
 describe("1. quem entra na exclusão automática", () => {

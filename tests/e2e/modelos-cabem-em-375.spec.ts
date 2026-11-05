@@ -54,11 +54,12 @@ test.describe.configure({ timeout: 180_000 });
 
 test.use({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
 
-/** As duas abas que montam o formulário. */
-const ABAS = [
-  { aba: "parceiro", rotulo: "parceiro" },
-  { aba: "oficial", rotulo: "canal oficial" },
-] as const;
+/**
+ * As abas que montam o formulário. Hiperbold: a aba do provedor parceiro é
+ * função oculta (hiperbold/FUNCOES.md, conexao-provedor-parceiro) e um
+ * `?aba=parceiro` cai na aba da instância; sobra a do canal oficial.
+ */
+const ABAS = [{ aba: "oficial", rotulo: "canal oficial" }] as const;
 
 /**
  * Quanto a tela passa da própria largura, em px: o maior entre os dois lados da
@@ -190,6 +191,10 @@ test("o formulário de modelo não estoura a tela em 375px, nas duas abas", asyn
       `o formulário da aba do ${rotulo} passa da própria caixa: ${doFormulario.scroll}/${doFormulario.client}`,
     ).toBeLessThanOrEqual(doFormulario.client + 1);
   }
+
+  // Hiperbold: o formulário de editar abaixo é o do modelo espelhado do PARCEIRO, aba oculta
+  // (hiperbold/FUNCOES.md, conexao-provedor-parceiro). Sem a aba, não há o que editar.
+  test.skip(true, "aba do provedor parceiro oculta no Hiperbold CRM (hiperbold/FUNCOES.md, conexao-provedor-parceiro)");
 
   // O formulário de EDITAR tem um campo a mais (a linha "Editando <nome>") e
   // nasce preenchido com o texto aprovado — inclusive com nome longo, que é o

@@ -7,6 +7,9 @@
  * interruptor DESLIGADO, a tela Billing como antes, nenhuma faixa,
  * nenhum item de admin, e "Recursos opcionais" sem a cobrança.
  *
+ * Hiperbold: o formulário não tem seletor de plano nenhum (o rótulo "Plano" foi
+ * aposentado, ffa92d69f) e a Billing redireciona para Meu plano.
+ *
  * Precondição medida, não suposta (Review Focus 5): a chave é da INSTALAÇÃO, e
  * uma spec anterior que falhasse antes da limpeza a deixaria ligada. Esta spec
  * a apaga e confere a ausência antes de qualquer passo.
@@ -76,7 +79,10 @@ test("sem a chave, nada da cobrança aparece e o que existia segue igual", async
     expect((await page.goto("/admin/cobranca"))?.status()).toBe(404);
 
     await page.goto("/admin/tenants/new");
-    await expect(page.getByRole("combobox", { name: "Plano" })).toBeVisible();
+    // Hiperbold: o rótulo antigo "Plano" foi aposentado na criação (ffa92d69f; a organização nasce no plano
+    // do gatilho). Controle positivo de que a tela montou: o campo do nome. Desligada, nenhum seletor de plano.
+    await expect(page.getByLabel("Nome de exibição")).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Plano" })).toHaveCount(0);
     await expect(page.getByRole("combobox", { name: "Plano de cobrança" })).toHaveCount(0);
     await page.screenshot({ path: `${EVIDENCIA}/desligada-novo-tenant.png`, fullPage: true });
 
@@ -89,9 +95,11 @@ test("sem a chave, nada da cobrança aparece e o que existia segue igual", async
     await expect(page.getByRole("switch", { name: "Cobrança dos seus clientes" })).toHaveCount(0);
 
     // ── A empresa: Billing como antes, nenhuma faixa, recursos sem cobrança ─
+    // Hiperbold: a antiga Billing redireciona para Meu plano, a tela da cobrança própria
+    // (app/app/settings/billing/page.tsx).
     await page.goto("/app/settings/billing");
-    await expect(page.getByRole("heading", { name: "Plano e cobrança" })).toBeVisible();
-    await expect(page.getByText("Em breve — Fase 2")).toBeVisible();
+    await page.waitForURL(/\/app\/settings\/plano/);
+    await expect(page.getByRole("heading", { level: 1, name: "Meu plano" })).toBeVisible();
     await expect(page.getByText(/teste grátis/i)).toHaveCount(0);
     await page.screenshot({ path: `${EVIDENCIA}/desligada-billing.png`, fullPage: true });
 
