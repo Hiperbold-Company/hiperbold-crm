@@ -182,7 +182,14 @@ async function main(): Promise<void> {
     // caminho hostil e leva 23514, sem mudar a linha; (2) o caminho é plantado pelo dono do banco
     // com a trava desligada só dentro de uma transação (simula a linha antiga anterior a ela), e o
     // worker tem de recusá-lo do mesmo jeito.
-    const trocarCaminho = async (caminho: string) => {
+    const trocarCaminho = async (caminho: string, hostil = true) => {
+      if (!hostil) {
+        const alteracao = await sessao.from("messages").update({ media_storage_path: caminho, media_derived_status: null })
+          .eq("id", msgA).eq("organization_id", orgA).select("id").single();
+        assert.equal(alteracao.error, null, "JWT próprio precisa alterar só a linha própria");
+        assert.equal(alteracao.data?.id, msgA);
+        return;
+      }
       const antesDaTentativa = await lerMensagem(msgA, orgA);
       const tentativa = await sessao.from("messages").update({ media_storage_path: caminho, media_derived_status: null })
         .eq("id", msgA).eq("organization_id", orgA).select("id");
@@ -217,7 +224,7 @@ async function main(): Promise<void> {
       assert.deepEqual(await lerMensagem(msgB, orgB), controleB, "negativo alterou a outra organização");
     }
     fase = "positivo-real";
-    await trocarCaminho(objetos[0]!);
+    await trocarCaminho(objetos[0]!, false);
     chamadas.length = 0;
     observando = true;
     const positivo = await deriveMessageMedia(evento.data as EventRow);

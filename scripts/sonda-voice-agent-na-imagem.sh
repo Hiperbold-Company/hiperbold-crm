@@ -49,6 +49,9 @@ sonda_voice_imagem() { # <imagem local já construída no runner nativo>
     -e WAHA_WEBHOOK_BASE_URL=http://127.0.0.1:3000 \
     -e UPSTASH_REDIS_REST_URL=http://127.0.0.1:8079 \
     -e UPSTASH_REDIS_REST_TOKEN=token-de-mentira \
+    -e INTERNAL_SECRET=segredo-interno-de-mentira \
+    -e CPF_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+    -e WAHA_BYO_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
     "$imagem" >/dev/null
   for _ in $(seq 1 30); do
     logs="$(docker logs "$nome" 2>&1 || true)"

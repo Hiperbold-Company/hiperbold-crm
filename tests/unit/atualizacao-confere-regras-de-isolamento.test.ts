@@ -506,8 +506,23 @@ describe.skipIf(!temAwk)("recriar o que falta: o comando INTEIRO, nunca o nome",
       // do byte a byte (ela ignora o `_` no primeiro nível). Ele vinha do baseline; desde
       // que as policies do módulo financeiro saem por `format()` (o update.sh da v1.63.0 as
       // cobrava num banco sem o módulo), o arquivo real pode não trazer par nenhum assim.
-      // Entra como sonda nas DUAS listas: é regra que "existe", e o alarme falso aparece nela.
-      const sonda = ["sonda_sale_items_x|sonda_sale_items", "sonda_sales_x|sonda_sales"];
+      // As 13 que o arquivo trazia literais entram como sonda nas DUAS listas, exatamente como
+      // a régua as lia antes: é regra que "existe", e o alarme falso aparece nela.
+      const sonda = [
+        "tenant_isolation_commission_rules_insert|commission_rules",
+        "tenant_isolation_commission_rules_select|commission_rules",
+        "tenant_isolation_commission_rules_update|commission_rules",
+        "tenant_isolation_commissions_select|commissions",
+        "tenant_isolation_loyalty_ledger_insert|loyalty_ledger",
+        "tenant_isolation_loyalty_ledger_select|loyalty_ledger",
+        "tenant_isolation_sale_items_delete|sale_items",
+        "tenant_isolation_sale_items_insert|sale_items",
+        "tenant_isolation_sale_items_select|sale_items",
+        "tenant_isolation_sale_items_update|sale_items",
+        "tenant_isolation_sales_insert|sales",
+        "tenant_isolation_sales_select|sales",
+        "tenant_isolation_sales_update|sales",
+      ];
       const regras = [...esperadas(), ...sonda];
       const noBanco = [...todasAsPoliticasDePublic(), ...sonda];
       const hostil = localeHostil(regras, noBanco);
