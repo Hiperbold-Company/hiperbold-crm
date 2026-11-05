@@ -414,8 +414,10 @@ jobs:
       # escolher OpenRouter travava o instalador num laço, escolher OpenAI
       # deixava o .env pela metade — passaram por todos os checks verdes. Era 15s;
       # medido 98–234 s em 03/11/2026, e por isso tem a parte 4 só para ele.
+      # Hiperbold, 05/11/2026: depois do merge do upstream o kit mediu 393 s e a parte 4 passou do
+      # orçamento (13 min) com tudo verde; vai para a 8, a mais leve das oito (4 min, run 42022201022).
       - name: Kit self-host (bash)
-        if: matrix.parte == 4
+        if: matrix.parte == 8
         run: pnpm test:shell
 
       - name: Orçamento de tempo do verify-parte
