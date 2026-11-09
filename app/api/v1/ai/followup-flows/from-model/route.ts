@@ -36,6 +36,9 @@ import { flowGraphSchema } from "@/lib/followup/graph-schema";
 import { validateFlowForPublish } from "@/lib/followup/validate-publish";
 import { modeloPorId } from "@/lib/followup/modelos";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
+import { STATUS_RECUSA_DO_PLANO, recusaDoPlano } from "@/lib/billing/planos/recusa-do-plano";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -153,6 +156,17 @@ export async function POST(req: NextRequest): Promise<Response> {
         409,
         { requestId },
       );
+    }
+    // O gatilho de plano (1002) recusa com PT402 (conta suspensa, teto): 402 com a frase do plano.
+    const doPlano = recusaDoPlano(insErr);
+    if (doPlano) {
+      const mensagem = await mensagemDaRecusaDoPlano(
+        doPlano,
+        createAdminClient(),
+        organizationId,
+        authz.idioma ?? "pt-BR",
+      );
+      return fail("plano_limite_atingido", mensagem, STATUS_RECUSA_DO_PLANO, { requestId });
     }
     return falhaInterna("internal_error", insErr ?? "followup_flow_insert_failed", {
       requestId,

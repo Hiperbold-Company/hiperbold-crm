@@ -663,17 +663,17 @@ describe("0955: valor fixo limitado a 99% do preço", () => {
 
 describe("0955: parcela mínima de R$ 5,00 com cupom", () => {
   it("no pedido: 2x passa e 3x (e 4x, com juros) é recusado com o erro próprio, sem pedido criado", () => {
-    // Total descontado de 1% do semestral (1049): 2x = 524 por parcela, 3x = 349.
-    expect(tentarPedido(ORG_PARCELAS, "semiannual", "CREDIT_CARD", { cupom: "GIGANTE", parcelas: 2 })).toBeNull();
+    // Total descontado de 1% do anual do Pro (1399, catálogo v2): 2x = 700 por parcela, 3x = 466.
+    expect(tentarPedido(ORG_PARCELAS, "yearly", "CREDIT_CARD", { cupom: "GIGANTE", parcelas: 2 })).toBeNull();
     cancelarAbertos(ORG_PARCELAS);
-    expect(tentarPedido(ORG_PARCELAS, "semiannual", "CREDIT_CARD", { cupom: "GIGANTE", parcelas: 3 })).toContain("billing_cupom_parcela_minima");
-    expect(tentarPedido(ORG_PARCELAS, "semiannual", "CREDIT_CARD", { cupom: "GIGANTE", parcelas: 4 })).toContain("billing_cupom_parcela_minima");
+    expect(tentarPedido(ORG_PARCELAS, "yearly", "CREDIT_CARD", { cupom: "GIGANTE", parcelas: 3 })).toContain("billing_cupom_parcela_minima");
+    expect(tentarPedido(ORG_PARCELAS, "yearly", "CREDIT_CARD", { cupom: "GIGANTE", parcelas: 4 })).toContain("billing_cupom_parcela_minima");
     expect(abertos(ORG_PARCELAS)).toBe("0");
   });
 
   it("na simulação: o mesmo erro, para a tela avisar", () => {
     const sim = (parcelas: number) =>
-      JSON.parse(sql(`select public.fn_billing_cupom_simular('${ORG_PARCELAS}'::uuid, 'GIGANTE', 'pro', 'semiannual', ${parcelas});`)) as Record<string, unknown>;
+      JSON.parse(sql(`select public.fn_billing_cupom_simular('${ORG_PARCELAS}'::uuid, 'GIGANTE', 'pro', 'yearly', ${parcelas});`)) as Record<string, unknown>;
     expect(sim(2)).toMatchObject({ ok: true, parcelas: 2 });
     expect(sim(3)).toEqual({ ok: false, erro: "billing_cupom_parcela_minima" });
     expect(sim(6)).toEqual({ ok: false, erro: "billing_cupom_parcela_minima" });

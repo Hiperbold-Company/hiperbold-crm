@@ -22,7 +22,7 @@
  */
 
 /**
- * Os seis itens que esta função reconhece. `leads` entrou na Tarefa 7 (F3,
+ * Os itens que esta função reconhece. `leads` entrou na Tarefa 7 (F3,
  * decisão 5): o gatilho `trg_crm_leads_billing_bloqueio` (migration 0907,
  * parte 4) levanta o mesmo PT402 com `detail = 'leads'` em toda criação ou
  * reabertura de lead acima do teto, de qualquer origem.
@@ -34,6 +34,9 @@ export const ITENS_RECUSADOS_PELO_PLANO = [
   "integracoes_webhook",
   "membros",
   "leads",
+  // 1002 (D-227): os gatilhos de `ai_agents` e das automações levantam o mesmo PT402.
+  "agentes_ia",
+  "automacoes",
 ] as const;
 
 export type ItemRecusadoPeloPlano = (typeof ITENS_RECUSADOS_PELO_PLANO)[number];
@@ -60,6 +63,9 @@ const MENSAGEM_POR_ITEM: Record<ItemRecusadoPeloPlano, string> = {
     "O plano desta organização chegou ao limite de integrações de webhook. Fale com o suporte para ampliar.",
   membros: "O plano desta organização chegou ao limite de membros. Fale com o suporte para ampliar.",
   leads: "O plano desta organização chegou ao limite de leads. Fale com o suporte para ampliar.",
+  // 1002 (D-227): a frase com o número vem de `limite-de-agentes-e-automacoes.ts`; esta é a sem número.
+  agentes_ia: "Seu plano chegou ao limite de agentes de IA. Mude de plano para criar mais.",
+  automacoes: "Seu plano chegou ao limite de automações. Mude de plano para criar mais.",
 };
 
 /** Mensagem para um `detail` que não é nenhum dos itens conhecidos (defensivo). */

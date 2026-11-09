@@ -83,7 +83,8 @@ describe("D-094: organização nova", () => {
 
   it("o cadastro do próprio visitante nasce suspenso, sem período e sem ciclo (sem avaliação gratuita)", () => {
     const [linha] = sonda(`${nova(U(201), "l7b-aval", '{"billing_inicio":"sem_plano"}')} ${lerContrato(U(201))}`);
-    expect(linha).toBe("suspensa|pro|true|true");
+    // 1002 (D-227, 09/11/2026): a linha nasce no plano Max, não mais no Pro.
+    expect(linha).toBe("suspensa|max|true|true");
   });
 
   it("sem o marcador (admin da plataforma, provisionamento externo, instalação) segue ativa no Ilimitado, sem período", () => {
@@ -110,7 +111,7 @@ describe("D-094: organização nova", () => {
       update public.billing_settings set modo = 'desligado' where id = 1;
       ${nova(U(205), "l7b-desl", '{"billing_inicio":"sem_plano"}')} ${lerContrato(U(205))}
       update public.billing_settings set modo = 'avisar' where id = 1;
-      update public.billing_plans set active = false where code = 'pro';
+      update public.billing_plans set active = false where code = 'max';
       ${nova(U(206), "l7b-sempro", '{"billing_inicio":"sem_plano"}')} ${lerContrato(U(206))}`);
     expect(linhas).toEqual(["ativa|ilimitado|true|true", "suspensa|ilimitado|true|true"]);
   });

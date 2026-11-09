@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 
+import { AvisoDeLimiteDoPlano } from "@/components/billing/AvisoDeLimiteDoPlano";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Robot, Plus } from "@/lib/ui/icons";
@@ -15,9 +16,36 @@ import { deriveAgentStatus } from "./AgentStatusBadge";
 interface Props {
   initialData: AgentRow[];
   canWrite: boolean;
+  /** D-227: o teto de agentes do plano está cheio (frase pronta do servidor); `null` = pode criar. */
+  motivoDoBloqueio?: string | null;
 }
 
-export function AgentsList({ initialData, canWrite }: Props) {
+/** "Criar novo": desabilitado com o motivo quando o teto de agentes do plano foi atingido. */
+function BotaoCriarAgente({ motivo, className }: { motivo: string | null; className?: string }) {
+  const t = useT();
+  const rotulo = (
+    <>
+      <Plus size={14} aria-hidden className="mr-2" /> {t("Criar novo")}
+    </>
+  );
+  if (motivo) {
+    return (
+      <div className="flex flex-col items-end">
+        <Button className={className} disabled data-testid="criar-agente-bloqueado">
+          {rotulo}
+        </Button>
+        <AvisoDeLimiteDoPlano motivo={motivo} testId="aviso-limite-de-agentes" />
+      </div>
+    );
+  }
+  return (
+    <Link href="/app/ai/agents/new">
+      <Button className={className}>{rotulo}</Button>
+    </Link>
+  );
+}
+
+export function AgentsList({ initialData, canWrite, motivoDoBloqueio = null }: Props) {
   const t = useT();
   const { data, isLoading } = useAgentsList({ initialData });
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -47,13 +75,7 @@ export function AgentsList({ initialData, canWrite }: Props) {
             "Crie um agente para responder a conversas no WhatsApp com IA. Você configura prompt, tools, gatilhos e janela de contexto.",
           )}
         </p>
-        {canWrite && (
-          <Link href="/app/ai/agents/new">
-            <Button className="mt-1">
-              <Plus size={14} aria-hidden className="mr-2" /> {t("Criar novo")}
-            </Button>
-          </Link>
-        )}
+        {canWrite && <BotaoCriarAgente motivo={motivoDoBloqueio} className="mt-1" />}
       </Card>
     );
   }
@@ -69,13 +91,7 @@ export function AgentsList({ initialData, canWrite }: Props) {
           showArchived={showArchived}
           onShowArchivedChange={setShowArchived}
         />
-        {canWrite && (
-          <Link href="/app/ai/agents/new">
-            <Button>
-              <Plus size={14} aria-hidden className="mr-2" /> {t("Criar novo")}
-            </Button>
-          </Link>
-        )}
+        {canWrite && <BotaoCriarAgente motivo={motivoDoBloqueio} />}
       </div>
 
       {filtered.length === 0 ? (

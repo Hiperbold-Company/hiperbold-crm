@@ -18,6 +18,9 @@ import {
   provedorDesligadoNaInstalacao,
 } from "@/lib/ai/pontos/provedores-oferecidos";
 
+import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
+import { recusaDoPlano } from "@/lib/billing/planos/recusa-do-plano";
+
 import { mcpAgentDraftRecords } from "./create-draft";
 import { corpoLegadoComoCorpoDeCriacao } from "./legado-para-versao";
 import { agentMcpCreateSchema } from "./validation";
@@ -40,7 +43,9 @@ export type DuplicateAgentError =
   | "no_version_to_duplicate"
   | "agent_insert_failed"
   | "version_insert_failed"
-  | "provedor_desligado";
+  | "provedor_desligado"
+  // 1002 (D-227): o teto de agentes do plano (ou a conta suspensa) recusou no banco, PT402.
+  | "plano_limite_atingido";
 
 export type DuplicateAgentResult =
   | {
@@ -242,6 +247,14 @@ export async function duplicateAgentWithVersion(
     .single();
 
   if (agentErr || !newAgent) {
+    const doPlano = recusaDoPlano(agentErr);
+    if (doPlano) {
+      return {
+        ok: false,
+        error: "plano_limite_atingido",
+        message: await mensagemDaRecusaDoPlano(doPlano, admin, orgId),
+      };
+    }
     return { ok: false, error: "agent_insert_failed", message: agentErr?.message };
   }
 

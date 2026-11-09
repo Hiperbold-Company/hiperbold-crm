@@ -71,7 +71,7 @@ function abrirPedido(org: string, plano: string, ciclo: string, metodo: string, 
 }
 
 /** Compra e paga um Pix (anual por padrão) e devolve o resultado da aplicação. */
-function pagarPix(org: string, plano: string, pagamento: string, evento: string, reais = "1899.00", ciclo = "yearly"): string {
+function pagarPix(org: string, plano: string, pagamento: string, evento: string, reais = "1399.00", ciclo = "yearly"): string {
   const pedido = abrirPedido(org, plano, ciclo, "PIX", pagamento, null);
   return registrarEAplicar(evento, "PAYMENT_RECEIVED", pagamento, confirmacao(pagamento, "RECEIVED", reais, HOJE, `,'paymentDate',${HOJE},'externalReference','HC:ord:${pedido}'`));
 }
@@ -137,7 +137,7 @@ describe("0942 item 1: troca de plano com período pago vigente", () => {
           from public.billing_contracts where organization_id = '${ORG_DEFESA}';
     `);
     const fimAntes = contrato(ORG_DEFESA, "current_period_end");
-    const r = registrarEAplicar("evt-i942-d1", "PAYMENT_RECEIVED", "pay_i942_d1", confirmacao("pay_i942_d1", "RECEIVED", "3799.00", HOJE, `,'paymentDate',${HOJE},'externalReference','HC:ord:${pedido}'`));
+    const r = registrarEAplicar("evt-i942-d1", "PAYMENT_RECEIVED", "pay_i942_d1", confirmacao("pay_i942_d1", "RECEIVED", "2849.00", HOJE, `,'paymentDate',${HOJE},'externalReference','HC:ord:${pedido}'`));
     expect(r).toContain('"resultado": "divergente"');
     expect(r).toContain("troca_de_plano_com_periodo_vigente");
     expect(contrato(ORG_DEFESA, "(select code from public.billing_plans where id = plan_id)")).toBe("pro");
@@ -167,7 +167,7 @@ describe("0942 item 6 e item 1: Pix empilhado sem o dia extra e sem início no f
 });
 
 describe("0942 item 2: estorno com pagamentos empilhados", () => {
-  const estornar = (evento: string, pagamento: string, valor = "1899.00") =>
+  const estornar = (evento: string, pagamento: string, valor = "1399.00") =>
     registrarEAplicar(evento, "PAYMENT_REFUNDED", pagamento, confirmacao(pagamento, "REFUNDED", valor, HOJE));
   const carteiraDoPlano = (org: string) =>
     sql(`select coalesce(creditado - consumido, 0) from public.billing_token_wallets where organization_id = '${org}' and fonte = 'plano' and ciclo = ${CICLO};`);
@@ -244,11 +244,14 @@ describe("0942 item 3: os preços de ciclo são semeados uma vez", () => {
   it("controle: sem a marca (instalação que nunca semeou) o bloco semeia os preços decididos e grava a marca", () => {
     const saida = sql(`
       begin;
-      update public.billing_plans set price_semiannual_cents = null, price_yearly_cents = null where code = 'pro' and active;
+      -- A 0941 semeia a versão 1 em vigor; desde a 1001 (D-227) a ativa é a 2, então o controle
+      -- devolve a v1 ao estado de antes da 1001 (ativa, sem preço de ciclo) dentro da transação.
+      update public.billing_plans set active = false where code = 'pro' and active;
+      update public.billing_plans set active = true, price_semiannual_cents = null, price_yearly_cents = null where code = 'pro' and version = 1;
       update public.billing_settings set precos_de_ciclo_semeados_em = null where id = 1;
       ${DO_DA_0941}
       select (price_semiannual_cents = 104900 and price_yearly_cents = 189900 and (select precos_de_ciclo_semeados_em is not null from public.billing_settings where id = 1))::text
-        from public.billing_plans where code = 'pro' and active;
+        from public.billing_plans where code = 'pro' and version = 1;
       rollback;
     `);
     expect(ultima(saida)).toBe("true");
@@ -257,12 +260,13 @@ describe("0942 item 3: os preços de ciclo são semeados uma vez", () => {
   it("plano em versão nova não herda o preço velho, nem sem a marca", () => {
     const saida = sql(`
       begin;
+      -- A versão 2 já existe desde a 1001 (D-227): a versão nova da prova é a 3.
       update public.billing_plans set active = false where code = 'pro' and active;
       insert into public.billing_plans (code, version, active, name, for_sale, price_monthly_cents, grace_days, limits)
-        select code, 2, true, name, for_sale, price_monthly_cents, grace_days, limits from public.billing_plans where code = 'pro' and version = 1;
+        select code, 3, true, name, for_sale, price_monthly_cents, grace_days, limits from public.billing_plans where code = 'pro' and version = 1;
       update public.billing_settings set precos_de_ciclo_semeados_em = null where id = 1;
       ${DO_DA_0941}
-      select (price_semiannual_cents is null and price_yearly_cents is null)::text from public.billing_plans where code = 'pro' and version = 2;
+      select (price_semiannual_cents is null and price_yearly_cents is null)::text from public.billing_plans where code = 'pro' and version = 3;
       rollback;
     `);
     expect(ultima(saida)).toBe("true");
@@ -277,13 +281,13 @@ describe("0942 item 4: renovação", () => {
 
   it("setup: semestral no cartão pago pelo preço do ciclo", () => {
     const pedido = abrirPedido(ORG_RENOVACAO, "pro", "semiannual", "CREDIT_CARD", "pay_i942_r1", SUB);
-    const r = registrarEAplicar("evt-i942-r1", "PAYMENT_CONFIRMED", "pay_i942_r1", confirmacao("pay_i942_r1", "CONFIRMED", "1049.00", HOJE, `,'subscription','${SUB}','externalReference','HC:ord:${pedido}'`));
+    const r = registrarEAplicar("evt-i942-r1", "PAYMENT_CONFIRMED", "pay_i942_r1", confirmacao("pay_i942_r1", "CONFIRMED", "799.00", HOJE, `,'subscription','${SUB}','externalReference','HC:ord:${pedido}'`));
     expect(r).toContain('"resultado": "aplicado"');
   });
 
   it("renovação com valor ABAIXO do preço do ciclo é divergente: o período não anda e nada é gravado", () => {
     const fimAntes = contrato(ORG_RENOVACAO, "current_period_end");
-    const r = renovar("evt-i942-r2", "pay_i942_r2", "199.00", 6);
+    const r = renovar("evt-i942-r2", "pay_i942_r2", "149.00", 6);
     expect(r).toContain('"resultado": "divergente"');
     expect(r).toContain("renovacao_valor_abaixo_do_ciclo");
     expect(contrato(ORG_RENOVACAO, "current_period_end")).toBe(fimAntes);
@@ -291,7 +295,7 @@ describe("0942 item 4: renovação", () => {
   });
 
   it("controle: renovação pelo preço do ciclo estende, e acima do preço estende com o alarme divergente_valor", () => {
-    expect(renovar("evt-i942-r3", "pay_i942_r3", "1049.00", 6)).toContain('"resultado": "aplicado"');
+    expect(renovar("evt-i942-r3", "pay_i942_r3", "799.00", 6)).toContain('"resultado": "aplicado"');
     const r = renovar("evt-i942-r4", "pay_i942_r4", "1500.00", 12);
     expect(r).toContain('"resultado": "aplicado"');
     expect(r).toContain("divergente_valor");
@@ -301,7 +305,7 @@ describe("0942 item 4: renovação", () => {
     sql(`select public.fn_billing_asaas_marcar_assinatura_encerrada('${ORG_RENOVACAO}'::uuid, '${SUB}', null);`);
     expect(sql(`select categoria from public.fn_billing_asaas_rotear_pagamento('sandbox', '${SUB}', null, 'pay_i942_r5');`)).toBe("sem_vinculo");
     const fimAntes = contrato(ORG_RENOVACAO, "current_period_end");
-    const r = renovar("evt-i942-r5", "pay_i942_r5", "1049.00", 18);
+    const r = renovar("evt-i942-r5", "pay_i942_r5", "799.00", 18);
     expect(r).toContain('"resultado": "sem_vinculo"');
     expect(contrato(ORG_RENOVACAO, "current_period_end")).toBe(fimAntes);
     expect(sql(`select count(*) from public.billing_payments where asaas_payment_id = 'pay_i942_r5';`)).toBe("0");
@@ -316,7 +320,7 @@ describe("0942 item 4: renovação", () => {
   it("Pix comprado depois de encerrar o cartão não guarda o id da assinatura encerrada no contrato", () => {
     const SUB2 = "sub_i942_cartao";
     const pedido = abrirPedido(ORG_PIX_DEPOIS_CARTAO, "pro", "yearly", "CREDIT_CARD", "pay_i942_c1", SUB2);
-    expect(registrarEAplicar("evt-i942-c1", "PAYMENT_CONFIRMED", "pay_i942_c1", confirmacao("pay_i942_c1", "CONFIRMED", "1899.00", HOJE, `,'subscription','${SUB2}','externalReference','HC:ord:${pedido}'`))).toContain('"resultado": "aplicado"');
+    expect(registrarEAplicar("evt-i942-c1", "PAYMENT_CONFIRMED", "pay_i942_c1", confirmacao("pay_i942_c1", "CONFIRMED", "1399.00", HOJE, `,'subscription','${SUB2}','externalReference','HC:ord:${pedido}'`))).toContain('"resultado": "aplicado"');
     sql(`select public.fn_billing_asaas_marcar_assinatura_encerrada('${ORG_PIX_DEPOIS_CARTAO}'::uuid, '${SUB2}', null);`);
     expect(contrato(ORG_PIX_DEPOIS_CARTAO, "(asaas_subscription_id is not null)::text || '|' || (asaas_assinatura_encerrada_em is not null)::text")).toBe("true|true");
 

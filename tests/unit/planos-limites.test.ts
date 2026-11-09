@@ -15,6 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   esquemaDoAjusteDeLimites,
   esquemaDoPlanoDeLimites,
+  normalizarLimites,
   TETO_DE_LIMITE,
 } from "@/lib/billing/planos/limites";
 import { planoDaOrganizacao } from "@/lib/billing/planos/plano-da-organizacao";
@@ -170,7 +171,7 @@ describe("planoDaOrganizacao", () => {
     expect(r).toEqual({
       plano: { code: "pro", name: "Pro", version: 1 },
       contrato: { status: "ativa", cycle: "monthly" },
-      limites: LIMITES_PRO,
+      limites: normalizarLimites(LIMITES_PRO),
       leituraFalhou: false,
     });
     expect(chamadasRpc).toEqual([{ nome: "fn_billing_limites_efetivos", args: { p_org: ORG } }]);
@@ -187,7 +188,7 @@ describe("planoDaOrganizacao", () => {
     expect(r).toEqual({
       plano: { code: "ilimitado", name: "Ilimitado", version: 1 },
       contrato: null,
-      limites: LIMITES_ILIMITADO,
+      limites: normalizarLimites(LIMITES_ILIMITADO),
       leituraFalhou: false,
     });
     expect(log.warn).toHaveBeenCalledTimes(1);
@@ -202,7 +203,7 @@ describe("planoDaOrganizacao", () => {
 
     expect(r.leituraFalhou).toBe(true);
     expect(r.contrato).toBeNull();
-    expect(r.limites).toEqual(LIMITES_ILIMITADO);
+    expect(r.limites).toEqual(normalizarLimites(LIMITES_ILIMITADO));
     expect(log.error).toHaveBeenCalledWith(
       "alarme_planos_leitura",
       expect.objectContaining({ organization_id: ORG }),
@@ -219,7 +220,7 @@ describe("planoDaOrganizacao", () => {
     const r = await planoDaOrganizacao(admin, ORG, log);
 
     expect(r.leituraFalhou).toBe(true);
-    expect(r.limites).toEqual(LIMITES_ILIMITADO);
+    expect(r.limites).toEqual(normalizarLimites(LIMITES_ILIMITADO));
     expect(log.error).toHaveBeenCalledWith("alarme_planos_leitura", expect.anything());
   });
 
@@ -233,7 +234,7 @@ describe("planoDaOrganizacao", () => {
     const r = await planoDaOrganizacao(admin, ORG, log);
 
     expect(r.leituraFalhou).toBe(true);
-    expect(r.limites).toEqual(LIMITES_ILIMITADO);
+    expect(r.limites).toEqual(normalizarLimites(LIMITES_ILIMITADO));
     expect(log.error).toHaveBeenCalledWith("alarme_planos_leitura", expect.anything());
   });
 

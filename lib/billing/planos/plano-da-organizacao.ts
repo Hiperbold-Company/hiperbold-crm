@@ -30,7 +30,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Logger } from "@/lib/agent-engine/obs/logger";
 
-import { CHAVES_DE_LIMITE, esquemaDoPlanoDeLimites, type Limites } from "./limites";
+import {
+  CHAVES_DE_LIMITE,
+  esquemaDoPlanoDeLimites,
+  limiteDaChave,
+  recursoIncluidoNosLimites,
+  type ChaveDeLimite,
+  type Limites,
+  type RecursoDoPlano,
+} from "./limites";
 
 export interface PlanoResumo {
   code: string;
@@ -142,4 +150,52 @@ export async function planoDaOrganizacao(
       leituraFalhou: true,
     };
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Leitura de UMA chave (D-227): a porta que as travas dos limites novos usam
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface ResultadoDoLimite {
+  /** O limite efetivo (plano + ajuste do admin). `null` = sem limite, inclusive chave ausente. */
+  valor: number | null;
+  leituraFalhou: boolean;
+}
+
+export interface ResultadoDoRecurso {
+  /** Falso só quando o limite efetivo do recurso é 0. */
+  incluido: boolean;
+  leituraFalhou: boolean;
+}
+
+/**
+ * O limite efetivo de uma chave para a organização. Nunca lança: com a
+ * leitura falhando devolve `valor: null` e `leituraFalhou: true` (a mesma
+ * regra de `planoDaOrganizacao`, erro de leitura LIBERA), e quem trava decide
+ * o que fazer com o `leituraFalhou`.
+ */
+export async function limiteDe(
+  admin: SupabaseClient,
+  organizationId: string,
+  chave: ChaveDeLimite,
+  log?: Logger,
+): Promise<ResultadoDoLimite> {
+  const r = await planoDaOrganizacao(admin, organizationId, log);
+  return { valor: limiteDaChave(r.limites, chave), leituraFalhou: r.leituraFalhou };
+}
+
+/**
+ * Se o plano efetivo da organização inclui o recurso (`mcp`, `api`,
+ * `comentario_instagram`). Valor 0 = não incluso; `null` e chave ausente
+ * (plano de antes da 1001) = incluso. Nunca lança; leitura que falhou devolve
+ * `incluido: true` com `leituraFalhou: true`.
+ */
+export async function recursoIncluido(
+  admin: SupabaseClient,
+  organizationId: string,
+  recurso: RecursoDoPlano,
+  log?: Logger,
+): Promise<ResultadoDoRecurso> {
+  const r = await planoDaOrganizacao(admin, organizationId, log);
+  return { incluido: recursoIncluidoNosLimites(r.limites, recurso), leituraFalhou: r.leituraFalhou };
 }

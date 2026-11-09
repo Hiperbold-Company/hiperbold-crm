@@ -21,6 +21,10 @@ export interface Uso {
   membros: number;
   conexoes: number;
   integracoes_webhook: number;
+  /** Agentes de IA não arquivados (1002, D-227): a mesma contagem da trava. */
+  agentes_ia: number;
+  /** Automações (`followup_flow_pointers` da superfície `automacao`, 1002, D-227). */
+  automacoes: number;
   /** A carteira de tokens é da F2-B; nesta fase é sempre nulo. */
   tokens_ia_mes: null;
 }
@@ -32,7 +36,7 @@ export interface ResultadoDoUso {
 
 const campoDeUso = z.number().int().nonnegative();
 
-/** O formato do jsonb que `fn_billing_uso` devolve: seis contagens, todas obrigatórias. */
+/** O formato do jsonb que `fn_billing_uso` devolve: oito contagens (seis da F2 e duas da 1002), todas obrigatórias. */
 const esquemaDoUso = z
   .object({
     funis: campoDeUso,
@@ -41,6 +45,8 @@ const esquemaDoUso = z
     membros: campoDeUso,
     conexoes: campoDeUso,
     integracoes_webhook: campoDeUso,
+    agentes_ia: campoDeUso,
+    automacoes: campoDeUso,
   })
   .strict();
 
@@ -52,6 +58,8 @@ const USO_ZERADO: Uso = {
   membros: 0,
   conexoes: 0,
   integracoes_webhook: 0,
+  agentes_ia: 0,
+  automacoes: 0,
   tokens_ia_mes: null,
 };
 

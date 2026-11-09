@@ -30,7 +30,7 @@ describe("0951: nome exibido do plano escale", () => {
 
   it("nenhuma versão do código escale guarda o nome antigo, e o código e o preço seguem os mesmos", () => {
     expect(sql(`select count(*) from public.billing_plans where name ilike 'escale';`)).toBe("0");
-    expect(sql(`select code || '|' || price_monthly_cents from public.billing_plans where code = 'escale' and active;`)).toBe("escale|59900");
+    expect(sql(`select code || '|' || price_monthly_cents from public.billing_plans where code = 'escale' and version = 1;`)).toBe("escale|59900");
   });
 
   it("reaplicar a migration com o nome antigo volta para Scale, em todas as versões do código", () => {

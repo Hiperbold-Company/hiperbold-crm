@@ -73,14 +73,16 @@ describe("0941: setup", () => {
   });
 });
 
-describe("0941: os preços decididos em 29/09/2026 estão na versão ativa", () => {
+// A 1001 (D-227) pôs a versão 2 de cada plano em vigor; os preços da 0941 seguem na versão 1,
+// que continua servindo quem a contratou. O pedido novo usa a versão ativa (a 2).
+describe("0941: os preços decididos em 29/09/2026 estão na versão 1", () => {
   it("semestral e anual de Pro, Max e Scale, em centavos", () => {
-    const linhas = sql(`select code || '|' || price_semiannual_cents || '|' || price_yearly_cents from public.billing_plans where active and code in ('pro','max','escale') order by price_monthly_cents;`).split("\n");
+    const linhas = sql(`select code || '|' || price_semiannual_cents || '|' || price_yearly_cents from public.billing_plans where version = 1 and code in ('pro','max','escale') order by price_monthly_cents;`).split("\n");
     expect(linhas).toEqual(["pro|104900|189900", "max|214900|379900", "escale|319900|574900"]);
   });
 
   it("o mensal não mudou e o Ilimitado segue sem preço de ciclo", () => {
-    expect(sql(`select code || '|' || price_monthly_cents from public.billing_plans where active and code in ('pro','max','escale') order by price_monthly_cents;`).split("\n")).toEqual(["pro|19900", "max|39900", "escale|59900"]);
+    expect(sql(`select code || '|' || price_monthly_cents from public.billing_plans where version = 1 and code in ('pro','max','escale') order by price_monthly_cents;`).split("\n")).toEqual(["pro|19900", "max|39900", "escale|59900"]);
     expect(sql(`select coalesce(price_semiannual_cents::text,'nulo') || '|' || coalesce(price_yearly_cents::text,'nulo') from public.billing_plans where active and code = 'ilimitado';`)).toBe("nulo|nulo");
   });
 
@@ -90,7 +92,7 @@ describe("0941: os preços decididos em 29/09/2026 estão na versão ativa", () 
       update public.billing_plans set price_semiannual_cents = case code when 'pro' then 104900 when 'max' then 214900 when 'escale' then 319900 end
        where active and code in ('pro','max','escale') and price_semiannual_cents is null;`);
     expect(sql(`select price_semiannual_cents from public.billing_plans where code = 'escale' and active;`)).toBe("111100");
-    sql(`update public.billing_plans set price_semiannual_cents = 319900 where code = 'escale' and active;`);
+    sql(`update public.billing_plans set price_semiannual_cents = 239900 where code = 'escale' and active;`);
   });
 
   it("preço negativo é barrado pela constraint nova", () => {
@@ -103,20 +105,20 @@ describe("0941: o pedido por ciclo", () => {
     sql(`select public.fn_billing_criar_pedido('${org}'::uuid, 'assinatura', '${plano}', '${ciclo}', null, '${metodo}', 'sandbox', gen_random_uuid(), null)->>'amount_cents';`);
 
   it("o valor do período vem do catálogo, no cartão e no Pix, e cada pedido guarda o ciclo", () => {
-    expect(pedido(ORG_PEDIDOS, "pro", "semiannual", "CREDIT_CARD")).toBe("104900");
+    expect(pedido(ORG_PEDIDOS, "pro", "semiannual", "CREDIT_CARD")).toBe("79900");
     sql(`update public.billing_orders set status = 'cancelado' where organization_id = '${ORG_PEDIDOS}';`);
-    expect(pedido(ORG_PEDIDOS, "pro", "semiannual", "PIX")).toBe("104900");
+    expect(pedido(ORG_PEDIDOS, "pro", "semiannual", "PIX")).toBe("79900");
     sql(`update public.billing_orders set status = 'cancelado' where organization_id = '${ORG_PEDIDOS}';`);
-    expect(pedido(ORG_PEDIDOS, "max", "yearly", "CREDIT_CARD")).toBe("379900");
+    expect(pedido(ORG_PEDIDOS, "max", "yearly", "CREDIT_CARD")).toBe("284900");
     sql(`update public.billing_orders set status = 'cancelado' where organization_id = '${ORG_PEDIDOS}';`);
-    expect(pedido(ORG_PEDIDOS, "pro", "yearly", "PIX")).toBe("189900");
+    expect(pedido(ORG_PEDIDOS, "pro", "yearly", "PIX")).toBe("139900");
     expect(sql(`select string_agg(distinct ciclo, ',' order by ciclo) from public.billing_orders where organization_id = '${ORG_PEDIDOS}';`)).toBe("semiannual,yearly");
     sql(`update public.billing_orders set status = 'cancelado' where organization_id = '${ORG_PEDIDOS}';`);
   });
 
   it("o mensal continua só no cartão e a entrada nunca decide o valor", () => {
     expect(erroDe(`select public.fn_billing_criar_pedido('${ORG_PEDIDOS}'::uuid, 'assinatura', 'pro', 'monthly', null, 'PIX', 'sandbox', gen_random_uuid(), null);`)).toContain("billing_metodo_invalido_para_oferta");
-    expect(pedido(ORG_PEDIDOS, "pro", "monthly", "CREDIT_CARD")).toBe("19900");
+    expect(pedido(ORG_PEDIDOS, "pro", "monthly", "CREDIT_CARD")).toBe("14900");
     sql(`update public.billing_orders set status = 'cancelado' where organization_id = '${ORG_PEDIDOS}';`);
   });
 
@@ -166,7 +168,7 @@ describe("0941: semestral no cartão, do primeiro pagamento à renovação", () 
 
   it("o primeiro pagamento grava plano, ciclo semiannual e o período de seis meses mais um dia", () => {
     pedido = abrirPedido(ORG_SEMESTRAL, "pro", "semiannual", "CREDIT_CARD", "pay_i941_s1", SUB);
-    const r = registrarEAplicar("evt-i941-s1", "PAYMENT_CONFIRMED", "pay_i941_s1", confirmacao("pay_i941_s1", "CONFIRMED", "1049.00", HOJE, `,'subscription','${SUB}','externalReference','HC:ord:${pedido}'`));
+    const r = registrarEAplicar("evt-i941-s1", "PAYMENT_CONFIRMED", "pay_i941_s1", confirmacao("pay_i941_s1", "CONFIRMED", "799.00", HOJE, `,'subscription','${SUB}','externalReference','HC:ord:${pedido}'`));
     expect(r).toContain('"resultado": "aplicado"');
     expect(r).not.toContain("divergente_valor");
     expect(contrato(ORG_SEMESTRAL, "cycle || '|' || status || '|' || gateway")).toBe("semiannual|ativa|asaas");
@@ -187,7 +189,7 @@ describe("0941: semestral no cartão, do primeiro pagamento à renovação", () 
 
   it("a renovação (cobrança nova da mesma assinatura, seis meses depois) estende o período e confere o valor contra o semestral", () => {
     const dueRenovacao = `to_char(current_date + interval '6 months', 'YYYY-MM-DD')`;
-    const r = registrarEAplicar("evt-i941-s2", "PAYMENT_CONFIRMED", "pay_i941_s2", confirmacao("pay_i941_s2", "CONFIRMED", "1049.00", dueRenovacao, `,'customer',null,'subscription','${SUB}','assinatura_status','ACTIVE'`));
+    const r = registrarEAplicar("evt-i941-s2", "PAYMENT_CONFIRMED", "pay_i941_s2", confirmacao("pay_i941_s2", "CONFIRMED", "799.00", dueRenovacao, `,'customer',null,'subscription','${SUB}','assinatura_status','ACTIVE'`));
     expect(r).toContain('"resultado": "aplicado"');
     expect(r).not.toContain("divergente_valor");
     expect(fimEh(ORG_SEMESTRAL, `current_date + interval '6 months'`, 6)).toBe("true");
@@ -197,7 +199,7 @@ describe("0941: semestral no cartão, do primeiro pagamento à renovação", () 
 
   it("renovação com valor diferente do preço do ciclo alarma (nunca compara com o mensal): abaixo é divergente (0942), acima concede com divergente_valor", () => {
     const due = `to_char(current_date + interval '12 months', 'YYYY-MM-DD')`;
-    const abaixo = registrarEAplicar("evt-i941-s3", "PAYMENT_CONFIRMED", "pay_i941_s3", confirmacao("pay_i941_s3", "CONFIRMED", "199.00", due, `,'subscription','${SUB}'`));
+    const abaixo = registrarEAplicar("evt-i941-s3", "PAYMENT_CONFIRMED", "pay_i941_s3", confirmacao("pay_i941_s3", "CONFIRMED", "149.00", due, `,'subscription','${SUB}'`));
     expect(abaixo).toContain('"resultado": "divergente"');
     const acima = registrarEAplicar("evt-i941-s3b", "PAYMENT_CONFIRMED", "pay_i941_s3b", confirmacao("pay_i941_s3b", "CONFIRMED", "1500.00", due, `,'subscription','${SUB}'`));
     expect(acima).toContain('"resultado": "aplicado"');
@@ -206,7 +208,7 @@ describe("0941: semestral no cartão, do primeiro pagamento à renovação", () 
 
   it("a mesma confirmação de novo é ja_aplicado e nada duplica", () => {
     const due = `to_char(current_date + interval '6 months', 'YYYY-MM-DD')`;
-    const r = registrarEAplicar("evt-i941-s2b", "PAYMENT_RECEIVED", "pay_i941_s2", confirmacao("pay_i941_s2", "RECEIVED", "1049.00", due, `,'subscription','${SUB}'`));
+    const r = registrarEAplicar("evt-i941-s2b", "PAYMENT_RECEIVED", "pay_i941_s2", confirmacao("pay_i941_s2", "RECEIVED", "799.00", due, `,'subscription','${SUB}'`));
     expect(r).toContain('"resultado": "ja_aplicado"');
     expect(sql(`select count(*) from public.billing_payments where asaas_payment_id = 'pay_i941_s2';`)).toBe("1");
   });
@@ -247,7 +249,7 @@ describe("0941: tokens do plano com período longo (a carteira segue o mês civi
 describe("0941: Pix semestral e anual (cobrança avulsa, sem assinatura no Asaas)", () => {
   it("Pix semestral: início no dia do pagamento, fim seis meses e um dia depois", () => {
     const pedido = abrirPedido(ORG_PIX_SEMESTRAL, "pro", "semiannual", "PIX", "pay_i941_px1", null);
-    const r = registrarEAplicar("evt-i941-px1", "PAYMENT_RECEIVED", "pay_i941_px1", confirmacao("pay_i941_px1", "RECEIVED", "1049.00", HOJE, `,'paymentDate',${HOJE},'externalReference','HC:ord:${pedido}'`));
+    const r = registrarEAplicar("evt-i941-px1", "PAYMENT_RECEIVED", "pay_i941_px1", confirmacao("pay_i941_px1", "RECEIVED", "799.00", HOJE, `,'paymentDate',${HOJE},'externalReference','HC:ord:${pedido}'`));
     expect(r).toContain('"resultado": "aplicado"');
     expect(contrato(ORG_PIX_SEMESTRAL, "cycle || '|' || status || '|' || coalesce(asaas_subscription_id, 'sem-assinatura')")).toBe("semiannual|ativa|sem-assinatura");
     expect(fimEh(ORG_PIX_SEMESTRAL, HOJE, 6)).toBe("true");
@@ -263,7 +265,7 @@ describe("0941: Pix semestral e anual (cobrança avulsa, sem assinatura no Asaas
   it("Pix semestral com período ainda pago soma seis meses exatos ao fim atual (0942: sem o dia extra), sem encurtar nem sobrepor", () => {
     const fimAntes = contrato(ORG_PIX_SEMESTRAL, "current_period_end");
     const pedido = abrirPedido(ORG_PIX_SEMESTRAL, "pro", "semiannual", "PIX", "pay_i941_px3", null);
-    const r = registrarEAplicar("evt-i941-px3", "PAYMENT_RECEIVED", "pay_i941_px3", confirmacao("pay_i941_px3", "RECEIVED", "1049.00", HOJE, `,'paymentDate',${HOJE},'externalReference','HC:ord:${pedido}'`));
+    const r = registrarEAplicar("evt-i941-px3", "PAYMENT_RECEIVED", "pay_i941_px3", confirmacao("pay_i941_px3", "RECEIVED", "799.00", HOJE, `,'paymentDate',${HOJE},'externalReference','HC:ord:${pedido}'`));
     expect(r).toContain('"resultado": "aplicado"');
     expect(sql(`select ((current_period_end at time zone 'America/Sao_Paulo')::date = (('${fimAntes}'::timestamptz at time zone 'America/Sao_Paulo')::date + interval '6 months')::date)::text from public.billing_contracts where organization_id = '${ORG_PIX_SEMESTRAL}';`)).toBe("true");
   });
@@ -310,13 +312,13 @@ describe("0941: estorno total do semestral (D-086) corta acesso e tokens do per�
 
   it("estornar a cobrança do semestral cancela o contrato na hora, zera os tokens do mês e pede a remoção da assinatura", () => {
     const pedido = abrirPedido(ORG_ESTORNO, "pro", "semiannual", "CREDIT_CARD", "pay_i941_e1", SUB);
-    registrarEAplicar("evt-i941-e1a", "PAYMENT_CONFIRMED", "pay_i941_e1", confirmacao("pay_i941_e1", "CONFIRMED", "1049.00", HOJE, `,'subscription','${SUB}','externalReference','HC:ord:${pedido}'`));
+    registrarEAplicar("evt-i941-e1a", "PAYMENT_CONFIRMED", "pay_i941_e1", confirmacao("pay_i941_e1", "CONFIRMED", "799.00", HOJE, `,'subscription','${SUB}','externalReference','HC:ord:${pedido}'`));
     sql(`update public.billing_contracts set current_period_start = ${CICLO}::timestamp at time zone 'America/Sao_Paulo'
           where organization_id = '${ORG_ESTORNO}' and current_period_start > ${CICLO}::timestamp at time zone 'America/Sao_Paulo';`);
     sql(`select public.fn_billing_saldo_da_carteira('${ORG_ESTORNO}'::uuid);`);
     expect(sql(`select creditado || '|' || consumido from public.billing_token_wallets where organization_id = '${ORG_ESTORNO}' and fonte = 'plano' and ciclo = ${CICLO};`)).toBe("3000000|0");
 
-    const r = registrarEAplicar("evt-i941-e1b", "PAYMENT_REFUNDED", "pay_i941_e1", confirmacao("pay_i941_e1", "REFUNDED", "1049.00", HOJE, `,'subscription','${SUB}'`));
+    const r = registrarEAplicar("evt-i941-e1b", "PAYMENT_REFUNDED", "pay_i941_e1", confirmacao("pay_i941_e1", "REFUNDED", "799.00", HOJE, `,'subscription','${SUB}'`));
     expect(r).toContain('"resultado": "aplicado"');
     expect(r).toContain('"alarme": "estorno_confirmado,estorno_cortou_acesso,remover_assinatura_pendente"');
     expect(contrato(ORG_ESTORNO, "status || '|' || cancel_at_period_end || '|' || (current_period_end <= now())")).toBe("cancelada|true|true");

@@ -57,6 +57,8 @@ export function Campo({
 export interface Opcao {
   valor: string;
   rotulo: string;
+  /** Aparece na lista mas não pode ser escolhida (ex.: recurso fora do plano, D-227). */
+  desabilitada?: boolean;
 }
 
 export function Seletor({
@@ -85,7 +87,7 @@ export function Seletor({
     >
       {vazio !== undefined && <option value="">{vazio}</option>}
       {opcoes.map((o) => (
-        <option key={o.valor} value={o.valor}>
+        <option key={o.valor} value={o.valor} disabled={o.desabilitada}>
           {o.rotulo}
         </option>
       ))}

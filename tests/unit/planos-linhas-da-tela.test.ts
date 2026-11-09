@@ -18,6 +18,8 @@ const USO: Uso = {
   membros: 3,
   conexoes: 1,
   integracoes_webhook: 0,
+  agentes_ia: 1,
+  automacoes: 4,
   tokens_ia_mes: null,
 };
 
@@ -29,6 +31,12 @@ const LIMITES_PRO: Limites = {
   conexoes: 3,
   integracoes_webhook: 3,
   tokens_ia_mes: 1_000_000,
+  agentes_ia: null,
+  automacoes: null,
+  mcp_req_min: null,
+  acesso_api: null,
+  automacao_comentario_instagram: null,
+  fonte_dados_req_min: null,
 };
 
 const LIMITES_ILIMITADO: Limites = {
@@ -39,6 +47,12 @@ const LIMITES_ILIMITADO: Limites = {
   conexoes: null,
   integracoes_webhook: null,
   tokens_ia_mes: null,
+  agentes_ia: null,
+  automacoes: null,
+  mcp_req_min: null,
+  acesso_api: null,
+  automacao_comentario_instagram: null,
+  fonte_dados_req_min: null,
 };
 
 function linha(uso: Uso, limites: Limites, leituraFalhou: boolean, chave: ChaveDaTelaDePlano) {

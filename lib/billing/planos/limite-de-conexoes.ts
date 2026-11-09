@@ -21,6 +21,7 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
 
 import type { BloqueioDoBotao } from "./estado-do-bloqueio";
+import { mensagemDoTetoDeCriacao } from "./limite-de-agentes-e-automacoes";
 import { planoDaOrganizacao } from "./plano-da-organizacao";
 import { podeCriar } from "./pode-criar";
 import type { RecusaDoPlano } from "./recusa-do-plano";
@@ -87,7 +88,8 @@ export async function bloqueioDoBotaoDeConexoes(
 
 /**
  * A mensagem de uma recusa PT402 já reconhecida por `recusaDoPlano`: para o item `conexoes` é a frase com o
- * limite e o plano reais; para qualquer outro item é a frase fixa que `recusaDoPlano` já trouxe.
+ * limite e o plano reais; para `agentes_ia` e `automacoes` (1002), a frase com o limite efetivo; para qualquer
+ * outro item é a frase fixa que `recusaDoPlano` já trouxe.
  */
 export async function mensagemDaRecusaDoPlano(
   recusa: RecusaDoPlano,
@@ -96,6 +98,9 @@ export async function mensagemDaRecusaDoPlano(
   idioma: Idioma = "pt-BR",
   log?: Logger,
 ): Promise<string> {
+  if (recusa.item === "agentes_ia" || recusa.item === "automacoes") {
+    return mensagemDoTetoDeCriacao(admin, organizationId, recusa.item, idioma, log);
+  }
   if (recusa.item !== "conexoes") return recusa.mensagem;
   return mensagemDoLimiteDeConexoes(admin, organizationId, idioma, log);
 }
