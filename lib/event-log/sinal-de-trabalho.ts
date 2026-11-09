@@ -56,9 +56,11 @@
  *
  * O `insert` de `media.persist_requested` feito pelo INGEST do canal acontece
  * em OUTRO processo (a rota HTTP do webhook). Acordar o worker de lá exigiria
- * LISTEN/NOTIFY — que este PR evita de propósito. Esse salto continua limitado
- * pelo teto do recuo; o que este sinal cobre é a janela em que o worker já sabe
- * que a mídia está pendente, que é a que carrega os 86s da transcrição lenta.
+ * LISTEN/NOTIFY. Desde a migration 1000 ele existe: o ouvinte do banco
+ * (`lib/agent-engine/ouvinte-do-banco.ts`) recebe o NOTIFY do INSERT em
+ * `event_log` e chama este mesmo `acordar()`. Com o ouvinte caído, o salto volta
+ * a ser limitado pelo teto curto do recuo; o acordar do drain do turno continua
+ * cobrindo a janela em que o worker já sabe que a mídia está pendente.
  *
  * O módulo não importa NADA de propósito: ele entra no caminho de boot do
  * worker (`drain-loop` → este arquivo) e a cadeia `@/lib/env` já derrubou um

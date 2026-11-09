@@ -80,36 +80,55 @@ describe("intervaloDeEspera", () => {
     expect(Math.max(...esperas)).toBeLessThanOrEqual(60_000);
   });
 
-  it("doc 242 (C): sem QUEUE_IDLE_MAX_INTERVAL_MS o recuo fica DESLIGADO", () => {
-    // Decisão do dono: na fila de respostas do agente, o comportamento de hoje é
-    // o default e o recuo é opt-in. O env é o mesmo `loadEnv` do worker, e o
-    // valor vai cru para `ociosoMaxMs` (workers/agent-worker/main.ts).
+  it("fork (migration 1000): sem QUEUE_IDLE_MAX_INTERVAL_MS o teto é 60 s, não o piso", () => {
+    // Era o caso "doc 242 (C)": ausente = recuo DESLIGADO, a fila vazia
+    // consultando o banco a cada 2 s para sempre — ~40 mil consultas/dia medidas
+    // em produção no fork. Decisão do dono do fork (09/11/2026): default 60 s.
+    // O env é o mesmo `loadEnv` do worker, e o valor vai cru para `ociosoMaxMs`.
     const base: NodeJS.ProcessEnv = {
       NODE_ENV: "test",
       SUPABASE_DB_URL: "postgresql://u:p@localhost:5432/db",
       NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co",
       SUPABASE_SERVICE_ROLE_KEY: "service-key",
     };
-    const rodadas = (envAtual: ReturnType<typeof loadEnv>) =>
-      Array.from({ length: 10 }, (_, n) =>
+    const rodadas = (envAtual: ReturnType<typeof loadEnv>, ouvindo = false) =>
+      Array.from({ length: 12 }, (_, n) =>
         intervaloDeEspera(
           null,
           {
             ociosoMs: envAtual.QUEUE_POLL_INTERVAL_MS,
             retryMs: envAtual.QUEUE_CLAIM_RETRY_INTERVAL_MS,
             ociosoMaxMs: envAtual.QUEUE_IDLE_MAX_INTERVAL_MS,
+            ociosoMaxOuvindoMs: envAtual.QUEUE_IDLE_MAX_LISTENING_MS,
           },
           n,
+          ouvindo,
         ),
       );
 
-    // `.env` antigo e `CHAVE=` vazia: piso fixo, como antes da #3688.
+    // `.env` antigo e `CHAVE=` vazia: recua até 60 s.
     for (const envAtual of [loadEnv(base), loadEnv({ ...base, QUEUE_IDLE_MAX_INTERVAL_MS: "" })]) {
-      expect(envAtual.QUEUE_IDLE_MAX_INTERVAL_MS).toBeUndefined();
-      expect(new Set(rodadas(envAtual))).toEqual(new Set([2_000]));
+      expect(envAtual.QUEUE_IDLE_MAX_INTERVAL_MS).toBe(60_000);
+      expect(rodadas(envAtual).at(0)).toBe(2_000);
+      expect(Math.max(...rodadas(envAtual))).toBe(60_000);
+      // Com o ouvinte do banco vivo, o teto longo de 300 s.
+      expect(Math.max(...rodadas(envAtual, true))).toBe(300_000);
     }
-    // Quem liga, recua até o teto que escolheu.
-    expect(rodadas(loadEnv({ ...base, QUEUE_IDLE_MAX_INTERVAL_MS: "60000" })).at(-1)).toBe(60_000);
+    // Quem escolhe outro teto, recua até ele.
+    expect(rodadas(loadEnv({ ...base, QUEUE_IDLE_MAX_INTERVAL_MS: "30000" })).at(-1)).toBe(30_000);
+  });
+
+  it("com o ouvinte vivo o teto é o longo; caído, o curto — e o longo nunca encurta o curto", () => {
+    const com = { ...INTERVALOS, ociosoMaxOuvindoMs: 300_000 };
+    expect(intervaloDeEspera(null, com, 20, true)).toBe(300_000);
+    expect(intervaloDeEspera(null, com, 20, false)).toBe(60_000);
+    // Longo configurado abaixo do curto: vale o curto, nunca um laço mais rápido.
+    expect(intervaloDeEspera(null, { ...INTERVALOS, ociosoMaxOuvindoMs: 5_000 }, 20, true)).toBe(60_000);
+    // Sem o longo configurado, ouvir não muda nada.
+    expect(intervaloDeEspera(null, INTERVALOS, 20, true)).toBe(60_000);
+    // Os outros dois ramos não mudam com o ouvinte.
+    expect(intervaloDeEspera(0, com, 20, true)).toBe(INTERVALOS.retryMs);
+    expect(intervaloDeEspera(500_000, com, 20, true)).toBe(INTERVALOS.ociosoMs);
   });
 
   it("contador absurdo não vira Infinity nem NaN", () => {
@@ -205,6 +224,51 @@ describe("rodarLoopDaFila", () => {
     expect(dormiu).toEqual([250, 2_000, 4_000, 8_000, 250, 2_000]);
     // O job foi despachado: a rodada que achou trabalho não dormiu nada.
     expect(claimar).toHaveBeenCalledTimes(3);
+  });
+
+  it("o laço relê o ouvinte a cada soneca: vivo, recua até 300 s; caído, volta ao teto curto", async () => {
+    // Roteiro: fila sempre vazia, 12 rodadas. O ouvinte está vivo nas 9
+    // primeiras sonecas e cai antes da 10ª — a partir daí a soneca tem de sair
+    // com o teto curto (60 s) já na mesma volta, sem esperar o contador recuar.
+    const relogio = vi.fn(async () => null);
+    const claimar = vi.fn(async () => []);
+    const dormiu: number[] = [];
+    const { deveParar, contar } = pararDepoisDe(12);
+    let consultas = 0;
+
+    await rodarLoopDaFila({
+      relogio,
+      claimar,
+      aoClaimar: contar,
+      soneca: sonecaDeMentira(dormiu),
+      deveParar,
+      intervalos: { ...INTERVALOS, ociosoMaxOuvindoMs: 300_000 },
+      ouvindo: () => ++consultas <= 9,
+      log: logSpy(),
+    });
+
+    expect(dormiu).toEqual([
+      250, 2_000, 4_000, 8_000, 16_000, 32_000, 64_000, 128_000, 256_000,
+      60_000, 60_000, 60_000,
+    ]);
+  });
+
+  it("ouvinte que LANÇA vale como caído (teto curto), e o laço segue", async () => {
+    const dormiu: number[] = [];
+    const { deveParar, contar } = pararDepoisDe(10);
+    await rodarLoopDaFila({
+      relogio: async () => null,
+      claimar: async () => [],
+      aoClaimar: contar,
+      soneca: sonecaDeMentira(dormiu),
+      deveParar,
+      intervalos: { ...INTERVALOS, ociosoMaxOuvindoMs: 300_000 },
+      ouvindo: () => {
+        throw new Error("estado indisponível");
+      },
+      log: logSpy(),
+    });
+    expect(Math.max(...dormiu)).toBe(60_000);
   });
 
   it("relógio que LANÇA faz o laço claimar mesmo assim, e loga", async () => {

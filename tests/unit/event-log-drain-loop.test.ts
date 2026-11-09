@@ -28,7 +28,10 @@ vi.mock('@/lib/supabase/admin', () => ({ createAdminClient }));
 
 const {
   _reiniciarProntidaoDoLaco,
+  carregarDepsDoLaco,
   esperaOciosa,
+  knobsEmVigor,
+  notificacaoInteressaAoLaco,
   prontidaoDoLacoDeEventLog,
   proximaEspera,
   proximaRodadaOciosa,
@@ -367,5 +370,146 @@ describe('wake — a mídia pendente corta a soneca (#3701)', () => {
       await expect(laco, `comWake=${comWake}`).resolves.toBeUndefined();
       expect(vi.getTimerCount(), `comWake=${comWake}: timer pendurado`).toBe(0);
     }
+  });
+});
+
+describe('ouvinte do banco — tetos longos só com o NOTIFY vivo (migration 1000)', () => {
+  // Os knobs de produção: piso 10 s, teto curto 30 s, varredura 60 s; com o
+  // ouvinte vivo, teto e varredura de 300 s.
+  const prod = {
+    intervalMs: 2_000,
+    idleIntervalMs: 10_000,
+    idleMaxMs: 30_000,
+    staleSweepMs: 60_000,
+    batchSize: 50,
+    idleMaxListeningMs: 300_000,
+    staleSweepListeningMs: 300_000,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    drainEventLog.mockResolvedValue({ ...vazio });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Instantes (ms de relógio falso) em que o laço chamou o drain. */
+  async function instantesDosTicks(
+    ouvindo: () => boolean,
+    duracaoMs: number,
+    durante?: (agora: number, sinal: ReturnType<typeof criarSinalDeTrabalho>) => void,
+  ): Promise<{ ticks: number[]; varreduras: boolean[] }> {
+    const abort = new AbortController();
+    const sinal = criarSinalDeTrabalho();
+    const inicio = Date.now();
+    const ticks: number[] = [];
+    const varreduras: boolean[] = [];
+    drainEventLog.mockImplementation((_admin: unknown, opts: { varrerPresos?: boolean }) => {
+      ticks.push(Date.now() - inicio);
+      varreduras.push(opts.varrerPresos === true);
+      return Promise.resolve({ ...vazio });
+    });
+    const laco = runEventLogDrainLoop(prod, logger, abort.signal, { sinal, ouvindo });
+    for (let t = 0; t < duracaoMs; t += 1_000) {
+      durante?.(t, sinal);
+      await vi.advanceTimersByTimeAsync(1_000);
+    }
+    abort.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    await laco;
+    return { ticks, varreduras };
+  }
+
+  it('knobsEmVigor: vivo, os longos; caído, os curtos intactos; longo nunca encurta', () => {
+    expect(knobsEmVigor(prod, false)).toBe(prod);
+    expect(knobsEmVigor(prod, true)).toMatchObject({ idleMaxMs: 300_000, staleSweepMs: 300_000 });
+    expect(knobsEmVigor({ ...prod, idleMaxListeningMs: 5_000 }, true).idleMaxMs).toBe(30_000);
+    const semLongos = { ...prod, idleMaxListeningMs: undefined, staleSweepListeningMs: undefined };
+    expect(knobsEmVigor(semLongos, true)).toMatchObject({ idleMaxMs: 30_000, staleSweepMs: 60_000 });
+  });
+
+  it('com o ouvinte vivo, o recuo ocioso vai até 300 s', async () => {
+    const { ticks } = await instantesDosTicks(() => true, 1_000_000);
+    // 10, 20, 40, 80, 160, 300, 300… entre ticks.
+    expect(ticks.slice(0, 8)).toEqual([0, 10_000, 30_000, 70_000, 150_000, 310_000, 610_000, 910_000]);
+    const intervalos = ticks.slice(1).map((t, i) => t - ticks[i]!);
+    expect(Math.max(...intervalos)).toBe(300_000);
+  });
+
+  it('com o ouvinte caído, exatamente os tetos de antes (30 s)', async () => {
+    const { ticks } = await instantesDosTicks(() => false, 200_000);
+    expect(ticks.slice(0, 7)).toEqual([0, 10_000, 30_000, 60_000, 90_000, 120_000, 150_000]);
+  });
+
+  it('o NOTIFY acorda o laço no meio da soneca de 300 s', async () => {
+    const { ticks } = await instantesDosTicks(
+      () => true,
+      700_000,
+      (agora, sinal) => {
+        if (agora === 400_000) sinal.acordar();
+      },
+    );
+    // Na soneca de 310 s → 610 s, o aviso em 400 s corta: o tick sai em ~401 s
+    // (granularidade do relógio do teste), não em 610 s.
+    expect(ticks).toContain(310_000);
+    expect(ticks.some((t) => t > 310_000 && t <= 401_000)).toBe(true);
+    expect(ticks).not.toContain(610_000);
+  });
+
+  it('o ouvinte cai no meio da soneca longa: o acordar da queda devolve o laço aos 30 s', async () => {
+    let vivo = true;
+    const { ticks } = await instantesDosTicks(
+      () => vivo,
+      600_000,
+      (agora, sinal) => {
+        if (agora === 320_000) {
+          // É o que o ouvinte faz na queda: estado falso e um acordar.
+          vivo = false;
+          sinal.acordar();
+        }
+      },
+    );
+    const depois = ticks.filter((t) => t > 320_000);
+    const intervalos = depois.slice(1).map((t, i) => t - depois[i]!);
+    expect(intervalos.length).toBeGreaterThan(5);
+    expect(Math.max(...intervalos)).toBe(30_000);
+  });
+
+  it('com o ouvinte vivo, a varredura de presos espaça até 300 s (limiar de preso é 10 min)', async () => {
+    const { ticks, varreduras } = await instantesDosTicks(() => true, 1_300_000);
+    const comVarredura = ticks.filter((_, i) => varreduras[i]);
+    const intervalos = comVarredura.slice(1).map((t, i) => t - comVarredura[i]!);
+    expect(comVarredura[0]).toBe(0);
+    // A varredura roda no primeiro tick DEPOIS de vencer o intervalo (a regra de
+    // sempre): o espaço máximo é o intervalo mais um piso de soneca, bem abaixo
+    // dos 10 min que fazem uma linha contar como presa.
+    expect(Math.max(...intervalos)).toBeLessThanOrEqual(310_000);
+    expect(Math.max(...intervalos)).toBeGreaterThanOrEqual(150_000);
+    // E não varre a cada tick: menos varreduras que ticks nos primeiros minutos.
+    expect(varreduras.slice(0, 5).filter(Boolean).length).toBeLessThan(5);
+  });
+});
+
+describe('notificacaoInteressaAoLaco — o NOTIFY só acorda por evento com handler', () => {
+  it('antes de o laço carregar, todo aviso acorda (na dúvida, acorda)', () => {
+    expect(notificacaoInteressaAoLaco('ai_agent.dispatch_requested')).toBe(true);
+  });
+
+  it('depois de carregar: só tipo com handler, `*` ou vazio', async () => {
+    const { registerHandler } = await import('@/lib/event-log/dispatcher');
+    registerHandler({
+      key: 'teste-ouvinte',
+      events: ['media.persist_requested'],
+      naOrgParada: 'roda',
+      handle: async () => ({ status: 'done' }) as never,
+    });
+    await carregarDepsDoLaco(logger);
+    expect(notificacaoInteressaAoLaco('media.persist_requested')).toBe(true);
+    expect(notificacaoInteressaAoLaco('ai_agent.dispatch_requested,media.persist_requested')).toBe(true);
+    expect(notificacaoInteressaAoLaco('ai_agent.dispatch_requested')).toBe(false);
+    expect(notificacaoInteressaAoLaco('*')).toBe(true);
+    expect(notificacaoInteressaAoLaco('')).toBe(true);
   });
 });

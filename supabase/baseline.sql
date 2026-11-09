@@ -101405,6 +101405,90 @@ $$;
 revoke execute on function public.fn_exclusao_executar(uuid, uuid, boolean) from public, anon, authenticated;
 grant execute on function public.fn_exclusao_executar(uuid, uuid, boolean) to service_role;
 
+-- ---- o worker acorda por NOTIFY; calendar_appointments fora do realtime (migration 1000, fork Hiperbold) ----
+-- Gatilhos por COMANDO em event_log (INSERT, canal hb_event_log, payload = tipos distintos) e em job_queue
+-- (INSERT, e UPDATE que deixa linha em pending, canal hb_job_queue) que só fazem pg_notify — transacional e
+-- local, sem HTTP. O ouvinte é o worker (lib/agent-engine/ouvinte-do-banco.ts). calendar_appointments sai da
+-- publicação supabase_realtime: nenhum código a assina. Cria função: fica antes da VARREDURA anon.
+create or replace function public.fn_event_log_notifica_worker()
+returns trigger
+language plpgsql
+security invoker
+set search_path = pg_catalog, pg_temp
+as $$
+declare
+  v_tipos text;
+begin
+  select string_agg(distinct n.event_type, ',') into v_tipos from novos n;
+  if v_tipos is null then
+    return null;
+  end if;
+  if length(v_tipos) > 7000 then
+    v_tipos := '*';
+  end if;
+  perform pg_notify('hb_event_log', v_tipos);
+  return null;
+end;
+$$;
+
+revoke execute on function public.fn_event_log_notifica_worker() from public, anon, authenticated;
+
+drop trigger if exists trg_event_log_notifica_worker on public.event_log;
+create trigger trg_event_log_notifica_worker
+  after insert on public.event_log
+  referencing new table as novos
+  for each statement
+  execute function public.fn_event_log_notifica_worker();
+
+create or replace function public.fn_job_queue_notifica_worker()
+returns trigger
+language plpgsql
+security invoker
+set search_path = pg_catalog, pg_temp
+as $$
+begin
+  if tg_op = 'UPDATE' then
+    if not exists (select 1 from novos n where n.status = 'pending') then
+      return null;
+    end if;
+  end if;
+  perform pg_notify('hb_job_queue', '');
+  return null;
+end;
+$$;
+
+revoke execute on function public.fn_job_queue_notifica_worker() from public, anon, authenticated;
+
+drop trigger if exists trg_job_queue_notifica_worker on public.job_queue;
+create trigger trg_job_queue_notifica_worker
+  after insert on public.job_queue
+  for each statement
+  execute function public.fn_job_queue_notifica_worker();
+
+-- Trigger separado para o UPDATE: tabela de transição não vale para trigger de
+-- mais de um evento.
+drop trigger if exists trg_job_queue_notifica_worker_update on public.job_queue;
+create trigger trg_job_queue_notifica_worker_update
+  after update on public.job_queue
+  referencing new table as novos
+  for each statement
+  execute function public.fn_job_queue_notifica_worker();
+
+do $$
+begin
+  if exists (
+    select 1 from pg_publication_tables
+     where pubname = 'supabase_realtime'
+       and schemaname = 'public'
+       and tablename = 'calendar_appointments'
+  ) then
+    execute 'alter publication supabase_realtime drop table public.calendar_appointments';
+  end if;
+end $$;
+
+comment on table public.calendar_appointments is
+  'O compromisso COMBINADO: hora marcada, com alguém, ocupando a agenda de um atendente. Distinto do RETORNO agendado (cron_jobs kind=at, job_kind=followup_turn), que é decisão interna do sistema, não ocupa agenda de ninguém e o cliente não sabe. FORA da publicação supabase_realtime desde a 1000: a 0183 a publicou para um assinante que nunca foi escrito. Quem for assinar devolve a tabela à publicação e lembra que, sem replica identity full, o DELETE só traz o id.';
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

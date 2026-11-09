@@ -28,7 +28,7 @@ No painel do Supabase o número oficial está em **Settings → Usage**. É ele 
 vale para cobrança; `/proc/net/dev` mede o contêiner e serve para atribuir a
 origem.
 
-## 2. Os três intervalos que governam o custo do worker
+## 2. Os intervalos que governam o custo do worker
 
 Todos vivem no `.env`, são opcionais, e o worker imprime os valores em vigor na
 linha `agent-engine pronto` do log.
@@ -36,7 +36,8 @@ linha `agent-engine pronto` do log.
 | chave | default | o que faz |
 |---|---|---|
 | `QUEUE_POLL_INTERVAL_MS` | `2000` | **Piso da espera ociosa.** Com a fila vazia, é quanto o worker dorme entre uma consulta e a próxima; com o recuo ligado (abaixo), o valor dobra a cada rodada ociosa até o teto. Com job agendado, ele acorda no vencimento e este valor só limita a soneca. |
-| `QUEUE_IDLE_MAX_INTERVAL_MS` | vazio (desligado) | **Teto do recuo com a fila vazia.** Desligado, a instalação parada consulta o banco a cada piso — 3.880 consultas em 2h19 (~28/min) medidas na issue #3688. Com `60000`, cai para ~1/min. Mensagem de cliente acorda a fila na hora; a resposta da equipe a um caso da IA e os disparos agendados pelo cron podem esperar até o teto. |
+| `QUEUE_IDLE_MAX_INTERVAL_MS` | `60000` | **Teto do recuo com a fila vazia, com o ouvinte do banco caído.** Sem teto, a instalação parada consulta o banco a cada piso — 3.880 consultas em 2h19 (~28/min) medidas na issue #3688; com `60000`, ~1/min. |
+| `QUEUE_IDLE_MAX_LISTENING_MS` | `300000` | Teto do recuo com o **ouvinte do banco vivo** (abaixo). O NOTIFY acorda a fila na hora; o teto só espaça a consulta de segurança. |
 | `QUEUE_CLAIM_RETRY_INTERVAL_MS` | `250` | Ritmo do *“havia trabalho e eu não peguei”* — todas as vagas de `QUEUE_MAX_CONCURRENCY` ocupadas, ou outro turno rodando para o mesmo contato. |
 
 **Não passe `QUEUE_POLL_INTERVAL_MS` de 10000.** A conexão ociosa do pool expira
@@ -44,6 +45,28 @@ em 10 s; acima disso cada rodada volta a pagar TCP+TLS+startup, e o intervalo
 maior passa a gastar **mais** do que economiza. O worker avisa no boot se você
 cruzar essa linha. Ele também não deve chegar perto de `INBOUND_DEBOUNCE_MS`
 (8000), senão o laço dorme através da janela de coalescência.
+
+### O ouvinte do banco (migration 1000)
+
+O worker abre **uma** conexão própria na `SUPABASE_DB_URL` e faz `LISTEN`. Os
+gatilhos de `event_log` (INSERT) e de `job_queue` (INSERT, e UPDATE que devolve
+job a `pending`) fazem `pg_notify`, e o aviso acorda o laço na hora. Com ele
+vivo, valem os tetos longos: `QUEUE_IDLE_MAX_LISTENING_MS`,
+`EVENT_LOG_DRAIN_IDLE_MAX_LISTENING_MS` e `EVENT_LOG_DRAIN_STALE_SWEEP_LISTENING_MS`
+(300000 cada). O laço do `event_log` só acorda por evento que algum handler dele
+consome.
+
+- **Só liga depois de provar:** manda um NOTIFY para si mesmo e espera voltar; a
+  prova se repete a cada 60 s. URL na porta **6543** (pooler do Supabase em modo
+  transação, onde `LISTEN` não entrega nada) nem tenta.
+- **Na queda** (erro, conexão encerrada, prova sem resposta): os laços voltam na
+  hora aos tetos curtos (`QUEUE_IDLE_MAX_INTERVAL_MS`,
+  `EVENT_LOG_DRAIN_IDLE_MAX_INTERVAL_MS`, `EVENT_LOG_DRAIN_STALE_SWEEP_MS`) e o
+  ouvinte reconecta com recuo de 1 s até 5 min. Nada depende do NOTIFY chegar:
+  ele só encurta a espera.
+- **Como conferir:** a linha `agent-engine pronto` traz `ouvinte_do_banco`
+  (`ativo`, `reconectando` ou `desligado`) e os tetos em vigor; queda e volta
+  aparecem como `ouvinte do banco caiu` e `ouvinte do banco: ouvindo`.
 
 O teto do recuo (`QUEUE_IDLE_MAX_INTERVAL_MS`) fica **acima** dos 10 s de
 propósito e não cai na mesma regra: depois de um sono longo a rodada reconecta

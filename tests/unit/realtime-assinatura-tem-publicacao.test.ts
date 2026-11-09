@@ -75,6 +75,8 @@ const SEM_CONSUMIDOR_CONHECIDO: Record<string, string> = {
   ai_agents: "a tela de agentes lê por PostgREST; nenhum canal abre nela",
   crm_lead_risk_states: "o risco é lido junto do negócio; nenhum canal assina",
   crm_lead_reactivations: "a proposta de reativação é lida pela tela; nenhum canal assina",
+  calendar_appointments:
+    "a 0183 a publicou para um hook de agenda que nunca foi escrito; saiu na 1000 (fork Hiperbold)",
 };
 
 /**
