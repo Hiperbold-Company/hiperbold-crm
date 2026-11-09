@@ -61,8 +61,10 @@ function formatValor(cents: number | null, currency: string | null): string {
 }
 
 /**
- * O dossiê do negócio: cabeçalho vivo → Contato → Dados do negócio → Linha do
- * tempo (issue #3181).
+ * O dossiê do negócio: cabeçalho vivo → Contato → Linha do tempo → Dados do
+ * negócio → Tarefas → Propostas. A Linha do tempo voltou para antes dos campos
+ * a pedido do Filipe (09/11/2026); a história abaixo explica a ordem do #3181
+ * que o upstream adotou e que este fork desfez.
  *
  * ─── A ORDEM, e por que ela inverteu ────────────────────────────────────────
  *
@@ -312,51 +314,17 @@ export function LeadDossier({
           />
         </SecaoDoDossie>
 
-        {/* ② Dados do negócio — o que se PREENCHE, agora ANTES da linha do
-            tempo (#3181). */}
-        <SecaoDoDossie
-          id="dados-do-negocio"
-          titulo={t("Dados do negócio")}
-          recolhida={fechadas.has("dados-do-negocio")}
-          aoAlternar={alternar}
-        >
-          <div ref={campos}>
-            {/* ⚠️ A REVISÃO FICA AQUI, dentro do card, e é esta linha que o
-                mantenedor cobrou no #3415: a fila existia como API e não tinha
-                consumidor na tela — o mesmo que não existir. Acima do
-                formulário porque é o histórico do que o documento disse, e o
-                formulário é o destino do que for confirmado. */}
-            <RevisaoDoDocumento
-              leadId={lead.id}
-              podeDecidir={podeConfirmarDoDocumento}
-              aoDecidir={(confirmado) => formulario.current?.confirmarCampo(confirmado)}
-            />
-            <LeadFieldsForm lead={lead} pipelineId={pipelineId} fieldDefs={fieldDefs} controle={formulario} />
-          </div>
-        </SecaoDoDossie>
-
-        {/* As tarefas SEGUEM antes da linha do tempo: a timeline conta o que já
-            aconteceu, a tarefa é o que ainda falta fazer — e quem abre o card
-            para agir procura o próximo passo primeiro. Não entram no
-            recolhimento deste PR: o autor citou as três seções acima, e tarefa
-            é trabalho em curso, não consulta. */}
-        <TarefasDoNegocio
-          leadId={lead.id}
-          contactId={lead.contact_id}
-          podeEditar={podeEditarTarefas && podeCriarTarefa}
-          aberto={open}
-        />
-
-        {/* ③ Linha do tempo — a CONSULTA, por último. Recolhida, mostra as três
-            entradas mais recentes e o "ver tudo" (pedido do autor): a seção
-            fecha sem deixar a pergunta "e o que aconteceu por último?" sem
-            resposta. */}
+        {/* ② Linha do tempo — logo depois do Contato, ANTES de "Dados do
+            negócio" (pedido do Filipe, 09/11/2026: quem abre o card quer ver o
+            que aconteceu antes dos campos). O #3181 do upstream a tinha posto
+            por último; o recolhimento lembrado continua valendo para quem
+            preferir a seção fechada. Recolhida, mostra as três entradas mais
+            recentes e o "ver tudo". */}
         <SecaoDoDossie
           id="linha-do-tempo"
           titulo={t("Linha do tempo")}
           recolhida={timelineRecolhida}
           aoAlternar={alternar}
-          className="flex-1"
           conteudoRecolhido={
             <>
               <LeadTimeline {...propsDaLinhaDoTempo} />
@@ -379,6 +347,37 @@ export function LeadDossier({
           )}
           <LeadTimeline {...propsDaLinhaDoTempo} />
         </SecaoDoDossie>
+
+        {/* ③ Dados do negócio — o que se PREENCHE. */}
+        <SecaoDoDossie
+          id="dados-do-negocio"
+          titulo={t("Dados do negócio")}
+          recolhida={fechadas.has("dados-do-negocio")}
+          aoAlternar={alternar}
+        >
+          <div ref={campos}>
+            {/* ⚠️ A REVISÃO FICA AQUI, dentro do card, e é esta linha que o
+                mantenedor cobrou no #3415: a fila existia como API e não tinha
+                consumidor na tela — o mesmo que não existir. Acima do
+                formulário porque é o histórico do que o documento disse, e o
+                formulário é o destino do que for confirmado. */}
+            <RevisaoDoDocumento
+              leadId={lead.id}
+              podeDecidir={podeConfirmarDoDocumento}
+              aoDecidir={(confirmado) => formulario.current?.confirmarCampo(confirmado)}
+            />
+            <LeadFieldsForm lead={lead} pipelineId={pipelineId} fieldDefs={fieldDefs} controle={formulario} />
+          </div>
+        </SecaoDoDossie>
+
+        {/* As tarefas, depois dos campos: são trabalho em curso, não consulta,
+            e por isso não entram no recolhimento das seções. */}
+        <TarefasDoNegocio
+          leadId={lead.id}
+          contactId={lead.contact_id}
+          podeEditar={podeEditarTarefas && podeCriarTarefa}
+          aberto={open}
+        />
 
         {/* N1 — seção "Propostas", depois da linha do tempo. Some sozinha
             (null) quando a capacidade está desligada — ver PropostasDoNegocio. */}

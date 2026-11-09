@@ -137,25 +137,25 @@ describe("a ordem das seções do dossiê (#3181)", () => {
     linhaDoTempo.itens = seisAtividades();
   });
 
-  it("⭐ a ordem padrão é Contato, Dados do negócio, Linha do tempo", () => {
+  it("⭐ a ordem padrão é Contato, Linha do tempo, Dados do negócio (pedido do Filipe, 09/11/2026)", () => {
     montarDossie();
 
-    expect(ordemDasSecoes()).toEqual(["contato", "dados-do-negocio", "linha-do-tempo"]);
+    expect(ordemDasSecoes()).toEqual(["contato", "linha-do-tempo", "dados-do-negocio"]);
 
     // A mesma ordem pelo TEXTO que o atendente lê, e não só pelos ids: o id
     // poderia estar certo com o título trocado de lugar. O seletor pega o
     // primeiro `<span>` do cabeçalho — o segundo é o sinal `+`/`−`, que é
     // `aria-hidden` mas continua no `textContent` do `<h3>`.
     const titulos = ordemDasSecoes().map((id) => secao(id).querySelector("h3 button span")?.textContent);
-    expect(titulos).toEqual(["Contato", "Dados do negócio", "Linha do tempo"]);
+    expect(titulos).toEqual(["Contato", "Linha do tempo", "Dados do negócio"]);
 
-    // E os campos do negócio vêm ANTES de a linha do tempo começar: era
-    // exatamente isso que a ordem antiga não entregava.
+    // E a linha do tempo vem ANTES dos campos do negócio: o fork desfez a
+    // inversão do #3181 a pedido do Filipe (09/11/2026).
     const campos = document.querySelector('[data-peca="campos"]');
     const timeline = document.querySelector('[data-peca="linha-do-tempo"]');
     expect(campos).not.toBeNull();
     expect(timeline).not.toBeNull();
-    expect(campos!.compareDocumentPosition(timeline!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(timeline!.compareDocumentPosition(campos!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("as três seções nascem ABERTAS — sem preferência salva, ninguém esconde conteúdo", () => {
