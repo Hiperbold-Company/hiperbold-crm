@@ -91,7 +91,14 @@ import {
 } from "@/lib/instalacao/comportamento-sql";
 import { prontidaoDoDrainDaIa, runDrainLoop } from "@/lib/agent-engine/edge/crm/drain";
 import { sincronizarAvisoDoDrain } from "@/lib/agent-engine/edge/crm/vigilancia-do-drain";
-import { runEventLogDrainLoop } from "@/lib/event-log/drain-loop";
+import { notificacaoInteressaAoLaco, runEventLogDrainLoop } from "@/lib/event-log/drain-loop";
+import { acordarLacoDeEventLog } from "@/lib/event-log/sinal-de-trabalho";
+import {
+  clienteDeEscutaPg,
+  iniciarOuvinteDoBanco,
+  ouvinteDesligado,
+  urlSemSuporteALISTEN,
+} from "@/lib/agent-engine/ouvinte-do-banco";
 import { crmEdgeConfigFromEnv } from "@/lib/agent-engine/edge/crm/mcp-client";
 import { enforceHolds } from "@/lib/agent-engine/edge/crm/session-watchdog";
 import { runVoiceCallsBridgeLoop } from "@/lib/wacalls/events-bridge";
@@ -298,6 +305,30 @@ export async function startWorker(
   // cortar a soneca em curso na hora.
   const sonecaDaFila = criarSonecaDaFila({ signal: loopsAbort.signal });
 
+  // O OUVINTE DO BANCO (migration 1000): uma conexão própria, fora do pool, com
+  // LISTEN nos canais que os gatilhos de event_log e job_queue notificam. Ele
+  // acorda os dois laços e é o que libera os tetos longos de recuo — caído, os
+  // laços voltam aos tetos curtos sozinhos. O porquê está em
+  // lib/agent-engine/ouvinte-do-banco.ts.
+  const listenSemSuporte = urlSemSuporteALISTEN(env.SUPABASE_DB_URL);
+  if (listenSemSuporte) {
+    log.warn(
+      "ouvinte do banco DESLIGADO — SUPABASE_DB_URL aponta para o pooler em modo transação (porta 6543), onde LISTEN não entrega; os laços seguem nos tetos curtos",
+      {},
+    );
+  }
+  const ouvinte = listenSemSuporte
+    ? ouvinteDesligado()
+    : iniciarOuvinteDoBanco({
+        criarCliente: () => clienteDeEscutaPg(env.SUPABASE_DB_URL),
+        aoEventLog: (tipos) => {
+          if (notificacaoInteressaAoLaco(tipos)) acordarLacoDeEventLog();
+        },
+        aoJobQueue: () => sonecaDaFila.acordar(),
+        log,
+        signal: loopsAbort.signal,
+      });
+
   // Drain do event_log (mesmo banco pós-fusão) — transforma dispatch_requested em
   // jobs. Fase 0 (convergência, spec 2026-07-23): o drain liga SEMPRE — o
   // dispatcher nativo EPIC-13 foi aposentado, o engine é o único consumidor.
@@ -337,9 +368,12 @@ export async function startWorker(
       idleMaxMs: env.EVENT_LOG_DRAIN_IDLE_MAX_INTERVAL_MS,
       staleSweepMs: env.EVENT_LOG_DRAIN_STALE_SWEEP_MS,
       batchSize: env.EVENT_LOG_DRAIN_BATCH_SIZE,
+      idleMaxListeningMs: env.EVENT_LOG_DRAIN_IDLE_MAX_LISTENING_MS,
+      staleSweepListeningMs: env.EVENT_LOG_DRAIN_STALE_SWEEP_LISTENING_MS,
     },
     log,
     loopsAbort.signal,
+    { ouvindo: ouvinte.ouvindo },
   );
 
   // Watchdog de sessão (4A-2): reconcilia channel_sessions×WAHA + redrive de
@@ -576,7 +610,9 @@ export async function startWorker(
       ociosoMs: env.QUEUE_POLL_INTERVAL_MS,
       retryMs: env.QUEUE_CLAIM_RETRY_INTERVAL_MS,
       ociosoMaxMs: env.QUEUE_IDLE_MAX_INTERVAL_MS,
+      ociosoMaxOuvindoMs: env.QUEUE_IDLE_MAX_LISTENING_MS,
     },
+    ouvindo: ouvinte.ouvindo,
     log,
   });
 
@@ -618,6 +654,7 @@ export async function startWorker(
           sessionWatchdogLoop,
           flywheelLoop,
           voiceCallsBridgeLoop,
+          ouvinte.encerrado,
         ]);
         await workerLoop;
         await Promise.all([...inFlight]);
@@ -638,14 +675,34 @@ export async function startWorker(
   // #258 e #3688) e quem os ajusta precisa conseguir CONFERIR o que está em vigor sem
   // ler o código-fonte — foi o que os autores das issues tiveram de fazer para achar
   // o knob.
+  //
+  // O ouvinte do banco entra na linha porque decide qual teto vale: a linha
+  // espera a PRIMEIRA tentativa dele (conexão + prova de vida, no máximo ~20 s;
+  // os laços já estão rodando) para não dizer "desligado" de um ouvinte que só
+  // não terminou de conectar.
+  const ouvindoNoBoot = await ouvinte.primeiraTentativa;
+  // Sem QUEUE_IDLE_MAX_INTERVAL_MS o recuo está desligado: o teto curto é o piso.
+  const tetoCurtoDaFila = env.QUEUE_IDLE_MAX_INTERVAL_MS ?? env.QUEUE_POLL_INTERVAL_MS;
   log.info("agent-engine pronto", {
     worker_id: workerId,
     healthz_port: port,
     max_concurrency: env.QUEUE_MAX_CONCURRENCY,
     poll_ocioso_ms: env.QUEUE_POLL_INTERVAL_MS,
-    // Igual ao piso = recuo desligado (o default, doc 242).
-    poll_ocioso_teto_ms: env.QUEUE_IDLE_MAX_INTERVAL_MS ?? env.QUEUE_POLL_INTERVAL_MS,
+    poll_ocioso_teto_ms: tetoCurtoDaFila,
+    poll_ocioso_teto_ouvindo_ms: env.QUEUE_IDLE_MAX_LISTENING_MS,
     claim_retry_ms: env.QUEUE_CLAIM_RETRY_INTERVAL_MS,
+    ouvinte_do_banco: listenSemSuporte ? "desligado" : ouvindoNoBoot ? "ativo" : "reconectando",
+    event_log_teto_ms: env.EVENT_LOG_DRAIN_IDLE_MAX_INTERVAL_MS,
+    event_log_teto_ouvindo_ms: env.EVENT_LOG_DRAIN_IDLE_MAX_LISTENING_MS,
+    event_log_presos_ms: env.EVENT_LOG_DRAIN_STALE_SWEEP_MS,
+    event_log_presos_ouvindo_ms: env.EVENT_LOG_DRAIN_STALE_SWEEP_LISTENING_MS,
+    // Os tetos que valem AGORA (com o ouvinte caído, os curtos).
+    teto_em_vigor_fila_ms: ouvindoNoBoot
+      ? Math.max(env.QUEUE_IDLE_MAX_LISTENING_MS, tetoCurtoDaFila)
+      : tetoCurtoDaFila,
+    teto_em_vigor_event_log_ms: ouvindoNoBoot
+      ? Math.max(env.EVENT_LOG_DRAIN_IDLE_MAX_LISTENING_MS, env.EVENT_LOG_DRAIN_IDLE_MAX_INTERVAL_MS)
+      : env.EVENT_LOG_DRAIN_IDLE_MAX_INTERVAL_MS,
   });
   // Acima de 10 s a espera ociosa passa do idleTimeoutMillis do pool (10 s, o
   // default do pg): a conexão morre entre uma rodada e outra, e cada consulta ao

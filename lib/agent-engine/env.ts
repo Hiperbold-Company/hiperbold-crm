@@ -94,7 +94,17 @@ const envSchema = z.object({
   // O teto fica ACIMA do idleTimeoutMillis do pool (10 s) de propósito: cada
   // rodada depois de um sono longo reconecta (499 B medidos contra 66 B), mas
   // 1 rodada/min a 499 B continua 4× mais barata que 30 rodadas/min a 66 B.
+  //
+  // FORK HIPERBOLD (migration 1000): esta chave continua OPCIONAL SEM DEFAULT.
+  // Sem o ouvinte do banco (porta 6543, ouvinte caído) a fila precisa se
+  // comportar como sempre: o job criado pela API do app (ex.: `case_reply_turn`)
+  // espera no máximo o piso. O alongamento mora em QUEUE_IDLE_MAX_LISTENING_MS,
+  // que só vale com o ouvinte vivo, onde o NOTIFY da job_queue acorda a soneca
+  // também para o job que nasce na API do app.
   QUEUE_IDLE_MAX_INTERVAL_MS: z.coerce.number().int().positive().optional(),
+  // Teto do recuo da fila vazia ENQUANTO o ouvinte do banco (LISTEN na mesma
+  // SUPABASE_DB_URL) está vivo. Com o ouvinte caído vale o teto de cima.
+  QUEUE_IDLE_MAX_LISTENING_MS: z.coerce.number().int().positive().default(300_000),
   // Ritmo do "havia trabalho e eu não peguei" — cap QUEUE_MAX_CONCURRENCY cheio ou
   // lane do contato ocupada. Aqui há job vencido esperando vaga, então recolher o
   // ritmo custaria throughput no pico sem economizar nada no ocioso: é o único
@@ -172,6 +182,12 @@ const envSchema = z.object({
   // `processing`. A varredura procura linhas 10 min atrasadas: fazê-la a cada
   // tick (2s) era consulta ao PostgREST sem chance de achar nada novo.
   EVENT_LOG_DRAIN_STALE_SWEEP_MS: z.coerce.number().int().positive().default(60_000),
+  // Os mesmos dois tetos ENQUANTO o ouvinte do banco está vivo (migration 1000):
+  // o NOTIFY do INSERT em event_log acorda o laço, então o recuo longo só espaça
+  // a consulta de segurança. Com o ouvinte caído valem os de cima. A varredura de
+  // presos procura linhas 10 min atrasadas: 5 min continua dentro da janela.
+  EVENT_LOG_DRAIN_IDLE_MAX_LISTENING_MS: z.coerce.number().int().positive().default(300_000),
+  EVENT_LOG_DRAIN_STALE_SWEEP_LISTENING_MS: z.coerce.number().int().positive().default(300_000),
   EVENT_LOG_DRAIN_BATCH_SIZE: z.coerce.number().int().positive().default(50),
   // Coalescência de rajada inbound: mensagens do MESMO contato dentro desta
   // janela viram UM job (responder em rajada é gatilho de ban). 0 = sem debounce.

@@ -33,13 +33,18 @@ export interface IntervalosDaFila {
   retryMs: number;
   /**
    * Teto do recuo exponencial com a fila vazia — `QUEUE_IDLE_MAX_INTERVAL_MS`.
-   * AUSENTE = recuo DESLIGADO: a fila vazia dorme sempre o piso, que é o
-   * comportamento de antes da #3688. Decisão do dono (doc 242, opção C): a fila
-   * de respostas do agente é o caminho que o cliente sente na hora, e nem todo
-   * enfileiramento acorda a soneca (o `case_reply_turn` nasce na API do app, fora
-   * do worker), então economizar consultas é escolha de quem opera, não default.
+   * AUSENTE = recuo DESLIGADO: a fila vazia dorme sempre o piso (sem ouvinte
+   * do banco, a fila se comporta como antes da migration 1000). Só com o
+   * ouvinte vivo o `ociosoMaxOuvindoMs` ainda recua a espera.
    */
   ociosoMaxMs?: number | undefined;
+  /**
+   * Teto do recuo com o OUVINTE DO BANCO vivo — `QUEUE_IDLE_MAX_LISTENING_MS`.
+   * Com o NOTIFY da `job_queue` acordando a soneca (inclusive o job enfileirado
+   * pela API do app, que a soneca em memória não via), o teto longo só espaça a
+   * consulta de segurança. Nunca encurta `ociosoMaxMs`.
+   */
+  ociosoMaxOuvindoMs?: number | undefined;
 }
 
 /**
@@ -69,13 +74,18 @@ export function intervaloDeEspera(
   faltaMs: number | null,
   intervalos: IntervalosDaFila,
   rodadasOciosas = 0,
+  ouvindo = false,
 ): number {
   if (faltaMs === null) {
     // `2 ** 30` estoura para Infinity bem antes de qualquer contador real; o
     // `Math.min` com o teto já o domina, mas clampar o expoente mantém o número
     // finito e a leitura óbvia.
     const fator = 2 ** Math.min(Math.max(rodadasOciosas, 0), 30);
-    const teto = Math.max(intervalos.ociosoMaxMs ?? intervalos.ociosoMs, intervalos.ociosoMs);
+    const tetoCurto = Math.max(intervalos.ociosoMaxMs ?? intervalos.ociosoMs, intervalos.ociosoMs);
+    const teto =
+      ouvindo && intervalos.ociosoMaxOuvindoMs !== undefined
+        ? Math.max(intervalos.ociosoMaxOuvindoMs, tetoCurto)
+        : tetoCurto;
     return Math.min(intervalos.ociosoMs * fator, teto);
   }
   if (faltaMs <= 0) return intervalos.retryMs;
@@ -102,6 +112,11 @@ export interface DepsDoLoopDaFila<J> {
    */
   aoCadaVolta?: () => void;
   intervalos: IntervalosDaFila;
+  /**
+   * O ouvinte do banco está vivo? Relido a cada soneca: decide entre o teto
+   * longo e o curto. Ausente = nunca ouvindo (o comportamento de antes).
+   */
+  ouvindo?: () => boolean;
   log: Logger;
 }
 
@@ -177,7 +192,13 @@ export async function rodarLoopDaFila<J>(deps: DepsDoLoopDaFila<J>): Promise<voi
       // agora enxerga o job recém-enfileirado. Não é soneca pendente: a geração
       // é reabsorvida no topo da próxima volta.
       if (deps.soneca.geracao() !== geracaoNoInicio) continue;
-      const espera = intervaloDeEspera(faltaMs, deps.intervalos, rodadasOciosa);
+      let ouvindoAgora = false;
+      try {
+        ouvindoAgora = deps.ouvindo?.() ?? false;
+      } catch {
+        /* na dúvida, o teto curto */
+      }
+      const espera = intervaloDeEspera(faltaMs, deps.intervalos, rodadasOciosa, ouvindoAgora);
       // O contador avança DEPOIS de calcular a espera desta rodada: a primeira
       // volta com a fila vazia dorme o piso, não o piso dobrado. Só o relógio
       // dizendo `null` acumula recuo; `faltaMs` numérico (inclusive o vencido que
