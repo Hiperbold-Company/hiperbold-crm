@@ -19,6 +19,11 @@ const estado = vi.hoisted(() => ({
   chamadas: [] as string[],
 }));
 
+// D-227: dublê da leitura do plano — o plano inclui API e MCP (o tema deste
+// teste é outro; as travas do plano têm teste próprio).
+vi.mock("@/lib/billing/planos/limites-com-cache-curto", () => ({
+  limitesComCacheCurto: vi.fn(async () => ({ limites: {}, leituraFalhou: false })),
+}));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn(async () => ({})) }));
 vi.mock("@/lib/mcp/audit", () => ({ auditMcpToolCall: vi.fn(async () => undefined) }));

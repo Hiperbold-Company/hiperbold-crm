@@ -13,6 +13,7 @@ import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
 import type { Actor } from "@/lib/api/handlers/types";
 import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
+import { recusaDoPlanoSemApi } from "@/lib/api/plano-da-api";
 import { requireRole } from "@/lib/auth/require-role";
 import { extractBearer, validateBearerToken, ensureRole, ensureScope, McpAuthError } from "@/lib/mcp/auth";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -105,6 +106,10 @@ async function resolveContactsAuth(req: NextRequest, requestId: string): Promise
       }
       throw err;
     }
+
+    // Plano sem API (D-227): a mesma trava de `resolveAuthDual`, depois de escopo e papel.
+    const semApi = await recusaDoPlanoSemApi(auth.organizationId, requestId);
+    if (semApi) return { ok: false, response: semApi };
 
     // organization_id vem do TOKEN (fonte confiável), nunca do cliente.
     return {

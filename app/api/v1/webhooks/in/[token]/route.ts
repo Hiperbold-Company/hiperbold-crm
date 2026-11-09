@@ -13,7 +13,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
+import { checkRateLimit, type RateLimitResult } from "@/lib/ai/dispatcher/rate-limit";
+import { limiteDaChave } from "@/lib/billing/planos/limites";
+import { limitesComCacheCurto } from "@/lib/billing/planos/limites-com-cache-curto";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLeadHandler, moveLeadHandler, updateLeadHandler } from "@/app/api/v1/leads/_handler";
@@ -95,6 +97,54 @@ interface RouteCtx {
 }
 
 const RATE_LIMIT_PER_MIN = 60;
+
+// ─── O teto por minuto do plano (D-227, `fonte_dados_req_min`) ───────────────
+//
+// O limite do plano é POR FONTE (por `path_token`), não por organização: Pro 60,
+// Max 60, Scale 120 batidas por minuto em cada fonte. Já houve um balde por
+// organização (`webhook_in_org:<org>`) e ele foi removido por achado da
+// auditoria: o `path_token` de um formulário público está no HTML da página, e
+// quem o conhece esgotava o balde da organização inteira e derrubava as OUTRAS
+// fontes dela. Com o contador por fonte, quem abusa de um token só derruba aquele
+// token. A ordem é o que segura o anti-abuso:
+//
+//  1. ANTES de qualquer leitura de banco, o balde do token conta com o teto
+//     MÁXIMO que um plano pode dar a uma fonte (`TETO_DO_TOKEN_ANTES_DA_FONTE`).
+//     Token inexistente nunca chega ao plano: morre aqui ou no 404 da fonte,
+//     com a mesma leitura (a de `webhook_sources`) que já existia.
+//  2. Resolvida a fonte e a organização, o plano é lido (cache curto de 30 s) e
+//     o MESMO contador do passo 1 é comparado com o teto da fonte no plano — sem
+//     segundo incremento e sem balde por organização.
+//
+// `null` (Ilimitado) fica no teto do pré-filtro (120). Leitura do plano que
+// falha usa 60 por fonte: limite de VOLUME degrada para um valor seguro; o que
+// nega na falha é recurso de liga/desliga (MCP, API). Valor do plano acima de
+// 120 fica limitado a 120 pelo pré-filtro. Todas as recusas por teto usam a MESMA
+// mensagem, para o 429 não revelar plano nem estado. Recusa por teto NÃO grava
+// `webhook_captures`: uma linha por batida recusada seria a enxurrada que o
+// teto existe para conter.
+const TETO_DO_TOKEN_ANTES_DA_FONTE = 120;
+
+function tetoDaFonteNoPlano(valorDoPlano: number | null, leituraFalhou: boolean): number {
+  if (leituraFalhou) return RATE_LIMIT_PER_MIN;
+  if (valorDoPlano === null) return TETO_DO_TOKEN_ANTES_DA_FONTE;
+  return Math.min(valorDoPlano, TETO_DO_TOKEN_ANTES_DA_FONTE);
+}
+
+/** 429 com `Retry-After` e os `X-RateLimit-*` da janela que estourou. */
+function recusaPorTeto(rl: RateLimitResult, limite: number, requestId: string): NextResponse {
+  const inicio = rl.window_start ?? Math.floor(Date.now() / (rl.window_sec * 1000));
+  const reinicio = (inicio + 1) * rl.window_sec;
+  return fail("rate_limited", "Too many requests.", 429, {
+    requestId,
+    headers: {
+      "Retry-After": String(Math.max(1, reinicio - Math.floor(Date.now() / 1000))),
+      "X-RateLimit-Limit": String(limite),
+      "X-RateLimit-Remaining": "0",
+      "X-RateLimit-Reset": String(reinicio),
+    },
+  });
+}
 
 // O token está no HTML da página, então é público: o balde por token (acima) segura o
 // total, mas quem o conhece enche a fonte inteira sozinho (86 mil leads por dia),
@@ -242,12 +292,10 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     return fail("not_found", "unknown webhook token", 404, { requestId });
   }
 
-  const rl = await checkRateLimit(`webhook_in:${token}`, RATE_LIMIT_PER_MIN, 60);
+  // Passo 1 da ordem (ver `TETO_DO_TOKEN_ANTES_DA_FONTE`): antes de qualquer leitura.
+  const rl = await checkRateLimit(`webhook_in:${token}`, TETO_DO_TOKEN_ANTES_DA_FONTE, 60);
   if (!rl.allowed) {
-    return fail("rate_limited", "Too many requests.", 429, {
-      requestId,
-      headers: { "Retry-After": "60" },
-    });
+    return recusaPorTeto(rl, TETO_DO_TOKEN_ANTES_DA_FONTE, requestId);
   }
 
   const ipDoVisitante = ipDoClienteParaInet(req.headers);
@@ -275,6 +323,16 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   if (srcErr) return falhaInterna("internal_error", srcErr, { requestId });
   if (!source || !source.is_active) {
     return fail("not_found", "unknown webhook token", 404, { requestId });
+  }
+
+  // Passo 2 da ordem: o teto da fonte no plano da organização DONA dela.
+  {
+    const plano = await limitesComCacheCurto(admin, source.organization_id as string, logger);
+    const valorDoPlano = plano.leituraFalhou ? null : limiteDaChave(plano.limites, "fonte_dados_req_min");
+    const tetoDaFonte = tetoDaFonteNoPlano(valorDoPlano, plano.leituraFalhou);
+    if (rl.count > tetoDaFonte) {
+      return recusaPorTeto(rl, tetoDaFonte, requestId);
+    }
   }
 
   // A ORIGEM, lida uma vez e usada em todos os desfechos abaixo — inclusive nos

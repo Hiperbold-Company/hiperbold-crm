@@ -229,6 +229,11 @@ export const ApiErrorCodes = {
   // porque a tela precisa distinguir "chegou ao teto do plano" de qualquer outro
   // erro 500/422 — ver lib/billing/planos/recusa-do-plano.ts.
   plano_limite_atingido: "plano_limite_atingido",
+  // 402 / 403 (D-227): recurso de liga/desliga que o plano não inclui. A API
+  // REST por chave `dsk_` (`lib/api/plano-da-api.ts`) e o servidor MCP
+  // (`lib/mcp/plano-do-mcp.ts`, JSON-RPC -32002).
+  plano_sem_api: "plano_sem_api",
+  plano_sem_mcp: "plano_sem_mcp",
 
   // ─── ANÚNCIOS, eixo de LEITURA (0214) ───
   //

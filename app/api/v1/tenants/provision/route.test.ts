@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   rotate: vi.fn(),
   limite: vi.fn(),
   espiar: vi.fn(),
+  plano: vi.fn(),
 }));
 
 vi.mock("@/lib/env", () => ({ env: h.env }));
@@ -25,6 +26,8 @@ vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({
   checkRateLimit: h.limite,
   peekRateLimit: h.espiar,
 }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+vi.mock("@/lib/billing/planos/plano-da-organizacao", () => ({ planoDaOrganizacao: h.plano }));
 vi.mock("@/lib/tenants/api-key", () => ({ rotateIntegrationApiKey: h.rotate }));
 vi.mock("@/lib/auth/provision", async (original) => {
   const real = await original<typeof ProvisionModule>();
@@ -70,6 +73,7 @@ beforeEach(() => {
   h.espiar.mockResolvedValue(0);
   h.provision.mockResolvedValue({ organizationId: "org-1", ownerId: "user-1", replay: false });
   h.rotate.mockResolvedValue("dsk_abcd1234_segredo");
+  h.plano.mockResolvedValue({ limites: { acesso_api: 1, mcp_req_min: 60 }, leituraFalhou: false });
 });
 
 describe("desligada por padrão", () => {
@@ -175,6 +179,32 @@ describe("ligada: o provisionamento", () => {
         integrationScope: "integration:clinicfx",
       }),
     );
+  });
+
+  it("plano sem API nem MCP: segue 201 com a chave e acrescenta api_key_warning", async () => {
+    h.plano.mockResolvedValue({ limites: { acesso_api: 0, mcp_req_min: 0 }, leituraFalhou: false });
+    const res = await POST(pedido(SEGREDO));
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({
+      data: {
+        organization_id: "org-1",
+        api_key: "dsk_abcd1234_segredo",
+        replay: false,
+        api_key_warning: "plano_sem_api",
+      },
+    });
+  });
+
+  it("plano com só MCP (ou só API): sem aviso", async () => {
+    h.plano.mockResolvedValue({ limites: { acesso_api: 0, mcp_req_min: 30 }, leituraFalhou: false });
+    expect((await (await POST(pedido(SEGREDO))).json()).data).not.toHaveProperty("api_key_warning");
+  });
+
+  it("leitura do plano que falha não vira aviso e não derruba o provisionamento", async () => {
+    h.plano.mockResolvedValue({ limites: {}, leituraFalhou: true });
+    const res = await POST(pedido(SEGREDO));
+    expect(res.status).toBe(201);
+    expect((await res.json()).data).not.toHaveProperty("api_key_warning");
   });
 
   it("replay → 200", async () => {

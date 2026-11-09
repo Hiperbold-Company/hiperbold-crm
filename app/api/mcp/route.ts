@@ -15,6 +15,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 
 import { createMcpServer } from "@/lib/mcp/server";
 import { McpAuthError, validateBearerToken } from "@/lib/mcp/auth";
+import { exigirMcpNoPlano } from "@/lib/mcp/plano-do-mcp";
 import { modulosLigados } from "@/lib/instalacao/modulos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capacidadesDaOrganizacao } from "@/lib/organizacao/capacidades";
@@ -25,11 +26,13 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-function jsonRpcError(code: number, message: string, status: number): Response {
+function jsonRpcError(code: number, message: string, status: number, codigo?: string): Response {
   return new Response(
     JSON.stringify({
       jsonrpc: "2.0",
-      error: { code, message },
+      // `data.code`: o nome próprio da recusa (ex.: `plano_sem_mcp`), para o
+      // cliente distinguir "o plano não inclui" de "token inválido".
+      error: { code, message, ...(codigo ? { data: { code: codigo } } : {}) },
       id: null,
     }),
     {
@@ -46,9 +49,14 @@ async function handle(req: NextRequest): Promise<Response> {
     // Empresa suspensa entra marcada: o servidor só deixa a privacidade
     // responder (LGPD nunca é bloqueada — decisão do dono, 30/09).
     auth = await validateBearerToken(req.headers.get("authorization"), { permiteOrgSuspensa: true });
+    // Plano (D-227): sem MCP no plano, ou leitura do plano falhando, recusa
+    // aqui; com MCP, o teto por minuto do plano viaja no `auth` até
+    // `verificarTetoMcp`. Depois do token: a organização vem da linha dele.
+    const tetoDoPlano = await exigirMcpNoPlano(createAdminClient(), auth.organizationId);
+    if (tetoDoPlano !== null) auth = { ...auth, mcpReqMinDoPlano: tetoDoPlano };
   } catch (err) {
     if (err instanceof McpAuthError) {
-      return jsonRpcError(err.mcpCode, err.message, err.httpStatus);
+      return jsonRpcError(err.mcpCode, err.message, err.httpStatus, err.codigo);
     }
     const msg = err instanceof Error ? err.message : "auth_failed";
     return jsonRpcError(-32603, msg, 500);
