@@ -174,8 +174,10 @@ export async function modulosLigados(
 }
 
 /**
- * Opções de leitura. `fresco: true` pula o memo dos módulos por flag e vai ao banco —
- * para quem precisa do valor exato (a tela que acabou de salvar, o "antes" de uma troca).
+ * Opções de leitura. O PADRÃO é ler o banco (fresco): ligar um módulo na tela tem de
+ * valer na hora em todas as telas, rotas e no worker — o CI reprovou o memo como
+ * padrão (rota de roteamento, menu e roteiro enxergando o estado antigo por até 30 s).
+ * `fresco: false` usa o memo de 30 s, só para quem aceita esse atraso.
  */
 export interface OpcoesDeLeitura {
   fresco?: boolean;
@@ -243,7 +245,7 @@ async function modulosLigadosPorFlag(
   db: SupabaseClient,
   opcoes: OpcoesDeLeitura = {},
 ): Promise<ModuloPorFlag[]> {
-  const lido = opcoes.fresco
+  const lido = (opcoes.fresco ?? true)
     ? await lerModulosPorFlagDoBanco(db)
     : await comCacheCurto<ModuloPorFlag[] | "erro">({
         chave: CHAVE_DO_MEMO_DAS_FLAGS,

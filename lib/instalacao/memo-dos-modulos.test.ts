@@ -58,84 +58,86 @@ afterEach(() => {
   delete process.env.MEMO_DA_INSTALACAO_MS;
 });
 
+const M = { fresco: false } as const;
+
 describe("moduloLigado — memo de 30 s dos módulos por flag", () => {
   it("a segunda pergunta dentro do prazo não vai ao banco, nem para outro módulo", async () => {
     const { db, estado } = banco();
     estado.flags = [CAIXA_LIGADA];
-    expect(await moduloLigado(db, "setores")).toBe(true);
-    expect(await moduloLigado(db, "setores")).toBe(true);
-    expect(await moduloLigado(db, "cold_call")).toBe(false);
-    expect(await modulosLigados(db)).toEqual(["setores"]);
+    expect(await moduloLigado(db, "setores", M)).toBe(true);
+    expect(await moduloLigado(db, "setores", M)).toBe(true);
+    expect(await moduloLigado(db, "cold_call", M)).toBe(false);
+    expect(await modulosLigados(db, M)).toEqual(["setores"]);
     expect(estado.leiturasDeFlag).toBe(1);
   });
 
   it("módulo por flag não consulta a tabela de módulos instalados", async () => {
     const { db, estado } = banco();
-    await moduloLigado(db, "setores");
+    await moduloLigado(db, "setores", M);
     expect(estado.leiturasDeTabela).toBe(0);
   });
 
   it("módulo de tabela é lido a cada vez e não consulta as flags", async () => {
     const { db, estado } = banco();
     estado.tabela = [{ modulo: "financeiro" }];
-    expect(await moduloLigado(db, "financeiro")).toBe(true);
-    expect(await moduloLigado(db, "financeiro")).toBe(true);
+    expect(await moduloLigado(db, "financeiro", M)).toBe(true);
+    expect(await moduloLigado(db, "financeiro", M)).toBe(true);
     expect(estado.leiturasDeTabela).toBe(2);
     expect(estado.leiturasDeFlag).toBe(0);
   });
 
   it("gravarModulo invalida: a pergunta seguinte já vê o novo estado", async () => {
     const { db, estado } = banco();
-    expect(await moduloLigado(db, "setores")).toBe(false);
+    expect(await moduloLigado(db, "setores", M)).toBe(false);
     expect(await gravarModulo(db, "setores", true, "u1")).toBe(true);
-    expect(await moduloLigado(db, "setores")).toBe(true);
+    expect(await moduloLigado(db, "setores", M)).toBe(true);
     expect(await gravarModulo(db, "setores", false, "u1")).toBe(true);
-    expect(await moduloLigado(db, "setores")).toBe(false);
+    expect(await moduloLigado(db, "setores", M)).toBe(false);
     expect(estado.leiturasDeFlag).toBe(3);
   });
 
   it("gravação que falhou não invalida (o estado não mudou)", async () => {
     const { db, estado } = banco();
-    expect(await moduloLigado(db, "setores")).toBe(false);
+    expect(await moduloLigado(db, "setores", M)).toBe(false);
     estado.upsertErro = true;
     expect(await gravarModulo(db, "setores", true, "u1")).toBe(false);
-    await moduloLigado(db, "setores");
+    await moduloLigado(db, "setores", M);
     expect(estado.leiturasDeFlag).toBe(1);
   });
 
   it("vencido o prazo, volta ao banco e enxerga a mudança de outro processo", async () => {
     const { db, estado } = banco();
-    expect(await moduloLigado(db, "setores")).toBe(false);
+    expect(await moduloLigado(db, "setores", M)).toBe(false);
     estado.flags = [CAIXA_LIGADA];
     vi.advanceTimersByTime(TTL_CURTO_MS - 1);
-    expect(await moduloLigado(db, "setores")).toBe(false);
+    expect(await moduloLigado(db, "setores", M)).toBe(false);
     vi.advanceTimersByTime(2);
-    expect(await moduloLigado(db, "setores")).toBe(true);
+    expect(await moduloLigado(db, "setores", M)).toBe(true);
   });
 
   it("erro de leitura falha fechado e não entra no memo", async () => {
     const { db, estado } = banco();
     estado.flags = [CAIXA_LIGADA];
     estado.erroNaFlag = true;
-    expect(await moduloLigado(db, "setores")).toBe(false);
+    expect(await moduloLigado(db, "setores", M)).toBe(false);
     estado.erroNaFlag = false;
-    expect(await moduloLigado(db, "setores")).toBe(true);
+    expect(await moduloLigado(db, "setores", M)).toBe(true);
     expect(estado.leiturasDeFlag).toBe(2);
   });
 
-  it("{ fresco: true } ignora o memo", async () => {
+  it("o padrão lê o banco a cada vez: ligar um módulo vale na hora", async () => {
     const { db, estado } = banco();
     expect(await moduloLigado(db, "setores")).toBe(false);
     estado.flags = [CAIXA_LIGADA];
-    expect(await moduloLigado(db, "setores")).toBe(false);
-    expect(await moduloLigado(db, "setores", { fresco: true })).toBe(true);
+    expect(await moduloLigado(db, "setores")).toBe(true);
+    expect(estado.leiturasDeFlag).toBe(2);
   });
 
   it("MEMO_DA_INSTALACAO_MS=0 desliga o memo", async () => {
     process.env.MEMO_DA_INSTALACAO_MS = "0";
     const { db, estado } = banco();
-    await moduloLigado(db, "setores");
-    await moduloLigado(db, "setores");
+    await moduloLigado(db, "setores", M);
+    await moduloLigado(db, "setores", M);
     expect(estado.leiturasDeFlag).toBe(2);
   });
 });
