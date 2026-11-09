@@ -84,11 +84,9 @@ export function linhasDaTelaDePlano(
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * As chaves novas, na ordem da tela. Diferente das de cima, aqui não há
- * "atual": nesta etapa ninguém conta agentes nem automações contra o plano, e
- * mostrar "2 de 3" sem a contagem vir do mesmo lugar que a trava seria o
- * mesmo número pela metade que o comentário do arquivo proíbe. A linha diz só
- * o que o plano prevê.
+ * As chaves novas, na ordem da tela. Agentes de IA e automações têm "atual"
+ * desde a 1002: a contagem vem de `fn_billing_uso`, a mesma régua da trava
+ * (`fn_billing_pode_criar`). As demais dizem só o que o plano prevê.
  */
 export const CHAVES_DOS_RECURSOS_DO_PLANO = [
   "agentes_ia",
@@ -121,8 +119,8 @@ export type ValorDoRecursoDoPlano =
   | { tipo: "nao_sei" }
   | { tipo: "nao_incluso" }
   | { tipo: "incluso" }
-  | { tipo: "sem_limite" }
-  | { tipo: "ate"; quantidade: number }
+  | { tipo: "sem_limite"; atual?: number | null }
+  | { tipo: "ate"; quantidade: number; atual?: number | null }
   | { tipo: "por_minuto"; quantidade: number };
 
 export interface LinhaDoRecursoDoPlano {
@@ -134,6 +132,8 @@ export interface LinhaDoRecursoDoPlano {
 export function linhasDosRecursosDoPlano(
   limites: Limites,
   leituraFalhou: boolean,
+  /** O uso medido (1002), ou `null` quando a leitura do uso falhou: aí a linha mostra só o que o plano prevê. */
+  uso: Pick<Uso, "agentes_ia" | "automacoes"> | null = null,
 ): LinhaDoRecursoDoPlano[] {
   return CHAVES_DOS_RECURSOS_DO_PLANO.map((chave): LinhaDoRecursoDoPlano => {
     if (leituraFalhou) return { chave, valor: { tipo: "nao_sei" } };
@@ -147,8 +147,13 @@ export function linhasDosRecursosDoPlano(
         return { chave, valor: teto === null ? { tipo: "sem_limite" } : { tipo: "por_minuto", quantidade: teto } };
       case "taxa":
         return { chave, valor: teto === null ? { tipo: "sem_limite" } : { tipo: "por_minuto", quantidade: teto } };
-      case "quantidade":
-        return { chave, valor: teto === null ? { tipo: "sem_limite" } : { tipo: "ate", quantidade: teto } };
+      case "quantidade": {
+        const atual = uso && (chave === "agentes_ia" || chave === "automacoes") ? uso[chave] : null;
+        return {
+          chave,
+          valor: teto === null ? { tipo: "sem_limite", atual } : { tipo: "ate", quantidade: teto, atual },
+        };
+      }
     }
   });
 }

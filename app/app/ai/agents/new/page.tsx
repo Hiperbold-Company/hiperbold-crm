@@ -11,6 +11,9 @@ import type { CredentialRow } from "@/hooks/ai/useCredentials";
 import { lerAmbiente } from "@/lib/instalacao/ambiente";
 import { fusoUtilizavel } from "@/lib/tempo/fusos";
 
+import { bloqueioDoBotaoDeCriacao } from "@/lib/billing/planos/limite-de-agentes-e-automacoes";
+import { logger } from "@/lib/logger";
+
 import { AgentForm } from "../[id]/_components/AgentForm";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +58,8 @@ export default async function NewAgentPage() {
   ]);
 
   const credentials = (credentialsRes.data ?? []) as CredentialRow[];
+  // D-227: o teto de agentes do plano bloqueia sempre; o botão diz o motivo antes de a pessoa preencher tudo.
+  const bloqueio = await bloqueioDoBotaoDeCriacao(createAdminClient(), activeOrg.orgId, "agentes_ia", user.idioma, logger);
   const llmDaOrg = (
     orgRes.data?.settings as { llm?: { provider?: string } } | null
   )?.llm;
@@ -69,6 +74,7 @@ export default async function NewAgentPage() {
         provedorPadrao={llmDaOrg?.provider}
         channelSessions={channelSessions}
         organizationTimezone={fusoUtilizavel(activeOrg.timezone)}
+        motivoDoBloqueio={bloqueio.motivo}
       />
     </div>
   );

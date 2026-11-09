@@ -183,6 +183,7 @@ export default async function PlanoEUsoPage() {
   const linhasDosRecursos = linhasDosRecursosDoPlano(
     planoResultado.limites,
     planoResultado.leituraFalhou,
+    usoResultado.leituraFalhou ? null : usoResultado.uso,
   );
 
   // extratoDoCiclo e estimativaDeRespostas reaproveitam o ciclo e o saldo
@@ -720,9 +721,14 @@ function textoDoRecurso(
     case "incluso":
       return t("incluso");
     case "sem_limite":
-      return t("sem limite");
+      return typeof v.atual === "number"
+        ? `${v.atual.toLocaleString(tagDoIdioma)} · ${t("sem limite")}`
+        : t("sem limite");
     case "ate":
-      return `${t("até")} ${v.quantidade.toLocaleString(tagDoIdioma)}`;
+      // D-227: agentes de IA e automações têm contagem (a mesma da trava): "X de N".
+      return typeof v.atual === "number"
+        ? `${v.atual.toLocaleString(tagDoIdioma)} ${t("de")} ${v.quantidade.toLocaleString(tagDoIdioma)}`
+        : `${t("até")} ${v.quantidade.toLocaleString(tagDoIdioma)}`;
     case "por_minuto":
       return `${v.quantidade.toLocaleString(tagDoIdioma)} ${t("req/min")}`;
   }

@@ -24,6 +24,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { Plus, Trash } from "@/lib/ui/icons";
 
 import { CamposDoGatilho } from "./CamposDoGatilho";
+import { useComentarioDoInstagramNoPlano } from "./PlanoDoEditor";
 import { Campo, opcoesDeEtapa, Seletor, useFunis } from "./comum";
 
 function gatilhoEmBranco(kind: AutomacaoTriggerKind): AutomacaoTrigger {
@@ -81,6 +82,7 @@ export function AutomationTriggerForm({
   const [erro, setErro] = useState<string | null>(null);
   const { funis, etapas } = useFunis();
   const fontes = useWebhookSources();
+  const comentarioNoPlano = useComentarioDoInstagramNoPlano();
 
   const gravar = (novo: AutomacaoTriggerConfig) => {
     setRascunho(novo);
@@ -128,13 +130,26 @@ export function AutomationTriggerForm({
             <Seletor
               id={`gatilho-${i}-tipo`}
               valor={g.kind}
-              opcoes={(Object.keys(GATILHOS_DA_AUTOMACAO) as AutomacaoTriggerKind[]).map((k) => ({
-                valor: k,
-                rotulo: t(GATILHOS_DA_AUTOMACAO[k]),
-              }))}
+              opcoes={(Object.keys(GATILHOS_DA_AUTOMACAO) as AutomacaoTriggerKind[]).map((k) => {
+                // D-227: fora do plano, o comentário do Instagram aparece com o selo e não pode ser escolhido
+                // (o gatilho que já está gravado continua visível, para a pessoa poder trocá-lo).
+                const foraDoPlano = k === "instagram_comment" && !comentarioNoPlano && g.kind !== k;
+                return {
+                  valor: k,
+                  rotulo: foraDoPlano
+                    ? `${t(GATILHOS_DA_AUTOMACAO[k])} (${t("Disponível no Max")})`
+                    : t(GATILHOS_DA_AUTOMACAO[k]),
+                  desabilitada: foraDoPlano,
+                };
+              })}
               onChange={(k) => trocar(i, gatilhoEmBranco(k as AutomacaoTriggerKind))}
             />
           </Campo>
+          {g.kind === "instagram_comment" && !comentarioNoPlano && (
+            <p className="text-xs text-error-fg" data-testid="comentario-fora-do-plano">
+              {t("A automação por comentário do Instagram está disponível no plano Max.")}
+            </p>
+          )}
 
           {g.kind === "manual" && (
             <p className="text-xs text-text-muted">

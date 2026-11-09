@@ -36,6 +36,7 @@ import {
 import { EVENTO_COMENTARIO_RECEBIDO, identidadeDoComentarista, type IdentidadeDoComentarista } from "./canal-de-comentarios";
 import { createContactHandler } from "@/app/api/v1/contacts/_handler";
 import { logger } from "@/lib/logger";
+import { comentarioDoInstagramNoPlano } from "./comentario-no-plano";
 import { iniciarAutomacao, type InicioDaAutomacao } from "./iniciar";
 import type { AutomacaoTrigger, AutomacaoTriggerConfig } from "./schemas";
 import { IDADE_MAXIMA_DA_MENSAGEM_MS, automacaoEsperaRespostaNaConversaSupabase } from "./uma-voz";
@@ -97,6 +98,11 @@ export interface GatilhosDb {
   ): Promise<string | null>;
   iniciar(input: Parameters<typeof iniciarAutomacao>[1]): Promise<InicioDaAutomacao>;
   modoLeitura(orgId: string): Promise<boolean>;
+  /**
+   * O plano inclui a automação por comentário do Instagram (D-227)? Leitura que falha NEGA
+   * (`comentario-no-plano.ts`): recurso pago não fica ligado por acidente.
+   */
+  comentarioDoInstagramNoPlano(orgId: string): Promise<boolean>;
 }
 
 export interface ResumoDosGatilhos {
@@ -196,6 +202,19 @@ export async function aplicarGatilhosDeAutomacao(
     if (cfg) armadas.push({ id: a.id, cfg });
   }
   if (armadas.length === 0) return resumo;
+
+  // D-227: fluxo com gatilho de comentário do Instagram só dispara quando o plano inclui o recurso. O plano
+  // só é lido quando alguma automação armada tem esse gatilho; fora do plano ela simplesmente não dispara.
+  const comComentario = (cfg: AutomacaoTriggerConfig) => cfg.triggers.some((g) => g.kind === "instagram_comment");
+  if (armadas.some((a) => comComentario(a.cfg)) && !(await db.comentarioDoInstagramNoPlano(row.organization_id))) {
+    for (let i = armadas.length - 1; i >= 0; i--) {
+      if (comComentario(armadas[i]!.cfg)) {
+        armadas.splice(i, 1);
+        resumo.ignoradas++;
+      }
+    }
+    if (armadas.length === 0) return resumo;
+  }
 
   const mensagem = fatos.find((f): f is FatoDeMensagem => f.tipo === "message_received");
   if (mensagem && !(await mensagemPodeDisparar(db, row.organization_id, mensagem, armadas.map((a) => a.cfg), agora))) {
@@ -466,6 +485,7 @@ export function createSupabaseGatilhosDb(admin: SupabaseClient): GatilhosDb {
     },
     iniciar: (input) => iniciarAutomacao(admin, input),
     modoLeitura: (orgId) => contaBloqueadaParaProduzir(admin, orgId),
+    comentarioDoInstagramNoPlano: (orgId) => comentarioDoInstagramNoPlano(admin, orgId, logger),
   };
 }
 

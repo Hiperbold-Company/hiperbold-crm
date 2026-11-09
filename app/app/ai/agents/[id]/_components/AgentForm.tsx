@@ -16,6 +16,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { AvisoDeLimiteDoPlano } from "@/components/billing/AvisoDeLimiteDoPlano";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -161,6 +162,8 @@ interface EditProps extends BaseProps {
 
 interface CreateProps extends BaseProps {
   mode: "create";
+  /** D-227: o teto de agentes do plano está cheio (frase pronta do servidor); ausente/`null` = pode criar. */
+  motivoDoBloqueio?: string | null;
 }
 
 type Props = (EditProps | CreateProps) & {
@@ -417,6 +420,7 @@ export function AgentForm(props: Props) {
   const materiais = props.materiais ?? [];
   const router = useRouter();
   const isEdit = props.mode === "edit";
+  const motivoDoPlano = props.mode === "create" ? (props.motivoDoBloqueio ?? null) : null;
   const readOnly = props.readOnly ?? false;
 
   // As opções do campo "Empresa de inteligência artificial": a chave do plano e SÓ os provedores
@@ -800,7 +804,10 @@ export function AgentForm(props: Props) {
               {t("Descartar alterações")}
             </Button>
           ) : null}
-          <Button onClick={handleSave} disabled={(!dirty && isEdit) || disabled || !isValid}>
+          <Button
+            onClick={handleSave}
+            disabled={(!dirty && isEdit) || disabled || !isValid || motivoDoPlano !== null}
+          >
             {saving ? t("Salvando…") : isEdit ? t("Salvar rascunho") : t("Criar agente")}
           </Button>
           {isEdit ? (
@@ -821,6 +828,10 @@ export function AgentForm(props: Props) {
           ) : null}
         </div>
       </div>
+
+      {motivoDoPlano && (
+        <AvisoDeLimiteDoPlano motivo={motivoDoPlano} testId="aviso-limite-de-agentes" className="text-xs text-destructive" />
+      )}
 
       {/*
         O MOTIVO NA TELA, não só no `title` (issue #951).

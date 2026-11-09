@@ -18,6 +18,8 @@ const USO: Uso = {
   membros: 3,
   conexoes: 1,
   integracoes_webhook: 0,
+  agentes_ia: 1,
+  automacoes: 4,
   tokens_ia_mes: null,
 };
 

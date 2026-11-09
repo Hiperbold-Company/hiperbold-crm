@@ -35,6 +35,7 @@ import type { EnrollmentEventRef, EnrollmentRow } from "@/lib/followup/node-hand
 import { validateFlowForPublish } from "@/lib/followup/validate-publish";
 
 import * as canal from "./canal-de-comentarios";
+import { comentarioDoInstagramNoPlano, grafoUsaComentarioDoInstagram } from "./comentario-no-plano";
 import { criarExecutorDeEfeitos } from "./efeitos";
 import type { FatosDaAutomacao } from "./fatos";
 import { casaGatilho, fatosDoEvento, varsDoGatilho, type FatoDeComentario } from "./gatilhos";
@@ -229,6 +230,7 @@ function db(cfg: AutomacaoTriggerConfig, over: Partial<GatilhosDb> = {}) {
       return { resultado: "iniciada", enrollment_id: "enr-1" };
     },
     modoLeitura: async () => false,
+    comentarioDoInstagramNoPlano: async () => true,
     ...over,
   };
   return { fake, iniciadas, criados };
@@ -689,5 +691,75 @@ describe("histórico legível", () => {
         ],
       }).detalhe,
     ).toContain("Resposta privada: o comentário não foi encontrado");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D-227: o recurso só no plano que o inclui (Pro = 0, Max = 1)
+// ---------------------------------------------------------------------------
+
+describe("handler: comentário do Instagram fora do plano", () => {
+  it("plano sem o recurso (Pro): a automação com gatilho de comentário não dispara nem cria contato", async () => {
+    const d = db(config(gatilho()), { comentarioDoInstagramNoPlano: async () => false });
+    const r = await aplicarGatilhosDeAutomacao(d.fake, evento());
+    expect(r.iniciadas).toBe(0);
+    expect(d.iniciadas).toHaveLength(0);
+    expect(d.criados).toHaveLength(0);
+  });
+
+  it("plano com o recurso (Max): dispara", async () => {
+    const d = db(config(gatilho()), { comentarioDoInstagramNoPlano: async () => true });
+    expect((await aplicarGatilhosDeAutomacao(d.fake, evento())).iniciadas).toBe(1);
+  });
+});
+
+/** O cliente de serviço no limite da rede: contrato + `fn_billing_limites_efetivos`. */
+function adminDoPlano(limites: Record<string, number | null> | "erro"): SupabaseClient {
+  const contrato = {
+    select: () => contrato,
+    eq: () => contrato,
+    maybeSingle: async () => ({
+      data: { status: "ativa", cycle: "monthly", billing_plans: { code: "pro", name: "Pro", version: 2 } },
+      error: null,
+    }),
+  };
+  const sete = { funis: 5, etapas_por_funil: 10, leads: 5000, membros: 3, conexoes: 3, integracoes_webhook: 3, tokens_ia_mes: 1 };
+  return {
+    from: () => contrato,
+    rpc: async () =>
+      limites === "erro"
+        ? { data: null, error: { message: "banco fora" } }
+        : {
+            data: {
+              ...sete,
+              agentes_ia: 1,
+              automacoes: 10,
+              mcp_req_min: 0,
+              acesso_api: 0,
+              automacao_comentario_instagram: 0,
+              fonte_dados_req_min: 60,
+              ...limites,
+            },
+            error: null,
+          },
+  } as unknown as SupabaseClient;
+}
+
+describe("comentarioDoInstagramNoPlano: leitura que falha nega", () => {
+  it("Pro (0) não inclui, Max (1) inclui, sem limite (null) inclui", async () => {
+    expect(await comentarioDoInstagramNoPlano(adminDoPlano({ automacao_comentario_instagram: 0 }), ORG)).toBe(false);
+    expect(await comentarioDoInstagramNoPlano(adminDoPlano({ automacao_comentario_instagram: 1 }), ORG)).toBe(true);
+    expect(await comentarioDoInstagramNoPlano(adminDoPlano({ automacao_comentario_instagram: null }), ORG)).toBe(true);
+  });
+
+  it("o banco não respondeu: não inclui", async () => {
+    expect(await comentarioDoInstagramNoPlano(adminDoPlano("erro"), ORG)).toBe(false);
+  });
+
+  it("grafoUsaComentarioDoInstagram só olha o bloco Início", () => {
+    const inicio = (kind: string) => ({ nodes: [{ id: "t", type: "trigger", config: { triggers: [{ kind }] } }] });
+    expect(grafoUsaComentarioDoInstagram(inicio("instagram_comment"))).toBe(true);
+    expect(grafoUsaComentarioDoInstagram(inicio("lead_created"))).toBe(false);
+    expect(grafoUsaComentarioDoInstagram(null)).toBe(false);
   });
 });
