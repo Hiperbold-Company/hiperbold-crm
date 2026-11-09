@@ -1,15 +1,18 @@
 /**
  * D-227: a fonte de dados (`POST /api/v1/webhooks/in/[token]`) recebe por
- * minuto o que o plano diz (`fonte_dados_req_min`: Pro 60, Max 60, Scale 120).
+ * minuto o que o plano diz (`fonte_dados_req_min`: Pro 60, Max 60, Scale 120),
+ * POR FONTE (por token), nunca por organização.
  *
  * A ordem que se mede:
  *  - o balde do token conta ANTES de qualquer leitura, e o token que não
  *    existe nunca chega à leitura do plano;
- *  - resolvida a fonte, o MESMO contador do token é comparado com
- *    max(60, plano): o Scale chega a 120 num token só, o Pro para em 60;
- *  - depois, o balde por organização com o valor do plano (`null` = sem ele);
- *  - leitura do plano que falha fica no teto fixo de antes (60, sem balde por
- *    organização).
+ *  - resolvida a fonte, o MESMO contador do token é comparado com o valor do
+ *    plano (`null` = 120, o teto do pré-filtro): o Scale chega a 120 numa
+ *    fonte, o Pro para em 60;
+ *  - não existe balde por organização: esgotar uma fonte (token público no
+ *    HTML) não afeta outra fonte da mesma organização;
+ *  - leitura do plano que falha fica em 60 por fonte;
+ *  - toda recusa por teto tem a MESMA mensagem (não revela plano nem estado).
  *
  * Dublês só na borda: banco em memória, leitura do plano, contador de janela.
  */
@@ -20,6 +23,7 @@ import { criarBancoEmMemoria, type BancoEmMemoria } from "../helpers/banco-em-me
 
 const ORG = "22222222-2222-4222-8222-222222222222";
 const TOKEN = "token-publico-da-landing";
+const OUTRO_TOKEN = "token-de-outra-fonte-da-org";
 
 let banco: BancoEmMemoria;
 let limitesDoPlano: Record<string, number | null> = {};
@@ -80,8 +84,8 @@ function chamar(token = TOKEN) {
 }
 
 /** Põe o contador do token como se `n` envios já tivessem passado nesta janela. */
-function jaPassaram(n: number) {
-  baldes.set(`webhook_in:${TOKEN}`, n);
+function jaPassaram(n: number, token = TOKEN) {
+  baldes.set(`webhook_in:${token}`, n);
 }
 
 beforeEach(() => {
@@ -97,6 +101,18 @@ beforeEach(() => {
         name: "Landing",
         organization_id: ORG,
         path_token: TOKEN,
+        secret_encrypted: null,
+        default_pipeline_id: "p1",
+        default_stage_id: "e1",
+        field_map: {},
+        redirect_to: null,
+        is_active: true,
+      },
+      {
+        id: "fonte-2",
+        name: "Formulário do site",
+        organization_id: ORG,
+        path_token: OUTRO_TOKEN,
         secret_encrypted: null,
         default_pipeline_id: "p1",
         default_stage_id: "e1",
@@ -123,8 +139,6 @@ describe("D-227: teto por minuto da fonte de dados pelo plano", () => {
     expect(seguinte.status).toBe(429);
     expect(seguinte.headers.get("Retry-After")).toBeTruthy();
     expect(seguinte.headers.get("X-RateLimit-Remaining")).toBe("0");
-
-    expect(checkRateLimit).toHaveBeenCalledWith(`webhook_in_org:${ORG}`, 120, 60);
   });
 
   it("⭐ Pro (60): o 61º envio do token é 429, com X-RateLimit-Limit 60", async () => {
@@ -137,14 +151,28 @@ describe("D-227: teto por minuto da fonte de dados pelo plano", () => {
     expect(seguinte.headers.get("X-RateLimit-Limit")).toBe("60");
   });
 
-  it("o balde por organização usa o valor do plano e soma os tokens da organização", async () => {
+  it("⭐ esgotar uma fonte NÃO afeta outra fonte da mesma organização", async () => {
     limitesDoPlano = { fonte_dados_req_min: 60 };
-    baldes.set(`webhook_in_org:${ORG}`, 60);
+    jaPassaram(60);
 
-    const r = await chamar();
+    const esgotada = await chamar();
+    expect(esgotada.status).toBe(429);
 
-    expect(r.status).toBe(429);
-    expect(r.headers.get("X-RateLimit-Limit")).toBe("60");
+    const outra = await chamar(OUTRO_TOKEN);
+    expect(outra.status).not.toBe(429);
+    expect(vi.mocked(checkRateLimit).mock.calls.some(([chave]) => chave.startsWith("webhook_in_org:"))).toBe(false);
+  });
+
+  it("todas as recusas por teto dizem a mesma coisa, sem revelar plano nem estado", async () => {
+    limitesDoPlano = { fonte_dados_req_min: 60 };
+    jaPassaram(120);
+    const noPreFiltro = await (await chamar()).json();
+
+    jaPassaram(60);
+    const noPlano = await (await chamar()).json();
+
+    expect(noPreFiltro.error.message).toBe("Too many requests.");
+    expect(noPlano.error.message).toBe("Too many requests.");
   });
 
   it("⭐ token que não existe não consulta o plano", async () => {
@@ -166,7 +194,7 @@ describe("D-227: teto por minuto da fonte de dados pelo plano", () => {
     expect(planoDaOrganizacao).not.toHaveBeenCalled();
   });
 
-  it("leitura do plano que falha fica no teto fixo: 60 por token e sem balde por organização", async () => {
+  it("leitura do plano que falha fica em 60 por fonte", async () => {
     leituraFalha = true;
     jaPassaram(60);
 
@@ -174,15 +202,15 @@ describe("D-227: teto por minuto da fonte de dados pelo plano", () => {
 
     expect(r.status).toBe(429);
     expect(r.headers.get("X-RateLimit-Limit")).toBe("60");
-    expect(vi.mocked(checkRateLimit).mock.calls.some(([chave]) => chave.startsWith("webhook_in_org:"))).toBe(false);
   });
 
-  it("plano sem limite (null) não cria o balde por organização", async () => {
+  it("plano sem limite (null) vale o teto do pré-filtro: 120 passa, 121 é 429", async () => {
     limitesDoPlano = { fonte_dados_req_min: null };
+    jaPassaram(119);
 
-    const r = await chamar();
-
-    expect(r.status).not.toBe(429);
-    expect(vi.mocked(checkRateLimit).mock.calls.some(([chave]) => chave.startsWith("webhook_in_org:"))).toBe(false);
+    expect((await chamar()).status).not.toBe(429);
+    const seguinte = await chamar();
+    expect(seguinte.status).toBe(429);
+    expect(seguinte.headers.get("X-RateLimit-Limit")).toBe("120");
   });
 });

@@ -24,7 +24,9 @@ import type { NextRequest } from "next/server";
 
 import { checkRateLimit, peekRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { ApiError } from "@/lib/api/types";
+import { recursosDaChave } from "@/lib/api/plano-da-api";
 import { fail, ok } from "@/lib/api/wrappers";
+import { planoDaOrganizacao } from "@/lib/billing/planos/plano-da-organizacao";
 import {
   EmailJaTemContaError,
   ProvisionConflictError,
@@ -36,6 +38,7 @@ import { logger } from "@/lib/logger";
 import { extractBearer } from "@/lib/mcp/auth";
 import { provisionTenantSchema, type ProvisionTenantInput } from "@/lib/schemas/tenant-provisioning";
 import { validateRequest } from "@/lib/schemas/_validate";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { rotateIntegrationApiKey } from "@/lib/tenants/api-key";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +66,19 @@ function bearerConfere(req: NextRequest, esperado: string): boolean {
   const a = Buffer.from(recebido);
   const b = Buffer.from(esperado);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** `true` só quando o plano foi lido e não inclui API nem MCP. Nunca lança: o provisionamento já foi feito. */
+async function planoNaoServeAChave(organizationId: string): Promise<boolean> {
+  try {
+    const { limites, leituraFalhou } = await planoDaOrganizacao(createAdminClient(), organizationId, logger);
+    if (leituraFalhou) return false;
+    const recursos = recursosDaChave(limites, false);
+    return !recursos.api && !recursos.mcp;
+  } catch (err) {
+    logger.warn("[tenants.provision] plano não lido para o aviso da chave", { err, organizationId });
+    return false;
+  }
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -140,8 +156,17 @@ export async function POST(req: NextRequest): Promise<Response> {
       requestId,
     });
 
+    // Aviso, não recusa: a empresa pode subir de plano depois. Só avisa quando o
+    // plano foi lido e não inclui API nem MCP (a chave `dsk_` não serviria a nada).
+    const chaveSemUso = await planoNaoServeAChave(organizationId);
+
     return ok(
-      { organization_id: organizationId, api_key: apiKey, replay },
+      {
+        organization_id: organizationId,
+        api_key: apiKey,
+        replay,
+        ...(chaveSemUso ? { api_key_warning: "plano_sem_api" as const } : {}),
+      },
       {
         status: replay ? 200 : 201,
         requestId,
