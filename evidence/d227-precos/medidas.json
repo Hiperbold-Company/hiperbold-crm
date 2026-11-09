@@ -1,0 +1,208 @@
+{
+ "desktop": {
+  "checadoInicial": [
+   "Mensal:false",
+   "Semestral:false",
+   "Anual:true"
+  ],
+  "yearly": {
+   "cards": {
+    "pro": {
+     "porMes": "R$ 116,58",
+     "total": "R$ 1.399 por ano",
+     "economia": "economize 21%",
+     "href": "/signup?plano=pro&ciclo=yearly"
+    },
+    "max": {
+     "porMes": "R$ 237,41",
+     "total": "R$ 2.849 por ano",
+     "economia": "economize 20%",
+     "href": "/signup?plano=max&ciclo=yearly"
+    },
+    "scale": {
+     "porMes": "R$ 358,25",
+     "total": "R$ 4.299 por ano",
+     "economia": "economize 20%",
+     "href": "/signup?plano=scale&ciclo=yearly"
+    }
+   },
+   "thMax": "R$ 237,41",
+   "nota": "Pagamento anual, no cartão ou Pix.",
+   "scrollW": 1440,
+   "innerW": 1440
+  },
+  "semiannual": {
+   "cards": {
+    "pro": {
+     "porMes": "R$ 133,16",
+     "total": "R$ 799 a cada 6 meses",
+     "economia": "economize 10%",
+     "href": "/signup?plano=pro&ciclo=semiannual"
+    },
+    "max": {
+     "porMes": "R$ 266,50",
+     "total": "R$ 1.599 a cada 6 meses",
+     "economia": "economize 10%",
+     "href": "/signup?plano=max&ciclo=semiannual"
+    },
+    "scale": {
+     "porMes": "R$ 399,83",
+     "total": "R$ 2.399 a cada 6 meses",
+     "economia": "economize 10%",
+     "href": "/signup?plano=scale&ciclo=semiannual"
+    }
+   },
+   "thMax": "R$ 266,50",
+   "nota": "Pagamento a cada 6 meses, no cartão ou Pix.",
+   "scrollW": 1440,
+   "innerW": 1440
+  },
+  "monthly": {
+   "cards": {
+    "pro": {
+     "porMes": "R$ 149",
+     "total": "",
+     "economia": "",
+     "href": "/signup?plano=pro&ciclo=monthly"
+    },
+    "max": {
+     "porMes": "R$ 299",
+     "total": "",
+     "economia": "",
+     "href": "/signup?plano=max&ciclo=monthly"
+    },
+    "scale": {
+     "porMes": "R$ 449",
+     "total": "",
+     "economia": "",
+     "href": "/signup?plano=scale&ciclo=monthly"
+    }
+   },
+   "thMax": "R$ 299",
+   "nota": "Mensal, sem fidelidade.",
+   "scrollW": 1440,
+   "innerW": 1440
+  },
+  "layout": {
+   "ebCentro": 719.9921875,
+   "h1Centro": 720,
+   "gapLedeAzul": 69.109375,
+   "scrollW": 1440,
+   "innerW": 1440,
+   "lede": "Todos os planos com 3 milhões de tokens de IA por mês. No anual, você economiza até 21%."
+  },
+  "teclado": [
+   "monthly:false",
+   "semiannual:true",
+   "yearly:false"
+  ]
+ },
+ "mobile": {
+  "checadoInicial": [
+   "Mensal:false",
+   "Semestral:false",
+   "Anual:true"
+  ],
+  "yearly": {
+   "cards": {
+    "pro": {
+     "porMes": "R$ 116,58",
+     "total": "R$ 1.399 por ano",
+     "economia": "economize 21%",
+     "href": "/signup?plano=pro&ciclo=yearly"
+    },
+    "max": {
+     "porMes": "R$ 237,41",
+     "total": "R$ 2.849 por ano",
+     "economia": "economize 20%",
+     "href": "/signup?plano=max&ciclo=yearly"
+    },
+    "scale": {
+     "porMes": "R$ 358,25",
+     "total": "R$ 4.299 por ano",
+     "economia": "economize 20%",
+     "href": "/signup?plano=scale&ciclo=yearly"
+    }
+   },
+   "thMax": "R$ 237,41",
+   "nota": "Pagamento anual, no cartão ou Pix.",
+   "scrollW": 390,
+   "innerW": 390
+  },
+  "semiannual": {
+   "cards": {
+    "pro": {
+     "porMes": "R$ 133,16",
+     "total": "R$ 799 a cada 6 meses",
+     "economia": "economize 10%",
+     "href": "/signup?plano=pro&ciclo=semiannual"
+    },
+    "max": {
+     "porMes": "R$ 266,50",
+     "total": "R$ 1.599 a cada 6 meses",
+     "economia": "economize 10%",
+     "href": "/signup?plano=max&ciclo=semiannual"
+    },
+    "scale": {
+     "porMes": "R$ 399,83",
+     "total": "R$ 2.399 a cada 6 meses",
+     "economia": "economize 10%",
+     "href": "/signup?plano=scale&ciclo=semiannual"
+    }
+   },
+   "thMax": "R$ 266,50",
+   "nota": "Pagamento a cada 6 meses, no cartão ou Pix.",
+   "scrollW": 390,
+   "innerW": 390
+  },
+  "monthly": {
+   "cards": {
+    "pro": {
+     "porMes": "R$ 149",
+     "total": "",
+     "economia": "",
+     "href": "/signup?plano=pro&ciclo=monthly"
+    },
+    "max": {
+     "porMes": "R$ 299",
+     "total": "",
+     "economia": "",
+     "href": "/signup?plano=max&ciclo=monthly"
+    },
+    "scale": {
+     "porMes": "R$ 449",
+     "total": "",
+     "economia": "",
+     "href": "/signup?plano=scale&ciclo=monthly"
+    }
+   },
+   "thMax": "R$ 299",
+   "nota": "Mensal, sem fidelidade.",
+   "scrollW": 390,
+   "innerW": 390
+  },
+  "layout": {
+   "ebCentro": 194.9921875,
+   "h1Centro": 195,
+   "gapLedeAzul": 48,
+   "scrollW": 390,
+   "innerW": 390,
+   "lede": "Todos os planos com 3 milhões de tokens de IA por mês. No anual, você economiza até 21%."
+  },
+  "sticky": {
+   "scrollLeft": 200,
+   "thLeft": 20,
+   "boxLeft": 20,
+   "scrollable": true
+  },
+  "teclado": [
+   "monthly:false",
+   "semiannual:true",
+   "yearly:false"
+  ]
+ },
+ "home": {
+  "ativo": "Anual",
+  "max": "R$ 237,41"
+ }
+}
