@@ -93,6 +93,12 @@ export interface EventLogDrainKnobs {
  * exatamente os de antes. Teto longo nunca encurta o curto (`Math.max`): quem
  * configurar o longo abaixo do curto paga o ritmo curto, não um laço mais
  * rápido que antes.
+ *
+ * ATRASO CONHECIDO: o retry/backoff do `event_log` devolve a linha a `pending`
+ * por UPDATE, e o gatilho de `event_log` só notifica INSERT. Com o ouvinte vivo,
+ * o laço do worker pode então levar até o teto longo (300 s) para pegar um retry.
+ * Quem cobre é o cron `event-log-drain`, 1×/min (`docker/scheduler/entrypoint.sh`),
+ * que deve continuar ligado. Ver `docs/runbooks/custo-e-cota-do-supabase.md`.
  */
 export function knobsEmVigor(knobs: EventLogDrainKnobs, ouvindo: boolean): EventLogDrainKnobs {
   if (!ouvindo) return knobs;

@@ -36,8 +36,8 @@ linha `agent-engine pronto` do log.
 | chave | default | o que faz |
 |---|---|---|
 | `QUEUE_POLL_INTERVAL_MS` | `2000` | **Piso da espera ociosa.** Com a fila vazia, é quanto o worker dorme entre uma consulta e a próxima; com o recuo ligado (abaixo), o valor dobra a cada rodada ociosa até o teto. Com job agendado, ele acorda no vencimento e este valor só limita a soneca. |
-| `QUEUE_IDLE_MAX_INTERVAL_MS` | `60000` | **Teto do recuo com a fila vazia, com o ouvinte do banco caído.** Sem teto, a instalação parada consulta o banco a cada piso — 3.880 consultas em 2h19 (~28/min) medidas na issue #3688; com `60000`, ~1/min. |
-| `QUEUE_IDLE_MAX_LISTENING_MS` | `300000` | Teto do recuo com o **ouvinte do banco vivo** (abaixo). O NOTIFY acorda a fila na hora; o teto só espaça a consulta de segurança. |
+| `QUEUE_IDLE_MAX_INTERVAL_MS` | *(ausente)* | **Teto do recuo com a fila vazia, opt-in e sem default.** Ausente = recuo desligado: sem o ouvinte do banco (porta 6543, ouvinte caído) a fila consulta a cada piso, como sempre, e o job criado pela API do app (ex.: resposta da equipe a um caso da IA) espera no máximo o piso. Ligar (ex.: `60000`) derruba a instalação parada de ~28 para ~1 consulta/min (issue #3688), ao custo de esse job esperar até o teto. |
+| `QUEUE_IDLE_MAX_LISTENING_MS` | `300000` | Teto do recuo **só com o ouvinte do banco vivo** (abaixo), mesmo com a chave de cima ausente. O NOTIFY acorda a fila na hora; o teto só espaça a consulta de segurança. |
 | `QUEUE_CLAIM_RETRY_INTERVAL_MS` | `250` | Ritmo do *“havia trabalho e eu não peguei”* — todas as vagas de `QUEUE_MAX_CONCURRENCY` ocupadas, ou outro turno rodando para o mesmo contato. |
 
 **Não passe `QUEUE_POLL_INTERVAL_MS` de 10000.** A conexão ociosa do pool expira
@@ -60,15 +60,22 @@ consome.
   prova se repete a cada 60 s. URL na porta **6543** (pooler do Supabase em modo
   transação, onde `LISTEN` não entrega nada) nem tenta.
 - **Na queda** (erro, conexão encerrada, prova sem resposta): os laços voltam na
-  hora aos tetos curtos (`QUEUE_IDLE_MAX_INTERVAL_MS`,
-  `EVENT_LOG_DRAIN_IDLE_MAX_INTERVAL_MS`, `EVENT_LOG_DRAIN_STALE_SWEEP_MS`) e o
+  hora aos tetos curtos (`QUEUE_IDLE_MAX_INTERVAL_MS`, que ausente é o piso
+  `QUEUE_POLL_INTERVAL_MS`; `EVENT_LOG_DRAIN_IDLE_MAX_INTERVAL_MS`,
+  `EVENT_LOG_DRAIN_STALE_SWEEP_MS`) e o
   ouvinte reconecta com recuo de 1 s até 5 min. Nada depende do NOTIFY chegar:
   ele só encurta a espera.
+- **Retry do `event_log` não avisa.** O backoff/retry do `event_log` devolve a
+  linha a `pending` por UPDATE, e o gatilho de `event_log` só notifica INSERT.
+  Com o ouvinte vivo, o laço do worker pode levar até o teto (300 s) para pegar
+  esse retry. Quem cobre é o cron `event-log-drain`, 1×/min
+  (`docker/scheduler/entrypoint.sh`), que **deve continuar ligado**. (A
+  `job_queue` não tem esse vão: o UPDATE que devolve a `pending` notifica.)
 - **Como conferir:** a linha `agent-engine pronto` traz `ouvinte_do_banco`
   (`ativo`, `reconectando` ou `desligado`) e os tetos em vigor; queda e volta
   aparecem como `ouvinte do banco caiu` e `ouvinte do banco: ouvindo`.
 
-O teto do recuo (`QUEUE_IDLE_MAX_INTERVAL_MS`) fica **acima** dos 10 s de
+O teto do recuo (`QUEUE_IDLE_MAX_INTERVAL_MS`, quando ligado, e o de escuta) fica **acima** dos 10 s de
 propósito e não cai na mesma regra: depois de um sono longo a rodada reconecta
 (499 B medidos contra 66 B), mas 1 rodada/min a 499 B continua ~4× mais barata
 que 30 rodadas/min a 66 B. O que não vale é encurtar o **piso**.

@@ -80,11 +80,12 @@ describe("intervaloDeEspera", () => {
     expect(Math.max(...esperas)).toBeLessThanOrEqual(60_000);
   });
 
-  it("fork (migration 1000): sem QUEUE_IDLE_MAX_INTERVAL_MS o teto é 60 s, não o piso", () => {
-    // Era o caso "doc 242 (C)": ausente = recuo DESLIGADO, a fila vazia
-    // consultando o banco a cada 2 s para sempre — ~40 mil consultas/dia medidas
-    // em produção no fork. Decisão do dono do fork (09/11/2026): default 60 s.
-    // O env é o mesmo `loadEnv` do worker, e o valor vai cru para `ociosoMaxMs`.
+  it("fork (migration 1000): sem QUEUE_IDLE_MAX_INTERVAL_MS e sem ouvinte o recuo fica DESLIGADO; ouvindo, recua até 300 s", () => {
+    // Sem ouvinte (porta 6543, ouvinte caído) a fila se comporta como sempre: o
+    // job criado pela API do app (ex.: `case_reply_turn`) espera no máximo o
+    // piso. Só com o ouvinte vivo o NOTIFY da job_queue acorda a soneca, e aí o
+    // teto longo é seguro. O env é o mesmo `loadEnv` do worker, e o valor vai
+    // cru para `ociosoMaxMs`.
     const base: NodeJS.ProcessEnv = {
       NODE_ENV: "test",
       SUPABASE_DB_URL: "postgresql://u:p@localhost:5432/db",
@@ -106,15 +107,18 @@ describe("intervaloDeEspera", () => {
         ),
       );
 
-    // `.env` antigo e `CHAVE=` vazia: recua até 60 s.
+    // `.env` antigo e `CHAVE=` vazia: sem ouvinte, piso fixo, como antes.
     for (const envAtual of [loadEnv(base), loadEnv({ ...base, QUEUE_IDLE_MAX_INTERVAL_MS: "" })]) {
-      expect(envAtual.QUEUE_IDLE_MAX_INTERVAL_MS).toBe(60_000);
-      expect(rodadas(envAtual).at(0)).toBe(2_000);
-      expect(Math.max(...rodadas(envAtual))).toBe(60_000);
-      // Com o ouvinte do banco vivo, o teto longo de 300 s.
-      expect(Math.max(...rodadas(envAtual, true))).toBe(300_000);
+      expect(envAtual.QUEUE_IDLE_MAX_INTERVAL_MS).toBeUndefined();
+      expect(new Set(rodadas(envAtual))).toEqual(new Set([2_000]));
+      expect(new Set(rodadas(envAtual, false))).toEqual(new Set([2_000]));
+      // Ausente + ouvindo: recua até o teto de escuta (300 s).
+      const ouvindo = rodadas(envAtual, true);
+      expect(ouvindo.at(0)).toBe(2_000);
+      expect(Math.max(...ouvindo)).toBe(300_000);
+      expect(ouvindo.at(-1)).toBe(300_000);
     }
-    // Quem escolhe outro teto, recua até ele.
+    // Quem liga o teto curto, recua até ele sem ouvinte.
     expect(rodadas(loadEnv({ ...base, QUEUE_IDLE_MAX_INTERVAL_MS: "30000" })).at(-1)).toBe(30_000);
   });
 

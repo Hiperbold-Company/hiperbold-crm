@@ -681,12 +681,14 @@ export async function startWorker(
   // os laços já estão rodando) para não dizer "desligado" de um ouvinte que só
   // não terminou de conectar.
   const ouvindoNoBoot = await ouvinte.primeiraTentativa;
+  // Sem QUEUE_IDLE_MAX_INTERVAL_MS o recuo está desligado: o teto curto é o piso.
+  const tetoCurtoDaFila = env.QUEUE_IDLE_MAX_INTERVAL_MS ?? env.QUEUE_POLL_INTERVAL_MS;
   log.info("agent-engine pronto", {
     worker_id: workerId,
     healthz_port: port,
     max_concurrency: env.QUEUE_MAX_CONCURRENCY,
     poll_ocioso_ms: env.QUEUE_POLL_INTERVAL_MS,
-    poll_ocioso_teto_ms: env.QUEUE_IDLE_MAX_INTERVAL_MS,
+    poll_ocioso_teto_ms: tetoCurtoDaFila,
     poll_ocioso_teto_ouvindo_ms: env.QUEUE_IDLE_MAX_LISTENING_MS,
     claim_retry_ms: env.QUEUE_CLAIM_RETRY_INTERVAL_MS,
     ouvinte_do_banco: listenSemSuporte ? "desligado" : ouvindoNoBoot ? "ativo" : "reconectando",
@@ -696,8 +698,8 @@ export async function startWorker(
     event_log_presos_ouvindo_ms: env.EVENT_LOG_DRAIN_STALE_SWEEP_LISTENING_MS,
     // Os tetos que valem AGORA (com o ouvinte caído, os curtos).
     teto_em_vigor_fila_ms: ouvindoNoBoot
-      ? Math.max(env.QUEUE_IDLE_MAX_LISTENING_MS, env.QUEUE_IDLE_MAX_INTERVAL_MS)
-      : env.QUEUE_IDLE_MAX_INTERVAL_MS,
+      ? Math.max(env.QUEUE_IDLE_MAX_LISTENING_MS, tetoCurtoDaFila)
+      : tetoCurtoDaFila,
     teto_em_vigor_event_log_ms: ouvindoNoBoot
       ? Math.max(env.EVENT_LOG_DRAIN_IDLE_MAX_LISTENING_MS, env.EVENT_LOG_DRAIN_IDLE_MAX_INTERVAL_MS)
       : env.EVENT_LOG_DRAIN_IDLE_MAX_INTERVAL_MS,

@@ -139,28 +139,49 @@ describe('job_queue notifica hb_job_queue', () => {
   });
 
   it('o gatilho de UPDATE só notifica quando alguma linha fica pending (o claim não)', async () => {
-    // A contagem na janela pode pegar notificação de outro teste; a regra é
-    // provada direto no catálogo, pelo corpo da função que o banco instalou.
+    // Complemento: a regra no catálogo, pelo corpo da função que o banco instalou.
+    // A prova de comportamento (contagem de notificações) vem logo abaixo.
     const { rows } = await escritor.query<{ def: string }>(
       `select pg_get_functiondef('public.fn_job_queue_notifica_worker()'::regprocedure) as def`,
     );
     expect(rows[0]!.def).toMatch(/tg_op\s*=\s*'UPDATE'/);
     expect(rows[0]!.def).toMatch(/n\.status\s*=\s*'pending'/);
 
-    // E por comportamento, numa transação que só toca a linha nossa: o claim
-    // não deixa linha pending, então o gatilho de UPDATE sai sem notificar.
-    const { rows: job } = await escritor.query<{ id: string }>(
-      "insert into job_queue(organization_id, kind) values($1, 'watchdog') returning id",
-      [org],
-    );
-    await escritor.query('begin');
-    await escritor.query("update job_queue set status = 'running', locked_by = 'teste' where id = $1", [job[0]!.id]);
-    const { rows: pendente } = await escritor.query<{ n: number }>(
-      "select count(*)::int as n from job_queue where id = $1 and status = 'pending'",
-      [job[0]!.id],
-    );
-    await escritor.query('commit');
-    expect(pendente[0]!.n).toBe(0);
+    // E a prova é a CONTAGEM de notificações na conexão LISTEN, em janelas de
+    // silêncio: INSERT notifica; o claim (`pending` -> `running`) não; devolver
+    // a `pending` (o retry) notifica uma vez.
+    const JANELA_MS = 700;
+    const contar = async (acao: () => Promise<void>): Promise<number> => {
+      // Silêncio antes: o que o INSERT acabou de notificar tem de ter chegado.
+      await new Promise((r) => setTimeout(r, 300));
+      const desde = Date.now();
+      await acao();
+      await new Promise((r) => setTimeout(r, JANELA_MS));
+      return recebidas.filter((r) => r.canal === 'hb_job_queue' && r.em >= desde).length;
+    };
+
+    let id = '';
+    const nInsert = await contar(async () => {
+      const { rows: job } = await escritor.query<{ id: string }>(
+        "insert into job_queue(organization_id, kind) values($1, 'watchdog') returning id",
+        [org],
+      );
+      id = job[0]!.id;
+    });
+    expect(nInsert).toBeGreaterThanOrEqual(1);
+
+    const nClaim = await contar(async () => {
+      await escritor.query("update job_queue set status = 'running', locked_by = 'teste' where id = $1", [id]);
+    });
+    expect(nClaim).toBe(0);
+
+    const nRetry = await contar(async () => {
+      await escritor.query(
+        "update job_queue set status = 'pending', locked_by = null, run_after = now() + interval '1 minute' where id = $1",
+        [id],
+      );
+    });
+    expect(nRetry).toBe(1);
   });
 });
 

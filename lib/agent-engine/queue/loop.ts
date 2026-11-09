@@ -33,9 +33,9 @@ export interface IntervalosDaFila {
   retryMs: number;
   /**
    * Teto do recuo exponencial com a fila vazia — `QUEUE_IDLE_MAX_INTERVAL_MS`.
-   * AUSENTE = recuo DESLIGADO: a fila vazia dorme sempre o piso. No fork o env
-   * passou a ter default de 60 s (migration 1000), então o worker sempre manda
-   * um valor; o ausente segue valendo para quem chama esta função direto.
+   * AUSENTE = recuo DESLIGADO: a fila vazia dorme sempre o piso (sem ouvinte
+   * do banco, a fila se comporta como antes da migration 1000). Só com o
+   * ouvinte vivo o `ociosoMaxOuvindoMs` ainda recua a espera.
    */
   ociosoMaxMs?: number | undefined;
   /**

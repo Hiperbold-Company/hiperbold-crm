@@ -95,11 +95,13 @@ const envSchema = z.object({
   // rodada depois de um sono longo reconecta (499 B medidos contra 66 B), mas
   // 1 rodada/min a 499 B continua 4× mais barata que 30 rodadas/min a 66 B.
   //
-  // FORK HIPERBOLD (migration 1000): default 60000. Sem teto, a fila vazia
-  // consultava o banco a cada 2 s — ~40 mil consultas/dia medidas em produção.
-  // O custo descrito acima encolheu: com o ouvinte do banco vivo, o NOTIFY da
-  // job_queue acorda a soneca também para o job que nasce na API do app.
-  QUEUE_IDLE_MAX_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  // FORK HIPERBOLD (migration 1000): esta chave continua OPCIONAL SEM DEFAULT.
+  // Sem o ouvinte do banco (porta 6543, ouvinte caído) a fila precisa se
+  // comportar como sempre: o job criado pela API do app (ex.: `case_reply_turn`)
+  // espera no máximo o piso. O alongamento mora em QUEUE_IDLE_MAX_LISTENING_MS,
+  // que só vale com o ouvinte vivo, onde o NOTIFY da job_queue acorda a soneca
+  // também para o job que nasce na API do app.
+  QUEUE_IDLE_MAX_INTERVAL_MS: z.coerce.number().int().positive().optional(),
   // Teto do recuo da fila vazia ENQUANTO o ouvinte do banco (LISTEN na mesma
   // SUPABASE_DB_URL) está vivo. Com o ouvinte caído vale o teto de cima.
   QUEUE_IDLE_MAX_LISTENING_MS: z.coerce.number().int().positive().default(300_000),
