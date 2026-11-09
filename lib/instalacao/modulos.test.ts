@@ -8,11 +8,20 @@
  * Os dois falham fechado: banco que não responde, ou que lança, nunca liga um módulo.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { abrirAcesso } from "@/lib/external-db/acesso";
 
 import { CHAVE_DO_MODULO, esquecerMemoDosModulos, MEMO_DO_MODULO_MS, moduloLigadoComMemo, modulosLigados } from "./modulos";
+
+// Este arquivo mede a LEITURA (o que cada linha do banco liga) com bancos diferentes no mesmo caso;
+// o memo de 30 s tem o seu arquivo (`memo-dos-modulos.test.ts`) e aqui ficaria no caminho.
+beforeAll(() => {
+  process.env.MEMO_DA_INSTALACAO_MS = "0";
+});
+afterAll(() => {
+  delete process.env.MEMO_DA_INSTALACAO_MS;
+});
 
 type Resposta = { data?: unknown; error?: unknown } | Error;
 
@@ -118,11 +127,11 @@ describe("abrirAcesso com o módulo desligado", () => {
     const { db, from } = banco();
     const acesso = await abrirAcesso(db, "org", "conexao");
     expect(acesso).toEqual({ ok: false, motivo: "modulo_desligado" });
-    // As DUAS consultas de `modulosLigados` (flag + módulo de tabela) — e mais nenhuma:
-    // a tabela de conexões nem é tocada quando o módulo já está desligado.
-    expect(from).toHaveBeenCalledTimes(2);
+    // `banco_externo` é módulo por FLAG: `moduloLigado` consulta só o mecanismo dele
+    // (`platform_config`), não a tabela de módulos instalados — e a tabela de conexões
+    // nem é tocada quando o módulo já está desligado.
+    expect(from).toHaveBeenCalledTimes(1);
     expect(from).toHaveBeenCalledWith("platform_config");
-    expect(from).toHaveBeenCalledWith("modulos_instalados");
   });
 });
 
@@ -134,12 +143,11 @@ describe("moduloLigadoComMemo (turno do agente)", () => {
     });
     expect(await moduloLigadoComMemo(db, "fluxos_atendimento", 1_000)).toBe(true);
     expect(await moduloLigadoComMemo(db, "fluxos_atendimento", 1_000 + MEMO_DO_MODULO_MS - 1)).toBe(true);
-    // Cada leitura de verdade é DUAS chamadas a `.from()` (flag + módulo de tabela, ver
-    // `modulosLigados`) — 1 leitura real = 2, não 1; o memo evita a SEGUNDA leitura, não a
-    // segunda chamada dentro da mesma leitura.
-    expect(from).toHaveBeenCalledTimes(2);
+    // `fluxos_atendimento` é módulo por flag: 1 leitura real = 1 chamada a `.from()`
+    // (`moduloLigado` não consulta a tabela de módulos). O memo evita a SEGUNDA leitura.
+    expect(from).toHaveBeenCalledTimes(1);
     await moduloLigadoComMemo(db, "fluxos_atendimento", 1_000 + MEMO_DO_MODULO_MS + 1);
-    expect(from).toHaveBeenCalledTimes(4);
+    expect(from).toHaveBeenCalledTimes(2);
   });
 });
 

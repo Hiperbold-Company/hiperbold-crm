@@ -5,25 +5,37 @@
  * vence e de quando o `.env` promove mora em `config-resolve.ts`, puro e
  * testável sem Postgres.
  *
- * ── Por que NÃO há memo aqui (e a marca tem) ─────────────────────────────────
+ * ── O memo: 30 s, em processo, invalidado pela escrita ───────────────────────
  *
- * `lib/branding/instalacao.ts` mantém memo de processo com TTL, e o cabeçalho
- * dele documenta o preço: guarda de geração contra a leitura em voo que
- * ressuscita o valor pré-escrita, `"erro"` obrigado a ficar FORA do memo para
- * uma falha de transporte não virar fato por um TTL inteiro, e um bug medido no
- * CI em que a tela negava o logo por 19,6s ATRÁS DE UM TOAST VERDE.
+ * Esta configuração quase nunca muda e era lida do banco a cada uso: ~2 mil
+ * leituras/dia de `platform_config` numa instalação parada (e-mail, cobrança,
+ * marca de saída, webhook da instalação). `lerLinha` passa por `comCacheCurto`
+ * (`lib/auth/cache-curto.ts`, o mesmo cache de 30 s da autorização), uma entrada
+ * por chave: `config:<chave>`.
  *
- * Aquele memo se paga porque a marca é lida em `app/layout.tsx` — toda tela,
- * todo render. Credencial não: ela é lida quando alguém vai USAR a credencial
- * (chamar a IA, mandar mensagem), que é caminho de rede, não de render. E o
- * `worker` é um SEGUNDO processo, que nunca veria a invalidação do `app`: com
- * memo, trocar a chave pela tela deixaria o worker usando a antiga até alguém
- * reiniciar o servidor — sem erro e sem aviso, com a tela dizendo "salvo".
+ * O que fica guardado é a LINHA CRUA — com o envelope CIFRADO, nunca o texto em
+ * claro. Abrir o envelope (AES-GCM) é barato e continua a cada leitura; assim o
+ * mapa em memória não passa a conter segredo decifrado. O valor nunca é logado.
  *
- * Então lemos do banco no momento do uso, que é o que `resolveOrgLlmConfig` já
- * faz para a configuração de IA por organização ("trocar modelo/provider é
- * UPDATE na config, sem restart nem deploy"). Se algum dia isto virar hot path,
- * mede-se e resolve-se então — com a evidência na mão, não por antecipação.
+ * Invalidação: `gravarPelaTela`, `voltarAoAmbiente` e `gravarSeAusente`
+ * invalidam a chave logo depois de uma escrita bem-sucedida, e a leitura em voo
+ * que começou antes da escrita não regrava o valor velho (guarda de geração do
+ * `comCacheCurto`). No MESMO processo, a próxima leitura já vê o novo.
+ *
+ * ⚠️ O que o memo NÃO alcança: o `worker` e qualquer outra réplica são OUTROS
+ * processos e não veem a invalidação do `app`. Trocar a chave pela tela vale
+ * para eles em até 30 s (`TTL_CURTO_MS`) — não mais "até alguém reiniciar", como
+ * seria um memo sem TTL. Escrita direta por SQL (DBA, migration) tem o mesmo
+ * teto. Quem precisa do valor exato — a tela (`estadoParaTela`) e a leitura
+ * depois de gravar — lê FRESCO (`lerLinha(chave, { fresca: true })`).
+ *
+ * "erro" (banco recusou / transporte falhou) fica FORA do memo: erro é incidente,
+ * não estado, e uma falha de rede não pode virar fato por um TTL inteiro. Já
+ * "a linha não existe" (`null`) entra: é o caso comum (chave só no `.env`), e a
+ * escrita que cria a linha invalida.
+ *
+ * (Até 2026-11-09 este módulo não tinha memo, por medo de o `worker` usar a
+ * chave antiga sem aviso. O TTL resolve: a janela é de 30 s, não infinita.)
  *
  * ── Nada aqui lança ──────────────────────────────────────────────────────────
  *
@@ -32,10 +44,12 @@
  * alguém corrigiria o que quebrou. Falha fechada na AÇÃO (não grava sem cifra),
  * aberta na INFORMAÇÃO (a tela abre e diz o que falta).
  */
+import { comCacheCurto, invalidarChave } from "@/lib/auth/cache-curto";
 import { byteaToBuffer, bufToBytea, decryptKey, encryptKey } from "@/lib/crypto/aes_gcm";
 import { env } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { ttlDoMemoDaInstalacaoMs } from "./memo";
 import { precisaSemear, resolver, type EstadoDaLinha, type Fonte } from "./config-resolve";
 
 // ⚠️ O nome da tabela é escrito por EXTENSO em cada `.from()`, e não numa
@@ -139,7 +153,17 @@ function emClaro(linha: LinhaCrua): EstadoDaLinha {
   };
 }
 
-async function lerLinha(chave: string): Promise<LinhaCrua | null | "erro"> {
+/** A chave do memo de uma linha de `platform_config`. */
+function chaveDoMemo(chave: string): string {
+  return `config:${chave}`;
+}
+
+/** Esquece o memo desta chave neste processo. Chamar logo depois de uma escrita bem-sucedida. */
+export function invalidarConfiguracao(chave: string): void {
+  invalidarChave(chaveDoMemo(chave));
+}
+
+async function lerLinhaDoBanco(chave: string): Promise<LinhaCrua | null | "erro"> {
   try {
     const { data, error } = await createAdminClient()
       .from("platform_config")
@@ -164,6 +188,20 @@ async function lerLinha(chave: string): Promise<LinhaCrua | null | "erro"> {
   }
 }
 
+async function lerLinha(
+  chave: string,
+  opcoes: { fresca?: boolean } = {},
+): Promise<LinhaCrua | null | "erro"> {
+  if (opcoes.fresca) return lerLinhaDoBanco(chave);
+  return comCacheCurto<LinhaCrua | null | "erro">({
+    chave: chaveDoMemo(chave),
+    ttlMs: ttlDoMemoDaInstalacaoMs(),
+    // "erro" não é estado: não entra no memo.
+    guardar: (linha) => linha !== "erro",
+    carregar: () => lerLinhaDoBanco(chave),
+  });
+}
+
 /**
  * O valor em vigor para uma chave — o que o código deve chamar em vez de
  * `env.X` quando a chave é configurável pela tela.
@@ -184,7 +222,8 @@ export async function estadoParaTela(
   chave: string,
   ehSegredo: boolean,
 ): Promise<EstadoParaTela> {
-  const linha = await lerLinha(chave);
+  // Fresca: a tela mostra o que ACABOU de ser salvo, inclusive por outro processo.
+  const linha = await lerLinha(chave, { fresca: true });
   const cru = linha === "erro" ? null : linha;
   const { valor, fonte } = resolver(cru ? emClaro(cru) : null, doAmbiente(chave));
   return {
@@ -251,6 +290,7 @@ export async function gravarPelaTela(
     // este projeto já pagou em `organizations`.
     const { error } = await createAdminClient().from("platform_config").upsert(linha, { onConflict: "chave" });
     if (error) return { ok: false, motivo: "banco_recusou", detalhe: error.message };
+    invalidarConfiguracao(chave);
     return { ok: true };
   } catch (erro) {
     return {
@@ -269,6 +309,7 @@ export async function voltarAoAmbiente(chave: string): Promise<ResultadoDaEscrit
   try {
     const { error } = await createAdminClient().from("platform_config").delete().eq("chave", chave);
     if (error) return { ok: false, motivo: "banco_recusou", detalhe: error.message };
+    invalidarConfiguracao(chave);
     return { ok: true };
   } catch (erro) {
     return {
@@ -325,7 +366,10 @@ export async function gravarSeAusente(
     aviso(chave, "a gravação falhou", erro);
     return null;
   }
-  const gravada = await lerLinha(chave);
+  // Pode ter criado a linha (ou perdido a corrida para quem criou): esquece o memo
+  // e lê FRESCO para devolver o valor que de fato ficou.
+  invalidarConfiguracao(chave);
+  const gravada = await lerLinha(chave, { fresca: true });
   if (gravada === null || gravada === "erro") return null;
   return emClaro(gravada)?.valor ?? null;
 }

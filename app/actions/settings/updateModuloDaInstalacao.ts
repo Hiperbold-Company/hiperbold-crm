@@ -69,7 +69,7 @@ export async function updateModuloDaInstalacao(
   }
 
   const db = createAdminClient();
-  const antes = await moduloLigado(db, modulo);
+  const antes = await moduloLigado(db, modulo, { fresco: true });
 
   let liberadas: number | null = null;
   if (modulo === "cobranca" && !ligado) {

@@ -200,7 +200,10 @@ export default defineConfig({
     // `publicarNoProcesso` acima que garante que o `process.env` do runner tenha
     // o que aquele conserto precisa: sem ele, num worktree sem `.env.local`, o
     // seed não tinha NENHUMA das duas fontes.
-    env: ENV_DO_E2E,
+    // `MEMO_DA_INSTALACAO_MS=0`: sem o memo de 30 s da configuração da instalação
+    // (`lib/instalacao/memo.ts`). As specs ligam módulo e gravam `platform_config`
+    // direto no banco, de outro processo, e nenhuma invalidação em processo as alcança.
+    env: { ...ENV_DO_E2E, MEMO_DA_INSTALACAO_MS: "0" },
     url: BASE_URL,
     // false: reusar um server que já ocupa a porta pode ser OUTRO processo
     // (ex.: bundle do Remotion na 3000) — o teste precisa do NOSSO next start.

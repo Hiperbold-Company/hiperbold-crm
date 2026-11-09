@@ -38,7 +38,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type pg from "pg";
 
+import { comCacheCurto, invalidarChave } from "@/lib/auth/cache-curto";
 import { logger } from "@/lib/logger";
+
+import { ttlDoMemoDaInstalacaoMs } from "./memo";
 
 /**
  * `banco_externo`, `fluxos_atendimento`, `propostas`, `crm_b2b`, `cobranca`, `login_codex`, `setores`, `avisos`, `conferir_whatsapp`, `mcp_por_agente` e `cold_call` ligam/desligam por uma linha em `platform_config`
@@ -159,17 +162,59 @@ const DESLIGADO = "desligado";
 
 /** Os módulos ligados nesta instalação, dos dois mecanismos. Nunca lança: erro de banco =
  * nenhum módulo daquele mecanismo — falha fechada, os dois lados. */
-export async function modulosLigados(db: SupabaseClient): Promise<ModuloOpcional[]> {
+export async function modulosLigados(
+  db: SupabaseClient,
+  opcoes: OpcoesDeLeitura = {},
+): Promise<ModuloOpcional[]> {
   const [porFlag, porTabela] = await Promise.all([
-    modulosLigadosPorFlag(db),
+    modulosLigadosPorFlag(db, opcoes),
     modulosDeTabelaAtivos(db),
   ]);
   return [...porFlag, ...porTabela];
 }
 
-async function modulosLigadosPorFlag(
-  db: SupabaseClient,
-): Promise<Array<(typeof MODULOS_OPCIONAIS_POR_FLAG)[number]>> {
+/**
+ * Opções de leitura. `fresco: true` pula o memo dos módulos por flag e vai ao banco —
+ * para quem precisa do valor exato (a tela que acabou de salvar, o "antes" de uma troca).
+ */
+export interface OpcoesDeLeitura {
+  fresco?: boolean;
+}
+
+type ModuloPorFlag = (typeof MODULOS_OPCIONAIS_POR_FLAG)[number];
+
+/**
+ * ── O memo dos módulos por flag: 30 s, em processo, invalidado pela escrita ──
+ *
+ * `moduloLigado` é chamado em quase toda rota e tela de módulo opcional (milhares
+ * de vezes por dia), e a resposta quase nunca muda. A lista de módulos por flag
+ * passa por `comCacheCurto` (`lib/auth/cache-curto.ts`): uma entrada só, porque a
+ * leitura já é uma consulta única a todas as chaves.
+ *
+ *  - `gravarModulo` invalida a entrada logo depois de gravar com sucesso: no mesmo
+ *    processo a próxima leitura já vê o novo estado.
+ *  - ⚠️ O `worker` e qualquer outra réplica são OUTROS processos e não veem essa
+ *    invalidação: ligar/desligar um módulo vale para eles em até 30 s. Escrita
+ *    direta por SQL tem o mesmo teto.
+ *  - Erro de leitura NÃO entra no memo (erro é incidente, não estado): devolve
+ *    `[]` — falha fechada, como sempre — e a próxima chamada tenta de novo.
+ *  - O `db` precisa ser o cliente de SERVIÇO: `platform_config` não tem policy, e
+ *    um cliente de usuário leria `[]` sem erro. A entrada é única e vale para
+ *    todos os chamadores, então um cliente restrito aqui envenenaria o memo por
+ *    30 s. Todos os chamadores do repositório passam o admin.
+ *  - Só os módulos por FLAG são memoizados. Os de TABELA (`modulos_instalados`)
+ *    continuam lidos a cada vez: a escrita deles (`fn_modulo_instalar`) não passa
+ *    por aqui para invalidar.
+ */
+const CHAVE_DO_MEMO_DAS_FLAGS = "modulos:por-flag";
+
+/** Esquece o memo dos módulos neste processo. Chamar logo depois de gravar um módulo. */
+export function invalidarModulosDaInstalacao(): void {
+  invalidarChave(CHAVE_DO_MEMO_DAS_FLAGS);
+  memoDoModulo.clear();
+}
+
+async function lerModulosPorFlagDoBanco(db: SupabaseClient): Promise<ModuloPorFlag[] | "erro"> {
   try {
     const { data, error } = await db
       .from("platform_config")
@@ -180,7 +225,7 @@ async function modulosLigadosPorFlag(
         codigo: error.code,
         detalhe: error.message,
       });
-      return [];
+      return "erro";
     }
     const linhas = (data ?? []) as Array<{ chave: string; valor: string | null }>;
     return MODULOS_OPCIONAIS_POR_FLAG.filter((m) =>
@@ -190,8 +235,23 @@ async function modulosLigadosPorFlag(
     logger.warn("módulos da instalação: leitura falhou — tratando todos como desligados", {
       detalhe: erro instanceof Error ? erro.message : String(erro),
     });
-    return [];
+    return "erro";
   }
+}
+
+async function modulosLigadosPorFlag(
+  db: SupabaseClient,
+  opcoes: OpcoesDeLeitura = {},
+): Promise<ModuloPorFlag[]> {
+  const lido = opcoes.fresco
+    ? await lerModulosPorFlagDoBanco(db)
+    : await comCacheCurto<ModuloPorFlag[] | "erro">({
+        chave: CHAVE_DO_MEMO_DAS_FLAGS,
+        ttlMs: ttlDoMemoDaInstalacaoMs(),
+        guardar: (v) => v !== "erro",
+        carregar: () => lerModulosPorFlagDoBanco(db),
+      });
+  return lido === "erro" ? [] : lido;
 }
 
 async function modulosDeTabelaAtivos(
@@ -222,8 +282,19 @@ async function modulosDeTabelaAtivos(
   }
 }
 
-export async function moduloLigado(db: SupabaseClient, modulo: ModuloOpcional): Promise<boolean> {
-  return (await modulosLigados(db)).includes(modulo);
+/**
+ * Um módulo só: consulta APENAS o mecanismo dele (flag ou tabela), em vez de montar a
+ * lista dos dois. Módulo por flag passa pelo memo de 30 s; `{ fresco: true }` lê o banco.
+ */
+export async function moduloLigado(
+  db: SupabaseClient,
+  modulo: ModuloOpcional,
+  opcoes: OpcoesDeLeitura = {},
+): Promise<boolean> {
+  if ((MODULOS_OPCIONAIS_POR_FLAG as readonly string[]).includes(modulo)) {
+    return (await modulosLigadosPorFlag(db, opcoes)).includes(modulo as ModuloPorFlag);
+  }
+  return (await modulosDeTabelaAtivos(db)).includes(modulo as (typeof MODULOS_DE_TABELA)[number]);
 }
 
 /**
@@ -247,7 +318,8 @@ export async function moduloLigadoComMemo(
 ): Promise<boolean> {
   const memo = memoDoModulo.get(modulo);
   if (memo !== undefined && memo.ate > agora) return memo.ligado;
-  const ligado = await moduloLigado(db, modulo);
+  // Fresco: este memo já tem o seu prazo; empilhar o do memo da flag dobraria a janela.
+  const ligado = await moduloLigado(db, modulo, { fresco: true });
   memoDoModulo.set(modulo, { ligado, ate: agora + MEMO_DO_MODULO_MS });
   return ligado;
 }
@@ -336,5 +408,6 @@ export async function gravarModulo(
     });
     return false;
   }
+  invalidarModulosDaInstalacao();
   return true;
 }

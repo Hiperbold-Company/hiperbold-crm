@@ -180,7 +180,8 @@ describe("adapter.send", () => {
 });
 
 describe("validade do token do Instagram (login unificado)", () => {
-  const agora = new Date("2026-11-02T06:35:00Z");
+  // Relativo ao relógio real: a saúde e o cron leem `new Date()` por dentro, e uma data fixa vira bomba-relógio.
+  const agora = new Date();
   const dia = 24 * 3600 * 1000;
   const linha = (id: string, venceEmDias: number | null, extra: Record<string, unknown> = {}) => ({
     ...sessao,
