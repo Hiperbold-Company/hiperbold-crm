@@ -272,6 +272,47 @@ describe("abrirRecuperacoesDasQuedas (Spec 32, item 2)", () => {
   });
 });
 
+describe("a lista de organizações vinda de fora (piso ocioso do cron)", () => {
+  it("abrir: com a lista, só olha essas organizações e NÃO lista as operantes pelo PostgREST", async () => {
+    h.tabelas.event_log = [...quedaPadrao("ev-a-saida", "ev-a-volta"), ...[
+      evento("ev-b-saida", minutos(120), "WORKING", "FAILED", CONEXAO_DE_OUTRA, OUTRA),
+      evento("ev-b-volta", minutos(60), "STOPPED", "WORKING", CONEXAO_DE_OUTRA, OUTRA),
+    ]];
+    h.tabelas.channel_sessions = [sessao(CONEXAO), sessao(CONEXAO_DE_OUTRA, { organization_id: OUTRA })];
+    h.consultas.length = 0;
+    const r = await abrirRecuperacoesDasQuedas(admin() as never, AGORA, [ORG]);
+    expect(r).toEqual({ criadas: 1 });
+    expect(importacoes().map((i) => i.organization_id)).toEqual([ORG]);
+    expect(h.consultas.some((c) => c.tabela === "organizations")).toBe(false);
+  });
+
+  it("abrir: sem a lista, o comportamento de antes (todas as operantes)", async () => {
+    h.tabelas.event_log = quedaPadrao();
+    h.tabelas.channel_sessions = [sessao(CONEXAO)];
+    h.consultas.length = 0;
+    await abrirRecuperacoesDasQuedas(admin() as never, AGORA);
+    expect(h.consultas.some((c) => c.tabela === "organizations")).toBe(true);
+  });
+
+  it("preparar: com a lista vazia não faz consulta alguma", async () => {
+    h.consultas.length = 0;
+    expect(await prepararRecuperacoesAguardando(admin() as never, AGORA, [])).toEqual({ promovidas: 0, canceladas: 0 });
+    expect(h.consultas).toEqual([]);
+  });
+
+  it("preparar: com a lista, não lista as operantes e só olha a organização pedida", async () => {
+    h.tabelas.importacoes_de_historico = [
+      { id: "imp-a", organization_id: ORG, channel_session_id: CONEXAO, status: "aguardando", origem: "queda", numero_esperado: "553192220002", desde: minutos(130), ate: minutos(60), created_at: minutos(5), cursor: {} },
+    ];
+    h.tabelas.channel_sessions = [sessao(CONEXAO)];
+    h.verificar.mockResolvedValue({ name: "sessao-1", status: "WORKING", me: { id: "5531992220002@c.us" } });
+    h.consultas.length = 0;
+    const r = await prepararRecuperacoesAguardando(admin() as never, AGORA, [ORG]);
+    expect(r).toEqual({ promovidas: 1, canceladas: 0 });
+    expect(h.consultas.some((c) => c.tabela === "organizations")).toBe(false);
+  });
+});
+
 describe("prepararRecuperacoesAguardando (Spec 32, item 2)", () => {
   function aguardando(extra: Linha = {}): Linha {
     return {

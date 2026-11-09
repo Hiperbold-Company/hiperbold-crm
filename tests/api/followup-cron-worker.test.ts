@@ -84,7 +84,7 @@ describe("GET/POST /api/v1/cron/followup-flow-worker", () => {
     expect(body.data).toEqual({
       ...summary,
       confirmation_sweep: { ok: true, avisos: 0 },
-      recursos: { followup: true, followup_silencio: true, fila_followup: true },
+      recursos: { followup: true, followup_silencio: true, fila_followup: true, confirmacao_de_presenca: true },
     });
     expect(vi.mocked(createSupabaseAdminClient)).toHaveBeenCalledWith(expect.anything());
     expect(vi.mocked(createAdminClient)).toHaveBeenCalled();
@@ -162,7 +162,7 @@ describe("GET/POST /api/v1/cron/followup-flow-worker", () => {
       expect(body.data).toEqual({
         ...summary,
         confirmation_sweep: { ok: false, erro },
-        recursos: { followup: true, followup_silencio: true, fila_followup: true },
+        recursos: { followup: true, followup_silencio: true, fila_followup: true, confirmacao_de_presenca: true },
       });
       expect(logErro).toHaveBeenCalledWith(
         expect.stringContaining("fn_appointment_confirmation_sweep"),

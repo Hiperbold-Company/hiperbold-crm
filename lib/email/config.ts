@@ -1,3 +1,4 @@
+import { comCacheCurto, invalidarChave } from "@/lib/auth/cache-curto";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -55,6 +56,56 @@ const EMPTY: SmtpConfig = {
   source: "none",
 };
 
+type LinhaDoSmtp = {
+  smtp_host: string | null;
+  smtp_port: number;
+  smtp_security: SmtpSecurity;
+  smtp_username: string | null;
+  smtp_password_encrypted: string | null;
+  from_email: string | null;
+  from_name: string | null;
+};
+
+const CHAVE_DA_LINHA_DO_SMTP = "email:platform_smtp_settings";
+
+/**
+ * Quanto a leitura da linha `platform_smtp_settings` vale em memória. O cron
+ * `enviar-emails-de-conta` pergunta "há caminho de e-mail?" TODO minuto, e a linha
+ * quase nunca muda: com o TTL padrão do cache curto (30 s) cada batida ainda iria
+ * ao PostgREST, então aqui são 5 min. Quem grava (`saveSmtpConfig`) invalida na
+ * mesma requisição; só outro PROCESSO (o worker, outra réplica) espera o TTL — e o
+ * pior efeito disso é o e-mail sair 5 min pelo transporte antigo.
+ */
+const TTL_DA_LINHA_DO_SMTP_MS = 5 * 60_000;
+
+/**
+ * A linha crua (com a senha AINDA cifrada: o texto claro nunca entra no cache). Só
+ * guarda leitura que o banco respondeu — erro é incidente, não estado, e cair no
+ * `.env` por um soluço não pode virar 5 min de transporte errado.
+ */
+async function lerLinhaDoSmtp(): Promise<{ data: LinhaDoSmtp | null; error: boolean }> {
+  return comCacheCurto({
+    chave: CHAVE_DA_LINHA_DO_SMTP,
+    ttlMs: TTL_DA_LINHA_DO_SMTP_MS,
+    guardar: (leitura) => !leitura.error,
+    carregar: async () => {
+      const { data, error } = await createAdminClient()
+        .from("platform_smtp_settings")
+        .select(
+          "smtp_host,smtp_port,smtp_security,smtp_username,smtp_password_encrypted,from_email,from_name",
+        )
+        .eq("id", 1)
+        .maybeSingle();
+      return { data: (data as LinhaDoSmtp | null) ?? null, error: Boolean(error) };
+    },
+  });
+}
+
+/** Esquece a linha lida: a próxima leitura vai ao banco. Quem grava a chama; os testes também. */
+export function esquecerLinhaDoSmtp(): void {
+  invalidarChave(CHAVE_DA_LINHA_DO_SMTP);
+}
+
 /** Banco primeiro; o .env permite provisionar uma VPS sem abrir a interface. */
 export async function getSmtpConfig(): Promise<SmtpConfig> {
   return (await lerSmtp()).config;
@@ -69,23 +120,9 @@ export async function getSmtpConfig(): Promise<SmtpConfig> {
 export async function lerSmtp(): Promise<{ config: SmtpConfig; bancoRespondeu: boolean }> {
   let bancoRespondeu = false;
   try {
-    const { data, error } = await createAdminClient()
-      .from("platform_smtp_settings")
-      .select(
-        "smtp_host,smtp_port,smtp_security,smtp_username,smtp_password_encrypted,from_email,from_name",
-      )
-      .eq("id", 1)
-      .maybeSingle();
+    const { data, error } = await lerLinhaDoSmtp();
     if (!error && data) {
-      const row = data as {
-        smtp_host: string | null;
-        smtp_port: number;
-        smtp_security: SmtpSecurity;
-        smtp_username: string | null;
-        smtp_password_encrypted: string | null;
-        from_email: string | null;
-        from_name: string | null;
-      };
+      const row = data;
       const config: SmtpConfig = {
         host: row.smtp_host?.trim() ?? "",
         port: row.smtp_port,
@@ -184,5 +221,7 @@ export async function saveSmtpConfig(input: Omit<SmtpConfig, "source"> & { updat
         : MENSAGEM_DA_FALHA_AO_SALVAR_SMTP;
     return { ok: false as const, error: mensagem };
   }
+  // A linha mudou: a próxima leitura (neste processo) já enxerga o novo servidor.
+  esquecerLinhaDoSmtp();
   return { ok: true as const };
 }

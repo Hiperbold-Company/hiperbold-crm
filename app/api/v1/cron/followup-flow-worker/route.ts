@@ -112,15 +112,17 @@ async function handle(req: NextRequest): Promise<Response> {
   // Não é o `if (await recursoOcioso(...)) return` das outras rotas: cada sinal
   // desliga só a SUA etapa, e o resto da batida segue.
   //
-  // O que NÃO é gated aqui, de propósito: a varredura de confirmação de
+  // O que NÃO é gated por estes três, de propósito: a varredura de confirmação de
   // presença (RPC, mutação de agenda) e `encerrarRoteirosVencidos` (RPC, muda
-  // estado de roteiro). As duas MUTAM mesmo sem nada vencido no follow-up, não
-  // estavam na medição da issue e ficam fora — rodada que fecha roteiro vencido
+  // estado de roteiro). Não dependem do follow-up. A primeira tem o SEU sinal
+  // (`confirmacao_de_presenca`, dentro de `varrerConfirmacoesDePresenca`);
+  // `encerrarRoteirosVencidos` segue sem sinal — rodada que fecha roteiro vencido
   // é efeito, não consulta vazia.
-  const [followupLigado, silencioLigado, filaLigada] = await Promise.all([
+  const [followupLigado, silencioLigado, filaLigada, confirmacaoLigada] = await Promise.all([
     recursoTemTrabalho("followup"),
     recursoTemTrabalho("followup_silencio"),
     recursoTemTrabalho("fila_followup"),
+    recursoTemTrabalho("confirmacao_de_presenca"),
   ]);
 
   // A varredura de confirmação de presença pega carona neste cron, mas é OUTRO
@@ -128,7 +130,15 @@ async function handle(req: NextRequest): Promise<Response> {
   // follow-up de todas as orgs parava junto com a agenda. Agora a falha fica
   // isolada aqui (log + Sentry + trilha) e volta na resposta em
   // `confirmation_sweep`, sem esconder — mas sem derrubar o tick.
-  const confirmationSweep = await varrerConfirmacoesDePresenca(admin, requestId);
+  //
+  // O PISO OCIOSO (`confirmacao_de_presenca`): sem compromisso terminado e ainda
+  // sem confirmação, a RPC só devolveria 0 (121 chamadas vazias em 2 h, medidas em
+  // 09/11/2026). O sinal é mais LARGO que a função (ver lib/cron/piso-ocioso.ts)
+  // e, na dúvida, a RPC roda. Pular a RPC não pula a auditoria: ela só existe
+  // quando a varredura abriu aviso ou falhou.
+  const confirmationSweep: ResultadoDaVarreduraDeConfirmacao = confirmacaoLigada
+    ? await varrerConfirmacoesDePresenca(admin, requestId)
+    : { ok: true, avisos: 0 };
 
   // Tick que não chegou a rodar é indistinguível, na resposta, de um tick sem
   // nada vencido — a não ser pelo `recursos` no fim do corpo, que diz por quê.
@@ -289,7 +299,12 @@ async function handle(req: NextRequest): Promise<Response> {
       confirmation_sweep: confirmationSweep,
       // Diz, sem ambiguidade, se a rodada rodou: tick de minuto com três `false`
       // aqui é "nada ligado nesta instalação", não "o motor falhou calado".
-      recursos: { followup: followupLigado, followup_silencio: silencioLigado, fila_followup: filaLigada },
+      recursos: {
+        followup: followupLigado,
+        followup_silencio: silencioLigado,
+        fila_followup: filaLigada,
+        confirmacao_de_presenca: confirmacaoLigada,
+      },
     },
     { requestId },
   );

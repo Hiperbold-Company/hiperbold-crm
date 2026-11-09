@@ -49,7 +49,7 @@ import {
   prepararRecuperacoesAguardando,
 } from "@/lib/channels/historico/quedas";
 import { rodarUmaRodada, TETO_PADRAO } from "@/lib/channels/historico/rodada";
-import { recursoOcioso } from "@/lib/cron/piso-ocioso";
+import { organizacoesComHistorico, recursoOcioso } from "@/lib/cron/piso-ocioso";
 import { logger } from "@/lib/logger";
 import { STATUS_OPERANTE, ehOperante, statusDaOrgEmbutida } from "@/lib/organizacao/operante";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -81,9 +81,9 @@ const PASSOS_DEPOIS_DO_PORTAO = [
   "const agora",
   "const recuperacoes",
   "const passo",
-  "expr await passo(...)",
-  "expr await passo(...)",
   "let operantes",
+  "expr await passo(...)",
+  "expr await passo(...)",
   "expr await passo(...)",
   "for (organizationId of operantes)",
   "const prazo",
@@ -144,17 +144,21 @@ async function handle(req: NextRequest): Promise<Response> {
       });
     }
   };
+  // Só as organizações que têm o que olhar (importação em curso, saída de WORKING
+  // nos últimos 8 dias ou aviso aberto da queda): UMA consulta pelo pool direto, em
+  // vez de três idas ao PostgREST POR organização a cada minuto. Se a consulta não
+  // responde, vale o comportamento de antes: todas as operantes.
+  let operantes: string[] = [];
+  await passo("listar organizações com histórico a olhar", async () => {
+    operantes = (await organizacoesComHistorico()) ?? (await organizacoesOperantes(admin));
+  });
   await passo("abrir recuperações das quedas", async () => {
-    recuperacoes.criadas = (await abrirRecuperacoesDasQuedas(admin, agora)).criadas;
+    recuperacoes.criadas = (await abrirRecuperacoesDasQuedas(admin, agora, operantes)).criadas;
   });
   await passo("preparar recuperações aguardando", async () => {
-    const r = await prepararRecuperacoesAguardando(admin, agora);
+    const r = await prepararRecuperacoesAguardando(admin, agora, operantes);
     recuperacoes.promovidas = r.promovidas;
     recuperacoes.canceladas = r.canceladas;
-  });
-  let operantes: string[] = [];
-  await passo("listar organizações operantes", async () => {
-    operantes = await organizacoesOperantes(admin);
   });
   for (const organizationId of operantes) {
     await passo("fechar avisos de cliente respondido", async () => {

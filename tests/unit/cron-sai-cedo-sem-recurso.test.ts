@@ -97,6 +97,8 @@ import { GET as webhookReplay } from "@/app/api/v1/cron/webhook-replay/route";
 import { GET as followupFlowWorker } from "@/app/api/v1/cron/followup-flow-worker/route";
 import { GET as channelPauseScheduler } from "@/app/api/v1/cron/channel-pause-scheduler/route";
 import { GET as propostaTravada } from "@/app/api/v1/cron/proposta-travada/route";
+import { GET as metaSocialFila } from "@/app/api/v1/cron/meta-social-fila/route";
+import { GET as routingWorker } from "@/app/api/v1/cron/routing-worker/route";
 
 type Rota = (req: NextRequest) => Promise<Response>;
 
@@ -158,6 +160,23 @@ describe("followup-flow-worker", () => {
     expect(estado.rpcs).toEqual(["fn_appointment_confirmation_sweep"]);
   });
 
+  it("sem compromisso a confirmar: a RPC de confirmação de presença NÃO é chamada", async () => {
+    retrato({ followup: false, followup_silencio: false, fila_followup: false, confirmacao_de_presenca: false });
+    const dados = await dadosDe(await chamar(followupFlowWorker, "followup-flow-worker"));
+
+    expect(estado.rpcs).toEqual([]);
+    expect(dados).toMatchObject({
+      confirmation_sweep: { ok: true, avisos: 0 },
+      recursos: { confirmacao_de_presenca: false },
+    });
+  });
+
+  it("com compromisso a confirmar: a RPC roda (o gate não cala quem tem trabalho)", async () => {
+    retrato({ followup: false, followup_silencio: false, fila_followup: false });
+    await chamar(followupFlowWorker, "followup-flow-worker");
+    expect(estado.rpcs).toEqual(["fn_appointment_confirmation_sweep"]);
+  });
+
   it("só o follow-up ligado: o tick roda e o silêncio/dreno não", async () => {
     retrato({ followup_silencio: false, fila_followup: false });
     const dados = await dadosDe(await chamar(followupFlowWorker, "followup-flow-worker"));
@@ -196,5 +215,47 @@ describe("proposta-travada", () => {
     retrato({});
     await chamar(propostaTravada, "proposta-travada");
     expect(estado.consultas.crm_proposals).toBeGreaterThan(0);
+  });
+});
+
+describe("meta-social-fila", () => {
+  it("desligado: sai cedo, sem NENHUM from() ao PostgREST", async () => {
+    retrato({ fila_meta_social: false });
+    const dados = await dadosDe(await chamar(metaSocialFila, "meta-social-fila"));
+
+    expect(dados).toMatchObject({ pulado: "recurso_ocioso" });
+    expect(estado.consultas).toEqual({});
+  });
+
+  it("erro do piso (sem SUPABASE_DB_URL, retrato não semeado): a rodada roda", async () => {
+    await chamar(metaSocialFila, "meta-social-fila");
+    expect(estado.consultas.meta_social_fila_de_envio).toBeGreaterThan(0);
+  });
+
+  it("ligado: destrava e lê a fila de verdade", async () => {
+    retrato({});
+    await chamar(metaSocialFila, "meta-social-fila");
+    expect(estado.consultas.meta_social_fila_de_envio).toBeGreaterThan(0);
+  });
+});
+
+describe("routing-worker", () => {
+  it("desligado: sai cedo, sem NENHUM from() ao PostgREST", async () => {
+    retrato({ roteamento: false });
+    const dados = await dadosDe(await chamar(routingWorker, "routing-worker"));
+
+    expect(dados).toMatchObject({ pulado: "recurso_ocioso" });
+    expect(estado.consultas).toEqual({});
+  });
+
+  it("erro do piso (sem SUPABASE_DB_URL, retrato não semeado): o worker roda", async () => {
+    await chamar(routingWorker, "routing-worker");
+    expect(estado.consultas.event_log).toBeGreaterThan(0);
+  });
+
+  it("ligado: recupera os travados e puxa os pendentes", async () => {
+    retrato({});
+    await chamar(routingWorker, "routing-worker");
+    expect(estado.consultas.event_log).toBeGreaterThan(0);
   });
 });

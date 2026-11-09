@@ -88,6 +88,9 @@ export const RECURSOS_DO_CRON = [
   "mcp_a_revogar",
   "lembrete_de_tarefa",
   "lembrete_de_agenda",
+  "confirmacao_de_presenca",
+  "fila_meta_social",
+  "roteamento",
 ] as const;
 export type RecursoDoCron = (typeof RECURSOS_DO_CRON)[number];
 
@@ -171,6 +174,34 @@ const TETO_DA_LEITURA_MS = 2_000;
  *   em `organizations`);
  * - `canal_vigiado`, `fila_de_soneca`, `redacao_de_storage`: a condição exata
  *   da consulta da rodada.
+ *
+ * ─── AS ROTINAS DE MINUTO (terceira fatia) ─────────────────────────────────
+ *
+ * Medido em produção em 09/11/2026 (2 h, 6 organizações ativas): três rotas de
+ * 1×/min ainda iam ao PostgREST só para descobrir que não havia nada a fazer.
+ * Cada linha nova é mais LARGA que o predicado da rota (o lado seguro):
+ *
+ * - `confirmacao_de_presenca`: `fn_appointment_confirmation_sweep` (RPC do
+ *   `followup-flow-worker`, 121 chamadas em 2 h). Candidato = compromisso
+ *   `pending`/`confirmed`, já terminado (`ends_at <= now()`, sem somar o atraso de
+ *   confirmação por organização, que é >= 1 min), sem `confirmation_next_at` no
+ *   futuro e sem contato anonimizado — as mesmas condições da função, menos o
+ *   atraso. Cada aviso empurra `confirmation_next_at` para o futuro, então o
+ *   predicado não fica ligado depois de a rodada passar;
+ * - `fila_meta_social`: `meta_social_fila_de_envio` com linha `na_fila` já
+ *   vencida (o select da rodada) OU `enviando` parada há mais de 9 min (o
+ *   `destravar`, que atualiza antes do select);
+ * - `roteamento`: `event_log` de `conversation.routing_requested` em `pending` ou
+ *   `processing` (recuperação do travado + pendentes do `routing-worker`), sem o
+ *   corte de `next_attempt_at` nem o de 5 min do `processing`.
+ *
+ * ─── `organizacoesComHistorico` (não é um recurso: é a LISTA) ───────────────
+ *
+ * O recurso `historico` liga a `historico-import` inteira, e ela percorria TODAS
+ * as organizações operantes (3 consultas por organização por minuto). A função
+ * `organizacoesComHistorico` devolve, em UMA consulta pelo pool `pg`, só as
+ * organizações operantes que satisfazem uma das três condições do predicado
+ * `historico`. Falha = `null` e quem chama volta a olhar todas.
  *
  * Duas rodadas fazem MAIS do que a consulta principal, e o portão cobre as duas
  * (medido em `tests/invariants/piso-ocioso-retrato.test.ts`):
@@ -287,7 +318,58 @@ select
   ) or exists (
     select 1 from agent_inbox_items
      where ref_kind = 'agenda_reminder_sender' and status = 'open'
-  ) as lembrete_de_agenda
+  ) as lembrete_de_agenda,
+  exists (
+    select 1 from calendar_appointments c
+     where c.status in ('pending', 'confirmed')
+       and c.ends_at <= now()
+       and (c.confirmation_next_at is null or c.confirmation_next_at <= now())
+       and not exists (
+         select 1 from contacts ct
+          where ct.organization_id = c.organization_id and ct.id = c.contact_id and ct.is_anonymized
+       )
+  ) as confirmacao_de_presenca,
+  (
+    exists (
+      select 1 from meta_social_fila_de_envio
+       where status = 'na_fila' and proxima_tentativa_em <= now()
+    )
+    or exists (
+      select 1 from meta_social_fila_de_envio
+       where status = 'enviando' and atualizado_em < now() - interval '9 minutes'
+    )
+  ) as fila_meta_social,
+  exists (
+    select 1 from event_log
+     where event_type = 'conversation.routing_requested'
+       and status in ('pending', 'processing')
+  ) as roteamento
+`;
+
+/**
+ * As organizações operantes que têm algo para a `historico-import` olhar: as três
+ * condições do recurso `historico` (importação rodando/aguardando, saída de
+ * `WORKING` nos últimos 8 dias, aviso aberto da queda), uma `union` de
+ * `organization_id` cruzada com `organizations.status = 'active'` (a régua
+ * `STATUS_OPERANTE`). Mantenha as três condições IGUAIS às do recurso `historico`
+ * acima — `lib/cron/piso-ocioso.test.ts` compara os dois textos.
+ */
+const SQL_DAS_ORGANIZACOES_DO_HISTORICO = `
+select o.id as organization_id
+  from organizations o
+ where o.status = 'active'
+   and o.id in (
+     select organization_id from importacoes_de_historico where status in ('rodando', 'aguardando')
+     union
+     select organization_id from event_log
+      where event_type = 'channel_session.status_changed'
+        and payload ->> 'from_status' = 'WORKING'
+        and created_at > now() - interval '8 days'
+     union
+     select organization_id from agent_inbox_items
+      where status = 'open'
+        and kind in ('recuperacao_da_queda', 'cliente_sem_resposta_na_queda')
+   )
 `;
 
 type Retrato = { emUso: Record<RecursoDoCron, boolean>; ate: number };
@@ -348,6 +430,34 @@ async function lerRetrato(db?: BancoDoPortao): Promise<Record<RecursoDoCron, boo
       detalhe: erro instanceof Error ? erro.message : String(erro),
     });
     return TUDO_EM_USO;
+  }
+}
+
+/**
+ * As organizações operantes com algo para a importação do histórico olhar, ou
+ * `null` quando não deu para saber (sem `SUPABASE_DB_URL`, tabela ausente numa
+ * instalação antiga, banco lento). `null` é "não sei": quem chama volta a olhar
+ * TODAS as organizações operantes, o comportamento de antes — a mesma regra de
+ * falha do retrato (na dúvida, RODA). Lista vazia é resposta de verdade: ninguém
+ * tem o que olhar.
+ *
+ * `db` é ponto de injeção do teste; a rota não o passa.
+ */
+export async function organizacoesComHistorico(db?: BancoDoPortao): Promise<string[] | null> {
+  try {
+    const banco = db ?? getRequestPool();
+    const { rows } = await comTeto(
+      Promise.resolve(banco.query(SQL_DAS_ORGANIZACOES_DO_HISTORICO)) as Promise<{ rows: unknown[] }>,
+      TETO_DA_LEITURA_MS,
+    );
+    return (rows as Array<{ organization_id?: unknown }>)
+      .map((r) => r.organization_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+  } catch (erro) {
+    logger.warn("piso ocioso do cron: lista de organizações do histórico falhou — a rota olha todas as operantes", {
+      detalhe: erro instanceof Error ? erro.message : String(erro),
+    });
+    return null;
   }
 }
 

@@ -72,8 +72,10 @@ const ROTAS_CONHECIDAS = [
   "campaign-worker",
   "channel-pause-scheduler",
   "historico-import",
+  "meta-social-fila",
   "proposta-travada",
   "prospecting",
+  "routing-worker",
   "webhook-replay",
 ];
 

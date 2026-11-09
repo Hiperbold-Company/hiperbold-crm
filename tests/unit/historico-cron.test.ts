@@ -40,8 +40,8 @@ vi.mock("@/lib/channels/historico/rodada", () => ({
 // Os passos da queda (Spec 32) têm o próprio teste: aqui só importa que o cron os chame
 // e que a falha de um deles não tire as rodadas.
 const quedasEspiao = vi.hoisted(() => ({
-  abrir: vi.fn(async () => ({ criadas: 0 })),
-  preparar: vi.fn(async () => ({ promovidas: 0, canceladas: 0 })),
+  abrir: vi.fn(async (_admin: unknown, _agora: Date, _organizacoes?: string[]) => ({ criadas: 0 })),
+  preparar: vi.fn(async (_admin: unknown, _agora: Date, _organizacoes?: string[]) => ({ promovidas: 0, canceladas: 0 })),
   operantes: vi.fn(async () => [] as string[]),
 }));
 vi.mock("@/lib/channels/historico/quedas", () => ({
@@ -49,7 +49,23 @@ vi.mock("@/lib/channels/historico/quedas", () => ({
   prepararRecuperacoesAguardando: quedasEspiao.preparar,
   organizacoesOperantes: quedasEspiao.operantes,
 }));
-vi.mock("@/lib/channels/historico/avisos-da-queda", () => ({ fecharAvisosDeClienteRespondido: vi.fn(async () => 0) }));
+const fecharEspiao = vi.hoisted(() => vi.fn(async (_admin: unknown, _org: string) => 0));
+vi.mock("@/lib/channels/historico/avisos-da-queda", () => ({ fecharAvisosDeClienteRespondido: fecharEspiao }));
+// O pool `pg` do piso ocioso: o retrato diz "histórico ligado" e a lista de
+// organizações vem de `pgFalso.orgs` (`null` = a consulta falha e a rota olha todas).
+const pgFalso = vi.hoisted(() => ({ orgs: null as string[] | null, consultas: [] as string[] }));
+vi.mock("@/lib/agent-engine/db/request-pool", () => ({
+  getRequestPool: () => ({
+    query: async (sql: string) => {
+      pgFalso.consultas.push(sql);
+      if (sql.includes("as organization_id")) {
+        if (pgFalso.orgs === null) throw new Error("banco fora");
+        return { rows: pgFalso.orgs.map((organization_id) => ({ organization_id })) };
+      }
+      return { rows: [{ historico: true }] };
+    },
+  }),
+}));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (t: string) => {
@@ -109,7 +125,53 @@ beforeEach(() => {
   h.avancoPorRodada = 0;
   h.statusDaRodada = {};
   auditEspiao.mockReset();
+  quedasEspiao.abrir.mockClear();
+  quedasEspiao.preparar.mockClear();
+  quedasEspiao.operantes.mockReset();
+  quedasEspiao.operantes.mockResolvedValue([]);
+  fecharEspiao.mockClear();
+  pgFalso.orgs = null;
+  pgFalso.consultas.length = 0;
   vi.useRealTimers();
+});
+
+describe("cron da importação do histórico: só as organizações com o que olhar", () => {
+  it("a lista vem de UMA consulta pelo pool e nenhum passo da queda vai listar as operantes pelo PostgREST", async () => {
+    pgFalso.orgs = ["org-a", "org-b"];
+    await chamar();
+    expect(quedasEspiao.operantes).not.toHaveBeenCalled();
+    expect(quedasEspiao.abrir).toHaveBeenCalledWith(expect.anything(), expect.any(Date), ["org-a", "org-b"]);
+    expect(quedasEspiao.preparar).toHaveBeenCalledWith(expect.anything(), expect.any(Date), ["org-a", "org-b"]);
+    expect(fecharEspiao.mock.calls.map((c) => c[1])).toEqual(["org-a", "org-b"]);
+    expect(pgFalso.consultas.filter((q) => q.includes("as organization_id"))).toHaveLength(1);
+  });
+
+  it("nenhuma organização com o que olhar: os passos da queda rodam sobre lista vazia, sem fechar aviso", async () => {
+    pgFalso.orgs = [];
+    await chamar();
+    expect(quedasEspiao.operantes).not.toHaveBeenCalled();
+    expect(quedasEspiao.abrir).toHaveBeenCalledWith(expect.anything(), expect.any(Date), []);
+    expect(fecharEspiao).not.toHaveBeenCalled();
+  });
+
+  it("a consulta do pool falha: volta a olhar TODAS as operantes (na dúvida, roda)", async () => {
+    pgFalso.orgs = null;
+    quedasEspiao.operantes.mockResolvedValue(["org-x", "org-y", "org-z"]);
+    await chamar();
+    expect(quedasEspiao.operantes).toHaveBeenCalledTimes(1);
+    expect(quedasEspiao.abrir).toHaveBeenCalledWith(expect.anything(), expect.any(Date), ["org-x", "org-y", "org-z"]);
+    expect(quedasEspiao.preparar).toHaveBeenCalledWith(expect.anything(), expect.any(Date), ["org-x", "org-y", "org-z"]);
+    expect(fecharEspiao.mock.calls.map((c) => c[1])).toEqual(["org-x", "org-y", "org-z"]);
+  });
+
+  it("a listagem das operantes também falha: as rodadas das importações seguem", async () => {
+    pgFalso.orgs = null;
+    quedasEspiao.operantes.mockRejectedValue(new Error("organizations fora do ar"));
+    h.tabela = [linha("a")];
+    const r = await chamar();
+    expect(r.status).toBe(200);
+    expect(h.rodadas.map((x) => x.id)).toEqual(["a"]);
+  });
 });
 
 describe("cron da importação do histórico (#999)", () => {
