@@ -5,6 +5,10 @@ import { ROLE_RANK } from "@/lib/auth/types";
 import { ApiTokensClient } from "./_components/ApiTokensClient";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
+import { recursosDaChave } from "@/lib/api/plano-da-api";
+import { planoDaOrganizacao } from "@/lib/billing/planos/plano-da-organizacao";
+import { logger } from "@/lib/logger";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +19,11 @@ export default async function ApiTokensPage() {
     redirect("/403");
   }
   const idioma = user.idioma;
+  // D-227: o que a chave serve neste plano decide o botão de criar. Cliente de
+  // serviço porque `fn_billing_limites_efetivos` só responde a `service_role`;
+  // a organização vem da sessão, já checada acima.
+  const plano = await planoDaOrganizacao(createAdminClient(), activeOrg.orgId, logger);
+  const recursos = recursosDaChave(plano.limites, plano.leituraFalhou);
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
@@ -27,7 +36,7 @@ export default async function ApiTokensPage() {
         </p>
         <LinkDeAjudaDaTela />
       </header>
-      <ApiTokensClient />
+      <ApiTokensClient recursos={recursos} />
     </div>
   );
 }

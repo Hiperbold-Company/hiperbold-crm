@@ -14,6 +14,16 @@ import type { AuthUser } from "@/lib/auth/types";
 
 import { PEDIDO_EM_ABERTO } from "./helpers/gotrue-admin-falso";
 
+// D-227: dublê da leitura do plano — o plano inclui API e MCP (o tema deste
+// teste é outro; a trava do plano na criação de chave tem teste próprio).
+vi.mock("@/lib/billing/planos/plano-da-organizacao", () => ({
+  planoDaOrganizacao: vi.fn(async () => ({
+    plano: { code: "max", name: "Max", version: 2 },
+    contrato: null,
+    limites: {},
+    leituraFalhou: false,
+  })),
+}));
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(),
   resolveActiveOrg: vi.fn(),

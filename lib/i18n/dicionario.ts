@@ -26979,6 +26979,14 @@ export const DICIONARIO: Traducoes = {
     es: "Tu cuenta alcanzó el límite de conexiones del plan. Elimina una conexión o cambia de plan.",
   },
   "Ver planos": { es: "Ver planes" },
+  // D-227: a chave de acesso (`dsk_`) segue o plano.
+  "A API com chave de acesso está disponível nos planos Max e Scale.": {
+    es: "La API con clave de acceso está disponible en los planes Max y Scale.",
+  },
+  "Disponível no Max": { es: "Disponible en Max" },
+  "Neste plano a chave serve só ao servidor MCP. A API com chave de acesso está disponível nos planos Max e Scale.": {
+    es: "En este plan la clave solo sirve al servidor MCP. La API con clave de acceso está disponible en los planes Max y Scale.",
+  },
   "WhatsApp, Instagram e Messenger somados": { es: "WhatsApp, Instagram y Messenger sumados" },
   "Este limite bloqueia novas conexões ao ser atingido.": {
     es: "Este límite bloquea nuevas conexiones al alcanzarse.",

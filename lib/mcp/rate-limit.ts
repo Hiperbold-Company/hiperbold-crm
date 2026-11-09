@@ -16,6 +16,12 @@
  * quer mais cota emite mais token, e o teto por token vira contornável por
  * quem já está dentro. O agregado é o que fecha isso.
  *
+ * ⚠️ Plano (D-227): quando o plano da organização tem `mcp_req_min`
+ * (`auth.mcpReqMinDoPlano`), o teto por ORGANIZAÇÃO passa a ser esse valor
+ * (Max 30, Scale 60) e o por TOKEN vira min(60, plano) — um token só não pode
+ * mais que a organização inteira. O de escrita não muda. Sem valor do plano
+ * (Ilimitado, plano antigo) valem os números fixos abaixo.
+ *
  * Por ESCRITA (30/min) — o mais apertado, e é o que protege o número de
  * WhatsApp. `crm_send_whatsapp_message` é escrita, e o canal por QR é
  * cliente não-oficial: o WhatsApp restringe e bane por VOLUME, e bane o
@@ -70,16 +76,21 @@ export async function verificarTetoMcp(
   // contador. Disparar os três sempre faria a chamada já recusada pelo teto do
   // token consumir também a cota da organização — o agente em laço queimaria a
   // cota agregada de quem não fez nada.
+  const doPlano = auth.mcpReqMinDoPlano;
+  const temTetoDoPlano = typeof doPlano === "number" && doPlano > 0;
+  const tetoDoToken = temTetoDoPlano ? Math.min(TETO_POR_TOKEN, doPlano) : TETO_POR_TOKEN;
+  const tetoDaOrganizacao = temTetoDoPlano ? doPlano : TETO_POR_ORGANIZACAO;
+
   const porToken = await checkRateLimit(
     `mcp:tok:${auth.apiTokenId}`,
-    TETO_POR_TOKEN,
+    tetoDoToken,
     JANELA_SEGUNDOS,
   );
   if (!porToken.allowed) throw recusa("token");
 
   const porOrganizacao = await checkRateLimit(
     `mcp:org:${auth.organizationId}`,
-    TETO_POR_ORGANIZACAO,
+    tetoDaOrganizacao,
     JANELA_SEGUNDOS,
   );
   if (!porOrganizacao.allowed) throw recusa("organização");

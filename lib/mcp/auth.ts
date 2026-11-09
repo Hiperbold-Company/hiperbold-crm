@@ -42,6 +42,12 @@ export interface McpAuthResult {
    * (decisão do dono, 30/09). Ausente = empresa opera.
    */
   orgSuspensa?: true;
+  /**
+   * `mcp_req_min` do plano da organização (D-227), preenchido pelo `/api/mcp`
+   * depois de `exigirMcpNoPlano`. Ausente = sem teto do plano: valem os tetos
+   * fixos de `rate-limit.ts`. Ver `verificarTetoMcp`.
+   */
+  mcpReqMinDoPlano?: number;
 }
 
 /** Opção de quem valida o token: aceitar o da empresa suspensa, marcado. */

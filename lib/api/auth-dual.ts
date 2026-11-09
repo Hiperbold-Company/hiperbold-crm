@@ -11,7 +11,9 @@
  *     não existe caminho para um Bearer de uma org escrever noutra.
  *
  * Erro de token (ausente, inválido, revogado, expirado) fecha em 401; token
- * válido sem o scope exigido, ou com role abaixo do mínimo, fecha em 403.
+ * válido de organização cujo plano não inclui a API fecha em 402
+ * `plano_sem_api` (D-227, `lib/api/plano-da-api.ts`); token válido sem o
+ * scope exigido, ou com role abaixo do mínimo, fecha em 403.
  * Nenhum dos dois ramos loga o header nem o plaintext do token.
  *
  * ⚠️ NÃO BASTA chamar isto na rota: o `proxy.ts` global roda ANTES de qualquer
@@ -29,6 +31,7 @@ import { type NextRequest } from "next/server";
 
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import type { Actor } from "@/lib/api/handlers/types";
+import { recusaDoPlanoSemApi } from "@/lib/api/plano-da-api";
 import { fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { ROLE_RANK, type Role } from "@/lib/auth/types";
@@ -166,6 +169,12 @@ export async function resolveAuthDual(
       }
       throw err;
     }
+
+    // Plano sem API (D-227): só aqui, no ramo REST do bearer — o `/api/mcp`
+    // não passa por este helper e tem a trava própria. Depois de escopo e
+    // papel: a recusa que não precisa de banco sai antes da que precisa.
+    const semApi = await recusaDoPlanoSemApi(auth.organizationId, requestId);
+    if (semApi) return { ok: false, response: semApi };
 
     const supabaseDoToken = createAdminClient();
     if (comDono) {

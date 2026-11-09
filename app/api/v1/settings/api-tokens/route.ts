@@ -30,6 +30,9 @@ import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { papelAcimaDoCriador } from "@/lib/auth/teto-de-papel-da-chave";
+import { PLANO_SEM_API_MSG, recursosDaChave } from "@/lib/api/plano-da-api";
+import { planoDaOrganizacao } from "@/lib/billing/planos/plano-da-organizacao";
+import { logger } from "@/lib/logger";
 import { createApiTokenSchema, validateRequest } from "@/lib/schemas";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -71,6 +74,16 @@ export async function POST(req: NextRequest): Promise<Response> {
     requestId,
   });
   if (naoVerificado) return naoVerificado;
+
+  // D-227: a chave só nasce se o plano inclui a API REST ou o MCP (leitura do
+  // plano que falha conta como "não inclui"). Leitura direta, sem o cache
+  // curto: criar chave é raro, e quem acabou de subir de plano não espera.
+  // As chaves já emitidas não são apagadas: cada porta recusa na hora do uso.
+  const plano = await planoDaOrganizacao(createAdminClient(), activeOrg.orgId, logger);
+  const recursos = recursosDaChave(plano.limites, plano.leituraFalhou);
+  if (!recursos.api && !recursos.mcp) {
+    return fail("plano_sem_api", t(PLANO_SEM_API_MSG), 402, { requestId });
+  }
 
   let input;
   try {
