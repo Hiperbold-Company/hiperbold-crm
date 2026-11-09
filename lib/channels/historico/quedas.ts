@@ -145,10 +145,15 @@ function voltouHa(voltaEm: Date, agora: Date, janelaMs: number): boolean {
  * WAHA ativas e abre UMA importação `aguardando` por queda. Com
  * "Guardar o histórico" desligado não há o que buscar: só avisa.
  */
-export async function abrirRecuperacoesDasQuedas(admin: SupabaseClient, agora: Date): Promise<{ criadas: number }> {
+export async function abrirRecuperacoesDasQuedas(
+  admin: SupabaseClient,
+  agora: Date,
+  /** As organizações a olhar; sem ela, todas as operantes (uma ida ao PostgREST). */
+  organizacoes?: string[],
+): Promise<{ criadas: number }> {
   let criadas = 0;
   const desde = new Date(agora.getTime() - OLHAR_PARA_TRAS_MS - 24 * 3_600_000).toISOString();
-  for (const organizationId of await organizacoesOperantes(admin)) {
+  for (const organizationId of organizacoes ?? (await organizacoesOperantes(admin))) {
     try {
       criadas += await abrirDaOrganizacao(admin, organizationId, desde, agora);
     } catch (err) {
@@ -288,10 +293,12 @@ interface LinhaAguardando {
 export async function prepararRecuperacoesAguardando(
   admin: SupabaseClient,
   agora: Date,
+  /** As organizações a olhar; sem ela, todas as operantes (uma ida ao PostgREST). */
+  organizacoes?: string[],
 ): Promise<{ promovidas: number; canceladas: number }> {
   let promovidas = 0;
   let canceladas = 0;
-  for (const organizationId of await organizacoesOperantes(admin)) {
+  for (const organizationId of organizacoes ?? (await organizacoesOperantes(admin))) {
     try {
       const r = await prepararDaOrganizacao(admin, organizationId, agora);
       promovidas += r.promovidas;

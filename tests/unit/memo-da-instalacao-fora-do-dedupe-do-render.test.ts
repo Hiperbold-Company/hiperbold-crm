@@ -31,6 +31,7 @@ import {
   cssPersonalizadoDaInstalacao,
   invalidarCssPersonalizadoDaInstalacao,
 } from "@/lib/branding/css-personalizado";
+import { invalidarConfiguracao } from "@/lib/instalacao/config";
 import { carregarComportamentoDaInstalacao } from "@/lib/instalacao/comportamento-servidor";
 import { esquecerComportamento, invalidarComportamento } from "@/lib/instalacao/comportamento";
 import {
@@ -138,7 +139,11 @@ const MEMOS: Memo[] = [
       semeado_do_env: false,
     },
     ler: cssPersonalizadoDaInstalacao,
-    invalidar: invalidarCssPersonalizadoDaInstalacao,
+    // A escrita real (`gravarPelaTela`) invalida o memo da chave e depois o do CSS.
+    invalidar: () => {
+      invalidarConfiguracao("APP_CUSTOM_CSS");
+      invalidarCssPersonalizadoDaInstalacao();
+    },
     esperado: "/* depois */",
   },
   {

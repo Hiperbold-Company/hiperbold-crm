@@ -78,6 +78,37 @@ export interface EventLogDrainKnobs {
   staleSweepMs: number;
   /** Teto de eventos por tick. */
   batchSize: number;
+  /**
+   * Teto do recuo enquanto o ouvinte do banco está VIVO (migration 1000). Com
+   * NOTIFY acordando o laço, o recuo longo não atrasa evento novo: só o ritmo da
+   * consulta de segurança. Ausente = o mesmo `idleMaxMs`.
+   */
+  idleMaxListeningMs?: number;
+  /** Intervalo da varredura de presos enquanto o ouvinte está vivo. Ausente = `staleSweepMs`. */
+  staleSweepListeningMs?: number;
+}
+
+/**
+ * Os knobs EM VIGOR nesta volta. Com o ouvinte vivo, os tetos longos; caído,
+ * exatamente os de antes. Teto longo nunca encurta o curto (`Math.max`): quem
+ * configurar o longo abaixo do curto paga o ritmo curto, não um laço mais
+ * rápido que antes.
+ *
+ * ATRASO CONHECIDO: o retry/backoff do `event_log` devolve a linha a `pending`
+ * por UPDATE, e o gatilho de `event_log` só notifica INSERT. Com o ouvinte vivo,
+ * o laço do worker pode então levar até o teto longo (300 s) para pegar um retry.
+ * Quem cobre é o cron `event-log-drain`, 1×/min (`docker/scheduler/entrypoint.sh`),
+ * que deve continuar ligado. Ver `docs/runbooks/custo-e-cota-do-supabase.md`.
+ */
+export function knobsEmVigor(knobs: EventLogDrainKnobs, ouvindo: boolean): EventLogDrainKnobs {
+  if (!ouvindo) return knobs;
+  const longo = (curto: number, pedido: number | undefined): number =>
+    pedido !== undefined && Number.isFinite(pedido) && pedido > 0 ? Math.max(curto, pedido) : curto;
+  return {
+    ...knobs,
+    idleMaxMs: longo(knobs.idleMaxMs, knobs.idleMaxListeningMs),
+    staleSweepMs: longo(knobs.staleSweepMs, knobs.staleSweepListeningMs),
+  };
 }
 
 // Assinatura escrita à mão em vez de `typeof import(...)`: a regra
@@ -100,6 +131,11 @@ interface Deps {
  */
 export interface DepsDoLaco {
   sinal?: SinalDeTrabalhoDeEventLog;
+  /**
+   * O ouvinte do banco está vivo? Consultado a cada volta: é o que decide entre
+   * os tetos longos e os curtos (`knobsEmVigor`). Ausente = nunca ouvindo.
+   */
+  ouvindo?: () => boolean;
 }
 
 /**
@@ -129,6 +165,25 @@ export interface ProntidaoDoLacoDeEventLog {
 
 const AINDA_NAO_TENTOU = 'o laço ainda não tentou carregar';
 
+/**
+ * Os `event_type` que algum handler deste laço consome. `null` = o laço ainda
+ * não carregou, e aí todo NOTIFY acorda (na dúvida, acorda).
+ */
+let tiposComHandler: ReadonlySet<string> | null = null;
+
+/**
+ * O NOTIFY do `event_log` interessa a este laço? O payload são os tipos
+ * DISTINTOS que o comando inseriu (migration 1000). Sem este filtro, cada
+ * `ai_agent.dispatch_requested` — que é do drain do turno, não destes handlers
+ * — custaria uma consulta ao PostgREST. Payload vazio ou `*` (lista longa
+ * demais para o NOTIFY) acorda sempre.
+ */
+export function notificacaoInteressaAoLaco(payload: string): boolean {
+  if (tiposComHandler === null) return true;
+  if (payload === '' || payload === '*') return true;
+  return payload.split(',').some((t) => tiposComHandler?.has(t.trim()) === true);
+}
+
 let prontidao: ProntidaoDoLacoDeEventLog = {
   carregado: false,
   motivo: AINDA_NAO_TENTOU,
@@ -145,6 +200,7 @@ export function prontidaoDoLacoDeEventLog(): ProntidaoDoLacoDeEventLog {
 /** Só para teste: volta ao estado de quem ainda não tentou carregar. */
 export function _reiniciarProntidaoDoLaco(): void {
   prontidao = { carregado: false, motivo: AINDA_NAO_TENTOU };
+  tiposComHandler = null;
 }
 
 /**
@@ -171,6 +227,8 @@ export async function carregarDepsDoLaco(log: Logger): Promise<Deps | null> {
     const { drainEventLog } = await import('@/lib/event-log/drain');
     const { ensureHandlersRegistered } = await import('@/lib/event-log/register-handlers');
     ensureHandlersRegistered();
+    const { getRegisteredHandlers } = await import('@/lib/event-log/dispatcher');
+    tiposComHandler = new Set(getRegisteredHandlers().flatMap((h) => h.events));
 
     const deps: Deps = { drainEventLog, admin: adminParaAviso };
     // A prontidão sai ANTES de resolver o aviso antigo: ela depende só das deps,
@@ -298,6 +356,7 @@ export async function runEventLogDrainLoop(
   if (!deps) return;
 
   const sinal = opts.sinal ?? sinalDeTrabalhoDoLacoDeEventLog();
+  const ouvindo = opts.ouvindo ?? (() => false);
 
   // O contador e o relógio moram AQUI, não na regra: `proximaEspera` continua
   // pura e é o laço quem sabe quantas voltas ociosas já passaram.
@@ -306,18 +365,21 @@ export async function runEventLogDrainLoop(
   // worker recém-subido esperaria um minuto para recuperar o evento que a
   // queda anterior deixou preso.
   let ultimaVarreduraMs = Number.NEGATIVE_INFINITY;
-  const noTetoAPartirDe = rodadasAteOTeto(knobs);
   const vazio: DrainSummary = { scanned: 0, done: 0, retried: 0, failed: 0, dead: 0 };
 
   while (!signal.aborted) {
     // O tick paga o corte da soneca anterior: daqui para baixo, um `acordar()`
     // novo volta a comprar um tick.
     sinal.inicioDoTick();
+    // Os tetos são relidos a cada volta: o ouvinte pode cair ou voltar no meio
+    // de um recuo, e a próxima soneca já tem de sair com o teto certo.
+    const k = knobsEmVigor(knobs, ouvindo());
+    const noTetoAPartirDe = rodadasAteOTeto(k);
     // Tick que EXPLODE não pode acelerar o laço: no erro não há resumo, e o
     // erro conta como rodada ociosa — um banco fora do ar lançaria a cada
     // iteração, e o ritmo rápido transformaria a indisponibilidade numa
     // tempestade de tentativas.
-    let espera = esperaOciosa(knobs, rodadasOciosas);
+    let espera = esperaOciosa(k, rodadasOciosas);
     try {
       // A segunda leitura da rodada (os `processing` com `updated_at` velho)
       // procura linhas MINUTOS atrasadas — rodá-la a cada 10 s era trabalho sem
@@ -326,14 +388,14 @@ export async function runEventLogDrainLoop(
       // uma vez por `staleSweepMs`.
       const agora = Date.now();
       const noTeto = rodadasOciosas >= noTetoAPartirDe;
-      const varrerPresos = noTeto || agora - ultimaVarreduraMs >= knobs.staleSweepMs;
+      const varrerPresos = noTeto || agora - ultimaVarreduraMs >= k.staleSweepMs;
       if (varrerPresos) ultimaVarreduraMs = agora;
 
       const resumo = await deps.drainEventLog(deps.admin, {
-        limit: knobs.batchSize,
+        limit: k.batchSize,
         varrerPresos,
       });
-      espera = proximaEspera(resumo, knobs, rodadasOciosas);
+      espera = proximaEspera(resumo, k, rodadasOciosas);
       rodadasOciosas = proximaRodadaOciosa(resumo, rodadasOciosas);
       if (resumo.done + resumo.retried + resumo.failed + resumo.dead > 0) {
         log.info('event-log drain: tick', { ...resumo });
@@ -343,7 +405,7 @@ export async function runEventLogDrainLoop(
         error: (err instanceof Error ? err.message : String(err)).slice(0, 300),
       });
       rodadasOciosas = proximaRodadaOciosa(vazio, rodadasOciosas);
-      espera = esperaOciosa(knobs, rodadasOciosas);
+      espera = esperaOciosa(k, rodadasOciosas);
     }
     await sinal.dormir(espera, signal);
   }

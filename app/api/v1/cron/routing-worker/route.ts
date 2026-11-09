@@ -15,10 +15,25 @@ import type { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { autorizaCron } from "@/lib/auth/cron-auth";
+import { recursoOcioso } from "@/lib/cron/piso-ocioso";
 import { logger } from "@/lib/logger";
 import { runRoutingWorker } from "@/lib/routing/worker";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * O QUE RODA DEPOIS DO PORTÃO DO PISO OCIOSO, na ordem do arquivo (cerca:
+ * `tests/unit/cron-passa-pelo-portao.test.ts`). O worker só tem o que fazer
+ * quando há evento `conversation.routing_requested` pendente ou em processamento;
+ * a auditoria abaixo já era condicional ao tick ter drenado algo.
+ */
+const PASSOS_DEPOIS_DO_PORTAO = [
+  "let summary",
+  "try",
+  "if (summary.batch_size > 0 || summary.errors.length > 0)",
+  "return",
+] as const;
+void PASSOS_DEPOIS_DO_PORTAO;
 
 async function handle(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
@@ -26,6 +41,12 @@ async function handle(req: NextRequest): Promise<Response> {
   if (!autorizaCron(req)) {
     return fail("forbidden", "Cron secret missing or invalid.", 403, { requestId });
   }
+
+  // O PISO OCIOSO: sem evento de roteamento `pending`/`processing`, o worker faria
+  // duas consultas ao `event_log` por minuto só para receber lista vazia (a
+  // recuperação do travado e os pendentes). O sinal vem do pool `pg`
+  // (lib/cron/piso-ocioso.ts) e, na dúvida, a rota roda.
+  if (await recursoOcioso("roteamento")) return ok({ pulado: "recurso_ocioso" }, { requestId });
 
   let summary;
   try {

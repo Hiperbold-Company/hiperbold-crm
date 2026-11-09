@@ -25,7 +25,12 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import { esquecerRetrato, recursoTemTrabalho, type RecursoDoCron } from "@/lib/cron/piso-ocioso";
+import {
+  esquecerRetrato,
+  organizacoesComHistorico,
+  recursoTemTrabalho,
+  type RecursoDoCron,
+} from "@/lib/cron/piso-ocioso";
 
 const pool = new pg.Pool({
   connectionString: `postgresql://postgres:postgres@127.0.0.1:${process.env.TEST_DB_PORT ?? 54329}/postgres`,
@@ -44,6 +49,9 @@ const FILAS: RecursoDoCron[] = [
   "mcp_a_revogar",
   "lembrete_de_tarefa",
   "lembrete_de_agenda",
+  "confirmacao_de_presenca",
+  "fila_meta_social",
+  "roteamento",
 ];
 
 async function leitura(recurso: RecursoDoCron): Promise<boolean> {
@@ -102,5 +110,57 @@ describe("retrato do piso ocioso contra o baseline", () => {
       await pool.query("delete from mcp_oauth_pedidos where id = $1", [id]);
     }
     expect(await leitura("mcp_a_revogar")).toBe(false);
+  });
+
+  it("evento de roteamento pendente liga o recurso; consumido, desliga", async () => {
+    const id = randomUUID();
+    await semFk(
+      `insert into event_log (id, organization_id, event_type, entity_kind, payload, status)
+       values ($1, $2, 'conversation.routing_requested', 'conversation', '{}'::jsonb, 'pending')`,
+      [id, randomUUID()],
+    );
+    try {
+      expect(await leitura("roteamento")).toBe(true);
+      await pool.query("update event_log set status = 'done' where id = $1", [id]);
+      expect(await leitura("roteamento")).toBe(false);
+    } finally {
+      await pool.query("delete from event_log where id = $1", [id]);
+    }
+  });
+
+  it("organizacoesComHistorico executa contra o baseline e só devolve organização operante com o que olhar", async () => {
+    const operante = randomUUID();
+    const suspensa = randomUUID();
+    const sossegada = randomUUID();
+    const orgs = [operante, suspensa, sossegada];
+    for (const [org, status] of [
+      [operante, "active"],
+      [suspensa, "suspended"],
+      [sossegada, "active"],
+    ] as const) {
+      await semFk(`insert into organizations (id, slug, legal_name, display_name, status) values ($1, $2, 'T', 'T', $3)`, [
+        org,
+        `t-${org.slice(0, 8)}`,
+        status,
+      ]);
+    }
+    const eventos = [randomUUID(), randomUUID()];
+    try {
+      for (const [i, org] of [operante, suspensa].entries()) {
+        await semFk(
+          `insert into event_log (id, organization_id, event_type, entity_kind, payload, status)
+           values ($1, $2, 'channel_session.status_changed', 'channel_session', '{"from_status":"WORKING","to_status":"FAILED"}'::jsonb, 'done')`,
+          [eventos[i], org],
+        );
+      }
+      const lista = await organizacoesComHistorico(pool);
+      expect(lista).not.toBeNull();
+      expect(lista).toContain(operante);
+      expect(lista).not.toContain(suspensa);
+      expect(lista).not.toContain(sossegada);
+    } finally {
+      await pool.query("delete from event_log where id = any($1)", [eventos]);
+      await pool.query("delete from organizations where id = any($1)", [orgs]);
+    }
   });
 });

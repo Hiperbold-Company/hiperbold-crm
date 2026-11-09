@@ -34,6 +34,7 @@ vi.hoisted(() => {
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 import { pickToolsFromMcp } from "@/lib/ai/runtime/tools";
+import { invalidarModulosDaInstalacao } from "@/lib/instalacao/modulos";
 import type { McpAuthResult } from "@/lib/mcp/auth";
 import type { McpContext } from "@/lib/mcp/types";
 
@@ -352,13 +353,17 @@ function montar(servidores: ServidorDoAgenteNoTurno[], contato?: string) {
 
 describe("módulo opcional desligado (doc 252)", () => {
   it("o turno não monta servidor do agente, nem o de chave nem o de OAuth", async () => {
+    // Cada mudança da chave invalida o memo de 30 s, como `gravarModulo` faz ao gravar.
     banco.tabelas.platform_config = [{ chave: "MODULO_MCP_POR_AGENTE", valor: "desligado" }];
+    invalidarModulosDaInstalacao();
     expect(await carga(CONTATO_A, CONVERSA_A)).toEqual([]);
     banco.tabelas.platform_config = [];
+    invalidarModulosDaInstalacao();
     expect(await carga(CONTATO_A, CONVERSA_A)).toEqual([]);
     expect(stub.chamadas).toEqual([]);
     // Controle: a mesma carga, com o módulo ligado, monta o servidor.
     banco.tabelas.platform_config = [{ chave: "MODULO_MCP_POR_AGENTE", valor: "ligado" }];
+    invalidarModulosDaInstalacao();
     expect((await carga(CONTATO_A, CONVERSA_A)).map((s) => s.estado)).toEqual(["sem_autorizacao"]);
   });
 });

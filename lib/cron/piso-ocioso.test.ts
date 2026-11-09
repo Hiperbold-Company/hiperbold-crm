@@ -14,10 +14,14 @@ import { join } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { TRAVADA_APOS_MS } from "@/lib/channels/meta-social/fila";
+import { ROUTING_EVENT_TYPE } from "@/lib/routing/worker";
+
 import {
   type BancoDoPortao,
   esquecerRetrato,
   invalidarRetrato,
+  organizacoesComHistorico,
   RECURSOS_DO_CRON,
   recursoOcioso,
   recursoTemTrabalho,
@@ -194,5 +198,111 @@ describe("portão do piso ocioso", () => {
       expect(semEspaco(claim)).toContain(condicao);
       expect(semEspaco(sinal)).toContain(condicao);
     }
+  });
+});
+
+describe("as rotinas de minuto (terceira fatia): o sinal anda junto com o que a rotina faz", () => {
+  const semEspaco = (texto: string) => texto.replace(/\s+/g, "");
+  const baseline = () => readFileSync(join(__dirname, "..", "..", "supabase", "baseline.sql"), "utf8");
+
+  it("confirmação de presença: as condições da última definição de fn_appointment_confirmation_sweep estão no sinal", async () => {
+    const db = banco(TUDO_VAZIO);
+    await recursoTemTrabalho("confirmacao_de_presenca", 1_000, db.portao);
+    const sinal = semEspaco(db.consultas[0] ?? "");
+
+    const arquivo = baseline();
+    const inicio = arquivo.lastIndexOf("create or replace function public.fn_appointment_confirmation_sweep");
+    expect(inicio).toBeGreaterThan(0);
+    const funcao = semEspaco(arquivo.slice(inicio, arquivo.indexOf("$$;", arquivo.indexOf("$$", inicio) + 2)));
+
+    // Cada condição da função (menos o atraso por organização, que só estreita)
+    // tem de estar no sinal; sinal mais ESTREITO calaria a confirmação sem erro.
+    expect(funcao).toContain("c.statusin('pending','confirmed')");
+    expect(sinal).toContain("c.statusin('pending','confirmed')");
+    expect(funcao).toContain("(c.confirmation_next_atisnullorc.confirmation_next_at<=p_now)");
+    expect(sinal).toContain("(c.confirmation_next_atisnullorc.confirmation_next_at<=now())");
+    expect(funcao).toContain("ct.is_anonymized");
+    expect(sinal).toContain("ct.is_anonymized");
+    // O atraso de confirmação nunca é menor que 1 minuto (fn_agenda_minutes), então
+    // `ends_at <= now()` é um superconjunto de `ends_at + atraso <= now()`.
+    expect(funcao).toContain("c.ends_at+make_interval(mins=>public.fn_agenda_minutes(o.settings,'confirmation_delay_minutes',10))<=p_now");
+    expect(sinal).toContain("c.ends_at<=now()");
+  });
+
+  it("fila da Meta: a vencida (select da rodada) e a travada (destravar) ligam o recurso, com folga no prazo da travada", async () => {
+    const db = banco(TUDO_VAZIO);
+    await recursoTemTrabalho("fila_meta_social", 1_000, db.portao);
+    const sql = (db.consultas[0] ?? "").replace(/\s+/g, " ");
+    expect(sql).toContain("meta_social_fila_de_envio where status = 'na_fila' and proxima_tentativa_em <= now()");
+    const travada = /meta_social_fila_de_envio where status = 'enviando' and atualizado_em < now\(\) - interval '(\d+) minutes'/.exec(sql);
+    expect(travada, "o piso não olha a linha `enviando` parada").not.toBeNull();
+    // Mais CEDO que a rodada (que espera TRAVADA_APOS_MS): nunca mais tarde.
+    expect(Number(travada![1]) * 60_000).toBeLessThanOrEqual(TRAVADA_APOS_MS);
+  });
+
+  it("roteamento: o tipo do evento é o do worker e os dois estados (pendente e processando) ligam o recurso", async () => {
+    const db = banco(TUDO_VAZIO);
+    await recursoTemTrabalho("roteamento", 1_000, db.portao);
+    const sql = (db.consultas[0] ?? "").replace(/\s+/g, " ");
+    expect(sql).toContain(`event_type = '${ROUTING_EVENT_TYPE}' and status in ('pending', 'processing')`);
+  });
+
+  it("cada coluna nova liga só o seu recurso", async () => {
+    const db = banco({ ...TUDO_VAZIO, fila_meta_social: true });
+    expect(await recursoTemTrabalho("fila_meta_social", 1_000, db.portao)).toBe(true);
+    expect(await recursoTemTrabalho("roteamento", 1_000, db.portao)).toBe(false);
+    expect(await recursoTemTrabalho("confirmacao_de_presenca", 1_000, db.portao)).toBe(false);
+  });
+});
+
+describe("organizacoesComHistorico — a lista que poupa o laço por organização", () => {
+  it("devolve os organization_id da consulta, em UMA ida ao banco", async () => {
+    const consultas: string[] = [];
+    const portao = {
+      query: vi.fn<ConsultaDublada>(async (sql: string) => {
+        consultas.push(sql);
+        return { rows: [{ organization_id: "org-a" }, { organization_id: "org-b" }], rowCount: 2 };
+      }),
+    } as unknown as BancoDoPortao;
+    expect(await organizacoesComHistorico(portao)).toEqual(["org-a", "org-b"]);
+    expect(consultas).toHaveLength(1);
+  });
+
+  it("lista vazia é resposta de verdade (ninguém tem o que olhar), não falha", async () => {
+    const portao = { query: vi.fn<ConsultaDublada>(async () => ({ rows: [], rowCount: 0 })) } as unknown as BancoDoPortao;
+    expect(await organizacoesComHistorico(portao)).toEqual([]);
+  });
+
+  it("erro do banco = null (quem chama olha todas as operantes)", async () => {
+    const portao = {
+      query: vi.fn<ConsultaDublada>(async () => {
+        throw new Error("relation does not exist");
+      }),
+    } as unknown as BancoDoPortao;
+    expect(await organizacoesComHistorico(portao)).toBeNull();
+  });
+
+  it("pool indisponível (sem SUPABASE_DB_URL) = null", async () => {
+    expect(await organizacoesComHistorico()).toBeNull();
+  });
+
+  it("as três condições são as do recurso `historico` e só entra organização operante", async () => {
+    const lista = banco({});
+    await organizacoesComHistorico(lista.portao);
+    const sqlDaLista = (lista.consultas[0] ?? "").replace(/\s+/g, " ");
+
+    const retrato = banco(TUDO_VAZIO);
+    await recursoTemTrabalho("historico", 1_000, retrato.portao);
+    const sqlDoRetrato = (retrato.consultas[0] ?? "").replace(/\s+/g, " ");
+
+    for (const condicao of [
+      "importacoes_de_historico where status in ('rodando', 'aguardando')",
+      "event_type = 'channel_session.status_changed' and payload ->> 'from_status' = 'WORKING' and created_at > now() - interval '8 days'",
+      "status = 'open' and kind in ('recuperacao_da_queda', 'cliente_sem_resposta_na_queda')",
+    ]) {
+      expect(sqlDoRetrato, `o retrato perdeu: ${condicao}`).toContain(condicao);
+      expect(sqlDaLista, `a lista perdeu: ${condicao}`).toContain(condicao);
+    }
+    expect(sqlDaLista).toContain("o.status = 'active'");
   });
 });

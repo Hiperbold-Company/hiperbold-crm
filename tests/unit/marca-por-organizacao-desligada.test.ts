@@ -45,6 +45,7 @@ import { resolverMarcaDaOrganizacao } from "@/lib/branding/organizacao";
 import { marcaDaSaida } from "@/lib/branding/saida";
 import {
   CHAVE_DO_MODULO,
+  invalidarModulosDaInstalacao,
   MODULOS_OPCIONAIS,
   modulosLigados,
   type ModuloOpcional,
@@ -78,13 +79,14 @@ describe("o módulo existe e nasce desligado", () => {
 
   it("sem linha no banco, está desligado; só o valor `ligado` liga", async () => {
     const chave = "MODULO_MARCA_POR_ORGANIZACAO";
-    expect(await modulosLigados(dbDe([]))).not.toContain("marca_por_organizacao");
-    expect(await modulosLigados(dbDe([{ chave, valor: "desligado" }]))).not.toContain(
-      "marca_por_organizacao",
-    );
-    expect(await modulosLigados(dbDe([{ chave, valor: "ligado" }]))).toContain(
-      "marca_por_organizacao",
-    );
+    // Cada banco novo equivale a uma escrita: o memo de 30 s é invalidado, como `gravarModulo` faz.
+    const lidos = (linhas: Array<{ chave: string; valor: string }>) => {
+      invalidarModulosDaInstalacao();
+      return modulosLigados(dbDe(linhas));
+    };
+    expect(await lidos([])).not.toContain("marca_por_organizacao");
+    expect(await lidos([{ chave, valor: "desligado" }])).not.toContain("marca_por_organizacao");
+    expect(await lidos([{ chave, valor: "ligado" }])).toContain("marca_por_organizacao");
   });
 });
 
