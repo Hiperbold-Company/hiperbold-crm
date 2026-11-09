@@ -181,28 +181,28 @@ describe("0945 item 1: a conta do total no banco", () => {
 
 describe("0945 item 2: fn_billing_criar_pedido valida o parcelamento", () => {
   it("semestral 4x com o total certo: o pedido nasce com amount_cents = total e parcelas = 4", () => {
-    expect(tentar(ORG_VALIDACAO, "semiannual", 4, 110172)).toBeNull();
-    expect(sql(`select amount_cents || '|' || parcelas || '|' || metodo || '|' || ciclo from public.billing_orders where organization_id = '${ORG_VALIDACAO}' and status = 'criado';`)).toBe("110172|4|CREDIT_CARD|semiannual");
+    expect(tentar(ORG_VALIDACAO, "semiannual", 4, 83916)).toBeNull();
+    expect(sql(`select amount_cents || '|' || parcelas || '|' || metodo || '|' || ciclo from public.billing_orders where organization_id = '${ORG_VALIDACAO}' and status = 'criado';`)).toBe("83916|4|CREDIT_CARD|semiannual");
     cancelarAbertos(ORG_VALIDACAO);
   });
 
   it("3x é sem juros: o total do pedido é o preço do ciclo", () => {
-    expect(tentar(ORG_VALIDACAO, "semiannual", 3, 104900)).toBeNull();
-    expect(sql(`select amount_cents from public.billing_orders where organization_id = '${ORG_VALIDACAO}' and status = 'criado';`)).toBe("104900");
+    expect(tentar(ORG_VALIDACAO, "semiannual", 3, 79900)).toBeNull();
+    expect(sql(`select amount_cents from public.billing_orders where organization_id = '${ORG_VALIDACAO}' and status = 'criado';`)).toBe("79900");
     cancelarAbertos(ORG_VALIDACAO);
   });
 
   it("total errado (também o do preço à vista num 4x) é recusado e nenhum pedido nasce", () => {
-    expect(tentar(ORG_VALIDACAO, "semiannual", 4, 104900)).toContain("billing_parcelamento_total_divergente");
-    expect(tentar(ORG_VALIDACAO, "semiannual", 4, 110171)).toContain("billing_parcelamento_total_divergente");
+    expect(tentar(ORG_VALIDACAO, "semiannual", 4, 79900)).toContain("billing_parcelamento_total_divergente");
+    expect(tentar(ORG_VALIDACAO, "semiannual", 4, 83915)).toContain("billing_parcelamento_total_divergente");
     expect(tentar(ORG_VALIDACAO, "semiannual", 4, null)).toContain("billing_parcelamento_total_divergente");
-    expect(tentar(ORG_VALIDACAO, "yearly", 12, 189900)).toContain("billing_parcelamento_total_divergente");
+    expect(tentar(ORG_VALIDACAO, "yearly", 12, 139900)).toContain("billing_parcelamento_total_divergente");
     expect(sql(`select count(*) from public.billing_orders where organization_id = '${ORG_VALIDACAO}' and status = 'criado';`)).toBe("0");
   });
 
   it("à vista com total diferente do preço também é recusado; com o total certo ou sem total segue como antes", () => {
     expect(tentar(ORG_VALIDACAO, "semiannual", 1, 99999)).toContain("billing_parcelamento_total_divergente");
-    expect(tentar(ORG_VALIDACAO, "semiannual", 1, 104900)).toBeNull();
+    expect(tentar(ORG_VALIDACAO, "semiannual", 1, 79900)).toBeNull();
     cancelarAbertos(ORG_VALIDACAO);
     expect(tentar(ORG_VALIDACAO, "semiannual", 1, null)).toBeNull();
     expect(sql(`select parcelas from public.billing_orders where organization_id = '${ORG_VALIDACAO}' and status = 'criado';`)).toBe("1");
@@ -212,20 +212,20 @@ describe("0945 item 2: fn_billing_criar_pedido valida o parcelamento", () => {
   it("acima do teto do ciclo: semestral 7x e anual 13x são recusados, anual 12x passa", () => {
     expect(tentar(ORG_VALIDACAO, "semiannual", 7, 120000)).toContain("billing_parcelas_acima_do_teto");
     expect(tentar(ORG_VALIDACAO, "yearly", 13, 220000)).toContain("billing_parcelas_invalidas");
-    expect(tentar(ORG_VALIDACAO, "yearly", 12, 215352)).toBeNull();
+    expect(tentar(ORG_VALIDACAO, "yearly", 12, 158652)).toBeNull();
     cancelarAbertos(ORG_VALIDACAO);
   });
 
   it("parcelas fora de 1 a 12 são recusadas", () => {
-    expect(tentar(ORG_VALIDACAO, "yearly", 0, 189900)).toContain("billing_parcelas_invalidas");
-    expect(tentar(ORG_VALIDACAO, "yearly", -2, 189900)).toContain("billing_parcelas_invalidas");
+    expect(tentar(ORG_VALIDACAO, "yearly", 0, 139900)).toContain("billing_parcelas_invalidas");
+    expect(tentar(ORG_VALIDACAO, "yearly", -2, 139900)).toContain("billing_parcelas_invalidas");
   });
 
   it("o teto vem de billing_settings, não do código: baixando o teto do semestral para 3, o 4x é recusado", () => {
     sql(`update public.billing_settings set parcelamento_max_semestral = 3 where id = 1;`);
     try {
-      expect(tentar(ORG_VALIDACAO, "semiannual", 4, 110172)).toContain("billing_parcelas_acima_do_teto");
-      expect(tentar(ORG_VALIDACAO, "semiannual", 3, 104900)).toBeNull();
+      expect(tentar(ORG_VALIDACAO, "semiannual", 4, 83916)).toContain("billing_parcelas_acima_do_teto");
+      expect(tentar(ORG_VALIDACAO, "semiannual", 3, 79900)).toBeNull();
       cancelarAbertos(ORG_VALIDACAO);
     } finally {
       sql(`update public.billing_settings set parcelamento_max_semestral = 6 where id = 1;`);
@@ -233,8 +233,8 @@ describe("0945 item 2: fn_billing_criar_pedido valida o parcelamento", () => {
   });
 
   it("só no cartão: o Pix parcelado é recusado", () => {
-    expect(tentar(ORG_VALIDACAO, "semiannual", 4, 110172, "PIX")).toContain("billing_parcelamento_so_no_cartao");
-    expect(tentar(ORG_VALIDACAO, "yearly", 2, 189900, "PIX")).toContain("billing_parcelamento_so_no_cartao");
+    expect(tentar(ORG_VALIDACAO, "semiannual", 4, 83916, "PIX")).toContain("billing_parcelamento_so_no_cartao");
+    expect(tentar(ORG_VALIDACAO, "yearly", 2, 139900, "PIX")).toContain("billing_parcelamento_so_no_cartao");
   });
 
   it("o mensal e o pacote de tokens não parcelam", () => {
@@ -254,12 +254,12 @@ describe("0945 item 2: fn_billing_criar_pedido valida o parcelamento", () => {
     const chave = "'0945c000-0000-4000-8000-000000000001'::uuid";
     const pedir = (parcelas: number, total: number) =>
       sql(`select public.fn_billing_criar_pedido('${ORG_IDEMPOTENCIA}'::uuid, 'assinatura', 'pro', 'yearly', null, 'CREDIT_CARD', 'sandbox', ${chave}, null, null, ${parcelas}, ${total});`);
-    const primeiro = pedir(4, 199440);
+    const primeiro = pedir(4, 146928);
     expect(primeiro).toContain('"ja_existia": false');
-    const repetido = pedir(4, 199440);
+    const repetido = pedir(4, 146928);
     expect(repetido).toContain('"ja_existia": true');
     expect(repetido).toContain('"parcelas": 4');
-    const totalEm6x = calcularParcelamento(189900, 6, PARAMETROS).totalCents;
+    const totalEm6x = calcularParcelamento(139900, 6, PARAMETROS).totalCents;
     expect(erroDe(`select public.fn_billing_criar_pedido('${ORG_IDEMPOTENCIA}'::uuid, 'assinatura', 'pro', 'yearly', null, 'CREDIT_CARD', 'sandbox', ${chave}, null, null, 6, ${totalEm6x});`)).toContain("billing_chave_com_valores_diferentes");
     expect(erroDe(`select public.fn_billing_criar_pedido('${ORG_IDEMPOTENCIA}'::uuid, 'assinatura', 'pro', 'yearly', null, 'CREDIT_CARD', 'sandbox', ${chave}, null);`)).toContain("billing_chave_com_valores_diferentes");
     expect(sql(`select count(*) from public.billing_orders where organization_id = '${ORG_IDEMPOTENCIA}';`)).toBe("1");
@@ -269,7 +269,7 @@ describe("0945 item 2: fn_billing_criar_pedido valida o parcelamento", () => {
 
 describe("0945 item 4: o id do parcelamento no pedido", () => {
   it("grava, repete sem erro, recusa id diferente e formato inválido, e recusa pedido à vista", () => {
-    const pedido = pedirParcelado(ORG_REGISTRO, "pro", "yearly", 4, 199440);
+    const pedido = pedirParcelado(ORG_REGISTRO, "pro", "yearly", 4, 146928);
     const registrar = (id: string) => sql(`select public.fn_billing_pedido_registrar_parcelamento('${ORG_REGISTRO}'::uuid, '${pedido}'::uuid, '${id}');`);
     expect(registrar(INST(1))).toContain('"ja_registrado": false');
     expect(pedidoCol(pedido, "asaas_installment_id")).toBe(INST(1));
@@ -285,7 +285,7 @@ describe("0945 item 4: o id do parcelamento no pedido", () => {
   });
 
   it("pedido de outra organização: não encontrado", () => {
-    const pedido = pedirParcelado(ORG_REGISTRO, "pro", "yearly", 2, 189900);
+    const pedido = pedirParcelado(ORG_REGISTRO, "pro", "yearly", 2, 139900);
     expect(erroDe(`select public.fn_billing_pedido_registrar_parcelamento('${ORG_IDEMPOTENCIA}'::uuid, '${pedido}'::uuid, '${INST(4)}');`)).toContain("billing_pedido_nao_encontrado");
     cancelarAbertos(ORG_REGISTRO);
   });
@@ -295,10 +295,10 @@ describe("0945 item 3: as parcelas confirmadas", () => {
   let pedidoSemestral = "";
 
   it("semestral 4x: a primeira parcela concede o período (6 meses e um dia), as outras só entram em billing_payments", () => {
-    pedidoSemestral = pedirParcelado(ORG_SEMESTRAL, "pro", "semiannual", 4, 110172);
+    pedidoSemestral = pedirParcelado(ORG_SEMESTRAL, "pro", "semiannual", 4, 83916);
     registrarCobrancaEParcelamento(ORG_SEMESTRAL, pedidoSemestral, "pay_i945_s_1", INST(10));
 
-    const resultados = pagarParcelas(ORG_SEMESTRAL, pedidoSemestral, "i945_s", INST(10), "275.43", "1101.72", 4);
+    const resultados = pagarParcelas(ORG_SEMESTRAL, pedidoSemestral, "i945_s", INST(10), "209.79", "839.16", 4);
     // `pay_i945_s_1` já está em billing_orders.asaas_payment_id, e o resto chega pelo externalReference.
     for (const r of resultados) {
       expect(r).toContain('"resultado": "aplicado"');
@@ -310,7 +310,7 @@ describe("0945 item 3: as parcelas confirmadas", () => {
     // Só a primeira tem período; as outras três têm período nulo.
     expect(sql(`select count(*) from public.billing_payments where order_id = '${pedidoSemestral}' and billing_period_end is not null;`)).toBe("1");
     expect(sql(`select billing_period_end is not null from public.billing_payments where asaas_payment_id = 'pay_i945_s_1';`)).toBe("t");
-    expect(sql(`select sum(gross_cents) from public.billing_payments where order_id = '${pedidoSemestral}';`)).toBe("110172");
+    expect(sql(`select sum(gross_cents) from public.billing_payments where order_id = '${pedidoSemestral}';`)).toBe("83916");
     // O período do contrato é o de seis meses mais o dia (limite exclusivo), concedido uma vez.
     expect(contrato(ORG_SEMESTRAL, `((current_period_end at time zone ${SP})::date = (current_date + interval '6 months')::date + 1)::text`)).toBe("true");
     expect(contrato(ORG_SEMESTRAL, "status || '|' || cycle")).toBe("ativa|semiannual");
@@ -329,29 +329,29 @@ describe("0945 item 3: as parcelas confirmadas", () => {
 
   it("reentregar qualquer parcela é idempotente: nada muda no período nem em billing_payments", () => {
     const fim = contrato(ORG_SEMESTRAL, "current_period_end");
-    const r = registrarEAplicar("evt-i945_s-2-de-novo", "PAYMENT_CONFIRMED", "pay_i945_s_2", confirmacaoDaParcela("pay_i945_s_2", "275.43", pedidoSemestral, INST(10), "1101.72", 4));
+    const r = registrarEAplicar("evt-i945_s-2-de-novo", "PAYMENT_CONFIRMED", "pay_i945_s_2", confirmacaoDaParcela("pay_i945_s_2", "209.79", pedidoSemestral, INST(10), "839.16", 4));
     expect(r).toContain('"resultado": "ja_aplicado"');
-    const r1 = registrarEAplicar("evt-i945_s-1-de-novo", "PAYMENT_CONFIRMED", "pay_i945_s_1", confirmacaoDaParcela("pay_i945_s_1", "275.43", pedidoSemestral, INST(10), "1101.72", 4));
+    const r1 = registrarEAplicar("evt-i945_s-1-de-novo", "PAYMENT_CONFIRMED", "pay_i945_s_1", confirmacaoDaParcela("pay_i945_s_1", "209.79", pedidoSemestral, INST(10), "839.16", 4));
     expect(r1).toContain('"resultado": "ja_aplicado"');
     expect(contrato(ORG_SEMESTRAL, "current_period_end")).toBe(fim);
     expect(linhasDe(pedidoSemestral)).toBe("4");
   });
 
-  it("anual 3x sem juros: parcelas de R$ 633,00, total 1.899,00 e período de um ano e um dia", () => {
-    const pedido = pedirParcelado(ORG_ANUAL_3X, "pro", "yearly", 3, 189900);
+  it("anual 3x sem juros: parcelas de R$ 466,33, total 1.399,00 e período de um ano e um dia", () => {
+    const pedido = pedirParcelado(ORG_ANUAL_3X, "pro", "yearly", 3, 139900);
     registrarCobrancaEParcelamento(ORG_ANUAL_3X, pedido, "pay_i945_a_1", INST(11));
-    const resultados = pagarParcelas(ORG_ANUAL_3X, pedido, "i945_a", INST(11), "633.00", "1899.00", 3);
+    const resultados = pagarParcelas(ORG_ANUAL_3X, pedido, "i945_a", INST(11), "466.33", "1399.00", 3);
     for (const r of resultados) expect(r).toContain('"resultado": "aplicado"');
-    expect(pedidoCol(pedido, "status || '|' || amount_cents || '|' || parcelas")).toBe("pago|189900|3");
+    expect(pedidoCol(pedido, "status || '|' || amount_cents || '|' || parcelas")).toBe("pago|139900|3");
     expect(contrato(ORG_ANUAL_3X, `((current_period_end at time zone ${SP})::date = (current_date + interval '1 year')::date + 1)::text`)).toBe("true");
   });
 });
 
 describe("0945 item 3: a conferência de valor é pelo TOTAL do parcelamento", () => {
   it("o valor de uma parcela, bem abaixo do preço do plano, NÃO é divergente (já provado acima); o total abaixo do pedido é", () => {
-    const pedido = pedirParcelado(ORG_CONFERE_TOTAL, "pro", "yearly", 4, 199440);
+    const pedido = pedirParcelado(ORG_CONFERE_TOTAL, "pro", "yearly", 4, 146928);
     registrarCobrancaEParcelamento(ORG_CONFERE_TOTAL, pedido, "pay_i945_c_1", INST(20));
-    const r = registrarEAplicar("evt-i945_c-1", "PAYMENT_CONFIRMED", "pay_i945_c_1", confirmacaoDaParcela("pay_i945_c_1", "498.60", pedido, INST(20), "1899.00", 4));
+    const r = registrarEAplicar("evt-i945_c-1", "PAYMENT_CONFIRMED", "pay_i945_c_1", confirmacaoDaParcela("pay_i945_c_1", "367.32", pedido, INST(20), "1399.00", 4));
     expect(r).toContain('"resultado": "divergente"');
     expect(sql(`select count(*) from public.billing_payments where asaas_payment_id = 'pay_i945_c_1';`)).toBe("0");
     expect(pedidoCol(pedido, "status")).not.toBe("pago");
@@ -364,7 +364,7 @@ describe("0945 item 3: a conferência de valor é pelo TOTAL do parcelamento", (
       "evt-i945_c-2",
       "PAYMENT_CONFIRMED",
       "pay_i945_c_2",
-      `jsonb_build_object('id','pay_i945_c_2','status','CONFIRMED','value',498.60,'dueDate',${HOJE},'paymentDate',${HOJE},'externalReference','HC:ord:${pedidoAberto}')`,
+      `jsonb_build_object('id','pay_i945_c_2','status','CONFIRMED','value',367.32,'dueDate',${HOJE},'paymentDate',${HOJE},'externalReference','HC:ord:${pedidoAberto}')`,
     );
     expect(r).toContain('"resultado": "aguardando"');
     expect(sql(`select erro_codigo from public.asaas_webhook_events where event_id = 'evt-i945_c-2';`)).toBe("billing_parcelamento_sem_total");
@@ -373,17 +373,17 @@ describe("0945 item 3: a conferência de valor é pelo TOTAL do parcelamento", (
 
   it("parcelamento de outro id ou com número de parcelas diferente do pedido é divergente", () => {
     const pedidoAberto = sql(`select id from public.billing_orders where organization_id = '${ORG_CONFERE_TOTAL}' and status = 'aguardando_pagamento';`);
-    const outroId = registrarEAplicar("evt-i945_c-3", "PAYMENT_CONFIRMED", "pay_i945_c_3", confirmacaoDaParcela("pay_i945_c_3", "498.60", pedidoAberto, INST(21), "1994.40", 4));
+    const outroId = registrarEAplicar("evt-i945_c-3", "PAYMENT_CONFIRMED", "pay_i945_c_3", confirmacaoDaParcela("pay_i945_c_3", "367.32", pedidoAberto, INST(21), "1469.28", 4));
     expect(outroId).toContain('"resultado": "divergente"');
     expect(outroId).toContain("parcelamento_diferente_do_pedido");
-    const outrasParcelas = registrarEAplicar("evt-i945_c-4", "PAYMENT_CONFIRMED", "pay_i945_c_4", confirmacaoDaParcela("pay_i945_c_4", "332.40", pedidoAberto, INST(20), "1994.40", 6));
+    const outrasParcelas = registrarEAplicar("evt-i945_c-4", "PAYMENT_CONFIRMED", "pay_i945_c_4", confirmacaoDaParcela("pay_i945_c_4", "244.88", pedidoAberto, INST(20), "1469.28", 6));
     expect(outrasParcelas).toContain('"resultado": "divergente"');
     expect(sql(`select count(*) from public.billing_payments where order_id = '${pedidoAberto}';`)).toBe("0");
   });
 
   it("com o total certo (R$ 1.994,40) a primeira parcela concede e o pedido fecha", () => {
     const pedidoAberto = sql(`select id from public.billing_orders where organization_id = '${ORG_CONFERE_TOTAL}' and status = 'aguardando_pagamento';`);
-    const r = registrarEAplicar("evt-i945_c-5", "PAYMENT_CONFIRMED", "pay_i945_c_5", confirmacaoDaParcela("pay_i945_c_5", "498.60", pedidoAberto, INST(20), "1994.40", 4));
+    const r = registrarEAplicar("evt-i945_c-5", "PAYMENT_CONFIRMED", "pay_i945_c_5", confirmacaoDaParcela("pay_i945_c_5", "367.32", pedidoAberto, INST(20), "1469.28", 4));
     expect(r).toContain('"resultado": "aplicado"');
     expect(r).not.toContain("divergente_valor");
     expect(pedidoCol(pedidoAberto, "status")).toBe("pago");
@@ -391,7 +391,7 @@ describe("0945 item 3: a conferência de valor é pelo TOTAL do parcelamento", (
 
   it("uma parcela de OUTRO parcelamento chegando depois do pedido pago é divergente, nunca entra no pedido", () => {
     const pedido = sql(`select id from public.billing_orders where organization_id = '${ORG_CONFERE_TOTAL}' and status = 'pago';`);
-    const r = registrarEAplicar("evt-i945_c-6", "PAYMENT_CONFIRMED", "pay_i945_c_6", confirmacaoDaParcela("pay_i945_c_6", "498.60", pedido, INST(22), "1994.40", 4));
+    const r = registrarEAplicar("evt-i945_c-6", "PAYMENT_CONFIRMED", "pay_i945_c_6", confirmacaoDaParcela("pay_i945_c_6", "367.32", pedido, INST(22), "1469.28", 4));
     expect(r).toContain('"resultado": "divergente"');
     expect(r).toContain("parcela_de_outro_parcelamento");
     expect(sql(`select count(*) from public.billing_payments where asaas_payment_id = 'pay_i945_c_6';`)).toBe("0");
@@ -400,14 +400,14 @@ describe("0945 item 3: a conferência de valor é pelo TOTAL do parcelamento", (
 
 describe("0945: o parcelamento empilha como o Pix", () => {
   it("o segundo parcelamento do mesmo plano e ciclo começa no fim do primeiro e dura exatamente seis meses", () => {
-    const p1 = pedirParcelado(ORG_EMPILHA, "pro", "semiannual", 2, 104900);
+    const p1 = pedirParcelado(ORG_EMPILHA, "pro", "semiannual", 2, 79900);
     registrarCobrancaEParcelamento(ORG_EMPILHA, p1, "pay_i945_e1_1", INST(30));
-    for (const r of pagarParcelas(ORG_EMPILHA, p1, "i945_e1", INST(30), "524.50", "1049.00", 2)) expect(r).toContain('"resultado": "aplicado"');
+    for (const r of pagarParcelas(ORG_EMPILHA, p1, "i945_e1", INST(30), "399.50", "799.00", 2)) expect(r).toContain('"resultado": "aplicado"');
     const fim1 = sql(`select billing_period_end from public.billing_payments where asaas_payment_id = 'pay_i945_e1_1';`);
 
-    const p2 = pedirParcelado(ORG_EMPILHA, "pro", "semiannual", 3, 104900);
+    const p2 = pedirParcelado(ORG_EMPILHA, "pro", "semiannual", 3, 79900);
     registrarCobrancaEParcelamento(ORG_EMPILHA, p2, "pay_i945_e2_1", INST(31));
-    for (const r of pagarParcelas(ORG_EMPILHA, p2, "i945_e2", INST(31), "349.67", "1049.00", 3)) expect(r).toContain('"resultado": "aplicado"');
+    for (const r of pagarParcelas(ORG_EMPILHA, p2, "i945_e2", INST(31), "266.33", "799.00", 3)) expect(r).toContain('"resultado": "aplicado"');
 
     expect(sql(`select billing_period_start = '${fim1}'::timestamptz from public.billing_payments where asaas_payment_id = 'pay_i945_e2_1';`)).toBe("t");
     expect(sql(`select ((billing_period_end at time zone ${SP})::date = (('${fim1}'::timestamptz at time zone ${SP})::date + interval '6 months')::date)::text from public.billing_payments where asaas_payment_id = 'pay_i945_e2_1';`)).toBe("true");
@@ -426,16 +426,16 @@ describe("0945 item 3: estorno de parcela(s)", () => {
   let pedido = "";
 
   it("pagas as três parcelas (anual 3x), o contrato fica ativo com os tokens do plano", () => {
-    pedido = pedirParcelado(ORG_ESTORNO, "pro", "yearly", 3, 189900);
+    pedido = pedirParcelado(ORG_ESTORNO, "pro", "yearly", 3, 139900);
     registrarCobrancaEParcelamento(ORG_ESTORNO, pedido, "pay_i945_r_1", INST(40));
-    for (const r of pagarParcelas(ORG_ESTORNO, pedido, "i945_r", INST(40), "633.00", "1899.00", 3)) expect(r).toContain('"resultado": "aplicado"');
+    for (const r of pagarParcelas(ORG_ESTORNO, pedido, "i945_r", INST(40), "466.33", "1399.00", 3)) expect(r).toContain('"resultado": "aplicado"');
     sql(`select public.fn_billing_saldo_da_carteira('${ORG_ESTORNO}'::uuid);`);
     expect(Number(carteiraDoPlano(ORG_ESTORNO))).toBeGreaterThan(0);
   });
 
   it("estornar a parcela que concedeu o período (a primeira) só alarma: não corta, não zera tokens, o pedido continua pago", () => {
     const tokens = carteiraDoPlano(ORG_ESTORNO);
-    const r = estornar("evt-i945_r-e1", "pay_i945_r_1", "633.00");
+    const r = estornar("evt-i945_r-e1", "pay_i945_r_1", "466.33");
     expect(r).toContain('"resultado": "aplicado"');
     expect(r).toContain('"alarme": "estorno_confirmado,estorno_parcial_do_parcelamento"');
     expect(r).not.toContain("estorno_cortou_acesso");
@@ -446,20 +446,20 @@ describe("0945 item 3: estorno de parcela(s)", () => {
   });
 
   it("estornar uma parcela de período nulo (a segunda) também só alarma", () => {
-    const r = estornar("evt-i945_r-e2", "pay_i945_r_2", "633.00");
+    const r = estornar("evt-i945_r-e2", "pay_i945_r_2", "466.33");
     expect(r).toContain('"alarme": "estorno_confirmado,estorno_parcial_do_parcelamento"');
     expect(contrato(ORG_ESTORNO, "status")).toBe("ativa");
     expect(pedidoCol(pedido, "status")).toBe("pago");
   });
 
   it("reentregar o estorno de uma parcela já estornada é idempotente", () => {
-    const r = estornar("evt-i945_r-e2-de-novo", "pay_i945_r_2", "633.00");
+    const r = estornar("evt-i945_r-e2-de-novo", "pay_i945_r_2", "466.33");
     expect(r).toContain('"resultado": "ja_aplicado"');
     expect(sql(`select count(*) from public.billing_payments where order_id = '${pedido}' and status = 'REFUNDED';`)).toBe("2");
   });
 
   it("estornadas TODAS as parcelas, corta como o estorno total: pedido estornado, contrato cancelado e tokens do mês zerados", () => {
-    const r = estornar("evt-i945_r-e3", "pay_i945_r_3", "633.00");
+    const r = estornar("evt-i945_r-e3", "pay_i945_r_3", "466.33");
     expect(r).toContain('"resultado": "aplicado"');
     expect(r).toContain('"alarme": "estorno_confirmado,estorno_cortou_acesso"');
     expect(pedidoCol(pedido, "status")).toBe("estornado");
@@ -469,15 +469,15 @@ describe("0945 item 3: estorno de parcela(s)", () => {
   });
 
   it("estornando as parcelas em outra ordem (a última primeiro), o corte só vem na que completa o pedido", () => {
-    const p = pedirParcelado(ORG_ESTORNO_ORDEM, "pro", "semiannual", 2, 104900);
+    const p = pedirParcelado(ORG_ESTORNO_ORDEM, "pro", "semiannual", 2, 79900);
     registrarCobrancaEParcelamento(ORG_ESTORNO_ORDEM, p, "pay_i945_o_1", INST(41));
-    for (const r of pagarParcelas(ORG_ESTORNO_ORDEM, p, "i945_o", INST(41), "524.50", "1049.00", 2)) expect(r).toContain('"resultado": "aplicado"');
+    for (const r of pagarParcelas(ORG_ESTORNO_ORDEM, p, "i945_o", INST(41), "399.50", "799.00", 2)) expect(r).toContain('"resultado": "aplicado"');
 
-    const primeiro = estornar("evt-i945_o-e2", "pay_i945_o_2", "524.50");
+    const primeiro = estornar("evt-i945_o-e2", "pay_i945_o_2", "399.50");
     expect(primeiro).toContain("estorno_parcial_do_parcelamento");
     expect(contrato(ORG_ESTORNO_ORDEM, "status")).toBe("ativa");
 
-    const segundo = estornar("evt-i945_o-e1", "pay_i945_o_1", "524.50");
+    const segundo = estornar("evt-i945_o-e1", "pay_i945_o_1", "399.50");
     expect(segundo).toContain('"alarme": "estorno_confirmado,estorno_cortou_acesso"');
     expect(pedidoCol(p, "status")).toBe("estornado");
     expect(contrato(ORG_ESTORNO_ORDEM, "status")).toBe("cancelada");
@@ -497,7 +497,7 @@ describe("0945 item 5: parâmetros semeados uma vez", () => {
       sql(bloco);
       expect(sql(`select parcelamento_taxa_mensal || '|' || parcelamento_max_anual || '|' || coalesce(parcelamento_max_semestral::text, 'nulo') from public.billing_settings where id = 1;`)).toBe("0.025000|9|nulo");
       // Sem teto do semestral configurado, só o 1x existe.
-      expect(tentar(ORG_VALIDACAO, "semiannual", 2, 104900)).toContain("billing_parcelas_acima_do_teto");
+      expect(tentar(ORG_VALIDACAO, "semiannual", 2, 79900)).toContain("billing_parcelas_acima_do_teto");
     } finally {
       sql(`update public.billing_settings set parcelamento_taxa_mensal = 0.0199, parcelamento_max_anual = 12, parcelamento_max_semestral = 6 where id = 1;`);
     }
@@ -524,11 +524,11 @@ describe("0945: forma", () => {
 describe("0947 M2: o período só é concedido com todas as parcelas confirmadas", () => {
   let pedido = "";
   const parcela = (k: number, confirmadas: number | null, evento: string) =>
-    registrarEAplicar(evento, "PAYMENT_CONFIRMED", `pay_i947_p_${k}`, confirmacaoDaParcela(`pay_i947_p_${k}`, "179.46", pedido, INST(50), "2153.52", 12, "", confirmadas));
+    registrarEAplicar(evento, "PAYMENT_CONFIRMED", `pay_i947_p_${k}`, confirmacaoDaParcela(`pay_i947_p_${k}`, "132.21", pedido, INST(50), "1586.52", 12, "", confirmadas));
   const eventoCol = (evento: string, coluna: string) => sql(`select ${coluna} from public.asaas_webhook_events where event_id = '${evento}';`);
 
   it("1 de 12 confirmada: o evento fica aguardando, nada é gravado, o pedido não fecha e o contrato não ganha período", () => {
-    pedido = pedirParcelado(ORG_PARCIAL, "pro", "yearly", 12, 215352);
+    pedido = pedirParcelado(ORG_PARCIAL, "pro", "yearly", 12, 158652);
     registrarCobrancaEParcelamento(ORG_PARCIAL, pedido, "pay_i947_p_1", INST(50));
 
     const r = parcela(1, 1, "evt-i947-p-1a");
@@ -578,7 +578,7 @@ describe("0947 B4: parcelamento removido no Asaas com parcela confirmada alarma"
     `jsonb_build_object('id','${pagamento}','status','CONFIRMED','value',100,'dueDate',${HOJE},'paymentDate',${HOJE},'externalReference','HC:ord:${pedido}','installment','${installment}','parcelamento_removido',true)`;
 
   it("pedido ainda aberto: não concede, devolve divergente com o alarme e não grava nada", () => {
-    const pedido = pedirParcelado(ORG_REMOVIDO, "pro", "yearly", 4, 199440);
+    const pedido = pedirParcelado(ORG_REMOVIDO, "pro", "yearly", 4, 146928);
     registrarCobrancaEParcelamento(ORG_REMOVIDO, pedido, "pay_i947_r_1", INST(60));
 
     const r = registrarEAplicar("evt-i947-r-1", "PAYMENT_CONFIRMED", "pay_i947_r_1", removido("pay_i947_r_1", pedido, INST(60)));
@@ -592,9 +592,9 @@ describe("0947 B4: parcelamento removido no Asaas com parcela confirmada alarma"
   });
 
   it("pedido já pago: a parcela confirmada é registrada (o dinheiro entrou) e o alarme aparece, sem mexer no período", () => {
-    const pedido = pedirParcelado(ORG_REMOVIDO, "pro", "yearly", 3, 189900);
+    const pedido = pedirParcelado(ORG_REMOVIDO, "pro", "yearly", 3, 139900);
     registrarCobrancaEParcelamento(ORG_REMOVIDO, pedido, "pay_i947_r2_1", INST(61));
-    const primeira = registrarEAplicar("evt-i947-r2-1", "PAYMENT_CONFIRMED", "pay_i947_r2_1", confirmacaoDaParcela("pay_i947_r2_1", "633.00", pedido, INST(61), "1899.00", 3));
+    const primeira = registrarEAplicar("evt-i947-r2-1", "PAYMENT_CONFIRMED", "pay_i947_r2_1", confirmacaoDaParcela("pay_i947_r2_1", "466.33", pedido, INST(61), "1399.00", 3));
     expect(primeira).toContain('"resultado": "aplicado"');
     const fim = contrato(ORG_REMOVIDO, "current_period_end");
 
