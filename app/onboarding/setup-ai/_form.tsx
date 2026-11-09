@@ -81,7 +81,11 @@ export function SetupAiForm({ capacidades, conferencias }: Props) {
           setRegrasNaoSalvas(null);
           const res = await createDefaultAgent(formData);
           if (res && !res.ok) {
-            toast.error(`${t("Falha ao criar agente:")} ${res.error}`);
+            toast.error(
+              res.error === "plano_limite_atingido" && res.message
+                ? res.message
+                : `${t("Falha ao criar agente:")} ${res.error}`,
+            );
             return;
           }
           if (res?.regras_nao_salvas) setRegrasNaoSalvas(res.regras_nao_salvas);

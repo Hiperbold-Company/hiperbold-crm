@@ -12,7 +12,8 @@ import { motivoDoErro, sql } from "./psql-transporte";
  *  4. organização do Pro que já tem 2 agentes continua com os 2 (nada é apagado nem arquivado);
  *  5. follow-up e roteiro não contam como automação;
  *  6. o cadastro do próprio visitante nasce no Max;
- *  7. isolamento: o uso de uma organização não conta na outra.
+ *  7. isolamento: o uso de uma organização não conta na outra;
+ *  8. a organização de um agente e de uma automação é imutável (não fura o teto nem mistura tenants).
  */
 
 const ORG_PRO = "10020000-0000-4000-8000-000000000001";
@@ -162,5 +163,40 @@ describe("organização nova", () => {
       select 'SONDA|' || bp.code || '|' || bc.status from public.billing_contracts bc
         join public.billing_plans bp on bp.id = bc.plan_id where bc.organization_id = '${ORG_TRIAL}';`);
     expect(linha).toBe("max|suspensa");
+  });
+});
+
+describe("a organização de um agente e de uma automação não muda", () => {
+  it("mover um agente para a organização que está no teto é recusado (23514), e a linha fica onde estava", () => {
+    // ORG_PRO está no teto de agentes (1); ORG_ACIMA tem 2 agentes. Mover um de ORG_ACIMA para ORG_PRO furaria o teto.
+    const erro = erroDe(
+      `update public.ai_agents set organization_id = '${ORG_PRO}' where organization_id = '${ORG_ACIMA}' and name like 'acima-1%';`,
+    );
+    expect(erro).toContain("23514");
+    expect(erro).toContain("não muda");
+    expect(uso(ORG_ACIMA, "agentes_ia")).toBe("2");
+    expect(uso(ORG_PRO, "agentes_ia")).toBe("1");
+  });
+
+  it("mover uma automação para a organização que está no teto é recusado (23514)", () => {
+    // ORG_PRO está com 10 automações (teto do Pro); ORG_MAX tem 1.
+    const erro = erroDe(
+      `update public.followup_flow_pointers set organization_id = '${ORG_PRO}' where organization_id = '${ORG_MAX}' and name = 'max-auto-1';`,
+    );
+    expect(erro).toContain("23514");
+    expect(erro).toContain("não muda");
+    expect(uso(ORG_MAX, "automacoes")).toBe("1");
+    expect(uso(ORG_PRO, "automacoes")).toBe("10");
+  });
+
+  it("regravar a mesma organização (set organization_id = organization_id) segue permitido", () => {
+    expect(
+      erroDe(`update public.ai_agents set organization_id = organization_id where organization_id = '${ORG_ACIMA}';`),
+    ).toBeNull();
+    expect(
+      erroDe(
+        `update public.followup_flow_pointers set organization_id = organization_id where organization_id = '${ORG_MAX}';`,
+      ),
+    ).toBeNull();
   });
 });

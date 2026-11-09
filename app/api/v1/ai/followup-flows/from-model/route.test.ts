@@ -21,12 +21,14 @@ const deps = vi.hoisted(() => ({
   support: vi.fn(),
   audit: vi.fn(),
   client: vi.fn(),
+  admin: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: deps.role }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: deps.support }));
 vi.mock("@/lib/audit", () => ({ audit: deps.audit }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: deps.client }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: deps.admin }));
 
 import { POST } from "./route";
 import { MODELOS_DE_FOLLOWUP, modeloPorId } from "@/lib/followup/modelos";
@@ -229,5 +231,24 @@ describe("POST /api/v1/ai/followup-flows/from-model", () => {
       );
       expect([modelo.id, res.status]).toEqual([modelo.id, 201]);
     }
+  });
+  it("PT402 do gatilho de plano vira 402 plano_limite_atingido, nunca erro interno", async () => {
+    const { client } = clientFake({
+      erroDoInsert: { code: "PT402", message: "Conta suspensa", details: "assinatura_suspensa" } as never,
+    });
+    deps.client.mockResolvedValue(client);
+    // Leitura do limite indisponível: a frase fixa da conta suspensa vem do reconhecimento do erro.
+    deps.admin.mockReturnValue({
+      from: () => {
+        throw new Error("sem leitura");
+      },
+    });
+
+    const res = await POST(req({ model_id: "clinica-consulta-retomada" }));
+    expect(res.status).toBe(402);
+    const corpo = (await res.json()) as { error: { code: string; message: string } };
+    expect(corpo.error.code).toBe("plano_limite_atingido");
+    expect(corpo.error.message).not.toBe("");
+    expect(corpo.error.message).not.toContain("Conta suspensa");
   });
 });

@@ -1,4 +1,4 @@
--- manifest: **Planos v2: as travas de agentes de IA e de automações, e a organização nova no Max (D-227, fork Hiperbold).** Dois gatilhos novos, no padrão do de funis: `trg_billing_trava_ai_agents` (antes do INSERT de agente não arquivado e da volta de `archived_at` para nulo) e `trg_billing_trava_followup_flow_pointers` (antes do INSERT de fluxo da superfície `automacao`). Cada um confere modo leitura, `fn_billing_bloqueia` e `fn_billing_conferir_teto`, e recusa com PT402 e `detail` = `agentes_ia` ou `automacoes`. `fn_billing_bloqueia` passa a tratar `agentes_ia` e `automacoes` como `conexoes`: bloqueiam sempre, qualquer que seja `billing_settings.modo` (os outros itens seguem o modo). `fn_billing_uso` e `fn_billing_pode_criar` ganham as duas contagens: agente = linha de `ai_agents` com `archived_at` nulo (rascunho conta); automação = linha de `followup_flow_pointers` com `surface = 'automacao'` (a tabela não tem marca de exclusão; excluir apaga a linha). `automation_rules` não conta. Organização já acima do teto não perde nada: só a criação nova é recusada. `fn_billing_contrato_da_organizacao_nova` passa a gravar o plano `max` (era `pro`) para o cadastro do próprio visitante; só afeta organizações novas.
+-- manifest: **Planos v2: as travas de agentes de IA e de automações, e a organização nova no Max (D-227, fork Hiperbold).** Dois gatilhos novos, no padrão do de funis: `trg_billing_trava_ai_agents` (antes do INSERT de agente não arquivado e da volta de `archived_at` para nulo) e `trg_billing_trava_followup_flow_pointers` (antes do INSERT de fluxo da superfície `automacao`). Cada um confere modo leitura, `fn_billing_bloqueia` e `fn_billing_conferir_teto`, e recusa com PT402 e `detail` = `agentes_ia` ou `automacoes`. `fn_billing_bloqueia` passa a tratar `agentes_ia` e `automacoes` como `conexoes`: bloqueiam sempre, qualquer que seja `billing_settings.modo` (os outros itens seguem o modo). `fn_billing_uso` e `fn_billing_pode_criar` ganham as duas contagens: agente = linha de `ai_agents` com `archived_at` nulo (rascunho conta); automação = linha de `followup_flow_pointers` com `surface = 'automacao'` (a tabela não tem marca de exclusão; excluir apaga a linha). `automation_rules` não conta. Organização já acima do teto não perde nada: só a criação nova é recusada. `fn_billing_contrato_da_organizacao_nova` passa a gravar o plano `max` (era `pro`) para o cadastro do próprio visitante; só afeta organizações novas. Também: erro ao ler o teto efetivo ou o modo leitura libera, só para agentes e automações; e dois gatilhos (`trg_ai_agents_organizacao_imutavel`, `trg_followup_flow_pointers_organizacao_imutavel`) recusam, com 23514, a troca de `organization_id` de agente e de automação, que furaria o teto e misturaria tenants.
 
 -- ============================================================================
 -- 1002 — PLANOS V2: AS TRAVAS DE AGENTES DE IA E DE AUTOMAÇÕES
@@ -34,7 +34,23 @@
 --
 -- ─── Leitura que falha ────────────────────────────────────────────────────
 -- Libera, como todo o módulo: `fn_billing_bloqueia` devolve false em qualquer
--- falha interna e `fn_billing_conferir_teto` nunca lança.
+-- falha interna e `fn_billing_conferir_teto` nunca lança. As leituras que antes
+-- ficavam fora do `begin/exception` (o teto efetivo em `fn_billing_bloqueia` e
+-- `fn_billing_modo_leitura` nos dois gatilhos novos) agora também liberam, mas
+-- SÓ para `agentes_ia` e `automacoes`: para os itens antigos (`conexoes`,
+-- `funis` etc.) o erro do teto efetivo continua propagando, como na 0907/0954,
+-- porque mudar isso alteraria o comportamento de quem já está em produção.
+--
+-- ─── A organização de um agente ou de uma automação é imutável ─────────────
+-- A policy dessas tabelas é só de tenant: quem é admin/manager de duas
+-- organizações poderia, pela REST, trocar `organization_id` de um agente ou de
+-- uma automação e (a) furar o teto da organização de origem, empurrando a linha
+-- para uma que ainda tem vaga, e (b) misturar tenants, já que as versões, bases
+-- de conhecimento e inscrições filhas continuam apontando para a organização
+-- antiga. Dois gatilhos `before update of organization_id` recusam a troca
+-- (23514, a mesma forma de `trg_superficie_do_fluxo_imutavel`). Nenhum caminho
+-- do produto troca a organização dessas linhas (conferido no código e nas
+-- funções SQL), então nada legítimo é recusado.
 --
 -- ─── A organização nova nasce no Max ──────────────────────────────────────
 -- Decisão do dono em 09/11/2026: o cadastro do próprio visitante passa a
@@ -81,7 +97,18 @@ begin
     end if;
   end if;
 
-  v_teto := (public.fn_billing_limites_efetivos(p_org) ->> p_item)::integer;
+  -- 1002: erro ao ler o teto efetivo (ex.: cast do jsonb) LIBERA, mas só para os
+  -- itens novos; nos antigos o erro continua propagando, como na 0907/0954.
+  begin
+    v_teto := (public.fn_billing_limites_efetivos(p_org) ->> p_item)::integer;
+  exception
+    when others then
+      if p_item in ('agentes_ia', 'automacoes') then
+        raise warning 'billing_bloqueia_teto_falhou: organizacao=%, item=%, sqlerrm=%', p_org, p_item, sqlerrm;
+        return false;
+      end if;
+      raise;
+  end;
 
   -- Organização Ilimitado (ou item sem teto efetivo) nunca bloqueia.
   if v_teto is null then
@@ -104,7 +131,7 @@ end;
 $$;
 
 comment on function public.fn_billing_bloqueia(uuid, text, uuid) is
-  '0907, 0954 e 1002: o veredito de bloqueio de verdade. Para conexoes (0954), agentes_ia e automacoes (1002) é true sempre que o teto efetivo existe e fn_billing_pode_criar diz que não pode, SEM ler billing_settings.modo nem a carência. Para os demais itens, true só com modo=bloquear, bloqueio_a_partir_de vencido, teto não nulo e fn_billing_pode_criar dizendo que não pode. Pega pg_advisory_xact_lock BLOQUEANTE pela chave billing:<org>:<item> antes de contar; qualquer falha interna devolve false (raise warning). Quem chama levanta o PT402 (este código nunca lança).';
+  '0907, 0954 e 1002: o veredito de bloqueio de verdade. Para conexoes (0954), agentes_ia e automacoes (1002) é true sempre que o teto efetivo existe e fn_billing_pode_criar diz que não pode, SEM ler billing_settings.modo nem a carência; erro ao ler o teto efetivo libera só para agentes_ia e automacoes. Para os demais itens, true só com modo=bloquear, bloqueio_a_partir_de vencido, teto não nulo e fn_billing_pode_criar dizendo que não pode. Pega pg_advisory_xact_lock BLOQUEANTE pela chave billing:<org>:<item> antes de contar; qualquer falha interna devolve false (raise warning). Quem chama levanta o PT402 (este código nunca lança).';
 
 revoke execute on function public.fn_billing_bloqueia(uuid, text, uuid) from public, anon, authenticated;
 grant execute on function public.fn_billing_bloqueia(uuid, text, uuid) to service_role;
@@ -298,10 +325,20 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
+declare
+  v_leitura boolean;
 begin
   if (tg_op = 'INSERT' and new.archived_at is null)
      or (tg_op = 'UPDATE' and old.archived_at is not null and new.archived_at is null) then
-    if public.fn_billing_modo_leitura(new.organization_id) then
+    -- Leitura que falha libera (1002): só a recusa de verdade sai daqui.
+    begin
+      v_leitura := public.fn_billing_modo_leitura(new.organization_id);
+    exception
+      when others then
+        raise warning 'billing_modo_leitura_falhou: organizacao=%, sqlerrm=%', new.organization_id, sqlerrm;
+        v_leitura := false;
+    end;
+    if v_leitura then
       raise exception 'Conta suspensa' using errcode = 'PT402', detail = 'assinatura_suspensa';
     end if;
     if public.fn_billing_bloqueia(new.organization_id, 'agentes_ia', null) then
@@ -333,9 +370,19 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
+declare
+  v_leitura boolean;
 begin
   if new.surface = 'automacao' then
-    if public.fn_billing_modo_leitura(new.organization_id) then
+    -- Leitura que falha libera (1002): só a recusa de verdade sai daqui.
+    begin
+      v_leitura := public.fn_billing_modo_leitura(new.organization_id);
+    exception
+      when others then
+        raise warning 'billing_modo_leitura_falhou: organizacao=%, sqlerrm=%', new.organization_id, sqlerrm;
+        v_leitura := false;
+    end;
+    if v_leitura then
       raise exception 'Conta suspensa' using errcode = 'PT402', detail = 'assinatura_suspensa';
     end if;
     if public.fn_billing_bloqueia(new.organization_id, 'automacoes', null) then
@@ -359,6 +406,55 @@ create trigger trg_billing_trava_followup_flow_pointers
   before insert on public.followup_flow_pointers
   for each row
   execute function public.fn_billing_trava_followup_flow_pointers();
+
+-- ── 5b. A organização de um agente e de uma automação não muda ──
+-- Gatilho simples (security invoker): só compara old e new. `before update of
+-- organization_id` dispara quando a coluna entra no SET; a função só recusa
+-- quando o valor de fato muda. Nome do gatilho antes de `trg_billing_...` na
+-- ordem alfabética, então a recusa vem antes da trava de plano.
+create or replace function public.fn_ai_agents_organizacao_imutavel()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if new.organization_id is distinct from old.organization_id then
+    raise exception 'a organização de um agente de IA não muda depois de criado'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.fn_ai_agents_organizacao_imutavel() from public, anon, authenticated;
+
+drop trigger if exists trg_ai_agents_organizacao_imutavel on public.ai_agents;
+create trigger trg_ai_agents_organizacao_imutavel
+  before update of organization_id on public.ai_agents
+  for each row
+  execute function public.fn_ai_agents_organizacao_imutavel();
+
+create or replace function public.fn_followup_flow_pointers_organizacao_imutavel()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if new.organization_id is distinct from old.organization_id then
+    raise exception 'a organização de um fluxo de follow-up ou automação não muda depois de criado'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.fn_followup_flow_pointers_organizacao_imutavel() from public, anon, authenticated;
+
+drop trigger if exists trg_followup_flow_pointers_organizacao_imutavel on public.followup_flow_pointers;
+create trigger trg_followup_flow_pointers_organizacao_imutavel
+  before update of organization_id on public.followup_flow_pointers
+  for each row
+  execute function public.fn_followup_flow_pointers_organizacao_imutavel();
 
 -- ── 6. A organização nova nasce no Max ──
 create or replace function public.fn_billing_contrato_da_organizacao_nova()
@@ -428,7 +524,7 @@ grant execute on function public.fn_billing_contrato_da_organizacao_nova() to se
 do $agent_worker_1002$
 begin
   if exists (select 1 from pg_roles where rolname = 'agent_worker') then
-    execute 'revoke execute on function public.fn_billing_bloqueia(uuid, text, uuid), public.fn_billing_uso(uuid), public.fn_billing_pode_criar(uuid, text, uuid), public.fn_billing_trava_ai_agents(), public.fn_billing_trava_followup_flow_pointers(), public.fn_billing_contrato_da_organizacao_nova() from agent_worker';
+    execute 'revoke execute on function public.fn_billing_bloqueia(uuid, text, uuid), public.fn_billing_uso(uuid), public.fn_billing_pode_criar(uuid, text, uuid), public.fn_billing_trava_ai_agents(), public.fn_billing_trava_followup_flow_pointers(), public.fn_ai_agents_organizacao_imutavel(), public.fn_followup_flow_pointers_organizacao_imutavel(), public.fn_billing_contrato_da_organizacao_nova() from agent_worker';
   end if;
 end
 $agent_worker_1002$;
