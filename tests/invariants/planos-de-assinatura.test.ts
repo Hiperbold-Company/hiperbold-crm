@@ -195,12 +195,19 @@ describe("3. RLS: membro de A lê o próprio contrato e ajuste, não os de B", (
   // plano do CONTRATO da própria organização (ou um plano for_sale=true, ou
   // o admin da plataforma), não lê um plano fora de venda alheio.
   it("lê o plano do próprio contrato (pro), não um plano fora de venda que não é dele", () => {
-    comoServico(`select public.fn_billing_trocar_plano('${ORG_A}'::uuid, 'pro', null);`);
+    // Desde a 1001 (D-227) a versão ativa do Pro é a 2, à venda e legível por
+    // todos; a versão 1 saiu de venda. O contrato de A aponta a v1, e é ela o
+    // plano fora de venda que B não pode ler.
+    comoServico(`
+      update public.billing_contracts
+         set plan_id = (select id from public.billing_plans where code = 'pro' and version = 1)
+       where organization_id = '${ORG_A}';
+    `);
     expect(
-      membro(USER_A, `select 'SONDA|' || count(*) from public.billing_plans where code = 'pro' and active;`),
+      membro(USER_A, `select 'SONDA|' || count(*) from public.billing_plans where code = 'pro' and version = 1;`),
     ).toEqual(["1"]);
     expect(
-      membro(USER_B, `select 'SONDA|' || count(*) from public.billing_plans where code = 'pro' and active;`),
+      membro(USER_B, `select 'SONDA|' || count(*) from public.billing_plans where code = 'pro' and version = 1;`),
     ).toEqual(["0"]);
   });
 });
@@ -443,7 +450,8 @@ describe("7. fn_billing_trocar_plano", () => {
     );
     const resultado = JSON.parse(linhas[0]!) as { antes: unknown; depois: { plan_code: string; version: number } };
     expect(resultado.antes).toBeNull();
-    expect(resultado.depois).toEqual({ plan_code: "pro", version: 1 });
+    // A versão ativa do Pro é a 2 desde a 1001 (D-227).
+    expect(resultado.depois).toEqual({ plan_code: "pro", version: 2 });
   });
 
   it("troca concorrente: a SEGUNDA troca devolve o 'antes' certo (o resultado da primeira)", () => {
@@ -454,8 +462,8 @@ describe("7. fn_billing_trocar_plano", () => {
       antes: { plan_code: string; version: number };
       depois: { plan_code: string; version: number };
     };
-    expect(resultado.antes).toEqual({ plan_code: "pro", version: 1 });
-    expect(resultado.depois).toEqual({ plan_code: "max", version: 1 });
+    expect(resultado.antes).toEqual({ plan_code: "pro", version: 2 });
+    expect(resultado.depois).toEqual({ plan_code: "max", version: 2 });
   });
 
   it("plano inexistente é recusado", () => {
@@ -476,7 +484,7 @@ describe("7. fn_billing_trocar_plano", () => {
   });
 
   it("'escale' segue ativo depois do rollback, não vazou para outros casos", () => {
-    expect(comoServico(`select 'SONDA|' || active from public.billing_plans where code = 'escale' and version = 1;`)).toEqual([
+    expect(comoServico(`select 'SONDA|' || active from public.billing_plans where code = 'escale' and version = 2;`)).toEqual([
       "true",
     ]);
   });
@@ -514,6 +522,7 @@ describe("8. a semeadura rodada duas vezes não duplica nem sobrescreve preço a
       select 'SONDA|preco=' || price_monthly_cents from public.billing_plans where code = 'pro' and active;
       rollback;
     `);
-    expect(linhas).toEqual(["linhas=1", "preco=12345"]);
+    // Duas linhas do Pro desde a 1001 (v1 fora de venda + v2 ativa); a reaplicação não cria a terceira.
+    expect(linhas).toEqual(["linhas=2", "preco=12345"]);
   });
 });

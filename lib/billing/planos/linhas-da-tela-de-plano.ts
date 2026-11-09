@@ -18,7 +18,7 @@
  * `limites`: os dois argumentos são ignorados de propósito, não só não
  * usados.
  */
-import type { ChaveDeLimite, Limites } from "./limites";
+import { limiteDaChave, type ChaveDeLimite, type ChaveDeLimiteNova, type Limites } from "./limites";
 import type { Uso } from "./uso-da-organizacao";
 
 /**
@@ -34,7 +34,7 @@ export const CHAVES_DA_TELA_DE_PLANO = [
   "conexoes",
   "integracoes_webhook",
   "leads",
-] as const satisfies readonly Exclude<ChaveDeLimite, "tokens_ia_mes">[];
+] as const satisfies readonly Exclude<ChaveDeLimite, "tokens_ia_mes" | ChaveDeLimiteNova>[];
 
 export type ChaveDaTelaDePlano = (typeof CHAVES_DA_TELA_DE_PLANO)[number];
 
@@ -76,5 +76,79 @@ export function linhasDaTelaDePlano(
     // aparece cheia em vez de dividir por zero.
     const percentual = teto <= 0 ? 100 : Math.min(100, Math.round((atual / teto) * 100));
     return { chave, atual, teto, semLimite: false, percentual, estourou: atual >= teto };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// O que o plano inclui (D-227): as seis chaves novas
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * As chaves novas, na ordem da tela. Diferente das de cima, aqui não há
+ * "atual": nesta etapa ninguém conta agentes nem automações contra o plano, e
+ * mostrar "2 de 3" sem a contagem vir do mesmo lugar que a trava seria o
+ * mesmo número pela metade que o comentário do arquivo proíbe. A linha diz só
+ * o que o plano prevê.
+ */
+export const CHAVES_DOS_RECURSOS_DO_PLANO = [
+  "agentes_ia",
+  "automacoes",
+  "mcp_req_min",
+  "acesso_api",
+  "automacao_comentario_instagram",
+  "fonte_dados_req_min",
+] as const satisfies readonly ChaveDeLimiteNova[];
+
+export type ChaveDosRecursosDoPlano = (typeof CHAVES_DOS_RECURSOS_DO_PLANO)[number];
+
+/**
+ * Como cada chave se lê:
+ * - `quantidade`: "até N" ou "sem limite";
+ * - `taxa_ou_fora`: 0 é "não incluso", N é "N req/min", null é "sem limite";
+ * - `taxa`: "N req/min" ou "sem limite";
+ * - `incluso`: 0 é "não incluso", qualquer outro valor (ou null) é "incluso".
+ */
+const FORMA_DA_CHAVE: Record<ChaveDosRecursosDoPlano, "quantidade" | "taxa_ou_fora" | "taxa" | "incluso"> = {
+  agentes_ia: "quantidade",
+  automacoes: "quantidade",
+  mcp_req_min: "taxa_ou_fora",
+  acesso_api: "incluso",
+  automacao_comentario_instagram: "incluso",
+  fonte_dados_req_min: "taxa",
+};
+
+export type ValorDoRecursoDoPlano =
+  | { tipo: "nao_sei" }
+  | { tipo: "nao_incluso" }
+  | { tipo: "incluso" }
+  | { tipo: "sem_limite" }
+  | { tipo: "ate"; quantidade: number }
+  | { tipo: "por_minuto"; quantidade: number };
+
+export interface LinhaDoRecursoDoPlano {
+  chave: ChaveDosRecursosDoPlano;
+  valor: ValorDoRecursoDoPlano;
+}
+
+/** O que o plano prevê para cada chave nova. Com `leituraFalhou`, toda linha é "não sei". */
+export function linhasDosRecursosDoPlano(
+  limites: Limites,
+  leituraFalhou: boolean,
+): LinhaDoRecursoDoPlano[] {
+  return CHAVES_DOS_RECURSOS_DO_PLANO.map((chave): LinhaDoRecursoDoPlano => {
+    if (leituraFalhou) return { chave, valor: { tipo: "nao_sei" } };
+
+    const teto = limiteDaChave(limites, chave);
+    switch (FORMA_DA_CHAVE[chave]) {
+      case "incluso":
+        return { chave, valor: { tipo: teto === 0 ? "nao_incluso" : "incluso" } };
+      case "taxa_ou_fora":
+        if (teto === 0) return { chave, valor: { tipo: "nao_incluso" } };
+        return { chave, valor: teto === null ? { tipo: "sem_limite" } : { tipo: "por_minuto", quantidade: teto } };
+      case "taxa":
+        return { chave, valor: teto === null ? { tipo: "sem_limite" } : { tipo: "por_minuto", quantidade: teto } };
+      case "quantidade":
+        return { chave, valor: teto === null ? { tipo: "sem_limite" } : { tipo: "ate", quantidade: teto } };
+    }
   });
 }

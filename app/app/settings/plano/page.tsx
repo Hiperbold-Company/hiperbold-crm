@@ -69,8 +69,11 @@ import {
 import { estadoDoBloqueio, type EstadoDoBloqueio } from "@/lib/billing/planos/estado-do-bloqueio";
 import {
   linhasDaTelaDePlano,
+  linhasDosRecursosDoPlano,
   type ChaveDaTelaDePlano,
+  type ChaveDosRecursosDoPlano,
   type LinhaDaTelaDePlano,
+  type LinhaDoRecursoDoPlano,
 } from "@/lib/billing/planos/linhas-da-tela-de-plano";
 import { planoDaOrganizacao } from "@/lib/billing/planos/plano-da-organizacao";
 import { usoDaOrganizacao } from "@/lib/billing/planos/uso-da-organizacao";
@@ -126,6 +129,16 @@ const ROTULO_DA_CHAVE: Record<ChaveDaTelaDePlano, string> = {
   leads: "Leads",
 };
 
+/** Rótulo de cada item do que o plano inclui (D-227), na ordem de `CHAVES_DOS_RECURSOS_DO_PLANO`. */
+const ROTULO_DO_RECURSO: Record<ChaveDosRecursosDoPlano, string> = {
+  agentes_ia: "Agentes de IA",
+  automacoes: "Automações",
+  mcp_req_min: "MCP",
+  acesso_api: "API com chave",
+  automacao_comentario_instagram: "Automação por comentário do Instagram",
+  fonte_dados_req_min: "Fonte de dados",
+};
+
 /** Rótulo de cada fonte da carteira de tokens (decisão 6 da fase F2-B). */
 const ROTULO_DA_FONTE: Record<FonteCarteira, string> = {
   plano: "Do plano contratado",
@@ -165,6 +178,12 @@ export default async function PlanoEUsoPage() {
 
   const leituraFalhou = usoResultado.leituraFalhou || planoResultado.leituraFalhou;
   const linhas = linhasDaTelaDePlano(usoResultado.uso, planoResultado.limites, leituraFalhou);
+  // O que o plano inclui (D-227) só depende do plano: uma falha só na leitura
+  // do uso não apaga o que o plano prevê.
+  const linhasDosRecursos = linhasDosRecursosDoPlano(
+    planoResultado.limites,
+    planoResultado.leituraFalhou,
+  );
 
   // extratoDoCiclo e estimativaDeRespostas reaproveitam o ciclo e o saldo
   // restante já lidos por saldoDaOrganizacao (quando ela não falhou), para as
@@ -260,6 +279,17 @@ export default async function PlanoEUsoPage() {
         <CardContent className="divide-y divide-border/60 p-6">
           {linhas.map((linha) => (
             <LinhaDeUso key={linha.chave} linha={linha} t={t} tagDoIdioma={tagDoIdioma} />
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("O que o plano inclui")}</CardTitle>
+        </CardHeader>
+        <CardContent className="divide-y divide-border/60">
+          {linhasDosRecursos.map((linha) => (
+            <LinhaDoRecurso key={linha.chave} linha={linha} t={t} tagDoIdioma={tagDoIdioma} />
           ))}
         </CardContent>
       </Card>
@@ -672,6 +702,54 @@ function LinhaDeUso({
           {t("WhatsApp, Instagram e Messenger somados")}. {t("Este limite bloqueia novas conexões ao ser atingido.")}
         </p>
       )}
+    </div>
+  );
+}
+
+function textoDoRecurso(
+  linha: LinhaDoRecursoDoPlano,
+  t: (texto: string) => string,
+  tagDoIdioma: string,
+): string {
+  const v = linha.valor;
+  switch (v.tipo) {
+    case "nao_sei":
+      return t("Não foi possível medir agora.");
+    case "nao_incluso":
+      return t("não incluso");
+    case "incluso":
+      return t("incluso");
+    case "sem_limite":
+      return t("sem limite");
+    case "ate":
+      return `${t("até")} ${v.quantidade.toLocaleString(tagDoIdioma)}`;
+    case "por_minuto":
+      return `${v.quantidade.toLocaleString(tagDoIdioma)} ${t("req/min")}`;
+  }
+}
+
+function LinhaDoRecurso({
+  linha,
+  t,
+  tagDoIdioma,
+}: {
+  linha: LinhaDoRecursoDoPlano;
+  t: (texto: string) => string;
+  tagDoIdioma: string;
+}) {
+  return (
+    <div
+      className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0"
+      data-testid={`recurso-do-plano-${linha.chave}`}
+    >
+      <span className="text-sm font-medium">{t(ROTULO_DO_RECURSO[linha.chave])}</span>
+      <span className="text-sm text-muted-foreground">
+        {linha.valor.tipo === "nao_incluso" ? (
+          <Badge variant="neutral">{textoDoRecurso(linha, t, tagDoIdioma)}</Badge>
+        ) : (
+          textoDoRecurso(linha, t, tagDoIdioma)
+        )}
+      </span>
     </div>
   );
 }

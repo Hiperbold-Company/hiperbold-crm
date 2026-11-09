@@ -173,6 +173,12 @@ const ROTULO_DA_CHAVE: Record<ChaveDeLimite, string> = {
   conexoes: "Conexões",
   integracoes_webhook: "Integrações webhook",
   tokens_ia_mes: "Tokens de IA por mês",
+  agentes_ia: "Agentes de IA",
+  automacoes: "Automações",
+  mcp_req_min: "MCP, requisições por minuto (0 = não incluso)",
+  acesso_api: "API com chave (0 = não incluso, 1 = incluso)",
+  automacao_comentario_instagram: "Automação por comentário do Instagram (0 = não incluso, 1 = incluso)",
+  fonte_dados_req_min: "Fonte de dados, requisições por minuto",
 };
 
 /**
