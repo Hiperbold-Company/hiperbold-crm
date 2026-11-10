@@ -260,7 +260,7 @@
   "A automação foi alterada e não tem mais o rodízio que disparou esta ação. Nada foi atribuído.": "The automation was changed and no longer has the rotation that triggered this action. Nothing was assigned.",
   "A automação nasce pausada. Revise e ligue quando estiver pronta.": "The automation starts paused. Review it and turn it on when you're ready.",
   "A automação não foi salva. Corrija os pontos marcados nas caixas.": "The automation was not saved. Fix the points marked in the boxes.",
-  "A automação por comentário do Instagram está disponível no plano Max.": "Instagram comment automation is available on the Max plan.",
+  "A automação por comentário do Instagram está disponível nos planos Max e Scale.": "Instagram comment automation is available on the Max and Scale plans.",
   "A automação precisa de um gatilho.": "The automation needs a trigger.",
   "A automação publicada roda de verdade para o contato escolhido: as ações mudam o CRM.": "The published automation really runs for the chosen contact: the actions change the CRM.",
   "A automação que iniciar esta pode passar dados; aqui eles se usam como {{param.chave}}.": "The automation that starts this one can pass data; here it is used as {{param.chave}}.",
@@ -5491,7 +5491,7 @@
   "Funil do campo": "Pipeline for the field",
   "Funil do negócio": "Deal pipeline",
   "Funil do número (padrão)": "Number's pipeline (default)",
-  "Funil e performance por atendente nos últimos 30 dias.": "Pipeline and performance by agent over the last 30 days.",
+  "Funil e performance por atendente, no período que você escolher.": "Pipeline and performance by agent, for the period you choose.",
   "Funil inválido.": "Invalid pipeline.",
   "Funil não encontrado.": "Pipeline not found.",
   "Funis": "Pipelines",
@@ -11576,7 +11576,7 @@
   "Só quando o negócio nasce na etapa": "Only when the deal is created in the stage",
   "Só quando o negócio é movido para a etapa": "Only when the deal is moved to the stage",
   "Só quem administra a conta pode configurar o aviso de agendamento.": "Only whoever administers the account can set up appointment notices.",
-  "Só quem administra a empresa define a meta.": "Only whoever administers the business sets the goal.",
+  "Só o administrador e o gerente definem a meta.": "Only administrators and managers set the goal.",
   "Só quem administra a empresa pode ativar uma jornada.": "Only whoever administers the company can activate a journey.",
   "Só quem administra a empresa pode colar a chave e ligar o Jev.": "Only those who administer the company can paste the key and turn on Jev.",
   "Só quem administra a empresa pode definir a meta.": "Only whoever administers the business can set the goal.",
@@ -14113,5 +14113,7 @@
   "…ou cole o texto aqui": "…or paste the text here",
   "⚠ Com o Meet aberto, quem tiver o link da reunião entra sozinho, sem que ninguém o admita. O link é a porta: não o publique onde circula livremente.": "⚠ With an open Meet, whoever has the meeting link gets in alone, with nobody admitting them. The link is the door: do not publish it where it circulates freely.",
   "⚠ Modo teste consome créditos do provider.": "⚠ Test mode uses provider credits.",
-  "⚠️ Atenção: o produto ainda não sabe o preço do modelo em uso, então o gasto medido é menor que o real e esta parada pode não disparar.": "⚠️ Attention: the product doesn't know the price of the model in use yet, so the measured spend is lower than the real one and this stop may not trigger."
+  "⚠️ Atenção: o produto ainda não sabe o preço do modelo em uso, então o gasto medido é menor que o real e esta parada pode não disparar.": "⚠️ Attention: the product doesn't know the price of the model in use yet, so the measured spend is lower than the real one and this stop may not trigger.",
+  "Endereço do MCP:": "MCP address:",
+  "Como conectar um assistente de IA": "How to connect an AI assistant"
 }

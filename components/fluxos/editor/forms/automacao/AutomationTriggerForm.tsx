@@ -147,7 +147,7 @@ export function AutomationTriggerForm({
           </Campo>
           {g.kind === "instagram_comment" && !comentarioNoPlano && (
             <p className="text-xs text-error-fg" data-testid="comentario-fora-do-plano">
-              {t("A automação por comentário do Instagram está disponível no plano Max.")}
+              {t("A automação por comentário do Instagram está disponível nos planos Max e Scale.")}
             </p>
           )}
 

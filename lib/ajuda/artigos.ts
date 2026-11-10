@@ -68,6 +68,9 @@ export const ARTIGOS_POR_ROTA: Readonly<Record<string, string>> = {
 /** Artigo sobre os campos personalizados (seção "Vocabulário e campos" de Etapas do funil). */
 export const CAMINHO_CAMPOS_PERSONALIZADOS = "/crm/funis-e-leads/campos-personalizados/";
 
+/** Artigo de como conectar um assistente de IA (Claude, ChatGPT etc.) ao CRM pelo MCP, usado na tela de chaves de API. */
+export const CAMINHO_CONECTAR_ASSISTENTE_DE_IA = "/crm/integracoes-e-api/conectar-assistente-de-ia/";
+
 /** Segundo artigo da aba "Receber dados": como ligar o formulário do site. */
 export const CAMINHO_CONECTAR_FORMULARIOS = "/crm/receber-leads/conectar-formularios-e-n8n/";
 

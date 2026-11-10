@@ -13,7 +13,7 @@ import { recursoIncluido } from "@/lib/billing/planos/plano-da-organizacao";
 import type { Logger } from "@/lib/agent-engine/obs/logger";
 
 export const FRASE_COMENTARIO_SO_NO_MAX =
-  "A automação por comentário do Instagram está disponível no plano Max.";
+  "A automação por comentário do Instagram está disponível nos planos Max e Scale.";
 
 /** Algum gatilho do bloco Início do grafo é "Comentário no Instagram"? */
 export function grafoUsaComentarioDoInstagram(graph: unknown): boolean {

@@ -36,7 +36,7 @@ O `public_profile` já tem acesso avançado (concedido em 03/11/2026).
 - [ ] **Conta para o revisor no CRM**: um usuário só para a Meta (por exemplo `revisao-meta@hiperbold.com.br`), na organização Hiperbold Company, com papel `admin`.
   - A senha vai **só** no campo de instruções da análise, nunca em arquivo nem em chat.
   - **Não apague a conta depois da análise:** o Checkup de Uso de Dados (revisão anual da Meta) pede que as credenciais de teste fiquem ativas por 1 ano a partir do envio.
-- [ ] **A aba Conexões › Redes sociais precisa aparecer para o revisor.** Hoje ela está oculta para todos, exceto o administrador da plataforma (`lib/hiperbold/funcoes-ocultas.ts`). Sem isso, o revisor não vê a tela que o vídeo mostra (ver a seção 6).
+- [ ] **A aba Conexões › Redes sociais precisa aparecer para o revisor.** Hoje ela está oculta para todos, exceto o administrador da plataforma e as organizações com acesso antecipado (`lib/hiperbold/funcoes-ocultas.ts`: Hiperbold Company e o tenant do revisor, "Meta Developers"). Sem isso, o revisor não vê a tela que o vídeo mostra (ver a seção 6).
 - [ ] O @hiperbold e a Página Hiperbold Company **conectados** no CRM (já estão, desde 03/11/2026).
 - [ ] O app em modo **Ao vivo** (já está).
 

@@ -108,7 +108,7 @@ export function MetaDoMesPanel({ estado, periodo, metas, podeConfigurar, valores
               </Link>
             ) : (
               <p className="text-sm text-muted-foreground">
-                {t("Só quem administra a empresa define a meta.")}
+                {t("Só o administrador e o gerente definem a meta.")}
               </p>
             )}
           </div>
