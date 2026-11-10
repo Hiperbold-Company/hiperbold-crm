@@ -1361,6 +1361,7 @@ jobs:
         followup-dossie.spec.ts
         followup-queue.spec.ts
         automacoes-crm-basico.spec.ts
+        automacoes-tela-unica.spec.ts
         automacoes-botoes-e-pergunta.spec.ts
         automacoes-gatilhos.spec.ts
         automacoes-espera-por-horario.spec.ts

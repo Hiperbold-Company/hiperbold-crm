@@ -4342,3 +4342,10 @@ vai para `evidence/automacoes-lote6/` quando a spec rodar.
 
 Não provado pela tela: "até a data de um campo" (coberto por unitários) e a espera de
 5 s retomando em ~5 s com o worker de pé (o e2e chama o relógio HTTP, não sobe o worker).
+
+## Automações — tela única (lote 5)
+
+- `[P1]` /app/automacoes junta automações, follow-ups e regras antigas; filtro por tipo e busca pelo nome; regra já convertida aparece uma vez só (como automação). Spec: `tests/e2e/automacoes-tela-unica.spec.ts` (escrita, ainda não rodada).
+- `[P1]` Regra antiga conversível → pré-visualização em blocos → publicar: regra desligada, `migrated_to_pointer_id` gravado, automação ligada, numa transação (`fn_automacao_converter_regra`, migration 1005). Não conversível: motivo na tela e link para `/app/webhooks?tab=rules`, onde continua rodando.
+- `[P1]` "Usar um modelo" cria rascunho (não publica) e abre no editor.
+- Voltar atrás é manual: desligar a automação nova e religar a regra antiga (o banco recusa as duas ligadas, PT409).

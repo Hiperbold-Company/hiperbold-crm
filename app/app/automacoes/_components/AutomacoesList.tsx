@@ -40,6 +40,9 @@ import {
 
 import { ModelosDeAutomacaoDialog, type OpcaoDeCampo, type OpcaoDeEtapa } from "./ModelosDeAutomacaoDialog";
 
+/** "Todos" + os três tipos, na ordem do filtro. */
+const FILTROS_DE_TIPO = ["todos", ...TIPOS_DA_LISTA] as const;
+
 export function AutomacoesList({
   initialData,
   followups = [],
@@ -131,7 +134,7 @@ export function AutomacoesList({
                 data-testid="busca-de-automacoes"
               />
               <div role="group" aria-label={t("Filtrar por tipo")} className="flex flex-wrap gap-1">
-                {(["todos", ...TIPOS_DA_LISTA] as const).map((v) => (
+                {FILTROS_DE_TIPO.map((v) => (
                   <Button
                     key={v}
                     type="button"

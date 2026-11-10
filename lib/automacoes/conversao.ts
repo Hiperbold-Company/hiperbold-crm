@@ -27,12 +27,12 @@ export interface RegraLida extends RegraAntiga {
   migrated_to_pointer_id: string | null;
 }
 
-const t = (deps: DepsDeFollowup, texto: string) => (deps.t ?? ((x: string) => x))(texto);
 const recusa = (deps: DepsDeFollowup, status: number, code: string, message: string, details?: Record<string, unknown>) =>
   new ApiError(status, code, details, deps.requestId, message);
 
 /** A regra DESTA organização (service role, filtro explícito), ou 404. */
 export async function lerRegra(deps: DepsDeFollowup, ruleId: string): Promise<RegraLida> {
+  const t = deps.t ?? ((x: string) => x);
   const { data, error } = await deps.admin
     .from("automation_rules")
     .select(COLUNAS_DA_REGRA)
@@ -41,9 +41,9 @@ export async function lerRegra(deps: DepsDeFollowup, ruleId: string): Promise<Re
     .maybeSingle();
   if (error) {
     logger.error("automacao.conversao.leitura_falhou", { request_id: deps.requestId, causa: error.message });
-    throw recusa(deps, 500, "internal_error", t(deps, "Não consegui ler a regra. Tente de novo."));
+    throw recusa(deps, 500, "internal_error", t("Não consegui ler a regra. Tente de novo."));
   }
-  if (!data) throw recusa(deps, 404, "not_found", t(deps, "Regra não encontrada."));
+  if (!data) throw recusa(deps, 404, "not_found", t("Regra não encontrada."));
   return data as unknown as RegraLida;
 }
 
@@ -53,20 +53,22 @@ export function previaDaConversao(regra: RegraLida): ResultadoDaConversao {
 }
 
 function mapearErroDoBanco(deps: DepsDeFollowup, err: { message?: string; code?: string }): ApiError {
+  const t = deps.t ?? ((x: string) => x);
   const msg = (err.message ?? "").trim();
   if (msg === "rule_already_converted") {
-    return recusa(deps, 409, "regra_ja_convertida", t(deps, "Esta regra já virou automação."));
+    return recusa(deps, 409, "regra_ja_convertida", t("Esta regra já virou automação."));
   }
-  if (msg === "rule_not_found") return recusa(deps, 404, "not_found", t(deps, "Regra não encontrada."));
-  if (msg === "pointer_not_found") return recusa(deps, 404, "not_found", t(deps, "Fluxo não encontrado."));
+  if (msg === "rule_not_found") return recusa(deps, 404, "not_found", t("Regra não encontrada."));
+  if (msg === "pointer_not_found") return recusa(deps, 404, "not_found", t("Fluxo não encontrado."));
   if (err.code === "PT409") {
-    return recusa(deps, 409, "dois_motores", t(deps, "A regra antiga e a automação nova não podem ficar ligadas ao mesmo tempo."));
+    return recusa(deps, 409, "dois_motores", t("A regra antiga e a automação nova não podem ficar ligadas ao mesmo tempo."));
   }
   logger.error("automacao.conversao.rpc_falhou", { request_id: deps.requestId, causa: msg });
-  return recusa(deps, 500, "internal_error", t(deps, "Não consegui publicar a automação. Tente de novo."));
+  return recusa(deps, 500, "internal_error", t("Não consegui publicar a automação. Tente de novo."));
 }
 
 async function criarRascunho(deps: DepsDeFollowup, nome: string): Promise<string> {
+  const t = deps.t ?? ((x: string) => x);
   const tentativas = [nome, `${nome} (automação)`.slice(0, 120)];
   for (const [i, n] of tentativas.entries()) {
     try {
@@ -77,7 +79,7 @@ async function criarRascunho(deps: DepsDeFollowup, nome: string): Promise<string
       if (!conflito || i === tentativas.length - 1) throw err;
     }
   }
-  throw recusa(deps, 409, "conflict", t(deps, "Já existe um fluxo com este nome."));
+  throw recusa(deps, 409, "conflict", t("Já existe um fluxo com este nome."));
 }
 
 export interface ConversaoFeita {
@@ -93,8 +95,9 @@ export interface ConversaoFeita {
  * com a lista do que não tem equivalente.
  */
 export async function converterEPublicarRegra(deps: DepsDeFollowup, ruleId: string): Promise<ConversaoFeita> {
+  const t = deps.t ?? ((x: string) => x);
   if (!deps.responsavel) {
-    throw recusa(deps, 403, "forbidden", t(deps, "Não foi possível identificar quem responde por esta chave."));
+    throw recusa(deps, 403, "forbidden", t("Não foi possível identificar quem responde por esta chave."));
   }
   const regra = await lerRegra(deps, ruleId);
   if (regra.migrated_to_pointer_id) {
@@ -102,7 +105,7 @@ export async function converterEPublicarRegra(deps: DepsDeFollowup, ruleId: stri
   }
   const conversao = converterRegra(regra);
   if (!conversao.conversivel) {
-    throw recusa(deps, 422, "regra_nao_conversivel", t(deps, "Esta regra tem partes que ainda não existem nas automações novas."), {
+    throw recusa(deps, 422, "regra_nao_conversivel", t("Esta regra tem partes que ainda não existem nas automações novas."), {
       nao_convertido: conversao.naoConvertido,
     });
   }
