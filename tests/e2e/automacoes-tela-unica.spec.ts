@@ -7,7 +7,9 @@
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 
+import type { Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 
 import { carregarEnvLocal } from "../../scripts/lib/env-de-teste";
@@ -15,6 +17,7 @@ import { loginComoAdmin, type CredsE2E } from "./helpers/login-admin";
 import { expect, test } from "./helpers/test";
 
 const CREDS_PATH = ".e2e-creds.json";
+const EVIDENCIA = "evidence/automacoes-lote5";
 const PRAZO = 60_000;
 
 function loadCreds(): CredsE2E {
@@ -34,6 +37,18 @@ const banco = createClient(
     auth: { autoRefreshToken: false, persistSession: false },
   },
 );
+
+async function foto(page: Page, nome: string): Promise<void> {
+  fs.mkdirSync(EVIDENCIA, { recursive: true });
+  await page.screenshot({ path: path.join(EVIDENCIA, `${nome}.png`), fullPage: true });
+}
+
+async function semearPonteiro(nome: string, surface: "followup" | "automacao"): Promise<void> {
+  const { error } = await banco
+    .from("followup_flow_pointers")
+    .insert({ organization_id: orgId, name: nome, status: "draft", surface });
+  expect(error, `semear o ${surface}`).toBeNull();
+}
 
 async function semearRegra(nome: string, actions: unknown[]): Promise<string> {
   const { data, error } = await banco
@@ -66,6 +81,9 @@ test.describe("Automações — tela única", () => {
       { type: "send_email", config: { destinatario: "contato", assunto: "Oi", corpo: "Oi" } },
     ]);
 
+    await semearPonteiro(`Follow-up ${carimbo}`, "followup");
+    await semearPonteiro(`Automação ${carimbo}`, "automacao");
+
     await loginComoAdmin(page, creds);
     await page.goto("/app/automacoes");
     await expect(page.getByRole("heading", { name: "Automações", level: 1 })).toBeVisible({
@@ -76,6 +94,9 @@ test.describe("Automações — tela única", () => {
     await page.getByTestId("busca-de-automacoes").fill(carimbo);
     const lista = page.getByTestId("lista-de-automacoes");
     await expect(lista.getByTestId("linha-regra")).toHaveCount(2);
+    await expect(lista.getByTestId("linha-followup")).toHaveCount(1);
+    await expect(lista.getByTestId("linha-automacao")).toHaveCount(1);
+    await foto(page, "01-lista-unica-com-os-tres-tipos");
     await expect(
       lista.getByText("Regra antiga — continua funcionando; abra na tela antiga."),
     ).toBeVisible();
@@ -87,6 +108,7 @@ test.describe("Automações — tela única", () => {
     // A não conversível abre a explicação e o caminho da tela antiga.
     await page.goto(`/app/automacoes/converter/${naoConversivel}`);
     await expect(page.getByTestId("regra-nao-conversivel")).toBeVisible({ timeout: PRAZO });
+    await foto(page, "02-regra-antiga-nao-conversivel");
     await expect(page.getByRole("link", { name: "Abrir na tela antiga" })).toHaveAttribute(
       "href",
       /tab=rules/,
@@ -98,6 +120,7 @@ test.describe("Automações — tela única", () => {
     await lista.getByRole("link", { name: new RegExp(`Etiqueta nova ${carimbo}`) }).click();
     await expect(page.getByTestId("blocos-da-conversao")).toBeVisible({ timeout: PRAZO });
     await expect(page.getByText("Ao publicar, a regra antiga é desligada")).toBeVisible();
+    await foto(page, "03-previa-da-conversao-com-o-aviso");
     await page.getByTestId("publicar-conversao").click();
     await page.waitForURL(/\/app\/automacoes\/[0-9a-f-]{36}$/, { timeout: PRAZO });
     const pointerId = page.url().split("/").pop()!;
@@ -122,6 +145,12 @@ test.describe("Automações — tela única", () => {
     await page.getByTestId("busca-de-automacoes").fill(`Etiqueta nova ${carimbo}`);
     await expect(lista.locator("li")).toHaveCount(1);
     await expect(lista.getByTestId("linha-automacao")).toHaveCount(1);
+    await foto(page, "04-depois-de-publicar-so-a-automacao-nova");
+
+    // A regra antiga, na tela antiga, aparece desligada.
+    await page.goto("/app/webhooks?tab=rules");
+    await expect(page.getByText(`Etiqueta nova ${carimbo}`).first()).toBeVisible({ timeout: PRAZO });
+    await foto(page, "05-tela-antiga-com-a-regra-desligada");
   });
 
   test("Usar um modelo cria um rascunho que abre no editor", async ({ page }) => {
@@ -129,6 +158,7 @@ test.describe("Automações — tela única", () => {
     await page.goto("/app/automacoes");
     await page.getByTestId("usar-modelo-de-automacao").first().click();
     await page.getByTestId("modelo-boas_vindas").check();
+    await foto(page, "06-dialogo-usar-um-modelo");
     await page.getByTestId("criar-de-modelo").click();
     await page.waitForURL(/\/app\/automacoes\/[0-9a-f-]{36}$/, { timeout: PRAZO });
     const pointerId = page.url().split("/").pop()!;
@@ -139,5 +169,6 @@ test.describe("Automações — tela única", () => {
       .eq("id", pointerId)
       .single();
     expect(data).toMatchObject({ status: "draft", surface: "automacao", active_version_id: null });
+    await foto(page, "07-rascunho-aberto-no-editor");
   });
 });

@@ -165,7 +165,7 @@ test.describe("Automações — esperar até amanhã 9h e 'Está no horário?'",
 
     await loginComoAdmin(page, creds);
     const criado = await page.request.post("/api/v1/contacts", {
-      data: { display_name: nomeDoContato, source: "manual" },
+      data: { name: nomeDoContato, source: "manual" },
     });
     expect(criado.status(), `criar o contato: ${await criado.text()}`).toBe(201);
     const contatoId = ((await criado.json()) as { data: { id: string } }).data.id;
@@ -181,7 +181,7 @@ test.describe("Automações — esperar até amanhã 9h e 'Está no horário?'",
     // ── 1. Lista → Nova automação → editor ──
     await page.goto("/app/automacoes");
     await page.getByTestId("nova-automacao").click();
-    await page.getByLabel("Nome").fill(`Lembrete amanhã 9h ${carimbo}`);
+    await page.getByLabel("Nome", { exact: true }).fill(`Lembrete amanhã 9h ${carimbo}`);
     await page.getByTestId("criar-automacao").click();
     await page.waitForURL(/\/app\/automacoes\/[0-9a-f-]+$/, { timeout: PRAZO });
     const automacaoId = page.url().split("/").pop()!;
@@ -235,7 +235,11 @@ test.describe("Automações — esperar até amanhã 9h e 'Está no horário?'",
     await page.locator("#acao-0-tags").fill("no-horario");
     await fecharPainel(page);
 
-    // ── Ligações ──
+    // ── Ligações ── (enquadra o fluxo inteiro: com os cartões já preenchidos, o último sai da tela)
+    await page.getByTestId("auto-fit-flow").click();
+    await page.locator(".react-flow__controls-fitview").click();
+    await zoomAte(page, 0.7);
+    await page.waitForTimeout(400);
     await ligar(page, "n1", espera);
     await ligar(page, espera, condicao);
     await ligar(page, condicao, tag, "true");
@@ -263,18 +267,26 @@ test.describe("Automações — esperar até amanhã 9h e 'Está no horário?'",
     await relogio(page);
 
     // A execução estacionou até amanhã, 09:00, no relógio da organização.
-    const execucao = async () =>
-      (
-        await banco
-          .from("followup_enrollments")
-          .select("id, status, current_node_id, next_eval_at")
-          .eq("organization_id", creds.org_id)
-          .eq("pointer_id", automacaoId)
-          .eq("contact_id", contatoId)
-          .single()
-      ).data as { id: string; status: string; current_node_id: string; next_eval_at: string };
+    let ultimoErro = "";
+    const execucao = async () => {
+      const r = await banco
+        .from("followup_enrollments")
+        .select("id, status, current_node_id, next_eval_at")
+        .eq("organization_id", creds.org_id)
+        .eq("pointer_id", automacaoId)
+        .eq("contact_id", contatoId)
+        .single();
+      ultimoErro = `${automacaoId}/${contatoId}/${creds.org_id}: ${JSON.stringify(r.error)}`;
+      return r.data as {
+        id: string;
+        status: string;
+        current_node_id: string;
+        next_eval_at: string;
+      } | null;
+    };
+    // A matrícula nasce no tick do relógio, não no clique: a linha pode ainda não existir.
     await expect
-      .poll(async () => (await execucao()).current_node_id, { timeout: PRAZO })
+      .poll(async () => (await execucao())?.current_node_id ?? ultimoErro, { timeout: PRAZO })
       .toBe(espera);
     const estacionada = await execucao();
     const quando = paredeNoFuso(new Date(estacionada.next_eval_at), fuso);
@@ -306,7 +318,7 @@ test.describe("Automações — esperar até amanhã 9h e 'Está no horário?'",
     await relogio(page);
 
     await expect
-      .poll(async () => (await execucao()).status, { timeout: PRAZO })
+      .poll(async () => (await execucao())?.status ?? "active", { timeout: PRAZO })
       .not.toMatch(/^(active|waiting_reply)$/);
     const { data: contato } = await banco
       .from("contacts")

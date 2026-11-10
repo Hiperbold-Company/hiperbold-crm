@@ -206,7 +206,7 @@ test.describe("Automações do CRM — cenário Novo lead do Facebook", () => {
     await page.waitForURL(/\/app\/automacoes$/, { timeout: PRAZO });
     await foto(page, "01-lista-vazia-ou-com-automacoes");
     await page.getByTestId("nova-automacao").click();
-    await page.getByLabel("Nome").fill(`Novo lead do Facebook ${carimbo}`);
+    await page.getByLabel("Nome", { exact: true }).fill(`Novo lead do Facebook ${carimbo}`);
     await page.getByTestId("criar-automacao").click();
     await page.waitForURL(/\/app\/automacoes\/[0-9a-f-]+$/, { timeout: PRAZO });
     const automacaoId = page.url().split("/").pop()!;

@@ -165,7 +165,7 @@ test.describe("Automações — lote 4: Requisição HTTP com chave secreta", ()
     // ── 2. A automação ──
     await page.goto("/app/automacoes");
     await page.getByTestId("nova-automacao").click();
-    await page.getByLabel("Nome").fill(`Rastrear anúncio ${carimbo}`);
+    await page.getByLabel("Nome", { exact: true }).fill(`Rastrear anúncio ${carimbo}`);
     await page.getByTestId("criar-automacao").click();
     await page.waitForURL(/\/app\/automacoes\/[0-9a-f-]+$/, { timeout: PRAZO });
     const automacaoId = page.url().split("/").pop()!;

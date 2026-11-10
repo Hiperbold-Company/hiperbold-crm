@@ -259,7 +259,7 @@ test.describe("Automações — Qualificar contato (pergunta e botões)", () => 
       // ── 1. Lista → Nova automação → editor ──
       await page.goto("/app/automacoes");
       await page.getByTestId("nova-automacao").click();
-      await page.getByLabel("Nome").fill(`Qualificar contato ${carimbo}`);
+      await page.getByLabel("Nome", { exact: true }).fill(`Qualificar contato ${carimbo}`);
       await page.getByTestId("criar-automacao").click();
       await page.waitForURL(/\/app\/automacoes\/[0-9a-f-]+$/, { timeout: PRAZO });
       const automacaoId = page.url().split("/").pop()!;
