@@ -207,7 +207,7 @@ test.describe("navegação agrupada", () => {
     await page.waitForURL(/\/app\/settings$/);
     // Comandas, Provedores e Meta Ads estão ocultos (16/10/2026, hiperbold/FUNCOES.md); Credenciais
     // virou "Usar minha própria chave de IA (avançado)" e mora só em Configurações.
-    for (const nome of ["Agenda", "Respostas rápidas", "Tarefas", "Follow-ups", "Roteadores", "Usar minha própria chave de IA", "Conexões", "Automações e Webhooks"]) {
+    for (const nome of ["Agenda", "Respostas rápidas", "Tarefas", "Follow-ups", "Roteadores", "Usar minha própria chave de IA", "Conexões", "Webhooks e regras antigas"]) {
       await expect(page.getByRole("link", { name: new RegExp(`^${nome}`) }).first()).toBeVisible();
     }
     for (const nome of ["Comandas", "Provedores", "Meta Ads", "Trunk SIP", "Conversões", "Extensões", "Contas e recebimentos"]) {

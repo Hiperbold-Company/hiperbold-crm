@@ -75,7 +75,7 @@ test.describe("Automações — tela única", () => {
   }) => {
     const carimbo = Date.now().toString(36);
     const conversivel = await semearRegra(`Etiqueta nova ${carimbo}`, [
-      { type: "add_tag", config: { tags: ["novo"] } },
+      { type: "add_tag", config: { tags: ["vip"] } },
     ]);
     const naoConversivel = await semearRegra(`Email ${carimbo}`, [
       { type: "send_email", config: { destinatario: "contato", assunto: "Oi", corpo: "Oi" } },
