@@ -106,6 +106,7 @@ const nodeTypes: NodeTypes = {
   instagram_check_follow: EffectNode,
   message: ConversaNode,
   question: ConversaNode,
+  http_request: EffectNode,
 };
 
 interface Props {

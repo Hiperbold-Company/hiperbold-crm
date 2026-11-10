@@ -102237,6 +102237,289 @@ $agent_worker_1002$;
 
 reset lock_timeout;
 
+-- ---- o claim das automações para o laço rápido do worker (migration 1003, fork Hiperbold, lote 6) ----
+-- Mesma definição da migration; create or replace é idempotente.
+-- Índice parcial do claim da raia: o laço de 5 s lê só `lane = 'automacao'` e o
+-- predicado abaixo é o MESMO filtro das duas leituras da função (raia + os três
+-- status vivos), então o planejador o usa; sem ele o laço varreria os vencidos
+-- de todas as raias. Parcial, então só as execuções vivas da automação pagam
+-- o custo de escrita.
+create index if not exists idx_followup_enrollments_due_automacao
+  on public.followup_enrollments (next_eval_at)
+  where lane = 'automacao' and status in ('active','waiting_reply','dormente');
+
+create or replace function fn_claim_due_automacao_enrollments(p_limit int, p_lease_seconds int)
+returns setof followup_enrollments
+language sql
+security definer
+set search_path = public
+as $$
+  with orgs as (
+    -- Sem a condição de claim aqui de propósito: o lateral abaixo a aplica, e uma
+    -- organização cujos vencidos estão todos com lease apenas devolve zero linhas.
+    select distinct organization_id
+      from followup_enrollments
+     where lane = 'automacao'
+       and status in ('active','waiting_reply','dormente')
+       and next_eval_at <= now()
+       -- Organização parada (suspensa, redigida, arquivada) não roda follow-up
+       -- (migration 0501).
+       and exists (select 1 from public.organizations o
+                    where o.id = followup_enrollments.organization_id
+                      and o.status = 'active')
+  ),
+  fila as (
+    select f.id, f.next_eval_at, f.posicao_na_org
+      from orgs
+      cross join lateral (
+        select d.id,
+               d.next_eval_at,
+               row_number() over (order by d.next_eval_at) as posicao_na_org
+          from followup_enrollments d
+         where d.organization_id = orgs.organization_id
+           and d.lane = 'automacao'
+           and d.status in ('active','waiting_reply','dormente')
+           and d.next_eval_at <= now()
+           and (d.claimed_until is null or d.claimed_until < now())
+         order by d.next_eval_at
+         limit p_limit
+      ) f
+  ),
+  escolhidos as (
+    -- O rodízio: posição 1 de todas as organizações, depois a 2 de todas, etc.
+    -- Empate na mesma posição vai para quem esperou mais.
+    select id from fila order by posicao_na_org, next_eval_at limit p_limit
+  ),
+  travados as (
+    select e.id from followup_enrollments e
+     where e.id in (select id from escolhidos)
+     for update skip locked
+  )
+  update followup_enrollments e
+     set claimed_until = now() + make_interval(secs => p_lease_seconds),
+         updated_at = now()
+   where e.id in (select id from travados)
+     -- A condição de lease É REPETIDA AQUI, e não é redundante com a CTE `fila`.
+     -- Sem ela, duas conexões simultâneas reclamam as MESMAS linhas: a segunda
+     -- espera o lock da primeira, e quando ele sai o Postgres (READ COMMITTED)
+     -- reavalia só o WHERE do UPDATE — que não olhava `claimed_until` — e grava
+     -- por cima. O `skip locked` da CTE não salva: as duas materializam a mesma
+     -- lista antes de qualquer lock existir. Medido: interseção de 5 em 5 no
+     -- invariante de concorrência (followup-schema.test.ts).
+     and (e.claimed_until is null or e.claimed_until < now())
+  returning e.*;
+$$;
+
+revoke execute on function fn_claim_due_automacao_enrollments(int, int) from public, anon, authenticated;
+grant execute on function fn_claim_due_automacao_enrollments(int, int) to service_role;
+
+-- ---- automações: cofre de chaves secretas do bloco "Requisição HTTP" (migration 1004, fork Hiperbold) ----
+-- 1004 — O bloco "Requisição HTTP" das automações (lote 4) chama outro sistema com uma chave
+-- (token de API) que a organização guarda aqui. A chave NUNCA é digitada no grafo: o bloco guarda
+-- só o id da linha, e o servidor decifra na hora do envio (service role, filtrando a organização).
+--
+-- Cifra: a mesma das outras integrações por organização (`fn_encrypt_oauth`, pgp_sym com a chave
+-- da GUC `app.nuvemshop_oauth_key`; wrapper `lib/webhooks/secrets.ts`).
+--
+-- Leitura: só a service role lê `valor_cifrado`. `authenticated` tem SELECT coluna a coluna
+-- (sem `valor_cifrado`) e só gerente ou acima da própria organização passa na RLS. Nenhum papel do
+-- PostgREST além da service role grava: escrita só pelas rotas `/api/v1/automacoes/segredos`.
+-- O revoke começa por `all` nos três papéis porque o default ACL do Supabase concede tudo a
+-- anon/authenticated em tabela nova de `public` (ver CLAUDE.md, audit log e 9037).
+--
+-- Reaplicável: create ... if not exists, constraints conferidas no catálogo, policy recriada,
+-- revoke/grant idempotentes. Sem função nova: nada a revogar de PUBLIC/anon além da tabela.
+
+create table if not exists public.automacao_segredos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  nome text not null,
+  valor_cifrado bytea not null,
+  ultimos4 text not null,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  last_used_at timestamptz
+);
+
+do $hb_1004_segredos$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'public.automacao_segredos'::regclass
+                 and conname = 'automacao_segredos_nome_valido') then
+    alter table public.automacao_segredos add constraint automacao_segredos_nome_valido
+      check (nome ~ '^[a-z][a-z0-9_]{0,39}$');
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.automacao_segredos'::regclass
+                 and conname = 'automacao_segredos_ultimos4_curto') then
+    alter table public.automacao_segredos add constraint automacao_segredos_ultimos4_curto
+      check (char_length(ultimos4) <= 4);
+  end if;
+end
+$hb_1004_segredos$;
+
+create unique index if not exists uniq_automacao_segredos_org_nome
+  on public.automacao_segredos (organization_id, nome);
+
+alter table public.automacao_segredos enable row level security;
+
+drop policy if exists tenant_isolation_automacao_segredos_all on public.automacao_segredos;
+create policy tenant_isolation_automacao_segredos_all on public.automacao_segredos
+  for all
+  to authenticated
+  using (
+    organization_id in (select * from public.fn_user_org_ids())
+    and public.fn_role_at_least(organization_id, 'manager')
+  )
+  with check (
+    organization_id in (select * from public.fn_user_org_ids())
+    and public.fn_role_at_least(organization_id, 'manager')
+  );
+
+revoke all on table public.automacao_segredos from anon, authenticated, service_role;
+grant select, insert, update, delete on table public.automacao_segredos to service_role;
+grant select (id, organization_id, nome, ultimos4, created_by, created_at, updated_at, last_used_at)
+  on table public.automacao_segredos to authenticated;
+
+comment on table public.automacao_segredos is
+  '1004: chaves secretas das automações (bloco Requisição HTTP). valor_cifrado com fn_encrypt_oauth; só a service role o lê. authenticated: SELECT sem valor_cifrado, gerente+ da própria organização.';
+comment on column public.automacao_segredos.valor_cifrado is
+  '1004: a chave cifrada (fn_encrypt_oauth). Nunca em claro, nunca com grant a anon/authenticated.';
+comment on column public.automacao_segredos.ultimos4 is
+  '1004: os 4 últimos caracteres da chave — o que a tela mostra (••••1234), nunca a chave inteira.';
+
+notify pgrst, 'reload schema';
+
+
+-- ---- automações: regra antiga convertida em automação, numa transação só (migration 1005, fork Hiperbold) ----
+-- ⚠️ ANTES DA VARREDURA anon: cria função. Mesmo corpo da migration 1005.
+-- 1005 — Reaplicável: add column if not exists, create or replace function, drop trigger if exists
+-- antes do create, revoke/grant idempotentes.
+
+alter table public.automation_rules
+  add column if not exists migrated_to_pointer_id uuid
+    references public.followup_flow_pointers(id) on delete set null;
+
+comment on column public.automation_rules.migrated_to_pointer_id is
+  '1005: a automação (followup_flow_pointers, surface automacao) em que esta regra foi convertida. Com valor, a regra fica desligada enquanto a automação estiver ligada.';
+
+create index if not exists idx_automation_rules_migrated_to_pointer
+  on public.automation_rules (migrated_to_pointer_id)
+  where migrated_to_pointer_id is not null;
+
+-- A troca atômica: desliga a regra, grava o vínculo e publica a automação, ou nada.
+create or replace function public.fn_automacao_converter_regra(
+  p_org uuid,
+  p_rule uuid,
+  p_pointer uuid,
+  p_graph jsonb,
+  p_created_by uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_rule record;
+  v_ptr record;
+begin
+  select r.id, r.organization_id, r.migrated_to_pointer_id
+    into v_rule
+  from automation_rules r
+  where r.id = p_rule
+  for update;
+  if not found or v_rule.organization_id <> p_org then
+    raise exception 'rule_not_found' using errcode = 'P0001';
+  end if;
+  if v_rule.migrated_to_pointer_id is not null then
+    raise exception 'rule_already_converted' using errcode = 'P0001';
+  end if;
+
+  select p.id, p.organization_id, p.surface
+    into v_ptr
+  from followup_flow_pointers p
+  where p.id = p_pointer
+  for update;
+  if not found or v_ptr.organization_id <> p_org or v_ptr.surface is distinct from 'automacao' then
+    raise exception 'pointer_not_found' using errcode = 'P0001';
+  end if;
+
+  -- Desliga ANTES de ligar: o gatilho de guarda do ponteiro olha a regra.
+  update automation_rules
+     set is_active = false,
+         migrated_to_pointer_id = p_pointer,
+         updated_at = now()
+   where id = p_rule
+     and organization_id = p_org;
+
+  return fn_publish_followup_flow_version(p_org, p_pointer, p_graph, p_created_by);
+end;
+$$;
+
+revoke all on function public.fn_automacao_converter_regra(uuid, uuid, uuid, jsonb, uuid) from public, anon, authenticated;
+grant execute on function public.fn_automacao_converter_regra(uuid, uuid, uuid, jsonb, uuid) to service_role;
+
+-- Guarda do lado da regra: religar a regra convertida com a automação ligada.
+create or replace function public.fn_regra_convertida_nao_religa()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.is_active
+     and new.migrated_to_pointer_id is not null
+     and exists (
+       select 1 from followup_flow_pointers p
+        where p.id = new.migrated_to_pointer_id
+          and p.organization_id = new.organization_id
+          and p.status = 'active'
+     ) then
+    raise exception 'regra_convertida_com_automacao_ligada' using errcode = 'PT409',
+      hint = 'Desligue a automação nova antes de religar a regra antiga.';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.fn_regra_convertida_nao_religa() from public, anon;
+
+drop trigger if exists trg_regra_convertida_nao_religa on public.automation_rules;
+create trigger trg_regra_convertida_nao_religa
+  before insert or update of is_active, migrated_to_pointer_id on public.automation_rules
+  for each row execute function public.fn_regra_convertida_nao_religa();
+
+-- Guarda do lado da automação: ligar a automação com a regra de origem ligada.
+create or replace function public.fn_automacao_nao_liga_com_regra_antiga()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.status = 'active'
+     and (tg_op = 'INSERT' or old.status is distinct from 'active')
+     and exists (
+       select 1 from automation_rules r
+        where r.migrated_to_pointer_id = new.id
+          and r.organization_id = new.organization_id
+          and r.is_active
+     ) then
+    raise exception 'automacao_com_regra_antiga_ligada' using errcode = 'PT409',
+      hint = 'Desligue a regra antiga antes de ligar a automação que veio dela.';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.fn_automacao_nao_liga_com_regra_antiga() from public, anon;
+
+drop trigger if exists trg_automacao_nao_liga_com_regra_antiga on public.followup_flow_pointers;
+create trigger trg_automacao_nao_liga_com_regra_antiga
+  before insert or update of status on public.followup_flow_pointers
+  for each row execute function public.fn_automacao_nao_liga_com_regra_antiga();
+
+notify pgrst, 'reload schema';
+
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

@@ -72,7 +72,7 @@ describe("resumo do seed de demonstração", () => {
   it("o instrumento lê as abas das telas (controle)", () => {
     // Sem isto, uma regex que deixasse de casar devolveria lista vazia e o caso
     // abaixo reprovaria por outro motivo — ou, afrouxado, passaria medindo nada.
-    expect(abasDaRota("/app/webhooks")).toEqual(expect.arrayContaining(["Receber dados", "Automações"]));
+    expect(abasDaRota("/app/webhooks")).toEqual(expect.arrayContaining(["Receber dados", "Regras antigas"]));
     expect(abasDaRota("/app/webhooks")).not.toContain("Regras");
   });
 

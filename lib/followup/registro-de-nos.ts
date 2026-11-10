@@ -20,7 +20,15 @@ import { RAMOS_POR_TIPO, type BranchableNode, type FlowBranch, type NodeType } f
 import { DECISORES, type EntradaDoNo, type NodeResult } from "./node-handlers";
 
 /** Grupo da paleta de blocos (automações). */
-export type CategoriaDoNo = "inicio" | "crm" | "logica" | "mensagem" | "controle" | "atendimento" | "instagram";
+export type CategoriaDoNo =
+  | "inicio"
+  | "crm"
+  | "logica"
+  | "mensagem"
+  | "controle"
+  | "atendimento"
+  | "instagram"
+  | "integracao";
 
 export interface DefinicaoDoNo {
   tipo: NodeType;
@@ -107,6 +115,14 @@ export const REGISTRO_DE_NOS: { readonly [K in NodeType]: DefinicaoDoNo } = {
     efeito: true,
     precisaEventos: true,
   }),
+  // Requisição HTTP (lote 4): efeito — chama outro sistema no máximo uma vez por
+  // passo; num replay o desfecho é relido do evento e a chamada não se repete.
+  http_request: definir("http_request", {
+    superficies: ["automacao"],
+    categoria: "integracao",
+    efeito: true,
+    precisaEventos: true,
+  }),
 };
 
 /**
@@ -128,6 +144,7 @@ const ORDEM: Record<FollowupFlowSurface, readonly NodeType[]> = {
     "instagram_private_reply",
     "instagram_check_follow",
     "instagram_public_reply",
+    "http_request",
     "end",
   ],
 };

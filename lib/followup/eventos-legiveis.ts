@@ -39,7 +39,10 @@ import {
   nodeBranches,
   type FlowEdge,
   type FlowNode,
+  MOTIVO_SEM_DATA_NO_CAMPO,
+  SEM_DATA_BRANCH_ID,
 } from "./graph-schema";
+import { fraseDaEsperaAteAData, fraseDaEsperaAteODia } from "@/lib/automacoes/plano-de-tempo";
 import {
   FRASE_DE_OUTROS_CASOS,
   RAMOS_RESERVADOS_EM_FRASE,
@@ -140,6 +143,14 @@ export interface NoDoDossie {
   rotulo: string;
   /** O que o nó faz, em uma linha, sem instrução de prompt. */
   resumo: string;
+  /**
+   * Lote 6: a espera é "até um dia e horário" ou "até a data de um campo" — o
+   * `wait_started` dela diz "Esperando até <dia e hora>" em vez de "Começou a
+   * esperar". Opcional: os dossiês já montados seguem iguais.
+   */
+  esperaAteODia?: boolean;
+  /** Só na espera "até a data de um campo": a chave do campo, para dizer qual faltava ao terminar sem data. */
+  campoDeData?: string;
 }
 
 const TIPO_DO_NO: Record<FlowNode["type"], string> = {
@@ -165,6 +176,7 @@ const TIPO_DO_NO: Record<FlowNode["type"], string> = {
   instagram_private_reply: "Responder em privado",
   instagram_public_reply: "Responder no comentário",
   instagram_check_follow: "Confere se segue",
+  http_request: "Requisição HTTP",
 };
 
 const DESFECHO: Record<string, string> = {
@@ -226,6 +238,15 @@ export const GATILHO_QUE_COMECOU = {
   instagram_comment: "comentário no Instagram",
 } as const;
 
+/** O host da URL do bloco HTTP (sem caminho, sem query): é o que o resumo e o histórico mostram. */
+function hostDoModelo(url: string): string {
+  try {
+    return new URL(url.replace(/\{\{[^}]*\}\}/g, "x")).host || "outro sistema";
+  } catch {
+    return "outro sistema";
+  }
+}
+
 /** O rótulo do tipo, para o cabeçalho do passo. */
 export function tipoDoNo(tipo: FlowNode["type"]): string {
   return TIPO_DO_NO[tipo] ?? "Passo";
@@ -245,8 +266,14 @@ export function resumoDoNo(node: FlowNode, raia: RaiaDoEnrollment = "followup"):
             : node.config.mode === "smart"
               ? `espera adaptativa, entre ${duracaoLegivel(node.config.min_ms)} e ${duracaoLegivel(node.config.max_ms)}`
               : node.config.mode === "delay"
-                ? `espera ${segundosLegiveis(node.config.duration_s)}`
-                : `espera o contato responder, por até ${duracaoLegivel(node.config.timeout_ms)}`,
+                ? `espera ${segundosLegiveis(node.config.duration_s)}${node.config.ate_o_horario ? " e só termina em horário comercial" : ""}`
+                : node.config.mode === "until_time"
+                  ? `espera ${fraseDaEsperaAteODia(node.config)}${node.config.ate_o_horario ? " e só termina em horário comercial" : ""}`
+                  : node.config.mode === "until_date_field"
+                    ? `espera ${fraseDaEsperaAteAData(node.config)}${node.config.ate_o_horario ? " e só termina em horário comercial" : ""}`
+                    : `espera o contato responder, por até ${duracaoLegivel(node.config.timeout_ms)}`,
+        ...(node.config.mode === "until_time" || node.config.mode === "until_date_field" ? { esperaAteODia: true } : {}),
+        ...(node.config.mode === "until_date_field" ? { campoDeData: node.config.field_key } : {}),
       };
     case "condition":
       return {
@@ -319,6 +346,8 @@ export function resumoDoNo(node: FlowNode, raia: RaiaDoEnrollment = "followup"):
       return { ...base, resumo: "responde em público, no próprio comentário" };
     case "instagram_check_follow":
       return { ...base, resumo: "confere se quem comentou segue o perfil" };
+    case "http_request":
+      return { ...base, resumo: `chama ${hostDoModelo(node.config.url)} (${node.config.method}) e guarda o que a resposta devolve` };
   }
 }
 
@@ -480,6 +509,13 @@ export function descreveEvento(
     case "node_advanced":
       // Com `class`, o avanço É a classificação que o motor decidiu: a carência
       // do classificar venceu sem resposta. "Seguiu em frente" esconderia o porquê.
+      if (texto(p.class) === SEM_DATA_BRANCH_ID) {
+        return {
+          titulo: "A data do campo estava vazia ou já tinha passado",
+          detalhe: `foi por “Sem data” para ${refDoNo(texto(p.next_node_id), nos)}`,
+          ...motor,
+        };
+      }
       if (texto(p.class) === NO_REPLY_BRANCH_ID) {
         return {
           titulo: "O cliente não respondeu dentro do prazo",
@@ -490,6 +526,10 @@ export function descreveEvento(
       return { titulo: "Seguiu em frente", detalhe: `foi para ${refDoNo(texto(p.next_node_id), nos)}`, ...motor };
     case "wait_started": {
       const ate = quandoLegivel(p.next_eval_at, idioma);
+      // Lote 6: "Esperando até 11 de nov., 09:00" — o dia e a hora em que volta.
+      if (evento.node_id && nos[evento.node_id]?.esperaAteODia && ate) {
+        return { titulo: `Esperando até ${ate}`, detalhe: null, ...motor };
+      }
       const modo = texto(p.mode) === "smart" ? " (tempo escolhido pelo agente)" : "";
       return { titulo: "Começou a esperar", detalhe: ate ? `volta a olhar em ${ate}${modo}` : null, ...motor };
     }
@@ -588,6 +628,16 @@ export function descreveEvento(
     case "flow_completed": {
       const desfecho = texto(p.outcome);
       const nota = texto(p.cancel_reason);
+      // A espera por data de campo terminou a execução porque não havia data
+      // futura e a saída "Sem data" não estava ligada: diz qual campo faltava.
+      if (nota === MOTIVO_SEM_DATA_NO_CAMPO) {
+        const campo = evento.node_id ? nos[evento.node_id]?.campoDeData : undefined;
+        return {
+          titulo: raia === "automacao" ? "Automação concluída" : "Fluxo concluído",
+          detalhe: campo ? `Terminou: não havia data futura no campo “${campo}”` : "Terminou: não havia data futura no campo",
+          ...motor,
+        };
+      }
       return {
         titulo: raia === "automacao" ? "Automação concluída" : "Fluxo concluído",
         detalhe: desfecho ? desfechoLegivel(desfecho, raia) : nota,
@@ -825,6 +875,25 @@ function fraseDoInicioDeOutra(d: Record<string, unknown>): string {
   }
 }
 
+/** "Chamou GET api.example.com/v1/x — respondeu 200 em 120 ms; guardou: utm_campaign". */
+function fraseDaRequisicao(d: Record<string, unknown>): string {
+  const host = texto(d.host);
+  const caminho = texto(d.caminho);
+  const destino = host ? `${host}${caminho && caminho !== "/" ? caminho : ""}` : "outro sistema";
+  const metodo = texto(d.metodo);
+  const chamada = `Chamou ${metodo ? `${metodo} ` : ""}${destino}`;
+  const status = typeof d.status === "number" ? d.status : null;
+  const duracao = typeof d.duracao_ms === "number" ? ` em ${Math.round(d.duracao_ms)} ms` : "";
+  const resposta = status !== null ? ` — respondeu ${status}${duracao}` : "";
+  // Na falha, o motivo já abre a linha do evento (`effect_failed`): aqui só o que foi chamado.
+  if (d.ok === false) return `${chamada}${resposta}`;
+  const campos = Array.isArray(d.campos) ? (d.campos as unknown[]).filter((x): x is string => typeof x === "string") : [];
+  const ausentes = Array.isArray(d.ausentes) ? (d.ausentes as unknown[]).filter((x): x is string => typeof x === "string") : [];
+  const guardou = campos.length > 0 ? `; guardou: ${campos.join(", ")}` : "";
+  const faltou = ausentes.length > 0 ? `; não veio na resposta: ${ausentes.join(", ")}` : "";
+  return `${chamada}${resposta}${guardou}${faltou}`;
+}
+
 /** O que cada ação do bloco fez, numa linha ("Adicionar tags: ok; Criar negócio: criado"). */
 function detalhesDoEfeito(p: Record<string, unknown>): string | null {
   const lista = Array.isArray(p.detalhes) ? (p.detalhes as Array<Record<string, unknown>>) : [];
@@ -856,6 +925,8 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
         if (d.ok === false) return `${frases.erro}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
         return frases[texto(d.resultado) ?? ""] ?? frases.feito ?? "feito";
       }
+      // Requisição HTTP: método, host, caminho, status e o que guardou — nunca a chave nem a resposta.
+      if (tipo === "http_request") return fraseDaRequisicao(d);
       const nome = tipo === "field_op" ? "Campos" : tipo ? (ACOES_DE_CRM[tipo as keyof typeof ACOES_DE_CRM] ?? tipo) : "Ação";
       if (d.ok === false) return `${nome}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
       if (tipo === "start_automation") return fraseDoInicioDeOutra(d);

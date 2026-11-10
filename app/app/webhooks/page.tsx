@@ -14,7 +14,7 @@ import { ABAS_DOS_WEBHOOKS, abaInicialDeAutomacoes } from "./_components/abas";
 import { WebhooksClient } from "./_components/WebhooksClient";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Automações e Webhooks" };
+export const metadata: Metadata = { title: "Webhooks e regras antigas" };
 
 export default async function WebhooksPage({
   searchParams,
@@ -26,7 +26,10 @@ export default async function WebhooksPage({
   const canManage = !!activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
   if (!canManage) redirect("/app/inbox");
   const idioma = user.idioma;
-  const { tab, aba } = await searchParams;
+  const { tab, aba, regra } = await searchParams;
+  // `?regra=<id>` (a lista única de Automações manda): abre o editor daquela regra. Só aceita formato de id.
+  const regraPedida = Array.isArray(regra) ? regra[0] : regra;
+  const regraInicial = regraPedida && /^[0-9a-f-]{36}$/i.test(regraPedida) ? regraPedida : undefined;
   // Dois formatos de link: `?aba=automacoes` (upstream, a volta do designer) e
   // `?tab=rules` (Hiperbold). O `aba` conhecido vence; o resto cai no `tab`.
   const pedida = Array.isArray(aba) ? aba[0] : aba;
@@ -51,7 +54,7 @@ export default async function WebhooksPage({
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">
-          {traduzir("Automações e Webhooks", idioma)}
+          {traduzir("Webhooks e regras antigas", idioma)}
         </h1>
         <p className="text-sm text-muted-foreground">
           {traduzir(
@@ -60,7 +63,7 @@ export default async function WebhooksPage({
           )}
         </p>
       </header>
-      <WebhooksClient bloqueio={bloqueio} abaInicial={abaInicial} />
+      <WebhooksClient bloqueio={bloqueio} abaInicial={abaInicial} regraInicial={regraInicial} />
     </div>
   );
 }

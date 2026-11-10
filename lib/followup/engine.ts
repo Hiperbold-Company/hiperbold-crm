@@ -1268,8 +1268,16 @@ async function processarUmPasso(
   // A espera com horário (`ate_o_horario`) também pergunta pelo relógio da
   // organização: "9h às 18h" sem fuso seria 9h às 18h em UTC — 6h às 15h em
   // São Paulo, e o toque sairia cedo demais, que é o que o horário impede.
+  // Lote 6: as esperas "até um dia e horário" e "até a data de um campo"
+  // contam o dia no relógio da organização, a espera em segundos pode ter
+  // horário, e a condição "Está no horário?" pergunta pela hora local.
   const temEsperaComHorario = graph.nodes.some(
-    (n) => n.type === "wait" && n.config.mode === "fixed" && n.config.ate_o_horario !== undefined,
+    (n) =>
+      (n.type === "wait" &&
+        (n.config.mode === "until_time" ||
+          n.config.mode === "until_date_field" ||
+          ((n.config.mode === "fixed" || n.config.mode === "delay") && n.config.ate_o_horario !== undefined))) ||
+      (n.type === "condition" && n.config.checks.some((c) => ehRegraNova(c) && c.kind === "business_hours")),
   );
   const fusoDaOrg =
     (temRegraDeData || temEsperaComHorario) && db.loadFusoDaOrganizacao
@@ -1400,6 +1408,12 @@ async function processarUmPasso(
       : undefined;
     if (definicaoDoNo(node.type).efeito) {
       const resolvido = await resolverEfeito(deps, enrollment, node, events, fatos ?? null);
+      if (resolvido.adiado) {
+        // O lease não cobre a chamada: nada começou. Solta o claim; `next_eval_at`
+        // já venceu, então o próximo tick (com lease novo) faz a chamada.
+        await db.updateEnrollment(enrollment.id, enrollment.organization_id, { claimed_until: null });
+        return null;
+      }
       efeito = resolvido.desfecho;
       if (resolvido.vars) varsNovas = { ...(enrollment.vars ?? {}), ...resolvido.vars };
     }
@@ -1573,6 +1587,27 @@ async function processarUmPasso(
  * ação aconteceu — o bloco sai por "Erro" (`efeito_interrompido`) em vez de
  * arriscar criar o negócio duas vezes.
  */
+const ADIADO = { desfecho: { ok: false, erro: "adiado" }, adiado: true } as const;
+
+/** Teto de chamadas do bloco "Requisição HTTP" numa execução (além de `MAX_VISITAS_POR_NO`). */
+export const MAX_HTTP_POR_EXECUCAO = 30;
+/** Folga de lease além do tempo limite do bloco HTTP: gravar o fim e o passo depois da chamada. */
+export const FOLGA_DO_LEASE_HTTP_MS = 15_000;
+
+/**
+ * O lease do claim ainda cobre a chamada HTTP (tempo limite + folga)? Sem
+ * lease (caminho sem claim, como a resposta inbound) não há o que vencer.
+ * Chamada que começa com lease curto pode terminar DEPOIS de outro tick
+ * reclamar a inscrição — e aquele tick, vendo só o `effect_started`, gravaria
+ * `efeito_interrompido` por cima de uma chamada que deu certo.
+ */
+export function leaseCobreOHttp(claimedUntil: string | null | undefined, agora: Date, timeoutMs: number): boolean {
+  if (!claimedUntil) return true;
+  const fim = Date.parse(claimedUntil);
+  if (Number.isNaN(fim)) return true;
+  return fim - agora.getTime() >= timeoutMs + FOLGA_DO_LEASE_HTTP_MS;
+}
+
 async function resolverEfeito(
   deps: TickDeps,
   enrollment: EnrollmentRow,
@@ -1580,7 +1615,7 @@ async function resolverEfeito(
   events: EnrollmentEventRef[],
   fatos: FatosDaAutomacao | null,
   acao?: AcaoDeConversa,
-): Promise<{ desfecho: DesfechoDoEfeito; vars?: Record<string, unknown> }> {
+): Promise<{ desfecho: DesfechoDoEfeito; vars?: Record<string, unknown>; adiado?: true }> {
   const { db } = deps;
   const chave = `${node.id}:${enrollment.steps_taken}`;
   const chaveInicio = `${chave}:efeito_inicio`;
@@ -1610,6 +1645,15 @@ async function resolverEfeito(
   if (jaFeito) return completar(jaFeito);
 
   const gravarFim = async (r: ResultadoDoEfeito) => {
+    // O que a resposta HTTP devolveu (`saida`) é dado de terceiro, às vezes do
+    // contato: não vai ao evento (legível pela equipe e imutável) — o detalhe
+    // guarda só os NOMES (`campos`). Para o replay não perder os valores, eles
+    // vão para `enrollments.vars` ANTES do `effect_done`.
+    if (r.vars && Object.hasOwn(r.vars, "saida")) {
+      await db.updateEnrollment(enrollment.id, enrollment.organization_id, {
+        vars: { ...(enrollment.vars ?? {}), saida: r.vars.saida },
+      });
+    }
     const { inserted } = await db.insertEnrollmentEvent({
       ...base,
       event_type: r.desfecho.ok ? "effect_done" : "effect_failed",
@@ -1630,6 +1674,14 @@ async function resolverEfeito(
   };
 
   const iniciou = events.some((e) => e.idempotency_key === chaveInicio);
+  if (!iniciou && node.type === "http_request") {
+    const feitas = events.filter((e) => e.event_type === "effect_started" && e.payload?.tipo === "http_request").length;
+    if (feitas >= MAX_HTTP_POR_EXECUCAO) {
+      const erro = "http_limite_por_execucao";
+      return gravarFim({ desfecho: { ok: false, erro }, detalhes: [{ tipo: "http_request", ok: false, erro, metodo: node.config.method }] });
+    }
+    if (!leaseCobreOHttp(enrollment.claimed_until, deps.clock(), node.config.timeout_ms)) return { ...ADIADO };
+  }
   const { inserted } = iniciou
     ? { inserted: false }
     : await db.insertEnrollmentEvent({
@@ -1731,7 +1783,17 @@ export async function runFollowupTick(deps: TickDeps, opts?: { limit?: number })
 }
 
 /** Production adapter: `AdminClient` backed by the real Supabase service-role client. */
-export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
+export function createSupabaseAdminClient(
+  admin: SupabaseClient,
+  /**
+   * Lote 6: `automacao` faz o claim só da raia das automações
+   * (`fn_claim_due_automacao_enrollments`, migration 1003) — o laço rápido do
+   * worker (`lib/automacoes/runner.ts`). Ausente = todas as raias, o de sempre.
+   * As duas funções escrevem o MESMO `claimed_until`: o lease é o que impede
+   * duas execuções do mesmo enrollment, venha o claim de onde vier.
+   */
+  opcoes: { claim?: "todas" | "automacao" } = {},
+): AdminClient {
   const revisions=new Map<string,number>();
   return {
     async assertServiceBoundary(enrollment) { if(!revisions.has(enrollment.id) && enrollment.revision!==undefined) revisions.set(enrollment.id,enrollment.revision); await assertServiceBoundarySupabase(admin, enrollment.service_boundary ?? null); },
@@ -1760,7 +1822,9 @@ export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
       await assertAgendaEffectSupabase(admin,{organizationId:enrollment.organization_id,contactId:enrollment.contact_id,enrollmentId:enrollment.id,nodeId:enrollment.current_node_id,escolhaNoEnvio:escolha});
     },
     async claimDueEnrollments(limit, leaseSeconds) {
-      const { data, error } = await admin.rpc("fn_claim_due_followup_enrollments", {
+      const funcao =
+        opcoes.claim === "automacao" ? "fn_claim_due_automacao_enrollments" : "fn_claim_due_followup_enrollments";
+      const { data, error } = await admin.rpc(funcao, {
         p_limit: limit,
         p_lease_seconds: leaseSeconds,
       });

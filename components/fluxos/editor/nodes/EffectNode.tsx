@@ -19,7 +19,8 @@ type TipoDeEfeito =
   | "field_op"
   | "instagram_private_reply"
   | "instagram_public_reply"
-  | "instagram_check_follow";
+  | "instagram_check_follow"
+  | "http_request";
 
 export function EffectNode({ id, type, data, selected }: NodeProps<RFNode>) {
   const t = useT();

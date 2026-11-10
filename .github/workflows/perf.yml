@@ -38,6 +38,11 @@ jobs:
         run: pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+          # O `next build` checa os tipos do projeto inteiro e, em 10/11/2026, a
+          # main já usava ~4,1 GB nessa etapa: o teto padrão do Node no runner
+          # (~4 GB) reprovava qualquer PR que somasse alguns MB (PR #36). Medido
+          # sem tipo explosivo; é tamanho do programa. Custo de quem builda (o CI).
+          NODE_OPTIONS: --max-old-space-size=6144
           # "off", não vazio: vazio seleciona o Sentry DA COMUNIDADE
           # (lib/sentry/dsn.ts:8-10). A intenção aqui sempre foi desligar, e
           # com aspas vazias ela não era alcançada — o build seguia com o DSN

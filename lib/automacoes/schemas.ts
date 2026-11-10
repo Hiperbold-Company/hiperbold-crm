@@ -194,6 +194,18 @@ export const regrasNovasDeCondicao = {
   open_deal_in_pipeline: { kind: z.literal("open_deal_in_pipeline"), pipeline_id: uuid },
   deal_exists: { kind: z.literal("deal_exists") },
   deal_status: { kind: z.literal("deal_status"), status: z.enum(["open", "won", "lost"]) },
+  /**
+   * Lote 6: "Está no horário?" — agora está dentro dos dias e horas, no fuso da
+   * organização? Mesma forma do horário da espera (`horarioDaEsperaSchema`) e
+   * frouxa pelo mesmo motivo (o rascunho grava a cada clique); o publish exige
+   * um horário que dá para obedecer.
+   */
+  business_hours: {
+    kind: z.literal("business_hours"),
+    start: z.string().max(5),
+    end: z.string().max(5),
+    weekdays: z.array(z.number().int().min(0).max(6)).max(7),
+  },
 } as const;
 
 // ---------------------------------------------------------------------------

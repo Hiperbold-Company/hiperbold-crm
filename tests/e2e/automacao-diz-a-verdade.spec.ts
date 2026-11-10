@@ -145,7 +145,7 @@ test.describe("a automação conta o que aconteceu de verdade", () => {
       await page.keyboard.press("Escape");
 
       // ── A automação, montada pela TELA, igual à do relato ────────────────
-      await page.getByRole("tab", { name: "Automações" }).click();
+      await page.getByRole("tab", { name: "Regras antigas" }).click();
       await page.getByRole("button", { name: /Nova automação/ }).click();
       await page.locator("#rule-name").fill(RULE_NAME);
 
@@ -310,7 +310,7 @@ test.describe("a automação conta o que aconteceu de verdade", () => {
     // a feature inteira vira "manda um JSON e reza".
     await login(page, creds.users.manager!.email);
     await page.goto(`${APP_URL}/app/webhooks`);
-    await page.getByRole("tab", { name: "Automações" }).click();
+    await page.getByRole("tab", { name: "Regras antigas" }).click();
     await page.getByRole("button", { name: /Nova automação/ }).click();
 
     const editor = page.getByRole("dialog");

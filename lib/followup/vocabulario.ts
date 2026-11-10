@@ -627,6 +627,8 @@ export const MODOS_DE_ESPERA: Record<ModoDeEspera, string> = {
   smart: "A IA escolhe a hora",
   delay: "Tempo em segundos",
   until_reply: "Até o contato responder",
+  until_time: "Até um dia e horário",
+  until_date_field: "Até a data de um campo do negócio",
 };
 
 export const MODOS_DA_ACAO: Record<ModoDaAcao, string> = {

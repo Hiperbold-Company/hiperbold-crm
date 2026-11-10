@@ -22,13 +22,13 @@ describe("Automações e Webhooks — porta na navegação", () => {
   const porta = NAV_DESTINATIONS.find((d) => d.href === "/app/webhooks");
 
   it("mantém a rota e troca o rótulo", () => {
-    expect(porta?.label).toBe("Automações e Webhooks");
+    expect(porta?.label).toBe("Webhooks e regras antigas");
   });
 
   it("aparece no hub de Configurações, em Canais, com o nome novo", () => {
     const canais = hubSections("organizacao", false, "admin").find((s) => s.section === "Canais");
     const rotulos = canais?.items.map((i) => i.label) ?? [];
-    expect(rotulos).toContain("Automações e Webhooks");
+    expect(rotulos).toContain("Webhooks e regras antigas");
     expect(rotulos).not.toContain("Webhooks");
   });
 
@@ -74,7 +74,7 @@ describe("Automações e Webhooks — abas", () => {
 
 describe("Automações e Webhooks — espanhol", () => {
   it.each([
-    ["Automações e Webhooks", "Automatizaciones y Webhooks"],
+    ["Webhooks e regras antigas", "Webhooks y reglas antiguas"],
     ["Registro de atividade", "Registro de actividad"],
     [
       "Regras que agem sozinhas, entrada de leads de sites e formulários, e o registro do que chegou e do que rodou.",

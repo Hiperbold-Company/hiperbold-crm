@@ -1,5 +1,7 @@
 "use client";
 import * as React from "react";
+import Link from "next/link";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
@@ -25,7 +27,8 @@ function AjudaDaAba({ aba }: { aba: AbaDeAutomacoes }) {
 export function WebhooksClient({
   bloqueio,
   abaInicial = ABA_PADRAO_DE_AUTOMACOES,
-}: { bloqueio?: BloqueioDoBotao; abaInicial?: AbaDeAutomacoes } = {}) {
+  regraInicial,
+}: { bloqueio?: BloqueioDoBotao; abaInicial?: AbaDeAutomacoes; regraInicial?: string } = {}) {
   const t = useT();
   // Radix Tabs gera ids via useId; com SSR streamado (Next 15) os ids divergem
   // entre server e client e o React acusa hydration mismatch. Nenhuma outra
@@ -61,14 +64,25 @@ export function WebhooksClient({
   return (
     <Tabs defaultValue={abaInicial} className="flex-1">
       <TabsList className="h-auto flex-wrap justify-start">
-        <TabsTrigger value="rules">{t("Automações")}</TabsTrigger>
+        <TabsTrigger value="rules">{t("Regras antigas")}</TabsTrigger>
         <TabsTrigger value="sources">{t("Receber dados")}</TabsTrigger>
         <TabsTrigger value="capturas">{t("Leads recebidos")}</TabsTrigger>
         <TabsTrigger value="activity">{t("Registro de atividade")}</TabsTrigger>
       </TabsList>
       <TabsContent value="rules">
         <AjudaDaAba aba="rules" />
-        <RulesTab />
+        <Card className="mb-3" data-testid="regras-agora-em-automacoes">
+          <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm">{t("As regras agora ficam em Automações.")}</p>
+            <Link
+              href="/app/automacoes"
+              className="text-sm font-medium text-accent underline-offset-4 hover:underline"
+            >
+              {t("Ir para Automações")}
+            </Link>
+          </CardContent>
+        </Card>
+        <RulesTab regraInicial={regraInicial} />
       </TabsContent>
       <TabsContent value="sources">
         <div className="mb-3 space-y-1">

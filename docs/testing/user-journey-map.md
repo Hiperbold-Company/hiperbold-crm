@@ -4321,3 +4321,55 @@ Fora desta rodada: gatilho "Entrou na etapa" e "Testar com um contato" pela tela
 Configurações › Etapas do funil: cada funil vira um acordeão (fechado quando há mais de um; abre pelo cabeçalho, por "Abrir todos" e por link `#etapas-<id>`/`#mapeamento-<id>`), e "Duplicar funil" copia etapas, motivos de perda e de ganho, campos do lead e o mapeamento do assistente para um funil novo com o nome escolhido. Negócios, automações e formulários não são copiados. Rota `POST /api/v1/pipelines/[id]/duplicate` (`lib/pipelines/duplicar.ts`). Spec: `tests/e2e/duplicar-funil.spec.ts` (job e2e, parte 3), com conferência no banco das etapas, motivos e campos da cópia.
 
 Evidência: `evidence/duplicar-funil/01-funis-fechados.png` (os funis fechados), `evidence/duplicar-funil/02-um-funil-aberto.png` (um aberto pelo cabeçalho), `evidence/duplicar-funil/03-aberto-pelo-hash.png` (aberto pelo link), `evidence/duplicar-funil/04-dialogo-origem-escolhida.png` (o diálogo de duplicar), `evidence/duplicar-funil/05-copia-pelo-topo-aberta.png` (a cópia aberta, igual à origem), `evidence/duplicar-funil/06-erro-nome-repetido.png` (o aviso de nome repetido) e `evidence/duplicar-funil/07-copia-pelo-card-aberta.png` (a cópia pelo botão do card).
+
+## J106 — Automação espera até um dia e horário e pergunta se está no horário `[P1]` (2026-11-10)
+
+Automações, lote 6 (migration 1003): esperas "até um dia e horário" e "até a data de
+um campo do negócio", "só no horário" nas esperas por tempo, condição "Está no
+horário?" e o laço rápido do worker (`AUTOMACAO_RUNNER_INTERVAL_MS`, 5 s). Spec:
+`tests/e2e/automacoes-espera-por-horario.spec.ts` (job e2e, parte 5). A evidência
+está em `evidence/automacoes-lote6/`. Medido local em 10/11/2026, build de produção,
+banco fresco estilo VPS: `automacoes-espera-por-horario.spec.ts` `1 passed`.
+
+Evidência: `evidence/automacoes-lote6/01-espera-ate-amanha-9h.png` (o painel da espera
+"Amanhã, 09:00"), `evidence/automacoes-lote6/02-condicao-esta-no-horario.png` (a condição
+"Está no horário?"), `evidence/automacoes-lote6/03-editor-com-o-fluxo-montado.png` (o fluxo
+inteiro no editor), `evidence/automacoes-lote6/04-execucao-esperando-ate-amanha.png` (o dossiê
+"Esperando até 11 de nov., 09:00" e "Volta a andar em 19 horas") e
+`evidence/automacoes-lote6/05-execucao-retomada-pela-condicao.png` (a execução retomada, passando
+pela condição, com a tag aplicada e o desfecho "Concluída").
+
+| # | Caso | Expectativa | Resultado |
+|---|------|-------------|-----------|
+| J106.1 | Configurar "Esperar até amanhã, 09:00" pela tela | o card diz "Até amanhã, 09:00" | **PASS (tela, 10/11/2026)** — `tests/e2e/automacoes-espera-por-horario.spec.ts` |
+| J106.2 | Condição "Está no horário?" | início, fim e dias; a frase diz o horário | **PASS (tela, 10/11/2026)** — `tests/e2e/automacoes-espera-por-horario.spec.ts` |
+| J106.3 | Iniciar pelo "Testar com um contato" | a execução estaciona até amanhã 09:00 no fuso da organização; o dossiê diz "Esperando até …" | **PASS (tela, 10/11/2026)** — `tests/e2e/automacoes-espera-por-horario.spec.ts` |
+| J106.4 | Retomada | com o prazo vencido, o relógio leva pela condição e o contato ganha a tag | **PASS (tela, 10/11/2026)** — `tests/e2e/automacoes-espera-por-horario.spec.ts` |
+| J106.5 | Cálculo do dia e hora | fuso, horário de verão, virada de dia, domingo, "hoje já passou" | **PASS (unit)** — `lib/automacoes/plano-de-tempo.test.ts` |
+| J106.6 | Motor, condição, publish, reatividade | "Sem data", "só no horário", campo inexistente, hora em branco | **PASS (unit)** — `lib/automacoes/espera-por-horario.test.ts` |
+| J106.7 | Laço rápido sem dupla execução | o claim do laço só pega a raia automação; com o cron simultâneo, nenhuma execução sai duas vezes | **PASS (`test:db`)** — `tests/invariants/automacao-claim-do-laco-rapido.test.ts` |
+
+Não provado pela tela: "até a data de um campo" (coberto por unitários) e a espera de
+5 s retomando em ~5 s com o worker de pé (o e2e chama o relógio HTTP, não sobe o worker).
+
+## Automações — tela única (lote 5)
+
+- `[P1]` /app/automacoes junta automações, follow-ups e regras antigas; filtro por tipo e busca pelo nome; regra já convertida aparece uma vez só (como automação). Spec: `tests/e2e/automacoes-tela-unica.spec.ts` (job e2e; medido local em 10/11/2026, build de produção: `2 passed`).
+- `[P1]` Regra antiga conversível → pré-visualização em blocos → publicar: regra desligada, `migrated_to_pointer_id` gravado, automação ligada, numa transação (`fn_automacao_converter_regra`, migration 1005). Não conversível: motivo na tela e link para `/app/webhooks?tab=rules`, onde continua rodando.
+- `[P1]` "Usar um modelo" cria rascunho (não publica) e abre no editor.
+- Voltar atrás é manual: desligar a automação nova e religar a regra antiga (o banco recusa as duas ligadas, PT409).
+
+Evidência (10/11/2026): `evidence/automacoes-lote5/01-lista-unica-com-os-tres-tipos.png` (a lista com automação, follow-up e as duas regras antigas), `evidence/automacoes-lote5/02-regra-antiga-nao-conversivel.png` (o motivo "Enviar e-mail ainda não existe" e o link para a tela antiga), `evidence/automacoes-lote5/03-previa-da-conversao-com-o-aviso.png` (a prévia com o aviso "Ao publicar, a regra antiga é desligada"), `evidence/automacoes-lote5/04-depois-de-publicar-so-a-automacao-nova.png` (a regra convertida aparece uma vez, como automação ativa), `evidence/automacoes-lote5/05-tela-antiga-com-a-regra-desligada.png` (a tela antiga com a regra Pausada), `evidence/automacoes-lote5/06-dialogo-usar-um-modelo.png` (o diálogo "Usar um modelo") e `evidence/automacoes-lote5/07-rascunho-aberto-no-editor.png` (o rascunho do modelo aberto no editor).
+
+## J104 — Automações: bloco Requisição HTTP e chaves secretas `[P1]` (2026-11-10)
+
+Automações, lote 4: bloco "Requisição HTTP" (método, endereço, cabeçalhos, tempo limite, guardar da resposta) e "Chaves secretas" (a chave entra num cabeçalho, sem aparecer no fluxo, no histórico nem para outras pessoas). Spec: `tests/e2e/automacoes-http-segredo.spec.ts` (job e2e), com receptor HTTP real que conta as requisições que chegam. Medido local em 10/11/2026, build de produção, banco fresco estilo VPS: `1 passed`.
+
+| # | Caso | Expectativa | Resultado |
+|---|------|-------------|-----------|
+| J104.1 | Salvar a chave | depois de salva, a lista mostra o nome e só os 4 últimos caracteres (`••••REDO`); o valor inteiro não volta | **PASS (tela, 10/11/2026)** — `tests/e2e/automacoes-http-segredo.spec.ts` |
+| J104.2 | Montar o bloco | cabeçalho "Authorization" com a chave escolhida em lista, mascarada (`token_meta_… (••••R…)`); aviso "Endereços internos do servidor são bloqueados" | **PASS (tela, 10/11/2026)** — idem |
+| J104.3 | Publicar com endereço local | a validação recusa ("o endereço precisa começar com https://") e destaca o nó | **PASS (tela, 10/11/2026)** — idem |
+| J104.4 | Executar com destino interno | a execução conta "Uma ação falhou: endereço recusado" e o receptor recebe zero requisições | **PASS (tela, 10/11/2026)** — idem |
+
+Evidência: `evidence/automacoes-lote4/01-chave-salva-mascarada.png` (a tela de chaves, só os 4 últimos caracteres), `evidence/automacoes-lote4/02-bloco-http-com-endereco-local.png` (o bloco montado, com a chave mascarada no cabeçalho), `evidence/automacoes-lote4/03-publish-recusa-http-local.png` (a publicação recusada) e `evidence/automacoes-lote4/04-execucao-falhou-destino-recusado.png` (o dossiê com a falha em português).

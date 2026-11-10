@@ -75,13 +75,15 @@ export function varsDaResposta(
 
 /**
  * O pedaço de `vars` que pode ir ao payload de um evento: tudo menos o
- * namespace `resposta` (texto do contato). `undefined` quando não sobra nada.
+ * namespace `resposta` (texto do contato) e o `saida` (o que a resposta de uma
+ * Requisição HTTP devolveu — dado de terceiro, às vezes do contato; o evento
+ * guarda só os nomes, em `detalhes.campos`). `undefined` quando não sobra nada.
  */
 export function varsParaOEvento(
   vars: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
   if (!vars) return undefined;
-  const { [NAMESPACE_DA_RESPOSTA]: _fora, ...resto } = vars;
+  const { [NAMESPACE_DA_RESPOSTA]: _fora, saida: _saida, ...resto } = vars;
   return Object.keys(resto).length > 0 ? resto : undefined;
 }
 

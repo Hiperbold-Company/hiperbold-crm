@@ -939,7 +939,7 @@ export const NAV_CATALOG = [
   },
   {
     href: "/app/webhooks",
-    label: "Automações e Webhooks",
+    label: "Webhooks e regras antigas",
     description:
       "Regras que agem sozinhas, entrada de leads de sites e formulários, e o registro do que chegou e do que rodou.",
     termos: ["automação", "automações", "automatização", "webhook", "webhooks", "log", "logs", "registro", "histórico"],

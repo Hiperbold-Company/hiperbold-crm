@@ -132,24 +132,24 @@ test.describe("webhooks & automações — fluxo completo", () => {
     let pipelineId: string | undefined;
 
     try {
-      // --- Step 1: login como manager; "Automações e Webhooks" mora em Configurações › Canais
+      // --- Step 1: login como manager; "Webhooks e regras antigas" mora em Configurações › Canais
       // (o sidebar só tem o essencial desde 15/10/2026) ---
       await login(page, creds.users.manager!.email);
       await page.getByRole("link", { name: "Configurações" }).click();
       await page.waitForURL(/\/app\/settings$/);
-      await expect(page.getByRole("link", { name: /^Automações e Webhooks/ })).toBeVisible();
-      await page.getByRole("link", { name: /^Automações e Webhooks/ }).click();
+      await expect(page.getByRole("link", { name: /^Webhooks e regras antigas/ })).toBeVisible();
+      await page.getByRole("link", { name: /^Webhooks e regras antigas/ }).click();
       await page.waitForURL(/\/app\/webhooks/);
 
-      // --- Step 2: a tela abre em "Automações" (a aba de destaque); a ordem das
-      // abas é Automações, Receber dados, Leads recebidos, Registro de atividade ---
-      await expect(page.getByRole("heading", { name: "Automações e Webhooks", level: 1 })).toBeVisible();
-      await expect(page.getByRole("tab", { name: "Automações" })).toHaveAttribute(
+      // --- Step 2: a tela abre em "Regras antigas" (a aba de destaque); a ordem das
+      // abas é Regras antigas, Receber dados, Leads recebidos, Registro de atividade ---
+      await expect(page.getByRole("heading", { name: "Webhooks e regras antigas", level: 1 })).toBeVisible();
+      await expect(page.getByRole("tab", { name: "Regras antigas" })).toHaveAttribute(
         "data-state",
         "active",
       );
       await expect(page.getByRole("tab")).toHaveText([
-        "Automações",
+        "Regras antigas",
         "Receber dados",
         "Leads recebidos",
         "Registro de atividade",
@@ -188,8 +188,8 @@ test.describe("webhooks & automações — fluxo completo", () => {
       await expectToast(page, "Funcionou! Um lead de teste entrou no seu funil.");
       await page.keyboard.press("Escape");
 
-      // --- Step 4: aba Automações — criar regra + ligar ---
-      await page.getByRole("tab", { name: "Automações" }).click();
+      // --- Step 4: aba Regras antigas — criar regra + ligar ---
+      await page.getByRole("tab", { name: "Regras antigas" }).click();
       await page.getByRole("button", { name: /Nova automação|Criar primeira automação/ }).click();
       const ruleSheet = page.getByRole("dialog");
       await expect(ruleSheet).toBeVisible();
@@ -366,12 +366,12 @@ test.describe("webhooks & automações — fluxo completo", () => {
       );
       await expect(leadCard).toHaveAttribute("title", new RegExp(`Tags:.*${TAG}`));
 
-      // --- Step 9: AGENT não vê "Automações e Webhooks" e é redirecionado ---
+      // --- Step 9: AGENT não vê "Webhooks e regras antigas" e é redirecionado ---
       const agentContext = await browser.newContext();
       const agentPage = await agentContext.newPage();
       try {
         await login(agentPage, creds.users.agent!.email);
-        await expect(agentPage.getByRole("link", { name: "Automações e Webhooks" })).toHaveCount(0);
+        await expect(agentPage.getByRole("link", { name: "Webhooks e regras antigas" })).toHaveCount(0);
         await agentPage.goto(`${APP_URL}/app/webhooks`);
         await agentPage.waitForURL(/\/app\/inbox/);
         expect(agentPage.url()).toMatch(/\/app\/inbox/);
@@ -385,7 +385,7 @@ test.describe("webhooks & automações — fluxo completo", () => {
       try {
         if (ruleCreated) {
           await page.goto(`${APP_URL}/app/webhooks`);
-          await page.getByRole("tab", { name: "Automações" }).click();
+          await page.getByRole("tab", { name: "Regras antigas" }).click();
           const ruleTitle = page.getByText(RULE_NAME, { exact: true });
           // waitFor (não .count() imediato): a lista busca via rede após a
           // troca de aba — um count() síncrono aqui pegava 0 e pulava o
@@ -481,7 +481,7 @@ testSemGravacao.describe("#3267 — uma vez por contato e o mesmo recibo nos doi
       } });
       expect(criada.ok()).toBe(true); regra = (await criada.json()).data.id;
       await page.goto(`${APP_URL}/app/webhooks`);
-      await page.getByRole("tab", { name: "Automações", exact: true }).click();
+      await page.getByRole("tab", { name: "Regras antigas", exact: true }).click();
       const card = cardOf(page.getByText(nome, { exact: true }));
       await card.getByRole("button", { name: "Editar automação" }).click();
       const editor = page.getByRole("dialog");

@@ -94,6 +94,11 @@ import { sincronizarAvisoDoDrain } from "@/lib/agent-engine/edge/crm/vigilancia-
 import { notificacaoInteressaAoLaco, runEventLogDrainLoop } from "@/lib/event-log/drain-loop";
 import { acordarLacoDeEventLog } from "@/lib/event-log/sinal-de-trabalho";
 import {
+  carregarTickDasAutomacoes,
+  criarSondaDeTrabalhoDasAutomacoes,
+  rodarLacoDasAutomacoes,
+} from "@/lib/automacoes/runner";
+import {
   clienteDeEscutaPg,
   iniciarOuvinteDoBanco,
   ouvinteDesligado,
@@ -376,6 +381,23 @@ export async function startWorker(
     { ouvindo: ouvinte.ouvindo },
   );
 
+  // Laço rápido das automações (lote 6): só a raia `automacao`, pelo MESMO
+  // claim/lease do cron — ver lib/automacoes/runner.ts. O cron segue de piso.
+  const automacoesLoop = (async () => {
+    if (!(env.AUTOMACAO_RUNNER_INTERVAL_MS > 0)) {
+      log.info("laço rápido das automações OFF (AUTOMACAO_RUNNER_INTERVAL_MS=0)", {});
+      return;
+    }
+    const tick = await carregarTickDasAutomacoes(log);
+    if (!tick) return;
+    await rodarLacoDasAutomacoes(
+      { intervalMs: env.AUTOMACAO_RUNNER_INTERVAL_MS },
+      { tick, temTrabalho: criarSondaDeTrabalhoDasAutomacoes(pool) },
+      log,
+      loopsAbort.signal,
+    );
+  })();
+
   // Watchdog de sessão (4A-2): reconcilia channel_sessions×WAHA + redrive de
   // queued. Liga só com as credenciais do WAHA no env (sem elas: warn + off).
   const sessionWatchdogLoop =
@@ -649,6 +671,7 @@ export async function startWorker(
         await Promise.all([
           drainLoop,
           eventLogLoop,
+          automacoesLoop,
           healthLoop,
           cronLoop,
           sessionWatchdogLoop,

@@ -268,7 +268,7 @@ test.describe("o agente organiza a operação e a tela conta quem foi", () => {
 
       // ---- a tela mostra "Ativa" COM a autoria do assistente ----
       await page.goto(`${APP_URL}/app/webhooks`);
-      await page.getByRole("tab", { name: "Automações" }).click();
+      await page.getByRole("tab", { name: "Regras antigas" }).click();
       const tituloDaRegra = page.getByText(REGRA, { exact: true }).first();
       await expect(tituloDaRegra).toBeVisible({ timeout: 15_000 });
       const cardDaRegra = cardDe(tituloDaRegra);

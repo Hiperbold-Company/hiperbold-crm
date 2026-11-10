@@ -39,6 +39,7 @@ import { audit } from "@/lib/audit";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { logger } from "@/lib/logger";
+import { camposDeDataDoNegocio } from "@/lib/leads/campos-do-funil";
 
 import { triggerConfigSchema, type FollowupFlowSurface } from "./api-schemas";
 import { carregaEtapasCitadas } from "./etapas-citadas";
@@ -475,7 +476,14 @@ export async function reverterFluxo(deps: DepsDeFollowup, id: string, versionId:
  * (migration 0056; EXECUTE só para service role). 422 `validation_failed` com `details.errors` se o rascunho
  * faltar ou for reprovado.
  */
-export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<unknown> {
+/** Quem grava a versão publicada. O padrão é `fn_publish_followup_flow_version`; a conversão de regra antiga (lote 5) troca pela função que também desliga a regra, na mesma transação. */
+export type PublicadorDeVersao = typeof publishFollowupFlowVersion;
+
+export async function publicarFluxo(
+  deps: DepsDeFollowup,
+  id: string,
+  publicar: PublicadorDeVersao = publishFollowupFlowVersion,
+): Promise<unknown> {
   const t = tr(deps);
   const admin = deps.admin;
   const orgId = deps.organizationId;
@@ -597,7 +605,7 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
   // motor executa com a service role.
   let automacao: ContextoDoPublish["automacao"];
   if (surface === "automacao") {
-    const { funis, etapas, pessoas, fontes, automacoes } = referenciasDoGrafo(graph);
+    const { funis, etapas, pessoas, fontes, automacoes, segredos } = referenciasDoGrafo(graph);
     const vazio = Promise.resolve({ data: [], error: null });
     const [rf, re, rp, rs] = await Promise.all([
       funis.length ? admin.from("crm_pipelines").select("id").eq("organization_id", orgId).in("id", funis) : vazio,
@@ -637,9 +645,15 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
           .in("id", outras)
       : { data: [], error: null };
     if (ra.error) throw falhaInterna(deps, ra.error);
+    // Bloco "Requisição HTTP": só chave do cofre DESTA organização (o motor decifra com a service role).
+    const rk = segredos.length
+      ? await admin.from("automacao_segredos").select("id").eq("organization_id", orgId).in("id", segredos)
+      : { data: [], error: null };
+    if (rk.error) throw falhaInterna(deps, rk.error);
     automacao = {
       pointerId: id,
       existentes: new Set((ra.data ?? []).map((r) => (r as { id: string }).id)),
+      segredosExistentes: new Set((rk.data ?? []).map((r) => (r as { id: string }).id)),
     };
   }
   // A regra de etapa guarda o `stage_id`, e só o banco diz se a etapa existe e está ativa.
@@ -698,6 +712,21 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
   // O gatilho entra só pelos AVISOS (`avisosDoGatilho`): nenhuma recusa depende dele, e um `trigger_config`
   // que não parseia não pode travar a publicação de um grafo válido — vira ausência, "nada a avisar".
   const gatilho = triggerConfigSchema.safeParse(pointer.trigger_config);
+  // Lote 6: a espera "até a data de um campo" cita a chave de um campo de data;
+  // só os funis DESTA organização dizem se ele existe.
+  let camposDeData: Set<string> | undefined;
+  if (graph.nodes.some((n) => n.type === "wait" && n.config.mode === "until_date_field")) {
+    const { data: funis, error: funisErr } = await admin
+      .from("crm_pipelines")
+      .select("settings")
+      .eq("organization_id", orgId);
+    if (funisErr) throw falhaInterna(deps, funisErr);
+    camposDeData = new Set(
+      (funis ?? []).flatMap((f) =>
+        camposDeDataDoNegocio((f as { settings?: Record<string, unknown> | null }).settings ?? null).map((c) => c.key),
+      ),
+    );
+  }
   const validation = validateFlowForPublish(graph, {
     etapas: citadas.etapas,
     surface,
@@ -705,6 +734,7 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
     exigeModeloForaDaJanela,
     automacao,
     modelos: modelos.modelos,
+    ...(camposDeData ? { camposDeData } : {}),
     ...(gatilho.success ? { trigger: gatilho.data } : {}),
   });
   if (!validation.ok) {
@@ -714,7 +744,7 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
     });
   }
 
-  const result = await publishFollowupFlowVersion(admin, {
+  const result = await publicar(admin, {
     orgId,
     pointerId: id,
     graph,

@@ -232,7 +232,8 @@ test.describe("condição com várias regras — uma bolinha por regra", () => {
     for (let i = 2; i < 5; i++) {
       await painel.getByRole("button", { name: "Condição", exact: true }).click();
     }
-    await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
+    // Com 5 regras o painel estica a página e o topo do canvas sai da tela: clica no vazio do canvas, em coordenada da janela.
+    await page.mouse.click(700, 600);
     await expect(saidas).toHaveCount(6); // 5 regras + "nenhuma delas"
     const alturaCom5Regras = await alturaDoCard(page, condicaoId);
     console.info(
@@ -250,7 +251,8 @@ test.describe("condição com várias regras — uma bolinha por regra", () => {
     for (let i = 0; i < 3; i++) {
       await painel.getByRole("button", { name: "Remover condição" }).last().click();
     }
-    await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
+    // Com 5 regras o painel estica a página e o topo do canvas sai da tela: clica no vazio do canvas, em coordenada da janela.
+    await page.mouse.click(700, 600);
     await expect(saidas).toHaveCount(3);
 
     // ─── 6. uma aresta por saída, para destinos diferentes ───────────────

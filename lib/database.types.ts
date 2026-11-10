@@ -2806,6 +2806,51 @@ export type Database = {
           },
         ];
       };
+      automacao_segredos: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          last_used_at: string | null;
+          nome: string;
+          organization_id: string;
+          ultimos4: string;
+          updated_at: string;
+          valor_cifrado: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_used_at?: string | null;
+          nome: string;
+          organization_id: string;
+          ultimos4: string;
+          updated_at?: string;
+          valor_cifrado: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_used_at?: string | null;
+          nome?: string;
+          organization_id?: string;
+          ultimos4?: string;
+          updated_at?: string;
+          valor_cifrado?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automacao_segredos_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       automation_rodizio_atribuicoes: {
         Row: {
           created_at: string;
@@ -2996,6 +3041,7 @@ export type Database = {
           last_change_actor_kind: string | null;
           last_change_at: string | null;
           last_run_at: string | null;
+          migrated_to_pointer_id: string | null;
           name: string;
           organization_id: string;
           run_count: number;
@@ -3014,6 +3060,7 @@ export type Database = {
           last_change_actor_kind?: string | null;
           last_change_at?: string | null;
           last_run_at?: string | null;
+          migrated_to_pointer_id?: string | null;
           name: string;
           organization_id: string;
           run_count?: number;
@@ -3031,6 +3078,7 @@ export type Database = {
           last_change_actor_kind?: string | null;
           last_change_at?: string | null;
           last_run_at?: string | null;
+          migrated_to_pointer_id?: string | null;
           name?: string;
           organization_id?: string;
           run_count?: number;
@@ -17272,6 +17320,16 @@ export type Database = {
         };
         Returns: boolean;
       };
+      fn_automacao_converter_regra: {
+        Args: {
+          p_created_by: string;
+          p_graph: Json;
+          p_org: string;
+          p_pointer: string;
+          p_rule: string;
+        };
+        Returns: string;
+      };
       fn_automacao_iniciar: {
         Args: {
           p_contact: string;
@@ -17892,6 +17950,46 @@ export type Database = {
           p_user: string;
         };
         Returns: string;
+      };
+      fn_claim_due_automacao_enrollments: {
+        Args: { p_lease_seconds: number; p_limit: number };
+        Returns: {
+          agent_id: string | null;
+          appointment_id: string | null;
+          appointment_revision: number | null;
+          attempts: number;
+          cancel_reason: string | null;
+          claimed_until: string | null;
+          completed_at: string | null;
+          contact_id: string;
+          conversation_id: string | null;
+          current_node_id: string;
+          id: string;
+          lane: string;
+          last_error: string | null;
+          max_attempts: number;
+          next_eval_at: string | null;
+          organization_id: string;
+          origin_event_id: string | null;
+          outcome: string | null;
+          parent_enrollment_id: string | null;
+          pointer_id: string;
+          revision: number;
+          service_boundary: Json | null;
+          started_at: string;
+          status: string;
+          steps_taken: number;
+          timing_plan: Json | null;
+          updated_at: string;
+          vars: NonNullable<Json>;
+          version_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "followup_enrollments";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
       };
       fn_claim_due_followup_enrollments: {
         Args: { p_lease_seconds: number; p_limit: number };

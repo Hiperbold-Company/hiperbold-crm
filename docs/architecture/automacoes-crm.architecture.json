@@ -23,7 +23,11 @@
     { "id": "iniciar", "lane": "dados", "col": 3, "type": "database", "label": "fn_automacao_iniciar", "sublabel": "lane automacao, reentrada, teto por hora" },
     { "id": "motor", "lane": "motor", "col": 4, "type": "backend", "label": "followup-flow-worker", "sublabel": "passos em sequência com orçamento" },
     { "id": "efeitos", "lane": "motor", "col": 5, "type": "backend", "label": "criarExecutorDeEfeitos", "sublabel": "crm_action, field_op (uma vez por passo)" },
-    { "id": "execucoes", "lane": "ui", "col": 5, "type": "frontend", "label": "Execuções + dossiê", "sublabel": "eventos em português" }
+    { "id": "execucoes", "lane": "ui", "col": 5, "type": "frontend", "label": "Execuções + dossiê", "sublabel": "eventos em português" },
+    { "id": "lista", "lane": "ui", "col": 3, "type": "frontend", "label": "/app/automacoes (lista única)", "sublabel": "automações, follow-ups e regras antigas; lib/automacoes/lista-unica.ts" },
+    { "id": "modelos", "lane": "ui", "col": 4, "type": "frontend", "label": "Modelos prontos", "sublabel": "GET/POST /api/v1/automacoes/modelos, lib/automacoes/modelos.ts" },
+    { "id": "conversor", "lane": "motor", "col": 1, "type": "backend", "label": "converterRegra", "sublabel": "lib/automacoes/converter-regra.ts, POST /api/v1/automacoes/converter-regra/[id]" },
+    { "id": "fnconverter", "lane": "dados", "col": 1, "type": "database", "label": "fn_automacao_converter_regra", "sublabel": "troca atômica, gatilhos PT409 (migration 1005)" }
   ],
   "edges": [
     { "from": "cadastro", "to": "evento", "label": "emite" },
@@ -35,6 +39,13 @@
     { "from": "motor", "to": "efeitos", "label": "effect_started / effect_done" },
     { "from": "efeitos", "to": "cadastro", "label": "request_id automacao:* (anti-laço)" },
     { "from": "efeitos", "to": "execucoes", "label": "erro sai pela saída Erro e aparece na história" },
-    { "from": "execucoes", "to": "editor", "label": "quem lê a falha corrige o bloco" }
+    { "from": "execucoes", "to": "editor", "label": "quem lê a falha corrige o bloco" },
+    { "from": "lista", "to": "editor", "label": "abrir ou criar automação" },
+    { "from": "lista", "to": "conversor", "label": "converter regra antiga (tela de conferência)" },
+    { "from": "modelos", "to": "editor", "label": "modelo vira rascunho para editar" },
+    { "from": "lista", "to": "modelos", "label": "escolher um modelo" },
+    { "from": "conversor", "to": "fnconverter", "label": "publica a versão e desliga a regra na mesma transação" },
+    { "from": "fnconverter", "to": "gatilhos", "label": "a automação ativa assume o gatilho; regra convertida não religa" },
+    { "from": "execucoes", "to": "lista", "label": "última execução por linha" }
   ]
 }

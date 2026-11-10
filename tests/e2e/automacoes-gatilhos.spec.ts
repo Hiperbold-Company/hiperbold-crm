@@ -151,7 +151,7 @@ async function processar(page: Page, vezes = 3): Promise<void> {
 async function novaAutomacao(page: Page, nome: string): Promise<string> {
   await page.goto("/app/automacoes");
   await page.getByTestId("nova-automacao").click();
-  await page.getByLabel("Nome").fill(nome);
+  await page.getByLabel("Nome", { exact: true }).fill(nome);
   await page.getByTestId("criar-automacao").click();
   await page.waitForURL(/\/app\/automacoes\/[0-9a-f-]+$/, { timeout: PRAZO });
   const id = page.url().split("/").pop()!;
