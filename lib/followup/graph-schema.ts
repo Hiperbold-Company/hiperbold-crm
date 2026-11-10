@@ -128,6 +128,13 @@ export const NAO_SEGUE_BRANCH_ID = 'nao_segue';
  * pelo mesmo motivo de `ERROR_BRANCH_ID`: a espera não tem ramo declarado.
  */
 export const SEM_DATA_BRANCH_ID = 'sem_data';
+/**
+ * O motivo que a execução grava (`cancel_reason`, e o payload do `flow_completed`)
+ * quando a espera "até a data de um campo" não achou data futura E a saída
+ * "Sem data" não está ligada a nada: a execução termina ali. Texto estável,
+ * porque é ele que a linha do tempo reconhece para dizer qual campo faltava.
+ */
+export const MOTIVO_SEM_DATA_NO_CAMPO = 'Sem data futura no campo da espera';
 
 /** Branch ids the contract owns — a user-declared branch may not claim one. */
 export const RESERVED_BRANCH_IDS = [

@@ -39,6 +39,7 @@ import {
   nodeBranches,
   type FlowEdge,
   type FlowNode,
+  MOTIVO_SEM_DATA_NO_CAMPO,
   SEM_DATA_BRANCH_ID,
 } from "./graph-schema";
 import { fraseDaEsperaAteAData, fraseDaEsperaAteODia } from "@/lib/automacoes/plano-de-tempo";
@@ -148,6 +149,8 @@ export interface NoDoDossie {
    * esperar". Opcional: os dossiês já montados seguem iguais.
    */
   esperaAteODia?: boolean;
+  /** Só na espera "até a data de um campo": a chave do campo, para dizer qual faltava ao terminar sem data. */
+  campoDeData?: string;
 }
 
 const TIPO_DO_NO: Record<FlowNode["type"], string> = {
@@ -270,6 +273,7 @@ export function resumoDoNo(node: FlowNode, raia: RaiaDoEnrollment = "followup"):
                     ? `espera ${fraseDaEsperaAteAData(node.config)}${node.config.ate_o_horario ? " e só termina em horário comercial" : ""}`
                     : `espera o contato responder, por até ${duracaoLegivel(node.config.timeout_ms)}`,
         ...(node.config.mode === "until_time" || node.config.mode === "until_date_field" ? { esperaAteODia: true } : {}),
+        ...(node.config.mode === "until_date_field" ? { campoDeData: node.config.field_key } : {}),
       };
     case "condition":
       return {
@@ -624,6 +628,16 @@ export function descreveEvento(
     case "flow_completed": {
       const desfecho = texto(p.outcome);
       const nota = texto(p.cancel_reason);
+      // A espera por data de campo terminou a execução porque não havia data
+      // futura e a saída "Sem data" não estava ligada: diz qual campo faltava.
+      if (nota === MOTIVO_SEM_DATA_NO_CAMPO) {
+        const campo = evento.node_id ? nos[evento.node_id]?.campoDeData : undefined;
+        return {
+          titulo: raia === "automacao" ? "Automação concluída" : "Fluxo concluído",
+          detalhe: campo ? `Terminou: não havia data futura no campo “${campo}”` : "Terminou: não havia data futura no campo",
+          ...motor,
+        };
+      }
       return {
         titulo: raia === "automacao" ? "Automação concluída" : "Fluxo concluído",
         detalhe: desfecho ? desfechoLegivel(desfecho, raia) : nota,

@@ -20,6 +20,7 @@ import {
   NO_REPLY_BRANCH_ID,
   REPEAT_BODY_BRANCH_ID,
   REPEAT_DONE_BRANCH_ID,
+  MOTIVO_SEM_DATA_NO_CAMPO,
   SEM_DATA_BRANCH_ID,
   ehRegraNova,
   nodeBranches,
@@ -970,7 +971,7 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
             const semData = edges.find(
               (e) => e.source === node.id && e.condition.type === "branch" && e.condition.branch_id === SEM_DATA_BRANCH_ID,
             );
-            if (!semData) return { kind: "complete", outcome: null };
+            if (!semData) return { kind: "complete", outcome: null, cancel_reason: MOTIVO_SEM_DATA_NO_CAMPO };
             return { kind: "advance", next_node_id: semData.target, next_eval_at: agora, class: SEM_DATA_BRANCH_ID };
           }
           fim = alvo;

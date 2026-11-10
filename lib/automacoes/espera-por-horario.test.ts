@@ -11,6 +11,7 @@ import {
   duracaoMaximaDaEspera,
   duracaoMinimaDaEspera,
   flowGraphSchema,
+  MOTIVO_SEM_DATA_NO_CAMPO,
   nodeBranches,
   waitConfigSchema,
   type FlowEdge,
@@ -219,6 +220,7 @@ describe("espera até a data de um campo (until_date_field)", () => {
     expect(decidir(cfg, TERCA_10H, { negocio: { visita: "" } })).toEqual({
       kind: "complete",
       outcome: null,
+      cancel_reason: MOTIVO_SEM_DATA_NO_CAMPO,
     });
   });
 
@@ -508,6 +510,25 @@ describe("reatividade e textos", () => {
     );
     expect(linha.titulo).toMatch(/^Esperando até /);
     expect(linha.titulo).toMatch(/11/);
+  });
+
+  it("terminar sem data (saída sem ligação) diz qual campo faltava", () => {
+    const no = espera({ mode: "until_date_field", field_key: "visita", offset_days: -1, time: "09:00" });
+    const resumo = resumoDoNo(no, "automacao");
+    const linha = descreveEvento(
+      {
+        id: "x",
+        node_id: "espera",
+        event_type: "flow_completed",
+        payload: { outcome: null, cancel_reason: MOTIVO_SEM_DATA_NO_CAMPO },
+        created_at: "",
+      },
+      { espera: resumo },
+      "pt-BR",
+      "automacao",
+    );
+    expect(linha.titulo).toBe("Automação concluída");
+    expect(linha.detalhe).toBe("Terminou: não havia data futura no campo “visita”");
   });
 
   it("a saída 'Sem data' é contada por extenso", () => {
