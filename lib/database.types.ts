@@ -2806,6 +2806,51 @@ export type Database = {
           },
         ];
       };
+      automacao_segredos: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          last_used_at: string | null;
+          nome: string;
+          organization_id: string;
+          ultimos4: string;
+          updated_at: string;
+          valor_cifrado: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_used_at?: string | null;
+          nome: string;
+          organization_id: string;
+          ultimos4: string;
+          updated_at?: string;
+          valor_cifrado: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_used_at?: string | null;
+          nome?: string;
+          organization_id?: string;
+          ultimos4?: string;
+          updated_at?: string;
+          valor_cifrado?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automacao_segredos_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       automation_rodizio_atribuicoes: {
         Row: {
           created_at: string;

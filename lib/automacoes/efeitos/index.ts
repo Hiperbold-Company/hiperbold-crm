@@ -42,6 +42,7 @@ import { renderizar } from "../template-vars";
 import { CAMPOS_PADRAO_DO_CONTATO, CAMPOS_PADRAO_DO_NEGOCIO } from "../vocabulario";
 import { executarConversa } from "./conversa";
 import { executarIniciarAutomacao } from "./iniciar-automacao";
+import { executarHttp } from "./http";
 import { ehNoDoInstagram, executarInstagram } from "./instagram";
 
 /** Evento que avisa a equipe (push) — consumido por `lib/notifications/push.handler.ts`. */
@@ -439,6 +440,8 @@ export function criarExecutorDeEfeitos(
     recarregarFatos?: (pedido: PedidoDeEfeito, vars: Record<string, unknown>) => Promise<FatosDaAutomacao | null>;
     /** Organização suspensa (plataforma ou cobrança) não muda o CRM sozinha. Padrão: `organizacaoPodeProduzir`. */
     podeProduzir?: (organizationId: string) => Promise<boolean>;
+    /** Teste: a rede do bloco "Requisição HTTP" (padrão: o fetch seguro de produção). */
+    fetchHttp?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
   } = {},
 ): ExecutorDeEfeitos {
   const clock = opts.clock ?? (() => new Date());
@@ -464,6 +467,12 @@ export function criarExecutorDeEfeitos(
         }
       }
       if (ehNoDoInstagram(node)) return executarInstagram(c, node);
+      if (node.type === "http_request") {
+        return executarHttp(c, node, {
+          ...(opts.fetchHttp ? { fetch: opts.fetchHttp } : {}),
+          gravarCampos: (ops) => executarOperacoes(c, ops, true),
+        });
+      }
       if (node.type !== "crm_action") return { desfecho: { ok: false, erro: "efeito_falhou" } };
 
       const detalhes: Array<Record<string, unknown>> = [];

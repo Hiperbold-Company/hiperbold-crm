@@ -7,6 +7,8 @@
  */
 import type { FlowGraph } from "@/lib/followup/graph-schema";
 
+import { segredosDoBloco } from "./http";
+
 export interface ReferenciasDoGrafo {
   funis: string[];
   etapas: string[];
@@ -16,6 +18,8 @@ export interface ReferenciasDoGrafo {
   fontes: string[];
   /** Automações que a ação "Iniciar outra automação" inicia: desta organização e da superfície `automacao`. */
   automacoes: string[];
+  /** Chaves do cofre (`automacao_segredos`) citadas pelos blocos "Requisição HTTP": desta organização. */
+  segredos: string[];
 }
 
 export function referenciasDoGrafo(graph: FlowGraph): ReferenciasDoGrafo {
@@ -24,7 +28,9 @@ export function referenciasDoGrafo(graph: FlowGraph): ReferenciasDoGrafo {
   const pessoas = new Set<string>();
   const fontes = new Set<string>();
   const automacoes = new Set<string>();
+  const segredos = new Set<string>();
   for (const n of graph.nodes) {
+    if (n.type === "http_request") segredosDoBloco(n.config).forEach((id) => segredos.add(id));
     if (n.type === "crm_action") {
       for (const a of n.config.actions) {
         if (a.type === "create_deal" || a.type === "move_deal") {
@@ -57,7 +63,7 @@ export function referenciasDoGrafo(graph: FlowGraph): ReferenciasDoGrafo {
       }
     }
   }
-  return { funis: [...funis], etapas: [...etapas], pessoas: [...pessoas], fontes: [...fontes], automacoes: [...automacoes] };
+  return { funis: [...funis], etapas: [...etapas], pessoas: [...pessoas], fontes: [...fontes], automacoes: [...automacoes], segredos: [...segredos] };
 }
 
 /** Grafo com que uma automação nova nasce: Início (gatilho manual) → Fim. */

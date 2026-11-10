@@ -1722,6 +1722,11 @@ export const AUDIT_ACTIONS = [
   // 9096), na organização NOVA, com o id do molde e as contagens no metadata;
   // quem lê é Painel › Empresas › [empresa] ("IA copiada do molde").
   "ai.molde_de_ia_aplicado",
+  // Cofre de chaves secretas das automações (lote 4, `automacao_segredos`, migration 1004):
+  // criada, valor trocado, apagada. metadata só com o nome e os 4 últimos caracteres — nunca o valor.
+  "automacao.chave_criada",
+  "automacao.chave_trocada",
+  "automacao.chave_apagada",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

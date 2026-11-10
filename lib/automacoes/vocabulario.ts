@@ -313,6 +313,25 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   sem_comentario: "a execução não começou por um comentário do Instagram",
   comentario_nao_encontrado: "o comentário não foi encontrado nesta conta (ou a conexão do Instagram não está ligada)",
   texto_invalido: "o texto ficou vazio ou passou de 1000 caracteres depois de preencher as variáveis",
+  // Bloco "Requisição HTTP" (lote 4). Nunca o valor da chave nem a resposta.
+  http_url_invalida: "o endereço (URL) não é válido depois de preencher as variáveis",
+  http_https_obrigatorio: "o endereço precisa começar com https://",
+  http_destino_recusado:
+    "endereço recusado: o servidor não chama endereços internos (localhost, rede interna, 169.254.169.254) nem nomes que não existem",
+  http_segredo_na_url: "a chave secreta não pode ir no endereço (URL): use um cabeçalho",
+  http_segredo_no_texto: "a chave secreta não pode ser escrita no texto: escolha a chave no cabeçalho",
+  http_cabecalho_proibido: "um dos cabeçalhos não pode ser definido pela automação",
+  http_cabecalho_invalido: "um dos cabeçalhos ficou com valor inválido (quebra de linha ou caractere especial)",
+  http_corpo_invalido: "o corpo não é um JSON válido",
+  http_tempo_esgotado: "o outro sistema não respondeu dentro do tempo limite",
+  http_redirecionamento: "o outro sistema respondeu com redirecionamento, e redirecionamento não é seguido",
+  http_resposta_grande: "a resposta passou do tamanho máximo (2 MB)",
+  http_resposta_nao_json: "a resposta não é JSON, então não deu para guardar os campos",
+  http_saida_grande: "os valores guardados das respostas passaram do limite desta execução",
+  http_falha_de_rede: "não foi possível conectar ao outro sistema",
+  http_status: "o outro sistema respondeu com erro",
+  segredo_inexistente: "a chave secreta escolhida não existe mais",
+  segredo_indisponivel: "não foi possível abrir a chave secreta (a cifra do servidor está indisponível)",
 };
 
 /**
@@ -393,6 +412,15 @@ export const SE_DER_ERRO: Record<"route" | "continue", string> = {
   continue: "Seguir com as próximas ações",
 };
 
+/** Métodos do bloco "Requisição HTTP": o nome técnico é o rótulo (é o que a documentação de toda API usa). */
+export const METODOS_HTTP_ROTULOS: Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE", string> = {
+  GET: "GET",
+  POST: "POST",
+  PUT: "PUT",
+  PATCH: "PATCH",
+  DELETE: "DELETE",
+};
+
 /** Todos os mapas de rótulo deste módulo — o teste de cobertura do vocabulário de wire os lê. */
 export const MAPAS_DA_AUTOMACAO: ReadonlyArray<Record<string, string>> = [
   CAMPOS_PADRAO_DO_CONTATO,
@@ -416,4 +444,5 @@ export const MAPAS_DA_AUTOMACAO: ReadonlyArray<Record<string, string>> = [
   VALIDACOES_DA_PERGUNTA,
   TIPOS_DE_OPCAO,
   ENVIOS_DA_CONVERSA,
+  METODOS_HTTP_ROTULOS,
 ];

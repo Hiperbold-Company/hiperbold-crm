@@ -50,6 +50,7 @@ describe('graph-schema', () => {
         'instagram_private_reply',
         'instagram_public_reply',
         'instagram_check_follow',
+        'http_request',
       ]);
     });
 

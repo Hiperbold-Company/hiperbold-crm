@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
@@ -40,13 +41,19 @@ export default async function AutomacoesPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
-      <header>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
         <h1 className="text-2xl font-semibold tracking-tight">{t("Automações")}</h1>
         <p className="text-sm text-text-muted">
           {t(
             "Regras que mexem no CRM sozinhas: quando um lead chega ou muda de etapa, a automação cria negócio, põe tag, preenche campo, define responsável e cria tarefa.",
           )}
         </p>
+        </div>
+        {/* Porta da tela de chaves (lote 4): o bloco Requisição HTTP usa as chaves daqui. */}
+        <Link href="/app/automacoes/chaves" className="text-sm font-medium text-accent underline-offset-4 hover:underline" data-testid="link-chaves-secretas">
+          {t("Chaves secretas")}
+        </Link>
       </header>
       <AutomacoesList
         initialData={(data ?? []) as unknown as FollowupFlowPointerRow[]}

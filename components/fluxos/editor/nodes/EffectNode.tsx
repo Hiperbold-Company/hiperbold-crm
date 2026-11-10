@@ -15,7 +15,7 @@ import { NodeCard } from "./NodeCard";
  */
 export function EffectNode({ id, type, data, selected }: NodeProps<RFNode>) {
   const t = useT();
-  const tipo = type as "crm_action" | "field_op";
+  const tipo = type as "crm_action" | "field_op" | "http_request";
   // O card diz o NOME da automação, etapa ou pessoa escolhida, como o formulário.
   const nomes = useNomesDaAutomacao();
   return (

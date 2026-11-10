@@ -899,6 +899,8 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
   instagram_private_reply: (input) => decidirInstagram(input),
   instagram_public_reply: (input) => decidirInstagram(input),
   instagram_check_follow: (input) => decidirInstagram(input),
+  // "Deu certo" é a saída comum; "Falhou" é a de erro — a mesma régua dos efeitos de CRM.
+  http_request: (input) => decidirEfeito(input),
   trigger: (input) => {
     const { node, edges, enrollment, clock, smartWaits, planEnqueued, planRecheckCount } = input;
     const edge = selectEdge(edges, node.id, { type: "always" });

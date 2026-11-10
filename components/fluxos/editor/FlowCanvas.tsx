@@ -100,6 +100,7 @@ const nodeTypes: NodeTypes = {
   field_op: EffectNode,
   message: ConversaNode,
   question: ConversaNode,
+  http_request: EffectNode,
 };
 
 interface Props {

@@ -597,7 +597,7 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
   // motor executa com a service role.
   let automacao: ContextoDoPublish["automacao"];
   if (surface === "automacao") {
-    const { funis, etapas, pessoas, fontes, automacoes } = referenciasDoGrafo(graph);
+    const { funis, etapas, pessoas, fontes, automacoes, segredos } = referenciasDoGrafo(graph);
     const vazio = Promise.resolve({ data: [], error: null });
     const [rf, re, rp, rs] = await Promise.all([
       funis.length ? admin.from("crm_pipelines").select("id").eq("organization_id", orgId).in("id", funis) : vazio,
@@ -637,9 +637,15 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
           .in("id", outras)
       : { data: [], error: null };
     if (ra.error) throw falhaInterna(deps, ra.error);
+    // Bloco "Requisição HTTP": só chave do cofre DESTA organização (o motor decifra com a service role).
+    const rk = segredos.length
+      ? await admin.from("automacao_segredos").select("id").eq("organization_id", orgId).in("id", segredos)
+      : { data: [], error: null };
+    if (rk.error) throw falhaInterna(deps, rk.error);
     automacao = {
       pointerId: id,
       existentes: new Set((ra.data ?? []).map((r) => (r as { id: string }).id)),
+      segredosExistentes: new Set((rk.data ?? []).map((r) => (r as { id: string }).id)),
     };
   }
   // A regra de etapa guarda o `stage_id`, e só o banco diz se a etapa existe e está ativa.
