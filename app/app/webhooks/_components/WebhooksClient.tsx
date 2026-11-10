@@ -61,7 +61,7 @@ export function WebhooksClient({
   return (
     <Tabs defaultValue={abaInicial} className="flex-1">
       <TabsList className="h-auto flex-wrap justify-start">
-        <TabsTrigger value="rules">{t("Automações")}</TabsTrigger>
+        <TabsTrigger value="rules">{t("Regras antigas")}</TabsTrigger>
         <TabsTrigger value="sources">{t("Receber dados")}</TabsTrigger>
         <TabsTrigger value="capturas">{t("Leads recebidos")}</TabsTrigger>
         <TabsTrigger value="activity">{t("Registro de atividade")}</TabsTrigger>

@@ -476,7 +476,14 @@ export async function reverterFluxo(deps: DepsDeFollowup, id: string, versionId:
  * (migration 0056; EXECUTE só para service role). 422 `validation_failed` com `details.errors` se o rascunho
  * faltar ou for reprovado.
  */
-export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<unknown> {
+/** Quem grava a versão publicada. O padrão é `fn_publish_followup_flow_version`; a conversão de regra antiga (lote 5) troca pela função que também desliga a regra, na mesma transação. */
+export type PublicadorDeVersao = typeof publishFollowupFlowVersion;
+
+export async function publicarFluxo(
+  deps: DepsDeFollowup,
+  id: string,
+  publicar: PublicadorDeVersao = publishFollowupFlowVersion,
+): Promise<unknown> {
   const t = tr(deps);
   const admin = deps.admin;
   const orgId = deps.organizationId;
@@ -737,7 +744,7 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
     });
   }
 
-  const result = await publishFollowupFlowVersion(admin, {
+  const result = await publicar(admin, {
     orgId,
     pointerId: id,
     graph,

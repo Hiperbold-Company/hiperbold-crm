@@ -1727,6 +1727,11 @@ export const AUDIT_ACTIONS = [
   "automacao.chave_criada",
   "automacao.chave_trocada",
   "automacao.chave_apagada",
+  // Lote 5 ("tela única"): a regra antiga virou automação — a regra desligada e a automação publicada
+  // na mesma transação (`fn_automacao_converter_regra`, migration 1005). metadata: rule_id e version_id.
+  "automacao.regra_convertida",
+  // Lote 5: rascunho criado a partir de um modelo pronto (`lib/automacoes/modelos`). metadata: model_id.
+  "automacao.criada_de_modelo",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

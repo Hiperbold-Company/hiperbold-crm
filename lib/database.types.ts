@@ -3041,6 +3041,7 @@ export type Database = {
           last_change_actor_kind: string | null;
           last_change_at: string | null;
           last_run_at: string | null;
+          migrated_to_pointer_id: string | null;
           name: string;
           organization_id: string;
           run_count: number;
@@ -3059,6 +3060,7 @@ export type Database = {
           last_change_actor_kind?: string | null;
           last_change_at?: string | null;
           last_run_at?: string | null;
+          migrated_to_pointer_id?: string | null;
           name: string;
           organization_id: string;
           run_count?: number;
@@ -3076,6 +3078,7 @@ export type Database = {
           last_change_actor_kind?: string | null;
           last_change_at?: string | null;
           last_run_at?: string | null;
+          migrated_to_pointer_id?: string | null;
           name?: string;
           organization_id?: string;
           run_count?: number;
@@ -17316,6 +17319,16 @@ export type Database = {
           p_ttl_ms: number;
         };
         Returns: boolean;
+      };
+      fn_automacao_converter_regra: {
+        Args: {
+          p_created_by: string;
+          p_graph: Json;
+          p_org: string;
+          p_pointer: string;
+          p_rule: string;
+        };
+        Returns: string;
       };
       fn_automacao_iniciar: {
         Args: {

@@ -14,7 +14,7 @@ import { ABAS_DOS_WEBHOOKS, abaInicialDeAutomacoes } from "./_components/abas";
 import { WebhooksClient } from "./_components/WebhooksClient";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Automações e Webhooks" };
+export const metadata: Metadata = { title: "Webhooks e regras antigas" };
 
 export default async function WebhooksPage({
   searchParams,
@@ -51,7 +51,7 @@ export default async function WebhooksPage({
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">
-          {traduzir("Automações e Webhooks", idioma)}
+          {traduzir("Webhooks e regras antigas", idioma)}
         </h1>
         <p className="text-sm text-muted-foreground">
           {traduzir(

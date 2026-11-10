@@ -106,7 +106,7 @@ test.describe("J6.8 — anti-SSRF do outbound call_webhook (real, ponta a ponta)
       // Automações e Webhooks mora em Configurações › Canais (sidebar só com o essencial, 15/10/2026).
       await page.getByRole("link", { name: "Configurações" }).click();
       await page.waitForURL(/\/app\/settings$/);
-      await page.getByRole("link", { name: /^Automações e Webhooks/ }).click();
+      await page.getByRole("link", { name: /^Webhooks e regras antigas/ }).click();
       await page.waitForURL(/\/app\/webhooks/);
       await page.getByRole("tab", { name: "Receber dados" }).click();
       await page.getByRole("button", { name: /Nova fonte|Criar primeira fonte/ }).click();
@@ -126,7 +126,7 @@ test.describe("J6.8 — anti-SSRF do outbound call_webhook (real, ponta a ponta)
       await page.keyboard.press("Escape");
 
       // --- automação: gatilho lead novo → ação "Avisar outro sistema (webhook)" ---
-      await page.getByRole("tab", { name: "Automações" }).click();
+      await page.getByRole("tab", { name: "Regras antigas" }).click();
       await page.getByRole("button", { name: /Nova automação|Criar primeira automação/ }).click();
       const ruleSheet = page.getByRole("dialog");
       await ruleSheet.locator("#rule-name").fill(RULE_NAME);
