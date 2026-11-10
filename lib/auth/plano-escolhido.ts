@@ -38,3 +38,35 @@ export function planoPreSelecionado(
   }
   return null;
 }
+
+/**
+ * O `?ciclo=` do mesmo link (`/signup?plano=pro&ciclo=yearly`). Lista FECHADA, igual à de
+ * `CicloDeCompra` (`app/app/settings/plano/_logica-compra.ts`): qualquer outro valor é ignorado em silêncio.
+ * Como o `plano`, é só uma dica de seleção: preço e compra são decididos no servidor a partir do catálogo.
+ */
+export const CICLOS_DO_SITE = ["monthly", "semiannual", "yearly"] as const;
+export type CicloDoSite = (typeof CICLOS_DO_SITE)[number];
+
+export function sanitizarCiclo(bruto: unknown): CicloDoSite | null {
+  const valor = Array.isArray(bruto) ? bruto[0] : bruto;
+  if (typeof valor !== "string") return null;
+  const limpo = valor.trim().toLowerCase();
+  return (CICLOS_DO_SITE as readonly string[]).includes(limpo) ? (limpo as CicloDoSite) : null;
+}
+
+/**
+ * Qual ciclo a tela de pagamento deixa marcado: o primeiro candidato (`?ciclo=` da URL, depois o que o
+ * cadastro guardou em `user_metadata.ciclo_escolhido`) que seja válido E exista no plano escolhido
+ * (`ciclosDoPlano`: os que têm preço no catálogo). Sem plano pré-selecionado, ou ciclo inválido/ausente,
+ * devolve `null` e a tela segue como antes (mensal).
+ */
+export function cicloPreSelecionado(
+  ciclosDoPlano: readonly string[],
+  candidatos: readonly unknown[],
+): CicloDoSite | null {
+  for (const bruto of candidatos) {
+    const limpo = sanitizarCiclo(bruto);
+    if (limpo && ciclosDoPlano.includes(limpo)) return limpo;
+  }
+  return null;
+}

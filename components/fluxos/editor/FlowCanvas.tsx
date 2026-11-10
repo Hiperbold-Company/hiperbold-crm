@@ -98,6 +98,12 @@ const nodeTypes: NodeTypes = {
   skill: SkillNode,
   crm_action: EffectNode,
   field_op: EffectNode,
+  // Os três blocos do Instagram estavam na paleta, no painel e no motor, e não
+  // aqui: o editor desenhava a caixa desconhecida, sem estilo e sem as linhas
+  // (achado em 10/11/2026 ao tirar o print do site; mesmo defeito do #1540).
+  instagram_private_reply: EffectNode,
+  instagram_public_reply: EffectNode,
+  instagram_check_follow: EffectNode,
   message: ConversaNode,
   question: ConversaNode,
   http_request: EffectNode,

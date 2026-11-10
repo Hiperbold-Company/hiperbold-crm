@@ -10,12 +10,21 @@ import { NODE_VISUALS, describeNodeConfig } from "./nodeVisuals";
 import { NodeCard } from "./NodeCard";
 
 /**
- * Card dos blocos de EFEITO das automações (`crm_action`, `field_op`): duas
- * saídas, "Concluído" e "Erro", vindas do registro de ramos.
+ * Card dos blocos de EFEITO das automações (`crm_action`, `field_op` e os três
+ * blocos do Instagram): as saídas vêm do registro de ramos (`nodeBranches`), então
+ * "Confere se segue" mostra as quatro dele sem código próprio aqui.
  */
+type TipoDeEfeito =
+  | "crm_action"
+  | "field_op"
+  | "instagram_private_reply"
+  | "instagram_public_reply"
+  | "instagram_check_follow"
+  | "http_request";
+
 export function EffectNode({ id, type, data, selected }: NodeProps<RFNode>) {
   const t = useT();
-  const tipo = type as "crm_action" | "field_op" | "http_request";
+  const tipo = type as TipoDeEfeito;
   // O card diz o NOME da automação, etapa ou pessoa escolhida, como o formulário.
   const nomes = useNomesDaAutomacao();
   return (
