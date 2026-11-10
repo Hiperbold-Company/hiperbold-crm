@@ -91,7 +91,7 @@ describe("URL do bloco", () => {
   });
   it("URL com variável no caminho passa (controle)", () => {
     expect(
-      problemaDaUrl("https://graph.facebook.com/v19.0/{{campo.source_id}}?fields=campaign"),
+      problemaDaUrl("https://api.example.com/v19.0/{{campo.source_id}}?fields=campaign"),
     ).toBeNull();
   });
 });
