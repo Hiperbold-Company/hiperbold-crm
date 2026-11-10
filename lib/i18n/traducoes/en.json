@@ -864,7 +864,7 @@
   "Aceita": "Accepted",
   "Aceita .csv ou .xlsx (primeira aba), até 500 empresas. Colunas obrigatórias: nome da empresa e telefone. Quem já é contato do CRM não é abordado. Nenhuma abordagem começa nesta etapa.": "Accepts .csv or .xlsx (first sheet), up to 500 companies. Required columns: company name and phone. Anyone who is already a CRM contact is not approached. No outreach starts at this step.",
   "Aceita um IP (10.1.2.7) ou uma faixa (10.1.0.0/16). Nome de máquina não entra: o que se confere é o endereço para o qual o nome aponta na hora, e não o nome.": "Accepts an IP (10.1.2.7) or a range (10.1.0.0/16). Hostnames aren't accepted: what's checked is the address the name points to at the time, not the name.",
-  "Aceita variáveis, como https://api.example.com/clientes/{{campo.codigo}}. Endereços internos do servidor são bloqueados.": "Accepts variables, like https://api.example.com/clientes/{{campo.codigo}}. The server's internal addresses are blocked.",
+  "Aceita variáveis, como https://api.example.com/clientes/{{campo.codigo}}. Endereços internos do servidor são bloqueados.": "Accepts variables, like https://api.example.com/customers/{{campo.codigo}}. The server's internal addresses are blocked.",
   "Aceita variáveis: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}.": "Accepts variables: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}.",
   "Aceitar #on/#off enviados pelo celular": "Accept #on/#off sent from the phone",
   "Aceitar convite": "Accept invitation",

@@ -210,6 +210,8 @@ bytes contado no corpo lido e prazo total de 15 s. A exceção HTTP em loopback
 **Ressalva do mesmo tipo:** o caminho HTTPS real (SNI, certificado, lookup amarrado) não é
 exercitado por nenhum gate — os testes usam HTTP local e um dublê do lookup.
 
+**Terceiro egress do servidor (bloco "Requisição HTTP" das Automações, lote 4):** `lib/automacoes/efeitos/http.ts` (sobre `criarFetchSeguro`) chama o endereço que a ORGANIZAÇÃO escreve, então a régua é a mais estrita das três: só https, IP público validado (conexão aberta no IP validado, sem janela de DNS rebinding), sem redirect, sem exceção para endereço interno (a lista de destinos autorizados só vale para endereço da instalação), resposta cortada em 2 MiB e prazo de 10 s (máximo 30 s). A chave secreta vive cifrada em `automacao_segredos` (`valor_cifrado` sem GRANT de leitura para `authenticated`; o texto claro só existe na memória do envio), a API devolve só `••••final`, e o valor é mascarado em log, histórico e mensagem de erro. Provas: `lib/automacoes/efeitos/http.test.ts` (receptor real), `tests/invariants/automacao-segredos-cofre.test.ts` (RLS e coluna negada) e `tests/e2e/automacoes-http-segredo.spec.ts` (recusa pela tela). **Ressalva do mesmo tipo da T6:** o caminho positivo com TLS real contra internet não é exercitado por gate.
+
 ### T7 — Sem varredura de secret no histórico git 🟡 CONFIRMADO
 
 Sem gitleaks/trufflehog no CI, sem pre-commit hook (`.husky` e `.pre-commit-config.yaml`
