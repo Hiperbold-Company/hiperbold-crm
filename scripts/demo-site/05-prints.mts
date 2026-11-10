@@ -19,8 +19,8 @@ const so = new Set(process.argv.slice(2));
 
 const browser = await chromium.launch();
 const ctx = await browser.newContext({
-  viewport: { width: 1440, height: 900 },
-  deviceScaleFactor: 2,
+  viewport: { width: Number(process.env.VW ?? 1440), height: Number(process.env.VH ?? 900) },
+  deviceScaleFactor: Number(process.env.DSF ?? 2),
   locale: "pt-BR",
   timezoneId: "America/Sao_Paulo",
   colorScheme: "light",
