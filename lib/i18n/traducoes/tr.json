@@ -4371,7 +4371,7 @@
   "Funil de vendas criado:": "Satış hunisi oluşturuldu:",
   "Funil do campo": "Alanın satış hunisi",
   "Funil do número (padrão)": "Numaranın satış hunisi (varsayılan)",
-  "Funil e performance por atendente nos últimos 30 dias.": "Son 30 günde temsilci bazında satış hunisi ve performans.",
+  "Funil e performance por atendente, no período que você escolher.": "Seçtiğiniz dönem için temsilci bazında satış hunisi ve performans.",
   "Funil não encontrado.": "Satış hunisi bulunamadı.",
   "Funis": "Satış hunileri",
   "Funis arquivados": "Arşivlenen satış hunileri",
@@ -11418,5 +11418,7 @@
   "O link de autorização é automático: enquanto o cliente não autorizar, o agente recebe sozinho a ferramenta que gera o link. Não é preciso marcá-la aqui.": "Yetkilendirme bağlantısı otomatiktir: müşteri yetkilendirene kadar ajan, bağlantıyı üreten aracı kendiliğinden alır. Burada seçmeniz gerekmez.",
   "Mover negócio no funil": "Fırsatı satış hunisinde taşı",
   "Editar tag do negócio": "Fırsatın etiketini düzenle",
-  "Gravar tag no negócio": "Fırsata etiket kaydet"
+  "Gravar tag no negócio": "Fırsata etiket kaydet",
+  "Endereço do MCP:": "MCP adresi:",
+  "Como conectar um assistente de IA": "Bir yapay zekâ asistanı nasıl bağlanır"
 }

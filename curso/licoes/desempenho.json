@@ -2,7 +2,7 @@
  "id": "desempenho",
  "titulo": "Desempenho",
  "tela": "/app/metrics",
- "resumo": "Os números do atendimento e das vendas dos últimos 30 dias: o que o resultado custou, por que se perdeu, quanto deve entrar e como cada pessoa da equipe está indo.",
+ "resumo": "Os números do atendimento e das vendas dos últimos 30 dias, ou do período que você escolher: o que o resultado custou, por que se perdeu, quanto deve entrar e como cada pessoa da equipe está indo.",
  "licoes": [
   {
    "id": "conhecendo-o-desempenho",
@@ -23,7 +23,7 @@
     {
      "id": "p1",
      "titulo": "Onde ficam os números",
-     "texto": "A tela Desempenho junta os números do atendimento e das vendas da clínica. Você chega a ela pelo menu, em \"Desempenho\", no grupo Análise. A maior parte dos números olha para os últimos 30 dias, contados até agora, e não há como escolher outro período nesta tela. O Funil e a Previsão são a exceção: eles mostram os negócios que estão abertos agora. O campo \"Atendente\" mostra parte dos blocos só para uma pessoa da equipe; ele aparece numa lição mais adiante.",
+     "texto": "A tela Desempenho junta os números do atendimento e das vendas da clínica. Você chega a ela pelo menu, em \"Desempenho\", no grupo Análise. A maior parte dos números olha, por padrão, para os últimos 30 dias, contados até agora. Para ver outro período, use o campo \"Período\", na barra de filtros no alto da tela. O Funil e a Previsão são a exceção: eles mostram os negócios que estão abertos agora. O campo \"Atendente\" mostra parte dos blocos só para uma pessoa da equipe; ele aparece numa lição mais adiante.",
      "dica": "Role a tela para baixo: os blocos aparecem nesta ordem: Atrito, Perdas, Previsão, Funil, Performance por atendente, Por canal e Ganhos por período.",
      "rota": "/app/metrics",
      "antes": [],
@@ -705,7 +705,7 @@
     {
      "id": "p2",
      "titulo": "Ganhos por período",
-     "texto": "O último cartão mostra os negócios ganhos ao longo dos últimos 30 dias. O número do título é o total de ganhos, de toda a clínica. A linha do gráfico passa por cada dia, e os dias sem ganho aparecem com zero, para os vales não sumirem. Mais abaixo, rolando a tela, uma tabela repete os mesmos números, período por período. O campo à direita do título, hoje em \"Dia\", escolhe se os ganhos são juntados por dia, por semana ou por mês; o período continua sendo os últimos 30 dias. Clique nele.",
+     "texto": "O último cartão mostra os negócios ganhos ao longo dos últimos 30 dias. O número do título é o total de ganhos, de toda a clínica. A linha do gráfico passa por cada dia, e os dias sem ganho aparecem com zero, para os vales não sumirem. Mais abaixo, rolando a tela, uma tabela repete os mesmos números, período por período. O campo à direita do título, hoje em \"Dia\", escolhe se os ganhos são juntados por dia, por semana ou por mês; o período continua sendo o do filtro \"Período\" (aqui, os últimos 30 dias). Clique nele.",
      "antes": [],
      "destaques": [
       {
@@ -734,7 +734,7 @@
     {
      "id": "p3",
      "titulo": "Ver por semana",
-     "texto": "Escolha \"Semana\" para juntar os ganhos de cada semana num ponto só. Assim fica mais fácil ver se as vendas estão subindo ou caindo, sem o sobe e desce de um dia para o outro. \"Mês\" serve pouco aqui: como a tela olha só 30 dias, ele mostra no máximo dois meses, e os dois incompletos.",
+     "texto": "Escolha \"Semana\" para juntar os ganhos de cada semana num ponto só. Assim fica mais fácil ver se as vendas estão subindo ou caindo, sem o sobe e desce de um dia para o outro. \"Mês\" serve pouco aqui: com os últimos 30 dias, ele mostra no máximo dois meses, e os dois incompletos.",
      "antes": [
       {
        "acao": "click",

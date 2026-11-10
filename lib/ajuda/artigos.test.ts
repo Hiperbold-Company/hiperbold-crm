@@ -4,6 +4,7 @@ import {
   ARTIGOS_POR_ABA,
   ARTIGOS_POR_ROTA,
   CAMINHO_CAMPOS_PERSONALIZADOS,
+  CAMINHO_CONECTAR_ASSISTENTE_DE_IA,
   CAMINHO_CONECTAR_FORMULARIOS,
   CAMINHO_PADRAO_DA_AJUDA,
   artigoDaAba,
@@ -48,6 +49,7 @@ const ARTIGOS_DA_CENTRAL = new Set([
   "/crm/assinatura/exclusao-dos-dados/",
   "/crm/integracoes-e-api/tokens-de-api/",
   "/crm/integracoes-e-api/referencia-da-api/",
+  "/crm/integracoes-e-api/conectar-assistente-de-ia/",
   "/crm/privacidade/lgpd/",
   "/crm/automacoes/criar-uma-automacao/",
   "/crm/automacoes/ver-execucoes/",
@@ -135,6 +137,7 @@ describe("todo caminho do código existe na central", () => {
       }
     }
     expect(ARTIGOS_DA_CENTRAL.has(CAMINHO_CONECTAR_FORMULARIOS)).toBe(true);
+    expect(ARTIGOS_DA_CENTRAL.has(CAMINHO_CONECTAR_ASSISTENTE_DE_IA)).toBe(true);
     expect(ARTIGOS_DA_CENTRAL.has(CAMINHO_CAMPOS_PERSONALIZADOS)).toBe(true);
   });
 });

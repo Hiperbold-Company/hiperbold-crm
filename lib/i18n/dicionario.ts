@@ -17848,8 +17848,8 @@ export const DICIONARIO: Traducoes = {
   "Devolver ao anúncio as vendas que ele trouxe, e marcar a origem de quem chega pelo site.": {
     es: "Devolver al anuncio las ventas que trajo, y marcar el origen de quien llega por el sitio.",
   },
-  "Funil e performance por atendente nos últimos 30 dias.": {
-    es: "Embudo y rendimiento por asesor en los últimos 30 días.",
+  "Funil e performance por atendente, no período que você escolher.": {
+    es: "Embudo y rendimiento por asesor, en el período que elijas.",
   },
   "O catálogo da loja, com o preço que o atendente de IA responde.": {
     es: "El catálogo de la tienda, con el precio que responde el agente de IA.",
@@ -24554,8 +24554,8 @@ export const DICIONARIO: Traducoes = {
   "Leitura parcial: as parcelas somam o que foi lido no período.": {
     es: "Lectura parcial: las partes suman lo que se leyó en el período.",
   },
-  "Só quem administra a empresa define a meta.": {
-    es: "Solo quien administra la empresa define la meta.",
+  "Só o administrador e o gerente definem a meta.": {
+    es: "Solo el administrador y el gerente definen la meta.",
   },
   "Não consegui carregar a meta do mês — isto é uma falha de leitura, não a ausência de meta.": {
     es: "No pude cargar la meta del mes: esto es un fallo de lectura, no la ausencia de meta.",
@@ -28363,7 +28363,9 @@ export const DICIONARIO: Traducoes = {
   "Seu plano permite até 1 automação.": { es: "Tu plan permite hasta 1 automatización." },
   "Seu plano chegou ao limite de agentes de IA. Mude de plano para criar mais.": { es: "Tu plan llegó al límite de agentes de IA. Cambia de plan para crear más." },
   "Seu plano chegou ao limite de automações. Mude de plano para criar mais.": { es: "Tu plan llegó al límite de automatizaciones. Cambia de plan para crear más." },
-  "A automação por comentário do Instagram está disponível no plano Max.": { es: "La automatización por comentario de Instagram está disponible en el plan Max." },
+  "A automação por comentário do Instagram está disponível nos planos Max e Scale.": { es: "La automatización por comentario de Instagram está disponible en los planes Max y Scale." },
+  "Endereço do MCP:": { es: "Dirección del MCP:" },
+  "Como conectar um assistente de IA": { es: "Cómo conectar un asistente de IA" },
 };
 
 /**

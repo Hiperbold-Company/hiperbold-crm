@@ -207,7 +207,7 @@
           "id": "p1",
           "titulo": "Quando ainda não há meta",
           "texto": "Abra \"Desempenho\", no grupo Análise do menu, e desça até o quadro \"Meta do mês\". Sem meta cadastrada, ele diz \"Nenhuma meta cadastrada para este mês.\" e não mostra zero: a clínica pode ter vendido, só não tem alvo. O link \"Definir a meta\" leva direto à tela de cadastro.",
-          "dica": "O administrador, o gerente e o atendente veem este quadro. O link \"Definir a meta\" só aparece para o administrador e o gerente; o atendente lê \"Só quem administra a empresa define a meta.\".",
+          "dica": "O administrador, o gerente e o atendente veem este quadro. O link \"Definir a meta\" só aparece para o administrador e o gerente; o atendente lê \"Só o administrador e o gerente definem a meta.\".",
           "rota": "/app/metrics",
           "antes": [
             {
