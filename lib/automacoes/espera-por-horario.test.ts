@@ -5,8 +5,11 @@
 import { describe, expect, it } from "vitest";
 
 import { avaliarRegraNova, estaNoHorario } from "@/lib/automacoes/condicoes";
+import { instanteAteODia } from "@/lib/automacoes/plano-de-tempo";
 import { descreveEvento, resumoDoNo } from "@/lib/followup/eventos-legiveis";
 import {
+  duracaoMaximaDaEspera,
+  duracaoMinimaDaEspera,
   flowGraphSchema,
   nodeBranches,
   waitConfigSchema,
@@ -190,6 +193,16 @@ describe("espera até a data de um campo (until_date_field)", () => {
     });
   });
 
+  it("execução COM negócio sem o campo não lê a data de outro negócio do contato: sai por 'Sem data'", () => {
+    expect(
+      decidir(cfg, TERCA_10H, {
+        negocio: {}, // o negócio da execução não tem o campo
+        lead: lead({ custom_fields: { visita: "2026-11-20" } }), // o card mais recente do contato, que é OUTRO
+        edges: [SEGUE, SEM_DATA],
+      }),
+    ).toMatchObject({ kind: "advance", next_node_id: "aviso", class: "sem_data" });
+  });
+
   it("campo vazio ou data já passada: sai por 'Sem data'", () => {
     for (const visita of ["", "2026-11-10", "texto"]) {
       expect(
@@ -365,6 +378,100 @@ describe("publicação", () => {
         }),
       ),
     ).toContain("horario_da_espera_invalido");
+  });
+
+  describe("ciclo recorrente (espera → mensagem → volta à espera)", () => {
+    const ciclo = (wait: Record<string, unknown>): FlowGraph =>
+      flowGraphSchema.parse({
+        nodes: [
+          {
+            id: "inicio",
+            type: "trigger",
+            label: "Início",
+            position: { x: 0, y: 0 },
+            config: {
+              triggers: [{ kind: "lead_created" }],
+              reentry: { policy: "skip_if_running", cooldown_minutes: 0 },
+            },
+          },
+          { id: "espera", type: "wait", label: "Espera", position: { x: 0, y: 1 }, config: wait },
+          {
+            id: "msg",
+            type: "message",
+            label: "Lembrete",
+            position: { x: 0, y: 2 },
+            config: { body: "Bom dia!" },
+          },
+          // O laço tem saída (a condição decide se volta): "espera → mensagem →
+          // volta à espera" só é recusado pelo ciclo, não por falta de fim.
+          {
+            id: "rep",
+            type: "condition",
+            label: "No horário?",
+            position: { x: 0, y: 3 },
+            config: { combinator: "and", checks: [{ kind: "business_hours", ...COMERCIAL }] },
+          },
+          { id: "fim", type: "end", label: "Fim", position: { x: 0, y: 4 }, config: { outcome: "converted" } },
+        ],
+        edges: [
+          { id: "e1", source: "inicio", target: "espera", priority: 0, condition: { type: "always" } },
+          { id: "e2", source: "espera", target: "msg", priority: 0, condition: { type: "always" } },
+          { id: "e3", source: "msg", target: "rep", priority: 0, condition: { type: "always" } },
+          { id: "e4", source: "rep", target: "espera", priority: 0, condition: { type: "cond_result", value: true } },
+          { id: "e5", source: "rep", target: "fim", priority: 1, condition: { type: "cond_result", value: false } },
+        ],
+      });
+
+    it("'até a próxima segunda, 09:00' → mensagem → volta à espera publica", () => {
+      expect(
+        codigos(ciclo({ mode: "until_time", when: "next_weekday", weekday: 1, time: "09:00" })),
+      ).toEqual([]);
+    });
+
+    it("'amanhã' e 'daqui a N dias' também quebram o ciclo", () => {
+      expect(codigos(ciclo({ mode: "until_time", when: "tomorrow", time: "09:00" }))).toEqual([]);
+      expect(
+        codigos(ciclo({ mode: "until_time", when: "in_days", days: 3, time: "09:00" })),
+      ).toEqual([]);
+    });
+
+    it("'hoje, 09:00' (que pode já ter passado e seguir na hora) é recusado como ciclo sem espera", () => {
+      expect(codigos(ciclo({ mode: "until_time", when: "today", time: "09:00" }))).toContain(
+        "cycle_without_wait",
+      );
+    });
+
+    it("'até a data de um campo' (vazia ou passada sai na hora) não quebra o ciclo", () => {
+      expect(
+        codigos(
+          ciclo({ mode: "until_date_field", field_key: "visita", offset_days: 1, time: "09:00" }),
+        ),
+      ).toContain("cycle_without_wait");
+    });
+
+    it("a conta confere com o plano de tempo: no instante do horário, 'próxima segunda' vai a +7 dias e 'amanhã' nunca é hoje", () => {
+      // Segunda 09/11/2026 09:00 em SP = 12:00Z. Acordou agora e voltou à espera.
+      const acordou = new Date("2026-11-09T12:00:00.000Z");
+      const proxima = instanteAteODia({ when: "next_weekday", weekday: 1, time: "09:00" }, acordou, SP);
+      expect(proxima.getTime() - acordou.getTime()).toBe(7 * 86_400_000);
+      const amanha = instanteAteODia({ when: "tomorrow", time: "09:00" }, acordou, SP);
+      expect(amanha.getTime() - acordou.getTime()).toBe(86_400_000);
+      const piso = (c: Parameters<typeof duracaoMinimaDaEspera>[0]) => duracaoMinimaDaEspera(c);
+      expect(piso({ mode: "until_time", when: "next_weekday", weekday: 1, time: "09:00" })).toBeLessThanOrEqual(
+        proxima.getTime() - acordou.getTime(),
+      );
+      expect(piso({ mode: "until_time", when: "tomorrow", time: "09:00" })).toBeLessThanOrEqual(
+        amanha.getTime() - acordou.getTime(),
+      );
+    });
+
+    it("o teto da data do campo cresce com o deslocamento para depois dela", () => {
+      const base = { mode: "until_date_field", field_key: "visita", time: "09:00" } as const;
+      expect(duracaoMaximaDaEspera({ ...base, offset_days: -30 })).toBe(7_776_000_000);
+      expect(duracaoMaximaDaEspera({ ...base, offset_days: 3650 })).toBe(
+        7_776_000_000 + 3650 * 86_400_000,
+      );
+    });
   });
 
   it("os grafos antigos seguem válidos byte a byte (nenhuma chave nova obrigatória)", () => {

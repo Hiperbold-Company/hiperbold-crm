@@ -1,4 +1,4 @@
--- manifest: **O claim das automações para o laço rápido do worker (lote 6 das Automações, fork Hiperbold).** Função nova `fn_claim_due_automacao_enrollments(p_limit, p_lease_seconds)`: a MESMA definição vigente de `fn_claim_due_followup_enrollments` (rodízio justo entre organizações, só organização `active`, lease repetido no UPDATE), com UM filtro a mais — `lane = 'automacao'` nas duas leituras. O `agent-worker` a chama a cada ~5 s (`AUTOMACAO_RUNNER_INTERVAL_MS`) para que uma espera curta da automação retome em segundos; o cron `followup-flow-worker` (1×/min) continua como piso e reclama TODAS as raias. Os dois escrevem o mesmo `claimed_until`, então uma execução reclamada por um não é reclamada pelo outro até o lease vencer. Nenhuma tabela muda. `security definer`, revogada de public/anon/authenticated, concedida só a service_role.
+-- manifest: **O claim das automações para o laço rápido do worker (lote 6 das Automações, fork Hiperbold).** Função nova `fn_claim_due_automacao_enrollments(p_limit, p_lease_seconds)`: a MESMA definição vigente de `fn_claim_due_followup_enrollments` (rodízio justo entre organizações, só organização `active`, lease repetido no UPDATE), com UM filtro a mais — `lane = 'automacao'` nas duas leituras. O `agent-worker` a chama a cada ~5 s (`AUTOMACAO_RUNNER_INTERVAL_MS`) para que uma espera curta da automação retome em segundos; o cron `followup-flow-worker` (1×/min) continua como piso e reclama TODAS as raias. Os dois escrevem o mesmo `claimed_until`, então uma execução reclamada por um não é reclamada pelo outro até o lease vencer. Um índice parcial (`idx_followup_enrollments_due_automacao`) serve o claim. Nenhuma tabela muda. `security definer`, revogada de public/anon/authenticated, concedida só a service_role.
 
 -- ============================================================================
 -- 1003 — O CLAIM DAS AUTOMAÇÕES PARA O LAÇO RÁPIDO DO WORKER
@@ -12,6 +12,15 @@
 -- enfileiram turno de IA e têm o próprio ritmo de 1 min); só as automações têm
 -- espera em segundos.
 -- ============================================================================
+
+-- Índice parcial do claim da raia: o laço de 5 s lê só `lane = 'automacao'` e o
+-- predicado abaixo é o MESMO filtro das duas leituras da função (raia + os três
+-- status vivos), então o planejador o usa; sem ele o laço varreria os vencidos
+-- de todas as raias. Parcial, então só as execuções vivas da automação pagam
+-- o custo de escrita.
+create index if not exists idx_followup_enrollments_due_automacao
+  on public.followup_enrollments (next_eval_at)
+  where lane = 'automacao' and status in ('active','waiting_reply','dormente');
 
 create or replace function fn_claim_due_automacao_enrollments(p_limit int, p_lease_seconds int)
 returns setof followup_enrollments

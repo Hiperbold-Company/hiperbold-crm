@@ -950,8 +950,16 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
         } else {
           // A data é lida UMA vez, aqui na entrada: mudar o campo depois não
           // move a espera em curso (ver `plano-de-tempo.ts`).
-          const valor =
-            input.fatos?.negocio?.custom_fields?.[config.field_key] ?? lead.custom_fields?.[config.field_key];
+          //
+          // Execução COM negócio: o campo é lido SÓ dele. Cair para o
+          // `lead.custom_fields` (o card mais recente do contato, que pode ser
+          // OUTRO negócio) faria a espera acordar pela data de um negócio que
+          // não é o da execução. O `lead` só vale quando a execução não tem
+          // negócio próprio.
+          const negocioDaExecucao = input.fatos?.negocio ?? null;
+          const valor = negocioDaExecucao
+            ? negocioDaExecucao.custom_fields?.[config.field_key]
+            : lead.custom_fields?.[config.field_key];
           const alvo = instanteDaDataDoCampo(valor, config, lead.fuso);
           if (alvo === null || alvo.getTime() <= agora.getTime()) {
             // "Sem data": só pela saída dela. Sem aresta ligada, a execução

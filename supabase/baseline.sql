@@ -102239,6 +102239,15 @@ reset lock_timeout;
 
 -- ---- o claim das automações para o laço rápido do worker (migration 1003, fork Hiperbold, lote 6) ----
 -- Mesma definição da migration; create or replace é idempotente.
+-- Índice parcial do claim da raia: o laço de 5 s lê só `lane = 'automacao'` e o
+-- predicado abaixo é o MESMO filtro das duas leituras da função (raia + os três
+-- status vivos), então o planejador o usa; sem ele o laço varreria os vencidos
+-- de todas as raias. Parcial, então só as execuções vivas da automação pagam
+-- o custo de escrita.
+create index if not exists idx_followup_enrollments_due_automacao
+  on public.followup_enrollments (next_eval_at)
+  where lane = 'automacao' and status in ('active','waiting_reply','dormente');
+
 create or replace function fn_claim_due_automacao_enrollments(p_limit int, p_lease_seconds int)
 returns setof followup_enrollments
 language sql

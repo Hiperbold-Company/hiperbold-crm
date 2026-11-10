@@ -294,7 +294,10 @@ export function duracaoMaximaDaEspera(config: WaitConfig): number {
     case 'until_reply':
       return config.timeout_ms;
     // O teto de uma estadia: o dia mais distante que cada opção alcança (com a
-    // folga de um dia do horário), e para a data do campo o teto de 90 dias.
+    // folga de um dia do horário). Para a data do campo, 90 dias para a data
+    // estar à frente (o teto das demais esperas) MAIS o deslocamento para depois
+    // dela, que o schema aceita até 3650 dias: um teto fixo de 90 dias mentiria
+    // para "30 dias depois da data". O deslocamento para antes não aumenta a espera.
     case 'until_time':
       return config.when === 'today'
         ? 86_400_000
@@ -304,7 +307,7 @@ export function duracaoMaximaDaEspera(config: WaitConfig): number {
             ? ((config.days ?? 1) + 1) * 86_400_000
             : 8 * 86_400_000;
     case 'until_date_field':
-      return 7_776_000_000;
+      return 7_776_000_000 + Math.max(config.offset_days, 0) * 86_400_000;
   }
 }
 
@@ -319,10 +322,21 @@ export function duracaoMinimaDaEspera(config: WaitConfig): number {
       return config.duration_s * 1000;
     case 'until_reply':
       return config.timeout_ms;
-    // "Hoje" que já passou e a data do campo que já passou seguem na hora: não
-    // quebram ciclo. As outras esperam ao menos o próximo minuto do relógio.
+    // O MENOR tempo ENTRE UMA VOLTA DO CICLO E A SEGUINTE (é o que o publish
+    // pergunta: "quebra o ciclo?"). Depois de acordar às HH:MM, a próxima volta
+    // entra na espera já com o relógio em HH:MM ou depois (`instanteAteODia`):
+    //  - "amanhã" e "daqui a N dias" caem no dia seguinte (ou além): ao menos
+    //    24 h, menos a hora que o horário de verão pode comer (23 h de folga);
+    //  - "próximo <dia>" no instante exato do horário NÃO é hoje (`candidato >
+    //    agora` é estrito): vai para +7 dias, ao menos 6 dias e 23 h.
+    // "Hoje" que já passou e a data do campo (vazia ou passada sai por "Sem data"
+    // na hora) seguem na hora: não quebram ciclo.
     case 'until_time':
-      return config.when === 'today' ? 0 : 60_000;
+      return config.when === 'today'
+        ? 0
+        : config.when === 'next_weekday'
+          ? 7 * 86_400_000 - 3_600_000
+          : Math.max(config.when === 'in_days' ? (config.days ?? 1) : 1, 1) * 86_400_000 - 3_600_000;
     case 'until_date_field':
       return 0;
   }

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import pg from "pg";
 
@@ -163,5 +166,50 @@ describe("fn_claim_due_automacao_enrollments (migration 1003)", () => {
       authenticated: false,
       service_role: true,
     });
+  });
+
+  it("o índice parcial da raia existe, casa com o filtro da função e o planejador o usa", async () => {
+    const { rows } = await pool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes
+        where schemaname = 'public' and indexname = 'idx_followup_enrollments_due_automacao'`,
+    );
+    expect(rows).toHaveLength(1);
+    const def = rows[0]!.indexdef;
+    expect(def).toMatch(/\(next_eval_at\)/);
+    expect(def).toMatch(/lane = 'automacao'/);
+    for (const status of ["active", "waiting_reply", "dormente"]) expect(def).toContain(`'${status}'`);
+
+    // Com seqscan desligado o planejador só pode escolher o índice se o predicado
+    // da consulta (a mesma que a função faz) implica o dele.
+    const c = await pool.connect();
+    try {
+      await c.query("begin");
+      await c.query("set local enable_seqscan = off");
+      const { rows: plano } = await c.query<{ "QUERY PLAN": string }>(
+        `explain select id from followup_enrollments
+          where lane = 'automacao' and status in ('active','waiting_reply','dormente')
+            and next_eval_at <= now()`,
+      );
+      expect(plano.map((r) => r["QUERY PLAN"]).join("\n")).toContain("idx_followup_enrollments_due_automacao");
+      await c.query("rollback");
+    } finally {
+      c.release();
+    }
+  });
+
+  it("reaplicar o apêndice do baseline (update.sh) não quebra e a função segue servindo o claim", async () => {
+    const baseline = readFileSync(join(process.cwd(), "supabase", "baseline.sql"), "utf8");
+    const inicio = baseline.indexOf("-- ---- o claim das automações para o laço rápido do worker (migration 1003");
+    expect(inicio).toBeGreaterThan(0);
+    const fim = baseline.indexOf("-- ---- VARREDURA anon", inicio);
+    expect(fim).toBeGreaterThan(inicio);
+    const bloco = baseline.slice(inicio, fim);
+
+    await pool.query(bloco);
+    await pool.query(bloco); // duas vezes: idempotente
+
+    await semearOrg(ORG, "ativa");
+    const automacoes = await semearVencidos(ORG, await semearPointer(ORG, "automacao"), 2);
+    expect((await claimAutomacao()).map((r) => r.id).sort()).toEqual([...automacoes].sort());
   });
 });

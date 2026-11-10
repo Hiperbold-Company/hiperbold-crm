@@ -93,7 +93,11 @@ import { prontidaoDoDrainDaIa, runDrainLoop } from "@/lib/agent-engine/edge/crm/
 import { sincronizarAvisoDoDrain } from "@/lib/agent-engine/edge/crm/vigilancia-do-drain";
 import { notificacaoInteressaAoLaco, runEventLogDrainLoop } from "@/lib/event-log/drain-loop";
 import { acordarLacoDeEventLog } from "@/lib/event-log/sinal-de-trabalho";
-import { carregarTickDasAutomacoes, rodarLacoDasAutomacoes } from "@/lib/automacoes/runner";
+import {
+  carregarTickDasAutomacoes,
+  criarSondaDeTrabalhoDasAutomacoes,
+  rodarLacoDasAutomacoes,
+} from "@/lib/automacoes/runner";
 import {
   clienteDeEscutaPg,
   iniciarOuvinteDoBanco,
@@ -386,7 +390,12 @@ export async function startWorker(
     }
     const tick = await carregarTickDasAutomacoes(log);
     if (!tick) return;
-    await rodarLacoDasAutomacoes({ intervalMs: env.AUTOMACAO_RUNNER_INTERVAL_MS }, { tick }, log, loopsAbort.signal);
+    await rodarLacoDasAutomacoes(
+      { intervalMs: env.AUTOMACAO_RUNNER_INTERVAL_MS },
+      { tick, temTrabalho: criarSondaDeTrabalhoDasAutomacoes(pool) },
+      log,
+      loopsAbort.signal,
+    );
   })();
 
   // Watchdog de sessão (4A-2): reconcilia channel_sessions×WAHA + redrive de
