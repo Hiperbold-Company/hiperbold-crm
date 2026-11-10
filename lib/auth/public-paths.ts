@@ -10,6 +10,8 @@ export const PUBLIC_PATHS: RegExp[] = [
   // next.config.ts). Sem sessão precisa carregar igual à raiz. Ancorado, com
   // barra final opcional e sem sub-path: /precos não tem rota filha.
   /^\/precos\/?$/,
+  // Páginas de funcionalidade do site de vendas (D-228) e os prints delas: só um nível, slug em minúsculas.
+  /^\/funcionalidades\/[a-z0-9-]+(\.png)?\/?$/,
   // Sitemap do site de vendas, exportado para public/site (ver
   // hiperbold/site-de-vendas.md). O matcher do proxy (proxy.ts) só dispensa
   // caminho com extensão .svg/.png/.jpg/.jpeg/.gif/.webp/.ico/.css/.js; .xml
