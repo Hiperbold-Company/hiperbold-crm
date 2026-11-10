@@ -29,6 +29,9 @@ const USO_PADRAO = {
   membros: 3,
   conexoes: 3,
   integracoes_webhook: 0,
+  // `fn_billing_uso` devolve oito contagens desde a 1002 (D-227); o esquema é estrito.
+  agentes_ia: 0,
+  automacoes: 0,
 };
 
 const LIMITES_PRO = {

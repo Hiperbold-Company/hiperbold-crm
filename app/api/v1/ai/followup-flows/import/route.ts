@@ -37,6 +37,8 @@ import {
 } from "@/lib/followup/portabilidade";
 import { contextoDaConta } from "@/lib/followup/portabilidade-db";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
+import { STATUS_RECUSA_DO_PLANO, recusaDoPlano } from "@/lib/billing/planos/recusa-do-plano";
 
 export const dynamic = "force-dynamic";
 
@@ -156,6 +158,18 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (insErr || !criado) {
     if (insErr?.code === "23505") {
       return fail("conflict", t("Já existe um fluxo com este nome."), 409, { requestId });
+    }
+    // O gatilho de plano (1002) recusa a automação acima do teto e a conta suspensa com PT402:
+    // 402 com a frase do plano, nunca o erro interno.
+    const doPlano = recusaDoPlano(insErr);
+    if (doPlano) {
+      const mensagem = await mensagemDaRecusaDoPlano(
+        doPlano,
+        createAdminClient(),
+        activeOrg.orgId,
+        authz.user.idioma,
+      );
+      return fail("plano_limite_atingido", mensagem, STATUS_RECUSA_DO_PLANO, { requestId });
     }
     return falhaInterna("internal_error", insErr ?? "followup_flow_import_failed", { requestId });
   }

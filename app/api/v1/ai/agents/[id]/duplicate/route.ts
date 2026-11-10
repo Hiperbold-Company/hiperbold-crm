@@ -56,6 +56,11 @@ export async function POST(_req: NextRequest, ctx: Ctx): Promise<Response> {
     if (result.error === "provedor_desligado") {
       return fail("provedor_desligado", MENSAGEM_PROVEDOR_DESLIGADO, 422, { requestId });
     }
+    if (result.error === "plano_limite_atingido") {
+      return fail("plano_limite_atingido", result.message ?? t("O plano desta organização chegou a um limite contratado."), 402, {
+        requestId,
+      });
+    }
     if (result.error === "no_version_to_duplicate") {
       return fail("state_conflict", t("Agent não tem versão para duplicar."), 409, { requestId });
     }

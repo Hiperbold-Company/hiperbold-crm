@@ -1,6 +1,7 @@
 "use client";
 
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
+import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -32,6 +33,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useT } from "@/hooks/i18n/useT";
+import type { RecursosDaChave } from "@/lib/api/plano-da-api";
+
+/** Para onde o aviso do plano manda quem pode mudar de plano (a tela de assinar). */
+const CAMINHO_PARA_ASSINAR = "/app/settings/plano/assinar";
 
 /**
  * `mcp:read`/`mcp:write` faltavam nesta lista, e sem eles NENHUMA ferramenta
@@ -71,7 +76,13 @@ const SCOPES: { id: string; label: string }[] = [
   { id: "audit:read", label: "Ler o log de auditoria" },
 ];
 
-export function ApiTokensClient() {
+/**
+ * `recursos`: o que a chave serve no plano (D-227), lido no servidor pela página.
+ * Nem API nem MCP: o botão de criar fica desabilitado, com o caminho para mudar
+ * de plano (mesmo estilo de `AvisoDeLimiteDeConexoes`). Só MCP: cria, e o aviso
+ * diz que a chave não abre a API REST. As chaves já emitidas continuam listadas.
+ */
+export function ApiTokensClient({ recursos }: { recursos: RecursosDaChave }) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
   const { data, isLoading } = useApiTokens();
@@ -85,6 +96,7 @@ export function ApiTokensClient() {
   const [created, setCreated] = useState<CreatedApiToken | null>(null);
 
   const tokens = data?.data ?? [];
+  const podeCriar = recursos.api || recursos.mcp;
 
   const onCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,10 +126,29 @@ export function ApiTokensClient() {
 
   return (
     <>
-      <div className="flex sm:justify-end">
-        <Button onClick={() => setCreateOpen(true)} className="w-full sm:w-auto">
+      <div className="flex flex-col gap-1.5 sm:items-end">
+        <Button
+          onClick={() => setCreateOpen(true)}
+          className="w-full sm:w-auto"
+          disabled={!podeCriar}
+        >
           {t("Criar token")}
         </Button>
+        {!podeCriar ? (
+          <p className="text-xs text-destructive" data-testid="aviso-plano-sem-api">
+            {t("Disponível no Max")}{" "}
+            <Link href={CAMINHO_PARA_ASSINAR} className="font-medium underline underline-offset-2">
+              {t("Ver planos")}
+            </Link>
+          </p>
+        ) : !recursos.api ? (
+          <p className="text-xs text-muted-foreground" data-testid="aviso-plano-so-mcp">
+            {t("Neste plano a chave serve só ao servidor MCP. A API com chave de acesso está disponível nos planos Max e Scale.")}{" "}
+            <Link href={CAMINHO_PARA_ASSINAR} className="font-medium underline underline-offset-2">
+              {t("Ver planos")}
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       {isLoading ? (

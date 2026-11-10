@@ -24,6 +24,11 @@ import { isPublicPath } from "@/lib/auth/public-paths";
 import { McpAuthError, validateBearerToken } from "@/lib/mcp/auth";
 import type { Role } from "@/lib/auth/types";
 
+// D-227: dublê da leitura do plano — o plano inclui API e MCP (o tema deste
+// teste é outro; as travas do plano têm teste próprio).
+vi.mock("@/lib/billing/planos/limites-com-cache-curto", () => ({
+  limitesComCacheCurto: vi.fn(async () => ({ limites: {}, leituraFalhou: false })),
+}));
 // D-204: a trava "Confirme seu e-mail" tem teste próprio (tests/unit/trava-de-email-nao-verificado.test.ts); aqui a
 // conta é tratada como verificada para este arquivo continuar medindo o que é dele.
 vi.mock("@/lib/auth/exigir-email-verificado", () => ({

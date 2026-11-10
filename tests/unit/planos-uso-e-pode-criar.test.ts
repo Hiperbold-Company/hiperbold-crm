@@ -18,6 +18,8 @@ const USO_PADRAO = {
   membros: 3,
   conexoes: 1,
   integracoes_webhook: 0,
+  agentes_ia: 1,
+  automacoes: 4,
 };
 
 const USO_ZERADO: Uso = {
@@ -27,6 +29,8 @@ const USO_ZERADO: Uso = {
   membros: 0,
   conexoes: 0,
   integracoes_webhook: 0,
+  agentes_ia: 0,
+  automacoes: 0,
   tokens_ia_mes: null,
 };
 

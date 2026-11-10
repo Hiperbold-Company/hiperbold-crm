@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { AvisoDeLimiteDoPlano } from "@/components/billing/AvisoDeLimiteDoPlano";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -27,7 +28,14 @@ import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { FlowArrow, Plus } from "@/lib/ui/icons";
 
-export function AutomacoesList({ initialData }: { initialData: FollowupFlowPointerRow[] }) {
+export function AutomacoesList({
+  initialData,
+  motivoDoBloqueio = null,
+}: {
+  initialData: FollowupFlowPointerRow[];
+  /** D-227: o teto de automações do plano está cheio (frase pronta do servidor); `null` = pode criar. */
+  motivoDoBloqueio?: string | null;
+}) {
   const t = useT();
   const idioma = useTagDeIdioma();
   const { data } = useFollowupFlows({ initialData, surface: "automacao" });
@@ -35,9 +43,17 @@ export function AutomacoesList({ initialData }: { initialData: FollowupFlowPoint
   const lista = data ?? [];
 
   const botaoNova = (
-    <Button onClick={() => setAberto(true)} data-testid="nova-automacao" className="w-full sm:w-auto">
-      <Plus size={14} aria-hidden className="mr-2" /> {t("Nova automação")}
-    </Button>
+    <div className="flex flex-col items-end">
+      <Button
+        onClick={() => setAberto(true)}
+        data-testid="nova-automacao"
+        className="w-full sm:w-auto"
+        disabled={motivoDoBloqueio !== null}
+      >
+        <Plus size={14} aria-hidden className="mr-2" /> {t("Nova automação")}
+      </Button>
+      <AvisoDeLimiteDoPlano motivo={motivoDoBloqueio} testId="aviso-limite-de-automacoes" />
+    </div>
   );
 
   return (

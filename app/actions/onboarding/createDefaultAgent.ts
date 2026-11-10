@@ -12,6 +12,8 @@ import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiAgentDefaultSchema, type PromptTemplate } from "@/lib/schemas/onboarding";
 import { publicarMemoriaDaOrg } from "@/lib/ai/memoria-da-org";
+import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
+import { recusaDoPlano } from "@/lib/billing/planos/recusa-do-plano";
 import {
   requireOnboardingCtx,
   patchOnboardingState,
@@ -100,8 +102,10 @@ export type CreateAgentResult =
     }
   | {
       ok: false;
-      error: "auth_required" | "no_active_org" | "invalid_input" | "db_error";
+      error: "auth_required" | "no_active_org" | "invalid_input" | "db_error" | "plano_limite_atingido";
       details?: unknown;
+      /** Só na recusa do plano (PT402 do gatilho de agentes, 1002): a frase pronta para a tela. */
+      message?: string;
     };
 
 export async function createDefaultAgent(formData: FormData): Promise<CreateAgentResult> {
@@ -199,6 +203,15 @@ export async function createDefaultAgent(formData: FormData): Promise<CreateAgen
       .single();
 
     if (error || !data) {
+      // O gatilho de plano (1002) recusa o agente acima do teto e a conta suspensa com PT402.
+      const doPlano = recusaDoPlano(error);
+      if (doPlano) {
+        return {
+          ok: false,
+          error: "plano_limite_atingido",
+          message: await mensagemDaRecusaDoPlano(doPlano, admin, ctx.orgId),
+        };
+      }
       return { ok: false, error: "db_error", details: error?.message };
     }
     agent = data;

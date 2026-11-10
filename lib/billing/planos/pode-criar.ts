@@ -19,7 +19,7 @@ import { z } from "zod";
 
 import type { Logger } from "@/lib/agent-engine/obs/logger";
 
-/** Os seis itens que `fn_billing_pode_criar` aceita: o mesmo conjunto do `p_item` dela. */
+/** Os itens que `fn_billing_pode_criar` aceita: o mesmo conjunto do `p_item` dela (os dois últimos da 1002). */
 export const ITENS_COM_TETO = [
   "funis",
   "etapas_por_funil",
@@ -27,6 +27,8 @@ export const ITENS_COM_TETO = [
   "membros",
   "conexoes",
   "integracoes_webhook",
+  "agentes_ia",
+  "automacoes",
 ] as const;
 
 export type ItemComTeto = (typeof ITENS_COM_TETO)[number];

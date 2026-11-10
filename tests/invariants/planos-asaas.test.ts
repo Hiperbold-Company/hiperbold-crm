@@ -1296,7 +1296,7 @@ describe("0909 Tarefa 5: pago fora do prazo concede com alarme (decisão 4/A1)",
     sql(`update public.billing_contracts set status = 'suspensa' where organization_id = '${ORG_T5_VENCIDO}';`);
     sql(`select public.fn_billing_vincular_cliente_asaas('${ORG_T5_VENCIDO}'::uuid, 'sandbox', 'cus_t5006');`);
 
-    const conf = `jsonb_build_object('id','pay_t5_006','status','CONFIRMED','value',199.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'customer','cus_t5006')`;
+    const conf = `jsonb_build_object('id','pay_t5_006','status','CONFIRMED','value',149.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'customer','cus_t5006')`;
     const resultado = registrarEAplicar("evt-t5-006", "pay_t5_006", conf);
     expect(resultado).toContain('"resultado": "aplicado"');
     expect(sql(`select alarme from public.asaas_webhook_events where event_id = 'evt-t5-006';`).trim()).toBe("pago_fora_do_prazo");

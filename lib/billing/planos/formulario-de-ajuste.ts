@@ -20,7 +20,7 @@
 import {
   CHAVES_DE_LIMITE,
   esquemaDoAjusteDeLimites,
-  TETO_DE_LIMITE,
+  tetoDaChave,
   type AjusteDeLimites,
   type ChaveDeLimite,
 } from "./limites";
@@ -65,7 +65,7 @@ export type ResultadoDoFormularioDeAjuste =
  *
  * "herdar" NÃO entra no objeto (é a ausência da chave: herda do plano).
  * "sem_limite" entra como `null`. "valor" só vira número quando o texto
- * digitado é um inteiro entre 0 e `TETO_DE_LIMITE`, sem espaço solto, sem
+ * digitado é um inteiro entre 0 e `tetoDaChave(chave)`, sem espaço solto, sem
  * sinal, sem casa decimal: qualquer outra coisa devolve o erro NAQUELA
  * chave, sem tocar nas demais e sem inventar "sem limite" nem "herdar" para
  * ela.
@@ -91,10 +91,13 @@ export function ajusteDoFormulario(
     }
 
     const numero = Number(bruto);
-    if (numero > TETO_DE_LIMITE) {
+    // As chaves de liga/desliga (acesso_api, automacao_comentario_instagram)
+    // só aceitam 0 ou 1; as demais, até o teto do `integer` do Postgres.
+    const teto = tetoDaChave(chave);
+    if (numero > teto) {
       return {
         ok: false,
-        erro: `O maior valor aceito é ${TETO_DE_LIMITE.toLocaleString("pt-BR")}.`,
+        erro: `O maior valor aceito é ${teto.toLocaleString("pt-BR")}.`,
         chave,
       };
     }

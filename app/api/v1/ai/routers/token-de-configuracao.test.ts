@@ -22,6 +22,11 @@ import type * as McpAuthModule from "@/lib/mcp/auth";
 
 const deps = vi.hoisted(() => ({ validateBearerToken: vi.fn() }));
 
+// D-227: dublê da leitura do plano — o plano inclui API e MCP (o tema deste
+// teste é outro; as travas do plano têm teste próprio).
+vi.mock("@/lib/billing/planos/limites-com-cache-curto", () => ({
+  limitesComCacheCurto: vi.fn(async () => ({ limites: {}, leituraFalhou: false })),
+}));
 vi.mock("@/lib/mcp/auth", async () => {
   const actual = await vi.importActual<typeof McpAuthModule>("@/lib/mcp/auth");
   return { ...actual, validateBearerToken: deps.validateBearerToken };

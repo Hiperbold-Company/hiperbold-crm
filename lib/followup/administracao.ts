@@ -18,7 +18,18 @@
  * ⚠️ PUBLICAR NÃO ENVIA NADA NA HORA, mas arma o gatilho: a partir dele o motor passa a matricular
  * contatos e a mandar as mensagens do fluxo. A validação semântica roda aqui, na hora de virar a chave.
  */
+import {
+  FRASE_COMENTARIO_SO_NO_MAX,
+  comentarioDoInstagramNoPlano,
+  grafoUsaComentarioDoInstagram,
+} from "@/lib/automacoes/comentario-no-plano";
 import { grafoInicialDaAutomacao, referenciasDoGrafo } from "@/lib/automacoes/referencias";
+import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
+import {
+  CODIGO_RECUSA_DO_PLANO,
+  STATUS_RECUSA_DO_PLANO,
+  recusaDoPlano,
+} from "@/lib/billing/planos/recusa-do-plano";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ApiError } from "@/lib/api/types";
@@ -215,6 +226,15 @@ export async function criarFluxo(
     if (error?.code === "23505") {
       throw recusa(deps, 409, "conflict", tr(deps)("Já existe um fluxo com este nome."));
     }
+    const doPlano = recusaDoPlano(error);
+    if (doPlano) {
+      throw recusa(
+        deps,
+        STATUS_RECUSA_DO_PLANO,
+        CODIGO_RECUSA_DO_PLANO,
+        await mensagemDaRecusaDoPlano(doPlano, deps.admin, deps.organizationId),
+      );
+    }
     throw falhaInterna(deps, error ?? "followup_flow_insert_failed");
   }
   const linha = created as unknown as { id: string } & Record<string, unknown>;
@@ -373,6 +393,15 @@ export async function duplicarFluxo(deps: DepsDeFollowup, id: string): Promise<{
   if (insErr || !copia) {
     if (insErr?.code === "23505") {
       throw recusa(deps, 409, "conflict", tr(deps)("Já existe um fluxo com este nome."));
+    }
+    const doPlano = recusaDoPlano(insErr);
+    if (doPlano) {
+      throw recusa(
+        deps,
+        STATUS_RECUSA_DO_PLANO,
+        CODIGO_RECUSA_DO_PLANO,
+        await mensagemDaRecusaDoPlano(doPlano, deps.admin, deps.organizationId),
+      );
     }
     throw falhaInterna(deps, insErr ?? "followup_flow_duplicate_failed");
   }
@@ -556,6 +585,14 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
   }
 
   const graph = pointer.draft_graph as unknown as FlowGraph;
+  // D-227: gatilho de comentário do Instagram só com o recurso no plano. Leitura que falha nega.
+  if (
+    surface === "automacao" &&
+    grafoUsaComentarioDoInstagram(graph) &&
+    !(await comentarioDoInstagramNoPlano(admin, orgId, logger))
+  ) {
+    throw recusa(deps, STATUS_RECUSA_DO_PLANO, CODIGO_RECUSA_DO_PLANO, t(FRASE_COMENTARIO_SO_NO_MAX));
+  }
   // Automação: todo funil e etapa citados têm de ser DESTA organização — o
   // motor executa com a service role.
   let automacao: ContextoDoPublish["automacao"];

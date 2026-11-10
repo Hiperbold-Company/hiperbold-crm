@@ -25940,6 +25940,18 @@ export const DICIONARIO: Traducoes = {
   "Etapas por funil": { es: "Etapas por embudo" },
   "Integrações webhook": { es: "Integraciones webhook" },
   "Tokens de IA por mês": { es: "Tokens de IA por mes" },
+  "O que o plano inclui": { es: "Lo que incluye el plan" },
+  "MCP": { es: "MCP" },
+  "API com chave": { es: "API con clave" },
+  "Automação por comentário do Instagram": { es: "Automatización por comentario de Instagram" },
+  "Fonte de dados": { es: "Fuente de datos" },
+  "não incluso": { es: "no incluido" },
+  "incluso": { es: "incluido" },
+  "req/min": { es: "req/min" },
+  "MCP, requisições por minuto (0 = não incluso)": { es: "MCP, solicitudes por minuto (0 = no incluido)" },
+  "API com chave (0 = não incluso, 1 = incluso)": { es: "API con clave (0 = no incluido, 1 = incluido)" },
+  "Automação por comentário do Instagram (0 = não incluso, 1 = incluso)": { es: "Automatización por comentario de Instagram (0 = no incluido, 1 = incluido)" },
+  "Fonte de dados, requisições por minuto": { es: "Fuente de datos, solicitudes por minuto" },
   "herda do plano": { es: "hereda del plan" },
   "Escolha um plano": { es: "Elige un plan" },
   "não à venda": { es: "no en venta" },
@@ -26967,6 +26979,14 @@ export const DICIONARIO: Traducoes = {
     es: "Tu cuenta alcanzó el límite de conexiones del plan. Elimina una conexión o cambia de plan.",
   },
   "Ver planos": { es: "Ver planes" },
+  // D-227: a chave de acesso (`dsk_`) segue o plano.
+  "A API com chave de acesso está disponível nos planos Max e Scale.": {
+    es: "La API con clave de acceso está disponible en los planes Max y Scale.",
+  },
+  "Disponível no Max": { es: "Disponible en Max" },
+  "Neste plano a chave serve só ao servidor MCP. A API com chave de acesso está disponível nos planos Max e Scale.": {
+    es: "En este plan la clave solo sirve al servidor MCP. La API con clave de acceso está disponible en los planes Max y Scale.",
+  },
   "WhatsApp, Instagram e Messenger somados": { es: "WhatsApp, Instagram y Messenger sumados" },
   "Este limite bloqueia novas conexões ao ser atingido.": {
     es: "Este límite bloquea nuevas conexiones al alcanzarse.",
@@ -28336,6 +28356,14 @@ export const DICIONARIO: Traducoes = {
   "pode ter ficado incompleto. Exclua-o e tente de novo.": { es: "puede haber quedado incompleto. Elimínalo e inténtalo de nuevo." },
   "Seu perfil não pode duplicar funis nesta organização. Peça a um administrador.": { es: "Tu perfil no puede duplicar embudos en esta organización. Pídeselo a un administrador." },
   "O plano desta organização chegou ao limite de funis ou de etapas. Fale com quem cuida da assinatura.": { es: "El plan de esta organización llegó al límite de embudos o de etapas. Habla con quien gestiona la suscripción." },
+  // ─── D-227: tetos de agentes de IA e automações; comentário do Instagram só no Max ───
+  "Seu plano permite até {n} agentes de IA.": { es: "Tu plan permite hasta {n} agentes de IA." },
+  "Seu plano permite até {n} automações.": { es: "Tu plan permite hasta {n} automatizaciones." },
+  "Seu plano permite até 1 agente de IA.": { es: "Tu plan permite hasta 1 agente de IA." },
+  "Seu plano permite até 1 automação.": { es: "Tu plan permite hasta 1 automatización." },
+  "Seu plano chegou ao limite de agentes de IA. Mude de plano para criar mais.": { es: "Tu plan llegó al límite de agentes de IA. Cambia de plan para crear más." },
+  "Seu plano chegou ao limite de automações. Mude de plano para criar mais.": { es: "Tu plan llegó al límite de automatizaciones. Cambia de plan para crear más." },
+  "A automação por comentário do Instagram está disponível no plano Max.": { es: "La automatización por comentario de Instagram está disponible en el plan Max." },
 };
 
 /**

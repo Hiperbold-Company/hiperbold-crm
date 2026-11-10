@@ -23,7 +23,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { papelAcimaDoCriador } from "@/lib/auth/teto-de-papel-da-chave";
 import type { AuthUser, Role } from "@/lib/auth/types";
+import { planoDaOrganizacao } from "@/lib/billing/planos/plano-da-organizacao";
 
+// D-227: dublê da leitura do plano — o plano inclui API e MCP (o tema deste
+// teste é outro; a trava do plano na criação de chave tem teste próprio).
+vi.mock("@/lib/billing/planos/plano-da-organizacao", () => ({
+  planoDaOrganizacao: vi.fn(async () => ({
+    plano: { code: "max", name: "Max", version: 2 },
+    contrato: null,
+    limites: {},
+    leituraFalhou: false,
+  })),
+}));
 // D-204: a trava "Confirme seu e-mail" tem teste próprio (tests/unit/trava-de-email-nao-verificado.test.ts); aqui a
 // conta é tratada como verificada para este arquivo continuar medindo o que é dele.
 vi.mock("@/lib/auth/exigir-email-verificado", () => ({
@@ -282,5 +293,54 @@ describe("POST /settings/api-tokens/[id]/revoke: revogação pelo servidor", () 
     const res = await POST(post({}), ctx);
     expect(res.status).toBe(403);
     expect(chamadasDoServidor).toEqual([]);
+  });
+});
+
+describe("POST /settings/api-tokens: o plano decide se a chave nasce (D-227)", () => {
+  function planoCom(limites: Record<string, number | null>, leituraFalhou = false) {
+    vi.mocked(planoDaOrganizacao).mockResolvedValueOnce({
+      plano: { code: "x", name: "X", version: 2 },
+      contrato: null,
+      limites: limites as never,
+      leituraFalhou,
+    });
+  }
+
+  it("⭐ Pro (sem API e sem MCP): 402 plano_sem_api e nada chega a api_tokens", async () => {
+    sessao("admin");
+    planoCom({ acesso_api: 0, mcp_req_min: 0 });
+    const { POST } = await import("@/app/api/v1/settings/api-tokens/route");
+
+    const res = await POST(post({ name: "Chave", scopes: ["mcp:read"] }));
+
+    expect(res.status).toBe(402);
+    const corpo = (await res.json()) as { error: { code: string; message: string } };
+    expect(corpo.error.code).toBe("plano_sem_api");
+    expect(corpo.error.message).toBe("A API com chave de acesso está disponível nos planos Max e Scale.");
+    expect(chamadasDoServidor.some((c) => c.tabela === "api_tokens")).toBe(false);
+  });
+
+  it("leitura do plano que falha também recusa (recurso pago nega na falha)", async () => {
+    sessao("admin");
+    planoCom({}, true);
+    const { POST } = await import("@/app/api/v1/settings/api-tokens/route");
+    const res = await POST(post({ name: "Chave", scopes: ["mcp:read"] }));
+    expect(res.status).toBe(402);
+  });
+
+  it("plano só com MCP (sem API) ainda cria a chave: ela serve ao MCP", async () => {
+    sessao("admin");
+    planoCom({ acesso_api: 0, mcp_req_min: 30 });
+    const { POST } = await import("@/app/api/v1/settings/api-tokens/route");
+    const res = await POST(post({ name: "Chave do MCP", scopes: ["mcp:read"] }));
+    expect(res.status).toBe(201);
+  });
+
+  it("Max (API e MCP) cria", async () => {
+    sessao("admin");
+    planoCom({ acesso_api: 1, mcp_req_min: 30 });
+    const { POST } = await import("@/app/api/v1/settings/api-tokens/route");
+    const res = await POST(post({ name: "Chave", scopes: ["mcp:read"] }));
+    expect(res.status).toBe(201);
   });
 });

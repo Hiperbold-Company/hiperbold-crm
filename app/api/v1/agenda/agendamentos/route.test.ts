@@ -21,6 +21,11 @@ import {
   marcarAgendamentoHandler,
 } from "./_handler";
 
+// D-227: dublê da leitura do plano — o plano inclui API e MCP (o tema deste
+// teste é outro; as travas do plano têm teste próprio).
+vi.mock("@/lib/billing/planos/limites-com-cache-curto", () => ({
+  limitesComCacheCurto: vi.fn(async () => ({ limites: {}, leituraFalhou: false })),
+}));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({ checkRateLimit: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));

@@ -1,6 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 
 import { FlowBuilder } from "@/components/fluxos/editor/FlowBuilder";
+import { PlanoDoEditorProvider } from "@/components/fluxos/editor/forms/automacao/PlanoDoEditor";
+import { comentarioDoInstagramNoPlano } from "@/lib/automacoes/comentario-no-plano";
+import { logger } from "@/lib/logger";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { FollowupFlowDetailRow } from "@/hooks/followup/useFollowupFlow";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
@@ -50,9 +54,14 @@ export default async function AutomacaoEditorPage({ params }: { params: Promise<
     previous_version_id: versoes?.[1]?.id ?? null,
   };
 
+  // D-227: o gatilho de comentário do Instagram só no plano que o inclui (leitura que falha nega).
+  const comentarioNoPlano = await comentarioDoInstagramNoPlano(createAdminClient(), activeOrg.orgId, logger);
+
   return (
     <div className="flex h-full flex-col">
-      <FlowBuilder flowId={id} initialData={flow} />
+      <PlanoDoEditorProvider comentarioDoInstagram={comentarioNoPlano}>
+        <FlowBuilder flowId={id} initialData={flow} />
+      </PlanoDoEditorProvider>
     </div>
   );
 }

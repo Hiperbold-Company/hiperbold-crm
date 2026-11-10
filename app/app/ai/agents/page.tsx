@@ -6,6 +6,8 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 import { COLUNAS_DO_AGENTE_NA_LISTA } from "@/lib/ai/agents/administracao";
 import type { AgentRow } from "@/hooks/ai/useAgent";
+import { bloqueioDoBotaoDeCriacao } from "@/lib/billing/planos/limite-de-agentes-e-automacoes";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { AgentsList } from "./_components/AgentsList";
 import { logger } from "@/lib/logger";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
@@ -53,6 +55,10 @@ export default async function AgentsListPage() {
   const agents = (data ?? []) as unknown as AgentRow[];
   const canWrite = ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin;
   const idioma = user.idioma;
+  // D-227: o teto de agentes do plano bloqueia sempre; a tela diz o motivo antes de a pessoa tentar.
+  const bloqueioDeCriar = canWrite
+    ? await bloqueioDoBotaoDeCriacao(createAdminClient(), activeOrg.orgId, "agentes_ia", idioma, logger)
+    : null;
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
@@ -67,7 +73,7 @@ export default async function AgentsListPage() {
           <LinkDeAjudaDaTela />
         </div>
       </header>
-      <AgentsList initialData={agents} canWrite={canWrite} />
+      <AgentsList initialData={agents} canWrite={canWrite} motivoDoBloqueio={bloqueioDeCriar?.motivo ?? null} />
     </div>
   );
 }

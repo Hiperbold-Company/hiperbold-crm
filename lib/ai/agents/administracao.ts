@@ -23,6 +23,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError } from "@/lib/api/types";
 import type { Actor } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
+import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
+import {
+  CODIGO_RECUSA_DO_PLANO,
+  STATUS_RECUSA_DO_PLANO,
+  recusaDoPlano,
+} from "@/lib/billing/planos/recusa-do-plano";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { lerAmbiente } from "@/lib/instalacao/ambiente";
 import { ehToolIdRemoto } from "@/lib/mcp/servidor-externo/ids";
@@ -152,7 +158,19 @@ export async function criarAgenteMcp(
     .insert(records.agent)
     .select(COLUNAS_DO_AGENTE)
     .single();
-  if (agentError || !agentRow) throw recusa(deps, 500, "internal_error", "Erro ao criar agent.");
+  if (agentError || !agentRow) {
+    // 1002 (D-227): o teto de agentes do plano (ou a conta suspensa) recusa no banco com PT402.
+    const doPlano = recusaDoPlano(agentError);
+    if (doPlano) {
+      throw recusa(
+        deps,
+        STATUS_RECUSA_DO_PLANO,
+        CODIGO_RECUSA_DO_PLANO,
+        await mensagemDaRecusaDoPlano(doPlano, deps.admin, deps.organizationId),
+      );
+    }
+    throw recusa(deps, 500, "internal_error", "Erro ao criar agent.");
+  }
   const agent = agentRow as unknown as { id: string };
 
   const { data: versionRow, error: versionError } = await deps.admin

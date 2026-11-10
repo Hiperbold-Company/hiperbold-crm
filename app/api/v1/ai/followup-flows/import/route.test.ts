@@ -7,13 +7,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const deps = vi.hoisted(() => ({ role: vi.fn(), support: vi.fn(), audit: vi.fn(), client: vi.fn(), admin: vi.fn(), modulo: vi.fn() }));
+const deps = vi.hoisted(() => ({ role: vi.fn(), support: vi.fn(), audit: vi.fn(), client: vi.fn(), admin: vi.fn(), modulo: vi.fn(), conta: vi.fn() }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: deps.role }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: deps.support }));
 vi.mock("@/lib/audit", () => ({ audit: deps.audit }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: deps.client }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: deps.admin }));
 vi.mock("@/lib/instalacao/modulos", () => ({ moduloLigado: deps.modulo }));
+vi.mock("@/lib/followup/portabilidade-db", () => ({ contextoDaConta: deps.conta }));
 
 import { POST } from "./route";
 
@@ -73,5 +74,81 @@ describe("POST /followup-flows/import — o corpo do pedido também lê no idiom
     const corpo = (await res.json()) as { error: { code: string; details: { problemas: string[] } } };
     expect(corpo.error.code).toBe("validation_failed");
     expect(corpo.error.details.problemas).toEqual([linha]);
+  });
+});
+
+describe("POST /followup-flows/import — o gatilho de plano recusa com PT402", () => {
+  const pos = { x: 0, y: 0 };
+  const arquivoValido = () => ({
+    format: "followup_flow",
+    version: 1,
+    flow: {
+      name: "Automação do arquivo",
+      surface: "automacao",
+      handoff_policy: "pause",
+      trigger_config: { kind: "manual" },
+      graph: {
+        nodes: [
+          { id: "t1", type: "trigger", label: "Início", position: pos, config: {} },
+          { id: "e1", type: "end", label: "Fim", position: pos, config: { outcome: "exhausted" } },
+        ],
+        edges: [{ id: "x0", source: "t1", target: "e1", priority: 0, condition: { type: "always" } }],
+      },
+    },
+  });
+
+  const clienteQueRecusa = (erro: { code: string; message: string; details?: string }) => ({
+    from: () => ({
+      insert: () => ({ select: () => ({ single: async () => ({ data: null, error: erro }) }) }),
+    }),
+  });
+
+  beforeEach(() => {
+    deps.conta.mockResolvedValue({
+      stages: new Map(),
+      templates: new Map(),
+      users: new Set(),
+      flows: new Map(),
+      event_types: new Map(),
+    });
+    // Leitura do limite falha: a mensagem cai na frase sem número, que continua verdadeira.
+    deps.admin.mockReturnValue({
+      from: () => {
+        throw new Error("sem leitura");
+      },
+    });
+  });
+
+  it("PT402 do teto de automações vira 402 plano_limite_atingido, nunca erro interno", async () => {
+    comoQuem("pt-BR");
+    deps.client.mockResolvedValue(
+      clienteQueRecusa({ code: "PT402", message: "Limite do plano atingido", details: "automacoes" }),
+    );
+    const res = await importar(arquivoValido());
+    expect(res.status).toBe(402);
+    const corpo = (await res.json()) as { error: { code: string; message: string } };
+    expect(corpo.error.code).toBe("plano_limite_atingido");
+    expect(corpo.error.message).toBe(
+      "Seu plano chegou ao limite de automações. Mude de plano para criar mais.",
+    );
+    expect(corpo.error.message).not.toContain("Limite do plano atingido");
+  });
+
+  it("PT402 de conta suspensa também é 402", async () => {
+    comoQuem("pt-BR");
+    deps.client.mockResolvedValue(
+      clienteQueRecusa({ code: "PT402", message: "Conta suspensa", details: "assinatura_suspensa" }),
+    );
+    const res = await importar(arquivoValido());
+    expect(res.status).toBe(402);
+    const corpo = (await res.json()) as { error: { code: string } };
+    expect(corpo.error.code).toBe("plano_limite_atingido");
+  });
+
+  it("outro erro do banco segue como 500", async () => {
+    comoQuem("pt-BR");
+    deps.client.mockResolvedValue(clienteQueRecusa({ code: "XX000", message: "boom" }));
+    const res = await importar(arquivoValido());
+    expect(res.status).toBe(500);
   });
 });

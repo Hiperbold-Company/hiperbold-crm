@@ -23,6 +23,8 @@ import { audit } from "@/lib/audit";
 import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
+import { CODIGO_RECUSA_DO_PLANO, recusaDoPlano } from "@/lib/billing/planos/recusa-do-plano";
 import { codigoDoEscopo, mensagemDoEscopo, validarEscopoDaVersao } from "@/lib/ai/agents/escopo";
 import {
   agentMcpCreateSchema,
@@ -829,6 +831,15 @@ export async function createMcpAgentAction(
     .single();
 
   if (agentErr || !agentRow) {
+    // 1002 (D-227): o teto de agentes do plano (ou a conta suspensa) recusa no banco com PT402.
+    const recusa = recusaDoPlano(agentErr);
+    if (recusa) {
+      return {
+        ok: false,
+        error: CODIGO_RECUSA_DO_PLANO,
+        message: await mensagemDaRecusaDoPlano(recusa, admin, activeOrg.orgId),
+      };
+    }
     return { ok: false, error: "internal_error", message: agentErr?.message };
   }
 

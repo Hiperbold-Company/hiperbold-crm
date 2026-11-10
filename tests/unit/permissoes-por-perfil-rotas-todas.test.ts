@@ -25,6 +25,11 @@ import { resolverPermissoes } from "@/lib/permissoes/resolver";
 import { clienteEmMemoria, criarBanco } from "./helpers/supabase-em-memoria";
 
 const auditSpy = vi.fn(async (_e: unknown) => undefined);
+// D-227: dublê da leitura do plano — o plano inclui API e MCP (o tema deste
+// teste é outro; as travas do plano têm teste próprio).
+vi.mock("@/lib/billing/planos/limites-com-cache-curto", () => ({
+  limitesComCacheCurto: vi.fn(async () => ({ limites: {}, leituraFalhou: false })),
+}));
 vi.mock("@/lib/audit", () => ({
   audit: (e: unknown) => auditSpy(e),
   isServiceRoleConfigured: () => false,

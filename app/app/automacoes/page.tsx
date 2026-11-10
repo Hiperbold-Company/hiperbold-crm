@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { bloqueioDoBotaoDeCriacao } from "@/lib/billing/planos/limite-de-agentes-e-automacoes";
+import { logger } from "@/lib/logger";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { FollowupFlowPointerRow } from "@/hooks/followup/useFollowupFlows";
 
@@ -32,6 +35,9 @@ export default async function AutomacoesPage() {
     .eq("surface", "automacao")
     .order("updated_at", { ascending: false });
 
+  // D-227: o teto de automações do plano bloqueia sempre; o botão diz o motivo antes de a pessoa tentar.
+  const bloqueio = await bloqueioDoBotaoDeCriacao(createAdminClient(), activeOrg.orgId, "automacoes", user.idioma, logger);
+
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
@@ -42,7 +48,10 @@ export default async function AutomacoesPage() {
           )}
         </p>
       </header>
-      <AutomacoesList initialData={(data ?? []) as unknown as FollowupFlowPointerRow[]} />
+      <AutomacoesList
+        initialData={(data ?? []) as unknown as FollowupFlowPointerRow[]}
+        motivoDoBloqueio={bloqueio.motivo}
+      />
     </div>
   );
 }

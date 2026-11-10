@@ -24,6 +24,16 @@ const deps = vi.hoisted(() => ({
   single: vi.fn(),
 }));
 
+// D-227: dublê da leitura do plano — o plano inclui API e MCP (o tema deste
+// teste é outro; a trava do plano na criação de chave tem teste próprio).
+vi.mock("@/lib/billing/planos/plano-da-organizacao", () => ({
+  planoDaOrganizacao: vi.fn(async () => ({
+    plano: { code: "max", name: "Max", version: 2 },
+    contrato: null,
+    limites: {},
+    leituraFalhou: false,
+  })),
+}));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: deps.support }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: deps.role }));
 vi.mock("@/lib/audit", () => ({ audit: deps.audit }));

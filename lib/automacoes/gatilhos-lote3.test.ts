@@ -386,6 +386,7 @@ function db(cfg: AutomacaoTriggerConfig, over: Partial<GatilhosDb> = {}) {
       return { resultado: "iniciada", enrollment_id: "enr-1" };
     },
     modoLeitura: async () => false,
+    comentarioDoInstagramNoPlano: async () => true,
     ...over,
   };
   return { fake, iniciadas };
