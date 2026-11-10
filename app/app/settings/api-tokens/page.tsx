@@ -38,7 +38,7 @@ export default async function ApiTokensPage() {
         </p>
         <p className="text-sm text-muted-foreground">
           {traduzir("Endereço do MCP:", idioma)}{" "}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs" data-testid="api-tokens-url-do-mcp">
+          <code className="rounded-md bg-muted px-1 py-0.5 text-xs" data-testid="api-tokens-url-do-mcp">
             {urlDoServidorMcp()}
           </code>
         </p>
