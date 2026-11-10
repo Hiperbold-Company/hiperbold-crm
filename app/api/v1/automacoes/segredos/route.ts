@@ -6,7 +6,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *   POST — cria `{ nome, valor }`. `Idempotency-Key` opcional (recibo em `idempotency_keys`).
  *
  * O valor é cifrado (`fn_encrypt_oauth`) antes de gravar e nunca volta: nem na
- * resposta, nem no audit (só nome e `ultimos4`), nem em log. Regra em `lib/automacoes/segredos.ts`.
+ * resposta, nem no audit (só o nome; nem os finais), nem em log. Regra em `lib/automacoes/segredos.ts`.
  */
 import { createHash } from "node:crypto";
 import { type NextRequest } from "next/server";
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       resourceId: r.segredo.id,
       requestId,
       // O QUE mudou, jamais o valor.
-      metadata: { nome: r.segredo.nome, ultimos4: r.segredo.ultimos4 },
+      metadata: { nome: r.segredo.nome },
     });
     return { resposta: { ok: true, segredo: r.segredo }, status: 201 };
   };

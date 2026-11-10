@@ -156,9 +156,10 @@ export function segredosDoGrafo(grafo: unknown): string[] {
   const ids = new Set<string>();
   for (const n of nos as Array<{ type?: unknown; config?: unknown }>) {
     if (n?.type !== "http_request") continue;
-    const headers = (n.config as { headers?: unknown } | undefined)?.headers;
-    if (!Array.isArray(headers)) continue;
-    for (const id of segredosDoBloco({ headers: headers as HttpRequestConfig["headers"] })) ids.add(id);
+    const cfg = n.config as { headers?: unknown; body_secrets?: unknown } | undefined;
+    const headers = Array.isArray(cfg?.headers) ? (cfg.headers as HttpRequestConfig["headers"]) : [];
+    const noCorpo = Array.isArray(cfg?.body_secrets) ? (cfg.body_secrets as NonNullable<HttpRequestConfig["body_secrets"]>) : [];
+    for (const id of segredosDoBloco({ headers, body_secrets: noCorpo })) ids.add(id);
   }
   return [...ids];
 }

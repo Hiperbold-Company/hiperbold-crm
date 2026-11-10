@@ -179,6 +179,8 @@ test.describe("Automações — lote 4: Requisição HTTP com chave secreta", ()
     await page.getByRole("button", { name: "+ Cabeçalho" }).click();
     const cab = page.getByTestId("http-cabecalho-0");
     await cab.getByLabel("Nome do cabeçalho").fill("Authorization");
+    // Nome que leva credencial vira "Chave secreta" sozinho: o token escrito ficaria legível no grafo.
+    await expect(page.getByTestId("http-cabecalho-0-tipo")).toHaveValue("chave");
     await page.getByTestId("http-cabecalho-0-tipo").selectOption("chave");
     await page.getByTestId("http-cabecalho-0-chave").selectOption({ label: `${nomeDaChave} (••••${TOKEN.slice(-4)})` });
     await page.getByRole("button", { name: "+ Guardar campo da resposta" }).click();

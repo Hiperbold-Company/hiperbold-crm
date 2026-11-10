@@ -166,6 +166,19 @@ describe("cofre de chaves: o valor nunca volta", () => {
     expect(tabelas.automacao_segredos![0]!.organization_id).toBe(ORG);
   });
 
+  it("chave curta (menos de 16) não mostra os finais; o audit nunca leva os finais", async () => {
+    const curta = "abcd1234efgh";
+    const r = await POST(req("POST", { nome: "token_curto", valor: curta }));
+    expect(r.status).toBe(201);
+    expect(JSON.parse(await r.text()).data.ultimos4).toBe("");
+    expect(tabelas.automacao_segredos![0]!.ultimos4).toBe("");
+    await POST(req("POST", { nome: "token_longo", valor: VALOR }));
+    const metadados = deps.audit.mock.calls.map((c: unknown[]) => (c[0] as { metadata?: Record<string, unknown> }).metadata);
+    expect(metadados.length).toBeGreaterThan(0);
+    for (const m of metadados) expect(m).not.toHaveProperty("ultimos4");
+    expect(JSON.stringify(deps.audit.mock.calls)).not.toContain(VALOR.slice(-4));
+  });
+
   it("valor curto ou com espaço é recusado sem ecoar o valor", async () => {
     const r = await POST(req("POST", { nome: "token_meta", valor: "abc def ghi" }));
     expect(r.status).toBe(400);
@@ -190,12 +203,12 @@ describe("cofre de chaves: o valor nunca volta", () => {
   it("PATCH troca o valor (e o final); chave de outra organização é 404", async () => {
     await POST(req("POST", { nome: "token_meta", valor: VALOR }));
     const id = tabelas.automacao_segredos![0]!.id as string;
-    const r = await PATCH(req("PATCH", { valor: "novo_valor_ABCD" }), ctx(id));
+    const r = await PATCH(req("PATCH", { valor: "novo_valor_X_ABCD" }), ctx(id));
     expect(r.status).toBe(200);
-    expect(await r.text()).not.toContain("novo_valor_ABCD");
+    expect(await r.text()).not.toContain("novo_valor_X_ABCD");
     expect(tabelas.automacao_segredos![0]!.ultimos4).toBe("ABCD");
     tabelas.automacao_segredos![0]!.organization_id = OUTRA;
-    expect((await PATCH(req("PATCH", { valor: "novo_valor_ABCD" }), ctx(id))).status).toBe(404);
+    expect((await PATCH(req("PATCH", { valor: "novo_valor_X_ABCD" }), ctx(id))).status).toBe(404);
   });
 });
 

@@ -14,7 +14,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useSegredos } from "@/hooks/automacoes/useSegredos";
 import { useT } from "@/hooks/i18n/useT";
 import {
+  cabecalhoComSegredoEscrito,
   cabecalhoProibido,
+  cabecalhoSensivel,
+  FRASE_DO_SEGREDO_ESCRITO,
   CAMINHO_NO_JSON,
   corpoEhJsonValido,
   MASCARA,
@@ -41,7 +44,10 @@ const FRASE_DA_URL: Record<NonNullable<ReturnType<typeof problemaDaUrl>>, string
   invalida: "Escreva o endereço completo, como https://api.example.com/v1/recurso.",
   https_obrigatorio: "O endereço precisa começar com https://.",
   credencial_na_url: "O endereço não pode ter usuário e senha. Use um cabeçalho com a chave.",
+  variavel_no_dominio: "O domínio não pode ter variável. Escreva o domínio fixo e use variáveis só depois da primeira /.",
 };
+
+const LINK_DO_COFRE = "/app/automacoes/chaves";
 
 export function HttpForm({
   config,
@@ -63,6 +69,18 @@ export function HttpForm({
   const mudar = (patch: Partial<HttpRequestConfig>) => onChange({ ...config, ...patch });
   const mudarCabecalho = (i: number, h: CabecalhoHttp) =>
     mudar({ headers: config.headers.map((x, j) => (j === i ? h : x)) });
+  const cofreVazio = (segredos ?? []).length === 0;
+  const segredoNoCorpo = config.body_secrets?.[0];
+  const opcoesDoCofre = (segredos ?? []).map((s) => ({ valor: s.id, rotulo: `${s.nome} (${MASCARA}${s.ultimos4})` }));
+  // Nome que leva credencial (Authorization, X-Api-Key, *-Token...): o valor
+  // escrito ficaria legível para toda a equipe no grafo. Vira "Chave secreta".
+  const mudarNomeDoCabecalho = (i: number, h: CabecalhoHttp, nome: string) =>
+    mudarCabecalho(
+      i,
+      h.kind === "texto" && cabecalhoSensivel(nome) && cabecalhoComSegredoEscrito({ ...h, name: nome, value: h.value || "x" })
+        ? { kind: "chave", name: nome, secret_id: segredos?.[0]?.id ?? "", prefix: nome.toLowerCase() === "authorization" ? "Bearer " : "" }
+        : { ...h, name: nome },
+    );
   const mudarMapeamento = (i: number, m: MapeamentoHttp) =>
     mudar({ mappings: config.mappings.map((x, j) => (j === i ? m : x)) });
 
@@ -76,7 +94,7 @@ export function HttpForm({
           onChange={(v) => {
             const method = v as MetodoHttp;
             // GET não leva corpo: some com ele ao trocar.
-            const { body: _corpo, ...resto } = config;
+            const { body: _corpo, body_secrets: _segredosDoCorpo, ...resto } = config;
             onChange(metodoTemCorpo(method) ? { ...config, method } : { ...resto, method });
           }}
         />
@@ -109,7 +127,7 @@ export function HttpForm({
               <Input
                 aria-label={t("Nome do cabeçalho")}
                 value={h.name}
-                onChange={(e) => mudarCabecalho(i, { ...h, name: e.target.value.trim() })}
+                onChange={(e) => mudarNomeDoCabecalho(i, h, e.target.value.trim())}
                 placeholder="Authorization"
               />
               <Seletor
@@ -117,8 +135,8 @@ export function HttpForm({
                 valor={h.kind}
                 opcoes={[
                   { valor: "texto", rotulo: t("Texto") },
-                  // Sem chave no cofre não há o que escolher (o id vazio não salva o rascunho).
-                  { valor: "chave", rotulo: t("Chave secreta"), desabilitada: (segredos ?? []).length === 0 },
+                  // Sem chave no cofre a opção continua escolhível: o aviso abaixo leva a criar a chave.
+                  { valor: "chave", rotulo: t("Chave secreta") },
                 ]}
                 onChange={(v) =>
                   mudarCabecalho(
@@ -154,13 +172,27 @@ export function HttpForm({
                   onChange={(e) => mudarCabecalho(i, { ...h, prefix: e.target.value })}
                   placeholder="Bearer "
                 />
-                <Seletor
-                  id={`http-cabecalho-${i}-chave`}
-                  valor={h.secret_id}
-                  opcoes={(segredos ?? []).map((s) => ({ valor: s.id, rotulo: `${s.nome} (${MASCARA}${s.ultimos4})` }))}
-                  onChange={(v) => mudarCabecalho(i, { ...h, secret_id: v })}
-                />
+                {cofreVazio ? (
+                  <p className="text-xs text-text-muted" data-testid={`http-cabecalho-${i}-sem-chave`}>
+                    {t("Nenhuma chave guardada ainda.")}{" "}
+                    <Link href={LINK_DO_COFRE} className="underline" target="_blank">
+                      {t("Criar a chave em Chaves secretas")}
+                    </Link>
+                  </p>
+                ) : (
+                  <Seletor
+                    id={`http-cabecalho-${i}-chave`}
+                    valor={h.secret_id}
+                    opcoes={opcoesDoCofre}
+                    onChange={(v) => mudarCabecalho(i, { ...h, secret_id: v })}
+                  />
+                )}
               </div>
+            )}
+            {cabecalhoComSegredoEscrito(h) && (
+              <p className="text-xs text-error-fg" role="alert">
+                {t(FRASE_DO_SEGREDO_ESCRITO)}
+              </p>
             )}
             {h.name && cabecalhoProibido(h.name) && (
               <p className="text-xs text-error-fg" role="alert">
@@ -182,7 +214,7 @@ export function HttpForm({
           >
             {t("+ Cabeçalho")}
           </Button>
-          <Link href="/app/automacoes/chaves" className="text-xs underline" target="_blank">
+          <Link href={LINK_DO_COFRE} className="text-xs underline" target="_blank">
             {t("Gerenciar chaves secretas")}
           </Link>
         </div>
@@ -209,6 +241,65 @@ export function HttpForm({
               {t("O corpo não é um JSON válido.")}
             </p>
           )}
+          <div className="space-y-2 rounded-md border border-border p-2" data-testid="http-corpo-chave">
+            <p className="text-xs text-text-muted">
+              {t('Chave secreta no corpo (opcional): escreva o campo com texto vazio, como {"token": ""}, e escolha a chave. O valor entra só na hora do envio.')}
+            </p>
+            {segredoNoCorpo ? (
+              <div className="flex gap-2">
+                <Input
+                  aria-label={t("Campo do corpo")}
+                  value={segredoNoCorpo.path}
+                  onChange={(e) => mudar({ body_secrets: [{ ...segredoNoCorpo, path: e.target.value.trim() }] })}
+                  placeholder="token"
+                />
+                <Input
+                  aria-label={t("Antes da chave")}
+                  className="w-28"
+                  value={segredoNoCorpo.prefix}
+                  onChange={(e) => mudar({ body_secrets: [{ ...segredoNoCorpo, prefix: e.target.value }] })}
+                />
+                {cofreVazio ? null : (
+                  <Seletor
+                    id="http-corpo-chave-id"
+                    valor={segredoNoCorpo.secret_id}
+                    opcoes={opcoesDoCofre}
+                    onChange={(v) => mudar({ body_secrets: [{ ...segredoNoCorpo, secret_id: v }] })}
+                  />
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("Remover")}
+                  onClick={() => {
+                    const { body_secrets: _bs, ...resto } = config;
+                    onChange(resto);
+                  }}
+                >
+                  <Trash size={14} aria-hidden />
+                </Button>
+              </div>
+            ) : cofreVazio ? (
+              <Link href={LINK_DO_COFRE} className="text-xs underline" target="_blank">
+                {t("Criar a chave em Chaves secretas")}
+              </Link>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => mudar({ body_secrets: [{ path: "token", secret_id: segredos![0]!.id, prefix: "" }] })}
+              >
+                {t("+ Chave secreta no corpo")}
+              </Button>
+            )}
+            {segredoNoCorpo && segredoNoCorpo.path && !CAMINHO_NO_JSON.test(segredoNoCorpo.path) && (
+              <p className="text-xs text-error-fg" role="alert">
+                {t("Use o caminho com pontos, como auth.token")}
+              </p>
+            )}
+          </div>
         </Campo>
       )}
 

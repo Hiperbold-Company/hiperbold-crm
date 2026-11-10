@@ -19,27 +19,37 @@
  * Sem retentativa no v1: o motor roda o efeito no máximo uma vez por nó+passo
  * (`effect_started`/`effect_done`, `resolverEfeito` em engine.ts). Tick que caiu
  * no meio da chamada sai por "Falhou" (`efeito_interrompido`) em vez de chamar
- * de novo — o outro sistema pode não ser idempotente.
+ * de novo — o outro sistema pode não ser idempotente. Para isso não acontecer
+ * por lease vencido, o motor só começa a chamada quando o lease ainda cobre o
+ * tempo limite do bloco (`leaseCobreOHttp` em engine.ts).
+ *
+ * Tetos: `TETO_DE_CHAMADAS_POR_MINUTO` por organização (o mesmo contador por
+ * janela do despacho de IA, Redis com recuo para memória) e
+ * `MAX_HTTP_POR_EXECUCAO` por execução (conferido no motor).
  */
 import { codigoParaOrganizacao } from "@/lib/automation/destino-recusado";
 import { assertSafeOutboundUrl } from "@/lib/automation/outbound-url";
 import { renderTemplate } from "@/lib/automation/template";
+import { checkRateLimit, type RateLimitResult } from "@/lib/ai/dispatcher/rate-limit";
 import { criarFetchSeguro } from "@/lib/ai/mcp-externo/fetch-seguro";
 import type { ResultadoDoEfeito } from "@/lib/followup/engine";
 import type { FlowNode } from "@/lib/followup/graph-schema";
 import { logger } from "@/lib/logger";
 
 import {
+  cabecalhoComSegredoEscrito,
   cabecalhoProibido,
   lerCaminhoNoJson,
   mascararSegredos,
   MAX_BYTES_DA_SAIDA,
   MAX_VALOR_MAPEADO,
   metodoTemCorpo,
+  porNoCaminhoDoCorpo,
   preencherCorpoJson,
   segredosDoBloco,
   TENTATIVA_DE_SEGREDO,
   valorComoTexto,
+  variavelNaAutoridade,
 } from "../http";
 import type { FieldOp } from "../schemas";
 import { lerValoresDosSegredos, marcarUsoDosSegredos } from "../segredos";
@@ -55,6 +65,40 @@ export interface DepsDoHttp {
   fetch?: FetchLike;
   /** Grava nos campos (a mesma escrita da operação de campo). */
   gravarCampos: (ops: FieldOp[]) => Promise<Passo>;
+  /** Teste: troca o contador por janela (o padrão é `checkRateLimit`). */
+  limitar?: (bucket: string, teto: number, janelaSeg: number) => Promise<Pick<RateLimitResult, "allowed">>;
+}
+
+/** Chamadas HTTP por organização por minuto (todas as automações somadas). */
+export const TETO_DE_CHAMADAS_POR_MINUTO = 120;
+
+/**
+ * Separa o modelo da URL em origem (`https://host:porta`, sem variável — o
+ * publish e o motor recusam variável ali), caminho e o resto (`?query#frag`).
+ */
+function partesDoModelo(modelo: string): { origem: string; caminho: string; resto: string } {
+  const u = modelo.trim();
+  const esquema = /^[a-z][a-z0-9+.-]*:\/\//i.exec(u)?.[0] ?? "";
+  const depois = u.slice(esquema.length);
+  const fimDaOrigem = depois.search(/[/?#]/);
+  const origem = esquema + (fimDaOrigem === -1 ? depois : depois.slice(0, fimDaOrigem));
+  const aposOrigem = fimDaOrigem === -1 ? "" : depois.slice(fimDaOrigem);
+  const fimDoCaminho = aposOrigem.search(/[?#]/);
+  return {
+    origem,
+    caminho: fimDoCaminho === -1 ? aposOrigem : aposOrigem.slice(0, fimDoCaminho),
+    resto: fimDoCaminho === -1 ? "" : aposOrigem.slice(fimDoCaminho),
+  };
+}
+
+/** Quantos segmentos o caminho tem (`/v1/x` = 2). As variáveis do modelo contam como um segmento cada. */
+function segmentos(caminho: string): number {
+  return caminho === "" ? 0 : caminho.split("/").length - 1;
+}
+
+/** Segmentos vazios (`//`, ou `/` no fim). Um valor vazio que some com um segmento muda esta conta. */
+function vazios(caminho: string): number {
+  return caminho.split("/").slice(1).filter((x) => x === "").length;
 }
 
 /** O código de erro legível (vocabulário: `ERROS_DO_EFEITO`) para o que a guarda ou a rede devolveu. */
@@ -79,25 +123,50 @@ export async function executarHttp(c: Contexto, node: NoHttp, deps: DepsDoHttp):
   const contexto = contextoDoTemplate(c.fatos, c.agora);
   const base: Record<string, unknown> = { metodo: cfg.method };
 
-  // 1. A URL: nunca com chave; cada valor preenchido vai codificado (não muda o caminho).
+  // 1. A URL: nunca com chave; nunca variável no domínio (nem na porta). Cada
+  // valor preenchido vai codificado — `encodeURIComponent` troca `/`, `?` e `#`,
+  // mas NÃO `.`: um valor `..` subiria um nível no caminho. Por isso o valor `.`
+  // ou `..` no CAMINHO é recusado, e o caminho renderizado tem de ter os mesmos
+  // segmentos (e os mesmos segmentos vazios) que o modelo.
   if (TENTATIVA_DE_SEGREDO.test(cfg.url)) return falha("http_segredo_na_url", base);
-  const url = renderTemplate(cfg.url, contexto, encodeURIComponent).trim();
+  if (variavelNaAutoridade(cfg.url)) return falha("http_url_invalida", base);
+  const modelo = partesDoModelo(cfg.url);
+  let caminhoTorto = false;
+  const caminhoPreenchido = renderTemplate(modelo.caminho, contexto, (v) => {
+    if (v === "." || v === "..") caminhoTorto = true;
+    return encodeURIComponent(v);
+  });
+  const url = (modelo.origem + caminhoPreenchido + renderTemplate(modelo.resto, contexto, encodeURIComponent)).trim();
+  // O que o evento guarda: host e caminho do MODELO (com as `{{...}}`), nunca o
+  // valor preenchido (pode ser dado do contato) nem a query.
+  let alvoDoModelo: URL;
   let alvo: URL;
   try {
+    alvoDoModelo = new URL(modelo.origem);
     alvo = new URL(url);
   } catch {
     return falha("http_url_invalida", base);
   }
+  Object.assign(base, { host: alvoDoModelo.host, caminho: modelo.caminho.slice(0, 200) });
+  if (caminhoTorto) return falha("http_url_invalida", base);
   if (alvo.username || alvo.password) return falha("http_url_invalida", base);
+  // O destino tem de ser EXATAMENTE o do modelo (host e porta) antes de anexar a chave.
+  if (alvo.host !== alvoDoModelo.host || alvo.protocol !== alvoDoModelo.protocol) return falha("http_url_invalida", base);
+  // `..` que sobrou de reserva, ou segmento esvaziado: o caminho não é o que o modelo diz.
+  const esperado = modelo.caminho === "" ? 1 : segmentos(modelo.caminho);
+  if (segmentos(alvo.pathname) !== esperado || vazios(caminhoPreenchido) !== vazios(modelo.caminho)) {
+    return falha("http_url_invalida", base);
+  }
 
   // 2. As chaves do cofre, desta organização.
   const ids = segredosDoBloco(cfg);
   const { valores, inexistentes, indisponiveis } = await lerValoresDosSegredos(c.admin, c.org, ids);
   const segredos = [...valores.values()];
-  const mascarar = (t: string) => mascararSegredos(t, segredos);
-  // Host e caminho, nunca a query (pode levar dado do contato).
-  const onde = { host: mascarar(alvo.host), caminho: mascarar(alvo.pathname).slice(0, 200) };
-  Object.assign(base, onde);
+  const prefixos = [
+    ...cfg.headers.flatMap((h) => (h.kind === "chave" ? [h.prefix] : [])),
+    ...(cfg.body_secrets ?? []).map((b) => b.prefix),
+  ];
+  const mascarar = (t: string) => mascararSegredos(t, segredos, prefixos);
   if (inexistentes.length > 0) return falha("segredo_inexistente", base);
   if (indisponiveis.length > 0) return falha("segredo_indisponivel", base);
 
@@ -113,6 +182,8 @@ export async function executarHttp(c: Contexto, node: NoHttp, deps: DepsDoHttp):
   const headers = new Headers();
   for (const h of cfg.headers) {
     if (cabecalhoProibido(h.name)) return falha("http_cabecalho_proibido", { ...base, cabecalho: h.name });
+    // Credencial escrita no grafo (legível por toda a organização): só chave do cofre.
+    if (cabecalhoComSegredoEscrito(h)) return falha("http_segredo_no_texto", { ...base, cabecalho: h.name });
     const valor =
       h.kind === "chave"
         ? `${h.prefix}${valores.get(h.secret_id) ?? ""}`
@@ -132,16 +203,32 @@ export async function executarHttp(c: Contexto, node: NoHttp, deps: DepsDoHttp):
   let corpo: string | undefined;
   if (cfg.body !== undefined && cfg.body.trim() !== "" && metodoTemCorpo(cfg.method)) {
     if (TENTATIVA_DE_SEGREDO.test(cfg.body)) return falha("http_segredo_no_texto", base);
+    let objeto: unknown;
     try {
-      corpo = JSON.stringify(preencherCorpoJson(cfg.body, (t) => renderTemplate(t, contexto)));
+      objeto = preencherCorpoJson(cfg.body, (t) => renderTemplate(t, contexto));
     } catch {
       return falha("http_corpo_invalido", base);
     }
+    // A chave do cofre entra DEPOIS do preenchimento, no campo de texto escolhido.
+    for (const b of cfg.body_secrets ?? []) {
+      if (!porNoCaminhoDoCorpo(objeto, b.path, `${b.prefix}${valores.get(b.secret_id) ?? ""}`)) {
+        return falha("http_corpo_invalido", base);
+      }
+    }
+    corpo = JSON.stringify(objeto);
     if (!headers.has("content-type")) headers.set("content-type", "application/json");
   }
   if (!headers.has("accept")) headers.set("accept", "application/json");
 
-  // 5. A chamada.
+  // 5. O teto da organização (por minuto), e a chamada.
+  const limitar = deps.limitar ?? checkRateLimit;
+  let cabe: boolean;
+  try {
+    cabe = (await limitar(`automacao-http:${c.org}`, TETO_DE_CHAMADAS_POR_MINUTO, 60)).allowed;
+  } catch {
+    cabe = false;
+  }
+  if (!cabe) return falha("http_limite_atingido", base);
   const buscar = deps.fetch ?? criarFetchSeguro();
   const inicio = Date.now();
   let status: number;

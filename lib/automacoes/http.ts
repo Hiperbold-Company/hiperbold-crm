@@ -110,6 +110,51 @@ export const cabecalhoHttpSchema = z.discriminatedUnion("kind", [
 ]);
 export type CabecalhoHttp = z.infer<typeof cabecalhoHttpSchema>;
 
+/**
+ * Cabeçalho que costuma levar credencial: `Authorization`, `X-Api-Key`,
+ * `Api-Key`, `apikey` e qualquer nome terminado em `-Token`, `-Key` ou
+ * `-Secret` (sem maiúsculas). O grafo é legível por todo membro da
+ * organização, então nesses o valor digitado não serve: só chave do cofre (ou
+ * uma variável pura, `{{...}}`, que não é segredo escrito no grafo).
+ */
+const NOMES_SENSIVEIS: ReadonlySet<string> = new Set([
+  "authorization",
+  "proxy-authorization",
+  "x-api-key",
+  "api-key",
+  "apikey",
+]);
+export function cabecalhoSensivel(nome: string): boolean {
+  const n = nome.trim().toLowerCase();
+  return NOMES_SENSIVEIS.has(n) || /-(token|key|secret)$/.test(n);
+}
+
+/** Só uma variável, sem texto em volta (`{{campo.token}}`). */
+const VARIAVEL_PURA = /^\s*\{\{[^{}]*\}\}\s*$/;
+
+/** O cabeçalho de texto escreve um valor literal num nome sensível? (recusado no publish e no motor) */
+export function cabecalhoComSegredoEscrito(h: CabecalhoHttp): boolean {
+  return h.kind === "texto" && cabecalhoSensivel(h.name) && h.value.trim() !== "" && !VARIAVEL_PURA.test(h.value);
+}
+
+export const FRASE_DO_SEGREDO_ESCRITO = "Guarde este valor em Chaves secretas e escolha a chave aqui.";
+
+/**
+ * Chave do cofre num campo do CORPO: depois de preencher as variáveis, o texto
+ * do campo em `path` vira `prefix` + a chave. O grafo guarda só o id; o valor
+ * nunca entra no grafo nem no evento. Um campo só por bloco; nunca na URL.
+ */
+export const segredoNoCorpoSchema = z.strictObject({
+  path: z.string().max(200).regex(CAMINHO_NO_JSON, "Use o caminho com pontos, como auth.token"),
+  secret_id: uuid,
+  prefix: z
+    .string()
+    .max(40)
+    .regex(/^[\x20-\x7e]*$/, "Use só letras, números e símbolos simples"),
+});
+export type SegredoNoCorpo = z.infer<typeof segredoNoCorpoSchema>;
+export const MAX_SEGREDOS_NO_CORPO = 1;
+
 export const mapeamentoHttpSchema = z
   .strictObject({
     /** Onde está o valor no JSON da resposta. */
@@ -132,6 +177,8 @@ export const httpRequestConfigSchema = z
     headers: z.array(cabecalhoHttpSchema).max(MAX_CABECALHOS),
     /** Corpo JSON (com variáveis dentro das aspas). Ausente = sem corpo. */
     body: tpl(MAX_CORPO).optional(),
+    /** Chave do cofre num campo do corpo (aplicada depois do preenchimento). */
+    body_secrets: z.array(segredoNoCorpoSchema).max(MAX_SEGREDOS_NO_CORPO).optional(),
     timeout_ms: z.number().int().min(TEMPO_LIMITE_MINIMO_MS).max(TEMPO_LIMITE_MAXIMO_MS),
     mappings: z.array(mapeamentoHttpSchema).max(MAX_MAPEAMENTOS),
   })
@@ -147,8 +194,49 @@ export function configHttpEmBranco(): HttpRequestConfig {
 }
 
 /** As chaves do cofre que o bloco cita. */
-export function segredosDoBloco(config: Pick<HttpRequestConfig, "headers">): string[] {
-  return [...new Set(config.headers.flatMap((h) => (h.kind === "chave" ? [h.secret_id] : [])))];
+export function segredosDoBloco(config: Pick<HttpRequestConfig, "headers"> & { body_secrets?: SegredoNoCorpo[] }): string[] {
+  return [
+    ...new Set([
+      ...config.headers.flatMap((h) => (h.kind === "chave" ? [h.secret_id] : [])),
+      ...(config.body_secrets ?? []).map((b) => b.secret_id),
+    ]),
+  ];
+}
+
+/**
+ * Põe `valor` no campo `caminho` do corpo JÁ preenchido. Só troca um campo de
+ * TEXTO que já existe no modelo (não cria campo, não desce por protótipo).
+ * `false` quando o caminho não aponta para um texto.
+ */
+export function porNoCaminhoDoCorpo(raiz: unknown, caminho: string, valor: string): boolean {
+  if (!CAMINHO_NO_JSON.test(caminho)) return false;
+  const partes = caminho.split(/\.|\[(\d+)\]/).filter((p) => p !== undefined && p !== "");
+  let atual: unknown = raiz;
+  for (let i = 0; i < partes.length; i++) {
+    const parte = partes[i]!;
+    if (atual === null || typeof atual !== "object") return false;
+    const ultimo = i === partes.length - 1;
+    if (Array.isArray(atual)) {
+      if (!/^\d+$/.test(parte)) return false;
+      const k = Number(parte);
+      if (ultimo) {
+        if (typeof atual[k] !== "string") return false;
+        atual[k] = valor;
+        return true;
+      }
+      atual = atual[k];
+      continue;
+    }
+    if (!Object.hasOwn(atual, parte)) return false;
+    const obj = atual as Record<string, unknown>;
+    if (ultimo) {
+      if (typeof obj[parte] !== "string") return false;
+      obj[parte] = valor;
+      return true;
+    }
+    atual = obj[parte];
+  }
+  return false;
 }
 
 /** Método que leva corpo. GET não leva (muitos servidores recusam). */
@@ -219,32 +307,69 @@ export function valorComoTexto(valor: unknown): string | null {
 
 export const MASCARA = "••••";
 
+/** As formas em que uma chave costuma reaparecer num eco: crua, codificada na URL, em base64 e escapada em JSON. */
+function formasDoSegredo(s: string, prefixos: readonly string[]): string[] {
+  // `btoa` dos bytes UTF-8: roda igual no servidor e no navegador (este arquivo vai à tela).
+  const b64 = (t: string) => btoa(String.fromCharCode(...new TextEncoder().encode(t)));
+  const formas = [s, encodeURIComponent(s), JSON.stringify(s).slice(1, -1), b64(s)];
+  for (const p of prefixos) if (p) formas.push(b64(`${p}${s}`));
+  // base64 sem o preenchimento final (`=`), como aparece em token e em URL.
+  formas.push(...formas.filter((f) => f.endsWith("=")).map((f) => f.replace(/=+$/, "")));
+  return formas.filter((f) => f.length > 0);
+}
+
 /**
- * Troca toda ocorrência de cada chave secreta por `••••`. Vale para tudo que
- * sai da chamada e é gravado (valor mapeado, caminho do log): o servidor de
- * destino pode ECOAR o token na resposta. Chave curta demais (menos de 4
- * caracteres) também é mascarada — o cofre exige no mínimo 8, então isso só
- * protege contra dado antigo.
+ * Troca toda ocorrência de cada chave secreta por `••••` — crua, codificada
+ * na URL (`encodeURIComponent`), em base64 (sozinha ou com o prefixo do
+ * cabeçalho, como `Basic`) e escapada em JSON. Vale para tudo que sai da
+ * chamada e é gravado (valor mapeado, caminho do log): o servidor de destino
+ * pode ECOAR o token na resposta, e quase nunca na forma em que foi enviado.
  */
-export function mascararSegredos(texto: string, segredos: readonly string[]): string {
+export function mascararSegredos(texto: string, segredos: readonly string[], prefixos: readonly string[] = []): string {
+  const formas = [...new Set(segredos.filter((x) => x.length > 0).flatMap((s) => formasDoSegredo(s, prefixos)))];
   let saida = texto;
-  // A mais longa primeiro: uma chave que contém outra não sobra pela metade.
-  for (const s of [...segredos].filter((x) => x.length > 0).sort((a, b) => b.length - a.length)) {
-    saida = saida.split(s).join(MASCARA);
+  // A mais longa primeiro: uma forma que contém outra não sobra pela metade.
+  for (const f of formas.sort((a, b) => b.length - a.length)) {
+    saida = saida.split(f).join(MASCARA);
   }
   return saida;
 }
 
-/** Os 4 últimos caracteres que a tela mostra (`••••1234`). */
+/** Abaixo deste tamanho a tela não mostra os finais da chave: 4 de 8 caracteres é meia chave. */
+export const MIN_PARA_MOSTRAR_FINAIS = 16;
+
+/**
+ * Os 4 últimos caracteres que a tela mostra (`••••1234`) — só quando a chave
+ * tem pelo menos `MIN_PARA_MOSTRAR_FINAIS` caracteres. Mais curta: texto vazio
+ * (a tela mostra só `••••`).
+ */
 export function ultimos4(valor: string): string {
-  return valor.slice(-4);
+  return valor.length >= MIN_PARA_MOSTRAR_FINAIS ? valor.slice(-4) : "";
 }
 
 /** Por que esta URL (ainda com as variáveis) não serve — ou `null`. Só o que dá para julgar sem rede. */
-export function problemaDaUrl(url: string): "vazia" | "segredo_na_url" | "invalida" | "https_obrigatorio" | "credencial_na_url" | null {
+/**
+ * A AUTORIDADE da URL (host e porta: entre `https://` e a primeira `/`, `?` ou
+ * `#`) tem variável? Recusado sempre: `https://api.{{campo.x}}/` ou
+ * `https://api.x.com{{y}}/` mandariam a chave para o domínio que o contato
+ * (ou quem edita o campo) escolher.
+ */
+export function variavelNaAutoridade(url: string): boolean {
+  const u = url.trim();
+  const m = /^[a-z][a-z0-9+.-]*:\/\//i.exec(u);
+  const resto = m ? u.slice(m[0].length) : u;
+  const fim = resto.search(/[/?#]/);
+  const autoridade = fim === -1 ? resto : resto.slice(0, fim);
+  return autoridade.includes("{{");
+}
+
+export function problemaDaUrl(
+  url: string,
+): "vazia" | "segredo_na_url" | "invalida" | "https_obrigatorio" | "credencial_na_url" | "variavel_no_dominio" | null {
   const u = url.trim();
   if (!u || u === "https://") return "vazia";
   if (TENTATIVA_DE_SEGREDO.test(u)) return "segredo_na_url";
+  if (variavelNaAutoridade(u)) return "variavel_no_dominio";
   // As variáveis viram texto de exemplo para conferir a forma.
   let parsed: URL;
   try {

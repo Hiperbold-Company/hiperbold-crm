@@ -66,7 +66,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     resourceType: "automacao_segredos",
     resourceId: id,
     requestId,
-    metadata: { nome: r.segredo.nome, ultimos4: r.segredo.ultimos4 },
+    metadata: { nome: r.segredo.nome },
   });
   return ok(r.segredo, { requestId });
 }

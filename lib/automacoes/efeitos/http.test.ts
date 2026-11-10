@@ -62,7 +62,7 @@ function bancoDuble(linhas: Linha[]) {
   };
 }
 
-function contexto(admin: unknown, fatos: Partial<FatosDaAutomacao> = {}, vars: Record<string, unknown> = {}): Contexto {
+function contexto(admin: unknown, fatos: Partial<FatosDaAutomacao> = {}, vars: Record<string, unknown> = { gatilho: { fonte: "x" } }): Contexto {
   return {
     admin: admin as Contexto["admin"],
     org: ORG,
@@ -133,7 +133,7 @@ describe("executarHttp — o envio", () => {
   it("mantém o que blocos anteriores guardaram em saida", async () => {
     const { admin } = bancoDuble(linhas);
     const { fetch } = fetchQueResponde({ campaign: { name: "X" } });
-    const r = await executarHttp(contexto(admin, {}, { saida: { anterior: "1" } }), no({}), { fetch, gravarCampos: semCampos });
+    const r = await executarHttp(contexto(admin, {}, { gatilho: { fonte: "x" }, saida: { anterior: "1" } }), no({}), { fetch, gravarCampos: semCampos });
     expect(r.vars).toEqual({ saida: { anterior: "1", utm_campaign: "X" } });
   });
 
@@ -230,7 +230,7 @@ describe("executarHttp — as recusas (sem chamar a rede)", () => {
 });
 
 describe("histórico legível", () => {
-  it("“Chamou GET api.exemplo.com/v1/x — respondeu 200 …; guardou: utm_campaign”, sem a chave", async () => {
+  it("“Chamou GET api.exemplo.com/v1/{{gatilho.fonte}} — respondeu 200 …; guardou: utm_campaign”, sem a chave nem o valor preenchido", async () => {
     const { admin } = bancoDuble(linhas);
     const { fetch } = fetchQueResponde({ campaign: { name: "X" } });
     const r = await executarHttp(contexto(admin, {}, { gatilho: { fonte: "x" } }), no({}), { fetch, gravarCampos: semCampos });
@@ -241,7 +241,7 @@ describe("histórico legível", () => {
       "automacao",
     );
     const texto = `${lido.titulo} ${lido.detalhe ?? ""}`;
-    expect(texto).toMatch(/Chamou GET api\.exemplo\.com\/v1\/x — respondeu 200 em \d+ ms; guardou: utm_campaign/);
+    expect(texto).toMatch(/Chamou GET api\.exemplo\.com\/v1\/\{\{gatilho\.fonte\}\} — respondeu 200 em \d+ ms; guardou: utm_campaign/);
     expect(texto).not.toContain(TOKEN);
   });
 });
@@ -296,5 +296,97 @@ describe("pelo fetch seguro de produção, contra um receptor HTTP real", () => 
     expect(r.desfecho.ok).toBe(false);
     expect(["http_destino_recusado", "http_falha_de_rede"]).toContain(r.desfecho.erro);
     expect(recebidas.length).toBe(antes);
+  });
+});
+
+describe("auditoria do lote 4 — no motor", () => {
+  it("1. Authorization com token ESCRITO sai por Falhou sem chamar a rede; variável pura chama (controle)", async () => {
+    const { admin } = bancoDuble(linhas);
+    const { fetch } = fetchQueResponde({});
+    const r = await executarHttp(contexto(admin), no({ headers: [{ kind: "texto", name: "X-Api-Key", value: "abc123literal" }] }), {
+      fetch,
+      gravarCampos: semCampos,
+    });
+    expect(r.desfecho).toEqual({ ok: false, erro: "http_segredo_no_texto" });
+    expect(fetch).not.toHaveBeenCalled();
+    const ok = await executarHttp(
+      contexto(admin, {}, { gatilho: { fonte: "x" } }),
+      no({ headers: [{ kind: "texto", name: "X-Api-Key", value: "{{gatilho.fonte}}" }], mappings: [] }),
+      { fetch, gravarCampos: semCampos },
+    );
+    expect(ok.desfecho).toEqual({ ok: true });
+  });
+
+  it("1. chave do cofre no corpo: vai no campo escolhido e nunca volta no resultado", async () => {
+    const { admin } = bancoDuble(linhas);
+    const { fetch, chamadas } = fetchQueResponde({ eco: `Basic ${btoa(`k:${TOKEN}`)}`, campaign: { name: "x" } });
+    const r = await executarHttp(
+      contexto(admin),
+      no({
+        method: "POST",
+        headers: [],
+        body: '{"auth": {"token": ""}, "n": 1}',
+        body_secrets: [{ path: "auth.token", secret_id: CHAVE_ID, prefix: "k:" }],
+        mappings: [{ path: "eco", var: "eco" }],
+      }),
+      { fetch, gravarCampos: semCampos },
+    );
+    expect(r.desfecho).toEqual({ ok: true });
+    expect(JSON.parse(String(chamadas[0]!.init.body))).toEqual({ auth: { token: `k:${TOKEN}` }, n: 1 });
+    expect(JSON.stringify(r)).not.toContain(TOKEN);
+    // 6. O eco em base64 do prefixo + chave também é mascarado.
+    expect(r.vars).toEqual({ saida: { eco: "Basic ••••" } });
+  });
+
+  it.each([
+    ["https://api.{{gatilho.fonte}}/v1", "evil.com"],
+    ["https://api.exemplo.com{{gatilho.fonte}}/v1", ".evil.com"],
+    ["https://api.exemplo.com:{{gatilho.fonte}}/v1", "8443"],
+  ])("2. variável na autoridade (%s) é recusada antes de anexar a chave", async (url, fonte) => {
+    const { admin } = bancoDuble(linhas);
+    const { fetch } = fetchQueResponde({});
+    const r = await executarHttp(contexto(admin, {}, { gatilho: { fonte } }), no({ url }), { fetch, gravarCampos: semCampos });
+    expect(r.desfecho).toEqual({ ok: false, erro: "http_url_invalida" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([[".."], ["."], [""]])("3. valor %j no caminho não muda o caminho: sai por Falhou", async (fonte) => {
+    const { admin } = bancoDuble(linhas);
+    const { fetch } = fetchQueResponde({});
+    const r = await executarHttp(
+      contexto(admin, {}, { gatilho: { fonte } }),
+      no({ url: "https://api.exemplo.com/v1/{{gatilho.fonte}}/admin" }),
+      { fetch, gravarCampos: semCampos },
+    );
+    expect(r.desfecho).toEqual({ ok: false, erro: "http_url_invalida" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("3. valor com ponto dentro do segmento passa (controle)", async () => {
+    const { admin } = bancoDuble(linhas);
+    const { fetch, chamadas } = fetchQueResponde({ campaign: { name: "x" } });
+    const r = await executarHttp(contexto(admin, {}, { gatilho: { fonte: "a..b" } }), no({}), { fetch, gravarCampos: semCampos });
+    expect(r.desfecho).toEqual({ ok: true });
+    expect(chamadas[0]!.url).toBe("https://api.exemplo.com/v1/a..b");
+  });
+
+  it("4a. passou de 120 chamadas por minuto na organização: sai por Falhou sem chamar a rede", async () => {
+    const { admin } = bancoDuble([{ id: CHAVE_ID, organization_id: "aaaaaaaa-0000-4000-8000-0000000000ff", valor_cifrado: "\\xcifrado" }]);
+    const { fetch } = fetchQueResponde({ campaign: { name: "x" } });
+    const ctx = { ...contexto(admin), org: "aaaaaaaa-0000-4000-8000-0000000000ff" };
+    for (let i = 0; i < 120; i++) {
+      expect((await executarHttp(ctx, no({}), { fetch, gravarCampos: semCampos })).desfecho).toEqual({ ok: true });
+    }
+    const r = await executarHttp(ctx, no({}), { fetch, gravarCampos: semCampos });
+    expect(r.desfecho).toEqual({ ok: false, erro: "http_limite_atingido" });
+    expect(fetch).toHaveBeenCalledTimes(120);
+  });
+
+  it("5. o detalhe guarda o caminho do MODELO, nunca o valor preenchido", async () => {
+    const { admin } = bancoDuble(linhas);
+    const { fetch } = fetchQueResponde({ campaign: { name: "x" } });
+    const r = await executarHttp(contexto(admin, {}, { gatilho: { fonte: "cpf-12345678900" } }), no({}), { fetch, gravarCampos: semCampos });
+    expect(r.detalhes?.[0]).toMatchObject({ caminho: "/v1/{{gatilho.fonte}}", host: "api.exemplo.com" });
+    expect(JSON.stringify(r.detalhes)).not.toContain("12345678900");
   });
 });

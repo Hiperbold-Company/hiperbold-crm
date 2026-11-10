@@ -319,7 +319,9 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   http_destino_recusado:
     "endereço recusado: o servidor não chama endereços internos (localhost, rede interna, 169.254.169.254) nem nomes que não existem",
   http_segredo_na_url: "a chave secreta não pode ir no endereço (URL): use um cabeçalho",
-  http_segredo_no_texto: "a chave secreta não pode ser escrita no texto: escolha a chave no cabeçalho",
+  http_segredo_no_texto: "a chave secreta não pode ser escrita no texto: guarde-a em Chaves secretas e escolha a chave no bloco",
+  http_limite_atingido: "a conta passou de 120 chamadas HTTP por minuto; a chamada não foi feita",
+  http_limite_por_execucao: "esta execução já fez 30 chamadas HTTP, o máximo por execução; a chamada não foi feita",
   http_cabecalho_proibido: "um dos cabeçalhos não pode ser definido pela automação",
   http_cabecalho_invalido: "um dos cabeçalhos ficou com valor inválido (quebra de linha ou caractere especial)",
   http_corpo_invalido: "o corpo não é um JSON válido",

@@ -1,9 +1,12 @@
 import { campoSoLeitura } from '@/lib/automacoes/campos';
 import { GATILHO_TRAZ_CONTATO } from '@/lib/automacoes/schemas';
 import {
+  cabecalhoComSegredoEscrito,
   cabecalhoProibido,
+  FRASE_DO_SEGREDO_ESCRITO,
   corpoEhJsonValido,
   metodoTemCorpo,
+  porNoCaminhoDoCorpo,
   problemaDaUrl,
   TENTATIVA_DE_SEGREDO,
 } from '@/lib/automacoes/http';
@@ -532,6 +535,7 @@ const FRASE_DA_URL: Record<NonNullable<ReturnType<typeof problemaDaUrl>>, string
   invalida: 'o endereço (URL) não é válido. Escreva o endereço completo, como https://api.example.com/v1/recurso.',
   https_obrigatorio: 'o endereço precisa começar com https://.',
   credencial_na_url: 'o endereço não pode ter usuário e senha. Use um cabeçalho com a chave.',
+  variavel_no_dominio: 'o domínio do endereço não pode ter variável: escreva o domínio fixo e use variáveis só no caminho, depois da primeira /.',
 };
 
 /**
@@ -558,6 +562,9 @@ function validarRequisicoesHttp(
       if (h.kind === 'texto' && TENTATIVA_DE_SEGREDO.test(h.value)) {
         erro('http_segredo_no_texto', `não escreva a chave no texto do cabeçalho ${h.name}: escolha "Chave secreta" e selecione a chave.`);
       }
+      if (cabecalhoComSegredoEscrito(h)) {
+        erro('http_segredo_no_texto', `o cabeçalho ${h.name} leva credencial e o bloco é visível para toda a equipe. ${FRASE_DO_SEGREDO_ESCRITO}`);
+      }
       if (h.kind === 'chave' && segredosExistentes && !segredosExistentes.has(h.secret_id)) {
         erro('http_segredo_inexistente', `a chave secreta do cabeçalho ${h.name} não existe mais — escolha outra em Automações › Chaves secretas.`);
       }
@@ -566,9 +573,19 @@ function validarRequisicoesHttp(
       if (!metodoTemCorpo(c.method)) {
         erro('http_corpo_no_get', 'requisição GET não leva corpo: troque o método ou apague o corpo.');
       } else if (TENTATIVA_DE_SEGREDO.test(c.body)) {
-        erro('http_segredo_no_texto', 'não escreva a chave no corpo: a chave só vai num cabeçalho.');
+        erro('http_segredo_no_texto', 'não escreva a chave no corpo: escolha a chave em "Chave secreta no corpo".');
       } else if (!corpoEhJsonValido(c.body)) {
         erro('http_corpo_invalido', 'o corpo não é um JSON válido. Coloque cada variável entre aspas, como {"nome": "{{contact.name}}"}.');
+      }
+    }
+    for (const b of c.body_secrets ?? []) {
+      if (!metodoTemCorpo(c.method) || c.body === undefined || c.body.trim() === '') {
+        erro('http_corpo_invalido', 'a chave secreta do corpo precisa de um corpo JSON (e de um método que leve corpo).');
+      } else if (corpoEhJsonValido(c.body) && !porNoCaminhoDoCorpo(JSON.parse(c.body), b.path, '')) {
+        erro('http_corpo_invalido', `o corpo não tem o campo de texto ${b.path} para receber a chave secreta. Escreva-o, como {"token": ""}.`);
+      }
+      if (segredosExistentes && !segredosExistentes.has(b.secret_id)) {
+        erro('http_segredo_inexistente', 'a chave secreta do corpo não existe mais — escolha outra em Automações › Chaves secretas.');
       }
     }
     for (const m of c.mappings) {

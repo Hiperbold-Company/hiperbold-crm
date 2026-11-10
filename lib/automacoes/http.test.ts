@@ -9,8 +9,12 @@ import { flowGraphSchema, type FlowGraph } from "@/lib/followup/graph-schema";
 import { validateFlowForPublish } from "@/lib/followup/validate-publish";
 
 import {
+  cabecalhoComSegredoEscrito,
   cabecalhoProibido,
+  cabecalhoSensivel,
   httpRequestConfigSchema,
+  porNoCaminhoDoCorpo,
+  ultimos4,
   lerCaminhoNoJson,
   mascararSegredos,
   preencherCorpoJson,
@@ -163,5 +167,73 @@ describe("publicação do bloco HTTP", () => {
   it("o bloco não roda num follow-up", () => {
     const r = validateFlowForPublish(grafo(BASE), { surface: "followup" });
     expect(r.ok ? [] : r.errors.map((e) => e.code)).toContain("no_fora_da_superficie");
+  });
+});
+
+describe("auditoria do lote 4", () => {
+  it("1. nome sensível com valor escrito é segredo no grafo; variável pura e nome comum não", () => {
+    for (const nome of ["Authorization", "authorization", "X-Api-Key", "Api-Key", "apikey", "X-Auth-Token", "Client-Secret", "x-partner-key"]) {
+      expect(cabecalhoSensivel(nome)).toBe(true);
+      expect(cabecalhoComSegredoEscrito({ kind: "texto", name: nome, value: "Bearer abc123" })).toBe(true);
+      expect(cabecalhoComSegredoEscrito({ kind: "texto", name: nome, value: "{{campo.token}}" })).toBe(false);
+    }
+    expect(cabecalhoSensivel("Accept")).toBe(false);
+    expect(cabecalhoComSegredoEscrito({ kind: "texto", name: "Accept", value: "application/json" })).toBe(false);
+  });
+
+  it("1. o publish recusa token escrito em Authorization, com a frase que manda ao cofre", () => {
+    const cfg: HttpRequestConfig = { ...BASE, headers: [{ kind: "texto", name: "Authorization", value: "Bearer abc123" }] };
+    const r = validateFlowForPublish(grafo(cfg), { surface: "automacao", automacao: { pointerId: "p", segredosExistentes: new Set([CHAVE]) } });
+    expect(r.ok).toBe(false);
+    const erro = r.ok ? undefined : r.errors.find((e) => e.code === "http_segredo_no_texto");
+    expect(erro?.message).toContain("Guarde este valor em Chaves secretas");
+    // Controle: variável pura no mesmo cabeçalho publica.
+    const ok: HttpRequestConfig = { ...BASE, headers: [{ kind: "texto", name: "Authorization", value: "{{campo.token}}" }] };
+    expect(codigos(ok, new Set([CHAVE]))).not.toContain("http_segredo_no_texto");
+  });
+
+  it("1. chave do cofre num campo do corpo: o schema aceita um, o publish confere o campo", () => {
+    const cfg: HttpRequestConfig = {
+      ...BASE,
+      method: "POST",
+      body: '{"auth": {"token": ""}, "nome": "{{contact.name}}"}',
+      body_secrets: [{ path: "auth.token", secret_id: CHAVE, prefix: "" }],
+    };
+    expect(httpRequestConfigSchema.safeParse(cfg).success).toBe(true);
+    expect(codigos(cfg, new Set([CHAVE])).filter((c) => c.startsWith("http_"))).toEqual([]);
+    expect(codigos({ ...cfg, body_secrets: [{ path: "auth.outro", secret_id: CHAVE, prefix: "" }] }, new Set([CHAVE]))).toContain("http_corpo_invalido");
+    expect(codigos(cfg, new Set())).toContain("http_segredo_inexistente");
+    const dois = { ...cfg, body_secrets: [cfg.body_secrets![0]!, { path: "nome", secret_id: CHAVE, prefix: "" }] };
+    expect(httpRequestConfigSchema.safeParse(dois).success).toBe(false);
+    const obj = JSON.parse(cfg.body!);
+    expect(porNoCaminhoDoCorpo(obj, "auth.token", "S")).toBe(true);
+    expect(obj.auth.token).toBe("S");
+    expect(porNoCaminhoDoCorpo(obj, "auth.novo", "S")).toBe(false);
+    expect(porNoCaminhoDoCorpo(obj, "auth", "S")).toBe(false);
+  });
+
+  it("2. variável no domínio ou na porta é recusada; no caminho passa", () => {
+    for (const url of ["https://api.{{campo.x}}/v1", "https://api.x.com{{campo.y}}/v1", "https://api.x.com:{{campo.p}}/v1", "https://{{campo.h}}"]) {
+      expect(problemaDaUrl(url)).toBe("variavel_no_dominio");
+      expect(codigos({ ...BASE, url }, new Set([CHAVE]))).toContain("http_url_invalida");
+    }
+    expect(problemaDaUrl("https://api.x.com/v1/{{campo.y}}?q={{campo.z}}")).toBeNull();
+  });
+
+  it("6. a máscara cobre a chave codificada na URL, em base64 (com e sem prefixo) e escapada em JSON", () => {
+    const s = 'ab+c/d"e\\f=g&h';
+    const eco = [
+      encodeURIComponent(s),
+      btoa(s),
+      btoa(`user:${s}`),
+      JSON.stringify(s).slice(1, -1),
+    ].join(" | ");
+    const mascarado = mascararSegredos(eco, [s], ["user:"]);
+    expect(mascarado).toBe("•••• | •••• | •••• | ••••");
+  });
+
+  it("7. os finais só aparecem em chave com 16 caracteres ou mais", () => {
+    expect(ultimos4("abcdefghijk1234")).toBe("");
+    expect(ultimos4("abcdefghijkl1234")).toBe("1234");
   });
 });
