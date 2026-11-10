@@ -59,6 +59,7 @@ export const CUSTO_NO_MOTOR: Record<NodeType, number> = {
   instagram_private_reply: 1,
   instagram_public_reply: 1,
   instagram_check_follow: 1,
+  http_request: 1,
 };
 
 /**

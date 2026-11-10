@@ -1,8 +1,9 @@
 import type { ComponentType } from "react";
 
-import { Bell, Play, Clock, GitBranch, Brain, ChatCircle, ChatsCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Funnel, Tag, Kanban, PencilSimple, InstagramLogo, Users } from "@/lib/ui/icons";
+import { Bell, Play, Clock, GitBranch, Brain, ChatCircle, ChatsCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Funnel, Tag, Kanban, PencilSimple, InstagramLogo, Users, Globe } from "@/lib/ui/icons";
 import { fraseDaAcao, fraseDaOperacao, GATILHOS_DA_AUTOMACAO, type NomesDaAutomacao } from "@/lib/automacoes/vocabulario";
 import type { FollowupFlowSurface } from "@/lib/followup/api-schemas";
+import { configHttpEmBranco } from "@/lib/automacoes/http";
 import type { FlowNode, NodeType } from "@/lib/followup/graph-schema";
 import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
 import { NOS_DA_SUPERFICIE } from "@/lib/followup/validate-publish";
@@ -275,6 +276,16 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
     defaultLabel: "Confere se segue",
     defaultConfig: () => ({}),
   },
+  // Requisição HTTP (lote 4): o formulário mora em forms/automacao/HttpForm.tsx.
+  http_request: {
+    type: "http_request",
+    paletteLabel: "Requisição HTTP",
+    icon: Globe,
+    chipClassName: "bg-info-bg text-info-fg",
+    borderClassName: "border-l-info",
+    defaultLabel: "Requisição HTTP",
+    defaultConfig: () => configHttpEmBranco(),
+  },
 };
 
 /**
@@ -426,6 +437,10 @@ export function describeNodeConfig(
     }
     case "instagram_check_follow":
       return t("Segue o perfil?");
+    case "http_request": {
+      const c = config as ConfigOf<"http_request">;
+      return `${c.method} ${c.url.replace(/^https:\/\//, "").slice(0, 50)}`;
+    }
     default: {
       const exhaustive: never = type;
       return String(exhaustive);

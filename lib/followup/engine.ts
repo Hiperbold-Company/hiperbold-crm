@@ -1408,6 +1408,12 @@ async function processarUmPasso(
       : undefined;
     if (definicaoDoNo(node.type).efeito) {
       const resolvido = await resolverEfeito(deps, enrollment, node, events, fatos ?? null);
+      if (resolvido.adiado) {
+        // O lease não cobre a chamada: nada começou. Solta o claim; `next_eval_at`
+        // já venceu, então o próximo tick (com lease novo) faz a chamada.
+        await db.updateEnrollment(enrollment.id, enrollment.organization_id, { claimed_until: null });
+        return null;
+      }
       efeito = resolvido.desfecho;
       if (resolvido.vars) varsNovas = { ...(enrollment.vars ?? {}), ...resolvido.vars };
     }
@@ -1581,6 +1587,27 @@ async function processarUmPasso(
  * ação aconteceu — o bloco sai por "Erro" (`efeito_interrompido`) em vez de
  * arriscar criar o negócio duas vezes.
  */
+const ADIADO = { desfecho: { ok: false, erro: "adiado" }, adiado: true } as const;
+
+/** Teto de chamadas do bloco "Requisição HTTP" numa execução (além de `MAX_VISITAS_POR_NO`). */
+export const MAX_HTTP_POR_EXECUCAO = 30;
+/** Folga de lease além do tempo limite do bloco HTTP: gravar o fim e o passo depois da chamada. */
+export const FOLGA_DO_LEASE_HTTP_MS = 15_000;
+
+/**
+ * O lease do claim ainda cobre a chamada HTTP (tempo limite + folga)? Sem
+ * lease (caminho sem claim, como a resposta inbound) não há o que vencer.
+ * Chamada que começa com lease curto pode terminar DEPOIS de outro tick
+ * reclamar a inscrição — e aquele tick, vendo só o `effect_started`, gravaria
+ * `efeito_interrompido` por cima de uma chamada que deu certo.
+ */
+export function leaseCobreOHttp(claimedUntil: string | null | undefined, agora: Date, timeoutMs: number): boolean {
+  if (!claimedUntil) return true;
+  const fim = Date.parse(claimedUntil);
+  if (Number.isNaN(fim)) return true;
+  return fim - agora.getTime() >= timeoutMs + FOLGA_DO_LEASE_HTTP_MS;
+}
+
 async function resolverEfeito(
   deps: TickDeps,
   enrollment: EnrollmentRow,
@@ -1588,7 +1615,7 @@ async function resolverEfeito(
   events: EnrollmentEventRef[],
   fatos: FatosDaAutomacao | null,
   acao?: AcaoDeConversa,
-): Promise<{ desfecho: DesfechoDoEfeito; vars?: Record<string, unknown> }> {
+): Promise<{ desfecho: DesfechoDoEfeito; vars?: Record<string, unknown>; adiado?: true }> {
   const { db } = deps;
   const chave = `${node.id}:${enrollment.steps_taken}`;
   const chaveInicio = `${chave}:efeito_inicio`;
@@ -1618,6 +1645,15 @@ async function resolverEfeito(
   if (jaFeito) return completar(jaFeito);
 
   const gravarFim = async (r: ResultadoDoEfeito) => {
+    // O que a resposta HTTP devolveu (`saida`) é dado de terceiro, às vezes do
+    // contato: não vai ao evento (legível pela equipe e imutável) — o detalhe
+    // guarda só os NOMES (`campos`). Para o replay não perder os valores, eles
+    // vão para `enrollments.vars` ANTES do `effect_done`.
+    if (r.vars && Object.hasOwn(r.vars, "saida")) {
+      await db.updateEnrollment(enrollment.id, enrollment.organization_id, {
+        vars: { ...(enrollment.vars ?? {}), saida: r.vars.saida },
+      });
+    }
     const { inserted } = await db.insertEnrollmentEvent({
       ...base,
       event_type: r.desfecho.ok ? "effect_done" : "effect_failed",
@@ -1638,6 +1674,14 @@ async function resolverEfeito(
   };
 
   const iniciou = events.some((e) => e.idempotency_key === chaveInicio);
+  if (!iniciou && node.type === "http_request") {
+    const feitas = events.filter((e) => e.event_type === "effect_started" && e.payload?.tipo === "http_request").length;
+    if (feitas >= MAX_HTTP_POR_EXECUCAO) {
+      const erro = "http_limite_por_execucao";
+      return gravarFim({ desfecho: { ok: false, erro }, detalhes: [{ tipo: "http_request", ok: false, erro, metodo: node.config.method }] });
+    }
+    if (!leaseCobreOHttp(enrollment.claimed_until, deps.clock(), node.config.timeout_ms)) return { ...ADIADO };
+  }
   const { inserted } = iniciou
     ? { inserted: false }
     : await db.insertEnrollmentEvent({

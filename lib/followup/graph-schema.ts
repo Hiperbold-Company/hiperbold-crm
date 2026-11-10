@@ -12,6 +12,7 @@ import {
   regrasNovasDeCondicao,
   tpl,
 } from '@/lib/automacoes/schemas';
+import { httpRequestConfigSchema } from '@/lib/automacoes/http';
 import {
   MAX_BOTOES,
   MAX_CORPO_COM_OPCOES,
@@ -58,6 +59,8 @@ export const NODE_TYPES = [
   'instagram_private_reply',
   'instagram_public_reply',
   'instagram_check_follow',
+  // Bloco "Requisição HTTP" (lote 4, só automação): chama outro sistema e guarda a resposta.
+  'http_request',
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
@@ -1099,6 +1102,14 @@ export const flowNodeSchema = z.discriminatedUnion('type', [
     position: z.strictObject({ x: z.number(), y: z.number() }),
     config: instagramCheckFollowConfigSchema,
   }),
+  // Requisição HTTP (automação): chama a URL, guarda o que a resposta devolve.
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('http_request'),
+    label: z.string().min(1).max(60),
+    position: z.strictObject({ x: z.number(), y: z.number() }),
+    config: httpRequestConfigSchema,
+  }),
 ]);
 
 export type FlowNode = z.infer<typeof flowNodeSchema>;
@@ -1394,6 +1405,11 @@ function ramosDaRespostaPublica(): FlowBranch[] {
   return [ramo(JA_RESPONDIDO_BRANCH_ID, 'Já respondido'), ramoDeErro(), fallbackBranch('Enviada')];
 }
 
+/** "Requisição HTTP": Deu certo (comum, resposta 2xx) e Falhou (erro, tempo esgotado, não-2xx, destino recusado). */
+function ramosDaRequisicao(): FlowBranch[] {
+  return [{ ...ramoDeErro(), label: 'Falhou' }, fallbackBranch('Deu certo')];
+}
+
 /** "Confere se segue": Segue, Não segue, e "Não deu para saber" (comum). */
 function ramosDoConfereSeSegue(): FlowBranch[] {
   return [ramo(SEGUE_BRANCH_ID, 'Segue'), ramo(NAO_SEGUE_BRANCH_ID, 'Não segue'), fallbackBranch('Não deu para saber')];
@@ -1556,6 +1572,7 @@ export const RAMOS_POR_TIPO: { [K in NodeType]: RamosDe<K> } = {
   instagram_private_reply: ramosDaRespostaPrivada,
   instagram_public_reply: ramosDaRespostaPublica,
   instagram_check_follow: ramosDoConfereSeSegue,
+  http_request: ramosDaRequisicao,
 
   trigger: saidaUnica,
   wait: (node) =>

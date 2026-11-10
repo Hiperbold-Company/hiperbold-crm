@@ -30,6 +30,7 @@ import { CondicaoAutomacaoForm } from "./forms/automacao/CondicaoAutomacaoForm";
 import { CrmActionForm } from "./forms/automacao/CrmActionForm";
 import { FieldOpForm } from "./forms/automacao/FieldOpForm";
 import { ConfereSeSegueForm, RespostaPrivadaForm, RespostaPublicaForm } from "./forms/automacao/InstagramForms";
+import { HttpForm } from "./forms/automacao/HttpForm";
 import { MessageForm } from "./forms/automacao/MessageForm";
 import { QuestionForm } from "./forms/automacao/QuestionForm";
 import type { RespostaDisponivel } from "./forms/automacao/comum";
@@ -193,6 +194,13 @@ export function NodeConfigPanel({
           />
         )}
         {type === "instagram_check_follow" && <ConfereSeSegueForm />}
+        {type === "http_request" && (
+          <HttpForm
+            config={node.data.config as ConfigOf<"http_request">}
+            onChange={(config) => onChange({ config })}
+            respostas={respostasAnteriores}
+          />
+        )}
         {type === "field_op" && (
           <FieldOpForm config={node.data.config as ConfigOf<"field_op">} onChange={(config) => onChange({ config })} />
         )}

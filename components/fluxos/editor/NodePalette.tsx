@@ -20,6 +20,7 @@ const GRUPOS: Array<{ categoria: GrupoDaPaleta }> = [
   { categoria: "mensagem" },
   // Só a automação tem blocos nesta categoria (registro de nós).
   { categoria: "instagram" },
+  { categoria: "integracao" },
 ];
 
 // Rótulo em tabela de topo: a cerca de i18n resolve t(TABELA[chave]) e cobra o espanhol de cada valor.
@@ -30,6 +31,7 @@ const ROTULO_DO_GRUPO: Record<GrupoDaPaleta, string> = {
   controle: "Controle",
   mensagem: "Mensagens",
   instagram: "Instagram",
+  integracao: "Integrações",
 };
 
 interface Props {

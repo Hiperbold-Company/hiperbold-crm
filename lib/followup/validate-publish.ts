@@ -1,5 +1,15 @@
 import { campoSoLeitura } from '@/lib/automacoes/campos';
 import { GATILHO_TRAZ_CONTATO } from '@/lib/automacoes/schemas';
+import {
+  cabecalhoComSegredoEscrito,
+  cabecalhoProibido,
+  FRASE_DO_SEGREDO_ESCRITO,
+  corpoEhJsonValido,
+  metodoTemCorpo,
+  porNoCaminhoDoCorpo,
+  problemaDaUrl,
+  TENTATIVA_DE_SEGREDO,
+} from '@/lib/automacoes/http';
 import { nomeDoCampo } from '@/lib/automacoes/vocabulario';
 import type { FlowGraph, FlowEdge, FlowNode, NodeType } from './graph-schema';
 import type { FollowupFlowSurface, TriggerConfig } from './api-schemas';
@@ -99,6 +109,14 @@ export const PUBLISH_ERROR_CODES = [
   // Lote 6: a espera "até a data de um campo" aponta para um campo de data que
   // nenhum funil da organização tem (apagado, renomeado, de outra conta).
   'campo_de_data_inexistente',
+  // Bloco "Requisição HTTP" (lote 4): URL, cabeçalho, chave do cofre e corpo.
+  'http_url_invalida',
+  'http_segredo_na_url',
+  'http_segredo_no_texto',
+  'http_cabecalho_proibido',
+  'http_segredo_inexistente',
+  'http_corpo_no_get',
+  'http_corpo_invalido',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -180,7 +198,12 @@ export interface ContextoDoPublish {
    * (`surface = 'automacao'`, lidas filtrando a organização). Sem `existentes`,
    * só a conferência de "iniciar a si mesma" roda.
    */
-  automacao?: { pointerId: string; existentes?: ReadonlySet<string> };
+  automacao?: {
+    pointerId: string;
+    existentes?: ReadonlySet<string>;
+    /** Chaves do cofre DESTA organização entre as que os blocos "Requisição HTTP" citam. Ausente = não confere. */
+    segredosExistentes?: ReadonlySet<string>;
+  };
   /**
    * O gatilho que vai armar este fluxo. Só os AVISOS o leem — nenhuma recusa
    * depende dele —, e ausente significa "não há o que avisar sobre o gatilho".
@@ -518,6 +541,73 @@ function validarSomenteInterno(
   }
 }
 
+const FRASE_DA_URL: Record<NonNullable<ReturnType<typeof problemaDaUrl>>, string> = {
+  vazia: 'informe o endereço (URL) que a automação vai chamar.',
+  segredo_na_url: 'a chave secreta não pode ir no endereço (URL) — API key em URL vaza em log. Use um cabeçalho com a chave.',
+  invalida: 'o endereço (URL) não é válido. Escreva o endereço completo, como https://api.example.com/v1/recurso.',
+  https_obrigatorio: 'o endereço precisa começar com https://.',
+  credencial_na_url: 'o endereço não pode ter usuário e senha. Use um cabeçalho com a chave.',
+  variavel_no_dominio: 'o domínio do endereço não pode ter variável: escreva o domínio fixo e use variáveis só no caminho, depois da primeira /.',
+};
+
+/**
+ * Bloco "Requisição HTTP": a URL bem formada (https, sem chave, sem usuário e
+ * senha), nenhum cabeçalho proibido, nenhum `{{segredo...}}` em texto, corpo
+ * JSON válido (e só em método que leva corpo), a chave citada existe nesta
+ * organização e o campo de destino do mapeamento pode ser escrito.
+ */
+function validarRequisicoesHttp(
+  graph: FlowGraph,
+  errors: PublishValidationError[],
+  segredosExistentes?: ReadonlySet<string>,
+): void {
+  for (const n of [...graph.nodes].sort(byId)) {
+    if (n.type !== 'http_request') continue;
+    const c = n.config;
+    const erro = (code: PublishErrorCode, message: string) => errors.push({ node_id: n.id, code, message: `"${n.label}": ${message}` });
+    const url = problemaDaUrl(c.url);
+    if (url) erro(url === 'segredo_na_url' ? 'http_segredo_na_url' : 'http_url_invalida', FRASE_DA_URL[url]);
+    for (const h of c.headers) {
+      if (cabecalhoProibido(h.name)) {
+        erro('http_cabecalho_proibido', `o cabeçalho ${h.name} não pode ser definido pela automação.`);
+      }
+      if (h.kind === 'texto' && TENTATIVA_DE_SEGREDO.test(h.value)) {
+        erro('http_segredo_no_texto', `não escreva a chave no texto do cabeçalho ${h.name}: escolha "Chave secreta" e selecione a chave.`);
+      }
+      if (cabecalhoComSegredoEscrito(h)) {
+        erro('http_segredo_no_texto', `o cabeçalho ${h.name} leva credencial e o bloco é visível para toda a equipe. ${FRASE_DO_SEGREDO_ESCRITO}`);
+      }
+      if (h.kind === 'chave' && segredosExistentes && !segredosExistentes.has(h.secret_id)) {
+        erro('http_segredo_inexistente', `a chave secreta do cabeçalho ${h.name} não existe mais — escolha outra em Automações › Chaves secretas.`);
+      }
+    }
+    if (c.body !== undefined && c.body.trim() !== '') {
+      if (!metodoTemCorpo(c.method)) {
+        erro('http_corpo_no_get', 'requisição GET não leva corpo: troque o método ou apague o corpo.');
+      } else if (TENTATIVA_DE_SEGREDO.test(c.body)) {
+        erro('http_segredo_no_texto', 'não escreva a chave no corpo: escolha a chave em "Chave secreta no corpo".');
+      } else if (!corpoEhJsonValido(c.body)) {
+        erro('http_corpo_invalido', 'o corpo não é um JSON válido. Coloque cada variável entre aspas, como {"nome": "{{contact.name}}"}.');
+      }
+    }
+    for (const b of c.body_secrets ?? []) {
+      if (!metodoTemCorpo(c.method) || c.body === undefined || c.body.trim() === '') {
+        erro('http_corpo_invalido', 'a chave secreta do corpo precisa de um corpo JSON (e de um método que leve corpo).');
+      } else if (corpoEhJsonValido(c.body) && !porNoCaminhoDoCorpo(JSON.parse(c.body), b.path, '')) {
+        erro('http_corpo_invalido', `o corpo não tem o campo de texto ${b.path} para receber a chave secreta. Escreva-o, como {"token": ""}.`);
+      }
+      if (segredosExistentes && !segredosExistentes.has(b.secret_id)) {
+        erro('http_segredo_inexistente', 'a chave secreta do corpo não existe mais — escolha outra em Automações › Chaves secretas.');
+      }
+    }
+    for (const m of c.mappings) {
+      if (m.to && campoSoLeitura(m.to)) {
+        erro('campo_so_leitura', `${nomeDoCampo(m.to)} não pode ser alterado por automação.`);
+      }
+    }
+  }
+}
+
 /** Regras do roteiro de atendimento que o grafo sozinho não carrega. */
 function validarSuperficie(
   graph: FlowGraph,
@@ -537,7 +627,7 @@ function validarSuperficie(
             ? `A caixa "${n.label}" não é de roteiro de atendimento — use Pergunta, Skill e Fim.`
             : surface === 'automacao'
               ? `A caixa "${n.label}" não roda numa automação.`
-              : n.type === 'crm_action' || n.type === 'field_op' || n.type === 'message' || n.type === 'question' || TIPOS_DO_INSTAGRAM.has(n.type)
+              : n.type === 'crm_action' || n.type === 'field_op' || n.type === 'message' || n.type === 'question' || n.type === 'http_request' || TIPOS_DO_INSTAGRAM.has(n.type)
                 ? `A caixa "${n.label}" é de automação e não roda num follow-up.`
                 : `A caixa "${n.label}" é de roteiro de atendimento e não roda num follow-up.`,
       });
@@ -637,6 +727,7 @@ function validarSuperficie(
   if (surface === 'automacao') {
     validarBlocosDoInstagram(graph, errors);
     validarConversaNoDirect(graph, errors);
+    validarRequisicoesHttp(graph, errors, automacao?.segredosExistentes);
   }
   // Os gatilhos de uma AUTOMAÇÃO moram no nó Início (vários por fluxo); nos
   // follow-ups, em `pointer.trigger_config`, e o Início fica sem configuração.
@@ -774,6 +865,7 @@ export const CONTA_NO_TETO: Record<NodeType, boolean> = {
   crm_action: false, // efeito no CRM
   field_op: false, // grava campo
   instagram_check_follow: false, // consulta se segue
+  http_request: false, // chama outro sistema (não fala com o cliente)
 };
 
 function waitMs(config: Extract<FlowNode, { type: 'wait' }>['config']): number {

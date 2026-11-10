@@ -173,6 +173,7 @@ const TIPO_DO_NO: Record<FlowNode["type"], string> = {
   instagram_private_reply: "Responder em privado",
   instagram_public_reply: "Responder no comentário",
   instagram_check_follow: "Confere se segue",
+  http_request: "Requisição HTTP",
 };
 
 const DESFECHO: Record<string, string> = {
@@ -233,6 +234,15 @@ export const GATILHO_QUE_COMECOU = {
   case_opened: "caso aberto na Central",
   instagram_comment: "comentário no Instagram",
 } as const;
+
+/** O host da URL do bloco HTTP (sem caminho, sem query): é o que o resumo e o histórico mostram. */
+function hostDoModelo(url: string): string {
+  try {
+    return new URL(url.replace(/\{\{[^}]*\}\}/g, "x")).host || "outro sistema";
+  } catch {
+    return "outro sistema";
+  }
+}
 
 /** O rótulo do tipo, para o cabeçalho do passo. */
 export function tipoDoNo(tipo: FlowNode["type"]): string {
@@ -332,6 +342,8 @@ export function resumoDoNo(node: FlowNode, raia: RaiaDoEnrollment = "followup"):
       return { ...base, resumo: "responde em público, no próprio comentário" };
     case "instagram_check_follow":
       return { ...base, resumo: "confere se quem comentou segue o perfil" };
+    case "http_request":
+      return { ...base, resumo: `chama ${hostDoModelo(node.config.url)} (${node.config.method}) e guarda o que a resposta devolve` };
   }
 }
 
@@ -849,6 +861,25 @@ function fraseDoInicioDeOutra(d: Record<string, unknown>): string {
   }
 }
 
+/** "Chamou GET api.example.com/v1/x — respondeu 200 em 120 ms; guardou: utm_campaign". */
+function fraseDaRequisicao(d: Record<string, unknown>): string {
+  const host = texto(d.host);
+  const caminho = texto(d.caminho);
+  const destino = host ? `${host}${caminho && caminho !== "/" ? caminho : ""}` : "outro sistema";
+  const metodo = texto(d.metodo);
+  const chamada = `Chamou ${metodo ? `${metodo} ` : ""}${destino}`;
+  const status = typeof d.status === "number" ? d.status : null;
+  const duracao = typeof d.duracao_ms === "number" ? ` em ${Math.round(d.duracao_ms)} ms` : "";
+  const resposta = status !== null ? ` — respondeu ${status}${duracao}` : "";
+  // Na falha, o motivo já abre a linha do evento (`effect_failed`): aqui só o que foi chamado.
+  if (d.ok === false) return `${chamada}${resposta}`;
+  const campos = Array.isArray(d.campos) ? (d.campos as unknown[]).filter((x): x is string => typeof x === "string") : [];
+  const ausentes = Array.isArray(d.ausentes) ? (d.ausentes as unknown[]).filter((x): x is string => typeof x === "string") : [];
+  const guardou = campos.length > 0 ? `; guardou: ${campos.join(", ")}` : "";
+  const faltou = ausentes.length > 0 ? `; não veio na resposta: ${ausentes.join(", ")}` : "";
+  return `${chamada}${resposta}${guardou}${faltou}`;
+}
+
 /** O que cada ação do bloco fez, numa linha ("Adicionar tags: ok; Criar negócio: criado"). */
 function detalhesDoEfeito(p: Record<string, unknown>): string | null {
   const lista = Array.isArray(p.detalhes) ? (p.detalhes as Array<Record<string, unknown>>) : [];
@@ -880,6 +911,8 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
         if (d.ok === false) return `${frases.erro}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
         return frases[texto(d.resultado) ?? ""] ?? frases.feito ?? "feito";
       }
+      // Requisição HTTP: método, host, caminho, status e o que guardou — nunca a chave nem a resposta.
+      if (tipo === "http_request") return fraseDaRequisicao(d);
       const nome = tipo === "field_op" ? "Campos" : tipo ? (ACOES_DE_CRM[tipo as keyof typeof ACOES_DE_CRM] ?? tipo) : "Ação";
       if (d.ok === false) return `${nome}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
       if (tipo === "start_automation") return fraseDoInicioDeOutra(d);
