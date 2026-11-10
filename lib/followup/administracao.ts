@@ -39,6 +39,7 @@ import { audit } from "@/lib/audit";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { logger } from "@/lib/logger";
+import { camposDeDataDoNegocio } from "@/lib/leads/campos-do-funil";
 
 import { triggerConfigSchema, type FollowupFlowSurface } from "./api-schemas";
 import { carregaEtapasCitadas } from "./etapas-citadas";
@@ -698,6 +699,21 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
   // O gatilho entra só pelos AVISOS (`avisosDoGatilho`): nenhuma recusa depende dele, e um `trigger_config`
   // que não parseia não pode travar a publicação de um grafo válido — vira ausência, "nada a avisar".
   const gatilho = triggerConfigSchema.safeParse(pointer.trigger_config);
+  // Lote 6: a espera "até a data de um campo" cita a chave de um campo de data;
+  // só os funis DESTA organização dizem se ele existe.
+  let camposDeData: Set<string> | undefined;
+  if (graph.nodes.some((n) => n.type === "wait" && n.config.mode === "until_date_field")) {
+    const { data: funis, error: funisErr } = await admin
+      .from("crm_pipelines")
+      .select("settings")
+      .eq("organization_id", orgId);
+    if (funisErr) throw falhaInterna(deps, funisErr);
+    camposDeData = new Set(
+      (funis ?? []).flatMap((f) =>
+        camposDeDataDoNegocio((f as { settings?: Record<string, unknown> | null }).settings ?? null).map((c) => c.key),
+      ),
+    );
+  }
   const validation = validateFlowForPublish(graph, {
     etapas: citadas.etapas,
     surface,
@@ -705,6 +721,7 @@ export async function publicarFluxo(deps: DepsDeFollowup, id: string): Promise<u
     exigeModeloForaDaJanela,
     automacao,
     modelos: modelos.modelos,
+    ...(camposDeData ? { camposDeData } : {}),
     ...(gatilho.success ? { trigger: gatilho.data } : {}),
   });
   if (!validation.ok) {

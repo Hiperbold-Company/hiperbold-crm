@@ -132,7 +132,13 @@ export interface LiveEnrollmentRef {
 /** Automação parada num "Esperar um tempo": a mensagem do contato não a acorda
  *  nem a cancela. Follow-up e os outros modos seguem a política de sempre. */
 export function esperaDeTempoPuro(e: Pick<LiveEnrollmentRef, "lane" | "status" | "wait_mode">): boolean {
-  return e.lane === "automacao" && e.status === "active" && e.wait_mode === "delay";
+  // Lote 6: "até um dia e horário" e "até a data de um campo" também são tempo
+  // puro — a mensagem do contato não antecipa a hora marcada.
+  return (
+    e.lane === "automacao" &&
+    e.status === "active" &&
+    (e.wait_mode === "delay" || e.wait_mode === "until_time" || e.wait_mode === "until_date_field")
+  );
 }
 
 /** Interface estreita de DB (mesma doutrina de `AdminClient`/`TurnBridgeAdminClient`

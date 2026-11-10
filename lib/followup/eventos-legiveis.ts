@@ -39,7 +39,9 @@ import {
   nodeBranches,
   type FlowEdge,
   type FlowNode,
+  SEM_DATA_BRANCH_ID,
 } from "./graph-schema";
+import { fraseDaEsperaAteAData, fraseDaEsperaAteODia } from "@/lib/automacoes/plano-de-tempo";
 import {
   FRASE_DE_OUTROS_CASOS,
   RAMOS_RESERVADOS_EM_FRASE,
@@ -140,6 +142,12 @@ export interface NoDoDossie {
   rotulo: string;
   /** O que o nó faz, em uma linha, sem instrução de prompt. */
   resumo: string;
+  /**
+   * Lote 6: a espera é "até um dia e horário" ou "até a data de um campo" — o
+   * `wait_started` dela diz "Esperando até <dia e hora>" em vez de "Começou a
+   * esperar". Opcional: os dossiês já montados seguem iguais.
+   */
+  esperaAteODia?: boolean;
 }
 
 const TIPO_DO_NO: Record<FlowNode["type"], string> = {
@@ -245,8 +253,13 @@ export function resumoDoNo(node: FlowNode, raia: RaiaDoEnrollment = "followup"):
             : node.config.mode === "smart"
               ? `espera adaptativa, entre ${duracaoLegivel(node.config.min_ms)} e ${duracaoLegivel(node.config.max_ms)}`
               : node.config.mode === "delay"
-                ? `espera ${segundosLegiveis(node.config.duration_s)}`
-                : `espera o contato responder, por até ${duracaoLegivel(node.config.timeout_ms)}`,
+                ? `espera ${segundosLegiveis(node.config.duration_s)}${node.config.ate_o_horario ? " e só termina em horário comercial" : ""}`
+                : node.config.mode === "until_time"
+                  ? `espera ${fraseDaEsperaAteODia(node.config)}${node.config.ate_o_horario ? " e só termina em horário comercial" : ""}`
+                  : node.config.mode === "until_date_field"
+                    ? `espera ${fraseDaEsperaAteAData(node.config)}${node.config.ate_o_horario ? " e só termina em horário comercial" : ""}`
+                    : `espera o contato responder, por até ${duracaoLegivel(node.config.timeout_ms)}`,
+        ...(node.config.mode === "until_time" || node.config.mode === "until_date_field" ? { esperaAteODia: true } : {}),
       };
     case "condition":
       return {
@@ -480,6 +493,13 @@ export function descreveEvento(
     case "node_advanced":
       // Com `class`, o avanço É a classificação que o motor decidiu: a carência
       // do classificar venceu sem resposta. "Seguiu em frente" esconderia o porquê.
+      if (texto(p.class) === SEM_DATA_BRANCH_ID) {
+        return {
+          titulo: "A data do campo estava vazia ou já tinha passado",
+          detalhe: `foi por “Sem data” para ${refDoNo(texto(p.next_node_id), nos)}`,
+          ...motor,
+        };
+      }
       if (texto(p.class) === NO_REPLY_BRANCH_ID) {
         return {
           titulo: "O cliente não respondeu dentro do prazo",
@@ -490,6 +510,10 @@ export function descreveEvento(
       return { titulo: "Seguiu em frente", detalhe: `foi para ${refDoNo(texto(p.next_node_id), nos)}`, ...motor };
     case "wait_started": {
       const ate = quandoLegivel(p.next_eval_at, idioma);
+      // Lote 6: "Esperando até 11 de nov., 09:00" — o dia e a hora em que volta.
+      if (evento.node_id && nos[evento.node_id]?.esperaAteODia && ate) {
+        return { titulo: `Esperando até ${ate}`, detalhe: null, ...motor };
+      }
       const modo = texto(p.mode) === "smart" ? " (tempo escolhido pelo agente)" : "";
       return { titulo: "Começou a esperar", detalhe: ate ? `volta a olhar em ${ate}${modo}` : null, ...motor };
     }

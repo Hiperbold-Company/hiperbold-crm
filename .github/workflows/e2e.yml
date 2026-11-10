@@ -1363,6 +1363,7 @@ jobs:
         automacoes-crm-basico.spec.ts
         automacoes-botoes-e-pergunta.spec.ts
         automacoes-gatilhos.spec.ts
+        automacoes-espera-por-horario.spec.ts
         fluxo-de-atendimento.spec.ts
         qa-l12-funil.spec.ts
         i18n-espanhol-na-tela.spec.ts

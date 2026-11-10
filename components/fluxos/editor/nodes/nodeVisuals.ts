@@ -6,6 +6,9 @@ import type { FollowupFlowSurface } from "@/lib/followup/api-schemas";
 import type { FlowNode, NodeType } from "@/lib/followup/graph-schema";
 import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
 import { NOS_DA_SUPERFICIE } from "@/lib/followup/validate-publish";
+import { fraseDaEsperaAteAData, fraseDaEsperaAteODia } from "@/lib/automacoes/plano-de-tempo";
+
+const primeiraMaiuscula = (s: string) => s.charAt(0).toLocaleUpperCase("pt-BR") + s.slice(1);
 
 /**
  * Visual identity per node type — shared by the palette (Task 6.2 increment 2)
@@ -318,7 +321,13 @@ export function describeNodeConfig(
     }
     case "wait": {
       const c = config as ConfigOf<"wait">;
-      if (c.mode === "delay") return c.duration_s < 60 ? `${c.duration_s} s` : minutos(c.duration_s * 1000);
+      const soNoHorario = (texto: string, h: unknown) => (h ? `${texto} · ${t("só em horário comercial")}` : texto);
+      if (c.mode === "delay")
+        return soNoHorario(c.duration_s < 60 ? `${c.duration_s} s` : minutos(c.duration_s * 1000), c.ate_o_horario);
+      // Lote 6: a frase vem do plano de tempo (`Até amanhã, 09:00`).
+      if (c.mode === "until_time") return soNoHorario(primeiraMaiuscula(fraseDaEsperaAteODia(c)), c.ate_o_horario);
+      if (c.mode === "until_date_field")
+        return soNoHorario(primeiraMaiuscula(fraseDaEsperaAteAData(c)), c.ate_o_horario);
       if (c.mode === "until_reply") return `${t("Até responder")} · ${minutos(c.timeout_ms)}`;
       // O horário da espera aparece no card: sem isto, "1440 min" prometia o
       // toque à mesma hora do dia seguinte, e o motor o segura até a próxima abertura.

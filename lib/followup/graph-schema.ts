@@ -119,6 +119,12 @@ export const JA_RESPONDIDO_BRANCH_ID = 'ja_respondido';
 export const PRAZO_VENCIDO_BRANCH_ID = 'prazo_vencido';
 export const SEGUE_BRANCH_ID = 'segue';
 export const NAO_SEGUE_BRANCH_ID = 'nao_segue';
+/**
+ * Saída "Sem data" da espera "até a data de um campo do negócio" (lote 6): o
+ * campo está vazio, ilegível, ou a data já passou. Fora de `RESERVED_BRANCH_IDS`
+ * pelo mesmo motivo de `ERROR_BRANCH_ID`: a espera não tem ramo declarado.
+ */
+export const SEM_DATA_BRANCH_ID = 'sem_data';
 
 /** Branch ids the contract owns — a user-declared branch may not claim one. */
 export const RESERVED_BRANCH_IDS = [
@@ -219,7 +225,7 @@ export const waitConfigSchema = z
       guidance: z.string().max(500).optional(),
     }),
     /**
-     * Automação (lote 2): espera em SEGUNDOS, de 1 s a 90 dias. O relógio roda
+     * Automação (lote 2): espera em SEGUNDOS, de 1 s a 90 dias. (Lote 6: o laço rápido do worker, `lib/automacoes/runner.ts`, a retoma em ~5 s; sem worker, vale o que segue.) O relógio roda
      * de minuto em minuto, então uma espera curta termina no tick seguinte (em
      * até 1 minuto) — a execução não segue no mesmo tick. Só na superfície
      * `automacao` (`validate-publish.ts`); o mínimo de 5 min do `fixed` fica.
@@ -227,6 +233,38 @@ export const waitConfigSchema = z
     z.strictObject({
       mode: z.literal('delay'),
       duration_s: z.number().int().min(1).max(7_776_000),
+      /** Lote 6: só termina dentro do horário (dias + horas, fuso da organização). Opcional. */
+      ate_o_horario: horarioDaEsperaSchema.optional(),
+    }),
+    /**
+     * Automação (lote 6): espera "até um dia e horário" — hoje, amanhã, daqui a
+     * N dias ou o próximo <dia da semana>, às `time` (HH:MM) no fuso da
+     * organização. A conta e a regra de "já passou" moram em
+     * `lib/automacoes/plano-de-tempo.ts`. Frouxo como o horário da espera: o
+     * rascunho grava a cada clique, e quem exige hora válida e os campos de
+     * cada `when` é o publish (`hora_da_espera_invalida`).
+     */
+    z.strictObject({
+      mode: z.literal('until_time'),
+      when: z.enum(['today', 'tomorrow', 'in_days', 'next_weekday']),
+      days: z.number().int().min(1).max(365).optional(),
+      weekday: z.number().int().min(0).max(6).optional(),
+      time: z.string().max(5),
+      ate_o_horario: horarioDaEsperaSchema.optional(),
+    }),
+    /**
+     * Automação (lote 6): espera "até a data de um campo do negócio"
+     * (`crm_leads.custom_fields[field_key]`), `offset_days` depois dela
+     * (negativo = antes, 0 = no dia), às `time`. Data vazia, ilegível ou já
+     * passada sai por "Sem data" (`SEM_DATA_BRANCH_ID`). A data é lida uma vez,
+     * ao entrar na espera.
+     */
+    z.strictObject({
+      mode: z.literal('until_date_field'),
+      field_key: z.string().max(60),
+      offset_days: z.number().int().min(-3650).max(3650),
+      time: z.string().max(5),
+      ate_o_horario: horarioDaEsperaSchema.optional(),
     }),
     /**
      * Automação (lote 2): espera até o contato responder, com tempo limite de
@@ -255,6 +293,18 @@ export function duracaoMaximaDaEspera(config: WaitConfig): number {
       return config.duration_s * 1000;
     case 'until_reply':
       return config.timeout_ms;
+    // O teto de uma estadia: o dia mais distante que cada opção alcança (com a
+    // folga de um dia do horário), e para a data do campo o teto de 90 dias.
+    case 'until_time':
+      return config.when === 'today'
+        ? 86_400_000
+        : config.when === 'tomorrow'
+          ? 2 * 86_400_000
+          : config.when === 'in_days'
+            ? ((config.days ?? 1) + 1) * 86_400_000
+            : 8 * 86_400_000;
+    case 'until_date_field':
+      return 7_776_000_000;
   }
 }
 
@@ -269,6 +319,12 @@ export function duracaoMinimaDaEspera(config: WaitConfig): number {
       return config.duration_s * 1000;
     case 'until_reply':
       return config.timeout_ms;
+    // "Hoje" que já passou e a data do campo que já passou seguem na hora: não
+    // quebram ciclo. As outras esperam ao menos o próximo minuto do relógio.
+    case 'until_time':
+      return config.when === 'today' ? 0 : 60_000;
+    case 'until_date_field':
+      return 0;
   }
 }
 
@@ -542,6 +598,7 @@ export const novaConditionCheckSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.open_deal_in_pipeline }),
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.deal_exists }),
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.deal_status }),
+  z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.business_hours }),
 ]);
 export type NovaConditionCheck = z.infer<typeof novaConditionCheckSchema>;
 
@@ -1488,7 +1545,11 @@ export const RAMOS_POR_TIPO: { [K in NodeType]: RamosDe<K> } = {
 
   trigger: saidaUnica,
   wait: (node) =>
-    node.config.mode === 'until_reply' ? [ramoSemResposta(), fallbackBranch(RESPONDEU_LABEL)] : saidaUnica(),
+    node.config.mode === 'until_reply'
+      ? [ramoSemResposta(), fallbackBranch(RESPONDEU_LABEL)]
+      : node.config.mode === 'until_date_field'
+        ? [ramo(SEM_DATA_BRANCH_ID, 'Sem data'), fallbackBranch('Chegou a data')]
+        : saidaUnica(),
   collect: saidaUnica,
   skill: saidaUnica,
   action: saidaUnica,

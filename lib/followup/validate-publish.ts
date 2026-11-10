@@ -29,6 +29,7 @@ import { bytesDoTextoQueSai } from '../channels/opcoes-numeradas';
 import type { OutboundInteractive } from '../channels/types';
 import { CUSTO_NO_MOTOR, TETO_DE_PASSOS_DO_MOTOR } from './custo-no-motor';
 import { horarioDaEsperaValido } from './espera-no-horario';
+import { horaValida } from '../automacoes/plano-de-tempo';
 
 /**
  * Structural publish validator for follow-up flow graphs.
@@ -92,6 +93,12 @@ export const PUBLISH_ERROR_CODES = [
   // hora torta — o motor não teria como obedecer e terminaria a espera na
   // duração crua, calado (`espera-no-horario.ts` falha aberta).
   'horario_da_espera_invalido',
+  // Lote 6: a espera "até um dia e horário" / "até a data de um campo" com hora
+  // torta, sem o número de dias ou sem o dia da semana.
+  'hora_da_espera_invalida',
+  // Lote 6: a espera "até a data de um campo" aponta para um campo de data que
+  // nenhum funil da organização tem (apagado, renomeado, de outra conta).
+  'campo_de_data_inexistente',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -184,6 +191,11 @@ export interface ContextoDoPublish {
    * existem na organização (`carregaModelosCitados`). Ausente = não confere.
    */
   modelos?: ModelosDaConta;
+  /**
+   * Lote 6: as chaves dos campos de DATA do negócio em algum funil da
+   * organização (`camposDeDataDoNegocio`). Ausente = não confere.
+   */
+  camposDeData?: ReadonlySet<string>;
 }
 
 /** Chave do dicionário (a rota traduz): a frase não cita id, que a pessoa não lê. */
@@ -571,11 +583,17 @@ function validarSuperficie(
   // follow-ups não lê resposta assim nem tem o relógio para segundos.
   if (surface !== 'automacao') {
     for (const n of [...graph.nodes].sort(byId)) {
-      if (n.type === 'wait' && (n.config.mode === 'delay' || n.config.mode === 'until_reply')) {
+      if (
+        n.type === 'wait' &&
+        (n.config.mode === 'delay' ||
+          n.config.mode === 'until_reply' ||
+          n.config.mode === 'until_time' ||
+          n.config.mode === 'until_date_field')
+      ) {
         errors.push({
           node_id: n.id,
           code: 'espera_so_na_automacao',
-          message: `"${n.label}": espera em segundos e "até responder" só existem nas automações.`,
+          message: `"${n.label}": espera em segundos, "até responder", "até um dia e horário" e "até a data de um campo" só existem nas automações.`,
         });
       }
     }
@@ -1278,6 +1296,15 @@ function conferirRegras(
       ) {
         errors.push({ ...ancora, code: 'empty_check_value', message: `${regra} sem valor: preencha ou remova a regra.` });
       }
+      // "Está no horário?": um horário que não dá para obedecer responderia
+      // "Não" para sempre, calado.
+      if (check.kind === 'business_hours' && !horarioDaEsperaValido(check)) {
+        errors.push({
+          ...ancora,
+          code: 'horario_da_espera_invalido',
+          message: `${regra}: o horário precisa de pelo menos um dia e de um início antes do fim.`,
+        });
+      }
       return;
     }
     const valor = String(check.value).trim();
@@ -1492,14 +1519,60 @@ export function validateFlowForPublish(
   // dá para obedecer viraria "sem horário" no motor, e o toque sairia de
   // madrugada com a tela dizendo o contrário.
   for (const node of [...nodes].sort(byId)) {
-    if (node.type !== 'wait' || node.config.mode !== 'fixed') continue;
-    const horario = node.config.ate_o_horario;
+    if (node.type !== 'wait') continue;
+    const cfg = node.config;
+    if (cfg.mode === 'smart' || cfg.mode === 'until_reply') continue;
+    const horario = cfg.ate_o_horario;
     if (horario === undefined || horarioDaEsperaValido(horario)) continue;
     errors.push({
       node_id: node.id,
       code: 'horario_da_espera_invalido',
       message: `Nó "${node.id}": o horário da espera precisa de pelo menos um dia e de um início antes do fim.`,
     });
+  }
+
+  // Lote 6: o dia e a hora das esperas por horário. O rascunho aceita a hora em
+  // branco (o painel grava a cada clique); a publicação não — o motor seguiria
+  // na hora (ou sairia por "Sem data") sem ninguém ver por quê.
+  for (const node of [...nodes].sort(byId)) {
+    if (node.type !== 'wait') continue;
+    const cfg = node.config;
+    if (cfg.mode === 'until_time') {
+      const falta =
+        !horaValida(cfg.time)
+          ? 'escolha a hora (HH:MM)'
+          : cfg.when === 'in_days' && cfg.days === undefined
+            ? 'diga daqui a quantos dias'
+            : cfg.when === 'next_weekday' && cfg.weekday === undefined
+              ? 'escolha o dia da semana'
+              : null;
+      if (falta) {
+        errors.push({ node_id: node.id, code: 'hora_da_espera_invalida', message: `"${node.label}": ${falta}.` });
+      }
+    }
+    if (cfg.mode === 'until_date_field') {
+      const chave = cfg.field_key.trim();
+      if (chave === '') {
+        errors.push({
+          node_id: node.id,
+          code: 'campo_de_data_ausente',
+          message: `"${node.label}": escolha o campo do negócio que guarda a data.`,
+        });
+      } else if (contexto.camposDeData && !contexto.camposDeData.has(chave)) {
+        errors.push({
+          node_id: node.id,
+          code: 'campo_de_data_inexistente',
+          message: `"${node.label}": o campo de data escolhido não existe em nenhum funil — escolha outro.`,
+        });
+      }
+      if (!horaValida(cfg.time)) {
+        errors.push({
+          node_id: node.id,
+          code: 'hora_da_espera_invalida',
+          message: `"${node.label}": escolha a hora (HH:MM).`,
+        });
+      }
+    }
   }
 
   // Cobertura por ramo — SÓ no modo 'per_check'. É deliberado que o modo

@@ -1268,8 +1268,16 @@ async function processarUmPasso(
   // A espera com horário (`ate_o_horario`) também pergunta pelo relógio da
   // organização: "9h às 18h" sem fuso seria 9h às 18h em UTC — 6h às 15h em
   // São Paulo, e o toque sairia cedo demais, que é o que o horário impede.
+  // Lote 6: as esperas "até um dia e horário" e "até a data de um campo"
+  // contam o dia no relógio da organização, a espera em segundos pode ter
+  // horário, e a condição "Está no horário?" pergunta pela hora local.
   const temEsperaComHorario = graph.nodes.some(
-    (n) => n.type === "wait" && n.config.mode === "fixed" && n.config.ate_o_horario !== undefined,
+    (n) =>
+      (n.type === "wait" &&
+        (n.config.mode === "until_time" ||
+          n.config.mode === "until_date_field" ||
+          ((n.config.mode === "fixed" || n.config.mode === "delay") && n.config.ate_o_horario !== undefined))) ||
+      (n.type === "condition" && n.config.checks.some((c) => ehRegraNova(c) && c.kind === "business_hours")),
   );
   const fusoDaOrg =
     (temRegraDeData || temEsperaComHorario) && db.loadFusoDaOrganizacao
@@ -1731,7 +1739,17 @@ export async function runFollowupTick(deps: TickDeps, opts?: { limit?: number })
 }
 
 /** Production adapter: `AdminClient` backed by the real Supabase service-role client. */
-export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
+export function createSupabaseAdminClient(
+  admin: SupabaseClient,
+  /**
+   * Lote 6: `automacao` faz o claim só da raia das automações
+   * (`fn_claim_due_automacao_enrollments`, migration 1003) — o laço rápido do
+   * worker (`lib/automacoes/runner.ts`). Ausente = todas as raias, o de sempre.
+   * As duas funções escrevem o MESMO `claimed_until`: o lease é o que impede
+   * duas execuções do mesmo enrollment, venha o claim de onde vier.
+   */
+  opcoes: { claim?: "todas" | "automacao" } = {},
+): AdminClient {
   const revisions=new Map<string,number>();
   return {
     async assertServiceBoundary(enrollment) { if(!revisions.has(enrollment.id) && enrollment.revision!==undefined) revisions.set(enrollment.id,enrollment.revision); await assertServiceBoundarySupabase(admin, enrollment.service_boundary ?? null); },
@@ -1760,7 +1778,9 @@ export function createSupabaseAdminClient(admin: SupabaseClient): AdminClient {
       await assertAgendaEffectSupabase(admin,{organizationId:enrollment.organization_id,contactId:enrollment.contact_id,enrollmentId:enrollment.id,nodeId:enrollment.current_node_id,escolhaNoEnvio:escolha});
     },
     async claimDueEnrollments(limit, leaseSeconds) {
-      const { data, error } = await admin.rpc("fn_claim_due_followup_enrollments", {
+      const funcao =
+        opcoes.claim === "automacao" ? "fn_claim_due_automacao_enrollments" : "fn_claim_due_followup_enrollments";
+      const { data, error } = await admin.rpc(funcao, {
         p_limit: limit,
         p_lease_seconds: leaseSeconds,
       });

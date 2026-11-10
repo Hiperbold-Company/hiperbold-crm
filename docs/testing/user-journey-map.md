@@ -4321,3 +4321,24 @@ Fora desta rodada: gatilho "Entrou na etapa" e "Testar com um contato" pela tela
 Configurações › Etapas do funil: cada funil vira um acordeão (fechado quando há mais de um; abre pelo cabeçalho, por "Abrir todos" e por link `#etapas-<id>`/`#mapeamento-<id>`), e "Duplicar funil" copia etapas, motivos de perda e de ganho, campos do lead e o mapeamento do assistente para um funil novo com o nome escolhido. Negócios, automações e formulários não são copiados. Rota `POST /api/v1/pipelines/[id]/duplicate` (`lib/pipelines/duplicar.ts`). Spec: `tests/e2e/duplicar-funil.spec.ts` (job e2e, parte 3), com conferência no banco das etapas, motivos e campos da cópia.
 
 Evidência: `evidence/duplicar-funil/01-funis-fechados.png` (os funis fechados), `evidence/duplicar-funil/02-um-funil-aberto.png` (um aberto pelo cabeçalho), `evidence/duplicar-funil/03-aberto-pelo-hash.png` (aberto pelo link), `evidence/duplicar-funil/04-dialogo-origem-escolhida.png` (o diálogo de duplicar), `evidence/duplicar-funil/05-copia-pelo-topo-aberta.png` (a cópia aberta, igual à origem), `evidence/duplicar-funil/06-erro-nome-repetido.png` (o aviso de nome repetido) e `evidence/duplicar-funil/07-copia-pelo-card-aberta.png` (a cópia pelo botão do card).
+
+## J106 — Automação espera até um dia e horário e pergunta se está no horário `[P1]` (2026-11-10)
+
+Automações, lote 6 (migration 1003): esperas "até um dia e horário" e "até a data de
+um campo do negócio", "só no horário" nas esperas por tempo, condição "Está no
+horário?" e o laço rápido do worker (`AUTOMACAO_RUNNER_INTERVAL_MS`, 5 s). Spec:
+`tests/e2e/automacoes-espera-por-horario.spec.ts` (job e2e, parte 5). A evidência
+vai para `evidence/automacoes-lote6/` quando a spec rodar.
+
+| # | Caso | Expectativa | Resultado |
+|---|------|-------------|-----------|
+| J106.1 | Configurar "Esperar até amanhã, 09:00" pela tela | o card diz "Até amanhã, 09:00" | **não medido pela tela localmente** — CI `e2e` parte 5 |
+| J106.2 | Condição "Está no horário?" | início, fim e dias; a frase diz o horário | **não medido pela tela localmente** — CI `e2e` parte 5 |
+| J106.3 | Iniciar pelo "Testar com um contato" | a execução estaciona até amanhã 09:00 no fuso da organização; o dossiê diz "Esperando até …" | **não medido pela tela localmente** — CI `e2e` parte 5 |
+| J106.4 | Retomada | com o prazo vencido, o relógio leva pela condição e o contato ganha a tag | **não medido pela tela localmente** — CI `e2e` parte 5 |
+| J106.5 | Cálculo do dia e hora | fuso, horário de verão, virada de dia, domingo, "hoje já passou" | **PASS (unit)** — `lib/automacoes/plano-de-tempo.test.ts` |
+| J106.6 | Motor, condição, publish, reatividade | "Sem data", "só no horário", campo inexistente, hora em branco | **PASS (unit)** — `lib/automacoes/espera-por-horario.test.ts` |
+| J106.7 | Laço rápido sem dupla execução | o claim do laço só pega a raia automação; com o cron simultâneo, nenhuma execução sai duas vezes | **PASS (`test:db`)** — `tests/invariants/automacao-claim-do-laco-rapido.test.ts` |
+
+Não provado pela tela: "até a data de um campo" (coberto por unitários) e a espera de
+5 s retomando em ~5 s com o worker de pé (o e2e chama o relógio HTTP, não sobe o worker).

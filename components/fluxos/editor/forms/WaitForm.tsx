@@ -22,7 +22,9 @@ import { MODOS_DE_ESPERA, opcoes, type ModoDeEspera } from "@/lib/followup/vocab
 import type { HorarioDaEspera } from "@/lib/followup/espera-no-horario";
 import { useT } from "@/hooks/i18n/useT";
 
-import { Campo, Seletor, TempoComUnidade } from "./automacao/comum";
+import { Campo, Seletor, TempoComUnidade, useCamposPersonalizados } from "./automacao/comum";
+import { escopoDoCampo } from "@/lib/leads/campos-do-funil";
+import type { QuandoDaEspera } from "@/lib/automacoes/plano-de-tempo";
 import { HorarioDaEsperaEditor } from "./HorarioDaEsperaEditor";
 import { msToMin, minToMs, type ConfigOf } from "./shared";
 
@@ -33,6 +35,8 @@ const MODOS_DO_FOLLOWUP: ReadonlyArray<ModoDeEspera> = ["fixed", "smart"];
 const MODOS_DA_AUTOMACAO: Record<ModoDeEspera, string> = {
   delay: "Esperar um tempo",
   until_reply: "Esperar o contato responder",
+  until_time: "Esperar até um dia e horário",
+  until_date_field: "Esperar até a data de um campo do negócio",
   fixed: MODOS_DE_ESPERA.fixed,
   smart: MODOS_DE_ESPERA.smart,
 };
@@ -51,7 +55,30 @@ interface Estado {
   replyMs: number | null;
   /** O horário em que a espera fixa pode terminar (`ate_o_horario`); `null` = desligado. */
   horario: HorarioDaEspera | null;
+  /** Lote 6: "até um dia e horário". */
+  quando: QuandoDaEspera;
+  dias: number | null;
+  diaDaSemana: number;
+  hora: string;
+  /** Lote 6: "até a data de um campo". */
+  campo: string;
+  /** Quantos dias antes/depois da data (sempre ≥ 0; o sentido vem de `sentido`). */
+  deslocamento: number | null;
+  sentido: "antes" | "no_dia" | "depois";
 }
+
+const SENTIDOS = {
+  antes: "Dias antes da data",
+  no_dia: "No dia da data",
+  depois: "Dias depois da data",
+} as const;
+
+const QUANDO_ROTULOS: Record<QuandoDaEspera, string> = {
+  today: "Hoje",
+  tomorrow: "Amanhã",
+  in_days: "Daqui a alguns dias",
+  next_weekday: "No próximo dia da semana",
+};
 
 export function WaitForm({
   config,
@@ -77,7 +104,21 @@ export function WaitForm({
     guidance: config.mode === "smart" ? (config.guidance ?? "") : "",
     delayMs: config.mode === "delay" ? config.duration_s * 1000 : 60_000,
     replyMs: config.mode === "until_reply" ? config.timeout_ms : 86_400_000,
-    horario: config.mode === "fixed" ? (config.ate_o_horario ?? null) : null,
+    horario: config.mode === "smart" || config.mode === "until_reply" ? null : (config.ate_o_horario ?? null),
+    quando: config.mode === "until_time" ? config.when : "tomorrow",
+    dias: config.mode === "until_time" ? (config.days ?? 2) : 2,
+    diaDaSemana: config.mode === "until_time" ? (config.weekday ?? 1) : 1,
+    hora: config.mode === "until_time" || config.mode === "until_date_field" ? config.time : "09:00",
+    campo: config.mode === "until_date_field" ? config.field_key : "",
+    deslocamento: config.mode === "until_date_field" ? Math.abs(config.offset_days) : 1,
+    sentido:
+      config.mode === "until_date_field"
+        ? config.offset_days < 0
+          ? "antes"
+          : config.offset_days > 0
+            ? "depois"
+            : "no_dia"
+        : "no_dia",
   });
   const [error, setError] = useState<string | null>(null);
 
@@ -107,6 +148,19 @@ export function WaitForm({
       setError(t("O tempo limite vai de 1 minuto a 30 dias."));
       return;
     }
+    if (next.mode === "until_time" && next.quando === "in_days" && (next.dias === null || next.dias < 1 || next.dias > 365)) {
+      setError(t("Os dias vão de 1 a 365."));
+      return;
+    }
+    if (
+      next.mode === "until_date_field" &&
+      next.sentido !== "no_dia" &&
+      (next.deslocamento === null || next.deslocamento < 1 || next.deslocamento > 3650)
+    ) {
+      setError(t("Os dias vão de 1 a 3650."));
+      return;
+    }
+    const soNoHorario = next.horario ? { ate_o_horario: next.horario } : {};
     const candidate =
       next.mode === "fixed"
         ? {
@@ -123,8 +177,28 @@ export function WaitForm({
               ...(next.guidance.trim() ? { guidance: next.guidance } : {}),
             }
           : next.mode === "delay"
-            ? { mode: "delay" as const, duration_s: Math.round((next.delayMs ?? 0) / 1000) }
-            : { mode: "until_reply" as const, timeout_ms: next.replyMs ?? 0 };
+            ? { mode: "delay" as const, duration_s: Math.round((next.delayMs ?? 0) / 1000), ...soNoHorario }
+            : next.mode === "until_time"
+              ? {
+                  mode: "until_time" as const,
+                  when: next.quando,
+                  ...(next.quando === "in_days" ? { days: next.dias ?? 1 } : {}),
+                  ...(next.quando === "next_weekday" ? { weekday: next.diaDaSemana } : {}),
+                  time: next.hora,
+                  ...soNoHorario,
+                }
+              : next.mode === "until_date_field"
+                ? {
+                    mode: "until_date_field" as const,
+                    field_key: next.campo,
+                    offset_days:
+                      next.sentido === "no_dia"
+                        ? 0
+                        : (next.sentido === "antes" ? -1 : 1) * (next.deslocamento ?? 1),
+                    time: next.hora,
+                    ...soNoHorario,
+                  }
+                : { mode: "until_reply" as const, timeout_ms: next.replyMs ?? 0 };
     const parsed = waitConfigSchema.safeParse(candidate);
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? t("Configuração inválida."));
@@ -172,7 +246,7 @@ export function WaitForm({
         <Campo
           id="wait-delay"
           rotulo={t("Esperar por")}
-          ajuda={t("O relógio roda de minuto em minuto: uma espera curta termina em até 1 minuto.")}
+          ajuda={t("Uma espera curta costuma terminar em poucos segundos (no máximo em 1 minuto).")}
         >
           <TempoComUnidade
             id="wait-delay"
@@ -181,6 +255,93 @@ export function WaitForm({
             onChange={(ms) => commit({ delayMs: ms })}
           />
         </Campo>
+      )}
+
+      {mode === "until_time" && (
+        <>
+          <Campo
+            id="wait-quando"
+            rotulo={t("Até quando")}
+            ajuda={
+              estado.quando === "today"
+                ? t("Se já passou desse horário hoje, a automação segue na hora.")
+                : estado.quando === "next_weekday"
+                  ? t("Se hoje é o dia escolhido e o horário ainda não chegou, vale hoje.")
+                  : undefined
+            }
+          >
+            <Seletor
+              id="wait-quando"
+              valor={estado.quando}
+              opcoes={opcoes(QUANDO_ROTULOS).map(({ valor, rotulo }) => ({ valor, rotulo: t(rotulo) }))}
+              onChange={(v) => commit({ quando: v as QuandoDaEspera })}
+            />
+          </Campo>
+          {estado.quando === "in_days" && (
+            <Campo id="wait-dias" rotulo={t("Quantos dias")}>
+              <Input
+                id="wait-dias"
+                type="number"
+                min={1}
+                max={365}
+                value={estado.dias ?? ""}
+                onChange={(e) => commit({ dias: e.target.value === "" ? null : Number(e.target.value) })}
+              />
+            </Campo>
+          )}
+          {estado.quando === "next_weekday" && (
+            <Campo id="wait-dia-da-semana" rotulo={t("Dia da semana")}>
+              <Seletor
+                id="wait-dia-da-semana"
+                valor={String(estado.diaDaSemana)}
+                opcoes={DIAS_DA_SEMANA.map((rotulo, i) => ({ valor: String(i), rotulo: t(rotulo) }))}
+                onChange={(v) => commit({ diaDaSemana: Number(v) })}
+              />
+            </Campo>
+          )}
+        </>
+      )}
+
+      {mode === "until_date_field" && (
+        <>
+          <CampoDeDataDoNegocio valor={estado.campo} onChange={(campo) => commit({ campo })} />
+          <Campo
+            id="wait-sentido"
+            rotulo={t("Quando, em relação à data")}
+            ajuda={t('Se o campo estiver vazio ou a data já tiver passado, segue por "Sem data". A data é lida quando a espera começa.')}
+          >
+            <Seletor
+              id="wait-sentido"
+              valor={estado.sentido}
+              opcoes={opcoes(SENTIDOS).map(({ valor, rotulo }) => ({ valor, rotulo: t(rotulo) }))}
+              onChange={(v) => commit({ sentido: v as Estado["sentido"] })}
+            />
+          </Campo>
+          {estado.sentido !== "no_dia" && (
+            <Campo id="wait-deslocamento" rotulo={t("Quantos dias")}>
+              <Input
+                id="wait-deslocamento"
+                type="number"
+                min={1}
+                max={3650}
+                value={estado.deslocamento ?? ""}
+                onChange={(e) =>
+                  commit({ deslocamento: e.target.value === "" ? null : Number(e.target.value) })
+                }
+              />
+            </Campo>
+          )}
+        </>
+      )}
+
+      {(mode === "until_time" || mode === "until_date_field") && (
+        <Campo id="wait-hora" rotulo={t("Às (hora)")} ajuda={t("Vale o fuso da organização.")}>
+          <Input id="wait-hora" type="time" value={estado.hora} onChange={(e) => commit({ hora: e.target.value })} />
+        </Campo>
+      )}
+
+      {naAutomacao && (mode === "delay" || mode === "until_time" || mode === "until_date_field") && (
+        <HorarioDaEsperaEditor value={estado.horario} onChange={(h) => commit({ horario: h })} />
       )}
 
       {mode === "until_reply" && (
@@ -263,5 +424,32 @@ export function WaitForm({
         </p>
       )}
     </div>
+  );
+}
+
+/** Literais de propósito: o gate de tradução enxerga cada chave usada. */
+const DIAS_DA_SEMANA = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+
+/**
+ * O campo de DATA do negócio (lote 6). Componente à parte para que só a espera
+ * "até a data de um campo" peça a lista de campos dos funis.
+ */
+function CampoDeDataDoNegocio({ valor, onChange }: { valor: string; onChange: (chave: string) => void }) {
+  const t = useT();
+  const campos = useCamposPersonalizados().filter((c) => c.type === "date" && escopoDoCampo(c) === "negocio");
+  return (
+    <Campo
+      id="wait-campo-de-data"
+      rotulo={t("Campo de data do negócio")}
+      ajuda={campos.length === 0 ? t("Nenhum funil tem campo de data. Crie um nos campos do funil.") : undefined}
+    >
+      <Seletor
+        id="wait-campo-de-data"
+        valor={valor}
+        vazio={t("Escolha o campo")}
+        opcoes={campos.map((c) => ({ valor: c.key, rotulo: c.label ?? c.key }))}
+        onChange={onChange}
+      />
+    </Campo>
   );
 }

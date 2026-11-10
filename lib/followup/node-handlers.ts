@@ -20,6 +20,7 @@ import {
   NO_REPLY_BRANCH_ID,
   REPEAT_BODY_BRANCH_ID,
   REPEAT_DONE_BRANCH_ID,
+  SEM_DATA_BRANCH_ID,
   ehRegraNova,
   nodeBranches,
 } from "./graph-schema";
@@ -27,6 +28,7 @@ import type { ConditionCheck, FlowEdge, FlowNode, NodeType, ReplySaveTo } from "
 import { avaliarDataRelativa, ehOpDeData } from "./condicao-por-data";
 import { parseReplyCount } from "./parse-count";
 import { janelaDaEspera, primeiroInstanteNoHorario } from "./espera-no-horario";
+import { instanteAteODia, instanteDaDataDoCampo } from "@/lib/automacoes/plano-de-tempo";
 import { clampEspera, esperaPlanejadaDe, type EsperaAdaptativa } from "./timing-plan";
 import { fraseDeConfirmacao } from "./vocabulario";
 
@@ -537,7 +539,7 @@ function evaluateCheck(
   fatos?: FatosDaAutomacao,
 ): boolean {
   // Regra das automações: lê os fatos ao vivo do contato/negócio (`lib/automacoes/condicoes.ts`).
-  if (ehRegraNova(check)) return avaliarRegraNova(check, fatos);
+  if (ehRegraNova(check)) return avaliarRegraNova(check, fatos, { agora, fuso: lead.fuso });
   // A regra de data sai ANTES de tudo: ela não tem valor "atual" comparável
   // pelos operadores comuns, e `custom_fields` é jsonb — qualquer coisa pode
   // estar lá. Campo ausente ou ilegível responde `false`, nunca `true`.
@@ -930,11 +932,49 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
     // Automação: "até responder" é bloco de conversa; "em segundos" é o
     // `fixed` com outra unidade e sem piso de 5 min — sem acordar por resposta.
     if (node.config.mode === "until_reply") return decidirConversa(input);
-    if (node.config.mode === "delay") {
-      if (!waitElapsed) return { kind: "wait", next_eval_at: new Date(clock().getTime() + node.config.duration_s * 1000) };
+    // As esperas de TEMPO PURO da automação: em segundos, "até um dia e
+    // horário" e "até a data de um campo" (lote 6). Nenhuma acorda por
+    // resposta (`esperaDeTempoPuro` em reactivity.ts), e as três aceitam o
+    // "só no horário" (`ate_o_horario`), conferido na entrada e na saída como
+    // no `fixed`.
+    if (node.config.mode === "delay" || node.config.mode === "until_time" || node.config.mode === "until_date_field") {
+      const config = node.config;
+      const janela = janelaDaEspera(config.ate_o_horario, lead.fuso);
+      const agora = clock();
+      if (!waitElapsed) {
+        let fim: Date;
+        if (config.mode === "delay") {
+          fim = new Date(agora.getTime() + config.duration_s * 1000);
+        } else if (config.mode === "until_time") {
+          fim = instanteAteODia(config, agora, lead.fuso);
+        } else {
+          // A data é lida UMA vez, aqui na entrada: mudar o campo depois não
+          // move a espera em curso (ver `plano-de-tempo.ts`).
+          const valor =
+            input.fatos?.negocio?.custom_fields?.[config.field_key] ?? lead.custom_fields?.[config.field_key];
+          const alvo = instanteDaDataDoCampo(valor, config, lead.fuso);
+          if (alvo === null || alvo.getTime() <= agora.getTime()) {
+            // "Sem data": só pela saída dela. Sem aresta ligada, a execução
+            // termina — seguir pelo caminho de "Chegou a data" sem data nenhuma
+            // seria fazer o que a pessoa pediu para fazer NA data.
+            const semData = edges.find(
+              (e) => e.source === node.id && e.condition.type === "branch" && e.condition.branch_id === SEM_DATA_BRANCH_ID,
+            );
+            if (!semData) return { kind: "complete", outcome: null };
+            return { kind: "advance", next_node_id: semData.target, next_eval_at: agora, class: SEM_DATA_BRANCH_ID };
+          }
+          fim = alvo;
+        }
+        fim = primeiroInstanteNoHorario(fim, janela);
+        if (fim.getTime() > agora.getTime()) return { kind: "wait", next_eval_at: fim };
+        // "Hoje às 9h" depois das 9h (e dentro do horário): segue na hora.
+      } else {
+        const abertura = primeiroInstanteNoHorario(agora, janela);
+        if (abertura.getTime() > agora.getTime()) return { kind: "wait", next_eval_at: abertura };
+      }
       const edge = selectEdge(edges, node.id, { type: "always" });
       if (!edge) return { kind: "fail", error: `wait node "${node.id}" has no outbound edge after elapsing` };
-      return { kind: "advance", next_node_id: edge.target, next_eval_at: clock() };
+      return { kind: "advance", next_node_id: edge.target, next_eval_at: agora };
     }
     const config = node.config;
     // Resposta do lead corta a espera: o timer é teto (ninguém respondeu),

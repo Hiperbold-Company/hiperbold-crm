@@ -8,6 +8,7 @@
  * contato sem negócio não está "fora da etapa Y" — está fora do alcance da
  * pergunta, e a regra responde `false`.
  */
+import { janelaDaEspera, primeiroInstanteNoHorario, type HorarioDaEspera } from "@/lib/followup/espera-no-horario";
 import type { NovaConditionCheck } from "@/lib/followup/graph-schema";
 
 import type { FatosDaAutomacao } from "./fatos";
@@ -109,8 +110,43 @@ export function comparaCampo(
   }
 }
 
+/**
+ * "Está no horário?" (lote 6): `agora` está dentro dos dias e horas, no fuso da
+ * organização? A conta é a do horário da espera (`janelaDaEspera`, que delega a
+ * `lerJanelaDeAtendimento` + `msAteAJanelaAbrir`): três leitores de "aberto
+ * agora?" concordam por construção.
+ *
+ * Horário torto (fim antes do início, nenhum dia) responde `false`: o publish o
+ * recusa, e aqui não há "aberto" a afirmar. Diferente da espera, que falha
+ * ABERTA (termina na duração), a condição não tem lado neutro — e "Não" é o
+ * ramo que não presume que alguém está atendendo.
+ */
+export function estaNoHorario(
+  horario: HorarioDaEspera,
+  agora: Date,
+  fuso: string | null | undefined,
+): boolean {
+  const janela = janelaDaEspera(horario, fuso);
+  if (janela === null) return false;
+  return primeiroInstanteNoHorario(agora, janela).getTime() === agora.getTime();
+}
+
+/** O relógio que as regras de tempo leem: agora e o fuso da organização. */
+export interface RelogioDaRegra {
+  agora: Date;
+  fuso: string | null | undefined;
+}
+
 /** Avalia UMA regra nova contra os fatos. Sem fatos (motor de follow-up), nenhuma regra nova passa. */
-export function avaliarRegraNova(check: NovaConditionCheck, fatos: FatosDaAutomacao | undefined): boolean {
+export function avaliarRegraNova(
+  check: NovaConditionCheck,
+  fatos: FatosDaAutomacao | undefined,
+  relogio?: RelogioDaRegra,
+): boolean {
+  if (check.kind === "business_hours") {
+    if (!relogio) return false;
+    return estaNoHorario(check, relogio.agora, relogio.fuso);
+  }
   if (!fatos) return false;
   switch (check.kind) {
     case "field":

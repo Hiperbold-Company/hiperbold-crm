@@ -66,7 +66,7 @@ const BRASILEIRA = /^(\d{2})\/(\d{2})\/(\d{4})$/;
  * `Date` os "conserta" sozinho, e data corrigida por engano é pior que data
  * ausente.
  */
-function dataDoValor(valor: unknown): string | null {
+export function dataDoValor(valor: unknown): string | null {
   if (typeof valor !== "string") return null;
   const texto = valor.trim();
 

@@ -17893,6 +17893,46 @@ export type Database = {
         };
         Returns: string;
       };
+      fn_claim_due_automacao_enrollments: {
+        Args: { p_lease_seconds: number; p_limit: number };
+        Returns: {
+          agent_id: string | null;
+          appointment_id: string | null;
+          appointment_revision: number | null;
+          attempts: number;
+          cancel_reason: string | null;
+          claimed_until: string | null;
+          completed_at: string | null;
+          contact_id: string;
+          conversation_id: string | null;
+          current_node_id: string;
+          id: string;
+          lane: string;
+          last_error: string | null;
+          max_attempts: number;
+          next_eval_at: string | null;
+          organization_id: string;
+          origin_event_id: string | null;
+          outcome: string | null;
+          parent_enrollment_id: string | null;
+          pointer_id: string;
+          revision: number;
+          service_boundary: Json | null;
+          started_at: string;
+          status: string;
+          steps_taken: number;
+          timing_plan: Json | null;
+          updated_at: string;
+          vars: NonNullable<Json>;
+          version_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "followup_enrollments";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
       fn_claim_due_followup_enrollments: {
         Args: { p_lease_seconds: number; p_limit: number };
         Returns: {

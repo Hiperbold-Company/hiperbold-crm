@@ -132,6 +132,7 @@ export const REGRAS_NOVAS: Record<NovaConditionCheck["kind"], string> = {
   open_deal_in_pipeline: "Tem negócio aberto no funil",
   deal_exists: "Contato já tem negócio",
   deal_status: "Situação do negócio",
+  business_hours: "Está no horário?",
 };
 
 /** O nome do campo como a pessoa o lê. */
@@ -151,6 +152,9 @@ export function nomeDoCampo(ref: FieldRef): string {
 }
 
 const aspas = (v: unknown) => `“${String(v)}”`;
+
+/** Dias da semana abreviados, domingo = 0 (a régua do horário da espera). */
+const DIAS_CURTOS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
 
 /** A regra inteira em uma frase. */
 export function fraseDaRegraNova(check: NovaConditionCheck, nomes: NomesDaAutomacao = {}): string {
@@ -177,6 +181,14 @@ export function fraseDaRegraNova(check: NovaConditionCheck, nomes: NomesDaAutoma
       return "O contato já tem algum negócio";
     case "deal_status":
       return `O negócio está ${check.status === "open" ? "em aberto" : check.status === "won" ? "ganho" : "perdido"}`;
+    case "business_hours": {
+      const dias = [...check.weekdays]
+        .sort((a, b) => a - b)
+        .map((d) => DIAS_CURTOS[d] ?? "")
+        .filter(Boolean)
+        .join(", ");
+      return `Agora está entre ${check.start || "--:--"} e ${check.end || "--:--"}${dias ? ` (${dias})` : ""}, no fuso da organização`;
+    }
   }
 }
 

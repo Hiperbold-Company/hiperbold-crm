@@ -189,6 +189,11 @@ const envSchema = z.object({
   EVENT_LOG_DRAIN_IDLE_MAX_LISTENING_MS: z.coerce.number().int().positive().default(300_000),
   EVENT_LOG_DRAIN_STALE_SWEEP_LISTENING_MS: z.coerce.number().int().positive().default(300_000),
   EVENT_LOG_DRAIN_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+  // Lote 6 das Automações: o laço rápido que anda só a raia `automacao`
+  // (`lib/automacoes/runner.ts`) — uma espera de 5 s retoma em ~5 s com o
+  // worker de pé. O cron `followup-flow-worker` (1×/min) segue como piso.
+  // 0 = desligado.
+  AUTOMACAO_RUNNER_INTERVAL_MS: z.coerce.number().int().min(0).default(5_000),
   // Coalescência de rajada inbound: mensagens do MESMO contato dentro desta
   // janela viram UM job (responder em rajada é gatilho de ban). 0 = sem debounce.
   INBOUND_DEBOUNCE_MS: z.coerce.number().int().min(0).default(8_000),
