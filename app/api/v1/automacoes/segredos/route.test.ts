@@ -18,7 +18,9 @@ const deps = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api/auth-dual-admin", async () => {
-  const real = await vi.importActual<typeof import("@/lib/api/auth-dual-admin")>("@/lib/api/auth-dual-admin");
+  const real = await vi.importActual<typeof import("@/lib/api/auth-dual-admin")>(
+    "@/lib/api/auth-dual-admin",
+  );
   return { ...real, autorizarAdministracao: deps.autorizar };
 });
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: deps.suporte }));
@@ -44,16 +46,26 @@ function banco() {
     let valores: Linha | null = null;
     // Como o PostgREST: só as colunas pedidas voltam.
     let colunas: string[] | null = null;
-    const projetar = (l: Linha) => (colunas ? Object.fromEntries(colunas.map((c) => [c, l[c]])) : l);
-    const casa = (l: Linha) => filtros.every(([c, v]) => l[c] === v) && (!lista || lista[1].includes(l[lista[0]]));
+    const projetar = (l: Linha) =>
+      colunas ? Object.fromEntries(colunas.map((c) => [c, l[c]])) : l;
+    const casa = (l: Linha) =>
+      filtros.every(([c, v]) => l[c] === v) && (!lista || lista[1].includes(l[lista[0]]));
     const rodar = () => {
       consultas += 1;
       const t = (tabelas[tabela] ??= []);
       if (op === "insert") {
-        if (t.some((l) => l.organization_id === valores!.organization_id && l.nome === valores!.nome)) {
+        if (
+          t.some((l) => l.organization_id === valores!.organization_id && l.nome === valores!.nome)
+        ) {
           return { data: null, error: { code: "23505" } };
         }
-        const nova = { id: `bbbbbbbb-0000-4000-8000-00000000000${t.length + 1}`, created_at: "x", updated_at: "x", last_used_at: null, ...valores };
+        const nova = {
+          id: `bbbbbbbb-0000-4000-8000-00000000000${t.length + 1}`,
+          created_at: "x",
+          updated_at: "x",
+          last_used_at: null,
+          ...valores,
+        };
         t.push(nova);
         return { data: [projetar(nova)], error: null };
       }
@@ -63,7 +75,10 @@ function banco() {
       return { data: achadas.map(projetar), error: null };
     };
     const q = {
-      select: (c?: string) => ((colunas = c && c !== "*" ? c.split(",").map((x) => x.trim()) : null), q),
+      select: (c?: string) => (
+        (colunas = c && c !== "*" ? c.split(",").map((x) => x.trim()) : null),
+        q
+      ),
       insert: (v: Linha) => ((op = "insert"), (valores = v), q),
       update: (v: Linha) => ((op = "update"), (valores = v), q),
       delete: () => ((op = "delete"), q),
@@ -79,14 +94,17 @@ function banco() {
         const r = rodar();
         return { data: r.data?.[0] ?? null, error: r.error };
       },
-      then: (ok: (v: unknown) => unknown, erro: (e: unknown) => unknown) => Promise.resolve(rodar()).then(ok, erro),
+      then: (ok: (v: unknown) => unknown, erro: (e: unknown) => unknown) =>
+        Promise.resolve(rodar()).then(ok, erro),
     };
     return q;
   }
   return {
     from: builder,
     rpc: async (nome: string, args: { plaintext?: string }) =>
-      nome === "fn_encrypt_oauth" ? { data: `\\xcifra(${args.plaintext!.length})`, error: null } : { data: null, error: null },
+      nome === "fn_encrypt_oauth"
+        ? { data: `\\xcifra(${args.plaintext!.length})`, error: null }
+        : { data: null, error: null },
   };
 }
 
@@ -125,19 +143,28 @@ describe("cofre de chaves: quem pode", () => {
     expect((await POST(req("POST", { nome: "token_meta", valor: VALOR }))).status).toBe(403);
     expect((await GET(req("GET"))).status).toBe(403);
     expect(consultas).toBe(0);
-    expect(deps.autorizar).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ role: "manager" }));
+    expect(deps.autorizar).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ role: "manager" }),
+    );
   });
 
   it("suporte em modo leitura: 403 antes de qualquer efeito", async () => {
     deps.suporte.mockResolvedValue(new Response(null, { status: 403 }));
     expect((await POST(req("POST", { nome: "token_meta", valor: VALOR }))).status).toBe(403);
-    expect((await DELETE(req("DELETE"), ctx("bbbbbbbb-0000-4000-8000-000000000001"))).status).toBe(403);
+    expect((await DELETE(req("DELETE"), ctx("bbbbbbbb-0000-4000-8000-000000000001"))).status).toBe(
+      403,
+    );
     expect(consultas).toBe(0);
     expect(deps.autorizar).not.toHaveBeenCalled();
   });
 
   it("token dsk_ é recusado: chave secreta só pela tela", async () => {
-    deps.autorizar.mockResolvedValue({ ...sessao(), via: "token", actor: { type: "api_token", id: "t1" } });
+    deps.autorizar.mockResolvedValue({
+      ...sessao(),
+      via: "token",
+      actor: { type: "api_token", id: "t1" },
+    });
     expect((await POST(req("POST", { nome: "token_meta", valor: VALOR }))).status).toBe(403);
     expect(consultas).toBe(0);
   });
@@ -150,9 +177,14 @@ describe("cofre de chaves: o valor nunca volta", () => {
     const corpo = await r.text();
     expect(corpo).not.toContain(VALOR);
     expect(JSON.parse(corpo).data).toMatchObject({ nome: "token_meta", ultimos4: "9876" });
-    expect(tabelas.automacao_segredos![0]).toMatchObject({ organization_id: ORG, valor_cifrado: `\\xcifra(${VALOR.length})` });
+    expect(tabelas.automacao_segredos![0]).toMatchObject({
+      organization_id: ORG,
+      valor_cifrado: `\\xcifra(${VALOR.length})`,
+    });
     expect(JSON.stringify(deps.audit.mock.calls)).not.toContain(VALOR);
-    expect(deps.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "automacao.chave_criada", organizationId: ORG }));
+    expect(deps.audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "automacao.chave_criada", organizationId: ORG }),
+    );
 
     const lista = await (await GET(req("GET"))).text();
     expect(lista).not.toContain(VALOR);
@@ -173,7 +205,9 @@ describe("cofre de chaves: o valor nunca volta", () => {
     expect(JSON.parse(await r.text()).data.ultimos4).toBe("");
     expect(tabelas.automacao_segredos![0]!.ultimos4).toBe("");
     await POST(req("POST", { nome: "token_longo", valor: VALOR }));
-    const metadados = deps.audit.mock.calls.map((c: unknown[]) => (c[0] as { metadata?: Record<string, unknown> }).metadata);
+    const metadados = deps.audit.mock.calls.map(
+      (c: unknown[]) => (c[0] as { metadata?: Record<string, unknown> }).metadata,
+    );
     expect(metadados.length).toBeGreaterThan(0);
     for (const m of metadados) expect(m).not.toHaveProperty("ultimos4");
     expect(JSON.stringify(deps.audit.mock.calls)).not.toContain(VALOR.slice(-4));
@@ -192,8 +226,12 @@ describe("cofre de chaves: o valor nunca volta", () => {
 
   it("Idempotency-Key: a retentativa não cria duas chaves", async () => {
     const chave = "cccccccc-0000-4000-8000-000000000001";
-    const a = await POST(req("POST", { nome: "token_meta", valor: VALOR }, { "Idempotency-Key": chave }));
-    const b = await POST(req("POST", { nome: "token_meta", valor: VALOR }, { "Idempotency-Key": chave }));
+    const a = await POST(
+      req("POST", { nome: "token_meta", valor: VALOR }, { "Idempotency-Key": chave }),
+    );
+    const b = await POST(
+      req("POST", { nome: "token_meta", valor: VALOR }, { "Idempotency-Key": chave }),
+    );
     expect(a.status).toBe(201);
     expect(b.status).toBe(201);
     expect(tabelas.automacao_segredos).toHaveLength(1);
@@ -217,13 +255,29 @@ describe("cofre de chaves: apagar", () => {
     await POST(req("POST", { nome: "token_meta", valor: VALOR }));
     const id = tabelas.automacao_segredos![0]!.id as string;
     tabelas.followup_flow_pointers = [
-      { id: "p1", name: "Rastrear anúncio", organization_id: ORG, surface: "automacao", status: "active", active_version_id: "v1" },
+      {
+        id: "p1",
+        name: "Rastrear anúncio",
+        organization_id: ORG,
+        surface: "automacao",
+        status: "active",
+        active_version_id: "v1",
+      },
     ];
     tabelas.followup_flow_versions = [
       {
         id: "v1",
         organization_id: ORG,
-        graph: { nodes: [{ type: "http_request", config: { headers: [{ kind: "chave", name: "Authorization", secret_id: id, prefix: "" }] } }] },
+        graph: {
+          nodes: [
+            {
+              type: "http_request",
+              config: {
+                headers: [{ kind: "chave", name: "Authorization", secret_id: id, prefix: "" }],
+              },
+            },
+          ],
+        },
       },
     ];
     const r = await DELETE(req("DELETE"), ctx(id));
@@ -240,6 +294,8 @@ describe("cofre de chaves: apagar", () => {
     const r = await DELETE(req("DELETE"), ctx(id));
     expect(r.status).toBe(200);
     expect(tabelas.automacao_segredos).toHaveLength(0);
-    expect(deps.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "automacao.chave_apagada" }));
+    expect(deps.audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "automacao.chave_apagada" }),
+    );
   });
 });

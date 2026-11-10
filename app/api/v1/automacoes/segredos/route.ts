@@ -37,7 +37,9 @@ export async function GET(req: NextRequest): Promise<Response> {
     const lista = await listarSegredos(createAdminClient(), p.org);
     return ok(lista, { requestId: p.requestId });
   } catch {
-    return fail("internal_error", p.t("Não consegui ler as chaves."), 500, { requestId: p.requestId });
+    return fail("internal_error", p.t("Não consegui ler as chaves."), 500, {
+      requestId: p.requestId,
+    });
   }
 }
 
@@ -54,7 +56,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     // Sem `details`: o Zod repetiria o valor recusado — e o valor é a chave.
     return fail(
       "validation_failed",
-      t("Dê um nome (letras minúsculas, números e _) e cole a chave inteira, sem espaços (mínimo de 8 caracteres)."),
+      t(
+        "Dê um nome (letras minúsculas, números e _) e cole a chave inteira, sem espaços (mínimo de 8 caracteres).",
+      ),
       400,
       { requestId },
     );
@@ -65,12 +69,23 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   const admin = createAdminClient();
-  type Saida = { ok: true; segredo: SegredoVisivel } | { ok: false; status: number; code: string; mensagem: string };
+  type Saida =
+    | { ok: true; segredo: SegredoVisivel }
+    | { ok: false; status: number; code: string; mensagem: string };
   const executar = async (): Promise<{ resposta: Saida; status: number }> => {
-    const r = await criarSegredo(admin, { org, nome: corpo.data.nome, valor: corpo.data.valor, atorId: p.atorId });
+    const r = await criarSegredo(admin, {
+      org,
+      nome: corpo.data.nome,
+      valor: corpo.data.valor,
+      atorId: p.atorId,
+    });
     if (!r.ok) {
       const mapa = {
-        nome_em_uso: { status: 409, code: "segredo_nome_em_uso", mensagem: t("Já existe uma chave com este nome.") },
+        nome_em_uso: {
+          status: 409,
+          code: "segredo_nome_em_uso",
+          mensagem: t("Já existe uma chave com este nome."),
+        },
         cifra_indisponivel: {
           status: 500,
           code: "internal_error",
@@ -95,7 +110,9 @@ export async function POST(req: NextRequest): Promise<Response> {
   };
 
   const responder = (s: Saida) =>
-    s.ok ? ok(s.segredo, { status: 201, requestId }) : fail(s.code, s.mensagem, s.status, { requestId });
+    s.ok
+      ? ok(s.segredo, { status: 201, requestId })
+      : fail(s.code, s.mensagem, s.status, { requestId });
 
   if (chave === null) return responder((await executar()).resposta);
   const desfecho = await comIdempotencia<Saida>({
@@ -106,16 +123,29 @@ export async function POST(req: NextRequest): Promise<Response> {
     chave,
     ator: p.atorId ?? "desconhecido",
     // O recibo guarda só o hash do corpo; ainda assim entra o SHA-256 do valor, nunca o valor.
-    corpo: { nome: corpo.data.nome, valor_sha256: createHash("sha256").update(corpo.data.valor).digest("hex") },
+    corpo: {
+      nome: corpo.data.nome,
+      valor_sha256: createHash("sha256").update(corpo.data.valor).digest("hex"),
+    },
     executar,
   });
   if (desfecho.tipo === "conflito") {
-    return fail("idempotency_conflict", t("Esta chave de idempotência já foi usada com outro conteúdo."), 409, { requestId });
+    return fail(
+      "idempotency_conflict",
+      t("Esta chave de idempotência já foi usada com outro conteúdo."),
+      409,
+      { requestId },
+    );
   }
   if (desfecho.tipo === "em_curso") {
-    return fail("idempotency_in_progress", t("A mesma requisição ainda está em curso. Tente de novo em instantes."), 409, {
-      requestId,
-    });
+    return fail(
+      "idempotency_in_progress",
+      t("A mesma requisição ainda está em curso. Tente de novo em instantes."),
+      409,
+      {
+        requestId,
+      },
+    );
   }
   return responder(desfecho.resposta);
 }

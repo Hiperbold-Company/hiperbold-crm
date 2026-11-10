@@ -413,14 +413,38 @@ describe("publicação", () => {
             position: { x: 0, y: 3 },
             config: { combinator: "and", checks: [{ kind: "business_hours", ...COMERCIAL }] },
           },
-          { id: "fim", type: "end", label: "Fim", position: { x: 0, y: 4 }, config: { outcome: "converted" } },
+          {
+            id: "fim",
+            type: "end",
+            label: "Fim",
+            position: { x: 0, y: 4 },
+            config: { outcome: "converted" },
+          },
         ],
         edges: [
-          { id: "e1", source: "inicio", target: "espera", priority: 0, condition: { type: "always" } },
+          {
+            id: "e1",
+            source: "inicio",
+            target: "espera",
+            priority: 0,
+            condition: { type: "always" },
+          },
           { id: "e2", source: "espera", target: "msg", priority: 0, condition: { type: "always" } },
           { id: "e3", source: "msg", target: "rep", priority: 0, condition: { type: "always" } },
-          { id: "e4", source: "rep", target: "espera", priority: 0, condition: { type: "cond_result", value: true } },
-          { id: "e5", source: "rep", target: "fim", priority: 1, condition: { type: "cond_result", value: false } },
+          {
+            id: "e4",
+            source: "rep",
+            target: "espera",
+            priority: 0,
+            condition: { type: "cond_result", value: true },
+          },
+          {
+            id: "e5",
+            source: "rep",
+            target: "fim",
+            priority: 1,
+            condition: { type: "cond_result", value: false },
+          },
         ],
       });
 
@@ -454,14 +478,18 @@ describe("publicação", () => {
     it("a conta confere com o plano de tempo: no instante do horário, 'próxima segunda' vai a +7 dias e 'amanhã' nunca é hoje", () => {
       // Segunda 09/11/2026 09:00 em SP = 12:00Z. Acordou agora e voltou à espera.
       const acordou = new Date("2026-11-09T12:00:00.000Z");
-      const proxima = instanteAteODia({ when: "next_weekday", weekday: 1, time: "09:00" }, acordou, SP);
+      const proxima = instanteAteODia(
+        { when: "next_weekday", weekday: 1, time: "09:00" },
+        acordou,
+        SP,
+      );
       expect(proxima.getTime() - acordou.getTime()).toBe(7 * 86_400_000);
       const amanha = instanteAteODia({ when: "tomorrow", time: "09:00" }, acordou, SP);
       expect(amanha.getTime() - acordou.getTime()).toBe(86_400_000);
       const piso = (c: Parameters<typeof duracaoMinimaDaEspera>[0]) => duracaoMinimaDaEspera(c);
-      expect(piso({ mode: "until_time", when: "next_weekday", weekday: 1, time: "09:00" })).toBeLessThanOrEqual(
-        proxima.getTime() - acordou.getTime(),
-      );
+      expect(
+        piso({ mode: "until_time", when: "next_weekday", weekday: 1, time: "09:00" }),
+      ).toBeLessThanOrEqual(proxima.getTime() - acordou.getTime());
       expect(piso({ mode: "until_time", when: "tomorrow", time: "09:00" })).toBeLessThanOrEqual(
         amanha.getTime() - acordou.getTime(),
       );
@@ -513,7 +541,12 @@ describe("reatividade e textos", () => {
   });
 
   it("terminar sem data (saída sem ligação) diz qual campo faltava", () => {
-    const no = espera({ mode: "until_date_field", field_key: "visita", offset_days: -1, time: "09:00" });
+    const no = espera({
+      mode: "until_date_field",
+      field_key: "visita",
+      offset_days: -1,
+      time: "09:00",
+    });
     const resumo = resumoDoNo(no, "automacao");
     const linha = descreveEvento(
       {

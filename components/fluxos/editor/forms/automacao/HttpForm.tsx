@@ -44,7 +44,8 @@ const FRASE_DA_URL: Record<NonNullable<ReturnType<typeof problemaDaUrl>>, string
   invalida: "Escreva o endereço completo, como https://api.example.com/v1/recurso.",
   https_obrigatorio: "O endereço precisa começar com https://.",
   credencial_na_url: "O endereço não pode ter usuário e senha. Use um cabeçalho com a chave.",
-  variavel_no_dominio: "O domínio não pode ter variável. Escreva o domínio fixo e use variáveis só depois da primeira /.",
+  variavel_no_dominio:
+    "O domínio não pode ter variável. Escreva o domínio fixo e use variáveis só depois da primeira /.",
 };
 
 const LINK_DO_COFRE = "/app/automacoes/chaves";
@@ -62,7 +63,11 @@ export function HttpForm({
   const { data: segredos } = useSegredos();
   const problema = problemaDaUrl(config.url);
   const temCorpo = metodoTemCorpo(config.method);
-  const corpoInvalido = temCorpo && config.body !== undefined && config.body.trim() !== "" && !corpoEhJsonValido(config.body);
+  const corpoInvalido =
+    temCorpo &&
+    config.body !== undefined &&
+    config.body.trim() !== "" &&
+    !corpoEhJsonValido(config.body);
 
   const cabecalhosNoLimite = config.headers.length >= MAX_CABECALHOS;
   const mapeamentosNoLimite = config.mappings.length >= MAX_MAPEAMENTOS;
@@ -71,14 +76,24 @@ export function HttpForm({
     mudar({ headers: config.headers.map((x, j) => (j === i ? h : x)) });
   const cofreVazio = (segredos ?? []).length === 0;
   const segredoNoCorpo = config.body_secrets?.[0];
-  const opcoesDoCofre = (segredos ?? []).map((s) => ({ valor: s.id, rotulo: `${s.nome} (${MASCARA}${s.ultimos4})` }));
+  const opcoesDoCofre = (segredos ?? []).map((s) => ({
+    valor: s.id,
+    rotulo: `${s.nome} (${MASCARA}${s.ultimos4})`,
+  }));
   // Nome que leva credencial (Authorization, X-Api-Key, *-Token...): o valor
   // escrito ficaria legível para toda a equipe no grafo. Vira "Chave secreta".
   const mudarNomeDoCabecalho = (i: number, h: CabecalhoHttp, nome: string) =>
     mudarCabecalho(
       i,
-      h.kind === "texto" && cabecalhoSensivel(nome) && cabecalhoComSegredoEscrito({ ...h, name: nome, value: h.value || "x" })
-        ? { kind: "chave", name: nome, secret_id: segredos?.[0]?.id ?? "", prefix: nome.toLowerCase() === "authorization" ? "Bearer " : "" }
+      h.kind === "texto" &&
+        cabecalhoSensivel(nome) &&
+        cabecalhoComSegredoEscrito({ ...h, name: nome, value: h.value || "x" })
+        ? {
+            kind: "chave",
+            name: nome,
+            secret_id: segredos?.[0]?.id ?? "",
+            prefix: nome.toLowerCase() === "authorization" ? "Bearer " : "",
+          }
         : { ...h, name: nome },
     );
   const mudarMapeamento = (i: number, m: MapeamentoHttp) =>
@@ -103,7 +118,9 @@ export function HttpForm({
       <Campo
         id="http-url"
         rotulo={t("Endereço (URL)")}
-        ajuda={t("Aceita variáveis, como https://api.example.com/clientes/{{campo.codigo}}. Endereços internos do servidor são bloqueados.")}
+        ajuda={t(
+          "Aceita variáveis, como https://api.example.com/clientes/{{campo.codigo}}. Endereços internos do servidor são bloqueados.",
+        )}
       >
         <Input
           id="http-url"
@@ -122,7 +139,11 @@ export function HttpForm({
       <div className="space-y-2">
         <p className="text-sm font-medium">{t("Cabeçalhos")}</p>
         {config.headers.map((h, i) => (
-          <div key={i} className="space-y-2 rounded-md border border-border p-2" data-testid={`http-cabecalho-${i}`}>
+          <div
+            key={i}
+            className="space-y-2 rounded-md border border-border p-2"
+            data-testid={`http-cabecalho-${i}`}
+          >
             <div className="flex gap-2">
               <Input
                 aria-label={t("Nome do cabeçalho")}
@@ -142,7 +163,12 @@ export function HttpForm({
                   mudarCabecalho(
                     i,
                     v === "chave"
-                      ? { kind: "chave", name: h.name, secret_id: segredos?.[0]?.id ?? "", prefix: "Bearer " }
+                      ? {
+                          kind: "chave",
+                          name: h.name,
+                          secret_id: segredos?.[0]?.id ?? "",
+                          prefix: "Bearer ",
+                        }
                       : { kind: "texto", name: h.name, value: "" },
                   )
                 }
@@ -173,7 +199,10 @@ export function HttpForm({
                   placeholder="Bearer "
                 />
                 {cofreVazio ? (
-                  <p className="text-xs text-text-muted" data-testid={`http-cabecalho-${i}-sem-chave`}>
+                  <p
+                    className="text-xs text-text-muted"
+                    data-testid={`http-cabecalho-${i}-sem-chave`}
+                  >
                     {t("Nenhuma chave guardada ainda.")}{" "}
                     <Link href={LINK_DO_COFRE} className="underline" target="_blank">
                       {t("Criar a chave em Chaves secretas")}
@@ -209,7 +238,12 @@ export function HttpForm({
             disabled={cabecalhosNoLimite}
             title={cabecalhosNoLimite ? t("Limite de 20 cabeçalhos") : undefined}
             onClick={() =>
-              mudar({ headers: [...config.headers, { kind: "texto", name: "Accept", value: "application/json" }] })
+              mudar({
+                headers: [
+                  ...config.headers,
+                  { kind: "texto", name: "Accept", value: "application/json" },
+                ],
+              })
             }
           >
             {t("+ Cabeçalho")}
@@ -241,23 +275,32 @@ export function HttpForm({
               {t("O corpo não é um JSON válido.")}
             </p>
           )}
-          <div className="space-y-2 rounded-md border border-border p-2" data-testid="http-corpo-chave">
+          <div
+            className="space-y-2 rounded-md border border-border p-2"
+            data-testid="http-corpo-chave"
+          >
             <p className="text-xs text-text-muted">
-              {t('Chave secreta no corpo (opcional): escreva o campo com texto vazio, como {"token": ""}, e escolha a chave. O valor entra só na hora do envio.')}
+              {t(
+                'Chave secreta no corpo (opcional): escreva o campo com texto vazio, como {"token": ""}, e escolha a chave. O valor entra só na hora do envio.',
+              )}
             </p>
             {segredoNoCorpo ? (
               <div className="flex gap-2">
                 <Input
                   aria-label={t("Campo do corpo")}
                   value={segredoNoCorpo.path}
-                  onChange={(e) => mudar({ body_secrets: [{ ...segredoNoCorpo, path: e.target.value.trim() }] })}
+                  onChange={(e) =>
+                    mudar({ body_secrets: [{ ...segredoNoCorpo, path: e.target.value.trim() }] })
+                  }
                   placeholder="token"
                 />
                 <Input
                   aria-label={t("Antes da chave")}
                   className="w-28"
                   value={segredoNoCorpo.prefix}
-                  onChange={(e) => mudar({ body_secrets: [{ ...segredoNoCorpo, prefix: e.target.value }] })}
+                  onChange={(e) =>
+                    mudar({ body_secrets: [{ ...segredoNoCorpo, prefix: e.target.value }] })
+                  }
                 />
                 {cofreVazio ? null : (
                   <Seletor
@@ -289,16 +332,22 @@ export function HttpForm({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => mudar({ body_secrets: [{ path: "token", secret_id: segredos![0]!.id, prefix: "" }] })}
+                onClick={() =>
+                  mudar({
+                    body_secrets: [{ path: "token", secret_id: segredos![0]!.id, prefix: "" }],
+                  })
+                }
               >
                 {t("+ Chave secreta no corpo")}
               </Button>
             )}
-            {segredoNoCorpo && segredoNoCorpo.path && !CAMINHO_NO_JSON.test(segredoNoCorpo.path) && (
-              <p className="text-xs text-error-fg" role="alert">
-                {t("Use o caminho com pontos, como auth.token")}
-              </p>
-            )}
+            {segredoNoCorpo &&
+              segredoNoCorpo.path &&
+              !CAMINHO_NO_JSON.test(segredoNoCorpo.path) && (
+                <p className="text-xs text-error-fg" role="alert">
+                  {t("Use o caminho com pontos, como auth.token")}
+                </p>
+              )}
           </div>
         </Campo>
       )}
@@ -309,7 +358,11 @@ export function HttpForm({
         testId="http-variaveis"
       />
 
-      <Campo id="http-tempo" rotulo={t("Tempo limite (segundos)")} ajuda={t("Entre 1 e 30 segundos. Passou disso, sai por Falhou.")}>
+      <Campo
+        id="http-tempo"
+        rotulo={t("Tempo limite (segundos)")}
+        ajuda={t("Entre 1 e 30 segundos. Passou disso, sai por Falhou.")}
+      >
         <Input
           id="http-tempo"
           type="number"
@@ -317,7 +370,10 @@ export function HttpForm({
           max={TEMPO_LIMITE_MAXIMO_MS / 1000}
           value={Math.round(config.timeout_ms / 1000)}
           onChange={(e) => {
-            const s = Math.min(TEMPO_LIMITE_MAXIMO_MS / 1000, Math.max(TEMPO_LIMITE_MINIMO_MS / 1000, Number(e.target.value) || 10));
+            const s = Math.min(
+              TEMPO_LIMITE_MAXIMO_MS / 1000,
+              Math.max(TEMPO_LIMITE_MINIMO_MS / 1000, Number(e.target.value) || 10),
+            );
             mudar({ timeout_ms: Math.round(s) * 1000 });
           }}
         />
@@ -326,10 +382,16 @@ export function HttpForm({
       <div className="space-y-2">
         <p className="text-sm font-medium">{t("Guardar da resposta")}</p>
         <p className="text-xs text-text-muted">
-          {t("Cada valor guardado fica disponível nos blocos seguintes como {{saida.nome}} e, se quiser, também num campo.")}
+          {t(
+            "Cada valor guardado fica disponível nos blocos seguintes como {{saida.nome}} e, se quiser, também num campo.",
+          )}
         </p>
         {config.mappings.map((m, i) => (
-          <div key={i} className="space-y-2 rounded-md border border-border p-2" data-testid={`http-mapeamento-${i}`}>
+          <div
+            key={i}
+            className="space-y-2 rounded-md border border-border p-2"
+            data-testid={`http-mapeamento-${i}`}
+          >
             <div className="flex gap-2">
               <Input
                 aria-label={t("Caminho na resposta")}
@@ -340,7 +402,9 @@ export function HttpForm({
               <Input
                 aria-label={t("Nome da variável")}
                 value={m.var}
-                onChange={(e) => mudarMapeamento(i, { ...m, var: e.target.value.trim().toLowerCase() })}
+                onChange={(e) =>
+                  mudarMapeamento(i, { ...m, var: e.target.value.trim().toLowerCase() })
+                }
                 placeholder="utm_campaign"
               />
               <Button
@@ -364,9 +428,12 @@ export function HttpForm({
                 mudarMapeamento(i, resto);
               }}
             />
-            {((m.path && !CAMINHO_NO_JSON.test(m.path)) || (m.var && !NOME_DA_VARIAVEL_DE_SAIDA.test(m.var))) && (
+            {((m.path && !CAMINHO_NO_JSON.test(m.path)) ||
+              (m.var && !NOME_DA_VARIAVEL_DE_SAIDA.test(m.var))) && (
               <p className="text-xs text-error-fg" role="alert">
-                {t("Use o caminho com pontos (campaign.name) e um nome com letras minúsculas, números e _.")}
+                {t(
+                  "Use o caminho com pontos (campaign.name) e um nome com letras minúsculas, números e _.",
+                )}
               </p>
             )}
           </div>
@@ -388,7 +455,9 @@ export function HttpForm({
         </Button>
       </div>
       <p className="text-xs text-text-muted">
-        {t("Saídas: Deu certo (resposta 2xx) e Falhou (erro, tempo esgotado, endereço recusado ou resposta fora de 2xx). Não há nova tentativa automática.")}
+        {t(
+          "Saídas: Deu certo (resposta 2xx) e Falhou (erro, tempo esgotado, endereço recusado ou resposta fora de 2xx). Não há nova tentativa automática.",
+        )}
       </p>
     </div>
   );

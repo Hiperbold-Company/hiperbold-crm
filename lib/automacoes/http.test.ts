@@ -27,7 +27,9 @@ const CHAVE = "11111111-2222-4333-8444-555555555555";
 
 describe("máscara da chave secreta", () => {
   it("troca toda ocorrência por ••••, inclusive o eco do servidor", () => {
-    expect(mascararSegredos("token=abc12345 e de novo abc12345", ["abc12345"])).toBe("token=•••• e de novo ••••");
+    expect(mascararSegredos("token=abc12345 e de novo abc12345", ["abc12345"])).toBe(
+      "token=•••• e de novo ••••",
+    );
   });
   it("mascara a mais longa primeiro (uma chave dentro de outra não sobra pela metade)", () => {
     expect(mascararSegredos("xyzSEGREDO_LONGO", ["SEGREDO", "SEGREDO_LONGO"])).toBe("xyz••••");
@@ -38,7 +40,11 @@ describe("máscara da chave secreta", () => {
 });
 
 describe("caminho no JSON da resposta", () => {
-  const json = { campaign: { name: "Black Friday", id: 42 }, data: [{ id: "a" }, { id: "b" }], ok: true };
+  const json = {
+    campaign: { name: "Black Friday", id: 42 },
+    data: [{ id: "a" }, { id: "b" }],
+    ok: true,
+  };
   it("desce por ponto e por índice", () => {
     expect(lerCaminhoNoJson(json, "campaign.name")).toBe("Black Friday");
     expect(lerCaminhoNoJson(json, "data[1].id")).toBe("b");
@@ -72,7 +78,9 @@ describe("cabeçalhos proibidos", () => {
 
 describe("URL do bloco", () => {
   it("{{segredo...}} na URL é recusado", () => {
-    expect(problemaDaUrl("https://api.exemplo.com/x?token={{segredo.token_meta}}")).toBe("segredo_na_url");
+    expect(problemaDaUrl("https://api.exemplo.com/x?token={{segredo.token_meta}}")).toBe(
+      "segredo_na_url",
+    );
     expect(problemaDaUrl("https://api.exemplo.com/{{ secret.x }}")).toBe("segredo_na_url");
   });
   it("http, usuário e senha e URL torta são recusados", () => {
@@ -82,13 +90,17 @@ describe("URL do bloco", () => {
     expect(problemaDaUrl("isto não é url")).toBe("invalida");
   });
   it("URL com variável no caminho passa (controle)", () => {
-    expect(problemaDaUrl("https://graph.facebook.com/v19.0/{{campo.source_id}}?fields=campaign")).toBeNull();
+    expect(
+      problemaDaUrl("https://graph.facebook.com/v19.0/{{campo.source_id}}?fields=campaign"),
+    ).toBeNull();
   });
 });
 
 describe("corpo JSON", () => {
   it("o valor preenchido é escapado (aspas não quebram nem injetam campo)", () => {
-    const obj = preencherCorpoJson('{"nome": "{{x}}"}', (t) => t.replace("{{x}}", 'a", "admin": "true'));
+    const obj = preencherCorpoJson('{"nome": "{{x}}"}', (t) =>
+      t.replace("{{x}}", 'a", "admin": "true'),
+    );
     expect(JSON.stringify(obj)).toBe('{"nome":"a\\", \\"admin\\": \\"true"}');
   });
 });
@@ -101,15 +113,30 @@ function grafo(config: HttpRequestConfig): FlowGraph {
         type: "trigger",
         label: "Início",
         position: { x: 0, y: 0 },
-        config: { triggers: [{ kind: "manual" }], reentry: { policy: "skip_if_running", cooldown_minutes: 0 } },
+        config: {
+          triggers: [{ kind: "manual" }],
+          reentry: { policy: "skip_if_running", cooldown_minutes: 0 },
+        },
       },
       { id: "h", type: "http_request", label: "Chamar API", position: { x: 0, y: 100 }, config },
-      { id: "f", type: "end", label: "Fim", position: { x: 0, y: 200 }, config: { outcome: "converted" } },
+      {
+        id: "f",
+        type: "end",
+        label: "Fim",
+        position: { x: 0, y: 200 },
+        config: { outcome: "converted" },
+      },
     ],
     edges: [
       { id: "e1", source: "t", target: "h", priority: 0, condition: { type: "always" } },
       { id: "e2", source: "h", target: "f", priority: 0, condition: { type: "always" } },
-      { id: "e3", source: "h", target: "f", priority: 1, condition: { type: "branch", branch_id: "erro" } },
+      {
+        id: "e3",
+        source: "h",
+        target: "f",
+        priority: 1,
+        condition: { type: "branch", branch_id: "erro" },
+      },
     ],
   });
 }
@@ -119,7 +146,13 @@ const BASE: HttpRequestConfig = {
   url: "https://api.exemplo.com/v1/{{campo.source_id}}",
   headers: [{ kind: "chave", name: "Authorization", secret_id: CHAVE, prefix: "Bearer " }],
   timeout_ms: 10_000,
-  mappings: [{ path: "campaign.name", var: "utm_campaign", to: { scope: "lead_custom", key: "utm_campaign" } }],
+  mappings: [
+    {
+      path: "campaign.name",
+      var: "utm_campaign",
+      to: { scope: "lead_custom", key: "utm_campaign" },
+    },
+  ],
 };
 
 function codigos(config: HttpRequestConfig, segredos?: Set<string>): string[] {
@@ -138,30 +171,49 @@ describe("publicação do bloco HTTP", () => {
     expect(codigos(BASE, new Set())).toContain("http_segredo_inexistente");
   });
   it("{{segredo}} na URL e no cabeçalho de texto são recusados", () => {
-    expect(codigos({ ...BASE, url: "https://api.exemplo.com/?k={{segredo.token_meta}}" })).toContain("http_segredo_na_url");
     expect(
-      codigos({ ...BASE, headers: [{ kind: "texto", name: "X-Api-Key", value: "{{segredo.token_meta}}" }] }),
+      codigos({ ...BASE, url: "https://api.exemplo.com/?k={{segredo.token_meta}}" }),
+    ).toContain("http_segredo_na_url");
+    expect(
+      codigos({
+        ...BASE,
+        headers: [{ kind: "texto", name: "X-Api-Key", value: "{{segredo.token_meta}}" }],
+      }),
     ).toContain("http_segredo_no_texto");
   });
   it("cabeçalho proibido é recusado", () => {
-    expect(codigos({ ...BASE, headers: [{ kind: "texto", name: "Host", value: "interno" }] })).toContain(
-      "http_cabecalho_proibido",
-    );
+    expect(
+      codigos({ ...BASE, headers: [{ kind: "texto", name: "Host", value: "interno" }] }),
+    ).toContain("http_cabecalho_proibido");
   });
   it("URL vazia, corpo em GET e corpo que não é JSON são recusados", () => {
     expect(codigos({ ...BASE, url: "https://" })).toContain("http_url_invalida");
     expect(codigos({ ...BASE, body: '{"a": 1}' })).toContain("http_corpo_no_get");
-    expect(codigos({ ...BASE, method: "POST", body: '{"a": {{x}} }' })).toContain("http_corpo_invalido");
-  });
-  it("mapear para campo só de leitura é recusado", () => {
-    expect(codigos({ ...BASE, mappings: [{ path: "x", var: "x", to: { scope: "contact", key: "email" } }] })).toContain(
-      "campo_so_leitura",
+    expect(codigos({ ...BASE, method: "POST", body: '{"a": {{x}} }' })).toContain(
+      "http_corpo_invalido",
     );
   });
-  it("o schema recusa nome de variável inválido e nome repetido", () => {
-    expect(httpRequestConfigSchema.safeParse({ ...BASE, mappings: [{ path: "a", var: "Nome Ruim" }] }).success).toBe(false);
+  it("mapear para campo só de leitura é recusado", () => {
     expect(
-      httpRequestConfigSchema.safeParse({ ...BASE, mappings: [{ path: "a", var: "x" }, { path: "b", var: "x" }] }).success,
+      codigos({
+        ...BASE,
+        mappings: [{ path: "x", var: "x", to: { scope: "contact", key: "email" } }],
+      }),
+    ).toContain("campo_so_leitura");
+  });
+  it("o schema recusa nome de variável inválido e nome repetido", () => {
+    expect(
+      httpRequestConfigSchema.safeParse({ ...BASE, mappings: [{ path: "a", var: "Nome Ruim" }] })
+        .success,
+    ).toBe(false);
+    expect(
+      httpRequestConfigSchema.safeParse({
+        ...BASE,
+        mappings: [
+          { path: "a", var: "x" },
+          { path: "b", var: "x" },
+        ],
+      }).success,
     ).toBe(false);
   });
   it("o bloco não roda num follow-up", () => {
@@ -172,23 +224,47 @@ describe("publicação do bloco HTTP", () => {
 
 describe("auditoria do lote 4", () => {
   it("1. nome sensível com valor escrito é segredo no grafo; variável pura e nome comum não", () => {
-    for (const nome of ["Authorization", "authorization", "X-Api-Key", "Api-Key", "apikey", "X-Auth-Token", "Client-Secret", "x-partner-key"]) {
+    for (const nome of [
+      "Authorization",
+      "authorization",
+      "X-Api-Key",
+      "Api-Key",
+      "apikey",
+      "X-Auth-Token",
+      "Client-Secret",
+      "x-partner-key",
+    ]) {
       expect(cabecalhoSensivel(nome)).toBe(true);
-      expect(cabecalhoComSegredoEscrito({ kind: "texto", name: nome, value: "Bearer abc123" })).toBe(true);
-      expect(cabecalhoComSegredoEscrito({ kind: "texto", name: nome, value: "{{campo.token}}" })).toBe(false);
+      expect(
+        cabecalhoComSegredoEscrito({ kind: "texto", name: nome, value: "Bearer abc123" }),
+      ).toBe(true);
+      expect(
+        cabecalhoComSegredoEscrito({ kind: "texto", name: nome, value: "{{campo.token}}" }),
+      ).toBe(false);
     }
     expect(cabecalhoSensivel("Accept")).toBe(false);
-    expect(cabecalhoComSegredoEscrito({ kind: "texto", name: "Accept", value: "application/json" })).toBe(false);
+    expect(
+      cabecalhoComSegredoEscrito({ kind: "texto", name: "Accept", value: "application/json" }),
+    ).toBe(false);
   });
 
   it("1. o publish recusa token escrito em Authorization, com a frase que manda ao cofre", () => {
-    const cfg: HttpRequestConfig = { ...BASE, headers: [{ kind: "texto", name: "Authorization", value: "Bearer abc123" }] };
-    const r = validateFlowForPublish(grafo(cfg), { surface: "automacao", automacao: { pointerId: "p", segredosExistentes: new Set([CHAVE]) } });
+    const cfg: HttpRequestConfig = {
+      ...BASE,
+      headers: [{ kind: "texto", name: "Authorization", value: "Bearer abc123" }],
+    };
+    const r = validateFlowForPublish(grafo(cfg), {
+      surface: "automacao",
+      automacao: { pointerId: "p", segredosExistentes: new Set([CHAVE]) },
+    });
     expect(r.ok).toBe(false);
     const erro = r.ok ? undefined : r.errors.find((e) => e.code === "http_segredo_no_texto");
     expect(erro?.message).toContain("Guarde este valor em Chaves secretas");
     // Controle: variável pura no mesmo cabeçalho publica.
-    const ok: HttpRequestConfig = { ...BASE, headers: [{ kind: "texto", name: "Authorization", value: "{{campo.token}}" }] };
+    const ok: HttpRequestConfig = {
+      ...BASE,
+      headers: [{ kind: "texto", name: "Authorization", value: "{{campo.token}}" }],
+    };
     expect(codigos(ok, new Set([CHAVE]))).not.toContain("http_segredo_no_texto");
   });
 
@@ -201,9 +277,17 @@ describe("auditoria do lote 4", () => {
     };
     expect(httpRequestConfigSchema.safeParse(cfg).success).toBe(true);
     expect(codigos(cfg, new Set([CHAVE])).filter((c) => c.startsWith("http_"))).toEqual([]);
-    expect(codigos({ ...cfg, body_secrets: [{ path: "auth.outro", secret_id: CHAVE, prefix: "" }] }, new Set([CHAVE]))).toContain("http_corpo_invalido");
+    expect(
+      codigos(
+        { ...cfg, body_secrets: [{ path: "auth.outro", secret_id: CHAVE, prefix: "" }] },
+        new Set([CHAVE]),
+      ),
+    ).toContain("http_corpo_invalido");
     expect(codigos(cfg, new Set())).toContain("http_segredo_inexistente");
-    const dois = { ...cfg, body_secrets: [cfg.body_secrets![0]!, { path: "nome", secret_id: CHAVE, prefix: "" }] };
+    const dois = {
+      ...cfg,
+      body_secrets: [cfg.body_secrets![0]!, { path: "nome", secret_id: CHAVE, prefix: "" }],
+    };
     expect(httpRequestConfigSchema.safeParse(dois).success).toBe(false);
     const obj = JSON.parse(cfg.body!);
     expect(porNoCaminhoDoCorpo(obj, "auth.token", "S")).toBe(true);
@@ -213,7 +297,12 @@ describe("auditoria do lote 4", () => {
   });
 
   it("2. variável no domínio ou na porta é recusada; no caminho passa", () => {
-    for (const url of ["https://api.{{campo.x}}/v1", "https://api.x.com{{campo.y}}/v1", "https://api.x.com:{{campo.p}}/v1", "https://{{campo.h}}"]) {
+    for (const url of [
+      "https://api.{{campo.x}}/v1",
+      "https://api.x.com{{campo.y}}/v1",
+      "https://api.x.com:{{campo.p}}/v1",
+      "https://{{campo.h}}",
+    ]) {
       expect(problemaDaUrl(url)).toBe("variavel_no_dominio");
       expect(codigos({ ...BASE, url }, new Set([CHAVE]))).toContain("http_url_invalida");
     }

@@ -74,7 +74,9 @@ async function ligar(page: Page, origem: string, destino: string, ramo?: string)
   for (let tentativa = 0; tentativa < 3; tentativa++) {
     if ((await page.getByTestId("node-config-sheet").count()) > 0) await fecharPainel(page);
     const sBox = await page.locator(seletor).first().boundingBox();
-    const tBox = await page.locator(`.react-flow__node[data-id="${destino}"] .react-flow__handle.target`).boundingBox();
+    const tBox = await page
+      .locator(`.react-flow__node[data-id="${destino}"] .react-flow__handle.target`)
+      .boundingBox();
     if (!sBox || !tBox) throw new Error(`handle não encontrado: ${origem}[${ramo}] -> ${destino}`);
     await page.mouse.move(sBox.x + sBox.width / 2, sBox.y + sBox.height / 2);
     await page.mouse.down();
@@ -89,11 +91,16 @@ async function ligar(page: Page, origem: string, destino: string, ramo?: string)
 
 async function adicionar(page: Page, tipo: string): Promise<string> {
   const antes = new Set(
-    await page.locator(`.react-flow__node[data-id^="${tipo}-"]`).evaluateAll((els) => els.map((e) => e.getAttribute("data-id"))),
+    await page
+      .locator(`.react-flow__node[data-id^="${tipo}-"]`)
+      .evaluateAll((els) => els.map((e) => e.getAttribute("data-id"))),
   );
   await page.getByTestId(`palette-add-${tipo}`).click();
   await expect
-    .poll(async () => (await page.locator(`.react-flow__node[data-id^="${tipo}-"]`).count()) > antes.size)
+    .poll(
+      async () =>
+        (await page.locator(`.react-flow__node[data-id^="${tipo}-"]`).count()) > antes.size,
+    )
     .toBe(true);
   const depois = await page
     .locator(`.react-flow__node[data-id^="${tipo}-"]`)
@@ -135,7 +142,9 @@ test.describe("Automações — lote 4: Requisição HTTP com chave secreta", ()
     await new Promise<void>((r) => receptor.close(() => r()));
   });
 
-  test("chave salva mascarada; destino interno recusado com mensagem legível e zero requisições", async ({ page }) => {
+  test("chave salva mascarada; destino interno recusado com mensagem legível e zero requisições", async ({
+    page,
+  }) => {
     const carimbo = Date.now();
     const nomeDaChave = `token_meta_${String(carimbo).slice(-6)}`;
     await loginComoAdmin(page, creds);
@@ -175,14 +184,18 @@ test.describe("Automações — lote 4: Requisição HTTP com chave secreta", ()
     await abrirNo(page, bloco);
     // Endereço do receptor local: o formulário avisa antes de publicar.
     await page.locator("#http-url").fill(`http://127.0.0.1:${porta}/campanha/{{contact.id}}`);
-    await expect(page.getByTestId("http-form")).toContainText("O endereço precisa começar com https://.");
+    await expect(page.getByTestId("http-form")).toContainText(
+      "O endereço precisa começar com https://.",
+    );
     await page.getByRole("button", { name: "+ Cabeçalho" }).click();
     const cab = page.getByTestId("http-cabecalho-0");
     await cab.getByLabel("Nome do cabeçalho").fill("Authorization");
     // Nome que leva credencial vira "Chave secreta" sozinho: o token escrito ficaria legível no grafo.
     await expect(page.getByTestId("http-cabecalho-0-tipo")).toHaveValue("chave");
     await page.getByTestId("http-cabecalho-0-tipo").selectOption("chave");
-    await page.getByTestId("http-cabecalho-0-chave").selectOption({ label: `${nomeDaChave} (••••${TOKEN.slice(-4)})` });
+    await page
+      .getByTestId("http-cabecalho-0-chave")
+      .selectOption({ label: `${nomeDaChave} (••••${TOKEN.slice(-4)})` });
     await page.getByRole("button", { name: "+ Guardar campo da resposta" }).click();
     const mapa = page.getByTestId("http-mapeamento-0");
     await mapa.getByLabel("Caminho na resposta").fill("campaign.name");
@@ -198,7 +211,9 @@ test.describe("Automações — lote 4: Requisição HTTP com chave secreta", ()
 
     // Publicar com http:// local é recusado com a frase do bloco.
     await page.getByTestId("publish-button").click();
-    await expect(page.getByText(/o endereço precisa começar com https:\/\//).first()).toBeVisible({ timeout: PRAZO });
+    await expect(page.getByText(/o endereço precisa começar com https:\/\//).first()).toBeVisible({
+      timeout: PRAZO,
+    });
     await foto(page, "03-publish-recusa-http-local");
 
     // ── 3. O endereço do metadata da nuvem: publica, mas o motor recusa ──
@@ -211,19 +226,26 @@ test.describe("Automações — lote 4: Requisição HTTP com chave secreta", ()
     await expect(page.getByTestId("testar-automacao")).toBeEnabled({ timeout: PRAZO });
 
     const telefone = `+55119${String(carimbo).slice(-8)}`;
-    const contato = await page.request.post("/api/v1/contacts", { data: { name: `Lead HTTP ${carimbo}`, phone_number: telefone } });
+    const contato = await page.request.post("/api/v1/contacts", {
+      data: { name: `Lead HTTP ${carimbo}`, phone_number: telefone },
+    });
     expect(contato.ok(), `criar contato: ${contato.status()} ${await contato.text()}`).toBe(true);
 
     await page.getByTestId("testar-automacao").click();
     await page.getByTestId("testar-busca").fill(telefone.slice(-8));
-    const linha = page.getByTestId("testar-resultados").locator("li").filter({ hasText: telefone.slice(-8) });
+    const linha = page
+      .getByTestId("testar-resultados")
+      .locator("li")
+      .filter({ hasText: telefone.slice(-8) });
     await expect(linha).toHaveCount(1, { timeout: PRAZO });
     await linha.getByRole("button", { name: "Iniciar" }).click();
     await expect(page.getByTestId("testar-busca")).toHaveCount(0, { timeout: PRAZO });
     await relogio(page);
 
     await page.goto(`/app/automacoes/${automacaoId}/execucoes`);
-    const execucao = page.getByTestId("lista-de-execucoes").getByRole("link", { name: new RegExp(`Lead HTTP ${carimbo}`) });
+    const execucao = page
+      .getByTestId("lista-de-execucoes")
+      .getByRole("link", { name: new RegExp(`Lead HTTP ${carimbo}`) });
     await expect(execucao).toBeVisible({ timeout: PRAZO });
     await execucao.click();
     await page.waitForURL(/\/app\/ai\/followups\/enrollments\/[0-9a-f-]+$/, { timeout: PRAZO });

@@ -214,6 +214,8 @@ const SITES: { arquivo: string; fronteira: string; papel?: "gerador" | "validado
   // Chave de idempotência: os geradores (manda UUID) e os validadores (exige UUID).
   // Fork Hiperbold: o onboarding conecta pela UAZAPI e não chama mais POST /api/v1/onboarding/whatsapp/session
   // (WAHA); a tela deixou de gerar chave de idempotência.
+  { arquivo: "app/app/automacoes/_components/ModelosDeAutomacaoDialog.tsx", fronteira: "api.idempotency-key", papel: "gerador" },
+  { arquivo: "app/app/automacoes/converter/[ruleId]/PublicarConversao.tsx", fronteira: "api.idempotency-key", papel: "gerador" },
   { arquivo: "components/extensions/ExtensionsManager.tsx", fronteira: "api.idempotency-key", papel: "gerador" },
   { arquivo: "components/modulos/ModulosManager.tsx", fronteira: "api.idempotency-key", papel: "gerador" },
   { arquivo: "hooks/ai/useSkills.ts", fronteira: "api.idempotency-key", papel: "gerador" },

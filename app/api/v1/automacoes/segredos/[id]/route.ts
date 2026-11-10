@@ -45,11 +45,17 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
 
   const corpo = patchSchema.safeParse(await req.json().catch(() => null));
   if (!corpo.success) {
-    return fail("validation_failed", t("Cole a chave inteira, sem espaços (mínimo de 8 caracteres)."), 400, { requestId });
+    return fail(
+      "validation_failed",
+      t("Cole a chave inteira, sem espaços (mínimo de 8 caracteres)."),
+      400,
+      { requestId },
+    );
   }
   const r = await trocarValorDoSegredo(createAdminClient(), { org, id, valor: corpo.data.valor });
   if (!r.ok) {
-    if (r.erro === "nao_encontrado") return fail("not_found", t("Chave não encontrada."), 404, { requestId });
+    if (r.erro === "nao_encontrado")
+      return fail("not_found", t("Chave não encontrada."), 404, { requestId });
     return fail(
       "internal_error",
       r.erro === "cifra_indisponivel"

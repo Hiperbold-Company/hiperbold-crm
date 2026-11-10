@@ -12,7 +12,13 @@ import { fail } from "@/lib/api/wrappers";
 
 export type PortaDoCofre =
   | { resposta: Response }
-  | { resposta?: undefined; org: string; atorId: string | null; requestId: string; t: (s: string) => string };
+  | {
+      resposta?: undefined;
+      org: string;
+      atorId: string | null;
+      requestId: string;
+      t: (s: string) => string;
+    };
 
 export async function portaDoCofre(req: NextRequest, escrita: boolean): Promise<PortaDoCofre> {
   const requestId = crypto.randomUUID();
@@ -26,7 +32,12 @@ export async function portaDoCofre(req: NextRequest, escrita: boolean): Promise<
   const t = traducaoDe(authz);
   if (authz.via === "token") {
     return {
-      resposta: fail("forbidden", t("As chaves secretas só são administradas pela tela, com sessão."), 403, { requestId }),
+      resposta: fail(
+        "forbidden",
+        t("As chaves secretas só são administradas pela tela, com sessão."),
+        403,
+        { requestId },
+      ),
     };
   }
   return { org: authz.organizationId, atorId: pessoaResponsavel(authz), requestId, t };

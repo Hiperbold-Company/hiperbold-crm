@@ -177,7 +177,8 @@ describe("fn_claim_due_automacao_enrollments (migration 1003)", () => {
     const def = rows[0]!.indexdef;
     expect(def).toMatch(/\(next_eval_at\)/);
     expect(def).toMatch(/lane = 'automacao'/);
-    for (const status of ["active", "waiting_reply", "dormente"]) expect(def).toContain(`'${status}'`);
+    for (const status of ["active", "waiting_reply", "dormente"])
+      expect(def).toContain(`'${status}'`);
 
     // Com seqscan desligado o planejador só pode escolher o índice se o predicado
     // da consulta (a mesma que a função faz) implica o dele.
@@ -190,7 +191,9 @@ describe("fn_claim_due_automacao_enrollments (migration 1003)", () => {
           where lane = 'automacao' and status in ('active','waiting_reply','dormente')
             and next_eval_at <= now()`,
       );
-      expect(plano.map((r) => r["QUERY PLAN"]).join("\n")).toContain("idx_followup_enrollments_due_automacao");
+      expect(plano.map((r) => r["QUERY PLAN"]).join("\n")).toContain(
+        "idx_followup_enrollments_due_automacao",
+      );
       await c.query("rollback");
     } finally {
       c.release();
@@ -199,7 +202,9 @@ describe("fn_claim_due_automacao_enrollments (migration 1003)", () => {
 
   it("reaplicar o apêndice do baseline (update.sh) não quebra e a função segue servindo o claim", async () => {
     const baseline = readFileSync(join(process.cwd(), "supabase", "baseline.sql"), "utf8");
-    const inicio = baseline.indexOf("-- ---- o claim das automações para o laço rápido do worker (migration 1003");
+    const inicio = baseline.indexOf(
+      "-- ---- o claim das automações para o laço rápido do worker (migration 1003",
+    );
     expect(inicio).toBeGreaterThan(0);
     const fim = baseline.indexOf("-- ---- VARREDURA anon", inicio);
     expect(fim).toBeGreaterThan(inicio);

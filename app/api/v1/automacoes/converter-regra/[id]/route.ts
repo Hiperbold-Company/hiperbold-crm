@@ -18,6 +18,7 @@ import { respostaDeRecusa } from "@/lib/api/recusa";
 import { fail, ok } from "@/lib/api/wrappers";
 import { converterEPublicarRegra, lerRegra, previaDaConversao } from "@/lib/automacoes/conversao";
 import { entradaDeFluxo } from "@/lib/followup/porta";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
       return ok(feito, { requestId: e.requestId, status: feito.ja_convertida ? 200 : 201 });
     }
     const desfecho = await comIdempotencia({
-      db: e.deps.admin,
+      db: createAdminClient(),
       organizationId: e.deps.organizationId,
       endpoint: ENDPOINT,
       chave,

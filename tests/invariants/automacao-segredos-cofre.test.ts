@@ -17,14 +17,30 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 const container = process.env.TEST_DB_CONTAINER;
 if (!container) {
-  throw new Error("TEST_DB_CONTAINER not set — rode esta suíte via `pnpm test:db` (scripts/test-db.sh)");
+  throw new Error(
+    "TEST_DB_CONTAINER not set — rode esta suíte via `pnpm test:db` (scripts/test-db.sh)",
+  );
 }
 const containerName: string = container;
 
 function sql(script: string): string {
   return execFileSync(
     "docker",
-    ["exec", "-i", containerName, "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-tA", "-f", "-"],
+    [
+      "exec",
+      "-i",
+      containerName,
+      "psql",
+      "-U",
+      "postgres",
+      "-d",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-f",
+      "-",
+    ],
     { input: script, encoding: "utf8" },
   ).trim();
 }
@@ -82,51 +98,97 @@ describe("automacao_segredos: o valor cifrado é só do servidor", () => {
             where table_schema='public' and table_name='automacao_segredos'
               and grantee in ('anon','authenticated','PUBLIC') and privilege_type <> 'SELECT';`),
     ).toBe("0");
-    expect(sql("select has_column_privilege('authenticated', 'public.automacao_segredos', 'valor_cifrado', 'select');")).toBe("f");
-    expect(sql("select has_table_privilege('anon', 'public.automacao_segredos', 'select');")).toBe("f");
+    expect(
+      sql(
+        "select has_column_privilege('authenticated', 'public.automacao_segredos', 'valor_cifrado', 'select');",
+      ),
+    ).toBe("f");
+    expect(sql("select has_table_privilege('anon', 'public.automacao_segredos', 'select');")).toBe(
+      "f",
+    );
   });
 
   it("o gerente dono lê nome e final (controle positivo), mas pedir valor_cifrado é negado", () => {
-    expect(como("authenticated", GERENTE_A, "select string_agg(nome || ':' || ultimos4, ',') from public.automacao_segredos;")).toBe("token_a:1234");
-    expect(como("authenticated", GERENTE_A, "select valor_cifrado from public.automacao_segredos;")).toMatch(/permission denied/);
-    expect(como("authenticated", GERENTE_A, "select * from public.automacao_segredos;")).toMatch(/permission denied/);
+    expect(
+      como(
+        "authenticated",
+        GERENTE_A,
+        "select string_agg(nome || ':' || ultimos4, ',') from public.automacao_segredos;",
+      ),
+    ).toBe("token_a:1234");
+    expect(
+      como("authenticated", GERENTE_A, "select valor_cifrado from public.automacao_segredos;"),
+    ).toMatch(/permission denied/);
+    expect(como("authenticated", GERENTE_A, "select * from public.automacao_segredos;")).toMatch(
+      /permission denied/,
+    );
   });
 
   it("anon não lê nada", () => {
-    expect(como("anon", null, "select count(*) from public.automacao_segredos;")).toMatch(/permission denied/);
+    expect(como("anon", null, "select count(*) from public.automacao_segredos;")).toMatch(
+      /permission denied/,
+    );
   });
 
   it("a service role lê o valor cifrado (é ela que decifra no envio)", () => {
-    expect(sql("set role service_role; select count(*) from public.automacao_segredos where valor_cifrado is not null;")).not.toBe("0");
+    expect(
+      sql(
+        "set role service_role; select count(*) from public.automacao_segredos where valor_cifrado is not null;",
+      ),
+    ).not.toBe("0");
   });
 });
 
 describe("automacao_segredos: isolamento entre organizações", () => {
   it("o gerente de B não vê a chave de A (e vice-versa)", () => {
-    expect(como("authenticated", GERENTE_B, "select string_agg(nome, ',') from public.automacao_segredos;")).toBe("token_b");
     expect(
-      como("authenticated", GERENTE_B, `select count(*) from public.automacao_segredos where organization_id = '${ORG_A}';`),
+      como(
+        "authenticated",
+        GERENTE_B,
+        "select string_agg(nome, ',') from public.automacao_segredos;",
+      ),
+    ).toBe("token_b");
+    expect(
+      como(
+        "authenticated",
+        GERENTE_B,
+        `select count(*) from public.automacao_segredos where organization_id = '${ORG_A}';`,
+      ),
     ).toBe("0");
   });
 
   it("atendente (abaixo de gerente) não vê nem as da própria organização", () => {
-    expect(como("authenticated", ATENDENTE_A, "select count(id) from public.automacao_segredos;")).toBe("0");
+    expect(
+      como("authenticated", ATENDENTE_A, "select count(id) from public.automacao_segredos;"),
+    ).toBe("0");
   });
 
   it("ninguém grava pelo PostgREST: insert, update e delete de authenticated são negados", () => {
     expect(
-      como("authenticated", GERENTE_A, `insert into public.automacao_segredos (organization_id, nome, valor_cifrado, ultimos4) values ('${ORG_A}', 'nova', '\\x00', '0000');`),
+      como(
+        "authenticated",
+        GERENTE_A,
+        `insert into public.automacao_segredos (organization_id, nome, valor_cifrado, ultimos4) values ('${ORG_A}', 'nova', '\\x00', '0000');`,
+      ),
     ).toMatch(/permission denied/);
-    expect(como("authenticated", GERENTE_A, "update public.automacao_segredos set ultimos4 = '9999';")).toMatch(/permission denied/);
-    expect(como("authenticated", GERENTE_A, "delete from public.automacao_segredos;")).toMatch(/permission denied/);
+    expect(
+      como("authenticated", GERENTE_A, "update public.automacao_segredos set ultimos4 = '9999';"),
+    ).toMatch(/permission denied/);
+    expect(como("authenticated", GERENTE_A, "delete from public.automacao_segredos;")).toMatch(
+      /permission denied/,
+    );
   });
 
   it("o nome é único por organização e segue o formato", () => {
     expect(() =>
-      sql(`insert into public.automacao_segredos (organization_id, nome, valor_cifrado, ultimos4) values ('${ORG_A}', 'token_a', '\\x00', '0000');`),
+      sql(
+        `insert into public.automacao_segredos (organization_id, nome, valor_cifrado, ultimos4) values ('${ORG_A}', 'token_a', '\\x00', '0000');`,
+      ),
     ).toThrow(/uniq_automacao_segredos_org_nome/);
     expect(() =>
-      sql(`insert into public.automacao_segredos (organization_id, nome, valor_cifrado, ultimos4) values ('${ORG_A}', 'Nome Ruim', '\\x00', '0000');`),
+      sql(
+        `insert into public.automacao_segredos (organization_id, nome, valor_cifrado, ultimos4) values ('${ORG_A}', 'Nome Ruim', '\\x00', '0000');`,
+      ),
     ).toThrow(/automacao_segredos_nome_valido/);
   });
 });

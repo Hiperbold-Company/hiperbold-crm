@@ -29,16 +29,37 @@ const pos = { x: 0, y: 0 };
 const TIMEOUT = 10_000;
 const GRAFO = flowGraphSchema.parse({
   nodes: [
-    { id: "t", type: "trigger", label: "Início", position: pos, config: { triggers: [{ kind: "manual" }], reentry: { policy: "skip_if_running", cooldown_minutes: 0 } } },
+    {
+      id: "t",
+      type: "trigger",
+      label: "Início",
+      position: pos,
+      config: {
+        triggers: [{ kind: "manual" }],
+        reentry: { policy: "skip_if_running", cooldown_minutes: 0 },
+      },
+    },
     {
       id: "h",
       type: "http_request",
       label: "Chamar API",
       position: pos,
-      config: { method: "GET", url: "https://api.exemplo.com/v1", headers: [], timeout_ms: TIMEOUT, mappings: [{ path: "id", var: "pedido" }] },
+      config: {
+        method: "GET",
+        url: "https://api.exemplo.com/v1",
+        headers: [],
+        timeout_ms: TIMEOUT,
+        mappings: [{ path: "id", var: "pedido" }],
+      },
     },
     { id: "ok", type: "end", label: "Fim", position: pos, config: { outcome: "converted" } },
-    { id: "falhou", type: "end", label: "Fim", position: pos, config: { outcome: "custom", note: "falhou" } },
+    {
+      id: "falhou",
+      type: "end",
+      label: "Fim",
+      position: pos,
+      config: { outcome: "custom", note: "falhou" },
+    },
   ],
   edges: [
     { id: "e0", source: "t", target: "h", condition: { type: "always" } },
@@ -47,7 +68,9 @@ const GRAFO = flowGraphSchema.parse({
   ],
 });
 
-function montar(opts: { claimedUntilEmMs?: number | null; eventosAntes?: EnrollmentEventRef[] } = {}) {
+function montar(
+  opts: { claimedUntilEmMs?: number | null; eventosAntes?: EnrollmentEventRef[] } = {},
+) {
   const agora = new Date("2026-11-10T12:00:00.000Z");
   const eventos: EnrollmentEventRef[] = [...(opts.eventosAntes ?? [])];
   const pedidos: PedidoDeEfeito[] = [];
@@ -86,7 +109,12 @@ function montar(opts: { claimedUntilEmMs?: number | null; eventosAntes?: Enrollm
     loadLastInboundBody: async () => null,
     insertEnrollmentEvent: async (e) => {
       if (eventos.some((x) => x.idempotency_key === e.idempotency_key)) return { inserted: false };
-      eventos.push({ node_id: e.node_id, idempotency_key: e.idempotency_key, event_type: e.event_type, payload: e.payload });
+      eventos.push({
+        node_id: e.node_id,
+        idempotency_key: e.idempotency_key,
+        event_type: e.event_type,
+        payload: e.payload,
+      });
       return { inserted: true };
     },
     updateEnrollment: async (_id, _org, patch) => {
@@ -96,7 +124,12 @@ function montar(opts: { claimedUntilEmMs?: number | null; eventosAntes?: Enrollm
     loadFlowPointerName: async () => "Automação",
     insertDeadInboxItem: async () => {},
     persistirRespostaFollowup: async () => {},
-    loadFatosDaAutomacao: async (_o, _c, vars) => ({ contato: null, negocio: null, negocios: [], vars }),
+    loadFatosDaAutomacao: async (_o, _c, vars) => ({
+      contato: null,
+      negocio: null,
+      negocios: [],
+      vars,
+    }),
   };
   const efeitos: ExecutorDeEfeitos = {
     async executar(p) {
@@ -104,7 +137,17 @@ function montar(opts: { claimedUntilEmMs?: number | null; eventosAntes?: Enrollm
       return {
         desfecho: { ok: true },
         vars: { saida: { pedido: "PED-123 de Maria Silva" } },
-        detalhes: [{ tipo: "http_request", ok: true, metodo: "GET", host: "api.exemplo.com", caminho: "/v1", status: 200, campos: ["pedido"] }],
+        detalhes: [
+          {
+            tipo: "http_request",
+            ok: true,
+            metodo: "GET",
+            host: "api.exemplo.com",
+            caminho: "/v1",
+            status: 200,
+            campos: ["pedido"],
+          },
+        ],
       };
     },
   };
@@ -140,7 +183,9 @@ describe("bloco HTTP no motor — lease", () => {
     const m2 = montar({ claimedUntilEmMs: 120_000 });
     await m2.tick();
     expect(m2.pedidos).toHaveLength(1);
-    const fim = m2.eventos.find((e) => e.event_type === "effect_done" || e.event_type === "effect_failed");
+    const fim = m2.eventos.find(
+      (e) => e.event_type === "effect_done" || e.event_type === "effect_failed",
+    );
     expect(fim?.event_type).toBe("effect_done");
     expect(JSON.stringify(m2.eventos)).not.toContain("efeito_interrompido");
     expect(m2.row.current_node_id).toBe("ok");
@@ -170,12 +215,15 @@ describe("bloco HTTP no motor — teto por execução", () => {
   });
 
   it("uma a menos que o teto ainda chama (controle)", async () => {
-    const antes: EnrollmentEventRef[] = Array.from({ length: MAX_HTTP_POR_EXECUCAO - 1 }, (_, i) => ({
-      node_id: `h${i}`,
-      idempotency_key: `h${i}:${i}:efeito_inicio`,
-      event_type: "effect_started",
-      payload: { tipo: "http_request" },
-    }));
+    const antes: EnrollmentEventRef[] = Array.from(
+      { length: MAX_HTTP_POR_EXECUCAO - 1 },
+      (_, i) => ({
+        node_id: `h${i}`,
+        idempotency_key: `h${i}:${i}:efeito_inicio`,
+        event_type: "effect_started",
+        payload: { tipo: "http_request" },
+      }),
+    );
     const m = montar({ claimedUntilEmMs: 120_000, eventosAntes: antes });
     await m.tick();
     expect(m.pedidos).toHaveLength(1);
@@ -196,7 +244,9 @@ describe("bloco HTTP no motor — o que a resposta devolveu não vai ao evento",
   it("os valores vão a enrollments.vars num patch próprio, antes do passo (sobrevivem à queda entre o fim e o passo)", async () => {
     const m = montar({ claimedUntilEmMs: 120_000 });
     await m.tick();
-    const varsGravadas = m.patches.find((p) => p.vars && (p.vars as { saida?: unknown }).saida)?.vars;
+    const varsGravadas = m.patches.find(
+      (p) => p.vars && (p.vars as { saida?: unknown }).saida,
+    )?.vars;
     expect(varsGravadas).toMatchObject({ saida: { pedido: "PED-123 de Maria Silva" } });
   });
 });

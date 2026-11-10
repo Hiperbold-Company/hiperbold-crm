@@ -216,7 +216,10 @@ describe("criarSondaDeTrabalhoDasAutomacoes", () => {
   it("consulta só a raia automacao e devolve o booleano; resposta vazia = roda", async () => {
     const consultas: string[] = [];
     const pool = (tem: unknown) => ({
-      query: async (sql: string) => (consultas.push(sql), { rows: tem === undefined ? [] : [{ tem }] }),
+      query: async (sql: string) => (
+        consultas.push(sql),
+        { rows: tem === undefined ? [] : [{ tem }] }
+      ),
     });
     expect(await criarSondaDeTrabalhoDasAutomacoes(pool(false) as never)()).toBe(false);
     expect(await criarSondaDeTrabalhoDasAutomacoes(pool(true) as never)()).toBe(true);

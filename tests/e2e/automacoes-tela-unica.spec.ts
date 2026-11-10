@@ -53,7 +53,7 @@ async function semearRegra(nome: string, actions: unknown[]): Promise<string> {
 }
 
 test.describe("Automações — tela única", () => {
-  test.setTimeout(4 * 60_000);
+  test.setTimeout(240_000);
 
   test("a lista mostra os três tipos; regra antiga vira automação ao publicar", async ({
     page,

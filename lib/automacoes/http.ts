@@ -134,10 +134,16 @@ const VARIAVEL_PURA = /^\s*\{\{[^{}]*\}\}\s*$/;
 
 /** O cabeçalho de texto escreve um valor literal num nome sensível? (recusado no publish e no motor) */
 export function cabecalhoComSegredoEscrito(h: CabecalhoHttp): boolean {
-  return h.kind === "texto" && cabecalhoSensivel(h.name) && h.value.trim() !== "" && !VARIAVEL_PURA.test(h.value);
+  return (
+    h.kind === "texto" &&
+    cabecalhoSensivel(h.name) &&
+    h.value.trim() !== "" &&
+    !VARIAVEL_PURA.test(h.value)
+  );
 }
 
-export const FRASE_DO_SEGREDO_ESCRITO = "Guarde este valor em Chaves secretas e escolha a chave aqui.";
+export const FRASE_DO_SEGREDO_ESCRITO =
+  "Guarde este valor em Chaves secretas e escolha a chave aqui.";
 
 /**
  * Chave do cofre num campo do CORPO: depois de preencher as variáveis, o texto
@@ -158,7 +164,10 @@ export const MAX_SEGREDOS_NO_CORPO = 1;
 export const mapeamentoHttpSchema = z
   .strictObject({
     /** Onde está o valor no JSON da resposta. */
-    path: z.string().max(200).regex(CAMINHO_NO_JSON, "Use o caminho com pontos, como campaign.name"),
+    path: z
+      .string()
+      .max(200)
+      .regex(CAMINHO_NO_JSON, "Use o caminho com pontos, como campaign.name"),
     /** Nome da variável: `{{saida.<var>}}` nos blocos seguintes. */
     var: z.string().regex(NOME_DA_VARIAVEL_DE_SAIDA, "Use letras minúsculas, números e underscore"),
     /** Opcional: grava também neste campo do negócio ou do contato (a mesma escrita da operação de campo). */
@@ -190,11 +199,19 @@ export type HttpRequestConfig = z.infer<typeof httpRequestConfigSchema>;
 
 /** A config com que o bloco nasce no editor (válida no schema; o publish cobra a URL). */
 export function configHttpEmBranco(): HttpRequestConfig {
-  return { method: "GET", url: "https://", headers: [], timeout_ms: TEMPO_LIMITE_PADRAO_MS, mappings: [] };
+  return {
+    method: "GET",
+    url: "https://",
+    headers: [],
+    timeout_ms: TEMPO_LIMITE_PADRAO_MS,
+    mappings: [],
+  };
 }
 
 /** As chaves do cofre que o bloco cita. */
-export function segredosDoBloco(config: Pick<HttpRequestConfig, "headers"> & { body_secrets?: SegredoNoCorpo[] }): string[] {
+export function segredosDoBloco(
+  config: Pick<HttpRequestConfig, "headers"> & { body_secrets?: SegredoNoCorpo[] },
+): string[] {
   return [
     ...new Set([
       ...config.headers.flatMap((h) => (h.kind === "chave" ? [h.secret_id] : [])),
@@ -265,7 +282,8 @@ export function preencherCorpoJson(corpo: string, preencher: (texto: string) => 
     if (Array.isArray(v)) return v.map(desce);
     if (v && typeof v === "object") {
       const saida: Record<string, unknown> = {};
-      for (const [k, valor] of Object.entries(v as Record<string, unknown>)) saida[preencher(k)] = desce(valor);
+      for (const [k, valor] of Object.entries(v as Record<string, unknown>))
+        saida[preencher(k)] = desce(valor);
       return saida;
     }
     return v;
@@ -325,8 +343,14 @@ function formasDoSegredo(s: string, prefixos: readonly string[]): string[] {
  * chamada e é gravado (valor mapeado, caminho do log): o servidor de destino
  * pode ECOAR o token na resposta, e quase nunca na forma em que foi enviado.
  */
-export function mascararSegredos(texto: string, segredos: readonly string[], prefixos: readonly string[] = []): string {
-  const formas = [...new Set(segredos.filter((x) => x.length > 0).flatMap((s) => formasDoSegredo(s, prefixos)))];
+export function mascararSegredos(
+  texto: string,
+  segredos: readonly string[],
+  prefixos: readonly string[] = [],
+): string {
+  const formas = [
+    ...new Set(segredos.filter((x) => x.length > 0).flatMap((s) => formasDoSegredo(s, prefixos))),
+  ];
   let saida = texto;
   // A mais longa primeiro: uma forma que contém outra não sobra pela metade.
   for (const f of formas.sort((a, b) => b.length - a.length)) {
@@ -365,7 +389,14 @@ export function variavelNaAutoridade(url: string): boolean {
 
 export function problemaDaUrl(
   url: string,
-): "vazia" | "segredo_na_url" | "invalida" | "https_obrigatorio" | "credencial_na_url" | "variavel_no_dominio" | null {
+):
+  | "vazia"
+  | "segredo_na_url"
+  | "invalida"
+  | "https_obrigatorio"
+  | "credencial_na_url"
+  | "variavel_no_dominio"
+  | null {
   const u = url.trim();
   if (!u || u === "https://") return "vazia";
   if (TENTATIVA_DE_SEGREDO.test(u)) return "segredo_na_url";

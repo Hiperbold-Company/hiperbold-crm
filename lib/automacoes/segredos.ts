@@ -27,7 +27,10 @@ export { NOME_DO_SEGREDO };
 export const nomeDoSegredoSchema = z
   .string()
   .trim()
-  .regex(NOME_DO_SEGREDO, "Use letras minúsculas, números e underscore, começando por letra (até 40)");
+  .regex(
+    NOME_DO_SEGREDO,
+    "Use letras minúsculas, números e underscore, começando por letra (até 40)",
+  );
 
 /** A chave em si: sem espaço nem quebra de linha (vai num cabeçalho HTTP), 8 a 4000 caracteres. */
 export const valorDoSegredoSchema = z
@@ -47,7 +50,10 @@ export interface SegredoVisivel {
 
 const COLUNAS_VISIVEIS = "id, nome, ultimos4, created_at, updated_at, last_used_at";
 
-export async function listarSegredos(admin: SupabaseClient, org: string): Promise<SegredoVisivel[]> {
+export async function listarSegredos(
+  admin: SupabaseClient,
+  org: string,
+): Promise<SegredoVisivel[]> {
   const { data, error } = await admin
     .from("automacao_segredos")
     .select(COLUNAS_VISIVEIS)
@@ -57,7 +63,11 @@ export async function listarSegredos(admin: SupabaseClient, org: string): Promis
   return (data ?? []) as SegredoVisivel[];
 }
 
-export async function lerSegredoVisivel(admin: SupabaseClient, org: string, id: string): Promise<SegredoVisivel | null> {
+export async function lerSegredoVisivel(
+  admin: SupabaseClient,
+  org: string,
+  id: string,
+): Promise<SegredoVisivel | null> {
   const { data, error } = await admin
     .from("automacao_segredos")
     .select(COLUNAS_VISIVEIS)
@@ -95,7 +105,9 @@ export async function criarSegredo(
     .single();
   if (error) {
     if ((error as { code?: string }).code === "23505") return { ok: false, erro: "nome_em_uso" };
-    logger.warn("[automacoes.segredos] gravação falhou", { codigo: (error as { code?: string }).code });
+    logger.warn("[automacoes.segredos] gravação falhou", {
+      codigo: (error as { code?: string }).code,
+    });
     return { ok: false, erro: "falha" };
   }
   return { ok: true, segredo: data as SegredoVisivel };
@@ -119,14 +131,20 @@ export async function trocarValorDoSegredo(
     .select(COLUNAS_VISIVEIS)
     .maybeSingle();
   if (error) {
-    logger.warn("[automacoes.segredos] troca falhou", { codigo: (error as { code?: string }).code });
+    logger.warn("[automacoes.segredos] troca falhou", {
+      codigo: (error as { code?: string }).code,
+    });
     return { ok: false, erro: "falha" };
   }
   if (!data) return { ok: false, erro: "nao_encontrado" };
   return { ok: true, segredo: data as SegredoVisivel };
 }
 
-export async function apagarSegredo(admin: SupabaseClient, org: string, id: string): Promise<boolean> {
+export async function apagarSegredo(
+  admin: SupabaseClient,
+  org: string,
+  id: string,
+): Promise<boolean> {
   const { data, error } = await admin
     .from("automacao_segredos")
     .delete()
@@ -138,7 +156,11 @@ export async function apagarSegredo(admin: SupabaseClient, org: string, id: stri
 }
 
 /** Os ids de chave desta organização (o publish confere que a chave citada existe). */
-export async function idsDosSegredos(admin: SupabaseClient, org: string, ids: readonly string[]): Promise<Set<string>> {
+export async function idsDosSegredos(
+  admin: SupabaseClient,
+  org: string,
+  ids: readonly string[],
+): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
   const { data, error } = await admin
     .from("automacao_segredos")
@@ -157,15 +179,23 @@ export function segredosDoGrafo(grafo: unknown): string[] {
   for (const n of nos as Array<{ type?: unknown; config?: unknown }>) {
     if (n?.type !== "http_request") continue;
     const cfg = n.config as { headers?: unknown; body_secrets?: unknown } | undefined;
-    const headers = Array.isArray(cfg?.headers) ? (cfg.headers as HttpRequestConfig["headers"]) : [];
-    const noCorpo = Array.isArray(cfg?.body_secrets) ? (cfg.body_secrets as NonNullable<HttpRequestConfig["body_secrets"]>) : [];
+    const headers = Array.isArray(cfg?.headers)
+      ? (cfg.headers as HttpRequestConfig["headers"])
+      : [];
+    const noCorpo = Array.isArray(cfg?.body_secrets)
+      ? (cfg.body_secrets as NonNullable<HttpRequestConfig["body_secrets"]>)
+      : [];
     for (const id of segredosDoBloco({ headers, body_secrets: noCorpo })) ids.add(id);
   }
   return [...ids];
 }
 
 /** Os NOMES das automações PUBLICADAS (ativas) desta organização que usam a chave. */
-export async function automacoesQueUsam(admin: SupabaseClient, org: string, segredoId: string): Promise<string[]> {
+export async function automacoesQueUsam(
+  admin: SupabaseClient,
+  org: string,
+  segredoId: string,
+): Promise<string[]> {
   const { data: ponteiros, error } = await admin
     .from("followup_flow_pointers")
     .select("id, name, active_version_id")
@@ -173,9 +203,9 @@ export async function automacoesQueUsam(admin: SupabaseClient, org: string, segr
     .eq("surface", "automacao")
     .eq("status", "active");
   if (error) throw new Error("segredos_uso_indeterminado");
-  const ativos = ((ponteiros ?? []) as Array<{ id: string; name: string; active_version_id: string | null }>).filter(
-    (p) => p.active_version_id,
-  );
+  const ativos = (
+    (ponteiros ?? []) as Array<{ id: string; name: string; active_version_id: string | null }>
+  ).filter((p) => p.active_version_id);
   if (ativos.length === 0) return [];
   const { data: versoes, error: erroV } = await admin
     .from("followup_flow_versions")
@@ -213,7 +243,9 @@ export async function lerValoresDosSegredos(
   if (error) return { valores, inexistentes: [], indisponiveis: [...ids] };
   const indisponiveis: string[] = [];
   for (const linha of (data ?? []) as Array<{ id: string; valor_cifrado: string | null }>) {
-    const valor = linha.valor_cifrado ? await decryptWebhookSecret(admin, linha.valor_cifrado) : null;
+    const valor = linha.valor_cifrado
+      ? await decryptWebhookSecret(admin, linha.valor_cifrado)
+      : null;
     if (valor) valores.set(linha.id, valor);
     else indisponiveis.push(linha.id);
   }
@@ -222,7 +254,12 @@ export async function lerValoresDosSegredos(
 }
 
 /** Marca o uso (a tela mostra "usada pela última vez"). Melhor esforço. */
-export async function marcarUsoDosSegredos(admin: SupabaseClient, org: string, ids: readonly string[], agora: Date): Promise<void> {
+export async function marcarUsoDosSegredos(
+  admin: SupabaseClient,
+  org: string,
+  ids: readonly string[],
+  agora: Date,
+): Promise<void> {
   if (ids.length === 0) return;
   try {
     await admin

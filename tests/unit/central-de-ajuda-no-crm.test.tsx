@@ -119,9 +119,12 @@ describe("Automações e webhooks: o artigo de cada aba", () => {
       .map((a) => a.getAttribute("href"));
   }
 
-  it("Automações (aba inicial) leva às regras de automação", () => {
+  it("Regras antigas (aba inicial) leva ao artigo das regras e à tela nova de Automações", () => {
     abrir();
-    expect(linksDoPainel()).toEqual([`${BASE}/crm/automacoes/regras-em-automacoes-e-webhooks/`]);
+    expect(linksDoPainel()).toEqual([
+      `${BASE}/crm/automacoes/regras-em-automacoes-e-webhooks/`,
+      "/app/automacoes",
+    ]);
   });
 
   it("Receber dados leva às fontes e a como conectar o formulário", async () => {
@@ -147,7 +150,7 @@ describe("Automações e webhooks: o artigo de cada aba", () => {
   it("as quatro abas continuam as mesmas, na mesma ordem", () => {
     abrir();
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
-      "Automações",
+      "Regras antigas",
       "Receber dados",
       "Leads recebidos",
       "Registro de atividade",

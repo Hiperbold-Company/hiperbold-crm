@@ -21,6 +21,7 @@ import { criarFluxo, type DepsDeFollowup } from "@/lib/followup/administracao";
 import { flowGraphSchema } from "@/lib/followup/graph-schema";
 import { entradaDeFluxo } from "@/lib/followup/porta";
 import { camposDeDataDoNegocio } from "@/lib/leads/campos-do-funil";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -148,7 +149,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (chave === null)
       return ok(await criar(e.deps, parsed.data), { requestId: e.requestId, status: 201 });
     const desfecho = await comIdempotencia({
-      db: e.deps.admin,
+      db: createAdminClient(),
       organizationId: e.deps.organizationId,
       endpoint: ENDPOINT,
       chave,

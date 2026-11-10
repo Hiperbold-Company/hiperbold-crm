@@ -66,7 +66,11 @@ export interface DepsDoHttp {
   /** Grava nos campos (a mesma escrita da operação de campo). */
   gravarCampos: (ops: FieldOp[]) => Promise<Passo>;
   /** Teste: troca o contador por janela (o padrão é `checkRateLimit`). */
-  limitar?: (bucket: string, teto: number, janelaSeg: number) => Promise<Pick<RateLimitResult, "allowed">>;
+  limitar?: (
+    bucket: string,
+    teto: number,
+    janelaSeg: number,
+  ) => Promise<Pick<RateLimitResult, "allowed">>;
 }
 
 /** Chamadas HTTP por organização por minuto (todas as automações somadas). */
@@ -98,14 +102,18 @@ function segmentos(caminho: string): number {
 
 /** Segmentos vazios (`//`, ou `/` no fim). Um valor vazio que some com um segmento muda esta conta. */
 function vazios(caminho: string): number {
-  return caminho.split("/").slice(1).filter((x) => x === "").length;
+  return caminho
+    .split("/")
+    .slice(1)
+    .filter((x) => x === "").length;
 }
 
 /** O código de erro legível (vocabulário: `ERROS_DO_EFEITO`) para o que a guarda ou a rede devolveu. */
 export function codigoDaFalhaDeRede(err: unknown): string {
   const nome = err instanceof Error ? err.name : "";
   const msg = err instanceof Error ? err.message : String(err);
-  if (nome === "TimeoutError" || nome === "AbortError" || /aborted|timeout/i.test(msg)) return "http_tempo_esgotado";
+  if (nome === "TimeoutError" || nome === "AbortError" || /aborted|timeout/i.test(msg))
+    return "http_tempo_esgotado";
   if (msg === "unsafe_url:https_required") return "http_https_obrigatorio";
   if (msg === "unsafe_url:invalid" || msg === "unsafe_url:scheme") return "http_url_invalida";
   if (msg.startsWith("unsafe_url:")) return "http_destino_recusado";
@@ -115,10 +123,17 @@ export function codigoDaFalhaDeRede(err: unknown): string {
 }
 
 function falha(erro: string, detalhe: Record<string, unknown>): ResultadoDoEfeito {
-  return { desfecho: { ok: false, erro }, detalhes: [{ tipo: "http_request", ok: false, erro, ...detalhe }] };
+  return {
+    desfecho: { ok: false, erro },
+    detalhes: [{ tipo: "http_request", ok: false, erro, ...detalhe }],
+  };
 }
 
-export async function executarHttp(c: Contexto, node: NoHttp, deps: DepsDoHttp): Promise<ResultadoDoEfeito> {
+export async function executarHttp(
+  c: Contexto,
+  node: NoHttp,
+  deps: DepsDoHttp,
+): Promise<ResultadoDoEfeito> {
   const cfg = node.config;
   const contexto = contextoDoTemplate(c.fatos, c.agora);
   const base: Record<string, unknown> = { metodo: cfg.method };
@@ -136,7 +151,11 @@ export async function executarHttp(c: Contexto, node: NoHttp, deps: DepsDoHttp):
     if (v === "." || v === "..") caminhoTorto = true;
     return encodeURIComponent(v);
   });
-  const url = (modelo.origem + caminhoPreenchido + renderTemplate(modelo.resto, contexto, encodeURIComponent)).trim();
+  const url = (
+    modelo.origem +
+    caminhoPreenchido +
+    renderTemplate(modelo.resto, contexto, encodeURIComponent)
+  ).trim();
   // O que o evento guarda: host e caminho do MODELO (com as `{{...}}`), nunca o
   // valor preenchido (pode ser dado do contato) nem a query.
   let alvoDoModelo: URL;
@@ -151,10 +170,14 @@ export async function executarHttp(c: Contexto, node: NoHttp, deps: DepsDoHttp):
   if (caminhoTorto) return falha("http_url_invalida", base);
   if (alvo.username || alvo.password) return falha("http_url_invalida", base);
   // O destino tem de ser EXATAMENTE o do modelo (host e porta) antes de anexar a chave.
-  if (alvo.host !== alvoDoModelo.host || alvo.protocol !== alvoDoModelo.protocol) return falha("http_url_invalida", base);
+  if (alvo.host !== alvoDoModelo.host || alvo.protocol !== alvoDoModelo.protocol)
+    return falha("http_url_invalida", base);
   // `..` que sobrou de reserva, ou segmento esvaziado: o caminho não é o que o modelo diz.
   const esperado = modelo.caminho === "" ? 1 : segmentos(modelo.caminho);
-  if (segmentos(alvo.pathname) !== esperado || vazios(caminhoPreenchido) !== vazios(modelo.caminho)) {
+  if (
+    segmentos(alvo.pathname) !== esperado ||
+    vazios(caminhoPreenchido) !== vazios(modelo.caminho)
+  ) {
     return falha("http_url_invalida", base);
   }
 
@@ -181,9 +204,11 @@ export async function executarHttp(c: Contexto, node: NoHttp, deps: DepsDoHttp):
   // 3. Cabeçalhos.
   const headers = new Headers();
   for (const h of cfg.headers) {
-    if (cabecalhoProibido(h.name)) return falha("http_cabecalho_proibido", { ...base, cabecalho: h.name });
+    if (cabecalhoProibido(h.name))
+      return falha("http_cabecalho_proibido", { ...base, cabecalho: h.name });
     // Credencial escrita no grafo (legível por toda a organização): só chave do cofre.
-    if (cabecalhoComSegredoEscrito(h)) return falha("http_segredo_no_texto", { ...base, cabecalho: h.name });
+    if (cabecalhoComSegredoEscrito(h))
+      return falha("http_segredo_no_texto", { ...base, cabecalho: h.name });
     const valor =
       h.kind === "chave"
         ? `${h.prefix}${valores.get(h.secret_id) ?? ""}`
@@ -191,7 +216,8 @@ export async function executarHttp(c: Contexto, node: NoHttp, deps: DepsDoHttp):
           ? null
           : renderTemplate(h.value, contexto);
     if (valor === null) return falha("http_segredo_no_texto", base);
-    if (/[\r\n\0]/.test(valor)) return falha("http_cabecalho_invalido", { ...base, cabecalho: h.name });
+    if (/[\r\n\0]/.test(valor))
+      return falha("http_cabecalho_invalido", { ...base, cabecalho: h.name });
     try {
       headers.set(h.name, valor);
     } catch {
@@ -252,7 +278,8 @@ export async function executarHttp(c: Contexto, node: NoHttp, deps: DepsDoHttp):
     // Só o código: a mensagem crua pode trazer a URL com dado do contato.
     logger.warn("[automacao.http] chamada falhou", {
       codigo,
-      motivo: err instanceof Error && err.message.startsWith("unsafe_url:") ? err.message : undefined,
+      motivo:
+        err instanceof Error && err.message.startsWith("unsafe_url:") ? err.message : undefined,
       pointer_id: c.pointerId,
     });
     return falha(codigo, { ...base, duracao_ms: Date.now() - inicio });

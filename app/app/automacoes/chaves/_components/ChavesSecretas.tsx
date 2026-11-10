@@ -7,7 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useApagarSegredo, useCriarSegredo, useSegredos, useTrocarSegredo } from "@/hooks/automacoes/useSegredos";
+import {
+  useApagarSegredo,
+  useCriarSegredo,
+  useSegredos,
+  useTrocarSegredo,
+} from "@/hooks/automacoes/useSegredos";
 import { useT } from "@/hooks/i18n/useT";
 import { ApiError } from "@/lib/api/types";
 import { MASCARA } from "@/lib/automacoes/http";
@@ -78,7 +83,9 @@ export function ChavesSecretas() {
               placeholder="token_meta"
               autoComplete="off"
             />
-            <p className="text-xs text-text-muted">{t("Letras minúsculas, números e _ (ex.: token_meta).")}</p>
+            <p className="text-xs text-text-muted">
+              {t("Letras minúsculas, números e _ (ex.: token_meta).")}
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="chave-valor">{t("Chave (token)")}</Label>
@@ -89,7 +96,9 @@ export function ChavesSecretas() {
               onChange={(e) => setValor(e.target.value.trim())}
               autoComplete="new-password"
             />
-            <p className="text-xs text-text-muted">{t("Cole a chave inteira. Depois de salva, ela não aparece mais.")}</p>
+            <p className="text-xs text-text-muted">
+              {t("Cole a chave inteira. Depois de salva, ela não aparece mais.")}
+            </p>
           </div>
         </div>
         {erro && (
@@ -121,7 +130,10 @@ export function ChavesSecretas() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-col">
                       <span className="font-mono text-sm">{s.nome}</span>
-                      <span className="font-mono text-xs text-text-muted" data-testid={`chave-${s.nome}-final`}>
+                      <span
+                        className="font-mono text-xs text-text-muted"
+                        data-testid={`chave-${s.nome}-final`}
+                      >
                         {MASCARA}
                         {s.ultimos4}
                       </span>
@@ -137,7 +149,12 @@ export function ChavesSecretas() {
                       >
                         {t("Trocar valor")}
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => remover(s.id)} disabled={apagar.isPending}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => remover(s.id)}
+                        disabled={apagar.isPending}
+                      >
                         {t("Apagar")}
                       </Button>
                     </div>
@@ -154,7 +171,10 @@ export function ChavesSecretas() {
                           autoComplete="new-password"
                         />
                       </div>
-                      <Button onClick={() => salvarTroca(s.id)} disabled={novoValor.length < 8 || trocar.isPending}>
+                      <Button
+                        onClick={() => salvarTroca(s.id)}
+                        disabled={novoValor.length < 8 || trocar.isPending}
+                      >
                         {t("Salvar novo valor")}
                       </Button>
                     </div>
