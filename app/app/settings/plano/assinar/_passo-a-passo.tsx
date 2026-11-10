@@ -85,11 +85,14 @@ export function AssinarPlanoPassoAPasso({
   precisaPagador,
   planoAtualCode,
   planoInicial,
+  cicloInicial,
   depoisDePago,
   pixDisponivel,
 }: {
   /** O plano a deixar marcado ao abrir (o `?plano=` do site ou o do cadastro), já validado contra os à venda. Só marca: quem avança é o botão. */
   planoInicial?: string | null;
+  /** O ciclo a deixar marcado (o `?ciclo=` do site ou o do cadastro). Só vale junto de `planoInicial` e se o plano o vender; senão, mensal. */
+  cicloInicial?: CicloDeCompra | null;
   /** Quando o passo vive dentro do wizard de onboarding: para onde o Pix confirmado leva. */
   depoisDePago?: DepoisDePago;
   planos: PlanoParaVenda[];
@@ -107,7 +110,10 @@ export function AssinarPlanoPassoAPasso({
   const [planCode, setPlanCode] = useState<string | null>(() =>
     planoInicial && planos.some((p) => p.code === planoInicial) ? planoInicial : null,
   );
-  const [ciclo, setCiclo] = useState<CicloDeCompra>("monthly");
+  const [ciclo, setCiclo] = useState<CicloDeCompra>(() => {
+    const marcado = planoInicial ? planos.find((p) => p.code === planoInicial) : undefined;
+    return marcado && cicloInicial && ciclosDisponiveis(marcado).includes(cicloInicial) ? cicloInicial : "monthly";
+  });
   const [metodo, setMetodo] = useState<Metodo>("CREDIT_CARD");
   const [parcelas, setParcelas] = useState(1);
   const [pagador, setPagador] = useState<CamposDoFormularioDoPagador>(CAMPOS_VAZIOS);

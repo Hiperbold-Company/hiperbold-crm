@@ -24,7 +24,7 @@ import { env } from "@/lib/env";
 import { captchaRecusadoPeloGoTrue } from "@/lib/security/turnstile";
 import { enviarVerificacaoDeEmail } from "@/lib/auth/enviar-verificacao-email";
 import { gravarNoAppMetadata } from "@/lib/auth/verificacao-email";
-import { sanitizarPlano } from "@/lib/auth/plano-escolhido";
+import { sanitizarCiclo, sanitizarPlano } from "@/lib/auth/plano-escolhido";
 import { contaRecemCriada } from "@/lib/auth/conta-recem-criada";
 import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
 import { normalizarIdioma, parseAcceptLanguage } from "@/lib/i18n/idiomas";
@@ -300,6 +300,7 @@ export async function signUp(
   }
 
   const plano = convite ? null : sanitizarPlano((parsed.data as SignupInput).plano_escolhido);
+  const ciclo = convite ? null : sanitizarCiclo((parsed.data as SignupInput).ciclo_escolhido);
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
@@ -327,6 +328,8 @@ export async function signUp(
             // Só uma dica para a tela de pagamento pré-selecionar o plano; nunca preço. Sanitizada aqui de
             // novo: a ação é chamável direto.
             ...(plano ? { plano_escolhido: plano } : {}),
+            // Idem o ciclo (`?ciclo=`): lista fechada, só uma dica de seleção.
+            ...(ciclo ? { ciclo_escolhido: ciclo } : {}),
             ...(planoEscolhido ? { cobranca_plan_id: planoEscolhido } : {}),
             ...metadadosDasPistas(pistas),
           },

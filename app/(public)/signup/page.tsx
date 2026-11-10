@@ -7,7 +7,7 @@ import { marcaDaSaida } from "@/lib/branding/saida";
 import { turnstileSiteKey } from "@/lib/security/turnstile";
 import { provaDoEmailConfere, verifyInviteToken } from "@/lib/auth/invite-token";
 import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
-import { sanitizarPlano } from "@/lib/auth/plano-escolhido";
+import { sanitizarCiclo, sanitizarPlano } from "@/lib/auth/plano-escolhido";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { compraPeloClienteDisponivel } from "@/lib/onboarding/precisa-pagar";
@@ -44,11 +44,13 @@ export const generateMetadata = () => tituloDaTelaPublica((t) => t("Criar conta"
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ invite?: string; v?: string | string[]; plano?: string | string[] }>;
+  searchParams: Promise<{ invite?: string; v?: string | string[]; plano?: string | string[]; ciclo?: string | string[] }>;
 }) {
-  const { invite, v, plano: planoBruto } = await searchParams;
+  const { invite, v, plano: planoBruto, ciclo: cicloBruto } = await searchParams;
   // O plano escolhido no site de vendas: só uma dica de forma validada; a tela de pagamento confere se está à venda.
   const plano = sanitizarPlano(planoBruto);
+  // O ciclo do mesmo link: lista fechada (monthly, semiannual, yearly); fora dela, ignorado.
+  const ciclo = sanitizarCiclo(cicloBruto);
   const payload = invite ? verifyInviteToken(invite) : null;
   // `v`: a prova de que o link veio pelo e-mail do convidado (D-204). Só atravessa o cadastro quando confere.
   const prova = payload && typeof v === "string" && provaDoEmailConfere(payload, v) ? v : undefined;
@@ -139,6 +141,7 @@ export default async function SignupPage({
         convite={convite}
         turnstileSiteKey={turnstileSiteKey()}
         plano={plano}
+        ciclo={ciclo}
         compraLigada={compraLigada}
         planos={planos}
         planoInicial={planoInicialDoSeletor(planos, cadastro?.padraoId ?? null)}

@@ -196,6 +196,29 @@ describe("plano escolhido (dica)", () => {
   });
 });
 
+describe("ciclo escolhido (dica)", () => {
+  it("vai para o user_metadata.ciclo_escolhido só se estiver na lista fechada; o resto é descartado sem recusar o cadastro", async () => {
+    signUpDoProvedor.mockResolvedValue({ data: { user: { id: USER }, session: null }, error: null });
+    const { signUp } = await import("@/app/actions/auth/signUp");
+
+    await signUp(entrada({ plano_escolhido: "max", ciclo_escolhido: " Yearly " }));
+    expect(signUpDoProvedor.mock.calls[0]![0].options.data).toEqual({
+      org_name: "Plata Iphones",
+      plano_escolhido: "max",
+      ciclo_escolhido: "yearly",
+    });
+
+    signUpDoProvedor.mockClear();
+    const res = await signUp(entrada({ plano_escolhido: "max", ciclo_escolhido: "anual" }));
+    expect(res.ok).toBe(true);
+    expect(signUpDoProvedor.mock.calls[0]![0].options.data).toEqual({ org_name: "Plata Iphones", plano_escolhido: "max" });
+
+    signUpDoProvedor.mockClear();
+    await signUp(entrada({ plano_escolhido: "max" }));
+    expect(signUpDoProvedor.mock.calls[0]![0].options.data).toEqual({ org_name: "Plata Iphones", plano_escolhido: "max" });
+  });
+});
+
 describe("verificação de e-mail do CRM no cadastro", () => {
   it("sessão aberta (confirmação do provedor desligada): manda o e-mail com o link e grava só o hash", async () => {
     const f = criarAuthAdminFalso([{ id: USER, email: "dono@plata.test", app_metadata: { provider: "email" } }]);

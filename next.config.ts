@@ -106,6 +106,10 @@ const nextConfig: NextConfig = {
       beforeFiles: [
         { source: "/", destination: "/site/index.html" },
         { source: "/precos", destination: "/site/precos/index.html" },
+        // Páginas de funcionalidade (D-228) e os prints delas. O print vem antes: sem a regra
+        // própria, "/funcionalidades/crm.png" casaria com a da página.
+        { source: "/funcionalidades/:arquivo([a-z0-9-]+\\.png)", destination: "/site/funcionalidades/:arquivo" },
+        { source: "/funcionalidades/:slug([a-z0-9-]+)", destination: "/site/funcionalidades/:slug/index.html" },
         { source: "/_hipercrm/:path*", destination: "/site/_hipercrm/:path*" },
         { source: "/og.png", destination: "/site/og.png" },
         { source: "/favicon.svg", destination: "/site/favicon.svg" },
