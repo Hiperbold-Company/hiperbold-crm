@@ -200,11 +200,28 @@ describe("ligada: o provisionamento", () => {
     expect((await (await POST(pedido(SEGREDO))).json()).data).not.toHaveProperty("api_key_warning");
   });
 
-  it("leitura do plano que falha não vira aviso e não derruba o provisionamento", async () => {
+  it("leitura do plano que falha avisa que não foi possível confirmar a API, sem derrubar o provisionamento", async () => {
     h.plano.mockResolvedValue({ limites: {}, leituraFalhou: true });
     const res = await POST(pedido(SEGREDO));
     expect(res.status).toBe(201);
-    expect((await res.json()).data).not.toHaveProperty("api_key_warning");
+    expect(await res.json()).toEqual({
+      data: {
+        organization_id: "org-1",
+        api_key: "dsk_abcd1234_segredo",
+        replay: false,
+        api_key_warning: "plano_nao_confirmado",
+      },
+    });
+  });
+
+  it("leitura do plano que lança também avisa que não foi possível confirmar, e segue 201", async () => {
+    h.plano.mockRejectedValue(new Error("banco fora do ar"));
+    const res = await POST(pedido(SEGREDO));
+    expect(res.status).toBe(201);
+    expect((await res.json()).data).toMatchObject({
+      api_key: "dsk_abcd1234_segredo",
+      api_key_warning: "plano_nao_confirmado",
+    });
   });
 
   it("replay → 200", async () => {

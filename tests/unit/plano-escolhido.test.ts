@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { sanitizarPlano } from "@/lib/auth/plano-escolhido";
+import { cicloPreSelecionado, sanitizarCiclo, sanitizarPlano } from "@/lib/auth/plano-escolhido";
 
 describe("?plano= do site: só a forma é aceita", () => {
   it.each([
@@ -41,5 +41,60 @@ describe("?plano= do site: só a forma é aceita", () => {
     expect(sanitizarPlano(["max", "pro"])).toBe("max");
     expect(sanitizarPlano(["../x", "pro"])).toBeNull();
     expect(sanitizarPlano([])).toBeNull();
+  });
+});
+
+describe("?ciclo= do site: lista fechada", () => {
+  it.each([
+    ["monthly", "monthly"],
+    ["semiannual", "semiannual"],
+    ["yearly", "yearly"],
+    ["  YEARLY ", "yearly"],
+  ])("aceita %j", (entrada, esperado) => {
+    expect(sanitizarCiclo(entrada)).toBe(esperado);
+  });
+
+  it.each([
+    ["fora da lista", "anual"],
+    ["vazio", ""],
+    ["prefixo da lista", "year"],
+    ["tag HTML", "<script>"],
+    ["caminho", "../monthly"],
+    ["nulo", null],
+    ["indefinido", undefined],
+    ["número", 12],
+    ["objeto", { a: 1 }],
+    ["lista vazia", []],
+  ])("ignora %s", (_nome, entrada) => {
+    expect(sanitizarCiclo(entrada)).toBeNull();
+  });
+
+  it("repetido na URL vale o primeiro", () => {
+    expect(sanitizarCiclo(["yearly", "monthly"])).toBe("yearly");
+    expect(sanitizarCiclo(["x", "monthly"])).toBeNull();
+  });
+});
+
+describe("cicloPreSelecionado: só vale se o plano escolhido vende aquele ciclo", () => {
+  const TODOS = ["monthly", "semiannual", "yearly"];
+
+  it("ciclo válido chega pré-selecionado", () => {
+    expect(cicloPreSelecionado(TODOS, ["yearly"])).toBe("yearly");
+    expect(cicloPreSelecionado(TODOS, ["semiannual"])).toBe("semiannual");
+  });
+
+  it("ciclo inválido é ignorado e o seguinte válido vale (URL antes do cadastro)", () => {
+    expect(cicloPreSelecionado(TODOS, ["anual", "semiannual"])).toBe("semiannual");
+    expect(cicloPreSelecionado(TODOS, ["anual", "<x>", 5, null])).toBeNull();
+  });
+
+  it("ausente não muda nada", () => {
+    expect(cicloPreSelecionado(TODOS, [undefined, undefined])).toBeNull();
+    expect(cicloPreSelecionado(TODOS, [])).toBeNull();
+  });
+
+  it("ciclo que o plano não vende é ignorado (sem preço anual no catálogo)", () => {
+    expect(cicloPreSelecionado(["monthly", "semiannual"], ["yearly"])).toBeNull();
+    expect(cicloPreSelecionado(["monthly", "semiannual"], ["yearly", "semiannual"])).toBe("semiannual");
   });
 });

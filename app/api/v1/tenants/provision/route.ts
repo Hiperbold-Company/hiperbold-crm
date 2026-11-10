@@ -68,16 +68,23 @@ function bearerConfere(req: NextRequest, esperado: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** `true` só quando o plano foi lido e não inclui API nem MCP. Nunca lança: o provisionamento já foi feito. */
-async function planoNaoServeAChave(organizationId: string): Promise<boolean> {
+/**
+ * O aviso sobre a chave, ou `null` quando não há o que avisar. Nunca lança: o provisionamento já foi feito.
+ * - `plano_sem_api`: o plano foi lido e não inclui API nem MCP (a chave `dsk_` não serviria a nada).
+ * - `plano_nao_confirmado`: a leitura do plano falhou (ou lançou), então não dá para afirmar nem negar que o
+ *   plano inclui API. Sem este aviso o integrador leria o silêncio como "está tudo certo".
+ */
+type AvisoDaChave = "plano_sem_api" | "plano_nao_confirmado";
+
+async function avisoDaChave(organizationId: string): Promise<AvisoDaChave | null> {
   try {
     const { limites, leituraFalhou } = await planoDaOrganizacao(createAdminClient(), organizationId, logger);
-    if (leituraFalhou) return false;
+    if (leituraFalhou) return "plano_nao_confirmado";
     const recursos = recursosDaChave(limites, false);
-    return !recursos.api && !recursos.mcp;
+    return !recursos.api && !recursos.mcp ? "plano_sem_api" : null;
   } catch (err) {
     logger.warn("[tenants.provision] plano não lido para o aviso da chave", { err, organizationId });
-    return false;
+    return "plano_nao_confirmado";
   }
 }
 
@@ -156,16 +163,16 @@ export async function POST(req: NextRequest): Promise<Response> {
       requestId,
     });
 
-    // Aviso, não recusa: a empresa pode subir de plano depois. Só avisa quando o
-    // plano foi lido e não inclui API nem MCP (a chave `dsk_` não serviria a nada).
-    const chaveSemUso = await planoNaoServeAChave(organizationId);
+    // Aviso, não recusa: a empresa pode subir de plano depois. Avisa quando o plano foi lido e não inclui
+    // API nem MCP, e também quando a leitura falhou (não foi possível confirmar se o plano inclui API).
+    const avisoApi = await avisoDaChave(organizationId);
 
     return ok(
       {
         organization_id: organizationId,
         api_key: apiKey,
         replay,
-        ...(chaveSemUso ? { api_key_warning: "plano_sem_api" as const } : {}),
+        ...(avisoApi ? { api_key_warning: avisoApi } : {}),
       },
       {
         status: replay ? 200 : 201,

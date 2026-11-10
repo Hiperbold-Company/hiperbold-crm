@@ -7,12 +7,13 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
 import { pedidoDaAssinatura } from "@/lib/onboarding/pedido-da-assinatura";
 import { podeEscolherOutraForma } from "@/lib/onboarding/situacao-do-pedido";
-import { planoPreSelecionado } from "@/lib/auth/plano-escolhido";
+import { cicloPreSelecionado, planoPreSelecionado } from "@/lib/auth/plano-escolhido";
 import { adminsDaOrganizacao } from "@/lib/email/conta-e-cobranca/enviar";
 import { precisaPagarAntesDeConfigurar } from "@/lib/onboarding/precisa-pagar";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+import { ciclosDisponiveis } from "@/app/app/settings/plano/_logica-compra";
 import { dadosDaCompraDePlano } from "@/app/app/settings/plano/assinar/_dados";
 import { AssinarPlanoPassoAPasso } from "@/app/app/settings/plano/assinar/_passo-a-passo";
 import { AguardandoPagamento } from "./_aguardando";
@@ -31,7 +32,7 @@ export const dynamic = "force-dynamic";
 export default async function PlanoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ plano?: string | string[] }>;
+  searchParams: Promise<{ plano?: string | string[]; ciclo?: string | string[] }>;
 }) {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
@@ -90,12 +91,18 @@ export default async function PlanoPage({
   const dados = await dadosDaCompraDePlano(admin, activeOrg.orgId, ambiente, logger);
 
   // Pré-seleção: `?plano=` e, na falta, o que o cadastro guardou. `getUser()` valida o JWT no servidor.
-  const { plano: planoDaUrl } = await searchParams;
+  const { plano: planoDaUrl, ciclo: cicloDaUrl } = await searchParams;
   const { data: sessao } = await (await createClient()).auth.getUser();
   const planoInicial = planoPreSelecionado(
     dados.planos.map((p) => p.code),
     [planoDaUrl, sessao.user?.user_metadata?.plano_escolhido],
   );
+  // O ciclo vai pelo mesmo caminho (`?ciclo=` e, na falta, o do cadastro) e só vale se o plano pré-selecionado
+  // o vende; sem plano pré-selecionado não há ciclo a marcar.
+  const planoMarcado = planoInicial ? dados.planos.find((p) => p.code === planoInicial) : undefined;
+  const cicloInicial = planoMarcado
+    ? cicloPreSelecionado(ciclosDisponiveis(planoMarcado), [cicloDaUrl, sessao.user?.user_metadata?.ciclo_escolhido])
+    : null;
 
   return (
     <div className="space-y-6">
@@ -130,6 +137,7 @@ export default async function PlanoPage({
           planoAtualCode={dados.planoAtualCode}
           pixDisponivel={dados.pixDisponivel}
           planoInicial={planoInicial}
+          cicloInicial={cicloInicial}
           depoisDePago={{ href: "/onboarding" }}
         />
       )}

@@ -45,6 +45,7 @@ export function SignupForm({
   convite,
   turnstileSiteKey,
   plano,
+  ciclo,
   compraLigada = false,
   planos = [],
   planoInicial,
@@ -53,6 +54,8 @@ export function SignupForm({
   turnstileSiteKey?: string | null;
   /** O `?plano=` do site, já sanitizado pela página (`lib/auth/plano-escolhido.ts`). Só uma dica. */
   plano?: string | null;
+  /** O `?ciclo=` do site, já checado contra a lista fechada pela página (`sanitizarCiclo`). Só uma dica. */
+  ciclo?: string | null;
   /**
    * A compra do plano pelo cliente está LIGADA nesta instalação (calculado no servidor pela página)? Só então
    * o cadastro pede o aceite dos Termos e segue o caminho "paga primeiro". Desligada (instalação própria), o
@@ -100,6 +103,7 @@ export function SignupForm({
       // Desmarcado de partida: o aceite é um ato da pessoa (o valor inicial só existe para o tipo fechar).
       ...(compraLigada ? { aceite_termos: false as unknown as true } : {}),
       plano_escolhido: plano ?? undefined,
+      ciclo_escolhido: ciclo ?? undefined,
     },
   });
   const password = useWatch({ control, name: "password" });
@@ -117,7 +121,7 @@ export function SignupForm({
           password: values.password,
           password_confirm: values.password_confirm,
         }
-      : { ...semAceite, ...(compraLigada ? { aceite_termos } : {}), plano_escolhido: plano ?? undefined };
+      : { ...semAceite, ...(compraLigada ? { aceite_termos } : {}), plano_escolhido: plano ?? undefined, ciclo_escolhido: ciclo ?? undefined };
     // O idioma desta tela e o fuso do navegador: a empresa nasce com eles
     // quando o e-mail for confirmado (`lib/auth/perfil-da-empresa-nova.ts`).
     const pistas = { idioma, fuso: fusoDoNavegador() };

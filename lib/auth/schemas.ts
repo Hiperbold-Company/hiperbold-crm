@@ -28,6 +28,8 @@ const signupBase = {
   password_confirm: z.string(),
   /** Dica do `?plano=` do site (ver `lib/auth/plano-escolhido.ts`); a ação sanitiza de novo. */
   plano_escolhido: z.string().max(40).optional(),
+  /** Dica do `?ciclo=` do site; lista fechada checada pela ação (valor fora dela é ignorado, nunca recusa o cadastro). */
+  ciclo_escolhido: z.string().max(20).optional(),
 };
 
 const senhasCoincidem = {
