@@ -154,6 +154,15 @@ test.describe("Automações — tela única", () => {
   });
 
   test("Usar um modelo cria um rascunho que abre no editor", async ({ page }) => {
+    // O modelo nasce com nome fixo e o produto recusa nome repetido: limpa o rascunho de uma
+    // rodada anterior no mesmo banco, para a spec poder rodar de novo.
+    const { error: limpar } = await banco
+      .from("followup_flow_pointers")
+      .delete()
+      .eq("organization_id", orgId)
+      .eq("surface", "automacao")
+      .eq("name", "Boas-vindas ao novo contato");
+    expect(limpar, "limpar o rascunho do modelo de uma rodada anterior").toBeNull();
     await loginComoAdmin(page, creds);
     await page.goto("/app/automacoes");
     await page.getByTestId("usar-modelo-de-automacao").first().click();
@@ -169,6 +178,9 @@ test.describe("Automações — tela única", () => {
       .eq("id", pointerId)
       .single();
     expect(data).toMatchObject({ status: "draft", surface: "automacao", active_version_id: null });
+    // O editor carrega depois da URL: sem esperar o fluxo desenhado a foto sairia em esqueleto.
+    await expect(page.locator(".react-flow__node").first()).toBeVisible({ timeout: PRAZO });
+    await expect(page.getByRole("button", { name: "Publicar", exact: true })).toBeVisible();
     await foto(page, "07-rascunho-aberto-no-editor");
   });
 });

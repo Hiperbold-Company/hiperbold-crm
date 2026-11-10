@@ -141,15 +141,15 @@ test.describe("webhooks & automações — fluxo completo", () => {
       await page.getByRole("link", { name: /^Webhooks e regras antigas/ }).click();
       await page.waitForURL(/\/app\/webhooks/);
 
-      // --- Step 2: a tela abre em "Automações" (a aba de destaque); a ordem das
-      // abas é Automações, Receber dados, Leads recebidos, Registro de atividade ---
+      // --- Step 2: a tela abre em "Regras antigas" (a aba de destaque); a ordem das
+      // abas é Regras antigas, Receber dados, Leads recebidos, Registro de atividade ---
       await expect(page.getByRole("heading", { name: "Webhooks e regras antigas", level: 1 })).toBeVisible();
       await expect(page.getByRole("tab", { name: "Regras antigas" })).toHaveAttribute(
         "data-state",
         "active",
       );
       await expect(page.getByRole("tab")).toHaveText([
-        "Automações",
+        "Regras antigas",
         "Receber dados",
         "Leads recebidos",
         "Registro de atividade",
@@ -188,7 +188,7 @@ test.describe("webhooks & automações — fluxo completo", () => {
       await expectToast(page, "Funcionou! Um lead de teste entrou no seu funil.");
       await page.keyboard.press("Escape");
 
-      // --- Step 4: aba Automações — criar regra + ligar ---
+      // --- Step 4: aba Regras antigas — criar regra + ligar ---
       await page.getByRole("tab", { name: "Regras antigas" }).click();
       await page.getByRole("button", { name: /Nova automação|Criar primeira automação/ }).click();
       const ruleSheet = page.getByRole("dialog");

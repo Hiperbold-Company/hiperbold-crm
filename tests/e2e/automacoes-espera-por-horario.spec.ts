@@ -168,7 +168,8 @@ test.describe("Automações — esperar até amanhã 9h e 'Está no horário?'",
       data: { name: nomeDoContato, source: "manual" },
     });
     expect(criado.status(), `criar o contato: ${await criado.text()}`).toBe(201);
-    const contatoId = ((await criado.json()) as { data: { id: string } }).data.id;
+    const contatoId = ((await criado.json()) as { data: { contact: { id: string } } }).data.contact
+      .id;
 
     const { data: org } = await banco
       .from("organizations")
@@ -267,7 +268,6 @@ test.describe("Automações — esperar até amanhã 9h e 'Está no horário?'",
     await relogio(page);
 
     // A execução estacionou até amanhã, 09:00, no relógio da organização.
-    let ultimoErro = "";
     const execucao = async () => {
       const r = await banco
         .from("followup_enrollments")
@@ -275,8 +275,7 @@ test.describe("Automações — esperar até amanhã 9h e 'Está no horário?'",
         .eq("organization_id", creds.org_id)
         .eq("pointer_id", automacaoId)
         .eq("contact_id", contatoId)
-        .single();
-      ultimoErro = `${automacaoId}/${contatoId}/${creds.org_id}: ${JSON.stringify(r.error)}`;
+        .maybeSingle();
       return r.data as {
         id: string;
         status: string;
@@ -286,9 +285,9 @@ test.describe("Automações — esperar até amanhã 9h e 'Está no horário?'",
     };
     // A matrícula nasce no tick do relógio, não no clique: a linha pode ainda não existir.
     await expect
-      .poll(async () => (await execucao())?.current_node_id ?? ultimoErro, { timeout: PRAZO })
+      .poll(async () => (await execucao())?.current_node_id ?? null, { timeout: PRAZO })
       .toBe(espera);
-    const estacionada = await execucao();
+    const estacionada = (await execucao())!;
     const quando = paredeNoFuso(new Date(estacionada.next_eval_at), fuso);
     expect(quando.hora, `volta às 09:00 em ${fuso}`).toBe("09:00");
     expect(quando.dia, "volta AMANHÃ, no dia da organização").toBe(
