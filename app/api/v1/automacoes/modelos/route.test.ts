@@ -16,14 +16,18 @@ const deps = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api/auth-dual-admin", async () => {
-  const real = await vi.importActual<typeof import("@/lib/api/auth-dual-admin")>("@/lib/api/auth-dual-admin");
+  const real = await vi.importActual<typeof import("@/lib/api/auth-dual-admin")>(
+    "@/lib/api/auth-dual-admin",
+  );
   return { ...real, autorizarAdministracao: deps.autorizar };
 });
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: deps.suporte }));
 vi.mock("@/lib/audit", () => ({ audit: deps.audit }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => deps.db }));
 vi.mock("@/lib/followup/administracao", async () => {
-  const real = await vi.importActual<typeof import("@/lib/followup/administracao")>("@/lib/followup/administracao");
+  const real = await vi.importActual<typeof import("@/lib/followup/administracao")>(
+    "@/lib/followup/administracao",
+  );
   return { ...real, criarFluxo: deps.criar };
 });
 
@@ -48,7 +52,15 @@ function banco() {
     const rodar = () => {
       const t = (tabelas[tabela] ??= []);
       if (op === "insert") {
-        if (tabela === "idempotency_keys" && t.some((l) => l.organization_id === valores!.organization_id && l.key === valores!.key && l.endpoint === valores!.endpoint)) {
+        if (
+          tabela === "idempotency_keys" &&
+          t.some(
+            (l) =>
+              l.organization_id === valores!.organization_id &&
+              l.key === valores!.key &&
+              l.endpoint === valores!.endpoint,
+          )
+        ) {
           return { data: null, error: { code: "23505" } };
         }
         const nova = { id: `id-${t.length + 1}`, ...valores };
@@ -76,7 +88,8 @@ function banco() {
         const r = rodar();
         return { data: r.data?.[0] ?? null, error: r.error };
       },
-      then: (ok: (v: unknown) => unknown, erro: (e: unknown) => unknown) => Promise.resolve(rodar()).then(ok, erro),
+      then: (ok: (v: unknown) => unknown, erro: (e: unknown) => unknown) =>
+        Promise.resolve(rodar()).then(ok, erro),
     };
     return q;
   }
@@ -84,7 +97,15 @@ function banco() {
 }
 
 function sessao() {
-  return { ok: true, via: "session", actor: { type: "user", id: "u1", role: "manager" }, organizationId: ORG, supabase: {}, idioma: "pt-BR", user: { id: "u1" } };
+  return {
+    ok: true,
+    via: "session",
+    actor: { type: "user", id: "u1", role: "manager" },
+    organizationId: ORG,
+    supabase: {},
+    idioma: "pt-BR",
+    user: { id: "u1" },
+  };
 }
 
 const req = (corpo: unknown, headers: Record<string, string> = {}) =>
@@ -99,15 +120,26 @@ beforeEach(() => {
   tabelas = {
     crm_stages: [
       { id: ETAPA, organization_id: ORG, pipeline_id: FUNIL, is_archived: false },
-      { id: ETAPA_DA_OUTRA, organization_id: OUTRA, pipeline_id: "bbbbbbbb-0000-4000-8000-000000000002", is_archived: false },
+      {
+        id: ETAPA_DA_OUTRA,
+        organization_id: OUTRA,
+        pipeline_id: "bbbbbbbb-0000-4000-8000-000000000002",
+        is_archived: false,
+      },
       { id: ETAPA_ARQUIVADA, organization_id: ORG, pipeline_id: FUNIL, is_archived: true },
     ],
     crm_pipelines: [
-      { id: FUNIL, organization_id: ORG, settings: { fields: [{ key: "data_da_visita", label: "Data da visita", type: "date" }] } },
+      {
+        id: FUNIL,
+        organization_id: ORG,
+        settings: { fields: [{ key: "data_da_visita", label: "Data da visita", type: "date" }] },
+      },
       {
         id: "bbbbbbbb-0000-4000-8000-000000000002",
         organization_id: OUTRA,
-        settings: { fields: [{ key: "data_secreta", label: "Segredo da outra conta", type: "date" }] },
+        settings: {
+          fields: [{ key: "data_secreta", label: "Segredo da outra conta", type: "date" }],
+        },
       },
     ],
     followup_flow_pointers: [],
@@ -133,7 +165,10 @@ describe("modelos de automação: quem pode", () => {
   it("papel abaixo de gerente: a recusa da autorização volta e nada é criado", async () => {
     deps.autorizar.mockResolvedValue({ ok: false, response: new Response(null, { status: 403 }) });
     expect((await POST(req({ model_id: "boas_vindas" }))).status).toBe(403);
-    expect(deps.autorizar).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ role: "manager", escrita: true }));
+    expect(deps.autorizar).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ role: "manager", escrita: true }),
+    );
     expect(deps.criar).not.toHaveBeenCalled();
   });
 
@@ -191,7 +226,9 @@ describe("modelos de automação: entrada inválida", () => {
   });
 
   it("campo de data que só existe no funil de OUTRA organização: recusado", async () => {
-    const r = await POST(req({ model_id: "lembrete_antes_da_data", campo_de_data: "data_secreta" }));
+    const r = await POST(
+      req({ model_id: "lembrete_antes_da_data", campo_de_data: "data_secreta" }),
+    );
     expect(r.status).toBe(422);
     expect((await r.json()).error.code).toBe("campo_de_data_ausente");
     expect(deps.criar).not.toHaveBeenCalled();
@@ -209,14 +246,21 @@ describe("modelos de automação: sucesso e idempotência", () => {
     const r = await POST(req({ model_id: "boas_vindas", name: "Minha boas-vindas" }));
     expect(r.status).toBe(201);
     expect((await r.json()).data).toEqual({ id: PTR, model_id: "boas_vindas" });
-    expect(deps.criar).toHaveBeenCalledWith(expect.anything(), { name: "Minha boas-vindas", surface: "automacao" });
+    expect(deps.criar).toHaveBeenCalledWith(expect.anything(), {
+      name: "Minha boas-vindas",
+      surface: "automacao",
+    });
     const ptr = tabelas.followup_flow_pointers![0]!;
     expect(ptr).toMatchObject({ status: "draft", active_version_id: null });
     const grafo = ptr.draft_graph as { nodes: Array<{ type: string }> };
     expect(grafo.nodes.map((n) => n.type)).toEqual(["trigger", "message", "end"]);
     expect((deps.db as { rpc: ReturnType<typeof vi.fn> }).rpc).not.toHaveBeenCalled();
     expect(deps.audit).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "automacao.criada_de_modelo", organizationId: ORG, metadata: { model_id: "boas_vindas" } }),
+      expect.objectContaining({
+        action: "automacao.criada_de_modelo",
+        organizationId: ORG,
+        metadata: { model_id: "boas_vindas" },
+      }),
     );
   });
 
@@ -228,9 +272,13 @@ describe("modelos de automação: sucesso e idempotência", () => {
   });
 
   it("campo de data de um funil da própria organização: aceito", async () => {
-    const r = await POST(req({ model_id: "lembrete_antes_da_data", campo_de_data: "data_da_visita" }));
+    const r = await POST(
+      req({ model_id: "lembrete_antes_da_data", campo_de_data: "data_da_visita" }),
+    );
     expect(r.status).toBe(201);
-    expect(JSON.stringify(tabelas.followup_flow_pointers![0]!.draft_graph)).toContain("data_da_visita");
+    expect(JSON.stringify(tabelas.followup_flow_pointers![0]!.draft_graph)).toContain(
+      "data_da_visita",
+    );
   });
 
   it("mesma Idempotency-Key e mesmo corpo: um rascunho só, a segunda volta o mesmo recibo", async () => {

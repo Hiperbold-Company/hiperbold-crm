@@ -28,8 +28,17 @@
  * do funil, aviso à equipe, iniciar fluxo — fica no motor antigo, com o motivo.
  */
 import type { CrmAction, FieldRef, OperadorDeCampo } from "@/lib/automacoes/schemas";
-import { CAMPOS_DO_CONTATO, CAMPOS_DO_NEGOCIO, type AutomacaoTrigger } from "@/lib/automacoes/schemas";
-import type { FlowEdge, FlowGraph, FlowNode, NovaConditionCheck } from "@/lib/followup/graph-schema";
+import {
+  CAMPOS_DO_CONTATO,
+  CAMPOS_DO_NEGOCIO,
+  type AutomacaoTrigger,
+} from "@/lib/automacoes/schemas";
+import type {
+  FlowEdge,
+  FlowGraph,
+  FlowNode,
+  NovaConditionCheck,
+} from "@/lib/followup/graph-schema";
 
 /** A linha de `automation_rules` que a conversão lê (o resto não importa). */
 export interface RegraAntiga {
@@ -60,15 +69,18 @@ const CHAVE = /^[a-z][a-z0-9_]*$/i;
 
 /** Motivo por gatilho SEM equivalente. Um mapa: o teste confere que cada um tem frase. */
 export const GATILHOS_SEM_EQUIVALENTE: Record<string, string> = {
-  "lead.won": "O gatilho \"negócio ganho\" ainda não existe nas automações novas.",
-  "lead.lost": "O gatilho \"negócio perdido\" ainda não existe nas automações novas.",
-  "lead.reopened": "O gatilho \"negócio reaberto\" ainda não existe nas automações novas.",
-  "lead.assigned": "O gatilho \"responsável mudou\" ainda não existe nas automações novas.",
-  "message.failed": "O gatilho \"mensagem não entregue\" ainda não existe nas automações novas.",
-  "contact.phone_added": "O gatilho \"contato ganhou telefone\" ainda não existe nas automações novas.",
-  "lead.date_field_due": "O gatilho de data do funil dispara num horário diferente nas automações novas.",
-  "lead.silent_for": "O gatilho \"negócio em silêncio\" conta o tempo de outro jeito nas automações novas.",
-  "lead.stage_stale": "O gatilho \"negócio parado na etapa\" ainda não existe nas automações novas.",
+  "lead.won": 'O gatilho "negócio ganho" ainda não existe nas automações novas.',
+  "lead.lost": 'O gatilho "negócio perdido" ainda não existe nas automações novas.',
+  "lead.reopened": 'O gatilho "negócio reaberto" ainda não existe nas automações novas.',
+  "lead.assigned": 'O gatilho "responsável mudou" ainda não existe nas automações novas.',
+  "message.failed": 'O gatilho "mensagem não entregue" ainda não existe nas automações novas.',
+  "contact.phone_added":
+    'O gatilho "contato ganhou telefone" ainda não existe nas automações novas.',
+  "lead.date_field_due":
+    "O gatilho de data do funil dispara num horário diferente nas automações novas.",
+  "lead.silent_for":
+    'O gatilho "negócio em silêncio" conta o tempo de outro jeito nas automações novas.',
+  "lead.stage_stale": 'O gatilho "negócio parado na etapa" ainda não existe nas automações novas.',
   // Prova (medida em 10/11/2026): o motor antigo dispara em TODO `message.received` (lib/automation/engine.ts não filtra
   // tipo nem idade; lib/automation/engine.handler.ts:25 só pula canal desativado), e o gatilho novo descarta reação e
   // tipo não suportado (gatilhos.ts:257), mensagem com mais de 10 min (gatilhos.handler.ts, mensagemPodeDisparar) e
@@ -88,13 +100,22 @@ export const ACOES_SEM_EQUIVALENTE: Record<string, string> = {
     "O aviso a outro sistema assina com o segredo da regra e manda outro formato; não dá para levar sem expor o segredo.",
   create_or_move_lead:
     "Criar ou mover o negócio tem regras próprias entre funis no motor antigo (transferir, continuar no pós-venda).",
-  start_message_flow: "Iniciar um follow-up a partir da regra ainda não existe nas automações novas.",
+  start_message_flow:
+    "Iniciar um follow-up a partir da regra ainda não existe nas automações novas.",
   apply_task_plan: "Plano de tarefas ainda não existe nas automações novas.",
-  set_lead_date_field: "Gravar a data do atendimento num campo ainda não existe nas automações novas.",
+  set_lead_date_field:
+    "Gravar a data do atendimento num campo ainda não existe nas automações novas.",
   notify_team: "O aviso à equipe pelo WhatsApp da empresa ainda não existe nas automações novas.",
 };
 
-const EVENTOS_DE_AGENDA = ["created", "confirmed", "rescheduled", "cancelled", "completed", "no_show"] as const;
+const EVENTOS_DE_AGENDA = [
+  "created",
+  "confirmed",
+  "rescheduled",
+  "cancelled",
+  "completed",
+  "no_show",
+] as const;
 
 type Condicao = { field: string; op: string; value: string };
 
@@ -107,14 +128,21 @@ function lerCondicoes(raw: unknown): { lista: unknown[]; combinador: "and" | "or
   if (raw === null || raw === undefined) return { lista: [], combinador: "and" };
   if (Array.isArray(raw)) return { lista: raw, combinador: "and" };
   if (ehObjeto(raw)) {
-    if (Array.isArray(raw.all) && raw.any === undefined) return { lista: raw.all, combinador: "and" };
-    if (Array.isArray(raw.any) && raw.all === undefined) return { lista: raw.any, combinador: "or" };
+    if (Array.isArray(raw.all) && raw.any === undefined)
+      return { lista: raw.all, combinador: "and" };
+    if (Array.isArray(raw.any) && raw.all === undefined)
+      return { lista: raw.any, combinador: "or" };
   }
   return null;
 }
 
 function ehCondicao(v: unknown): v is Condicao {
-  return ehObjeto(v) && typeof v.field === "string" && typeof v.op === "string" && typeof v.value === "string";
+  return (
+    ehObjeto(v) &&
+    typeof v.field === "string" &&
+    typeof v.op === "string" &&
+    typeof v.value === "string"
+  );
 }
 
 const OP_DIRETO: Record<string, OperadorDeCampo> = {
@@ -131,8 +159,15 @@ const OP_DE_ORDEM = new Set(["gt", "gte", "lt", "lte"]);
 function campoNovo(field: string): FieldRef | null {
   const [escopo, ...resto] = field.split(".");
   if (escopo !== "lead" && escopo !== "contact") return null;
-  if (resto.length === 2 && resto[0] === "custom_fields" && CHAVE.test(resto[1]!) && resto[1]!.length <= 40) {
-    return escopo === "lead" ? { scope: "lead_custom", key: resto[1]! } : { scope: "contact_custom", key: resto[1]! };
+  if (
+    resto.length === 2 &&
+    resto[0] === "custom_fields" &&
+    CHAVE.test(resto[1]!) &&
+    resto[1]!.length <= 40
+  ) {
+    return escopo === "lead"
+      ? { scope: "lead_custom", key: resto[1]! }
+      : { scope: "contact_custom", key: resto[1]! };
   }
   if (resto.length !== 1) return null;
   const chave = resto[0]!;
@@ -151,8 +186,17 @@ function converterCondicao(c: Condicao): NovaConditionCheck | string {
   // Tags: "contém X" numa lista é pertinência nos dois motores.
   if (c.field === "lead.tags" || c.field === "contact.tags") {
     const alvo = c.field === "lead.tags" ? "lead" : "contact";
-    if ((c.op === "contains" || c.op === "not_contains") && valor.length > 0 && valor.length <= 60) {
-      return { kind: "tag", target: alvo, op: c.op === "contains" ? "has_any" : "has_none", tags: [valor] };
+    if (
+      (c.op === "contains" || c.op === "not_contains") &&
+      valor.length > 0 &&
+      valor.length <= 60
+    ) {
+      return {
+        kind: "tag",
+        target: alvo,
+        op: c.op === "contains" ? "has_any" : "has_none",
+        tags: [valor],
+      };
     }
   }
   if (c.field === "lead.stage_id" && (c.op === "eq" || c.op === "neq") && UUID.test(valor)) {
@@ -160,15 +204,21 @@ function converterCondicao(c: Condicao): NovaConditionCheck | string {
   }
   const campo = campoNovo(c.field);
   if (!campo) return `A condição sobre «${c.field}» ainda não existe nas automações novas.`;
-  if (c.field === "lead.stage_id" || c.field === "lead.pipeline_id" || c.field === "lead.owner_user_id") {
+  if (
+    c.field === "lead.stage_id" ||
+    c.field === "lead.pipeline_id" ||
+    c.field === "lead.owner_user_id"
+  ) {
     if (c.op !== "eq" && c.op !== "neq" && c.op !== "is_empty" && c.op !== "is_not_empty") {
       return `A condição «${c.field}» com este operador compara de outro jeito nas automações novas.`;
     }
   }
   const direto = OP_DIRETO[c.op];
   if (direto) {
-    if (direto === "empty" || direto === "has_value") return { kind: "field", field: campo, op: direto };
-    if (valor.length === 0 || valor.length > 500) return `A condição sobre «${c.field}» não tem valor para comparar.`;
+    if (direto === "empty" || direto === "has_value")
+      return { kind: "field", field: campo, op: direto };
+    if (valor.length === 0 || valor.length > 500)
+      return `A condição sobre «${c.field}» não tem valor para comparar.`;
     return { kind: "field", field: campo, op: direto, value: valor };
   }
   if (OP_DE_ORDEM.has(c.op)) {
@@ -177,7 +227,8 @@ function converterCondicao(c: Condicao): NovaConditionCheck | string {
     if (valor !== "" && Number.isFinite(numero)) {
       return { kind: "field", field: campo, op: c.op as OperadorDeCampo, value: numero };
     }
-    if (/^\d{4}-\d{2}-\d{2}/.test(valor)) return { kind: "field", field: campo, op: c.op as OperadorDeCampo, value: valor };
+    if (/^\d{4}-\d{2}-\d{2}/.test(valor))
+      return { kind: "field", field: campo, op: c.op as OperadorDeCampo, value: valor };
     return `A comparação «maior/menor» sobre «${c.field}» com texto funciona de outro jeito nas automações novas.`;
   }
   return `O operador «${c.op}» ainda não existe nas automações novas.`;
@@ -189,30 +240,52 @@ function converterAcao(raw: unknown): CrmAction | string {
   const tipo = raw.type;
   const config = ehObjeto(raw.config) ? raw.config : {};
   if (tipo === "add_tag") {
-    const tags = Array.isArray(config.tags) ? config.tags.filter((t): t is string => typeof t === "string" && t.trim() !== "") : [];
-    if (tags.length === 0 || tags.length > 10 || tags.some((t) => t.trim().length > 60)) return "A etiqueta da regra está vazia ou grande demais.";
-    return { type: "add_tags", target: config.destino === "contato" ? "contact" : "lead", tags: tags.map((t) => t.trim()) };
+    const tags = Array.isArray(config.tags)
+      ? config.tags.filter((t): t is string => typeof t === "string" && t.trim() !== "")
+      : [];
+    if (tags.length === 0 || tags.length > 10 || tags.some((t) => t.trim().length > 60))
+      return "A etiqueta da regra está vazia ou grande demais.";
+    return {
+      type: "add_tags",
+      target: config.destino === "contato" ? "contact" : "lead",
+      tags: tags.map((t) => t.trim()),
+    };
   }
   if (tipo === "assign_owner") {
     const modo = config.modo ?? "fixo";
-    if (modo !== "fixo") return "O rodízio e o destino dinâmico da regra contam a vez de outro jeito nas automações novas.";
+    if (modo !== "fixo")
+      return "O rodízio e o destino dinâmico da regra contam a vez de outro jeito nas automações novas.";
     if (config.contato === true || config.conversas === true) {
       return "A regra leva o contato e as conversas junto com o responsável; o bloco novo troca só o responsável do negócio.";
     }
-    if (typeof config.user_id !== "string" || !UUID.test(config.user_id)) return "O responsável da regra não está escolhido.";
+    if (typeof config.user_id !== "string" || !UUID.test(config.user_id))
+      return "O responsável da regra não está escolhido.";
     return { type: "set_owner", mode: { m: "user", user_id: config.user_id } };
   }
   if (tipo === "create_task") {
-    if (config.prioridade !== "medium") return "A tarefa da regra tem prioridade própria; a tarefa nova nasce sempre com prioridade média.";
+    if (config.prioridade !== "medium")
+      return "A tarefa da regra tem prioridade própria; a tarefa nova nasce sempre com prioridade média.";
     const titulo = typeof config.titulo === "string" ? config.titulo.trim() : "";
     const dias = config.vence_em_dias;
-    if (!titulo || titulo.length > 200 || typeof dias !== "number" || !Number.isInteger(dias) || dias < 0 || dias > 365) {
+    if (
+      !titulo ||
+      titulo.length > 200 ||
+      typeof dias !== "number" ||
+      !Number.isInteger(dias) ||
+      dias < 0 ||
+      dias > 365
+    ) {
       return "A tarefa da regra está incompleta.";
     }
     const atribuir = config.atribuir_a;
     let assignee: "owner" | string;
     if (atribuir === "dono_do_lead") assignee = "owner";
-    else if (ehObjeto(atribuir) && typeof atribuir.usuario_id === "string" && UUID.test(atribuir.usuario_id)) assignee = atribuir.usuario_id;
+    else if (
+      ehObjeto(atribuir) &&
+      typeof atribuir.usuario_id === "string" &&
+      UUID.test(atribuir.usuario_id)
+    )
+      assignee = atribuir.usuario_id;
     else return "A tarefa da regra não diz para quem é.";
     return { type: "create_task", title: titulo, due_in_minutes: dias * 1440, assignee };
   }
@@ -230,7 +303,8 @@ function converterGatilho(
 ): { gatilho: AutomacaoTrigger; consumidas: Set<number> } | string {
   const ev = regra.trigger_event;
   const cfg = ehObjeto(regra.trigger_config) ? regra.trigger_config : {};
-  if (cfg.uma_vez_por_contato === true) return "A regra roda uma vez só por contato; as automações novas ainda não têm essa trava.";
+  if (cfg.uma_vez_por_contato === true)
+    return "A regra roda uma vez só por contato; as automações novas ainda não têm essa trava.";
   const consumidas = new Set<number>();
   // Só uma condição E (ou a única) pode virar parte do gatilho: num OU ela não restringe tudo.
   const fixa = (teste: (c: Condicao) => boolean): { i: number; c: Condicao } | null => {
@@ -242,44 +316,70 @@ function converterGatilho(
   if (ev === "lead.created") {
     const fonte = cfg.webhook_source_id;
     if (fonte !== undefined && fonte !== null) {
-      if (typeof fonte !== "string" || !UUID.test(fonte)) return "A fonte de captação da regra não é válida.";
+      if (typeof fonte !== "string" || !UUID.test(fonte))
+        return "A fonte de captação da regra não é válida.";
       return { gatilho: { kind: "lead_created", capture_source_ids: [fonte] }, consumidas };
     }
     return { gatilho: { kind: "lead_created" }, consumidas };
   }
   if (ev === "lead.stage_changed") {
-    const achada = fixa((c) => c.field === "lead.stage_id" && c.op === "eq" && UUID.test(c.value.trim()));
-    if (!achada) return "A regra dispara em qualquer troca de etapa; a automação nova precisa saber qual etapa.";
+    const achada = fixa(
+      (c) => c.field === "lead.stage_id" && c.op === "eq" && UUID.test(c.value.trim()),
+    );
+    if (!achada)
+      return "A regra dispara em qualquer troca de etapa; a automação nova precisa saber qual etapa.";
     consumidas.add(achada.i);
-    return { gatilho: { kind: "stage_entered", stage_ids: [achada.c.value.trim()], via: "moved" }, consumidas };
+    return {
+      gatilho: { kind: "stage_entered", stage_ids: [achada.c.value.trim()], via: "moved" },
+      consumidas,
+    };
   }
   if (ev === "lead.tag_added" || ev === "contact.tag_added") {
     const achada = fixa(
-      (c) => c.field === "event.added_tags" && c.op === "contains" && c.value.trim().length > 0 && c.value.trim().length <= 60,
+      (c) =>
+        c.field === "event.added_tags" &&
+        c.op === "contains" &&
+        c.value.trim().length > 0 &&
+        c.value.trim().length <= 60,
     );
-    if (!achada) return "A regra dispara com qualquer etiqueta; a automação nova precisa saber qual etiqueta.";
+    if (!achada)
+      return "A regra dispara com qualquer etiqueta; a automação nova precisa saber qual etiqueta.";
     consumidas.add(achada.i);
     return {
-      gatilho: { kind: "tag_added", target: ev === "lead.tag_added" ? "lead" : "contact", tags: [achada.c.value.trim()] },
+      gatilho: {
+        kind: "tag_added",
+        target: ev === "lead.tag_added" ? "lead" : "contact",
+        tags: [achada.c.value.trim()],
+      },
       consumidas,
     };
   }
   if (ev.startsWith("appointment.")) {
     const evento = ev.slice("appointment.".length);
     if ((EVENTOS_DE_AGENDA as readonly string[]).includes(evento)) {
-      return { gatilho: { kind: "appointment", events: [evento as (typeof EVENTOS_DE_AGENDA)[number]] }, consumidas };
+      return {
+        gatilho: { kind: "appointment", events: [evento as (typeof EVENTOS_DE_AGENDA)[number]] },
+        consumidas,
+      };
     }
   }
   if (ev === "contact.birthday") {
     const dias = cfg.dias_antecedencia;
-    if (dias !== undefined && dias !== 0) return "A regra avisa dias antes do aniversário; a automação nova dispara no dia.";
+    if (dias !== undefined && dias !== 0)
+      return "A regra avisa dias antes do aniversário; a automação nova dispara no dia.";
     return { gatilho: { kind: "birthday" }, consumidas };
   }
   return GATILHOS_SEM_EQUIVALENTE[ev] ?? `O gatilho «${ev}» ainda não existe nas automações novas.`;
 }
 
 const POS = (y: number) => ({ x: 0, y });
-const aresta = (id: string, source: string, target: string, condition: FlowEdge["condition"], priority = 0): FlowEdge => ({
+const aresta = (
+  id: string,
+  source: string,
+  target: string,
+  condition: FlowEdge["condition"],
+  priority = 0,
+): FlowEdge => ({
   id,
   source,
   target,
@@ -294,7 +394,13 @@ export function converterRegra(regra: RegraAntiga): ResultadoDaConversao {
     return {
       conversivel: false,
       grafo: null,
-      naoConvertido: [{ parte: "condicao", item: "grupo", motivo: "As condições da regra estão num formato que a tela não edita." }],
+      naoConvertido: [
+        {
+          parte: "condicao",
+          item: "grupo",
+          motivo: "As condições da regra estão num formato que a tela não edita.",
+        },
+      ],
     };
   }
 
@@ -306,11 +412,17 @@ export function converterRegra(regra: RegraAntiga): ResultadoDaConversao {
   condicoes.lista.forEach((c, i) => {
     if (consumidas.has(i)) return;
     if (!ehCondicao(c)) {
-      nao.push({ parte: "condicao", indice: i, item: "grupo", motivo: "Grupo de condições dentro de outro grupo não existe nas automações novas." });
+      nao.push({
+        parte: "condicao",
+        indice: i,
+        item: "grupo",
+        motivo: "Grupo de condições dentro de outro grupo não existe nas automações novas.",
+      });
       return;
     }
     const nova = converterCondicao(c);
-    if (typeof nova === "string") nao.push({ parte: "condicao", indice: i, item: c.field, motivo: nova });
+    if (typeof nova === "string")
+      nao.push({ parte: "condicao", indice: i, item: c.field, motivo: nova });
     else checks.push(nova);
   });
 
@@ -326,7 +438,8 @@ export function converterRegra(regra: RegraAntiga): ResultadoDaConversao {
     else acoes.push(nova);
   });
 
-  if (nao.length > 0 || typeof g === "string") return { conversivel: false, grafo: null, naoConvertido: nao };
+  if (nao.length > 0 || typeof g === "string")
+    return { conversivel: false, grafo: null, naoConvertido: nao };
 
   const nodes: FlowNode[] = [
     {
@@ -334,7 +447,10 @@ export function converterRegra(regra: RegraAntiga): ResultadoDaConversao {
       type: "trigger",
       label: "Início",
       position: POS(0),
-      config: { triggers: [g.gatilho], reentry: { policy: "skip_if_running", cooldown_minutes: 0 } },
+      config: {
+        triggers: [g.gatilho],
+        reentry: { policy: "skip_if_running", cooldown_minutes: 0 },
+      },
     },
   ];
   const edges: FlowEdge[] = [];
@@ -346,7 +462,13 @@ export function converterRegra(regra: RegraAntiga): ResultadoDaConversao {
     // `continue`: o motor antigo roda cada ação mesmo que uma anterior falhe.
     config: { actions: acoes, on_error: "continue" },
   };
-  const fim: FlowNode = { id: "n4", type: "end", label: "Fim", position: POS(checks.length > 0 ? 600 : 400), config: { outcome: "converted" } };
+  const fim: FlowNode = {
+    id: "n4",
+    type: "end",
+    label: "Fim",
+    position: POS(checks.length > 0 ? 600 : 400),
+    config: { outcome: "converted" },
+  };
   if (checks.length > 0) {
     nodes.push({
       id: "n2",

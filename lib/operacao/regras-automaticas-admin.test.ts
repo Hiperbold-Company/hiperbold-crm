@@ -8,9 +8,16 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/types";
 
-import { alterarRegra, MENSAGEM_DA_REGRA_CONVERTIDA, type DepsDeRegras } from "./regras-automaticas-admin";
+import {
+  alterarRegra,
+  MENSAGEM_DA_REGRA_CONVERTIDA,
+  type DepsDeRegras,
+} from "./regras-automaticas-admin";
 
-function bancoQueRecusaAoAtualizar(erro: { code?: string; message: string }): DepsDeRegras["supabase"] {
+function bancoQueRecusaAoAtualizar(erro: {
+  code?: string;
+  message: string;
+}): DepsDeRegras["supabase"] {
   const leitura = {
     select: () => leitura,
     eq: () => leitura,
@@ -53,17 +60,19 @@ async function recusaDe(d: DepsDeRegras): Promise<ApiError> {
 
 describe("alterarRegra: religar regra já convertida em automação ligada", () => {
   it("PT409 do gatilho vira 409 com a mensagem legível", async () => {
-    const err = await recusaDe(deps({ code: "PT409", message: "regra_convertida_com_automacao_ligada" }));
+    const err = await recusaDe(
+      deps({ code: "PT409", message: "regra_convertida_com_automacao_ligada" }),
+    );
     expect(err.status).toBe(409);
     expect(err.code).toBe("rule_converted_to_automation");
-    expect(err.message).toBe("Esta regra foi convertida em uma automação. Desligue a automação antes de religar a regra.");
+    expect(err.message).toBe(
+      "Esta regra foi convertida em uma automação. Desligue a automação antes de religar a regra.",
+    );
     expect(err.message).toBe(MENSAGEM_DA_REGRA_CONVERTIDA);
   });
 
   it("a mensagem passa pelo tradutor de quem pediu (en/es)", async () => {
-    const err = await recusaDe(
-      deps({ code: "PT409", message: "x" }, (texto) => `[en] ${texto}`),
-    );
+    const err = await recusaDe(deps({ code: "PT409", message: "x" }, (texto) => `[en] ${texto}`));
     expect(err.message).toBe(`[en] ${MENSAGEM_DA_REGRA_CONVERTIDA}`);
   });
 

@@ -24,9 +24,10 @@ export function PublicarConversao({ ruleId }: { ruleId: string }) {
         method: "POST",
         headers: { "Idempotency-Key": chave },
       });
-      const corpo = (await resp.json().catch(() => null)) as
-        | { data?: { pointer_id: string }; error?: { message?: string } }
-        | null;
+      const corpo = (await resp.json().catch(() => null)) as {
+        data?: { pointer_id: string };
+        error?: { message?: string };
+      } | null;
       if (!resp.ok || !corpo?.data) {
         setErro(corpo?.error?.message ?? t("Não consegui publicar a automação. Tente de novo."));
         return;
@@ -40,10 +41,12 @@ export function PublicarConversao({ ruleId }: { ruleId: string }) {
   };
 
   return (
-    <Card className="space-y-3 border-warning-200 p-4" data-testid="aviso-da-conversao">
+    <Card className="border-warning-200 space-y-3 p-4" data-testid="aviso-da-conversao">
       <p className="text-sm font-medium">{t("Ao publicar, a regra antiga é desligada")}</p>
       <p className="text-sm text-text-muted">
-        {t("A automação nova passa a fazer o mesmo trabalho. As duas nunca ficam ligadas ao mesmo tempo.")}
+        {t(
+          "A automação nova passa a fazer o mesmo trabalho. As duas nunca ficam ligadas ao mesmo tempo.",
+        )}
       </p>
       {erro && (
         <p role="alert" className="text-sm text-error-fg">

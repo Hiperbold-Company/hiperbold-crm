@@ -28,7 +28,13 @@ const ORG_B = "a1005000-0000-4000-8000-00000000000b";
 const GRAFO = JSON.stringify({
   nodes: [
     { id: "t1", type: "trigger", label: "i", position: { x: 0, y: 0 }, config: {} },
-    { id: "e1", type: "end", label: "f", position: { x: 0, y: 0 }, config: { outcome: "converted" } },
+    {
+      id: "e1",
+      type: "end",
+      label: "f",
+      position: { x: 0, y: 0 },
+      config: { outcome: "converted" },
+    },
   ],
   edges: [{ id: "a", source: "t1", target: "e1", priority: 0, condition: { type: "always" } }],
 });
@@ -45,7 +51,7 @@ beforeEach(async () => {
     [ORG_B, "conv-regra-b"],
   ] as const) {
     await pool.query(
-      `insert into organizations (id, slug, legal_name, display_name) values ($1, $2, $2, $2)`,
+      `insert into organizations (id, slug, legal_name, display_name) values ($1::uuid, $2::text, $2::text, $2::text)`,
       [id, slug],
     );
   }
@@ -81,10 +87,10 @@ const converter = (org: string, regra: string, ponteiro: string, grafo: string |
   );
 
 async function estado(regra: string, ponteiro: string) {
-  const { rows: r } = await pool.query<{ is_active: boolean; migrated_to_pointer_id: string | null }>(
-    `select is_active, migrated_to_pointer_id from automation_rules where id = $1`,
-    [regra],
-  );
+  const { rows: r } = await pool.query<{
+    is_active: boolean;
+    migrated_to_pointer_id: string | null;
+  }>(`select is_active, migrated_to_pointer_id from automation_rules where id = $1`, [regra]);
   const { rows: p } = await pool.query<{ status: string; active_version_id: string | null }>(
     `select status, active_version_id from followup_flow_pointers where id = $1`,
     [ponteiro],
@@ -96,7 +102,9 @@ async function estado(regra: string, ponteiro: string) {
   return { regra: r[0]!, ponteiro: p[0]!, versoes: Number(v[0]!.n) };
 }
 
-async function codigoDoErro(promessa: Promise<unknown>): Promise<{ code?: string; message: string }> {
+async function codigoDoErro(
+  promessa: Promise<unknown>,
+): Promise<{ code?: string; message: string }> {
   try {
     await promessa;
   } catch (err) {
@@ -157,7 +165,10 @@ describe("fn_automacao_converter_regra (migration 1005)", () => {
     const e2 = await codigoDoErro(converter(ORG_B, regraB, ponteiroA));
     expect(e2.message).toMatch(/pointer_not_found/);
 
-    expect((await estado(regraA, ponteiroA)).regra).toEqual({ is_active: true, migrated_to_pointer_id: null });
+    expect((await estado(regraA, ponteiroA)).regra).toEqual({
+      is_active: true,
+      migrated_to_pointer_id: null,
+    });
     expect(await estado(regraB, ponteiroB)).toEqual({
       regra: { is_active: true, migrated_to_pointer_id: null },
       ponteiro: { status: "draft", active_version_id: null },
@@ -179,7 +190,12 @@ describe("fn_automacao_converter_regra (migration 1005)", () => {
 
   it("só a service role executa: anon e authenticated são negados", async () => {
     const f = "public.fn_automacao_converter_regra(uuid, uuid, uuid, jsonb, uuid)";
-    const { rows } = await pool.query<{ anon: boolean; auth: boolean; service: boolean; pub: boolean }>(
+    const { rows } = await pool.query<{
+      anon: boolean;
+      auth: boolean;
+      service: boolean;
+      pub: boolean;
+    }>(
       `select has_function_privilege('anon', '${f}', 'execute') as anon,
               has_function_privilege('authenticated', '${f}', 'execute') as auth,
               has_function_privilege('service_role', '${f}', 'execute') as service,
@@ -194,7 +210,9 @@ describe("fn_automacao_converter_regra (migration 1005)", () => {
       try {
         await client.query(`set role ${papel}`);
         const erro = await codigoDoErro(
-          client.query(`select fn_automacao_converter_regra($1, $1, $1, '{}'::jsonb, null)`, [ORG_A]),
+          client.query(`select fn_automacao_converter_regra($1, $1, $1, '{}'::jsonb, null)`, [
+            ORG_A,
+          ]),
         );
         expect(erro.code).toBe("42501");
       } finally {
@@ -211,11 +229,15 @@ describe("gatilhos de guarda: dois motores nunca ligados ao mesmo tempo (PT409)"
     const ponteiro = await semearAutomacao(ORG_A);
     await converter(ORG_A, regra, ponteiro);
 
-    const erro = await codigoDoErro(pool.query(`update automation_rules set is_active = true where id = $1`, [regra]));
+    const erro = await codigoDoErro(
+      pool.query(`update automation_rules set is_active = true where id = $1`, [regra]),
+    );
     expect(erro.code).toBe("PT409");
     expect((await estado(regra, ponteiro)).regra.is_active).toBe(false);
 
-    await pool.query(`update followup_flow_pointers set status = 'disabled' where id = $1`, [ponteiro]);
+    await pool.query(`update followup_flow_pointers set status = 'disabled' where id = $1`, [
+      ponteiro,
+    ]);
     await pool.query(`update automation_rules set is_active = true where id = $1`, [regra]);
     expect((await estado(regra, ponteiro)).regra.is_active).toBe(true);
   });
@@ -225,7 +247,9 @@ describe("gatilhos de guarda: dois motores nunca ligados ao mesmo tempo (PT409)"
     const ponteiro = await semearAutomacao(ORG_A);
     await converter(ORG_A, regra, ponteiro);
     // volta atrás "à mão": desliga a automação e religa a regra.
-    await pool.query(`update followup_flow_pointers set status = 'disabled' where id = $1`, [ponteiro]);
+    await pool.query(`update followup_flow_pointers set status = 'disabled' where id = $1`, [
+      ponteiro,
+    ]);
     await pool.query(`update automation_rules set is_active = true where id = $1`, [regra]);
 
     const erro = await codigoDoErro(
@@ -235,14 +259,19 @@ describe("gatilhos de guarda: dois motores nunca ligados ao mesmo tempo (PT409)"
     expect((await estado(regra, ponteiro)).ponteiro.status).toBe("disabled");
 
     await pool.query(`update automation_rules set is_active = false where id = $1`, [regra]);
-    await pool.query(`update followup_flow_pointers set status = 'active' where id = $1`, [ponteiro]);
+    await pool.query(`update followup_flow_pointers set status = 'active' where id = $1`, [
+      ponteiro,
+    ]);
     expect((await estado(regra, ponteiro)).ponteiro.status).toBe("active");
   });
 
   it("regra comum (nunca convertida) liga e desliga livremente", async () => {
     const regra = await semearRegra(ORG_A, false);
     await pool.query(`update automation_rules set is_active = true where id = $1`, [regra]);
-    const { rows } = await pool.query<{ is_active: boolean }>(`select is_active from automation_rules where id = $1`, [regra]);
+    const { rows } = await pool.query<{ is_active: boolean }>(
+      `select is_active from automation_rules where id = $1`,
+      [regra],
+    );
     expect(rows[0]!.is_active).toBe(true);
   });
 
@@ -253,10 +282,10 @@ describe("gatilhos de guarda: dois motores nunca ligados ao mesmo tempo (PT409)"
 
     await pool.query(`delete from followup_flow_pointers where id = $1`, [ponteiro]);
 
-    const { rows } = await pool.query<{ is_active: boolean; migrated_to_pointer_id: string | null }>(
-      `select is_active, migrated_to_pointer_id from automation_rules where id = $1`,
-      [regra],
-    );
+    const { rows } = await pool.query<{
+      is_active: boolean;
+      migrated_to_pointer_id: string | null;
+    }>(`select is_active, migrated_to_pointer_id from automation_rules where id = $1`, [regra]);
     expect(rows[0]).toEqual({ is_active: false, migrated_to_pointer_id: null });
   });
 });

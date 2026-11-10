@@ -27,14 +27,25 @@ function loadCreds(): CredsE2E {
 const creds = loadCreds();
 const orgId = (creds as CredsE2E & { org_id?: string }).org_id ?? "";
 const envLocal = carregarEnvLocal();
-const banco = createClient(envLocal.NEXT_PUBLIC_SUPABASE_URL ?? "", envLocal.SUPABASE_SERVICE_ROLE_KEY ?? "", {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+const banco = createClient(
+  envLocal.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  envLocal.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  {
+    auth: { autoRefreshToken: false, persistSession: false },
+  },
+);
 
 async function semearRegra(nome: string, actions: unknown[]): Promise<string> {
   const { data, error } = await banco
     .from("automation_rules")
-    .insert({ organization_id: orgId, name: nome, trigger_event: "lead.created", conditions: [], actions, is_active: true })
+    .insert({
+      organization_id: orgId,
+      name: nome,
+      trigger_event: "lead.created",
+      conditions: [],
+      actions,
+      is_active: true,
+    })
     .select("id")
     .single();
   expect(error, "semear a regra antiga").toBeNull();
@@ -44,22 +55,30 @@ async function semearRegra(nome: string, actions: unknown[]): Promise<string> {
 test.describe("Automações — tela única", () => {
   test.setTimeout(4 * 60_000);
 
-  test("a lista mostra os três tipos; regra antiga vira automação ao publicar", async ({ page }) => {
+  test("a lista mostra os três tipos; regra antiga vira automação ao publicar", async ({
+    page,
+  }) => {
     const carimbo = Date.now().toString(36);
-    const conversivel = await semearRegra(`Etiqueta nova ${carimbo}`, [{ type: "add_tag", config: { tags: ["novo"] } }]);
+    const conversivel = await semearRegra(`Etiqueta nova ${carimbo}`, [
+      { type: "add_tag", config: { tags: ["novo"] } },
+    ]);
     const naoConversivel = await semearRegra(`Email ${carimbo}`, [
       { type: "send_email", config: { destinatario: "contato", assunto: "Oi", corpo: "Oi" } },
     ]);
 
     await loginComoAdmin(page, creds);
     await page.goto("/app/automacoes");
-    await expect(page.getByRole("heading", { name: "Automações", level: 1 })).toBeVisible({ timeout: PRAZO });
+    await expect(page.getByRole("heading", { name: "Automações", level: 1 })).toBeVisible({
+      timeout: PRAZO,
+    });
 
     // Os tipos em palavra simples, com filtro e busca.
     await page.getByTestId("busca-de-automacoes").fill(carimbo);
     const lista = page.getByTestId("lista-de-automacoes");
     await expect(lista.getByTestId("linha-regra")).toHaveCount(2);
-    await expect(lista.getByText("Regra antiga — continua funcionando; abra na tela antiga.")).toBeVisible();
+    await expect(
+      lista.getByText("Regra antiga — continua funcionando; abra na tela antiga."),
+    ).toBeVisible();
     await page.getByTestId("busca-de-automacoes").fill("");
     await page.getByTestId("filtro-tipo-followup").click();
     await expect(page.getByTestId("filtro-tipo-followup")).toHaveAttribute("aria-pressed", "true");
@@ -68,7 +87,10 @@ test.describe("Automações — tela única", () => {
     // A não conversível abre a explicação e o caminho da tela antiga.
     await page.goto(`/app/automacoes/converter/${naoConversivel}`);
     await expect(page.getByTestId("regra-nao-conversivel")).toBeVisible({ timeout: PRAZO });
-    await expect(page.getByRole("link", { name: "Abrir na tela antiga" })).toHaveAttribute("href", /tab=rules/);
+    await expect(page.getByRole("link", { name: "Abrir na tela antiga" })).toHaveAttribute(
+      "href",
+      /tab=rules/,
+    );
 
     // A conversível: pré-visualização em blocos, aviso, publicar.
     await page.goto("/app/automacoes");

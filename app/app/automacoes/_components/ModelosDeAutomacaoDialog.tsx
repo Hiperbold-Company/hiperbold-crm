@@ -47,8 +47,7 @@ export function ModelosDeAutomacaoDialog({
   // Uma chave por abertura do diálogo: o duplo clique não cria dois rascunhos.
   const [chave, setChave] = useState(() => randomId());
   const modelo = MODELOS_DE_AUTOMACAO.find((m) => m.id === modeloId)!;
-  const falta =
-    (modelo.pede === "etapa" && !etapa) || (modelo.pede === "campo_de_data" && !campo);
+  const falta = (modelo.pede === "etapa" && !etapa) || (modelo.pede === "campo_de_data" && !campo);
 
   const criar = async () => {
     setErro(null);
@@ -63,7 +62,10 @@ export function ModelosDeAutomacaoDialog({
           ...(modelo.pede === "campo_de_data" ? { campo_de_data: campo } : {}),
         }),
       });
-      const corpo = (await resp.json().catch(() => null)) as { data?: { id: string }; error?: { message?: string } } | null;
+      const corpo = (await resp.json().catch(() => null)) as {
+        data?: { id: string };
+        error?: { message?: string };
+      } | null;
       if (!resp.ok || !corpo?.data) {
         setErro(corpo?.error?.message ?? t("Não consegui criar a automação. Tente de novo."));
         return;
@@ -90,12 +92,17 @@ export function ModelosDeAutomacaoDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("Usar um modelo")}</DialogTitle>
-          <DialogDescription>{t("Nasce como rascunho. Você lê os textos no editor antes de publicar.")}</DialogDescription>
+          <DialogDescription>
+            {t("Nasce como rascunho. Você lê os textos no editor antes de publicar.")}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <fieldset className="space-y-2" data-testid="modelos-de-automacao">
             {MODELOS_DE_AUTOMACAO.map((m) => (
-              <label key={m.id} className="flex cursor-pointer gap-2 rounded-md border border-border p-3 text-sm">
+              <label
+                key={m.id}
+                className="flex cursor-pointer gap-2 rounded-md border border-border p-3 text-sm"
+              >
                 <input
                   type="radio"
                   name="modelo"
@@ -114,7 +121,12 @@ export function ModelosDeAutomacaoDialog({
           {modelo.pede === "etapa" && (
             <div className="space-y-2">
               <Label htmlFor="modelo-etapa">{t("Para qual etapa o negócio vai")}</Label>
-              <select id="modelo-etapa" className={SELECT} value={etapa} onChange={(e) => setEtapa(e.target.value)}>
+              <select
+                id="modelo-etapa"
+                className={SELECT}
+                value={etapa}
+                onChange={(e) => setEtapa(e.target.value)}
+              >
                 <option value="">{t("Escolha a etapa")}</option>
                 {etapas.map((e) => (
                   <option key={e.id} value={e.id}>
@@ -129,10 +141,17 @@ export function ModelosDeAutomacaoDialog({
               <Label htmlFor="modelo-campo">{t("Campo de data do negócio")}</Label>
               {camposDeData.length === 0 ? (
                 <p className="text-sm text-text-muted">
-                  {t("Nenhum funil tem campo de data. Crie um campo do tipo data no funil antes de usar este modelo.")}
+                  {t(
+                    "Nenhum funil tem campo de data. Crie um campo do tipo data no funil antes de usar este modelo.",
+                  )}
                 </p>
               ) : (
-                <select id="modelo-campo" className={SELECT} value={campo} onChange={(e) => setCampo(e.target.value)}>
+                <select
+                  id="modelo-campo"
+                  className={SELECT}
+                  value={campo}
+                  onChange={(e) => setCampo(e.target.value)}
+                >
                   <option value="">{t("Escolha o campo")}</option>
                   {camposDeData.map((c) => (
                     <option key={c.key} value={c.key}>
@@ -150,10 +169,20 @@ export function ModelosDeAutomacaoDialog({
           )}
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onAberto(false)} disabled={enviando}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onAberto(false)}
+            disabled={enviando}
+          >
             {t("Cancelar")}
           </Button>
-          <Button type="button" onClick={criar} disabled={enviando || falta} data-testid="criar-de-modelo">
+          <Button
+            type="button"
+            onClick={criar}
+            disabled={enviando || falta}
+            data-testid="criar-de-modelo"
+          >
             {enviando ? t("Criando…") : t("Criar rascunho")}
           </Button>
         </DialogFooter>

@@ -39,7 +39,7 @@ export function BlocosDaConversao({
       {nodes.map((n) => (
         <li key={n.id}>
           <Card className="space-y-1 p-4">
-            <p className="text-xs font-medium uppercase text-text-muted">{t(n.label)}</p>
+            <p className="text-xs font-medium text-text-muted uppercase">{t(n.label)}</p>
             {n.type === "trigger" &&
               (n.config as AutomacaoTriggerConfig).triggers.map((g, i) => (
                 <p key={i} className="text-sm">
@@ -47,12 +47,17 @@ export function BlocosDaConversao({
                 </p>
               ))}
             {n.type === "condition" &&
-              (n.config as { checks: NovaConditionCheck[]; combinator: "and" | "or" }).checks.map((c, i) => (
-                <p key={i} className="text-sm">
-                  {i > 0 && ((n.config as { combinator: string }).combinator === "or" ? `${t("ou")} ` : `${t("e")} `)}
-                  {fraseDaRegraNova(c, nomes)}
-                </p>
-              ))}
+              (n.config as { checks: NovaConditionCheck[]; combinator: "and" | "or" }).checks.map(
+                (c, i) => (
+                  <p key={i} className="text-sm">
+                    {i > 0 &&
+                      ((n.config as { combinator: string }).combinator === "or"
+                        ? `${t("ou")} `
+                        : `${t("e")} `)}
+                    {fraseDaRegraNova(c, nomes)}
+                  </p>
+                ),
+              )}
             {n.type === "crm_action" &&
               (n.config as CrmActionConfig).actions.map((a, i) => (
                 <p key={i} className="text-sm">

@@ -4,14 +4,27 @@ import { flowGraphSchema } from "@/lib/followup/graph-schema";
 import { validateFlowForPublish } from "@/lib/followup/validate-publish";
 import { TRIGGER_EVENTS, actionSchema } from "@/lib/schemas/webhooks";
 
-import { ACOES_SEM_EQUIVALENTE, GATILHOS_SEM_EQUIVALENTE, converterRegra, type RegraAntiga } from "./converter-regra";
+import {
+  ACOES_SEM_EQUIVALENTE,
+  GATILHOS_SEM_EQUIVALENTE,
+  converterRegra,
+  type RegraAntiga,
+} from "./converter-regra";
 
 const U1 = "11111111-1111-4111-8111-111111111111";
 const U2 = "22222222-2222-4222-8222-222222222222";
 const TAG = { type: "add_tag", config: { tags: ["vip"] } };
 
 function regra(p: Partial<RegraAntiga>): RegraAntiga {
-  return { id: U1, name: "Regra", trigger_event: "lead.created", trigger_config: {}, conditions: [], actions: [TAG], ...p };
+  return {
+    id: U1,
+    name: "Regra",
+    trigger_event: "lead.created",
+    trigger_config: {},
+    conditions: [],
+    actions: [TAG],
+    ...p,
+  };
 }
 
 /** O grafo convertido passa no schema E no publish da superfície `automacao`. */
@@ -30,7 +43,8 @@ const gatilhoDe = (g: { nodes: { type: string; config: unknown }[] }) =>
 const acoesDe = (g: { nodes: { type: string; config: unknown }[] }) =>
   (g.nodes.find((n) => n.type === "crm_action")!.config as { actions: unknown[] }).actions;
 const checksDe = (g: { nodes: { type: string; config: unknown }[] }) =>
-  (g.nodes.find((n) => n.type === "condition")?.config as { checks: unknown[]; combinator: string } | undefined);
+  g.nodes.find((n) => n.type === "condition")?.config as
+    { checks: unknown[]; combinator: string } | undefined;
 
 describe("converterRegra — gatilhos com equivalente", () => {
   it("lead.created → lead_created; com fonte, a fonte vai junto", () => {
@@ -43,23 +57,46 @@ describe("converterRegra — gatilhos com equivalente", () => {
 
   it("lead.stage_changed com a etapa fixada vira stage_entered (a condição da etapa sai)", () => {
     const g = publicavel(
-      regra({ trigger_event: "lead.stage_changed", conditions: [{ field: "lead.stage_id", op: "eq", value: U2 }] }),
+      regra({
+        trigger_event: "lead.stage_changed",
+        conditions: [{ field: "lead.stage_id", op: "eq", value: U2 }],
+      }),
     );
     expect(gatilhoDe(g)).toEqual({ kind: "stage_entered", stage_ids: [U2], via: "moved" });
     expect(checksDe(g)).toBeUndefined();
   });
 
-  it.each(["lead.tag_added", "contact.tag_added"])("%s com a etiqueta fixada vira tag_added", (ev) => {
-    const g = publicavel(regra({ trigger_event: ev, conditions: [{ field: "event.added_tags", op: "contains", value: "quente" }] }));
-    expect(gatilhoDe(g)).toEqual({ kind: "tag_added", target: ev === "lead.tag_added" ? "lead" : "contact", tags: ["quente"] });
-  });
+  it.each(["lead.tag_added", "contact.tag_added"])(
+    "%s com a etiqueta fixada vira tag_added",
+    (ev) => {
+      const g = publicavel(
+        regra({
+          trigger_event: ev,
+          conditions: [{ field: "event.added_tags", op: "contains", value: "quente" }],
+        }),
+      );
+      expect(gatilhoDe(g)).toEqual({
+        kind: "tag_added",
+        target: ev === "lead.tag_added" ? "lead" : "contact",
+        tags: ["quente"],
+      });
+    },
+  );
 
-  it.each(["created", "confirmed", "rescheduled", "cancelled", "completed", "no_show"])("appointment.%s → appointment", (e) => {
-    expect(gatilhoDe(publicavel(regra({ trigger_event: `appointment.${e}` })))).toEqual({ kind: "appointment", events: [e] });
-  });
+  it.each(["created", "confirmed", "rescheduled", "cancelled", "completed", "no_show"])(
+    "appointment.%s → appointment",
+    (e) => {
+      expect(gatilhoDe(publicavel(regra({ trigger_event: `appointment.${e}` })))).toEqual({
+        kind: "appointment",
+        events: [e],
+      });
+    },
+  );
 
   it("contact.birthday no dia → birthday", () => {
-    expect(gatilhoDe(publicavel(regra({ trigger_event: "contact.birthday" })))).toEqual({ kind: "birthday" });
+    expect(gatilhoDe(publicavel(regra({ trigger_event: "contact.birthday" })))).toEqual({
+      kind: "birthday",
+    });
   });
 
   it("message.received NÃO converte: o gatilho novo descarta reação, mensagem atrasada e resposta a automação, e o antigo não", () => {
@@ -96,14 +133,24 @@ describe("converterRegra — condições com equivalente", () => {
     expect(c.combinator).toBe("or");
     expect(c.checks).toEqual([
       { kind: "field", field: { scope: "lead", key: "title" }, op: "contains", value: "Plano" },
-      { kind: "field", field: { scope: "lead_custom", key: "origem" }, op: "eq", value: "facebook" },
+      {
+        kind: "field",
+        field: { scope: "lead_custom", key: "origem" },
+        op: "eq",
+        value: "facebook",
+      },
       { kind: "field", field: { scope: "contact", key: "email" }, op: "has_value" },
       { kind: "field", field: { scope: "contact_custom", key: "cidade" }, op: "empty" },
       { kind: "field", field: { scope: "lead", key: "value_cents" }, op: "gte", value: 1000 },
       { kind: "tag", target: "lead", op: "has_any", tags: ["vip"] },
       { kind: "tag", target: "contact", op: "has_none", tags: ["bloq"] },
       { kind: "stage", op: "not_in", stage_ids: [U2] },
-      { kind: "field", field: { scope: "lead", key: "expected_close_date" }, op: "lt", value: "2026-12-01" },
+      {
+        kind: "field",
+        field: { scope: "lead", key: "expected_close_date" },
+        op: "lt",
+        value: "2026-12-01",
+      },
     ]);
   });
 });
@@ -116,8 +163,24 @@ describe("converterRegra — ações com equivalente", () => {
           { type: "add_tag", config: { tags: ["a"], destino: "contato" } },
           { type: "add_tag", config: { tags: ["b"] } },
           { type: "assign_owner", config: { user_id: U2 } },
-          { type: "create_task", config: { titulo: "Ligar", vence_em_dias: 2, atribuir_a: "dono_do_lead", prioridade: "medium" } },
-          { type: "create_task", config: { titulo: "Ver", vence_em_dias: 0, atribuir_a: { usuario_id: U2 }, prioridade: "medium" } },
+          {
+            type: "create_task",
+            config: {
+              titulo: "Ligar",
+              vence_em_dias: 2,
+              atribuir_a: "dono_do_lead",
+              prioridade: "medium",
+            },
+          },
+          {
+            type: "create_task",
+            config: {
+              titulo: "Ver",
+              vence_em_dias: 0,
+              atribuir_a: { usuario_id: U2 },
+              prioridade: "medium",
+            },
+          },
         ],
       }),
     );
@@ -142,7 +205,11 @@ describe("converterRegra — sem equivalente: a regra inteira fica no motor anti
     for (const ev of Object.keys(GATILHOS_SEM_EQUIVALENTE)) {
       const r = converterRegra(regra({ trigger_event: ev }));
       expect(r.conversivel, ev).toBe(false);
-      expect(r.naoConvertido[0]).toMatchObject({ parte: "gatilho", item: ev, motivo: GATILHOS_SEM_EQUIVALENTE[ev] });
+      expect(r.naoConvertido[0]).toMatchObject({
+        parte: "gatilho",
+        item: ev,
+        motivo: GATILHOS_SEM_EQUIVALENTE[ev],
+      });
     }
   });
 
@@ -154,23 +221,63 @@ describe("converterRegra — sem equivalente: a regra inteira fica no motor anti
       const r = converterRegra(regra({ actions: [TAG, { type: tipo, config: {} }] }));
       expect(r.conversivel).toBe(false);
       expect(r.grafo).toBeNull();
-      expect(r.naoConvertido).toEqual([{ parte: "acao", indice: 1, item: tipo, motivo: ACOES_SEM_EQUIVALENTE[tipo] }]);
+      expect(r.naoConvertido).toEqual([
+        { parte: "acao", indice: 1, item: tipo, motivo: ACOES_SEM_EQUIVALENTE[tipo] },
+      ]);
     }
   });
 
   it.each([
     ["mudou de etapa sem etapa fixada", { trigger_event: "lead.stage_changed" }],
     ["etiqueta sem etiqueta fixada", { trigger_event: "lead.tag_added" }],
-    ["etapa fixada num OU", { trigger_event: "lead.stage_changed", conditions: { any: [{ field: "lead.stage_id", op: "eq", value: U2 }, { field: "lead.title", op: "eq", value: "x" }] } }],
+    [
+      "etapa fixada num OU",
+      {
+        trigger_event: "lead.stage_changed",
+        conditions: {
+          any: [
+            { field: "lead.stage_id", op: "eq", value: U2 },
+            { field: "lead.title", op: "eq", value: "x" },
+          ],
+        },
+      },
+    ],
     ["uma vez por contato", { trigger_config: { uma_vez_por_contato: true } }],
-    ["aniversário com antecedência", { trigger_event: "contact.birthday", trigger_config: { dias_antecedencia: 3 } }],
-    ["condição do evento", { conditions: [{ field: "message.text", op: "contains", value: "oi" }] }],
-    ["condição do contato no banco", { conditions: [{ field: "contato.followup_vivo", op: "eq", value: "sim" }] }],
+    [
+      "aniversário com antecedência",
+      { trigger_event: "contact.birthday", trigger_config: { dias_antecedencia: 3 } },
+    ],
+    [
+      "condição do evento",
+      { conditions: [{ field: "message.text", op: "contains", value: "oi" }] },
+    ],
+    [
+      "condição do contato no banco",
+      { conditions: [{ field: "contato.followup_vivo", op: "eq", value: "sim" }] },
+    ],
     ["maior que com texto", { conditions: [{ field: "lead.title", op: "gt", value: "abc" }] }],
     ["grupo aninhado", { conditions: { all: [{ any: [] }] } }],
     ["rodízio", { actions: [{ type: "assign_owner", config: { modo: "rodizio", fila: [] } }] }],
-    ["responsável levando contato", { actions: [{ type: "assign_owner", config: { user_id: U2, contato: true } }] }],
-    ["tarefa urgente", { actions: [{ type: "create_task", config: { titulo: "x", vence_em_dias: 1, atribuir_a: "dono_do_lead", prioridade: "urgent" } }] }],
+    [
+      "responsável levando contato",
+      { actions: [{ type: "assign_owner", config: { user_id: U2, contato: true } }] },
+    ],
+    [
+      "tarefa urgente",
+      {
+        actions: [
+          {
+            type: "create_task",
+            config: {
+              titulo: "x",
+              vence_em_dias: 1,
+              atribuir_a: "dono_do_lead",
+              prioridade: "urgent",
+            },
+          },
+        ],
+      },
+    ],
     ["sem ações", { actions: [] }],
   ] as const)("%s → não conversível, com motivo", (_nome, p) => {
     const r = converterRegra(regra(p as Partial<RegraAntiga>));
@@ -181,7 +288,11 @@ describe("converterRegra — sem equivalente: a regra inteira fica no motor anti
   });
 
   it("webhook com segredo nunca leva o segredo para lugar nenhum", () => {
-    const r = converterRegra(regra({ actions: [{ type: "call_webhook", config: { url: "https://x.test", secret_enc: "abcd" } }] }));
+    const r = converterRegra(
+      regra({
+        actions: [{ type: "call_webhook", config: { url: "https://x.test", secret_enc: "abcd" } }],
+      }),
+    );
     expect(r.conversivel).toBe(false);
     expect(JSON.stringify(r)).not.toContain("abcd");
   });

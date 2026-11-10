@@ -20,15 +20,21 @@ import { logger } from "@/lib/logger";
 
 import { converterRegra, type RegraAntiga, type ResultadoDaConversao } from "./converter-regra";
 
-const COLUNAS_DA_REGRA = "id, name, trigger_event, trigger_config, conditions, actions, is_active, migrated_to_pointer_id";
+const COLUNAS_DA_REGRA =
+  "id, name, trigger_event, trigger_config, conditions, actions, is_active, migrated_to_pointer_id";
 
 export interface RegraLida extends RegraAntiga {
   is_active: boolean;
   migrated_to_pointer_id: string | null;
 }
 
-const recusa = (deps: DepsDeFollowup, status: number, code: string, message: string, details?: Record<string, unknown>) =>
-  new ApiError(status, code, details, deps.requestId, message);
+const recusa = (
+  deps: DepsDeFollowup,
+  status: number,
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+) => new ApiError(status, code, details, deps.requestId, message);
 
 /** A regra DESTA organização (service role, filtro explícito), ou 404. */
 export async function lerRegra(deps: DepsDeFollowup, ruleId: string): Promise<RegraLida> {
@@ -40,7 +46,10 @@ export async function lerRegra(deps: DepsDeFollowup, ruleId: string): Promise<Re
     .eq("organization_id", deps.organizationId)
     .maybeSingle();
   if (error) {
-    logger.error("automacao.conversao.leitura_falhou", { request_id: deps.requestId, causa: error.message });
+    logger.error("automacao.conversao.leitura_falhou", {
+      request_id: deps.requestId,
+      causa: error.message,
+    });
     throw recusa(deps, 500, "internal_error", t("Não consegui ler a regra. Tente de novo."));
   }
   if (!data) throw recusa(deps, 404, "not_found", t("Regra não encontrada."));
@@ -52,19 +61,33 @@ export function previaDaConversao(regra: RegraLida): ResultadoDaConversao {
   return converterRegra(regra);
 }
 
-function mapearErroDoBanco(deps: DepsDeFollowup, err: { message?: string; code?: string }): ApiError {
+function mapearErroDoBanco(
+  deps: DepsDeFollowup,
+  err: { message?: string; code?: string },
+): ApiError {
   const t = deps.t ?? ((x: string) => x);
   const msg = (err.message ?? "").trim();
   if (msg === "rule_already_converted") {
     return recusa(deps, 409, "regra_ja_convertida", t("Esta regra já virou automação."));
   }
   if (msg === "rule_not_found") return recusa(deps, 404, "not_found", t("Regra não encontrada."));
-  if (msg === "pointer_not_found") return recusa(deps, 404, "not_found", t("Fluxo não encontrado."));
+  if (msg === "pointer_not_found")
+    return recusa(deps, 404, "not_found", t("Fluxo não encontrado."));
   if (err.code === "PT409") {
-    return recusa(deps, 409, "dois_motores", t("A regra antiga e a automação nova não podem ficar ligadas ao mesmo tempo."));
+    return recusa(
+      deps,
+      409,
+      "dois_motores",
+      t("A regra antiga e a automação nova não podem ficar ligadas ao mesmo tempo."),
+    );
   }
   logger.error("automacao.conversao.rpc_falhou", { request_id: deps.requestId, causa: msg });
-  return recusa(deps, 500, "internal_error", t("Não consegui publicar a automação. Tente de novo."));
+  return recusa(
+    deps,
+    500,
+    "internal_error",
+    t("Não consegui publicar a automação. Tente de novo."),
+  );
 }
 
 async function criarRascunho(deps: DepsDeFollowup, nome: string): Promise<string> {
@@ -94,20 +117,39 @@ export interface ConversaoFeita {
  * reenvio do botão não cria segunda automação); regra não conversível é 422
  * com a lista do que não tem equivalente.
  */
-export async function converterEPublicarRegra(deps: DepsDeFollowup, ruleId: string): Promise<ConversaoFeita> {
+export async function converterEPublicarRegra(
+  deps: DepsDeFollowup,
+  ruleId: string,
+): Promise<ConversaoFeita> {
   const t = deps.t ?? ((x: string) => x);
   if (!deps.responsavel) {
-    throw recusa(deps, 403, "forbidden", t("Não foi possível identificar quem responde por esta chave."));
+    throw recusa(
+      deps,
+      403,
+      "forbidden",
+      t("Não foi possível identificar quem responde por esta chave."),
+    );
   }
   const regra = await lerRegra(deps, ruleId);
   if (regra.migrated_to_pointer_id) {
-    return { pointer_id: regra.migrated_to_pointer_id, rule_id: regra.id, version_id: null, ja_convertida: true };
+    return {
+      pointer_id: regra.migrated_to_pointer_id,
+      rule_id: regra.id,
+      version_id: null,
+      ja_convertida: true,
+    };
   }
   const conversao = converterRegra(regra);
   if (!conversao.conversivel) {
-    throw recusa(deps, 422, "regra_nao_conversivel", t("Esta regra tem partes que ainda não existem nas automações novas."), {
-      nao_convertido: conversao.naoConvertido,
-    });
+    throw recusa(
+      deps,
+      422,
+      "regra_nao_conversivel",
+      t("Esta regra tem partes que ainda não existem nas automações novas."),
+      {
+        nao_convertido: conversao.naoConvertido,
+      },
+    );
   }
   const grafo: FlowGraph = conversao.grafo;
 
@@ -130,7 +172,8 @@ export async function converterEPublicarRegra(deps: DepsDeFollowup, ruleId: stri
         p_created_by: params.createdBy,
       });
       if (error) throw mapearErroDoBanco(deps, error);
-      if (typeof data !== "string") return { ok: false, code: "internal_error", message: "no_version_id_returned" };
+      if (typeof data !== "string")
+        return { ok: false, code: "internal_error", message: "no_version_id_returned" };
       versionId = data;
       return { ok: true, version_id: data };
     });
@@ -142,7 +185,11 @@ export async function converterEPublicarRegra(deps: DepsDeFollowup, ruleId: stri
       .eq("id", pointerId)
       .eq("organization_id", deps.organizationId)
       .is("active_version_id", null);
-    if (delErr) logger.error("automacao.conversao.compensacao_falhou", { request_id: deps.requestId, causa: delErr.message });
+    if (delErr)
+      logger.error("automacao.conversao.compensacao_falhou", {
+        request_id: deps.requestId,
+        causa: delErr.message,
+      });
     throw err;
   }
 

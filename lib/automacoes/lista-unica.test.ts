@@ -13,11 +13,39 @@ const P = (id: string, surface: string | null, status = "active", updated_at = "
 describe("montarListaUnica", () => {
   const base = {
     automacoes: [P("a1", "automacao", "active", "2026-11-05")],
-    followups: [P("f1", "followup", "disabled", "2026-11-03"), P("f2", null, "draft", "2026-11-02"), P("x", "atendimento")],
+    followups: [
+      P("f1", "followup", "disabled", "2026-11-03"),
+      P("f2", null, "draft", "2026-11-02"),
+      P("x", "atendimento"),
+    ],
     regras: [
-      { id: "r1", name: "Ação antiga", is_active: true, last_run_at: "2026-11-09", updated_at: "2026-11-04", migrated_to_pointer_id: null, conversivel: true },
-      { id: "r2", name: "E-mail", is_active: false, last_run_at: null, updated_at: "2026-11-01", migrated_to_pointer_id: null, conversivel: false },
-      { id: "r3", name: "Já virou", is_active: false, last_run_at: null, updated_at: "2026-11-06", migrated_to_pointer_id: "a1", conversivel: true },
+      {
+        id: "r1",
+        name: "Ação antiga",
+        is_active: true,
+        last_run_at: "2026-11-09",
+        updated_at: "2026-11-04",
+        migrated_to_pointer_id: null,
+        conversivel: true,
+      },
+      {
+        id: "r2",
+        name: "E-mail",
+        is_active: false,
+        last_run_at: null,
+        updated_at: "2026-11-01",
+        migrated_to_pointer_id: null,
+        conversivel: false,
+      },
+      {
+        id: "r3",
+        name: "Já virou",
+        is_active: false,
+        last_run_at: null,
+        updated_at: "2026-11-06",
+        migrated_to_pointer_id: "a1",
+        conversivel: true,
+      },
     ],
     ultimasExecucoes: { a1: "2026-11-08", f1: "2026-11-07" },
   };
@@ -35,10 +63,26 @@ describe("montarListaUnica", () => {
 
   it("diz para onde cada linha abre e o que está ligado", () => {
     const porId = Object.fromEntries(montarListaUnica(base).map((x) => [x.id, x]));
-    expect(porId.a1).toMatchObject({ href: "/app/automacoes/a1", ligado: true, ultimaExecucao: "2026-11-08" });
-    expect(porId.f1).toMatchObject({ href: "/app/ai/followups/f1", ligado: false, ultimaExecucao: "2026-11-07" });
-    expect(porId.r1).toMatchObject({ href: "/app/automacoes/converter/r1", ligado: true, ultimaExecucao: "2026-11-09", conversivel: true });
-    expect(porId.r2).toMatchObject({ href: "/app/webhooks?tab=rules&regra=r2", conversivel: false });
+    expect(porId.a1).toMatchObject({
+      href: "/app/automacoes/a1",
+      ligado: true,
+      ultimaExecucao: "2026-11-08",
+    });
+    expect(porId.f1).toMatchObject({
+      href: "/app/ai/followups/f1",
+      ligado: false,
+      ultimaExecucao: "2026-11-07",
+    });
+    expect(porId.r1).toMatchObject({
+      href: "/app/automacoes/converter/r1",
+      ligado: true,
+      ultimaExecucao: "2026-11-09",
+      conversivel: true,
+    });
+    expect(porId.r2).toMatchObject({
+      href: "/app/webhooks?tab=rules&regra=r2",
+      conversivel: false,
+    });
   });
 
   it("filtro por tipo e busca sem acento", () => {

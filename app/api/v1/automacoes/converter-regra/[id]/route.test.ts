@@ -19,14 +19,18 @@ const deps = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api/auth-dual-admin", async () => {
-  const real = await vi.importActual<typeof import("@/lib/api/auth-dual-admin")>("@/lib/api/auth-dual-admin");
+  const real = await vi.importActual<typeof import("@/lib/api/auth-dual-admin")>(
+    "@/lib/api/auth-dual-admin",
+  );
   return { ...real, autorizarAdministracao: deps.autorizar };
 });
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: deps.suporte }));
 vi.mock("@/lib/audit", () => ({ audit: deps.audit }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => deps.db }));
 vi.mock("@/lib/followup/administracao", async () => {
-  const real = await vi.importActual<typeof import("@/lib/followup/administracao")>("@/lib/followup/administracao");
+  const real = await vi.importActual<typeof import("@/lib/followup/administracao")>(
+    "@/lib/followup/administracao",
+  );
   return { ...real, criarFluxo: deps.criar, publicarFluxo: deps.publicar };
 });
 
@@ -51,7 +55,15 @@ function banco() {
     const rodar = () => {
       const t = (tabelas[tabela] ??= []);
       if (op === "insert") {
-        if (tabela === "idempotency_keys" && t.some((l) => l.organization_id === valores!.organization_id && l.key === valores!.key && l.endpoint === valores!.endpoint)) {
+        if (
+          tabela === "idempotency_keys" &&
+          t.some(
+            (l) =>
+              l.organization_id === valores!.organization_id &&
+              l.key === valores!.key &&
+              l.endpoint === valores!.endpoint,
+          )
+        ) {
           return { data: null, error: { code: "23505" } };
         }
         const nova = { id: `id-${t.length + 1}`, ...valores };
@@ -79,7 +91,8 @@ function banco() {
         const r = rodar();
         return { data: r.data?.[0] ?? null, error: r.error };
       },
-      then: (ok: (v: unknown) => unknown, erro: (e: unknown) => unknown) => Promise.resolve(rodar()).then(ok, erro),
+      then: (ok: (v: unknown) => unknown, erro: (e: unknown) => unknown) =>
+        Promise.resolve(rodar()).then(ok, erro),
     };
     return q;
   }
@@ -88,9 +101,12 @@ function banco() {
     rpc: async (nome: string, args: Record<string, unknown>) => {
       rpcs.push({ nome, args });
       // O que a 1005 faz, em uma "transação": desliga a regra, grava o vínculo, publica.
-      const regra = tabelas.automation_rules!.find((r) => r.id === args.p_rule && r.organization_id === args.p_org);
+      const regra = tabelas.automation_rules!.find(
+        (r) => r.id === args.p_rule && r.organization_id === args.p_org,
+      );
       if (!regra) return { data: null, error: { message: "rule_not_found" } };
-      if (regra.migrated_to_pointer_id) return { data: null, error: { message: "rule_already_converted" } };
+      if (regra.migrated_to_pointer_id)
+        return { data: null, error: { message: "rule_already_converted" } };
       Object.assign(regra, { is_active: false, migrated_to_pointer_id: args.p_pointer });
       const p = tabelas.followup_flow_pointers!.find((x) => x.id === args.p_pointer)!;
       Object.assign(p, { status: "active", active_version_id: "v1" });
@@ -100,10 +116,21 @@ function banco() {
 }
 
 function sessao(role = "manager") {
-  return { ok: true, via: "session", actor: { type: "user", id: "u1", role }, organizationId: ORG, supabase: {}, idioma: "pt-BR", user: { id: "u1" } };
+  return {
+    ok: true,
+    via: "session",
+    actor: { type: "user", id: "u1", role },
+    organizationId: ORG,
+    supabase: {},
+    idioma: "pt-BR",
+    user: { id: "u1" },
+  };
 }
 const req = (metodo: string, headers: Record<string, string> = {}) =>
-  new NextRequest("http://localhost/api/v1/automacoes/converter-regra/x", { method: metodo, headers });
+  new NextRequest("http://localhost/api/v1/automacoes/converter-regra/x", {
+    method: metodo,
+    headers,
+  });
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 
 const regraConversivel = (id: string, org = ORG): Linha => ({
@@ -134,13 +161,29 @@ beforeEach(() => {
   deps.suporte.mockResolvedValue(null);
   deps.autorizar.mockResolvedValue(sessao());
   deps.criar.mockImplementation(async (_d: unknown, e: { name: string }) => {
-    tabelas.followup_flow_pointers!.push({ id: PTR, organization_id: ORG, name: e.name, surface: "automacao", status: "draft", active_version_id: null });
+    tabelas.followup_flow_pointers!.push({
+      id: PTR,
+      organization_id: ORG,
+      name: e.name,
+      surface: "automacao",
+      status: "draft",
+      active_version_id: null,
+    });
     return { id: PTR };
   });
   deps.publicar.mockImplementation(
-    async (d: { admin: unknown; organizationId: string; responsavel: string }, id: string, publicador: (a: unknown, p: unknown) => Promise<unknown>) => {
+    async (
+      d: { admin: unknown; organizationId: string; responsavel: string },
+      id: string,
+      publicador: (a: unknown, p: unknown) => Promise<unknown>,
+    ) => {
       const p = tabelas.followup_flow_pointers!.find((x) => x.id === id)!;
-      return publicador(d.admin, { orgId: d.organizationId, pointerId: id, graph: p.draft_graph, createdBy: d.responsavel });
+      return publicador(d.admin, {
+        orgId: d.organizationId,
+        pointerId: id,
+        graph: p.draft_graph,
+        createdBy: d.responsavel,
+      });
     },
   );
 });
@@ -150,7 +193,10 @@ describe("converter regra: quem pode", () => {
     deps.autorizar.mockResolvedValue({ ok: false, response: new Response(null, { status: 403 }) });
     expect((await POST(req("POST"), ctx(R1))).status).toBe(403);
     expect((await GET(req("GET"), ctx(R1))).status).toBe(403);
-    expect(deps.autorizar).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ role: "manager" }));
+    expect(deps.autorizar).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ role: "manager" }),
+    );
     expect(tabelas.automation_rules![0]!.is_active).toBe(true);
   });
 
@@ -176,7 +222,11 @@ describe("converter regra: pré-visualização e publicação", () => {
     expect(r.status).toBe(200);
     const { data } = await r.json();
     expect(data.conversivel).toBe(true);
-    expect(data.grafo.nodes.map((n: { type: string }) => n.type)).toEqual(["trigger", "crm_action", "end"]);
+    expect(data.grafo.nodes.map((n: { type: string }) => n.type)).toEqual([
+      "trigger",
+      "crm_action",
+      "end",
+    ]);
     expect(tabelas.followup_flow_pointers).toEqual([]);
   });
 
@@ -185,9 +235,14 @@ describe("converter regra: pré-visualização e publicação", () => {
     expect(r.status).toBe(201);
     expect(rpcs.map((x) => x.nome)).toEqual(["fn_automacao_converter_regra"]);
     expect(rpcs[0]!.args).toMatchObject({ p_org: ORG, p_rule: R1, p_pointer: PTR });
-    expect(tabelas.automation_rules![0]).toMatchObject({ is_active: false, migrated_to_pointer_id: PTR });
+    expect(tabelas.automation_rules![0]).toMatchObject({
+      is_active: false,
+      migrated_to_pointer_id: PTR,
+    });
     expect(tabelas.followup_flow_pointers![0]).toMatchObject({ status: "active" });
-    expect(deps.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "automacao.regra_convertida", organizationId: ORG }));
+    expect(deps.audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "automacao.regra_convertida", organizationId: ORG }),
+    );
   });
 
   it("regra não conversível: 422 com o motivo, a regra segue ligada e nenhum rascunho nasce", async () => {
@@ -195,17 +250,25 @@ describe("converter regra: pré-visualização e publicação", () => {
     expect(r.status).toBe(422);
     const corpo = await r.json();
     expect(corpo.error.code).toBe("regra_nao_conversivel");
-    expect(corpo.error.details.nao_convertido[0]).toMatchObject({ parte: "acao", item: "send_email" });
+    expect(corpo.error.details.nao_convertido[0]).toMatchObject({
+      parte: "acao",
+      item: "send_email",
+    });
     expect(deps.criar).not.toHaveBeenCalled();
     expect(tabelas.automation_rules![1]!.is_active).toBe(true);
   });
 
   it("publish recusado depois do rascunho: o rascunho é apagado e a regra continua ligada", async () => {
     const { ApiError } = await import("@/lib/api/types");
-    deps.publicar.mockRejectedValue(new ApiError(422, "validation_failed", undefined, "r", "reprovado"));
+    deps.publicar.mockRejectedValue(
+      new ApiError(422, "validation_failed", undefined, "r", "reprovado"),
+    );
     expect((await POST(req("POST"), ctx(R1))).status).toBe(422);
     expect(tabelas.followup_flow_pointers).toEqual([]);
-    expect(tabelas.automation_rules![0]).toMatchObject({ is_active: true, migrated_to_pointer_id: null });
+    expect(tabelas.automation_rules![0]).toMatchObject({
+      is_active: true,
+      migrated_to_pointer_id: null,
+    });
   });
 
   it("mesma Idempotency-Key: uma conversão só, a segunda volta o mesmo recibo", async () => {

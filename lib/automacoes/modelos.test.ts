@@ -18,13 +18,18 @@ describe("modelos de automação", () => {
     expect(ids.length).toBeGreaterThanOrEqual(2);
   });
 
-  it.each(MODELOS_DE_AUTOMACAO.map((m) => [m.id, m] as const))("%s: o grafo passa no schema e no publish da automação", (_id, m) => {
-    const g = flowGraphSchema.parse(m.grafo(ENTRADA));
-    const v = validateFlowForPublish(g, {
-      surface: "automacao",
-      etapas: new Map([[ENTRADA.stageId, { id: ENTRADA.stageId, name: "Qualificado", is_archived: false }]]) as never,
-      camposDeData: new Set([ENTRADA.campoDeData]),
-    });
-    expect(v.ok ? [] : v.errors).toEqual([]);
-  });
+  it.each(MODELOS_DE_AUTOMACAO.map((m) => [m.id, m] as const))(
+    "%s: o grafo passa no schema e no publish da automação",
+    (_id, m) => {
+      const g = flowGraphSchema.parse(m.grafo(ENTRADA));
+      const v = validateFlowForPublish(g, {
+        surface: "automacao",
+        etapas: new Map([
+          [ENTRADA.stageId, { id: ENTRADA.stageId, name: "Qualificado", is_archived: false }],
+        ]) as never,
+        camposDeData: new Set([ENTRADA.campoDeData]),
+      });
+      expect(v.ok ? [] : v.errors).toEqual([]);
+    },
+  );
 });

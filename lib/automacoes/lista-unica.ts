@@ -101,22 +101,34 @@ export function montarListaUnica(entrada: {
       status: r.is_active ? "active" : "disabled",
       ultimaExecucao: r.last_run_at,
       atualizadoEm: r.updated_at,
-      href: r.conversivel ? `/app/automacoes/converter/${r.id}` : `/app/webhooks?tab=rules&regra=${r.id}`,
+      href: r.conversivel
+        ? `/app/automacoes/converter/${r.id}`
+        : `/app/webhooks?tab=rules&regra=${r.id}`,
       conversivel: r.conversivel,
     });
   }
-  return linhas.sort((a, b) => (a.atualizadoEm < b.atualizadoEm ? 1 : a.atualizadoEm > b.atualizadoEm ? -1 : 0));
+  return linhas.sort((a, b) =>
+    a.atualizadoEm < b.atualizadoEm ? 1 : a.atualizadoEm > b.atualizadoEm ? -1 : 0,
+  );
 }
 
 /** Filtro por tipo e busca por nome (sem acento, sem maiúsculas). */
-export function filtrarLista(linhas: LinhaDaLista[], tipo: TipoDaLista | "todos", busca: string): LinhaDaLista[] {
+export function filtrarLista(
+  linhas: LinhaDaLista[],
+  tipo: TipoDaLista | "todos",
+  busca: string,
+): LinhaDaLista[] {
   const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
   const alvo = norm(busca);
-  return linhas.filter((l) => (tipo === "todos" || l.tipo === tipo) && (alvo === "" || norm(l.nome).includes(alvo)));
+  return linhas.filter(
+    (l) => (tipo === "todos" || l.tipo === tipo) && (alvo === "" || norm(l.nome).includes(alvo)),
+  );
 }
 
 /** A execução mais recente por ponteiro, a partir das linhas já ordenadas por `started_at desc`. */
-export function ultimaExecucaoPorPonteiro(execucoes: { pointer_id: string; started_at: string | null }[]): Record<string, string> {
+export function ultimaExecucaoPorPonteiro(
+  execucoes: { pointer_id: string; started_at: string | null }[],
+): Record<string, string> {
   const mapa: Record<string, string> = {};
   for (const e of execucoes) {
     if (!e.started_at) continue;

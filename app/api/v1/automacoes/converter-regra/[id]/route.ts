@@ -33,7 +33,12 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     const previa = previaDaConversao(regra);
     return ok(
       {
-        rule: { id: regra.id, name: regra.name, is_active: regra.is_active, migrated_to_pointer_id: regra.migrated_to_pointer_id },
+        rule: {
+          id: regra.id,
+          name: regra.name,
+          is_active: regra.is_active,
+          migrated_to_pointer_id: regra.migrated_to_pointer_id,
+        },
         conversivel: previa.conversivel,
         grafo: previa.grafo,
         nao_convertido: previa.naoConvertido,
@@ -73,14 +78,24 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
       },
     });
     if (desfecho.tipo === "conflito") {
-      return fail("idempotency_conflict", t("Esta chave de idempotência já foi usada com outro conteúdo."), 409, {
-        requestId: e.requestId,
-      });
+      return fail(
+        "idempotency_conflict",
+        t("Esta chave de idempotência já foi usada com outro conteúdo."),
+        409,
+        {
+          requestId: e.requestId,
+        },
+      );
     }
     if (desfecho.tipo === "em_curso") {
-      return fail("idempotency_in_progress", t("A mesma conversão ainda está em curso. Tente de novo em instantes."), 409, {
-        requestId: e.requestId,
-      });
+      return fail(
+        "idempotency_in_progress",
+        t("A mesma conversão ainda está em curso. Tente de novo em instantes."),
+        409,
+        {
+          requestId: e.requestId,
+        },
+      );
     }
     return ok(desfecho.resposta, { requestId: e.requestId, status: desfecho.status as 200 | 201 });
   } catch (err) {
