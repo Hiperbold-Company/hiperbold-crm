@@ -28461,6 +28461,11 @@ export const DICIONARIO: Traducoes = {
   "As chaves secretas só são administradas pela tela, com sessão.": { es: "Las claves secretas solo se administran desde la pantalla, con sesión." },
   // ---- Automações: tela única (lote 5) ----
   "Não foi possível identificar quem responde por esta chave.": { es: "No fue posible identificar quién responde por esta clave." },
+  "Esta regra foi convertida em uma automação. Desligue a automação antes de religar a regra.": { es: "Esta regla se convirtió en una automatización. Desactiva la automatización antes de volver a activar la regla." },
+  "um responsável da equipe": { es: "un responsable del equipo" },
+  "As regras agora ficam em Automações.": { es: "Las reglas ahora están en Automatizaciones." },
+  "Ir para Automações": { es: "Ir a Automatizaciones" },
+  "A regra dispara em toda mensagem recebida; a automação nova ignora reações, mensagens atrasadas e respostas a outra automação, e o comportamento não é idêntico.": { es: "La regla se activa con todo mensaje recibido; la automatización nueva ignora reacciones, mensajes atrasados y respuestas a otra automatización, y el comportamiento no es idéntico." },
   "A IA escolher a ação ainda não existe nas automações novas.": { es: "Que la IA elija la acción todavía no existe en las automatizaciones nuevas." },
   "A automação nova passa a fazer o mesmo trabalho. As duas nunca ficam ligadas ao mesmo tempo.": { es: "La automatización nueva pasa a hacer el mismo trabajo. Las dos nunca quedan activas al mismo tiempo." },
   "A etapa escolhida não existe mais. Escolha outra.": { es: "La etapa elegida ya no existe. Elige otra." },

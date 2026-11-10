@@ -13,7 +13,8 @@
  *     QUANDO a regra fixa a etapa numa condição `lead.stage_id = X`,
  *     `lead.tag_added`/`contact.tag_added` QUANDO a regra fixa a tag numa
  *     condição `event.added_tags contém X`, os seis de agenda, `contact.birthday`
- *     no próprio dia e `message.received`.
+ *     no próprio dia. `message.received` NÃO converte: os dois motores não tratam a mesma
+ *     mensagem do mesmo jeito (ver `GATILHOS_SEM_EQUIVALENTE`).
  *   • Condições: campos padrão e personalizados do negócio e do contato, a
  *     etapa e as tags, com os operadores que o motor novo compara igual.
  *   • Ações: pôr etiqueta, responsável fixo (sem levar contato e conversas),
@@ -68,6 +69,12 @@ export const GATILHOS_SEM_EQUIVALENTE: Record<string, string> = {
   "lead.date_field_due": "O gatilho de data do funil dispara num horário diferente nas automações novas.",
   "lead.silent_for": "O gatilho \"negócio em silêncio\" conta o tempo de outro jeito nas automações novas.",
   "lead.stage_stale": "O gatilho \"negócio parado na etapa\" ainda não existe nas automações novas.",
+  // Prova (medida em 10/11/2026): o motor antigo dispara em TODO `message.received` (lib/automation/engine.ts não filtra
+  // tipo nem idade; lib/automation/engine.handler.ts:25 só pula canal desativado), e o gatilho novo descarta reação e
+  // tipo não suportado (gatilhos.ts:257), mensagem com mais de 10 min (gatilhos.handler.ts, mensagemPodeDisparar) e
+  // resposta a automação da conversa, e não tem a guarda de canal desativado. Grupo e `fromMe` coincidem (nenhum dos dois dispara).
+  "message.received":
+    "A regra dispara em toda mensagem recebida; a automação nova ignora reações, mensagens atrasadas e respostas a outra automação, e o comportamento não é idêntico.",
 };
 
 /** Motivo por ação SEM equivalente. */
@@ -267,10 +274,6 @@ function converterGatilho(
     const dias = cfg.dias_antecedencia;
     if (dias !== undefined && dias !== 0) return "A regra avisa dias antes do aniversário; a automação nova dispara no dia.";
     return { gatilho: { kind: "birthday" }, consumidas };
-  }
-  if (ev === "message.received") {
-    // O motor antigo não olha se há humano na conversa: a conversão mantém isso.
-    return { gatilho: { kind: "message_received", match: "any", keywords: [], skip_if_human: false }, consumidas };
   }
   return GATILHOS_SEM_EQUIVALENTE[ev] ?? `O gatilho «${ev}» ainda não existe nas automações novas.`;
 }

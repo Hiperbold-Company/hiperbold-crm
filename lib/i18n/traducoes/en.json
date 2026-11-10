@@ -14272,5 +14272,10 @@
   "Webhooks e regras antigas": "Webhooks and legacy rules",
   "É assim que a regra fica no formato novo. Nada muda até você publicar.": "This is how the rule looks in the new format. Nothing changes until you publish.",
   "Última execução em": "Last run on",
-  "Não foi possível identificar quem responde por esta chave.": "Could not identify who is responsible for this key."
+  "Não foi possível identificar quem responde por esta chave.": "Could not identify who is responsible for this key.",
+  "Esta regra foi convertida em uma automação. Desligue a automação antes de religar a regra.": "This rule was converted into an automation. Turn the automation off before turning the rule back on.",
+  "um responsável da equipe": "a team member",
+  "As regras agora ficam em Automações.": "Rules now live in Automations.",
+  "Ir para Automações": "Go to Automations",
+  "A regra dispara em toda mensagem recebida; a automação nova ignora reações, mensagens atrasadas e respostas a outra automação, e o comportamento não é idêntico.": "The rule fires on every message received; the new automation ignores reactions, late messages and replies to another automation, so the behavior is not identical."
 }

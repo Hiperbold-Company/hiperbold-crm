@@ -38,7 +38,7 @@ function triggerLabel(trigger: string, t: (texto: string) => string): string {
   return t(TRIGGER_LABELS[trigger as TriggerEvent] ?? trigger);
 }
 
-export function RulesTab() {
+export function RulesTab({ regraInicial }: { regraInicial?: string } = {}) {
   const t = useT();
   const { data, isLoading } = useAutomationRules();
   const update = useUpdateAutomationRule();
@@ -50,6 +50,19 @@ export function RulesTab() {
   const [deleting, setDeleting] = React.useState<AutomationRuleRow | null>(null);
 
   const rules = data?.data ?? [];
+
+  // `?regra=<id>`: abre o editor daquela regra, UMA vez. Regra que não está na lista desta organização
+  // (outra org, apagada) é ignorada em silêncio.
+  const jaAbriuARegra = React.useRef(false);
+  React.useEffect(() => {
+    if (!regraInicial || jaAbriuARegra.current || !data) return;
+    jaAbriuARegra.current = true;
+    const alvo = data.data.find((r) => r.id === regraInicial);
+    if (alvo) {
+      setEditing(alvo);
+      setEditorOpen(true);
+    }
+  }, [regraInicial, data]);
 
   const toggleActive = (rule: AutomationRuleRow, checked: boolean) => {
     qc.setQueryData<{ data: AutomationRuleRow[] }>(RULES_QUERY_KEY, (old) =>

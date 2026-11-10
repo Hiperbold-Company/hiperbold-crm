@@ -50,6 +50,10 @@ export interface DepsDeRegras extends DepsDaOperacao {
 
 const tr = (deps: DepsDeRegras) => deps.t ?? ((texto: string) => texto);
 
+/** Texto da recusa 409 quando o gatilho da 1005 impede religar uma regra já convertida em automação ligada. */
+export const MENSAGEM_DA_REGRA_CONVERTIDA =
+  "Esta regra foi convertida em uma automação. Desligue a automação antes de religar a regra.";
+
 function recusa(deps: DepsDeRegras, status: number, code: string, message: string): ApiError {
   return new ApiError(status, code, undefined, deps.requestId, message);
 }
@@ -314,6 +318,10 @@ export async function alterarRegra(deps: DepsDeRegras, id: string, entrada: Upda
     .eq("organization_id", deps.organizationId)
     .select("*")
     .single();
+  // Gatilho da 1005 (`fn_regra_convertida_nao_religa`): a regra virou automação e a automação está ligada.
+  if (updErr && (updErr as { code?: string }).code === "PT409") {
+    throw recusa(deps, 409, "rule_converted_to_automation", tr(deps)(MENSAGEM_DA_REGRA_CONVERTIDA));
+  }
   if (updErr || !updated) throw falhaInterna(deps, updErr ?? "automation_rule_update_failed");
 
   // `actions` fora do audit: a config de call_webhook carrega segredo em claro no input.

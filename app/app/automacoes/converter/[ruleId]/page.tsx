@@ -5,12 +5,10 @@ import { Card } from "@/components/ui/card";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { converterRegra, type RegraAntiga } from "@/lib/automacoes/converter-regra";
-import type { AutomacaoTriggerConfig, CrmActionConfig } from "@/lib/automacoes/schemas";
-import { GATILHOS_DA_AUTOMACAO, fraseDaAcao, fraseDaRegraNova } from "@/lib/automacoes/vocabulario";
-import type { NovaConditionCheck } from "@/lib/followup/graph-schema";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 
+import { BlocosDaConversao } from "./BlocosDaConversao";
 import { PublicarConversao } from "./PublicarConversao";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +41,6 @@ export default async function ConverterRegraPage({ params }: Props) {
 
   const { data: etapas } = await supabase.from("crm_stages").select("id, name").eq("organization_id", activeOrg.orgId);
   const nomeDaEtapa = new Map((etapas ?? []).map((e) => [e.id as string, e.name as string]));
-  const nomes = { etapa: (id: string) => nomeDaEtapa.get(id) ?? null };
 
   const conversao = converterRegra(regra as unknown as RegraAntiga);
   const telaAntiga = `/app/webhooks?tab=rules&regra=${regra.id}`;
@@ -78,34 +75,7 @@ export default async function ConverterRegraPage({ params }: Props) {
           <p className="text-sm text-text-muted">
             {t("É assim que a regra fica no formato novo. Nada muda até você publicar.")}
           </p>
-          <ol className="space-y-3" data-testid="blocos-da-conversao">
-            {conversao.grafo.nodes.map((n) => (
-              <li key={n.id}>
-                <Card className="space-y-1 p-4">
-                  <p className="text-xs font-medium uppercase text-text-muted">{t(n.label)}</p>
-                  {n.type === "trigger" &&
-                    (n.config as AutomacaoTriggerConfig).triggers.map((g, i) => (
-                      <p key={i} className="text-sm">
-                        {t("Quando")}: {t(GATILHOS_DA_AUTOMACAO[g.kind])}
-                      </p>
-                    ))}
-                  {n.type === "condition" &&
-                    (n.config as { checks: NovaConditionCheck[]; combinator: "and" | "or" }).checks.map((c, i) => (
-                      <p key={i} className="text-sm">
-                        {i > 0 && ((n.config as { combinator: string }).combinator === "or" ? `${t("ou")} ` : `${t("e")} `)}
-                        {fraseDaRegraNova(c, nomes)}
-                      </p>
-                    ))}
-                  {n.type === "crm_action" &&
-                    (n.config as CrmActionConfig).actions.map((a, i) => (
-                      <p key={i} className="text-sm">
-                        {fraseDaAcao(a, nomes)}
-                      </p>
-                    ))}
-                </Card>
-              </li>
-            ))}
-          </ol>
+          <BlocosDaConversao nodes={conversao.grafo.nodes} etapas={Object.fromEntries(nomeDaEtapa)} />
           <PublicarConversao ruleId={regra.id} />
         </>
       )}

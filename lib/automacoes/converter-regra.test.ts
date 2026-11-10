@@ -58,13 +58,17 @@ describe("converterRegra — gatilhos com equivalente", () => {
     expect(gatilhoDe(publicavel(regra({ trigger_event: `appointment.${e}` })))).toEqual({ kind: "appointment", events: [e] });
   });
 
-  it("contact.birthday no dia → birthday; message.received → message_received sem olhar humano", () => {
+  it("contact.birthday no dia → birthday", () => {
     expect(gatilhoDe(publicavel(regra({ trigger_event: "contact.birthday" })))).toEqual({ kind: "birthday" });
-    expect(gatilhoDe(publicavel(regra({ trigger_event: "message.received" })))).toEqual({
-      kind: "message_received",
-      match: "any",
-      keywords: [],
-      skip_if_human: false,
+  });
+
+  it("message.received NÃO converte: o gatilho novo descarta reação, mensagem atrasada e resposta a automação, e o antigo não", () => {
+    const r = converterRegra(regra({ trigger_event: "message.received" }));
+    expect(r.conversivel).toBe(false);
+    expect(r.naoConvertido[0]).toMatchObject({
+      parte: "gatilho",
+      item: "message.received",
+      motivo: GATILHOS_SEM_EQUIVALENTE["message.received"],
     });
   });
 });
