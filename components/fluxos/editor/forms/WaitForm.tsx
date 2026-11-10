@@ -25,6 +25,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { Campo, Seletor, TempoComUnidade, useCamposPersonalizados } from "./automacao/comum";
 import { escopoDoCampo } from "@/lib/leads/campos-do-funil";
 import type { QuandoDaEspera } from "@/lib/automacoes/plano-de-tempo";
+import { QUANDO_DA_ESPERA_ROTULOS } from "@/lib/automacoes/vocabulario";
 import { HorarioDaEsperaEditor } from "./HorarioDaEsperaEditor";
 import { msToMin, minToMs, type ConfigOf } from "./shared";
 
@@ -72,13 +73,6 @@ const SENTIDOS = {
   no_dia: "No dia da data",
   depois: "Dias depois da data",
 } as const;
-
-const QUANDO_ROTULOS: Record<QuandoDaEspera, string> = {
-  today: "Hoje",
-  tomorrow: "Amanhã",
-  in_days: "Daqui a alguns dias",
-  next_weekday: "No próximo dia da semana",
-};
 
 export function WaitForm({
   config,
@@ -273,7 +267,7 @@ export function WaitForm({
             <Seletor
               id="wait-quando"
               valor={estado.quando}
-              opcoes={opcoes(QUANDO_ROTULOS).map(({ valor, rotulo }) => ({ valor, rotulo: t(rotulo) }))}
+              opcoes={opcoes(QUANDO_DA_ESPERA_ROTULOS).map(({ valor, rotulo }) => ({ valor, rotulo: t(rotulo) }))}
               onChange={(v) => commit({ quando: v as QuandoDaEspera })}
             />
           </Campo>

@@ -8,6 +8,8 @@
  */
 import type { NovaConditionCheck, QuestionValidation } from "@/lib/followup/graph-schema";
 
+import type { QuandoDaEspera } from "./plano-de-tempo";
+
 import type {
   AutomacaoTriggerKind,
   EventoDeAgendamento,
@@ -400,6 +402,14 @@ export const SE_JA_TEM_NEGOCIO: Record<"skip" | "move" | "create_new", string> =
   create_new: "Criar outro negócio mesmo assim",
 };
 
+/** Lote 6: "quando", na espera "até um dia e horário". */
+export const QUANDO_DA_ESPERA_ROTULOS: Record<QuandoDaEspera, string> = {
+  today: "Hoje",
+  tomorrow: "Amanhã",
+  in_days: "Daqui a alguns dias",
+  next_weekday: "No próximo dia da semana",
+};
+
 export const SE_DER_ERRO: Record<"route" | "continue", string> = {
   route: "Parar e sair por “Erro”",
   continue: "Seguir com as próximas ações",
@@ -425,6 +435,7 @@ export const MAPAS_DA_AUTOMACAO: ReadonlyArray<Record<string, string>> = [
   SITUACOES_DO_NEGOCIO,
   SE_JA_TEM_NEGOCIO,
   SE_DER_ERRO,
+  QUANDO_DA_ESPERA_ROTULOS,
   VALIDACOES_DA_PERGUNTA,
   TIPOS_DE_OPCAO,
   ENVIOS_DA_CONVERSA,
