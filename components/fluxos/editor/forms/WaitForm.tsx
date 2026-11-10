@@ -302,7 +302,7 @@ export function WaitForm({
           <Campo
             id="wait-sentido"
             rotulo={t("Quando, em relação à data")}
-            ajuda={t('Se o campo estiver vazio ou a data já tiver passado, segue por "Sem data". A data é lida quando a espera começa.')}
+            ajuda={t('Se o campo estiver vazio ou a data já tiver passado, a automação segue pela saída "Sem data". Se essa saída não estiver ligada a nada, a automação termina ali. A data é lida quando a espera começa.')}
           >
             <Seletor
               id="wait-sentido"

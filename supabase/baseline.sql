@@ -102312,6 +102312,7 @@ $$;
 
 revoke execute on function fn_claim_due_automacao_enrollments(int, int) from public, anon, authenticated;
 grant execute on function fn_claim_due_automacao_enrollments(int, int) to service_role;
+
 -- ---- automações: cofre de chaves secretas do bloco "Requisição HTTP" (migration 1004, fork Hiperbold) ----
 -- 1004 — O bloco "Requisição HTTP" das automações (lote 4) chama outro sistema com uma chave
 -- (token de API) que a organização guarda aqui. A chave NUNCA é digitada no grafo: o bloco guarda
