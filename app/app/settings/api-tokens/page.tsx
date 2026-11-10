@@ -5,6 +5,8 @@ import { ROLE_RANK } from "@/lib/auth/types";
 import { ApiTokensClient } from "./_components/ApiTokensClient";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
+import { CAMINHO_CONECTAR_ASSISTENTE_DE_IA } from "@/lib/ajuda/artigos";
+import { urlDoServidorMcp } from "@/lib/mcp/url-do-servidor";
 import { recursosDaChave } from "@/lib/api/plano-da-api";
 import { planoDaOrganizacao } from "@/lib/billing/planos/plano-da-organizacao";
 import { logger } from "@/lib/logger";
@@ -34,7 +36,18 @@ export default async function ApiTokensPage() {
           <strong>{traduzir("uma única vez", idioma)}</strong>{" "}
           {traduzir("na criação.", idioma)}
         </p>
+        <p className="text-sm text-muted-foreground">
+          {traduzir("Endereço do MCP:", idioma)}{" "}
+          <code className="rounded-md bg-muted px-1 py-0.5 text-xs" data-testid="api-tokens-url-do-mcp">
+            {urlDoServidorMcp()}
+          </code>
+        </p>
         <LinkDeAjudaDaTela />
+        <LinkDeAjudaDaTela
+          caminho={CAMINHO_CONECTAR_ASSISTENTE_DE_IA}
+          rotulo={traduzir("Como conectar um assistente de IA", idioma)}
+          semPrefixo
+        />
       </header>
       <ApiTokensClient recursos={recursos} />
     </div>

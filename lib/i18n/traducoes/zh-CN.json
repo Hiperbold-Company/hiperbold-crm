@@ -5672,7 +5672,7 @@
   "Nuvemshop": "Nuvemshop",
   "Conecte a loja para trazer pedidos e clientes para dentro do CRM.": "连接店铺，将订单和客户导入 CRM。",
   "Avise outros sistemas quando algo acontecer aqui dentro.": "当此处发生事件时通知其他系统。",
-  "Funil e performance por atendente nos últimos 30 dias.": "过去 30 天各客服的销售漏斗与业绩表现。",
+  "Funil e performance por atendente, no período que você escolher.": "按所选时间段显示各客服的销售漏斗与业绩表现。",
   "Quanto custou cada resultado das campanhas que trazem gente para cá.": "查看获客广告每项成果的成本。",
   "Relatório do que a equipe e os agentes fizeram no período: quanto, quem e de que tipo.": "团队和智能体在该期间的工作报告：数量、人员和类型。",
   "Se o agente está melhorando, onde ele erra e o que falta ensinar.": "智能体是否在进步、哪里出错、还需教什么。",
@@ -6485,5 +6485,7 @@
   "pode ter ficado incompleto. Exclua-o e tente de novo.": "可能不完整。请删除后重试。",
   "Seu perfil não pode duplicar funis nesta organização. Peça a um administrador.": "你的角色无法在此组织中复制销售漏斗。请联系管理员。",
   "O plano desta organização chegou ao limite de funis ou de etapas. Fale com quem cuida da assinatura.": "该组织的套餐已达到销售漏斗或阶段数量上限。请联系负责订阅的人员。",
-  "etapas": "个阶段"
+  "etapas": "个阶段",
+  "Endereço do MCP:": "MCP 地址：",
+  "Como conectar um assistente de IA": "如何连接 AI 助手"
 }

@@ -128,7 +128,7 @@ describe("MetaDoMesPanel", () => {
       podeConfigurar: false,
     });
     expect(screen.queryByRole("link", { name: "Definir a meta" })).toBeNull();
-    expect(container.textContent).toContain("Só quem administra a empresa define a meta.");
+    expect(container.textContent).toContain("Só o administrador e o gerente definem a meta.");
   });
 
   it("carregando: a silhueta anuncia a espera em vez de um traço vazio", () => {
