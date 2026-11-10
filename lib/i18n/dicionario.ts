@@ -28364,7 +28364,6 @@ export const DICIONARIO: Traducoes = {
   "Seu plano chegou ao limite de agentes de IA. Mude de plano para criar mais.": { es: "Tu plan llegó al límite de agentes de IA. Cambia de plan para crear más." },
   "Seu plano chegou ao limite de automações. Mude de plano para criar mais.": { es: "Tu plan llegó al límite de automatizaciones. Cambia de plan para crear más." },
   "A automação por comentário do Instagram está disponível no plano Max.": { es: "La automatización por comentario de Instagram está disponible en el plan Max." },
-  "Disponível no Max": { es: "Disponible en Max" },
 };
 
 /**

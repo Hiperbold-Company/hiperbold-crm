@@ -76,8 +76,8 @@ describe("linhasDosRecursosDoPlano", () => {
   it("Pro v2: agentes até 1, MCP/API/comentário não inclusos, fonte 60 req/min", () => {
     const linhas = linhasDosRecursosDoPlano(normalizarLimites({ ...SETE, ...SEIS_PRO }), false);
     expect(Object.fromEntries(linhas.map((l) => [l.chave, l.valor]))).toEqual({
-      agentes_ia: { tipo: "ate", quantidade: 1 },
-      automacoes: { tipo: "ate", quantidade: 10 },
+      agentes_ia: { tipo: "ate", quantidade: 1, atual: null }, // sem `uso` passado, o "atual" não vem
+      automacoes: { tipo: "ate", quantidade: 10, atual: null },
       mcp_req_min: { tipo: "nao_incluso" },
       acesso_api: { tipo: "nao_incluso" },
       automacao_comentario_instagram: { tipo: "nao_incluso" },

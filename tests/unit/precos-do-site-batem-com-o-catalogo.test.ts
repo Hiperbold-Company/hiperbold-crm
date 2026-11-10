@@ -12,14 +12,10 @@ import { describe, expect, it } from "vitest";
  * id="planos-dados">`. Este teste lê esse bloco do HTML que o CRM serve e o compara:
  *
  *  1. com a constante abaixo (os centavos decididos pelo dono do produto em 09/11/2026);
- *  2. com a versão 2 de `pro`, `max` e `escale` no `supabase/baseline.sql`, quando o
- *     baseline do worktree já a traz (vale a ÚLTIMA ocorrência, porque o arquivo é
- *     aplicado inteiro e em ordem).
- *
- * ATENÇÃO: a versão 2 do catálogo vem de outra unidade, em outro branch. Depois do
- * merge dela, a comparação com o baseline passa a ser OBRIGATÓRIA: `BASELINE_TEM_V2`
- * vira `true` sozinha quando o baseline traz a v2, e o teste reprova se ela divergir.
- * Quando a v2 já estiver na `main`, trocar a guarda por `expect(BASELINE_TEM_V2).toBe(true)`.
+ *  2. com a versão 2 de `pro`, `max` e `escale` no `supabase/baseline.sql` (a migration
+ *     1001 a semeia num loop de `values`; vale a ÚLTIMA ocorrência, porque o arquivo é
+ *     aplicado inteiro e em ordem). A comparação é OBRIGATÓRIA: se o parser não achar
+ *     os três códigos, o teste reprova em vez de passar vazio.
  *
  * O código do terceiro plano é `scale` no site e `escale` no catálogo (apelido em
  * `lib/auth/plano-escolhido.ts`).
@@ -47,72 +43,36 @@ function lerDados(arquivo: string): DadosDaPagina {
   const html = readFileSync(join(RAIZ, "public/site", arquivo), "utf8");
   const blocos = [...html.matchAll(/<script[^>]*id="planos-dados"[^>]*>([\s\S]*?)<\/script>/g)];
   expect(blocos, `${arquivo}: deve haver exatamente um bloco #planos-dados`).toHaveLength(1);
-  return JSON.parse(blocos[0][1]) as DadosDaPagina;
+  const bloco = blocos[0]?.[1];
+  if (bloco === undefined) throw new Error(`${arquivo}: bloco #planos-dados ausente`);
+  return JSON.parse(bloco) as DadosDaPagina;
 }
 
-/** Divide por vírgulas de nível zero, respeitando aspas simples e parênteses. */
-function dividirNoNivelZero(texto: string): string[] {
-  const partes: string[] = [];
-  let nivel = 0;
-  let aspas = false;
-  let atual = "";
-  for (let i = 0; i < texto.length; i++) {
-    const c = texto[i];
-    if (aspas) {
-      atual += c;
-      if (c === "'") {
-        if (texto[i + 1] === "'") atual += texto[++i];
-        else aspas = false;
-      }
-      continue;
-    }
-    if (c === "'") aspas = true;
-    if (c === "(") nivel++;
-    if (c === ")") nivel--;
-    if (c === "," && nivel === 0) {
-      partes.push(atual.trim());
-      atual = "";
-      continue;
-    }
-    atual += c;
-  }
-  if (atual.trim()) partes.push(atual.trim());
-  return partes;
-}
-
-/** Última linha `version = 2` de cada plano em `insert into public.billing_plans` do baseline. */
+/**
+ * Preços da versão 2 como o BANCO os grava: a migration 1001 os semeia num loop
+ * (`for v in select * from (values ('pro', 'Pro', mensal, semestral, anual, jsonb_build_object(...)), ...)
+ * as t(code, nome, mensal, semestral, anual, limites)`), não por `insert` literal.
+ * Vale a ÚLTIMA ocorrência no arquivo, porque ele é aplicado inteiro e em ordem.
+ */
 function precosDaV2NoBaseline(): Record<string, Precos> {
   const sql = readFileSync(join(RAIZ, "supabase/baseline.sql"), "utf8");
+  const fim = sql.lastIndexOf("as t(code, nome, mensal, semestral, anual, limites)");
+  if (fim < 0) return {};
+  const inicio = sql.lastIndexOf("select * from (values", fim);
+  if (inicio < 0) return {};
+  const bloco = sql.slice(inicio, fim);
   const achados: Record<string, Precos> = {};
-  const inserts = sql.split(/insert\s+into\s+public\.billing_plans/i).slice(1);
-  for (const bloco of inserts) {
-    const colunas = /^\s*\(([^)]*)\)/.exec(bloco)?.[1].split(",").map((c) => c.trim());
-    if (!colunas) continue;
-    const idx = (re: RegExp) => colunas.findIndex((c) => re.test(c));
-    const iCode = idx(/^code$/);
-    const iVersion = idx(/^version$/);
-    const iMes = idx(/^price_monthly_cents$/);
-    const iSem = idx(/semi/);
-    const iAno = idx(/^price_yearly_cents$/);
-    if ([iCode, iVersion, iMes, iSem, iAno].some((i) => i < 0)) continue;
-    const valores = bloco.slice(bloco.search(/\bvalues\b/i) + 6).split(/\bon\s+conflict\b|;/i)[0];
-    for (const linha of valores.split(/\n(?=\s*\(')/)) {
-      const interior = linha.trim().replace(/^\(/, "").replace(/\),?\s*$/, "");
-      const campos = dividirNoNivelZero(interior);
-      if (campos[iVersion] !== "2") continue;
-      const codigo = campos[iCode]?.replace(/'/g, "");
-      achados[codigo] = {
-        monthly: Number(campos[iMes]),
-        semiannual: Number(campos[iSem]),
-        yearly: Number(campos[iAno]),
-      };
-    }
+  for (const m of bloco.matchAll(/\(\s*'([a-z_]+)'\s*,\s*'[^']*'\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*jsonb_build_object/g)) {
+    achados[m[1] as string] = {
+      monthly: Number(m[2]),
+      semiannual: Number(m[3]),
+      yearly: Number(m[4]),
+    };
   }
   return achados;
 }
 
 const BASELINE_V2 = precosDaV2NoBaseline();
-const BASELINE_TEM_V2 = ["pro", "max", "escale"].every((c) => BASELINE_V2[c]);
 
 describe.each(["index.html", "precos/index.html"])("preços do site em public/site/%s", (arquivo) => {
   const dados = lerDados(arquivo);
@@ -131,12 +91,12 @@ describe.each(["index.html", "precos/index.html"])("preços do site em public/si
     }
   });
 
-  it("bate com a versão 2 do catálogo no baseline.sql (obrigatório quando a v2 está no baseline)", () => {
-    if (!BASELINE_TEM_V2) return; // v2 ainda em outro branch; ver o cabeçalho do arquivo
+  it("bate com a versão 2 do catálogo no baseline.sql (obrigatório)", () => {
+    // OBRIGATÓRIO: se o parser não acha os três códigos, o teste reprova em vez de passar vazio.
+    expect(Object.keys(BASELINE_V2).sort(), "v2 de pro, max e escale lida do baseline.sql").toEqual(["escale", "max", "pro"]);
     for (const plano of dados.planos) {
-      expect(plano.precos, `${arquivo} · ${plano.codigo} vs baseline v2`).toEqual(
-        BASELINE_V2[CODIGO_NO_CATALOGO[plano.codigo]],
-      );
+      const codigoNoCatalogo = CODIGO_NO_CATALOGO[plano.codigo] ?? plano.codigo;
+      expect(plano.precos, `${arquivo} · ${plano.codigo} vs baseline v2`).toEqual(BASELINE_V2[codigoNoCatalogo]);
     }
   });
 });
@@ -144,7 +104,7 @@ describe.each(["index.html", "precos/index.html"])("preços do site em public/si
 describe("o link de assinatura leva plano e ciclo", () => {
   it.each(["index.html", "precos/index.html"])("%s: três botões Assinar com plano e ciclo anual", (arquivo) => {
     const html = readFileSync(join(RAIZ, "public/site", arquivo), "utf8");
-    const links = [...html.matchAll(/href="(\/signup\?plano=[^"]+)"/g)].map((m) => m[1].replace(/&amp;/g, "&"));
+    const links = [...html.matchAll(/href="(\/signup\?plano=[^"]+)"/g)].map((m) => (m[1] ?? "").replace(/&amp;/g, "&"));
     expect(links).toEqual([
       "/signup?plano=pro&ciclo=yearly",
       "/signup?plano=max&ciclo=yearly",
