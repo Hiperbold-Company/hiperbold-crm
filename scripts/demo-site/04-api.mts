@@ -23,6 +23,7 @@ async function chamar(req: APIRequestContext, metodo: "get" | "post" | "patch", 
   });
   const corpo = await r.json().catch(() => ({}));
   if (!r.ok()) throw new Error(`${metodo.toUpperCase()} ${url} -> ${r.status()} ${JSON.stringify(corpo).slice(0, 1500)}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- roteiro de demonstração; a forma varia por rota
   return corpo as { data: any };
 }
 
