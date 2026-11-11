@@ -12,6 +12,7 @@
  * sessão nova ainda vale em vez de presumir (`reassumir-conta.ts`).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 
 type AdminMinimo = Pick<SupabaseClient, "auth">;
 
@@ -32,5 +33,8 @@ export async function removerTodosOsFatores(admin: AdminMinimo, userId: string):
     removidos += 1;
     if (fator.status === "verified") verificadosRemovidos += 1;
   }
+  // O GoTrue rebaixou (ou encerrou) as sessões da conta: o que o cache curto
+  // guardou sobre elas não vale mais. Quem chama pode invalidar de novo; é barato.
+  if (removidos > 0) invalidarUsuario(userId);
   return { ok: true, removidos, verificadosRemovidos };
 }

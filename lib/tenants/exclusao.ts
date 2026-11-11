@@ -81,6 +81,7 @@ import { NuvemshopApiClient } from "@/lib/nuvemshop/api-client";
 import { desligarSessaoDeVozNoTransporte } from "@/lib/voice/desparear";
 import { getWacallsClient } from "@/lib/wacalls/client";
 import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 
 export type DesfechoExterno = "ok" | "falhou" | "nao_se_aplica";
 
@@ -311,13 +312,18 @@ async function removerLogins(
     // Na retomada, o login pode já ter saído na tentativa interrompida.
     if (error && (error as { status?: number }).status === 404) {
       removidos.push(id);
+      invalidarUsuario(id);
       continue;
     }
     // O banco ainda referencia a pessoa (ex.: autora de um registro que não é
     // da organização excluída): o GoTrue recusa pela FK e o login fica. É o
     // desfecho correto — apagar forçado levaria dado alheio junto.
     if (error) mantidos.push({ id, motivo: error.message });
-    else removidos.push(id);
+    else {
+      removidos.push(id);
+      // Login apagado: a sessão em cache curto não pode seguir "autenticada".
+      invalidarUsuario(id);
+    }
   }
   return { removidos, mantidos };
 }

@@ -15,7 +15,7 @@
  *
  * ─── A regra ────────────────────────────────────────────────────────────────
  *
- * - Erro TRANSITÓRIO (rede, 5xx, exceção lançada sem status de recusa): tenta
+ * - Erro TRANSITÓRIO (rede, 5xx, 429 do GoTrue, exceção lançada sem status de recusa): tenta
  *   de novo, com espera curta e dentro de um orçamento de tempo. Se persistir,
  *   devolve `indisponivel` — quem chama responde "tente de novo", nunca login.
  * - Erro DEFINITIVO (sessão ausente, JWT inválido/expirado, 401/403, usuário
@@ -98,6 +98,7 @@ function statusDe(valor: unknown): number | undefined {
  */
 export function ehFalhaTransitoria(erro: ErroDeAuth | null | undefined): boolean {
   if (!erro) return false;
+  if (ehLimiteDeRequisicoes(erro)) return true;
   if (erro.name === "AuthRetryableFetchError") return true;
   if (erro.name === "AuthUnknownError") {
     const s = statusDe(erro.originalError) ?? erro.status;
@@ -105,6 +106,24 @@ export function ehFalhaTransitoria(erro: ErroDeAuth | null | undefined): boolean
   }
   return typeof erro.status === "number" && erro.status >= 500;
 }
+
+/**
+ * O GoTrue recusou por excesso de chamadas (429 `over_request_rate_limit`).
+ *
+ * Medido em produção em 11/11/2026: rajadas de várias por segundo em
+ * `/auth/v1/user`, e cada uma virava "deslogado" — quem estava logado ia para
+ * o login ou levava 401. 429 diz "pergunte mais devagar", não "o token não
+ * vale": a sessão continua válida. Por isso é transitório, mas com UMA nova
+ * tentativa só (`ESPERA_DO_LIMITE_MS`): repetir mais vezes só aumentaria a
+ * rajada que provocou o limite.
+ */
+export function ehLimiteDeRequisicoes(erro: ErroDeAuth | null | undefined): boolean {
+  if (!erro) return false;
+  return erro.status === 429 || erro.code === "over_request_rate_limit";
+}
+
+/** Espera antes da única nova tentativa depois de um 429. */
+export const ESPERA_DO_LIMITE_MS = 400;
 
 function esperarDeVerdade(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -133,6 +152,13 @@ export interface OpcoesDoGetUserResiliente {
   agora?: () => number;
   limiteDaTentativaMs?: number;
   orcamentoTotalMs?: number;
+  /**
+   * Chamado ao fim de CADA tentativa, antes da próxima espera ou do retorno.
+   * É onde o proxy desfaz a exclusão do cookie de sessão que o auth-js faz
+   * quando o refresh leva 429 (ver `proxy.ts`): sem isto, a nova tentativa já
+   * leria o cookie apagado e sairia "deslogado".
+   */
+  aoTerminarTentativa?: (fim: { transitoria: boolean; erro: ErroDeAuth | null }) => void;
 }
 
 /**
@@ -175,6 +201,8 @@ export async function getUserResiliente<U, C extends ClienteComAuth<U>>(
       erro = erroDaExcecao(e);
     }
 
+    opcoes.aoTerminarTentativa?.({ transitoria: !user && ehFalhaTransitoria(erro), erro: user ? null : erro });
+
     if (user) return { cliente, resultado: { estado: "autenticado", user, erro: null } };
 
     if (!erro || !ehFalhaTransitoria(erro)) {
@@ -185,7 +213,11 @@ export async function getUserResiliente<U, C extends ClienteComAuth<U>>(
       cliente,
       resultado: { estado: "indisponivel" as const, user: null, erro },
     };
-    const espera = esperas[tentativa];
+    // 429: uma nova tentativa só, com espera curta. Persistiu, é indisponível.
+    const limitado = ehLimiteDeRequisicoes(erro);
+    if (limitado && tentativa >= 1) return indisponivel;
+    // `esperasMs: []` (tentativa única) vale também para o 429.
+    const espera = limitado ? (esperas.length > 0 ? ESPERA_DO_LIMITE_MS : undefined) : esperas[tentativa];
     if (espera === undefined) return indisponivel;
     const fim = agora();
     // Tentativa lenta: a biblioteca já repetiu por dentro. Não empilhar outra.

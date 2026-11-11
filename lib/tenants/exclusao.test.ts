@@ -281,6 +281,22 @@ describe("recusas — nada é tocado", () => {
 });
 
 describe("a ordem", () => {
+  it("login apagado derruba o cache curto da pessoa", async () => {
+    const { comCacheCurto, espiarCacheCurto, esquecerTudo, etiquetaDeUsuario } = await import(
+      "@/lib/auth/cache-curto"
+    );
+    esquecerTudo();
+    await comCacheCurto({
+      chave: "sessao:de-u1",
+      etiquetas: [etiquetaDeUsuario("u1")],
+      carregar: async () => ({ estado: "autenticado" }),
+    });
+    const admin = adminFalso({ status: "suspended", removiveis: ["u1"] });
+    const r = await excluirOrganizacao(admin as never, entrada);
+    expect(r.usuarios?.removidos ?? []).toContain("u1");
+    expect(espiarCacheCurto("sessao:de-u1")).toBeUndefined();
+  });
+
   it("credenciais lidas ANTES do banco; WhatsApp, voz e loja desligados DEPOIS do commit; Storage, logins e registro por último", async () => {
     const admin = adminFalso({
       status: "suspended",

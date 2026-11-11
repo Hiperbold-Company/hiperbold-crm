@@ -289,6 +289,12 @@ const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
     motivo: "o mesmo cookie de sessão, lido no servidor; tem de casar com o do browser",
     marcas: ["sb-deskcomm-auth"],
   },
+  "lib/auth/cache-curto.ts": {
+    categoria: "INFRA",
+    motivo:
+      "o mesmo cookie de sessão, lido para montar a chave do cache curto; só esse nome entra na chave, senão um cookie inventado furaria o cache",
+    marcas: ["sb-deskcomm-auth"],
+  },
   "lib/impersonate/cookie.ts": {
     categoria: "INFRA",
     motivo:

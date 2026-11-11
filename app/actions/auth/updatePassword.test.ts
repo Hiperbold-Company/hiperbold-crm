@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { audit } from "@/lib/audit";
+import { comCacheCurto, espiarCacheCurto, esquecerTudo, etiquetaDeUsuario } from "@/lib/auth/cache-curto";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -62,5 +63,21 @@ describe("updatePassword", () => {
         metadata: { reason: "sessoes_nao_encerradas" },
       }),
     );
+  });
+
+  it("derruba o cache curto da pessoa logo depois da troca (sessão em cache não segue autenticada)", async () => {
+    esquecerTudo();
+    await comCacheCurto({
+      chave: "sessao:hash-da-sessao",
+      etiquetas: [etiquetaDeUsuario("u1")],
+      carregar: async () => ({ estado: "autenticado" }),
+    });
+    expect(espiarCacheCurto("sessao:hash-da-sessao")).toBeDefined();
+    supabaseFalso();
+    const { updatePassword } = await import("./updatePassword");
+
+    await expect(updatePassword(ENTRADA)).rejects.toThrow("REDIRECT:/login?reset=success");
+
+    expect(espiarCacheCurto("sessao:hash-da-sessao")).toBeUndefined();
   });
 });

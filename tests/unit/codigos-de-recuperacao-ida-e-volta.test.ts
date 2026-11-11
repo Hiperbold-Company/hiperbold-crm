@@ -172,6 +172,21 @@ describe("código de recuperação: gerar e usar", () => {
     expect(entrou()).toBe(false);
   });
 
+  it("usar o código derruba o cache curto da pessoa (fatores saíram, a sessão em cache não vale)", async () => {
+    const { comCacheCurto, espiarCacheCurto, esquecerTudo, etiquetaDeUsuario } = await import(
+      "@/lib/auth/cache-curto"
+    );
+    esquecerTudo();
+    await comCacheCurto({
+      chave: "sessao:de-eu",
+      etiquetas: [etiquetaDeUsuario("eu")],
+      carregar: async () => ({ estado: "autenticado" }),
+    });
+    const codigos = await emitir();
+    expect(await usar(codigos[0]!)).toBeUndefined();
+    expect(espiarCacheCurto("sessao:de-eu")).toBeUndefined();
+  });
+
   it("um código que não foi emitido é recusado", async () => {
     const codigos = await emitir();
     const inventado = codigos[0] === "ABCDEFGH" ? "HGFEDCBA" : "ABCDEFGH";

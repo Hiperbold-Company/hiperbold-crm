@@ -396,7 +396,7 @@ export function ConversationListItem({
               </Badge>
             )}
           </span>
-          <span className="shrink-0 text-[11px] tabular-nums text-text-subtle">
+          <span className="shrink-0 text-[11px] tabular-nums text-text-muted">
             {time}
           </span>
         </div>

@@ -289,6 +289,22 @@ function copiar<T>(valor: T): T {
   }
 }
 
+/**
+ * Lê uma entrada SEM carregar: devolve o valor guardado ou `undefined`.
+ *
+ * Para quem só quer ANOTAR (o relato de erro do navegador) e não pode falar
+ * com o GoTrue — nem renovar token, nem apagar cookie de sessão. Nunca decide
+ * autorização: ausência é "não sei", não "não é".
+ */
+export function espiarCacheCurto<T>(chave: string): T | undefined {
+  try {
+    const achado = ler(chave, relogio());
+    return achado ? copiar(achado.valor as T) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface OpcoesDoCacheCurto<T> {
   /** Identidade do dado. Mesma chave = mesma resposta dentro do TTL. */
   chave: string;
@@ -367,8 +383,31 @@ export async function comCacheCurto<T>({
 // Identidade da SESSÃO a partir dos cookies — a chave do cache de sessão.
 // ---------------------------------------------------------------------------
 
-/** `sb-<ref>-auth`, `sb-<ref>-auth.0`, `sb-<ref>-auth-token`… */
-const COOKIE_DE_SESSAO = /^sb-[A-Za-z0-9._-]*auth(-token)?(\.\d+)?$/;
+/**
+ * O cookie de sessão do produto (`NOME_DO_COOKIE_DE_SESSAO`) e os pedaços `.0`, `.1`…
+ * que o `@supabase/ssr` cria quando o valor passa do tamanho de um cookie. O
+ * nome é o `cookieOptions.name` de `lib/supabase/server.ts`,
+ * `lib/supabase/browser.ts` e `proxy.ts`.
+ *
+ * Era qualquer `sb-*auth*`, e isso deixava FURAR o cache (11/11/2026): um
+ * cookie inventado `sb-x-auth=<aleatório>` mudava a chave a cada requisição e
+ * cada uma ia ao GoTrue — a rajada que leva ao 429. Só o cookie que o
+ * `@supabase/ssr` de fato lê entra na chave.
+ */
+export const NOME_DO_COOKIE_DE_SESSAO = "sb-deskcomm-auth";
+// Montada a partir do nome, para o nome existir num lugar só (o nome não tem
+// caractere especial de regex além do hífen, que fora de classe é literal).
+const COOKIE_DE_SESSAO = new RegExp(`^${NOME_DO_COOKIE_DE_SESSAO}(\\.(\\d+))?$`);
+
+/** `true` para o cookie de sessão e os pedaços `.N`; nunca o `-code-verifier`. */
+export function ehCookieDeSessao(nome: string): boolean {
+  return COOKIE_DE_SESSAO.test(nome);
+}
+
+function ordemDoPedaco(nome: string): number {
+  const n = COOKIE_DE_SESSAO.exec(nome)?.[2];
+  return n === undefined ? -1 : Number(n);
+}
 
 /** O prefixo que o `@supabase/ssr` usa para o valor em base64url. */
 const PREFIXO_BASE64 = "base64-";
@@ -402,8 +441,9 @@ export function sessaoDosCookies(
 ): SessaoDosCookies | null {
   try {
     const pedacos = cookies
-      .filter((c) => COOKIE_DE_SESSAO.test(c.name) && !c.name.includes("code-verifier"))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .filter((c) => ehCookieDeSessao(c.name))
+      // Ordem NUMÉRICA dos pedaços: na ordem do texto, `.10` viria antes de `.2`.
+      .sort((a, b) => ordemDoPedaco(a.name) - ordemDoPedaco(b.name));
     if (pedacos.length === 0) return null;
 
     // Junta os pedaços na ordem dos nomes (`...auth`, `...auth.0`, `...auth.1`).

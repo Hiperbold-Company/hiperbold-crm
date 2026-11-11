@@ -13,6 +13,7 @@ import { hashRecoveryCode, normalizeRecoveryCode } from "@/lib/auth/recovery-cod
 import { authRateLimited, AUTH_LIMITS } from "@/lib/auth/rate-limit";
 import { avisarSobreCodigosDeRecuperacao } from "@/lib/auth/aviso-de-codigos-de-recuperacao";
 import { esquecerDispositivosConfiaveis } from "@/lib/auth/dispositivo-confiavel";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 
 export type UseRecoveryCodeResult =
   | { ok: false; error: "invalid_or_used" }
@@ -132,6 +133,10 @@ export async function useRecoveryCode(
     // Non-fatal: user still gets a recovery_used redirect; on next login the
     // residual factor would block them, but seeded user has no factor anyway.
   }
+
+  // Os fatores saíram (ou o código queimou): o cache curto da pessoa, que guarda
+  // a sessão validada e o contexto dela, cai agora em vez de esperar o TTL.
+  invalidarUsuario(targetUser.id);
 
   // 5) Audit (masked).
   await audit({

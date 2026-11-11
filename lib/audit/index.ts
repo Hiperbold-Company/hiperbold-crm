@@ -69,8 +69,15 @@ export async function audit(entry: AuditEntry): Promise<void> {
           support_auth_session_id: support.auth_session_id,
         };
       } else if (entry.actorUserId && !entry.actorApiTokenId) {
+        // `loadAuthUser` e não `db.auth.getUser()`: ele reaproveita a validação
+        // que a própria requisição já fez (cache da requisição e cache curto por
+        // sessão). O `getUser` daqui era uma ida a `/auth/v1/user` a mais por
+        // mutação auditada — parte da rajada que levou o GoTrue ao 429 em
+        // 11/11/2026. Import dinâmico: `lib/auth/server` é pesado e workers
+        // chamam `audit()` fora de requisição (aí ele lança e cai no `catch`).
+        const { loadAuthUser } = await import("@/lib/auth/server");
+        const user = await loadAuthUser();
         const db = await createClient();
-        const { data: { user } } = await db.auth.getUser();
         if (user?.id === entry.actorUserId) {
           const { readSupportContext } = await import("@/lib/impersonate/support");
           const support = await readSupportContext(db);

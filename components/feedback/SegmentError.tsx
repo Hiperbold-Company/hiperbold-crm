@@ -6,6 +6,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { copyToClipboard } from "@/lib/clipboard";
+import { relatarErroDoNavegador } from "@/lib/erros/relatar-erro-do-navegador";
 
 export interface SegmentErrorProps {
   error: Error & { digest?: string };
@@ -23,6 +24,8 @@ export function SegmentError({ error, reset, segment }: SegmentErrorProps) {
       tags: segment ? { segment } : undefined,
     });
     setEventId(id);
+    // Com o Sentry desligado (`SENTRY_DSN=off`), este é o único rastro do erro.
+    relatarErroDoNavegador(error, segment);
   }, [error, segment]);
 
   const displayId = eventId ?? error.digest ?? "—";
