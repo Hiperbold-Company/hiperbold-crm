@@ -353,6 +353,21 @@ export const RETENCAO_CHECKPOINTS_DIAS_PADRAO = 180;
 export const RETENCAO_CHECKPOINTS_DIAS_PISO = 30;
 
 /**
+ * 90 dias para os ALARMES DE GATILHO DE PLANO (`billing_trigger_alarmes`,
+ * migration 1009, D-074) — o padrão É o piso.
+ *
+ * Cada linha é uma falha que um gatilho de plano engoliu (a disputa pelo
+ * contador de uso, por exemplo); o conferidor diário corrige o contador no dia
+ * seguinte, e o alarme serve para o admin ver que aconteceu. Três meses cobrem
+ * qualquer investigação de cobrança do trimestre. Quem aplica é
+ * `fn_podar_alarmes_de_gatilho`, com o piso no CORPO: o `service_role` não tem
+ * DELETE na tabela, e a função é a única porta, só por idade.
+ */
+export const RETENCAO_ALARMES_DE_GATILHO_DIAS_PADRAO = 90;
+/** Piso de 90 dias: o trimestre de cobrança fica sempre investigável. */
+export const RETENCAO_ALARMES_DE_GATILHO_DIAS_PISO = 90;
+
+/**
  * Teto de 36500 dias (100 anos) para todo knob que passa por
  * `interpretarRetencao`. Os dois do arquivo de webhooks
  * (`WEBHOOK_LOG_*_RETENTION_DAYS`) NÃO passam por essa função, mas importam

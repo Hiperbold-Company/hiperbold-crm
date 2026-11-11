@@ -102584,6 +102584,68 @@ comment on column public.automacao_segredos.hosts_permitidos is
 
 notify pgrst, 'reload schema';
 
+-- ---- os alarmes de gatilho de plano ganham prazo (migration 1009, fork Hiperbold, D-074) ----
+--
+-- Cria função: fica ANTES da VARREDURA anon. Mesmo corpo da migration 1009.
+
+-- 1009, os alarmes de gatilho de plano ganham prazo (D-074, fork Hiperbold).
+--
+-- O defeito. `billing_trigger_alarmes` (0910) guarda a falha que um gatilho de plano engoliu, e nada a
+-- apagava: o `service_role` não tem DELETE nela (só select e insert, de propósito, para o rastro não ser
+-- reescrito), e nenhuma poda a alcançava. Numa disputa de linha que se repete, a tabela só cresce.
+--
+-- A correção. `fn_podar_alarmes_de_gatilho(p_retencao_dias, p_limite)`, security definer, no molde das
+-- podas da 0587 e da 9021: apaga em lote o alarme com `criado_em` mais velho que o prazo e devolve a
+-- contagem. O piso de 90 dias mora no CORPO (`greatest(..., 90)`): quem chama com 1 dia não apaga alarme
+-- recente. Os nomes dos parâmetros são os das irmãs, porque o cron `data-retention` chama todas pelo mesmo
+-- laço e o PostgREST resolve a função pelo nome do argumento. Sem seletor de linha (nem organização, nem
+-- gatilho): a função só alcança a ponta mais velha que o piso. O `service_role` continua sem DELETE na
+-- tabela; esta função é a única porta, e só por idade.
+--
+-- O índice em `criado_em`. O que já existe é `(organization_id, criado_em desc)`, que não serve ao corte
+-- global por idade com `order by criado_em limit`. A tabela é pequena e de escrita rara (uma linha por
+-- falha engolida), então o índice novo custa quase nada e evita varrer a tabela inteira quando ela crescer.
+--
+-- Padrão e piso também em `lib/retencao/politica.ts` (RETENCAO_ALARMES_DE_GATILHO_DIAS_*), knob
+-- `BILLING_TRIGGER_ALARM_RETENTION_DAYS`. O par SQL x TypeScript é medido em
+-- `tests/unit/retencao-dos-alarmes-de-gatilho.test.ts`; o piso, num Postgres, em
+-- `tests/invariants/alarmes-de-gatilho-tem-prazo.test.ts`.
+
+create index if not exists billing_trigger_alarmes_criado_em_idx
+  on public.billing_trigger_alarmes (criado_em);
+
+create or replace function public.fn_podar_alarmes_de_gatilho(
+  p_retencao_dias int default null,
+  p_limite int default 1000
+) returns int
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  -- 90 = padrão e piso (RETENCAO_ALARMES_DE_GATILHO_DIAS_PADRAO e _PISO). Repetido aqui de propósito: a
+  -- função vale para quem chama sem passar pelo TypeScript.
+  v_dias int := greatest(coalesce(p_retencao_dias, 90), 90);
+  v_limite int := least(greatest(coalesce(p_limite, 1000), 1), 10000);
+  v_corte timestamptz := now() - make_interval(days => v_dias);
+  v_apagadas int;
+begin
+  -- O corte fica no `where` antes do `limit` (a lição da 0167).
+  with vencidos as (
+    select a.id from public.billing_trigger_alarmes a
+     where a.criado_em < v_corte
+     order by a.criado_em limit v_limite
+  )
+  delete from public.billing_trigger_alarmes a using vencidos v where a.id = v.id;
+  get diagnostics v_apagadas = row_count;
+  return v_apagadas;
+end;
+$$;
+revoke execute on function public.fn_podar_alarmes_de_gatilho(int,int) from public, anon, authenticated;
+grant  execute on function public.fn_podar_alarmes_de_gatilho(int,int) to service_role;
+
+comment on function public.fn_podar_alarmes_de_gatilho(int,int) is
+  '1009, D-074: poda de billing_trigger_alarmes por idade (criado_em), em lote, piso de 90 dias no corpo. Única porta de apagamento da tabela; só service_role executa.';
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
@@ -108236,3 +108298,78 @@ begin
  end loop;
 end
 $hb_1006_mfa_na_leitura$;
+
+-- ---- toda security definer de public termina o search_path com pg_temp (migration 1008, fork Hiperbold, D-223) ----
+--
+-- ⚠️ ESTE É O ÚLTIMO BLOCO DO ARQUIVO, DE PROPÓSITO. A varredura só alcança a definer que já existe quando
+-- ela roda, e `create or replace function ... set search_path = public` acima dela tira o pg_temp de novo a
+-- cada update.sh. Apêndice novo entra ANTES deste bloco (ou repete a varredura no fim). Mesmo corpo da
+-- migration 1008.
+
+-- 1008, toda função security definer de `public` termina o search_path com pg_temp (D-223, fork Hiperbold).
+--
+-- O defeito. Sem `pg_temp` escrito no search_path, o Postgres procura o schema temporário da sessão ANTES
+-- de todos os outros para tabela, view e tipo. Quem chama uma definer pode criar uma tabela temporária com o
+-- nome de uma tabela que a função lê sem schema e fazer a função, que roda com o poder do dono, ler o dado
+-- dele. Escrever `pg_temp` no fim do search_path põe o schema temporário por último. Medido num baseline
+-- fresco em 11/11/2026: 202 das 436 definer de `public` sem `pg_temp` (164 com `public`, 33 com o caminho
+-- vazio, 5 com outras listas).
+--
+-- A correção. Uma varredura em pg_proc: para cada definer de `public` que não pertence a extensão,
+--  - search_path sem pg_temp: `alter routine ... set search_path = <o que já tinha>, pg_temp`;
+--  - search_path vazio (`""`): `set search_path = pg_temp` (o vazio já não achava nada sem schema);
+--  - sem search_path nenhum: `set search_path = public, pg_temp`.
+-- Só o atributo muda: o corpo, os grants e o dono ficam como estão. Quem já tem pg_temp não é tocado, então
+-- reaplicar não faz nada. Uma subtransação por função: a que o papel atual não pode alterar fica com aviso,
+-- sem derrubar as outras.
+--
+-- ⚠️ POSIÇÃO. `create or replace function` com `set search_path = public` reescreve o atributo e tira o
+-- pg_temp de novo. No baseline este bloco é o ÚLTIMO do arquivo, e o update.sh o reaplica inteiro: tudo que
+-- vier antes dele é curado no mesmo run. Apêndice novo entra ANTES deste bloco (ou repete a varredura).
+-- Função nova deve nascer já com `set search_path = public, pg_temp`.
+--
+-- Gate: tests/invariants/definer-com-pg-temp-e-escrita-de-negocios.test.ts.
+
+do $hb_1008_definer_pg_temp$
+declare
+ f record;
+ v_sp text;
+ v_novo text;
+ v_curadas integer := 0;
+begin
+ perform set_config('lock_timeout', '3s', true);
+ for f in
+  select format('public.%I(%s)', p.proname, pg_get_function_identity_arguments(p.oid)) as assinatura,
+         (select substr(c, length('search_path=') + 1)
+            from unnest(coalesce(p.proconfig, '{}'::text[])) as c
+           where c like 'search_path=%') as sp
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.prosecdef
+     and p.prokind in ('f', 'p')
+     and not exists (select 1 from pg_depend d
+                      where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
+   order by p.oid
+ loop
+  v_sp := f.sp;
+  if v_sp is not null and exists (
+       select 1 from unnest(string_to_array(v_sp, ',')) as e
+        where lower(btrim(btrim(e), '"')) = 'pg_temp') then
+   continue;
+  end if;
+  v_novo := case
+              when v_sp is null then 'public, pg_temp'
+              when btrim(v_sp) in ('', '""') then 'pg_temp'
+              else v_sp || ', pg_temp'
+            end;
+  begin
+   execute format('alter routine %s set search_path = %s', f.assinatura, v_novo);
+   v_curadas := v_curadas + 1;
+  exception when insufficient_privilege or lock_not_available then
+   raise warning '1008: % ficou sem pg_temp (%)', f.assinatura, sqlerrm;
+  end;
+ end loop;
+ raise notice '1008: % função(ões) security definer ganharam pg_temp no search_path', v_curadas;
+end
+$hb_1008_definer_pg_temp$;

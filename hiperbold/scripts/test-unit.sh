@@ -15,4 +15,13 @@
 #    duas vezes e estoura os 15 s do teste. O teto maior só vale aqui.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-UPSTASH_REDIS_REST_URL=" " UPSTASH_REDIS_REST_TOKEN=" " exec pnpm test:unit --testTimeout=60000 "$@"
+#
+# 3. As cercas estruturais (projeto `cercas` do vitest, `pnpm cercas`) o CI roda à
+#    parte e o `test:unit` local não as cobre (D-190: no PR #7 três falhas só
+#    apareceram lá). Rodam depois da suíte, nas mesmas condições, e o código de
+#    saída falha se qualquer uma das duas falhar.
+export UPSTASH_REDIS_REST_URL=" " UPSTASH_REDIS_REST_TOKEN=" "
+codigo=0
+pnpm test:unit --testTimeout=60000 "$@" || codigo=$?
+pnpm cercas || codigo=$((codigo > 0 ? codigo : $?))
+exit "$codigo"
