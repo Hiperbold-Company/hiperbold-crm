@@ -51,7 +51,14 @@ export interface ConexaoExterna {
   /** `all` = vê tudo que o usuário do banco vê; `list` = só `fontes`. */
   sourceMode: ModoDeFontes;
   /** Fontes liberadas (só valem com `sourceMode = "list"`; em `all` vem vazio). */
-  fontes: Array<{ schema: string; tabela: string; colunas: string[] | null; descricao: string }>;
+  fontes: Array<{
+    schema: string;
+    tabela: string;
+    colunas: string[] | null;
+    descricao: string;
+    /** Coluna do cliente desta tabela para a IA na conversa (ver `fonteSchema` em `fontes.ts`). */
+    cliente?: { coluna: string; dado: "phone" | "email" | "document" } | null;
+  }>;
   versao: string;
 }
 

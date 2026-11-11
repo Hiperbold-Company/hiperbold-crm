@@ -23,6 +23,7 @@
  */
 import { z } from "zod";
 
+import { decifrarCpfDoContato } from "@/lib/contacts/cpf-do-contato";
 import { abrirAcesso } from "@/lib/external-db/acesso";
 import {
   avaliarConsultaDoTurno,
@@ -30,6 +31,7 @@ import {
   type IdentidadeDoContato,
 } from "@/lib/external-db/escopo-do-contato";
 import { FonteNaoLiberadaError } from "@/lib/external-db/dialeto";
+import type { DadoDoContato } from "@/lib/external-db/fontes";
 import { LeituraInvalidaError } from "@/lib/external-db/leitura";
 import { LIMITE_FILTROS, LIMITE_LINHAS } from "@/lib/external-db/limites";
 import type {
@@ -39,7 +41,6 @@ import type {
   PedidoDeLeitura,
   TabelaExterna,
 } from "@/lib/external-db/types";
-import type { TipoDeIdentificador } from "@/lib/external-db/schemas";
 
 import type { McpContext, McpToolDefinition } from "../types";
 
@@ -169,8 +170,20 @@ async function identidadeDoContato(ctx: McpContext, contatoId: string): Promise<
 async function identificadoresDoContato(
   ctx: McpContext,
   contatoId: string,
-  tipo: TipoDeIdentificador,
+  tipo: DadoDoContato,
 ): Promise<string[]> {
+  if (tipo === "document") {
+    // CPF/CNPJ: cifrado no CRM, aberto só aqui no servidor. Vai só nos valores
+    // parametrizados da consulta; nunca volta ao modelo nem ao audit.
+    const doc = (await decifrarCpfDoContato(ctx.organizationId, contatoId))?.replace(/\D/g, "") ?? "";
+    if (doc.length === 11) {
+      return [doc, `${doc.slice(0, 3)}.${doc.slice(3, 6)}.${doc.slice(6, 9)}-${doc.slice(9)}`];
+    }
+    if (doc.length === 14) {
+      return [doc, `${doc.slice(0, 2)}.${doc.slice(2, 5)}.${doc.slice(5, 8)}/${doc.slice(8, 12)}-${doc.slice(12)}`];
+    }
+    return doc ? [doc] : [];
+  }
   const { data } = await ctx.supabase
     .from("contacts")
     .select("phone_number, email")
@@ -236,6 +249,29 @@ function semFontesLiberadas(conexao: ConexaoExterna): Record<string, unknown> | 
   };
 }
 
+/**
+ * D-146 — o turno de uma conversa (o runtime injeta o contato; o modelo não
+ * alcança estes campos). Fora dele (rota HTTP, MCP externo) vale o de antes.
+ */
+function contatoDaConversa(ctx: McpContext): string | null {
+  return ctx.escopoDoTurno?.contatoId ?? ctx.contatoDoTurno ?? null;
+}
+
+/**
+ * Padrão seguro da IA na conversa (D-146): em `all` o administrador nunca disse
+ * o que a IA pode ler, então ela não lê nada. Liberar é marcar tabelas na tela.
+ */
+function semRegrasParaAConversa(conexao: ConexaoExterna, ctx: McpContext): Record<string, unknown> | null {
+  if (conexao.sourceMode !== "all" || contatoDaConversa(ctx) === null) return null;
+  return {
+    erro: "sem_fontes_liberadas",
+    mensagem:
+      "o administrador ainda não liberou tabelas para a IA nesta conexão. Não invente o dado: diga " +
+      "ao cliente que a equipe confirma, e peça a um administrador para escolher, em Integração de " +
+      "dados, o que a IA pode consultar.",
+  };
+}
+
 /** Tabela que não apareceu: em `list` quase sempre é "não liberada"; em `all`, "não existe". */
 function tabelaNaoAchada(conexao: ConexaoExterna): Record<string, unknown> {
   return conexao.sourceMode === "list"
@@ -246,6 +282,16 @@ function tabelaNaoAchada(conexao: ConexaoExterna): Record<string, unknown> {
           "Veja quais estão com crm_describe_external_data.",
       }
     : { erro: "tabela_nao_encontrada", mensagem: "não encontrei essa tabela." };
+}
+
+function clienteSemIdentificador(dado: DadoDoContato): Record<string, unknown> {
+  const nome = dado === "email" ? "e-mail" : dado === "document" ? "CPF ou CNPJ" : "telefone";
+  return {
+    erro: "cliente_sem_identificador",
+    mensagem:
+      `o cliente desta conversa não tem ${nome} no cadastro, ` +
+      "então não há como achar as linhas dele. Não invente o dado — diga que a equipe confirma.",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +329,7 @@ export const crmDescribeExternalData: McpToolDefinition<typeof descreverInputSha
     const acesso = await abrirAcesso(ctx.supabase, ctx.organizationId, resolucao.id);
     if (!acesso.ok) return { erro: "acesso_negado", mensagem: mensagemDeAcesso(acesso.motivo) };
 
-    const semFontes = semFontesLiberadas(acesso.conexao);
+    const semFontes = semFontesLiberadas(acesso.conexao) ?? semRegrasParaAConversa(acesso.conexao, ctx);
     if (semFontes) return semFontes;
 
     let tabelas: TabelaExterna[];
@@ -319,6 +365,10 @@ export const crmDescribeExternalData: McpToolDefinition<typeof descreverInputSha
       nome: t.nome,
       tipo: t.tipo,
       ...(t.descricao ? { descricao: t.descricao } : {}),
+      // A IA sabe de antemão que só volta a linha do cliente desta conversa.
+      ...(acesso.conexao.fontes.some((f) => f.schema === t.schema && f.tabela === t.nome && f.cliente)
+        ? { so_do_cliente_da_conversa: true }
+        : {}),
       chave: t.chavePrimaria,
       linhas_estimadas: t.estimativaLinhas,
       campos: t.colunas.slice(0, MAX_COLUNAS_POR_TABELA).map((c) => ({
@@ -416,33 +466,8 @@ export const crmQueryExternalData: McpToolDefinition<typeof consultarInputShape>
     const acesso = await abrirAcesso(ctx.supabase, ctx.organizationId, resolucao.id);
     if (!acesso.ok) return { erro: "acesso_negado", mensagem: mensagemDeAcesso(acesso.motivo) };
 
-    const semFontes = semFontesLiberadas(acesso.conexao);
+    const semFontes = semFontesLiberadas(acesso.conexao) ?? semRegrasParaAConversa(acesso.conexao, ctx);
     if (semFontes) return semFontes;
-
-    // ── NA CONVERSA, SÓ AS LINHAS DO CLIENTE (filtro do servidor) ──────────
-    //
-    // As demais leituras do turno ficam no contato da conversa pela chave que o
-    // CRM conhece. O banco externo não tem essa chave: quem configura a conexão
-    // diz qual coluna guarda o telefone ou o e-mail do cliente, e aqui esse
-    // filtro entra na consulta com o dado do contato do turno — o modelo não
-    // escolhe o valor nem tira o filtro (os dele somam com `and`). Sem a coluna
-    // configurada, a consulta segue como antes (decisão do mantenedor: a conexão
-    // existente não muda de comportamento numa versão menor; a tela avisa até a
-    // coluna ser escolhida). Fora do turno (integrador, pessoa), nada muda.
-    let filtroDoCliente: FiltroDeLeitura | null = null;
-    const chave = acesso.conexao.chaveDoCliente;
-    if (ctx.contatoDoTurno && chave) {
-      const valores = await identificadoresDoContato(ctx, ctx.contatoDoTurno, chave.tipo);
-      if (valores.length === 0) {
-        return {
-          erro: "cliente_sem_identificador",
-          mensagem:
-            `o cliente desta conversa não tem ${chave.tipo === "email" ? "e-mail" : "telefone"} no cadastro, ` +
-            "então não há como achar as linhas dele. Não invente o dado — diga que a equipe confirma.",
-        };
-      }
-      filtroDoCliente = { coluna: chave.coluna, operador: "in", valor: valores };
-    }
 
     // C-005/C-010: o modelo manda filtro SEM valor ("modelo eq", "preco lte").
     //
@@ -540,7 +565,52 @@ export const crmQueryExternalData: McpToolDefinition<typeof consultarInputShape>
         : { erro: "tabela_nao_encontrada", mensagem: "essa tabela não existe. Confira o nome com crm_describe_external_data." };
     }
 
-    if (filtroDoCliente && !permitidas.has(filtroDoCliente.coluna)) {
+    // ── NA CONVERSA, SÓ AS LINHAS DO CLIENTE (filtro do servidor) ──────────
+    //
+    // O banco externo não tem a chave do CRM: quem configura a conexão diz qual
+    // coluna guarda o dado do cliente, e aqui esse filtro entra na consulta com
+    // o dado do contato do turno — o modelo não escolhe o valor nem tira o
+    // filtro. Fora do turno (integrador, pessoa), nada muda.
+    //
+    // Regra da tabela escolhida pelo administrador (D-146):
+    //
+    // `cliente` objeto: a tabela é de cada cliente; a consulta da conversa é
+    // presa a `coluna in (<dado do contato do turno>)`, e o filtro do modelo
+    // nessa coluna é DESCARTADO (o valor nunca é dele). `null`: serve a
+    // qualquer cliente. Ausente: vale o de antes (coluna da conexão + proteção
+    // automática por nome).
+    const contatoId = contatoDaConversa(ctx);
+    const regraDaTabela =
+      contatoId === null
+        ? undefined
+        : acesso.conexao.fontes.find((f) => f.schema === schema && f.tabela === tabela)?.cliente;
+    let filtroDoCliente: FiltroDeLeitura | null = null;
+    let filtrosDoModelo = filtros;
+    let projecao = input.colunas ?? [];
+    let usaveis: ReadonlySet<string> = permitidas;
+    let ordem = input.ordem;
+
+    if (contatoId !== null && regraDaTabela) {
+      const valores = await identificadoresDoContato(ctx, contatoId, regraDaTabela.dado);
+      if (valores.length === 0) return clienteSemIdentificador(regraDaTabela.dado);
+      filtroDoCliente = { coluna: regraDaTabela.coluna, operador: "in", valor: valores };
+      filtrosDoModelo = filtros.filter((f) => f.coluna !== regraDaTabela.coluna);
+      // A coluna do cliente pode estar escondida da IA: entra só no filtro do
+      // servidor, nunca na projeção nem na ordenação.
+      if (!permitidas.has(regraDaTabela.coluna)) {
+        projecao = projecao.filter((c) => c !== regraDaTabela.coluna);
+        if (projecao.length === 0) projecao = [...permitidas];
+        if (ordem && ordem.coluna === regraDaTabela.coluna) ordem = undefined;
+        usaveis = new Set([...permitidas, regraDaTabela.coluna]);
+      }
+    } else if (contatoId !== null && regraDaTabela === undefined && acesso.conexao.chaveDoCliente) {
+      const chave = acesso.conexao.chaveDoCliente;
+      const valores = await identificadoresDoContato(ctx, contatoId, chave.tipo);
+      if (valores.length === 0) return clienteSemIdentificador(chave.tipo);
+      filtroDoCliente = { coluna: chave.coluna, operador: "in", valor: valores };
+    }
+
+    if (filtroDoCliente && !usaveis.has(filtroDoCliente.coluna)) {
       return {
         erro: "tabela_sem_identificador_do_cliente",
         mensagem:
@@ -551,7 +621,9 @@ export const crmQueryExternalData: McpToolDefinition<typeof consultarInputShape>
 
     // D-146: no turno de uma conversa, tabela com dado de pessoa só é lida
     // ancorada no cliente dela (telefone/e-mail do contato) e com colunas explícitas.
-    const escopo = ctx.escopoDoTurno;
+    // Com a regra da tabela escolhida (objeto ou `null`), quem decide é o
+    // administrador, e a proteção automática por nome não se aplica.
+    const escopo = regraDaTabela === undefined ? ctx.escopoDoTurno : undefined;
     let ancorada: "identidade" | "encadeada" | false = false;
     if (escopo) {
       const identidade = await identidadeDoContato(ctx, escopo.contatoId);
@@ -562,7 +634,7 @@ export const crmQueryExternalData: McpToolDefinition<typeof consultarInputShape>
         tabela: input.tabela,
         colunasDaTabela: [...permitidas],
         colunasPedidas: input.colunas ?? [],
-        filtros,
+        filtros: filtrosDoModelo,
         identidade,
         memoria: escopo.externo,
       });
@@ -573,16 +645,16 @@ export const crmQueryExternalData: McpToolDefinition<typeof consultarInputShape>
     const pedido: PedidoDeLeitura = {
       schema: schema!,
       tabela,
-      colunas: input.colunas ?? [],
+      colunas: projecao,
       filtros: [
-        ...filtros.map((f) => ({
+        ...filtrosDoModelo.map((f) => ({
           coluna: f.coluna,
           operador: f.operador as OperadorDeFiltro,
           ...(f.valor !== undefined ? { valor: f.valor } : {}),
         })),
         ...(filtroDoCliente ? [filtroDoCliente] : []),
       ],
-      ...(input.ordem ? { ordem: { coluna: input.ordem.coluna, desc: input.ordem.desc ?? false } } : {}),
+      ...(ordem ? { ordem: { coluna: ordem.coluna, desc: ordem.desc ?? false } } : {}),
       // O teto é o da conexão, não o que o modelo pediu.
       limite: Math.min(input.limite, acesso.conexao.maxRows),
       offset: 0,
@@ -590,7 +662,7 @@ export const crmQueryExternalData: McpToolDefinition<typeof consultarInputShape>
 
     let resultado;
     try {
-      resultado = await acesso.dialeto.lerTabela(pedido, permitidas, {
+      resultado = await acesso.dialeto.lerTabela(pedido, usaveis, {
         limiteMax: acesso.conexao.maxRows,
       });
     } catch (err) {

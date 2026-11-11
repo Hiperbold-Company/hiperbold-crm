@@ -180,4 +180,43 @@ describe("PainelDeFontes", () => {
     expect(screen.getByText(/Esta tabela não tem a coluna que identifica o cliente:/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Salvar" }) as HTMLButtonElement).disabled).toBe(false);
   });
+
+  it("11. D-146: 'é de cada cliente' grava a coluna do cliente e o dado do contato", async () => {
+    preparar({ fontes: [{ schema: "public", tabela: "pedidos", colunas: ["id", "total"], descricao: "" }] });
+    salvarMock.mockResolvedValue({ source_mode: "list", sources: [] });
+    montar();
+    await userEvent.click(screen.getByRole("button", { name: "Detalhes" }));
+    expect(screen.getByText(/Ainda não escolhido/)).toBeTruthy();
+    await userEvent.click(screen.getByLabelText(/É de cada cliente/));
+    // Palpite pelo nome: a coluna `telefone`, guardando telefone.
+    const coluna = screen.getByLabelText("Coluna que guarda o cliente") as HTMLSelectElement;
+    expect(coluna.value).toBe("telefone");
+    await userEvent.selectOptions(screen.getByLabelText("O que essa coluna guarda"), "document");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(salvarMock).toHaveBeenCalledWith("conn-1", {
+      source_mode: "list",
+      sources: [
+        { schema: "public", tabela: "pedidos", colunas: ["id", "total"], descricao: "", cliente: { coluna: "telefone", dado: "document" } },
+      ],
+    });
+  });
+
+  it("12. D-146: 'serve para qualquer cliente' grava cliente null", async () => {
+    preparar({ fontes: [{ schema: "public", tabela: "pedidos", colunas: ["id", "total"], descricao: "" }] });
+    salvarMock.mockResolvedValue({ source_mode: "list", sources: [] });
+    montar();
+    await userEvent.click(screen.getByRole("button", { name: "Detalhes" }));
+    await userEvent.click(screen.getByLabelText(/Serve para qualquer cliente/));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(salvarMock).toHaveBeenCalledWith("conn-1", {
+      source_mode: "list",
+      sources: [{ schema: "public", tabela: "pedidos", colunas: ["id", "total"], descricao: "", cliente: null }],
+    });
+  });
+
+  it("13. D-146: modo 'tudo' avisa que nas conversas o assistente não consulta nada", () => {
+    preparar({ modo: "all" });
+    montar();
+    expect(screen.getByText(/Nas conversas com clientes, o assistente não consulta nada deste banco neste modo/)).toBeTruthy();
+  });
 });

@@ -28540,6 +28540,16 @@ export const DICIONARIO: Traducoes = {
   "A automação por comentário do Instagram está disponível nos planos Max e Scale.": { es: "La automatización por comentario de Instagram está disponible en los planes Max y Scale." },
   "Endereço do MCP:": { es: "Dirección del MCP:" },
   "Como conectar um assistente de IA": { es: "Cómo conectar un asistente de IA" },
+  "nas conversas, só os dados de quem conversa": { es: "en las conversaciones, solo los datos de quien conversa" },
+  "Nas conversas com clientes, de quem é este dado?": { es: "En las conversaciones con clientes, ¿de quién es este dato?" },
+  "Serve para qualquer cliente (ex.: produtos, preços, horários)": { es: "Sirve para cualquier cliente (ej.: productos, precios, horarios)" },
+  "É de cada cliente (ex.: pedidos, cadastro, cobranças): o assistente só mostra os dados de quem está conversando": { es: "Es de cada cliente (ej.: pedidos, registro, cobros): el asistente solo muestra los datos de quien está conversando" },
+  "Ainda não escolhido. Enquanto isso, nas conversas o assistente só lê esta tabela se ela não parecer ter dados de clientes.": { es: "Todavía no elegido. Mientras tanto, en las conversaciones el asistente solo lee esta tabla si no parece tener datos de clientes." },
+  "Coluna que guarda o cliente": { es: "Columna que guarda al cliente" },
+  "O que essa coluna guarda": { es: "Qué guarda esa columna" },
+  "O valor vem do cadastro do contato no CRM. Se o contato não tiver esse dado, o assistente não consulta a tabela e diz que a equipe confirma.": { es: "El valor viene del registro del contacto en el CRM. Si el contacto no tiene ese dato, el asistente no consulta la tabla y dice que el equipo lo confirma." },
+  "Nas conversas com clientes, o assistente não consulta nada deste banco neste modo. Para liberar, escolha \"Só o que eu marcar\" e diga, em cada tabela, de quem é o dado.": { es: "En las conversaciones con clientes, el asistente no consulta nada de esta base en este modo. Para habilitarlo, elija \"Solo lo que yo marque\" e indique, en cada tabla, de quién es el dato." },
+  "Telefone (WhatsApp)": { es: "Teléfono (WhatsApp)" },
 };
 
 /**

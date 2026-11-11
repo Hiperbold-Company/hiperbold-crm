@@ -13,6 +13,10 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * ao vivo pode estar fora do ar, e a tela marca "não encontrada no banco" a
  * fonte que sumiu. A organização vem do contexto autenticado, nunca do corpo.
  *
+ * Cada fonte pode dizer de quem é o dado para a IA na conversa (`cliente`,
+ * D-146): a coluna do cliente e qual dado do contato a preenche, ou `null`
+ * (serve a qualquer cliente).
+ *
  * O audit guarda CONTAGENS (modo e número de fontes) — nunca nomes.
  */
 import { randomUUID } from "node:crypto";
@@ -117,7 +121,9 @@ export async function PUT(req: NextRequest, ctx: Ctx): Promise<Response> {
     resourceType: "external_db_connection",
     resourceId: id,
     requestId,
-    metadata: { source_mode, fontes: sources.length },
+    // `fontes_do_cliente`: quantas tabelas a IA só lê presas ao cliente da
+    // conversa (D-146). Contagem, nunca o nome da coluna.
+    metadata: { source_mode, fontes: sources.length, fontes_do_cliente: sources.filter((f) => f.cliente).length },
   });
 
   return ok({ source_mode: atualizado.source_mode as string, sources }, { requestId });
