@@ -1,3 +1,5 @@
+import { createServer, type AddressInfo, type Socket } from "node:net";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { criarPool, criarConexao } = vi.hoisted(() => ({
@@ -93,6 +95,32 @@ describe("configMysql", () => {
   });
 });
 
+describe("configMysql — preso ao IP validado (D-084, M2)", () => {
+  it("sem IP, não há stream: o mysql2 conecta pelo nome (só as suítes locais)", () => {
+    expect("stream" in configMysql(conexao())).toBe(false);
+  });
+
+  it("com IP, o socket abre NESSE IP mesmo que o nome cadastrado não resolva, e o nome fica para o SNI", async () => {
+    const servidor = createServer((s) => s.end());
+    await new Promise<void>((ok) => servidor.listen(0, "127.0.0.1", ok));
+    const porta = (servidor.address() as AddressInfo).port;
+    try {
+      const cfg = configMysql(conexao({ host: "nao-resolve.invalid", port: porta }), "127.0.0.1");
+      expect(cfg.host).toBe("nao-resolve.invalid");
+      const socket = (cfg.stream as () => Socket)();
+      await new Promise<void>((ok, erro) => {
+        socket.once("connect", ok);
+        socket.once("error", erro);
+      });
+      expect(socket.remoteAddress).toBe("127.0.0.1");
+      expect(socket.remotePort).toBe(porta);
+      socket.destroy();
+    } finally {
+      await new Promise<void>((ok) => servidor.close(() => ok()));
+    }
+  });
+});
+
 describe("obterPoolMysql — cache e invalidação", () => {
   it("a mesma conexão devolve o mesmo pool; versão, host ou credencial nova derrubam o antigo", async () => {
     const fim = vi.fn(async () => undefined);
@@ -106,6 +134,18 @@ describe("obterPoolMysql — cache e invalidação", () => {
     expect(fim).toHaveBeenCalledTimes(1);
     await fecharPoolMysql("conn-1");
     expect(fim).toHaveBeenCalledTimes(2);
+  });
+
+  it("o DNS mudar de IP derruba o pool antigo: nada continua preso ao endereço velho", async () => {
+    const fim = vi.fn(async () => undefined);
+    criarPool.mockImplementation(() => ({ end: fim }));
+    await fecharTodosOsPoolsMysql();
+    const a = obterPoolMysql(conexao(), "203.0.113.10");
+    expect(obterPoolMysql(conexao(), "203.0.113.10")).toBe(a);
+    const b = obterPoolMysql(conexao(), "198.51.100.7");
+    expect(b).not.toBe(a);
+    expect(fim).toHaveBeenCalledTimes(1);
+    await fecharTodosOsPoolsMysql();
   });
 });
 

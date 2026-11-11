@@ -40,11 +40,15 @@ Tripla completa: migration + apêndice idempotente no `baseline.sql` + `MANIFEST
 
 ### Núcleo `lib/external-db/`
 
-- `guardas.ts` — decisão de destino. **Deliberadamente diferente** do guard de
-  webhook: RFC1918 é permitido (Postgres na LAN é caso real); link-local/metadata
-  (`169.254.0.0/16`), loopback, CGNAT, multicast e reservadas sempre bloqueados.
-  IPv6 é normalizado para 16 bytes antes de classificar (as grafias equivalentes
-  de loopback não escapam).
+- `guardas.ts` — decisão de destino. O host é escolhido por uma organização, então
+  RFC1918 e a ULA do IPv6 (`fc00::/7`) são recusados por padrão (D-083/D-084); a
+  única exceção é da instalação, `EXTERNAL_DB_PERMITIR_REDE_PRIVADA=true`, para
+  self-host com o ERP na mesma rede. Link-local/metadata (`169.254.0.0/16`),
+  loopback, CGNAT, NAT64, multicast e reservadas ficam bloqueados sempre, com ou
+  sem a exceção. IPv6 é normalizado para 16 bytes antes de classificar (as
+  grafias equivalentes de loopback não escapam). Os dois drivers (PostgreSQL e
+  MySQL) conectam pelo IP que a guarda devolveu, nunca pelo nome; a recusa
+  visível é uma só para qualquer motivo, e o motivo real fica no log.
 - `conexao.ts` — pool por conexão, invalidado pelo `updated_at`; teto de pools;
   `BEGIN READ ONLY` + `statement_timeout`/`lock_timeout` por transação.
 - `introspeccao.ts` — catálogo ao vivo (`information_schema` + `pg_catalog`),

@@ -215,8 +215,6 @@ function mensagemDeAcesso(motivo: string): string {
       return "a chave de criptografia da instalação não está disponível; isso é configuração do servidor.";
     case "host_bloqueado":
       return "o endereço dessa conexão não é um destino permitido pela política de rede.";
-    case "dns_falhou":
-      return "não foi possível resolver o endereço dessa conexão agora.";
     case "modulo_desligado":
       return "o banco de dados externo está desligado nesta instalação; quem administra o servidor precisa ligar o módulo em Admin › Sistema.";
     default:

@@ -49,11 +49,12 @@ const postgres: DriverDeBanco = {
   fecharTodosOsPools: () => fecharTodosPostgres(),
 };
 
-// PENDENTE (D-084): o driver MySQL ainda conecta pelo nome (`c.host`), sem fixar o
-// IP validado; o `enderecoValidado` chega aqui mas não é usado.
+// O MySQL também conecta pelo IP que a guarda validou (D-083/D-084, M2): o
+// socket abre no `enderecoValidado` e o nome fica só para o SNI do TLS.
 const mysql: DriverDeBanco = {
-  abrirDialeto: (conexao) => criarDialetoMysql(conexao, { modo: conexao.sourceMode, fontes: conexao.fontes }),
-  testar: (conexao) => testarConexaoMysql(conexao),
+  abrirDialeto: (conexao, enderecoValidado) =>
+    criarDialetoMysql(conexao, { modo: conexao.sourceMode, fontes: conexao.fontes }, enderecoValidado),
+  testar: (conexao, enderecoValidado) => testarConexaoMysql(conexao, enderecoValidado),
   fecharPool: (connectionId) => fecharPoolMysql(connectionId),
   fecharTodosOsPools: () => fecharTodosOsPoolsMysql(),
 };
