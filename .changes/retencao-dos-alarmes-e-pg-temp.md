@@ -1,6 +1,6 @@
 ---
 impacto: nada_mudou
-secao: seguranca
+secao: alterado
 titulo: Funções do banco com caminho de busca fechado e prazo para os alarmes de contagem
 ---
 
