@@ -47,8 +47,11 @@ const CONEXAO: ConexaoExterna = {
   maxFilters: 20,
   maxResponseBytes: 30_000,
   chaveDoCliente: null,
-  sourceMode: "all",
-  fontes: [],
+  // Na conversa a IA só lê com tabelas liberadas (D-146, padrão seguro); estas
+  // fontes não escolheram a coluna do cliente (`cliente` ausente), então vale a
+  // proteção automática que este arquivo mede.
+  sourceMode: "list",
+  fontes: [{ schema: "public", tabela: "clientes", colunas: null, descricao: "" }],
   versao: "v1",
 };
 

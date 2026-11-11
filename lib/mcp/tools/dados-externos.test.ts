@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/external-db/acesso", () => ({ abrirAcesso: vi.fn() }));
+// O CPF mora cifrado no CRM e abre por RPC do banco: o limite do teste é esse.
+vi.mock("@/lib/contacts/cpf-do-contato", () => ({ decifrarCpfDoContato: vi.fn() }));
 
+import { decifrarCpfDoContato } from "@/lib/contacts/cpf-do-contato";
 import { abrirAcesso } from "@/lib/external-db/acesso";
 import type { Dialeto } from "@/lib/external-db/dialeto";
 import { FonteNaoLiberadaError } from "@/lib/external-db/dialeto";
@@ -416,7 +419,14 @@ describe("crm_query_external_data durante a conversa: só as linhas do cliente",
   // `contatoDoTurno` é contexto de confiança do runtime; o valor do filtro sai
   // do cadastro do contato, nunca do modelo.
   const PEDIDO = { connection_id: "conn-1", schema: "public", tabela: "assinaturas", limite: 20 };
-  const COM_CHAVE: ConexaoExterna = { ...CONEXAO, chaveDoCliente: { coluna: "telefone", tipo: "phone" } };
+  // Na conversa, só com tabela liberada (D-146); a fonte não escolheu a coluna
+  // do cliente, então vale a coluna da conexão (comportamento anterior).
+  const LEGADA: ConexaoExterna = {
+    ...CONEXAO,
+    sourceMode: "list",
+    fontes: [{ schema: "public", tabela: "assinaturas", colunas: null, descricao: "" }],
+  };
+  const COM_CHAVE: ConexaoExterna = { ...LEGADA, chaveDoCliente: { coluna: "telefone", tipo: "phone" } };
 
   /** ctx de turno: registra os `.eq()` da leitura do contato para provar org + id. */
   function ctxDoTurno(contato: { phone_number: string | null; email: string | null } | null) {
@@ -435,6 +445,7 @@ describe("crm_query_external_data durante a conversa: só as linhas do cliente",
   }
 
   beforeEach(() => {
+    vi.mocked(abrirAcesso).mockResolvedValue({ ok: true, conexao: LEGADA, dialeto: dialeto as unknown as Dialeto });
     vi.mocked(colunasDaTabela).mockResolvedValue(new Set(["id", "status", "telefone", "email"]));
     vi.mocked(lerTabela).mockResolvedValue({ colunas: ["id"], linhas: [], limite: 20, offset: 0 });
   });
@@ -477,7 +488,7 @@ describe("crm_query_external_data durante a conversa: só as linhas do cliente",
   it("por e-mail, o valor é o do contato (e a forma minúscula)", async () => {
     vi.mocked(abrirAcesso).mockResolvedValue({
       ok: true,
-      conexao: { ...CONEXAO, chaveDoCliente: { coluna: "email", tipo: "email" } },
+      conexao: { ...LEGADA, chaveDoCliente: { coluna: "email", tipo: "email" } },
       dialeto: dialeto as unknown as Dialeto,
     });
     const { ctx } = ctxDoTurno({ phone_number: null, email: "Ana@Loja.com" });
@@ -612,5 +623,188 @@ describe("fontes liberadas", () => {
       ctxFake(),
     )) as Record<string, unknown>;
     expect(r.erro).toBe("pedido_invalido");
+  });
+});
+
+describe("D-146: o que a IA pode consultar na conversa (regra por tabela)", () => {
+  const PEDIDOS: TabelaExterna = {
+    schema: "public",
+    nome: "pedidos",
+    tipo: "tabela",
+    colunas: [
+      { nome: "id", tipo: "int", nulavel: false, posicao: 1 },
+      { nome: "total", tipo: "numeric", nulavel: true, posicao: 2 },
+      { nome: "cpf", tipo: "text", nulavel: true, posicao: 3 },
+      { nome: "telefone", tipo: "text", nulavel: true, posicao: 4 },
+    ],
+    chavePrimaria: ["id"],
+    estimativaLinhas: 10,
+  };
+  const PRODUTOS: TabelaExterna = { ...PEDIDOS, nome: "produtos", colunas: PEDIDOS.colunas.slice(0, 2) };
+
+  const REGRAS: ConexaoExterna = {
+    ...CONEXAO,
+    sourceMode: "list",
+    fontes: [
+      // Pedido é de cada cliente: a coluna `telefone` é a do cliente, e a IA nem enxerga `cpf`.
+      {
+        schema: "public",
+        tabela: "pedidos",
+        colunas: ["id", "total"],
+        descricao: "",
+        cliente: { coluna: "telefone", dado: "phone" },
+      },
+      { schema: "public", tabela: "pedidos_por_cpf", colunas: null, descricao: "", cliente: { coluna: "cpf", dado: "document" } },
+      // Catálogo serve a qualquer cliente.
+      { schema: "public", tabela: "produtos", colunas: null, descricao: "", cliente: null },
+    ],
+  };
+
+  function ctxConversa(contato: { phone_number: string | null; email: string | null }) {
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      order: async () => ({ data: [{ id: "conn-1", label: "Outro CRM" }], error: null }),
+      maybeSingle: async () => ({ data: contato, error: null }),
+    };
+    return {
+      ...ctxFake(),
+      contatoDoTurno: "contato-1",
+      escopoDoTurno: { contatoId: "contato-1", externo: { conhecidos: new Set<string>() } },
+      supabase: { from: () => chain },
+    } as unknown as McpContext;
+  }
+  const ANA = { phone_number: "+5511999998888", email: "ana@loja.com" };
+
+  beforeEach(() => {
+    vi.mocked(decifrarCpfDoContato).mockReset();
+    vi.mocked(abrirAcesso).mockResolvedValue({ ok: true, conexao: REGRAS, dialeto: dialeto as unknown as Dialeto });
+    vi.mocked(listarTabelas).mockResolvedValue([PEDIDOS, PRODUTOS, { ...PEDIDOS, nome: "pedidos_por_cpf" }]);
+    // O dialeto (modo list) só devolve as colunas liberadas da fonte.
+    vi.mocked(colunasDaTabela).mockImplementation(async (_s: string, t: string) =>
+      t === "pedidos" ? new Set(["id", "total"]) : t === "produtos" ? new Set(["id", "total"]) : new Set(["id", "total", "cpf"]),
+    );
+    vi.mocked(lerTabela).mockResolvedValue({ colunas: ["id", "total"], linhas: [{ id: 1, total: 10 }], limite: 20, offset: 0 });
+  });
+
+  it("conexão sem configuração (modo `all`): na conversa as DUAS tools recusam e não tocam o banco", async () => {
+    vi.mocked(abrirAcesso).mockResolvedValue({ ok: true, conexao: CONEXAO, dialeto: dialeto as unknown as Dialeto });
+    const ctx = ctxConversa(ANA);
+    const q = (await crmQueryExternalData.handler({ tabela: "pedidos", limite: 20 }, ctx)) as Record<string, unknown>;
+    const d = (await crmDescribeExternalData.handler({}, ctx)) as Record<string, unknown>;
+    for (const r of [q, d]) {
+      expect(r.erro).toBe("sem_fontes_liberadas");
+      expect(String(r.mensagem)).toContain("o administrador ainda não liberou tabelas para a IA nesta conexão");
+    }
+    expect(listarTabelas).not.toHaveBeenCalled();
+    expect(lerTabela).not.toHaveBeenCalled();
+  });
+
+  it("tabela fora da lista: recusa sem ler", async () => {
+    vi.mocked(colunasDaTabela).mockResolvedValue(null);
+    vi.mocked(listarTabelas).mockResolvedValue([PEDIDOS, PRODUTOS]);
+    const r = (await crmQueryExternalData.handler(
+      { schema: "public", tabela: "clientes", limite: 20 },
+      ctxConversa(ANA),
+    )) as Record<string, unknown>;
+    expect(r.erro).toBe("fonte_nao_liberada");
+    expect(lerTabela).not.toHaveBeenCalled();
+  });
+
+  it("coluna do cliente: força `telefone in (<do contato>)`, descarta o filtro do modelo nessa coluna e não projeta a coluna escondida", async () => {
+    await crmQueryExternalData.handler(
+      {
+        schema: "public",
+        tabela: "pedidos",
+        // O cliente pediu "o pedido do telefone 21 98888-7777": o modelo obedeceu.
+        filtros: [
+          { coluna: "telefone", operador: "eq", valor: "5521988887777" },
+          { coluna: "total", operador: "gt", valor: 0 },
+        ],
+        limite: 20,
+      },
+      ctxConversa(ANA),
+    );
+    const [pedido, usaveis] = vi.mocked(lerTabela).mock.calls[0]!;
+    expect(pedido.filtros).toEqual([
+      { coluna: "total", operador: "gt", valor: 0 },
+      { coluna: "telefone", operador: "in", valor: ["+5511999998888", "5511999998888", "11999998888"] },
+    ]);
+    // A coluna escondida só entra no filtro do servidor: a projeção é a liberada.
+    expect(pedido.colunas).toEqual(["id", "total"]);
+    expect([...usaveis]).toContain("telefone");
+    // Parametrizado: o valor do contato vai nos values, nunca no texto.
+    const sql = montarConsulta(pedido, usaveis);
+    expect(sql.text).not.toContain("5521988887777");
+    expect(sql.values).not.toContain("5521988887777");
+  });
+
+  it("coluna fora da lista não volta: pedir `cpf` escondido vira pedido_invalido", async () => {
+    vi.mocked(lerTabela).mockImplementation(async (pedido, usaveis) => {
+      montarConsulta(pedido, usaveis); // o validador real da projeção
+      return { colunas: [], linhas: [], limite: 20, offset: 0 };
+    });
+    const r = (await crmQueryExternalData.handler(
+      { schema: "public", tabela: "pedidos", colunas: ["cpf"], limite: 20 },
+      ctxConversa(ANA),
+    )) as Record<string, unknown>;
+    expect(r.erro).toBe("pedido_invalido");
+  });
+
+  it("pedir a coluna do cliente escondida na projeção não a devolve", async () => {
+    await crmQueryExternalData.handler(
+      { schema: "public", tabela: "pedidos", colunas: ["telefone", "total"], limite: 20 },
+      ctxConversa(ANA),
+    );
+    expect(vi.mocked(lerTabela).mock.calls[0]![0].colunas).toEqual(["total"]);
+  });
+
+  it("coluna do cliente por CPF: o valor vem do cadastro (decifrado no servidor), com e sem máscara", async () => {
+    vi.mocked(decifrarCpfDoContato).mockResolvedValue("12345678901");
+    await crmQueryExternalData.handler(
+      { schema: "public", tabela: "pedidos_por_cpf", filtros: [{ coluna: "cpf", operador: "eq", valor: "99999999999" }], limite: 20 },
+      ctxConversa(ANA),
+    );
+    expect(decifrarCpfDoContato).toHaveBeenCalledWith("org-1", "contato-1");
+    expect(vi.mocked(lerTabela).mock.calls[0]![0].filtros).toEqual([
+      { coluna: "cpf", operador: "in", valor: ["12345678901", "123.456.789-01"] },
+    ]);
+  });
+
+  it("contato sem o dado da coluna do cliente: recusa sem ler", async () => {
+    vi.mocked(decifrarCpfDoContato).mockResolvedValue(null);
+    const semCpf = (await crmQueryExternalData.handler(
+      { schema: "public", tabela: "pedidos_por_cpf", limite: 20 },
+      ctxConversa(ANA),
+    )) as Record<string, unknown>;
+    const semTelefone = (await crmQueryExternalData.handler(
+      { schema: "public", tabela: "pedidos", limite: 20 },
+      ctxConversa({ phone_number: null, email: "ana@loja.com" }),
+    )) as Record<string, unknown>;
+    expect(semCpf.erro).toBe("cliente_sem_identificador");
+    expect(String(semCpf.mensagem)).toContain("CPF");
+    expect(semTelefone.erro).toBe("cliente_sem_identificador");
+    expect(lerTabela).not.toHaveBeenCalled();
+  });
+
+  it("tabela sem coluna do cliente (`cliente: null`): consulta normal, com o filtro do modelo e sem vínculo", async () => {
+    const r = (await crmQueryExternalData.handler(
+      { schema: "public", tabela: "produtos", filtros: [{ coluna: "total", operador: "lt", valor: 50 }], limite: 20 },
+      ctxConversa(ANA),
+    )) as Record<string, unknown>;
+    expect(r.erro).toBeUndefined();
+    expect(vi.mocked(lerTabela).mock.calls[0]![0].filtros).toEqual([{ coluna: "total", operador: "lt", valor: 50 }]);
+  });
+
+  it("describe na conversa marca a tabela que só devolve o cliente da conversa", async () => {
+    vi.mocked(listarTabelas).mockResolvedValue([PEDIDOS, PRODUTOS]);
+    const r = (await crmDescribeExternalData.handler({}, ctxConversa(ANA))) as { tabelas: Array<Record<string, unknown>> };
+    expect(r.tabelas.find((t) => t.nome === "pedidos")?.so_do_cliente_da_conversa).toBe(true);
+    expect(r.tabelas.find((t) => t.nome === "produtos")?.so_do_cliente_da_conversa).toBeUndefined();
+  });
+
+  it("CONTROLE: fora da conversa, a regra da tabela não se aplica (integrador lê como antes)", async () => {
+    await crmQueryExternalData.handler({ schema: "public", tabela: "pedidos", limite: 20 }, ctxFake());
+    expect(vi.mocked(lerTabela).mock.calls[0]![0].filtros).toEqual([]);
   });
 });
