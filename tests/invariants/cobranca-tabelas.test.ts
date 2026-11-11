@@ -132,12 +132,13 @@ describe("RLS, grants e o que sai de organizations", () => {
     ).toBe("cobranca_assinaturas:true,cobranca_planos:true");
   });
 
-  it("planos sem policy; assinaturas com UMA, de leitura, para authenticated", () => {
+  it("planos sem policy; assinaturas com UMA permissiva, de leitura, para authenticated", () => {
     expect(numero(`select count(*) from pg_policy where polrelid = 'public.cobranca_planos'::regclass;`)).toBe(0);
+    // Só as PERMISSIVAS abrem porta. A restritiva sessao_com_prova_de_mfa (1006) só estreita.
     expect(
       valor(`select string_agg(p.polname || '|' || p.polcmd::text || '|' ||
                      (select string_agg(r.rolname, ',') from pg_roles r where r.oid = any(p.polroles)), ' ## ')
-               from pg_policy p where p.polrelid = 'public.cobranca_assinaturas'::regclass;`),
+               from pg_policy p where p.polrelid = 'public.cobranca_assinaturas'::regclass and p.polpermissive;`),
     ).toBe("tenant_isolation_cobranca_assinaturas_select|r|authenticated");
   });
 

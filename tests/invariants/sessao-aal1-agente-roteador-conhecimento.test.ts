@@ -13,7 +13,7 @@
  *   2. admin com fator e sessão aal1: insert, update e delete em `ai_agents` recusados; com aal2 passam;
  *   3. o mesmo para `org_guardrail_layers`, `automation_rules` e `message_templates`;
  *   4. admin SEM fator, sessão aal1: passa (quem nunca cadastrou não é trancado fora);
- *   5. a LEITURA não muda: o admin com fator em aal1 segue lendo os agentes;
+ *   5. a LEITURA é da 1006 (`sessao_com_prova_de_mfa`): o aal1 com fator lê zero agentes, o aal2 lê;
  *   6. execução de um fluxo já publicado (`followup_enrollments`) NÃO entra na trava, de propósito.
  *
  * Roda via `pnpm test:db tests/invariants/sessao-aal1-agente-roteador-conhecimento.test.ts`.
@@ -124,7 +124,7 @@ describe("as quatorze tabelas têm as três políticas restritivas da prova de s
     expect(fora).toBe("0");
   });
 
-  it("nenhuma política nova é de SELECT: a leitura não muda", () => {
+  it("nenhuma política _mfa_ desta migration é de SELECT (a leitura é da 1006, com outro nome)", () => {
     const leitura = sql(`
       select count(*) from pg_policies
        where schemaname = 'public' and policyname ~ '_mfa_' and cmd in ('SELECT', 'ALL');
@@ -163,13 +163,10 @@ describe("ai_agents: reescrever o prompt do agente exige a prova da sessão de q
     expect(sql(`select count(*) from public.ai_agents where id = '${id}'::uuid;`)).toBe("1");
   });
 
-  it("a leitura não muda: o admin com fator em aal1 segue lendo os agentes da empresa", () => {
-    const lidos = como(
-      ADMIN_COM_FATOR,
-      "aal1",
-      `select count(*) from public.ai_agents where organization_id = '${ORG}'::uuid;`,
-    );
-    expect(Number(lidos.split("\n").pop())).toBeGreaterThan(0);
+  it("a leitura agora também pede a prova (1006): aal1 com fator lê zero agentes, aal2 lê", () => {
+    const contar = `select count(*) from public.ai_agents where organization_id = '${ORG}'::uuid;`;
+    expect(Number(como(ADMIN_COM_FATOR, "aal1", contar).split("\n").pop())).toBe(0);
+    expect(Number(como(ADMIN_COM_FATOR, "aal2", contar).split("\n").pop())).toBeGreaterThan(0);
   });
 });
 

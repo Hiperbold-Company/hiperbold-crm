@@ -88,11 +88,29 @@ export type OrgDaApi =
  * o 307 e entrega o HTML de `/account-suspended` à tela como se fosse o dado
  * (cerca `tests/unit/api-nao-redireciona-org-suspensa.test.ts`).
  * Sem usuário, sem org: `{ ok: true, org: null }`, e a rota responde o seu "sem org".
+ *
+ * D-092 (1006): quem tem fator e não o provou nesta sessão leva 403
+ * `mfa_required`, a MESMA resposta do `requireRole`. Estas rotas costumam ler com
+ * o cliente de serviço, que ignora a RLS, então a trava do banco não as alcança.
  */
 export async function orgAtivaDaApi(user: AuthUser | null, requestId?: string): Promise<OrgDaApi> {
   const org = user ? await orgAtivaSemPortao(user) : null;
   if (user && org && !ehOperante(org.org_status)) {
     return { ok: false, response: orgSuspensa(user, requestId) };
+  }
+  if (user && org && (await mfaEmDivida())) {
+    void audit({
+      action: "authz.denied",
+      actorUserId: user.id,
+      organizationId: org.orgId,
+      resourceType: null,
+      requestId,
+      metadata: { reason: "mfa_required", via: "org_ativa_da_api" },
+    });
+    return {
+      ok: false,
+      response: fail("mfa_required", traduzir(MENSAGEM_DE_MFA, user.idioma), 403, { requestId }),
+    };
   }
   return { ok: true, org };
 }
@@ -217,7 +235,23 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
   }
 
   if (user.is_platform_admin && !user.support && allowPlatformAdmin !== false) {
-    if (allowPlatformAdmin === "leitura") return { ok: true, user, org };
+    if (allowPlatformAdmin === "leitura") {
+      // D-092 (1006): LER também pede a prova da sessão de quem tem fator. O
+      // atalho devolvia o histórico do canal a uma sessão só com senha.
+      const peloPoderDePlataforma = ROLE_RANK[org.role] < ROLE_RANK.admin;
+      if (peloPoderDePlataforma ? await mfaEmDividaEstrita() : await mfaEmDivida()) {
+        void audit({
+          action: "authz.denied",
+          actorUserId: user.id,
+          organizationId: org.orgId,
+          resourceType: resource ?? null,
+          requestId,
+          metadata: { reason: "mfa_required", via: "platform_admin_leitura" },
+        });
+        return { ok: false, response: fail("mfa_required", t(MENSAGEM_DE_MFA), 403, { requestId }) };
+      }
+      return { ok: true, user, org };
+    }
     if (user.platform_admin_scope === "full") {
       // O alvo pode vir do path (`organizationId`), não do cookie: onde quem
       // pede não é admin, é o poder de plataforma que autoriza, e dispositivo

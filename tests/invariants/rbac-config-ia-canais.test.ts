@@ -232,6 +232,7 @@ describe("0150 — a dívida de RBAC não cresce", () => {
        where schemaname = 'public'
          and tablename in (${corrigidas.map((t) => `'${t}'`).join(",")})
          and cmd = 'ALL'
+         and permissive = 'PERMISSIVE' -- a restritiva sessao_com_prova_de_mfa (1006) não abre porta
          and (coalesce(qual, '') || coalesce(with_check, '')) not like '%role_at_least%';
     `);
     expect(semRole.trim()).toBe("");
@@ -242,6 +243,7 @@ describe("0150 — a dívida de RBAC não cresce", () => {
       select coalesce(string_agg(distinct tablename, ',' order by tablename), '') from pg_policies
        where schemaname = 'public'
          and cmd = 'ALL'
+         and permissive = 'PERMISSIVE' -- a restritiva sessao_com_prova_de_mfa (1006) não abre porta
          and (coalesce(qual, '') || coalesce(with_check, '')) not like '%role_at_least%';
     `)
       .trim()
@@ -260,7 +262,7 @@ describe("0150 — a dívida de RBAC não cresce", () => {
         select bool_and(coalesce(qual, '') like '%user_id = ( SELECT auth.uid()%'
                     and coalesce(with_check, '') like '%user_id = ( SELECT auth.uid()%')
           from pg_policies
-         where schemaname = 'public' and tablename = '${t}' and cmd = 'ALL';
+         where schemaname = 'public' and tablename = '${t}' and cmd = 'ALL' and permissive = 'PERMISSIVE';
       `);
       expect(ok.trim().endsWith("t"), t).toBe(true);
     }

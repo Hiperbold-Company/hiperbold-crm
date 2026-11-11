@@ -128,7 +128,10 @@ function privilegiosDe(papel: string, tabela: string): string[] {
 function policiesDe(tabela: string): string[] {
   return sql(`
     select coalesce(string_agg(policyname || ':' || cmd, ',' order by policyname), '')
-      from pg_policies where schemaname = 'public' and tablename = '${tabela}';
+      from pg_policies where schemaname = 'public' and tablename = '${tabela}'
+       -- Só as PERMISSIVAS abrem porta. A restritiva sessao_com_prova_de_mfa (1006, ALL) só
+       -- estreita: ela não reabre escrita nenhuma.
+       and permissive = 'PERMISSIVE';
   `)
     .trim()
     .split(",")
