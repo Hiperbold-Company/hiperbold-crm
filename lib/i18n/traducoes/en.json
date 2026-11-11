@@ -14280,5 +14280,15 @@
   "Ir para Automações": "Go to Automations",
   "A regra dispara em toda mensagem recebida; a automação nova ignora reações, mensagens atrasadas e respostas a outra automação, e o comportamento não é idêntico.": "The rule fires on every message received; the new automation ignores reactions, late messages and replies to another automation, so the behavior is not identical.",
   "Endereço do MCP:": "MCP address:",
-  "Como conectar um assistente de IA": "How to connect an AI assistant"
+  "Como conectar um assistente de IA": "How to connect an AI assistant",
+  "nas conversas, só os dados de quem conversa": "in conversations, only the data of whoever is chatting",
+  "Nas conversas com clientes, de quem é este dado?": "In conversations with customers, whose data is this?",
+  "Serve para qualquer cliente (ex.: produtos, preços, horários)": "Works for any customer (e.g. products, prices, hours)",
+  "É de cada cliente (ex.: pedidos, cadastro, cobranças): o assistente só mostra os dados de quem está conversando": "Belongs to each customer (e.g. orders, profile, billing): the assistant only shows the data of whoever is chatting",
+  "Ainda não escolhido. Enquanto isso, nas conversas o assistente só lê esta tabela se ela não parecer ter dados de clientes.": "Not chosen yet. Until then, in conversations the assistant only reads this table if it does not look like it holds customer data.",
+  "Coluna que guarda o cliente": "Column that holds the customer",
+  "O que essa coluna guarda": "What this column holds",
+  "O valor vem do cadastro do contato no CRM. Se o contato não tiver esse dado, o assistente não consulta a tabela e diz que a equipe confirma.": "The value comes from the contact's record in the CRM. If the contact does not have it, the assistant does not query the table and says the team will confirm.",
+  "Nas conversas com clientes, o assistente não consulta nada deste banco neste modo. Para liberar, escolha \"Só o que eu marcar\" e diga, em cada tabela, de quem é o dado.": "In conversations with customers, the assistant does not query anything from this database in this mode. To allow it, choose \"Only what I select\" and say, for each table, whose data it is.",
+  "Telefone (WhatsApp)": "Phone (WhatsApp)"
 }

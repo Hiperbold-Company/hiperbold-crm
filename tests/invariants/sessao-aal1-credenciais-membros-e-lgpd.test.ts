@@ -15,7 +15,7 @@
  *      recusados; o mesmo admin com aal2 passa (controle positivo);
  *   3. admin SEM fator, sessão aal1: passa (quem nunca cadastrou não é trancado fora);
  *   4. admin de plataforma full com fator, aal1: não altera `organizations`; com aal2 altera;
- *   5. a LEITURA não muda: o admin com fator em aal1 segue lendo `team_invites`.
+ *   5. a LEITURA é da 1006 (`sessao_com_prova_de_mfa`): o aal1 com fator lê zero `team_invites`, o aal2 lê.
  *
  * Roda via `pnpm test:db tests/invariants/sessao-aal1-credenciais-membros-e-lgpd.test.ts`.
  */
@@ -123,7 +123,7 @@ describe("as doze tabelas têm as três políticas restritivas da prova de sess�
     });
   }
 
-  it("nenhuma política nova é de SELECT: a leitura não muda", () => {
+  it("nenhuma política _mfa_ desta migration é de SELECT (a leitura é da 1006, com outro nome)", () => {
     const leitura = sql(`
       select count(*) from pg_policies
        where schemaname = 'public' and policyname ~ '_mfa_' and cmd in ('SELECT', 'ALL');
@@ -168,13 +168,10 @@ describe("team_invites: a escrita exige a prova da sessão de quem tem fator", (
     expect(id).not.toBe("");
   });
 
-  it("a leitura não muda: o admin com fator em aal1 segue lendo os convites da empresa", () => {
-    const lidos = como(
-      ADMIN_COM_FATOR,
-      "aal1",
-      `select count(*) from public.team_invites where organization_id = '${ORG}'::uuid;`,
-    );
-    expect(Number(lidos.split("\n").pop())).toBeGreaterThan(0);
+  it("a leitura agora também pede a prova (1006): aal1 com fator lê zero convites, aal2 lê", () => {
+    const contar = `select count(*) from public.team_invites where organization_id = '${ORG}'::uuid;`;
+    expect(Number(como(ADMIN_COM_FATOR, "aal1", contar).split("\n").pop())).toBe(0);
+    expect(Number(como(ADMIN_COM_FATOR, "aal2", contar).split("\n").pop())).toBeGreaterThan(0);
   });
 });
 

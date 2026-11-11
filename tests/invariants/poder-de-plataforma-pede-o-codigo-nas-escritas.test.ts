@@ -12,6 +12,8 @@ import { sql } from "./gov-helpers";
  * desligada) o admin da plataforma escreve como antes; e quem escreve pelo
  * PAPEL na própria organização — admin de plataforma ou membro comum — segue
  * como estava, porque ali quem autoriza é `fn_user_org_ids` / `fn_role_at_least`.
+ * (Desde a 1006, D-092, quem tem fator prova a sessão também na própria
+ * organização: a trava `sessao_com_prova_de_mfa` vale para todo papel.)
  */
 const PLAT = "dddddddd-0757-4000-8000-000000000001";
 const PLAT_SEM_FATOR = "dddddddd-0757-4000-8000-000000000002";
@@ -157,12 +159,21 @@ describe("0757 — o que não muda", () => {
     expect(criarContato(PLAT_SEM_FATOR, "aal1", OUTRA)).toBe("ok");
   });
 
-  it("admin da plataforma COM fator segue escrevendo pelo papel na própria organização", () => {
-    expect(criarContato(PLAT, "aal1", PROPRIA)).toBe("ok");
+  // Desde a 1006 (D-092), quem TEM fator prova a sessão também na própria organização: o aal1
+  // sem dispositivo confiável é recusado por `sessao_com_prova_de_mfa`, qualquer que seja o papel.
+  it("admin da plataforma COM fator escreve pelo papel na própria organização com a sessão provada", () => {
+    expect(() => criarContato(PLAT, "aal1", PROPRIA)).toThrow(RLS);
+    confiar(true);
+    try {
+      expect(criarContato(PLAT, "aal1", PROPRIA)).toBe("ok");
+    } finally {
+      confiar(false);
+    }
+    expect(criarContato(PLAT, "aal2", PROPRIA)).toBe("ok");
   });
 
-  it("membro comum com fator escreve na própria organização como antes", () => {
-    expect(criarContato(MEMBRO, "aal1", PROPRIA)).toBe("ok");
+  it("membro comum com fator escreve na própria organização com aal2; com aal1 é recusado (1006)", () => {
+    expect(() => criarContato(MEMBRO, "aal1", PROPRIA)).toThrow(RLS);
     expect(criarContato(MEMBRO, "aal2", PROPRIA)).toBe("ok");
   });
 

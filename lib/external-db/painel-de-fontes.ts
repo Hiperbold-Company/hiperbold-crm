@@ -13,7 +13,15 @@
  *      liberada: sem ela, conversar com a tabela dá erro sempre.
  *   3. Lista vazia de colunas não existe, e a lista nunca passa dos tetos.
  */
-import { MAX_COLUNAS_POR_FONTE, MAX_DESCRICAO, MAX_FONTES, fontesSchema, type Fonte } from "./fontes";
+import { ehColunaDeEmail, ehColunaDeTelefone } from "./escopo-do-contato";
+import {
+  MAX_COLUNAS_POR_FONTE,
+  MAX_DESCRICAO,
+  MAX_FONTES,
+  fontesSchema,
+  type DadoDoContato,
+  type Fonte,
+} from "./fontes";
 
 /** O que o painel precisa saber de uma tabela do catálogo (a `TabelaExterna` do servidor cabe aqui). */
 export interface TabelaDoCatalogo {
@@ -169,6 +177,11 @@ export function contarLiberadas(
   };
 }
 
+function clienteIgual(a: Fonte["cliente"], b: Fonte["cliente"]): boolean {
+  if (a === undefined || b === undefined || a === null || b === null) return a === b;
+  return a.coluna === b.coluna && a.dado === b.dado;
+}
+
 function colunasIguais(a: string[] | null, b: string[] | null): boolean {
   if (a === null || b === null) return a === b;
   return a.length === b.length && a.every((nome, i) => nome === b[i]);
@@ -183,7 +196,13 @@ export function rascunhoMudou(
   if (salvo.fontes.length !== rascunho.fontes.length) return true;
   return salvo.fontes.some((a, i) => {
     const b = rascunho.fontes[i]!;
-    return a.schema !== b.schema || a.tabela !== b.tabela || a.descricao !== b.descricao || !colunasIguais(a.colunas, b.colunas);
+    return (
+      a.schema !== b.schema ||
+      a.tabela !== b.tabela ||
+      a.descricao !== b.descricao ||
+      !colunasIguais(a.colunas, b.colunas) ||
+      !clienteIgual(a.cliente, b.cliente)
+    );
   });
 }
 
@@ -196,4 +215,44 @@ export function listaValida(lista: readonly Fonte[]): boolean {
 export function tabelaSemColunaDoCliente(tabela: TabelaDoCatalogo, colunaDoCliente: string | null): boolean {
   if (colunaDoCliente === null) return false;
   return !tabela.colunas.some((c) => c.nome === colunaDoCliente);
+}
+
+// ─── De quem é o dado (D-146) ───────────────────────────────────────────────
+
+/** Um palpite para a pessoa não começar do zero: pelo nome da coluna. */
+function palpiteDeDado(coluna: string): DadoDoContato {
+  if (ehColunaDeEmail(coluna)) return "email";
+  if (ehColunaDeTelefone(coluna)) return "phone";
+  return /cpf|cnpj|document/i.test(coluna) ? "document" : "phone";
+}
+
+/** A coluna mais provável de guardar o dado do cliente nesta tabela. */
+export function palpiteDeColunaDoCliente(
+  tabela: TabelaDoCatalogo,
+  colunaDoCliente: string | null,
+): { coluna: string; dado: DadoDoContato } | null {
+  const nomes = tabela.colunas.map((c) => c.nome);
+  const coluna =
+    (colunaDoCliente !== null && nomes.includes(colunaDoCliente) ? colunaDoCliente : undefined) ??
+    nomes.find((n) => ehColunaDeTelefone(n) || ehColunaDeEmail(n) || /cpf|cnpj|document/i.test(n)) ??
+    nomes[0];
+  return coluna === undefined ? null : { coluna, dado: palpiteDeDado(coluna) };
+}
+
+/**
+ * Define de quem é o dado da fonte: `null` = serve a qualquer cliente; objeto =
+ * é de cada cliente (a IA na conversa só vê as linhas de quem conversa).
+ */
+export function definirClienteDaFonte(
+  lista: readonly Fonte[],
+  schema: string,
+  tabela: string,
+  cliente: { coluna: string; dado: DadoDoContato } | null,
+): Fonte[] {
+  return lista.map((f) => (f.schema === schema && f.tabela === tabela ? { ...f, cliente } : f));
+}
+
+/** Fontes liberadas em que ninguém ainda disse de quem é o dado. */
+export function fontesSemDonoDoDado(lista: readonly Fonte[]): number {
+  return lista.filter((f) => f.cliente === undefined).length;
 }

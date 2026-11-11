@@ -24,6 +24,9 @@ vi.mock("@/lib/auth/require-role", async () => ({
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(),
   orgAtivaSemPortao: vi.fn(),
+  // Sessão sem dívida de MFA: o gate da sessão (D-092, 1006) tem suíte própria em
+  // tests/unit/sessao-aal1-nao-le-pela-api.test.ts.
+  mfaEmDivida: vi.fn(async () => false),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
