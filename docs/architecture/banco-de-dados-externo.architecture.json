@@ -72,7 +72,7 @@
       "id": "guardas",
       "lane": "nucleo",
       "label": "guardas.ts",
-      "sublabel": "política de rede: LAN permitida, link-local/loopback sempre bloqueados; IPv6 normalizado",
+      "sublabel": "política de rede: LAN recusada salvo EXTERNAL_DB_PERMITIR_REDE_PRIVADA, link-local/loopback sempre bloqueados; IPv6 normalizado",
       "type": "lib",
       "dot": "red"
     },
@@ -614,7 +614,7 @@
       "id": "card-rede",
       "tone": "red",
       "title": "A guarda de rede roda a CADA abertura de pool",
-      "body": "Validar só no cadastro deixaria a janela do DNS binding aberta entre o POST e o primeiro SELECT. `abrirAcesso` revalida o destino em toda leitura. RFC1918 é permitido (Postgres na LAN é caso real); link-local/metadata, loopback e CGNAT nunca."
+      "body": "Validar só no cadastro deixaria a janela do DNS binding aberta entre o POST e o primeiro SELECT. `abrirAcesso` revalida o destino em toda leitura. RFC1918 é recusado, salvo a exceção da instalação `EXTERNAL_DB_PERMITIR_REDE_PRIVADA=true`; link-local/metadata, loopback e CGNAT nunca. A conexão abre no IP validado, nos dois drivers."
     },
     {
       "id": "card-pii",

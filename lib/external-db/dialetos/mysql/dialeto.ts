@@ -5,8 +5,12 @@ import { obterPoolMysql } from "./conexao";
 import { descreverTabelaMysql, listarTabelasMysql } from "./introspeccao";
 import { executarReceitaMysql, lerTabelaMysql } from "./leitura";
 
-export function criarDialetoMysql(conexao: ConexaoExterna, regra: RegraDeFontes): Dialeto {
-  const pool = obterPoolMysql(conexao);
+export function criarDialetoMysql(
+  conexao: ConexaoExterna,
+  regra: RegraDeFontes,
+  enderecoValidado?: string,
+): Dialeto {
+  const pool = obterPoolMysql(conexao, enderecoValidado);
   const banco = conexao.database;
   return criarDialetoDeLeitura(
     {

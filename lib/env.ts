@@ -186,6 +186,22 @@ const schema = z.object({
    * é tolerada — `lib/crypto/aes_gcm.ts` lança se a key não bate em runtime.
    */
   AI_CRED_AES_KEY: required("AI_CRED_AES_KEY"),
+  /**
+   * Exceção da INSTALAÇÃO à guarda de rede do banco externo
+   * (`lib/external-db/guardas.ts`, D-083 item 6). Desligada, o host cadastrado
+   * por uma organização nunca resolve para RFC1918 nem ULA; "true" libera só
+   * essas faixas, para self-host com o ERP na mesma rede (loopback, metadata e
+   * CGNAT continuam proibidos). A guarda lê `process.env` direto, a cada
+   * chamada, e só a grafia exata "true" liga; o `z.enum` aqui faz um valor torto
+   * falhar no boot em vez de ligar ou desligar a exceção em silêncio, e nasce
+   * desligada, então o erro de boot só alcança quem tentou ligá-la. Vazio
+   * (`EXTERNAL_DB_PERMITIR_REDE_PRIVADA=`) vale como desligada.
+   */
+  EXTERNAL_DB_PERMITIR_REDE_PRIVADA: z
+    .enum(["true", "false", ""])
+    .optional()
+    .default("false")
+    .transform((v) => v === "true"),
 
   // Postgres direto do Supabase (Settings → Database) — só as rotas de skills
   // instaláveis (import/install) usam `pg` cru (mesmo pool do agent-engine).

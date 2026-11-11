@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ipDeBancoProibido, validarHostDeBanco } from "./guardas";
 
@@ -173,5 +173,55 @@ describe("validarHostDeBanco", () => {
       ok: false,
       motivo: "dns_falhou",
     });
+  });
+});
+
+describe("exceção da instalação: EXTERNAL_DB_PERMITIR_REDE_PRIVADA (D-083, item 6)", () => {
+  const PRIVADOS = ["10.1.2.3", "172.16.5.5", "172.31.255.254", "192.168.0.10", "fd00::1", "fc00::1", "::ffff:10.1.2.3"];
+  const NUNCA = ["127.0.0.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "fe80::1", "::ffff:127.0.0.1", "::ffff:169.254.169.254", "64:ff9b::10.1.2.3"];
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("ausente, a rede privada é recusada (IPv4 e IPv6)", async () => {
+    vi.stubEnv("EXTERNAL_DB_PERMITIR_REDE_PRIVADA", undefined);
+    for (const ip of PRIVADOS) {
+      await expect(validarHostDeBanco(ip)).resolves.toEqual({ ok: false, motivo: "ip_especial" });
+    }
+  });
+
+  it.each(["false", "", "TRUE", "1", "sim", " true"])("com %j a exceção continua desligada", async (valor) => {
+    vi.stubEnv("EXTERNAL_DB_PERMITIR_REDE_PRIVADA", valor);
+    await expect(validarHostDeBanco("10.1.2.3")).resolves.toEqual({ ok: false, motivo: "ip_especial" });
+  });
+
+  it("com true, libera RFC1918 e ULA, literal e por nome", async () => {
+    vi.stubEnv("EXTERNAL_DB_PERMITIR_REDE_PRIVADA", "true");
+    for (const ip of PRIVADOS) {
+      await expect(validarHostDeBanco(ip)).resolves.toEqual({ ok: true, enderecos: [ip] });
+    }
+    await expect(validarHostDeBanco("banco.lan.exemplo")).resolves.toEqual({ ok: true, enderecos: ["10.1.2.3"] });
+  });
+
+  it("com true, loopback, metadata, link-local, CGNAT e NAT64 seguem recusados", async () => {
+    vi.stubEnv("EXTERNAL_DB_PERMITIR_REDE_PRIVADA", "true");
+    for (const ip of NUNCA) {
+      await expect(validarHostDeBanco(ip)).resolves.toEqual({ ok: false, motivo: "ip_especial" });
+      expect(ipDeBancoProibido(ip, { permitirRedePrivada: true })).toBe(true);
+    }
+    // Nome que mistura LAN e loopback: um endereço proibido recusa tudo.
+    dns.mapa["misto.exemplo"] = ["10.1.2.3", "127.0.0.1"];
+    try {
+      await expect(validarHostDeBanco("misto.exemplo")).resolves.toEqual({ ok: false, motivo: "ip_especial" });
+      await expect(validarHostDeBanco("localhost")).resolves.toEqual({ ok: false, motivo: "ip_especial" });
+    } finally {
+      delete dns.mapa["misto.exemplo"];
+    }
+  });
+
+  it("a política sem opção é a mesma de antes: privado recusado", () => {
+    for (const ip of PRIVADOS) expect(ipDeBancoProibido(ip)).toBe(true);
+    for (const ip of PRIVADOS) expect(ipDeBancoProibido(ip, { permitirRedePrivada: true })).toBe(false);
   });
 });

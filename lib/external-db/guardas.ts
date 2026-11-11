@@ -20,6 +20,12 @@
  *     loopback, CGNAT, multicast, reservadas e TEST-NET são BLOQUEADOS SEMPRE.
  *     O 169.254.169.254 entrega credencial de instância de nuvem.
  *
+ *   - A ÚNICA exceção é da INSTALAÇÃO, nunca da organização:
+ *     `EXTERNAL_DB_PERMITIR_REDE_PRIVADA=true` (default ausente = desligada),
+ *     para self-host com o ERP na mesma rede. Ela libera só RFC1918 e a ULA do
+ *     IPv6 (`fc00::/7`); loopback, link-local/metadata, CGNAT e o resto seguem
+ *     bloqueados mesmo com ela ligada (D-083, item 6).
+ *
  * DNS rebinding: entre a resolução desta guarda e a do `pg` o DNS poderia mudar.
  * Quem chama fecha a janela conectando pelo IP que ESTA guarda devolveu
  * (`enderecos`), nunca pelo nome: ver `conexao.ts` (host = IP, nome original em
@@ -131,20 +137,21 @@ function byte(bytes: ReadonlyArray<number>, i: number): number {
   return bytes[i] ?? 0;
 }
 
-function ipv6Proibido(bytes: ReadonlyArray<number>): boolean {
-  if (bytes.length !== 16) return true; // não é IPv6: trata como perigoso
-  if (bytes.every((b) => b === 0)) return true; // ::
-  if (bytes.slice(0, 15).every((b) => b === 0) && byte(bytes, 15) === 1) return true; // ::1
-  if (byte(bytes, 0) === 0xfe && (byte(bytes, 1) & 0xc0) === 0x80) return true; // link-local fe80::/10
-  if ((byte(bytes, 0) & 0xfe) === 0xfc) return true; // ULA fc00::/7
-  if (byte(bytes, 0) === 0xff) return true; // multicast ff00::/8
+type Classe = "publico" | "privado" | "proibido";
+
+function classificarIpv6(bytes: ReadonlyArray<number>): Classe {
+  if (bytes.length !== 16) return "proibido"; // não é IPv6: trata como perigoso
+  if (bytes.every((b) => b === 0)) return "proibido"; // ::
+  if (bytes.slice(0, 15).every((b) => b === 0) && byte(bytes, 15) === 1) return "proibido"; // ::1
+  if (byte(bytes, 0) === 0xfe && (byte(bytes, 1) & 0xc0) === 0x80) return "proibido"; // link-local fe80::/10
+  if (byte(bytes, 0) === 0xff) return "proibido"; // multicast ff00::/8
   if (
     byte(bytes, 0) === 0x20 &&
     byte(bytes, 1) === 0x01 &&
     byte(bytes, 2) === 0x0d &&
     byte(bytes, 3) === 0xb8 // 2001:db8::/32 (documentação)
   ) {
-    return true;
+    return "proibido";
   }
   if (
     byte(bytes, 0) === 0x00 &&
@@ -153,42 +160,71 @@ function ipv6Proibido(bytes: ReadonlyArray<number>): boolean {
     byte(bytes, 3) === 0x9b &&
     bytes.slice(4, 12).every((b) => b === 0) // 64:ff9b::/96 (NAT64 — alcança IPv4)
   ) {
-    return true;
+    return "proibido";
   }
+  if ((byte(bytes, 0) & 0xfe) === 0xfc) return "privado"; // ULA fc00::/7 (a "RFC1918" do IPv6)
 
   // IPv4 embutido: `::ffff:a.b.c.d` (mapeado) e `::a.b.c.d` (compatível, legado).
   const dezZeros = bytes.slice(0, 10).every((b) => b === 0);
   if (dezZeros && byte(bytes, 10) === 0xff && byte(bytes, 11) === 0xff) {
-    return ipDeBancoProibido(`${byte(bytes, 12)}.${byte(bytes, 13)}.${byte(bytes, 14)}.${byte(bytes, 15)}`);
+    return classificarIp(`${byte(bytes, 12)}.${byte(bytes, 13)}.${byte(bytes, 14)}.${byte(bytes, 15)}`);
   }
   if (dezZeros && byte(bytes, 10) === 0 && byte(bytes, 11) === 0) {
     const embutido = `${byte(bytes, 12)}.${byte(bytes, 13)}.${byte(bytes, 14)}.${byte(bytes, 15)}`;
-    if (embutido !== "0.0.0.0") return ipDeBancoProibido(embutido);
+    if (embutido !== "0.0.0.0") return classificarIp(embutido);
   }
-  return false;
+  return "publico";
 }
 
-/** Um literal de IP é proibido? Exportado para teste direto da política. */
-export function ipDeBancoProibido(ip: string): boolean {
+/**
+ * `privado` = rede local de verdade (RFC1918 e ULA `fc00::/7`), a única classe
+ * que a exceção da instalação pode liberar. `proibido` = loopback, link-local
+ * (metadata de nuvem), CGNAT, multicast, reservadas e documentação: nunca.
+ */
+function classificarIp(ip: string): Classe {
   if (isIPv4(ip)) {
     const alvo = ipv4ParaInt(ip);
-    if (alvo === null) return true; // não parseou: trata como perigoso
+    if (alvo === null) return "proibido"; // não parseou: trata como perigoso
     for (const [base, prefixo] of FAIXAS_PROIBIDAS) {
-      if (noBloco(alvo, base, prefixo)) return true;
+      if (noBloco(alvo, base, prefixo)) return "proibido";
     }
     for (const [base, prefixo] of FAIXAS_PRIVADAS) {
-      if (noBloco(alvo, base, prefixo)) return true;
+      if (noBloco(alvo, base, prefixo)) return "privado";
     }
-    return false;
+    return "publico";
   }
 
   if (isIPv6(ip)) {
     const bytes = ipv6ParaBytes(ip);
-    if (bytes === null) return true; // não parseou: trata como perigoso
-    return ipv6Proibido(bytes);
+    if (bytes === null) return "proibido"; // não parseou: trata como perigoso
+    return classificarIpv6(bytes);
   }
 
-  return true; // nem IPv4 nem IPv6
+  return "proibido"; // nem IPv4 nem IPv6
+}
+
+export type OpcoesDaPolitica = {
+  /** Libera SÓ a classe `privado` (RFC1918 e ULA). Loopback e metadata continuam proibidos. */
+  permitirRedePrivada?: boolean;
+};
+
+/** Um literal de IP é proibido? Exportado para teste direto da política. */
+export function ipDeBancoProibido(ip: string, opcoes: OpcoesDaPolitica = {}): boolean {
+  const classe = classificarIp(ip);
+  if (classe === "proibido") return true;
+  if (classe === "privado") return opcoes.permitirRedePrivada !== true;
+  return false;
+}
+
+/**
+ * A exceção da INSTALAÇÃO (`EXTERNAL_DB_PERMITIR_REDE_PRIVADA=true`, declarada
+ * em `lib/env.ts`): self-host com o ERP na mesma rede. Lida a cada chamada, de
+ * `process.env` direto, para esta guarda não depender da validação inteira do
+ * ambiente (o `curso/` a importa fora do app). Só a grafia exata `true` liga:
+ * qualquer outra coisa, ou a ausência, mantém a rede privada recusada.
+ */
+export function redePrivadaPermitidaPelaInstalacao(): boolean {
+  return process.env.EXTERNAL_DB_PERMITIR_REDE_PRIVADA === "true";
 }
 
 /** Tira colchetes de IPv6 literal e recusa host com espaço, barra ou vazio. */
@@ -209,8 +245,10 @@ export async function validarHostDeBanco(host: string): Promise<ResultadoDeHost>
   const h = normalizarHost(host);
   if (h === null) return { ok: false, motivo: "host_invalido" };
 
+  const opcoes: OpcoesDaPolitica = { permitirRedePrivada: redePrivadaPermitidaPelaInstalacao() };
+
   if (isIP(h) !== 0) {
-    if (ipDeBancoProibido(h)) return { ok: false, motivo: "ip_especial" };
+    if (ipDeBancoProibido(h, opcoes)) return { ok: false, motivo: "ip_especial" };
     return { ok: true, enderecos: [h] };
   }
 
@@ -224,7 +262,7 @@ export async function validarHostDeBanco(host: string): Promise<ResultadoDeHost>
   if (enderecos.length === 0) return { ok: false, motivo: "dns_vazio" };
 
   for (const { address } of enderecos) {
-    if (ipDeBancoProibido(address)) return { ok: false, motivo: "ip_especial" };
+    if (ipDeBancoProibido(address, opcoes)) return { ok: false, motivo: "ip_especial" };
   }
   return { ok: true, enderecos: enderecos.map((e) => e.address) };
 }

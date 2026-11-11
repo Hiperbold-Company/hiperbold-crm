@@ -17,6 +17,8 @@
  * do cliente (`LOAD DATA LOCAL`). Fatos do driver INFERIDOS (documentação): a
  * Fatia 4a-2b os mede num MySQL de verdade.
  */
+import { connect as conectarTcp } from "node:net";
+
 import mysql from "mysql2/promise";
 import type { PoolOptions } from "mysql2/promise";
 
@@ -48,8 +50,10 @@ export interface PoolMysql {
 type Entrada = { chave: string; pool: PoolMysql };
 const pools = new Map<string, Entrada>();
 
-function chaveDaConexao(c: ConexaoExterna): string {
-  return [c.id, c.versao, c.dbType, c.host, c.port, c.database, c.username, c.sslMode].join("\u0000");
+function chaveDaConexao(c: ConexaoExterna, enderecoValidado: string | undefined): string {
+  return [c.id, c.versao, c.dbType, c.host, enderecoValidado ?? "", c.port, c.database, c.username, c.sslMode].join(
+    "\u0000",
+  );
 }
 
 function sslPara(modo: ModoTls): PoolOptions["ssl"] | undefined {
@@ -65,11 +69,32 @@ function sslPara(modo: ModoTls): PoolOptions["ssl"] | undefined {
   }
 }
 
-/** As opções do `mysql2` de uma conexão. Pura: é o que os testes conferem. */
-export function configMysql(c: ConexaoExterna): PoolOptions {
+/**
+ * As opções do `mysql2` de uma conexão. Pura: é o que os testes conferem.
+ *
+ * `enderecoValidado` (D-084, M2, lado MySQL): o IP que `validarHostDeBanco`
+ * devolveu. Com ele, o socket TCP abre NESSE IP por `stream` e o `mysql2` não
+ * resolve o nome de novo, o que fecha a janela de DNS rebinding entre a guarda e
+ * a conexão. `host` continua sendo o nome cadastrado porque é dele que o
+ * `mysql2` tira o `servername` do TLS (SNI). O caminho de produção
+ * (`lib/external-db/drivers.ts`) sempre passa o IP; sem ele (só as suítes de
+ * `tests/mysql`, contra um MySQL local) a conexão segue pelo nome.
+ */
+export function configMysql(c: ConexaoExterna, enderecoValidado?: string): PoolOptions {
   const ssl = sslPara(c.sslMode);
+  const preso =
+    enderecoValidado === undefined
+      ? {}
+      : {
+          stream: () => {
+            const socket = conectarTcp({ host: enderecoValidado, port: c.port });
+            socket.setNoDelay(true);
+            return socket;
+          },
+        };
   return {
     host: c.host,
+    ...preso,
     port: c.port,
     user: c.username,
     password: c.password,
@@ -98,8 +123,8 @@ function evictarSeNecessario(): void {
 }
 
 /** Pool da conexão, criando/invalidando conforme o cadastro atual. */
-export function obterPoolMysql(c: ConexaoExterna): PoolMysql {
-  const chave = chaveDaConexao(c);
+export function obterPoolMysql(c: ConexaoExterna, enderecoValidado?: string): PoolMysql {
+  const chave = chaveDaConexao(c, enderecoValidado);
   const existente = pools.get(c.id);
   if (existente && existente.chave === chave) {
     pools.delete(c.id);
@@ -110,7 +135,7 @@ export function obterPoolMysql(c: ConexaoExterna): PoolMysql {
     pools.delete(c.id);
     void existente.pool.end().catch(() => undefined);
   }
-  const pool = mysql.createPool(configMysql(c)) as unknown as PoolMysql;
+  const pool = mysql.createPool(configMysql(c, enderecoValidado)) as unknown as PoolMysql;
   pools.set(c.id, { chave, pool });
   evictarSeNecessario();
   return pool;
@@ -175,10 +200,10 @@ function mensagemSegura(err: unknown): string {
  * `SHOW GRANTS` para o aviso de privilégio. Falhar ao ler os privilégios NÃO
  * derruba o teste: a conexão funciona, só não deu para conferir o usuário.
  */
-export async function testarConexaoMysql(c: ConexaoExterna): Promise<ResultadoDeTeste> {
+export async function testarConexaoMysql(c: ConexaoExterna, enderecoValidado?: string): Promise<ResultadoDeTeste> {
   let cliente: Awaited<ReturnType<typeof mysql.createConnection>> | null = null;
   try {
-    cliente = await mysql.createConnection(configMysql(c));
+    cliente = await mysql.createConnection(configMysql(c, enderecoValidado));
     cliente.on("error", () => undefined);
     await cliente.query("SELECT 1");
     let aviso: string | null;
