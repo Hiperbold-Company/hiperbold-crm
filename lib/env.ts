@@ -656,6 +656,11 @@ const schema = z.object({
   PACING_LEDGER_RETENTION_DAYS: z.string().optional().default(""),
   OUTBOUND_COPIES_RETENTION_DAYS: z.string().optional().default(""),
   LEAD_CHECKPOINT_RETENTION_DAYS: z.string().optional().default(""),
+  /**
+   * Os alarmes de gatilho de plano (`billing_trigger_alarmes`, migration 1009,
+   * D-074). Mesma razão das irmãs para `z.string()`. Padrão e piso 90.
+   */
+  BILLING_TRIGGER_ALARM_RETENTION_DAYS: z.string().optional().default(""),
 
   // LGPD export (S-08.04)
   LGPD_SIGNING_KEY: z.string().optional().default(""),

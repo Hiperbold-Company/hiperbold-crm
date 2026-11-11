@@ -56,6 +56,8 @@ import { autorizaCron } from "@/lib/auth/cron-auth";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import {
+  RETENCAO_ALARMES_DE_GATILHO_DIAS_PADRAO,
+  RETENCAO_ALARMES_DE_GATILHO_DIAS_PISO,
   RETENCAO_AUDITORIA_DIAS_PADRAO,
   RETENCAO_AUDITORIA_DIAS_PISO,
   RETENCAO_CANDIDATOS_GOLDEN_DIAS_PADRAO,
@@ -199,6 +201,15 @@ export interface ResultadoDaRetencao {
   checkpoints_tem_resto: boolean;
   retencao_checkpoints_dias: number;
   /**
+   * Os alarmes de gatilho de plano vencidos (`billing_trigger_alarmes`,
+   * migration 1009, D-074). Piso de 90 dias no corpo da função; o
+   * `service_role` não tem DELETE na tabela, a função é a única porta.
+   */
+  alarmes_de_gatilho_apagados: number;
+  lotes_alarmes_de_gatilho: number;
+  alarmes_de_gatilho_tem_resto: boolean;
+  retencao_alarmes_de_gatilho_dias: number;
+  /**
    * O traço do turno vencido (migration 9021, issue #3201) — uma linha por
    * execução do agente, e a poda de MAIOR volume da rodada depois da telemetria.
    *
@@ -254,7 +265,8 @@ export interface PodaDb {
       | "fn_expurgar_ritmo_de_envio_vencido"
       | "fn_expurgar_copias_enviadas_vencidas"
       | "fn_expurgar_checkpoints_superados"
-      | "fn_expurgar_traco_do_turno_vencido",
+      | "fn_expurgar_traco_do_turno_vencido"
+      | "fn_podar_alarmes_de_gatilho",
     args: { p_retencao_dias: number; p_limite: number },
   ): Promise<{ data: number | null; error: { message: string } | null }>;
   /**
@@ -323,7 +335,8 @@ async function drenar(
     | "fn_expurgar_ritmo_de_envio_vencido"
     | "fn_expurgar_copias_enviadas_vencidas"
     | "fn_expurgar_checkpoints_superados"
-    | "fn_expurgar_traco_do_turno_vencido",
+    | "fn_expurgar_traco_do_turno_vencido"
+    | "fn_podar_alarmes_de_gatilho",
   dias: number,
 ): Promise<{ apagadas: number; lotes: number; temResto: boolean }> {
   let apagadas = 0;
@@ -504,6 +517,7 @@ export async function podarHistorico(
     PACING_LEDGER_RETENTION_DAYS?: string;
     OUTBOUND_COPIES_RETENTION_DAYS?: string;
     LEAD_CHECKPOINT_RETENTION_DAYS?: string;
+    BILLING_TRIGGER_ALARM_RETENTION_DAYS?: string;
   },
 ): Promise<ResultadoDaRetencao> {
   const fila = interpretarRetencao(ambiente.JOB_QUEUE_RETENTION_DAYS, {
@@ -589,6 +603,12 @@ export async function podarHistorico(
     piso: RETENCAO_CHECKPOINTS_DIAS_PISO,
   });
 
+  const alarmesDeGatilho = interpretarRetencao(ambiente.BILLING_TRIGGER_ALARM_RETENTION_DAYS, {
+    chave: "BILLING_TRIGGER_ALARM_RETENTION_DAYS",
+    padrao: RETENCAO_ALARMES_DE_GATILHO_DIAS_PADRAO,
+    piso: RETENCAO_ALARMES_DE_GATILHO_DIAS_PISO,
+  });
+
   // As falhas desta rodada, uma por dreno (ver `executarDreno`): a rodada
   // segue e cada uma é reportada pelo NOME.
   const falhas: string[] = [];
@@ -666,6 +686,9 @@ export async function podarHistorico(
   const ritmoDrenado = await executarDreno(falhas, "fn_expurgar_ritmo_de_envio_vencido", () => drenar(db, "fn_expurgar_ritmo_de_envio_vencido", ritmoDeEnvio.dias), zerado);
   const copiasDrenadas = await executarDreno(falhas, "fn_expurgar_copias_enviadas_vencidas", () => drenar(db, "fn_expurgar_copias_enviadas_vencidas", copiasEnviadas.dias), zerado);
   const checkpointsDrenados = await executarDreno(falhas, "fn_expurgar_checkpoints_superados", () => drenar(db, "fn_expurgar_checkpoints_superados", checkpoints.dias), zerado);
+  // Os alarmes de gatilho de plano (migration 1009, D-074): a tabela que só
+  // crescia. Piso de 90 dias no CORPO da função, como nas irmãs.
+  const alarmesDrenados = await executarDreno(falhas, "fn_podar_alarmes_de_gatilho", () => drenar(db, "fn_podar_alarmes_de_gatilho", alarmesDeGatilho.dias), zerado);
 
   return {
     jobs_apagados: jobs.apagadas,
@@ -726,6 +749,10 @@ export async function podarHistorico(
     lotes_checkpoints: checkpointsDrenados.lotes,
     checkpoints_tem_resto: checkpointsDrenados.temResto,
     retencao_checkpoints_dias: checkpoints.dias,
+    alarmes_de_gatilho_apagados: alarmesDrenados.apagadas,
+    lotes_alarmes_de_gatilho: alarmesDrenados.lotes,
+    alarmes_de_gatilho_tem_resto: alarmesDrenados.temResto,
+    retencao_alarmes_de_gatilho_dias: alarmesDeGatilho.dias,
     retencao_fila_dias: fila.dias,
     retencao_auditoria_dias: auditoria.dias,
     retencao_espelho_dias: espelho.dias,
@@ -752,6 +779,7 @@ export async function podarHistorico(
       ritmoDeEnvio.aviso,
       copiasEnviadas.aviso,
       checkpoints.aviso,
+      alarmesDeGatilho.aviso,
     ].filter((a): a is string => a !== null),
     falhas,
   };
@@ -823,7 +851,10 @@ export function houveEfeito(resultado: ResultadoDaRetencao): boolean {
     // A linha é metadado (nome de ferramenta, ids, erro truncado) — não é texto
     // de cliente —, mas é a trilha do que o agente FEZ: silêncio aqui seria
     // encolhimento de auditoria, não de telemetria.
-    resultado.tracos_apagados > 0
+    resultado.tracos_apagados > 0 ||
+    // Os alarmes de gatilho (1009), pela mesma razão: poda sem trilha é
+    // encolhimento silencioso.
+    resultado.alarmes_de_gatilho_apagados > 0
   );
 }
 
@@ -888,6 +919,7 @@ async function handle(req: NextRequest): Promise<Response> {
       PACING_LEDGER_RETENTION_DAYS: env.PACING_LEDGER_RETENTION_DAYS,
       OUTBOUND_COPIES_RETENTION_DAYS: env.OUTBOUND_COPIES_RETENTION_DAYS,
       LEAD_CHECKPOINT_RETENTION_DAYS: env.LEAD_CHECKPOINT_RETENTION_DAYS,
+      BILLING_TRIGGER_ALARM_RETENTION_DAYS: env.BILLING_TRIGGER_ALARM_RETENTION_DAYS,
     });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
