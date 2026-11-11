@@ -3,7 +3,8 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * As CHAVES SECRETAS das automações (bloco "Requisição HTTP"), gerente+.
  *
  *   GET  — lista: nome e os 4 últimos caracteres. NUNCA o valor.
- *   POST — cria `{ nome, valor }`. `Idempotency-Key` opcional (recibo em `idempotency_keys`).
+ *   POST — cria `{ nome, valor, hosts_permitidos }` (pelo menos um endereço: a chave só vai
+ *          para eles — migration 1007). `Idempotency-Key` opcional (recibo em `idempotency_keys`).
  *
  * O valor é cifrado (`fn_encrypt_oauth`) antes de gravar e nunca volta: nem na
  * resposta, nem no audit (só o nome; nem os finais), nem em log. Regra em `lib/automacoes/segredos.ts`.
@@ -22,13 +23,18 @@ import {
   valorDoSegredoSchema,
   type SegredoVisivel,
 } from "@/lib/automacoes/segredos";
+import { hostsPermitidosSchema } from "@/lib/automacoes/hosts-permitidos";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { portaDoCofre } from "./_porta";
 
 export const dynamic = "force-dynamic";
 
-const corpoSchema = z.strictObject({ nome: nomeDoSegredoSchema, valor: valorDoSegredoSchema });
+const corpoSchema = z.strictObject({
+  nome: nomeDoSegredoSchema,
+  valor: valorDoSegredoSchema,
+  hosts_permitidos: hostsPermitidosSchema,
+});
 
 export async function GET(req: NextRequest): Promise<Response> {
   const p = await portaDoCofre(req, false);
@@ -51,7 +57,22 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (p.resposta) return p.resposta;
   const { org, requestId, t } = p;
 
-  const corpo = corpoSchema.safeParse(await req.json().catch(() => null));
+  const bruto: unknown = await req.json().catch(() => null);
+  // Os endereços primeiro, com a frase própria: o erro deles não carrega o valor da chave.
+  const hosts = hostsPermitidosSchema.safeParse(
+    (bruto as { hosts_permitidos?: unknown } | null)?.hosts_permitidos,
+  );
+  if (!hosts.success) {
+    return fail(
+      "validation_failed",
+      t(
+        "Informe pelo menos um endereço permitido (até 10), só o nome do servidor, como api.exemplo.com.br: sem https://, sem caminho e sem porta.",
+      ),
+      400,
+      { requestId },
+    );
+  }
+  const corpo = corpoSchema.safeParse(bruto);
   if (!corpo.success) {
     // Sem `details`: o Zod repetiria o valor recusado — e o valor é a chave.
     return fail(
@@ -77,6 +98,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       org,
       nome: corpo.data.nome,
       valor: corpo.data.valor,
+      hosts: corpo.data.hosts_permitidos,
       atorId: p.atorId,
     });
     if (!r.ok) {
@@ -104,7 +126,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       resourceId: r.segredo.id,
       requestId,
       // O QUE mudou, jamais o valor.
-      metadata: { nome: r.segredo.nome },
+      metadata: { nome: r.segredo.nome, hosts_permitidos: r.segredo.hosts_permitidos },
     });
     return { resposta: { ok: true, segredo: r.segredo }, status: 201 };
   };
@@ -125,6 +147,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     // O recibo guarda só o hash do corpo; ainda assim entra o SHA-256 do valor, nunca o valor.
     corpo: {
       nome: corpo.data.nome,
+      hosts_permitidos: corpo.data.hosts_permitidos,
       valor_sha256: createHash("sha256").update(corpo.data.valor).digest("hex"),
     },
     executar,

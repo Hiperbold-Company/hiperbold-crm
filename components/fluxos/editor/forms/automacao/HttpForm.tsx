@@ -27,6 +27,7 @@ import {
   METODOS_HTTP,
   NOME_DA_VARIAVEL_DE_SAIDA,
   problemaDaUrl,
+  segredosDoBloco,
   TEMPO_LIMITE_MAXIMO_MS,
   TEMPO_LIMITE_MINIMO_MS,
   type CabecalhoHttp,
@@ -34,6 +35,7 @@ import {
   type MapeamentoHttp,
   type MetodoHttp,
 } from "@/lib/automacoes/http";
+import { hostDaUrlDoBloco, hostPermitido } from "@/lib/automacoes/hosts-permitidos";
 import { Trash } from "@/lib/ui/icons";
 
 import { AjudaDeVariaveis, Campo, Seletor, SeletorDeCampo, type RespostaDisponivel } from "./comum";
@@ -68,6 +70,18 @@ export function HttpForm({
     config.body !== undefined &&
     config.body.trim() !== "" &&
     !corpoEhJsonValido(config.body);
+
+  // A chave escolhida só vai para os endereços permitidos dela (migration 1007): avisa antes de
+  // publicar. O publish recusa também, e o motor recusa na hora do envio — este aviso é só o cedo.
+  const hostDoBloco = problema ? null : hostDaUrlDoBloco(config.url);
+  const chavesForaDoEndereco = hostDoBloco
+    ? segredosDoBloco(config)
+        .map((id) => (segredos ?? []).find((s) => s.id === id))
+        .filter(
+          (s): s is NonNullable<typeof s> =>
+            !!s && s.hosts_permitidos !== null && !hostPermitido(hostDoBloco, s.hosts_permitidos),
+        )
+    : [];
 
   const cabecalhosNoLimite = config.headers.length >= MAX_CABECALHOS;
   const mapeamentosNoLimite = config.mappings.length >= MAX_MAPEAMENTOS;
@@ -134,6 +148,19 @@ export function HttpForm({
             {t(FRASE_DA_URL[problema])}
           </p>
         )}
+        {chavesForaDoEndereco.map((s) => (
+          <p
+            key={s.id}
+            className="text-xs text-error-fg"
+            role="alert"
+            data-testid="http-chave-fora-do-endereco"
+          >
+            {t("A chave “{nome}” só pode ser enviada para {lista}. Troque o endereço ou inclua {host} na chave em Chaves secretas.")
+              .replace("{nome}", s.nome)
+              .replace("{lista}", (s.hosts_permitidos ?? []).join(", "))
+              .replace("{host}", hostDoBloco ?? "")}
+          </p>
+        ))}
       </Campo>
 
       <div className="space-y-2">

@@ -43,12 +43,14 @@ export interface SegredoVisivel {
   id: string;
   nome: string;
   ultimos4: string;
+  /** Para onde a chave pode ir (migration 1007). `null` = chave antiga, vai para qualquer endereço. */
+  hosts_permitidos: string[] | null;
   created_at: string;
   updated_at: string;
   last_used_at: string | null;
 }
 
-const COLUNAS_VISIVEIS = "id, nome, ultimos4, created_at, updated_at, last_used_at";
+const COLUNAS_VISIVEIS = "id, nome, ultimos4, hosts_permitidos, created_at, updated_at, last_used_at";
 
 export async function listarSegredos(
   admin: SupabaseClient,
@@ -88,7 +90,7 @@ function cifradaParaBytea(hex: string): string {
 
 export async function criarSegredo(
   admin: SupabaseClient,
-  input: { org: string; nome: string; valor: string; atorId: string | null },
+  input: { org: string; nome: string; valor: string; hosts: string[]; atorId: string | null },
 ): Promise<ResultadoDaGravacao> {
   const cifrada = await encryptWebhookSecret(admin, input.valor);
   if (cifrada === null) return { ok: false, erro: "cifra_indisponivel" };
@@ -99,6 +101,7 @@ export async function criarSegredo(
       nome: input.nome,
       valor_cifrado: cifradaParaBytea(cifrada),
       ultimos4: ultimos4(input.valor),
+      hosts_permitidos: input.hosts,
       created_by: input.atorId,
     })
     .select(COLUNAS_VISIVEIS)
@@ -113,19 +116,25 @@ export async function criarSegredo(
   return { ok: true, segredo: data as SegredoVisivel };
 }
 
-export async function trocarValorDoSegredo(
+/**
+ * Troca o valor, os endereços permitidos, ou os dois. Quem decide se a troca
+ * dos endereços exige o valor junto (`ampliaOsHosts`) é a rota: aqui só grava.
+ */
+export async function atualizarSegredo(
   admin: SupabaseClient,
-  input: { org: string; id: string; valor: string },
+  input: { org: string; id: string; valor?: string; hosts?: string[] },
 ): Promise<ResultadoDaGravacao> {
-  const cifrada = await encryptWebhookSecret(admin, input.valor);
-  if (cifrada === null) return { ok: false, erro: "cifra_indisponivel" };
+  const mudanca: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.valor !== undefined) {
+    const cifrada = await encryptWebhookSecret(admin, input.valor);
+    if (cifrada === null) return { ok: false, erro: "cifra_indisponivel" };
+    mudanca.valor_cifrado = cifradaParaBytea(cifrada);
+    mudanca.ultimos4 = ultimos4(input.valor);
+  }
+  if (input.hosts !== undefined) mudanca.hosts_permitidos = input.hosts;
   const { data, error } = await admin
     .from("automacao_segredos")
-    .update({
-      valor_cifrado: cifradaParaBytea(cifrada),
-      ultimos4: ultimos4(input.valor),
-      updated_at: new Date().toISOString(),
-    })
+    .update(mudanca)
     .eq("organization_id", input.org)
     .eq("id", input.id)
     .select(COLUNAS_VISIVEIS)
@@ -224,25 +233,67 @@ export async function automacoesQueUsam(
   return ativos.filter((p) => usa.has(p.active_version_id as string)).map((p) => p.name);
 }
 
+/** O nome e os endereços permitidos de uma chave (o que o motor e o publish conferem). */
+export interface DestinoDaChave {
+  nome: string;
+  hosts_permitidos: string[] | null;
+}
+
+/** Nome e endereços permitidos das chaves citadas, SÓ desta organização (o publish confere o host). */
+export async function destinosDosSegredos(
+  admin: SupabaseClient,
+  org: string,
+  ids: readonly string[],
+): Promise<Map<string, DestinoDaChave>> {
+  const mapa = new Map<string, DestinoDaChave>();
+  if (ids.length === 0) return mapa;
+  const { data, error } = await admin
+    .from("automacao_segredos")
+    .select("id, nome, hosts_permitidos")
+    .eq("organization_id", org)
+    .in("id", [...ids]);
+  if (error) throw new Error("segredos_leitura_falhou");
+  for (const l of (data ?? []) as Array<{ id: string } & DestinoDaChave>)
+    mapa.set(l.id, { nome: l.nome, hosts_permitidos: l.hosts_permitidos ?? null });
+  return mapa;
+}
+
 /**
  * Decifra as chaves citadas, SÓ desta organização. Devolve o mapa id → valor;
  * id ausente do mapa = a chave não existe (apagada) ou não decifrou. Nunca lança.
+ * `destinos` traz nome e endereços permitidos de cada chave achada (o motor
+ * confere o host ANTES de pôr a chave na requisição).
  */
 export async function lerValoresDosSegredos(
   admin: SupabaseClient,
   org: string,
   ids: readonly string[],
-): Promise<{ valores: Map<string, string>; inexistentes: string[]; indisponiveis: string[] }> {
+): Promise<{
+  valores: Map<string, string>;
+  destinos: Map<string, DestinoDaChave>;
+  inexistentes: string[];
+  indisponiveis: string[];
+}> {
   const valores = new Map<string, string>();
-  if (ids.length === 0) return { valores, inexistentes: [], indisponiveis: [] };
+  const destinos = new Map<string, DestinoDaChave>();
+  if (ids.length === 0) return { valores, destinos, inexistentes: [], indisponiveis: [] };
   const { data, error } = await admin
     .from("automacao_segredos")
-    .select("id, valor_cifrado")
+    .select("id, nome, hosts_permitidos, valor_cifrado")
     .eq("organization_id", org)
     .in("id", [...ids]);
-  if (error) return { valores, inexistentes: [], indisponiveis: [...ids] };
+  if (error) return { valores, destinos, inexistentes: [], indisponiveis: [...ids] };
   const indisponiveis: string[] = [];
-  for (const linha of (data ?? []) as Array<{ id: string; valor_cifrado: string | null }>) {
+  for (const linha of (data ?? []) as Array<{
+    id: string;
+    nome?: string;
+    hosts_permitidos?: string[] | null;
+    valor_cifrado: string | null;
+  }>) {
+    destinos.set(linha.id, {
+      nome: linha.nome ?? "",
+      hosts_permitidos: Array.isArray(linha.hosts_permitidos) ? linha.hosts_permitidos : null,
+    });
     const valor = linha.valor_cifrado
       ? await decryptWebhookSecret(admin, linha.valor_cifrado)
       : null;
@@ -250,7 +301,12 @@ export async function lerValoresDosSegredos(
     else indisponiveis.push(linha.id);
   }
   const achados = new Set(((data ?? []) as Array<{ id: string }>).map((l) => l.id));
-  return { valores, inexistentes: ids.filter((id) => !achados.has(id)), indisponiveis };
+  return {
+    valores,
+    destinos,
+    inexistentes: ids.filter((id) => !achados.has(id)),
+    indisponiveis,
+  };
 }
 
 /** Marca o uso (a tela mostra "usada pela última vez"). Melhor esforço. */

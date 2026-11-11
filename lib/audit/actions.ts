@@ -1726,6 +1726,8 @@ export const AUDIT_ACTIONS = [
   // criada, valor trocado, apagada. metadata só com o nome e os 4 últimos caracteres — nunca o valor.
   "automacao.chave_criada",
   "automacao.chave_trocada",
+  // Migration 1007: só os endereços permitidos da chave mudaram. metadata: nome, hosts_antes, hosts_depois.
+  "automacao.chave_enderecos_trocados",
   "automacao.chave_apagada",
   // Lote 5 ("tela única"): a regra antiga virou automação — a regra desligada e a automação publicada
   // na mesma transação (`fn_automacao_converter_regra`, migration 1005). metadata: rule_id e version_id.

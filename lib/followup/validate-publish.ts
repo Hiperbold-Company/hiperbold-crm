@@ -8,8 +8,10 @@ import {
   metodoTemCorpo,
   porNoCaminhoDoCorpo,
   problemaDaUrl,
+  segredosDoBloco,
   TENTATIVA_DE_SEGREDO,
 } from '@/lib/automacoes/http';
+import { fraseDaChavePresa, hostDaUrlDoBloco, hostPermitido } from '@/lib/automacoes/hosts-permitidos';
 import { nomeDoCampo } from '@/lib/automacoes/vocabulario';
 import type { FlowGraph, FlowEdge, FlowNode, NodeType } from './graph-schema';
 import type { FollowupFlowSurface, TriggerConfig } from './api-schemas';
@@ -117,6 +119,8 @@ export const PUBLISH_ERROR_CODES = [
   'http_segredo_inexistente',
   'http_corpo_no_get',
   'http_corpo_invalido',
+  // Migration 1007: a chave citada só pode ir para os endereços permitidos dela.
+  'http_host_nao_permitido',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -203,6 +207,8 @@ export interface ContextoDoPublish {
     existentes?: ReadonlySet<string>;
     /** Chaves do cofre DESTA organização entre as que os blocos "Requisição HTTP" citam. Ausente = não confere. */
     segredosExistentes?: ReadonlySet<string>;
+    /** Nome e endereços permitidos dessas chaves (migration 1007). Ausente = não confere o host. */
+    destinosDosSegredos?: ReadonlyMap<string, { nome: string; hosts_permitidos: string[] | null }>;
   };
   /**
    * O gatilho que vai armar este fluxo. Só os AVISOS o leem — nenhuma recusa
@@ -560,6 +566,7 @@ function validarRequisicoesHttp(
   graph: FlowGraph,
   errors: PublishValidationError[],
   segredosExistentes?: ReadonlySet<string>,
+  destinosDosSegredos?: ReadonlyMap<string, { nome: string; hosts_permitidos: string[] | null }>,
 ): void {
   for (const n of [...graph.nodes].sort(byId)) {
     if (n.type !== 'http_request') continue;
@@ -567,6 +574,21 @@ function validarRequisicoesHttp(
     const erro = (code: PublishErrorCode, message: string) => errors.push({ node_id: n.id, code, message: `"${n.label}": ${message}` });
     const url = problemaDaUrl(c.url);
     if (url) erro(url === 'segredo_na_url' ? 'http_segredo_na_url' : 'http_url_invalida', FRASE_DA_URL[url]);
+    // O domínio da URL é fixo (variável ali é recusada acima), então o host é conhecido no publish:
+    // a chave citada que não pode ir para ele é recusada aqui, e não só no motor.
+    const host = url ? null : hostDaUrlDoBloco(c.url);
+    if (host && destinosDosSegredos) {
+      const avisadas = new Set<string>();
+      for (const id of segredosDoBloco(c)) {
+        const d = destinosDosSegredos.get(id);
+        if (!d || avisadas.has(id) || hostPermitido(host, d.hosts_permitidos)) continue;
+        avisadas.add(id);
+        erro(
+          'http_host_nao_permitido',
+          `${fraseDaChavePresa(d.nome, d.hosts_permitidos ?? [])} O endereço do bloco é ${host}: troque o endereço ou inclua ${host} na chave em Automações › Chaves secretas.`,
+        );
+      }
+    }
     for (const h of c.headers) {
       if (cabecalhoProibido(h.name)) {
         erro('http_cabecalho_proibido', `o cabeçalho ${h.name} não pode ser definido pela automação.`);
@@ -727,7 +749,7 @@ function validarSuperficie(
   if (surface === 'automacao') {
     validarBlocosDoInstagram(graph, errors);
     validarConversaNoDirect(graph, errors);
-    validarRequisicoesHttp(graph, errors, automacao?.segredosExistentes);
+    validarRequisicoesHttp(graph, errors, automacao?.segredosExistentes, automacao?.destinosDosSegredos);
   }
   // Os gatilhos de uma AUTOMAÇÃO moram no nó Início (vários por fluxo); nos
   // follow-ups, em `pointer.trigger_config`, e o Início fica sem configuração.
