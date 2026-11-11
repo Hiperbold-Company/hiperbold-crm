@@ -65,6 +65,13 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/500$/,
   /^\/503$/,
   /^\/api\/v1\/health$/,
+  // Relato de erro do navegador (11/11/2026). Público porque o erro a relatar
+  // pode ser a própria sessão que não validou (o 429 do GoTrue derrubou telas
+  // de quem estava logado, e com `SENTRY_DSN=off` nada ficou registrado). A
+  // rota só escreve no log do processo; a sessão, quando há, só anota usuário e
+  // organização. Quem segura abuso mora DENTRO dela: Origin do próprio host,
+  // corpo de 4 KB, limite por IP e teto global. Ancorado com `$`.
+  /^\/api\/v1\/client-errors$/,
   // Saúde do worker e do scheduler para o monitor externo (Uptime Kuma). Só estado e idade do último
   // batimento, sem segredo nem dado de organização. Ancorado nos DOIS nomes: nenhum sub-path futuro
   // sob /health/ nasce público de carona.

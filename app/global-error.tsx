@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs";
 import { useEffect, useState } from "react";
 
 import { copyToClipboard } from "@/lib/clipboard";
+import { relatarErroDoNavegador } from "@/lib/erros/relatar-erro-do-navegador";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { IDIOMA_PADRAO, idiomaDelNavegador, type Idioma } from "@/lib/i18n/idiomas";
 
@@ -27,6 +28,8 @@ export default function GlobalError({
   useEffect(() => {
     const id = Sentry.captureException(error);
     setEventId(id);
+    // Com o Sentry desligado (`SENTRY_DSN=off`), este é o único rastro do erro.
+    relatarErroDoNavegador(error, "global");
   }, [error]);
 
   const displayId = eventId ?? error.digest ?? "—";

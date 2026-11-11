@@ -13,6 +13,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  NOME_DO_COOKIE_DE_SESSAO,
   comCacheCurto,
   esquecerTudo,
   etiquetaDeOrg,
@@ -246,7 +247,7 @@ describe("sessaoDosCookies — identidade para o cache, nunca autorização", ()
   function cookie(opcoes: { exp?: number; bruto?: string } = {}) {
     const sessao = { access_token: jwt({ sub: "u1", exp: opcoes.exp ?? exp }), expires_at: exp };
     return {
-      name: "sb-exemplo-auth",
+      name: NOME_DO_COOKIE_DE_SESSAO,
       value: opcoes.bruto ?? `base64-${Buffer.from(JSON.stringify(sessao)).toString("base64url")}`,
     };
   }
@@ -267,18 +268,18 @@ describe("sessaoDosCookies — identidade para o cache, nunca autorização", ()
   it("sem cookie de sessão → null (caminho direto, como antes do #3696)", () => {
     expect(sessaoDosCookies([])).toBeNull();
     expect(sessaoDosCookies([{ name: "active_org", value: "o1" }])).toBeNull();
-    expect(sessaoDosCookies([{ name: "sb-exemplo-auth-code-verifier", value: "x" }])).toBeNull();
+    expect(sessaoDosCookies([{ name: `${NOME_DO_COOKIE_DE_SESSAO}-code-verifier`, value: "x" }])).toBeNull();
   });
 
   it("valor ilegível → null, nunca exceção", () => {
-    expect(sessaoDosCookies([{ name: "sb-exemplo-auth", value: "base64-%%%lixo" }])).toBeNull();
-    expect(sessaoDosCookies([{ name: "sb-exemplo-auth", value: "{nao-e-json" }])).toBeNull();
+    expect(sessaoDosCookies([{ name: NOME_DO_COOKIE_DE_SESSAO, value: "base64-%%%lixo" }])).toBeNull();
+    expect(sessaoDosCookies([{ name: NOME_DO_COOKIE_DE_SESSAO, value: "{nao-e-json" }])).toBeNull();
   });
 
   it("sessão legível sem exp no JWT devolve chave e expiração nula (quem decide é o chamador)", () => {
     const sessao = sessaoDosCookies([
       {
-        name: "sb-exemplo-auth",
+        name: NOME_DO_COOKIE_DE_SESSAO,
         value: `base64-${Buffer.from(JSON.stringify({ access_token: jwt({ sub: "u1" }) })).toString("base64url")}`,
       },
     ]);
@@ -291,8 +292,8 @@ describe("sessaoDosCookies — identidade para o cache, nunca autorização", ()
     const texto = inteiro.value;
     const meio = Math.floor(texto.length / 2);
     const fatiado = sessaoDosCookies([
-      { name: "sb-exemplo-auth.1", value: texto.slice(meio) },
-      { name: "sb-exemplo-auth", value: texto.slice(0, meio) },
+      { name: `${NOME_DO_COOKIE_DE_SESSAO}.1`, value: texto.slice(meio) },
+      { name: NOME_DO_COOKIE_DE_SESSAO, value: texto.slice(0, meio) },
     ]);
     expect(fatiado).not.toBeNull();
     expect(fatiado!.expiraEm).toBe(exp * 1000);

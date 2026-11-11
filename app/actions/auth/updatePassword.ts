@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/auth/schemas";
 import { audit } from "@/lib/audit";
 import { mfaBloqueadoPorFalhas, registrarFalhaDeMfa } from "@/lib/auth/rate-limit";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 
 export type UpdatePasswordResult = {
   ok: false;
@@ -94,6 +95,10 @@ export async function updatePassword(
     });
     return { ok: false, error: "update_failed" };
   }
+
+  // Senha trocada: o cache curto da sessão (proxy e servidor) não pode seguir
+  // servindo "autenticado" por até 30 s a uma sessão que o signOut abaixo derruba.
+  invalidarUsuario(user.id);
 
   await audit({
     action: "auth.password_reset_completed",
