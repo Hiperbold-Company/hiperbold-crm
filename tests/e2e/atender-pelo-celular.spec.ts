@@ -598,16 +598,24 @@ test.describe("atender pelo celular", () => {
         { message: "a setinha das opções não parou dentro da tela" },
       )
       .toBe(true);
-    const acerto = await opcoes.evaluate((b) => {
-      const r = b.getBoundingClientRect();
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      return [[20, 0], [-20, 0], [0, 20], [0, -20]].map(([dx, dy]) => {
-        const alvo = document.elementFromPoint(cx + dx!, cy + dy!);
-        return { dx, dy, acerta: !!alvo && b.contains(alvo) };
+    // Centralizar e medir na MESMA chamada, e repetir: entre o `poll` acima e uma
+    // medida separada a conversa ainda podia rolar, e os quatro pontos caíam fora
+    // da setinha (falhou assim na main em 10/11/2026, com a área de 48px intacta).
+    // Uma área menor que 44px nunca passa, por mais vezes que se repita.
+    const medirAcerto = () =>
+      opcoes.evaluate((b) => {
+        b.scrollIntoView({ block: "center" });
+        const r = b.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        return [[20, 0], [-20, 0], [0, 20], [0, -20]]
+          .map(([dx, dy]) => {
+            const alvo = document.elementFromPoint(cx + dx!, cy + dy!);
+            return { dx, dy, acerta: !!alvo && b.contains(alvo) };
+          })
+          .filter((p) => !p.acerta);
       });
-    });
-    expect(acerto.filter((p) => !p.acerta), "a setinha das opções tem menos de 44px de área de toque").toEqual([]);
+    await expect.poll(medirAcerto, { message: "a setinha das opções tem menos de 44px de área de toque" }).toEqual([]);
 
     // O ✕ da citação: responder a uma mensagem pelo menu da bolha.
     await opcoes.tap();
