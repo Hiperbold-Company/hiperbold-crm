@@ -368,11 +368,11 @@ test.describe("Automações — lote 4: Requisição HTTP com chave secreta", ()
     await cartao.getByRole("button", { name: "Endereços", exact: true }).click();
     const campo = page.locator(`[data-testid="chave-${nomeDaChave}-editar-hosts"] input`).first();
     await campo.fill(`${RESERVA}, ${OUTRO}`);
-    await expect(cartao.getByLabel("Cole a chave de novo para incluir um endereço novo")).toBeVisible();
+    await expect(cartao.getByLabel("Cole a chave atual para incluir um endereço novo")).toBeVisible();
     await expect(cartao.getByRole("button", { name: "Salvar endereços" })).toBeDisabled();
     await foto(page, "04-incluir-endereco-pede-a-chave", EVIDENCIA_1007);
     await campo.fill(RESERVA);
-    await expect(cartao.getByLabel("Cole a chave de novo para incluir um endereço novo")).toHaveCount(0);
+    await expect(cartao.getByLabel("Cole a chave atual para incluir um endereço novo")).toHaveCount(0);
     await cartao.getByRole("button", { name: "Salvar endereços" }).click();
     await expect(page.getByTestId(`chave-${nomeDaChave}-hosts`)).toHaveText(
       `Só vai para: ${RESERVA}`,
@@ -444,7 +444,7 @@ test.describe("Automações — lote 4: Requisição HTTP com chave secreta", ()
     const cartaoAntigo = page.getByTestId(`chave-${antiga}`);
     await cartaoAntigo.getByRole("button", { name: "Endereços", exact: true }).click();
     await page.locator(`[data-testid="chave-${antiga}-editar-hosts"] input`).first().fill(PERMITIDO);
-    await expect(cartaoAntigo.getByLabel("Cole a chave de novo para incluir um endereço novo")).toHaveCount(0);
+    await expect(cartaoAntigo.getByLabel("Cole a chave atual para incluir um endereço novo")).toHaveCount(0);
     await cartaoAntigo.getByRole("button", { name: "Salvar endereços" }).click();
     await expect(page.getByTestId(`chave-${antiga}-aviso-hosts`)).toHaveCount(0, { timeout: PRAZO });
     await expect(page.getByTestId(`chave-${antiga}-hosts`)).toHaveText(`Só vai para: ${PERMITIDO}`);
