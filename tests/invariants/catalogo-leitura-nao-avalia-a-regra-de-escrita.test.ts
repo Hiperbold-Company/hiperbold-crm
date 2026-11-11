@@ -88,7 +88,10 @@ describe("catalog_products — a leitura não avalia a regra de escrita", () => 
     const n = noBanco(`
       select count(*) from pg_policies
        where schemaname = 'public' and tablename = 'catalog_products'
-         and cmd in ('ALL', 'SELECT') and policyname <> 'catalog_products_select';
+         and cmd in ('ALL', 'SELECT') and policyname <> 'catalog_products_select'
+         -- A restritiva da 1006 vale para SELECT, mas é a prova da sessão em initplan (uma vez por
+         -- consulta), não a regra de escrita: o plano acima segue sem fn_role_at_least.
+         and policyname <> 'sessao_com_prova_de_mfa';
     `);
     expect(n).toBe("0");
   });
