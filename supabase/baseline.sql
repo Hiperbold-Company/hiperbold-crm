@@ -102520,8 +102520,8 @@ create trigger trg_automacao_nao_liga_com_regra_antiga
 notify pgrst, 'reload schema';
 
 
--- ---- LGPD: automação não nasce para contato em anonimização, releitura sob a trava (migration 1006, fork Hiperbold) ----
--- ⚠️ ANTES DA VARREDURA anon: redefine função. Mesmo corpo da migration 1006.
+-- ---- LGPD: automação não nasce para contato em anonimização, releitura sob a trava (migration 1010, fork Hiperbold) ----
+-- ⚠️ ANTES DA VARREDURA anon: redefine função. Mesmo corpo da migration 1010.
 -- A limpeza das variáveis e o encerramento das automações vivas na virada de
 -- is_anonymized continuam no gatilho da 0986 (trg_contato_anonimizado_limpa_automacoes);
 -- aqui só se fecha a corrida em que a execução nascia depois da limpeza.
@@ -102565,7 +102565,7 @@ begin
 
   perform public.fn_service_lock(p_org, p_contact);
 
-  -- 1006: a anonimização (os DOIS caminhos) toma esta mesma trava antes de
+  -- 1010: a anonimização (os DOIS caminhos) toma esta mesma trava antes de
   -- virar `is_anonymized`. A leitura acima é de ANTES da trava: se a
   -- anonimização estava em voo, ela via o contato ainda identificado, esperava
   -- a trava e nascia uma execução viva, com o `gatilho.*` nas variáveis, DEPOIS

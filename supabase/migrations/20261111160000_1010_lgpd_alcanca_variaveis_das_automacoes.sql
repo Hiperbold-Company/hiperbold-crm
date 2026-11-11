@@ -1,5 +1,5 @@
 -- manifest: **Automação não nasce para contato que está sendo anonimizado (LGPD, fork Hiperbold).** A anonimização já alcançava as variáveis das automações desde a 0986: o gatilho `trg_contato_anonimizado_limpa_automacoes` (virada false→true de `contacts.is_anonymized`, a porta dos DOIS caminhos) zera `followup_enrollments.vars` de todas as execuções do contato, em todas as raias, e cancela as automações vivas; os eventos (`followup_enrollment_events.payload`) não guardam resposta nem saída HTTP por construção (`varsParaOEvento`). O furo que sobrava era de CORRIDA: `fn_automacao_iniciar` lia `is_anonymized` ANTES de tomar `fn_service_lock(org, contato)`, a mesma trava que `fn_lgpd_cascade_redact_contact` e `fn_lgpd_anonymize_contact` seguram durante a virada. Com a anonimização em voo, a leitura via o contato ainda identificado, esperava a trava e criava uma execução viva com `gatilho.*` nas variáveis DEPOIS de o gatilho já ter limpado — contato anonimizado com automação rodando e dado nas variáveis. `create or replace` de `fn_automacao_iniciar` (assinatura igual) relendo `is_anonymized` sob a trava (`contato_invalido`). Sem coluna, sem tabela, sem dado reescrito. Grants reaplicados (revogada de public/anon/authenticated, só service_role). Gate: `tests/invariants/lgpd-alcanca-variaveis-das-automacoes.test.ts` (limpeza na virada com vizinho e outra organização intactos, e a corrida com duas sessões).
--- 1006 — Reaplicável: create or replace function com a mesma assinatura e
+-- 1010 — Reaplicável: create or replace function com a mesma assinatura e
 -- revoke/grant idempotentes. Sem BEGIN/COMMIT (o runner envolve).
 
 create or replace function public.fn_automacao_iniciar(
@@ -42,7 +42,7 @@ begin
 
   perform public.fn_service_lock(p_org, p_contact);
 
-  -- 1006: a anonimização (os DOIS caminhos) toma esta mesma trava antes de
+  -- 1010: a anonimização (os DOIS caminhos) toma esta mesma trava antes de
   -- virar `is_anonymized`. A leitura acima é de ANTES da trava: se a
   -- anonimização estava em voo, ela via o contato ainda identificado, esperava
   -- a trava e nascia uma execução viva, com o `gatilho.*` nas variáveis, DEPOIS
