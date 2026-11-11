@@ -313,7 +313,7 @@ export function ChavesSecretas() {
                           {amplia && (
                             <div className="space-y-1.5">
                               <Label htmlFor={`hosts-valor-${s.id}`}>
-                                {t("Cole a chave de novo para incluir um endereço novo")}
+                                {t("Cole a chave atual para incluir um endereço novo")}
                               </Label>
                               <Input
                                 id={`hosts-valor-${s.id}`}
@@ -324,7 +324,7 @@ export function ChavesSecretas() {
                               />
                               <p className="text-xs text-text-muted">
                                 {t(
-                                  "Assim ninguém manda a chave para outro servidor sem conhecê-la.",
+                                  "É a chave que já está salva, não uma nova: o valor não é trocado. Assim ninguém manda a chave para outro servidor sem conhecê-la.",
                                 )}
                               </p>
                             </div>

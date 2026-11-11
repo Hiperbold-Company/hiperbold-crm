@@ -114,6 +114,12 @@ export async function POST(req: NextRequest): Promise<Response> {
           mensagem: t("A cifra do servidor não está disponível; a chave não foi gravada."),
         },
         nao_encontrado: { status: 404, code: "not_found", mensagem: t("Chave não encontrada.") },
+        // Só o PATCH condiciona a gravação; criar nunca chega aqui.
+        conflito: {
+          status: 409,
+          code: "conflito_de_edicao",
+          mensagem: t("A chave mudou enquanto você editava. Recarregue e tente de novo."),
+        },
         falha: { status: 500, code: "internal_error", mensagem: t("Não consegui gravar a chave.") },
       } as const;
       return { resposta: { ok: false, ...mapa[r.erro] }, status: mapa[r.erro].status };

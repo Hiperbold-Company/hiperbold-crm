@@ -28479,6 +28479,11 @@ export const DICIONARIO: Traducoes = {
   "A chave “{nome}” só pode ser enviada para {lista}. Troque o endereço ou inclua {host} na chave em Chaves secretas.": { es: "La clave “{nome}” solo puede enviarse a {lista}. Cambia la dirección o agrega {host} a la clave en Claves secretas." },
   "Informe pelo menos um endereço permitido (até 10), só o nome do servidor, como api.exemplo.com.br: sem https://, sem caminho e sem porta.": { es: "Indica al menos una dirección permitida (hasta 10), solo el nombre del servidor, como api.ejemplo.com: sin https://, sin ruta y sin puerto." },
   "Para incluir um endereço novo, cole a chave de novo. Assim ninguém manda a chave para outro servidor sem conhecê-la.": { es: "Para agregar una dirección nueva, pega la clave de nuevo. Así nadie envía la clave a otro servidor sin conocerla." },
+  "Cole a chave atual para incluir um endereço novo": { es: "Pega la clave actual para agregar una dirección nueva" },
+  "É a chave que já está salva, não uma nova: o valor não é trocado. Assim ninguém manda a chave para outro servidor sem conhecê-la.": { es: "Es la clave que ya está guardada, no una nueva: el valor no se cambia. Así nadie envía la clave a otro servidor sin conocerla." },
+  "Para incluir um endereço novo, cole a chave atual. Assim ninguém manda a chave para outro servidor sem conhecê-la.": { es: "Para agregar una dirección nueva, pega la clave actual. Así nadie envía la clave a otro servidor sin conocerla." },
+  "A chave colada não é a que está salva. Para incluir um endereço, cole a chave atual; para trocar a chave, troque primeiro e depois inclua o endereço.": { es: "La clave pegada no es la que está guardada. Para agregar una dirección, pega la clave actual; para cambiar la clave, cámbiala primero y luego agrega la dirección." },
+  "A chave mudou enquanto você editava. Recarregue e tente de novo.": { es: "La clave cambió mientras la editabas. Recarga e inténtalo de nuevo." },
   // ---- Automações: tela única (lote 5) ----
   "Não foi possível identificar quem responde por esta chave.": { es: "No fue posible identificar quién responde por esta clave." },
   "Esta regra foi convertida em uma automação. Desligue a automação antes de religar a regra.": { es: "Esta regla se convirtió en una automatización. Desactiva la automatización antes de volver a activar la regla." },

@@ -14309,5 +14309,10 @@
   "Salvar endereços": "Save addresses",
   "A chave “{nome}” só pode ser enviada para {lista}. Troque o endereço ou inclua {host} na chave em Chaves secretas.": "The key “{nome}” can only be sent to {lista}. Change the address or add {host} to the key in Secret keys.",
   "Informe pelo menos um endereço permitido (até 10), só o nome do servidor, como api.exemplo.com.br: sem https://, sem caminho e sem porta.": "Enter at least one allowed address (up to 10), only the server name, like api.example.com: no https://, no path and no port.",
-  "Para incluir um endereço novo, cole a chave de novo. Assim ninguém manda a chave para outro servidor sem conhecê-la.": "To add a new address, paste the key again. This way no one can send the key to another server without knowing it."
+  "Para incluir um endereço novo, cole a chave de novo. Assim ninguém manda a chave para outro servidor sem conhecê-la.": "To add a new address, paste the key again. This way no one can send the key to another server without knowing it.",
+  "Cole a chave atual para incluir um endereço novo": "Paste the current key to add a new address",
+  "É a chave que já está salva, não uma nova: o valor não é trocado. Assim ninguém manda a chave para outro servidor sem conhecê-la.": "It is the key that is already saved, not a new one: the value is not changed. This way no one can send the key to another server without knowing it.",
+  "Para incluir um endereço novo, cole a chave atual. Assim ninguém manda a chave para outro servidor sem conhecê-la.": "To add a new address, paste the current key. This way no one can send the key to another server without knowing it.",
+  "A chave colada não é a que está salva. Para incluir um endereço, cole a chave atual; para trocar a chave, troque primeiro e depois inclua o endereço.": "The key you pasted is not the one that is saved. To add an address, paste the current key; to change the key, change it first and then add the address.",
+  "A chave mudou enquanto você editava. Recarregue e tente de novo.": "The key changed while you were editing. Reload and try again."
 }

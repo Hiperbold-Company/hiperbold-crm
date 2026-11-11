@@ -4,10 +4,15 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *
  *   PATCH  — troca o valor `{ valor }`, os endereços permitidos `{ hosts_permitidos }`, ou os
  *            dois (o nome não muda: é por ele que a tela a lista). INCLUIR um endereço que a
- *            lista não tinha exige o valor junto (422 `segredo_valor_exigido`): quem edita
- *            automação também edita a chave, e sem isso acrescentaria o próprio servidor e
- *            mandaria a chave para lá sem conhecê-la. Tirar endereço, ou preencher a lista de
- *            uma chave antiga (que ia para qualquer endereço), só restringe e não pede o valor.
+ *            lista não tinha exige o valor ATUAL junto: sem ele, 422 `segredo_valor_exigido`;
+ *            com um valor diferente do salvo, 422 `segredo_valor_divergente` (comparação em
+ *            tempo constante). Quem edita automação também edita a chave, e exigir "um valor"
+ *            deixaria trocar o valor por lixo e plantar o endereço, para depois o dono
+ *            "trocar o valor" e liberar o token real para ele. Quando amplia, o valor só
+ *            PROVA: não é regravado. Tirar endereço, ou preencher a lista de uma chave antiga
+ *            (que ia para qualquer endereço), só restringe e não pede o valor.
+ *            A gravação dos endereços é condicionada à lista que foi lida: se outro PATCH a
+ *            mudou no meio, 409 `conflito_de_edicao` e nada é gravado.
  *   DELETE — apaga. Chave usada por automação PUBLICADA é recusada (409) com o
  *            nome das automações: apagar faria o bloco "Requisição HTTP" sair por
  *            "Falhou" em toda execução, em silêncio.
@@ -25,6 +30,7 @@ import {
   atualizarSegredo,
   automacoesQueUsam,
   lerSegredoVisivel,
+  valorDoSegredoConfere,
   valorDoSegredoSchema,
 } from "@/lib/automacoes/segredos";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -77,6 +83,8 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   }
   const admin = createAdminClient();
   const novosHosts = corpo.data.hosts_permitidos;
+  // O valor que veio no corpo só é GRAVADO se não for a prova de uma ampliação.
+  let valorAGravar = corpo.data.valor;
   let hostsAntes: string[] | null = null;
   if (novosHosts !== undefined) {
     let atual;
@@ -87,26 +95,63 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     }
     if (!atual) return fail("not_found", t("Chave não encontrada."), 404, { requestId });
     hostsAntes = atual.hosts_permitidos;
-    if (corpo.data.valor === undefined && ampliaOsHosts(hostsAntes, novosHosts)) {
-      return fail(
-        "segredo_valor_exigido",
-        t(
-          "Para incluir um endereço novo, cole a chave de novo. Assim ninguém manda a chave para outro servidor sem conhecê-la.",
-        ),
-        422,
-        { requestId },
-      );
+    if (hostsAntes !== null && ampliaOsHosts(hostsAntes, novosHosts)) {
+      if (corpo.data.valor === undefined) {
+        return fail(
+          "segredo_valor_exigido",
+          t(
+            "Para incluir um endereço novo, cole a chave atual. Assim ninguém manda a chave para outro servidor sem conhecê-la.",
+          ),
+          422,
+          { requestId },
+        );
+      }
+      let confere;
+      try {
+        confere = await valorDoSegredoConfere(admin, org, id, corpo.data.valor);
+      } catch {
+        return fail("internal_error", t("Não consegui gravar a chave."), 500, { requestId });
+      }
+      if (confere === "nao_encontrado")
+        return fail("not_found", t("Chave não encontrada."), 404, { requestId });
+      if (confere === "cifra_indisponivel") {
+        return fail(
+          "internal_error",
+          t("A cifra do servidor não está disponível; a chave não foi gravada."),
+          500,
+          { requestId },
+        );
+      }
+      if (confere === "diverge") {
+        return fail(
+          "segredo_valor_divergente",
+          t(
+            "A chave colada não é a que está salva. Para incluir um endereço, cole a chave atual; para trocar a chave, troque primeiro e depois inclua o endereço.",
+          ),
+          422,
+          { requestId },
+        );
+      }
+      valorAGravar = undefined; // era só a prova: amplia a lista e deixa o valor como está
     }
   }
   const r = await atualizarSegredo(admin, {
     org,
     id,
-    ...(corpo.data.valor !== undefined ? { valor: corpo.data.valor } : {}),
-    ...(novosHosts !== undefined ? { hosts: novosHosts } : {}),
+    ...(valorAGravar !== undefined ? { valor: valorAGravar } : {}),
+    ...(novosHosts !== undefined ? { hosts: novosHosts, hostsEsperados: hostsAntes } : {}),
   });
   if (!r.ok) {
     if (r.erro === "nao_encontrado")
       return fail("not_found", t("Chave não encontrada."), 404, { requestId });
+    if (r.erro === "conflito") {
+      return fail(
+        "conflito_de_edicao",
+        t("A chave mudou enquanto você editava. Recarregue e tente de novo."),
+        409,
+        { requestId },
+      );
+    }
     return fail(
       "internal_error",
       r.erro === "cifra_indisponivel"
@@ -119,7 +164,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   await audit({
     // Valor trocado (com ou sem endereços) é "chave_trocada"; só endereços, "chave_enderecos_trocados".
     action:
-      corpo.data.valor !== undefined
+      valorAGravar !== undefined
         ? "automacao.chave_trocada"
         : "automacao.chave_enderecos_trocados",
     actorUserId: p.atorId,

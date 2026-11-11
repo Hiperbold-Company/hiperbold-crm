@@ -13,6 +13,8 @@
  *
  * (Não confundir com `chaves.ts`, que são constantes do motor.)
  */
+import { createHash, timingSafeEqual } from "node:crypto";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -82,7 +84,10 @@ export async function lerSegredoVisivel(
 
 export type ResultadoDaGravacao =
   | { ok: true; segredo: SegredoVisivel }
-  | { ok: false; erro: "cifra_indisponivel" | "nome_em_uso" | "nao_encontrado" | "falha" };
+  | {
+      ok: false;
+      erro: "cifra_indisponivel" | "nome_em_uso" | "nao_encontrado" | "conflito" | "falha";
+    };
 
 function cifradaParaBytea(hex: string): string {
   return hex.startsWith("\\x") ? hex : `\\x${hex}`;
@@ -116,13 +121,61 @@ export async function criarSegredo(
   return { ok: true, segredo: data as SegredoVisivel };
 }
 
+/** Igualdade em tempo constante. O SHA-256 dos dois lados iguala o tamanho: o comprimento não vaza. */
+function iguaisEmTempoConstante(a: string, b: string): boolean {
+  return timingSafeEqual(
+    createHash("sha256").update(a, "utf8").digest(),
+    createHash("sha256").update(b, "utf8").digest(),
+  );
+}
+
+/**
+ * O valor colado é O valor que está salvo? Decifra no servidor e compara em tempo
+ * constante; o valor nunca sai daqui. `cifra_indisponivel` = não deu para decifrar
+ * (chave da cifra ausente ou linha sem valor): quem chama responde 500, nunca "confere".
+ */
+export async function valorDoSegredoConfere(
+  admin: SupabaseClient,
+  org: string,
+  id: string,
+  candidato: string,
+): Promise<"confere" | "diverge" | "cifra_indisponivel" | "nao_encontrado"> {
+  const { data, error } = await admin
+    .from("automacao_segredos")
+    .select("valor_cifrado")
+    .eq("organization_id", org)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error("segredos_leitura_falhou");
+  if (!data) return "nao_encontrado";
+  const cifrado = (data as { valor_cifrado: string | null }).valor_cifrado;
+  const atual = cifrado ? await decryptWebhookSecret(admin, cifrado) : null;
+  if (atual === null) return "cifra_indisponivel";
+  return iguaisEmTempoConstante(atual, candidato) ? "confere" : "diverge";
+}
+
+/** Lista de texto no formato de array do Postgres (`{a,b}`); os endereços já vêm normalizados (sem vírgula, aspas ou chave). */
+function literalDeArray(lista: readonly string[]): string {
+  return `{${lista.join(",")}}`;
+}
+
 /**
  * Troca o valor, os endereços permitidos, ou os dois. Quem decide se a troca
  * dos endereços exige o valor junto (`ampliaOsHosts`) é a rota: aqui só grava.
+ *
+ * `hostsEsperados` (só com `hosts`): a lista que a rota LEU antes de decidir. A
+ * gravação é UMA instrução com essa condição na linha, então outro PATCH que
+ * mudou a lista no meio do caminho não é sobrescrito: devolve `conflito`.
  */
 export async function atualizarSegredo(
   admin: SupabaseClient,
-  input: { org: string; id: string; valor?: string; hosts?: string[] },
+  input: {
+    org: string;
+    id: string;
+    valor?: string;
+    hosts?: string[];
+    hostsEsperados?: string[] | null;
+  },
 ): Promise<ResultadoDaGravacao> {
   const mudanca: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (input.valor !== undefined) {
@@ -132,20 +185,32 @@ export async function atualizarSegredo(
     mudanca.ultimos4 = ultimos4(input.valor);
   }
   if (input.hosts !== undefined) mudanca.hosts_permitidos = input.hosts;
-  const { data, error } = await admin
+  const condicionada = input.hosts !== undefined && input.hostsEsperados !== undefined;
+  let consulta = admin
     .from("automacao_segredos")
     .update(mudanca)
     .eq("organization_id", input.org)
-    .eq("id", input.id)
-    .select(COLUNAS_VISIVEIS)
-    .maybeSingle();
+    .eq("id", input.id);
+  if (condicionada) {
+    consulta =
+      input.hostsEsperados === null
+        ? consulta.is("hosts_permitidos", null)
+        : consulta.eq("hosts_permitidos", literalDeArray(input.hostsEsperados ?? []));
+  }
+  const { data, error } = await consulta.select(COLUNAS_VISIVEIS).maybeSingle();
   if (error) {
     logger.warn("[automacoes.segredos] troca falhou", {
       codigo: (error as { code?: string }).code,
     });
     return { ok: false, erro: "falha" };
   }
-  if (!data) return { ok: false, erro: "nao_encontrado" };
+  if (!data) {
+    // Zero linhas: a chave sumiu, ou a lista mudou desde a leitura. Só a segunda é conflito.
+    if (condicionada && (await lerSegredoVisivel(admin, input.org, input.id))) {
+      return { ok: false, erro: "conflito" };
+    }
+    return { ok: false, erro: "nao_encontrado" };
+  }
   return { ok: true, segredo: data as SegredoVisivel };
 }
 
