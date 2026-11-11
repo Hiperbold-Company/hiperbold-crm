@@ -378,9 +378,10 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // 18 drenos: 16 pelo rpc (o 15º é o aviso de agendamento, 0753; o 16º é o
-    // traço do turno, 0778) + a mídia + a décima poda (o DELETE do admin).
-    expect(r.falhas).toHaveLength(18);
+    // 19 drenos: 17 pelo rpc (o 15º é o aviso de agendamento, 0753; o 16º é o
+    // traço do turno, 0778; o 17º são os alarmes de gatilho, 1009) + a mídia +
+    // a décima poda (o DELETE do admin).
+    expect(r.falhas).toHaveLength(19);
     expect(r.falhas.some((f) => f.includes("conversation_drafts"))).toBe(true);
     expect(r.falhas.some((f) => f.includes("fn_enfileirar_midia_vencida"))).toBe(true);
     expect(r.jobs_apagados).toBe(0);
@@ -434,8 +435,8 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // Só os 16 drenos do rpc falham nesta rodada (mídia e rascunhos vão bem).
-    expect(r.falhas).toHaveLength(16);
+    // Só os 17 drenos do rpc falham nesta rodada (mídia e rascunhos vão bem).
+    expect(r.falhas).toHaveLength(17);
     for (const f of r.falhas) expect(f.length).toBeLessThanOrEqual(300);
   });
 
@@ -668,6 +669,11 @@ describe("houveEfeito — as duas direções", () => {
     lotes_tracos: 0,
     tracos_tem_resto: false,
     retencao_traco_dias: 400,
+    // Os alarmes de gatilho de plano (migration 1009, D-074).
+    alarmes_de_gatilho_apagados: 0,
+    lotes_alarmes_de_gatilho: 0,
+    alarmes_de_gatilho_tem_resto: false,
+    retencao_alarmes_de_gatilho_dias: 90,
     avisos: [] as string[],
     falhas: [] as string[],
   };
