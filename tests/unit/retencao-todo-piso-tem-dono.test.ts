@@ -74,6 +74,8 @@ const DONO_NO_SQL: Record<string, string> = {
   RITMO_DE_ENVIO: "fn_expurgar_ritmo_de_envio_vencido",
   COPIAS_ENVIADAS: "fn_expurgar_copias_enviadas_vencidas",
   CHECKPOINTS: "fn_expurgar_checkpoints_superados",
+  // 1009 (D-074): os alarmes de gatilho de plano.
+  ALARMES_DE_GATILHO: "fn_podar_alarmes_de_gatilho",
 };
 
 /**

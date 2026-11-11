@@ -70,6 +70,8 @@ const PODAS = [
   "fn_expurgar_avisos_de_caso_vencidos",
   // 0778 (#3201): o traço do turno, com a janela da telemetria da IA.
   "fn_expurgar_traco_do_turno_vencido",
+  // 1009 (D-074): os alarmes de gatilho de plano.
+  "fn_podar_alarmes_de_gatilho",
 ];
 
 const ALVO = "fn_expurgar_nonces_de_oauth";
