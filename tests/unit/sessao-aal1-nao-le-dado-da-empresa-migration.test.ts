@@ -4,8 +4,9 @@ import { describe, expect, it } from "vitest";
 
 /**
  * Migration 1006 (D-092, 3a parte, fork Hiperbold): a sessão sem o segundo fator também não lê o dado da
- * empresa. Este arquivo cobre a FORMA: migration e baseline dizem a mesma coisa, o bloco é o ÚLTIMO do
- * baseline (a varredura do catálogo só alcança tabela que já existe), está no MANIFEST, não cria função e
+ * empresa. Este arquivo cobre a FORMA: migration e baseline dizem a mesma coisa, o bloco vem DEPOIS de toda
+ * tabela do baseline e das travas de suporte (a varredura do catálogo só alcança tabela que já existe; o que
+ * vem depois dele, como a varredura de pg_temp da 1008, não cria tabela), está no MANIFEST, não cria função e
  * é reaplicável com o app no ar. O COMPORTAMENTO (aal1 com fator lê vazio, aal2 lê tudo, login segue) é
  * provado por `tests/invariants/sessao-aal1-nao-le-dado-da-empresa.test.ts` (`pnpm test:db`).
  */
@@ -26,14 +27,18 @@ function codigo(sql: string): string {
 const MARCADOR = /^-- ---- .*\(migration 1006, fork Hiperbold[^\n]*$/m;
 const marcador = BASELINE.match(MARCADOR)?.[0] ?? "";
 const inicio = BASELINE.lastIndexOf(marcador);
-const bloco = BASELINE.slice(inicio);
+// O bloco vai do marcador da 1006 até o próximo marcador de apêndice (ou o fim do arquivo). Antes era
+// "até o fim", o que obrigava a 1006 a ser o último bloco; o que importa para ela é não ter tabela depois.
+const proximo = BASELINE.indexOf("\n-- ---- ", inicio + 1);
+const bloco = proximo === -1 ? BASELINE.slice(inicio) : BASELINE.slice(inicio, proximo + 1);
 const c = codigo(migration);
 
 describe("1006: posição, igualdade e registro", () => {
-  it("o bloco existe uma vez e é o último do baseline (depois de toda tabela e das travas de suporte)", () => {
+  it("o bloco existe uma vez e vem depois de toda tabela e das travas de suporte", () => {
     expect(marcador, "bloco da 1006 não está no baseline").not.toBe("");
     expect(BASELINE.split(marcador).length - 1).toBe(1);
-    expect(bloco.indexOf("\n-- ---- ", 1)).toBe(-1);
+    // Nada depois do bloco cria tabela (nem pela provisionadora): a varredura da 1006 alcança todas.
+    expect(BASELINE.slice(inicio + bloco.length)).not.toMatch(/create table|fn_aplicar_travas_de_suporte\(\)/i);
     expect(inicio).toBeGreaterThan(BASELINE.lastIndexOf("perform public.fn_aplicar_travas_de_suporte();"));
     expect(inicio).toBeGreaterThan(BASELINE.lastIndexOf("create table"));
   });

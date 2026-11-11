@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Fila de e-mails de conta e de cobrança — o gatilho só enfileira, o cron envia",
+    "subtitle": "migration 0952 (D-181, D-183): billing_emails_enviados com unicidade por fato, claim atômico em lote e o roteador SMTP/Resend na ponta",
+    "output": "fila-de-emails-de-conta.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "gatilhos", "label": "Quem dispara o fato" },
+    { "id": "fila", "label": "Enfileiramento (lib/email/conta-e-cobranca)" },
+    { "id": "banco", "label": "Banco" },
+    { "id": "cron", "label": "Cron e envio" },
+    { "id": "saida", "label": "Servidor de e-mail e quem recebe" },
+    { "id": "guarda", "label": "Provas" }
+  ],
+  "mainPath": [
+    "asaas",
+    "fila",
+    "tabela",
+    "reservar",
+    "enviar",
+    "roteador",
+    "caixa"
+  ],
+  "nodes": [
+    { "id": "asaas", "lane": "gatilhos", "col": 0, "type": "api", "label": "app/api/v1/cron/processar-eventos-asaas/route.ts", "sublabel": "passa `avisos` ao processador: pagamento aplicado, vencido, estorno total e pacote de tokens (COB-02, 03, 05, 08, 09); recusa de cartão e estorno parcial NÃO disparam" },
+    { "id": "vencimentos", "lane": "gatilhos", "col": 1, "type": "api", "label": "app/api/v1/cron/conferir-vencimentos/route.ts", "sublabel": "organização que passa a suspensa enfileira o aviso de suspensão (COB-06); a só atrasada não" },
+    { "id": "cancelar", "lane": "gatilhos", "col": 2, "type": "api", "label": "app/actions/settings/compraDoPlano.ts + app/actions/admin/cobrancaAsaas.ts", "sublabel": "cancelar a assinatura (cliente ou admin da plataforma) enfileira COB-07" },
+    { "id": "reembolso", "lane": "gatilhos", "col": 3, "type": "api", "label": "app/actions/settings/reembolso.ts", "sublabel": "pedido de reembolso (COB-11): destino `financeiro`, só quem cuida do financeiro da instalação" },
+    { "id": "provision", "lane": "gatilhos", "col": 4, "type": "service", "label": "lib/auth/provision.ts", "sublabel": "empresa nova criada: avisarBoasVindas() ao criador (CONTA-06)" },
+    { "id": "cronscadastro", "lane": "gatilhos", "col": 5, "type": "api", "label": "crons avisar-tokens-acabando e avisar-renovacao-no-cartao", "sublabel": "varredura de banco que só ENFILEIRA (IA-02 por ciclo; COB-04, renovação no cartão chegando); nada é comparado no caminho quente" },
+    { "id": "exclusaorodada", "lane": "gatilhos", "col": 6, "type": "service", "label": "lib/retencao/exclusao-de-organizacao/rodada.ts", "sublabel": "enfileirarAvisosDevidos(): aviso de exclusão programada dos dados (COB-12, D-30 e D-7)" },
+
+    { "id": "fila", "lane": "fila", "col": 0, "type": "service", "label": "lib/email/conta-e-cobranca/fila.ts", "sublabel": "enfileirarEmailDeConta(): insert on conflict do nothing com os DADOS DO MOMENTO · nunca lança · log sem endereço" },
+    { "id": "gatilhosts", "lane": "fila", "col": 1, "type": "service", "label": "gatilhos-de-cobranca / -de-conta / -de-reembolso / -de-exclusao .ts", "sublabel": "cada fato vira (emailId, chave, destino, dados); a chave é o fato: pagamento:<id do Asaas>, pedido:<id>, organizacao:<id>" },
+    { "id": "montar", "lane": "fila", "col": 2, "type": "service", "label": "lib/email/conta-e-cobranca/montar.ts", "sublabel": "codigoConhecido + DADOS_DO_EMAIL: dados inválidos viram EmailNaoMontavel (falhou na hora, sem nova tentativa) · templates em lib/email/templates" },
+
+    { "id": "tabela", "lane": "banco", "col": 0, "type": "database", "label": "public.billing_emails_enviados", "sublabel": "unique (organization_id, email_id, chave) · status pendente/enviando/enviado/falhou/sem_destinatario · RLS ligada sem policy, só service_role, sem delete" },
+    { "id": "reservar", "lane": "banco", "col": 1, "type": "database", "label": "fn_billing_emails_reservar_lote (0952)", "sublabel": "security definer · for update skip locked · conta a tentativa na reserva (5 min) · reserva vencida sem tentativa sobrando vira `falhou`" },
+
+    { "id": "scheduler", "lane": "cron", "col": 0, "type": "service", "label": "docker/scheduler/entrypoint.sh", "sublabel": "`* * * * *|55|api/v1/cron/enviar-emails-de-conta` — a cada minuto, teto de 55 s do curl" },
+    { "id": "cronenviar", "lane": "cron", "col": 1, "type": "api", "label": "app/api/v1/cron/enviar-emails-de-conta/route.ts", "sublabel": "Bearer INTERNAL_CRON_SECRET (fail-closed) · erro ao reservar vira frase fixa, o texto do Postgres só vai ao log" },
+    { "id": "enviar", "lane": "cron", "col": 2, "type": "service", "label": "lib/email/conta-e-cobranca/enviar.ts", "sublabel": "enviarFilaDeEmails(): lote de 20, orçamento de 40 s, 6 tentativas com espera 1/5/15/60/240 min, resolve destinatários, grava o desfecho só se a reserva ainda é da rodada" },
+    { "id": "copia", "lane": "cron", "col": 3, "type": "service", "label": "cópia para o operador", "sublabel": "EMAIL_DE_COPIA_DOS_AVISOS (lib/instalacao/catalogo.ts) ou platform_admins · sempre em português, marca da instalação, um envio por endereço" },
+
+    { "id": "roteador", "lane": "saida", "col": 0, "type": "service", "label": "lib/email/roteador.ts", "sublabel": "SMTP configurado → SMTP; ausente → Resend; decisão por CONFIGURAÇÃO, nunca por falha (evita entrega em dobro)" },
+    { "id": "smtp", "lane": "saida", "col": 1, "type": "external", "label": "lib/email/smtp.ts", "sublabel": "caminho do SMTP do operador" },
+    { "id": "resend", "lane": "saida", "col": 2, "type": "external", "label": "lib/email/resend.ts", "sublabel": "caminho da Resend; sem nenhum dos dois, `emailConfigurado()` é falso e o lote nem é reservado" },
+    { "id": "caixa", "lane": "saida", "col": 3, "type": "frontend", "label": "Caixa de entrada dos admins da empresa (e do operador)", "sublabel": "assunto e corpo com a marca resolvida por marcaDaSaida(); conta banida ou apagada no GoTrue não recebe" },
+    { "id": "recibo", "lane": "saida", "col": 4, "type": "service", "label": "lib/email/conta-e-cobranca/recibo-de-exclusao.ts", "sublabel": "FORA da fila de propósito: a organização foi excluída e a linha sumiria na cascata. Sai direto, só ao operador, melhor esforço" },
+
+    { "id": "provaenviar", "lane": "guarda", "col": 0, "type": "test", "label": "tests/unit/emails-de-conta-enviar.test.ts", "sublabel": "desfecho por linha, espera crescente, cópia, reserva atrasada" },
+    { "id": "provaliga", "lane": "guarda", "col": 1, "type": "test", "label": "tests/unit/cron-ligacao-dos-avisos-de-conta.test.ts", "sublabel": "cada ponto de partida passa de verdade os gatilhos reais e o efeito chega à fila" },
+    { "id": "provabanco", "lane": "guarda", "col": 2, "type": "test", "label": "tests/invariants/emails-de-conta-e-cobranca-banco.test.ts", "sublabel": "unicidade, claim sem repetir linha e grants no Postgres real" }
+  ],
+  "edges": [
+    { "id": "e1", "from": "asaas", "to": "gatilhosts", "label": "pagamento aplicado, estorno, recusa: avisos de cobrança" },
+    { "id": "e2", "from": "vencimentos", "to": "gatilhosts", "label": "aoSuspender: COB-06" },
+    { "id": "e3", "from": "cancelar", "to": "gatilhosts", "label": "avisoDeCancelamento: COB-07" },
+    { "id": "e4", "from": "reembolso", "to": "gatilhosts", "label": "pedido de reembolso: COB-11 ao financeiro" },
+    { "id": "e5", "from": "provision", "to": "fila", "label": "avisarBoasVindas: CONTA-06 ao criador" },
+    { "id": "e6", "from": "cronscadastro", "to": "fila", "label": "IA-02 e COB-04: enfileiram, não enviam" },
+    { "id": "e7", "from": "exclusaorodada", "to": "gatilhosts", "label": "aviso de exclusão programada" },
+    { "id": "e8", "from": "gatilhosts", "to": "fila", "label": "entrega (emailId, chave, destino, dados) ao enfileirador" },
+    { "id": "e9", "from": "fila", "to": "tabela", "label": "insert on conflict do nothing: o mesmo fato repetido não enfileira de novo" },
+    { "id": "e10", "from": "scheduler", "to": "cronenviar", "label": "curl a cada minuto" },
+    { "id": "e11", "from": "cronenviar", "to": "enviar", "label": "enviarFilaDeEmails()" },
+    { "id": "e12", "from": "enviar", "to": "reservar", "label": "rpc: reserva até 20 linhas" },
+    { "id": "e13", "from": "reservar", "to": "tabela", "label": "pendente → enviando, tentativas + 1, reserva de 5 min" },
+    { "id": "e14", "from": "enviar", "to": "montar", "label": "monta assunto e corpo com os dados do momento" },
+    { "id": "e15", "from": "enviar", "to": "copia", "label": "copia_para_operador: só depois de sair para alguém da organização" },
+    { "id": "e16", "from": "enviar", "to": "roteador", "label": "sendEmail por destinatário" },
+    { "id": "e17", "from": "roteador", "to": "smtp", "label": "SMTP configurado" },
+    { "id": "e18", "from": "roteador", "to": "resend", "label": "SMTP ausente" },
+    { "id": "e19", "from": "smtp", "to": "caixa", "label": "entrega" },
+    { "id": "e20", "from": "resend", "to": "caixa", "label": "entrega" },
+    { "id": "e21", "from": "enviar", "to": "tabela", "label": "grava enviado / pendente com espera / falhou / sem_destinatario — só se a reserva ainda é desta rodada (laço de retorno: o aviso que falha volta à fila)" },
+    { "id": "e22", "from": "exclusaorodada", "to": "recibo", "label": "recibo da exclusão, fora da fila" },
+    { "id": "e23", "from": "recibo", "to": "roteador", "label": "mesmo roteador, envio direto ao operador" },
+    { "id": "e24", "from": "provaenviar", "to": "enviar", "label": "prova o envio" },
+    { "id": "e25", "from": "provaliga", "to": "fila", "label": "prova a ligação dos gatilhos com a fila" },
+    { "id": "e26", "from": "provabanco", "to": "tabela", "label": "prova o claim e a unicidade no Postgres real" },
+    { "id": "e27", "from": "provabanco", "to": "reservar", "label": "prova a função" }
+  ]
+}
