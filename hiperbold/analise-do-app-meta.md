@@ -1,6 +1,6 @@
-# Análise do app na Meta: Instagram Direct e Messenger
+# Análise do app na Meta: Instagram Direct, Messenger e WhatsApp
 
-Roteiro da primeira análise do app **Hiperbold CRM** (id 803080829518569), feita para o atendimento por mensagens. Os comentários (`instagram_manage_comments`, a automação estilo ManyChat) ficam para a segunda análise, quando o fluxo estiver pronto.
+Roteiro da primeira análise do app **Hiperbold CRM** (id 803080829518569), feita para o atendimento por mensagens. Os comentários (`instagram_manage_comments`, a automação estilo ManyChat) ficam para a segunda análise, quando o fluxo estiver pronto. O WhatsApp oficial tem análise própria (seção 7).
 
 Sem esta análise, só quem tem função no app (administrador, desenvolvedor ou testador) consegue conectar o Instagram ou a Página e trocar mensagens. Os clientes do CRM dependem dela.
 
@@ -118,3 +118,36 @@ O revisor entra como um usuário comum, e a aba está oculta para usuário comum
 1. **Mostrar a aba só na organização Hiperbold Company (recomendado).** É uma mudança pequena no código. Os clientes continuam sem ver a aba até a aprovação, porque sem ela não conseguiriam conectar.
 2. Mostrar a aba para todos já. Os clientes veriam uma função que ainda não funciona para eles.
 3. Dar ao revisor o papel de administrador da plataforma. Isso dá poder demais para uma conta de fora, e não recomendo.
+
+## 7. Análise do WhatsApp (separada)
+
+Sim, o WhatsApp oficial (WABA) também precisa de acesso avançado, mas numa análise própria, depois desta.
+
+**Por que separada:** acesso padrão já basta para o número da própria Hiperbold, porque a WABA é do mesmo portfólio do app. É o que roda hoje, com o token do usuário do sistema. O acesso avançado é necessário para o CRM operar a WABA de **outro negócio**, ou seja, do assinante. E isso só acontece pelo Cadastro Incorporado (Embedded Signup), que ainda não existe no CRM (D-172). Sem esse fluxo pronto, não há o que mostrar no vídeo, e a Meta recusa.
+
+**O que pedir:**
+
+| Permissão                        | Para que o CRM usa                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------ |
+| `whatsapp_business_messaging`    | Receber as mensagens do WhatsApp do assinante no Chat e responder por ele                  |
+| `whatsapp_business_management`   | Ler a WABA e o número do assinante, inscrever o app no webhook e gerenciar os modelos (templates) |
+| `business_management`            | Já pedida na primeira análise; serve também para ler a WABA dentro do portfólio            |
+
+**Pré-requisitos, nesta ordem:**
+
+1. A primeira análise (Instagram e Messenger) aprovada. Ela já resolve a verificação da empresa e as URLs públicas.
+2. A Hiperbold cadastrada como **Provedor de Tecnologia** (Tech Provider) no app. O caminho é Painel do app › WhatsApp › Primeiros passos › "Tornar-se um provedor de tecnologia".
+3. O D-172 implementado: botão Conectar em Conexões › API Oficial (Meta), com login do Facebook, escolha do número e **coexistência**. Coexistência quer dizer que o mesmo número continua no aplicativo WhatsApp Business. É regra fixa do projeto.
+4. Uma configuração de Login do Facebook para Empresas (`config_id`) só para o WhatsApp, com as duas permissões acima.
+
+**Roteiro do vídeo (quando o D-172 estiver pronto):**
+
+1. Login no CRM, depois Connections › Official API (Meta).
+2. Clicar Connect. Na janela da Meta, escolher o portfólio, a WABA e o número, já em uso no WhatsApp Business, e confirmar as permissões.
+3. Voltar ao CRM e mostrar o número conectado.
+4. De outro celular, mandar uma mensagem para o número. A conversa chega no Chat com o ícone do WhatsApp.
+5. Responder pelo CRM e mostrar a resposta chegando no WhatsApp.
+6. Abrir Templates, criar um modelo e mostrar o envio para aprovação (`whatsapp_business_management`).
+7. Desconectar e mostrar o cartão sem número.
+
+Os textos de cada permissão, em inglês, entram aqui quando o D-172 estiver pronto, porque eles descrevem a tela como ela ficou.
