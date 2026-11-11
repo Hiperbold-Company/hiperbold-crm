@@ -77,8 +77,38 @@ describe("PUT /connections/:id/sources", () => {
     expect(deps.audit).toHaveBeenCalledOnce();
     const evento = deps.audit.mock.calls[0]![0] as { action: string; metadata: Record<string, unknown> };
     expect(evento.action).toBe("external_db_sources.updated");
-    expect(evento.metadata).toEqual({ source_mode: "list", fontes: 1 });
+    expect(evento.metadata).toEqual({ source_mode: "list", fontes: 1, fontes_do_cliente: 0 });
     expect(JSON.stringify(evento)).not.toContain("clientes");
+  });
+
+  it("D-146: grava a coluna do cliente por tabela (ou `null`) e audita só a contagem", async () => {
+    const DO_CLIENTE = { ...FONTE, cliente: { coluna: "telefone", dado: "phone" } };
+    const CATALOGO = { ...FONTE, tabela: "produtos", cliente: null };
+    const { visto, client } = banco({ data: { source_mode: "list", sources: [DO_CLIENTE, CATALOGO] } });
+    deps.admin.mockReturnValue(client);
+
+    const res = await PUT(put({ source_mode: "list", sources: [DO_CLIENTE, CATALOGO] }), ctx);
+
+    expect(res.status).toBe(200);
+    expect(visto.payload).toEqual({ source_mode: "list", sources: [DO_CLIENTE, CATALOGO] });
+    const evento = deps.audit.mock.calls[0]![0] as { metadata: Record<string, unknown> };
+    expect(evento.metadata).toEqual({ source_mode: "list", fontes: 2, fontes_do_cliente: 1 });
+    expect(JSON.stringify(evento.metadata)).not.toContain("telefone");
+  });
+
+  it("D-146: coluna do cliente fora do formato (dado desconhecido, sem coluna, chave a mais): 422 e nada gravado", async () => {
+    const { visto, client } = banco({ data: null });
+    deps.admin.mockReturnValue(client);
+    for (const cliente of [
+      { coluna: "telefone", dado: "rg" },
+      { dado: "phone" },
+      { coluna: "telefone", dado: "phone", valor: "5511999998888" },
+    ]) {
+      const res = await PUT(put({ source_mode: "list", sources: [{ ...FONTE, cliente }] }), ctx);
+      expect(res.status).toBe(422);
+    }
+    expect(visto.payload).toBeUndefined();
+    expect(deps.audit).not.toHaveBeenCalled();
   });
 
   it("conexão de OUTRA organização (a consulta não acha): 404 e sem audit de sucesso", async () => {

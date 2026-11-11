@@ -66,6 +66,25 @@ export function tamanhoComoJsonb(valor: unknown): number {
   return new TextEncoder().encode(textoComoJsonb(valor)).length;
 }
 
+/**
+ * Qual dado do contato da conversa preenche a "coluna do cliente" de uma fonte
+ * (D-146). `document` é o CPF/CNPJ do cadastro (`contacts.cpf_encrypted`,
+ * decifrado só no servidor). Vive só no jsonb `sources`, sem CHECK no banco.
+ */
+export const DADOS_DO_CONTATO = ["phone", "email", "document"] as const;
+export type DadoDoContato = (typeof DADOS_DO_CONTATO)[number];
+
+/**
+ * A coluna do cliente de uma fonte: na conversa, a consulta da IA nesta tabela
+ * é SEMPRE filtrada por `coluna = <dado do contato do turno>`.
+ */
+export const clienteDaFonteSchema = z
+  .object({
+    coluna: z.string().trim().min(1).max(128),
+    dado: z.enum(DADOS_DO_CONTATO),
+  })
+  .strict();
+
 export const fonteSchema = z
   .object({
     schema: z.string().trim().min(1).max(128),
@@ -73,6 +92,14 @@ export const fonteSchema = z
     /** `null` = todas as colunas visíveis ao usuário do banco; lista vazia não existe. */
     colunas: z.array(z.string().trim().min(1).max(128)).min(1).max(MAX_COLUNAS_POR_FONTE).nullable(),
     descricao: z.string().trim().max(MAX_DESCRICAO),
+    /**
+     * De quem é o dado desta tabela, para a IA na conversa (D-146):
+     *  - objeto: é de cada cliente; a consulta é presa ao contato da conversa;
+     *  - `null`: serve a qualquer cliente (catálogo, preços), sem vínculo;
+     *  - ausente: o administrador ainda não escolheu; vale a proteção automática
+     *    (`escopo-do-contato.ts`) e a coluna do cliente da conexão, se houver.
+     */
+    cliente: clienteDaFonteSchema.nullable().optional(),
   })
   .strict();
 

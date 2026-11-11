@@ -14,11 +14,12 @@ import { catalogoExternoQueryKey } from "@/hooks/external-db/useCatalogoExterno"
 import { conexoesExternasQueryKey } from "@/hooks/external-db/useConexoesExternas";
 import { fontesQueryKey, salvarFontes, useFontesDaConexao } from "@/hooks/external-db/useFontesDaConexao";
 import { useT } from "@/hooks/i18n/useT";
-import { MAX_DESCRICAO, type Fonte } from "@/lib/external-db/fontes";
+import { MAX_DESCRICAO, type DadoDoContato, type Fonte } from "@/lib/external-db/fontes";
 import {
   alternarColuna,
   alternarTabela,
   contarLiberadas,
+  definirClienteDaFonte,
   definirDescricao,
   desmarcarVisiveis,
   filtrarCatalogo,
@@ -26,6 +27,7 @@ import {
   indiceDaFonte,
   listaValida,
   marcarVisiveis,
+  palpiteDeColunaDoCliente,
   rascunhoMudou,
   tabelaSemColunaDoCliente,
   usarColunasMarcadas,
@@ -81,6 +83,9 @@ function ListaSomenteLeitura({ guardado }: { guardado: Rascunho | null }) {
             {f.schema}.{f.tabela}
           </span>
           {f.descricao ? <span className="text-muted-foreground"> — {f.descricao}</span> : null}
+          {f.cliente ? (
+            <span className="text-muted-foreground"> · {t("nas conversas, só os dados de quem conversa")}</span>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -118,7 +123,9 @@ function DetalheDaFonte({
         </span>
       </label>
 
-      {colunaDoCliente !== null && tabelaSemColunaDoCliente(tabela, colunaDoCliente) && (
+      <DonoDoDado fonte={fonte} tabela={tabela} colunaDoCliente={colunaDoCliente} aplicar={aplicar} />
+
+      {fonte.cliente === undefined && colunaDoCliente !== null && tabelaSemColunaDoCliente(tabela, colunaDoCliente) && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
           {t("Esta tabela não tem a coluna que identifica o cliente:")} <code>{colunaDoCliente}</code>.{" "}
           {t("Nas conversas, o assistente não consegue consultá-la.")}
@@ -176,6 +183,108 @@ function DetalheDaFonte({
         )}
       </fieldset>
     </div>
+  );
+}
+
+const NOMES_DO_DADO: Array<{ valor: DadoDoContato; rotulo: string }> = [
+  { valor: "phone", rotulo: "Telefone (WhatsApp)" },
+  { valor: "email", rotulo: "E-mail" },
+  { valor: "document", rotulo: "CPF ou CNPJ" },
+];
+
+/**
+ * D-146 — "De quem é este dado?". Na conversa, a IA só lê a linha de quem está
+ * conversando quando a tabela é "de cada cliente"; o valor sai do cadastro do
+ * contato, nunca do que o cliente digita.
+ */
+function DonoDoDado({
+  fonte,
+  tabela,
+  colunaDoCliente,
+  aplicar,
+}: {
+  fonte: Fonte;
+  tabela: TabelaDoCatalogo;
+  colunaDoCliente: string | null;
+  aplicar: (f: (lista: Fonte[]) => Fonte[]) => void;
+}) {
+  const t = useT();
+  const nomeDoGrupo = `dono-${tabela.schema}.${tabela.nome}`;
+  const cliente = fonte.cliente;
+  const definir = (valor: { coluna: string; dado: DadoDoContato } | null) =>
+    aplicar((l) => definirClienteDaFonte(l, tabela.schema, tabela.nome, valor));
+  const idColuna = `${nomeDoGrupo}-coluna`;
+  const idDado = `${nomeDoGrupo}-dado`;
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-xs font-medium">{t("Nas conversas com clientes, de quem é este dado?")}</legend>
+      <label className="flex items-start gap-2">
+        <input
+          type="radio"
+          name={nomeDoGrupo}
+          className="mt-1 h-4 w-4 shrink-0 accent-primary"
+          checked={cliente === null}
+          onChange={() => definir(null)}
+        />
+        <span>{t("Serve para qualquer cliente (ex.: produtos, preços, horários)")}</span>
+      </label>
+      <label className="flex items-start gap-2">
+        <input
+          type="radio"
+          name={nomeDoGrupo}
+          className="mt-1 h-4 w-4 shrink-0 accent-primary"
+          checked={cliente !== null && cliente !== undefined}
+          onChange={() => definir(palpiteDeColunaDoCliente(tabela, colunaDoCliente))}
+        />
+        <span>{t("É de cada cliente (ex.: pedidos, cadastro, cobranças): o assistente só mostra os dados de quem está conversando")}</span>
+      </label>
+      {cliente === undefined && (
+        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+          {t("Ainda não escolhido. Enquanto isso, nas conversas o assistente só lê esta tabela se ela não parecer ter dados de clientes.")}
+        </p>
+      )}
+      {cliente && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <label htmlFor={idColuna} className="text-xs text-muted-foreground">
+              {t("Coluna que guarda o cliente")}
+            </label>
+            <select
+              id={idColuna}
+              value={cliente.coluna}
+              onChange={(e) => definir({ coluna: e.target.value, dado: cliente.dado })}
+              className="mt-1 block w-full rounded-md border bg-background p-2 text-sm"
+            >
+              {tabela.colunas.map((c) => (
+                <option key={c.nome} value={c.nome}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor={idDado} className="text-xs text-muted-foreground">
+              {t("O que essa coluna guarda")}
+            </label>
+            <select
+              id={idDado}
+              value={cliente.dado}
+              onChange={(e) => definir({ coluna: cliente.coluna, dado: e.target.value as DadoDoContato })}
+              className="mt-1 block w-full rounded-md border bg-background p-2 text-sm"
+            >
+              {NOMES_DO_DADO.map((d) => (
+                <option key={d.valor} value={d.valor}>
+                  {t(d.rotulo)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            {t("O valor vem do cadastro do contato no CRM. Se o contato não tiver esse dado, o assistente não consulta a tabela e diz que a equipe confirma.")}
+          </p>
+        </div>
+      )}
+    </fieldset>
   );
 }
 
@@ -306,6 +415,9 @@ export function PainelDeFontes({ connectionId, canWrite, colunaDoCliente, aberto
                 <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
                   <p className="font-medium">
                     {t("O assistente enxerga todas as tabelas que o usuário do banco enxerga.")}
+                  </p>
+                  <p className="mt-1 text-xs">
+                    {t("Nas conversas com clientes, o assistente não consulta nada deste banco neste modo. Para liberar, escolha \"Só o que eu marcar\" e diga, em cada tabela, de quem é o dado.")}
                   </p>
                   <p className="mt-1 text-xs">
                     {t("Se houver dados sensíveis (senhas, chaves), crie no banco um usuário de leitura só com o que ele precisa, ou volte para \"Só o que eu marcar\".")}

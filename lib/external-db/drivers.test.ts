@@ -97,13 +97,13 @@ describe("registro de drivers", () => {
   it("abrirDialeto de uma conexão mysql chama criarDialetoMysql com a conexão e a regra, sem tocar no pool do PostgreSQL", () => {
     const dialeto = abrirDialeto({ ...CONEXAO, dbType: "mysql" }, IP);
     expect(dialeto).toEqual({ marca: "dialeto-mysql" });
-    expect(criarDialetoMysqlMock).toHaveBeenCalledWith({ ...CONEXAO, dbType: "mysql" }, { modo: "all", fontes: [] });
+    expect(criarDialetoMysqlMock).toHaveBeenCalledWith({ ...CONEXAO, dbType: "mysql" }, { modo: "all", fontes: [] }, IP);
     expect(obterPoolMock).not.toHaveBeenCalled();
   });
 
   it("testarConexao de uma conexão mysql devolve o que o driver devolveu, com aviso, sem chamar o teste do PostgreSQL", async () => {
     await expect(testarConexao({ ...CONEXAO, dbType: "mysql" }, IP)).resolves.toEqual({ ok: true, aviso: "cuidado" });
-    expect(testarMysql).toHaveBeenCalledWith({ ...CONEXAO, dbType: "mysql" });
+    expect(testarMysql).toHaveBeenCalledWith({ ...CONEXAO, dbType: "mysql" }, IP);
     expect(testarPg).not.toHaveBeenCalled();
   });
 
