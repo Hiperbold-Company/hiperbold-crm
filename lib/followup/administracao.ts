@@ -646,14 +646,23 @@ export async function publicarFluxo(
       : { data: [], error: null };
     if (ra.error) throw falhaInterna(deps, ra.error);
     // Bloco "Requisição HTTP": só chave do cofre DESTA organização (o motor decifra com a service role).
+    // Com o nome e os endereços permitidos (migration 1007): o publish recusa a chave mandada para outro host.
     const rk = segredos.length
-      ? await admin.from("automacao_segredos").select("id").eq("organization_id", orgId).in("id", segredos)
+      ? await admin
+          .from("automacao_segredos")
+          .select("id, nome, hosts_permitidos")
+          .eq("organization_id", orgId)
+          .in("id", segredos)
       : { data: [], error: null };
     if (rk.error) throw falhaInterna(deps, rk.error);
+    const linhasDasChaves = (rk.data ?? []) as Array<{ id: string; nome: string; hosts_permitidos: string[] | null }>;
     automacao = {
       pointerId: id,
       existentes: new Set((ra.data ?? []).map((r) => (r as { id: string }).id)),
-      segredosExistentes: new Set((rk.data ?? []).map((r) => (r as { id: string }).id)),
+      segredosExistentes: new Set(linhasDasChaves.map((r) => r.id)),
+      destinosDosSegredos: new Map(
+        linhasDasChaves.map((r) => [r.id, { nome: r.nome, hosts_permitidos: r.hosts_permitidos ?? null }]),
+      ),
     };
   }
   // A regra de etapa guarda o `stage_id`, e só o banco diz se a etapa existe e está ativa.

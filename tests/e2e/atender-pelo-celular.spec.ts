@@ -403,6 +403,9 @@ test.describe("atender pelo celular", () => {
       await expect(linha(page)).toBeVisible({ timeout: 60_000 });
       await linha(page).tap();
       await esperarConversa(page);
+      // A medida abaixo lê o campo de mensagem: a bolha pode aparecer antes de
+      // o campo montar, e sem esta espera o caso falhava por tempo (null).
+      await expect(page.locator('textarea[aria-label="Mensagem"]')).toBeVisible({ timeout: 30_000 });
 
       const m = await faixa.evaluate((el) => {
         const involucro = el.parentElement!.getBoundingClientRect();

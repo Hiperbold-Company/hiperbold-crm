@@ -102520,6 +102520,70 @@ create trigger trg_automacao_nao_liga_com_regra_antiga
 notify pgrst, 'reload schema';
 
 
+-- ---- automações: a chave secreta só vai para os endereços permitidos dela (migration 1007, fork Hiperbold) ----
+-- 1007 — Quem edita uma automação não vê o valor de nenhuma chave do cofre (1004), mas escolhe a
+-- URL do bloco "Requisição HTTP". Sem limite de destino, um bloco apontado para um servidor
+-- próprio com a chave no cabeçalho entregava o token. Agora cada chave guarda os hosts para onde
+-- pode ir, e o servidor recusa o envio para qualquer outro (regra em `lib/automacoes/hosts-permitidos.ts`).
+--
+-- `null` = chave anterior a esta migration: continua indo para qualquer endereço, para não quebrar
+-- automação publicada. Chave nova nasce com pelo menos um endereço (Zod nas rotas do cofre).
+--
+-- A forma é conferida no banco, e não só no Zod: a coluna é a régua do envio, e um valor torto
+-- (com `https://`, com porta, com `*`) nunca bateria com o host da URL — a chave ficaria muda, ou,
+-- pior, alguém leria o item como curinga. Sem subconsulta no CHECK: o item vira texto com
+-- `array_to_string` (que PULA nulo — por isso o `array_position(.., null)` à parte) e a lista
+-- inteira casa com uma expressão de hosts separados por vírgula. Repetição não é conferida aqui
+-- (CHECK não aceita subconsulta, e uma função só para isso seria superfície nova): item repetido
+-- é inofensivo, e a rota já grava a lista sem repetição.
+--
+-- Reaplicável: add column if not exists, constraint conferida no catálogo, grant idempotente.
+
+alter table public.automacao_segredos add column if not exists hosts_permitidos text[];
+
+do $hb_1007_hosts$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'public.automacao_segredos'::regclass
+                 and conname = 'automacao_segredos_hosts_permitidos_forma') then
+    -- Nenhuma linha viola: a coluna acabou de nascer nula. Se um clone tiver gravado algo torto
+    -- antes (não deveria: só esta migration cria a coluna), o item torto é zerado para nulo — a
+    -- chave volta ao comportamento antigo e a tela pede o endereço — em vez de quebrar o update.
+    update public.automacao_segredos set hosts_permitidos = null
+     where hosts_permitidos is not null
+       and not (
+         cardinality(hosts_permitidos) between 1 and 10
+         and array_position(hosts_permitidos, null) is null
+         and char_length(array_to_string(hosts_permitidos, ',')) <= 2540
+         -- a vírgula é o separador: um item com vírgula dentro ("a.com,b.com") casaria a expressão
+         and char_length(array_to_string(hosts_permitidos, ',')) - char_length(replace(array_to_string(hosts_permitidos, ','), ',', '')) = cardinality(hosts_permitidos) - 1
+         and array_to_string(hosts_permitidos, ',') ~
+           '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+(,[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+)*$'
+       );
+    alter table public.automacao_segredos add constraint automacao_segredos_hosts_permitidos_forma
+      check (
+        hosts_permitidos is null or (
+          cardinality(hosts_permitidos) between 1 and 10
+          and array_position(hosts_permitidos, null) is null
+          and char_length(array_to_string(hosts_permitidos, ',')) <= 2540
+          -- a vírgula é o separador: um item com vírgula dentro ("a.com,b.com") casaria a expressão
+          and char_length(array_to_string(hosts_permitidos, ',')) - char_length(replace(array_to_string(hosts_permitidos, ','), ',', '')) = cardinality(hosts_permitidos) - 1
+          and array_to_string(hosts_permitidos, ',') ~
+            '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+(,[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+)*$'
+        )
+      );
+  end if;
+end
+$hb_1007_hosts$;
+
+-- A tela lê a lista pela rota (service role), mas `authenticated` tem SELECT coluna a coluna
+-- (1004): a coluna nova entra nele, porque não é segredo.
+grant select (hosts_permitidos) on table public.automacao_segredos to authenticated;
+
+comment on column public.automacao_segredos.hosts_permitidos is
+  '1007: os hosts para onde o bloco Requisição HTTP pode mandar esta chave (minúsculas, sem esquema, porta nem curinga). null = chave anterior à 1007, vai para qualquer endereço.';
+
+notify pgrst, 'reload schema';
+
 -- ---- os alarmes de gatilho de plano ganham prazo (migration 1009, fork Hiperbold, D-074) ----
 --
 -- Cria função: fica ANTES da VARREDURA anon. Mesmo corpo da migration 1009.
@@ -102582,6 +102646,202 @@ grant  execute on function public.fn_podar_alarmes_de_gatilho(int,int) to servic
 
 comment on function public.fn_podar_alarmes_de_gatilho(int,int) is
   '1009, D-074: poda de billing_trigger_alarmes por idade (criado_em), em lote, piso de 90 dias no corpo. Única porta de apagamento da tabela; só service_role executa.';
+
+-- ---- LGPD: automação não nasce para contato em anonimização, releitura sob a trava (migration 1010, fork Hiperbold) ----
+-- ⚠️ ANTES DA VARREDURA anon: redefine função. Mesmo corpo da migration 1010.
+-- A limpeza das variáveis e o encerramento das automações vivas na virada de
+-- is_anonymized continuam no gatilho da 0986 (trg_contato_anonimizado_limpa_automacoes);
+-- aqui só se fecha a corrida em que a execução nascia depois da limpeza.
+create or replace function public.fn_automacao_iniciar(
+  p_org uuid,
+  p_pointer uuid,
+  p_contact uuid,
+  p_vars jsonb,
+  p_origin_event_id uuid,
+  p_parent_enrollment_id uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_version uuid;
+  v_graph jsonb;
+  v_trigger_id text;
+  v_policy text;
+  v_cooldown int;
+  v_live public.followup_enrollments;
+  v_id uuid;
+  v_anon boolean;
+  v_profundidade int;
+  v_ciclo boolean;
+begin
+  select p.active_version_id into v_version
+    from public.followup_flow_pointers p
+   where p.organization_id = p_org and p.id = p_pointer
+     and p.surface = 'automacao' and p.status = 'active' and p.active_version_id is not null;
+  if v_version is null then
+    return jsonb_build_object('resultado', 'inativa');
+  end if;
+
+  select c.is_anonymized into v_anon
+    from public.contacts c where c.organization_id = p_org and c.id = p_contact;
+  if not found or coalesce(v_anon, false) then
+    return jsonb_build_object('resultado', 'contato_invalido');
+  end if;
+
+  perform public.fn_service_lock(p_org, p_contact);
+
+  -- 1010: a anonimização (os DOIS caminhos) toma esta mesma trava antes de
+  -- virar `is_anonymized`. A leitura acima é de ANTES da trava: se a
+  -- anonimização estava em voo, ela via o contato ainda identificado, esperava
+  -- a trava e nascia uma execução viva, com o `gatilho.*` nas variáveis, DEPOIS
+  -- de o gatilho da virada já ter limpado e encerrado as do contato. Sob a
+  -- trava, a releitura vê o que a anonimização gravou.
+  select c.is_anonymized into v_anon
+    from public.contacts c where c.organization_id = p_org and c.id = p_contact;
+  if not found or coalesce(v_anon, false) then
+    return jsonb_build_object('resultado', 'contato_invalido');
+  end if;
+
+  if p_origin_event_id is not null and exists (
+    select 1 from public.followup_enrollments
+     where pointer_id = p_pointer and origin_event_id = p_origin_event_id
+  ) then
+    return jsonb_build_object('resultado', 'duplicada');
+  end if;
+
+  select v.graph into v_graph
+    from public.followup_flow_versions v
+   where v.organization_id = p_org and v.id = v_version;
+  select n->>'id',
+         coalesce(n->'config'->'reentry'->>'policy', 'skip_if_running'),
+         coalesce((n->'config'->'reentry'->>'cooldown_minutes')::int, 0)
+    into v_trigger_id, v_policy, v_cooldown
+    from jsonb_array_elements(coalesce(v_graph->'nodes', '[]'::jsonb)) n
+   where n->>'type' = 'trigger'
+   limit 1;
+  if v_trigger_id is null then
+    return jsonb_build_object('resultado', 'sem_inicio');
+  end if;
+
+  -- Cadeia de automações (o evento que chegou foi causado por outra execução):
+  -- a mesma automação voltando na cadeia (A → B → A) ou uma cadeia funda demais
+  -- é cortada aqui, com aviso na Central — senão duas automações que se
+  -- disparam giram até o teto por hora de cada contato.
+  if p_parent_enrollment_id is not null then
+    with recursive cadeia(id, pointer_id, parent, n) as (
+      select e.id, e.pointer_id, e.parent_enrollment_id, 1
+        from public.followup_enrollments e
+       where e.organization_id = p_org and e.id = p_parent_enrollment_id
+      union all
+      select e.id, e.pointer_id, e.parent_enrollment_id, c.n + 1
+        from public.followup_enrollments e
+        join cadeia c on e.id = c.parent
+       where e.organization_id = p_org and c.n < 20
+    )
+    select coalesce(max(n), 0), coalesce(bool_or(pointer_id = p_pointer), false)
+      into v_profundidade, v_ciclo
+      from cadeia;
+    if v_ciclo or v_profundidade >= 5 then
+      insert into public.agent_inbox_items(organization_id, kind, severity, title, body, ref_kind, ref_id)
+      select p_org, 'other', 'warn', 'Automações em cadeia interrompidas',
+             case when v_ciclo
+               then 'Uma automação disparou outra que voltaria a disparar a primeira. A volta foi cortada para não girar sem fim.'
+               else 'Uma sequência de automações disparando umas às outras passou de 5 passos e foi cortada.' end,
+             'followup_flow_pointer', p_pointer
+       where not exists (
+         select 1 from public.agent_inbox_items i
+          where i.organization_id = p_org and i.kind = 'other' and i.status = 'open'
+            and i.ref_kind = 'followup_flow_pointer' and i.ref_id = p_pointer
+            and i.title = 'Automações em cadeia interrompidas');
+      return jsonb_build_object('resultado', case when v_ciclo then 'ciclo' else 'cadeia_longa' end);
+    end if;
+  end if;
+
+  -- Teto por organização e por hora: freio de último caso contra laço que
+  -- escape das guardas acima (cada execução nova conta, de qualquer automação).
+  if (select count(*) from public.followup_enrollments e
+       where e.organization_id = p_org and e.lane = 'automacao'
+         and e.started_at > now() - interval '1 hour') >= 5000 then
+    insert into public.agent_inbox_items(organization_id, kind, severity, title, body, ref_kind, ref_id)
+    select p_org, 'other', 'critical', 'Automações pausadas pelo teto da hora',
+           'Mais de 5000 execuções de automação começaram na última hora. As novas ficam recusadas até o volume baixar.',
+           'organization', p_org
+     where not exists (
+       select 1 from public.agent_inbox_items i
+        where i.organization_id = p_org and i.kind = 'other' and i.status = 'open'
+          and i.title = 'Automações pausadas pelo teto da hora');
+    return jsonb_build_object('resultado', 'limite_da_organizacao');
+  end if;
+
+  -- Espera e teto do contato ANTES de mexer na execução viva: um "recomeçar"
+  -- barrado por eles não pode cancelar a execução que estava em curso.
+  if v_cooldown > 0 and exists (
+    select 1 from public.followup_enrollments e
+     where e.organization_id = p_org and e.pointer_id = p_pointer and e.contact_id = p_contact
+       and e.completed_at > now() - make_interval(mins => v_cooldown)
+       and coalesce(e.cancel_reason, '') <> 'reiniciada'
+  ) then
+    return jsonb_build_object('resultado', 'em_espera');
+  end if;
+
+  -- Freio contra laço entre fluxos: no máximo 10 execuções por automação por contato por hora.
+  if (select count(*) from public.followup_enrollments e
+       where e.organization_id = p_org and e.pointer_id = p_pointer and e.contact_id = p_contact
+         and e.started_at > now() - interval '1 hour') >= 10 then
+    return jsonb_build_object('resultado', 'limite_por_hora');
+  end if;
+
+  select * into v_live
+    from public.followup_enrollments e
+   where e.organization_id = p_org and e.pointer_id = p_pointer and e.contact_id = p_contact
+     and e.lane = 'automacao'
+     and e.status in ('active','waiting_reply','paused_handoff','paused_manual')
+   for update;
+
+  if found then
+    if v_policy <> 'restart' then
+      insert into public.followup_enrollment_events(organization_id, enrollment_id, node_id, event_type, payload, idempotency_key)
+      values (p_org, v_live.id, v_live.current_node_id, 'trigger_ignored_running',
+              jsonb_build_object('gatilho', p_vars->'gatilho'->>'tipo'),
+              'gatilho-ignorado:' || coalesce(p_origin_event_id::text, gen_random_uuid()::text))
+      on conflict do nothing;
+      return jsonb_build_object('resultado', 'ja_em_execucao', 'enrollment_id', v_live.id);
+    end if;
+    update public.followup_enrollments
+       set status = 'cancelled', cancel_reason = 'reiniciada', completed_at = now(),
+           next_eval_at = null, claimed_until = null, updated_at = now()
+     where id = v_live.id;
+  end if;
+
+  begin
+    insert into public.followup_enrollments(
+      organization_id, pointer_id, version_id, contact_id, current_node_id, status,
+      vars, origin_event_id, parent_enrollment_id)
+    values (
+      p_org, p_pointer, v_version, p_contact, v_trigger_id, 'active',
+      coalesce(p_vars, '{}'::jsonb), p_origin_event_id, p_parent_enrollment_id)
+    returning id into v_id;
+  exception when unique_violation then
+    return jsonb_build_object('resultado', 'ja_em_execucao');
+  end;
+
+  insert into public.followup_enrollment_events(organization_id, enrollment_id, node_id, event_type, payload, idempotency_key)
+  values (p_org, v_id, v_trigger_id, 'automacao_iniciada',
+          jsonb_build_object('gatilho', p_vars->'gatilho'->>'tipo', 'reiniciada', v_live.id is not null),
+          'inicio');
+
+  return jsonb_build_object('resultado', case when v_live.id is not null then 'reiniciada' else 'iniciada' end,
+                            'enrollment_id', v_id);
+end
+$$;
+
+revoke execute on function public.fn_automacao_iniciar(uuid, uuid, uuid, jsonb, uuid, uuid) from public, anon, authenticated;
+grant execute on function public.fn_automacao_iniciar(uuid, uuid, uuid, jsonb, uuid, uuid) to service_role;
+
+notify pgrst, 'reload schema';
+
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
@@ -108116,6 +108376,36 @@ $hb_0995_caixa$;
 
 do $hb_0995_financeiro$ begin perform public.fn_financeiro_policies_por_papel(); end $hb_0995_financeiro$;
 
+-- ---- a cor da etiqueta da conexão (migration 1012, fork Hiperbold) ----
+-- Fica ANTES do bloco da 0998 (grant por coluna de channel_sessions lido do catálogo): assim a
+-- instalação nova já concede SELECT da coluna a `authenticated`. Mesmo corpo da migration 1012.
+-- `label_color` guarda a CHAVE de um dos doze tons de lib/conexoes/cores.ts; nula = sem cor.
+alter table public.channel_sessions add column if not exists label_color text;
+
+update public.channel_sessions
+   set label_color = null
+ where label_color is not null
+   and label_color not in ('rosa', 'coral', 'pessego', 'amarelo', 'lima', 'verde', 'menta',
+                           'turquesa', 'azul', 'lavanda', 'lilas', 'cinza');
+
+do $hb_1012_cor_da_conexao$
+begin
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.channel_sessions'::regclass
+       and conname = 'channel_sessions_label_color_check'
+  ) then
+    alter table public.channel_sessions
+      add constraint channel_sessions_label_color_check
+      check (label_color is null or label_color = any (array['rosa', 'coral', 'pessego', 'amarelo', 'lima',
+             'verde', 'menta', 'turquesa', 'azul', 'lavanda', 'lilas', 'cinza']::text[]));
+  end if;
+end
+$hb_1012_cor_da_conexao$;
+
+comment on column public.channel_sessions.label_color is
+  'Chave da cor da etiqueta da conexão (paleta em lib/conexoes/cores.ts). Nula = sem cor. Migration 1012.';
+
 -- ---- grants por coluna reaplicados no fim (migration 0998, fork Hiperbold) ----
 -- 0967 (contacts sem cpf_hash/cpf_encrypted, D-216) e 0948 (tokens de webhook, D-128) dão grant
 -- coluna a coluna com a lista do catálogo NO PONTO em que o bloco roda. O merge do upstream de
@@ -108234,6 +108524,66 @@ begin
  end loop;
 end
 $hb_1006_mfa_na_leitura$;
+
+-- ---- a view de reconciliação do Google refeita depois de todas as colunas (migration 1011, fork Hiperbold, D-194) ----
+-- ⚠️ ANTES DA VARREDURA da 1008 (último bloco). Corpo da migration 1011, com a guarda da issue #1041 abaixo.
+
+-- 1011, a view de reconciliação do Google volta a ter todas as colunas da agenda (D-194, fork Hiperbold).
+--
+-- O defeito. `calendar_google_reconcilable_appointments` é `select a.* from calendar_appointments a where ...`
+-- (migration 0225). O Postgres EXPANDE o `*` no instante em que a view é criada, e a view só o refaz quando
+-- alguém a recria. No `baseline.sql` a view era criada no bloco da 0225, ANTES de as colunas `meeting_*`,
+-- `service_*`, `guest_email`, `reminder_sent_offsets_minutes`, `starts_at_marked_at` e as demais chegarem à
+-- tabela base pelos apêndices seguintes. Medido num Postgres descartável, baseline aplicado uma vez
+-- (o `install.sh`): a view tinha 51 colunas contra 79 da tabela. Só uma segunda aplicação (o `update.sh`)
+-- a levava a 79, porque `create or replace view` acrescenta as colunas que faltam no fim — e por isso a
+-- produção (que já passou por updates) tem as 79 e a instalação nova, até o primeiro update, não.
+--
+-- A correção. Recriar a view DEPOIS de todas as colunas existirem: `drop view if exists` + `create view`
+-- (não `create or replace`, que só acrescenta ao fim e preserva a ordem errada), com a MESMA definição e o
+-- MESMO filtro da 0225 (titular anonimizado fica de fora) e `security_invoker`. Mesmos revoke e grant: só o
+-- `service_role` lê. Nada depende da view (conferido em pg_depend), então o drop não precisa de cascade.
+--
+-- Efeito na produção: a ordem das colunas da view passa a seguir a da tabela (`needs_google_push` sobe da
+-- 63a para a 51a posição). O consumidor (`agenda-google-sync`) lê por nome, não por posição.
+--
+-- Esta migration vai ao fim do apêndice do baseline (antes só da varredura da 1008), para que todo update.sh
+-- recrie a view depois de qualquer coluna nova da `calendar_appointments`.
+
+-- ⚠️ NO BASELINE, SÓ QUANDO PRECISA (issue #1041). O update.sh reaplica este bloco num banco que já está
+-- certo, e derrubar e recriar a view ali troca o OID dela à toa (o `test:db:update` reprova). Por isso,
+-- aqui, a view só é refeita quando falta ou quando as colunas dela (nome e ordem) não são as da tabela. A
+-- migration 1011 roda uma vez só e recria direto.
+
+do $hb_1011_view_reconciliavel$
+declare
+ v_tabela text[];
+ v_view text[];
+begin
+ select array_agg(attname::text order by attnum) into v_tabela
+   from pg_attribute
+  where attrelid = 'public.calendar_appointments'::regclass and attnum > 0 and not attisdropped;
+ if to_regclass('public.calendar_google_reconcilable_appointments') is not null then
+  select array_agg(attname::text order by attnum) into v_view
+    from pg_attribute
+   where attrelid = 'public.calendar_google_reconcilable_appointments'::regclass and attnum > 0 and not attisdropped;
+ end if;
+ if v_view is not distinct from v_tabela then
+  return;
+ end if;
+
+ drop view if exists public.calendar_google_reconcilable_appointments;
+
+ create view public.calendar_google_reconcilable_appointments with (security_invoker=true) as
+  select a.* from public.calendar_appointments a where not exists(
+   select 1 from public.contacts c where c.organization_id=a.organization_id and c.id=a.contact_id and c.is_anonymized);
+end
+$hb_1011_view_reconciliavel$;
+
+revoke all on public.calendar_google_reconcilable_appointments from public,anon,authenticated;
+grant select on public.calendar_google_reconcilable_appointments to service_role;
+
+notify pgrst,'reload schema';
 
 -- ---- toda security definer de public termina o search_path com pg_temp (migration 1008, fork Hiperbold, D-223) ----
 --

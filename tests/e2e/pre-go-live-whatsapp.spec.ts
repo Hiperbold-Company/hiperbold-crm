@@ -8,10 +8,13 @@ import { ROTULO_DA_ABA_INSTANCIA } from "../../lib/channels/rotulo-da-aba-instan
 
 // Banco e auth reais, sem interceptar a API da feature. Não envia WhatsApp real.
 test.use({ locale: "pt-BR" });
-test("admin configura testes, remove número, confirma abertura e volta a restringir", async ({ page }, testInfo) => {
+test("admin configura testes, remove número, confirma abertura e volta a restringir", async ({
+  page,
+}, testInfo) => {
   test.setTimeout(120_000);
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  if (!["localhost", "127.0.0.1"].includes(new URL(url).hostname)) throw new Error("Somente Supabase local");
+  if (!["localhost", "127.0.0.1"].includes(new URL(url).hostname))
+    throw new Error("Somente Supabase local");
   const admin = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const suffix = randomUUID().slice(0, 8);
   const email = `prego-${suffix}@example.test`;
@@ -21,11 +24,22 @@ test("admin configura testes, remove número, confirma abertura e volta a restri
     env: { ...process.env, OWNER_EMAIL: email, OWNER_PASSWORD: password, OWNER_ORG_NAME: orgName },
     stdio: "pipe",
   });
-  const { data: org, error: orgError } = await admin.from("organizations").select("id").eq("slug", orgName).single();
+  const { data: org, error: orgError } = await admin
+    .from("organizations")
+    .select("id")
+    .eq("slug", orgName)
+    .single();
   expect(orgError).toBeNull();
   const orgId = org!.id;
   // Esta spec cobre a configuração do canal após onboarding, não o wizard.
-  expect((await admin.from("organizations").update({ onboarded_at: new Date().toISOString() }).eq("id", orgId)).error).toBeNull();
+  expect(
+    (
+      await admin
+        .from("organizations")
+        .update({ onboarded_at: new Date().toISOString() })
+        .eq("id", orgId)
+    ).error,
+  ).toBeNull();
   // Este spec passa a montar o nome com o MESMO gerador que o banco usa (#686):
   // o que ele inserir tem de caber no que o WAHA aceita e ter o formato real,
   // senão a prova de tela continua passando ao lado do mesmo defeito que o
@@ -33,13 +47,22 @@ test("admin configura testes, remove número, confirma abertura e volta a restri
   const sessao = nomeDaSessaoNovo(orgId);
   expect(nomeDaSessaoCabeNoWaha(sessao)).toBe(true);
   expect(sessao).toMatch(/^org_[0-9a-f]{8}_[0-9a-f]{32}$/);
-  const { data: channel, error } = await admin.from("channel_sessions").insert({
-    // Canal por instância: é o único tipo que a tela de Conexões lista aqui (a aba
-    // "Números por QR" saiu em be97dd61f), e a spec precisa ver o cartão do canal.
-    organization_id: orgId, display_name: "Canal de validação", provider: "uazapi",
-    uazapi_instance_id: `prego_${suffix}`, uazapi_base_url: "https://uazapi.exemplo.test",
-    webhook_secret_encrypted: "\\x00", metadata: metadataInicialDoCanal(), status: "STOPPED",
-  }).select("id").single();
+  const { data: channel, error } = await admin
+    .from("channel_sessions")
+    .insert({
+      // Canal por instância: é o único tipo que a tela de Conexões lista aqui (a aba
+      // "Números por QR" saiu em be97dd61f), e a spec precisa ver o cartão do canal.
+      organization_id: orgId,
+      display_name: "Canal de validação",
+      provider: "uazapi",
+      uazapi_instance_id: `prego_${suffix}`,
+      uazapi_base_url: "https://uazapi.exemplo.test",
+      webhook_secret_encrypted: "\\x00",
+      metadata: metadataInicialDoCanal(),
+      status: "STOPPED",
+    })
+    .select("id")
+    .single();
   expect(error).toBeNull();
   const channelId = channel!.id;
 
@@ -53,18 +76,32 @@ test("admin configura testes, remove número, confirma abertura e volta a restri
   // o teste passava pela faixa enquanto a lista carregava e reprovava quando a lista chegava antes.
   // Hiperbold: a aba da instância se chama "UAZAPI" (ROTULO_DA_ABA_INSTANCIA), não "Números por QR" do upstream.
   await expect(
-    page.getByRole("tabpanel", { name: ROTULO_DA_ABA_INSTANCIA }).getByText("Canal de validação", { exact: true }),
+    // O nome aparece no título do cartão e na prévia da etiqueta ("No Chat:"); vale o título.
+    page
+      .getByRole("tabpanel", { name: ROTULO_DA_ABA_INSTANCIA })
+      .locator("p")
+      .filter({ hasText: /^Canal de validação$/ }),
   ).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("IA em modo de teste", { exact: true })).toBeVisible();
   const openPanel = () => page.getByRole("button", { name: "Configurar acesso da IA" }).click();
   const input = page.getByLabel("Números autorizados para teste");
   const phone = "+5511999998888";
-  const read = async () => (await admin.from("channel_sessions").select("metadata").eq("organization_id", orgId).eq("id", channelId).single()).data!.metadata;
+  const read = async () =>
+    (
+      await admin
+        .from("channel_sessions")
+        .select("metadata")
+        .eq("organization_id", orgId)
+        .eq("id", channelId)
+        .single()
+    ).data!.metadata;
   await openPanel();
   await expect(input).toHaveValue("");
   await input.fill("telefone inválido");
   await page.getByRole("button", { name: "Salvar lista de teste" }).click();
-  await expect(page.getByRole("dialog", { name: "Acesso da IA no WhatsApp" }).getByRole("alert")).toContainText("Use um telefone com DDI");
+  await expect(
+    page.getByRole("dialog", { name: "Acesso da IA no WhatsApp" }).getByRole("alert"),
+  ).toContainText("Use um telefone com DDI");
   expect((await read()).ai_test_phone_numbers).toEqual([]);
   await input.fill(`${phone}\n+55 (11) 99999-8888\n+14155552671`);
   await page.getByRole("button", { name: "Salvar lista de teste" }).click();
@@ -97,8 +134,10 @@ test("admin configura testes, remove número, confirma abertura e volta a restri
   await openPanel();
   await expect(input).toHaveValue(phone);
   const sheet = page.getByRole("dialog", { name: "Acesso da IA no WhatsApp" });
-  expect(await sheet.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-  await expect(page.getByText("Acesso da IA atualizado.", { exact: true })).not.toBeVisible({ timeout: 10_000 });
+  expect(await sheet.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await expect(page.getByText("Acesso da IA atualizado.", { exact: true })).not.toBeVisible({
+    timeout: 10_000,
+  });
   await page.screenshot({ path: testInfo.outputPath("pre-go-live-mobile.png"), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.screenshot({ path: testInfo.outputPath("pre-go-live-desktop.png"), fullPage: true });

@@ -272,6 +272,11 @@ const DECISOES: Record<string, Decisao> = {
     caminho: "gatilho",
     razao: "0210: título trocado e descrição apagada na virada — 'Ligar para Fulano confirmar o orçamento' é texto que nomeia a pessoa.",
   },
+  followup_enrollments: {
+    decidida: "redigir",
+    caminho: "gatilho",
+    razao: "Desde a 0986 a execução guarda `vars` (jsonb, até 64 KB): respostas do bloco Pergunta (nome, telefone, texto livre), `saida.*` do bloco HTTP, `gatilho.*` e `param.*` — dado da pessoa, não vocabulário fechado. A virada de is_anonymized zera `vars` de TODAS as execuções do contato, em todas as raias, e cancela as automações vivas (fn_contato_anonimizado_limpa_automacoes, 0986); o roteiro `coletando` é encerrado pela 0394. A linha fica (status, nó, motivo: a trilha do que o motor fez), e `fn_automacao_iniciar` relê is_anonymized sob a trava do contato (1006) para não nascer execução nova depois da limpeza. Os eventos (`followup_enrollment_events`) não têm FK para `contacts` e não guardam resposta nem saída por construção (`varsParaOEvento`).",
+  },
   job_queue: {
     decidida: "redigir",
     caminho: "gatilho",
@@ -330,10 +335,6 @@ const DECISOES: Record<string, Decisao> = {
   cron_jobs: {
     decidida: "manter",
     razao: "Agenda do agendador (kind, intervalo, expressão, payload de configuração) — dado de operação da instalação, sem texto da pessoa; a FK existe para dizer de QUEM é o job.",
-  },
-  followup_enrollments: {
-    decidida: "manter",
-    razao: "Trilha de estados do roteiro (ponte, nó atual, status, motivo de cancelamento — vocabulário fechado), sem texto livre. A virada de is_anonymizado ENCERRA o roteiro em curso pelo gatilho da 0394; encerrar não é redigir, e não sobra nada legível da pessoa.",
   },
   google_ads_click_refs: {
     decidida: "manter",

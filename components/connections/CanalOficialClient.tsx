@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,9 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { useT } from "@/hooks/i18n/useT";
 import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
 import { ChannelAiAccess } from "./ChannelAiAccess";
+import { EtiquetaDaConexao } from "./EtiquetaDaConexao";
+import { RenomearConexao } from "./RenomearConexao";
+import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
 import { NumeroOficialCard } from "./NumeroOficialCard";
 import { ParaIntegrar } from "./ParaIntegrar";
 
@@ -76,6 +80,7 @@ export function CanalOficialClient({
   bloqueio?: BloqueioDoBotao;
 } = {}) {
   const t = useT();
+  const qc = useQueryClient();
   const { data, isPending } = useOfficialChannel();
   const conectar = useConnectOfficialChannel();
   const registrarWebhook = useRegistrarWebhookOficial();
@@ -115,6 +120,29 @@ export function CanalOficialClient({
             WABA <span className="font-mono">{estado.wabaId}</span> · {t("número")}{" "}
             <span className="font-mono">{estado.phoneNumberId}</span>
           </p>
+          {rotuloDoCanalDaConversa({ display_name: estado.displayName, phone_number: estado.phoneNumber }, t) && (
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+              {t("No Chat:")}
+              <EtiquetaDaConexao
+                texto={rotuloDoCanalDaConversa({ display_name: estado.displayName, phone_number: estado.phoneNumber }, t) ?? ""}
+                cor={estado.labelColor}
+              />
+            </div>
+          )}
+          {estado.channel_session_id && (
+            <div className="mt-2">
+              <RenomearConexao
+                channelId={estado.channel_session_id}
+                currentName={estado.displayName}
+                comCor
+                currentColor={estado.labelColor ?? null}
+                onSaved={async () => {
+                  await qc.invalidateQueries({ queryKey: ["official-channel"] });
+                  void qc.invalidateQueries({ queryKey: ["conversations"] });
+                }}
+              />
+            </div>
+          )}
         </Card>
       ) : null}
       {estado?.connected ? <NumeroOficialCard /> : null}

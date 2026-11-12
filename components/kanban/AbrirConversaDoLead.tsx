@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
 import { ArrowRight, ChatCircle } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
+import { BotaoNovaAba } from "./BotaoNovaAba";
 
 /**
  * A ação "Abrir conversa" — a porta que faltava para o lead sem conversa
@@ -74,14 +75,16 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
   // Sem telefone nenhum a rota não tem o que abrir — e a spec da #1993 pede
   // que o clique NÃO vá ao servidor nesse caso, e que o motivo apareça.
   const podeAbrir = telefone.length > 0;
-  const semTelefone = t(
-    "Sem telefone no contato: cadastre um telefone para abrir a conversa.",
-  );
+  const semTelefone = t("Sem telefone no contato: cadastre um telefone para abrir a conversa.");
 
   if (!temAlvo) return null;
 
-  async function abrir() {
+  async function abrir(novaAba: boolean) {
     if (!podeAbrir || abrindo) return;
+    // Em nova aba o funil fica onde estava. A aba nasce AGORA, dentro do
+    // clique — aberta depois do `await` o navegador a trataria como pop-up e
+    // bloquearia.
+    const aba = novaAba ? window.open("", "_blank") : null;
     setAbrindo(true);
     try {
       const res = await fetch("/api/v1/conversations/open-with-contact", {
@@ -102,8 +105,18 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
       // O quadro é a fonte do card E do dossiê: sem invalidar, a linha continuaria
       // oferecendo "Abrir conversa" sobre uma conversa que acabou de nascer.
       await qc.invalidateQueries({ queryKey: ["board"] });
-      router.push(`/app/inbox?id=${json.data.conversation_id}`);
+      const destino = `/app/inbox?id=${json.data.conversation_id}`;
+      if (aba) {
+        aba.opener = null;
+        aba.location.href = destino;
+      } else if (novaAba) {
+        // Pop-up bloqueado mesmo assim: abre aqui, para o clique não ficar mudo.
+        window.location.assign(destino);
+      } else {
+        router.push(destino);
+      }
     } catch (err) {
+      aba?.close();
       toast.error(err instanceof Error ? t(err.message) : t("Não foi possível abrir a conversa."));
     } finally {
       setAbrindo(false);
@@ -112,36 +125,39 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
 
   if (variante === "dossie") {
     return (
-      <button
-        type="button"
-        onClick={() => void abrir()}
-        disabled={!podeAbrir || abrindo}
-        aria-busy={abrindo}
-        title={podeAbrir ? t("Abrir conversa no Inbox") : semTelefone}
-        className="group mt-3 flex w-full items-center gap-2.5 rounded-md border border-border bg-muted/40 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-70"
-      >
-        <ChatCircle size={16} weight="regular" className="shrink-0 text-text-muted" aria-hidden />
-        <span className="min-w-0 flex-1">
-          <span className="block text-xs font-medium text-text">
-            {abrindo
-              ? t("Abrindo…")
-              : podeAbrir
-                ? t("Abrir conversa no Inbox")
-                : t("Abrir conversa")}
+      // Dois botões lado a lado, como no dossiê com conversa: o largo abre aqui,
+      // o quadrado abre numa nova aba.
+      <div className="mt-3 flex items-stretch gap-2">
+        <button
+          type="button"
+          onClick={() => void abrir(false)}
+          disabled={!podeAbrir || abrindo}
+          aria-busy={abrindo}
+          title={podeAbrir ? t("Abrir conversa no Chat do CRM") : semTelefone}
+          className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-md border border-border bg-muted/40 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          <ChatCircle size={16} weight="regular" className="shrink-0 text-text-muted" aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-medium text-text">
+              {abrindo
+                ? t("Abrindo…")
+                : podeAbrir
+                  ? t("Abrir conversa no Chat do CRM")
+                  : t("Abrir conversa")}
+            </span>
+            {!podeAbrir && <span className="block text-[11px] text-text-muted">{semTelefone}</span>}
           </span>
-          {!podeAbrir && (
-            <span className="block text-[11px] text-text-muted">{semTelefone}</span>
+          {podeAbrir && !abrindo && (
+            <ArrowRight
+              size={14}
+              weight="regular"
+              className="shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5"
+              aria-hidden
+            />
           )}
-        </span>
-        {podeAbrir && !abrindo && (
-          <ArrowRight
-            size={14}
-            weight="regular"
-            className="shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5"
-            aria-hidden
-          />
-        )}
-      </button>
+        </button>
+        {podeAbrir && <BotaoNovaAba onClick={() => void abrir(true)} disabled={abrindo} />}
+      </div>
     );
   }
 
@@ -152,12 +168,12 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
       // propagação, abrir a conversa também abriria o dossiê por baixo.
       onClick={(e) => {
         e.stopPropagation();
-        void abrir();
+        void abrir(true);
       }}
       onPointerDown={(e) => e.stopPropagation()}
       disabled={!podeAbrir || abrindo}
       aria-busy={abrindo}
-      title={podeAbrir ? t("Abrir conversa no Inbox") : semTelefone}
+      title={podeAbrir ? t("Abrir conversa no Chat do CRM") : semTelefone}
       className={cn(
         "group/conversa mt-1 flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[11px]",
         "transition-colors",

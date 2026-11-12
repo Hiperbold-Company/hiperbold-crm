@@ -39,7 +39,17 @@ describe("a porta para a conversa", () => {
     // `/app/inbox` sozinho devolveria o usuário à lista para procurar de novo —
     // que é exatamente o trabalho que este bloco existe para evitar.
     render(<ConversaNoDossie conversa={conversa} />);
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/app/inbox?id=conv-1");
+    const aqui = screen.getByRole("link", { name: /Abrir conversa no Chat do CRM/ });
+    expect(aqui).toHaveAttribute("href", "/app/inbox?id=conv-1");
+    expect(aqui).not.toHaveAttribute("target");
+  });
+
+  it("ao lado, o botão de ícone abre a MESMA conversa numa nova aba", () => {
+    render(<ConversaNoDossie conversa={conversa} />);
+    const novaAba = screen.getByRole("link", { name: "Abrir conversa em nova aba" });
+    expect(novaAba).toHaveAttribute("href", "/app/inbox?id=conv-1");
+    expect(novaAba).toHaveAttribute("target", "_blank");
+    expect(novaAba).toHaveAttribute("rel", "noopener noreferrer");
   });
 
   it("mostra a última mensagem — senão o clique é uma aposta", () => {
@@ -60,7 +70,10 @@ describe("a porta para a conversa", () => {
 
   it("conversa sem prévia ainda abre — o texto é extra, o destino é o ponto", () => {
     render(<ConversaNoDossie conversa={{ ...conversa, preview: null }} />);
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/app/inbox?id=conv-1");
+    expect(screen.getByRole("link", { name: /Abrir conversa no Chat do CRM/ })).toHaveAttribute(
+      "href",
+      "/app/inbox?id=conv-1",
+    );
   });
 
   it("negócio SEM conversa não renderiza nada", () => {

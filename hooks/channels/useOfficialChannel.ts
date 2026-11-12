@@ -14,6 +14,8 @@ export interface OfficialChannelState {
   /** Base pública da API — usada no painel "Para integrar". */
   endpoint: string | null;
   displayName: string | null;
+  /** Chave da cor da etiqueta (migration 1012); ausente em resposta antiga. */
+  labelColor?: string | null;
   phoneNumber: string | null;
   status: string | null;
   webhook: {

@@ -36,6 +36,7 @@ import {
   type LinksDoContato,
   type TipoDeLink,
 } from "@/lib/leads/links-de-contato";
+import { cargoEEmpresa } from "@/lib/contacts/cargo-e-empresa";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import type { Contact } from "@/lib/types/contacts";
 
@@ -48,6 +49,12 @@ interface Props {
    * `useContatosRelacionados` segura a chamada sem `leadId`.
    */
   leadId?: string | null;
+  /**
+   * `custom_fields` do negócio: cargo e empresa que o formulário gravou no card
+   * valem quando o contato não os tem. Opcional — quem monta sem o negócio
+   * (testes, outras telas) mostra só o que o contato guarda.
+   */
+  camposDoNegocio?: Record<string, unknown> | null;
 }
 
 /**
@@ -90,7 +97,7 @@ interface Props {
  * desvinculado por esta tela. É o que permite desfazer sem inventar estado no
  * pai.
  */
-export function ContatoDoNegocio({ contactId, pipelineId, leadId }: Props) {
+export function ContatoDoNegocio({ contactId, pipelineId, leadId, camposDoNegocio }: Props) {
   const [vinculo, setVinculo] = useState<string | null | undefined>(undefined);
   const efetivo = vinculo !== undefined ? vinculo : contactId;
   return (
@@ -100,6 +107,7 @@ export function ContatoDoNegocio({ contactId, pipelineId, leadId }: Props) {
           contactId={efetivo}
           pipelineId={pipelineId}
           leadId={leadId ?? null}
+          camposDoNegocio={camposDoNegocio ?? null}
           onDesvinculado={() => setVinculo(null)}
         />
       ) : (
@@ -266,11 +274,13 @@ function ContatoVinculado({
   contactId,
   pipelineId,
   leadId,
+  camposDoNegocio,
   onDesvinculado,
 }: {
   contactId: string;
   pipelineId: string;
   leadId: string | null;
+  camposDoNegocio: Record<string, unknown> | null;
   onDesvinculado: () => void;
 }) {
   const t = useT();
@@ -290,7 +300,7 @@ function ContatoVinculado({
             <TabsTrigger value="links">{t("Links")}</TabsTrigger>
           </TabsList>
           <TabsContent value="dados">
-            <DadosDoContato contato={contato} />
+            <DadosDoContato contato={contato} camposDoNegocio={camposDoNegocio} />
           </TabsContent>
           <TabsContent value="links">
             {/* `key` = updated_at: quando o contato é relido depois de salvar
@@ -718,9 +728,16 @@ function FormularioDeParticipante({ leadId, onFechar }: { leadId: string; onFech
   );
 }
 
-function DadosDoContato({ contato }: { contato: Contact }) {
+function DadosDoContato({
+  contato,
+  camposDoNegocio,
+}: {
+  contato: Contact;
+  camposDoNegocio?: Record<string, unknown> | null;
+}) {
   const t = useT();
   const nome = nomeDoContato(contato);
+  const { cargo, empresa } = cargoEEmpresa(contato.custom_fields, camposDoNegocio);
   const digitos = (contato.phone_number ?? "").replace(/\D/g, "");
 
   return (
@@ -741,7 +758,7 @@ function DadosDoContato({ contato }: { contato: Contact }) {
                   rel="noopener noreferrer"
                   className="text-xs text-accent underline-offset-2 hover:underline"
                 >
-                  {t("Abrir no WhatsApp")}
+                  {t("Abrir no WhatsApp Web (Externo)")}
                 </a>
               )}
             </span>
@@ -759,6 +776,16 @@ function DadosDoContato({ contato }: { contato: Contact }) {
           ) : (
             "—"
           )}
+        </dd>
+
+        <dt className="text-xs text-text-muted">{t("Cargo")}</dt>
+        <dd className="min-w-0 truncate" title={cargo ?? undefined}>
+          {cargo ?? "—"}
+        </dd>
+
+        <dt className="text-xs text-text-muted">{t("Empresa")}</dt>
+        <dd className="min-w-0 truncate" title={empresa ?? undefined}>
+          {empresa ?? "—"}
         </dd>
       </dl>
       <Link

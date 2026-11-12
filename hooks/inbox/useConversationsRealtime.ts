@@ -57,6 +57,8 @@ export interface ContactSummary {
 export interface ChannelSummary {
   phone_number: string | null;
   display_name: string | null;
+  /** Chave da cor da etiqueta da conexão (migration 1012); ausente em cache antigo. */
+  label_color?: string | null;
   /**
    * Quem impõe a regra deste número. A tela NÃO interpreta este valor — ela o
    * entrega a `estadoDaJanela` (lib/channels), que decide se há relógio a

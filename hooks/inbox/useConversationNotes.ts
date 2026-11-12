@@ -1,7 +1,9 @@
 "use client";
 import { usePermission } from "@/hooks/auth/AuthProvider";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { useInvalidacaoAgrupada } from "@/hooks/realtime/useInvalidacaoAgrupada";
+import { AGRUPAR_PAINEL } from "@/lib/realtime/coalescer";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
@@ -10,7 +12,6 @@ import type { Note } from "@/lib/types/messaging";
 /** Onda 5.2: notas internas da conversa (poucas por conversa — query simples, sem paginação). */
 export function useConversationNotes(conversationId: string | null) {
   const podeConsultar = usePermission("inbox.notes.view");
-  const qc = useQueryClient();
   const queryKey = ["notes", conversationId] as const;
 
   const query = useQuery({
@@ -29,9 +30,10 @@ export function useConversationNotes(conversationId: string | null) {
     select: (res) => res.data,
   });
 
+  const invalidar = useInvalidacaoAgrupada(AGRUPAR_PAINEL);
   const onChange = useCallback(() => {
-    if (conversationId) qc.invalidateQueries({ queryKey: ["notes", conversationId] });
-  }, [qc, conversationId]);
+    if (conversationId) invalidar(["notes", conversationId]);
+  }, [invalidar, conversationId]);
 
   useRealtimeChannel({
     name: conversationId ? `conversation-notes-${conversationId}` : "conversation-notes-disabled",

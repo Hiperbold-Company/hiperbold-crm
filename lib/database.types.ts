@@ -2810,6 +2810,7 @@ export type Database = {
         Row: {
           created_at: string;
           created_by: string | null;
+          hosts_permitidos: string[] | null;
           id: string;
           last_used_at: string | null;
           nome: string;
@@ -2822,6 +2823,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           created_by?: string | null;
+          hosts_permitidos?: string[] | null;
           id?: string;
           last_used_at?: string | null;
           nome: string;
@@ -2833,6 +2835,7 @@ export type Database = {
         Update: {
           created_at?: string;
           created_by?: string | null;
+          hosts_permitidos?: string[] | null;
           id?: string;
           last_used_at?: string | null;
           nome?: string;
@@ -3087,6 +3090,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "automation_rules_migrated_to_pointer_id_fkey";
+            columns: ["migrated_to_pointer_id"];
+            isOneToOne: false;
+            referencedRelation: "followup_flow_pointers";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "automation_rules_organization_id_fkey";
             columns: ["organization_id"];
@@ -6747,6 +6757,7 @@ export type Database = {
           engine: string;
           id: string;
           is_warmup_complete: boolean | null;
+          label_color: string | null;
           last_health_check_at: string | null;
           last_status_change_at: string;
           meta_phone_number_id: string | null;
@@ -6806,6 +6817,7 @@ export type Database = {
           engine?: string;
           id?: string;
           is_warmup_complete?: never;
+          label_color?: string | null;
           last_health_check_at?: string | null;
           last_status_change_at?: string;
           meta_phone_number_id?: string | null;
@@ -6864,6 +6876,7 @@ export type Database = {
           engine?: string;
           id?: string;
           is_warmup_complete?: never;
+          label_color?: string | null;
           last_health_check_at?: string | null;
           last_status_change_at?: string;
           meta_phone_number_id?: string | null;
@@ -18526,6 +18539,7 @@ export type Database = {
       };
       fn_financeiro_declarar_secoes_lgpd: { Args: Record<PropertyKey, never>; Returns: undefined };
       fn_financeiro_ligar_caixa_a_comanda: { Args: Record<PropertyKey, never>; Returns: undefined };
+      fn_financeiro_policies_por_papel: { Args: Record<PropertyKey, never>; Returns: undefined };
       fn_financeiro_provisionar: { Args: Record<PropertyKey, never>; Returns: undefined };
       fn_finish_channel_connection: {
         Args: {
@@ -18816,6 +18830,10 @@ export type Database = {
         Returns: number;
       };
       fn_pgrst_recusar_replay_do_gateway: { Args: Record<PropertyKey, never>; Returns: undefined };
+      fn_podar_alarmes_de_gatilho: {
+        Args: { p_limite?: number; p_retencao_dias?: number };
+        Returns: number;
+      };
       fn_podar_fila_de_jobs: {
         Args: { p_limite?: number; p_retencao_dias?: number };
         Returns: number;

@@ -311,6 +311,7 @@ export function LeadDossier({
             contactId={lead.contact_id}
             pipelineId={pipelineId}
             leadId={lead.id}
+            camposDoNegocio={lead.custom_fields}
           />
         </SecaoDoDossie>
 

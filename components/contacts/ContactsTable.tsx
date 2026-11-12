@@ -473,7 +473,7 @@ export function ContactsTable({
                           <Button variant="ghost" size="icon" className="md:h-8 md:w-8" asChild>
                             <Link
                               href={`/app/inbox?id=${c.conversa.id}`}
-                              title={t("Abrir conversa no Inbox")}
+                              title={t("Abrir conversa no Chat do CRM")}
                               aria-label={`${t("Abrir conversa com")} ${displayName(c, t)} ${t("no Inbox")}`}
                             >
                               <ChatCircle size={16} weight="regular" aria-hidden />
@@ -487,7 +487,7 @@ export function ContactsTable({
                             variant="ghost"
                             size="icon"
                             className="md:h-8 md:w-8"
-                            title={t("Iniciar conversa no Inbox")}
+                            title={t("Iniciar conversa no Chat do CRM")}
                             aria-label={`${t("Iniciar conversa com")} ${displayName(c, t)} ${t("no Inbox")}`}
                             disabled={abrindo}
                             onClick={() => void iniciarConversa(c)}

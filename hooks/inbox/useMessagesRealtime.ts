@@ -3,6 +3,8 @@ import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 import { useRefetchDeSeguranca } from "@/hooks/realtime/useRefetchDeSeguranca";
+import { useInvalidacaoAgrupada } from "@/hooks/realtime/useInvalidacaoAgrupada";
+import { AGRUPAR_MENSAGENS } from "@/lib/realtime/coalescer";
 import { agendarRecargaDasConversas } from "@/hooks/inbox/recargaDasConversas";
 import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
@@ -16,6 +18,8 @@ interface MessagesResponse {
 export function useMessagesRealtime(conversationId: string | null) {
   const qc = useQueryClient();
   const queryKey = useMemo(() => ["messages", conversationId] as const, [conversationId]);
+  // A primeira mensagem da rajada recarrega na hora; as seguintes, juntas (lib/realtime/coalescer.ts).
+  const invalidar = useInvalidacaoAgrupada(AGRUPAR_MENSAGENS);
 
   const query = useInfiniteQuery({
     queryKey,
@@ -56,9 +60,9 @@ export function useMessagesRealtime(conversationId: string | null) {
   });
 
   const onChange = useCallback(() => {
-    if (conversationId) qc.invalidateQueries({ queryKey: ["messages", conversationId] });
+    if (conversationId) invalidar(["messages", conversationId]);
     agendarRecargaDasConversas(qc);
-  }, [qc, conversationId]);
+  }, [qc, conversationId, invalidar]);
 
   const { status: realtimeStatus, ultimaEntrega } = useRealtimeChannel({
     name: conversationId ? `messages-${conversationId}` : "messages-disabled",
