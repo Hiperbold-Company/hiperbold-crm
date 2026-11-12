@@ -27,7 +27,14 @@
  * esconde o bloco de sugestões — lá a informação É a lista.
  */
 import { useQuery, type QueryClient } from "@tanstack/react-query";
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 import { apiClient } from "@/lib/api/client";
 import { useAuth } from "@/hooks/auth/AuthProvider";
@@ -47,7 +54,53 @@ export function invalidarCoresDasEtiquetas(queryClient: QueryClient): void {
 
 const VAZIO: CoresPorEtiqueta = {};
 
-const Ctx = createContext<CoresPorEtiqueta>(VAZIO);
+/**
+ * ─── Por que o contexto leva uma LOJA, e não o mapa ─────────────────────────
+ *
+ * O provider envolve o shell inteiro (`app/app/layout.tsx`), acima da página.
+ * Quando o valor de um contexto muda, o React propaga a mudança até as
+ * fronteiras de Suspense que ainda não hidrataram — e a fronteira da página que
+ * acabou de chegar pelo streaming fica pendente por até ~300 ms (o React agrupa
+ * as revelações). Mudança nesse intervalo faz o React DESCARTAR o HTML do
+ * servidor e redesenhar a página no cliente, enquanto a cópia do servidor
+ * espera escondida no fim do `<body>`: a tela existia duas vezes no DOM
+ * (11/11/2026, `agenda-tela-do-produto.spec.ts`, assim que `/api/v1/tags/cores`
+ * passou a responder dentro dessa janela).
+ *
+ * Com a loja, o valor do contexto nunca muda: quem lê assina a loja por
+ * `useSyncExternalStore`, e a chegada das cores só acorda os componentes que já
+ * estão na tela. Uma fronteira ainda não hidratada não tem assinante e não é
+ * tocada.
+ */
+interface LojaDeCores {
+  ler: () => CoresPorEtiqueta;
+  assinar: (aviso: () => void) => () => void;
+}
+
+function criarLoja(inicial: CoresPorEtiqueta): LojaDeCores & { gravar: (v: CoresPorEtiqueta) => void } {
+  let atual = inicial;
+  const avisos = new Set<() => void>();
+  return {
+    ler: () => atual,
+    assinar: (aviso) => {
+      avisos.add(aviso);
+      return () => avisos.delete(aviso);
+    },
+    gravar: (v) => {
+      if (v === atual) return;
+      atual = v;
+      avisos.forEach((aviso) => aviso());
+    },
+  };
+}
+
+/** Fora do provider: mapa vazio para sempre (o chip sai cinza). */
+const LOJA_VAZIA: LojaDeCores = { ler: () => VAZIO, assinar: () => () => {} };
+
+const Ctx = createContext<LojaDeCores>(LOJA_VAZIA);
+
+/** O servidor nunca tem as cores (a leitura é do navegador): a hidratação parte do vazio. */
+const lerNoServidor = () => VAZIO;
 
 export function ProvedorDeCoresDasEtiquetas({ children }: { children: ReactNode }) {
   const { activeOrg } = useAuth();
@@ -66,13 +119,16 @@ export function ProvedorDeCoresDasEtiquetas({ children }: { children: ReactNode 
       return coresDoVocabulario({ tags: res.data });
     },
   });
-  const valor = useMemo(() => data ?? VAZIO, [data]);
-  return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
+  const valor = data ?? VAZIO;
+  const [loja] = useState(() => criarLoja(valor));
+  useLayoutEffect(() => loja.gravar(valor), [loja, valor]);
+  return <Ctx.Provider value={loja}>{children}</Ctx.Provider>;
 }
 
 /** O mapa inteiro — para quem desenha uma lista de opções (filtros). */
 export function useCoresDasEtiquetas(): CoresPorEtiqueta {
-  return useContext(Ctx);
+  const loja = useContext(Ctx);
+  return useSyncExternalStore(loja.assinar, loja.ler, lerNoServidor);
 }
 
 /** A cor de UMA etiqueta, ou `null`. */

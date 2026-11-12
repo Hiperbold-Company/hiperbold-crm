@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 
 import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
@@ -826,24 +826,51 @@ export function useVoiceCallSession(remoteAudioRef: RefObject<HTMLAudioElement |
 
   useEffect(() => teardownMedia, [teardownMedia]);
 
-  return {
-    call,
-    /** `true` só quando quem está vendo é quem está na linha. */
-    minha,
-    muted,
-    connectingMedia,
-    /** O que o transporte de áudio está fazendo DE FATO — ver `EstadoDaMidia`. */
-    estadoDaMidia,
-    /** O áudio desta ligação está em outra aba/aparelho deste usuário. */
-    midiaEmOutraAba,
-    /** Encerrar em voo — o botão fica desabilitado para não sair outro DELETE. */
-    encerrando,
-    ultimoFim,
-    startCall,
-    acceptCall,
-    rejectCall,
-    hangUp,
-    toggleMute,
-    ouvirAqui,
-  };
+  // Objeto de IDENTIDADE ESTÁVEL: é o `value` do contexto em
+  // `VoiceCallProvider`, que envolve o shell inteiro (`app/app/layout.tsx`).
+  // Um objeto novo a cada render do provedor muda o contexto mesmo sem nada ter
+  // mudado, e o React propaga a mudança até as fronteiras de Suspense ainda não
+  // hidratadas: a da página que acabou de chegar pelo streaming é descartada e
+  // redesenhada no cliente, enquanto a cópia do servidor espera escondida a
+  // revelação. Por ~200 ms a tela existia DUAS vezes no DOM (11/11/2026,
+  // `agenda-tela-do-produto.spec.ts`).
+  return useMemo(
+    () => ({
+      call,
+      /** `true` só quando quem está vendo é quem está na linha. */
+      minha,
+      muted,
+      connectingMedia,
+      /** O que o transporte de áudio está fazendo DE FATO — ver `EstadoDaMidia`. */
+      estadoDaMidia,
+      /** O áudio desta ligação está em outra aba/aparelho deste usuário. */
+      midiaEmOutraAba,
+      /** Encerrar em voo — o botão fica desabilitado para não sair outro DELETE. */
+      encerrando,
+      ultimoFim,
+      startCall,
+      acceptCall,
+      rejectCall,
+      hangUp,
+      toggleMute,
+      ouvirAqui,
+    }),
+    [
+      call,
+      minha,
+      muted,
+      connectingMedia,
+      estadoDaMidia,
+      midiaEmOutraAba,
+      encerrando,
+      ultimoFim,
+      startCall,
+      acceptCall,
+      rejectCall,
+      hangUp,
+      toggleMute,
+      ouvirAqui,
+    ],
+  );
+
 }
