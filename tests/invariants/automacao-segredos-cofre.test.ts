@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 
 /**
@@ -190,5 +191,92 @@ describe("automacao_segredos: isolamento entre organizações", () => {
         `insert into public.automacao_segredos (organization_id, nome, valor_cifrado, ultimos4) values ('${ORG_A}', 'Nome Ruim', '\\x00', '0000');`,
       ),
     ).toThrow(/automacao_segredos_nome_valido/);
+  });
+});
+
+/**
+ * A CHAVE PRESA AO ENDEREÇO (migration 1007, `hosts_permitidos`): a forma é do
+ * banco, não só do Zod — a coluna é a régua do envio, e um item torto
+ * (`https://`, porta, `*`) nunca bateria com o host da URL, ou seria lido como
+ * curinga. E a chave que já existia fica NULA: segue indo para qualquer
+ * endereço, para não quebrar automação publicada.
+ */
+describe("automacao_segredos.hosts_permitidos (migration 1007)", () => {
+  const RX_RECUSA = /automacao_segredos_hosts_permitidos_forma/;
+  const inserir = (lista: string) =>
+    sql(`
+      begin;
+      insert into public.automacao_segredos (organization_id, nome, valor_cifrado, ultimos4, hosts_permitidos)
+        values ('${ORG_A}', 'token_forma', '\\x00', '', ${lista});
+      rollback;
+    `);
+
+  it("a chave que já existia (sem endereço) fica nula", () => {
+    expect(
+      sql(
+        `select count(*) from public.automacao_segredos where organization_id in ('${ORG_A}', '${ORG_B}') and hosts_permitidos is not null;`,
+      ),
+    ).toBe("0");
+  });
+
+  it("aceita hosts em minúsculas, com punycode, até 10", () => {
+    expect(() => inserir(`array['graph.facebook.com']`)).not.toThrow();
+    expect(() => inserir(`array['api.exemplo.com.br', 'xn--ao-xka2b.com.br', '1.2.3.4']`)).not.toThrow();
+    expect(() =>
+      inserir(`(select array_agg('h' || g || '.com') from generate_series(1, 10) g)`),
+    ).not.toThrow();
+  });
+
+  it.each([
+    ["lista vazia", `array[]::text[]`],
+    ["com esquema", `array['https://api.exemplo.com']`],
+    ["com maiúscula", `array['Api.Exemplo.com']`],
+    ["com porta", `array['api.exemplo.com:443']`],
+    ["com caminho", `array['api.exemplo.com/v1']`],
+    ["curinga", `array['*.exemplo.com']`],
+    ["curinga sozinho", `array['*']`],
+    ["sem ponto", `array['localhost']`],
+    ["item vazio", `array['api.exemplo.com', '']`],
+    ["item nulo", `array['api.exemplo.com', null]`],
+    ["vírgula dentro do item", `array['a.com,b.com']`],
+    ["11 itens", `(select array_agg('h' || g || '.com') from generate_series(1, 11) g)`],
+  ])("recusa %s", (_nome, lista) => {
+    expect(() => inserir(lista)).toThrow(RX_RECUSA);
+  });
+
+  it("o gerente lê a coluna pela sessão (não é segredo); o valor cifrado segue negado", () => {
+    expect(
+      como(
+        "authenticated",
+        GERENTE_A,
+        "select coalesce(string_agg(coalesce(array_to_string(hosts_permitidos, ','), 'nulo'), ','), '') from public.automacao_segredos;",
+      ),
+    ).toBe("nulo");
+    expect(
+      sql(
+        "select has_column_privilege('authenticated', 'public.automacao_segredos', 'hosts_permitidos', 'select');",
+      ),
+    ).toBe("t");
+  });
+
+  it("o apêndice do baseline cura um banco anterior à 1007: a coluna nasce, a linha antiga fica nula", () => {
+    const base = fs.readFileSync("supabase/baseline.sql", "utf8");
+    const inicio = base.indexOf("-- ---- automações: a chave secreta só vai para os endereços permitidos dela (migration 1007");
+    expect(inicio).toBeGreaterThan(0);
+    const fim = base.indexOf("\n-- ---- ", inicio + 10);
+    const bloco = base.slice(inicio, fim);
+    const saida = sql(`
+      begin;
+      alter table public.automacao_segredos drop constraint automacao_segredos_hosts_permitidos_forma;
+      alter table public.automacao_segredos drop column hosts_permitidos;
+      insert into public.automacao_segredos (organization_id, nome, valor_cifrado, ultimos4)
+        values ('${ORG_A}', 'token_antigo', '\\x00', '');
+      ${bloco}
+      ${bloco}
+      select (select count(*) from public.automacao_segredos where nome = 'token_antigo' and hosts_permitidos is null)
+        || ':' || (select count(*) from pg_constraint where conname = 'automacao_segredos_hosts_permitidos_forma');
+      rollback;
+    `);
+    expect(saida.split("\n").filter((l) => /^\d+:\d+$/.test(l))).toEqual(["1:1"]);
   });
 });

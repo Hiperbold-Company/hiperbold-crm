@@ -2810,6 +2810,7 @@ export type Database = {
         Row: {
           created_at: string;
           created_by: string | null;
+          hosts_permitidos: string[] | null;
           id: string;
           last_used_at: string | null;
           nome: string;
@@ -2822,6 +2823,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           created_by?: string | null;
+          hosts_permitidos?: string[] | null;
           id?: string;
           last_used_at?: string | null;
           nome: string;
@@ -2833,6 +2835,7 @@ export type Database = {
         Update: {
           created_at?: string;
           created_by?: string | null;
+          hosts_permitidos?: string[] | null;
           id?: string;
           last_used_at?: string | null;
           nome?: string;

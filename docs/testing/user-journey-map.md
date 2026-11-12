@@ -4373,3 +4373,17 @@ Automações, lote 4: bloco "Requisição HTTP" (método, endereço, cabeçalhos
 | J104.4 | Executar com destino interno | a execução conta "Uma ação falhou: endereço recusado" e o receptor recebe zero requisições | **PASS (tela, 10/11/2026)** — idem |
 
 Evidência: `evidence/automacoes-lote4/01-chave-salva-mascarada.png` (a tela de chaves, só os 4 últimos caracteres), `evidence/automacoes-lote4/02-bloco-http-com-endereco-local.png` (o bloco montado, com a chave mascarada no cabeçalho), `evidence/automacoes-lote4/03-publish-recusa-http-local.png` (a publicação recusada) e `evidence/automacoes-lote4/04-execucao-falhou-destino-recusado.png` (o dossiê com a falha em português).
+
+### J104 — chave presa ao endereço (migration 1007, 11/11/2026)
+
+Achado da auditoria do lote 4: quem edita automação (e não vê o valor da chave) montava o bloco para um servidor próprio com a chave no cabeçalho. Agora cada chave tem "Endereços permitidos"; o formulário avisa, o publish recusa e o motor recusa antes de qualquer requisição. Mesma spec, segundo caso ("chave presa ao endereço…"), medido local em 11/11/2026, build de produção, banco fresco do `baseline.sql`.
+
+| # | Caso | Expectativa | Resultado |
+|---|------|-------------|-----------|
+| J104.5 | Salvar chave com endereço | sem endereço (ou com `https://…/v1`) o botão não salva e a frase diz o porquê; salva com dois endereços, normalizados em minúsculas ("Só vai para: …") | **PASS (tela, 11/11/2026)** — `tests/e2e/automacoes-http-segredo.spec.ts` |
+| J104.6 | Bloco aponta para outro host | o formulário avisa "A chave “…” só pode ser enviada para …" e o publish recusa com a mesma frase | **PASS (tela, 11/11/2026)** — idem |
+| J104.7 | Incluir endereço novo | o campo "Cole a chave de novo para incluir um endereço novo" aparece e o botão fica travado sem ela; tirar endereço salva sem pedir a chave | **PASS (tela, 11/11/2026)** — idem |
+| J104.8 | Executar com o host tirado da chave | a execução conta "Uma ação falhou: … A chave “…” só pode ser enviada para …"; o receptor real recebe zero e o token não aparece | **PASS (tela, 11/11/2026)** — idem |
+| J104.9 | Chave antiga (sem endereço) | aviso "Esta chave pode ser enviada para qualquer endereço. Informe o endereço do serviço."; preencher não pede a chave e o aviso some | **PASS (tela, 11/11/2026)** — idem |
+
+Evidência: `evidence/automacoes-chave-por-host/01-chave-com-enderecos-permitidos.png`, `evidence/automacoes-chave-por-host/02-bloco-aviso-chave-fora-do-endereco.png`, `evidence/automacoes-chave-por-host/03-publish-recusa-host-fora-da-chave.png`, `evidence/automacoes-chave-por-host/04-incluir-endereco-pede-a-chave.png`, `evidence/automacoes-chave-por-host/05-execucao-recusada-chave-fora-do-endereco.png` e `evidence/automacoes-chave-por-host/06-chave-antiga-com-aviso.png`. O caminho positivo (a chave chega ao host permitido) é provado em `lib/automacoes/chave-presa-ao-host.test.ts`, com o fetch seguro de produção contra um receptor HTTP real (só DNS e TLS trocados), pelo mesmo motivo do lote 4: a régua da organização exige https e IP público.

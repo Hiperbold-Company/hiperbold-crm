@@ -83,6 +83,9 @@ export const ApiErrorCodes = {
   // retentar depois resolve, enquanto conflito manda trocar a chave.
   idempotency_in_progress: "idempotency_in_progress",
   state_conflict: "state_conflict",
+  // PATCH /api/v1/automacoes/segredos/[id]: a lista de endereços da chave mudou
+  // entre a leitura e a gravação (outro PATCH). Nada foi gravado; a tela manda recarregar.
+  conflito_de_edicao: "conflito_de_edicao",
   // Escrita vinda de uma aba que ficou numa organização diferente da do cookie
   // `active_org` (#2335). O header `X-Org-Da-Aba` só serve para RECUSAR: a org
   // efetiva continua sendo a do cookie (`lib/auth/require-role.ts`).
@@ -144,6 +147,11 @@ export const ApiErrorCodes = {
   voice_already_paired: "voice_already_paired", // POST /voice/sessions/pair com aparelho já vinculado — a saída é DELETE /voice/sessions, nunca re-parear por cima (ver a rota)
 
   // 422 — semântica
+  // 422 — PATCH de chave do cofre de automações que AMPLIA a lista de endereços (migration 1007):
+  // sem o valor atual (`segredo_valor_exigido`) ou com um valor que não é o salvo
+  // (`segredo_valor_divergente`). Códigos próprios: a tela explica a saída.
+  segredo_valor_exigido: "segredo_valor_exigido",
+  segredo_valor_divergente: "segredo_valor_divergente",
   unprocessable_entity: "unprocessable_entity",
   // 422, e é PRODUTO, não erro: o aviso do art. 12.º vale só para organizações
   // FORA do Brasil (decisão de 2026-10-16). A organização brasileira não recebe

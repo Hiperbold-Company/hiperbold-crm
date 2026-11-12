@@ -12,6 +12,8 @@ export interface SegredoDaTela {
   id: string;
   nome: string;
   ultimos4: string;
+  /** Para onde a chave pode ir. `null` = chave antiga: vai para qualquer endereço (a tela avisa). */
+  hosts_permitidos: string[] | null;
   created_at: string;
   updated_at: string;
   last_used_at: string | null;
@@ -31,7 +33,7 @@ export function useSegredos(enabled = true) {
 export function useCriarSegredo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { nome: string; valor: string }) =>
+    mutationFn: async (input: { nome: string; valor: string; hosts_permitidos: string[] }) =>
       (await apiClient.post<{ data: SegredoDaTela }>("/api/v1/automacoes/segredos", input)).data,
     onSuccess: () => void qc.invalidateQueries({ queryKey: segredosQueryKey }),
   });
@@ -40,12 +42,17 @@ export function useCriarSegredo() {
 export function useTrocarSegredo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id: string; valor: string }) =>
-      (
-        await apiClient.patch<{ data: SegredoDaTela }>(`/api/v1/automacoes/segredos/${input.id}`, {
-          valor: input.valor,
-        })
-      ).data,
+    // Valor, endereços permitidos, ou os dois. Incluir endereço novo pede o valor junto (a rota recusa sem).
+    mutationFn: async ({
+      id,
+      ...corpo
+    }: {
+      id: string;
+      valor?: string;
+      hosts_permitidos?: string[];
+    }) =>
+      (await apiClient.patch<{ data: SegredoDaTela }>(`/api/v1/automacoes/segredos/${id}`, corpo))
+        .data,
     onSuccess: () => void qc.invalidateQueries({ queryKey: segredosQueryKey }),
   });
 }

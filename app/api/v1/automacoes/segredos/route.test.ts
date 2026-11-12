@@ -33,10 +33,14 @@ import { GET, POST } from "./route";
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const OUTRA = "aaaaaaaa-0000-4000-8000-000000000002";
 const VALOR = "tok_SUPERSECRETO_9876";
+/** Chave nova nasce com pelo menos um endereço permitido (migration 1007). */
+const H = { hosts_permitidos: ["api.exemplo.com"] };
 
 type Linha = Record<string, unknown>;
 let tabelas: Record<string, Linha[]>;
 let consultas = 0;
+/** Roda uma vez, no instante em que a rota chama `update` (simula outro PATCH no meio da corrida). */
+let antesDoUpdate: (() => void) | null = null;
 
 function banco() {
   function builder(tabela: string) {
@@ -48,8 +52,11 @@ function banco() {
     let colunas: string[] | null = null;
     const projetar = (l: Linha) =>
       colunas ? Object.fromEntries(colunas.map((c) => [c, l[c]])) : l;
+    // Como o PostgREST: `eq.{a,b}` casa uma coluna text[] pelo literal de array do Postgres.
+    const igual = (a: unknown, v: unknown) =>
+      Array.isArray(a) && typeof v === "string" ? `{${a.join(",")}}` === v : a === v;
     const casa = (l: Linha) =>
-      filtros.every(([c, v]) => l[c] === v) && (!lista || lista[1].includes(l[lista[0]]));
+      filtros.every(([c, v]) => igual(l[c], v)) && (!lista || lista[1].includes(l[lista[0]]));
     const rodar = () => {
       consultas += 1;
       const t = (tabelas[tabela] ??= []);
@@ -80,9 +87,17 @@ function banco() {
         q
       ),
       insert: (v: Linha) => ((op = "insert"), (valores = v), q),
-      update: (v: Linha) => ((op = "update"), (valores = v), q),
+      update: (v: Linha) => {
+        op = "update";
+        valores = v;
+        const gancho = antesDoUpdate;
+        antesDoUpdate = null;
+        gancho?.();
+        return q;
+      },
       delete: () => ((op = "delete"), q),
       eq: (c: string, v: unknown) => (filtros.push([c, v]), q),
+      is: (c: string, v: unknown) => (filtros.push([c, v]), q),
       gt: () => q,
       in: (c: string, v: unknown[]) => ((lista = [c, v]), q),
       order: () => q,
@@ -101,10 +116,15 @@ function banco() {
   }
   return {
     from: builder,
-    rpc: async (nome: string, args: { plaintext?: string }) =>
-      nome === "fn_encrypt_oauth"
-        ? { data: `\\xcifra(${args.plaintext!.length})`, error: null }
-        : { data: null, error: null },
+    // Cifra reversível de mentira: o texto vai no próprio "cifrado", para a rota poder comparar.
+    rpc: async (nome: string, args: { plaintext?: string; ciphertext?: string }) => {
+      if (nome === "fn_encrypt_oauth") return { data: `\\xcifra:${args.plaintext!}`, error: null };
+      if (nome === "fn_decrypt_oauth")
+        return args.ciphertext?.startsWith("\\xcifra:")
+          ? { data: args.ciphertext.slice("\\xcifra:".length), error: null }
+          : { data: null, error: null };
+      return { data: null, error: null };
+    },
   };
 }
 
@@ -132,6 +152,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   tabelas = {};
   consultas = 0;
+  antesDoUpdate = null;
   deps.db = banco();
   deps.suporte.mockResolvedValue(null);
   deps.autorizar.mockResolvedValue(sessao());
@@ -140,7 +161,7 @@ beforeEach(() => {
 describe("cofre de chaves: quem pode", () => {
   it("papel abaixo de gerente: 403 e o banco nem é consultado", async () => {
     deps.autorizar.mockResolvedValue({ ok: false, response: new Response(null, { status: 403 }) });
-    expect((await POST(req("POST", { nome: "token_meta", valor: VALOR }))).status).toBe(403);
+    expect((await POST(req("POST", { nome: "token_meta", valor: VALOR, ...H }))).status).toBe(403);
     expect((await GET(req("GET"))).status).toBe(403);
     expect(consultas).toBe(0);
     expect(deps.autorizar).toHaveBeenCalledWith(
@@ -151,7 +172,7 @@ describe("cofre de chaves: quem pode", () => {
 
   it("suporte em modo leitura: 403 antes de qualquer efeito", async () => {
     deps.suporte.mockResolvedValue(new Response(null, { status: 403 }));
-    expect((await POST(req("POST", { nome: "token_meta", valor: VALOR }))).status).toBe(403);
+    expect((await POST(req("POST", { nome: "token_meta", valor: VALOR, ...H }))).status).toBe(403);
     expect((await DELETE(req("DELETE"), ctx("bbbbbbbb-0000-4000-8000-000000000001"))).status).toBe(
       403,
     );
@@ -165,21 +186,21 @@ describe("cofre de chaves: quem pode", () => {
       via: "token",
       actor: { type: "api_token", id: "t1" },
     });
-    expect((await POST(req("POST", { nome: "token_meta", valor: VALOR }))).status).toBe(403);
+    expect((await POST(req("POST", { nome: "token_meta", valor: VALOR, ...H }))).status).toBe(403);
     expect(consultas).toBe(0);
   });
 });
 
 describe("cofre de chaves: o valor nunca volta", () => {
   it("POST cria; resposta, lista e audit levam nome e ••••final, nunca o valor", async () => {
-    const r = await POST(req("POST", { nome: "token_meta", valor: VALOR }));
+    const r = await POST(req("POST", { nome: "token_meta", valor: VALOR, ...H }));
     expect(r.status).toBe(201);
     const corpo = await r.text();
     expect(corpo).not.toContain(VALOR);
     expect(JSON.parse(corpo).data).toMatchObject({ nome: "token_meta", ultimos4: "9876" });
     expect(tabelas.automacao_segredos![0]).toMatchObject({
       organization_id: ORG,
-      valor_cifrado: `\\xcifra(${VALOR.length})`,
+      valor_cifrado: `\\xcifra:${VALOR}`,
     });
     expect(JSON.stringify(deps.audit.mock.calls)).not.toContain(VALOR);
     expect(deps.audit).toHaveBeenCalledWith(
@@ -192,19 +213,19 @@ describe("cofre de chaves: o valor nunca volta", () => {
   });
 
   it("a organização vem da sessão, não do corpo", async () => {
-    const r = await POST(req("POST", { nome: "x_chave", valor: VALOR, organization_id: OUTRA }));
+    const r = await POST(req("POST", { nome: "x_chave", valor: VALOR, organization_id: OUTRA, ...H }));
     expect(r.status).toBe(400);
-    await POST(req("POST", { nome: "x_chave", valor: VALOR }));
+    await POST(req("POST", { nome: "x_chave", valor: VALOR, ...H }));
     expect(tabelas.automacao_segredos![0]!.organization_id).toBe(ORG);
   });
 
   it("chave curta (menos de 16) não mostra os finais; o audit nunca leva os finais", async () => {
     const curta = "abcd1234efgh";
-    const r = await POST(req("POST", { nome: "token_curto", valor: curta }));
+    const r = await POST(req("POST", { nome: "token_curto", valor: curta, ...H }));
     expect(r.status).toBe(201);
     expect(JSON.parse(await r.text()).data.ultimos4).toBe("");
     expect(tabelas.automacao_segredos![0]!.ultimos4).toBe("");
-    await POST(req("POST", { nome: "token_longo", valor: VALOR }));
+    await POST(req("POST", { nome: "token_longo", valor: VALOR, ...H }));
     const metadados = deps.audit.mock.calls.map(
       (c: unknown[]) => (c[0] as { metadata?: Record<string, unknown> }).metadata,
     );
@@ -214,23 +235,23 @@ describe("cofre de chaves: o valor nunca volta", () => {
   });
 
   it("valor curto ou com espaço é recusado sem ecoar o valor", async () => {
-    const r = await POST(req("POST", { nome: "token_meta", valor: "abc def ghi" }));
+    const r = await POST(req("POST", { nome: "token_meta", valor: "abc def ghi", ...H }));
     expect(r.status).toBe(400);
     expect(await r.text()).not.toContain("abc def ghi");
   });
 
   it("nome repetido: 409", async () => {
-    await POST(req("POST", { nome: "token_meta", valor: VALOR }));
-    expect((await POST(req("POST", { nome: "token_meta", valor: `${VALOR}x` }))).status).toBe(409);
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, ...H }));
+    expect((await POST(req("POST", { nome: "token_meta", valor: `${VALOR}x`, ...H }))).status).toBe(409);
   });
 
   it("Idempotency-Key: a retentativa não cria duas chaves", async () => {
     const chave = "cccccccc-0000-4000-8000-000000000001";
     const a = await POST(
-      req("POST", { nome: "token_meta", valor: VALOR }, { "Idempotency-Key": chave }),
+      req("POST", { nome: "token_meta", valor: VALOR, ...H }, { "Idempotency-Key": chave }),
     );
     const b = await POST(
-      req("POST", { nome: "token_meta", valor: VALOR }, { "Idempotency-Key": chave }),
+      req("POST", { nome: "token_meta", valor: VALOR, ...H }, { "Idempotency-Key": chave }),
     );
     expect(a.status).toBe(201);
     expect(b.status).toBe(201);
@@ -239,7 +260,7 @@ describe("cofre de chaves: o valor nunca volta", () => {
   });
 
   it("PATCH troca o valor (e o final); chave de outra organização é 404", async () => {
-    await POST(req("POST", { nome: "token_meta", valor: VALOR }));
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, ...H }));
     const id = tabelas.automacao_segredos![0]!.id as string;
     const r = await PATCH(req("PATCH", { valor: "novo_valor_X_ABCD" }), ctx(id));
     expect(r.status).toBe(200);
@@ -252,7 +273,7 @@ describe("cofre de chaves: o valor nunca volta", () => {
 
 describe("cofre de chaves: apagar", () => {
   it("chave usada por automação publicada: 409 com o nome da automação, e nada apagado", async () => {
-    await POST(req("POST", { nome: "token_meta", valor: VALOR }));
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, ...H }));
     const id = tabelas.automacao_segredos![0]!.id as string;
     tabelas.followup_flow_pointers = [
       {
@@ -289,7 +310,7 @@ describe("cofre de chaves: apagar", () => {
   });
 
   it("chave sem uso: apaga e audita", async () => {
-    await POST(req("POST", { nome: "token_meta", valor: VALOR }));
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, ...H }));
     const id = tabelas.automacao_segredos![0]!.id as string;
     const r = await DELETE(req("DELETE"), ctx(id));
     expect(r.status).toBe(200);
@@ -297,5 +318,200 @@ describe("cofre de chaves: apagar", () => {
     expect(deps.audit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "automacao.chave_apagada" }),
     );
+  });
+});
+
+describe("cofre de chaves: endereços permitidos (migration 1007)", () => {
+  it("POST sem endereço, ou com endereço torto, é 400 e nada é gravado", async () => {
+    for (const hosts of [undefined, [], ["https://api.exemplo.com"], ["api.exemplo.com/v1"], ["*.exemplo.com"], ["api.exemplo.com:443"]]) {
+      const r = await POST(req("POST", { nome: "token_meta", valor: VALOR, ...(hosts ? { hosts_permitidos: hosts } : {}) }));
+      expect(r.status, JSON.stringify(hosts)).toBe(400);
+      const corpo = await r.text();
+      expect(corpo).not.toContain(VALOR);
+      expect(JSON.parse(corpo).error.message).toMatch(/endereço permitido/);
+    }
+    expect(tabelas.automacao_segredos ?? []).toHaveLength(0);
+  });
+
+  it("POST grava a lista normalizada (minúsculas, sem repetição, punycode) e o audit a registra", async () => {
+    const r = await POST(
+      req("POST", {
+        nome: "token_meta",
+        valor: VALOR,
+        hosts_permitidos: ["Api.Servico.com.br", "api.servico.com.br", "ação.com.br"],
+      }),
+    );
+    expect(r.status).toBe(201);
+    const esperado = ["api.servico.com.br", new URL("https://ação.com.br/").hostname];
+    expect(tabelas.automacao_segredos![0]!.hosts_permitidos).toEqual(esperado);
+    expect(JSON.parse(await r.text()).data.hosts_permitidos).toEqual(esperado);
+    expect(deps.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "automacao.chave_criada",
+        metadata: { nome: "token_meta", hosts_permitidos: esperado },
+      }),
+    );
+  });
+
+  it("PATCH que RESTRINGE (tira endereço) não pede o valor e audita antes e depois", async () => {
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, hosts_permitidos: ["a.com.br", "b.com.br"] }));
+    const id = tabelas.automacao_segredos![0]!.id as string;
+    const antes = tabelas.automacao_segredos![0]!.valor_cifrado;
+    const r = await PATCH(req("PATCH", { hosts_permitidos: ["a.com.br"] }), ctx(id));
+    expect(r.status).toBe(200);
+    expect(tabelas.automacao_segredos![0]!.hosts_permitidos).toEqual(["a.com.br"]);
+    expect(tabelas.automacao_segredos![0]!.valor_cifrado).toBe(antes);
+    expect(deps.audit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        action: "automacao.chave_enderecos_trocados",
+        metadata: { nome: "token_meta", hosts_antes: ["a.com.br", "b.com.br"], hosts_depois: ["a.com.br"] },
+      }),
+    );
+    expect(JSON.stringify(deps.audit.mock.calls)).not.toContain(VALOR);
+  });
+
+  it("PATCH que AMPLIA sem o valor é 422 e nada muda", async () => {
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, hosts_permitidos: ["api.servico.com.br"] }));
+    const id = tabelas.automacao_segredos![0]!.id as string;
+    const antes = { ...tabelas.automacao_segredos![0]! };
+    const recusa = await PATCH(
+      req("PATCH", { hosts_permitidos: ["api.servico.com.br", "coletor.atacante.net"] }),
+      ctx(id),
+    );
+    expect(recusa.status).toBe(422);
+    expect((await recusa.json()).error.code).toBe("segredo_valor_exigido");
+    expect(tabelas.automacao_segredos![0]).toEqual(antes);
+  });
+
+  it("PATCH que AMPLIA com um valor DIVERGENTE é 422 e nem o valor nem a lista mudam", async () => {
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, hosts_permitidos: ["api.servico.com.br"] }));
+    const id = tabelas.automacao_segredos![0]!.id as string;
+    const antes = { ...tabelas.automacao_segredos![0]! };
+    // O ataque: um valor qualquer vale como "prova" e planta o endereço do atacante.
+    for (const lixo of ["lixo12345", `${VALOR}x`, VALOR.slice(0, -1)]) {
+      const r = await PATCH(
+        req("PATCH", { valor: lixo, hosts_permitidos: ["api.servico.com.br", "evil.com"] }),
+        ctx(id),
+      );
+      const corpo = await r.text();
+      expect(r.status, lixo).toBe(422);
+      expect(JSON.parse(corpo).error.code).toBe("segredo_valor_divergente");
+      expect(corpo).not.toContain(lixo);
+      expect(corpo).not.toContain(VALOR);
+      expect(tabelas.automacao_segredos![0], lixo).toEqual(antes);
+    }
+    expect(deps.audit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: "automacao.chave_trocada" }),
+    );
+  });
+
+  it("PATCH que AMPLIA com o valor ATUAL é 200, amplia a lista e deixa o valor intacto", async () => {
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, hosts_permitidos: ["api.servico.com.br"] }));
+    const id = tabelas.automacao_segredos![0]!.id as string;
+    const cifrado = tabelas.automacao_segredos![0]!.valor_cifrado;
+    const r = await PATCH(
+      req("PATCH", { valor: VALOR, hosts_permitidos: ["api.servico.com.br", "api2.servico.com.br"] }),
+      ctx(id),
+    );
+    expect(r.status).toBe(200);
+    const corpo = await r.text();
+    expect(corpo).not.toContain(VALOR);
+    expect(tabelas.automacao_segredos![0]).toMatchObject({
+      hosts_permitidos: ["api.servico.com.br", "api2.servico.com.br"],
+      valor_cifrado: cifrado,
+      ultimos4: "9876",
+    });
+    // O valor só provou: o audit diz que foram só os endereços.
+    expect(deps.audit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        action: "automacao.chave_enderecos_trocados",
+        metadata: {
+          nome: "token_meta",
+          hosts_antes: ["api.servico.com.br"],
+          hosts_depois: ["api.servico.com.br", "api2.servico.com.br"],
+        },
+      }),
+    );
+    expect(JSON.stringify(deps.audit.mock.calls)).not.toContain(VALOR);
+  });
+
+  it("PATCH que RESTRINGE com um valor qualquer troca o valor e a lista (sem prova)", async () => {
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, hosts_permitidos: ["a.com.br", "b.com.br"] }));
+    const id = tabelas.automacao_segredos![0]!.id as string;
+    const r = await PATCH(req("PATCH", { valor: "outro_valor_LONGO_WXYZ", hosts_permitidos: ["a.com.br"] }), ctx(id));
+    expect(r.status).toBe(200);
+    expect(tabelas.automacao_segredos![0]).toMatchObject({ hosts_permitidos: ["a.com.br"], ultimos4: "WXYZ" });
+    expect(deps.audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: "automacao.chave_trocada" }));
+  });
+
+  it("PATCH que AMPLIA com a cifra indisponível na comparação é 500 e nada muda", async () => {
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, hosts_permitidos: ["api.servico.com.br"] }));
+    const id = tabelas.automacao_segredos![0]!.id as string;
+    tabelas.automacao_segredos![0]!.valor_cifrado = "\\xlixo_que_nao_decifra";
+    const antes = { ...tabelas.automacao_segredos![0]! };
+    const r = await PATCH(
+      req("PATCH", { valor: VALOR, hosts_permitidos: ["api.servico.com.br", "api2.servico.com.br"] }),
+      ctx(id),
+    );
+    expect(r.status).toBe(500);
+    expect(await r.text()).not.toContain(VALOR);
+    expect(tabelas.automacao_segredos![0]).toEqual(antes);
+  });
+
+  it("CORRIDA: a lista mudou entre a leitura e a gravação é 409 e a lista do outro PATCH fica", async () => {
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, hosts_permitidos: ["a.com.br", "b.com.br"] }));
+    const id = tabelas.automacao_segredos![0]!.id as string;
+    antesDoUpdate = () => {
+      tabelas.automacao_segredos![0]!.hosts_permitidos = ["b.com.br"]; // outro PATCH restringiu no meio
+    };
+    const r = await PATCH(req("PATCH", { hosts_permitidos: ["a.com.br"] }), ctx(id));
+    expect(r.status).toBe(409);
+    expect((await r.json()).error.code).toBe("conflito_de_edicao");
+    expect(tabelas.automacao_segredos![0]!.hosts_permitidos).toEqual(["b.com.br"]);
+    expect(deps.audit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: "automacao.chave_enderecos_trocados" }),
+    );
+  });
+
+  it("CORRIDA numa chave ANTIGA (lista nula): outro PATCH preencheu antes é 409", async () => {
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, ...H }));
+    const id = tabelas.automacao_segredos![0]!.id as string;
+    tabelas.automacao_segredos![0]!.hosts_permitidos = null;
+    antesDoUpdate = () => {
+      tabelas.automacao_segredos![0]!.hosts_permitidos = ["x.com.br"];
+    };
+    const r = await PATCH(req("PATCH", { hosts_permitidos: ["y.com.br"] }), ctx(id));
+    expect(r.status).toBe(409);
+    expect(tabelas.automacao_segredos![0]!.hosts_permitidos).toEqual(["x.com.br"]);
+  });
+
+  it("chave apagada no meio da corrida continua 404, não 409", async () => {
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, hosts_permitidos: ["a.com.br", "b.com.br"] }));
+    const id = tabelas.automacao_segredos![0]!.id as string;
+    antesDoUpdate = () => {
+      tabelas.automacao_segredos = [];
+    };
+    expect((await PATCH(req("PATCH", { hosts_permitidos: ["a.com.br"] }), ctx(id))).status).toBe(404);
+  });
+
+  it("chave ANTIGA (lista nula): preencher não pede o valor (só restringe)", async () => {
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, ...H }));
+    const id = tabelas.automacao_segredos![0]!.id as string;
+    tabelas.automacao_segredos![0]!.hosts_permitidos = null;
+    const lista = JSON.parse(await (await GET(req("GET"))).text()).data;
+    expect(lista[0].hosts_permitidos).toBeNull();
+    const r = await PATCH(req("PATCH", { hosts_permitidos: ["api.servico.com.br"] }), ctx(id));
+    expect(r.status).toBe(200);
+    expect(tabelas.automacao_segredos![0]!.hosts_permitidos).toEqual(["api.servico.com.br"]);
+  });
+
+  it("PATCH com endereço torto é 400; PATCH vazio é 400; de outra organização é 404", async () => {
+    await POST(req("POST", { nome: "token_meta", valor: VALOR, ...H }));
+    const id = tabelas.automacao_segredos![0]!.id as string;
+    expect((await PATCH(req("PATCH", { hosts_permitidos: ["https://x.com"] }), ctx(id))).status).toBe(400);
+    expect((await PATCH(req("PATCH", { hosts_permitidos: [] }), ctx(id))).status).toBe(400);
+    expect((await PATCH(req("PATCH", {}), ctx(id))).status).toBe(400);
+    tabelas.automacao_segredos![0]!.organization_id = OUTRA;
+    expect((await PATCH(req("PATCH", { hosts_permitidos: ["api.exemplo.com"] }), ctx(id))).status).toBe(404);
   });
 });

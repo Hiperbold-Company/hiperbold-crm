@@ -346,6 +346,8 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   http_saida_grande: "os valores guardados das respostas passaram do limite desta execução",
   http_falha_de_rede: "não foi possível conectar ao outro sistema",
   http_status: "o outro sistema respondeu com erro",
+  http_host_nao_permitido:
+    "a chave secreta não pode ser enviada para este endereço; a chamada não foi feita",
   segredo_inexistente: "a chave secreta escolhida não existe mais",
   segredo_indisponivel: "não foi possível abrir a chave secreta (a cifra do servidor está indisponível)",
 };

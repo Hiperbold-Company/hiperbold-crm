@@ -42,6 +42,7 @@ import {
   MOTIVO_SEM_DATA_NO_CAMPO,
   SEM_DATA_BRANCH_ID,
 } from "./graph-schema";
+import { fraseDaChavePresa } from "@/lib/automacoes/hosts-permitidos";
 import { fraseDaEsperaAteAData, fraseDaEsperaAteODia } from "@/lib/automacoes/plano-de-tempo";
 import {
   FRASE_DE_OUTROS_CASOS,
@@ -885,6 +886,15 @@ function fraseDaRequisicao(d: Record<string, unknown>): string {
   const status = typeof d.status === "number" ? d.status : null;
   const duracao = typeof d.duracao_ms === "number" ? ` em ${Math.round(d.duracao_ms)} ms` : "";
   const resposta = status !== null ? ` — respondeu ${status}${duracao}` : "";
+  // Chave presa ao endereço (migration 1007): diz qual chave e para onde ela pode ir.
+  if (d.ok === false && texto(d.erro) === "http_host_nao_permitido") {
+    const permitidos = Array.isArray(d.permitidos)
+      ? (d.permitidos as unknown[]).filter((x): x is string => typeof x === "string")
+      : [];
+    const nome = texto(d.chave);
+    if (nome && permitidos.length > 0)
+      return `${fraseDaChavePresa(nome, permitidos)} O bloco tentaria ${host ?? "outro endereço"}`;
+  }
   // Na falha, o motivo já abre a linha do evento (`effect_failed`): aqui só o que foi chamado.
   if (d.ok === false) return `${chamada}${resposta}`;
   const campos = Array.isArray(d.campos) ? (d.campos as unknown[]).filter((x): x is string => typeof x === "string") : [];

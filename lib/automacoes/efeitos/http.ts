@@ -11,6 +11,8 @@
  *  - redirecionamento nunca é seguido (3xx = Falhou);
  *  - resposta com teto de bytes (`TETO_DE_BYTES`, 2 MiB);
  *  - tempo limite do bloco (padrão 10 s, máximo 30 s).
+ * Cada chave só vai para os hosts permitidos dela (`hosts-permitidos.ts`,
+ * migration 1007): host fora da lista = "Falhou" antes de qualquer requisição.
  * A chave do cofre é decifrada aqui, na hora, e só vai no cabeçalho. Ela nunca
  * entra no detalhe do evento, no log, na mensagem de erro nem nas variáveis:
  * todo texto que sai daqui é mascarado (`mascararSegredos`) — o servidor de
@@ -52,6 +54,7 @@ import {
   variavelNaAutoridade,
 } from "../http";
 import type { FieldOp } from "../schemas";
+import { hostPermitido } from "../hosts-permitidos";
 import { lerValoresDosSegredos, marcarUsoDosSegredos } from "../segredos";
 import { contextoDoTemplate } from "../template-vars";
 import type { Contexto, Passo } from "./index";
@@ -183,7 +186,11 @@ export async function executarHttp(
 
   // 2. As chaves do cofre, desta organização.
   const ids = segredosDoBloco(cfg);
-  const { valores, inexistentes, indisponiveis } = await lerValoresDosSegredos(c.admin, c.org, ids);
+  const { valores, destinos, inexistentes, indisponiveis } = await lerValoresDosSegredos(
+    c.admin,
+    c.org,
+    ids,
+  );
   const segredos = [...valores.values()];
   const prefixos = [
     ...cfg.headers.flatMap((h) => (h.kind === "chave" ? [h.prefix] : [])),
@@ -192,6 +199,25 @@ export async function executarHttp(
   const mascarar = (t: string) => mascararSegredos(t, segredos, prefixos);
   if (inexistentes.length > 0) return falha("segredo_inexistente", base);
   if (indisponiveis.length > 0) return falha("segredo_indisponivel", base);
+
+  // 2b. Cada chave só vai para os endereços permitidos dela (migration 1007). O host é o da URL
+  // JÁ PREENCHIDA (igual ao do modelo, conferido acima), comparado sem porta, em minúsculas e em
+  // punycode. Vale para a chave do cabeçalho e para a do corpo; na URL a chave nunca entra.
+  // Antes de montar cabeçalho e corpo: nenhuma requisição sai, e o valor nem chega a ser usado.
+  for (const id of ids) {
+    const destino = destinos.get(id);
+    if (destino && !hostPermitido(alvo.hostname, destino.hosts_permitidos)) {
+      logger.warn("[automacao.http] chave fora dos endereços permitidos", {
+        pointer_id: c.pointerId,
+        host: alvo.hostname,
+      });
+      return falha("http_host_nao_permitido", {
+        ...base,
+        chave: destino.nome,
+        permitidos: destino.hosts_permitidos ?? [],
+      });
+    }
+  }
 
   try {
     assertSafeOutboundUrl(url, { httpsSempre: true });
