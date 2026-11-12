@@ -23,6 +23,8 @@ import { apiClient } from "@/lib/api/client";
 import { fraseDoMotivo } from "@/lib/channels/meta-social/motivos";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
+import { EtiquetaDaConexao } from "./EtiquetaDaConexao";
+import { RenomearConexao } from "./RenomearConexao";
 
 /**
  * Redes sociais: Instagram Direct e Facebook Messenger pela conexão OFICIAL e
@@ -45,6 +47,9 @@ export type ContaSocial = {
   conectado_em: string;
   token_expira_em: string | null;
   status: string;
+  /** Nome interno e cor da etiqueta no Chat (migration 1012); ausentes em resposta antiga. */
+  apelido?: string | null;
+  cor?: string | null;
 };
 
 export type EstadoMetaSocial = {
@@ -282,6 +287,12 @@ export function RedesSociaisClient({
                               <p className="text-xs text-muted-foreground">
                                 {t("Conectada desde")} {formatarData(conta.conectado_em)}
                               </p>
+                              {conta.apelido && (
+                                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  {t("No Chat:")}
+                                  <EtiquetaDaConexao texto={conta.apelido} cor={conta.cor} />
+                                </div>
+                              )}
                             </div>
                             <Badge variant={atencao ? "outline" : "secondary"}>
                               {atencao ? t("Precisa de atenção") : t("Conectada")}
@@ -298,6 +309,16 @@ export function RedesSociaisClient({
                                 <a href={urlDeConectar(plataforma)}>{t("Reconectar")}</a>
                               </Button>
                             )}
+                            <RenomearConexao
+                              channelId={conta.id}
+                              currentName={conta.apelido ?? null}
+                              comCor
+                              currentColor={conta.cor ?? null}
+                              onSaved={async () => {
+                                await qc.invalidateQueries({ queryKey: ["meta-social"] });
+                                void qc.invalidateQueries({ queryKey: ["conversations"] });
+                              }}
+                            />
                             <Button
                               size="sm"
                               variant="outline"

@@ -108376,6 +108376,36 @@ $hb_0995_caixa$;
 
 do $hb_0995_financeiro$ begin perform public.fn_financeiro_policies_por_papel(); end $hb_0995_financeiro$;
 
+-- ---- a cor da etiqueta da conexão (migration 1012, fork Hiperbold) ----
+-- Fica ANTES do bloco da 0998 (grant por coluna de channel_sessions lido do catálogo): assim a
+-- instalação nova já concede SELECT da coluna a `authenticated`. Mesmo corpo da migration 1012.
+-- `label_color` guarda a CHAVE de um dos doze tons de lib/conexoes/cores.ts; nula = sem cor.
+alter table public.channel_sessions add column if not exists label_color text;
+
+update public.channel_sessions
+   set label_color = null
+ where label_color is not null
+   and label_color not in ('rosa', 'coral', 'pessego', 'amarelo', 'lima', 'verde', 'menta',
+                           'turquesa', 'azul', 'lavanda', 'lilas', 'cinza');
+
+do $hb_1012_cor_da_conexao$
+begin
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.channel_sessions'::regclass
+       and conname = 'channel_sessions_label_color_check'
+  ) then
+    alter table public.channel_sessions
+      add constraint channel_sessions_label_color_check
+      check (label_color is null or label_color = any (array['rosa', 'coral', 'pessego', 'amarelo', 'lima',
+             'verde', 'menta', 'turquesa', 'azul', 'lavanda', 'lilas', 'cinza']::text[]));
+  end if;
+end
+$hb_1012_cor_da_conexao$;
+
+comment on column public.channel_sessions.label_color is
+  'Chave da cor da etiqueta da conexão (paleta em lib/conexoes/cores.ts). Nula = sem cor. Migration 1012.';
+
 -- ---- grants por coluna reaplicados no fim (migration 0998, fork Hiperbold) ----
 -- 0967 (contacts sem cpf_hash/cpf_encrypted, D-216) e 0948 (tokens de webhook, D-128) dão grant
 -- coluna a coluna com a lista do catálogo NO PONTO em que o bloco roda. O merge do upstream de

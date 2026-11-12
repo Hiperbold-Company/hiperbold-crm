@@ -6750,6 +6750,7 @@ export type Database = {
           engine: string;
           id: string;
           is_warmup_complete: boolean | null;
+          label_color: string | null;
           last_health_check_at: string | null;
           last_status_change_at: string;
           meta_phone_number_id: string | null;
@@ -6809,6 +6810,7 @@ export type Database = {
           engine?: string;
           id?: string;
           is_warmup_complete?: never;
+          label_color?: string | null;
           last_health_check_at?: string | null;
           last_status_change_at?: string;
           meta_phone_number_id?: string | null;
@@ -6867,6 +6869,7 @@ export type Database = {
           engine?: string;
           id?: string;
           is_warmup_complete?: never;
+          label_color?: string | null;
           last_health_check_at?: string | null;
           last_status_change_at?: string;
           meta_phone_number_id?: string | null;

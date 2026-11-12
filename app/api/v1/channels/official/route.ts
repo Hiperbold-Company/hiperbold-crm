@@ -40,6 +40,7 @@ import {
 } from "@/lib/channels/meta/webhook-da-sessao";
 import { reactivateChannelSession } from "@/lib/channels/reactivate";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { lerCorDaConexao } from "@/lib/conexoes/cores";
 import { metadataInicialDoCanal } from "@/lib/ai/elegibilidade/pre-go-live";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { basePublicaDoWebhookMeta } from "@/lib/webhooks/url-publica";
@@ -137,7 +138,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const consultar = () =>
     admin
       .from("channel_sessions")
-      .select("id, meta_phone_number_id, meta_waba_id, meta_token_encrypted, phone_number, display_name, webhook_path_token, status")
+      .select("id, meta_phone_number_id, meta_waba_id, meta_token_encrypted, phone_number, display_name, label_color, webhook_path_token, status")
       .eq("organization_id", orgId)
       .eq("provider", CHANNEL_PROVIDER_META);
   const { data } = await queryTolerantToMissingArchived(
@@ -158,6 +159,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     /** Base pública da Graph API — para o operador reaproveitar em outro sistema. */
     endpoint: data ? metaGraphBase() : null,
     displayName: data?.display_name ?? null,
+    /** Chave da cor da etiqueta (migration 1012); `null` = sem cor. */
+    labelColor: lerCorDaConexao(data?.label_color),
     phoneNumber: data?.phone_number ?? null,
     status: data?.status ?? null,
     /** O que o operador precisa colar do NOSSO lado no dashboard da Meta. */

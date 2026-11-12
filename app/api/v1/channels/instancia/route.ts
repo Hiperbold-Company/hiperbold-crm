@@ -64,6 +64,7 @@ export async function GET(): Promise<NextResponse> {
       conexoes: conexoes.map((c) => ({
         id: c.id,
         display_name: c.displayName,
+        label_color: c.labelColor,
         phone_number: c.phoneNumber,
         status: c.status,
         servidor: c.servidor,

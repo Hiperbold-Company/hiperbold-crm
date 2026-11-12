@@ -16,6 +16,9 @@ import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
 import { ShieldCheck } from "@/lib/ui/icons";
 import { AntiBanSheet } from "./AntiBanSheet";
 import { ChannelAiAccess } from "./ChannelAiAccess";
+import { EtiquetaDaConexao } from "./EtiquetaDaConexao";
+import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
+import { RenomearConexao } from "./RenomearConexao";
 import { PareamentoQrClient } from "./PareamentoQrClient";
 
 /**
@@ -39,6 +42,8 @@ import { PareamentoQrClient } from "./PareamentoQrClient";
 interface Conexao {
   id: string;
   display_name: string | null;
+  /** Chave da cor da etiqueta no Chat (migration 1012); `null` = sem cor. */
+  label_color?: string | null;
   phone_number: string | null;
   status: string | null;
   servidor: string | null;
@@ -290,6 +295,13 @@ export function CanalInstanciaClient({
               <p className="text-xs text-muted-foreground">
                 {c.phone_number ?? t("sem número informado")} · {c.servidor ?? "—"}
               </p>
+              {/* A mesma etiqueta que a lista do Chat mostra para este número. */}
+              {rotuloDoCanalDaConversa(c, t) && (
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  {t("No Chat:")}
+                  <EtiquetaDaConexao texto={rotuloDoCanalDaConversa(c, t) ?? ""} cor={c.label_color} />
+                </div>
+              )}
             </div>
             <Badge variant={c.status === "WORKING" ? "secondary" : "outline"}>{rotuloDoStatus(c.status, t)}</Badge>
           </div>
@@ -309,6 +321,17 @@ export function CanalInstanciaClient({
                 {t("Proteção de envio")}
               </Button>
             )}
+            <RenomearConexao
+              channelId={c.id}
+              currentName={c.display_name}
+              comCor
+              currentColor={c.label_color ?? null}
+              onSaved={async () => {
+                await carregar();
+                // A etiqueta da lista do Chat vem da mesma linha: a próxima leitura já traz nome e cor.
+                void qc.invalidateQueries({ queryKey: ["conversations"] });
+              }}
+            />
             <Button variant="outline" size="sm" onClick={() => void remover(c.id)}>
               {confirmandoRemocao === c.id ? t("Clique de novo para remover") : t("Remover conexão")}
             </Button>

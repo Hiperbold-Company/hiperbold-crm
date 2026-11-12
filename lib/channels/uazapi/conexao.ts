@@ -32,6 +32,7 @@ import {
 import { ARCHIVED_AT, queryTolerantToMissingArchived } from "../archived";
 import { CHANNEL_PROVIDER_UAZAPI } from "../capabilities";
 import { normalizarServidorUazapi } from "./credentials";
+import { lerCorDaConexao, type CorDaConexao } from "@/lib/conexoes/cores";
 
 /** Como o canal se chama PARA O USUÁRIO. Mora aqui por causa do lint, e porque é dado, não decisão de tela. */
 export const UAZAPI_CHANNEL_LABEL = "UAZAPI";
@@ -272,6 +273,8 @@ export async function removerWebhookUazapi(input: {
 export interface ConexaoUazapi {
   id: string;
   displayName: string | null;
+  /** Chave da cor da etiqueta (migration 1012); `null` = sem cor. */
+  labelColor: CorDaConexao | null;
   phoneNumber: string | null;
   status: string | null;
   /** Só o host: o endereço completo não precisa voltar para a tela. */
@@ -283,6 +286,7 @@ export interface ConexaoUazapi {
 interface LinhaDaConexao {
   id: string;
   display_name: string | null;
+  label_color?: string | null;
   phone_number: string | null;
   status: string | null;
   uazapi_base_url: string | null;
@@ -296,7 +300,7 @@ interface LinhaDaConexao {
 }
 
 const COLUNAS =
-  "id, display_name, phone_number, status, uazapi_base_url, uazapi_instance_id, webhook_path_token, metadata, pareamento_qr_estado, criada_pelo_crm";
+  "id, display_name, label_color, phone_number, status, uazapi_base_url, uazapi_instance_id, webhook_path_token, metadata, pareamento_qr_estado, criada_pelo_crm";
 
 function hostDe(url: string | null): string | null {
   if (!url) return null;
@@ -311,6 +315,7 @@ function paraConexao(l: LinhaDaConexao): ConexaoUazapi {
   return {
     id: l.id,
     displayName: l.display_name,
+    labelColor: lerCorDaConexao(l.label_color),
     phoneNumber: l.phone_number,
     status: l.status,
     servidor: hostDe(l.uazapi_base_url),
