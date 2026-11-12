@@ -108526,7 +108526,7 @@ end
 $hb_1006_mfa_na_leitura$;
 
 -- ---- a view de reconciliação do Google refeita depois de todas as colunas (migration 1011, fork Hiperbold, D-194) ----
--- ⚠️ ANTES DA VARREDURA da 1008 (último bloco). Mesmo corpo da migration 1011.
+-- ⚠️ ANTES DA VARREDURA da 1008 (último bloco). Corpo da migration 1011, com a guarda da issue #1041 abaixo.
 
 -- 1011, a view de reconciliação do Google volta a ter todas as colunas da agenda (D-194, fork Hiperbold).
 --
@@ -108550,11 +108550,35 @@ $hb_1006_mfa_na_leitura$;
 -- Esta migration vai ao fim do apêndice do baseline (antes só da varredura da 1008), para que todo update.sh
 -- recrie a view depois de qualquer coluna nova da `calendar_appointments`.
 
-drop view if exists public.calendar_google_reconcilable_appointments;
+-- ⚠️ NO BASELINE, SÓ QUANDO PRECISA (issue #1041). O update.sh reaplica este bloco num banco que já está
+-- certo, e derrubar e recriar a view ali troca o OID dela à toa (o `test:db:update` reprova). Por isso,
+-- aqui, a view só é refeita quando falta ou quando as colunas dela (nome e ordem) não são as da tabela. A
+-- migration 1011 roda uma vez só e recria direto.
 
-create view public.calendar_google_reconcilable_appointments with (security_invoker=true) as
- select a.* from public.calendar_appointments a where not exists(
-  select 1 from public.contacts c where c.organization_id=a.organization_id and c.id=a.contact_id and c.is_anonymized);
+do $hb_1011_view_reconciliavel$
+declare
+ v_tabela text[];
+ v_view text[];
+begin
+ select array_agg(attname::text order by attnum) into v_tabela
+   from pg_attribute
+  where attrelid = 'public.calendar_appointments'::regclass and attnum > 0 and not attisdropped;
+ if to_regclass('public.calendar_google_reconcilable_appointments') is not null then
+  select array_agg(attname::text order by attnum) into v_view
+    from pg_attribute
+   where attrelid = 'public.calendar_google_reconcilable_appointments'::regclass and attnum > 0 and not attisdropped;
+ end if;
+ if v_view is not distinct from v_tabela then
+  return;
+ end if;
+
+ drop view if exists public.calendar_google_reconcilable_appointments;
+
+ create view public.calendar_google_reconcilable_appointments with (security_invoker=true) as
+  select a.* from public.calendar_appointments a where not exists(
+   select 1 from public.contacts c where c.organization_id=a.organization_id and c.id=a.contact_id and c.is_anonymized);
+end
+$hb_1011_view_reconciliavel$;
 
 revoke all on public.calendar_google_reconcilable_appointments from public,anon,authenticated;
 grant select on public.calendar_google_reconcilable_appointments to service_role;
