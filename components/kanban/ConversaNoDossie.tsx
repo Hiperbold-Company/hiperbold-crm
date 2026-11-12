@@ -63,11 +63,16 @@ export function ConversaNoDossie({
   return (
     <Link
       href={`/app/inbox?id=${conversa.id}`}
+      // Sempre em nova aba: o funil fica onde estava.
+      target="_blank"
+      rel="noopener noreferrer"
       className="group mt-3 flex items-center gap-2.5 rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-muted"
     >
       <ChatCircle size={16} weight="regular" className="shrink-0 text-text-muted" aria-hidden />
       <span className="min-w-0 flex-1">
-        <span className="block text-xs font-medium text-text">{t("Abrir conversa no Chat do CRM")}</span>
+        <span className="block text-xs font-medium text-text">
+          {t("Abrir conversa no Chat do CRM")}
+        </span>
         {preview && (
           // A última mensagem responde "vale a pena entrar agora?" sem entrar —
           // sem ela o botão é uma aposta, e o dossiê já existe para não obrigar

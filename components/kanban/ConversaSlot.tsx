@@ -64,6 +64,9 @@ export function ConversaSlot({
   return (
     <Link
       href={`/app/inbox?id=${conversa.id}`}
+      // Sempre em nova aba: o funil fica onde estava.
+      target="_blank"
+      rel="noopener noreferrer"
       // O card inteiro é arrastável e clicável (abre o dossiê). Sem parar a
       // propagação, o clique no atalho também abriria o dossiê por baixo — dois
       // destinos para um gesto.
@@ -73,7 +76,7 @@ export function ConversaSlot({
         "group/conversa mt-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px]",
         "text-text-muted transition-colors hover:bg-muted hover:text-foreground",
       )}
-      title={t("Abrir esta conversa no Inbox")}
+      title={t("Abrir esta conversa no Chat do CRM")}
     >
       <ChatCircle size={12} weight="regular" className="shrink-0" aria-hidden />
       <span className="truncate">

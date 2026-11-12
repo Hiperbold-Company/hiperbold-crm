@@ -487,7 +487,7 @@ export function ContactsTable({
                             variant="ghost"
                             size="icon"
                             className="md:h-8 md:w-8"
-                            title={t("Iniciar conversa no Inbox")}
+                            title={t("Iniciar conversa no Chat do CRM")}
                             aria-label={`${t("Iniciar conversa com")} ${displayName(c, t)} ${t("no Inbox")}`}
                             disabled={abrindo}
                             onClick={() => void iniciarConversa(c)}

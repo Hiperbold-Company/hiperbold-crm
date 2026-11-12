@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -62,7 +61,6 @@ export function temAlvoParaAbrir(contactId?: string | null, phone?: string | nul
 
 export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Props) {
   const t = useT();
-  const router = useRouter();
   const qc = useQueryClient();
   const [abrindo, setAbrindo] = useState(false);
 
@@ -74,14 +72,16 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
   // Sem telefone nenhum a rota não tem o que abrir — e a spec da #1993 pede
   // que o clique NÃO vá ao servidor nesse caso, e que o motivo apareça.
   const podeAbrir = telefone.length > 0;
-  const semTelefone = t(
-    "Sem telefone no contato: cadastre um telefone para abrir a conversa.",
-  );
+  const semTelefone = t("Sem telefone no contato: cadastre um telefone para abrir a conversa.");
 
   if (!temAlvo) return null;
 
   async function abrir() {
     if (!podeAbrir || abrindo) return;
+    // Sempre em nova aba (pedido do dono do produto, 12/11/2026): o funil fica
+    // onde estava. A aba nasce AGORA, dentro do clique — aberta depois do
+    // `await` o navegador a trataria como pop-up e bloquearia.
+    const aba = window.open("", "_blank");
     setAbrindo(true);
     try {
       const res = await fetch("/api/v1/conversations/open-with-contact", {
@@ -102,8 +102,16 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
       // O quadro é a fonte do card E do dossiê: sem invalidar, a linha continuaria
       // oferecendo "Abrir conversa" sobre uma conversa que acabou de nascer.
       await qc.invalidateQueries({ queryKey: ["board"] });
-      router.push(`/app/inbox?id=${json.data.conversation_id}`);
+      const destino = `/app/inbox?id=${json.data.conversation_id}`;
+      if (aba) {
+        aba.opener = null;
+        aba.location.href = destino;
+      } else {
+        // Pop-up bloqueado mesmo assim: abre aqui, para o clique não ficar mudo.
+        window.location.assign(destino);
+      }
     } catch (err) {
+      aba?.close();
       toast.error(err instanceof Error ? t(err.message) : t("Não foi possível abrir a conversa."));
     } finally {
       setAbrindo(false);
@@ -129,9 +137,7 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
                 ? t("Abrir conversa no Chat do CRM")
                 : t("Abrir conversa")}
           </span>
-          {!podeAbrir && (
-            <span className="block text-[11px] text-text-muted">{semTelefone}</span>
-          )}
+          {!podeAbrir && <span className="block text-[11px] text-text-muted">{semTelefone}</span>}
         </span>
         {podeAbrir && !abrindo && (
           <ArrowRight

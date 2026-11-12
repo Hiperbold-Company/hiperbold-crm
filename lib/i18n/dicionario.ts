@@ -12996,7 +12996,7 @@ export const DICIONARIO: Traducoes = {
   Selecionar: { es: "Seleccionar" },
   "Selecionar todos em": { es: "Seleccionar todos en" },
   "Desmarcar todos em": { es: "Desmarcar todos en" },
-  "Abrir esta conversa no Inbox": { es: "Abrir esta conversación en Inbox" },
+  "Abrir esta conversa no Chat do CRM": { es: "Abrir esta conversación en el Chat del CRM" },
   "conversa sem mensagens": { es: "conversación sin mensajes" },
   "Valor inválido": { es: "Valor inválido" },
   // O VALOR RECORRENTE do negócio (#3602): setup + mensalidade no mesmo card.
@@ -14582,7 +14582,7 @@ export const DICIONARIO: Traducoes = {
   "Fluxo de follow-up": { es: "Flujo de follow-up" },
   "Fluxo excluído.": { es: "Flujo eliminado." },
   "Iniciar conversa com": { es: "Iniciar conversación con" },
-  "Iniciar conversa no Inbox": { es: "Iniciar conversación en el Inbox" },
+  "Iniciar conversa no Chat do CRM": { es: "Iniciar conversación en el Chat del CRM" },
   "Isso remove": { es: "Esto elimina" },
   "Novo campo": { es: "Nuevo campo" },
   "Opções do campo": { es: "Opciones del campo" },

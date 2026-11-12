@@ -19,6 +19,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *    na própria linha. Um botão que falha em silêncio é pior que nenhum botão.
  */
 const push = vi.hoisted(() => vi.fn());
+// A conversa abre em NOVA aba: a aba nasce no clique e recebe o destino depois.
+const abaNova = { opener: {} as unknown, location: { href: "" }, close: vi.fn() };
+const openMock = vi.fn(() => abaNova);
 const toastError = vi.hoisted(() => vi.fn());
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
@@ -52,6 +55,11 @@ beforeEach(() => {
   push.mockReset();
   toastError.mockReset();
   vi.stubGlobal("fetch", fetchMock);
+  openMock.mockClear();
+  abaNova.location.href = "";
+  abaNova.opener = {};
+  abaNova.close.mockReset();
+  vi.spyOn(window, "open").mockImplementation(openMock as unknown as typeof window.open);
 });
 
 afterEach(() => {
@@ -60,12 +68,12 @@ afterEach(() => {
 
 describe("Abrir conversa no card do funil (#1993)", () => {
   it("com conversa já vinculada, o clique leva para ELA — nenhuma chamada de API", async () => {
-    montar(
-      <ConversaSlot conversa={conversa} contactId="contato-1" phone="+5581999999999" />,
-    );
+    montar(<ConversaSlot conversa={conversa} contactId="contato-1" phone="+5581999999999" />);
 
     const link = screen.getByRole("link");
     expect(link).toHaveAttribute("href", "/app/inbox?id=conv-1");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
 
     // O gesto completo: nem a rota de abrir conversa nem a navegação programada
     // entram — o destino é o elo que já existia.
@@ -84,9 +92,7 @@ describe("Abrir conversa no card do funil (#1993)", () => {
       }),
     );
 
-    montar(
-      <ConversaSlot conversa={null} contactId="contato-1" phone="+5581999999999" />,
-    );
+    montar(<ConversaSlot conversa={null} contactId="contato-1" phone="+5581999999999" />);
 
     await user.click(screen.getByRole("button", { name: /Abrir conversa/ }));
 
@@ -105,7 +111,10 @@ describe("Abrir conversa no card do funil (#1993)", () => {
     expect(durante).toBeDisabled();
 
     liberar({ ok: true, json: async () => ({ data: { conversation_id: "conv-nova" } }) });
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/app/inbox?id=conv-nova"));
+    await waitFor(() => expect(abaNova.location.href).toBe("/app/inbox?id=conv-nova"));
+    expect(openMock).toHaveBeenCalledWith("", "_blank");
+    expect(abaNova.opener).toBeNull();
+    expect(push).not.toHaveBeenCalled();
     expect(toastError).not.toHaveBeenCalled();
   });
 
