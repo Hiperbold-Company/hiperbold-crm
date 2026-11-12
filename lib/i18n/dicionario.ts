@@ -28575,6 +28575,20 @@ export const DICIONARIO: Traducoes = {
   "O valor vem do cadastro do contato no CRM. Se o contato não tiver esse dado, o assistente não consulta a tabela e diz que a equipe confirma.": { es: "El valor viene del registro del contacto en el CRM. Si el contacto no tiene ese dato, el asistente no consulta la tabla y dice que el equipo lo confirma." },
   "Nas conversas com clientes, o assistente não consulta nada deste banco neste modo. Para liberar, escolha \"Só o que eu marcar\" e diga, em cada tabela, de quem é o dado.": { es: "En las conversaciones con clientes, el asistente no consulta nada de esta base en este modo. Para habilitarlo, elija \"Solo lo que yo marque\" e indique, en cada tabla, de quién es el dato." },
   "Telefone (WhatsApp)": { es: "Teléfono (WhatsApp)" },
+  // D-074: tela "Falhas na contagem do plano" (/admin/sistema/falhas-do-plano).
+  "Falhas na contagem do plano": { es: "Fallas en el conteo del plan" },
+  "Quando o sistema não consegue somar um lead novo ao limite do plano de uma empresa, o lead entra normalmente e a falha fica anotada aqui. A conferência diária corrige a conta no dia seguinte. As anotações com mais de 90 dias são apagadas sozinhas.":
+    {
+      es: "Cuando el sistema no logra sumar un lead nuevo al límite del plan de una empresa, el lead entra normalmente y la falla queda anotada aquí. La verificación diaria corrige la cuenta al día siguiente. Las anotaciones con más de 90 días se borran solas.",
+    },
+  "Falhas registradas": { es: "Fallas registradas" },
+  "Da mais nova para a mais antiga.": { es: "De la más nueva a la más antigua." },
+  "Não foi possível ler as falhas agora.": { es: "No se pudieron leer las fallas ahora." },
+  "Não há mais falhas nesta página.": { es: "No hay más fallas en esta página." },
+  "O que falhou": { es: "Qué falló" },
+  "Mensagem do banco": { es: "Mensaje de la base de datos" },
+  "Contagem de leads abertos": { es: "Conteo de leads abiertos" },
+  Páginas: { es: "Páginas" },
 };
 
 /**
