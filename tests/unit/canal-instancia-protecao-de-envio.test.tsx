@@ -166,7 +166,8 @@ describe("CanalInstanciaClient: Proteção de envio", () => {
     render(tela({}));
 
     // Espera o cartão da conexão aparecer para o "não há botão" não ser pressa.
-    await screen.findByText("Comercial");
+    // O nome aparece duas vezes: no título do cartão e na prévia da etiqueta do Chat (migration 1012).
+    await screen.findAllByText("Comercial");
     expect(screen.queryByRole("button", { name: /Proteção de envio/ })).toBeNull();
     expect(getMock).not.toHaveBeenCalledWith("/api/v1/ai/pacing");
   });

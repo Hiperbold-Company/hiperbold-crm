@@ -20,6 +20,7 @@ import { CHANNEL_PROVIDER_META_SOCIAL } from "../capabilities";
 import { reactivateChannelSession } from "../reactivate";
 import { canalDaConversa, type PlataformaMetaSocial } from "./constantes";
 import type { MotivoDaVolta } from "./motivos";
+import { lerCorDaConexao, type CorDaConexao } from "@/lib/conexoes/cores";
 import { assinarWebhookDaConta, desassinarWebhookDaConta, type ContaDaMeta } from "./oauth";
 
 export type MotivoDaRecusa = Extract<
@@ -267,6 +268,10 @@ export interface ContaListada {
   conectado_em: string;
   token_expira_em: string | null;
   status: string;
+  /** O nome interno (`display_name`): é ele que a etiqueta do Chat mostra. */
+  apelido: string | null;
+  /** Chave da cor da etiqueta no Chat (migration 1012); `null` = sem cor. */
+  cor: CorDaConexao | null;
 }
 
 /** `conectado` quando a sessão está de pé e o token não venceu; senão, o motivo. */
@@ -285,7 +290,7 @@ export async function listarContas(admin: SupabaseClient, organizationId: string
   const { data, error } = await admin
     .from("channel_sessions")
     .select(
-      "id, meta_social_platform, meta_social_username, display_name, created_at, meta_social_token_expires_at, status, metadata",
+      "id, meta_social_platform, meta_social_username, display_name, label_color, created_at, meta_social_token_expires_at, status, metadata",
     )
     .eq("organization_id", organizationId)
     .eq("provider", CHANNEL_PROVIDER_META_SOCIAL)
@@ -301,6 +306,8 @@ export async function listarContas(admin: SupabaseClient, organizationId: string
       usuario: (l.meta_social_username as string | null) ?? null,
       conectado_em: (metadata.conectado_em as string | undefined) ?? (l.created_at as string),
       token_expira_em: (l.meta_social_token_expires_at as string | null) ?? null,
+      apelido: (l.display_name as string | null) ?? null,
+      cor: lerCorDaConexao(l.label_color),
       status: statusDaConta({
         status: l.status as string | null,
         meta_social_token_expires_at: l.meta_social_token_expires_at as string | null,

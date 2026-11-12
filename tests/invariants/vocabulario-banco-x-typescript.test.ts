@@ -590,6 +590,15 @@ const PARES: Array<{
     arquivo: "lib/external-db/types.ts",
     simbolo: "TipoBanco",
   },
+  {
+    tabela: "channel_sessions",
+    coluna: "label_color",
+    // lib/conexoes/cores.ts → CHAVES_DE_COR_DA_CONEXAO (tupla `as const`).
+    // Migration 1012 (fork Hiperbold): a cor da etiqueta da conexão. Uma chave
+    // só no TypeScript viraria `23514` ao salvar; só no CHECK, cor sem tom.
+    arquivo: "lib/conexoes/cores.ts",
+    simbolo: "CHAVES_DE_COR_DA_CONEXAO",
+  },
 ];
 
 /** Tira um nível de parênteses externos, se ele envolver a expressão inteira. */

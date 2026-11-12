@@ -7,6 +7,7 @@ import { format, formatDistanceToNowStrict } from "date-fns";
 import { useT } from "@/hooks/i18n/useT";
 import { Check, Robot, Sparkle } from "@/lib/ui/icons";
 import { ChannelLogo } from "@/components/inbox/ChannelLogo";
+import { EtiquetaDaConexao } from "@/components/connections/EtiquetaDaConexao";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ChipDeEtiqueta } from "@/components/tags/ChipDeEtiqueta";
@@ -453,13 +454,11 @@ export function ConversationListItem({
                 lista (critério de aceite: layout utilizável com nomes maiores).
                 O `title` devolve o texto inteiro para quem passa o mouse. */}
             {mostrarCanal && rotuloCanal && (
-              <Badge
-                variant="outline"
-                className="h-4 min-w-0 max-w-[9rem] gap-1 truncate px-1.5 text-[10px] font-normal text-text-muted"
+              <EtiquetaDaConexao
+                texto={rotuloCanal}
+                cor={canal?.label_color}
                 title={`${t("Entrou por")} ${rotuloCanal}`}
-              >
-                <span className="truncate">{rotuloCanal}</span>
-              </Badge>
+              />
             )}
             {c?.is_blocked && (
               <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
