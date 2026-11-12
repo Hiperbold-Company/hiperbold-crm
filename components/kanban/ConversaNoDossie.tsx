@@ -5,6 +5,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { ArrowRight, ChatCircle } from "@/lib/ui/icons";
 import type { Contact } from "@/lib/types/contacts";
 import { AbrirConversaDoLead, temAlvoParaAbrir } from "./AbrirConversaDoLead";
+import { BotaoNovaAba } from "./BotaoNovaAba";
 
 /**
  * A porta para a conversa, dentro do dossiê.
@@ -60,42 +61,47 @@ export function ConversaNoDossie({
 
   const preview = conversa.preview?.trim();
 
+  const destino = `/app/inbox?id=${conversa.id}`;
+
+  // Dois botões lado a lado (pedido do dono do produto, 12/11/2026): o largo
+  // abre a conversa nesta aba; o quadrado, só com o ícone, abre a MESMA
+  // conversa numa nova aba e deixa o funil onde estava.
   return (
-    <Link
-      href={`/app/inbox?id=${conversa.id}`}
-      // Sempre em nova aba: o funil fica onde estava.
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group mt-3 flex items-center gap-2.5 rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-muted"
-    >
-      <ChatCircle size={16} weight="regular" className="shrink-0 text-text-muted" aria-hidden />
-      <span className="min-w-0 flex-1">
-        <span className="block text-xs font-medium text-text">
-          {t("Abrir conversa no Chat do CRM")}
+    <div className="mt-3 flex items-stretch gap-2">
+      <Link
+        href={destino}
+        className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-muted"
+      >
+        <ChatCircle size={16} weight="regular" className="shrink-0 text-text-muted" aria-hidden />
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-medium text-text">
+            {t("Abrir conversa no Chat do CRM")}
+          </span>
+          {preview && (
+            // A última mensagem responde "vale a pena entrar agora?" sem entrar —
+            // sem ela o botão é uma aposta, e o dossiê já existe para não obrigar
+            // a abrir outra tela para saber.
+            <span className="block truncate text-[11px] text-text-muted">{preview}</span>
+          )}
         </span>
-        {preview && (
-          // A última mensagem responde "vale a pena entrar agora?" sem entrar —
-          // sem ela o botão é uma aposta, e o dossiê já existe para não obrigar
-          // a abrir outra tela para saber.
-          <span className="block truncate text-[11px] text-text-muted">{preview}</span>
+        {conversa.unread > 0 && (
+          // O número, não um ponto: "3 sem ler" e "12 sem ler" pedem urgências
+          // diferentes, e um ponto colapsa as duas.
+          <span
+            className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground tabular-nums"
+            aria-label={`${conversa.unread} ${t("sem ler")}`}
+          >
+            {conversa.unread}
+          </span>
         )}
-      </span>
-      {conversa.unread > 0 && (
-        // O número, não um ponto: "3 sem ler" e "12 sem ler" pedem urgências
-        // diferentes, e um ponto colapsa as duas.
-        <span
-          className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground tabular-nums"
-          aria-label={`${conversa.unread} ${t("sem ler")}`}
-        >
-          {conversa.unread}
-        </span>
-      )}
-      <ArrowRight
-        size={14}
-        weight="regular"
-        className="shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5"
-        aria-hidden
-      />
-    </Link>
+        <ArrowRight
+          size={14}
+          weight="regular"
+          className="shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5"
+          aria-hidden
+        />
+      </Link>
+      <BotaoNovaAba href={destino} />
+    </div>
   );
 }

@@ -35,6 +35,7 @@ vi.mock("next/link", () => ({
 vi.mock("sonner", () => ({ toast: { error: toastError, success: vi.fn(), info: vi.fn() } }));
 
 import { ConversaSlot } from "./ConversaSlot";
+import { ConversaNoDossie } from "./ConversaNoDossie";
 
 const fetchMock = vi.fn();
 
@@ -136,5 +137,37 @@ describe("Abrir conversa no card do funil (#1993)", () => {
   it("sem conversa e sem contato nenhum, a linha continua vazia (card não cresce à toa)", () => {
     const { container } = render(<ConversaSlot conversa={null} />);
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("Abrir conversa no painel do lead, sem conversa ainda", () => {
+  const resposta = { ok: true, json: async () => ({ data: { conversation_id: "conv-nova" } }) };
+
+  it("o botão largo abre a conversa NESTA aba", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(resposta);
+    montar(<ConversaNoDossie conversa={null} contactId="contato-1" phone="+5581999999999" />);
+
+    await user.click(screen.getByRole("button", { name: /Abrir conversa no Chat do CRM/ }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/app/inbox?id=conv-nova"));
+    expect(openMock).not.toHaveBeenCalled();
+  });
+
+  it("o botão de ícone abre a MESMA conversa numa nova aba", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(resposta);
+    montar(<ConversaNoDossie conversa={null} contactId="contato-1" phone="+5581999999999" />);
+
+    await user.click(screen.getByRole("button", { name: "Abrir conversa em nova aba" }));
+
+    expect(openMock).toHaveBeenCalledWith("", "_blank");
+    await waitFor(() => expect(abaNova.location.href).toBe("/app/inbox?id=conv-nova"));
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("sem telefone, o botão de ícone nem aparece", () => {
+    montar(<ConversaNoDossie conversa={null} contactId="contato-1" phone={null} />);
+    expect(screen.queryByRole("button", { name: "Abrir conversa em nova aba" })).toBeNull();
   });
 });

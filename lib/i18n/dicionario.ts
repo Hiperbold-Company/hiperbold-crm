@@ -3208,6 +3208,7 @@ export const DICIONARIO: Traducoes = {
   "Tags (separadas por vírgula)": { es: "Etiquetas (separadas por coma)" },
   Salvar: { es: "Guardar" },
   vazio: { es: "vacío" },
+  "Abrir conversa em nova aba": { es: "Abrir conversación en una pestaña nueva" },
   "Abrir conversa no Chat do CRM": { es: "Abrir conversación en el Chat del CRM" },
 
   // ─── Aviso à equipe (mensagem para a equipe na virada para ganho) ───
