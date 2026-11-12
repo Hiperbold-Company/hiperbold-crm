@@ -3196,7 +3196,7 @@ export const DICIONARIO: Traducoes = {
   "Tags (separadas por vírgula)": { es: "Etiquetas (separadas por coma)" },
   Salvar: { es: "Guardar" },
   vazio: { es: "vacío" },
-  "Abrir conversa no Inbox": { es: "Abrir conversación en el Inbox" },
+  "Abrir conversa no Chat do CRM": { es: "Abrir conversación en el Chat del CRM" },
 
   // ─── Aviso à equipe (mensagem para a equipe na virada para ganho) ───
   "O aviso à equipe não tem número cadastrado. Cadastre-o em Configurações › Avisos.": {
@@ -19620,7 +19620,8 @@ export const DICIONARIO: Traducoes = {
   "Não consegui carregar o contato.": { es: "No pude cargar el contacto." },
   Dados: { es: "Datos" },
   Links: { es: "Enlaces" },
-  "Abrir no WhatsApp": { es: "Abrir en WhatsApp" },
+  "Abrir no WhatsApp Web (Externo)": { es: "Abrir en WhatsApp Web (externo)" },
+  Cargo: { es: "Cargo" },
   "Ver ficha completa do contato": { es: "Ver la ficha completa del contacto" },
   // ─── #1506 F1: as outras pessoas do negócio, abaixo do contato principal ───
   "Pessoas relacionadas": { es: "Personas relacionadas" },

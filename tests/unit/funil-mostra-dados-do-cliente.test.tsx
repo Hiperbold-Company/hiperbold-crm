@@ -180,7 +180,7 @@ describe("ContatoDoNegocio — as abas do dossiê", () => {
 
     expect(screen.getByText("Ana Souza")).toBeInTheDocument();
     expect(screen.getByText("+5511999998888")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Abrir no WhatsApp" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Abrir no WhatsApp Web (Externo)" })).toHaveAttribute(
       "href",
       "https://wa.me/5511999998888",
     );
@@ -192,6 +192,33 @@ describe("ContatoDoNegocio — as abas do dossiê", () => {
       "href",
       "/app/contacts/c-1",
     );
+  });
+
+  it("aba Dados: cargo e empresa saem do contato; sem eles, do negócio; sem nenhum, traço", () => {
+    useContact.mockReturnValue({
+      data: { data: { ...CONTATO, custom_fields: { cargo: "Diretora", Empresa: "  " } } },
+      isLoading: false,
+      isError: false,
+    });
+    comQuery(
+      <ContatoDoNegocio
+        contactId="c-1"
+        pipelineId="p-1"
+        camposDoNegocio={{ cargo: "Gerente", empresa: "Loja Azul" }}
+      />,
+    );
+
+    const cargo = screen.getByText("Cargo").nextElementSibling;
+    const empresa = screen.getByText("Empresa").nextElementSibling;
+    expect(cargo).toHaveTextContent("Diretora");
+    expect(empresa).toHaveTextContent("Loja Azul");
+  });
+
+  it("aba Dados: sem cargo nem empresa em lugar nenhum, as duas linhas mostram traço", () => {
+    comQuery(<ContatoDoNegocio contactId="c-1" pipelineId="p-1" />);
+
+    expect(screen.getByText("Cargo").nextElementSibling).toHaveTextContent("—");
+    expect(screen.getByText("Empresa").nextElementSibling).toHaveTextContent("—");
   });
 
   function abrirAbaDeLinks() {

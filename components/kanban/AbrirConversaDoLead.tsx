@@ -117,7 +117,7 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
         onClick={() => void abrir()}
         disabled={!podeAbrir || abrindo}
         aria-busy={abrindo}
-        title={podeAbrir ? t("Abrir conversa no Inbox") : semTelefone}
+        title={podeAbrir ? t("Abrir conversa no Chat do CRM") : semTelefone}
         className="group mt-3 flex w-full items-center gap-2.5 rounded-md border border-border bg-muted/40 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-70"
       >
         <ChatCircle size={16} weight="regular" className="shrink-0 text-text-muted" aria-hidden />
@@ -126,7 +126,7 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
             {abrindo
               ? t("Abrindo…")
               : podeAbrir
-                ? t("Abrir conversa no Inbox")
+                ? t("Abrir conversa no Chat do CRM")
                 : t("Abrir conversa")}
           </span>
           {!podeAbrir && (
@@ -157,7 +157,7 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
       onPointerDown={(e) => e.stopPropagation()}
       disabled={!podeAbrir || abrindo}
       aria-busy={abrindo}
-      title={podeAbrir ? t("Abrir conversa no Inbox") : semTelefone}
+      title={podeAbrir ? t("Abrir conversa no Chat do CRM") : semTelefone}
       className={cn(
         "group/conversa mt-1 flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[11px]",
         "transition-colors",
