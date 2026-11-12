@@ -1,6 +1,8 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { useInvalidacaoAgrupada } from "@/hooks/realtime/useInvalidacaoAgrupada";
+import { AGRUPAR_PAINEL } from "@/lib/realtime/coalescer";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 
 import { apiClient } from "@/lib/api/client";
@@ -52,10 +54,11 @@ export function chaveDosParticipantes(conversationId: string) {
  */
 export function useParticipantesDaConversa(conversationId: string, enabled = true) {
   const podeConsultar = usePermission("inbox.participantes.view");
-  const qc = useQueryClient();
+  // Cada escrita na conversa aberta chega aqui; a rajada vira uma busca só.
+  const invalidar = useInvalidacaoAgrupada(AGRUPAR_PAINEL);
   const onChange = useCallback(() => {
-    void qc.invalidateQueries({ queryKey: chaveDosParticipantes(conversationId) });
-  }, [qc, conversationId]);
+    invalidar(chaveDosParticipantes(conversationId));
+  }, [invalidar, conversationId]);
   // A escrita do vínculo toca updated_at da conversa na mesma transação.
   // Dono e gestor recebem esse evento sem ganhar SELECT na participação alheia.
   useRealtimeChannel({
