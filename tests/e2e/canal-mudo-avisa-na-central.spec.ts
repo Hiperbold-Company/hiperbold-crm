@@ -140,7 +140,10 @@ test.describe("o canal em modo de teste avisa na Central", () => {
     // `pre-go-live-whatsapp.spec.ts` já exerce nesta mesma tela — o painel se
     // abre por "Configurar acesso da IA", e a lista é um campo com rótulo.
     await page.goto("/app/connections");
-    await expect(page.getByText(`WhatsApp mudo ${SUFIXO}`, { exact: true })).toBeVisible({
+    // O nome aparece no título do cartão e na prévia da etiqueta ("No Chat:"); vale o título.
+    await expect(
+      page.locator("p").filter({ hasText: new RegExp(`^WhatsApp mudo ${SUFIXO}$`) }),
+    ).toBeVisible({
       timeout: 60_000,
     });
     await page.getByRole("button", { name: "Configurar acesso da IA" }).click();
@@ -158,8 +161,8 @@ test.describe("o canal em modo de teste avisa na Central", () => {
             .select("metadata")
             .eq("id", canalId)
             .single();
-          const nums = (data as { metadata: { ai_test_phone_numbers?: unknown[] } } | null)?.metadata
-            ?.ai_test_phone_numbers;
+          const nums = (data as { metadata: { ai_test_phone_numbers?: unknown[] } } | null)
+            ?.metadata?.ai_test_phone_numbers;
           return Array.isArray(nums) ? nums.length : 0;
         },
         { timeout: 60_000 },
