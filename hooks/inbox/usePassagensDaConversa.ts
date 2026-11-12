@@ -1,9 +1,11 @@
 "use client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { usePermission } from "@/hooks/auth/AuthProvider";
+import { useInvalidacaoAgrupada } from "@/hooks/realtime/useInvalidacaoAgrupada";
+import { AGRUPAR_PAINEL } from "@/lib/realtime/coalescer";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 import { apiClient } from "@/lib/api/client";
 import type { PassagemDaConversa } from "@/lib/escalacao/cartao-da-passagem";
@@ -33,7 +35,6 @@ import type { PassagemDaConversa } from "@/lib/escalacao/cartao-da-passagem";
  */
 export function usePassagensDaConversa(conversationId: string | null): PassagemDaConversa[] {
   const podeConsultar = usePermission("inbox.passagens.view");
-  const qc = useQueryClient();
   const queryKey = ["passagens", conversationId] as const;
 
   const query = useQuery({
@@ -52,9 +53,11 @@ export function usePassagensDaConversa(conversationId: string | null): PassagemD
     select: (res) => res.data,
   });
 
+  // Cada escrita na conversa aberta chega aqui; a rajada vira uma busca só.
+  const invalidar = useInvalidacaoAgrupada(AGRUPAR_PAINEL);
   const onChange = useCallback(() => {
-    if (conversationId) qc.invalidateQueries({ queryKey: ["passagens", conversationId] });
-  }, [qc, conversationId]);
+    if (conversationId) invalidar(["passagens", conversationId]);
+  }, [invalidar, conversationId]);
 
   useRealtimeChannel({
     name: conversationId ? `conversation-passagens-${conversationId}` : "conversation-passagens-disabled",

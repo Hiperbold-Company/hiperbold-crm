@@ -1,6 +1,7 @@
 "use client";
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useInvalidacaoAgrupada } from "@/hooks/realtime/useInvalidacaoAgrupada";
+import { AGRUPAR_ADMIN } from "@/lib/realtime/coalescer";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 
 /**
@@ -13,11 +14,13 @@ import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
  * the list will still refresh on focus (staleTime = 10s).
  */
 export function useAdminInboxRealtime() {
-  const qc = useQueryClient();
+  // Sem filtro de organização, cada mensagem de QUALQUER cliente chega aqui:
+  // a rajada vira uma recarga por janela.
+  const invalidar = useInvalidacaoAgrupada(AGRUPAR_ADMIN);
 
   const onChange = useCallback(() => {
-    void qc.invalidateQueries({ queryKey: ["admin", "inbox"] });
-  }, [qc]);
+    invalidar(["admin", "inbox"]);
+  }, [invalidar]);
 
   return useRealtimeChannel({
     name: "admin-inbox-realtime",
