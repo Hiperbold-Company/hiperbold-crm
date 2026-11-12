@@ -14315,5 +14315,15 @@
   "É a chave que já está salva, não uma nova: o valor não é trocado. Assim ninguém manda a chave para outro servidor sem conhecê-la.": "It is the key that is already saved, not a new one: the value is not changed. This way no one can send the key to another server without knowing it.",
   "Para incluir um endereço novo, cole a chave atual. Assim ninguém manda a chave para outro servidor sem conhecê-la.": "To add a new address, paste the current key. This way no one can send the key to another server without knowing it.",
   "A chave colada não é a que está salva. Para incluir um endereço, cole a chave atual; para trocar a chave, troque primeiro e depois inclua o endereço.": "The key you pasted is not the one that is saved. To add an address, paste the current key; to change the key, change it first and then add the address.",
-  "A chave mudou enquanto você editava. Recarregue e tente de novo.": "The key changed while you were editing. Reload and try again."
+  "A chave mudou enquanto você editava. Recarregue e tente de novo.": "The key changed while you were editing. Reload and try again.",
+  "Contagem de leads abertos": "Open lead count",
+  "Da mais nova para a mais antiga.": "Newest first.",
+  "Falhas na contagem do plano": "Plan count failures",
+  "Falhas registradas": "Recorded failures",
+  "Mensagem do banco": "Database message",
+  "Não foi possível ler as falhas agora.": "Couldn't read the failures right now.",
+  "Não há mais falhas nesta página.": "There are no more failures on this page.",
+  "O que falhou": "What failed",
+  "Páginas": "Pages",
+  "Quando o sistema não consegue somar um lead novo ao limite do plano de uma empresa, o lead entra normalmente e a falha fica anotada aqui. A conferência diária corrige a conta no dia seguinte. As anotações com mais de 90 dias são apagadas sozinhas.": "When the system can't add a new lead to a company's plan limit, the lead still comes in normally and the failure is noted here. The daily check fixes the count the next day. Notes older than 90 days are deleted automatically."
 }

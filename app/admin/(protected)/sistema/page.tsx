@@ -9,6 +9,7 @@ import {
   ultimoDiaDoPeriodo,
 } from "@/lib/billing/assinatura/estado-da-assinatura";
 import { carregarBloqueioDosPlanos } from "@/lib/billing/planos/bloqueio-da-instalacao";
+import { DIAS_DO_CONTADOR, contarFalhasRecentesDoGatilho } from "@/lib/billing/alarmes-de-gatilho";
 import { lerAssinaturaDasEntregas } from "@/lib/channels/assinatura-das-entregas";
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import { carregarComportamentoDaInstalacao } from "@/lib/instalacao/comportamento-servidor";
@@ -115,7 +116,7 @@ export default async function Page() {
 
   // O valor EFETIVO (linha acima, `.env` como piso): a tela mostra o que está
   // valendo de verdade, e não o que a linha diria se ela existisse.
-  const [comportamento, ligados, servidor, assinatura, molde, bloqueio, atrasadasESuspensas, pacotesRes] = await Promise.all([
+  const [comportamento, ligados, servidor, assinatura, molde, bloqueio, atrasadasESuspensas, pacotesRes, falhasDoPlano] = await Promise.all([
     carregarComportamentoDaInstalacao(),
     modulosLigados(admin),
     detectarServidor(),
@@ -131,6 +132,8 @@ export default async function Page() {
       .from("billing_token_pacotes")
       .select("id, codigo, nome, tokens, preco_cents, ativo")
       .order("created_at", { ascending: false }),
+    // D-074: o contador ao lado da porta de "Falhas na contagem do plano".
+    contarFalhasRecentesDoGatilho(admin),
   ]);
   // O molde de IA das empresas novas (migration 9096). Leitura que falhou vira
   // "nenhum" na tela, com a lista travada: o seletor não oferece escolha sobre
@@ -178,6 +181,14 @@ export default async function Page() {
           <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/admin/sistema/cupons">{t("Cupons de desconto")}</Link>
           <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/admin/sistema/reembolsos">{t("Reembolsos e cancelamentos")}</Link>
           <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/admin/sistema/exclusoes">{t("Exclusão dos dados")}</Link>
+          <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/admin/sistema/falhas-do-plano">
+            {t("Falhas na contagem do plano")}
+            {falhasDoPlano !== null && falhasDoPlano > 0 && (
+              <Badge variant="warning" className="ml-1.5">
+                {falhasDoPlano} {t("em")} {DIAS_DO_CONTADOR} {t("dias")}
+              </Badge>
+            )}
+          </Link>
         </div>
       </div>
 
