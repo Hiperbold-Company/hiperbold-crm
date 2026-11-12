@@ -3091,6 +3091,13 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "automation_rules_migrated_to_pointer_id_fkey";
+            columns: ["migrated_to_pointer_id"];
+            isOneToOne: false;
+            referencedRelation: "followup_flow_pointers";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "automation_rules_organization_id_fkey";
             columns: ["organization_id"];
             isOneToOne: false;
@@ -18529,6 +18536,7 @@ export type Database = {
       };
       fn_financeiro_declarar_secoes_lgpd: { Args: Record<PropertyKey, never>; Returns: undefined };
       fn_financeiro_ligar_caixa_a_comanda: { Args: Record<PropertyKey, never>; Returns: undefined };
+      fn_financeiro_policies_por_papel: { Args: Record<PropertyKey, never>; Returns: undefined };
       fn_financeiro_provisionar: { Args: Record<PropertyKey, never>; Returns: undefined };
       fn_finish_channel_connection: {
         Args: {
@@ -18819,6 +18827,10 @@ export type Database = {
         Returns: number;
       };
       fn_pgrst_recusar_replay_do_gateway: { Args: Record<PropertyKey, never>; Returns: undefined };
+      fn_podar_alarmes_de_gatilho: {
+        Args: { p_limite?: number; p_retencao_dias?: number };
+        Returns: number;
+      };
       fn_podar_fila_de_jobs: {
         Args: { p_limite?: number; p_retencao_dias?: number };
         Returns: number;
