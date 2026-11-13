@@ -129,6 +129,35 @@ async function criar(
   return { id: criado.id, name: nome };
 }
 
+/**
+ * Lê o corpo parando no teto, mesmo sem `content-length` (envio em partes): o
+ * `req.text()` leria tudo para a memória antes de qualquer conferência.
+ * Devolve `null` quando passa do teto.
+ */
+async function lerComTeto(req: Request, teto: number): Promise<string | null> {
+  if (!req.body) return "";
+  const leitor = req.body.getReader();
+  const partes: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await leitor.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > teto) {
+      await leitor.cancel().catch(() => undefined);
+      return null;
+    }
+    partes.push(value);
+  }
+  const junto = new Uint8Array(total);
+  let pos = 0;
+  for (const p of partes) {
+    junto.set(p, pos);
+    pos += p.byteLength;
+  }
+  return new TextDecoder().decode(junto);
+}
+
 export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
@@ -141,13 +170,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     fail("payload_too_large", t("Arquivo grande demais para uma automação (máximo de 512 KB)."), 413, { requestId });
 
   if (Number(req.headers.get("content-length") ?? "0") > TETO_DO_CORPO) return grandeDemais();
-  let texto: string;
+  let texto: string | null;
   try {
-    texto = await req.text();
+    texto = await lerComTeto(req, TETO_DO_CORPO);
   } catch {
     return fail("invalid_request", t("Body JSON inválido."), 400, { requestId });
   }
-  if (texto.length > TETO_DO_CORPO) return grandeDemais();
+  if (texto === null) return grandeDemais();
   let raw: unknown;
   try {
     raw = JSON.parse(texto);

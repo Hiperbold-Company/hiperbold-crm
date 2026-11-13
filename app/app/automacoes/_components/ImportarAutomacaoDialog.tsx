@@ -33,6 +33,12 @@ const ROTULO_DO_TIPO: Record<TipoDeReferencia, string> = {
   modelo: "Modelo de mensagem",
 };
 
+const ONDE_APAGADO: Record<PreviaDaImportacao["apagados"][number]["onde"], string> = {
+  cabecalho: "cabeçalho",
+  url: "parâmetro da URL",
+  corpo: "campo do corpo",
+};
+
 type Resposta<T> = { data?: T; error?: { message?: string; details?: { problemas?: string[] } } } | null;
 
 /**
@@ -192,6 +198,20 @@ export function ImportarAutomacaoDialog({ aberto, onAberto }: { aberto: boolean;
                             {d.chaves.map((c) => previa.referencias.find((r) => r.id === c)?.nome ?? c).join(", ")}
                           </span>
                         )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {previa.apagados.length > 0 && (
+                <div className="space-y-1 rounded-md border border-border p-3 text-sm" data-testid="campos-apagados-da-importacao">
+                  <p className="font-medium">
+                    {t("Por segurança, a exportação apagou estes valores. Preencha no editor antes de publicar:")}
+                  </p>
+                  <ul className="list-disc space-y-0.5 pl-5">
+                    {previa.apagados.map((a, i) => (
+                      <li key={`${a.caixa}-${a.onde}-${a.nome}-${i}`} className="break-all">
+                        {a.caixa} · {t(ONDE_APAGADO[a.onde])}: <span className="font-mono text-xs">{a.nome}</span>
                       </li>
                     ))}
                   </ul>

@@ -28576,6 +28576,12 @@ export const DICIONARIO: Traducoes = {
   // Exportar e importar automação (13/11/2026).
   "Esta automação chama outros sistemas. Confira os endereços antes de escolher as chaves:": { es: "Esta automatización llama a otros sistemas. Revisa las direcciones antes de elegir las claves:", en: "This automation calls other systems. Check the addresses before choosing the keys:" },
   "Leva a chave secreta escolhida em": { es: "Lleva la clave secreta elegida en", en: "Carries the secret key chosen in" },
+  "Por segurança, a exportação apagou estes valores. Preencha no editor antes de publicar:": {
+    es: "Por seguridad, la exportación borró estos valores. Complétalos en el editor antes de publicar:",
+    en: "For safety, the export erased these values. Fill them in the editor before publishing:",
+  },
+  "parâmetro da URL": { es: "parámetro de la URL", en: "URL parameter" },
+  "campo do corpo": { es: "campo del cuerpo", en: "body field" },
   "Não consegui exportar a automação. Tente de novo.": { es: "No pude exportar la automatización. Inténtalo de nuevo.", en: "I couldn't export the automation. Try again." },
   "Esta automação ainda não tem caixas para exportar.": { es: "Esta automatización aún no tiene cajas para exportar.", en: "This automation has no boxes to export yet." },
   "A automação cita algo que não existe mais nesta conta. Abra o editor, escolha de novo o item que falta e exporte outra vez.": { es: "La automatización menciona algo que ya no existe en esta cuenta. Abre el editor, elige de nuevo el elemento que falta y exporta otra vez.", en: "The automation refers to something that no longer exists in this account. Open the editor, pick the missing item again and export once more." },

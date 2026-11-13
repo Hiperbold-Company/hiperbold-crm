@@ -70,6 +70,7 @@ export type TipoDeReferencia = (typeof TIPOS_DE_REFERENCIA)[number];
 /** A própria automação (o arquivo não sabe o id que ela vai ganhar). */
 export const REF_DESTA_AUTOMACAO = "ref:esta";
 const PREFIXO = "ref:";
+const MAX_APAGADOS = 200;
 const ID_DE_REFERENCIA = /^[a-z0-9_-]{1,40}$/i;
 export const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -100,6 +101,17 @@ export const arquivoDeAutomacaoSchema = z.strictObject({
     .refine((rs) => new Set(rs.map((r) => r.id.toLowerCase())).size === rs.length, {
       message: "id de referência repetido",
     }),
+  /** Valores que a exportação apagou (segredo escrito à mão): a importação avisa que precisam ser preenchidos. */
+  apagados: z
+    .array(
+      z.strictObject({
+        caixa: z.string().max(100),
+        onde: z.enum(["cabecalho", "url", "corpo"]),
+        nome: z.string().max(200),
+      }),
+    )
+    .max(MAX_APAGADOS)
+    .optional(),
 });
 export type ArquivoDeAutomacao = z.infer<typeof arquivoDeAutomacaoSchema>;
 
@@ -172,16 +184,108 @@ export class ErroDeExportacao extends Error {
   }
 }
 
-/** Cabeçalho HTTP de credencial com o valor ESCRITO sai em branco (o publish já o recusaria). */
-function semSegredoEscrito(grafo: FlowGraph): FlowGraph {
+/** Um valor que o exportador apagou: a pessoa que importa precisa preencher de novo. */
+export interface CampoApagado {
+  /** Nome (rótulo) da caixa "Requisição HTTP" — o id da caixa pode ser um uuid e não vai para a lista. */
+  caixa: string;
+  onde: "cabecalho" | "url" | "corpo";
+  /** Nome do cabeçalho, do parâmetro da URL ou do campo do corpo. */
+  nome: string;
+}
+
+/**
+ * Nome que costuma carregar credencial (parâmetro de URL ou campo do corpo):
+ * token, key, secret, senha, password, authorization, api_key... Comparado sem
+ * maiúsculas e sem separador (`api_key`, `api-key` e `apiKey` são o mesmo nome).
+ */
+export function nomeDeCredencial(nome: string): boolean {
+  const n = nome.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!n) return false;
+  return (
+    /(token|secret|senha|password|passwd|apikey|authorization|credential|privatekey|accesskey|signature)/.test(n) ||
+    /key$/.test(n) ||
+    ["auth", "pwd", "pass", "sig"].includes(n)
+  );
+}
+
+/** Só uma variável (`{{campo.token}}`), sem texto em volta: não é segredo escrito. */
+const SO_VARIAVEL = /^\s*\{\{[^{}]*\}\}\s*$/;
+const escritoAMao = (valor: string) => valor.trim() !== "" && !SO_VARIAVEL.test(valor);
+
+/** Apaga o VALOR dos parâmetros de query com nome de credencial. Não usa `URL`: a URL pode ter `{{...}}`. */
+function urlSemCredencial(url: string, apagados: string[]): string {
+  const q = url.indexOf("?");
+  if (q < 0) return url;
+  const h = url.indexOf("#", q);
+  const fim = h < 0 ? url.length : h;
+  const query = url
+    .slice(q + 1, fim)
+    .split("&")
+    .map((par) => {
+      const igual = par.indexOf("=");
+      if (igual < 0) return par;
+      const bruto = par.slice(0, igual);
+      let nome = bruto;
+      try {
+        nome = decodeURIComponent(bruto.replace(/\+/g, " "));
+      } catch {
+        /* nome com % solto: compara cru */
+      }
+      const valor = par.slice(igual + 1);
+      if (!nomeDeCredencial(nome) || !escritoAMao(valor)) return par;
+      apagados.push(nome);
+      return `${bruto}=`;
+    })
+    .join("&");
+  return url.slice(0, q + 1) + query + url.slice(fim);
+}
+
+/**
+ * Apaga o VALOR dos campos do corpo com nome de credencial (`"api_key": "x"` vira
+ * `"api_key": ""`). O corpo é um MODELO de JSON (pode ter `{{...}}` e nem sempre
+ * é JSON válido), por isso a troca é por padrão de texto, em qualquer nível.
+ * Valor número/booleano de campo sensível também sai (vira `""`).
+ */
+function corpoSemCredencial(corpo: string, apagados: string[]): string {
+  return corpo.replace(
+    /"((?:[^"\\]|\\.)*)"(\s*:\s*)("(?:[^"\\]|\\.)*"|-?\d[\d.eE+-]*|true|false)/g,
+    (inteiro, nome: string, separador: string, valor: string) => {
+      if (!nomeDeCredencial(nome)) return inteiro;
+      const texto = valor.startsWith('"') ? valor.slice(1, -1) : valor;
+      if (!escritoAMao(texto)) return inteiro;
+      apagados.push(nome);
+      return `"${nome}"${separador}""`;
+    },
+  );
+}
+
+/**
+ * Tira do bloco HTTP todo segredo ESCRITO À MÃO: cabeçalho de credencial,
+ * parâmetro de URL e campo do corpo com nome de credencial. A chave do cofre
+ * (`kind: "segredo"`, `body_secrets`) não tem valor no grafo e vira referência.
+ */
+function semSegredoEscrito(grafo: FlowGraph, apagados: CampoApagado[]): FlowGraph {
   return {
     ...grafo,
     nodes: grafo.nodes.map((n) => {
       if (n.type !== "http_request") return n;
-      const headers = (n.config.headers as CabecalhoHttp[]).map((h) =>
-        cabecalhoComSegredoEscrito(h) ? { ...h, value: "" } : h,
-      );
-      return { ...n, config: { ...n.config, headers } } as typeof n;
+      const caixa = n.label;
+      const config = n.config as { headers?: CabecalhoHttp[]; url?: unknown; body?: unknown };
+      const headers = (config.headers ?? []).map((h) => {
+        if (!cabecalhoComSegredoEscrito(h)) return h;
+        apagados.push({ caixa, onde: "cabecalho", nome: h.name });
+        return { ...h, value: "" };
+      });
+      const daUrl: string[] = [];
+      const url = typeof config.url === "string" ? urlSemCredencial(config.url, daUrl) : config.url;
+      const doCorpo: string[] = [];
+      const body = typeof config.body === "string" ? corpoSemCredencial(config.body, doCorpo) : config.body;
+      for (const nome of daUrl) apagados.push({ caixa, onde: "url", nome });
+      for (const nome of doCorpo) apagados.push({ caixa, onde: "corpo", nome });
+      const novo: Record<string, unknown> = { ...n.config, headers };
+      if (config.url !== undefined) novo.url = url;
+      if (config.body !== undefined) novo.body = body;
+      return { ...n, config: novo } as typeof n;
     }),
   };
 }
@@ -201,7 +305,8 @@ export function exportarAutomacao(
   const refDoId = new Map<string, string>();
   const contadores = new Map<TipoDeReferencia, number>();
 
-  const grafo = trocarTextos(semSegredoEscrito(entrada.grafo), (texto, campo, caminho) => {
+  const apagados: CampoApagado[] = [];
+  const grafo = trocarTextos(semSegredoEscrito(entrada.grafo, apagados), (texto, campo, caminho) => {
     if (!UUID_RX.test(texto)) return texto;
     const id = texto.toLowerCase();
     if (id === entrada.id.toLowerCase()) return REF_DESTA_AUTOMACAO;
@@ -224,6 +329,7 @@ export function exportarAutomacao(
     exportado_em: agora.toISOString(),
     automacao: { nome: entrada.nome.trim().slice(0, MAX_FOLLOWUP_FLOW_NAME) || "Automação", grafo },
     referencias,
+    ...(apagados.length > 0 ? { apagados: apagados.slice(0, MAX_APAGADOS) } : {}),
   };
 }
 
@@ -354,6 +460,8 @@ export interface PreviaDaImportacao {
   referencias: ReferenciaNaPrevia[];
   /** Cada "Requisição HTTP": para onde vai e quais chaves secretas leva. A pessoa confere antes de importar. */
   destinosHttp: { caixa: string; metodo: string; url: string; chaves: string[] }[];
+  /** Valores que a exportação apagou: precisam ser preenchidos no editor antes de publicar. */
+  apagados: { caixa: string; onde: CampoApagado["onde"]; nome: string }[];
 }
 
 /** O que a tela mostra antes de criar: resumo e, para cada referência, as opções DESTA conta. */
@@ -386,6 +494,7 @@ export function previaDaImportacao(
     });
   return {
     destinosHttp,
+    apagados: arquivo.apagados ?? [],
     nome: arquivo.automacao.nome,
     caixas: nodes.length,
     porTipo,
