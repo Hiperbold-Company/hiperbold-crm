@@ -40,6 +40,7 @@ import { Trash, TreeStructure } from "@/lib/ui/icons";
 import { FlowStatusBadge } from "@/app/app/ai/followups/_components/FlowStatusBadge";
 import { DeleteFollowupFlowButton } from "@/app/app/ai/followups/_components/DeleteFollowupFlowButton";
 import { RenameFollowupFlowButton } from "@/app/app/ai/followups/_components/RenameFollowupFlowButton";
+import { ExportarAutomacaoButton } from "@/app/app/automacoes/_components/ExportarAutomacaoButton";
 import { TestarAutomacao } from "./TestarAutomacao";
 import { TriggerConfigControl } from "./TriggerConfigControl";
 
@@ -157,6 +158,7 @@ export function PublishBar({
             de relógio e a política de handoff do follow-up não valem para ele —
             na prova do #1130 esta barra aparecia igual e confundia. */}
         {deAutomacao && <TestarAutomacao flowId={flowId} publicada={flow.status === "active"} />}
+        {deAutomacao && <ExportarAutomacaoButton flowId={flowId} />}
         {!deRoteiro && !deAutomacao && <TriggerConfigControl flowId={flowId} triggerConfig={flow.trigger_config} />}
 
         {!deRoteiro && !deAutomacao && (

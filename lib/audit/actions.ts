@@ -1737,6 +1737,8 @@ export const AUDIT_ACTIONS = [
   "automacao.regra_convertida",
   // Lote 5: rascunho criado a partir de um modelo pronto (`lib/automacoes/modelos`). metadata: model_id.
   "automacao.criada_de_modelo",
+  // Rascunho criado de um arquivo exportado (`lib/automacoes/portabilidade`). metadata: contagens, sem texto.
+  "automacao.importada",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */
