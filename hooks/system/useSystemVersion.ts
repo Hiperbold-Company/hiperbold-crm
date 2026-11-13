@@ -7,6 +7,8 @@ import type { RodadaDoBanco } from "@/lib/system/update-run";
 
 export interface SystemVersion {
   current_version: string;
+  /** Nenhum agente do host jamais bateu (instalação pelo EasyPanel): a versão vem da imagem. */
+  sem_agente?: boolean;
   identity?: RuntimeIdentity;
   runtime_services?: RuntimeConfirmation["services"] | null;
   manual_reconciliation_required?: boolean;

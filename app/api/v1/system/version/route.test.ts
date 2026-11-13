@@ -219,6 +219,27 @@ describe("GET /api/v1/system/version", () => {
     expect(body.data.notes).toBeUndefined();
   });
 
+  it("sem agente do host (EasyPanel), a versão vem da imagem e o aviso de execução não se aplica", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(MEMBRO as never);
+    versionRow.agent_last_seen_at = null;
+    versionRow.runtime_confirmation = { qualquer: "coisa" };
+    versionRow.current_version = "";
+    vi.stubEnv("APP_VERSION", "1217c9e");
+    const { GET } = await import("../version/route");
+    const body = await (await GET(get())).json();
+    expect(body.data.current_version).toBe("1217c9e");
+    expect(body.data.sem_agente).toBe(true);
+  });
+
+  it("CONTROLE — com o agente batendo, a versão continua sendo a que o host afirma", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(MEMBRO as never);
+    vi.stubEnv("APP_VERSION", "9.9.9");
+    const { GET } = await import("../version/route");
+    const body = await (await GET(get())).json();
+    expect(body.data.current_version).toBe("1.0.0");
+    expect(body.data.sem_agente).toBe(false);
+  });
+
   it("entrega o estado completo e a faixa do CHANGELOG para o dono", async () => {
     vi.mocked(loadAuthUser).mockResolvedValue(OWNER as never);
     const { GET } = await import("../version/route");
