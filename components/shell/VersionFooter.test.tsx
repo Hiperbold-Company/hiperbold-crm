@@ -21,3 +21,27 @@ describe("installed version remains visible beside the update notice", () => {
     expect(screen.getByText(/1\.2\.0/)).toBeTruthy();
   });
 });
+
+describe("instalação sem agente do host (EasyPanel)", () => {
+  it("mostra a versão da imagem e não acusa 'Execução não confirmada'", () => {
+    const antes = { ...state.data };
+    Object.assign(state.data, {
+      current_version: "1217c9e",
+      update_available: false,
+      sem_agente: true,
+      identity: { status: "unknown" },
+    });
+    render(<VersionFooter collapsed={false} />);
+    expect(screen.getByText(/Versão 1217c9e/)).toBeTruthy();
+    expect(screen.queryByText("Execução não confirmada")).toBeNull();
+    state.data = antes;
+  });
+
+  it("CONTROLE — com agente e execução não confirmada, o aviso continua", () => {
+    const antes = { ...state.data };
+    Object.assign(state.data, { update_available: false, sem_agente: false, identity: { status: "stale" } });
+    render(<VersionFooter collapsed={false} />);
+    expect(screen.getByText("Execução não confirmada")).toBeTruthy();
+    state.data = antes;
+  });
+});

@@ -134,8 +134,19 @@ export async function GET(_req: NextRequest): Promise<Response> {
       ? run.from_version
       : current;
 
+  // Instalação SEM o agente do host (fork Hiperbold: publica pelo EasyPanel e
+  // pelo GitHub, sem `agent.sh`). Nenhum host jamais bateu, então `running`
+  // sai vazio e o rodapé dizia "Versão ainda não confirmada / Execução não
+  // confirmada" para sempre. Aqui quem afirma a versão é a própria imagem
+  // (`APP_VERSION`, gravada no build, a mesma do /api/v1/health), e o aviso de
+  // execução não se aplica: não há o que confirmar. Com o agente presente nada
+  // muda — a régua da issue 1101 (só o host afirma versão) segue de pé.
+  const semAgente = !version?.agent_last_seen_at;
+  const versaoDaImagem = process.env.APP_VERSION?.trim() ?? "";
+  const versaoExibida = semAgente && !running && versaoDaImagem ? versaoDaImagem : running;
+
   if (!user.is_platform_admin) {
-    return ok({ current_version: running, is_owner: false, identity });
+    return ok({ current_version: versaoExibida, is_owner: false, identity, sem_agente: semAgente });
   }
 
   const latest = version?.latest_version ?? "";
@@ -165,7 +176,8 @@ export async function GET(_req: NextRequest): Promise<Response> {
   const smtpConfigurado = !(await semSmtpNaInstalacao());
 
   return ok({
-    current_version: running,
+    current_version: versaoExibida,
+    sem_agente: semAgente,
     identity,
     runtime_services: observation.success ? observation.data.services : null,
     official_latest_version: observation.success

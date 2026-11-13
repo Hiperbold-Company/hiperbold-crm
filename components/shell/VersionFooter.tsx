@@ -41,7 +41,7 @@ export function VersionFooter({
       title={titulo}
     >
       {collapsed && label ? label.split(".").slice(0, 2).join(".") : titulo}
-      {data.identity && data.identity.status !== "confirmed" && (
+      {data.identity && data.identity.status !== "confirmed" && !data.sem_agente && (
         <span className="block text-[10px]">{t("Execução não confirmada")}</span>
       )}
     </p>
