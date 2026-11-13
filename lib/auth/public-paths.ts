@@ -294,6 +294,10 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/v1\/ai\/followup-flows\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   /^\/api\/v1\/ai\/followup-flows\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(publish|disable|duplicate|rollback)$/i,
   /^\/api\/v1\/automation-rules$/,
+  // Exportar e importar automação por token (13/11/2026): quem monta a automação fora do CRM a importa
+  // sem navegador. `entradaDeFluxo` autentica e cobra `manager` dentro da rota; a org sai do token.
+  /^\/api\/v1\/automacoes\/importar$/,
+  /^\/api\/v1\/automacoes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/exportar$/i,
   /^\/api\/v1\/settings\/routing$/,
   // Só LEITURA por token: conexões de canal e credenciais de IA (sem segredo nenhum). Escrita fica na sessão.
   /^\/api\/v1\/channel-sessions$/,

@@ -38,6 +38,8 @@ import {
   type TipoDaLista,
 } from "@/lib/automacoes/lista-unica";
 
+import { ExportarAutomacaoButton } from "./ExportarAutomacaoButton";
+import { ImportarAutomacaoDialog } from "./ImportarAutomacaoDialog";
 import { ModelosDeAutomacaoDialog, type OpcaoDeCampo, type OpcaoDeEtapa } from "./ModelosDeAutomacaoDialog";
 
 /** "Todos" + os três tipos, na ordem do filtro. */
@@ -67,6 +69,7 @@ export function AutomacoesList({
   const { data } = useFollowupFlows({ initialData, surface: "automacao" });
   const [aberto, setAberto] = useState(false);
   const [modelosAberto, setModelosAberto] = useState(false);
+  const [importarAberto, setImportarAberto] = useState(false);
   const [tipo, setTipo] = useState<TipoDaLista | "todos">("todos");
   const [busca, setBusca] = useState("");
   const todas = useMemo(
@@ -85,6 +88,15 @@ export function AutomacoesList({
 
   const botaoNova = (
     <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-start">
+      <Button
+        variant="outline"
+        onClick={() => setImportarAberto(true)}
+        data-testid="importar-automacao-botao"
+        className="w-full sm:w-auto"
+        disabled={motivoDoBloqueio !== null}
+      >
+        {t("Importar")}
+      </Button>
       <Button
         variant="outline"
         onClick={() => setModelosAberto(true)}
@@ -163,6 +175,7 @@ export function AutomacoesList({
         </>
       )}
       <NovaAutomacaoDialog aberto={aberto} onAberto={setAberto} />
+      <ImportarAutomacaoDialog aberto={importarAberto} onAberto={setImportarAberto} />
       <ModelosDeAutomacaoDialog aberto={modelosAberto} onAberto={setModelosAberto} etapas={etapas} camposDeData={camposDeData} />
     </div>
   );
@@ -205,7 +218,10 @@ function LinhaDaListaUnica({ linha: a, data_ }: { linha: LinhaDaLista; data_: (i
             <Link href={`/app/automacoes/${a.id}/execucoes`} className="text-xs text-accent-600 hover:underline">
               {t("Ver execuções")}
             </Link>
-            <DeleteFollowupFlowButton flowId={a.id} flowName={a.nome} />
+            <div className="flex items-center gap-1">
+              <ExportarAutomacaoButton flowId={a.id} />
+              <DeleteFollowupFlowButton flowId={a.id} flowName={a.nome} />
+            </div>
           </div>
         )}
       </Card>
