@@ -18,6 +18,7 @@ import {
   exportarAutomacao,
   lerArquivoDeAutomacao,
   montarGrafoImportado,
+  nomeDeCredencial,
   nomeDoArquivoDaAutomacao,
   previaDaImportacao,
   type CatalogoDaConta,
@@ -173,6 +174,55 @@ describe("exportar automação", () => {
     const json = JSON.stringify(exportar());
     expect(json).not.toContain("segredo-escrito-a-mao");
     expect(json).toContain('"value":"crm"');
+  });
+
+  it("token na URL e chave no corpo do bloco HTTP saem apagados, e o arquivo diz o que foi apagado", () => {
+    const g = grafoDaOrigem();
+    const n5 = g.nodes.find((n) => n.id === "n5")!;
+    const c = n5.config as { url: string; body?: string };
+    c.url = "https://erp.exemplo.com/v1?cliente={{lead.id}}&token=abc&lang=pt";
+    c.body = '{"api_key":"x","nome":"{{lead.name}}","auth":{"password":"pw-escrita","senha":"{{lead.senha}}"},"pin":1234}';
+    const arquivo = exportarAutomacao({ id: ORIGEM.automacao, nome: "x", grafo: g }, CATALOGO_ORIGEM, AGORA);
+    const http = arquivo.automacao.grafo.nodes.find((n) => (n as { id: string }).id === "n5") as {
+      config: { url: string; body: string };
+    };
+    const json = JSON.stringify(arquivo);
+    expect(json).not.toContain("abc");
+    expect(json).not.toMatch(/"api_key\\?":\\?"x/);
+    expect(json).not.toContain("pw-escrita");
+    expect(http.config.url).toBe("https://erp.exemplo.com/v1?cliente={{lead.id}}&token=&lang=pt");
+    expect(JSON.parse(http.config.body)).toEqual({
+      api_key: "",
+      nome: "{{lead.name}}",
+      auth: { password: "", senha: "{{lead.senha}}" },
+      pin: 1234,
+    });
+    expect(arquivo.apagados).toEqual([
+      { caixa: "Avisar o ERP", onde: "cabecalho", nome: "Authorization" },
+      { caixa: "Avisar o ERP", onde: "url", nome: "token" },
+      { caixa: "Avisar o ERP", onde: "corpo", nome: "api_key" },
+      { caixa: "Avisar o ERP", onde: "corpo", nome: "password" },
+    ]);
+
+    // A prévia da importação avisa o que precisa ser preenchido.
+    const leitura = lerArquivoDeAutomacao(JSON.parse(json));
+    if (!leitura.ok) throw new Error(leitura.problemas.join("; "));
+    const previa = previaDaImportacao(leitura.arquivo, leitura.usadas, CATALOGO_DESTINO);
+    expect(previa.apagados.map((a) => `${a.onde}:${a.nome}`)).toEqual([
+      "cabecalho:Authorization",
+      "url:token",
+      "corpo:api_key",
+      "corpo:password",
+    ]);
+  });
+
+  it("nome de credencial: as grafias comuns valem, nomes comuns não", () => {
+    for (const n of ["token", "access_token", "apiKey", "api-key", "API_KEY", "client_secret", "senha", "Password", "authorization", "auth", "sig"]) {
+      expect(nomeDeCredencial(n), n).toBe(true);
+    }
+    for (const n of ["nome", "email", "cliente", "lang", "status", "id", "author"]) {
+      expect(nomeDeCredencial(n), n).toBe(false);
+    }
   });
 
   it("id que nem o catálogo nem o campo classificam recusa a exportação", () => {

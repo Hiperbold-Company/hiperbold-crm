@@ -284,6 +284,28 @@ describe("importar automação: criar", () => {
     expect(deps.criar).not.toHaveBeenCalled();
   });
 
+  it("corpo em partes, sem content-length, acima do teto: 413 sem ler o resto", async () => {
+    const pedaco = new TextEncoder().encode("x".repeat(64 * 1024));
+    let enviados = 0;
+    const corpo = new ReadableStream<Uint8Array>({
+      pull(c) {
+        enviados += 1;
+        if (enviados > 40) return c.close(); // 2,5 MB, se ninguém parar antes
+        c.enqueue(pedaco);
+      },
+    });
+    const r = new NextRequest("http://localhost/api/v1/automacoes/importar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: corpo,
+      duplex: "half",
+    });
+    expect(r.headers.get("content-length")).toBeNull();
+    expect((await POST(r)).status).toBe(413);
+    expect(enviados).toBeLessThan(15);
+    expect(deps.criar).not.toHaveBeenCalled();
+  });
+
   it("Idempotency-Key: o duplo clique cria uma automação só", async () => {
     const h = { "Idempotency-Key": "11111111-2222-4333-8444-555555555555" };
     const a = await POST(req({ arquivo: arquivo(), escolhas: ESCOLHAS }, h));
