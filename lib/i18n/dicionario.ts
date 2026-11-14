@@ -12378,6 +12378,9 @@ export const DICIONARIO: Traducoes = {
   // ─── Inbox: o anúncio que trouxe a pessoa (bolha e painel) ───
   "Ver anúncio": { es: "Ver anuncio" },
   "Anúncio de origem": { es: "Anuncio de origen" },
+  "Vem do anúncio ou do formulário: não use para dar benefício": {
+    es: "Viene del anuncio o del formulario: no lo uses para dar un beneficio",
+  },
   "Clicou em {data}": { es: "Hizo clic el {data}" },
   "Voltou por outro anúncio": { es: "Volvió por otro anuncio" },
 
@@ -16617,6 +16620,10 @@ export const DICIONARIO: Traducoes = {
     {
       es: "No se permite mover entre embudos. Usa POST /api/v1/leads/[id]/clone para llevar el negocio a otro embudo.",
     },
+  "A etapa de destino é do mesmo funil do negócio: use a troca de etapa.": {
+    es: "La etapa de destino es del mismo embudo del negocio: usa el cambio de etapa.",
+  },
+  "A etapa ou o funil de destino está arquivado.": { es: "La etapa o el embudo de destino está archivado." },
   "Nada para alterar.": { es: "No hay nada que modificar." },
   "Nenhum arquivo foi enviado.": { es: "No se envió ningún archivo." },
   "Nenhum lead acessível na operação.": { es: "No hay ningún lead accesible en la operación." },
@@ -27609,9 +27616,9 @@ export const DICIONARIO: Traducoes = {
   "A automação publicada roda de verdade para o contato escolhido: as ações mudam o CRM.": {
     es: "La automatización publicada se ejecuta de verdad para el contacto elegido: las acciones cambian el CRM.",
   },
-  "Aceita variáveis: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}.":
+  "Aceita variáveis: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}, {{contact.anuncio.source_id}} (dados do anúncio de origem).":
     {
-      es: "Acepta variables: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}.",
+      es: "Acepta variables: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}, {{contact.anuncio.source_id}} (datos del anuncio de origen).",
     },
   "Acrescentar ao texto": { es: "Agregar al texto" },
   "Adicione ao menos uma ação.": { es: "Agrega al menos una acción." },
@@ -27698,6 +27705,9 @@ export const DICIONARIO: Traducoes = {
   },
   "Se o contato já tem negócio aberto neste funil": {
     es: "Si el contacto ya tiene un negocio abierto en este embudo",
+  },
+  "Se o negócio estiver em outro funil, trazer para este funil": {
+    es: "Si el negocio está en otro embudo, traerlo a este embudo",
   },
   "Se uma ação falhar": { es: "Si una acción falla" },
   "Seguir por “Sim” quando": { es: "Seguir por “Sí” cuando" },
@@ -28631,6 +28641,19 @@ export const DICIONARIO: Traducoes = {
   "Mensagem do banco": { es: "Mensaje de la base de datos" },
   "Contagem de leads abertos": { es: "Conteo de leads abiertos" },
   Páginas: { es: "Páginas" },
+  "Anúncio: código do clique (ctwa_clid)": { es: "Anuncio: código del clic (ctwa_clid)" },
+  "Anúncio: ID do anúncio": { es: "Anuncio: ID del anuncio" },
+  "Anúncio: link do anúncio": { es: "Anuncio: enlace del anuncio" },
+  "Anúncio: título": { es: "Anuncio: título" },
+  "Anúncio: texto": { es: "Anuncio: texto" },
+  "Anúncio: tipo de mídia": { es: "Anuncio: tipo de medio" },
+  "Atribuir a conversa e iniciar o atendimento": { es: "Asignar la conversación e iniciar la atención" },
+  "Escolha a pessoa": { es: "Elige a la persona" },
+  "A conversa do contato (a mais recente no canal que iniciou a automação) passa para esta pessoa e o atendimento automático para nela.": { es: "La conversación del contacto (la más reciente en el canal que inició la automatización) pasa a esta persona y la atención automática se detiene en ella." },
+  "Sorteio": { es: "Sorteo" },
+  "Percentual que segue pela saída A": { es: "Porcentaje que sigue por la salida A" },
+  "A saída B recebe o restante. Cada contato é sorteado na hora, uma vez por passagem pelo bloco.": { es: "La salida B recibe el resto. Cada contacto se sortea en el momento, una vez por cada paso por el bloque." },
+  "Informe um número inteiro de 1 a 99.": { es: "Indica un número entero de 1 a 99." },
 };
 
 /**

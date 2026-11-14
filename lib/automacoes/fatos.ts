@@ -8,6 +8,8 @@
  * bloco que acabou de mudar a etapa tem de ver a etapa nova no bloco seguinte.
  */
 
+import type { AnuncioDoFluxo } from "./anuncio-do-contato";
+
 export interface ContatoDosFatos {
   id: string;
   name: string | null;
@@ -16,6 +18,12 @@ export interface ContatoDosFatos {
   birthdate: string | null;
   tags: string[];
   custom_fields: Record<string, unknown>;
+  /**
+   * O anúncio de primeiro toque (`{{contact.anuncio.*}}`, `anuncio-do-contato.ts`).
+   * Opcional só para os montadores de fatos que não o carregam; quem carrega
+   * sempre o preenche, com string vazia onde não há anúncio.
+   */
+  anuncio?: AnuncioDoFluxo;
 }
 
 export interface NegocioDosFatos {

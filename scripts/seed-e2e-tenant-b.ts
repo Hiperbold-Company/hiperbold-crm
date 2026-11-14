@@ -302,7 +302,9 @@ async function ensurePegadaLgpd(
   };
   if (lExist) {
     leadId = (lExist as { id: string }).id;
-    const { error } = await admin.from("crm_leads").update(leadLinha as never).eq("id", leadId);
+    // `pipeline_id` só entra no insert: a troca de funil de negócio existente é da função nomeada (migration 1013).
+    const { pipeline_id: _funil, ...semFunil } = leadLinha;
+    const { error } = await admin.from("crm_leads").update(semFunil as never).eq("id", leadId);
     if (error) throw new Error(`atualizar lead B: ${error.message}`);
   } else {
     const { data, error } = await admin.from("crm_leads").insert(leadLinha as never).select("id").single();

@@ -178,6 +178,7 @@ const TIPO_DO_NO: Record<FlowNode["type"], string> = {
   instagram_public_reply: "Responder no comentário",
   instagram_check_follow: "Confere se segue",
   http_request: "Requisição HTTP",
+  random_split: "Sorteio",
 };
 
 const DESFECHO: Record<string, string> = {
@@ -349,6 +350,8 @@ export function resumoDoNo(node: FlowNode, raia: RaiaDoEnrollment = "followup"):
       return { ...base, resumo: "confere se quem comentou segue o perfil" };
     case "http_request":
       return { ...base, resumo: `chama ${hostDoModelo(node.config.url)} (${node.config.method}) e guarda o que a resposta devolve` };
+    case "random_split":
+      return { ...base, resumo: `sorteia o caminho: ${node.config.percent_a}% seguem por A e ${100 - node.config.percent_a}% por B` };
   }
 }
 
@@ -514,6 +517,15 @@ export function descreveEvento(
         return {
           titulo: "A data do campo estava vazia ou já tinha passado",
           detalhe: `foi por “Sem data” para ${refDoNo(texto(p.next_node_id), nos)}`,
+          ...motor,
+        };
+      }
+      // Sorteio: o lado que saiu. `branch` (e não `class`) porque `class` vira o
+      // desfecho de classificação que as condições leem.
+      if (evento.node_id && nos[evento.node_id]?.tipo === "random_split" && (texto(p.branch) === "a" || texto(p.branch) === "b")) {
+        return {
+          titulo: `Sorteio: caiu no caminho ${texto(p.branch)?.toUpperCase()}`,
+          detalhe: `foi para ${refDoNo(texto(p.next_node_id), nos)}`,
           ...motor,
         };
       }

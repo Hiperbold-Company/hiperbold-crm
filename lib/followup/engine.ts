@@ -359,6 +359,8 @@ export interface TickDeps {
   enqueueJob: (job: FollowupJobRequest) => Promise<void>;
   /** Sem executor, todo bloco de efeito sai por "Erro" com `efeitos_indisponiveis`. */
   efeitos?: ExecutorDeEfeitos;
+  /** Teste: a fonte de aleatoriedade do bloco "Sorteio", um número em [0, 1). Padrão: a fonte segura do sistema. */
+  sortear?: () => number;
 }
 
 function ehAutomacao(enrollment: EnrollmentRow): boolean {
@@ -486,6 +488,7 @@ function eventPayload(result: NodeResult): Record<string, unknown> {
           ? { repeat_index: result.repeat.index, repeat_total: result.repeat.total }
           : {}),
         ...(result.class !== undefined ? { class: result.class } : {}),
+        ...(result.branch !== undefined ? { branch: result.branch } : {}),
       };
     case "wait":
       return {
@@ -1481,6 +1484,7 @@ async function processarUmPasso(
     ...(fatos ? { fatos } : {}),
     ...(espera ? { espera } : {}),
     ...(respostas ? { respostas } : {}),
+    ...(deps.sortear ? { sortear: deps.sortear } : {}),
   };
   let result = processNode({ ...entrada, efeito });
   // A decisão do bloco de conversa pediu UM efeito (enviar ou registrar): o

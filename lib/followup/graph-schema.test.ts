@@ -51,6 +51,7 @@ describe('graph-schema', () => {
         'instagram_public_reply',
         'instagram_check_follow',
         'http_request',
+        'random_split',
       ]);
     });
 

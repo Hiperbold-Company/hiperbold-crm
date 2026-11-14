@@ -11,6 +11,8 @@
  */
 import { z } from "zod";
 
+import { CHAVES_DO_ANUNCIO } from "./anuncio-do-contato";
+
 /** Texto com variáveis `{{...}}`. */
 export const tpl = (max = 4000) => z.string().max(max);
 
@@ -35,6 +37,9 @@ export const CAMPOS_DO_NEGOCIO = [
   "expected_close_date",
 ] as const;
 
+const CAMINHO_DE_VARIAVEL = /^(gatilho|param|resposta|saida)\.[a-z0-9_.[\]]+$/i;
+const CAMINHO_DO_ANUNCIO = new RegExp(String.raw`^contact\.anuncio\.(${CHAVES_DO_ANUNCIO.join("|")})$`);
+
 /**
  * Onde mora o valor que um bloco lê ou escreve. `var` é só leitura (o gatilho
  * e o que blocos anteriores guardaram).
@@ -48,7 +53,10 @@ export const fieldRefSchema = z.discriminatedUnion("scope", [
     scope: z.literal("var"),
     path: z
       .string()
-      .regex(/^(gatilho|param|resposta|saida)\.[a-z0-9_.[\]]+$/i)
+      // Só o `contact.anuncio.*` é exato (minúsculo): `chaveDoAnuncioNoCaminho` lê com
+      // `startsWith`/`includes`, e uma caixa aceita aqui e não lida lá viraria variável vazia.
+      // As demais alternativas seguem sem distinguir caixa, como sempre.
+      .refine((v) => CAMINHO_DE_VARIAVEL.test(v) || CAMINHO_DO_ANUNCIO.test(v))
       .max(120),
   }),
 ]);
@@ -76,7 +84,13 @@ export const crmActionSchema = z.discriminatedUnion("type", [
     title: tpl(200).optional(),
     value_cents: z.number().int().min(0).optional(),
   }),
-  z.strictObject({ type: z.literal("move_deal"), pipeline_id: uuid, stage_id: uuid }),
+  z.strictObject({
+    type: z.literal("move_deal"),
+    pipeline_id: uuid,
+    stage_id: uuid,
+    /** Ausente = false: o bloco só troca de etapa dentro do funil (comportamento das automações já publicadas). */
+    trocar_funil: z.boolean().optional(),
+  }),
   z.strictObject({ type: z.literal("win_deal"), reason: tpl(500).optional() }),
   z.strictObject({ type: z.literal("lose_deal"), reason: tpl(500).min(1) }),
   z.strictObject({ type: z.literal("add_tags"), target: z.enum(["lead", "contact"]), tags }),
@@ -89,6 +103,12 @@ export const crmActionSchema = z.discriminatedUnion("type", [
       z.strictObject({ m: z.literal("round_robin"), user_ids: z.array(uuid).max(50).optional() }),
     ]),
   }),
+  /**
+   * Atribuir a CONVERSA do contato a uma pessoa e pô-la em atendimento humano:
+   * a mesma troca de dono do botão "Transferir" da Inbox (`fn_conversation_assign`),
+   * que também cala o atendimento automático naquela conversa.
+   */
+  z.strictObject({ type: z.literal("assign_conversation"), user_id: uuid }),
   z.strictObject({
     type: z.literal("notify"),
     to: z.union([z.literal("owner"), z.array(uuid).min(1).max(10)]),
@@ -152,6 +172,21 @@ export const fieldOpConfigSchema = z.strictObject({
   ops: z.array(fieldOpSchema).min(1).max(20),
 });
 export type FieldOpConfig = z.infer<typeof fieldOpConfigSchema>;
+
+// ---------------------------------------------------------------------------
+// Sorteio (bloco `random_split`): divide os contatos entre os caminhos A e B
+// ---------------------------------------------------------------------------
+
+/** O percentual da saída A fica entre 1 e 99: 0 ou 100 não sorteia nada (a B é 100 − A). */
+export const PERCENTUAL_MINIMO_DO_SORTEIO = 1;
+export const PERCENTUAL_MAXIMO_DO_SORTEIO = 99;
+export const PERCENTUAL_PADRAO_DO_SORTEIO = 50;
+
+export const sorteioConfigSchema = z.strictObject({
+  /** Chance, em %, de o contato seguir pela saída A. A saída B recebe o resto. */
+  percent_a: z.number().int().min(PERCENTUAL_MINIMO_DO_SORTEIO).max(PERCENTUAL_MAXIMO_DO_SORTEIO),
+});
+export type SorteioConfig = z.infer<typeof sorteioConfigSchema>;
 
 // ---------------------------------------------------------------------------
 // Condições novas (dentro do bloco `condition`, ao lado das legadas)

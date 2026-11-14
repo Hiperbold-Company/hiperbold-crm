@@ -33,6 +33,7 @@ import { ConfereSeSegueForm, RespostaPrivadaForm, RespostaPublicaForm } from "./
 import { HttpForm } from "./forms/automacao/HttpForm";
 import { MessageForm } from "./forms/automacao/MessageForm";
 import { QuestionForm } from "./forms/automacao/QuestionForm";
+import { SorteioForm } from "./forms/automacao/SorteioForm";
 import type { RespostaDisponivel } from "./forms/automacao/comum";
 import type { ConfigOf } from "./forms/shared";
 import { NODE_VISUALS } from "./nodes/nodeVisuals";
@@ -199,6 +200,12 @@ export function NodeConfigPanel({
             config={node.data.config as ConfigOf<"http_request">}
             onChange={(config) => onChange({ config })}
             respostas={respostasAnteriores}
+          />
+        )}
+        {type === "random_split" && (
+          <SorteioForm
+            config={node.data.config as ConfigOf<"random_split">}
+            onChange={(config) => onChange({ config })}
           />
         )}
         {type === "field_op" && (

@@ -55,6 +55,7 @@ const TYPE_ORDER: Record<NodeType, number> = {
   instagram_public_reply: 8,
   instagram_check_follow: 8,
   http_request: 8,
+  random_split: 2,
   // #2065 — ações que também não falam com o cliente: entram junto do envio,
   // porque são o MEIO do caminho (mover o card, etiquetar) e não o epílogo.
   move_lead: 8.5,
