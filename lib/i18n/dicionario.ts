@@ -16617,6 +16617,10 @@ export const DICIONARIO: Traducoes = {
     {
       es: "No se permite mover entre embudos. Usa POST /api/v1/leads/[id]/clone para llevar el negocio a otro embudo.",
     },
+  "A etapa de destino é do mesmo funil do negócio: use a troca de etapa.": {
+    es: "La etapa de destino es del mismo embudo del negocio: usa el cambio de etapa.",
+  },
+  "A etapa ou o funil de destino está arquivado.": { es: "La etapa o el embudo de destino está archivado." },
   "Nada para alterar.": { es: "No hay nada que modificar." },
   "Nenhum arquivo foi enviado.": { es: "No se envió ningún archivo." },
   "Nenhum lead acessível na operação.": { es: "No hay ningún lead accesible en la operación." },

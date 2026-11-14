@@ -17,7 +17,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { createLeadHandler, moveLeadHandler, updateLeadHandler } from "@/app/api/v1/leads/_handler";
+import { createLeadHandler, moveLeadHandler, moverParaOutroFunilHandler, updateLeadHandler } from "@/app/api/v1/leads/_handler";
 import { patchContactHandler } from "@/app/api/v1/contacts/_handler";
 import type { HandlerCtx } from "@/lib/api/handlers/types";
 import { ApiError } from "@/lib/api/types";
@@ -42,6 +42,7 @@ import { renderizar } from "../template-vars";
 import { CAMPOS_PADRAO_DO_CONTATO, CAMPOS_PADRAO_DO_NEGOCIO } from "../vocabulario";
 import { executarConversa } from "./conversa";
 import { executarIniciarAutomacao } from "./iniciar-automacao";
+import { escolherNegocioParaMover } from "./mover-negocio";
 import { executarHttp } from "./http";
 import { ehNoDoInstagram, executarInstagram } from "./instagram";
 
@@ -156,14 +157,14 @@ async function executarAcao(c: Contexto, acao: CrmAction, indice: number): Promi
       return { ok: true, vars: { _lead_id: id }, detalhe: { ...base, resultado: "criado", lead_id: id } };
     }
     case "move_deal": {
-      const daExecucao = c.fatos?.negocio;
-      const alvo =
-        daExecucao && daExecucao.pipeline_id === acao.pipeline_id
-          ? daExecucao.id
-          : c.fatos?.negocios.find((n) => n.pipeline_id === acao.pipeline_id && n.status === "open")?.id;
-      if (!alvo) return { ok: false, erro: "sem_negocio", detalhe: base };
-      await moveLeadHandler(c.admin, c.handler, alvo, { to_stage_id: acao.stage_id });
-      return { ok: true, vars: { _lead_id: alvo }, detalhe: { ...base, lead_id: alvo } };
+      const escolha = escolherNegocioParaMover(c, acao.pipeline_id);
+      if (!escolha) return { ok: false, erro: "sem_negocio", detalhe: base };
+      if (escolha.entreFunis) {
+        await moverParaOutroFunilHandler(c.admin, c.handler, escolha.id, { to_stage_id: acao.stage_id });
+        return { ok: true, vars: { _lead_id: escolha.id }, detalhe: { ...base, lead_id: escolha.id, resultado: "trocou_de_funil" } };
+      }
+      await moveLeadHandler(c.admin, c.handler, escolha.id, { to_stage_id: acao.stage_id });
+      return { ok: true, vars: { _lead_id: escolha.id }, detalhe: { ...base, lead_id: escolha.id } };
     }
     case "win_deal":
     case "lose_deal": {

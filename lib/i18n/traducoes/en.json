@@ -14337,6 +14337,8 @@
   "Não foi possível ler as falhas agora.": "Couldn't read the failures right now.",
   "Não há mais falhas nesta página.": "There are no more failures on this page.",
   "O que falhou": "What failed",
+  "A etapa de destino é do mesmo funil do negócio: use a troca de etapa.": "The destination stage is in the same pipeline as the deal: use the stage change.",
+  "A etapa ou o funil de destino está arquivado.": "The destination stage or pipeline is archived.",
   "Páginas": "Pages",
   "Quando o sistema não consegue somar um lead novo ao limite do plano de uma empresa, o lead entra normalmente e a falha fica anotada aqui. A conferência diária corrige a conta no dia seguinte. As anotações com mais de 90 dias são apagadas sozinhas.": "When the system can't add a new lead to a company's plan limit, the lead still comes in normally and the failure is noted here. The daily check fixes the count the next day. Notes older than 90 days are deleted automatically."
 }

@@ -33,7 +33,13 @@ import {
   recorrenciaParaGravar,
   type RecorrenciaNoPatch,
 } from "@/lib/leads/valor-recorrente";
-import { RECUSA_DE_TROCA_DE_FUNIL } from "@/lib/leads/clonar-para-funil";
+import { FUNIL_DE_DESTINO_NAO_ENCONTRADO, RECUSA_DE_TROCA_DE_FUNIL } from "@/lib/leads/clonar-para-funil";
+import {
+  RECUSA_DESTINO_ARQUIVADO,
+  RECUSA_MESMO_FUNIL,
+  camposForaDoFunilDeDestino,
+  motivoDaTrocaDeFunil,
+} from "@/lib/leads/mover-para-outro-funil";
 import {
   camposQueMudaram,
   defsDoPadraoDoFunil,
@@ -1797,6 +1803,294 @@ export async function moveLeadHandler(
   return ocultarProvaMetaNaResposta(finalLead);
 }
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// MOVER O MESMO NEGÓCIO PARA UMA ETAPA DE OUTRO FUNIL (migration 1013)
+// ════════════════════════════════════════════════════════════════════════════
+//
+// A operação NOMEADA que troca `pipeline_id`. O `moveLeadHandler` acima segue
+// recusando etapa de outro funil (`pipeline_immutable_use_clone`), e o banco
+// recusa o UPDATE solto que troque o funil: só a função
+// `fn_mover_negocio_para_outro_funil` (service_role) passa a trava. Por isso o
+// `supabase` daqui é o client de serviço (as automações já o usam).
+//
+// O resto é a MESMA régua da troca de etapa: negócio de contato pessoal recusa,
+// reabertura segue o modo do funil de ORIGEM (o encerramento é dele), campos
+// obrigatórios e motivo de ganho/perda seguem a etapa e o funil de DESTINO, e
+// sai o mesmo `lead.stage_changed` (com `pipeline_id` do destino) que os
+// gatilhos "entrou na etapa" escutam. Os campos personalizados ficam todos; os
+// que o funil de destino não declara vão listados na atividade
+// (`lib/leads/mover-para-outro-funil.ts`).
+
+export interface MoverParaOutroFunilInput {
+  to_stage_id: string;
+  /** Nota humana opcional que entra na timeline. */
+  reason?: string;
+}
+
+function recusaDoBancoNaTrocaDeFunil(
+  err: { code?: string; message?: string },
+  ctx: HandlerCtx,
+): ApiError | null {
+  const idioma = ctx.idioma ?? "pt-BR";
+  switch (err.code) {
+    case "PT404":
+      return new ApiError(404, "not_found", undefined, ctx.requestId, traduzir("Stage não encontrado.", idioma));
+    case "PT409":
+      return new ApiError(
+        409,
+        "lead_stage_changed_concurrent",
+        undefined,
+        ctx.requestId,
+        traduzir("Lead foi modificado concorrentemente.", idioma),
+      );
+    case "PT422":
+      return new ApiError(422, "validation_error", undefined, ctx.requestId, err.message);
+    default:
+      return null;
+  }
+}
+
+export async function moverParaOutroFunilHandler(
+  supabase: SB,
+  ctx: HandlerCtx,
+  leadId: string,
+  input: MoverParaOutroFunilInput,
+): Promise<Record<string, unknown>> {
+  const idioma = ctx.idioma ?? "pt-BR";
+  const { data: lead, error: selErr } = await supabase
+    .from("crm_leads")
+    .select("*")
+    .eq("id", leadId)
+    .eq("organization_id", ctx.organization_id)
+    .maybeSingle();
+  if (selErr) {
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId, selErr.message);
+  }
+  if (!lead || lead.organization_id !== ctx.organization_id) {
+    throw new ApiError(404, "not_found", undefined, ctx.requestId, traduzir("Lead não encontrado.", idioma));
+  }
+  await recusaPessoalNaEscrita(supabase, ctx, (lead as { contact_id?: string | null }).contact_id);
+
+  const { data: stage, error: stageErr } = await supabase
+    .from("crm_stages")
+    .select("id, pipeline_id, organization_id, name, is_lost, is_won, is_archived")
+    .eq("id", input.to_stage_id)
+    .eq("organization_id", ctx.organization_id)
+    .maybeSingle();
+  if (stageErr) {
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId, stageErr.message);
+  }
+  // Etapa de outra organização responde igual à inexistente (sem dizer que existe).
+  if (!stage || stage.organization_id !== ctx.organization_id) {
+    throw new ApiError(404, "not_found", undefined, ctx.requestId, traduzir("Stage não encontrado.", idioma));
+  }
+  if (stage.pipeline_id === lead.pipeline_id) {
+    throw new ApiError(422, "validation_error", { use: "/api/v1/leads/{id}/move" }, ctx.requestId, traduzir(RECUSA_MESMO_FUNIL, idioma));
+  }
+
+  const { data: funis, error: funisErr } = await supabase
+    .from("crm_pipelines")
+    .select("id, name, settings, is_archived, organization_id")
+    .eq("organization_id", ctx.organization_id)
+    .in("id", [lead.pipeline_id, stage.pipeline_id]);
+  if (funisErr) {
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId, funisErr.message);
+  }
+  type Funil = { id: string; name: string | null; settings: unknown; is_archived: boolean; organization_id: string };
+  const lista = (funis ?? []) as Funil[];
+  const destino = lista.find((f) => f.id === stage.pipeline_id && f.organization_id === ctx.organization_id);
+  const origem = lista.find((f) => f.id === lead.pipeline_id);
+  if (!destino) {
+    throw new ApiError(404, "not_found", undefined, ctx.requestId, traduzir(FUNIL_DE_DESTINO_NAO_ENCONTRADO, idioma));
+  }
+  if (destino.is_archived || (stage as { is_archived?: boolean }).is_archived) {
+    throw new ApiError(422, "validation_error", undefined, ctx.requestId, traduzir(RECUSA_DESTINO_ARQUIVADO, idioma));
+  }
+
+  // Reabertura: o encerramento é do funil de ORIGEM, então é o modo dele que decide.
+  {
+    const recusa = recusaReabertura({
+      modo: modoDeReabertura(origem?.settings ?? null),
+      statusAtual: (lead as { status?: string }).status,
+      etapaDestino: stage,
+      idioma: ctx.idioma,
+    });
+    if (recusa) {
+      throw new ApiError(409, recusa.codigo, { use: "/api/v1/leads/{id}/retomar", lead_id: leadId }, ctx.requestId, recusa.mensagem);
+    }
+  }
+
+  const settingsDestino = destino.settings ?? null;
+  const vereditoDeCampos = validaCamposExigidos({
+    lead: lead as Record<string, unknown>,
+    settingsDoFunil: settingsDestino,
+    camposComAnexo: await camposComAnexo(supabase, settingsDestino, ctx.organization_id, leadId),
+    destino: { stageId: stage.id, desfecho: stage.is_won ? "won" : stage.is_lost ? "lost" : null },
+    motivoDeGanho: null,
+  });
+  if (vereditoDeCampos.faltando.length > 0) {
+    const recusa = recusaDeCamposObrigatorios(vereditoDeCampos.faltando, ctx.idioma);
+    throw new ApiError(422, recusa.codigo, { faltando: vereditoDeCampos.faltando }, ctx.requestId, recusa.mensagem);
+  }
+  if (stage.is_won) {
+    const recusaGanho = recusaDeMotivoDoGanho({ motivo: null, settingsDoFunil: settingsDestino, idioma: ctx.idioma });
+    if (recusaGanho) {
+      throw new ApiError(422, recusaGanho.codigo, undefined, ctx.requestId, recusaGanho.mensagem);
+    }
+  }
+  const vereditoPerda = decideMotivoDaPerda({
+    etapaDeDestino: stage,
+    motivo: null,
+    motivoAtual: (lead as { lost_reason?: string | null }).lost_reason ?? null,
+    idioma: ctx.idioma,
+  });
+  if (!vereditoPerda.ok) {
+    throw new ApiError(422, vereditoPerda.codigo, undefined, ctx.requestId, vereditoPerda.mensagem);
+  }
+
+  // A entrada vai para o TOPO da etapa de destino, como a troca de etapa sem posição.
+  const { data: ponta } = await supabase
+    .from("crm_leads")
+    .select("position_in_stage")
+    .eq("organization_id", ctx.organization_id)
+    .eq("stage_id", stage.id)
+    .order("position_in_stage", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const position = posicaoDeEntradaNaEtapa(
+    ponta?.position_in_stage == null ? null : Number(ponta.position_in_stage),
+  );
+
+  const camposFora = camposForaDoFunilDeDestino(
+    (lead as { custom_fields?: Record<string, unknown> | null }).custom_fields ?? null,
+    settingsDestino as Record<string, unknown> | null,
+  );
+
+  const serviceOrigin =
+    ctx.serviceOrigin ?? (await observeServiceOrigin(createAdminClient(), ctx.organization_id, lead.contact_id));
+  await guardServiceEffect();
+  const { error: rpcErr } = await supabase.rpc("fn_mover_negocio_para_outro_funil", {
+    p_organization_id: ctx.organization_id,
+    p_lead_id: leadId,
+    p_stage_id: stage.id,
+    p_position_in_stage: position,
+    p_expected_updated_at: lead.updated_at,
+  });
+  if (rpcErr) {
+    const recusaDoTeto = recusaDoPlano(rpcErr);
+    if (recusaDoTeto) {
+      throw new ApiError(STATUS_RECUSA_DO_PLANO, "plano_limite_atingido", undefined, ctx.requestId, recusaDoTeto.mensagem);
+    }
+    const recusaPerda = recusaDeMotivoDaPerdaPeloBanco(rpcErr, ctx.idioma);
+    if (recusaPerda) {
+      throw new ApiError(422, recusaPerda.codigo, undefined, ctx.requestId, recusaPerda.mensagem);
+    }
+    const recusaBanco = recusaDoBancoNaTrocaDeFunil(rpcErr, ctx);
+    if (recusaBanco) throw recusaBanco;
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId, rpcErr.message);
+  }
+
+  const { data: depois } = await supabase
+    .from("crm_leads")
+    .select("status")
+    .eq("id", leadId)
+    .eq("organization_id", ctx.organization_id)
+    .maybeSingle();
+
+  const a = actorAuditPayload(ctx.actor);
+  await createAdminClient()
+    .rpc("emit_event", {
+      p_event_type: "lead.stage_changed",
+      p_entity_kind: "crm_lead",
+      p_entity_id: leadId,
+      p_payload: {
+        service_origin: serviceOrigin,
+        // O funil que a etapa de destino tem: é o que o gatilho "entrou na etapa" filtra.
+        pipeline_id: stage.pipeline_id,
+        from_pipeline_id: lead.pipeline_id,
+        from_stage_id: lead.stage_id,
+        to_stage_id: stage.id,
+        position_in_stage: position,
+        status: (depois as { status?: string } | null)?.status ?? (lead as { status?: string }).status,
+        troca_de_funil: true,
+      },
+      p_metadata: { request_id: ctx.requestId, ...a.metadataActor },
+      p_organization_id: lead.organization_id,
+    })
+    .then(({ error }) => {
+      if (error) console.error("[lead.move_pipeline] emit_event failed", error.message);
+    });
+
+  const { data: fromStage } = await supabase
+    .from("crm_stages")
+    .select("name")
+    .eq("id", lead.stage_id)
+    .eq("organization_id", ctx.organization_id)
+    .maybeSingle();
+  const texto = motivoDaTrocaDeFunil(
+    { funil: origem?.name ?? null, etapa: fromStage?.name ?? null },
+    { funil: destino.name ?? null, etapa: stage.name ?? null },
+  );
+  const atividade = await emitLeadActivity(supabase, {
+    organizationId: lead.organization_id,
+    leadId,
+    contactId: (lead as { contact_id: string | null }).contact_id,
+    type: "stage_changed",
+    sourceModule: "crm",
+    sourceId: leadId,
+    actor: ctx.actor,
+    reason: input.reason ? `${texto} — ${input.reason}` : texto,
+    payload: {
+      from_stage_id: lead.stage_id,
+      to_stage_id: stage.id,
+      pipeline_id: stage.pipeline_id,
+      from_pipeline_id: lead.pipeline_id,
+      to_pipeline_id: stage.pipeline_id,
+      troca_de_funil: true,
+      campos_fora_do_funil: camposFora,
+    },
+  });
+  if (!atividade.ok) {
+    await registraFalhaDeAtividade(supabase, {
+      organizationId: lead.organization_id,
+      leadId,
+      tipo: "stage_changed",
+      origem: "leads/_handler.moverParaOutroFunilHandler",
+      erro: atividade.error,
+      requestId: ctx.requestId,
+    });
+  }
+
+  const { data: fresh } = await supabase
+    .from("crm_leads")
+    .select("*")
+    .eq("id", leadId)
+    .eq("organization_id", ctx.organization_id)
+    .maybeSingle();
+
+  await audit({
+    action: "lead.pipeline_moved",
+    actorUserId: a.actorUserId,
+    actorApiTokenId: colunasDeAtorNoAudit(ctx.actor).actorApiTokenId,
+    organizationId: lead.organization_id,
+    resourceType: "crm_lead",
+    resourceId: leadId,
+    requestId: ctx.requestId,
+    metadata: {
+      ...a.metadataActor,
+      from_pipeline_id: lead.pipeline_id,
+      to_pipeline_id: stage.pipeline_id,
+      from_stage_id: lead.stage_id,
+      to_stage_id: stage.id,
+      position_in_stage: position,
+      campos_fora_do_funil: camposFora,
+      ...(input.reason ? { reason: input.reason } : {}),
+    },
+  });
+
+  return ocultarProvaMetaNaResposta((fresh ?? lead) as Record<string, unknown>);
+}
 
 export interface RetomarLeadInput {
   /**
