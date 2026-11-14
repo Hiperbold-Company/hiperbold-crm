@@ -56,6 +56,8 @@ export interface Contexto {
   admin: SupabaseClient;
   org: string;
   pointerId: string;
+  /** Versão da automação da inscrição (só ids na auditoria). */
+  versionId?: string;
   enrollmentId: string;
   /** `${node}:${passo}` do efeito — base das chaves idempotentes. */
   chave: string;
@@ -422,6 +424,7 @@ function contextoDe(admin: SupabaseClient, pedido: PedidoDeEfeito, agora: Date):
     admin,
     org: enrollment.organization_id,
     pointerId: enrollment.pointer_id,
+    versionId: enrollment.version_id,
     enrollmentId: enrollment.id,
     chave: pedido.chave,
     contatoId: enrollment.contact_id,

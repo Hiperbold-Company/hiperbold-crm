@@ -94,6 +94,18 @@ describe("anuncioDoFluxo: projeção do que a ingestão gravou", () => {
   });
 });
 
+describe("anuncioDoFluxo: teto por valor", () => {
+  it("corta cada valor a 500 caracteres e não mexe no que cabe", () => {
+    const longo = "x".repeat(900);
+    const a = anuncioDoFluxo({ ...SOURCE_METADATA, ad_title: longo, ad_body: longo, ad_source_url: `https://a.co/${longo}` });
+    expect(a.headline).toHaveLength(500);
+    expect(a.body).toHaveLength(500);
+    expect(a.source_url).toHaveLength(500);
+    expect(a.source_id).toBe("AD-777");
+    expect(anuncioDoFluxo({ ...SOURCE_METADATA, ad_body: "y".repeat(500) }).body).toHaveLength(500);
+  });
+});
+
 describe("texto da automação", () => {
   it("{{contact.anuncio.*}} vira o valor, e a ausência vira vazio (nunca 'undefined')", () => {
     const texto = "[{{contact.anuncio.ctwa_clid}}|{{contact.anuncio.source_id}}|{{contact.anuncio.headline}}|{{contact.anuncio.media_type}}]";
@@ -161,6 +173,13 @@ describe("leitura pelo seletor de campo (condições)", () => {
       expect(fieldRefSchema.safeParse({ scope: "var", path: `contact.anuncio.${chave}` }).success, chave).toBe(true);
     }
     expect(fieldRefSchema.safeParse({ scope: "var", path: "contact.anuncio.raw" }).success).toBe(false);
+    // Caixa diferente da que `chaveDoAnuncioNoCaminho` lê não passa (leria vazio em silêncio)...
+    for (const path of ["contact.anuncio.HEADLINE", "Contact.Anuncio.headline", "contact.ANUNCIO.body"]) {
+      expect(fieldRefSchema.safeParse({ scope: "var", path }).success, path).toBe(false);
+    }
+    // ...e as outras variáveis seguem como eram.
+    expect(fieldRefSchema.safeParse({ scope: "var", path: "gatilho.tipo" }).success).toBe(true);
+    expect(fieldRefSchema.safeParse({ scope: "var", path: "Gatilho.Tipo" }).success).toBe(true);
     expect(fieldRefSchema.safeParse({ scope: "var", path: "contact.email" }).success).toBe(false);
     const ref = { scope: "var", path: "contact.anuncio.source_id" } as const;
     expect(lerCampo(ref, fatosCom(SOURCE_METADATA))).toBe("AD-777");

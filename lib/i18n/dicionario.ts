@@ -12378,6 +12378,9 @@ export const DICIONARIO: Traducoes = {
   // ─── Inbox: o anúncio que trouxe a pessoa (bolha e painel) ───
   "Ver anúncio": { es: "Ver anuncio" },
   "Anúncio de origem": { es: "Anuncio de origen" },
+  "Vem do anúncio ou do formulário: não use para dar benefício": {
+    es: "Viene del anuncio o del formulario: no lo uses para dar un beneficio",
+  },
   "Clicou em {data}": { es: "Hizo clic el {data}" },
   "Voltou por outro anúncio": { es: "Volvió por otro anuncio" },
 

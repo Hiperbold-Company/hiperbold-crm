@@ -43,6 +43,7 @@ function criarBanco(tabelas: Record<string, Linha[]>) {
       const filtros: Array<(l: Linha) => boolean> = [];
       let limite = Infinity;
       let ordem: { col: string; asc: boolean } | null = null;
+      let escrita: Linha | null = null;
       const executar = () => {
         let linhas = (tabelas[tabela] ?? []).filter((l) => filtros.every((f) => f(l)));
         if (ordem) {
@@ -53,10 +54,15 @@ function criarBanco(tabelas: Record<string, Linha[]>) {
             return asc ? x.localeCompare(y) : y.localeCompare(x);
           });
         }
+        if (escrita) for (const l of linhas) Object.assign(l, escrita);
         return linhas.slice(0, limite);
       };
       const b: Record<string, unknown> = {
         select: () => b,
+        update(patch: Linha) {
+          escrita = patch;
+          return b;
+        },
         eq(c: string, v: unknown) {
           filtros.push((l) => valor(l, c) === v);
           return b;
@@ -67,6 +73,12 @@ function criarBanco(tabelas: Record<string, Linha[]>) {
         },
         is(c: string, v: null) {
           filtros.push((l) => (valor(l, c) ?? null) === v);
+          return b;
+        },
+        not(c: string, op: string, v: string) {
+          // `.not("col", "in", "(a,b)")`: a única forma que o efeito usa.
+          const fora = op === "in" ? v.replace(/[()]/g, "").split(",") : [];
+          filtros.push((l) => !fora.includes(String(valor(l, c))));
           return b;
         },
         order(col: string, o?: { ascending?: boolean }) {
@@ -108,7 +120,7 @@ function criarBanco(tabelas: Record<string, Linha[]>) {
 
 function tabelasBase(conversas: Linha[]): Record<string, Linha[]> {
   return {
-    contacts: [{ id: CONTATO, organization_id: ORG, phone_number: null, is_merged_into: null }],
+    contacts: [{ id: CONTATO, organization_id: ORG, phone_number: null, is_merged_into: null, is_personal: false }],
     user_organizations: [
       { organization_id: ORG, user_id: ANA, role: "agent", revoked_at: null },
       { organization_id: ORG, user_id: VISUALIZADOR, role: "viewer", revoked_at: null },
@@ -259,5 +271,76 @@ describe("assign_conversation", () => {
     const r = await executar(admin, pedido(ANA));
     expect(r.desfecho).toEqual({ ok: false, erro: "usuario_invalido" });
     expect(tabelas.conversations![0]!.assigned_to_user_id).toBeNull();
+  });
+
+  it("contato pessoal: erro `contato_pessoal`, sem atribuir, sem auditar", async () => {
+    const base = tabelasBase([conversa({ id: "c1" })]);
+    base.contacts![0]!.is_personal = true;
+    const { admin, tabelas, rpcs } = criarBanco(base);
+    const r = await executar(admin, pedido(ANA));
+    expect(r.desfecho).toEqual({ ok: false, erro: "contato_pessoal" });
+    expect(fraseDoErro("contato_pessoal")).toContain("pessoal");
+    expect(tabelas.conversations![0]!.assigned_to_user_id).toBeNull();
+    expect(rpcs.some((x) => x.nome === "fn_conversation_assign")).toBe(false);
+    expect(auditMock).not.toHaveBeenCalled();
+  });
+
+  it("gêmeo de telefone pessoal também barra", async () => {
+    const GEMEO = "20000000-0000-4000-8000-000000000009";
+    const base = tabelasBase([conversa({ id: "c1" }), conversa({ id: "c-gemeo", contact_id: GEMEO })]);
+    base.contacts![0]!.phone_number = "+5532984793302";
+    base.contacts!.push({ id: GEMEO, organization_id: ORG, phone_number: "+553284793302", is_merged_into: null, is_personal: true });
+    const { admin, tabelas } = criarBanco(base);
+    const r = await executar(admin, pedido(ANA));
+    expect(r.desfecho).toEqual({ ok: false, erro: "contato_pessoal" });
+    expect(tabelas.conversations!.every((c) => c.assigned_to_user_id === null)).toBe(true);
+  });
+
+  it("conversa fechada não é reaberta: só as não fechadas entram, e sem nenhuma é `sem_conversa`", async () => {
+    const { admin, tabelas } = criarBanco(
+      tabelasBase([
+        conversa({ id: "fechada-recente", status: "closed", last_message_at: "2026-11-14T10:00:00Z" }),
+        conversa({ id: "arquivada", status: "archived", last_message_at: "2026-11-13T10:00:00Z" }),
+        conversa({ id: "resolvida", status: "resolved", last_message_at: "2026-11-12T10:00:00Z" }),
+        conversa({ id: "aberta-antiga", status: "open", last_message_at: "2026-11-01T10:00:00Z" }),
+      ]),
+    );
+    expect((await executar(admin, pedido(ANA))).desfecho).toEqual({ ok: true });
+    const donos = Object.fromEntries(tabelas.conversations!.map((c) => [c.id as string, c.assigned_to_user_id]));
+    expect(donos).toEqual({ "fechada-recente": null, arquivada: null, resolvida: null, "aberta-antiga": ANA });
+
+    const so = criarBanco(tabelasBase([conversa({ id: "f", status: "closed" }), conversa({ id: "a", status: "archived" })]));
+    const r = await executar(so.admin, pedido(ANA));
+    expect(r.desfecho).toEqual({ ok: false, erro: "sem_conversa" });
+    expect(so.rpcs.some((x) => x.nome === "fn_conversation_assign")).toBe(false);
+    expect(so.tabelas.conversations!.every((c) => c.assigned_to_user_id === null)).toBe(true);
+  });
+
+  it("a auditoria leva o dono anterior, o número antes e depois e a versão, só ids", async () => {
+    const { admin } = criarBanco(
+      tabelasBase([conversa({ id: "c1", assigned_to_user_id: VISUALIZADOR, channel_session_id: OUTRO_CANAL, status: "open" })]),
+    );
+    const p = pedido(ANA);
+    (p.enrollment as { version_id: string }).version_id = "50000000-0000-4000-8000-000000000001";
+    await executar(admin, p);
+    const meta = auditMock.mock.calls[0]![0].metadata as Record<string, unknown>;
+    expect(meta).toMatchObject({
+      to_user_id: ANA,
+      from_user_id: VISUALIZADOR,
+      numero_anterior: OUTRO_CANAL,
+      numero_novo: OUTRO_CANAL,
+      version_id: "50000000-0000-4000-8000-000000000001",
+      negocio_aberto: "sem_negocio_aberto",
+    });
+  });
+
+  it("o negócio aberto do contato passa para o atendente, como na transferência manual", async () => {
+    const base = tabelasBase([conversa({ id: "c1" })]);
+    base.crm_leads = [{ id: "L1", organization_id: ORG, contact_id: CONTATO, status: "open", owner_user_id: null, owner_agent_id: null }];
+    const { admin, rpcs } = criarBanco(base);
+    await executar(admin, pedido(ANA));
+    expect(base.crm_leads![0]).toMatchObject({ owner_user_id: ANA });
+    expect(auditMock.mock.calls[0]![0].metadata).toMatchObject({ negocio_aberto: "sincronizado", negocio_id: "L1" });
+    expect(rpcs.some((x) => x.nome === "fn_conversation_assign")).toBe(true);
   });
 });

@@ -42,6 +42,13 @@ function texto(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+/** Teto de cada valor projetado: o texto do anúncio é de terceiro e não pode inflar mensagem nem campo. */
+export const MAX_VALOR_DO_ANUNCIO = 500;
+
+function corte(v: string): string {
+  return v.length > MAX_VALOR_DO_ANUNCIO ? v.slice(0, MAX_VALOR_DO_ANUNCIO) : v;
+}
+
 function objeto(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
@@ -53,12 +60,12 @@ export function anuncioDoFluxo(sourceMetadata: unknown): AnuncioDoFluxo {
   const cru = objeto(m.ad_raw);
   const doSite = texto(m.ad_click_source) === "site";
   return {
-    ctwa_clid: doSite || texto(m.ad_platform) !== "meta_ads" ? "" : texto(m.ad_source_id),
-    source_id: texto(m.ad_id),
-    source_url: texto(m.ad_source_url),
-    headline: texto(m.ad_title),
-    body: texto(m.ad_body),
-    media_type: texto(m.ad_media_type) || texto(cru.media_type) || texto(cru.mediaType),
+    ctwa_clid: corte(doSite || texto(m.ad_platform) !== "meta_ads" ? "" : texto(m.ad_source_id)),
+    source_id: corte(texto(m.ad_id)),
+    source_url: corte(texto(m.ad_source_url)),
+    headline: corte(texto(m.ad_title)),
+    body: corte(texto(m.ad_body)),
+    media_type: corte(texto(m.ad_media_type) || texto(cru.media_type) || texto(cru.mediaType)),
   };
 }
 

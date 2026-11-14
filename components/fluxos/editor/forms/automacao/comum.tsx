@@ -237,7 +237,8 @@ export function SeletorDeCampo({
       {custom.length > 0 && grupo(t("Campos personalizados do negócio"), custom)}
       {grupo(t("Contato"), contato)}
       {variaveis.length > 0 && grupo(t("Gatilho"), variaveis)}
-      {anuncio.length > 0 && grupo(t("Anúncio de origem"), anuncio)}
+      {anuncio.length > 0 &&
+        grupo(`${t("Anúncio de origem")} — ${t("Vem do anúncio ou do formulário: não use para dar benefício")}`, anuncio)}
     </>
   );
   return (

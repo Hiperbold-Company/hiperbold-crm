@@ -37,6 +37,9 @@ export const CAMPOS_DO_NEGOCIO = [
   "expected_close_date",
 ] as const;
 
+const CAMINHO_DE_VARIAVEL = /^(gatilho|param|resposta|saida)\.[a-z0-9_.[\]]+$/i;
+const CAMINHO_DO_ANUNCIO = new RegExp(String.raw`^contact\.anuncio\.(${CHAVES_DO_ANUNCIO.join("|")})$`);
+
 /**
  * Onde mora o valor que um bloco lê ou escreve. `var` é só leitura (o gatilho
  * e o que blocos anteriores guardaram).
@@ -50,12 +53,10 @@ export const fieldRefSchema = z.discriminatedUnion("scope", [
     scope: z.literal("var"),
     path: z
       .string()
-      .regex(
-        new RegExp(
-          String.raw`^((gatilho|param|resposta|saida)\.[a-z0-9_.[\]]+|contact\.anuncio\.(${CHAVES_DO_ANUNCIO.join("|")}))$`,
-          "i",
-        ),
-      )
+      // Só o `contact.anuncio.*` é exato (minúsculo): `chaveDoAnuncioNoCaminho` lê com
+      // `startsWith`/`includes`, e uma caixa aceita aqui e não lida lá viraria variável vazia.
+      // As demais alternativas seguem sem distinguir caixa, como sempre.
+      .refine((v) => CAMINHO_DE_VARIAVEL.test(v) || CAMINHO_DO_ANUNCIO.test(v))
       .max(120),
   }),
 ]);
