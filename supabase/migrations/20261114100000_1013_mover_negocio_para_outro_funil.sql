@@ -44,11 +44,19 @@ revoke execute on function public.fn_lead_funil_so_pela_troca_nomeada() from pub
 
 do $hb_1013_trava_do_funil$
 begin
-  perform set_config('lock_timeout', '3s', true);
-  drop trigger if exists trg_lead_funil_so_pela_troca_nomeada on public.crm_leads;
-  create trigger trg_lead_funil_so_pela_troca_nomeada
-    before update of pipeline_id on public.crm_leads
-    for each row execute function public.fn_lead_funil_so_pela_troca_nomeada();
+  -- Só cria se não existir: drop+create a cada aplicação do baseline pegaria lock exclusivo em
+  -- crm_leads sem necessidade (o corpo da função acima já é atualizado pelo create or replace).
+  if not exists (
+    select 1 from pg_trigger
+     where tgname = 'trg_lead_funil_so_pela_troca_nomeada'
+       and tgrelid = 'public.crm_leads'::regclass
+       and not tgisinternal
+  ) then
+    perform set_config('lock_timeout', '3s', true);
+    create trigger trg_lead_funil_so_pela_troca_nomeada
+      before update of pipeline_id on public.crm_leads
+      for each row execute function public.fn_lead_funil_so_pela_troca_nomeada();
+  end if;
 end
 $hb_1013_trava_do_funil$;
 

@@ -157,7 +157,7 @@ async function executarAcao(c: Contexto, acao: CrmAction, indice: number): Promi
       return { ok: true, vars: { _lead_id: id }, detalhe: { ...base, resultado: "criado", lead_id: id } };
     }
     case "move_deal": {
-      const escolha = escolherNegocioParaMover(c, acao.pipeline_id);
+      const escolha = escolherNegocioParaMover(c, acao.pipeline_id, acao.trocar_funil === true);
       if (!escolha) return { ok: false, erro: "sem_negocio", detalhe: base };
       if (escolha.entreFunis) {
         await moverParaOutroFunilHandler(c.admin, c.handler, escolha.id, { to_stage_id: acao.stage_id });

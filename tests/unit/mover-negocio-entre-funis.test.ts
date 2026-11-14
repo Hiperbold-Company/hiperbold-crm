@@ -97,6 +97,8 @@ import { moverParaOutroFunilHandler } from "@/app/api/v1/leads/_handler";
 import { escolherNegocioParaMover } from "@/lib/automacoes/efeitos/mover-negocio";
 import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
 import { camposForaDoFunilDeDestino } from "@/lib/leads/mover-para-outro-funil";
+import { execucaoQueCausou } from "@/lib/automacoes/gatilhos";
+import { crmActionSchema } from "@/lib/automacoes/schemas";
 
 const ORG = "10130000-0000-4000-8000-000000000001";
 const OUTRA_ORG = "10130000-0000-4000-8000-000000000002";
@@ -180,7 +182,45 @@ describe("campos personalizados fora do schema do funil de destino", () => {
   });
 });
 
-describe("move_deal: qual negócio se move", () => {
+describe("move_deal sem trocar_funil (automação já publicada): o comportamento de antes da 1013", () => {
+  const fatos = (vars: Record<string, unknown>, negocio: { id: string; pipeline_id: string } | null, negocios: FatosDaAutomacao["negocios"]) =>
+    ({ contato: null, negocio, negocios, vars }) as unknown as FatosDaAutomacao;
+
+  it("o negócio da execução já está no funil de destino: ele troca de etapa", () => {
+    const f = fatos({ _lead_id: "n2" }, { id: "n2", pipeline_id: FUNIL_B }, [{ id: "n2", pipeline_id: FUNIL_B, stage_id: ETAPA_B, status: "open" }]);
+    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B)).toEqual({ id: "n2", entreFunis: false });
+    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B, false)).toEqual({ id: "n2", entreFunis: false });
+  });
+
+  it("o da execução está em OUTRO funil e o contato tem aberto no destino: o aberto do destino, nunca troca de funil", () => {
+    const f = fatos({ _lead_id: "n1" }, { id: "n1", pipeline_id: FUNIL_A }, [
+      { id: "n1", pipeline_id: FUNIL_A, stage_id: ETAPA_A, status: "open" },
+      { id: "n2", pipeline_id: FUNIL_B, stage_id: ETAPA_B, status: "open" },
+    ]);
+    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B)).toEqual({ id: "n2", entreFunis: false });
+  });
+
+  it("só há negócio em outro funil: sem_negocio (null), como antes; o aberto no destino que está fechado não conta", () => {
+    const f = fatos({ _lead_id: "n1" }, { id: "n1", pipeline_id: FUNIL_A }, [
+      { id: "n1", pipeline_id: FUNIL_A, stage_id: ETAPA_A, status: "open" },
+      { id: "n3", pipeline_id: FUNIL_B, stage_id: ETAPA_B, status: "won" },
+    ]);
+    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B)).toBeNull();
+    expect(escolherNegocioParaMover({ fatos: fatos({}, null, []) }, FUNIL_B)).toBeNull();
+    expect(escolherNegocioParaMover({ fatos: null }, FUNIL_B)).toBeNull();
+  });
+});
+
+describe("move_deal: o campo trocar_funil no contrato", () => {
+  const base = { type: "move_deal", pipeline_id: FUNIL_B, stage_id: ETAPA_B };
+  it("é opcional (ação publicada sem ele continua válida), aceita booleano e recusa outro tipo", () => {
+    expect(crmActionSchema.safeParse(base).success).toBe(true);
+    expect(crmActionSchema.safeParse({ ...base, trocar_funil: true })).toMatchObject({ success: true, data: { trocar_funil: true } });
+    expect(crmActionSchema.safeParse({ ...base, trocar_funil: "sim" }).success).toBe(false);
+  });
+});
+
+describe("move_deal com trocar_funil: true: qual negócio se move", () => {
   const fatos = (vars: Record<string, unknown>, negocio: { id: string; pipeline_id: string } | null, negocios: FatosDaAutomacao["negocios"]) =>
     ({ contato: null, negocio, negocios, vars }) as unknown as FatosDaAutomacao;
 
@@ -189,12 +229,12 @@ describe("move_deal: qual negócio se move", () => {
       { id: "n1", pipeline_id: FUNIL_A, stage_id: ETAPA_A, status: "open" },
       { id: "n2", pipeline_id: FUNIL_B, stage_id: ETAPA_B, status: "open" },
     ]);
-    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B)).toEqual({ id: "n1", entreFunis: true });
+    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B, true)).toEqual({ id: "n1", entreFunis: true });
   });
 
   it("negócio da execução já no funil de destino: troca de etapa comum", () => {
     const f = fatos({ _lead_id: "n2" }, { id: "n2", pipeline_id: FUNIL_B }, [{ id: "n2", pipeline_id: FUNIL_B, stage_id: ETAPA_B, status: "open" }]);
-    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B)).toEqual({ id: "n2", entreFunis: false });
+    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B, true)).toEqual({ id: "n2", entreFunis: false });
   });
 
   it("sem negócio na execução: o aberto do contato no destino troca de etapa (como antes)", () => {
@@ -202,13 +242,13 @@ describe("move_deal: qual negócio se move", () => {
       { id: "n1", pipeline_id: FUNIL_A, stage_id: ETAPA_A, status: "open" },
       { id: "n2", pipeline_id: FUNIL_B, stage_id: ETAPA_B, status: "open" },
     ]);
-    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B)).toEqual({ id: "n2", entreFunis: false });
+    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B, true)).toEqual({ id: "n2", entreFunis: false });
   });
 
   it("sem negócio na execução e nada no destino: o aberto mais recente troca de funil; nenhum = null", () => {
     const f = fatos({}, { id: "n1", pipeline_id: FUNIL_A }, [{ id: "n1", pipeline_id: FUNIL_A, stage_id: ETAPA_A, status: "open" }]);
-    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B)).toEqual({ id: "n1", entreFunis: true });
-    expect(escolherNegocioParaMover({ fatos: fatos({}, null, []) }, FUNIL_B)).toBeNull();
+    expect(escolherNegocioParaMover({ fatos: f }, FUNIL_B, true)).toEqual({ id: "n1", entreFunis: true });
+    expect(escolherNegocioParaMover({ fatos: fatos({}, null, []) }, FUNIL_B, true)).toBeNull();
   });
 });
 
@@ -285,5 +325,39 @@ describe("moverParaOutroFunilHandler", () => {
     const err = await recusa(() => moverParaOutroFunilHandler(fakeClient() as never, ctx, LEAD, { to_stage_id: ETAPA_B }));
     expect(err.status).toBe(422);
     expect(banco.rpcs).toHaveLength(0);
+  });
+});
+
+describe("pingue-pongue entre funis (A -> B -> A)", () => {
+  it("o evento da troca de funil leva a execução de automação que o causou: é por ela que o freio de ciclo do fn_automacao_iniciar corta A <-> B", async () => {
+    const EXECUCAO = "10130000-0000-4000-8000-0000000000b1";
+    const ctxAutomacao: HandlerCtx = { ...ctx, requestId: `automacao:10130000-0000-4000-8000-0000000000a9:${EXECUCAO}:1` };
+
+    await moverParaOutroFunilHandler(fakeClient() as never, ctxAutomacao, LEAD, { to_stage_id: ETAPA_B });
+
+    const evento = banco.rpcs.find((c) => c.nome === "emit_event")!;
+    expect(evento.args.p_event_type).toBe("lead.stage_changed");
+    // O gatilho "entrou na etapa" da automação B recebe este evento; `execucaoQueCausou` vira o
+    // `parent_enrollment_id` dela, e quando B move de volta e A reabre, a cadeia já tem A: `ciclo`.
+    expect(execucaoQueCausou({ metadata: evento.args.p_metadata as Record<string, unknown> })).toBe(EXECUCAO);
+  });
+});
+
+describe("moverParaOutroFunilHandler: falha do banco e texto livre", () => {
+  it("erro inesperado da RPC: 500 com mensagem fixa, sem o texto cru do Postgres", async () => {
+    const cliente = {
+      ...fakeClient(),
+      rpc: async () => ({ data: null, error: { message: 'relation "crm_leads" constraint segredo_interno', code: "XX000" } }),
+    };
+    const err = await recusa(() => moverParaOutroFunilHandler(cliente as never, ctx, LEAD, { to_stage_id: ETAPA_B }));
+    expect(err.status).toBe(500);
+    expect(err.code).toBe("internal_error");
+    expect(err.message).not.toContain("segredo_interno");
+    expect(banco.tabelas.crm_lead_activities).toHaveLength(0);
+  });
+
+  it("o motivo livre vai à auditoria cortado em 500 caracteres", async () => {
+    await moverParaOutroFunilHandler(fakeClient() as never, ctx, LEAD, { to_stage_id: ETAPA_B, reason: "x".repeat(900) });
+    expect((auditado[0]!.metadata as { reason: string }).reason).toHaveLength(500);
   });
 });

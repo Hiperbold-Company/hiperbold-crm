@@ -10983,6 +10983,7 @@
   "Se o contato já estiver em outro fluxo, ele sai daquele e entra neste. Fluxo pausado por uma pessoa não é trocado.": "If the contact is already in another flow, they leave that one and enter this one. A flow paused by a person isn't swapped.",
   "Se o contato já estiver nesta automação": "If the contact is already in this automation",
   "Se o contato já tem negócio aberto neste funil": "If the contact already has an open deal in this pipeline",
+  "Se o negócio estiver em outro funil, trazer para este funil": "If the deal is in another pipeline, bring it to this pipeline",
   "Se o contato não responder dentro desse tempo, o fluxo segue sozinho pelo caminho": "If the contact doesn't reply within that time, the flow continues on its own along the path",
   "Se o contato responder, segue por \"Respondeu\"; se o tempo acabar, por \"Sem resposta\". A resposta é processada em até 1 minuto.": "If the contact replies, they follow \"Replied\"; if time runs out, \"No reply\". The reply is processed within 1 minute.",
   "Se o convite vencer, abra Equipe na organização para gerar outro.": "If the invitation expires, open Team in the organization to generate another one.",

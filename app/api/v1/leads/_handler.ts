@@ -66,6 +66,7 @@ import {
 import { ORIGEM_DA_PLANILHA } from "@/lib/leads/planilha";
 import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import { moedaDaOrganizacao } from "@/lib/catalogo/moeda-da-org";
+import { logger } from "@/lib/logger";
 import {
   decideMotivoDaPerda,
   recusaDeMotivoDaPerdaPeloBanco,
@@ -1828,6 +1829,29 @@ export interface MoverParaOutroFunilInput {
   reason?: string;
 }
 
+/** Teto do texto livre que vai para o metadata da auditoria. */
+const MAX_MOTIVO_NA_AUDITORIA = 500;
+
+/**
+ * Falha inesperada do banco na troca de funil: o detalhe (mensagem do Postgres) vai só para o
+ * log estruturado; quem chama a API recebe uma mensagem fixa.
+ */
+function falhaInternaDaTrocaDeFunil(
+  ctx: HandlerCtx,
+  leadId: string,
+  etapa: string,
+  err: { message: string },
+): ApiError {
+  logger.error("lead.move_pipeline: falha do banco", {
+    request_id: ctx.requestId,
+    organization_id: ctx.organization_id,
+    lead_id: leadId,
+    etapa,
+    detalhe: err.message,
+  });
+  return new ApiError(500, "internal_error", undefined, ctx.requestId);
+}
+
 function recusaDoBancoNaTrocaDeFunil(
   err: { code?: string; message?: string },
   ctx: HandlerCtx,
@@ -1865,7 +1889,7 @@ export async function moverParaOutroFunilHandler(
     .eq("organization_id", ctx.organization_id)
     .maybeSingle();
   if (selErr) {
-    throw new ApiError(500, "internal_error", undefined, ctx.requestId, selErr.message);
+    throw falhaInternaDaTrocaDeFunil(ctx, leadId, "ler_negocio", selErr);
   }
   if (!lead || lead.organization_id !== ctx.organization_id) {
     throw new ApiError(404, "not_found", undefined, ctx.requestId, traduzir("Lead não encontrado.", idioma));
@@ -1879,7 +1903,7 @@ export async function moverParaOutroFunilHandler(
     .eq("organization_id", ctx.organization_id)
     .maybeSingle();
   if (stageErr) {
-    throw new ApiError(500, "internal_error", undefined, ctx.requestId, stageErr.message);
+    throw falhaInternaDaTrocaDeFunil(ctx, leadId, "ler_etapa", stageErr);
   }
   // Etapa de outra organização responde igual à inexistente (sem dizer que existe).
   if (!stage || stage.organization_id !== ctx.organization_id) {
@@ -1895,7 +1919,7 @@ export async function moverParaOutroFunilHandler(
     .eq("organization_id", ctx.organization_id)
     .in("id", [lead.pipeline_id, stage.pipeline_id]);
   if (funisErr) {
-    throw new ApiError(500, "internal_error", undefined, ctx.requestId, funisErr.message);
+    throw falhaInternaDaTrocaDeFunil(ctx, leadId, "ler_funis", funisErr);
   }
   type Funil = { id: string; name: string | null; settings: unknown; is_archived: boolean; organization_id: string };
   const lista = (funis ?? []) as Funil[];
@@ -1988,7 +2012,7 @@ export async function moverParaOutroFunilHandler(
     }
     const recusaBanco = recusaDoBancoNaTrocaDeFunil(rpcErr, ctx);
     if (recusaBanco) throw recusaBanco;
-    throw new ApiError(500, "internal_error", undefined, ctx.requestId, rpcErr.message);
+    throw falhaInternaDaTrocaDeFunil(ctx, leadId, "rpc", rpcErr);
   }
 
   const { data: depois } = await supabase
@@ -2019,7 +2043,14 @@ export async function moverParaOutroFunilHandler(
       p_organization_id: lead.organization_id,
     })
     .then(({ error }) => {
-      if (error) console.error("[lead.move_pipeline] emit_event failed", error.message);
+      if (error) {
+        logger.error("lead.move_pipeline: emit_event falhou", {
+          request_id: ctx.requestId,
+          organization_id: ctx.organization_id,
+          lead_id: leadId,
+          detalhe: error.message,
+        });
+      }
     });
 
   const { data: fromStage } = await supabase
@@ -2085,7 +2116,7 @@ export async function moverParaOutroFunilHandler(
       to_stage_id: stage.id,
       position_in_stage: position,
       campos_fora_do_funil: camposFora,
-      ...(input.reason ? { reason: input.reason } : {}),
+      ...(input.reason ? { reason: input.reason.slice(0, MAX_MOTIVO_NA_AUDITORIA) } : {}),
     },
   });
 

@@ -27703,6 +27703,9 @@ export const DICIONARIO: Traducoes = {
   "Se o contato já tem negócio aberto neste funil": {
     es: "Si el contacto ya tiene un negocio abierto en este embudo",
   },
+  "Se o negócio estiver em outro funil, trazer para este funil": {
+    es: "Si el negocio está en otro embudo, traerlo a este embudo",
+  },
   "Se uma ação falhar": { es: "Si una acción falla" },
   "Seguir por “Sim” quando": { es: "Seguir por “Sí” cuando" },
   "Somar ao número": { es: "Sumar al número" },

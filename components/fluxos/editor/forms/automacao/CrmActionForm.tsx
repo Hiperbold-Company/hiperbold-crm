@@ -234,6 +234,20 @@ function CamposDaAcao({
               onChange={(v) => onChange({ ...acao, stage_id: v })}
             />
           </Campo>
+          {acao.type === "move_deal" && (
+            <label htmlFor={`${prefixo}-trocar-funil`} className="flex items-center gap-2 text-sm text-text">
+              <input
+                id={`${prefixo}-trocar-funil`}
+                type="checkbox"
+                checked={acao.trocar_funil === true}
+                onChange={(e) => {
+                  const { trocar_funil: _antes, ...resto } = acao;
+                  onChange(e.target.checked ? { ...resto, trocar_funil: true } : resto);
+                }}
+              />
+              {t("Se o negócio estiver em outro funil, trazer para este funil")}
+            </label>
+          )}
           {acao.type === "create_deal" && (
             <>
               <Campo
