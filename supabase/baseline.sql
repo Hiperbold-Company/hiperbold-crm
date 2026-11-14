@@ -108730,6 +108730,17 @@ grant select on public.calendar_google_reconcilable_appointments to service_role
 
 notify pgrst,'reload schema';
 
+-- ---- o número oficial pelo Cadastro Incorporado da Meta (migration 1014) ----
+-- Espelho idempotente da 1014; racional completo no arquivo da migration.
+
+alter table public.platform_meta_app
+  add column if not exists whatsapp_config_id text;
+
+comment on column public.platform_meta_app.whatsapp_config_id is
+  '1014: id da configuração do Facebook Login para Empresas do tipo WhatsApp Embedded Signup (botão Conectar com a Meta). Não é segredo.';
+
+notify pgrst, 'reload schema';
+
 -- ---- toda security definer de public termina o search_path com pg_temp (migration 1008, fork Hiperbold, D-223) ----
 --
 -- ⚠️ ESTE É O ÚLTIMO BLOCO DO ARQUIVO, DE PROPÓSITO. A varredura só alcança a definer que já existe quando
@@ -108804,14 +108815,3 @@ begin
  raise notice '1008: % função(ões) security definer ganharam pg_temp no search_path', v_curadas;
 end
 $hb_1008_definer_pg_temp$;
-
--- ---- o número oficial pelo Cadastro Incorporado da Meta (migration 1014) ----
--- Espelho idempotente da 1014; racional completo no arquivo da migration.
-
-alter table public.platform_meta_app
-  add column if not exists whatsapp_config_id text;
-
-comment on column public.platform_meta_app.whatsapp_config_id is
-  '1014: id da configuração do Facebook Login para Empresas do tipo WhatsApp Embedded Signup (botão Conectar com a Meta). Não é segredo.';
-
-notify pgrst, 'reload schema';
