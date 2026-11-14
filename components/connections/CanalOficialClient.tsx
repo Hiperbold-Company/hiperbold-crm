@@ -19,6 +19,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { useT } from "@/hooks/i18n/useT";
 import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
 import { ChannelAiAccess } from "./ChannelAiAccess";
+import { ConectarComAMeta } from "./ConectarComAMeta";
 import { EtiquetaDaConexao } from "./EtiquetaDaConexao";
 import { RenomearConexao } from "./RenomearConexao";
 import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
@@ -277,6 +278,11 @@ export function CanalOficialClient({
         />
       ) : null}
 
+      <ConectarComAMeta jaConectado={Boolean(estado?.connected)} bloqueio={bloqueio} />
+
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {t("Ou conecte à mão")}
+      </p>
       <Card className="p-4">
         <h2 className="font-medium">
           {estado?.connected ? t("Trocar credencial") : t("Conectar canal oficial")}

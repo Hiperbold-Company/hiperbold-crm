@@ -9327,6 +9327,27 @@ export const DICIONARIO: Traducoes = {
   },
   "Validando com a Meta…": { es: "Validando con Meta…" },
   "Validar e conectar": { es: "Validar y conectar" },
+  "Preparando a conexão com a Meta, clique de novo em instantes.": { es: "Preparando la conexión con Meta, vuelve a hacer clic en unos instantes." },
+  "Não foi possível abrir o login da Meta. Tente de novo.": { es: "No fue posible abrir el inicio de sesión de Meta. Inténtalo de nuevo." },
+  "etapa": { es: "etapa" },
+  "Você fechou o cadastro da Meta antes de terminar": { es: "Cerraste el registro de Meta antes de terminar" },
+  "Nada foi conectado.": { es: "No se conectó nada." },
+  "A Meta recusou o cadastro:": { es: "Meta rechazó el registro:" },
+  "Não foi possível carregar o login da Meta. Desative bloqueadores de anúncio e tente de novo.": { es: "No fue posible cargar el inicio de sesión de Meta. Desactiva los bloqueadores de anuncios e inténtalo de nuevo." },
+  "Login com a Meta cancelado ou sem permissão concedida.": { es: "Inicio de sesión con Meta cancelado o sin permiso concedido." },
+  "A Meta não devolveu o número escolhido. Tente de novo e escolha um número no fim do cadastro.": { es: "Meta no devolvió el número elegido. Inténtalo de nuevo y elige un número al final del registro." },
+  "Não foi possível concluir o cadastro. Tente de novo.": { es: "No fue posible completar el registro. Inténtalo de nuevo." },
+  "Falta ativar o número: use o botão Registrar no cartão do número.": { es: "Falta activar el número: usa el botón Registrar en la tarjeta del número." },
+  "Conectar com a Meta": { es: "Conectar con Meta" },
+  "Entre com a sua conta da Meta e escolha o número. O CRM guarda a credencial e configura o recebimento de mensagens sozinho.": { es: "Entra con tu cuenta de Meta y elige el número. El CRM guarda la credencial y configura la recepción de mensajes por sí solo." },
+  "Nome da conexão (opcional)": { es: "Nombre de la conexión (opcional)" },
+  "Ex.: Comercial": { es: "Ej.: Comercial" },
+  "Esta organização tem uma conexão oficial; conectar outro número pela Meta substitui a atual.": { es: "Esta organización tiene una conexión oficial; conectar otro número con Meta reemplaza la actual." },
+  "Abrindo a Meta…": { es: "Abriendo Meta…" },
+  "Conectando o número…": { es: "Conectando el número…" },
+  "Trocar número pela Meta": { es: "Cambiar número con Meta" },
+  "O botão ainda não está configurado nesta instalação. Quem administra a instalação cadastra o app da Meta em Administração › Meta.": { es: "El botón aún no está configurado en esta instalación. Quien administra la instalación registra la app de Meta en Administración › Meta." },
+  "Ou conecte à mão": { es: "O conecta a mano" },
   "Canal conectado.": { es: "Canal conectado." },
   "Canal pausado.": { es: "Canal pausado." },
   "Canal reativado.": { es: "Canal reactivado." },
@@ -27995,6 +28016,18 @@ export const DICIONARIO: Traducoes = {
     {
       es: "Es lo que Instagram usa para conectarse, junto con el ID y la clave de la app de Meta. No es secreto.",
     },
+  "Configuração da Meta salva.": { es: "Configuración de Meta guardada." },
+  "WhatsApp: Cadastro Incorporado": { es: "WhatsApp: Registro Integrado" },
+  "ID da configuração do Cadastro Incorporado do WhatsApp": {
+    es: "ID de la configuración del Registro Integrado de WhatsApp",
+  },
+  "Só números, em Facebook Login para Empresas › Configurações": {
+    es: "Solo números, en Inicio de sesión con Facebook para Empresas › Configuraciones",
+  },
+  "É o que o botão Conectar com a Meta, em Conexões › API Oficial, usa. Não é segredo. Junto do ID e da chave do app da Meta.":
+    {
+      es: "Es lo que usa el botón Conectar con Meta, en Conexiones › API Oficial. No es secreto. Va junto con el ID y la clave de la app de Meta.",
+    },
   "Para as empresas conectarem o Instagram e a Página do Facebook em Conexões › Redes sociais. A chave secreta do aplicativo, acima, vale para os dois.":
     {
       es: "Para que las empresas conecten Instagram y la Página de Facebook en Conexiones › Redes sociales. La clave secreta de la app, arriba, vale para los dos.",
@@ -28665,6 +28698,22 @@ export const DICIONARIO: Traducoes = {
   "Janela de 24h aberta?": { es: "¿Ventana de 24h abierta?" },
   "Sim quando o contato escreveu no WhatsApp nas últimas 24 horas e dá para mandar texto livre. Fora disso, só modelo aprovado sai.": { es: "Sí cuando el contacto escribió por WhatsApp en las últimas 24 horas y se puede enviar texto libre. Fuera de eso, solo sale una plantilla aprobada." },
   "Todas as conversas abertas do contato (WhatsApp, Messenger, Direct)": { es: "Todas las conversaciones abiertas del contacto (WhatsApp, Messenger, Direct)" },
+  // Cadastro Incorporado do WhatsApp (botão Conectar com a Meta, migration 1014).
+  "Este número já está conectado em outra organização desta instalação. Desconecte lá antes de conectar aqui.": { es: "Este número ya está conectado en otra organización de esta instalación. Desconéctelo allí antes de conectarlo aquí." },
+  "A volta do cadastro da Meta veio incompleta. Clique em Conectar de novo.": { es: "El regreso del registro de Meta llegó incompleto. Haga clic en Conectar de nuevo." },
+  "Escolha um número no cadastro da Meta": { es: "Elija un número en el registro de Meta" },
+  "A Meta recusou a credencial do número escolhido. Confira se o número terminou o cadastro e tente de novo.": { es: "Meta rechazó la credencial del número elegido. Compruebe que el número terminó el registro e inténtelo de nuevo." },
+  "O pedido de conexão venceu ou não é seu. Clique em Conectar de novo.": { es: "La solicitud de conexión venció o no es suya. Haga clic en Conectar de nuevo." },
+  "O cadastro pela Meta não está configurado nesta instalação.": { es: "El registro por Meta no está configurado en esta instalación." },
+  "A conta do WhatsApp informada não está entre as que você autorizou na Meta. Clique em Conectar de novo.": { es: "La cuenta de WhatsApp informada no está entre las que usted autorizó en Meta. Haga clic en Conectar de nuevo." },
+  "Não deu para saber qual conta do WhatsApp foi escolhida no cadastro da Meta. Clique em Conectar de novo.": { es: "No fue posible saber qué cuenta de WhatsApp se eligió en el registro de Meta. Haga clic en Conectar de nuevo." },
+  "Não foi possível falar com a Meta agora. Tente de novo.": { es: "No fue posible comunicarse con Meta ahora. Inténtelo de nuevo." },
+  "A Meta não respondeu a tempo. Tente de novo.": { es: "Meta no respondió a tiempo. Inténtelo de nuevo." },
+  "O código da Meta venceu (vale 30 segundos). Clique em Conectar de novo.": { es: "El código de Meta venció (vale 30 segundos). Haga clic en Conectar de nuevo." },
+  "A Meta recusou o app desta instalação (id ou chave do app). Peça a quem administra a instalação para conferir.": { es: "Meta rechazó la app de esta instalación (id o clave de la app). Pida a quien administra la instalación que lo revise." },
+  "A Meta não deu permissão para gerenciar esta conta do WhatsApp. Conecte de novo e aceite todas as permissões.": { es: "Meta no dio permiso para administrar esta cuenta de WhatsApp. Conéctese de nuevo y acepte todos los permisos." },
+  "A Meta recusou o acesso concedido. Clique em Conectar de novo.": { es: "Meta rechazó el acceso concedido. Haga clic en Conectar de nuevo." },
+  "A Meta recusou a conexão. Clique em Conectar de novo.": { es: "Meta rechazó la conexión. Haga clic en Conectar de nuevo." },
 };
 
 /**

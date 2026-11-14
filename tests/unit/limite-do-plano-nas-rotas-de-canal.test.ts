@@ -19,6 +19,7 @@ const ROTAS = [
   "app/api/v1/channel-sessions/route.ts",
   "app/api/v1/onboarding/whatsapp/session/route.ts",
   "app/api/v1/channels/official/route.ts",
+  "app/api/v1/channels/official/cadastro-incorporado/route.ts",
   "app/api/v1/channels/partner/route.ts",
   "app/api/v1/channels/social/route.ts",
   "app/api/v1/channels/graph-partner/route.ts",

@@ -55,8 +55,10 @@ vi.mock("@/lib/webhooks/secrets", () => ({ decryptWebhookSecret: (...a: unknown[
 
 const updateMetaApp = vi.fn();
 const rotacionarVerifyTokenDaMeta = vi.fn();
+const updateAppSocialDaMeta = vi.fn();
 vi.mock("@/app/actions/settings/updateMetaApp", () => ({
   updateMetaApp: (...a: unknown[]) => updateMetaApp(...a),
+  updateAppSocialDaMeta: (...a: unknown[]) => updateAppSocialDaMeta(...a),
   rotacionarVerifyTokenDaMeta: (...a: unknown[]) => rotacionarVerifyTokenDaMeta(...a),
 }));
 
@@ -88,6 +90,7 @@ beforeEach(() => {
   decifrar.mockReset();
   updateMetaApp.mockReset();
   rotacionarVerifyTokenDaMeta.mockReset();
+  updateAppSocialDaMeta.mockReset();
   refresh.mockReset();
   toastErro.mockReset();
   copiar.mockClear();
@@ -255,3 +258,42 @@ describe("/admin/meta — o formulário", () => {
     expect(screen.queryByTestId("meta-token-gerado")).toBeNull();
   });
 });
+
+describe("/admin/meta — ID da configuração do Cadastro Incorporado do WhatsApp", () => {
+  const SOCIAL = {
+    appId: "1234567890",
+    configIdDoLoginUnificado: "1855366338969369",
+    configIdDoWhatsapp: null,
+    enderecos: [],
+  };
+
+  it("grava só o campo que mudou, e o botão só habilita com id válido", async () => {
+    updateAppSocialDaMeta.mockResolvedValue({ ok: true });
+    render(<FormularioDaMeta {...TUDO_CONFIGURADO} social={SOCIAL} />);
+
+    const salvar = screen.getByTestId("meta-social-salvar") as HTMLButtonElement;
+    expect(salvar.disabled).toBe(true);
+
+    const campo = screen.getByTestId("meta-whatsapp-config-id");
+    await userEvent.type(campo, "abc");
+    expect(salvar.disabled).toBe(true);
+
+    await userEvent.clear(campo);
+    await userEvent.type(campo, "987654321012");
+    expect(salvar.disabled).toBe(false);
+
+    await userEvent.click(salvar);
+    await waitFor(() => expect(updateAppSocialDaMeta).toHaveBeenCalledTimes(1));
+    expect(updateAppSocialDaMeta).toHaveBeenCalledWith({
+      app_id: undefined,
+      unified_config_id: undefined,
+      whatsapp_config_id: "987654321012",
+    });
+  });
+
+  it("mostra o id já gravado", () => {
+    render(<FormularioDaMeta {...TUDO_CONFIGURADO} social={{ ...SOCIAL, configIdDoWhatsapp: "555666777888" }} />);
+    expect((screen.getByTestId("meta-whatsapp-config-id") as HTMLInputElement).value).toBe("555666777888");
+  });
+});
+
