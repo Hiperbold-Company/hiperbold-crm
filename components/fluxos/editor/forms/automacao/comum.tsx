@@ -220,12 +220,24 @@ export function SeletorDeCampo({
         { valor: "var:gatilho.tipo", rotulo: t("Gatilho: como começou") },
         { valor: "var:gatilho.fonte_id", rotulo: t("Gatilho: fonte de captação") },
       ];
+  // Os dados do anúncio de primeiro toque do contato (`{{contact.anuncio.*}}`): só leitura.
+  const anuncio = paraEscrita
+    ? []
+    : [
+        { valor: "var:contact.anuncio.ctwa_clid", rotulo: t("Anúncio: código do clique (ctwa_clid)") },
+        { valor: "var:contact.anuncio.source_id", rotulo: t("Anúncio: ID do anúncio") },
+        { valor: "var:contact.anuncio.source_url", rotulo: t("Anúncio: link do anúncio") },
+        { valor: "var:contact.anuncio.headline", rotulo: t("Anúncio: título") },
+        { valor: "var:contact.anuncio.body", rotulo: t("Anúncio: texto") },
+        { valor: "var:contact.anuncio.media_type", rotulo: t("Anúncio: tipo de mídia") },
+      ];
   const blocos = (
     <>
       {grupo(t("Negócio"), negocio)}
       {custom.length > 0 && grupo(t("Campos personalizados do negócio"), custom)}
       {grupo(t("Contato"), contato)}
       {variaveis.length > 0 && grupo(t("Gatilho"), variaveis)}
+      {anuncio.length > 0 && grupo(t("Anúncio de origem"), anuncio)}
     </>
   );
   return (
@@ -305,7 +317,7 @@ export function listaDeTags(texto: string): string[] {
  * que a automação que iniciou esta passou (ação "Iniciar outra automação").
  */
 export const AJUDA_DAS_VARIAVEIS =
-  "Aceita variáveis: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}.";
+  "Aceita variáveis: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}, {{contact.anuncio.source_id}} (dados do anúncio de origem).";
 
 /** Unidades de tempo dos formulários da automação. */
 export const UNIDADES_DE_TEMPO = {

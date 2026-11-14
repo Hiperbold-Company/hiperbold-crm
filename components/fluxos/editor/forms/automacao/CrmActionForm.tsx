@@ -56,6 +56,8 @@ export function acaoEmBranco(type: CrmActionType): CrmAction {
       return { type, target: "lead", tags: [] };
     case "set_owner":
       return { type, mode: { m: "round_robin" } };
+    case "assign_conversation":
+      return { type, user_id: "" };
     case "notify":
       return { type, to: "owner", message: "" };
     case "create_task":
@@ -197,7 +199,10 @@ function CamposDaAcao({
   const t = useT();
   const { funis, etapas } = useFunis();
   const membros = useAssignableMembers(
-    acao.type === "set_owner" || acao.type === "notify" || acao.type === "create_task",
+    acao.type === "set_owner" ||
+      acao.type === "assign_conversation" ||
+      acao.type === "notify" ||
+      acao.type === "create_task",
   );
   const opcoesDeMembro = (membros.data ?? []).map((m) => ({
     valor: m.user_id,
@@ -336,6 +341,24 @@ function CamposDaAcao({
             />
           </Campo>
         </>
+      );
+    case "assign_conversation":
+      return (
+        <Campo
+          id={`${prefixo}-atendente`}
+          rotulo={t("Quem atende")}
+          ajuda={t(
+            "A conversa do contato (a mais recente no canal que iniciou a automação) passa para esta pessoa e o atendimento automático para nela.",
+          )}
+        >
+          <Seletor
+            id={`${prefixo}-atendente`}
+            valor={acao.user_id}
+            vazio={t("Escolha a pessoa")}
+            opcoes={opcoesDeMembro}
+            onChange={(v) => onChange({ ...acao, user_id: v })}
+          />
+        </Campo>
       );
     case "notify":
       return (

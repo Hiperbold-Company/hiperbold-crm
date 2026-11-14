@@ -868,7 +868,7 @@
   "Aceita .csv ou .xlsx (primeira aba), até 500 empresas. Colunas obrigatórias: nome da empresa e telefone. Quem já é contato do CRM não é abordado. Nenhuma abordagem começa nesta etapa.": "Accepts .csv or .xlsx (first sheet), up to 500 companies. Required columns: company name and phone. Anyone who is already a CRM contact is not approached. No outreach starts at this step.",
   "Aceita um IP (10.1.2.7) ou uma faixa (10.1.0.0/16). Nome de máquina não entra: o que se confere é o endereço para o qual o nome aponta na hora, e não o nome.": "Accepts an IP (10.1.2.7) or a range (10.1.0.0/16). Hostnames aren't accepted: what's checked is the address the name points to at the time, not the name.",
   "Aceita variáveis, como https://api.example.com/clientes/{{campo.codigo}}. Endereços internos do servidor são bloqueados.": "Accepts variables, like https://api.example.com/customers/{{campo.codigo}}. The server's internal addresses are blocked.",
-  "Aceita variáveis: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}.": "Accepts variables: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}.",
+  "Aceita variáveis: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}, {{contact.anuncio.source_id}} (dados do anúncio de origem).": "Accepts variables: {{contact.name}}, {{lead.title}}, {{campo.chave}}, {{gatilho.tipo}}, {{param.chave}}, {{sistema.data}}, {{contact.anuncio.source_id}} (source ad data).",
   "Aceitar #on/#off enviados pelo celular": "Accept #on/#off sent from the phone",
   "Aceitar convite": "Accept invitation",
   "Aceitar de": "Accept from",
@@ -14338,5 +14338,18 @@
   "Não há mais falhas nesta página.": "There are no more failures on this page.",
   "O que falhou": "What failed",
   "Páginas": "Pages",
-  "Quando o sistema não consegue somar um lead novo ao limite do plano de uma empresa, o lead entra normalmente e a falha fica anotada aqui. A conferência diária corrige a conta no dia seguinte. As anotações com mais de 90 dias são apagadas sozinhas.": "When the system can't add a new lead to a company's plan limit, the lead still comes in normally and the failure is noted here. The daily check fixes the count the next day. Notes older than 90 days are deleted automatically."
+  "Quando o sistema não consegue somar um lead novo ao limite do plano de uma empresa, o lead entra normalmente e a falha fica anotada aqui. A conferência diária corrige a conta no dia seguinte. As anotações com mais de 90 dias são apagadas sozinhas.": "When the system can't add a new lead to a company's plan limit, the lead still comes in normally and the failure is noted here. The daily check fixes the count the next day. Notes older than 90 days are deleted automatically.",
+  "Anúncio: código do clique (ctwa_clid)": "Ad: click code (ctwa_clid)",
+  "Anúncio: ID do anúncio": "Ad: ad ID",
+  "Anúncio: link do anúncio": "Ad: ad link",
+  "Anúncio: título": "Ad: headline",
+  "Anúncio: texto": "Ad: text",
+  "Anúncio: tipo de mídia": "Ad: media type",
+  "Atribuir a conversa e iniciar o atendimento": "Assign the conversation and start the support",
+  "Escolha a pessoa": "Choose the person",
+  "A conversa do contato (a mais recente no canal que iniciou a automação) passa para esta pessoa e o atendimento automático para nela.": "The contact's conversation (the most recent one on the channel that started the automation) goes to this person and the automatic support stops on it.",
+  "Sorteio": "Random split",
+  "Percentual que segue pela saída A": "Percentage that follows output A",
+  "A saída B recebe o restante. Cada contato é sorteado na hora, uma vez por passagem pelo bloco.": "Output B gets the rest. Each contact is drawn on the spot, once per pass through the block.",
+  "Informe um número inteiro de 1 a 99.": "Enter a whole number from 1 to 99."
 }

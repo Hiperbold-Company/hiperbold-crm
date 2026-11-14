@@ -10,6 +10,7 @@ import {
   fieldOpConfigSchema,
   fieldRefSchema,
   regrasNovasDeCondicao,
+  sorteioConfigSchema,
   tpl,
 } from '@/lib/automacoes/schemas';
 import { httpRequestConfigSchema } from '@/lib/automacoes/http';
@@ -61,6 +62,8 @@ export const NODE_TYPES = [
   'instagram_check_follow',
   // Bloco "Requisição HTTP" (lote 4, só automação): chama outro sistema e guarda a resposta.
   'http_request',
+  // Bloco "Sorteio" (só automação): divide os contatos entre A e B ao acaso.
+  'random_split',
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
@@ -122,6 +125,13 @@ export const JA_RESPONDIDO_BRANCH_ID = 'ja_respondido';
 export const PRAZO_VENCIDO_BRANCH_ID = 'prazo_vencido';
 export const SEGUE_BRANCH_ID = 'segue';
 export const NAO_SEGUE_BRANCH_ID = 'nao_segue';
+/**
+ * Saídas do bloco "Sorteio" (`random_split`): A e B, com ids estáveis. Fora de
+ * `RESERVED_BRANCH_IDS` pelo mesmo motivo de `ERROR_BRANCH_ID`: o bloco não tem
+ * ramo declarado pelo usuário.
+ */
+export const SORTEIO_A_BRANCH_ID = 'a';
+export const SORTEIO_B_BRANCH_ID = 'b';
 /**
  * Saída "Sem data" da espera "até a data de um campo do negócio" (lote 6): o
  * campo está vazio, ilegível, ou a data já passou. Fora de `RESERVED_BRANCH_IDS`
@@ -1117,6 +1127,14 @@ export const flowNodeSchema = z.discriminatedUnion('type', [
     position: z.strictObject({ x: z.number(), y: z.number() }),
     config: httpRequestConfigSchema,
   }),
+  // Sorteio (automação): sorteia A ou B pelo percentual configurado.
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('random_split'),
+    label: z.string().min(1).max(60),
+    position: z.strictObject({ x: z.number(), y: z.number() }),
+    config: sorteioConfigSchema,
+  }),
 ]);
 
 export type FlowNode = z.infer<typeof flowNodeSchema>;
@@ -1417,6 +1435,14 @@ function ramosDaRequisicao(): FlowBranch[] {
   return [{ ...ramoDeErro(), label: 'Falhou' }, fallbackBranch('Deu certo')];
 }
 
+/** "Sorteio": A e B, cada uma com o seu percentual no rótulo. As duas são ramos nomeados (sem escape). */
+function ramosDoSorteio(percentA: number): FlowBranch[] {
+  return [
+    ramo(SORTEIO_A_BRANCH_ID, `A (${percentA}%)`),
+    ramo(SORTEIO_B_BRANCH_ID, `B (${100 - percentA}%)`),
+  ];
+}
+
 /** "Confere se segue": Segue, Não segue, e "Não deu para saber" (comum). */
 function ramosDoConfereSeSegue(): FlowBranch[] {
   return [ramo(SEGUE_BRANCH_ID, 'Segue'), ramo(NAO_SEGUE_BRANCH_ID, 'Não segue'), fallbackBranch('Não deu para saber')];
@@ -1580,6 +1606,7 @@ export const RAMOS_POR_TIPO: { [K in NodeType]: RamosDe<K> } = {
   instagram_public_reply: ramosDaRespostaPublica,
   instagram_check_follow: ramosDoConfereSeSegue,
   http_request: ramosDaRequisicao,
+  random_split: (node) => ramosDoSorteio(node.config.percent_a),
 
   trigger: saidaUnica,
   wait: (node) =>

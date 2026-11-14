@@ -6,6 +6,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { anuncioDoFluxo } from "./anuncio-do-contato";
 import { negocioDaExecucao, type FatosDaAutomacao, type NegocioDosFatos } from "./fatos";
 
 const COLUNAS_DO_NEGOCIO =
@@ -40,7 +41,7 @@ export async function carregarFatosDaAutomacao(
   const [{ data: contato, error: erroContato }, { data: negocios, error: erroNegocios }] = await Promise.all([
     admin
       .from("contacts")
-      .select("id, name, email, phone_number, birthdate, tags, custom_fields")
+      .select("id, name, email, phone_number, birthdate, tags, custom_fields, source_metadata")
       .eq("organization_id", orgId)
       .eq("id", contactId)
       .maybeSingle(),
@@ -73,6 +74,7 @@ export async function carregarFatosDaAutomacao(
           birthdate: (c.birthdate as string | null) ?? null,
           tags: Array.isArray(c.tags) ? (c.tags as string[]) : [],
           custom_fields: objeto(c.custom_fields),
+          anuncio: anuncioDoFluxo(c.source_metadata),
         }
       : null,
     negocio,

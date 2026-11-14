@@ -60,6 +60,12 @@ export interface AtribuicaoDeAnuncio {
    * extrator a conhece; quem não traz fica sem miniatura, nunca sem atribuição.
    */
   miniatura?: string | null;
+  /**
+   * O tipo de mídia do anúncio (`image`, `video`...), quando o payload o traz
+   * (`referral.media_type`). Fica em `source_metadata.ad_media_type`, ao lado
+   * dos outros campos do anúncio — nenhuma coluna nova.
+   */
+  tipoDeMidia?: string | null;
   /** Payload de onde isto foi extraído — nunca descartado, é a prova. */
   bruto: Record<string, unknown>;
   /**
@@ -266,6 +272,8 @@ export async function estamparAtribuicaoDoContato(
       ad_body: atribuicao.corpo,
       ad_source_url: atribuicao.sourceUrl,
       ad_thumbnail_url: atribuicao.miniatura ?? null,
+      // Só quando existe: chave nula em `source_metadata` suja a prova sem dizer nada.
+      ...(atribuicao.tipoDeMidia ? { ad_media_type: atribuicao.tipoDeMidia } : {}),
       ad_raw: atribuicao.bruto,
       ad_captured_at: new Date().toISOString(),
     },

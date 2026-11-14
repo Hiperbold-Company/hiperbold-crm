@@ -40,6 +40,7 @@ import type { FatosDaAutomacao } from "../fatos";
 import type { CrmAction, FieldOp } from "../schemas";
 import { renderizar } from "../template-vars";
 import { CAMPOS_PADRAO_DO_CONTATO, CAMPOS_PADRAO_DO_NEGOCIO } from "../vocabulario";
+import { executarAtribuirConversa } from "./atribuir-conversa";
 import { executarConversa } from "./conversa";
 import { executarIniciarAutomacao } from "./iniciar-automacao";
 import { executarHttp } from "./http";
@@ -215,6 +216,8 @@ async function executarAcao(c: Contexto, acao: CrmAction, indice: number): Promi
       await updateLeadHandler(c.admin, c.handler, alvo, { owner_user_id: userId });
       return { ok: true, detalhe: { ...base, user_id: userId, lead_id: alvo } };
     }
+    case "assign_conversation":
+      return executarAtribuirConversa(c, acao, membroAtivo);
     case "notify": {
       const dono = c.fatos?.negocio?.owner_user_id ?? null;
       const para = acao.to === "owner" ? (dono ? [dono] : []) : acao.to;
