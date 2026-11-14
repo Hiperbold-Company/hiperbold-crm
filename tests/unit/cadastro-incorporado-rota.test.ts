@@ -29,10 +29,12 @@ const h = vi.hoisted(() => ({
   },
   banco: {
     existente: null as null | Record<string, unknown>,
+    erroDaBusca: null as null | { code: string; message: string },
     erroDoNonce: null as null | { code: string; message?: string },
     erroDoInsert: null as null | { code: string; message: string },
     inserts: [] as Array<{ tabela: string; linha: Record<string, unknown> }>,
   },
+  validacaoRecusada: null as null | string,
   audit: [] as Array<Record<string, unknown>>,
   cifrar: [] as string[],
 }));
@@ -79,12 +81,15 @@ vi.mock("@/lib/webhooks/secrets", () => ({
 }));
 vi.mock("@/lib/webhooks/url-publica", () => ({ basePublicaDoWebhookMeta: () => "https://crm.exemplo.com" }));
 vi.mock("@/lib/channels/meta/validate-credentials", () => ({
-  validateMetaCredentials: async () => ({
-    ok: true,
-    displayPhoneNumber: "+55 11 99999-0000",
-    verifiedName: "Loja Exemplo",
-    qualityRating: "GREEN",
-  }),
+  validateMetaCredentials: async () =>
+    h.validacaoRecusada
+      ? { ok: false, motivo: h.validacaoRecusada }
+      : {
+          ok: true,
+          displayPhoneNumber: "+55 11 99999-0000",
+          verifiedName: "Loja Exemplo",
+          qualityRating: "GREEN",
+        },
 }));
 vi.mock("@/lib/channels/meta/webhook-da-sessao", async (original) => ({
   ...((await original()) as object),
@@ -95,7 +100,10 @@ vi.mock("@/lib/supabase/admin", () => ({
     from(tabela: string) {
       const q: Record<string, unknown> = {};
       for (const n of ["select", "eq", "is"]) q[n] = () => q;
-      q.maybeSingle = async () => ({ data: h.banco.existente, error: null });
+      q.maybeSingle = async () => ({
+        data: h.banco.erroDaBusca ? null : h.banco.existente,
+        error: h.banco.erroDaBusca,
+      });
       q.insert = (linha: Record<string, unknown>) => {
         h.banco.inserts.push({ tabela, linha });
         if (tabela === "calendar_oauth_nonces") return Promise.resolve({ error: h.banco.erroDoNonce });
@@ -113,6 +121,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 
+import { logger } from "@/lib/logger";
 import { emitirEstadoDoCadastroIncorporado } from "@/lib/channels/meta/cadastro-incorporado/estado";
 import { GET, POST } from "@/app/api/v1/channels/official/cadastro-incorporado/route";
 import { POST as POST_MANUAL } from "@/app/api/v1/channels/official/route";
@@ -171,6 +180,9 @@ beforeEach(() => {
   h.suporteNegado = false;
   h.cfg = { appId: "123456", appSecret: "SEGREDO-DO-APP", configId: "cfg-1" };
   h.banco.existente = null;
+  h.banco.erroDaBusca = null;
+  h.validacaoRecusada = null;
+  vi.mocked(logger.warn).mockClear();
   h.banco.erroDoNonce = null;
   h.banco.erroDoInsert = null;
   h.banco.inserts.length = 0;
@@ -194,6 +206,16 @@ describe("GET /api/v1/channels/official/cadastro-incorporado", () => {
     // O state emitido CONCLUI na mesma sessão.
     const fim = await POST(post({ state: corpo.data.state, code: "codigo-do-fb-login-123", phone_number_id: NUMERO }));
     expect(fim.status).toBe(200);
+  });
+
+  it("sem sessão de login: o state sai sem sessão, e isso fica no log com request_id", async () => {
+    h.sessao.authSessionId = null;
+    const res = await GET();
+    expect((await res.json()).data.disponivel).toBe(true);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("state emitido sem sessão de login"),
+      expect.objectContaining({ request_id: expect.any(String) }),
+    );
   });
 
   it("sem configuração: disponivel false com motivo nao_configurado", async () => {
@@ -239,6 +261,52 @@ describe("POST /api/v1/channels/official/cadastro-incorporado", () => {
     expect((await res.json()).error.code).toBe("estado_invalido");
     expect(fetchMock).not.toHaveBeenCalled();
     expect(insertsDeCanal()).toEqual([]);
+  });
+
+  it("⭐ recusas de segurança vão ao log com org, usuário e código, e nunca com state, code ou token", async () => {
+    const corpo = corpoValido();
+    h.sessao.orgId = "org-b";
+    h.sessao.userId = "user-b";
+    await POST(post(corpo));
+    h.sessao.orgId = "org-a";
+    h.sessao.userId = "user-a";
+    h.banco.erroDoNonce = { code: "23505" };
+    await POST(post(corpoValido()));
+    h.banco.erroDoNonce = null;
+    h.banco.erroDoInsert = ERRO_DO_INDICE;
+    await POST(post(corpoValido()));
+
+    const chamadas = vi.mocked(logger.warn).mock.calls.filter(([m]) => String(m).includes("recusa de segurança"));
+    expect(chamadas.map(([, ctx]) => (ctx as Record<string, unknown>).recusa)).toEqual([
+      "estado_de_outra_organizacao_ou_usuario",
+      "nonce_repetido",
+      "numero_em_outra_organizacao",
+    ]);
+    expect(chamadas[0]![1]).toMatchObject({ request_id: expect.any(String), organization_id: "org-b", user_id: "user-b" });
+    const log = JSON.stringify(vi.mocked(logger.warn).mock.calls);
+    expect(log).not.toContain(corpo.state);
+    expect(log).not.toContain("codigo-do-fb-login-123");
+    expect(log).not.toContain(TOKEN_CLARO);
+  });
+
+  it("⭐ busca da conexão existente que falha é 500 e não segue para o INSERT", async () => {
+    h.banco.erroDaBusca = { code: "57014", message: "canceling statement due to statement timeout" };
+    const res = await POST(post(corpoValido()));
+    expect(res.status).toBe(500);
+    expect(insertsDeCanal()).toEqual([]);
+    expect(h.audit).toEqual([]);
+  });
+
+  it("⭐ credencial recusada pela Meta: 422 com frase fixa, sem o texto cru, que fica só no log", async () => {
+    const CRU = "Unsupported post request. Object with ID '111222333444' does not exist (#100)";
+    h.validacaoRecusada = CRU;
+    const res = await POST(post(corpoValido()));
+    expect(res.status).toBe(422);
+    const corpo = await res.json();
+    expect(corpo.error.message).toMatch(/A Meta recusou a credencial do número escolhido/);
+    expect(JSON.stringify(corpo)).not.toContain(CRU);
+    expect(insertsDeCanal()).toEqual([]);
+    expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).toContain(CRU);
   });
 
   it("outro erro ao queimar o nonce é 500, também sem chegar à Meta", async () => {
@@ -358,6 +426,13 @@ describe("POST /api/v1/channels/official (manual): o mesmo número em outra orga
     const res = await POST_MANUAL(manual());
     expect(res.status).toBe(409);
     expect((await res.json()).error.code).toBe("numero_em_outra_organizacao");
+  });
+
+  it("credencial recusada na porta manual segue devolvendo o motivo da Meta ao operador", async () => {
+    h.validacaoRecusada = "o número 111222333444 não pertence à WABA 999888777666";
+    const res = await POST_MANUAL(manual());
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.message).toBe(h.validacaoRecusada);
   });
 
   it("23505 de OUTRA trava (a de dentro da organização) segue no 500 genérico", async () => {

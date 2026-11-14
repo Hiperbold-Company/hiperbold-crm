@@ -28668,6 +28668,7 @@ export const DICIONARIO: Traducoes = {
   "Este número já está conectado em outra organização desta instalação. Desconecte lá antes de conectar aqui.": { es: "Este número ya está conectado en otra organización de esta instalación. Desconéctelo allí antes de conectarlo aquí." },
   "A volta do cadastro da Meta veio incompleta. Clique em Conectar de novo.": { es: "El regreso del registro de Meta llegó incompleto. Haga clic en Conectar de nuevo." },
   "Escolha um número no cadastro da Meta": { es: "Elija un número en el registro de Meta" },
+  "A Meta recusou a credencial do número escolhido. Confira se o número terminou o cadastro e tente de novo.": { es: "Meta rechazó la credencial del número elegido. Compruebe que el número terminó el registro e inténtelo de nuevo." },
   "O pedido de conexão venceu ou não é seu. Clique em Conectar de novo.": { es: "La solicitud de conexión venció o no es suya. Haga clic en Conectar de nuevo." },
   "O cadastro pela Meta não está configurado nesta instalação.": { es: "El registro por Meta no está configurado en esta instalación." },
   "A conta do WhatsApp informada não está entre as que você autorizou na Meta. Clique em Conectar de novo.": { es: "La cuenta de WhatsApp informada no está entre las que usted autorizó en Meta. Haga clic en Conectar de nuevo." },

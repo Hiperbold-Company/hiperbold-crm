@@ -172,7 +172,7 @@ export function ConectarComAMeta({
       const sdk = await carregarSdk();
       sdk.init({
         appId: inicio.appId,
-        autoLogAppEvents: true,
+        autoLogAppEvents: false,
         xfbml: false,
         version: inicio.versaoDaGraph,
       });

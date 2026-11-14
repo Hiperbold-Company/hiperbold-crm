@@ -84,6 +84,7 @@ export async function GET(): Promise<NextResponse> {
     authSessionId = await authenticatedSessionId();
   } catch {
     authSessionId = undefined;
+    logger.warn("[cadastro-incorporado] state emitido sem sessão de login", { request_id: requestId });
   }
 
   let state: string;
@@ -140,17 +141,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // ─── O state: deste usuário, desta organização, desta sessão, uma vez ─────
-  const recusaDoEstado = () =>
+  const respostaDoEstadoInvalido = () =>
     fail("estado_invalido", t("O pedido de conexão venceu ou não é seu. Clique em Conectar de novo."), 403, {
       requestId,
     });
+  const recusaDoEstado = (codigo: string) => {
+    // Só o código da recusa vai ao log: nunca state, code nem token.
+    logger.warn("[cadastro-incorporado] recusa de segurança", {
+      request_id: requestId,
+      organization_id: orgId,
+      user_id: userId,
+      recusa: codigo,
+    });
+    return respostaDoEstadoInvalido();
+  };
   let estado: ReturnType<typeof verificarEstadoDoCadastroIncorporado>;
   try {
     estado = verificarEstadoDoCadastroIncorporado(state, { segredo: env.INTERNAL_SECRET, agora: new Date() });
   } catch (err) {
     return falhaInterna("internal_error", err, { requestId });
   }
-  if (!estado || estado.organizationId !== orgId || estado.userId !== userId) return recusaDoEstado();
+  if (!estado) return recusaDoEstado("estado_invalido_ou_vencido");
+  if (estado.organizationId !== orgId || estado.userId !== userId) return recusaDoEstado("estado_de_outra_organizacao_ou_usuario");
   if (estado.authSessionId) {
     let sessaoAtual: string | null = null;
     try {
@@ -158,7 +170,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     } catch {
       sessaoAtual = null;
     }
-    if (sessaoAtual !== estado.authSessionId) return recusaDoEstado();
+    if (sessaoAtual !== estado.authSessionId) return recusaDoEstado("estado_de_outra_sessao_de_login");
   }
 
   const cfg = await configDoCadastroIncorporado();
@@ -179,7 +191,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     expira_em: new Date(estado.expiraEmMs).toISOString(),
   });
   if (erroDoNonce) {
-    if (erroDoNonce.code === "23505") return recusaDoEstado();
+    if (erroDoNonce.code === "23505") return recusaDoEstado("nonce_repetido");
     return falhaInterna("internal_error", erroDoNonce, { requestId });
   }
 
@@ -232,6 +244,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
 
   if (!conexao.ok) {
+    if (conexao.erro === "numero_em_outra_organizacao") {
+      logger.warn("[cadastro-incorporado] recusa de segurança", {
+        request_id: requestId,
+        organization_id: orgId,
+        user_id: userId,
+        recusa: "numero_em_outra_organizacao",
+      });
+    }
     if (conexao.erro !== "gravacao") return respostaDaFalhaDaConexaoOficial(conexao, idioma, requestId);
     const { error } = conexao;
     const recusa = recusaDoPlano(error);

@@ -14368,6 +14368,7 @@
   "Este número já está conectado em outra organização desta instalação. Desconecte lá antes de conectar aqui.": "This number is already connected in another organization on this installation. Disconnect it there before connecting it here.",
   "A volta do cadastro da Meta veio incompleta. Clique em Conectar de novo.": "The return from the Meta signup came back incomplete. Click Connect again.",
   "Escolha um número no cadastro da Meta": "Choose a number in the Meta signup",
+  "A Meta recusou a credencial do número escolhido. Confira se o número terminou o cadastro e tente de novo.": "Meta rejected the credential for the chosen number. Check that the number finished signup and try again.",
   "O pedido de conexão venceu ou não é seu. Clique em Conectar de novo.": "The connection request expired or isn't yours. Click Connect again.",
   "O cadastro pela Meta não está configurado nesta instalação.": "Signup through Meta isn't configured on this installation.",
   "A conta do WhatsApp informada não está entre as que você autorizou na Meta. Clique em Conectar de novo.": "The WhatsApp account provided isn't among the ones you authorized on Meta. Click Connect again.",

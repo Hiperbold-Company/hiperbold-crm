@@ -33,6 +33,7 @@ import { registrarWebhookDaSessao } from "@/lib/channels/meta/webhook-da-sessao"
 import { reactivateChannelSession } from "@/lib/channels/reactivate";
 import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
+import { logger } from "@/lib/logger";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 
@@ -43,6 +44,15 @@ export const INDICE_DO_NUMERO_ATIVO = "channel_sessions_meta_phone_number_id_ati
 
 export const MENSAGEM_NUMERO_EM_OUTRA_ORGANIZACAO =
   "Este número já está conectado em outra organização desta instalação. Desconecte lá antes de conectar aqui.";
+
+/**
+ * O que o cadastro incorporado devolve ao navegador quando a Meta recusa a
+ * credencial. O texto cru da Meta (`error_data.details`/`message`) nunca sai
+ * daqui por essa porta: vai só para o log, com o `request_id`. A porta manual
+ * segue devolvendo o motivo, porque o operador que colou a credencial precisa dele.
+ */
+export const MENSAGEM_CREDENCIAL_RECUSADA_NO_CADASTRO =
+  "A Meta recusou a credencial do número escolhido. Confira se o número terminou o cadastro e tente de novo.";
 
 export const MENSAGEM_CIFRA_INDISPONIVEL =
   "cifra indisponível nesta instalação (GUC app.nuvemshop_oauth_key ausente) — o token não foi gravado";
@@ -144,7 +154,21 @@ export async function conectarCanalOficial(input: EntradaDaConexaoOficial): Prom
   // trocado (número de uma conta, id de outra), e o registro do webhook logo abaixo
   // apontaria o override de um número que esta instalação não controla.
   const validacao = await validateMetaCredentials({ phoneNumberId, token, wabaId });
-  if (!validacao.ok) return { ok: false, erro: "credencial_invalida", motivo: validacao.motivo };
+  if (!validacao.ok) {
+    if (input.origem === "cadastro_incorporado") {
+      logger.warn("[conectar-canal-oficial] credencial recusada no cadastro incorporado", {
+        request_id: requestId,
+        organization_id: orgId,
+        motivo_da_meta: validacao.motivo,
+      });
+      return {
+        ok: false,
+        erro: "credencial_invalida",
+        motivo: traduzir(MENSAGEM_CREDENCIAL_RECUSADA_NO_CADASTRO, input.idioma),
+      };
+    }
+    return { ok: false, erro: "credencial_invalida", motivo: validacao.motivo };
+  }
 
   const cifrado = await encryptWebhookSecret(admin, token);
   if (!cifrado) return { ok: false, erro: "cifra_indisponivel" };
@@ -160,10 +184,13 @@ export async function conectarCanalOficial(input: EntradaDaConexaoOficial): Prom
       .eq("organization_id", orgId)
       .eq("provider", CHANNEL_PROVIDER_META)
       .maybeSingle();
-  const { data: existenteRaw } = await queryTolerantToMissingArchived(
+  const { data: existenteRaw, error: erroDaBusca } = await queryTolerantToMissingArchived(
     () => buscarExistente(`id, ${ARCHIVED_AT}, webhook_path_token, display_name`),
     () => buscarExistente("id, webhook_path_token, display_name"),
   );
+  // Busca que falhou NÃO é "não existe": seguir para o INSERT criaria uma segunda
+  // linha oficial na org (ou esbarraria na trava do número) e esconderia a causa.
+  if (erroDaBusca) return { ok: false, erro: "gravacao", error: erroDaBusca };
   const existente = existenteRaw as {
     id: string;
     archived_at?: string | null;
