@@ -28654,6 +28654,17 @@ export const DICIONARIO: Traducoes = {
   "Percentual que segue pela saída A": { es: "Porcentaje que sigue por la salida A" },
   "A saída B recebe o restante. Cada contato é sorteado na hora, uma vez por passagem pelo bloco.": { es: "La salida B recibe el resto. Cada contacto se sortea en el momento, una vez por cada paso por el bloque." },
   "Informe um número inteiro de 1 a 99.": { es: "Indica un número entero de 1 a 99." },
+  "Os pesos das saídas precisam somar 100%.": { es: "Los pesos de las salidas deben sumar 100%." },
+  "Cada peso é um número inteiro de 0 a 100.": { es: "Cada peso es un número entero de 0 a 100." },
+  "Saídas e pesos": { es: "Salidas y pesos" },
+  "Cada contato é sorteado na hora, uma vez por passagem pelo bloco, conforme o peso de cada saída. Uma saída com 0% fica reservada e não recebe ninguém.": { es: "Cada contacto se sortea en el momento, una vez por cada paso por el bloque, según el peso de cada salida. Una salida con 0% queda reservada y no recibe a nadie." },
+  "Peso da saída": { es: "Peso de la salida" },
+  "Remover a saída": { es: "Quitar la salida" },
+  "Adicionar saída": { es: "Añadir salida" },
+  "Soma dos pesos:": { es: "Suma de los pesos:" },
+  "Janela de 24h aberta?": { es: "¿Ventana de 24h abierta?" },
+  "Sim quando o contato escreveu no WhatsApp nas últimas 24 horas e dá para mandar texto livre. Fora disso, só modelo aprovado sai.": { es: "Sí cuando el contacto escribió por WhatsApp en las últimas 24 horas y se puede enviar texto libre. Fuera de eso, solo sale una plantilla aprobada." },
+  "Todas as conversas abertas do contato (WhatsApp, Messenger, Direct)": { es: "Todas las conversaciones abiertas del contacto (WhatsApp, Messenger, Direct)" },
 };
 
 /**

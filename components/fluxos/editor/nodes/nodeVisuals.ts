@@ -4,7 +4,7 @@ import { Bell, Play, Clock, GitBranch, Brain, ChatCircle, ChatsCircle, ArrowsClo
 import { fraseDaAcao, fraseDaOperacao, GATILHOS_DA_AUTOMACAO, type NomesDaAutomacao } from "@/lib/automacoes/vocabulario";
 import type { FollowupFlowSurface } from "@/lib/followup/api-schemas";
 import { configHttpEmBranco } from "@/lib/automacoes/http";
-import { PERCENTUAL_PADRAO_DO_SORTEIO } from "@/lib/automacoes/schemas";
+import { PERCENTUAL_PADRAO_DO_SORTEIO, ramosDoSorteioConfig } from "@/lib/automacoes/schemas";
 import type { FlowNode, NodeType } from "@/lib/followup/graph-schema";
 import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
 import { NOS_DA_SUPERFICIE } from "@/lib/followup/validate-publish";
@@ -454,7 +454,7 @@ export function describeNodeConfig(
     }
     case "random_split": {
       const c = config as ConfigOf<"random_split">;
-      return `A ${c.percent_a}% · B ${100 - c.percent_a}%`;
+      return ramosDoSorteioConfig(c).map((r) => `${r.letra} ${r.peso}%`).join(" · ");
     }
     default: {
       const exhaustive: never = type;

@@ -9,8 +9,11 @@ import {
   crmActionConfigSchema,
   fieldOpConfigSchema,
   fieldRefSchema,
+  ramosDoSorteioConfig,
   regrasNovasDeCondicao,
+  rotuloDoRamoDoSorteio,
   sorteioConfigSchema,
+  type SorteioConfig,
   tpl,
 } from '@/lib/automacoes/schemas';
 import { httpRequestConfigSchema } from '@/lib/automacoes/http';
@@ -633,6 +636,7 @@ export const novaConditionCheckSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.deal_exists }),
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.deal_status }),
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.business_hours }),
+  z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.window_open }),
 ]);
 export type NovaConditionCheck = z.infer<typeof novaConditionCheckSchema>;
 
@@ -1435,12 +1439,13 @@ function ramosDaRequisicao(): FlowBranch[] {
   return [{ ...ramoDeErro(), label: 'Falhou' }, fallbackBranch('Deu certo')];
 }
 
-/** "Sorteio": A e B, cada uma com o seu percentual no rótulo. As duas são ramos nomeados (sem escape). */
-function ramosDoSorteio(percentA: number): FlowBranch[] {
-  return [
-    ramo(SORTEIO_A_BRANCH_ID, `A (${percentA}%)`),
-    ramo(SORTEIO_B_BRANCH_ID, `B (${100 - percentA}%)`),
-  ];
+/**
+ * "Sorteio": uma saída por ramo (A e B na forma antiga; A…J na ponderada), cada
+ * uma com o seu percentual no rótulo. Todas são ramos nomeados (sem escape) —
+ * inclusive a de peso 0, que o publish também exige ligada.
+ */
+function ramosDoSorteio(config: SorteioConfig): FlowBranch[] {
+  return ramosDoSorteioConfig(config).map((r) => ramo(r.id, rotuloDoRamoDoSorteio(r)));
 }
 
 /** "Confere se segue": Segue, Não segue, e "Não deu para saber" (comum). */
@@ -1606,7 +1611,7 @@ export const RAMOS_POR_TIPO: { [K in NodeType]: RamosDe<K> } = {
   instagram_public_reply: ramosDaRespostaPublica,
   instagram_check_follow: ramosDoConfereSeSegue,
   http_request: ramosDaRequisicao,
-  random_split: (node) => ramosDoSorteio(node.config.percent_a),
+  random_split: (node) => ramosDoSorteio(node.config),
 
   trigger: saidaUnica,
   wait: (node) =>

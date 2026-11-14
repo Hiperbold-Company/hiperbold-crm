@@ -2,6 +2,10 @@
  * Os mesmos fatos de `carregar-fatos.ts`, lidos por `pg` puro — o adaptador
  * dos invariantes (sem PostgREST) e do turno local. Filtra `organization_id`
  * em toda consulta, como a versão service-role.
+ *
+ * ⚠️ Não carrega a janela de 24h (`fatos.janela` fica ausente): neste adaptador
+ * a condição `window_open` responde sempre "não". Só `carregar-fatos.ts` lê a
+ * janela, pela mesma conversa do envio (`conversaDoEnvio`).
  */
 import type pg from "pg";
 

@@ -372,6 +372,18 @@ function CamposDaAcao({
             opcoes={opcoesDeMembro}
             onChange={(v) => onChange({ ...acao, user_id: v })}
           />
+          <label htmlFor={`${prefixo}-todas`} className="mt-2 flex items-center gap-2 text-sm text-text">
+            <input
+              id={`${prefixo}-todas`}
+              type="checkbox"
+              checked={acao.todas === true}
+              onChange={(e) => {
+                const { todas: _antes, ...resto } = acao;
+                onChange(e.target.checked ? { ...resto, todas: true } : resto);
+              }}
+            />
+            {t("Todas as conversas abertas do contato (WhatsApp, Messenger, Direct)")}
+          </label>
         </Campo>
       );
     case "notify":

@@ -9,6 +9,7 @@
  */
 
 import type { AnuncioDoFluxo } from "./anuncio-do-contato";
+import type { JanelaDaConversa } from "./conversa-de-whatsapp";
 
 export interface ContatoDosFatos {
   id: string;
@@ -48,6 +49,12 @@ export interface FatosDaAutomacao {
   negocios: Array<{ id: string; pipeline_id: string; stage_id: string; status: string }>;
   /** `followup_enrollments.vars` desta execução. */
   vars: Record<string, unknown>;
+  /**
+   * A janela de 24h da conversa de WhatsApp do contato (`conversa-de-whatsapp.ts`).
+   * Só é carregada quando o passo é uma condição que pergunta por ela; ausente
+   * nos demais passos e nos montadores que não a carregam.
+   */
+  janela?: JanelaDaConversa;
 }
 
 /** O id do negócio que a execução carrega (o gatilho trouxe, ou um bloco criou/moveu). */

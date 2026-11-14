@@ -14355,5 +14355,16 @@
   "Sorteio": "Random split",
   "Percentual que segue pela saída A": "Percentage that follows output A",
   "A saída B recebe o restante. Cada contato é sorteado na hora, uma vez por passagem pelo bloco.": "Output B gets the rest. Each contact is drawn on the spot, once per pass through the block.",
-  "Informe um número inteiro de 1 a 99.": "Enter a whole number from 1 to 99."
+  "Informe um número inteiro de 1 a 99.": "Enter a whole number from 1 to 99.",
+  "Os pesos das saídas precisam somar 100%.": "The output weights must add up to 100%.",
+  "Cada peso é um número inteiro de 0 a 100.": "Each weight is a whole number from 0 to 100.",
+  "Saídas e pesos": "Outputs and weights",
+  "Cada contato é sorteado na hora, uma vez por passagem pelo bloco, conforme o peso de cada saída. Uma saída com 0% fica reservada e não recebe ninguém.": "Each contact is drawn on the spot, once per pass through the block, according to each output's weight. An output with 0% stays reserved and gets no one.",
+  "Peso da saída": "Output weight",
+  "Remover a saída": "Remove the output",
+  "Adicionar saída": "Add output",
+  "Soma dos pesos:": "Sum of the weights:",
+  "Janela de 24h aberta?": "Is the 24h window open?",
+  "Sim quando o contato escreveu no WhatsApp nas últimas 24 horas e dá para mandar texto livre. Fora disso, só modelo aprovado sai.": "Yes when the contact wrote on WhatsApp in the last 24 hours and free text can be sent. Otherwise, only an approved template goes out.",
+  "Todas as conversas abertas do contato (WhatsApp, Messenger, Direct)": "All of the contact's open conversations (WhatsApp, Messenger, Direct)"
 }

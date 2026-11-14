@@ -12,6 +12,7 @@ import {
   type RespostaRecebida,
 } from "@/lib/automacoes/conversa";
 import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
+import { ramosDoSorteioConfig, ramoSorteado, type SorteioConfig } from "@/lib/automacoes/schemas";
 import { casarRespostaComOpcao } from "@/lib/channels/opcoes-numeradas";
 import {
   ERROR_BRANCH_ID,
@@ -908,6 +909,12 @@ export function ladoDoSorteio(percentA: number, sorteado: number): typeof SORTEI
   return sorteado * 100 < percentA ? SORTEIO_A_BRANCH_ID : SORTEIO_B_BRANCH_ID;
 }
 
+/** A saída sorteada nas duas formas do bloco (A/B ou ponderada de N saídas). */
+export function saidaDoSorteio(config: SorteioConfig, sorteado: number): string {
+  if ("percent_a" in config) return ladoDoSorteio(config.percent_a, sorteado);
+  return ramoSorteado(ramosDoSorteioConfig(config), sorteado);
+}
+
 type Decisor<K extends NodeType> = (input: EntradaDoNo & { node: Extract<FlowNode, { type: K }> }) => NodeResult;
 
 /**
@@ -931,7 +938,7 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
   // teste), a execução termina ali — nunca cai no outro lado em silêncio.
   random_split: (input) => {
     const { node, edges, clock } = input;
-    const lado = ladoDoSorteio(node.config.percent_a, (input.sortear ?? sorteioSeguro)());
+    const lado = saidaDoSorteio(node.config, (input.sortear ?? sorteioSeguro)());
     const edge = edges
       .filter((e) => e.source === node.id && e.condition.type === "branch" && e.condition.branch_id === lado)
       .sort((a, b) => b.priority - a.priority)[0];

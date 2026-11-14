@@ -136,6 +136,7 @@ export const REGRAS_NOVAS: Record<NovaConditionCheck["kind"], string> = {
   deal_exists: "Contato já tem negócio",
   deal_status: "Situação do negócio",
   business_hours: "Está no horário?",
+  window_open: "Janela de 24h aberta?",
 };
 
 /** O nome do campo como a pessoa o lê. */
@@ -184,6 +185,8 @@ export function fraseDaRegraNova(check: NovaConditionCheck, nomes: NomesDaAutoma
       return "O contato já tem algum negócio";
     case "deal_status":
       return `O negócio está ${check.status === "open" ? "em aberto" : check.status === "won" ? "ganho" : "perdido"}`;
+    case "window_open":
+      return "A janela de 24h do WhatsApp está aberta (dá para mandar texto livre)";
     case "business_hours": {
       const dias = [...check.weekdays]
         .sort((a, b) => a - b)
@@ -215,7 +218,7 @@ export function fraseDaAcao(acao: CrmAction, nomes: NomesDaAutomacao = {}): stri
         ? `Responsável: ${nomes.pessoa?.(acao.mode.user_id) ?? "pessoa escolhida"}`
         : "Responsável por rodízio";
     case "assign_conversation":
-      return `Atribuir a conversa a ${nomes.pessoa?.(acao.user_id) ?? "pessoa escolhida"}`;
+      return `Atribuir ${acao.todas ? "todas as conversas" : "a conversa"} a ${nomes.pessoa?.(acao.user_id) ?? "pessoa escolhida"}`;
     case "notify":
       return "Avisar a equipe";
     case "create_task":

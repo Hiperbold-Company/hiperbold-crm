@@ -50,6 +50,8 @@ export function regraDeAutomacaoEmBranco(kind: Kind = "field"): NovaConditionChe
       return { kind };
     case "deal_status":
       return { kind, status: "open" };
+    case "window_open":
+      return { kind };
     case "business_hours":
       // O mesmo padrão do horário da espera: dias úteis, horário comercial.
       return { kind, start: "09:00", end: "18:00", weekdays: [1, 2, 3, 4, 5] };
@@ -284,6 +286,12 @@ function CamposDaRegra({
       );
     case "deal_exists":
       return null;
+    case "window_open":
+      return (
+        <p className="text-xs text-text-muted" data-testid={`${prefixo}-janela-ajuda`}>
+          {t("Sim quando o contato escreveu no WhatsApp nas últimas 24 horas e dá para mandar texto livre. Fora disso, só modelo aprovado sai.")}
+        </p>
+      );
     case "business_hours":
       return <HorarioDaRegra prefixo={prefixo} regra={regra} onChange={onChange} />;
     case "deal_status":

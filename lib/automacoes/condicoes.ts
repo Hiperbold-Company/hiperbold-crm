@@ -176,5 +176,9 @@ export function avaliarRegraNova(
       return fatos.negocios.length > 0;
     case "deal_status":
       return fatos.negocio?.status === check.status;
+    case "window_open":
+      // Sem a leitura da janela (montador de fatos que não a carrega), "não":
+      // dizer "aberta" mandaria texto livre para uma janela que ninguém mediu.
+      return fatos.janela === "aberta";
   }
 }

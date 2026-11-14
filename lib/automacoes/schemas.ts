@@ -108,7 +108,12 @@ export const crmActionSchema = z.discriminatedUnion("type", [
    * a mesma troca de dono do botão "Transferir" da Inbox (`fn_conversation_assign`),
    * que também cala o atendimento automático naquela conversa.
    */
-  z.strictObject({ type: z.literal("assign_conversation"), user_id: uuid }),
+  z.strictObject({
+    type: z.literal("assign_conversation"),
+    user_id: uuid,
+    /** Todas as conversas abertas do contato (não só a do canal do gatilho). Ausente = só uma. */
+    todas: z.boolean().optional(),
+  }),
   z.strictObject({
     type: z.literal("notify"),
     to: z.union([z.literal("owner"), z.array(uuid).min(1).max(10)]),
@@ -182,11 +187,81 @@ export const PERCENTUAL_MINIMO_DO_SORTEIO = 1;
 export const PERCENTUAL_MAXIMO_DO_SORTEIO = 99;
 export const PERCENTUAL_PADRAO_DO_SORTEIO = 50;
 
-export const sorteioConfigSchema = z.strictObject({
+/** Forma de duas saídas (A/B): a primeira que existiu, e continua valendo. */
+export const sorteioAbConfigSchema = z.strictObject({
   /** Chance, em %, de o contato seguir pela saída A. A saída B recebe o resto. */
   percent_a: z.number().int().min(PERCENTUAL_MINIMO_DO_SORTEIO).max(PERCENTUAL_MAXIMO_DO_SORTEIO),
 });
+
+/**
+ * Sorteio PONDERADO de 2 a 10 saídas (A, B, C…): cada saída tem o seu peso em
+ * %, e os pesos somam 100. Uma saída com peso 0 nunca é sorteada — é o "ramo
+ * reservado" (o corretor que ainda vai entrar): fica ligado no fluxo e só
+ * passa a receber gente quando alguém lhe dá peso. O id de cada saída é a
+ * LETRA da posição (`a`, `b`, `c`…), estável enquanto a ordem não muda; o
+ * `nome` é só o que a tela mostra ao lado da letra.
+ */
+export const MAX_RAMOS_DO_SORTEIO = 10;
+export const MIN_RAMOS_DO_SORTEIO = 2;
+export const IDS_DOS_RAMOS_DO_SORTEIO = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"] as const;
+export const ramoDoSorteioSchema = z.strictObject({
+  peso: z.number().int().min(0).max(100),
+  // Sem caractere de controle nem de formato (U+202E e afins): o nome aparece no
+  // rótulo da saída e no histórico, e um caractere invisível o falsificaria.
+  nome: z
+    .string()
+    .trim()
+    .max(40)
+    .regex(/^[^\p{Cc}\p{Cf}]*$/u)
+    .optional(),
+});
+export const sorteioPonderadoConfigSchema = z
+  .strictObject({
+    ramos: z.array(ramoDoSorteioSchema).min(MIN_RAMOS_DO_SORTEIO).max(MAX_RAMOS_DO_SORTEIO),
+  })
+  .refine((c) => c.ramos.reduce((t, r) => t + r.peso, 0) === 100, {
+    message: "os pesos das saídas precisam somar 100",
+    path: ["ramos"],
+  });
+
+export const sorteioConfigSchema = z.union([sorteioAbConfigSchema, sorteioPonderadoConfigSchema]);
 export type SorteioConfig = z.infer<typeof sorteioConfigSchema>;
+
+export type RamoDoSorteio = { id: string; letra: string; peso: number; nome?: string };
+
+/** As saídas do sorteio, na ordem, nas duas formas de config. Pura. */
+export function ramosDoSorteioConfig(c: SorteioConfig): RamoDoSorteio[] {
+  if ("percent_a" in c) {
+    return [
+      { id: "a", letra: "A", peso: c.percent_a },
+      { id: "b", letra: "B", peso: 100 - c.percent_a },
+    ];
+  }
+  return c.ramos.map((r, i) => {
+    const id = IDS_DOS_RAMOS_DO_SORTEIO[i]!;
+    return { id, letra: id.toUpperCase(), peso: r.peso, ...(r.nome ? { nome: r.nome } : {}) };
+  });
+}
+
+/**
+ * A saída sorteada: `sorteado` em [0, 1) cai numa faixa acumulada de pesos.
+ * Peso 0 não tem faixa, e por isso nunca sai. Pura.
+ */
+export function ramoSorteado(ramos: Array<{ id: string; peso: number }>, sorteado: number): string {
+  const x = sorteado * 100;
+  let acumulado = 0;
+  for (const r of ramos) {
+    acumulado += r.peso;
+    if (r.peso > 0 && x < acumulado) return r.id;
+  }
+  // Só por arredondamento (x ≥ soma): a última saída com peso.
+  return [...ramos].reverse().find((r) => r.peso > 0)?.id ?? ramos[0]!.id;
+}
+
+/** "A · Kyla (17%)" — o rótulo de uma saída, igual na tela e no histórico. */
+export function rotuloDoRamoDoSorteio(r: RamoDoSorteio): string {
+  return r.nome ? `${r.letra} · ${r.nome} (${r.peso}%)` : `${r.letra} (${r.peso}%)`;
+}
 
 // ---------------------------------------------------------------------------
 // Condições novas (dentro do bloco `condition`, ao lado das legadas)
@@ -235,6 +310,14 @@ export const regrasNovasDeCondicao = {
    * frouxa pelo mesmo motivo (o rascunho grava a cada clique); o publish exige
    * um horário que dá para obedecer.
    */
+  /**
+   * "Janela de 24h aberta?" — dá para mandar texto livre AGORA na conversa de
+   * WhatsApp que o bloco de mensagem usaria (`conversa-de-whatsapp.ts`)? Canal
+   * sem regra de janela conta como aberta; contato sem conversa, como fechada.
+   * Fora da janela só sai modelo aprovado: é o desvio que evita a mensagem
+   * cair na saída "Erro" com `janela_fechada`.
+   */
+  window_open: { kind: z.literal("window_open") },
   business_hours: {
     kind: z.literal("business_hours"),
     start: z.string().max(5),

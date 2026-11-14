@@ -42,6 +42,7 @@ import {
   MOTIVO_SEM_DATA_NO_CAMPO,
   SEM_DATA_BRANCH_ID,
 } from "./graph-schema";
+import { ramosDoSorteioConfig } from "@/lib/automacoes/schemas";
 import { fraseDaChavePresa } from "@/lib/automacoes/hosts-permitidos";
 import { fraseDaEsperaAteAData, fraseDaEsperaAteODia } from "@/lib/automacoes/plano-de-tempo";
 import {
@@ -351,7 +352,7 @@ export function resumoDoNo(node: FlowNode, raia: RaiaDoEnrollment = "followup"):
     case "http_request":
       return { ...base, resumo: `chama ${hostDoModelo(node.config.url)} (${node.config.method}) e guarda o que a resposta devolve` };
     case "random_split":
-      return { ...base, resumo: `sorteia o caminho: ${node.config.percent_a}% seguem por A e ${100 - node.config.percent_a}% por B` };
+      return { ...base, resumo: `sorteia o caminho: ${ramosDoSorteioConfig(node.config).map((r) => `${r.peso}% por ${r.letra}`).join(", ")}` };
   }
 }
 
