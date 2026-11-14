@@ -1739,6 +1739,9 @@ export const AUDIT_ACTIONS = [
   "automacao.criada_de_modelo",
   // Rascunho criado de um arquivo exportado (`lib/automacoes/portabilidade`). metadata: contagens, sem texto.
   "automacao.importada",
+  // Migration 1013: o MESMO negócio foi para uma etapa de outro funil (`moverParaOutroFunilHandler`).
+  // metadata: from/to pipeline e etapa, posição e campos_fora_do_funil (chaves, nunca valores).
+  "lead.pipeline_moved",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

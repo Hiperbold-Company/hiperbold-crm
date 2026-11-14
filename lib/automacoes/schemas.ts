@@ -83,7 +83,13 @@ export const crmActionSchema = z.discriminatedUnion("type", [
     title: tpl(200).optional(),
     value_cents: z.number().int().min(0).optional(),
   }),
-  z.strictObject({ type: z.literal("move_deal"), pipeline_id: uuid, stage_id: uuid }),
+  z.strictObject({
+    type: z.literal("move_deal"),
+    pipeline_id: uuid,
+    stage_id: uuid,
+    /** Ausente = false: o bloco só troca de etapa dentro do funil (comportamento das automações já publicadas). */
+    trocar_funil: z.boolean().optional(),
+  }),
   z.strictObject({ type: z.literal("win_deal"), reason: tpl(500).optional() }),
   z.strictObject({ type: z.literal("lose_deal"), reason: tpl(500).min(1) }),
   z.strictObject({ type: z.literal("add_tags"), target: z.enum(["lead", "contact"]), tags }),

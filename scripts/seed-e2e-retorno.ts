@@ -152,7 +152,9 @@ async function ensureLead(
     .maybeSingle();
   if (existing) {
     const id = (existing as { id: string }).id;
-    await admin.from("crm_leads").update(campos as never).eq("id", id);
+    // `pipeline_id` só entra no insert: a troca de funil de negócio existente é da função nomeada (migration 1013).
+    const { pipeline_id: _funil, ...semFunil } = campos;
+    await admin.from("crm_leads").update(semFunil as never).eq("id", id);
     return { leadId: id, pipelineId };
   }
   const { data, error } = await admin
