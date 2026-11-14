@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { invalidarAppDaMeta } from "@/lib/channels/meta/app";
 import { invalidarConfigMetaSocial } from "@/lib/channels/meta-social/config";
+import { invalidarConfigDoCadastroIncorporado } from "@/lib/channels/meta/cadastro-incorporado/config";
 import { audit } from "@/lib/audit";
 import { respostaParaOperador } from "@/lib/erros/para-operador";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
@@ -126,6 +127,7 @@ async function gravar(
   invalidarAppDaMeta();
   // O canal social (Instagram e Messenger) lê esta mesma linha, com memo próprio.
   invalidarConfigMetaSocial();
+  invalidarConfigDoCadastroIncorporado();
 
   const cabecalhos = await headers();
   await audit({
@@ -313,7 +315,8 @@ export async function rotacionarVerifyTokenDaMeta(): Promise<UpdateMetaAppResult
 }
 
 /**
- * O id do app da Meta e o `config_id` do login unificado do Instagram — o que o
+ * O id do app da Meta, o `config_id` do login unificado do Instagram e o
+ * `config_id` do Cadastro Incorporado do WhatsApp (migration 1014) — o que o
  * canal social oficial (Instagram Direct e Messenger, migrations 0984 e 0988)
  * precisa para o OAuth. Nenhum dos dois é segredo: a chave é o App Secret de
  * cima, a mesma do WhatsApp oficial.
@@ -332,11 +335,15 @@ const idDoApp = z.preprocess(vazioEhAusente, z.string().trim().regex(/^[0-9]{5,3
 const entradaSocialSchema = z.object({
   app_id: idDoApp,
   unified_config_id: idDoApp,
+  // Id da configuração do Cadastro Incorporado do WhatsApp (Facebook Login para
+  // Empresas, tipo WhatsApp). Não é segredo; só dígitos, como os outros dois.
+  whatsapp_config_id: idDoApp,
 });
 
 export interface MetaSocialAppInput {
   app_id?: string;
   unified_config_id?: string;
+  whatsapp_config_id?: string;
 }
 
 export async function updateAppSocialDaMeta(input: MetaSocialAppInput): Promise<UpdateMetaAppResult> {
@@ -348,8 +355,8 @@ export async function updateAppSocialDaMeta(input: MetaSocialAppInput): Promise<
   if (!parsed.success) {
     return { ok: false, error: "invalid_input", details: parsed.error.flatten() };
   }
-  const { app_id, unified_config_id } = parsed.data;
-  if (!app_id && !unified_config_id) return { ok: false, error: "nada_para_salvar" };
+  const { app_id, unified_config_id, whatsapp_config_id } = parsed.data;
+  if (!app_id && !unified_config_id && !whatsapp_config_id) return { ok: false, error: "nada_para_salvar" };
 
   const valores: Record<string, unknown> = { updated_by: authUser.id };
   const campos: string[] = [];
@@ -360,6 +367,10 @@ export async function updateAppSocialDaMeta(input: MetaSocialAppInput): Promise<
   if (unified_config_id) {
     valores.unified_config_id = unified_config_id;
     campos.push("unified_config_id");
+  }
+  if (whatsapp_config_id) {
+    valores.whatsapp_config_id = whatsapp_config_id;
+    campos.push("whatsapp_config_id");
   }
 
   // Trilha: QUAIS campos mudaram. Os ids não são segredo, mas a trilha segue a

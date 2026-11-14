@@ -75,8 +75,15 @@ export default async function Page() {
     .select("unified_config_id")
     .eq("id", 1)
     .maybeSingle();
+  // Idem para o Cadastro Incorporado do WhatsApp (migration 1014): erro = null.
+  const { data: dadosWhatsapp } = await admin
+    .from("platform_meta_app")
+    .select("whatsapp_config_id")
+    .eq("id", 1)
+    .maybeSingle();
   const social = dadosSociais as { app_id: string | null } | null;
   const unificado = dadosUnificados as { unified_config_id: string | null } | null;
+  const cadastroWhatsapp = dadosWhatsapp as { whatsapp_config_id: string | null } | null;
   const base = new URL(env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").origin;
 
   // O `.env` é o piso de rollback (`lib/channels/meta/app.ts`). Dizer que ele
@@ -97,6 +104,7 @@ export default async function Page() {
       social={{
         appId: social?.app_id ?? null,
         configIdDoLoginUnificado: unificado?.unified_config_id ?? null,
+        configIdDoWhatsapp: cadastroWhatsapp?.whatsapp_config_id ?? null,
         enderecos: enderecosParaAMeta(base),
       }}
     />

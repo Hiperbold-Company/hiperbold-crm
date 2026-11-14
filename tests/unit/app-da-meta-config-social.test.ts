@@ -61,6 +61,26 @@ describe("updateAppSocialDaMeta", () => {
     });
   });
 
+  it("grava o whatsapp_config_id (Cadastro Incorporado) e a trilha lista o campo sem o valor", async () => {
+    const r = await updateAppSocialDaMeta({ whatsapp_config_id: "987654321012" });
+    expect(r).toEqual({ ok: true });
+    expect(gravacoes[0]).toMatchObject({ id: 1, whatsapp_config_id: "987654321012", updated_by: USUARIO });
+    expect(gravacoes[0]).not.toHaveProperty("app_id");
+    expect(h.invalidar).toHaveBeenCalled();
+    const e = audit.mock.calls[0]![0];
+    expect(e).toMatchObject({ metadata: { campos: ["whatsapp_config_id"] } });
+    expect(JSON.stringify(e)).not.toContain("987654321012");
+  });
+
+  it("whatsapp_config_id em branco mantém o gravado; com letra é invalid_input", async () => {
+    await updateAppSocialDaMeta({ app_id: "1234567890", whatsapp_config_id: "  " });
+    expect(gravacoes[0]).not.toHaveProperty("whatsapp_config_id");
+    gravacoes.length = 0;
+    const r = await updateAppSocialDaMeta({ whatsapp_config_id: "config-1" });
+    expect(r).toMatchObject({ ok: false, error: "invalid_input" });
+    expect(gravacoes).toEqual([]);
+  });
+
   it("campo vazio mantém o gravado: config_id em branco não apaga o salvo", async () => {
     await updateAppSocialDaMeta({ app_id: "1234567890", unified_config_id: "" });
     expect(gravacoes[0]).not.toHaveProperty("unified_config_id");

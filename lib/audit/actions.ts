@@ -285,6 +285,9 @@ export const AUDIT_ACTIONS = [
   "channel.connected",
   // O número do canal oficial foi registrado na Meta (POST /register). Nunca leva o PIN.
   "channel.number_registered",
+  // O número oficial da Meta conectado (formulário manual ou Cadastro Incorporado,
+  // migration 1014). Metadata: origem e os dois ids da Meta. Nunca o token.
+  "channel.official_connected",
   "prospecting.changed",
   // A ABORDAGEM que SAIU (PR #963). Distinta de `prospecting.changed`, que é
   // configuração: esta é a única linha do produto que fala primeiro com quem
