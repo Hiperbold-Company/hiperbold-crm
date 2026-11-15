@@ -60,6 +60,8 @@ export const CUSTO_NO_MOTOR: Record<NodeType, number> = {
   instagram_public_reply: 1,
   instagram_check_follow: 1,
   http_request: 1,
+  // Decide e segue no mesmo tick.
+  random_split: 1,
 };
 
 /**

@@ -95,7 +95,7 @@ import {
   idsDasConversasDoDirect,
   type EscopoDoDirect,
 } from "@/lib/automacoes/conversa-do-direct";
-import { carregarFatosDaAutomacao } from "@/lib/automacoes/carregar-fatos";
+import { carregarFatosDaAutomacao, type OpcoesDosFatos } from "@/lib/automacoes/carregar-fatos";
 import {
   MAX_PASSOS_DA_AUTOMACAO,
   MAX_VISITAS_POR_NO,
@@ -292,7 +292,12 @@ export interface AdminClient {
    * Automação (0986): contato, negócio da execução e variáveis, lidos AO VIVO a
    * cada passo. Opcional — o motor de follow-up não precisa.
    */
-  loadFatosDaAutomacao?(orgId: string, contactId: string, vars: Record<string, unknown>): Promise<FatosDaAutomacao>;
+  loadFatosDaAutomacao?(
+    orgId: string,
+    contactId: string,
+    vars: Record<string, unknown>,
+    opcoes?: OpcoesDosFatos,
+  ): Promise<FatosDaAutomacao>;
   /**
    * Bloco de conversa (automação): as mensagens do contato (e gêmeos de
    * telefone) desde `desde`, da mais antiga à mais nova, no máximo 5, com o id
@@ -359,6 +364,8 @@ export interface TickDeps {
   enqueueJob: (job: FollowupJobRequest) => Promise<void>;
   /** Sem executor, todo bloco de efeito sai por "Erro" com `efeitos_indisponiveis`. */
   efeitos?: ExecutorDeEfeitos;
+  /** Teste: a fonte de aleatoriedade do bloco "Sorteio", um número em [0, 1). Padrão: a fonte segura do sistema. */
+  sortear?: () => number;
 }
 
 function ehAutomacao(enrollment: EnrollmentRow): boolean {
@@ -486,6 +493,7 @@ function eventPayload(result: NodeResult): Record<string, unknown> {
           ? { repeat_index: result.repeat.index, repeat_total: result.repeat.total }
           : {}),
         ...(result.class !== undefined ? { class: result.class } : {}),
+        ...(result.branch !== undefined ? { branch: result.branch } : {}),
       };
     case "wait":
       return {
@@ -1404,7 +1412,12 @@ async function processarUmPasso(
       return null;
     }
     fatos = db.loadFatosDaAutomacao
-      ? await db.loadFatosDaAutomacao(enrollment.organization_id, enrollment.contact_id, enrollment.vars ?? {})
+      ? await db.loadFatosDaAutomacao(
+          enrollment.organization_id,
+          enrollment.contact_id,
+          enrollment.vars ?? {},
+          perguntaPelaJanela(node) ? { janela: true, agora: clock() } : undefined,
+        )
       : undefined;
     if (definicaoDoNo(node.type).efeito) {
       const resolvido = await resolverEfeito(deps, enrollment, node, events, fatos ?? null);
@@ -1481,6 +1494,7 @@ async function processarUmPasso(
     ...(fatos ? { fatos } : {}),
     ...(espera ? { espera } : {}),
     ...(respostas ? { respostas } : {}),
+    ...(deps.sortear ? { sortear: deps.sortear } : {}),
   };
   let result = processNode({ ...entrada, efeito });
   // A decisão do bloco de conversa pediu UM efeito (enviar ou registrar): o
@@ -2236,8 +2250,8 @@ export function createSupabaseAdminClient(
     async persistirRespostaFollowup(input) {
       await persistirRespostaFollowupSupabase(admin, input);
     },
-    async loadFatosDaAutomacao(orgId, contactId, vars) {
-      return carregarFatosDaAutomacao(admin, orgId, contactId, vars);
+    async loadFatosDaAutomacao(orgId, contactId, vars, opcoes) {
+      return carregarFatosDaAutomacao(admin, orgId, contactId, vars, opcoes);
     },
     async devolverTurnoAoAgente(orgId, enrollmentId, desde) {
       await devolverTurnoAoAgente(admin, { organizationId: orgId, enrollmentId, desde });
@@ -2287,4 +2301,9 @@ export function createSupabaseAdminClient(
         });
     },
   };
+}
+
+/** O passo é uma condição que pergunta pela janela de 24h? Só ele paga a consulta da conversa. */
+function perguntaPelaJanela(node: FlowNode): boolean {
+  return node.type === "condition" && node.config.checks.some((c) => ehRegraNova(c) && c.kind === "window_open");
 }

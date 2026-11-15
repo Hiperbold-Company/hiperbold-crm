@@ -56,6 +56,8 @@ export function acaoEmBranco(type: CrmActionType): CrmAction {
       return { type, target: "lead", tags: [] };
     case "set_owner":
       return { type, mode: { m: "round_robin" } };
+    case "assign_conversation":
+      return { type, user_id: "" };
     case "notify":
       return { type, to: "owner", message: "" };
     case "create_task":
@@ -197,7 +199,10 @@ function CamposDaAcao({
   const t = useT();
   const { funis, etapas } = useFunis();
   const membros = useAssignableMembers(
-    acao.type === "set_owner" || acao.type === "notify" || acao.type === "create_task",
+    acao.type === "set_owner" ||
+      acao.type === "assign_conversation" ||
+      acao.type === "notify" ||
+      acao.type === "create_task",
   );
   const opcoesDeMembro = (membros.data ?? []).map((m) => ({
     valor: m.user_id,
@@ -234,6 +239,20 @@ function CamposDaAcao({
               onChange={(v) => onChange({ ...acao, stage_id: v })}
             />
           </Campo>
+          {acao.type === "move_deal" && (
+            <label htmlFor={`${prefixo}-trocar-funil`} className="flex items-center gap-2 text-sm text-text">
+              <input
+                id={`${prefixo}-trocar-funil`}
+                type="checkbox"
+                checked={acao.trocar_funil === true}
+                onChange={(e) => {
+                  const { trocar_funil: _antes, ...resto } = acao;
+                  onChange(e.target.checked ? { ...resto, trocar_funil: true } : resto);
+                }}
+              />
+              {t("Se o negócio estiver em outro funil, trazer para este funil")}
+            </label>
+          )}
           {acao.type === "create_deal" && (
             <>
               <Campo
@@ -336,6 +355,36 @@ function CamposDaAcao({
             />
           </Campo>
         </>
+      );
+    case "assign_conversation":
+      return (
+        <Campo
+          id={`${prefixo}-atendente`}
+          rotulo={t("Quem atende")}
+          ajuda={t(
+            "A conversa do contato (a mais recente no canal que iniciou a automação) passa para esta pessoa e o atendimento automático para nela.",
+          )}
+        >
+          <Seletor
+            id={`${prefixo}-atendente`}
+            valor={acao.user_id}
+            vazio={t("Escolha a pessoa")}
+            opcoes={opcoesDeMembro}
+            onChange={(v) => onChange({ ...acao, user_id: v })}
+          />
+          <label htmlFor={`${prefixo}-todas`} className="mt-2 flex items-center gap-2 text-sm text-text">
+            <input
+              id={`${prefixo}-todas`}
+              type="checkbox"
+              checked={acao.todas === true}
+              onChange={(e) => {
+                const { todas: _antes, ...resto } = acao;
+                onChange(e.target.checked ? { ...resto, todas: true } : resto);
+              }}
+            />
+            {t("Todas as conversas abertas do contato (WhatsApp, Messenger, Direct)")}
+          </label>
+        </Campo>
       );
     case "notify":
       return (

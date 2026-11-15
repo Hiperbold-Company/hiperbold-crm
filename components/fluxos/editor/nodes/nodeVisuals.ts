@@ -1,9 +1,10 @@
 import type { ComponentType } from "react";
 
-import { Bell, Play, Clock, GitBranch, Brain, ChatCircle, ChatsCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Funnel, Tag, Kanban, PencilSimple, InstagramLogo, Users, Globe } from "@/lib/ui/icons";
+import { Bell, Play, Clock, GitBranch, Brain, ChatCircle, ChatsCircle, ArrowsClockwise, PaperPlaneTilt, Flag, Question, PuzzlePiece, Funnel, Tag, Kanban, PencilSimple, InstagramLogo, Users, Globe, Scales } from "@/lib/ui/icons";
 import { fraseDaAcao, fraseDaOperacao, GATILHOS_DA_AUTOMACAO, type NomesDaAutomacao } from "@/lib/automacoes/vocabulario";
 import type { FollowupFlowSurface } from "@/lib/followup/api-schemas";
 import { configHttpEmBranco } from "@/lib/automacoes/http";
+import { PERCENTUAL_PADRAO_DO_SORTEIO, ramosDoSorteioConfig } from "@/lib/automacoes/schemas";
 import type { FlowNode, NodeType } from "@/lib/followup/graph-schema";
 import { RESULTADOS_DO_FIM } from "@/lib/followup/vocabulario";
 import { NOS_DA_SUPERFICIE } from "@/lib/followup/validate-publish";
@@ -286,6 +287,16 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
     defaultLabel: "Requisição HTTP",
     defaultConfig: () => configHttpEmBranco(),
   },
+  // Sorteio: divide os contatos entre A e B. O formulário mora em forms/automacao/SorteioForm.tsx.
+  random_split: {
+    type: "random_split",
+    paletteLabel: "Sorteio",
+    icon: Scales,
+    chipClassName: "bg-warning-bg text-warning-fg",
+    borderClassName: "border-l-warning",
+    defaultLabel: "Sorteio",
+    defaultConfig: () => ({ percent_a: PERCENTUAL_PADRAO_DO_SORTEIO }),
+  },
 };
 
 /**
@@ -440,6 +451,10 @@ export function describeNodeConfig(
     case "http_request": {
       const c = config as ConfigOf<"http_request">;
       return `${c.method} ${c.url.replace(/^https:\/\//, "").slice(0, 50)}`;
+    }
+    case "random_split": {
+      const c = config as ConfigOf<"random_split">;
+      return ramosDoSorteioConfig(c).map((r) => `${r.letra} ${r.peso}%`).join(" · ");
     }
     default: {
       const exhaustive: never = type;

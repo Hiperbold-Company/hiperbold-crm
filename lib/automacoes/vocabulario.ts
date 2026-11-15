@@ -75,6 +75,7 @@ export const ACOES_DE_CRM: Record<CrmActionType, string> = {
   add_tags: "Adicionar tags",
   remove_tags: "Remover tags",
   set_owner: "Definir responsável",
+  assign_conversation: "Atribuir a conversa e iniciar o atendimento",
   notify: "Avisar a equipe",
   create_task: "Criar tarefa",
   add_note: "Adicionar nota",
@@ -135,6 +136,7 @@ export const REGRAS_NOVAS: Record<NovaConditionCheck["kind"], string> = {
   deal_exists: "Contato já tem negócio",
   deal_status: "Situação do negócio",
   business_hours: "Está no horário?",
+  window_open: "Janela de 24h aberta?",
 };
 
 /** O nome do campo como a pessoa o lê. */
@@ -183,6 +185,8 @@ export function fraseDaRegraNova(check: NovaConditionCheck, nomes: NomesDaAutoma
       return "O contato já tem algum negócio";
     case "deal_status":
       return `O negócio está ${check.status === "open" ? "em aberto" : check.status === "won" ? "ganho" : "perdido"}`;
+    case "window_open":
+      return "A janela de 24h do WhatsApp está aberta (dá para mandar texto livre)";
     case "business_hours": {
       const dias = [...check.weekdays]
         .sort((a, b) => a - b)
@@ -213,6 +217,8 @@ export function fraseDaAcao(acao: CrmAction, nomes: NomesDaAutomacao = {}): stri
       return acao.mode.m === "user"
         ? `Responsável: ${nomes.pessoa?.(acao.mode.user_id) ?? "pessoa escolhida"}`
         : "Responsável por rodízio";
+    case "assign_conversation":
+      return `Atribuir ${acao.todas ? "todas as conversas" : "a conversa"} a ${nomes.pessoa?.(acao.user_id) ?? "pessoa escolhida"}`;
     case "notify":
       return "Avisar a equipe";
     case "create_task":
@@ -304,6 +310,9 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   efeito_falhou: "a ação falhou",
   valor_invalido: "o valor não serve para o campo",
   sem_responsavel: "nenhum atendente disponível",
+  sem_conversa: "o contato não tem conversa aberta para atribuir",
+  contato_pessoal: "o contato é pessoal e não recebe atendimento",
+  usuario_invalido: "a pessoa escolhida não é atendente desta conta",
   plano_limite_atingido: "o limite de negócios do plano foi atingido",
   campo_desconhecido: "o campo não existe no funil",
   tag_vazia: "a tag ficou vazia depois de preencher as variáveis",

@@ -649,7 +649,7 @@ function validarSuperficie(
             ? `A caixa "${n.label}" não é de roteiro de atendimento — use Pergunta, Skill e Fim.`
             : surface === 'automacao'
               ? `A caixa "${n.label}" não roda numa automação.`
-              : n.type === 'crm_action' || n.type === 'field_op' || n.type === 'message' || n.type === 'question' || n.type === 'http_request' || TIPOS_DO_INSTAGRAM.has(n.type)
+              : n.type === 'crm_action' || n.type === 'field_op' || n.type === 'message' || n.type === 'question' || n.type === 'http_request' || n.type === 'random_split' || TIPOS_DO_INSTAGRAM.has(n.type)
                 ? `A caixa "${n.label}" é de automação e não roda num follow-up.`
                 : `A caixa "${n.label}" é de roteiro de atendimento e não roda num follow-up.`,
       });
@@ -888,6 +888,7 @@ export const CONTA_NO_TETO: Record<NodeType, boolean> = {
   field_op: false, // grava campo
   instagram_check_follow: false, // consulta se segue
   http_request: false, // chama outro sistema (não fala com o cliente)
+  random_split: false, // sorteia o caminho
 };
 
 function waitMs(config: Extract<FlowNode, { type: 'wait' }>['config']): number {
@@ -1698,6 +1699,13 @@ export function validateFlowForPublish(
     const outgoing = outEdges.get(node.id) ?? [];
 
     cobrirRamos(node, outgoing, errors, nomes);
+  }
+
+  // Sorteio: as DUAS saídas (A e B) levam a algum lugar. Saída solta mandaria
+  // parte dos contatos para o fim da automação sem ninguém ter pedido.
+  for (const node of [...nodes].sort(byId)) {
+    if (node.type !== 'random_split') continue;
+    cobrirRamos(node, outEdges.get(node.id) ?? [], errors, nomes);
   }
 
   for (const node of [...nodes].sort(byId)) {

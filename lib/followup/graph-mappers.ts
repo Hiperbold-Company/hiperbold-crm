@@ -101,6 +101,8 @@ export function toFlowNode(n: RFNode): FlowNode {
       return { ...shared, type, config: n.data.config as ConfigOf<"instagram_check_follow"> };
     case "http_request":
       return { ...shared, type, config: n.data.config as ConfigOf<"http_request"> };
+    case "random_split":
+      return { ...shared, type, config: n.data.config as ConfigOf<"random_split"> };
     default: {
       const exhaustive: never = type;
       throw new Error(`unknown node type: ${String(exhaustive)}`);

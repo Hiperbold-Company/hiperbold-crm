@@ -34,6 +34,7 @@ export function extrairAtribuicaoMeta(referral: unknown): AtribuicaoDeAnuncio | 
   const adId = str(r.source_id) ?? str(r.sourceId);
   const titulo = str(r.headline);
   const sourceUrl = str(r.source_url) ?? str(r.sourceUrl);
+  const tipoDeMidia = str(r.media_type) ?? str(r.mediaType);
   // Sem NENHUM campo que identifique o anúncio, não há o que atribuir — um
   // `referral` vazio (ou só com `body`) não distingue "veio de anúncio" de
   // "o provider mandou um objeto vazio por engano".
@@ -47,6 +48,8 @@ export function extrairAtribuicaoMeta(referral: unknown): AtribuicaoDeAnuncio | 
     corpo: str(r.body),
     sourceUrl,
     miniatura: str(r.thumbnail_url) ?? str(r.image_url),
+    // Só quando o payload traz: o resto do objeto segue idêntico ao de antes.
+    ...(tipoDeMidia ? { tipoDeMidia } : {}),
     bruto: r,
   };
 }

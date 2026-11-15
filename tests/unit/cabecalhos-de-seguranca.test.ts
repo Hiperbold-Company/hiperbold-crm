@@ -52,6 +52,16 @@ describe("cabeçalhos de segurança", () => {
     expect(CSP_REPORT_ONLY).toMatch(/frame-src 'self'/);
   });
 
+  it("o JS SDK da Meta e a janela do Cadastro Incorporado cabem em script-src e frame-src (1014)", () => {
+    expect(CSP_REPORT_ONLY).toMatch(/script-src[^;]*https:\/\/connect\.facebook\.net/);
+    for (const origem of ["https://www.facebook.com", "https://web.facebook.com", "https://*.facebook.com"]) {
+      expect(CSP_REPORT_ONLY).toMatch(new RegExp(`frame-src[^;]*${origem.replace(/[.*]/g, "\\$&")}`));
+    }
+    // Só onde precisa: o Facebook não ganha script fora do SDK nem moldura em outra diretiva.
+    expect(CSP_REPORT_ONLY).not.toMatch(/script-src[^;]*\*\.facebook\.com/);
+    expect(CSP_REPORT_ONLY).toMatch(/frame-ancestors 'none'/);
+  });
+
   it("HSTS de 1 ano, sem includeSubDomains nem preload", () => {
     expect(HSTS).toBe("max-age=31536000");
     expect(HSTS).not.toMatch(/includeSubDomains|preload/i);

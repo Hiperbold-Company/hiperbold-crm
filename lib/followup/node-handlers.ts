@@ -12,10 +12,13 @@ import {
   type RespostaRecebida,
 } from "@/lib/automacoes/conversa";
 import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
+import { ramosDoSorteioConfig, ramoSorteado, type SorteioConfig } from "@/lib/automacoes/schemas";
 import { casarRespostaComOpcao } from "@/lib/channels/opcoes-numeradas";
 import {
   ERROR_BRANCH_ID,
   FALLBACK_BRANCH_ID,
+  SORTEIO_A_BRANCH_ID,
+  SORTEIO_B_BRANCH_ID,
   INVALID_REPLY_BRANCH_ID,
   NO_REPLY_BRANCH_ID,
   REPEAT_BODY_BRANCH_ID,
@@ -150,7 +153,7 @@ export type NodeResult =
   // o `ai_classify` que sai por "sem resposta" porque a carência venceu. Vai para
   // o payload do evento e é o que `ultimoDesfechoDe` lê — o desfecho não pode
   // depender de QUEM tirou o lead do classificar.
-  | { kind: "advance"; next_node_id: string; next_eval_at: Date; reason?: "plan_timeout"; repeat?: { index: number; total: number }; class?: string }
+  | { kind: "advance"; next_node_id: string; next_eval_at: Date; reason?: "plan_timeout"; repeat?: { index: number; total: number }; class?: string; branch?: string }
   // stays on the node. `wake_status` parks `match_reply` in waiting_reply without a job.
   | { kind: "wait"; next_eval_at: Date; wake_status?: "active" | "waiting_reply" | "dormente" }
   | {
@@ -673,6 +676,8 @@ export interface EntradaDoNo {
   espera?: EstadoDaEspera;
   /** Bloco de conversa: as mensagens do contato desde o início da espera em curso, da mais antiga à mais nova. */
   respostas?: RespostaRecebida[];
+  /** `random_split`: a fonte de aleatoriedade, um número em [0, 1). Ausente = a fonte segura do sistema. Injetável nos testes. */
+  sortear?: () => number;
 }
 
 /**
@@ -886,6 +891,30 @@ export function decidirConversa(input: EntradaDoNo): NodeResult {
   return esperar(new Date(prazo));
 }
 
+/**
+ * Um número em [0, 1) da fonte criptográfica do sistema (`crypto`, nunca
+ * `Math.random`): o sorteio decide o caminho de gente de verdade, e uma fonte
+ * previsível enviesaria a divisão A/B.
+ */
+export function sorteioSeguro(): number {
+  const [n] = globalThis.crypto.getRandomValues(new Uint32Array(1));
+  return (n ?? 0) / 2 ** 32;
+}
+
+/**
+ * O lado sorteado: `A` quando o número cai abaixo do corte (`percent_a`% do
+ * intervalo), `B` no resto. `sorteado` é um número em [0, 1).
+ */
+export function ladoDoSorteio(percentA: number, sorteado: number): typeof SORTEIO_A_BRANCH_ID | typeof SORTEIO_B_BRANCH_ID {
+  return sorteado * 100 < percentA ? SORTEIO_A_BRANCH_ID : SORTEIO_B_BRANCH_ID;
+}
+
+/** A saída sorteada nas duas formas do bloco (A/B ou ponderada de N saídas). */
+export function saidaDoSorteio(config: SorteioConfig, sorteado: number): string {
+  if ("percent_a" in config) return ladoDoSorteio(config.percent_a, sorteado);
+  return ramoSorteado(ramosDoSorteioConfig(config), sorteado);
+}
+
 type Decisor<K extends NodeType> = (input: EntradaDoNo & { node: Extract<FlowNode, { type: K }> }) => NodeResult;
 
 /**
@@ -904,6 +933,18 @@ export const DECISORES: { [K in NodeType]: Decisor<K> } = {
   instagram_check_follow: (input) => decidirInstagram(input),
   // "Deu certo" é a saída comum; "Falhou" é a de erro — a mesma régua dos efeitos de CRM.
   http_request: (input) => decidirEfeito(input),
+  // Sorteio: decide A ou B na hora e segue pela aresta do lado sorteado. Sem
+  // aresta ligada naquele lado (o publish recusa, mas o rascunho pode rodar em
+  // teste), a execução termina ali — nunca cai no outro lado em silêncio.
+  random_split: (input) => {
+    const { node, edges, clock } = input;
+    const lado = saidaDoSorteio(node.config, (input.sortear ?? sorteioSeguro)());
+    const edge = edges
+      .filter((e) => e.source === node.id && e.condition.type === "branch" && e.condition.branch_id === lado)
+      .sort((a, b) => b.priority - a.priority)[0];
+    if (!edge) return { kind: "complete", outcome: null };
+    return { kind: "advance", next_node_id: edge.target, next_eval_at: clock(), branch: lado };
+  },
   trigger: (input) => {
     const { node, edges, enrollment, clock, smartWaits, planEnqueued, planRecheckCount } = input;
     const edge = selectEdge(edges, node.id, { type: "always" });

@@ -34,7 +34,6 @@ import { createHash } from "node:crypto";
 import { sendMessageHandler } from "@/app/api/v1/messages/_handler";
 import { ApiError } from "@/lib/api/types";
 import { opcoesNativas, tetoDoTextoEmBytes } from "@/lib/channels/capabilities";
-import { ehCanalDeWhatsapp } from "@/lib/channels/canal-de-whatsapp";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
 import { estadoDaJanela } from "@/lib/channels/janela";
 import { bytesDoTextoQueSai } from "@/lib/channels/opcoes-numeradas";
@@ -44,7 +43,8 @@ import type { FlowNode } from "@/lib/followup/graph-schema";
 import type { AcaoDeConversa } from "@/lib/followup/node-handlers";
 
 import { varsDaResposta } from "../conversa";
-import { conversaDoDirect, escopoDoDirect } from "../conversa-do-direct";
+import { conversaDoEnvio } from "../conversa-de-whatsapp";
+import { escopoDoDirect } from "../conversa-do-direct";
 import type { FieldOp } from "../schemas";
 import { renderizar } from "../template-vars";
 import {
@@ -95,41 +95,6 @@ function opcoesDoEnvio(node: NoDeConversa): OutboundInteractive | undefined {
   return node.config.options as OutboundInteractive;
 }
 
-interface ConversaDoContato {
-  id: string;
-  provider: string | null;
-  last_inbound_at: string | null;
-}
-
-/** A conversa de WhatsApp (não grupo) mais recente do contato e dos gêmeos de telefone. */
-async function conversaDeWhatsapp(
-  c: Contexto,
-  ids: readonly string[],
-): Promise<ConversaDoContato | null> {
-  const { data, error } = await c.admin
-    .from("conversations")
-    .select("id, last_inbound_at, is_group, channel_sessions:channel_session_id(provider)")
-    .eq("organization_id", c.org)
-    .in("contact_id", [...ids])
-    .eq("is_group", false)
-    .order("last_inbound_at", { ascending: false, nullsFirst: false })
-    .limit(20);
-  if (error) throw new Error("conversa_indeterminada");
-  const linhas = (data ?? []) as unknown as Array<{
-    id: string;
-    last_inbound_at: string | null;
-    channel_sessions: { provider: string | null } | null;
-  }>;
-  const achada = linhas.find((l) => ehCanalDeWhatsapp(l.channel_sessions?.provider));
-  return achada
-    ? {
-        id: achada.id,
-        provider: achada.channel_sessions?.provider ?? null,
-        last_inbound_at: achada.last_inbound_at,
-      }
-    : null;
-}
-
 async function contatoBloqueado(c: Contexto): Promise<boolean> {
   const { data, error } = await c.admin
     .from("contacts")
@@ -168,9 +133,8 @@ async function enviar(
 
   // Os mesmos ids (contato + gêmeos de telefone) para a conversa e para o teto.
   const ids = await idsDoContatoEGemeos(c.admin, c.org, c.contatoId);
-  const conversa = escopo
-    ? await conversaDoDirect(c.admin, c.org, escopo, ids)
-    : await conversaDeWhatsapp(c, ids);
+  // A mesma escolha da condição "Janela de 24h aberta" (`conversaDoEnvio`).
+  const conversa = await conversaDoEnvio(c.admin, c.org, varsDaExecucao(c), ids);
   if (!conversa) {
     return { ok: false, erro: escopo ? "sem_conversa_direct" : "sem_conversa_whatsapp", detalhe: base };
   }

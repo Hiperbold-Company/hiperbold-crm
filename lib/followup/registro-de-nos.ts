@@ -123,6 +123,13 @@ export const REGISTRO_DE_NOS: { readonly [K in NodeType]: DefinicaoDoNo } = {
     efeito: true,
     precisaEventos: true,
   }),
+  // Sorteio: decisão pura (não muda o CRM nem fala com ninguém), como a condição.
+  random_split: definir("random_split", {
+    superficies: ["automacao"],
+    categoria: "logica",
+    efeito: false,
+    precisaEventos: false,
+  }),
 };
 
 /**
@@ -140,6 +147,7 @@ const ORDEM: Record<FollowupFlowSurface, readonly NodeType[]> = {
     "crm_action",
     "field_op",
     "condition",
+    "random_split",
     "wait",
     "instagram_private_reply",
     "instagram_check_follow",

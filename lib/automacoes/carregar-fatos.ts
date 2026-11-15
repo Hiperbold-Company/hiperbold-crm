@@ -6,6 +6,10 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
+
+import { anuncioDoFluxo } from "./anuncio-do-contato";
+import { conversaDoEnvio, janelaDaConversa } from "./conversa-de-whatsapp";
 import { negocioDaExecucao, type FatosDaAutomacao, type NegocioDosFatos } from "./fatos";
 
 const COLUNAS_DO_NEGOCIO =
@@ -31,16 +35,24 @@ function negocioDe(row: Record<string, unknown>): NegocioDosFatos {
   };
 }
 
+/** O que só alguns passos leem — e só eles pagam a consulta. */
+export interface OpcoesDosFatos {
+  /** A janela de 24h da conversa do envio (condição "Janela de 24h aberta?"; ver `conversaDoEnvio`). */
+  janela?: boolean;
+  agora?: Date;
+}
+
 export async function carregarFatosDaAutomacao(
   admin: SupabaseClient,
   orgId: string,
   contactId: string,
   vars: Record<string, unknown>,
+  opcoes: OpcoesDosFatos = {},
 ): Promise<FatosDaAutomacao> {
   const [{ data: contato, error: erroContato }, { data: negocios, error: erroNegocios }] = await Promise.all([
     admin
       .from("contacts")
-      .select("id, name, email, phone_number, birthdate, tags, custom_fields")
+      .select("id, name, email, phone_number, birthdate, tags, custom_fields, source_metadata")
       .eq("organization_id", orgId)
       .eq("id", contactId)
       .maybeSingle(),
@@ -63,6 +75,14 @@ export async function carregarFatosDaAutomacao(
     null;
 
   const c = contato as Record<string, unknown> | null;
+  // A janela da MESMA conversa por onde o bloco de mensagem enviaria: o Direct
+  // de quem comentou, na execução que nasceu de comentário; senão, o WhatsApp.
+  const janela = opcoes.janela
+    ? janelaDaConversa(
+        await conversaDoEnvio(admin, orgId, vars, await idsDoContatoEGemeos(admin, orgId, contactId)),
+        opcoes.agora ?? new Date(),
+      )
+    : undefined;
   return {
     contato: c
       ? {
@@ -73,10 +93,12 @@ export async function carregarFatosDaAutomacao(
           birthdate: (c.birthdate as string | null) ?? null,
           tags: Array.isArray(c.tags) ? (c.tags as string[]) : [],
           custom_fields: objeto(c.custom_fields),
+          anuncio: anuncioDoFluxo(c.source_metadata),
         }
       : null,
     negocio,
     negocios: lista.map((n) => ({ id: n.id, pipeline_id: n.pipeline_id, stage_id: n.stage_id, status: n.status })),
     vars,
+    ...(janela ? { janela } : {}),
   };
 }

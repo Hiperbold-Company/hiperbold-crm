@@ -51,6 +51,8 @@ interface Props {
   readonly social?: {
     readonly appId: string | null;
     readonly configIdDoLoginUnificado: string | null;
+    /** Cadastro Incorporado do WhatsApp (migration 1014). Não é segredo. */
+    readonly configIdDoWhatsapp?: string | null;
     readonly enderecos: readonly EnderecoParaAMeta[];
   };
 }
@@ -83,10 +85,13 @@ export function FormularioDaMeta({
 
   const [appId, setAppId] = useState(social?.appId ?? "");
   const [configId, setConfigId] = useState(social?.configIdDoLoginUnificado ?? "");
+  const [configWhatsapp, setConfigWhatsapp] = useState(social?.configIdDoWhatsapp ?? "");
   const idValido = (v: string) => v.trim() === "" || /^[0-9]{5,30}$/.test(v.trim());
   const socialMudou =
-    appId.trim() !== (social?.appId ?? "") || configId.trim() !== (social?.configIdDoLoginUnificado ?? "");
-  const podeSalvarSocial = socialMudou && idValido(appId) && idValido(configId);
+    appId.trim() !== (social?.appId ?? "") ||
+    configId.trim() !== (social?.configIdDoLoginUnificado ?? "") ||
+    configWhatsapp.trim() !== (social?.configIdDoWhatsapp ?? "");
+  const podeSalvarSocial = socialMudou && idValido(appId) && idValido(configId) && idValido(configWhatsapp);
 
   function motivoDaRecusa(r: Extract<UpdateMetaAppResult, { ok: false }>): string {
     if (ehRecusaDeEscrita(r.error)) return t(MENSAGEM_DA_RECUSA_DE_ESCRITA[r.error]);
@@ -131,8 +136,10 @@ export function FormularioDaMeta({
         app_id: appId.trim() !== (social?.appId ?? "") ? appId.trim() : undefined,
         unified_config_id:
           configId.trim() !== (social?.configIdDoLoginUnificado ?? "") ? configId.trim() : undefined,
+        whatsapp_config_id:
+          configWhatsapp.trim() !== (social?.configIdDoWhatsapp ?? "") ? configWhatsapp.trim() : undefined,
       });
-      aoGravar(r, t("Configuração do Instagram e do Messenger salva."));
+      aoGravar(r, t("Configuração da Meta salva."));
     });
   }
 
@@ -314,6 +321,25 @@ export function FormularioDaMeta({
             />
             <p className="text-xs text-muted-foreground">
               {t("É o que o Instagram usa para conectar, junto com o ID e a chave do app da Meta. Não é segredo.")}
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5 border-t border-border pt-4">
+            <h3 className="text-sm font-medium">{t("WhatsApp: Cadastro Incorporado")}</h3>
+            <Label htmlFor="meta-whatsapp-config-id">
+              {t("ID da configuração do Cadastro Incorporado do WhatsApp")}
+            </Label>
+            <Input
+              id="meta-whatsapp-config-id"
+              data-testid="meta-whatsapp-config-id"
+              inputMode="numeric"
+              autoComplete="off"
+              value={configWhatsapp}
+              onChange={(e) => setConfigWhatsapp(e.target.value)}
+              placeholder={t("Só números, em Facebook Login para Empresas › Configurações")}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("É o que o botão Conectar com a Meta, em Conexões › API Oficial, usa. Não é segredo. Junto do ID e da chave do app da Meta.")}
             </p>
           </div>
 

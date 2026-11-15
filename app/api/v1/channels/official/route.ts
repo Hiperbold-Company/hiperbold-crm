@@ -33,16 +33,10 @@ import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/arch
 import { CHANNEL_PROVIDER_META } from "@/lib/channels/capabilities";
 import { appDaMeta, appDaMetaDoAmbiente } from "@/lib/channels/meta/app";
 import { metaGraphBase } from "@/lib/channels/meta/credentials";
-import { validateMetaCredentials } from "@/lib/channels/meta/validate-credentials";
-import {
-  COLUNAS_DO_DESFECHO_DO_WEBHOOK,
-  registrarWebhookDaSessao,
-} from "@/lib/channels/meta/webhook-da-sessao";
-import { reactivateChannelSession } from "@/lib/channels/reactivate";
+import { conectarCanalOficial, respostaDaFalhaDaConexaoOficial } from "@/lib/channels/meta/conectar-canal-oficial";
+import { COLUNAS_DO_DESFECHO_DO_WEBHOOK } from "@/lib/channels/meta/webhook-da-sessao";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { lerCorDaConexao } from "@/lib/conexoes/cores";
-import { metadataInicialDoCanal } from "@/lib/ai/elegibilidade/pre-go-live";
-import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { basePublicaDoWebhookMeta } from "@/lib/webhooks/url-publica";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { traduzirLimiteDoPlano } from "@/lib/cobranca/limites";
@@ -213,7 +207,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const orgId = authz.org.orgId;
-  const userId = authz.user.id;
 
   const parsed = conectarSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
@@ -223,134 +216,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
   const { phone_number_id, waba_id, token } = parsed.data;
 
-  // VALIDA ANTES DE GRAVAR — a rota não sabe com quem fala; ela pergunta se a
-  // credencial presta e o canal responde.
-  //
-  // `wabaId` junto desde a fatia F1: a checagem do número sozinha aceita o par
-  // trocado (número de uma conta, id de outra), e o registro do webhook logo abaixo
-  // apontaria o override de um número que esta instalação não controla.
-  const validacao = await validateMetaCredentials({
-    phoneNumberId: phone_number_id,
-    token,
-    wabaId: waba_id,
-  });
-  if (!validacao.ok) {
-    return fail("invalid_request", validacao.motivo, 422, { requestId });
-  }
-
+  // Validar, cifrar, achar a conexão existente, reativar ou inserir e registrar o
+  // webhook: o mesmo caminho do Cadastro Incorporado (migration 1014), num lugar só.
   const admin = createAdminClient();
-  const cifrado = await encryptWebhookSecret(admin, token);
-  if (!cifrado) {
-    // Sem a GUC de cifra configurada, gravar o token em claro seria pior que
-    // recusar. O operador precisa saber que falta uma configuração de servidor.
-    return fail(
-      "invalid_request",
-      t("cifra indisponível nesta instalação (GUC app.nuvemshop_oauth_key ausente) — o token não foi gravado"),
-      422,
-      { requestId },
-    );
-  }
+  const conexao = await conectarCanalOficial({
+    admin,
+    orgId,
+    userId: authz.user.id,
+    idioma: authz.user.idioma,
+    requestId,
+    phoneNumberId: phone_number_id,
+    wabaId: waba_id,
+    token,
+    baseDoWebhook: basePublicaDoWebhookMeta(req),
+    origem: "manual",
+  });
 
-  // A busca NÃO filtra `archived_at`: um canal oficial excluído é exatamente o
-  // que este POST precisa achar para trazer de volta. Ignorá-lo criaria uma
-  // SEGUNDA linha oficial na org — e a linha velha continuaria segurando o par
-  // (org, número) na trava da 0106.
-  const buscarExistente = (colunas: string) =>
-    admin
-      .from("channel_sessions")
-      .select(colunas)
-      .eq("organization_id", orgId)
-      .eq("provider", CHANNEL_PROVIDER_META)
-      .maybeSingle();
-  const { data: existenteRaw } = await queryTolerantToMissingArchived(
-    () => buscarExistente(`id, ${ARCHIVED_AT}, webhook_path_token, display_name`),
-    () => buscarExistente("id, webhook_path_token, display_name"),
-  );
-  const existente = existenteRaw as {
-    id: string;
-    archived_at?: string | null;
-    webhook_path_token?: string | null;
-    display_name?: string | null;
-  } | null;
-
-  const linha = {
-    organization_id: orgId,
-    provider: CHANNEL_PROVIDER_META,
-    meta_phone_number_id: phone_number_id,
-    meta_waba_id: waba_id,
-    meta_token_encrypted: cifrado,
-    phone_number: validacao.displayPhoneNumber ? `+${validacao.displayPhoneNumber.replace(/\D/g, "")}` : null,
-    // O nome do provedor só batiza a conexão; depois dela o nome é do operador
-    // (Renomear), e salvar a credencial de novo não o apaga. Mesma regra do
-    // `coalesce(display_name, ...)` do pareamento por QR.
-    display_name: existente?.display_name || (validacao.verifiedName ?? "Canal oficial"),
-    status: "WORKING",
-  };
-
-  // `update` quando já existe em vez de upsert: a trava única de (org,
-  // phone_number) não serve de árbitro de `ON CONFLICT` aqui. Era DEFERRABLE
-  // (medido ao criar a sessão de teste da Fase 3b, e o Postgres recusa
-  // constraint deferível na inferência); a migration 0107 a trocou por um índice
-  // único PARCIAL (`where archived_at is null`), que só seria inferível se a
-  // cláusula repetisse o predicado — e o cliente do PostgREST não expõe isso.
-  // Mudou a razão, não a escolha.
-  //
-  // O update passa por `reactivateChannelSession` porque reconectar é
-  // ressuscitar: o mesmo patch que devolve status, credencial e número tem que
-  // devolver a linha à vida, ou o canal fica "conectado" na tela e excluído para
-  // todo o resto do sistema. Para o canal que já estava ativo é um no-op — e a
-  // auditoria de volta sai de lá, junto da ressurreição, não daqui.
-  let idDaSessao: string | null = existente?.id ?? null;
-  let webhookPathToken: string | null = existente?.webhook_path_token ?? null;
-  // Tipo largo o bastante para carregar `code`/`details`/`detail`: é isso que
-  // `recusaDoPlano` lê para reconhecer o PT402 (fase F3, decisão 9) — um tipo só
-  // com `message` esconderia o código e a recusa cairia sempre no 500 genérico.
-  let error: {
-    message?: string | null;
-    code?: string | null;
-    details?: unknown;
-    detail?: unknown;
-  } | null = null;
-
-  if (existente) {
-    ({ error } = await reactivateChannelSession(
-      admin,
-      {
-        organizationId: orgId,
-        channelSessionId: existente.id,
-        archivedAt: existente.archived_at ?? null,
-      },
-      linha,
-      {
-        userId: userId,
-        requestId,
-        metadata: { provider: CHANNEL_PROVIDER_META, phone_number: linha.phone_number },
-      },
-    ));
-  } else {
-    // `select("id, webhook_path_token")` porque o registro do webhook logo abaixo
-    // precisa dos DOIS: o id para gravar o desfecho na mesma linha, e o token porque
-    // é ele que compõe a URL que a Meta vai chamar. O INSERT não os devolve sozinho,
-    // e reler a linha por (org, provider) seria uma segunda ida ao banco pelo dado
-    // que este INSERT acabou de criar.
-    const inserida = await admin
-      .from("channel_sessions")
-      .insert({
-        ...linha,
-        webhook_secret_encrypted: cifrado,
-        metadata: metadataInicialDoCanal(),
-      })
-      .select("id, webhook_path_token")
-      .maybeSingle();
-    error = inserida.error;
-    idDaSessao = inserida.data?.id ?? null;
-    webhookPathToken = inserida.data?.webhook_path_token ?? null;
-  }
-
-  if (error) {
-    // Fase F3, decisão 3: cobre as DUAS escritas acima (o INSERT de canal novo
-    // e o UPDATE de `reactivateChannelSession`) — as duas contam contra o teto
-    // de conexões. PT402 pelo `code`, nunca pelo texto do Postgres.
+  if (!conexao.ok) {
+    if (conexao.erro !== "gravacao") return respostaDaFalhaDaConexaoOficial(conexao, authz.user.idioma, requestId);
+    const { error } = conexao;
+    // Fase F3, decisão 3: cobre as DUAS escritas (o INSERT de canal novo e o
+    // UPDATE de `reactivateChannelSession`), que contam contra o teto de
+    // conexões. PT402 pelo `code`, nunca pelo texto do Postgres.
     const recusa = recusaDoPlano(error);
     if (recusa) {
       const mensagem = await mensagemDaRecusaDoPlano(recusa, admin, orgId, authz.user.idioma);
@@ -359,40 +246,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // Limite do módulo de cobrança do upstream (spec cobrança §5), quando ligado.
     const limite = traduzirLimiteDoPlano(error, authz.user.idioma);
     if (limite) return fail(limite.code, limite.message, 409, { requestId, details: limite.details });
-    return falhaInterna("internal_error", error ?? "channel_session_write_failed", {
-      requestId,
-    });
+    return falhaInterna("internal_error", error ?? "channel_session_write_failed", { requestId });
   }
-
-  // ─── O webhook DESTE número, registrado pela própria instalação (fatia F1) ──
-  // DEPOIS de gravar, nunca antes: o GET de verificação da Meta chega no instante
-  // em que o override é registrado e procura a sessão pelo `webhook_path_token` —
-  // registrar antes de a linha existir devolveria 404 e a Meta marcaria o webhook
-  // como inválido, que é pior que não registrar.
-  //
-  // E o desfecho volta na RESPOSTA, não só no log: quem colou as credenciais precisa
-  // saber que o canal envia mas ainda não entrega, com o motivo em mãos.
-  const webhook =
-    idDaSessao && webhookPathToken
-      ? await registrarWebhookDaSessao({
-          admin,
-          channelSessionId: idDaSessao,
-          phoneNumberId: phone_number_id,
-          wabaId: waba_id,
-          tokenCifrado: cifrado,
-          webhookPathToken,
-          base: basePublicaDoWebhookMeta(req),
-          requestId,
-        })
-      : null;
 
   return ok({
     connected: true,
-    displayName: linha.display_name,
-    phoneNumber: linha.phone_number,
-    /** `registrado: false` NÃO desfaz a conexão — o canal envia; falta a entrega. */
-    webhookRegistro: webhook
-      ? { registrado: webhook.registrado, url: webhook.url, erro: webhook.erro, em: webhook.em }
-      : null,
+    displayName: conexao.displayName,
+    phoneNumber: conexao.phoneNumber,
+    /** `registrado: false` NÃO desfaz a conexão: o canal envia; falta a entrega. */
+    webhookRegistro: conexao.webhookRegistro,
   });
 }

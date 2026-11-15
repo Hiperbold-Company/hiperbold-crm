@@ -2,9 +2,14 @@
  * Os mesmos fatos de `carregar-fatos.ts`, lidos por `pg` puro — o adaptador
  * dos invariantes (sem PostgREST) e do turno local. Filtra `organization_id`
  * em toda consulta, como a versão service-role.
+ *
+ * ⚠️ Não carrega a janela de 24h (`fatos.janela` fica ausente): neste adaptador
+ * a condição `window_open` responde sempre "não". Só `carregar-fatos.ts` lê a
+ * janela, pela mesma conversa do envio (`conversaDoEnvio`).
  */
 import type pg from "pg";
 
+import { anuncioDoFluxo } from "./anuncio-do-contato";
 import { negocioDaExecucao, type FatosDaAutomacao, type NegocioDosFatos } from "./fatos";
 
 function objeto(v: unknown): Record<string, unknown> {
@@ -18,7 +23,7 @@ export async function carregarFatosDaAutomacaoPg(
   vars: Record<string, unknown>,
 ): Promise<FatosDaAutomacao> {
   const { rows: contatos } = await pool.query(
-    `select id, name, email, phone_number, birthdate::text as birthdate, tags, custom_fields
+    `select id, name, email, phone_number, birthdate::text as birthdate, tags, custom_fields, source_metadata
        from contacts where organization_id = $1 and id = $2`,
     [orgId, contactId],
   );
@@ -54,6 +59,7 @@ export async function carregarFatosDaAutomacaoPg(
           birthdate: (c.birthdate as string | null) ?? null,
           tags: Array.isArray(c.tags) ? (c.tags as string[]) : [],
           custom_fields: objeto(c.custom_fields),
+          anuncio: anuncioDoFluxo(c.source_metadata),
         }
       : null,
     negocio: (id ? lista.find((n) => n.id === id) : undefined) ?? lista.find((n) => n.status === "open") ?? null,

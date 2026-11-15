@@ -8,6 +8,9 @@
  * bloco que acabou de mudar a etapa tem de ver a etapa nova no bloco seguinte.
  */
 
+import type { AnuncioDoFluxo } from "./anuncio-do-contato";
+import type { JanelaDaConversa } from "./conversa-de-whatsapp";
+
 export interface ContatoDosFatos {
   id: string;
   name: string | null;
@@ -16,6 +19,12 @@ export interface ContatoDosFatos {
   birthdate: string | null;
   tags: string[];
   custom_fields: Record<string, unknown>;
+  /**
+   * O anúncio de primeiro toque (`{{contact.anuncio.*}}`, `anuncio-do-contato.ts`).
+   * Opcional só para os montadores de fatos que não o carregam; quem carrega
+   * sempre o preenche, com string vazia onde não há anúncio.
+   */
+  anuncio?: AnuncioDoFluxo;
 }
 
 export interface NegocioDosFatos {
@@ -40,6 +49,12 @@ export interface FatosDaAutomacao {
   negocios: Array<{ id: string; pipeline_id: string; stage_id: string; status: string }>;
   /** `followup_enrollments.vars` desta execução. */
   vars: Record<string, unknown>;
+  /**
+   * A janela de 24h da conversa de WhatsApp do contato (`conversa-de-whatsapp.ts`).
+   * Só é carregada quando o passo é uma condição que pergunta por ela; ausente
+   * nos demais passos e nos montadores que não a carregam.
+   */
+  janela?: JanelaDaConversa;
 }
 
 /** O id do negócio que a execução carrega (o gatilho trouxe, ou um bloco criou/moveu). */

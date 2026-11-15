@@ -107,6 +107,7 @@ const nodeTypes: NodeTypes = {
   message: ConversaNode,
   question: ConversaNode,
   http_request: EffectNode,
+  random_split: EffectNode,
 };
 
 interface Props {

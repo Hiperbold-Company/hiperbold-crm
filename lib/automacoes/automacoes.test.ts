@@ -253,6 +253,7 @@ describe("registro de nós e publish da automação", () => {
         "instagram_public_reply",
         "instagram_check_follow",
         "http_request",
+        "random_split",
       ].sort(),
     );
     expect(NOS_DA_SUPERFICIE.followup).not.toContain("crm_action");

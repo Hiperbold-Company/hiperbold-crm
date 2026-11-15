@@ -11,6 +11,7 @@
 import { janelaDaEspera, primeiroInstanteNoHorario, type HorarioDaEspera } from "@/lib/followup/espera-no-horario";
 import type { NovaConditionCheck } from "@/lib/followup/graph-schema";
 
+import { chaveDoAnuncioNoCaminho } from "./anuncio-do-contato";
 import type { FatosDaAutomacao } from "./fatos";
 import type { FieldRef } from "./schemas";
 
@@ -35,8 +36,12 @@ export function lerCampo(ref: FieldRef, fatos: FatosDaAutomacao): unknown {
       return fatos.negocio ? fatos.negocio[ref.key] : undefined;
     case "lead_custom":
       return fatos.negocio?.custom_fields[ref.key];
-    case "var":
+    case "var": {
+      // `contact.anuncio.*`: o anúncio do contato, não uma variável da execução.
+      const doAnuncio = chaveDoAnuncioNoCaminho(ref.path);
+      if (doAnuncio) return fatos.contato?.anuncio?.[doAnuncio] ?? "";
       return lerCaminho(fatos.vars, ref.path);
+    }
   }
 }
 
@@ -171,5 +176,9 @@ export function avaliarRegraNova(
       return fatos.negocios.length > 0;
     case "deal_status":
       return fatos.negocio?.status === check.status;
+    case "window_open":
+      // Sem a leitura da janela (montador de fatos que não a carrega), "não":
+      // dizer "aberta" mandaria texto livre para uma janela que ninguém mediu.
+      return fatos.janela === "aberta";
   }
 }

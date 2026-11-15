@@ -766,6 +766,13 @@ const schema = z.object({
    */
   META_APP_ID: z.string().optional().default(""),
   META_UNIFIED_CONFIG_ID: z.string().optional().default(""),
+  /**
+   * `config_id` da configuração do Facebook Login para Empresas do tipo WhatsApp
+   * Embedded Signup (botão "Conectar com a Meta", migration 1014). PISO de
+   * rollback: o banco (`platform_meta_app.whatsapp_config_id`) vence. Não é
+   * segredo. Lida por `lib/channels/meta/cadastro-incorporado/config.ts`.
+   */
+  META_WHATSAPP_CONFIG_ID: z.string().optional().default(""),
 
   // Marca da instalação (white-label) — ver lib/branding.ts.
   // Sem prefixo NEXT_PUBLIC_ de propósito: essas seriam queimadas no bundle

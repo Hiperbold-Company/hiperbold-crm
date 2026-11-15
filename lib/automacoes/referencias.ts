@@ -41,6 +41,7 @@ export function referenciasDoGrafo(graph: FlowGraph): ReferenciasDoGrafo {
           if (a.mode.m === "user") pessoas.add(a.mode.user_id);
           if (a.mode.m === "round_robin") a.mode.user_ids?.forEach((id) => pessoas.add(id));
         }
+        if (a.type === "assign_conversation") pessoas.add(a.user_id);
         if (a.type === "notify" && Array.isArray(a.to)) a.to.forEach((id) => pessoas.add(id));
         if (a.type === "create_task" && a.assignee !== "owner") pessoas.add(a.assignee);
         if (a.type === "start_automation") automacoes.add(a.pointer_id);

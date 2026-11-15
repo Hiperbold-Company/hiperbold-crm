@@ -24,16 +24,19 @@
  * - `challenges.cloudflare.com` em `script-src`, `connect-src` e `frame-src` é o que o
  *   widget do Turnstile pede (D-173). O `frame-src` é explícito porque, sem ele, o
  *   navegador cai no `default-src 'self'` e recusaria o iframe do widget.
+ * - `connect.facebook.net` em `script-src` e os domínios do Facebook em `frame-src`
+ *   são o JS SDK da Meta e a janela do Cadastro Incorporado do WhatsApp (botão
+ *   "Conectar com a Meta", migration 1014).
  */
 export const CSP_REPORT_ONLY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://connect.facebook.net",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob: https:",
   "font-src 'self' data:",
   "connect-src 'self' https: wss: https://challenges.cloudflare.com",
-  "frame-src 'self' https://challenges.cloudflare.com",
+  "frame-src 'self' https://challenges.cloudflare.com https://www.facebook.com https://web.facebook.com https://*.facebook.com",
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",

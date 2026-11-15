@@ -20,7 +20,8 @@ type TipoDeEfeito =
   | "instagram_private_reply"
   | "instagram_public_reply"
   | "instagram_check_follow"
-  | "http_request";
+  | "http_request"
+  | "random_split";
 
 export function EffectNode({ id, type, data, selected }: NodeProps<RFNode>) {
   const t = useT();

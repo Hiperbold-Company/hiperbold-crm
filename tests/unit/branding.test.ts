@@ -981,6 +981,16 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "diálogo de consentimento do login do Facebook (`/<versão>/dialog/oauth`), que concede as Páginas do Messenger (0984), e do login unificado do Instagram (`/dialog/oauth` com `config_id`, 0988). Contrato da Meta.",
   },
+  "connect.facebook.net": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "de onde se carrega o JS SDK da Meta (`FB.login`) do Cadastro Incorporado do WhatsApp (botão Conectar com a Meta, 1014), e por isso também no `script-src` da CSP (`lib/security/cabecalhos.ts`). Contrato da Meta.",
+  },
+  "web.facebook.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "origem alternativa da janela do Cadastro Incorporado do WhatsApp (1014), declarada no `frame-src` da CSP (`lib/security/cabecalhos.ts`) ao lado de `www.facebook.com`. Só aparece na política; o código não a chama.",
+  },
   "googleads.googleapis.com": {
     categoria: "FORNECEDOR",
     motivo:
