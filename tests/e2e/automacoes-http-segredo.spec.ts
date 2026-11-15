@@ -111,6 +111,28 @@ async function ligar(page: Page, origem: string, destino: string, ramo?: string)
   throw new Error(`a ligação ${origem}[${ramo ?? "única"}] -> ${destino} não foi criada`);
 }
 
+/**
+ * Afasta um nó para baixo, arrastando o card. A paleta põe cada nó novo 220
+ * unidades à direita do anterior, e o card mede quase isso: o Fim nasce colado
+ * à direita do bloco HTTP, com a bolinha de entrada dele na mesma altura do
+ * topo do bloco. Com um item a mais na paleta (o Sorteio, lote de 14/11) o
+ * painel do canvas cresceu, o encaixe da tela desceu os nós ~20 px, e o
+ * arraste "Deu certo" → Fim deixou de criar a ligação. Separar os dois tira a
+ * ligação da dependência de onde a paleta põe o nó.
+ */
+async function afastar(page: Page, id: string, dy: number): Promise<void> {
+  const caixa = await page.locator(`.react-flow__node[data-id="${id}"]`).boundingBox();
+  if (!caixa) throw new Error(`nó não encontrado: ${id}`);
+  const x = caixa.x + caixa.width / 2;
+  const y = caixa.y + 12;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + 10, { steps: 3 });
+  await page.mouse.move(x, y + dy, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+}
+
 async function adicionar(page: Page, tipo: string): Promise<string> {
   const antes = new Set(
     await page
@@ -203,6 +225,9 @@ test.describe("Automações — lote 4: Requisição HTTP com chave secreta", ()
     await page.getByTestId("delete-node").click();
     const bloco = await adicionar(page, "http_request");
     const fim = await adicionar(page, "end");
+    await page.locator(".react-flow__controls-fitview").click();
+    await page.waitForTimeout(400);
+    await afastar(page, fim, 220);
     await page.locator(".react-flow__controls-fitview").click();
     await page.waitForTimeout(400);
 
@@ -325,6 +350,9 @@ test.describe("Automações — lote 4: Requisição HTTP com chave secreta", ()
     await page.getByTestId("delete-node").click();
     const bloco = await adicionar(page, "http_request");
     const fim = await adicionar(page, "end");
+    await page.locator(".react-flow__controls-fitview").click();
+    await page.waitForTimeout(400);
+    await afastar(page, fim, 220);
     await page.locator(".react-flow__controls-fitview").click();
     await page.waitForTimeout(400);
 
