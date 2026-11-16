@@ -52,6 +52,8 @@ vi.mock("@/lib/channels/graph-parceiro/credentials", async (importOriginal) => {
 import * as pareamentoQr from "@/app/api/v1/channels/pareamento-qr/route";
 import * as pareamentoQrPorId from "@/app/api/v1/channels/pareamento-qr/[id]/route";
 import * as pareamentoQrVerificar from "@/app/api/v1/channels/pareamento-qr/[id]/verificar/route";
+import * as reconectar from "@/app/api/v1/channels/instancia/[id]/reconectar/route";
+import * as reconectarVerificar from "@/app/api/v1/channels/instancia/[id]/reconectar/verificar/route";
 import * as instancia from "@/app/api/v1/channels/instancia/route";
 import * as oficial from "@/app/api/v1/channels/official/route";
 import * as oficialNumero from "@/app/api/v1/channels/official/numero/route";
@@ -112,6 +114,8 @@ const ROTAS: Array<[string, Handler, string, Record<string, string>?]> = [
   ["GET instancia", h1(instancia.GET), "GET"],
   ["POST instancia", h1(instancia.POST), "POST"],
   ["DELETE instancia", h1(instancia.DELETE), "DELETE"],
+  ["POST instancia/[id]/reconectar", h1(reconectar.POST), "POST", { id: CANAL }],
+  ["POST instancia/[id]/reconectar/verificar", h1(reconectarVerificar.POST), "POST", { id: CANAL }],
   ["GET official", h1(oficial.GET), "GET"],
   ["POST official", h1(oficial.POST), "POST"],
   ["GET official/numero", h1(oficialNumero.GET), "GET"],

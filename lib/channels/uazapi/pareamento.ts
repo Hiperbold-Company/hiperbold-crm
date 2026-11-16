@@ -292,9 +292,10 @@ function normalizarCodigo(bruto: unknown): string | null {
   return texto && CODIGO_DE_PAREAMENTO.test(texto) ? texto : null;
 }
 
-type Conexao = { ok: true; qr: string | null; codigo: string | null } | { ok: false };
+export type Conexao = { ok: true; qr: string | null; codigo: string | null } | { ok: false };
 
-async function pedirConexao(
+/** Exportada para a reconexão (`./reconexao`), que pede o QR na MESMA instância. */
+export async function pedirConexao(
   baseUrl: string,
   token: string,
   telefone: string | null,
@@ -321,7 +322,7 @@ async function pedirConexao(
   }
 }
 
-interface InstanciaLida {
+export interface InstanciaLida {
   estado: string;
   qr: string | null;
   codigo: string | null;
@@ -331,7 +332,8 @@ interface InstanciaLida {
   perfil: string | null;
 }
 
-async function lerInstancia(baseUrl: string, token: string): Promise<InstanciaLida | null> {
+/** Exportada para a reconexão (`./reconexao`). */
+export async function lerInstancia(baseUrl: string, token: string): Promise<InstanciaLida | null> {
   try {
     const { res, json } = await chamarServidor(baseUrl, { token }, "GET", "/instance/status");
     if (!res.ok) return null;
