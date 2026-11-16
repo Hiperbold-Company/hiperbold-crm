@@ -1,4 +1,10 @@
 import { assertProspectingDelivery } from "@/lib/prospecting/guard";
+import {
+  CODIGO_CONEXAO_PROPRIA_OBRIGATORIA,
+  MENSAGEM_CONEXAO_PROPRIA_OBRIGATORIA,
+} from "@/lib/inbox/conexao-ao-abrir";
+import { envioRecusadoPelaConexao, modoDaOrganizacao } from "@/lib/inbox/opcoes-de-abertura";
+import type { ModoDeConexaoAoAbrir } from "@/lib/schemas/routing";
 import { assertAgentOperationSupabase, mesmaOperacao } from "@/lib/ai/agents/operation";
 import {
   assertApprovedReplySupabase,
@@ -640,7 +646,27 @@ export async function sendMessageHandler(
   // Só ator HUMANO: token de integração e IA não são "a pessoa do número" — o
   // defeito é de quem digita no Inbox, e restringir a regra a ele deixa os
   // caminhos automáticos exatamente como estavam.
+  //
+  // SÓ NO MODO "só a conexão própria" (decisão do dono do produto, 16/11/2026,
+  // caso CBEXS: "uma vai responder os leads da outra"). No modo "deixar
+  // escolher" (o padrão), quem tem número próprio responde a conversa no número
+  // da colega, e o aviso do Chat (`AvisoDeConexao`) mostra por qual conexão.
+  // Falha ao ler o modo fecha, como o resto desta guarda.
+  let modoDoEnvio: ModoDeConexaoAoAbrir = "choose";
   if (ctx.actor.type === "user") {
+    try {
+      modoDoEnvio = await modoDaOrganizacao(supabase, ctx.organization_id);
+    } catch {
+      throw new ApiError(
+        503,
+        "numero_do_atendente_indisponivel",
+        undefined,
+        ctx.requestId,
+        traduzir("Não foi possível conferir o número desta conversa. Nada foi enviado.", ctx.idioma ?? "pt-BR"),
+      );
+    }
+  }
+  if (ctx.actor.type === "user" && modoDoEnvio === "own_only") {
     const numero = await quadroDoNumero(supabase, {
       organizationId: ctx.organization_id,
       channelSessionId: c.channel_session_id ?? null,
@@ -700,6 +726,57 @@ export async function sendMessageHandler(
         },
         ctx.requestId,
         mensagem,
+      );
+    }
+  }
+
+  // ─── "Só a conexão própria" (Configurações › Atendimento, 16/11/2026) ────────
+  //
+  // Decisão do dono do produto: no modo `own_only`, o atendente (abaixo de
+  // gerente) só envia pela conexão dele, pelo número geral (sem responsável) ou
+  // numa conversa ABERTA atribuída a ele (a transferência). Só ator humano:
+  // token e automações não passam por aqui. A regra pura é
+  // `envioPermitidoPelaConexao`; a leitura, `envioRecusadoPelaConexao`. Falha
+  // de leitura fecha, como a guarda do número logo acima.
+  //
+  // As duas guardas, no mesmo modo, sem recusa dupla: a do número (#3642, 409)
+  // roda antes e cuida de quem TEM número próprio conectado — com a resposta
+  // que aponta a conversa que continua no número dele (#3732). Esta cuida de
+  // quem NÃO tem (403 `conexao_propria_obrigatoria`). Para quem tem número, a
+  // de cima já decidiu; aqui ele só chega pela conexão dele ou por um número
+  // sem dono, e esta não recusa nenhum dos dois.
+  if (ctx.actor.type === "user" && modoDoEnvio === "own_only") {
+    let recusado: boolean;
+    try {
+      // O cliente do próprio handler, como a guarda do número logo acima: a
+      // pessoa enxerga a própria conversa, as policies e os settings da org.
+      recusado = await envioRecusadoPelaConexao(
+        supabase,
+        {
+          modoJaLido: modoDoEnvio,
+          organizationId: ctx.organization_id,
+          userId: ctx.actor.id,
+          role: ctx.actor.role,
+          conversationId: input.conversation_id,
+          channelSessionId: c.channel_session_id ?? null,
+        },
+      );
+    } catch {
+      throw new ApiError(
+        503,
+        "numero_do_atendente_indisponivel",
+        undefined,
+        ctx.requestId,
+        traduzir("Não foi possível conferir o número desta conversa. Nada foi enviado.", ctx.idioma ?? "pt-BR"),
+      );
+    }
+    if (recusado) {
+      throw new ApiError(
+        403,
+        CODIGO_CONEXAO_PROPRIA_OBRIGATORIA,
+        undefined,
+        ctx.requestId,
+        traduzir(MENSAGEM_CONEXAO_PROPRIA_OBRIGATORIA, ctx.idioma ?? "pt-BR"),
       );
     }
   }

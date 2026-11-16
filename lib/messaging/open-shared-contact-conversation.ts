@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ensureConversation, sessaoProntaParaEnvio } from "@/lib/automation/start-conversation";
 import { encontrarContatoPorTelefone } from "@/lib/channels/contato-por-telefone";
 import { phoneLookupVariants, canonicalPhoneBR } from "@/lib/channels/phone-variants";
+import { transportaMensagem } from "@/lib/channels/capabilities";
 import { parseDialablePhone } from "@/lib/messaging/contact-card";
 
 type Admin = SupabaseClient;
@@ -87,12 +88,17 @@ export async function openSharedContactConversation(
   if (!sessionId) throw new Error("session_not_found");
   const { data: session, error: sessErr } = await admin
     .from("channel_sessions")
-    .select("id")
+    .select("id, provider")
     .eq("organization_id", organizationId)
     .eq("id", sessionId)
     .maybeSingle();
   if (sessErr) throw new Error(sessErr.message);
-  if (!session) throw new Error("session_not_found");
+  // Sessão de outra organização não aparece (filtro acima), e sessão que não é
+  // de mensagem (linha de voz) não abre conversa: as duas respondem igual, para
+  // quem chama não sondar o que existe fora da própria organização.
+  if (!session || !transportaMensagem((session as { provider?: string | null }).provider)) {
+    throw new Error("session_not_found");
+  }
 
   const contactId = await resolveContactId(admin, organizationId, input);
   // Abrir conversa com pessoal é escrita para fora da operação (spec 21, etapa

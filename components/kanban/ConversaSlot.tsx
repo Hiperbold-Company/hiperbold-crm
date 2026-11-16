@@ -7,6 +7,8 @@ import { ChatCircle } from "@/lib/ui/icons";
 import type { Lead } from "@/lib/types/leads";
 import { cn } from "@/lib/utils";
 import { AbrirConversaDoLead, temAlvoParaAbrir } from "./AbrirConversaDoLead";
+import { useAbrirPelaConexao } from "./AbrirPelaConexao";
+import { ehCanalSocial } from "@/lib/channels/capabilities";
 
 /**
  * A última mensagem do negócio, com atalho para o inbox.
@@ -37,26 +39,80 @@ import { AbrirConversaDoLead, temAlvoParaAbrir } from "./AbrirConversaDoLead";
  * linha não some: vira o botão "Abrir conversa", que usa a rota já existente e
  * leva para a Inbox. `conversa === undefined` continua mudo — é "ainda não
  * carregou", e prometer ação sobre um dado que pode existir seria mentir.
+ *
+ * ─── Com conversa: pela conexão de quem clica (16/11/2026) ──────────────────
+ *
+ * A conversa da prévia pode estar na conexão de OUTRA atendente. O clique não
+ * vai mais direto a ela: passa por `useAbrirPelaConexao`, que abre a da minha
+ * conexão, pergunta numa janela ou recusa, conforme o modo da organização. O
+ * `href` continua no elo (leitor de tela, copiar link), mas o clique comum é
+ * interceptado. Sem contato, o elo segue como antes.
  */
 export function ConversaSlot({
   conversa,
   contactId,
   phone,
+  leadId,
 }: {
   conversa: Lead["conversa"];
   contactId?: string | null;
   phone?: string | null;
+  leadId?: string | null;
 }) {
-  const t = useT();
   if (conversa === undefined) return null;
   if (conversa === null) {
     // A guarda de alvo fica AQUI, antes de montar: montar o botão sem contato
     // nem telefone desenharia (e custaria router + query client) uma linha que
     // não tem o que dizer.
     return temAlvoParaAbrir(contactId, phone) ? (
-      <AbrirConversaDoLead contactId={contactId} phone={phone} />
+      <AbrirConversaDoLead contactId={contactId} phone={phone} leadId={leadId} />
     ) : null;
   }
+  // Sem contato não há conexão a decidir, e conversa de rede social (Instagram,
+  // Messenger) não vira WhatsApp: o elo direto de sempre, sem montar router nem
+  // query client e sem perguntar nada ao servidor.
+  if (!contactId || ehCanalSocial(conversa.provider)) return <EloDaConversa conversa={conversa} />;
+  return <EloPelaConexao conversa={conversa} contactId={contactId} phone={phone} leadId={leadId} />;
+}
+
+function EloPelaConexao({
+  conversa,
+  contactId,
+  phone,
+  leadId,
+}: {
+  conversa: NonNullable<Lead["conversa"]>;
+  contactId: string;
+  phone?: string | null;
+  leadId?: string | null;
+}) {
+  const { abrir, abrindo, janela } = useAbrirPelaConexao({
+    contactId,
+    phone,
+    leadId,
+    conversaId: conversa.id,
+  });
+  return (
+    <>
+      <span onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+        {janela}
+      </span>
+      <EloDaConversa conversa={conversa} abrindo={abrindo} onAbrir={() => void abrir(true)} />
+    </>
+  );
+}
+
+function EloDaConversa({
+  conversa,
+  abrindo = false,
+  onAbrir,
+}: {
+  conversa: NonNullable<Lead["conversa"]>;
+  abrindo?: boolean;
+  /** Presente = o clique comum passa pela escolha de conexão. */
+  onAbrir?: () => void;
+}) {
+  const t = useT();
 
   const preview = conversa.preview?.trim();
   const temNaoLidas = conversa.unread > 0;
@@ -70,7 +126,24 @@ export function ConversaSlot({
       // O card inteiro é arrastável e clicável (abre o dossiê). Sem parar a
       // propagação, o clique no atalho também abriria o dossiê por baixo — dois
       // destinos para um gesto.
-      onClick={(e: MouseEvent) => e.stopPropagation()}
+      onClick={(e: MouseEvent) => {
+        e.stopPropagation();
+        if (!onAbrir) return;
+        // Ctrl/Cmd/Shift-clique também: o atalho já abre em nova aba, e deixar o
+        // navegador abrir o `href` pularia a escolha da conexão.
+        e.preventDefault();
+        onAbrir();
+      }}
+      // Clique do meio (botão 1): o mesmo fluxo, em nova aba. O menu de
+      // contexto ("abrir em nova aba") não dá para interceptar — quem segura é
+      // o servidor, no envio.
+      onAuxClick={(e: MouseEvent) => {
+        e.stopPropagation();
+        if (!onAbrir || e.button !== 1) return;
+        e.preventDefault();
+        onAbrir();
+      }}
+      aria-busy={abrindo}
       onPointerDown={(e: MouseEvent) => e.stopPropagation()}
       className={cn(
         "group/conversa mt-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px]",

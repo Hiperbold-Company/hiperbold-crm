@@ -23,6 +23,23 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
  * lista, então acrescentar um modo aqui os atualiza sem tocar em mais nada.
  */
 export const ROUTING_MODES = ["manual", "round_robin", "load"] as const;
+
+/**
+ * Por qual conexão o atendente abre a conversa no funil (card, ficha do negócio)
+ * — decisão do dono do produto, 16/11/2026 (casos CBEXS e Edegar):
+ *
+ * - `choose` (padrão, para não mudar quem já usa): sai pela conexão de quem
+ *   clica; se o contato só tem conversa em outra conexão, uma janela deixa
+ *   escolher entre iniciar pela própria e continuar na existente.
+ * - `own_only`: o atendente (papel `agent`) só inicia pela conexão vinculada a
+ *   ele e não abre conversa de contato que está na conexão de outro atendente,
+ *   salvo quando a conversa ou o negócio foi transferido para ele. Gerente e
+ *   administrador seguem como em `choose`.
+ *
+ * A regra pura vive em `lib/inbox/conexao-ao-abrir.ts`.
+ */
+export const MODOS_DE_CONEXAO_AO_ABRIR = ["choose", "own_only"] as const;
+export type ModoDeConexaoAoAbrir = (typeof MODOS_DE_CONEXAO_AO_ABRIR)[number];
 export type RoutingMode = (typeof ROUTING_MODES)[number];
 
 /**
@@ -113,6 +130,8 @@ export const routingConfigSchema = z.object({
    * pura e vive em `lib/leads/assumir-ao-mover.ts`; este é só o interruptor.
    */
   assign_owner_on_move: z.boolean().default(false),
+  /** Ver `MODOS_DE_CONEXAO_AO_ABRIR`. */
+  conversation_connection_mode: z.enum(MODOS_DE_CONEXAO_AO_ABRIR).default("choose"),
 });
 export type RoutingConfig = z.infer<typeof routingConfigSchema>;
 
@@ -151,6 +170,16 @@ export function donoAoMoverLigado(settings: unknown): boolean {
  * lista literal morava nos dois arquivos e um teste comparava array com array
  * para impedir que divergissem. Agora não há o que divergir.
  */
+/** O modo lido de `organizations.settings`; valor ausente ou estranho = `choose`. */
+export function modoDeConexaoAoAbrir(settings: unknown): ModoDeConexaoAoAbrir {
+  if (!settings || typeof settings !== "object") return "choose";
+  const routing = (settings as Record<string, unknown>).routing;
+  if (!routing || typeof routing !== "object") return "choose";
+  return (routing as Record<string, unknown>).conversation_connection_mode === "own_only"
+    ? "own_only"
+    : "choose";
+}
+
 export const VISIBILITY_MODES = MODOS_DE_VISIBILIDADE;
 export type VisibilityModeInput = (typeof VISIBILITY_MODES)[number];
 
@@ -203,6 +232,7 @@ export const atendimentoConfigPatchSchema = routingConfigSchema.extend({
     .optional(),
   /** Opcional pela mesma razão: cliente antigo não desliga o ajuste por omissão. */
   assign_owner_on_move: z.boolean().optional(),
+  conversation_connection_mode: z.enum(MODOS_DE_CONEXAO_AO_ABRIR).optional(),
 });
 export type AtendimentoConfigPatch = z.infer<typeof atendimentoConfigPatchSchema>;
 
@@ -229,6 +259,7 @@ export function mesclarSettingsDeAtendimento(
     assign_owner_on_move,
     manual_reply_silence_minutes,
     unanswered_return_minutes,
+    conversation_connection_mode,
     ...routingInput
   } = input;
   const routingAtual = routingConfigSchema
@@ -243,6 +274,8 @@ export function mesclarSettingsDeAtendimento(
     conversation_stays_with_attendant:
       conversation_stays_with_attendant ?? routingAtual.conversation_stays_with_attendant,
     assign_owner_on_move: assign_owner_on_move ?? routingAtual.assign_owner_on_move,
+    conversation_connection_mode:
+      conversation_connection_mode ?? routingAtual.conversation_connection_mode,
     manual_reply_silence_minutes:
       manual_reply_silence_minutes !== undefined
         ? manual_reply_silence_minutes

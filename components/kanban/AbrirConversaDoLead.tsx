@@ -1,13 +1,9 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-
 import { useT } from "@/hooks/i18n/useT";
 import { ArrowRight, ChatCircle } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { BotaoNovaAba } from "./BotaoNovaAba";
+import { useAbrirPelaConexao } from "./AbrirPelaConexao";
 
 /**
  * A ação "Abrir conversa" — a porta que faltava para o lead sem conversa
@@ -48,6 +44,8 @@ import { BotaoNovaAba } from "./BotaoNovaAba";
 interface Props {
   contactId?: string | null;
   phone?: string | null;
+  /** O negócio de onde se abre — conta para a regra "só a conexão própria". */
+  leadId?: string | null;
   /** `card` = linha compacta do funil; `dossie` = bloco do painel do lead. */
   variante?: "card" | "dossie";
 }
@@ -61,11 +59,17 @@ export function temAlvoParaAbrir(contactId?: string | null, phone?: string | nul
   return Boolean(contactId) || Boolean(phone?.trim());
 }
 
-export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Props) {
+export function AbrirConversaDoLead({ contactId, phone, leadId, variante = "card" }: Props) {
   const t = useT();
-  const router = useRouter();
-  const qc = useQueryClient();
-  const [abrindo, setAbrindo] = useState(false);
+  // A abertura passa pela conexão de quem clica (`AbrirPelaConexao.tsx`): sem
+  // conversa ainda, ela nasce na conexão vinculada a ele; sem conexão
+  // vinculada, como sempre.
+  const { abrir: abrirPelaConexao, abrindo, janela } = useAbrirPelaConexao({
+    contactId,
+    phone,
+    leadId,
+    conversaId: null,
+  });
 
   const telefone = phone?.trim() ?? "";
   // Rede de segurança: quem monta (ConversaSlot, ConversaNoDossie) já checou
@@ -79,48 +83,9 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
 
   if (!temAlvo) return null;
 
-  async function abrir(novaAba: boolean) {
+  function abrir(novaAba: boolean) {
     if (!podeAbrir || abrindo) return;
-    // Em nova aba o funil fica onde estava. A aba nasce AGORA, dentro do
-    // clique — aberta depois do `await` o navegador a trataria como pop-up e
-    // bloquearia.
-    const aba = novaAba ? window.open("", "_blank") : null;
-    setAbrindo(true);
-    try {
-      const res = await fetch("/api/v1/conversations/open-with-contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contact_id: contactId || undefined,
-          phone_number: telefone,
-        }),
-      });
-      const json = (await res.json()) as {
-        data?: { conversation_id: string };
-        error?: { message?: string };
-      };
-      if (!res.ok || !json.data?.conversation_id) {
-        throw new Error(json.error?.message ?? t("Não foi possível abrir a conversa."));
-      }
-      // O quadro é a fonte do card E do dossiê: sem invalidar, a linha continuaria
-      // oferecendo "Abrir conversa" sobre uma conversa que acabou de nascer.
-      await qc.invalidateQueries({ queryKey: ["board"] });
-      const destino = `/app/inbox?id=${json.data.conversation_id}`;
-      if (aba) {
-        aba.opener = null;
-        aba.location.href = destino;
-      } else if (novaAba) {
-        // Pop-up bloqueado mesmo assim: abre aqui, para o clique não ficar mudo.
-        window.location.assign(destino);
-      } else {
-        router.push(destino);
-      }
-    } catch (err) {
-      aba?.close();
-      toast.error(err instanceof Error ? t(err.message) : t("Não foi possível abrir a conversa."));
-    } finally {
-      setAbrindo(false);
-    }
+    void abrirPelaConexao(novaAba);
   }
 
   if (variante === "dossie") {
@@ -128,9 +93,10 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
       // Dois botões lado a lado, como no dossiê com conversa: o largo abre aqui,
       // o quadrado abre numa nova aba.
       <div className="mt-3 flex items-stretch gap-2">
+        {janela}
         <button
           type="button"
-          onClick={() => void abrir(false)}
+          onClick={() => abrir(false)}
           disabled={!podeAbrir || abrindo}
           aria-busy={abrindo}
           title={podeAbrir ? t("Abrir conversa no Chat do CRM") : semTelefone}
@@ -156,19 +122,23 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
             />
           )}
         </button>
-        {podeAbrir && <BotaoNovaAba onClick={() => void abrir(true)} disabled={abrindo} />}
+        {podeAbrir && <BotaoNovaAba onClick={() => abrir(true)} disabled={abrindo} />}
       </div>
     );
   }
 
   return (
+    <>
+    <span onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+      {janela}
+    </span>
     <button
       type="button"
       // O card inteiro é arrastável e clicável (abre o dossiê): sem parar a
       // propagação, abrir a conversa também abriria o dossiê por baixo.
       onClick={(e) => {
         e.stopPropagation();
-        void abrir(true);
+        abrir(true);
       }}
       onPointerDown={(e) => e.stopPropagation()}
       disabled={!podeAbrir || abrindo}
@@ -191,5 +161,6 @@ export function AbrirConversaDoLead({ contactId, phone, variante = "card" }: Pro
         <span className="ml-auto shrink-0 text-text-muted">{t("sem telefone")}</span>
       )}
     </button>
+    </>
   );
 }

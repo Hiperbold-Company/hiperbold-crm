@@ -97,6 +97,12 @@ export interface Lead {
     preview: string | null;
     last_message_at: string | null;
     unread: number;
+    /**
+     * `channel_sessions.provider` da conversa. Rede social (Instagram,
+     * Messenger) abre direto, sem a escolha de conexão — que é de telefone.
+     * Opcional: resposta antiga do quadro não traz.
+     */
+    provider?: string | null;
   } | null;
   score?: {
     probability: number;

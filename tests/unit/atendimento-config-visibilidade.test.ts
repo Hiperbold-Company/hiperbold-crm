@@ -102,9 +102,31 @@ describe("config de atendimento — routing + visibilidade na mesma porta", () =
       assign_owner_on_move: _donoAoMover,
       manual_reply_silence_minutes: _silencio,
       unanswered_return_minutes: _devolveAoRodizio,
+      conversation_connection_mode: _conexaoAoAbrir,
       ...semPrazo
     } = routingConfigSchema.parse(antigo);
     expect(atendimentoConfigPatchSchema.parse(antigo)).toEqual(semPrazo);
+  });
+
+  it("corpo SEM conversation_connection_mode preserva 'só a conexão própria' que já valia", () => {
+    // Outra tela que salva o atendimento (ou cliente antigo da API) não pode
+    // devolver a organização ao padrão "deixar escolher" por omissão.
+    const atual = { routing: { mode: "manual", conversation_connection_mode: "own_only" } };
+    const proximo = proximoSettings(atual, { mode: "round_robin", max_retries: 5, backoff_seconds: 60 });
+    expect(
+      (proximo.routing as { conversation_connection_mode: string }).conversation_connection_mode,
+    ).toBe("own_only");
+    const nunca = proximoSettings({}, { mode: "manual", max_retries: 5, backoff_seconds: 60 });
+    expect((nunca.routing as { conversation_connection_mode: string }).conversation_connection_mode).toBe("choose");
+    const trocou = proximoSettings(atual, {
+      mode: "manual",
+      max_retries: 5,
+      backoff_seconds: 60,
+      conversation_connection_mode: "choose",
+    });
+    expect((trocou.routing as { conversation_connection_mode: string }).conversation_connection_mode).toBe("choose");
+    // E os vizinhos do jsonb não somem.
+    expect(proximoSettings({ visibility_mode: "own", crm: { x: 1 } }, { mode: "manual", max_retries: 5, backoff_seconds: 60, conversation_connection_mode: "own_only" })).toMatchObject({ visibility_mode: "own", crm: { x: 1 } });
   });
 
   it("corpo SEM unanswered_return_minutes preserva a devolução ao rodízio que já valia", () => {

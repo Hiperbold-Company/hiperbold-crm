@@ -1,4 +1,5 @@
 "use client";
+import type { ReactNode } from "react";
 import Link from "next/link";
 
 import { useT } from "@/hooks/i18n/useT";
@@ -6,6 +7,8 @@ import { ArrowRight, ChatCircle } from "@/lib/ui/icons";
 import type { Contact } from "@/lib/types/contacts";
 import { AbrirConversaDoLead, temAlvoParaAbrir } from "./AbrirConversaDoLead";
 import { BotaoNovaAba } from "./BotaoNovaAba";
+import { useAbrirPelaConexao } from "./AbrirPelaConexao";
+import { ehCanalSocial } from "@/lib/channels/capabilities";
 
 /**
  * A porta para a conversa, dentro do dossiê.
@@ -39,25 +42,73 @@ import { BotaoNovaAba } from "./BotaoNovaAba";
  * reabre) a conversa do contato e leva para a Inbox. `contactId`/`phone` são
  * opcionais porque a tela de CONTATO ainda não os passa — sem eles o bloco
  * continua sumindo, como antes.
+ *
+ * ─── Com conversa: pela conexão de quem clica (16/11/2026) ──────────────────
+ *
+ * Com `contactId` (a ficha do negócio), os dois botões passam por
+ * `useAbrirPelaConexao` — a mesma regra do card. Sem ele (a tela de contato),
+ * seguem como elos diretos, como antes.
  */
 export function ConversaNoDossie({
   conversa,
   contactId,
   phone,
+  leadId,
 }: {
   conversa: Contact["conversa"] | null | undefined;
   contactId?: string | null;
   phone?: string | null;
+  leadId?: string | null;
 }) {
-  const t = useT();
   if (conversa === undefined) return null;
   if (conversa === null) {
     // Mesma guarda do card, antes de montar: sem contato e sem telefone o bloco
     // continua sumindo (regra de sempre), em vez de desenhar um botão mudo.
     return temAlvoParaAbrir(contactId, phone) ? (
-      <AbrirConversaDoLead contactId={contactId} phone={phone} variante="dossie" />
+      <AbrirConversaDoLead contactId={contactId} phone={phone} leadId={leadId} variante="dossie" />
     ) : null;
   }
+  // Sem contato (a tela de contato): os elos diretos de sempre, sem montar
+  // router nem query client.
+  if (!contactId || ehCanalSocial((conversa as { provider?: string | null }).provider)) {
+    return <BlocoDaConversa conversa={conversa} />;
+  }
+  return <BlocoPelaConexao conversa={conversa} contactId={contactId} phone={phone} leadId={leadId} />;
+}
+
+function BlocoPelaConexao({
+  conversa,
+  contactId,
+  phone,
+  leadId,
+}: {
+  conversa: NonNullable<Contact["conversa"]>;
+  contactId: string;
+  phone?: string | null;
+  leadId?: string | null;
+}) {
+  const { abrir, abrindo, janela } = useAbrirPelaConexao({
+    contactId,
+    phone,
+    leadId,
+    conversaId: conversa.id,
+  });
+  return <BlocoDaConversa conversa={conversa} janela={janela} abrindo={abrindo} onAbrir={(n) => void abrir(n)} />;
+}
+
+function BlocoDaConversa({
+  conversa,
+  janela,
+  abrindo = false,
+  onAbrir,
+}: {
+  conversa: NonNullable<Contact["conversa"]>;
+  janela?: ReactNode;
+  abrindo?: boolean;
+  /** Presente = os dois botões passam pela escolha de conexão. */
+  onAbrir?: (novaAba: boolean) => void;
+}) {
+  const t = useT();
 
   const preview = conversa.preview?.trim();
 
@@ -68,8 +119,21 @@ export function ConversaNoDossie({
   // conversa numa nova aba e deixa o funil onde estava.
   return (
     <div className="mt-3 flex items-stretch gap-2">
+      {janela}
       <Link
         href={destino}
+        onClick={(e) => {
+          if (!onAbrir) return;
+          e.preventDefault();
+          // Ctrl/Cmd/Shift-clique pede nova aba: o mesmo fluxo, em nova aba.
+          onAbrir(e.metaKey || e.ctrlKey || e.shiftKey);
+        }}
+        onAuxClick={(e) => {
+          if (!onAbrir || e.button !== 1) return;
+          e.preventDefault();
+          onAbrir(true);
+        }}
+        aria-busy={abrindo}
         className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-muted"
       >
         <ChatCircle size={16} weight="regular" className="shrink-0 text-text-muted" aria-hidden />
@@ -101,7 +165,11 @@ export function ConversaNoDossie({
           aria-hidden
         />
       </Link>
-      <BotaoNovaAba href={destino} />
+      {onAbrir ? (
+        <BotaoNovaAba onClick={() => onAbrir(true)} disabled={abrindo} />
+      ) : (
+        <BotaoNovaAba href={destino} />
+      )}
     </div>
   );
 }

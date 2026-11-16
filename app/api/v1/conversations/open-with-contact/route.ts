@@ -18,6 +18,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { IDIOMA_PADRAO } from "@/lib/i18n/idiomas";
 import { assumirConversaComEfeitos } from "@/lib/inbox/assumir-conversa";
+import { guardarConexaoAoAbrir } from "@/lib/inbox/guarda-da-conexao-ao-abrir";
+import type { MotivoDaRecusa } from "@/lib/inbox/conexao-ao-abrir";
+import { audit } from "@/lib/audit";
+
+const MENSAGEM_DA_RECUSA: Record<MotivoDaRecusa, string> = {
+  conexao_alheia: "Nesta empresa, você só inicia conversa pela sua conexão.",
+  contato_de_outro: "Este contato é atendido pela conexão de outro atendente.",
+  sem_conexao: "Você não tem conexão própria e não há número geral para iniciar esta conversa.",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -126,11 +135,53 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   try {
     const admin = createAdminClient();
-    const result = await openSharedContactConversation(admin, authz.organizationId, input);
+    // "Só a conexão própria" (Configurações › Atendimento): vale para quem
+    // clica na tela. O token de servidor segue como antes — ele não é um
+    // atendente com número. Ver `lib/inbox/guarda-da-conexao-ao-abrir.ts`.
+    let entrada = input;
+    if (authz.via === "session" && authz.actor.type === "user") {
+      const guarda = await guardarConexaoAoAbrir(admin, {
+        organizationId: authz.organizationId,
+        userId: authz.actor.id,
+        role: authz.actor.role,
+        input,
+      });
+      if (!guarda.ok) {
+        // Fire-and-forget como o resto do audit: a recusa não espera o registro.
+        void audit({
+          action: "conversation.open_refused",
+          actorUserId: authz.actor.id,
+          organizationId: authz.organizationId,
+          resourceType: "contact",
+          resourceId: input.contact_id ?? null,
+          requestId,
+          metadata: { actor_type: "user", motivo: guarda.motivo },
+        });
+        return fail("forbidden", t(MENSAGEM_DA_RECUSA[guarda.motivo]), 403, {
+          requestId,
+          details: { motivo: guarda.motivo },
+        });
+      }
+      entrada = { ...input, channel_session_id: guarda.channelSessionId };
+    }
+    const result = await openSharedContactConversation(admin, authz.organizationId, entrada);
     // #3479: a conversa que o clique abriu nasce de quem clicou. Sem isto, em
     // "Só os seus" o Atendente abre uma conversa que ele não enxerga (dona:
     // ninguém) — ver o bloco de `assumirConversaSeLivre`.
     if (authz.via === "session" && authz.actor.type === "user") {
+      void audit({
+        action: "conversation.opened_with_contact",
+        actorUserId: authz.actor.id,
+        organizationId: authz.organizationId,
+        resourceType: "conversation",
+        resourceId: result.conversation_id,
+        requestId,
+        metadata: {
+          actor_type: "user",
+          contact_id: result.contact_id,
+          channel_session_id: entrada.channel_session_id ?? null,
+        },
+      });
       await assumirConversaSeLivre({
         supabase: authz.supabase,
         organizationId: authz.organizationId,

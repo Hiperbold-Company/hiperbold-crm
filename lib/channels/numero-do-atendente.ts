@@ -16,6 +16,15 @@
  * resto: quem TEM número próprio conectado não responde pelo número de outra
  * pessoa — a conversa precisa estar no número dele.
  *
+ * ─── Só no modo "só a conexão própria" (16/11/2026) ─────────────────────────
+ *
+ * Decisão do dono do produto (caso CBEXS, "uma vai responder os leads da
+ * outra"): o envio só aplica esta guarda quando a organização está em
+ * `routing.conversation_connection_mode = 'own_only'` (Configurações ›
+ * Atendimento). No modo "deixar escolher", o padrão, quem tem número próprio
+ * responde pelo número da colega e o Chat avisa por qual conexão. O gate mora
+ * em `app/api/v1/messages/_handler.ts`; esta peça segue sem saber do modo.
+ *
  * ─── Quem não tem número segue respondendo como hoje (doc 237, escolha 1-B) ─
  *
  * A lista "Quem atende cada número" diz quem RECEBE as conversas de um número,
