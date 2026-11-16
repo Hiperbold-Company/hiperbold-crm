@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -20,6 +20,7 @@ import { EtiquetaDaConexao } from "./EtiquetaDaConexao";
 import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
 import { RenomearConexao } from "./RenomearConexao";
 import { PareamentoQrClient } from "./PareamentoQrClient";
+import { ReconectarConexao } from "./ReconectarConexao";
 
 /**
  * Conectar números por INSTÂNCIA de uma API não oficial.
@@ -97,6 +98,9 @@ export function CanalInstanciaClient({
   bloqueio,
   podeEditarProtecao,
   pareamentoQr = false,
+  reconectarId = null,
+  aoReconectar,
+  aoConsumirReconectar,
 }: {
   /**
    * Fase F3, tarefa 9: quando o bloqueio do plano vale e "conexões" está no
@@ -121,9 +125,22 @@ export function CanalInstanciaClient({
    * `false`/ausente mantém a tela como sempre foi.
    */
   pareamentoQr?: boolean;
+  /**
+   * A conexão que a faixa de "desconectado" mandou reconectar (`?reconectar=<id>`): o cartão dela
+   * rola à vista e já abre o QR. Id que não está na lista é ignorado.
+   */
+  reconectarId?: string | null;
+  /**
+   * Depois de uma reconexão: a faixa vermelha do topo vem do layout de /app, que é servidor, e só um
+   * `router.refresh()` a recalcula. Quem monta a tela dentro do roteador passa isto.
+   */
+  aoReconectar?: () => void;
+  /** O cartão de `reconectarId` já abriu o QR sozinho: quem monta tira o parâmetro da URL. */
+  aoConsumirReconectar?: () => void;
 } = {}) {
   const t = useT();
   const qc = useQueryClient();
+  const cartaoAlvo = useRef<HTMLDivElement | null>(null);
   const [estado, setEstado] = useState<Estado | null>(null);
   const [servidor, setServidor] = useState("");
   const [token, setToken] = useState("");
@@ -147,6 +164,18 @@ export function CanalInstanciaClient({
   useEffect(() => {
     void carregar();
   }, []);
+
+  // Veio da faixa do topo: rola até o cartão da conexão caída assim que a lista chega.
+  const alvoNaLista = !!reconectarId && !!estado?.conexoes.some((c) => c.id === reconectarId);
+  useEffect(() => {
+    if (alvoNaLista) cartaoAlvo.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [alvoNaLista]);
+
+  const reconectou = async () => {
+    await carregar();
+    void qc.invalidateQueries({ queryKey: ["pacing-knobs"] });
+    aoReconectar?.();
+  };
 
   const conectar = async () => {
     setSalvando(true);
@@ -288,7 +317,12 @@ export function CanalInstanciaClient({
       )}
 
       {conexoes.map((c) => (
-        <Card key={c.id} className="flex flex-col gap-3 p-4">
+        <Card
+          key={c.id}
+          ref={c.id === reconectarId ? cartaoAlvo : undefined}
+          className="flex flex-col gap-3 p-4"
+          data-testid={`canal-instancia-cartao-${c.id}`}
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium">{c.display_name ?? t("Número conectado")}</p>
@@ -310,6 +344,15 @@ export function CanalInstanciaClient({
             <p className="text-xs text-warning-fg">
               {t("A entrada de mensagens não está ligada. Reconecte com o mesmo token depois de configurar o endereço público do CRM.")}
             </p>
+          )}
+
+          {c.status !== "WORKING" && (
+            <ReconectarConexao
+              conexaoId={c.id}
+              abrirAoMontar={c.id === reconectarId}
+              aoConectar={() => void reconectou()}
+              aoAbrirSozinho={c.id === reconectarId ? aoConsumirReconectar : undefined}
+            />
           )}
 
           <ChannelAiAccess channelId={c.id} />

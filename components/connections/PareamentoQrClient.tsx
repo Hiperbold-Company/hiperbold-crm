@@ -328,7 +328,8 @@ export function PareamentoQrClient({
   );
 }
 
-function CodigoNoCelular({
+/** Exportado para a reconexão (`./ReconectarConexao`), que oferece o mesmo caminho. */
+export function CodigoNoCelular({
   aberto,
   alternar,
   telefone,

@@ -22,6 +22,15 @@ export const LIMITES_DO_PAREAMENTO_QR = {
    * concluir ou desfazer o pareamento; a tela consulta a cada 3 s, então 1/s não recusa o uso normal.
    */
   verificar: { max: 1, janelaSeg: 1 },
+  /**
+   * Reconectar uma conexão que JÁ EXISTE (QR novo na mesma instância, sem criar nada): 30 por hora,
+   * o mesmo teto de "outro QR" do pareamento.
+   */
+  reconectar: { max: 30, janelaSeg: 3600 },
+  /** Código por telefone na reconexão: 5 por hora. Pedir código demais ao WhatsApp é o que trava o número. */
+  reconectar_codigo: { max: 5, janelaSeg: 3600 },
+  /** Consultas do estado da reconexão: 1 por segundo, como as do pareamento (a tela consulta a cada 3 s). */
+  reconectar_verificar: { max: 1, janelaSeg: 1 },
 } as const;
 
 export type AcaoDoPareamentoQr = keyof typeof LIMITES_DO_PAREAMENTO_QR;

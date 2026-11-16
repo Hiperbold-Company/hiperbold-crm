@@ -323,6 +323,9 @@ export const AUDIT_ACTIONS = [
   // criou a instância no servidor. O desfecho vem em `channel.connected` (leu) ou
   // `channel.archived` (cancelou ou expirou), sempre com `via: "qr"`.
   "channel.qr_pairing_started",
+  // O cliente pediu um QR novo para RECONECTAR uma conexão que já existe (o aparelho saiu).
+  // Nada é criado nem apagado; o desfecho vem em `channel.connected` com `via: "reconexao"`.
+  "channel.reconnect_started",
   "channel.social_configured",
   "channel.social_disconnected",
   "channel.social_desvinculado",

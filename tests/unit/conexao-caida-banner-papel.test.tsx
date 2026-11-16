@@ -42,7 +42,8 @@ describe.each(["pt-BR", "es"] as const)("alerta de conexão em %s", locale => {
     const mounted = render(view(role, locale, who));
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("Vendas");
-    expect(within(alert).getByRole("link", { name: copy[locale].qr })).toHaveAttribute("href", "/app/connections");
+    // Uma conexão só que precisa de QR: o link leva ao cartão dela, que já abre o QR.
+    expect(within(alert).getByRole("link", { name: copy[locale].qr })).toHaveAttribute("href", "/app/connections?reconectar=channel");
     expect(within(alert).queryByText(copy[locale].help)).toBeNull();
     mounted.rerender(view(role, locale, who, [{ id: "channel", apelido: "Vendas", status: "FAILED" }]));
     expect(within(screen.getByRole("alert")).getByRole("link", { name: copy[locale].connections })).toHaveAttribute("href", "/app/connections");

@@ -28734,6 +28734,15 @@ export const DICIONARIO: Traducoes = {
   "A Meta não deu permissão para gerenciar esta conta do WhatsApp. Conecte de novo e aceite todas as permissões.": { es: "Meta no dio permiso para administrar esta cuenta de WhatsApp. Conéctese de nuevo y acepte todos los permisos." },
   "A Meta recusou o acesso concedido. Clique em Conectar de novo.": { es: "Meta rechazó el acceso concedido. Haga clic en Conectar de nuevo." },
   "A Meta recusou a conexão. Clique em Conectar de novo.": { es: "Meta rechazó la conexión. Haga clic en Conectar de nuevo." },
+  "WhatsApp reconectado. As mensagens voltaram a entrar no CRM.": { es: "WhatsApp reconectado. Los mensajes volvieron a entrar en el CRM." },
+  "Conectou um número diferente do anterior. Confira se é o aparelho certo.": { es: "Se conectó un número distinto del anterior. Verifique si es el aparato correcto." },
+  "Não foi possível gerar o QR Code.": { es: "No fue posible generar el código QR." },
+  "O QR Code vale por pouco tempo. Se expirar, gere outro: a conexão e as conversas não se perdem.": { es: "El código QR vale por poco tiempo. Si expira, genere otro: la conexión y las conversaciones no se pierden." },
+  "Já foram pedidos códigos demais. Leia o QR Code ou tente mais tarde.": { es: "Ya se pidieron demasiados códigos. Lea el código QR o inténtelo más tarde." },
+  "Esta conexão não tem o acesso ao servidor guardado. Conecte de novo pelo modo avançado, com o mesmo token.": { es: "Esta conexión no tiene guardado el acceso al servidor. Conéctela de nuevo por el modo avanzado, con el mismo token." },
+  "Este número já está em outra conexão desta empresa. Remova uma das duas e tente de novo.": { es: "Este número ya está en otra conexión de esta empresa. Elimine una de las dos e inténtelo de nuevo." },
+  "Não foi possível falar com o servidor de WhatsApp agora. Tente de novo em instantes.": { es: "No fue posible comunicarse con el servidor de WhatsApp ahora. Inténtelo de nuevo en instantes." },
+  "Conectado, mas as mensagens ainda não entram.": { es: "Conectado, pero los mensajes todavía no entran." },
 };
 
 /**

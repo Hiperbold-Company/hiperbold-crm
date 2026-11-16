@@ -14426,5 +14426,14 @@
   "Não foi possível conferir a conexão. Tente de novo.": "Couldn't check the connection. Try again.",
   "A conexão": "Connection",
   "não está conectada agora: a mensagem só sai quando ela voltar.": "is not connected right now: the message only goes out when it's back.",
-  "Nesta empresa, você só responde pela sua conexão. Esta conversa está na conexão de outro atendente: peça para transferi-la a você.": "In this company, you only reply from your own connection. This conversation is on another agent's connection: ask for it to be transferred to you."
+  "Nesta empresa, você só responde pela sua conexão. Esta conversa está na conexão de outro atendente: peça para transferi-la a você.": "In this company, you only reply from your own connection. This conversation is on another agent's connection: ask for it to be transferred to you.",
+  "WhatsApp reconectado. As mensagens voltaram a entrar no CRM.": "WhatsApp reconnected. Messages are coming into the CRM again.",
+  "Conectou um número diferente do anterior. Confira se é o aparelho certo.": "A different number from the previous one was connected. Check that it is the right device.",
+  "Não foi possível gerar o QR Code.": "Couldn't generate the QR code.",
+  "O QR Code vale por pouco tempo. Se expirar, gere outro: a conexão e as conversas não se perdem.": "The QR code is only valid for a short time. If it expires, generate another one: the connection and conversations are not lost.",
+  "Já foram pedidos códigos demais. Leia o QR Code ou tente mais tarde.": "Too many codes have been requested. Scan the QR code or try again later.",
+  "Esta conexão não tem o acesso ao servidor guardado. Conecte de novo pelo modo avançado, com o mesmo token.": "This connection has no saved access to the server. Connect it again through the advanced mode, with the same token.",
+  "Este número já está em outra conexão desta empresa. Remova uma das duas e tente de novo.": "This number is already in another connection of this company. Remove one of the two and try again.",
+  "Não foi possível falar com o servidor de WhatsApp agora. Tente de novo em instantes.": "Couldn't reach the WhatsApp server right now. Try again in a moment.",
+  "Conectado, mas as mensagens ainda não entram.": "Connected, but messages are not coming in yet."
 }

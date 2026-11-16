@@ -160,6 +160,17 @@ export function ConexoesShell({
           bloqueio={bloqueio}
           podeEditarProtecao={podeEditarProtecao}
           pareamentoQr={pareamentoQr}
+          // A faixa de conexão caída aponta o cartão: `?reconectar=<id>` já abre o QR dele.
+          reconectarId={params.get("reconectar")}
+          // A faixa vermelha do topo vem do layout de /app (servidor): só um refresh a recalcula.
+          aoReconectar={() => router.refresh()}
+          // Abriu o QR sozinho uma vez: tira o `?reconectar=` (reload e histórico não pedem outro QR).
+          aoConsumirReconectar={() => {
+            const q = new URLSearchParams(params.toString());
+            q.delete("reconectar");
+            const qs = q.toString();
+            router.replace(qs ? `/app/connections?${qs}` : "/app/connections", { scroll: false });
+          }}
         />
       </TabsContent>
 
