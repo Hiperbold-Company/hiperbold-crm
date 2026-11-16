@@ -157,6 +157,11 @@ describe("a sétima cópia não nasce", () => {
    * último caso), para não sobrar autorização em nome de código que sumiu.
    */
   const LEITURAS_LEGITIMAS: ReadonlyArray<{ arquivo: string; trecho: string; motivo: string }> = [
+    {
+      arquivo: "lib/inbox/conexao-ao-abrir.ts",
+      trecho: 'return s.display_name?.trim() || s.phone_number?.trim() || "Conexão sem nome";',
+      motivo: "nome da CONEXÃO (channel_sessions) no pop-up de abrir conversa, não de contato",
+    },
     // ── prospecção (PR #963): nenhuma destas é nome de CONTATO ──────────────
     {
       arquivo: "app/app/prospecting/_client.tsx",

@@ -12,6 +12,11 @@ import {
 import { carregarOpcoesDeAbertura, envioRecusadoPelaConexao } from "@/lib/inbox/opcoes-de-abertura";
 import { guardarConexaoAoAbrir } from "@/lib/inbox/guarda-da-conexao-ao-abrir";
 import { openSharedContactConversation } from "@/lib/messaging/open-shared-contact-conversation";
+import {
+  CHANNEL_PROVIDER_META_SOCIAL,
+  DEFAULT_CHANNEL_PROVIDER,
+  CHANNEL_PROVIDER_WACALLS,
+} from "@/lib/channels/capabilities";
 
 /**
  * "Abrir conversa" e "enviar" pela conexão de quem atende (cliente real,
@@ -83,7 +88,7 @@ function sessao(id: string, org: string, nome: string, extra: Linha = {}): Linha
     organization_id: org,
     display_name: nome,
     phone_number: "5511999990000",
-    provider: "uazapi",
+    provider: DEFAULT_CHANNEL_PROVIDER,
     status: "WORKING",
     metadata: {},
     archived_at: null,
@@ -115,7 +120,7 @@ function tabelas(c: Cenario = {}): Record<string, Linha[]> {
       sessao(SESS_INGRID, ORG, "Ingrid Müller"),
       ...(c.semGeral ? [] : [sessao(SESS_GERAL, ORG, "Número geral")]),
       sessao(SESS_ARQUIVADA, ORG, "Arquivada", { archived_at: "2026-06-01T00:00:00Z" }),
-      sessao(SESS_INSTAGRAM, ORG, "Instagram da loja", { provider: "meta_social" }),
+      sessao(SESS_INSTAGRAM, ORG, "Instagram da loja", { provider: CHANNEL_PROVIDER_META_SOCIAL }),
       // A outra organização tem uma conexão em que a Rosana aparece como
       // responsável (linha forjada): nunca pode virar "minha conexão".
       sessao(SESS_OUTRA_ORG, OUTRA_ORG, "Conexão de outra empresa"),
@@ -646,7 +651,7 @@ describe("openSharedContactConversation — channel_session_id validado pela org
 
   it("sessão que não é de mensagem (voz) → session_not_found", async () => {
     const db = bancoEmMemoria({
-      channel_sessions: [sessao(SESS_ROSANA, ORG, "Linha de voz", { provider: "wacalls" })],
+      channel_sessions: [sessao(SESS_ROSANA, ORG, "Linha de voz", { provider: CHANNEL_PROVIDER_WACALLS })],
     });
     await expect(
       openSharedContactConversation(db, ORG, { contact_id: LUCAS, channel_session_id: SESS_ROSANA }),
