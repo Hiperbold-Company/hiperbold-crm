@@ -239,6 +239,12 @@ export const openConversationWithContactSchema = z
     contact_id: z.string().uuid().optional(),
     phone_number: z.string().min(8).max(32).optional(),
     name: z.string().trim().min(1).max(200).optional(),
+    /**
+     * O negócio de onde se abriu (card ou ficha do funil). Só serve à regra
+     * "só a conexão própria": negócio DESTE contato que é de quem clica conta
+     * como transferido para ele (`lib/inbox/opcoes-de-abertura.ts`).
+     */
+    lead_id: z.string().uuid().optional(),
   })
   .refine((d) => !!d.contact_id || !!d.phone_number?.trim(), {
     message: "Informe contact_id ou phone_number.",

@@ -63,7 +63,14 @@ const conversa = (sessao: string) => ({
 const texto = (): SendMessageInput =>
   ({ conversation_id: CONV, type: "text", body: "oi" }) as SendMessageInput;
 
+// A guarda do número vale SÓ no modo "só a conexão própria" (16/11/2026).
+const ORGANIZACAO_SO_A_PROPRIA = {
+  settings: { routing: { conversation_connection_mode: "own_only" } },
+  status: "active",
+};
+
 async function enviar(opcoes: {
+  modo?: "choose" | "own_only";
   sessao: string;
   politicas?: Array<Record<string, unknown>>;
   responsaveis?: Array<Record<string, unknown>>;
@@ -72,6 +79,8 @@ async function enviar(opcoes: {
 }) {
   const duble = criarDubleDoHandler({
     conversation: conversa(opcoes.sessao),
+    organizacao:
+      opcoes.modo === "choose" ? { settings: {}, status: "active" } : ORGANIZACAO_SO_A_PROPRIA,
     politicasDeNumero: opcoes.politicas,
     responsaveisDeNumero: opcoes.responsaveis,
     sessoesDeNumero: opcoes.sessoes,
@@ -175,5 +184,13 @@ describe("#3642 — o envio humano não fala pelo número do colega", () => {
       });
       if (resultado instanceof ApiError) expect(resultado.status).not.toBe(409);
     }
+  });
+});
+
+describe("modo 'deixar escolher' (o padrão): a guarda do número não vale", () => {
+  it("⭐ vendedor com número próprio responde a conversa no número da colega (caso CBEXS)", async () => {
+    const { resultado } = await enviar({ ...comMeuNumero({}), modo: "choose" });
+    expect(recusadoPeloNumero(resultado)).toBe(false);
+    if (resultado instanceof ApiError) expect(resultado.status).not.toBe(409);
   });
 });

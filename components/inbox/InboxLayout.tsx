@@ -11,6 +11,7 @@ import { motivoDaJanelaFechada, motivoDoContato } from "@/lib/inbox/motivo-do-en
 import { composerBloqueadoAteAssumir } from "@/lib/inbox/bloqueio-ate-assumir";
 import { JanelaFechadaAviso } from "@/components/inbox/JanelaFechadaAviso";
 import { NumeroForaDoAr } from "@/components/inbox/NumeroForaDoAr";
+import { AvisoDeConexao, useBloqueioPelaConexao } from "@/components/inbox/AvisoDeConexao";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useCloseConversation } from "@/hooks/inbox/useCloseConversation";
 import { useMarkAsRead } from "@/hooks/inbox/useMarkAsRead";
@@ -696,6 +697,12 @@ export function InboxLayout({
     : t("Seu perfil não responde conversas nesta organização. Notas internas continuam liberadas.");
 
   const blockedReason = motivoDoContato(selectedConversation?.contacts, t);
+  // "Só a conexão própria": a mesma regra do envio, para a caixa não fingir
+  // que vai mandar o que o servidor recusa. Barra só a resposta (nota livre).
+  const bloqueioPelaConexao = useBloqueioPelaConexao(
+    selectedConversation && !selectedConversation.is_group ? selectedConversation : null,
+    user?.id ?? null,
+  );
 
   /* ─── DIVISÓRIAS ARRASTÁVEIS (#2579) ────────────────────────────────────
    *
@@ -1130,6 +1137,9 @@ export function InboxLayout({
                 onAbrirConversa={handleSelect}
               />
             )}
+            {!selectedConversation.is_group && (
+              <AvisoDeConexao conversa={selectedConversation} userId={user?.id ?? null} />
+            )}
             {semPermissaoDeResponder && (
               <p
                 data-testid="aviso-sem-permissao-de-responder"
@@ -1153,7 +1163,7 @@ export function InboxLayout({
               ref={composerRef}
               conversationId={selectedConversation.id}
               blockedReason={supportReadonly ? "Acompanhamento somente leitura" : blockedReason}
-              janelaFechada={motivoDaJanela ?? semPermissaoDeResponder}
+              janelaFechada={motivoDaJanela ?? semPermissaoDeResponder ?? bloqueioPelaConexao}
               disabled={selectedConversation.status === "closed"}
               // A CAIXA TRAVADA ATÉ ASSUMIR (#3012) — a opção é da ORGANIZAÇÃO e
               // chega pela mesma preferência que o menu (`interface_settings` em

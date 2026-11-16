@@ -129,6 +129,10 @@ export const AUDIT_ACTIONS = [
   "onboarding.completed",
   "tenant.onboarded",
   "conversation.created",
+  // "Abrir conversa" pelo funil/contatos (sessão do navegador) e a recusa da
+  // regra "só a conexão própria" (`lib/inbox/guarda-da-conexao-ao-abrir.ts`).
+  "conversation.opened_with_contact",
+  "conversation.open_refused",
   "conversation.claimed",
   "conversation.transferred",
   "conversation.released",

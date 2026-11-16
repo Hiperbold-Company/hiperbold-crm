@@ -40,6 +40,26 @@ import { TEXTOS_AGENDA_SERVICOS } from "./agenda-servicos";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  // Por qual conexão abrir a conversa (16/11/2026).
+  "Você não tem conexão própria e não há número geral para iniciar esta conversa.": { es: "Usted no tiene conexión propia y no hay número general para iniciar esta conversación." },
+  "Não foi possível conferir a conexão. Tente de novo.": { es: "No fue posible verificar la conexión. Inténtelo de nuevo." },
+  "A conexão": { es: "La conexión" },
+  "não está conectada agora: a mensagem só sai quando ela voltar.": { es: "no está conectada ahora: el mensaje solo sale cuando vuelva." },
+  "Nesta empresa, você só responde pela sua conexão. Esta conversa está na conexão de outro atendente: peça para transferi-la a você.": { es: "En esta empresa, usted solo responde por su propia conexión. Esta conversación está en la conexión de otro agente: pida que se la transfieran." },
+  "Nesta empresa, você só inicia conversa pela sua conexão.": { es: "En esta empresa, usted solo inicia conversaciones por su propia conexión." },
+  "Este contato é atendido pela conexão de outro atendente.": { es: "Este contacto es atendido por la conexión de otro agente." },
+  "Conexão sem nome": { es: "Conexión sin nombre" },
+  "Iniciar pela conexão": { es: "Iniciar por la conexión" },
+  "Continuar na conexão": { es: "Continuar en la conexión" },
+  "Por qual conexão abrir a conversa?": { es: "¿Por cuál conexión abrir la conversación?" },
+  "Este contato já conversou por outra conexão. O cliente recebe a mensagem pelo número da conexão escolhida.": { es: "Este contacto ya conversó por otra conexión. El cliente recibe el mensaje desde el número de la conexión elegida." },
+  "Você está respondendo pela conexão": { es: "Usted está respondiendo por la conexión" },
+  "Deixar escolher a conexão": { es: "Dejar elegir la conexión" },
+  "Ao abrir a conversa pelo funil, ela sai pela conexão de quem clica. Se o contato já conversou por outra conexão, aparece uma janela para escolher entre iniciar pela própria conexão ou continuar na existente. Conversa já aberta no Chat é respondida pela conexão dela.": { es: "Al abrir la conversación desde el embudo, sale por la conexión de quien hace clic. Si el contacto ya conversó por otra conexión, aparece una ventana para elegir entre iniciar por la propia conexión o continuar en la existente. Una conversación ya abierta en el Chat se responde por su propia conexión." },
+  "Só a conexão própria": { es: "Solo la conexión propia" },
+  "Cada atendente inicia conversa só pela conexão vinculada a ele, sem janela de escolha, e não abre pelo funil o contato que está na conexão de outro atendente, a não ser que a conversa ou o negócio tenha sido transferido para ele. Gerente e administrador continuam podendo escolher.": { es: "Cada agente inicia conversaciones solo por la conexión vinculada a él, sin ventana de elección, y no abre desde el embudo el contacto que está en la conexión de otro agente, a menos que la conversación o el negocio le haya sido transferido. Gerente y administrador siguen pudiendo elegir." },
+  "Por qual conexão o atendente abre a conversa": { es: "Por cuál conexión el agente abre la conversación" },
+  "Vale para quem tem conexão vinculada no bloco por número, abaixo. Quem não tem continua como sempre.": { es: "Vale para quien tiene una conexión vinculada en el bloque por número, abajo. Quien no tiene sigue como siempre." },
   // Servidores MCP por agente e OAuth por contato (migration 9095).
   "O link de autorização é automático: enquanto o cliente não autorizar, o agente recebe sozinho a ferramenta que gera o link. Não é preciso marcá-la aqui.":
     {

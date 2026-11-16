@@ -275,10 +275,12 @@ async function withConversas(
   // Em lotes, e a ordem continua valendo para o que importa: as conversas de um
   // contato caem todas no mesmo lote, e é DENTRO do contato que "a primeira vista
   // vence" lê a ordem.
+  // O `provider` da conexão: conversa de rede social abre direto no card, sem a
+  // escolha de conexão (que é de telefone).
   const { data, error } = await buscaEmLotes(contactIds, (lote) =>
     supabase
       .from("conversations")
-      .select("id, contact_id, last_message_preview, last_message_at, unread_count_for_assignee, tags")
+      .select("id, contact_id, last_message_preview, last_message_at, unread_count_for_assignee, tags, channel_sessions:channel_session_id(provider)")
       .eq("organization_id", organizationId)
       .in("contact_id", lote)
       .order("last_message_at", { ascending: false, nullsFirst: false }),
@@ -294,6 +296,7 @@ async function withConversas(
     last_message_at: string | null;
     unread_count_for_assignee: number | null;
     tags: string[] | null;
+    channel_sessions?: { provider?: string | null } | null;
   }>) {
     // Os marcadores somam TODAS as conversas; a linha do card é só a mais recente.
     for (const tag of row.tags ?? []) {
@@ -308,6 +311,7 @@ async function withConversas(
       preview: row.last_message_preview,
       last_message_at: row.last_message_at,
       unread: row.unread_count_for_assignee ?? 0,
+      provider: row.channel_sessions?.provider ?? null,
     });
   }
 

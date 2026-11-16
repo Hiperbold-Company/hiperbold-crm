@@ -110,6 +110,11 @@ vi.mock("@/lib/inbox/atividade-de-comando", () => ({ registrarTrocaDeComando: vi
 vi.mock("@/lib/inbox/negocio-aberto-do-contato", () => ({
   sincronizarNegocioAbertoDoContato: vi.fn(async () => ({ gravou: false, motivo: "sem_negocio_aberto", abertos: 0 })),
 }));
+// A regra de "por qual conexão" tem teste próprio (lib/inbox/conexao-ao-abrir.test.ts);
+// aqui ela deixa passar, para o arquivo medir só o claim.
+vi.mock("@/lib/inbox/guarda-da-conexao-ao-abrir", () => ({
+  guardarConexaoAoAbrir: vi.fn(async () => ({ ok: true, channelSessionId: undefined })),
+}));
 vi.mock("@/lib/messaging/open-shared-contact-conversation", () => ({
   openSharedContactConversation: vi.fn(),
 }));
@@ -135,7 +140,11 @@ describe("#3479 — abrir a conversa assume a conversa SEM dono", () => {
     // Mandá-lo (mesmo nulo) mudaria o significado do pedido para quem lê o RPC.
     expect(rpcs[0]?.params).not.toHaveProperty("p_expected_assignee");
     expect(rpcs[1]?.nome).toBe("emit_event");
-    expect(audit).toHaveBeenCalledOnce();
+    // Duas linhas: a abertura pela tela (16/11/2026) e o claim.
+    expect(audit).toHaveBeenCalledTimes(2);
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "conversation.opened_with_contact", actorUserId: USER, organizationId: ORG_A }),
+    );
     expect(registrarTrocaDeComando).toHaveBeenCalledOnce();
     expect(sincronizarNegocioAbertoDoContato).toHaveBeenCalledOnce();
   });
@@ -183,5 +192,44 @@ describe("#3479 — abrir a conversa assume a conversa SEM dono", () => {
     await expect(res.json()).resolves.toMatchObject({ data: { conversation_id: CONV } });
     expect(erro).toHaveBeenCalled();
     erro.mockRestore();
+  });
+});
+
+describe("'só a conexão própria' — a rota obedece à guarda", () => {
+  it("guarda recusa → 403 e nenhuma conversa é aberta", async () => {
+    const { guardarConexaoAoAbrir } = await import("@/lib/inbox/guarda-da-conexao-ao-abrir");
+    vi.mocked(guardarConexaoAoAbrir).mockResolvedValueOnce({ ok: false, motivo: "conexao_alheia" });
+    const { cliente } = clienteFake({ data: [], error: null });
+    mResolve.mockResolvedValue(authzDeSessao(cliente));
+
+    const res = await POST(requisicao());
+    expect(res.status).toBe(403);
+    const corpo = (await res.json()) as { error: { details: Record<string, unknown> } };
+    // Só o motivo: nenhum nome de conexão alheia na resposta.
+    expect(corpo.error.details).toEqual({ motivo: "conexao_alheia" });
+    expect(mAbrir).not.toHaveBeenCalled();
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "conversation.open_refused", metadata: expect.objectContaining({ motivo: "conexao_alheia" }) }),
+    );
+  });
+
+  it("guarda troca a sessão → a conversa abre pela conexão que ela devolveu", async () => {
+    const { guardarConexaoAoAbrir } = await import("@/lib/inbox/guarda-da-conexao-ao-abrir");
+    const SESS = "aaaaaaaa-9999-4000-8000-000000000001";
+    vi.mocked(guardarConexaoAoAbrir).mockResolvedValueOnce({ ok: true, channelSessionId: SESS });
+    const { cliente } = clienteFake({ data: [], error: null });
+    mResolve.mockResolvedValue(authzDeSessao(cliente));
+
+    await POST(requisicao());
+    expect(mAbrir).toHaveBeenCalledWith(expect.anything(), ORG_A, expect.objectContaining({ channel_session_id: SESS }));
+  });
+
+  it("token de servidor não passa pela guarda", async () => {
+    const { guardarConexaoAoAbrir } = await import("@/lib/inbox/guarda-da-conexao-ao-abrir");
+    const { cliente } = clienteFake({ data: [], error: null });
+    mResolve.mockResolvedValue(authzDeToken(cliente));
+
+    await POST(requisicao());
+    expect(guardarConexaoAoAbrir).not.toHaveBeenCalled();
   });
 });

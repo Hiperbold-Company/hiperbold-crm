@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -20,6 +21,12 @@ vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const fetcher = vi.fn();
+
+// O formulário invalida a leitura das conexões ao salvar: precisa de um QueryClient.
+function montar(ui: React.ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+}
 beforeEach(() => {
   vi.stubGlobal("fetch", fetcher);
   fetcher.mockReset();
@@ -35,6 +42,7 @@ const inicial: AtendimentoConfig = {
   conversation_stays_with_attendant: false,
   assign_owner_on_move: false,
   manual_reply_silence_minutes: null,
+  conversation_connection_mode: "choose",
 };
 
 function corpoDoPatch(): Record<string, unknown> {
@@ -45,7 +53,7 @@ function corpoDoPatch(): Record<string, unknown> {
 
 describe("Distribuição de atendimento — devolver ao agente sozinho", () => {
   it("desligado por padrão: sem campo de minutos, e o corpo salvo leva null", async () => {
-    render(<AtendimentoForm initial={{ ...inicial, mode: "round_robin" }} />);
+    montar(<AtendimentoForm initial={{ ...inicial, mode: "round_robin" }} />);
     expect(screen.getByTestId("devolver-sozinho")).not.toBeChecked();
     expect(screen.queryByLabelText("Minutos sem resposta da equipe")).not.toBeInTheDocument();
 
@@ -57,7 +65,7 @@ describe("Distribuição de atendimento — devolver ao agente sozinho", () => {
   });
 
   it("ligar sugere 60 min, aceita outro valor e o corpo salvo leva os minutos", async () => {
-    render(<AtendimentoForm initial={inicial} />);
+    montar(<AtendimentoForm initial={inicial} />);
     fireEvent.click(screen.getByTestId("devolver-sozinho"));
 
     const minutos = screen.getByLabelText("Minutos sem resposta da equipe");
@@ -70,7 +78,7 @@ describe("Distribuição de atendimento — devolver ao agente sozinho", () => {
   });
 
   it("desligar de novo volta a null — não guarda o número escondido", async () => {
-    render(<AtendimentoForm initial={{ ...inicial, handoff_return_after_minutes: 90 }} />);
+    montar(<AtendimentoForm initial={{ ...inicial, handoff_return_after_minutes: 90 }} />);
     expect(screen.getByLabelText("Minutos sem resposta da equipe")).toHaveValue(90);
     fireEvent.click(screen.getByTestId("devolver-sozinho"));
     expect(screen.queryByLabelText("Minutos sem resposta da equipe")).not.toBeInTheDocument();
@@ -94,7 +102,7 @@ describe("Distribuição de atendimento — devolver ao agente sozinho", () => {
    *     sairia truncado pelo navegador, e o campo anunciaria 24 h).
    */
   it("aceita 5.000 minutos: salva 5.000 no corpo e o campo anuncia o teto de 30 dias", async () => {
-    render(<AtendimentoForm initial={inicial} />);
+    montar(<AtendimentoForm initial={inicial} />);
     fireEvent.click(screen.getByTestId("devolver-sozinho"));
 
     const minutos = screen.getByLabelText("Minutos sem resposta da equipe");
@@ -107,12 +115,12 @@ describe("Distribuição de atendimento — devolver ao agente sozinho", () => {
   });
 
   it("empresa com 5.000 minutos salvos vê 5.000 no campo ao recarregar", () => {
-    render(<AtendimentoForm initial={{ ...inicial, handoff_return_after_minutes: 5000 }} />);
+    montar(<AtendimentoForm initial={{ ...inicial, handoff_return_after_minutes: 5000 }} />);
     expect(screen.getByLabelText("Minutos sem resposta da equipe")).toHaveValue(5000);
   });
 
   it("controle do outro knob: o silêncio do celular continua com teto de 24 h", () => {
-    render(<AtendimentoForm initial={inicial} />);
+    montar(<AtendimentoForm initial={inicial} />);
     expect(screen.getByLabelText("Minutos de silêncio da IA depois de uma resposta pelo celular")).toHaveAttribute(
       "max",
       String(PRAZO_MAX_MINUTOS),
@@ -122,7 +130,7 @@ describe("Distribuição de atendimento — devolver ao agente sozinho", () => {
 
 describe("Distribuição de atendimento — a conversa fica com quem atendeu", () => {
   it("desligado por padrão, e salvar outra coisa manda false", async () => {
-    render(<AtendimentoForm initial={inicial} />);
+    montar(<AtendimentoForm initial={inicial} />);
     expect(screen.getByTestId("fica-com-quem-atendeu")).not.toBeChecked();
     fireEvent.click(screen.getByTestId("opcao-modo-round_robin"));
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -131,7 +139,7 @@ describe("Distribuição de atendimento — a conversa fica com quem atendeu", (
   });
 
   it("ligar manda true", async () => {
-    render(<AtendimentoForm initial={inicial} />);
+    montar(<AtendimentoForm initial={inicial} />);
     fireEvent.click(screen.getByTestId("fica-com-quem-atendeu"));
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
@@ -139,14 +147,14 @@ describe("Distribuição de atendimento — a conversa fica com quem atendeu", (
   });
 
   it("empresa com o ajuste ligado vê a caixa marcada", () => {
-    render(<AtendimentoForm initial={{ ...inicial, conversation_stays_with_attendant: true }} />);
+    montar(<AtendimentoForm initial={{ ...inicial, conversation_stays_with_attendant: true }} />);
     expect(screen.getByTestId("fica-com-quem-atendeu")).toBeChecked();
   });
 });
 
 describe("Distribuição de atendimento — quem move um lead sem responsável assume", () => {
   it("desligado por padrão, com o texto simples, e salvar outra coisa manda false", async () => {
-    render(<AtendimentoForm initial={inicial} />);
+    montar(<AtendimentoForm initial={inicial} />);
     expect(screen.getByTestId("dono-ao-mover-interruptor")).not.toBeChecked();
     expect(
       screen.getByText("Quem move um lead sem responsável passa a ser o responsável"),
@@ -158,7 +166,7 @@ describe("Distribuição de atendimento — quem move um lead sem responsável a
   });
 
   it("ligar manda true", async () => {
-    render(<AtendimentoForm initial={inicial} />);
+    montar(<AtendimentoForm initial={inicial} />);
     fireEvent.click(screen.getByTestId("dono-ao-mover-interruptor"));
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
@@ -166,7 +174,7 @@ describe("Distribuição de atendimento — quem move um lead sem responsável a
   });
 
   it("empresa com a regra ligada vê a caixa marcada", () => {
-    render(<AtendimentoForm initial={{ ...inicial, assign_owner_on_move: true }} />);
+    montar(<AtendimentoForm initial={{ ...inicial, assign_owner_on_move: true }} />);
     expect(screen.getByTestId("dono-ao-mover-interruptor")).toBeChecked();
   });
 });
@@ -175,7 +183,7 @@ describe("Distribuição de atendimento — silêncio da IA depois de resposta p
   const ROTULO = "Minutos de silêncio da IA depois de uma resposta pelo celular";
 
   it("empresa sem ajuste vê o padrão de 60, e salvar outra coisa não grava número nenhum", async () => {
-    render(<AtendimentoForm initial={inicial} />);
+    montar(<AtendimentoForm initial={inicial} />);
     expect(screen.getByLabelText(ROTULO)).toHaveValue(60);
     fireEvent.click(screen.getByTestId("opcao-modo-round_robin"));
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -184,7 +192,7 @@ describe("Distribuição de atendimento — silêncio da IA depois de resposta p
   });
 
   it("digitar 15 manda 15 no corpo salvo", async () => {
-    render(<AtendimentoForm initial={inicial} />);
+    montar(<AtendimentoForm initial={inicial} />);
     fireEvent.change(screen.getByLabelText(ROTULO), { target: { value: "15" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
@@ -192,7 +200,20 @@ describe("Distribuição de atendimento — silêncio da IA depois de resposta p
   });
 
   it("empresa com 15 min salvos vê 15 no campo", () => {
-    render(<AtendimentoForm initial={{ ...inicial, manual_reply_silence_minutes: 15 }} />);
+    montar(<AtendimentoForm initial={{ ...inicial, manual_reply_silence_minutes: 15 }} />);
     expect(screen.getByLabelText(ROTULO)).toHaveValue(15);
+  });
+});
+
+describe("Por qual conexão o atendente abre a conversa", () => {
+  it("'Deixar escolher a conexão' vem marcado por padrão; escolher 'Só a conexão própria' vai no PATCH", async () => {
+    montar(<AtendimentoForm initial={inicial} />);
+    expect(screen.getByTestId("opcao-conexao-ao-abrir-choose")).toHaveAttribute("data-marcada", "sim");
+    expect(screen.getByTestId("opcao-conexao-ao-abrir-own_only")).toHaveAttribute("data-marcada", "nao");
+
+    fireEvent.click(screen.getByLabelText("Só a conexão própria"));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    expect(corpoDoPatch()).toMatchObject({ conversation_connection_mode: "own_only" });
   });
 });

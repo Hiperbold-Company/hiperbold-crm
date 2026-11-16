@@ -8,6 +8,8 @@
  * consequência escrita — inclusive a ruim.
  */
 import { useState, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { CHAVE_MINHAS_CONEXOES } from "@/hooks/inbox/useMinhasConexoes";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -22,7 +24,13 @@ import {
   PRAZO_MIN_MINUTOS,
 } from "@/lib/escalacao/devolucao-automatica";
 import { PRAZO_PADRAO_DO_SILENCIO_MINUTOS } from "@/lib/escalacao/atendimento-manual";
-import { ROUTING_MODES, VISIBILITY_MODES, type RoutingMode } from "@/lib/schemas/routing";
+import {
+  MODOS_DE_CONEXAO_AO_ABRIR,
+  ROUTING_MODES,
+  VISIBILITY_MODES,
+  type ModoDeConexaoAoAbrir,
+  type RoutingMode,
+} from "@/lib/schemas/routing";
 import { useT } from "@/hooks/i18n/useT";
 
 export interface AtendimentoConfig {
@@ -38,7 +46,23 @@ export interface AtendimentoConfig {
   assign_owner_on_move: boolean;
   /** Minutos de silêncio da IA após resposta pelo celular. `null` = o padrão de 60. */
   manual_reply_silence_minutes: number | null;
+  /** Por qual conexão o atendente abre a conversa no funil. `choose` é o padrão. */
+  conversation_connection_mode: ModoDeConexaoAoAbrir;
 }
+
+/** A cópia dos dois modos de "por qual conexão abrir" (decisão de 16/11/2026). */
+const CONEXAO_COPY: Record<ModoDeConexaoAoAbrir, { titulo: string; corpo: string }> = {
+  choose: {
+    titulo: "Deixar escolher a conexão",
+    corpo:
+      "Ao abrir a conversa pelo funil, ela sai pela conexão de quem clica. Se o contato já conversou por outra conexão, aparece uma janela para escolher entre iniciar pela própria conexão ou continuar na existente. Conversa já aberta no Chat é respondida pela conexão dela.",
+  },
+  own_only: {
+    titulo: "Só a conexão própria",
+    corpo:
+      "Cada atendente inicia conversa só pela conexão vinculada a ele, sem janela de escolha, e não abre pelo funil o contato que está na conexão de outro atendente, a não ser que a conversa ou o negócio tenha sido transferido para ele. Gerente e administrador continuam podendo escolher.",
+  },
+};
 
 /**
  * A cópia dos modos de distribuição. Exportada porque a tela por número
@@ -138,6 +162,7 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
   const [form, setForm] = useState<AtendimentoConfig>(initial);
   const [salvo, setSalvo] = useState<AtendimentoConfig>(initial);
   const [isPending, startTransition] = useTransition();
+  const qc = useQueryClient();
 
   const sujo = JSON.stringify(form) !== JSON.stringify(salvo);
 
@@ -156,6 +181,8 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
       try {
         await apiClient.patch("/api/v1/settings/routing", form);
         setSalvo(form);
+        // O modo da conexão é lido pelo funil e pelo Chat desta mesma aba.
+        void qc.invalidateQueries({ queryKey: CHAVE_MINHAS_CONEXOES });
         toast.success(t("Distribuição de atendimento salva."));
       } catch (err) {
         toast.error(err instanceof Error ? t(err.message) : t("Não consegui salvar."));
@@ -385,6 +412,33 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
             </span>
           </span>
         </label>
+      </Card>
+
+      <Card className="space-y-4 p-4" data-testid="conexao-ao-abrir">
+        <div>
+          <h2 className="text-sm font-semibold">{t("Por qual conexão o atendente abre a conversa")}</h2>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "Vale para quem tem conexão vinculada no bloco por número, abaixo. Quem não tem continua como sempre.",
+            )}
+          </p>
+        </div>
+        <div className="space-y-2">
+          {MODOS_DE_CONEXAO_AO_ABRIR.map((m) => (
+            <Escolha
+              key={m}
+              nome="conexao-ao-abrir"
+              valor={m}
+              atual={form.conversation_connection_mode}
+              titulo={t(CONEXAO_COPY[m].titulo)}
+              corpo={t(CONEXAO_COPY[m].corpo)}
+              disabled={isPending}
+              onPick={(v) =>
+                setForm((f) => ({ ...f, conversation_connection_mode: v as ModoDeConexaoAoAbrir }))
+              }
+            />
+          ))}
+        </div>
       </Card>
 
       <Card className="space-y-4 p-4" data-testid="dono-ao-mover">

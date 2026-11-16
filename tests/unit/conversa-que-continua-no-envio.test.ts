@@ -89,10 +89,17 @@ const conversa = {
 const texto = (): SendMessageInput =>
   ({ conversation_id: CONV, type: "text", body: "oi" }) as SendMessageInput;
 
+// A guarda do número vale SÓ no modo "só a conexão própria" (16/11/2026).
+const ORGANIZACAO_SO_A_PROPRIA = {
+  settings: { routing: { conversation_connection_mode: "own_only" } },
+  status: "active",
+};
+
 /** EU tenho número próprio; a conversa está no número do COLEGA. */
 function euComMeuNumero() {
   return criarDubleDoHandler({
     conversation: conversa,
+    organizacao: ORGANIZACAO_SO_A_PROPRIA,
     politicasDeNumero: [
       { id: POLITICA, organization_id: ORG, channel_session_id: SESSAO_DO_COLEGA },
       { id: MINHA_POLITICA, organization_id: ORG, channel_session_id: MINHA_SESSAO },
