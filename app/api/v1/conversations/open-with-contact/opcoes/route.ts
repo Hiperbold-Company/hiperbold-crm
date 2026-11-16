@@ -7,7 +7,7 @@
  * modo da organização. A decisão é `decidirAbertura`
  * (`lib/inbox/conexao-ao-abrir.ts`) — a mesma que o POST aplica.
  *
- * Só sessão de navegador (atendente ou acima): "minha conexão" é de uma pessoa,
+ * Só sessão de navegador (viewer ou acima; a caixa chama para todos, o suporte só leitura inclusive): "minha conexão" é de uma pessoa,
  * e token de servidor não tem uma. A organização sai da sessão; os ids da query
  * só são lidos dentro dela. Leitura sem efeito: não audita.
  *
@@ -36,7 +36,7 @@ const querySchema = z.object({
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("agent", { requestId, resource: "conversations" });
+  const authz = await requireRole("viewer", { requestId, resource: "conversations" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 

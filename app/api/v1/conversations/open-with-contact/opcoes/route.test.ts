@@ -44,11 +44,14 @@ beforeEach(() => {
 });
 
 describe("GET opcoes", () => {
-  it("viewer (abaixo de atendente) é recusado e nada é lido", async () => {
+  it("é leitura: o piso é viewer (o suporte só leitura abre a caixa sem 403), e recusa antes de ler", async () => {
+    // A caixa de entrada chama esta rota para todo mundo que a abre, inclusive o suporte em modo só
+    // leitura, que entra como viewer. Escolher e enviar continuam com o piso de atendente nas rotas de
+    // escrita (open-with-contact e o envio de mensagem).
     mRole.mockResolvedValue({ ok: false, response: fail("forbidden", "x", 403) } as never);
     const res = await GET(pedido(`?contact_id=${CONTATO}`));
     expect(res.status).toBe(403);
-    expect(mRole).toHaveBeenCalledWith("agent", expect.anything());
+    expect(mRole).toHaveBeenCalledWith("viewer", expect.anything());
     expect(mCarregar).not.toHaveBeenCalled();
   });
 
