@@ -6,6 +6,7 @@
  * automação). Cada mudança sobe o gatilho inteiro; quem decide se ele está
  * completo é o schema, no `AutomationTriggerForm`.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -63,9 +64,8 @@ export function Marcador({
 }) {
   return (
     <label htmlFor={id} className="flex items-center gap-2 text-sm text-text">
-      <input
+      <Checkbox
         id={id}
-        type="checkbox"
         data-testid={id}
         checked={marcado}
         onChange={(e) => onChange(e.target.checked)}

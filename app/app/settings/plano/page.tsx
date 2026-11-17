@@ -87,6 +87,7 @@ import { saldoDaOrganizacao, type FonteCarteira } from "@/lib/billing/tokens/sal
 import { linhasDeTokensDeIA, type LinhasDeTokensDeIA } from "@/lib/billing/tokens/linhas-da-tela";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { assinaturaCancelada, estadoDoReembolso, type EstadoDoReembolso } from "@/lib/billing/reembolso/regras";
 import { pagamentosReembolsaveis } from "@/lib/billing/reembolso/elegiveis";
@@ -679,17 +680,7 @@ function LinhaDeUso({
       </div>
 
       {linha.percentual !== null && (
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full transition-all ${linha.estourou ? "bg-destructive" : "bg-primary"}`}
-            style={{ width: `${linha.percentual}%` }}
-            role="progressbar"
-            aria-valuenow={linha.percentual}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={rotulo}
-          />
-        </div>
+        <Progress valor={linha.percentual} rotulo={rotulo} tom={linha.estourou ? "erro" : "marca"} />
       )}
 
       {linha.chave === "etapas_por_funil" && (
@@ -827,17 +818,7 @@ function SecaoTokensDeIA({
         )}
 
         {carteira.percentual !== null && (
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className={`h-full transition-all ${carteira.estourou ? "bg-destructive" : "bg-primary"}`}
-              style={{ width: `${carteira.percentual}%` }}
-              role="progressbar"
-              aria-valuenow={carteira.percentual}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={t("Consumo do mês")}
-            />
-          </div>
+          <Progress valor={carteira.percentual} rotulo={t("Consumo do mês")} tom={carteira.estourou ? "erro" : "marca"} />
         )}
 
         {carteira.saldoNegativo && (

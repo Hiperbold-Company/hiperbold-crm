@@ -29071,6 +29071,9 @@ export const DICIONARIO: Traducoes = {
   "Trocar modelo": { es: "Cambiar modelo" },
   "Recusar proposta": { es: "Rechazar propuesta" },
   "Motivo da recusa (opcional)": { es: "Motivo del rechazo (opcional)" },
+  // design: componentes nas telas
+  "Prazo da solicitação": { es: "Plazo de la solicitud" },
+  "Uso do orçamento de IA": { es: "Uso del presupuesto de IA" },
 };
 
 /**

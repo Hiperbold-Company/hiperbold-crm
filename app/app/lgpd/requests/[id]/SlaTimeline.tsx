@@ -4,6 +4,7 @@ import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 
 import { differenceInDays, format, isBefore } from "date-fns";
 import { useT } from "@/hooks/i18n/useT";
+import { Progress } from "@/components/ui/progress";
 import { diasAtePrazo, diasDeAtraso, progressoDoPrazo } from "@/lib/lgpd/sla";
 
 interface SlaTimelineProps {
@@ -92,12 +93,7 @@ export function SlaTimeline({ received_at, due_at, request_type }: SlaTimelinePr
 
   const daysElapsed = differenceInDays(now, receivedAt);
 
-  const progressColor =
-    progress >= 1
-      ? "bg-error"
-      : progress >= 0.75
-        ? "bg-warning"
-        : "bg-success";
+  const tomDoPrazo = progress >= 1 ? "erro" : progress >= 0.75 ? "aviso" : "sucesso";
 
   return (
     <div className="space-y-4">
@@ -113,16 +109,7 @@ export function SlaTimeline({ received_at, due_at, request_type }: SlaTimelinePr
                 : `${Math.abs(diasRestantes)}${t("d em atraso")}`}
           </span>
         </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full rounded-full transition-all ${progressColor}`}
-            style={{ width: `${progressPct}%` }}
-            role="progressbar"
-            aria-valuenow={progressPct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          />
-        </div>
+        <Progress valor={progressPct} rotulo={t("Prazo da solicitação")} tom={tomDoPrazo} />
       </div>
 
       {/* Milestones */}

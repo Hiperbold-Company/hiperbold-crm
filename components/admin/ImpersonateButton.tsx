@@ -9,6 +9,7 @@
  * On success: pushes the user to the redirect_url returned by the API
  * (default `/app/inbox`) so they immediately enter the tenant context.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { useOrganizationTransition } from "@/components/shell/OrganizationTransitionProvider";
@@ -105,7 +106,7 @@ export function ImpersonateButton({
             {t("Acompanhe")} <span className="font-semibold text-foreground">{displayName}</span> {t("com sua identidade de administrador. As ações pelo aplicativo serão registradas em seu nome. O acesso dura até uma hora.")}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={readonly} onChange={e => setReadonly(e.target.checked)} />{t("Somente leitura")}</label>
+        <label className="flex items-center gap-2 text-sm"><Checkbox checked={readonly} onChange={e => setReadonly(e.target.checked)} />{t("Somente leitura")}</label>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={busy}>{t("Cancelar")}</AlertDialogCancel>
           <AlertDialogAction onClick={handleConfirm} disabled={busy}>

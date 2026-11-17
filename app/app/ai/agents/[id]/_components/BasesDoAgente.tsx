@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useT } from "@/hooks/i18n/useT";
 /**
  * O QUE ESTE ASSISTENTE CONSULTA ANTES DE RESPONDER (0181).
@@ -120,11 +121,10 @@ export function BasesDoAgente({ materiais, value, onChange, disabled = false }: 
                   repo não tem componente de checkbox, e introduzir um só para
                   esta seção criaria duas aparências para o mesmo controle na
                   MESMA página. */}
-              <input
+              <Checkbox
                 id={`base-${m.id}`}
                 data-testid={`base-${m.id}`}
-                type="checkbox"
-                className="h-4 w-4 shrink-0 rounded-md border-border accent-primary"
+                className="shrink-0"
                 checked={marcados.has(m.id)}
                 onChange={(e) => alternar(m.id, e.target.checked)}
                 disabled={disabled}

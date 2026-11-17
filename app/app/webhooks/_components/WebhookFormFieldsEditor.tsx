@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -94,8 +95,7 @@ export function WebhookFormFieldsEditor({ fields, onChange }: Props) {
               </Select>
             </div>
             <label className="flex items-center gap-2 pt-5 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={field.required}
                 onChange={(event) => atualizar(index, { required: event.target.checked })}
               />

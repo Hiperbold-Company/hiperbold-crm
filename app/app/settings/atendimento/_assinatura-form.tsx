@@ -4,6 +4,7 @@
  * Sem este cartão o recurso só ligava por SQL. A regra mora em
  * `lib/messaging/assinatura.ts`; a gravação, em `/api/v1/settings/assinatura`.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -68,13 +69,12 @@ export function AssinaturaForm({ initial }: { initial: AssinaturaConfig }) {
         </div>
         {opcoes.map((o) => (
           <label key={o.chave} className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
+            <Checkbox
               data-testid={`assinatura-${o.chave}`}
               checked={form[o.chave]}
               disabled={isPending}
               onChange={(e) => setForm((f) => ({ ...f, [o.chave]: e.target.checked }))}
-              className="mt-1 h-4 w-4 shrink-0 accent-primary"
+              className="mt-1 shrink-0"
             />
             <span className="space-y-1">
               <span className="block text-sm font-medium">{t(o.titulo)}</span>
@@ -94,13 +94,12 @@ export function AssinaturaForm({ initial }: { initial: AssinaturaConfig }) {
           <p className="text-xs text-muted-foreground">{t("Sem asteriscos nem quebra de linha.")}</p>
         </div>
         <label className="flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
+          <Checkbox
             data-testid="assinatura-por_agente"
             checked={form.por_agente}
             disabled={isPending || !form.ia}
             onChange={(e) => setForm((f) => ({ ...f, por_agente: e.target.checked }))}
-            className="mt-1 h-4 w-4 shrink-0 accent-primary"
+            className="mt-1 shrink-0"
           />
           <span className="space-y-1">
             <span className="block text-sm font-medium">{t("Assinar com o nome de cada agente")}</span>

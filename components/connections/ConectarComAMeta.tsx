@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -465,12 +466,11 @@ export function ConectarComAMeta({
                 )}
               </p>
               <label className="mt-2 flex cursor-pointer items-start gap-2">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={confirmouContatos}
                   onChange={(e) => setConfirmouContatos(e.target.checked)}
                   disabled={ocupado}
-                  className="mt-0.5 h-4 w-4 rounded-md border-border"
+                  className="mt-0.5"
                   data-testid="cadastro-meta-confirma-contatos"
                 />
                 <span>{t("Entendi e autorizo trazer esses contatos e conversas para o CRM.")}</span>

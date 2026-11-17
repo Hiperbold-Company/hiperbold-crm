@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -125,8 +126,7 @@ export function AgendasConectadas() {
                 <p className="text-xs text-muted-foreground">{t(calendar.allowed_conference_types == null ? "Google Meet: atualize a lista para conferir" : calendar.allowed_conference_types.includes("hangoutsMeet") ? "Permite criar links do Google Meet" : "Esta agenda não permite criar Google Meet")}</p>
                 <div className="flex flex-wrap gap-4 text-sm">
                   <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={sources.includes(calendar.id)}
                       disabled={busy || (!calendar.can_read && !sources.includes(calendar.id))}
                       onChange={(e) =>

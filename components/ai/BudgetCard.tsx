@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 /**
  * O card de orçamento de IA — a peça que, até a 0159, mentia POR DEFAULT.
@@ -36,6 +37,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -215,22 +217,11 @@ export function BudgetCard({ initialData, isAdmin }: Props) {
       )}
 
       <div className="mt-4 space-y-2">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full transition-all ${
-              status.pct >= 100
-                ? "bg-destructive"
-                : status.pct >= status.alarm_threshold_pct
-                  ? "bg-warning"
-                  : "bg-primary"
-            }`}
-            style={{ width: `${pct}%` }}
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            role="progressbar"
-          />
-        </div>
+        <Progress
+          valor={pct}
+          rotulo={t("Uso do orçamento de IA")}
+          tom={status.pct >= 100 ? "erro" : status.pct >= status.alarm_threshold_pct ? "aviso" : "marca"}
+        />
         <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
           <span>
             <strong>{fmtCents(consumed)}</strong>
@@ -486,11 +477,9 @@ function EditBudgetDialog({ status }: { status: BudgetStatus }) {
                 {t("A parada começa a valer")} <strong>72 {t("horas")}</strong> {t("depois de salvar. É o tempo de você ver o aviso chegar antes que alguma conversa pare.")}
               </p>
               <label className="flex cursor-pointer items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={imediato}
                   onChange={(e) => setImediato(e.target.checked)}
-                  className="h-4 w-4 accent-primary"
                 />
                 {t("Começar a valer agora, sem esperar as 72 horas")}
               </label>

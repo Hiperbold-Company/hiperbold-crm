@@ -11,6 +11,7 @@ import { ReenviarConfirmacaoBotao } from "@/components/auth/ReenviarConfirmacaoB
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { useT } from "@/hooks/i18n/useT";
 import type { ContagemDosPassos, PassoDoInicio } from "@/lib/inicio/primeiros-passos";
 import { ArrowRight, CheckCircle } from "@/lib/ui/icons";
@@ -18,22 +19,16 @@ import { cn } from "@/lib/utils";
 
 export function ProgressoDosPassos({ contagem }: { contagem: ContagemDosPassos }) {
   const t = useT();
-  const percentual = Math.round((contagem.obrigatoriosFeitos / Math.max(contagem.obrigatoriosTotal, 1)) * 100);
   return (
     <div className="space-y-1.5">
       <p className="text-sm font-medium" data-testid="inicio-progresso">
         {contagem.obrigatoriosFeitos} {t("de")} {contagem.obrigatoriosTotal} {t("obrigatórios")}
       </p>
-      <div
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={contagem.obrigatoriosTotal}
-        aria-valuenow={contagem.obrigatoriosFeitos}
-        aria-label={t("Passos obrigatórios concluídos")}
-        className="h-2 w-full overflow-hidden rounded-full bg-surface-elevated"
-      >
-        <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${percentual}%` }} />
-      </div>
+      <Progress
+        valor={contagem.obrigatoriosFeitos}
+        maximo={Math.max(contagem.obrigatoriosTotal, 1)}
+        rotulo={t("Passos obrigatórios concluídos")}
+      />
     </div>
   );
 }

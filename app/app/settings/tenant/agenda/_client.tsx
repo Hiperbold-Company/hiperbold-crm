@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { TituloDaAgenda } from "@/components/agenda/TituloDaAgenda";
 import { AgendasConectadas } from "@/components/agenda/AgendasConectadas";
 import { PrazosDePresenca } from "@/components/agenda/PrazosDePresenca";
@@ -204,13 +205,12 @@ function LembreteDoCompromisso({
   return (
     <div className="grid gap-3 border-t border-border pt-3">
       <label className="flex items-center gap-2 text-xs text-text-muted">
-        <input
-          type="checkbox"
+        <Checkbox
           name="reminder_enabled"
           checked={ligado}
           data-testid={`editar-lembrete-${tipo.id}`}
           onChange={(e) => setLigado(e.target.checked)}
-          className="size-4 shrink-0 rounded-sm border-border accent-accent"
+          className="shrink-0"
         />
         {t("Avisar o cliente antes do compromisso, pelo WhatsApp")}
       </label>
@@ -623,7 +623,7 @@ export function TiposDeAgendamentoClient({
                   ))}
                 </select>
               </label>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={serviceDraft} onChange={(e) => setServiceDraft(e.target.checked)}/>{t("Criar como serviço em rascunho")}</label>
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={serviceDraft} onChange={(e) => setServiceDraft(e.target.checked)}/>{t("Criar como serviço em rascunho")}</label>
               {serviceDraft && <p className="text-sm text-text-muted">{t("Depois de criar, abra Serviço e horários para configurar e ativar. Nenhuma reserva é oferecida antes da ativação.")}</p>}
               <div className="flex justify-end gap-2 sm:col-span-2">
                 <Button type="button" variant="ghost" size="sm" onClick={() => setCriando(false)}>

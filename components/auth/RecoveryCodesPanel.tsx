@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -103,11 +104,10 @@ export function RecoveryCodesPanel({ codes, onAcknowledge }: RecoveryCodesPanelP
       </div>
 
       <label className="flex cursor-pointer items-start gap-2 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={acked}
           onChange={(e) => setAcked(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded-md border-border"
+          className="mt-0.5"
         />
         <span>{t("Salvei meus códigos em local seguro.")}</span>
       </label>

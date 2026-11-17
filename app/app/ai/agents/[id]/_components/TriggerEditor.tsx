@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import * as React from "react";
 
 import { Input } from "@/components/ui/input";
@@ -155,9 +156,7 @@ function ListaDeFunis({
               key={f.id}
               className="flex cursor-pointer items-center gap-2 rounded-md border border-border/60 px-2 py-1 text-xs"
             >
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5 accent-primary"
+              <Checkbox
                 checked={marcado}
                 disabled={disabled}
                 aria-label={f.name}
@@ -234,9 +233,7 @@ export function TriggerEditor({ value, onChange, disabled, organizationTimezone,
                 key={ev}
                 className="flex cursor-pointer items-center gap-2 rounded-md border border-border/60 px-2 py-1 text-xs"
               >
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5 accent-primary"
+                <Checkbox
                   checked={checked}
                   onChange={() =>
                     onChange({

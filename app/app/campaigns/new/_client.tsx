@@ -15,6 +15,7 @@
  * A prévia do público fica ao lado do filtro, e não depois: o número que o
  * operador precisa ver antes de apertar é "quantas pessoas isto pega".
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -214,8 +215,7 @@ export function NovaCampanha() {
               .filter((c) => c.id !== canal)
               .map((c) => (
                 <label key={c.id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={extras.includes(c.id)}
                     onChange={(e) =>
                       setExtras((atual) =>

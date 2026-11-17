@@ -12,6 +12,7 @@
  * Só `admin` vê (as actions recusam o resto). Segredo nunca volta: a tela vê o
  * `last4` da chave e se há `client_secret`.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -385,9 +386,7 @@ export function ServidoresMcpDoAgente({ agentId, toolIds, onChangeToolIds, disab
                   <div className="flex flex-wrap gap-2">
                     {escoposOferecidos.map((e) => (
                       <label key={e} className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs max-md:min-h-11">
-                        <input
-                          type="checkbox"
-                          className="h-3.5 w-3.5 accent-primary"
+                        <Checkbox
                           checked={f.escoposPedidos.includes(e)}
                           onChange={(ev) =>
                             mudar({
@@ -588,9 +587,8 @@ function ServidorNaLista({
                 <li key={nome} className="flex flex-wrap items-start gap-3 rounded-md border border-border px-3 py-2" data-testid={`ferramenta-mcp-${servidor.slug}-${nome}`}>
                   {/* O label leva o toque do nome para a caixa: sozinha ela tem 16px. */}
                   <label className="flex flex-1 cursor-pointer items-start gap-3 max-md:min-h-11">
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                    <Checkbox
+                      className="mt-1 shrink-0"
                       checked={marca !== null}
                       onChange={(e) => alternar(nome, e.target.checked)}
                       disabled={disabled}

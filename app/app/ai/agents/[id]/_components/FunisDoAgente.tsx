@@ -18,6 +18,7 @@
  *  3. **Não usa jargão.** Nada de "escopo" nem de nome de coluna: o dono do
  *     negócio lê "mexer em negócio", que é o que de fato acontece.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import * as React from "react";
 
@@ -89,11 +90,10 @@ export function FunisDoAgente({ funis, value, onChange, cobertura, disabled = fa
               {/* `input` nativo, como o ToolPicker ao lado: o repo não tem
                   componente de checkbox, e introduzir um só para esta tela
                   criaria duas aparências para o mesmo controle na MESMA página. */}
-              <input
+              <Checkbox
                 id={`funil-${f.id}`}
                 data-testid={`funil-${f.id}`}
-                type="checkbox"
-                className="h-4 w-4 shrink-0 rounded-md border-border accent-primary"
+                className="shrink-0"
                 checked={marcados.has(f.id)}
                 onChange={(e) => alternar(f.id, e.target.checked)}
                 disabled={disabled}

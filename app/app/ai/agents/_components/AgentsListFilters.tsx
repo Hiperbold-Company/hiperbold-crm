@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -51,11 +52,9 @@ export function AgentsListFilters({
         </SelectContent>
       </Select>
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={showArchived}
           onChange={(e) => onShowArchivedChange(e.target.checked)}
-          className="size-4"
         />
         {t("Incluir arquivados")}
       </label>

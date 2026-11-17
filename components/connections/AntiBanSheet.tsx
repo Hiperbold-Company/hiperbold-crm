@@ -5,6 +5,7 @@
  * honesto com o motor: campo vazio = padrão conservador do engine (placeholder
  * mostra o valor); preenchido = override desta conexão.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FUSOS_OFERECIDOS } from "@/lib/tempo/fusos";
@@ -363,13 +364,11 @@ export function AntiBanSheet({ item, canWrite, onClose }: Props) {
                     key={dia}
                     className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm ${marcado ? "border-primary bg-primary/5" : "opacity-70"} ${canWrite ? "" : "pointer-events-none opacity-50"}`}
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={marcado}
                       onChange={() => alternarDiaDaProspeccao(dia)}
                       disabled={!canWrite}
                       aria-label={t("Prospecção no dia {dia}").replace("{dia}", nome)}
-                      className="accent-current"
                     />
                     {nome}
                   </label>

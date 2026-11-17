@@ -21,7 +21,9 @@ describe("InterfaceEditor: alvos de toque no celular", () => {
     for (const caixa of caixas) {
       expect(caixa.closest("label")).toHaveClass("max-md:min-h-11", "max-md:items-center");
       // `mt-1` sem prefixo desalinhava a caixa do texto centrado no celular.
-      expect(caixa.className.split(/\s+/)).toEqual(["md:mt-1"]);
+      const classes = caixa.className.split(/\s+/);
+      expect(classes).toContain("md:mt-1");
+      expect(classes).not.toContain("mt-1");
     }
   });
 });

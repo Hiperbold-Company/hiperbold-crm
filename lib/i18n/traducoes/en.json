@@ -14687,5 +14687,7 @@
   "Ligar a limpeza de mídia antiga?": "Turn on old media cleanup?",
   "Trocar modelo": "Change template",
   "Recusar proposta": "Decline proposal",
-  "Motivo da recusa (opcional)": "Reason for declining (optional)"
+  "Motivo da recusa (opcional)": "Reason for declining (optional)",
+  "Prazo da solicitação": "Request deadline",
+  "Uso do orçamento de IA": "AI budget usage"
 }

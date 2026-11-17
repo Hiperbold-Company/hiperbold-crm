@@ -31,6 +31,7 @@
  * decorativo — pior que controle ausente, porque ensina que a decisão foi
  * tomada.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import * as React from "react";
 import { toast } from "sonner";
 
@@ -205,8 +206,7 @@ export function PainelDeChamadaDeVoz() {
       ) : (
         <div className="space-y-3">
           <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               className="mt-1"
               checked={aceitou}
               disabled={salvando}

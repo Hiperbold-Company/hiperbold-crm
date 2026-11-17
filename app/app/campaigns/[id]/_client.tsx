@@ -20,6 +20,7 @@ import { useState } from "react";
 import { EstadoDaCampanha } from "@/components/campanhas/EstadoDaCampanha";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -210,17 +211,7 @@ export function DetalheDaCampanha({ id }: { id: string }) {
             <h2 className="font-medium">{t("Progresso")}</h2>
             <span className="text-sm text-muted-foreground">{Math.round(m.progresso * 100)}%</span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-surface-elevated">
-            <div
-              className="h-full bg-accent-500"
-              style={{ width: `${Math.round(m.progresso * 100)}%` }}
-              role="progressbar"
-              aria-valuenow={Math.round(m.progresso * 100)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={t("Progresso do envio")}
-            />
-          </div>
+          <Progress valor={Math.round(m.progresso * 100)} rotulo={t("Progresso do envio")} />
           <p className="text-sm text-muted-foreground">
             {m.contagem.pendentes} {t("ainda não enviadas")} · {m.contagem.falharam} {t("falharam")}{" "}
             · {m.contagem.optOut} {t("pediram para parar")}

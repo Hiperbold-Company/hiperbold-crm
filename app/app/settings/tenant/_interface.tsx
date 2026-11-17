@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -99,8 +100,7 @@ export function InterfaceDaEmpresaForm({ initial, role, camposDeCompra = [] }: P
           </p>
           {camposDeCompra.map((campo) => (
             <label key={campo.key} className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
                 data-testid={`compra-campo-${campo.key}`}
                 checked={escolhidosDeCompra.includes(campo.key)}
                 disabled={isPending || (!escolhidosDeCompra.includes(campo.key) && escolhidosDeCompra.length >= MAX_CAMPOS_DE_COMPRA)}

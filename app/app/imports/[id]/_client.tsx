@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -49,8 +50,7 @@ export function ImportDetailClient({ id }: { id: string }) {
       </div>
 
       <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={onlyConflicts}
           onChange={(e) => setOnlyConflicts(e.target.checked)}
         />

@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -178,11 +179,11 @@ export function EditorDeModelo({ slug }: { slug: string }) {
             <Textarea aria-label={t("Texto da seção")} value={s.body} disabled={somenteLeitura} rows={4} onChange={(e) => mudarSecao(i, { body: e.target.value })} />
             <div className="flex gap-4 text-sm">
               <label className="flex items-center gap-1">
-                <input type="checkbox" checked={s.required} disabled={somenteLeitura} onChange={(e) => mudarSecao(i, { required: e.target.checked, conditional: e.target.checked ? false : s.conditional })} />
+                <Checkbox checked={s.required} disabled={somenteLeitura} onChange={(e) => mudarSecao(i, { required: e.target.checked, conditional: e.target.checked ? false : s.conditional })} />
                 {t("Obrigatória")}
               </label>
               <label className="flex items-center gap-1">
-                <input type="checkbox" checked={s.conditional} disabled={somenteLeitura} onChange={(e) => mudarSecao(i, { conditional: e.target.checked, required: e.target.checked ? false : s.required })} />
+                <Checkbox checked={s.conditional} disabled={somenteLeitura} onChange={(e) => mudarSecao(i, { conditional: e.target.checked, required: e.target.checked ? false : s.required })} />
                 {t("Só aparece se tiver dado")}
               </label>
             </div>
