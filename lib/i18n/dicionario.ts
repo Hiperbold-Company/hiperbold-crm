@@ -28772,6 +28772,16 @@ export const DICIONARIO: Traducoes = {
   "Este número já está em outra conexão desta empresa. Remova uma das duas e tente de novo.": { es: "Este número ya está en otra conexión de esta empresa. Elimine una de las dos e inténtelo de nuevo." },
   "Não foi possível falar com o servidor de WhatsApp agora. Tente de novo em instantes.": { es: "No fue posible comunicarse con el servidor de WhatsApp ahora. Inténtelo de nuevo en instantes." },
   "Conectado, mas as mensagens ainda não entram.": { es: "Conectado, pero los mensajes todavía no entran." },
+  // Início com painel de indicadores (17/11/2026).
+  "Esconder checklist": { es: "Ocultar lista de pasos" },
+  "Exibir checklist": { es: "Mostrar lista de pasos" },
+  "Primeiros passos": { es: "Primeros pasos" },
+  "VER TUDO EM ATENDIMENTO": { es: "VER TODO EN ATENCIÓN" },
+  "VER TUDO EM NEGÓCIOS": { es: "VER TODO EN NEGOCIOS" },
+  "VER TUDO EM ORIGENS": { es: "VER TODO EN ORÍGENES" },
+  "Sem origem rastreada": { es: "Sin origen rastreado" },
+  "Ganhos de origem rastreada": { es: "Ganados de origen rastreado" },
+  "Taxa de ganho de origem rastreada": { es: "Tasa de ganados de origen rastreado" },
 };
 
 /**

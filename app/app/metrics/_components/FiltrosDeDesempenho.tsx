@@ -23,21 +23,18 @@ export interface FunilDoFiltro {
   name: string;
 }
 
-export function FiltrosDeDesempenho({
+/**
+ * O seletor de período (atalhos + datas do "Personalizado"). Fragmento: entra como irmão dos demais
+ * filtros na barra de Desempenho e sozinho no painel do Início, sempre com o mesmo desenho e a mesma regra.
+ */
+export function SeletorDePeriodo({
   filtros,
   onChange,
-  funis,
-  podeEscolherAtendente,
-  currentUserId,
 }: {
   filtros: FiltrosDaTela;
   onChange: (f: FiltrosDaTela) => void;
-  funis: FunilDoFiltro[];
-  podeEscolherAtendente: boolean;
-  currentUserId: string;
 }) {
   const t = useT();
-  const equipe = useTeamMembers({ enabled: podeEscolherAtendente });
 
   const rotulos: Record<Atalho, string> = {
     hoje: t("Hoje"),
@@ -70,10 +67,7 @@ export function FiltrosDeDesempenho({
   };
 
   return (
-    <div
-      className="flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-end"
-      data-testid="desempenho-filtros"
-    >
+    <>
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         {t("Período")}
         <Select value={filtros.atalho} onValueChange={escolherAtalho}>
@@ -115,6 +109,32 @@ export function FiltrosDeDesempenho({
         </div>
       ) : null}
 
+    </>
+  );
+}
+
+export function FiltrosDeDesempenho({
+  filtros,
+  onChange,
+  funis,
+  podeEscolherAtendente,
+  currentUserId,
+}: {
+  filtros: FiltrosDaTela;
+  onChange: (f: FiltrosDaTela) => void;
+  funis: FunilDoFiltro[];
+  podeEscolherAtendente: boolean;
+  currentUserId: string;
+}) {
+  const t = useT();
+  const equipe = useTeamMembers({ enabled: podeEscolherAtendente });
+
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-end"
+      data-testid="desempenho-filtros"
+    >
+      <SeletorDePeriodo filtros={filtros} onChange={onChange} />
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         {t("Funil")}
         <Select

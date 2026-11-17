@@ -14,14 +14,13 @@ import { useDesempenhoAtendimento } from "@/hooks/metrics/useDesempenho";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatarDuracao, variacaoPercentual } from "@/lib/metrics/desempenho";
 
-import { BarrasPorDia, CartaoKpi, COR, LinhasPorDia, MapaDeCalor, Painel, Rosca } from "./graficos";
-
-/**
- * Célula de número que, no celular, vira "Rótulo valor" dentro do cartão
- * (upstream, ADR-0006 F4): o cabeçalho some abaixo de `md` e o rótulo vem do
- * `data-rotulo` da própria célula. Só classes `max-md:`.
- */
-const CELULA_DE_NUMERO = "text-right tabular-nums max-md:p-0 max-md:text-left max-md:before:mr-1 max-md:before:text-muted-foreground max-md:before:content-[attr(data-rotulo)]";
+import { BarrasPorDia, CartaoKpi, COR, LinhasPorDia, Painel } from "./graficos";
+import {
+  CELULA_DE_NUMERO,
+  PainelAtendimentosPorAtendente,
+  PainelQuandoOsClientesEscrevem,
+  PainelRankingDeAtendimento,
+} from "./paineis-compartilhados";
 
 function nome(
   a: { user_id: string | null; name: string | null; email?: string | null },
@@ -102,61 +101,11 @@ export function AbaAtendimento({
         </Painel>
       </div>
 
-      <Painel
-        titulo={t("Quando os clientes escrevem")}
-        descricao={`${t("Mensagens recebidas por dia da semana e hora, no fuso da organização")} (${d.fuso}).`}
-      >
-        <MapaDeCalor celulas={d.mapa_de_calor} />
-      </Painel>
+      <PainelQuandoOsClientesEscrevem d={d} />
 
       <div className="grid gap-4 lg:grid-cols-5">
-        <Painel className="lg:col-span-2" titulo={t("Atendimentos por atendente")}>
-          {d.atendentes.some((a) => a.atendimentos > 0) ? (
-            <Rosca
-              fatias={d.atendentes
-                .filter((a) => a.atendimentos > 0)
-                .map((a) => ({ nome: nome(a, t, currentUserId), valor: a.atendimentos }))}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">{t("Nenhum atendimento no período.")}</p>
-          )}
-        </Painel>
-        <Painel
-          className="lg:col-span-3"
-          titulo={t("Ranking de atendimento")}
-          descricao={t("Atendimentos pelo responsável atual da conversa; tempos por quem respondeu.")}
-        >
-          {d.atendentes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("Nenhum atendimento no período.")}</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table className="max-md:block">
-                <TableHeader className="max-md:hidden">
-                  <TableRow>
-                    <TableHead>{t("Atendente")}</TableHead>
-                    <TableHead className="text-right">{t("Atendimentos")}</TableHead>
-                    <TableHead className="text-right">{t("Finalizados")}</TableHead>
-                    <TableHead className="text-right">{t("Em aberto")}</TableHead>
-                    <TableHead className="text-right">{t("1ª resposta")}</TableHead>
-                    <TableHead className="text-right">{t("Resposta")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody className="max-md:block">
-                  {d.atendentes.map((a) => (
-                    <TableRow key={a.user_id ?? "sem"} className="max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:py-2">
-                      <TableCell className="font-medium max-md:col-span-2 max-md:p-0">{nome(a, t, currentUserId)}</TableCell>
-                      <TableCell data-rotulo={t("Atendimentos")} className={CELULA_DE_NUMERO}>{a.atendimentos}</TableCell>
-                      <TableCell data-rotulo={t("Finalizados")} className={CELULA_DE_NUMERO}>{a.finalizados}</TableCell>
-                      <TableCell data-rotulo={t("Em aberto")} className={CELULA_DE_NUMERO}>{a.em_aberto}</TableCell>
-                      <TableCell data-rotulo={t("1ª resposta")} className={CELULA_DE_NUMERO}>{formatarDuracao(a.primeira_resposta_seg)}</TableCell>
-                      <TableCell data-rotulo={t("Resposta")} className={CELULA_DE_NUMERO}>{formatarDuracao(a.resposta_seg)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </Painel>
+        <PainelAtendimentosPorAtendente atendentes={d.atendentes} nomeDe={(a) => nome(a, t, currentUserId)} />
+        <PainelRankingDeAtendimento atendentes={d.atendentes} nomeDe={(a) => nome(a, t, currentUserId)} />
       </div>
 
       <PerformanceDosAtendentes
