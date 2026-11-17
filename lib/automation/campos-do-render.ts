@@ -41,7 +41,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { chavesRestritasDaOrganizacao, type ChavesRestritas } from "@/lib/campos/chaves-restritas";
 import { chavesRestritasDosCampos, recortarCampos, recortarValores } from "@/lib/campos/recorte-por-papel";
 import { camposDoFunil } from "@/lib/leads/campos-do-funil";
 import type { CustomFieldDef } from "@/lib/schemas/settings";
@@ -82,7 +82,7 @@ export function camposPersonalizadosParaIa(context: Record<string, unknown>, cam
   return recortarValores(campos, new Set(marca as string[]), "ia");
 }
 
-function marcarRestritas(context: Record<string, unknown>, chaves: Iterable<string> | "todas"): void {
+export function marcarRestritas(context: Record<string, unknown>, chaves: Iterable<string> | "todas"): void {
   if (context[CAMPOS_RESTRITOS_NO_CONTEXTO] === "todas") return;
   if (chaves === "todas") {
     context[CAMPOS_RESTRITOS_NO_CONTEXTO] = "todas";
@@ -245,6 +245,18 @@ export async function recortarCamposRestritosDoContexto(
     return !!campos && typeof campos === "object" && Object.keys(campos as object).length > 0;
   });
   if (!temValor) return;
-  const lidas = await chavesRestritasDaOrganizacao(admin, organizationId);
+  aplicarChavesRestritas(context, await chavesRestritasDaOrganizacao(admin, organizationId));
+}
+
+/** O contexto tem algum valor de campo personalizado (do negócio ou do contato)? */
+export function contextoTemCamposPersonalizados(context: Record<string, unknown>): boolean {
+  return [context.lead, context.contact].some((alvo) => {
+    const campos = (alvo as { custom_fields?: unknown } | null | undefined)?.custom_fields;
+    return !!campos && typeof campos === "object" && Object.keys(campos as object).length > 0;
+  });
+}
+
+/** Marca no `context` o resultado da leitura das chaves restritas; falha de leitura = `"todas"`. */
+export function aplicarChavesRestritas(context: Record<string, unknown>, lidas: ChavesRestritas): void {
   marcarRestritas(context, lidas.ok ? lidas.chaves : "todas");
 }

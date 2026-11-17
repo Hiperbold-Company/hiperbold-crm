@@ -22,6 +22,7 @@
  *  - `obrigatorio_em.etapas` só aceita etapas DESTE funil, desta organização.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { recortarCampos } from "@/lib/campos/recorte-por-papel";
 import { z } from "zod";
 
 import { ApiError } from "@/lib/api/types";
@@ -132,7 +133,8 @@ async function validarEtapas(
 export async function listarCamposDoFunil(deps: DepsDosCampos, pipelineId: string): Promise<unknown[]> {
   const lida = await lerConfiguracaoDoFunil(deps.supabase, deps.organizationId, pipelineId);
   if (!lida.ok) throw erroDoNucleo(deps, lida.error);
-  return lida.dados.settings.fields;
+  // 1015: a definição não pública só vai para administrador.
+  return recortarCampos(lida.dados.settings.fields as unknown[], deps.papel);
 }
 
 /** A obrigatoriedade DESTE funil, alterada numa chave, dentro da trava otimista do núcleo. */

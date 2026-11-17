@@ -1,4 +1,6 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { recortarLinhaDaResposta } from "@/lib/campos/resposta-recortada";
+import { leitorDoAtor } from "@/lib/campos/recorte-por-papel";
 /**
  * POST /api/v1/leads/[id]/move
  *
@@ -420,5 +422,14 @@ export async function POST(
     },
   });
 
-  return ok(ocultarProvaMetaNaResposta(finalLead as Record<string, unknown>), { requestId });
+  // 1015: a resposta segue o recorte do GET (campo não público só para administrador).
+  const recortado = await recortarLinhaDaResposta(
+    supabase,
+    orgId,
+    ocultarProvaMetaNaResposta(finalLead as Record<string, unknown>),
+    leitorDoAtor(authz.actor),
+    requestId,
+  );
+  if (!recortado.ok) return recortado.resposta;
+  return ok(recortado.linha, { requestId });
 }

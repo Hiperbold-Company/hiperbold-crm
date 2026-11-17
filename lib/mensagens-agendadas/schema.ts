@@ -8,7 +8,11 @@ export const modeloDaAgendadaSchema = z.object({
   name: z.string().min(1).max(512),
   language: z.string().min(2).max(16),
   values: z.record(z.string(), z.string().max(2048)).default({}),
-  body: z.string().min(1).max(4096),
+  /**
+   * Aceito por compatibilidade e IGNORADO: o servidor monta o texto pela
+   * definição aprovada da conexão da conversa (`modeloAprovadoDaConexao`).
+   */
+  body: z.string().max(4096).optional(),
 });
 
 export const criarAgendadaSchema = z.object({

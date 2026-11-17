@@ -19,12 +19,18 @@ import { randomUUID } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { linhaDoEspelho } from "@/lib/channels/linha-do-espelho";
+import { lerConteudo } from "@/lib/channels/template-conteudo";
+
 import {
   canalTemModelo,
   exigenciaAoAgendar,
   horarioValido,
+  MAX_PENDENTES_POR_CONVERSA,
+  MAX_PENDENTES_POR_USUARIO,
   type ExigenciaAoAgendar,
   type ModeloDaAgendada,
+  type ModeloEscolhido,
   type StatusDaAgendada,
 } from "./regras";
 import { MENSAGEM_HORARIO_INVALIDO } from "./textos";
@@ -97,7 +103,13 @@ export async function lerConversaDoAgendamento(
 }
 
 export interface RecusaDoAgendamento {
-  codigo: "horario_invalido" | "modelo_obrigatorio" | "modelo_sem_canal";
+  codigo:
+    | "horario_invalido"
+    | "modelo_obrigatorio"
+    | "modelo_sem_canal"
+    | "modelo_nao_aprovado"
+    | "limite_da_conversa"
+    | "limite_do_usuario";
   /** Chave do dicionário (pt-BR). A rota traduz. */
   mensagem: string;
 }
@@ -106,6 +118,12 @@ export { MENSAGEM_HORARIO_INVALIDO };
 export const MENSAGEM_MODELO_OBRIGATORIO =
   "A janela de 24 horas estará fechada no horário escolhido. Escolha um modelo aprovado para enviar se o cliente não responder antes.";
 export const MENSAGEM_MODELO_SEM_CANAL = "Este canal não envia modelo aprovado.";
+export const MENSAGEM_MODELO_NAO_APROVADO =
+  "Este modelo não está aprovado na conexão desta conversa. Escolha um modelo aprovado.";
+export const MENSAGEM_LIMITE_DA_CONVERSA =
+  "Esta conversa já tem 20 mensagens agendadas para sair. Cancele uma antes de agendar outra.";
+export const MENSAGEM_LIMITE_DO_USUARIO =
+  "Você já tem 200 mensagens agendadas para sair. Cancele alguma antes de agendar outra.";
 
 /**
  * O que impede este agendamento, ou `null` quando ele pode ser gravado.
@@ -118,7 +136,7 @@ export const MENSAGEM_MODELO_SEM_CANAL = "Este canal não envia modelo aprovado.
 export function conferirAgendamento(
   conversa: Pick<ConversaDoAgendamento, "provider" | "last_inbound_at">,
   sendAt: Date,
-  modelo: ModeloDaAgendada | null,
+  modelo: Pick<ModeloEscolhido, "name" | "language"> | null,
   agora: Date,
   opcoes: { conferirHorario?: boolean } = {},
 ): RecusaDoAgendamento | null {
@@ -134,6 +152,67 @@ export function conferirAgendamento(
     return { codigo: "modelo_obrigatorio", mensagem: MENSAGEM_MODELO_OBRIGATORIO };
   }
   return null;
+}
+
+/**
+ * O modelo escolhido, conferido contra o espelho (`meta_templates`) DA CONEXÃO
+ * DA CONVERSA — a mesma busca do envio (`linhaDoEspelho`: a linha da conexão
+ * ou, no canal oficial, a da WABA dela) — e só se estiver APROVADO. O `body`
+ * sai da definição guardada, nunca do navegador. `null` = não existe nessa
+ * conexão ou não está aprovado. Erro de leitura volta como erro.
+ *
+ * Usada na criação, na edição e de novo pelo worker antes de enviar: o modelo
+ * aprovado hoje pode ter sido pausado ou apagado até a hora marcada.
+ */
+export async function modeloAprovadoDaConexao(
+  servico: SupabaseClient,
+  organizationId: string,
+  channelSessionId: string | null,
+  escolhido: ModeloEscolhido,
+): Promise<Leitura<ModeloDaAgendada | null>> {
+  // Sem conexão não há conta onde o modelo seria aprovado.
+  if (!channelSessionId) return { ok: true, valor: null };
+  const { data, error } = await linhaDoEspelho<{ name: string; language: string; status: string | null; components: unknown }>(
+    servico,
+    "name, language, status, components",
+    { organizationId, name: escolhido.name, language: escolhido.language, channelSessionId },
+  );
+  if (error) return { ok: false, erro: error };
+  if (!data || String(data.status ?? "").toUpperCase() !== "APPROVED") return { ok: true, valor: null };
+  const componentes = Array.isArray(data.components) ? (data.components as unknown[]) : [];
+  const body = lerConteudo(componentes).body?.trim() || data.name;
+  return { ok: true, valor: { name: data.name, language: data.language, values: escolhido.values, body } };
+}
+
+/**
+ * O teto de pendentes (`agendada`/`enviando`) da conversa e de quem agenda.
+ * `null` = cabe mais uma. Conta antes do insert (ver `MAX_PENDENTES_POR_CONVERSA`).
+ */
+export async function conferirTetoDePendentes(
+  servico: SupabaseClient,
+  entrada: { organizationId: string; conversationId: string; userId: string },
+): Promise<Leitura<RecusaDoAgendamento | null>> {
+  const contar = async (coluna: "conversation_id" | "created_by", valor: string) => {
+    const { count, error } = await servico
+      .from("scheduled_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", entrada.organizationId)
+      .eq(coluna, valor)
+      .in("status", ["agendada", "enviando"]);
+    if (error) throw error;
+    return count ?? 0;
+  };
+  try {
+    if ((await contar("conversation_id", entrada.conversationId)) >= MAX_PENDENTES_POR_CONVERSA) {
+      return { ok: true, valor: { codigo: "limite_da_conversa", mensagem: MENSAGEM_LIMITE_DA_CONVERSA } };
+    }
+    if ((await contar("created_by", entrada.userId)) >= MAX_PENDENTES_POR_USUARIO) {
+      return { ok: true, valor: { codigo: "limite_do_usuario", mensagem: MENSAGEM_LIMITE_DO_USUARIO } };
+    }
+    return { ok: true, valor: null };
+  } catch (erro) {
+    return { ok: false, erro };
+  }
 }
 
 /** Grava a agendada. `id` e carimbos saem daqui para a linha devolvida ser a gravada. */

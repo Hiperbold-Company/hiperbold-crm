@@ -6,8 +6,11 @@
  * envio, se o cliente tiver escrito antes, sai o texto; se não, sai este modelo.
  * Sem modelo a mensagem não sairia, então a tela o pede antes de agendar.
  *
- * A lista é a MESMA do seletor da janela fechada (`JanelaFechadaAviso`): mesma
- * rota, mesma chave de cache, só as aprovadas, um campo por valor do modelo.
+ * A lista é a da CONEXÃO DA CONVERSA (`?channel_session_id=`, como a aba de
+ * modelos do painel): uma organização com duas contas oficiais aprovaria o
+ * modelo numa e o envio sairia pela outra. Só as aprovadas, um campo por valor.
+ * O servidor confere nome e idioma contra o espelho DESTA conexão e monta o
+ * texto pela definição guardada; o `body` daqui é só a prévia.
  * O que sai daqui só vale quando todo valor foi preenchido — o servidor recusa
  * modelo com valor faltando, e recusar no horário do envio é tarde demais.
  */
@@ -53,9 +56,12 @@ export function modeloCompleto(modelo: ModeloAprovado | null, valores: Record<st
 
 export function ModeloDoAgendamento({
   provider,
+  channelSessionId = null,
   onChange,
 }: {
   provider: string | null;
+  /** A conexão da conversa: a lista é a dos modelos aprovados NELA. */
+  channelSessionId?: string | null;
   onChange: (modelo: ModeloDaAgendada | null) => void;
 }) {
   const t = useT();
@@ -64,9 +70,13 @@ export function ModeloDoAgendamento({
   const [valores, setValores] = useState<Record<string, string>>({});
 
   const { data, isLoading } = useQuery({
-    queryKey: ["templates-da-conversa", fonte],
+    queryKey: ["templates-da-conversa", fonte, channelSessionId ?? "padrao"],
     enabled: fonte !== null,
-    queryFn: async () => apiClient.get<{ data: { templates: ModeloAprovado[] } }>(rotaDeTemplates(fonte!)),
+    queryFn: async () => {
+      const rota = rotaDeTemplates(fonte!);
+      const url = channelSessionId ? `${rota}?channel_session_id=${encodeURIComponent(channelSessionId)}` : rota;
+      return apiClient.get<{ data: { templates: ModeloAprovado[] } }>(url);
+    },
     staleTime: 30_000,
   });
   const aprovados = (data?.data.templates ?? []).filter((tpl) => tpl.status?.toUpperCase() === "APPROVED");

@@ -1,4 +1,5 @@
 import {claimOfJob,type JobClaim} from "../queue/claim";
+import { chavesRestritasDaOrganizacaoPg } from "@/lib/campos/chaves-restritas";
 import { recortarValores } from "@/lib/campos/recorte-por-papel";
 import {resultadoDoEnvioDoFollowup} from "../edge/crm/send-ledger";
 import { parseServiceBoundary } from "@/lib/atendimento/fronteira";
@@ -1308,19 +1309,15 @@ async function dadosParaVariaveis(
        order by updated_at desc limit 1`,
       [tenantId, contactId],
     ),
-    // 1015: campo não público nunca vira texto que sai da IA ao cliente.
-    pool.query<{ key: string }>(
-      `select key from custom_field_definitions where organization_id = $1 and publico = false`,
-      [tenantId],
-    ),
+    // 1015: campo não público nunca vira variável do modelo que sai ao cliente — nem o marcado só
+    // no funil (organização no legado). Sem conseguir ler quais são, nenhum campo entra.
+    chavesRestritasDaOrganizacaoPg(pool, tenantId),
   ]);
   return {
     nomeDoContato: nomeDoContato(contatos.rows[0] ?? null),
-    camposDoNegocio: recortarValores(
-      negocios.rows[0]?.custom_fields ?? {},
-      new Set(restritas.rows.map((r) => r.key.toLowerCase())),
-      "ia",
-    ),
+    camposDoNegocio: restritas.ok
+      ? recortarValores(negocios.rows[0]?.custom_fields ?? {}, restritas.chaves, "ia")
+      : {},
   };
 }
 

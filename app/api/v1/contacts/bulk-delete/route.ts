@@ -29,6 +29,7 @@ import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { exigirPermissao } from "@/lib/permissoes/servidor";
+import { recusaDoFiltroPorCampoRestrito } from "@/lib/campos/filtro-restrito";
 import { resolverAlvoDeLote } from "@/lib/contacts/alvo-de-lote";
 import { excluirContatosEmLote } from "@/lib/contacts/excluir-em-lote";
 import { resumoDoFiltroParaAuditoria } from "@/lib/contacts/filtros";
@@ -84,6 +85,17 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   const supabase = await createClient();
+  // 1015: filtro por campo não público é oráculo do valor — só administrador.
+  if ("filtro" in corpo) {
+    const recusaDoCampo = await recusaDoFiltroPorCampoRestrito(
+      supabase,
+      organizationId,
+      corpo.filtro.campo_valor ? corpo.filtro.campo : null,
+      authz.org.role,
+      requestId,
+    );
+    if (recusaDoCampo) return recusaDoCampo;
+  }
   try {
     const alvo = await resolverAlvoDeLote(
       supabase,

@@ -60,48 +60,112 @@ const botaoSchema = z.discriminatedUnion(
   { message: "Tipo de botão desconhecido. Use QUICK_REPLY, URL ou PHONE_NUMBER." },
 );
 
+const cabecalhoDeTextoSchema = z.object({
+  type: z.literal("HEADER"),
+  format: z.literal("TEXT", { message: "Só o cabeçalho de texto é aceito aqui (format: TEXT)." }),
+  text: z
+    .string({ message: "O cabeçalho precisa de texto." })
+    .trim()
+    .min(1, "O cabeçalho precisa de texto.")
+    .max(LIMITES_DO_MODELO.cabecalhoTexto, "O cabeçalho passa de 60 caracteres."),
+  example: z.object({ header_text: z.array(z.string()) }).optional(),
+});
+
+/**
+ * Cabeçalho de mídia: o formulário das Conexões o monta (`montarComponents`,
+ * `format: IMAGE` com `example.header_handle`). A importação de JSON do chat não
+ * o aceita (ver o cabeçalho deste arquivo); a rota de criação aceita.
+ */
+const cabecalhoDeMidiaSchema = z.object({
+  type: z.literal("HEADER"),
+  format: z.enum(["IMAGE", "VIDEO", "DOCUMENT"], {
+    message: "Formato de cabeçalho desconhecido. Use TEXT, IMAGE, VIDEO ou DOCUMENT.",
+  }),
+  example: z.object({ header_handle: z.array(z.string().trim().min(1)).min(1) }).optional(),
+});
+
+const corpoSchema = z.object({
+  type: z.literal("BODY"),
+  text: z
+    .string({ message: "O corpo precisa de texto." })
+    .trim()
+    .min(1, "O corpo precisa de texto.")
+    .max(LIMITES_DO_MODELO.corpo, "O corpo passa de 1024 caracteres."),
+  example: z
+    .object({ body_text: z.array(z.array(z.string()), { message: "Os exemplos do corpo vão em body_text, uma lista dentro de outra." }) })
+    .optional(),
+});
+
+const rodapeSchema = z.object({
+  type: z.literal("FOOTER"),
+  text: z
+    .string({ message: "O rodapé precisa de texto." })
+    .trim()
+    .min(1, "O rodapé precisa de texto.")
+    .max(LIMITES_DO_MODELO.rodape, "O rodapé passa de 60 caracteres."),
+});
+
+const botoesSchema = z.object({
+  type: z.literal("BUTTONS"),
+  buttons: z
+    .array(botaoSchema)
+    .min(1, "O bloco de botões está vazio.")
+    .max(LIMITES_DO_MODELO.botoes, "A Meta aceita no máximo 10 botões."),
+});
+
+const MENSAGEM_TIPO_DESCONHECIDO = "Tipo de componente desconhecido. Use HEADER, BODY, FOOTER ou BUTTONS.";
+
+/** O componente da IMPORTAÇÃO de JSON: só cabeçalho de texto. */
 const componenteSchema = z.discriminatedUnion(
   "type",
-  [
-    z.object({
-      type: z.literal("HEADER"),
-      format: z.literal("TEXT", { message: "Só o cabeçalho de texto é aceito aqui (format: TEXT)." }),
-      text: z
-        .string({ message: "O cabeçalho precisa de texto." })
-        .trim()
-        .min(1, "O cabeçalho precisa de texto.")
-        .max(LIMITES_DO_MODELO.cabecalhoTexto, "O cabeçalho passa de 60 caracteres."),
-      example: z.object({ header_text: z.array(z.string()) }).optional(),
-    }),
-    z.object({
-      type: z.literal("BODY"),
-      text: z
-        .string({ message: "O corpo precisa de texto." })
-        .trim()
-        .min(1, "O corpo precisa de texto.")
-        .max(LIMITES_DO_MODELO.corpo, "O corpo passa de 1024 caracteres."),
-      example: z
-        .object({ body_text: z.array(z.array(z.string()), { message: "Os exemplos do corpo vão em body_text, uma lista dentro de outra." }) })
-        .optional(),
-    }),
-    z.object({
-      type: z.literal("FOOTER"),
-      text: z
-        .string({ message: "O rodapé precisa de texto." })
-        .trim()
-        .min(1, "O rodapé precisa de texto.")
-        .max(LIMITES_DO_MODELO.rodape, "O rodapé passa de 60 caracteres."),
-    }),
-    z.object({
-      type: z.literal("BUTTONS"),
-      buttons: z
-        .array(botaoSchema)
-        .min(1, "O bloco de botões está vazio.")
-        .max(LIMITES_DO_MODELO.botoes, "A Meta aceita no máximo 10 botões."),
-    }),
-  ],
-  { message: "Tipo de componente desconhecido. Use HEADER, BODY, FOOTER ou BUTTONS." },
+  [cabecalhoDeTextoSchema, corpoSchema, rodapeSchema, botoesSchema],
+  { message: MENSAGEM_TIPO_DESCONHECIDO },
 );
+
+/** O componente da ROTA de criação: o mesmo, mais o cabeçalho de mídia do formulário das Conexões. */
+const componenteDaRotaSchema = z.discriminatedUnion(
+  "type",
+  [z.discriminatedUnion("format", [cabecalhoDeTextoSchema, cabecalhoDeMidiaSchema]), corpoSchema, rodapeSchema, botoesSchema],
+  { message: MENSAGEM_TIPO_DESCONHECIDO },
+);
+
+type ComponenteLido = { type: string; buttons?: ReadonlyArray<{ type: string }> };
+
+/** As regras da LISTA (um corpo, sem repetição, tetos por tipo de botão). Uma régua para a importação e para a rota. */
+function conferirListaDeComponentes(
+  components: readonly ComponenteLido[],
+  ctx: z.RefinementCtx,
+  caminho: (string | number)[],
+): void {
+  const conta = (tipo: string) => components.filter((c) => c.type === tipo).length;
+  if (conta("BODY") !== 1) {
+    ctx.addIssue({ code: "custom", path: caminho, message: "O modelo precisa de exatamente um corpo (BODY)." });
+  }
+  for (const tipo of ["HEADER", "FOOTER", "BUTTONS"]) {
+    if (conta(tipo) > 1) {
+      ctx.addIssue({ code: "custom", path: caminho, message: "Cada componente HEADER, FOOTER ou BUTTONS aparece uma vez só." });
+    }
+  }
+  const botoes = components.flatMap((c) => (c.type === "BUTTONS" ? (c.buttons ?? []) : []));
+  if (botoes.filter((b) => b.type === "URL").length > MAX_BOTOES_URL) {
+    ctx.addIssue({ code: "custom", path: caminho, message: "A Meta aceita no máximo 2 botões de link." });
+  }
+  if (botoes.filter((b) => b.type === "PHONE_NUMBER").length > MAX_BOTOES_TELEFONE) {
+    ctx.addIssue({ code: "custom", path: caminho, message: "A Meta aceita no máximo 1 botão de telefone." });
+  }
+}
+
+/**
+ * `components` como a rota `POST /api/v1/channels/templates` aceita (criar e
+ * editar): a MESMA régua da importação de JSON, com o cabeçalho de mídia a mais.
+ * A rota só VALIDA com isto e segue mandando o que recebeu: o `strip` do Zod não
+ * pode tirar campo do corpo que vai para a Meta.
+ */
+export const componentesDoModeloSchema = z
+  .array(componenteDaRotaSchema, { message: "Falta a lista components." })
+  .min(1, "Falta a lista components.")
+  .max(10, "A Meta aceita no máximo 10 componentes.")
+  .superRefine((components, ctx) => conferirListaDeComponentes(components, ctx, []));
 
 /** O modelo no formato da Meta, como o JSON é exportado e importado. */
 export const modeloJsonSchema = z
@@ -123,24 +187,7 @@ export const modeloJsonSchema = z
       .array(componenteSchema, { message: "Falta a lista components." })
       .min(1, "Falta a lista components."),
   })
-  .superRefine((modelo, ctx) => {
-    const conta = (tipo: string) => modelo.components.filter((c) => c.type === tipo).length;
-    if (conta("BODY") !== 1) {
-      ctx.addIssue({ code: "custom", path: ["components"], message: "O modelo precisa de exatamente um corpo (BODY)." });
-    }
-    for (const tipo of ["HEADER", "FOOTER", "BUTTONS"]) {
-      if (conta(tipo) > 1) {
-        ctx.addIssue({ code: "custom", path: ["components"], message: "Cada componente HEADER, FOOTER ou BUTTONS aparece uma vez só." });
-      }
-    }
-    const botoes = modelo.components.flatMap((c) => (c.type === "BUTTONS" ? c.buttons : []));
-    if (botoes.filter((b) => b.type === "URL").length > MAX_BOTOES_URL) {
-      ctx.addIssue({ code: "custom", path: ["components"], message: "A Meta aceita no máximo 2 botões de link." });
-    }
-    if (botoes.filter((b) => b.type === "PHONE_NUMBER").length > MAX_BOTOES_TELEFONE) {
-      ctx.addIssue({ code: "custom", path: ["components"], message: "A Meta aceita no máximo 1 botão de telefone." });
-    }
-  });
+  .superRefine((modelo, ctx) => conferirListaDeComponentes(modelo.components, ctx, ["components"]));
 
 export type ModeloJson = z.infer<typeof modeloJsonSchema>;
 

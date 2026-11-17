@@ -30,6 +30,7 @@ import { ApiError } from "@/lib/api/types";
 import { fail, MENSAGEM_DE_FALHA_INTERNA } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { roleAtLeast } from "@/lib/auth/types";
+import { recusaDoFiltroPorCampoRestrito } from "@/lib/campos/filtro-restrito";
 import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
 import {
   chavesRestritasDosCampos,
@@ -103,6 +104,17 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const supabase = await createClient();
   const ctx = { organizationId, requestId, timezone };
+  // 1015: filtro por campo não público é oráculo do valor — só administrador.
+  if ("filtro" in corpo) {
+    const recusaDoCampo = await recusaDoFiltroPorCampoRestrito(
+      supabase,
+      organizationId,
+      corpo.filtro.campo_valor ? corpo.filtro.campo : null,
+      authz.org.role,
+      requestId,
+    );
+    if (recusaDoCampo) return recusaDoCampo;
+  }
 
   try {
     // Os dois modos passam pela MESMA resolução do lote: o filtro vira ids no servidor (com o teto e

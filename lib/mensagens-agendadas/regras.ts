@@ -27,15 +27,49 @@ export type StatusDaAgendada = (typeof STATUS_DA_AGENDADA)[number];
 /** Até quando se pode agendar. Mais longe que isso a conversa e o canal já não são os mesmos. */
 export const PRAZO_MAXIMO_DIAS = 90;
 
-/** Linha `enviando` há mais que isto ficou presa (o worker caiu no meio). */
+/**
+ * Linha `enviando` cujo lease (`reservada_em`) é mais velho que isto ficou presa
+ * (o worker caiu no meio). O worker RENOVA o lease logo antes de cada envio e
+ * para de enviar depois de `PRAZO_DA_RODADA_MS`, então uma linha que a rodada
+ * ainda está enviando nunca tem lease mais velho que o tempo de UM envio — bem
+ * abaixo destes 10 minutos. Ver `lib/mensagens-agendadas/worker.ts`.
+ */
 export const PRESA_APOS_MS = 10 * 60 * 1000;
+
+/**
+ * Até quando a rodada começa envios novos. Passado isto, o que ela reservou e
+ * ainda não enviou volta para `agendada` (a próxima rodada pega). Metade de
+ * `PRESA_APOS_MS`: o lease renovado no começo do envio nunca envelhece até lá.
+ */
+export const PRAZO_DA_RODADA_MS = 5 * 60 * 1000;
+
+/**
+ * Tetos de agendadas PENDENTES (`agendada` ou `enviando`). Acima deles a criação
+ * é recusada com 422: uma conversa com dezenas de mensagens marcadas é engano
+ * ou abuso, e uma pessoa com centenas ocuparia a fila de envio da instalação.
+ * A conta é feita antes do insert, sem trava no banco: duas criações
+ * simultâneas podem passar o teto por uma — é um teto de uso, não de segurança.
+ */
+export const MAX_PENDENTES_POR_CONVERSA = 20;
+export const MAX_PENDENTES_POR_USUARIO = 200;
+
+/** O que a tela escolhe: o servidor confere contra o espelho e monta o resto. */
+export interface ModeloEscolhido {
+  name: string;
+  language: string;
+  values: Record<string, string>;
+}
 
 /** O modelo escolhido no agendamento, guardado em `scheduled_messages.template`. */
 export interface ModeloDaAgendada {
   name: string;
   language: string;
   values: Record<string, string>;
-  /** O texto renderizado do modelo: é o `body` do envio e o que a conversa mostra. */
+  /**
+   * O texto do corpo do modelo: é o `body` do envio e o que a conversa mostra.
+   * Sai SEMPRE da definição guardada no espelho (`meta_templates`), nunca do
+   * que o navegador mandou.
+   */
   body: string;
 }
 

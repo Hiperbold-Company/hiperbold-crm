@@ -22,7 +22,11 @@
  *     resposta humana passar dentro da janela, D-116; uma mensagem marcada dias
  *     antes não é essa resposta);
  *   - quem agendou ainda atende nesta empresa (senão a mensagem sairia em nome
- *     de quem saiu da equipe);
+ *     de quem saiu da equipe), ainda tem `chat.responder` pelo resolvedor de
+ *     permissões e ainda ENXERGA a conversa pela régua da inbox
+ *     (`revalidarAutor`, `./autor.ts`) — o cliente de serviço não passa pela RLS;
+ *   - o modelo, quando é ele que sai, ainda está APROVADO na conexão da
+ *     conversa, com o texto da definição guardada (`modeloAprovadoDaConexao`);
  *   - janela de HORÁRIO do canal (7h–22h por padrão): fora dela a linha volta a
  *     `agendada` com `adiada_ate` na próxima abertura;
  *   - texto ou modelo pela janela de 24h (`decidirEnvioAgendado`);
@@ -35,6 +39,25 @@
  * `recover-stuck-messages`). Linha presa em `enviando` (o processo caiu no meio
  * do envio) vira `falhou` depois de `PRESA_APOS_MS`, sem reenvio: não dá para
  * saber se a mensagem saiu, e chegar duas vezes é pior que não chegar.
+ *
+ * ─── O lease: a presa é só a que ninguém está enviando ──────────────────────
+ *
+ * `reservada_em` é o lease. A rodada o RENOVA logo antes de cada envio
+ * (`update ... where status = 'enviando'`); se a renovação não alcança a linha
+ * (outra rodada já a deu como presa), nada sai. E a rodada não começa envio
+ * novo depois de `PRAZO_DA_RODADA_MS`: o que sobrou volta para `agendada`. Com
+ * as duas travas, uma linha em envio tem lease de no máximo UM envio, muito
+ * abaixo de `PRESA_APOS_MS` — `recuperarPresas` de uma rodada sobreposta não a
+ * alcança.
+ *
+ * ─── Reserva justa entre organizações ───────────────────────────────────────
+ *
+ * Uma organização reserva no máximo `RESERVAS_POR_ORG_POR_RODADA` das
+ * `RESERVAS_POR_RODADA` de cada rodada: a reserva chama a função do banco em
+ * voltas, cada uma com `p_limite` que nenhuma organização pode estourar, e a
+ * organização que bate o teto entra na lista de exclusão das voltas seguintes.
+ * O conserto definitivo é a própria função receber o teto por organização
+ * (precisa de migration).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -47,15 +70,24 @@ import { logger } from "@/lib/logger";
 import { idsDeOrgsParadas, OrgNaoOperanteError } from "@/lib/organizacao/operante";
 import type { Message } from "@/lib/types/messaging";
 
-import { decidirEnvioAgendado, lerModelo, PRESA_APOS_MS } from "./regras";
-import type { LinhaDaAgendada } from "./servidor";
+import { revalidarAutor } from "./autor";
+import { decidirEnvioAgendado, lerModelo, PRAZO_DA_RODADA_MS, PRESA_APOS_MS } from "./regras";
+import { modeloAprovadoDaConexao, type LinhaDaAgendada } from "./servidor";
 
 /** Teto de reservas por rodada: com o espaçamento anti-ban (~2 s por envio do mesmo número), 20 cabem no corte de 50 s do scheduler. */
 export const RESERVAS_POR_RODADA = 20;
 
+/** Teto por organização em cada rodada: uma organização com fila grande não ocupa as 20 reservas. */
+export const RESERVAS_POR_ORG_POR_RODADA = 5;
+
 export const MOTIVO_OPT_OUT = "O contato pediu para não receber mensagens. A mensagem agendada foi cancelada.";
 export const MOTIVO_ANONIMIZADO = "O contato foi anonimizado. A mensagem agendada foi cancelada.";
 export const MOTIVO_SEM_AUTOR = "Quem agendou não atende mais nesta empresa. A mensagem agendada foi cancelada.";
+export const MOTIVO_SEM_PERMISSAO =
+  "Quem agendou não tem mais permissão para responder no chat. A mensagem agendada foi cancelada.";
+export const MOTIVO_SEM_VISIBILIDADE = "Quem agendou não enxerga mais esta conversa. A mensagem agendada foi cancelada.";
+export const MOTIVO_MODELO_NAO_APROVADO =
+  "O modelo escolhido não está mais aprovado na conexão desta conversa. Nada foi enviado.";
 export const MOTIVO_SEM_CONVERSA = "A conversa não existe mais. Nada foi enviado.";
 export const MOTIVO_CANAL_RECUSOU = "O canal recusou o envio. O motivo está na mensagem, na conversa.";
 export const MOTIVO_ERRO = "Não foi possível enviar no horário. Nada foi reenviado automaticamente.";
@@ -68,12 +100,15 @@ export interface DepsDoWorker {
   enviar: Enviar;
   espacar: (channelSessionId: string) => Promise<void>;
   adiar: (admin: SupabaseClient, org: string, channelSessionId: string, agora: Date) => Promise<string | null>;
+  /** O relógio de agora, para o lease e o prazo da rodada (o `agora` da rodada envelhece). */
+  relogio?: () => Date;
 }
 
 const DEPS_REAIS: DepsDoWorker = {
   enviar: sendMessageHandler,
   espacar: espacarEnvio,
   adiar: adiarAteAJanelaAbrir,
+  relogio: () => new Date(),
 };
 
 export interface ResultadoDaRodada {
@@ -90,7 +125,9 @@ type Desfecho =
   | { status: "enviada"; messageId: string }
   | { status: "cancelada"; motivo: string }
   | { status: "falhou"; motivo: string; messageId?: string | null }
-  | { status: "agendada"; adiadaAte: string | null };
+  | { status: "agendada"; adiadaAte: string | null }
+  /** O lease não pôde ser renovado: outra rodada já concluiu a linha. Nada sai e nada se grava. */
+  | { status: "perdida" };
 
 /** Conclui só a linha que ESTA rodada reservou (`status = 'enviando'`). */
 async function concluir(
@@ -99,6 +136,7 @@ async function concluir(
   desfecho: Desfecho,
   agora: Date,
 ): Promise<boolean> {
+  if (desfecho.status === "perdida") return false;
   const agoraIso = agora.toISOString();
   const patch: Record<string, unknown> =
     desfecho.status === "agendada"
@@ -141,7 +179,7 @@ async function processar(
 
   const { data: conversaLida, error: erroConversa } = await admin
     .from("conversations")
-    .select("id, contact_id, channel_session_id, last_inbound_at")
+    .select("id, contact_id, channel_session_id, last_inbound_at, assigned_to_user_id")
     .eq("id", linha.conversation_id)
     .eq("organization_id", org)
     .maybeSingle();
@@ -151,20 +189,23 @@ async function processar(
     contact_id: string | null;
     channel_session_id: string | null;
     last_inbound_at: string | null;
+    assigned_to_user_id?: string | null;
   } | null;
   if (!conversa) return { status: "falhou", motivo: MOTIVO_SEM_CONVERSA };
 
+  let contatoPessoal = false;
   if (conversa.contact_id) {
     const { data: contato, error } = await admin
       .from("contacts")
-      .select("id, is_blocked, is_anonymized")
+      .select("id, is_blocked, is_anonymized, is_personal")
       .eq("id", conversa.contact_id)
       .eq("organization_id", org)
       .maybeSingle();
     if (error) throw new Error(`contato: ${error.message}`);
-    const c = contato as { is_blocked?: boolean | null; is_anonymized?: boolean | null } | null;
+    const c = contato as { is_blocked?: boolean | null; is_anonymized?: boolean | null; is_personal?: boolean | null } | null;
     if (c?.is_blocked) return { status: "cancelada", motivo: MOTIVO_OPT_OUT };
     if (c?.is_anonymized) return { status: "cancelada", motivo: MOTIVO_ANONIMIZADO };
+    contatoPessoal = c?.is_personal === true;
   }
 
   if (!linha.created_by) return { status: "cancelada", motivo: MOTIVO_SEM_AUTOR };
@@ -178,6 +219,19 @@ async function processar(
   if (erroMembro) throw new Error(`membro: ${erroMembro.message}`);
   const papel = (membro as { role?: string } | null)?.role ?? null;
   if (!papel || !roleAtLeast(papel, "agent")) return { status: "cancelada", motivo: MOTIVO_SEM_AUTOR };
+
+  // Permissão e visibilidade de AGORA, com as réguas da rota e da inbox.
+  const autor = await revalidarAutor(admin, {
+    organizationId: org,
+    autorId: linha.created_by,
+    papel,
+    conversationId: conversa.id,
+    atribuidaA: conversa.assigned_to_user_id ?? null,
+    contatoPessoal,
+  });
+  if (!autor.ok) {
+    return { status: "cancelada", motivo: autor.motivo === "sem_permissao" ? MOTIVO_SEM_PERMISSAO : MOTIVO_SEM_VISIBILIDADE };
+  }
 
   let provider: string | null = null;
   if (conversa.channel_session_id) {
@@ -204,19 +258,44 @@ async function processar(
   });
   if (decisao.tipo === "falha") return { status: "falhou", motivo: decisao.motivo };
 
+  // O modelo que sai é o APROVADO agora na conexão da conversa, com o texto da
+  // definição guardada: entre agendar e enviar ele pode ter sido pausado ou apagado.
+  let modeloDoEnvio = modelo;
+  if (decisao.tipo === "modelo" && modelo) {
+    const conferido = await modeloAprovadoDaConexao(admin, org, conversa.channel_session_id, modelo);
+    if (!conferido.ok) {
+      throw new Error(`modelo: ${(conferido.erro as { message?: string } | null)?.message ?? String(conferido.erro)}`);
+    }
+    if (!conferido.valor) return { status: "falhou", motivo: MOTIVO_MODELO_NAO_APROVADO };
+    modeloDoEnvio = conferido.valor;
+  }
+
   const entrada: Parameters<Enviar>[2] =
-    decisao.tipo === "modelo" && modelo
+    decisao.tipo === "modelo" && modeloDoEnvio
       ? ({
           conversation_id: conversa.id,
           type: "template",
-          template_name: modelo.name,
-          template_language: modelo.language,
-          template_values: modelo.values,
-          body: modelo.body,
+          template_name: modeloDoEnvio.name,
+          template_language: modeloDoEnvio.language,
+          template_values: modeloDoEnvio.values,
+          body: modeloDoEnvio.body,
         } as Parameters<Enviar>[2])
       : ({ conversation_id: conversa.id, type: "text", body: linha.body } as Parameters<Enviar>[2]);
 
   if (conversa.channel_session_id) await deps.espacar(conversa.channel_session_id);
+
+  // Renova o lease logo antes de enviar. Se outra rodada já deu a linha como
+  // presa (ou a concluiu), a renovação não a alcança e nada sai.
+  const relogio = deps.relogio ?? (() => new Date());
+  const { data: renovada, error: erroLease } = await admin
+    .from("scheduled_messages")
+    .update({ reservada_em: relogio().toISOString() })
+    .eq("id", linha.id)
+    .eq("organization_id", org)
+    .eq("status", "enviando")
+    .select("id");
+  if (erroLease) throw new Error(`lease: ${erroLease.message}`);
+  if (((renovada ?? []) as unknown[]).length === 0) return { status: "perdida" };
 
   let mensagem: Message;
   try {
@@ -297,6 +376,40 @@ async function recuperarPresas(admin: SupabaseClient, agora: Date): Promise<Falh
   return falhas;
 }
 
+/**
+ * A reserva da rodada, justa entre organizações (ver o cabeçalho). Cada volta
+ * pede à função do banco no máximo o que NENHUMA organização ainda elegível pode
+ * receber sem passar do teto; quem bate o teto vai para a exclusão. Toda volta
+ * que devolve algo reserva ao menos uma linha, então são no máximo
+ * `RESERVAS_POR_RODADA` voltas. Nada é reservado a mais para devolver depois:
+ * devolver mudaria `updated_at` e a tela de quem edita levaria 409.
+ */
+async function reservarComJustica(admin: SupabaseClient, paradas: string[]): Promise<LinhaDaAgendada[]> {
+  const reservadas: LinhaDaAgendada[] = [];
+  const porOrg = new Map<string, number>();
+  const excluidas = new Set(paradas);
+  for (let volta = 0; volta < RESERVAS_POR_RODADA && reservadas.length < RESERVAS_POR_RODADA; volta++) {
+    let maior = 0;
+    for (const [org, n] of porOrg) if (!excluidas.has(org) && n > maior) maior = n;
+    const limite = Math.min(RESERVAS_POR_RODADA - reservadas.length, RESERVAS_POR_ORG_POR_RODADA - maior);
+    if (limite <= 0) break;
+    const { data, error } = await admin.rpc("fn_reservar_mensagens_agendadas", {
+      p_limite: limite,
+      p_orgs_paradas: [...excluidas],
+    });
+    if (error) throw new Error(`reserva: ${error.message}`);
+    const lote = (data ?? []) as LinhaDaAgendada[];
+    if (lote.length === 0) break;
+    for (const linha of lote) {
+      reservadas.push(linha);
+      const n = (porOrg.get(linha.organization_id) ?? 0) + 1;
+      porOrg.set(linha.organization_id, n);
+      if (n >= RESERVAS_POR_ORG_POR_RODADA) excluidas.add(linha.organization_id);
+    }
+  }
+  return reservadas;
+}
+
 /** Um aviso por organização por rodada — N avisos iguais enterrariam a Central. */
 async function avisar(admin: SupabaseClient, falhas: Falha[], requestId: string): Promise<number> {
   const porOrg = new Map<string, Falha[]>();
@@ -345,16 +458,18 @@ export async function rodarMensagensAgendadas(
 
   // Organização parada não envia: a linha dela nem é reservada, e sai quando ela voltar.
   const paradas = await idsDeOrgsParadas(admin);
-  const { data, error } = await admin.rpc("fn_reservar_mensagens_agendadas", {
-    p_limite: RESERVAS_POR_RODADA,
-    p_orgs_paradas: paradas,
-  });
-  if (error) throw new Error(`reserva: ${error.message}`);
-  const reservadas = (data ?? []) as LinhaDaAgendada[];
+  const reservadas = await reservarComJustica(admin, paradas);
   resultado.reservadas = reservadas.length;
 
+  const relogio = deps.relogio ?? (() => new Date());
+  const inicio = relogio().getTime();
   for (const linha of reservadas) {
     let desfecho: Desfecho;
+    // Passado o prazo da rodada, nada de envio novo: o que sobrou volta para a fila.
+    if (relogio().getTime() - inicio > PRAZO_DA_RODADA_MS) {
+      if (await concluir(admin, linha, { status: "agendada", adiadaAte: null }, agora)) resultado.adiadas += 1;
+      continue;
+    }
     try {
       desfecho = await processar(admin, linha, agora, requestId, deps);
     } catch (err) {

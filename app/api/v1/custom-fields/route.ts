@@ -1,4 +1,5 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { recortarCampos } from "@/lib/campos/recorte-por-papel";
 /**
  * GET  /api/v1/custom-fields?entidade=contato|negocio — os campos personalizados da organização.
  * POST /api/v1/custom-fields — cria um campo (contato ou negócio). Chave repetida = 409; cota por
@@ -28,7 +29,8 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
   try {
     const lista = await listarDefinicoes(e.deps, (entidade ?? undefined) as "contato" | "negocio" | undefined);
-    return ok(lista, { requestId });
+    // 1015: a definição não pública só vai para administrador.
+    return ok(recortarCampos(lista, e.deps.papel), { requestId });
   } catch (err) {
     return respostaDeRecusa(err, requestId);
   }

@@ -3,6 +3,7 @@
  * (`updated_at` do registro), tamanho médio do valor, criado em e última edição. Gerente+, só sessão.
  */
 import { randomUUID } from "node:crypto";
+import { campoEhRestrito, leitorVeCamposRestritos } from "@/lib/campos/recorte-por-papel";
 import type { NextRequest } from "next/server";
 
 import { respostaDeRecusa } from "@/lib/api/recusa";
@@ -20,7 +21,12 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
   if (!UUID_RX.test(id)) return fail("invalid_request", e.t("id inválido."), 400, { requestId });
   try {
-    return ok((await estatisticasDaDefinicao(e.deps, id)).estatisticas, { requestId });
+    const { definicao, estatisticas } = await estatisticasDaDefinicao(e.deps, id);
+    // 1015: a definição não pública (e o retrato dos valores dela) só vai para administrador.
+    if (campoEhRestrito(definicao) && !leitorVeCamposRestritos(e.deps.papel)) {
+      return fail("not_found", e.t("Campo não encontrado."), 404, { requestId });
+    }
+    return ok(estatisticas, { requestId });
   } catch (err) {
     return respostaDeRecusa(err, requestId);
   }

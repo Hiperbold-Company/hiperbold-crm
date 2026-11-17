@@ -19,11 +19,15 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { criarAgendadaSchema } from "@/lib/mensagens-agendadas/schema";
+import type { ModeloDaAgendada } from "@/lib/mensagens-agendadas/regras";
 import {
   conferirAgendamento,
+  conferirTetoDePendentes,
   inserirAgendada,
   lerConversaDoAgendamento,
   listarAgendadasDaConversa,
+  MENSAGEM_MODELO_NAO_APROVADO,
+  modeloAprovadoDaConexao,
   type LinhaDaAgendada,
 } from "@/lib/mensagens-agendadas/servidor";
 import { exigirPermissao } from "@/lib/permissoes/servidor";
@@ -95,9 +99,25 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
 
   const agora = new Date();
   const sendAt = new Date(input.send_at);
-  const modelo = input.template ?? null;
-  const recusa = conferirAgendamento(conversa.valor, sendAt, modelo, agora);
+  const escolhido = input.template ?? null;
+  const recusa = conferirAgendamento(conversa.valor, sendAt, escolhido, agora);
   if (recusa) return fail(recusa.codigo, t(recusa.mensagem), 422, { requestId });
+
+  // O modelo é o APROVADO na conexão desta conversa, com o texto da definição
+  // guardada — o `body` que o navegador mandou não vale.
+  let modelo: ModeloDaAgendada | null = null;
+  if (escolhido) {
+    const conferido = await modeloAprovadoDaConexao(servico, org.orgId, conversa.valor.channel_session_id, escolhido);
+    if (!conferido.ok) return falhaInterna("internal_error", conferido.erro, { requestId });
+    if (!conferido.valor) {
+      return fail("modelo_nao_aprovado", t(MENSAGEM_MODELO_NAO_APROVADO), 422, { requestId });
+    }
+    modelo = conferido.valor;
+  }
+
+  const teto = await conferirTetoDePendentes(servico, { organizationId: org.orgId, conversationId: id, userId: user.id });
+  if (!teto.ok) return falhaInterna("internal_error", teto.erro, { requestId });
+  if (teto.valor) return fail(teto.valor.codigo, t(teto.valor.mensagem), 422, { requestId });
 
   const executar = async (): Promise<{ resposta: LinhaDaAgendada; status: number }> => {
     const gravada = await inserirAgendada(servico, {

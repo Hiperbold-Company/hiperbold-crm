@@ -15,7 +15,7 @@ import { observeServiceOrigin } from "@/lib/atendimento/origem";
 import { ApiError } from "@/lib/api/types";
 import { MENSAGEM_DE_FALHA_INTERNA } from "@/lib/api/wrappers";
 import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
-import { preservarValoresRestritos } from "@/lib/campos/recorte-por-papel";
+import { leitorDoAtor, leitorVeCamposRestritos, preservarValoresRestritos } from "@/lib/campos/recorte-por-papel";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
@@ -828,8 +828,14 @@ export async function patchContactHandler(
   //
   // 1015: o PATCH SUBSTITUI `custom_fields` (ver abaixo), e quem não é administrador recebeu a ficha
   // SEM os campos não públicos (`lib/campos/recorte-por-papel.ts`). Chave restrita ausente na entrada
-  // mantém o valor gravado — senão salvar o nome apagaria o que a pessoa nem viu.
-  if (input.custom_fields !== undefined && input.custom_fields !== null) {
+  // mantém o valor gravado — senão salvar o nome apagaria o que a pessoa nem viu. SÓ para quem não vê
+  // os restritos: o administrador recebeu a ficha inteira, e a chave ausente na entrada dele é ele
+  // apagando o campo (na ficha ou em lote). Papel ausente no ator = não vê (preserva).
+  if (
+    input.custom_fields !== undefined &&
+    input.custom_fields !== null &&
+    !leitorVeCamposRestritos(leitorDoAtor(ctx.actor))
+  ) {
     const restritas = await chavesRestritasDaOrganizacao(supabase, ctx.organization_id, ctx.requestId);
     if (!restritas.ok) throw new ApiError(500, "internal_error", undefined, ctx.requestId, MENSAGEM_DE_FALHA_INTERNA);
     input = {

@@ -15,6 +15,7 @@
  * (ver `lib/api/auth-dual-admin.ts`).
  */
 import { z } from "zod";
+import { recortarCampos, recortarSettingsDoFunil, type LeitorDosCampos } from "@/lib/campos/recorte-por-papel";
 
 import { ApiError } from "@/lib/api/types";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
@@ -63,6 +64,11 @@ function deps(ctx: McpContext): DepsDaOperacao {
   };
 }
 
+/** Quem lê pela tool: o agente de IA é `"ia"` (nunca recebe o restrito); senão, o papel da chave. */
+function leitorDoMcp(ctx: McpContext): LeitorDosCampos {
+  return ctx.actor.type === "ai_agent" ? "ia" : ctx.role;
+}
+
 function recusa(ctx: McpContext, status: number, code: string, message: string): ApiError {
   return new ApiError(status, code, undefined, ctx.requestId, message);
 }
@@ -91,7 +97,8 @@ export const crmGetPipelineConfig: McpToolDefinition<typeof getPipelineConfigSha
       if (lida.error === "not_found") throw recusa(ctx, 404, "not_found", "Funil não encontrado.");
       throw recusa(ctx, 500, "internal_error", lida.error);
     }
-    return lida.dados;
+    // 1015: a definição não pública só vai para administrador (nunca para o agente de IA).
+    return { ...lida.dados, settings: recortarSettingsDoFunil(lida.dados.settings, leitorDoMcp(ctx)) };
   },
 };
 
@@ -171,7 +178,10 @@ export const crmListPipelineFields: McpToolDefinition<typeof listFieldsShape> = 
   category: "read",
   requiresRole: "manager",
   requiresScope: "mcp:read",
-  handler: async (input, ctx) => ({ fields: await listarCamposDoFunil(depsDosCampos(ctx), input.pipeline_id) }),
+  // 1015: a definição não pública só vai para administrador (nunca para o agente de IA).
+  handler: async (input, ctx) => ({
+    fields: recortarCampos(await listarCamposDoFunil(depsDosCampos(ctx), input.pipeline_id), leitorDoMcp(ctx)),
+  }),
 };
 
 const obrigatorioEmShape = z.object({

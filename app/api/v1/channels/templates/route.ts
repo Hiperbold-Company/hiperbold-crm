@@ -42,6 +42,7 @@ import {
 import { resolveMetaCreds } from "@/lib/channels/meta/credentials";
 import { metaSessionForOrg } from "@/lib/channels/meta/session";
 import { idDaConexaoNaQuery, recusaSeConexaoOficialAmbigua } from "@/lib/channels/meta/sessao-oficial-viva";
+import { componentesDoModeloSchema } from "@/lib/channels/meta/modelo-json";
 import { metaCloudTemplateOps } from "@/lib/channels/meta/templates";
 import { normalizeRejectedReason } from "@/lib/channels/meta/webhook";
 import { deriveTemplateContract, describeAddress } from "@/lib/channels/meta/template-contract";
@@ -383,6 +384,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           ...(problema.botao !== undefined ? { botao: problema.botao } : {}),
           ...(problema.variavel !== undefined ? { variavel: problema.variavel } : {}),
         },
+      });
+    }
+    // A FORMA dos componentes, com a mesma régua da importação de JSON do chat
+    // (`componentesDoModeloSchema`): tipo conhecido, um corpo só, botões dentro
+    // dos tetos da Meta. Vem DEPOIS dos limites acima, que dizem o número do
+    // campo culpado. Só valida: o que vai para a Meta é o corpo recebido.
+    const forma = componentesDoModeloSchema.safeParse(corpo.components);
+    if (!forma.success) {
+      const primeira = forma.error.issues[0];
+      return fail("validation_failed", t(primeira?.message ?? "Faltam nome, idioma ou conteúdo."), 422, {
+        requestId,
+        details: { campo: "components", caminho: (primeira?.path ?? []).map(String).join(".") || null },
       });
     }
   }

@@ -340,6 +340,19 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const [agenda, setAgenda] = useState<{ conversationId: string; quando: Date } | null>(null);
   const [modeloAgendado, setModeloAgendado] = useState<ModeloDaAgendada | null>(null);
   const agendaAqui = agenda?.conversationId === conversationId ? agenda : null;
+  /**
+   * TROCAR DE CONVERSA ZERA o painel de mensagens e o agendamento. O compositor
+   * não é remontado na troca (a `key` do `InboxLayout` é fixa sem rascunho), e o
+   * modelo escolhido na conversa A não pode sair na B. Ajuste de estado durante
+   * o render (o padrão do React para "resetar quando a prop muda"), sem efeito.
+   */
+  const [conversaDoEstado, setConversaDoEstado] = useState(conversationId);
+  if (conversaDoEstado !== conversationId) {
+    setConversaDoEstado(conversationId);
+    setPainelAberto(false);
+    setAgenda(null);
+    setModeloAgendado(null);
+  }
   const fusoDaOrganizacao = useFusoDaOrganizacao() ?? FUSO_PADRAO;
   const agendar = useAgendarMensagem();
   useEffect(() => {
@@ -1269,6 +1282,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               <ModeloDoAgendamento
                 key={`${conversationId}:${agendaAqui.quando.toISOString()}`}
                 provider={provider}
+                channelSessionId={channelSessionId}
                 onChange={setModeloAgendado}
               />
             )}
@@ -1281,6 +1295,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         )}
         {mode === "reply" && (
           <PainelDeMensagens
+            // Remonta por conversa: busca, aba, modelo escolhido e valores da
+            // conversa anterior não sobrevivem à troca.
+            key={conversationId}
             aberto={painelAberto && !isDisabled}
             onFechar={fecharPainel}
             conversationId={conversationId}

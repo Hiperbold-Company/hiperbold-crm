@@ -20,7 +20,7 @@ import { audit } from "@/lib/audit";
 import type { RoleCheck } from "@/lib/auth/require-role";
 import { roleAtLeast } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { lerModelo } from "@/lib/mensagens-agendadas/regras";
+import { lerModelo, type ModeloDaAgendada } from "@/lib/mensagens-agendadas/regras";
 import { editarAgendadaSchema } from "@/lib/mensagens-agendadas/schema";
 import {
   cancelarAgendada,
@@ -28,6 +28,8 @@ import {
   editarAgendada,
   lerAgendada,
   lerConversaDoAgendamento,
+  MENSAGEM_MODELO_NAO_APROVADO,
+  modeloAprovadoDaConexao,
   type ConversaDoAgendamento,
   type LinhaDaAgendada,
 } from "@/lib/mensagens-agendadas/servidor";
@@ -115,6 +117,22 @@ export async function PATCH(req: NextRequest, { params }: RouteParams): Promise<
   });
   if (recusa) return fail(recusa.codigo, t(recusa.mensagem), 422, { requestId });
 
+  // Modelo novo: o APROVADO na conexão da conversa, com o texto da definição.
+  let modeloNovo: ModeloDaAgendada | null | undefined = input.template === undefined ? undefined : null;
+  if (input.template) {
+    const conferido = await modeloAprovadoDaConexao(
+      createAdminClient(),
+      authz.org.orgId,
+      conversa.channel_session_id,
+      input.template,
+    );
+    if (!conferido.ok) return falhaInterna("internal_error", conferido.erro, { requestId });
+    if (!conferido.valor) {
+      return fail("modelo_nao_aprovado", t(MENSAGEM_MODELO_NAO_APROVADO), 422, { requestId });
+    }
+    modeloNovo = conferido.valor;
+  }
+
   const desfecho = await editarAgendada(createAdminClient(), {
     organizationId: authz.org.orgId,
     id: linha.id,
@@ -122,7 +140,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams): Promise<
     patch: {
       ...(input.body !== undefined ? { body: input.body } : {}),
       ...(input.send_at !== undefined ? { send_at: sendAt.toISOString() } : {}),
-      ...(input.template !== undefined ? { template: input.template } : {}),
+      ...(modeloNovo !== undefined ? { template: modeloNovo } : {}),
     },
     agora,
   });

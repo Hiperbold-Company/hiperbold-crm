@@ -16,6 +16,7 @@ import { ApiError } from "@/lib/api/types";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { contarContatos } from "@/lib/contacts/consulta";
+import { recusaDoFiltroPorCampoRestrito } from "@/lib/campos/filtro-restrito";
 import { filtrosDeContatosSchema } from "@/lib/schemas";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
@@ -42,8 +43,19 @@ export async function GET(req: NextRequest): Promise<Response> {
     });
   }
 
+  const supabase = await createClient();
+  // 1015: filtro por campo não público é oráculo do valor — só administrador.
+  const recusaDoCampo = await recusaDoFiltroPorCampoRestrito(
+    supabase,
+    authz.org.orgId,
+    parsed.data.campo_valor ? parsed.data.campo : null,
+    authz.org.role,
+    requestId,
+  );
+  if (recusaDoCampo) return recusaDoCampo;
+
   try {
-    const total = await contarContatos(await createClient(), parsed.data, {
+    const total = await contarContatos(supabase, parsed.data, {
       organizationId: authz.org.orgId,
       requestId,
       timezone: authz.org.timezone ?? null,

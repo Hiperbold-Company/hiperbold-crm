@@ -14,12 +14,17 @@
  * rótulo declarado vale para as duas listas. A
  * chave precisa casar com `CHAVE_DE_CAMPO_FILTRAVEL`: ela vira caminho JSON na
  * consulta. Chave que lembra CPF nunca é oferecida.
+ *
+ * 1015: campo NÃO PÚBLICO (da organização ou marcado só no funil) só é oferecido a administrador —
+ * e a lista recusa o filtro por ele vindo de quem não é (`lib/campos/filtro-restrito.ts`).
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
-import { fail, ok } from "@/lib/api/wrappers";
+import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { leitorVeCamposRestritos } from "@/lib/campos/recorte-por-papel";
 import { chaveSensivelDeCampo } from "@/lib/contacts/campos-sensiveis";
 import { CHAVE_DE_CAMPO_FILTRAVEL } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
@@ -78,6 +83,13 @@ export async function GET(_req: NextRequest): Promise<Response> {
   const erro = funis.error ?? etapas.error ?? contatos.error ?? negocios.error;
   if (erro) return fail("internal_error", "Não foi possível carregar as opções de filtro.", 500, { requestId });
 
+  let restritas = new Set<string>();
+  if (!leitorVeCamposRestritos(authz.org.role)) {
+    const lidas = await chavesRestritasDaOrganizacao(supabase, orgId, requestId);
+    if (!lidas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
+    restritas = lidas.chaves;
+  }
+
   const rotulos = new Map<string, string>();
   for (const funil of funis.data ?? []) {
     const declarados = (funil.settings as { fields?: Array<{ key?: unknown; label?: unknown }> } | null)?.fields;
@@ -91,7 +103,7 @@ export async function GET(_req: NextRequest): Promise<Response> {
   const montar = (presentes: Set<string>, comDeclarados: boolean): CampoOferecido[] => {
     const todas = new Set<string>([...(comDeclarados ? rotulos.keys() : []), ...presentes]);
     return [...todas]
-      .filter((k) => CHAVE_DE_CAMPO_FILTRAVEL.test(k) && !chaveSensivelDeCampo(k))
+      .filter((k) => CHAVE_DE_CAMPO_FILTRAVEL.test(k) && !chaveSensivelDeCampo(k) && !restritas.has(k.toLowerCase()))
       .map((key) => ({ key, label: rotulos.get(key) ?? key }))
       .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   };
