@@ -18,7 +18,7 @@ const ADMIN = randomUUID();
 const INTRUSO = randomUUID();
 
 function bancoFalso() {
-  const modulos = new Map<string, { estado: Estado }>();
+  const modulos = new Map<string, { estado: Estado; motivo?: string | null }>();
   const comandas = [{ id: "c1" }, { id: "c2" }];
   const recibos = new Map<string, { fingerprint: string; recibo: Record<string, unknown> }>();
   const destrutivos: string[] = [];
@@ -73,6 +73,9 @@ function bancoFalso() {
       (!ligar && linha.estado !== "ativo")
     ) {
       return p0001("extension_module_state_changed");
+    }
+    if (ligar && linha.motivo) {
+      return { data: null, error: { code: "PT428", message: "extension_module_needs_update" } };
     }
     linha.estado = ligar ? "ativo" : "desligado";
     const agora = new Date().toISOString();
@@ -189,5 +192,19 @@ describe("desligar e religar Comandas", () => {
       definirEstadoDoModulo(ADMIN, randomUUID(), "nao_existe", false, "ativo"),
     ).rejects.toMatchObject({ code: "extension_module_unknown" });
     expect(banco.sqlExecutado).toEqual(["fn_modulo_definir_estado"]);
+  });
+
+  it("religar um módulo cuja última atualização falhou = 409 com a mensagem legível, nada muda", async () => {
+    banco.modulos.set("financeiro", { estado: "desligado", motivo: "a provisionadora falhou" });
+
+    await expect(
+      definirEstadoDoModulo(ADMIN, randomUUID(), "financeiro", true, "desligado"),
+    ).rejects.toMatchObject({
+      code: "extension_module_needs_update",
+      status: 409,
+      message: "O módulo teve falha na última atualização; rode a atualização antes de religar.",
+    });
+    expect(banco.modulos.get("financeiro")?.estado).toBe("desligado");
+    expect(mocks.audit).not.toHaveBeenCalled();
   });
 });

@@ -30,6 +30,14 @@
 --     fn_estornar_comanda, fn_honorarios_parcela_pagar) começam por essa checagem: desligar deixa de
 --     valer só no app. As policies de leitura ficam como estão. Os corpos são os do baseline, com o
 --     search_path terminando em pg_temp (1008).
+--  8. `fn_modulo_esta_ativo(p_modulo)`, `stable security definer` que NÃO lança (boolean; sem linha =
+--     permitido), e `fn_aplicar_trava_de_modulo_inativo()`: três policies RESTRITIVAS de escrita
+--     (`modulo_ativo_insert|update|delete`, para `authenticated`) em sales, sale_items, loyalty_ledger,
+--     commissions, commission_rules, honorarios_contratos e honorarios_parcelas. Aplicada aqui às tabelas
+--     que já existem e, pela `fn_proteger_modulo_provisionado`, às que a provisionadora criar. Leitura
+--     não muda.
+--  9. Religar recusa com `extension_module_needs_update` (errcode PT428) quando `motivo_suspensao` não é
+--     nulo: a última atualização falhou na provisionadora e precisa ser refeita antes.
 --
 -- Idempotente: as duas CHECKs são trocadas por drop + add com a lista completa (nenhuma linha existente
 -- viola a lista nova, que só cresce); funções por `create or replace`.
@@ -54,6 +62,7 @@ declare
   v_request jsonb;
   v_op public.extension_operations;
   v_atual text;
+  v_motivo text;
 begin
   perform public.fn_extensions_assert_actor(p_actor);
   if p_operation is null or p_ligar is null or p_modulo is null
@@ -80,7 +89,8 @@ begin
     raise exception using errcode = 'P0001', message = 'extension_core_update_in_progress';
   end if;
 
-  select estado into v_atual from public.modulos_instalados where modulo = p_modulo for update;
+  select estado, motivo_suspensao into v_atual, v_motivo
+    from public.modulos_instalados where modulo = p_modulo for update;
   if not found then
     raise exception using errcode = 'P0001', message = 'extension_module_not_installed';
   end if;
@@ -92,6 +102,13 @@ begin
      or (p_ligar and v_atual <> 'desligado')
      or (not p_ligar and v_atual <> 'ativo') then
     raise exception using errcode = 'P0001', message = 'extension_module_state_changed';
+  end if;
+
+  -- Religar um módulo cuja provisionadora falhou na última atualização o poria no ar com as tabelas
+  -- fora da versão. O motivo só é limpo por uma atualização que dê certo.
+  if p_ligar and v_motivo is not null then
+    raise exception using errcode = 'PT428', message = 'extension_module_needs_update',
+      hint = 'O módulo teve falha na última atualização; rode a atualização antes de religar.';
   end if;
 
   -- Só o estado muda. Nenhuma tabela do módulo é tocada, nem a provisionadora roda.
@@ -226,11 +243,12 @@ revoke execute on function public.fn_modulo_instalar(uuid, uuid, text) from auth
 grant execute on function public.fn_modulo_instalar(uuid, uuid, text) to service_role;
 
 -- ── 6. a ação do módulo exige o módulo ativo ─────────────────────────────────
--- Desligar não pode valer só no app: as RPCs que MUDAM dados de módulo e estão expostas a
--- `authenticated` (fn_finalizar_comanda, fn_estornar_comanda, fn_honorarios_parcela_pagar) começam
--- por esta checagem. Sem linha no registro (módulo provisionado direto, como na bateria de
--- invariantes) não há decisão de quem administra a respeitar, e a função segue como antes; a falta
--- da tabela continua recusada pela própria RPC. Leitura não passa por aqui: as policies ficam.
+-- Fica logo depois do registro, ANTES de qualquer chamador no arquivo. Desligar não pode valer só
+-- no app: as RPCs que MUDAM dados de módulo e estão expostas a `authenticated` (fn_finalizar_comanda,
+-- fn_estornar_comanda, fn_honorarios_parcela_pagar) começam por `fn_modulo_exigir_ativo`, e as
+-- tabelas do módulo ganham policies RESTRITIVAS de escrita com `fn_modulo_esta_ativo`. Sem linha no
+-- registro (módulo provisionado direto, como na bateria de invariantes) não há decisão de quem
+-- administra a respeitar: as duas deixam passar. Leitura não muda.
 create or replace function public.fn_modulo_exigir_ativo(p_modulo text)
 returns void language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare
@@ -246,6 +264,72 @@ end $$;
 
 -- Só as RPCs definer a chamam, e elas rodam como o dono: nenhum papel do PostgREST precisa dela.
 revoke execute on function public.fn_modulo_exigir_ativo(text) from public, anon, authenticated, service_role;
+
+-- A versão que NÃO lança, para as policies: devolve se o módulo pode ser escrito agora.
+create or replace function public.fn_modulo_esta_ativo(p_modulo text)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select coalesce((select m.estado = 'ativo' from public.modulos_instalados m where m.modulo = p_modulo), true)
+$$;
+
+-- As policies rodam com o papel de quem escreve: `authenticated` precisa de EXECUTE. Ela só diz
+-- o estado de um módulo da instalação, que não é dado de organização.
+revoke execute on function public.fn_modulo_esta_ativo(text) from public, anon;
+grant execute on function public.fn_modulo_esta_ativo(text) to authenticated, service_role;
+
+-- As três policies restritivas de escrita (insert, update, delete) em cada tabela de módulo que já
+-- existe. A lista é fixa e por módulo; tabela que ainda não existe fica para quando a provisionadora
+-- a criar (fn_proteger_modulo_provisionado chama esta função no fim). Só cria a policy que falta:
+-- reaplicar não toma trava de tabela à toa.
+create or replace function public.fn_aplicar_trava_de_modulo_inativo()
+returns void language plpgsql set search_path = public, pg_temp as $f$
+declare
+  r record;
+  c text;
+begin
+  for r in
+    select t.modulo, t.tabela
+      from (values ('financeiro', 'sales'), ('financeiro', 'sale_items'), ('financeiro', 'loyalty_ledger'),
+                   ('financeiro', 'commissions'), ('financeiro', 'commission_rules'),
+                   ('honorarios', 'honorarios_contratos'), ('honorarios', 'honorarios_parcelas'))
+           as t(modulo, tabela)
+     where to_regclass(format('public.%I', t.tabela)) is not null
+  loop
+    foreach c in array array['insert', 'update', 'delete'] loop
+      if not exists (select 1 from pg_policies
+                      where schemaname = 'public' and tablename = r.tabela
+                        and policyname = 'modulo_ativo_' || c) then
+        execute format('create policy %I on public.%I as restrictive for %s to authenticated %s',
+          'modulo_ativo_' || c, r.tabela, c,
+          case c
+            when 'insert' then format('with check ((select public.fn_modulo_esta_ativo(%L)))', r.modulo)
+            when 'update' then format('using ((select public.fn_modulo_esta_ativo(%L))) with check ((select public.fn_modulo_esta_ativo(%L)))', r.modulo, r.modulo)
+            else format('using ((select public.fn_modulo_esta_ativo(%L)))', r.modulo)
+          end);
+      end if;
+    end loop;
+  end loop;
+end $f$;
+
+revoke execute on function public.fn_aplicar_trava_de_modulo_inativo() from public, anon, authenticated, service_role;
+
+-- A provisionadora de todo módulo termina em fn_proteger_modulo_provisionado: ela passa a aplicar a trava
+-- de escrita na mesma transação em que cria as tabelas.
+create or replace function public.fn_proteger_modulo_provisionado()
+returns void
+language plpgsql
+set search_path = public
+as $f$
+begin
+  perform public.fn_proteger_tabelas_de_organizacao();
+  perform public.fn_aplicar_travas_de_suporte();
+  -- 1016: escrita em tabela de módulo exige o módulo ativo. A trava nasce mais abaixo no baseline;
+  -- até ela existir, nada a aplicar.
+  if to_regprocedure('public.fn_aplicar_trava_de_modulo_inativo()') is not null then
+    perform public.fn_aplicar_trava_de_modulo_inativo();
+  end if;
+end $f$;
+
+revoke execute on function public.fn_proteger_modulo_provisionado() from public, anon, authenticated, service_role;
 
 -- ── 7. as RPCs que mudam dados de módulo começam pela checagem da seção 6 ───────
 create or replace function public.fn_finalizar_comanda(
@@ -536,6 +620,11 @@ $$;
 
 revoke execute on function public.fn_honorarios_parcela_pagar(uuid, uuid, uuid, uuid) from public, anon;
 grant execute on function public.fn_honorarios_parcela_pagar(uuid, uuid, uuid, uuid) to authenticated;
+
+
+-- Quem já tem o módulo instalado recebe as policies de escrita agora; quem instalar depois as recebe
+-- pela provisionadora (fn_proteger_modulo_provisionado).
+select public.fn_aplicar_trava_de_modulo_inativo();
 
 comment on table public.modulos_instalados is
   'Módulos opcionais instalados NA INSTÂNCIA (ADR-0002, D3). Sem organization_id: o corte é por instalação. Escrito só por fn_modulo_instalar, fn_modulo_definir_estado (1016: desligar/religar, sem apagar dados) e fn_reaplicar_modulos_instalados.';

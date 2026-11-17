@@ -15,6 +15,7 @@ import { fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import type { AuthUser } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
+import { audit } from "@/lib/audit";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { comIdempotencia } from "@/lib/api/idempotency";
 import type * as Idempotencia from "@/lib/api/idempotency";
@@ -139,6 +140,19 @@ describe("POST /api/v1/honorarios/parcelas/[id]/pagar", () => {
     const res = await POST(postReq({ account_id: ACCOUNT_ID }), params);
 
     expect(res.status).toBe(422);
+  });
+
+  it("módulo desligado no banco (PT423 modulo_inativo) → 404, sem auditar", async () => {
+    autorizadoComoManager();
+    vi.mocked(createClient).mockResolvedValue(
+      fakeSupabase({ error: { message: "modulo_inativo", code: "PT423" } }) as never,
+    );
+
+    const { POST } = await import("./route");
+    const res = await POST(postReq({ account_id: ACCOUNT_ID }), params);
+
+    expect(res.status).toBe(404);
+    expect(audit).not.toHaveBeenCalled();
   });
 
   it("parcela inexistente → 404", async () => {

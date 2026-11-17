@@ -24,6 +24,7 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { moduloLigado } from "@/lib/instalacao/modulos";
+import { moduloInativo } from "@/lib/modulos/modulo-inativo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -163,6 +164,7 @@ class Recusa extends Error {
 }
 
 function respostaDaRecusa(error: { message?: string; code?: string }, requestId: string): Response {
+  if (moduloInativo(error)) return fail("not_found", "Not found", 404, { requestId });
   if (moduloNaoInstalado(error)) {
     return fail("module_not_installed", MODULO_NAO_INSTALADO, 409, { requestId });
   }

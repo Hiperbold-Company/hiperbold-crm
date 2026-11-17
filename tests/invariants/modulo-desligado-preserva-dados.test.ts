@@ -208,6 +208,16 @@ describe("só o botão religa", () => {
     ]);
   });
 
+  it("religar com a última atualização falhada (motivo_suspensao) é recusado com PT428, sem efeito", async () => {
+    await query("update public.modulos_instalados set motivo_suspensao = 'falhou' where modulo = $1", [MODULO]);
+    await expect(definir(randomUUID(), true, "desligado")).rejects.toMatchObject({
+      code: "PT428",
+      message: "extension_module_needs_update",
+    });
+    expect(await estado()).toBe("desligado");
+    await query("update public.modulos_instalados set motivo_suspensao = null where modulo = $1", [MODULO]);
+  });
+
   it("religar pela fn_modulo_definir_estado é o caminho de volta", async () => {
     await definir(randomUUID(), true, "desligado");
     expect(await estado()).toBe("ativo");

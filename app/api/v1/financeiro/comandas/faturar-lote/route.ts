@@ -30,6 +30,7 @@ import { moedaDaOrganizacao } from "@/lib/catalogo/moeda-da-org";
 import { percentualDoItem } from "@/lib/financeiro/comissao-do-item";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { moduloLigado } from "@/lib/instalacao/modulos";
+import { moduloInativo } from "@/lib/modulos/modulo-inativo";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   // do relatório (#2160). O corpo nem declara `currency`: o Zod descarta.
   const moeda = await moedaDaOrganizacao(supabase, org);
 
+  let moduloDesligou = false;
   for (const ag of agendamentos ?? []) {
     const tipo = Array.isArray(ag.calendar_event_types)
       ? ag.calendar_event_types[0]
@@ -176,6 +178,12 @@ export async function POST(req: NextRequest): Promise<Response> {
     });
 
     if (erroFinal) {
+      // O módulo foi desligado no meio do lote (PT423): para aqui. Sem nada faturado, a resposta é
+      // o 404 de módulo desligado; com algo já faturado, o que entrou é auditado e devolvido.
+      if (moduloInativo(erroFinal)) {
+        moduloDesligou = true;
+        break;
+      }
       pular(
         erroFinal.message.includes("forma_sem_conta")
           ? "forma_sem_conta"
@@ -194,6 +202,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     faturados += 1;
     numeros.push(comanda.number as number);
   }
+
+  if (moduloDesligou && faturados === 0) return fail("not_found", "Not found", 404, { requestId });
 
   if (faturados > 0) {
     await audit({

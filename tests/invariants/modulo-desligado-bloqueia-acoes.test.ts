@@ -7,6 +7,8 @@
  * `fn_modulo_exigir_ativo`, que lança `modulo_inativo` (errcode PT423) quando o módulo está registrado
  * e não está `ativo`. Este arquivo mede: a forma do helper; a recusa nas três RPCs com o módulo
  * desligado; e, em honorários, que a parcela não é paga desligado e é paga depois de religar.
+ * E as tabelas do módulo têm policies RESTRITIVAS de escrita (`modulo_ativo_insert|update|delete`,
+ * com `fn_modulo_esta_ativo`): desligado, a escrita direta pela sessão é recusada e a leitura segue.
  */
 import { randomUUID } from "node:crypto";
 
@@ -129,6 +131,34 @@ describe("o helper", () => {
   });
 });
 
+describe("a trava de escrita nas tabelas do módulo", () => {
+  it("fn_modulo_esta_ativo é stable security definer, não lança, e authenticated a executa (as policies precisam)", async () => {
+    const r = await query(`
+      select p.prosecdef, p.provolatile, p.prorettype = 'boolean'::regtype as booleana,
+             has_function_privilege('anon', p.oid, 'execute') as anon,
+             has_function_privilege('authenticated', p.oid, 'execute') as authenticated
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.proname = 'fn_modulo_esta_ativo'`);
+    expect(r.rows).toEqual([{ prosecdef: true, provolatile: "s", booleana: true, anon: false, authenticated: true }]);
+    expect((await query("select public.fn_modulo_esta_ativo('sem_registro') as v")).rows[0].v).toBe(true);
+  });
+
+  it("as tabelas de honorários têm as três policies restritivas de escrita, e nenhuma de leitura", async () => {
+    const r = await query(`
+      select tablename, policyname, permissive, cmd from pg_policies
+       where schemaname = 'public' and tablename in ('honorarios_contratos', 'honorarios_parcelas')
+         and policyname like 'modulo_ativo_%'
+       order by tablename, policyname`);
+    expect(r.rows).toEqual(
+      ["honorarios_contratos", "honorarios_parcelas"].flatMap((tablename) => [
+        { tablename, policyname: "modulo_ativo_delete", permissive: "RESTRICTIVE", cmd: "DELETE" },
+        { tablename, policyname: "modulo_ativo_insert", permissive: "RESTRICTIVE", cmd: "INSERT" },
+        { tablename, policyname: "modulo_ativo_update", permissive: "RESTRICTIVE", cmd: "UPDATE" },
+      ]),
+    );
+  });
+});
+
 describe("desligado não aceita ação", () => {
   it("comanda: finalizar e estornar são recusados com PT423 quando o financeiro está desligado", async () => {
     await definirEstado("financeiro", "desligado");
@@ -154,6 +184,23 @@ describe("desligado não aceita ação", () => {
     await definirEstado("honorarios", "desligado");
     expect(await recusa(pagar())).toMatchObject({ code: "PT423", message: "modulo_inativo" });
     expect(await statusDaParcela()).toBe("pendente");
+  });
+
+  it("honorários desligado: escrita direta pela sessão é recusada pela RLS; a leitura segue", async () => {
+    const insercao = await recusa(
+      comoGerente(
+        "insert into public.honorarios_contratos (organization_id, modelo, valor_fixo_cents) values ($1, 'fixo', 1) returning id",
+        [ORG],
+      ),
+    );
+    expect(insercao).toMatchObject({ code: "42501" });
+    const alterou = await comoGerente(
+      "with u as (update public.honorarios_parcelas set valor_cents = 1 where id = $1 returning 1) select count(*)::int as n from u",
+      [PARCELA],
+    );
+    expect(alterou.n).toBe(0);
+    const lida = await comoGerente("select count(*)::int as n from public.honorarios_parcelas where id = $1", [PARCELA]);
+    expect(lida.n).toBe(1);
   });
 
   it("honorários religado: a mesma parcela é paga", async () => {

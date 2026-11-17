@@ -48,7 +48,9 @@ export interface ModuloInstalarResultado {
  * também levanta. */
 function dbFailure(error: { code?: string; message?: string } | null): void {
   if (!error) return;
-  const known = error.code === "P0001" && error.message ? SQL_ERRORS[error.message] : undefined;
+  // PT428 é o errcode próprio de "religar pede atualização antes" (migration 1016).
+  const known =
+    (error.code === "P0001" || error.code === "PT428") && error.message ? SQL_ERRORS[error.message] : undefined;
   if (known && error.message) {
     throw new ExtensionServiceError(error.message, known.message, known.status);
   }
