@@ -292,6 +292,9 @@ export const AUDIT_ACTIONS = [
   // O número oficial da Meta conectado (formulário manual ou Cadastro Incorporado,
   // migration 1014). Metadata: origem e os dois ids da Meta. Nunca o token.
   "channel.official_connected",
+  // "Tentar de novo" a sincronização dos contatos do app WhatsApp Business (coexistência). Metadata:
+  // o número e se a Meta aceitou. Nunca o token.
+  "channel.official_contacts_sync_requested",
   "prospecting.changed",
   // A ABORDAGEM que SAIU (PR #963). Distinta de `prospecting.changed`, que é
   // configuração: esta é a única linha do produto que fala primeiro com quem

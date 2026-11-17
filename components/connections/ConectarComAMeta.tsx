@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import {
   pedirInicioDoCadastroIncorporado,
   useFinalizarCadastroIncorporado,
+  useSincronizarContatosDoApp,
   type InicioDoCadastroIncorporado,
 } from "@/hooks/channels/useCadastroIncorporado";
 import { useT } from "@/hooks/i18n/useT";
@@ -142,9 +143,18 @@ export function ConectarComAMeta({
 }) {
   const t = useT();
   const finalizar = useFinalizarCadastroIncorporado();
+  const sincronizar = useSincronizarContatosDoApp();
   const [nome, setNome] = useState("");
   /** Modo "coexistência" escolhido (o número já usa o app WhatsApp Business). Lido no render, sem `await`. */
   const [coexistencia, setCoexistencia] = useState(false);
+  /**
+   * LGPD: a coexistência traz a agenda e as conversas do celular para o CRM. Só abre o popup depois de a
+   * pessoa marcar que sabe disso. Não vale de uma conexão para a outra: volta a desmarcada.
+   */
+  const [confirmouContatos, setConfirmouContatos] = useState(false);
+  /** A Meta recusou (ou não respondeu) a sincronização dos contatos do app: a sessão a tentar de novo. */
+  const [sincronizacaoPendente, setSincronizacaoPendente] = useState<string | null>(null);
+  const [erroDaSincronizacao, setErroDaSincronizacao] = useState<string | null>(null);
   const [fase, setFase] = useState<Fase>("ocioso");
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -214,6 +224,7 @@ export function ConectarComAMeta({
 
   const ocupado = fase !== "ocioso";
   const travadoPeloPlano = !jaConectado && Boolean(bloqueio?.desabilitado);
+  const faltaConfirmarContatos = coexistencia && !confirmouContatos;
 
   function falhar(mensagem: string) {
     if (!montado.current) return;
@@ -276,7 +287,14 @@ export function ConectarComAMeta({
         if (r.data.precisaRegistrar === true) {
           setAviso(t("Falta ativar o número: use o botão Registrar no cartão do número."));
         }
+        // `false` = a Meta recusou a sincronização dos contatos do app: a conexão vale, mas a tela avisa
+        // e oferece tentar de novo. `null`/`true`/ausente: nada a dizer.
+        if (r.data.sincronizacaoDoApp === false && r.data.channelSessionId) {
+          setSincronizacaoPendente(r.data.channelSessionId);
+          setErroDaSincronizacao(null);
+        }
         setNome("");
+        setConfirmouContatos(false);
         setFase("ocioso");
       }
     } catch (e) {
@@ -298,8 +316,11 @@ export function ConectarComAMeta({
    * avisa, dispara a preparação e NÃO abre nada: o próximo clique abre.
    */
   function aoClicar() {
+    if (faltaConfirmarContatos) return;
     setErro(null);
     setAviso(null);
+    setSincronizacaoPendente(null);
+    setErroDaSincronizacao(null);
 
     const guardado = preparado.current;
     const sdk = (window as JanelaComSdk).FB;
@@ -338,6 +359,30 @@ export function ConectarComAMeta({
     void concluir(inicio, codigo, escuta);
   }
 
+  async function tentarSincronizarDeNovo() {
+    if (!sincronizacaoPendente) return;
+    setErroDaSincronizacao(null);
+    try {
+      const r = await sincronizar.mutateAsync({ channel_session_id: sincronizacaoPendente });
+      if (!montado.current) return;
+      if (r.data.sincronizado) {
+        toast.success(t("Contatos do WhatsApp Business solicitados."));
+        setSincronizacaoPendente(null);
+      } else {
+        setErroDaSincronizacao(
+          r.data.motivo ?? t("A Meta não aceitou trazer os contatos agora. Tente de novo em instantes."),
+        );
+      }
+    } catch (e) {
+      if (!montado.current) return;
+      setErroDaSincronizacao(
+        e instanceof ApiError && e.message
+          ? e.message
+          : t("Não foi possível pedir os contatos agora. Tente de novo."),
+      );
+    }
+  }
+
   const mostrarPreparando = esperando && !semConfiguracao;
 
   return (
@@ -370,7 +415,10 @@ export function ConectarComAMeta({
               size="sm"
               variant={coexistencia ? "outline" : "default"}
               aria-pressed={!coexistencia}
-              onClick={() => setCoexistencia(false)}
+              onClick={() => {
+                setCoexistencia(false);
+                setConfirmouContatos(false);
+              }}
               disabled={ocupado}
               data-testid="cadastro-meta-modo-padrao"
             >
@@ -402,6 +450,22 @@ export function ConectarComAMeta({
               <p className="mt-1 text-muted-foreground">
                 {t("Recurso recente da Meta: se a conexão falhar, use a conexão padrão.")}
               </p>
+              <p className="mt-2 font-medium" data-testid="cadastro-meta-aviso-contatos">
+                {t(
+                  "Os contatos e as conversas dos últimos 6 meses do WhatsApp Business deste número vão aparecer no CRM para a sua equipe.",
+                )}
+              </p>
+              <label className="mt-2 flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={confirmouContatos}
+                  onChange={(e) => setConfirmouContatos(e.target.checked)}
+                  disabled={ocupado}
+                  className="mt-0.5 h-4 w-4 rounded-md border-border"
+                  data-testid="cadastro-meta-confirma-contatos"
+                />
+                <span>{t("Entendi e autorizo trazer esses contatos e conversas para o CRM.")}</span>
+              </label>
             </div>
           ) : (
             <div
@@ -430,7 +494,7 @@ export function ConectarComAMeta({
           <Button
             type="button"
             onClick={aoClicar}
-            disabled={ocupado || travadoPeloPlano}
+            disabled={ocupado || travadoPeloPlano || faltaConfirmarContatos}
             title={travadoPeloPlano ? (bloqueio?.motivo ?? undefined) : undefined}
             data-testid="btn-conectar-meta"
           >
@@ -469,6 +533,32 @@ export function ConectarComAMeta({
             className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"
           >
             {erro}
+          </div>
+        ) : null}
+
+        {sincronizacaoPendente ? (
+          <div
+            role="alert"
+            data-testid="cadastro-meta-sincronizacao-falhou"
+            className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+          >
+            <p>{t("A conexão funcionou, mas os contatos do WhatsApp Business não foram trazidos.")}</p>
+            {erroDaSincronizacao ? (
+              <p className="mt-1 text-muted-foreground" data-testid="cadastro-meta-sincronizacao-motivo">
+                {erroDaSincronizacao}
+              </p>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-2"
+              onClick={() => void tentarSincronizarDeNovo()}
+              disabled={sincronizar.isPending}
+              data-testid="cadastro-meta-sincronizar-de-novo"
+            >
+              {sincronizar.isPending ? t("Tentando…") : t("Tentar de novo")}
+            </Button>
           </div>
         ) : null}
 

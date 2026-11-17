@@ -26,6 +26,7 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
+import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 import { requireRole } from "@/lib/auth/require-role";
 import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
@@ -34,6 +35,7 @@ import { CHANNEL_PROVIDER_META } from "@/lib/channels/capabilities";
 import { appDaMeta, appDaMetaDoAmbiente } from "@/lib/channels/meta/app";
 import { metaGraphBase } from "@/lib/channels/meta/credentials";
 import { conectarCanalOficial, respostaDaFalhaDaConexaoOficial } from "@/lib/channels/meta/conectar-canal-oficial";
+import { numeroDoCanalOficialVivo } from "@/lib/channels/meta/numero-da-sessao";
 import { COLUNAS_DO_DESFECHO_DO_WEBHOOK } from "@/lib/channels/meta/webhook-da-sessao";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { lerCorDaConexao } from "@/lib/conexoes/cores";
@@ -219,6 +221,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Validar, cifrar, achar a conexão existente, reativar ou inserir e registrar o
   // webhook: o mesmo caminho do Cadastro Incorporado (migration 1014), num lugar só.
   const admin = createAdminClient();
+
+  // TROCAR o número de uma conexão oficial viva pede o mesmo papel que REMOVÊ-LA (admin), igual ao
+  // Cadastro Incorporado. Criar a primeira conexão, ou recolar a credencial do MESMO número, segue
+  // com gerente. Roda antes de validar na Meta e de gravar.
+  const viva = await numeroDoCanalOficialVivo(admin, orgId);
+  if (viva && viva.phoneNumberId !== phone_number_id && !podeAdministrarEmpresa(authz.user, authz.org)) {
+    return fail(
+      "forbidden_role",
+      t("Trocar o número da conexão oficial é uma ação de administrador. Peça a quem administra a empresa para fazer a troca."),
+      403,
+      { requestId },
+    );
+  }
+
   const conexao = await conectarCanalOficial({
     admin,
     orgId,

@@ -14463,5 +14463,15 @@
   "Esta conexão não tem o acesso ao servidor guardado. Conecte de novo pelo modo avançado, com o mesmo token.": "This connection has no saved access to the server. Connect it again through the advanced mode, with the same token.",
   "Este número já está em outra conexão desta empresa. Remova uma das duas e tente de novo.": "This number is already in another connection of this company. Remove one of the two and try again.",
   "Não foi possível falar com o servidor de WhatsApp agora. Tente de novo em instantes.": "Couldn't reach the WhatsApp server right now. Try again in a moment.",
-  "Conectado, mas as mensagens ainda não entram.": "Connected, but messages are not coming in yet."
+  "Conectado, mas as mensagens ainda não entram.": "Connected, but messages are not coming in yet.",
+  "Os contatos e as conversas dos últimos 6 meses do WhatsApp Business deste número vão aparecer no CRM para a sua equipe.": "The contacts and the conversations from the last 6 months of this number's WhatsApp Business will appear in the CRM for your team.",
+  "Entendi e autorizo trazer esses contatos e conversas para o CRM.": "I understand and authorize bringing these contacts and conversations into the CRM.",
+  "A conexão funcionou, mas os contatos do WhatsApp Business não foram trazidos.": "The connection worked, but the WhatsApp Business contacts were not brought in.",
+  "Contatos do WhatsApp Business solicitados.": "WhatsApp Business contacts requested.",
+  "A Meta não aceitou trazer os contatos agora. Tente de novo em instantes.": "Meta did not accept bringing the contacts right now. Try again in a moment.",
+  "Não foi possível pedir os contatos agora. Tente de novo.": "Couldn't request the contacts right now. Try again.",
+  "Confira a conexão e tente de novo.": "Check the connection and try again.",
+  "Não foi possível ler a credencial da conexão. Reconecte o número pela Meta.": "Couldn't read the connection's credential. Reconnect the number with Meta.",
+  "Conexão oficial não encontrada.": "Official connection not found.",
+  "Trocar o número da conexão oficial é uma ação de administrador. Peça a quem administra a empresa para fazer a troca.": "Switching the official connection's number is an administrator action. Ask whoever administers the company to make the change."
 }
