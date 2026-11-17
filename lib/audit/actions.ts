@@ -289,6 +289,9 @@ export const AUDIT_ACTIONS = [
   "channel.connected",
   // O número do canal oficial foi registrado na Meta (POST /register). Nunca leva o PIN.
   "channel.number_registered",
+  // O webhook do número oficial foi regravado na Meta (POST /channels/official/webhook, "tentar de novo").
+  // Metadata: `registrado` e `com_erro`. Nunca a URL de callback (leva o token de caminho) nem o texto do erro.
+  "channel.webhook_registered",
   // O número oficial da Meta conectado (formulário manual ou Cadastro Incorporado,
   // migration 1014). Metadata: origem e os dois ids da Meta. Nunca o token.
   "channel.official_connected",

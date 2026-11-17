@@ -104,7 +104,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from(tabela: string) {
       const q: Record<string, unknown> = {};
-      for (const n of ["select", "eq", "is"]) q[n] = () => q;
+      for (const n of ["select", "eq", "is", "order", "limit"]) q[n] = () => q;
       q.maybeSingle = async () => ({
         data: h.banco.erroDaBusca ? null : h.banco.existente,
         error: h.banco.erroDaBusca,
@@ -205,12 +205,13 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
 });
 
-describe("POST cadastro-incorporado: trocar o número de uma conexão viva exige administrador", () => {
+describe("POST cadastro-incorporado: substituir o número de uma conexão existente exige administrador", () => {
   const OUTRO_NUMERO = "555444333222";
+  const ID_DA_CONEXAO = "aaaaaaaa-0000-4000-8000-0000000000b2";
 
-  it("gerente que TROCARIA o número recebe 403 legível, sem queimar o nonce, sem Meta e sem gravar", async () => {
-    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: OUTRO_NUMERO };
-    const res = await POST(post(corpoValido()));
+  it("gerente que SUBSTITUIRIA o número (mesmo id, número diferente) recebe 403 legível, sem queimar o nonce, sem Meta e sem gravar", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
+    const res = await POST(post(corpoValido({ channel_session_id: ID_DA_CONEXAO })));
     expect(res.status).toBe(403);
     const corpo = await res.json();
     expect(corpo.error.code).toBe("forbidden_role");
@@ -220,16 +221,21 @@ describe("POST cadastro-incorporado: trocar o número de uma conexão viva exige
     expect(h.audit).toHaveLength(0);
   });
 
-  it("administrador consegue trocar o número", async () => {
+  it("administrador passa da guarda de papel (e cai na recusa do número diferente da conexão)", async () => {
     h.sessao.role = "admin";
-    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: OUTRO_NUMERO };
-    const res = await POST(post(corpoValido()));
-    expect(res.status).toBe(200);
-    expect(h.banco.inserts.some((i) => i.tabela === "calendar_oauth_nonces")).toBe(true);
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
+    const res = await POST(post(corpoValido({ channel_session_id: ID_DA_CONEXAO })));
+    expect(res.status).not.toBe(403);
+    expect((await res.json()).error.code).toBe("numero_diferente_da_conexao");
   });
 
-  it("gerente refazendo o cadastro do MESMO número segue permitido", async () => {
-    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: NUMERO };
+  it("gerente refazendo o cadastro do MESMO número da conexão segue permitido", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: NUMERO };
+    expect((await POST(post(corpoValido({ channel_session_id: ID_DA_CONEXAO })))).status).toBe(200);
+  });
+
+  it("gerente conectando um número NOVO (sem id) com outra conexão viva segue permitido: cria conexão, não troca", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
     expect((await POST(post(corpoValido()))).status).toBe(200);
   });
 
@@ -298,6 +304,15 @@ describe("POST /api/v1/channels/official/cadastro-incorporado", () => {
     h.sessao.authSessionId = "22222222-2222-4222-8222-222222222222";
     expect((await POST(post(corpo))).status).toBe(403);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("⭐ channel_session_id que não é desta organização: 404 ANTES de queimar o nonce e de trocar o código", async () => {
+    h.banco.existente = null; // a busca por id + organização + oficial + viva não achou nada
+    const res = await POST(post(corpoValido({ channel_session_id: "aaaaaaaa-0000-4000-8000-0000000000a1" })));
+    expect(res.status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(h.banco.inserts).toEqual([]); // nem o nonce, nem a conexão
+    expect(h.audit).toEqual([]);
   });
 
   it("⭐ replay: nonce já queimado (23505) é 403 sem chegar à Meta", async () => {
@@ -560,18 +575,19 @@ describe("POST /api/v1/channels/official (manual): o mesmo número em outra orga
   });
 });
 
-describe("POST /api/v1/channels/official (manual): trocar o número de uma conexão viva exige administrador", () => {
+describe("POST /api/v1/channels/official (manual): substituir o número de uma conexão existente exige administrador", () => {
   const OUTRO_NUMERO = "555444333222";
-  const manual = () =>
+  const ID_DA_CONEXAO = "aaaaaaaa-0000-4000-8000-0000000000b3";
+  const manual = (extra: Record<string, unknown> = {}) =>
     new NextRequest("http://localhost/api/v1/channels/official", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone_number_id: NUMERO, waba_id: WABA, token: TOKEN_CLARO }),
+      body: JSON.stringify({ phone_number_id: NUMERO, waba_id: WABA, token: TOKEN_CLARO, ...extra }),
     });
 
-  it("gerente que TROCARIA o número recebe 403 legível, sem validar na Meta, sem gravar e sem audit", async () => {
-    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: OUTRO_NUMERO };
-    const res = await POST_MANUAL(manual());
+  it("gerente que SUBSTITUIRIA o número (mesmo id, número diferente) recebe 403 legível, sem validar na Meta, sem gravar e sem audit", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
+    const res = await POST_MANUAL(manual({ channel_session_id: ID_DA_CONEXAO }));
     expect(res.status).toBe(403);
     const corpo = await res.json();
     expect(corpo.error.code).toBe("forbidden_role");
@@ -581,14 +597,21 @@ describe("POST /api/v1/channels/official (manual): trocar o número de uma conex
     expect(h.audit).toHaveLength(0);
   });
 
-  it("administrador consegue trocar o número", async () => {
+  it("administrador passa da guarda de papel (e cai na recusa do número diferente da conexão)", async () => {
     h.sessao.role = "admin";
-    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: OUTRO_NUMERO };
-    expect((await POST_MANUAL(manual())).status).toBe(200);
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
+    const res = await POST_MANUAL(manual({ channel_session_id: ID_DA_CONEXAO }));
+    expect(res.status).not.toBe(403);
+    expect((await res.json()).error.code).toBe("numero_diferente_da_conexao");
   });
 
-  it("gerente recolando a credencial do MESMO número segue permitido", async () => {
-    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: NUMERO };
+  it("gerente recolando a credencial do MESMO número da conexão segue permitido", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: NUMERO };
+    expect((await POST_MANUAL(manual({ channel_session_id: ID_DA_CONEXAO }))).status).toBe(200);
+  });
+
+  it("gerente conectando um número NOVO (sem id) com outra conexão viva segue permitido: cria conexão, não troca", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
     expect((await POST_MANUAL(manual())).status).toBe(200);
   });
 

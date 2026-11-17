@@ -7,6 +7,10 @@
  *
  * A Meta recusar a leitura NÃO é erro de requisição: a resposta é 200 com `disponivel: false` e o
  * motivo em português, que é a informação que a tela precisa mostrar.
+ *
+ * Várias conexões oficiais por organização (17/11/2026): `?id=<channel_session_id>` diz qual. Id de
+ * outra organização, de outro canal ou excluído = 404, sem dizer qual. Sem `id`, a oficial mais antiga
+ * (a tela de hoje); a fase B (cartões) passa o id sempre.
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -14,6 +18,7 @@ import type { NextRequest } from "next/server";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { credenciaisDoCanalOficialVivo } from "@/lib/channels/meta/numero-da-sessao";
+import { idDaConexaoNaQuery } from "@/lib/channels/meta/sessao-oficial-viva";
 import { lerEstadoDoNumero } from "@/lib/channels/meta/registro-do-numero";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -22,13 +27,19 @@ export const runtime = "nodejs";
 
 const NO_STORE = { "cache-control": "no-store, max-age=0" } as const;
 
-export async function GET(_req: NextRequest): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const authz = await requireRole("manager", { requestId, resource: "channels_official_numero" });
   if (!authz.ok) return authz.response;
 
-  const cred = await credenciaisDoCanalOficialVivo(createAdminClient(), authz.org.orgId);
+  const id = idDaConexaoNaQuery(new URL(req.url));
+  if (id === null) return fail("not_found", "Conexão não encontrada.", 404, { requestId, headers: NO_STORE });
+
+  const cred = await credenciaisDoCanalOficialVivo(createAdminClient(), authz.org.orgId, id);
   if (!cred.ok) {
+    if (cred.erro === "sessao_nao_encontrada") {
+      return fail("not_found", "Conexão não encontrada.", 404, { requestId, headers: NO_STORE });
+    }
     return fail("invalid_request", cred.erro, 422, { requestId, headers: NO_STORE });
   }
 

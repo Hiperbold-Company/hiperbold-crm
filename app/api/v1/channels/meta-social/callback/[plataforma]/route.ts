@@ -279,9 +279,10 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
       // Recusa PARCIAL: umas contas entraram, outras não. Dizer só "erro"
       // esconderia as que funcionam; dizer só "ok" esconderia as que faltam.
       await registrarFalha(primeiraRecusa, `parcial:${conectadas}/${conectadas + recusadas}`);
-      return voltarParaConexoes({ meta_social: "parcial", n: conectadas, recusadas, motivo: primeiraRecusa });
+      return voltarParaConexoes({ meta_social: "parcial", n: conectadas, recusadas, motivo: primeiraRecusa, plataforma });
     }
-    return voltarParaConexoes({ meta_social: "ok", n: conectadas });
+    // `plataforma` diz à tela em cartões qual tipo abrir na volta (Instagram ou Messenger).
+    return voltarParaConexoes({ meta_social: "ok", n: conectadas, plataforma });
   } catch (err) {
     if (err instanceof ConexaoRecusada) return falhou(err.motivo);
     if (err instanceof ErroDaMeta) {

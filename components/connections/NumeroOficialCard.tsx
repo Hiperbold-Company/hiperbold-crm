@@ -24,10 +24,15 @@ import { copyToClipboard } from "@/lib/clipboard";
  *
  * Quem não é admin leva 403 da rota e o cartão simplesmente não aparece.
  */
-export function NumeroOficialCard() {
+export function NumeroOficialCard({
+  channelSessionId,
+}: {
+  /** Qual conexão oficial (tela em cartões). Ausente = a mais antiga da organização. */
+  channelSessionId?: string;
+} = {}) {
   const t = useT();
-  const estado = useEstadoDoNumeroOficial(true);
-  const registrar = useRegistrarNumeroOficial();
+  const estado = useEstadoDoNumeroOficial(true, channelSessionId);
+  const registrar = useRegistrarNumeroOficial(channelSessionId);
   const [pinInformado, setPinInformado] = useState("");
   const [pinGerado, setPinGerado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);

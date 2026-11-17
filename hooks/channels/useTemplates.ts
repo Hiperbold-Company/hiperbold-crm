@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { apiClient } from "@/lib/api/client";
+import { rotaDosModelosOficiais } from "@/lib/channels/rota-dos-modelos-oficiais";
 
 export interface TemplateSlotView {
   key: string;
@@ -56,18 +57,18 @@ export interface SyncCounts {
   disabled: number;
 }
 
-export function useTemplates() {
+export function useTemplates(channelSessionId?: string) {
   return useQuery({
-    queryKey: ["channel-templates"],
-    queryFn: async () => apiClient.get<{ data: TemplatesPayload }>("/api/v1/channels/templates"),
+    queryKey: channelSessionId ? ["channel-templates", channelSessionId] : ["channel-templates"],
+    queryFn: async () => apiClient.get<{ data: TemplatesPayload }>(rotaDosModelosOficiais(channelSessionId)),
     staleTime: 30_000,
   });
 }
 
-export function useSyncTemplates() {
+export function useSyncTemplates(channelSessionId?: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async () => apiClient.post<{ data: SyncCounts }>("/api/v1/channels/templates", {}),
+    mutationFn: async () => apiClient.post<{ data: SyncCounts }>(rotaDosModelosOficiais(channelSessionId), {}),
     onError: showApiError,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["channel-templates"] });
@@ -81,12 +82,13 @@ export function useSyncTemplates() {
  * chave: sem isso o link salvo aqui só apareceria na conversa depois do
  * `staleTime`.
  */
-export function useSaveTemplateValues() {
+export function useSaveTemplateValues(channelSessionId?: string) {
   const qc = useQueryClient();
   return useMutation({
+    // Com o id, a rota grava só nas linhas daquela conta oficial; sem ele, em todas as da organização.
     mutationFn: async (args: { name: string; language: string; values: Record<string, string> }) =>
       apiClient.patch<{ data: { savedValues: Record<string, string> } }>(
-        "/api/v1/channels/templates",
+        rotaDosModelosOficiais(channelSessionId),
         args,
       ),
     onError: showApiError,

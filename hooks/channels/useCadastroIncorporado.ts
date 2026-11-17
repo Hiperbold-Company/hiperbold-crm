@@ -52,6 +52,7 @@ export function useFinalizarCadastroIncorporado() {
     // Sem toast genérico: a tela mostra a mensagem da rota em caixa própria.
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["official-channel"] });
+      qc.invalidateQueries({ queryKey: ["conexoes"] });
     },
   });
 }

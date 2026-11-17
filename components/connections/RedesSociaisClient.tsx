@@ -137,6 +137,8 @@ const DESCRICAO_DO_CARTAO: Record<PlataformaSocial, string> = {
 
 export function RedesSociaisClient({
   bloqueio,
+  plataformas,
+  semContas = false,
 }: {
   /**
    * O limite de Conexões do plano (D-188). Conectar conta NOVA cria canal, então
@@ -144,6 +146,13 @@ export function RedesSociaisClient({
    * barrado pelo teto.
    */
   bloqueio?: BloqueioDoBotao;
+  /** Só os cartões destas plataformas (o "Criar" da tela em cartões abre um tipo de cada vez). */
+  plataformas?: PlataformaSocial[];
+  /**
+   * Sem a lista das contas já conectadas: na tela em cartões cada conta tem o seu cartão e o seu
+   * Gerenciar, e aqui fica só o botão de conectar.
+   */
+  semContas?: boolean;
 } = {}) {
   const t = useT();
   const tagDeIdioma = useTagDeIdioma();
@@ -232,7 +241,7 @@ export function RedesSociaisClient({
 
       {estado && (
         <div className="grid gap-4 xl:grid-cols-2">
-          {CARTOES.map(({ plataforma, titulo }) => {
+          {CARTOES.filter((c) => !plataformas || plataformas.includes(c.plataforma)).map(({ plataforma, titulo }) => {
             const configurado = !!estado.configurado?.[plataforma];
             const contas = (estado.contas ?? []).filter((c) => c.plataforma === plataforma);
             return (
@@ -268,7 +277,7 @@ export function RedesSociaisClient({
                   <AvisoDeLimiteDeConexoes motivo={bloqueio?.motivo} className="text-xs text-destructive" />
                 )}
 
-                {contas.length === 0 ? (
+                {semContas ? null : contas.length === 0 ? (
                   <p className="text-sm text-muted-foreground">{t("Nenhuma conta conectada.")}</p>
                 ) : (
                   <ul className="flex flex-col gap-2">

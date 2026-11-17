@@ -134,12 +134,20 @@ interface Preparado {
 }
 
 export function ConectarComAMeta({
-  jaConectado,
   bloqueio,
+  temConexaoOficial = false,
 }: {
-  /** Já existe um canal oficial nesta organização: o botão passa a TROCAR o número. */
-  jaConectado: boolean;
+  /**
+   * Desde 17/11/2026 cada número NOVO conectado pela Meta é uma conexão nova (várias contas oficiais
+   * por organização): o botão nunca substitui a atual.
+   */
   bloqueio?: BloqueioDoBotao;
+  /**
+   * A organização já tem conexão oficial: no teto do plano o botão continua livre, porque reautenticar
+   * o MESMO número reaproveita a linha dele. Número novo segue barrado pelo servidor (trigger do plano),
+   * e a recusa chega com a mensagem da rota.
+   */
+  temConexaoOficial?: boolean;
 }) {
   const t = useT();
   const finalizar = useFinalizarCadastroIncorporado();
@@ -223,7 +231,8 @@ export function ConectarComAMeta({
   }, []);
 
   const ocupado = fase !== "ocioso";
-  const travadoPeloPlano = !jaConectado && Boolean(bloqueio?.desabilitado);
+  const travadoPeloPlano = !temConexaoOficial && Boolean(bloqueio?.desabilitado);
+  const soReconectar = temConexaoOficial && Boolean(bloqueio?.desabilitado);
   const faltaConfirmarContatos = coexistencia && !confirmouContatos;
 
   function falhar(mensagem: string) {
@@ -482,14 +491,6 @@ export function ConectarComAMeta({
           )}
         </div>
 
-        {jaConectado ? (
-          <p className="text-xs text-muted-foreground">
-            {t(
-              "Esta organização tem uma conexão oficial; conectar outro número pela Meta substitui a atual.",
-            )}
-          </p>
-        ) : null}
-
         <div>
           <Button
             type="button"
@@ -502,14 +503,18 @@ export function ConectarComAMeta({
               ? t("Abrindo a Meta…")
               : fase === "conectando"
                 ? t("Conectando o número…")
-                : jaConectado
-                  ? t("Trocar número pela Meta")
-                  : t("Conectar com a Meta")}
+                : t("Conectar com a Meta")}
           </Button>
         </div>
 
         {travadoPeloPlano ? (
           <AvisoDeLimiteDeConexoes motivo={bloqueio?.motivo} className="text-xs text-destructive" />
+        ) : null}
+
+        {soReconectar ? (
+          <p className="text-xs text-muted-foreground" data-testid="cadastro-meta-so-reconectar">
+            {t("O plano chegou ao limite de conexões: dá para entrar de novo com um número que já está conectado, mas não para conectar um número novo.")}
+          </p>
         ) : null}
 
         {semConfiguracao ? (

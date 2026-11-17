@@ -113,13 +113,13 @@ type Abertura =
  */
 async function abrirAba(page: Page, aba: string): Promise<Abertura> {
   await page.goto(`/app/connections?aba=${aba}&sub=templates`, { waitUntil: "domcontentloaded" });
-  // A tela montou quando a sub-aba "Modelos" está lá: ela existe nas duas abas
-  // mesmo quando a conexão do canal ainda não foi feita (a lista vazia e o
-  // "canal não conectado" convivem com a barra de sub-abas).
-  await page
-    .getByRole("tab", { name: /^(Modelos|Modelos do parceiro|Templates da Meta)$/ })
-    .first()
-    .waitFor({ state: "visible", timeout: 60_000 });
+  // Tela em cartões (17/11/2026): o link antigo abre os modelos DENTRO de um diálogo — o Gerenciar da
+  // primeira conta oficial, ou o Criar do parceiro na aba de modelos. Sem conta oficial, o link abre o
+  // Criar da oficial, que não tem modelos: é o "canal não conectado" desta tela.
+  const abaDeModelos = page.getByRole("tab", { name: /^(Modelos|Modelos do parceiro|Templates da Meta)$/ }).first();
+  const criarDaOficial = page.getByTestId("criar-conteudo-whatsapp_oficial");
+  await abaDeModelos.or(criarDaOficial).first().waitFor({ state: "visible", timeout: 60_000 });
+  if ((await criarDaOficial.count()) > 0) return { formulario: false, motivo: "canal-oficial-desconectado" };
 
   // Duas telas possíveis: a aba com o botão que abre o formulário, ou o cartão
   // que avisa que não há canal oficial conectado — a ÚNICA saída sem form.

@@ -41,6 +41,7 @@ import {
 } from "@/lib/channels/gestao-de-modelos";
 import { resolveMetaCreds } from "@/lib/channels/meta/credentials";
 import { metaSessionForOrg } from "@/lib/channels/meta/session";
+import { idDaConexaoNaQuery, recusaSeConexaoOficialAmbigua } from "@/lib/channels/meta/sessao-oficial-viva";
 import { metaCloudTemplateOps } from "@/lib/channels/meta/templates";
 import { normalizeRejectedReason } from "@/lib/channels/meta/webhook";
 import { deriveTemplateContract, describeAddress } from "@/lib/channels/meta/template-contract";
@@ -152,12 +153,52 @@ async function orgOrFail(requestId: string, papel: "agent" | "manager"): Promise
   return { autorizado: true, orgId: authz.org.orgId, userId: authz.user.id, idioma: authz.user.idioma };
 }
 
-export async function GET(): Promise<NextResponse> {
+/**
+ * QUAL conta oficial (17/11/2026, várias por organização): `?channel_session_id=` na
+ * query, nos dois métodos. Id de outra organização, de outro canal ou excluído = 404,
+ * sem dizer qual. Sem ele, a oficial mais antiga, como antes da fase B — exceto na rota que ESCREVE
+ * (`mutante`) com mais de uma conexão oficial viva: aí 422 `conexao_oficial_ambigua`, porque sincronizar
+ * ou gerir modelo na conta errada não se desfaz. Leitura (GET) segue na mais antiga.
+ */
+async function sessaoDaRequisicao(
+  req: NextRequest,
+  orgId: string,
+  idioma: Idioma,
+  requestId: string,
+  mutante = false,
+): Promise<{ sessao: Awaited<ReturnType<typeof metaSessionForOrg>> } | { resposta: NextResponse }> {
+  const id = idDaConexaoNaQuery(new URL(req.url));
+  const naoEncontrada = () => ({
+    resposta: fail("not_found", traduzir("Conexão não encontrada.", idioma), 404, { requestId }),
+  });
+  if (id === null) return naoEncontrada();
+  if (mutante) {
+    const ambigua = await recusaSeConexaoOficialAmbigua({
+      admin: createAdminClient(),
+      organizationId: orgId,
+      channelSessionId: id,
+      idioma,
+      requestId,
+    });
+    if (ambigua) return { resposta: ambigua };
+  }
+  const sessao = await metaSessionForOrg(orgId, id);
+  if (id && !sessao) return naoEncontrada();
+  return { sessao };
+}
+
+export async function GET(req: NextRequest): Promise<NextResponse> {
   const requestId = randomUUID();
   const r = await orgOrFail(requestId, "agent");
   if (!r.autorizado) return r.resposta;
 
-  const sessao = await metaSessionForOrg(r.orgId);
+  const escolhida = await sessaoDaRequisicao(req, r.orgId, r.idioma, requestId);
+  if ("resposta" in escolhida) return escolhida.resposta;
+  const { sessao } = escolhida;
+  // Com `channel_session_id` (tela em cartões, várias contas oficiais por organização) a lista é SÓ a
+  // daquela conta: linha oficial (sem conexão de parceiro) da WABA da sessão escolhida. Sem id, o espelho
+  // inteiro da organização, como antes (o seletor do inbox e as telas antigas leem assim).
+  const daContaEscolhida = Boolean(idDaConexaoNaQuery(new URL(req.url)));
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("meta_templates")
@@ -170,7 +211,11 @@ export async function GET(): Promise<NextResponse> {
 
   if (error) return falhaInterna("internal_error", error, { requestId });
 
-  const templates: TemplateView[] = (data ?? []).map((row) => {
+  const linhas = daContaEscolhida
+    ? (data ?? []).filter((row) => !!sessao?.wabaId && row.channel_session_id === null && row.waba_id === sessao.wabaId)
+    : (data ?? []);
+
+  const templates: TemplateView[] = linhas.map((row) => {
     const contrato = deriveTemplateContract({
       name: row.name,
       language: row.language,
@@ -255,7 +300,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!r.autorizado) return r.resposta;
   const t = (texto: string) => traduzir(texto, r.idioma);
 
-  const sessao = await metaSessionForOrg(r.orgId);
+  const escolhida = await sessaoDaRequisicao(req, r.orgId, r.idioma, requestId, true);
+  if ("resposta" in escolhida) return escolhida.resposta;
+  const { sessao } = escolhida;
   if (!sessao?.wabaId) {
     return fail("invalid_request", "no_meta_channel", 400, { requestId });
   }
@@ -502,13 +549,27 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     });
   }
 
+  // Com `channel_session_id`, grava SÓ nas linhas daquela conta oficial (WABA da sessão escolhida);
+  // sem id, em todas as linhas do mesmo nome e idioma da organização, como antes.
+  const id = idDaConexaoNaQuery(new URL(req.url));
+  if (id === null) return fail("not_found", traduzir("Conexão não encontrada.", r.idioma), 404, { requestId });
+  let wabaDaConta: string | null = null;
+  if (id) {
+    const sessao = await metaSessionForOrg(r.orgId, id);
+    if (!sessao?.wabaId) return fail("not_found", traduzir("Conexão não encontrada.", r.idioma), 404, { requestId });
+    wabaDaConta = sessao.wabaId;
+  }
+
   const admin = createAdminClient();
-  const { data: linhas, error } = await admin
+  const consulta = admin
     .from("meta_templates")
     .select("id, name, language, parameter_format, components, saved_values")
     .eq("organization_id", r.orgId)
     .eq("name", body.name)
     .eq("language", body.language);
+  const { data: linhas, error } = wabaDaConta
+    ? await consulta.eq("waba_id", wabaDaConta).is("channel_session_id", null)
+    : await consulta;
   if (error) return falhaInterna("internal_error", error, { requestId });
   if (!linhas || linhas.length === 0) {
     return fail("not_found", "modelo não encontrado", 404, { requestId });

@@ -41,7 +41,6 @@ import * as path from "node:path";
 
 import { test, type Locator, type Page } from "./helpers/test";
 import { lerCreds, loginComoAdmin } from "./helpers/login-admin";
-import { ROTULO_DA_ABA_INSTANCIA } from "../../lib/channels/rotulo-da-aba-instancia";
 
 import { admin, creds, expect, insere, type Creds } from "./qa-l12-comum";
 
@@ -216,19 +215,22 @@ test.describe("vendas e dinheiro no celular", () => {
     const foto = async (nome: string) =>
       info.attach(nome, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 
-    // 1. Conexões.
-    // Hiperbold: sem canal por QR do WAHA (components/connections/ConexoesShell.tsx, `wahaConfigured`
-    // sem uso). A lista do upstream com "Conectar novo WhatsApp", "Agendar pausa" e o link de
-    // responsáveis não é montada; a entrada é a aba da instância (ROTULO_DA_ABA_INSTANCIA), e o que
-    // se mede no celular é o botão de conectar dela dentro da tela e o <main> sem rolar de lado.
+    // 1. Conexões. Tela em cartões (17/11/2026): a grade e o botão Criar; o Criar abre o tipo
+    // "WhatsApp por QR Code". O que se mede no celular: o Criar dentro da tela, o <main> sem rolar
+    // de lado e o tipo do Criar alcançável dentro da tela.
     await page.goto("/app/connections");
-    const conectar = page
-      .getByRole("tabpanel", { name: ROTULO_DA_ABA_INSTANCIA })
-      .getByRole("button", { name: "Conectar", exact: true });
-    await expect(conectar).toBeVisible({ timeout: 30_000 });
+    const criar = page.getByTestId("btn-criar-conexao");
+    await expect(criar).toBeVisible({ timeout: 30_000 });
     await semRolagemNoMain(page, "Conexões");
-    await dentroDaTela(conectar, "Conectar");
+    await dentroDaTela(criar, "Criar");
+    await criar.click();
+    const tipoQr = page.getByTestId("criar-tipo-whatsapp_qr");
+    await expect(tipoQr).toBeVisible();
+    await dentroDaTela(tipoQr, "Tipo WhatsApp por QR Code");
+    await tipoQr.click();
+    await expect(page.getByTestId("criar-conteudo-whatsapp_qr")).toBeVisible();
     await foto("01-conexoes");
+    await page.keyboard.press("Escape");
 
     // 2. Webhooks: as quatro abas na tela, nenhuma rolando escondida.
     await page.goto("/app/webhooks");
