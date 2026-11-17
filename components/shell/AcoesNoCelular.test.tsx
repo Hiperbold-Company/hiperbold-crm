@@ -32,6 +32,30 @@ describe("AcoesNoCelular", () => {
     expect(importar).toHaveBeenCalledTimes(1);
   });
 
+  it("celular: ação desativada aparece travada e não roda; ação com href vira link", async () => {
+    simular(true);
+    const importar = vi.fn();
+    render(
+      <AcoesNoCelular
+        acoes={[
+          { rotulo: "Importar", onSelect: importar, desativada: true },
+          { rotulo: "Usar um modelo", href: "/app/automacoes/modelos" },
+        ]}
+      >
+        <button>Importar</button>
+      </AcoesNoCelular>,
+    );
+    const gatilho = screen.getByRole("button", { name: "Mais ações" });
+    fireEvent.pointerDown(gatilho, { button: 0, ctrlKey: false, pointerType: "mouse" });
+    fireEvent.click(gatilho);
+    const travada = await screen.findByRole("menuitem", { name: "Importar" });
+    expect(travada.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(travada);
+    expect(importar).not.toHaveBeenCalled();
+    const link = screen.getByRole("menuitem", { name: "Usar um modelo" });
+    expect(link.getAttribute("href")).toBe("/app/automacoes/modelos");
+  });
+
   it("desktop: os botões como estão e nenhum ⋯", () => {
     simular(false);
     render(

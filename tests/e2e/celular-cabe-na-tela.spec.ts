@@ -449,7 +449,9 @@ test("as superfícies não estouram a tela em 360 nem em 390px", async ({ page }
 test("no celular os filtros ficam atrás do botão Filtros, que abre a gaveta", async ({ page }) => {
   await loginComoAdmin(page, creds);
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const rota of ["/app/contacts", "/app/automacoes", "/app/inbox"]) {
+  // Automações fica fora: sem nenhuma automação na organização a tela é o
+  // estado vazio, sem filtros. A gaveta dela é coberta no teste de unidade.
+  for (const rota of ["/app/contacts", "/app/inbox"]) {
     await abrir(page, rota);
     const botao = page.getByRole("button", { name: /^Filtros/ }).first();
     await expect(botao, `${rota}: botão Filtros`).toBeVisible();

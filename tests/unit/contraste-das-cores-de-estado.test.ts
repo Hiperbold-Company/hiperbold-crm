@@ -29,14 +29,14 @@ type Rgba = [number, number, number, number];
 function cor(tema: string, nome: string): Rgba {
   const m = bloco(tema).match(new RegExp(`--color-${nome}:\\s*([^;]+);`));
   if (!m) throw new Error(`--color-${nome} ausente em ${tema}`);
-  const v = m[1].trim();
+  const v = (m[1] ?? "").trim();
   const hex = v.match(/^#([0-9a-f]{6})$/i);
-  if (hex) {
+  if (hex?.[1]) {
     const n = parseInt(hex[1], 16);
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1];
   }
   const rgba = v.match(/^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/);
-  if (rgba) return [+rgba[1], +rgba[2], +rgba[3], +rgba[4]];
+  if (rgba) return [Number(rgba[1]), Number(rgba[2]), Number(rgba[3]), Number(rgba[4])];
   throw new Error(`--color-${nome} em ${tema} não é hex nem rgba: ${v}`);
 }
 
@@ -46,16 +46,17 @@ function sobre([r, g, b, a]: Rgba, [R, G, B]: Rgba): Rgba {
 }
 
 function luminancia([r, g, b]: Rgba): number {
-  const c = [r, g, b].map((x) => {
+  const canal = (x: number) => {
     const s = x / 255;
     return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  return 0.2126 * canal(r) + 0.7152 * canal(g) + 0.0722 * canal(b);
 }
 
 function contraste(a: Rgba, b: Rgba): number {
-  const [x, y] = [luminancia(a), luminancia(b)].sort((p, q) => q - p);
-  return (x + 0.05) / (y + 0.05);
+  const la = luminancia(a);
+  const lb = luminancia(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
 function matiz([r, g, b]: Rgba): number {

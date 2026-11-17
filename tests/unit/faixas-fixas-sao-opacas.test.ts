@@ -34,7 +34,7 @@ function tsx(dir: string, saida: string[] = []): string[] {
 function classesSticky(fonte: string): string[] {
   const achadas: string[] = [];
   const re = /(["'`])((?:(?!\1)[^\n])*\bsticky\b(?:(?!\1)[^\n])*)\1/g;
-  for (const m of fonte.matchAll(re)) achadas.push(m[2]);
+  for (const m of fonte.matchAll(re)) if (m[2]) achadas.push(m[2]);
   return achadas;
 }
 

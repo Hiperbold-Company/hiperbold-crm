@@ -134,17 +134,35 @@ export function AutomacoesList({
     </div>
   );
 
+  // Parte da leitura falhou. Sem nada para mostrar, o cartão de erro ocupa a
+  // tela; com follow-ups ou regras já carregados, o erro vira uma faixa acima
+  // da lista — esconder o que carregou bem (e os botões de criar) era pior.
+  const falhou = servidorFalhou || isError;
+  const tentarDeNovo = () => {
+    void refetch().then((r) => {
+      if (!r.isError) setServidorFalhou(false);
+    });
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      {servidorFalhou || (isError && todas.length === 0) ? (
+      {falhou && todas.length > 0 ? (
+        <div
+          role="alert"
+          data-testid="faixa-erro-automacoes"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-error/40 bg-error-bg px-4 py-2 text-sm text-error-fg"
+        >
+          <span>{t("Não foi possível carregar as automações")}</span>
+          <Button type="button" size="sm" variant="outline" onClick={tentarDeNovo} disabled={isFetching}>
+            {t("Tentar novamente")}
+          </Button>
+        </div>
+      ) : null}
+      {falhou && todas.length === 0 ? (
         <Card>
           <ErroComRetry
             titulo={t("Não foi possível carregar as automações")}
-            onRetry={() => {
-              void refetch().then((r) => {
-                if (!r.isError) setServidorFalhou(false);
-              });
-            }}
+            onRetry={tentarDeNovo}
             tentando={isFetching}
           />
         </Card>
