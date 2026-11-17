@@ -175,6 +175,31 @@ end $$;
 
 revoke execute on function public.fn_reaplicar_modulos_instalados() from public, anon, authenticated, service_role;
 
+-- A conferência do fim da atualização acusa também o módulo desligado com motivo de falha (o
+-- corpo do baseline é editado no lugar, como o da reaplicação acima).
+create or replace function public.fn_conferir_modulos_instalados()
+returns void language plpgsql set search_path = public, pg_temp as $$
+declare
+  v_suspensos text;
+begin
+  -- 1016: o módulo DESLIGADO cuja provisionadora falhou também conta. A falha não grava
+  -- `suspenso` por cima de `desligado` (a decisão de quem administra fica), mas deixa o motivo;
+  -- sem esta metade a atualização quebrada de um módulo desligado passaria calada.
+  select string_agg(modulo, ', ' order by modulo) into v_suspensos
+    from public.modulos_instalados
+   where estado = 'suspenso'
+      or (estado = 'desligado' and nullif(btrim(coalesce(motivo_suspensao, '')), '') is not null);
+  -- A mensagem NÃO repete o erro original, e isso é o ponto: se a provisionadora falhou com
+  -- "already exists" e o texto viesse junto, a linha casaria com a lista de erros benignos do
+  -- kit e seria ENGOLIDA — exatamente o silêncio que esta função existe para impedir. O motivo
+  -- fica em modulos_instalados.motivo_suspensao; o aviso só nomeia o módulo.
+  if v_suspensos is not null then
+    raise exception 'modulo suspenso na atualizacao: % — o motivo esta em modulos_instalados.motivo_suspensao', v_suspensos;
+  end if;
+end $$;
+
+revoke execute on function public.fn_conferir_modulos_instalados() from public, anon, authenticated, service_role;
+
 
 -- ── 5. instalar de novo não religa ───────────────────────────────────────────
 create or replace function public.fn_modulo_instalar(p_actor uuid, p_operation uuid, p_modulo text)

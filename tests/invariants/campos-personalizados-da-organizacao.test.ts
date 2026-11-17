@@ -313,6 +313,42 @@ describe("a mesma chave em contato e negócio nunca se funde", () => {
   });
 });
 
+describe("a mesma chave com maiúsculas diferentes entre funis vira uma definição e leva os valores", () => {
+  const ORG_M = "eeeeeeee-1015-4000-8000-0000000000aa";
+  const FUNIL_M1 = "eeeeeeee-1015-4000-8000-0000000000a1";
+  const FUNIL_M2 = "eeeeeeee-1015-4000-8000-0000000000a2";
+  const ETAPA_M2 = "eeeeeeee-1015-4000-8000-0000000000a3";
+  const LEAD_M2 = "eeeeeeee-1015-4000-8000-0000000000a4";
+
+  beforeAll(() => {
+    sql(`
+      insert into public.organizations (id, slug, legal_name, display_name) values
+        ('${ORG_M}', 'cp-inv-m', 'CP M', 'CP M') on conflict (id) do nothing;
+      insert into public.crm_pipelines (id, organization_id, name, slug, settings, created_at) values
+        ('${FUNIL_M1}', '${ORG_M}', 'Mais antigo', 'cp-m-1', '{"fields": [{"key":"cidade","label":"Cidade","type":"text"}]}', now() - interval '2 days'),
+        ('${FUNIL_M2}', '${ORG_M}', 'Mais novo', 'cp-m-2', '{"fields": [{"key":"Cidade","label":"Cidade","type":"text"}]}', now() - interval '1 day')
+        on conflict (id) do nothing;
+      insert into public.crm_stages (id, organization_id, pipeline_id, name, slug, position) values
+        ('${ETAPA_M2}', '${ORG_M}', '${FUNIL_M2}', 'Entrada', 'entrada', 1000) on conflict (id) do nothing;
+      insert into public.crm_leads (id, organization_id, pipeline_id, stage_id, title, custom_fields) values
+        ('${LEAD_M2}', '${ORG_M}', '${FUNIL_M2}', '${ETAPA_M2}', 'Negócio M', '{"Cidade": "Recife"}') on conflict (id) do nothing;
+    `);
+    sql(`select public.fn_adotar_campos_legados_da_organizacao('${ORG_M}');`);
+  });
+
+  it("uma definição só, na chave do funil mais antigo", () => {
+    expect(
+      sql(`select string_agg(entidade || ':' || key, ',' order by position) from public.custom_field_definitions where organization_id = '${ORG_M}';`),
+    ).toBe("negocio:cidade");
+  });
+
+  it("o valor gravado com `Cidade` no funil mais novo é COPIADO para `cidade` (o antigo fica)", () => {
+    expect(sql(`select custom_fields from public.crm_leads where id = '${LEAD_M2}';`)).toBe(
+      '{"Cidade": "Recife", "cidade": "Recife"}',
+    );
+  });
+});
+
 describe("os tetos do banco", () => {
   const ORG_F = "eeeeeeee-1015-4000-8000-00000000000f";
 

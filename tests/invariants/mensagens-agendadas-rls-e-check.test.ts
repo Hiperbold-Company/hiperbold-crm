@@ -212,3 +212,117 @@ describe("fn_reservar_mensagens_agendadas", () => {
     expect(lastLine(sql(`select status from public.scheduled_messages where id = '${SM_B}';`))).toBe("agendada");
   });
 });
+
+describe("a agendada herda a visibilidade da conversa (auditoria do lote 17/11)", () => {
+  // Org com visibility_mode = 'own': o atendente só vê a conversa atribuída a ele. A agendada de
+  // uma conversa de OUTRO atendente, na mesma organização, não pode aparecer pela REST.
+  const ORG_V = "1017cccc-0000-4000-8000-000000000003";
+  const USER_V = "1017cccc-1111-4000-8000-000000000003";
+  const USER_V2 = "1017cccc-1111-4000-8000-000000000004";
+  const SESS_V = "1017cccc-2222-4000-8000-000000000003";
+  const CT_V = "1017cccc-3333-4000-8000-000000000003";
+  const CT_V2 = "1017cccc-3333-4000-8000-000000000004";
+  const CV_DELE = "1017cccc-4444-4000-8000-000000000003";
+  const CV_DO_OUTRO = "1017cccc-4444-4000-8000-000000000004";
+  const SM_DELE = "1017cccc-5555-4000-8000-000000000003";
+  const SM_DO_OUTRO = "1017cccc-5555-4000-8000-000000000004";
+
+  beforeAll(() => {
+    sql(`
+      insert into auth.users (id, email) values
+        ('${USER_V}', 'sm-v@invariant.test'), ('${USER_V2}', 'sm-v2@invariant.test')
+        on conflict (id) do nothing;
+      insert into public.organizations (id, slug, legal_name, display_name, settings)
+        values ('${ORG_V}', 'sm-inv-v', 'Agendadas Inv V', 'SM V', '{"visibility_mode": "own"}')
+        on conflict (id) do nothing;
+      insert into public.user_organizations (user_id, organization_id, role, accepted_at) values
+        ('${USER_V}', '${ORG_V}', 'agent', now()), ('${USER_V2}', '${ORG_V}', 'agent', now())
+        on conflict do nothing;
+      insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted)
+        values ('${SESS_V}', '${ORG_V}', 'sm-inv-v', '\\x00'::bytea) on conflict (id) do nothing;
+      insert into public.contacts (id, organization_id, display_name)
+        values ('${CT_V}', '${ORG_V}', 'Agendadas Inv Contact V'), ('${CT_V2}', '${ORG_V}', 'Agendadas Inv Contact V2')
+        on conflict (id) do nothing;
+      insert into public.conversations (id, organization_id, contact_id, channel_session_id, assigned_to_user_id) values
+        ('${CV_DELE}', '${ORG_V}', '${CT_V}', '${SESS_V}', '${USER_V}'),
+        ('${CV_DO_OUTRO}', '${ORG_V}', '${CT_V2}', '${SESS_V}', '${USER_V2}')
+        on conflict (id) do nothing;
+      insert into public.scheduled_messages (id, organization_id, conversation_id, contact_id, created_by, body, send_at) values
+        ('${SM_DELE}', '${ORG_V}', '${CV_DELE}', '${CT_V}', '${USER_V}', 'minha', now() + interval '1 day'),
+        ('${SM_DO_OUTRO}', '${ORG_V}', '${CV_DO_OUTRO}', '${CT_V2}', '${USER_V2}', 'do outro', now() + interval '1 day')
+        on conflict (id) do nothing;
+    `);
+  });
+
+  it("controle positivo: o atendente lê a agendada da conversa dele", () => {
+    expect(countAs(USER_V, `select count(*) from public.scheduled_messages where id = '${SM_DELE}';`)).toBe(1);
+  });
+
+  it("não lê a agendada da conversa de outro atendente da mesma organização", () => {
+    expect(countAs(USER_V, `select count(*) from public.scheduled_messages where id = '${SM_DO_OUTRO}';`)).toBe(0);
+  });
+});
+
+describe("o service_role tem só o que usa em scheduled_messages", () => {
+  it("sem TRUNCATE, REFERENCES nem TRIGGER (o revoke all inclui service_role)", () => {
+    expect(
+      lastLine(
+        sql(`select coalesce(string_agg(privilege_type, ',' order by privilege_type), '')
+               from information_schema.role_table_grants
+              where table_schema = 'public' and table_name = 'scheduled_messages'
+                and grantee = 'service_role';`),
+      ),
+    ).toBe("DELETE,INSERT,SELECT,UPDATE");
+  });
+});
+
+describe("anonimizar o contato alcança a agendada (LGPD)", () => {
+  const ORG_L = "1017dddd-0000-4000-8000-000000000005";
+  const SESS_L = "1017dddd-2222-4000-8000-000000000005";
+  const CT_L = "1017dddd-3333-4000-8000-000000000005";
+  const CT_VIZINHO = "1017dddd-3333-4000-8000-000000000006";
+  const CV_L = "1017dddd-4444-4000-8000-000000000005";
+  const CV_VIZINHO = "1017dddd-4444-4000-8000-000000000006";
+  const SM_PENDENTE = "1017dddd-5555-4000-8000-000000000005";
+  const SM_ENVIADA = "1017dddd-5555-4000-8000-000000000006";
+  const SM_VIZINHO = "1017dddd-5555-4000-8000-000000000007";
+
+  beforeAll(() => {
+    sql(`
+      insert into public.organizations (id, slug, legal_name, display_name)
+        values ('${ORG_L}', 'sm-inv-l', 'Agendadas Inv L', 'SM L') on conflict (id) do nothing;
+      insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted)
+        values ('${SESS_L}', '${ORG_L}', 'sm-inv-l', '\\x00'::bytea) on conflict (id) do nothing;
+      insert into public.contacts (id, organization_id, display_name) values
+        ('${CT_L}', '${ORG_L}', 'Titular L'), ('${CT_VIZINHO}', '${ORG_L}', 'Vizinho L')
+        on conflict (id) do nothing;
+      insert into public.conversations (id, organization_id, contact_id, channel_session_id) values
+        ('${CV_L}', '${ORG_L}', '${CT_L}', '${SESS_L}'), ('${CV_VIZINHO}', '${ORG_L}', '${CT_VIZINHO}', '${SESS_L}')
+        on conflict (id) do nothing;
+      insert into public.scheduled_messages (id, organization_id, conversation_id, contact_id, body, template, send_at, status) values
+        ('${SM_PENDENTE}', '${ORG_L}', '${CV_L}', '${CT_L}', 'Oi Maria, sua consulta', '{"name":"lembrete","values":["Maria"]}', now() + interval '1 day', 'agendada'),
+        ('${SM_ENVIADA}', '${ORG_L}', '${CV_L}', null, 'Oi Maria, chegou', null, now() - interval '1 day', 'enviada'),
+        ('${SM_VIZINHO}', '${ORG_L}', '${CV_VIZINHO}', '${CT_VIZINHO}', 'Oi João', null, now() + interval '1 day', 'agendada')
+        on conflict (id) do nothing;
+    `);
+    sql(`select public.fn_lgpd_cascade_redact_contact('${ORG_L}', '${CT_L}', null);`);
+  });
+
+  it("a pendente vira cancelada, com o texto redigido e o modelo zerado", () => {
+    expect(
+      lastLine(sql(`select status || '|' || body || '|' || coalesce(template::text, 'null') from public.scheduled_messages where id = '${SM_PENDENTE}';`)),
+    ).toBe("cancelada|[mensagem anonimizada]|null");
+  });
+
+  it("a já enviada (achada pela conversa, sem contact_id) mantém o status e perde o texto", () => {
+    expect(lastLine(sql(`select status || '|' || body from public.scheduled_messages where id = '${SM_ENVIADA}';`))).toBe(
+      "enviada|[mensagem anonimizada]",
+    );
+  });
+
+  it("CONTROLE: a agendada do vizinho fica intacta", () => {
+    expect(lastLine(sql(`select status || '|' || body from public.scheduled_messages where id = '${SM_VIZINHO}';`))).toBe(
+      "agendada|Oi João",
+    );
+  });
+});

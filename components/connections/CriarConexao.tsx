@@ -234,7 +234,10 @@ export function CriarConexao({
 
   return (
     <Dialog open={aberto} onOpenChange={(v) => !v && aoFechar()}>
-      <DialogContent className="max-w-5xl gap-0 p-0" data-testid="criar-conexao">
+      {/* No celular o diálogo deixa 1rem de cada lado (o `w-full` da base encostava na borda), e os
+          tipos QUEBRAM LINHA em vez de rolar de lado: numa faixa rolável, "WhatsApp por QR Code"
+          ficava fora da tela e quem não sabe que a faixa rola não o achava. */}
+      <DialogContent className="w-[calc(100%-2rem)] max-w-5xl gap-0 p-0" data-testid="criar-conexao">
         <DialogHeader className="border-b px-6 py-5 pr-12">
           <DialogTitle>{t("Criar conexão")}</DialogTitle>
           <DialogDescription>{t("Escolha por onde o seu negócio vai falar com o cliente.")}</DialogDescription>
@@ -242,7 +245,7 @@ export function CriarConexao({
         <div className="grid min-h-0 md:grid-cols-[240px_minmax(0,1fr)]">
           <nav
             aria-label={t("Tipos de conexão")}
-            className="flex gap-1 overflow-x-auto border-b p-3 md:flex-col md:overflow-visible md:border-r md:border-b-0"
+            className="flex flex-wrap gap-1 border-b p-3 md:flex-col md:flex-nowrap md:border-r md:border-b-0"
           >
             {tipos.map((k) => {
               const Icon = ICONE[k];

@@ -687,6 +687,25 @@ beforeAll(() => {
             (organization_id, preview_run_id, conversation_id, contact_id, is_dry_run, status, messages_sent)
           values (v_org, 'rls-invariant-' || v_org::text, v_conv, v_contact, true, 'completed', 0);
         end if;
+
+        -- migration 1015 (fork Hiperbold): o campo personalizado da ORGANIZAÇÃO.
+        -- A leitura é de qualquer membro (custom_field_definitions_select_membro),
+        -- então o agent semeado é controle positivo legítimo; a escrita exige
+        -- gerente e é só do servidor (authenticated tem só select).
+        if not exists (select 1 from public.custom_field_definitions where organization_id = v_org) then
+          insert into public.custom_field_definitions (organization_id, entidade, key, label, type)
+            values (v_org, 'negocio', 'rls_invariante', 'RLS invariante', 'text');
+        end if;
+
+        -- migration 1017 (fork Hiperbold): a mensagem agendada no chat. Vazar a
+        -- linha entrega ao vizinho o TEXTO que a empresa vai mandar e para quem.
+        -- Leitura por organização sem gate de papel (o balão aparece a quem vê a
+        -- conversa); a escrita é só do servidor (authenticated tem só select).
+        if not exists (select 1 from public.scheduled_messages where organization_id = v_org) then
+          insert into public.scheduled_messages
+            (organization_id, conversation_id, contact_id, channel_session_id, body, send_at)
+          values (v_org, v_conv, v_contact, v_sess, 'rls invariant agendada', now() + interval '1 day');
+        end if;
       end loop;
     end
     $seed$;
@@ -777,7 +796,7 @@ export const TABLES = [
   // migration 0207 — as credenciais de IA da organização. A 0150 apagou a policy
   // de leitura por organização sem que nada acusasse, e a 0207 a restaurou; esta
   // linha é o que passa a acusar se ela sumir de novo (issue #545). A leitura é
-  // org-scoped sem gate de papel, então o `agent` semeado serve de controle
+  // org-scoped sem gate de papel, então o agent semeado serve de controle
   // positivo. O SELECT de `authenticated` é por COLUNA, sem as colunas cifradas:
   // a contagem abaixo usa só `organization_id` e mede o que um membro enxerga.
   "ai_provider_credentials",
@@ -803,7 +822,7 @@ export const TABLES = [
   // praticado e a carteira de clientes — é o dado comercial mais sensível que
   // este produto grava, e o único dos dois lados (dinheiro E pessoa).
   //
-  // A LEITURA das dez é org-scoped sem gate de papel, então o `agent` semeado
+  // A LEITURA das dez é org-scoped sem gate de papel, então o agent semeado
   // aqui é controle positivo legítimo. A ESCRITA tem um segundo eixo que NÃO é
   // medido nesta lista: `manager` no catálogo (0350/0357) e `agent` na comanda
   // (0351). Quem for medir a escrita precisa de um usuário `viewer`, que este
@@ -825,7 +844,7 @@ export const TABLES = [
   // colunas cifradas só existem na tabela-base; a tela lê a view `_safe`).
   //
   // Cabe neste molde porque a policy de SELECT é org-scoped SEM gate de papel
-  // — qualquer membro vê a lista, decisão do dono —, então o `agent` semeado
+  // — qualquer membro vê a lista, decisão do dono —, então o agent semeado
   // aqui é controle positivo legítimo. A ESCRITA tem um segundo eixo que este
   // seed NÃO mede: a policy `for all` exige `fn_role_at_least(org,'admin')`, e
   // provar isso pediria um usuário abaixo de admin escrevendo. Fica declarado
@@ -856,7 +875,7 @@ export const TABLES = [
   // TEXTO que um outro sistema escreveu sobre uma pessoa da conversa, antes de
   // alguém clicar em enviar: vazar a linha entregaria ao vizinho a mensagem que
   // a empresa ainda não mandou. A leitura é da SESSÃO do atendente (a caixa de
-  // entrada abre por `?rascunho=`), então o `agent` semeado aqui é controle
+  // entrada abre por `?rascunho=`), então o agent semeado aqui é controle
   // positivo legítimo e a policy `for all` cobre também o UPDATE do consumo.
   "conversation_drafts",
   // migration 0448 (metade B2B do #1621) — as cinco tabelas do módulo de
@@ -875,7 +894,7 @@ export const TABLES = [
   "channel_schedules",
   // migration 0665 (#2796, fatia 1) — o vínculo versão↔número: em quais números
   // uma versão de agente atende. A LEITURA é org-scoped pela policy `select`
-  // (fn_user_org_ids) sem gate de papel, então o `agent` semeado é controle
+  // (fn_user_org_ids) sem gate de papel, então o agent semeado é controle
   // positivo legítimo; a ESCRITA é `for all` com fn_role_at_least(admin),
   // medida em vinculo-do-agente-ao-numero.test.ts. O número PRINCIPAL segue em
   // ai_agent_versions.channel_session_id — esta tabela só acrescenta vínculos.
@@ -909,6 +928,12 @@ export const TABLES = [
   // migration 9043 — o segundo telefone da ficha (Spec 31 B1). Leitura por
   // organização; a escrita exige `agent`, o papel semeado aqui.
   "contact_phones",
+  // migration 1015 (fork Hiperbold) — campos personalizados da organização.
+  // Leitura de qualquer membro; escrita só do servidor (gerente+).
+  "custom_field_definitions",
+  // migration 1017 (fork Hiperbold) — mensagem agendada no chat: o texto que
+  // a empresa vai mandar. Leitura por organização; escrita só do servidor.
+  "scheduled_messages",
   // ⚠️ `cobranca_assinaturas` (migration 0583) NÃO entra nesta lista, pelo mesmo
   // motivo de `webhook_lead_captures`: a leitura é só do `admin` e o usuário
   // semeado aqui é `agent`, então o controle positivo falharia por ACERTO. A

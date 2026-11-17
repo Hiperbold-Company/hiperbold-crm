@@ -442,8 +442,11 @@ begin
       v_chave := v_venc ->> 'chave';
     end if;
 
-    -- Chave própria: COPIA os valores (a chave antiga fica onde estava).
-    if (v_venc ->> 'renomeado')::boolean then
+    -- Chave final diferente da do funil (chave própria da outra entidade, OU a mesma chave com
+    -- maiúsculas diferentes que caiu na definição do funil mais antigo): COPIA os valores para a
+    -- chave final (a antiga fica onde estava). Só olhar `renomeado` deixava `Cidade` do segundo
+    -- funil fora da definição `cidade`.
+    if v_chave is distinct from (r.item ->> 'key') then
       if v_ent = 'contato' then
         update public.contacts c
            set custom_fields = c.custom_fields || jsonb_build_object(v_chave, c.custom_fields -> (r.item ->> 'key'))
@@ -556,13 +559,25 @@ set search_path = public, pg_temp
 as $$
 declare
   v_qtd integer;
+  v_ultima numeric;
 begin
   if coalesce(current_setting('hb.campos_adocao', true), '') = new.organization_id::text then
     return new;
   end if;
   perform pg_advisory_xact_lock(hashtextextended('hb_1015_campos:' || new.organization_id::text, 0));
   if not exists (select 1 from public.custom_field_definitions d where d.organization_id = new.organization_id) then
-    perform public.fn_adotar_campos_legados_da_organizacao(new.organization_id);
+    if public.fn_adotar_campos_legados_da_organizacao(new.organization_id) > 0 then
+      -- A posição que quem cria calculou (a tela soma 1000 à última que VIU) é de antes da adoção:
+      -- com zero definições ela dá 1000, a mesma da primeira adotada. A campo novo vai DEPOIS dos
+      -- campos que a organização já tinha nos funis.
+      select max(d.position) into v_ultima
+        from public.custom_field_definitions d
+       where d.organization_id = new.organization_id
+         and d.entidade = new.entidade;
+      if v_ultima is not null and new.position <= v_ultima then
+        new.position := v_ultima + 1000;
+      end if;
+    end if;
   end if;
   select count(*) into v_qtd
     from public.custom_field_definitions d
