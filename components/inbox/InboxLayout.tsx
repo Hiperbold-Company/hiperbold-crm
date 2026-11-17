@@ -1194,6 +1194,10 @@ export function InboxLayout({
               // não pode deixar um texto sugerido no campo de outra pessoa.
               rascunho={rascunhoVivo}
               provider={selectedConversation.channel_sessions?.provider ?? null}
+              // Mensagem agendada (migration 1017): a janela de 24h medida no
+              // horário escolhido, e se o bloqueio de agora é SÓ dela.
+              lastInboundAt={selectedConversation.last_inbound_at ?? null}
+              janelaSoDe24h={!!motivoDaJanela && !semPermissaoDeResponder && !bloqueioPelaConexao}
               initialDraft={
                 rascunhoVivo?.leitura.estado === "sugerido" ? rascunhoVivo.leitura.texto : ""
               }

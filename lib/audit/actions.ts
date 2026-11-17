@@ -1752,6 +1752,13 @@ export const AUDIT_ACTIONS = [
   // Migration 1013: o MESMO negócio foi para uma etapa de outro funil (`moverParaOutroFunilHandler`).
   // metadata: from/to pipeline e etapa, posição e campos_fora_do_funil (chaves, nunca valores).
   "lead.pipeline_moved",
+  // Migration 1017: mensagem agendada no chat. created/updated/cancelled saem das rotas
+  // (metadata: conversation_id, send_at, campos; nunca o texto); run é a rodada do cron
+  // `mensagens-agendadas` que teve efeito (contagens).
+  "scheduled_message.created",
+  "scheduled_message.updated",
+  "scheduled_message.cancelled",
+  "scheduled_message.run",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

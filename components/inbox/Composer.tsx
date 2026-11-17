@@ -61,6 +61,12 @@ import {
 import { cn } from "@/lib/utils";
 import { resolveSharedContact } from "@/lib/messaging/contact-card";
 import { BarraDeRecursos } from "@/components/inbox/composer/BarraDeRecursos";
+import { AgendarMensagemButton, SeloDeAgendamento } from "@/components/inbox/composer/AgendarMensagem";
+import { ModeloDoAgendamento } from "@/components/inbox/composer/ModeloDoAgendamento";
+import { useFusoDaOrganizacao } from "@/hooks/auth/AuthProvider";
+import { useAgendarMensagem } from "@/hooks/inbox/useMensagensAgendadas";
+import { FUSO_PADRAO } from "@/lib/mensagens-agendadas/horario";
+import { exigenciaAoAgendar, type ModeloDaAgendada } from "@/lib/mensagens-agendadas/regras";
 import { type Recurso } from "@/lib/inbox/recursos";
 import { lerRespostaRapidaGravada } from "@/lib/inbox/resposta-rapida";
 import type { Message } from "@/lib/types/messaging";
@@ -173,6 +179,18 @@ interface Props {
    * e o botão leva direto para lá.
    */
   onAbrirConversa?: (id: string) => void;
+  /**
+   * Última mensagem do cliente (migration 1017): mede a janela de 24h NO
+   * HORÁRIO escolhido para a mensagem agendada, com a MESMA régua da tela.
+   */
+  lastInboundAt?: string | null;
+  /**
+   * `janelaFechada` veio SÓ da janela de 24h (e não de permissão ou de conexão).
+   * Aí agendar continua possível: o texto sai se o cliente escrever antes, e o
+   * modelo escolhido sai se não escrever. Os outros bloqueios valem para o
+   * agendamento também.
+   */
+  janelaSoDe24h?: boolean;
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
@@ -195,6 +213,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     provider = null,
     usuarioId = null,
     onAbrirConversa,
+    lastInboundAt = null,
+    janelaSoDe24h = false,
   },
   ref,
 ) {
@@ -293,6 +313,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     nome: string | null;
   } | null>(null);
   const continuaAqui = continua?.conversationId === conversationId ? continua : null;
+  /**
+   * O AGENDAMENTO (migration 1017): o horário escolhido no calendário e, quando
+   * a janela de 24h estará fechada nele, o modelo. Guardado com a conversa pelo
+   * mesmo motivo do `continua` acima: o compositor não é remontado ao trocar de
+   * conversa, e o horário de uma não pode valer para a outra.
+   */
+  const [agenda, setAgenda] = useState<{ conversationId: string; quando: Date } | null>(null);
+  const [modeloAgendado, setModeloAgendado] = useState<ModeloDaAgendada | null>(null);
+  const agendaAqui = agenda?.conversationId === conversationId ? agenda : null;
+  const fusoDaOrganizacao = useFusoDaOrganizacao() ?? FUSO_PADRAO;
+  const agendar = useAgendarMensagem();
   useEffect(() => {
     onDraftChange?.(text, mode);
   }, [text, mode, onDraftChange]);
@@ -368,7 +399,24 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   // A janela só alcança o que SAI. Em modo nota o composer segue liberado: a
   // nota interna nunca chega ao cliente, e é onde o atendente registra por que
   // a conversa esfriou — barrá-la tira exatamente o que ainda dá para fazer.
-  const respostaBarrada = isDisabled || (mode === "reply" && !!janelaFechada);
+  //
+  // Agendando com a janela de 24h fechada, o campo LIBERA: o texto é para quando
+  // o cliente escrever, e o modelo escolhido cobre o caso de ele não escrever.
+  // Só a janela de 24h: permissão e conexão continuam barrando (`janelaSoDe24h`).
+  const agendando = mode === "reply" && agendaAqui !== null;
+  const respostaBarrada =
+    isDisabled || (mode === "reply" && !!janelaFechada && !(agendando && janelaSoDe24h));
+  const exigenciaDoAgendamento = agendaAqui
+    ? exigenciaAoAgendar(provider, lastInboundAt, agendaAqui.quando)
+    : null;
+  const faltaModeloNoAgendamento =
+    agendando && exigenciaDoAgendamento?.tipo === "modelo_obrigatorio" && modeloAgendado === null;
+  /** O calendário segue o que trava a resposta, menos a janela de 24h (ver acima). */
+  const calendarioBarrado = isDisabled || (!!janelaFechada && !janelaSoDe24h);
+  function tirarAgendamento() {
+    setAgenda(null);
+    setModeloAgendado(null);
+  }
 
   /**
    * O QUE O DROP ACEITA — a MESMA guarda do Ctrl+V e do botão de anexar (#3708).
@@ -380,7 +428,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
    * forma mais fácil de furar o bloqueio até assumir (#3012): o botão
    * `disabled` não impede um arquivo de ser solto em cima do compositor.
    */
-  const aceitaArquivoArrastado = !respostaBarrada && pendingFiles.length === 0;
+  const aceitaArquivoArrastado = !respostaBarrada && !agendando && pendingFiles.length === 0;
 
   /**
    * O RASCUNHO QUE JÁ ESTÁ NO CAMPO (#3354).
@@ -421,7 +469,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const motivoCuringa = mode === "reply" ? motivoDoCuringaLiteral(text, contato) : null;
   // O que trava o ENVIO: o de sempre, mais o curinga. O que trava o CAMPO
   // (`respostaBarrada`) NÃO recebe o curinga — ver acima.
-  const envioBarrado = respostaBarrada || !!motivoCuringa;
+  const envioBarrado = respostaBarrada || !!motivoCuringa || faltaModeloNoAgendamento;
 
   /**
    * Escolhe os arquivos e MARCA o modo da escolha (ver `pendingEm`).
@@ -547,6 +595,27 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           // seguinte sairia como texto puro (com homônimos, avisando os dois).
           onSuccess: () =>
             setMencoes((atual) => atual.filter((m) => !mencoesEnviadas.includes(m))),
+        },
+      );
+      return;
+    }
+    // Com horário escolhido, o Enviar AGENDA (migration 1017). Quem manda na hora
+    // é o cron, pela mesma porta de envio; aqui só se grava a intenção.
+    if (agendando && agendaAqui) {
+      agendar.mutate(
+        {
+          conversationId,
+          body: corpo,
+          sendAt: agendaAqui.quando,
+          template: exigenciaDoAgendamento?.tipo === "modelo_obrigatorio" ? modeloAgendado : null,
+        },
+        {
+          onSuccess: () => {
+            tirarAgendamento();
+            toast.success(t("Mensagem agendada."));
+            requestAnimationFrame(() => autoresize());
+          },
+          onError: restoreOnError,
         },
       );
       return;
@@ -716,7 +785,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     // `respostaBarrada` cobre a resposta barrada (janela fechada, canal
     // bloqueado) — enfileirar um upload que o dispatcher vai recusar deixaria
     // arquivo órfão no bucket. O texto segue no campo, como sempre esteve.
-    if (!payload.midias.length || respostaBarrada) {
+    // Agendando, a mídia do recurso não entra: anexo sai na hora, e o
+    // agendamento é só de texto.
+    if (!payload.midias.length || respostaBarrada || agendando) {
       escreverNoCampo(payload.texto);
       return;
     }
@@ -839,7 +910,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
    * a conversa esfriou).
    */
   function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
-    if (respostaBarrada || pendingFiles.length > 0) return;
+    // Agendando, imagem colada não entra: anexo sairia na hora (migration 1017).
+    if (respostaBarrada || agendando || pendingFiles.length > 0) return;
     const imagem = imagemDoClipboard(e.clipboardData, new Date());
     if (!imagem) return; // colagem de texto segue o caminho normal do browser
     e.preventDefault();
@@ -1172,6 +1244,23 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             NÃO envia: entrega o recurso ao MESMO `applyTemplate` que o `/` usa.
             Texto cai no campo editável; mídia (imagem OU áudio) entra na fila de
             anexos, com prévia e legenda — não há barra de anexo própria. */}
+        {agendando && agendaAqui && (
+          <div className="mb-1 space-y-1.5">
+            <SeloDeAgendamento quando={agendaAqui.quando} fuso={fusoDaOrganizacao} onTirar={tirarAgendamento} />
+            {exigenciaDoAgendamento?.tipo === "modelo_obrigatorio" && (
+              <ModeloDoAgendamento
+                key={`${conversationId}:${agendaAqui.quando.toISOString()}`}
+                provider={provider}
+                onChange={setModeloAgendado}
+              />
+            )}
+            {exigenciaDoAgendamento?.tipo === "sem_saida_fora_da_janela" && (
+              <p role="status" className="text-xs text-amber-800 dark:text-amber-200">
+                {t("A janela de 24 horas estará fechada nesse horário e este canal não envia modelo: a mensagem só sai se o cliente escrever antes.")}
+              </p>
+            )}
+          </div>
+        )}
         {mode === "reply" && (
           <BarraDeRecursos
             recursos={templates.data ?? []}
@@ -1200,7 +1289,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               (`anexosOferecidos(provider)`); a nota é interna e não depende do canal. */}
           {(mode !== "reply" || ofereceAnexo) && (
             <AttachMenu
-              disabled={respostaBarrada}
+              disabled={respostaBarrada || agendando}
               onPick={escolherArquivo}
               onPickContact={mode === "reply" && anexos.contato ? () => setContactPickerOpen(true) : undefined}
               aceita={mode === "reply" ? anexos : undefined}
@@ -1243,6 +1332,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             texto NÃO é despejado no campo: quem revisa e decide é o bloco, e ter
             o mesmo texto nos dois lugares diria duas vezes a mesma coisa.
           */}
+          {mode === "reply" && (
+            <AgendarMensagemButton
+              disabled={calendarioBarrado}
+              fuso={fusoDaOrganizacao}
+              onEscolher={(quando) => {
+                setAgenda({ conversationId, quando });
+                setModeloAgendado(null);
+                requestAnimationFrame(() => taRef.current?.focus());
+              }}
+            />
+          )}
           {mode === "reply" && !sugestao && (
             <DraftReplyButton
               conversationId={conversationId}
@@ -1296,7 +1396,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             placeholder={
               mode === "note"
                 ? t("Escreva uma nota interna… (só o time vê)")
-                : t("Escreva uma mensagem…")
+                : agendando
+                  ? t("Escreva a mensagem agendada…")
+                  : t("Escreva uma mensagem…")
             }
             title={
               mode === "note"
@@ -1320,7 +1422,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               className="shrink-0"
               onClick={handleSubmit}
               disabled={(mode === "note" ? isDisabled : envioBarrado) || !text.trim()}
-              aria-label={t("Enviar")}
+              aria-label={agendando ? t("Agendar") : t("Enviar")}
             >
               <PaperPlaneTilt size={16} weight="fill" aria-hidden />
             </Button>

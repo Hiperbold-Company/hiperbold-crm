@@ -9,6 +9,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageBubble } from "./MessageBubble";
+import { MensagensAgendadas } from "./MensagensAgendadas";
 import { separarReacoes } from "@/lib/inbox/reacoes-no-fio";
 import { NoteCard } from "./NoteCard";
 import { PassagemCard } from "./PassagemCard";
@@ -378,6 +379,17 @@ export function ChatThread({
             )}
           </div>
         ))}
+
+        {/* As mensagens agendadas (migration 1017) moram no FIM da conversa: é ali que
+            elas vão aparecer quando saírem. Somem quando viram a mensagem real. */}
+        {conversationId && (
+          <MensagensAgendadas
+            conversationId={conversationId}
+            // As rotas de editar e cancelar exigem `chat.responder`: sem ele, nenhum botão.
+            usuarioId={podeResponder ? currentUser.id : null}
+            gerente={canManage && podeResponder}
+          />
+        )}
 
         <div ref={bottomRef} />
         </div>
