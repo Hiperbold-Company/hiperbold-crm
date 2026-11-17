@@ -16,6 +16,7 @@ import { z } from "zod";
 import { autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { respostaDeRecusa } from "@/lib/api/recusa";
 import { fail, ok } from "@/lib/api/wrappers";
+import { leitorDoAtor, recortarSettingsDoFunil } from "@/lib/campos/recorte-por-papel";
 import { criarFunil } from "@/lib/pipelines/administracao";
 import { listPipelinesHandler } from "./_handler";
 
@@ -38,7 +39,12 @@ export async function GET(req: NextRequest): Promise<Response> {
       actor: authz.actor,
       requestId,
     });
-    return ok(pipelines, { requestId });
+    // 1015: a definição de campo não pública só vai para administrador.
+    const leitor = leitorDoAtor(authz.actor);
+    return ok(
+      pipelines.map((p) => ({ ...p, settings: recortarSettingsDoFunil(p.settings, leitor) })),
+      { requestId },
+    );
   } catch {
     return fail("internal_error", t("Falha ao listar funis."), 500, { requestId });
   }

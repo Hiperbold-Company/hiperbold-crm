@@ -10,7 +10,7 @@ import { type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ApiError } from "@/lib/api/types";
-import { ok, fail } from "@/lib/api/wrappers";
+import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import type { Actor } from "@/lib/api/handlers/types";
 import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
 import { recusaDoPlanoSemApi } from "@/lib/api/plano-da-api";
@@ -30,6 +30,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { exigirVisibilidadeDoToken } from "@/lib/mcp/visibilidade-do-token";
 import type { Role } from "@/lib/auth/types";
+import { recusaDoFiltroPorCampoRestrito } from "@/lib/campos/filtro-restrito";
+import { temCamposPersonalizados } from "@/lib/campos/resposta-recortada";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { leitorVeCamposRestritos, recortarLinha, type LeitorDosCampos } from "@/lib/campos/recorte-por-papel";
 import { temFiltroDeData } from "@/lib/contacts/filtros";
 import { fusoDaOrganizacao } from "@/lib/contacts/fuso-da-organizacao";
 import { filtraPorNegocio } from "@/lib/contacts/consulta";
@@ -69,6 +73,8 @@ type ContactsAuth =
       timezone?: string | null;
       /** Chamada por token (cliente admin, sem a RLS): carrega o papel da chave para a regra D-148. */
       token?: { role: Role };
+      /** 1015: quem vai ler os campos personalizados (o papel da sessão, o da chave, ou a IA). */
+      leitor: LeitorDosCampos | null;
     }
   | { ok: false; response: Response };
 
@@ -118,6 +124,7 @@ async function resolveContactsAuth(req: NextRequest, requestId: string): Promise
       actor: auth.actor,
       supabase: createAdminClient(),
       token: { role: auth.role },
+      leitor: auth.actor.type === "ai_agent" ? "ia" : auth.role,
     };
   }
 
@@ -130,6 +137,7 @@ async function resolveContactsAuth(req: NextRequest, requestId: string): Promise
     supabase: await createClient(),
     idioma: authz.user.idioma,
     timezone: authz.org.timezone ?? null,
+    leitor: authz.org.role,
   };
 }
 
@@ -173,6 +181,16 @@ export async function GET(req: NextRequest): Promise<Response> {
     }
   }
 
+  // 1015: filtro por campo não público é oráculo do valor — só administrador.
+  const recusaDoCampo = await recusaDoFiltroPorCampoRestrito(
+    supabase,
+    organizationId,
+    qsParsed.data.campo_valor ? qsParsed.data.campo : null,
+    auth.leitor,
+    requestId,
+  );
+  if (recusaDoCampo) return recusaDoCampo;
+
   try {
     const timezone = temFiltroDeData(qsParsed.data)
       ? (auth.timezone ?? (await fusoDaOrganizacao(supabase, organizationId)))
@@ -189,6 +207,15 @@ export async function GET(req: NextRequest): Promise<Response> {
       undefined,
       { timezone },
     );
+    // 1015: a lista segue o MESMO recorte da ficha (`[id]`): campo não público só para administrador.
+    if (!leitorVeCamposRestritos(auth.leitor) && contacts.some(temCamposPersonalizados)) {
+      const restritas = await chavesRestritasDaOrganizacao(supabase, organizationId, requestId);
+      if (!restritas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
+      return ok(
+        contacts.map((c) => recortarLinha(c, restritas.chaves, auth.leitor)),
+        { requestId, meta: { cursor, has_more } },
+      );
+    }
     return ok(contacts, { requestId, meta: { cursor, has_more } });
   } catch (err) {
     if (err instanceof ApiError) {

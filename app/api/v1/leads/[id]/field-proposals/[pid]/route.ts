@@ -46,6 +46,8 @@ import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
 import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { leitorVeCamposRestritos } from "@/lib/campos/recorte-por-papel";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { camposDoFunil, camposPorEscopo } from "@/lib/leads/campos-do-funil";
 import { settingsDoFunil } from "@/lib/leads/campos-exigidos";
@@ -384,5 +386,14 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     },
   });
 
+  // 1015: o valor de campo restrito só volta para administrador. A gravação JÁ aconteceu (o audit
+  // saiu): se a leitura das chaves falhar, 500 em vez de entregar o valor ao papel errado.
+  if (!leitorVeCamposRestritos(guard.org.role)) {
+    const lidas = await chavesRestritasDaOrganizacao(supabase, orgId, requestId);
+    if (!lidas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
+    if (lidas.chaves.has(p.campo.toLowerCase())) {
+      return ok({ decision: "accepted", campo: p.campo }, { requestId });
+    }
+  }
   return ok({ decision: "accepted", campo: p.campo, valor: conferido.valor }, { requestId });
 }

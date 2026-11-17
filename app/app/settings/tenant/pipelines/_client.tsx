@@ -34,13 +34,9 @@ import {
 import { atalhosDoFunil, motivoDaRecusaDoModelo, type AtalhoDoCard } from "@/lib/leads/atalhos-do-card";
 import { modoDeReabertura } from "@/lib/leads/reabertura";
 import { CATEGORIAS_DE_PERDA } from "@/lib/schemas/leads";
-import { rotuloDoTipo } from "@/lib/schemas/rotulos-do-campo";
 import { EditorDeAtalhos } from "./_atalhos-do-card";
-import { useMoedaDaOrgAtiva } from "@/hooks/auth/AuthProvider";
-import { MOEDA_PADRAO } from "@/lib/money";
 import {
   customFieldSchema,
-  MAX_CAMPOS_DO_NEGOCIO,
   type CustomFieldDef,
 } from "@/lib/schemas/settings";
 import {
@@ -49,14 +45,8 @@ import {
   type OperadorDeMostra,
 } from "@/lib/schemas/mostrar-quando";
 import { irAoDesafioDeMfa } from "@/lib/auth/ir-ao-desafio-de-mfa";
-import { CaretDown, Plus, Trash } from "@/lib/ui/icons";
+import { CaretDown } from "@/lib/ui/icons";
 import { entradaDoInboxDeclarada } from "@/lib/leads/entrada-do-inbox";
-import {
-  GRUPOS_DE_CAMPO,
-  ROTULO_DO_GRUPO,
-  grupoDoCampo,
-  type GrupoDeCampo,
-} from "@/lib/leads/grupo-do-campo";
 import { AgentMappingSection, ancoraDoMapeamento } from "./_mapping";
 import { StagesSection, ancoraDasEtapas } from "./_stages";
 import { AcordeaoDoFunil, AcordeaoDosFunis } from "./_acordeao-do-funil";
@@ -712,7 +702,7 @@ function PipelineEditor({
   pipeline,
   etapas,
   comandaDisponivel,
-  ehFunilPadrao,
+  ehFunilPadrao: _ehFunilPadrao,
 }: {
   pipeline: PipelineRow;
   etapas: EtapaDoFunil[];
@@ -726,8 +716,6 @@ function PipelineEditor({
   ehFunilPadrao: boolean;
 }) {
   const t = useT();
-  // O tipo moeda diz a moeda da organização (« Moeda (EUR) »), não « (BRL) » em duro.
-  const moeda = useMoedaDaOrgAtiva() ?? MOEDA_PADRAO;
   const v = pipeline.vocabulary ?? {};
   const [lead, setLead] = useState(v.lead ?? "Contato");
   const [deal, setDeal] = useState(v.deal ?? "Negócio");
@@ -775,10 +763,16 @@ function PipelineEditor({
   const entradaInicial = entradaDoInboxDeclarada(pipeline.settings);
   const [entradaAtiva, setEntradaAtiva] = useState(entradaInicial.ativa);
   const [entradaEtapaId, setEntradaEtapaId] = useState<string | null>(entradaInicial.stage_id);
-  // O texto CSV de importação de opções (#2521), por chave de campo — vive só
-  // enquanto a pessoa cola; "Importar" o transforma em opções e o limpa.
-  const [csvDeOpcoes, setCsvDeOpcoes] = useState<Record<string, string>>({});
-  const [fields, setFields] = useState<CustomFieldDef[]>(camposDoFunil(pipeline.settings));
+  // 1015: os campos vêm da organização (projeção em `settings.fields`); daqui só sai a regra.
+  const camposDoNegocio = camposDoFunil(pipeline.settings).filter((f) => escopoDoCampo(f) === "negocio");
+  const [obrigatorios, setObrigatorios] = useState<Record<string, CustomFieldDef["obrigatorio_em"]>>(() => {
+    const inicial: Record<string, CustomFieldDef["obrigatorio_em"]> = {};
+    for (const f of camposDoFunil(pipeline.settings)) {
+      const regra = normalizaObrigatorioEm(f.obrigatorio_em);
+      if (regra) inicial[f.key] = regra;
+    }
+    return inicial;
+  });
   /**
    * OS ATALHOS DO CARD (#3487) — os botões que abrem outro sistema com o dado
    * do cliente. O estado nasce do que está GRAVADO (não de uma lista vazia):
@@ -792,51 +786,12 @@ function PipelineEditor({
   const [isPending, startTransition] = useTransition();
 
   function handleSave() {
-    const ok: CustomFieldDef[] = [];
-    for (const f of fields) {
-      // O item vazio que a vírgula deixou no input segue vivo até aqui — é o
-      // preço de NÃO descartá-lo durante a digitação (ver o `onChange` das
-      // opções). Ele nunca foi uma opção: `customFieldSchema` exige
-      // `label.min(1)`, então filtrá-lo ANTES de validar é o que separa "acabei
-      // de digitar uma vírgula" de "quero gravar uma opção em branco". É aqui
-      // também que o espaço do FIM de cada opção é aparado: o `onChange` só
-      // apara o início, para não apagar o espaço que a pessoa está digitando.
-      const limpo = tipoTemOpcoes(f.type)
-        ? {
-            ...f,
-            options: (f.options ?? [])
-              .map((o) => ({
-                value: o.value.trim(),
-                label: o.label.trim(),
-                // Os APELIDOS da opção (#2521) sobrevivem ao salvar: o input de
-                // opções preserva `value` e apelidos de todo rótulo que já
-                // existia (ver o `onChange` dele), e esquecer a chave aqui
-                // apagaria o que a importação CSV cadastrou.
-                ...(o.aliases && o.aliases.length > 0 ? { aliases: o.aliases } : {}),
-              }))
-              .filter((o) => o.label !== ""),
-          }
-        : f;
-      // A regra de `obrigatorio_em` é normalizada AQUI, e não só durante a
-      // digitação: um campo que chegou do settings com `{}` ou com marca
-      // desligada sai sem a chave — é o que mantém o funil idêntico ao de antes
-      // do #1536 enquanto ninguém marca nada.
-      const { obrigatorio_em: regraBruta, ...semRegra } = limpo;
-      const regra = normalizaObrigatorioEm(regraBruta);
-      const base = regra ? { ...semRegra, obrigatorio_em: regra } : semRegra;
-      // A condição de exibição passa pela MESMA régua (#2728): meio montada é
-      // ausência, e não um save recusado com a mensagem de um campo que a
-      // pessoa nem terminou de configurar.
-      const { mostrar_quando: condicaoBruta, ...semCondicao } = base;
-      const condicao = normalizaMostrarQuando(condicaoBruta);
-      const comCondicao = condicao ? { ...semCondicao, mostrar_quando: condicao } : semCondicao;
-      const parsed = customFieldSchema.safeParse(comCondicao);
-      if (!parsed.success) {
-        toast.error(parsed.error.issues[0]?.message ?? t("Campo inválido."));
-        return;
-      }
-      ok.push(parsed.data);
-    }
+    const camposObrigatorios = Object.fromEntries(
+      Object.entries(obrigatorios).flatMap(([chave, regra]) => {
+        const normal = normalizaObrigatorioEm(regra);
+        return normal ? [[chave, normal]] : [];
+      }),
+    );
     const reasons = reasonsText
       .split(",")
       .map((s) => s.trim())
@@ -894,7 +849,8 @@ function PipelineEditor({
 
     const patch: PipelineConfigPatch = {
       vocabulary: { lead, deal, won, lost },
-      fields: ok,
+      // 1015: `fields` não sai mais daqui (é projeção do banco); a regra do funil sim.
+      campos_obrigatorios: camposObrigatorios,
       lost_reasons: motivosComCategoria,
       won_reasons: wonReasons,
       won_reason_required: wonRequired,
@@ -1225,404 +1181,69 @@ function PipelineEditor({
           `pipelineConfigPatchSchema`) e de novo ao renderizar no card. */}
       <EditorDeAtalhos valor={atalhos} onChange={setAtalhos} />
 
-      <div className="space-y-2">
-        <Label className="text-xs">{t("Campos do lead neste funil")}</Label>
+      {/* ─── OS CAMPOS DESTE FUNIL (migration 1015) ───────────────────
+          Desde a 1015 os campos são da ORGANIZAÇÃO e se criam em Configurações › Campos
+          Personalizados. Aqui fica só a regra do funil: em quais etapas (e ao ganhar/perder)
+          cada campo do NEGÓCIO passa a ser exigido. Grava em `settings.campos_obrigatorios`, e o
+          banco a junta à definição — o `obrigatorio_em` que `campos-exigidos` lê não mudou. */}
+      <div className="space-y-2" data-testid={`obrigatoriedade-${pipeline.id}`}>
+        <Label className="text-xs">{t("Campos obrigatórios neste funil")}</Label>
         <p className="text-xs text-muted-foreground">
-          {t("Aparecem no dossiê do negócio. No follow-up, você escolhe em qual campo gravar a resposta.")}
+          {t("Marque em quais etapas cada campo do negócio precisa estar preenchido. Criar, renomear ou excluir campos é em Configurações › Campos Personalizados.")}{" "}
+          <Link href="/app/settings/campos-personalizados" className="underline">
+            {t("Gerenciar campos em Configurações › Campos Personalizados")}
+          </Link>
         </p>
-        {/* `lg:` e não `md:` (#3099): com a barra lateral aberta, a 768px sobram ~380px
-            para a linha, e a coluna de 13rem deixava Chave e Rótulo com 46px. Abaixo de
-            1024px os campos empilham, como no celular. Os `col-span-4` dos blocos de
-            dentro seguem o MESMO corte: um `md:col-span-4` sozinho cria quatro colunas
-            implícitas e devolve a linha espremida, mesmo sem o template. */}
-        {fields.map((f, i) => (
-          <div key={`${f.key}-${i}`} className="grid gap-2 rounded-md border border-border p-2 lg:grid-cols-[1fr_1fr_13rem_auto]">
-            <Input
-              aria-label={`${t("Chave do campo")} ${i + 1}`}
-              placeholder={t("chave (endereco)")}
-              value={f.key}
-              onChange={(e) => {
-                const next = [...fields];
-                next[i] = { ...f, key: e.target.value };
-                setFields(next);
-              }}
-            />
-            <Input
-              aria-label={`${t("Rótulo do campo")} ${i + 1}`}
-              placeholder={t("Rótulo (Endereço)")}
-              value={f.label}
-              onChange={(e) => {
-                const next = [...fields];
-                next[i] = { ...f, label: e.target.value };
-                setFields(next);
-              }}
-            />
-            <Select
-              value={f.type}
-              onValueChange={(type) => {
-                const next = [...fields];
-                next[i] = { ...f, type: type as CustomFieldDef["type"] };
-                setFields(next);
-              }}
-            >
-              <SelectTrigger
-                aria-label={`${t("Tipo do campo")} ${i + 1}`}
-                title={rotuloDoTipo(f.type, t, moeda)}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TIPOS_DE_CAMPO.map((tipo) => (
-                  <SelectItem key={tipo} value={tipo}>
-                    {rotuloDoTipo(tipo, t, moeda)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label={`${t("Remover campo")} ${f.label || i + 1}`}
-              onClick={() => setFields(fields.filter((_, j) => j !== i))}
-            >
-              <Trash size={14} aria-hidden />
-            </Button>
-            {tipoTemOpcoes(f.type) && (
-              <OpcoesDaLista
-                campo={f}
-                indice={i}
-                csv={csvDeOpcoes[f.key] ?? ""}
-                aoMudarCsv={(texto) => setCsvDeOpcoes((atual) => ({ ...atual, [f.key]: texto }))}
-                aoMudarOpcoes={(options) => {
-                  const next = [...fields];
-                  next[i] = { ...f, options };
-                  setFields(next);
-                }}
-              />
-            )}
-            {/* Em qual bloco da ficha o campo aparece. Mostra o grupo EFETIVO
-                (o gravado ou, na falta dele, o inferido pela chave): o seletor
-                nunca aparece em branco para um funil antigo, e escolher grava
-                `grupo` explícito. */}
-            <div className="flex items-center gap-2 lg:col-span-4">
-              <Label className="text-xs">{t("Categoria")}</Label>
-              <Select
-                value={grupoDoCampo(f)}
-                onValueChange={(grupo) => {
-                  const next = [...fields];
-                  next[i] = { ...f, grupo: grupo as GrupoDeCampo };
-                  setFields(next);
-                }}
-              >
-                <SelectTrigger
-                  className="h-8 w-48 text-xs"
-                  aria-label={`${t("Categoria do campo")} ${i + 1}`}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {GRUPOS_DE_CAMPO.map((g) => (
-                    <SelectItem key={g} value={g}>
-                      {t(ROTULO_DO_GRUPO[g])}
-                    </SelectItem>
+        {camposDoNegocio.length === 0 ? (
+          <p className="text-xs text-muted-foreground">{t("A empresa ainda não tem campos de negócio.")}</p>
+        ) : (
+          camposDoNegocio.map((f) => {
+            const regra = obrigatorios[f.key];
+            const mudar = (proxima: CustomFieldDef["obrigatorio_em"]) =>
+              setObrigatorios((atuais) => {
+                const copia = { ...atuais };
+                if (proxima) copia[f.key] = proxima;
+                else delete copia[f.key];
+                return copia;
+              });
+            return (
+              <fieldset key={f.key} className="rounded-md border border-border p-2" data-testid={`obrigatorio-${f.key}`}>
+                <legend className="px-1 text-xs font-medium">{f.label}</legend>
+                <div className="flex flex-wrap gap-3 text-xs">
+                  {etapas.map((etapa) => (
+                    <label key={etapa.id} className="flex items-center gap-1">
+                      <input
+                        type="checkbox"
+                        aria-label={`${t("Exigir em")} ${etapa.name} — ${f.label}`}
+                        checked={regra?.etapas?.includes(etapa.id) ?? false}
+                        onChange={(e) => mudar(comEtapa(regra, etapa.id, e.target.checked))}
+                      />
+                      {etapa.name}
+                      {etapa.is_archived ? ` (${t("arquivada")})` : ""}
+                    </label>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {/* ── LISTA PESQUISÁVEL (#2521) ────────────────────────────────
-                A válvula "permitir valor novo" e, logo abaixo, o RESUMO com a
-                lista recolhida. A caixa de importação CSV e a leitura das
-                opções moraram aqui até o #3176 e agora vivem DENTRO do bloco
-                recolhido: o que a tela monta antes de a pessoa pedir é o
-                resumo, nunca as opções. */}
-            {f.type === "searchable_select" && (
-              <div className="space-y-1 lg:col-span-4">
-                <label className="flex items-center gap-1 text-xs">
-                  <input
-                    type="checkbox"
-                    aria-label={`${t("Permitir valor novo")} ${i + 1}`}
-                    checked={f.allow_new === true}
-                    onChange={(ev) => {
-                      const next = [...fields];
-                      next[i] = { ...f, allow_new: ev.target.checked };
-                      setFields(next);
-                    }}
-                  />
-                  {t("Permitir valor novo (fora da lista)")}
-                </label>
-                {/* ── MÚLTIPLA ESCOLHA (#3182) ────────────────────────────────
-                    O modo múltiplo da lista pesquisável: o campo grava uma
-                    LISTA de valores canônicos e a ficha mostra os escolhidos
-                    como chips. Sem esta tela a chave nasceria no schema e
-                    ninguém conseguiria ligá-la (#1536 foi o mesmo defeito, com
-                    o `obrigatorio_em`). Desmarcar APAGA a chave: o funil que
-                    ninguém tocou continua idêntico ao de antes. */}
-                <label className="flex items-center gap-1 text-xs">
-                  <input
-                    type="checkbox"
-                    aria-label={`${t("Permitir várias escolhas")} ${i + 1}`}
-                    checked={f.multiple === true}
-                    onChange={(ev) => {
-                      const next = [...fields];
-                      // `false` some da definição: desmarcar não deixa uma
-                      // chave morta no settings — vale para o valor único
-                      // gravado por TODO funil que existe hoje.
-                      const { multiple: _apagado, ...semMultiplo } = f;
-                      next[i] = ev.target.checked
-                        ? { ...f, multiple: true }
-                        : (semMultiplo as CustomFieldDef);
-                      setFields(next);
-                    }}
-                  />
-                  {t("Permitir várias escolhas")}
-                </label>
-              </div>
-            )}
-            {/* ── QUANDO ESTE CAMPO OBRIGA (issue #1536) ────────────────────
-                O `obrigatorio_em` nasceu no schema sem nenhuma tela: quem
-                operava não conseguia ligar a régua principal do PR. As três
-                marcas são as que `campoExigidoNoDestino` lê — etapas de
-                entrada, `ao_ganhar` e `ao_perder` — e nada mais, para a tela
-                não prometer gatilho que o servidor não pergunta. */}
-            <div className="space-y-1 lg:col-span-4">
-              <p className="text-xs font-medium">{t("Exigir o preenchimento:")}</p>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                {etapas.map((e) => (
-                  <label key={e.id} className="flex items-center gap-1">
+                  <label className="flex items-center gap-1">
                     <input
                       type="checkbox"
-                      aria-label={`${t("Exigir em")} ${e.name} — ${f.label || i + 1}`}
-                      checked={f.obrigatorio_em?.etapas?.includes(e.id) ?? false}
-                      onChange={(ev) => {
-                        const next = [...fields];
-                        next[i] = {
-                          ...f,
-                          obrigatorio_em: comEtapa(f.obrigatorio_em, e.id, ev.target.checked),
-                        };
-                        setFields(next);
-                      }}
+                      aria-label={`${t("Ao ganhar")} — ${f.label}`}
+                      checked={regra?.ao_ganhar === true}
+                      onChange={(e) => mudar(comGatilho(regra, "ao_ganhar", e.target.checked))}
                     />
-                    {e.name}
-                    {e.is_archived ? ` (${t("arquivada")})` : ""}
+                    {t("Ao ganhar")}
                   </label>
-                ))}
-                <label className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    aria-label={`${t("Ao ganhar")} — ${f.label || i + 1}`}
-                    checked={f.obrigatorio_em?.ao_ganhar === true}
-                    onChange={(ev) => {
-                      const next = [...fields];
-                      next[i] = {
-                        ...f,
-                        obrigatorio_em: comGatilho(f.obrigatorio_em, "ao_ganhar", ev.target.checked),
-                      };
-                      setFields(next);
-                    }}
-                  />
-                  {t("Ao ganhar")}
-                </label>
-                <label className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    aria-label={`${t("Ao perder")} — ${f.label || i + 1}`}
-                    checked={f.obrigatorio_em?.ao_perder === true}
-                    onChange={(ev) => {
-                      const next = [...fields];
-                      next[i] = {
-                        ...f,
-                        obrigatorio_em: comGatilho(f.obrigatorio_em, "ao_perder", ev.target.checked),
-                      };
-                      setFields(next);
-                    }}
-                  />
-                  {t("Ao perder")}
-                </label>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  "Sem marca nenhuma este campo nunca é exigido — é o comportamento de sempre. Marcado, ele precisa estar preenchido para o negócio entrar na etapa escolhida ou ser fechado como ganho/perdido.",
-                )}
-              </p>
-            </div>
-            {/* ── QUANDO ESTE CAMPO APARECE (issue #2728) ──────────────────
-                A condição que a ficha do contato, o dossiê e o painel do inbox
-                leem para ESCONDER o campo. Campo + operador + valor, e os
-                operadores são exatamente os três que `campoVisivel` aplica —
-                a tela não promete nenhum outro. Meio montada, a condição não
-                grava (ver `normalizaMostrarQuando`), como `obrigatorio_em`. */}
-            <div className="space-y-1 lg:col-span-4">
-              <p className="text-xs font-medium">{t("Mostrar só quando:")}</p>
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Select
-                  value={f.mostrar_quando?.campo || SEM_CONDICAO}
-                  onValueChange={(campo) => {
-                    const next = [...fields];
-                    next[i] = {
-                      ...f,
-                      mostrar_quando:
-                        campo === SEM_CONDICAO
-                          ? undefined
-                          : escreveMostrarQuando(f.mostrar_quando, { campo }),
-                    };
-                    setFields(next);
-                  }}
-                >
-                  <SelectTrigger aria-label={`${t("Campo da condição")} ${f.label || i + 1}`}>
-                    <SelectValue placeholder={t("Sempre mostrar")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={SEM_CONDICAO}>{t("Sempre mostrar")}</SelectItem>
-                    {fields
-                      .filter((outra, j) => j !== i && outra.key.trim().length > 0)
-                      .map((outra) => (
-                        <SelectItem key={outra.key} value={outra.key}>
-                          {outra.label || outra.key}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                {f.mostrar_quando?.campo && (
-                  <>
-                    <Select
-                      value={operadorDaCondicao(f.mostrar_quando)}
-                      onValueChange={(op) => {
-                        const next = [...fields];
-                        next[i] = {
-                          ...f,
-                          mostrar_quando: escreveMostrarQuando(f.mostrar_quando, {
-                            operador: op as OperadorDeMostra,
-                          }),
-                        };
-                        setFields(next);
-                      }}
-                    >
-                      <SelectTrigger
-                        aria-label={`${t("Operador da condição")} ${f.label || i + 1}`}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="igual">{t("é igual a")}</SelectItem>
-                        <SelectItem value="contem">{t("contém")}</SelectItem>
-                        <SelectItem value="maior_que">{t("é maior que")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {/* O valor vem de lista quando o campo que MANDA na condição
-                        é de lista fechada: digitar "Outro" errado deixaria a
-                        condição montada e quieta, casando com nada. */}
-                    {tipoTemOpcoes(
-                      fields.find((o) => o.key === f.mostrar_quando?.campo)?.type ?? "text",
-                    ) ? (
-                      <Select
-                        value={valorDaCondicao(f.mostrar_quando) || SEM_VALOR_DA_CONDICAO}
-                        onValueChange={(valor) => {
-                          const next = [...fields];
-                          next[i] = {
-                            ...f,
-                            mostrar_quando: escreveMostrarQuando(f.mostrar_quando, { valor }),
-                          };
-                          setFields(next);
-                        }}
-                      >
-                        <SelectTrigger
-                          aria-label={`${t("Valor da condição")} ${f.label || i + 1}`}
-                        >
-                          <SelectValue placeholder={t("Valor da condição")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={SEM_VALOR_DA_CONDICAO}>
-                            {t("Valor da condição")}
-                          </SelectItem>
-                          {fields
-                            .find((o) => o.key === f.mostrar_quando?.campo)
-                            ?.options?.map((o) => (
-                              <SelectItem key={o.value} value={o.value}>
-                                {o.label}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        className="w-40"
-                        aria-label={`${t("Valor da condição")} ${f.label || i + 1}`}
-                        value={valorDaCondicao(f.mostrar_quando)}
-                        onChange={(ev) => {
-                          const next = [...fields];
-                          next[i] = {
-                            ...f,
-                            mostrar_quando: escreveMostrarQuando(f.mostrar_quando, {
-                              valor: ev.target.value,
-                            }),
-                          };
-                          setFields(next);
-                        }}
-                      />
-                    )}
-                  </>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  "Escondido, o campo não aparece no formulário nem é validado como obrigatório, e o valor já gravado continua no registro.",
-                )}
-              </p>
-            </div>
-            {/* ── A QUE PERTENCE O CAMPO (issue #2791) ──────────────────────
-                `negocio` (padrão) é o campo como ele sempre foi: aparece no
-                card e no dossiê do negócio, gravado em `crm_leads.custom_fields`.
-                `contato` tira o campo do card e o leva para a ficha do contato,
-                cujo valor mora em `contacts.custom_fields`. A chave só é
-                gravada quando vale `contato` — um funil sem ela continua
-                idêntico ao de antes. */}
-            {/* Fora do funil padrão o seletor só aparece para DESFAZER uma marca
-                "Contato" que já exista (gravada quando este era o padrão). */}
-            {(ehFunilPadrao || escopoDoCampo(f) === "contato") && (
-              <div className="flex flex-wrap items-center gap-3 lg:col-span-4">
-                <span className="text-xs font-medium">{t("Este campo pertence a:")}</span>
-                <Select
-                  value={escopoDoCampo(f)}
-                  onValueChange={(escopo) => {
-                    const next = [...fields];
-                    const copia = { ...next[i] } as CustomFieldDef;
-                    if (escopo === "contato") copia.escopo = "contato";
-                    else delete (copia as { escopo?: unknown }).escopo;
-                    next[i] = copia;
-                    setFields(next);
-                  }}
-                >
-                  <SelectTrigger
-                    aria-label={`${t("Escopo do campo")} ${i + 1}`}
-                    className="h-8 w-40 text-xs"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="negocio">{t("Negócio")}</SelectItem>
-                    <SelectItem value="contato">{t("Contato")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-        ))}
-        {/* A cota é do NEGÓCIO (issue #3111): o campo do contato não esconde o botão. */}
-        {fields.filter((f) => escopoDoCampo(f) === "negocio").length < MAX_CAMPOS_DO_NEGOCIO && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setFields([
-                ...fields,
-                { key: `campo_${fields.length + 1}`, label: t("Novo campo"), type: "text" },
-              ])
-            }
-          >
-            <Plus size={14} aria-hidden className="mr-1" /> {t("Adicionar campo")}
-          </Button>
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      aria-label={`${t("Ao perder")} — ${f.label}`}
+                      checked={regra?.ao_perder === true}
+                      onChange={(e) => mudar(comGatilho(regra, "ao_perder", e.target.checked))}
+                    />
+                    {t("Ao perder")}
+                  </label>
+                </div>
+              </fieldset>
+            );
+          })
         )}
       </div>
 

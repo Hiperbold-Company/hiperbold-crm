@@ -19,6 +19,8 @@ vi.mock("@/lib/auth/require-role", () => ({
 vi.mock("@/lib/channels/meta/validate-credentials", () => ({
   validateMetaCredentials: (...a: unknown[]) => validar(...a),
 }));
+// Sem conexão oficial viva: a guarda de troca de número (só admin) não se aplica aqui.
+vi.mock("@/lib/channels/meta/numero-da-sessao", () => ({ numeroDoCanalOficialVivo: async () => null }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } }));
 

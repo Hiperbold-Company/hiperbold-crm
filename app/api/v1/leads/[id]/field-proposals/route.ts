@@ -19,6 +19,8 @@ import { type NextRequest } from "next/server";
 
 import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { leitorVeCamposRestritos } from "@/lib/campos/recorte-por-papel";
 import { camposDoFunil, camposPorEscopo } from "@/lib/leads/campos-do-funil";
 import { settingsDoFunil } from "@/lib/leads/campos-exigidos";
 import { createClient } from "@/lib/supabase/server";
@@ -116,7 +118,19 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const gravados = ((lead as { custom_fields?: unknown }).custom_fields ??
     {}) as Record<string, unknown>;
 
-  const propostas: PropostaDeCampoDoNegocio[] = (linhas ?? []).map((l) => {
+  // 1015: a proposta de um campo restrito leva o valor ATUAL e o PROPOSTO — os dois só para
+  // administrador. Para os outros papéis a proposta não aparece (nem a chave, nem os valores).
+  let restritas = new Set<string>();
+  if (!leitorVeCamposRestritos(guard.org.role) && (linhas ?? []).length > 0) {
+    const lidas = await chavesRestritasDaOrganizacao(supabase, orgId, requestId);
+    if (!lidas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
+    restritas = lidas.chaves;
+  }
+  const visiveis = (linhas ?? []).filter(
+    (l) => !restritas.has(String((l as unknown as { campo: string }).campo).toLowerCase()),
+  );
+
+  const propostas: PropostaDeCampoDoNegocio[] = visiveis.map((l) => {
     const linha = l as unknown as {
       id: string;
       campo: string;

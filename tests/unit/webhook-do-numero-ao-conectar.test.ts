@@ -107,6 +107,12 @@ function makeDb(opts: { sessions?: Linha[]; recusaColunaDoDesfecho?: boolean } =
       this.filtros.push([col, val]);
       return this;
     }
+    order(): this {
+      return this;
+    }
+    limit(): this {
+      return this;
+    }
     maybeSingle(): this {
       this.unica = true;
       return this;
@@ -218,7 +224,7 @@ function stubMeta(respostas: {
   return chamadas;
 }
 
-function authOk(): void {
+function authOk(extra: Record<string, unknown> = {}): void {
   const user = {
     id: USER,
     email: "a@example.com",
@@ -227,6 +233,7 @@ function authOk(): void {
     is_platform_admin: false,
     idioma: "pt-BR" as const,
     organizations: [{ organization_id: ORG, organization_name: "Org", role: "admin" }],
+    ...extra,
   };
   vi.mocked(requireRole).mockResolvedValue({
     ok: true,
@@ -342,6 +349,7 @@ describe("registrarWebhookDaSessao — o desfecho gravado na sessão", () => {
 
     const desfecho = await registrarWebhookDaSessao({
       admin: registro.client as never,
+      organizationId: ORG,
       channelSessionId: SESSAO,
       phoneNumberId: NUMERO,
       wabaId: WABA,
@@ -361,6 +369,25 @@ describe("registrarWebhookDaSessao — o desfecho gravado na sessão", () => {
     expect(gravado.meta_webhook_override_em).toBe(desfecho.em);
   });
 
+  it("o desfecho só é gravado na sessão da PRÓPRIA organização (o cliente ignora a RLS)", async () => {
+    const registro = makeDb();
+    stubMeta({});
+
+    await registrarWebhookDaSessao({
+      admin: registro.client as never,
+      organizationId: "org-de-outra-empresa",
+      channelSessionId: SESSAO,
+      phoneNumberId: NUMERO,
+      wabaId: WABA,
+      tokenCifrado: "cifrado",
+      webhookPathToken: PATH_TOKEN,
+      base: BASE,
+    });
+
+    // O dublê filtra de verdade: com a organização errada o UPDATE não alcança a linha.
+    expect(registro.linhas[0]?.meta_webhook_override_em).toBeUndefined();
+  });
+
   it("sem verify token na instalação, NÃO chama a Meta e explica o que falta", async () => {
     const registro = makeDb();
     const chamadas = stubMeta({});
@@ -368,6 +395,7 @@ describe("registrarWebhookDaSessao — o desfecho gravado na sessão", () => {
 
     const desfecho = await registrarWebhookDaSessao({
       admin: registro.client as never,
+      organizationId: ORG,
       channelSessionId: SESSAO,
       phoneNumberId: NUMERO,
       wabaId: WABA,
@@ -388,6 +416,7 @@ describe("registrarWebhookDaSessao — o desfecho gravado na sessão", () => {
 
     const desfecho = await registrarWebhookDaSessao({
       admin: registro.client as never,
+      organizationId: ORG,
       channelSessionId: SESSAO,
       phoneNumberId: NUMERO,
       wabaId: WABA,
@@ -406,6 +435,7 @@ describe("registrarWebhookDaSessao — o desfecho gravado na sessão", () => {
 
     const desfecho = await registrarWebhookDaSessao({
       admin: registro.client as never,
+      organizationId: ORG,
       channelSessionId: SESSAO,
       phoneNumberId: NUMERO,
       wabaId: WABA,
@@ -584,7 +614,8 @@ describe("POST /api/v1/channels/official/webhook — tentar de novo", () => {
   it("reaplica com a credencial JÁ guardada e devolve o desfecho de agora", async () => {
     const registro = makeDb();
     stubMeta({});
-    authOk();
+    // O endereço leva o token de caminho: só o admin da instalação o recebe de volta.
+    authOk({ is_platform_admin: true });
 
     const res = await registrarDeNovo(req());
     const corpo = (await res.json()) as { data: Record<string, unknown> };

@@ -20,7 +20,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   SEGREDO: "segredo-interno-de-teste-com-32-caracteres",
-  sessao: { orgId: "org-a", userId: "user-a", authSessionId: "11111111-1111-4111-8111-111111111111" as string | null },
+  sessao: {
+    orgId: "org-a",
+    userId: "user-a",
+    authSessionId: "11111111-1111-4111-8111-111111111111" as string | null,
+    role: "manager" as "manager" | "admin",
+  },
   suporteNegado: false,
   cfg: { appId: "123456", appSecret: "SEGREDO-DO-APP", configId: "cfg-1" } as null | {
     appId: string;
@@ -60,7 +65,7 @@ vi.mock("@/lib/auth/require-role", () => ({
   requireRole: async () => ({
     ok: true,
     user: { id: h.sessao.userId, idioma: "pt-BR", is_platform_admin: false, support: null },
-    org: { orgId: h.sessao.orgId, role: "manager" },
+    org: { orgId: h.sessao.orgId, role: h.sessao.role },
   }),
 }));
 vi.mock("@/lib/audit", () => ({
@@ -99,11 +104,17 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from(tabela: string) {
       const q: Record<string, unknown> = {};
-      for (const n of ["select", "eq", "is"]) q[n] = () => q;
+      for (const n of ["select", "eq", "is", "order", "limit"]) q[n] = () => q;
       q.maybeSingle = async () => ({
         data: h.banco.erroDaBusca ? null : h.banco.existente,
         error: h.banco.erroDaBusca,
       });
+      // Reconexão da linha existente: `update().eq().eq()` e devolve `{ error }`.
+      q.update = () => {
+        const u: Record<string, unknown> = { error: null };
+        u.eq = () => u;
+        return u;
+      };
       q.insert = (linha: Record<string, unknown>) => {
         h.banco.inserts.push({ tabela, linha });
         if (tabela === "calendar_oauth_nonces") return Promise.resolve({ error: h.banco.erroDoNonce });
@@ -176,6 +187,7 @@ const insertsDeCanal = () => h.banco.inserts.filter((i) => i.tabela === "channel
 beforeEach(() => {
   h.sessao.orgId = "org-a";
   h.sessao.userId = "user-a";
+  h.sessao.role = "manager";
   h.sessao.authSessionId = "11111111-1111-4111-8111-111111111111";
   h.suporteNegado = false;
   h.cfg = { appId: "123456", appSecret: "SEGREDO-DO-APP", configId: "cfg-1" };
@@ -191,6 +203,45 @@ beforeEach(() => {
   fetchMock.mockReset();
   metaResponde();
   vi.stubGlobal("fetch", fetchMock);
+});
+
+describe("POST cadastro-incorporado: trocar o número de uma conexão existente é recusado (422), para qualquer papel", () => {
+  const OUTRO_NUMERO = "555444333222";
+  const ID_DA_CONEXAO = "aaaaaaaa-0000-4000-8000-0000000000b2";
+
+  it("gerente que SUBSTITUIRIA o número (mesmo id, número diferente) recebe 422, sem queimar o nonce, sem Meta e sem gravar", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
+    const res = await POST(post(corpoValido({ channel_session_id: ID_DA_CONEXAO })));
+    expect(res.status).toBe(422);
+    const corpo = await res.json();
+    expect(corpo.error.code).toBe("numero_diferente_da_conexao");
+    expect(h.banco.inserts).toHaveLength(0);
+    expect(chamadasAMeta()).toHaveLength(0);
+    expect(h.audit).toHaveLength(0);
+  });
+
+  it("administrador recebe a mesma recusa 422: não há guarda de papel a passar", async () => {
+    h.sessao.role = "admin";
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
+    const res = await POST(post(corpoValido({ channel_session_id: ID_DA_CONEXAO })));
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("numero_diferente_da_conexao");
+  });
+
+  it("gerente refazendo o cadastro do MESMO número da conexão segue permitido", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: NUMERO };
+    expect((await POST(post(corpoValido({ channel_session_id: ID_DA_CONEXAO })))).status).toBe(200);
+  });
+
+  it("gerente conectando um número NOVO (sem id) com outra conexão viva segue permitido: cria conexão, não troca", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
+    expect((await POST(post(corpoValido()))).status).toBe(200);
+  });
+
+  it("gerente criando a PRIMEIRA conexão (nenhuma viva) segue permitido", async () => {
+    h.banco.existente = null;
+    expect((await POST(post(corpoValido()))).status).toBe(200);
+  });
 });
 
 describe("GET /api/v1/channels/official/cadastro-incorporado", () => {
@@ -252,6 +303,15 @@ describe("POST /api/v1/channels/official/cadastro-incorporado", () => {
     h.sessao.authSessionId = "22222222-2222-4222-8222-222222222222";
     expect((await POST(post(corpo))).status).toBe(403);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("⭐ channel_session_id que não é desta organização: 404 ANTES de queimar o nonce e de trocar o código", async () => {
+    h.banco.existente = null; // a busca por id + organização + oficial + viva não achou nada
+    const res = await POST(post(corpoValido({ channel_session_id: "aaaaaaaa-0000-4000-8000-0000000000a1" })));
+    expect(res.status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(h.banco.inserts).toEqual([]); // nem o nonce, nem a conexão
+    expect(h.audit).toEqual([]);
   });
 
   it("⭐ replay: nonce já queimado (23505) é 403 sem chegar à Meta", async () => {
@@ -511,5 +571,50 @@ describe("POST /api/v1/channels/official (manual): o mesmo número em outra orga
       metadata: { origem: "manual", phone_number_id: NUMERO, waba_id: WABA },
     });
     expect(JSON.stringify(h.audit)).not.toContain(TOKEN_CLARO);
+  });
+});
+
+describe("POST /api/v1/channels/official (manual): trocar o número de uma conexão existente é recusado (422), para qualquer papel", () => {
+  const OUTRO_NUMERO = "555444333222";
+  const ID_DA_CONEXAO = "aaaaaaaa-0000-4000-8000-0000000000b3";
+  const manual = (extra: Record<string, unknown> = {}) =>
+    new NextRequest("http://localhost/api/v1/channels/official", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone_number_id: NUMERO, waba_id: WABA, token: TOKEN_CLARO, ...extra }),
+    });
+
+  it("gerente que SUBSTITUIRIA o número (mesmo id, número diferente) recebe 422, sem validar na Meta, sem gravar e sem audit", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
+    const res = await POST_MANUAL(manual({ channel_session_id: ID_DA_CONEXAO }));
+    expect(res.status).toBe(422);
+    const corpo = await res.json();
+    expect(corpo.error.code).toBe("numero_diferente_da_conexao");
+    expect(h.cifrar).toHaveLength(0);
+    expect(h.banco.inserts).toHaveLength(0);
+    expect(h.audit).toHaveLength(0);
+  });
+
+  it("administrador recebe a mesma recusa 422: não há guarda de papel a passar", async () => {
+    h.sessao.role = "admin";
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
+    const res = await POST_MANUAL(manual({ channel_session_id: ID_DA_CONEXAO }));
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("numero_diferente_da_conexao");
+  });
+
+  it("gerente recolando a credencial do MESMO número da conexão segue permitido", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: NUMERO };
+    expect((await POST_MANUAL(manual({ channel_session_id: ID_DA_CONEXAO }))).status).toBe(200);
+  });
+
+  it("gerente conectando um número NOVO (sem id) com outra conexão viva segue permitido: cria conexão, não troca", async () => {
+    h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
+    expect((await POST_MANUAL(manual())).status).toBe(200);
+  });
+
+  it("gerente criando a PRIMEIRA conexão segue permitido", async () => {
+    h.banco.existente = null;
+    expect((await POST_MANUAL(manual())).status).toBe(200);
   });
 });

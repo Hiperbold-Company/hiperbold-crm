@@ -35,10 +35,12 @@ vi.mock("@/hooks/inbox/useClaimConversation", () => ({
 vi.mock("@/hooks/inbox/useDeleteNote", () => ({ useDeleteNote: () => ({ mutate: vi.fn() }) }));
 vi.mock("@/hooks/ai/useDebugToggle", () => ({ useDebugToggle: () => ({ enabled: false }) }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
+  useFusoDaOrganizacao: () => null,
   usePermission: () => true,
   useActiveOrg: () => ({ role: "agent" }),
   useUser: () => ({ id: "u-1" }),
 }));
+vi.mock("@/components/inbox/MensagensAgendadas", () => ({ MensagensAgendadas: () => null }));
 vi.mock("@/hooks/i18n/useLocaleDeData", () => ({ useLocaleDeData: () => undefined }));
 vi.mock("@/components/inbox/NoteCard", () => ({ NoteCard: () => null }));
 vi.mock("@/components/inbox/PassagemCard", () => ({ PassagemCard: () => null }));

@@ -131,6 +131,8 @@ function canal(provider: string): Record<string, unknown> {
     archived_at: null,
     status: "WORKING",
     created_at: "2026-10-01T00:00:00.000Z",
+    // O canal oficial é identificado pelo NÚMERO (17/11/2026): salvar a credencial de novo é do MESMO número.
+    ...(provider === CHANNEL_PROVIDER_META ? { meta_phone_number_id: "1234567" } : {}),
   };
 }
 

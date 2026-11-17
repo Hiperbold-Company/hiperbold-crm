@@ -35,6 +35,8 @@ import { type NextRequest } from "next/server";
 
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
+import type { Role } from "@/lib/auth/types";
+import { chavesRestritasDosCampos, recortarCampos, recortarLinha } from "@/lib/campos/recorte-por-papel";
 import { ALVO_DE_CONTATO, VINCULO_DE_CONTATO } from "@/app/api/v1/leads/[id]/contatos-relacionados/route";
 import { atalhosDoFunil } from "@/lib/leads/atalhos-do-card";
 import { camposDoFunil, camposPorEscopo, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
@@ -253,10 +255,11 @@ export async function GET(
   }>;
   const nomes = await nomesDosAtendentes(linhas.map((a) => a.performed_by_user_id ?? null));
 
+
   return ok(
     {
       ...enrichment,
-      leads: leadsResolvidos.map((row) => comCamposDoFunil(row as Record<string, unknown>)),
+      leads: leadsResolvidos.map((row) => comCamposDoFunil(row as Record<string, unknown>, authz.org.role)),
       orders: orders.data ?? [],
       activities: linhas.map((a) => ({
         ...a,
@@ -310,11 +313,18 @@ async function anunciosDoContato(
   };
 }
 
-function comCamposDoFunil(row: Record<string, unknown>) {
-  const { crm_pipelines, crm_stages, ...lead } = row;
+/**
+ * 1015: campo não público (definição e valor) só sai para administrador. A projeção em
+ * `settings.fields` já traz `publico: false` dos campos de contato e de negócio da organização, então
+ * o funil embutido basta para saber o que recortar.
+ */
+function comCamposDoFunil(row: Record<string, unknown>, papel: Role) {
+  const { crm_pipelines, crm_stages, ...bruto } = row;
+  const fields = camposDoFunil(settingsDoEmbed(crm_pipelines));
+  const lead = recortarLinha(bruto, chavesRestritasDosCampos(fields), papel);
   return {
     ...lead,
-    field_defs: camposPorEscopo(camposDoFunil(settingsDoEmbed(crm_pipelines)), "negocio"),
+    field_defs: camposPorEscopo(recortarCampos(fields, papel), "negocio"),
     funil_nome: nomeDoEmbed(crm_pipelines),
     etapa_nome: nomeDoEmbed(crm_stages),
     etapas_do_funil: etapasDoEmbed(crm_pipelines),

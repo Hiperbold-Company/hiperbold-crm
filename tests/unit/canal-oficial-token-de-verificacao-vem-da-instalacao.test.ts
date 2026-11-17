@@ -58,6 +58,8 @@ vi.mock("@/lib/supabase/admin", () => {
     select: () => cadeiaDoCanal,
     eq: () => cadeiaDoCanal,
     is: () => cadeiaDoCanal,
+    order: () => cadeiaDoCanal,
+    limit: () => cadeiaDoCanal,
     maybeSingle: async () => ({ data: canal, error: null }),
   };
   return {
@@ -86,7 +88,8 @@ const ORIGINAL = { ...process.env };
 
 beforeEach(async () => {
   linhaDaMeta = null;
-  usuario = { id: "u1", idioma: "pt-BR", is_platform_admin: false };
+  // Quem vê endereço e token é quem administra a instalação; os casos de tenant comum sobrescrevem.
+  usuario = { id: "u1", idioma: "pt-BR", is_platform_admin: true };
   delete process.env.META_APP_SECRET;
   delete process.env.META_WEBHOOK_VERIFY_TOKEN;
   // O resolvedor memoriza o par por 30s no `globalThis`; cada caso é uma instalação.
@@ -155,10 +158,22 @@ describe("GET /api/v1/channels/official — a porta para a tela da instalação"
     expect((await webhookDaTela()).configurarEm).toBe("/admin/meta");
   });
 
-  it("o admin de um tenant não recebe um link que daria 404 — nem em modo suporte", async () => {
-    expect((await webhookDaTela()).configurarEm).toBeNull();
-
-    usuario = { ...usuario, is_platform_admin: true, support: true };
-    expect((await webhookDaTela()).configurarEm).toBeNull();
+  it("o admin de um tenant não recebe link, endereço nem token — nem em modo suporte", async () => {
+    process.env.META_APP_SECRET = SEGREDO_DO_ENV;
+    process.env.META_WEBHOOK_VERIFY_TOKEN = TOKEN_DO_ENV;
+    for (const u of [
+      { ...usuario, is_platform_admin: false },
+      { ...usuario, is_platform_admin: true, support: true },
+    ]) {
+      usuario = u;
+      const webhook = await webhookDaTela();
+      expect(webhook).not.toHaveProperty("callbackUrl");
+      expect(webhook).not.toHaveProperty("verifyToken");
+      expect(webhook).not.toHaveProperty("verifyTokenOrigem");
+      expect(webhook).not.toHaveProperty("configurarEm");
+      expect(JSON.stringify(webhook)).not.toContain(TOKEN_DO_ENV);
+      expect(JSON.stringify(webhook)).not.toContain("tok-do-canal");
+      expect(webhook.fields).toContain("messages");
+    }
   });
 });

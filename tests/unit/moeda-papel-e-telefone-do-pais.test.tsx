@@ -36,7 +36,6 @@ vi.mock("@/app/app/settings/tenant/pipelines/_mapping", () => ({
   ancoraDoMapeamento: () => "mapeamento",
 }));
 
-import { PipelinesClient, type PipelineRow } from "@/app/app/settings/tenant/pipelines/_client";
 import { CadastrarCampo } from "@/app/app/webhooks/_components/CadastrarCampo";
 import { PairingOptions } from "@/components/connections/PairingOptions";
 import { CustomFieldsEditor } from "@/components/contacts/CustomFieldsEditor";
@@ -145,29 +144,6 @@ describe("1. o campo de moeda segue a moeda da organização", () => {
     fireEvent.change(campo, { target: { value: "1 300,25 €" } });
     fireEvent.click(screen.getByRole("button", { name: "Mover agora" }));
     expect(confirmados).toEqual([{ customFields: { orcamento: 1300.25 } }]);
-  });
-
-  it("nas Configurações › Funis, o tipo diz a moeda da organização — e em real, o « Moeda (BRL) » de antes", () => {
-    const funil = {
-      id: "11111111-1111-4111-8111-111111111111",
-      name: "Vendas",
-      slug: "vendas",
-      vocabulary: {},
-      settings: { fields: [{ key: "orcamento", label: "Orçamento", type: "currency" }] },
-    } as unknown as PipelineRow;
-    // O editor do funil monta sob demanda (#3176): abre-se pelo botão, como quem configura.
-    const abrirEditor = () =>
-      fireEvent.click(screen.getByRole("button", { name: "Editar vocabulário e campos deste funil" }));
-    const { unmount } = render(<PipelinesClient pipelines={[funil]} podeEditarConfig />);
-    abrirEditor();
-    expect(screen.getAllByText("Moeda (EUR)").length).toBeGreaterThan(0);
-    expect(screen.queryByText(/BRL/)).toBeNull();
-    unmount();
-
-    h.org = { currency: "BRL", country: null };
-    render(<PipelinesClient pipelines={[funil]} podeEditarConfig />);
-    abrirEditor();
-    expect(screen.getAllByText("Moeda (BRL)").length).toBeGreaterThan(0);
   });
 
   it("ao cadastrar um campo vindo da captação, o tipo moeda é o da organização", () => {

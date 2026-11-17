@@ -8,6 +8,62 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [2.3.0] — 2026-11-17
+
+### ⚠️ Requer atenção
+
+- **Campos personalizados da empresa, de contato e de negócio, numa tela só** - O DELETE de `/api/v1/pipelines/{id}/fields/{key}` e a ferramenta `crm_delete_pipeline_field`
+    agora removem o campo da empresa inteira, de todos os funis, e não só do funil do caminho. Os
+    valores continuam nos registros. Se a sua integração apaga um campo de um funil esperando que os
+    outros funis o mantenham, ela passa a tirá-lo de todos.
+  - O PATCH de `/api/v1/pipelines/{id}/config` (e a ferramenta `crm_update_pipeline_config`) com
+    `fields` passa a responder 422 quando a empresa já tem os campos da empresa. Para criar, alterar
+    ou remover um campo, use `POST /api/v1/pipelines/{id}/fields` e
+    `PATCH`/`DELETE /api/v1/pipelines/{id}/fields/{key}` (ou as ferramentas
+    `crm_create_pipeline_field`, `crm_update_pipeline_field` e `crm_delete_pipeline_field`). No
+    `config` do funil fica só a obrigatoriedade por etapa (`campos_obrigatorios`).
+- **Coexistência avisa sobre os contatos e permite trazer de novo** - A resposta pública de saúde da instalação deixou de trazer o identificador do commit; a versão
+    continua nela. Se um monitor ou script seu lê o commit nessa resposta, ele passa a não encontrá-lo.
+  - Uma conexão oficial existente não troca mais de número: reenviar a conexão com um número diferente
+    do dela é recusado (422, `numero_diferente_da_conexao`). Para usar outro número, conecte-o como uma
+    conexão nova; a antiga continua como está até você removê-la.
+
+### Adicionado
+
+- **Campos personalizados da empresa, de contato e de negócio, numa tela só** Os campos personalizados passam a ser da empresa, em dois níveis: contato e negócio. A tela nova fica em Configurações › Campos Personalizados, com uma lista para Contatos e outra para Negócios, e cada campo se cria, edita e exclui num diálogo com as abas Campo, Tipo de dado, Avançado e Estatísticas (registros preenchidos, taxa de preenchimento, registros vazios, criado em e última edição). Um campo de negócio vale para todos os funis. Em Etapas do funil fica só a escolha de quais campos são obrigatórios em cada etapa, ao ganhar ou ao perder. Criar, editar e excluir campos é de administrador. Campo marcado como visível só para administradores sai, com o valor, só para administradores nas telas e exportações, e nunca vai para o agente de IA, para as variáveis das automações, para o texto dos follow-ups e das campanhas nem para as variáveis dos modelos do WhatsApp. Quem não é administrador também não filtra a lista de contatos por esse campo. Isso não é sigilo: quem tem acesso ao banco pela API continua lendo o valor. O campo restrito também fica de fora da decisão por IA das automações, das ferramentas MCP de negócio usadas pelo agente e das variáveis do follow-up da IA. As condições das automações e o webhook de saída (a ação que chama uma URL externa) continuam vendo e enviando o valor completo, porque quem os configura é administrador. A dica de ajuda aparece debaixo do nome do campo no formulário. Na atualização, os campos que cada funil já tinha viram campos da empresa automaticamente: a mesma chave em vários funis vira um campo só e vale a do funil mais antigo. A mesma chave usada num funil como campo de contato e em outro como campo de negócio vira dois campos, e o segundo ganha uma chave nova com os valores copiados. Nenhum valor já preenchido se perde, e a lista que cada funil tinha fica guardada como cópia. Excluir um campo tira ele das telas e mantém os valores guardados nos registros.
+
+  Se a imagem for revertida para uma versão anterior, os campos dos funis só voltam a ser editáveis quando a versão nova for religada.
+
+- **Tela Conexões em cartões, com Criar e Gerenciar** A tela Conexões mostra todas as conexões numa grade só de cartões, com o status (conectado, desconectado ou precisa de atenção), o tipo, o nome e o número de cada uma, e uma pesquisa por nome, número ou tipo. O botão Criar abre a lista de tipos (WhatsApp oficial, WhatsApp por QR Code, Instagram, Messenger e os demais) e o caminho de conectar de cada um. O botão Gerenciar de cada cartão abre o nome, o acesso da IA, a remoção e, no WhatsApp oficial, o estado do número e os templates da Meta daquela conta. Os links antigos da tela continuam abrindo no lugar certo. Nada precisa ser mudado para atualizar.
+
+- **Mensagem agendada no chat** A caixa de mensagem da conversa ganhou um botão de calendário. Escolha data e hora (no fuso da empresa), escreva, e o Enviar passa a agendar: um selo "Agendada para 18/11 às 14:30" fica no campo, com um X para voltar ao envio na hora. Até o horário, o fim da conversa mostra a mensagem agendada com Editar (texto e horário) e Cancelar; na hora marcada ela sai pela mesma cadeia de envio de sempre, respeitando o horário de envio da conexão e o espaçamento entre mensagens, e vira a mensagem normal da conversa. No WhatsApp oficial, se a janela de 24 horas estiver fechada no horário escolhido, a tela pede um modelo aprovado: na hora do envio sai o texto se o cliente tiver escrito antes, e o modelo se não. Sem modelo e com a janela fechada, nada é enviado e um aviso aparece na Central. Contato que pediu para não receber mensagens tem a agendada cancelada. A atualização aplica a tabela nova pelo próprio banco do kit; nada precisa ser editado à mão.
+
+- **Módulos da instalação podem ser desligados e religados sem perder dados** Em Módulos da instalação, cada módulo instalado (Comandas e Honorários) ganha o botão "Desligar", e o desligado ganha "Ligar de novo". Desligado, os menus, as telas e as rotas do módulo somem para todas as organizações; as tabelas e os dados ficam guardados e voltam iguais ao religar. Só quem administra a instalação desliga e religa, e uma atualização do sistema não religa sozinha um módulo desligado. O caixa e o faturamento do núcleo continuam funcionando com Comandas desligada. Nada precisa ser feito para atualizar. Desligado, as ações do módulo (finalizar e estornar comanda, pagar parcela de honorários) também são recusadas pelo banco, não só escondidas nas telas.
+
+  Depois de desligar um módulo, reverter a imagem para uma versão anterior pede religar o módulo antes: a versão anterior não conhece o estado desligado.
+
+- **Painel de mensagens no chat** A caixa de mensagem da conversa ganhou um botão de aspas que abre um painel por cima do chat, sem trocar de página. A aba "Mensagens rápidas" lista as respostas rápidas com busca; um clique coloca o texto no campo, com as variáveis preenchidas como no atalho `/`, e "Nova mensagem rápida" cria uma ali mesmo, com as mesmas regras da tela de Respostas rápidas. Nas conversas do WhatsApp oficial aparece também a aba "Templates do WhatsApp": os modelos da conta daquela conversa, com status e categoria, envio do modelo aprovado com as variáveis e prévia, e "Novo modelo" com formulário (nome, categoria, idioma, cabeçalho, corpo com exemplos, rodapé, botões), prévia em balão e uma aba JSON para exportar e importar o modelo no formato da Meta. O modelo novo vai para aprovação da Meta pela mesma rota da tela de Conexões. Esc fecha o painel. Nada precisa ser editado à mão para atualizar.
+
+- **Várias contas oficiais do WhatsApp (WABA) na mesma organização** A organização pode conectar mais de um número oficial do WhatsApp (API oficial da Meta), inclusive de contas (WABA) diferentes. Conectar um número novo cria uma conexão nova e não mexe nas que já existem; conectar de novo um número que já estava na organização troca só a credencial dele (e o traz de volta, se tinha sido excluído). Cada conexão conta no limite de conexões do plano. Nada precisa ser mudado para atualizar.
+
+### Alterado
+
+- **Integração com a Meta usa a versão 26 da Graph API** A versão 26.0 da Graph API passa a ser o padrão do WhatsApp oficial e dos anúncios
+  da Meta, a mesma que o Instagram e o Messenger já usavam. A versão 22.0 deixou de
+  ser o padrão. Nada muda na tela nem no uso. Quem fixou outra versão na variável
+  `META_GRAPH_VERSION` do `.env` continua com a que escolheu.
+
+### Corrigido
+
+- **Coexistência avisa sobre os contatos e permite trazer de novo** Na conexão em coexistência, a tela agora avisa que os contatos e as conversas dos últimos 6 meses
+  do WhatsApp Business do número vão aparecer no CRM para a equipe, e só abre a Meta depois de a
+  pessoa marcar que concorda. Se a Meta não trouxer os contatos no momento da conexão, a tela diz isso
+  e oferece o botão "Tentar de novo", em vez de mostrar só "Conectado".
+
+- **O e-mail de pagamento não aprovado leva aos Planos do CRM quando a cobrança é cancelada** Quando a primeira cobrança de uma assinatura vencia sem pagamento, o e-mail de pagamento não aprovado trazia o link da fatura, e logo depois o próprio CRM cancelava essa cobrança, deixando o link sem destino. Agora, quando a cobrança é removida, o e-mail leva aos Planos do CRM para assinar de novo: quem nunca pagou lê que a assinatura não foi concluída, e quem já pagava lê que a assinatura precisa ser renovada. O período de avaliação deixou de contar como período pago. Quando a cobrança continua ativa, o e-mail segue levando à fatura dessa cobrança.
+
+- **Link Modelos de proposta some com o módulo de Propostas desligado** O link Modelos de proposta não aparece mais quando o módulo de Propostas está desligado. Antes ele aparecia em Configurações, na busca e na tela de atalhos, e levava a uma página não encontrada.
+
 ## [2.2.0] — 2026-11-17
 
 ### ⚠️ Requer atenção
@@ -14710,7 +14766,8 @@ Primeira versão marcada do DeskcommCRM. O projeto vinha sendo desenvolvido publ
 
 - **Node 22 é obrigatório para desenvolvimento.** A suíte de invariantes instancia o cliente do Supabase, que exige o `WebSocket` global — nativo apenas a partir do Node 22. Isso não afeta quem apenas hospeda: a VPS roda a imagem pronta.
 
-[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.2.0...HEAD
+[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/melgarafael/DeskcommCRM/compare/v1.57.0...v2.0.0

@@ -326,11 +326,14 @@ test.describe("Conexões — número oficial com um clique, pela conta do proved
 
     // A volta: dublê → /auth/partner-return/<estado> → ponte → Conexões.
     await page.waitForURL(/\/app\/connections\?aba=parceiro$/, { timeout: 60_000 });
-    await expect(page.getByText(/^(Conectado)$/).first()).toBeVisible({ timeout: 30_000 });
+    // Tela em cartões (17/11/2026): a volta abre o Criar no Provedor parceiro. O "Conectado" e o número
+    // valem DENTRO do diálogo; o cartão da grade atrás dele também diz "Conectado".
+    const criar = page.getByTestId("criar-conexao");
+    await expect(criar.getByText(/^(Conectado)$/).first()).toBeVisible({ timeout: 30_000 });
     await expect(
-      page.getByText(/Configurado automaticamente|Configurado automáticamente/),
+      criar.getByText(/Configurado automaticamente|Configurado automáticamente/),
     ).toBeVisible();
-    await expect(page.getByText(new RegExp(TELEFONE.replace("+", "\\+")))).toBeVisible();
+    await expect(criar.getByText(new RegExp(TELEFONE.replace("+", "\\+")))).toBeVisible();
     await page.screenshot({
       path: path.join(EVIDENCIA, "02-conectado-webhook-automatico.png"),
       fullPage: true,

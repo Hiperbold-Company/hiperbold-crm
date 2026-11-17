@@ -20,6 +20,12 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *
  * O token é cifrado pelas MESMAS RPCs do resto do repo (`lib/webhooks/secrets.ts`) e
  * **nunca volta** num GET: uma vez gravado, a tela mostra que existe, não qual é.
+ *
+ * Várias conexões oficiais por organização (17/11/2026): o GET aceita `?id=` e o POST
+ * `channel_session_id` no corpo. Id de outra organização, de outro canal ou excluído
+ * = 404, sem dizer qual. Sem id, o GET mostra a oficial mais antiga e o POST decide
+ * pelo número (mesmo número = mesma linha; número novo = conexão nova). A fase B
+ * (tela em cartões) passa o id sempre.
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
@@ -29,11 +35,10 @@ import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
-import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
-import { CHANNEL_PROVIDER_META } from "@/lib/channels/capabilities";
 import { appDaMeta, appDaMetaDoAmbiente } from "@/lib/channels/meta/app";
 import { metaGraphBase } from "@/lib/channels/meta/credentials";
 import { conectarCanalOficial, respostaDaFalhaDaConexaoOficial } from "@/lib/channels/meta/conectar-canal-oficial";
+import { buscarSessaoOficialViva, idDaConexaoNaQuery, idDaConexaoOficialSchema } from "@/lib/channels/meta/sessao-oficial-viva";
 import { COLUNAS_DO_DESFECHO_DO_WEBHOOK } from "@/lib/channels/meta/webhook-da-sessao";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { lerCorDaConexao } from "@/lib/conexoes/cores";
@@ -49,6 +54,8 @@ const conectarSchema = z.object({
   phone_number_id: z.string().regex(/^[0-9]{5,30}$/),
   waba_id: z.string().regex(/^[0-9]{5,30}$/),
   token: z.string().min(20),
+  /** A conexão cuja credencial está sendo trocada (fase B). Ausente = decide o número. */
+  channel_session_id: idDaConexaoOficialSchema.optional(),
 });
 
 interface DesfechoGravado {
@@ -122,6 +129,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!authz.ok) return authz.response;
   const orgId = authz.org.orgId;
 
+  const id = idDaConexaoNaQuery(new URL(req.url));
+  if (id === null) return fail("not_found", traduzir("Conexão não encontrada.", authz.user.idioma), 404, { requestId });
+
   const admin = createAdminClient();
   // Canal ARQUIVADO não conta como conectado. A linha sobrevive à exclusão como
   // âncora das FKs, e sem este filtro a tela dizia "conectado" (com a URL de
@@ -129,18 +139,29 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // de excluir — e oferecia "Trocar credencial" onde deveria oferecer "Conectar".
   // O POST, ao contrário, PRECISA enxergar a linha arquivada: é ela que ele
   // ressuscita.
-  const consultar = () =>
-    admin
-      .from("channel_sessions")
-      .select("id, meta_phone_number_id, meta_waba_id, meta_token_encrypted, phone_number, display_name, label_color, webhook_path_token, status")
-      .eq("organization_id", orgId)
-      .eq("provider", CHANNEL_PROVIDER_META);
-  const { data } = await queryTolerantToMissingArchived(
-    () => consultar().is(ARCHIVED_AT, null).maybeSingle(),
-    () => consultar().maybeSingle(),
+  const { data } = await buscarSessaoOficialViva<{
+    id: string;
+    meta_phone_number_id: string | null;
+    meta_waba_id: string | null;
+    meta_token_encrypted: string | null;
+    phone_number: string | null;
+    display_name: string | null;
+    label_color: string | null;
+    webhook_path_token: string | null;
+    status: string | null;
+  }>(
+    admin,
+    orgId,
+    "id, meta_phone_number_id, meta_waba_id, meta_token_encrypted, phone_number, display_name, label_color, webhook_path_token, status",
+    id,
   );
+  if (id && !data) return fail("not_found", traduzir("Conexão não encontrada.", authz.user.idioma), 404, { requestId });
 
   const base = basePublicaDoWebhookMeta(req);
+  // Endereço e token de verificação só saem para quem administra a INSTALAÇÃO (mesma régua do link
+  // `/admin/meta`): o admin de um tenant não precisa deles — a instalação registra o webhook sozinha — e o
+  // token do `.env` vale para todas as organizações.
+  const veOsSegredosDoWebhook = Boolean(authz.user.is_platform_admin && !authz.user.support);
   const desfecho = data?.id ? await lerDesfechoDoWebhook(admin, orgId, data.id) : null;
   return ok({
     connected: Boolean(data),
@@ -160,12 +181,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     /** O que o operador precisa colar do NOSSO lado no dashboard da Meta. */
     webhook: data
       ? {
-          callbackUrl: `${base}/api/v1/webhooks/meta/${data.webhook_path_token}`,
-          ...(await tokenDeVerificacaoParaATela()),
-          // A porta para quem PODE abrir a tela da instalação — mesma regra do
-          // link de `/admin/google` na Agenda. Para o admin de um tenant qualquer
-          // o link seria um 404; a tela diz a ele quem procurar.
-          configurarEm: authz.user.is_platform_admin && !authz.user.support ? "/admin/meta" : null,
+          ...(veOsSegredosDoWebhook
+            ? {
+                callbackUrl: `${base}/api/v1/webhooks/meta/${data.webhook_path_token}`,
+                ...(await tokenDeVerificacaoParaATela()),
+                configurarEm: "/admin/meta",
+              }
+            : {}),
           // `smb_message_echoes`: o que a empresa manda pelo app WhatsApp Business
           // num número em coexistência. Sem coexistência a Meta não o envia, então
           // assinar é inofensivo para quem não usa.
@@ -210,15 +232,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const parsed = conectarSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
+    // Id malformado é conexão que não existe aqui: o mesmo 404 do id de outra organização.
+    if (parsed.error.issues.some((i) => i.path[0] === "channel_session_id")) {
+      return fail("not_found", t("Conexão não encontrada."), 404, { requestId });
+    }
     return fail("invalid_request", t("phone_number_id, waba_id e token são obrigatórios"), 422, {
       requestId,
     });
   }
-  const { phone_number_id, waba_id, token } = parsed.data;
+  const { phone_number_id, waba_id, token, channel_session_id } = parsed.data;
 
   // Validar, cifrar, achar a conexão existente, reativar ou inserir e registrar o
   // webhook: o mesmo caminho do Cadastro Incorporado (migration 1014), num lugar só.
   const admin = createAdminClient();
+
   const conexao = await conectarCanalOficial({
     admin,
     orgId,
@@ -228,6 +255,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     phoneNumberId: phone_number_id,
     wabaId: waba_id,
     token,
+    channelSessionId: channel_session_id ?? null,
     baseDoWebhook: basePublicaDoWebhookMeta(req),
     origem: "manual",
   });
@@ -251,6 +279,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   return ok({
     connected: true,
+    channel_session_id: conexao.channelSessionId,
     displayName: conexao.displayName,
     phoneNumber: conexao.phoneNumber,
     /** `registrado: false` NÃO desfaz a conexão: o canal envia; falta a entrega. */

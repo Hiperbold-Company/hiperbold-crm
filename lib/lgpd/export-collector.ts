@@ -847,6 +847,22 @@ export interface ExportPayload {
     created_at: string;
   }>;
   /**
+   * Mensagens AGENDADAS (migration 1017) do titular: as com o `contact_id` dele
+   * OU de uma conversa dele. Guardam o texto (`body`) e o modelo, e a
+   * anonimização as redige; o que se apaga a pedido é o que se entrega a pedido
+   * (Art. 18 II). Opcional como `conversation_drafts`.
+   */
+  scheduled_messages?: Array<{
+    id: string;
+    conversation_id: string;
+    contact_id: string | null;
+    body: string;
+    template: unknown;
+    status: string;
+    send_at: string;
+    created_at: string;
+  }>;
+  /**
    * Notas internas das conversas do titular (#1863, F3) — o texto que a equipe
    * escreveu SOBRE ele e a mídia que anexou junto. Sem FK para `contacts` (só
    * para `conversations`), nenhuma outra leitura alcançaria a tabela; é o mesmo
@@ -2222,6 +2238,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
   const avisos_de_caso: AvisoDeCasoEntregaRow[] = [];
   const conversation_drafts: NonNullable<ExportPayload["conversation_drafts"]> = [];
   const conversation_notes: NonNullable<ExportPayload["conversation_notes"]> = [];
+  const scheduled_messages: NonNullable<ExportPayload["scheduled_messages"]> = [];
   const knowledge_chunks: NonNullable<ExportPayload["knowledge_chunks"]> = [];
   if (contactId) {
     const pageSize = 500;
@@ -2424,6 +2441,37 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         if (!data || data.length < pageSize) break;
       }
     }
+    // Mensagens agendadas (migration 1017): pelo contato OU pela conversa do
+    // titular, sempre filtradas pela organização; deduplicadas por id.
+    const agendadasPorId = new Map<string, NonNullable<ExportPayload["scheduled_messages"]>[number]>();
+    const colunasAgendada = "id, conversation_id, contact_id, body, template, status, send_at, created_at";
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await admin
+        .from("scheduled_messages")
+        .select(colunasAgendada)
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .order("id")
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      for (const r of data ?? []) agendadasPorId.set(r.id, r);
+      if (!data || data.length < pageSize) break;
+    }
+    for (let batch = 0; batch < conversationIds.length; batch += refBatchSize) {
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await admin
+          .from("scheduled_messages")
+          .select(colunasAgendada)
+          .eq("organization_id", organizationId)
+          .in("conversation_id", conversationIds.slice(batch, batch + refBatchSize))
+          .order("id")
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        for (const r of data ?? []) agendadasPorId.set(r.id, r);
+        if (!data || data.length < pageSize) break;
+      }
+    }
+    scheduled_messages.push(...agendadasPorId.values());
     // O registro de entrega do aviso ao suporte (migration 0292). O escopo sai
     // dos CASOS já coletados, e não de uma segunda derivação pela conversa: um
     // `case_id` que não esteja em `cases` seria de outro titular.
@@ -2596,6 +2644,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     group_messages_authored,
     conversation_drafts,
     conversation_notes,
+    scheduled_messages,
     knowledge_chunks,
     contact_field_proposals,
     lead_attachments,

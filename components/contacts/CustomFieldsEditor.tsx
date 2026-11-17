@@ -31,6 +31,8 @@ import { buscarOpcoes, valorCanonico } from "@/lib/leads/campos-pesquisaveis";
 import { cn } from "@/lib/utils";
 import { camposVisiveis, type MostrarQuando } from "@/lib/schemas/mostrar-quando";
 import { mensagemDoCampo } from "@/lib/leads/padrao-do-campo";
+import { camposVisiveisAoPapel } from "@/lib/leads/campos-do-funil";
+import { roleAtLeast } from "@/lib/auth/types";
 
 import { FileUploadCustomField } from "@/components/kanban/FileUploadCustomField";
 
@@ -82,6 +84,12 @@ export interface CustomFieldDef {
    * tornava o `multiselect` inviável com listas longas.
    */
   multiple?: boolean;
+  /** 1015: `false` = só administrador vê o campo (ver `camposVisiveisAoPapel`). */
+  publico?: boolean;
+  /** 1015: a frase curta debaixo do rótulo. */
+  dica_de_ajuda?: string;
+  /** 1015: aparece mesmo vazio onde a ficha esconde o vazio (aqui o formulário já mostra todos). */
+  sempre_visivel?: boolean;
 }
 
 interface Props {
@@ -160,7 +168,9 @@ export function CustomFieldsEditor({ fields, value, onChange, mode, disabled, cl
    * continua dentro do objeto e viaja no save, e o campo volta à tela no
    * instante em que a condição cumpre. Esconder não é limpar.
    */
-  const visiveis = camposVisiveis(fields, value);
+  // 1015: campo não público é só de administrador — a régua mora no renderizador ÚNICO, então vale
+  // no dossiê, no painel do Inbox, no novo negócio e na ficha do contato de uma vez.
+  const visiveis = camposVisiveisAoPapel(camposVisiveis(fields, value), org ? roleAtLeast(org.role, "admin") : false);
 
   return (
     <div className={cn("grid grid-cols-1 gap-4 md:grid-cols-2", className)}>
@@ -192,6 +202,7 @@ export function CustomFieldsEditor({ fields, value, onChange, mode, disabled, cl
               {f.label}
               {f.required && <span className="ml-1 text-error-fg">*</span>}
             </Label>
+            {f.dica_de_ajuda && <p className="text-xs text-muted-foreground">{f.dica_de_ajuda}</p>}
             {textoDoErro && (
               <p id={`${id}-erro`} role="alert" className="text-sm text-error-fg">
                 {textoDoErro}

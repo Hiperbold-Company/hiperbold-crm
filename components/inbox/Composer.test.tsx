@@ -62,6 +62,8 @@ vi.mock("@/hooks/i18n/useT", () => ({
   useT: () => fazTradutor(idioma),
 }));
 
+// Mensagem agendada (migration 1017): o compositor agenda pelo hook próprio; aqui só o envio na hora importa.
+vi.mock("@/hooks/inbox/useMensagensAgendadas", () => ({ useAgendarMensagem: () => ({ mutate: vi.fn(), isPending: false }) }));
 vi.mock("@/hooks/inbox/useSendMessage", () => ({
   useSendMessage: () => ({ mutate: sendMutate, isPending: false }),
 }));

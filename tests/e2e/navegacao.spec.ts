@@ -188,8 +188,9 @@ test.describe("navegação agrupada", () => {
     await page.waitForURL(/\/app\/settings$/);
     await page.getByRole("link", { name: /Conexões/ }).click();
     await page.waitForURL(/\/app\/connections/);
-    // `API Oficial` e não só `oficial`: a aba "API não oficial" também casa com a palavra.
-    await expect(page.getByRole("tab", { name: /API Oficial/i })).toBeVisible();
+    // Tela em cartões (17/11/2026): sem abas; o canal oficial é um tipo do Criar.
+    await expect(page.getByTestId("btn-criar-conexao")).toBeVisible();
+    await expect(page.getByTestId("grade-de-conexoes").or(page.getByTestId("conexoes-vazio"))).toBeVisible();
   });
 
   test("o menu lateral tem só o essencial, e o resto está em Configurações", async ({ page }) => {

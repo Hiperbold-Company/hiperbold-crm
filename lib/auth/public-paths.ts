@@ -301,6 +301,8 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/v1\/settings\/routing$/,
   // Só LEITURA por token: conexões de canal e credenciais de IA (sem segredo nenhum). Escrita fica na sessão.
   /^\/api\/v1\/channel-sessions$/,
+  // Lista em cartões da tela de Conexões (17/11/2026): leitura por token com `role:manager`, sem segredo.
+  /^\/api\/v1\/channels\/conexoes$/,
   /^\/api\/v1\/ai\/credentials$/,
   /^\/api\/v1\/ai\/knowledge\/sources$/,
   /^\/api\/v1\/ai\/knowledge\/sources\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,

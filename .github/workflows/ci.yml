@@ -263,8 +263,15 @@ jobs:
         # (exit 134, medido no Mac e no runner); com 7 GB passa, RSS 7,66 GB. O runner
         # privado tem 8 GB de RAM e swap: 7 GB é o teto. Se voltar a estourar, dividir
         # o typecheck em dois programas (ou runner maior) — não subir mais o heap.
+        # 17/11/2026: estourou (programa único 7,67 GB no Mac, exit 134 no runner) e
+        # foi dividido: `pnpm typecheck` roda, em sequência, tsconfig.typecheck.servidor
+        # e tsconfig.typecheck.resto (cobertura = a do tsconfig.typecheck.json, provada
+        # por --listFilesOnly). Medido no Mac sem incremental: cada um morre com 4,5 GB
+        # de heap e passa com 5 GB; com o heap abaixo, Memory used 5,19 e 5,37 GB, RSS
+        # 5,8 e 5,9 GB. O heap vale para cada processo, um de cada vez. Se voltar a
+        # estourar, rebalancear a divisão (cabeçalho do tsconfig.typecheck.servidor).
         env:
-          NODE_OPTIONS: --max-old-space-size=7168
+          NODE_OPTIONS: --max-old-space-size=6144
         run: pnpm typecheck
 
       # Na parte 2, não na 1: o porquê e a conta estão no cabeçalho do job.

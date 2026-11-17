@@ -11,7 +11,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 
 
@@ -30,25 +30,37 @@ fs.mkdirSync(EVIDENCE, { recursive: true });
 
 test.describe.configure({ mode: "serial" });
 
-test("o operador chega aos templates pela aba do canal oficial", async ({ page }) => {
-  // MUDOU DE LUGAR de propósito (2026-07-31): template só existe por causa do
-  // canal oficial, então vive como sub-aba dele em Conexões — não como tela solta
-  // em Configurações. O redirect da rota antiga é coberto por `conexoes-abas.spec.ts`.
-  await page.goto("/app/connections?aba=oficial");
+/**
+ * Tela em cartões (17/11/2026): os templates moram no Gerenciar da conta oficial, na aba "Templates da
+ * Meta" DENTRO do diálogo. A jornada usa a conexão oficial semeada da org de e2e.
+ */
+async function abrirTemplatesDaOficial(page: Page) {
+  await page.goto("/app/connections");
+  const cartao = page.locator('[data-testid^="cartao-conexao-"]', { hasText: "WhatsApp oficial" }).first();
+  await expect(cartao).toBeVisible({ timeout: 20_000 });
+  await cartao.getByRole("button", { name: /Gerenciar/ }).click();
+  const dialogo = page.getByTestId("gerenciar-conexao");
+  await dialogo.getByRole("tab", { name: /Templates da Meta/i }).click();
+  await expect(dialogo.getByTestId("templates-root")).toBeVisible({ timeout: 20_000 });
+  return dialogo;
+}
+
+test("o operador chega aos templates pelo Gerenciar da conta oficial", async ({ page }) => {
+  // O redirect da rota antiga é coberto por `conexoes-abas.spec.ts`.
+  await page.goto("/app/connections");
   await page.waitForLoadState("networkidle");
   await page.screenshot({ path: `${EVIDENCE}/01-hub-settings.png`, fullPage: true });
 
-  await page.getByRole("tab", { name: /Templates da Meta/i }).click();
-  await page.waitForURL(/sub=templates/, { timeout: 20_000 });
-  await expect(page.getByTestId("templates-root")).toBeVisible({ timeout: 20_000 });
+  await abrirTemplatesDaOficial(page);
+  // Trocar de aba dentro do diálogo não é navegar: a URL não muda.
+  await expect(page).toHaveURL(/\/app\/connections$/);
   await page.screenshot({ path: `${EVIDENCE}/02-tela-templates.png`, fullPage: true });
 });
 
 test("os parâmetros aparecem derivados, com o contexto como rótulo", async ({ page }) => {
-  await page.goto("/app/connections?aba=oficial&sub=templates");
-  await expect(page.getByTestId("templates-root")).toBeVisible({ timeout: 20_000 });
+  const dialogo = await abrirTemplatesDaOficial(page);
 
-  const cards = page.getByTestId("template-card");
+  const cards = dialogo.getByTestId("template-card");
   await expect(cards.first()).toBeVisible();
 
   // O template de confirmação de pedido tem 3 parâmetros no CORPO, e o texto ao
@@ -73,9 +85,9 @@ test("os parâmetros aparecem derivados, com o contexto como rótulo", async ({ 
 });
 
 test("o botão Sincronizar fala com a Graph API de verdade", async ({ page }) => {
-  await page.goto("/app/connections?aba=oficial&sub=templates");
+  const dialogo = await abrirTemplatesDaOficial(page);
 
-  const botao = page.getByTestId("btn-sync");
+  const botao = dialogo.getByTestId("btn-sync");
   await expect(botao).toBeEnabled({ timeout: 20_000 });
 
   const resposta = page.waitForResponse(

@@ -116,6 +116,7 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   usePermission: () => true,
   // A escolha de contato do Composer lê o país da organização (o exemplo do telefone); sem organização, o Brasil.
   usePaisDaOrgAtiva: () => null,
+  useFusoDaOrganizacao: () => null,
 }));
 
 import { Composer } from "@/components/inbox/Composer";
@@ -197,7 +198,7 @@ describe("Composer + recursos pré-prontos", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /boas vindas/i }));
 
-    const campo = screen.getByLabelText(/mensagem/i);
+    const campo = screen.getByLabelText(/^mensagem$/i);
     expect(campo).toHaveValue("Oi Ana, tudo bem?");
     // Editável: o operador ainda decide o que sai.
     expect(campo).not.toBeDisabled();
@@ -234,7 +235,7 @@ describe("Composer + recursos pré-prontos", () => {
     // O corpo interpolado entra como LEGENDA, não no campo: o texto não pode
     // estar nos dois lugares, senão a mensagem sairia duplicada.
     expect(within(fila).getByLabelText("Legenda")).toHaveValue("Olha a tabela, Ana");
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("");
+    expect(screen.getByLabelText(/^mensagem$/i)).toHaveValue("");
     expect(fetchMock).toHaveBeenCalledWith(`/api/v1/message-templates/${IMAGEM_ID}/midias/0`);
     // E o clique não enviou nada.
     expect(sendMock).not.toHaveBeenCalled();
@@ -252,7 +253,7 @@ describe("Composer + recursos pré-prontos", () => {
     [
       "pelo /",
       () => {
-        fireEvent.change(screen.getByLabelText(/mensagem/i), { target: { value: "/áudio" } });
+        fireEvent.change(screen.getByLabelText(/^mensagem$/i), { target: { value: "/áudio" } });
         fireEvent.click(within(screen.getByRole("listbox")).getByText("Áudio preço"));
       },
     ],
@@ -264,7 +265,7 @@ describe("Composer + recursos pré-prontos", () => {
     fireEvent.click(within(fila).getByRole("button", { name: "Cancelar" }));
     expect(screen.queryByRole("dialog")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText(/mensagem/i), { target: { value: "/boas" } });
+    fireEvent.change(screen.getByLabelText(/^mensagem$/i), { target: { value: "/boas" } });
     expect(within(screen.getByRole("listbox")).getByText("Boas vindas")).toBeInTheDocument();
   });
 });
@@ -350,7 +351,7 @@ describe("BarraDeRecursos — marcação e recolhimento na tela (#3282)", () => 
     expect(within(barra).getByRole("button", { name: /boas vindas/i })).toBeInTheDocument();
 
     // ...mas o `/` continua listando TODAS — inclusive a desmarcada.
-    fireEvent.change(screen.getByLabelText(/mensagem/i), { target: { value: "/" } });
+    fireEvent.change(screen.getByLabelText(/^mensagem$/i), { target: { value: "/" } });
     const menu = screen.getByRole("listbox");
     expect(within(menu).getByText("Só por atalho")).toBeInTheDocument();
     expect(within(menu).getByText("Boas vindas")).toBeInTheDocument();
@@ -405,7 +406,7 @@ describe("Composer + recursos pré-prontos: o rascunho que já está no campo (#
   const DICA_DE_SEMPRE = "Prepara no compositor — você revisa e envia";
 
   function escrever(valor: string) {
-    const campo = screen.getByLabelText(/mensagem/i);
+    const campo = screen.getByLabelText(/^mensagem$/i);
     fireEvent.change(campo, { target: { value: valor } });
     return campo;
   }
@@ -456,7 +457,7 @@ describe("Composer + recursos pré-prontos: o rascunho que já está no campo (#
     escrever("/boa");
     expect(botao).toBeEnabled();
     fireEvent.click(botao);
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("Oi Ana, tudo bem?");
+    expect(screen.getByLabelText(/^mensagem$/i)).toHaveValue("Oi Ana, tudo bem?");
   });
 
   it("(j) resposta barrada com texto no campo: a dica não manda apagar o que o campo travado não deixa", () => {
@@ -465,7 +466,7 @@ describe("Composer + recursos pré-prontos: o rascunho que já está no campo (#
     renderComposer({ janelaFechada: "Janela de 24h fechada", initialDraft: RASCUNHO });
 
     const botao = screen.getByRole("button", { name: /boas vindas/i });
-    expect(screen.getByLabelText(/mensagem/i)).toBeDisabled();
+    expect(screen.getByLabelText(/^mensagem$/i)).toBeDisabled();
     expect(botao).toBeDisabled();
     // O motivo é a janela, não o rascunho: a dica continua a de sempre.
     expect(botao).toHaveAttribute("title", DICA_DE_SEMPRE);
@@ -492,7 +493,7 @@ describe("Composer + recursos pré-prontos: o rascunho que já está no campo (#
  * ══════════════════════════════════════════════════════════════════════════════ */
 describe("Composer + recursos: o clique injeta, e o operador decide o resto (#2833)", () => {
   function campo() {
-    return screen.getByLabelText(/mensagem/i) as HTMLTextAreaElement;
+    return screen.getByLabelText(/^mensagem$/i) as HTMLTextAreaElement;
   }
 
   it("(e) digitar por cima do texto injetado: o Enviar leva o texto EDITADO, e nada sai antes", () => {
