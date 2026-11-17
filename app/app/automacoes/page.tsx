@@ -40,7 +40,7 @@ export default async function AutomacoesPage() {
   const org = activeOrg.orgId;
   // Lote 5 — tela única: as três fontes, sempre filtrando a organização ativa. Quem chega aqui é
   // gerente ou acima, o mesmo papel que a tela de regras e a edição de follow-ups exigem.
-  const [{ data }, { data: followups }, { data: regras }, { data: funis }, { data: etapas }] = await Promise.all([
+  const [{ data, error: erroDosFluxos }, { data: followups }, { data: regras }, { data: funis }, { data: etapas }] = await Promise.all([
     supabase
       .from("followup_flow_pointers")
       .select(COLUNAS)
@@ -122,6 +122,7 @@ export default async function AutomacoesPage() {
         etapas={etapasAtivas}
         camposDeData={camposDeData}
         motivoDoBloqueio={bloqueio.motivo}
+        falhouNoServidor={Boolean(erroDosFluxos)}
       />
     </div>
   );

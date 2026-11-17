@@ -28961,6 +28961,12 @@ export const DICIONARIO: Traducoes = {
   "Este número já está em outra conexão desta empresa. Remova uma das duas e tente de novo.": { es: "Este número ya está en otra conexión de esta empresa. Elimine una de las dos e inténtelo de nuevo." },
   "Não foi possível falar com o servidor de WhatsApp agora. Tente de novo em instantes.": { es: "No fue posible comunicarse con el servidor de WhatsApp ahora. Inténtelo de nuevo en instantes." },
   "Conectado, mas as mensagens ainda não entram.": { es: "Conectado, pero los mensajes todavía no entran." },
+  // design: carregando e erro
+  "Não foi possível carregar": { es: "No fue posible cargar" },
+  "Algo deu errado do nosso lado. Tente de novo em instantes.": { es: "Algo salió mal de nuestro lado. Inténtelo de nuevo en unos instantes." },
+  "Não foi possível carregar os contatos": { es: "No fue posible cargar los contactos" },
+  "Não foi possível carregar as automações": { es: "No fue posible cargar las automaciones" },
+  "Não foi possível carregar as métricas": { es: "No fue posible cargar las métricas" },
   // Tela de Conexões em cartões (17/11/2026).
   "Chamadas de voz pelo WhatsApp.": { es: "Llamadas de voz por WhatsApp." },
   "Conectar com credenciais (avançado)": { es: "Conectar con credenciales (avanzado)" },

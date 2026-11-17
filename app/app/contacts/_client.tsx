@@ -6,6 +6,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { ArrowsClockwise, Columns, DownloadSimple, Plus, MagnifyingGlass, UploadSimple, UsersThree } from "@/lib/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ErroComRetry } from "@/components/empty/ErroComRetry";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -626,17 +627,13 @@ export function ContactsListClient() {
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
-      ) : q.isError ? (
-        <Card className="p-6 text-center">
-          <p className="text-sm text-error-fg">{t("Erro ao carregar contatos.")}</p>
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-2"
-            onClick={() => q.refetch()}
-          >
-            {t("Tentar novamente")}
-          </Button>
+      ) : q.isError && !q.data ? (
+        <Card>
+          <ErroComRetry
+            titulo={t("Não foi possível carregar os contatos")}
+            onRetry={() => q.refetch()}
+            tentando={q.isFetching}
+          />
         </Card>
       ) : allContacts.length === 0 ? (
         <Card className="p-2">
