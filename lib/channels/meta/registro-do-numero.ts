@@ -205,3 +205,27 @@ export async function registrarNumero(input: {
   }
   return { ok: true };
 }
+
+export type ResultadoDaSincronizacaoDoApp = { ok: true } | { ok: false; motivo: string };
+
+/**
+ * Coexistência (número que continua no app WhatsApp Business): depois do cadastro a Meta exige
+ * `POST /{phone_number_id}/smb_app_data` com `sync_type: smb_app_state_sync`, que traz os contatos do
+ * app. Histórico de conversas (`history`) fica de fora. Quem chama trata a falha como best effort.
+ */
+export async function sincronizarContatosDoApp(input: {
+  phoneNumberId: string;
+  token: string;
+}): Promise<ResultadoDaSincronizacaoDoApp> {
+  const r = await chamarGraph(`${graphBaseUrl()}/${encodeURIComponent(input.phoneNumberId)}/smb_app_data`, input.token, {
+    method: "POST",
+    corpo: { messaging_product: "whatsapp", sync_type: "smb_app_state_sync" },
+  });
+  if ("rede" in r) return { ok: false, motivo: `rede indisponível: ${r.rede}` };
+
+  const corpo = r.corpo as ErroDaGraph;
+  if (r.http < 200 || r.http >= 300 || corpo.error) {
+    return { ok: false, motivo: motivoDeErroConhecidoOuGenerico(r.http, corpo, null).motivo };
+  }
+  return { ok: true };
+}

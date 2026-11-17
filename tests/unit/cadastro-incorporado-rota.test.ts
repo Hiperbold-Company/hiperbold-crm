@@ -360,6 +360,70 @@ describe("POST /api/v1/channels/official/cadastro-incorporado", () => {
     expect(JSON.stringify(corpo)).not.toContain(TOKEN_CLARO);
   });
 
+  describe("coexistência (app WhatsApp Business)", () => {
+    const chamadasDeSincronizacao = () => fetchMock.mock.calls.filter((c) => String(c[0]).includes("/smb_app_data"));
+
+    it("FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING: chama smb_app_data com o corpo e o token certos", async () => {
+      const res = await POST(post(corpoValido({ evento: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING" })));
+      expect(res.status).toBe(200);
+      expect((await res.json()).data.sincronizacaoDoApp).toBe(true);
+
+      const chamadas = chamadasDeSincronizacao();
+      expect(chamadas).toHaveLength(1);
+      const [url, init] = chamadas[0]!;
+      expect(String(url)).toContain(`/${NUMERO}/smb_app_data`);
+      expect(init.method).toBe("POST");
+      expect(JSON.parse(init.body)).toEqual({ messaging_product: "whatsapp", sync_type: "smb_app_state_sync" });
+      expect(init.headers.Authorization).toBe(`Bearer ${TOKEN_CLARO}`);
+    });
+
+    it("FINISH (fluxo comum): não chama smb_app_data e devolve sincronizacaoDoApp null", async () => {
+      const res = await POST(post(corpoValido({ evento: "FINISH" })));
+      expect(res.status).toBe(200);
+      expect((await res.json()).data.sincronizacaoDoApp).toBeNull();
+      expect(chamadasDeSincronizacao()).toHaveLength(0);
+    });
+
+    it("sem evento: não chama smb_app_data", async () => {
+      const res = await POST(post(corpoValido()));
+      expect((await res.json()).data.sincronizacaoDoApp).toBeNull();
+      expect(chamadasDeSincronizacao()).toHaveLength(0);
+    });
+
+    it("⭐ a Meta recusa a sincronização: continua 200, conexão gravada, sincronizacaoDoApp false e log sem token", async () => {
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url.includes("/smb_app_data")) {
+          return respostaJson(400, { error: { code: 100, message: "Invalid parameter" } });
+        }
+        if (url.includes("/oauth/access_token")) return respostaJson(200, { access_token: TOKEN_CLARO });
+        if (url.includes("/debug_token")) {
+          return respostaJson(200, {
+            data: { granular_scopes: [{ scope: "whatsapp_business_management", target_ids: [WABA] }] },
+          });
+        }
+        return respostaJson(200, { status: "CONNECTED" });
+      });
+      const res = await POST(post(corpoValido({ evento: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING" })));
+      expect(res.status).toBe(200);
+      const corpo = await res.json();
+      expect(corpo.data).toMatchObject({ connected: true, sincronizacaoDoApp: false });
+      expect(insertsDeCanal()).toHaveLength(1);
+      expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain(TOKEN_CLARO);
+    });
+
+    it("⭐ falha de rede na sincronização: continua 200 com sincronizacaoDoApp false", async () => {
+      const base = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation(async (url: string, init: unknown) => {
+        if (url.includes("/smb_app_data")) throw new TypeError("fetch failed");
+        return base(url, init);
+      });
+      const res = await POST(post(corpoValido({ evento: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING" })));
+      expect(res.status).toBe(200);
+      expect((await res.json()).data.sincronizacaoDoApp).toBe(false);
+      expect(insertsDeCanal()).toHaveLength(1);
+    });
+  });
+
   it("WABA do navegador fora das autorizadas pelo token é recusada antes de gravar", async () => {
     const res = await POST(post(corpoValido({ waba_id: "123123123" })));
     expect(res.status).toBe(422);

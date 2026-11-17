@@ -32,6 +32,8 @@ export interface ResultadoDoCadastroIncorporado {
   webhookRegistro: unknown;
   /** `null` = a Meta não respondeu sobre o estado do número; a tela não afirma nada. */
   precisaRegistrar: boolean | null;
+  /** Coexistência: `true` = a Meta aceitou sincronizar os contatos do app, `false` = recusou, `null` = não se aplica. */
+  sincronizacaoDoApp?: boolean | null;
 }
 
 /** Pede o início do cadastro: devolve um `state` NOVO a cada chamada. Não passa pelo cache. */

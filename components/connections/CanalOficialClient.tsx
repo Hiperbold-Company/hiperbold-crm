@@ -16,7 +16,9 @@ import {
 } from "@/hooks/channels/useOfficialChannel";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { copyToClipboard } from "@/lib/clipboard";
+import { usePermission } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
+import { apiClient } from "@/lib/api/client";
 import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
 import { ChannelAiAccess } from "./ChannelAiAccess";
 import { ConectarComAMeta } from "./ConectarComAMeta";
@@ -86,8 +88,32 @@ export function CanalOficialClient({
   const conectar = useConnectOfficialChannel();
   const registrarWebhook = useRegistrarWebhookOficial();
   const [form, setForm] = useState({ phone_number_id: "", waba_id: "", token: "" });
+  const [confirmandoRemocao, setConfirmandoRemocao] = useState(false);
+  const [removendo, setRemovendo] = useState(false);
+  // Esconde o botão; quem barra é a rota (`DELETE /api/v1/channel-sessions/[id]` exige admin).
+  const podeRemover = usePermission("settings.write");
 
   const estado = data?.data;
+
+  async function remover(id: string) {
+    // Dois cliques, como nas conexões por QR: remover desfaz o webhook do número na Meta.
+    if (!confirmandoRemocao) {
+      setConfirmandoRemocao(true);
+      return;
+    }
+    setConfirmandoRemocao(false);
+    setRemovendo(true);
+    try {
+      await apiClient.delete(`/api/v1/channel-sessions/${encodeURIComponent(id)}`);
+      toast.success(t("Conexão removida."));
+      await qc.invalidateQueries({ queryKey: ["official-channel"] });
+      void qc.invalidateQueries({ queryKey: ["conversations"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? t(e.message) : t("Não foi possível remover."));
+    } finally {
+      setRemovendo(false);
+    }
+  }
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -131,7 +157,7 @@ export function CanalOficialClient({
             </div>
           )}
           {estado.channel_session_id && (
-            <div className="mt-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <RenomearConexao
                 channelId={estado.channel_session_id}
                 currentName={estado.displayName}
@@ -142,6 +168,18 @@ export function CanalOficialClient({
                   void qc.invalidateQueries({ queryKey: ["conversations"] });
                 }}
               />
+              {podeRemover ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={removendo}
+                  onClick={() => void remover(estado.channel_session_id as string)}
+                  data-testid="btn-remover-conexao-oficial"
+                >
+                  {confirmandoRemocao ? t("Clique de novo para remover") : t("Remover conexão")}
+                </Button>
+              ) : null}
             </div>
           )}
         </Card>

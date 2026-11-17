@@ -34,7 +34,7 @@ interface SdkDaMeta {
       config_id: string;
       response_type: "code";
       override_default_response_type: boolean;
-      extras: { setup: Record<string, never>; sessionInfoVersion: string };
+      extras: { setup: Record<string, never>; sessionInfoVersion: string; featureType?: string };
     },
   ): void;
 }
@@ -43,6 +43,8 @@ type JanelaComSdk = Window & { FB?: SdkDaMeta; fbAsyncInit?: () => void };
 
 const URL_DO_SDK = "https://connect.facebook.net/en_US/sdk.js";
 const ESPERA_DO_SDK_MS = 15_000;
+/** O `featureType` que a Meta pede para ligar um número que já usa o app WhatsApp Business (coexistência). */
+const FEATURE_DA_COEXISTENCIA = "whatsapp_business_app_onboarding";
 /** O servidor aceita o state por 15 min; aqui se renova antes, aos 10. */
 const IDADE_MAXIMA_DO_STATE_MS = 10 * 60_000;
 /** O `code` do login vale 30 s: o evento do popup tem de chegar bem antes disso. */
@@ -141,6 +143,8 @@ export function ConectarComAMeta({
   const t = useT();
   const finalizar = useFinalizarCadastroIncorporado();
   const [nome, setNome] = useState("");
+  /** Modo "coexistência" escolhido (o número já usa o app WhatsApp Business). Lido no render, sem `await`. */
+  const [coexistencia, setCoexistencia] = useState(false);
   const [fase, setFase] = useState<Fase>("ocioso");
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -319,7 +323,9 @@ export function ConectarComAMeta({
           config_id: inicio.configId,
           response_type: "code",
           override_default_response_type: true,
-          extras: { setup: {}, sessionInfoVersion: "3" },
+          extras: coexistencia
+            ? { setup: {}, sessionInfoVersion: "3", featureType: FEATURE_DA_COEXISTENCIA }
+            : { setup: {}, sessionInfoVersion: "3" },
         });
       });
     } catch {
@@ -355,6 +361,61 @@ export function ConectarComAMeta({
             placeholder={t("Ex.: Comercial")}
             disabled={ocupado}
           />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label={t("Tipo de conexão")}>
+            <Button
+              type="button"
+              size="sm"
+              variant={coexistencia ? "outline" : "default"}
+              aria-pressed={!coexistencia}
+              onClick={() => setCoexistencia(false)}
+              disabled={ocupado}
+              data-testid="cadastro-meta-modo-padrao"
+            >
+              {t("Conexão padrão")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={coexistencia ? "default" : "outline"}
+              aria-pressed={coexistencia}
+              onClick={() => setCoexistencia(true)}
+              disabled={ocupado}
+              data-testid="cadastro-meta-modo-coexistencia"
+            >
+              {t("Conexão em coexistência")}
+            </Button>
+          </div>
+          {coexistencia ? (
+            <div
+              data-testid="cadastro-meta-explicacao-coexistencia"
+              className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+            >
+              <p className="font-medium">{t("Conexão em coexistência")}</p>
+              <p className="mt-1 text-muted-foreground">
+                {t(
+                  "Para um número que já funciona no app WhatsApp Business. A Meta mostra o número do app e pede para ler um QR Code no WhatsApp Business do celular. O número continua funcionando no app.",
+                )}
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                {t("Recurso recente da Meta: se a conexão falhar, use a conexão padrão.")}
+              </p>
+            </div>
+          ) : (
+            <div
+              data-testid="cadastro-meta-explicacao-padrao"
+              className="rounded-md border bg-muted/30 p-3 text-sm"
+            >
+              <p className="font-medium">{t("Conexão padrão")}</p>
+              <p className="mt-1 text-muted-foreground">
+                {t(
+                  "Para um número novo ou que ainda não está no app WhatsApp Business. O número passa a funcionar só pela API oficial.",
+                )}
+              </p>
+            </div>
+          )}
         </div>
 
         {jaConectado ? (
