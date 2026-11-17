@@ -63,16 +63,22 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: () => {
       let org = "";
+      let id: string | null = null;
       const q: Record<string, unknown> = {};
       q.select = () => q;
       q.is = () => q;
       q.eq = (coluna: string, valor: string) => {
         if (coluna === "organization_id") org = valor;
+        if (coluna === "id") id = valor;
         return q;
       };
+      q.order = () => q;
+      q.limit = () => q;
       q.maybeSingle = async () => {
         h.consultasPorOrg.push(org);
-        return { data: h.sessoesPorOrg[org] ?? null, error: null };
+        const sessao = h.sessoesPorOrg[org] ?? null;
+        // Com id, ele decide (como a rota passa a pedir); sem id, a mais antiga.
+        return { data: sessao && (id === null || sessao.id === id) ? sessao : null, error: null };
       };
       return q;
     },

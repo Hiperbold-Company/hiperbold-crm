@@ -60,10 +60,14 @@ export async function POST(req: NextRequest): Promise<Response> {
     });
   }
 
-  const cred = await credenciaisDoCanalOficialVivo(createAdminClient(), orgId);
+  const cred = await credenciaisDoCanalOficialVivo(
+    createAdminClient(),
+    orgId,
+    parsed.data.channel_session_id,
+  );
   // A sessão viva da organização é a ÚNICA que vale: id que não é ela (de outra org, arquivado,
   // inventado) é 404, igual a "não há conexão", para a resposta não confirmar que o id existe fora daqui.
-  if (!cred.ok && cred.erro === "no_meta_channel") return naoEncontrada(requestId, t);
+  if (!cred.ok && (cred.erro === "no_meta_channel" || cred.erro === "sessao_nao_encontrada")) return naoEncontrada(requestId, t);
   if (!cred.ok) {
     return fail(
       "invalid_request",

@@ -41,6 +41,7 @@ import type { TemplatesPayload, TemplateView } from "@/hooks/channels/useTemplat
 import { useT } from "@/hooks/i18n/useT";
 import { useSendMessage } from "@/hooks/inbox/useSendMessage";
 import { apiClient } from "@/lib/api/client";
+import { copyToClipboard } from "@/lib/clipboard";
 import { exportarModeloJson, importarModeloJson } from "@/lib/channels/meta/modelo-json";
 import { renderTemplatePreview } from "@/lib/channels/meta/render-template";
 import { lerConteudo } from "@/lib/channels/template-conteudo";
@@ -419,10 +420,11 @@ export function NovoModelo({
               variant="outline"
               disabled={!json.trim()}
               onClick={() => {
-                void navigator.clipboard
-                  ?.writeText(json)
-                  .then(() => toast.success(t("JSON copiado.")))
-                  .catch(() => toast.error(t("Não consegui copiar. Selecione o texto e copie.")));
+                void copyToClipboard(json).then((ok) =>
+                  ok
+                    ? toast.success(t("JSON copiado."))
+                    : toast.error(t("Não consegui copiar. Selecione o texto e copie.")),
+                );
               }}
             >
               {t("Copiar JSON")}
