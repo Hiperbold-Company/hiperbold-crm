@@ -48,7 +48,7 @@ export function ContadorDeTarefas({ compacto }: { compacto: boolean }) {
       aria-label={rotulo}
       title={rotulo}
       className={cn(
-        "rounded-full bg-error text-2xs leading-none font-semibold text-white tabular-nums",
+        "rounded-full bg-error-fg text-2xs leading-none font-semibold text-surface tabular-nums",
         compacto ? "absolute top-1 right-1 h-2 w-2" : "ml-auto px-1.5 py-0.5",
       )}
     >
