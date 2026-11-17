@@ -28961,6 +28961,10 @@ export const DICIONARIO: Traducoes = {
   "Este número já está em outra conexão desta empresa. Remova uma das duas e tente de novo.": { es: "Este número ya está en otra conexión de esta empresa. Elimine una de las dos e inténtelo de nuevo." },
   "Não foi possível falar com o servidor de WhatsApp agora. Tente de novo em instantes.": { es: "No fue posible comunicarse con el servidor de WhatsApp ahora. Inténtelo de nuevo en instantes." },
   "Conectado, mas as mensagens ainda não entram.": { es: "Conectado, pero los mensajes todavía no entran." },
+  // design: componentes
+  "Paginação": { es: "Paginación" },
+  "Página {a} de {b}": { es: "Página {a} de {b}" },
+  "Página {a}": { es: "Página {a}" },
   // design: carregando e erro
   "Não foi possível carregar": { es: "No fue posible cargar" },
   "Algo deu errado do nosso lado. Tente de novo em instantes.": { es: "Algo salió mal de nuestro lado. Inténtelo de nuevo en unos instantes." },
