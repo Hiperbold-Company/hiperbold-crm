@@ -9,7 +9,7 @@ import type { Lead } from "@/lib/types/leads";
 import type { Stage } from "@/lib/kanban/types";
 import { resolveCardState, stageAgeLabel, type CardInput } from "@/lib/kanban/card-state";
 import { useFusoDaOrganizacao, usePermission } from "@/hooks/auth/AuthProvider";
-import { formataDataNoFuso, rotuloDeIdade, ultimaMovimentacao } from "@/lib/kanban/datas-do-lead";
+import { formataDataNoFuso, ultimaMovimentacao } from "@/lib/kanban/datas-do-lead";
 import { KanbanCardActions } from "./KanbanCardActions";
 import { NextActionSlot } from "./NextActionSlot";
 import { ReactivationSlot } from "./ReactivationSlot";
@@ -127,9 +127,10 @@ export function KanbanCard({
   );
   const state = resolveCardState(card, t);
   const age = stageAgeLabel(card.hoursInStage, t);
-  // "movido há 3 dias": a última movimentação (entrada na etapa; se faltar, a criação).
+  // As datas exatas (criação e última movimentação) vão no `title` do tempo na
+  // etapa. A linha "movido há X" saiu do card: repetia o mesmo tempo do rodapé.
   const fuso = useFusoDaOrganizacao();
-  const movido = rotuloDeIdade(ultimaMovimentacao(lead), new Date(), fuso, t);
+  const datasDoCard = `${t("Criado em")} ${formataDataNoFuso(lead.created_at, fuso)} · ${t("Última movimentação")} ${formataDataNoFuso(ultimaMovimentacao(lead), fuso)}`;
 
   // Clique ABRE o dossiê; ctrl/cmd+clique SELECIONA; shift+clique estende até a
   // âncora. "Clicar abre" é a convenção mais forte, e seleção múltipla é recurso
@@ -434,24 +435,13 @@ export function KanbanCard({
             {state.showStageAge && age ? (
               <span
                 className="min-w-0 shrink truncate whitespace-nowrap text-2xs tabular-nums text-text-muted"
-                title={`${age} ${t("em")} ${card.stageName}`}
+                title={`${age} ${t("em")} ${card.stageName} · ${datasDoCard}`}
                 data-tempo-na-etapa
               >
                 {age} {t("na etapa")}
               </span>
             ) : null}
           </div>
-          {movido && (
-            // Discreto de propósito: uma linha miúda, sem cor, que não disputa
-            // atenção com o estado do card. A data exata está no `title`.
-            <p
-              className="truncate text-2xs text-text-muted"
-              data-movido-ha
-              title={`${t("Criado em")} ${formataDataNoFuso(lead.created_at, fuso)} · ${t("Última movimentação")} ${formataDataNoFuso(ultimaMovimentacao(lead), fuso)}`}
-            >
-              {t("movido")} {movido}
-            </p>
-          )}
         </div>
       )}
     </Draggable>

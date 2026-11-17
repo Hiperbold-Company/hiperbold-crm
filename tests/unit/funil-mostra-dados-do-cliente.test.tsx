@@ -107,7 +107,7 @@ describe("ContatoNoCard", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("⭐ mostra telefone, e-mail e um link por rede, abrindo em outra aba", () => {
+  it("⭐ mostra telefone e um link por rede, abrindo em outra aba; o e-mail fica no dossiê", () => {
     render(
       <ContatoNoCard
         lead={{
@@ -122,7 +122,8 @@ describe("ContatoNoCard", () => {
     );
 
     expect(screen.getByText("+5511999998888")).toBeInTheDocument();
-    expect(screen.getByText("ana@exemplo.com")).toBeInTheDocument();
+    // Decisão de 17/11: no card o e-mail só aparecia cortado; ele mora no dossiê.
+    expect(screen.queryByText("ana@exemplo.com")).toBeNull();
 
     const instagram = screen.getByRole("link", { name: "Abrir Instagram" });
     expect(instagram).toHaveAttribute("href", "https://www.instagram.com/loja");
