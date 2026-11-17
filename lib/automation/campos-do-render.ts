@@ -41,6 +41,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { chavesRestritasDosCampos, recortarCampos } from "@/lib/campos/recorte-por-papel";
 import { camposDoFunil } from "@/lib/leads/campos-do-funil";
 import type { CustomFieldDef } from "@/lib/schemas/settings";
 
@@ -51,6 +53,34 @@ import type { CustomFieldDef } from "@/lib/schemas/settings";
  * token — ver o cabeçalho.
  */
 export const CAMPOS_DO_FUNIL_NO_CONTEXTO = "campos-do-funil";
+
+/**
+ * 1015: as chaves dos campos NÃO PÚBLICOS, que o render NUNCA troca por valor (o texto pode sair ao
+ * cliente pelo WhatsApp). `"todas"` = não deu para ler quais são, e nenhum campo personalizado vira
+ * texto (falha fechada). Fora do alfabeto da marcação, como a chave acima. Só o RENDER lê isto: as
+ * condições e as ações continuam vendo o `custom_fields` inteiro, como antes.
+ */
+export const CAMPOS_RESTRITOS_NO_CONTEXTO = "campos-restritos";
+
+/** O campo personalizado `chave` é restrito neste contexto? */
+export function campoRestritoNoContexto(context: Record<string, unknown>, chave: string): boolean {
+  const marca = context[CAMPOS_RESTRITOS_NO_CONTEXTO];
+  if (marca === "todas") return true;
+  return Array.isArray(marca) && marca.includes(chave.toLowerCase());
+}
+
+function marcarRestritas(context: Record<string, unknown>, chaves: Iterable<string> | "todas"): void {
+  if (context[CAMPOS_RESTRITOS_NO_CONTEXTO] === "todas") return;
+  if (chaves === "todas") {
+    context[CAMPOS_RESTRITOS_NO_CONTEXTO] = "todas";
+    return;
+  }
+  const atuais = Array.isArray(context[CAMPOS_RESTRITOS_NO_CONTEXTO])
+    ? (context[CAMPOS_RESTRITOS_NO_CONTEXTO] as string[])
+    : [];
+  const juntas = new Set([...atuais, ...[...chaves].map((c) => c.toLowerCase())]);
+  context[CAMPOS_RESTRITOS_NO_CONTEXTO] = [...juntas];
+}
 
 /**
  * O separador da múltipla escolha. `", "` porque é o que o domínio já usa:
@@ -160,6 +190,7 @@ export async function hidratarCamposDoFunil(
   admin: SupabaseClient,
   organizationId: string,
 ): Promise<void> {
+  await recortarCamposRestritosDoContexto(context, admin, organizationId);
   const lead = context.lead;
   if (!lead || typeof lead !== "object") return;
   const linha = lead as LeadDoContexto;
@@ -179,5 +210,28 @@ export async function hidratarCamposDoFunil(
     .maybeSingle();
 
   const settings = (data as { settings?: Record<string, unknown> | null } | null)?.settings ?? null;
-  anexarCamposDoFunil(context, camposDoFunil(settings));
+  const campos = camposDoFunil(settings);
+  // 1015: o campo não público do funil (legado, sem definição na organização) também é restrito.
+  marcarRestritas(context, chavesRestritasDosCampos(campos));
+  anexarCamposDoFunil(context, recortarCampos(campos, "automacao"));
+}
+
+/**
+ * 1015: campo NÃO PÚBLICO nunca vira variável de automação — o texto renderizado pode sair ao
+ * cliente pelo WhatsApp. Marca no `context` quais chaves o render deve deixar vazias
+ * (`CAMPOS_RESTRITOS_NO_CONTEXTO`). Sem conseguir ler as chaves, marca `"todas"`.
+ */
+export async function recortarCamposRestritosDoContexto(
+  context: Record<string, unknown>,
+  admin: SupabaseClient,
+  organizationId: string,
+): Promise<void> {
+  // Sem valor de campo personalizado no contexto não há o que esconder — e nenhuma consulta a mais.
+  const temValor = [context.lead, context.contact].some((alvo) => {
+    const campos = (alvo as { custom_fields?: unknown } | null | undefined)?.custom_fields;
+    return !!campos && typeof campos === "object" && Object.keys(campos as object).length > 0;
+  });
+  if (!temValor) return;
+  const lidas = await chavesRestritasDaOrganizacao(admin, organizationId);
+  marcarRestritas(context, lidas.ok ? lidas.chaves : "todas");
 }

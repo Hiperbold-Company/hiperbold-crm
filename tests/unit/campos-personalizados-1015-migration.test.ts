@@ -31,7 +31,7 @@ describe("migration 1015 — campos personalizados da organização", () => {
 
   it("toda função criada revoga EXECUTE de public e anon e nasce com pg_temp no search_path", () => {
     const funcoes = [...new Set([...migration.matchAll(/^create or replace function public\.(\w+)\(/gm)].map((m) => m[1]))];
-    expect(funcoes.length).toBe(5);
+    expect(funcoes.length).toBe(7);
     for (const f of funcoes) {
       expect(migration).toMatch(new RegExp(`revoke execute on function public\\.${f}\\([^)]*\\) from public, anon`));
     }

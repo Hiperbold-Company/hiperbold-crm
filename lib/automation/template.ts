@@ -1,5 +1,5 @@
 import { resolveField } from "@/lib/automation/conditions";
-import { valorComRotulo } from "@/lib/automation/campos-do-render";
+import { CAMPOS_RESTRITOS_NO_CONTEXTO, campoRestritoNoContexto, valorComRotulo } from "@/lib/automation/campos-do-render";
 import { nomeDoContato, type ContatoNomeavel } from "@/lib/contacts/rotulo-do-contato";
 import { RESERVA_DA_VARIAVEL } from "@/lib/texto/reserva-da-variavel";
 
@@ -111,6 +111,15 @@ export function renderTemplate(
   return template.replace(MARCACAO, (_m, path: string, reserva: string | undefined) => {
     if (SO_DA_EQUIPE.has(path)) return "";
     if (CAMPO_DO_CPF.test(ALIASES[path] ?? path)) return "";
+    // 1015: campo não público nunca vira texto de mensagem (nem o objeto inteiro de campos).
+    if (path === "lead.custom_fields" || path === "contact.custom_fields") {
+      if (context[CAMPOS_RESTRITOS_NO_CONTEXTO] !== undefined) return reserva ?? "";
+    }
+    const chaveRestrita = path.startsWith("campo.") ? path.slice("campo.".length) : chaveDoCampoPersonalizado(path);
+    const doCampoPersonalizado = path.includes(".") || resolveField(context, path) === undefined;
+    if (chaveRestrita !== null && doCampoPersonalizado && campoRestritoNoContexto(context, chaveRestrita)) {
+      return reserva ?? "";
+    }
     // `{{nome}}` fala com a pessoa: segue a régua única de nome de gente
     // (cadastrado, depois o perfil do WhatsApp). Contato que chega pelo
     // WhatsApp tem `name` nulo — só `contact.name` saía "Olá , ...".

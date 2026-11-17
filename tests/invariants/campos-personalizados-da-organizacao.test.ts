@@ -12,7 +12,11 @@ import { beforeAll, describe, expect, it } from "vitest";
  *     obrigatoriedade de cada funil, e apagar a última definição deixa `fields = []`;
  *  3. key/type imutáveis no banco;
  *  4. a migração de dados (reaplicada sobre uma organização só com o legado) deduplica a chave
- *     entre funis, guarda `campos_legados` e monta `campos_obrigatorios`.
+ *     entre funis, guarda `campos_legados`, monta `campos_obrigatorios` e GRAVA o conflito em
+ *     `organizations.settings.campos_conflitos`;
+ *  5. a primeira definição de uma organização ainda no legado ADOTA os campos dos funis antes de
+ *     projetar (nada some), e chave de contato e de negócio iguais nunca se fundem;
+ *  6. `authenticated` só lê a tabela; `config` tem teto de tamanho; 50 definições por entidade.
  */
 
 const container = process.env.TEST_DB_CONTAINER;
@@ -98,7 +102,9 @@ describe("custom_field_definitions: isolamento entre organizações", () => {
         `insert into public.custom_field_definitions (organization_id, entidade, key, label, type) values ('${ORG_A}', 'negocio', 'x', 'X', 'text');`,
       ),
     ).toMatch(/row-level security|permission denied/);
-    expect(como("authenticated", ATENDENTE_A, "update public.custom_field_definitions set label = 'H' returning id;")).toBe("");
+    expect(como("authenticated", ATENDENTE_A, "update public.custom_field_definitions set label = 'H' returning id;")).toMatch(
+      /permission denied/,
+    );
   });
 
   it("o gerente de A não grava na organização B (with check)", () => {
@@ -108,7 +114,27 @@ describe("custom_field_definitions: isolamento entre organizações", () => {
         GERENTE_A,
         `insert into public.custom_field_definitions (organization_id, entidade, key, label, type) values ('${ORG_B}', 'negocio', 'invasor', 'X', 'text');`,
       ),
-    ).toMatch(/row-level security/);
+    ).toMatch(/permission denied|row-level security/);
+  });
+
+  it("authenticated só tem SELECT: nem o gerente grava pela REST (o app grava pela service role)", () => {
+    expect(sql("select has_table_privilege('authenticated', 'public.custom_field_definitions', 'select');")).toBe("t");
+    for (const op of ["insert", "update", "delete"]) {
+      expect(sql(`select has_table_privilege('authenticated', 'public.custom_field_definitions', '${op}');`)).toBe("f");
+    }
+    expect(
+      como(
+        "authenticated",
+        GERENTE_A,
+        `insert into public.custom_field_definitions (organization_id, entidade, key, label, type) values ('${ORG_A}', 'negocio', 'pela_rest', 'X', 'text');`,
+      ),
+    ).toMatch(/permission denied/);
+    expect(
+      sql("select has_function_privilege('authenticated', 'public.fn_adotar_campos_legados_da_organizacao(uuid)', 'execute');"),
+    ).toBe("f");
+    expect(sql("select has_function_privilege('anon', 'public.fn_adotar_campos_legados_da_organizacao(uuid)', 'execute');")).toBe(
+      "f",
+    );
   });
 
   it("anon não alcança a tabela nem as funções", () => {
@@ -178,6 +204,16 @@ describe("a migração de dados da 1015 (reaplicada)", () => {
     );
   });
 
+  it("o conflito (tipo e maiúsculas de `cidade` entre os funis) fica GRAVADO na organização", () => {
+    const conflitos = JSON.parse(
+      sql(`select settings->'campos_conflitos' from public.organizations where id = '${ORG_LEGADO}';`),
+    ) as Array<{ chave: string; diferenca: string[]; funis: Array<{ id: string }>; resolucao: string }>;
+    const cidade = conflitos.find((c) => c.chave === "cidade");
+    expect(cidade?.diferenca).toEqual(expect.arrayContaining(["tipo", "maiusculas"]));
+    expect(cidade?.funis.map((f) => f.id)).toEqual([FUNIL_L1, FUNIL_L2]);
+    expect(cidade?.resolucao).toBe("vale_o_funil_mais_antigo");
+  });
+
   it("os dois funis passam a projetar os três campos da organização", () => {
     expect(sql(`select jsonb_array_length(settings->'fields') from public.crm_pipelines where id = '${FUNIL_L2}';`)).toBe("3");
   });
@@ -190,5 +226,118 @@ describe("a migração de dados da 1015 (reaplicada)", () => {
   it("apagar a última definição deixa fields vazio (a organização volta a não ter campos)", () => {
     sql(`delete from public.custom_field_definitions where organization_id = '${ORG_LEGADO}';`);
     expect(sql(`select settings->'fields' from public.crm_pipelines where id = '${FUNIL_L1}';`)).toBe("[]");
+  });
+});
+
+describe("a adoção do legado na primeira definição (sem perder fields)", () => {
+  const ORG_D = "eeeeeeee-1015-4000-8000-00000000000d";
+  const FUNIL_D = "eeeeeeee-1015-4000-8000-0000000000d1";
+
+  beforeAll(() => {
+    // Organização que ganhou campos pelo caminho antigo DEPOIS da migração: nenhuma definição.
+    sql(`
+      insert into public.organizations (id, slug, legal_name, display_name) values
+        ('${ORG_D}', 'cp-inv-d', 'CP D', 'CP D') on conflict (id) do nothing;
+      insert into public.crm_pipelines (id, organization_id, name, slug, settings) values
+        ('${FUNIL_D}', '${ORG_D}', 'Legado', 'cp-legado-d',
+         '{"fields": [{"key":"origem_lead","label":"Origem","type":"text","obrigatorio_em":{"ao_ganhar":true}},
+                      {"key":"canal","label":"Canal","type":"select","options":[{"value":"a","label":"A"}]}]}')
+        on conflict (id) do nothing;
+    `);
+  });
+
+  it("criar a primeira definição adota os campos dos funis ANTES de projetar", () => {
+    sql(
+      `insert into public.custom_field_definitions (organization_id, entidade, key, label, type) values ('${ORG_D}', 'negocio', 'nova', 'Nova', 'text');`,
+    );
+    expect(
+      sql(`select string_agg(key, ',' order by position, created_at) from public.custom_field_definitions where organization_id = '${ORG_D}';`),
+    ).toBe("origem_lead,canal,nova");
+    const fields = JSON.parse(sql(`select settings->'fields' from public.crm_pipelines where id = '${FUNIL_D}';`)) as Array<
+      Record<string, unknown>
+    >;
+    expect(fields.map((f) => f.key).sort()).toEqual(["canal", "nova", "origem_lead"]);
+    expect(fields.find((f) => f.key === "origem_lead")?.obrigatorio_em).toEqual({ ao_ganhar: true });
+    expect(fields.find((f) => f.key === "canal")?.options).toEqual([{ value: "a", label: "A" }]);
+    expect(sql(`select jsonb_array_length(settings->'campos_legados') from public.crm_pipelines where id = '${FUNIL_D}';`)).toBe("2");
+  });
+
+  it("chamar a adoção de novo não refaz nada (idempotente)", () => {
+    expect(sql(`select public.fn_adotar_campos_legados_da_organizacao('${ORG_D}');`)).toBe("0");
+    expect(sql(`select count(*) from public.custom_field_definitions where organization_id = '${ORG_D}';`)).toBe("3");
+  });
+});
+
+describe("a mesma chave em contato e negócio nunca se funde", () => {
+  const ORG_E = "eeeeeeee-1015-4000-8000-00000000000e";
+  const FUNIL_E1 = "eeeeeeee-1015-4000-8000-0000000000e1";
+  const FUNIL_E2 = "eeeeeeee-1015-4000-8000-0000000000e2";
+  const CONTATO_E = "eeeeeeee-1015-4000-8000-0000000000e9";
+
+  beforeAll(() => {
+    sql(`
+      insert into public.organizations (id, slug, legal_name, display_name) values
+        ('${ORG_E}', 'cp-inv-e', 'CP E', 'CP E') on conflict (id) do nothing;
+      insert into public.crm_pipelines (id, organization_id, name, slug, settings, created_at) values
+        ('${FUNIL_E1}', '${ORG_E}', 'Negócio', 'cp-e-1', '{"fields": [{"key":"cidade","label":"Cidade","type":"text"}]}', now() - interval '2 days'),
+        ('${FUNIL_E2}', '${ORG_E}', 'Contato', 'cp-e-2',
+         '{"fields": [{"key":"cidade","label":"Cidade do contato","type":"text","escopo":"contato"}]}', now() - interval '1 day')
+        on conflict (id) do nothing;
+      insert into public.contacts (id, organization_id, name, custom_fields) values
+        ('${CONTATO_E}', '${ORG_E}', 'Pessoa E', '{"cidade": "Recife"}') on conflict (id) do nothing;
+    `);
+    sql(`select public.fn_adotar_campos_legados_da_organizacao('${ORG_E}');`);
+  });
+
+  it("a segunda entidade ganha chave própria, e o valor é COPIADO para ela (o antigo fica)", () => {
+    expect(
+      sql(`select string_agg(entidade || ':' || key, ',' order by position) from public.custom_field_definitions where organization_id = '${ORG_E}';`),
+    ).toBe("negocio:cidade,contato:cidade_contato");
+    expect(sql(`select custom_fields from public.contacts where id = '${CONTATO_E}';`)).toBe(
+      '{"cidade": "Recife", "cidade_contato": "Recife"}',
+    );
+  });
+
+  it("o conflito de entidade fica gravado com a chave nova", () => {
+    const conflitos = JSON.parse(sql(`select settings->'campos_conflitos' from public.organizations where id = '${ORG_E}';`)) as Array<
+      Record<string, unknown>
+    >;
+    expect(conflitos).toEqual([
+      expect.objectContaining({
+        chave: "cidade",
+        chave_nova: "cidade_contato",
+        diferenca: ["entidade"],
+        resolucao: "chave_distinta_com_valores_copiados",
+      }),
+    ]);
+  });
+});
+
+describe("os tetos do banco", () => {
+  const ORG_F = "eeeeeeee-1015-4000-8000-00000000000f";
+
+  beforeAll(() => {
+    sql(`insert into public.organizations (id, slug, legal_name, display_name) values
+           ('${ORG_F}', 'cp-inv-f', 'CP F', 'CP F') on conflict (id) do nothing;`);
+  });
+
+  it("config acima de 256 KB é recusado pelo CHECK", () => {
+    expect(() =>
+      sql(`insert into public.custom_field_definitions (organization_id, entidade, key, label, type, config)
+           values ('${ORG_F}', 'negocio', 'grande', 'Grande', 'text',
+                   jsonb_build_object('padrao', repeat('x', 300000)));`),
+    ).toThrow(/custom_field_definitions_config_tamanho_check/);
+  });
+
+  it("50 definições por entidade; a 51ª é recusada e a outra entidade segue livre", () => {
+    sql(`insert into public.custom_field_definitions (organization_id, entidade, key, label, type)
+         select '${ORG_F}', 'negocio', 'campo_' || g, 'Campo ' || g, 'text' from generate_series(1, 50) g;`);
+    expect(() =>
+      sql(`insert into public.custom_field_definitions (organization_id, entidade, key, label, type)
+           values ('${ORG_F}', 'negocio', 'campo_51', 'Campo 51', 'text');`),
+    ).toThrow(/teto de campos personalizados/);
+    sql(`insert into public.custom_field_definitions (organization_id, entidade, key, label, type)
+         values ('${ORG_F}', 'contato', 'do_contato', 'Do contato', 'text');`);
+    expect(sql(`select count(*) from public.custom_field_definitions where organization_id = '${ORG_F}';`)).toBe("51");
   });
 });

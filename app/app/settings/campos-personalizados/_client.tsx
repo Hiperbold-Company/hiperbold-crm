@@ -245,7 +245,7 @@ export function CamposPersonalizadosClient({ iniciais }: { iniciais: DefinicaoDe
                         <span className="font-medium">{c.label}</span>
                         <span className="text-xs text-muted-foreground">{t(ROTULOS_DO_TIPO[c.type])}</span>
                         <code className="text-xs text-muted-foreground">{c.key}</code>
-                        {c.publico ? <Badge variant="secondary">{t("Público")}</Badge> : <Badge variant="outline">{t("Só administradores")}</Badge>}
+                        {c.publico ? <Badge variant="secondary">{t("Público")}</Badge> : <Badge variant="outline">{t("Só administradores nas telas")}</Badge>}
                         {c.sempre_visivel && <Badge variant="secondary">{t("Sempre visível")}</Badge>}
                         <span className="ml-auto flex gap-1">
                           <Button type="button" variant="ghost" size="sm" onClick={() => setRascunho(rascunhoDe(c))}>
@@ -420,7 +420,7 @@ export function DialogoDoCampo({
                 <option value="rastreamento">{t("Rastreamento")}</option>
               </select>
             </div>
-            <Interruptor id="cp-publico" rotulo={t("Público (atendentes e gerentes veem)")} marcado={r.publico} aoMudar={(v) => mudar({ publico: v })} />
+            <Interruptor id="cp-publico" rotulo={t("Visível só para administradores nas telas e exportações")} marcado={!r.publico} aoMudar={(v) => mudar({ publico: !v })} />
             <Interruptor id="cp-sempre" rotulo={t("Sempre visível, mesmo vazio")} marcado={r.sempre_visivel} aoMudar={(v) => mudar({ sempre_visivel: v })} />
             <Interruptor id="cp-perfil" rotulo={t("Exibir no perfil")} marcado={r.exibir_no_perfil} aoMudar={(v) => mudar({ exibir_no_perfil: v })} />
             <div className="rounded-md border border-dashed border-border p-3" data-testid="previa-do-campo">
@@ -541,8 +541,8 @@ export function DialogoDoCampo({
                   <p className="text-sm">
                     {t("Registros preenchidos")}: <strong>{estatisticas.preenchidos}</strong> / {estatisticas.total}
                   </p>
-                  <div className="h-2 w-full rounded bg-muted" aria-label={t("Taxa de preenchimento")}>
-                    <div className="h-2 rounded bg-primary" style={{ width: `${estatisticas.taxa}%` }} />
+                  <div className="h-2 w-full rounded-md bg-muted" aria-label={t("Taxa de preenchimento")}>
+                    <div className="h-2 rounded-md bg-primary" style={{ width: `${estatisticas.taxa}%` }} />
                   </div>
                   <p className="text-sm">{t("Taxa de preenchimento")}: {estatisticas.taxa}%</p>
                   <p className="text-sm">{t("Registros vazios")}: {estatisticas.vazios}</p>

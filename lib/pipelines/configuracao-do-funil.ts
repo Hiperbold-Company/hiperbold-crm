@@ -136,13 +136,20 @@ export const CAMPOS_DA_ORGANIZACAO = "campos_da_organizacao";
 export const MENSAGEM_CAMPOS_DA_ORGANIZACAO =
   "Os campos personalizados agora são da organização: crie e edite em Configurações › Campos Personalizados (ou pela API /api/v1/custom-fields). No funil fica só a obrigatoriedade por etapa (campos_obrigatorios).";
 
-/** A organização já está no modelo da 1015 (tem ao menos uma definição)? Falha de leitura = não. */
-async function organizacaoTemCamposProprios(supabase: SupabaseClient, organizationId: string): Promise<boolean> {
+/** Falha ao conferir se a organização já tem campos próprios: a gravação de `fields` é recusada. */
+export const MENSAGEM_CAMPOS_SEM_CONFERENCIA = "Não foi possível conferir os campos da organização. Tente de novo.";
+
+/**
+ * A organização já está no modelo da 1015 (tem ao menos uma definição)? Falha de leitura = `null`, e
+ * quem chama RECUSA gravar `fields` (falha fechada): gravar por cima de definições que não se
+ * conseguiu ver é o caminho por onde o PATCH apagaria campos da organização.
+ */
+async function organizacaoTemCamposProprios(supabase: SupabaseClient, organizationId: string): Promise<boolean | null> {
   const { count, error } = await supabase
     .from("custom_field_definitions")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId);
-  if (error) return false;
+  if (error) return null;
   return (count ?? 0) > 0;
 }
 
@@ -183,13 +190,22 @@ export async function aplicarConfiguracaoDoFunil(
     return { ok: false, error: "validation_failed", details: parsed.error.flatten() };
   }
 
-  // 1015: com os campos na organização, `fields` é projeção do banco — gravá-lo daqui não pegaria.
-  if (parsed.data.fields !== undefined && (await organizacaoTemCamposProprios(supabase, organizationId))) {
-    return {
-      ok: false,
-      error: traduzir(MENSAGEM_CAMPOS_DA_ORGANIZACAO, input.idioma ?? "pt-BR"),
-      details: { [CAMPOS_DA_ORGANIZACAO]: true },
-    };
+  // 1015: com os campos na organização, `fields` é projeção do banco — gravá-lo daqui não pegaria, e
+  // a definição é editada só pela porta dos campos (`/api/v1/custom-fields`, a rota antiga por item e
+  // as tools `crm_*_pipeline_field`). Na organização ainda no legado, `fields` grava como sempre, e a
+  // primeira definição ADOTA esses campos antes de projetar (`fn_adotar_campos_legados_da_organizacao`).
+  if (parsed.data.fields !== undefined) {
+    const temProprios = await organizacaoTemCamposProprios(supabase, organizationId);
+    if (temProprios !== false) {
+      return {
+        ok: false,
+        error: traduzir(
+          temProprios === null ? MENSAGEM_CAMPOS_SEM_CONFERENCIA : MENSAGEM_CAMPOS_DA_ORGANIZACAO,
+          input.idioma ?? "pt-BR",
+        ),
+        details: { [CAMPOS_DA_ORGANIZACAO]: true },
+      };
+    }
   }
 
   // LER-MODIFICAR-GRAVAR com trava otimista: dois salvamentos ao mesmo tempo (duas abas, a tela e um

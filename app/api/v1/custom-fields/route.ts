@@ -4,7 +4,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * POST /api/v1/custom-fields — cria um campo (contato ou negócio). Chave repetida = 409; cota por
  *      entidade = 422.
  *
- * Regra em `lib/campos/administracao.ts`; porta em `./_entrada.ts` (gerente+, só sessão).
+ * Regra em `lib/campos/administracao.ts`; porta em `./_entrada.ts` (gerente+ lê, admin grava; só sessão).
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const e = await entradaDosCampos(requestId);
+  const e = await entradaDosCampos(requestId, { escrita: true });
   if (!e.ok) return e.response;
   let json: unknown;
   try {

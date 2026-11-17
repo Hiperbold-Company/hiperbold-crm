@@ -27,9 +27,16 @@ import { type NextRequest } from "next/server";
 
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { ApiError } from "@/lib/api/types";
-import { fail } from "@/lib/api/wrappers";
+import { fail, MENSAGEM_DE_FALHA_INTERNA } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { roleAtLeast } from "@/lib/auth/types";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import {
+  chavesRestritasDosCampos,
+  leitorVeCamposRestritos,
+  recortarValores,
+  unirChavesRestritas,
+} from "@/lib/campos/recorte-por-papel";
 import { cpfsDecifradosDosContatos } from "@/lib/contacts/cpf-do-contato";
 import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { resolverAlvoDeLote } from "@/lib/contacts/alvo-de-lote";
@@ -154,6 +161,18 @@ export async function POST(req: NextRequest): Promise<Response> {
           rotulosDeCampo.set(c.key, c.label);
         }
       }
+    }
+
+    // 1015: campo não público (rótulo e valor) só sai na exportação de administrador.
+    if (!leitorVeCamposRestritos(authz.org.role)) {
+      const lidas = await chavesRestritasDaOrganizacao(supabase, organizationId, requestId);
+      if (!lidas.ok) throw new ApiError(500, "internal_error", undefined, requestId, MENSAGEM_DE_FALHA_INTERNA);
+      const restritas = unirChavesRestritas(
+        lidas.chaves,
+        ...(funis.data ?? []).map((f) => chavesRestritasDosCampos((f.settings as { fields?: unknown } | null)?.fields)),
+      );
+      for (const c of contatos) c.custom_fields = recortarValores(c.custom_fields, restritas, authz.org.role);
+      for (const chave of [...rotulosDeCampo.keys()]) if (restritas.has(chave.toLowerCase())) rotulosDeCampo.delete(chave);
     }
 
     const csv = montarCsvDeContatos(contatos, {

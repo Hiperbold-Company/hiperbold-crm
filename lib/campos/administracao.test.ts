@@ -9,15 +9,24 @@ const auditados = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async (e: Record<string, unknown>) => void auditados.push(e)) }));
 const rpc = vi.hoisted(() => vi.fn(async () => ({ data: { total: 4, preenchidos: 3 }, error: null })));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc }) }));
+const logados = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+vi.mock("@/lib/logger", () => ({
+  logger: { error: (_m: string, c: Record<string, unknown>) => void logados.push(c), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { alterarDefinicao, criarDefinicao, listarDefinicoes, removerDefinicao } from "./administracao";
 import { COTA_DE_CAMPOS_POR_ENTIDADE } from "./definicoes";
+import { MENSAGEM_DE_FALHA_INTERNA } from "@/lib/api/wrappers";
+import type { Role } from "@/lib/auth/types";
 
 type Linha = Record<string, unknown>;
 
-function bancoEmMemoria(linhas: Linha[]): SupabaseClient {
+/** Chamadas à RPC da adoção do legado (1015), feita pelo cliente da porta antes de criar. */
+const adocoes: unknown[] = [];
+
+function bancoEmMemoria(linhas: Linha[], falhaDoBanco?: { code: string; message: string }): SupabaseClient {
   let seq = 0;
   const from = () => {
     const filtros: Array<[string, unknown]> = [];
@@ -25,6 +34,7 @@ function bancoEmMemoria(linhas: Linha[]): SupabaseClient {
     let carga: Linha | null = null;
     const casa = (l: Linha) => filtros.every(([c, v]) => l[c] === v);
     const executar = () => {
+      if (falhaDoBanco) return { data: null, error: falhaDoBanco };
       if (op === "insert") {
         const nova: Linha = { id: `id-${++seq}`, created_at: "t", updated_at: "t", ...carga! };
         if (linhas.some((l) => l.organization_id === nova.organization_id && String(l.key).toLowerCase() === String(nova.key).toLowerCase())) {
@@ -57,21 +67,28 @@ function bancoEmMemoria(linhas: Linha[]): SupabaseClient {
     };
     return q;
   };
-  return { from } as unknown as SupabaseClient;
+  const rpcDaPorta = async (nome: string, args: unknown) => {
+    adocoes.push({ nome, args });
+    return { data: 0, error: null };
+  };
+  return { from, rpc: rpcDaPorta } as unknown as SupabaseClient;
 }
 
 const ORG_A = "org-a";
 const ORG_B = "org-b";
 let linhas: Linha[];
-const deps = (org: string) => ({
+const deps = (org: string, papel: Role = "admin") => ({
   supabase: bancoEmMemoria(linhas),
   organizationId: org,
   actor: { type: "user" as const, id: "u1" },
   requestId: "req",
+  papel,
 });
 
 beforeEach(() => {
   auditados.length = 0;
+  logados.length = 0;
+  adocoes.length = 0;
   linhas = [
     { id: "b1", organization_id: ORG_B, entidade: "negocio", key: "segredo_b", label: "B", type: "text", config: {}, position: 1000 },
   ];
@@ -142,5 +159,40 @@ describe("campos da organização: isolamento, imutáveis, cota e audit", () => 
       p_entidade: "negocio",
       p_key: "origem",
     });
+  });
+});
+
+describe("quem vê o campo (`publico`) e a falha do banco", () => {
+  it("só administrador muda `publico`: gerente recebe 403 e nada é gravado", async () => {
+    const d = await criarDefinicao(deps(ORG_A), { entidade: "negocio", key: "margem", label: "Margem", type: "number" });
+    await expect(alterarDefinicao(deps(ORG_A, "manager"), d.id, { publico: false })).rejects.toMatchObject({ status: 403 });
+    await expect(alterarDefinicao(deps(ORG_A, "agent"), d.id, { publico: false })).rejects.toMatchObject({ status: 403 });
+    expect(linhas.find((l) => l.id === d.id)?.publico).toBe(true);
+    await alterarDefinicao(deps(ORG_A), d.id, { publico: false });
+    expect(linhas.find((l) => l.id === d.id)?.publico).toBe(false);
+  });
+
+  it("gerente não cria campo já restrito; o campo público ele cria (a porta é que exige admin)", async () => {
+    await expect(
+      criarDefinicao(deps(ORG_A, "manager"), { entidade: "contato", key: "cpf", label: "CPF", type: "text", publico: false }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(linhas.some((l) => l.key === "cpf")).toBe(false);
+  });
+
+  it("criar adota o legado antes, pela organização da porta", async () => {
+    await criarDefinicao(deps(ORG_A), { entidade: "negocio", key: "origem", label: "Origem", type: "text" });
+    expect(adocoes).toEqual([{ nome: "fn_adotar_campos_legados_da_organizacao", args: { p_org: ORG_A } }]);
+  });
+
+  it("erro do Postgres vira 500 com mensagem genérica; o detalhe vai só para o log, com o requestId", async () => {
+    const quebrado = {
+      ...deps(ORG_A),
+      supabase: bancoEmMemoria(linhas, { code: "XX000", message: 'relation "custom_field_definitions" column "x" segredo' }),
+    };
+    const erro = await listarDefinicoes(quebrado).catch((e: unknown) => e);
+    expect(erro).toMatchObject({ status: 500, code: "internal_error" });
+    expect(JSON.stringify(erro)).not.toContain("segredo");
+    expect((erro as Error).message).toBe(MENSAGEM_DE_FALHA_INTERNA);
+    expect(logados).toEqual([expect.objectContaining({ request_id: "req", causa: expect.stringContaining("segredo") })]);
   });
 });

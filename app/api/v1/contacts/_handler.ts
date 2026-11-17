@@ -13,6 +13,9 @@ import { revogarAcessosDoContato } from "@/lib/mcp/servidor-externo/do-agente/re
 import { logger } from "@/lib/logger";
 import { observeServiceOrigin } from "@/lib/atendimento/origem";
 import { ApiError } from "@/lib/api/types";
+import { MENSAGEM_DE_FALHA_INTERNA } from "@/lib/api/wrappers";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { preservarValoresRestritos } from "@/lib/campos/recorte-por-papel";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
@@ -823,6 +826,22 @@ export async function patchContactHandler(
 
   // ── O PADRÃO (#2730) — DEPOIS do select, e só sobre o que MUDOU ──────────
   //
+  // 1015: o PATCH SUBSTITUI `custom_fields` (ver abaixo), e quem não é administrador recebeu a ficha
+  // SEM os campos não públicos (`lib/campos/recorte-por-papel.ts`). Chave restrita ausente na entrada
+  // mantém o valor gravado — senão salvar o nome apagaria o que a pessoa nem viu.
+  if (input.custom_fields !== undefined && input.custom_fields !== null) {
+    const restritas = await chavesRestritasDaOrganizacao(supabase, ctx.organization_id, ctx.requestId);
+    if (!restritas.ok) throw new ApiError(500, "internal_error", undefined, ctx.requestId, MENSAGEM_DE_FALHA_INTERNA);
+    input = {
+      ...input,
+      custom_fields: preservarValoresRestritos(
+        input.custom_fields,
+        (existing as { custom_fields?: unknown } | null)?.custom_fields,
+        restritas.chaves,
+      ),
+    };
+  }
+
   // A MESMA régua da criação, com a MESMA leitura (todos os funis, escopo
   // `contato`: o contato não tem funil próprio), mas agora JULGANDO O DIFF.
   //

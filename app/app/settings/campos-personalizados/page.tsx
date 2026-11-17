@@ -3,7 +3,7 @@
  * CONTATO (ficha do contato) e NEGÓCIO (vale para todos os funis). A obrigatoriedade por etapa
  * continua em Etapas do funil.
  *
- * `manager` e não `admin`: é o mesmo piso da rota `/api/v1/custom-fields`, que é quem grava — a
+ * `admin`: é o mesmo piso da GRAVAÇÃO em `/api/v1/custom-fields` (e da rota antiga e do MCP) — a
  * tela e a rota dizem a mesma coisa (controle que a rota recusaria seria decorativo).
  */
 import { redirect } from "next/navigation";
@@ -24,7 +24,7 @@ export default async function CamposPersonalizadosPage() {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
-  if (!roleAtLeast(activeOrg.role, "manager")) redirect("/403");
+  if (!roleAtLeast(activeOrg.role, "admin")) redirect("/403");
 
   // Service role com o filtro da organização da SESSÃO — a mesma leitura da rota.
   const { data, error } = await createAdminClient()

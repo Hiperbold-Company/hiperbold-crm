@@ -23,6 +23,7 @@ import {
   removerCampoDoFunil,
   type DepsDosCampos,
 } from "@/lib/pipelines/campos-do-funil";
+import { papelDoAtorOuPiso } from "@/lib/campos/recorte-por-papel";
 import { customFieldSchema } from "@/lib/schemas/settings";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +63,8 @@ async function entrada(req: NextRequest, ctx: RouteCtx): Promise<Entrada> {
     organizationId: authz.organizationId,
     actor: authz.actor,
     requestId,
+    // O papel viaja no ator (D-148); sem ele, o piso que a porta acabou de conferir.
+    papel: papelDoAtorOuPiso(authz.actor, "admin"),
   };
   return { requestId, authz, pipelineId, key, deps };
 }

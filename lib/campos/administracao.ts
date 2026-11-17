@@ -23,6 +23,9 @@ import type { Actor } from "@/lib/api/handlers/types";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
+import { MENSAGEM_DE_FALHA_INTERNA } from "@/lib/api/wrappers";
+import { roleAtLeast, type Role } from "@/lib/auth/types";
+import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
@@ -43,6 +46,11 @@ export interface DepsDasDefinicoes {
   organizationId: string;
   actor: Actor;
   requestId: string;
+  /**
+   * O papel EFETIVO de quem age, resolvido pela porta. Só administrador muda `publico` (o campo que só
+   * administrador vê): a porta já exige admin para gravar, e esta é a segunda trava, no núcleo.
+   */
+  papel: Role;
 }
 
 function recusa(deps: DepsDasDefinicoes, status: number, code: string, message: string, details?: unknown): ApiError {
@@ -55,8 +63,44 @@ function erroDoBanco(deps: DepsDasDefinicoes, error: { code?: string; message: s
   if (error.code === "22023") {
     return recusa(deps, 422, "unprocessable_entity", "A chave, a entidade e o tipo de um campo não mudam depois de criados.");
   }
-  if (error.code === "23514") return recusa(deps, 422, "unprocessable_entity", "Campo inválido.");
-  return new ApiError(500, "internal_error", undefined, deps.requestId, error.message);
+  if (error.code === "23514") {
+    // O teto do banco (gatilho `trg_custom_field_definitions_antes_de_inserir`), o mesmo da cota daqui.
+    if (error.message?.includes("teto de campos personalizados")) {
+      return recusa(deps, 422, "unprocessable_entity", "A organização chegou ao limite de campos personalizados.", {
+        cota: COTA_DE_CAMPOS_POR_ENTIDADE,
+      });
+    }
+    return recusa(deps, 422, "unprocessable_entity", "Campo inválido.");
+  }
+  // A mensagem do Postgres traz nome de tabela, coluna e valor: vai só para o log, com o requestId.
+  logger.error("[campos] falha do banco", {
+    request_id: deps.requestId,
+    organizationId: deps.organizationId,
+    code: error.code,
+    causa: error.message,
+  });
+  return new ApiError(500, "internal_error", undefined, deps.requestId, MENSAGEM_DE_FALHA_INTERNA);
+}
+
+/** Mudar `publico` (inclusive criar já não público) é só de administrador. */
+function exigirAdminParaPublico(deps: DepsDasDefinicoes, publico: boolean | undefined, criando: boolean): void {
+  if (publico === undefined || (criando && publico === true)) return;
+  if (roleAtLeast(deps.papel, "admin")) return;
+  throw recusa(deps, 403, "forbidden", "Só administrador muda quem vê o campo.");
+}
+
+/**
+ * A ADOÇÃO DO LEGADO (1015, `fn_adotar_campos_legados_da_organizacao`) ANTES da primeira definição:
+ * organização que ganhou campos pelo caminho antigo depois da atualização tem os campos dos funis
+ * copiados para definições primeiro — e a chave repetida aparece como 409 normal, não como um campo
+ * que some. Idempotente (organização com definição devolve 0). O gatilho do banco faz o mesmo, como
+ * segunda trava.
+ */
+async function adotarLegado(deps: DepsDasDefinicoes): Promise<void> {
+  const { error } = await deps.supabase.rpc("fn_adotar_campos_legados_da_organizacao", {
+    p_org: deps.organizationId,
+  });
+  if (error) throw erroDoBanco(deps, error);
 }
 
 /** Quem assina `created_by`/`updated_by`: só pessoa (a FK é `auth.users`). Token e IA: `null`. */
@@ -117,6 +161,8 @@ function configLimpo(config: ConfigDoCampo | undefined): Record<string, unknown>
 export async function criarDefinicao(deps: DepsDasDefinicoes, entrada: NovaDefinicao): Promise<DefinicaoDeCampo> {
   const incoerente = incoerenciaDaDefinicao(entrada.type, entrada.config);
   if (incoerente) throw recusa(deps, 422, "unprocessable_entity", incoerente);
+  exigirAdminParaPublico(deps, entrada.publico, true);
+  await adotarLegado(deps);
 
   const doNivel = await listarDefinicoes(deps, entrada.entidade);
   if (doNivel.length >= COTA_DE_CAMPOS_POR_ENTIDADE) {
@@ -177,6 +223,7 @@ export async function alterarDefinicao(
 ): Promise<DefinicaoDeCampo> {
   const campos = Object.keys(alteracao);
   if (campos.length === 0) throw recusa(deps, 422, "unprocessable_entity", "Diga o que mudar no campo.");
+  exigirAdminParaPublico(deps, alteracao.publico, false);
   const atual = await lerDefinicao(deps, id);
 
   // `config` faz MERGE por chave: mandar só `options` não apaga o `padrao`. `null` numa chave a tira.

@@ -157,6 +157,7 @@ function depsDosCampos(ctx: McpContext): DepsDosCampos {
     organizationId: ctx.organizationId,
     actor: ctx.actor,
     requestId: ctx.requestId,
+    papel: ctx.role,
   };
 }
 

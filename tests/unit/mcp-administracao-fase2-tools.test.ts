@@ -116,10 +116,18 @@ describe("tools MCP de administração — fase 2", () => {
     expect(JSON.stringify(vi.mocked(audit).mock.calls)).not.toContain(r.secret);
   });
 
-  it("crm_create_pipeline_field: valida pelo schema (select sem opções → 422) e acrescenta sem apagar os outros", async () => {
+  it("crm_create_pipeline_field: valida pelo schema (select sem opções → 422) e cria o campo NA ORGANIZAÇÃO sem apagar os outros", async () => {
+    // Desde a 1015 o campo é da organização (`custom_field_definitions`); `settings.fields` é projeção.
+    const def = (key: string, label: string, type: string) => ({
+      id: `id-${key}`, organization_id: ORG, entidade: "negocio", key, label, type, descricao: null, grupo: null,
+      obrigatorio: false, publico: true, sempre_visivel: false, exibir_no_perfil: false, dica_de_ajuda: null,
+      config: {}, position: 1000, created_at: "2026-11-17T00:00:00Z", updated_at: "2026-11-17T00:00:00Z",
+      created_by: null, updated_by: null,
+    });
     const { ctx, escritas } = ctxComBanco({
       crm_pipelines: { id: FUNIL, name: "V", vocabulary: {}, settings: { fields: [{ key: "a", label: "A", type: "text" }] } },
-      "crm_pipelines:update": [{ id: FUNIL }],
+      "custom_field_definitions:select": [def("a", "A", "text")],
+      "custom_field_definitions:insert": def("b", "B", "boolean"),
     });
     await expect(
       tool("crm_create_pipeline_field").handler({ pipeline_id: FUNIL, key: "porte", label: "Porte", type: "select" }, ctx),
@@ -127,10 +135,13 @@ describe("tools MCP de administração — fase 2", () => {
     expect(escritas).toEqual([]);
 
     await tool("crm_create_pipeline_field").handler({ pipeline_id: FUNIL, key: "b", label: "B", type: "boolean" }, ctx);
-    const escrita = escritas.find((e) => e.tabela === "crm_pipelines");
-    expect(escrita?.filtros).toMatchObject({ id: FUNIL, organization_id: ORG });
-    expect((escrita?.patch as { settings: { fields: unknown[] } }).settings.fields).toHaveLength(2);
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ actorApiTokenId: TOKEN, organizationId: ORG }));
+    const escrita = escritas.find((e) => e.tabela === "custom_field_definitions");
+    expect(escrita?.patch).toMatchObject({ organization_id: ORG, entidade: "negocio", key: "b", type: "boolean" });
+    // Só uma escrita, um INSERT: o campo "a" não foi tocado.
+    expect(escritas.map((e) => e.tabela)).toEqual(["custom_field_definitions"]);
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "custom_field.created", actorApiTokenId: TOKEN, organizationId: ORG }),
+    );
   });
 
   it("crm_pause_ai_agent: agente de outra organização → 404 sem escrita", async () => {

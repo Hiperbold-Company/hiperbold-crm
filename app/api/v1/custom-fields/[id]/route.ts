@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const e = await entradaDosCampos(requestId);
+  const e = await entradaDosCampos(requestId, { escrita: true });
   if (!e.ok) return e.response;
   const { id } = await ctx.params;
   if (!UUID_RX.test(id)) return fail("invalid_request", e.t("id inválido."), 400, { requestId });
@@ -55,7 +55,7 @@ export async function DELETE(_req: NextRequest, ctx: RouteCtx): Promise<Response
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const e = await entradaDosCampos(requestId);
+  const e = await entradaDosCampos(requestId, { escrita: true });
   if (!e.ok) return e.response;
   const { id } = await ctx.params;
   if (!UUID_RX.test(id)) return fail("invalid_request", e.t("id inválido."), 400, { requestId });

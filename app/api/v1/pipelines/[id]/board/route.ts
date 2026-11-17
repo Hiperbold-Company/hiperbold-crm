@@ -17,6 +17,7 @@ import { type NextRequest } from "next/server";
 
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
+import { chavesRestritasDosCampos, recortarLinha, recortarSettingsDoFunil } from "@/lib/campos/recorte-por-papel";
 import { traduzir } from "@/lib/i18n/dicionario";
 import {
   roteiaProximasAcoes,
@@ -694,12 +695,24 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     return falhaInterna("internal_error", leadsComMarcadores.error, { requestId });
   }
 
+  // 1015: campo não público (definição e valor) só sai para administrador. A projeção em
+  // `settings.fields` traz o `publico: false` de todos os campos da organização.
+  const papel = authz.org.role;
+  const restritas = chavesRestritasDosCampos(((pipeline as Pipeline).settings as { fields?: unknown } | null)?.fields);
+
   const board: BoardData = {
-    pipeline: pipeline as Pipeline,
+    pipeline: {
+      ...(pipeline as Pipeline),
+      settings: recortarSettingsDoFunil((pipeline as Pipeline).settings, papel),
+    } as Pipeline,
     stages: (stages ?? []) as Stage[],
     leads: leadsComMarcadores.leads.map(
       (lead) =>
-        ocultarProvaMetaNaResposta(lead as unknown as Record<string, unknown>) as unknown as Lead,
+        recortarLinha(
+          ocultarProvaMetaNaResposta(lead as unknown as Record<string, unknown>),
+          restritas,
+          papel,
+        ) as unknown as Lead,
     ),
   };
 

@@ -25,6 +25,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { ApiError } from "@/lib/api/types";
+import { MENSAGEM_DE_FALHA_INTERNA } from "@/lib/api/wrappers";
+import type { Role } from "@/lib/auth/types";
+import { logger } from "@/lib/logger";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Actor } from "@/lib/api/handlers/types";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { customFieldSchema, type CustomFieldDef } from "@/lib/schemas/settings";
@@ -44,6 +48,27 @@ export interface DepsDosCampos {
   organizationId: string;
   actor: Actor;
   requestId: string;
+  /** O papel efetivo de quem age (a porta já exige admin para gravar). */
+  papel: Role;
+}
+
+/**
+ * As dependências do núcleo das DEFINIÇÕES: sempre o cliente de service role, porque `authenticated`
+ * só tem SELECT em `custom_field_definitions` (1015). A organização continua a da porta, e todo
+ * acesso do núcleo a filtra explicitamente.
+ */
+function depsDasDefinicoes(deps: DepsDosCampos): DepsDosCampos {
+  return { ...deps, supabase: createAdminClient() };
+}
+
+/** Falha do banco: o detalhe vai para o log com o requestId; o corpo leva a frase genérica. */
+function falhaDoBanco(deps: DepsDosCampos, causa: string): ApiError {
+  logger.error("[campos-do-funil] falha do banco", {
+    request_id: deps.requestId,
+    organizationId: deps.organizationId,
+    causa,
+  });
+  return recusa(deps, 500, "internal_error", MENSAGEM_DE_FALHA_INTERNA);
 }
 
 /**
@@ -75,7 +100,7 @@ function erroDoNucleo(deps: DepsDosCampos, error: string): ApiError {
   if (error === "validation_failed" || error === "invalid_request") {
     return recusa(deps, 422, "unprocessable_entity", "Regra de obrigatoriedade inválida.");
   }
-  return recusa(deps, 500, "internal_error", error);
+  return falhaDoBanco(deps, error);
 }
 
 /** As etapas de `obrigatorio_em.etapas` têm de ser deste funil e desta organização. */
@@ -92,7 +117,7 @@ async function validarEtapas(
     .eq("organization_id", deps.organizationId)
     .eq("pipeline_id", pipelineId)
     .in("id", ids);
-  if (error) throw recusa(deps, 500, "internal_error", error.message);
+  if (error) throw falhaDoBanco(deps, error.message);
   if ((data ?? []).length !== ids.length) {
     throw recusa(
       deps,
@@ -177,7 +202,7 @@ export async function criarCampoDoFunil(
 ): Promise<{ campo: CustomFieldDef; total: number }> {
   await exigirFunil(deps, pipelineId);
   await validarEtapas(deps, pipelineId, campo.obrigatorio_em?.etapas);
-  await criarDefinicao(deps, {
+  await criarDefinicao(depsDasDefinicoes(deps), {
     entidade: campo.escopo === "contato" ? "contato" : "negocio",
     key: campo.key,
     label: campo.label,
@@ -207,12 +232,12 @@ export async function alterarCampoDoFunil(
   }
   await exigirFunil(deps, pipelineId);
   await validarEtapas(deps, pipelineId, alteracao.obrigatorio_em?.etapas);
-  const definicao = await definicaoPelaChave(deps, chave);
+  const definicao = await definicaoPelaChave(depsDasDefinicoes(deps), chave);
   if (!definicao) throw recusa(deps, 404, "not_found", "Esse campo não existe neste funil.");
 
   const { obrigatorio_em, label, required, options } = alteracao;
   if (label !== undefined || required !== undefined || options !== undefined) {
-    await alterarDefinicao(deps, definicao.id, {
+    await alterarDefinicao(depsDasDefinicoes(deps), definicao.id, {
       ...(label !== undefined ? { label } : {}),
       ...(required !== undefined ? { obrigatorio: required } : {}),
       ...(options !== undefined ? { config: { options } } : {}),
@@ -231,9 +256,9 @@ export async function removerCampoDoFunil(
   chave: string,
 ): Promise<{ key: string; total: number }> {
   await exigirFunil(deps, pipelineId);
-  const definicao = await definicaoPelaChave(deps, chave);
+  const definicao = await definicaoPelaChave(depsDasDefinicoes(deps), chave);
   if (!definicao) throw recusa(deps, 404, "not_found", "Esse campo não existe neste funil.");
-  await removerDefinicao(deps, definicao.id);
+  await removerDefinicao(depsDasDefinicoes(deps), definicao.id);
   const { total } = await campoProjetado(deps, pipelineId, chave);
   return { key: definicao.key, total };
 }
