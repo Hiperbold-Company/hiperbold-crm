@@ -28,6 +28,8 @@ import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { ErroComRetry } from "@/components/empty/ErroComRetry";
 import { FlowArrow, Plus } from "@/lib/ui/icons";
+import { AcoesNoCelular } from "@/components/shell/AcoesNoCelular";
+import { FiltrosNoCelular } from "@/components/shell/FiltrosNoCelular";
 import {
   ROTULO_DO_TIPO,
   TIPOS_DA_LISTA,
@@ -92,7 +94,13 @@ export function AutomacoesList({
     new Date(iso).toLocaleDateString(idioma, { day: "2-digit", month: "2-digit", year: "numeric" });
 
   const botaoNova = (
-    <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-start">
+    <div className="flex w-full items-start gap-2 sm:w-auto">
+      <AcoesNoCelular
+        acoes={[
+          { rotulo: t("Importar"), onSelect: () => setImportarAberto(true), desativada: motivoDoBloqueio !== null },
+          { rotulo: t("Usar um modelo"), onSelect: () => setModelosAberto(true), desativada: motivoDoBloqueio !== null },
+        ]}
+      >
       <Button
         variant="outline"
         onClick={() => setImportarAberto(true)}
@@ -111,7 +119,8 @@ export function AutomacoesList({
       >
         {t("Usar um modelo")}
       </Button>
-      <div className="flex flex-col items-end">
+      </AcoesNoCelular>
+      <div className="flex flex-1 flex-col items-end sm:flex-none">
       <Button
         onClick={() => setAberto(true)}
         data-testid="nova-automacao"
@@ -159,9 +168,10 @@ export function AutomacoesList({
                 onChange={(e) => setBusca(e.target.value)}
                 placeholder={t("Buscar pelo nome")}
                 aria-label={t("Buscar pelo nome")}
-                className="w-56"
+                className="w-full sm:w-56"
                 data-testid="busca-de-automacoes"
               />
+              <FiltrosNoCelular ativos={tipo !== "todos" ? 1 : 0}>
               <div role="group" aria-label={t("Filtrar por tipo")} className="flex flex-wrap gap-1">
                 {FILTROS_DE_TIPO.map((v) => (
                   <Button
@@ -177,6 +187,7 @@ export function AutomacoesList({
                   </Button>
                 ))}
               </div>
+              </FiltrosNoCelular>
             </div>
             {botaoNova}
           </div>

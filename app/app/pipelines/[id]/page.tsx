@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { bloqueioDoBotao, estadoDoBloqueio } from "@/lib/billing/planos/estado-do-bloqueio";
@@ -8,6 +9,26 @@ import { logger } from "@/lib/logger";
 import { PipelinePageClient } from "./_client";
 
 export const dynamic = "force-dynamic";
+
+/** Título da aba: o nome do funil, no mesmo escopo de organização da página. */
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  try {
+    const user = await requireAuth();
+    const activeOrg = await resolveActiveOrg(user);
+    if (!activeOrg) return { title: "Funil" };
+    const { id } = await params;
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("crm_pipelines")
+      .select("name")
+      .eq("organization_id", activeOrg.orgId)
+      .eq("id", id)
+      .maybeSingle();
+    return { title: data?.name || "Funil" };
+  } catch {
+    return { title: "Funil" };
+  }
+}
 
 export default async function PipelinePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireAuth();

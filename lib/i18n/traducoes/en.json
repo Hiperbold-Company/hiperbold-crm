@@ -14617,5 +14617,8 @@
   "Templates do WhatsApp": "WhatsApp templates",
   "Tipo de botão desconhecido. Use QUICK_REPLY, URL ou PHONE_NUMBER.": "Unknown button type. Use QUICK_REPLY, URL or PHONE_NUMBER.",
   "Tipo de componente desconhecido. Use HEADER, BODY, FOOTER ou BUTTONS.": "Unknown component type. Use HEADER, BODY, FOOTER or BUTTONS.",
-  "link público do arquivo": "public link to the file"
+  "link público do arquivo": "public link to the file",
+  "Filtros": "Filters",
+  "Ver resultados": "View results",
+  "Escolha os filtros e toque em Ver resultados.": "Choose your filters and tap View results."
 }

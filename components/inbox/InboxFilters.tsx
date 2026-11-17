@@ -3,6 +3,8 @@ import { useT } from "@/hooks/i18n/useT";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CaretLeft, CaretRight, MagnifyingGlass } from "@/lib/ui/icons";
 import { Input } from "@/components/ui/input";
+import { FiltrosNoCelular } from "@/components/shell/FiltrosNoCelular";
+import { useAbaixoDeMd } from "@/hooks/useAbaixoDeMd";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
@@ -398,31 +400,18 @@ export function InboxFilters({ value, onChange }: Props) {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  return (
-    <div className="border-b border-border bg-background">
-      <div className="space-y-2 px-3 pt-3 pb-2">
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <MagnifyingGlass
-              size={15}
-              weight="regular"
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
-              aria-hidden
-            />
-            {/* "última mensagem", e não "mensagem": a busca alcança apenas
-                `conversations.last_message_preview` — a ÚLTIMA mensagem, truncada em 200
-                caracteres já na ingestão (`grep -rn 'slice(0, 200)' lib/channels/` mostra onde).
-                Medido numa conversa real de 32 mensagens: buscar o que o cliente pediu na
-                3ª devolve ZERO. Alcançar o histórico é projeto próprio (índice trigram +
-                retenção + LGPD); até lá, a tela não promete o que o backend não faz. */}
-            <Input
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder={t("Buscar por nome, telefone ou última mensagem…")}
-              className="h-9 rounded-full border-transparent bg-surface-elevated pl-9 shadow-none focus-visible:border-border focus-visible:bg-background"
-              aria-label={t("Buscar conversas")}
-            />
-          </div>
+  // Filtros auxiliares definidos uma vez: no computador ficam inline (busca +
+  // botões numa linha, seletores na de baixo); no celular vão todos para a gaveta.
+  const celular = useAbaixoDeMd();
+  const filtrosAtivosNoCelular = [
+    value.onlyUnread,
+    value.onlyGroups,
+    value.channel_session_id != null,
+    etiquetas.length > 0,
+    value.assigned_to != null,
+  ].filter(Boolean).length;
+  const botoesAuxiliares = (
+    <>
           {/* Botão pressionável em vez de Switch: o filtro vive na mesma linha
               da busca, e o Switch com rótulo pedia uma linha inteira só para
               si numa coluna de 280px. */}
@@ -457,10 +446,12 @@ export function InboxFilters({ value, onChange }: Props) {
           >
             {t("Grupos")}
           </button>
-        </div>
-
+    </>
+  );
+  const seletoresAuxiliares = (
+    <>
         {(showChannelSwitch || mostrarSeletorDeTag || mostrarSeletorDeAtendente) && (
-          <div className="flex gap-2">
+          <div className={celular ? "flex flex-col gap-3" : "flex gap-2"}>
             {showChannelSwitch && (
               <Select
                 value={value.channel_session_id ?? "all"}
@@ -636,6 +627,45 @@ export function InboxFilters({ value, onChange }: Props) {
             )}
           </div>
         )}
+    </>
+  );
+
+  return (
+    <div className="border-b border-border bg-background">
+      <div className="space-y-2 px-3 pt-3 pb-2">
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <MagnifyingGlass
+              size={15}
+              weight="regular"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
+              aria-hidden
+            />
+            {/* "última mensagem", e não "mensagem": a busca alcança apenas
+                `conversations.last_message_preview` — a ÚLTIMA mensagem, truncada em 200
+                caracteres já na ingestão (`grep -rn 'slice(0, 200)' lib/channels/` mostra onde).
+                Medido numa conversa real de 32 mensagens: buscar o que o cliente pediu na
+                3ª devolve ZERO. Alcançar o histórico é projeto próprio (índice trigram +
+                retenção + LGPD); até lá, a tela não promete o que o backend não faz. */}
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder={celular ? t("Buscar conversas") : t("Buscar por nome, telefone ou última mensagem…")}
+              className="h-9 rounded-full border-transparent bg-surface-elevated pl-9 shadow-none focus-visible:border-border focus-visible:bg-background"
+              aria-label={t("Buscar conversas")}
+            />
+          </div>
+          {celular ? (
+            <FiltrosNoCelular ativos={filtrosAtivosNoCelular}>
+              <div className="flex gap-2">{botoesAuxiliares}</div>
+              {seletoresAuxiliares}
+            </FiltrosNoCelular>
+          ) : (
+            botoesAuxiliares
+          )}
+        </div>
+
+        {celular ? null : seletoresAuxiliares}
       </div>
 
       {/* As setas aparecem só quando há abas fora da área visível; a faixa e o
