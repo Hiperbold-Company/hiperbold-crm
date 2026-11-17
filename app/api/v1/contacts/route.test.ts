@@ -276,11 +276,19 @@ describe("GET /api/v1/contacts — Bearer (integrações externas)", () => {
       unread: 1,
     };
 
-    function adminComModo(modo: string): void {
+    // O modo só "existe" para a leitura certa: tabela `organizations`, linha da organização da chave.
+    // Ler outra tabela ou outra organização devolve "sem modo", e o caso own+agent fica vermelho.
+    function adminComModo(modo: string, erro = false): void {
       vi.mocked(createAdminClient).mockReturnValue({
-        from: () => ({
+        from: (tabela: string) => ({
           select: () => ({
-            eq: () => ({ maybeSingle: async () => ({ data: { settings: { visibility_mode: modo } }, error: null }) }),
+            eq: (coluna: string, valor: string) => ({
+              maybeSingle: async () => {
+                if (erro) return { data: null, error: { message: "falhou" } };
+                const certa = tabela === "organizations" && coluna === "id" && valor === ORG_ID;
+                return { data: { settings: certa ? { visibility_mode: modo } : {} }, error: null };
+              },
+            }),
           }),
         }),
       } as never);
@@ -324,6 +332,16 @@ describe("GET /api/v1/contacts — Bearer (integrações externas)", () => {
       for (const c of data) expect(c).not.toHaveProperty("conversa");
       expect(JSON.stringify(data)).not.toContain(CONVERSA.preview);
       expect(JSON.stringify(data)).not.toContain(CONVERSA.id);
+    });
+
+    it("falha ao ler o modo + chave agent: 500 e a lista não é lida (não trata leitura falha como liberado)", async () => {
+      tokenCom("agent");
+      adminComModo("own", true);
+      handlerComConversa();
+      const { status, data } = await lista(bearer);
+      expect(status).toBe(500);
+      expect(data).toBeUndefined();
+      expect(listContactsHandler).not.toHaveBeenCalled();
     });
 
     it("empresa em 'só os meus' + chave manager: a conversa vem", async () => {
