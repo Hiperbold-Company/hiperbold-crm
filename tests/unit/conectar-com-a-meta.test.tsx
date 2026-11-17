@@ -24,7 +24,7 @@ vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undef
 vi.mock("@/lib/clipboard", () => ({ copyToClipboard: async () => undefined }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 // O cartão da conexão oficial pergunta a permissão para mostrar "Remover conexão".
-vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermissionSeHouverSessao: () => true }));
 
 import { CanalOficialClient } from "@/components/connections/CanalOficialClient";
 

@@ -235,8 +235,22 @@ const ACAO_PARA_PERMISSAO: Record<string, ChaveDePermissao> = {
  * (`requireRole` / `exigirPermissao`). Aceita as ações do mapa acima ou uma
  * chave do catálogo de permissões (`"contatos.importar"`).
  */
+/**
+ * `usePermission` SEM exigir o provider: componentes que também renderizam fora
+ * de `app/app/layout.tsx` (o onboarding usa o cartão da conexão oficial) leem
+ * `false` em vez de lançar e derrubar a tela inteira.
+ */
+export function usePermissionSeHouverSessao(action: string): boolean {
+  const ctx = useContext(Ctx);
+  if (!ctx) return false;
+  return permissaoDoContexto(ctx, action);
+}
+
 export function usePermission(action: string): boolean {
-  const { user, activeOrg } = useAuth();
+  return permissaoDoContexto(useAuth(), action);
+}
+
+function permissaoDoContexto({ user, activeOrg }: AuthCtx, action: string): boolean {
   if (user.is_platform_admin && !user.support) return true;
   if (!activeOrg) return false;
   const chave = ehChaveDePermissao(action) ? action : ACAO_PARA_PERMISSAO[action];
