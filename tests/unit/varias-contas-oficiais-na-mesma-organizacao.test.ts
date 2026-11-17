@@ -297,12 +297,34 @@ describe("(a) e (b) — a conexão oficial é o NÚMERO dentro da organização"
     const antes = { ...primeira };
     const db = makeDb([primeira]);
     const { POST } = await import("@/app/api/v1/channels/official/route");
+    // Administrador: o gerente nem chega aqui (403 da guarda de substituição, caso abaixo).
+    const { requireRole } = await import("@/lib/auth/require-role");
+    vi.mocked(requireRole).mockResolvedValueOnce({
+      ok: true,
+      user: { id: "user-a", idioma: "pt-BR", support: false, is_platform_admin: false },
+      org: { orgId: ORG_A, role: "admin" },
+    } as never);
 
     const res = await POST(
       conectar({ phone_number_id: NUMERO_2, waba_id: WABA_2, token: TOKEN, channel_session_id: primeira.id }),
     );
     expect(res.status).toBe(422);
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe("numero_diferente_da_conexao");
+    expect(db.linhas).toHaveLength(1);
+    expect(primeira).toEqual(antes);
+  });
+
+  it("gerente que SUBSTITUIRIA o número de uma conexão (mesmo id, número diferente) recebe 403 e nada é gravado", async () => {
+    const primeira = sessaoOficial();
+    const antes = { ...primeira };
+    const db = makeDb([primeira]);
+    const { POST } = await import("@/app/api/v1/channels/official/route");
+
+    const res = await POST(
+      conectar({ phone_number_id: NUMERO_2, waba_id: WABA_2, token: TOKEN, channel_session_id: primeira.id }),
+    );
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("forbidden_role");
     expect(db.linhas).toHaveLength(1);
     expect(primeira).toEqual(antes);
   });

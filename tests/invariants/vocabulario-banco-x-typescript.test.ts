@@ -599,6 +599,15 @@ const PARES: Array<{
     arquivo: "lib/conexoes/cores.ts",
     simbolo: "CHAVES_DE_COR_DA_CONEXAO",
   },
+  {
+    tabela: "scheduled_messages",
+    coluna: "status",
+    // Migration 1017 (fork Hiperbold): mensagem agendada no chat. O worker e as
+    // rotas gravam estes cinco; um sexto só no TypeScript viraria `23514` na
+    // conclusão do envio, com a mensagem já entregue.
+    arquivo: "lib/mensagens-agendadas/regras.ts",
+    simbolo: "STATUS_DA_AGENDADA",
+  },
 ];
 
 /** Tira um nível de parênteses externos, se ele envolver a expressão inteira. */

@@ -154,11 +154,13 @@ async function orgOrFail(requestId: string, papel: "agent" | "manager"): Promise
 }
 
 /**
- * QUAL conta oficial (17/11/2026, várias por organização): `?channel_session_id=` na
- * query, nos dois métodos. Id de outra organização, de outro canal ou excluído = 404,
- * sem dizer qual. Sem ele, a oficial mais antiga, como antes da fase B — exceto na rota que ESCREVE
- * (`mutante`) com mais de uma conexão oficial viva: aí 422 `conexao_oficial_ambigua`, porque sincronizar
- * ou gerir modelo na conta errada não se desfaz. Leitura (GET) segue na mais antiga.
+ * QUAL conta oficial (17/11/2026, várias por organização). Duas portas, a mesma regra:
+ * `?channel_session_id=` na query, nos dois métodos (tela em cartões), ou `channel_session_id` no
+ * corpo do POST (painel de mensagens do chat, que fala pela conexão DA CONVERSA). A query vence.
+ * Id de outra organização, de outro canal ou excluído = 404, sem dizer qual. Sem id, a oficial mais
+ * antiga, como antes da fase B — exceto na rota que ESCREVE (`mutante`) com mais de uma conexão
+ * oficial viva: aí 422 `conexao_oficial_ambigua`, porque sincronizar ou gerir modelo na conta errada
+ * não se desfaz. Leitura (GET) segue na mais antiga.
  */
 async function sessaoDaRequisicao(
   req: NextRequest,
@@ -166,11 +168,16 @@ async function sessaoDaRequisicao(
   idioma: Idioma,
   requestId: string,
   mutante = false,
-): Promise<{ sessao: Awaited<ReturnType<typeof metaSessionForOrg>> } | { resposta: NextResponse }> {
-  const id = idDaConexaoNaQuery(new URL(req.url));
+  idDoCorpo?: unknown,
+): Promise<{ sessao: Awaited<ReturnType<typeof metaSessionForOrg>>; filtrada: boolean } | { resposta: NextResponse }> {
   const naoEncontrada = () => ({
     resposta: fail("not_found", traduzir("Conexão não encontrada.", idioma), 404, { requestId }),
   });
+  let id = idDaConexaoNaQuery(new URL(req.url));
+  if (id === undefined && idDoCorpo !== undefined && idDoCorpo !== null && idDoCorpo !== "") {
+    const doCorpo = z.string().uuid().safeParse(idDoCorpo);
+    id = doCorpo.success ? doCorpo.data : null;
+  }
   if (id === null) return naoEncontrada();
   if (mutante) {
     const ambigua = await recusaSeConexaoOficialAmbigua({
@@ -184,7 +191,7 @@ async function sessaoDaRequisicao(
   }
   const sessao = await metaSessionForOrg(orgId, id);
   if (id && !sessao) return naoEncontrada();
-  return { sessao };
+  return { sessao, filtrada: Boolean(id) };
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -194,28 +201,25 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   const escolhida = await sessaoDaRequisicao(req, r.orgId, r.idioma, requestId);
   if ("resposta" in escolhida) return escolhida.resposta;
-  const { sessao } = escolhida;
-  // Com `channel_session_id` (tela em cartões, várias contas oficiais por organização) a lista é SÓ a
-  // daquela conta: linha oficial (sem conexão de parceiro) da WABA da sessão escolhida. Sem id, o espelho
-  // inteiro da organização, como antes (o seletor do inbox e as telas antigas leem assim).
-  const daContaEscolhida = Boolean(idDaConexaoNaQuery(new URL(req.url)));
+  const { sessao, filtrada } = escolhida;
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let consulta = admin
     .from("meta_templates")
     .select(
       "name, language, status, category, rejected_reason, quality_score, parameter_format, contract_hash, components, synced_at, saved_values, channel_session_id, waba_id",
     )
-    .eq("organization_id", r.orgId)
-    .order("status")
-    .order("name");
+    .eq("organization_id", r.orgId);
+  // Pedida a conexão, só os modelos DA CONTA dela (linha oficial = sem conexão e
+  // com a WABA desta sessão, a régua de `linhasDoModeloNaConexao`). Conexão sem
+  // WABA gravada não tem modelo nenhum para oferecer.
+  if (filtrada) {
+    consulta = consulta.is("channel_session_id", null).eq("waba_id", sessao?.wabaId ?? "__sem_waba__");
+  }
+  const { data, error } = await consulta.order("status").order("name");
 
   if (error) return falhaInterna("internal_error", error, { requestId });
 
-  const linhas = daContaEscolhida
-    ? (data ?? []).filter((row) => !!sessao?.wabaId && row.channel_session_id === null && row.waba_id === sessao.wabaId)
-    : (data ?? []);
-
-  const templates: TemplateView[] = linhas.map((row) => {
+  const templates: TemplateView[] = (data ?? []).map((row) => {
     const contrato = deriveTemplateContract({
       name: row.name,
       language: row.language,
@@ -300,7 +304,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!r.autorizado) return r.resposta;
   const t = (texto: string) => traduzir(texto, r.idioma);
 
-  const escolhida = await sessaoDaRequisicao(req, r.orgId, r.idioma, requestId, true);
+  // O corpo é lido uma vez, aqui: dele pode sair a conexão pedida e, adiante, a ação.
+  const cru = (await req.json().catch(() => null)) as unknown;
+  const idDoCorpo =
+    cru && typeof cru === "object" && !Array.isArray(cru)
+      ? (cru as Record<string, unknown>).channel_session_id
+      : undefined;
+  const escolhida = await sessaoDaRequisicao(req, r.orgId, r.idioma, requestId, true, idDoCorpo);
   if ("resposta" in escolhida) return escolhida.resposta;
   const { sessao } = escolhida;
   if (!sessao?.wabaId) {
@@ -326,7 +336,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // O corpo é validado ANTES de falar com a plataforma: um `acao` inventado não
   // pode virar "sincronizar por omissão" nem tocar a conta.
-  const cru = (await req.json().catch(() => null)) as unknown;
   const parsed = corpoSchema.safeParse(
     // Sem corpo é SINCRONIZAR: era o contrato da rota antes da #3635 (o POST
     // nem lia o corpo), e integração que chama sem corpo não pode virar 422.
