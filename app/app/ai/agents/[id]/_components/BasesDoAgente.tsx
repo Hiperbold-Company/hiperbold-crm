@@ -117,10 +117,7 @@ export function BasesDoAgente({ materiais, value, onChange, disabled = false }: 
         <div className="space-y-2" data-testid="agente-bases">
           {visiveis.map((m) => (
             <div key={m.id} className="flex items-center gap-2">
-              {/* `input` nativo, como o ToolPicker e o FunisDoAgente ao lado: o
-                  repo não tem componente de checkbox, e introduzir um só para
-                  esta seção criaria duas aparências para o mesmo controle na
-                  MESMA página. */}
+              {/* O mesmo `Checkbox` do ToolPicker e das outras seções desta página. */}
               <Checkbox
                 id={`base-${m.id}`}
                 data-testid={`base-${m.id}`}

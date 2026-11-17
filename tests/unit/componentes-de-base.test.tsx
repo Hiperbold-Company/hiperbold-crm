@@ -122,6 +122,32 @@ describe("useConfirmar", () => {
   });
 });
 
+describe("ProvedorDeConfirmacao — pergunta deslocada", () => {
+  it("um perguntar deslocado por um confirmar devolve null, nunca false", async () => {
+    let primeiro: Promise<string | null> | null = null;
+    const caixa: { api: ReturnType<typeof useConfirmar> | null } = { api: null };
+    function Captura() {
+      const api = useConfirmar();
+      useEffect(() => {
+        caixa.api = api;
+      }, [api]);
+      return null;
+    }
+    render(
+      <ProvedorDeConfirmacao>
+        <Captura />
+      </ProvedorDeConfirmacao>,
+    );
+    act(() => {
+      primeiro = caixa.api!.perguntar({ titulo: "Motivo", opcional: true });
+    });
+    act(() => {
+      void caixa.api!.confirmar({ titulo: "Outro" });
+    });
+    await expect(primeiro).resolves.toBeNull();
+  });
+});
+
 describe("Checkbox", () => {
   it("é a caixa nativa: marca, desmarca e respeita disabled", () => {
     const onChange = vi.fn();

@@ -87,9 +87,7 @@ export function FunisDoAgente({ funis, value, onChange, cobertura, disabled = fa
         <div className="space-y-2" data-testid="agente-funis">
           {funis.map((f) => (
             <div key={f.id} className="flex items-center gap-2">
-              {/* `input` nativo, como o ToolPicker ao lado: o repo não tem
-                  componente de checkbox, e introduzir um só para esta tela
-                  criaria duas aparências para o mesmo controle na MESMA página. */}
+              {/* O mesmo `Checkbox` do ToolPicker e das outras seções desta página. */}
               <Checkbox
                 id={`funil-${f.id}`}
                 data-testid={`funil-${f.id}`}
