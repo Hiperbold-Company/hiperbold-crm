@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import { format, isToday, isYesterday } from "date-fns";
 import { useT } from "@/hooks/i18n/useT";
 import { ChatCircle, Users, Storefront, Robot, Gear } from "@/lib/ui/icons";
-import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
+import type { Icon as PhosphorIcon } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";

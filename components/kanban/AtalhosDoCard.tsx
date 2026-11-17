@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
+import type { Icon as PhosphorIcon } from "@/lib/ui/icons";
 
 import { useContact } from "@/hooks/contacts/useContact";
 import { useT } from "@/hooks/i18n/useT";

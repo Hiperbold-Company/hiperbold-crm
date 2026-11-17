@@ -295,7 +295,7 @@ test.describe("aviso de caso no WhatsApp", () => {
     expect(m.rolagemHorizontal, "a tela do aviso não pode rolar para o lado").toBeLessThanOrEqual(0);
     // A fonte da INTERFACE, e não um nome de fonte fixo: o nome já mudou de
     // propósito (a Hiperbold serve a Inter, no lugar da Atkinson, pela mesma
-    // variável `--font-atkinson`). O que se quer pegar é o botão cair na fonte do
+    // variável `--font-inter`). O que se quer pegar é o botão cair na fonte do
     // sistema, e isso é não ser a do corpo.
     expect(m.salvar.fonte).toBe(m.salvar.fonteDoCorpo);
     expect(m.salvar.fundo).not.toBe("rgba(0, 0, 0, 0)");

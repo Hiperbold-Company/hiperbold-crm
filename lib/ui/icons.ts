@@ -173,6 +173,17 @@ export {
   // erro de compilação na primeira tela que precisasse dos dois.
   ShoppingCart,
   LinkSimple as LinkIcon,
+  // faxina de ícones (lucide -> Phosphor)
+  ArrowLeft,
+  Circle,
+  CurrencyDollar,
+  Package,
+  ChatText,
+  ListMagnifyingGlass,
+  ArrowsLeftRight,
   // painel de mensagens do chat: respostas rápidas e modelos do WhatsApp
   Quotes,
 } from "@phosphor-icons/react/dist/ssr";
+
+// Tipo dos componentes de ícone (antes importado direto de @phosphor-icons/react).
+export type { Icon } from "@phosphor-icons/react";
