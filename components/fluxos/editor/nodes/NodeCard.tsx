@@ -1,6 +1,7 @@
 "use client";
 
 import { Handle, Position } from "@xyflow/react";
+import type { ReactNode } from "react";
 
 import type { FlowBranch } from "@/lib/followup/graph-schema";
 import { rotuloDoRamo } from "@/lib/followup/rotulo-do-ramo";
@@ -41,6 +42,8 @@ interface Props {
    * sem nome trocaria um problema por outro.
    */
   branches?: FlowBranch[];
+  /** Linha discreta abaixo do subtítulo (ex.: a conexão escolhida no bloco de conversa). */
+  detalhe?: ReactNode;
 }
 
 /**
@@ -68,6 +71,7 @@ export function NodeCard({
   showTarget = true,
   showSource = true,
   branches,
+  detalhe,
 }: Props) {
   const t = useT();
   const { nomes } = useEtapasDoFluxo();
@@ -105,6 +109,7 @@ export function NodeCard({
           <p className="line-clamp-2 break-words text-xs text-text-muted" title={subtitle}>
             {subtitle}
           </p>
+          {detalhe}
         </div>
       </div>
       {hasError && (

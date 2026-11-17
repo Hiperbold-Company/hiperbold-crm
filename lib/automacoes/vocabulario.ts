@@ -300,6 +300,8 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   teto_indisponivel: "não foi possível conferir o limite de mensagens por hora",
   sem_conversa_whatsapp: "contato sem conversa de WhatsApp",
   sem_conversa_direct: "a conversa do Direct ainda não abriu: a pessoa precisa responder primeiro",
+  sem_conversa_social: "a conversa do Messenger ou do Direct que iniciou a automação não está mais disponível",
+  sem_conversa_na_conexao: "o contato não tem conversa na conexão escolhida no bloco",
   contato_bloqueado: "o contato pediu para não receber mensagens",
   envio_falhou: "o envio da mensagem falhou",
   organizacao_bloqueada: "a conta não pode enviar nem mudar o CRM agora",
@@ -320,6 +322,8 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   texto_longo: "texto passou do limite de 4096 caracteres depois de preencher as variáveis",
   texto_longo_instagram:
     "texto passou do limite do Instagram (1000 bytes, contando as opções numeradas; acento e emoji contam mais de um)",
+  texto_longo_rede_social:
+    "texto passou do limite da conversa (1000 bytes, contando as opções numeradas; acento e emoji contam mais de um)",
   // Ação "Iniciar outra automação" (lote 3): o que impediu o início.
   automacao_propria: "a automação não pode iniciar a si mesma",
   automacao_inexistente: "a automação escolhida não existe mais nesta conta",

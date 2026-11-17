@@ -25,6 +25,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { ArrowDown, ArrowUp, Plus, Trash } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
+import { CampoDaConexao, type SubstituicaoDeConexao } from "./CampoDaConexao";
 import {
   AjudaDeVariaveis,
   AvisoDoDirect,
@@ -165,6 +166,7 @@ export function MessageForm({
   onChange,
   respostas = [],
   noInstagram = false,
+  substituirConexao,
 }: {
   config: MessageConfig;
   onChange: (config: MessageConfig) => void;
@@ -172,6 +174,8 @@ export function MessageForm({
   respostas?: RespostaDisponivel[];
   /** A automação começa por comentário do Instagram: a mensagem sai pelo Direct. */
   noInstagram?: boolean;
+  /** "Substituir em todos os blocos" do campo Conexão — quem aplica é o canvas. */
+  substituirConexao?: SubstituicaoDeConexao;
 }) {
   const t = useT();
   const [r, setR] = useState<Rascunho>(() => rascunhoDe(config, t));
@@ -185,7 +189,12 @@ export function MessageForm({
       setErro(problema);
       return;
     }
-    const parsed = messageConfigSchema.safeParse(configDoRascunho(novo));
+    // A conexão não mora no rascunho: vem da config viva (o "Substituir em
+    // todos os blocos" a troca por fora do formulário).
+    const parsed = messageConfigSchema.safeParse({
+      ...(config.channel_session_id ? { channel_session_id: config.channel_session_id } : {}),
+      ...(configDoRascunho(novo) as Record<string, unknown>),
+    });
     if (!parsed.success) {
       setErro(t("Configuração inválida."));
       return;
@@ -214,6 +223,15 @@ export function MessageForm({
 
   return (
     <div className="space-y-4" data-testid="message-form">
+      <CampoDaConexao
+        prefixo="mensagem"
+        valor={config.channel_session_id}
+        onChange={(conexao) => {
+          const { channel_session_id: _antes, ...resto } = config;
+          onChange(conexao ? { ...resto, channel_session_id: conexao } : resto);
+        }}
+        {...(substituirConexao ? { substituir: substituirConexao } : {})}
+      />
       <Campo id="mensagem-texto" rotulo={t("Mensagem")}>
         <Textarea
           id="mensagem-texto"

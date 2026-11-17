@@ -23,6 +23,7 @@ import {
 } from "./schemas";
 import { VIA_ACAO_EM_MASSA } from "./chaves";
 import { inboundContaComoResposta } from "./conversa";
+import type { CanalSocial } from "./conversa-do-direct";
 import { flowGraphSchema } from "@/lib/followup/graph-schema";
 import { ENTIDADE_DO_EVENTO_COMENTARIO, EVENTO_COMENTARIO_RECEBIDO } from "./canal-de-comentarios";
 
@@ -57,6 +58,12 @@ export interface FatoDeMensagem extends ComumDoFato {
   primeira_da_conversa?: boolean;
   /** Preenchido pelo handler quando um gatilho pede "não disparar com humano no comando". */
   humano_no_comando?: boolean;
+  /**
+   * Preenchido pelo handler quando a conversa é de rede social (Messenger,
+   * Direct): a execução conversa por ELA, não pelo WhatsApp do contato
+   * (`escopoDaConversaSocial`). Ausente = WhatsApp, a regra de sempre.
+   */
+  canal_social?: CanalSocial;
 }
 
 export interface FatoDeTag extends ComumDoFato {
@@ -497,6 +504,7 @@ export function varsDoGatilho(fato: FatoDeGatilho, eventId: string): Record<stri
         conversation_id: fato.conversation_id,
         channel_session_id: fato.channel_session_id,
         texto: fato.texto.slice(0, 280),
+        ...(fato.canal_social ? { canal_social: fato.canal_social } : {}),
       });
     case "tag_added":
       return comLead(fato.lead_id, {

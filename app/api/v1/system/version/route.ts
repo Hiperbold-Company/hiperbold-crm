@@ -144,9 +144,17 @@ export async function GET(_req: NextRequest): Promise<Response> {
   const semAgente = !version?.agent_last_seen_at;
   const versaoDaImagem = process.env.APP_VERSION?.trim() ?? "";
   const versaoExibida = semAgente && !running && versaoDaImagem ? versaoDaImagem : running;
+  // SHA curto do commit da imagem (APP_COMMIT): vai ao tooltip do rodapé.
+  const commit = process.env.APP_COMMIT?.trim() || null;
 
   if (!user.is_platform_admin) {
-    return ok({ current_version: versaoExibida, is_owner: false, identity, sem_agente: semAgente });
+    return ok({
+      current_version: versaoExibida,
+      commit,
+      is_owner: false,
+      identity,
+      sem_agente: semAgente,
+    });
   }
 
   const latest = version?.latest_version ?? "";
@@ -177,6 +185,7 @@ export async function GET(_req: NextRequest): Promise<Response> {
 
   return ok({
     current_version: versaoExibida,
+    commit,
     sem_agente: semAgente,
     identity,
     runtime_services: observation.success ? observation.data.services : null,

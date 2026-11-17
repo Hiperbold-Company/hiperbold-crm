@@ -39,7 +39,7 @@ import {
   wabaDoToken,
 } from "@/lib/channels/meta/cadastro-incorporado/meta";
 import { conectarCanalOficial, respostaDaFalhaDaConexaoOficial } from "@/lib/channels/meta/conectar-canal-oficial";
-import { lerEstadoDoNumero } from "@/lib/channels/meta/registro-do-numero";
+import { lerEstadoDoNumero, sincronizarContatosDoApp } from "@/lib/channels/meta/registro-do-numero";
 import { VERSAO_DA_GRAPH_SOCIAL } from "@/lib/channels/meta-social/constantes";
 import { traduzirLimiteDoPlano } from "@/lib/cobranca/limites";
 import { env } from "@/lib/env";
@@ -274,6 +274,30 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     precisaRegistrar = null;
   }
 
+  // Coexistência: a Meta exige a sincronização dos contatos do app depois do cadastro. Best effort:
+  // falha não desfaz a conexão nem muda o status; só vai ao log (nunca o token).
+  let sincronizacaoDoApp: boolean | null = null;
+  if (evento === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
+    try {
+      const sync = await sincronizarContatosDoApp({ phoneNumberId: phone_number_id, token });
+      sincronizacaoDoApp = sync.ok;
+      if (!sync.ok) {
+        logger.warn("[cadastro-incorporado] sincronização dos contatos do app recusada", {
+          request_id: requestId,
+          organization_id: orgId,
+          motivo: sync.motivo,
+        });
+      }
+    } catch (err) {
+      sincronizacaoDoApp = false;
+      logger.warn("[cadastro-incorporado] sincronização dos contatos do app falhou", {
+        request_id: requestId,
+        organization_id: orgId,
+        erro: err instanceof Error ? err.name : "desconhecido",
+      });
+    }
+  }
+
   return ok(
     {
       connected: true,
@@ -282,6 +306,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       /** `registrado: false` NÃO desfaz a conexão: o canal envia; falta a entrega. */
       webhookRegistro: conexao.webhookRegistro,
       precisaRegistrar,
+      /** Só na coexistência: `true` = a Meta aceitou, `false` = recusou; `null` = não se aplica. */
+      sincronizacaoDoApp,
     },
     { requestId, headers: NO_STORE },
   );

@@ -917,6 +917,13 @@ function fraseDaRequisicao(d: Record<string, unknown>): string {
   return `${chamada}${resposta}${guardou}${faltou}`;
 }
 
+/** O canal social do bloco de conversa (`detalhe.canal`), nas duas preposições do histórico. */
+const CANAIS_DA_CONVERSA: Record<string, { no: string; pelo: string }> = {
+  direct: { no: "no Direct", pelo: "pelo Direct" },
+  messenger: { no: "no Messenger", pelo: "pelo Messenger" },
+  rede_social: { no: "na rede social", pelo: "pela rede social" },
+};
+
 /** O que cada ação do bloco fez, numa linha ("Adicionar tags: ok; Criar negócio: criado"). */
 function detalhesDoEfeito(p: Record<string, unknown>): string | null {
   const lista = Array.isArray(p.detalhes) ? (p.detalhes as Array<Record<string, unknown>>) : [];
@@ -928,8 +935,10 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
       const envio = texto(d.envio);
       if (envio) {
         const nomeDoEnvio = ENVIOS_DA_CONVERSA[envio as keyof typeof ENVIOS_DA_CONVERSA] ?? envio;
-        // Direct (execução que começou por comentário): diz por onde saiu e por onde veio.
-        const direct = texto(d.canal) === "direct";
+        // Rede social (Direct do comentário, Messenger ou Direct da mensagem
+        // recebida): diz por onde saiu e por onde veio. WhatsApp não leva canal.
+        const rotuloDoCanal = texto(d.canal) ?? "";
+        const social = Object.hasOwn(CANAIS_DA_CONVERSA, rotuloDoCanal) ? CANAIS_DA_CONVERSA[rotuloDoCanal] : undefined;
         if (d.ok === false) return `${nomeDoEnvio}: ${fraseDoErro(texto(d.erro) ?? undefined)}`;
         if (envio === "resposta") {
           const escolha = texto(d.opcao_rotulo)
@@ -937,10 +946,10 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
             : texto(d.opcao_id)
               ? "escolheu uma opção"
               : "registrada";
-          if (direct) return escolha === "registrada" ? "Respondeu no Direct" : `Respondeu no Direct: ${escolha}`;
+          if (social) return escolha === "registrada" ? `Respondeu ${social.no}` : `Respondeu ${social.no}: ${escolha}`;
           return `${nomeDoEnvio}: ${escolha}`;
         }
-        return `${nomeDoEnvio}: ${direct ? "enviada pelo Direct" : "enviada"}`;
+        return `${nomeDoEnvio}: ${social ? `enviada ${social.pelo}` : "enviada"}`;
       }
       // Blocos do Instagram: o desfecho numa frase (nunca o texto do comentário).
       if (tipo && Object.hasOwn(DESFECHOS_DO_INSTAGRAM, tipo)) {

@@ -36,6 +36,7 @@ import { ApiError } from "@/lib/api/types";
 import type { Actor } from "@/lib/api/handlers/types";
 import { MENSAGEM_DE_FALHA_INTERNA } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { transportaMensagem } from "@/lib/channels/capabilities";
 import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { logger } from "@/lib/logger";
@@ -711,13 +712,23 @@ export async function publicarFluxo(
   // `algumCanalExigeModeloForaDaJanela` — inclusive o #3109, canal social que fecha a janela sem catálogo.
   const { data: conexoes, error: conexoesErr } = await admin
     .from("channel_sessions")
-    .select("provider")
+    .select("id, provider")
     .eq("organization_id", orgId)
     .is("archived_at", null);
   if (conexoesErr) throw falhaInterna(deps, conexoesErr);
   const exigeModeloForaDaJanela = algumCanalExigeModeloForaDaJanela(
     (conexoes ?? []).map((c) => c.provider as string | null),
   );
+  // Campo "Conexão" de Mensagem/Pergunta: só conexão DESTA organização, não
+  // arquivada, que transporta mensagem (a mesma leitura, sem outra ida ao banco).
+  if (automacao) {
+    automacao = {
+      ...automacao,
+      conexoesDeMensagem: new Set(
+        (conexoes ?? []).filter((c) => transportaMensagem(c.provider as string | null)).map((c) => String(c.id)),
+      ),
+    };
+  }
   // O gatilho entra só pelos AVISOS (`avisosDoGatilho`): nenhuma recusa depende dele, e um `trigger_config`
   // que não parseia não pode travar a publicação de um grafo válido — vira ausência, "nada a avisar".
   const gatilho = triggerConfigSchema.safeParse(pointer.trigger_config);

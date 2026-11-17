@@ -141,6 +141,7 @@ const TIPO_PELO_CAMPO: Record<string, TipoDeReferencia> = {
   usuario_id: "pessoa",
   capture_source_ids: "fonte",
   channel_session_ids: "canal",
+  channel_session_id: "canal",
   secret_id: "segredo",
   pointer_id: "automacao",
   from_pointer_ids: "automacao",

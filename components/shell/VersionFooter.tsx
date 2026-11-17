@@ -29,6 +29,9 @@ export function VersionFooter({
   const titulo = label
     ? `${t("Versão")} ${label}${personalizada ? ` · ${t("Personalizada")}` : ""}`
     : t("Versão ainda não confirmada");
+  // O SHA do commit fica no tooltip: o texto mostra só x.y.z.
+  const commit = data.commit?.trim();
+  const dica = commit ? `${titulo} · commit ${commit}` : titulo;
   // Só acende quando existe versão nova de verdade. `off_release` sozinho não
   // conta: uma instalação de desenvolvimento sem versão publicada mais nova
   // ficava com o ponto pulsando pra sempre, e o texto "Nova versão · " com o
@@ -38,7 +41,7 @@ export function VersionFooter({
   const instalada = (
     <p
       className={cn("px-3 py-1 text-[11px] text-muted-foreground", collapsed && "px-0 text-center")}
-      title={titulo}
+      title={dica}
     >
       {collapsed && label ? label.split(".").slice(0, 2).join(".") : titulo}
       {data.identity && data.identity.status !== "confirmed" && !data.sem_agente && (
