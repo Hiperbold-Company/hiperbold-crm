@@ -59,10 +59,7 @@ test.describe.configure({ timeout: 150_000 });
 /** Literal de `app/app/ai/skills/_client.tsx` — copiado do código, não de memória. */
 const AVISO_PT =
   "Há uma versão nova desta skill no catálogo. Se você editou esta cópia, suas alterações ficam só no Histórico de versões: ao adotar, a versão nova do catálogo passa a ser a ativa. Confira antes de adotar.";
-const AVISO_ES =
-  "Hay una versión nueva de esta skill en el catálogo. Si editaste esta copia, tus cambios quedan solo en el Historial de versiones: al adoptarla, la versión nueva del catálogo pasa a ser la activa. Revisa antes de adoptar.";
 const TITULO_PT = "Se você adotar a versão do catálogo, muda:";
-const TITULO_ES = "Si adoptas la versión del catálogo, cambia:";
 
 /** O par de versões que o seed garante — o comparativo da tela é disto. */
 const DESCRICAO_ANTIGA = "Atende o cliente pelo WhatsApp e fecha o agendamento.";
@@ -125,16 +122,6 @@ function cartao(page: import("@playwright/test").Page, nome: string) {
   return page.locator("li").filter({ hasText: nome });
 }
 
-/** Mecanismo de troca de idioma das specs irmãs: pela TELA, esperando o reload. */
-async function trocarParaEspanhol(page: import("@playwright/test").Page): Promise<void> {
-  await page.keyboard.press("Escape");
-  await page.getByTestId("seletor-de-idioma").click();
-  const reload = page.waitForEvent("load");
-  await page.getByTestId("idioma-es").click();
-  await reload;
-  await expect(page.getByTestId("seletor-de-idioma")).toHaveText("ES");
-}
-
 // Devolve o cenário E o idioma do `manager` mesmo quando o caso reprova no meio:
 // a troca para espanhol fica gravada no usuário compartilhado, e as specs
 // seguintes com o `manager` a herdariam. O seed é quem devolve (ver o cabeçalho
@@ -143,7 +130,7 @@ test.afterAll(() => {
   semear();
 });
 
-test("o painel de Skills avisa da versão nova do catálogo em pt-BR e em es, e o aviso some ao adotar", async ({
+test("o painel de Skills avisa da versão nova do catálogo em pt-BR, e o aviso some ao adotar", async ({
   page,
 }) => {
   const creds = semear();
@@ -178,31 +165,17 @@ test("o painel de Skills avisa da versão nova do catálogo em pt-BR e em es, e 
   await expect(cartaoDaSkill.getByText(/Procedimento \(corpo\):\s*\+2\s*−\s*1/)).toBeVisible();
   await expect(cartaoDaSkill.getByText("• Descrição")).toBeVisible();
 
-  // ═══ es — o MESMO alvo, com os textos em espanhol ═══
-  await trocarParaEspanhol(page);
-
-  await expect(cartaoDaSkill.getByText(AVISO_ES, { exact: true })).toBeVisible();
-  await expect(cartaoDaSkill.getByText(TITULO_ES, { exact: true })).toBeVisible();
-  await expect(cartaoDaSkill.getByText("Palabras clave de activación")).toBeVisible();
-  // Os +/- e o placar são DADO (palavras-chave e contagem), não texto de
-  // interface: os mesmos literais nos dois idiomas.
-  await expect(cartaoDaSkill.getByText("+reatendimento, lista de espera")).toBeVisible();
-  await expect(cartaoDaSkill.getByText("−legado")).toBeVisible();
-  await expect(cartaoDaSkill.getByText(/Procedimiento \(cuerpo\):\s*\+2\s*−\s*1/)).toBeVisible();
-  await expect(cartaoDaSkill.getByText("• Descripción")).toBeVisible();
-
   // ═══ adotar — e o aviso SOME no banco, não só no cache do cliente ═══
-  await cartaoDaSkill.getByRole("button", { name: "Adoptar versión nueva" }).click();
-  await expect(cartaoDaSkill.getByText(AVISO_ES, { exact: true })).toHaveCount(0, { timeout: 20_000 });
+  await cartaoDaSkill.getByRole("button", { name: "Adotar versão nova" }).click();
+  await expect(cartaoDaSkill.getByText(AVISO_PT, { exact: true })).toHaveCount(0, { timeout: 20_000 });
 
   // Recarrega do servidor: o ponteiro da organização foi para a cópia forkada da
   // versão ATUAL de plataforma, então o aviso não volta nem no primeiro paint.
   await page.reload();
-  await expect(page.getByTestId("seletor-de-idioma")).toHaveText("ES");
   const depoisDeAdotar = cartao(page, skill.nome);
   await expect(depoisDeAdotar, "adotar desinstalou a skill").toBeVisible({ timeout: 20_000 });
-  await expect(depoisDeAdotar.getByText(AVISO_ES, { exact: true })).toHaveCount(0);
-  await expect(depoisDeAdotar.getByText(TITULO_ES, { exact: true })).toHaveCount(0);
+  await expect(depoisDeAdotar.getByText(AVISO_PT, { exact: true })).toHaveCount(0);
+  await expect(depoisDeAdotar.getByText(TITULO_PT, { exact: true })).toHaveCount(0);
   // E o que ficou ativo é a versão nova do catálogo — descrição inclusive.
   await expect(depoisDeAdotar.getByText(skill.descricao_plataforma, { exact: true })).toBeVisible();
 });

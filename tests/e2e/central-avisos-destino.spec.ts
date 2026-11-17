@@ -3,7 +3,6 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { test, expect, type Page, type TestInfo } from "./helpers/test";
 import { credenciaisSupabaseDeTeste } from "../../scripts/lib/env-de-teste";
-import { trocarIdiomaPelaTela } from "./helpers/idioma";
 const credentials = credenciaisSupabaseDeTeste();
 const db = createClient(credentials.url, credentials.serviceRole, { auth: { persistSession: false } });
 const password = `Local-${randomUUID()}!`;
@@ -132,10 +131,6 @@ test("agent abre contexto, volta ainda aberto, resolve e reabre; RLS e menu ocul
     await expect(row(page, `${prefix} própria`).getByRole("link")).toBeVisible();
     for (const suffix of ["sem responsável", "outro atendente", "outra organização"]) await expect(row(page, `${prefix} ${suffix}`).getByRole("link")).toHaveCount(0);
   }
-  // Pela tela: o idioma viaja no cache curto da autorização (#3696), e quem invalida é o `trocarIdioma`.
-  await trocarIdiomaPelaTela(page, "es");
-  await expect(row(page, "Conversa própria").getByRole("link", { name: "Abrir conversación" })).toBeVisible();
-  await expect(row(page, "Referência removida")).toContainText("Este contexto no está disponible para ti");
   await page.setViewportSize({ width: 390, height: 844 });
   await evidence(page, info, "mobile");
 });

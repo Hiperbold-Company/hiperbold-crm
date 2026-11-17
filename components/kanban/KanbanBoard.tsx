@@ -166,7 +166,10 @@ export function KanbanBoard({
   // As linhas do cartão ("Editar cartão"): lidas do `settings` pelo schema
   // central, nunca pelo caminho do jsonb. Ausente/inválido = o padrão.
   const linhasDoCartaoDoFunil = useMemo(
-    () => linhasDoCartao((pipelineProp ?? queryResult.data?.pipeline)?.settings ?? null),
+    () => {
+      const funil = pipelineProp ?? queryResult.data?.pipeline;
+      return linhasDoCartao(funil?.settings ?? null);
+    },
     [pipelineProp, queryResult.data?.pipeline],
   );
 

@@ -141,6 +141,7 @@ test("um clique fecha os abertos da minha organização e não encosta na vizinh
 test("em espanhol, o título do aviso continua o que foi gravado (issue #603)", async ({
   page,
 }) => {
+  test.skip(true, "espanhol e inglês fora do seletor desde 17/11/2026 (em construção); religar volta este caso");
   test.setTimeout(120_000);
   const reabre = await db
     .from("agent_inbox_items")
