@@ -41,6 +41,8 @@ const ATALHOS_COM_SCOPE = new Set(["escreveComoPlatformAdmin", "podeAdministrarE
 
 /** Allowlist que SÓ ENCOLHE. Chave `arquivo#regra:alvo`; valor = porquê (≥ 20 caracteres). */
 const EXCECOES: Record<string, string> = {
+  "app/api/v1/channels/official/webhook/route.ts#A:POST":
+    "Hiperbold (lote 17/11-b): lê is_platform_admin só para ESCONDER da resposta o endereço com o webhook_path_token de quem não administra a instalação; a escrita é do tenant (requireRole + requireSupportWrite) e a flag só tira dado da saída, nunca concede efeito",
   "app/api/v1/admin/tenants/[id]/impersonate/route.ts#A:POST":
     "abrir acompanhamento é o trabalho do support_readonly: fn_support_context rebaixa scope diferente de full a support_readonly, e a rota já confere mfaEmDivida",
   "app/actions/auth/politicaDeMfa.ts#B:flag":

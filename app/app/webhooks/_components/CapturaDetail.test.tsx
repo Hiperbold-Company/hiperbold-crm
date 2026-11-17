@@ -55,6 +55,10 @@ globalThis.ResizeObserver = class {
 import { updatePipelineConfig } from "@/app/actions/settings/updatePipelineConfig";
 import { CapturaDetail } from "./CapturaDetail";
 
+/** 1015: o campo nasce na organização, pela rota `/api/v1/custom-fields`. */
+const fetchDoCampo = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ data: {} }), { status: 201 }));
+const corpoDoPost = (i = 0) => JSON.parse(String(fetchDoCampo.mock.calls[i]?.[1]?.body ?? "{}")) as Record<string, unknown>;
+
 function captura(fields: Record<string, unknown>): LeadCaptureRow {
   return {
     id: "c1",
@@ -86,6 +90,8 @@ function abrir(c: LeadCaptureRow) {
 
 beforeEach(() => {
   vi.mocked(updatePipelineConfig).mockClear();
+  fetchDoCampo.mockClear();
+  vi.stubGlobal("fetch", fetchDoCampo);
   estado.fontes = [{ id: FONTE, default_pipeline_id: FUNIL }];
   estado.funis = [
     {
@@ -127,13 +133,11 @@ describe("campo novo", () => {
     fireEvent.click(screen.getByText("Cadastrar como campo do lead"));
     fireEvent.change(screen.getByLabelText("Rótulo"), { target: { value: "Cidade" } });
     fireEvent.click(screen.getByText("Salvar"));
-    await waitFor(() => expect(updatePipelineConfig).toHaveBeenCalledTimes(1));
-    expect(updatePipelineConfig).toHaveBeenCalledWith(FUNIL, {
-      fields: [
-        { key: "servico", label: "Serviço que precisa", type: "select" },
-        { key: "cidade", label: "Cidade", type: "text" },
-      ],
-    });
+    await waitFor(() => expect(fetchDoCampo).toHaveBeenCalledTimes(1));
+    expect(fetchDoCampo.mock.calls[0]?.[0]).toBe("/api/v1/custom-fields");
+    expect(corpoDoPost()).toEqual({ entidade: "negocio", key: "cidade", label: "Cidade", type: "text" });
+    // `fields` do funil não é mais regravado daqui.
+    expect(updatePipelineConfig).not.toHaveBeenCalled();
   });
 
   it("parte da leitura FRESCA: o campo que outro admin acabou de cadastrar não some", async () => {
@@ -151,9 +155,8 @@ describe("campo novo", () => {
     abrir(captura({ cidade: "Goiânia" }));
     fireEvent.click(screen.getByText("Cadastrar como campo do lead"));
     fireEvent.click(screen.getByText("Salvar"));
-    await waitFor(() => expect(updatePipelineConfig).toHaveBeenCalledTimes(1));
-    const fields = vi.mocked(updatePipelineConfig).mock.calls[0]?.[1].fields ?? [];
-    expect(fields.map((f) => f.key)).toEqual(["servico", "orcamento", "cidade"]);
+    await waitFor(() => expect(fetchDoCampo).toHaveBeenCalledTimes(1));
+    expect(corpoDoPost().key).toBe("cidade");
   });
 
   it("rótulo vazio não grava nada", async () => {
@@ -163,6 +166,7 @@ describe("campo novo", () => {
     fireEvent.click(screen.getByText("Salvar"));
     await new Promise((r) => setTimeout(r, 20));
     expect(updatePipelineConfig).not.toHaveBeenCalled();
+    expect(fetchDoCampo).not.toHaveBeenCalled();
   });
 });
 

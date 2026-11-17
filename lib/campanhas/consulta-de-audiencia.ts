@@ -14,6 +14,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CAMPANHAS_VIVAS, limiteDeSilencio, usaNegocio, type FiltroDeAudiencia } from "./audiencia";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { recortarValores } from "@/lib/campos/recorte-por-papel";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { recusouMarketing, type CandidatoDaAudiencia } from "./elegibilidade";
 import { camposUsadosNoTexto, type CamposPersonalizados } from "./renderizador";
@@ -294,6 +296,9 @@ export async function buscarCandidatos(
   const leads = camposDoTexto.lead
     ? await leadsMaisRecentes(admin, organizationId, linhas.map((l) => l.id))
     : null;
+  // 1015: o texto da campanha sai ao cliente — campo não público nunca vira variável.
+  const recortar =
+    camposDoTexto.lead || camposDoTexto.contato ? await recorteDaCampanha(admin, organizationId) : semRecorte;
 
   return {
     candidatos: linhas.map((l) => ({
@@ -304,8 +309,8 @@ export async function buscarCandidatos(
       pessoal: l.is_personal === true,
       anonimizado: l.is_anonymized,
       recusouMarketing: recusouMarketing(l.consent),
-      ...(camposDoTexto.contato ? { contato: mapaDeJson(l.custom_fields) } : {}),
-      ...(leads ? { lead: leads.get(l.id) ?? null } : {}),
+      ...(camposDoTexto.contato ? { contato: recortar(mapaDeJson(l.custom_fields)) } : {}),
+      ...(leads ? { lead: recortar(leads.get(l.id) ?? null) } : {}),
     })),
     truncado,
   };
@@ -324,6 +329,7 @@ export async function camposDoDestinatario(
   const doTexto = camposUsadosNoTexto(entrada.corpo);
   const campos = { ...doTexto, lead: doTexto.lead || entrada.lerCamposDoNegocio === true };
   if (!campos.lead && !campos.contato) return {};
+  const recortar = await recorteDaCampanha(admin, entrada.organizationId);
   const saida: { lead?: CamposPersonalizados | null; contato?: CamposPersonalizados | null } = {};
   if (campos.contato) {
     const { data, error } = await admin
@@ -333,11 +339,11 @@ export async function camposDoDestinatario(
       .eq("id", entrada.contactId)
       .maybeSingle();
     if (error) throw new Error(`audiência: campos do contato — ${error.message}`);
-    saida.contato = mapaDeJson((data as { custom_fields?: unknown } | null)?.custom_fields);
+    saida.contato = recortar(mapaDeJson((data as { custom_fields?: unknown } | null)?.custom_fields));
   }
   if (campos.lead) {
     const leads = await leadsMaisRecentes(admin, entrada.organizationId, [entrada.contactId]);
-    saida.lead = leads.get(entrada.contactId) ?? null;
+    saida.lead = recortar(leads.get(entrada.contactId) ?? null);
   }
   return saida;
 }
@@ -409,6 +415,21 @@ async function leadsMaisRecentes(
     mapa.set(linha.contact_id, mapaDeJson(linha.custom_fields));
   }
   return mapa;
+}
+
+type Recorte = (campos: CamposPersonalizados | null) => CamposPersonalizados | null;
+const semRecorte: Recorte = (campos) => campos;
+
+/**
+ * 1015: tira dos campos personalizados os NÃO PÚBLICOS da organização antes de virarem texto ou
+ * variável de modelo da campanha. Sem conseguir ler quais são, tira TODOS (falha fechada): o
+ * destinatário cuja mensagem dependia de um campo sai da lista como variável ausente.
+ */
+async function recorteDaCampanha(admin: SupabaseClient, organizationId: string): Promise<Recorte> {
+  const lidas = await chavesRestritasDaOrganizacao(admin, organizationId);
+  if (!lidas.ok) return (campos) => (campos === null ? null : {});
+  if (lidas.chaves.size === 0) return semRecorte;
+  return (campos) => (campos === null ? null : recortarValores(campos, lidas.chaves, "automacao"));
 }
 
 /** Lê `custom_fields` sem confiar no shape — é jsonb livre. */

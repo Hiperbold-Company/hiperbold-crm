@@ -24,9 +24,14 @@ const operationRowSchema = z.object({
 
 const appliedSchema = z.object({ applied_now: z.boolean() });
 
+/** Os estados de `modulos_instalados.estado` (CHECK da migration 1016). `desligado` é a escolha de
+ * quem administra a instalação: telas e rotas somem, as tabelas e as linhas ficam. */
+export const ESTADOS_DO_MODULO = ["ativo", "suspenso", "desligado"] as const;
+export type EstadoDoModulo = (typeof ESTADOS_DO_MODULO)[number];
+
 export interface ModuloInstaladoView {
   modulo: string;
-  estado: "ativo" | "suspenso";
+  estado: EstadoDoModulo;
   instalado_em: string;
   reaplicado_em: string | null;
   motivo_suspensao: string | null;
@@ -43,7 +48,9 @@ export interface ModuloInstalarResultado {
  * também levanta. */
 function dbFailure(error: { code?: string; message?: string } | null): void {
   if (!error) return;
-  const known = error.code === "P0001" && error.message ? SQL_ERRORS[error.message] : undefined;
+  // PT428 é o errcode próprio de "religar pede atualização antes" (migration 1016).
+  const known =
+    (error.code === "P0001" || error.code === "PT428") && error.message ? SQL_ERRORS[error.message] : undefined;
   if (known && error.message) {
     throw new ExtensionServiceError(error.message, known.message, known.status);
   }
@@ -108,6 +115,64 @@ export async function instalarModulo(
       resourceType: "modulos_instalados",
       resourceId: receipt.id,
       metadata: { modulo, operation_id: receipt.id },
+    });
+  }
+
+  return { operationId: receipt.id, appliedNow: applied };
+}
+
+export interface ModuloEstadoResultado {
+  operationId: string;
+  appliedNow: boolean;
+}
+
+/**
+ * Desliga (`ligar = false`) ou religa (`ligar = true`) um módulo de tabela NA INSTÂNCIA.
+ *
+ * Tirar é LÓGICO (doutrina de extensões): `fn_modulo_definir_estado` só troca
+ * `modulos_instalados.estado` entre `ativo` e `desligado` — não roda a provisionadora, não apaga
+ * tabela nem linha. Desligado, `moduloLigado` devolve `false` e as telas, rotas, a navegação e as
+ * tools MCP do módulo somem; religado, voltam com os mesmos dados.
+ *
+ * `estadoVisto` é o estado que a tela mostrou: a troca só vale sobre ele (concorrência otimista),
+ * e a chave de operação faz o pedido repetido devolver o mesmo recibo sem reexecutar.
+ */
+export async function definirEstadoDoModulo(
+  actorId: string,
+  operationId: string,
+  modulo: string,
+  ligar: boolean,
+  estadoVisto: EstadoDoModulo,
+): Promise<ModuloEstadoResultado> {
+  if (!moduloDoCatalogo(modulo)) {
+    throw new ExtensionServiceError(
+      "extension_module_unknown",
+      SQL_ERRORS.extension_module_unknown!.message,
+      SQL_ERRORS.extension_module_unknown!.status,
+    );
+  }
+
+  const admin = createAdminClient();
+  const resultado = await admin.rpc("fn_modulo_definir_estado", {
+    p_actor: actorId,
+    p_operation: operationId,
+    p_modulo: modulo,
+    p_ligar: ligar,
+    p_estado_visto: estadoVisto,
+  });
+  dbFailure(resultado.error);
+
+  const receipt = operationRowSchema.parse(resultado.data);
+  const applied = appliedSchema.parse(resultado.data).applied_now;
+
+  if (applied) {
+    await audit({
+      action: ligar ? "modulo.religado" : "modulo.desligado",
+      actorUserId: actorId,
+      actingAsPlatformAdmin: true,
+      resourceType: "modulos_instalados",
+      resourceId: receipt.id,
+      metadata: { modulo, operation_id: receipt.id, estado_anterior: estadoVisto },
     });
   }
 

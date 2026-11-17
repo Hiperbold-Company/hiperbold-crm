@@ -186,12 +186,21 @@ describe("GET /api/v1/contacts — Bearer (integrações externas)", () => {
 
     /** O cliente admin do token, que responde só o que `exigirVisibilidadeDoToken` lê da organização. */
     function adminComModo(modo: string): void {
+      // 1015: o filtro por campo lê as chaves restritas (definições e funis) — nenhuma aqui.
+      const vazio = { data: [], error: null };
+      const lista: Record<string, unknown> = {
+        eq: () => lista,
+        then: (ok: (v: typeof vazio) => unknown) => Promise.resolve(vazio).then(ok),
+      };
       vi.mocked(createAdminClient).mockReturnValue({
-        from: () => ({
-          select: () => ({
-            eq: () => ({ maybeSingle: async () => ({ data: { settings: { visibility_mode: modo } }, error: null }) }),
-          }),
-        }),
+        from: (tabela: string) =>
+          tabela === "custom_field_definitions" || tabela === "crm_pipelines"
+            ? { select: () => lista }
+            : {
+                select: () => ({
+                  eq: () => ({ maybeSingle: async () => ({ data: { settings: { visibility_mode: modo } }, error: null }) }),
+                }),
+              },
       } as never);
     }
 
@@ -283,5 +292,65 @@ describe("GET /api/v1/contacts — alcançável sem cookie (proxy)", () => {
   it("NÃO libera sub-rotas que ainda não suportam Bearer", () => {
     expect(isPublicPath("/api/v1/contacts/algum-id")).toBe(false);
     expect(isPublicPath("/api/v1/contacts/import")).toBe(false);
+  });
+});
+
+describe("GET /api/v1/contacts — recorte do campo não público (1015)", () => {
+  function sessaoCom(role: "viewer" | "manager" | "admin"): void {
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      user: {
+        id: USER_ID,
+        email: "a@example.com",
+        full_name: null,
+        avatar_url: null,
+        is_platform_admin: false,
+        idioma: "pt-BR" as const,
+        organizations: [{ organization_id: ORG_ID, organization_name: "Org", role }],
+      },
+      org: { orgId: ORG_ID, name: "Org", role },
+    });
+    const resposta = (tabela: string) =>
+      tabela === "custom_field_definitions"
+        ? { data: [{ key: "segredo" }], error: null }
+        : { data: [{ settings: { fields: [{ key: "legado", publico: false }] } }], error: null };
+    vi.mocked(createClient).mockResolvedValue({
+      from: (tabela: string) => {
+        const b: Record<string, unknown> = {
+          select: () => b,
+          eq: () => b,
+          then: (ok: (v: unknown) => unknown) => Promise.resolve(resposta(tabela)).then(ok),
+        };
+        return b;
+      },
+    } as never);
+    vi.mocked(listContactsHandler).mockResolvedValue({
+      contacts: [{ id: "c1", custom_fields: { segredo: "X", legado: "Y", pub: "ok" } }] as never,
+      cursor: null,
+      has_more: false,
+    });
+  }
+
+  it("quem não é admin não recebe o valor restrito na lista", async () => {
+    for (const role of ["viewer", "manager"] as const) {
+      sessaoCom(role);
+      const { GET } = await import("./route");
+      const body = (await (await GET(req())).json()) as { data: Array<{ custom_fields: unknown }> };
+      expect(body.data[0]?.custom_fields).toEqual({ pub: "ok" });
+    }
+  });
+
+  it("administrador recebe tudo", async () => {
+    sessaoCom("admin");
+    const { GET } = await import("./route");
+    const body = (await (await GET(req())).json()) as { data: Array<{ custom_fields: unknown }> };
+    expect(body.data[0]?.custom_fields).toEqual({ segredo: "X", legado: "Y", pub: "ok" });
+  });
+
+  it("quem não é admin leva 403 ao filtrar por campo restrito", async () => {
+    sessaoCom("manager");
+    const { GET } = await import("./route");
+    const res = await GET(req("http://localhost/api/v1/contacts?campo_escopo=contato&campo=legado&campo_valor=x"));
+    expect(res.status).toBe(403);
   });
 });

@@ -98,6 +98,7 @@ export const MOTIVOS_DECLARADOS: ReadonlyMap<string, string> = new Map([
   ["conta_viva_em_outra_organizacao", "lib/channels/meta-social/store.ts"],
   ["linha_arquivada_da_propria_organizacao", "lib/channels/meta-social/store.ts"],
   ["exclusao_pedida_pela_meta", "lib/channels/meta-social/exclusao.ts"],
+  ["numero_da_propria_organizacao_vivo_ou_arquivado", "lib/channels/meta/conectar-canal-oficial.ts"],
 ]);
 
 /**

@@ -55,6 +55,18 @@ export interface FatosDaAutomacao {
    * nos demais passos e nos montadores que não a carregam.
    */
   janela?: JanelaDaConversa;
+  /**
+   * 1015: as chaves (minúsculas) dos campos NÃO PÚBLICOS da organização, que o texto renderizado
+   * (que pode sair ao cliente) nunca preenche. `"todas"` = não deu para ler quais são: nenhum campo
+   * personalizado vira texto. As CONDIÇÕES continuam lendo `custom_fields` inteiro. Quem carrega os
+   * fatos do banco sempre preenche; ausente só em fatos montados à mão sem campo restrito.
+   */
+  camposRestritos?: string[] | "todas";
+}
+
+/** Os fatos têm algum valor de campo personalizado (contato ou negócio da execução)? */
+export function fatosTemCamposPersonalizados(f: Pick<FatosDaAutomacao, "contato" | "negocio">): boolean {
+  return [f.contato?.custom_fields, f.negocio?.custom_fields].some((c) => !!c && Object.keys(c).length > 0);
 }
 
 /** O id do negócio que a execução carrega (o gatilho trouxe, ou um bloco criou/moveu). */

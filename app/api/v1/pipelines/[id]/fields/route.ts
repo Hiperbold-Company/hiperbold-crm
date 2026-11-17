@@ -28,6 +28,7 @@ import {
   novoCampoSchema,
   type DepsDosCampos,
 } from "@/lib/pipelines/campos-do-funil";
+import { papelDoAtorOuPiso } from "@/lib/campos/recorte-por-papel";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,8 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     organizationId: authz.organizationId,
     actor: authz.actor,
     requestId,
+    // O papel viaja no ator (D-148); sem ele, o piso que a porta acabou de conferir.
+    papel: papelDoAtorOuPiso(authz.actor, "manager"),
   };
   try {
     return ok(await listarCamposDoFunil(deps, pipelineId), { requestId });
@@ -97,6 +100,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     organizationId: authz.organizationId,
     actor: authz.actor,
     requestId,
+    // O papel viaja no ator (D-148); sem ele, o piso que a porta acabou de conferir.
+    papel: papelDoAtorOuPiso(authz.actor, "admin"),
   };
   try {
     return await criarComChaveOpcional(req, authz, {

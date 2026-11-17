@@ -24,7 +24,7 @@ vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undef
 vi.mock("@/lib/clipboard", () => ({ copyToClipboard: async () => undefined }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 // O cartão da conexão oficial pergunta a permissão para mostrar "Remover conexão".
-vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermissionSeHouverSessao: () => true }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true, usePermissionSeHouverSessao: () => true }));
 
 import { CanalOficialClient } from "@/components/connections/CanalOficialClient";
 
@@ -321,13 +321,14 @@ describe("Conectar com a Meta", () => {
     await waitFor(() => expect(chamadasDoInicio()).toBe(2));
   });
 
-  it("já conectado: o rótulo vira Trocar e o aviso de substituição aparece", async () => {
+  it("já conectado: cada número é uma conexão nova, sem Trocar nem aviso de substituição", async () => {
+    // Várias contas oficiais por organização (17/11/2026): conectar outro número não substitui a atual.
     estadoDoCanal = CONECTADO as typeof NAO_CONECTADO;
     respostasDoInicio = [OFF];
     montar();
     const botao = await screen.findByTestId("btn-conectar-meta");
-    expect(botao.textContent).toBe("Trocar número pela Meta");
-    expect(screen.getByText(/substitui a atual/)).toBeTruthy();
+    expect(botao.textContent).toBe("Conectar com a Meta");
+    expect(screen.queryByText(/substitui a atual/)).toBeNull();
   });
 
   it("limite do plano sem canal conectado: o botão da Meta fica desabilitado como o manual", async () => {
@@ -336,5 +337,15 @@ describe("Conectar com a Meta", () => {
     const botao = (await screen.findByTestId("btn-conectar-meta")) as HTMLButtonElement;
     expect(botao.disabled).toBe(true);
     expect((screen.getByTestId("btn-conectar") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("limite do plano COM conexão oficial: o botão da Meta fica livre para reautenticar o mesmo número", async () => {
+    // O servidor reaproveita a linha do mesmo número; número novo é recusado pela rota, com a mensagem dela.
+    estadoDoCanal = CONECTADO as typeof NAO_CONECTADO;
+    respostasDoInicio = [OFF];
+    montar({ bloqueio: { desabilitado: true, motivo: "Limite atingido." } as never });
+    const botao = (await screen.findByTestId("btn-conectar-meta")) as HTMLButtonElement;
+    expect(botao.disabled).toBe(false);
+    expect(screen.getByTestId("cadastro-meta-so-reconectar")).toBeTruthy();
   });
 });

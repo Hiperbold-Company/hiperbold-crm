@@ -3,7 +3,6 @@
 import * as React from "react";
 import { toast } from "sonner";
 
-import { updatePipelineConfig } from "@/app/actions/settings/updatePipelineConfig";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,14 +73,22 @@ export function useCampoDoFunilDaCaptacao(webhookSourceId: string | null): Campo
         toast.error(mensagemDoMotivo(novo.motivo, t));
         return false;
       }
-      const r = await updatePipelineConfig(pipelineId, { fields: novo.fields });
-      if (!r.ok) {
-        if (r.error === "mfa_required") {
+      // 1015: o campo é da ORGANIZAÇÃO (vale para todos os funis) e se cria pela rota dos campos
+      // personalizados — `fields` do funil é projeção do banco. A régua acima (chave, rótulo, cota,
+      // repetido) continua a antecipar a recusa; quem decide é a rota.
+      const res = await fetch("/api/v1/custom-fields", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ entidade: "negocio", key: chave, label: rotulo.trim().slice(0, 80), type: tipo }),
+      });
+      if (!res.ok) {
+        const corpo = (await res.json().catch(() => null)) as { error?: { code?: string } } | null;
+        if (corpo?.error?.code === "mfa_required") {
           irAoDesafioDeMfa();
           return false;
         }
         toast.error(
-          t("Não foi possível cadastrar o campo. Só quem administra o funil pode fazer isso."),
+          t("Não foi possível cadastrar o campo. Só gerente ou administrador pode fazer isso."),
         );
         return false;
       }

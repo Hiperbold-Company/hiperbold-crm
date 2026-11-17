@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": { "title": "Mensagem agendada no chat", "subtitle": "migration 1017: agenda no compositor, envia pela mesma porta, falha volta para a Central", "output": "mensagem-agendada.html", "quality_profile": "standard" },
+  "lanes": [{ "id": "tela", "label": "Tela" }, { "id": "api", "label": "API e cron" }, { "id": "dados", "label": "Dados" }],
+  "mainPath": ["compositor", "rota", "tabela", "cron", "porta"],
+  "nodes": [
+    { "id": "compositor", "lane": "tela", "col": 0, "type": "frontend", "label": "Composer + AgendarMensagem", "sublabel": "calendário, selo, modelo quando a janela fecha" },
+    { "id": "balao", "lane": "tela", "col": 1, "type": "frontend", "label": "MensagensAgendadas", "sublabel": "balão no fim da conversa: Editar, Cancelar, motivo" },
+    { "id": "rota", "lane": "api", "col": 1, "type": "api", "label": "/api/v1/conversations/:id/scheduled-messages e /scheduled-messages/:id", "sublabel": "Zod, suporte, audit, Idempotency-Key, updated_at visto" },
+    { "id": "cron", "lane": "api", "col": 2, "type": "worker", "label": "cron mensagens-agendadas", "sublabel": "lib/mensagens-agendadas/worker.ts, a cada minuto" },
+    { "id": "porta", "lane": "api", "col": 3, "type": "api", "label": "sendMessageHandler", "sublabel": "mesma porta do compositor" },
+    { "id": "tabela", "lane": "dados", "col": 2, "type": "database", "label": "scheduled_messages", "sublabel": "fn_reservar_mensagens_agendadas, skip locked" },
+    { "id": "central", "lane": "dados", "col": 3, "type": "database", "label": "agent_inbox_items", "sublabel": "message_send_stuck, um por organização por rodada" }
+  ],
+  "edges": [
+    { "id": "agendar", "from": "compositor", "to": "rota", "label": "POST agenda" },
+    { "id": "gravar", "from": "rota", "to": "tabela", "label": "service role, org da sessão" },
+    { "id": "listar", "from": "balao", "to": "rota", "label": "GET, PATCH, DELETE" },
+    { "id": "reservar", "from": "cron", "to": "tabela", "label": "agendada para enviando" },
+    { "id": "enviar", "from": "cron", "to": "porta", "label": "texto ou modelo pela janela de 24h" },
+    { "id": "avisar", "from": "cron", "to": "central", "label": "laço de retorno: falha vira aviso" },
+    { "id": "concluir", "from": "porta", "to": "tabela", "label": "enviada com message_id, ou falhou com motivo" }
+  ]
+}

@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json,css}\"",
-    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.servidor.json && tsc --noEmit -p tsconfig.typecheck.resto.json",
     "db:migrate": "echo 'TODO: wire supabase db push or pg-migrate' && exit 0",
     "db:reset": "supabase db reset",
     "test:e2e": "playwright test",

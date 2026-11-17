@@ -45,12 +45,16 @@ async function login(page: Page): Promise<void> {
 
 /** O que a tela mostra quando alguém abre: título, vazio, erro — o que der. */
 async function radiografia(page: Page, rotulo: string): Promise<void> {
+  // Prazo curto: sem `actionTimeout` na suíte, um h1 que não existe esperava até o fim do teste.
+  // E não existir é um estado legítimo: diálogo aberto por cima (ex.: /app/settings/templates leva a
+  // Conexões e, sem conexão oficial, abre o "Criar conexão") deixa o resto da página fora da árvore
+  // de acessibilidade.
   const h1 = await page
     .getByRole("heading", { level: 1 })
     .first()
-    .textContent()
+    .textContent({ timeout: 5_000 })
     .catch(() => null);
-  const corpo = (await page.locator("main, body").first().innerText().catch(() => "")) ?? "";
+  const corpo = (await page.locator("main, body").first().innerText({ timeout: 5_000 }).catch(() => "")) ?? "";
   const botoes = await page.getByRole("button").allTextContents();
   console.info(`[QA] ${rotulo} · h1="${(h1 ?? "(sem h1)").trim()}"`);
   console.info(`[QA] ${rotulo} · botões: ${botoes.filter(Boolean).slice(0, 8).join(" | ") || "(nenhum)"}`);

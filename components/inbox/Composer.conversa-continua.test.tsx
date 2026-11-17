@@ -33,6 +33,8 @@ const { sendMutate, noteMutate, erroDoEnvio } = vi.hoisted(() => ({
   erroDoEnvio: { valor: null as unknown },
 }));
 
+// Mensagem agendada (migration 1017): o compositor agenda pelo hook próprio; aqui só o envio na hora importa.
+vi.mock("@/hooks/inbox/useMensagensAgendadas", () => ({ useAgendarMensagem: () => ({ mutate: vi.fn(), isPending: false }) }));
 vi.mock("@/hooks/inbox/useSendMessage", () => ({
   useSendMessage: () => ({
     mutate: (entrada: unknown, opcoes?: { onError?: (e: unknown) => void }) => {

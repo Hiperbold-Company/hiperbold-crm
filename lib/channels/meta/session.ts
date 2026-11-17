@@ -87,13 +87,18 @@ export async function metaSessionByWebhookToken(
  * que o operador excluiu e o botão de sincronizar continuava puxando templates
  * dela — o token do env não foi revogado junto com o da linha, então a chamada
  * ia mesmo. "Excluído" que continua operando é a promessa quebrada.
+ *
+ * `channelSessionId` (17/11/2026, várias contas oficiais por organização): escolhe
+ * a conta. Id de outra organização, de outro canal ou excluído = `null`. Sem ele,
+ * a oficial mais antiga, como antes.
  */
 export async function metaSessionForOrg(
   organizationId: string,
+  channelSessionId?: string | null,
 ): Promise<MetaSessaoDaOrg | null> {
   const admin = createAdminClient();
-  const base = () =>
-    admin
+  const base = () => {
+    const q = admin
       .from("channel_sessions")
       // `meta_phone_number_id` entra na seleção porque é a segunda metade da chave da
       // credencial (`organization_id` + ele): sem o número, quem chama não tem como
@@ -101,9 +106,11 @@ export async function metaSessionForOrg(
       // que a fatia F4 da #850 fecha.
       .select("id, organization_id, meta_waba_id, meta_phone_number_id")
       .eq("organization_id", organizationId)
-      .eq("provider", CHANNEL_PROVIDER_META)
+      .eq("provider", CHANNEL_PROVIDER_META);
+    return (channelSessionId ? q.eq("id", channelSessionId) : q)
       .order("created_at", { ascending: true })
       .limit(1);
+  };
   const { data } = await queryTolerantToMissingArchived(
     () => base().is(ARCHIVED_AT, null).maybeSingle(),
     () => base().maybeSingle(),

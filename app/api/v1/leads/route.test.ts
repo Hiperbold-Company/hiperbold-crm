@@ -338,3 +338,63 @@ describe("POST /api/v1/leads — responsável padrão do Atendente no modo 'own'
     erro.mockRestore();
   });
 });
+
+describe("POST /api/v1/leads — a resposta recorta o campo restrito (1015)", () => {
+  /** Supabase de mentira com as duas fontes das chaves restritas e a consulta do aviso. */
+  function supabaseComRestrito() {
+    const tabelas: Record<string, Array<Record<string, unknown>>> = {
+      custom_field_definitions: [{ organization_id: ORG, key: "renda", publico: false }],
+      crm_pipelines: [{ organization_id: ORG, settings: {} }],
+      crm_leads: [],
+    };
+    return {
+      from(tabela: string) {
+        const meus: Array<[string, unknown]> = [];
+        const linhas = () => (tabelas[tabela] ?? []).filter((l) => meus.every(([c, v]) => l[c] === v));
+        const q = {
+          select: () => q,
+          eq: (c: string, v: unknown) => {
+            meus.push([c, v]);
+            return q;
+          },
+          limit: () => q,
+          maybeSingle: async () => ({ data: linhas()[0] ?? null, error: null }),
+          then: (resolve: (v: unknown) => unknown) => resolve({ data: linhas(), error: null }),
+        };
+        return q;
+      },
+    } as never;
+  }
+
+  function comPapel(role: string) {
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      user: { id: USER, idioma: "pt-BR" },
+      org: { orgId: ORG, role },
+    } as never);
+  }
+
+  beforeEach(() => {
+    vi.mocked(createLeadHandler).mockResolvedValue({
+      id: "lead-novo-0000",
+      custom_fields: { renda: "R$ 20 mil", cidade: "Recife" },
+    } as never);
+    vi.mocked(createClient).mockResolvedValue(supabaseComRestrito());
+  });
+
+  it("gerente não recebe de volta o valor restrito que acabou de gravar", async () => {
+    comPapel("manager");
+    const res = await POST(req(criarBody({ contact_id: undefined })));
+    const body = await res.json();
+    expect(res.status).toBe(201);
+    expect(body.data.custom_fields).toEqual({ cidade: "Recife" });
+  });
+
+  it("admin recebe a linha inteira", async () => {
+    comPapel("admin");
+    const res = await POST(req(criarBody({ contact_id: undefined })));
+    const body = await res.json();
+    expect(res.status).toBe(201);
+    expect(body.data.custom_fields).toEqual({ renda: "R$ 20 mil", cidade: "Recife" });
+  });
+});

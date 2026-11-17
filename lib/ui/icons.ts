@@ -181,6 +181,8 @@ export {
   ChatText,
   ListMagnifyingGlass,
   ArrowsLeftRight,
+  // painel de mensagens do chat: respostas rápidas e modelos do WhatsApp
+  Quotes,
 } from "@phosphor-icons/react/dist/ssr";
 
 // Tipo dos componentes de ícone (antes importado direto de @phosphor-icons/react).

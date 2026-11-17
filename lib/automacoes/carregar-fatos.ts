@@ -6,11 +6,12 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
 
 import { anuncioDoFluxo } from "./anuncio-do-contato";
 import { conversaDoEnvio, janelaDaConversa } from "./conversa-de-whatsapp";
-import { negocioDaExecucao, type FatosDaAutomacao, type NegocioDosFatos } from "./fatos";
+import { fatosTemCamposPersonalizados, negocioDaExecucao, type FatosDaAutomacao, type NegocioDosFatos } from "./fatos";
 
 const COLUNAS_DO_NEGOCIO =
   "id, title, pipeline_id, stage_id, status, value_cents, owner_user_id, source, tags, expected_close_date, custom_fields, updated_at";
@@ -83,7 +84,7 @@ export async function carregarFatosDaAutomacao(
         opcoes.agora ?? new Date(),
       )
     : undefined;
-  return {
+  const fatos: FatosDaAutomacao = {
     contato: c
       ? {
           id: String(c.id),
@@ -101,4 +102,10 @@ export async function carregarFatosDaAutomacao(
     vars,
     ...(janela ? { janela } : {}),
   };
+  // 1015: só lê quando há valor a esconder (e falha de leitura = nenhum campo vira texto).
+  if (fatosTemCamposPersonalizados(fatos)) {
+    const lidas = await chavesRestritasDaOrganizacao(admin, orgId);
+    fatos.camposRestritos = lidas.ok ? [...lidas.chaves] : "todas";
+  }
+  return fatos;
 }

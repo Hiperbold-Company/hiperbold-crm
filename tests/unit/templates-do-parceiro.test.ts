@@ -98,8 +98,9 @@ describe("os elos que somem sem barulho", () => {
   });
 
   it("a aba existe dentro do canal do parceiro", () => {
-    // Sem porta, a tela não é alcançável — e o CI já reprova tela sem porta.
-    const fonte = readFileSync("components/connections/ConexoesShell.tsx", "utf8");
+    // Sem porta, a tela não é alcançável — e o CI já reprova tela sem porta. Desde a tela em
+    // cartões (17/11/2026) a porta é o tipo "Provedor parceiro" do Criar.
+    const fonte = readFileSync("components/connections/CriarConexao.tsx", "utf8");
     expect(fonte).toMatch(/\n\s*<TemplatesParceiroClient \/>/);
     expect(fonte).toMatch(/Modelos do parceiro/);
   });
@@ -109,7 +110,7 @@ describe("os elos que somem sem barulho", () => {
     // as variantes de idioma enquanto a tela apagaria uma (#1728). Desde a
     // #1734 o alvo resolve o id da variante por nome+idioma, então a aba usa o
     // MESMO cliente do outro parceiro, sem apagar botão.
-    const fonte = readFileSync("components/connections/ConexoesShell.tsx", "utf8");
+    const fonte = readFileSync("components/connections/CriarConexao.tsx", "utf8");
     expect(fonte).toContain('<TemplatesParceiroClient rota={rotaDeTemplates("graph")} />');
     expect(fonte, "a aba Graph ainda entrega o cliente com gerenciar desligado").not.toContain(
       "gerenciar={false}",

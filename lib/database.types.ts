@@ -18756,6 +18756,16 @@ export type Database = {
         }[];
       };
       fn_modulo_dados_compilar: { Args: { p_artifact_id: string }; Returns: Json };
+      fn_modulo_definir_estado: {
+        Args: {
+          p_actor: string;
+          p_estado_visto: string;
+          p_ligar: boolean;
+          p_modulo: string;
+          p_operation: string;
+        };
+        Returns: Json;
+      };
       fn_modulo_instalar: {
         Args: { p_actor: string; p_modulo: string; p_operation: string };
         Returns: Json;

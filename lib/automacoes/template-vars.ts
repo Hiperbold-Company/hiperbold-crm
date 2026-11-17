@@ -8,6 +8,7 @@
  * projeção do evento guardada em `vars.gatilho` quando a execução nasceu.
  * O CPF nunca sai (regra do próprio `renderTemplate`).
  */
+import { CAMPOS_RESTRITOS_NO_CONTEXTO } from "@/lib/automation/campos-do-render";
 import { renderTemplate } from "@/lib/automation/template";
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import { IDIOMA_PADRAO, type Idioma } from "@/lib/i18n/idiomas";
@@ -29,6 +30,8 @@ export function contextoDoTemplate(
 ): Record<string, unknown> {
   const vars = fatos?.vars ?? {};
   return {
+    // 1015: as chaves que o render deixa vazias (campo não público nunca vira texto).
+    ...(fatos?.camposRestritos !== undefined ? { [CAMPOS_RESTRITOS_NO_CONTEXTO]: fatos.camposRestritos } : {}),
     contact: fatos?.contato ?? null,
     lead: fatos?.negocio ?? null,
     gatilho: (vars.gatilho as Record<string, unknown> | undefined) ?? {},

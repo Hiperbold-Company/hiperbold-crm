@@ -39,6 +39,7 @@ vi.mock("@/lib/mcp/auth", async (importOriginal) => {
   return { ...real, validateBearerToken: vi.fn() };
 });
 
+import { paraCampoDoFunil } from "@/lib/campos/definicoes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const ORG_TOKEN = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -478,19 +479,82 @@ describe("POST /webhook-sources — o recibo não guarda path_token nem o segred
 // ---------------------------------------------------------------------------
 
 describe("campos personalizados do funil", () => {
+  // Desde a 1015 o campo é da ORGANIZAÇÃO (`custom_field_definitions`) e `settings.fields` é a
+  // projeção que o banco deriva dele. O banco falso deste bloco faz o papel do gatilho: guarda as
+  // definições da organização do token e devolve `fields` projetado com a regra do funil.
   const base = `/api/v1/pipelines/${FUNIL}/fields`;
   const existente = { key: "origem", label: "Origem", type: "text" };
 
-  function bancoDoFunil(fields: unknown[] = [existente]) {
-    return bancoFalso({
-      crm_pipelines: (c) =>
-        c.filtros.organization_id !== ORG_TOKEN
-          ? null
-          : c.op === "update"
-            ? [{ id: FUNIL }]
-            : { id: FUNIL, name: "Vendas", vocabulary: {}, settings: { fields }, updated_at: "2026-10-17T00:00:00Z" },
-      crm_stages: (c) => (c.op === "select" ? [{ id: ETAPA }] : null),
+  function definicao(campo: { key: string; label: string; type: string }, n: number) {
+    return {
+      id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+      organization_id: ORG_TOKEN,
+      entidade: "negocio",
+      key: campo.key,
+      label: campo.label,
+      type: campo.type,
+      descricao: null,
+      grupo: null,
+      obrigatorio: false,
+      publico: true,
+      sempre_visivel: false,
+      exibir_no_perfil: false,
+      dica_de_ajuda: null,
+      config: {},
+      position: n * 1000,
+      created_at: "2026-11-17T00:00:00Z",
+      updated_at: "2026-11-17T00:00:00Z",
+      created_by: null,
+      updated_by: null,
+    };
+  }
+
+  function bancoDoFunil(campos: Array<{ key: string; label: string; type: string }> = [existente], etapas = [{ id: ETAPA }]) {
+    const defs: Array<ReturnType<typeof definicao>> = campos.map((c, i) => definicao(c, i + 1));
+    let obrigatorios: Record<string, unknown> = {};
+    let seq = campos.length;
+    const db = bancoFalso({
+      crm_pipelines: (c) => {
+        if (c.filtros.organization_id !== ORG_TOKEN) return null;
+        if (c.op === "update") {
+          const s = (c.patch as { settings?: { campos_obrigatorios?: Record<string, unknown> } }).settings;
+          if (s?.campos_obrigatorios) obrigatorios = s.campos_obrigatorios;
+          return [{ id: FUNIL }];
+        }
+        return {
+          id: FUNIL,
+          name: "Vendas",
+          vocabulary: {},
+          settings: {
+            fields: defs.map((d) => paraCampoDoFunil(d as never, obrigatorios[d.key] as never)),
+            campos_obrigatorios: obrigatorios,
+          },
+          updated_at: "2026-10-17T00:00:00Z",
+        };
+      },
+      crm_stages: (c) => (c.op === "select" ? etapas : null),
+      custom_field_definitions: (c) => {
+        if (c.op === "insert") {
+          const linha = { ...definicao({ key: "", label: "", type: "text" }, ++seq), ...(c.patch as object) };
+          if (linha.organization_id !== ORG_TOKEN) return null;
+          defs.push(linha as ReturnType<typeof definicao>);
+          return linha;
+        }
+        if (c.filtros.organization_id !== ORG_TOKEN) return c.op === "select" ? [] : null;
+        const alvo = defs.filter((d) => c.filtros.id === undefined || d.id === c.filtros.id);
+        if (c.op === "update") {
+          for (const d of alvo) Object.assign(d, c.patch);
+          return alvo;
+        }
+        if (c.op === "delete") {
+          for (const d of alvo) defs.splice(defs.indexOf(d), 1);
+          return alvo.map((d) => ({ id: d.id }));
+        }
+        return alvo;
+      },
+      idempotency_keys: () => null,
     });
+    return Object.assign(db, { defs });
   }
 
   it("GET: manager+mcp:read lê; agent leva 403; funil de outra organização → 404", async () => {
@@ -519,7 +583,7 @@ describe("campos personalizados do funil", () => {
     expect((await POST(req(base, "POST", novo, {}, false), ctxDe({ id: FUNIL }))).status).toBe(401);
   });
 
-  it("POST acrescenta SEM apagar os campos que já existem; org do token no filtro; audit leva o token", async () => {
+  it("POST cria o campo NA ORGANIZAÇÃO do token sem apagar os que já existem; a regra fica no funil; audit leva o token", async () => {
     const db = bancoDoFunil([existente]);
     vi.mocked(createAdminClient).mockReturnValue(db as never);
     comoToken("admin", ["mcp:write"]);
@@ -527,18 +591,28 @@ describe("campos personalizados do funil", () => {
     const novo = { key: "orcamento", label: "Orçamento", type: "number", obrigatorio_em: { etapas: [ETAPA], ao_ganhar: true } };
     const res = await POST(req(base, "POST", novo), ctxDe({ id: FUNIL }));
     expect(res.status).toBe(201);
-    const escrita = db.chamadas.find((c) => c.tabela === "crm_pipelines" && c.op === "update");
-    expect(escrita?.filtros).toMatchObject({ id: FUNIL, organization_id: ORG_TOKEN });
-    expect((escrita?.patch as { settings: { fields: unknown[] } }).settings.fields).toEqual([existente, novo]);
+    expect((await res.json()).data).toMatchObject({ campo: novo, total: 2 });
+
+    const criada = db.chamadas.find((c) => c.tabela === "custom_field_definitions" && c.op === "insert");
+    expect(criada?.patch).toMatchObject({ organization_id: ORG_TOKEN, entidade: "negocio", key: "orcamento", type: "number" });
+    expect(db.defs.map((d) => d.key)).toEqual(["origem", "orcamento"]);
+    expect(db.chamadas.some((c) => c.tabela === "custom_field_definitions" && c.op === "delete")).toBe(false);
+
+    // A obrigatoriedade é DESTE funil, gravada com a organização do token no filtro.
+    const regra = db.chamadas.find((c) => c.tabela === "crm_pipelines" && c.op === "update");
+    expect(regra?.filtros).toMatchObject({ id: FUNIL, organization_id: ORG_TOKEN });
+    expect((regra?.patch as { settings: { campos_obrigatorios: unknown } }).settings.campos_obrigatorios).toEqual({
+      orcamento: { etapas: [ETAPA], ao_ganhar: true },
+    });
     // A etapa citada foi conferida contra ESTE funil e esta organização.
     const conferencia = db.chamadas.find((c) => c.tabela === "crm_stages");
     expect(conferencia?.filtros).toMatchObject({ organization_id: ORG_TOKEN, pipeline_id: FUNIL });
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: "pipeline.config_updated",
+        action: "custom_field.created",
         organizationId: ORG_TOKEN,
         actorApiTokenId: TOKEN_ID,
-        metadata: expect.objectContaining({ campo_chave: "orcamento", campo_acao: "criado" }),
+        metadata: expect.objectContaining({ key: "orcamento" }),
       }),
     );
   });
@@ -555,25 +629,20 @@ describe("campos personalizados do funil", () => {
       (await POST(req(base, "POST", { key: "porte", label: "Porte", type: "text", options: [{ value: "a", label: "A" }] }), ctxDe({ id: FUNIL }))).status,
     ).toBe(422);
     expect((await POST(req(base, "POST", { key: "x", label: "X", type: "text", organization_id: ORG_OUTRA }), ctxDe({ id: FUNIL }))).status).toBe(422);
+    expect(db.chamadas.some((c) => c.op === "insert" || c.op === "update")).toBe(false);
 
-    db = bancoFalso({
-      crm_pipelines: () => ({ id: FUNIL, name: "V", vocabulary: {}, settings: { fields: [] } }),
-      crm_stages: () => [], // a etapa não é deste funil
-    });
+    db = bancoDoFunil([], []); // a etapa não é deste funil
     vi.mocked(createAdminClient).mockReturnValue(db as never);
     const res = await POST(
       req(base, "POST", { key: "x", label: "X", type: "text", obrigatorio_em: { etapas: [ETAPA] } }),
       ctxDe({ id: FUNIL }),
     );
     expect(res.status).toBe(422);
-    expect(db.chamadas.some((c) => c.op === "update")).toBe(false);
+    expect(db.chamadas.some((c) => c.op === "insert" || c.op === "update")).toBe(false);
   });
 
   it("POST com Idempotency-Key: o recibo é escopado pela organização e pelo funil", async () => {
-    const db = bancoFalso({
-      crm_pipelines: (c) => (c.op === "update" ? [{ id: FUNIL }] : { id: FUNIL, name: "V", vocabulary: {}, settings: { fields: [] } }),
-      idempotency_keys: () => null,
-    });
+    const db = bancoDoFunil([]);
     vi.mocked(createAdminClient).mockReturnValue(db as never);
     comoToken("admin", ["mcp:write"]);
     const { POST } = await import("@/app/api/v1/pipelines/[id]/fields/route");
@@ -586,7 +655,7 @@ describe("campos personalizados do funil", () => {
     expect(reserva?.patch).toMatchObject({ organization_id: ORG_TOKEN, endpoint: base });
   });
 
-  it("PATCH altera um campo (type não muda: 422), campo inexistente → 404, DELETE remove só ele", async () => {
+  it("PATCH altera o campo da organização (type não muda: 422), inexistente → 404, DELETE tira só ele da organização", async () => {
     const { PATCH, DELETE } = await import("@/app/api/v1/pipelines/[id]/fields/[key]/route");
     const outro = { key: "porte", label: "Porte", type: "text" };
     const db = bancoDoFunil([existente, outro]);
@@ -598,23 +667,21 @@ describe("campos personalizados do funil", () => {
 
     const ok = await PATCH(req(`${base}/origem`, "PATCH", { label: "De onde veio", required: true }), ctxDe({ id: FUNIL, key: "origem" }));
     expect(ok.status).toBe(200);
-    const patch = db.chamadas.filter((c) => c.tabela === "crm_pipelines" && c.op === "update").at(-1)?.patch as {
-      settings: { fields: unknown[] };
-    };
-    expect(patch.settings.fields).toEqual([{ ...existente, label: "De onde veio", required: true }, outro]);
+    expect((await ok.json()).data).toEqual({ ...existente, label: "De onde veio", required: true });
+    const alteracao = db.chamadas.find((c) => c.tabela === "custom_field_definitions" && c.op === "update");
+    expect(alteracao?.filtros).toMatchObject({ organization_id: ORG_TOKEN });
+    expect(alteracao?.patch).toMatchObject({ label: "De onde veio", obrigatorio: true });
 
     const inexistente = await PATCH(req(`${base}/nao_existe`, "PATCH", { label: "x" }), ctxDe({ id: FUNIL, key: "nao_existe" }));
     expect(inexistente.status).toBe(404);
 
     const remove = await DELETE(req(`${base}/origem`, "DELETE"), ctxDe({ id: FUNIL, key: "origem" }));
     expect(remove.status).toBe(200);
-    const aposRemover = db.chamadas.filter((c) => c.tabela === "crm_pipelines" && c.op === "update").at(-1)?.patch as {
-      settings: { fields: unknown[] };
-    };
-    expect(aposRemover.settings.fields).toEqual([outro]);
+    expect(db.defs.map((d) => d.key)).toEqual(["porte"]);
 
     comoToken("manager", ["mcp:write"]);
-    expect((await DELETE(req(`${base}/origem`, "DELETE"), ctxDe({ id: FUNIL, key: "origem" }))).status).toBe(403);
+    expect((await DELETE(req(`${base}/porte`, "DELETE"), ctxDe({ id: FUNIL, key: "porte" }))).status).toBe(403);
+    expect(db.defs.map((d) => d.key)).toEqual(["porte"]);
   });
 });
 

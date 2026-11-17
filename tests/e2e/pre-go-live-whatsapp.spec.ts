@@ -4,7 +4,6 @@ import { test, expect } from "./helpers/test";
 import { createClient } from "@supabase/supabase-js";
 import { metadataInicialDoCanal } from "../../lib/ai/elegibilidade/pre-go-live";
 import { nomeDaSessaoCabeNoWaha, nomeDaSessaoNovo } from "../../lib/channels/nome-da-sessao";
-import { ROTULO_DA_ABA_INSTANCIA } from "../../lib/channels/rotulo-da-aba-instancia";
 
 // Banco e auth reais, sem interceptar a API da feature. Não envia WhatsApp real.
 test.use({ locale: "pt-BR" });
@@ -72,17 +71,19 @@ test("admin configura testes, remove número, confirma abertura e volta a restri
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await page.waitForURL(/\/app/);
   await page.goto("/app/connections");
-  // O canal nasce STOPPED, então a faixa de conexão caída também mostra este nome. Sem o recorte,
-  // o teste passava pela faixa enquanto a lista carregava e reprovava quando a lista chegava antes.
-  // Hiperbold: a aba da instância se chama "UAZAPI" (ROTULO_DA_ABA_INSTANCIA), não "Números por QR" do upstream.
-  await expect(
-    // O nome aparece no título do cartão e na prévia da etiqueta ("No Chat:"); vale o título.
-    page
-      .getByRole("tabpanel", { name: ROTULO_DA_ABA_INSTANCIA })
-      .locator("p")
-      .filter({ hasText: /^Canal de validação$/ }),
-  ).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("IA em modo de teste", { exact: true })).toBeVisible();
+  // Tela em cartões (17/11/2026): o canal tem o seu cartão na grade, e o acesso da IA mora no
+  // Gerenciar dele. O canal nasce STOPPED, então a faixa de conexão caída também mostra este nome:
+  // o recorte pelo cartão evita passar pela faixa.
+  const cartao = page.getByTestId(`cartao-conexao-${channelId}`);
+  await expect(cartao.getByTestId("nome-da-conexao")).toHaveText("Canal de validação", { timeout: 15_000 });
+  // O Gerenciar é um diálogo da tela, sem rota própria: depois de cada recarga ele volta fechado e
+  // é reaberto pelo cartão, como a pessoa faria.
+  const abrirGerenciar = async () => {
+    await page.getByTestId(`gerenciar-${channelId}`).click();
+    await expect(page.getByTestId("gerenciar-conexao")).toBeVisible();
+  };
+  await abrirGerenciar();
+  await expect(page.getByTestId("gerenciar-conexao").getByText("IA em modo de teste", { exact: true })).toBeVisible();
   const openPanel = () => page.getByRole("button", { name: "Configurar acesso da IA" }).click();
   const input = page.getByLabel("Números autorizados para teste");
   const phone = "+5511999998888";
@@ -108,6 +109,7 @@ test("admin configura testes, remove número, confirma abertura e volta a restri
   await expect(input).not.toBeVisible();
   expect((await read()).ai_test_phone_numbers).toEqual([phone, "+14155552671"]);
   await page.reload();
+  await abrirGerenciar();
   await openPanel();
   await expect(input).toHaveValue(`${phone}\n+14155552671`);
   await input.fill(phone);
@@ -124,6 +126,7 @@ test("admin configura testes, remove número, confirma abertura e volta a restri
   expect((await read()).ai_gate).toBe("open");
   expect((await read()).ai_test_phone_numbers).toEqual([phone]);
   await page.reload();
+  await abrirGerenciar();
   await expect(page.getByText("IA aberta ao público", { exact: true })).toBeVisible();
   await openPanel();
   await expect(input).toHaveValue(phone);
