@@ -44,7 +44,7 @@ function tsx(dir: string, saida: string[] = []): string[] {
 const le = (f: string) => fs.readFileSync(path.join(RAIZ, f), "utf8");
 
 describe("cor pela paleta do produto", () => {
-  const arquivos = [...tsx("app"), ...tsx("components")];
+  const arquivos = [...tsx("app"), ...tsx("components"), ...tsx("lib"), ...tsx("hooks")];
 
   it("nenhum .tsx usa a paleta padrão do Tailwind (família + número)", () => {
     const sujos = arquivos.filter((f) => !(f in ALLOWLIST) && PALETA.test(le(f)));

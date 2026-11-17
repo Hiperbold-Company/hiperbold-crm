@@ -37,7 +37,7 @@ export function SuspendedBanner({ suspendedAt, reason }: SuspendedBannerProps) {
     <div
       role="region"
       aria-label={t("Tenant Suspenso")}
-      className="sticky top-0 z-10 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning-bg px-4 py-3 text-warning-fg"
+      className="sticky top-0 z-10 flex items-start gap-3 rounded-lg border border-warning/30 bg-surface bg-linear-to-b from-warning-bg to-warning-bg px-4 py-3 text-warning-fg"
     >
       <Warning size={18} weight="fill" className="mt-0.5 shrink-0 text-warning-fg" aria-hidden />
       <p className="text-sm">

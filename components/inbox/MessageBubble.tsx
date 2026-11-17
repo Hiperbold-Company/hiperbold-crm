@@ -103,7 +103,7 @@ function AckIndicator({ status, paradaSemConexao, saiSozinha, t }: {
     );
   }
   if (status === "read") {
-    return <Checks size={12} weight="bold" className="text-info" aria-label={t("Lida")} />;
+    return <Checks size={12} weight="bold" className="text-current" aria-label={t("Lida")} />;
   }
   if (status === "delivered") {
     return <Checks size={12} weight="bold" className="text-current/70" aria-label={t("Entregue")} />;

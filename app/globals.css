@@ -89,6 +89,8 @@
   --color-info: #4a7a93;
   --color-info-bg: rgba(74, 122, 147, 0.12);
   --color-info-fg: #355d72;
+  /* Identidade de "quem atende é a IA" (não é estado nem marca). */
+  --color-ia: #7b5bad;
 
   /* Spacing (4-base) */
   --space-0: 0px;
@@ -299,6 +301,8 @@
   --color-info: #4a7a93;
   --color-info-bg: rgba(74, 122, 147, 0.12);
   --color-info-fg: #355d72;
+  /* Identidade de "quem atende é a IA" (não é estado nem marca). */
+  --color-ia: #7b5bad;
   --shadow-xs: 0 1px 2px 0 rgba(20, 18, 14, 0.04);
   --shadow-sm: 0 1px 2px 0 rgba(20, 18, 14, 0.05), 0 1px 1px 0 rgba(20, 18, 14, 0.03);
   --shadow-md: 0 4px 12px -2px rgba(20, 18, 14, 0.06), 0 2px 4px -1px rgba(20, 18, 14, 0.04);
@@ -398,6 +402,7 @@
   --color-info: #7da9bf;
   --color-info-bg: rgba(125, 169, 191, 0.18);
   --color-info-fg: #9bbfd2;
+  --color-ia: #a98fd6;
 
   /* Shadows — heavier in dark */
   --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
@@ -519,6 +524,7 @@
   --color-info: var(--color-info);
   --color-info-bg: var(--color-info-bg);
   --color-info-fg: var(--color-info-fg);
+  --color-ia: var(--color-ia);
 
   /* Aliases shadcn (consumers ainda não migrados). Espelham 1:1 o que o
      `tailwind.config.ts` mapeava — inclusive `ring`, que apontava para a

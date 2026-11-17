@@ -24,7 +24,7 @@ export function LgpdRiskBanner({ requests }: LgpdRiskBannerProps) {
   return (
     <div
       role="alert"
-      className="sticky top-0 z-10 flex items-center justify-between gap-4 rounded-lg border border-error/30 bg-error-bg px-4 py-3 text-sm text-error-fg"
+      className="sticky top-0 z-10 flex items-center justify-between gap-4 rounded-lg border border-error/30 bg-surface bg-linear-to-b from-error-bg to-error-bg px-4 py-3 text-sm text-error-fg"
     >
       <div className="flex items-center gap-3">
         <Warning

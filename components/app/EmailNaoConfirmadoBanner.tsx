@@ -27,7 +27,7 @@ export function EmailNaoConfirmadoBanner() {
       role="status"
       aria-live="polite"
       data-testid="email-nao-confirmado"
-      className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-3 border-b border-warning/30 bg-surface px-4 py-2 text-sm text-warning-fg backdrop-blur"
+      className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-3 border-b border-warning/40 bg-surface bg-linear-to-b from-warning-bg to-warning-bg px-4 py-2 text-sm text-warning-fg"
     >
       <span>
         {t("Confirme seu e-mail: enviamos um link para")}{" "}
@@ -43,7 +43,7 @@ export function EmailNaoConfirmadoBanner() {
           type="button"
           onClick={reenviar}
           disabled={pendente}
-          className="rounded-md border border-warning/30 bg-white/70 px-3 py-1 font-medium text-warning-fg hover:bg-white disabled:opacity-60"
+          className="rounded-md border border-warning/30 bg-surface hover:bg-surface-elevated px-3 py-1 font-medium text-warning-fg disabled:opacity-60"
         >
           {pendente ? t("Enviando...") : t("Reenviar")}
         </button>

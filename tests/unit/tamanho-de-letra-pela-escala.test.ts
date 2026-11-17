@@ -41,7 +41,7 @@ function tsx(dir: string, saida: string[] = []): string[] {
 const TAMANHO_ARBITRARIO = /text-\[\d+(\.\d+)?(px|rem)\]/;
 
 describe("tamanho de letra pela escala", () => {
-  const arquivos = [...tsx("app"), ...tsx("components")];
+  const arquivos = [...tsx("app"), ...tsx("components"), ...tsx("lib"), ...tsx("hooks")];
 
   it("nenhum .tsx usa `text-[<n>px]` nem `text-[<n>rem]`", () => {
     const sujos = arquivos.filter(

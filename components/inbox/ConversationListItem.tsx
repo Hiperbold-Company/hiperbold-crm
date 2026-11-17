@@ -117,7 +117,7 @@ interface Props {
  */
 const COR_DO_COMANDO: Record<string, string> = {
   humano: "bg-info",
-  automatico: "bg-accent",
+  automatico: "bg-ia",
   aguardando: "bg-warning",
   ninguem: "bg-muted-foreground/60",
   encerrada: "bg-muted-foreground/30",
