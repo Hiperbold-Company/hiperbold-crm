@@ -54,6 +54,7 @@ export function AutomacoesList({
   etapas = [],
   camposDeData = [],
   motivoDoBloqueio = null,
+  falhouNoServidor = false,
 }: {
   initialData: FollowupFlowPointerRow[];
   /** Lote 5 — tela única: follow-ups e regras antigas lidos no servidor (filtro de organização). */
@@ -64,10 +65,13 @@ export function AutomacoesList({
   camposDeData?: OpcaoDeCampo[];
   /** D-227: o teto de automações do plano está cheio (frase pronta do servidor); `null` = pode criar. */
   motivoDoBloqueio?: string | null;
+  /** A leitura das automações falhou no servidor: a lista vazia não é "nenhuma automação". */
+  falhouNoServidor?: boolean;
 }) {
   const t = useT();
   const idioma = useTagDeIdioma();
   const { data, isError, refetch, isFetching } = useFollowupFlows({ initialData, surface: "automacao" });
+  const [servidorFalhou, setServidorFalhou] = useState(falhouNoServidor);
   const [aberto, setAberto] = useState(false);
   const [modelosAberto, setModelosAberto] = useState(false);
   const [importarAberto, setImportarAberto] = useState(false);
@@ -123,11 +127,15 @@ export function AutomacoesList({
 
   return (
     <div className="flex flex-col gap-4">
-      {isError && !data ? (
+      {servidorFalhou || (isError && todas.length === 0) ? (
         <Card>
           <ErroComRetry
             titulo={t("Não foi possível carregar as automações")}
-            onRetry={() => refetch()}
+            onRetry={() => {
+              void refetch().then((r) => {
+                if (!r.isError) setServidorFalhou(false);
+              });
+            }}
             tentando={isFetching}
           />
         </Card>

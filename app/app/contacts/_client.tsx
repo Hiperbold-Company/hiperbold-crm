@@ -627,7 +627,7 @@ export function ContactsListClient() {
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
-      ) : q.isError ? (
+      ) : q.isError && !q.data ? (
         <Card>
           <ErroComRetry
             titulo={t("Não foi possível carregar os contatos")}
