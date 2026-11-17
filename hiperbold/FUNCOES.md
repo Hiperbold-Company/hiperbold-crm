@@ -25,13 +25,13 @@ A lista de ocultas mora num único arquivo: [`lib/hiperbold/funcoes-ocultas.ts`]
 | Tarefas | O que ficou combinado, com prazo. |
 | Produtos | Catálogo que o agente de IA usa para responder. |
 | Agentes de IA, Follow-ups, Fluxos de atendimento, Roteadores | Quem atende por você e como retoma conversa que esfriou. |
-| Conhecimento, Memória, Skills, Conexões MCP | O que o agente consulta e pode fazer. |
-| Casos, Alertas, Aviso no WhatsApp, Propostas, Execuções, Uso e orçamento, Evolução da IA | Acompanhar o que a IA fez e decidir o que ela sugere. |
+| Conhecimento, Memória, Ações da IA, Ferramentas externas da IA | O que o agente consulta e pode fazer. |
+| Casos, Alertas, Aviso no WhatsApp, Sugestões da IA, Execuções, Uso e orçamento, Evolução da IA | Acompanhar o que a IA fez e decidir o que ela sugere. |
 | Desempenho, Atividades, Faturamento | Números do período e quanto entrou. |
 | Conexões WhatsApp: **UAZAPI** (QR Code) e **API Oficial (Meta)** | Por onde o negócio fala com o cliente. A opção que se chamava "API não oficial" passou a se chamar UAZAPI. |
 | Webhooks (receber e enviar dados) | Avisar outros sistemas quando algo acontece, e receber dados de fora. |
 | Nuvemshop | Trazer pedidos e clientes da loja. |
-| Equipe, Distribuição de atendimento, Tags, Organização, Marca, LGPD, API Tokens, Audit Log, Notificações, Perfil, Segurança (verificação em duas etapas e sessões) | Configurações do dia a dia. |
+| Equipe, Distribuição de atendimento, Tags, Organização, Marca, LGPD, Chaves de integração, Histórico de ações, Notificações, Perfil, Segurança (verificação em duas etapas e sessões) | Configurações do dia a dia. |
 | Membro da agência (painel de plataforma › tenant › "Membros da agência"; selo "Agência" na Equipe) | Acesso permanente da agência que opera o CRM do cliente: não ocupa vaga do plano, não sai quando o dono assume e o cliente não remove. Quem cria a organização para outra pessoa nasce assim (antes era provisório). Marcar e remover: só admin da plataforma `full`, pela função `fn_membro_da_agencia_definir` (migration 0974). |
 | Meu plano | Plano contratado, pagamento, uso e cancelamento. |
 | Jev — decisões rápidas | Um segundo modelo de IA, rápido e barato, que decide para onde mandar cada conversa (TypeSafe System One). Funciona com a chave da TypeSafe da Hiperbold no servidor (`JEV_API_KEY`); a empresa que cola a própria chave em Credenciais usa a dela. Tela própria em Configurações › IA › **Decisões rápidas (Jev)** (`/app/ai/jev`, a partir de gestor): é o mesmo cartão que morava em Provedores, que segue oculto. Precisa ser ligado e aceito por um administrador. O consumo do Jev na chave da instalação **não desconta dos tokens do plano**, mas é medido (origem `jev_da_instalacao` em `llm_calls`, migration 0960). |
@@ -47,8 +47,8 @@ Todas: **16/10/2026, decisão do Filipe: validar antes de lançar.** Id é o nom
 | `prospeccao` | Buscar empresas e abordá-las aos poucos, com a IA conduzindo a conversa. | CRM › Prospecção (`/app/prospecting`) |
 | `chamadas` | Histórico das ligações de voz feitas pela IA, com o texto do que foi dito. | CRM › Chamadas (`/app/calls`) |
 | `comandas` | Registro do que foi feito para cada cliente, por quem, e quanto ele paga (serviços, como em salão ou clínica). | CRM › Comandas e Configurações › Comandas (`/app/comandas`) |
-| `meta-ads` | Ver quanto custou cada resultado dos anúncios do Facebook e Instagram, e conectar a conta de anúncios. | Análise › Meta Ads (`/app/ads/meta`) e Configurações › Meta Ads (`/app/settings/meta-ads`) |
-| `trunk-sip` | Dados de uma linha telefônica comum para a IA fazer ligações. | Configurações › Trunk SIP (`/app/settings/voip-trunk`) |
+| `meta-ads` | Ver quanto custou cada resultado dos anúncios do Facebook e Instagram, e conectar a conta de anúncios. | Análise › Meta Ads (`/app/ads/meta`) e Configurações › Conectar Meta Ads (`/app/settings/meta-ads`) |
+| `trunk-sip` | Dados de uma linha telefônica comum para a IA fazer ligações. | Configurações › Linha telefônica (SIP) (`/app/settings/voip-trunk`) |
 | `conversoes` | Avisar o Google e o Facebook quais anúncios geraram venda, e marcar de onde veio quem chegou pelo site. | Configurações › Conversões (`/app/settings/conversoes`) |
 | `extensoes` | Guias extras instalados por cima do sistema para orientar o trabalho. | Configurações › Extensões (`/app/extensions`) e "Orientações instaladas" no hub do CRM |
 | `contas-e-recebimentos` | Cadastro das contas onde o dinheiro das vendas do cliente entra. | Configurações › Contas e recebimentos (`/app/settings/tenant/financeiro`) |

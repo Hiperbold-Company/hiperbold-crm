@@ -1968,7 +1968,7 @@ export function mensagensDePuladasParaAvisar(
   // Conexões MCP — o aviso manda direto para lá.
   if (puladas.some((p) => p.motivo === 'aguardando_aprovacao')) {
     mensagens.push(
-      'Há ferramentas de conexão MCP marcadas no agente aguardando aprovação do admin em IA › Conexões MCP. Elas não rodam até serem aprovadas.',
+      'Há ferramentas de conexão MCP marcadas no agente aguardando aprovação do admin em IA › Ferramentas externas da IA. Elas não rodam até serem aprovadas.',
     );
   }
 

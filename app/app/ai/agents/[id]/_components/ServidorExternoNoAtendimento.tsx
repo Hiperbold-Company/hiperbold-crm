@@ -89,7 +89,7 @@ const MENSAGEM_DA_RECUSA: Record<
   mfa_required: "Esta ação exige a verificação em duas etapas.",
   upstream_unavailable: "Não foi possível falar com o servidor.",
   sem_servidor:
-    "Nenhum servidor externo respondeu. Confira o endereço e a chave em Configurações › Servidor MCP externo.",
+    "Nenhum servidor externo respondeu. Confira o endereço e a chave em Configurações › Sistema externo da IA.",
 };
 
 export function ServidorExternoNoAtendimento({

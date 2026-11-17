@@ -32,7 +32,7 @@ export default async function TrunkSettingsPage() {
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Trunk SIP", idioma)}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Linha telefônica (SIP)", idioma)}</h1>
         <p className="text-sm text-muted-foreground">
           {traduzir(
             "Credenciais de registro do seu provedor SIP (Asterisk/AudioSocket). Depois de salvar, aplique o bloco abaixo em",

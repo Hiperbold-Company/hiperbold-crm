@@ -28772,6 +28772,21 @@ export const DICIONARIO: Traducoes = {
   "Este número já está em outra conexão desta empresa. Remova uma das duas e tente de novo.": { es: "Este número ya está en otra conexión de esta empresa. Elimine una de las dos e inténtelo de nuevo." },
   "Não foi possível falar com o servidor de WhatsApp agora. Tente de novo em instantes.": { es: "No fue posible comunicarse con el servidor de WhatsApp ahora. Inténtelo de nuevo en instantes." },
   "Conectado, mas as mensagens ainda não entram.": { es: "Conectado, pero los mensajes todavía no entran." },
+  // design: menu em linguagem clara
+  "Regras das propostas": { es: "Reglas de las propuestas" },
+  "Sugestões da IA": { es: "Sugerencias de la IA" },
+  "Limite da IA nas automações": { es: "Límite de la IA en las automatizaciones" },
+  "Conectar Meta Ads": { es: "Conectar Meta Ads" },
+  "Histórico de ações": { es: "Historial de acciones" },
+  "Chaves de integração": { es: "Claves de integración" },
+  "Linha telefônica (SIP)": { es: "Línea telefónica (SIP)" },
+  "Ferramentas externas da IA": { es: "Herramientas externas de la IA" },
+  "Sistema externo da IA": { es: "Sistema externo de la IA" },
+  "Ações da IA": { es: "Acciones de la IA" },
+  "Ligações em lista": { es: "Llamadas en lista" },
+  "Não roda até o admin aprovar em IA › Ferramentas externas da IA.": { es: "No se ejecuta hasta que el admin lo apruebe en IA › Herramientas externas de la IA." },
+  "Nenhuma conexão MCP. Conecte um servidor em IA › Ferramentas externas da IA para dar ferramentas de outros sistemas ao agente.": { es: "Ninguna conexión MCP. Conecta un servidor en IA › Herramientas externas de la IA para darle al agente herramientas de otros sistemas." },
+  "Nenhum servidor externo respondeu. Confira o endereço e a chave em Configurações › Sistema externo da IA.": { es: "Ningún servidor externo respondió. Revisa la dirección y la clave en Configuración › Sistema externo de la IA." },
 };
 
 /**

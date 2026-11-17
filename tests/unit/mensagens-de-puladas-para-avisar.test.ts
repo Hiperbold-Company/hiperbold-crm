@@ -21,10 +21,10 @@ describe("mensagensDePuladasParaAvisar", () => {
     expect(msgs).toEqual(["conexão MCP indisponível: mcp_n8n__buscar, mcp_n8n__cadastrar"]);
   });
 
-  it("aguardando_aprovacao: frase fixa mandando para Conexões MCP", () => {
+  it("aguardando_aprovacao: frase fixa mandando para Ferramentas externas da IA", () => {
     const msgs = mensagensDePuladasParaAvisar([{ id: "mcp_n8n__x", motivo: "aguardando_aprovacao" }]);
     expect(msgs).toEqual([
-      "Há ferramentas de conexão MCP marcadas no agente aguardando aprovação do admin em IA › Conexões MCP. Elas não rodam até serem aprovadas.",
+      "Há ferramentas de conexão MCP marcadas no agente aguardando aprovação do admin em IA › Ferramentas externas da IA. Elas não rodam até serem aprovadas.",
     ]);
   });
 
@@ -68,7 +68,7 @@ describe("mensagensDePuladasParaAvisar", () => {
       { id: "d", motivo: "entregue_ao_operador" },
     ]);
     expect(msgs).toHaveLength(3);
-    expect(msgs.some((m) => m.includes("Conexões MCP"))).toBe(true);
+    expect(msgs.some((m) => m.includes("Ferramentas externas da IA"))).toBe(true);
     expect(msgs.some((m) => m.includes("recusada"))).toBe(true);
     expect(msgs.some((m) => m.startsWith("conexão MCP indisponível"))).toBe(true);
   });

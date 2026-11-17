@@ -86,7 +86,7 @@ describe("avisarCapacidadesAusentes — acumula motivo em vez de calar", () => {
       pool,
       ORG,
       CONVERSA,
-      "Há ferramentas de conexão MCP marcadas no agente aguardando aprovação do admin em IA › Conexões MCP. Elas não rodam até serem aprovadas.",
+      "Há ferramentas de conexão MCP marcadas no agente aguardando aprovação do admin em IA › Ferramentas externas da IA. Elas não rodam até serem aprovadas.",
       log() as never,
     );
 
@@ -99,7 +99,7 @@ describe("avisarCapacidadesAusentes — acumula motivo em vez de calar", () => {
     expect(id).toBe("item-1");
     // Acumula: o motivo antigo continua legível junto do novo.
     expect(corpo).toContain("conexão MCP indisponível: mcp_n8n__buscar");
-    expect(corpo).toContain("Conexões MCP");
+    expect(corpo).toContain("Ferramentas externas da IA");
   });
 
   /**

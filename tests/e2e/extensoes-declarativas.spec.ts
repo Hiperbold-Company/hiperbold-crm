@@ -1039,7 +1039,7 @@ test("pacote pós-build atravessa catálogo, tenants, guia e Tarefas com recuper
     ]);
     expect(tenantsCarregados.status()).toBe(200);
     expect(auditoriaCarregada.status()).toBe(200);
-    await expect(auditPage.getByRole("heading", { name: "Audit Log", exact: true })).toBeVisible();
+    await expect(auditPage.getByRole("heading", { name: "Histórico de ações", exact: true })).toBeVisible();
 
     const filtroTenants = auditPage.getByRole("button", { name: "Tenants", exact: true });
     await filtroTenants.click();

@@ -153,9 +153,9 @@ test.describe("navegação agrupada", () => {
 
   test("e a lista de funis é o item vizinho, com nome próprio", async ({ page }) => {
     await loginAdmin(page);
-    await sidebar(page).getByRole("link", { name: "Pipeline", exact: true }).click();
+    await sidebar(page).getByRole("link", { name: "Funil", exact: true }).click();
     await page.waitForURL(/\/app\/kanban/);
-    await expect(page.getByRole("heading", { name: "Pipeline", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Funil", level: 1 })).toBeVisible();
   });
 
   test("chega em Conhecimento, que só existia atrás das abas de IA", async ({ page }) => {
@@ -195,7 +195,7 @@ test.describe("navegação agrupada", () => {
   test("o menu lateral tem só o essencial, e o resto está em Configurações", async ({ page }) => {
     await loginAdmin(page);
 
-    for (const nome of ["Início", "Chat", "Radar", "Pipeline", "Contatos", "Agentes", "Desempenho", "Atividades"]) {
+    for (const nome of ["Início", "Chat", "Radar", "Funil", "Contatos", "Agentes", "Desempenho", "Atividades"]) {
       // O upstream pôs o contador da fila no nome do link ("Chat 32 conversas esperando…").
       await expect(sidebar(page).getByRole("link", { name: new RegExp(`^${nome}( |$)`) })).toBeVisible();
     }
@@ -210,7 +210,7 @@ test.describe("navegação agrupada", () => {
     for (const nome of ["Agenda", "Respostas rápidas", "Tarefas", "Follow-ups", "Roteadores", "Usar minha própria chave de IA", "Conexões", "Webhooks e regras antigas"]) {
       await expect(page.getByRole("link", { name: new RegExp(`^${nome}`) }).first()).toBeVisible();
     }
-    for (const nome of ["Comandas", "Provedores", "Meta Ads", "Trunk SIP", "Conversões", "Extensões", "Contas e recebimentos"]) {
+    for (const nome of ["Comandas", "Provedores", "Meta Ads", "Conectar Meta Ads", "Linha telefônica (SIP)", "Conversões", "Extensões", "Contas e recebimentos"]) {
       await expect(page.getByRole("link", { name: new RegExp(`^${nome}`) })).toHaveCount(0);
     }
   });
@@ -286,7 +286,7 @@ test.describe("navegação agrupada", () => {
         fullPage: true,
       });
 
-      await sidebar(page).getByRole("link", { name: "Pipeline", exact: true }).click();
+      await sidebar(page).getByRole("link", { name: "Funil", exact: true }).click();
       await page.waitForURL(/\/app\/kanban/);
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await expectSemOverflowHorizontal(page, "shell mobile após navegar pelo drawer");
