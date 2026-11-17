@@ -29,7 +29,7 @@ export function FiltrosNoCelular({ children, ativos = 0, titulo }: Props) {
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setAberto(true)}>
+      <Button variant="outline" size="sm" aria-expanded={aberto} aria-haspopup="dialog" onClick={() => setAberto(true)}>
         <FunnelSimple size={16} weight="bold" aria-hidden />
         <span>{ativos > 0 ? `${t("Filtros")} (${ativos})` : t("Filtros")}</span>
       </Button>

@@ -265,7 +265,7 @@ export function ContactDetailClient({ contactId, paineisDeModulo = [], acessosMc
       {contact.is_anonymized && (
         <div
           role="alert"
-          className="border-error-fg/30 sticky top-0 z-20 flex items-center gap-3 rounded-md border bg-error-bg p-3 text-sm text-error-fg"
+          className="border-error-fg/30 sticky top-0 z-20 flex items-center gap-3 rounded-md border bg-surface bg-linear-to-b from-error-bg to-error-bg p-3 text-sm text-error-fg"
         >
           <ShieldCheck size={18} weight="duotone" aria-hidden />
           <span>
