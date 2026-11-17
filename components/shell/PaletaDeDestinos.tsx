@@ -3,8 +3,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useT } from "@/hooks/i18n/useT";
-import { MagnifyingGlass } from "@/lib/ui/icons";
+import { MagnifyingGlass, Warning } from "@/lib/ui/icons";
 import type { Icon as PhosphorIcon } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
@@ -29,8 +30,10 @@ import { cn } from "@/lib/utils";
  * Não usa `cmdk`: o projeto já tem Dialog e Input, e uma lista filtrada com
  * setas e Enter são poucas linhas.
  *
- * v1 busca só NAVEGAÇÃO — destinos. Contato, conversa e lead têm outra fonte
- * de dados e são outra feature.
+ * Busca de DADOS (contatos, conversas): este componente só DESENHA os grupos
+ * que recebe em `gruposDeDados` e avisa o termo por `aoMudarBusca`. Quem busca
+ * é o chamador (`CommandPalette`, do tenant) — o admin não passa nada e a
+ * paleta dele continua só de telas, sem `useAuth` nem `useQuery` aqui.
  */
 
 /** O mínimo que um destino precisa ter para aparecer aqui. */
@@ -59,6 +62,32 @@ function normalizar(texto: string): string {
     .toLowerCase();
 }
 
+/** Um resultado de dado (contato, conversa) que abre a tela dele. */
+export interface ItemDeDados {
+  /** Único dentro do grupo. */
+  id: string;
+  href: string;
+  /** Texto do dado (nome de pessoa): NÃO passa por `t()`. */
+  titulo: string;
+  /** Linha curta de apoio, já pronta (telefone, canal…). */
+  secundaria?: string | null;
+}
+
+/** Um grupo de resultados de dados, montado pelo chamador. */
+export interface GrupoDeDados {
+  id: string;
+  /** Rótulo JÁ TRADUZIDO. */
+  rotulo: string;
+  icon: PhosphorIcon;
+  estado: "carregando" | "erro" | "pronto";
+  itens: readonly ItemDeDados[];
+}
+
+/** O que o grupo ocupa na tela: some quando terminou sem nada. */
+function grupoAparece(g: GrupoDeDados): boolean {
+  return g.estado !== "pronto" || g.itens.length > 0;
+}
+
 export interface PaletaDeDestinosProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -76,6 +105,10 @@ export interface PaletaDeDestinosProps {
   rotuloLista: string;
   /** Placeholder do campo, já traduzido. */
   placeholder: string;
+  /** Avisado a cada tecla com o termo cru; o chamador decide se busca. */
+  aoMudarBusca?: (termo: string) => void;
+  /** Grupos de dados, depois das telas. Só aparecem com termo digitado e categoria "Todas". */
+  gruposDeDados?: readonly GrupoDeDados[];
 }
 
 export function PaletaDeDestinos({
@@ -86,6 +119,8 @@ export function PaletaDeDestinos({
   titulo,
   rotuloLista,
   placeholder,
+  aoMudarBusca,
+  gruposDeDados,
 }: PaletaDeDestinosProps) {
   const rotuloGrupo = useMemo(() => new Map(grupos.map((g) => [g.id, g.label])), [grupos]);
 
@@ -118,6 +153,8 @@ export function PaletaDeDestinos({
           rotuloGrupo={rotuloGrupo}
           rotuloLista={rotuloLista}
           placeholder={placeholder}
+          aoMudarBusca={aoMudarBusca}
+          gruposDeDados={gruposDeDados}
         />
       </DialogContent>
     </Dialog>
@@ -131,6 +168,8 @@ function Resultados({
   rotuloGrupo,
   rotuloLista,
   placeholder,
+  aoMudarBusca,
+  gruposDeDados,
 }: {
   aoEscolher: () => void;
   destinos: readonly DestinoDaPaleta[];
@@ -138,6 +177,8 @@ function Resultados({
   rotuloGrupo: Map<string, string>;
   rotuloLista: string;
   placeholder: string;
+  aoMudarBusca?: (termo: string) => void;
+  gruposDeDados?: readonly GrupoDeDados[];
 }) {
   const t = useT();
   const router = useRouter();
@@ -184,9 +225,34 @@ function Resultados({
     return map;
   }, [resultados]);
 
-  function navegar(destino: DestinoDaPaleta) {
+  // Os dados só entram na busca digitada e com "Todas": filtrar por uma
+  // categoria de telas é pedir telas.
+  const gruposVisiveis = useMemo(
+    () =>
+      busca.trim() && categoriaAtiva === "todos"
+        ? (gruposDeDados ?? []).filter(grupoAparece)
+        : [],
+    [busca, categoriaAtiva, gruposDeDados],
+  );
+
+  /**
+   * UMA lista para o teclado: telas primeiro, depois os itens de dados, na
+   * ordem da tela. Setas, Enter e `aria-activedescendant` andam por ela.
+   */
+  const hrefs = useMemo(
+    () => [
+      ...resultados.map((d) => d.href),
+      ...gruposVisiveis.flatMap((g) => g.itens.map((i) => i.href)),
+    ],
+    [resultados, gruposVisiveis],
+  );
+  // A lista encolhe sozinha quando uma busca de dados volta menor: o destaque
+  // não pode apontar para fora dela.
+  const ativoIdx = Math.min(destacado, Math.max(hrefs.length - 1, 0));
+
+  function navegar(href: string) {
     aoEscolher();
-    router.push(destino.href);
+    router.push(href);
   }
 
   /**
@@ -197,6 +263,7 @@ function Resultados({
   function aoDigitar(valor: string) {
     setBusca(valor);
     setDestacado(0);
+    aoMudarBusca?.(valor);
   }
 
   function mudarCategoria(id: string) {
@@ -207,13 +274,13 @@ function Resultados({
   function aoTeclar(e: React.KeyboardEvent) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setDestacado((i) => Math.min(i + 1, resultados.length - 1));
+      setDestacado((i) => Math.max(Math.min(i + 1, hrefs.length - 1), 0));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setDestacado((i) => Math.max(i - 1, 0));
+      setDestacado((i) => Math.max(Math.min(i, hrefs.length - 1) - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const alvo = resultados[destacado];
+      const alvo = hrefs[ativoIdx];
       if (alvo) navegar(alvo);
     }
   }
@@ -232,7 +299,7 @@ function Resultados({
           role="combobox"
           aria-expanded
           aria-controls="palette-resultados"
-          aria-activedescendant={resultados[destacado] ? `palette-${destacado}` : undefined}
+          aria-activedescendant={hrefs[ativoIdx] ? `palette-${ativoIdx}` : undefined}
           value={busca}
           onChange={(e) => aoDigitar(e.target.value)}
           onKeyDown={aoTeclar}
@@ -284,7 +351,7 @@ function Resultados({
         })}
       </div>
 
-      {resultados.length === 0 ? (
+      {resultados.length === 0 && gruposVisiveis.length === 0 ? (
         <div className="px-4 py-12 text-center text-sm text-muted-foreground">
           <p className="font-medium text-foreground">
             {t("Nada encontrado para")} “{busca}”.
@@ -317,7 +384,7 @@ function Resultados({
                   {itens.map((d) => {
                     const Icon = d.icon;
                     const idxGlobal = resultados.findIndex((r) => r.href === d.href);
-                    const ativo = idxGlobal === destacado;
+                    const ativo = idxGlobal === ativoIdx;
                     // Mesmo par do modo lista: cinza sobre o destaque dava 1,2:1.
                     const secundario = ativo ? "text-accent-foreground" : "text-muted-foreground";
                     return (
@@ -328,7 +395,7 @@ function Resultados({
                         aria-selected={ativo}
                         data-href={d.href}
                         onMouseEnter={() => setDestacado(idxGlobal)}
-                        onClick={() => navegar(d)}
+                        onClick={() => navegar(d.href)}
                         className={cn(
                           "group flex cursor-pointer items-start gap-3 rounded-lg border border-border/50 p-2.5 transition-all",
                           ativo
@@ -375,7 +442,7 @@ function Resultados({
         >
           {resultados.map((d, i) => {
             const Icon = d.icon;
-            const ativo = i === destacado;
+            const ativo = i === ativoIdx;
             // No item destacado o fundo é a cor de destaque: o cinza de apoio
             // ficava 1,2:1 sobre o verde (medido), ilegível. A cor de frente do
             // destaque SEM opacidade herda o piso de 4,5:1 que
@@ -390,7 +457,7 @@ function Resultados({
                 aria-selected={ativo}
                 data-href={d.href}
                 onMouseEnter={() => setDestacado(i)}
-                onClick={() => navegar(d)}
+                onClick={() => navegar(d.href)}
                 className={cn(
                   "flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 transition-colors",
                   ativo && "bg-accent text-accent-foreground",
@@ -423,6 +490,24 @@ function Resultados({
               </li>
             );
           })}
+          {gruposVisiveis.map((g, gi) => {
+            // O índice global do 1º item do grupo: depois das telas e dos
+            // itens dos grupos anteriores, a mesma conta de `hrefs`.
+            const inicio =
+              resultados.length +
+              gruposVisiveis.slice(0, gi).reduce((n, anterior) => n + anterior.itens.length, 0);
+            return (
+              <GrupoDeDadosNaLista
+                key={g.id}
+                grupo={g}
+                inicio={inicio}
+                ativoIdx={ativoIdx}
+                aoDestacar={setDestacado}
+                aoEscolher={navegar}
+                textoDoErro={t("Não foi possível buscar agora.")}
+              />
+            );
+          })}
         </ul>
       )}
       <div className="flex items-center justify-between border-t bg-muted/20 px-4 py-2 text-[11px] text-muted-foreground pointer-coarse:hidden">
@@ -430,5 +515,88 @@ function Resultados({
         <span>{t("ESC para fechar")}</span>
       </div>
     </>
+  );
+}
+
+function GrupoDeDadosNaLista({
+  grupo,
+  inicio,
+  ativoIdx,
+  aoDestacar,
+  aoEscolher,
+  textoDoErro,
+}: {
+  grupo: GrupoDeDados;
+  inicio: number;
+  ativoIdx: number;
+  aoDestacar: (i: number) => void;
+  aoEscolher: (href: string) => void;
+  textoDoErro: string;
+}) {
+  const Icon = grupo.icon;
+  const tituloId = `palette-grupo-${grupo.id}`;
+  return (
+    <li
+      role="group"
+      aria-labelledby={tituloId}
+      aria-busy={grupo.estado === "carregando" || undefined}
+      className="mt-2 border-t pt-2"
+    >
+      <p
+        id={tituloId}
+        className="px-3 pb-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+      >
+        {grupo.rotulo}
+      </p>
+      {grupo.estado === "carregando" ? (
+        <div aria-hidden className="space-y-2 px-3 py-1.5">
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-3 w-1/3" />
+        </div>
+      ) : grupo.estado === "erro" ? (
+        <p className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+          <Warning size={14} aria-hidden className="shrink-0" />
+          {textoDoErro}
+        </p>
+      ) : (
+        <ul role="presentation">
+          {grupo.itens.map((item, j) => {
+            const idx = inicio + j;
+            const ativo = idx === ativoIdx;
+            const secundario = ativo ? "text-accent-foreground" : "text-muted-foreground";
+            return (
+              <li
+                key={item.id}
+                id={`palette-${idx}`}
+                role="option"
+                aria-selected={ativo}
+                data-href={item.href}
+                onMouseEnter={() => aoDestacar(idx)}
+                onClick={() => aoEscolher(item.href)}
+                className={cn(
+                  "flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 transition-colors pointer-coarse:min-h-11",
+                  ativo && "bg-accent text-accent-foreground",
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/40 bg-background/60",
+                    ativo && "bg-primary text-primary-foreground",
+                  )}
+                >
+                  <Icon size={16} aria-hidden />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{item.titulo}</p>
+                  {item.secundaria ? (
+                    <p className={cn("truncate text-xs", secundario)}>{item.secundaria}</p>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </li>
   );
 }
