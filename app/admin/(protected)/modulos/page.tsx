@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ModulosManager } from "@/components/modulos/ModulosManager";
 import { loadAuthUser } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { listarModulos } from "@/lib/modulos/service";
 
 export const metadata = { title: "Módulos da instalação" };
@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const usuario = await loadAuthUser();
   if (!usuario?.is_platform_admin) notFound();
-  const idioma = normalizarIdioma(usuario.locale);
+  const idioma = idiomaDaTela(usuario.locale);
   const t = (s: string) => traduzir(s, idioma);
 
   const modulos = await listarModulos();

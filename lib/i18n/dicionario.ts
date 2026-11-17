@@ -28965,6 +28965,7 @@ export const DICIONARIO: Traducoes = {
   "Paginação": { es: "Paginación" },
   "Página {a} de {b}": { es: "Página {a} de {b}" },
   "Página {a}": { es: "Página {a}" },
+  // design: cartão do funil
   "na etapa": { es: "en la etapa" },
   // design: carregando e erro
   "Não foi possível carregar": { es: "No fue posible cargar" },
@@ -29038,6 +29039,33 @@ export const DICIONARIO: Traducoes = {
   "Filtros": { es: "Filtros" },
   "Ver resultados": { es: "Ver resultados" },
   "Escolha os filtros e toque em Ver resultados.": { es: "Elija los filtros y toque en Ver resultados." },
+  "Relatar problema": { es: "Reportar un problema" },
+  "Relatar um problema": { es: "Reportar un problema" },
+  "Descreva o problema encontrado": { es: "Describa el problema encontrado" },
+  "Descreva o problema com 10 a 2000 caracteres.": { es: "Describa el problema con 10 a 2000 caracteres." },
+  "Podemos incluir um print da tela atual?": { es: "¿Podemos incluir una captura de la pantalla actual?" },
+  "O seu print-screen nos ajudará a resolver o problema mais rapidamente.": { es: "Su captura de pantalla nos ayudará a resolver el problema más rápido." },
+  "Print da tela": { es: "Captura de pantalla" },
+  "Recebemos o seu relato. Obrigado!": { es: "Recibimos su reporte. ¡Gracias!" },
+  "Não foi possível enviar o relato. Tente de novo.": { es: "No fue posible enviar el reporte. Inténtelo de nuevo." },
+  "Muitos relatos em pouco tempo. Tente de novo mais tarde.": { es: "Demasiados reportes en poco tiempo. Inténtelo de nuevo más tarde." },
+  "O print precisa ter até 3 MB.": { es: "La captura debe tener hasta 3 MB." },
+  "O print precisa ser uma imagem WebP ou PNG.": { es: "La captura debe ser una imagen WebP o PNG." },
+  "Descartado": { es: "Descartado" },
+  "Não foi possível carregar os relatos.": { es: "No fue posible cargar los reportes." },
+  "Não foi possível abrir o relato.": { es: "No fue posible abrir el reporte." },
+  "Relatos de problema": { es: "Reportes de problemas" },
+  "O que os usuários relataram pelo botão do inseto, em todas as empresas da instalação.": { es: "Lo que los usuarios reportaron con el botón del insecto, en todas las empresas de la instalación." },
+  "Tela": { es: "Pantalla" },
+  "Print": { es: "Captura" },
+  "Nenhum relato com este status.": { es: "Ningún reporte con este estado." },
+  "Relato atualizado.": { es: "Reporte actualizado." },
+  "Não foi possível salvar o relato.": { es: "No fue posible guardar el reporte." },
+  "Relato de problema": { es: "Reporte de problema" },
+  "Contexto": { es: "Contexto" },
+  "Nota interna (opcional)": { es: "Nota interna (opcional)" },
+  "Relatos": { es: "Reportes" },
+  "Problemas relatados pelos usuários pelo botão do inseto, com print e contexto": { es: "Problemas reportados por los usuarios con el botón del insecto, con captura y contexto" },
 };
 
 /**
@@ -29047,7 +29075,18 @@ export const DICIONARIO: Traducoes = {
  * português, que é exatamente o comportamento de antes desta feature. Uma
  * tradução parcial não pode deixar a tela PIOR do que estava.
  */
+/** `traduzir` com outro leitor de catálogo — o teste mede o inglês por aqui. */
+export function traduzirCom(
+  lerCatalogo: (idioma: Idioma, texto: string) => string | undefined,
+): (texto: string, idioma: Idioma) => string {
+  return (texto, idioma) => {
+    if (idioma === "pt-BR") return texto;
+    return DICIONARIO[texto]?.[idioma] ?? lerCatalogo(idioma, texto) ?? texto;
+  };
+}
+
+const traduzirPeloLeitor = traduzirCom(entradaDoCatalogo);
+
 export function traduzir(texto: string, idioma: Idioma): string {
-  if (idioma === "pt-BR") return texto;
-  return DICIONARIO[texto]?.[idioma] ?? entradaDoCatalogo(idioma, texto) ?? texto;
+  return traduzirPeloLeitor(texto, idioma);
 }

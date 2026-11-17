@@ -2,7 +2,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { traduzir } from "./dicionario";
-import { normalizarIdioma, IDIOMA_PADRAO, type Idioma } from "./idiomas";
+import { IDIOMA_PADRAO, type Idioma } from "./idiomas";
+import { IDIOMAS_COM_TEXTO } from "./registro";
 
 /**
  * O idioma da interface, com contexto PRÓPRIO — não pendurado no de autenticação.
@@ -36,9 +37,21 @@ import { normalizarIdioma, IDIOMA_PADRAO, type Idioma } from "./idiomas";
  * está na tela (a gravação terminou, ou a pessoa navegou), o de fora vence. Sem
  * essa reconciliação o estado local venceria para sempre e uma gravação que
  * FALHOU continuaria parecendo aplicada.
+ *
+ * ─── Ele PINTA o idioma que recebe; quem decide é quem o monta ─────────────
+ *
+ * O provider aceita qualquer idioma com texto (`IDIOMAS_COM_TEXTO`), inclusive
+ * um retirado do seletor, e cai no padrão para o resto. O corte da TELA mora
+ * onde o idioma é decidido: `idiomaDaTela` em `lib/auth/server.ts`
+ * (`AuthUser.idioma`; o gravado segue em `AuthUser.idiomaGravado`), em
+ * `idiomaDoVisitante` nas telas públicas e nas páginas que montam o provider
+ * sozinhas (admin, erro). `normalizarIdioma` NÃO corta: ele serve as saídas
+ * fora da tela. Assim a cobertura de tradução de um idioma fora do seletor
+ * continua medida pela tela, e religá-lo não exige reescrever teste nenhum.
  */
-const Ctx = createContext<{ idioma: Idioma; aplicar: (i: Idioma) => void }>({
+const Ctx = createContext<{ idioma: Idioma; gravado: Idioma | null; aplicar: (i: Idioma) => void }>({
   idioma: IDIOMA_PADRAO,
+  gravado: null,
   aplicar: () => {},
 });
 
@@ -58,14 +71,25 @@ export function idiomaAtual(): Idioma {
   return idiomaFora;
 }
 
+function idiomaQueSabePintar(bruto: string | null | undefined): Idioma {
+  return IDIOMAS_COM_TEXTO.find((idioma) => idioma.codigo === bruto)?.codigo ?? IDIOMA_PADRAO;
+}
+
 export function IdiomaProvider({
   locale,
+  gravado = null,
   children,
 }: {
   locale: string | null | undefined;
+  /**
+   * O idioma GRAVADO, quando difere do pintado (`AuthUser.idiomaGravado`): quem
+   * tem espanhol salvo vê a tela em português, e o seletor precisa saber que
+   * escolher "PT" é uma troca de verdade, não um clique no idioma em vigor.
+   */
+  gravado?: Idioma | null;
   children: React.ReactNode;
 }) {
-  const doServidor = normalizarIdioma(locale);
+  const doServidor = idiomaQueSabePintar(locale);
   const [idioma, setIdioma] = useState<Idioma>(doServidor);
 
   useEffect(() => {
@@ -84,7 +108,7 @@ export function IdiomaProvider({
     };
   }, [idioma]);
 
-  const valor = useMemo(() => ({ idioma, aplicar: setIdioma }), [idioma]);
+  const valor = useMemo(() => ({ idioma, gravado, aplicar: setIdioma }), [idioma, gravado]);
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }
 
@@ -94,6 +118,12 @@ export function useT(): (texto: string) => string {
   // Identidade estável: sem isto, todo `useMemo`/`useEffect` que dependa de `t`
   // reexecutaria a cada render.
   return useMemo(() => (texto: string) => traduzir(texto, idioma), [idioma]);
+}
+
+/** O idioma gravado da pessoa, quando o layout o informou; senão o em vigor. */
+export function useIdiomaGravado(): Idioma {
+  const { idioma, gravado } = useContext(Ctx);
+  return gravado ?? idioma;
 }
 
 /** O idioma em vigor, para quem precisa do código e não da tradução. */

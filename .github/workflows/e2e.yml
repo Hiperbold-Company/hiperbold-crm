@@ -1559,6 +1559,7 @@ jobs:
         webhooks.spec.ts
         system-update.spec.ts
         respostas-rapidas-conteudos.spec.ts
+        relatar-problema.spec.ts
 
       # ─── FORA_DO_CI — as que ficaram fora, e o motivo de cada uma ───
       #

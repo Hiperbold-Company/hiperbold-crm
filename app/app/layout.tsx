@@ -13,6 +13,7 @@ import { clientePelaAgendaLigado, clientePelaVendaLigado } from "@/lib/schemas/s
 import { AuthProvider } from "@/hooks/auth/AuthProvider";
 import { ProvedorDeCoresDasEtiquetas } from "@/components/tags/CoresDasEtiquetas";
 import { AppShell } from "./_components/AppShell";
+import { RelatarProblema } from "@/components/relatos/RelatarProblema";
 import { EstiloDaMarcaDaOrganizacao } from "./_components/EstiloDaMarcaDaOrganizacao";
 import { EstiloDoTemaDaExtensao } from "./_components/EstiloDoTemaDaExtensao";
 import { MfaEnrollGate } from "@/components/auth/MfaEnrollGate";
@@ -343,6 +344,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         >
           {children}
         </AppShell>
+        <RelatarProblema />
       </VoiceCallProvider>
     </ProvedorDaOcupacaoDoRodape>
   );
@@ -351,7 +353,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // O idioma envolve a árvore inteira e recebe o código PRONTO — ele não
     // pergunta quem está logado. Ver `lib/i18n/IdiomaProvider`: foi o
     // acoplamento com a autenticação que derrubou 32 casos.
-    <IdiomaProvider locale={user.idioma}>
+    <IdiomaProvider locale={user.idioma} gravado={user.idiomaGravado ?? user.idioma}>
     {/* Dentro do idioma: a confirmação traduz os próprios botões. */}
     <ProvedorDeConfirmacao>
     <AuthProvider user={user} activeOrg={activeOrg}>

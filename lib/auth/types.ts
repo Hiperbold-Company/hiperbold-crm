@@ -229,6 +229,15 @@ export interface AuthUser {
    */
   idioma: Idioma;
   /**
+   * O idioma GRAVADO (pessoa → organização → padrão), antes do corte da tela.
+   * `idioma` é o da TELA (`idiomaDaTela`): espanhol e inglês saíram do seletor
+   * em 17/11/2026 e a tela os pinta em português. Quem escreve PARA FORA da
+   * tela — aviso gravado, roteiro, mensagem ao cliente — lê este campo, com
+   * `?? idioma` (opcional só para não quebrar os dublês de `AuthUser` dos testes;
+   * `loadAuthUser` sempre o preenche).
+   */
+  idiomaGravado?: Idioma;
+  /**
    * Fuso de APRESENTAÇÃO, de `user_metadata.timezone`.
    *
    * Vem aqui pelo mesmo motivo do `locale` acima: a grade da Agenda precisa

@@ -183,7 +183,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       sincronizarAvisoDePausa(
         admin,
         { id: canal, organization_id: auth.org.orgId },
-        { autor, idioma: auth.user.idioma },
+        { autor, idioma: auth.user.idiomaGravado ?? auth.user.idioma },
       ),
     ),
   );

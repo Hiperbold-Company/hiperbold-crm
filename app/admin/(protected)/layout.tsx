@@ -1,3 +1,4 @@
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import type { ReactNode } from "react";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { AdminShell } from "@/components/admin/AdminShell";
@@ -27,7 +28,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
     instalacaoSemSmtp(),
   ]);
   return (
-    <IdiomaProvider locale={locale}>
+    <IdiomaProvider locale={idiomaDaTela(locale)}>
       <AdminShell userEmail={user.email ?? ""} modulosLigados={modulos} semSmtp={semSmtp}>
         {children}
       </AdminShell>

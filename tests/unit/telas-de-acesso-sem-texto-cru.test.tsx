@@ -145,8 +145,10 @@ describe("o título da aba das telas de acesso segue o idioma do corpo", () => {
   });
 
   it.each([
-    ["navegador em espanhol, sem sessão", "es-ES,es;q=0.9", null, "Crear cuenta"],
-    ["navegador em português, perfil em espanhol", "pt-BR,pt;q=0.9", "es", "Crear cuenta"],
+    // espanhol e inglês saíram do seletor em 17/11/2026 (lib/i18n/registro.ts, `retiradoDoSeletorEm`): quem chega em espanhol,
+    // pelo navegador ou pelo perfil, lê o título em português — o mesmo do corpo.
+    ["navegador em espanhol, sem sessão", "es-ES,es;q=0.9", null, "Criar conta"],
+    ["navegador em português, perfil em espanhol", "pt-BR,pt;q=0.9", "es", "Criar conta"],
     ["navegador em português, sem sessão", "pt-BR,pt;q=0.9", null, "Criar conta"],
     ["nada", null, null, "Criar conta"],
   ])("%s: « %s »", async (_rotulo, aceita, locale, esperado) => {

@@ -130,6 +130,20 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe("rodapé e contato do card (decisão de 17/11)", () => {
+  it("mostra o telefone, não o e-mail, e não repete 'movido há'", () => {
+    const { container } = montar(false);
+    const contato = screen.getByTestId("contato-no-card");
+    expect(contato).toHaveTextContent("+55 11 98888-7777");
+    expect(contato).not.toHaveTextContent("ana@exemplo.com");
+    expect(container.querySelector("[data-movido-ha]")).toBeNull();
+    expect(container.textContent).not.toMatch(/movido/);
+    // As datas exatas continuam a um passar de mouse, no tempo na etapa.
+    const tempo = container.querySelector("[data-tempo-na-etapa]") as HTMLElement;
+    expect(tempo.getAttribute("title")).toMatch(/Criado em .* · Última movimentação /);
+  });
+});
+
 describe("card compacto × confortável (#3461, item 2)", () => {
   it("o confortável mostra a conversa e o contato", () => {
     const { container } = montar(false);

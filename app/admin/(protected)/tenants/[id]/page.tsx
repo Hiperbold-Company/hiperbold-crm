@@ -13,7 +13,7 @@ import type { ProvedorDeCobranca } from "@/lib/cobranca/vocabulario";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { loadAuthUser } from "@/lib/auth/server";
 import { tagDeIdioma } from "@/lib/i18n/datas";
-import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -99,7 +99,7 @@ async function lerIaDoMolde(orgId: string): Promise<IaDoMolde | null> {
     padrao: typeof meta.padrao?.default_model === "string" ? meta.padrao.default_model : null,
     // Formatado AQUI, com fuso fixo: no cliente, o HTML servido e a hidratação
     // divergiriam. Mesmo motivo e mesma escolha de `/admin/sistema`.
-    quando: new Date(data.created_at as string).toLocaleString(tagDeIdioma(usuario?.idioma ?? normalizarIdioma(null)), {
+    quando: new Date(data.created_at as string).toLocaleString(tagDeIdioma(usuario?.idioma ?? idiomaDaTela(null)), {
       timeZone: "America/Sao_Paulo",
       dateStyle: "short",
       timeStyle: "short",

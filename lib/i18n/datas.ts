@@ -2,7 +2,7 @@ import { enUS, es, ptBR } from "date-fns/locale";
 import type { Locale } from "date-fns";
 
 import { IDIOMA_PADRAO, type Idioma } from "./idiomas";
-import { idiomaVisivelPorCodigo } from "./registro";
+import { idiomaComTextoPorCodigo } from "./registro";
 
 /**
  * A DATA no idioma de quem está lendo.
@@ -56,5 +56,5 @@ export function localeDeData(idioma: Idioma): Locale {
  * o ganho é não haver um segundo lugar onde o idioma está escrito à mão.
  */
 export function tagDeIdioma(idioma: Idioma): string {
-  return idiomaVisivelPorCodigo(idioma).tagBcp47;
+  return idiomaComTextoPorCodigo(idioma).tagBcp47;
 }

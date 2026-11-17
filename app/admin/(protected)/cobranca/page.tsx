@@ -8,7 +8,7 @@ import { ROTULO_DO_ERRO, ROTULO_DO_ESTADO } from "@/lib/cobranca/rotulos";
 import { leituraAtrasada, lerVisaoGeral, montarChecklist } from "@/lib/cobranca/visao-geral";
 import type { ErroDeLeitura, EstadoDaAssinatura } from "@/lib/cobranca/vocabulario";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { COLUNAS_DO_PLANO } from "@/lib/schemas/cobranca-plano";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -50,7 +50,7 @@ interface ClienteDaTela {
  */
 export default async function CobrancaPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
   const { user } = await requirePlatformAdmin();
-  const idioma = normalizarIdioma((user.user_metadata?.locale as string | undefined) ?? null);
+  const idioma = idiomaDaTela((user.user_metadata?.locale as string | undefined) ?? null);
   const t = (texto: string) => traduzir(texto, idioma);
   const admin = createAdminClient();
   if (!(await moduloLigado(admin, "cobranca"))) notFound();

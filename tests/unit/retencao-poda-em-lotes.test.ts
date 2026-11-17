@@ -71,11 +71,24 @@ let tabelasLidas: string[] = [];
  * ele apaga está no fim deste arquivo — é o que prova `houveEfeito` contando.
  */
 let rascunhosApagados: Array<{ id: string }> = [];
+// A poda dos relatos de problema (migration 1018) também chama `from`; aqui ela não tem o que
+// apagar: a superfície devolve vazio, e o que o arquivo mede segue sendo o resto da rodada.
+function relatosVazios() {
+  const q: Record<string, unknown> = {
+    select: () => q,
+    lt: () => q,
+    order: () => q,
+    limit: () => q,
+    then: (r: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(r),
+  };
+  return q;
+}
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     rpc: async () => respostaRpc,
     from: (tabela: string) => {
       tabelasLidas.push(tabela);
+      if (tabela === "bug_reports") return relatosVazios();
       const q: Record<string, unknown> = {
         eq: () => q,
         in: () => q,

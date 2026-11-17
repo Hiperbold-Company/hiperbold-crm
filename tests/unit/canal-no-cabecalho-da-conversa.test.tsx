@@ -179,3 +179,19 @@ describe("o rótulo É o da página /channels", () => {
     expect(rotuloDoCanalDaConversa(canal)).toBeNull();
   });
 });
+
+describe("cabeçalho em DUAS linhas (decisão de 17/11)", () => {
+  const fonte = readFileSync("components/inbox/ConversationHeader.tsx", "utf8");
+  it("a raiz empilha identidade e ações em coluna, não lado a lado", () => {
+    expect(fonte).toMatch(/flex flex-col gap-2 border-b border-border bg-background/);
+    expect(fonte).not.toMatch(/flex flex-wrap items-center justify-between gap-2 border-b/);
+  });
+  it("conexão, telefone e comando moram na segunda linha, abaixo do nome", () => {
+    const nome = fonte.indexOf("<h2 ");
+    const canal = fonte.indexOf('data-testid="canal-da-conversa"');
+    const comando = fonte.indexOf('data-testid="comando-da-conversa"');
+    expect(nome).toBeGreaterThan(-1);
+    expect(canal).toBeGreaterThan(nome);
+    expect(comando).toBeGreaterThan(canal);
+  });
+});

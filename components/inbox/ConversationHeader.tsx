@@ -274,7 +274,10 @@ export function ConversationHeader({
     // fileira que rola na horizontal — a mesma régua de não esconder ação, sem
     // pagar em altura. `py-2` pelo mesmo motivo: cada pixel de altura ali é
     // tirado da conversa.
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background px-3 py-2 md:gap-3 md:px-4 md:py-3">
+    // DUAS LINHAS SEMPRE (decisão do dono do produto, 17/11, a partir do
+    // protótipo): em cima quem é o contato, embaixo as ações. Na linha única o
+    // nome espremia em três linhas ("Clínica / Bem / Estar") ao lado dos botões.
+    <div className="flex flex-col gap-2 border-b border-border bg-background px-3 py-2 md:px-4 md:py-3">
       {/* FAIXA DA CARTEIRA (#2591, regra 2): "este cliente pertence à carteira de
           A". `w-full` a põe numa linha própria acima da identidade, sem disputar
           espaço com a barra de ações — a faixa só existe quando o dono é OUTRA
@@ -285,7 +288,7 @@ export function ConversationHeader({
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-1.5">
           <ChannelLogo channel={conversation.channel_sessions} size={20} />
-          <h2 className="min-w-0 truncate text-sm font-semibold" title={displayName}>{displayName}</h2>
+          <h2 className="min-w-0 truncate text-base font-semibold" title={displayName}>{displayName}</h2>
           <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-2xs">
             {t(STATUS_LABEL[status] ?? status)}
           </Badge>
@@ -296,6 +299,12 @@ export function ConversationHeader({
             provider={conversation.channel_sessions?.provider ?? null}
             lastInboundAt={conversation.last_inbound_at}
           />
+        </div>
+
+        {/* SEGUNDA LINHA DA IDENTIDADE: por onde entrou (a conexão), o telefone e
+            quem está no comando — o que diz "que conversa é esta" sem disputar a
+            linha do nome. */}
+        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           {/* #2383: O CANAL DESTA CONVERSA, NO CABEÇALHO — a acepção que faltava
               da issue: a lista já dizia por onde a conversa entrou, a conversa
               ABERTA não dizia. O logo ao lado nomeia o provedor, não o número:
@@ -321,31 +330,30 @@ export function ConversationHeader({
               <span className="truncate">{rotuloCanal}</span>
             </Badge>
           )}
-        </div>
-
-        {/* QUEM ESTÁ NO COMANDO, com nome e por GEOMETRIA — disco cheio para
-            pessoa, anel vazado para o automático. É o mesmo componente do card do
-            funil e do dossiê: um terceiro jeito de dizer "quem manda", por cor ou
-            por texto, faria a mesma pergunta ter três respostas diferentes na
-            mesma tela. Cor não sobrevive ao daltonismo nem ao teste do metro. */}
-        <div className="mt-1 flex items-center gap-2" data-testid="comando-da-conversa">
-          {comando.quem === "humano" ? (
-            <OwnerBadge ownerKind="user" ownerName={comando.nome ?? t("Atendente")} />
-          ) : comando.quem === "automatico" ? (
-            <OwnerBadge ownerKind="ai" ownerName={t("Automático")} />
-          ) : (
-            // `ninguem`, `aguardando` e `encerrada` sem dono caem aqui: o disco
-            // TRACEJADO do OwnerBadge, que é como o funil já desenha "ninguém".
-            <OwnerBadge ownerKind={null} ownerName={null} />
+          {phone && (
+            // No celular o telefone sai: cada linha do cabeçalho é altura tirada
+            // do fio, e o número continua na Ficha.
+            <p className="flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground max-md:hidden">
+              <Phone size={11} weight="regular" aria-hidden /> {phone}
+            </p>
           )}
+          {/* QUEM ESTÁ NO COMANDO, com nome e por GEOMETRIA — disco cheio para
+              pessoa, anel vazado para o automático. É o mesmo componente do card do
+              funil e do dossiê: um terceiro jeito de dizer "quem manda", por cor ou
+              por texto, faria a mesma pergunta ter três respostas diferentes na
+              mesma tela. Cor não sobrevive ao daltonismo nem ao teste do metro. */}
+          <div className="flex items-center gap-2" data-testid="comando-da-conversa">
+            {comando.quem === "humano" ? (
+              <OwnerBadge ownerKind="user" ownerName={comando.nome ?? t("Atendente")} />
+            ) : comando.quem === "automatico" ? (
+              <OwnerBadge ownerKind="ai" ownerName={t("Automático")} />
+            ) : (
+              // `ninguem`, `aguardando` e `encerrada` sem dono caem aqui: o disco
+              // TRACEJADO do OwnerBadge, que é como o funil já desenha "ninguém".
+              <OwnerBadge ownerKind={null} ownerName={null} />
+            )}
+          </div>
         </div>
-        {phone && (
-          // No celular o telefone sai: cada linha do cabeçalho é altura tirada
-          // do fio, e o número continua na Ficha.
-          <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground max-md:hidden">
-            <Phone size={11} weight="regular" aria-hidden /> {phone}
-          </p>
-        )}
       </div>
 
       {/* `shrink-0` saiu daqui: era ele que impunha o piso de largura. Agora a
@@ -360,7 +368,7 @@ export function ConversationHeader({
           máscara apaga a borda direita para dizer que a fileira rola, e o `pr-8`
           deixa o último botão fora da máscara quando rolado até o fim. Tudo
           `max-md:` — no computador encolher a janela não é teclado. */}
-      <div className="flex min-w-0 flex-col items-end gap-1 max-md:w-full max-md:items-stretch max-md:group-data-[teclado-aberto]/conversa:hidden">
+      <div className="flex w-full min-w-0 flex-col items-start gap-1 max-md:items-stretch max-md:group-data-[teclado-aberto]/conversa:hidden">
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 max-md:flex-nowrap max-md:overflow-x-auto max-md:pb-1 max-md:pr-8 max-md:[&>*]:shrink-0 max-md:[mask-image:linear-gradient(to_right,black_calc(100%_-_2rem),transparent)]">
         {/* Primeira da barra e sem rótulo escrito: é ferramenta de LEITURA, não
             ação de atendimento, e não muda de lugar com o estado da conversa.
