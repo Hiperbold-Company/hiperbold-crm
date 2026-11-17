@@ -23,6 +23,8 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { moduloLigado } from "@/lib/instalacao/modulos";
+import { moduloInativo } from "@/lib/modulos/modulo-inativo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -48,6 +50,12 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const requestId = randomUUID();
+  // Módulo de tabela (ADR-0002): desligado em `/admin/modulos` (migration 1016), as tabelas
+  // continuam no banco, então a rota precisa perguntar o ESTADO — o 42P01 abaixo só cobre o
+  // módulo nunca instalado.
+  if (!(await moduloLigado(createAdminClient(), "honorarios"))) {
+    return fail("not_found", "Not found", 404, { requestId });
+  }
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
@@ -156,6 +164,7 @@ class Recusa extends Error {
 }
 
 function respostaDaRecusa(error: { message?: string; code?: string }, requestId: string): Response {
+  if (moduloInativo(error)) return fail("not_found", "Not found", 404, { requestId });
   if (moduloNaoInstalado(error)) {
     return fail("module_not_installed", MODULO_NAO_INSTALADO, 409, { requestId });
   }

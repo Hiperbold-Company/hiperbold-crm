@@ -1000,6 +1000,9 @@ export const AUDIT_ACTIONS = [
   // kind `module_install`), mas é um código próprio: "extension.installed" fala de pacote
   // baixado de um catálogo, e aqui não há pacote nenhum, só a função provisionadora do módulo.
   "modulo.instalado",
+  // Desligar e religar um módulo de tabela (migration 1016): só o estado muda, os dados ficam.
+  "modulo.desligado",
+  "modulo.religado",
   // "Cliente pela agenda" ligada ou desligada (migration 0262). Ligar reescreve
   // etiquetas de toda a organização; metadata leva as contagens.
   "crm.cliente_pela_agenda_alterado",

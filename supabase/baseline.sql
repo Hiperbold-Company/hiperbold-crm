@@ -6906,6 +6906,11 @@ as $f$
 begin
   perform public.fn_proteger_tabelas_de_organizacao();
   perform public.fn_aplicar_travas_de_suporte();
+  -- 1016: escrita em tabela de módulo exige o módulo ativo. A trava nasce mais abaixo no baseline;
+  -- até ela existir, nada a aplicar.
+  if to_regprocedure('public.fn_aplicar_trava_de_modulo_inativo()') is not null then
+    perform public.fn_aplicar_trava_de_modulo_inativo();
+  end if;
 end $f$;
 
 revoke execute on function public.fn_proteger_tabelas_de_organizacao() from public, anon, authenticated, service_role;
@@ -27943,7 +27948,8 @@ alter table public.extension_installations add constraint extension_installation
 alter table public.organization_extensions add column if not exists deactivated_by_removal_at timestamptz;
 alter table public.extension_operations drop constraint if exists extension_operations_kind_check;
 alter table public.extension_operations add constraint extension_operations_kind_check
-  check (kind in ('catalog_admission','install','update','revert','removal','configure','module_install'));
+  check (kind in ('catalog_admission','install','update','revert','removal','configure','module_install',
+                  'module_disable','module_enable'));
 alter table public.extension_operations drop constraint if exists extension_operations_status_check;
 alter table public.extension_operations add constraint extension_operations_status_check
   check (status in ('preparing','completed','failed','cancelled'));
@@ -33474,7 +33480,7 @@ notify pgrst, 'reload schema';
 -- ── 1. O registro da instância ───────────────────────────────────────────────
 create table if not exists public.modulos_instalados (
   modulo text primary key check (modulo ~ '^[a-z][a-z0-9_]{1,40}$'),
-  estado text not null default 'ativo' check (estado in ('ativo', 'suspenso')),
+  estado text not null default 'ativo' check (estado in ('ativo', 'suspenso', 'desligado')),
   instalado_em timestamptz not null default now(),
   instalado_por uuid references auth.users(id) on delete set null,
   reaplicado_em timestamptz,
@@ -33483,8 +33489,86 @@ create table if not exists public.modulos_instalados (
 comment on table public.modulos_instalados is
   'Módulos opcionais instalados NA INSTÂNCIA (ADR-0002, D3). Sem organization_id: o corte é por instalação. Escrito só por fn_modulo_instalar e fn_reaplicar_modulos_instalados.';
 
+-- 1016: `desligado` (desligar/religar sem perder dados). A CHECK inline só vale para banco novo; o
+-- banco que já tem a tabela recebe a lista completa por este drop + add — o ÚNICO bloco desta
+-- constraint (tests/unit/baseline-constraint-reconstruida.test.ts). A lista só cresce, então nenhuma
+-- linha existente a viola.
+alter table public.modulos_instalados drop constraint if exists modulos_instalados_estado_check;
+alter table public.modulos_instalados add constraint modulos_instalados_estado_check
+  check (estado in ('ativo', 'suspenso', 'desligado'));
+
 alter table public.modulos_instalados enable row level security;
 revoke all on public.modulos_instalados from anon, authenticated;
+
+-- ── 1016: a ação do módulo exige o módulo ativo ──────────────────────────────
+-- Fica logo depois do registro, ANTES de qualquer chamador no arquivo. Desligar não pode valer só
+-- no app: as RPCs que MUDAM dados de módulo e estão expostas a `authenticated` (fn_finalizar_comanda,
+-- fn_estornar_comanda, fn_honorarios_parcela_pagar) começam por `fn_modulo_exigir_ativo`, e as
+-- tabelas do módulo ganham policies RESTRITIVAS de escrita com `fn_modulo_esta_ativo`. Sem linha no
+-- registro (módulo provisionado direto, como na bateria de invariantes) não há decisão de quem
+-- administra a respeitar: as duas deixam passar. Leitura não muda.
+create or replace function public.fn_modulo_exigir_ativo(p_modulo text)
+returns void language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare
+  v_estado text;
+begin
+  select estado into v_estado from public.modulos_instalados where modulo = p_modulo;
+  if found and v_estado <> 'ativo' then
+    raise exception using errcode = 'PT423', message = 'modulo_inativo',
+      detail = format('modulo=%s estado=%s', p_modulo, v_estado),
+      hint = 'O módulo está desligado ou suspenso nesta instalação.';
+  end if;
+end $$;
+
+-- Só as RPCs definer a chamam, e elas rodam como o dono: nenhum papel do PostgREST precisa dela.
+revoke execute on function public.fn_modulo_exigir_ativo(text) from public, anon, authenticated, service_role;
+
+-- A versão que NÃO lança, para as policies: devolve se o módulo pode ser escrito agora.
+create or replace function public.fn_modulo_esta_ativo(p_modulo text)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select coalesce((select m.estado = 'ativo' from public.modulos_instalados m where m.modulo = p_modulo), true)
+$$;
+
+-- As policies rodam com o papel de quem escreve: `authenticated` precisa de EXECUTE. Ela só diz
+-- o estado de um módulo da instalação, que não é dado de organização.
+revoke execute on function public.fn_modulo_esta_ativo(text) from public, anon;
+grant execute on function public.fn_modulo_esta_ativo(text) to authenticated, service_role;
+
+-- As três policies restritivas de escrita (insert, update, delete) em cada tabela de módulo que já
+-- existe. A lista é fixa e por módulo; tabela que ainda não existe fica para quando a provisionadora
+-- a criar (fn_proteger_modulo_provisionado chama esta função no fim). Só cria a policy que falta:
+-- reaplicar não toma trava de tabela à toa.
+create or replace function public.fn_aplicar_trava_de_modulo_inativo()
+returns void language plpgsql set search_path = public, pg_temp as $f$
+declare
+  r record;
+  c text;
+begin
+  for r in
+    select t.modulo, t.tabela
+      from (values ('financeiro', 'sales'), ('financeiro', 'sale_items'), ('financeiro', 'loyalty_ledger'),
+                   ('financeiro', 'commissions'), ('financeiro', 'commission_rules'),
+                   ('honorarios', 'honorarios_contratos'), ('honorarios', 'honorarios_parcelas'))
+           as t(modulo, tabela)
+     where to_regclass(format('public.%I', t.tabela)) is not null
+  loop
+    foreach c in array array['insert', 'update', 'delete'] loop
+      if not exists (select 1 from pg_policies
+                      where schemaname = 'public' and tablename = r.tabela
+                        and policyname = 'modulo_ativo_' || c) then
+        execute format('create policy %I on public.%I as restrictive for %s to authenticated %s',
+          'modulo_ativo_' || c, r.tabela, c,
+          case c
+            when 'insert' then format('with check ((select public.fn_modulo_esta_ativo(%L)))', r.modulo)
+            when 'update' then format('using ((select public.fn_modulo_esta_ativo(%L))) with check ((select public.fn_modulo_esta_ativo(%L)))', r.modulo, r.modulo)
+            else format('using ((select public.fn_modulo_esta_ativo(%L)))', r.modulo)
+          end);
+      end if;
+    end loop;
+  end loop;
+end $f$;
+
+revoke execute on function public.fn_aplicar_trava_de_modulo_inativo() from public, anon, authenticated, service_role;
 
 -- ── 2. O recibo mora no mesmo livro das extensões ────────────────────────────
 -- Um tipo novo, `module_install`, em vez de um segundo livro: a instalação passa "pelo mesmo
@@ -33534,10 +33618,13 @@ begin
   -- O nome só chega aqui depois de passar pelo slug e pela existência da função; `%I` o cita.
   execute format('select public.%I()', 'fn_' || p_modulo || '_provisionar');
 
+  -- 1016: quando a linha já existe, instalar de novo NÃO mexe em `estado`. Um módulo desligado
+  -- por quem administra só religa pela fn_modulo_definir_estado (botão "Ligar de novo"), e um
+  -- suspenso só sai de lá pela atualização que o conserta.
   insert into public.modulos_instalados (modulo, estado, instalado_por, reaplicado_em)
     values (p_modulo, 'ativo', p_actor, now())
     on conflict (modulo) do update
-      set estado = 'ativo', motivo_suspensao = null, reaplicado_em = now();
+      set reaplicado_em = now();
 
   insert into public.extension_operations
       (id, kind, status, actor_id, name, request_fingerprint, request, result)
@@ -33576,8 +33663,14 @@ begin
         raise exception 'a provisionadora de % não existe nesta versão', r.modulo;
       end if;
       execute format('select public.%I()', 'fn_' || r.modulo || '_provisionar');
+      -- 1016: um módulo DESLIGADO por quem administra continua desligado depois da atualização. A
+      -- provisionadora roda mesmo assim, para as tabelas acompanharem a versão e religar ser só
+      -- trocar o estado. Este corpo é editado AQUI, e não redefinido no fim do apêndice, porque o
+      -- rodapé do baseline chama a função ANTES do fim: uma redefinição posterior chegaria tarde e
+      -- o update.sh religaria o módulo desligado.
       update public.modulos_instalados
-        set estado = 'ativo', motivo_suspensao = null, reaplicado_em = now()
+        set estado = case when estado = 'desligado' then 'desligado' else 'ativo' end,
+            motivo_suspensao = null, reaplicado_em = now()
         where modulo = r.modulo;
     exception
       -- Disputa de trava com o app no ar NÃO é defeito do módulo: relançar desfaz esta
@@ -33586,9 +33679,13 @@ begin
       -- aplicar de novo. Suspender aqui tiraria do ar um módulo que só precisava esperar.
       when deadlock_detected or serialization_failure or lock_not_available then
         raise;
+      -- 1016: a falha NUNCA sobrescreve `desligado`. Gravar `suspenso` por cima apagaria a decisão
+      -- do administrador, e a atualização seguinte, já consertada, levaria `suspenso` a `ativo`: o
+      -- módulo religaria sozinho. O motivo fica anotado para quem religar saber.
       when others then
         update public.modulos_instalados
-          set estado = 'suspenso', motivo_suspensao = sqlerrm
+          set estado = case when estado = 'desligado' then 'desligado' else 'suspenso' end,
+              motivo_suspensao = sqlerrm
           where modulo = r.modulo;
     end;
   end loop;
@@ -34026,7 +34123,7 @@ create or replace function public.fn_finalizar_comanda(
   p_payment_method uuid,
   p_loyalty_points integer default 0
 )
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   -- ⚠️ `record` e NÃO `public.sales%rowtype`, por D7 da ADR-0002: a tabela é do
   -- módulo e não existe onde ele não está instalado, e `%rowtype` é resolvido na
@@ -34040,6 +34137,8 @@ declare
   v_item       record;
   v_entry      uuid;
 begin
+  -- 1016: módulo desligado (ou suspenso) não aceita ação, mesmo chamada direto pela REST.
+  perform public.fn_modulo_exigir_ativo('financeiro');
   if auth.uid() is null or not public.fn_role_at_least(p_org, 'agent') then
     raise exception 'comanda_forbidden' using errcode = '42501';
   end if;
@@ -34155,7 +34254,7 @@ grant execute on function public.fn_finalizar_comanda(uuid, uuid, uuid, integer)
 
 -- ─── O ESTORNO: contra-lançamento, nunca exclusão ────────────────────────────
 create or replace function public.fn_estornar_comanda(p_org uuid, p_sale uuid, p_motivo text)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   -- ⚠️ `record` e NÃO `%rowtype`, por D7 da ADR-0002 (medido: `%rowtype` contra
   -- tabela do módulo ausente faz a CRIAÇÃO da função falhar).
@@ -34163,6 +34262,8 @@ declare
   v_orig   record;
   v_novo   uuid;
 begin
+  -- 1016: módulo desligado (ou suspenso) não aceita ação, mesmo chamada direto pela REST.
+  perform public.fn_modulo_exigir_ativo('financeiro');
   if auth.uid() is null or not public.fn_role_at_least(p_org, 'manager') then
     raise exception 'estorno_forbidden' using errcode = '42501';
   end if;
@@ -37360,6 +37461,8 @@ declare
   v_parcela record;
   v_entry uuid;
 begin
+  -- 1016: módulo desligado (ou suspenso) não aceita ação, mesmo chamada direto pela REST.
+  perform public.fn_modulo_exigir_ativo('honorarios');
   if auth.uid() is null or not public.fn_role_at_least(p_org, 'manager') then
     raise exception 'honorarios_forbidden' using errcode = '42501';
   end if;
@@ -102987,6 +103090,104 @@ grant execute on function public.fn_mover_negocio_para_outro_funil(uuid, uuid, u
 
 comment on function public.fn_mover_negocio_para_outro_funil(uuid, uuid, uuid, numeric, timestamptz) is
   'Migration 1013 (fork Hiperbold): o ÚNICO caminho que troca crm_leads.pipeline_id. Leva o MESMO negócio (id, contato, responsável, histórico e custom_fields intactos) para uma etapa de outro funil da mesma organização. Só service_role; quem chama é moverParaOutroFunilHandler (app/api/v1/leads/_handler.ts), que emite lead.stage_changed, a atividade e a auditoria.';
+
+-- ---- desligar e religar um módulo de tabela sem perder dados (migration 1016, fork Hiperbold) ----
+-- Espelho idempotente da 1016; racional completo no arquivo da migration. As duas CHECKs (estado de
+-- `modulos_instalados` e kind de `extension_operations`) e os corpos de `fn_reaplicar_modulos_instalados`,
+-- `fn_modulo_instalar`, `fn_finalizar_comanda`, `fn_estornar_comanda` e `fn_honorarios_parcela_pagar`
+-- foram editados nos blocos únicos deles, acima, como o de `fn_proteger_modulo_provisionado`; os helpers
+-- `fn_modulo_exigir_ativo`, `fn_modulo_esta_ativo` e `fn_aplicar_trava_de_modulo_inativo` ficam logo depois
+-- de `modulos_instalados`, antes dos chamadores. Aqui ficam a porta nova e a aplicação da trava. Este bloco fica ANTES da
+-- VARREDURA anon (tests/unit/varredura-anon-e-o-ultimo-bloco.test.ts).
+
+-- ── 3. a porta de desligar e religar ─────────────────────────────────────────
+create or replace function public.fn_modulo_definir_estado(
+  p_actor uuid, p_operation uuid, p_modulo text, p_ligar boolean, p_estado_visto text)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_kind text := case when p_ligar then 'module_enable' else 'module_disable' end;
+  v_request jsonb;
+  v_op public.extension_operations;
+  v_atual text;
+  v_motivo text;
+begin
+  perform public.fn_extensions_assert_actor(p_actor);
+  if p_operation is null or p_ligar is null or p_modulo is null
+     or p_modulo !~ '^[a-z][a-z0-9_]{1,40}$'
+     or p_estado_visto is null or p_estado_visto not in ('ativo', 'suspenso', 'desligado') then
+    raise exception using errcode = 'P0001', message = 'extension_invalid_input';
+  end if;
+  v_request := jsonb_build_object('kind', v_kind, 'actor', p_actor, 'modulo', p_modulo,
+                                  'estado_visto', p_estado_visto);
+
+  -- A mesma trava do instalar e das extensões; o ator é conferido de novo depois da espera.
+  perform pg_advisory_xact_lock(255, 1);
+  perform public.fn_extensions_assert_actor(p_actor);
+
+  select * into v_op from public.extension_operations where id = p_operation;
+  if found then
+    if v_op.request_fingerprint <> public.fn_extensions_fingerprint(v_request) then
+      raise exception using errcode = 'P0001', message = 'extension_idempotency_conflict';
+    end if;
+    return to_jsonb(v_op) || jsonb_build_object('applied_now', false);
+  end if;
+
+  if public.fn_extensions_core_update_in_progress() then
+    raise exception using errcode = 'P0001', message = 'extension_core_update_in_progress';
+  end if;
+
+  select estado, motivo_suspensao into v_atual, v_motivo
+    from public.modulos_instalados where modulo = p_modulo for update;
+  if not found then
+    raise exception using errcode = 'P0001', message = 'extension_module_not_installed';
+  end if;
+
+  -- Concorrência otimista: a troca vale só sobre o estado que a tela mostrou. E cada direção tem um
+  -- único ponto de partida: desligar sai de `ativo`, religar sai de `desligado`. Um `suspenso` não se
+  -- religa por aqui (precisa da atualização que o conserta), nem se desliga.
+  if v_atual <> p_estado_visto
+     or (p_ligar and v_atual <> 'desligado')
+     or (not p_ligar and v_atual <> 'ativo') then
+    raise exception using errcode = 'P0001', message = 'extension_module_state_changed';
+  end if;
+
+  -- Religar um módulo cuja provisionadora falhou na última atualização o poria no ar com as tabelas
+  -- fora da versão. O motivo só é limpo por uma atualização que dê certo.
+  if p_ligar and v_motivo is not null then
+    raise exception using errcode = 'PT428', message = 'extension_module_needs_update',
+      hint = 'O módulo teve falha na última atualização; rode a atualização antes de religar.';
+  end if;
+
+  -- Só o estado muda. Nenhuma tabela do módulo é tocada, nem a provisionadora roda.
+  update public.modulos_instalados
+     set estado = case when p_ligar then 'ativo' else 'desligado' end
+   where modulo = p_modulo;
+
+  insert into public.extension_operations
+      (id, kind, status, actor_id, name, request_fingerprint, request, result)
+    values
+      (p_operation, v_kind, 'completed', p_actor, p_modulo,
+       public.fn_extensions_fingerprint(v_request), v_request,
+       jsonb_build_object('modulo', p_modulo, 'de', v_atual,
+                          'para', case when p_ligar then 'ativo' else 'desligado' end))
+    returning * into v_op;
+
+  return to_jsonb(v_op) || jsonb_build_object('applied_now', true);
+end $$;
+
+revoke execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) from public, anon;
+revoke execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) from authenticated;
+grant execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) to service_role;
+
+
+-- Quem já tem o módulo instalado recebe as policies de escrita agora; quem instalar depois as recebe
+-- pela provisionadora (fn_proteger_modulo_provisionado).
+select public.fn_aplicar_trava_de_modulo_inativo();
+
+comment on table public.modulos_instalados is
+  'Módulos opcionais instalados NA INSTÂNCIA (ADR-0002, D3). Sem organization_id: o corte é por instalação. Escrito só por fn_modulo_instalar, fn_modulo_definir_estado (1016: desligar/religar, sem apagar dados) e fn_reaplicar_modulos_instalados.';
+
+notify pgrst, 'reload schema';
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --

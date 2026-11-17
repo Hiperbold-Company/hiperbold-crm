@@ -26,6 +26,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { estornarSchema } from "@/lib/financeiro/comanda";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { moduloLigado } from "@/lib/instalacao/modulos";
+import { moduloInativo } from "@/lib/modulos/modulo-inativo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   });
 
   if (error) {
+    if (moduloInativo(error)) return fail("not_found", "Not found", 404, { requestId });
     const traduzido = traduzirErro(error.message);
     if (traduzido) {
       return fail(traduzido.code as never, traduzido.texto, traduzido.status as never, { requestId });

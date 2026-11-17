@@ -1227,5 +1227,9 @@ function tituloDoPedido(kind: PendingReceipt["kind"], t: (texto: string) => stri
       return t("Configuração");
     case "module_install":
       return t("Instalação de módulo");
+    case "module_disable":
+      return t("Módulo desligado");
+    case "module_enable":
+      return t("Módulo religado");
   }
 }

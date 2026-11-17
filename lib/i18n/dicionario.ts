@@ -18275,6 +18275,13 @@ export const DICIONARIO: Traducoes = {
   "Operação da plataforma": { es: "Operación de la plataforma" },
   "Instalação de módulo": { es: "Instalación de módulo" },
   "Módulo {nome}": { es: "Módulo {nome}" },
+  "Módulo desligado": { es: "Módulo desactivado" },
+  "Módulo religado": { es: "Módulo reactivado" },
+  "Ligar de novo": { es: "Activar de nuevo" },
+  "Desligar {nome}?": { es: "¿Desactivar {nome}?" },
+  "Desligar esconde o módulo das telas de todas as organizações e bloqueia as ações dele. Os dados ficam guardados e voltam ao religar.": {
+    es: "Desactivar oculta el módulo de las pantallas de todas las organizaciones y bloquea sus acciones. Los datos quedan guardados y vuelven al reactivar.",
+  },
   "Confira o catálogo admitido e tente a instalação novamente.": {
     es: "Revisa el catálogo admitido e intenta instalar de nuevo.",
   },

@@ -35,6 +35,8 @@ vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
+// As rotas de honorários perguntam se o módulo está ligado (migration 1016); aqui ele está.
+vi.mock("@/lib/instalacao/modulos", () => ({ moduloLigado: vi.fn(async () => true) }));
 
 const ORG = "22222222-2222-4222-8222-222222222222";
 const ORG_DE_FORA = "99999999-9999-4999-8999-999999999999";
