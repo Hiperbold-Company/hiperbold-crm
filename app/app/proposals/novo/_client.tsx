@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { ArrowLeft, CircleNotch, MagnifyingGlass } from "@/lib/ui/icons";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
@@ -109,13 +110,13 @@ export function NewProposalClient({
     e.preventDefault();
 
     if (!leadId) {
-      alert(t("Por favor, selecione o negócio associado à proposta."));
+      toast.error(t("Por favor, selecione o negócio associado à proposta."));
       return;
     }
 
     const trimmedTitulo = titulo.trim();
     if (!trimmedTitulo) {
-      alert(t("Por favor, informe o título da proposta."));
+      toast.error(t("Por favor, informe o título da proposta."));
       return;
     }
 

@@ -14653,6 +14653,9 @@
   "Filtros": "Filters",
   "Ver resultados": "View results",
   "Escolha os filtros e toque em Ver resultados.": "Choose your filters and tap View results.",
+  "Paginação": "Pagination",
+  "Página {a} de {b}": "Page {a} of {b}",
+  "Página {a}": "Page {a}",
   "na etapa": "in stage",
   "Relatar problema": "Report a problem",
   "Relatar um problema": "Report a problem",
@@ -14696,5 +14699,12 @@
   "Clínica Bem Viver": "Wellness Clinic",
   "Gerente de compras": "Purchasing manager",
   "Oi! Queria saber o valor da consulta.": "Hi! I'd like to know the price of the appointment.",
-  "Outra pessoa alterou este funil ao mesmo tempo. Recarregue e tente de novo.": "Someone else changed this pipeline at the same time. Reload and try again."
+  "Outra pessoa alterou este funil ao mesmo tempo. Recarregue e tente de novo.": "Someone else changed this pipeline at the same time. Reload and try again.",
+  "Ligar a limpeza de mídia antiga?": "Turn on old media cleanup?",
+  "Trocar modelo": "Change template",
+  "Recusar proposta": "Decline proposal",
+  "Motivo da recusa (opcional)": "Reason for declining (optional)",
+  "Prazo da solicitação": "Request deadline",
+  "Uso do orçamento de IA": "AI budget usage",
+  "Este funil está arquivado. Tire-o do arquivo em Funis para editar o cartão.": "This pipeline is archived. Unarchive it in Pipelines to edit the card."
 }

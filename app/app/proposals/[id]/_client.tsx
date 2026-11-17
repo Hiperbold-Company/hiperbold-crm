@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
+import { useConfirmar } from "@/components/ui/confirmar";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
@@ -133,6 +134,7 @@ function camposRecusados(details: Record<string, unknown> | undefined): string[]
 
 export function ProposalEditorClient({ id, podeEditar, podeRevisar = false }: { id: string; podeEditar: boolean; podeRevisar?: boolean }) {
   const t = useT();
+  const { confirmar, perguntar } = useConfirmar();
   const [proposta, setProposta] = useState<Proposta | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -331,7 +333,12 @@ export function ProposalEditorClient({ id, podeEditar, podeRevisar = false }: { 
   }
 
   async function descartar() {
-    if (!window.confirm(t("Descartar este rascunho? A proposta anterior (se houver) não é afetada."))) return;
+    const ok = await confirmar({
+      titulo: t("Descartar este rascunho? A proposta anterior (se houver) não é afetada."),
+      confirmar: t("Descartar"),
+      perigo: true,
+    });
+    if (!ok) return;
     setSalvando(true);
     setErro(null);
     try {
@@ -728,9 +735,16 @@ export function ProposalEditorClient({ id, podeEditar, podeRevisar = false }: { 
           </Button>
           <Button
             variant="outline"
-            onClick={() => {
-              const motivo = prompt(t("Motivo da recusa (opcional):")) ?? undefined;
-              void decidir("recusada", motivo);
+            onClick={async () => {
+              const motivo = await perguntar({
+                titulo: t("Recusar proposta"),
+                rotulo: t("Motivo da recusa (opcional)"),
+                opcional: true,
+                confirmar: t("Recusar"),
+                perigo: true,
+              });
+              if (motivo === null) return;
+              void decidir("recusada", motivo || undefined);
             }}
           >
             {t("Marcar como recusada")}

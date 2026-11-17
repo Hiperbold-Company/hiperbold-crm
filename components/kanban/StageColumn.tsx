@@ -1,5 +1,6 @@
 "use client";
 import { Droppable } from "@hello-pangea/dnd";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useRef, useState, type CSSProperties } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { cn } from "@/lib/utils";
@@ -197,12 +198,9 @@ export function StageColumn({
             podem ter a mesma aparência num controle que o próximo clique
             inverte. */}
             {!somenteLeitura && (
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={todosSelecionados}
-                ref={(el) => {
-                  if (el) el.indeterminate = selecionadosAqui > 0 && !todosSelecionados;
-                }}
+                indeterminado={selecionadosAqui > 0 && !todosSelecionados}
                 disabled={idsVisiveis.length === 0}
                 onChange={alternarEtapa}
                 aria-label={

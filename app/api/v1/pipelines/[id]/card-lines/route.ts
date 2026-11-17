@@ -67,12 +67,18 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   for (let tentativa = 0; tentativa < TENTATIVAS && !gravou; tentativa += 1) {
     const { data: row, error: readErr } = await supabase
       .from("crm_pipelines")
-      .select("id, settings, updated_at")
+      .select("id, settings, updated_at, is_archived")
       .eq("id", pipelineId)
       .eq("organization_id", orgId)
       .maybeSingle();
     if (readErr) return falhaInterna("internal_error", readErr, { requestId });
     if (!row) return fail("not_found", t("Funil não encontrado."), 404, { requestId });
+    // Funil arquivado é só leitura (#1298): o botão nem aparece, e a rota recusa igual.
+    if ((row as { is_archived?: boolean | null }).is_archived) {
+      return fail("conflict", t("Este funil está arquivado. Tire-o do arquivo em Funis para editar o cartão."), 409, {
+        requestId,
+      });
+    }
 
     const atual = (row as { settings: Record<string, unknown> | null }).settings;
     let escrita = supabase

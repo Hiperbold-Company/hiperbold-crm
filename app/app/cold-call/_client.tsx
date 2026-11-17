@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -11,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ChatThread } from "@/components/inbox/ChatThread";
 import { Composer } from "@/components/inbox/Composer";
 import { Button } from "@/components/ui/button";
+import { Paginacao } from "@/components/ui/paginacao";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,8 +46,6 @@ import {
   CalendarCheck,
   CalendarPlus,
   CaretDown,
-  CaretLeft,
-  CaretRight,
   ChartBar,
   Check,
   Clock,
@@ -483,11 +483,9 @@ function Fila({
               <thead className="border-b border-border/70 text-xs font-medium text-text-muted">
                 <tr>
                   <th className="w-10 py-3 pl-4">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={tudoMarcado}
                       aria-label={t("Selecionar todos")}
-                      className="size-4 accent-[var(--color-accent)]"
                       onChange={() =>
                         setMarcados((atuais) => {
                           const novo = new Set(atuais);
@@ -516,11 +514,9 @@ function Fila({
                   return (
                     <tr key={lead.id} className="border-b border-border/40 last:border-0 hover:bg-surface-elevated/50" data-testid="linha-da-fila">
                       <td className="py-2.5 pl-4">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={marcados.has(lead.id)}
                           aria-label={`${t("Selecionar")} ${lead.titulo}`}
-                          className="size-4 accent-[var(--color-accent)]"
                           onChange={() =>
                             setMarcados((atuais) => {
                               const novo = new Set(atuais);
@@ -601,16 +597,8 @@ function Fila({
         )}
 
         {visiveis.length > 0 && (
-          <footer className="flex items-center justify-end gap-2 border-t border-border/60 p-3">
-            <span className="mr-auto pl-1 text-xs tabular-nums text-text-muted">
-              {t("Página")} {atual + 1} {t("de")} {paginas}
-            </span>
-            <Button variant="outline" size="sm" disabled={atual === 0} onClick={() => setPagina(atual - 1)}>
-              <CaretLeft size={14} className="mr-1" aria-hidden /> {t("Anterior")}
-            </Button>
-            <Button variant="outline" size="sm" disabled={atual >= paginas - 1} onClick={() => setPagina(atual + 1)}>
-              {t("Próxima")} <CaretRight size={14} className="ml-1" aria-hidden />
-            </Button>
+          <footer className="border-t border-border/60 p-3">
+            <Paginacao pagina={atual + 1} totalDePaginas={paginas} onIr={(p) => setPagina(p - 1)} />
           </footer>
         )}
       </section>

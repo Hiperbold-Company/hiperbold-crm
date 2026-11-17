@@ -6,6 +6,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { distanciaDoPrazo } from "@/lib/lgpd/contagem-do-prazo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Paginacao } from "@/components/ui/paginacao";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -329,27 +330,7 @@ export function RequestsTable({
 
       {/* Pagination */}
       {meta && (meta.page > 1 || meta.has_more) && (
-        <div className="flex items-center justify-between text-sm">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1 || q.isFetching}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            {t("Anterior")}
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            {t("Página")} {meta.page}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!meta.has_more || q.isFetching}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            {t("Próxima")}
-          </Button>
-        </div>
+        <Paginacao pagina={meta.page} temProxima={meta.has_more} carregando={q.isFetching} onIr={setPage} />
       )}
     </div>
   );

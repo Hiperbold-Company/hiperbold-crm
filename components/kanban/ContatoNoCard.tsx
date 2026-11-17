@@ -42,9 +42,12 @@ interface Props {
  */
 export function ContatoNoCard({ lead, linhas = LINHAS_PADRAO }: Props) {
   const links = (lead.contact_links ?? []).filter(({ href }) => /^https?:\/\//i.test(href));
+  const naoLidas = lead.conversa?.unread ?? 0;
   const preenchidas = linhas
     .map((campo) => ({ campo, valor: valorDaLinha(lead, campo) }))
-    .filter((l): l is { campo: CampoDoCartao; valor: string } => l.valor !== null);
+    // Conversa SEM prévia mas COM não lidas não some: o contador é o que importa,
+    // e a linha diz "conversa sem mensagens" ao lado dele (ainda só texto).
+    .filter((l) => l.valor !== null || (l.campo === "ultima_mensagem" && naoLidas > 0));
 
   if (preenchidas.length === 0 && links.length === 0) return null;
 
@@ -55,7 +58,7 @@ export function ContatoNoCard({ lead, linhas = LINHAS_PADRAO }: Props) {
           key={campo}
           campo={campo}
           valor={valor}
-          naoLidas={campo === "ultima_mensagem" ? (lead.conversa?.unread ?? 0) : 0}
+          naoLidas={campo === "ultima_mensagem" ? naoLidas : 0}
         />
       ))}
       {links.length > 0 && (
@@ -72,14 +75,15 @@ export function LinhaDoCartao({
   naoLidas = 0,
 }: {
   campo: CampoDoCartao;
-  valor: string;
+  /** `null` só na última mensagem sem prévia e com não lidas. */
+  valor: string | null;
   naoLidas?: number;
 }) {
   const t = useT();
   let icone: ReactNode = null;
   let rotulo = "";
   let dica: string | undefined;
-  let exibido = valor;
+  let exibido = valor ?? "";
   let numerico = false;
   switch (campo) {
     case "telefone":
@@ -106,7 +110,7 @@ export function LinhaDoCartao({
     case "origem":
       icone = <Signpost size={12} aria-hidden className="shrink-0" />;
       rotulo = t("Origem");
-      exibido = rotuloDaOrigem(valor);
+      exibido = rotuloDaOrigem(exibido);
       break;
     case "utm_source":
       rotulo = "source";
@@ -135,7 +139,11 @@ export function LinhaDoCartao({
       ) : (
         <span className="sr-only">{rotulo}: </span>
       )}
-      <span className="truncate">{exibido}</span>
+      {valor === null ? (
+        <span className="truncate italic">{t("conversa sem mensagens")}</span>
+      ) : (
+        <span className="truncate">{exibido}</span>
+      )}
       {naoLidas > 0 && (
         // O número, não um ponto: "3 sem ler" e "12 sem ler" pedem urgências
         // diferentes. É texto: a linha não tem clique.

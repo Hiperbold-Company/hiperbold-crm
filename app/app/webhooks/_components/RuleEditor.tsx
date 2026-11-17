@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import * as React from "react";
 import { toast } from "sonner";
 
@@ -629,8 +630,7 @@ export function RuleEditor({ open, onOpenChange, rule }: Props) {
                     que é o caso relatado (o lead volta pelo mesmo anúncio e
                     recebia a sequência inteira outra vez). */}
                 <label className="mt-3 flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={umaVezPorContato}
                     onChange={(e) => setUmaVezPorContato(e.target.checked)}
                   />
@@ -875,8 +875,7 @@ export function RuleEditor({ open, onOpenChange, rule }: Props) {
                 </div>
 
                 <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={configDoTempo.proteger_pela_agenda}
                     onChange={(e) =>
                       setConfigDoTempo((prev) => ({

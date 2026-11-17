@@ -17,7 +17,14 @@ import { type NextRequest } from "next/server";
 
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
-import { chavesRestritasDosCampos, recortarLinha, recortarSettingsDoFunil } from "@/lib/campos/recorte-por-papel";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import {
+  chavesRestritasDosCampos,
+  leitorVeCamposRestritos,
+  recortarLinha,
+  recortarSettingsDoFunil,
+  unirChavesRestritas,
+} from "@/lib/campos/recorte-por-papel";
 import { traduzir } from "@/lib/i18n/dicionario";
 import {
   roteiaProximasAcoes,
@@ -587,7 +594,13 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   if (pipelineErr) return falhaInterna("internal_error", pipelineErr, { requestId });
   if (stagesErr) return falhaInterna("internal_error", stagesErr, { requestId });
   if (leadsErr) return falhaInterna("internal_error", leadsErr, { requestId });
-  if (!pipeline) return fail("resource_not_found", t("Pipeline não encontrado."), 404, { requestId });
+  // O funil é lido só pelo id (a RLS deixa ver o de TODA organização de que o usuário é membro),
+  // e o papel aplicado adiante é o da organização ATIVA. Funil de outra organização responde 404,
+  // igual ao inexistente: senão quem é admin em A e atendente em B leria o quadro de B recortado
+  // como admin.
+  if (!pipeline || (pipeline as Pipeline).organization_id !== authz.org.orgId) {
+    return fail("resource_not_found", t("Pipeline não encontrado."), 404, { requestId });
+  }
 
   // Contato pessoal some do board mas a linha continua no banco (spec 21, etapa
   // 8, decisão 2 — critério 4): o card não é listado e volta ao desmarcar, com
@@ -704,11 +717,25 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const papel = authz.org.role;
   const restritas = chavesRestritasDosCampos(((pipeline as Pipeline).settings as { fields?: unknown } | null)?.fields);
 
+  // Cargo e empresa do CARTÃO saem do `custom_fields` do CONTATO, e a chave restrita pode estar
+  // declarada em outro funil: para quem não é administrador, valem as chaves restritas da
+  // ORGANIZAÇÃO inteira. Ilegíveis → 500 (fail-closed), nunca o valor sem recorte.
+  const linhasDoCartaoDoFunil = linhasDoCartao((pipeline as Pipeline).settings);
+  let restritasDoCartao: ReadonlySet<string> = restritas;
+  if (
+    (linhasDoCartaoDoFunil.includes("cargo") || linhasDoCartaoDoFunil.includes("empresa")) &&
+    !leitorVeCamposRestritos(papel)
+  ) {
+    const lidas = await chavesRestritasDaOrganizacao(supabase, authz.org.orgId, requestId);
+    if (!lidas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
+    restritasDoCartao = unirChavesRestritas(restritas, lidas.chaves);
+  }
+
   const leadsComMarcadores = await withMarcadoresDoContato(
     supabase,
     (pipeline as Pipeline).organization_id,
     leadsComConversa.leads,
-    { linhas: linhasDoCartao((pipeline as Pipeline).settings), restritas, leitor: papel },
+    { linhas: linhasDoCartaoDoFunil, restritas: restritasDoCartao, leitor: papel },
   );
   if (leadsComMarcadores.error) {
     return falhaInterna("internal_error", leadsComMarcadores.error, { requestId });

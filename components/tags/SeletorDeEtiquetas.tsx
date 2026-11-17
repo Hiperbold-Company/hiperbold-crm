@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useId, useMemo, useState } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { Input } from "@/components/ui/input";
@@ -184,12 +185,11 @@ export function SeletorDeEtiquetas({
                     return (
                       <li key={opcao.tag}>
                         <label className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-0.5 text-xs hover:bg-muted has-[:disabled]:cursor-default has-[:disabled]:opacity-60">
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={marcada}
                             onChange={() => alternar(opcao)}
                             disabled={disabled || (!marcada && noLimite)}
-                            className="size-3.5 shrink-0 accent-primary"
+                            className="shrink-0"
                           />
                           {opcao.cor && (
                             <span

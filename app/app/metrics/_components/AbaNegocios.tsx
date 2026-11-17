@@ -13,7 +13,7 @@ import { useState } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { useDesempenhoNegocios, useListaDeNegocios, type DesempenhoNegocios } from "@/hooks/metrics/useDesempenho";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Paginacao } from "@/components/ui/paginacao";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { TipoDaLista } from "@/lib/metrics/desempenho";
 
@@ -309,17 +309,7 @@ function TabelaDeNegocios({ query, tipo, titulo }: { query: string; tipo: TipoDa
         </div>
       )}
       {lista && paginas > 1 ? (
-        <div className="flex items-center justify-end gap-2 text-sm">
-          <Button variant="outline" size="sm" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>
-            {t("Anterior")}
-          </Button>
-          <span className="tabular-nums text-muted-foreground">
-            {pagina} / {paginas}
-          </span>
-          <Button variant="outline" size="sm" disabled={pagina >= paginas} onClick={() => setPagina(pagina + 1)}>
-            {t("Próxima")}
-          </Button>
-        </div>
+        <Paginacao pagina={pagina} totalDePaginas={paginas} onIr={setPagina} />
       ) : null}
     </Painel>
   );

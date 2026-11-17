@@ -6,7 +6,8 @@
  * responde pelo documento. O aviso também diz o efeito no fluxo que o operador
  * não vê: trocar para Portugal faz CPF chegar como "NIF inválido".
  */
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { render } from "@/tests/helpers/render-com-confirmacao";
 import { describe, expect, it, vi } from "vitest";
 
 import { TenantForm } from "@/app/app/settings/tenant/_form";

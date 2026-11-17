@@ -15,6 +15,7 @@
  * `lib/mcp/tools/selecao-por-pacote.ts`, com teste. O componente chama e
  * renderiza. Regra dentro de `onChange` é regra que nunca é exercitada.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import * as React from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -169,9 +170,8 @@ function FichaCapacidade({
         bloqueada ? "opacity-60" : ""
       }`}
     >
-      <input
-        type="checkbox"
-        className="mt-1 h-4 w-4 shrink-0 rounded-md border-border accent-primary"
+      <Checkbox
+        className="mt-1 shrink-0"
         checked={marcada}
         onChange={onToggle}
         disabled={disabled || (bloqueada && !marcada)}

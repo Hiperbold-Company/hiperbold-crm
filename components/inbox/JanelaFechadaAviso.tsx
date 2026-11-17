@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
@@ -336,8 +337,7 @@ export function JanelaFechadaAviso({
               />
               {ehMidia(slot) && atual?.savedValues !== undefined && (
                 <span className="flex items-center gap-1.5 text-2xs text-warning-fg">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={salvar[slot.valueKey] ?? false}
                     onChange={(e) =>
                       setSalvar((v) => ({ ...v, [slot.valueKey]: e.target.checked }))

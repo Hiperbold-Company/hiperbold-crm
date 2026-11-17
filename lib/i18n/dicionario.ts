@@ -28961,6 +28961,10 @@ export const DICIONARIO: Traducoes = {
   "Este número já está em outra conexão desta empresa. Remova uma das duas e tente de novo.": { es: "Este número ya está en otra conexión de esta empresa. Elimine una de las dos e inténtelo de nuevo." },
   "Não foi possível falar com o servidor de WhatsApp agora. Tente de novo em instantes.": { es: "No fue posible comunicarse con el servidor de WhatsApp ahora. Inténtelo de nuevo en instantes." },
   "Conectado, mas as mensagens ainda não entram.": { es: "Conectado, pero los mensajes todavía no entran." },
+  // design: componentes
+  "Paginação": { es: "Paginación" },
+  "Página {a} de {b}": { es: "Página {a} de {b}" },
+  "Página {a}": { es: "Página {a}" },
   // design: cartão do funil
   "na etapa": { es: "en la etapa" },
   // design: carregando e erro
@@ -29078,6 +29082,15 @@ export const DICIONARIO: Traducoes = {
   "Gerente de compras": { es: "Gerente de compras" },
   "Oi! Queria saber o valor da consulta.": { es: "¡Hola! Quería saber el precio de la consulta." },
   "Outra pessoa alterou este funil ao mesmo tempo. Recarregue e tente de novo.": { es: "Otra persona cambió este embudo al mismo tiempo. Recargue e inténtelo de nuevo." },
+  // design: confirmação nas telas
+  "Ligar a limpeza de mídia antiga?": { es: "¿Activar la limpieza de medios antiguos?" },
+  "Trocar modelo": { es: "Cambiar modelo" },
+  "Recusar proposta": { es: "Rechazar propuesta" },
+  "Motivo da recusa (opcional)": { es: "Motivo del rechazo (opcional)" },
+  // design: componentes nas telas
+  "Prazo da solicitação": { es: "Plazo de la solicitud" },
+  "Uso do orçamento de IA": { es: "Uso del presupuesto de IA" },
+  "Este funil está arquivado. Tire-o do arquivo em Funis para editar o cartão.": { es: "Este embudo está archivado. Sáquelo del archivo en Embudos para editar la tarjeta." },
 };
 
 /**

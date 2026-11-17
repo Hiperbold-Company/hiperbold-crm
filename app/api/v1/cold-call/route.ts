@@ -28,6 +28,8 @@ import { posicaoEntre, slugDeFunil } from "@/lib/pipelines/pipeline-editing";
 import { createClient } from "@/lib/supabase/server";
 import { lerFunis } from "../pipelines/_funis";
 
+import { regravarSettingsDoFunil } from "@/lib/pipelines/regravar-settings";
+
 export const dynamic = "force-dynamic";
 
 const NOME_DO_FUNIL = "Cold Call";
@@ -280,16 +282,19 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   try {
     const achado = await funilDoColdCall(supabase, orgId);
     if (!achado) return fail("not_found", t("O funil de cold call ainda não foi criado."), 404, { requestId });
-    const settings = {
-      ...(achado.funil.settings as Record<string, unknown>),
-      cold_call: { ativo: true, roteiro: lido.data.roteiro },
-    };
-    const { error } = await supabase
-      .from("crm_pipelines")
-      .update({ settings: settings as never })
-      .eq("id", achado.funil.id)
-      .eq("organization_id", orgId);
-    if (error) throw new Error(error.message);
+    // Trava otimista por `updated_at`: regravar o `settings` lido acima apagaria a chave que
+    // outro escritor (Configurações, "Editar cartão") gravou no meio.
+    const r = await regravarSettingsDoFunil(
+      supabase,
+      { organizationId: orgId, pipelineId: achado.funil.id as string },
+      (atual) => ({ ...atual, cold_call: { ativo: true, roteiro: lido.data.roteiro } }),
+    );
+    if (r === "nao_encontrado") return fail("not_found", t("O funil de cold call ainda não foi criado."), 404, { requestId });
+    if (r === "conflito") {
+      return fail("conflict", t("Outra pessoa alterou este funil ao mesmo tempo. Recarregue e tente de novo."), 409, {
+        requestId,
+      });
+    }
 
     void audit({
       action: "cold_call.script_updated",

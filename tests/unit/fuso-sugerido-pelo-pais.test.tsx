@@ -11,7 +11,8 @@
  * A sugestão NÃO é "Lisboa" escrita na tela: é o fuso do país (`fusoDoSugerido`
  * do perfil), e por isso o Brasil continua sugerindo São Paulo.
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
+import { render } from "@/tests/helpers/render-com-confirmacao";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 

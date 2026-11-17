@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -436,8 +437,7 @@ function ConfiguracoesDoRoteiro({
               <p className="text-xs font-medium text-text">{funil.nome}</p>
               {funil.etapas.map((etapa) => (
                 <label key={etapa.stageId} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={etapasDoFunil.includes(etapa.stageId)}
                     onChange={() => alternarEtapa(etapa.stageId)}
                   />

@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
@@ -398,9 +399,8 @@ export function SignupForm({
       {!convite && compraLigada && (
         <div className="space-y-1.5">
           <label className="flex items-start gap-2 text-sm">
-            <input
+            <Checkbox
               id="aceite_termos"
-              type="checkbox"
               className="mt-1"
               aria-invalid={errors.aceite_termos ? true : undefined}
               {...register("aceite_termos")}

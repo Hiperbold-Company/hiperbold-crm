@@ -17,6 +17,7 @@
  * seu estado e o seu "Deixar o Jev decidir": deixar decidir o clima não é
  * deixar decidir a tarefa seguinte.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -584,10 +585,9 @@ function DeOndeResponde({ dados, recarregar }: { dados: DadosDoJev; recarregar: 
       {confirmandoOpenRouter && (
         <div className="max-w-2xl rounded-md border border-border p-3 text-sm" data-testid="jev-origem-aceite">
           <div className="flex items-start gap-2">
-            <input
+            <Checkbox
               id="jev-origem-aceite"
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 accent-[var(--color-accent)]"
+              className="mt-0.5"
               checked={concordo}
               onChange={(e) => setConcordo(e.target.checked)}
             />
@@ -932,10 +932,9 @@ function ProntoParaLigar({ dados, recarregar }: { dados: DadosDoJev; recarregar:
         </p>
         {aceite === null ? (
           <div className="mt-3 flex items-start gap-2">
-            <input
+            <Checkbox
               id="jev-aceite"
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 accent-[var(--color-accent)]"
+              className="mt-0.5"
               checked={concordo}
               onChange={(e) => setConcordo(e.target.checked)}
               disabled={!dados.pode_editar}

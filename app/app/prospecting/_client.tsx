@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { randomId } from "@/lib/random-id";
@@ -967,8 +968,7 @@ export function ProspectingClient() {
                 </div>
               </div>
               <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={enrich}
                   onChange={(e) => setEnrich(e.target.checked)}
                   className="mt-1"
@@ -976,8 +976,7 @@ export function ProspectingClient() {
                 {t("Enriquecer com e-mails comerciais e redes encontradas no site")}
               </label>
               <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={avaliarSite}
                   onChange={(e) => setAvaliarSite(e.target.checked)}
                   className="mt-1"
@@ -985,8 +984,7 @@ export function ProspectingClient() {
                 {t("Avaliar o site de cada empresa automaticamente")}
               </label>
               <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={avaliarSite && gerarPrevia}
                   disabled={!avaliarSite}
                   onChange={(e) => setGerarPrevia(e.target.checked)}
@@ -1066,8 +1064,7 @@ export function ProspectingClient() {
                 />
               </div>
               <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={avaliarSiteLista}
                   onChange={(e) => setAvaliarSiteLista(e.target.checked)}
                   className="mt-1"
@@ -1075,8 +1072,7 @@ export function ProspectingClient() {
                 {t("Avaliar o site de cada empresa automaticamente")}
               </label>
               <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={avaliarSiteLista && gerarPreviaLista}
                   disabled={!avaliarSiteLista}
                   onChange={(e) => setGerarPreviaLista(e.target.checked)}
@@ -1606,8 +1602,7 @@ export function ProspectingClient() {
                                   ] as const
                                 ).map(([valor, rotulo]) => (
                                   <label key={valor} className="flex items-start gap-2 text-sm">
-                                    <input
-                                      type="checkbox"
+                                    <Checkbox
                                       className="mt-1"
                                       checked={(config.ofertas ?? ["site"]).includes(valor)}
                                       disabled={busy}
@@ -1981,8 +1976,7 @@ export function ProspectingClient() {
                           {canSelect && (
                             <th className="p-4">
                               <label className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
+                                <Checkbox
                                   checked={allSelected}
                                   disabled={busy || elegiveis.length === 0}
                                   onChange={() =>
@@ -2010,8 +2004,7 @@ export function ProspectingClient() {
                             {canSelect && (
                               <td className="p-4 align-top">
                                 {marcavel(c) && (
-                                  <input
-                                    type="checkbox"
+                                  <Checkbox
                                     checked={c.selected !== false}
                                     disabled={busy}
                                     onChange={() => setSelection([c.id], c.selected === false)}

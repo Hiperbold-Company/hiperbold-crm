@@ -187,6 +187,14 @@ describe("PATCH …/pipelines/[id]/card-lines", () => {
     expect(audit).not.toHaveBeenCalledWith(expect.objectContaining({ action: "pipeline.card_lines_updated" }));
   });
 
+  it("⭐ funil arquivado responde 409 e não muda", async () => {
+    tabela[0]!.is_archived = true;
+    const r = await chamar({ card_lines: ["email"] });
+    expect(r.status).toBe(409);
+    expect(tabela[0]!.settings).not.toHaveProperty("card_lines");
+    expect(audit).not.toHaveBeenCalledWith(expect.objectContaining({ action: "pipeline.card_lines_updated" }));
+  });
+
   it("acompanhamento só leitura (suporte) é barrado antes do efeito", async () => {
     vi.mocked(requireSupportWrite).mockResolvedValueOnce(new Response(null, { status: 403 }) as never);
     expect((await chamar({ card_lines: ["email"] })).status).toBe(403);

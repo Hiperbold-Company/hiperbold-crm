@@ -8,6 +8,8 @@
  * quando ele tem; se não tem, vale o que o formulário gravou no NEGÓCIO, que é
  * onde a CBEXS os recebe. Só texto: número ou objeto solto não vira "cargo".
  */
+import { normalizarChaveDeCampo } from "@/lib/campos/recorte-por-papel";
+
 export interface CargoEEmpresa {
   cargo: string | null;
   empresa: string | null;
@@ -16,14 +18,8 @@ export interface CargoEEmpresa {
 const CHAVES_DE_CARGO = ["cargo", "job_title"];
 const CHAVES_DE_EMPRESA = ["empresa", "company", "company_name"];
 
-function normalizar(chave: string): string {
-  return chave
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
+/** A mesma normalização do recorte por papel: o que este leitor acha, o recorte também alcança. */
+const normalizar = normalizarChaveDeCampo;
 
 function ler(campos: Record<string, unknown> | null | undefined, chaves: string[]): string | null {
   if (!campos) return null;

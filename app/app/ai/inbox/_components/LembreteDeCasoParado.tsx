@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -62,8 +63,7 @@ export function LembreteDeCasoParado({ inicial }: { inicial: Lembrete }) {
         )}
       </p>
       <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={valor.ligado}
           onChange={(e) => setValor({ ...valor, ligado: e.target.checked })}
           className="mt-1"

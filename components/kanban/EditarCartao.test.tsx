@@ -62,6 +62,43 @@ describe("ContatoNoCard — as linhas do cartão", () => {
     expect(utm.getAttribute("title")).toContain("utm_campaign");
   });
 
+  it("⭐ conversa com não lidas e prévia vazia: a linha fica, com o contador e \"conversa sem mensagens\", sem clique", () => {
+    const { container } = render(
+      <ContatoNoCard lead={{ conversa: { id: "c", preview: null, last_message_at: null, unread: 4 } }} />,
+    );
+    expect(ordem(container)).toEqual(["ultima_mensagem"]);
+    expect(screen.getByText("conversa sem mensagens")).toBeInTheDocument();
+    expect(screen.getByLabelText("4 sem ler")).toHaveTextContent("4");
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("⭐ sem a linha \"Última mensagem\" configurada, o contador de não lidas não aparece", () => {
+    render(
+      <ContatoNoCard
+        lead={{ contact_phone: "+5511999998888", conversa: { id: "c", preview: "Oi", last_message_at: null, unread: 5 } }}
+        linhas={["telefone"]}
+      />,
+    );
+    expect(screen.queryByLabelText(/sem ler/)).toBeNull();
+    // controle: com a linha, o contador aparece
+    cleanup();
+    render(
+      <ContatoNoCard
+        lead={{ contact_phone: "+5511999998888", conversa: { id: "c", preview: "Oi", last_message_at: null, unread: 5 } }}
+        linhas={["telefone", "ultima_mensagem"]}
+      />,
+    );
+    expect(screen.getByLabelText("5 sem ler")).toHaveTextContent("5");
+  });
+
+  it("prévia vazia e SEM não lidas: a linha some", () => {
+    const { container } = render(
+      <ContatoNoCard lead={{ conversa: { id: "c", preview: null, last_message_at: null, unread: 0 } }} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("zero linhas e sem links: o bloco não renderiza nada", () => {
     const { container } = render(<ContatoNoCard lead={lead} linhas={[]} />);
     expect(container).toBeEmptyDOMElement();

@@ -14,7 +14,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { render } from "@/tests/helpers/render-com-confirmacao";
 import { describe, expect, it, vi } from "vitest";
 
 import { TenantForm } from "@/app/app/settings/tenant/_form";
@@ -52,24 +53,32 @@ const FRASE_DESLIGADO = "Desligado: a mídia das conversas e os anexos de nota i
 const FRASE_LIGADO = "Ligado: apaga a mídia e o anexo de nota interna com mais de {n} dias.";
 
 describe("a confirmação de ligar a limpeza cita o anexo de nota interna", () => {
-  it("o confirm menciona a nota interna, não só a mídia de mensagem", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("o confirm menciona a nota interna, não só a mídia de mensagem", async () => {
     tela("pt-BR", false);
 
     const chave = document.getElementById("media_retention_enforced");
     expect(chave, "o interruptor da limpeza precisa estar na tela").toBeTruthy();
     fireEvent.click(chave as Element);
 
-    expect(confirm, "o confirm precisa ser chamado").toHaveBeenCalledTimes(1);
-    const chamada = confirm.mock.calls[0];
-    const texto = String(chamada?.[0] ?? "");
+    const dialogo = await screen.findByRole("alertdialog");
+    const texto = dialogo.textContent ?? "";
     expect(texto).toContain("nota interna");
     expect(texto).toContain("90");
     // a frase velha subdeclarava — não pode voltar
-    expect(texto).not.toBe(
-      "Ao ligar, a mídia de mensagem com mais de 90 dias começará a ser apagada.",
-    );
-    confirm.mockRestore();
+    expect(texto).not.toContain("Ao ligar, a mídia de mensagem com mais de 90 dias começará a ser apagada.");
+    // confirmar de verdade liga o interruptor
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Ligar" }));
+    await waitFor(() => expect(chave as HTMLElement).toHaveAttribute("aria-checked", "true"));
+  });
+
+  it("cancelar a confirmação mantém a limpeza desligada", async () => {
+    tela("pt-BR", false);
+    const chave = document.getElementById("media_retention_enforced") as HTMLElement;
+    fireEvent.click(chave);
+    const dialogo = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(chave).toHaveAttribute("aria-checked", "false");
   });
 
   it("a frase de ESTADO (desligado) também cita a nota interna", () => {

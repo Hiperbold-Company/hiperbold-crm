@@ -1,5 +1,6 @@
 "use client";
 import { Draggable } from "@hello-pangea/dnd";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { MouseEvent } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { cn } from "@/lib/utils";
@@ -242,8 +243,7 @@ export function KanbanCard({
               {/* No funil arquivado a caixa some de vez: seleção só existe
                   para a ação em lote, e escrever ali é o que o arquivo proíbe (#1298). */}
               {!somenteLeitura && (
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={Boolean(isSelected)}
                   aria-label={`${t("Selecionar")}: ${card.title}`}
                   onClick={(e) => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -179,9 +180,7 @@ export function PersonalizarColunasDialog({
                     key={id}
                     className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted"
                   >
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
+                    <Checkbox
                       checked={marcada}
                       disabled={!marcada && cheio}
                       onChange={() => alternar(id)}

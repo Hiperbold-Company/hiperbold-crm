@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { render } from "@/tests/helpers/render-com-confirmacao";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/lib/api/client";
@@ -411,5 +412,37 @@ describe("ProposalEditorClient — Enviar envia o que está NA TELA", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/recarregue antes de editar/i);
     expect(post).not.toHaveBeenCalled();
+  });
+});
+
+describe("ProposalEditorClient — recusar pela confirmação do produto", () => {
+  beforeEach(() => {
+    get.mockReset();
+    vi.mocked(apiClient.post).mockReset();
+  });
+
+  async function abrirRecusa() {
+    responderProposta({ data: { ...PROPOSTA_BASE, status: "enviada", ultima_falha_envio: null } });
+    render(<ProposalEditorClient id="p1" podeEditar={true} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Marcar como recusada" }));
+    return screen.findByRole("alertdialog");
+  }
+
+  it("cancelar a pergunta do motivo NÃO recusa a proposta", async () => {
+    const dialogo = await abrirRecusa();
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(vi.mocked(apiClient.post)).not.toHaveBeenCalled();
+  });
+
+  it("confirmar com o motivo vazio recusa sem motivo", async () => {
+    const dialogo = await abrirRecusa();
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Recusar" }));
+    await waitFor(() =>
+      expect(vi.mocked(apiClient.post)).toHaveBeenCalledWith("/api/v1/proposals/p1/decide", {
+        decisao: "recusada",
+        motivo: undefined,
+      }),
+    );
   });
 });

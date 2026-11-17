@@ -5,6 +5,7 @@
  * o valor em reais, o aceite dos Termos de Uso (D-133) e o formulário de quem paga (decisão 16, nunca
  * guardado no navegador). Saíram de `_client.tsx` sem mudar uma linha de comportamento (D-180).
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -31,9 +32,8 @@ export function AceiteDosTermos({ id, aceito, onChange }: { id: string; aceito: 
   const t = useT();
   return (
     <label htmlFor={id} className="flex items-start gap-2 text-sm">
-      <input
+      <Checkbox
         id={id}
-        type="checkbox"
         checked={aceito}
         onChange={(e) => onChange(e.target.checked)}
         className="mt-1"

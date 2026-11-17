@@ -11,6 +11,7 @@
  * à comanda — mostrar o botão e deixar a recusa para o servidor ensinaria a
  * pessoa a tentar o que nunca vai funcionar.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -163,12 +164,10 @@ export function ListaDeLancamentos({
           </label>
 
           <label className="flex items-center gap-2 text-xs text-text-muted max-md:min-h-11">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={jaPago}
               data-testid="lancamento-ja-pago"
               onChange={(e) => setJaPago(e.target.checked)}
-              className="size-4 rounded-sm border-border accent-accent"
             />
             {t("Já pago")}
           </label>

@@ -1,11 +1,12 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 
 import type { Locale } from "date-fns";
 
 import { useT } from "@/hooks/i18n/useT";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -161,10 +162,6 @@ function CaixaDeSelecao({
   onChange: (marcada: boolean) => void;
   rotulo: string;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = indeterminada && !marcada;
-  }, [indeterminada, marcada]);
   // No toque, a área que pega o dedo passa a 44px sem mudar o desenho (a mesma régua
   // da caixa do lote do upstream). O alvo é o `::before` do <label> que envolve a
   // caixa, e não o do <input>: o Safari do iPhone não desenha pseudo-elemento em
@@ -174,10 +171,8 @@ function CaixaDeSelecao({
       className="relative inline-flex cursor-pointer pointer-coarse:before:absolute pointer-coarse:before:-inset-3.5 pointer-coarse:before:content-['']"
       onClick={(e) => e.stopPropagation()}
     >
-      <input
-        ref={ref}
-        type="checkbox"
-        className="h-4 w-4 cursor-pointer rounded-sm border-border accent-[var(--color-accent,currentColor)]"
+      <Checkbox
+        indeterminado={indeterminada && !marcada}
         checked={marcada}
         disabled={desabilitada}
         aria-label={rotulo}

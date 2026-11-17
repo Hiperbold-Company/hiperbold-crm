@@ -43,6 +43,7 @@
  * O interruptor continua sendo PATCH imediato (é `config` do agente, não da
  * versão) — comportamento de antes, com a mesma rota admin-only.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -276,9 +277,8 @@ export function ServidorExternoNoAtendimento({
                     data-marcada={marca === null ? "nao" : "sim"}
                     className="flex flex-wrap items-start gap-3 rounded-md border border-border px-3 py-2"
                   >
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 shrink-0 rounded-md border-border accent-primary"
+                    <Checkbox
+                      className="mt-1 shrink-0"
                       data-testid={`marcar-${opcao.nome}`}
                       checked={marca !== null}
                       onChange={(e) => alternarFerramenta(opcao, e.target.checked)}

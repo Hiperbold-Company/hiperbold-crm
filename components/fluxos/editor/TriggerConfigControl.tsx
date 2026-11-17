@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useT } from "@/hooks/i18n/useT";
 
 import { useQuery } from "@tanstack/react-query";
@@ -474,7 +475,7 @@ export function TriggerConfigControl({ flowId, triggerConfig }: Props) {
           {form.kind === "appointment_no_show" && <div className="space-y-2">
             <p className="text-xs text-muted-foreground">{t("Só começa após falta confirmada pela equipe. Remarcação, cancelamento ou nova resposta interrompem a recuperação. Outro acompanhamento ativo impede o início.")}</p>
             <p className="text-xs">{t("Tipos de compromisso (nenhum selecionado = todos)")}</p>
-            {eventTypes.data?.map(type=><label key={type.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.eventTypeIds.includes(type.id)} onChange={e=>setForm(f=>({...f,eventTypeIds:e.target.checked?[...f.eventTypeIds,type.id]:f.eventTypeIds.filter(id=>id!==type.id)}))}/>{type.name}</label>)}
+            {eventTypes.data?.map(type=><label key={type.id} className="flex items-center gap-2 text-sm"><Checkbox checked={form.eventTypeIds.includes(type.id)} onChange={e=>setForm(f=>({...f,eventTypeIds:e.target.checked?[...f.eventTypeIds,type.id]:f.eventTypeIds.filter(id=>id!==type.id)}))}/>{type.name}</label>)}
             {eventTypes.isError?<p role="alert">{t("Não foi possível carregar os tipos de compromisso.")}</p>:null}
           </div>}
           {form.kind === "case_opened" && (

@@ -1,5 +1,6 @@
 // app/app/settings/tenant/proposals/modelos/_client.test.tsx
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { render } from "@/tests/helpers/render-com-confirmacao";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ModelosDeProposta } from "./_client";
@@ -54,16 +55,22 @@ describe("ModelosDeProposta", () => {
     );
   });
 
-  it("Voltar ao modelo da plataforma com confirm falso não chama DELETE", async () => {
-    const confirmar = vi.spyOn(window, "confirm").mockReturnValue(false);
-    try {
-      render(<ModelosDeProposta />);
-      fireEvent.click(await screen.findByRole("button", { name: "Voltar ao modelo da plataforma" }));
-      await waitFor(() => expect(screen.getByText("E-commerce nosso")).toBeInTheDocument());
-      expect(excluir).not.toHaveBeenCalled();
-    } finally {
-      confirmar.mockRestore();
-    }
+  it("Voltar ao modelo da plataforma cancelando a confirmação não chama DELETE", async () => {
+    render(<ModelosDeProposta />);
+    fireEvent.click(await screen.findByRole("button", { name: "Voltar ao modelo da plataforma" }));
+    const dialogo = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(screen.getByText("E-commerce nosso")).toBeInTheDocument();
+    expect(excluir).not.toHaveBeenCalled();
+  });
+
+  it("Voltar ao modelo da plataforma confirmando chama DELETE", async () => {
+    excluir.mockResolvedValue({ data: {} });
+    render(<ModelosDeProposta />);
+    fireEvent.click(await screen.findByRole("button", { name: "Voltar ao modelo da plataforma" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Apagar" }));
+    await waitFor(() => expect(excluir).toHaveBeenCalled());
   });
 
   it("modelo da plataforma tem botão Não usar, que chama POST ocultar", async () => {

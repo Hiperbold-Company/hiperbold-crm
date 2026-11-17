@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -152,8 +153,7 @@ export function EdicaoDoProduto({ produto, aoFechar }: { produto: Produto; aoFec
       </div>
 
       <label className="mt-3 flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={rascunho.controla_estoque}
           onChange={(e) => setRascunho({ ...rascunho, controla_estoque: e.target.checked })}
           disabled={desabilitado}

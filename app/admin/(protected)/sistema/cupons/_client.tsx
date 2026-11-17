@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -339,8 +340,7 @@ export function FormularioDeNovoCupom({ planos }: { planos: PlanoDoCatalogo[] })
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {planos.map((p) => (
               <label key={p.code} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={planosEscolhidos.includes(p.code)}
                   onChange={() => setPlanosEscolhidos((atual) => alternar(atual, p.code))}
                   disabled={criando}
@@ -357,8 +357,7 @@ export function FormularioDeNovoCupom({ planos }: { planos: PlanoDoCatalogo[] })
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {CICLOS.map((c) => (
               <label key={c} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={ciclosEscolhidos.includes(c)}
                   onChange={() => setCiclosEscolhidos((atual) => alternar(atual, c))}
                   disabled={criando}

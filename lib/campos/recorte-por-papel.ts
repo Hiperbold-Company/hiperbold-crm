@@ -77,8 +77,25 @@ export function recortarCampos<T>(campos: readonly T[], leitor: LeitorDosCampos 
 }
 
 /**
- * Os valores (`custom_fields`) que este leitor recebe: sem as chaves restritas (sem diferenciar
- * maiúsculas). Não é objeto → volta como veio. Nada a tirar → o MESMO objeto.
+ * A chave de campo NORMALIZADA: sem acento, minúscula, pontuação e espaço viram `_`, sem `_` nas
+ * pontas ("Company Name" → `company_name`, "Cargo / Posição" → `cargo_posicao`). É a MESMA regra
+ * com que os leitores tolerantes (`cargoEEmpresa`) acham o valor; o recorte a usa também, senão
+ * um valor gravado como "Company Name" escaparia da chave restrita `company_name` e seria lido.
+ */
+export function normalizarChaveDeCampo(chave: string): string {
+  return chave
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+/**
+ * Os valores (`custom_fields`) que este leitor recebe: sem as chaves restritas. Uma chave sai se
+ * casa uma restrita sem diferenciar maiúsculas (a regra de sempre) OU pela forma normalizada
+ * (`normalizarChaveDeCampo`) — só acrescenta casos, nunca deixa passar o que antes saía.
+ * Não é objeto → volta como veio. Nada a tirar → o MESMO objeto.
  */
 export function recortarValores<T>(
   valores: T,
@@ -88,9 +105,11 @@ export function recortarValores<T>(
   if (leitorVeCamposRestritos(leitor) || restritas.size === 0) return valores;
   if (!valores || typeof valores !== "object" || Array.isArray(valores)) return valores;
   const entrada = valores as Record<string, unknown>;
-  if (!Object.keys(entrada).some((k) => restritas.has(k.toLowerCase()))) return valores;
+  const normalizadas = new Set([...restritas].map(normalizarChaveDeCampo));
+  const restrita = (k: string) => restritas.has(k.toLowerCase()) || normalizadas.has(normalizarChaveDeCampo(k));
+  if (!Object.keys(entrada).some(restrita)) return valores;
   const saida: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(entrada)) if (!restritas.has(k.toLowerCase())) saida[k] = v;
+  for (const [k, v] of Object.entries(entrada)) if (!restrita(k)) saida[k] = v;
   return saida as T;
 }
 
