@@ -41,19 +41,19 @@ export function Paginacao({
       ? t("Página {a} de {b}").replace("{a}", String(pagina)).replace("{b}", String(Math.max(totalDePaginas, 1)))
       : t("Página {a}").replace("{a}", String(pagina));
 
-  function botao(alvo: number, ativo: boolean, rotulo: string, icone: "antes" | "depois") {
+  function botao(alvo: number, ativo: boolean, rotulo: string, anterior: boolean) {
     const conteudo = (
       <>
-        {icone === "antes" ? <CaretLeft size={14} aria-hidden /> : null}
+        {anterior ? <CaretLeft size={14} aria-hidden /> : null}
         <span>{rotulo}</span>
-        {icone === "depois" ? <CaretRight size={14} aria-hidden /> : null}
+        {!anterior ? <CaretRight size={14} aria-hidden /> : null}
       </>
     );
     const desligado = !ativo || carregando;
     if (hrefDaPagina && !desligado) {
       return (
         <Button asChild variant="outline" size="sm">
-          <Link href={hrefDaPagina(alvo)} aria-label={icone === "antes" ? t("Página anterior") : t("Próxima página")}>
+          <Link href={hrefDaPagina(alvo)} aria-label={anterior ? t("Página anterior") : t("Próxima página")}>
             {conteudo}
           </Link>
         </Button>
@@ -65,7 +65,7 @@ export function Paginacao({
         variant="outline"
         size="sm"
         disabled={desligado}
-        aria-label={icone === "antes" ? t("Página anterior") : t("Próxima página")}
+        aria-label={anterior ? t("Página anterior") : t("Próxima página")}
         onClick={() => onIr?.(alvo)}
       >
         {conteudo}
@@ -75,11 +75,11 @@ export function Paginacao({
 
   return (
     <nav aria-label={t("Paginação")} className={cn("flex items-center justify-between gap-3", className)}>
-      {botao(pagina - 1, temAnterior, t("Anterior"), "antes")}
+      {botao(pagina - 1, temAnterior, t("Anterior"), true)}
       <span className="text-sm text-text-muted tabular-nums" aria-live="polite">
         {posicao}
       </span>
-      {botao(pagina + 1, haProxima, t("Próxima"), "depois")}
+      {botao(pagina + 1, haProxima, t("Próxima"), false)}
     </nav>
   );
 }
