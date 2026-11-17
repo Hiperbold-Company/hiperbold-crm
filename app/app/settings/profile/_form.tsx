@@ -1,9 +1,9 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { useBarraDeSalvar } from "@/components/configuracoes/grupo-de-salvar";
+import { SecaoDaConfiguracao } from "@/components/configuracoes/secao-da-configuracao";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -42,34 +42,57 @@ export function ProfileForm({
   initialTimezone,
 }: Props) {
   const t = useT();
-  const [fullName, setFullName] = useState(initialFullName ?? "");
-  const [locale, setLocale] = useState<Locale | typeof SEM_PREFERENCIA_DE_IDIOMA>(initialLocale);
-  const [timezone, setTimezone] = useState(initialTimezone);
-  const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl ?? "");
-  const [isPending, startTransition] = useTransition();
+  const inicial = {
+    fullName: initialFullName ?? "",
+    locale: initialLocale,
+    timezone: initialTimezone,
+    avatarUrl: initialAvatarUrl ?? "",
+  };
+  const [salvo, setSalvo] = useState(inicial);
+  const [fullName, setFullName] = useState(inicial.fullName);
+  const [locale, setLocale] = useState<Locale | typeof SEM_PREFERENCIA_DE_IDIOMA>(inicial.locale);
+  const [timezone, setTimezone] = useState(inicial.timezone);
+  const [avatarUrl, setAvatarUrl] = useState(inicial.avatarUrl);
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const parsed = profileSchema.safeParse({
-      full_name: fullName || null,
-      locale,
-      timezone,
-      avatar_url: avatarUrl || null,
-    });
-    if (!parsed.success) {
-      toast.error(t("Dados inválidos."));
-      return;
-    }
-    startTransition(async () => {
+  const sujo =
+    fullName !== salvo.fullName ||
+    locale !== salvo.locale ||
+    timezone !== salvo.timezone ||
+    avatarUrl !== salvo.avatarUrl;
+
+  const { barra, enviar, salvando } = useBarraDeSalvar({
+    sujo,
+    descartar: () => {
+      setFullName(salvo.fullName);
+      setLocale(salvo.locale);
+      setTimezone(salvo.timezone);
+      setAvatarUrl(salvo.avatarUrl);
+    },
+    salvar: async () => {
+      const parsed = profileSchema.safeParse({
+        full_name: fullName || null,
+        locale,
+        timezone,
+        avatar_url: avatarUrl || null,
+      });
+      if (!parsed.success) {
+        toast.error(t("Dados inválidos."));
+        return "invalido";
+      }
       const r = await updateProfile(parsed.data);
-      if (r.ok) toast.success(t("Perfil atualizado."));
-      else toast.error(`${t("Erro")}: ${r.error}`);
-    });
-  }
+      if (r.ok) {
+        setSalvo({ fullName, locale, timezone, avatarUrl });
+        toast.success(t("Perfil atualizado."));
+        return "salvo";
+      }
+      toast.error(`${t("Erro")}: ${r.error}`);
+      return "falhou";
+    },
+  });
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-xl">
-      <Card className="space-y-4 p-6">
+    <form onSubmit={enviar} className="flex max-w-xl flex-col gap-6">
+      <SecaoDaConfiguracao id="sec-dados" titulo={t("Seus dados")}>
         <div className="space-y-2">
           <Label htmlFor="email">{t("Email")}</Label>
           <Input id="email" value={email} disabled />
@@ -82,14 +105,32 @@ export function ProfileForm({
           <Input
             id="full_name"
             value={fullName}
+            disabled={salvando}
             onChange={(e) => setFullName(e.target.value)}
             maxLength={120}
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="avatar_url">{t("Avatar URL")}</Label>
+          <Input
+            id="avatar_url"
+            type="url"
+            placeholder="https://…"
+            value={avatarUrl}
+            disabled={salvando}
+            onChange={(e) => setAvatarUrl(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            {t("Upload de arquivo — em breve. Cole uma URL pública.")}
+          </p>
+        </div>
+      </SecaoDaConfiguracao>
+
+      <SecaoDaConfiguracao id="sec-idioma" titulo={t("Idioma e fuso horário")}>
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="locale">{t("Idioma")}</Label>
-            <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
+            <Select value={locale} onValueChange={(v) => setLocale(v as Locale)} disabled={salvando}>
               <SelectTrigger id="locale">
                 <SelectValue />
               </SelectTrigger>
@@ -111,7 +152,7 @@ export function ProfileForm({
           </div>
           <div className="space-y-2">
             <Label htmlFor="timezone">{t("Fuso horário")}</Label>
-            <Select value={timezone} onValueChange={setTimezone}>
+            <Select value={timezone} onValueChange={setTimezone} disabled={salvando}>
               <SelectTrigger id="timezone">
                 <SelectValue />
               </SelectTrigger>
@@ -125,25 +166,9 @@ export function ProfileForm({
             </Select>
           </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="avatar_url">{t("Avatar URL")}</Label>
-          <Input
-            id="avatar_url"
-            type="url"
-            placeholder="https://…"
-            value={avatarUrl}
-            onChange={(e) => setAvatarUrl(e.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">
-            {t("Upload de arquivo — em breve. Cole uma URL pública.")}
-          </p>
-        </div>
-        <div className="flex sm:justify-end">
-          <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
-            {isPending ? t("Salvando…") : t("Salvar")}
-          </Button>
-        </div>
-      </Card>
+      </SecaoDaConfiguracao>
+
+      {barra}
     </form>
   );
 }

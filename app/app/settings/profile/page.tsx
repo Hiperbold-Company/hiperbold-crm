@@ -1,3 +1,4 @@
+import { CabecalhoDaConfiguracao } from "@/components/configuracoes/cabecalho-da-configuracao";
 import { requireAuth } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
@@ -27,13 +28,11 @@ export default async function ProfilePage() {
   //                    a troca de idioma da empresa passaria por cima dela.
   const idioma = user.idioma;
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Perfil", idioma)}</h1>
-        <p className="text-sm text-muted-foreground">
-          {traduzir("Informações pessoais. Email só pode ser trocado em breve.", idioma)}
-        </p>
-      </header>
+    <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
+      <CabecalhoDaConfiguracao
+        titulo={traduzir("Perfil", idioma)}
+        descricao={traduzir("Informações pessoais. Email só pode ser trocado em breve.", idioma)}
+      />
       <ProfileForm
         email={user.email}
         initialFullName={meta.full_name}

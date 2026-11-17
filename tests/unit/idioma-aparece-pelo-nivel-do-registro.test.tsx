@@ -26,6 +26,8 @@ import { REGISTRO_DE_IDIOMAS, type IdiomaRegistrado, type NivelDeIdioma } from "
  * chinês pelo nome, para continuarem valendo no dia em que ele for promovido.
  */
 
+// A barra de salvar avisa ao sair sem salvar e navega pelo roteador do app.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/app/actions/settings/updateProfile", () => ({
   updateProfile: vi.fn(async () => ({ ok: true })),
 }));

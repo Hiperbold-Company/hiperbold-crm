@@ -27,6 +27,7 @@
  */
 import { redirect } from "next/navigation";
 
+import { CabecalhoDaConfiguracao } from "@/components/configuracoes/cabecalho-da-configuracao";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -56,14 +57,12 @@ export default async function MetaAdsSettingsPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Conectar Meta Ads")}</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          {t(
-            "Conecte um token de acesso para o sistema ler o desempenho das suas campanhas e mostrá-lo em Análise › Meta Ads. É uma conexão só de leitura: nada é criado, pausado ou alterado na sua conta de anúncios.",
-          )}
-        </p>
-      </header>
+      <CabecalhoDaConfiguracao
+        titulo={t("Conectar Meta Ads")}
+        descricao={t(
+          "Conecte um token de acesso para o sistema ler o desempenho das suas campanhas e mostrá-lo em Análise › Meta Ads. É uma conexão só de leitura: nada é criado, pausado ou alterado na sua conta de anúncios.",
+        )}
+      />
 
       <div className="rounded-md border border-info/30 bg-info-bg p-4 text-sm">
         {/*

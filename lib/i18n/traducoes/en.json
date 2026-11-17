@@ -14689,5 +14689,19 @@
   "Recusar proposta": "Decline proposal",
   "Motivo da recusa (opcional)": "Reason for declining (optional)",
   "Prazo da solicitação": "Request deadline",
-  "Uso do orçamento de IA": "AI budget usage"
+  "Uso do orçamento de IA": "AI budget usage",
+  "Sair sem salvar?": "Leave without saving?",
+  "As mudanças desta tela vão se perder.": "The changes on this screen will be lost.",
+  "Descartar e sair": "Discard and leave",
+  "Continuar editando": "Keep editing",
+  "Suas mudanças continuam aqui. Tente de novo.": "Your changes are still here. Try again.",
+  "Seus dados": "Your details",
+  "Idioma e fuso horário": "Language and time zone",
+  "Dados da empresa": "Company details",
+  "País, fuso, idioma e moeda": "Country, time zone, language and currency",
+  "Privacidade e retenção de mídia": "Privacy and media retention",
+  "Nome e logo": "Name and logo",
+  "Cor de destaque": "Accent color",
+  "Quando a IA volta a atender": "When the AI takes over again",
+  "Quem fica com a conversa e o negócio": "Who keeps the conversation and the deal"
 }

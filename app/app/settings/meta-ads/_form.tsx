@@ -8,8 +8,9 @@ import {
   disconnectAdInsights,
   updateAdInsightsConnection,
 } from "@/app/actions/settings/updateAdInsightsConnection";
+import { useBarraDeSalvar } from "@/components/configuracoes/grupo-de-salvar";
+import { SecaoDaConfiguracao } from "@/components/configuracoes/secao-da-configuracao";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -43,19 +44,34 @@ export function FormularioDeMetaAds({
 }) {
   const t = (texto: string) => traduzir(texto, idioma);
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  // Desconectar é ação imediata, fora da barra: tem a própria transição.
+  const [desconectando, startTransition] = useTransition();
 
   const [token, setToken] = useState("");
   const [conta, setConta] = useState(contaPadrao ?? "");
+  // O último salvo da conta padrão. O token nunca volta do servidor, então
+  // "mudou" para ele é só ter algo digitado.
+  const [contaSalva, setContaSalva] = useState(contaPadrao ?? "");
 
   // Na primeira conexão o token é obrigatório — a coluna é NOT NULL (0214) e a
   // Server Action recusa. Barrar aqui explica antes de o clique acontecer, em
   // vez de devolver um erro de validação depois.
   const podeSalvar = conectada || token.trim().length >= 20;
+  const sujo = token !== "" || conta !== contaSalva;
 
-  function salvar(evento: React.FormEvent) {
-    evento.preventDefault();
-    startTransition(async () => {
+  const { barra, enviar, salvando } = useBarraDeSalvar({
+    sujo,
+    podeSalvar,
+    aviso: t("Cole o token para poder salvar."),
+    descartar: () => {
+      setToken("");
+      setConta(contaSalva);
+    },
+    salvar: async () => {
+      if (!podeSalvar) {
+        toast.error(t("Cole o token para poder salvar."));
+        return "invalido";
+      }
       const resultado = await updateAdInsightsConnection({
         platform: "meta_ads",
         access_token: token.trim() || undefined,
@@ -66,13 +82,17 @@ export function FormularioDeMetaAds({
         // O campo é limpo no sucesso: deixá-lo preenchido dá a impressão de que
         // a tela guarda o token, e ela nunca o mostra de volta.
         setToken("");
+        setContaSalva(conta);
         toast.success(t("Conexão salva."));
         router.refresh();
-        return;
+        return "salvo";
       }
       toast.error(t(ERRO_EM_PORTUGUES[resultado.error] ?? "Não consegui salvar agora."));
-    });
-  }
+      return "falhou";
+    },
+  });
+
+  const ocupado = salvando || desconectando;
 
   function desconectar() {
     startTransition(async () => {
@@ -80,6 +100,7 @@ export function FormularioDeMetaAds({
       if (resultado.ok) {
         setToken("");
         setConta("");
+        setContaSalva("");
         toast.success(t("Conta desconectada."));
         router.refresh();
         return;
@@ -89,25 +110,30 @@ export function FormularioDeMetaAds({
   }
 
   return (
-    <Card className="p-6">
-      <form onSubmit={salvar} className="flex flex-col gap-5">
+    <form onSubmit={enviar} className="flex flex-col gap-6">
+      <SecaoDaConfiguracao
+        titulo={t("Token de acesso")}
+        descricao={
+          conectada
+            ? t(
+                "Já existe um token guardado. Deixe em branco para mantê-lo, ou cole um novo para substituir.",
+              )
+            : t("Precisa da permissão ads_read.")
+        }
+      >
         <div className="flex flex-col gap-2">
-          <Label htmlFor="access_token">{t("Token de acesso")}</Label>
+          <Label htmlFor="access_token" className="sr-only">
+            {t("Token de acesso")}
+          </Label>
           <Input
             id="access_token"
             type="password"
             autoComplete="off"
             value={token}
+            disabled={ocupado}
             onChange={(e) => setToken(e.target.value)}
             placeholder={conectada ? t("Guardado — preencha só para trocar") : "EAA…"}
           />
-          <p className="text-xs text-muted-foreground">
-            {conectada
-              ? t(
-                  "Já existe um token guardado. Deixe em branco para mantê-lo, ou cole um novo para substituir.",
-                )
-              : t("Precisa da permissão ads_read.")}
-          </p>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -115,6 +141,7 @@ export function FormularioDeMetaAds({
           <Input
             id="default_account_id"
             value={conta}
+            disabled={ocupado}
             onChange={(e) => setConta(e.target.value)}
             placeholder="act_123456789012345"
           />
@@ -124,44 +151,32 @@ export function FormularioDeMetaAds({
             )}
           </p>
         </div>
+      </SecaoDaConfiguracao>
 
-        <div className="flex items-center gap-3">
-          <Button type="submit" disabled={isPending || !podeSalvar}>
-            {isPending ? t("Salvando…") : t("Salvar")}
-          </Button>
-
-          {conectada && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isPending}
-              onClick={desconectar}
-            >
-              {t("Desconectar")}
-            </Button>
-          )}
-
-          {!podeSalvar && (
-            <span className="text-sm text-muted-foreground">
-              {t("Cole o token para poder salvar.")}
-            </span>
-          )}
-        </div>
-
-        {conectada && (
-          <p className="text-xs text-muted-foreground">
-            {/*
+      {conectada && (
+        <SecaoDaConfiguracao
+          titulo={t("Desconectar")}
+          descricao={
+            /*
               Desconectar APAGA a linha — não existe "pausar" nesta feature, e o
               porquê está no cabeçalho da 0214: como nada roda sozinho, um estado
               "conectado mas desligado" teria a mesma consequência visível de não
               estar conectado.
-            */}
-            {t(
+            */
+            t(
               "Desconectar apaga o token guardado. A tela de Meta Ads volta a pedir uma conexão, e nenhum dado histórico é perdido — nada é armazenado aqui.",
-            )}
-          </p>
-        )}
-      </form>
-    </Card>
+            )
+          }
+        >
+          <div>
+            <Button type="button" variant="outline" disabled={ocupado} onClick={desconectar}>
+              {t("Desconectar")}
+            </Button>
+          </div>
+        </SecaoDaConfiguracao>
+      )}
+
+      {barra}
+    </form>
   );
 }

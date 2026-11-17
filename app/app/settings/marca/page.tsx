@@ -36,6 +36,7 @@
  */
 import { notFound, redirect } from "next/navigation";
 
+import { CabecalhoDaConfiguracao } from "@/components/configuracoes/cabecalho-da-configuracao";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { marcaDaInstalacao } from "@/lib/branding/instalacao";
@@ -84,12 +85,10 @@ export default async function MarcaDaOrganizacaoPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Marca", idioma)}</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          {traduzir("O nome e a cor que a sua empresa mostra para quem trabalha aqui dentro.", idioma)}
-        </p>
-      </header>
+      <CabecalhoDaConfiguracao
+        titulo={traduzir("Marca", idioma)}
+        descricao={traduzir("O nome e a cor que a sua empresa mostra para quem trabalha aqui dentro.", idioma)}
+      />
 
       <FormularioDaMarcaDaOrganizacao
         gravada={{

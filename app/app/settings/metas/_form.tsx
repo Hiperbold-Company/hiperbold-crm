@@ -11,13 +11,13 @@
  * Configurações: "forbidden_role" mandaria um atendente tentar de novo para
  * falhar igual, então ela diz quem pode.
  */
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { definirMetaMensal } from "@/app/actions/settings/definirMetaMensal";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { useBarraDeSalvar } from "@/components/configuracoes/grupo-de-salvar";
+import { SecaoDaConfiguracao } from "@/components/configuracoes/secao-da-configuracao";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useT } from "@/hooks/i18n/useT";
@@ -39,40 +39,51 @@ export function FormularioDaMeta({
 }) {
   const t = useT();
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
 
-  const [periodo, setPeriodo] = useState(mes);
-  const [alvo, setAlvo] = useState(alvoAtual === null ? "" : String(alvoAtual));
+  const inicial = { periodo: mes, alvo: alvoAtual === null ? "" : String(alvoAtual) };
+  const [salvo, setSalvo] = useState(inicial);
+  const [periodo, setPeriodo] = useState(inicial.periodo);
+  const [alvo, setAlvo] = useState(inicial.alvo);
 
   const numero = Number.parseInt(alvo, 10);
   const podeSalvar = /^\d{4}-\d{2}$/.test(periodo) && Number.isInteger(numero) && numero > 0;
+  const sujo = periodo !== salvo.periodo || alvo !== salvo.alvo;
 
-  function salvar(evento: React.FormEvent) {
-    evento.preventDefault();
-    if (!podeSalvar) {
-      toast.error(t("Informe um mês e uma quantidade de vendas maior que zero."));
-      return;
-    }
-    startTransition(async () => {
+  const { barra, enviar, salvando } = useBarraDeSalvar({
+    sujo,
+    podeSalvar,
+    aviso: t("Informe um mês e uma quantidade de vendas maior que zero."),
+    descartar: () => {
+      setPeriodo(salvo.periodo);
+      setAlvo(salvo.alvo);
+    },
+    salvar: async () => {
+      if (!podeSalvar) {
+        toast.error(t("Informe um mês e uma quantidade de vendas maior que zero."));
+        return "invalido";
+      }
       const resultado = await definirMetaMensal({ periodo, alvo: numero });
       if (resultado.ok) {
+        setSalvo({ periodo, alvo });
         toast.success(t("Meta salva."));
         router.refresh();
-        return;
+        return "salvo";
       }
       toast.error(t(ERRO_EM_PORTUGUES[resultado.error] ?? "Não consegui salvar a meta agora."));
-    });
-  }
+      return "falhou";
+    },
+  });
 
   return (
-    <Card className="max-w-xl p-6">
-      <form onSubmit={salvar} className="flex flex-col gap-5">
+    <form onSubmit={enviar} className="flex max-w-xl flex-col gap-6">
+      <SecaoDaConfiguracao titulo={t("Meta do mês")}>
         <div className="flex flex-col gap-2">
           <Label htmlFor="periodo">{t("Mês")}</Label>
           <Input
             id="periodo"
             type="month"
             value={periodo}
+            disabled={salvando}
             onChange={(e) => setPeriodo(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
@@ -89,6 +100,7 @@ export function FormularioDaMeta({
             min={1}
             step={1}
             value={alvo}
+            disabled={salvando}
             onChange={(e) => setAlvo(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
@@ -97,13 +109,8 @@ export function FormularioDaMeta({
               : t("Salvar de novo corrige a meta deste mês — nada é duplicado.")}
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <Button type="submit" disabled={isPending || !podeSalvar}>
-            {isPending ? t("Salvando…") : t("Salvar meta")}
-          </Button>
-        </div>
-      </form>
-    </Card>
+      </SecaoDaConfiguracao>
+      {barra}
+    </form>
   );
 }

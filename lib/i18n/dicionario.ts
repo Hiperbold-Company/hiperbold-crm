@@ -29074,6 +29074,21 @@ export const DICIONARIO: Traducoes = {
   // design: componentes nas telas
   "Prazo da solicitação": { es: "Plazo de la solicitud" },
   "Uso do orçamento de IA": { es: "Uso del presupuesto de IA" },
+  // design: configurações
+  "Sair sem salvar?": { es: "¿Salir sin guardar?" },
+  "As mudanças desta tela vão se perder.": { es: "Los cambios de esta pantalla se van a perder." },
+  "Descartar e sair": { es: "Descartar y salir" },
+  "Continuar editando": { es: "Seguir editando" },
+  "Suas mudanças continuam aqui. Tente de novo.": { es: "Tus cambios siguen aquí. Inténtalo de nuevo." },
+  "Seus dados": { es: "Tus datos" },
+  "Idioma e fuso horário": { es: "Idioma y zona horaria" },
+  "Dados da empresa": { es: "Datos de la empresa" },
+  "País, fuso, idioma e moeda": { es: "País, zona horaria, idioma y moneda" },
+  "Privacidade e retenção de mídia": { es: "Privacidad y retención de medios" },
+  "Nome e logo": { es: "Nombre y logo" },
+  "Cor de destaque": { es: "Color de acento" },
+  "Quando a IA volta a atender": { es: "Cuándo la IA vuelve a atender" },
+  "Quem fica com a conversa e o negócio": { es: "Quién se queda con la conversación y el negocio" },
 };
 
 /**

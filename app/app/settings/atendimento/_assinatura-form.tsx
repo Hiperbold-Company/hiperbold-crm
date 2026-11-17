@@ -5,11 +5,11 @@
  * `lib/messaging/assinatura.ts`; a gravação, em `/api/v1/settings/assinatura`.
  */
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { useBarraDeSalvar } from "@/components/configuracoes/grupo-de-salvar";
+import { SecaoDaConfiguracao } from "@/components/configuracoes/secao-da-configuracao";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api/client";
@@ -27,21 +27,23 @@ export function AssinaturaForm({ initial }: { initial: AssinaturaConfig }) {
   const t = useT();
   const [form, setForm] = useState(initial);
   const [salvo, setSalvo] = useState(initial);
-  const [isPending, startTransition] = useTransition();
   const sujo = JSON.stringify(form) !== JSON.stringify(salvo);
 
-  function salvar(e: React.FormEvent) {
-    e.preventDefault();
-    startTransition(async () => {
+  const { barra, enviar, salvando: isPending, refDoFormulario } = useBarraDeSalvar({
+    sujo,
+    descartar: () => setForm(salvo),
+    salvar: async () => {
       try {
         await apiClient.patch("/api/v1/settings/assinatura", form);
         setSalvo(form);
         toast.success(t("Assinatura salva."));
+        return "salvo";
       } catch (err) {
         toast.error(err instanceof Error ? t(err.message) : t("Não consegui salvar."));
+        return "falhou";
       }
-    });
-  }
+    },
+  });
 
   const opcoes = [
     {
@@ -57,16 +59,14 @@ export function AssinaturaForm({ initial }: { initial: AssinaturaConfig }) {
   ];
 
   return (
-    <form onSubmit={salvar} className="flex max-w-3xl flex-col gap-4" data-testid="form-assinatura">
-      <Card className="space-y-4 p-4">
-        <div>
-          <h2 className="text-sm font-semibold">{t("Quem fala aparece na mensagem?")}</h2>
-          <p className="text-xs text-muted-foreground">
-            {t(
-              "Ligado, a mensagem que vai ao cliente ganha o nome de quem fala em negrito, na linha de cima. O histórico do CRM guarda o texto como foi escrito. Campanhas, lembretes e integrações por token não assinam.",
-            )}
-          </p>
-        </div>
+    <form ref={refDoFormulario} onSubmit={enviar} className="flex max-w-3xl flex-col gap-4" data-testid="form-assinatura">
+      <SecaoDaConfiguracao
+        id="sec-assinatura"
+        titulo={t("Quem fala aparece na mensagem?")}
+        descricao={t(
+          "Ligado, a mensagem que vai ao cliente ganha o nome de quem fala em negrito, na linha de cima. O histórico do CRM guarda o texto como foi escrito. Campanhas, lembretes e integrações por token não assinam.",
+        )}
+      >
         {opcoes.map((o) => (
           <label key={o.chave} className="flex cursor-pointer items-start gap-3">
             <Checkbox
@@ -110,13 +110,8 @@ export function AssinaturaForm({ initial }: { initial: AssinaturaConfig }) {
             </span>
           </span>
         </label>
-      </Card>
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={isPending || !sujo}>
-          {isPending ? t("Salvando…") : t("Salvar assinatura")}
-        </Button>
-        {sujo ? <span className="text-xs text-muted-foreground">{t("Há mudanças não salvas.")}</span> : null}
-      </div>
+      </SecaoDaConfiguracao>
+      {barra}
     </form>
   );
 }

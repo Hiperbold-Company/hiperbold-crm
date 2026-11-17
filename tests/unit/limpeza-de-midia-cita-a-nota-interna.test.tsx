@@ -23,6 +23,8 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { traduzir } from "@/lib/i18n/dicionario";
 import type { TenantInput } from "@/lib/schemas/settings";
 
+// A barra de salvar avisa ao sair sem salvar e navega pelo roteador do app.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/app/actions/settings/updateTenant", () => ({
   updateTenant: vi.fn(async () => ({ ok: true })),
 }));

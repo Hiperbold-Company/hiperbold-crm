@@ -1,7 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { render } from "@/tests/helpers/render-com-confirmacao";
+
+import { GrupoDeSalvar } from "@/components/configuracoes/grupo-de-salvar";
+
+import { AssinaturaForm } from "./_assinatura-form";
 import { AtendimentoForm, type AtendimentoConfig } from "./_form";
 import {
   PRAZO_MAX_MINUTOS,
@@ -17,6 +22,8 @@ import {
  * o campo de minutos só aparece quando está ligado.
  */
 
+// A barra de salvar avisa ao sair sem salvar e navega pelo roteador do app.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -215,5 +222,54 @@ describe("Por qual conexão o atendente abre a conversa", () => {
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
     expect(corpoDoPatch()).toMatchObject({ conversation_connection_mode: "own_only" });
+  });
+});
+
+describe("A tela inteira tem UMA barra de salvar", () => {
+  const assinatura = { humanos: false, ia: false, nome_ia: "Assistente", por_agente: false };
+  const barras = () => screen.queryAllByRole("region", { name: "Alterações não salvas" });
+  // Resposta HTTP de verdade: o `apiClient` lê status e cabeçalhos, e aqui o
+  // que se mede é a barra sumir porque as gravações deram certo.
+  beforeEach(() => {
+    fetcher.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ data: {} }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+  });
+
+  it("mudar a distribuição e a assinatura mostra uma barra só, e Salvar grava as duas rotas", async () => {
+    montar(
+      <GrupoDeSalvar>
+        <AtendimentoForm initial={inicial} />
+        <AssinaturaForm initial={assinatura} />
+      </GrupoDeSalvar>,
+    );
+    expect(barras()).toHaveLength(0);
+    fireEvent.click(screen.getByTestId("opcao-modo-round_robin"));
+    fireEvent.click(screen.getByTestId("assinatura-humanos"));
+    expect(barras()).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(barras()).toHaveLength(0));
+    const rotas = fetcher.mock.calls.map(([url]) => String(url));
+    expect(rotas.some((u) => u.endsWith("/api/v1/settings/routing"))).toBe(true);
+    expect(rotas.some((u) => u.endsWith("/api/v1/settings/assinatura"))).toBe(true);
+  });
+
+  it("só o que mudou é gravado", async () => {
+    montar(
+      <GrupoDeSalvar>
+        <AtendimentoForm initial={inicial} />
+        <AssinaturaForm initial={assinatura} />
+      </GrupoDeSalvar>,
+    );
+    fireEvent.click(screen.getByTestId("assinatura-ia"));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(barras()).toHaveLength(0));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(String(fetcher.mock.calls[0]![0])).toMatch(/\/api\/v1\/settings\/assinatura$/);
   });
 });

@@ -18,6 +18,8 @@
  */
 import { redirect } from "next/navigation";
 
+import { CabecalhoDaConfiguracao } from "@/components/configuracoes/cabecalho-da-configuracao";
+import { GrupoDeSalvar } from "@/components/configuracoes/grupo-de-salvar";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { DEFAULT_VISIBILITY_MODE, ROLE_RANK, type VisibilityMode } from "@/lib/auth/types";
 import { routingConfigSchema } from "@/lib/schemas";
@@ -79,18 +81,19 @@ export default async function AtendimentoSettingsPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {traduzir("Distribuição de atendimento", idioma)}
-        </h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          {traduzir(
-            "Quem recebe cada cliente novo, e o que cada atendente enxerga. As duas decisões andam juntas: distribuir sem restringir deixa todo mundo vendo a carteira do colega; restringir sem distribuir deixa o funil de cada um vazio.",
-            idioma,
-          )}
-        </p>
-      </header>
+      <CabecalhoDaConfiguracao
+        titulo={traduzir("Distribuição de atendimento", idioma)}
+        descricao={traduzir(
+          "Quem recebe cada cliente novo, e o que cada atendente enxerga. As duas decisões andam juntas: distribuir sem restringir deixa todo mundo vendo a carteira do colega; restringir sem distribuir deixa o funil de cada um vazio.",
+          idioma,
+        )}
+      />
 
+      {/* Três formulários, três endpoints, UMA barra de salvar: o grupo junta
+          o que mudou em qualquer um deles. Os interruptores abaixo gravam na
+          hora e ficam fora da barra. O grupo envolve a página inteira para a
+          barra ficar presa ao rodapé enquanto se rola até o fim. */}
+      <GrupoDeSalvar>
       <AtendimentoForm
         initial={{ ...routing, visibility_mode: settings.visibility_mode ?? DEFAULT_VISIBILITY_MODE }}
       />
@@ -108,6 +111,7 @@ export default async function AtendimentoSettingsPage() {
         idioma={idioma}
         podeMudar={podeAdministrarEmpresa(user, activeOrg)}
       />
+      </GrupoDeSalvar>
     </div>
   );
 }

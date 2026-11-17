@@ -18,15 +18,15 @@
  * (o placeholder) e outra com a camada dela no topo. Dois arrays divergiriam.
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { updateMarcaDaOrganizacao } from "@/app/actions/settings/updateMarcaDaOrganizacao";
 import { CampoDeLogo } from "@/components/branding/CampoDeLogo";
 import { TiraDeTons, type ItemDaLegenda } from "@/components/branding/TiraDeTons";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { useBarraDeSalvar } from "@/components/configuracoes/grupo-de-salvar";
+import { SecaoDaConfiguracao } from "@/components/configuracoes/secao-da-configuracao";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cssDaMarca, ESCOPO_DA_ORGANIZACAO } from "@/lib/branding/css";
@@ -158,7 +158,20 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
   const [remetenteNome, setRemetenteNome] = useState(gravada.email_from_name ?? "");
   const [responderPara, setResponderPara] = useState(gravada.email_reply_to ?? "");
   const [erroTecnico, setErroTecnico] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  // O último salvo dos campos do `Salvar` (o logo não entra: sobe na hora).
+  const [salvo, setSalvo] = useState(() => ({
+    nome: gravada.app_name ?? "",
+    hex: gravada.accent_hex ?? "",
+    hexEscuro: gravada.accent_dark_hex ?? "",
+    remetenteNome: gravada.email_from_name ?? "",
+    responderPara: gravada.email_reply_to ?? "",
+  }));
+  const sujo =
+    nome !== salvo.nome ||
+    hex !== salvo.hex ||
+    hexEscuro !== salvo.hexEscuro ||
+    remetenteNome !== salvo.remetenteNome ||
+    responderPara !== salvo.responderPara;
 
   const nomeLimpo = nome.trim();
   const hexLimpo = hex.trim();
@@ -272,54 +285,65 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
     ];
   }, [derivada, derivadaEscura, degraus, t]);
 
-  function handleSubmit(evento: React.FormEvent) {
-    evento.preventDefault();
-    setErroTecnico(null);
+  const corValida = hexValido && hexEscuroValido;
+  const { barra, enviar } = useBarraDeSalvar({
+    sujo,
+    podeSalvar: corValida && responderParaValido,
+    aviso: !corValida
+      ? t("Use um código de cor como #7a5cd6.")
+      : t("Use um endereço de e-mail como contato@suaempresa.com"),
+    descartar: () => {
+      setNome(salvo.nome);
+      setHex(salvo.hex);
+      setHexEscuro(salvo.hexEscuro);
+      setRemetenteNome(salvo.remetenteNome);
+      setResponderPara(salvo.responderPara);
+      setErroTecnico(null);
+    },
+    salvar: async () => {
+      setErroTecnico(null);
 
-    // Os campos vazios = "volte ao que vem do sistema". A action traduz esse
-    // par de `null` em apagar a chave inteira, e não em gravar um envelope vazio.
-    const lido = marcaDaOrganizacaoSchema.safeParse({
-      app_name: nomeLimpo.length > 0 ? nomeLimpo : null,
-      accent_hex: hexLimpo.length > 0 ? hexLimpo : null,
-      accent_dark_hex: hexEscuroLimpo.length > 0 ? hexEscuroLimpo : null,
-      // O remetente da automação (#3287, fatia 1). Vão SEMPRE, mesmo quando a
-      // pessoa só mexeu na cor: o `Save` da marca substitui o objeto `branding`
-      // inteiro (só o `logo_path` é preservado no banco), então omitir um campo
-      // aqui o APAGARIA em silêncio no próximo salvamento de qualquer outro.
-      email_from_name: remetenteNomeLimpo.length > 0 ? remetenteNomeLimpo : null,
-      email_reply_to: responderParaLimpo.length > 0 ? responderParaLimpo : null,
-    });
-    if (!lido.success) {
-      toast.error(t("Confira os campos: algum valor não está no formato esperado."));
-      return;
-    }
+      // Os campos vazios = "volte ao que vem do sistema". A action traduz esse
+      // par de `null` em apagar a chave inteira, e não em gravar um envelope vazio.
+      const lido = marcaDaOrganizacaoSchema.safeParse({
+        app_name: nomeLimpo.length > 0 ? nomeLimpo : null,
+        accent_hex: hexLimpo.length > 0 ? hexLimpo : null,
+        accent_dark_hex: hexEscuroLimpo.length > 0 ? hexEscuroLimpo : null,
+        // O remetente da automação (#3287, fatia 1). Vão SEMPRE, mesmo quando a
+        // pessoa só mexeu na cor: o `Save` da marca substitui o objeto `branding`
+        // inteiro (só o `logo_path` é preservado no banco), então omitir um campo
+        // aqui o APAGARIA em silêncio no próximo salvamento de qualquer outro.
+        email_from_name: remetenteNomeLimpo.length > 0 ? remetenteNomeLimpo : null,
+        email_reply_to: responderParaLimpo.length > 0 ? responderParaLimpo : null,
+      });
+      if (!lido.success) {
+        toast.error(t("Confira os campos: algum valor não está no formato esperado."));
+        return "invalido";
+      }
 
-    startTransition(async () => {
       const resultado = await updateMarcaDaOrganizacao(lido.data);
       if (resultado.ok) {
+        setSalvo({ nome, hex, hexEscuro, remetenteNome, responderPara });
         toast.success(t("Marca salva."));
         // O bloco de cor e o nome no menu são emitidos pelo LAYOUT de `/app`, e a
         // action já revalidou `/app` como layout. O refresh é o que traz esse
         // render novo para esta aba — sem ele a pessoa salvaria, veria "ok" e
         // continuaria navegando com a cor velha até recarregar na mão.
         router.refresh();
-        return;
+        return "salvo";
       }
       toast.error(t(ERRO_EM_PORTUGUES[resultado.error] ?? "Não consegui salvar a marca agora."));
       // Recusa que esta tela não sabe nomear não pode virar só um toast genérico:
       // o texto cru é o que torna o problema diagnosticável para quem tem acesso
       // ao servidor. Falhar fechado na ação, aberto na informação.
       if (!ERRO_EM_PORTUGUES[resultado.error]) setErroTecnico(resultado.error);
-    });
-  }
+      return "falhou";
+    },
+  });
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-3xl space-y-6">
-      <Card className="space-y-4 p-6">
-        <h2 className="text-base font-semibold tracking-tight text-text">
-          {t("Como sua empresa aparece")}
-        </h2>
-
+    <form onSubmit={enviar} className="flex max-w-3xl flex-col gap-6">
+      <SecaoDaConfiguracao id="sec-nome" titulo={t("Nome e logo")}>
         <div className="space-y-2">
           <Label htmlFor="org_app_name">{t("Nome da sua empresa")}</Label>
           <Input
@@ -338,6 +362,31 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
           </p>
         </div>
 
+        {/*
+          O logo fica na MESMA seção que o nome porque, para quem administra a
+          empresa, é a mesma pergunta ("como minha empresa aparece"). O que o
+          separa é o mecanismo — ele sobe na hora, sem passar pela barra de
+          salvar —, e isso a própria caixa explica.
+        */}
+        <CampoDeLogo
+          escopo="organizacao"
+          // Literal, nunca memoizado: a identidade deste objeto é o que diz ao
+          // campo que houve render NOVO do servidor. Ver os Props de CampoDeLogo.
+          logoDaCamada={{
+            url: resolvida.origens.logoUrl === "organizacao" ? resolvida.logoUrl : null,
+            escuraUrl:
+              resolvida.origens.logoDarkUrl === "organizacao" ? resolvida.logoDarkUrl : null,
+          }}
+          logoHerdado={semAOrganizacao.logoUrl}
+          logoEscuroHerdado={semAOrganizacao.logoDarkUrl}
+          // Texto-fonte cru, não traduzido aqui: CampoDeLogo já chama t()
+          // internamente sobre esta prop (ver componente compartilhado).
+          origemDoHerdado="de quem instalou o sistema"
+          nomeEmVigor={resolvida.name}
+        />
+      </SecaoDaConfiguracao>
+
+      <SecaoDaConfiguracao id="sec-cor" titulo={t("Cor de destaque")}>
         <div className="space-y-2">
           <Label htmlFor="org_accent_hex">{t("Cor da sua marca")}</Label>
           <div className="flex items-center gap-3">
@@ -451,30 +500,7 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
             </p>
           </div>
         ) : null}
-
-        {/*
-          O logo fica na MESMA prancheta que o nome e a cor porque, para quem
-          administra a empresa, é a mesma pergunta ("como minha empresa
-          aparece"). O que o separa é o mecanismo — ele sobe na hora, sem passar
-          pelo Salvar —, e isso a própria caixa explica.
-        */}
-        <CampoDeLogo
-          escopo="organizacao"
-          // Literal, nunca memoizado: a identidade deste objeto é o que diz ao
-          // campo que houve render NOVO do servidor. Ver os Props de CampoDeLogo.
-          logoDaCamada={{
-            url: resolvida.origens.logoUrl === "organizacao" ? resolvida.logoUrl : null,
-            escuraUrl:
-              resolvida.origens.logoDarkUrl === "organizacao" ? resolvida.logoDarkUrl : null,
-          }}
-          logoHerdado={semAOrganizacao.logoUrl}
-          logoEscuroHerdado={semAOrganizacao.logoDarkUrl}
-          // Texto-fonte cru, não traduzido aqui: CampoDeLogo já chama t()
-          // internamente sobre esta prop (ver componente compartilhado).
-          origemDoHerdado="de quem instalou o sistema"
-          nomeEmVigor={resolvida.name}
-        />
-      </Card>
+      </SecaoDaConfiguracao>
 
       {/*
         O remetente do e-mail de AUTOMAÇÃO (#3287, fatia 1). Fica na MESMA tela
@@ -484,15 +510,13 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
         endereço de ENVIO (o domínio) continua sendo o do sistema. O SMTP próprio
         da organização é a fatia 2 e ainda não aparece aqui.
       */}
-      <Card className="space-y-4 p-6">
-        <h2 className="text-base font-semibold tracking-tight text-text">
-          {t("Como seus e-mails saem")}
-        </h2>
-        <p className="text-sm text-text-muted">
-          {t(
-            "Vale para os e-mails que as automações enviam ao seu cliente. O endereço de envio continua sendo o do sistema — o que muda é o nome que aparece e para onde vai a resposta.",
-          )}
-        </p>
+      <SecaoDaConfiguracao
+        id="sec-email"
+        titulo={t("Como seus e-mails saem")}
+        descricao={t(
+          "Vale para os e-mails que as automações enviam ao seu cliente. O endereço de envio continua sendo o do sistema — o que muda é o nome que aparece e para onde vai a resposta.",
+        )}
+      >
 
         <div className="space-y-2">
           <Label htmlFor="org_email_from_name">{t("Nome de exibição")}</Label>
@@ -531,7 +555,7 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
             {t("Para onde vai a resposta do cliente. Deixe em branco para usar o endereço do sistema.")}
           </p>
         </div>
-      </Card>
+      </SecaoDaConfiguracao>
 
       {/*
         O LAÇO DE RETORNO desta feature (invariante 7 do Sistema Vivo).
@@ -542,15 +566,10 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
         cor dela, e de onde vem cada campo, com os motivos que o próprio motor
         emitiu (nunca uma conclusão que a tela tirou por conta).
       */}
-      <Card className="space-y-3 p-6">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight text-text">
-            {t("De onde vem cada coisa")}
-          </h2>
-          <p className="text-sm text-text-muted">
-            {t("Considerando o que está nos campos acima.")}
-          </p>
-        </div>
+      <SecaoDaConfiguracao
+        titulo={t("De onde vem cada coisa")}
+        descricao={t("Considerando o que está nos campos acima.")}
+      >
 
         <div>
           <LinhaDeOrigem campo={t("Nome")} valor={origemEmPortugues(resolvida.origens.nome, t)} />
@@ -578,17 +597,14 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
             )}
           </p>
         ) : null}
-      </Card>
+      </SecaoDaConfiguracao>
 
       {/*
         O bloco honesto. Sem ele, a pessoa troca a cor, encontra o nome antigo em
         algum canto do produto e conclui que não funcionou — e "não funcionou" é
         o que ela vai repetir para o fornecedor dela.
       */}
-      <Card className="space-y-2 p-6">
-        <h2 className="text-base font-semibold tracking-tight text-text">
-          {t("O que isto ainda não muda")}
-        </h2>
+      <SecaoDaConfiguracao titulo={t("O que isto ainda não muda")}>
         <ul className="list-disc space-y-1 pl-5 text-sm text-text-muted">
           <li>
             {t(
@@ -644,16 +660,12 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
             )}
           </li>
         </ul>
-      </Card>
+      </SecaoDaConfiguracao>
 
-      <div className="flex items-center justify-end gap-3">
-        {erroTecnico ? (
-          <span className="font-mono text-xs text-text-muted">{erroTecnico}</span>
-        ) : null}
-        <Button type="submit" disabled={isPending || !hexValido || !hexEscuroValido || !responderParaValido}>
-          {isPending ? t("Salvando…") : t("Salvar")}
-        </Button>
-      </div>
+      {erroTecnico ? (
+        <p className="text-right font-mono text-xs text-text-muted">{erroTecnico}</p>
+      ) : null}
+      {barra}
     </form>
   );
 }

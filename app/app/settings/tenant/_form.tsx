@@ -1,9 +1,9 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { useBarraDeSalvar } from "@/components/configuracoes/grupo-de-salvar";
+import { SecaoDaConfiguracao } from "@/components/configuracoes/secao-da-configuracao";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -43,7 +43,8 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
   const t = useT();
   const { confirmar } = useConfirmar();
   const [form, setForm] = useState<TenantInput>(initial);
-  const [isPending, startTransition] = useTransition();
+  const [salvo, setSalvo] = useState<TenantInput>(initial);
+  const sujo = JSON.stringify(form) !== JSON.stringify(salvo);
 
   // O rótulo do nome legal e do número da empresa vem do PERFIL DO PAÍS
   // (issue #1946, item 4): a mesma troca de país que muda o documento do
@@ -55,27 +56,37 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const parsed = tenantSchema.safeParse(form);
-    if (!parsed.success) {
-      toast.error(t("Dados inválidos."));
-      return;
-    }
-    startTransition(async () => {
+  const { barra, enviar, liberarSaida } = useBarraDeSalvar({
+    sujo,
+    descartar: () => setForm(salvo),
+    salvar: async () => {
+      const parsed = tenantSchema.safeParse(form);
+      if (!parsed.success) {
+        toast.error(t("Dados inválidos."));
+        return "invalido";
+      }
       const r = await (onSave ?? updateTenant)(parsed.data);
       if (r.ok) {
+        setSalvo(form);
         toast.success(t("Organização atualizada."));
         onSaved?.();
-      } else if (r.error === "mfa_required") irAoDesafioDeMfa();
-      else toast.error(`${t("Erro")}: ${r.error}`);
-    });
-  }
+        return "salvo";
+      }
+      if (r.error === "mfa_required") {
+        // A própria tela manda ao desafio: o aviso de saída não pergunta aqui.
+        liberarSaida();
+        irAoDesafioDeMfa();
+        return "invalido";
+      }
+      toast.error(`${t("Erro")}: ${r.error}`);
+      return "falhou";
+    },
+  });
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl">
-      <Card className="space-y-4 p-6">
-        <div className="grid grid-cols-2 gap-4">
+    <form onSubmit={enviar} className="flex max-w-2xl flex-col gap-6">
+      <SecaoDaConfiguracao id="sec-empresa" titulo={t("Dados da empresa")}>
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="display_name">{t("Nome de exibição")}</Label>
             <Input
@@ -102,14 +113,55 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
               onChange={(e) => set("cnpj", e.target.value || null)}
             />
           </div>
+        </div>
+      </SecaoDaConfiguracao>
+
+      <SecaoDaConfiguracao id="sec-regiao" titulo={t("País, fuso, idioma e moeda")}>
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="dpo_email">{t("DPO email")}</Label>
-            <Input
-              id="dpo_email"
-              type="email"
-              value={form.dpo_email ?? ""}
-              onChange={(e) => set("dpo_email", e.target.value || null)}
-            />
+            <Label htmlFor="country">{t("País")}</Label>
+            <Select
+              value={form.country ?? "BR"}
+              onValueChange={(v) => {
+                // Escolher o país SUGERE o fuso dele (issue #2347, item 4): uma
+                // organização de Portugal que nunca trocou o fuso ficava com o
+                // `America/Sao_Paulo` do padrão e mandava ao titular datas em
+                // GMT-3. A sugestão entra no campo de fuso, logo ao lado — e quem quiser
+                // outro fuso ainda pode recusá-la, que é só trocar ali.
+                const sugerido = perfilDoPais(v).fusoDoSugerido;
+                setForm((f) => ({ ...f, country: v, timezone: sugerido }));
+              }}
+            >
+              <SelectTrigger id="country">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {paisesOferecidos().map((pais) => (
+                  <SelectItem key={pais.codigo} value={pais.codigo}>
+                    {pais.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "De onde saem o documento do contato, a lei citada no documento de acesso e o prazo em dias úteis. Só aparecem países com a lei revisada — a lista é curta de propósito.",
+              )}
+            </p>
+            {/* Quem responde pelo documento precisa saber que a revisão foi
+                feita por IA (doc 88). O texto fala de Portugal: só o perfil PT
+                declara `revisadaPorIa`, e um teste prende isso. */}
+            {perfil.lei?.revisadaPorIa && (
+              <p
+                role="note"
+                data-testid="aviso-revisao-por-ia"
+                className="rounded-md border border-warning bg-warning-bg p-3 text-xs text-warning-fg"
+              >
+                {t(
+                  "A citação do RGPD (artigo 15.º do Regulamento (UE) 2016/679) foi conferida contra o texto oficial numa revisão feita por IA, sem advogado em Portugal. Os prazos do sistema (7 e 15 dias úteis) são mais curtos que o prazo legal de um mês, e o relatório de acesso ainda não traz todas as informações do art. 15.º. Trocar o país muda a regra do documento do contato: a partir daí, CPF enviado por API, importação ou integração é recusado como NIF inválido. O sistema não substitui o seu encarregado da proteção de dados: confirme com ele os textos enviados aos titulares, sobretudo nas campanhas de marketing, que em Portugal, em regra, exigem consentimento prévio (Lei 41/2004, art. 13.º-A).",
+                )}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="timezone">{t("Fuso horário")}</Label>
@@ -165,50 +217,28 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
               {t("Vale para todo preço do catálogo. Produto já cadastrado guarda a moeda com que nasceu.")}
             </p>
           </div>
+        </div>
+      </SecaoDaConfiguracao>
+
+      <SecaoDaConfiguracao id="sec-privacidade" titulo={t("Privacidade e retenção de mídia")}>
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="country">{t("País")}</Label>
-            <Select
-              value={form.country ?? "BR"}
-              onValueChange={(v) => {
-                // Escolher o país SUGERE o fuso dele (issue #2347, item 4): uma
-                // organização de Portugal que nunca trocou o fuso ficava com o
-                // `America/Sao_Paulo` do padrão e mandava ao titular datas em
-                // GMT-3. A sugestão entra no campo logo acima — e quem quiser
-                // outro fuso ainda pode recusá-la, que é só trocar ali.
-                const sugerido = perfilDoPais(v).fusoDoSugerido;
-                setForm((f) => ({ ...f, country: v, timezone: sugerido }));
-              }}
-            >
-              <SelectTrigger id="country">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {paisesOferecidos().map((pais) => (
-                  <SelectItem key={pais.codigo} value={pais.codigo}>
-                    {pais.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {t(
-                "De onde saem o documento do contato, a lei citada no documento de acesso e o prazo em dias úteis. Só aparecem países com a lei revisada — a lista é curta de propósito.",
-              )}
-            </p>
-            {/* Quem responde pelo documento precisa saber que a revisão foi
-                feita por IA (doc 88). O texto fala de Portugal: só o perfil PT
-                declara `revisadaPorIa`, e um teste prende isso. */}
-            {perfil.lei?.revisadaPorIa && (
-              <p
-                role="note"
-                data-testid="aviso-revisao-por-ia"
-                className="rounded-md border border-warning bg-warning-bg p-3 text-xs text-warning-fg"
-              >
-                {t(
-                  "A citação do RGPD (artigo 15.º do Regulamento (UE) 2016/679) foi conferida contra o texto oficial numa revisão feita por IA, sem advogado em Portugal. Os prazos do sistema (7 e 15 dias úteis) são mais curtos que o prazo legal de um mês, e o relatório de acesso ainda não traz todas as informações do art. 15.º. Trocar o país muda a regra do documento do contato: a partir daí, CPF enviado por API, importação ou integração é recusado como NIF inválido. O sistema não substitui o seu encarregado da proteção de dados: confirme com ele os textos enviados aos titulares, sobretudo nas campanhas de marketing, que em Portugal, em regra, exigem consentimento prévio (Lei 41/2004, art. 13.º-A).",
-                )}
-              </p>
-            )}
+            <Label htmlFor="dpo_email">{t("DPO email")}</Label>
+            <Input
+              id="dpo_email"
+              type="email"
+              value={form.dpo_email ?? ""}
+              onChange={(e) => set("dpo_email", e.target.value || null)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="privacy_policy_url">{t("URL política de privacidade")}</Label>
+            <Input
+              id="privacy_policy_url"
+              type="url"
+              value={form.privacy_policy_url ?? ""}
+              onChange={(e) => set("privacy_policy_url", e.target.value || null)}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="media_retention_days">{t("Retenção de mídia (dias)")}</Label>
@@ -255,23 +285,10 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
               }}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="privacy_policy_url">{t("URL política de privacidade")}</Label>
-            <Input
-              id="privacy_policy_url"
-              type="url"
-              value={form.privacy_policy_url ?? ""}
-              onChange={(e) => set("privacy_policy_url", e.target.value || null)}
-            />
-          </div>
         </div>
+      </SecaoDaConfiguracao>
 
-        <div className="flex sm:justify-end">
-          <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
-            {isPending ? t("Salvando…") : t("Salvar")}
-          </Button>
-        </div>
-      </Card>
+      {barra}
     </form>
   );
 }

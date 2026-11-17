@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
+import { render } from "@/tests/helpers/render-com-confirmacao";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { TenantForm } from "@/app/app/settings/tenant/_form";
 import { ProfileForm } from "./_form";
@@ -16,6 +17,8 @@ import { ProfileForm } from "./_form";
  *    voseo ("Escribí") reprova o caso 3.
  */
 
+// A barra de salvar avisa ao sair sem salvar e navega pelo roteador do app.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/app/actions/settings/updateProfile", () => ({
   updateProfile: vi.fn(async () => ({ ok: true })),
 }));

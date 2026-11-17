@@ -8,13 +8,13 @@
  * consequência escrita — inclusive a ruim.
  */
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CHAVE_MINHAS_CONEXOES } from "@/hooks/inbox/useMinhasConexoes";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { useBarraDeSalvar } from "@/components/configuracoes/grupo-de-salvar";
+import { SecaoDaConfiguracao } from "@/components/configuracoes/secao-da-configuracao";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api/client";
@@ -162,7 +162,6 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
   const t = useT();
   const [form, setForm] = useState<AtendimentoConfig>(initial);
   const [salvo, setSalvo] = useState<AtendimentoConfig>(initial);
-  const [isPending, startTransition] = useTransition();
   const qc = useQueryClient();
 
   const sujo = JSON.stringify(form) !== JSON.stringify(salvo);
@@ -176,30 +175,33 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
 
   const devolveSozinho = form.handoff_return_after_minutes !== null;
 
-  function salvar(e: React.FormEvent) {
-    e.preventDefault();
-    startTransition(async () => {
+  // A barra é a da tela inteira quando a página põe os formulários num
+  // `GrupoDeSalvar`; sozinho, o formulário desenha a dele.
+  const { barra, enviar, salvando: isPending, refDoFormulario } = useBarraDeSalvar({
+    sujo,
+    descartar: () => setForm(salvo),
+    salvar: async () => {
       try {
         await apiClient.patch("/api/v1/settings/routing", form);
         setSalvo(form);
         // O modo da conexão é lido pelo funil e pelo Chat desta mesma aba.
         void qc.invalidateQueries({ queryKey: CHAVE_MINHAS_CONEXOES });
         toast.success(t("Distribuição de atendimento salva."));
+        return "salvo";
       } catch (err) {
         toast.error(err instanceof Error ? t(err.message) : t("Não consegui salvar."));
+        return "falhou";
       }
-    });
-  }
+    },
+  });
 
   return (
-    <form onSubmit={salvar} className="flex max-w-3xl flex-col gap-6" data-testid="form-atendimento">
-      <Card className="space-y-4 p-4">
-        <div>
-          <h2 className="text-sm font-semibold">{t("Quem recebe o cliente novo")}</h2>
-          <p className="text-xs text-muted-foreground">
-            {t("Vale para conversa que chega sem dono.")}
-          </p>
-        </div>
+    <form ref={refDoFormulario} onSubmit={enviar} className="flex max-w-3xl flex-col gap-6" data-testid="form-atendimento">
+      <SecaoDaConfiguracao
+        id="sec-quem"
+        titulo={t("Quem recebe o cliente novo")}
+        descricao={t("Vale para conversa que chega sem dono.")}
+      >
         <div className="space-y-2">
           {ROUTING_MODES.map((m) => (
             <Escolha
@@ -254,16 +256,18 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
             </div>
           </div>
         ) : null}
-      </Card>
+      </SecaoDaConfiguracao>
 
-      <Card className="space-y-4 p-4">
-        <div>
-          <h2 className="text-sm font-semibold">{t("O que cada atendente enxerga")}</h2>
-          <p className="text-xs text-muted-foreground">
+      <SecaoDaConfiguracao
+        id="sec-visao"
+        titulo={t("O que cada atendente enxerga")}
+        descricao={
+          <>
             {t("Restringe apenas quem tem o papel")} <strong>{t("Atendente")}</strong>.{" "}
             {t("Gerente e administrador continuam vendo a operação inteira.")}
-          </p>
-        </div>
+          </>
+        }
+      >
         <div className="space-y-2">
           {VISIBILITY_MODES.map((v) => (
             <Escolha
@@ -290,11 +294,15 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
             )}
           </p>
         ) : null}
-      </Card>
+      </SecaoDaConfiguracao>
 
-      <Card className="space-y-4 p-4" data-testid="devolucao-ao-agente">
+      {/* As duas perguntas sobre a IA voltar a falar numa seção só: uma é a
+          volta depois do silêncio da equipe, a outra o silêncio depois de uma
+          resposta pelo celular. */}
+      <SecaoDaConfiguracao id="sec-ia" titulo={t("Quando a IA volta a atender")}>
+      <div className="space-y-4" data-testid="devolucao-ao-agente">
         <div>
-          <h2 className="text-sm font-semibold">{t("Quando a pessoa some, a IA volta?")}</h2>
+          <h3 className="text-sm font-semibold">{t("Quando a pessoa some, a IA volta?")}</h3>
           <p className="text-xs text-muted-foreground">
             {t(
               "Quando alguém assume uma conversa, o agente de IA para de responder nela até ser devolvido. Se ninguém devolve, o cliente que escreve de novo fica sem resposta.",
@@ -345,13 +353,13 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
             </p>
           </div>
         ) : null}
-      </Card>
+      </div>
 
-      <Card className="space-y-4 p-4" data-testid="silencio-apos-resposta-pelo-celular">
+      <div className="space-y-4 border-t pt-4" data-testid="silencio-apos-resposta-pelo-celular">
         <div>
-          <h2 className="text-sm font-semibold">
+          <h3 className="text-sm font-semibold">
             {t("Quando alguém responde pelo celular, a IA espera quanto tempo?")}
-          </h2>
+          </h3>
           <p className="text-xs text-muted-foreground">
             {t(
               "Quando alguém da equipe responde o cliente direto pelo celular, fora do sistema, o agente de IA fica calado naquela conversa por este tempo. Cada nova resposta pelo celular recomeça a contagem.",
@@ -379,13 +387,17 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
             )}
           </p>
         </div>
-      </Card>
+      </div>
+      </SecaoDaConfiguracao>
 
-      <Card className="space-y-4 p-4" data-testid="conversa-fica-com-quem-atendeu">
+      {/* Quem fica dono do quê: a conversa, a conexão por onde ela sai e o
+          negócio sem responsável. */}
+      <SecaoDaConfiguracao id="sec-dono" titulo={t("Quem fica com a conversa e o negócio")}>
+      <div className="space-y-4" data-testid="conversa-fica-com-quem-atendeu">
         <div>
-          <h2 className="text-sm font-semibold">
+          <h3 className="text-sm font-semibold">
             {t("Quando alguém responde, a conversa fica com essa pessoa?")}
-          </h2>
+          </h3>
           <p className="text-xs text-muted-foreground">
             {t(
               "Desligado, vale a regra de sempre: responder pela tela cala a IA por alguns minutos, e a conversa encerrada que recebe mensagem nova volta para a fila.",
@@ -411,11 +423,11 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
             </span>
           </span>
         </label>
-      </Card>
+      </div>
 
-      <Card className="space-y-4 p-4" data-testid="conexao-ao-abrir">
+      <div className="space-y-4 border-t pt-4" data-testid="conexao-ao-abrir">
         <div>
-          <h2 className="text-sm font-semibold">{t("Por qual conexão o atendente abre a conversa")}</h2>
+          <h3 className="text-sm font-semibold">{t("Por qual conexão o atendente abre a conversa")}</h3>
           <p className="text-xs text-muted-foreground">
             {t(
               "Vale para quem tem conexão vinculada no bloco por número, abaixo. Quem não tem continua como sempre.",
@@ -438,11 +450,11 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
             />
           ))}
         </div>
-      </Card>
+      </div>
 
-      <Card className="space-y-4 p-4" data-testid="dono-ao-mover">
+      <div className="space-y-4 border-t pt-4" data-testid="dono-ao-mover">
         <div>
-          <h2 className="text-sm font-semibold">{t("Negócio sem responsável")}</h2>
+          <h3 className="text-sm font-semibold">{t("Negócio sem responsável")}</h3>
           <p className="text-xs text-muted-foreground">
             {t("Vale quando uma pessoa da equipe muda o negócio de etapa.")}
           </p>
@@ -466,18 +478,10 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
             </span>
           </span>
         </label>
-      </Card>
-
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={isPending || !sujo}>
-          {isPending ? t("Salvando…") : t("Salvar")}
-        </Button>
-        {sujo ? (
-          <span className="text-xs text-muted-foreground">
-            {t("Há mudanças não salvas.")}
-          </span>
-        ) : null}
       </div>
+      </SecaoDaConfiguracao>
+
+      {barra}
     </form>
   );
 }

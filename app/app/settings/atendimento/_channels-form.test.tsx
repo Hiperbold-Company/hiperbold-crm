@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { render } from "@/tests/helpers/render-com-confirmacao";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChannelRoutingForm } from "./_channels-form";
-vi.mock("next/navigation",()=>({useRouter:()=>({refresh:vi.fn()})}));
+vi.mock("next/navigation",()=>({useRouter:()=>({push:vi.fn(),refresh:vi.fn()})}));
 vi.mock("@/hooks/i18n/useT",()=>({useT:()=>(s:string)=>s}));
 const fetcher=vi.fn();
 beforeEach(()=>{vi.stubGlobal("fetch",fetcher);fetcher.mockReset();fetcher.mockResolvedValue({ok:true,json:async()=>({data:{mode:"restricted_empty",user_ids:[]}})});});
@@ -12,11 +13,13 @@ const initial={
  ],
  members:[{id:"ana",name:"Ana"},{id:"bruno",name:"Bruno"}]};
 const corpo=()=>JSON.parse(fetcher.mock.calls[0]![1].body);
+// O Salvar por número saiu: a barra de salvar da tela grava cada número que mudou.
+const salvarNaBarra=()=>fireEvent.click(within(screen.getByRole("region",{name:"Alterações não salvas"})).getByRole("button",{name:"Salvar"}));
 describe("responsáveis por número na tela",()=>{
  it("salvar lista vazia é explícito e não altera o número vizinho",async()=>{
   render(<ChannelRoutingForm initial={initial}/>);
   const a=within(screen.getByRole("group",{name:"Número A"}));
-  fireEvent.click(a.getByRole("checkbox",{name:"Ana"}));fireEvent.click(a.getByRole("button",{name:"Salvar responsáveis"}));
+  fireEvent.click(a.getByRole("checkbox",{name:"Ana"}));salvarNaBarra();
   await waitFor(()=>expect(a.getByText("Ninguém configurado — as conversas ficarão na fila.")).toBeVisible());
   expect(corpo()).toEqual({channel_session_id:"a",user_ids:[],reset:false,distribution_mode:"round_robin",default_assignee_user_id:"ana"});
   expect(within(screen.getByRole("group",{name:"Número B"})).getByText("Usa todos os atendentes elegíveis da organização.")).toBeVisible();
@@ -34,9 +37,11 @@ describe("responsáveis por número na tela",()=>{
   render(<ChannelRoutingForm initial={initial}/>);
   const b=within(screen.getByRole("group",{name:"Número B"}));
   expect(b.getByTestId("modo-do-numero-b")).toHaveValue("");
-  fireEvent.click(b.getByRole("button",{name:"Salvar responsáveis"}));
-  await waitFor(()=>expect(fetcher).toHaveBeenCalled());
-  expect(corpo()).toEqual({channel_session_id:"b",user_ids:[],reset:false,distribution_mode:null,default_assignee_user_id:null});
+  // A barra só grava o que mudou: marca alguém em B sem tocar no modo.
+  fireEvent.click(b.getByRole("checkbox",{name:"Bruno"}));
+  salvarNaBarra();
+  await waitFor(()=>expect(fetcher).toHaveBeenCalledTimes(1));
+  expect(corpo()).toEqual({channel_session_id:"b",user_ids:["bruno"],reset:false,distribution_mode:null,default_assignee_user_id:null});
  });
  it("escolher modo e destino de UM número não encosta no outro",async()=>{
   render(<ChannelRoutingForm initial={initial}/>);
@@ -47,7 +52,7 @@ describe("responsáveis por número na tela",()=>{
   fireEvent.change(b.getByTestId("modo-do-numero-b"),{target:{value:"manual"}});
   expect(b.getByTestId("destino-do-numero-b")).not.toBeDisabled();
   fireEvent.change(b.getByTestId("destino-do-numero-b"),{target:{value:"bruno"}});
-  fireEvent.click(b.getByRole("button",{name:"Salvar responsáveis"}));
+  salvarNaBarra();
   await waitFor(()=>expect(fetcher).toHaveBeenCalledTimes(1));
   expect(corpo()).toEqual({channel_session_id:"b",user_ids:[],reset:false,distribution_mode:"manual",default_assignee_user_id:"bruno"});
   // O número A continua com a regra dele no estado do formulário.
@@ -60,8 +65,26 @@ describe("responsáveis por número na tela",()=>{
   const a=within(screen.getByRole("group",{name:"Número A"}));
   fireEvent.change(a.getByTestId("modo-do-numero-a"),{target:{value:""}});
   expect(a.getByTestId("destino-do-numero-a")).toBeDisabled();
-  fireEvent.click(a.getByRole("button",{name:"Salvar responsáveis"}));
+  salvarNaBarra();
   await waitFor(()=>expect(fetcher).toHaveBeenCalled());
   expect(corpo()).toEqual({channel_session_id:"a",user_ids:["ana"],reset:false,distribution_mode:null,default_assignee_user_id:null});
+ });
+ it("sem mudança não há barra; Descartar volta o número ao último salvo",async()=>{
+  render(<ChannelRoutingForm initial={initial}/>);
+  expect(screen.queryByRole("region",{name:"Alterações não salvas"})).toBeNull();
+  const a=within(screen.getByRole("group",{name:"Número A"}));
+  fireEvent.click(a.getByRole("checkbox",{name:"Bruno"}));
+  fireEvent.click(within(screen.getByRole("region",{name:"Alterações não salvas"})).getByRole("button",{name:"Descartar"}));
+  expect(a.getByRole("checkbox",{name:"Bruno"})).not.toBeChecked();
+  expect(screen.queryByRole("region",{name:"Alterações não salvas"})).toBeNull();
+  expect(fetcher).not.toHaveBeenCalled();
+ });
+ it("depois de salvar, a barra some",async()=>{
+  fetcher.mockResolvedValue({ok:true,json:async()=>({data:{mode:"restricted",user_ids:["ana","bruno"],distribution_mode:"round_robin",default_assignee_user_id:"ana"}})});
+  render(<ChannelRoutingForm initial={initial}/>);
+  fireEvent.click(within(screen.getByRole("group",{name:"Número A"})).getByRole("checkbox",{name:"Bruno"}));
+  salvarNaBarra();
+  await waitFor(()=>expect(screen.queryByRole("region",{name:"Alterações não salvas"})).toBeNull());
+  expect(screen.getByRole("status")).toHaveTextContent("Responsáveis salvos.");
  });
 });
