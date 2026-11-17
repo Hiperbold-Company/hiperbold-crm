@@ -159,3 +159,41 @@ export async function metaWabaDoNumero(
   const waba = data?.meta_waba_id;
   return typeof waba === "string" && waba.length > 0 ? waba : null;
 }
+
+/**
+ * A sessão oficial `sessionId` DESTA organização — a conta da CONVERSA, e não a
+ * primeira da organização (painel de mensagens do chat, 17/11/2026).
+ *
+ * `metaSessionForOrg` devolve a mais antiga, e uma organização com duas contas
+ * oficiais listaria no chat da segunda os modelos da primeira: o envio sairia
+ * por uma conta que não tem aquele modelo aprovado. Aqui a conversa diz qual.
+ *
+ * O filtro de `organization_id` é o isolamento: o id vem do navegador, e uma
+ * sessão de outra organização (ou de outro canal, ou arquivada) devolve `null` —
+ * quem chama responde 404 sem dizer se ela existe.
+ */
+export async function metaSessaoDaOrgPorId(
+  organizationId: string,
+  sessionId: string,
+): Promise<MetaSessaoDaOrg | null> {
+  if (!organizationId || !sessionId) return null;
+  const admin = createAdminClient();
+  const base = () =>
+    admin
+      .from("channel_sessions")
+      .select("id, organization_id, meta_waba_id, meta_phone_number_id")
+      .eq("organization_id", organizationId)
+      .eq("provider", CHANNEL_PROVIDER_META)
+      .eq("id", sessionId);
+  const { data } = await queryTolerantToMissingArchived(
+    () => base().is(ARCHIVED_AT, null).maybeSingle(),
+    () => base().maybeSingle(),
+  );
+  if (!data || data.organization_id !== organizationId) return null;
+  return {
+    id: data.id,
+    organizationId: data.organization_id,
+    wabaId: data.meta_waba_id ?? null,
+    phoneNumberId: data.meta_phone_number_id ?? null,
+  };
+}

@@ -62,6 +62,8 @@ import { cn } from "@/lib/utils";
 import { resolveSharedContact } from "@/lib/messaging/contact-card";
 import { BarraDeRecursos } from "@/components/inbox/composer/BarraDeRecursos";
 import { AgendarMensagemButton, SeloDeAgendamento } from "@/components/inbox/composer/AgendarMensagem";
+import { PainelDeMensagens } from "@/components/inbox/composer/PainelDeMensagens";
+import { Quotes } from "@/lib/ui/icons";
 import { ModeloDoAgendamento } from "@/components/inbox/composer/ModeloDoAgendamento";
 import { useFusoDaOrganizacao } from "@/hooks/auth/AuthProvider";
 import { useAgendarMensagem } from "@/hooks/inbox/useMensagensAgendadas";
@@ -191,6 +193,13 @@ interface Props {
    * agendamento também.
    */
   janelaSoDe24h?: boolean;
+  /**
+   * A conexão da conversa (painel de mensagens, 17/11/2026): a organização pode
+   * ter várias contas oficiais, e os modelos são de cada uma.
+   */
+  channelSessionId?: string | null;
+  /** Gerente para cima: compartilha resposta rápida e cria modelo no painel. */
+  podeGerenciarMensagens?: boolean;
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
@@ -215,10 +224,19 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     onAbrirConversa,
     lastInboundAt = null,
     janelaSoDe24h = false,
+    channelSessionId = null,
+    podeGerenciarMensagens = false,
   },
   ref,
 ) {
   const t = useT();
+  /** O painel de mensagens (botão de aspas): respostas rápidas e modelos. */
+  const [painelAberto, setPainelAberto] = useState(false);
+  const botaoDoPainelRef = useRef<HTMLButtonElement>(null);
+  function fecharPainel() {
+    setPainelAberto(false);
+    requestAnimationFrame(() => botaoDoPainelRef.current?.focus());
+  }
   const anexos = anexosOferecidos(provider);
   const ofereceAnexo = anexos.imagem || anexos.video || anexos.documento || anexos.contato;
   const [text, setText] = useState(initialDraft);
@@ -1262,6 +1280,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </div>
         )}
         {mode === "reply" && (
+          <PainelDeMensagens
+            aberto={painelAberto && !isDisabled}
+            onFechar={fecharPainel}
+            conversationId={conversationId}
+            provider={provider}
+            channelSessionId={channelSessionId}
+            podeGerenciar={podeGerenciarMensagens}
+            onInserir={(resposta) => void applyTemplate(resposta)}
+          />
+        )}
+        {mode === "reply" && (
           <BarraDeRecursos
             recursos={templates.data ?? []}
             grupos={grupos.data ?? []}
@@ -1332,6 +1361,22 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             texto NÃO é despejado no campo: quem revisa e decide é o bloco, e ter
             o mesmo texto nos dois lugares diria duas vezes a mesma coisa.
           */}
+          {mode === "reply" && (
+            <button
+              ref={botaoDoPainelRef}
+              type="button"
+              data-botao-painel-de-mensagens
+              aria-label={t("Mensagens rápidas e modelos")}
+              aria-expanded={painelAberto}
+              aria-haspopup="dialog"
+              title={t("Mensagens rápidas e modelos")}
+              disabled={isDisabled}
+              onClick={() => (painelAberto ? fecharPainel() : setPainelAberto(true))}
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 lg:size-8"
+            >
+              <Quotes size={18} aria-hidden />
+            </button>
+          )}
           {mode === "reply" && (
             <AgendarMensagemButton
               disabled={calendarioBarrado}

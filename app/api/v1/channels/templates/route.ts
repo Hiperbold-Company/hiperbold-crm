@@ -40,7 +40,7 @@ import {
   type EscopoDaGestao,
 } from "@/lib/channels/gestao-de-modelos";
 import { resolveMetaCreds } from "@/lib/channels/meta/credentials";
-import { metaSessionForOrg } from "@/lib/channels/meta/session";
+import { metaSessaoDaOrgPorId, metaSessionForOrg, type MetaSessaoDaOrg } from "@/lib/channels/meta/session";
 import { metaCloudTemplateOps } from "@/lib/channels/meta/templates";
 import { normalizeRejectedReason } from "@/lib/channels/meta/webhook";
 import { deriveTemplateContract, describeAddress } from "@/lib/channels/meta/template-contract";
@@ -152,21 +152,54 @@ async function orgOrFail(requestId: string, papel: "agent" | "manager"): Promise
   return { autorizado: true, orgId: authz.org.orgId, userId: authz.user.id, idioma: authz.user.idioma };
 }
 
-export async function GET(): Promise<NextResponse> {
+/** O id da conexão pedida pela tela: uuid ou nada. Lixo vira 404, nunca a 1ª conta. */
+const idDaConexaoSchema = z.string().uuid();
+
+/**
+ * QUAL conta oficial (painel de mensagens do chat, 17/11/2026).
+ *
+ * Sem `channel_session_id` é a de sempre — a mais antiga da organização, que é
+ * o que a tela de Conexões e toda integração anterior esperam. Com ele, é a
+ * conexão DA CONVERSA: uma organização pode ter várias contas oficiais, e cada
+ * uma tem os próprios modelos aprovados. A sessão é procurada DENTRO da
+ * organização da sessão de login; a de outra organização devolve 404, igual à
+ * que não existe.
+ */
+async function sessaoPedida(
+  orgId: string,
+  idPedido: unknown,
+): Promise<{ ok: true; sessao: MetaSessaoDaOrg | null; filtrada: boolean } | { ok: false }> {
+  if (idPedido === undefined || idPedido === null || idPedido === "") {
+    return { ok: true, sessao: await metaSessionForOrg(orgId), filtrada: false };
+  }
+  const id = idDaConexaoSchema.safeParse(idPedido);
+  if (!id.success) return { ok: false };
+  const sessao = await metaSessaoDaOrgPorId(orgId, id.data);
+  return sessao ? { ok: true, sessao, filtrada: true } : { ok: false };
+}
+
+export async function GET(req?: NextRequest): Promise<NextResponse> {
   const requestId = randomUUID();
   const r = await orgOrFail(requestId, "agent");
   if (!r.autorizado) return r.resposta;
 
-  const sessao = await metaSessionForOrg(r.orgId);
+  const pedida = await sessaoPedida(r.orgId, req?.nextUrl?.searchParams.get("channel_session_id") ?? undefined);
+  if (!pedida.ok) return fail("not_found", "channel_session_not_found", 404, { requestId });
+  const sessao = pedida.sessao;
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let consulta = admin
     .from("meta_templates")
     .select(
       "name, language, status, category, rejected_reason, quality_score, parameter_format, contract_hash, components, synced_at, saved_values, channel_session_id, waba_id",
     )
-    .eq("organization_id", r.orgId)
-    .order("status")
-    .order("name");
+    .eq("organization_id", r.orgId);
+  // Pedida a conexão, só os modelos DA CONTA dela (linha oficial = sem conexão e
+  // com a WABA desta sessão, a régua de `linhasDoModeloNaConexao`). Conexão sem
+  // WABA gravada não tem modelo nenhum para oferecer.
+  if (pedida.filtrada) {
+    consulta = consulta.is("channel_session_id", null).eq("waba_id", sessao?.wabaId ?? "__sem_waba__");
+  }
+  const { data, error } = await consulta.order("status").order("name");
 
   if (error) return falhaInterna("internal_error", error, { requestId });
 
@@ -255,7 +288,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!r.autorizado) return r.resposta;
   const t = (texto: string) => traduzir(texto, r.idioma);
 
-  const sessao = await metaSessionForOrg(r.orgId);
+  // O corpo é lido uma vez, aqui: dele sai a conexão pedida e, adiante, a ação.
+  const cru = (await req.json().catch(() => null)) as unknown;
+  const idPedido =
+    cru && typeof cru === "object" && !Array.isArray(cru)
+      ? (cru as Record<string, unknown>).channel_session_id
+      : undefined;
+  const pedida = await sessaoPedida(r.orgId, idPedido);
+  if (!pedida.ok) return fail("not_found", "channel_session_not_found", 404, { requestId });
+  const sessao = pedida.sessao;
   if (!sessao?.wabaId) {
     return fail("invalid_request", "no_meta_channel", 400, { requestId });
   }
@@ -279,7 +320,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // O corpo é validado ANTES de falar com a plataforma: um `acao` inventado não
   // pode virar "sincronizar por omissão" nem tocar a conta.
-  const cru = (await req.json().catch(() => null)) as unknown;
   const parsed = corpoSchema.safeParse(
     // Sem corpo é SINCRONIZAR: era o contrato da rota antes da #3635 (o POST
     // nem lia o corpo), e integração que chama sem corpo não pode virar 422.
