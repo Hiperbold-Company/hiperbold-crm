@@ -19,6 +19,10 @@
  * (advisory lock de sessão, `trava-de-registro.ts`): o segundo pedido leva 409 sem falar com a Meta.
  *
  * A Meta recusar o registro NÃO é erro de requisição: 200 com `registrado: false` e o motivo traduzido.
+ *
+ * Várias conexões oficiais por organização (17/11/2026): `channel_session_id` no corpo diz qual. Id de
+ * outra organização, de outro canal ou excluído = 404, sem dizer qual. Sem ele, a oficial mais antiga
+ * (a tela de hoje); a fase B (cartões) passa o id sempre.
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -28,6 +32,10 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { credenciaisDoCanalOficialVivo } from "@/lib/channels/meta/numero-da-sessao";
+import {
+  idDaConexaoOficialSchema,
+  recusaSeConexaoOficialAmbigua,
+} from "@/lib/channels/meta/sessao-oficial-viva";
 import {
   gerarPinDeRegistro,
   lerEstadoDoNumero,
@@ -43,7 +51,12 @@ export const runtime = "nodejs";
 
 const NO_STORE = { "cache-control": "no-store, max-age=0" } as const;
 
-const corpoSchema = z.object({ pin: z.string().regex(/^[0-9]{6}$/).optional() }).strict();
+const corpoSchema = z
+  .object({
+    pin: z.string().regex(/^[0-9]{6}$/).optional(),
+    channel_session_id: idDaConexaoOficialSchema.optional(),
+  })
+  .strict();
 
 export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -56,6 +69,10 @@ export async function POST(req: NextRequest): Promise<Response> {
   const bruto = await req.json().catch(() => ({}));
   const parsed = corpoSchema.safeParse(bruto ?? {});
   if (!parsed.success) {
+    // Id malformado é conexão que não existe aqui: o mesmo 404 do id de outra organização.
+    if (parsed.error.issues.some((i) => i.path[0] === "channel_session_id")) {
+      return fail("not_found", "Conexão não encontrada.", 404, { requestId, headers: NO_STORE });
+    }
     // Sem `details`: o erro do schema ecoaria o valor recebido, e o valor pode ser o PIN.
     return fail("validation_failed", "O PIN precisa ter exatamente seis dígitos.", 422, {
       requestId,
@@ -74,8 +91,22 @@ export async function POST(req: NextRequest): Promise<Response> {
     );
   }
 
-  const cred = await credenciaisDoCanalOficialVivo(createAdminClient(), authz.org.orgId);
+  const admin = createAdminClient();
+  // Registrar o número errado gasta tentativa de PIN da Meta: com mais de uma oficial, o id é obrigatório.
+  const ambigua = await recusaSeConexaoOficialAmbigua({
+    admin,
+    organizationId: authz.org.orgId,
+    channelSessionId: parsed.data.channel_session_id,
+    idioma: authz.user.idioma,
+    requestId,
+  });
+  if (ambigua) return ambigua;
+
+  const cred = await credenciaisDoCanalOficialVivo(admin, authz.org.orgId, parsed.data.channel_session_id);
   if (!cred.ok) {
+    if (cred.erro === "sessao_nao_encontrada") {
+      return fail("not_found", "Conexão não encontrada.", 404, { requestId, headers: NO_STORE });
+    }
     return fail("invalid_request", cred.erro, 422, { requestId, headers: NO_STORE });
   }
 

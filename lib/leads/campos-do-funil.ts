@@ -1,6 +1,14 @@
 import { customFieldSchema, type CustomFieldDef } from "@/lib/schemas/settings";
 
-/** Lê `pipelines.settings.fields` sem explodir se o jsonb estiver velho ou vazio. */
+/**
+ * Lê `pipelines.settings.fields` sem explodir se o jsonb estiver velho ou vazio.
+ *
+ * ⚠️ DESDE A MIGRATION 1015 este array é PROJEÇÃO: quando a organização tem campos em
+ * `custom_field_definitions`, o banco o deriva delas (contato + negócio, todos os funis) com a
+ * obrigatoriedade DESTE funil (`settings.campos_obrigatorios`). Organização sem definição nenhuma —
+ * ou clone que ainda não aplicou a 1015 — continua com a lista que o funil declarava (legado). Os
+ * dois caminhos chegam aqui na MESMA forma, e é por isso que nenhum leitor precisou mudar.
+ */
 export function camposDoFunil(settings: Record<string, unknown> | null | undefined): CustomFieldDef[] {
   if (!settings) return [];
   const raw = settings.fields;
@@ -93,4 +101,17 @@ export function campoEhDoContato(
   chave: string,
 ): boolean {
   return camposDoFunil(settings).some((campo) => campo.key === chave && escopoDoCampo(campo) === "contato");
+}
+
+
+/**
+ * O campo que este papel VÊ na ficha (1015): `publico: false` é só para administrador. Ausência é
+ * público — toda definição anterior à 1015 continua visível a todos. Esconder não apaga valor.
+ */
+export function campoVisivelAoPapel(campo: { publico?: boolean }, ehAdmin: boolean): boolean {
+  return ehAdmin || campo.publico !== false;
+}
+
+export function camposVisiveisAoPapel<T extends { publico?: boolean }>(campos: T[], ehAdmin: boolean): T[] {
+  return campos.filter((campo) => campoVisivelAoPapel(campo, ehAdmin));
 }

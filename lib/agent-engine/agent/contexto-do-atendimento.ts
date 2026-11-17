@@ -1,4 +1,5 @@
 /** Fontes canônicas do atendimento. Texto armazenado é dado, nunca autoridade por si. */
+import { chavesRestritasDosCampos, recortarCampos, recortarValores } from '@/lib/campos/recorte-por-papel';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { Queryable } from '../queue/queue';
@@ -139,10 +140,12 @@ export function normalizarFontesDoAtendimento(f: FontesDoAtendimento, tenantId: 
   for (const n of negocios) {
     const sujeito = alias.get(string(n.id))!;
     adicionar('perfil', n, 'negocio', sujeito, 'recorded', { titulo: n.title, descricao: n.description, situacao: n.status, origem_cadastro: n.source, negocio_ativo: n.id === ativo });
-    const campos = object(n.custom_fields);
+    // 1015: campo não público NUNCA vai ao agente (o que ele lê pode sair ao cliente pelo WhatsApp).
+    const todasAsDefs = array(n.field_definitions);
+    const campos = recortarValores(object(n.custom_fields), chavesRestritasDosCampos(todasAsDefs), 'ia');
+    const defs = recortarCampos(todasAsDefs, 'ia');
     for (const [campo, valor] of Object.entries(campos)) {
       // IDs/credenciais e objetos opacos não são fatos de perfil. Só valores de campos cadastrados.
-      const defs = array(n.field_definitions);
       const def = defs.find(d => d.key === campo || d.id === campo);
       if (!def || !['string', 'number', 'boolean'].includes(typeof valor) && !Array.isArray(valor)) continue;
       adicionar('perfil', n, 'campo_crm', sujeito, n.source === 'form' || n.source === 'formulario' ? 'declared' : 'recorded', { campo: string(def.label ?? def.name) || campo, valor });

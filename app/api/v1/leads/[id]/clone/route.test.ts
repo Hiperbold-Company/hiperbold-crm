@@ -697,3 +697,41 @@ describe("POST /api/v1/leads/[id]/move cross-pipeline", () => {
     expect(body.error.details).toMatchObject({ use: "/api/v1/leads/{id}/clone" });
   });
 });
+
+describe("POST /api/v1/leads/[id]/clone — campo restrito (1015)", () => {
+  function semeiaRestrito() {
+    const base = seed();
+    base.crm_leads![0]!.custom_fields = { renda: "R$ 20 mil", cidade: "Recife" };
+    base.custom_field_definitions = [{ organization_id: ORG_ID, key: "renda", publico: false }];
+    db = fakeDb(base);
+    vi.mocked(createClient).mockResolvedValue(db.client);
+  }
+
+  it("quem não é admin não recebe o valor restrito em `lead` nem em `origem`", async () => {
+    semeiaRestrito();
+    const { POST } = await import("./route");
+    const response = await POST(cloneRequest({ pipeline_id: P2 }), params);
+    const body = await response.json();
+    expect(response.status).toBe(201);
+    expect(body.data.lead.custom_fields).toEqual({ cidade: "Recife" });
+    expect(body.data.origem.custom_fields).toEqual({ cidade: "Recife" });
+    // O recorte é só da resposta: o banco guarda o valor nas duas linhas.
+    const gravada = (db.tables.crm_leads ?? []).find((lead) => lead.id === LEAD_ID);
+    expect(gravada?.custom_fields).toEqual({ renda: "R$ 20 mil", cidade: "Recife" });
+  });
+
+  it("admin recebe o valor restrito nas duas linhas", async () => {
+    semeiaRestrito();
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      user: { id: USER_ID, idioma: "pt-BR" },
+      org: { orgId: ORG_ID, role: "admin" },
+    } as never);
+    const { POST } = await import("./route");
+    const response = await POST(cloneRequest({ pipeline_id: P2 }), params);
+    const body = await response.json();
+    expect(response.status).toBe(201);
+    expect(body.data.lead.custom_fields).toEqual({ renda: "R$ 20 mil", cidade: "Recife" });
+    expect(body.data.origem.custom_fields).toEqual({ renda: "R$ 20 mil", cidade: "Recife" });
+  });
+});

@@ -49,10 +49,12 @@ vi.mock("@/hooks/inbox/useMessageTemplates", () => ({
   }),
 }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
+  useFusoDaOrganizacao: () => null,
   usePermission: () => true,
   // A escolha de contato do Composer lê o país da organização (o exemplo do telefone); sem organização, o Brasil.
   usePaisDaOrgAtiva: () => null,
 }));
+vi.mock("@/hooks/inbox/useMensagensAgendadas", () => ({ useAgendarMensagem: () => ({ mutate: vi.fn(), isPending: false }) }));
 
 import { Composer } from "@/components/inbox/Composer";
 

@@ -66,6 +66,7 @@ import { getAction } from "@/lib/automation/actions";
 // automação usa. A tag do follow-up é a tag da automação — não uma segunda.
 import "@/lib/automation/actions/add-tag";
 import { renderizarTextoDeFollowup } from "@/lib/automation/texto-do-followup";
+import { recortarCamposRestritosDoContexto } from "@/lib/automation/campos-do-render";
 import type { EventRow } from "@/lib/event-log/dispatcher";
 import { quandoDoRetornoVivo, reavaliarDepoisDoRetorno } from "./retorno-segura-o-fluxo";
 import { triggerConfigSchema } from "./api-schemas";
@@ -1943,6 +1944,8 @@ export function createSupabaseAdminClient(
       const contexto: Record<string, unknown> = {};
       if (contact) contexto.contact = contact;
       if (lead) contexto.lead = lead;
+      // 1015: o texto sai ao cliente — campo não público nunca vira texto (falha de leitura = todos).
+      await recortarCamposRestritosDoContexto(contexto, admin, orgId);
       return contexto;
     },
     async loadLastInboundBody(orgId, contactId, conversationId, naoAntesDe) {

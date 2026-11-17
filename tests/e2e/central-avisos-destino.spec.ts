@@ -156,7 +156,9 @@ for (const role of ["manager", "admin"]) test(`${role}: destinos conforme papel 
     await page.goBack();
     await row(page, "Modelo do canal mudou").getByRole("link").click();
     await expect(page).toHaveURL(/aba=parceiro&sub=templates/);
-    await expect(page.getByRole("heading", { name: /Conexões/ }).first()).toBeVisible();
+    // Tela em cartões (17/11/2026): o link de aba abre o Criar, e o diálogo esconde o resto da tela
+    // da árvore de acessibilidade (aria-hidden): a prova é o diálogo, não o título atrás dele.
+    await expect(page.getByTestId("criar-conexao")).toBeVisible();
   }
 });
 test("viewer continua sem acesso à API Central e bearer não autentica", async ({ page, playwright }) => {

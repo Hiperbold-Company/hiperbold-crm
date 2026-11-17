@@ -14,6 +14,8 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { moedaDaOrganizacao } from "@/lib/catalogo/moeda-da-org";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { moduloLigado } from "@/lib/instalacao/modulos";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +38,12 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const requestId = randomUUID();
+  // Módulo de tabela (ADR-0002): desligado em `/admin/modulos` (migration 1016), as tabelas
+  // continuam no banco, então a rota precisa perguntar o ESTADO — o 42P01 abaixo só cobre o
+  // módulo nunca instalado.
+  if (!(await moduloLigado(createAdminClient(), "honorarios"))) {
+    return fail("not_found", "Not found", 404, { requestId });
+  }
   const authz = await requireRole("viewer", { requestId, resource: "honorarios_parcelas" });
   if (!authz.ok) return authz.response;
   const { id: contratoId } = await ctx.params;
@@ -59,6 +67,12 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
 
 export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const requestId = randomUUID();
+  // Módulo de tabela (ADR-0002): desligado em `/admin/modulos` (migration 1016), as tabelas
+  // continuam no banco, então a rota precisa perguntar o ESTADO — o 42P01 abaixo só cobre o
+  // módulo nunca instalado.
+  if (!(await moduloLigado(createAdminClient(), "honorarios"))) {
+    return fail("not_found", "Not found", 404, { requestId });
+  }
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 

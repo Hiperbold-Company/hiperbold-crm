@@ -11,11 +11,10 @@
  * `tests/unit/versao-da-graph-num-lugar-so.test.ts`: literal de versão da Graph
  * fora deste arquivo reprova a suíte.
  *
- * NÃO SUBIU DE VERSÃO AQUI — de propósito. A v26.0 saiu em 29/07/2026, e subir
- * é decisão de manutenção, com reconferência de campo a campo antes (a lição
- * medida em `lib/plataformas-de-anuncio/meta/insights.ts`: campo válido some
- * entre versões, sem aviso). Esta mudança só diz ONDE o número mora; o número
- * continua o mesmo de hoje.
+ * SUBIU PARA v26.0 em 17/11/2026, por decisão do dono do produto ("não podemos
+ * usar mais a v22.0"). A reconferência de campo a campo (a lição medida em
+ * `lib/plataformas-de-anuncio/meta/insights.ts`: campo válido some entre
+ * versões, sem aviso) está no PR que fez o bump.
  *
  * Dois eixos, um número só:
  * - `graphVersion()` — canais de mensagem (`lib/channels/**`,
@@ -30,13 +29,13 @@
  */
 
 /** O default da instalação. `bump` aqui é mudança deliberada, não deriva. */
-export const VERSAO_PADRAO_DA_GRAPH = "v22.0";
+export const VERSAO_PADRAO_DA_GRAPH = "v26.0";
 
 /**
  * A versão do canal social OFICIAL (Instagram Direct e Messenger, migration
  * 0984). Separada da do WhatsApp de propósito: a Instagram API com login do
- * Instagram foi conferida em v26.0, e subir a do WhatsApp para acompanhar seria
- * um bump não medido no envio de template. Mora aqui para continuar havendo UM
+ * Instagram foi conferida em v26.0 antes de o WhatsApp subir. Hoje as duas
+ * falam v26.0, mas a constante segue separada: o ciclo de vida é outro. Mora aqui para continuar havendo UM
  * lugar onde se lê toda versão da Graph que o produto fala.
  */
 export const VERSAO_DA_GRAPH_DO_CANAL_SOCIAL = "v26.0";

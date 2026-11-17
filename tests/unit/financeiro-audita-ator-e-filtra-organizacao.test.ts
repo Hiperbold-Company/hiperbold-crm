@@ -84,6 +84,9 @@ const RPCS: Record<string, unknown> = {
   fn_saldo_de_fidelidade: 10,
 };
 
+/** Recusa que a RPC devolve no lugar do resultado (o caso do módulo desligado, PT423). */
+let RPC_RECUSADA: Record<string, { code: string; message: string }> = {};
+
 function banco() {
   return {
     from: (tabela: string) => {
@@ -110,7 +113,8 @@ function banco() {
       );
       return q;
     },
-    rpc: async (nome: string) => ({ data: RPCS[nome] ?? null, error: null }),
+    rpc: async (nome: string) =>
+      RPC_RECUSADA[nome] ? { data: null, error: RPC_RECUSADA[nome] } : { data: RPCS[nome] ?? null, error: null },
   };
 }
 
@@ -161,6 +165,7 @@ function filtrouPorOrganizacao(tabelas: string[]) {
 beforeEach(() => {
   vi.clearAllMocks();
   registros = [];
+  RPC_RECUSADA = {};
   sessao();
 });
 
@@ -271,5 +276,26 @@ describe("D-132: a busca por id leva o filtro da organização", () => {
     const { GET } = await import("@/app/api/v1/financeiro/fidelidade/route");
     await GET(new NextRequest(`http://localhost/api/v1/financeiro/fidelidade?contact_id=${CONTATO}`));
     filtrouPorOrganizacao(["loyalty_ledger"]);
+  });
+});
+
+describe("1016: módulo desligado no banco (PT423 modulo_inativo) vira 404, sem auditar", () => {
+  const inativo = { code: "PT423", message: "modulo_inativo" };
+
+  it("finalizar e estornar comanda", async () => {
+    RPC_RECUSADA = { fn_finalizar_comanda: inativo, fn_estornar_comanda: inativo };
+    const { POST: finalizar } = await import("@/app/api/v1/financeiro/comandas/[id]/finalizar/route");
+    expect((await finalizar(req({ payment_method_id: FORMA }, "POST"), ctxComanda)).status).toBe(404);
+    const { POST: estornar } = await import("@/app/api/v1/financeiro/comandas/[id]/estornar/route");
+    expect((await estornar(req({ reason: "pagou em dobro" }, "POST"), ctxComanda)).status).toBe(404);
+    expect(auditSpy).not.toHaveBeenCalled();
+  });
+
+  it("faturamento em lote sem nada faturado", async () => {
+    RPC_RECUSADA = { fn_finalizar_comanda: inativo };
+    const { POST } = await import("@/app/api/v1/financeiro/comandas/faturar-lote/route");
+    const res = await POST(req({ appointment_ids: [AGENDAMENTO], payment_method_id: FORMA }, "POST"));
+    expect(res.status).toBe(404);
+    expect(auditSpy).not.toHaveBeenCalled();
   });
 });

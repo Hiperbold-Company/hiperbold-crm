@@ -68,11 +68,11 @@ function abrirModoNota() {
     </QueryClientProvider>,
   );
   fireEvent.click(screen.getByRole("button", { name: /nota interna/i }));
-  return screen.getByLabelText(/mensagem/i);
+  return screen.getByLabelText(/^mensagem$/i);
 }
 
 async function digitar(texto: string) {
-  const campo = screen.getByLabelText(/mensagem/i);
+  const campo = screen.getByLabelText(/^mensagem$/i);
   fireEvent.change(campo, { target: { value: texto } });
   return campo;
 }
@@ -109,7 +109,7 @@ describe("menção apagada não notifica a pessoa errada", () => {
     abrirModoNota();
     await digitar("fala com @an");
     await escolherNaLista(0); // pessoa 1
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("fala com @Ana Lima ");
+    expect(screen.getByLabelText(/^mensagem$/i)).toHaveValue("fala com @Ana Lima ");
 
     // O gesto da issue: apaga a menção inteira do texto.
     await digitar("fala com ");
@@ -243,7 +243,7 @@ describe("menção apagada não notifica a pessoa errada", () => {
 
     await digitar("x"); // a próxima nota começa enquanto a 1ª ainda está no ar
     act(() => opcoes.onError());
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("fala com @Ana Lima oi\nx");
+    expect(screen.getByLabelText(/^mensagem$/i)).toHaveValue("fala com @Ana Lima oi\nx");
 
     createNoteMock.mockClear();
     const retry = await enviarNota();
@@ -269,7 +269,7 @@ describe("menção apagada não notifica a pessoa errada", () => {
     await escolherNaLista(0);
     act(() => opcoes.onSuccess());
 
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("outra @Ana Lima ");
+    expect(screen.getByLabelText(/^mensagem$/i)).toHaveValue("outra @Ana Lima ");
     createNoteMock.mockClear();
     const segunda = await enviarNota();
     expect(segunda.body, "o sucesso da anterior apagou a escolha desta — sai sem id").toBe(

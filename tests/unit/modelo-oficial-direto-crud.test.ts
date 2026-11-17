@@ -174,13 +174,13 @@ beforeEach(() => {
         ? {
             phoneNumberId: "PN-DA-SESSAO",
             token: "token-da-sessao",
-            graphVersion: "v22.0",
+            graphVersion: "v26.0",
             source: "session",
           }
         : {
             phoneNumberId: q?.phoneNumberId ?? "",
             token: "token-do-ambiente",
-            graphVersion: "v22.0",
+            graphVersion: "v26.0",
             source: "env",
           },
   );
@@ -386,7 +386,7 @@ describe("canal oficial direto — só o modelo DESTA conexão", () => {
       { ...LINHA_DO_PARCEIRO, status: "APPROVED", components: [], parameter_format: "POSITIONAL" },
     ];
 
-    const res = await GET();
+    const res = await GET(new NextRequest(URL_ROTA));
 
     expect(res.status).toBe(200);
     const j = (await res.json()) as { data: { templates: { daConexao: boolean }[] } };
@@ -596,3 +596,61 @@ describe("canal oficial direto — limites e exemplos ANTES da plataforma", () =
   });
 });
 
+
+/**
+ * A FORMA de `components` é validada no servidor com a régua da importação de
+ * JSON do chat (`componentesDoModeloSchema`, `lib/channels/meta/modelo-json.ts`),
+ * antes da Meta. O cabeçalho de mídia do formulário das Conexões
+ * (`montarComponents`, `format: IMAGE`) continua passando.
+ */
+describe("canal oficial direto — forma dos componentes ANTES da plataforma", () => {
+  it("tipo de componente desconhecido é 422 e a Meta NÃO é chamada", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const res = await post({ acao: "criar", ...ALVO, components: [{ type: "BODY", text: "Olá" }, { type: "CAROUSEL", cards: [] }] });
+    expect(res.status).toBe(422);
+    const j = (await res.json()) as { error: { code: string; details: Record<string, unknown> } };
+    expect(j.error.code).toBe("validation_failed");
+    expect(j.error.details).toMatchObject({ campo: "components" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("dois corpos, ou nenhum, é 422", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const dois = await post({ acao: "criar", ...ALVO, components: [{ type: "BODY", text: "a" }, { type: "BODY", text: "b" }] });
+    expect(dois.status).toBe(422);
+    const nenhum = await post({ acao: "criar", ...ALVO, components: [{ type: "FOOTER", text: "só rodapé" }] });
+    expect(nenhum.status).toBe(422);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("três botões de link é 422 (a Meta aceita 2)", async () => {
+    const link = (n: number) => ({ type: "URL", text: `Link ${n}`, url: `https://exemplo.com/${n}` });
+    const res = await post({
+      acao: "criar",
+      ...ALVO,
+      components: [{ type: "BODY", text: "Olá" }, { type: "BUTTONS", buttons: [link(1), link(2), link(3)] }],
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it("editar passa pela mesma régua", async () => {
+    h.espelho = [LINHA_OFICIAL];
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const res = await post({ acao: "editar", ...ALVO, components: [{ type: "BODY", text: "Oi" }, { type: "XYZ" }] });
+    expect(res.status).toBe(422);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("o cabeçalho de imagem do formulário das Conexões passa e chega na Meta", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(fetchOk({ id: "tpl-novo", status: "PENDING" }));
+    const components = [
+      { type: "HEADER", format: "IMAGE", example: { header_handle: ["https://exemplo.com/a.png"] } },
+      ...CORPO,
+    ];
+    const res = await post({ acao: "criar", ...ALVO, components });
+    expect(res.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    // O corpo que vai para a Meta é o recebido, sem campo tirado pela validação.
+    expect(JSON.parse(String(fetchSpy.mock.calls[0]![1]!.body))).toMatchObject({ components });
+  });
+});

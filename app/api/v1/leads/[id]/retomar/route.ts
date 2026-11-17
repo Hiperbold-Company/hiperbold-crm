@@ -1,4 +1,5 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { recortarLinhaDaResposta } from "@/lib/campos/resposta-recortada";
 /**
  * POST /api/v1/leads/[id]/retomar — retomar um negócio perdido como NEGÓCIO
  * NOVO (issue #1538).
@@ -64,7 +65,10 @@ export async function POST(
       stage_id: input.stage_id,
     });
 
-    return ok({ lead }, { requestId, status: 201 });
+    // 1015: a resposta segue o recorte do GET (campo não público só para administrador).
+    const recortado = await recortarLinhaDaResposta(supabase, authz.org.orgId, lead, authz.org.role, requestId);
+    if (!recortado.ok) return recortado.resposta;
+    return ok({ lead: recortado.linha }, { requestId, status: 201 });
   } catch (err) {
     if (err instanceof ApiError) {
       return fail(err.code, err.message, err.status, {

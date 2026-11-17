@@ -563,6 +563,11 @@ export const NAV_CATALOG = [
     group: "organizacao",
     section: "Sua empresa",
     minRole: "manager",
+    // Os DOIS gates, e os dois são necessários: o `layout.tsx` de `settings/tenant/proposals`
+    // chama `notFound()` com o módulo da INSTALAÇÃO desligado, então sem `modulo` a porta
+    // aparecia (Configurações, ⌘K, hub) e levava a um 404. A `capacidade` segue valendo:
+    // ligado o módulo, a empresa ainda precisa ter ligado Propostas para ver os modelos.
+    modulo: "propostas",
     capacidade: "propostas",
     // SEM `sidebar`, como a tela-mãe de Propostas: chega-se por Configurações.
   },
@@ -1172,6 +1177,18 @@ export const NAV_CATALOG = [
     group: "organizacao",
     section: "Sua empresa",
     minRole: "manager",
+  },
+  {
+    // Os campos personalizados da ORGANIZAÇÃO (migration 1015): contato e negócio, num lugar só. Antes
+    // cada funil declarava os seus em Etapas do funil; lá agora fica só a obrigatoriedade por etapa.
+    // `admin`: o mesmo piso da GRAVAÇÃO em `/api/v1/custom-fields` (e da rota antiga e do MCP).
+    href: "/app/settings/campos-personalizados",
+    label: "Campos Personalizados",
+    description: "Os campos de contato e de negócio da empresa: criar, editar, excluir e ver quanto são preenchidos.",
+    icon: "ClipboardText",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "admin",
   },
   {
     // A área única dos recursos opcionais (pedido do mantenedor, doc 73/80):

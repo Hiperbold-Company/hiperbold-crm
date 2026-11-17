@@ -16,10 +16,12 @@ vi.mock("@/hooks/inbox/useAlterarMensagem", () => ({ useAlterarMensagem: () => (
 vi.mock("@/hooks/ai/useDebugToggle", () => ({ useDebugToggle: () => ({ enabled: false }) }));
 // `usePermission`: permissão por perfil da Hiperbold (editar/apagar exige `chat.responder`).
 vi.mock("@/hooks/auth/AuthProvider", () => ({
+  useFusoDaOrganizacao: () => null,
   useActiveOrg: () => ({ role: "agent" }),
   useUser: () => ({ id: "u-1" }),
   usePermission: () => true,
 }));
+vi.mock("@/components/inbox/MensagensAgendadas", () => ({ MensagensAgendadas: () => null }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 vi.mock("@/hooks/i18n/useLocaleDeData", () => ({ useLocaleDeData: () => undefined }));
 vi.mock("@/components/inbox/MessageBubble", () => ({ MessageBubble: ({ message }: { message: Message }) => <div>{message.body}</div> }));

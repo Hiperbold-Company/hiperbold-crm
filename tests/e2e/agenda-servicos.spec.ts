@@ -134,8 +134,12 @@ test("painel configura, bloqueia e reserva três pessoas pela conversa; publica�
   if (stored.error) throw stored.error; expect(stored.data).toHaveLength(3); expect(new Set(stored.data.map((r) => r.service_occurrence_id)).size).toBe(1);
   const messages = await db.from("messages").select("id", { count: "exact" }).eq("organization_id", f.org).eq("direction", "outbound");
   if (messages.error) throw messages.error; expect(messages.count).toBe(0);
-  await page.goto("/app/agenda"); await page.getByText("Turmas e reservas coletivas", { exact: true }).click();
-  await expect(page.getByText("Pessoa fictícia A", { exact: false })).toBeVisible();
+  await page.goto("/app/agenda");
+  // O nome aparece também fora do painel (a agenda mostra a reserva): a prova é dentro de
+  // "Turmas e reservas coletivas" (components/agenda/ReservasColetivas.tsx), uma linha por pessoa.
+  const coletivas = page.locator("details").filter({ has: page.getByText("Turmas e reservas coletivas", { exact: true }) });
+  await coletivas.getByText("Turmas e reservas coletivas", { exact: true }).click();
+  await expect(coletivas.getByText("Pessoa fictícia A", { exact: false })).toBeVisible();
 });
 
 test("Google compartilhado preserva identidade em retry, remarcação e cancelamento; edições incompatíveis viram conflito", async () => {

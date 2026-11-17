@@ -96,6 +96,7 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   usePermission: () => true,
   // A escolha de contato do Composer lê o país da organização (o exemplo do telefone); sem organização, o Brasil.
   usePaisDaOrgAtiva: () => null,
+  useFusoDaOrganizacao: () => null,
 }));
 
 import { Composer } from "@/components/inbox/Composer";
@@ -145,7 +146,7 @@ describe("Composer: a legenda vai só com o anexo que a leva (#3151)", () => {
 
     const fila = await screen.findByRole("dialog");
     expect(within(fila).queryByLabelText("Legenda")).toBeNull();
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("Ouve o áudio, Ana");
+    expect(screen.getByLabelText(/^mensagem$/i)).toHaveValue("Ouve o áudio, Ana");
 
     await act(async () => {
       fireEvent.click(within(fila).getByRole("button", { name: "Enviar" }));
@@ -179,7 +180,7 @@ describe("Composer: a legenda vai só com o anexo que a leva (#3151)", () => {
 
     const fila = await screen.findByRole("dialog");
     expect(within(fila).getByLabelText("Legenda")).toHaveValue("Olha a tabela");
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("");
+    expect(screen.getByLabelText(/^mensagem$/i)).toHaveValue("");
 
     // O primeiro "remover" é o da capa, que aqui é a imagem.
     const [removerCapa] = within(fila).getAllByRole("button", { name: "Remover imagem" });
@@ -189,7 +190,7 @@ describe("Composer: a legenda vai só com o anexo que a leva (#3151)", () => {
       await new Promise((pronto) => requestAnimationFrame(() => pronto(null)));
     });
 
-    const campo = screen.getByLabelText(/mensagem/i);
+    const campo = screen.getByLabelText(/^mensagem$/i);
     expect(campo).toHaveValue("Olha a tabela");
     expect(campo).not.toHaveFocus();
     const restante = screen.getByRole("dialog");

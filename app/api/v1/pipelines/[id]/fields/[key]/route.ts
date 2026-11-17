@@ -4,6 +4,10 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *                                              obrigatorio_em (`null` limpa a regra).
  * DELETE /api/v1/pipelines/[id]/fields/[key] — remove a definição do campo.
  *
+ * ⚠️ Desde a 1015 o campo é da ORGANIZAÇÃO (`custom_field_definitions`), e `settings.fields` de cada
+ * funil é projeção dela: o DELETE por esta rota apaga o campo da EMPRESA INTEIRA — some de TODOS os
+ * funis, não só do `[id]` do caminho. O `[id]` só localiza a definição.
+ *
  * `key` e `type` não mudam depois de criados (o corpo é `strict`: mandá-los é 422). Remover o campo
  * NÃO apaga o valor que os negócios já guardam em `custom_fields` — a tela de configuração faz o
  * mesmo ao excluir o campo.
@@ -23,6 +27,7 @@ import {
   removerCampoDoFunil,
   type DepsDosCampos,
 } from "@/lib/pipelines/campos-do-funil";
+import { papelDoAtorOuPiso } from "@/lib/campos/recorte-por-papel";
 import { customFieldSchema } from "@/lib/schemas/settings";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +67,8 @@ async function entrada(req: NextRequest, ctx: RouteCtx): Promise<Entrada> {
     organizationId: authz.organizationId,
     actor: authz.actor,
     requestId,
+    // O papel viaja no ator (D-148); sem ele, o piso que a porta acabou de conferir.
+    papel: papelDoAtorOuPiso(authz.actor, "admin"),
   };
   return { requestId, authz, pipelineId, key, deps };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,8 @@ export function FormularioDaDefinicao({
   editando = null,
   salvando = false,
   rotaDeMidia = "/api/v1/channels/partner/templates/media",
+  semente = null,
+  onRascunho,
   onEnviar,
 }: {
   /** `null` = criação. Preenchido = edição daquela variante. */
@@ -82,18 +84,26 @@ export function FormularioDaDefinicao({
    */
   rotaDeMidia?: string;
   onEnviar: (corpo: CorpoDoModelo) => void;
+  /**
+   * Preenche a CRIAÇÃO sem travar nome, idioma e categoria — é o JSON importado
+   * no painel do chat. Quem troca a semente remonta o formulário pela `key`.
+   */
+  semente?: ModeloEmEdicao | null;
+  /** Recebe o modelo como está agora, a cada mudança: é o que o JSON exporta. */
+  onRascunho?: (corpo: CorpoDoModelo) => void;
 }) {
   const t = useT();
   const telefoneExemplo = useTelefoneExemplo();
 
   // O texto aprovado vira o formulário: quem edita uma vírgula não redigita a
   // definição inteira.
-  const inicial = editando ? paraFormulario(lerConteudo(editando.components)) : null;
+  const base = editando ?? semente;
+  const inicial = base ? paraFormulario(lerConteudo(base.components)) : null;
 
-  const [nome, setNome] = useState(editando?.name ?? "");
+  const [nome, setNome] = useState(base?.name ?? "");
   const localeDaOrg = useLocaleDaOrgAtiva();
-  const [idioma, setIdioma] = useState(editando?.language ?? idiomaInicialDaDefinicao(localeDaOrg));
-  const [categoria, setCategoria] = useState(editando?.category ?? "UTILITY");
+  const [idioma, setIdioma] = useState(base?.language ?? idiomaInicialDaDefinicao(localeDaOrg));
+  const [categoria, setCategoria] = useState(base?.category ?? "UTILITY");
   const [corpo, setCorpo] = useState(inicial?.corpo ?? "");
   const [rodape, setRodape] = useState(inicial?.rodape ?? "");
   const [exemplos, setExemplos] = useState<string[]>(inicial?.exemplos ?? []);
@@ -175,6 +185,32 @@ export function FormularioDaDefinicao({
   // Fora do JSX de propósito: a cerca de botão mudo (`controle-decorativo`) lê o
   // atributo até o primeiro `>`, e um `problemas.length > 0` inline a cortaria.
   const temProblema = problemas.length > 0;
+
+  /** O modelo como está no formulário — o que o botão envia e o JSON exporta. */
+  function corpoAtual(): CorpoDoModelo {
+    const components = montarComponents({
+      body: corpo,
+      footer: rodape,
+      exemplos,
+      cabecalho: { texto: cabecalho, midiaUrl },
+      botoes,
+    });
+    return editando
+      ? { acao: "editar", name: editando.name, language: editando.language, components }
+      : {
+          acao: "criar",
+          name: nome.trim(),
+          language: idioma.trim(),
+          category: categoria,
+          components,
+        };
+  }
+
+  // Só quem pediu o rascunho paga por ele: as telas de Conexões não passam a prop.
+  useEffect(() => {
+    if (onRascunho) onRascunho(corpoAtual());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nome, idioma, categoria, corpo, rodape, exemplos, cabecalho, midiaUrl, botoes]);
 
   return (
     <div
@@ -511,26 +547,7 @@ export function FormularioDaDefinicao({
             type="button"
             size="sm"
             disabled={!nome.trim() || !corpo.trim() || salvando || temProblema}
-            onClick={() => {
-              const components = montarComponents({
-                body: corpo,
-                footer: rodape,
-                exemplos,
-                cabecalho: { texto: cabecalho, midiaUrl },
-                botoes,
-              });
-              onEnviar(
-                editando
-                  ? { acao: "editar", name: editando.name, language: editando.language, components }
-                  : {
-                      acao: "criar",
-                      name: nome.trim(),
-                      language: idioma.trim(),
-                      category: categoria,
-                      components,
-                    },
-              );
-            }}
+            onClick={() => onEnviar(corpoAtual())}
             className="w-full sm:w-auto"
           >
             {editando ? t("Salvar e enviar para revisão") : t("Enviar para revisão")}

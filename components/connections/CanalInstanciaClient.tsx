@@ -101,6 +101,9 @@ export function CanalInstanciaClient({
   reconectarId = null,
   aoReconectar,
   aoConsumirReconectar,
+  somenteConectar = false,
+  aoMudar,
+  servidorProprio = true,
 }: {
   /**
    * Fase F3, tarefa 9: quando o bloqueio do plano vale e "conexões" está no
@@ -137,6 +140,19 @@ export function CanalInstanciaClient({
   aoReconectar?: () => void;
   /** O cartão de `reconectarId` já abriu o QR sozinho: quem monta tira o parâmetro da URL. */
   aoConsumirReconectar?: () => void;
+  /**
+   * Só os caminhos de CONECTAR um número novo, sem a lista das conexões que já existem: é o
+   * "Criar" da tela em cartões, onde cada conexão já tem o seu cartão e o seu Gerenciar.
+   */
+  somenteConectar?: boolean;
+  /** Uma conexão foi criada ou mudou: quem monta refaz a lista dele (a grade de cartões). */
+  aoMudar?: () => void;
+  /**
+   * Oferece o formulário de servidor e token (instância já pareada noutro servidor). Na tela em
+   * cartões só o administrador da plataforma o vê: para o cliente, o caminho é ler o QR Code.
+   * Padrão `true`: o onboarding segue como sempre foi.
+   */
+  servidorProprio?: boolean;
 } = {}) {
   const t = useT();
   const qc = useQueryClient();
@@ -155,6 +171,7 @@ export function CanalInstanciaClient({
     try {
       const r = await apiClient.get<{ data: Estado }>("/api/v1/channels/instancia");
       setEstado(r.data);
+      aoMudar?.();
     } catch {
       // Falha de leitura não trava a tela: o formulário continua servindo.
       setEstado(null);
@@ -233,11 +250,17 @@ export function CanalInstanciaClient({
   const conexoes = estado?.conexoes ?? [];
   // Só busca a ficha quando a tela a oferece e há conexão: o onboarding e a tela
   // vazia não pagam uma consulta que ninguém vai abrir.
-  const pacingItems = usePacingKnobs(oferecerProtecao && conexoes.length > 0).data?.items ?? [];
+  const pacingItems = usePacingKnobs(oferecerProtecao && !somenteConectar && conexoes.length > 0).data?.items ?? [];
 
   return (
     <div className="flex flex-col gap-4" data-testid="canal-instancia-root">
       {pareamentoQr && <PareamentoQrClient bloqueio={bloqueio} aoConectar={() => void carregar()} />}
+      {!pareamentoQr && !servidorProprio ? (
+        <p className="text-sm text-muted-foreground" data-testid="qr-indisponivel">
+          {t("A conexão por QR Code ainda não está disponível nesta instalação. Fale com quem administra a instalação.")}
+        </p>
+      ) : null}
+      {servidorProprio ? (
       <Avancado ativo={pareamentoQr}>
         <Card className="flex flex-col gap-4 p-4">
           <div>
@@ -308,6 +331,7 @@ export function CanalInstanciaClient({
           </div>
         </Card>
       </Avancado>
+      ) : null}
 
       {aviso && (
         <Card className="flex flex-col gap-2 border-warning/40 bg-warning-bg p-4">
@@ -316,7 +340,7 @@ export function CanalInstanciaClient({
         </Card>
       )}
 
-      {conexoes.map((c) => (
+      {!somenteConectar && conexoes.map((c) => (
         <Card
           key={c.id}
           ref={c.id === reconectarId ? cartaoAlvo : undefined}

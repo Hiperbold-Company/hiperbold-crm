@@ -40,6 +40,7 @@ vi.mock("@/hooks/inbox/useSendMessage", () => ({
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   usePermission: () => true,
   usePaisDaOrgAtiva: () => null,
+  useFusoDaOrganizacao: () => null,
 }));
 
 const wrap = (ui: React.ReactNode) => (

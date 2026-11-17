@@ -14,7 +14,9 @@ import { type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ApiError } from "@/lib/api/types";
-import { ok, fail, noContent } from "@/lib/api/wrappers";
+import { ok, fail, falhaInterna, noContent } from "@/lib/api/wrappers";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { leitorDoAtor, leitorVeCamposRestritos, recortarLinha } from "@/lib/campos/recorte-por-papel";
 import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
 import { orgAtivaDaApi } from "@/lib/auth/require-role";
 import { loadAuthUser } from "@/lib/auth/server";
@@ -118,7 +120,14 @@ export async function GET(
       { contactId: id, decryptPurpose },
     );
     const telefones = await telefonesDaFicha(supabase, activeOrg.orgId, id, requestId);
-    return ok({ ...result, ...telefones }, { requestId });
+    // 1015: campo não público (definição e valor) só sai para administrador.
+    let contato = result;
+    if (!leitorVeCamposRestritos(activeOrg.role)) {
+      const restritas = await chavesRestritasDaOrganizacao(supabase, activeOrg.orgId, requestId);
+      if (!restritas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
+      contato = recortarLinha(result, restritas.chaves, activeOrg.role);
+    }
+    return ok({ ...contato, ...telefones }, { requestId });
   } catch (err) {
     if (err instanceof ApiError) {
       return fail(err.code, err.message, err.status, { requestId });
@@ -177,6 +186,14 @@ export async function PATCH(
       id,
       input,
     );
+    // 1015: a resposta do PATCH segue o MESMO recorte do GET (senão a ficha recebia de volta o valor
+    // que o GET escondeu).
+    const leitor = leitorDoAtor(authz.actor);
+    if (!leitorVeCamposRestritos(leitor)) {
+      const restritas = await chavesRestritasDaOrganizacao(supabase, activeOrg.orgId, requestId);
+      if (!restritas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
+      return ok(recortarLinha(contact, restritas.chaves, leitor), { requestId });
+    }
     return ok(contact, { requestId });
   } catch (err) {
     if (err instanceof ApiError) {
