@@ -103763,6 +103763,8 @@ begin
 end
 $hb_1015_migrar_campos$;
 
+notify pgrst, 'reload schema';
+
 -- ---- desligar e religar um módulo de tabela sem perder dados (migration 1016, fork Hiperbold) ----
 -- Espelho idempotente da 1016; racional completo no arquivo da migration. As duas CHECKs (estado de
 -- `modulos_instalados` e kind de `extension_operations`) e os corpos de `fn_reaplicar_modulos_instalados`,

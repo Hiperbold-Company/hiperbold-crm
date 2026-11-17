@@ -124,7 +124,7 @@ const botao = () => screen.getByTestId("btn-conectar-meta") as HTMLButtonElement
 
 describe("ConectarComAMeta: aviso e ciência dos contatos na coexistência (LGPD)", () => {
   it("só a coexistência mostra o aviso dos contatos e a caixa; a conexão padrão não", () => {
-    render(<ConectarComAMeta jaConectado={false} />);
+    render(<ConectarComAMeta temConexaoOficial={false} />);
     expect(screen.queryByTestId("cadastro-meta-aviso-contatos")).toBeNull();
     expect(screen.queryByTestId("cadastro-meta-confirma-contatos")).toBeNull();
 
@@ -136,7 +136,7 @@ describe("ConectarComAMeta: aviso e ciência dos contatos na coexistência (LGPD
   });
 
   it("sem a caixa marcada o botão fica desativado e o popup NÃO abre, nem por clique forçado", async () => {
-    render(<ConectarComAMeta jaConectado={false} />);
+    render(<ConectarComAMeta temConexaoOficial={false} />);
     await waitFor(() => expect(init).toHaveBeenCalled());
     fireEvent.click(screen.getByTestId("cadastro-meta-modo-coexistencia"));
 
@@ -146,7 +146,7 @@ describe("ConectarComAMeta: aviso e ciência dos contatos na coexistência (LGPD
   });
 
   it("marcada a caixa o botão ativa e o popup abre; desmarcar trava de novo", async () => {
-    render(<ConectarComAMeta jaConectado={false} />);
+    render(<ConectarComAMeta temConexaoOficial={false} />);
     await waitFor(() => expect(init).toHaveBeenCalled());
     fireEvent.click(screen.getByTestId("cadastro-meta-modo-coexistencia"));
 
@@ -161,7 +161,7 @@ describe("ConectarComAMeta: aviso e ciência dos contatos na coexistência (LGPD
   });
 
   it("a conexão padrão não pede caixa nenhuma; e voltar da coexistência desmarca a ciência", async () => {
-    render(<ConectarComAMeta jaConectado={false} />);
+    render(<ConectarComAMeta temConexaoOficial={false} />);
     expect(botao().disabled).toBe(false);
 
     fireEvent.click(screen.getByTestId("cadastro-meta-modo-coexistencia"));
@@ -180,7 +180,7 @@ describe("ConectarComAMeta: a sincronização dos contatos que falhou não fica 
   async function conectarEmCoexistencia(resposta: unknown) {
     finalizar.mockResolvedValue({ data: resposta });
     login.mockImplementation((callback: (r: unknown) => void) => callback({ authResponse: { code: "codigo-1" } }));
-    render(<ConectarComAMeta jaConectado={false} />);
+    render(<ConectarComAMeta temConexaoOficial={false} />);
     fireEvent.click(screen.getByTestId("cadastro-meta-modo-coexistencia"));
     await waitFor(() => expect(init).toHaveBeenCalled());
     marcarCienciaDosContatos();
