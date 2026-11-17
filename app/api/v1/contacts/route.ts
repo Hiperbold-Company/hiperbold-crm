@@ -28,7 +28,7 @@ import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { exigirVisibilidadeDoToken } from "@/lib/mcp/visibilidade-do-token";
+import { exigirVisibilidadeDoToken, tokenSemVisaoDeDonoNaOrganizacao } from "@/lib/mcp/visibilidade-do-token";
 import type { Role } from "@/lib/auth/types";
 import { recusaDoFiltroPorCampoRestrito } from "@/lib/campos/filtro-restrito";
 import { temCamposPersonalizados } from "@/lib/campos/resposta-recortada";
@@ -170,9 +170,18 @@ export async function GET(req: NextRequest): Promise<Response> {
   // abaixo de gerente não pode usar o negócio como filtro (descobriria quem tem negócio de quem).
   // Mesma regra D-148 de `lib/api/auth-dual.ts`.
   // Os UTMs também saem de `crm_leads`: a mesma regra vale para quem os pede por token.
-  if (auth.token && (filtraPorNegocio(qsParsed.data) || qsParsed.data.com_utm)) {
+  //
+  // Sem filtro de negócio a lista segue (contato não tem dono), mas a conversa anexada a cada
+  // contato (id e prévia da última mensagem) TEM: nesse mesmo caso a chave recebe os contatos
+  // sem o campo `conversa`, no formato de um contato que nunca conversou.
+  let semConversa = false;
+  if (auth.token) {
     try {
-      await exigirVisibilidadeDoToken(supabase, organizationId, auth.token.role);
+      if (filtraPorNegocio(qsParsed.data) || qsParsed.data.com_utm) {
+        await exigirVisibilidadeDoToken(supabase, organizationId, auth.token.role);
+      } else {
+        semConversa = await tokenSemVisaoDeDonoNaOrganizacao(supabase, organizationId, auth.token.role);
+      }
     } catch (err) {
       if (err instanceof McpAuthError) {
         return fail("forbidden_role", err.message, err.httpStatus, { requestId });
@@ -195,7 +204,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     const timezone = temFiltroDeData(qsParsed.data)
       ? (auth.timezone ?? (await fusoDaOrganizacao(supabase, organizationId)))
       : null;
-    const { contacts, cursor, has_more } = await listContactsHandler(
+    const lista = await listContactsHandler(
       supabase,
       {
         organization_id: organizationId,
@@ -207,6 +216,10 @@ export async function GET(req: NextRequest): Promise<Response> {
       undefined,
       { timezone },
     );
+    const { cursor, has_more } = lista;
+    const contacts = semConversa
+      ? lista.contacts.map(({ conversa: _conversa, ...contato }) => contato)
+      : lista.contacts;
     // 1015: a lista segue o MESMO recorte da ficha (`[id]`): campo não público só para administrador.
     if (!leitorVeCamposRestritos(auth.leitor) && contacts.some(temCamposPersonalizados)) {
       const restritas = await chavesRestritasDaOrganizacao(supabase, organizationId, requestId);

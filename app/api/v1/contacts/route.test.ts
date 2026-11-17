@@ -48,7 +48,13 @@ const OUTRA_ORG = "33333333-3333-4333-8333-333333333333";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 
 const FAKE_SESSION_CLIENT = { session: true } as never;
-const FAKE_ADMIN_CLIENT = { admin: true } as never;
+// O cliente admin responde a leitura do modo de visibilidade (D-148) sem modo gravado: o padrão.
+const FAKE_ADMIN_CLIENT = {
+  admin: true,
+  from: () => ({
+    select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { settings: {} }, error: null }) }) }),
+  }),
+} as never;
 
 function req(url = "http://localhost/api/v1/contacts", headers?: HeadersInit) {
   return new NextRequest(url, { headers });
@@ -257,6 +263,111 @@ describe("GET /api/v1/contacts — Bearer (integrações externas)", () => {
       sessaoOk();
       const { GET } = await import("./route");
       expect((await GET(req(urlDoFunil))).status).toBe(200);
+      expect(createAdminClient).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("conversa anexada à lista pelo token — visibilidade D-148", () => {
+    const bearer = { authorization: "Bearer dsk_abc_def" };
+    const CONVERSA = {
+      id: "c0nv0000-0000-4000-8000-000000000000",
+      preview: "mensagem do colega",
+      last_message_at: "2026-11-17T10:00:00Z",
+      unread: 1,
+    };
+
+    // O modo só "existe" para a leitura certa: tabela `organizations`, linha da organização da chave.
+    // Ler outra tabela ou outra organização devolve "sem modo", e o caso own+agent fica vermelho.
+    function adminComModo(modo: string, erro = false): void {
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: (tabela: string) => ({
+          select: () => ({
+            eq: (coluna: string, valor: string) => ({
+              maybeSingle: async () => {
+                if (erro) return { data: null, error: { message: "falhou" } };
+                const certa = tabela === "organizations" && coluna === "id" && valor === ORG_ID;
+                return { data: { settings: certa ? { visibility_mode: modo } : {} }, error: null };
+              },
+            }),
+          }),
+        }),
+      } as never);
+    }
+
+    function handlerComConversa(): void {
+      vi.mocked(listContactsHandler).mockResolvedValue({
+        contacts: [
+          { id: "k1", name: "Ana", conversa: CONVERSA },
+          { id: "k2", name: "Bia" },
+        ] as never,
+        cursor: null,
+        has_more: false,
+      });
+    }
+
+    async function lista(headers?: HeadersInit): Promise<{ status: number; data: Array<Record<string, unknown>> }> {
+      const { GET } = await import("./route");
+      const res = await GET(req("http://localhost/api/v1/contacts", headers));
+      const body = (await res.json()) as { data: Array<Record<string, unknown>> };
+      return { status: res.status, data: body.data };
+    }
+
+    function tokenCom(role: string): void {
+      vi.mocked(validateBearerToken).mockResolvedValue({
+        organizationId: ORG_ID,
+        role: role as never,
+        actor: { type: "ai_agent", id: "run-1", role: role as never, api_token_id: "tok-1" },
+        apiTokenId: "tok-1",
+        scopes: ["mcp:read"],
+      });
+    }
+
+    it("empresa em 'só os meus' + chave agent: lista os contatos, sem prévia nem id de conversa", async () => {
+      tokenCom("agent");
+      adminComModo("own");
+      handlerComConversa();
+      const { status, data } = await lista(bearer);
+      expect(status).toBe(200);
+      expect(data.map((c) => c.id)).toEqual(["k1", "k2"]);
+      for (const c of data) expect(c).not.toHaveProperty("conversa");
+      expect(JSON.stringify(data)).not.toContain(CONVERSA.preview);
+      expect(JSON.stringify(data)).not.toContain(CONVERSA.id);
+    });
+
+    it("falha ao ler o modo + chave agent: 500 e a lista não é lida (não trata leitura falha como liberado)", async () => {
+      tokenCom("agent");
+      adminComModo("own", true);
+      handlerComConversa();
+      const { status, data } = await lista(bearer);
+      expect(status).toBe(500);
+      expect(data).toBeUndefined();
+      expect(listContactsHandler).not.toHaveBeenCalled();
+    });
+
+    it("empresa em 'só os meus' + chave manager: a conversa vem", async () => {
+      tokenCom("manager");
+      adminComModo("own");
+      handlerComConversa();
+      const { status, data } = await lista(bearer);
+      expect(status).toBe(200);
+      expect(data[0]?.conversa).toEqual(CONVERSA);
+    });
+
+    it("modo padrão (own_and_unassigned) + chave agent: a conversa vem (decisão do D-148)", async () => {
+      tokenCom("agent");
+      adminComModo("own_and_unassigned");
+      handlerComConversa();
+      const { status, data } = await lista(bearer);
+      expect(status).toBe(200);
+      expect(data[0]?.conversa).toEqual(CONVERSA);
+    });
+
+    it("sessão de pessoa: inalterada, a conversa vem (a RLS cuida)", async () => {
+      sessaoOk();
+      handlerComConversa();
+      const { status, data } = await lista();
+      expect(status).toBe(200);
+      expect(data[0]?.conversa).toEqual(CONVERSA);
       expect(createAdminClient).not.toHaveBeenCalled();
     });
   });
