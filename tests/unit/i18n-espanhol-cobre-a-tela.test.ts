@@ -78,8 +78,13 @@ const RAIZ = join(__dirname, "..", "..");
  * ofensores, que pode ter centenas de linhas e empurrar o conserto para fora
  * da tela. Só cita comando e arquivo que existem.
  */
+// Sem os retirados do seletor (espanhol e inglês desde 17/11/2026): este gate
+// segue cobrando o espanhol, e a régua de baixo o inglês — dizer que eles "não
+// reprovam" seria falso.
 const EM_CONSTRUCAO =
-  IDIOMAS_EM_CONSTRUCAO.map((idioma) => idioma.nomeNativo).join(", ") || "nenhum hoje";
+  IDIOMAS_EM_CONSTRUCAO.filter((idioma) => !("retiradoDoSeletorEm" in idioma))
+    .map((idioma) => idioma.nomeNativo)
+    .join(", ") || "nenhum hoje";
 const COMO_CONSERTAR =
   'Conserto: uma linha em lib/i18n/dicionario.ts, no formato "texto em português": { es: "texto en español" }. ' +
   "Não fala espanhol? Mande o PR assim mesmo e diga isso na descrição. " +

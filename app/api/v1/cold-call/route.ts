@@ -221,7 +221,7 @@ export async function POST(): Promise<Response> {
         position: posicaoEntre(funis[funis.length - 1]?.position ?? null, null),
         is_default: false,
         settings: {
-          cold_call: { ativo: true, roteiro: roteiroPadrao(authz.user.idioma) },
+          cold_call: { ativo: true, roteiro: roteiroPadrao(authz.user.idiomaGravado ?? authz.user.idioma) },
           lost_reasons: [...MOTIVOS_DE_PERDA_DO_COLD_CALL],
         },
       })

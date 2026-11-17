@@ -41,7 +41,16 @@ const CATALOGOS: Readonly<Record<IdiomaDeCatalogoVisivel, Readonly<Record<string
 /** Os idiomas cujo texto vem de um catálogo, e não de coluna do dicionário. */
 export const IDIOMAS_COM_CATALOGO = Object.keys(CATALOGOS) as Idioma[];
 
-/** A frase no catálogo do idioma, ou `undefined` quando ele não a tem (ou não está carregado). */
-export function entradaDoCatalogo(idioma: Idioma, texto: string): string | undefined {
-  return (CATALOGOS as Partial<Record<Idioma, Readonly<Record<string, string>>>>)[idioma]?.[texto];
+type MapaDeCatalogos = Partial<Record<Idioma, Readonly<Record<string, string>>>>;
+
+/**
+ * O leitor de um mapa de catálogos. Separado do mapa para o teste medir o
+ * caminho inteiro com um catálogo que ainda não aparece (o `en.json`, lido do
+ * disco pelo teste), sem importá-lo para o pacote de quem usa.
+ */
+export function leitorDeCatalogos(mapa: MapaDeCatalogos): (idioma: Idioma, texto: string) => string | undefined {
+  return (idioma, texto) => mapa[idioma]?.[texto];
 }
+
+/** A frase no catálogo do idioma, ou `undefined` quando ele não a tem (ou não está carregado). */
+export const entradaDoCatalogo = leitorDeCatalogos(CATALOGOS as MapaDeCatalogos);

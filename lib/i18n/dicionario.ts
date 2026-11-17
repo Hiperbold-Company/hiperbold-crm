@@ -28999,7 +28999,18 @@ export const DICIONARIO: Traducoes = {
  * português, que é exatamente o comportamento de antes desta feature. Uma
  * tradução parcial não pode deixar a tela PIOR do que estava.
  */
+/** `traduzir` com outro leitor de catálogo — o teste mede o inglês por aqui. */
+export function traduzirCom(
+  lerCatalogo: (idioma: Idioma, texto: string) => string | undefined,
+): (texto: string, idioma: Idioma) => string {
+  return (texto, idioma) => {
+    if (idioma === "pt-BR") return texto;
+    return DICIONARIO[texto]?.[idioma] ?? lerCatalogo(idioma, texto) ?? texto;
+  };
+}
+
+const traduzirPeloLeitor = traduzirCom(entradaDoCatalogo);
+
 export function traduzir(texto: string, idioma: Idioma): string {
-  if (idioma === "pt-BR") return texto;
-  return DICIONARIO[texto]?.[idioma] ?? entradaDoCatalogo(idioma, texto) ?? texto;
+  return traduzirPeloLeitor(texto, idioma);
 }

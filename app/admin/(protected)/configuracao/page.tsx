@@ -8,7 +8,7 @@ import {
   type GrupoDaInstalacao,
 } from "@/lib/instalacao/catalogo";
 import { estadoParaTela, type EstadoParaTela } from "@/lib/instalacao/config";
-import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 import { PainelDeConfiguracao } from "./_form";
@@ -79,7 +79,7 @@ export default async function Page() {
   // própria página aplica. `notFound()` e não 403 — para quem não administra a
   // instalação, esta tela não faz parte do produto.
   if (!usuario?.is_platform_admin) notFound();
-  const idioma = normalizarIdioma(usuario.locale);
+  const idioma = idiomaDaTela(usuario.locale);
 
   // Uma ida ao banco por chave, em paralelo. Sem cache de propósito — ver o
   // cabeçalho de `lib/instalacao/config.ts`: com memo, a tela mostraria o valor

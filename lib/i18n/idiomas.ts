@@ -145,3 +145,18 @@ export function idiomaDelNavegador(languages: readonly string[]): Idioma {
 export function idiomaDoTexto(tag: string | null | undefined): Idioma {
   return parseAcceptLanguage(tag) ?? IDIOMA_PADRAO;
 }
+
+/**
+ * A pista de idioma que o CADASTRO manda para a empresa nova nascer
+ * (`lib/auth/perfil-da-empresa-nova.ts`): o idioma do VISITANTE, não o da tela.
+ *
+ * Desde 17/11/2026 a tela de quem chega em espanhol ou inglês é pintada em
+ * português (`idiomaDaTela`), e mandar esse português como pista faria a
+ * empresa de um visitante do México nascer em pt-BR, com real e fuso de São
+ * Paulo. Quando a tela está no padrão, vale o navegador — o mesmo sinal do
+ * `Accept-Language` —, como era antes do corte.
+ */
+export function idiomaDoCadastro(daTela: Idioma, languages: readonly string[] | null | undefined): Idioma {
+  if (daTela !== IDIOMA_PADRAO || !languages || languages.length === 0) return daTela;
+  return idiomaDelNavegador(languages);
+}

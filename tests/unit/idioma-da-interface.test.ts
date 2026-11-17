@@ -145,9 +145,9 @@ describe("os elos que somem sem barulho", () => {
     // fazem `vi.mock` daquele módulo, e um RÓTULO passou a depender de quem
     // sabe permissão. Traduzir é apresentação.
     const layout = readFileSync("app/app/layout.tsx", "utf8");
-    // `idiomaDaTela`: espanhol e inglês saíram do seletor em 17/11/2026 e a tela
-    // os pinta no padrão; o idioma segue vindo de `user.idioma`.
-    expect(layout).toMatch(/<IdiomaProvider locale=\{idiomaDaTela\(user\.idioma\)\}>/);
+    // `user.idioma` já é o idioma da TELA (`idiomaDaTela` em lib/auth/server.ts,
+    // desde 17/11/2026); o gravado vai junto para o seletor do topo.
+    expect(layout).toMatch(/<IdiomaProvider locale=\{user\.idioma\} gravado=\{user\.idiomaGravado \?\? user\.idioma\}>/);
     // E nenhuma outra tela com sessão pula a cadeia: onboarding e get-started
     // passavam `user.locale` (só a preferência) ao provider enquanto o texto do
     // servidor da mesma tela usava `user.idioma` — metade da tela em cada língua.

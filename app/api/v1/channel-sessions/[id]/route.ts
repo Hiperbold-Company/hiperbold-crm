@@ -631,7 +631,7 @@ export async function DELETE(
   await sincronizarAvisoDePausa(
     createAdminClient(),
     { id, organization_id: activeOrg.orgId },
-    { autor: (user.full_name ?? "").trim() || user.email || user.id, idioma: user.idioma },
+    { autor: (user.full_name ?? "").trim() || user.email || user.id, idioma: user.idiomaGravado ?? user.idioma },
   );
 
   void audit({

@@ -14,26 +14,28 @@
  *
  * - `em_construcao`: está sendo traduzido. Não aparece em tela nenhuma, não é
  *   servido a ninguém e não reprova ninguém — quem acrescenta uma frase em
- *   português não precisa escrever a versão deste idioma.
+ *   português não precisa escrever a versão deste idioma. Exceção: o idioma
+ *   RETIRADO do seletor (seção abaixo) segue servido fora da tela e cobrado.
  * - `telas_principais`: aparece. A régua de "telas principais" é medida, e ela
  *   ainda não existe (fatia 5 do PROG-022) — por isso nenhum idioma pode
  *   declarar este nível hoje, e um teste reprova quem declarar.
- * - `completo`: aparece, e toda frase de tela precisa dele. É o nível do
- *   espanhol, e nada nele afrouxa.
+ * - `completo`: aparece, e toda frase de tela precisa dele. Era o nível do
+ *   espanhol e do inglês até 17/11/2026, e é o do português.
  *
- * Quem decide o que é visível é o NÍVEL, não uma lista paralela: `IDIOMAS`
- * (`./idiomas`) só inclui códigos cujo nível aparece. Promover um idioma é
+ * Quem decide o que é visível é o NÍVEL, não uma lista paralela:
+ * `IDIOMAS_VISIVEIS` só inclui códigos cujo nível aparece (`IDIOMAS`, em
+ * `./idiomas`, inclui também os retirados do seletor). Promover um idioma é
  * mudar uma linha aqui, e o compilador aponta cada lugar que passa a precisar
  * dele (o `Locale` de data em `datas.ts`, o catálogo em `catalogos.ts`).
  *
  * ─── Retirado do seletor não é o mesmo que nunca ter tido texto ────────────
  *
  * Um idioma que já apareceu e saiu (`retiradoDoSeletorEm`) volta a
- * `em_construcao`: não é oferecido, não é aceito na gravação e quem o tinha
- * gravado lê a tela no padrão. Mas o texto dele continua existindo e sendo
- * vigiado, e o TIPO `Idioma` continua a incluí-lo — é o que mantém o dicionário,
- * o `Locale` de data e as saídas que escrevem na língua de um destinatário
- * (`idiomaDoTexto`) compilando e cobertos enquanto ele está fora.
+ * `em_construcao` só para a TELA: não é oferecido no seletor e quem o tem
+ * gravado vê a tela no padrão (`idiomaDaTela`). Fora da tela nada muda: ele
+ * segue em `IDIOMAS`, é aceito na gravação, `normalizarIdioma` o devolve e as
+ * saídas (e-mail, push, avisos, prospecção) seguem escrevendo nele. O texto
+ * continua existindo e sendo vigiado, e o TIPO `Idioma` continua a incluí-lo.
  *
  * ─── Por que o `Locale` de data NÃO mora aqui ──────────────────────────────
  *

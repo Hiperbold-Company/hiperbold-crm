@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { updateProfile } from "@/app/actions/settings/updateProfile";
 import { useT } from "@/hooks/i18n/useT";
-import { IDIOMAS_VISIVEIS, REGISTRO_DE_IDIOMAS } from "@/lib/i18n/registro";
+import { IDIOMAS_COM_TEXTO, IDIOMAS_VISIVEIS } from "@/lib/i18n/registro";
 import {
   profileSchema,
   SEM_PREFERENCIA_DE_IDIOMA,
@@ -153,6 +153,7 @@ export function ProfileForm({
 // trocaria o idioma da conta sem a pessoa ter pedido.
 function idiomasDoSeletor(gravado: string) {
   if (IDIOMAS_VISIVEIS.some((i) => i.codigo === gravado)) return IDIOMAS_VISIVEIS;
-  const extra = REGISTRO_DE_IDIOMAS.find((i) => i.codigo === gravado);
+  // Só um idioma que o produto ainda escreve (`IDIOMAS`: es, en); nunca tr nem zh-CN.
+  const extra = IDIOMAS_COM_TEXTO.find((i) => i.codigo === gravado);
   return extra ? [...IDIOMAS_VISIVEIS, extra] : IDIOMAS_VISIVEIS;
 }

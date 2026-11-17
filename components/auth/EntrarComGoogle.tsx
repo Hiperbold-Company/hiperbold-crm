@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
 import { useIdioma } from "@/lib/i18n/IdiomaProvider";
+import { idiomaDoCadastro } from "@/lib/i18n/idiomas";
 import { fusoDoNavegador } from "@/lib/tempo/fuso-do-navegador";
 import { Button } from "@/components/ui/button";
 import { signInWithGoogle } from "@/app/actions/auth/signInWithGoogle";
@@ -33,9 +34,9 @@ export function EntrarComGoogle({ next, convite }: { next?: string; convite?: st
 
   const onClick = () => {
     setErro(null);
-    // O idioma desta tela e o fuso do navegador vão junto: se a volta for um
+    // O idioma do visitante (`idiomaDoCadastro`) e o fuso do navegador vão junto: se a volta for um
     // primeiro acesso, a empresa nasce com eles (`lib/auth/perfil-da-empresa-nova.ts`).
-    void enviar(() => signInWithGoogle({ next, convite, idioma, fuso: fusoDoNavegador() }), (res) => {
+    void enviar(() => signInWithGoogle({ next, convite, idioma: idiomaDoCadastro(idioma, navigator.languages), fuso: fusoDoNavegador() }), (res) => {
       if (res.ok) {
         setSaindo(true);
         window.location.assign(res.url);

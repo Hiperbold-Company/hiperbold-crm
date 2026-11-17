@@ -5,9 +5,9 @@ import { render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { IDIOMAS_COM_CATALOGO } from "@/lib/i18n/catalogos";
+import { IDIOMAS_COM_CATALOGO, leitorDeCatalogos } from "@/lib/i18n/catalogos";
 import { tagDeIdioma } from "@/lib/i18n/datas";
-import { DICIONARIO, traduzir } from "@/lib/i18n/dicionario";
+import { DICIONARIO, traduzir, traduzirCom } from "@/lib/i18n/dicionario";
 import { IdiomaProvider, useT } from "@/lib/i18n/IdiomaProvider";
 import {
   IDIOMA_PADRAO,
@@ -19,7 +19,7 @@ import {
   parseAcceptLanguage,
   type Idioma,
 } from "@/lib/i18n/idiomas";
-import { IDIOMAS_VISIVEIS, REGISTRO_DE_IDIOMAS, type IdiomaRegistrado } from "@/lib/i18n/registro";
+import { IDIOMAS_COM_TEXTO, IDIOMAS_VISIVEIS, REGISTRO_DE_IDIOMAS, type IdiomaRegistrado } from "@/lib/i18n/registro";
 import { profileSchema } from "@/lib/schemas/settings";
 
 /**
@@ -88,6 +88,25 @@ describe("todo idioma visível de catálogo chega à tela", () => {
       if (erradas.length > 0) faltando.push(`${codigo}: ${erradas.length}/${amostra.length} frases saem em português`);
     }
     expect(faltando).toEqual([]);
+  });
+
+  it("o mesmo caminho de leitura traduz o inglês hoje, com o en.json do disco", () => {
+    // O inglês está fora do seletor e o catálogo dele não vai no pacote; o
+    // leitor e o `traduzir` são os mesmos, só o mapa vem do disco. Sem isto a
+    // prova do caso acima ficaria vazia enquanto nenhum catálogo aparece.
+    const comCatalogo = IDIOMAS_COM_TEXTO.filter((idioma) => idioma.fonteDoTexto === "catalogo");
+    expect(comCatalogo.map((idioma) => idioma.codigo)).toContain("en");
+    for (const { codigo } of comCatalogo) {
+      const disco = catalogoDoDisco(codigo);
+      const t = traduzirCom(leitorDeCatalogos({ [codigo]: disco }));
+      const amostra = Object.entries(disco)
+        .filter(([chave, valor]) => valor !== chave && !DICIONARIO[chave]?.[codigo as Exclude<Idioma, "pt-BR">])
+        .slice(0, 200);
+      expect(amostra.length, codigo).toBeGreaterThan(0);
+      const erradas = amostra.filter(([chave, valor]) => t(chave, codigo as Idioma) !== valor);
+      expect(erradas.length, `${codigo}: frases que saem em português`).toBe(0);
+    }
+    expect(traduzirCom(leitorDeCatalogos({ en: catalogoDoDisco("en") }))("Contatos", "en")).toBe("Contacts");
   });
 
   it("o useT dentro do IdiomaProvider pinta a frase do catálogo", () => {
