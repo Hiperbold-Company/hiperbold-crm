@@ -100,7 +100,7 @@ describe("Seção Conexões MCP", () => {
     });
     render(wrap(<Controlado inicial={[]} />));
 
-    expect(await screen.findByText("Conexões MCP")).toBeInTheDocument();
+    expect(await screen.findByText("Ferramentas externas da IA")).toBeInTheDocument();
     expect(screen.getByText("n8n de produção")).toBeInTheDocument();
     expect(screen.getByTestId("capacidade-mcp_n8n__listar_leads")).toBeInTheDocument();
     expect(screen.getByTestId("capacidade-mcp_n8n__criar_lead")).toBeInTheDocument();

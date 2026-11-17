@@ -5,7 +5,7 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { CadastroDoServidorMcpExterno } from "./_components/CadastroDoServidorMcpExterno";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Servidor MCP externo" };
+export const metadata = { title: "Sistema externo da IA" };
 
 /**
  * A tela do servidor MCP externo da empresa (#2948).
@@ -44,7 +44,7 @@ export default async function ServidorMcpExternoPage() {
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">
-          {traduzir("Servidor MCP externo", idioma)}
+          {traduzir("Sistema externo da IA", idioma)}
         </h1>
         <p className="text-sm text-muted-foreground">
           {traduzir(

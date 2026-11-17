@@ -52,7 +52,7 @@ export function ProposalsSettingsClient() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 p-6">
-      <h1 className="text-xl font-semibold">{t("Propostas")}</h1>
+      <h1 className="text-xl font-semibold">{t("Regras das propostas")}</h1>
       {enabledSalvo ? (
         <p className="text-sm">
           <Link href="/app/settings/tenant/proposals/modelos" className="underline underline-offset-4">

@@ -202,7 +202,7 @@ function FichaCapacidade({
             data-testid={`aviso-aprovacao-${capacidade.name}`}
             className="block text-xs text-amber-700 dark:text-amber-400"
           >
-            {t("Não roda até o admin aprovar em IA › Conexões MCP.")}
+            {t("Não roda até o admin aprovar em IA › Ferramentas externas da IA.")}
           </span>
         ) : null}
         {capacidade.motivo_nao_marcavel ? (
@@ -540,7 +540,7 @@ export function ToolPicker({ value: valorSalvo, onChange, disabled, ocultar }: P
       */}
       <div className="space-y-3 rounded-md border border-border/60 p-4" data-testid="secao-mcp-externo">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-medium">{t("Conexões MCP")}</h3>
+          <h3 className="text-sm font-medium">{t("Ferramentas externas da IA")}</h3>
           <Link
             href="/app/ai/mcp"
             className="text-xs font-medium text-primary underline-offset-4 hover:underline"
@@ -556,7 +556,7 @@ export function ToolPicker({ value: valorSalvo, onChange, disabled, ocultar }: P
         ) : porConexao.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             {t(
-              "Nenhuma conexão MCP. Conecte um servidor em IA › Conexões MCP para dar ferramentas de outros sistemas ao agente.",
+              "Nenhuma conexão MCP. Conecte um servidor em IA › Ferramentas externas da IA para dar ferramentas de outros sistemas ao agente.",
             )}
           </p>
         ) : (
@@ -627,7 +627,7 @@ export function ToolPicker({ value: valorSalvo, onChange, disabled, ocultar }: P
           className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground"
         >
           {t(
-            "Propostas está desligada nesta organização: o rascunho automático de proposta fica guardado e volta a valer quando alguém ligar em Configurações › Propostas.",
+            "Propostas está desligada nesta organização: o rascunho automático de proposta fica guardado e volta a valer quando alguém ligar em Configurações › Regras das propostas.",
           )}
         </p>
       ) : null}

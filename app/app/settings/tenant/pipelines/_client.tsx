@@ -332,7 +332,7 @@ export function PipelinesClient({
       <Card className="p-6 text-sm leading-relaxed text-muted-foreground" data-testid="sem-funil-configuracao">
         {t("Você ainda não tem nenhum funil. Enquanto for assim, o agente atende normalmente, mas não tem para onde levar o card de ninguém — não há etapas para onde mover.")}{" "}
         <Link href="/app/kanban" className="font-medium text-foreground underline underline-offset-2" data-testid="link-criar-funil">
-          {t("Crie o primeiro na tela Pipeline")}
+          {t("Crie o primeiro na tela Funil")}
         </Link>
         {t(": ele já nasce com etapas, e depois aparece aqui para você escolher a etapa de cada passo.")}
       </Card>

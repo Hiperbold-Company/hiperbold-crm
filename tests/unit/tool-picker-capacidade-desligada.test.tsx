@@ -58,7 +58,7 @@ describe("ToolPicker — capacidade desligada pela organização", () => {
     await waitFor(() => expect(screen.getByTestId("capacidades-desligadas-pela-organizacao")).toBeTruthy());
     expect(screen.queryByTestId("capacidades-orfas")).toBeNull();
     expect(screen.getByTestId("capacidades-desligadas-pela-organizacao").textContent).toContain(
-      "Configurações › Propostas",
+      "Configurações › Regras das propostas",
     );
   });
 

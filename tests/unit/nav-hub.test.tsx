@@ -97,7 +97,7 @@ describe("NavHub", () => {
     expect(screen.getByRole("link", { name: /Agentes/ })).toBeTruthy();
   });
 
-  it("o viewer vê Dados externos (Extensões está oculto); a seção aparece filtrada, sem API Tokens nem LGPD", () => {
+  it("o viewer vê Dados externos (Extensões está oculto); a seção aparece filtrada, sem Chaves de integração nem LGPD", () => {
     /**
      * Esta asserção dizia `not.toContain("Dados e acesso")`, e passava porque os
      * DOIS destinos daquela seção eram `admin`. "Dados externos" entrou nela sem
@@ -122,7 +122,7 @@ describe("NavHub", () => {
       "href",
       "/app/integracao-dados",
     );
-    expect(screen.queryByRole("link", { name: /API Tokens/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Chaves de integração/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /LGPD/ })).toBeNull();
   });
 
@@ -134,7 +134,7 @@ describe("NavHub", () => {
       <NavHub group="organizacao" isPlatformAdmin={false} role="admin" title="Org" subtitle="" modulosLigados={[]} />,
     );
     expect(screen.queryByRole("link", { name: /Dados externos/ })).toBeNull();
-    expect(screen.getByRole("link", { name: /API Tokens/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Chaves de integração/ })).toBeTruthy();
     cleanup();
 
     render(

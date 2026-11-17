@@ -159,7 +159,7 @@ export function SeletorDoResultado({
   return (
     <>
       <label className="mt-3 block text-xs text-text-muted" htmlFor="resultado-cold-call">
-        {t("Resultado Cold Call")}
+        {t("Resultado da ligação")}
       </label>
       <select
         id="resultado-cold-call"
@@ -234,7 +234,7 @@ export function ColdCall() {
   if (consulta.isPending) {
     return (
       <div className="flex flex-col gap-4">
-        <h1>{t("Cold Call")}</h1>
+        <h1>{t("Ligações em lista")}</h1>
         <Skeleton className="h-96 w-full rounded-2xl" />
       </div>
     );
@@ -243,7 +243,7 @@ export function ColdCall() {
   if (consulta.isError || !dados) {
     return (
       <div className="flex flex-col items-start gap-3">
-        <h1>{t("Cold Call")}</h1>
+        <h1>{t("Ligações em lista")}</h1>
         <p className="text-sm text-text-muted">{t("Não consegui carregar a fila de ligações.")}</p>
         <Button variant="outline" onClick={() => void consulta.refetch()}>
           {t("Tentar de novo")}
@@ -255,7 +255,7 @@ export function ColdCall() {
   if (!dados.funil) {
     return (
       <div className="flex flex-col gap-4">
-        <h1>{t("Cold Call")}</h1>
+        <h1>{t("Ligações em lista")}</h1>
         <section className="flex max-w-2xl flex-col items-start gap-4 rounded-2xl border border-border/70 bg-surface p-6">
           <span className="flex size-12 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Phone size={24} weight="duotone" aria-hidden />
@@ -373,8 +373,8 @@ function Fila({
   return (
     <div className="flex flex-col gap-4" data-testid="fila-de-ligacoes">
       <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border/70 pb-3">
-        <h1>{t("Cold Call")}</h1>
-        <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label={t("Cold Call")}>
+        <h1>{t("Ligações em lista")}</h1>
+        <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label={t("Ligações em lista")}>
           <span className="border-b-2 border-accent px-3 py-1.5 font-semibold text-accent">{t("Ações manuais")}</span>
           {podeGerenciar && (
             <button type="button" onClick={aoEditarRoteiro} className="px-3 py-1.5 text-text-muted hover:text-text" data-testid="editar-roteiro">
@@ -552,7 +552,7 @@ function Fila({
                       </td>
                       <td className="px-3 py-2.5 text-text">
                         <span className="inline-flex items-center gap-1.5">
-                          <Phone size={14} weight="fill" className="text-accent" aria-hidden /> {t("Cold Call")}
+                          <Phone size={14} weight="fill" className="text-accent" aria-hidden /> {t("Ligações em lista")}
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-text">
@@ -835,7 +835,7 @@ function Sessao({
   if (!lead) {
     return (
       <div className="flex flex-col items-start gap-3" data-testid="sessao-concluida">
-        <h1>{t("Cold Call")}</h1>
+        <h1>{t("Ligações em lista")}</h1>
         <section className={cn(CARTAO, "flex w-full max-w-xl flex-col items-start gap-3 p-6")}>
           <h2 className="text-xl font-bold tracking-tight text-text">{t("Fila concluída")}</h2>
           <p className="text-sm text-text-muted">
@@ -884,7 +884,7 @@ function Sessao({
         <span className="flex size-11 items-center justify-center rounded-xl border border-accent/30 bg-accent-soft text-accent">
           <Phone size={22} weight="fill" aria-hidden />
         </span>
-        <h1 className="!text-2xl">{t("Cold Call")}</h1>
+        <h1 className="!text-2xl">{t("Ligações em lista")}</h1>
         <span className="border-b-2 border-accent px-1 pb-1 text-sm font-semibold text-accent">{t("Ligando")}</span>
         <span className="pb-1 text-sm tabular-nums text-text-muted">
           {t("Lead")} {posicao + 1} {t("de")} {ordem.length}
@@ -969,7 +969,7 @@ function Sessao({
             <div className="mt-2 rounded-xl border border-border/60 bg-surface-elevated/30 px-3 py-2.5">
               <p className="flex items-center justify-between gap-2 text-sm font-medium text-text">
                 <span className="flex items-center gap-1.5">
-                  <Phone size={15} weight="fill" aria-hidden /> {t("Cold Calls")}
+                  <Phone size={15} weight="fill" aria-hidden /> {t("Ligações em lista")}
                 </span>
                 <span className="flex size-5 items-center justify-center rounded-full bg-accent text-[11px] font-bold tabular-nums text-accent-foreground">
                   {lead.tentativas}

@@ -139,7 +139,7 @@ describe("Sidebar agrupado", () => {
   it("e os dois itens de funil não disputam o mesmo nome", () => {
     comoPapel("admin");
     render(<Sidebar collapsed={false} />);
-    expect(screen.getByRole("link", { name: "Pipeline" })).toHaveAttribute("href", "/app/kanban");
+    expect(screen.getByRole("link", { name: "Funil" })).toHaveAttribute("href", "/app/kanban");
   });
 
   it("desenterra Audit Log — e Nuvemshop ficou de fora, por escolha", () => {
@@ -159,7 +159,7 @@ describe("Sidebar agrupado", () => {
     // #105, e Conexões é a porta.
     const hubAnalise = screen.getByRole("link", { name: /Ver tudo em Análise/ });
     expect(hubAnalise).toHaveAttribute("href", "/app/analise");
-    expect(screen.queryByRole("link", { name: /Audit Log/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Histórico de ações/ })).toBeNull();
 
     // NUVEMSHOP SAIU, e esta linha é a reversão explícita de uma decisão que
     // este mesmo teste travava: a integração tinha sido "desenterrada" para o
@@ -208,7 +208,7 @@ describe("Sidebar agrupado", () => {
     comoPapel("admin");
     render(<Sidebar collapsed={false} />);
     expect(screen.getByRole("link", { name: /Chat/ })).toHaveAttribute("aria-current", "page");
-    // "Kanban" saiu da interface; o item da mesma URL agora se chama "Funis".
-    expect(screen.getByRole("link", { name: "Pipeline" })).not.toHaveAttribute("aria-current");
+    // "Kanban" saiu da interface; o item da mesma URL agora se chama "Funil".
+    expect(screen.getByRole("link", { name: "Funil" })).not.toHaveAttribute("aria-current");
   });
 });

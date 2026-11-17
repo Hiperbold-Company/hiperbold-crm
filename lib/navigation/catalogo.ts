@@ -164,11 +164,11 @@ export function sobeAoMenuLateral(
 /**
  * SIDEBAR = SÓ O ESSENCIAL (decisão do dono do produto, Hiperbold, 15/10/2026).
  *
- * O cliente é leigo: a barra lateral mostra oito portas, nesta ordem — Início,
- * Inbox, Radar, Funis, Contatos, Agentes, Desempenho, Atividades — e o rodapé
- * fixo "Configurações". O teto anterior (15 itens, medido em 900px) deixou de ser
- * o alvo: a barra encolhe de propósito, e `tests/unit/interface-por-empresa.test.ts`
- * guarda um teto novo de 8.
+ * O cliente é leigo: a barra lateral mostra nove portas (as marcadas com
+ * `sidebar: true` abaixo, na ordem do catálogo) e o rodapé fixo "Configurações".
+ * O teto anterior (15 itens, medido em 900px) deixou de ser o alvo: a barra
+ * encolhe de propósito, e `tests/unit/interface-por-empresa.test.ts` guarda um
+ * teto de 9.
  *
  * Tudo o que saiu da barra continua a um clique, sem perder porta: aparece no hub
  * de Configurações (`/app/settings`) pelo campo `configuracoes` (seções
@@ -281,7 +281,7 @@ export const NAV_CATALOG = [
     //
     // Em 21/10/2026 o dono do produto trocou o rótulo para "Pipeline".
     href: "/app/kanban",
-    label: "Pipeline",
+    label: "Funil",
     description: "Seus funis de venda — clique em um para abrir o quadro de clientes.",
     icon: "Kanban",
     group: "crm",
@@ -438,7 +438,7 @@ export const NAV_CATALOG = [
   {
     // Fila de ligações sobre um funil próprio. A régua está em lib/cold-call/regras.ts.
     href: "/app/cold-call",
-    label: "Cold Call",
+    label: "Ligações em lista",
     description: "Ligue para uma lista de leads, um por vez, com roteiro e resultado de cada ligação.",
     icon: "Phone",
     // No CRM, e não em Atendimento: porta de módulo mora em grupo com hub ("Ver tudo em CRM"),
@@ -543,7 +543,7 @@ export const NAV_CATALOG = [
   },
   {
     href: "/app/settings/tenant/proposals",
-    label: "Propostas",
+    label: "Regras das propostas",
     description: "Configure a validade padrão e condições para propostas comerciais.",
     icon: "FileText",
     group: "organizacao",
@@ -777,7 +777,7 @@ export const NAV_CATALOG = [
   },
   {
     href: "/app/ai/skills",
-    label: "Skills",
+    label: "Ações da IA",
     description: "As ações que o agente pode executar sozinho durante o atendimento.",
     icon: "PuzzlePiece",
     group: "ia",
@@ -795,7 +795,7 @@ export const NAV_CATALOG = [
     // faz — ver e marcar ferramenta NO AGENTE continua "manager", por
     // `/api/v1/ai/mcp/ferramentas`, usado pelo ToolPicker.
     href: "/app/ai/mcp",
-    label: "Conexões MCP",
+    label: "Ferramentas externas da IA",
     description: "Ferramentas de outros sistemas que o agente consulta ou aciona durante o atendimento.",
     icon: "Plug",
     group: "ia",
@@ -868,7 +868,7 @@ export const NAV_CATALOG = [
     // Órfã: nenhum lugar do app linkava para cá. O flywheel gerava propostas de
     // melhoria do agente e a fila só era vista por quem soubesse a URL.
     href: "/app/ai/proposals",
-    label: "Propostas",
+    label: "Sugestões da IA",
     description: "Melhorias que a IA sugere para si mesma, esperando sua decisão.",
     icon: "Lightbulb",
     group: "ia",
@@ -1082,7 +1082,7 @@ export const NAV_CATALOG = [
   },
   {
     href: "/app/audit",
-    label: "Audit Log",
+    label: "Histórico de ações",
     description: "Quem fez o quê, quando — o histórico que não se apaga.",
     icon: "ClockCounterClockwise",
     group: "analise",
@@ -1150,7 +1150,7 @@ export const NAV_CATALOG = [
     // `UPDATE` à mão no `organizations.settings` — o anti-exemplo de "toda
     // configuração tem superfície" (docs/doctrine/restricao-de-canal.md).
     href: "/app/settings/automacoes",
-    label: "Automações",
+    label: "Limite da IA nas automações",
     description: "O freio único do passo em que a IA escolhe entre as opções de uma regra, para a empresa inteira.",
     icon: "FlowArrow",
     group: "organizacao",
@@ -1240,7 +1240,7 @@ export const NAV_CATALOG = [
     // Uma tela só, com dois campos de token parecidos, é como se cola o token
     // errado no campo errado e se perde uma semana achando que quebrou.
     href: "/app/settings/meta-ads",
-    label: "Meta Ads",
+    label: "Conectar Meta Ads",
     description: "Conectar a conta de anúncios para ler o desempenho das campanhas.",
     icon: "Megaphone",
     group: "organizacao",
@@ -1294,7 +1294,7 @@ export const NAV_CATALOG = [
   },
   {
     href: "/app/settings/api-tokens",
-    label: "API Tokens",
+    label: "Chaves de integração",
     description: "Chaves para outro sistema conversar com o seu CRM.",
     icon: "Lock",
     group: "organizacao",
@@ -1303,7 +1303,7 @@ export const NAV_CATALOG = [
   },
   {
     href: "/app/settings/voip-trunk",
-    label: "Trunk SIP",
+    label: "Linha telefônica (SIP)",
     description: "Credenciais do provedor SIP para chamadas de voz por IA.",
     icon: "Phone",
     group: "organizacao",
@@ -1329,7 +1329,7 @@ export const NAV_CATALOG = [
     // permissão recebe `/403` da própria tela; a porta existe porque a tela
     // nova precisa de por onde ser encontrada (item 14 da Definition of Done).
     href: "/app/settings/servidor-mcp-externo",
-    label: "Servidor MCP externo",
+    label: "Sistema externo da IA",
     description: "O endereço e a chave do sistema de fora que a IA da empresa pode consultar.",
     icon: "Plugs",
     group: "organizacao",

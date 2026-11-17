@@ -211,7 +211,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!trunkEndpoint) {
     return fail(
       "trunk_not_configured",
-      "Nenhum trunk SIP configurado para esta organização (Configurações > Trunk SIP).",
+      "Nenhum trunk SIP configurado para esta organização (Configurações > Linha telefônica (SIP)).",
       422,
       { requestId },
     );

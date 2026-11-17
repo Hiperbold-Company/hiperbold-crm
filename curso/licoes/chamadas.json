@@ -25,7 +25,7 @@
           "titulo": "Onde fica a tela",
           "rota": "/app/crm",
           "texto": "Chamadas não aparece direto no menu lateral. No grupo \"CRM\" do menu, clique em \"Ver tudo em CRM\". Na parte \"O dia a dia da venda\" está o cartão \"Chamadas\". O caminho completo é: CRM › Ver tudo em CRM › Chamadas.",
-          "dica": "Só gerente ou administrador vê este cartão. As ligações só acontecem se quem cuida do servidor ligou a telefonia e a linha do provedor foi cadastrada em Configurações › Trunk SIP. Sem isso, a tela abre, mas fica vazia.",
+          "dica": "Só gerente ou administrador vê este cartão. As ligações só acontecem se quem cuida do servidor ligou a telefonia e a linha do provedor foi cadastrada em Configurações › Linha telefônica (SIP). Sem isso, a tela abre, mas fica vazia.",
           "destaques": [
             {
               "alvo": { "role": "link", "nome": "Ver tudo em CRM", "exato": true },

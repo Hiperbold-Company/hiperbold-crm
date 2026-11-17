@@ -168,7 +168,7 @@ export function mensagemDoEscopo(r: Extract<ResultadoDoEscopo, { ok: false }>): 
       return "A conexão escolhida não existe nesta organização. Recarregue a página e escolha de novo.";
     case "tool_ids":
     case "operator_tool_ids":
-      return `Uma das ferramentas de conexão MCP marcadas não existe mais ou a conexão foi desligada (${r.ausentes.length}). Abra IA › Conexões MCP, atualize as ferramentas e marque de novo.`;
+      return `Uma das ferramentas de conexão MCP marcadas não existe mais ou a conexão foi desligada (${r.ausentes.length}). Abra IA › Ferramentas externas da IA, atualize as ferramentas e marque de novo.`;
     case "provider":
       return MENSAGEM_PROVEDOR_DESLIGADO;
   }

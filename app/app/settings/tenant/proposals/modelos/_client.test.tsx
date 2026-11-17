@@ -151,7 +151,7 @@ describe("ModelosDeProposta", () => {
 
     expect(await screen.findByText(/propostas estão desligadas/i)).toBeInTheDocument();
     expect(screen.queryByText("Carregando…")).toBeNull();
-    expect(screen.getByRole("link", { name: /Configurações › Propostas/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Configurações › Regras das propostas/ })).toBeInTheDocument();
   });
 
   it("um erro que NÃO é not_found segue mostrando o erro via showApiError, não o estado de desligado", async () => {

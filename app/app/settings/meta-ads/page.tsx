@@ -35,7 +35,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { FormularioDeMetaAds } from "./_form";
 
-export const metadata = { title: "Meta Ads" };
+export const metadata = { title: "Conectar Meta Ads" };
 export const dynamic = "force-dynamic";
 
 export default async function MetaAdsSettingsPage() {
@@ -57,7 +57,7 @@ export default async function MetaAdsSettingsPage() {
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Meta Ads")}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("Conectar Meta Ads")}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {t(
             "Conecte um token de acesso para o sistema ler o desempenho das suas campanhas e mostrá-lo em Análise › Meta Ads. É uma conexão só de leitura: nada é criado, pausado ou alterado na sua conta de anúncios.",

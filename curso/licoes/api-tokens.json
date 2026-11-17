@@ -7,7 +7,7 @@
     {
       "id": "conhecendo-a-tela",
       "titulo": "Conhecendo a tela de API Tokens",
-      "objetivo": "Achar a tela de API Tokens e ler a lista de chaves: o nome, o começo da chave, o que cada uma pode fazer, se está ligada e até quando vale.",
+      "objetivo": "Achar a tela de Chaves de integração e ler a lista de chaves: o nome, o começo da chave, o que cada uma pode fazer, se está ligada e até quando vale.",
       "papel": "admin",
       "busca": [
         "api tokens",
@@ -21,7 +21,7 @@
         {
           "id": "p1",
           "titulo": "Onde ficam as chaves",
-          "texto": "Abra \"Configurações\", no rodapé do menu lateral. Na parte \"Dados e acesso\" fica o cartão \"API Tokens\". Clique nele.",
+          "texto": "Abra \"Configurações\", no rodapé do menu lateral. Na parte \"Dados e acesso\" fica o cartão \"Chaves de integração\". Clique nele.",
           "dica": "Só o administrador da empresa vê este cartão. Quem tem outro cargo e tenta abrir a tela recebe um aviso de acesso negado.",
           "rota": "/app/settings",
           "antes": [],
@@ -30,7 +30,7 @@
               "alvo": {
                 "css": "a[href='/app/settings/api-tokens']"
               },
-              "rotulo": "API Tokens",
+              "rotulo": "Chaves de integração",
               "tipo": "seta"
             }
           ],
