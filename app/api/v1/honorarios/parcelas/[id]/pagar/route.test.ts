@@ -15,6 +15,7 @@ import { fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import type { AuthUser } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
+import { moduloLigado } from "@/lib/instalacao/modulos";
 import { comIdempotencia } from "@/lib/api/idempotency";
 import type * as Idempotencia from "@/lib/api/idempotency";
 
@@ -22,6 +23,8 @@ vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
+// Módulo de tabela: o estado (ativo/desligado) vem de `modulos_instalados` (migration 1016).
+vi.mock("@/lib/instalacao/modulos", () => ({ moduloLigado: vi.fn(async () => true) }));
 vi.mock("@/lib/api/idempotency", async (importOriginal) => {
   const real = await importOriginal<typeof Idempotencia>();
   return { ...real, comIdempotencia: vi.fn(real.comIdempotencia) };
@@ -252,5 +255,17 @@ describe("POST /api/v1/honorarios/parcelas/[id]/pagar", () => {
     const res = await POST(postReq({ account_id: ACCOUNT_ID }, CHAVE), params);
 
     expect(res.status).toBe(422);
+  });
+});
+
+describe("módulo desligado em /admin/modulos (migration 1016)", () => {
+  it("pagar responde 404 sem tocar no banco nem no papel", async () => {
+    vi.mocked(moduloLigado).mockResolvedValue(false);
+    const { POST } = await import("./route");
+    const res = await POST(postReq({}, "chave-1"), params);
+    expect(res.status).toBe(404);
+    expect(createClient).not.toHaveBeenCalled();
+    expect(requireRole).not.toHaveBeenCalled();
+    vi.mocked(moduloLigado).mockResolvedValue(true);
   });
 });

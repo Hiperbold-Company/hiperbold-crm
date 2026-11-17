@@ -27943,7 +27943,8 @@ alter table public.extension_installations add constraint extension_installation
 alter table public.organization_extensions add column if not exists deactivated_by_removal_at timestamptz;
 alter table public.extension_operations drop constraint if exists extension_operations_kind_check;
 alter table public.extension_operations add constraint extension_operations_kind_check
-  check (kind in ('catalog_admission','install','update','revert','removal','configure','module_install'));
+  check (kind in ('catalog_admission','install','update','revert','removal','configure','module_install',
+                  'module_disable','module_enable'));
 alter table public.extension_operations drop constraint if exists extension_operations_status_check;
 alter table public.extension_operations add constraint extension_operations_status_check
   check (status in ('preparing','completed','failed','cancelled'));
@@ -33474,7 +33475,7 @@ notify pgrst, 'reload schema';
 -- ── 1. O registro da instância ───────────────────────────────────────────────
 create table if not exists public.modulos_instalados (
   modulo text primary key check (modulo ~ '^[a-z][a-z0-9_]{1,40}$'),
-  estado text not null default 'ativo' check (estado in ('ativo', 'suspenso')),
+  estado text not null default 'ativo' check (estado in ('ativo', 'suspenso', 'desligado')),
   instalado_em timestamptz not null default now(),
   instalado_por uuid references auth.users(id) on delete set null,
   reaplicado_em timestamptz,
@@ -33482,6 +33483,14 @@ create table if not exists public.modulos_instalados (
 );
 comment on table public.modulos_instalados is
   'Módulos opcionais instalados NA INSTÂNCIA (ADR-0002, D3). Sem organization_id: o corte é por instalação. Escrito só por fn_modulo_instalar e fn_reaplicar_modulos_instalados.';
+
+-- 1016: `desligado` (desligar/religar sem perder dados). A CHECK inline só vale para banco novo; o
+-- banco que já tem a tabela recebe a lista completa por este drop + add — o ÚNICO bloco desta
+-- constraint (tests/unit/baseline-constraint-reconstruida.test.ts). A lista só cresce, então nenhuma
+-- linha existente a viola.
+alter table public.modulos_instalados drop constraint if exists modulos_instalados_estado_check;
+alter table public.modulos_instalados add constraint modulos_instalados_estado_check
+  check (estado in ('ativo', 'suspenso', 'desligado'));
 
 alter table public.modulos_instalados enable row level security;
 revoke all on public.modulos_instalados from anon, authenticated;
@@ -33576,8 +33585,14 @@ begin
         raise exception 'a provisionadora de % não existe nesta versão', r.modulo;
       end if;
       execute format('select public.%I()', 'fn_' || r.modulo || '_provisionar');
+      -- 1016: um módulo DESLIGADO por quem administra continua desligado depois da atualização. A
+      -- provisionadora roda mesmo assim, para as tabelas acompanharem a versão e religar ser só
+      -- trocar o estado. Este corpo é editado AQUI, e não redefinido no fim do apêndice, porque o
+      -- rodapé do baseline chama a função ANTES do fim: uma redefinição posterior chegaria tarde e
+      -- o update.sh religaria o módulo desligado.
       update public.modulos_instalados
-        set estado = 'ativo', motivo_suspensao = null, reaplicado_em = now()
+        set estado = case when estado = 'desligado' then 'desligado' else 'ativo' end,
+            motivo_suspensao = null, reaplicado_em = now()
         where modulo = r.modulo;
     exception
       -- Disputa de trava com o app no ar NÃO é defeito do módulo: relançar desfaz esta
@@ -108738,6 +108753,86 @@ alter table public.platform_meta_app
 
 comment on column public.platform_meta_app.whatsapp_config_id is
   '1014: id da configuração do Facebook Login para Empresas do tipo WhatsApp Embedded Signup (botão Conectar com a Meta). Não é segredo.';
+
+notify pgrst, 'reload schema';
+
+-- ---- desligar e religar um módulo de tabela sem perder dados (migration 1016, fork Hiperbold) ----
+-- Espelho idempotente da 1016; racional completo no arquivo da migration. As duas CHECKs (estado de
+-- `modulos_instalados` e kind de `extension_operations`) e o corpo de `fn_reaplicar_modulos_instalados`
+-- foram editados nos blocos únicos deles, acima; aqui fica só a função nova.
+
+-- ── 3. a porta de desligar e religar ─────────────────────────────────────────
+create or replace function public.fn_modulo_definir_estado(
+  p_actor uuid, p_operation uuid, p_modulo text, p_ligar boolean, p_estado_visto text)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_kind text := case when p_ligar then 'module_enable' else 'module_disable' end;
+  v_request jsonb;
+  v_op public.extension_operations;
+  v_atual text;
+begin
+  perform public.fn_extensions_assert_actor(p_actor);
+  if p_operation is null or p_ligar is null or p_modulo is null
+     or p_modulo !~ '^[a-z][a-z0-9_]{1,40}$'
+     or p_estado_visto is null or p_estado_visto not in ('ativo', 'suspenso', 'desligado') then
+    raise exception using errcode = 'P0001', message = 'extension_invalid_input';
+  end if;
+  v_request := jsonb_build_object('kind', v_kind, 'actor', p_actor, 'modulo', p_modulo,
+                                  'estado_visto', p_estado_visto);
+
+  -- A mesma trava do instalar e das extensões; o ator é conferido de novo depois da espera.
+  perform pg_advisory_xact_lock(255, 1);
+  perform public.fn_extensions_assert_actor(p_actor);
+
+  select * into v_op from public.extension_operations where id = p_operation;
+  if found then
+    if v_op.request_fingerprint <> public.fn_extensions_fingerprint(v_request) then
+      raise exception using errcode = 'P0001', message = 'extension_idempotency_conflict';
+    end if;
+    return to_jsonb(v_op) || jsonb_build_object('applied_now', false);
+  end if;
+
+  if public.fn_extensions_core_update_in_progress() then
+    raise exception using errcode = 'P0001', message = 'extension_core_update_in_progress';
+  end if;
+
+  select estado into v_atual from public.modulos_instalados where modulo = p_modulo for update;
+  if not found then
+    raise exception using errcode = 'P0001', message = 'extension_module_not_installed';
+  end if;
+
+  -- Concorrência otimista: a troca vale só sobre o estado que a tela mostrou. E cada direção tem um
+  -- único ponto de partida: desligar sai de `ativo`, religar sai de `desligado`. Um `suspenso` não se
+  -- religa por aqui (precisa da atualização que o conserta), nem se desliga.
+  if v_atual <> p_estado_visto
+     or (p_ligar and v_atual <> 'desligado')
+     or (not p_ligar and v_atual <> 'ativo') then
+    raise exception using errcode = 'P0001', message = 'extension_module_state_changed';
+  end if;
+
+  -- Só o estado muda. Nenhuma tabela do módulo é tocada, nem a provisionadora roda.
+  update public.modulos_instalados
+     set estado = case when p_ligar then 'ativo' else 'desligado' end
+   where modulo = p_modulo;
+
+  insert into public.extension_operations
+      (id, kind, status, actor_id, name, request_fingerprint, request, result)
+    values
+      (p_operation, v_kind, 'completed', p_actor, p_modulo,
+       public.fn_extensions_fingerprint(v_request), v_request,
+       jsonb_build_object('modulo', p_modulo, 'de', v_atual,
+                          'para', case when p_ligar then 'ativo' else 'desligado' end))
+    returning * into v_op;
+
+  return to_jsonb(v_op) || jsonb_build_object('applied_now', true);
+end $$;
+
+revoke execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) from public, anon;
+revoke execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) from authenticated;
+grant execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) to service_role;
+
+comment on table public.modulos_instalados is
+  'Módulos opcionais instalados NA INSTÂNCIA (ADR-0002, D3). Sem organization_id: o corte é por instalação. Escrito só por fn_modulo_instalar, fn_modulo_definir_estado (1016: desligar/religar, sem apagar dados) e fn_reaplicar_modulos_instalados.';
 
 notify pgrst, 'reload schema';
 
