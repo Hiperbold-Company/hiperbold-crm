@@ -365,7 +365,7 @@ export function ModelPicker({
         </Popover>
       )}
       {salvoForaDaLista ? (
-        <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="modelo-so-com-chave-propria">
+        <p className="text-xs text-warning-fg" data-testid="modelo-so-com-chave-propria">
           {t("Este modelo só funciona com a sua própria chave. Sem ela, o agente usa o Luna.")}
         </p>
       ) : null}

@@ -86,13 +86,13 @@ export function QuadroClient({
         o primeiro cliente real.
       */}
       {sugestao.origem === "ia" ? (
-        <p className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
+        <p className="rounded-md border border-success/30 bg-success-bg p-3 text-sm">
           {t(
             "Seu funcionário montou este quadro olhando o que você me contou sobre o negócio. Ajuste o que quiser.",
           )}
         </p>
       ) : (
-        <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+        <div className="space-y-2 rounded-md border border-warning/30 bg-warning-bg p-3 text-sm">
           <p>
             {t("Não consegui pedir uma sugestão para o seu funcionário agora")}
             {sugestao.porque ? <> — {t(sugestao.porque)}</> : null}. {t("Comecei por um quadro pronto de")}{" "}
@@ -243,7 +243,7 @@ export function QuadroClient({
 
         <div className="flex flex-wrap items-center gap-3">
           {semNome ? (
-            <span className="text-xs text-amber-700 dark:text-amber-500">
+            <span className="text-xs text-warning-fg">
               {t("Dê um nome à coluna em branco.")}
             </span>
           ) : null}

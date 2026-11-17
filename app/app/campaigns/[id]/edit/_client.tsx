@@ -317,7 +317,7 @@ export function EditarCampanha({ id }: { id: string }) {
             </p>
           )}
           {previa.data?.truncado && (
-            <p className="text-sm text-amber-600">
+            <p className="text-sm text-warning-fg">
               {t(
                 "O recorte bateu o teto de 20.000 negócios desta prévia — a lista pode estar incompleta. Refine o filtro para ver o todo.",
               )}

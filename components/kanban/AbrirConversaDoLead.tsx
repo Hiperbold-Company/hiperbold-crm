@@ -111,7 +111,7 @@ export function AbrirConversaDoLead({ contactId, phone, leadId, variante = "card
                   ? t("Abrir conversa no Chat do CRM")
                   : t("Abrir conversa")}
             </span>
-            {!podeAbrir && <span className="block text-[11px] text-text-muted">{semTelefone}</span>}
+            {!podeAbrir && <span className="block text-2xs text-text-muted">{semTelefone}</span>}
           </span>
           {podeAbrir && !abrindo && (
             <ArrowRight
@@ -145,7 +145,7 @@ export function AbrirConversaDoLead({ contactId, phone, leadId, variante = "card
       aria-busy={abrindo}
       title={podeAbrir ? t("Abrir conversa no Chat do CRM") : semTelefone}
       className={cn(
-        "group/conversa mt-1 flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[11px]",
+        "group/conversa mt-1 flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-2xs",
         "transition-colors",
         podeAbrir
           ? "text-text-muted hover:bg-muted hover:text-foreground"

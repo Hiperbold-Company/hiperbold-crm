@@ -111,7 +111,7 @@ export function FormularioDeCadastro({ modoInicial }: { modoInicial: ModoDeCadas
         )}
 
         {modo === "so_convite" && (
-          <p className="rounded-md border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm dark:border-amber-500/30 dark:bg-amber-950/20">
+          <p className="rounded-md border border-warning/30 bg-warning-bg px-4 py-3 text-sm">
             {t(
               "Com isto ligado, a única porta de entrada é o convite — inclusive para você, se um dia precisar de uma conta nova. Convide pela tela de Equipe antes de precisar.",
             )}

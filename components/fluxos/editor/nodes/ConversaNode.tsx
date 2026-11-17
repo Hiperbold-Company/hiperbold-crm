@@ -44,7 +44,7 @@ function ConexaoDoCard({ id, conexao }: { id: string; conexao: string }) {
   const c = (canais.data ?? []).find((x) => x.id === conexao);
   const nome = c ? channelLabel(c, t) : canais.isLoading ? "…" : t("Conexão não encontrada");
   return (
-    <p className="truncate text-[11px] text-text-muted" data-testid={`node-conexao-${id}`} title={nome}>
+    <p className="truncate text-2xs text-text-muted" data-testid={`node-conexao-${id}`} title={nome}>
       {t("Pela conexão")}: {nome}
     </p>
   );

@@ -163,7 +163,7 @@ export function NewProposalClient({
             {initialLeads.length === 0 ? (
               <div
                 role="alert"
-                className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300"
+                className="rounded-lg border border-warning/30 bg-warning-bg p-4 text-sm text-warning-fg"
               >
                 <p className="font-medium">
                   {t("Nenhum negócio elegível encontrado")}

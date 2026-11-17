@@ -121,7 +121,7 @@ export function UsageTable({ tenants, range }: UsageTableProps) {
                 <TableCell>
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-medium">{row.tenant_name}</span>
-                    <Badge variant="secondary" className="w-fit px-1.5 py-0 text-[10px]">
+                    <Badge variant="secondary" className="w-fit px-1.5 py-0 text-2xs">
                       {row.tenant_slug}
                     </Badge>
                   </div>

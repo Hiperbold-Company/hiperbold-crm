@@ -412,7 +412,7 @@ function LembreteDoCompromisso({
           {t("Adicionar lembrete")}
         </Button>
       ) : null}
-      <p className="text-[11px] text-text-muted">
+      <p className="text-2xs text-text-muted">
         {t(
           "Deixe a mensagem em branco para o texto padrão. Variáveis: {{nome}}, {{titulo}}, {{dia}}, {{hora}}, {{endereco}}.",
         )}
@@ -687,7 +687,7 @@ export function TiposDeAgendamentoClient({
                   rótulo do sistema — traduzir trocaria "Retorno" por
                   "Seguimiento" (chave existente, de outro contexto). */}
               <span className="text-sm font-medium text-text">{tipo.name}</span>
-              <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-text-muted">
+              <span className="rounded-full border border-border px-2 py-0.5 text-2xs text-text-muted">
                 {t(rotuloDe(CATEGORIAS, tipo.category))}
               </span>
               <span className="text-xs tabular-nums text-text-muted">{tipo.duration_minutes} min</span>
@@ -931,7 +931,7 @@ export function TiposDeAgendamentoClient({
                       data-testid={`editar-preco-${tipo.id}`}
                       className="rounded-md border border-border bg-surface-elevated p-2 text-sm text-text"
                     />
-                    <span className="text-[11px] text-text-muted">
+                    <span className="text-2xs text-text-muted">
                       {t("Opcional. Vira o valor sugerido na comanda, e pode ser mudado lá.")}
                     </span>
                   </label>

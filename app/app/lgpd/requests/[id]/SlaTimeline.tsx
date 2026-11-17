@@ -94,10 +94,10 @@ export function SlaTimeline({ received_at, due_at, request_type }: SlaTimelinePr
 
   const progressColor =
     progress >= 1
-      ? "bg-red-500"
+      ? "bg-error"
       : progress >= 0.75
-        ? "bg-yellow-500"
-        : "bg-emerald-500";
+        ? "bg-warning"
+        : "bg-success";
 
   return (
     <div className="space-y-4">
@@ -130,16 +130,16 @@ export function SlaTimeline({ received_at, due_at, request_type }: SlaTimelinePr
         {milestones.map((m, idx) => {
           const dotColor =
             m.status === "completed"
-              ? "bg-emerald-500 border-emerald-500"
+              ? "bg-success border-success/30"
               : m.status === "current"
-                ? "bg-yellow-500 border-yellow-500 ring-2 ring-yellow-200 dark:ring-yellow-900"
+                ? "bg-warning border-warning/30 ring-2 ring-warning"
                 : "bg-muted border-border";
 
           const labelColor =
             m.status === "completed"
-              ? "text-emerald-700 dark:text-emerald-400"
+              ? "text-success-fg"
               : m.status === "current"
-                ? "text-yellow-700 dark:text-yellow-400 font-medium"
+                ? "text-warning-fg font-medium"
                 : "text-muted-foreground";
 
           const isLast = idx === milestones.length - 1;

@@ -104,11 +104,11 @@ export function PassagemCard({ cartao, contatoId, onAssumir, assumindo }: Props)
         }
       >
         <div className="flex items-start justify-between gap-2">
-          <h3 id={tituloId} className="flex items-center gap-1.5 text-[13px] font-semibold">
+          <h3 id={tituloId} className="flex items-center gap-1.5 text-sm font-semibold">
             <Robot size={14} weight="fill" aria-hidden />
             {t(cartao.titulo)}
           </h3>
-          <span className="shrink-0 text-[11px] text-muted-foreground">{hora}</span>
+          <span className="shrink-0 text-2xs text-muted-foreground">{hora}</span>
         </div>
 
         <Corpo cartao={cartao} tituloId={tituloId} />
@@ -221,7 +221,7 @@ function Corpo({ cartao, tituloId }: { cartao: CartaoDaPassagem; tituloId: strin
 function Secao({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
     <div className="mt-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
         {rotulo}
       </p>
       <div className="mt-0.5">{children}</div>
@@ -249,7 +249,7 @@ function Rodape({
 
   if (cartao.estado === "reconhecida") {
     return (
-      <p className="mt-2 text-[11px] text-muted-foreground">
+      <p className="mt-2 text-2xs text-muted-foreground">
         {cartao.assumidaPor === null
           ? t("Alguém da equipe já assumiu este atendimento.")
           : `${t("Assumida por")} ${cartao.assumidaPor}`}
@@ -259,7 +259,7 @@ function Rodape({
 
   if (cartao.estado === "devolvida") {
     return (
-      <p className="mt-2 text-[11px] text-muted-foreground">
+      <p className="mt-2 text-2xs text-muted-foreground">
         {t("Atendimento devolvido ao automático — ninguém assumiu.")}
       </p>
     );
@@ -287,7 +287,7 @@ function Rodape({
               </Link>
             </Button>
           ) : (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               {t("Confirme na ficha do contato se ele pediu para não receber mais mensagens.")}
             </p>
           )}
@@ -298,7 +298,7 @@ function Rodape({
       // aqui seria dois botões para um ato; ficar mudo deixaria o cartão mais
       // caro da entrega sem nada a dizer para metade dos leitores.
       return (
-        <p className="mt-2 text-[11px] text-muted-foreground">
+        <p className="mt-2 text-2xs text-muted-foreground">
           {cartao.acao.donoNome === null
             ? t("Outra pessoa está atendendo. Se precisar assumir, use Transferir no topo da conversa.")
             : `${cartao.acao.donoNome} ${t("está atendendo. Se precisar assumir, use Transferir no topo da conversa.")}`}

@@ -26,7 +26,7 @@ export function AdminSidePanel({ data }: Props) {
     <aside className="flex h-full w-[320px] shrink-0 flex-col gap-6 overflow-y-auto border-l border-border bg-muted/20 px-4 py-4">
       {/* ── Contact info ── */}
       <section>
-        <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <h3 className="mb-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           Contato
         </h3>
         {contact ? (
@@ -48,7 +48,7 @@ export function AdminSidePanel({ data }: Props) {
               <div className="text-xs text-muted-foreground">{maskEmail(contact.email)}</div>
             )}
             {contact.is_blocked && (
-              <span className="inline-block rounded-md bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+              <span className="inline-block rounded-md bg-destructive/10 px-1.5 py-0.5 text-2xs font-medium text-destructive">
                 Bloqueado
               </span>
             )}
@@ -60,7 +60,7 @@ export function AdminSidePanel({ data }: Props) {
 
       {/* ── Tenant info ── */}
       <section>
-        <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <h3 className="mb-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           Tenant
         </h3>
         {organization ? (

@@ -48,7 +48,7 @@ export function LegacyRecovery({
   }
   return (
     <section
-      className="space-y-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-4"
+      className="space-y-3 rounded-md border border-warning/30 bg-warning-bg p-4"
       aria-label={t("Recuperar agente legado")}
     >
       <h2 className="font-medium">

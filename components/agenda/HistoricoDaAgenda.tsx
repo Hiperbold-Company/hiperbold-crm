@@ -180,7 +180,7 @@ export function HistoricoDaAgenda({
               <span
                 data-testid={`contador-${a.id}`}
                 className={cn(
-                  "rounded-full px-1.5 text-[10px] tabular-nums",
+                  "rounded-full px-1.5 text-2xs tabular-nums",
                   aba === a.id ? "bg-accent-foreground/20" : "bg-surface-elevated text-text-subtle",
                 )}
               >
@@ -220,7 +220,7 @@ export function HistoricoDaAgenda({
                     <div className="text-sm font-medium tabular-nums first-letter:uppercase">
                       {format(dataDeParede(comeca, fuso), t("d 'de' MMM"), { locale: localeDaData })}
                     </div>
-                    <div className="text-[11px] text-text-muted tabular-nums">
+                    <div className="text-2xs text-text-muted tabular-nums">
                       {format(dataDeParede(comeca, fuso), "HH:mm")}
                       {" – "}
                       {format(dataDeParede(new Date(a.termina), fuso), "HH:mm")}
@@ -237,7 +237,7 @@ export function HistoricoDaAgenda({
                     >
                       {a.quemSeraAtendido ?? a.titulo}
                     </Link>
-                    <div className="truncate text-[11px] text-text-muted">
+                    <div className="truncate text-2xs text-text-muted">
                       {a.tipo || t("Agendamento")}
                       {pessoa ? ` · ${t("com")} ${pessoa.nome}` : ""}
                     </div>

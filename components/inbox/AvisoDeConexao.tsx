@@ -71,7 +71,7 @@ export function AvisoDeConexao({
       <p
         role="status"
         data-testid="aviso-de-conexao-bloqueio"
-        className="border-t border-border bg-amber-50/60 px-4 py-1.5 text-xs text-foreground dark:bg-amber-900/10"
+        className="border-t border-border bg-warning-bg px-4 py-1.5 text-xs text-foreground"
       >
         {bloqueio}
       </p>

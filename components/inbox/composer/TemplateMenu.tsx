@@ -83,7 +83,7 @@ export function TemplateMenu({ open, query, templates, grupos = [], onPick, onCl
                 {grupo && (
                   <span
                     data-grupo-da-resposta={grupo.id}
-                    className="shrink-0 text-[11px] text-muted-foreground"
+                    className="shrink-0 text-2xs text-muted-foreground"
                   >
                     {grupo.name}
                   </span>

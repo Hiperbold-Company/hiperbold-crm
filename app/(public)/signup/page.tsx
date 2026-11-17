@@ -128,7 +128,7 @@ export default async function SignupPage({
       {conviteExpirado && (
         <p
           role="alert"
-          className="rounded-md border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm dark:border-amber-500/30 dark:bg-amber-950/20"
+          className="rounded-md border border-warning/30 bg-warning-bg px-4 py-3 text-sm"
         >
           {t(
             "Esse convite expirou ou não é mais válido. Peça um novo a quem te convidou — criar uma conta agora abriria uma empresa nova, e não é isso que você quer.",

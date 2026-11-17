@@ -200,7 +200,7 @@ export function BudgetCard({ initialData, isAdmin }: Props) {
       </div>
 
       {chave && (
-        <p className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-200">
+        <p className="mt-3 rounded-md border border-warning/30 bg-warning-bg p-2 text-xs text-warning-fg">
           {chave}
         </p>
       )}
@@ -208,7 +208,7 @@ export function BudgetCard({ initialData, isAdmin }: Props) {
       {status.gasto_incompleto && (
         <p
           data-testid="aviso-medicao-incompleta"
-          className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-200"
+          className="mt-3 rounded-md border border-warning/30 bg-warning-bg p-2 text-xs text-warning-fg"
         >
           {t(AVISO_DE_MEDICAO)}
         </p>
@@ -221,7 +221,7 @@ export function BudgetCard({ initialData, isAdmin }: Props) {
               status.pct >= 100
                 ? "bg-destructive"
                 : status.pct >= status.alarm_threshold_pct
-                  ? "bg-amber-500"
+                  ? "bg-warning"
                   : "bg-primary"
             }`}
             style={{ width: `${pct}%` }}
@@ -302,7 +302,7 @@ function OpcaoDeModo({
         <span className="block text-sm font-medium">{titulo}</span>
         <span className="block text-xs text-muted-foreground">{corpo}</span>
         {disabled && motivoBloqueado && (
-          <span className="block text-xs text-amber-700 dark:text-amber-300">
+          <span className="block text-xs text-warning-fg">
             {motivoBloqueado}
           </span>
         )}
@@ -481,7 +481,7 @@ function EditBudgetDialog({ status }: { status: BudgetStatus }) {
           )}
 
           {armando && (
-            <div className="space-y-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+            <div className="space-y-1.5 rounded-lg border border-warning/30 bg-warning-bg p-3">
               <p className="text-xs">
                 {t("A parada começa a valer")} <strong>72 {t("horas")}</strong> {t("depois de salvar. É o tempo de você ver o aviso chegar antes que alguma conversa pare.")}
               </p>

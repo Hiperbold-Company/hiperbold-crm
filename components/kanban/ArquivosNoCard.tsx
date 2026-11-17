@@ -71,14 +71,14 @@ export function ArquivosNoCard({ lead }: Props) {
                     title={arquivo.nome}
                     aria-label={`${t("Abrir arquivo")}: ${arquivo.nome}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="max-w-[10rem] truncate rounded-md border border-border px-1.5 py-0.5 text-[11px] leading-4 text-text-muted hover:border-accent hover:text-accent"
+                    className="max-w-[10rem] truncate rounded-md border border-border px-1.5 py-0.5 text-2xs leading-4 text-text-muted hover:border-accent hover:text-accent"
                   >
                     {arquivo.nome}
                   </a>
                 ))}
                 {restantes > 0 && (
                   <span
-                    className="text-[11px] leading-4"
+                    className="text-2xs leading-4"
                     title={`${bloco.total} ${t("arquivos")}`}
                   >
                     +{restantes}

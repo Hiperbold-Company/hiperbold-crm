@@ -980,7 +980,7 @@ export function ExtensionsManager({
                       <p className="truncate text-sm font-medium">
                         {tituloDoPedido(receipt.kind, t)} · {receipt.label}
                       </p>
-                      <p className="font-mono text-[11px] text-muted-foreground">{receipt.id}</p>
+                      <p className="font-mono text-2xs text-muted-foreground">{receipt.id}</p>
                       {receipt.id === uncertainReceiptId ? (
                         <p role="status" className="mt-1 text-xs text-warning-fg">
                           {t(

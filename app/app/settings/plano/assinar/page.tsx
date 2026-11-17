@@ -81,7 +81,7 @@ export default async function AssinarPage() {
     return (
       <div className="flex h-full flex-col gap-4 p-6">
         <h1 className="text-2xl font-semibold tracking-tight">{t("Assinar ou comprar")}</h1>
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
+        <div className="rounded-md border border-warning/30 bg-warning-bg p-4 text-sm text-warning-fg">
           {t("A compra pela tela ainda não está disponível. Fale com o suporte.")}
         </div>
       </div>

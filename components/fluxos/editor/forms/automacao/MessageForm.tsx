@@ -326,7 +326,7 @@ export function MessageForm({
                     value={item.label}
                     onChange={(e) => trocarItem(i, { label: e.target.value })}
                   />
-                  <span className="w-10 shrink-0 text-right text-[11px] text-text-muted">
+                  <span className="w-10 shrink-0 text-right text-2xs text-text-muted">
                     {item.label.length}/{tetoDoRotulo}
                   </span>
                   <Button

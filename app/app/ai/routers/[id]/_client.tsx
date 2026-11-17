@@ -1011,7 +1011,7 @@ function TestPanel({
               )}
             </p>
             {abaixoDoMinimo && confianca !== null && (
-              <p className="text-xs text-amber-600">
+              <p className="text-xs text-warning-fg">
                 {t("Confiança")} {(confianca * 100).toFixed(0)}% — {t("abaixo do mínimo de")}{" "}
                 {(result.min_confidence * 100).toFixed(0)}%,{" "}
                 {t("cairia no atendimento padrão em produção.")}

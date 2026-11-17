@@ -353,13 +353,13 @@ export default async function ConversoesPage({
             </div>
           )}
           {okDoGoogle && (
-            <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm">
+            <div className="rounded-md border border-success/30 bg-success-bg p-4 text-sm">
               {t("Google Ads autorizado. Agora informe a conta e a ação de conversão abaixo.")}
             </div>
           )}
 
           {estado.conectada && !estado.habilitada && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+            <div className="rounded-md border border-warning/30 bg-warning-bg p-4 text-sm">
               {t(
                 "O envio está pausado. As vendas continuam sendo registradas aqui, mas não vão para a plataforma enquanto isto estiver desligado.",
               )}
@@ -367,7 +367,7 @@ export default async function ConversoesPage({
           )}
 
           {estado.testEventCode && (
-            <div className="rounded-md border border-sky-500/40 bg-sky-500/10 p-4 text-sm">
+            <div className="rounded-md border border-info/30 bg-info-bg p-4 text-sm">
               {t(
                 "Modo de teste ligado: as vendas vão marcadas como teste e não contam para a otimização. Apague o código de teste quando terminar de conferir.",
               )}
@@ -601,7 +601,7 @@ export default async function ConversoesPage({
                 numerosConectados={numerosConectados}
               />
             ) : (
-              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+              <div className="rounded-md border border-warning/30 bg-warning-bg p-4 text-sm">
                 {t(
                   "Esta organização ainda não tem um apelido de URL, e o endereço de captura precisa de um. Fale com quem administra o servidor.",
                 )}

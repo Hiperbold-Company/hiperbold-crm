@@ -67,7 +67,7 @@ export function JanelaSelo({
     return (
       <Badge
         variant="outline"
-        className="h-4 border-amber-400 px-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:text-amber-300"
+        className="h-4 border-warning/30 px-1.5 text-2xs text-warning-fg"
         title={usaModelos ? t(
           "Passaram 24h desde a última mensagem do cliente. Só um modelo aprovado sai daqui — texto livre é recusado pela plataforma.",
         ) : t("Aguarde uma nova mensagem do cliente para reabrir o atendimento nesta rede.")}
@@ -82,8 +82,8 @@ export function JanelaSelo({
     <Badge
       variant="outline"
       className={cn(
-        "h-4 px-1.5 text-[10px]",
-        urgente && "border-amber-400 text-amber-700 dark:border-amber-700 dark:text-amber-300",
+        "h-4 px-1.5 text-2xs",
+        urgente && "border-warning/30 text-warning-fg",
       )}
       title={usaModelos ? t("Tempo restante para escrever texto livre. Depois disso, só modelo aprovado.") : t("Tempo restante para responder. Uma nova mensagem do cliente reabre a janela.")}
     >

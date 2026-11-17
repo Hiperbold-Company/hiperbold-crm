@@ -230,9 +230,9 @@ function SeletorDeVinculo({
           onChange={(e) => setBusca(e.target.value)}
         />
       </div>
-      {isLoading && <p className="text-[11px] text-text-muted">{t("Carregando…")}</p>}
+      {isLoading && <p className="text-2xs text-text-muted">{t("Carregando…")}</p>}
       {!isLoading && contatos.length === 0 && (
-        <p className="text-[11px] text-text-muted">{t("Nenhum contato encontrado.")}</p>
+        <p className="text-2xs text-text-muted">{t("Nenhum contato encontrado.")}</p>
       )}
       <ul className="space-y-1">
         {contatos.map((contato) => {
@@ -244,7 +244,7 @@ function SeletorDeVinculo({
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="ml-auto px-2 text-[11px] lg:h-6"
+                className="ml-auto px-2 text-2xs lg:h-6"
                 disabled={editar.isPending}
                 // Numa lista de pessoas, "Vincular" sozinho não diz a quem.
                 aria-label={`${t("Vincular")} ${nome}`.trim()}
@@ -264,7 +264,7 @@ function SeletorDeVinculo({
 /** O motivo da falha, no próprio bloco. `role="alert"` para quem não vê o toast. */
 function MensagemDeErro({ texto }: { texto: string }) {
   return (
-    <p role="alert" data-testid="erro-ao-vincular" className="text-[11px] text-destructive">
+    <p role="alert" data-testid="erro-ao-vincular" className="text-2xs text-destructive">
       {texto}
     </p>
   );
@@ -362,7 +362,7 @@ function RodapeDoVinculo({
         type="button"
         size="sm"
         variant="ghost"
-        className="px-2 text-[11px] text-text-muted hover:text-destructive lg:h-6"
+        className="px-2 text-2xs text-text-muted hover:text-destructive lg:h-6"
         disabled={editar.isPending}
         onClick={desvincular}
       >
@@ -421,7 +421,7 @@ function PessoasRelacionadas({ leadId }: { leadId: string | null }) {
   const pessoas = data?.data ?? [];
   return (
     <div className="mt-3 space-y-1" data-testid="pessoas-relacionadas">
-      <p className="text-[11px] font-medium tracking-wide text-text-muted uppercase">
+      <p className="text-2xs font-medium tracking-wide text-text-muted uppercase">
         {t("Pessoas relacionadas")}
       </p>
       {pessoas.length === 0 ? (
@@ -565,7 +565,7 @@ function FormularioDoTelefone({ leadId, onFechar }: { leadId: string; onFechar: 
           type="button"
           size="sm"
           variant="ghost"
-          className="h-7 px-2 text-[11px] text-text-muted"
+          className="h-7 px-2 text-2xs text-text-muted"
           onClick={onFechar}
         >
           {t("Cancelar")}
@@ -594,7 +594,7 @@ function RemoverParticipante({ leadId, pessoa }: { leadId: string; pessoa: Conta
       type="button"
       size="sm"
       variant="ghost"
-      className="ml-auto h-6 px-2 text-[11px] text-text-muted hover:text-destructive"
+      className="ml-auto h-6 px-2 text-2xs text-text-muted hover:text-destructive"
       disabled={remover.isPending}
       aria-label={`${t("Remover")} ${alvo}`.trim()}
       onClick={() =>
@@ -694,9 +694,9 @@ function FormularioDeParticipante({ leadId, onFechar }: { leadId: string; onFech
           onChange={(e) => setBusca(e.target.value)}
         />
       </div>
-      {isLoading && <p className="text-[11px] text-text-muted">{t("Carregando…")}</p>}
+      {isLoading && <p className="text-2xs text-text-muted">{t("Carregando…")}</p>}
       {!isLoading && contatos.length === 0 && (
-        <p className="text-[11px] text-text-muted">{t("Nenhum contato encontrado.")}</p>
+        <p className="text-2xs text-text-muted">{t("Nenhum contato encontrado.")}</p>
       )}
       <ul className="space-y-1">
         {contatos.map((contato) => (
@@ -706,7 +706,7 @@ function FormularioDeParticipante({ leadId, onFechar }: { leadId: string; onFech
               type="button"
               size="sm"
               variant="ghost"
-              className="ml-auto h-6 px-2 text-[11px]"
+              className="ml-auto h-6 px-2 text-2xs"
               disabled={adicionar.isPending}
               onClick={() => incluir(contato.id)}
             >
@@ -719,7 +719,7 @@ function FormularioDeParticipante({ leadId, onFechar }: { leadId: string; onFech
         type="button"
         size="sm"
         variant="ghost"
-        className="h-6 px-2 text-[11px] text-text-muted"
+        className="h-6 px-2 text-2xs text-text-muted"
         onClick={onFechar}
       >
         {t("Cancelar")}
@@ -868,7 +868,7 @@ function FormularioDeLinks({ contato, pipelineId }: { contato: Contact; pipeline
                   </a>
                 )}
               </div>
-              {erro && <p className="text-[11px] text-destructive">{t("Endereço inválido.")}</p>}
+              {erro && <p className="text-2xs text-destructive">{t("Endereço inválido.")}</p>}
             </div>
           );
         })}

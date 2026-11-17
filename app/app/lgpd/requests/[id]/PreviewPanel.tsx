@@ -74,7 +74,7 @@ export function PreviewPanel({ requestId }: PreviewPanelProps) {
           )}
 
           {error && (
-            <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+            <div className="flex items-center gap-2 rounded-md border border-error/30 bg-error-bg px-3 py-2 text-sm text-error-fg">
               <Warning size={16} aria-hidden />
               {t("Falha ao carregar prévia.")}
             </div>
@@ -83,7 +83,7 @@ export function PreviewPanel({ requestId }: PreviewPanelProps) {
           {preview && (
             <div className="space-y-4">
               {preview.no_local_footprint && (
-                <div className="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300">
+                <div className="rounded-md border border-warning/30 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
                   {t("Nenhum dado local encontrado para este titular.")}
                 </div>
               )}

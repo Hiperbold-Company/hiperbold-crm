@@ -209,7 +209,7 @@ export function FileUploadCustomField({
           {label}
           {required && <span className="ml-1 text-error-fg">*</span>}
         </Label>
-        <span className="text-[11px] text-text-muted">
+        <span className="text-2xs text-text-muted">
           {files.length} {files.length === 1 ? t("arquivo") : t("arquivos")}
         </span>
       </div>
@@ -231,14 +231,14 @@ export function FileUploadCustomField({
               >
                 <div className="flex items-center gap-2 min-w-0">
                   {isImage ? (
-                    <ImageIcon className="h-4 w-4 shrink-0 text-sky-500" />
+                    <ImageIcon className="h-4 w-4 shrink-0 text-text-muted" />
                   ) : (
-                    <FileText className="h-4 w-4 shrink-0 text-amber-500" />
+                    <FileText className="h-4 w-4 shrink-0 text-text-muted" />
                   )}
                   <span className="truncate font-medium text-text" title={file.name}>
                     {file.name}
                   </span>
-                  <span className="shrink-0 text-[10px] text-text-muted">
+                  <span className="shrink-0 text-2xs text-text-muted">
                     ({formatBytes(file.size)})
                   </span>
                 </div>
@@ -323,7 +323,7 @@ export function FileUploadCustomField({
                   <UploadSimple className="h-3.5 w-3.5 text-text-muted" />
                   <span>{t("Arraste arquivos aqui ou clique para selecionar")}</span>
                 </div>
-                <span className="text-[10px] text-text-muted">
+                <span className="text-2xs text-text-muted">
                   {t("PDF, PNG, JPG ou WebP (até 50 MB)")}
                 </span>
               </div>
@@ -341,9 +341,9 @@ export function FileUploadCustomField({
           <DialogHeader className="flex flex-row items-center justify-between pb-2 border-b border-border/80">
             <div className="flex items-center gap-2 min-w-0 pr-4">
               {previewAttachment?.type?.startsWith("image/") ? (
-                <ImageIcon className="h-4 w-4 shrink-0 text-sky-500" />
+                <ImageIcon className="h-4 w-4 shrink-0 text-text-muted" />
               ) : (
-                <FileText className="h-4 w-4 shrink-0 text-amber-500" />
+                <FileText className="h-4 w-4 shrink-0 text-text-muted" />
               )}
               <DialogTitle className="text-sm font-semibold truncate text-text">
                 {previewAttachment?.name}

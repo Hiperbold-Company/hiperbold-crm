@@ -259,7 +259,7 @@ export function LeadDossier({
 
         {/* As duas datas do negócio, perto da etapa: quando nasceu e quando
             entrou na etapa de agora (se faltar o carimbo, vale a criação). */}
-        <p className="pt-2 text-[11px] text-text-muted" data-datas-do-negocio>
+        <p className="pt-2 text-2xs text-text-muted" data-datas-do-negocio>
           {t("Criado em")} {formataDataNoFuso(lead.created_at, fuso, tagDoIdioma, true)}
           {" · "}
           {t("Última movimentação")}{" "}
@@ -275,7 +275,7 @@ export function LeadDossier({
             Sem esta linha, quem visse o número mudando no cabeçalho e nunca na
             timeline concluiria que a timeline está incompleta. */}
         {score?.at && (
-          <p className="pt-2 text-[11px] text-text-muted">
+          <p className="pt-2 text-2xs text-text-muted">
             {t("Probabilidade recalculada automaticamente")} ·{" "}
             {new Date(score.at).toLocaleString(tagDoIdioma)}
           </p>

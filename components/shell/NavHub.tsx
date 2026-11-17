@@ -205,7 +205,7 @@ export function NavHub({
                           className="mt-0.5 shrink-0 text-accent"
                         />
                         <div className="min-w-0">
-                          <p className="truncate text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                          <p className="truncate text-2xs font-medium tracking-wide text-muted-foreground uppercase">
                             {localize(guide.manifest.display.title, locale).text}
                           </p>
                           <h3 className="mt-0.5 text-sm font-semibold">
@@ -219,11 +219,11 @@ export function NavHub({
                           {localize(contribution.title, locale).fallback ||
                           (guide.configuration.show_description &&
                             localize(contribution.description, locale).fallback) ? (
-                            <p className="mt-1 text-[11px] text-warning-fg">
+                            <p className="mt-1 text-2xs text-warning-fg">
                               {traduzir("Texto disponível em português.", locale)}
                             </p>
                           ) : null}
-                          <p className="mt-2 text-[11px] text-text-subtle">
+                          <p className="mt-2 text-2xs text-text-subtle">
                             {portasLegiveis(
                               [permissaoDaCapacidade(contribution.action.capability)],
                               (texto) => traduzir(texto, locale),

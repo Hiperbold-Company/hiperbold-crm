@@ -4,7 +4,7 @@ import { corDaTrilha, iniciaisDe } from "./paleta";
 import type { Pessoa } from "./tipos";
 
 const TAMANHOS = {
-  sm: "h-6 w-6 text-[10px]",
+  sm: "h-6 w-6 text-2xs",
   md: "h-8 w-8 text-xs",
 } as const;
 

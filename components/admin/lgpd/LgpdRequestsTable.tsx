@@ -201,14 +201,14 @@ export function LgpdRequestsTable({
                   {contagemDoPrazo(row.due_at, row.status, t)}
                 </TableCell>
                 <TableCell>
-                  <Badge variant={RISK_VARIANT[row.risk_level]} className="text-[10px]">
+                  <Badge variant={RISK_VARIANT[row.risk_level]} className="text-2xs">
                     {t(RISK_LABELS[row.risk_level])}
                   </Badge>
                 </TableCell>
                 <TableCell>
                   <Badge
                     variant={STATUS_VARIANT[row.status]}
-                    className="text-[10px]"
+                    className="text-2xs"
                   >
                     {t(STATUS_LABELS[row.status] ?? row.status)}
                   </Badge>

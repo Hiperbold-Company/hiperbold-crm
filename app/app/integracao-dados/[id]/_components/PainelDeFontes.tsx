@@ -126,7 +126,7 @@ function DetalheDaFonte({
       <DonoDoDado fonte={fonte} tabela={tabela} colunaDoCliente={colunaDoCliente} aplicar={aplicar} />
 
       {fonte.cliente === undefined && colunaDoCliente !== null && tabelaSemColunaDoCliente(tabela, colunaDoCliente) && (
-        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+        <p className="rounded-md border border-warning/30 bg-warning-bg p-2 text-xs">
           {t("Esta tabela não tem a coluna que identifica o cliente:")} <code>{colunaDoCliente}</code>.{" "}
           {t("Nas conversas, o assistente não consegue consultá-la.")}
         </p>
@@ -155,7 +155,7 @@ function DetalheDaFonte({
           <span>{t("Todas, inclusive as que forem criadas depois")}</span>
         </label>
         {todasEFuturas ? (
-          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+          <p className="rounded-md border border-warning/30 bg-warning-bg p-2 text-xs">
             {t("Uma coluna nova (por exemplo, uma senha) passaria a ser lida sem ninguém marcar.")}
           </p>
         ) : (
@@ -239,7 +239,7 @@ function DonoDoDado({
         <span>{t("É de cada cliente (ex.: pedidos, cadastro, cobranças): o assistente só mostra os dados de quem está conversando")}</span>
       </label>
       {cliente === undefined && (
-        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+        <p className="rounded-md border border-warning/30 bg-warning-bg p-2 text-xs">
           {t("Ainda não escolhido. Enquanto isso, nas conversas o assistente só lê esta tabela se ela não parecer ter dados de clientes.")}
         </p>
       )}
@@ -412,7 +412,7 @@ export function PainelDeFontes({ connectionId, canWrite, colunaDoCliente, aberto
               </fieldset>
 
               {atual.modo === "all" && (
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                <div className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm">
                   <p className="font-medium">
                     {t("O assistente enxerga todas as tabelas que o usuário do banco enxerga.")}
                   </p>
@@ -426,7 +426,7 @@ export function PainelDeFontes({ connectionId, canWrite, colunaDoCliente, aberto
               )}
 
               {atual.modo === "list" && guardado !== null && guardado.modo === "list" && guardado.fontes.length === 0 && (
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                <div className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm">
                   {t("Falta escolher o que o assistente pode ler. Até lá, ele não enxerga nada deste banco.")}
                 </div>
               )}
@@ -550,7 +550,7 @@ export function PainelDeFontes({ connectionId, canWrite, colunaDoCliente, aberto
                   </div>
 
                   {sumidas.length > 0 && (
-                    <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                    <div className="space-y-2 rounded-md border border-warning/30 bg-warning-bg p-3">
                       <p className="text-sm font-medium">{t("Marcadas, mas não encontradas no banco")}</p>
                       <ul className="space-y-1">
                         {sumidas.map((f) => (

@@ -24,7 +24,7 @@ export function PushProntoNesteEndereco() {
     return (
       <Card
         data-testid="push-status-sem-https"
-        className="border-amber-500/40 bg-amber-50/40 p-4 text-sm dark:bg-amber-900/10"
+        className="border-warning/30 bg-warning-bg p-4 text-sm"
       >
         <p className="font-medium">{t("Nesta instalação, os avisos só aparecem com o site aberto.")}</p>
         <p className="mt-2 text-muted-foreground">
@@ -38,7 +38,7 @@ export function PushProntoNesteEndereco() {
   return (
     <Card
       data-testid="push-status-pronto"
-      className="border-amber-500/40 bg-amber-50/40 p-4 text-sm dark:bg-amber-900/10"
+      className="border-warning/30 bg-warning-bg p-4 text-sm"
     >
       {t(
         "Email ainda não está disponível. In-app (toast) e Push (Chrome) já funcionam para as cinco categorias, inclusive com a aba fechada.",

@@ -81,7 +81,7 @@ export function ParaIntegrar({
       <dl className="flex flex-col gap-2">
         {preenchidos.map((c, i) => (
           <div key={i} className="flex flex-col gap-0.5">
-            <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <dt className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
               {c.rotulo}
             </dt>
             <dd className="break-all font-mono text-xs">{c.valor}</dd>

@@ -40,12 +40,12 @@ export function VersionFooter({
 
   const instalada = (
     <p
-      className={cn("px-3 py-1 text-[11px] text-muted-foreground", collapsed && "px-0 text-center")}
+      className={cn("px-3 py-1 text-2xs text-muted-foreground", collapsed && "px-0 text-center")}
       title={dica}
     >
       {collapsed && label ? label.split(".").slice(0, 2).join(".") : titulo}
       {data.identity && data.identity.status !== "confirmed" && !data.sem_agente && (
-        <span className="block text-[10px]">{t("Execução não confirmada")}</span>
+        <span className="block text-2xs">{t("Execução não confirmada")}</span>
       )}
     </p>
   );

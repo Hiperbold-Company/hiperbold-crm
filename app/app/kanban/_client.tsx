@@ -616,12 +616,12 @@ export function FunisClient({
                       <span className="flex items-center gap-2">
                         <span className="text-sm font-medium group-hover:underline">{funil.name}</span>
                         {funil.is_default && (
-                          <Badge variant="secondary" className="text-[10px]">
+                          <Badge variant="secondary" className="text-2xs">
                             {t("Padrão")}
                           </Badge>
                         )}
                         {clientesLigado && funil.is_client_pipeline && (
-                          <Badge variant="secondary" className="text-[10px]">
+                          <Badge variant="secondary" className="text-2xs">
                             {t("Clientes")}
                           </Badge>
                         )}

@@ -156,7 +156,7 @@ export function SkillsClient({ initialState }: Props) {
                   <div className="flex flex-wrap items-center gap-2">
                     <PuzzlePiece className="text-accent" aria-hidden />
                     <span className="font-medium">{skill.name}</span>
-                    <Badge variant={skill.source === "catalog" ? "info" : "neutral"} className="text-[10px]">
+                    <Badge variant={skill.source === "catalog" ? "info" : "neutral"} className="text-2xs">
                       {skill.source === "catalog" ? t("do catálogo") : t("manual")}
                     </Badge>
                     <span className="ml-auto text-xs text-muted-foreground">

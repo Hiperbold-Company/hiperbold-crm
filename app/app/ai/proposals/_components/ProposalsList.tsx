@@ -95,7 +95,7 @@ function Pendentes({
               <span className="text-xs text-muted-foreground">· {p.contact_name}</span>
             )}
             {p.stage_name && (
-              <Badge variant="secondary" className="text-[11px]">
+              <Badge variant="secondary" className="text-2xs">
                 {p.stage_name}
               </Badge>
             )}

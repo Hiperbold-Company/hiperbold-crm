@@ -125,7 +125,7 @@ export function BalaoAgendado({
             : "border-primary/50 bg-primary/5",
         )}
       >
-        <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+        <div className="mb-1 flex items-center gap-1.5 text-2xs font-medium text-muted-foreground">
           <CalendarBlank size={13} weight="regular" aria-hidden />
           {falhou
             ? t("Agendada para {data} às {hora} · não enviada").replace("{data}", rotulo.data).replace("{hora}", rotulo.hora)
@@ -172,7 +172,7 @@ export function BalaoAgendado({
           <>
             <p className="whitespace-pre-wrap break-words">{agendada.body}</p>
             {agendada.template && (
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="mt-1 text-2xs text-muted-foreground">
                 {t("Se a janela de 24 horas estiver fechada, sai o modelo {modelo}.").replace(
                   "{modelo}",
                   agendada.template.name,
@@ -180,7 +180,7 @@ export function BalaoAgendado({
               </p>
             )}
             {agendada.status === "agendada" && agendada.adiada_ate && (
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="mt-1 text-2xs text-muted-foreground">
                 {t("Fora do horário de envio da conexão: sai quando ele abrir.")}
               </p>
             )}

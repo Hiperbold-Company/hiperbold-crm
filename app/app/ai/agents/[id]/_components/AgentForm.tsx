@@ -1068,7 +1068,7 @@ export function AgentForm(props: Props) {
               <p className="text-xs text-destructive">{validation.credential_id}</p>
             ) : null}
             {cred && credSt && credSt !== "validated" ? (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
+              <p className="text-xs text-warning-fg">
                 {t("Credencial selecionada está com status")} {t(STATUS_LABEL[credSt])}
                 {t(". Publish bloqueado até validar.")}
               </p>

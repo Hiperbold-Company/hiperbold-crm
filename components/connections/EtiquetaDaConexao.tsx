@@ -29,7 +29,7 @@ export function EtiquetaDaConexao({
       variant="outline"
       data-cor-da-conexao={chave ?? undefined}
       className={cn(
-        "h-4 max-w-[9rem] min-w-0 gap-1 truncate px-1.5 text-[10px] font-normal",
+        "h-4 max-w-[9rem] min-w-0 gap-1 truncate px-1.5 text-2xs font-normal",
         chave ? ESTILO_DA_ETIQUETA_COLORIDA : "text-text-muted",
         className,
       )}

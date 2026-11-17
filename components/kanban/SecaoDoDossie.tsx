@@ -150,7 +150,7 @@ export function SecaoDoDossie({
           <span>{titulo}</span>
           {/* Mesmo sinal da timeline: `+` fechado, `−` aberto. O `aria-expanded`
               é quem fala a verdade para quem não vê o sinal. */}
-          <span aria-hidden className="ml-auto text-[10px]">
+          <span aria-hidden className="ml-auto text-2xs">
             {recolhida ? "+" : "−"}
           </span>
         </button>

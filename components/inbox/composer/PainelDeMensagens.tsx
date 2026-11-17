@@ -164,7 +164,7 @@ export function PainelDeMensagens({
                     <span className="flex w-full items-baseline justify-between gap-2">
                       <span className="text-sm font-medium">{resposta.title}</span>
                       {resposta.shortcut && (
-                        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">/{resposta.shortcut}</span>
+                        <span className="shrink-0 font-mono text-2xs text-muted-foreground">/{resposta.shortcut}</span>
                       )}
                     </span>
                     <span className="line-clamp-2 text-xs text-muted-foreground">{resposta.body}</span>

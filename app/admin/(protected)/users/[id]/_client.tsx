@@ -210,7 +210,7 @@ export function UserDetailClient({ id }: UserDetailClientProps) {
                           {m.tenant_name ?? m.organization_id}
                         </Link>
                         {m.tenant_slug && (
-                          <span className="font-mono text-[10px] text-muted-foreground">
+                          <span className="font-mono text-2xs text-muted-foreground">
                             {m.tenant_slug}
                           </span>
                         )}

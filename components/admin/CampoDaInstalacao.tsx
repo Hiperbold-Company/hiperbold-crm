@@ -51,16 +51,16 @@ export function Origem({
   const t = (s: string) => traduzir(s, idioma);
   if (fonte === "ausente") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-        <span aria-hidden className="size-1.5 rounded-full bg-amber-500" />
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-warning-fg">
+        <span aria-hidden className="size-1.5 rounded-full bg-warning" />
         {t("Não configurado")}
       </span>
     );
   }
   if (fonte === "banco") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-        <span aria-hidden className="size-1.5 rounded-full bg-emerald-500" />
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success-fg">
+        <span aria-hidden className="size-1.5 rounded-full bg-success" />
         {t("Definido aqui nesta tela")}
       </span>
     );

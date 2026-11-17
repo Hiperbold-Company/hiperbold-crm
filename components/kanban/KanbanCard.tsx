@@ -317,7 +317,7 @@ export function KanbanCard({
             data-testid="card-valor"
             className={cn(
               "flex items-baseline gap-1 font-medium tabular-nums",
-              denso ? "mt-0.5 h-4 text-[11px] leading-4" : "mt-1 h-5 text-xs leading-5",
+              denso ? "mt-0.5 h-4 text-2xs leading-4" : "mt-1 h-5 text-xs leading-5",
               value || recorrente ? "text-text" : "text-text-muted",
             )}
             title={recorrente ? `${value ?? ""} + ${recorrente}`.trim() : undefined}
@@ -427,7 +427,7 @@ export function KanbanCard({
               />
               <TarefasNoCard tarefas={lead.tarefas} />
             </div>
-            <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-text-muted">
+            <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums text-text-muted">
               {state.showStageAge && age
                 ? `${age} ${t("em")} ${card.stageName}`
                 : `${t("em")} ${card.stageName}`}
@@ -437,7 +437,7 @@ export function KanbanCard({
             // Discreto de propósito: uma linha miúda, sem cor, que não disputa
             // atenção com o estado do card. A data exata está no `title`.
             <p
-              className="truncate text-[10px] text-text-muted"
+              className="truncate text-2xs text-text-muted"
               data-movido-ha
               title={`${t("Criado em")} ${formataDataNoFuso(lead.created_at, fuso)} · ${t("Última movimentação")} ${formataDataNoFuso(ultimaMovimentacao(lead), fuso)}`}
             >

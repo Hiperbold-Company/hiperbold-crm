@@ -326,7 +326,7 @@ function GrupoEmPopup({
               nome do grupo ("Abordagem"), não "Abordagem 2". */}
           <span
             aria-hidden
-            className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground"
+            className="rounded-full bg-muted px-1.5 text-2xs tabular-nums text-muted-foreground"
           >
             {respostas.length}
           </span>
@@ -339,7 +339,7 @@ function GrupoEmPopup({
         aria-label={`${t("Respostas do grupo")}: ${grupo.name}`}
         className="w-64 p-1"
       >
-        <p className="px-2 pb-1 pt-0.5 text-[11px] font-medium text-muted-foreground">
+        <p className="px-2 pb-1 pt-0.5 text-2xs font-medium text-muted-foreground">
           {grupo.name}
         </p>
         <div data-testid="respostas-do-grupo" className="max-h-64 space-y-0.5 overflow-y-auto">

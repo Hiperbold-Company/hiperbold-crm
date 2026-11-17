@@ -75,7 +75,7 @@ export function CartaoDaConexaoGoogle({
             {falta.length > 0 ? (
               <>
                 {" "}
-                <span data-testid="o-que-falta" className="font-mono text-[11px]">
+                <span data-testid="o-que-falta" className="font-mono text-2xs">
                   {falta.join(` ${t("e")} `)}
                 </span>
               </>
@@ -105,7 +105,7 @@ export function CartaoDaConexaoGoogle({
             <span className="font-medium">{t("exatamente assim")}</span>:{" "}
             <code
               data-testid="endereco-de-retorno"
-              className="select-all break-all font-mono text-[11px] text-text"
+              className="select-all break-all font-mono text-2xs text-text"
             >
               {enderecoDeRetorno}
             </code>

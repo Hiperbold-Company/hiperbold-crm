@@ -43,7 +43,7 @@ function SlaTimelineInline({ received_at, due_at, request_type }: SlaTimelinePro
   const daysElapsed = Math.floor(elapsed / (1000 * 60 * 60 * 24));
 
   const progressColor =
-    progress >= 1 ? "bg-red-500" : progress >= 0.75 ? "bg-yellow-500" : "bg-emerald-500";
+    progress >= 1 ? "bg-error" : progress >= 0.75 ? "bg-warning" : "bg-success";
 
   const milestones =
     request_type === "data_request"
@@ -91,7 +91,7 @@ function SlaTimelineInline({ received_at, due_at, request_type }: SlaTimelinePro
           const isPast = milestoneDate.getTime() < now.getTime();
           const isLast = idx === milestones.length - 1;
           const dotColor = isPast
-            ? "bg-emerald-500 border-emerald-500"
+            ? "bg-success border-success/30"
             : "bg-muted border-border";
 
           return (

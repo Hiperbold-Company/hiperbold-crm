@@ -77,7 +77,7 @@ export function AgendarMensagemButton({
             <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className={CAMPO} />
           </label>
         </div>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           {t("No fuso da empresa ({fuso}). Até {dias} dias.")
             .replace("{fuso}", fuso)
             .replace("{dias}", String(PRAZO_MAXIMO_DIAS))}

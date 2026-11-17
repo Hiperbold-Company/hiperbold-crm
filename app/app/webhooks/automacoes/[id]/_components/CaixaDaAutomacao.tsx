@@ -275,7 +275,7 @@ export function CaixaDaAutomacao({ id, data, selected }: NodeProps<NoDaAutomacao
         </span>
         <div className="min-w-0 flex-1">
           {data.etapa ? (
-            <p className="text-[10px] font-medium uppercase tracking-wide text-text-muted">{data.etapa}</p>
+            <p className="text-2xs font-medium uppercase tracking-wide text-text-muted">{data.etapa}</p>
           ) : null}
           <p className="line-clamp-2 break-words text-sm font-medium text-text">{titulo}</p>
           <p className="line-clamp-2 break-words text-xs text-text-muted">

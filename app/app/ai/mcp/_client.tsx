@@ -174,11 +174,11 @@ export function McpClient({ initialData, canWrite }: Props) {
                       <div>
                         <CardTitle className="flex items-center gap-2">
                           {conexao.nome}
-                          <Badge variant={conexao.ativa ? "success" : "neutral"} className="text-[10px]">
+                          <Badge variant={conexao.ativa ? "success" : "neutral"} className="text-2xs">
                             {conexao.ativa ? t("Ativa") : t("Desligada")}
                           </Badge>
                           {aguardando > 0 && (
-                            <Badge variant="warning" className="text-[10px]">
+                            <Badge variant="warning" className="text-2xs">
                               {aguardando} {t("aguardando aprovação")}
                             </Badge>
                           )}
@@ -239,7 +239,7 @@ export function McpClient({ initialData, canWrite }: Props) {
                               >
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium">{ferramenta.nome}</span>
-                                  <Badge variant="error" className="text-[10px]">
+                                  <Badge variant="error" className="text-2xs">
                                     {t("recusada")}
                                   </Badge>
                                 </div>
@@ -259,22 +259,22 @@ export function McpClient({ initialData, canWrite }: Props) {
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="font-medium">{ferramenta.nome}</span>
                                 {confirmado === true && (
-                                  <Badge variant="success" className="text-[10px]">
+                                  <Badge variant="success" className="text-2xs">
                                     {t("Só consulta")}
                                   </Badge>
                                 )}
                                 {confirmado === false && (
-                                  <Badge variant="warning" className="text-[10px]">
+                                  <Badge variant="warning" className="text-2xs">
                                     {t("Altera dados")}
                                   </Badge>
                                 )}
                                 {confirmado === null && (
-                                  <Badge variant="neutral" className="text-[10px]">
+                                  <Badge variant="neutral" className="text-2xs">
                                     {t("Aguardando aprovação")}
                                   </Badge>
                                 )}
                                 {ferramenta.mudou_desde_aprovacao && (
-                                  <Badge variant="warning" className="text-[10px]">
+                                  <Badge variant="warning" className="text-2xs">
                                     {t("mudou desde a última aprovação")}
                                   </Badge>
                                 )}

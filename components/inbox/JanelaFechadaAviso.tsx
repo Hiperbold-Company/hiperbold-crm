@@ -263,13 +263,13 @@ export function JanelaFechadaAviso({
   if (!fonte) return <p role="status" className="border-t px-4 py-3 text-sm text-muted-foreground">{motivo}</p>;
 
   return (
-    <div className="border-t border-amber-300 bg-amber-50/60 px-4 py-3 dark:border-amber-800/60 dark:bg-amber-950/30">
-      <p className="mb-2 text-xs text-amber-900 dark:text-amber-200">{motivo}</p>
+    <div className="border-t border-warning/30 bg-warning-bg px-4 py-3">
+      <p className="mb-2 text-xs text-warning-fg">{motivo}</p>
 
       {aprovados.length === 0 ? (
         // Sem modelo aprovado não há saída por aqui, e dizer isso é melhor que
         // um seletor vazio que se lê como "ainda não carregou".
-        <p className="text-xs text-amber-900/80 dark:text-amber-200/80">
+        <p className="text-xs text-warning-fg">
           {t("Nenhum modelo aprovado ainda. Crie um em")} <strong>{t("Conexões → Templates")}</strong>{" "}
           {t("e envie quando a plataforma aprovar.")}
         </p>
@@ -318,7 +318,7 @@ export function JanelaFechadaAviso({
         <div className="mt-2 flex flex-col gap-2">
           {slots.map((slot) => (
             <label key={slot.valueKey} className="flex flex-col gap-1">
-              <span className="text-[11px] text-amber-900/80 dark:text-amber-200/80">
+              <span className="text-2xs text-warning-fg">
                 {rotuloDoSlot(slot, t)}
               </span>
               <input
@@ -335,7 +335,7 @@ export function JanelaFechadaAviso({
                 )}
               />
               {ehMidia(slot) && atual?.savedValues !== undefined && (
-                <span className="flex items-center gap-1.5 text-[11px] text-amber-900/80 dark:text-amber-200/80">
+                <span className="flex items-center gap-1.5 text-2xs text-warning-fg">
                   <input
                     type="checkbox"
                     checked={salvar[slot.valueKey] ?? false}
@@ -356,7 +356,7 @@ export function JanelaFechadaAviso({
               parâmetro de novo, sempre — sem ele vem `132012 Format mismatch,
               expected IMAGE, received UNKNOWN`. */}
           {slots.some(ehMidia) && (
-            <p className="text-[11px] text-amber-900/70 dark:text-amber-200/70">
+            <p className="text-2xs text-warning-fg">
               {t("A mídia do modelo entra por link público — a plataforma baixa o arquivo na hora do envio.")}
             </p>
           )}

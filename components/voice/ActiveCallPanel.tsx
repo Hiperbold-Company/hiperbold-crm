@@ -172,7 +172,7 @@ export function ActiveCallPanel() {
         {avisoDeMidia ? (
           <p
             role="status"
-            className={`flex items-center gap-1 text-[11px] ${
+            className={`flex items-center gap-1 text-2xs ${
               avisoDeMidia.grave ? "font-medium text-destructive" : "text-muted-foreground"
             }`}
           >
