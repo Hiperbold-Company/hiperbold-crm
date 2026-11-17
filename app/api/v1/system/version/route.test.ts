@@ -231,6 +231,22 @@ describe("GET /api/v1/system/version", () => {
     expect(body.data.sem_agente).toBe(true);
   });
 
+  it("devolve o commit da imagem (APP_COMMIT) ao lado da versão, e null sem ele", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(MEMBRO as never);
+    versionRow.agent_last_seen_at = null;
+    versionRow.runtime_confirmation = { qualquer: "coisa" };
+    versionRow.current_version = "";
+    vi.stubEnv("APP_VERSION", "2.1.0");
+    vi.stubEnv("APP_COMMIT", "a8d94f6");
+    const { GET } = await import("../version/route");
+    let body = await (await GET(get())).json();
+    expect(body.data.current_version).toBe("2.1.0");
+    expect(body.data.commit).toBe("a8d94f6");
+    vi.stubEnv("APP_COMMIT", "");
+    body = await (await GET(get())).json();
+    expect(body.data.commit).toBeNull();
+  });
+
   it("CONTROLE — com o agente batendo, a versão continua sendo a que o host afirma", async () => {
     vi.mocked(loadAuthUser).mockResolvedValue(MEMBRO as never);
     vi.stubEnv("APP_VERSION", "9.9.9");

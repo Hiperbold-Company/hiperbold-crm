@@ -22,6 +22,36 @@ describe("installed version remains visible beside the update notice", () => {
   });
 });
 
+describe("versão semântica no rodapé, SHA no tooltip", () => {
+  it("mostra x.y.z no texto e o commit só no title", () => {
+    const antes = { ...state.data };
+    Object.assign(state.data, { current_version: "2.1.0", update_available: false, commit: "a8d94f6" });
+    const { container } = render(<VersionFooter collapsed={false} />);
+    const p = container.querySelector("p")!;
+    expect(p.textContent).toBe("Versão 2.1.0");
+    expect(p.textContent).not.toMatch(/a8d94f6/);
+    expect(p.getAttribute("title")).toBe("Versão 2.1.0 · commit a8d94f6");
+    state.data = antes;
+  });
+
+  it("CONTROLE — sem commit, o tooltip é só a versão", () => {
+    const antes = { ...state.data };
+    Object.assign(state.data, { current_version: "2.1.0", update_available: false, commit: null });
+    const { container } = render(<VersionFooter collapsed={false} />);
+    expect(container.querySelector("p")!.getAttribute("title")).toBe("Versão 2.1.0");
+    state.data = antes;
+  });
+
+  it("com versão x.y.z e versão nova semver, mostra as duas e o aviso acende", () => {
+    const antes = { ...state.data };
+    Object.assign(state.data, { current_version: "2.1.0", latest_version: "v2.2.0", update_available: true, commit: "a8d94f6" });
+    render(<VersionFooter collapsed={false} />);
+    expect(screen.getByText(/Versão 2\.1\.0/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /2\.2\.0/ })).toBeTruthy();
+    state.data = antes;
+  });
+});
+
 describe("instalação sem agente do host (EasyPanel)", () => {
   it("mostra a versão da imagem e não acusa 'Execução não confirmada'", () => {
     const antes = { ...state.data };
