@@ -27377,8 +27377,8 @@ export const DICIONARIO: Traducoes = {
   "O que já está pronto e o que falta para o CRM trabalhar pela sua empresa.": {
     es: "Lo que ya está listo y lo que falta para que el CRM trabaje por tu empresa.",
   },
-  "O essencial está pronto. Os passos abaixo deixam o CRM ainda melhor para a sua equipe.": {
-    es: "Lo esencial está listo. Los pasos de abajo dejan el CRM aún mejor para tu equipo.",
+  "O essencial está pronto. Os primeiros passos que faltam deixam o CRM ainda melhor para a sua equipe.": {
+    es: "Lo esencial está listo. Los primeros pasos que faltan dejan el CRM aún mejor para tu equipo.",
   },
   "Faltam poucos passos para o CRM começar a trabalhar pela sua empresa.": {
     es: "Faltan pocos pasos para que el CRM empiece a trabajar por tu empresa.",
@@ -28990,6 +28990,18 @@ export const DICIONARIO: Traducoes = {
   "O plano chegou ao limite de conexões: dá para entrar de novo com um número que já está conectado, mas não para conectar um número novo.": { es: "El plan llegó al límite de conexiones: puede volver a entrar con un número que ya está conectado, pero no conectar un número nuevo." },
   "A conexão por QR Code ainda não está disponível nesta instalação. Fale com quem administra a instalação.": { es: "La conexión por código QR todavía no está disponible en esta instalación. Hable con quien administra la instalación." },
   "Não foi possível carregar esta conexão. Tente de novo.": { es: "No fue posible cargar esta conexión. Inténtelo de nuevo." },
+  // Início com painel de indicadores (17/11/2026).
+  "Esconder checklist": { es: "Ocultar lista de pasos" },
+  "Exibir checklist": { es: "Mostrar lista de pasos" },
+  "Primeiros passos": { es: "Primeros pasos" },
+  "VER TUDO EM ATENDIMENTO": { es: "VER TODO EN ATENCIÓN" },
+  "VER TUDO EM NEGÓCIOS": { es: "VER TODO EN NEGOCIOS" },
+  "VER TUDO EM ORIGENS": { es: "VER TODO EN ORÍGENES" },
+  "Sem origem rastreada": { es: "Sin origen rastreado" },
+  "Ganhos de origem rastreada": { es: "Ganados de origen rastreado" },
+  "Taxa de ganho de origem rastreada": { es: "Tasa de ganados de origen rastreado" },
+  "Parcial: mais de 50 origens no período": { es: "Parcial: más de 50 orígenes en el período" },
+  "Ganhos ÷ criados com origem rastreada": { es: "Ganados ÷ creados con origen rastreado" },
 };
 
 /**

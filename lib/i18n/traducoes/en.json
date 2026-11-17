@@ -14612,5 +14612,17 @@
   "Templates do WhatsApp": "WhatsApp templates",
   "Tipo de botão desconhecido. Use QUICK_REPLY, URL ou PHONE_NUMBER.": "Unknown button type. Use QUICK_REPLY, URL or PHONE_NUMBER.",
   "Tipo de componente desconhecido. Use HEADER, BODY, FOOTER ou BUTTONS.": "Unknown component type. Use HEADER, BODY, FOOTER or BUTTONS.",
-  "link público do arquivo": "public link to the file"
+  "link público do arquivo": "public link to the file",
+  "O essencial está pronto. Os primeiros passos que faltam deixam o CRM ainda melhor para a sua equipe.": "The essentials are ready. The first steps still missing make the CRM even better for your team.",
+  "Esconder checklist": "Hide checklist",
+  "Exibir checklist": "Show checklist",
+  "Primeiros passos": "First steps",
+  "VER TUDO EM ATENDIMENTO": "VIEW ALL IN SERVICE",
+  "VER TUDO EM NEGÓCIOS": "VIEW ALL IN DEALS",
+  "VER TUDO EM ORIGENS": "VIEW ALL IN SOURCES",
+  "Sem origem rastreada": "Without tracked source",
+  "Ganhos de origem rastreada": "Won from tracked source",
+  "Taxa de ganho de origem rastreada": "Win rate from tracked source",
+  "Parcial: mais de 50 origens no período": "Partial: more than 50 sources in the period",
+  "Ganhos ÷ criados com origem rastreada": "Won ÷ created with tracked source"
 }
