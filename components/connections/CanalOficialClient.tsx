@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useOfficialChannel } from "@/hooks/channels/useOfficialChannel";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
-import { usePermission } from "@/hooks/auth/AuthProvider";
+import { usePermissionSeHouverSessao } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ChannelAiAccess } from "./ChannelAiAccess";
@@ -35,7 +35,7 @@ export function CanalOficialClient({
   const [confirmandoRemocao, setConfirmandoRemocao] = useState(false);
   const [removendo, setRemovendo] = useState(false);
   // Esconde o botão; quem barra é a rota (`DELETE /api/v1/channel-sessions/[id]` exige admin).
-  const podeRemover = usePermission("settings.write");
+  const podeRemover = usePermissionSeHouverSessao("settings.write");
 
   const estado = data?.data;
 

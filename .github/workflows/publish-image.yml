@@ -218,17 +218,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # A versão que a imagem vai reportar em /api/v1/health. Numa tag v1.2.3 é
-      # "1.2.3"; fora de tag, o SHA curto — que ainda responde "o que está
-      # rodando aqui?", que é a pergunta que o campo existe para responder.
+      # A versão que a imagem vai reportar em /api/v1/health e no rodapé. Numa
+      # tag v1.2.3 é "1.2.3". Fora de tag (a produção da Hiperbold sai de cada
+      # merge na main, sem tag) é a versão do topo do CHANGELOG.md — o primeiro
+      # cabeçalho `## [x.y.z]`, ignorando `## [Não lançado]` — para o rodapé
+      # mostrar Major.Minor.Patch. Sem versão no CHANGELOG, cai no SHA curto.
+      # O SHA curto vai SEMPRE em `commit` (build-arg APP_COMMIT): continua
+      # respondendo "que código está rodando aqui?", agora no tooltip do rodapé.
       - name: Resolver APP_VERSION
         id: ver
         run: |
+          commit="${GITHUB_SHA::7}"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            versao="${GITHUB_REF_NAME#v}"
           else
-            echo "value=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            versao="$(sed -n 's/^## \[\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)\].*/\1/p' CHANGELOG.md | head -n 1)"
+            versao="${versao:-$commit}"
           fi
+          echo "value=${versao}" >> "$GITHUB_OUTPUT"
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata (tags/labels)
         id: meta
@@ -291,6 +299,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ steps.ver.outputs.value }}
+            APP_COMMIT=${{ steps.ver.outputs.commit }}
           # Cache por imagem: cada uma tem camadas diferentes, e um escopo único
           # faria uma sobrescrever o cache da outra a cada run.
           cache-from: type=gha,scope=${{ matrix.name }}-${{ matrix.arch }}

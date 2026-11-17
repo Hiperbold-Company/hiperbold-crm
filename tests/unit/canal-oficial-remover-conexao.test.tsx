@@ -18,7 +18,7 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("sonner", () => ({ toast: h.toast }));
-vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => h.podeRemover }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermissionSeHouverSessao: () => h.podeRemover }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { delete: h.apagar } }));
 vi.mock("@/hooks/channels/useOfficialChannel", () => ({
   useOfficialChannel: () => ({

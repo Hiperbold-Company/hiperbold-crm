@@ -1,9 +1,0 @@
----
-impacto: capacidade_nova
-secao: adicionado
-titulo: Automação responde no Messenger e no Direct, e os blocos Mensagem e Pergunta ganham o campo "Conexão"
----
-
-Quando uma automação começa por "Mensagem recebida" numa conversa do Messenger ou do Direct do Instagram, os blocos de mensagem, de pergunta e o "Aguardar até responder" passam a enviar e esperar a resposta nessa mesma conversa. Antes a automação procurava uma conversa de WhatsApp do contato: ficava sem enviar ("contato sem conversa de WhatsApp") ou respondia pelo WhatsApp dele. Agora só a resposta nessa conversa conta, e uma mensagem do mesmo contato por outro canal não acorda a espera. A condição "Janela de 24h aberta?" olha a mesma conversa. O histórico da execução diz "enviada pelo Messenger" ou "enviada pelo Direct". O limite de 1000 bytes por mensagem dessas redes continua valendo. Automação que começa por mensagem no WhatsApp ou por comentário no Instagram continua como antes. Execuções que já estavam em andamento antes da atualização seguem pela regra antiga. Não é preciso mudar nada para atualizar.
-
-Os blocos Mensagem e Pergunta ganham o campo "Conexão": escolha por qual conexão o bloco envia, ou deixe em branco para usar a conexão dos blocos anteriores. Com a conexão escolhida, o bloco envia pela conversa do contato nessa conexão; se o contato não tiver conversa nela, o bloco sai por "Erro" ("o contato não tem conversa na conexão escolhida no bloco") e nunca envia por outra. Depois disso, os blocos seguintes em branco e a espera da resposta usam essa mesma conversa. O botão "Substituir em todos os blocos" troca, no rascunho, a conexão de todos os blocos que usam a atual (e dos gatilhos "Mensagem recebida" que a citam). A publicação recusa conexão que não existe mais na conta ou que não envia mensagens, e exportar/importar leva a conexão pelo nome, como os gatilhos. Automações que já existem não mudam: o campo nasce em branco.

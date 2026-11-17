@@ -122,6 +122,11 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 # Declarada AQUI, depois das camadas caras (ver acima).
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
+# SHA curto do commit que gerou a imagem (o CI passa; vazio em build local).
+# Aparece em /api/v1/health e no tooltip do rodapé. Mesmo lugar do APP_VERSION
+# de propósito: ARG acima das camadas caras invalidaria o cache a cada commit.
+ARG APP_COMMIT=
+ENV APP_COMMIT=$APP_COMMIT
 # O output standalone NÃO inclui public/ nem .next/static — copiar explicitamente,
 # senão CSS/JS/assets retornam 404 (app "sem estilo").
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./

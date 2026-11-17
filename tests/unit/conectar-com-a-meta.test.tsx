@@ -23,8 +23,8 @@ vi.mock("@/components/feedback/ApiErrorToast", () => ({ showApiError: () => unde
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/clipboard", () => ({ copyToClipboard: async () => undefined }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
-// `CanalOficialClient` esconde o "Remover conexão" de quem não é admin: aqui ele é.
-vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true }));
+// O cartão da conexão oficial pergunta a permissão para mostrar "Remover conexão".
+vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true, usePermissionSeHouverSessao: () => true }));
 
 import { CanalOficialClient } from "@/components/connections/CanalOficialClient";
 
