@@ -278,7 +278,7 @@ function makeDb(opts: DbOpts = {}): Registro {
   return registro;
 }
 
-function authOk(): void {
+function authOk(extra: Partial<AuthUser> = {}): void {
   const user: AuthUser = {
     id: USER,
     email: "a@example.com",
@@ -287,6 +287,7 @@ function authOk(): void {
     is_platform_admin: false,
     idioma: "pt-BR" as const,
     organizations: [{ organization_id: ORG, organization_name: "Org", role: "admin" }],
+    ...extra,
   };
   const org = { orgId: ORG, name: "Org", role: "admin" as const, org_status: "active" };
   vi.mocked(requireAuth).mockResolvedValue(user);
@@ -436,6 +437,17 @@ describe("GET /api/v1/channels/official — a tela não chama de conectado o que
 
     expect(body.data.connected).toBe(true);
     expect(body.data.hasToken).toBe(true);
+    // O endereço leva o token de caminho: o admin do TENANT não o recebe.
+    expect(body.data.webhook).not.toHaveProperty("callbackUrl");
+  });
+
+  it("canal oficial ativo: o admin da INSTALAÇÃO vê conectado e o endereço do webhook", async () => {
+    authOk({ is_platform_admin: true });
+    makeDb({ sessions: [canalOficial({ webhook_path_token: "tok", meta_token_encrypted: "x" })] });
+    const { GET } = await import("@/app/api/v1/channels/official/route");
+    const body = await (await GET(req())).json();
+
+    expect(body.data.connected).toBe(true);
     expect(body.data.webhook.callbackUrl).toContain("tok");
   });
 

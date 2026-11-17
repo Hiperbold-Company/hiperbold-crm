@@ -18,6 +18,8 @@ import { type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { montarCompras, type LeadGanhoRow } from "@/lib/leads/compras-do-contato";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { leitorDoAtor, leitorVeCamposRestritos, recortarLinha } from "@/lib/campos/recorte-por-papel";
 import { camposDeCompraDaInterface } from "@/lib/navigation/interface";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +79,25 @@ export async function GET(
   // não comprou nada" é uma afirmação sobre o negócio, não sobre a leitura.
   if (error) return falhaInterna("internal_error", error, { requestId });
 
-  const compras = montarCompras((data ?? []) as unknown as LeadGanhoRow[], chaves);
+  // 1015: campo restrito escolhido como coluna de compra só mostra o valor a administrador. O
+  // papel é o do usuário na organização do CONTATO (a mesma que filtra a leitura); sem papel
+  // legível, o leitor é o que não vê.
+  let linhas = (data ?? []) as unknown as LeadGanhoRow[];
+  if (chaves.length > 0 && linhas.length > 0) {
+    const { data: membro } = await supabase
+      .from("user_organizations")
+      .select("role")
+      .eq("organization_id", contactScope.organization_id)
+      .eq("user_id", user.id)
+      .is("revoked_at", null)
+      .maybeSingle();
+    const leitor = leitorDoAtor({ type: "user", role: (membro as { role?: string } | null)?.role });
+    if (!leitorVeCamposRestritos(leitor)) {
+      const lidas = await chavesRestritasDaOrganizacao(supabase, contactScope.organization_id, requestId);
+      if (!lidas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
+      linhas = linhas.map((l) => recortarLinha(l, lidas.chaves, leitor));
+    }
+  }
+  const compras = montarCompras(linhas, chaves);
   return ok({ compras }, { requestId });
 }

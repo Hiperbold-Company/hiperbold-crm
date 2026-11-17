@@ -103441,6 +103441,7 @@ declare
   v_item jsonb;
   v_ins integer;
   v_inseridas integer := 0;
+  v_restritas jsonb := '{}'::jsonb;  -- lower(chave) -> true quando QUALQUER ocorrência tem publico:false
 begin
   if p_org is null then
     return 0;
@@ -103482,6 +103483,13 @@ begin
     v_ent := case when r.item ->> 'escopo' = 'contato' then 'contato' else 'negocio' end;
     v_outra := case when v_ent = 'contato' then 'negocio' else 'contato' end;
     v_lk := lower(r.item ->> 'key');
+    -- Restrito vence: basta UMA ocorrência da chave (sem diferenciar maiúsculas, em qualquer funil
+    -- e em qualquer entidade) com `publico:false` para toda definição dessa chave nascer restrita.
+    -- Herdar do funil mais antigo deixava à vista da IA e do cliente um valor que outro funil marcou
+    -- como só do admin — inclusive o valor antigo que fica na chave original depois da cópia.
+    if r.item -> 'publico' = 'false'::jsonb then
+      v_restritas := v_restritas || jsonb_build_object(v_lk, true);
+    end if;
     v_grupo := coalesce(v_canon -> v_lk, '{}'::jsonb);
     v_venc := v_grupo -> v_ent;
 
@@ -103528,6 +103536,11 @@ begin
       end if;
       if (r.item ->> 'key') is distinct from (v_venc ->> 'original') then
         v_dif := v_dif || '["maiusculas"]'::jsonb;
+      end if;
+      -- `publico` NÃO segue o funil mais antigo (ver `v_restritas`): a diferença fica gravada.
+      if coalesce(r.item -> 'publico' <> 'false'::jsonb, true)
+         is distinct from coalesce(v_venc -> 'item' -> 'publico' <> 'false'::jsonb, true) then
+        v_dif := v_dif || '["publico"]'::jsonb;
       end if;
       if jsonb_array_length(v_dif) > 0 then
         v_conflitos := v_conflitos || jsonb_build_array(jsonb_build_object(
@@ -103613,7 +103626,7 @@ begin
       coalesce(v_item -> 'required' = 'true'::jsonb, false),
       case when v_item ->> 'grupo' in ('dados', 'rastreamento') then v_item ->> 'grupo' end,
       case when jsonb_typeof(v_item -> 'descricao') = 'string' then nullif(left(v_item ->> 'descricao', 500), '') end,
-      coalesce(v_item -> 'publico' <> 'false'::jsonb, true),
+      coalesce(v_item -> 'publico' <> 'false'::jsonb, true) and not (v_restritas ? (v_par ->> 0)),
       coalesce(v_item -> 'sempre_visivel' = 'true'::jsonb, false),
       coalesce(v_item -> 'exibir_no_perfil' = 'true'::jsonb, false),
       case when jsonb_typeof(v_item -> 'dica_de_ajuda') = 'string' then nullif(left(v_item ->> 'dica_de_ajuda', 300), '') end,

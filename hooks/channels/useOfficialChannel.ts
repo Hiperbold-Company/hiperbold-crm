@@ -58,10 +58,11 @@ export interface ConnectInput {
 
 export interface RegistroDoWebhook {
   registrado: boolean;
-  url: string | null;
+  /** `url` e `callbackUrl` levam o token de caminho: só vêm para o admin da instalação. */
+  url?: string | null;
   erro: string | null;
   em: string;
-  callbackUrl: string;
+  callbackUrl?: string;
 }
 
 /**

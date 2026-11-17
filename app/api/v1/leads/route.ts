@@ -1,4 +1,6 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { recortarLinhaDaResposta } from "@/lib/campos/resposta-recortada";
+import { leitorDoAtor } from "@/lib/campos/recorte-por-papel";
 import { carteiraDoContato } from "@/lib/carteira/dono";
 import { MOTIVO_DA_RECUSA, recusaNegocioNaCarteiraDeOutro } from "@/lib/carteira/negocio-novo";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -162,7 +164,16 @@ export async function POST(req: NextRequest): Promise<Response> {
       },
       input as CreateLeadInput,
     );
-    return ok(lead, {
+    // 1015: a resposta segue o recorte do GET (campo não público só para administrador).
+    const recortado = await recortarLinhaDaResposta(
+      supabase,
+      authz.organizationId,
+      lead,
+      leitorDoAtor(authz.actor),
+      requestId,
+    );
+    if (!recortado.ok) return recortado.resposta;
+    return ok(recortado.linha, {
       requestId,
       status: 201,
       // `meta` só quando há aviso: uma resposta sem `meta` continua sem

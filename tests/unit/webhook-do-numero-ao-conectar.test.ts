@@ -224,7 +224,7 @@ function stubMeta(respostas: {
   return chamadas;
 }
 
-function authOk(): void {
+function authOk(extra: Record<string, unknown> = {}): void {
   const user = {
     id: USER,
     email: "a@example.com",
@@ -233,6 +233,7 @@ function authOk(): void {
     is_platform_admin: false,
     idioma: "pt-BR" as const,
     organizations: [{ organization_id: ORG, organization_name: "Org", role: "admin" }],
+    ...extra,
   };
   vi.mocked(requireRole).mockResolvedValue({
     ok: true,
@@ -613,7 +614,8 @@ describe("POST /api/v1/channels/official/webhook — tentar de novo", () => {
   it("reaplica com a credencial JÁ guardada e devolve o desfecho de agora", async () => {
     const registro = makeDb();
     stubMeta({});
-    authOk();
+    // O endereço leva o token de caminho: só o admin da instalação o recebe de volta.
+    authOk({ is_platform_admin: true });
 
     const res = await registrarDeNovo(req());
     const corpo = (await res.json()) as { data: Record<string, unknown> };

@@ -349,6 +349,70 @@ describe("a mesma chave com maiúsculas diferentes entre funis vira uma definiç
   });
 });
 
+describe("restrito vence na adoção: uma ocorrência com publico:false basta", () => {
+  const ORG_P = "eeeeeeee-1015-4000-8000-0000000000bb";
+  const FUNIL_P1 = "eeeeeeee-1015-4000-8000-0000000000b2";
+  const FUNIL_P2 = "eeeeeeee-1015-4000-8000-0000000000b3";
+
+  beforeAll(() => {
+    // O funil mais antigo não marca `renda` (público por padrão); o mais novo a marca restrita,
+    // com outra grafia. Herdar do mais antigo deixaria a renda à vista da IA e do cliente.
+    sql(`
+      insert into public.organizations (id, slug, legal_name, display_name) values
+        ('${ORG_P}', 'cp-inv-p', 'CP P', 'CP P') on conflict (id) do nothing;
+      insert into public.crm_pipelines (id, organization_id, name, slug, settings, created_at) values
+        ('${FUNIL_P1}', '${ORG_P}', 'Mais antigo', 'cp-p-1',
+         '{"fields": [{"key":"renda","label":"Renda","type":"text"}]}', now() - interval '2 days'),
+        ('${FUNIL_P2}', '${ORG_P}', 'Mais novo', 'cp-p-2',
+         '{"fields": [{"key":"Renda","label":"Renda","type":"text","publico":false}]}', now() - interval '1 day')
+        on conflict (id) do nothing;
+    `);
+    sql(`select public.fn_adotar_campos_legados_da_organizacao('${ORG_P}');`);
+  });
+
+  it("a definição única nasce restrita, na chave do funil mais antigo", () => {
+    expect(
+      sql(`select string_agg(key || ':' || publico, ',') from public.custom_field_definitions where organization_id = '${ORG_P}';`),
+    ).toBe("renda:false");
+  });
+
+  it("a diferença de `publico` entra no conflito gravado", () => {
+    const conflitos = JSON.parse(sql(`select settings->'campos_conflitos' from public.organizations where id = '${ORG_P}';`)) as Array<{
+      chave: string;
+      diferenca: string[];
+    }>;
+    expect(conflitos.find((c) => c.chave === "renda")?.diferenca).toEqual(expect.arrayContaining(["publico", "maiusculas"]));
+  });
+});
+
+describe("restrito vence também entre entidades: a chave original não fica pública", () => {
+  const ORG_Q = "eeeeeeee-1015-4000-8000-0000000000cc";
+  const FUNIL_Q1 = "eeeeeeee-1015-4000-8000-0000000000c4";
+  const FUNIL_Q2 = "eeeeeeee-1015-4000-8000-0000000000c5";
+
+  beforeAll(() => {
+    // Negócio público no funil mais antigo; o contato marca a mesma chave como restrita. O valor
+    // antigo do contato fica em `cidade` depois da cópia para `cidade_contato`: `cidade` pública
+    // o deixaria à vista.
+    sql(`
+      insert into public.organizations (id, slug, legal_name, display_name) values
+        ('${ORG_Q}', 'cp-inv-q', 'CP Q', 'CP Q') on conflict (id) do nothing;
+      insert into public.crm_pipelines (id, organization_id, name, slug, settings, created_at) values
+        ('${FUNIL_Q1}', '${ORG_Q}', 'Negócio', 'cp-q-1', '{"fields": [{"key":"cidade","label":"Cidade","type":"text"}]}', now() - interval '2 days'),
+        ('${FUNIL_Q2}', '${ORG_Q}', 'Contato', 'cp-q-2',
+         '{"fields": [{"key":"cidade","label":"Cidade","type":"text","escopo":"contato","publico":false}]}', now() - interval '1 day')
+        on conflict (id) do nothing;
+    `);
+    sql(`select public.fn_adotar_campos_legados_da_organizacao('${ORG_Q}');`);
+  });
+
+  it("as duas definições da chave nascem restritas", () => {
+    expect(
+      sql(`select string_agg(entidade || ':' || key || ':' || publico, ',' order by position) from public.custom_field_definitions where organization_id = '${ORG_Q}';`),
+    ).toBe("negocio:cidade:false,contato:cidade_contato:false");
+  });
+});
+
 describe("os tetos do banco", () => {
   const ORG_F = "eeeeeeee-1015-4000-8000-00000000000f";
 

@@ -20,6 +20,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { criarBancoEmMemoria, type Linha } from "@/tests/helpers/banco-em-memoria";
 import { ApiError } from "@/lib/api/types";
 import {
+  MOTIVO_ANONIMIZADO,
   MOTIVO_MODELO_NAO_APROVADO,
   MOTIVO_OPT_OUT,
   MOTIVO_PRESA,
@@ -394,5 +395,43 @@ describe("o lease: linha em envio não vira presa", () => {
     expect(linha(tabelas, "s2")).toMatchObject({ status: "agendada", reservada_em: null });
     expect(r.adiadas).toBe(1);
   });
-});
 
+  // A cascata LGPD redige a linha e anonimiza o contato SEM tirar o status `enviando`: o lease
+  // renovado ainda a alcança. A releitura antes do envio é o que impede o texto apagado de sair.
+  it("anonimizado durante a espera do envio: o texto redigido não sai e a linha é cancelada", async () => {
+    const { admin, tabelas } = montar({ linhas: [agendada("s1")] });
+    deps.espacar = vi.fn(async () => {
+      Object.assign(linha(tabelas, "s1"), { body: "[mensagem anonimizada]", template: null });
+      Object.assign(tabelas.contacts![0]!, { is_anonymized: true });
+    });
+    const r = await rodarMensagensAgendadas(admin, AGORA, "req", deps);
+    expect(enviados).toEqual([]);
+    expect(r.canceladas).toBe(1);
+    expect(linha(tabelas, "s1")).toMatchObject({ status: "cancelada", motivo: MOTIVO_ANONIMIZADO });
+  });
+
+  it("modelo redigido durante a espera (template apagado): não envia o modelo antigo", async () => {
+    const modelo = { name: "retomada", language: "pt_BR", values: { "1": "Ana" }, body: "x" };
+    const { admin, tabelas } = montar({
+      lastInbound: "2026-11-15T10:00:00Z",
+      modelos: [modeloDoEspelho("retomada", "APPROVED")],
+      linhas: [agendada("s1", { template: modelo })],
+    });
+    deps.espacar = vi.fn(async () => {
+      Object.assign(linha(tabelas, "s1"), { template: null });
+    });
+    await rodarMensagensAgendadas(admin, AGORA, "req", deps);
+    expect(enviados).toEqual([]);
+    expect(linha(tabelas, "s1")).toMatchObject({ status: "cancelada", motivo: MOTIVO_ANONIMIZADO });
+  });
+
+  it("opt-out durante a espera do envio: cancela com o motivo do opt-out", async () => {
+    const { admin, tabelas } = montar({ linhas: [agendada("s1")] });
+    deps.espacar = vi.fn(async () => {
+      Object.assign(tabelas.contacts![0]!, { is_blocked: true });
+    });
+    await rodarMensagensAgendadas(admin, AGORA, "req", deps);
+    expect(enviados).toEqual([]);
+    expect(linha(tabelas, "s1")).toMatchObject({ status: "cancelada", motivo: MOTIVO_OPT_OUT });
+  });
+});

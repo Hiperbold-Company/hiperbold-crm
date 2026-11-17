@@ -119,11 +119,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // 200 mesmo quando a Meta recusou: a TENTATIVA foi feita e o desfecho é um estado
   // (com motivo), não um erro de requisição. A tela pinta o aviso com `erro` — um 4xx
   // aqui faria o cliente tratar como "deu erro" e esconder o motivo que a Meta deu.
+  //
+  // `url` e `callbackUrl` levam o `webhook_path_token`: só saem para quem administra a INSTALAÇÃO,
+  // fora de sessão de suporte — a mesma régua do GET de `/api/v1/channels/official`. O gerente e o
+  // admin do tenant recebem o desfecho (registrado, erro, em), que é o que a tela usa.
+  const veOsSegredosDoWebhook = Boolean(authz.user.is_platform_admin && !authz.user.support);
   return ok({
     registrado: desfecho.registrado,
-    url: desfecho.url,
     erro: desfecho.erro,
     em: desfecho.em,
-    callbackUrl: `${basePublicaDoWebhookMeta(req)}/api/v1/webhooks/meta/${sessao.webhook_path_token}`,
+    ...(veOsSegredosDoWebhook
+      ? {
+          url: desfecho.url,
+          callbackUrl: `${basePublicaDoWebhookMeta(req)}/api/v1/webhooks/meta/${sessao.webhook_path_token}`,
+        }
+      : {}),
   });
 }

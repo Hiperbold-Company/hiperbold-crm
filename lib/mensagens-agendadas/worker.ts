@@ -66,6 +66,7 @@ import { ApiError } from "@/lib/api/types";
 import { roleAtLeast } from "@/lib/auth/types";
 import { adiarAteAJanelaAbrir } from "@/lib/automation/janela-do-canal";
 import { espacarEnvio } from "@/lib/automation/throttle";
+import { MENSAGEM_REDIGIDA } from "@/lib/lgpd/cascata";
 import { logger } from "@/lib/logger";
 import { idsDeOrgsParadas, OrgNaoOperanteError } from "@/lib/organizacao/operante";
 import type { Message } from "@/lib/types/messaging";
@@ -296,6 +297,35 @@ async function processar(
     .select("id");
   if (erroLease) throw new Error(`lease: ${erroLease.message}`);
   if (((renovada ?? []) as unknown[]).length === 0) return { status: "perdida" };
+
+  // Releitura logo antes de enviar: a cascata LGPD redige a linha (`body`/`template`) e anonimiza
+  // o contato sem mexer no status `enviando`, então o lease renovado não a enxerga. O texto em
+  // memória é o de ANTES da redação — enviá-lo mandaria à pessoa anonimizada o conteúdo apagado.
+  const { data: atual, error: erroAtual } = await admin
+    .from("scheduled_messages")
+    .select("id, body, template")
+    .eq("id", linha.id)
+    .eq("organization_id", org)
+    .maybeSingle();
+  if (erroAtual) throw new Error(`releitura: ${erroAtual.message}`);
+  const linhaAtual = atual as { body?: string | null; template?: unknown } | null;
+  if (!linhaAtual) return { status: "perdida" };
+  const redigida =
+    linhaAtual.body === MENSAGEM_REDIGIDA ||
+    (linha.template !== null && linhaAtual.template == null);
+  if (redigida) return { status: "cancelada", motivo: MOTIVO_ANONIMIZADO };
+  if (conversa.contact_id) {
+    const { data: contatoAgora, error } = await admin
+      .from("contacts")
+      .select("id, is_blocked, is_anonymized")
+      .eq("id", conversa.contact_id)
+      .eq("organization_id", org)
+      .maybeSingle();
+    if (error) throw new Error(`contato: ${error.message}`);
+    const c = contatoAgora as { is_blocked?: boolean | null; is_anonymized?: boolean | null } | null;
+    if (c?.is_anonymized) return { status: "cancelada", motivo: MOTIVO_ANONIMIZADO };
+    if (c?.is_blocked) return { status: "cancelada", motivo: MOTIVO_OPT_OUT };
+  }
 
   let mensagem: Message;
   try {

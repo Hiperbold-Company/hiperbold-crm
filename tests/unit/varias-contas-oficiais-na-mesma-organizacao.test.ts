@@ -733,3 +733,51 @@ describe("(d) GET /api/v1/channels/conexoes — cartões só da organização, s
     expect((await GET(new NextRequest("https://crm.exemplo.com/api/v1/channels/conexoes"))).status).toBe(403);
   });
 });
+
+describe("POST /official/webhook — o endereço com o token de caminho só sai para o admin da instalação", () => {
+  const tentarDeNovo = () =>
+    new NextRequest("https://crm.exemplo.com/api/v1/channels/official/webhook", {
+      method: "POST",
+      body: JSON.stringify({ channel_session_id: "aaaaaaaa-0000-4000-8000-0000000000a1" }),
+    });
+
+  async function comUsuario(user: Linha) {
+    const { requireRole } = await import("@/lib/auth/require-role");
+    vi.mocked(requireRole).mockResolvedValueOnce({
+      ok: true,
+      user: { id: "user-a", idioma: "pt-BR", support: false, is_platform_admin: false, ...user },
+      org: { orgId: ORG_A, role: "admin" },
+    } as never);
+  }
+
+  it("admin do tenant recebe o desfecho, sem `url`, sem `callbackUrl` e sem o token", async () => {
+    makeDb([sessaoOficial()]);
+    await comUsuario({});
+    const { POST } = await import("@/app/api/v1/channels/official/webhook/route");
+    const res = await POST(tentarDeNovo());
+    expect(res.status).toBe(200);
+    const texto = await res.text();
+    expect(texto).not.toContain("ptk-a1");
+    const body = JSON.parse(texto) as { data: Linha };
+    expect(body.data).toMatchObject({ registrado: true, erro: null, em: "agora" });
+    expect(body.data).not.toHaveProperty("callbackUrl");
+    expect(body.data).not.toHaveProperty("url");
+  });
+
+  it("admin da instalação em sessão de suporte também não recebe", async () => {
+    makeDb([sessaoOficial()]);
+    await comUsuario({ is_platform_admin: true, support: true });
+    const { POST } = await import("@/app/api/v1/channels/official/webhook/route");
+    const texto = await (await POST(tentarDeNovo())).text();
+    expect(texto).not.toContain("ptk-a1");
+  });
+
+  it("admin da instalação fora do suporte recebe o endereço para colar na Meta", async () => {
+    makeDb([sessaoOficial()]);
+    await comUsuario({ is_platform_admin: true });
+    const { POST } = await import("@/app/api/v1/channels/official/webhook/route");
+    const body = (await (await POST(tentarDeNovo())).json()) as { data: Linha };
+    expect(String(body.data.callbackUrl)).toMatch(/\/api\/v1\/webhooks\/meta\/ptk-a1$/);
+    expect(body.data.url).toBe("https://crm.exemplo.com/x");
+  });
+});
