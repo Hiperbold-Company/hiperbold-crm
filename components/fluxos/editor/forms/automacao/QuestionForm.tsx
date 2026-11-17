@@ -15,6 +15,7 @@ import {
 } from "@/lib/followup/graph-schema";
 import { useT } from "@/hooks/i18n/useT";
 
+import { CampoDaConexao, type SubstituicaoDeConexao } from "./CampoDaConexao";
 import {
   AjudaDeVariaveis,
   AvisoDoDirect,
@@ -75,6 +76,7 @@ export function QuestionForm({
   nodeId,
   respostas = [],
   noInstagram = false,
+  substituirConexao,
 }: {
   config: QuestionConfig;
   onChange: (config: QuestionConfig) => void;
@@ -82,6 +84,8 @@ export function QuestionForm({
   respostas?: RespostaDisponivel[];
   /** A automação começa por comentário do Instagram: a pergunta sai pelo Direct. */
   noInstagram?: boolean;
+  /** "Substituir em todos os blocos" do campo Conexão — quem aplica é o canvas. */
+  substituirConexao?: SubstituicaoDeConexao;
 }) {
   const t = useT();
   const [r, setR] = useState<Rascunho>({
@@ -103,7 +107,11 @@ export function QuestionForm({
       setErro(problema);
       return;
     }
-    const parsed = questionConfigSchema.safeParse(configDaPergunta(novo));
+    // A conexão não mora no rascunho: vem da config viva (ver MessageForm).
+    const parsed = questionConfigSchema.safeParse({
+      ...(config.channel_session_id ? { channel_session_id: config.channel_session_id } : {}),
+      ...(configDaPergunta(novo) as Record<string, unknown>),
+    });
     if (!parsed.success) {
       setErro(t("Configuração inválida."));
       return;
@@ -115,6 +123,15 @@ export function QuestionForm({
 
   return (
     <div className="space-y-4" data-testid="question-form">
+      <CampoDaConexao
+        prefixo="pergunta"
+        valor={config.channel_session_id}
+        onChange={(conexao) => {
+          const { channel_session_id: _antes, ...resto } = config;
+          onChange(conexao ? { ...resto, channel_session_id: conexao } : resto);
+        }}
+        {...(substituirConexao ? { substituir: substituirConexao } : {})}
+      />
       {noInstagram && <AvisoDoDirect />}
       <Campo id="pergunta-texto" rotulo={t("Pergunta")}>
         <Textarea

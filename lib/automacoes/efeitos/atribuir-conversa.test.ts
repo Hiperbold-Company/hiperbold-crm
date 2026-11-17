@@ -249,6 +249,79 @@ describe("assign_conversation", () => {
     expect(tabelas.conversations!.find((c) => c.id === "antiga")!.assigned_to_user_id).toBeNull();
   });
 
+  describe("conversa ativa (`vars.conversa_ativa`)", () => {
+    const ativa = (conversationId: string, channelSessionId: string) => ({
+      conversa_ativa: { conversation_id: conversationId, channel_session_id: channelSessionId, canal: null },
+    });
+
+    it("a principal é a conversa ativa, mesmo com o gatilho em outra conexão", async () => {
+      const { admin, tabelas } = criarBanco(
+        tabelasBase([
+          conversa({ id: "no-gatilho", channel_session_id: CANAL_GATILHO, last_message_at: "2026-11-14T10:00:00Z" }),
+          conversa({ id: "ativa", channel_session_id: OUTRO_CANAL, last_message_at: "2026-11-01T10:00:00Z" }),
+        ]),
+      );
+      const r = await executar(
+        admin,
+        pedido(ANA, {
+          gatilho: { tipo: "message_received", channel_session_id: CANAL_GATILHO },
+          ...ativa("ativa", OUTRO_CANAL),
+        }),
+      );
+      expect(r.desfecho).toEqual({ ok: true });
+      const donos = Object.fromEntries(tabelas.conversations!.map((c) => [c.id as string, c.assigned_to_user_id]));
+      expect(donos).toEqual({ "no-gatilho": null, ativa: ANA });
+    });
+
+    it("conversa ativa de outro contato não vale: cai na regra antiga", async () => {
+      const { admin, tabelas } = criarBanco(
+        tabelasBase([
+          conversa({ id: "no-gatilho", channel_session_id: CANAL_GATILHO, last_message_at: "2026-11-01T10:00:00Z" }),
+          conversa({
+            id: "alheia",
+            contact_id: "20000000-0000-4000-8000-0000000000ff",
+            channel_session_id: OUTRO_CANAL,
+            last_message_at: "2026-11-14T10:00:00Z",
+          }),
+        ]),
+      );
+      const r = await executar(
+        admin,
+        pedido(ANA, {
+          gatilho: { tipo: "message_received", channel_session_id: CANAL_GATILHO },
+          ...ativa("alheia", OUTRO_CANAL),
+        }),
+      );
+      expect(r.desfecho).toEqual({ ok: true });
+      const donos = Object.fromEntries(tabelas.conversations!.map((c) => [c.id as string, c.assigned_to_user_id]));
+      expect(donos).toEqual({ "no-gatilho": ANA, alheia: null });
+    });
+
+    it("conversa ativa já encerrada não vale: cai na regra antiga", async () => {
+      const { admin, tabelas } = criarBanco(
+        tabelasBase([
+          conversa({ id: "no-gatilho", channel_session_id: CANAL_GATILHO, last_message_at: "2026-11-01T10:00:00Z" }),
+          conversa({ id: "fechada", channel_session_id: OUTRO_CANAL, status: "closed", last_message_at: "2026-11-14T10:00:00Z" }),
+        ]),
+      );
+      await executar(admin, pedido(ANA, { gatilho: { channel_session_id: CANAL_GATILHO }, ...ativa("fechada", OUTRO_CANAL) }));
+      expect(tabelas.conversations!.find((c) => c.id === "no-gatilho")!.assigned_to_user_id).toBe(ANA);
+      expect(tabelas.conversations!.find((c) => c.id === "fechada")!.assigned_to_user_id).toBeNull();
+    });
+
+    it("sem conversa ativa: igual ao comportamento de sempre (canal do gatilho)", async () => {
+      const { admin, tabelas } = criarBanco(
+        tabelasBase([
+          conversa({ id: "no-gatilho", channel_session_id: CANAL_GATILHO, last_message_at: "2026-11-13T10:00:00Z" }),
+          conversa({ id: "mais-nova", channel_session_id: OUTRO_CANAL, last_message_at: "2026-11-14T10:00:00Z" }),
+        ]),
+      );
+      await executar(admin, pedido(ANA, { gatilho: { tipo: "message_received", channel_session_id: CANAL_GATILHO } }));
+      const donos = Object.fromEntries(tabelas.conversations!.map((c) => [c.id as string, c.assigned_to_user_id]));
+      expect(donos).toEqual({ "no-gatilho": ANA, "mais-nova": null });
+    });
+  });
+
   it("contato sem conversa: saída de erro `sem_conversa`, sem lançar e sem escrever", async () => {
     const { admin, rpcs } = criarBanco(tabelasBase([]));
     const r = await executar(admin, pedido(ANA));

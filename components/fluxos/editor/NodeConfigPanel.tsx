@@ -34,6 +34,7 @@ import { HttpForm } from "./forms/automacao/HttpForm";
 import { MessageForm } from "./forms/automacao/MessageForm";
 import { QuestionForm } from "./forms/automacao/QuestionForm";
 import { SorteioForm } from "./forms/automacao/SorteioForm";
+import type { SubstituicaoDeConexao } from "./forms/automacao/CampoDaConexao";
 import type { RespostaDisponivel } from "./forms/automacao/comum";
 import type { ConfigOf } from "./forms/shared";
 import { NODE_VISUALS } from "./nodes/nodeVisuals";
@@ -55,6 +56,8 @@ interface Props {
   respostasAnteriores?: RespostaDisponivel[];
   /** A automação começa por comentário do Instagram (a conversa só abre quando a pessoa responde). */
   comecaPorComentario?: boolean;
+  /** "Substituir em todos os blocos" do campo Conexão (Mensagem, Pergunta) — quem aplica é o canvas. */
+  substituirConexao?: SubstituicaoDeConexao;
 }
 
 /**
@@ -77,6 +80,7 @@ export function NodeConfigPanel({
   onSettingsChange,
   respostasAnteriores = [],
   comecaPorComentario = false,
+  substituirConexao,
 }: Props) {
   const t = useT();
   const type = node.type as FlowNode["type"];
@@ -155,6 +159,7 @@ export function NodeConfigPanel({
             onChange={(config) => onChange({ config })}
             respostas={respostasAnteriores}
             noInstagram={comecaPorComentario}
+            {...(substituirConexao ? { substituirConexao } : {})}
           />
         )}
         {type === "question" && (
@@ -164,6 +169,7 @@ export function NodeConfigPanel({
             nodeId={node.id}
             respostas={respostasAnteriores}
             noInstagram={comecaPorComentario}
+            {...(substituirConexao ? { substituirConexao } : {})}
           />
         )}
         {type === "condition" && surface === "automacao" && (

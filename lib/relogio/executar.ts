@@ -6,9 +6,10 @@ import {
   pisoDaRespostaNoDirect,
 } from "@/lib/automacoes/conversa";
 import {
-  escopoDoDirect,
+  escopoDaConversaSocial,
   idsDasConversasDoDirect,
-  type EscopoDoDirect,
+  recuaOPisoDoComentario,
+  type EscopoDaConversaSocial,
 } from "@/lib/automacoes/conversa-do-direct";
 import { criarExecutorDeEfeitos } from "@/lib/automacoes/efeitos";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
@@ -159,11 +160,12 @@ export async function aplicarRespostasQueChegaram(admin: SupabaseClient, deps: T
       // respondem ao "até responder" e são resposta inválida na pergunta.
       // Começou por comentário: só a resposta no Direct de quem comentou, nesta
       // conexão, acorda — mesmo que a conversa tenha nascido depois da espera.
+      // Mensagem recebida no Messenger/Direct: só a resposta na conversa do gatilho.
       const enviada = await ultimaRespostaDaAutomacao(
         admin,
         enrollment.organization_id,
         ids,
-        escopoDoDirect(enrollment.vars),
+        escopoDaConversaSocial(enrollment.vars),
       );
       if (enviada && (await acordarAutomacaoEmEspera(admin, enrollment, enviada))) n++;
       continue;
@@ -198,7 +200,7 @@ export async function ultimaRespostaDaAutomacao(
   admin: SupabaseClient,
   organizationId: string,
   contactIds: readonly string[],
-  escopo?: EscopoDoDirect | null,
+  escopo?: EscopoDaConversaSocial | null,
 ): Promise<{ sent_at: string; created_at: string | null } | null> {
   let consulta = admin
     .from("messages")
@@ -258,7 +260,7 @@ export async function acordarAutomacaoEmEspera(
   if (!estacionou) return false;
   // Direct: o "quero" que chegou antes de a espera estacionar também acorda (o
   // mesmo piso do motor, `pisoDaRespostaNoDirect`), só na primeira leitura.
-  if (escopoDoDirect(enrollment.vars) && !inboundDentroDaEspera(inbound, estacionou)) {
+  if (recuaOPisoDoComentario(enrollment.vars) && !inboundDentroDaEspera(inbound, estacionou)) {
     const doDirect = await pisoDoDirectDaExecucao(admin, enrollment);
     if (doDirect && Date.parse(doDirect) < Date.parse(estacionou)) estacionou = doDirect;
   }

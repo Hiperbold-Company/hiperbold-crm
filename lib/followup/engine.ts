@@ -91,9 +91,10 @@ import {
 import { devolverTurnoAoAgente, devolverTurnoDoInicio } from "@/lib/automacoes/devolver-turno";
 import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
 import {
-  escopoDoDirect,
+  escopoDaConversaSocial,
   idsDasConversasDoDirect,
-  type EscopoDoDirect,
+  recuaOPisoDoComentario,
+  type EscopoDaConversaSocial,
 } from "@/lib/automacoes/conversa-do-direct";
 import { carregarFatosDaAutomacao, type OpcoesDosFatos } from "@/lib/automacoes/carregar-fatos";
 import {
@@ -306,13 +307,15 @@ export interface AdminClient {
    *
    * `escopo` (execução que começou por comentário): só as mensagens da conversa
    * do Direct de quem comentou, na conexão do comentário — achada pela consulta
-   * a cada leitura, porque ela pode nascer depois de a espera começar.
+   * a cada leitura, porque ela pode nascer depois de a espera começar. Na que
+   * começou por "Mensagem recebida" no Messenger ou no Direct, só as da
+   * conversa do gatilho (`escopoDaConversaSocial`).
    */
   loadRespostasDaEspera?(
     orgId: string,
     contactId: string,
     desde: string,
-    escopo?: EscopoDoDirect | null,
+    escopo?: EscopoDaConversaSocial | null,
   ): Promise<RespostaRecebida[]>;
   /**
    * A automação consumiu a resposta do contato e terminou sem caminho ligado:
@@ -1448,13 +1451,17 @@ async function processarUmPasso(
     );
     const limite = tempoLimiteDaConversa(node);
     if (espera.aguardando && limite !== null) {
-      const escopo = escopoDoDirect(enrollment.vars);
+      const escopo = escopoDaConversaSocial(enrollment.vars);
       let desde = pisoDaEspera(espera.prazo, limite, enrollment.updated_at);
-      // Direct: o "quero" pode chegar ANTES de a espera estacionar (a resposta
+      // Direct do comentário: o "quero" pode chegar ANTES de a espera estacionar (a resposta
       // privada sai pelo cron do canal, e a pessoa responde em segundos). Na
       // primeira leitura da estadia o piso recua até o início da execução (ou a
       // última resposta já consumida); na nova tentativa volta ao de sempre.
-      if (escopo && espera.novasTentativas === 0) {
+      // Só no comentário: na mensagem recebida, recuar até o início contaria
+      // como resposta uma segunda mensagem chegada entre o disparo e a espera
+      // — como no WhatsApp, ela não conta. Nem depois que um bloco escolheu a
+      // conexão (`recuaOPisoDoComentario`): a conversa ativa é outra.
+      if (recuaOPisoDoComentario(enrollment.vars) && espera.novasTentativas === 0) {
         const doDirect = pisoDaRespostaNoDirect(events, node.id, enrollment.started_at);
         if (doDirect && Date.parse(doDirect) < Date.parse(desde)) desde = doDirect;
       }
