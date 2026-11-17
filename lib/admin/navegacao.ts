@@ -19,6 +19,7 @@
 import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 
 import {
+  Bug,
   Buildings,
   CalendarBlank,
   ChartBar,
@@ -115,6 +116,13 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     description: "Pedidos de titular: exportar, anonimizar e prazos",
     group: "operacao",
     icon: Scales,
+  },
+  {
+    href: "/admin/relatos",
+    label: "Relatos",
+    description: "Problemas relatados pelos usuários pelo botão do inseto, com print e contexto",
+    group: "operacao",
+    icon: Bug,
   },
 
   // ── Clientes ──────────────────────────────────────────────────────────────

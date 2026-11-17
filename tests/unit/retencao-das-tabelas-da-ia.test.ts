@@ -43,10 +43,23 @@ vi.mock("@/lib/audit", () => ({ audit: (...args: unknown[]) => auditou(...args) 
 
 /** Quanto cada função devolve no handler HTTP; o resto devolve 0. */
 let apagadasPorFuncao: Record<string, number> = {};
+// A poda dos relatos de problema (migration 1018) também chama `from`; aqui ela não tem o que
+// apagar: a superfície devolve vazio, e o que o arquivo mede segue sendo o resto da rodada.
+function relatosVazios() {
+  const q: Record<string, unknown> = {
+    select: () => q,
+    lt: () => q,
+    order: () => q,
+    limit: () => q,
+    then: (r: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(r),
+  };
+  return q;
+}
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     rpc: async (nome: string) => ({ data: apagadasPorFuncao[nome] ?? 0, error: null }),
-    from: () => {
+    from: (tabela?: string) => {
+      if (tabela === "bug_reports") return relatosVazios();
       const q: Record<string, unknown> = {
         eq: () => q,
         in: () => q,

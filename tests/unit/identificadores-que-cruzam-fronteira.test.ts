@@ -201,6 +201,8 @@ const SITES: { arquivo: string; fronteira: string; papel?: "gerador" | "validado
   // O anexo de lead (#2829): anexo em campo customizado do lead, bucket `internal-media`.
   { arquivo: "app/api/v1/leads/[id]/attachments/route.ts", fronteira: "storage.chave-de-objeto" },
   { arquivo: "app/api/v1/ai/knowledge/sources/upload/route.ts", fronteira: "storage.chave-de-objeto" },
+  // O print do relato de problema (migration 1018): `<org>/<relato>.webp|png`, dois uuids.
+  { arquivo: "app/api/v1/bug-reports/route.ts", fronteira: "storage.chave-de-objeto" },
   // Fork Hiperbold: a rota é transporte; o upload do material mora no núcleo que a API e o MCP usam.
   { arquivo: "lib/ai/rag/administracao-fontes.ts", fronteira: "storage.chave-de-objeto" },
   // O PDF da proposta comercial (#1832): `<org>/<proposta>.pdf`, dois uuids.

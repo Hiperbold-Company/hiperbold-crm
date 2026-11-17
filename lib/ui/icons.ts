@@ -87,6 +87,8 @@ export {
   // feedback
   CheckCircle,
   Warning,
+  // relatar problema (botão flutuante do CRM)
+  Bug,
   WarningOctagon,
   Info,
   CircleNotch,

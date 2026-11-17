@@ -52,6 +52,8 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { BUCKET_DOS_RELATOS } from "@/lib/relatos/regras";
+import { podarRelatosVencidos, type ResultadoDaPodaDosRelatos } from "@/lib/relatos/retencao";
 import { autorizaCron } from "@/lib/auth/cron-auth";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
@@ -972,6 +974,39 @@ async function handle(req: NextRequest): Promise<Response> {
     varredura.falhas.push(err instanceof Error ? err.message : String(err));
   }
 
+  // Os relatos de problema (migration 1018): linha e print com mais de 90 dias. Fora do
+  // `podarHistorico` porque mexe no Storage; falha entra em `falhas`, como as podas irmãs.
+  let relatos: ResultadoDaPodaDosRelatos = {
+    relatos_apagados: 0,
+    prints_apagados: 0,
+    lotes_relatos: 0,
+    relatos_tem_resto: false,
+    retencao_relatos_dias: 90,
+  };
+  try {
+    relatos = await podarRelatosVencidos({
+      async vencidos(antesDe, lote) {
+        const { data, error } = await admin
+          .from("bug_reports")
+          .select("id, screenshot_path")
+          .lt("created_at", antesDe)
+          .order("created_at")
+          .limit(lote);
+        return { data: (data ?? null) as { id: string; screenshot_path: string | null }[] | null, error };
+      },
+      async removerPrints(caminhos) {
+        const { error } = await admin.storage.from(BUCKET_DOS_RELATOS).remove(caminhos);
+        return { error };
+      },
+      async apagar(ids) {
+        const { data, error } = await admin.from("bug_reports").delete().in("id", ids).select("id");
+        return { data: Array.isArray(data) ? data.length : null, error };
+      },
+    });
+  } catch (err) {
+    resultado.falhas.push((err instanceof Error ? err.message : String(err)).slice(0, 300));
+  }
+
   for (const aviso of resultado.avisos) {
     logger.warn("[data-retention] configuração de retenção ajustada", { aviso, requestId });
   }
@@ -985,12 +1020,12 @@ async function handle(req: NextRequest): Promise<Response> {
   // a fazer. E o metadata leva as contagens do que JÁ foi apagado — antes, o
   // catch registrava só `{falhou, erro}` e o trabalho que aconteceu sumia.
   const houveFalhaParcial = resultado.falhas.length > 0;
-  if (houveEfeito(resultado) || houveFalhaParcial) {
+  if (houveEfeito(resultado) || relatos.relatos_apagados > 0 || houveFalhaParcial) {
     void audit({
       action: "retention.sweep_run",
       organizationId: null,
       bypassedRls: true,
-      metadata: { ...(houveFalhaParcial ? { falhou: true } : {}), ...resultado },
+      metadata: { ...(houveFalhaParcial ? { falhou: true } : {}), ...resultado, ...relatos },
       requestId,
     });
   }
@@ -1032,6 +1067,7 @@ async function handle(req: NextRequest): Promise<Response> {
 
   const corpo = {
     ...resultado,
+    ...relatos,
     anonimizacoes_examinadas: varredura.examinados,
     anonimizacoes_completadas: varredura.completados.length,
     anonimizacoes_tem_resto: varredura.temResto,
