@@ -44,6 +44,7 @@ import {
 import {
   aplicarConfiguracaoDoFunil,
   lerConfiguracaoDoFunil,
+  CAMPOS_DA_ORGANIZACAO,
   REGRAS_PERDEM_O_CAMPO,
 } from "@/lib/pipelines/configuracao-do-funil";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -108,8 +109,9 @@ const updatePipelineConfigShape = {
 export const crmUpdatePipelineConfig: McpToolDefinition<typeof updatePipelineConfigShape> = {
   name: "crm_update_pipeline_config",
   description:
-    "Grava a configuração de um pipeline. `config` aceita: vocabulary (merge por chave), fields (SUBSTITUI a lista " +
-    "inteira de campos personalizados — leia antes com crm_get_pipeline_config), lost_reasons, won_reasons, " +
+    "Grava a configuração de um pipeline. `config` aceita: vocabulary (merge por chave), fields (só em organização " +
+    "sem campos da organização; com eles, use crm_create/update/delete_pipeline_field), campos_obrigatorios (chave → " +
+    "{etapas, ao_ganhar, ao_perder}, SUBSTITUI o mapa deste funil), lost_reasons, won_reasons, " +
     "won_reason_required, reabertura, reabertura_campos, comanda_no_ganho, entrada_do_inbox, " +
     "ocultar_encerrados_dias e atalhos. Chave ausente não muda. Exige papel admin.",
   inputSchema: updatePipelineConfigShape,
@@ -133,7 +135,10 @@ export const crmUpdatePipelineConfig: McpToolDefinition<typeof updatePipelineCon
         throw recusa(ctx, 422, "unprocessable_entity", "Não entendi o que mudar na configuração deste funil.");
       }
       // #2791: a frase já vem pronta e nomeia a regra que deixaria de disparar (o 422 da rota REST).
-      if ((r.details as Record<string, unknown> | undefined)?.[REGRAS_PERDEM_O_CAMPO]) {
+      if (
+        (r.details as Record<string, unknown> | undefined)?.[REGRAS_PERDEM_O_CAMPO] ||
+        (r.details as Record<string, unknown> | undefined)?.[CAMPOS_DA_ORGANIZACAO]
+      ) {
         throw recusa(ctx, 422, "unprocessable_entity", r.error);
       }
       throw recusa(ctx, 500, "internal_error", r.error);
@@ -189,8 +194,8 @@ const createFieldShape = {
 export const crmCreatePipelineField: McpToolDefinition<typeof createFieldShape> = {
   name: "crm_create_pipeline_field",
   description:
-    "Acrescenta UM campo personalizado ao fim da lista de um funil, sem tocar nos outros (diferente de " +
-    "crm_update_pipeline_config, que SUBSTITUI a lista inteira). key: letras/números/underscore, não muda depois; " +
+    "Cria UM campo personalizado da ORGANIZAÇÃO (vale para todos os funis) pela porta de um funil; " +
+    "escopo contato|negocio escolhe o nível, obrigatorio_em vira a regra DESTE funil. key: letras/números/underscore, não muda depois; " +
     "chave repetida é recusada. select/multiselect exigem options. obrigatorio_em.etapas só aceita etapas do mesmo funil. " +
     "Exige papel admin.",
   inputSchema: createFieldShape,
@@ -220,8 +225,8 @@ const updateFieldShape = {
 export const crmUpdatePipelineField: McpToolDefinition<typeof updateFieldShape> = {
   name: "crm_update_pipeline_field",
   description:
-    "Altera um campo personalizado existente de um funil: label, required, options (substitui a lista) e/ou " +
-    "obrigatorio_em (null limpa). key e type NÃO mudam — para outro tipo, crie outro campo. Exige papel admin.",
+    "Altera um campo personalizado da organização: label, required, options (substitui a lista) valem para " +
+    "todos os funis; obrigatorio_em (null limpa) só para ESTE funil. key e type NÃO mudam — para outro tipo, crie outro campo. Exige papel admin.",
   inputSchema: updateFieldShape,
   category: "write",
   requiresRole: "admin",
@@ -241,8 +246,8 @@ const deleteFieldShape = { pipeline_id: z.string().uuid(), key: z.string().min(1
 export const crmDeletePipelineField: McpToolDefinition<typeof deleteFieldShape> = {
   name: "crm_delete_pipeline_field",
   description:
-    "Remove a definição de um campo personalizado do funil. O valor que os negócios já guardam nele permanece nos " +
-    "dados deles, mas o campo some dos cartões e formulários. Exige papel admin.",
+    "Remove a definição de um campo personalizado da ORGANIZAÇÃO (some de TODOS os funis). O valor que os " +
+    "registros já guardam permanece nos dados deles, mas o campo some dos cartões e formulários. Exige papel admin.",
   inputSchema: deleteFieldShape,
   category: "write",
   requiresRole: "admin",

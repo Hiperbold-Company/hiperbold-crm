@@ -1,26 +1,25 @@
 /**
- * Os CAMPOS PERSONALIZADOS de um funil, um a um — listar, criar, alterar, remover.
+ * Os CAMPOS PERSONALIZADOS vistos POR UM FUNIL — listar, criar, alterar, remover — pela rota antiga
+ * `/api/v1/pipelines/[id]/fields` e pelas tools MCP `crm_*_pipeline_field`.
  *
- * ⚠️ POR QUE EXISTE SE `PATCH /pipelines/[id]/config` JÁ GRAVA `fields`. Lá a lista INTEIRA é
- * substituída: quem quer acrescentar um campo tem de ler tudo, remendar e devolver tudo, e um
- * agente de IA (ou uma integração) que erra um item apaga os outros — sem aviso, porque o valor já
- * gravado nos negócios fica órfão. Aqui a operação é POR ITEM e roda dentro da trava otimista de
- * `aplicarConfiguracaoDoFunil` (`editarCampos`), então "acrescente o campo X" nunca desfaz o que
- * outra aba ou outra chave gravou um instante antes.
+ * ⚠️ DESDE A MIGRATION 1015 ISTO É FACHADA. A definição do campo é da ORGANIZAÇÃO
+ * (`custom_field_definitions`, regra em `lib/campos/administracao.ts`) e vale para todos os funis; o
+ * que continua do funil é só a obrigatoriedade (`settings.campos_obrigatorios`). O contrato desta
+ * porta não mudou — mesmo corpo, mesma resposta (o item de `settings.fields`, que o banco projeta) —,
+ * mas o efeito mudou e quem integra precisa saber:
+ *  - CRIAR por um funil cria o campo na organização (aparece em todos os funis). O `escopo` do corpo
+ *    escolhe a entidade (`contato` ou, ausente, `negocio`); `obrigatorio_em` vira regra DESTE funil;
+ *  - ALTERAR `label`/`required`/`options` muda o campo da organização; `obrigatorio_em` muda só a
+ *    regra deste funil (`null` a tira);
+ *  - REMOVER tira o campo da ORGANIZAÇÃO (de todos os funis). Os valores ficam nos registros.
  *
- * ⚠️ A REGRA É DE UM LUGAR SÓ. A rota REST e as tools MCP chamam estas funções; o merge de
- * `settings`, a trava otimista e o audit (`pipeline.config_updated`) continuam em
- * `lib/pipelines/configuracao-do-funil.ts`. A AUTORIZAÇÃO NÃO MORA AQUI: cada porta confere o
- * papel (`admin`, como a tela de configuração do funil) e entrega a organização já resolvida de
- * fonte confiável; o funil TEM de ser dela (404 igual a inexistente).
+ * A AUTORIZAÇÃO NÃO MORA AQUI: cada porta confere o papel (`admin`, como sempre foi nesta porta) e
+ * entrega a organização resolvida de fonte confiável; o funil TEM de ser dela (404 igual a inexistente).
  *
- * Decisões que a tela não precisava tomar e a API precisa:
- *  - o `type` de um campo NÃO muda depois de criado — os valores já gravados nos negócios seguem o
- *    tipo antigo; para outro tipo, cria-se outro campo;
- *  - `select`/`multiselect` exigem opções (sem elas o campo nasce inutilizável) e só eles as aceitam;
- *  - `obrigatorio_em.etapas` só aceita etapas DESTE funil, desta organização;
- *  - remover um campo tira a definição; o valor que os negócios já guardam permanece no
- *    `custom_fields` deles (a tela faz o mesmo ao excluir o campo).
+ * Decisões que continuam valendo:
+ *  - o `type` de um campo NÃO muda depois de criado;
+ *  - `select`/`multiselect` exigem opções, e só os tipos de lista as aceitam;
+ *  - `obrigatorio_em.etapas` só aceita etapas DESTE funil, desta organização.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -31,11 +30,14 @@ import { colunasDeAtorNoAudit } from "@/lib/audit/ator";
 import { customFieldSchema, type CustomFieldDef } from "@/lib/schemas/settings";
 
 import {
-  aplicarConfiguracaoDoFunil,
-  lerConfiguracaoDoFunil,
-  LIMITE_DE_CAMPOS,
-  type EdicaoDeCampos,
-} from "./configuracao-do-funil";
+  alterarDefinicao,
+  criarDefinicao,
+  definicaoPelaChave,
+  removerDefinicao,
+} from "@/lib/campos/administracao";
+import type { ConfigDoCampo } from "@/lib/campos/definicoes";
+
+import { aplicarConfiguracaoDoFunil, lerConfiguracaoDoFunil, type EdicaoDeObrigatorios } from "./configuracao-do-funil";
 
 export interface DepsDosCampos {
   supabase: SupabaseClient;
@@ -43,8 +45,6 @@ export interface DepsDosCampos {
   actor: Actor;
   requestId: string;
 }
-
-const TIPOS_COM_OPCOES = new Set(["select", "multiselect"]);
 
 /**
  * O que se pode alterar num campo existente. `key` e `type` ficam de fora de propósito, e
@@ -67,44 +67,15 @@ function recusa(deps: DepsDosCampos, status: number, code: string, message: stri
   return new ApiError(status, code, details as never, deps.requestId, message);
 }
 
-function erroDoNucleo(deps: DepsDosCampos, error: string, details?: unknown): ApiError {
+function erroDoNucleo(deps: DepsDosCampos, error: string): ApiError {
   if (error === "not_found") return recusa(deps, 404, "not_found", "Funil não encontrado.");
-  if (error === "campo_nao_encontrado") return recusa(deps, 404, "not_found", "Esse campo não existe neste funil.");
-  if (error === "campo_ja_existe") {
-    return recusa(deps, 409, "conflict", "Já existe um campo com essa chave neste funil.");
-  }
   if (error === "conflict") {
     return recusa(deps, 409, "conflict", "Outra alteração mexeu neste funil ao mesmo tempo. Tente de novo.");
   }
-  if (error === "incoerente") {
-    return recusa(deps, 422, "unprocessable_entity", typeof details === "string" ? details : "Campo incoerente.");
-  }
   if (error === "validation_failed" || error === "invalid_request") {
-    return recusa(
-      deps,
-      422,
-      "unprocessable_entity",
-      `Um funil aceita até ${LIMITE_DE_CAMPOS} campos personalizados.`,
-      details,
-    );
+    return recusa(deps, 422, "unprocessable_entity", "Regra de obrigatoriedade inválida.");
   }
   return recusa(deps, 500, "internal_error", error);
-}
-
-/** Regras de coerência de UM campo (tipo × opções). Devolve a razão da recusa, ou `null` se coerente. */
-function incoerenciaDoCampo(campo: Pick<CustomFieldDef, "type" | "options">): string | null {
-  const temOpcoes = (campo.options?.length ?? 0) > 0;
-  if (TIPOS_COM_OPCOES.has(campo.type) && !temOpcoes) {
-    return "Campo de seleção precisa de pelo menos uma opção (options).";
-  }
-  if (!TIPOS_COM_OPCOES.has(campo.type) && campo.options !== undefined) {
-    return "Só campos de seleção (select/multiselect) têm opções.";
-  }
-  if (campo.options) {
-    const valores = campo.options.map((o) => o.value);
-    if (new Set(valores).size !== valores.length) return "As opções do campo têm valores repetidos.";
-  }
-  return null;
 }
 
 /** As etapas de `obrigatorio_em.etapas` têm de ser deste funil e desta organização. */
@@ -139,50 +110,92 @@ export async function listarCamposDoFunil(deps: DepsDosCampos, pipelineId: strin
   return lida.dados.settings.fields;
 }
 
-async function aplicar(
+/** A obrigatoriedade DESTE funil, alterada numa chave, dentro da trava otimista do núcleo. */
+async function gravarObrigatoriedade(
   deps: DepsDosCampos,
   pipelineId: string,
-  editarCampos: EdicaoDeCampos,
-  detalheDoAudit: Record<string, unknown>,
-): Promise<unknown[]> {
+  chave: string,
+  regra: CustomFieldDef["obrigatorio_em"] | null,
+): Promise<void> {
+  const editar: EdicaoDeObrigatorios = (atuais) => {
+    const proximo = { ...atuais };
+    if (regra) proximo[chave] = regra;
+    else delete proximo[chave];
+    return proximo;
+  };
   const r = await aplicarConfiguracaoDoFunil(deps.supabase, {
     organizationId: deps.organizationId,
     pipelineId,
     patch: {},
-    editarCampos,
-    detalheDoAudit,
+    editarObrigatorios: editar,
+    detalheDoAudit: { campo_chave: chave, campo_acao: regra ? "obrigatoriedade_definida" : "obrigatoriedade_removida" },
     autor: colunasDeAtorNoAudit(deps.actor),
     requestId: deps.requestId,
   });
-  if (!r.ok) throw erroDoNucleo(deps, r.error, r.details);
-  return r.dados.settings.fields;
+  if (!r.ok) throw erroDoNucleo(deps, r.error);
 }
 
-const mesmaChave = (a: unknown, b: string) =>
-  typeof (a as { key?: unknown })?.key === "string" && (a as { key: string }).key.toLowerCase() === b.toLowerCase();
+/** O item de `settings.fields` deste funil para a chave, como o banco o projetou. */
+async function campoProjetado(deps: DepsDosCampos, pipelineId: string, chave: string): Promise<{
+  campo: CustomFieldDef;
+  total: number;
+}> {
+  const lida = await lerConfiguracaoDoFunil(deps.supabase, deps.organizationId, pipelineId);
+  if (!lida.ok) throw erroDoNucleo(deps, lida.error);
+  const campos = lida.dados.settings.fields;
+  const achado = campos.find(
+    (c) => typeof (c as { key?: unknown })?.key === "string" && (c as { key: string }).key.toLowerCase() === chave.toLowerCase(),
+  );
+  return { campo: (achado ?? null) as unknown as CustomFieldDef, total: campos.length };
+}
 
-/** Acrescenta um campo ao fim da lista. Chave repetida (sem diferenciar maiúsculas) é 409. */
+/** O que é do tipo, tirado do corpo antigo (o item de `fields`) para o `config` da definição. */
+function configDoCorpo(campo: Partial<CustomFieldDef>): ConfigDoCampo | undefined {
+  const config: ConfigDoCampo = {};
+  if (campo.options !== undefined) config.options = campo.options;
+  if (campo.mostrar_quando !== undefined) config.mostrar_quando = campo.mostrar_quando;
+  if (campo.padrao !== undefined) config.padrao = campo.padrao;
+  if (campo.mensagem_padrao !== undefined) config.mensagem_padrao = campo.mensagem_padrao;
+  if (campo.allow_new !== undefined) config.allow_new = campo.allow_new;
+  if (campo.multiple !== undefined) config.multiple = campo.multiple;
+  return Object.keys(config).length > 0 ? config : undefined;
+}
+
+async function exigirFunil(deps: DepsDosCampos, pipelineId: string): Promise<void> {
+  const lida = await lerConfiguracaoDoFunil(deps.supabase, deps.organizationId, pipelineId);
+  if (!lida.ok) throw erroDoNucleo(deps, lida.error);
+}
+
+/**
+ * Cria o campo NA ORGANIZAÇÃO (ver o cabeçalho) e, se veio `obrigatorio_em`, a regra deste funil.
+ * Chave repetida na organização (sem diferenciar maiúsculas) é 409.
+ */
 export async function criarCampoDoFunil(
   deps: DepsDosCampos,
   pipelineId: string,
   campo: CustomFieldDef,
 ): Promise<{ campo: CustomFieldDef; total: number }> {
-  const incoerente = incoerenciaDoCampo(campo);
-  if (incoerente) throw recusa(deps, 422, "unprocessable_entity", incoerente);
+  await exigirFunil(deps, pipelineId);
   await validarEtapas(deps, pipelineId, campo.obrigatorio_em?.etapas);
-  const campos = await aplicar(
-    deps,
-    pipelineId,
-    (atuais) =>
-      atuais.some((c) => mesmaChave(c, campo.key))
-        ? { erro: "campo_ja_existe" }
-        : { campos: [...atuais, campo] },
-    { campo_chave: campo.key, campo_acao: "criado" },
-  );
-  return { campo, total: campos.length };
+  await criarDefinicao(deps, {
+    entidade: campo.escopo === "contato" ? "contato" : "negocio",
+    key: campo.key,
+    label: campo.label,
+    type: campo.type,
+    obrigatorio: campo.required,
+    grupo: campo.grupo,
+    descricao: campo.descricao,
+    publico: campo.publico,
+    sempre_visivel: campo.sempre_visivel,
+    exibir_no_perfil: campo.exibir_no_perfil,
+    dica_de_ajuda: campo.dica_de_ajuda,
+    config: configDoCorpo(campo),
+  });
+  if (campo.obrigatorio_em) await gravarObrigatoriedade(deps, pipelineId, campo.key, campo.obrigatorio_em);
+  return campoProjetado(deps, pipelineId, campo.key);
 }
 
-/** Altera label, obrigatoriedade, opções e regra de obrigatoriedade de um campo existente. */
+/** Altera label, obrigatoriedade e opções do campo da organização; `obrigatorio_em`, a regra deste funil. */
 export async function alterarCampoDoFunil(
   deps: DepsDosCampos,
   pipelineId: string,
@@ -192,45 +205,35 @@ export async function alterarCampoDoFunil(
   if (Object.keys(alteracao).length === 0) {
     throw recusa(deps, 422, "unprocessable_entity", "Diga o que mudar no campo.");
   }
+  await exigirFunil(deps, pipelineId);
   await validarEtapas(deps, pipelineId, alteracao.obrigatorio_em?.etapas);
+  const definicao = await definicaoPelaChave(deps, chave);
+  if (!definicao) throw recusa(deps, 404, "not_found", "Esse campo não existe neste funil.");
 
-  let resultado: CustomFieldDef | null = null;
-  await aplicar(
-    deps,
-    pipelineId,
-    (atuais) => {
-      const i = atuais.findIndex((c) => (c as { key?: unknown })?.key === chave);
-      if (i < 0) return { erro: "campo_nao_encontrado" };
-      const { obrigatorio_em, ...resto } = alteracao;
-      const novo = { ...(atuais[i] as CustomFieldDef), ...resto } as CustomFieldDef;
-      if (obrigatorio_em === null) delete novo.obrigatorio_em;
-      else if (obrigatorio_em !== undefined) novo.obrigatorio_em = obrigatorio_em;
-      const incoerente = incoerenciaDoCampo(novo);
-      if (incoerente) return { erro: "incoerente", details: incoerente };
-      resultado = novo;
-      const copia = [...atuais];
-      copia[i] = novo;
-      return { campos: copia };
-    },
-    { campo_chave: chave, campo_acao: "alterado", campos_alterados: Object.keys(alteracao) },
-  );
-  return resultado as unknown as CustomFieldDef;
+  const { obrigatorio_em, label, required, options } = alteracao;
+  if (label !== undefined || required !== undefined || options !== undefined) {
+    await alterarDefinicao(deps, definicao.id, {
+      ...(label !== undefined ? { label } : {}),
+      ...(required !== undefined ? { obrigatorio: required } : {}),
+      ...(options !== undefined ? { config: { options } } : {}),
+    });
+  }
+  if (obrigatorio_em !== undefined) {
+    await gravarObrigatoriedade(deps, pipelineId, definicao.key, obrigatorio_em);
+  }
+  return (await campoProjetado(deps, pipelineId, definicao.key)).campo;
 }
 
-/** Tira a definição do campo. Os valores já guardados nos negócios permanecem (ver o cabeçalho). */
+/** Tira o campo da ORGANIZAÇÃO. Os valores já guardados nos registros permanecem (ver o cabeçalho). */
 export async function removerCampoDoFunil(
   deps: DepsDosCampos,
   pipelineId: string,
   chave: string,
 ): Promise<{ key: string; total: number }> {
-  const campos = await aplicar(
-    deps,
-    pipelineId,
-    (atuais) =>
-      atuais.some((c) => (c as { key?: unknown })?.key === chave)
-        ? { campos: atuais.filter((c) => (c as { key?: unknown })?.key !== chave) }
-        : { erro: "campo_nao_encontrado" },
-    { campo_chave: chave, campo_acao: "removido" },
-  );
-  return { key: chave, total: campos.length };
+  await exigirFunil(deps, pipelineId);
+  const definicao = await definicaoPelaChave(deps, chave);
+  if (!definicao) throw recusa(deps, 404, "not_found", "Esse campo não existe neste funil.");
+  await removerDefinicao(deps, definicao.id);
+  const { total } = await campoProjetado(deps, pipelineId, chave);
+  return { key: definicao.key, total };
 }

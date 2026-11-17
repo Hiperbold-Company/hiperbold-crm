@@ -20,6 +20,7 @@ import {
   mensagemDasRegrasQuePerdemOCampo,
   regrasDeDataQuePerdemOCampo,
 } from "@/lib/automation/campo-do-gatilho-de-data";
+import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
 import { diasDeRecorte } from "@/lib/kanban/recorte-de-encerrados";
 import { entradaDoInboxDeclarada, type EntradaDoInboxDeclarada } from "@/lib/leads/entrada-do-inbox";
@@ -118,14 +119,32 @@ export async function lerConfiguracaoDoFunil(
 }
 
 /**
- * Edição CIRÚRGICA da lista de campos personalizados, dentro da mesma trava otimista do merge: recebe
- * os campos que estão no banco NESTA tentativa e devolve a lista nova — ou a recusa. Assim "acrescente
- * o campo X" nunca apaga o campo que outra aba/token gravou um instante antes (o `fields` do patch
- * SUBSTITUI a lista inteira; esta forma altera um item).
+ * Edição CIRÚRGICA da obrigatoriedade (`settings.campos_obrigatorios`, migration 1015), dentro da
+ * mesma trava otimista do merge: recebe o mapa que está no banco NESTA tentativa e devolve o novo.
+ * Assim "exija o campo X na etapa Y" nunca desfaz a regra do campo Z que outra aba gravou um instante
+ * antes (o `campos_obrigatorios` do patch SUBSTITUI o mapa inteiro; esta forma altera uma chave).
  */
-export type EdicaoDeCampos = (
-  atuais: unknown[],
-) => { campos: unknown[] } | { erro: string; details?: unknown };
+export type EdicaoDeObrigatorios = (atuais: Record<string, unknown>) => Record<string, unknown>;
+
+/**
+ * `details.campos_da_organizacao`: a recusa de gravar `fields` num funil cuja organização já tem os
+ * campos em `custom_field_definitions` (1015). O banco derivaria `fields` por cima do que viesse —
+ * aceitar seria dizer "salvo" e não salvar. `error` já é a frase.
+ */
+export const CAMPOS_DA_ORGANIZACAO = "campos_da_organizacao";
+
+export const MENSAGEM_CAMPOS_DA_ORGANIZACAO =
+  "Os campos personalizados agora são da organização: crie e edite em Configurações › Campos Personalizados (ou pela API /api/v1/custom-fields). No funil fica só a obrigatoriedade por etapa (campos_obrigatorios).";
+
+/** A organização já está no modelo da 1015 (tem ao menos uma definição)? Falha de leitura = não. */
+async function organizacaoTemCamposProprios(supabase: SupabaseClient, organizationId: string): Promise<boolean> {
+  const { count, error } = await supabase
+    .from("custom_field_definitions")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId);
+  if (error) return false;
+  return (count ?? 0) > 0;
+}
 
 export interface AutorDaConfiguracao {
   actorUserId?: string | null;
@@ -145,8 +164,8 @@ export async function aplicarConfiguracaoDoFunil(
     organizationId: string;
     pipelineId: string;
     patch: PipelineConfigPatch;
-    /** Altera a lista de campos sobre o que está no banco; roda a cada tentativa da trava otimista. */
-    editarCampos?: EdicaoDeCampos;
+    /** Altera `campos_obrigatorios` sobre o que está no banco; roda a cada tentativa da trava otimista. */
+    editarObrigatorios?: EdicaoDeObrigatorios;
     /** Acrescentado ao `metadata` do audit (ex.: qual campo mudou). Nunca valor de dado de contato. */
     detalheDoAudit?: Record<string, unknown>;
     /** Idioma da frase de recusa (#2791). Padrão `pt-BR`. */
@@ -162,6 +181,15 @@ export async function aplicarConfiguracaoDoFunil(
   const parsed = pipelineConfigPatchSchema.safeParse(input.patch);
   if (!parsed.success) {
     return { ok: false, error: "validation_failed", details: parsed.error.flatten() };
+  }
+
+  // 1015: com os campos na organização, `fields` é projeção do banco — gravá-lo daqui não pegaria.
+  if (parsed.data.fields !== undefined && (await organizacaoTemCamposProprios(supabase, organizationId))) {
+    return {
+      ok: false,
+      error: traduzir(MENSAGEM_CAMPOS_DA_ORGANIZACAO, input.idioma ?? "pt-BR"),
+      details: { [CAMPOS_DA_ORGANIZACAO]: true },
+    };
   }
 
   // LER-MODIFICAR-GRAVAR com trava otimista: dois salvamentos ao mesmo tempo (duas abas, a tela e um
@@ -189,14 +217,14 @@ export async function aplicarConfiguracaoDoFunil(
     const currentSettings = (row.settings as Record<string, unknown> | null) ?? {};
     const nextSettings: Record<string, unknown> = { ...currentSettings };
     if (parsed.data.fields !== undefined) nextSettings.fields = parsed.data.fields;
-    if (input.editarCampos) {
-      const atuais = Array.isArray(currentSettings.fields) ? (currentSettings.fields as unknown[]) : [];
-      const editada = input.editarCampos(atuais);
-      if ("erro" in editada) return { ok: false, error: editada.erro, details: editada.details };
-      if (editada.campos.length > LIMITE_DE_CAMPOS) {
-        return { ok: false, error: "validation_failed", details: { fields: ["max_fields"] } };
-      }
-      nextSettings.fields = editada.campos;
+    if (parsed.data.campos_obrigatorios !== undefined) {
+      nextSettings.campos_obrigatorios = parsed.data.campos_obrigatorios;
+    }
+    if (input.editarObrigatorios) {
+      const bruto = currentSettings.campos_obrigatorios;
+      const atuais =
+        bruto && typeof bruto === "object" && !Array.isArray(bruto) ? (bruto as Record<string, unknown>) : {};
+      nextSettings.campos_obrigatorios = input.editarObrigatorios(atuais);
     }
     if (parsed.data.lost_reasons !== undefined) nextSettings.lost_reasons = parsed.data.lost_reasons;
     if (parsed.data.won_reasons !== undefined) nextSettings.won_reasons = parsed.data.won_reasons;
@@ -229,7 +257,7 @@ export async function aplicarConfiguracaoDoFunil(
     // Campo que passa a ser do Contato e que uma regra ativa do gatilho por data lê (#2791):
     // a regra seguiria ligada e pararia de disparar em silêncio. Confere a cada tentativa,
     // sobre o `settings` lido nesta tentativa.
-    if (parsed.data.fields !== undefined || input.editarCampos) {
+    if (parsed.data.fields !== undefined) {
       const perdem = await regrasDeDataQuePerdemOCampo(
         supabase,
         organizationId,
@@ -271,6 +299,8 @@ export async function aplicarConfiguracaoDoFunil(
     metadata: {
       vocabulary_changed: !!parsed.data.vocabulary,
       fields_count: parsed.data.fields?.length ?? null,
+      campos_obrigatorios_count:
+        parsed.data.campos_obrigatorios !== undefined ? Object.keys(parsed.data.campos_obrigatorios).length : null,
       lost_reasons_count: parsed.data.lost_reasons?.length ?? null,
       won_reasons_count: parsed.data.won_reasons?.length ?? null,
       won_reason_required: parsed.data.won_reason_required ?? null,

@@ -1752,6 +1752,12 @@ export const AUDIT_ACTIONS = [
   // Migration 1013: o MESMO negócio foi para uma etapa de outro funil (`moverParaOutroFunilHandler`).
   // metadata: from/to pipeline e etapa, posição e campos_fora_do_funil (chaves, nunca valores).
   "lead.pipeline_moved",
+  // Migration 1015: campos personalizados da ORGANIZAÇÃO (`custom_field_definitions`, contato e negócio).
+  // metadata: entidade, key, type (criação), campos_alterados (alteração), registros_com_valor (exclusão)
+  // — contagens e chaves, nunca valor de registro.
+  "custom_field.created",
+  "custom_field.updated",
+  "custom_field.deleted",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */
