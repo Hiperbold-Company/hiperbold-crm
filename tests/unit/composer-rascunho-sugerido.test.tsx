@@ -83,7 +83,7 @@ describe("Composer + rascunho sugerido", () => {
   it("abre com o texto no campo e o aviso de origem — sem ter enviado nada", () => {
     renderComposer({ initialDraft: sugerido.leitura.estado === "sugerido" ? sugerido.leitura.texto : "", rascunho: sugerido });
 
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("Sua cobrança venceu hoje.");
+    expect(screen.getByLabelText(/^mensagem$/i)).toHaveValue("Sua cobrança venceu hoje.");
     expect(screen.getByTestId("aviso-rascunho")).toHaveTextContent(/texto sugerido por/i);
     expect(screen.getByTestId("aviso-rascunho")).toHaveTextContent(/revise antes de enviar/i);
     // Critério da issue: NENHUM envio aconteceu até aqui.
@@ -134,7 +134,7 @@ describe("Composer + rascunho sugerido", () => {
       },
     });
 
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("");
+    expect(screen.getByLabelText(/^mensagem$/i)).toHaveValue("");
     expect(screen.getByTestId("aviso-rascunho")).toHaveTextContent(/expirou/i);
     expect(sendMock).not.toHaveBeenCalled();
   });

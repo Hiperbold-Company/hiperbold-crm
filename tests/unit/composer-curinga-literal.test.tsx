@@ -57,7 +57,7 @@ describe("Composer + curinga de nome literal (#2744)", () => {
 
   it("(a) resposta com `{{primeiro_nome}}` e contato sem nome: barrar o envio e mostrar o motivo", () => {
     renderComposer({ contactName: null, contactDisplayName: null });
-    const campo = screen.getByLabelText(/mensagem/i);
+    const campo = screen.getByLabelText(/^mensagem$/i);
 
     fireEvent.change(campo, { target: { value: "Oi {{primeiro_nome}}, segue o catálogo!" } });
     // Enter é o caminho real de envio do operador; o botão também fica travado.
@@ -88,7 +88,7 @@ describe("Composer + curinga de nome literal (#2744)", () => {
 
   it("(c) contato COM name: nada barrado — o curinga resolve e a resposta sai", () => {
     renderComposer({ contactName: "Rafael Melgaço" });
-    const campo = screen.getByLabelText(/mensagem/i);
+    const campo = screen.getByLabelText(/^mensagem$/i);
 
     fireEvent.change(campo, { target: { value: "Oi {{nome}}, tudo bem?" } });
     fireEvent.click(screen.getByRole("button", { name: /^enviar$/i }));
@@ -99,7 +99,7 @@ describe("Composer + curinga de nome literal (#2744)", () => {
 
   it("(c') contato sem name mas COM display_name de gente: também não barra", () => {
     renderComposer({ contactName: null, contactDisplayName: "Ana Paula" });
-    const campo = screen.getByLabelText(/mensagem/i);
+    const campo = screen.getByLabelText(/^mensagem$/i);
 
     fireEvent.change(campo, { target: { value: "Oi {{primeiro_nome}}" } });
     fireEvent.click(screen.getByRole("button", { name: /^enviar$/i }));
@@ -110,7 +110,7 @@ describe("Composer + curinga de nome literal (#2744)", () => {
 
   it("(d) chave desconhecida não barra: `{{codigo}}` cru segue como texto", () => {
     renderComposer({ contactName: null, contactDisplayName: null });
-    const campo = screen.getByLabelText(/mensagem/i);
+    const campo = screen.getByLabelText(/^mensagem$/i);
 
     fireEvent.change(campo, { target: { value: "Seu cupom é {{codigo}}" } });
     fireEvent.click(screen.getByRole("button", { name: /^enviar$/i }));
@@ -121,7 +121,7 @@ describe("Composer + curinga de nome literal (#2744)", () => {
 
   it("apagar o literal destrava o envio: o aviso some e a resposta sai", () => {
     renderComposer({ contactName: null, contactDisplayName: null });
-    const campo = screen.getByLabelText(/mensagem/i);
+    const campo = screen.getByLabelText(/^mensagem$/i);
 
     fireEvent.change(campo, { target: { value: "Oi {{primeiro_nome}}" } });
     expect(screen.getByTestId("aviso-curinga-literal")).toBeInTheDocument();
