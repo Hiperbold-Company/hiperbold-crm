@@ -58,6 +58,8 @@ vi.mock("@/lib/supabase/admin", () => {
     select: () => cadeiaDoCanal,
     eq: () => cadeiaDoCanal,
     is: () => cadeiaDoCanal,
+    order: () => cadeiaDoCanal,
+    limit: () => cadeiaDoCanal,
     maybeSingle: async () => ({ data: canal, error: null }),
   };
   return {

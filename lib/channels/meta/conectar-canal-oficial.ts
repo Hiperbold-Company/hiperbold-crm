@@ -2,7 +2,7 @@
  * Conectar o número oficial da Meta (Cloud API) a UMA organização: a parte que o
  * formulário manual (`POST /api/v1/channels/official`) e o Cadastro Incorporado
  * (`POST /api/v1/channels/official/cadastro-incorporado`, migration 1014) têm em
- * comum: validar → cifrar → achar a conexão existente → reativar ou inserir →
+ * comum: validar → cifrar → achar a conexão deste número → reativar ou inserir →
  * reconhecer o erro do banco → registrar o webhook do número → auditar.
  *
  * As duas portas diferem só em COMO chegam ao trio (número, WABA, token): uma
@@ -10,8 +10,18 @@
  * divergir: uma conexão pelo botão que pulasse a validação, a cifra ou a
  * ressurreição da linha arquivada seria um canal oficial de segunda classe.
  *
- * Uma conexão oficial por organização (`maybeSingle` por org + provider): conectar
- * de novo, por qualquer porta, troca a credencial da mesma linha.
+ * VÁRIAS conexões oficiais por organização (17/11/2026, decisão do dono do produto):
+ * a identidade da conexão é o NÚMERO (`meta_phone_number_id`) dentro da organização.
+ * Mesmo número já conectado aqui (ativo ou arquivado) → a MESMA linha recebe a
+ * credencial nova (e volta à vida, se estava arquivada). Número novo → linha nova,
+ * e quem decide se ela cabe é o gatilho do plano (`trg_billing_trava_channel_sessions`),
+ * cuja recusa as rotas já traduzem. Conectar um segundo número NÃO toca no primeiro.
+ *
+ * `channelSessionId` (opcional) é a tela dizendo "estou trocando a credencial DESTA
+ * conexão": ela tem de ser oficial, viva e desta organização (senão
+ * `conexao_nao_encontrada`, 404) e o número informado tem de ser o dela (senão
+ * `numero_diferente_da_conexao`, 422). As duas conferências vêm antes de falar com
+ * a Meta e antes de gravar qualquer coisa.
  *
  * NUNCA devolve nem audita o token: a metadata da auditoria leva a origem e os
  * dois ids, que não são segredo.
@@ -30,6 +40,7 @@ import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/arch
 import { CHANNEL_PROVIDER_META } from "@/lib/channels/capabilities";
 import { validateMetaCredentials } from "@/lib/channels/meta/validate-credentials";
 import { registrarWebhookDaSessao } from "@/lib/channels/meta/webhook-da-sessao";
+import { buscarSessaoOficialViva } from "@/lib/channels/meta/sessao-oficial-viva";
 import { reactivateChannelSession } from "@/lib/channels/reactivate";
 import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
@@ -53,6 +64,11 @@ export const MENSAGEM_NUMERO_EM_OUTRA_ORGANIZACAO =
  */
 export const MENSAGEM_CREDENCIAL_RECUSADA_NO_CADASTRO =
   "A Meta recusou a credencial do número escolhido. Confira se o número terminou o cadastro e tente de novo.";
+
+export const MENSAGEM_CONEXAO_NAO_ENCONTRADA = "Conexão não encontrada.";
+
+export const MENSAGEM_NUMERO_DIFERENTE_DA_CONEXAO =
+  "Este número não é o desta conexão. Para conectar outro número, use Adicionar conexão.";
 
 export const MENSAGEM_CIFRA_INDISPONIVEL =
   "cifra indisponível nesta instalação (GUC app.nuvemshop_oauth_key ausente) — o token não foi gravado";
@@ -80,6 +96,8 @@ export interface EntradaDaConexaoOficial {
   wabaId: string;
   /** Em claro só aqui dentro; sai daqui cifrado e nunca volta. */
   token: string;
+  /** A conexão que a tela diz estar atualizando (fase B). Ausente = decide o número. */
+  channelSessionId?: string | null;
   /** Nome escolhido pelo operador; vazio = a regra de sempre (nome existente, depois o da Meta). */
   nome?: string | null;
   baseDoWebhook: string;
@@ -104,12 +122,11 @@ export type ResultadoDaConexaoOficial =
   | { ok: false; erro: "credencial_invalida"; motivo: string }
   | { ok: false; erro: "cifra_indisponivel" }
   | { ok: false; erro: "numero_em_outra_organizacao" }
+  | { ok: false; erro: "conexao_nao_encontrada" }
+  | { ok: false; erro: "numero_diferente_da_conexao" }
   | { ok: false; erro: "gravacao"; error: ErroDaGravacao };
 
-export type FalhaFixaDaConexaoOficial = Extract<
-  ResultadoDaConexaoOficial,
-  { ok: false; erro: "credencial_invalida" | "cifra_indisponivel" | "numero_em_outra_organizacao" }
->;
+export type FalhaFixaDaConexaoOficial = Exclude<ResultadoDaConexaoOficial, { ok: true } | { erro: "gravacao" }>;
 
 /**
  * 23505 do índice GLOBAL do número, e só dele. A trava de (org, phone_number) da
@@ -141,11 +158,27 @@ export function respostaDaFalhaDaConexaoOficial(
       return fail("invalid_request", t(MENSAGEM_CIFRA_INDISPONIVEL), 422, { requestId });
     case "numero_em_outra_organizacao":
       return fail("numero_em_outra_organizacao", t(MENSAGEM_NUMERO_EM_OUTRA_ORGANIZACAO), 409, { requestId });
+    case "conexao_nao_encontrada":
+      // O mesmo 404 para id de outra organização, de outro canal ou excluído: não diz qual.
+      return fail("not_found", t(MENSAGEM_CONEXAO_NAO_ENCONTRADA), 404, { requestId });
+    case "numero_diferente_da_conexao":
+      return fail("numero_diferente_da_conexao", t(MENSAGEM_NUMERO_DIFERENTE_DA_CONEXAO), 422, { requestId });
   }
 }
 
 export async function conectarCanalOficial(input: EntradaDaConexaoOficial): Promise<ResultadoDaConexaoOficial> {
   const { admin, orgId, userId, requestId, phoneNumberId, wabaId, token } = input;
+
+  // A conexão que a tela diz estar atualizando: conferida ANTES da Meta e de gravar.
+  if (input.channelSessionId) {
+    const { data: alvo, error: erroDoAlvo } = await buscarSessaoOficialViva<{
+      id: string;
+      meta_phone_number_id: string | null;
+    }>(admin, orgId, "id, meta_phone_number_id", input.channelSessionId);
+    if (erroDoAlvo) return { ok: false, erro: "gravacao", error: erroDoAlvo };
+    if (!alvo) return { ok: false, erro: "conexao_nao_encontrada" };
+    if (alvo.meta_phone_number_id !== phoneNumberId) return { ok: false, erro: "numero_diferente_da_conexao" };
+  }
 
   // VALIDA ANTES DE GRAVAR: a rota não sabe com quem fala; ela pergunta se a
   // credencial presta e o canal responde.
@@ -173,23 +206,27 @@ export async function conectarCanalOficial(input: EntradaDaConexaoOficial): Prom
   const cifrado = await encryptWebhookSecret(admin, token);
   if (!cifrado) return { ok: false, erro: "cifra_indisponivel" };
 
-  // A busca NÃO filtra `archived_at`: um canal oficial excluído é exatamente o
-  // que esta conexão precisa achar para trazer de volta. Ignorá-lo criaria uma
-  // SEGUNDA linha oficial na org, e a linha velha continuaria segurando o par
-  // (org, número) na trava da 0106.
-  const buscarExistente = (colunas: string) =>
-    admin
+  // A conexão é o NÚMERO dentro da organização. A busca NÃO filtra `archived_at`:
+  // um canal oficial excluído com ESTE número é exatamente o que esta conexão
+  // precisa achar para trazer de volta. Ignorá-lo criaria uma segunda linha para o
+  // mesmo número, e a velha continuaria segurando o par (org, número) na trava da
+  // 0106. Se houver mais de uma (histórico), a viva vem primeiro, depois a mais antiga.
+  const buscarExistente = (colunas: string, comArquivada: boolean) => {
+    const q = admin
       .from("channel_sessions")
       .select(colunas)
       .eq("organization_id", orgId)
       .eq("provider", CHANNEL_PROVIDER_META)
-      .maybeSingle();
+      .eq("meta_phone_number_id", phoneNumberId);
+    const ordenada = comArquivada ? q.order(ARCHIVED_AT, { ascending: false, nullsFirst: true }) : q;
+    return ordenada.order("created_at", { ascending: true }).limit(1).maybeSingle();
+  };
   const { data: existenteRaw, error: erroDaBusca } = await queryTolerantToMissingArchived(
-    () => buscarExistente(`id, ${ARCHIVED_AT}, webhook_path_token, display_name`),
-    () => buscarExistente("id, webhook_path_token, display_name"),
+    () => buscarExistente(`id, ${ARCHIVED_AT}, webhook_path_token, display_name`, true),
+    () => buscarExistente("id, webhook_path_token, display_name", false),
   );
   // Busca que falhou NÃO é "não existe": seguir para o INSERT criaria uma segunda
-  // linha oficial na org (ou esbarraria na trava do número) e esconderia a causa.
+  // linha para o mesmo número (ou esbarraria na trava do número) e esconderia a causa.
   if (erroDaBusca) return { ok: false, erro: "gravacao", error: erroDaBusca };
   const existente = existenteRaw as {
     id: string;

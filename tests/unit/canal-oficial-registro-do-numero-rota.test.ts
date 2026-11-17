@@ -64,7 +64,7 @@ vi.mock("@/lib/channels/archived", () => ({
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => {
     const cadeia: Record<string, unknown> = {};
-    for (const n of ["select", "eq", "is"]) cadeia[n] = () => cadeia;
+    for (const n of ["select", "eq", "is", "order", "limit"]) cadeia[n] = () => cadeia;
     cadeia.maybeSingle = async () => ({ data: estado.sessao, error: null });
     return { from: () => cadeia };
   },

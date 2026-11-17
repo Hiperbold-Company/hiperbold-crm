@@ -41,6 +41,7 @@ import {
 } from "@/lib/channels/gestao-de-modelos";
 import { resolveMetaCreds } from "@/lib/channels/meta/credentials";
 import { metaSessionForOrg } from "@/lib/channels/meta/session";
+import { idDaConexaoNaQuery } from "@/lib/channels/meta/sessao-oficial-viva";
 import { metaCloudTemplateOps } from "@/lib/channels/meta/templates";
 import { normalizeRejectedReason } from "@/lib/channels/meta/webhook";
 import { deriveTemplateContract, describeAddress } from "@/lib/channels/meta/template-contract";
@@ -152,12 +153,35 @@ async function orgOrFail(requestId: string, papel: "agent" | "manager"): Promise
   return { autorizado: true, orgId: authz.org.orgId, userId: authz.user.id, idioma: authz.user.idioma };
 }
 
-export async function GET(): Promise<NextResponse> {
+/**
+ * QUAL conta oficial (17/11/2026, várias por organização): `?channel_session_id=` na
+ * query, nos dois métodos. Id de outra organização, de outro canal ou excluído = 404,
+ * sem dizer qual. Sem ele, a oficial mais antiga, como antes da fase B.
+ */
+async function sessaoDaRequisicao(
+  req: NextRequest,
+  orgId: string,
+  idioma: Idioma,
+  requestId: string,
+): Promise<{ sessao: Awaited<ReturnType<typeof metaSessionForOrg>> } | { resposta: NextResponse }> {
+  const id = idDaConexaoNaQuery(new URL(req.url));
+  const naoEncontrada = () => ({
+    resposta: fail("not_found", traduzir("Conexão não encontrada.", idioma), 404, { requestId }),
+  });
+  if (id === null) return naoEncontrada();
+  const sessao = await metaSessionForOrg(orgId, id);
+  if (id && !sessao) return naoEncontrada();
+  return { sessao };
+}
+
+export async function GET(req: NextRequest): Promise<NextResponse> {
   const requestId = randomUUID();
   const r = await orgOrFail(requestId, "agent");
   if (!r.autorizado) return r.resposta;
 
-  const sessao = await metaSessionForOrg(r.orgId);
+  const escolhida = await sessaoDaRequisicao(req, r.orgId, r.idioma, requestId);
+  if ("resposta" in escolhida) return escolhida.resposta;
+  const { sessao } = escolhida;
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("meta_templates")
@@ -255,7 +279,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!r.autorizado) return r.resposta;
   const t = (texto: string) => traduzir(texto, r.idioma);
 
-  const sessao = await metaSessionForOrg(r.orgId);
+  const escolhida = await sessaoDaRequisicao(req, r.orgId, r.idioma, requestId);
+  if ("resposta" in escolhida) return escolhida.resposta;
+  const { sessao } = escolhida;
   if (!sessao?.wabaId) {
     return fail("invalid_request", "no_meta_channel", 400, { requestId });
   }

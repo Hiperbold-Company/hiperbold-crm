@@ -28749,6 +28749,7 @@ export const DICIONARIO: Traducoes = {
   "Todas as conversas abertas do contato (WhatsApp, Messenger, Direct)": { es: "Todas las conversaciones abiertas del contacto (WhatsApp, Messenger, Direct)" },
   // Cadastro Incorporado do WhatsApp (botão Conectar com a Meta, migration 1014).
   "Este número já está conectado em outra organização desta instalação. Desconecte lá antes de conectar aqui.": { es: "Este número ya está conectado en otra organización de esta instalación. Desconéctelo allí antes de conectarlo aquí." },
+  "Este número não é o desta conexão. Para conectar outro número, use Adicionar conexão.": { es: "Este número no es el de esta conexión. Para conectar otro número, use Agregar conexión." },
   "A volta do cadastro da Meta veio incompleta. Clique em Conectar de novo.": { es: "El regreso del registro de Meta llegó incompleto. Haga clic en Conectar de nuevo." },
   "Escolha um número no cadastro da Meta": { es: "Elija un número en el registro de Meta" },
   "A Meta recusou a credencial do número escolhido. Confira se o número terminou o cadastro e tente de novo.": { es: "Meta rechazó la credencial del número elegido. Compruebe que el número terminó el registro e inténtelo de nuevo." },

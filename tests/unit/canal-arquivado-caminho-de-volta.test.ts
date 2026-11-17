@@ -100,7 +100,9 @@ function canalOficial(over: Linha = {}): Linha {
     organization_id: ORG,
     provider: CHANNEL_PROVIDER_META,
     waha_session_name: null,
-    meta_phone_number_id: "999",
+    // O mesmo número do `corpoOficial`: desde 17/11/2026 a conexão oficial é o NÚMERO, e reconectar
+    // (ressuscitar) é conectar de novo o mesmo número. Número diferente vira conexão nova.
+    meta_phone_number_id: "1234567890",
     meta_token_encrypted: null,
     display_name: "Canal oficial",
     phone_number: null,
@@ -345,7 +347,7 @@ describe("POST /api/v1/channels/official — reconectar é ressuscitar", () => {
     expect(db.linhas[0]?.phone_number).toBe("+5531999998888");
   });
 
-  it("ressuscita a MESMA linha — nunca uma segunda linha oficial na org", async () => {
+  it("ressuscita a MESMA linha — nunca uma segunda linha para o mesmo número", async () => {
     authOk();
     const db = makeDb({ sessions: [canalOficial({ archived_at: ARQUIVADO_EM })] });
     const { POST } = await import("@/app/api/v1/channels/official/route");

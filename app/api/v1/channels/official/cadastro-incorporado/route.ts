@@ -16,6 +16,12 @@ import { authenticatedSessionId, requireSupportWrite } from "@/lib/impersonate/s
  * nonce do `state` é queimado ANTES da troca do código: repetir a mesma volta
  * (replay) recusa sem chegar à Meta.
  *
+ * Várias conexões oficiais por organização (17/11/2026): `channel_session_id` no
+ * corpo do POST diz qual conexão está sendo refeita (tem de ser desta organização,
+ * senão 404, e o número escolhido tem de ser o dela, senão 422). Sem ele, decide o
+ * número: mesmo número = mesma linha; número novo = conexão nova. A fase B passa o
+ * id sempre que o cadastro for de uma conexão existente.
+ *
  * Rota de cookie, como as demais de `/api/v1/channels`: o `proxy.ts` exige a
  * sessão, e por isso não há entrada em `lib/auth/public-paths.ts`.
  */
@@ -39,6 +45,7 @@ import {
   wabaDoToken,
 } from "@/lib/channels/meta/cadastro-incorporado/meta";
 import { conectarCanalOficial, respostaDaFalhaDaConexaoOficial } from "@/lib/channels/meta/conectar-canal-oficial";
+import { idDaConexaoOficialSchema } from "@/lib/channels/meta/sessao-oficial-viva";
 import { lerEstadoDoNumero, sincronizarContatosDoApp } from "@/lib/channels/meta/registro-do-numero";
 import { VERSAO_DA_GRAPH_SOCIAL } from "@/lib/channels/meta-social/constantes";
 import { traduzirLimiteDoPlano } from "@/lib/cobranca/limites";
@@ -65,6 +72,7 @@ const conclusaoSchema = z.object({
   waba_id: z.string().regex(SO_DIGITOS).optional(),
   nome: z.string().trim().min(1).max(80).optional(),
   evento: z.enum(["FINISH", "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING", "FINISH_ONLY_WABA"]).optional(),
+  channel_session_id: idDaConexaoOficialSchema.optional(),
 });
 
 export async function GET(): Promise<NextResponse> {
@@ -124,11 +132,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const parsed = conclusaoSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
+    // Id malformado é conexão que não existe aqui: o mesmo 404 do id de outra organização.
+    if (parsed.error.issues.some((i) => i.path[0] === "channel_session_id")) {
+      return fail("not_found", t("Conexão não encontrada."), 404, { requestId });
+    }
     return fail("invalid_request", t("A volta do cadastro da Meta veio incompleta. Clique em Conectar de novo."), 422, {
       requestId,
     });
   }
-  const { state, code, phone_number_id, waba_id, nome, evento } = parsed.data;
+  const { state, code, phone_number_id, waba_id, nome, evento, channel_session_id } = parsed.data;
   if (!phone_number_id) {
     return fail(
       "numero_nao_escolhido",
@@ -239,6 +251,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     wabaId: waba.wabaId,
     token,
     nome: nome ?? null,
+    channelSessionId: channel_session_id ?? null,
     baseDoWebhook: basePublicaDoWebhookMeta(req),
     origem: "cadastro_incorporado",
   });
@@ -301,6 +314,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   return ok(
     {
       connected: true,
+      channel_session_id: conexao.channelSessionId,
       displayName: conexao.displayName,
       phoneNumber: conexao.phoneNumber,
       /** `registrado: false` NÃO desfaz a conexão: o canal envia; falta a entrega. */

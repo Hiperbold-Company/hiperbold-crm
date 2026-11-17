@@ -107,6 +107,12 @@ function makeDb(opts: { sessions?: Linha[]; recusaColunaDoDesfecho?: boolean } =
       this.filtros.push([col, val]);
       return this;
     }
+    order(): this {
+      return this;
+    }
+    limit(): this {
+      return this;
+    }
     maybeSingle(): this {
       this.unica = true;
       return this;

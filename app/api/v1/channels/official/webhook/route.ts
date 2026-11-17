@@ -15,20 +15,27 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *
  * O desfecho é o da tentativa de AGORA, e é gravado nas colunas da 0311: a tela
  * recarrega o GET e vê o estado novo, não o da tentativa anterior.
+ *
+ * Várias conexões oficiais por organização (17/11/2026): `channel_session_id` no corpo diz qual. Id de
+ * outra organização, de outro canal ou excluído = 404, sem dizer qual. Sem ele, a oficial mais antiga
+ * (a tela de hoje); a fase B (cartões) passa o id sempre.
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
-import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
-import { CHANNEL_PROVIDER_META } from "@/lib/channels/capabilities";
+import { z } from "zod";
+
+import { buscarSessaoOficialViva, idDaConexaoOficialSchema } from "@/lib/channels/meta/sessao-oficial-viva";
 import { registrarWebhookDaSessao } from "@/lib/channels/meta/webhook-da-sessao";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { basePublicaDoWebhookMeta } from "@/lib/webhooks/url-publica";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const corpoSchema = z.object({ channel_session_id: idDaConexaoOficialSchema.optional() });
 
 const COLUNAS =
   "id, meta_phone_number_id, meta_waba_id, meta_token_encrypted, webhook_path_token";
@@ -42,29 +49,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!authz.ok) return authz.response;
   const orgId = authz.org.orgId;
 
-  const admin = createAdminClient();
-  const consultar = () =>
-    admin
-      .from("channel_sessions")
-      .select(COLUNAS)
-      .eq("organization_id", orgId)
-      .eq("provider", CHANNEL_PROVIDER_META);
+  // Corpo vazio (a tela de hoje) continua valendo: sem id, a oficial mais antiga.
+  const corpo = corpoSchema.safeParse((await req.json().catch(() => null)) ?? {});
+  if (!corpo.success) return fail("not_found", "Conexão não encontrada.", 404, { requestId });
+  const channelSessionId = corpo.data.channel_session_id;
 
+  const admin = createAdminClient();
   // Só a sessão VIVA: reaplicar o webhook de um canal arquivado apontaria a Meta para
   // uma URL cujo `webhook_path_token` já foi rotacionado — ou seja, registraria uma
   // entrega que ninguém atende. Canal arquivado se reconecta, não se "conserta".
-  const { data } = await queryTolerantToMissingArchived(
-    () => consultar().is(ARCHIVED_AT, null).maybeSingle(),
-    () => consultar().maybeSingle(),
-  );
-
-  const sessao = data as {
+  const { data: sessao } = await buscarSessaoOficialViva<{
     id: string;
     meta_phone_number_id: string | null;
     meta_waba_id: string | null;
     meta_token_encrypted: string | null;
     webhook_path_token: string | null;
-  } | null;
+  }>(admin, orgId, COLUNAS, channelSessionId);
+
+  if (!sessao && channelSessionId) return fail("not_found", "Conexão não encontrada.", 404, { requestId });
 
   if (!sessao || !sessao.meta_phone_number_id || !sessao.meta_waba_id || !sessao.meta_token_encrypted) {
     return fail("invalid_request", "no_meta_channel", 422, { requestId });

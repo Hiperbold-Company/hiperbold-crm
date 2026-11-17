@@ -386,7 +386,7 @@ describe("canal oficial direto — só o modelo DESTA conexão", () => {
       { ...LINHA_DO_PARCEIRO, status: "APPROVED", components: [], parameter_format: "POSITIONAL" },
     ];
 
-    const res = await GET();
+    const res = await GET(new NextRequest(URL_ROTA));
 
     expect(res.status).toBe(200);
     const j = (await res.json()) as { data: { templates: { daConexao: boolean }[] } };

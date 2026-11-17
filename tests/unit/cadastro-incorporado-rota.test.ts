@@ -99,7 +99,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from(tabela: string) {
       const q: Record<string, unknown> = {};
-      for (const n of ["select", "eq", "is"]) q[n] = () => q;
+      for (const n of ["select", "eq", "is", "order", "limit"]) q[n] = () => q;
       q.maybeSingle = async () => ({
         data: h.banco.erroDaBusca ? null : h.banco.existente,
         error: h.banco.erroDaBusca,
