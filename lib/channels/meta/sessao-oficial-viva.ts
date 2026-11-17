@@ -16,7 +16,7 @@
 import type { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { fail } from "@/lib/api/wrappers";
+import { fail, falhaInterna } from "@/lib/api/wrappers";
 import { ARCHIVED_AT, queryTolerantToMissingArchived, type DbErrorLike } from "@/lib/channels/archived";
 import { CHANNEL_PROVIDER_META } from "@/lib/channels/capabilities";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -64,11 +64,13 @@ export async function buscarSessaoOficialViva<T>(
 /**
  * A organização tem MAIS DE UMA conexão oficial viva? (`limit(2)`: só interessa saber se passa de uma.)
  * Mesma população de `buscarSessaoOficialViva`: id da organização explícito, provider oficial, não arquivada.
+ * LANÇA quando a consulta falha; as rotas respondem 500 (`recusaSeConexaoOficialAmbigua` converte).
  */
 export async function temMaisDeUmaConexaoOficialViva(
   admin: ReturnType<typeof createAdminClient>,
   organizationId: string,
 ): Promise<boolean> {
+  // Erro da consulta NÃO vira "uma só": a rota que decide por esta resposta responderia sobre a conexão errada.
   const consultar = () =>
     admin
       .from("channel_sessions")
@@ -76,10 +78,11 @@ export async function temMaisDeUmaConexaoOficialViva(
       .eq("organization_id", organizationId)
       .eq("provider", CHANNEL_PROVIDER_META)
       .limit(2);
-  const { data } = await queryTolerantToMissingArchived(
+  const { data, error } = await queryTolerantToMissingArchived(
     () => consultar().is(ARCHIVED_AT, null),
     () => consultar(),
   );
+  if (error) throw new Error(`consulta_das_conexoes_oficiais_falhou: ${error.message ?? error.code ?? "erro"}`);
   return (data?.length ?? 0) > 1;
 }
 
@@ -97,7 +100,13 @@ export async function recusaSeConexaoOficialAmbigua(input: {
   requestId?: string;
 }): Promise<NextResponse | null> {
   if (input.channelSessionId) return null;
-  if (!(await temMaisDeUmaConexaoOficialViva(input.admin, input.organizationId))) return null;
+  let maisDeUma: boolean;
+  try {
+    maisDeUma = await temMaisDeUmaConexaoOficialViva(input.admin, input.organizationId);
+  } catch (err) {
+    return falhaInterna("internal_error", err, { requestId: input.requestId });
+  }
+  if (!maisDeUma) return null;
   return fail(
     "conexao_oficial_ambigua",
     traduzir(

@@ -32,14 +32,12 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
-import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 import { requireRole } from "@/lib/auth/require-role";
 import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import { appDaMeta, appDaMetaDoAmbiente } from "@/lib/channels/meta/app";
 import { metaGraphBase } from "@/lib/channels/meta/credentials";
 import { conectarCanalOficial, respostaDaFalhaDaConexaoOficial } from "@/lib/channels/meta/conectar-canal-oficial";
-import { numeroDoCanalOficialVivo } from "@/lib/channels/meta/numero-da-sessao";
 import { buscarSessaoOficialViva, idDaConexaoNaQuery, idDaConexaoOficialSchema } from "@/lib/channels/meta/sessao-oficial-viva";
 import { COLUNAS_DO_DESFECHO_DO_WEBHOOK } from "@/lib/channels/meta/webhook-da-sessao";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -160,6 +158,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (id && !data) return fail("not_found", traduzir("Conexão não encontrada.", authz.user.idioma), 404, { requestId });
 
   const base = basePublicaDoWebhookMeta(req);
+  // Endereço e token de verificação só saem para quem administra a INSTALAÇÃO (mesma régua do link
+  // `/admin/meta`): o admin de um tenant não precisa deles — a instalação registra o webhook sozinha — e o
+  // token do `.env` vale para todas as organizações.
+  const veOsSegredosDoWebhook = Boolean(authz.user.is_platform_admin && !authz.user.support);
   const desfecho = data?.id ? await lerDesfechoDoWebhook(admin, orgId, data.id) : null;
   return ok({
     connected: Boolean(data),
@@ -179,12 +181,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     /** O que o operador precisa colar do NOSSO lado no dashboard da Meta. */
     webhook: data
       ? {
-          callbackUrl: `${base}/api/v1/webhooks/meta/${data.webhook_path_token}`,
-          ...(await tokenDeVerificacaoParaATela()),
-          // A porta para quem PODE abrir a tela da instalação — mesma regra do
-          // link de `/admin/google` na Agenda. Para o admin de um tenant qualquer
-          // o link seria um 404; a tela diz a ele quem procurar.
-          configurarEm: authz.user.is_platform_admin && !authz.user.support ? "/admin/meta" : null,
+          ...(veOsSegredosDoWebhook
+            ? {
+                callbackUrl: `${base}/api/v1/webhooks/meta/${data.webhook_path_token}`,
+                ...(await tokenDeVerificacaoParaATela()),
+                configurarEm: "/admin/meta",
+              }
+            : {}),
           // `smb_message_echoes`: o que a empresa manda pelo app WhatsApp Business
           // num número em coexistência. Sem coexistência a Meta não o envia, então
           // assinar é inofensivo para quem não usa.
@@ -242,23 +245,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Validar, cifrar, achar a conexão existente, reativar ou inserir e registrar o
   // webhook: o mesmo caminho do Cadastro Incorporado (migration 1014), num lugar só.
   const admin = createAdminClient();
-
-  // SUBSTITUIR o número de uma conexão oficial existente (mesmo `channel_session_id`, número diferente)
-  // pede o mesmo papel que REMOVÊ-LA (admin), igual ao Cadastro Incorporado. Conectar um número NOVO
-  // (sem id) cria outra conexão e não troca nada; recolar a credencial do MESMO número também segue
-  // com gerente. Roda antes de validar na Meta e de gravar. Id que não é desta organização segue para
-  // `conectarCanalOficial`, que responde o 404 de sempre.
-  if (channel_session_id) {
-    const alvo = await numeroDoCanalOficialVivo(admin, orgId, channel_session_id);
-    if (alvo && alvo.phoneNumberId !== phone_number_id && !podeAdministrarEmpresa(authz.user, authz.org)) {
-      return fail(
-        "forbidden_role",
-        t("Trocar o número da conexão oficial é uma ação de administrador. Peça a quem administra a empresa para fazer a troca."),
-        403,
-        { requestId },
-      );
-    }
-  }
 
   const conexao = await conectarCanalOficial({
     admin,

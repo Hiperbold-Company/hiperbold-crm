@@ -205,27 +205,26 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
 });
 
-describe("POST cadastro-incorporado: substituir o número de uma conexão existente exige administrador", () => {
+describe("POST cadastro-incorporado: trocar o número de uma conexão existente é recusado (422), para qualquer papel", () => {
   const OUTRO_NUMERO = "555444333222";
   const ID_DA_CONEXAO = "aaaaaaaa-0000-4000-8000-0000000000b2";
 
-  it("gerente que SUBSTITUIRIA o número (mesmo id, número diferente) recebe 403 legível, sem queimar o nonce, sem Meta e sem gravar", async () => {
+  it("gerente que SUBSTITUIRIA o número (mesmo id, número diferente) recebe 422, sem queimar o nonce, sem Meta e sem gravar", async () => {
     h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
     const res = await POST(post(corpoValido({ channel_session_id: ID_DA_CONEXAO })));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(422);
     const corpo = await res.json();
-    expect(corpo.error.code).toBe("forbidden_role");
-    expect(corpo.error.message).toMatch(/administrador/i);
+    expect(corpo.error.code).toBe("numero_diferente_da_conexao");
     expect(h.banco.inserts).toHaveLength(0);
     expect(chamadasAMeta()).toHaveLength(0);
     expect(h.audit).toHaveLength(0);
   });
 
-  it("administrador passa da guarda de papel (e cai na recusa do número diferente da conexão)", async () => {
+  it("administrador recebe a mesma recusa 422: não há guarda de papel a passar", async () => {
     h.sessao.role = "admin";
     h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
     const res = await POST(post(corpoValido({ channel_session_id: ID_DA_CONEXAO })));
-    expect(res.status).not.toBe(403);
+    expect(res.status).toBe(422);
     expect((await res.json()).error.code).toBe("numero_diferente_da_conexao");
   });
 
@@ -575,7 +574,7 @@ describe("POST /api/v1/channels/official (manual): o mesmo número em outra orga
   });
 });
 
-describe("POST /api/v1/channels/official (manual): substituir o número de uma conexão existente exige administrador", () => {
+describe("POST /api/v1/channels/official (manual): trocar o número de uma conexão existente é recusado (422), para qualquer papel", () => {
   const OUTRO_NUMERO = "555444333222";
   const ID_DA_CONEXAO = "aaaaaaaa-0000-4000-8000-0000000000b3";
   const manual = (extra: Record<string, unknown> = {}) =>
@@ -585,23 +584,22 @@ describe("POST /api/v1/channels/official (manual): substituir o número de uma c
       body: JSON.stringify({ phone_number_id: NUMERO, waba_id: WABA, token: TOKEN_CLARO, ...extra }),
     });
 
-  it("gerente que SUBSTITUIRIA o número (mesmo id, número diferente) recebe 403 legível, sem validar na Meta, sem gravar e sem audit", async () => {
+  it("gerente que SUBSTITUIRIA o número (mesmo id, número diferente) recebe 422, sem validar na Meta, sem gravar e sem audit", async () => {
     h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
     const res = await POST_MANUAL(manual({ channel_session_id: ID_DA_CONEXAO }));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(422);
     const corpo = await res.json();
-    expect(corpo.error.code).toBe("forbidden_role");
-    expect(corpo.error.message).toMatch(/administrador/i);
+    expect(corpo.error.code).toBe("numero_diferente_da_conexao");
     expect(h.cifrar).toHaveLength(0);
     expect(h.banco.inserts).toHaveLength(0);
     expect(h.audit).toHaveLength(0);
   });
 
-  it("administrador passa da guarda de papel (e cai na recusa do número diferente da conexão)", async () => {
+  it("administrador recebe a mesma recusa 422: não há guarda de papel a passar", async () => {
     h.sessao.role = "admin";
     h.banco.existente = { id: ID_DA_CONEXAO, meta_phone_number_id: OUTRO_NUMERO };
     const res = await POST_MANUAL(manual({ channel_session_id: ID_DA_CONEXAO }));
-    expect(res.status).not.toBe(403);
+    expect(res.status).toBe(422);
     expect((await res.json()).error.code).toBe("numero_diferente_da_conexao");
   });
 

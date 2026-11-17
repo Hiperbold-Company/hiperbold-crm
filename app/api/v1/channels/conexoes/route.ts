@@ -2,7 +2,8 @@
  * GET /api/v1/channels/conexoes — todas as conexões vivas da organização, uma por cartão (fase B da tela
  * de Conexões, 17/11/2026: várias contas oficiais do WhatsApp na mesma organização).
  *
- * Sessão OU token `dsk_…` (`role:manager` + `mcp:read`): só leitura. Piso `manager`, o mesmo da tela
+ * Sessão (cookie) ou token `dsk_…` (`role:manager` + `mcp:read`) — o token só chega ao handler quando
+ * o caminho entrar em `lib/auth/public-paths.ts`; hoje o proxy só reconhece cookie. Só leitura. Piso `manager`, o mesmo da tela
  * `/app/connections` (`lib/navigation/catalogo.ts`) e das rotas `/channels/official/*`.
  *
  * Nada de credencial na resposta: a regra (colunas fixas, sem token, segredo nem caminho de webhook) mora
@@ -29,7 +30,10 @@ export async function GET(req: NextRequest): Promise<Response> {
   });
   if (!authz.ok) return authz.response;
 
-  const { data, error, schemaOutdated } = await listarConexoesEmCartoes(authz.supabase, authz.organizationId);
+  const { data, error, schemaOutdated } = await listarConexoesEmCartoes(
+    authz.supabase,
+    authz.organizationId,
+  );
   if (error) return falhaInterna("internal_error", error, { requestId });
 
   return ok(data ?? [], {

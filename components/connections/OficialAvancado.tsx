@@ -45,7 +45,7 @@ function ParaColar({
   if (!valor) {
     return (
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           {rotulo}
         </span>
         {semValor}
@@ -54,11 +54,13 @@ function ParaColar({
   }
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
         {rotulo}
       </span>
       <div className="flex items-center gap-2">
-        <code className="flex-1 overflow-x-auto rounded-md bg-muted px-2 py-1.5 text-xs">{valor}</code>
+        <code className="flex-1 overflow-x-auto rounded-md bg-muted px-2 py-1.5 text-xs">
+          {valor}
+        </code>
         <Button
           size="sm"
           variant="outline"
@@ -134,40 +136,48 @@ export function WebhookDoNumeroOficial({
         </div>
       ) : null}
 
-      <ParaColar rotulo={t("URL de callback")} valor={estado.webhook.callbackUrl} />
-      <ParaColar
-        rotulo={t("Token de verificação")}
-        valor={estado.webhook.verifyToken}
-        semValor={
-          // Desde a 0257 o token vive na tela de administração da instalação
-          // e é mostrado UMA vez, quando é gerado. Mandar "definir no
-          // servidor" quem já cadastrou tudo por lá seria mandá-lo editar um
-          // arquivo que ele não precisa abrir — e o valor do arquivo nem é
-          // mais o que a Meta precisa receber.
-          <span className="flex flex-col items-start gap-1">
-            {estado.webhook.verifyTokenOrigem === "instalacao" ? (
-              <span className="text-sm text-muted-foreground" data-testid="token-na-instalacao">
-                {t("Já cadastrado na administração da instalação. Ele aparece uma vez só, quando é gerado — se não foi guardado, quem administra a instalação gera outro em Admin › API Oficial (Meta).")}
+      {estado.webhook.callbackUrl ? (
+        <>
+          <ParaColar rotulo={t("URL de callback")} valor={estado.webhook.callbackUrl} />
+          <ParaColar
+            rotulo={t("Token de verificação")}
+            valor={estado.webhook.verifyToken ?? null}
+            semValor={
+              // Desde a 0257 o token vive na tela de administração da instalação
+              // e é mostrado UMA vez, quando é gerado. Mandar "definir no
+              // servidor" quem já cadastrou tudo por lá seria mandá-lo editar um
+              // arquivo que ele não precisa abrir — e o valor do arquivo nem é
+              // mais o que a Meta precisa receber.
+              <span className="flex flex-col items-start gap-1">
+                {estado.webhook.verifyTokenOrigem === "instalacao" ? (
+                  <span className="text-sm text-muted-foreground" data-testid="token-na-instalacao">
+                    {t(
+                      "Já cadastrado na administração da instalação. Ele aparece uma vez só, quando é gerado — se não foi guardado, quem administra a instalação gera outro em Admin › API Oficial (Meta).",
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-sm text-destructive" data-testid="token-nao-configurado">
+                    {t(
+                      "Ainda não configurado. Quem administra a instalação cadastra em Admin › API Oficial (Meta), e o token aparece lá pronto para copiar.",
+                    )}
+                  </span>
+                )}
+                {estado.webhook.configurarEm ? (
+                  <Link
+                    href={estado.webhook.configurarEm}
+                    data-testid="abrir-app-da-meta"
+                    className="text-sm font-medium underline underline-offset-2"
+                  >
+                    {t("Abrir API Oficial (Meta) na administração")}
+                  </Link>
+                ) : null}
               </span>
-            ) : (
-              <span className="text-sm text-destructive" data-testid="token-nao-configurado">
-                {t("Ainda não configurado. Quem administra a instalação cadastra em Admin › API Oficial (Meta), e o token aparece lá pronto para copiar.")}
-              </span>
-            )}
-            {estado.webhook.configurarEm ? (
-              <Link
-                href={estado.webhook.configurarEm}
-                data-testid="abrir-app-da-meta"
-                className="text-sm font-medium underline underline-offset-2"
-              >
-                {t("Abrir API Oficial (Meta) na administração")}
-              </Link>
-            ) : null}
-          </span>
-        }
-      />
+            }
+          />
+        </>
+      ) : null}
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           {t("Campos a assinar")}
         </span>
         <div className="flex flex-wrap gap-1">
@@ -254,7 +264,9 @@ export function FormularioOficialManual({
 
   return (
     <Card className="p-4" data-testid="formulario-oficial-manual">
-      <h2 className="font-medium">{jaConectado ? t("Trocar credencial") : t("Conectar canal oficial")}</h2>
+      <h2 className="font-medium">
+        {jaConectado ? t("Trocar credencial") : t("Conectar canal oficial")}
+      </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {t("Os três valores vêm do seu app na Meta (")}
         <strong>WhatsApp → {t("Configuração da API")}</strong>
@@ -274,7 +286,9 @@ export function FormularioOficialManual({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`waba${channelSessionId ?? ""}`}>{t("ID da conta do WhatsApp Business")}</Label>
+          <Label htmlFor={`waba${channelSessionId ?? ""}`}>
+            {t("ID da conta do WhatsApp Business")}
+          </Label>
           <Input
             id={`waba${channelSessionId ?? ""}`}
             value={form.waba_id}
@@ -300,7 +314,7 @@ export function FormularioOficialManual({
         <Button
           type="submit"
           disabled={conectar.isPending || travadoPeloPlano}
-          title={travadoPeloPlano ? bloqueio?.motivo ?? undefined : undefined}
+          title={travadoPeloPlano ? (bloqueio?.motivo ?? undefined) : undefined}
           data-testid="btn-conectar"
         >
           {conectar.isPending ? t("Validando com a Meta…") : t("Validar e conectar")}

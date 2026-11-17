@@ -19,8 +19,9 @@ export interface OfficialChannelState {
   phoneNumber: string | null;
   status: string | null;
   webhook: {
-    callbackUrl: string;
-    verifyToken: string | null;
+    /** Ausente para quem não administra a instalação: o servidor omite endereço e token. */
+    callbackUrl?: string;
+    verifyToken?: string | null;
     /**
      * De onde vem o token que vale. `instalacao` = cadastrado na tela de
      * administração: existe, mas não volta num GET (foi mostrado uma vez, lá).

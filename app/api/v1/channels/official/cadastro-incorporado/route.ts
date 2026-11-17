@@ -30,7 +30,6 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
-import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 import { requireRole } from "@/lib/auth/require-role";
 import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
@@ -45,7 +44,11 @@ import {
   trocarCodigo,
   wabaDoToken,
 } from "@/lib/channels/meta/cadastro-incorporado/meta";
-import { conectarCanalOficial, respostaDaFalhaDaConexaoOficial } from "@/lib/channels/meta/conectar-canal-oficial";
+import {
+  conectarCanalOficial,
+  MENSAGEM_NUMERO_DIFERENTE_DA_CONEXAO,
+  respostaDaFalhaDaConexaoOficial,
+} from "@/lib/channels/meta/conectar-canal-oficial";
 import { numeroDoCanalOficialVivo } from "@/lib/channels/meta/numero-da-sessao";
 import { idDaConexaoOficialSchema } from "@/lib/channels/meta/sessao-oficial-viva";
 import { lerEstadoDoNumero, sincronizarContatosDoApp } from "@/lib/channels/meta/registro-do-numero";
@@ -198,24 +201,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Reconectar uma conexão que já existe: o id tem de ser desta organização, oficial e viva. Conferido ANTES
   // de queimar o nonce e de gastar o código na Meta — um id alheio não pode custar nem um nem outro.
   //
-  // SUBSTITUIR o número dessa conexão (mesmo id, número diferente) pede o mesmo papel que REMOVÊ-LA
-  // (admin). Conectar um número NOVO (sem id) cria outra conexão e não troca nada: segue com gerente,
-  // como refazer o cadastro do MESMO número. Recusado aqui, o `state` ainda vale e nada foi tocado.
+  // Trocar o número de uma conexão existente não existe: o `channel_session_id` com número diferente do da
+  // conexão é recusado (422, o mesmo código de `conectarCanalOficial`) aqui, antes do nonce e da Meta. Número
+  // novo = conexão nova, sem id.
   if (channel_session_id) {
     const alvo = await numeroDoCanalOficialVivo(admin, orgId, channel_session_id);
     if (!alvo) return fail("not_found", t("Conexão não encontrada."), 404, { requestId });
-    if (alvo.phoneNumberId !== phone_number_id && !podeAdministrarEmpresa(authz.user, authz.org)) {
-      logger.warn("[cadastro-incorporado] troca de número recusada: exige administrador", {
-        request_id: requestId,
-        organization_id: orgId,
-        user_id: userId,
-      });
-      return fail(
-        "forbidden_role",
-        t("Trocar o número da conexão oficial é uma ação de administrador. Peça a quem administra a empresa para fazer a troca."),
-        403,
-        { requestId },
-      );
+    if (alvo.phoneNumberId !== phone_number_id) {
+      return fail("numero_diferente_da_conexao", t(MENSAGEM_NUMERO_DIFERENTE_DA_CONEXAO), 422, { requestId });
     }
   }
   // O código vale UMA vez: o nonce é queimado ANTES da troca, na mesma tabela de

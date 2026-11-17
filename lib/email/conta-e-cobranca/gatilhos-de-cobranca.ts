@@ -310,6 +310,10 @@ export function criarAvisosDeCobrancaSobre(admin: SupabaseClient, deps: DepsDosG
     if (!jaPagou) {
       // Nunca pagou: a primeira cobrança venceu e não há renovação nem período pago a prometer. O e-mail sai, mas
       // leva aos Planos para assinar de novo (nunca ao texto de renovação, nunca à fatura).
+      // `ignorado` é a cobrança da assinatura viva, SEM alarme de remoção: ela segue no Asaas, e dizer ao cliente
+      // para assinar de novo (cobrança "cancelada") seria falso. Só `aplicado` (pedido que venceu, com o alarme de
+      // remoção) leva esta variante; no resto não sai nada, porque não existe outro e-mail para quem nunca pagou.
+      if (e.resultado !== "aplicado") return;
       const planoId = doPedido?.plan_id ?? doContrato?.plan_id ?? null;
       const doPlano = planoId ? await plano(planoId) : null;
       if (!doPlano) return;

@@ -358,28 +358,6 @@ describe("pagamento não aprovado: COB-05", () => {
     expect(texto).toContain("/app/settings/plano");
   });
 
-  it("quem nunca pagou nada (sem período) recebe a variante dos Planos, nunca o texto de renovação", async () => {
-    const banco = mundo();
-    for (const o of banco.tabelas.billing_orders!) o.status = "criado";
-    banco.tabelas.billing_contracts![0]!.current_period_end = null;
-    const c = cenario(banco);
-    await c.avisos.aoAplicar(
-      aviso({
-        eventType: "PAYMENT_OVERDUE",
-        resultado: "ignorado",
-        idDoPagamento: "pay_z",
-        cobranca: cobranca({ id: "pay_z", invoiceUrl: "https://www.asaas.com/i/abc123" }),
-      }),
-    );
-    expect(c.enviadas.map((e) => e.emailId)).toEqual(["COB-05"]);
-    const m = c.renderizar(c.enviadas[0]!);
-    expect(m.subject).toBe("Sua assinatura não foi concluída");
-    expect(m.text).toContain("Assinar de novo: https://crm.exemplo.com.br/app/settings/plano/assinar");
-    expect(m.text).not.toContain("asaas.com");
-    expect(m.text).not.toContain("renovação");
-    expect(m.text).not.toContain("Acesso até");
-  });
-
   it("carência que já passou não manda 'seu acesso continua': a conta já está só leitura", async () => {
     const c = cenario(mundo(), new Date("2026-11-09T15:00:00Z"));
     await c.avisos.aoAplicar(
@@ -534,6 +512,39 @@ describe("pagamento não aprovado: COB-05 só para a RENOVAÇÃO do plano vigent
     expect(m.text).not.toContain("Acesso até");
     expect(m.text).not.toContain("cancelada");
     expect(c.renderizar(c.enviadas[0]!, "es").subject).toBe("Tu suscripción no se completó");
+  });
+
+  it("quem nunca pagou nada (sem período) recebe a variante dos Planos, nunca o texto de renovação", async () => {
+    const banco = mundo();
+    for (const o of banco.tabelas.billing_orders!) o.status = "criado";
+    banco.tabelas.billing_contracts![0]!.current_period_end = null;
+    const c = cenario(banco);
+    novoPedido(banco, U(31), { plan_id: "plano-max", status: "criado" });
+    await c.avisos.aoAplicar(venceu("pay_z", `HC:ord:${U(31)}`));
+    expect(c.enviadas.map((e) => e.emailId)).toEqual(["COB-05"]);
+    const m = c.renderizar(c.enviadas[0]!);
+    expect(m.subject).toBe("Sua assinatura não foi concluída");
+    expect(m.text).toContain("Assinar de novo: https://crm.exemplo.com.br/app/settings/plano/assinar");
+    expect(m.text).not.toContain("asaas.com");
+    expect(m.text).not.toContain("renovação");
+    expect(m.text).not.toContain("Acesso até");
+  });
+
+  it("nunca pagou e a cobrança segue viva no Asaas (ignorado, sem alarme de remoção): não diz para assinar de novo", async () => {
+    const banco = mundo();
+    for (const o of banco.tabelas.billing_orders!) o.status = "criado";
+    banco.tabelas.billing_contracts![0]!.current_period_end = null;
+    const c = cenario(banco);
+    await c.avisos.aoAplicar(
+      aviso({
+        eventType: "PAYMENT_OVERDUE",
+        resultado: "ignorado",
+        alarmes: [],
+        idDoPagamento: "pay_viva",
+        cobranca: cobranca({ id: "pay_viva", invoiceUrl: "https://www.asaas.com/i/abc123" }),
+      }),
+    );
+    expect(c.enviadas).toEqual([]);
   });
 
   it("nunca pagou e o pedido vencido é pacote de tokens: nada", async () => {
