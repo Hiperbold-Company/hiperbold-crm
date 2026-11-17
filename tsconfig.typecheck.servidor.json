@@ -1,0 +1,36 @@
+{
+  // Metade 1 de 2 do `pnpm typecheck`. A outra é `tsconfig.typecheck.resto.json`.
+  //
+  // Por que dividir: o programa único (`tsconfig.typecheck.json`) passou de 7,5 GB
+  // e o runner do CI tem 8 GB de RAM (exit 134). Dois programas em sequência
+  // dividem o pico; cada um precisa de menos de 5 GB de heap (medido 17/11/2026).
+  //
+  // Esta metade: rotas de API, lib, workers, curso e os testes `.ts` de
+  // tests/unit que começam por `_` e `a`–`h`. A divisão alfabética dos testes é o
+  // que equilibra a memória entre as duas metades; mudou o peso, remeça.
+  //
+  // COBERTURA: o `resto` usa o include completo do `tsconfig.typecheck.json` e
+  // EXCLUI exatamente os padrões abaixo (de `app/api` até `tests/unit/h*`). Mudou
+  // aqui, mude lá — senão um arquivo fica nos dois ou em nenhum.
+  // Os três primeiros (declarações globais e o setup do Vitest, que traz os
+  // matchers do jest-dom) entram nos DOIS programas de propósito.
+  "extends": "./tsconfig.typecheck.json",
+  "include": [
+    "next-env.d.ts",
+    "types/**/*.d.ts",
+    "tests/setup/vitest.setup.ts",
+    "app/api/**/*",
+    "lib/**/*",
+    "workers/**/*",
+    "curso/**/*",
+    "tests/unit/_*.ts",
+    "tests/unit/a*.ts",
+    "tests/unit/b*.ts",
+    "tests/unit/c*.ts",
+    "tests/unit/d*.ts",
+    "tests/unit/e*.ts",
+    "tests/unit/f*.ts",
+    "tests/unit/g*.ts",
+    "tests/unit/h*.ts"
+  ]
+}

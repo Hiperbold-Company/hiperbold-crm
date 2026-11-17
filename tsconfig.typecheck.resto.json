@@ -1,0 +1,41 @@
+{
+  // Metade 2 de 2 do `pnpm typecheck`: tudo o que `tsconfig.typecheck.json` cobre,
+  // menos o que `tsconfig.typecheck.servidor.json` já cobre. Por que dividir e
+  // como medir: cabeçalho daquele arquivo.
+  //
+  // O `include` é o do `tsconfig.typecheck.json` (mais `types/**/*.d.ts` e o
+  // setup do Vitest, que precisam estar nos dois programas). O `exclude` é o
+  // dele mais os padrões da metade servidor, um a um. Arquivo novo em qualquer
+  // pasta cai aqui por padrão — nunca fica sem checagem.
+  "extends": "./tsconfig.typecheck.json",
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "types/**/*.d.ts",
+    "tests/setup/vitest.setup.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "dist",
+    "scripts/**",
+    "app/api/**/*",
+    "lib/**/*",
+    "workers/**/*",
+    "curso/**/*",
+    "tests/unit/_*.ts",
+    "tests/unit/a*.ts",
+    "tests/unit/b*.ts",
+    "tests/unit/c*.ts",
+    "tests/unit/d*.ts",
+    "tests/unit/e*.ts",
+    "tests/unit/f*.ts",
+    "tests/unit/g*.ts",
+    "tests/unit/h*.ts"
+  ]
+}
