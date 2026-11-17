@@ -29066,6 +29066,11 @@ export const DICIONARIO: Traducoes = {
   "Nota interna (opcional)": { es: "Nota interna (opcional)" },
   "Relatos": { es: "Reportes" },
   "Problemas relatados pelos usuários pelo botão do inseto, com print e contexto": { es: "Problemas reportados por los usuarios con el botón del insecto, con captura y contexto" },
+  // design: confirmação nas telas
+  "Ligar a limpeza de mídia antiga?": { es: "¿Activar la limpieza de medios antiguos?" },
+  "Trocar modelo": { es: "Cambiar modelo" },
+  "Recusar proposta": { es: "Rechazar propuesta" },
+  "Motivo da recusa (opcional)": { es: "Motivo del rechazo (opcional)" },
 };
 
 /**

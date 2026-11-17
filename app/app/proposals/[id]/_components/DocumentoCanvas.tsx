@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
+import { useConfirmar } from "@/components/ui/confirmar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/hooks/i18n/useT";
@@ -179,6 +180,7 @@ function EditorDeSecao({
 
 export function DocumentoCanvas({ propostaId, podeRevisar = false, emRascunho = false, versao = 0, onModeloConfirmado }: DocumentoCanvasProps) {
   const t = useT();
+  const { confirmar } = useConfirmar();
   const [doc, setDoc] = useState<Documento | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [recarga, setRecarga] = useState(0);
@@ -312,10 +314,15 @@ export function DocumentoCanvas({ propostaId, podeRevisar = false, emRascunho = 
     );
   }
 
-  const trocarModelo = (slug: string) => {
+  const trocarModelo = async (slug: string) => {
     if (!slug || slug === doc.modeloSlug) return;
     if (doc.temSecaoEditada) {
-      if (!window.confirm(t("Trocar o modelo descarta as seções reescritas à mão. Continuar?"))) return;
+      const ok = await confirmar({
+        titulo: t("Trocar o modelo descarta as seções reescritas à mão. Continuar?"),
+        confirmar: t("Trocar modelo"),
+        perigo: true,
+      });
+      if (!ok) return;
       void confirmarModelo(slug, true);
       return;
     }

@@ -17,7 +17,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { render } from "@/tests/helpers/render-com-confirmacao";
 import { describe, expect, it, vi } from "vitest";
 
 import { TenantForm } from "@/app/app/settings/tenant/_form";

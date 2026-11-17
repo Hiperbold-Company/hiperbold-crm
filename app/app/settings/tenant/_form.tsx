@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useConfirmar } from "@/components/ui/confirmar";
 import {
   Select,
   SelectContent,
@@ -40,6 +41,7 @@ const TIMEZONES = FUSOS_OFERECIDOS.map((f) => f.codigo);
 
 export function TenantForm({ initial, onSave, onSaved }: Props) {
   const t = useT();
+  const { confirmar } = useConfirmar();
   const [form, setForm] = useState<TenantInput>(initial);
   const [isPending, startTransition] = useTransition();
 
@@ -236,9 +238,15 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
             <Switch
               id="media_retention_enforced"
               checked={form.media_retention_enforced}
-              onCheckedChange={(v) => {
+              onCheckedChange={async (v) => {
                 if (v && !form.media_retention_enforced) {
-                  if (window.confirm(t("Ao ligar, a mídia de mensagem e o anexo de nota interna com mais de {n} dias começarão a ser apagados.").replace("{n}", String(form.media_retention_days)))) {
+                  const ok = await confirmar({
+                    titulo: t("Ligar a limpeza de mídia antiga?"),
+                    descricao: t("Ao ligar, a mídia de mensagem e o anexo de nota interna com mais de {n} dias começarão a ser apagados.").replace("{n}", String(form.media_retention_days)),
+                    confirmar: t("Ligar"),
+                    perigo: true,
+                  });
+                  if (ok) {
                     set("media_retention_enforced", true);
                   }
                 } else {

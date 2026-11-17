@@ -1,5 +1,6 @@
 // app/app/proposals/[id]/_components/DocumentoCanvas.test.tsx
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { render } from "@/tests/helpers/render-com-confirmacao";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DocumentoCanvas } from "./DocumentoCanvas";
@@ -224,24 +225,24 @@ describe("DocumentoCanvas — P1 (edição)", () => {
 
   it("trocar o modelo com seção reescrita: cancelar a confirmação não chama nada", async () => {
     responderDocumento(COM_MODELO);
-    const confirmar = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<DocumentoCanvas propostaId="p1" podeRevisar emRascunho />);
     fireEvent.change(await screen.findByLabelText("Modelo do documento"), { target: { value: "empresa_locacao" } });
-    expect(confirmar).toHaveBeenCalled();
+    const dialogo = await screen.findByRole("alertdialog");
+    expect(dialogo).toHaveTextContent("Trocar o modelo descarta as seções reescritas à mão");
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     expect(patch).not.toHaveBeenCalled();
-    confirmar.mockRestore();
   });
 
   it("trocar o modelo confirmando manda descartar_reescritas", async () => {
     responderDocumento(COM_MODELO);
     patch.mockResolvedValue({ data: {} });
-    const confirmar = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<DocumentoCanvas propostaId="p1" podeRevisar emRascunho />);
     fireEvent.change(await screen.findByLabelText("Modelo do documento"), { target: { value: "empresa_locacao" } });
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Trocar modelo" }));
     await waitFor(() =>
       expect(patch).toHaveBeenCalledWith("/api/v1/proposals/p1/modelo", { template_slug: "empresa_locacao", descartar_reescritas: true }),
     );
-    confirmar.mockRestore();
   });
 
   it("botão 'Preencher com a conversa' só aparece com campo de briefing faltando e papel de revisão", async () => {

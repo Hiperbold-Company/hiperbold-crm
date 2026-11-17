@@ -14683,5 +14683,9 @@
   "Contexto": "Context",
   "Nota interna (opcional)": "Internal note (optional)",
   "Relatos": "Reports",
-  "Problemas relatados pelos usuários pelo botão do inseto, com print e contexto": "Problems users reported with the bug button, with screenshot and context"
+  "Problemas relatados pelos usuários pelo botão do inseto, com print e contexto": "Problems users reported with the bug button, with screenshot and context",
+  "Ligar a limpeza de mídia antiga?": "Turn on old media cleanup?",
+  "Trocar modelo": "Change template",
+  "Recusar proposta": "Decline proposal",
+  "Motivo da recusa (opcional)": "Reason for declining (optional)"
 }

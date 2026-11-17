@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
+import { useConfirmar } from "@/components/ui/confirmar";
 import { Input } from "@/components/ui/input";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
@@ -30,6 +31,7 @@ export const CHAVE_DO_MODELO_IMPORTADO = "modelo-importado";
 
 export function ModelosDeProposta() {
   const t = useT();
+  const { confirmar } = useConfirmar();
   const router = useRouter();
   const salvo = useSearchParams().get("salvo");
   const [faixaFechada, setFaixaFechada] = useState(false);
@@ -231,11 +233,12 @@ export function ModelosDeProposta() {
                     <Link href={`/app/settings/tenant/proposals/modelos/${m.slug}`}>{t("Editar")}</Link>
                   </Button>
                   <Button size="sm" variant="ghost" disabled={ocupado}
-                    onClick={() => {
+                    onClick={async () => {
                       const pergunta = m.origem === "personalizado"
                         ? t("Voltar ao modelo da plataforma? As mudanças da empresa deixam de valer nas próximas propostas.")
                         : t("Remover este modelo? As propostas já enviadas não mudam.");
-                      if (window.confirm(pergunta)) void acao(() => apiClient.delete(`/api/v1/settings/proposal-templates/${m.slug}`));
+                      const ok = await confirmar({ titulo: pergunta, confirmar: t("Apagar"), perigo: true });
+                      if (ok) void acao(() => apiClient.delete(`/api/v1/settings/proposal-templates/${m.slug}`));
                     }}>
                     {m.origem === "personalizado" ? t("Voltar ao modelo da plataforma") : t("Remover")}
                   </Button>
