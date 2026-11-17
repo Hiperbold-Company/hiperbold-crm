@@ -128,7 +128,8 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
       chave === null
         ? { tipo: "executou" as const, ...(await executar()) }
         : await comIdempotencia<LinhaDaAgendada>({
-            db: servico,
+            // O recibo só se grava com o cliente de servidor (0969); literal, para a cerca enxergar.
+            db: createAdminClient(),
             organizationId: org.orgId,
             endpoint: ENDPOINT,
             chave,
