@@ -24,10 +24,15 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
 
 import { fail, ok } from "@/lib/api/wrappers";
+import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { z } from "zod";
 
-import { buscarSessaoOficialViva, idDaConexaoOficialSchema } from "@/lib/channels/meta/sessao-oficial-viva";
+import {
+  buscarSessaoOficialViva,
+  idDaConexaoOficialSchema,
+  recusaSeConexaoOficialAmbigua,
+} from "@/lib/channels/meta/sessao-oficial-viva";
 import { registrarWebhookDaSessao } from "@/lib/channels/meta/webhook-da-sessao";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { basePublicaDoWebhookMeta } from "@/lib/webhooks/url-publica";
@@ -55,6 +60,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const channelSessionId = corpo.data.channel_session_id;
 
   const admin = createAdminClient();
+  // Rota que ESCREVE: com mais de uma oficial viva, sem id não há "a mais antiga" que valha.
+  const ambigua = await recusaSeConexaoOficialAmbigua({
+    admin,
+    organizationId: orgId,
+    channelSessionId,
+    idioma: authz.user.idioma,
+    requestId,
+  });
+  if (ambigua) return ambigua;
   // Só a sessão VIVA: reaplicar o webhook de um canal arquivado apontaria a Meta para
   // uma URL cujo `webhook_path_token` já foi rotacionado — ou seja, registraria uma
   // entrega que ninguém atende. Canal arquivado se reconecta, não se "conserta".
@@ -80,6 +94,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const desfecho = await registrarWebhookDaSessao({
     admin,
+    organizationId: orgId,
     channelSessionId: sessao.id,
     phoneNumberId: sessao.meta_phone_number_id,
     wabaId: sessao.meta_waba_id,
@@ -87,6 +102,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     webhookPathToken: sessao.webhook_path_token,
     base: basePublicaDoWebhookMeta(req),
     requestId,
+  });
+
+  // O audit leva QUEM tentou e QUAL conexão, com o desfecho em dois booleanos. Nunca a URL (leva o token de
+  // caminho do webhook) nem o texto do erro da Meta.
+  await audit({
+    action: "channel.webhook_registered",
+    actorUserId: authz.user.id,
+    organizationId: orgId,
+    resourceType: "channel_session",
+    resourceId: sessao.id,
+    requestId,
+    metadata: { registrado: desfecho.registrado, com_erro: desfecho.erro !== null },
   });
 
   // 200 mesmo quando a Meta recusou: a TENTATIVA foi feita e o desfecho é um estado

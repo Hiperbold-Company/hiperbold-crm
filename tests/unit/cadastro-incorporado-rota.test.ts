@@ -254,6 +254,15 @@ describe("POST /api/v1/channels/official/cadastro-incorporado", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("⭐ channel_session_id que não é desta organização: 404 ANTES de queimar o nonce e de trocar o código", async () => {
+    h.banco.existente = null; // a busca por id + organização + oficial + viva não achou nada
+    const res = await POST(post(corpoValido({ channel_session_id: "aaaaaaaa-0000-4000-8000-0000000000a1" })));
+    expect(res.status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(h.banco.inserts).toEqual([]); // nem o nonce, nem a conexão
+    expect(h.audit).toEqual([]);
+  });
+
   it("⭐ replay: nonce já queimado (23505) é 403 sem chegar à Meta", async () => {
     h.banco.erroDoNonce = { code: "23505" };
     const res = await POST(post(corpoValido()));

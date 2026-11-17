@@ -348,6 +348,7 @@ describe("registrarWebhookDaSessao — o desfecho gravado na sessão", () => {
 
     const desfecho = await registrarWebhookDaSessao({
       admin: registro.client as never,
+      organizationId: ORG,
       channelSessionId: SESSAO,
       phoneNumberId: NUMERO,
       wabaId: WABA,
@@ -367,6 +368,25 @@ describe("registrarWebhookDaSessao — o desfecho gravado na sessão", () => {
     expect(gravado.meta_webhook_override_em).toBe(desfecho.em);
   });
 
+  it("o desfecho só é gravado na sessão da PRÓPRIA organização (o cliente ignora a RLS)", async () => {
+    const registro = makeDb();
+    stubMeta({});
+
+    await registrarWebhookDaSessao({
+      admin: registro.client as never,
+      organizationId: "org-de-outra-empresa",
+      channelSessionId: SESSAO,
+      phoneNumberId: NUMERO,
+      wabaId: WABA,
+      tokenCifrado: "cifrado",
+      webhookPathToken: PATH_TOKEN,
+      base: BASE,
+    });
+
+    // O dublê filtra de verdade: com a organização errada o UPDATE não alcança a linha.
+    expect(registro.linhas[0]?.meta_webhook_override_em).toBeUndefined();
+  });
+
   it("sem verify token na instalação, NÃO chama a Meta e explica o que falta", async () => {
     const registro = makeDb();
     const chamadas = stubMeta({});
@@ -374,6 +394,7 @@ describe("registrarWebhookDaSessao — o desfecho gravado na sessão", () => {
 
     const desfecho = await registrarWebhookDaSessao({
       admin: registro.client as never,
+      organizationId: ORG,
       channelSessionId: SESSAO,
       phoneNumberId: NUMERO,
       wabaId: WABA,
@@ -394,6 +415,7 @@ describe("registrarWebhookDaSessao — o desfecho gravado na sessão", () => {
 
     const desfecho = await registrarWebhookDaSessao({
       admin: registro.client as never,
+      organizationId: ORG,
       channelSessionId: SESSAO,
       phoneNumberId: NUMERO,
       wabaId: WABA,
@@ -412,6 +434,7 @@ describe("registrarWebhookDaSessao — o desfecho gravado na sessão", () => {
 
     const desfecho = await registrarWebhookDaSessao({
       admin: registro.client as never,
+      organizationId: ORG,
       channelSessionId: SESSAO,
       phoneNumberId: NUMERO,
       wabaId: WABA,

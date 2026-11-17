@@ -14423,6 +14423,7 @@
   "Todas as conversas abertas do contato (WhatsApp, Messenger, Direct)": "All of the contact's open conversations (WhatsApp, Messenger, Direct)",
   "Este número já está conectado em outra organização desta instalação. Desconecte lá antes de conectar aqui.": "This number is already connected in another organization on this installation. Disconnect it there before connecting it here.",
   "Este número não é o desta conexão. Para conectar outro número, use Adicionar conexão.": "This number does not belong to this connection. To connect another number, use Add connection.",
+  "Esta organização tem mais de uma conexão oficial. Informe qual conexão (channel_session_id).": "This organization has more than one official connection. Specify which connection (channel_session_id).",
   "A volta do cadastro da Meta veio incompleta. Clique em Conectar de novo.": "The return from the Meta signup came back incomplete. Click Connect again.",
   "Escolha um número no cadastro da Meta": "Choose a number in the Meta signup",
   "A Meta recusou a credencial do número escolhido. Confira se o número terminou o cadastro e tente de novo.": "Meta rejected the credential for the chosen number. Check that the number finished signup and try again.",

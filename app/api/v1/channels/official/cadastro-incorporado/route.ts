@@ -45,7 +45,7 @@ import {
   wabaDoToken,
 } from "@/lib/channels/meta/cadastro-incorporado/meta";
 import { conectarCanalOficial, respostaDaFalhaDaConexaoOficial } from "@/lib/channels/meta/conectar-canal-oficial";
-import { idDaConexaoOficialSchema } from "@/lib/channels/meta/sessao-oficial-viva";
+import { buscarSessaoOficialViva, idDaConexaoOficialSchema } from "@/lib/channels/meta/sessao-oficial-viva";
 import { lerEstadoDoNumero, sincronizarContatosDoApp } from "@/lib/channels/meta/registro-do-numero";
 import { VERSAO_DA_GRAPH_SOCIAL } from "@/lib/channels/meta-social/constantes";
 import { traduzirLimiteDoPlano } from "@/lib/cobranca/limites";
@@ -193,6 +193,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const admin = createAdminClient();
+  // Reconectar uma conexão que já existe: o id tem de ser desta organização, oficial e viva. Conferido ANTES
+  // de queimar o nonce e de gastar o código na Meta — um id alheio não pode custar nem um nem outro.
+  if (channel_session_id) {
+    const { data: alvo } = await buscarSessaoOficialViva<{ id: string }>(admin, orgId, "id", channel_session_id);
+    if (!alvo) return fail("not_found", t("Conexão não encontrada."), 404, { requestId });
+  }
   // O código vale UMA vez: o nonce é queimado ANTES da troca, na mesma tabela de
   // uso único do Google Agenda, Nuvemshop e canal social. 23505 = repetido;
   // qualquer outro erro também recusa, porque sem gravar não há uso único.

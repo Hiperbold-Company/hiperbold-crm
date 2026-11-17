@@ -51,6 +51,8 @@ function ehColunaDoDesfechoAusente(mensagem: string | null | undefined): boolean
 
 export async function registrarWebhookDaSessao(input: {
   admin: ReturnType<typeof createAdminClient>;
+  /** A organização da sessão: o cliente é de servidor (ignora a RLS), então o UPDATE filtra por ela também. */
+  organizationId: string;
   channelSessionId: string;
   phoneNumberId: string;
   wabaId: string;
@@ -69,7 +71,8 @@ export async function registrarWebhookDaSessao(input: {
         meta_webhook_override_erro: desfecho.erro,
         meta_webhook_override_em: desfecho.em,
       })
-      .eq("id", input.channelSessionId);
+      .eq("id", input.channelSessionId)
+      .eq("organization_id", input.organizationId);
 
     if (!error) return;
     if (ehColunaDoDesfechoAusente(error.message)) {

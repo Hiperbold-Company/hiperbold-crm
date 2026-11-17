@@ -18,6 +18,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CHANNEL_PROVIDER_META, CHANNEL_PROVIDER_UAZAPI, CHANNEL_PROVIDER_WAHA, CHANNEL_PROVIDER_ZERNIO, CHANNEL_PROVIDER_META_SOCIAL } from "@/lib/channels/capabilities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { autorizarAdministracao } from "@/lib/api/auth-dual-admin";
+import { audit } from "@/lib/audit";
+import { idDaConexaoNaQuery } from "@/lib/channels/meta/sessao-oficial-viva";
+import { registrarWebhookDaSessao } from "@/lib/channels/meta/webhook-da-sessao";
 
 const ORG_A = "0a0a0a0a-0000-4000-8000-00000000000a";
 const ORG_B = "0b0b0b0b-0000-4000-8000-00000000000b";
@@ -403,6 +406,171 @@ describe("(c) channel_session_id de OUTRA organização → 404, sem vazar", () 
       new NextRequest("https://crm.exemplo.com/api/v1/channels/official?id=aaaaaaaa-0000-4000-8000-0000000000a1"),
     );
     expect(res.status).toBe(200);
+  });
+});
+
+describe("(e) rota que ESCREVE sem id, com mais de uma conexão oficial viva → 422 conexao_oficial_ambigua", () => {
+  const PRIMEIRA = "aaaaaaaa-0000-4000-8000-0000000000a1";
+  const SEGUNDA = "aaaaaaaa-0000-4000-8000-0000000000a2";
+  const MENSAGEM = "Esta organização tem mais de uma conexão oficial. Informe qual conexão (channel_session_id).";
+
+  const duasOficiais = () =>
+    makeDb([
+      sessaoOficial(),
+      sessaoOficial({ id: SEGUNDA, meta_phone_number_id: NUMERO_2, meta_waba_id: WABA_2, created_at: "2026-11-01T00:00:00.000Z" }),
+    ]);
+  const umaOficialEUmaArquivada = () =>
+    makeDb([
+      sessaoOficial(),
+      sessaoOficial({ id: SEGUNDA, meta_phone_number_id: NUMERO_2, archived_at: "2026-11-10T00:00:00.000Z" }),
+    ]);
+
+  const webhook = (corpo?: Linha) =>
+    new NextRequest("https://crm.exemplo.com/api/v1/channels/official/webhook", {
+      method: "POST",
+      body: corpo ? JSON.stringify(corpo) : undefined,
+    });
+  const registrar = (corpo: Linha) =>
+    new NextRequest("https://crm.exemplo.com/api/v1/channels/official/registrar", {
+      method: "POST",
+      body: JSON.stringify(corpo),
+    });
+  const modelos = (query = "") =>
+    new NextRequest(`https://crm.exemplo.com/api/v1/channels/templates${query}`, { method: "POST", body: "{}" });
+
+  async function esperarAmbigua(res: Response) {
+    expect(res.status).toBe(422);
+    const { error } = (await res.json()) as { error: { code: string; message: string } };
+    expect(error.code).toBe("conexao_oficial_ambigua");
+    expect(error.message).toBe(MENSAGEM);
+  }
+
+  it("POST /official/webhook sem id: 422, a Meta não é chamada, nada é gravado nem auditado", async () => {
+    const db = duasOficiais();
+    const { POST } = await import("@/app/api/v1/channels/official/webhook/route");
+    await esperarAmbigua(await POST(webhook()));
+    expect(registrarWebhookDaSessao).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
+    expect(db.linhas.every((l) => l.meta_webhook_override_em === undefined)).toBe(true);
+  });
+
+  it("POST /official/registrar sem id: 422 antes de falar com a Meta", async () => {
+    duasOficiais();
+    const { POST } = await import("@/app/api/v1/channels/official/registrar/route");
+    await esperarAmbigua(await POST(registrar({ pin: "123456" })));
+    expect(audit).not.toHaveBeenCalled();
+  });
+
+  it("POST /channels/templates sem id: 422", async () => {
+    duasOficiais();
+    const { POST } = await import("@/app/api/v1/channels/templates/route");
+    await esperarAmbigua(await POST(modelos()));
+  });
+
+  it("GET /channels/templates sem id segue na mais antiga (leitura não é ambígua)", async () => {
+    duasOficiais();
+    const { GET } = await import("@/app/api/v1/channels/templates/route");
+    const res = await GET(new NextRequest("https://crm.exemplo.com/api/v1/channels/templates"));
+    expect(res.status).not.toBe(422);
+  });
+
+  it("COM id a rota segue: o webhook da conexão pedida é registrado", async () => {
+    duasOficiais();
+    const { POST } = await import("@/app/api/v1/channels/official/webhook/route");
+    const res = await POST(webhook({ channel_session_id: SEGUNDA }));
+    expect(res.status).toBe(200);
+    expect(vi.mocked(registrarWebhookDaSessao).mock.calls[0]?.[0]).toMatchObject({
+      channelSessionId: SEGUNDA,
+      organizationId: ORG_A,
+    });
+  });
+
+  it("com UMA oficial viva (a outra está excluída) sem id: segue como antes", async () => {
+    umaOficialEUmaArquivada();
+    const { POST } = await import("@/app/api/v1/channels/official/webhook/route");
+    const res = await POST(webhook());
+    expect(res.status).toBe(200);
+    expect(vi.mocked(registrarWebhookDaSessao).mock.calls[0]?.[0]).toMatchObject({ channelSessionId: PRIMEIRA });
+  });
+
+  it("a conexão oficial de OUTRA organização não torna a minha ambígua", async () => {
+    makeDb([sessaoOficial(), sessaoOficial({ id: SESSAO_DA_B, organization_id: ORG_B })]);
+    const { POST } = await import("@/app/api/v1/channels/official/webhook/route");
+    expect((await POST(webhook())).status).toBe(200);
+  });
+});
+
+describe("audit do POST /official/webhook", () => {
+  const SESSAO = "aaaaaaaa-0000-4000-8000-0000000000a1";
+  const pedir = () =>
+    new NextRequest("https://crm.exemplo.com/api/v1/channels/official/webhook", {
+      method: "POST",
+      body: JSON.stringify({ channel_session_id: SESSAO }),
+    });
+
+  it("registra channel.webhook_registered com a sessão e o desfecho, sem URL nem texto de erro", async () => {
+    makeDb([sessaoOficial()]);
+    const { POST } = await import("@/app/api/v1/channels/official/webhook/route");
+    expect((await POST(pedir())).status).toBe(200);
+
+    expect(audit).toHaveBeenCalledTimes(1);
+    const entrada = vi.mocked(audit).mock.calls[0]![0];
+    expect(entrada).toMatchObject({
+      action: "channel.webhook_registered",
+      actorUserId: "user-a",
+      organizationId: ORG_A,
+      resourceType: "channel_session",
+      resourceId: SESSAO,
+      metadata: { registrado: true, com_erro: false },
+    });
+    expect(JSON.stringify(entrada)).not.toContain("ptk-a1");
+    expect(JSON.stringify(entrada)).not.toContain("https://");
+  });
+
+  it("a Meta recusar também é auditado: registrado false e com_erro true, sem o texto da recusa", async () => {
+    makeDb([sessaoOficial()]);
+    vi.mocked(registrarWebhookDaSessao).mockResolvedValueOnce({
+      registrado: false,
+      url: null,
+      erro: "a Meta recusou o webhook do número (token expirado)",
+      em: "agora",
+    });
+    const { POST } = await import("@/app/api/v1/channels/official/webhook/route");
+    expect((await POST(pedir())).status).toBe(200);
+
+    const entrada = vi.mocked(audit).mock.calls[0]![0];
+    expect(entrada.metadata).toEqual({ registrado: false, com_erro: true });
+    expect(JSON.stringify(entrada)).not.toContain("token expirado");
+  });
+
+  it("conexão de outra organização (404) não audita", async () => {
+    makeDb([sessaoOficial(), sessaoOficial({ id: SESSAO_DA_B, organization_id: ORG_B })]);
+    const { POST } = await import("@/app/api/v1/channels/official/webhook/route");
+    const res = await POST(
+      new NextRequest("https://crm.exemplo.com/api/v1/channels/official/webhook", {
+        method: "POST",
+        body: JSON.stringify({ channel_session_id: SESSAO_DA_B }),
+      }),
+    );
+    expect(res.status).toBe(404);
+    expect(audit).not.toHaveBeenCalled();
+  });
+});
+
+describe("idDaConexaoNaQuery — string vazia conta como ausente antes do ??", () => {
+  const ID = "aaaaaaaa-0000-4000-8000-0000000000a1";
+  const url = (q: string) => new URL(`https://crm.exemplo.com/api/v1/channels/official${q}`);
+
+  it("`?id=` vazio não esconde o `channel_session_id` válido", () => {
+    expect(idDaConexaoNaQuery(url(`?id=&channel_session_id=${ID}`))).toBe(ID);
+  });
+  it("os dois vazios, ou nenhum: ausente (vale a mais antiga)", () => {
+    expect(idDaConexaoNaQuery(url("?id=&channel_session_id="))).toBeUndefined();
+    expect(idDaConexaoNaQuery(url(""))).toBeUndefined();
+  });
+  it("valor presente e inválido segue sendo null (a rota responde 404)", () => {
+    expect(idDaConexaoNaQuery(url("?id=nao-e-uuid"))).toBeNull();
+    expect(idDaConexaoNaQuery(url(`?id=&channel_session_id=lixo`))).toBeNull();
   });
 });
 

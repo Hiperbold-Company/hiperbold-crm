@@ -9,7 +9,7 @@
  *
  * ⚠️ SEM SEGREDO, POR CONSTRUÇÃO: as colunas pedidas são listas fixas (`COLUNAS_*`), sem token, segredo de
  * webhook, `webhook_path_token` nem `metadata`. Quem acrescenta coluna aqui responde por
- * `tests/unit/conexoes-em-cartoes.test.ts`, que reprova a saída com qualquer campo de credencial.
+ * `tests/unit/varias-contas-oficiais-na-mesma-organizacao.test.ts` (grupo (d)), que reprova a saída com qualquer campo de credencial.
  *
  * ⚠️ A organização é a que a porta resolveu (sessão/linha do token), com filtro explícito: o cliente de uma
  * chave é service role e BYPASSA a RLS.

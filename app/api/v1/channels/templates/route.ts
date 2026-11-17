@@ -41,7 +41,7 @@ import {
 } from "@/lib/channels/gestao-de-modelos";
 import { resolveMetaCreds } from "@/lib/channels/meta/credentials";
 import { metaSessionForOrg } from "@/lib/channels/meta/session";
-import { idDaConexaoNaQuery } from "@/lib/channels/meta/sessao-oficial-viva";
+import { idDaConexaoNaQuery, recusaSeConexaoOficialAmbigua } from "@/lib/channels/meta/sessao-oficial-viva";
 import { metaCloudTemplateOps } from "@/lib/channels/meta/templates";
 import { normalizeRejectedReason } from "@/lib/channels/meta/webhook";
 import { deriveTemplateContract, describeAddress } from "@/lib/channels/meta/template-contract";
@@ -156,19 +156,32 @@ async function orgOrFail(requestId: string, papel: "agent" | "manager"): Promise
 /**
  * QUAL conta oficial (17/11/2026, várias por organização): `?channel_session_id=` na
  * query, nos dois métodos. Id de outra organização, de outro canal ou excluído = 404,
- * sem dizer qual. Sem ele, a oficial mais antiga, como antes da fase B.
+ * sem dizer qual. Sem ele, a oficial mais antiga, como antes da fase B — exceto na rota que ESCREVE
+ * (`mutante`) com mais de uma conexão oficial viva: aí 422 `conexao_oficial_ambigua`, porque sincronizar
+ * ou gerir modelo na conta errada não se desfaz. Leitura (GET) segue na mais antiga.
  */
 async function sessaoDaRequisicao(
   req: NextRequest,
   orgId: string,
   idioma: Idioma,
   requestId: string,
+  mutante = false,
 ): Promise<{ sessao: Awaited<ReturnType<typeof metaSessionForOrg>> } | { resposta: NextResponse }> {
   const id = idDaConexaoNaQuery(new URL(req.url));
   const naoEncontrada = () => ({
     resposta: fail("not_found", traduzir("Conexão não encontrada.", idioma), 404, { requestId }),
   });
   if (id === null) return naoEncontrada();
+  if (mutante) {
+    const ambigua = await recusaSeConexaoOficialAmbigua({
+      admin: createAdminClient(),
+      organizationId: orgId,
+      channelSessionId: id,
+      idioma,
+      requestId,
+    });
+    if (ambigua) return { resposta: ambigua };
+  }
   const sessao = await metaSessionForOrg(orgId, id);
   if (id && !sessao) return naoEncontrada();
   return { sessao };
@@ -279,7 +292,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!r.autorizado) return r.resposta;
   const t = (texto: string) => traduzir(texto, r.idioma);
 
-  const escolhida = await sessaoDaRequisicao(req, r.orgId, r.idioma, requestId);
+  const escolhida = await sessaoDaRequisicao(req, r.orgId, r.idioma, requestId, true);
   if ("resposta" in escolhida) return escolhida.resposta;
   const { sessao } = escolhida;
   if (!sessao?.wabaId) {

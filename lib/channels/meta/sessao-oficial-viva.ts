@@ -13,10 +13,14 @@
  *
  * O cliente é de servidor e ignora a RLS: por isso o filtro de organização é explícito aqui.
  */
+import type { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { fail } from "@/lib/api/wrappers";
 import { ARCHIVED_AT, queryTolerantToMissingArchived, type DbErrorLike } from "@/lib/channels/archived";
 import { CHANNEL_PROVIDER_META } from "@/lib/channels/capabilities";
+import { traduzir } from "@/lib/i18n/dicionario";
+import type { Idioma } from "@/lib/i18n/idiomas";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 /** O id da conexão, quando a tela diz qual. */
@@ -27,7 +31,9 @@ export const idDaConexaoOficialSchema = z.string().uuid();
  * `undefined` = ausente (vale a mais antiga); `null` = presente e inválido (a rota responde 404).
  */
 export function idDaConexaoNaQuery(url: URL): string | undefined | null {
-  const bruto = url.searchParams.get("id") ?? url.searchParams.get("channel_session_id");
+  // String vazia conta como ausente ANTES do `??`: `?id=&channel_session_id=<uuid>` não pode esconder o segundo.
+  const doId = url.searchParams.get("id");
+  const bruto = doId !== null && doId !== "" ? doId : url.searchParams.get("channel_session_id");
   if (bruto === null || bruto === "") return undefined;
   const parsed = idDaConexaoOficialSchema.safeParse(bruto);
   return parsed.success ? parsed.data : null;
@@ -53,4 +59,52 @@ export async function buscarSessaoOficialViva<T>(
     () => consultar().maybeSingle(),
   );
   return { data: (data as T | null) ?? null, error: error ?? null };
+}
+
+/**
+ * A organização tem MAIS DE UMA conexão oficial viva? (`limit(2)`: só interessa saber se passa de uma.)
+ * Mesma população de `buscarSessaoOficialViva`: id da organização explícito, provider oficial, não arquivada.
+ */
+export async function temMaisDeUmaConexaoOficialViva(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+): Promise<boolean> {
+  const consultar = () =>
+    admin
+      .from("channel_sessions")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("provider", CHANNEL_PROVIDER_META)
+      .limit(2);
+  const { data } = await queryTolerantToMissingArchived(
+    () => consultar().is(ARCHIVED_AT, null),
+    () => consultar(),
+  );
+  return (data?.length ?? 0) > 1;
+}
+
+/**
+ * Rota MUTANTE sem `channel_session_id`: com mais de uma conexão oficial viva, "a mais antiga" seria um
+ * palpite sobre qual número registrar, reconfigurar ou sincronizar. Devolve a resposta 422 a enviar, ou
+ * `null` quando pode seguir (id informado, ou uma conexão só, como antes da fase B). GET não usa isto:
+ * leitura continua caindo na mais antiga.
+ */
+export async function recusaSeConexaoOficialAmbigua(input: {
+  admin: ReturnType<typeof createAdminClient>;
+  organizationId: string;
+  channelSessionId?: string | null;
+  idioma?: Idioma;
+  requestId?: string;
+}): Promise<NextResponse | null> {
+  if (input.channelSessionId) return null;
+  if (!(await temMaisDeUmaConexaoOficialViva(input.admin, input.organizationId))) return null;
+  return fail(
+    "conexao_oficial_ambigua",
+    traduzir(
+      "Esta organização tem mais de uma conexão oficial. Informe qual conexão (channel_session_id).",
+      input.idioma ?? "pt-BR",
+    ),
+    422,
+    { requestId: input.requestId },
+  );
 }

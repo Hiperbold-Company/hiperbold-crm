@@ -313,6 +313,7 @@ export async function conectarCanalOficial(input: EntradaDaConexaoOficial): Prom
     sessaoId && webhookPathToken
       ? await registrarWebhookDaSessao({
           admin,
+          organizationId: orgId,
           channelSessionId: sessaoId,
           phoneNumberId,
           wabaId,

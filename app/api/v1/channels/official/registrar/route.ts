@@ -32,7 +32,10 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { credenciaisDoCanalOficialVivo } from "@/lib/channels/meta/numero-da-sessao";
-import { idDaConexaoOficialSchema } from "@/lib/channels/meta/sessao-oficial-viva";
+import {
+  idDaConexaoOficialSchema,
+  recusaSeConexaoOficialAmbigua,
+} from "@/lib/channels/meta/sessao-oficial-viva";
 import {
   gerarPinDeRegistro,
   lerEstadoDoNumero,
@@ -88,11 +91,18 @@ export async function POST(req: NextRequest): Promise<Response> {
     );
   }
 
-  const cred = await credenciaisDoCanalOficialVivo(
-    createAdminClient(),
-    authz.org.orgId,
-    parsed.data.channel_session_id,
-  );
+  const admin = createAdminClient();
+  // Registrar o número errado gasta tentativa de PIN da Meta: com mais de uma oficial, o id é obrigatório.
+  const ambigua = await recusaSeConexaoOficialAmbigua({
+    admin,
+    organizationId: authz.org.orgId,
+    channelSessionId: parsed.data.channel_session_id,
+    idioma: authz.user.idioma,
+    requestId,
+  });
+  if (ambigua) return ambigua;
+
+  const cred = await credenciaisDoCanalOficialVivo(admin, authz.org.orgId, parsed.data.channel_session_id);
   if (!cred.ok) {
     if (cred.erro === "sessao_nao_encontrada") {
       return fail("not_found", "Conexão não encontrada.", 404, { requestId, headers: NO_STORE });
