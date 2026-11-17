@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { cargoEEmpresa } from "@/lib/contacts/cargo-e-empresa";
 
-import { normalizarChaveDeCampo, recortarValores } from "./recorte-por-papel";
+import { chaveEhRestrita, normalizarChaveDeCampo, preservarValoresRestritos, recortarValores } from "./recorte-por-papel";
 
 /**
  * O recorte e o leitor tolerante usam a MESMA normalização de chave. Antes, `recortarValores`
@@ -39,5 +39,31 @@ describe("recortarValores — chave normalizada", () => {
   it("normalizarChaveDeCampo", () => {
     expect(normalizarChaveDeCampo("  Company Name ")).toBe("company_name");
     expect(normalizarChaveDeCampo("Cargo / Posição")).toBe("cargo_posicao");
+  });
+});
+
+/**
+ * O preservador usa o MESMO predicado: o gerente não recebe "Company Name" (o recorte o tira pela
+ * forma normalizada), então ao salvar o PATCH não pode apagá-lo.
+ */
+describe("preservarValoresRestritos — chave normalizada", () => {
+  const restritas = new Set(["company_name"]);
+
+  it("mantém o valor gravado como 'Company Name' quando a entrada não o traz", () => {
+    const saida = preservarValoresRestritos({ cargo: "Dono" }, { "Company Name": "ACME", cargo: "x" }, restritas);
+    expect(saida).toEqual({ cargo: "Dono", "Company Name": "ACME" });
+  });
+
+  it("entrada com a forma normalizada conta como presente (admin troca o valor)", () => {
+    const saida = preservarValoresRestritos({ company_name: "Nova" }, { "Company Name": "ACME" }, restritas);
+    expect(saida).toEqual({ company_name: "Nova" });
+  });
+
+  it("chaveEhRestrita casa minúsculas e forma normalizada, e nada sem restritas", () => {
+    const e = chaveEhRestrita(restritas);
+    expect(e("COMPANY_NAME")).toBe(true);
+    expect(e("Company Name")).toBe(true);
+    expect(e("cargo")).toBe(false);
+    expect(chaveEhRestrita(new Set())("company_name")).toBe(false);
   });
 });

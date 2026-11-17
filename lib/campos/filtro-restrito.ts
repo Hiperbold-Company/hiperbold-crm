@@ -11,7 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fail, falhaInterna } from "@/lib/api/wrappers";
 import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
-import { leitorVeCamposRestritos, type LeitorDosCampos } from "@/lib/campos/recorte-por-papel";
+import { leitorVeCamposRestritos, type LeitorDosCampos, chaveEhRestrita } from "@/lib/campos/recorte-por-papel";
 
 export async function recusaDoFiltroPorCampoRestrito(
   supabase: SupabaseClient,
@@ -23,6 +23,6 @@ export async function recusaDoFiltroPorCampoRestrito(
   if (!campo || leitorVeCamposRestritos(leitor)) return null;
   const lidas = await chavesRestritasDaOrganizacao(supabase, organizationId, requestId);
   if (!lidas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
-  if (!lidas.chaves.has(campo.toLowerCase())) return null;
+  if (!chaveEhRestrita(lidas.chaves)(campo)) return null;
   return fail("forbidden_role", "Só administradores filtram por este campo.", 403, { requestId });
 }

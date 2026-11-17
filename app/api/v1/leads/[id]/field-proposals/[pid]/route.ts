@@ -47,7 +47,7 @@ import { audit } from "@/lib/audit";
 import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
-import { leitorVeCamposRestritos } from "@/lib/campos/recorte-por-papel";
+import { leitorVeCamposRestritos, chaveEhRestrita } from "@/lib/campos/recorte-por-papel";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { camposDoFunil, camposPorEscopo } from "@/lib/leads/campos-do-funil";
 import { settingsDoFunil } from "@/lib/leads/campos-exigidos";
@@ -391,7 +391,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   if (!leitorVeCamposRestritos(guard.org.role)) {
     const lidas = await chavesRestritasDaOrganizacao(supabase, orgId, requestId);
     if (!lidas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
-    if (lidas.chaves.has(p.campo.toLowerCase())) {
+    if (chaveEhRestrita(lidas.chaves)(p.campo)) {
       return ok({ decision: "accepted", campo: p.campo }, { requestId });
     }
   }
