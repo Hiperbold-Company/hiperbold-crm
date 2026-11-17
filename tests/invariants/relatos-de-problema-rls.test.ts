@@ -1,16 +1,13 @@
 /**
- * RELATOS DE PROBLEMA (migration 1018): o membro só INSERE, e só na própria organização.
+ * RELATOS DE PROBLEMA (migration 1018): nenhum papel do PostgREST além do service_role toca a
+ * tabela. Quem grava é a rota, pelo admin client, com organização e usuário da sessão.
  *
  * Medido em Postgres real, com JWT simulado (`set role authenticated` + `request.jwt.claims`):
- *   · membro (viewer) da A insere na A, como ele mesmo;
- *   · o mesmo membro NÃO insere na B, nem em nome de outro usuário, nem já com status/nota;
+ *   · membro (viewer) da A NÃO insere nem na A (a REST furaria o limite por hora e a poda);
  *   · `authenticated` não lê (nem o próprio relato), não altera, não apaga;
  *   · `anon` não tem privilégio nenhum;
- *   · o caminho do print só pode ser `<org>/<id>.webp|png` (CHECK, vale até para o service role).
- *
- * Sabotagem prevista: trocar o `with check` por `true` faz o caso "não insere na B" inserir 1;
- * acrescentar `grant select ... to authenticated` com policy de leitura faz o caso de leitura
- * contar linhas.
+ *   · o `service_role` grava, lê e altera (o caminho da rota);
+ *   · `page_url` só aceita caminho relativo (CHECK); o caminho do print só `<org>/<id>.webp|png`.
  */
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -69,35 +66,60 @@ beforeAll(() => {
 });
 
 describe("bug_reports: RLS e privilégios", () => {
-  it("o membro da A insere na A, como ele mesmo", () => {
-    const r = comoUsuario(
-      ANA,
-      `insert into public.bug_reports (organization_id, user_id, description) values ('${ORG_A}', '${ANA}', '${DESCRICAO} [ana]')`,
-    );
-    expect(r).toBe("ok");
-    expect(contar(`organization_id = '${ORG_A}' and description like '%[ana]'`)).toBe(1);
+  it("authenticated NÃO insere, nem na própria organização, nem com created_at no futuro", () => {
+    expect(
+      comoUsuario(
+        ANA,
+        `insert into public.bug_reports (organization_id, user_id, description) values ('${ORG_A}', '${ANA}', '${DESCRICAO} [ana]')`,
+      ),
+    ).toMatch(/permission denied/);
+    expect(
+      comoUsuario(
+        ANA,
+        `insert into public.bug_reports (organization_id, user_id, description, created_at) values ('${ORG_A}', '${ANA}', '${DESCRICAO} [futuro]', '2999-01-01')`,
+      ),
+    ).toMatch(/permission denied/);
+    expect(
+      comoUsuario(
+        BETO_B,
+        `insert into public.bug_reports (organization_id, user_id, description) values ('${ORG_B}', '${BETO_B}', '${DESCRICAO} [admin-b]')`,
+      ),
+    ).toMatch(/permission denied/);
+    expect(contar(`description ~ '\\[(ana|futuro|admin-b)\\]$'`)).toBe(0);
   });
 
-  it("o membro da A NÃO insere na B", () => {
-    const r = comoUsuario(
-      ANA,
-      `insert into public.bug_reports (organization_id, user_id, description) values ('${ORG_B}', '${ANA}', '${DESCRICAO} [cruzado]')`,
-    );
-    expect(r).toMatch(/row-level security/);
-    expect(contar(`description like '%[cruzado]'`)).toBe(0);
+  it("nenhuma policy de authenticated sobra na tabela (o drop desfaz a versão anterior)", () => {
+    expect(sql(`select count(*) from pg_policies where schemaname = 'public' and tablename = 'bug_reports' and 'authenticated' = any(roles);`)).toBe("0");
+    expect(
+      sql(`select count(*) from information_schema.role_table_grants
+            where table_schema = 'public' and table_name = 'bug_reports'
+              and grantee in ('anon', 'authenticated', 'PUBLIC');`),
+    ).toBe("0");
   });
 
-  it("nem em nome de outro usuário, nem já com status ou nota do administrador", () => {
+  it("o service_role grava, lê e altera (o caminho da rota)", () => {
+    const id = "dddddddd-1018-4000-8000-0000000000f3";
     expect(
-      comoUsuario(ANA, `insert into public.bug_reports (organization_id, user_id, description) values ('${ORG_A}', '${BETO_B}', '${DESCRICAO} [forjado]')`),
-    ).toMatch(/row-level security/);
-    expect(
-      comoUsuario(ANA, `insert into public.bug_reports (organization_id, user_id, description, status) values ('${ORG_A}', '${ANA}', '${DESCRICAO} [status]', 'resolvido')`),
-    ).toMatch(/row-level security/);
-    expect(
-      comoUsuario(ANA, `insert into public.bug_reports (organization_id, user_id, description, admin_note) values ('${ORG_A}', '${ANA}', '${DESCRICAO} [nota]', 'x')`),
-    ).toMatch(/row-level security/);
-    expect(contar(`description ~ '\\[(forjado|status|nota)\\]$'`)).toBe(0);
+      lastLine(
+        sql(`
+          set role service_role;
+          insert into public.bug_reports (id, organization_id, user_id, description) values ('${id}', '${ORG_A}', '${ANA}', '${DESCRICAO}');
+          update public.bug_reports set status = 'em_andamento' where id = '${id}';
+          select status from public.bug_reports where id = '${id}';
+        `),
+      ),
+    ).toBe("em_andamento");
+  });
+
+  it("page_url só aceita caminho relativo da instalação", () => {
+    for (const url of ["https://golpe.test", "//golpe.test", "/\\golpe.test", "javascript:alert(1)", "app/x"]) {
+      expect(
+        () => sql(`insert into public.bug_reports (organization_id, description, page_url) values ('${ORG_A}', '${DESCRICAO}', '${url}');`),
+        url,
+      ).toThrow(/bug_reports_page_url_check/);
+    }
+    sql(`insert into public.bug_reports (organization_id, description, page_url) values ('${ORG_A}', '${DESCRICAO} [rel]', '/app/inbox?aba=1');`);
+    expect(contar(`description like '%[rel]'`)).toBe(1);
   });
 
   it("authenticated não lê bug_reports, nem o próprio relato", () => {

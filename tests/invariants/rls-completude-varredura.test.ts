@@ -75,7 +75,7 @@ interface Excecao {
  * linhas da OUTRA organização, não uma leitura como superusuário.
  */
 const PROVA_PROPRIA: readonly Excecao[] = [
-  { tabela: "bug_reports", razao: "tests/invariants/relatos-de-problema-rls.test.ts — dois tenants reais por JWT (viewer): insere na própria organização e é recusado na do vizinho e com user_id alheio; authenticated não lê nem altera nem apaga nada (nem o próprio relato, só INSERT); anon sem privilégio nenhum." },
+  { tabela: "bug_reports", razao: "tests/invariants/relatos-de-problema-rls.test.ts — membro real por JWT (viewer): authenticated não insere (nem na própria organização), não lê, não altera e não apaga; anon sem privilégio nenhum; só o service_role grava (pela rota, com organização e usuário da sessão)." },
   { tabela: "meta_social_comentarios", razao: "tests/invariants/instagram-comentarios.test.ts — dois tenants reais por JWT (agent): leitura positiva local e ZERO do vizinho nos dois sentidos, a tabela inteira sem filtro igual à própria, anon sem privilégio, e update/delete de authenticated recusados (só o servidor grava)." },
   { tabela: "meta_social_fila_de_envio", razao: "tests/invariants/instagram-comentarios.test.ts — mesmo laço da linha acima, nas duas tabelas da 0991." },
   { tabela: "automacao_segredos", razao: "tests/invariants/automacao-segredos-cofre.test.ts — dois tenants reais por JWT (manager): leitura positiva local e ZERO do vizinho, atendente da própria organização vê zero, valor_cifrado negado a authenticated e anon por grant de coluna, e insert/update/delete de authenticated recusados (só o servidor grava)." },

@@ -149,6 +149,15 @@ describe("admin dos relatos de problema", () => {
     );
   });
 
+  it("cursor com created_at que não é data (injeção no filtro .or) dá 400", async () => {
+    const { GET } = await import("./route");
+    const cursor = Buffer.from(
+      JSON.stringify({ created_at: "2026-01-01),or(status.neq.x", id: RELATO_ID }),
+    ).toString("base64url");
+    const res = await GET(new NextRequest(`http://localhost/api/v1/admin/bug-reports?cursor=${cursor}`));
+    expect(res.status).toBe(400);
+  });
+
   it("status fora do vocabulário dá 400", async () => {
     const { PATCH } = await import("./[id]/route");
     expect((await PATCH(patch({ status: "fechado" }), params)).status).toBe(400);

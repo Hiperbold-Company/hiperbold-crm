@@ -28,6 +28,15 @@ export const RETENCAO_DOS_RELATOS_DIAS = 90;
 export const STATUS_DO_RELATO = ["novo", "em_andamento", "resolvido", "descartado"] as const;
 export type StatusDoRelato = (typeof STATUS_DO_RELATO)[number];
 
+/**
+ * O `page_url` é caminho RELATIVO da própria instalação: começa com `/`, nunca com `//`, e não
+ * tem barra invertida (o navegador lê `/\\x` como `//x`). Sem esquema, sem host. A mesma regra
+ * está na CHECK `bug_reports_page_url_check` e decide se o painel monta link com o valor.
+ */
+export function caminhoRelativoSeguro(valor: string): boolean {
+  return valor.length <= MAX_URL && valor.startsWith("/") && !valor.startsWith("//") && !valor.includes("\\");
+}
+
 export const DescricaoSchema = z.string().trim().min(DESCRICAO_MIN).max(DESCRICAO_MAX);
 
 /**
@@ -35,7 +44,7 @@ export const DescricaoSchema = z.string().trim().min(DESCRICAO_MIN).max(DESCRICA
  * console passam pela mesma limpeza de dado pessoal dos erros do navegador.
  */
 export const ContextoDoRelatoSchema = z.object({
-  url: z.string().trim().max(MAX_URL).optional(),
+  url: z.string().trim().max(MAX_URL).refine(caminhoRelativoSeguro).optional(),
   user_agent: z.string().max(MAX_USER_AGENT).optional(),
   viewport: z
     .object({

@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/hooks/i18n/useT";
-import { STATUS_DO_RELATO, type StatusDoRelato } from "@/lib/relatos/regras";
+import { STATUS_DO_RELATO, caminhoRelativoSeguro, type StatusDoRelato } from "@/lib/relatos/regras";
 
 const ROTULO_DO_STATUS: Record<StatusDoRelato, string> = {
   novo: "Novo",
@@ -134,7 +134,7 @@ export function RelatosClient() {
                 <td className="px-3 py-2">{r.empresa ?? "—"}</td>
                 <td className="px-3 py-2">{r.usuario_email ?? "—"}</td>
                 <td className="max-w-[200px] truncate px-3 py-2">
-                  {r.page_url ? (
+                  {r.page_url && caminhoRelativoSeguro(r.page_url) ? (
                     <a
                       href={r.page_url}
                       target="_blank"
@@ -145,7 +145,7 @@ export function RelatosClient() {
                       {r.page_url}
                     </a>
                   ) : (
-                    "—"
+                    (r.page_url ?? "—")
                   )}
                 </td>
                 <td className="max-w-[320px] truncate px-3 py-2">{r.description.slice(0, 120)}</td>

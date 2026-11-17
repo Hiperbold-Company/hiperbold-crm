@@ -22,12 +22,12 @@ const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(30),
 });
 
-const cursorSchema = z.object({ created_at: z.string().min(1).max(64), id: z.string().uuid() });
+const cursorSchema = z.object({ created_at: z.string().datetime({ offset: true }), id: z.string().uuid() });
 
 function lerCursor(cursor: string): z.infer<typeof cursorSchema> | null {
   try {
     const r = cursorSchema.safeParse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf-8")));
-    return r.success && !Number.isNaN(Date.parse(r.data.created_at)) ? r.data : null;
+    return r.success ? r.data : null;
   } catch {
     return null;
   }

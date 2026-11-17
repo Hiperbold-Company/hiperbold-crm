@@ -104595,7 +104595,7 @@ notify pgrst, 'reload schema';
 
 -- ---- relatos de problema (migration 1018, fork Hiperbold) ----
 -- Espelho da migration 20261117180000_1018_relatos_de_problema.sql. Antes da VARREDURA anon e das
--- chamadas de fn_aplicar_travas_de_suporte(): a tabela nova recebe as travas já na instalação.
+-- chamadas de fn_aplicar_travas_de_suporte().
 --
 -- 1018, relatos de problema (fork Hiperbold, decisão do dono do produto em 17/11/2026).
 --
@@ -104608,11 +104608,14 @@ notify pgrst, 'reload schema';
 --     o contexto técnico (jsonb: user agent, viewport, idioma, últimos erros do console),
 --     o caminho do print no bucket, status com CHECK (novo, em_andamento, resolvido,
 --     descartado) e a nota do administrador.
---  2. RLS: o membro só INSERE, na própria organização, como ele mesmo, com status `novo` e sem
---     nota. `authenticated` não tem SELECT, UPDATE nem DELETE: nenhum membro lê relato, nem o
---     próprio. A leitura e a troca de status são do administrador da instalação, pelo service
---     role. As CHECKs repetem os limites da rota, porque quem tem a anon key e uma sessão pode
---     inserir direto pela REST, sem passar pelo Zod.
+--  2. RLS ligada e NENHUM papel do PostgREST além do `service_role` toca a tabela: nem `anon`
+--     nem `authenticated` leem, inserem, alteram ou apagam. Quem grava é a rota, pelo service
+--     role, com `organization_id` e `user_id` da sessão (`requireRole`). Um insert direto pela
+--     REST furaria o limite de 10 por hora e gravaria `created_at` no futuro, fora da poda.
+--     Banco que já recebeu a versão anterior desta migration (com insert para `authenticated`)
+--     perde o grant e a policy aqui: `revoke all` + `drop policy if exists`.
+--  2b. `page_url` só aceita caminho relativo (`/...`, nunca `//...`, sem `\` e sem esquema): o
+--     painel do administrador monta link com ele, e uma URL externa viraria isca de golpe.
 --  3. O caminho do print só pode ser `<organization_id>/<id>.webp` (ou `.png`): o cron de
 --     retenção apaga o arquivo pelo caminho da linha, e um caminho escolhido pelo cliente
 --     apontaria a poda para o arquivo de outro lugar.
@@ -104640,7 +104643,15 @@ create table if not exists public.bug_reports (
   constraint bug_reports_description_check
     check (char_length(description) between 10 and 2000),
   constraint bug_reports_page_url_check
-    check (page_url is null or char_length(page_url) <= 2000),
+    check (
+      page_url is null
+      or (
+        char_length(page_url) <= 2000
+        and left(page_url, 1) = '/'
+        and left(page_url, 2) <> '//'
+        and position(chr(92) in page_url) = 0
+      )
+    ),
   constraint bug_reports_context_check
     check (jsonb_typeof(context) = 'object' and pg_column_size(context) <= 16384),
   constraint bug_reports_admin_note_check
@@ -104660,26 +104671,42 @@ create index if not exists bug_reports_status_created_idx
 create index if not exists bug_reports_created_idx
   on public.bug_reports (created_at);
 
-alter table public.bug_reports enable row level security;
-
-drop policy if exists bug_reports_insert_membro on public.bug_reports;
-create policy bug_reports_insert_membro on public.bug_reports
-  for insert to authenticated
-  with check (
-    organization_id in (select public.fn_user_org_ids())
-    and user_id = (select auth.uid())
-    and status = 'novo'
-    and admin_note is null
+-- A regra do `page_url` também em banco que já tinha a tabela com a CHECK antiga (só tamanho):
+-- o valor fora da regra vira nulo ANTES de a constraint nova entrar, senão o update quebra.
+update public.bug_reports
+   set page_url = null
+ where page_url is not null
+   and not (
+     char_length(page_url) <= 2000
+     and left(page_url, 1) = '/'
+     and left(page_url, 2) <> '//'
+     and position(chr(92) in page_url) = 0
+   );
+alter table public.bug_reports drop constraint if exists bug_reports_page_url_check;
+alter table public.bug_reports add constraint bug_reports_page_url_check
+  check (
+    page_url is null
+    or (
+      char_length(page_url) <= 2000
+      and left(page_url, 1) = '/'
+      and left(page_url, 2) <> '//'
+      and position(chr(92) in page_url) = 0
+    )
   );
 
+alter table public.bug_reports enable row level security;
+
+-- Nenhuma policy para `authenticated`: quem grava é só o servidor. O drop desfaz a versão
+-- anterior desta migration num banco que já a recebeu.
+drop policy if exists bug_reports_insert_membro on public.bug_reports;
+
 -- `service_role` também sai do `revoke all` (o default ACL do Supabase dá tudo aos três papéis)
--- e recebe de volta só o que usa, como na 1017.
+-- e recebe de volta só o que usa, como na 1017. `anon` e `authenticated` ficam sem nada.
 revoke all on public.bug_reports from public, anon, authenticated, service_role;
-grant insert on public.bug_reports to authenticated;
 grant select, insert, update, delete on public.bug_reports to service_role;
 
 comment on table public.bug_reports is
-  'Migration 1018 (fork Hiperbold): relato de problema enviado pelo botão "Relatar problema" do CRM. O membro só insere (POST /api/v1/bug-reports); quem lê e muda o status é o administrador da instalação em /admin/relatos, pelo service role. Linha e print saem aos 90 dias (cron data-retention).';
+  'Migration 1018 (fork Hiperbold): relato de problema enviado pelo botão "Relatar problema" do CRM. Só o service role toca a tabela: a rota POST /api/v1/bug-reports grava com a organização e o usuário da sessão; quem lê e muda o status é o administrador da instalação em /admin/relatos, pelo service role. Linha e print saem aos 90 dias (cron data-retention).';
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('bug-reports', 'bug-reports', false, 3145728, array['image/webp', 'image/png'])
