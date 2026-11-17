@@ -85,7 +85,7 @@ const nextConfig: NextConfig = {
   // typedRoutes moved out of experimental in Next 15.5+
   typedRoutes: true,
   experimental: {
-    optimizePackageImports: ["@phosphor-icons/react", "lucide-react", "date-fns"],
+    optimizePackageImports: ["@phosphor-icons/react", "date-fns"],
   },
   images: {
     // O app não usa next/image de fato (só <img> raw); desligar o otimizador
