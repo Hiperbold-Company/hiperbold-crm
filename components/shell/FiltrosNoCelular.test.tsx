@@ -24,6 +24,7 @@ describe("FiltrosNoCelular", () => {
     );
     expect(screen.getByRole("button", { name: /Filtros \(2\)/ })).toBeTruthy();
     expect(screen.queryByText("Filtro A")).toBeNull();
+    expect(screen.getByRole("button", { name: /Filtros \(2\)/ }).getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(screen.getByRole("button", { name: /Filtros \(2\)/ }));
     expect(screen.getByText("Filtro A")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Ver resultados" }));
