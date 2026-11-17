@@ -1179,6 +1179,18 @@ export const NAV_CATALOG = [
     minRole: "manager",
   },
   {
+    // Os campos personalizados da ORGANIZAÇÃO (migration 1015): contato e negócio, num lugar só. Antes
+    // cada funil declarava os seus em Etapas do funil; lá agora fica só a obrigatoriedade por etapa.
+    // `admin`: o mesmo piso da GRAVAÇÃO em `/api/v1/custom-fields` (e da rota antiga e do MCP).
+    href: "/app/settings/campos-personalizados",
+    label: "Campos Personalizados",
+    description: "Os campos de contato e de negócio da empresa: criar, editar, excluir e ver quanto são preenchidos.",
+    icon: "ClipboardText",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "admin",
+  },
+  {
     // A área única dos recursos opcionais (pedido do mantenedor, doc 73/80):
     // tudo o que a empresa pode ligar, com o estado e o caminho até a tela onde
     // se liga. Só leitura — quem liga continua sendo a tela do assunto.
