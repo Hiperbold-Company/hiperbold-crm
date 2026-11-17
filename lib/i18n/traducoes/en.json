@@ -6857,7 +6857,7 @@
   "Módulo religado": "Module turned back on",
   "Ligar de novo": "Turn on again",
   "Desligar {nome}?": "Turn off {nome}?",
-  "Os menus e telas somem para todas as organizações. Os dados ficam guardados e voltam ao religar.": "Menus and screens disappear for every organization. The data stays stored and comes back when you turn it on again.",
+  "Desligar esconde o módulo das telas de todas as organizações e bloqueia as ações dele. Os dados ficam guardados e voltam ao religar.": "Turning it off hides the module from every organization's screens and blocks its actions. The data stays stored and comes back when you turn it on again.",
   "Módulos desta instalação": "This installation's modules",
   "Módulos ocultos continuam existindo: nada é apagado nem desativado no CRM.": "Hidden modules still exist: nothing is deleted or turned off in the CRM.",
   "Módulos opcionais": "Optional modules",

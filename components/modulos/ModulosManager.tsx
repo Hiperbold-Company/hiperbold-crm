@@ -182,7 +182,7 @@ export function ModulosManager({ inicial }: { inicial: ListagemDeModulos }) {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {t(
-                "Os menus e telas somem para todas as organizações. Os dados ficam guardados e voltam ao religar.",
+                "Desligar esconde o módulo das telas de todas as organizações e bloqueia as ações dele. Os dados ficam guardados e voltam ao religar.",
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -33543,10 +33543,13 @@ begin
   -- O nome só chega aqui depois de passar pelo slug e pela existência da função; `%I` o cita.
   execute format('select public.%I()', 'fn_' || p_modulo || '_provisionar');
 
+  -- 1016: quando a linha já existe, instalar de novo NÃO mexe em `estado`. Um módulo desligado
+  -- por quem administra só religa pela fn_modulo_definir_estado (botão "Ligar de novo"), e um
+  -- suspenso só sai de lá pela atualização que o conserta.
   insert into public.modulos_instalados (modulo, estado, instalado_por, reaplicado_em)
     values (p_modulo, 'ativo', p_actor, now())
     on conflict (modulo) do update
-      set estado = 'ativo', motivo_suspensao = null, reaplicado_em = now();
+      set reaplicado_em = now();
 
   insert into public.extension_operations
       (id, kind, status, actor_id, name, request_fingerprint, request, result)
@@ -33601,9 +33604,13 @@ begin
       -- aplicar de novo. Suspender aqui tiraria do ar um módulo que só precisava esperar.
       when deadlock_detected or serialization_failure or lock_not_available then
         raise;
+      -- 1016: a falha NUNCA sobrescreve `desligado`. Gravar `suspenso` por cima apagaria a decisão
+      -- do administrador, e a atualização seguinte, já consertada, levaria `suspenso` a `ativo`: o
+      -- módulo religaria sozinho. O motivo fica anotado para quem religar saber.
       when others then
         update public.modulos_instalados
-          set estado = 'suspenso', motivo_suspensao = sqlerrm
+          set estado = case when estado = 'desligado' then 'desligado' else 'suspenso' end,
+              motivo_suspensao = sqlerrm
           where modulo = r.modulo;
     end;
   end loop;
@@ -34041,7 +34048,7 @@ create or replace function public.fn_finalizar_comanda(
   p_payment_method uuid,
   p_loyalty_points integer default 0
 )
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   -- ⚠️ `record` e NÃO `public.sales%rowtype`, por D7 da ADR-0002: a tabela é do
   -- módulo e não existe onde ele não está instalado, e `%rowtype` é resolvido na
@@ -34055,6 +34062,8 @@ declare
   v_item       record;
   v_entry      uuid;
 begin
+  -- 1016: módulo desligado (ou suspenso) não aceita ação, mesmo chamada direto pela REST.
+  perform public.fn_modulo_exigir_ativo('financeiro');
   if auth.uid() is null or not public.fn_role_at_least(p_org, 'agent') then
     raise exception 'comanda_forbidden' using errcode = '42501';
   end if;
@@ -34170,7 +34179,7 @@ grant execute on function public.fn_finalizar_comanda(uuid, uuid, uuid, integer)
 
 -- ─── O ESTORNO: contra-lançamento, nunca exclusão ────────────────────────────
 create or replace function public.fn_estornar_comanda(p_org uuid, p_sale uuid, p_motivo text)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   -- ⚠️ `record` e NÃO `%rowtype`, por D7 da ADR-0002 (medido: `%rowtype` contra
   -- tabela do módulo ausente faz a CRIAÇÃO da função falhar).
@@ -34178,6 +34187,8 @@ declare
   v_orig   record;
   v_novo   uuid;
 begin
+  -- 1016: módulo desligado (ou suspenso) não aceita ação, mesmo chamada direto pela REST.
+  perform public.fn_modulo_exigir_ativo('financeiro');
   if auth.uid() is null or not public.fn_role_at_least(p_org, 'manager') then
     raise exception 'estorno_forbidden' using errcode = '42501';
   end if;
@@ -37375,6 +37386,8 @@ declare
   v_parcela record;
   v_entry uuid;
 begin
+  -- 1016: módulo desligado (ou suspenso) não aceita ação, mesmo chamada direto pela REST.
+  perform public.fn_modulo_exigir_ativo('honorarios');
   if auth.uid() is null or not public.fn_role_at_least(p_org, 'manager') then
     raise exception 'honorarios_forbidden' using errcode = '42501';
   end if;
@@ -103003,6 +103016,110 @@ grant execute on function public.fn_mover_negocio_para_outro_funil(uuid, uuid, u
 comment on function public.fn_mover_negocio_para_outro_funil(uuid, uuid, uuid, numeric, timestamptz) is
   'Migration 1013 (fork Hiperbold): o ÚNICO caminho que troca crm_leads.pipeline_id. Leva o MESMO negócio (id, contato, responsável, histórico e custom_fields intactos) para uma etapa de outro funil da mesma organização. Só service_role; quem chama é moverParaOutroFunilHandler (app/api/v1/leads/_handler.ts), que emite lead.stage_changed, a atividade e a auditoria.';
 
+-- ---- desligar e religar um módulo de tabela sem perder dados (migration 1016, fork Hiperbold) ----
+-- Espelho idempotente da 1016; racional completo no arquivo da migration. As duas CHECKs (estado de
+-- `modulos_instalados` e kind de `extension_operations`) e os corpos de `fn_reaplicar_modulos_instalados`,
+-- `fn_modulo_instalar`, `fn_finalizar_comanda`, `fn_estornar_comanda` e `fn_honorarios_parcela_pagar`
+-- foram editados nos blocos únicos deles, acima; aqui ficam só as funções novas. Este bloco fica ANTES da
+-- VARREDURA anon (tests/unit/varredura-anon-e-o-ultimo-bloco.test.ts).
+
+-- ── 3. a porta de desligar e religar ─────────────────────────────────────────
+create or replace function public.fn_modulo_definir_estado(
+  p_actor uuid, p_operation uuid, p_modulo text, p_ligar boolean, p_estado_visto text)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_kind text := case when p_ligar then 'module_enable' else 'module_disable' end;
+  v_request jsonb;
+  v_op public.extension_operations;
+  v_atual text;
+begin
+  perform public.fn_extensions_assert_actor(p_actor);
+  if p_operation is null or p_ligar is null or p_modulo is null
+     or p_modulo !~ '^[a-z][a-z0-9_]{1,40}$'
+     or p_estado_visto is null or p_estado_visto not in ('ativo', 'suspenso', 'desligado') then
+    raise exception using errcode = 'P0001', message = 'extension_invalid_input';
+  end if;
+  v_request := jsonb_build_object('kind', v_kind, 'actor', p_actor, 'modulo', p_modulo,
+                                  'estado_visto', p_estado_visto);
+
+  -- A mesma trava do instalar e das extensões; o ator é conferido de novo depois da espera.
+  perform pg_advisory_xact_lock(255, 1);
+  perform public.fn_extensions_assert_actor(p_actor);
+
+  select * into v_op from public.extension_operations where id = p_operation;
+  if found then
+    if v_op.request_fingerprint <> public.fn_extensions_fingerprint(v_request) then
+      raise exception using errcode = 'P0001', message = 'extension_idempotency_conflict';
+    end if;
+    return to_jsonb(v_op) || jsonb_build_object('applied_now', false);
+  end if;
+
+  if public.fn_extensions_core_update_in_progress() then
+    raise exception using errcode = 'P0001', message = 'extension_core_update_in_progress';
+  end if;
+
+  select estado into v_atual from public.modulos_instalados where modulo = p_modulo for update;
+  if not found then
+    raise exception using errcode = 'P0001', message = 'extension_module_not_installed';
+  end if;
+
+  -- Concorrência otimista: a troca vale só sobre o estado que a tela mostrou. E cada direção tem um
+  -- único ponto de partida: desligar sai de `ativo`, religar sai de `desligado`. Um `suspenso` não se
+  -- religa por aqui (precisa da atualização que o conserta), nem se desliga.
+  if v_atual <> p_estado_visto
+     or (p_ligar and v_atual <> 'desligado')
+     or (not p_ligar and v_atual <> 'ativo') then
+    raise exception using errcode = 'P0001', message = 'extension_module_state_changed';
+  end if;
+
+  -- Só o estado muda. Nenhuma tabela do módulo é tocada, nem a provisionadora roda.
+  update public.modulos_instalados
+     set estado = case when p_ligar then 'ativo' else 'desligado' end
+   where modulo = p_modulo;
+
+  insert into public.extension_operations
+      (id, kind, status, actor_id, name, request_fingerprint, request, result)
+    values
+      (p_operation, v_kind, 'completed', p_actor, p_modulo,
+       public.fn_extensions_fingerprint(v_request), v_request,
+       jsonb_build_object('modulo', p_modulo, 'de', v_atual,
+                          'para', case when p_ligar then 'ativo' else 'desligado' end))
+    returning * into v_op;
+
+  return to_jsonb(v_op) || jsonb_build_object('applied_now', true);
+end $$;
+
+revoke execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) from public, anon;
+revoke execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) from authenticated;
+grant execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) to service_role;
+
+-- ── 6. a ação do módulo exige o módulo ativo ─────────────────────────────────
+-- Desligar não pode valer só no app: as RPCs que MUDAM dados de módulo e estão expostas a
+-- `authenticated` (fn_finalizar_comanda, fn_estornar_comanda, fn_honorarios_parcela_pagar) começam
+-- por esta checagem. Sem linha no registro (módulo provisionado direto, como na bateria de
+-- invariantes) não há decisão de quem administra a respeitar, e a função segue como antes; a falta
+-- da tabela continua recusada pela própria RPC. Leitura não passa por aqui: as policies ficam.
+create or replace function public.fn_modulo_exigir_ativo(p_modulo text)
+returns void language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare
+  v_estado text;
+begin
+  select estado into v_estado from public.modulos_instalados where modulo = p_modulo;
+  if found and v_estado <> 'ativo' then
+    raise exception using errcode = 'PT423', message = 'modulo_inativo',
+      detail = format('modulo=%s estado=%s', p_modulo, v_estado),
+      hint = 'O módulo está desligado ou suspenso nesta instalação.';
+  end if;
+end $$;
+
+-- Só as RPCs definer a chamam, e elas rodam como o dono: nenhum papel do PostgREST precisa dela.
+revoke execute on function public.fn_modulo_exigir_ativo(text) from public, anon, authenticated, service_role;
+
+comment on table public.modulos_instalados is
+  'Módulos opcionais instalados NA INSTÂNCIA (ADR-0002, D3). Sem organization_id: o corte é por instalação. Escrito só por fn_modulo_instalar, fn_modulo_definir_estado (1016: desligar/religar, sem apagar dados) e fn_reaplicar_modulos_instalados.';
+
+notify pgrst, 'reload schema';
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
@@ -108753,86 +108870,6 @@ alter table public.platform_meta_app
 
 comment on column public.platform_meta_app.whatsapp_config_id is
   '1014: id da configuração do Facebook Login para Empresas do tipo WhatsApp Embedded Signup (botão Conectar com a Meta). Não é segredo.';
-
-notify pgrst, 'reload schema';
-
--- ---- desligar e religar um módulo de tabela sem perder dados (migration 1016, fork Hiperbold) ----
--- Espelho idempotente da 1016; racional completo no arquivo da migration. As duas CHECKs (estado de
--- `modulos_instalados` e kind de `extension_operations`) e o corpo de `fn_reaplicar_modulos_instalados`
--- foram editados nos blocos únicos deles, acima; aqui fica só a função nova.
-
--- ── 3. a porta de desligar e religar ─────────────────────────────────────────
-create or replace function public.fn_modulo_definir_estado(
-  p_actor uuid, p_operation uuid, p_modulo text, p_ligar boolean, p_estado_visto text)
-returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
-declare
-  v_kind text := case when p_ligar then 'module_enable' else 'module_disable' end;
-  v_request jsonb;
-  v_op public.extension_operations;
-  v_atual text;
-begin
-  perform public.fn_extensions_assert_actor(p_actor);
-  if p_operation is null or p_ligar is null or p_modulo is null
-     or p_modulo !~ '^[a-z][a-z0-9_]{1,40}$'
-     or p_estado_visto is null or p_estado_visto not in ('ativo', 'suspenso', 'desligado') then
-    raise exception using errcode = 'P0001', message = 'extension_invalid_input';
-  end if;
-  v_request := jsonb_build_object('kind', v_kind, 'actor', p_actor, 'modulo', p_modulo,
-                                  'estado_visto', p_estado_visto);
-
-  -- A mesma trava do instalar e das extensões; o ator é conferido de novo depois da espera.
-  perform pg_advisory_xact_lock(255, 1);
-  perform public.fn_extensions_assert_actor(p_actor);
-
-  select * into v_op from public.extension_operations where id = p_operation;
-  if found then
-    if v_op.request_fingerprint <> public.fn_extensions_fingerprint(v_request) then
-      raise exception using errcode = 'P0001', message = 'extension_idempotency_conflict';
-    end if;
-    return to_jsonb(v_op) || jsonb_build_object('applied_now', false);
-  end if;
-
-  if public.fn_extensions_core_update_in_progress() then
-    raise exception using errcode = 'P0001', message = 'extension_core_update_in_progress';
-  end if;
-
-  select estado into v_atual from public.modulos_instalados where modulo = p_modulo for update;
-  if not found then
-    raise exception using errcode = 'P0001', message = 'extension_module_not_installed';
-  end if;
-
-  -- Concorrência otimista: a troca vale só sobre o estado que a tela mostrou. E cada direção tem um
-  -- único ponto de partida: desligar sai de `ativo`, religar sai de `desligado`. Um `suspenso` não se
-  -- religa por aqui (precisa da atualização que o conserta), nem se desliga.
-  if v_atual <> p_estado_visto
-     or (p_ligar and v_atual <> 'desligado')
-     or (not p_ligar and v_atual <> 'ativo') then
-    raise exception using errcode = 'P0001', message = 'extension_module_state_changed';
-  end if;
-
-  -- Só o estado muda. Nenhuma tabela do módulo é tocada, nem a provisionadora roda.
-  update public.modulos_instalados
-     set estado = case when p_ligar then 'ativo' else 'desligado' end
-   where modulo = p_modulo;
-
-  insert into public.extension_operations
-      (id, kind, status, actor_id, name, request_fingerprint, request, result)
-    values
-      (p_operation, v_kind, 'completed', p_actor, p_modulo,
-       public.fn_extensions_fingerprint(v_request), v_request,
-       jsonb_build_object('modulo', p_modulo, 'de', v_atual,
-                          'para', case when p_ligar then 'ativo' else 'desligado' end))
-    returning * into v_op;
-
-  return to_jsonb(v_op) || jsonb_build_object('applied_now', true);
-end $$;
-
-revoke execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) from public, anon;
-revoke execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) from authenticated;
-grant execute on function public.fn_modulo_definir_estado(uuid, uuid, text, boolean, text) to service_role;
-
-comment on table public.modulos_instalados is
-  'Módulos opcionais instalados NA INSTÂNCIA (ADR-0002, D3). Sem organization_id: o corte é por instalação. Escrito só por fn_modulo_instalar, fn_modulo_definir_estado (1016: desligar/religar, sem apagar dados) e fn_reaplicar_modulos_instalados.';
 
 notify pgrst, 'reload schema';
 

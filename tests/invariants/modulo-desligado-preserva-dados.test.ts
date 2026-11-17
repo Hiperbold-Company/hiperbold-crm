@@ -4,8 +4,10 @@
  * `fn_modulo_definir_estado` troca `modulos_instalados.estado` entre `ativo` e `desligado` e mais
  * nada: a tabela do módulo e as linhas dela ficam, e religar as devolve iguais. A reaplicação da
  * atualização (`fn_reaplicar_modulos_instalados`, que o rodapé do baseline chama) NÃO religa um
- * módulo desligado. Provado com uma provisionadora de mentira, na forma da D4, sobre o banco
- * recém-clonado do baseline (tests/db/banco-limpo-por-arquivo.ts).
+ * módulo desligado — nem quando a provisionadora FALHA (a falha não grava `suspenso` por cima de
+ * `desligado`, senão a atualização seguinte o religaria). E `fn_modulo_instalar` sobre módulo já
+ * registrado não mexe no estado. Provado com uma provisionadora de mentira, na forma da D4, sobre o
+ * banco recém-clonado do baseline (tests/db/banco-limpo-por-arquivo.ts).
  */
 import { randomUUID } from "node:crypto";
 
@@ -54,6 +56,30 @@ async function estado(): Promise<string | undefined> {
   return (await query("select estado from public.modulos_instalados where modulo = $1", [MODULO])).rows[0]?.estado;
 }
 
+async function motivo(): Promise<string | null | undefined> {
+  return (await query("select motivo_suspensao from public.modulos_instalados where modulo = $1", [MODULO])).rows[0]
+    ?.motivo_suspensao;
+}
+
+/** A provisionadora da sonda, na forma da D4; `quebrada` a faz falhar antes de criar qualquer coisa. */
+const provisionadora = (quebrada: boolean) => `
+    create or replace function public.fn_${MODULO}_provisionar()
+    returns void language plpgsql security definer set search_path = public as $prov$
+    begin
+      ${quebrada ? "raise exception 'provisionadora da sonda quebrada';" : ""}
+      create table if not exists public.${TABELA} (
+        id uuid primary key default gen_random_uuid(),
+        organization_id uuid not null references public.organizations(id) on delete cascade,
+        total_cents bigint not null default 0
+      );
+      perform public.fn_proteger_modulo_provisionado();
+    end $prov$;
+    revoke execute on function public.fn_${MODULO}_provisionar() from public, anon, authenticated;
+    grant execute on function public.fn_${MODULO}_provisionar() to service_role;`;
+
+const instalar = () =>
+  comoServico("select public.fn_modulo_instalar($1, $2, $3) as recibo", [plataforma, randomUUID(), MODULO]);
+
 async function linhasDoModulo(): Promise<number> {
   return (await query(`select count(*)::int as n from public.${TABELA}`)).rows[0].n;
 }
@@ -69,20 +95,8 @@ beforeAll(async () => {
     [plataforma],
   );
   await query("insert into public.organizations(id, slug, legal_name, display_name) values ($1, 'org-1016', 'Org 1016 LTDA', 'Org 1016') on conflict (id) do nothing", [org]);
-  await query(`
-    create or replace function public.fn_${MODULO}_provisionar()
-    returns void language plpgsql security definer set search_path = public as $prov$
-    begin
-      create table if not exists public.${TABELA} (
-        id uuid primary key default gen_random_uuid(),
-        organization_id uuid not null references public.organizations(id) on delete cascade,
-        total_cents bigint not null default 0
-      );
-      perform public.fn_proteger_modulo_provisionado();
-    end $prov$;
-    revoke execute on function public.fn_${MODULO}_provisionar() from public, anon, authenticated;
-    grant execute on function public.fn_${MODULO}_provisionar() to service_role;`);
-  await comoServico("select public.fn_modulo_instalar($1, $2, $3) as recibo", [plataforma, randomUUID(), MODULO]);
+  await query(provisionadora(false));
+  await instalar();
   await query(`insert into public.${TABELA}(organization_id, total_cents) values ($1, 100), ($1, 250)`, [org]);
 });
 
@@ -151,5 +165,52 @@ describe("desligar e religar", () => {
         "ativo",
       ]),
     ).rejects.toThrow("extension_module_not_installed");
+  });
+});
+
+describe("só o botão religa", () => {
+  it("desligado → provisionadora falha → reaplica: continua desligado, com o motivo anotado", async () => {
+    await definir(randomUUID(), false, "ativo");
+    expect(await estado()).toBe("desligado");
+
+    await query(provisionadora(true));
+    await query("select public.fn_reaplicar_modulos_instalados()");
+    expect(await estado()).toBe("desligado");
+    expect(await motivo()).toMatch(/provisionadora da sonda quebrada/);
+    expect(await linhasDoModulo()).toBe(2);
+  });
+
+  it("a atualização seguinte, já consertada, NÃO religa o módulo desligado", async () => {
+    await query(provisionadora(false));
+    await query("select public.fn_reaplicar_modulos_instalados()");
+    expect(await estado()).toBe("desligado");
+    expect(await motivo()).toBeNull();
+    await query("select public.fn_conferir_modulos_instalados()");
+    expect(await linhasDoModulo()).toBe(2);
+  });
+
+  it("instalar de novo um módulo desligado não o religa", async () => {
+    const recibo = await instalar();
+    expect(recibo).toMatchObject({ kind: "module_install", applied_now: true });
+    expect(await estado()).toBe("desligado");
+    expect(await linhasDoModulo()).toBe(2);
+  });
+
+  it("instalar de novo um módulo suspenso não o leva a ativo", async () => {
+    await query("update public.modulos_instalados set estado = 'suspenso', motivo_suspensao = 'sonda' where modulo = $1", [
+      MODULO,
+    ]);
+    await instalar();
+    expect(await estado()).toBe("suspenso");
+    expect(await motivo()).toBe("sonda");
+    await query("update public.modulos_instalados set estado = 'desligado', motivo_suspensao = null where modulo = $1", [
+      MODULO,
+    ]);
+  });
+
+  it("religar pela fn_modulo_definir_estado é o caminho de volta", async () => {
+    await definir(randomUUID(), true, "desligado");
+    expect(await estado()).toBe("ativo");
+    expect(await linhasDoModulo()).toBe(2);
   });
 });
