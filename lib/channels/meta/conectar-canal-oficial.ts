@@ -212,6 +212,7 @@ export async function conectarCanalOficial(input: EntradaDaConexaoOficial): Prom
   // mesmo número, e a velha continuaria segurando o par (org, número) na trava da
   // 0106. Se houver mais de uma (histórico), a viva vem primeiro, depois a mais antiga.
   const buscarExistente = (colunas: string, comArquivada: boolean) => {
+    // cerca-canal: numero_da_propria_organizacao_vivo_ou_arquivado
     const q = admin
       .from("channel_sessions")
       .select(colunas)
