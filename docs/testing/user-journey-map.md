@@ -4387,3 +4387,9 @@ Achado da auditoria do lote 4: quem edita automação (e não vê o valor da cha
 | J104.9 | Chave antiga (sem endereço) | aviso "Esta chave pode ser enviada para qualquer endereço. Informe o endereço do serviço."; preencher não pede a chave e o aviso some | **PASS (tela, 11/11/2026)** — idem |
 
 Evidência: `evidence/automacoes-chave-por-host/01-chave-com-enderecos-permitidos.png`, `evidence/automacoes-chave-por-host/02-bloco-aviso-chave-fora-do-endereco.png`, `evidence/automacoes-chave-por-host/03-publish-recusa-host-fora-da-chave.png`, `evidence/automacoes-chave-por-host/04-incluir-endereco-pede-a-chave.png`, `evidence/automacoes-chave-por-host/05-execucao-recusada-chave-fora-do-endereco.png` e `evidence/automacoes-chave-por-host/06-chave-antiga-com-aviso.png`. O caminho positivo (a chave chega ao host permitido) é provado em `lib/automacoes/chave-presa-ao-host.test.ts`, com o fetch seguro de produção contra um receptor HTTP real (só DNS e TLS trocados), pelo mesmo motivo do lote 4: a régua da organização exige https e IP público.
+
+## Relatar um problema pelo botão do inseto `[P1]` (2026-11-17)
+
+- `[P1]` Computador: a aba fica na borda direita, dentro da viewport e sem cobrir o enviar do chat; o clique abre o modal com a pergunta do print (Sim/Não) e a miniatura da captura real; sem descrição o envio é recusado; com ela, toast "Recebemos o seu relato".
+- `[P1]` Celular (390x844): a aba não aparece.
+- `[P1]` Dono do servidor em `/admin/relatos`: o relato aparece com a descrição, o detalhe carrega o print pela URL assinada e "Em andamento" persiste ao recarregar. Spec: `tests/e2e/relatar-problema.spec.ts` (`SPECS_PARTE_8`, roda no CI; ainda sem medição local). Evidência: `evidence/relatar-problema/`.
