@@ -42,7 +42,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
-import { chavesRestritasDosCampos, recortarCampos } from "@/lib/campos/recorte-por-papel";
+import { chavesRestritasDosCampos, recortarCampos, recortarValores } from "@/lib/campos/recorte-por-papel";
 import { camposDoFunil } from "@/lib/leads/campos-do-funil";
 import type { CustomFieldDef } from "@/lib/schemas/settings";
 
@@ -67,6 +67,19 @@ export function campoRestritoNoContexto(context: Record<string, unknown>, chave:
   const marca = context[CAMPOS_RESTRITOS_NO_CONTEXTO];
   if (marca === "todas") return true;
   return Array.isArray(marca) && marca.includes(chave.toLowerCase());
+}
+
+/**
+ * 1015: os `custom_fields` de uma linha do contexto SEM os campos restritos, para tudo o que sai do
+ * contexto da automação para um modelo de IA (o decisor de `ai_decide`). `"todas"` (não deu para ler
+ * quais são) tira todos. Não muda o contexto: as condições continuam vendo o dado inteiro.
+ */
+export function camposPersonalizadosParaIa(context: Record<string, unknown>, campos: unknown): unknown {
+  if (!campos || typeof campos !== "object" || Array.isArray(campos)) return campos;
+  const marca = context[CAMPOS_RESTRITOS_NO_CONTEXTO];
+  if (marca === "todas") return undefined;
+  if (!Array.isArray(marca) || marca.length === 0) return campos;
+  return recortarValores(campos, new Set(marca as string[]), "ia");
 }
 
 function marcarRestritas(context: Record<string, unknown>, chaves: Iterable<string> | "todas"): void {

@@ -17,11 +17,18 @@ export async function chavesRestritasDaOrganizacao(
   organizationId: string,
   requestId?: string,
 ): Promise<ChavesRestritas> {
-  const { data, error } = await supabase
-    .from("custom_field_definitions")
-    .select("key")
-    .eq("organization_id", organizationId)
-    .eq("publico", false);
+  let data: unknown[] | null = null;
+  let error: { code?: string; message: string } | null = null;
+  try {
+    ({ data, error } = await supabase
+      .from("custom_field_definitions")
+      .select("key")
+      .eq("organization_id", organizationId)
+      .eq("publico", false));
+  } catch (e) {
+    // Cliente sem a tabela ou fora do ar: a mesma falha declarada, nunca um throw no caminho do leitor.
+    error = { message: e instanceof Error ? e.message : String(e) };
+  }
   if (error) {
     logger.warn("[campos] não li as chaves restritas da organização", {
       organizationId,

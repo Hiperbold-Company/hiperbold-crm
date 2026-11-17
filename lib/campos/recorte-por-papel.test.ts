@@ -122,3 +122,52 @@ describe("recorte por papel: a variável de automação nunca recebe", () => {
     expect(renderTemplate("[{{origem}}][{{lead.custom_fields.origem}}]", context)).toBe("[][]");
   });
 });
+
+describe("recorte por papel: a decisão por IA da automação e o MCP do agente nunca recebem", () => {
+  it("a ficha do `ai_decide` leva o campo público e não o restrito", async () => {
+    const { fichaDaDecisao } = await import("@/lib/automation/decider");
+    const context: Record<string, unknown> = { lead: { status: "open", pipeline_id: "p1", custom_fields: { ...VALORES } } };
+    await hidratarCamposDoFunil(context, adminDoFunil(), "org-1");
+    const ficha = JSON.stringify(fichaDaDecisao(context));
+    expect(ficha).toContain("site");
+    expect(ficha).not.toContain("valor-da-margem");
+  });
+
+  it("crm_get_lead chamado pelo agente de IA não devolve o valor restrito", async () => {
+    const { crmGetLead } = await import("@/lib/mcp/tools/leads");
+    const lead = { id: "11111111-2222-4333-8444-555555555555", organization_id: "org-1", contact_id: null, stage_id: null,
+      owner_user_id: null, custom_fields: { ...VALORES } };
+    const supabase = bancoDoMcp(lead);
+    const r = (await crmGetLead.handler({ lead_id: lead.id }, {
+      organizationId: "org-1",
+      role: "admin",
+      actor: { type: "ai_agent", id: "run-1", role: "admin" },
+      requestId: "req",
+      supabase,
+    } as never)) as { lead: { custom_fields: Record<string, unknown> } };
+    expect(r.lead.custom_fields).toEqual({ origem: "site" });
+  });
+});
+
+/** Só a borda é falsa: o funil do negócio e as chaves restritas da organização. */
+function adminDoFunil(): SupabaseClient {
+  const q: Record<string, unknown> = {};
+  q.select = () => q;
+  q.eq = () => q;
+  q.maybeSingle = async () => ({ data: { settings: { fields: CAMPOS } }, error: null });
+  q.then = (ok: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(ok);
+  return { from: () => q } as unknown as SupabaseClient;
+}
+
+function bancoDoMcp(lead: Record<string, unknown>): SupabaseClient {
+  const from = (tabela: string) => {
+    const q: Record<string, unknown> = {};
+    for (const m of ["select", "eq", "in", "is", "neq", "order", "limit"]) q[m] = () => q;
+    q.maybeSingle = async () => ({ data: tabela === "crm_leads" ? lead : null, error: null });
+    q.single = q.maybeSingle;
+    q.then = (ok: (v: unknown) => unknown) =>
+      Promise.resolve({ data: tabela === "custom_field_definitions" ? [{ key: "Margem" }] : [], error: null }).then(ok);
+    return q;
+  };
+  return { from } as unknown as SupabaseClient;
+}

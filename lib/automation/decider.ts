@@ -19,6 +19,7 @@
  * o defeito oposto ao da IA que não fez nada, e pior, porque passa despercebido.
  */
 import { extrairObjetoJsonDoTexto } from "@/lib/agent-engine/texto/extrair-json-do-texto";
+import { camposPersonalizadosParaIa } from "@/lib/automation/campos-do-render";
 
 /** Uma opção do `ai_decide` — o id que a IA devolve e a ação que ele dispara. */
 export interface OpcaoDeDecisao {
@@ -78,10 +79,10 @@ function formatarOpcoes(opcoes: readonly OpcaoDeDecisao[]): string {
  * ao cliente ou entregam ao integrador; aqui a IA só ESCOLHE uma opção, e nome,
  * e-mail e telefone não mudam escolha nenhuma.
  *
- * ponytail: `custom_fields` vai inteiro — é o dado de negócio que a instrução
- * do operador costuma citar ("quer parcelar?"), e é o que o operador cadastrou.
- * Teto: um campo personalizado com documento dentro sai junto; o caminho é
- * filtrar pelos campos do funil quando alguém pedir.
+ * `custom_fields` vai, porque é o dado de negócio que a instrução do operador
+ * costuma citar ("quer parcelar?") — MENOS os campos não públicos (1015): campo
+ * restrito nunca vai a modelo de IA (`camposPersonalizadosParaIa`, com as chaves
+ * que `buildContext` marcou no contexto).
  */
 const FICHA_DA_DECISAO = {
   evento: ["body_preview", "added_tags", "event_type_name", "status", "lost_reason", "won_reason"],
@@ -104,6 +105,11 @@ export function fichaDaDecisao(contexto: Record<string, unknown>): Record<string
   const ficha: Record<string, unknown> = {};
   const evento = projetar(contexto.event, FICHA_DA_DECISAO.evento);
   const negocio = projetar(contexto.lead, FICHA_DA_DECISAO.lead);
+  if (negocio && "custom_fields" in negocio) {
+    const recortados = camposPersonalizadosParaIa(contexto, negocio.custom_fields);
+    if (recortados === undefined) delete negocio.custom_fields;
+    else negocio.custom_fields = recortados;
+  }
   const contato = projetar(contexto.contact, FICHA_DA_DECISAO.contact);
   if (evento) ficha.evento = evento;
   if (negocio) ficha.negocio = negocio;

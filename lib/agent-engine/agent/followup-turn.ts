@@ -1,4 +1,5 @@
 import {claimOfJob,type JobClaim} from "../queue/claim";
+import { recortarValores } from "@/lib/campos/recorte-por-papel";
 import {resultadoDoEnvioDoFollowup} from "../edge/crm/send-ledger";
 import { parseServiceBoundary } from "@/lib/atendimento/fronteira";
 import { requireCurrentServiceBoundary } from "@/lib/atendimento/fronteira-server";
@@ -1297,7 +1298,7 @@ async function dadosParaVariaveis(
   tenantId: string,
   contactId: string,
 ): Promise<{ nomeDoContato: string | null; camposDoNegocio: Record<string, unknown> }> {
-  const [contatos, negocios] = await Promise.all([
+  const [contatos, negocios, restritas] = await Promise.all([
     pool.query<{ name: string | null; display_name: string | null }>(
       `select name, display_name from contacts where organization_id = $1 and id = $2`,
       [tenantId, contactId],
@@ -1307,10 +1308,19 @@ async function dadosParaVariaveis(
        order by updated_at desc limit 1`,
       [tenantId, contactId],
     ),
+    // 1015: campo não público nunca vira texto que sai da IA ao cliente.
+    pool.query<{ key: string }>(
+      `select key from custom_field_definitions where organization_id = $1 and publico = false`,
+      [tenantId],
+    ),
   ]);
   return {
     nomeDoContato: nomeDoContato(contatos.rows[0] ?? null),
-    camposDoNegocio: negocios.rows[0]?.custom_fields ?? {},
+    camposDoNegocio: recortarValores(
+      negocios.rows[0]?.custom_fields ?? {},
+      new Set(restritas.rows.map((r) => r.key.toLowerCase())),
+      "ia",
+    ),
   };
 }
 
