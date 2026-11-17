@@ -121,7 +121,7 @@ const SheetContent = React.forwardRef<
           Sheet (z-50).
         */}
         <SheetPrimitive.Close className="absolute top-4 right-4 z-20 -m-3.5 rounded-sm p-3.5 opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-secondary lg:m-0 lg:p-0">
-          <X className="h-4 w-4" />
+          <X className="h-4 w-4" aria-hidden />
           <span className="sr-only">{t("Fechar")}</span>
         </SheetPrimitive.Close>
         {children}
