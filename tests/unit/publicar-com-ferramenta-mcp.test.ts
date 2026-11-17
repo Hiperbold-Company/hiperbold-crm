@@ -390,7 +390,7 @@ describe("publishAgentAction — ferramenta externa e conferência de escopo", (
     const r = await publishAgentAction(AGENT, VERSAO);
     expect(r.ok).toBe(false);
     expect((r as { error: string }).error).toBe("validation_failed");
-    expect((r as { message?: string }).message).toMatch(/Conexões MCP/);
+    expect((r as { message?: string }).message).toMatch(/Ferramentas externas da IA/);
   });
 });
 
@@ -433,7 +433,7 @@ describe("revertToVersionAction — ferramenta externa e conferência de escopo"
     const r = await revertToVersionAction(AGENT, VERSAO);
     expect(r.ok).toBe(false);
     expect((r as { error: string }).error).toBe("validation_failed");
-    expect((r as { message?: string }).message).toMatch(/Conexões MCP/);
+    expect((r as { message?: string }).message).toMatch(/Ferramentas externas da IA/);
     // A draft criada para virar a publicação foi desfeita: sobra só a
     // versão de origem, não uma órfã com `status: "draft"` no meio.
     expect(

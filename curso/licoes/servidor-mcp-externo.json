@@ -21,7 +21,7 @@
         {
           "id": "p1",
           "titulo": "Onde fica a tela",
-          "texto": "Abra \"Configurações\", no rodapé do menu lateral. Na parte \"Dados e acesso\" fica o cartão \"Servidor MCP externo\". Clique nele.",
+          "texto": "Abra \"Configurações\", no rodapé do menu lateral. Na parte \"Dados e acesso\" fica o cartão \"Sistema externo da IA\". Clique nele.",
           "dica": "Só o dono da instalação entra nesta tela. Quem não é dono e clica no cartão vê \"Sem permissão\". Se a verificação em duas etapas estiver ligada na sua conta, o sistema pode pedir o código antes de abrir a tela.",
           "rota": "/app/settings",
           "antes": [],
@@ -30,7 +30,7 @@
               "alvo": {
                 "css": "a[href='/app/settings/servidor-mcp-externo']"
               },
-              "rotulo": "Servidor MCP externo",
+              "rotulo": "Sistema externo da IA",
               "tipo": "seta"
             }
           ],
@@ -61,7 +61,7 @@
             {
               "alvo": {
                 "role": "heading",
-                "nome": "Servidor MCP externo",
+                "nome": "Sistema externo da IA",
                 "exato": true
               },
               "rotulo": "A tela",

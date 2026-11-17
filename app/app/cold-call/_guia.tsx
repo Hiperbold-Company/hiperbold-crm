@@ -54,7 +54,7 @@ export function GuiaDoColdCall({ aoFechar }: { aoFechar: () => void }) {
     <Dialog open onOpenChange={(aberto) => !aberto && fechar()}>
       <DialogContent className="max-h-[90dvh] max-w-xl overflow-y-auto" data-testid="guia-do-cold-call">
         <DialogHeader>
-          <DialogTitle>{t("Como deixar o Cold Call funcionando")}</DialogTitle>
+          <DialogTitle>{t("Como deixar as Ligações em lista funcionando")}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-text-muted">{t("São poucos passos, e você só faz uma vez em cada aparelho.")}</p>
 

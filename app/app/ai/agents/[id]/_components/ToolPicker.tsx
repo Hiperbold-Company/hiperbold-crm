@@ -627,7 +627,7 @@ export function ToolPicker({ value: valorSalvo, onChange, disabled, ocultar }: P
           className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground"
         >
           {t(
-            "Propostas está desligada nesta organização: o rascunho automático de proposta fica guardado e volta a valer quando alguém ligar em Configurações › Propostas.",
+            "Propostas está desligada nesta organização: o rascunho automático de proposta fica guardado e volta a valer quando alguém ligar em Configurações › Regras das propostas.",
           )}
         </p>
       ) : null}

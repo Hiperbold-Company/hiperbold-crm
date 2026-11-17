@@ -14477,5 +14477,12 @@
   "Ligações em lista": "Calls from a list",
   "Não roda até o admin aprovar em IA › Ferramentas externas da IA.": "Doesn't run until an admin approves it in AI › External AI tools.",
   "Nenhuma conexão MCP. Conecte um servidor em IA › Ferramentas externas da IA para dar ferramentas de outros sistemas ao agente.": "No MCP connection. Connect a server in AI › External AI tools to give the agent tools from other systems.",
-  "Nenhum servidor externo respondeu. Confira o endereço e a chave em Configurações › Sistema externo da IA.": "No external server responded. Check the address and key in Settings › External AI system."
+  "Nenhum servidor externo respondeu. Confira o endereço e a chave em Configurações › Sistema externo da IA.": "No external server responded. Check the address and key in Settings › External AI system.",
+  "Resultado da ligação": "Call result",
+  "Como deixar as Ligações em lista funcionando": "How to get Calls from a list working",
+  "Propostas está desligada nesta organização: o rascunho automático de proposta fica guardado e volta a valer quando alguém ligar em Configurações › Regras das propostas.": "Proposals is off in this organization: the automatic proposal draft stays saved and takes effect again once someone turns it on in Settings › Proposal rules.",
+  "As propostas estão desligadas para esta organização. Para editar os modelos, ligue as propostas em Configurações › Regras das propostas e salve.": "Proposals are turned off for this organization. To edit the templates, turn on proposals in Settings › Proposal rules and save.",
+  "Ir para Configurações › Regras das propostas": "Go to Settings › Proposal rules",
+  "Seu agente ainda não aprendeu nada neste período. Ele aprende de três jeitos: você publica uma regra na Memória da IA, aprova uma sugestão de melhoria na aba Propostas do agente, ou instala uma habilidade em Ações da IA.": "Your agent hasn't learned anything in this period yet. It learns three ways: you publish a rule in AI Memory, you approve an improvement suggestion in the agent's Proposals tab, or you install a skill in AI actions.",
+  "Crie o primeiro na tela Funil": "Create the first one on the Pipeline screen"
 }

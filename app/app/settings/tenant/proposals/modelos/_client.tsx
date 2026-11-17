@@ -128,10 +128,10 @@ export function ModelosDeProposta() {
       <div className="mx-auto w-full max-w-3xl space-y-3 p-6">
         <h1 className="text-xl font-semibold">{t("Modelos de proposta")}</h1>
         <p>
-          {t("As propostas estão desligadas para esta organização. Para editar os modelos, ligue as propostas em Configurações › Propostas e salve.")}
+          {t("As propostas estão desligadas para esta organização. Para editar os modelos, ligue as propostas em Configurações › Regras das propostas e salve.")}
         </p>
         <Button asChild variant="outline">
-          <Link href="/app/settings/tenant/proposals">{t("Ir para Configurações › Propostas")}</Link>
+          <Link href="/app/settings/tenant/proposals">{t("Ir para Configurações › Regras das propostas")}</Link>
         </Button>
       </div>
     );
