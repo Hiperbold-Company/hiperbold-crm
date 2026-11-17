@@ -103207,12 +103207,10 @@ begin
   -- constraint entra NOT VALID e vale para toda escrita nova.
   if not exists (select 1 from pg_constraint where conrelid = 'public.custom_field_definitions'::regclass
                  and conname = 'custom_field_definitions_config_tamanho_check') then
-    if exists (select 1 from public.custom_field_definitions where pg_column_size(config) >= 262144) then
-      alter table public.custom_field_definitions add constraint custom_field_definitions_config_tamanho_check
-        check (pg_column_size(config) < 262144) not valid;
-    else
-      alter table public.custom_field_definitions add constraint custom_field_definitions_config_tamanho_check
-        check (pg_column_size(config) < 262144);
+    alter table public.custom_field_definitions add constraint custom_field_definitions_config_tamanho_check
+      check (pg_column_size(config) < 262144) not valid;
+    if not exists (select 1 from public.custom_field_definitions where pg_column_size(config) >= 262144) then
+      alter table public.custom_field_definitions validate constraint custom_field_definitions_config_tamanho_check;
     end if;
   end if;
 end
