@@ -14468,5 +14468,8 @@
   "Esta conexão não tem o acesso ao servidor guardado. Conecte de novo pelo modo avançado, com o mesmo token.": "This connection has no saved access to the server. Connect it again through the advanced mode, with the same token.",
   "Este número já está em outra conexão desta empresa. Remova uma das duas e tente de novo.": "This number is already in another connection of this company. Remove one of the two and try again.",
   "Não foi possível falar com o servidor de WhatsApp agora. Tente de novo em instantes.": "Couldn't reach the WhatsApp server right now. Try again in a moment.",
-  "Conectado, mas as mensagens ainda não entram.": "Connected, but messages are not coming in yet."
+  "Conectado, mas as mensagens ainda não entram.": "Connected, but messages are not coming in yet.",
+  "Sua assinatura não foi concluída": "Your subscription was not completed",
+  "Sua assinatura precisa ser renovada": "Your subscription needs to be renewed",
+  "A cobrança de {valor} do plano {plano} não foi paga no prazo. Para continuar usando o CRM, assine novamente pelos Planos.": "The {valor} charge for the {plano} plan was not paid on time. To keep using the CRM, subscribe again through Plans."
 }
