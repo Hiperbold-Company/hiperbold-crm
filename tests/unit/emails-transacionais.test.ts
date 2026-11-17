@@ -118,6 +118,13 @@ const CASOS: Caso[] = [
       buildPagamentoNaoAprovadoEmail({ ...b, plano: "Pro", valor: 34966, acessoAte: "2026-10-15" }),
   },
   {
+    id: "COB-05 (cobrança cancelada)",
+    assunto: "Sua assinatura não foi concluída",
+    contem: ["A cobrança de R$ 349,66 do plano Pro não foi paga e foi cancelada", "assine novamente pelo CRM", "Acesso até: 15/10/2026"],
+    montar: (b) =>
+      buildPagamentoNaoAprovadoEmail({ ...b, plano: "Pro", valor: 34966, acessoAte: "2026-10-15", cobrancaCancelada: true }),
+  },
+  {
     id: "COB-06",
     assunto: "Sua conta está suspensa",
     contem: ["A conta da Empresa do Diego foi suspensa por falta de pagamento", "Regularizar"],

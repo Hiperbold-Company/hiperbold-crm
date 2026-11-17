@@ -468,6 +468,51 @@ describe("pagamento não aprovado: COB-05 só para a RENOVAÇÃO do plano vigent
     expect(c.enviadas.map((e) => e.emailId)).toEqual(["COB-05"]);
   });
 
+  it("pedido de assinatura vencido (o CRM remove a assinatura): o e-mail leva aos Planos, sem a fatura do Asaas", async () => {
+    const banco = mundo();
+    novoPedido(banco, U(20), { invoice_url: "https://www.asaas.com/i/do-pedido" });
+    for (const alarme of ["remover_assinatura_pendente", "remover_cobranca_pendente"]) {
+      const c = cenario(banco);
+      await c.avisos.aoAplicar({
+        ...venceu(`pay_${alarme}`, `HC:ord:${U(20)}`),
+        cobranca: cobranca({ id: `pay_${alarme}`, externalReference: `HC:ord:${U(20)}`, invoiceUrl: "https://www.asaas.com/i/da-cobranca" }),
+        alarmes: [alarme],
+      });
+      expect(c.enviadas).toHaveLength(1);
+      const dados = c.enviadas[0]!.dados as { faturaUrl: string | null; cobrancaCancelada: boolean };
+      expect(dados.faturaUrl).toBeNull();
+      expect(dados.cobrancaCancelada).toBe(true);
+      const m = c.renderizar(c.enviadas[0]!);
+      expect(m.subject).toBe("Sua assinatura não foi concluída");
+      expect(m.text).toContain("Assinar de novo: https://crm.exemplo.com.br/app/settings/plano/assinar");
+      expect(m.text).not.toContain("asaas.com");
+      expect(m.text).toContain("assine novamente pelo CRM");
+    }
+  });
+
+  it("linha antiga da fila com a fatura e sem o marcador continua levando à fatura", async () => {
+    const c = cenario();
+    await c.avisos.aoAplicar(
+      aviso({ eventType: "PAYMENT_OVERDUE", resultado: "ignorado", idDoPagamento: "pay_ren2", cobranca: cobranca({ id: "pay_ren2", invoiceUrl: "https://www.asaas.com/i/abc123" }) }),
+    );
+    const linha = c.enviadas[0]!;
+    const semMarcador = { ...(linha.dados as { plano: string; valor: number; acessoAte: string; faturaUrl: string | null }) };
+    expect(c.renderizar({ ...linha, emailId: "COB-05", dados: semMarcador }).text).toContain("Pagar agora: https://www.asaas.com/i/abc123");
+  });
+
+  it("cobrança da assinatura viva (ignorado, sem alarme de remoção) segue no Asaas e mantém a fatura", async () => {
+    const c = cenario();
+    await c.avisos.aoAplicar({
+      ...venceu("pay_viva", null, "ignorado"),
+      cobranca: cobranca({ id: "pay_viva", invoiceUrl: "https://www.asaas.com/i/viva" }),
+    });
+    const dados = c.enviadas[0]!.dados as { faturaUrl: string | null; cobrancaCancelada: boolean };
+    expect(dados.cobrancaCancelada).toBe(false);
+    const m = c.renderizar(c.enviadas[0]!);
+    expect(m.subject).toBe("Não conseguimos cobrar a renovação do seu plano");
+    expect(m.text).toContain("Pagar agora: https://www.asaas.com/i/viva");
+  });
+
   it("cobrança da assinatura viva (sem pedido, o banco fecha como ignorado): avisa", async () => {
     const c = cenario();
     await c.avisos.aoAplicar(venceu("pay_b", null, "ignorado"));

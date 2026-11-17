@@ -121,6 +121,7 @@ import type { ClienteAsaasHttp, LoggerAsaas } from "./cliente";
 import type { ConfigAsaas } from "./config";
 import { type CobrancaAsaas, envelopeWebhookAsaasSchema } from "./contratos";
 import { ErroAsaasException } from "./erros";
+import { ALARME_REMOVER_ASSINATURA, ALARME_REMOVER_COBRANCA } from "./alarmes-de-remocao";
 
 // ─── A interface estreita do banco ─────────────────────────────────────────
 
@@ -793,10 +794,10 @@ async function finalizarAplicacao(
   const alarmes = alarme ? alarme.split(",") : [];
   registrarAlarmesDoEstorno(deps, evento, organizationId, alarmes);
   await auditarCorteDeEstorno(deps, evento, organizationId, alarmes);
-  if (alarmes.includes("remover_cobranca_pendente")) {
+  if (alarmes.includes(ALARME_REMOVER_COBRANCA)) {
     await tentarRemoverCobranca(deps, evento, installmentId);
   }
-  if (alarmes.includes("remover_assinatura_pendente")) {
+  if (alarmes.includes(ALARME_REMOVER_ASSINATURA)) {
     await tentarRemoverAssinatura(deps, evento, subscriptionId, organizationId);
   }
   return { categoria: resultado, abortarRodada: false, aplicacao: aplicado.data };

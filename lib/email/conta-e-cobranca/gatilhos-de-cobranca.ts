@@ -37,6 +37,10 @@
  *     renovação, `aplicado`). Pedido de OUTRO plano ou ciclo (troca abandonada), pedido de pacote de tokens e
  *     pedido que o banco não deixou ler não são renovação do plano vigente e não mandam. Quem nunca pagou nada
  *     não recebe "não conseguimos cobrar a renovação".
+ *   - o PEDIDO vencido tem a cobrança removida pelo próprio CRM no Asaas logo depois (alarmes
+ *     `remover_assinatura_pendente`/`remover_cobranca_pendente`, `lib/billing/asaas/alarmes-de-remocao.ts`): o
+ *     e-mail sai SEM a fatura (`cobrancaCancelada`), com o botão para os Planos do CRM. A cobrança da assinatura
+ *     viva (`ignorado`, sem alarme) continua no Asaas e mantém o link da fatura.
  * "Acesso até" é o último dia da carência: `current_period_end + grace_days` (a mesma conta de
  * `fn_billing_conferir_vencimento`) menos um dia, porque o instante da suspensão já é o primeiro dia de leitura.
  * Carência que já passou não envia (a conta já está em modo só leitura; o aviso é o de conta suspensa, B2).
@@ -56,6 +60,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ultimoDiaDoPeriodo } from "@/lib/billing/assinatura/estado-da-assinatura";
+import { alarmesPedemRemoverACobranca } from "@/lib/billing/asaas/alarmes-de-remocao";
 import type { AvisosDeCobranca, EntradaDeAvisoDeCobranca } from "@/lib/billing/asaas/processar-eventos";
 import type { CicloDoPlano, FormaDePagamento } from "@/lib/email/templates/_layout-transacional";
 import { logger } from "@/lib/logger";
@@ -301,9 +306,14 @@ export function criarAvisosDeCobrancaSobre(admin: SupabaseClient, deps: DepsDosG
     if (fimDaCarencia.getTime() <= agora().getTime()) return;
     const acessoAte = ultimoDiaDoPeriodo(fimDaCarencia).toISOString();
 
+    // Cobrança que o próprio CRM remove no Asaas logo depois do evento (pedido de assinatura que venceu sem
+    // pagar: mesmo alarme que dispara `tentarRemoverAssinatura`/`tentarRemoverCobranca`): a fatura vai deixar de
+    // existir, então o e-mail NÃO a leva. O botão leva aos Planos do CRM, para assinar de novo.
+    const cobrancaCancelada = alarmesPedemRemoverACobranca(e.alarmes);
     // O link do pedido e o da cobrança passam pela mesma regra (https no domínio do Asaas); fora dela, sem link.
-    const fatura =
-      [doPedido?.invoice_url, e.cobranca.invoiceUrl].find((u): u is string => !!u && FATURA_DO_ASAAS.test(u)) ?? null;
+    const fatura = cobrancaCancelada
+      ? null
+      : ([doPedido?.invoice_url, e.cobranca.invoiceUrl].find((u): u is string => !!u && FATURA_DO_ASAAS.test(u)) ?? null);
 
     await enfileirar({
       organizationId,
@@ -316,6 +326,7 @@ export function criarAvisosDeCobrancaSobre(admin: SupabaseClient, deps: DepsDosG
         valor: Math.round(e.cobranca.valorConfirmado * 100),
         acessoAte,
         faturaUrl: fatura,
+        cobrancaCancelada,
       },
     });
   }

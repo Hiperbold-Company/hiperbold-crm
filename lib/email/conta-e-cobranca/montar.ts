@@ -98,6 +98,8 @@ export const DADOS_DO_EMAIL = {
     acessoAte: data,
     /** O link da fatura do Asaas, ou `null` para o botão levar à tela do plano. */
     faturaUrl: z.string().max(500).nullable(),
+    /** A cobrança foi removida pelo CRM no Asaas: o botão leva aos Planos para assinar de novo. Ausente nas linhas antigas da fila. */
+    cobrancaCancelada: z.boolean().optional(),
   }),
   "COB-06": z.object({}),
   "COB-07": z.object({ plano: texto, acessoAte: data }),
@@ -210,11 +212,19 @@ export function montarEmailDeConta(emailId: string, dados: unknown, ctx: Context
     }
     case "COB-05": {
       const d = validarDados(emailId, dados);
+      const cobrancaCancelada = d.cobrancaCancelada === true;
+      // Cobrança cancelada: nunca a fatura do Asaas (ela não existe mais), mesmo que o dado a traga.
+      const url = cobrancaCancelada
+        ? `${ctx.appUrl}${ROTA_DE_ASSINAR}`
+        : d.faturaUrl && FATURA_DO_ASAAS.test(d.faturaUrl)
+          ? d.faturaUrl
+          : plano;
       return buildPagamentoNaoAprovadoEmail({
-        ...ctx.base(d.faturaUrl && FATURA_DO_ASAAS.test(d.faturaUrl) ? d.faturaUrl : plano),
+        ...ctx.base(url),
         plano: d.plano,
         valor: d.valor,
         acessoAte: d.acessoAte,
+        cobrancaCancelada,
       });
     }
     case "COB-06": {

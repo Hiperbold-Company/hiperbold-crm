@@ -26838,6 +26838,13 @@ export const DICIONARIO: Traducoes = {
     {
       es: "El cobro de {valor} del plan {plano} no fue aprobado. Tu acceso continúa hasta el {data}; después la cuenta pasa a modo de solo lectura.",
     },
+  "Sua assinatura não foi concluída": {
+    es: "Tu suscripción no se completó",
+  },
+  "A cobrança de {valor} do plano {plano} não foi paga e foi cancelada. Seu acesso continua até {data}; para não perder o acesso, assine novamente pelo CRM.":
+    {
+      es: "El cobro de {valor} del plan {plano} no se pagó y fue cancelado. Tu acceso continúa hasta el {data}; para no perder el acceso, suscríbete de nuevo desde el CRM.",
+    },
   "Sua conta está suspensa": {
     es: "Tu cuenta está suspendida",
   },
