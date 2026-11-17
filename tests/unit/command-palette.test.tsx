@@ -3,12 +3,14 @@
  * "UI not yet implemented" — a única saída de emergência para quem não achava
  * uma tela era uma promessa vazia.
  *
- * v1 busca só NAVEGAÇÃO. Contato, conversa e lead são outra fonte de dados e
- * outra feature.
+ * A busca de contatos e conversas tem o próprio arquivo:
+ * tests/unit/command-palette-acha-dados.test.tsx.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import type { ActiveOrg, AuthUser } from "@/lib/auth/types";
@@ -26,14 +28,28 @@ function comoPapel(role: ActiveOrg["role"]) {
   authRef.activeOrg = { orgId: "org-1", name: "Org", role };
 }
 
+// Busca de dados (contatos/conversas) responde vazio: estes casos medem só a de telas.
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "content-type": "application/json" } })),
+  );
+});
+
 afterEach(() => {
+  vi.unstubAllGlobals();
   cleanup();
   push.mockClear();
   comoPapel("admin");
 });
 
 function abrir() {
-  return render(<CommandPalette open onOpenChange={() => {}} />);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <CommandPalette open onOpenChange={() => {}} />
+    </QueryClientProvider>,
+  );
 }
 
 describe("CommandPalette", () => {
@@ -129,7 +145,8 @@ describe("CommandPalette", () => {
     abrir();
     await user.type(screen.getByRole("combobox"), "zzzzzz");
     expect(screen.queryAllByRole("option")).toHaveLength(0);
-    expect(screen.getByText(/Nada encontrado/i)).toBeTruthy();
+    // Os grupos de dados carregam depois da digitação; o aviso vem quando todos voltam vazios.
+    expect(await screen.findByText(/Nada encontrado/i)).toBeTruthy();
   });
 
   it("permite filtrar por categorias através dos botões", async () => {
