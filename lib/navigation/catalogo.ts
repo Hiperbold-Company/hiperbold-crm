@@ -563,6 +563,11 @@ export const NAV_CATALOG = [
     group: "organizacao",
     section: "Sua empresa",
     minRole: "manager",
+    // Os DOIS gates, e os dois são necessários: o `layout.tsx` de `settings/tenant/proposals`
+    // chama `notFound()` com o módulo da INSTALAÇÃO desligado, então sem `modulo` a porta
+    // aparecia (Configurações, ⌘K, hub) e levava a um 404. A `capacidade` segue valendo:
+    // ligado o módulo, a empresa ainda precisa ter ligado Propostas para ver os modelos.
+    modulo: "propostas",
     capacidade: "propostas",
     // SEM `sidebar`, como a tela-mãe de Propostas: chega-se por Configurações.
   },
