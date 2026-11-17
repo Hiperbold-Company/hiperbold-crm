@@ -28995,7 +28995,8 @@ export const DICIONARIO: Traducoes = {
   "resultados": { es: "resultados" },
   "O plano chegou ao limite de conexões: dá para entrar de novo com um número que já está conectado, mas não para conectar um número novo.": { es: "El plan llegó al límite de conexiones: puede volver a entrar con un número que ya está conectado, pero no conectar un número nuevo." },
   "A conexão por QR Code ainda não está disponível nesta instalação. Fale com quem administra a instalação.": { es: "La conexión por código QR todavía no está disponible en esta instalación. Hable con quien administra la instalación." },
-  "Não foi possível carregar esta conexão. Tente de novo.": { es: "No fue posible cargar esta conexión. Inténtelo de nuevo." },  // design: filtros no celular
+  "Não foi possível carregar esta conexão. Tente de novo.": { es: "No fue posible cargar esta conexión. Inténtelo de nuevo." },
+  // design: filtros no celular
   "Filtros": { es: "Filtros" },
   "Ver resultados": { es: "Ver resultados" },
   "Escolha os filtros e toque em Ver resultados.": { es: "Elija los filtros y toque en Ver resultados." },

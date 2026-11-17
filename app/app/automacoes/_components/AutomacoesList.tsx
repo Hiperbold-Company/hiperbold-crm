@@ -120,7 +120,7 @@ export function AutomacoesList({
         {t("Usar um modelo")}
       </Button>
       </AcoesNoCelular>
-      <div className="flex flex-1 flex-col items-end sm:flex-none">
+      <div className="flex flex-1 flex-col items-end sm:flex-initial">
       <Button
         onClick={() => setAberto(true)}
         data-testid="nova-automacao"

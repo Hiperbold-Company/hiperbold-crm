@@ -195,7 +195,7 @@ export function FilterBar({ filters, onChange, leads, settings }: FilterBarProps
 
   // Quantos filtros (fora a busca) divergem do padrão: é o "(N)" do botão do celular.
   const filtrosAtivos = [
-    filters.owner,
+    filters.owner && filters.owner !== "any",
     marcadoresEscolhidos.length > 0,
     filters.overdueOnly,
     filters.lostReason,
