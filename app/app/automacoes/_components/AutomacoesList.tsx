@@ -26,6 +26,7 @@ import {
 } from "@/hooks/followup/useFollowupFlows";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
+import { ErroComRetry } from "@/components/empty/ErroComRetry";
 import { FlowArrow, Plus } from "@/lib/ui/icons";
 import {
   ROTULO_DO_TIPO,
@@ -66,7 +67,7 @@ export function AutomacoesList({
 }) {
   const t = useT();
   const idioma = useTagDeIdioma();
-  const { data } = useFollowupFlows({ initialData, surface: "automacao" });
+  const { data, isError, refetch, isFetching } = useFollowupFlows({ initialData, surface: "automacao" });
   const [aberto, setAberto] = useState(false);
   const [modelosAberto, setModelosAberto] = useState(false);
   const [importarAberto, setImportarAberto] = useState(false);
@@ -122,7 +123,15 @@ export function AutomacoesList({
 
   return (
     <div className="flex flex-col gap-4">
-      {todas.length === 0 ? (
+      {isError && !data ? (
+        <Card>
+          <ErroComRetry
+            titulo={t("Não foi possível carregar as automações")}
+            onRetry={() => refetch()}
+            tentando={isFetching}
+          />
+        </Card>
+      ) : todas.length === 0 ? (
         <Card className="flex flex-col items-center gap-3 p-10 text-center">
           <FlowArrow size={36} aria-hidden className="text-text-muted" />
           <h2 className="font-medium">{t("Nenhuma automação ainda")}</h2>

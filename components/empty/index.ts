@@ -12,3 +12,4 @@ export {
   EmptyFilterResults,
   EmptyAgenda,
 } from "./variants";
+export { ErroComRetry, type ErroComRetryProps } from "./ErroComRetry";
