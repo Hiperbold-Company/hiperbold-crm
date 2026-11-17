@@ -425,6 +425,20 @@ export function ConversationListItem({
 
         {temSelos && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            {/* A CONEXÃO VEM PRIMEIRO (decisão de 17/11): diz por qual número a
+                conversa entrou, e a faixa de etiquetas corta do fim.
+                #2383: `min-w-0` + `max-w` + `truncate` — o mesmo tratamento do
+                badge do cabeçalho. Uma linha de badges é `flex-wrap`, então um
+                nome de canal comprido ESTOURARIA a faixa para fora da coluna da
+                lista (critério de aceite: layout utilizável com nomes maiores).
+                O `title` devolve o texto inteiro para quem passa o mouse. */}
+            {mostrarCanal && rotuloCanal && (
+              <EtiquetaDaConexao
+                texto={rotuloCanal}
+                cor={canal?.label_color}
+                title={`${t("Entrou por")} ${rotuloCanal}`}
+              />
+            )}
             {/* O SELO DO EXEMPLO vem ANTES das etiquetas de propósito: a faixa
                 mostra no máximo 2 etiquetas e as que sobram viram "+N". Um
                 estado que decide se a conversa entra na base de conhecimento
@@ -447,18 +461,6 @@ export function ConversationListItem({
             )}
             {mostrarAtendente && comando.quem === "humano" && (
               <OwnerBadge ownerKind="user" ownerName={comando.nome ?? t("Atendente")} compacto />
-            )}
-            {/* #2383: `min-w-0` + `max-w` + `truncate` — o mesmo tratamento do
-                badge do cabeçalho. Uma linha de badges é `flex-wrap`, então um
-                nome de canal comprido ESTOURARIA a faixa para fora da coluna da
-                lista (critério de aceite: layout utilizável com nomes maiores).
-                O `title` devolve o texto inteiro para quem passa o mouse. */}
-            {mostrarCanal && rotuloCanal && (
-              <EtiquetaDaConexao
-                texto={rotuloCanal}
-                cor={canal?.label_color}
-                title={`${t("Entrou por")} ${rotuloCanal}`}
-              />
             )}
             {c?.is_blocked && (
               <Badge variant="destructive" className="h-4 px-1.5 text-2xs">
