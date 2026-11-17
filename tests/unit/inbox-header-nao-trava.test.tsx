@@ -118,7 +118,10 @@ describe("header do inbox — não trava a largura da tela", () => {
     // As duas pontas: o container quebra E a barra quebra internamente. Só uma
     // das duas não basta — sem a de dentro, a barra desce inteira e continua
     // pedindo a largura toda.
-    expect(header.className).toContain("flex-wrap");
+    // Desde 17/11 o header é SEMPRE duas linhas (`flex-col`: identidade em cima,
+    // ações embaixo), decisão do dono do produto. Empilhar é a forma mais forte
+    // de "reorganizar": a barra nunca disputa largura com o nome.
+    expect(header.className.split(/\s+/)).toContain("flex-col");
     expect(acoes.className).toContain("flex-wrap");
     expect(acoes.className).toContain("min-w-0");
   });
