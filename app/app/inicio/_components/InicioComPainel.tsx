@@ -26,21 +26,21 @@ import { cn } from "@/lib/utils";
 import { ChecklistDoInicio } from "./ChecklistDoInicio";
 import { PainelDoInicio } from "./PainelDoInicio";
 
-const CHAVE = (userId: string) => `inicio-checklist-escondido:${userId}`;
+const CHAVE = "inicio-checklist-escondido";
 const QUERY_DESKTOP = "(min-width: 1024px)";
 
-function lerEscondido(userId: string): boolean {
+function lerEscondido(): boolean {
   try {
-    return window.localStorage.getItem(CHAVE(userId)) === "1";
+    return window.localStorage.getItem(CHAVE) === "1";
   } catch {
     return false;
   }
 }
 
-function gravarEscondido(userId: string, escondido: boolean) {
+function gravarEscondido(escondido: boolean) {
   try {
-    if (escondido) window.localStorage.setItem(CHAVE(userId), "1");
-    else window.localStorage.removeItem(CHAVE(userId));
+    if (escondido) window.localStorage.setItem(CHAVE, "1");
+    else window.localStorage.removeItem(CHAVE);
   } catch {
     // Sem armazenamento a escolha vale só nesta visita.
   }
@@ -63,8 +63,8 @@ export function InicioComPainel({
   // Depois de montar: o servidor não conhece o localStorage nem a largura da janela.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- ler o localStorage só é possível depois de montar
-    setEscondido(lerEscondido(userId));
-  }, [userId]);
+    setEscondido(lerEscondido());
+  }, []);
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
@@ -80,7 +80,7 @@ export function InicioComPainel({
     if (desktop) {
       const proximo = !escondido;
       setEscondido(proximo);
-      gravarEscondido(userId, proximo);
+      gravarEscondido(proximo);
     } else {
       setGaveta((g) => !g);
     }
@@ -92,7 +92,7 @@ export function InicioComPainel({
         <div className="min-w-0 space-y-3">
           <h1 className="text-2xl font-semibold tracking-tight">{t("Início")}</h1>
           <p className="text-sm text-muted-foreground">
-            {t("O essencial está pronto. Os passos abaixo deixam o CRM ainda melhor para a sua equipe.")}
+            {t("O essencial está pronto. Os primeiros passos que faltam deixam o CRM ainda melhor para a sua equipe.")}
           </p>
           <LinkDeAjudaDaTela />
         </div>

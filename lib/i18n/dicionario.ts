@@ -27190,8 +27190,8 @@ export const DICIONARIO: Traducoes = {
   "O que já está pronto e o que falta para o CRM trabalhar pela sua empresa.": {
     es: "Lo que ya está listo y lo que falta para que el CRM trabaje por tu empresa.",
   },
-  "O essencial está pronto. Os passos abaixo deixam o CRM ainda melhor para a sua equipe.": {
-    es: "Lo esencial está listo. Los pasos de abajo dejan el CRM aún mejor para tu equipo.",
+  "O essencial está pronto. Os primeiros passos que faltam deixam o CRM ainda melhor para a sua equipe.": {
+    es: "Lo esencial está listo. Los primeros pasos que faltan dejan el CRM aún mejor para tu equipo.",
   },
   "Faltam poucos passos para o CRM começar a trabalhar pela sua empresa.": {
     es: "Faltan pocos pasos para que el CRM empiece a trabajar por tu empresa.",
@@ -28782,6 +28782,8 @@ export const DICIONARIO: Traducoes = {
   "Sem origem rastreada": { es: "Sin origen rastreado" },
   "Ganhos de origem rastreada": { es: "Ganados de origen rastreado" },
   "Taxa de ganho de origem rastreada": { es: "Tasa de ganados de origen rastreado" },
+  "Parcial: mais de 50 origens no período": { es: "Parcial: más de 50 orígenes en el período" },
+  "Ganhos ÷ criados com origem rastreada": { es: "Ganados ÷ creados con origen rastreado" },
 };
 
 /**

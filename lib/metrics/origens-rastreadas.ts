@@ -14,33 +14,46 @@ export interface LinhaDeOrigemMinima {
 }
 
 export interface ResumoDeOrigens {
-  /** Negócios criados com origem rastreada (soma das chaves não nulas). */
-  comOrigem: number;
-  /** Negócios criados sem origem (a linha de chave nula). */
-  semOrigem: number;
-  /** Ganhos dos negócios de origem rastreada. */
+  /** Negócios criados com origem rastreada: `total − semOrigem`. `null` quando semOrigem é desconhecido. */
+  comOrigem: number | null;
+  /** Negócios criados sem origem (a linha de chave nula). `null` se a linha não veio por corte. */
+  semOrigem: number | null;
+  /** Ganhos dos negócios de origem rastreada; parcial quando `parcial`. */
   ganhosRastreados: number;
-  /** ganhosRastreados ÷ comOrigem, de 0 a 1; `null` quando não há criados com origem (divisor zero). */
+  /** ganhosRastreados ÷ comOrigem, de 0 a 1; `null` sem divisor. Parcial quando `parcial`. */
   taxaDeGanhoRastreada: number | null;
+  /** A leitura cortou as origens (o endpoint devolve no máximo 50): ganhos e taxa são parciais. */
+  parcial: boolean;
 }
 
-export function resumoDeOrigens(porSource: readonly LinhaDeOrigemMinima[]): ResumoDeOrigens {
-  let comOrigem = 0;
-  let semOrigem = 0;
+/**
+ * @param porSource linhas de `por_source` (no máximo 50, as de mais negócios)
+ * @param total negócios criados no período, de todas as origens (`total` do endpoint)
+ * @param cortado `cortado.source` do endpoint
+ */
+export function resumoDeOrigens(
+  porSource: readonly LinhaDeOrigemMinima[],
+  total: number,
+  cortado: boolean,
+): ResumoDeOrigens {
+  let semOrigem: number | null = null;
   let ganhosRastreados = 0;
   for (const linha of porSource) {
     if (linha.chave === null) {
-      semOrigem += linha.total;
+      semOrigem = (semOrigem ?? 0) + linha.total;
     } else {
-      comOrigem += linha.total;
       ganhosRastreados += linha.ganhos;
     }
   }
+  // Sem a linha nula: se não houve corte, não há negócio sem origem; se houve, não dá para saber.
+  if (semOrigem === null && !cortado) semOrigem = 0;
+  const comOrigem = semOrigem === null ? null : total - semOrigem;
   return {
     comOrigem,
     semOrigem,
     ganhosRastreados,
-    taxaDeGanhoRastreada: comOrigem > 0 ? ganhosRastreados / comOrigem : null,
+    taxaDeGanhoRastreada: comOrigem !== null && comOrigem > 0 ? ganhosRastreados / comOrigem : null,
+    parcial: cortado,
   };
 }
 

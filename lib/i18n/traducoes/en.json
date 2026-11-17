@@ -8546,7 +8546,7 @@
   "O envio precisa de um modelo aprovado.": "Sending requires an approved template.",
   "O envio segue o ritmo do número e pode levar horas.": "Sending follows the number's pace and can take hours.",
   "O envio usa o e-mail configurado em Admin › E-mail (SMTP ou Resend).": "The send uses the email configured in Admin › Email (SMTP or Resend).",
-  "O essencial está pronto. Os passos abaixo deixam o CRM ainda melhor para a sua equipe.": "The essentials are ready. The steps below make the CRM even better for your team.",
+  "O essencial está pronto. Os primeiros passos que faltam deixam o CRM ainda melhor para a sua equipe.": "The essentials are ready. The first steps still missing make the CRM even better for your team.",
   "O estado exibido está desatualizado": "The displayed state is outdated",
   "O estado foi conferido novamente. Revise o guia antes de tentar outra vez.": "The state was checked again. Review the guide before trying again.",
   "O evento original deste run foi removido.": "The original event for this run was removed.",
@@ -14472,5 +14472,7 @@
   "VER TUDO EM ORIGENS": "VIEW ALL IN SOURCES",
   "Sem origem rastreada": "Without tracked source",
   "Ganhos de origem rastreada": "Won from tracked source",
-  "Taxa de ganho de origem rastreada": "Win rate from tracked source"
+  "Taxa de ganho de origem rastreada": "Win rate from tracked source",
+  "Parcial: mais de 50 origens no período": "Partial: more than 50 sources in the period",
+  "Ganhos ÷ criados com origem rastreada": "Won ÷ created with tracked source"
 }

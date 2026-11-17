@@ -3,7 +3,7 @@
  *
  * Medimos o comportamento que a pessoa vê: com obrigatório faltando é só o checklist (como sempre
  * foi); com os obrigatórios cumpridos aparecem o painel, a barra lateral e o botão que a recolhe, e
- * a escolha fica lembrada por pessoa. A rede é o único dublê (`apiClient`): hooks, componentes e a
+ * a escolha fica lembrada neste navegador. A rede é o único dublê (`apiClient`): hooks, componentes e a
  * conta das origens são os de verdade.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -154,9 +154,28 @@ describe("Início com os obrigatórios cumpridos", () => {
     expect(cartao("Sem origem rastreada")).toHaveTextContent("25");
     expect(cartao("Ganhos de origem rastreada")).toHaveTextContent("3");
     expect(cartao("Taxa de ganho de origem rastreada")).toHaveTextContent("30%");
+    expect(cartao("Taxa de ganho de origem rastreada")).toHaveTextContent("Ganhos ÷ criados com origem rastreada");
+    expect(within(org).queryByText(/Parcial/)).toBeNull();
   });
 
-  it("Esconder e Exibir recolhem e devolvem a barra, e a escolha fica lembrada por pessoa", async () => {
+  it("origens cortadas (mais de 50): com origem = total − sem origem, e ganhos e taxa avisam que são parciais", async () => {
+    vi.mocked(apiClient.get).mockImplementation(async (path: string) => {
+      if (path.includes("/metrics/atendimento")) return { data: ATENDIMENTO };
+      if (path.includes("/metrics/negocios")) return { data: NEGOCIOS };
+      if (path.includes("/metrics/origens"))
+        return { data: { ...ORIGENS, total: 100, cortado: { source: true, medium: false, campaign: false } } };
+      throw new Error(`rota inesperada ${path}`);
+    });
+    await abrir(BASE);
+    const org = await screen.findByTestId("inicio-cartoes-origens");
+    const cartao = (titulo: string) => within(org).getByText(titulo).closest("div")!;
+    expect(cartao("Sem origem rastreada")).toHaveTextContent("25");
+    expect(cartao("Com origem rastreada")).toHaveTextContent("75");
+    expect(cartao("Ganhos de origem rastreada")).toHaveTextContent("Parcial: mais de 50 origens no período");
+    expect(cartao("Taxa de ganho de origem rastreada")).toHaveTextContent("Parcial: mais de 50 origens no período");
+  });
+
+  it("Esconder e Exibir recolhem e devolvem a barra, e a escolha fica lembrada neste navegador", async () => {
     const user = userEvent.setup();
     const { unmount } = await abrir(BASE);
     const botao = screen.getByTestId("inicio-alternar-checklist");
@@ -167,7 +186,7 @@ describe("Início com os obrigatórios cumpridos", () => {
     expect(botao).toHaveTextContent("Exibir checklist");
     expect(screen.getByTestId("inicio-barra-lateral")).toHaveAttribute("data-visivel", "nao");
     expect(screen.getByTestId("inicio-barra-lateral").className).toContain("lg:hidden");
-    expect(window.localStorage.getItem("inicio-checklist-escondido:user-1")).toBe("1");
+    expect(window.localStorage.getItem("inicio-checklist-escondido")).toBe("1");
 
     // Volta à página: a escolha da pessoa continua.
     unmount();
@@ -176,7 +195,7 @@ describe("Início com os obrigatórios cumpridos", () => {
 
     await user.click(screen.getByTestId("inicio-alternar-checklist"));
     expect(screen.getByTestId("inicio-barra-lateral")).toHaveAttribute("data-visivel", "sim");
-    expect(window.localStorage.getItem("inicio-checklist-escondido:user-1")).toBeNull();
+    expect(window.localStorage.getItem("inicio-checklist-escondido")).toBeNull();
   });
 
   it("sem localStorage (bloqueado) o botão ainda funciona e nada lança", async () => {

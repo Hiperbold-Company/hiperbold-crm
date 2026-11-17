@@ -217,7 +217,7 @@ function SecaoOrigens({ query, filtros }: { query: string; filtros: FiltrosDaTel
   const t = useT();
   const q = useDesempenhoOrigens(query);
   const d = q.data?.data;
-  const r = d ? resumoDeOrigens(d.por_source) : null;
+  const r = d ? resumoDeOrigens(d.por_source, d.total, d.cortado.source) : null;
   return (
     <Secao
       id="origens"
@@ -228,13 +228,31 @@ function SecaoOrigens({ query, filtros }: { query: string; filtros: FiltrosDaTel
     >
       {r ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="inicio-cartoes-origens">
-          <CartaoKpi titulo={t("Com origem rastreada")} tom="info" valor={r.comOrigem.toLocaleString()} />
-          <CartaoKpi titulo={t("Sem origem rastreada")} tom="alerta" valor={r.semOrigem.toLocaleString()} />
-          <CartaoKpi titulo={t("Ganhos de origem rastreada")} tom="ganho" valor={r.ganhosRastreados.toLocaleString()} />
+          <CartaoKpi
+            titulo={t("Com origem rastreada")}
+            tom="info"
+            valor={r.comOrigem === null ? "—" : r.comOrigem.toLocaleString()}
+          />
+          <CartaoKpi
+            titulo={t("Sem origem rastreada")}
+            tom="alerta"
+            valor={r.semOrigem === null ? "—" : r.semOrigem.toLocaleString()}
+          />
+          <CartaoKpi
+            titulo={t("Ganhos de origem rastreada")}
+            tom="ganho"
+            valor={r.ganhosRastreados.toLocaleString()}
+            detalhe={r.parcial ? t("Parcial: mais de 50 origens no período") : undefined}
+          />
           <CartaoKpi
             titulo={t("Taxa de ganho de origem rastreada")}
             tom="ganho"
             valor={formatarTaxa(r.taxaDeGanhoRastreada)}
+            detalhe={
+              r.parcial
+                ? t("Parcial: mais de 50 origens no período")
+                : t("Ganhos ÷ criados com origem rastreada")
+            }
           />
         </div>
       ) : null}
