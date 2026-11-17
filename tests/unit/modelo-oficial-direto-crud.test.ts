@@ -174,13 +174,13 @@ beforeEach(() => {
         ? {
             phoneNumberId: "PN-DA-SESSAO",
             token: "token-da-sessao",
-            graphVersion: "v22.0",
+            graphVersion: "v26.0",
             source: "session",
           }
         : {
             phoneNumberId: q?.phoneNumberId ?? "",
             token: "token-do-ambiente",
-            graphVersion: "v22.0",
+            graphVersion: "v26.0",
             source: "env",
           },
   );

@@ -12,13 +12,13 @@ describe("ParaIntegrar — dados não-secretos da conexão", () => {
     render(
       <ParaIntegrar
         campos={[
-          { rotulo: "Endpoint da API", valor: "https://graph.facebook.com/v22.0" },
+          { rotulo: "Endpoint da API", valor: "https://graph.facebook.com/v26.0" },
           { rotulo: "Número", valor: null },
         ]}
         ajuda={<p>onde obter o token</p>}
       />,
     );
-    expect(screen.getByText("https://graph.facebook.com/v22.0")).toBeInTheDocument();
+    expect(screen.getByText("https://graph.facebook.com/v26.0")).toBeInTheDocument();
     // Campo sem valor não vira linha; o rótulo Número não aparece.
     expect(screen.queryByText("Número")).not.toBeInTheDocument();
   });

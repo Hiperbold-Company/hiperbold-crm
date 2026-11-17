@@ -43,7 +43,7 @@
  *    `file://`, `javascript:` e caminho relativo caem no host real — não viram
  *    exceção, viram o valor que sempre teve.
  * 2. **Barra final é aparada.** `https://recetor/` e `https://recetor` montam a
- *    MESMA base; sem o `replace` viraria `//v22.0` depois da versão, que a Graph
+ *    MESMA base; sem o `replace` viraria `//v26.0` depois da versão, que a Graph
  *    real nunca devolveria e o receptor local jamais casaria.
  * 3. **Recusa ABERTA no log, fechada na ação.** O valor ruim não derruba o envio
  *    (uma instalação que colou um endereço sem `https` continua falando com a

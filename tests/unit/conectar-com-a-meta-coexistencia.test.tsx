@@ -32,7 +32,7 @@ beforeEach(() => {
     disponivel: true,
     appId: "123456",
     configId: "cfg-1",
-    versaoDaGraph: "v22.0",
+    versaoDaGraph: "v26.0",
     state: "state-1",
   });
   (window as unknown as { FB: unknown }).FB = { init, login };
