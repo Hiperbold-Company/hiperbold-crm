@@ -1,5 +1,5 @@
 ---
-impacto: nada_mudou
+impacto: capacidade_nova
 secao: adicionado
 titulo: A busca (⌘K) acha contatos e conversas
 ---

@@ -77,6 +77,17 @@ function estadoDoGrupo(
   return "pronto";
 }
 
+// Item só conta quando está na tela: durante o debounce, num refetch ou num erro
+// com dado retido, o grupo mostra esqueleto/erro, e um item escondido ainda
+// contado faria o Enter abrir algo que a pessoa não viu (e o
+// aria-activedescendant apontar para um id que não existe).
+function comItensSoQuandoPronto(
+  estado: GrupoDeDados["estado"],
+  itens: ItemDeDados[],
+): Pick<GrupoDeDados, "estado" | "itens"> {
+  return { estado, itens: estado === "pronto" ? itens : [] };
+}
+
 export function CommandPalette({
   open,
   onOpenChange,
@@ -159,8 +170,7 @@ export function CommandPalette({
         id: "contatos",
         rotulo: t("Contatos"),
         icon: UserCircle,
-        estado: estadoDoGrupo(termoValido, aindaDigitando, contatos),
-        itens: termoValido ? itens : [],
+        ...comItensSoQuandoPronto(estadoDoGrupo(termoValido, aindaDigitando, contatos), termoValido ? itens : []),
       });
     }
     if (podeConversas) {
@@ -176,8 +186,7 @@ export function CommandPalette({
         id: "conversas",
         rotulo: t("Conversas"),
         icon: ChatCircle,
-        estado: estadoDoGrupo(termoValido, aindaDigitando, conversas),
-        itens: termoValido ? itens : [],
+        ...comItensSoQuandoPronto(estadoDoGrupo(termoValido, aindaDigitando, conversas), termoValido ? itens : []),
       });
     }
     return grupos;

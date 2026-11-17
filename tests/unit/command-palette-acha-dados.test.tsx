@@ -92,6 +92,22 @@ describe("⌘K acha contatos e conversas", () => {
     expect(push).toHaveBeenCalledWith("/app/contacts/c-1");
   });
 
+  it("durante a espera da digitação, item do termo anterior não conta para o teclado", async () => {
+    const user = userEvent.setup();
+    abrir();
+    const caixa = screen.getByRole("combobox");
+    // "zq" não casa tela nenhuma: o único item seria o contato do termo velho.
+    await user.type(caixa, "zq");
+    await screen.findByRole("option", { name: /Maria Souza/ });
+    await user.type(caixa, "x");
+    // Ainda dentro dos 250 ms: o grupo está em esqueleto.
+    expect(screen.queryByRole("option", { name: /Maria Souza/ })).toBeNull();
+    const ativo = caixa.getAttribute("aria-activedescendant");
+    if (ativo) expect(document.getElementById(ativo)).not.toBeNull();
+    await user.keyboard("{Enter}");
+    expect(push).not.toHaveBeenCalledWith("/app/contacts/c-1");
+  });
+
   it("erro na busca mostra a linha de erro e as telas continuam", async () => {
     falhar = true;
     const user = userEvent.setup();
