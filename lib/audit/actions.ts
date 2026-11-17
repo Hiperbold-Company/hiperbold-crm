@@ -1774,6 +1774,10 @@ export const AUDIT_ACTIONS = [
   "scheduled_message.updated",
   "scheduled_message.cancelled",
   "scheduled_message.run",
+  /** Relato do botão "Relatar problema" (migration 1018). */
+  "bug_report.created",
+  /** O administrador da instalação mudou o status (ou a nota) de um relato. */
+  "bug_report.status_changed",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */
