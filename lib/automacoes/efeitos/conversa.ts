@@ -10,11 +10,13 @@
  * ramo "Erro", legível no histórico (`ERROS_DO_EFEITO`):
  *   1. a conversa do contato: na execução que começou por um comentário, a do
  *      Direct de quem comentou, na conexão do comentário (`conversa-do-direct.ts`;
- *      sem ela: `sem_conversa_direct` — a pessoa ainda não respondeu); nas
- *      demais, a de WhatsApp do contato (sem ela: `sem_conversa_whatsapp`);
+ *      sem ela: `sem_conversa_direct` — a pessoa ainda não respondeu); na que
+ *      começou por "Mensagem recebida" no Messenger ou no Direct, a conversa do
+ *      gatilho (sem ela: `sem_conversa_social`); nas demais, a de WhatsApp do
+ *      contato (sem ela: `sem_conversa_whatsapp`);
  *   2. o texto que sai (com as opções numeradas, se o canal não as desenha)
  *      dentro do teto do canal (`tetoDoTextoEmBytes`; Direct: 1000 bytes):
- *      `texto_longo_instagram`;
+ *      `texto_longo_instagram` (`texto_longo_rede_social` fora do Instagram);
  *   3. o contato bloqueado (opt-out): `contato_bloqueado`;
  *   4. a janela de 24h fechada no canal oficial: `janela_fechada`;
  *   5. o teto de 30 mensagens automáticas por hora: `teto_por_hora`.
@@ -44,7 +46,7 @@ import type { AcaoDeConversa } from "@/lib/followup/node-handlers";
 
 import { varsDaResposta } from "../conversa";
 import { conversaDoEnvio } from "../conversa-de-whatsapp";
-import { escopoDoDirect } from "../conversa-do-direct";
+import { canalSocialDaExecucao, escopoDoDirect } from "../conversa-do-direct";
 import type { FieldOp } from "../schemas";
 import { renderizar } from "../template-vars";
 import {
@@ -118,8 +120,10 @@ async function enviar(
   chave: string,
 ): Promise<Passo> {
   const escopo = escopoDoDirect(varsDaExecucao(c));
-  // `canal` só no Direct: o histórico diz "pelo Direct"; o WhatsApp segue como era.
-  const base = { tipo: node.type, envio, ...(escopo ? { canal: "direct" } : {}) };
+  // `canal` só na rede social (Direct, Messenger): o histórico diz por onde
+  // saiu; o WhatsApp segue como era.
+  const canal = canalSocialDaExecucao(varsDaExecucao(c));
+  const base = { tipo: node.type, envio, ...(canal ? { canal } : {}) };
   const bruto = textoDoEnvio(node, envio);
   if (bruto === null) return { ok: false, erro: "efeito_falhou", detalhe: base };
   const corpo = renderizar(bruto, c.fatos, c.agora).trim();
@@ -136,7 +140,11 @@ async function enviar(
   // A mesma escolha da condição "Janela de 24h aberta" (`conversaDoEnvio`).
   const conversa = await conversaDoEnvio(c.admin, c.org, varsDaExecucao(c), ids);
   if (!conversa) {
-    return { ok: false, erro: escopo ? "sem_conversa_direct" : "sem_conversa_whatsapp", detalhe: base };
+    return {
+      ok: false,
+      erro: escopo ? "sem_conversa_direct" : canal ? "sem_conversa_social" : "sem_conversa_whatsapp",
+      detalhe: base,
+    };
   }
   // Teto do canal (o Direct do Instagram é menor que o do WhatsApp), medido no
   // texto que SAI: com as opções numeradas quando o canal não as desenha.
@@ -144,7 +152,8 @@ async function enviar(
   if (tetoDoCanal !== null) {
     const opcoes = envio === "tempo_esgotado" ? undefined : opcoesDoEnvio(node);
     if (bytesDoTextoQueSai(corpo, opcoes, opcoesNativas(conversa.provider)) > tetoDoCanal) {
-      return { ok: false, erro: "texto_longo_instagram", detalhe: base };
+      const foraDoInstagram = canal !== null && canal !== "direct";
+      return { ok: false, erro: foraDoInstagram ? "texto_longo_rede_social" : "texto_longo_instagram", detalhe: base };
     }
   }
   if (await contatoBloqueado(c)) return { ok: false, erro: "contato_bloqueado", detalhe: base };
@@ -213,10 +222,11 @@ async function registrar(
     acao.opcao_id && node.type === "message"
       ? node.config.options?.items.find((i) => i.id === acao.opcao_id)?.label
       : undefined;
+  const canal = canalSocialDaExecucao(varsDaExecucao(c));
   const base = {
     tipo: node.type,
     envio: "resposta",
-    ...(escopoDoDirect(varsDaExecucao(c)) ? { canal: "direct" } : {}),
+    ...(canal ? { canal } : {}),
     ...(acao.opcao_id ? { opcao_id: acao.opcao_id } : {}),
     ...(rotulo ? { opcao_rotulo: rotulo } : {}),
   };

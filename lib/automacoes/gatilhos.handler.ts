@@ -38,6 +38,7 @@ import { createContactHandler } from "@/app/api/v1/contacts/_handler";
 import { logger } from "@/lib/logger";
 import { comentarioDoInstagramNoPlano } from "./comentario-no-plano";
 import { iniciarAutomacao, type InicioDaAutomacao } from "./iniciar";
+import { canalSocialDaConexao, type CanalSocial } from "./conversa-do-direct";
 import type { AutomacaoTrigger, AutomacaoTriggerConfig } from "./schemas";
 import { IDADE_MAXIMA_DA_MENSAGEM_MS, automacaoEsperaRespostaNaConversaSupabase } from "./uma-voz";
 
@@ -63,6 +64,12 @@ export interface GatilhosDb {
   contatoDaConversa(orgId: string, conversationId: string): Promise<string | null>;
   /** `true` grupo, `false` conversa individual, `null` conversa não encontrada na organização. */
   conversaDeGrupo(orgId: string, conversationId: string): Promise<boolean | null>;
+  /**
+   * O canal social da conversa (`canalSocialDaConexao`: Messenger, Direct), ou
+   * `null` quando é WhatsApp ou não é desta organização. Opcional: os falsos de
+   * teste que não o implementam leem-se como WhatsApp (a regra de sempre).
+   */
+  canalSocialDaConversa?(orgId: string, conversationId: string): Promise<CanalSocial | null>;
   /** A linha da mensagem (organização e conversa conferidas): quando CHEGOU. `null` = não é desta conversa. */
   mensagemDaConversa(orgId: string, conversationId: string, messageId: string): Promise<{ created_at: string } | null>;
   /**
@@ -179,6 +186,9 @@ async function mensagemPodeDisparar(
   if (gatilhos.some((g) => g.skip_if_human !== false)) {
     fato.humano_no_comando = await db.humanoNaConversa(orgId, fato.conversation_id, agora);
   }
+  // Messenger/Direct: a execução responde nesta conversa, não no WhatsApp do contato.
+  const canalSocial = (await db.canalSocialDaConversa?.(orgId, fato.conversation_id)) ?? null;
+  if (canalSocial) fato.canal_social = canalSocial;
   return true;
 }
 
@@ -356,6 +366,23 @@ export function createSupabaseGatilhosDb(admin: SupabaseClient): GatilhosDb {
         .maybeSingle();
       if (error) throw new Error(error.message);
       return (data as { contact_id: string | null } | null)?.contact_id ?? null;
+    },
+    async canalSocialDaConversa(orgId, conversationId) {
+      // A plataforma (Instagram/Messenger) só dá o rótulo do histórico; banco
+      // sem a coluna (clone antigo) lê de novo só o provider.
+      const ler = (colunas: string) =>
+        admin
+          .from("conversations")
+          .select(`channel_sessions:channel_session_id(${colunas})`)
+          .eq("organization_id", orgId)
+          .eq("id", conversationId)
+          .maybeSingle();
+      let { data, error } = await ler("provider, meta_social_platform");
+      if (error && (error.message ?? "").includes("meta_social_platform")) ({ data, error } = await ler("provider"));
+      if (error) throw new Error(error.message);
+      const sessao = (data as { channel_sessions?: { provider?: string | null; meta_social_platform?: unknown } | null } | null)
+        ?.channel_sessions;
+      return canalSocialDaConexao(sessao?.provider ?? null, sessao?.meta_social_platform);
     },
     async conversaDeGrupo(orgId, conversationId) {
       const { data, error } = await admin

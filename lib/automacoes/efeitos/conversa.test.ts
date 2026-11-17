@@ -939,3 +939,127 @@ describe("executarConversa: envio pelo Direct", () => {
     expect(r.detalhes?.[0]).not.toHaveProperty("canal");
   });
 });
+
+// ─── Mensagem recebida no Messenger (ou no Direct) ─────────────────────────
+// A execução que nasceu de "Mensagem recebida" numa conversa de rede social
+// responde NESSA conversa, nunca no WhatsApp do contato. A marca `canal_social`
+// é gravada no disparo (`gatilhos.handler.ts`); a conversa é conferida de novo.
+const VARS_DA_MENSAGEM_SOCIAL = {
+  gatilho: {
+    tipo: "message_received",
+    message_id: "msg-in-1",
+    conversation_id: "conv-messenger",
+    channel_session_id: "sessao-fb",
+    canal_social: "messenger",
+    texto: "oi",
+  },
+};
+
+function conversaDoMessenger(over: Linha = {}): Linha {
+  return conversa({
+    id: "conv-messenger",
+    channel_session_id: "sessao-fb",
+    provider_conversation_id: "psid-1",
+    channel_sessions: { provider: CANAL_DO_DIRECT },
+    ...over,
+  });
+}
+
+describe("executarConversa: mensagem recebida no Messenger", () => {
+  beforeEach(() => {
+    enviarMock.mockReset();
+    enviarMock.mockResolvedValue({ id: "msg-fb", status: "sent" });
+  });
+
+  it("envia pela conversa do gatilho (Messenger), não pela de WhatsApp do contato", async () => {
+    const { admin } = criarBanco(
+      tabelasBase({
+        conversations: [conversa({ id: "conv-wa", last_inbound_at: AGORA.toISOString() }), conversaDoMessenger()],
+      }),
+    );
+    const r = await executarConversa(
+      contexto(admin, { vars: VARS_DA_MENSAGEM_SOCIAL }),
+      NO_COM_OPCOES,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(r.desfecho.ok).toBe(true);
+    const corpo = enviarMock.mock.calls[0]![2] as { conversation_id: string };
+    expect(corpo.conversation_id).toBe("conv-messenger");
+    expect(r.detalhes?.[0]).toMatchObject({ canal: "messenger", ok: true });
+  });
+
+  it("o teto de 1000 bytes do canal vale no Messenger, com erro que não fala de Instagram", async () => {
+    const { admin } = criarBanco(tabelasBase({ conversations: [conversaDoMessenger()] }));
+    const longo = { ...NO_MENSAGEM, config: { body: "a".repeat(1001) } } as unknown as Extract<
+      FlowNode,
+      { type: "message" }
+    >;
+    const r = await executarConversa(
+      contexto(admin, { vars: VARS_DA_MENSAGEM_SOCIAL }),
+      longo,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r)).toBe("texto_longo_rede_social");
+    expect(fraseDoErro("texto_longo_rede_social")).not.toMatch(/Instagram/);
+    expect(enviarMock).not.toHaveBeenCalled();
+  });
+
+  it("conversa do gatilho de OUTRO contato não serve: sem_conversa_social, e o WhatsApp do contato não é usado", async () => {
+    const { admin } = criarBanco(
+      tabelasBase({
+        conversations: [conversa({ id: "conv-wa" }), conversaDoMessenger({ contact_id: "contato-de-outra-pessoa" })],
+      }),
+    );
+    const r = await executarConversa(
+      contexto(admin, { vars: VARS_DA_MENSAGEM_SOCIAL }),
+      NO_MENSAGEM,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r)).toBe("sem_conversa_social");
+    expect(enviarMock).not.toHaveBeenCalled();
+  });
+
+  it("conversa do gatilho de OUTRA organização não serve", async () => {
+    const { admin } = criarBanco(
+      tabelasBase({ conversations: [conversa({ id: "conv-wa" }), conversaDoMessenger({ organization_id: OUTRA_ORG })] }),
+    );
+    const r = await executarConversa(
+      contexto(admin, { vars: VARS_DA_MENSAGEM_SOCIAL }),
+      NO_MENSAGEM,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r)).toBe("sem_conversa_social");
+    expect(enviarMock).not.toHaveBeenCalled();
+  });
+
+  it("marca social numa conversa que é de WhatsApp: não envia por ela (a consulta confere o canal)", async () => {
+    const { admin } = criarBanco(tabelasBase({ conversations: [conversa({ id: "conv-messenger" })] }));
+    const r = await executarConversa(
+      contexto(admin, { vars: VARS_DA_MENSAGEM_SOCIAL }),
+      NO_MENSAGEM,
+      ENVIAR,
+      "message-1",
+      noop,
+    );
+    expect(erroDe(r)).toBe("sem_conversa_social");
+  });
+
+  it("mensagem recebida no WhatsApp (sem a marca): segue a regra de sempre, sem `canal`", async () => {
+    const { admin } = criarBanco(tabelasBase({ conversations: [conversaDoMessenger(), conversa()] }));
+    const vars = {
+      gatilho: { ...VARS_DA_MENSAGEM_SOCIAL.gatilho, conversation_id: "conv-1", canal_social: undefined },
+    };
+    const r = await executarConversa(contexto(admin, { vars }), NO_MENSAGEM, ENVIAR, "message-1", noop);
+    expect(r.desfecho.ok).toBe(true);
+    expect((enviarMock.mock.calls[0]![2] as { conversation_id: string }).conversation_id).toBe("conv-1");
+    expect(r.detalhes?.[0]).not.toHaveProperty("canal");
+  });
+});

@@ -1,6 +1,8 @@
 /**
  * A conversa pela qual a automação ENVIA: na execução que nasceu de um
- * comentário, a do Direct de quem comentou (`conversa-do-direct.ts`); nas
+ * comentário, a do Direct de quem comentou (`conversa-do-direct.ts`); na que
+ * nasceu de "Mensagem recebida" numa conversa de rede social (Messenger ou
+ * Direct), a própria conversa do gatilho — nunca o WhatsApp do contato; nas
  * demais, a de WhatsApp mais recente (não grupo) do contato e dos gêmeos de
  * telefone. É a MESMA para o bloco de mensagem (que envia por ela,
  * `efeitos/conversa.ts`) e para a condição "Janela de 24h aberta" (que pergunta
@@ -16,7 +18,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ehCanalDeWhatsapp } from "@/lib/channels/canal-de-whatsapp";
 import { estadoDaJanela } from "@/lib/channels/janela";
 
-import { conversaDoDirect, escopoDoDirect } from "./conversa-do-direct";
+import { conversaDoDirect, escopoDaConversaSocial } from "./conversa-do-direct";
 
 export interface ConversaDoContato {
   id: string;
@@ -55,7 +57,8 @@ export async function conversaDeWhatsappDoContato(
 
 /**
  * A conversa do envio desta execução (ver o cabeçalho): Direct quando a
- * execução nasceu de um comentário, senão WhatsApp. `null` = não há por onde
+ * execução nasceu de um comentário, a conversa social do gatilho quando nasceu
+ * de mensagem recebida nela, senão WhatsApp. `null` = não há por onde
  * enviar. Lança em falha do banco.
  */
 export async function conversaDoEnvio(
@@ -64,7 +67,7 @@ export async function conversaDoEnvio(
   vars: Record<string, unknown> | null | undefined,
   ids: readonly string[],
 ): Promise<ConversaDoContato | null> {
-  const escopo = escopoDoDirect(vars);
+  const escopo = escopoDaConversaSocial(vars);
   return escopo ? conversaDoDirect(admin, orgId, escopo, ids) : conversaDeWhatsappDoContato(admin, orgId, ids);
 }
 

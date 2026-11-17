@@ -414,6 +414,16 @@ describe("handler das automações", () => {
       expect(d.iniciadas).toEqual([]);
     }
   });
+  it("mensagem no Messenger: a execução leva a marca do canal social; no WhatsApp, não", async () => {
+    const social = db(config(msgGatilho()), { canalSocialDaConversa: async () => "messenger" });
+    await aplicarGatilhosDeAutomacao(social.fake, mensagem());
+    expect(social.iniciadas[0]?.vars).toMatchObject({
+      gatilho: { tipo: "message_received", conversation_id: CONV, canal_social: "messenger" },
+    });
+    const wa = db(config(msgGatilho()), { canalSocialDaConversa: async () => null });
+    await aplicarGatilhosDeAutomacao(wa.fake, mensagem());
+    expect(wa.iniciadas[0]?.vars.gatilho).not.toHaveProperty("canal_social");
+  });
   it("só a primeira mensagem: segunda mensagem da conversa não dispara", async () => {
     const d = db(config(msgGatilho({ only_first_message: true })), {
       primeiraMensagemDaConversa: async () => false,

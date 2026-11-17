@@ -175,6 +175,37 @@ describe("reatividade — execução que começou por comentário (Direct)", () 
   });
 });
 
+describe("reatividade — execução que começou por mensagem recebida no Messenger", () => {
+  const doMessenger = () =>
+    inscricao({
+      lane: "automacao",
+      status: "waiting_reply",
+      wait_mode: null,
+      escopo_direct: { conversationId: "conv-messenger" },
+    });
+  const chegou = (conversation_id?: string): EventRow => ({
+    ...inbound,
+    payload: { ...inbound.payload, ...(conversation_id ? { conversation_id } : {}) },
+  });
+
+  it("mensagem do mesmo contato em OUTRA conversa (WhatsApp, outra página) não acorda", async () => {
+    const { db, eventos, patches } = montarDb([doMessenger()]);
+    expect((await applyReactivityEvent(db, () => new Date(AGORA), chegou("conv-whatsapp"))).reacted).toBe(0);
+    expect((await applyReactivityEvent(db, () => new Date(AGORA), chegou())).reacted).toBe(0);
+    expect(eventos).toEqual([]);
+    expect(patches).toEqual([]);
+  });
+
+  it("a resposta na conversa do gatilho acorda (inbound_woke), sem ler a conversa no banco", async () => {
+    const { db, eventos } = montarDb([doMessenger()]);
+    db.loadConversationRef = async () => {
+      throw new Error("não deveria ler a conversa");
+    };
+    expect((await applyReactivityEvent(db, () => new Date(AGORA), chegou("conv-messenger"))).reacted).toBe(1);
+    expect(eventos).toEqual(["inbound_woke"]);
+  });
+});
+
 describe("modoDoWait", () => {
   const grafo = {
     nodes: [

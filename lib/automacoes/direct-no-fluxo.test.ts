@@ -17,7 +17,7 @@ vi.mock("@/app/api/v1/messages/_handler", () => ({ sendMessageHandler: enviarMoc
 vi.mock("@/app/api/v1/cron/recover-stuck-messages/route", () => ({ recoverStuckMessages: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
-import { PROVIDERS_DE_MENSAGEM } from "@/lib/channels/capabilities";
+import { CHANNEL_PROVIDER_META_SOCIAL, PROVIDERS_DE_MENSAGEM } from "@/lib/channels/capabilities";
 import { ehCanalDeWhatsapp } from "@/lib/channels/canal-de-whatsapp";
 import { ehCanalDoDirect } from "@/lib/channels/canal-do-direct";
 import { createSupabaseAdminClient } from "@/lib/followup/engine";
@@ -28,7 +28,7 @@ import { acordarAutomacaoEmEspera, ultimaRespostaDaAutomacao } from "@/lib/relog
 
 import { criarBancoEmMemoria, type Linha } from "../../tests/helpers/banco-em-memoria";
 import { estadoDaEspera, pisoDaRespostaNoDirect } from "./conversa";
-import { escopoDoDirect } from "./conversa-do-direct";
+import { canalSocialDaConexao, escopoDaConversaSocial, escopoDoDirect } from "./conversa-do-direct";
 import { devolverTurnoAoAgente } from "./devolver-turno";
 import { executarConversa } from "./efeitos/conversa";
 import type { Contexto } from "./efeitos/index";
@@ -482,6 +482,15 @@ describe("histórico: envios e resposta pelo Direct, sem o texto do contato", ()
     expect(ev([{ tipo: "message", envio: "resposta", ok: true }])).toBe("Resposta do contato: registrada");
   });
 
+  it("Messenger e rede social sem nome têm a própria frase; rótulo desconhecido não vira canal", () => {
+    expect(ev([{ tipo: "message", envio: "mensagem", canal: "messenger", ok: true }])).toBe("Mensagem: enviada pelo Messenger");
+    expect(ev([{ tipo: "wait", envio: "resposta", canal: "messenger", ok: true }])).toBe("Respondeu no Messenger");
+    expect(ev([{ tipo: "message", envio: "mensagem", canal: "rede_social", ok: true }])).toBe(
+      "Mensagem: enviada pela rede social",
+    );
+    expect(ev([{ tipo: "message", envio: "mensagem", canal: "constructor", ok: true }])).toBe("Mensagem: enviada");
+  });
+
   it("o evento da resposta registrada no Direct não guarda o texto do contato", async () => {
     const b = bancoBase({ conversations: [conversaIg()] });
     const c: Contexto = {
@@ -626,5 +635,100 @@ describe("o desfecho da resposta do Instagram é neutro dentro da espera", () =>
 
   it("motor: estadoDaEspera continua vendo a espera estacionada (não reenvia nem recomeça)", () => {
     expect(estadoDaEspera(eventos as never, "espera")).toMatchObject({ aguardando: true, prazo: seg(86_400), novasTentativas: 0 });
+  });
+});
+
+// ─── Mensagem recebida no Messenger (ou no Direct) ─────────────────────────
+// A execução nasce de "Mensagem recebida" numa conversa de rede social: envia e
+// espera a resposta NESSA conversa. A marca vem do disparo (`canal_social`).
+describe("mensagem recebida numa conversa de rede social", () => {
+  const CONV_FB = "conv-fb";
+  const VARS_FB = {
+    gatilho: {
+      tipo: "message_received",
+      message_id: "msg-in",
+      conversation_id: CONV_FB,
+      channel_session_id: OUTRA_SESSAO,
+      canal_social: "messenger",
+      texto: "oi",
+    },
+  };
+  const conversaFb = (over: Linha = {}) =>
+    conversaIg({
+      id: CONV_FB,
+      channel_session_id: OUTRA_SESSAO,
+      provider_conversation_id: "psid-1",
+      channel_sessions: { provider: CANAL_DO_DIRECT, meta_social_platform: "messenger" },
+      ...over,
+    });
+  const conversaWa = () =>
+    conversaIg({ id: "conv-wa", channel_session_id: "sessao-wa", provider_conversation_id: null, channel_sessions: { provider: CANAL_DE_WHATSAPP } });
+
+  it("escopo: só com a marca social o gatilho de mensagem vira escopo da conversa; comentário segue como antes", () => {
+    expect(escopoDaConversaSocial(VARS_FB)).toEqual({ conversationId: CONV_FB });
+    expect(escopoDaConversaSocial({ gatilho: { ...VARS_FB.gatilho, canal_social: undefined } })).toBeNull();
+    expect(escopoDaConversaSocial({ gatilho: { ...VARS_FB.gatilho, canal_social: "qualquer" } })).toBeNull();
+    expect(escopoDaConversaSocial(VARS)).toEqual({ channelSessionId: SESSAO_IG, autorId: IGSID });
+    // O comentário continua sendo o único com o piso recuado.
+    expect(escopoDoDirect(VARS_FB)).toBeNull();
+  });
+
+  it("rótulo do canal: Messenger, Direct (Instagram) ou rede social; WhatsApp não é social", () => {
+    expect(canalSocialDaConexao(CHANNEL_PROVIDER_META_SOCIAL, "messenger")).toBe("messenger");
+    expect(canalSocialDaConexao(CHANNEL_PROVIDER_META_SOCIAL, "instagram")).toBe("direct");
+    expect(canalSocialDaConexao(CHANNEL_PROVIDER_META_SOCIAL, null)).toBe("rede_social");
+    // O social intermediado não diz a rede numa coluna.
+    for (const p of PROVIDERS_DE_MENSAGEM.filter((x) => ehCanalDoDirect(x) && x !== CHANNEL_PROVIDER_META_SOCIAL)) {
+      expect(canalSocialDaConexao(p, "messenger")).toBe("rede_social");
+    }
+    expect(canalSocialDaConexao(CANAL_DE_WHATSAPP, null)).toBeNull();
+    expect(canalSocialDaConexao(null, null)).toBeNull();
+  });
+
+  it("disparo: a leitura do canal da conversa é da organização e devolve null no WhatsApp", async () => {
+    const b = bancoBase({ conversations: [conversaFb(), conversaWa()] });
+    const db = createSupabaseGatilhosDb(admin(b));
+    expect(await db.canalSocialDaConversa!(ORG, CONV_FB)).not.toBeNull();
+    expect(await db.canalSocialDaConversa!(ORG, "conv-wa")).toBeNull();
+    expect(await db.canalSocialDaConversa!(OUTRA_ORG, CONV_FB)).toBeNull();
+  });
+
+  it("espera: inbound de OUTRA conversa do mesmo contato não acorda; o da conversa do gatilho, sim", async () => {
+    const b = bancoBase({
+      conversations: [conversaFb(), conversaWa()],
+      messages: [inbound({ id: "wa", conversation_id: "conv-wa", sent_at: seg(40), created_at: seg(40) })],
+      followup_enrollments: [execucao({ vars: VARS_FB })],
+    });
+    const escopo = escopoDaConversaSocial(VARS_FB);
+    expect(await ultimaRespostaDaAutomacao(admin(b), ORG, [CONTATO], escopo)).toBeNull();
+    // Sem escopo (regra do WhatsApp) a mesma mensagem contaria — é o que o escopo evita.
+    expect(await ultimaRespostaDaAutomacao(admin(b), ORG, [CONTATO], null)).not.toBeNull();
+
+    b.tabelas.messages!.push(inbound({ id: "fb", conversation_id: CONV_FB, sent_at: seg(50), created_at: seg(50) }));
+    expect(await ultimaRespostaDaAutomacao(admin(b), ORG, [CONTATO], escopo)).toMatchObject({ sent_at: seg(50) });
+  });
+
+  it("motor: as respostas da espera são só as da conversa do gatilho", async () => {
+    const b = bancoBase({
+      conversations: [conversaFb(), conversaWa()],
+      messages: [
+        inbound({ id: "wa", conversation_id: "conv-wa", body: "pelo whatsapp", sent_at: seg(40), created_at: seg(40) }),
+        inbound({ id: "fb", conversation_id: CONV_FB, body: "pelo messenger", sent_at: seg(50), created_at: seg(50) }),
+      ],
+    });
+    const db = createSupabaseAdminClient(admin(b));
+    expect(await db.loadRespostasDaEspera!(ORG, CONTATO, ESTACIONOU, escopoDaConversaSocial(VARS_FB))).toEqual([
+      { texto: "pelo messenger", replyId: null },
+    ]);
+  });
+
+  it("a mensagem que DISPAROU a automação (antes da espera) não acorda: sem o piso recuado do comentário", async () => {
+    const b = bancoBase({
+      conversations: [conversaFb()],
+      followup_enrollments: [execucao({ vars: VARS_FB, started_at: seg(-60) })],
+    });
+    const enr = b.tabelas.followup_enrollments![0]! as unknown as Parameters<typeof acordarAutomacaoEmEspera>[1];
+    expect(await acordarAutomacaoEmEspera(admin(b), enr, { sent_at: seg(-50), created_at: seg(-50) }, AGORA)).toBe(false);
+    expect(await acordarAutomacaoEmEspera(admin(b), enr, { sent_at: seg(20), created_at: seg(20) }, AGORA)).toBe(true);
   });
 });

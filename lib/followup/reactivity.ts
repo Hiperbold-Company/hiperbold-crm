@@ -58,7 +58,11 @@ import type { EnrollmentPatch } from "./engine";
 import { triggerConfigSchema } from "./api-schemas";
 import type { EnrollmentOutcome, EnrollmentStatus } from "./node-handlers";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
-import { escopoDoDirect, type EscopoDoDirect } from "@/lib/automacoes/conversa-do-direct";
+import {
+  ehEscopoDaMensagem,
+  escopoDaConversaSocial,
+  type EscopoDaConversaSocial,
+} from "@/lib/automacoes/conversa-do-direct";
 
 /** Grace pós-resume (spec §4: "grace configurável, default 30min, knob"). */
 export const RESUME_GRACE_MS = 30 * 60_000;
@@ -122,11 +126,13 @@ export interface LiveEnrollmentRef {
    */
   wait_mode?: string | null;
   /**
-   * Automação que começou por comentário do Instagram: a conexão e o IGSID do
-   * Direct de quem comentou (`escopoDoDirect`). Ela espera a resposta SÓ
-   * nessa conversa — a mensagem do mesmo contato por outro canal não a acorda.
+   * Automação que começou por comentário do Instagram (a conexão e o IGSID do
+   * Direct de quem comentou) ou por "Mensagem recebida" no Messenger ou no
+   * Direct (a conversa do gatilho) — `escopoDaConversaSocial`. Ela espera a
+   * resposta SÓ nessa conversa — a mensagem do mesmo contato por outro canal
+   * ou outra conversa não a acorda.
    */
-  escopo_direct?: EscopoDoDirect | null;
+  escopo_direct?: EscopoDaConversaSocial | null;
 }
 
 /** Automação parada num "Esperar um tempo": a mensagem do contato não a acorda
@@ -338,17 +344,24 @@ async function reactToInbound(
   // Execução do Direct: só a mensagem da conversa do Direct de quem comentou
   // conta como resposta dela. As outras (o mesmo contato pelo WhatsApp, outra
   // conta) não a acordam nem a cancelam — nada de "O cliente respondeu" falso.
-  const doDirect = live.some((e) => e.escopo_direct);
+  // Execução da mensagem recebida no Messenger/Direct: só a mensagem da
+  // conversa do gatilho conta — comparada pelo id, sem ida ao banco.
+  const doDirect = live.some((e) => e.escopo_direct && !ehEscopoDaMensagem(e.escopo_direct));
   const conversationId = strOrNull(row.payload.conversation_id);
   const conversa =
     doDirect && conversationId && db.loadConversationRef
       ? await db.loadConversationRef(row.organization_id, conversationId)
       : null;
-  const reageAEsta = (e: LiveEnrollmentRef) =>
-    !e.escopo_direct ||
-    (conversa !== null &&
-      conversa.channel_session_id === e.escopo_direct.channelSessionId &&
-      conversa.provider_conversation_id === e.escopo_direct.autorId);
+  const reageAEsta = (e: LiveEnrollmentRef) => {
+    const escopo = e.escopo_direct;
+    if (!escopo) return true;
+    if (ehEscopoDaMensagem(escopo)) return conversationId !== null && conversationId === escopo.conversationId;
+    return (
+      conversa !== null &&
+      conversa.channel_session_id === escopo.channelSessionId &&
+      conversa.provider_conversation_id === escopo.autorId
+    );
+  };
   const waitingReply = live.filter((e) => e.status === "waiting_reply" && reageAEsta(e));
   const esperaAtiva = live.filter(
     (e) => e.status === "active" && !esperaDeTempoPuro(e) && reageAEsta(e),
@@ -661,7 +674,7 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
           wait_mode: modoDoWait(grafoPorVersao.get(e.version_id as string), e.current_node_id),
           escopo_direct:
             e.lane === "automacao"
-              ? escopoDoDirect((e as { vars?: Record<string, unknown> | null }).vars)
+              ? escopoDaConversaSocial((e as { vars?: Record<string, unknown> | null }).vars)
               : null,
         };
       });
