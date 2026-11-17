@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { loadAuthUser } from "@/lib/auth/server";
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = { title: "Extensões da instalação" };
@@ -47,7 +47,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const usuario = await loadAuthUser();
   if (!usuario?.is_platform_admin) notFound();
-  const idioma = normalizarIdioma(usuario.locale);
+  const idioma = idiomaDaTela(usuario.locale);
   const t = (s: string) => traduzir(s, idioma);
 
   const db = createAdminClient();

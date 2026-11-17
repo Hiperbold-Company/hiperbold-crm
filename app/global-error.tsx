@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { relatarErroDoNavegador } from "@/lib/erros/relatar-erro-do-navegador";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { IDIOMA_PADRAO, idiomaDelNavegador, type Idioma } from "@/lib/i18n/idiomas";
+import { IDIOMA_PADRAO, idiomaDelNavegador, type Idioma, idiomaDaTela } from "@/lib/i18n/idiomas";
 
 export default function GlobalError({
   error,
@@ -22,7 +22,7 @@ export default function GlobalError({
   const [idioma, setIdioma] = useState<Idioma>(IDIOMA_PADRAO);
 
   useEffect(() => {
-    setIdioma(idiomaDelNavegador(navigator.languages ?? [navigator.language]));
+    setIdioma(idiomaDaTela(idiomaDelNavegador(navigator.languages ?? [navigator.language])));
   }, []);
 
   useEffect(() => {

@@ -42,7 +42,9 @@ describe("manifest do ícone configurável", () => {
   });
   it("a descrição segue o idioma do aparelho que pede (não há idioma da instalação)", async () => {
     expect((await manifest()).description).toBe("Atendimento e vendas pelo WhatsApp, também no celular.");
+    // Espanhol e inglês saíram do seletor em 17/11/2026: o aparelho em espanhol
+    // recebe a tela no padrão (`idiomaDoVisitante` → `idiomaDaTela`).
     mocks.lingua.valor = "es-AR,es;q=0.9";
-    expect((await manifest()).description).toBe("Atención y ventas por WhatsApp, también en el celular.");
+    expect((await manifest()).description).toBe("Atendimento e vendas pelo WhatsApp, também no celular.");
   });
 });

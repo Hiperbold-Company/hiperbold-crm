@@ -32,7 +32,7 @@ import {
   type ExigenciaDeMfa,
   type PapelMinimoDeMfa,
 } from "@/lib/auth/politica-mfa";
-import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { idiomaDaTela, normalizarIdioma } from "@/lib/i18n/idiomas";
 import { emailVerificado } from "@/lib/auth/verificacao-email";
 import { resolverPermissoes } from "@/lib/permissoes/resolver";
 import { getUserResiliente } from "@/lib/auth/get-user-resiliente";
@@ -487,7 +487,7 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
   // própria, e quem não pertence a organização nenhuma, não têm o que resolver.
   // Ler assim mesmo faria toda tela do produto tocar o cookie para descartar o
   // valor em seguida.
-  const idioma = normalizarIdioma(
+  const idiomaGravado = normalizarIdioma(
     locale ?? support?.locale ?? (await localeDaOrgAtiva(memberships)),
   );
   const timezone = (user.user_metadata?.timezone as string | undefined) ?? null;
@@ -500,7 +500,8 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
     is_platform_admin: !!paRow,
     platform_admin_scope: paRow?.scope ?? null,
     locale,
-    idioma,
+    idioma: idiomaDaTela(idiomaGravado),
+    idiomaGravado,
     timezone,
     email_verificado: emailVerificado(user.app_metadata),
     organizations: memberships,

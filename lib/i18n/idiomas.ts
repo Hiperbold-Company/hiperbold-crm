@@ -45,15 +45,34 @@
  * alcançar quem entra depois e nunca abriu o próprio perfil.
  */
 
-import { IDIOMAS_VISIVEIS, type IdiomaVisivel } from "./registro";
+import { IDIOMAS_COM_TEXTO, IDIOMAS_VISIVEIS, type IdiomaComTexto } from "./registro";
 
 /**
- * Os códigos que a interface serve. Derivados do registro (`./registro`): um
- * idioma `em_construcao` não entra aqui, então não é aceito na gravação, não é
- * servido na leitura e não é oferecido em tela nenhuma.
+ * Os idiomas em que o produto sabe escrever: os que aparecem e os retirados do
+ * seletor que ainda têm texto (`IdiomaComTexto`, em `./registro`). É o tipo do
+ * dicionário, do `Locale` de data e de `traduzir`.
  */
-export type Idioma = IdiomaVisivel["codigo"];
-export const IDIOMAS: readonly Idioma[] = IDIOMAS_VISIVEIS.map((idioma) => idioma.codigo);
+export type Idioma = IdiomaComTexto["codigo"];
+
+/**
+ * Os códigos em que o produto ESCREVE: aceitos na gravação e servidos às saídas
+ * fora da tela (e-mail, push, avisos, prospecção). Um idioma retirado do seletor
+ * (`retiradoDoSeletorEm`) continua aqui — tirá-lo do seletor é decisão de TELA.
+ *
+ * O que a tela mostra é `idiomaDaTela`, e o que o seletor oferece é
+ * `IDIOMAS_VISIVEIS` (`./registro`).
+ */
+export const IDIOMAS: readonly Idioma[] = IDIOMAS_COM_TEXTO.map((idioma) => idioma.codigo);
+
+/**
+ * O idioma em que a TELA é pintada: um idioma visível segue ele mesmo; qualquer
+ * outro — inclusive espanhol e inglês, fora do seletor desde 17/11/2026 — cai
+ * no padrão. Usado só onde o idioma chega ao `IdiomaProvider`, ao `lang` do
+ * documento e às telas sem provider; nunca nas saídas fora da tela.
+ */
+export function idiomaDaTela(codigo: string | null | undefined): Idioma {
+  return IDIOMAS_VISIVEIS.find((idioma) => idioma.codigo === codigo)?.codigo ?? IDIOMA_PADRAO;
+}
 
 export const IDIOMA_PADRAO: Idioma = "pt-BR";
 
@@ -95,7 +114,7 @@ export function parseAcceptLanguage(header: string | null | undefined): Idioma |
 
   for (const { tag } of candidatos) {
     const primario = tag.split("-")[0] ?? "";
-    const servido = IDIOMAS_VISIVEIS.find((idioma) =>
+    const servido = IDIOMAS_COM_TEXTO.find((idioma) =>
       idioma.subtagsDoNavegador.some((subtag) => subtag === primario),
     );
     if (servido) return servido.codigo;
@@ -125,4 +144,19 @@ export function idiomaDelNavegador(languages: readonly string[]): Idioma {
  */
 export function idiomaDoTexto(tag: string | null | undefined): Idioma {
   return parseAcceptLanguage(tag) ?? IDIOMA_PADRAO;
+}
+
+/**
+ * A pista de idioma que o CADASTRO manda para a empresa nova nascer
+ * (`lib/auth/perfil-da-empresa-nova.ts`): o idioma do VISITANTE, não o da tela.
+ *
+ * Desde 17/11/2026 a tela de quem chega em espanhol ou inglês é pintada em
+ * português (`idiomaDaTela`), e mandar esse português como pista faria a
+ * empresa de um visitante do México nascer em pt-BR, com real e fuso de São
+ * Paulo. Quando a tela está no padrão, vale o navegador — o mesmo sinal do
+ * `Accept-Language` —, como era antes do corte.
+ */
+export function idiomaDoCadastro(daTela: Idioma, languages: readonly string[] | null | undefined): Idioma {
+  if (daTela !== IDIOMA_PADRAO || !languages || languages.length === 0) return daTela;
+  return idiomaDelNavegador(languages);
 }

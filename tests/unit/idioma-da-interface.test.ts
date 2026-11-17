@@ -145,7 +145,9 @@ describe("os elos que somem sem barulho", () => {
     // fazem `vi.mock` daquele módulo, e um RÓTULO passou a depender de quem
     // sabe permissão. Traduzir é apresentação.
     const layout = readFileSync("app/app/layout.tsx", "utf8");
-    expect(layout).toMatch(/<IdiomaProvider locale=\{user\.idioma\}>/);
+    // `user.idioma` já é o idioma da TELA (`idiomaDaTela` em lib/auth/server.ts,
+    // desde 17/11/2026); o gravado vai junto para o seletor do topo.
+    expect(layout).toMatch(/<IdiomaProvider locale=\{user\.idioma\} gravado=\{user\.idiomaGravado \?\? user\.idioma\}>/);
     // E nenhuma outra tela com sessão pula a cadeia: onboarding e get-started
     // passavam `user.locale` (só a preferência) ao provider enquanto o texto do
     // servidor da mesma tela usava `user.idioma` — metade da tela em cada língua.
@@ -184,7 +186,10 @@ describe("os elos que somem sem barulho", () => {
       expect(fonte, `${arquivo} voltou a listar idioma à mão`).not.toMatch(
         /<SelectItem\s+value="(pt-BR|es|en-US|zh-CN)"/,
       );
-      expect(fonte, `${arquivo} deixou de ler a lista do registro`).toMatch(/IDIOMAS_VISIVEIS\.map/);
+      // Desde 17/11/2026 a lista passa por `idiomasDoSeletor`, que parte de IDIOMAS_VISIVEIS e
+      // acrescenta só o idioma já gravado que saiu do seletor (para salvar outro campo não trocá-lo).
+      expect(fonte, `${arquivo} deixou de ler a lista do registro`).toMatch(/IDIOMAS_VISIVEIS\.map|idiomasDoSeletor\(/);
+      expect(fonte, `${arquivo} deixou de partir dos idiomas visíveis`).toMatch(/IDIOMAS_VISIVEIS/);
     }
   });
 

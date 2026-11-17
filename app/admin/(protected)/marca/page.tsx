@@ -17,7 +17,7 @@ import {
   temasInstaladosDaPlataforma,
 } from "@/lib/extensions/tema-da-plataforma";
 import { tagDeIdioma } from "@/lib/i18n/datas";
-import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 import { FormularioDaMarca } from "./_form";
@@ -68,7 +68,7 @@ function instanteLegivel(iso: string | null, idioma: string): string | null {
 export default async function Page() {
   const usuario = await loadAuthUser();
   if (!usuario?.is_platform_admin) notFound();
-  const idioma = normalizarIdioma(usuario.locale);
+  const idioma = idiomaDaTela(usuario.locale);
 
   const [linha, cssPersonalizado, temasInstalados, temaEscolhido] = await Promise.all([
     marcaDaInstalacao(),
