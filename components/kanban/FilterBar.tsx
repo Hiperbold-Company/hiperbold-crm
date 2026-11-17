@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PontoDaEtiqueta } from "@/components/tags/PontoDaEtiqueta";
+import { FiltrosNoCelular } from "@/components/shell/FiltrosNoCelular";
 import { useUser } from "@/hooks/auth/AuthProvider";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useAssignableAgents } from "@/hooks/kanban/useAssignableAgents";
@@ -192,6 +193,19 @@ export function FilterBar({ filters, onChange, leads, settings }: FilterBarProps
   const motivoLabel = filters.lostReason ? rotuloDoMotivo(filters.lostReason) : t("Todos");
   const categoriaLabel = filters.lostCategory ?? t("Todas");
 
+  // Quantos filtros (fora a busca) divergem do padrão: é o "(N)" do botão do celular.
+  const filtrosAtivos = [
+    filters.owner && filters.owner !== "any",
+    marcadoresEscolhidos.length > 0,
+    filters.overdueOnly,
+    filters.lostReason,
+    filters.lostCategory,
+    filters.manualEvents,
+    filtroDeDataAtivo(filters.createdAt),
+    filtroDeDataAtivo(filters.movedAt),
+    filters.status && filters.status !== "all",
+  ].filter(Boolean).length;
+
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">
       <Input
@@ -202,6 +216,7 @@ export function FilterBar({ filters, onChange, leads, settings }: FilterBarProps
         className="h-9 w-full sm:w-64"
       />
 
+      <FiltrosNoCelular ativos={filtrosAtivos}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm">
@@ -399,6 +414,7 @@ export function FilterBar({ filters, onChange, leads, settings }: FilterBarProps
         />
         {t("Apenas atrasados")}
       </label>
+      </FiltrosNoCelular>
 
       {(filters.search ||
         filters.owner ||

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -16,6 +17,7 @@ import { camposDeDataDoNegocio } from "@/lib/leads/campos-do-funil";
 import { AutomacoesList } from "./_components/AutomacoesList";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Automações" };
 
 const COLUNAS = "id, name, status, active_version_id, handoff_policy, updated_at";
 const COLUNAS_DOS_FOLLOWUPS = "id, name, status, surface, updated_at";

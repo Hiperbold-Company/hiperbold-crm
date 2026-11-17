@@ -14650,5 +14650,8 @@
   "As propostas estão desligadas para esta organização. Para editar os modelos, ligue as propostas em Configurações › Regras das propostas e salve.": "Proposals are turned off for this organization. To edit the templates, turn on proposals in Settings › Proposal rules and save.",
   "Ir para Configurações › Regras das propostas": "Go to Settings › Proposal rules",
   "Seu agente ainda não aprendeu nada neste período. Ele aprende de três jeitos: você publica uma regra na Memória da IA, aprova uma sugestão de melhoria na aba Propostas do agente, ou instala uma habilidade em Ações da IA.": "Your agent hasn't learned anything in this period yet. It learns three ways: you publish a rule in AI Memory, you approve an improvement suggestion in the agent's Proposals tab, or you install a skill in AI actions.",
-  "Crie o primeiro na tela Funil": "Create the first one on the Pipeline screen"
+  "Crie o primeiro na tela Funil": "Create the first one on the Pipeline screen",
+  "Filtros": "Filters",
+  "Ver resultados": "View results",
+  "Escolha os filtros e toque em Ver resultados.": "Choose your filters and tap View results."
 }

@@ -29030,6 +29030,10 @@ export const DICIONARIO: Traducoes = {
   "Taxa de ganho de origem rastreada": { es: "Tasa de ganados de origen rastreado" },
   "Parcial: mais de 50 origens no período": { es: "Parcial: más de 50 orígenes en el período" },
   "Ganhos ÷ criados com origem rastreada": { es: "Ganados ÷ creados con origen rastreado" },
+  // design: filtros no celular
+  "Filtros": { es: "Filtros" },
+  "Ver resultados": { es: "Ver resultados" },
+  "Escolha os filtros e toque em Ver resultados.": { es: "Elija los filtros y toque en Ver resultados." },
 };
 
 /**
