@@ -21,6 +21,7 @@ import { type NextRequest } from "next/server";
 
 import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
+import { leitorDoAtor, recortarCampos } from "@/lib/campos/recorte-por-papel";
 import {
   aplicarConfiguracaoDoFunil,
   lerConfiguracaoDoFunil,
@@ -54,7 +55,13 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     }
     return falhaInterna("internal_error", new Error(lida.error), { requestId });
   }
-  return ok(lida.dados, { requestId });
+  // 1015: a definição de campo não pública só vai para administrador.
+  const leitor = leitorDoAtor(authz.actor);
+  const dados = {
+    ...lida.dados,
+    settings: { ...lida.dados.settings, fields: recortarCampos(lida.dados.settings.fields as unknown[], leitor) },
+  };
+  return ok(dados, { requestId });
 }
 
 export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> {
