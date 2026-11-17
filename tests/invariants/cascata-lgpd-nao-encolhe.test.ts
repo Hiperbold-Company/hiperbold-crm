@@ -129,6 +129,10 @@ const TABELAS_NA_CASCATA = [
   // de cada um. A linha sai inteira (passo 1b): número de telefone não tem
   // versão anonimizada que ainda sirva para alguma coisa.
   "contact_phones",
+  // 1017 (fork Hiperbold) — a mensagem agendada no chat. O passo 6z redige
+  // `body` e zera `template` de toda agendada do contato (pelo `contact_id` ou
+  // pela conversa dele); a pendente (`agendada`) vira `cancelada`. A linha fica.
+  "scheduled_messages",
 ] as const;
 
 /**

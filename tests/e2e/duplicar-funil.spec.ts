@@ -103,7 +103,7 @@ async function valoresDoCard(card: Locator): Promise<string[]> {
   return card.locator("input").evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value));
 }
 
-/** O que o card mostra: as etapas (em ordem), os motivos e os rótulos dos campos. */
+/** O que o card mostra: as etapas (em ordem), os motivos e os campos do negócio. */
 async function configuracaoNaTela(page: Page, id: string) {
   const card = page.getByTestId(`funil-${id}`);
   // O upstream (#3176) só monta o editor do funil depois do clique em "abrir editor".
@@ -114,7 +114,15 @@ async function configuracaoNaTela(page: Page, id: string) {
   const etapas = await card
     .locator('[data-testid^="nome-"]')
     .evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value));
-  return { etapas, valores: await valoresDoCard(card) };
+  // Desde a 1015 os campos são da organização: o card lista cada campo do negócio num bloco de
+  // obrigatoriedade (legenda = rótulo), sem input de chave nem de rótulo para editar.
+  const campos = await card.locator('fieldset[data-testid^="obrigatorio-"]').evaluateAll((els) =>
+    els.map((el) => ({
+      key: (el.getAttribute("data-testid") ?? "").slice("obrigatorio-".length),
+      label: el.querySelector("legend")?.textContent?.trim() ?? "",
+    })),
+  );
+  return { etapas, valores: await valoresDoCard(card), campos };
 }
 
 test.describe("Duplicar funil e o acordeão da página de Etapas", () => {
@@ -234,8 +242,7 @@ test.describe("Duplicar funil e o acordeão da página de Etapas", () => {
     const naTela = await configuracaoNaTela(page, novoId);
     expect(naTela.etapas, "as mesmas etapas, na mesma ordem").toEqual(ETAPAS);
     expect(naTela.valores, "os motivos de perda").toContain(MOTIVOS.join(", "));
-    expect(naTela.valores, "o campo do lead (chave)").toContain(CAMPO.key);
-    expect(naTela.valores, "o campo do lead (rótulo)").toContain(CAMPO.label);
+    expect(naTela.campos, "o campo do negócio (chave e rótulo)").toContainEqual({ key: CAMPO.key, label: CAMPO.label });
     await captura(page, "05-copia-pelo-topo-aberta");
 
     // O banco confirma o que a tela leu, e a origem não foi tocada.
@@ -276,7 +283,7 @@ test.describe("Duplicar funil e o acordeão da página de Etapas", () => {
     const doCard = await configuracaoNaTela(page, doCardId);
     expect(doCard.etapas).toEqual(ETAPAS);
     expect(doCard.valores).toContain(MOTIVOS.join(", "));
-    expect(doCard.valores).toContain(CAMPO.label);
+    expect(doCard.campos).toContainEqual({ key: CAMPO.key, label: CAMPO.label });
     await captura(page, "07-copia-pelo-card-aberta");
 
     // Recarregar a página: a lista volta fechada (o recém-duplicado não é estado permanente).

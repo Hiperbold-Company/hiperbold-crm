@@ -76,7 +76,13 @@ test("admin configura testes, remove número, confirma abertura e volta a restri
   // o recorte pelo cartão evita passar pela faixa.
   const cartao = page.getByTestId(`cartao-conexao-${channelId}`);
   await expect(cartao.getByTestId("nome-da-conexao")).toHaveText("Canal de validação", { timeout: 15_000 });
-  await page.getByTestId(`gerenciar-${channelId}`).click();
+  // O Gerenciar é um diálogo da tela, sem rota própria: depois de cada recarga ele volta fechado e
+  // é reaberto pelo cartão, como a pessoa faria.
+  const abrirGerenciar = async () => {
+    await page.getByTestId(`gerenciar-${channelId}`).click();
+    await expect(page.getByTestId("gerenciar-conexao")).toBeVisible();
+  };
+  await abrirGerenciar();
   await expect(page.getByTestId("gerenciar-conexao").getByText("IA em modo de teste", { exact: true })).toBeVisible();
   const openPanel = () => page.getByRole("button", { name: "Configurar acesso da IA" }).click();
   const input = page.getByLabel("Números autorizados para teste");
@@ -103,6 +109,7 @@ test("admin configura testes, remove número, confirma abertura e volta a restri
   await expect(input).not.toBeVisible();
   expect((await read()).ai_test_phone_numbers).toEqual([phone, "+14155552671"]);
   await page.reload();
+  await abrirGerenciar();
   await openPanel();
   await expect(input).toHaveValue(`${phone}\n+14155552671`);
   await input.fill(phone);
@@ -119,6 +126,7 @@ test("admin configura testes, remove número, confirma abertura e volta a restri
   expect((await read()).ai_gate).toBe("open");
   expect((await read()).ai_test_phone_numbers).toEqual([phone]);
   await page.reload();
+  await abrirGerenciar();
   await expect(page.getByText("IA aberta ao público", { exact: true })).toBeVisible();
   await openPanel();
   await expect(input).toHaveValue(phone);
