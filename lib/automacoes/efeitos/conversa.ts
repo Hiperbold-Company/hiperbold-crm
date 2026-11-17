@@ -13,7 +13,10 @@
  *      sem ela: `sem_conversa_direct` — a pessoa ainda não respondeu); na que
  *      começou por "Mensagem recebida" no Messenger ou no Direct, a conversa do
  *      gatilho (sem ela: `sem_conversa_social`); nas demais, a de WhatsApp do
- *      contato (sem ela: `sem_conversa_whatsapp`);
+ *      contato (sem ela: `sem_conversa_whatsapp`). Bloco com "Conexão" escolhida:
+ *      a conversa do contato NAQUELA conexão, e a execução que já tem conversa
+ *      ativa (um bloco anterior escolheu) usa a dela — sem ela:
+ *      `sem_conversa_na_conexao`, nunca outra conexão;
  *   2. o texto que sai (com as opções numeradas, se o canal não as desenha)
  *      dentro do teto do canal (`tetoDoTextoEmBytes`; Direct: 1000 bytes):
  *      `texto_longo_instagram` (`texto_longo_rede_social` fora do Instagram);
@@ -22,7 +25,9 @@
  *   5. o teto de 30 mensagens automáticas por hora: `teto_por_hora`.
  * A linha nasce marcada `metadata.origem_automacao` (é o que o teto conta) e
  * com id determinístico por execução+passo: o replay do mesmo passo não cria
- * uma segunda linha.
+ * uma segunda linha. O envio bem-sucedido por uma conexão escolhida devolve
+ * `vars.conversa_ativa` (`varsDaConversaAtiva`): os blocos seguintes em branco
+ * e a espera da resposta passam a usar essa conversa.
  *
  * ─── Resposta ──────────────────────────────────────────────────────────────
  *
@@ -45,8 +50,13 @@ import type { FlowNode } from "@/lib/followup/graph-schema";
 import type { AcaoDeConversa } from "@/lib/followup/node-handlers";
 
 import { varsDaResposta } from "../conversa";
-import { conversaDoEnvio } from "../conversa-de-whatsapp";
-import { canalSocialDaExecucao, escopoDoDirect } from "../conversa-do-direct";
+import { conversaDoEnvio, conversaNaConexao, type ConversaDoContato } from "../conversa-de-whatsapp";
+import {
+  canalSocialDaExecucao,
+  conversaAtivaDasVars,
+  escopoDoDirect,
+  varsDaConversaAtiva,
+} from "../conversa-do-direct";
 import type { FieldOp } from "../schemas";
 import { renderizar } from "../template-vars";
 import {
@@ -108,6 +118,12 @@ async function contatoBloqueado(c: Contexto): Promise<boolean> {
   return Boolean((data as { is_blocked?: boolean } | null)?.is_blocked);
 }
 
+/** A "Conexão" escolhida no bloco (Mensagem, Pergunta); ausente = a dos blocos anteriores. */
+function conexaoDoBloco(node: NoDeConversa): string | undefined {
+  if (node.type !== "message" && node.type !== "question") return undefined;
+  return node.config.channel_session_id;
+}
+
 /** As variáveis da execução: as da inscrição, ou as dos fatos (o mesmo `vars`). */
 function varsDaExecucao(c: Contexto): Record<string, unknown> | undefined {
   return c.vars ?? c.fatos?.vars;
@@ -118,12 +134,17 @@ async function enviar(
   node: NoDeConversa,
   envio: Extract<AcaoDeConversa, { tipo: "enviar" }>["envio"],
   chave: string,
-): Promise<Passo> {
-  const escopo = escopoDoDirect(varsDaExecucao(c));
+): Promise<Passo & { vars?: Record<string, unknown> }> {
+  const vars = varsDaExecucao(c);
+  const conexao = conexaoDoBloco(node);
+  // Conexão escolhida aqui ou num bloco anterior: só ela serve.
+  const naConexao = conexao !== undefined || conversaAtivaDasVars(vars) !== null;
+  const escopo = escopoDoDirect(vars);
   // `canal` só na rede social (Direct, Messenger): o histórico diz por onde
-  // saiu; o WhatsApp segue como era.
-  const canal = canalSocialDaExecucao(varsDaExecucao(c));
-  const base = { tipo: node.type, envio, ...(canal ? { canal } : {}) };
+  // saiu; o WhatsApp segue como era. Com a conexão do bloco, o canal só é
+  // conhecido depois de achar a conversa.
+  let canal = conexao ? null : canalSocialDaExecucao(vars);
+  let base: Record<string, unknown> = { tipo: node.type, envio, ...(canal ? { canal } : {}) };
   const bruto = textoDoEnvio(node, envio);
   if (bruto === null) return { ok: false, erro: "efeito_falhou", detalhe: base };
   const corpo = renderizar(bruto, c.fatos, c.agora).trim();
@@ -138,14 +159,28 @@ async function enviar(
   // Os mesmos ids (contato + gêmeos de telefone) para a conversa e para o teto.
   const ids = await idsDoContatoEGemeos(c.admin, c.org, c.contatoId);
   // A mesma escolha da condição "Janela de 24h aberta" (`conversaDoEnvio`).
-  const conversa = await conversaDoEnvio(c.admin, c.org, varsDaExecucao(c), ids);
+  let conversa: ConversaDoContato | null;
+  if (conexao) {
+    const naConexaoDoBloco = await conversaNaConexao(c.admin, c.org, conexao, ids);
+    canal = naConexaoDoBloco?.canal ?? null;
+    conversa = naConexaoDoBloco;
+  } else {
+    conversa = await conversaDoEnvio(c.admin, c.org, vars, ids);
+  }
   if (!conversa) {
     return {
       ok: false,
-      erro: escopo ? "sem_conversa_direct" : canal ? "sem_conversa_social" : "sem_conversa_whatsapp",
+      erro: naConexao
+        ? "sem_conversa_na_conexao"
+        : escopo
+          ? "sem_conversa_direct"
+          : canal
+            ? "sem_conversa_social"
+            : "sem_conversa_whatsapp",
       detalhe: base,
     };
   }
+  if (conexao && canal) base = { ...base, canal };
   // Teto do canal (o Direct do Instagram é menor que o do WhatsApp), medido no
   // texto que SAI: com as opções numeradas quando o canal não as desenha.
   const tetoDoCanal = tetoDoTextoEmBytes(conversa.provider);
@@ -196,7 +231,16 @@ async function enviar(
     );
     if ((msg as { status?: string }).status === "failed")
       return { ok: false, erro: "envio_falhou", detalhe: base };
-    return { ok: true, detalhe: { ...base, message_id: (msg as { id?: string }).id ?? null } };
+    return {
+      ok: true,
+      detalhe: { ...base, message_id: (msg as { id?: string }).id ?? null },
+      // A conexão escolhida aqui vira a dos blocos seguintes (e da espera).
+      ...(conexao
+        ? {
+            vars: varsDaConversaAtiva({ conversationId: conversa.id, channelSessionId: conexao, canal }),
+          }
+        : {}),
+    };
   } catch (err) {
     if (err instanceof ApiError) {
       if (err.code === "janela_fechada")

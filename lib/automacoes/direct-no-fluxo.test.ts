@@ -28,7 +28,12 @@ import { acordarAutomacaoEmEspera, ultimaRespostaDaAutomacao } from "@/lib/relog
 
 import { criarBancoEmMemoria, type Linha } from "../../tests/helpers/banco-em-memoria";
 import { estadoDaEspera, pisoDaRespostaNoDirect } from "./conversa";
-import { canalSocialDaConexao, escopoDaConversaSocial, escopoDoDirect } from "./conversa-do-direct";
+import {
+  canalSocialDaConexao,
+  escopoDaConversaSocial,
+  escopoDoDirect,
+  recuaOPisoDoComentario,
+} from "./conversa-do-direct";
 import { devolverTurnoAoAgente } from "./devolver-turno";
 import { executarConversa } from "./efeitos/conversa";
 import type { Contexto } from "./efeitos/index";
@@ -658,7 +663,8 @@ describe("mensagem recebida numa conversa de rede social", () => {
       id: CONV_FB,
       channel_session_id: OUTRA_SESSAO,
       provider_conversation_id: "psid-1",
-      channel_sessions: { provider: CANAL_DO_DIRECT, meta_social_platform: "messenger" },
+      // O canal social oficial: é ele que diz a rede (Messenger) numa coluna.
+      channel_sessions: { provider: CHANNEL_PROVIDER_META_SOCIAL, meta_social_platform: "messenger" },
       ...over,
     });
   const conversaWa = () =>
@@ -688,7 +694,7 @@ describe("mensagem recebida numa conversa de rede social", () => {
   it("disparo: a leitura do canal da conversa é da organização e devolve null no WhatsApp", async () => {
     const b = bancoBase({ conversations: [conversaFb(), conversaWa()] });
     const db = createSupabaseGatilhosDb(admin(b));
-    expect(await db.canalSocialDaConversa!(ORG, CONV_FB)).not.toBeNull();
+    expect(await db.canalSocialDaConversa!(ORG, CONV_FB)).toBe("messenger");
     expect(await db.canalSocialDaConversa!(ORG, "conv-wa")).toBeNull();
     expect(await db.canalSocialDaConversa!(OUTRA_ORG, CONV_FB)).toBeNull();
   });
@@ -722,13 +728,171 @@ describe("mensagem recebida numa conversa de rede social", () => {
     ]);
   });
 
-  it("a mensagem que DISPAROU a automação (antes da espera) não acorda: sem o piso recuado do comentário", async () => {
+  it("sem o piso recuado do comentário: nem a mensagem que DISPAROU nem uma segunda antes da espera acordam", async () => {
+    // Linha do tempo: a mensagem disparadora chega (-70), a execução começa
+    // (-60), o contato manda uma segunda mensagem (-50) e a espera estaciona (0).
     const b = bancoBase({
       conversations: [conversaFb()],
       followup_enrollments: [execucao({ vars: VARS_FB, started_at: seg(-60) })],
     });
     const enr = b.tabelas.followup_enrollments![0]! as unknown as Parameters<typeof acordarAutomacaoEmEspera>[1];
+    expect(await acordarAutomacaoEmEspera(admin(b), enr, { sent_at: seg(-70), created_at: seg(-70) }, AGORA)).toBe(false);
+    // O efeito real de não recuar: a segunda mensagem, chegada entre o disparo
+    // e a espera, não conta como resposta (como no WhatsApp).
     expect(await acordarAutomacaoEmEspera(admin(b), enr, { sent_at: seg(-50), created_at: seg(-50) }, AGORA)).toBe(false);
+    expect(await acordarAutomacaoEmEspera(admin(b), enr, { sent_at: seg(20), created_at: seg(20) }, AGORA)).toBe(true);
+  });
+});
+
+// ─── Mensagem recebida no Direct do Instagram (sem comentário) ─────────────
+describe("mensagem recebida no Direct do Instagram", () => {
+  const CONV_DM = "conv-dm";
+  const VARS_DM = {
+    gatilho: {
+      tipo: "message_received",
+      message_id: "msg-in",
+      conversation_id: CONV_DM,
+      channel_session_id: SESSAO_IG,
+      canal_social: "direct",
+      texto: "oi",
+    },
+  };
+  const contextoDm = (b: ReturnType<typeof bancoBase>, chave = "msg:1"): Contexto => ({
+    admin: admin(b),
+    org: ORG,
+    pointerId: "ptr-1",
+    enrollmentId: ENR,
+    chave,
+    contatoId: CONTATO,
+    fatos: null,
+    vars: VARS_DM,
+    handler: { requestId: "automacao:ptr-1:req" } as Contexto["handler"],
+    agora: AGORA,
+  });
+  const mensagem = (body: string) =>
+    ({ id: "msg", type: "message", label: "Oi", position: { x: 0, y: 0 }, config: { body } }) as unknown as Extract<
+      FlowNode,
+      { type: "message" }
+    >;
+
+  beforeEach(() => {
+    enviarMock.mockReset();
+    enviarMock.mockResolvedValue({ id: "msg-dm", status: "sent" });
+  });
+
+  it("envia pela conversa do gatilho, não pelo WhatsApp do contato, e o histórico diz Direct", async () => {
+    const b = bancoBase({
+      conversations: [
+        conversaIg({ id: "conv-wa", channel_session_id: "sessao-wa", provider_conversation_id: null, last_inbound_at: seg(60), channel_sessions: { provider: CANAL_DE_WHATSAPP } }),
+        conversaIg({ id: CONV_DM, channel_sessions: { provider: CANAL_DO_DIRECT, meta_social_platform: "instagram" } }),
+      ],
+    });
+    const r = await executarConversa(contextoDm(b), mensagem("Olá!"), { tipo: "enviar", envio: "mensagem" }, "msg", async () => ({ ok: true, detalhe: {} }));
+    expect(r.desfecho.ok).toBe(true);
+    expect((enviarMock.mock.calls[0]![2] as { conversation_id: string }).conversation_id).toBe(CONV_DM);
+    expect(r.detalhes?.[0]).toMatchObject({ canal: "direct", ok: true });
+  });
+
+  it("o teto do Direct vale com o erro do Instagram (texto_longo_instagram)", async () => {
+    const b = bancoBase({ conversations: [conversaIg({ id: CONV_DM })] });
+    const r = await executarConversa(contextoDm(b), mensagem("a".repeat(1001)), { tipo: "enviar", envio: "mensagem" }, "msg", async () => ({ ok: true, detalhe: {} }));
+    expect(r.desfecho).toEqual({ ok: false, erro: "texto_longo_instagram" });
+    expect(enviarMock).not.toHaveBeenCalled();
+  });
+
+  it("a resposta registrada aparece no histórico como \"Respondeu no Direct\"", async () => {
+    const b = bancoBase({ conversations: [conversaIg({ id: CONV_DM })] });
+    const espera = { id: "espera", type: "wait", label: "Aguardar", position: { x: 0, y: 0 }, config: { mode: "until_reply", timeout_ms: 86_400_000 } } as unknown as Extract<FlowNode, { type: "wait" }>;
+    const r = await executarConversa(
+      contextoDm(b, "espera:1"),
+      espera,
+      { tipo: "registrar_resposta", valor: "quero" } as Parameters<typeof executarConversa>[2],
+      "espera",
+      async () => ({ ok: true, detalhe: {} }),
+    );
+    expect(r.detalhes?.[0]).toMatchObject({ envio: "resposta", canal: "direct", ok: true });
+    const detalhe = descreveEvento(
+      { id: "x", node_id: null, event_type: "effect_done", payload: { detalhes: r.detalhes }, created_at: AGORA.toISOString() },
+      {},
+      "pt-BR",
+      "automacao",
+    ).detalhe;
+    expect(detalhe).toBe("Respondeu no Direct");
+  });
+});
+
+// ─── Conversa ativa (campo "Conexão" de Mensagem e Pergunta) ───────────────
+// Depois que um bloco com a conexão escolhida enviou, a espera da resposta
+// conta só o que chega NESSA conversa — também na execução do comentário.
+describe("a espera conta só a resposta da conversa ativa", () => {
+  const CONV_ATIVA = "conv-ativa";
+  const VARS_ATIVA = {
+    ...VARS,
+    conversa_ativa: { conversation_id: CONV_ATIVA, channel_session_id: OUTRA_SESSAO, canal: null },
+  };
+  const conversaAtiva = (over: Linha = {}) =>
+    conversaIg({
+      id: CONV_ATIVA,
+      channel_session_id: OUTRA_SESSAO,
+      provider_conversation_id: null,
+      channel_sessions: { provider: CANAL_DE_WHATSAPP },
+      ...over,
+    });
+
+  it("escopo: a conversa ativa vence o comentário e o gatilho; o piso do comentário não recua", () => {
+    expect(escopoDaConversaSocial(VARS_ATIVA)).toEqual({ conversationId: CONV_ATIVA, conexao: OUTRA_SESSAO });
+    expect(recuaOPisoDoComentario(VARS_ATIVA)).toBe(false);
+    expect(recuaOPisoDoComentario(VARS)).toBe(true);
+    // Marca torta não vira escopo: segue a regra de antes.
+    expect(escopoDaConversaSocial({ ...VARS, conversa_ativa: { conversation_id: CONV_ATIVA } })).toEqual({
+      channelSessionId: SESSAO_IG,
+      autorId: IGSID,
+    });
+  });
+
+  it("relógio e motor: só o inbound da conversa ativa conta; o do Direct do comentário, não", async () => {
+    const b = bancoBase({
+      conversations: [conversaIg(), conversaAtiva()],
+      messages: [
+        inbound({ id: "ig", conversation_id: "conv-ig", body: "pelo direct", sent_at: seg(40), created_at: seg(40) }),
+      ],
+      followup_enrollments: [execucao({ vars: VARS_ATIVA })],
+    });
+    const escopo = escopoDaConversaSocial(VARS_ATIVA);
+    expect(await ultimaRespostaDaAutomacao(admin(b), ORG, [CONTATO], escopo)).toBeNull();
+    b.tabelas.messages!.push(
+      inbound({ id: "wa", conversation_id: CONV_ATIVA, channel_session_id: OUTRA_SESSAO, body: "pelo whatsapp", sent_at: seg(50), created_at: seg(50) }),
+    );
+    expect(await ultimaRespostaDaAutomacao(admin(b), ORG, [CONTATO], escopo)).toMatchObject({ sent_at: seg(50) });
+    const db = createSupabaseAdminClient(admin(b));
+    expect(await db.loadRespostasDaEspera!(ORG, CONTATO, ESTACIONOU, escopo)).toEqual([
+      { texto: "pelo whatsapp", replyId: null },
+    ]);
+  });
+
+  it("a conversa ativa é revalidada: de outro contato, de outra organização, de grupo ou em outra conexão não serve", async () => {
+    const escopo = escopoDaConversaSocial(VARS_ATIVA);
+    for (const over of [
+      { contact_id: "outro" },
+      { organization_id: OUTRA_ORG },
+      { is_group: true },
+      { channel_session_id: SESSAO_IG },
+    ]) {
+      const b = bancoBase({
+        conversations: [conversaAtiva(over)],
+        messages: [inbound({ id: "wa", conversation_id: CONV_ATIVA, sent_at: seg(50), created_at: seg(50) })],
+      });
+      expect(await ultimaRespostaDaAutomacao(admin(b), ORG, [CONTATO], escopo), JSON.stringify(over)).toBeNull();
+    }
+  });
+
+  it("acordar: na execução do comentário com conversa ativa, o inbound de antes da espera não acorda", async () => {
+    const b = bancoBase({
+      conversations: [conversaAtiva()],
+      followup_enrollments: [execucao({ vars: VARS_ATIVA, started_at: seg(-60) })],
+    });
+    const enr = b.tabelas.followup_enrollments![0]! as unknown as Parameters<typeof acordarAutomacaoEmEspera>[1];
+    expect(await acordarAutomacaoEmEspera(admin(b), enr, { sent_at: seg(-20), created_at: seg(-20) }, AGORA)).toBe(false);
     expect(await acordarAutomacaoEmEspera(admin(b), enr, { sent_at: seg(20), created_at: seg(20) }, AGORA)).toBe(true);
   });
 });

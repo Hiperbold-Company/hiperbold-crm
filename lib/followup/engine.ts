@@ -92,8 +92,8 @@ import { devolverTurnoAoAgente, devolverTurnoDoInicio } from "@/lib/automacoes/d
 import type { FatosDaAutomacao } from "@/lib/automacoes/fatos";
 import {
   escopoDaConversaSocial,
-  escopoDoDirect,
   idsDasConversasDoDirect,
+  recuaOPisoDoComentario,
   type EscopoDaConversaSocial,
 } from "@/lib/automacoes/conversa-do-direct";
 import { carregarFatosDaAutomacao, type OpcoesDosFatos } from "@/lib/automacoes/carregar-fatos";
@@ -1457,9 +1457,11 @@ async function processarUmPasso(
       // privada sai pelo cron do canal, e a pessoa responde em segundos). Na
       // primeira leitura da estadia o piso recua até o início da execução (ou a
       // última resposta já consumida); na nova tentativa volta ao de sempre.
-      // Só no comentário: na mensagem recebida, recuar leria a própria mensagem
-      // que disparou a automação como resposta.
-      if (escopoDoDirect(enrollment.vars) && espera.novasTentativas === 0) {
+      // Só no comentário: na mensagem recebida, recuar até o início contaria
+      // como resposta uma segunda mensagem chegada entre o disparo e a espera
+      // — como no WhatsApp, ela não conta. Nem depois que um bloco escolheu a
+      // conexão (`recuaOPisoDoComentario`): a conversa ativa é outra.
+      if (recuaOPisoDoComentario(enrollment.vars) && espera.novasTentativas === 0) {
         const doDirect = pisoDaRespostaNoDirect(events, node.id, enrollment.started_at);
         if (doDirect && Date.parse(doDirect) < Date.parse(desde)) desde = doDirect;
       }

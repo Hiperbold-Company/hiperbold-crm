@@ -19,6 +19,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { estimateNodeSize, layoutFlowGraph, LAYOUT_NODE_WIDTH } from "@/lib/followup/auto-layout";
+import { blocosDaConexao, substituirConexao } from "@/lib/automacoes/substituir-conexao";
 import { semAresta, semArestasDoNo, semNo } from "@/lib/followup/excluir-do-grafo";
 import {
   toReactFlow,
@@ -254,6 +255,19 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
     [surface, nodes],
   );
 
+  // "Substituir em todos os blocos" do campo Conexão: troca no rascunho a
+  // conexão de todos os blocos de conversa (e dos gatilhos) que usam a atual.
+  const substituicaoDeConexao = useMemo(
+    () =>
+      surface === "automacao"
+        ? {
+            contar: (atual: string | null) => blocosDaConexao(nodes, atual),
+            aplicar: (atual: string | null, nova: string) => setNodes((nds) => substituirConexao(nds, atual, nova)),
+          }
+        : undefined,
+    [surface, nodes, setNodes],
+  );
+
   const onConnect = useCallback(
     (connection: Connection) => {
       // A bolinha de onde o usuário arrastou É a saída escolhida: o React Flow
@@ -485,6 +499,7 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
                 onSettingsChange={setSettings}
                 respostasAnteriores={respostasDoSelecionado}
                 comecaPorComentario={comecaPorComentario}
+                {...(substituicaoDeConexao ? { substituirConexao: substituicaoDeConexao } : {})}
               />
             </div>
           </aside>

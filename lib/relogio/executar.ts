@@ -7,8 +7,8 @@ import {
 } from "@/lib/automacoes/conversa";
 import {
   escopoDaConversaSocial,
-  escopoDoDirect,
   idsDasConversasDoDirect,
+  recuaOPisoDoComentario,
   type EscopoDaConversaSocial,
 } from "@/lib/automacoes/conversa-do-direct";
 import { criarExecutorDeEfeitos } from "@/lib/automacoes/efeitos";
@@ -260,7 +260,7 @@ export async function acordarAutomacaoEmEspera(
   if (!estacionou) return false;
   // Direct: o "quero" que chegou antes de a espera estacionar também acorda (o
   // mesmo piso do motor, `pisoDaRespostaNoDirect`), só na primeira leitura.
-  if (escopoDoDirect(enrollment.vars) && !inboundDentroDaEspera(inbound, estacionou)) {
+  if (recuaOPisoDoComentario(enrollment.vars) && !inboundDentroDaEspera(inbound, estacionou)) {
     const doDirect = await pisoDoDirectDaExecucao(admin, enrollment);
     if (doDirect && Date.parse(doDirect) < Date.parse(estacionou)) estacionou = doDirect;
   }

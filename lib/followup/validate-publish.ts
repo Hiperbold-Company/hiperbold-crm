@@ -121,6 +121,9 @@ export const PUBLISH_ERROR_CODES = [
   'http_corpo_invalido',
   // Migration 1007: a chave citada só pode ir para os endereços permitidos dela.
   'http_host_nao_permitido',
+  // Campo "Conexão" de Mensagem/Pergunta: a conexão escolhida não existe nesta
+  // organização (apagada, de outra conta) ou não envia mensagem.
+  'conexao_inexistente',
 ] as const;
 export type PublishErrorCode = (typeof PUBLISH_ERROR_CODES)[number];
 
@@ -209,6 +212,12 @@ export interface ContextoDoPublish {
     segredosExistentes?: ReadonlySet<string>;
     /** Nome e endereços permitidos dessas chaves (migration 1007). Ausente = não confere o host. */
     destinosDosSegredos?: ReadonlyMap<string, { nome: string; hosts_permitidos: string[] | null }>;
+    /**
+     * As conexões DESTA organização que transportam mensagem (não arquivadas).
+     * É contra elas que a "Conexão" escolhida em Mensagem/Pergunta é conferida.
+     * Ausente = não confere.
+     */
+    conexoesDeMensagem?: ReadonlySet<string>;
   };
   /**
    * O gatilho que vai armar este fluxo. Só os AVISOS o leem — nenhuma recusa
@@ -428,6 +437,29 @@ export const GATILHOS_MISTURADOS_NO_INSTAGRAM =
 
 export const MENSAGEM_ANTES_DA_RESPOSTA_NO_INSTAGRAM =
   "No Instagram, a conversa só abre quando a pessoa responde. Ponha um 'Aguardar o contato responder' antes.";
+
+/** Chave do dicionário (a rota traduz): a frase não cita id, que a pessoa não lê. */
+export const MENSAGEM_CONEXAO_INEXISTENTE =
+  'A conexão escolhida neste bloco não existe mais nesta conta ou não envia mensagens. Escolha outra em "Conexão".';
+
+/**
+ * Campo "Conexão" de Mensagem e Pergunta: a conexão escolhida tem de existir
+ * nesta organização e transportar mensagem — o motor envia com a service role, e
+ * uma conexão de outra conta (fluxo importado) nunca acharia conversa.
+ */
+function validarConexoesDosBlocos(
+  graph: FlowGraph,
+  errors: PublishValidationError[],
+  conexoesDeMensagem?: ReadonlySet<string>,
+): void {
+  if (!conexoesDeMensagem) return;
+  for (const n of [...graph.nodes].sort(byId)) {
+    if (n.type !== 'message' && n.type !== 'question') continue;
+    const id = n.config.channel_session_id;
+    if (id === undefined || conexoesDeMensagem.has(id)) continue;
+    errors.push({ node_id: n.id, code: 'conexao_inexistente', message: MENSAGEM_CONEXAO_INEXISTENTE });
+  }
+}
 
 /**
  * Automação que começa por comentário: a conversa do Direct só existe depois
@@ -749,6 +781,7 @@ function validarSuperficie(
   if (surface === 'automacao') {
     validarBlocosDoInstagram(graph, errors);
     validarConversaNoDirect(graph, errors);
+    validarConexoesDosBlocos(graph, errors, automacao?.conexoesDeMensagem);
     validarRequisicoesHttp(graph, errors, automacao?.segredosExistentes, automacao?.destinosDosSegredos);
   }
   // Os gatilhos de uma AUTOMAÇÃO moram no nó Início (vários por fluxo); nos

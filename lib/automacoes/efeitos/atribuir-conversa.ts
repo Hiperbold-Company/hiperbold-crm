@@ -10,8 +10,10 @@
  * auditoria, evento do barramento (a notificação do destino) e a linha na
  * linha do tempo da conversa.
  *
- * Qual conversa: a mais recente do contato (e dos gêmeos de telefone) NO CANAL
- * DO GATILHO (`vars.gatilho.channel_session_id`); sem conversa ali, a mais
+ * Qual conversa: a CONVERSA ATIVA da execução (`vars.conversa_ativa`, gravada
+ * quando um bloco Mensagem/Pergunta enviou por uma conexão escolhida), desde que
+ * ainda passe pelos filtros abaixo; senão, a mais recente do contato (e dos
+ * gêmeos de telefone) NO CANAL DO GATILHO (`vars.gatilho.channel_session_id`); sem conversa ali, a mais
  * recente do contato. Só entram conversas NÃO fechadas (`closed`, `archived` e
  * `resolved` ficam de fora: atribuir reabriria o atendimento). Sem nenhuma, erro
  * `sem_conversa` — a saída "Erro" do bloco, nunca uma exceção.
@@ -35,6 +37,7 @@
  */
 import { audit } from "@/lib/audit";
 import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
+import { conversaAtivaDasVars } from "@/lib/automacoes/conversa-do-direct";
 import { registrarTrocaDeComando } from "@/lib/inbox/atividade-de-comando";
 import { comandoDaConversa } from "@/lib/inbox/comando-da-conversa";
 import {
@@ -128,9 +131,29 @@ async function conversasAAtribuir(c: Contexto, todas: boolean): Promise<Escolha>
   if (linhasDeContato.some((l) => l.is_personal === true)) return vazia(true);
   const travas = new Map(linhasDeContato.map((l) => [l.id, { force_human: l.force_human, is_blocked: l.is_blocked }]));
 
+  const colunas = "id, contact_id, channel_session_id, assigned_to_user_id, status, is_group, bot_silenced_until, last_message_at";
+  const vars = c.vars ?? c.fatos?.vars;
+  const ativa = conversaAtivaDasVars(vars);
+  // A conversa ativa só vale se passar pelos MESMOS filtros da escolha comum
+  // (organização, contato ou gêmeo, não grupo, não encerrada); senão cai na regra antiga.
+  let principalAtiva: Alvo | null = null;
+  if (ativa) {
+    const { data: dadosAtiva, error: erroAtiva } = await c.admin
+      .from("conversations")
+      .select(colunas)
+      .eq("organization_id", c.org)
+      .eq("id", ativa.conversationId)
+      .in("contact_id", [...ids])
+      .eq("is_group", false)
+      .not("status", "in", STATUS_FECHADOS)
+      .maybeSingle();
+    if (erroAtiva) throw new Error("conversa_indeterminada");
+    principalAtiva = (dadosAtiva as Alvo | null) ?? null;
+  }
+
   const { data, error } = await c.admin
     .from("conversations")
-    .select("id, contact_id, channel_session_id, assigned_to_user_id, status, is_group, bot_silenced_until, last_message_at")
+    .select(colunas)
     .eq("organization_id", c.org)
     .in("contact_id", [...ids])
     .eq("is_group", false)
@@ -141,9 +164,9 @@ async function conversasAAtribuir(c: Contexto, todas: boolean): Promise<Escolha>
   if (error) throw new Error("conversa_indeterminada");
   const todasAsLinhas = (data ?? []) as Alvo[];
   const linhas = todasAsLinhas.slice(0, MAX_CONVERSAS);
-  const canal = canalDoGatilho(c.vars ?? c.fatos?.vars);
+  const canal = ativa?.channelSessionId ?? canalDoGatilho(vars);
   const doCanal = canal ? linhas.find((l) => l.channel_session_id === canal) : undefined;
-  const principal = doCanal ?? linhas[0];
+  const principal = principalAtiva ?? doCanal ?? linhas[0];
   if (!principal) return { conversas: [], pessoal: false, truncado: false, travas };
   if (!todas) return { conversas: [principal], pessoal: false, truncado: false, travas };
   return {

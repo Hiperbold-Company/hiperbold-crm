@@ -301,6 +301,7 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   sem_conversa_whatsapp: "contato sem conversa de WhatsApp",
   sem_conversa_direct: "a conversa do Direct ainda não abriu: a pessoa precisa responder primeiro",
   sem_conversa_social: "a conversa do Messenger ou do Direct que iniciou a automação não está mais disponível",
+  sem_conversa_na_conexao: "o contato não tem conversa na conexão escolhida no bloco",
   contato_bloqueado: "o contato pediu para não receber mensagens",
   envio_falhou: "o envio da mensagem falhou",
   organizacao_bloqueada: "a conta não pode enviar nem mudar o CRM agora",

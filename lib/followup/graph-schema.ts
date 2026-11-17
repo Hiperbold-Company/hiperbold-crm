@@ -837,8 +837,16 @@ export const invalidReplySchema = z.strictObject({
  * resposta, pelo relógio) e sai por um caminho por opção, "Sem resposta",
  * "Resposta inválida" ou "Erro"; sem opções, sai por "Concluído" ou "Erro".
  */
+/**
+ * "Conexão" dos blocos Mensagem e Pergunta (régua DataCrazy): por qual conexão
+ * da organização o bloco envia. Ausente = "a conexão dos blocos anteriores"
+ * (`vars.conversa_ativa`), senão a regra de sempre (`conversaDoEnvio`).
+ */
+const conexaoDoBloco = z.string().uuid();
+
 export const messageConfigSchema = z
   .strictObject({
+    channel_session_id: conexaoDoBloco.optional(),
     body: tpl(4000).min(1),
     options: messageOptionsSchema.optional(),
     /** Quanto esperar a escolha. Obrigatório com opções. */
@@ -880,6 +888,7 @@ export type QuestionValidation = (typeof QUESTION_VALIDATIONS)[number];
  * "Resposta inválida" (tentativas esgotadas), "Sem resposta" e "Erro".
  */
 export const questionConfigSchema = z.strictObject({
+  channel_session_id: conexaoDoBloco.optional(),
   question: tpl(1000).min(1),
   save_to: destinoDaResposta,
   validation: z.enum(QUESTION_VALIDATIONS),
