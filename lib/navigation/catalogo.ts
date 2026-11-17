@@ -281,7 +281,7 @@ export const NAV_CATALOG = [
     //
     // Em 21/10/2026 o dono do produto trocou o rótulo para "Pipeline".
     href: "/app/kanban",
-    label: "Funil",
+    label: "Pipeline",
     description: "Seus funis de venda — clique em um para abrir o quadro de clientes.",
     icon: "Kanban",
     group: "crm",

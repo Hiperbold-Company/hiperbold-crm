@@ -28982,7 +28982,6 @@ export const DICIONARIO: Traducoes = {
   "As propostas estão desligadas para esta organização. Para editar os modelos, ligue as propostas em Configurações › Regras das propostas e salve.": { es: "Las propuestas están desactivadas para esta organización. Para editar los modelos, activa las propuestas en Configuración › Reglas de las propuestas y guarda." },
   "Ir para Configurações › Regras das propostas": { es: "Ir a Configuración › Reglas de las propuestas" },
   "Seu agente ainda não aprendeu nada neste período. Ele aprende de três jeitos: você publica uma regra na Memória da IA, aprova uma sugestão de melhoria na aba Propostas do agente, ou instala uma habilidade em Ações da IA.": { es: "Tu agente todavía no aprendió nada en este período. Puede aprender de tres formas: cuando publicas una regla en la Memoria de la IA, cuando apruebas una sugerencia de mejora en la pestaña Propuestas del agente o cuando instalas una habilidad en Acciones de la IA." },
-  "Crie o primeiro na tela Funil": { es: "Crea el primero en la pantalla Embudo" },
   // Tela de Conexões em cartões (17/11/2026).
   "Chamadas de voz pelo WhatsApp.": { es: "Llamadas de voz por WhatsApp." },
   "Conectar com credenciais (avançado)": { es: "Conectar con credenciales (avanzado)" },

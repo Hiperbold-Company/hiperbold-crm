@@ -8,7 +8,6 @@ Doze itens do menu e das configurações mudaram de nome para ficarem mais claro
 
 | Nome antigo | Nome novo |
 |---|---|
-| Pipeline | Funil |
 | Propostas (Configurações) | Regras das propostas |
 | Propostas (IA) | Sugestões da IA |
 | Automações (Configurações) | Limite da IA nas automações |
