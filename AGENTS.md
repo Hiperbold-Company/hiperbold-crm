@@ -24,6 +24,7 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript 6 estrito · Tailwi
 shadcn/ui (`new-york`) · Supabase (Postgres + Auth + Realtime + Storage) · Zod 4 · Vitest 4 ·
 Playwright 1 · Sentry 11 · WAHA 2026.7.2 (engine NOWEB) · Upstash Redis · Vercel AI Gateway
 (`@ai-sdk/anthropic|openai|google`).
+Ícones: só Phosphor pelo barrel `@/lib/ui/icons`; componente de `shadcn add` tem o import de ícone trocado pelo barrel antes do commit.
 
 > As majors acima são verificadas contra o `package.json` por
 > [`tests/unit/agents-md-versoes.test.ts`](tests/unit/agents-md-versoes.test.ts) — declare **só a

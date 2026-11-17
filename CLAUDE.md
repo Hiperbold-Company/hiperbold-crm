@@ -21,6 +21,7 @@ DeskcommCRM é um sistema operacional de vendas open source com agentes de IA na
 ## Stack canônica
 
 - **Frontend:** Next.js 16 App Router (Turbopack) + React 19 + TypeScript 6 estrito + Tailwind 4 (config em CSS — ver abaixo) + shadcn/ui (style: `new-york`, neutral)
+- **Ícones:** só Phosphor, sempre pelo barrel `@/lib/ui/icons` (nunca `@phosphor-icons/react` direto nem `lucide-react`, que saiu do projeto). Componente trazido por `shadcn add` chega com o import de ícone da CLI: troque pelo barrel antes de commitar e ponha `aria-hidden` no ícone decorativo (o Phosphor não põe sozinho)
 - **Backend:** Next.js Route Handlers (mesmo repo); workers via `event_log` table + cron
 - **DB:** Supabase (Postgres). RLS em toda tabela tenant-aware. Extensions: `uuid-ossp`, `pgcrypto`, `vector`
 - **Auth:** Supabase Auth via `@supabase/ssr`. Cookie SameSite=Strict, HttpOnly, Secure
