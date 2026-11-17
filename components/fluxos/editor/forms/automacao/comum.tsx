@@ -420,7 +420,7 @@ export function AjudaDeVariaveis({
               type="button"
               variant="outline"
               size="sm"
-              className="h-6 px-1.5 font-mono text-[11px]"
+              className="h-6 px-1.5 font-mono text-2xs"
               title={r.origem}
               data-testid={`inserir-variavel-${r.variavel}`}
               onClick={() => onInserir?.(r.variavel)}

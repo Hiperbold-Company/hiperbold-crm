@@ -18,7 +18,7 @@ export function TenantBadge({ name, slug, size = "md" }: Props) {
           variant="outline"
           className={cn(
             "inline-flex cursor-default items-center gap-1 font-normal",
-            size === "sm" && "h-4 px-1.5 text-[10px]",
+            size === "sm" && "h-4 px-1.5 text-2xs",
             size === "md" && "h-5 px-2 text-xs",
           )}
         >

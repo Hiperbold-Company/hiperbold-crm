@@ -45,7 +45,7 @@ export function ImpersonateBanner({ impersonating, ended = false }: {
       toast.error(error instanceof Error ? error.message : "Falha de conexão.");
     }
   }
-  return <div role="alert" className="sticky top-0 z-50 flex items-center justify-between gap-4 border-b border-amber-300 bg-amber-100 px-4 py-2 text-sm text-amber-950">
+  return <div role="alert" className="sticky top-0 z-50 flex items-center justify-between gap-4 border-b border-warning/30 bg-warning-bg px-4 py-2 text-sm text-warning-fg">
     <span>{ended ? t("Acompanhamento encerrado") : t("Suporte à organização")} <strong>{impersonating.tenantName}</strong>
       {!ended && (impersonating.accessMode === "support_readonly" ? ` — ${t("Somente leitura")}` : ` — ${t("Edição permitida")}`)}</span>
     <Button size="sm" variant="outline" onClick={handleEnd} disabled={busy}>{t("Sair do acompanhamento")}</Button>

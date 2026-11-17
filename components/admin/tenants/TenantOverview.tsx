@@ -69,12 +69,12 @@ function StatCard({ label, value, warning }: { label: string; value: number; war
   return (
     <div className={[
       "rounded-lg border p-4 flex flex-col gap-1",
-      warning && value > 0 ? "border-amber-300 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/20" : "bg-card",
+      warning && value > 0 ? "border-warning/30 bg-warning-bg" : "bg-card",
     ].join(" ")}>
       <span className="text-2xl font-bold tabular-nums">{value.toLocaleString("pt-BR")}</span>
       <span className="text-xs text-muted-foreground leading-tight">{label}</span>
       {warning && value > 0 && (
-        <Warning size={14} weight="fill" className="text-amber-500 mt-0.5" aria-label={t("Atenção")} />
+        <Warning size={14} weight="fill" className="text-warning mt-0.5" aria-label={t("Atenção")} />
       )}
     </div>
   );
@@ -184,11 +184,11 @@ export function TenantOverview({ organization, counts, integrations, plano, cobr
               label={t("Solicitações LGPD pendentes")}
               value={
                 <span className="flex items-center gap-1.5">
-                  <span className={counts.lgpd_requests_pending > 0 ? "text-amber-600 font-semibold" : ""}>
+                  <span className={counts.lgpd_requests_pending > 0 ? "text-warning-fg font-semibold" : ""}>
                     {counts.lgpd_requests_pending}
                   </span>
                   {counts.lgpd_requests_pending > 0 && (
-                    <Warning size={14} weight="fill" className="text-amber-500" aria-label={t("Pendências LGPD")} />
+                    <Warning size={14} weight="fill" className="text-warning" aria-label={t("Pendências LGPD")} />
                   )}
                 </span>
               }

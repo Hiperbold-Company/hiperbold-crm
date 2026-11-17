@@ -112,7 +112,7 @@ export function FormularioDeDestinosInternos({ listaInicial, vemDoPiso }: Props)
           </p>
         ) : null}
 
-        <p className="rounded-md border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm dark:border-amber-500/30 dark:bg-amber-950/20">
+        <p className="rounded-md border border-warning/30 bg-warning-bg px-4 py-3 text-sm">
           {t(
             "Cada endereço aqui é uma porta que este servidor passa a poder abrir para dentro da própria rede, levando junto a chave da instalação. Declare o endereço do serviço que você mesmo colocou lá — nunca uma faixa inteira por conveniência.",
           )}

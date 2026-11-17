@@ -69,7 +69,7 @@ export function AdminThreadClient({ conversationId }: Props) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="truncate text-sm font-semibold">{contactName}</span>
-              <Badge variant={statusVariant} className="h-5 px-2 text-[10px] capitalize">
+              <Badge variant={statusVariant} className="h-5 px-2 text-2xs capitalize">
                 {conversation.status}
               </Badge>
             </div>

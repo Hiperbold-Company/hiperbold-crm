@@ -630,7 +630,7 @@ function BannerDoBloqueio({
 
   if (bloqueio.emCarencia && bloqueio.carenciaAte) {
     return (
-      <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
+      <div className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm text-warning-fg">
         {t("O bloqueio do plano está em carência até")}{" "}
         <span className="font-medium">
           {new Date(bloqueio.carenciaAte).toLocaleDateString(tagDoIdioma)}
@@ -641,7 +641,7 @@ function BannerDoBloqueio({
   }
 
   return (
-    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
+    <div className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm text-warning-fg">
       {t("Nesta fase só o limite de Conexões bloqueia. Os demais itens apenas avisam.")}
     </div>
   );
@@ -841,7 +841,7 @@ function SecaoTokensDeIA({
         )}
 
         {carteira.saldoNegativo && (
-          <p className="text-xs text-amber-700 dark:text-amber-300">
+          <p className="text-xs text-warning-fg">
             {t("O consumo passou do contratado. Nesta fase a IA continua respondendo normalmente.")}
           </p>
         )}

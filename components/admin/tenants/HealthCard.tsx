@@ -27,15 +27,15 @@ export interface HealthCardProps {
 // ---------------------------------------------------------------------------
 
 const STATUS_BORDER: Record<HealthStatus, string> = {
-  ok: "border-emerald-500/60 dark:border-emerald-600/50",
-  warning: "border-amber-400/70 dark:border-amber-500/50",
-  critical: "border-red-500/70 dark:border-red-600/60",
+  ok: "border-success/30",
+  warning: "border-warning/30",
+  critical: "border-error/30",
 };
 
 const STATUS_BADGE_BG: Record<HealthStatus, string> = {
-  ok: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
-  warning: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
-  critical: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+  ok: "bg-success-bg text-success-fg",
+  warning: "bg-warning-bg text-warning-fg",
+  critical: "bg-error-bg text-error-fg",
 };
 
 const STATUS_LABEL: Record<HealthStatus, string> = {
@@ -45,9 +45,9 @@ const STATUS_LABEL: Record<HealthStatus, string> = {
 };
 
 const STATUS_DOT: Record<HealthStatus, string> = {
-  ok: "bg-emerald-500",
-  warning: "bg-amber-400",
-  critical: "bg-red-500",
+  ok: "bg-success",
+  warning: "bg-warning",
+  critical: "bg-error",
 };
 
 // ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ export function HealthCard({
 
       {/* Last updated */}
       {lastUpdated && (
-        <p className="text-[11px] text-muted-foreground mt-auto">
+        <p className="text-2xs text-muted-foreground mt-auto">
           {lastUpdated}
         </p>
       )}

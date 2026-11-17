@@ -41,10 +41,10 @@ const ROTULO_DA_SITUACAO: Record<Situacao, string> = {
 };
 
 const ESTILO_DA_SITUACAO: Record<Exclude<Situacao, "todas">, string> = {
-  entregue: "border-emerald-500/40 bg-emerald-500/10",
+  entregue: "border-success/30 bg-success-bg",
   falha: "border-destructive/40 bg-destructive/10",
-  aguardando: "border-sky-500/40 bg-sky-500/10",
-  nao_enviado: "border-amber-500/40 bg-amber-500/10",
+  aguardando: "border-info/30 bg-info-bg",
+  nao_enviado: "border-warning/30 bg-warning-bg",
 };
 
 const ROTULO_CURTO: Record<Exclude<Situacao, "todas">, string> = {

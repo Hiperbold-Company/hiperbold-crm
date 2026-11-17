@@ -231,7 +231,7 @@ export function MetaAdsClient({ contaPadrao }: Props) {
       {erro && (
         <div
           role="alert"
-          className="rounded-md border border-red-500/40 bg-red-500/10 p-4 text-sm"
+          className="rounded-md border border-error/30 bg-error-bg p-4 text-sm"
         >
           <p className="font-medium">{mensagemDeErro(erro)}</p>
           {erro instanceof ApiError && (

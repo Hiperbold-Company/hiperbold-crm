@@ -56,7 +56,7 @@ export default async function AcessoRevogadoPage() {
             `lib/auth/public-paths.ts`), então abrir o link daqui funciona. O que
             faltava era alguém dizer isso.
           */}
-          <p className="rounded-md border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm dark:border-amber-500/30 dark:bg-amber-950/20">
+          <p className="rounded-md border border-warning/30 bg-warning-bg px-4 py-3 text-sm">
             {traduzir(
               "Recebeu um convite novo? Abra o link que chegou no seu e-mail — ele funciona mesmo com esta tela aberta, e devolve o seu acesso.",
               idioma,

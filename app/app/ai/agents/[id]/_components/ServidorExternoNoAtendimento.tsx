@@ -326,7 +326,7 @@ export function ServidorExternoNoAtendimento({
           {orfas.length > 0 ? (
             <div
               data-testid="remotas-orfas"
-              className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400"
+              className="space-y-2 rounded-md border border-warning/30 bg-warning-bg p-3 text-xs text-warning-fg"
             >
               <p>
                 {t("O servidor não anuncia mais estas ferramentas marcadas")}:{" "}

@@ -298,7 +298,7 @@ export function JanelaDeConexao({
           </DialogDescription>
         </DialogHeader>
         {padrao && !padrao.conectada ? (
-          <p data-testid="aviso-conexao-desconectada" className="rounded-md border border-amber-500/40 bg-amber-50/60 p-2 text-xs dark:bg-amber-900/10">
+          <p data-testid="aviso-conexao-desconectada" className="rounded-md border border-warning/30 bg-warning-bg p-2 text-xs">
             {t("A conexão")} {t(padrao.nome)}{" "}
             {t("não está conectada agora: a mensagem só sai quando ela voltar.")}
           </p>

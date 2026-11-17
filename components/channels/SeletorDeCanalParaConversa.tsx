@@ -128,7 +128,7 @@ function OpcaoDeCanal({
         )}
         <span className="mt-1 flex flex-wrap items-center gap-1.5">
           {tipo && <span className="text-xs text-muted-foreground">{tipo}</span>}
-          <Badge variant={TOM[estado.tom] ?? "neutral"} className="text-[11px] font-normal">
+          <Badge variant={TOM[estado.tom] ?? "neutral"} className="text-2xs font-normal">
             {rotuloDoEstadoDoCanal(canal.status, t)}
           </Badge>
         </span>

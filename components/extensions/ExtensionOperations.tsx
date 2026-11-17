@@ -116,7 +116,7 @@ export function ExtensionOperations({
                   <p className="mt-1 text-xs break-all text-muted-foreground">
                     {operationSubject(operation, t)}
                   </p>
-                  <p className="mt-1 font-mono text-[11px] text-text-subtle">
+                  <p className="mt-1 font-mono text-2xs text-text-subtle">
                     {operation.id} · {new Date(operation.updated_at).toLocaleString(locale)}
                   </p>
                   {operation.error_message ? (

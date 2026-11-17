@@ -756,7 +756,7 @@ export function PainelDeMarcacao({
                 {t("Usar")}
               </Button>
             </div>
-            <p id="ajuda-do-encaixe" className="text-[11px] leading-4 text-text-subtle">
+            <p id="ajuda-do-encaixe" className="text-2xs leading-4 text-text-subtle">
               {t("Vale fora dos horários publicados. A agenda só recusa se o horário já estiver ocupado.")}
             </p>
           </div>
@@ -932,7 +932,7 @@ export function PainelDeMarcacao({
               data-testid={duracaoOk ? "ajuda-da-duracao" : "duracao-invalida"}
               role={duracaoOk ? undefined : "alert"}
               className={cn(
-                "mt-1 text-[11px] leading-4",
+                "mt-1 text-2xs leading-4",
                 duracaoOk ? "text-text-subtle" : "text-warning",
               )}
             >
@@ -943,7 +943,7 @@ export function PainelDeMarcacao({
           </div>
         ) : null}
         {fuso ? (
-          <p className="mt-4 border-t border-border pt-3 text-[11px] leading-4 text-text-subtle">
+          <p className="mt-4 border-t border-border pt-3 text-2xs leading-4 text-text-subtle">
             {t("Horários no fuso")} <span className="font-mono">{fuso.replace("_", " ")}</span>.
           </p>
         ) : null}
@@ -1067,7 +1067,7 @@ export function PainelDeMarcacao({
 
         {googleCoberturaParcial && <p role="status" className="mb-2 text-xs text-warning">{t("Ocupação do Google ainda não verificada neste período.")}</p>}
         {fusoSuposto && (
-          <p data-testid="fuso-suposto" className="mb-2 text-[11px] leading-4 text-text-subtle">
+          <p data-testid="fuso-suposto" className="mb-2 text-2xs leading-4 text-text-subtle">
             {t("Estamos supondo o fuso")} <span className="font-mono">{(fuso ?? "").replace("_", " ")}</span> {t("— ninguém escolheu ainda. O agente oferece horário usando ele.")}
           </p>
         )}
@@ -1076,7 +1076,7 @@ export function PainelDeMarcacao({
           // Falhar fechado na AÇÃO (o horário fica bloqueado de qualquer jeito)
           // e aberto na INFORMAÇÃO (a tela diz desde quando). O contrário —
           // bloquear em silêncio — faz a pessoa achar que a agenda está errada.
-          <p data-testid="fontes-defasadas" className="mb-2 text-[11px] leading-4 text-warning">
+          <p data-testid="fontes-defasadas" className="mb-2 text-2xs leading-4 text-warning">
             {fontesDefasadas.length === 1
               ? `A agenda conectada ${fontesDefasadas[0]?.nome ?? ""} não atualiza desde ${fontesDefasadas[0]?.desde ?? "algum tempo"}. Os horários dela seguem bloqueados por precaução.`
               : `${fontesDefasadas.length} agendas conectadas não estão atualizando. Os horários delas seguem bloqueados por precaução.`}
@@ -1085,7 +1085,7 @@ export function PainelDeMarcacao({
 
         <div className="grid grid-cols-7 gap-1 text-center">
           {semanas[0]?.map((d) => (
-            <span key={`c-${d.toISOString()}`} className="pb-1 text-[10px] font-semibold uppercase text-text-subtle">
+            <span key={`c-${d.toISOString()}`} className="pb-1 text-2xs font-semibold uppercase text-text-subtle">
               {format(d, "EEEEEE", { locale: localeDaData }).replace(".", "")}
             </span>
           ))}

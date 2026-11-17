@@ -82,11 +82,11 @@ function SerieDiaria({ dias }: { dias: LinhaDoDia[] }) {
             data-dia={d.data}
             data-quantidade={d.quantidade}
           />
-          <span className="text-[10px] tabular-nums text-muted-foreground">{d.rotulo}</span>
+          <span className="text-2xs tabular-nums text-muted-foreground">{d.rotulo}</span>
           {/* O número do dia, escrito. Com mouse ele mora no `title` da barra
               (passar o cursor mostra); no dedo não há hover, e a altura da
               barra sozinha não diz quanto foi. */}
-          <span className="text-[10px] tabular-nums [@media(hover:hover)]:sr-only">
+          <span className="text-2xs tabular-nums [@media(hover:hover)]:sr-only">
             {d.quantidade}
           </span>
         </div>

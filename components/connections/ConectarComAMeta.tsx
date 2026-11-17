@@ -448,7 +448,7 @@ export function ConectarComAMeta({
           {coexistencia ? (
             <div
               data-testid="cadastro-meta-explicacao-coexistencia"
-              className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+              className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm"
             >
               <p className="font-medium">{t("Conexão em coexistência")}</p>
               <p className="mt-1 text-muted-foreground">
@@ -545,7 +545,7 @@ export function ConectarComAMeta({
           <div
             role="alert"
             data-testid="cadastro-meta-sincronizacao-falhou"
-            className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+            className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm"
           >
             <p>{t("A conexão funcionou, mas os contatos do WhatsApp Business não foram trazidos.")}</p>
             {erroDaSincronizacao ? (
@@ -571,7 +571,7 @@ export function ConectarComAMeta({
           <p
             role="status"
             data-testid="cadastro-meta-aviso"
-            className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+            className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm"
           >
             {aviso}
           </p>

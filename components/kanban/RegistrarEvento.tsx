@@ -168,7 +168,7 @@ export function RegistrarEvento({
           onChange={(e) => setText(e.target.value)}
           className="text-xs"
         />
-        <p className="text-right text-[11px] text-text-muted">
+        <p className="text-right text-2xs text-text-muted">
           {text.length}/{TEXTO_MAXIMO_DO_EVENTO}
         </p>
       </div>

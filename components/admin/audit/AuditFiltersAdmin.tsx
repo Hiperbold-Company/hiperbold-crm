@@ -70,7 +70,7 @@ function MultiSelectPopover({
         >
           {label}
           {selected.length > 0 && (
-            <Badge variant="info" className="h-4 px-1 text-[10px]">
+            <Badge variant="info" className="h-4 px-1 text-2xs">
               {selected.length}
             </Badge>
           )}

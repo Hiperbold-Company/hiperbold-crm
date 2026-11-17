@@ -149,10 +149,10 @@ export function AuditClient() {
                     {r.resource_type ?? "—"}
                     {r.resource_id ? `:${r.resource_id.slice(0, 8)}` : ""}
                   </TableCell>
-                  <TableCell className="font-mono text-[10px] text-muted-foreground">
+                  <TableCell className="font-mono text-2xs text-muted-foreground">
                     {r.request_id ? r.request_id.slice(0, 8) : "—"}
                   </TableCell>
-                  <TableCell className="font-mono text-[10px] text-muted-foreground">
+                  <TableCell className="font-mono text-2xs text-muted-foreground">
                     {truncJson(r.metadata)}
                   </TableCell>
                 </TableRow>

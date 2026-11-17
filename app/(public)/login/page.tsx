@@ -160,7 +160,7 @@ export default async function LoginPage({
           sem estar logado volta para cá com o aviso; o link continua valendo depois do login. */}
       {error === "verificar_email_entre" && (
         <div
-          className="rounded-md border border-amber-300 bg-amber-100 px-3 py-2 text-sm text-amber-950"
+          className="rounded-md border border-warning/30 bg-warning-bg px-3 py-2 text-sm text-warning-fg"
           role="status"
         >
           {t(

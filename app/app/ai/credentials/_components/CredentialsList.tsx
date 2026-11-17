@@ -150,7 +150,7 @@ export function CredentialsList({
     <div className="flex flex-col gap-6">
       {chaveDoPlano && <ChaveDoPlanoCard />}
       {soDecisao && (
-        <Card className="border-amber-500/40 bg-amber-500/5 p-4" data-testid="aviso-so-decisao">
+        <Card className="border-warning/30 bg-warning-bg p-4" data-testid="aviso-so-decisao">
           <p className="text-sm">
             {t("O Jev não conversa com o cliente — falta a chave da sua IA principal.")}
           </p>

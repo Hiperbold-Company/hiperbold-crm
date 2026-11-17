@@ -176,7 +176,7 @@ export function BarraInferior() {
                 )}
               >
                 <Icone size={22} weight={aqui ? "fill" : "regular"} aria-hidden />
-                <span className="w-full truncate text-center text-[10px] leading-tight">
+                <span className="w-full truncate text-center text-2xs leading-tight">
                   {t(aba.label)}
                 </span>
                 {/*

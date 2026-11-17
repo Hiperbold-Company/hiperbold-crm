@@ -578,7 +578,7 @@ export function FormularioDeBloqueioDosPlanos({ inicial }: { inicial: BloqueioDo
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+        <div className="space-y-1 rounded-md border border-warning/30 bg-warning-bg px-4 py-3 text-sm text-warning-fg">
           <p>
             {t(
               "A variável PLANOS_BLOQUEIO do servidor só alcança a IA (o teto de tokens). Ela não trava funil, etapa, conexão, webhook, membro nem lead: quem decide isso é o modo abaixo.",

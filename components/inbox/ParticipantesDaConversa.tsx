@@ -162,7 +162,7 @@ export function ParticipantesDaConversa({ conversationId, podeConvidar, atendent
                 data-testid={`participante-${p.user_id}`}
                 title={nome}
               >
-                <AvatarFallback className="bg-surface-elevated text-[10px] font-medium text-text-muted">
+                <AvatarFallback className="bg-surface-elevated text-2xs font-medium text-text-muted">
                   {iniciais(nomeDe(p.user_id))}
                 </AvatarFallback>
               </Avatar>

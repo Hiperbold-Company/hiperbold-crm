@@ -150,7 +150,7 @@ export function AgentPreview({
             <p
               key={`${item.code}:${index}`}
               role="status"
-              className="text-amber-700 dark:text-amber-400"
+              className="text-warning-fg"
             >
               {item.message}
             </p>

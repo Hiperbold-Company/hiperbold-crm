@@ -238,13 +238,13 @@ export function StageColumn({
             ) : (
               <h2 className="flex-1 truncate text-sm font-semibold text-text">{stage.name}</h2>
             )}
-            <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-text-muted tabular-nums">
+            <span className="rounded-full bg-surface px-2 py-0.5 text-2xs font-medium text-text-muted tabular-nums">
               {selecionadosAqui > 0 ? `${selecionadosAqui}/${leads.length}` : leads.length}
             </span>
           </div>
 
           {temTotal && (
-            <div className="border-b border-border px-3 py-1.5 text-[11px] text-text-muted tabular-nums">
+            <div className="border-b border-border px-3 py-1.5 text-2xs text-text-muted tabular-nums">
               {formatSomaPorMoeda(totais, formatValorDoNegocio, { primeira })}
               {ponderados !== null && (
                 <span className="ml-2">
@@ -293,7 +293,7 @@ export function StageColumn({
             ))}
             {provided.placeholder}
             {leads.length === 0 && !snapshot.isDraggingOver && (
-              <div className="flex h-20 items-center justify-center text-[11px] text-text-muted">
+              <div className="flex h-20 items-center justify-center text-2xs text-text-muted">
                 {t("vazio")}
               </div>
             )}

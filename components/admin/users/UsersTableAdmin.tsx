@@ -158,7 +158,7 @@ export function UsersTableAdmin({
                 <TableCell>
                   <div className="flex flex-col gap-0.5">
                     <span className="text-xs font-medium">{row.tenant_name}</span>
-                    <span className="font-mono text-[10px] text-muted-foreground">
+                    <span className="font-mono text-2xs text-muted-foreground">
                       {row.tenant_slug}
                     </span>
                   </div>

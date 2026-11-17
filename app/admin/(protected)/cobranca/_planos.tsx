@@ -191,7 +191,7 @@ export function PlanosDaInstalacao({ planos }: { planos: readonly PlanoDaTela[] 
           padraoId: planos.find((p) => p.padrao_no_cadastro && !p.arquivado_em)?.id ?? null,
           oferecidos: planos.filter((p) => p.oferecido_ao_cliente && !p.arquivado_em),
         }) && (
-          <p role="status" className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm dark:border-amber-500/30 dark:bg-amber-950/20">
+          <p role="status" className="rounded-md border border-warning/30 bg-warning-bg px-3 py-2 text-sm">
             {t("Nenhum plano está marcado para o cadastro. Quem se cadastra precisa escolher um plano, o “Entrar com Google” some da tela de cadastro e empresas criadas sem plano pela integração são recusadas. Use “Usar no cadastro” em um plano.")}
           </p>
         )}

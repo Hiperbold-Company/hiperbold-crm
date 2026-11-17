@@ -132,11 +132,11 @@ export function AssistantPanel({
           {t("Gerar")}
         </Button>
       </div>
-      {semOrcamento && <p className="text-sm text-gray-500">{t(orcamento?.motivo ?? "")}</p>}
-      {erro && <p className="text-red-600">{erro}</p>}
-      {preview && !preview.disponivel && <p className="text-gray-500">{preview.motivo}</p>}
+      {semOrcamento && <p className="text-sm text-text-muted">{t(orcamento?.motivo ?? "")}</p>}
+      {erro && <p className="text-error-fg">{erro}</p>}
+      {preview && !preview.disponivel && <p className="text-text-muted">{preview.motivo}</p>}
       {preview && preview.disponivel && preview.mudancas.length === 0 && (
-        <p className="text-gray-500">
+        <p className="text-text-muted">
           {preview.nao_entendido ?? t("Não entendi o que mudar nesta proposta.")}
         </p>
       )}

@@ -130,7 +130,7 @@ export function MetaDoMesPanel({ estado, periodo, metas, podeConfigurar, valores
                   <div
                     data-meta="barra"
                     className={`h-full rounded-full transition-[width] ${
-                      m.atingida ? "bg-emerald-500" : "bg-primary"
+                      m.atingida ? "bg-success" : "bg-primary"
                     }`}
                     style={{ width: `${Math.min(100, Math.max(0, m.percentual))}%` }}
                   />

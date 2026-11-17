@@ -104,7 +104,7 @@ interface Props {
 /**
  * A COR SAI DE QUEM MANDA, NÃO DO STATUS.
  *
- * O mapa anterior era por `conversations.status`, e o `bg-purple-500` de
+ * O mapa anterior era por `conversations.status`, e o roxo fixo do Tailwind de
  * `ai_handling` era a mesma mentira das abas em forma de cor: `ai_handling` é
  * escrito por UM caminho só em produção, então a bolinha do automático quase
  * nunca aparecia — enquanto o robô atendia a maior parte da lista — e, quando
@@ -116,9 +116,9 @@ interface Props {
  * podem ser mantidas em arquivos diferentes.
  */
 const COR_DO_COMANDO: Record<string, string> = {
-  humano: "bg-blue-500",
-  automatico: "bg-purple-500",
-  aguardando: "bg-amber-500",
+  humano: "bg-info",
+  automatico: "bg-accent",
+  aguardando: "bg-warning",
   ninguem: "bg-muted-foreground/60",
   encerrada: "bg-muted-foreground/30",
 };
@@ -358,14 +358,14 @@ export function ConversationListItem({
           <div className="mb-1 flex items-center gap-1.5">
             {queuePosition !== undefined && (
               <span
-                className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-soft px-1 text-[10px] font-medium tabular-nums text-accent"
+                className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-soft px-1 text-2xs font-medium tabular-nums text-accent"
                 aria-label={`${t("Posição")} ${queuePosition} ${t("na fila")}`}
               >
                 {queuePosition}º
               </span>
             )}
             <span
-              className="text-[11px] text-text-muted"
+              className="text-2xs text-text-muted"
               title={t("Desde quando o cliente espera resposta")}
             >
               {waitingLabel(conversation, t, localeDaData)}
@@ -392,12 +392,12 @@ export function ConversationListItem({
               mandou cada mensagem dentro do grupo).
             */}
             {conversation.is_group && (
-              <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px]">
+              <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-2xs">
                 {t("Grupo")}
               </Badge>
             )}
           </span>
-          <span className="shrink-0 text-[11px] tabular-nums text-text-muted">
+          <span className="shrink-0 text-2xs tabular-nums text-text-muted">
             {time}
           </span>
         </div>
@@ -405,7 +405,7 @@ export function ConversationListItem({
         <div className="mt-0.5 flex items-center justify-between gap-2">
           <p
             className={cn(
-              "min-w-0 truncate text-[13px]",
+              "min-w-0 truncate text-sm",
               // Na aberta, `text-text`: `text-muted` sobre o `accent-soft` do
               // escuro dá 4,2:1, abaixo do AA (medido em selecionada-legivel-no-escuro.test).
               unread > 0 || isSelected ? "text-text" : "text-text-muted",
@@ -417,7 +417,7 @@ export function ConversationListItem({
             {truncated}
           </p>
           {unread > 0 && (
-            <span className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-semibold tabular-nums text-accent-foreground">
+            <span className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-2xs font-semibold tabular-nums text-accent-foreground">
               {unread}
             </span>
           )}
@@ -433,17 +433,17 @@ export function ConversationListItem({
               <Badge
                 variant="outline"
                 data-testid="selo-exemplo-ia"
-                className="h-4 gap-1 px-1.5 text-[10px] font-normal text-accent"
+                className="h-4 gap-1 px-1.5 text-2xs font-normal text-accent"
               >
                 <Sparkle size={10} weight="fill" aria-hidden />
                 {t("Exemplo para a IA")}
               </Badge>
             )}
             {visibleTags.map((t) => (
-              <ChipDeEtiqueta key={t} tag={t} className="h-4 px-1.5 text-[10px]" />
+              <ChipDeEtiqueta key={t} tag={t} className="h-4 px-1.5 text-2xs" />
             ))}
             {overflow > 0 && (
-              <span className="text-[10px] text-text-muted" title={hiddenTags.join(", ")}>+{overflow}</span>
+              <span className="text-2xs text-text-muted" title={hiddenTags.join(", ")}>+{overflow}</span>
             )}
             {mostrarAtendente && comando.quem === "humano" && (
               <OwnerBadge ownerKind="user" ownerName={comando.nome ?? t("Atendente")} compacto />
@@ -461,12 +461,12 @@ export function ConversationListItem({
               />
             )}
             {c?.is_blocked && (
-              <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
+              <Badge variant="destructive" className="h-4 px-1.5 text-2xs">
                 {t("Bloqueado")}
               </Badge>
             )}
             {c?.is_anonymized && (
-              <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+              <Badge variant="outline" className="h-4 px-1.5 text-2xs">
                 {t("Anonimizado")}
               </Badge>
             )}

@@ -100,7 +100,7 @@ const TODOS_OS_PACOTES: ReadonlyArray<ToolBundle> = PACOTES.map((p) => p.id);
 
 const CLASSE_RISCO: Record<ToolRisk, string> = {
   seguro: "border-border/60 text-muted-foreground",
-  atencao: "border-amber-500/40 text-amber-700 dark:text-amber-400",
+  atencao: "border-warning/30 text-warning-fg",
   critico: "border-destructive/40 text-destructive",
 };
 
@@ -108,7 +108,7 @@ function BadgeRisco({ risco }: { risco: ToolRisk }) {
   const t = useT();
   const meta = riscoMeta(risco);
   return (
-    <Badge variant="outline" className={`text-[11px] ${CLASSE_RISCO[risco]}`} title={t(meta.explicacao)}>
+    <Badge variant="outline" className={`text-2xs ${CLASSE_RISCO[risco]}`} title={t(meta.explicacao)}>
       {t(meta.rotulo)}
     </Badge>
   );
@@ -124,20 +124,20 @@ function BadgeAprovacao({ aprovacao }: { aprovacao: boolean | null | undefined }
   const t = useT();
   if (aprovacao === true) {
     return (
-      <Badge variant="outline" className="text-[11px] border-border/60 text-muted-foreground">
+      <Badge variant="outline" className="text-2xs border-border/60 text-muted-foreground">
         {t("Só consulta")}
       </Badge>
     );
   }
   if (aprovacao === false) {
     return (
-      <Badge variant="outline" className="text-[11px] border-amber-500/40 text-amber-700 dark:text-amber-400">
+      <Badge variant="outline" className="text-2xs border-warning/30 text-warning-fg">
         {t("Altera dados")}
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="text-[11px] border-amber-500/40 text-amber-700 dark:text-amber-400">
+    <Badge variant="outline" className="text-2xs border-warning/30 text-warning-fg">
       {t("Aguardando aprovação")}
     </Badge>
   );
@@ -200,7 +200,7 @@ function FichaCapacidade({
         {capacidade.conexao && capacidade.somente_leitura_confirmado == null ? (
           <span
             data-testid={`aviso-aprovacao-${capacidade.name}`}
-            className="block text-xs text-amber-700 dark:text-amber-400"
+            className="block text-xs text-warning-fg"
           >
             {t("Não roda até o admin aprovar em IA › Ferramentas externas da IA.")}
           </span>
@@ -210,13 +210,13 @@ function FichaCapacidade({
           // jogava fora; o aviso existia só no log do worker, que ninguém lê.
           <span
             data-testid={`motivo-nao-marcavel-${capacidade.name}`}
-            className="block text-xs text-sky-700 dark:text-sky-400"
+            className="block text-xs text-info-fg"
           >
             {t(capacidade.motivo_nao_marcavel)}
           </span>
         ) : null}
         {mostrarNomeTecnico ? (
-          <code className="block font-mono text-[11px] text-muted-foreground">
+          <code className="block font-mono text-2xs text-muted-foreground">
             {capacidade.name}
           </code>
         ) : null}
@@ -487,7 +487,7 @@ export function ToolPicker({ value: valorSalvo, onChange, disabled, ocultar }: P
                       {t(pacote.rotulo)}
                     </label>
                     {estado === "parcial" ? (
-                      <Badge variant="outline" className="text-[11px]">
+                      <Badge variant="outline" className="text-2xs">
                         {t("parcial")}
                       </Badge>
                     ) : null}
@@ -635,7 +635,7 @@ export function ToolPicker({ value: valorSalvo, onChange, disabled, ocultar }: P
       {orfas.length > 0 ? (
         <div
           data-testid="capacidades-orfas"
-          className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400"
+          className="space-y-2 rounded-md border border-warning/30 bg-warning-bg p-3 text-xs text-warning-fg"
         >
           <p>
             {orfas.length === 1

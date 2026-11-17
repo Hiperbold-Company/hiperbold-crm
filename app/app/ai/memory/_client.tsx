@@ -245,7 +245,7 @@ export function OrgMemoryClient({ initialState }: Props) {
             placeholder={t(
               "Ex.: Nunca prometa desconto sem confirmar com um humano. Horário de atendimento: 9h–18h, seg-sex. Sempre chame o cliente pelo primeiro nome.",
             )}
-            className="min-h-[220px] font-mono text-[13px]"
+            className="min-h-[220px] font-mono text-sm"
           />
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">
@@ -280,7 +280,7 @@ export function OrgMemoryClient({ initialState }: Props) {
                       <span className="font-mono text-xs">v{v.version_number}</span>
                       <span className="text-xs text-muted-foreground">{formatDate(v.created_at, tagDoIdioma)}</span>
                       {document?.version_id === v.id && (
-                        <Badge variant="success" className="text-[10px]">
+                        <Badge variant="success" className="text-2xs">
                           {t("ativa")}
                         </Badge>
                       )}
@@ -309,7 +309,7 @@ export function OrgMemoryClient({ initialState }: Props) {
                 <li key={entry.id} className="flex flex-col gap-1.5 rounded-md border border-border/60 p-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{entry.title}</span>
-                    <Badge variant="info" className="text-[10px]">
+                    <Badge variant="info" className="text-2xs">
                       {rotuloDaOrigem[entry.source]}
                     </Badge>
                     <span className="ml-auto text-xs text-muted-foreground">{formatDate(entry.created_at, tagDoIdioma)}</span>
@@ -432,7 +432,7 @@ export function OrgMemoryClient({ initialState }: Props) {
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{entry.title}</span>
-                    <Badge variant={entry.source === "manual" ? "neutral" : "info"} className="text-[10px]">
+                    <Badge variant={entry.source === "manual" ? "neutral" : "info"} className="text-2xs">
                       {rotuloDaOrigem[entry.source]}
                     </Badge>
                     <span className="ml-auto text-xs text-muted-foreground">{formatDate(entry.created_at, tagDoIdioma)}</span>
@@ -450,7 +450,7 @@ export function OrgMemoryClient({ initialState }: Props) {
                           valor={entry.valid_until ?? ""}
                           onSalvar={(dia) => handleSetValidity(entry.id, dia)}
                         />
-                        <Badge variant={entry.valid_until ? "info" : "neutral"} className="text-[10px]">
+                        <Badge variant={entry.valid_until ? "info" : "neutral"} className="text-2xs">
                           {entry.valid_until
                             ? `${t("vale até")} ${formatDateOnly(entry.valid_until, tagDoIdioma)}`
                             : t("sem prazo")}
@@ -497,7 +497,7 @@ export function OrgMemoryClient({ initialState }: Props) {
           {versionDetail.isLoading ? (
             <p className="text-sm text-muted-foreground">{t("Carregando…")}</p>
           ) : (
-            <pre className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface-elevated p-4 font-mono text-[13px]">
+            <pre className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface-elevated p-4 font-mono text-sm">
               {versionDetail.data?.content}
             </pre>
           )}

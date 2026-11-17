@@ -65,7 +65,7 @@ export function AnuncioCard({
         </span>
       )}
       <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="text-[10px] font-medium uppercase tracking-wide opacity-70">
+        <div className="text-2xs font-medium uppercase tracking-wide opacity-70">
           {t("Anúncio da Meta")}
         </div>
         {anuncio.titulo && <div className="truncate font-semibold">{anuncio.titulo}</div>}

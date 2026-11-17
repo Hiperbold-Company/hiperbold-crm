@@ -80,7 +80,7 @@ function paraCampoLocal(d: Date): string {
 function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[11px] tracking-wide text-text-muted uppercase">{rotulo}</span>
+      <span className="text-2xs tracking-wide text-text-muted uppercase">{rotulo}</span>
       <span className="text-sm text-text">{children}</span>
     </div>
   );
@@ -153,7 +153,7 @@ function LinhaDoTempo({
                 {lido.detalhe && (
                   <p className="mt-0.5 text-xs text-text-muted">{t(lido.detalhe)}</p>
                 )}
-                <p className="mt-0.5 text-[11px] text-text-muted">
+                <p className="mt-0.5 text-2xs text-text-muted">
                   {lido.onde}
                   {nome ? ` · ${nome}` : ""} · {absoluta(evento.created_at, localeDaData)}
                 </p>

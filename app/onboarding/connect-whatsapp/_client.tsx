@@ -243,7 +243,7 @@ export function ConnectWhatsappClient({ sessionName, oficialPodeReceber, pareame
       <VoltarParaEscolha onVoltar={() => setForma(null)} />
 
       {forma === "oficial" && !oficialPodeReceber && (
-        <div className="rounded-md border border-amber-300/60 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100">
+        <div className="rounded-md border border-warning/30 bg-warning-bg p-4 text-sm text-warning-fg">
           <p className="font-medium">
             {t("Este servidor ainda não está pronto para RECEBER por este caminho.")}
           </p>

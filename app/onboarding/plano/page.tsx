@@ -111,7 +111,7 @@ export default async function PlanoPage({
         <div
           role="status"
           data-testid="plano-pedido-parado"
-          className="rounded-md border border-amber-300/60 bg-amber-50 p-4 text-sm dark:border-amber-500/30 dark:bg-amber-950/20"
+          className="rounded-md border border-warning/30 bg-warning-bg p-4 text-sm"
         >
           {t(
             "Seu pedido anterior não foi concluído. Escolha de novo a forma de pagamento: se for a mesma opção, retomamos o mesmo pedido, sem cobrar duas vezes.",

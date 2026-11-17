@@ -201,7 +201,7 @@ export function EscolhaDePosts({
                       type="button"
                       aria-pressed={marcado}
                       onClick={() => alternar(p.media_id)}
-                      className={`flex w-full flex-col gap-0.5 rounded-sm border p-1 text-left text-[11px] text-text ${marcado ? "border-primary ring-1 ring-primary" : "border-border"}`}
+                      className={`flex w-full flex-col gap-0.5 rounded-sm border p-1 text-left text-2xs text-text ${marcado ? "border-primary ring-1 ring-primary" : "border-border"}`}
                       data-testid={`${prefixo}-post-${p.media_id}`}
                     >
                       {p.miniatura ? (

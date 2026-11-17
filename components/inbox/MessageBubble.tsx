@@ -103,7 +103,7 @@ function AckIndicator({ status, paradaSemConexao, saiSozinha, t }: {
     );
   }
   if (status === "read") {
-    return <Checks size={12} weight="bold" className="text-blue-400" aria-label={t("Lida")} />;
+    return <Checks size={12} weight="bold" className="text-info" aria-label={t("Lida")} />;
   }
   if (status === "delivered") {
     return <Checks size={12} weight="bold" className="text-current/70" aria-label={t("Entregue")} />;
@@ -492,12 +492,12 @@ export function MessageBubble({
           </div>
         )}
         {remetente && (
-          <p className="mb-0.5 text-[11px] font-medium text-muted-foreground">
+          <p className="mb-0.5 text-2xs font-medium text-muted-foreground">
             {rotuloDoRemetente(remetente)}
           </p>
         )}
         {senderLabel && (
-          <div className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold opacity-80">
+          <div className="mb-0.5 flex items-center gap-1 text-2xs font-semibold opacity-80">
             {message.sent_via === "ai" ? (
               <Robot size={10} weight="duotone" aria-hidden />
             ) : null}
@@ -537,7 +537,7 @@ export function MessageBubble({
                 (`textoDaApagadaApareceNaInbox`). */}
             {textoApagadoVisivel && message.body && (
               <div className="border-t border-current/20 pt-1">
-                <p className="text-[10px] opacity-70">{t("Visível só aqui no CRM")}</p>
+                <p className="text-2xs opacity-70">{t("Visível só aqui no CRM")}</p>
                 <p className="whitespace-pre-wrap wrap-anywhere leading-snug">{message.body}</p>
               </div>
             )}
@@ -573,7 +573,7 @@ export function MessageBubble({
             {porModelo && (
               <div
                 data-testid="selo-do-modelo"
-                className="mb-1 inline-flex max-w-full items-center gap-1 rounded-sm bg-current/10 px-1.5 py-0.5 text-[10px] font-medium"
+                className="mb-1 inline-flex max-w-full items-center gap-1 rounded-sm bg-current/10 px-1.5 py-0.5 text-2xs font-medium"
               >
                 <FileText size={11} weight="bold" aria-hidden />
                 <span className="truncate">
@@ -609,14 +609,14 @@ export function MessageBubble({
             {opcoesNativas && (
               <div className="mt-1 space-y-1 border-t border-current/20 pt-1" data-testid="opcoes-da-mensagem">
                 {opcoesNativas.kind === "list" && (
-                  <p className="text-[11px] font-medium opacity-80">{opcoesNativas.button_label}</p>
+                  <p className="text-2xs font-medium opacity-80">{opcoesNativas.button_label}</p>
                 )}
                 <ul className="space-y-1">
                   {opcoesNativas.items.map((item) => (
                     <li key={item.id} className="rounded-md border border-current/25 px-2 py-1 text-center text-xs">
                       <span className="wrap-anywhere">{item.label}</span>
                       {"description" in item && item.description && (
-                        <span className="block text-[10px] opacity-70 wrap-anywhere">{item.description}</span>
+                        <span className="block text-2xs opacity-70 wrap-anywhere">{item.description}</span>
                       )}
                     </li>
                   ))}
@@ -628,7 +628,7 @@ export function MessageBubble({
 
         <div
           className={cn(
-            "mt-1 flex items-center justify-end gap-1 text-[10px]",
+            "mt-1 flex items-center justify-end gap-1 text-2xs",
             // O carimbo acompanha o FUNDO: numa bolha apagada (cinza) o
             // `primary-foreground` do envio sumiria — hora e check invisíveis
             // numa bolha que existe justamente para deixar registro.
@@ -700,7 +700,7 @@ export function MessageBubble({
                     {t("Abrir compromisso")}
                   </Link>
                 )}
-                <p className="text-[10px] leading-snug opacity-70">
+                <p className="text-2xs leading-snug opacity-70">
                   {t("Para mandar mesmo assim, mude a escolha do fluxo ou escreva pelo campo de resposta.")}
                 </p>
               </div>
@@ -726,7 +726,7 @@ export function MessageBubble({
             )}
           >
             {[...new Set(reacoes.map((r) => r.emoji))].join("")}
-            {reacoes.length > 1 && <span className="text-[10px] text-muted-foreground">{reacoes.length}</span>}
+            {reacoes.length > 1 && <span className="text-2xs text-muted-foreground">{reacoes.length}</span>}
           </span>
         ) : null}
       </div>

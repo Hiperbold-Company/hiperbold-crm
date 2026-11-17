@@ -111,7 +111,7 @@ export function InviteTeamForm() {
       </div>
 
       {undelivered.length > 0 && (
-        <div className="space-y-3 rounded-md border border-amber-300/60 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-950/20">
+        <div className="space-y-3 rounded-md border border-warning/30 bg-warning-bg p-4">
           <p className="text-sm font-medium">
             {t(
               "Esta instalação não envia e-mail. Os convites estão prontos — copie o link de cada pessoa e mande por onde você já fala com ela:",

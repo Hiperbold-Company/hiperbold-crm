@@ -65,7 +65,7 @@ export default async function MetaAdsSettingsPage() {
         </p>
       </header>
 
-      <div className="rounded-md border border-sky-500/40 bg-sky-500/10 p-4 text-sm">
+      <div className="rounded-md border border-info/30 bg-info-bg p-4 text-sm">
         {/*
           A permissão exata está escrita aqui porque é o erro nº 1 desta
           integração: um token gerado sem `ads_read` conecta, salva, e só falha

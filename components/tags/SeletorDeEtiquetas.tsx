@@ -141,7 +141,7 @@ export function SeletorDeEtiquetas({
       )}
 
       {noLimite && (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           {t("Limite de {n} tags atingido. Desmarque uma para escolher outra.").replace("{n}", String(limite))}
         </p>
       )}
@@ -174,7 +174,7 @@ export function SeletorDeEtiquetas({
               <div key={grupo ?? "__outras"} role="group" aria-labelledby={idTitulo}>
                 <p
                   id={idTitulo}
-                  className="px-1 pb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                  className="px-1 pb-0.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground"
                 >
                   {titulo}
                 </p>

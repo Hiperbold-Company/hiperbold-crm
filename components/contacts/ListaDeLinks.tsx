@@ -44,7 +44,7 @@ export function ListaDeLinks({ links, aoClicarNoLink }: Props) {
             title={`${rotulo} — ${href}`}
             aria-label={`${t("Abrir")} ${rotulo}`}
             onClick={aoClicarNoLink}
-            className="rounded-md border border-border px-1.5 py-0.5 text-[11px] leading-4 text-text-muted hover:border-accent hover:text-accent"
+            className="rounded-md border border-border px-1.5 py-0.5 text-2xs leading-4 text-text-muted hover:border-accent hover:text-accent"
           >
             {definicao?.curto ?? tipo}
           </a>

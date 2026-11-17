@@ -185,7 +185,7 @@ export function InboxList() {
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate text-sm font-medium">{name}</span>
-                <span className="shrink-0 text-[10px] text-muted-foreground">{time}</span>
+                <span className="shrink-0 text-2xs text-muted-foreground">{time}</span>
               </div>
 
               {org && (
@@ -199,7 +199,7 @@ export function InboxList() {
                   {preview.length > 55 ? `${preview.slice(0, 55)}…` : preview}
                 </p>
                 {unread > 0 && (
-                  <Badge className="h-4 min-w-4 shrink-0 px-1.5 text-[10px]">{unread}</Badge>
+                  <Badge className="h-4 min-w-4 shrink-0 px-1.5 text-2xs">{unread}</Badge>
                 )}
               </div>
             </button>

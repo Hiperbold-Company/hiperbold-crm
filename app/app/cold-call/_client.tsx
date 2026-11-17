@@ -131,7 +131,7 @@ function Iniciais({ nome, tamanho = "size-8" }: { nome: string; tamanho?: string
   return (
     <span
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-full border border-accent/30 bg-accent-soft text-[11px] font-bold text-accent",
+        "flex shrink-0 items-center justify-center rounded-full border border-accent/30 bg-accent-soft text-2xs font-bold text-accent",
         tamanho,
       )}
       aria-hidden
@@ -971,7 +971,7 @@ function Sessao({
                 <span className="flex items-center gap-1.5">
                   <Phone size={15} weight="fill" aria-hidden /> {t("Ligações em lista")}
                 </span>
-                <span className="flex size-5 items-center justify-center rounded-full bg-accent text-[11px] font-bold tabular-nums text-accent-foreground">
+                <span className="flex size-5 items-center justify-center rounded-full bg-accent text-2xs font-bold tabular-nums text-accent-foreground">
                   {lead.tentativas}
                 </span>
               </p>
@@ -986,17 +986,17 @@ function Sessao({
             <div className="px-1">
               <Phone size={18} className="mx-auto text-accent" aria-hidden />
               <p className="mt-1 text-lg font-bold tabular-nums text-text">{lead.tentativas}</p>
-              <p className="text-[11px] text-text-muted">{t("Tentativas")}</p>
+              <p className="text-2xs text-text-muted">{t("Tentativas")}</p>
             </div>
             <div className="px-1">
               <Clock size={18} className="mx-auto text-accent" aria-hidden />
               <p className="mt-1 text-lg font-bold tabular-nums text-text">{tempo}</p>
-              <p className="text-[11px] text-text-muted">{t("Duração")}</p>
+              <p className="text-2xs text-text-muted">{t("Duração")}</p>
             </div>
             <div className="px-1" title={t("Leads da fila que pediram reunião, entre os já tentados")}>
               <Check size={18} className="mx-auto text-accent" aria-hidden />
               <p className="mt-1 text-lg font-bold tabular-nums text-text">{conversao}%</p>
-              <p className="text-[11px] text-text-muted">{t("Conversão")}</p>
+              <p className="text-2xs text-text-muted">{t("Conversão")}</p>
             </div>
           </section>
 
@@ -1132,7 +1132,7 @@ function Sessao({
                 {ligacao.motivo && <span className="text-xs text-text-muted">{ligacao.motivo}</span>}
               </p>
               {!ligacao.viaCrm && !lead.nao_ligar && ligacao.fase === "pronta" && (
-                <p className="mt-2 text-center text-[11px] leading-relaxed text-text-muted" data-testid="aviso-sem-telefonia">
+                <p className="mt-2 text-center text-2xs leading-relaxed text-text-muted" data-testid="aviso-sem-telefonia">
                   {t("A ligação pelo CRM ainda não está ligada. Por enquanto, o botão abre o discador do seu aparelho.")}
                 </p>
               )}
@@ -1310,7 +1310,7 @@ function Sessao({
                       {linha.texto}
                     </h3>
                   ) : (
-                    <p key={i} className="text-base leading-relaxed text-text sm:text-[17px]">
+                    <p key={i} className="text-base leading-relaxed text-text sm:text-lg">
                       {linha.marca && <span className="mr-1 font-semibold text-accent">[{linha.marca}]</span>}
                       {linha.texto}
                     </p>

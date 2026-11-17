@@ -1098,7 +1098,7 @@ function PipelineEditor({
             já decide isso (e loga `logger.warn`); o que faltava era quem
             configurou FICAR SABENDO. */}
         {escolhaPerdida && (
-          <p role="alert" className="text-xs font-medium text-amber-600 dark:text-amber-400">
+          <p role="alert" className="text-xs font-medium text-warning-fg">
             {etapaDeclarada === null
               ? t(
                   "Nenhuma etapa escolhida: as conversas novas estão entrando na primeira etapa do funil.",

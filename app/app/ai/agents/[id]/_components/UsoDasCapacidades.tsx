@@ -46,11 +46,11 @@ const SINAL: Record<SinalDeUso, { rotulo: string; classe: string }> = {
   },
   fora_da_configuracao: {
     rotulo: "usada sem estar ligada",
-    classe: "border-amber-500/40 text-amber-700 dark:text-amber-400",
+    classe: "border-warning/30 text-warning-fg",
   },
   nunca_usada: {
     rotulo: "nunca usada",
-    classe: "border-amber-500/40 text-amber-700 dark:text-amber-400",
+    classe: "border-warning/30 text-warning-fg",
   },
   recem_ligada: {
     rotulo: "ligada agora",
@@ -62,7 +62,7 @@ const SINAL: Record<SinalDeUso, { rotulo: string; classe: string }> = {
   },
   saudavel: {
     rotulo: "funcionando",
-    classe: "border-emerald-500/40 text-emerald-700 dark:text-emerald-400",
+    classe: "border-success/30 text-success-fg",
   },
 };
 
@@ -173,11 +173,11 @@ export function UsoDasCapacidades({ agentId, active }: Props) {
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">{t(c.rotulo)}</span>
-                <Badge variant="outline" className={`text-[11px] ${SINAL[c.sinal].classe}`}>
+                <Badge variant="outline" className={`text-2xs ${SINAL[c.sinal].classe}`}>
                   {t(SINAL[c.sinal].rotulo)}
                 </Badge>
                 {!c.ligada ? (
-                  <Badge variant="outline" className="text-[11px] text-muted-foreground">
+                  <Badge variant="outline" className="text-2xs text-muted-foreground">
                     {t("desligada")}
                   </Badge>
                 ) : null}
@@ -186,7 +186,7 @@ export function UsoDasCapacidades({ agentId, active }: Props) {
 
               <p className="pt-1 text-xs text-muted-foreground">{t(c.recomendacao)}</p>
 
-              <div className="flex flex-wrap gap-x-4 pt-2 font-mono text-[11px] text-muted-foreground">
+              <div className="flex flex-wrap gap-x-4 pt-2 font-mono text-2xs text-muted-foreground">
                 <span>
                   {t("usos")} <strong className="text-foreground">{c.total}</strong>
                 </span>
