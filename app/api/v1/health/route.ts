@@ -507,7 +507,9 @@ export async function GET(req: NextRequest) {
         // APP_VERSION é injetada no build da imagem (ARG no Dockerfile) e vale
         // "1.2.3": a tag numa release, ou a versão do topo do CHANGELOG fora de
         // tag (SHA curto só se o CHANGELOG não tiver versão). O SHA do commit
-        // vai à parte, em `commit` (APP_COMMIT).
+        // (APP_COMMIT) NÃO sai na resposta pública: fingerprint de build para
+        // quem não se autenticou. Ele só aparece com `?verbose=1` + segredo
+        // interno, e autenticado em /api/v1/system/version.
         //
         // Antes isto era `process.env.npm_package_version ?? "0.1.0"`, e a
         // variável só existe quando o processo nasce de um `npm`/`pnpm run`. O
@@ -516,7 +518,7 @@ export async function GET(req: NextRequest) {
         // um campo ausente — ele desliga a pergunta em vez de deixá-la aberta.
         // Por isso o fallback agora é "desconhecido", e não um número plausível.
         version: process.env.APP_VERSION || "desconhecido",
-        commit: process.env.APP_COMMIT || null,
+        ...(verboso ? { commit: process.env.APP_COMMIT || null } : {}),
         timestamp: new Date().toISOString(),
         checks,
       },

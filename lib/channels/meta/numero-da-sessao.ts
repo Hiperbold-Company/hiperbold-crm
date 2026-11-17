@@ -49,3 +49,26 @@ export async function credenciaisDoCanalOficialVivo(
     token,
   };
 }
+
+/**
+ * O número (`phone_number_id`) do canal oficial VIVO da organização, ou `null` se não há. Só lê o id:
+ * não decifra o token. Serve a quem precisa saber se conectar outro número TROCARIA o atual.
+ */
+export async function numeroDoCanalOficialVivo(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+): Promise<{ phoneNumberId: string | null } | null> {
+  const consultar = () =>
+    admin
+      .from("channel_sessions")
+      .select("id, meta_phone_number_id")
+      .eq("organization_id", organizationId)
+      .eq("provider", CHANNEL_PROVIDER_META);
+
+  const { data } = await queryTolerantToMissingArchived(
+    () => consultar().is(ARCHIVED_AT, null).maybeSingle(),
+    () => consultar().maybeSingle(),
+  );
+  const sessao = data as { id: string; meta_phone_number_id: string | null } | null;
+  return sessao ? { phoneNumberId: sessao.meta_phone_number_id } : null;
+}

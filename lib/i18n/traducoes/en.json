@@ -14471,5 +14471,15 @@
   "Conectado, mas as mensagens ainda não entram.": "Connected, but messages are not coming in yet.",
   "Sua assinatura não foi concluída": "Your subscription was not completed",
   "Sua assinatura precisa ser renovada": "Your subscription needs to be renewed",
-  "A cobrança de {valor} do plano {plano} não foi paga no prazo. Para continuar usando o CRM, assine novamente pelos Planos.": "The {valor} charge for the {plano} plan was not paid on time. To keep using the CRM, subscribe again through Plans."
+  "A cobrança de {valor} do plano {plano} não foi paga no prazo. Para continuar usando o CRM, assine novamente pelos Planos.": "The {valor} charge for the {plano} plan was not paid on time. To keep using the CRM, subscribe again through Plans.",
+  "Os contatos e as conversas dos últimos 6 meses do WhatsApp Business deste número vão aparecer no CRM para a sua equipe.": "The contacts and the conversations from the last 6 months of this number's WhatsApp Business will appear in the CRM for your team.",
+  "Entendi e autorizo trazer esses contatos e conversas para o CRM.": "I understand and authorize bringing these contacts and conversations into the CRM.",
+  "A conexão funcionou, mas os contatos do WhatsApp Business não foram trazidos.": "The connection worked, but the WhatsApp Business contacts were not brought in.",
+  "Contatos do WhatsApp Business solicitados.": "WhatsApp Business contacts requested.",
+  "A Meta não aceitou trazer os contatos agora. Tente de novo em instantes.": "Meta did not accept bringing the contacts right now. Try again in a moment.",
+  "Não foi possível pedir os contatos agora. Tente de novo.": "Couldn't request the contacts right now. Try again.",
+  "Confira a conexão e tente de novo.": "Check the connection and try again.",
+  "Não foi possível ler a credencial da conexão. Reconecte o número pela Meta.": "Couldn't read the connection's credential. Reconnect the number with Meta.",
+  "Conexão oficial não encontrada.": "Official connection not found.",
+  "Trocar o número da conexão oficial é uma ação de administrador. Peça a quem administra a empresa para fazer a troca.": "Switching the official connection's number is an administrator action. Ask whoever administers the company to make the change."
 }

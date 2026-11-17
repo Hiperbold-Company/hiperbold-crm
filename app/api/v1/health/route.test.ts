@@ -93,6 +93,49 @@ describe("GET /api/v1/health — o endereço interno não sai para quem não tem
 });
 
 /**
+ * O SHA do commit da imagem (APP_COMMIT) é fingerprint de build: não sai para quem não se autenticou.
+ * `version` continua pública, porque o vigia de deploy e o workflow de deploy leem `.data.version`.
+ */
+describe("GET /api/v1/health: o commit não sai na resposta pública", () => {
+  const SHA = "abc1234def5678";
+  const antes = { commit: process.env.APP_COMMIT, versao: process.env.APP_VERSION };
+
+  beforeEach(() => {
+    vi.resetModules();
+    process.env.APP_COMMIT = SHA;
+    process.env.APP_VERSION = "2.2.0";
+  });
+  afterEach(() => {
+    if (antes.commit === undefined) delete process.env.APP_COMMIT;
+    else process.env.APP_COMMIT = antes.commit;
+    if (antes.versao === undefined) delete process.env.APP_VERSION;
+    else process.env.APP_VERSION = antes.versao;
+  });
+
+  it("resposta anônima não traz commit nem o SHA em lugar nenhum, e mantém version", async () => {
+    const { GET } = await import("./route");
+    const corpo = await (await GET(pedido())).json();
+    expect(corpo.data).not.toHaveProperty("commit");
+    expect(JSON.stringify(corpo)).not.toContain(SHA);
+    expect(corpo.data.version).toBe("2.2.0");
+  });
+
+  it("modo verbose com o segredo interno ainda devolve o commit", async () => {
+    const { GET } = await import("./route");
+    const req = pedido("?verbose=1", { authorization: `Bearer ${SEGREDO}` });
+    const corpo = await (await GET(req)).json();
+    expect(corpo.data.commit).toBe(SHA);
+    expect(corpo.data.version).toBe("2.2.0");
+  });
+
+  it("verbose sem o segredo não destrava o commit", async () => {
+    const { GET } = await import("./route");
+    const corpo = await (await GET(pedido("?verbose=1"))).json();
+    expect(corpo.data).not.toHaveProperty("commit");
+  });
+});
+
+/**
  * Worker e scheduler aparecem em `checks` (migration 0961), mas NÃO mexem no
  * status geral nem no HTTP: o `update.sh` e o deploy esperam `healthy` / 200 daqui,
  * e os dois serviços acabam de reiniciar num deploy, sem batimento novo ainda.

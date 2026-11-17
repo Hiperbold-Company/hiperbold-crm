@@ -20,7 +20,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   SEGREDO: "segredo-interno-de-teste-com-32-caracteres",
-  sessao: { orgId: "org-a", userId: "user-a", authSessionId: "11111111-1111-4111-8111-111111111111" as string | null },
+  sessao: {
+    orgId: "org-a",
+    userId: "user-a",
+    authSessionId: "11111111-1111-4111-8111-111111111111" as string | null,
+    role: "manager" as "manager" | "admin",
+  },
   suporteNegado: false,
   cfg: { appId: "123456", appSecret: "SEGREDO-DO-APP", configId: "cfg-1" } as null | {
     appId: string;
@@ -60,7 +65,7 @@ vi.mock("@/lib/auth/require-role", () => ({
   requireRole: async () => ({
     ok: true,
     user: { id: h.sessao.userId, idioma: "pt-BR", is_platform_admin: false, support: null },
-    org: { orgId: h.sessao.orgId, role: "manager" },
+    org: { orgId: h.sessao.orgId, role: h.sessao.role },
   }),
 }));
 vi.mock("@/lib/audit", () => ({
@@ -104,6 +109,12 @@ vi.mock("@/lib/supabase/admin", () => ({
         data: h.banco.erroDaBusca ? null : h.banco.existente,
         error: h.banco.erroDaBusca,
       });
+      // Reconexão da linha existente: `update().eq().eq()` e devolve `{ error }`.
+      q.update = () => {
+        const u: Record<string, unknown> = { error: null };
+        u.eq = () => u;
+        return u;
+      };
       q.insert = (linha: Record<string, unknown>) => {
         h.banco.inserts.push({ tabela, linha });
         if (tabela === "calendar_oauth_nonces") return Promise.resolve({ error: h.banco.erroDoNonce });
@@ -176,6 +187,7 @@ const insertsDeCanal = () => h.banco.inserts.filter((i) => i.tabela === "channel
 beforeEach(() => {
   h.sessao.orgId = "org-a";
   h.sessao.userId = "user-a";
+  h.sessao.role = "manager";
   h.sessao.authSessionId = "11111111-1111-4111-8111-111111111111";
   h.suporteNegado = false;
   h.cfg = { appId: "123456", appSecret: "SEGREDO-DO-APP", configId: "cfg-1" };
@@ -191,6 +203,40 @@ beforeEach(() => {
   fetchMock.mockReset();
   metaResponde();
   vi.stubGlobal("fetch", fetchMock);
+});
+
+describe("POST cadastro-incorporado: trocar o número de uma conexão viva exige administrador", () => {
+  const OUTRO_NUMERO = "555444333222";
+
+  it("gerente que TROCARIA o número recebe 403 legível, sem queimar o nonce, sem Meta e sem gravar", async () => {
+    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: OUTRO_NUMERO };
+    const res = await POST(post(corpoValido()));
+    expect(res.status).toBe(403);
+    const corpo = await res.json();
+    expect(corpo.error.code).toBe("forbidden_role");
+    expect(corpo.error.message).toMatch(/administrador/i);
+    expect(h.banco.inserts).toHaveLength(0);
+    expect(chamadasAMeta()).toHaveLength(0);
+    expect(h.audit).toHaveLength(0);
+  });
+
+  it("administrador consegue trocar o número", async () => {
+    h.sessao.role = "admin";
+    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: OUTRO_NUMERO };
+    const res = await POST(post(corpoValido()));
+    expect(res.status).toBe(200);
+    expect(h.banco.inserts.some((i) => i.tabela === "calendar_oauth_nonces")).toBe(true);
+  });
+
+  it("gerente refazendo o cadastro do MESMO número segue permitido", async () => {
+    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: NUMERO };
+    expect((await POST(post(corpoValido()))).status).toBe(200);
+  });
+
+  it("gerente criando a PRIMEIRA conexão (nenhuma viva) segue permitido", async () => {
+    h.banco.existente = null;
+    expect((await POST(post(corpoValido()))).status).toBe(200);
+  });
 });
 
 describe("GET /api/v1/channels/official/cadastro-incorporado", () => {
@@ -511,5 +557,43 @@ describe("POST /api/v1/channels/official (manual): o mesmo número em outra orga
       metadata: { origem: "manual", phone_number_id: NUMERO, waba_id: WABA },
     });
     expect(JSON.stringify(h.audit)).not.toContain(TOKEN_CLARO);
+  });
+});
+
+describe("POST /api/v1/channels/official (manual): trocar o número de uma conexão viva exige administrador", () => {
+  const OUTRO_NUMERO = "555444333222";
+  const manual = () =>
+    new NextRequest("http://localhost/api/v1/channels/official", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone_number_id: NUMERO, waba_id: WABA, token: TOKEN_CLARO }),
+    });
+
+  it("gerente que TROCARIA o número recebe 403 legível, sem validar na Meta, sem gravar e sem audit", async () => {
+    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: OUTRO_NUMERO };
+    const res = await POST_MANUAL(manual());
+    expect(res.status).toBe(403);
+    const corpo = await res.json();
+    expect(corpo.error.code).toBe("forbidden_role");
+    expect(corpo.error.message).toMatch(/administrador/i);
+    expect(h.cifrar).toHaveLength(0);
+    expect(h.banco.inserts).toHaveLength(0);
+    expect(h.audit).toHaveLength(0);
+  });
+
+  it("administrador consegue trocar o número", async () => {
+    h.sessao.role = "admin";
+    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: OUTRO_NUMERO };
+    expect((await POST_MANUAL(manual())).status).toBe(200);
+  });
+
+  it("gerente recolando a credencial do MESMO número segue permitido", async () => {
+    h.banco.existente = { id: "sessao-viva", meta_phone_number_id: NUMERO };
+    expect((await POST_MANUAL(manual())).status).toBe(200);
+  });
+
+  it("gerente criando a PRIMEIRA conexão segue permitido", async () => {
+    h.banco.existente = null;
+    expect((await POST_MANUAL(manual())).status).toBe(200);
   });
 });

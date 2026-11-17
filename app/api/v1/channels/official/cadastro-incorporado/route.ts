@@ -24,6 +24,7 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
+import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 import { requireRole } from "@/lib/auth/require-role";
 import { mensagemDaRecusaDoPlano } from "@/lib/billing/planos/limite-de-conexoes";
 import { recusaDoPlano, STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
@@ -39,6 +40,7 @@ import {
   wabaDoToken,
 } from "@/lib/channels/meta/cadastro-incorporado/meta";
 import { conectarCanalOficial, respostaDaFalhaDaConexaoOficial } from "@/lib/channels/meta/conectar-canal-oficial";
+import { numeroDoCanalOficialVivo } from "@/lib/channels/meta/numero-da-sessao";
 import { lerEstadoDoNumero, sincronizarContatosDoApp } from "@/lib/channels/meta/registro-do-numero";
 import { VERSAO_DA_GRAPH_SOCIAL } from "@/lib/channels/meta-social/constantes";
 import { traduzirLimiteDoPlano } from "@/lib/cobranca/limites";
@@ -181,6 +183,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const admin = createAdminClient();
+
+  // TROCAR o número de uma conexão oficial viva pede o mesmo papel que REMOVÊ-LA (admin). Criar a
+  // primeira conexão, ou refazer o cadastro do MESMO número, segue com gerente. Roda antes de queimar
+  // o nonce e de falar com a Meta: recusado aqui, o `state` ainda vale e nada foi tocado.
+  const viva = await numeroDoCanalOficialVivo(admin, orgId);
+  if (viva && viva.phoneNumberId !== phone_number_id && !podeAdministrarEmpresa(authz.user, authz.org)) {
+    logger.warn("[cadastro-incorporado] troca de número recusada: exige administrador", {
+      request_id: requestId,
+      organization_id: orgId,
+      user_id: userId,
+    });
+    return fail(
+      "forbidden_role",
+      t("Trocar o número da conexão oficial é uma ação de administrador. Peça a quem administra a empresa para fazer a troca."),
+      403,
+      { requestId },
+    );
+  }
+
   // O código vale UMA vez: o nonce é queimado ANTES da troca, na mesma tabela de
   // uso único do Google Agenda, Nuvemshop e canal social. 23505 = repetido;
   // qualquer outro erro também recusa, porque sem gravar não há uso único.
@@ -301,6 +322,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   return ok(
     {
       connected: true,
+      /** Para a tela pedir "tentar de novo" a sincronização dos contatos (a rota confere que é desta org). */
+      channelSessionId: conexao.channelSessionId,
       displayName: conexao.displayName,
       phoneNumber: conexao.phoneNumber,
       /** `registrado: false` NÃO desfaz a conexão: o canal envia; falta a entrega. */
