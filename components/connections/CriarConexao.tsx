@@ -135,6 +135,7 @@ export function CriarConexao({
   graphParceiro = null,
   wacallsConfigured,
   pareamentoQr = false,
+  temConexaoOficial = false,
   aoMudar,
 }: {
   aberto: boolean;
@@ -147,6 +148,8 @@ export function CriarConexao({
   graphParceiro?: { label: string } | null;
   wacallsConfigured: boolean;
   pareamentoQr?: boolean;
+  /** A organização já tem conexão oficial: no teto do plano, reautenticar o mesmo número segue livre. */
+  temConexaoOficial?: boolean;
   /** Uma conexão foi criada: quem monta refaz a grade. */
   aoMudar: () => void;
 }) {
@@ -170,7 +173,7 @@ export function CriarConexao({
       case "whatsapp_oficial":
         return (
           <div className="flex flex-col gap-4">
-            <ConectarComAMeta bloqueio={bloqueio} />
+            <ConectarComAMeta bloqueio={bloqueio} temConexaoOficial={temConexaoOficial} />
             {adminDaPlataforma ? (
               <details className="rounded-lg border p-3" data-testid="criar-oficial-credenciais">
                 <summary className="cursor-pointer text-sm font-medium">
@@ -185,7 +188,14 @@ export function CriarConexao({
         );
       case "whatsapp_qr":
         return (
-          <CanalInstanciaClient bloqueio={bloqueio} pareamentoQr={pareamentoQr} somenteConectar aoMudar={aoMudar} />
+          <CanalInstanciaClient
+            bloqueio={bloqueio}
+            pareamentoQr={pareamentoQr}
+            somenteConectar
+            aoMudar={aoMudar}
+            // Servidor e token da instância são termos de quem instala, não de quem atende.
+            servidorProprio={adminDaPlataforma}
+          />
         );
       case "instagram":
         return <RedesSociaisClient bloqueio={bloqueio} plataformas={["instagram"]} semContas />;

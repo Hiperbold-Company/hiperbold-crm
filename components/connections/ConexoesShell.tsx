@@ -1,7 +1,8 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import { MagnifyingGlass, Plus } from "@/lib/ui/icons";
 import { CartaoDeConexao, tituloDaConexao } from "./CartaoDeConexao";
 import { CriarConexao, type SubDoCriar, type TipoDoCriar } from "./CriarConexao";
 import { GerenciarConexao, type AbaDoGerenciar } from "./GerenciarConexao";
+import { lerAviso } from "./RedesSociaisClient";
 
 /**
  * Conexões — TODOS os canais numa grade só de cartões (decisão do dono do produto, 17/11/2026).
@@ -44,6 +46,34 @@ const TIPO_DA_ABA_ANTIGA: Record<string, TipoDoCriar> = {
 
 /** Os parâmetros que a tela consome: saem da URL quando o diálogo fecha. */
 const PARAMETROS_DA_TELA = ["aba", "sub", "reconectar"];
+
+type PedidoDaUrl =
+  | { kind: "criar"; tipo: TipoDoCriar; sub: SubDoCriar }
+  | { kind: "reconectar"; id: string }
+  | { kind: "templates-oficial" }
+  | { kind: "oficial" }
+  | {
+      kind: "social";
+      plataforma: "instagram" | "messenger";
+      aviso: { tipo: "ok" | "erro" | "parcial"; texto: string };
+    };
+
+/** O que a URL pede à tela. `null` = nada (a grade, só). */
+function pedidoDaUrl(params: URLSearchParams, t: (s: string) => string): PedidoDaUrl | null {
+  const reconectar = params.get("reconectar");
+  if (reconectar) return { kind: "reconectar", id: reconectar };
+  const aba = params.get("aba");
+  const sub: SubDoCriar = params.get("sub") === "templates" ? "templates" : "conexao";
+  if (aba === "oficial") return sub === "templates" ? { kind: "templates-oficial" } : { kind: "oficial" };
+  const plataforma = params.get("plataforma") === "messenger" ? "messenger" : "instagram";
+  if (aba === "sociais") {
+    const aviso = lerAviso(params, t);
+    if (aviso) return { kind: "social", plataforma, aviso };
+    return { kind: "criar", tipo: plataforma, sub: "conexao" };
+  }
+  const tipo = aba ? TIPO_DA_ABA_ANTIGA[aba] : undefined;
+  return tipo ? { kind: "criar", tipo, sub } : null;
+}
 
 export function ConexoesShell({
   wahaConfigured: _wahaConfigured,
@@ -88,34 +118,100 @@ export function ConexoesShell({
     voz: !funcaoOculta("voz-whatsapp"),
   };
 
-  const abaAntiga = params.get("aba");
-  const subAntiga: SubDoCriar = params.get("sub") === "templates" ? "templates" : "conexao";
-  const reconectarId = params.get("reconectar");
-  // Os Templates da Meta eram uma sub-aba da oficial: agora moram no Gerenciar de cada conta.
-  const [pedeTemplatesDaOficial, setPedeTemplatesDaOficial] = useState(
-    abaAntiga === "oficial" && subAntiga === "templates",
-  );
-
   const [busca, setBusca] = useState("");
-  const [criar, setCriar] = useState<{ tipo: TipoDoCriar | null; sub: SubDoCriar } | null>(() => {
-    if (abaAntiga === "oficial" && subAntiga === "templates") return null;
-    const tipo = abaAntiga ? TIPO_DA_ABA_ANTIGA[abaAntiga] : undefined;
-    return tipo ? { tipo, sub: subAntiga } : null;
-  });
-  const [gerenciar, setGerenciar] = useState<{ id: string; aba: AbaDoGerenciar; reconectar: boolean } | null>(
-    () => (reconectarId ? { id: reconectarId, aba: "conexao", reconectar: true } : null),
-  );
+  const [criar, setCriar] = useState<{ tipo: TipoDoCriar | null; sub: SubDoCriar; chave: number } | null>(null);
+  const [gerenciar, setGerenciar] = useState<{
+    id: string;
+    aba: AbaDoGerenciar;
+    reconectar: boolean;
+    avancado: boolean;
+  } | null>(null);
+  /** O pedido da URL que depende da lista (qual conta, se a conexão existe) espera ela chegar. */
+  const [pedido, setPedido] = useState<PedidoDaUrl | null>(null);
+  const [destaque, setDestaque] = useState<string | null>(null);
+  /** Aviso a mostrar UMA vez (toast): a chave muda a cada aviso novo. */
+  const [aviso, setAviso] = useState<{ chave: number; tipo: "ok" | "erro" | "parcial"; texto: string } | null>(null);
+  const avisoMostrado = useRef<number | null>(null);
+  const [contador, setContador] = useState(0);
+
+  // A URL é lida A CADA MUDANÇA, não só no primeiro render: a faixa de conexão caída leva a
+  // `?reconectar=<id>` estando já na tela, e voltar/avançar no navegador troca os parâmetros.
+  // Ajuste de estado durante o render (e não num efeito), uma vez por URL nova.
+  const qs = params.toString();
+  const [urlVista, setUrlVista] = useState<string | null>(null);
+  if (urlVista !== qs) {
+    setUrlVista(qs);
+    const lido = pedidoDaUrl(new URLSearchParams(qs), t);
+    const n = contador + 1;
+    setContador(n);
+    if (lido?.kind === "criar") {
+      setGerenciar(null);
+      setCriar({ tipo: lido.tipo, sub: lido.sub, chave: n });
+    } else if (lido?.kind === "social") {
+      // Volta do OAuth: o Criar não abre; o desfecho vira aviso e o cartão novo ganha destaque.
+      setCriar(null);
+      setAviso({ chave: n, tipo: lido.aviso.tipo, texto: lido.aviso.texto });
+      if (lido.aviso.tipo !== "erro") setPedido(lido);
+    } else if (lido) {
+      setPedido(lido);
+    }
+  }
 
   const lista = useMemo(() => conexoes.data ?? [], [conexoes.data]);
 
-  // `?aba=oficial&sub=templates`: espera a lista para saber qual conta abrir. Sem oficial, o Criar dela.
-  // Ajuste de estado durante o render (e não num efeito): acontece uma vez, quando a lista chega.
-  if (pedeTemplatesDaOficial && conexoes.data) {
-    const oficial = conexoes.data.find((c) => c.tipo === "whatsapp_oficial" && c.via === "meta");
-    setPedeTemplatesDaOficial(false);
-    if (oficial) setGerenciar({ id: oficial.id, aba: "templates", reconectar: false });
-    else setCriar({ tipo: "whatsapp_oficial", sub: "conexao" });
+  // O pedido que precisava da lista se resolve quando ela chega (também no render, uma vez).
+  if (pedido && conexoes.data) {
+    const dados = conexoes.data;
+    const primeiraOficial = dados.find((c) => c.tipo === "whatsapp_oficial" && c.via === "meta");
+    setPedido(null);
+    if (pedido.kind === "reconectar") {
+      if (dados.some((c) => c.id === pedido.id)) {
+        setCriar(null);
+        setGerenciar({ id: pedido.id, aba: "conexao", reconectar: true, avancado: false });
+      } else {
+        setAviso({ chave: contador + 1, tipo: "erro", texto: t("Conexão não encontrada.") });
+        setContador(contador + 1);
+      }
+    } else if (pedido.kind === "templates-oficial" || pedido.kind === "oficial") {
+      if (primeiraOficial) {
+        setCriar(null);
+        setGerenciar({
+          id: primeiraOficial.id,
+          aba: pedido.kind === "templates-oficial" ? "templates" : "conexao",
+          reconectar: false,
+          // O link do admin da Meta (`?aba=oficial`) leva ao webhook e aos IDs: o Avançado já abre.
+          avancado: pedido.kind === "oficial",
+        });
+      } else {
+        setCriar({ tipo: "whatsapp_oficial", sub: "conexao", chave: contador + 1 });
+        setContador(contador + 1);
+      }
+    } else if (pedido.kind === "social") {
+      const daPlataforma = dados
+        .filter((c) => c.tipo === pedido.plataforma)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
+      setDestaque(daPlataforma[0]?.id ?? null);
+    }
   }
+
+  // O toast sai num efeito (efeito externo), uma vez por aviso.
+  useEffect(() => {
+    if (!aviso || avisoMostrado.current === aviso.chave) return;
+    avisoMostrado.current = aviso.chave;
+    if (aviso.tipo === "ok") toast.success(aviso.texto);
+    else if (aviso.tipo === "parcial") toast.warning(aviso.texto);
+    else toast.error(aviso.texto);
+  }, [aviso]);
+
+  // O resultado da volta do OAuth sai da URL: um F5 não repete o aviso. `replaceState` e não
+  // `router.replace`: limpar a query não é navegar (o mesmo que a lista de redes sociais fazia).
+  useEffect(() => {
+    const atual = new URLSearchParams(window.location.search);
+    if (!atual.has("meta_social")) return;
+    for (const k of ["aba", "meta_social", "motivo", "n", "recusadas", "plataforma"]) atual.delete(k);
+    const resto = atual.toString();
+    window.history.replaceState(null, "", resto ? `/app/connections?${resto}` : "/app/connections");
+  }, [qs]);
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase();
@@ -147,6 +243,11 @@ export function ConexoesShell({
 
   const atualizarGrade = () => qc.invalidateQueries({ queryKey: ["conexoes"] });
 
+  const abrirCriar = () => {
+    setContador(contador + 1);
+    setCriar({ tipo: null, sub: "conexao", chave: contador + 1 });
+  };
+
   const total = filtradas.length;
 
   return (
@@ -172,7 +273,7 @@ export function ConexoesShell({
           <span className="text-sm text-muted-foreground" role="status" data-testid="contador-conexoes">
             {total} {total === 1 ? t("resultado") : t("resultados")}
           </span>
-          <Button onClick={() => setCriar({ tipo: null, sub: "conexao" })} data-testid="btn-criar-conexao">
+          <Button onClick={() => abrirCriar()} data-testid="btn-criar-conexao">
             <Plus size={16} aria-hidden />
             {t("Criar")}
           </Button>
@@ -196,7 +297,7 @@ export function ConexoesShell({
           <p className="max-w-md text-sm text-muted-foreground">
             {t("Conecte o WhatsApp, o Instagram ou o Messenger do seu negócio para atender os clientes pelo Chat.")}
           </p>
-          <Button onClick={() => setCriar({ tipo: null, sub: "conexao" })}>
+          <Button onClick={() => abrirCriar()}>
             <Plus size={16} aria-hidden />
             {t("Criar")}
           </Button>
@@ -211,7 +312,11 @@ export function ConexoesShell({
             <CartaoDeConexao
               key={c.id}
               conexao={c}
-              aoGerenciar={() => setGerenciar({ id: c.id, aba: "conexao", reconectar: false })}
+              destacado={c.id === destaque}
+              aoGerenciar={() => {
+                setDestaque(null);
+                setGerenciar({ id: c.id, aba: "conexao", reconectar: false, avancado: false });
+              }}
             />
           ))}
         </div>
@@ -219,6 +324,7 @@ export function ConexoesShell({
 
       {criar ? (
         <CriarConexao
+          key={criar.chave}
           aberto
           aoFechar={() => {
             setCriar(null);
@@ -232,6 +338,7 @@ export function ConexoesShell({
           graphParceiro={graphParceiro}
           wacallsConfigured={wacallsConfigured}
           pareamentoQr={pareamentoQr}
+          temConexaoOficial={lista.some((c) => c.tipo === "whatsapp_oficial" && c.via === "meta")}
           aoMudar={() => void atualizarGrade()}
         />
       ) : null}
@@ -242,7 +349,12 @@ export function ConexoesShell({
         conexao={conexaoGerenciada}
         abaInicial={gerenciar?.aba ?? "conexao"}
         reconectarAoAbrir={Boolean(gerenciar?.reconectar)}
-        aoConsumirReconectar={limparUrl}
+        avancadoAberto={Boolean(gerenciar?.avancado)}
+        aoConsumirReconectar={() => {
+          // O QR abriu sozinho uma vez: o pedido é consumido (reabrir o Gerenciar não pede outro QR).
+          setGerenciar((g) => (g ? { ...g, reconectar: false } : g));
+          limparUrl();
+        }}
         podeEditarProtecao={podeEditarProtecao}
         aoFechar={() => {
           setGerenciar(null);

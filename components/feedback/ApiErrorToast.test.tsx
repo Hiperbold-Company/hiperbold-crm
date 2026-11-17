@@ -116,4 +116,12 @@ describe("ApiErrorToast", () => {
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(toast.error).toHaveBeenCalledWith("Erro inesperado. Tente novamente.");
   });
+
+  it("conexao_oficial_ambigua: aviso com a mensagem do servidor", () => {
+    vi.mocked(toast.warning).mockClear();
+    showApiError(
+      new ApiError(422, "conexao_oficial_ambigua", undefined, "r1", "Esta organização tem mais de uma conexão oficial."),
+    );
+    expect(toast.warning).toHaveBeenCalledWith("Esta organização tem mais de uma conexão oficial.", { description: "ID: r1" });
+  });
 });

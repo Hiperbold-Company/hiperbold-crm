@@ -57,11 +57,29 @@ function useAdminDaPlataforma(): boolean {
   return Boolean(user.is_platform_admin && !user.support);
 }
 
-/** Fechado por padrão: o que está aqui é para quem instala, não para quem atende. */
-function Avancado({ children }: { children: ReactNode }) {
+function ErroAoCarregar({ aoTentar }: { aoTentar: () => void }) {
   const t = useT();
   return (
-    <details className="rounded-lg border p-3" data-testid="gerenciar-avancado">
+    <p role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive" data-testid="gerenciar-erro">
+      {t("Não foi possível carregar esta conexão. Tente de novo.")}{" "}
+      <Button variant="link" className="h-auto p-0" onClick={aoTentar}>
+        {t("Tentar de novo")}
+      </Button>
+    </p>
+  );
+}
+
+/** Fechado por padrão: o que está aqui é para quem instala, não para quem atende. */
+function Avancado({ children, abertoAoMontar = false }: { children: ReactNode; abertoAoMontar?: boolean }) {
+  const t = useT();
+  const [aberto, setAberto] = useState(abertoAoMontar);
+  return (
+    <details
+      className="rounded-lg border p-3"
+      data-testid="gerenciar-avancado"
+      open={aberto}
+      onToggle={(e) => setAberto(e.currentTarget.open)}
+    >
       <summary className="cursor-pointer text-sm font-medium">{t("Avançado")}</summary>
       <div className="mt-3 flex flex-col gap-4">{children}</div>
     </details>
@@ -130,11 +148,13 @@ function BlocoComum({
 function GerenciarOficialMeta({
   conexao,
   abaInicial,
+  avancadoAberto,
   aoMudar,
   aoRemovida,
 }: {
   conexao: CartaoDaConexao;
   abaInicial: AbaDoGerenciar;
+  avancadoAberto: boolean;
   aoMudar: () => void | Promise<unknown>;
   aoRemovida: () => void | Promise<unknown>;
 }) {
@@ -142,9 +162,16 @@ function GerenciarOficialMeta({
   const adminDaPlataforma = useAdminDaPlataforma();
   // `DELETE /api/v1/channel-sessions/[id]` exige admin: o botão some para quem a rota recusaria.
   const podeRemover = usePermission("settings.write");
+  const qc = useQueryClient();
   const [aba, setAba] = useState<AbaDoGerenciar>(abaInicial);
-  const { data, isPending } = useOfficialChannel(conexao.id);
+  const { data, isPending, isError, refetch } = useOfficialChannel(conexao.id);
   const estado = data?.data;
+  // O nome e a etiqueta moram no estado da oficial e na lista do Chat: os dois se refazem.
+  const atualizar = async () => {
+    await aoMudar();
+    void qc.invalidateQueries({ queryKey: ["official-channel"] });
+    void qc.invalidateQueries({ queryKey: ["conversations"] });
+  };
 
   return (
     <Tabs value={aba} onValueChange={(v) => setAba(v as AbaDoGerenciar)} className="flex flex-col gap-4">
@@ -156,6 +183,8 @@ function GerenciarOficialMeta({
       <TabsContent value="conexao" className="mt-0 flex flex-col gap-4">
         {isPending ? (
           <p className="text-sm text-muted-foreground">{t("Carregando…")}</p>
+        ) : isError ? (
+          <ErroAoCarregar aoTentar={() => void refetch()} />
         ) : (
           <>
             <BlocoComum
@@ -165,12 +194,16 @@ function GerenciarOficialMeta({
               comCor={Boolean(estado)}
               rotaDeRemover={`/api/v1/channel-sessions/${encodeURIComponent(conexao.id)}`}
               podeRemover={podeRemover}
-              aoMudar={aoMudar}
-              aoRemovida={aoRemovida}
+              aoMudar={atualizar}
+              aoRemovida={async () => {
+                void qc.invalidateQueries({ queryKey: ["official-channel"] });
+                void qc.invalidateQueries({ queryKey: ["conversations"] });
+                await aoRemovida();
+              }}
             />
             {estado?.connected ? <NumeroOficialCard channelSessionId={conexao.id} /> : null}
             {adminDaPlataforma && estado ? (
-              <Avancado>
+              <Avancado abertoAoMontar={avancadoAberto}>
                 <WebhookDoNumeroOficial estado={estado} channelSessionId={conexao.id} />
                 <ParaIntegrarOficial estado={estado} />
                 <FormularioOficialManual jaConectado hasToken={estado.hasToken} channelSessionId={conexao.id} />
@@ -206,6 +239,7 @@ function GerenciarPorQr({
   const t = useT();
   const qc = useQueryClient();
   const podeRemoverSessao = usePermission("settings.write");
+  const adminDaPlataforma = useAdminDaPlataforma();
   const [protecaoAberta, setProtecaoAberta] = useState(false);
   const oferecerProtecao = podeEditarProtecao !== undefined;
   const lista = useQuery({
@@ -216,6 +250,7 @@ function GerenciarPorQr({
   const pacingItems = usePacingKnobs(oferecerProtecao).data?.items ?? [];
 
   if (lista.isPending) return <p className="text-sm text-muted-foreground">{t("Carregando…")}</p>;
+  if (lista.isError) return <ErroAoCarregar aoTentar={() => void lista.refetch()} />;
   // A instância é a conexão por QR que o CRM sabe reconectar e apagar no servidor; fora da lista
   // (outro motor por QR), ficam o nome, o acesso da IA e o remover pela rota geral.
   const c = lista.data?.conexoes.find((x) => x.id === conexao.id) ?? null;
@@ -228,7 +263,8 @@ function GerenciarPorQr({
 
   return (
     <div className="flex flex-col gap-4">
-      {c && !c.webhook_registrado ? (
+      {/* "Endereço público do CRM" e "token" são termos de quem instala: só o administrador da plataforma lê. */}
+      {c && !c.webhook_registrado && adminDaPlataforma ? (
         <p className="rounded-md border border-warning/40 bg-warning-bg p-3 text-sm text-warning-fg">
           {t("A entrada de mensagens não está ligada. Reconecte com o mesmo token depois de configurar o endereço público do CRM.")}
         </p>
@@ -393,6 +429,7 @@ export function GerenciarConexao({
   conexao,
   aoFechar,
   abaInicial = "conexao",
+  avancadoAberto = false,
   reconectarAoAbrir = false,
   aoConsumirReconectar,
   podeEditarProtecao,
@@ -403,6 +440,8 @@ export function GerenciarConexao({
   conexao: CartaoDaConexao | null;
   aoFechar: () => void;
   abaInicial?: AbaDoGerenciar;
+  /** Veio do link do admin da Meta (`?aba=oficial`): o bloco Avançado já abre (se a pessoa o vê). */
+  avancadoAberto?: boolean;
   /** Veio da faixa de conexão caída (`?reconectar=<id>`): o QR já abre sozinho. */
   reconectarAoAbrir?: boolean;
   aoConsumirReconectar?: () => void;
@@ -445,6 +484,7 @@ export function GerenciarConexao({
                 <GerenciarOficialMeta
                   conexao={conexao}
                   abaInicial={abaInicial}
+                  avancadoAberto={avancadoAberto}
                   aoMudar={aoMudar}
                   aoRemovida={removida}
                 />

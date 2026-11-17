@@ -338,4 +338,14 @@ describe("Conectar com a Meta", () => {
     expect(botao.disabled).toBe(true);
     expect((screen.getByTestId("btn-conectar") as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it("limite do plano COM conexão oficial: o botão da Meta fica livre para reautenticar o mesmo número", async () => {
+    // O servidor reaproveita a linha do mesmo número; número novo é recusado pela rota, com a mensagem dela.
+    estadoDoCanal = CONECTADO as typeof NAO_CONECTADO;
+    respostasDoInicio = [OFF];
+    montar({ bloqueio: { desabilitado: true, motivo: "Limite atingido." } as never });
+    const botao = (await screen.findByTestId("btn-conectar-meta")) as HTMLButtonElement;
+    expect(botao.disabled).toBe(false);
+    expect(screen.getByTestId("cadastro-meta-so-reconectar")).toBeTruthy();
+  });
 });

@@ -28750,7 +28750,7 @@ export const DICIONARIO: Traducoes = {
   // Cadastro Incorporado do WhatsApp (botão Conectar com a Meta, migration 1014).
   "Este número já está conectado em outra organização desta instalação. Desconecte lá antes de conectar aqui.": { es: "Este número ya está conectado en otra organización de esta instalación. Desconéctelo allí antes de conectarlo aquí." },
   "Este número não é o desta conexão. Para conectar outro número, use Adicionar conexão.": { es: "Este número no es el de esta conexión. Para conectar otro número, use Agregar conexión." },
-  "Esta organização tem mais de uma conexão oficial. Informe qual conexão (channel_session_id).": { es: "Esta organización tiene más de una conexión oficial. Indique cuál conexión (channel_session_id)." },
+  "Esta organização tem mais de uma conexão oficial. Abra a conexão certa em Conexões e tente de novo.": { es: "Esta organización tiene más de una conexión oficial. Abra la conexión correcta en Conexiones e inténtelo de nuevo." },
   "A volta do cadastro da Meta veio incompleta. Clique em Conectar de novo.": { es: "El regreso del registro de Meta llegó incompleto. Haga clic en Conectar de nuevo." },
   "Escolha um número no cadastro da Meta": { es: "Elija un número en el registro de Meta" },
   "A Meta recusou a credencial do número escolhido. Confira se o número terminou o cadastro e tente de novo.": { es: "Meta rechazó la credencial del número elegido. Compruebe que el número terminó el registro e inténtelo de nuevo." },
@@ -28801,6 +28801,9 @@ export const DICIONARIO: Traducoes = {
   "WhatsApp por QR Code": { es: "WhatsApp por código QR" },
   "resultado": { es: "resultado" },
   "resultados": { es: "resultados" },
+  "O plano chegou ao limite de conexões: dá para entrar de novo com um número que já está conectado, mas não para conectar um número novo.": { es: "El plan llegó al límite de conexiones: puede volver a entrar con un número que ya está conectado, pero no conectar un número nuevo." },
+  "A conexão por QR Code ainda não está disponível nesta instalação. Fale com quem administra a instalação.": { es: "La conexión por código QR todavía no está disponible en esta instalación. Hable con quien administra la instalación." },
+  "Não foi possível carregar esta conexão. Tente de novo.": { es: "No fue posible cargar esta conexión. Inténtelo de nuevo." },
 };
 
 /**

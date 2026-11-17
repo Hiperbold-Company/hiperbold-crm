@@ -103,6 +103,7 @@ export function CanalInstanciaClient({
   aoConsumirReconectar,
   somenteConectar = false,
   aoMudar,
+  servidorProprio = true,
 }: {
   /**
    * Fase F3, tarefa 9: quando o bloqueio do plano vale e "conexões" está no
@@ -146,6 +147,12 @@ export function CanalInstanciaClient({
   somenteConectar?: boolean;
   /** Uma conexão foi criada ou mudou: quem monta refaz a lista dele (a grade de cartões). */
   aoMudar?: () => void;
+  /**
+   * Oferece o formulário de servidor e token (instância já pareada noutro servidor). Na tela em
+   * cartões só o administrador da plataforma o vê: para o cliente, o caminho é ler o QR Code.
+   * Padrão `true`: o onboarding segue como sempre foi.
+   */
+  servidorProprio?: boolean;
 } = {}) {
   const t = useT();
   const qc = useQueryClient();
@@ -248,6 +255,12 @@ export function CanalInstanciaClient({
   return (
     <div className="flex flex-col gap-4" data-testid="canal-instancia-root">
       {pareamentoQr && <PareamentoQrClient bloqueio={bloqueio} aoConectar={() => void carregar()} />}
+      {!pareamentoQr && !servidorProprio ? (
+        <p className="text-sm text-muted-foreground" data-testid="qr-indisponivel">
+          {t("A conexão por QR Code ainda não está disponível nesta instalação. Fale com quem administra a instalação.")}
+        </p>
+      ) : null}
+      {servidorProprio ? (
       <Avancado ativo={pareamentoQr}>
         <Card className="flex flex-col gap-4 p-4">
           <div>
@@ -318,6 +331,7 @@ export function CanalInstanciaClient({
           </div>
         </Card>
       </Avancado>
+      ) : null}
 
       {aviso && (
         <Card className="flex flex-col gap-2 border-warning/40 bg-warning-bg p-4">

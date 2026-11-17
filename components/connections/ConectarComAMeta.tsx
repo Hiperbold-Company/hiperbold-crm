@@ -134,12 +134,19 @@ interface Preparado {
 
 export function ConectarComAMeta({
   bloqueio,
+  temConexaoOficial = false,
 }: {
   /**
-   * Desde 17/11/2026 cada número conectado pela Meta é uma conexão NOVA (várias contas oficiais
-   * por organização): o botão nunca substitui a atual, e o teto do plano vale sempre.
+   * Desde 17/11/2026 cada número NOVO conectado pela Meta é uma conexão nova (várias contas oficiais
+   * por organização): o botão nunca substitui a atual.
    */
   bloqueio?: BloqueioDoBotao;
+  /**
+   * A organização já tem conexão oficial: no teto do plano o botão continua livre, porque reautenticar
+   * o MESMO número reaproveita a linha dele. Número novo segue barrado pelo servidor (trigger do plano),
+   * e a recusa chega com a mensagem da rota.
+   */
+  temConexaoOficial?: boolean;
 }) {
   const t = useT();
   const finalizar = useFinalizarCadastroIncorporado();
@@ -214,7 +221,8 @@ export function ConectarComAMeta({
   }, []);
 
   const ocupado = fase !== "ocioso";
-  const travadoPeloPlano = Boolean(bloqueio?.desabilitado);
+  const travadoPeloPlano = !temConexaoOficial && Boolean(bloqueio?.desabilitado);
+  const soReconectar = temConexaoOficial && Boolean(bloqueio?.desabilitado);
 
   function falhar(mensagem: string) {
     if (!montado.current) return;
@@ -437,6 +445,12 @@ export function ConectarComAMeta({
 
         {travadoPeloPlano ? (
           <AvisoDeLimiteDeConexoes motivo={bloqueio?.motivo} className="text-xs text-destructive" />
+        ) : null}
+
+        {soReconectar ? (
+          <p className="text-xs text-muted-foreground" data-testid="cadastro-meta-so-reconectar">
+            {t("O plano chegou ao limite de conexões: dá para entrar de novo com um número que já está conectado, mas não para conectar um número novo.")}
+          </p>
         ) : null}
 
         {semConfiguracao ? (

@@ -19,6 +19,9 @@ const h = vi.hoisted(() => ({
   conexoes: [] as unknown[],
   get: vi.fn(),
   replace: vi.fn(),
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  falharOficial: false,
+  webhookDoQr: true,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -30,7 +33,7 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   useAuth: () => ({ user: { is_platform_admin: h.adminDaPlataforma, support: null } }),
   usePermission: () => true,
 }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: h.toast }));
 vi.mock("@/lib/api/client", () => ({
   apiClient: { get: h.get, post: vi.fn(async () => ({ data: {} })), delete: vi.fn(async () => ({})) },
 }));
@@ -43,11 +46,14 @@ vi.mock("@/components/connections/ReconectarConexao", () => ({
 }));
 // O Criar monta os componentes de conectar de cada tipo; aqui só importa QUAIS tipos ele oferece.
 vi.mock("@/components/connections/ConectarComAMeta", () => ({ ConectarComAMeta: () => <div>conectar-meta</div> }));
-vi.mock("@/components/connections/CanalInstanciaClient", () => ({ CanalInstanciaClient: () => <div>conectar-qr</div> }));
-vi.mock("@/components/connections/RedesSociaisClient", () => ({
-  RedesSociaisClient: () => null,
-  precisaReconectar: () => false,
-  urlDeConectar: () => "#",
+vi.mock("@/components/connections/CanalInstanciaClient", () => ({
+  CanalInstanciaClient: ({ servidorProprio }: { servidorProprio?: boolean }) => (
+    <div>conectar-qr:{String(servidorProprio)}</div>
+  ),
+}));
+vi.mock("@/components/connections/RedesSociaisClient", async (original) => ({
+  ...((await original()) as object),
+  RedesSociaisClient: () => <div>conectar-sociais</div>,
 }));
 vi.mock("@/components/connections/CanalParceiroClient", () => ({ CanalParceiroClient: () => null }));
 vi.mock("@/components/connections/CanalGraphParceiroClient", () => ({ CanalGraphParceiroClient: () => null }));
@@ -115,7 +121,10 @@ const ESTADO_OFICIAL = {
 
 function responder(path: string): unknown {
   if (path === "/api/v1/channels/conexoes") return { data: h.conexoes };
-  if (path === `/api/v1/channels/official?id=${OFICIAL.id}`) return { data: ESTADO_OFICIAL };
+  if (path === `/api/v1/channels/official?id=${OFICIAL.id}`) {
+    if (h.falharOficial) throw new Error("falhou");
+    return { data: ESTADO_OFICIAL };
+  }
   if (path.startsWith("/api/v1/channels/official/numero")) return { data: { disponivel: false, motivo: "x" } };
   if (path === `/api/v1/channels/templates?channel_session_id=${OFICIAL.id}`) {
     return {
@@ -154,7 +163,7 @@ function responder(path: string): unknown {
             phone_number: "+55 11 90000-0002",
             status: "SCAN_QR_CODE",
             servidor: "srv",
-            webhook_registrado: true,
+            webhook_registrado: h.webhookDoQr,
           },
         ],
       },
@@ -163,8 +172,10 @@ function responder(path: string): unknown {
   throw new Error(`rota inesperada no teste: ${path}`);
 }
 
+let qcAtual: QueryClient | null = null;
 function montar() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  qcAtual = qc;
   return render(
     <QueryClientProvider client={qc}>
       <ConexoesShell wahaConfigured={false} wacallsConfigured={false} redesSociaisLiberadas />
@@ -179,6 +190,9 @@ beforeEach(() => {
   h.get.mockReset();
   h.get.mockImplementation(async (path: string) => responder(path));
   h.replace.mockReset();
+  h.falharOficial = false;
+  h.webhookDoQr = true;
+  Object.values(h.toast).forEach((f) => f.mockReset());
 });
 
 afterEach(() => cleanup());
@@ -253,7 +267,16 @@ describe("Criar", () => {
     }
     expect(screen.getByText("conectar-meta")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("criar-tipo-whatsapp_qr"));
-    expect(screen.getByText("conectar-qr")).toBeInTheDocument();
+    // Servidor e token da instância: só para o administrador da plataforma.
+    expect(screen.getByText("conectar-qr:false")).toBeInTheDocument();
+  });
+
+  it("QR para o administrador da plataforma: oferece servidor e token", async () => {
+    h.adminDaPlataforma = true;
+    montar();
+    fireEvent.click(screen.getByTestId("btn-criar-conexao"));
+    fireEvent.click(await screen.findByTestId("criar-tipo-whatsapp_qr"));
+    expect(screen.getByText("conectar-qr:true")).toBeInTheDocument();
   });
 
   it("credenciais à mão da oficial: só o administrador da plataforma vê", async () => {
@@ -322,15 +345,86 @@ describe("?reconectar=<id>", () => {
     expect(within(dialogo).getByText("Suporte", { selector: "h2" })).toBeInTheDocument();
   });
 
-  it("id que não é desta lista não abre nada", async () => {
+  it("id que não é desta lista não abre nada e avisa", async () => {
     h.busca = "reconectar=99999999-9999-4999-8999-999999999999";
     montar();
     await screen.findByTestId(`cartao-conexao-${OFICIAL.id}`);
-    await waitFor(() => expect(screen.queryByTestId("gerenciar-conexao")).toBeNull());
+    await waitFor(() => expect(h.toast.error).toHaveBeenCalledWith("Conexão não encontrada."));
+    expect(screen.queryByTestId("gerenciar-conexao")).toBeNull();
+  });
+
+  it("chega com a tela JÁ aberta (a faixa do topo): a URL nova abre o Gerenciar", async () => {
+    const { rerender } = montar();
+    await screen.findByTestId(`cartao-conexao-${QR.id}`);
+    expect(screen.queryByTestId("gerenciar-conexao")).toBeNull();
+    h.busca = `reconectar=${QR.id}`;
+    rerender(
+      <QueryClientProvider client={qcAtual!}>
+        <ConexoesShell wahaConfigured={false} wacallsConfigured={false} redesSociaisLiberadas />
+      </QueryClientProvider>,
+    );
+    const dialogo = await screen.findByTestId("gerenciar-conexao");
+    expect((await within(dialogo).findByTestId("reconectar")).getAttribute("data-conexao")).toBe(QR.id);
+  });
+});
+
+describe("Gerenciar da conexão por QR", () => {
+  it("o aviso de endereço público do CRM é só do administrador da plataforma", async () => {
+    h.webhookDoQr = false;
+    montar();
+    fireEvent.click(await screen.findByTestId(`gerenciar-${QR.id}`));
+    const dialogo = await screen.findByTestId("gerenciar-conexao");
+    await within(dialogo).findByTestId("gerenciar-bloco-comum");
+    expect(dialogo.textContent).not.toContain("endereço público");
+    cleanup();
+
+    h.adminDaPlataforma = true;
+    montar();
+    fireEvent.click(await screen.findByTestId(`gerenciar-${QR.id}`));
+    const outro = await screen.findByTestId("gerenciar-conexao");
+    await within(outro).findByTestId("gerenciar-bloco-comum");
+    expect(outro.textContent).toContain("endereço público");
+  });
+});
+
+describe("Gerenciar da oficial com falha", () => {
+  it("a leitura falhou: avisa e oferece tentar de novo", async () => {
+    h.falharOficial = true;
+    montar();
+    fireEvent.click(await screen.findByTestId(`gerenciar-${OFICIAL.id}`));
+    const erro = await screen.findByTestId("gerenciar-erro");
+    expect(erro.textContent).toContain("Não foi possível carregar esta conexão. Tente de novo.");
   });
 });
 
 describe("links antigos de aba", () => {
+  it("?aba=oficial (link do admin da Meta): Gerenciar da primeira oficial com o Avançado aberto", async () => {
+    h.adminDaPlataforma = true;
+    h.busca = "aba=oficial";
+    montar();
+    const dialogo = await screen.findByTestId("gerenciar-conexao");
+    const avancado = (await within(dialogo).findByTestId("gerenciar-avancado")) as HTMLDetailsElement;
+    expect(avancado.open).toBe(true);
+  });
+
+  it("volta do OAuth: sem Criar, aviso em toast e o cartão novo em destaque", async () => {
+    const MESSENGER = cartao({ id: "55555555-5555-4555-8555-555555555555", tipo: "messenger", nome: "Página" });
+    h.conexoes = [OFICIAL, INSTAGRAM, MESSENGER];
+    h.busca = "aba=sociais&meta_social=ok&n=1&plataforma=messenger";
+    montar();
+    const novo = await screen.findByTestId(`cartao-conexao-${MESSENGER.id}`);
+    await waitFor(() => expect(novo.getAttribute("data-destacado")).toBe("true"));
+    expect(screen.getByTestId(`cartao-conexao-${INSTAGRAM.id}`).getAttribute("data-destacado")).toBeNull();
+    expect(screen.queryByTestId("criar-conexao")).toBeNull();
+    expect(h.toast.success).toHaveBeenCalledTimes(1);
+  });
+
+  it("?aba=sociais sem resultado e com plataforma=messenger abre o Criar no Messenger", async () => {
+    h.busca = "aba=sociais&plataforma=messenger";
+    montar();
+    expect(await screen.findByTestId("criar-conteudo-messenger")).toBeInTheDocument();
+  });
+
   it("?aba=oficial&sub=templates abre os Templates da Meta da primeira conta oficial", async () => {
     h.busca = "aba=oficial&sub=templates";
     montar();

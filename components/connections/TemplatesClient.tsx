@@ -81,9 +81,17 @@ function ehMidia(s: TemplateSlotView): boolean {
  * modelo pronto, o operador tinha de disparar para um cliente. Aqui ele salva
  * sem enviar nada, na mesma tela em que sincroniza. Campo vazio esquece o link.
  */
-function LinkDaMidia({ tpl, slot }: { tpl: TemplateView; slot: TemplateSlotView }) {
+function LinkDaMidia({
+  tpl,
+  slot,
+  channelSessionId,
+}: {
+  tpl: TemplateView;
+  slot: TemplateSlotView;
+  channelSessionId?: string;
+}) {
   const t = useT();
-  const salvar = useSaveTemplateValues();
+  const salvar = useSaveTemplateValues(channelSessionId);
   const salvo = tpl.savedValues[slot.valueKey] ?? "";
   const [valor, setValor] = useState(salvo);
   const limpo = valor.trim();
@@ -356,6 +364,7 @@ export function TemplatesClient({
                           key={`m:${s.valueKey}:${tpl.savedValues[s.valueKey] ?? ""}`}
                           tpl={tpl}
                           slot={s}
+                          channelSessionId={channelSessionId}
                         />
                       ) : (
                         <div key={`m:${s.onde}:${i}`} className="flex flex-col gap-0.5">

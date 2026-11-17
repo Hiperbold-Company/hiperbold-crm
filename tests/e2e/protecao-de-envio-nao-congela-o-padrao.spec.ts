@@ -85,14 +85,12 @@ async function lerAllowSunday(sessionId: string): Promise<boolean | null | undef
  * clique no cartão errado — que passaria despercebido e mediria o knob de outro
  * canal — em falha ruidosa e imediata.
  */
-async function abrirFicha(page: Page): Promise<void> {
-  await expect(page.getByText(CANAL).first()).toBeVisible({ timeout: 20_000 });
-  const cartao = page
-    .locator("div")
-    .filter({ hasText: CANAL })
-    .filter({ has: page.getByRole("button", { name: /Proteção de envio/i }) })
-    .last();
-  await cartao.getByRole("button", { name: /Proteção de envio/i }).click();
+async function abrirFicha(page: Page, sessionId: string): Promise<void> {
+  // Tela em cartões (17/11/2026): a Proteção de envio mora no Gerenciar do cartão do canal.
+  const cartao = page.getByTestId(`cartao-conexao-${sessionId}`);
+  await expect(cartao).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId(`gerenciar-${sessionId}`).click();
+  await page.getByTestId("gerenciar-conexao").getByRole("button", { name: /Proteção de envio/i }).click();
   await expect(
     page.getByText(`Proteção de envio — ${CANAL}`),
     "abriu a ficha de outro canal — a medição seria do knob errado",
@@ -135,7 +133,7 @@ test.describe("Proteção de envio: o Switch sabe dizer 'não mexi'", () => {
     await loginComoAdmin(page, lerCreds());
     await page.goto("/app/connections");
 
-    await abrirFicha(page);
+    await abrirFicha(page, sessionId);
 
     // A tela precisa REFLETIR o estado antes de a gente concluir algo do save.
     const sw = page.locator("#allow-sunday");
@@ -163,7 +161,7 @@ test.describe("Proteção de envio: o Switch sabe dizer 'não mexi'", () => {
 
     await loginComoAdmin(page, lerCreds());
     await page.goto("/app/connections");
-    await abrirFicha(page);
+    await abrirFicha(page, sessionId);
 
     const sw = page.locator("#allow-sunday");
     await expect(sw).toBeVisible({ timeout: 10_000 });

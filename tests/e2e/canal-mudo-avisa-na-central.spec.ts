@@ -140,13 +140,13 @@ test.describe("o canal em modo de teste avisa na Central", () => {
     // `pre-go-live-whatsapp.spec.ts` já exerce nesta mesma tela — o painel se
     // abre por "Configurar acesso da IA", e a lista é um campo com rótulo.
     await page.goto("/app/connections");
-    // O nome aparece no título do cartão e na prévia da etiqueta ("No Chat:"); vale o título.
-    await expect(
-      page.locator("p").filter({ hasText: new RegExp(`^WhatsApp mudo ${SUFIXO}$`) }),
-    ).toBeVisible({
-      timeout: 60_000,
-    });
-    await page.getByRole("button", { name: "Configurar acesso da IA" }).click();
+    // Tela em cartões (17/11/2026): o canal tem o seu cartão, e o acesso da IA mora no Gerenciar dele.
+    await expect(page.getByTestId(`cartao-conexao-${canalId}`).getByTestId("nome-da-conexao")).toHaveText(
+      `WhatsApp mudo ${SUFIXO}`,
+      { timeout: 60_000 },
+    );
+    await page.getByTestId(`gerenciar-${canalId}`).click();
+    await page.getByTestId("gerenciar-conexao").getByRole("button", { name: "Configurar acesso da IA" }).click();
     const campo = page.getByLabel("Números autorizados para teste");
     await campo.fill("+5511999990000");
     await page.getByRole("button", { name: "Salvar lista de teste" }).click();

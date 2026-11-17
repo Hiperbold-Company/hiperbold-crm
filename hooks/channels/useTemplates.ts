@@ -82,12 +82,13 @@ export function useSyncTemplates(channelSessionId?: string) {
  * chave: sem isso o link salvo aqui só apareceria na conversa depois do
  * `staleTime`.
  */
-export function useSaveTemplateValues() {
+export function useSaveTemplateValues(channelSessionId?: string) {
   const qc = useQueryClient();
   return useMutation({
+    // Com o id, a rota grava só nas linhas daquela conta oficial; sem ele, em todas as da organização.
     mutationFn: async (args: { name: string; language: string; values: Record<string, string> }) =>
       apiClient.patch<{ data: { savedValues: Record<string, string> } }>(
-        "/api/v1/channels/templates",
+        rotaDosModelosOficiais(channelSessionId),
         args,
       ),
     onError: showApiError,

@@ -27,7 +27,8 @@ vi.mock("@/hooks/channels/useConexoes", () => ({
   useConexoes: () => ({ data: [], isPending: false, isError: false, refetch: vi.fn() }),
 }));
 vi.mock("@/components/connections/CanalInstanciaClient", () => ({ CanalInstanciaClient: () => <div>instancia</div> }));
-vi.mock("@/components/connections/RedesSociaisClient", () => ({
+vi.mock("@/components/connections/RedesSociaisClient", async (original) => ({
+  ...((await original()) as object),
   RedesSociaisClient: ({ plataformas }: { plataformas?: string[] }) => <div>conteudo-sociais:{plataformas?.join(",")}</div>,
 }));
 vi.mock("@/components/connections/CanalGraphParceiroClient", () => ({ CanalGraphParceiroClient: () => null }));

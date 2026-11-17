@@ -125,7 +125,7 @@ export function CanalOficialClient({
       {estado ? <WebhookDoNumeroOficial estado={estado} /> : null}
       {estado ? <ParaIntegrarOficial estado={estado} /> : null}
 
-      <ConectarComAMeta bloqueio={bloqueio} />
+      <ConectarComAMeta bloqueio={bloqueio} temConexaoOficial={Boolean(estado?.connected)} />
 
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {t("Ou conecte à mão")}

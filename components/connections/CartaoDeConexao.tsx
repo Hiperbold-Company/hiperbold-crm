@@ -1,5 +1,5 @@
 "use client";
-import type { ComponentType } from "react";
+import { useEffect, useRef, type ComponentType } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -66,18 +66,30 @@ export function StatusDaConexaoBadge({ status }: { status: StatusDaConexao }) {
 export function CartaoDeConexao({
   conexao,
   aoGerenciar,
+  destacado = false,
 }: {
   conexao: CartaoDaConexao;
   aoGerenciar: () => void;
+  /** Acabou de ser conectado (volta do OAuth): o cartão rola à vista e ganha um contorno. */
+  destacado?: boolean;
 }) {
   const t = useT();
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (destacado) ref.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  }, [destacado]);
   const Icone = ICONE_DO_TIPO[conexao.tipo];
   const titulo = t(tituloDaConexao(conexao));
   const nome = conexao.nome ?? conexao.numero_ou_handle ?? t("Conexão sem nome");
   return (
     <Card
-      className="flex flex-col gap-5 rounded-xl p-5 shadow-none transition-colors hover:border-border-strong"
+      ref={ref}
+      className={cn(
+        "flex flex-col gap-5 rounded-xl p-5 shadow-none transition-colors hover:border-border-strong",
+        destacado && "ring-2 ring-primary",
+      )}
       data-testid={`cartao-conexao-${conexao.id}`}
+      data-destacado={destacado ? "true" : undefined}
     >
       <div className="flex items-start justify-between gap-3">
         <StatusDaConexaoBadge status={conexao.status} />

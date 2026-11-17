@@ -195,6 +195,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const escolhida = await sessaoDaRequisicao(req, r.orgId, r.idioma, requestId);
   if ("resposta" in escolhida) return escolhida.resposta;
   const { sessao } = escolhida;
+  // Com `channel_session_id` (tela em cartões, várias contas oficiais por organização) a lista é SÓ a
+  // daquela conta: linha oficial (sem conexão de parceiro) da WABA da sessão escolhida. Sem id, o espelho
+  // inteiro da organização, como antes (o seletor do inbox e as telas antigas leem assim).
+  const daContaEscolhida = Boolean(idDaConexaoNaQuery(new URL(req.url)));
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("meta_templates")
@@ -207,7 +211,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   if (error) return falhaInterna("internal_error", error, { requestId });
 
-  const templates: TemplateView[] = (data ?? []).map((row) => {
+  const linhas = daContaEscolhida
+    ? (data ?? []).filter((row) => !!sessao?.wabaId && row.channel_session_id === null && row.waba_id === sessao.wabaId)
+    : (data ?? []);
+
+  const templates: TemplateView[] = linhas.map((row) => {
     const contrato = deriveTemplateContract({
       name: row.name,
       language: row.language,
@@ -541,13 +549,27 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     });
   }
 
+  // Com `channel_session_id`, grava SÓ nas linhas daquela conta oficial (WABA da sessão escolhida);
+  // sem id, em todas as linhas do mesmo nome e idioma da organização, como antes.
+  const id = idDaConexaoNaQuery(new URL(req.url));
+  if (id === null) return fail("not_found", traduzir("Conexão não encontrada.", r.idioma), 404, { requestId });
+  let wabaDaConta: string | null = null;
+  if (id) {
+    const sessao = await metaSessionForOrg(r.orgId, id);
+    if (!sessao?.wabaId) return fail("not_found", traduzir("Conexão não encontrada.", r.idioma), 404, { requestId });
+    wabaDaConta = sessao.wabaId;
+  }
+
   const admin = createAdminClient();
-  const { data: linhas, error } = await admin
+  const consulta = admin
     .from("meta_templates")
     .select("id, name, language, parameter_format, components, saved_values")
     .eq("organization_id", r.orgId)
     .eq("name", body.name)
     .eq("language", body.language);
+  const { data: linhas, error } = wabaDaConta
+    ? await consulta.eq("waba_id", wabaDaConta).is("channel_session_id", null)
+    : await consulta;
   if (error) return falhaInterna("internal_error", error, { requestId });
   if (!linhas || linhas.length === 0) {
     return fail("not_found", "modelo não encontrado", 404, { requestId });

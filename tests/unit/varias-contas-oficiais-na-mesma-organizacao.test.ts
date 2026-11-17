@@ -412,7 +412,7 @@ describe("(c) channel_session_id de OUTRA organização → 404, sem vazar", () 
 describe("(e) rota que ESCREVE sem id, com mais de uma conexão oficial viva → 422 conexao_oficial_ambigua", () => {
   const PRIMEIRA = "aaaaaaaa-0000-4000-8000-0000000000a1";
   const SEGUNDA = "aaaaaaaa-0000-4000-8000-0000000000a2";
-  const MENSAGEM = "Esta organização tem mais de uma conexão oficial. Informe qual conexão (channel_session_id).";
+  const MENSAGEM = "Esta organização tem mais de uma conexão oficial. Abra a conexão certa em Conexões e tente de novo.";
 
   const duasOficiais = () =>
     makeDb([

@@ -101,7 +101,7 @@ export async function recusaSeConexaoOficialAmbigua(input: {
   return fail(
     "conexao_oficial_ambigua",
     traduzir(
-      "Esta organização tem mais de uma conexão oficial. Informe qual conexão (channel_session_id).",
+      "Esta organização tem mais de uma conexão oficial. Abra a conexão certa em Conexões e tente de novo.",
       input.idioma ?? "pt-BR",
     ),
     422,
