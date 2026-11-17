@@ -29062,6 +29062,22 @@ export const DICIONARIO: Traducoes = {
   "Nota interna (opcional)": { es: "Nota interna (opcional)" },
   "Relatos": { es: "Reportes" },
   "Problemas relatados pelos usuários pelo botão do inseto, com print e contexto": { es: "Problemas reportados por los usuarios con el botón del insecto, con captura y contexto" },
+  "utm_source: de onde veio o clique (ex.: google, instagram)": { es: "utm_source: de dónde vino el clic (ej.: google, instagram)" },
+  "utm_medium: o tipo de mídia (ex.: cpc, email, social)": { es: "utm_medium: el tipo de medio (ej.: cpc, email, social)" },
+  "utm_campaign: o nome da campanha": { es: "utm_campaign: el nombre de la campaña" },
+  "Escolher o que o cartão deste funil mostra": { es: "Elegir lo que muestra la tarjeta de este embudo" },
+  "Editar cartão": { es: "Editar tarjeta" },
+  "Cartão atualizado.": { es: "Tarjeta actualizada." },
+  "Não foi possível salvar o cartão. Tente de novo.": { es: "No fue posible guardar la tarjeta. Inténtelo de nuevo." },
+  "Escolha até 5 linhas para o cartão deste funil. Vale para toda a equipe. Linha sem valor não aparece no cartão.": { es: "Elija hasta 5 líneas para la tarjeta de este embudo. Vale para todo el equipo. Una línea sin valor no aparece en la tarjeta." },
+  "Prévia": { es: "Vista previa" },
+  "Ana Souza": { es: "Ana Souza" },
+  "Nenhuma linha de contato.": { es: "Ninguna línea de contacto." },
+  "Escolha até 5 linhas, sem repetir campo.": { es: "Elija hasta 5 líneas, sin repetir campo." },
+  "Clínica Bem Viver": { es: "Clínica Bien Vivir" },
+  "Gerente de compras": { es: "Gerente de compras" },
+  "Oi! Queria saber o valor da consulta.": { es: "¡Hola! Quería saber el precio de la consulta." },
+  "Outra pessoa alterou este funil ao mesmo tempo. Recarregue e tente de novo.": { es: "Otra persona cambió este embudo al mismo tiempo. Recargue e inténtelo de nuevo." },
 };
 
 /**

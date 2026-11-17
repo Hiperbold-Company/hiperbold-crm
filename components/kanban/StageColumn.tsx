@@ -8,6 +8,7 @@ import type { Stage } from "@/lib/kanban/types";
 import { buildCardInput } from "@/lib/kanban/card-state";
 import { intervaloDaColuna } from "@/lib/kanban/selecao";
 import { formatSomaPorMoeda, formatValorDoNegocio, MOEDA_PADRAO, somaPorMoeda } from "@/lib/money";
+import type { CampoDoCartao } from "@/lib/kanban/linhas-do-cartao";
 import { KanbanCard, type GestoDeSelecao } from "./KanbanCard";
 
 interface StageColumnProps {
@@ -48,6 +49,8 @@ interface StageColumnProps {
    * escrita) e sem abrir o dossiê, que tem ações próprias.
    */
   somenteLeitura?: boolean;
+  /** As linhas do cartão do funil ("Editar cartão") — atravessa como `denso`. */
+  linhas?: readonly CampoDoCartao[];
 }
 
 export function StageColumn({
@@ -68,6 +71,7 @@ export function StageColumn({
   onRenomear,
   denso = false,
   somenteLeitura = false,
+  linhas,
 }: StageColumnProps) {
   const t = useT();
   // O TOTAL É POR MOEDA (#1531). Antes ele somava todos os `value_cents` e
@@ -289,6 +293,7 @@ export function StageColumn({
                 onMoverPara={onMoverPara}
                 denso={denso}
                 somenteLeitura={somenteLeitura}
+                linhas={linhas}
               />
             ))}
             {provided.placeholder}

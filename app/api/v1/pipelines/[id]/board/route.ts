@@ -25,7 +25,13 @@ import {
   type PropostaAmbigua,
 } from "@/lib/leads/next-action";
 import type { LeadCandidate } from "@/lib/leads/active-lead";
-import { anexarDadosDoContato, type LinhaDoContatoNoQuadro } from "@/lib/kanban/dados-do-contato";
+import {
+  anexarCargoEEmpresaDoContato,
+  anexarDadosDoContato,
+  type LinhaDoContatoNoQuadro,
+} from "@/lib/kanban/dados-do-contato";
+import { linhasDoCartao, type CampoDoCartao } from "@/lib/kanban/linhas-do-cartao";
+import type { LeitorDosCampos } from "@/lib/campos/recorte-por-papel";
 import {
   anexarAnexosAosNegocios,
   type LinhaDoAnexoNoQuadro,
@@ -350,12 +356,19 @@ async function withConversas(
  * etiqueta, para o payload do quadro não engordar com array vazio em todo card.
  *
  * A MESMA leitura de `contacts` também alimenta telefone, e-mail e links do card
- * (`anexarDadosDoContato`): uma consulta por quadro, não duas.
+ * (`anexarDadosDoContato`): uma consulta por quadro, não duas. E, quando o funil
+ * pôs cargo ou empresa no cartão ("Editar cartão"), os dois saem dessa mesma
+ * leitura (`anexarCargoEEmpresaDoContato`), já sem o campo restrito.
  */
 async function withMarcadoresDoContato(
   supabase: Awaited<ReturnType<typeof createClient>>,
   organizationId: string,
   leadsDoQuadro: Lead[],
+  cartao: {
+    linhas: readonly CampoDoCartao[];
+    restritas: ReadonlySet<string>;
+    leitor: LeitorDosCampos | null | undefined;
+  },
 ): Promise<{ leads: Lead[]; error: string | null }> {
   const contactIds = [
     ...new Set(leadsDoQuadro.map((l) => l.contact_id).filter((c): c is string => !!c)),
@@ -372,7 +385,7 @@ async function withMarcadoresDoContato(
   if (error) return { leads: leadsDoQuadro, error: error.message };
 
   const linhas = (data ?? []) as Array<{ id: string; tags: string[] | null } & LinhaDoContatoNoQuadro>;
-  const leads = anexarDadosDoContato(leadsDoQuadro, linhas);
+  const leads = anexarCargoEEmpresaDoContato(anexarDadosDoContato(leadsDoQuadro, linhas), linhas, cartao);
 
   const porContato = new Map<string, string[]>();
   for (const row of linhas) {
@@ -686,19 +699,20 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     return falhaInterna("internal_error", leadsComConversa.error, { requestId });
   }
 
-  const leadsComMarcadores = await withMarcadoresDoContato(
-    supabase,
-    (pipeline as Pipeline).organization_id,
-    leadsComConversa.leads,
-  );
-  if (leadsComMarcadores.error) {
-    return falhaInterna("internal_error", leadsComMarcadores.error, { requestId });
-  }
-
   // 1015: campo não público (definição e valor) só sai para administrador. A projeção em
   // `settings.fields` traz o `publico: false` de todos os campos da organização.
   const papel = authz.org.role;
   const restritas = chavesRestritasDosCampos(((pipeline as Pipeline).settings as { fields?: unknown } | null)?.fields);
+
+  const leadsComMarcadores = await withMarcadoresDoContato(
+    supabase,
+    (pipeline as Pipeline).organization_id,
+    leadsComConversa.leads,
+    { linhas: linhasDoCartao((pipeline as Pipeline).settings), restritas, leitor: papel },
+  );
+  if (leadsComMarcadores.error) {
+    return falhaInterna("internal_error", leadsComMarcadores.error, { requestId });
+  }
 
   const board: BoardData = {
     pipeline: {

@@ -23,6 +23,7 @@ import { StageColumn } from "./StageColumn";
 import { LeadDossier } from "./LeadDossier";
 import { RetomarComoNovoNegocioDialog } from "./RetomarComoNovoNegocioDialog";
 import { atalhosDoFunil } from "@/lib/leads/atalhos-do-card";
+import { linhasDoCartao } from "@/lib/kanban/linhas-do-cartao";
 import { camposPorEscopo, camposDoFunil } from "@/lib/leads/campos-do-funil";
 
 interface KanbanBoardProps {
@@ -161,6 +162,13 @@ export function KanbanBoard({
     const raw = (pipelineProp ?? queryResult.data?.pipeline)?.settings?.canonical_tags;
     return Array.isArray(raw) ? raw.filter((t): t is string => typeof t === "string") : [];
   }, [pipelineProp, queryResult.data?.pipeline]);
+
+  // As linhas do cartão ("Editar cartão"): lidas do `settings` pelo schema
+  // central, nunca pelo caminho do jsonb. Ausente/inválido = o padrão.
+  const linhasDoCartaoDoFunil = useMemo(
+    () => linhasDoCartao((pipelineProp ?? queryResult.data?.pipeline)?.settings ?? null),
+    [pipelineProp, queryResult.data?.pipeline],
+  );
 
   // O dossiê é do BOARD e não da página: ele precisa do lead inteiro e do nome
   // do estágio, que só existem aqui depois do agrupamento.
@@ -406,6 +414,7 @@ export function KanbanBoard({
               onRenomear={(nome) => renameStage.mutate({ stageId: stage.id, name: nome })}
               denso={denso}
               somenteLeitura={somenteLeitura}
+              linhas={linhasDoCartaoDoFunil}
             />
           ))}
         </div>

@@ -32,6 +32,8 @@ import { BulkActionBar } from "@/components/kanban/BulkActionBar";
 import { NewLeadDialog } from "@/components/kanban/NewLeadDialog";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { Button } from "@/components/ui/button";
+import { BotaoEditarCartao } from "@/components/kanban/EditarCartao";
+import { linhasDoCartao } from "@/lib/kanban/linhas-do-cartao";
 import {
   Select,
   SelectContent,
@@ -407,6 +409,18 @@ export function PipelinePageClient({
             >
               {t("Compacta")}
             </Button>
+          )}
+          {/* "EDITAR CARTÃO": o que a área de contato do card mostra, por
+              funil e igual para toda a equipe. Só no Quadro (é dele que o
+              cartão é), fora de funil arquivado (que não recebe escrita) e só
+              para gerente e administrador — o componente devolve nada abaixo
+              disso, e a rota confere o mesmo papel no servidor. */}
+          {visao === "quadro" && !arquivado && (
+            <BotaoEditarCartao
+              role={role}
+              pipelineId={pipelineId}
+              linhas={linhasDoCartao(data?.pipeline.settings ?? funilInicial.settings)}
+            />
           )}
           {/* Funil arquivado abre só no quadro, e o quadro é leitura (#1298):
               a Lista e o Calendário têm ações de negócio, e oferecê-las num
