@@ -427,11 +427,19 @@ export function KanbanCard({
               />
               <TarefasNoCard tarefas={lead.tarefas} />
             </div>
-            <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums text-text-muted">
-              {state.showStageAge && age
-                ? `${age} ${t("em")} ${card.stageName}`
-                : `${t("em")} ${card.stageName}`}
-            </span>
+            {/* O NOME DA ETAPA NÃO VAI NO RODAPÉ: ele já está no topo da coluna, e
+                nome longo ("ATIVO REALIZADO / SEM RESPOSTA", visto na CBEXS) era
+                `shrink-0` e passava por cima do nome do responsável. Fica só o
+                tempo; a etapa vai no `title`. */}
+            {state.showStageAge && age ? (
+              <span
+                className="min-w-0 shrink truncate whitespace-nowrap text-2xs tabular-nums text-text-muted"
+                title={`${age} ${t("em")} ${card.stageName}`}
+                data-tempo-na-etapa
+              >
+                {age} {t("na etapa")}
+              </span>
+            ) : null}
           </div>
           {movido && (
             // Discreto de propósito: uma linha miúda, sem cor, que não disputa

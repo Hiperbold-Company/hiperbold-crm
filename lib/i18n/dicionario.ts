@@ -28965,6 +28965,7 @@ export const DICIONARIO: Traducoes = {
   "Paginação": { es: "Paginación" },
   "Página {a} de {b}": { es: "Página {a} de {b}" },
   "Página {a}": { es: "Página {a}" },
+  "na etapa": { es: "en la etapa" },
   // design: carregando e erro
   "Não foi possível carregar": { es: "No fue posible cargar" },
   "Algo deu errado do nosso lado. Tente de novo em instantes.": { es: "Algo salió mal de nuestro lado. Inténtelo de nuevo en unos instantes." },
