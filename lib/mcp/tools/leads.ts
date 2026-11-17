@@ -29,6 +29,8 @@ import { audit } from "@/lib/audit";
 import { resolveUserNames } from "./_users";
 import type { McpContext, McpToolDefinition } from "../types";
 import { ApiError } from "@/lib/api/types";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { leitorVeCamposRestritos, recortarLinha, type LeitorDosCampos } from "@/lib/campos/recorte-por-papel";
 
 /**
  * A recusa ÚNICA das leituras de negócio durante um turno: negócio de outro
@@ -132,11 +134,41 @@ const RECORRENCIA = {
  * vêm na row (`select *`); nada existente muda. Dedupe de owners e stages —
  * sem N+1 numa listagem.
  */
+/**
+ * 1015: campo NÃO PÚBLICO não sai pelo MCP para o agente de IA (nunca: o que ele lê pode ir ao
+ * cliente pelo WhatsApp) nem para token abaixo de admin. Sem conseguir ler quais chaves são
+ * restritas, o `custom_fields` inteiro fica de fora (falha fechada).
+ */
+async function recortarLeadsDoMcp<T>(ctx: McpContext, leads: T[]): Promise<T[]> {
+  const leitor: LeitorDosCampos = ctx.actor.type === "ai_agent" ? "ia" : ctx.role;
+  if (leads.length === 0 || leitorVeCamposRestritos(leitor)) return leads;
+  const lidas = await chavesRestritasDaOrganizacao(ctx.supabase, ctx.organizationId, ctx.requestId);
+  return leads.map((lead) => {
+    if (lidas.ok) return recortarLinha(lead, lidas.chaves, leitor);
+    if (!lead || typeof lead !== "object" || !("custom_fields" in lead)) return lead;
+    const { custom_fields: _fora, ...resto } = lead as Record<string, unknown>;
+    void _fora;
+    return resto as T;
+  });
+}
+
+async function recortarLeadDoMcp<T>(ctx: McpContext, lead: T): Promise<T> {
+  const [recortado] = await recortarLeadsDoMcp(ctx, [lead]);
+  return recortado as T;
+}
+
 async function enrichLeads(
   ctx: McpContext,
   leads: Array<Record<string, unknown>>,
 ): Promise<Array<Record<string, unknown>>> {
   if (leads.length === 0) return leads;
+  return recortarLeadsDoMcp(ctx, await enriquecerLeads(ctx, leads));
+}
+
+async function enriquecerLeads(
+  ctx: McpContext,
+  leads: Array<Record<string, unknown>>,
+): Promise<Array<Record<string, unknown>>> {
 
   const names = await resolveUserNames(
     ctx.supabase,
@@ -378,7 +410,7 @@ export const crmCreateLead: McpToolDefinition<typeof createInputShape> = {
       },
     );
     return {
-      lead,
+      lead: await recortarLeadDoMcp(ctx, lead),
       ...(conferencia.recusados.length > 0
         ? {
             campos_nao_gravados: conferencia.recusados,
@@ -457,7 +489,7 @@ export const crmUpdateLead: McpToolDefinition<typeof updateInputShape> = {
         : { ...parsed, custom_fields: conferencia.custom_fields },
     );
     return {
-      lead,
+      lead: await recortarLeadDoMcp(ctx, lead),
       ...(conferencia.recusados.length > 0
         ? {
             campos_nao_gravados: conferencia.recusados,
@@ -529,7 +561,7 @@ export const crmMoveLeadStage: McpToolDefinition<typeof moveInputShape> = {
         lost_reason: input.lost_reason,
       },
     );
-    return { lead };
+    return { lead: await recortarLeadDoMcp(ctx, lead) };
   },
 };
 
@@ -570,7 +602,7 @@ export const crmRetomarLead: McpToolDefinition<typeof retomarInputShape> = {
       input.lead_id,
       { stage_id: input.stage_id },
     );
-    return { lead };
+    return { lead: await recortarLeadDoMcp(ctx, lead) };
   },
 };
 

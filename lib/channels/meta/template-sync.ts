@@ -209,7 +209,7 @@ export interface SyncInput {
   /** Token da Graph API. Resolvido de fonte confiável pelo chamador, nunca do body. */
   token: string;
   /**
-   * Ex.: `v22.0`. Explícito de propósito — ver o comentário de `fetchAllTemplates`.
+   * Ex.: `v26.0`. Explícito de propósito — ver o comentário de `fetchAllTemplates`.
    * É a VERSÃO que vai na base; o HOST vem do knob da instalação.
    */
   graphVersion: string;

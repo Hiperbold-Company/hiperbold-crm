@@ -1194,6 +1194,14 @@ export function InboxLayout({
               // não pode deixar um texto sugerido no campo de outra pessoa.
               rascunho={rascunhoVivo}
               provider={selectedConversation.channel_sessions?.provider ?? null}
+              // Mensagem agendada (migration 1017): a janela de 24h medida no
+              // horário escolhido, e se o bloqueio de agora é SÓ dela.
+              lastInboundAt={selectedConversation.last_inbound_at ?? null}
+              janelaSoDe24h={!!motivoDaJanela && !semPermissaoDeResponder && !bloqueioPelaConexao}
+              // Painel de mensagens: os modelos são da conta DESTA conversa, e
+              // gerente para cima compartilha resposta e cria modelo (a rota barra).
+              channelSessionId={selectedConversation.channel_session_id ?? null}
+              podeGerenciarMensagens={(user.is_platform_admin && !user.support) || roleAtLeast(activeOrg?.role, "manager")}
               initialDraft={
                 rascunhoVivo?.leitura.estado === "sugerido" ? rascunhoVivo.leitura.texto : ""
               }

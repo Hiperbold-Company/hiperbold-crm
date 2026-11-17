@@ -139,6 +139,12 @@ const COPY: Record<string, { variant: Variant; msg?: string }> = {
   // Recusa ROTINEIRA: a empresa ainda não tem administrador com e-mail para o
   // cliente do provedor. O caminho é convidar um, e a rota já diz isso.
   empresa_sem_email: { variant: "warning" },
+
+  // ---- Várias conexões oficiais (17/11/2026) ----
+  //
+  // Rota que escreve na conta oficial chamada SEM o id da conexão, numa organização com mais de uma
+  // (o onboarding, que não sabe qual): recusa rotineira, e a rota diz o que fazer.
+  conexao_oficial_ambigua: { variant: "warning" },
 };
 
 /**

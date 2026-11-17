@@ -1,4 +1,6 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { recortarLinhaDaResposta } from "@/lib/campos/resposta-recortada";
+import { leitorDoAtor } from "@/lib/campos/recorte-por-papel";
 /**
  * POST /api/v1/leads/[id]/lose
  *
@@ -58,7 +60,16 @@ export async function POST(
       },
       { leadId, desfecho: "lost", motivo: input.lost_reason },
     );
-    return ok(lead, { requestId });
+    // 1015: a resposta segue o recorte do GET (campo não público só para administrador).
+    const recortado = await recortarLinhaDaResposta(
+      supabase,
+      authz.organizationId,
+      lead,
+      leitorDoAtor(authz.actor),
+      requestId,
+    );
+    if (!recortado.ok) return recortado.resposta;
+    return ok(recortado.linha, { requestId });
   } catch (err) {
     if (err instanceof ApiError) {
       const fieldErrors = (err.details as { fieldErrors?: Record<string, unknown> } | undefined)?.fieldErrors;

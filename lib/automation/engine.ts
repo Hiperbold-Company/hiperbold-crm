@@ -26,7 +26,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EventRow, HandlerResult } from "@/lib/event-log/dispatcher";
 import { evaluateConditions, usaFatosDoContato, type Conditions } from "@/lib/automation/conditions";
 import { carregarFatosDoContato } from "@/lib/automation/fatos-do-contato";
-import { hidratarCamposDoFunil } from "@/lib/automation/campos-do-render";
+import { hidratarCamposDoFunil, recortarCamposRestritosDoContexto } from "@/lib/automation/campos-do-render";
 import { getAction } from "@/lib/automation/actions";
 import { falhaDeExecucaoParaRecibo, resultadosParaRecibo } from "@/lib/automation/resultado-para-recibo";
 import type { ActionResultDetail } from "@/lib/automation/types";
@@ -163,6 +163,9 @@ export async function buildContext(admin: SupabaseClient, row: EventRow): Promis
       if (contact) context.contact = contact;
     }
   }
+  // 1015: campo não público nunca vira variável de automação (o caminho do negócio já passou por
+  // aqui em `hidratarCamposDoFunil`; o recorte é idempotente).
+  await recortarCamposRestritosDoContexto(context, admin, org);
   return context;
 }
 

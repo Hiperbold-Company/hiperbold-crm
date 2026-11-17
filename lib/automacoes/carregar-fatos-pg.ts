@@ -9,8 +9,10 @@
  */
 import type pg from "pg";
 
+import { chavesRestritasDaOrganizacaoPg } from "@/lib/campos/chaves-restritas";
+
 import { anuncioDoFluxo } from "./anuncio-do-contato";
-import { negocioDaExecucao, type FatosDaAutomacao, type NegocioDosFatos } from "./fatos";
+import { fatosTemCamposPersonalizados, negocioDaExecucao, type FatosDaAutomacao, type NegocioDosFatos } from "./fatos";
 
 function objeto(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -49,7 +51,7 @@ export async function carregarFatosDaAutomacaoPg(
   }));
   const id = negocioDaExecucao(vars);
   const c = (contatos as Array<Record<string, unknown>>)[0];
-  return {
+  const fatos: FatosDaAutomacao = {
     contato: c
       ? {
           id: String(c.id),
@@ -66,4 +68,10 @@ export async function carregarFatosDaAutomacaoPg(
     negocios: lista.map((n) => ({ id: n.id, pipeline_id: n.pipeline_id, stage_id: n.stage_id, status: n.status })),
     vars,
   };
+  // 1015: só lê quando há valor a esconder (e falha de leitura = nenhum campo vira texto).
+  if (fatosTemCamposPersonalizados(fatos)) {
+    const lidas = await chavesRestritasDaOrganizacaoPg(pool, orgId);
+    fatos.camposRestritos = lidas.ok ? [...lidas.chaves] : "todas";
+  }
+  return fatos;
 }

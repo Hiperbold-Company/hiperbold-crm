@@ -289,9 +289,15 @@ export const AUDIT_ACTIONS = [
   "channel.connected",
   // O número do canal oficial foi registrado na Meta (POST /register). Nunca leva o PIN.
   "channel.number_registered",
+  // O webhook do número oficial foi regravado na Meta (POST /channels/official/webhook, "tentar de novo").
+  // Metadata: `registrado` e `com_erro`. Nunca a URL de callback (leva o token de caminho) nem o texto do erro.
+  "channel.webhook_registered",
   // O número oficial da Meta conectado (formulário manual ou Cadastro Incorporado,
   // migration 1014). Metadata: origem e os dois ids da Meta. Nunca o token.
   "channel.official_connected",
+  // "Tentar de novo" a sincronização dos contatos do app WhatsApp Business (coexistência). Metadata:
+  // o número e se a Meta aceitou. Nunca o token.
+  "channel.official_contacts_sync_requested",
   "prospecting.changed",
   // A ABORDAGEM que SAIU (PR #963). Distinta de `prospecting.changed`, que é
   // configuração: esta é a única linha do produto que fala primeiro com quem
@@ -1000,6 +1006,9 @@ export const AUDIT_ACTIONS = [
   // kind `module_install`), mas é um código próprio: "extension.installed" fala de pacote
   // baixado de um catálogo, e aqui não há pacote nenhum, só a função provisionadora do módulo.
   "modulo.instalado",
+  // Desligar e religar um módulo de tabela (migration 1016): só o estado muda, os dados ficam.
+  "modulo.desligado",
+  "modulo.religado",
   // "Cliente pela agenda" ligada ou desligada (migration 0262). Ligar reescreve
   // etiquetas de toda a organização; metadata leva as contagens.
   "crm.cliente_pela_agenda_alterado",
@@ -1752,6 +1761,19 @@ export const AUDIT_ACTIONS = [
   // Migration 1013: o MESMO negócio foi para uma etapa de outro funil (`moverParaOutroFunilHandler`).
   // metadata: from/to pipeline e etapa, posição e campos_fora_do_funil (chaves, nunca valores).
   "lead.pipeline_moved",
+  // Migration 1015: campos personalizados da ORGANIZAÇÃO (`custom_field_definitions`, contato e negócio).
+  // metadata: entidade, key, type (criação), campos_alterados (alteração), registros_com_valor (exclusão)
+  // — contagens e chaves, nunca valor de registro.
+  "custom_field.created",
+  "custom_field.updated",
+  "custom_field.deleted",
+  // Migration 1017: mensagem agendada no chat. created/updated/cancelled saem das rotas
+  // (metadata: conversation_id, send_at, campos; nunca o texto); run é a rodada do cron
+  // `mensagens-agendadas` que teve efeito (contagens).
+  "scheduled_message.created",
+  "scheduled_message.updated",
+  "scheduled_message.cancelled",
+  "scheduled_message.run",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

@@ -18,6 +18,9 @@ export const EXTENSION_OPERATION_KINDS = [
   "configure",
   // Módulo opcional instalado na instância (ADR-0002, D3 — migration 0340). Recibo de plataforma.
   "module_install",
+  // Desligar e religar um módulo de tabela, sem apagar dados (migration 1016). Recibo de plataforma.
+  "module_disable",
+  "module_enable",
 ] as const;
 export type ExtensionOperationKind = (typeof EXTENSION_OPERATION_KINDS)[number];
 

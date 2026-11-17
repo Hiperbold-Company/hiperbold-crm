@@ -304,8 +304,36 @@ export const customFieldSchema = z.object({
    * schema e a API conhecem, e o modo é uma propriedade dele.
    */
   multiple: z.boolean().optional(),
+  /**
+   * AS PROPRIEDADES DA TELA "Campos Personalizados" (migration 1015). Desde a 1015 a definição mora
+   * em `custom_field_definitions` (da organização) e `settings.fields` é a PROJEÇÃO que o banco
+   * deriva dela — estas chaves chegam aqui por essa projeção. Todas opcionais, e a ausência é o
+   * comportamento de sempre: campo sem `publico` é visível a todos, sem `sempre_visivel` segue a
+   * régua de antes.
+   *
+   * - `descricao`: o que o campo guarda, para quem configura (não aparece na ficha);
+   * - `publico`: `false` = só administrador vê o campo na ficha (`camposVisiveisAoPapel`);
+   * - `sempre_visivel`: aparece na ficha mesmo vazio, onde a ficha esconde o vazio;
+   * - `exibir_no_perfil`: entra no resumo do perfil do contato;
+   * - `dica_de_ajuda`: a frase curta debaixo do rótulo, no formulário.
+   */
+  descricao: z.string().max(500).optional(),
+  publico: z.boolean().optional(),
+  sempre_visivel: z.boolean().optional(),
+  exibir_no_perfil: z.boolean().optional(),
+  dica_de_ajuda: z.string().max(300).optional(),
 });
 export type CustomFieldDef = z.infer<typeof customFieldSchema>;
+
+/**
+ * A OBRIGATORIEDADE POR FUNIL (migration 1015): `settings.campos_obrigatorios`, chave do campo da
+ * organização → `{ etapas, ao_ganhar, ao_perder }`. É o que a tela Etapas do funil marca; o banco a
+ * junta à definição e o item de `settings.fields` sai com o `obrigatorio_em` de sempre — quem decide
+ * a exigência continua sendo `lib/leads/campos-exigidos.ts`, sem saber de onde a regra veio.
+ */
+export const camposObrigatoriosDoFunilSchema = z
+  .record(customFieldSchema.shape.key, customFieldSchema.shape.obrigatorio_em.unwrap())
+  .refine((mapa) => Object.keys(mapa).length <= 200, { message: "Regras de obrigatoriedade demais." });
 
 /**
  * A COTA DE CAMPOS DO NEGÓCIO por funil (issue #3111).
@@ -372,6 +400,8 @@ export const pipelineConfigPatchSchema = z.object({
     })
     .optional(),
   fields: camposDoFunilPatchSchema.optional(),
+  /** A obrigatoriedade dos campos da organização NESTE funil (1015). Substitui o mapa inteiro. */
+  campos_obrigatorios: camposObrigatoriosDoFunilSchema.optional(),
   /**
    * Os motivos de perda do funil (issue #1537): texto puro continua valendo —
    * nenhum funil existente precisa migrar dado — e quem quiser agrupar no

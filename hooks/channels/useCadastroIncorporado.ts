@@ -27,6 +27,8 @@ export interface FimDoCadastroIncorporado {
 
 export interface ResultadoDoCadastroIncorporado {
   connected: boolean;
+  /** A sessão do canal recém-conectado: é o que "tentar de novo" a sincronização dos contatos envia. */
+  channelSessionId?: string | null;
   displayName: string;
   phoneNumber: string | null;
   webhookRegistro: unknown;
@@ -50,6 +52,24 @@ export function useFinalizarCadastroIncorporado() {
     // Sem toast genérico: a tela mostra a mensagem da rota em caixa própria.
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["official-channel"] });
+      qc.invalidateQueries({ queryKey: ["conexoes"] });
     },
+  });
+}
+
+export interface ResultadoDaSincronizacaoDeContatos {
+  sincronizado: boolean;
+  /** Quando a Meta recusou: o motivo, já em português. */
+  motivo: string | null;
+}
+
+/** Coexistência: pede de novo à Meta os contatos do app WhatsApp Business. */
+export function useSincronizarContatosDoApp() {
+  return useMutation({
+    mutationFn: async (input: { channel_session_id: string }) =>
+      apiClient.post<{ data: ResultadoDaSincronizacaoDeContatos }>(
+        "/api/v1/channels/official/sincronizar-contatos",
+        input,
+      ),
   });
 }

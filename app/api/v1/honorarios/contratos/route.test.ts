@@ -12,11 +12,14 @@ import { fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import type { AuthUser } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
+import { moduloLigado } from "@/lib/instalacao/modulos";
 
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
+// Módulo de tabela: o estado (ativo/desligado) vem de `modulos_instalados` (migration 1016).
+vi.mock("@/lib/instalacao/modulos", () => ({ moduloLigado: vi.fn(async () => true) }));
 
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -164,5 +167,26 @@ describe("POST /api/v1/honorarios/contratos", () => {
     expect(res.status).toBe(422);
     expect(filtros).toContainEqual({ coluna: "organization_id", valor: ORG_ID });
     expect(from).not.toHaveBeenCalledWith("honorarios_contratos");
+  });
+});
+
+describe("módulo desligado em /admin/modulos (migration 1016)", () => {
+  it("GET e POST respondem 404 sem tocar no banco nem no papel", async () => {
+    vi.mocked(moduloLigado).mockResolvedValue(false);
+    const { GET, POST } = await import("./route");
+    const lido = await GET(new NextRequest("http://localhost/api/v1/honorarios/contratos"));
+    const criado = await POST(
+      new NextRequest("http://localhost/api/v1/honorarios/contratos", {
+        method: "POST",
+        body: JSON.stringify({ modelo: "fixo", valor_fixo_cents: 1000 }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    expect(lido.status).toBe(404);
+    expect(criado.status).toBe(404);
+    expect(moduloLigado).toHaveBeenCalledWith(expect.anything(), "honorarios");
+    expect(createClient).not.toHaveBeenCalled();
+    expect(requireRole).not.toHaveBeenCalled();
+    vi.mocked(moduloLigado).mockResolvedValue(true);
   });
 });

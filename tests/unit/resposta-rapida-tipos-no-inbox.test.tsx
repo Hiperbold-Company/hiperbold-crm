@@ -72,9 +72,11 @@ vi.mock("@/lib/api/client", () => ({
   },
 }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
+  useFusoDaOrganizacao: () => null,
   usePermission: () => true,
   usePaisDaOrgAtiva: () => null,
 }));
+vi.mock("@/hooks/inbox/useMensagensAgendadas", () => ({ useAgendarMensagem: () => ({ mutate: vi.fn(), isPending: false }) }));
 
 import { Composer } from "@/components/inbox/Composer";
 import { BarraDeRecursos } from "@/components/inbox/composer/BarraDeRecursos";
@@ -331,7 +333,7 @@ describe("envio (#3009): combinada vai para a fila e sai pelo caminho de sempre"
     expect(h.fetch).toHaveBeenCalledWith(`/api/v1/message-templates/${COMBINADA_ID}/midias/1`);
     // O corpo virou LEGENDA (não pode estar nos dois lugares: sairia duplicado).
     expect(within(fila).getByLabelText("Legenda")).toHaveValue("Olha os dois, Ana");
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("");
+    expect(screen.getByLabelText(/^mensagem$/i)).toHaveValue("");
     // Escolher não envia — quem decide é o operador.
     expect(h.enviar).not.toHaveBeenCalled();
 
@@ -355,7 +357,7 @@ describe("envio (#3009): combinada vai para a fila e sai pelo caminho de sempre"
     fireEvent.click(screen.getByRole("button", { name: /resposta vazia/i }));
 
     expect(h.toastErro).toHaveBeenCalledWith(MOTIVO_RESPOSTA_RAPIDA_SEM_CONTEUDO);
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("");
+    expect(screen.getByLabelText(/^mensagem$/i)).toHaveValue("");
     expect(h.fetch).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(h.enviar).not.toHaveBeenCalled();
@@ -365,7 +367,7 @@ describe("envio (#3009): combinada vai para a fila e sai pelo caminho de sempre"
     renderComposer();
 
     fireEvent.click(screen.getByRole("button", { name: /^Boas vindas$/ }));
-    const campo = screen.getByLabelText(/mensagem/i);
+    const campo = screen.getByLabelText(/^mensagem$/i);
     expect(campo).toHaveValue("Oi Ana, tudo bem?");
     expect(screen.queryByRole("dialog")).toBeNull();
 

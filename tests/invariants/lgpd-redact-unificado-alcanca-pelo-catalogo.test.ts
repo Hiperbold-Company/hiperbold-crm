@@ -236,6 +236,11 @@ const DECISOES: Record<string, Decisao> = {
     caminho: "cascata",
     razao: "0482 (grupos na inbox, #1647): subject é o NOME do grupo e vira null; contact_id aponta para o placeholder do grupo (contacts.kind = 'whatsapp_group'), e número, conversa e liga/desliga ficam. O que o TITULAR escreveu em grupo é redigido pelo gatilho fn_redigir_conversas_ao_anonimizar, em messages.",
   },
+  scheduled_messages: {
+    decidida: "redigir",
+    caminho: "cascata",
+    razao: "1017 (mensagem agendada no chat, fork Hiperbold): body é o TEXTO que a empresa ia mandar à pessoa e template guarda os valores do modelo aprovado. O passo 6z redige body e zera template de toda agendada do contato (pelo contact_id ou pela conversa dele), e a pendente (agendada) vira cancelada com motivo: anonimizado não recebe mensagem. A linha fica (status, horário, quem agendou, message_id), a trilha do que a equipe fez.",
+  },
   // ── redigir pela virada de is_anonymized (gatilho) ────────────────────────
   ai_reply_drafts: {
     decidida: "redigir",

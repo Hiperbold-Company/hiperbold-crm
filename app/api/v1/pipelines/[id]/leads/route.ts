@@ -50,6 +50,8 @@ import { type NextRequest } from "next/server";
 
 import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import { leitorVeCamposRestritos, recortarLinha } from "@/lib/campos/recorte-por-papel";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { donoDoFiltro, lerFiltrosDaLista } from "@/lib/kanban/filtros-da-lista";
 import { createClient } from "@/lib/supabase/server";
@@ -175,7 +177,13 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     return falhaInterna("internal_error", error, { requestId });
   }
 
-  const linhas = (data ?? []) as Lead[];
+  // 1015: campo não público (valor) só sai para administrador.
+  let linhas = (data ?? []) as Lead[];
+  if (!leitorVeCamposRestritos(authz.org.role)) {
+    const lidas = await chavesRestritasDaOrganizacao(supabase, orgId, requestId);
+    if (!lidas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
+    linhas = linhas.map((l) => recortarLinha(l, lidas.chaves, authz.org.role));
+  }
   // A linha extra não vai para a tela: ela existe só para dizer se há próxima.
   const hasMore = linhas.length > porPagina;
 

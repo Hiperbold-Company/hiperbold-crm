@@ -126,6 +126,7 @@ export const O_QUE_FICA = {
   channel_session_groups: "os grupos de WhatsApp ligados a ele",
   group_messages_authored: "o que ele escreveu em grupos",
   conversation_drafts: "o texto escrito PARA ele por outro sistema",
+  scheduled_messages: "as mensagens agendadas PARA ele: o texto, o estado e o horário (o motivo interno e a sessão não são coletados)",
   contact_field_proposals: "o dado dele que a IA ouviu na conversa e propôs gravar, e o que se decidiu",
   lead_attachments: "os documentos anexados aos negócios dele: nome, tipo, tamanho e data (o arquivo não vai no relatório)",
   lead_notes: "a memória que a IA guarda sobre ele (LGPD art. 20)",

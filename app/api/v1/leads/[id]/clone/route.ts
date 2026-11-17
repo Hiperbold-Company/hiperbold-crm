@@ -1,4 +1,5 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { recortarLinhaDaResposta } from "@/lib/campos/resposta-recortada";
 /**
  * POST /api/v1/leads/[id]/clone — levar o negócio para OUTRO funil.
  *
@@ -518,13 +519,19 @@ export async function POST(
     // 201 e não 200: a rota CRIA um recurso, como `POST /api/v1/leads`
     // (app/api/v1/leads/route.ts). Duas criações irmãs com códigos diferentes
     // fazem quem integra tratar cada uma de um jeito sem que nada justifique.
-    return ok(
-      {
-        lead: clone,
-        origem: ocultarProvaMetaNaResposta((origemFinal ?? origemEncerrada ?? origem) as Record<string, unknown>),
-      },
-      { requestId, status: 201 },
+    // 1015: as duas linhas da resposta seguem o recorte do GET (campo não público só para
+    // administrador). O clone copia `custom_fields` da origem, então as duas o trazem inteiro.
+    const leadRecortado = await recortarLinhaDaResposta(supabase, authz.org.orgId, clone, authz.org.role, requestId);
+    if (!leadRecortado.ok) return leadRecortado.resposta;
+    const origemRecortada = await recortarLinhaDaResposta(
+      supabase,
+      authz.org.orgId,
+      ocultarProvaMetaNaResposta((origemFinal ?? origemEncerrada ?? origem) as Record<string, unknown>),
+      authz.org.role,
+      requestId,
     );
+    if (!origemRecortada.ok) return origemRecortada.resposta;
+    return ok({ lead: leadRecortado.linha, origem: origemRecortada.linha }, { requestId, status: 201 });
   } catch (err) {
     if (err instanceof ApiError) {
       return fail(err.code, err.message, err.status, {

@@ -173,4 +173,6 @@ export {
   // erro de compilação na primeira tela que precisasse dos dois.
   ShoppingCart,
   LinkSimple as LinkIcon,
+  // painel de mensagens do chat: respostas rápidas e modelos do WhatsApp
+  Quotes,
 } from "@phosphor-icons/react/dist/ssr";

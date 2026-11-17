@@ -94,6 +94,20 @@ export const SQL_ERRORS: Readonly<Record<string, { message: string; status: numb
     message: "Este módulo não existe nesta versão do sistema. Atualize a instalação e tente de novo.",
     status: 404,
   },
+  // 1016: desligar/religar um módulo de tabela (`fn_modulo_definir_estado`).
+  extension_module_not_installed: {
+    message: "Este módulo não está instalado nesta instalação. Recarregue a página.",
+    status: 404,
+  },
+  extension_module_state_changed: {
+    message: "O módulo mudou em outra sessão. Recarregue a página antes de continuar.",
+    status: 409,
+  },
+  // Errcode PT428: religar com `motivo_suspensao` preenchido.
+  extension_module_needs_update: {
+    message: "O módulo teve falha na última atualização; rode a atualização antes de religar.",
+    status: 409,
+  },
   extension_core_update_in_progress: {
     message: "O sistema está sendo atualizado. Aguarde a conclusão para alterar extensões.",
     status: 409,

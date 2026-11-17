@@ -15,6 +15,8 @@ import { type NextRequest } from "next/server";
 import { resolveAuthDual, tetoDeEscritaDoToken } from "@/lib/api/auth-dual";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
+import { recortarLinhaDaResposta } from "@/lib/campos/resposta-recortada";
+import { leitorDoAtor } from "@/lib/campos/recorte-por-papel";
 import { updateLeadSchema, validateRequest } from "@/lib/schemas";
 
 import { updateLeadHandler } from "../_handler";
@@ -70,7 +72,10 @@ export async function PATCH(
       leadId,
       input,
     );
-    return ok(updated, { requestId });
+    // 1015: a resposta segue o recorte do GET (campo não público só para administrador).
+    const recortado = await recortarLinhaDaResposta(supabase, organizationId, updated, leitorDoAtor(actor), requestId);
+    if (!recortado.ok) return recortado.resposta;
+    return ok(recortado.linha, { requestId });
   } catch (err) {
     if (err instanceof ApiError) {
       return fail(err.code, err.message, err.status, { requestId });

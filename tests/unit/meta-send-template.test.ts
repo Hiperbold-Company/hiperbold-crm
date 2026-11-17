@@ -28,7 +28,7 @@ const CURRENT = {
 const BASE = {
   phoneNumberId: "1103328999528818",
   token: "tok",
-  graphVersion: "v22.0",
+  graphVersion: "v26.0",
   to: "5531999998888",
 };
 

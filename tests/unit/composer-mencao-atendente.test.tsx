@@ -52,6 +52,7 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   useAuth: () => ({ user: { id: "eu-mesmo-0000" } }),
   // A escolha de contato do Composer lê o país da organização (o exemplo do telefone); sem organização, o Brasil.
   usePaisDaOrgAtiva: () => null,
+  useFusoDaOrganizacao: () => null,
 }));
 vi.mock("@/hooks/inbox/useTransferConversation", () => ({
   useTransferConversation: () => ({ mutate: vi.fn(), isPending: false }),
@@ -87,11 +88,11 @@ function renderComposer() {
 function abrirModoNota() {
   renderComposer();
   fireEvent.click(screen.getByRole("button", { name: /nota interna/i }));
-  return screen.getByLabelText(/mensagem/i);
+  return screen.getByLabelText(/^mensagem$/i);
 }
 
 async function digitar(texto: string) {
-  const campo = screen.getByLabelText(/mensagem/i);
+  const campo = screen.getByLabelText(/^mensagem$/i);
   fireEvent.change(campo, { target: { value: texto } });
   return campo;
 }
@@ -209,7 +210,7 @@ describe("Composer — menção de atendentes em nota interna", () => {
 
   it("em RESPOSTA o @ não abre lista nenhuma: menção é assunto de nota", () => {
     renderComposer();
-    const campo = screen.getByLabelText(/mensagem/i);
+    const campo = screen.getByLabelText(/^mensagem$/i);
     fireEvent.change(campo, { target: { value: "oi @an" } });
 
     expect(screen.queryByRole("listbox", { name: /atendentes para mencionar/i })).not.toBeInTheDocument();
@@ -223,7 +224,7 @@ describe("Composer — menção de atendentes em nota interna", () => {
 
   it("nota sem @ nenhum continua saindo igual, sem token algum", () => {
     abrirModoNota();
-    fireEvent.change(screen.getByLabelText(/mensagem/i), { target: { value: "cliente ligou" } });
+    fireEvent.change(screen.getByLabelText(/^mensagem$/i), { target: { value: "cliente ligou" } });
     fireEvent.click(screen.getByRole("button", { name: /^enviar$/i }));
 
     expect(createNoteMock).toHaveBeenCalledWith(

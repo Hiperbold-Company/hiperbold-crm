@@ -21,9 +21,11 @@ import { type NextRequest } from "next/server";
 
 import { atorDoAudit, autorizarAdministracao, traducaoDe } from "@/lib/api/auth-dual-admin";
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
+import { leitorDoAtor, recortarCampos } from "@/lib/campos/recorte-por-papel";
 import {
   aplicarConfiguracaoDoFunil,
   lerConfiguracaoDoFunil,
+  CAMPOS_DA_ORGANIZACAO,
   REGRAS_PERDEM_O_CAMPO,
 } from "@/lib/pipelines/configuracao-do-funil";
 import { pipelineConfigPatchSchema } from "@/lib/schemas/settings";
@@ -53,7 +55,13 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     }
     return falhaInterna("internal_error", new Error(lida.error), { requestId });
   }
-  return ok(lida.dados, { requestId });
+  // 1015: a definição de campo não pública só vai para administrador.
+  const leitor = leitorDoAtor(authz.actor);
+  const dados = {
+    ...lida.dados,
+    settings: { ...lida.dados.settings, fields: recortarCampos(lida.dados.settings.fields as unknown[], leitor) },
+  };
+  return ok(dados, { requestId });
 }
 
 export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> {
@@ -104,6 +112,13 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
       });
     }
     // #2791: a frase já vem pronta (e no idioma de quem chama) e diz qual regra deixaria de disparar.
+    // 1015: com os campos na organização, `fields` não se grava por aqui — a frase diz para onde ir.
+    if ((aplicado.details as Record<string, unknown> | undefined)?.[CAMPOS_DA_ORGANIZACAO]) {
+      return fail("unprocessable_entity", aplicado.error, 422, {
+        requestId,
+        details: aplicado.details as Record<string, unknown>,
+      });
+    }
     if ((aplicado.details as Record<string, unknown> | undefined)?.[REGRAS_PERDEM_O_CAMPO]) {
       return fail("unprocessable_entity", aplicado.error, 422, {
         requestId,

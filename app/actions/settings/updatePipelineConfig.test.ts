@@ -59,6 +59,16 @@ vi.mock("@/lib/supabase/server", () => ({
         };
         return cadeia;
       }
+      if (tabela === "custom_field_definitions") {
+        // 1015: a organização deste dublê ainda está no legado (nenhuma definição), então o
+        // núcleo aceita `fields` e a regra do gatilho por data é a que decide.
+        const contagem: Record<string, unknown> = {};
+        contagem.select = () => contagem;
+        contagem.eq = () => contagem;
+        contagem.then = (resolve: (r: unknown) => unknown) =>
+          Promise.resolve({ count: 0, data: null, error: null }).then(resolve);
+        return contagem;
+      }
       expect(tabela).toBe("automation_rules");
       // O dublê aplica os filtros de verdade: a regra de outra org, desligada ou
       // de outro gatilho só some se a rota pedir que suma.

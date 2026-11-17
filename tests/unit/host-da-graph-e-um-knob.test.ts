@@ -38,6 +38,7 @@ import type { AddressInfo } from "node:net";
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { VERSAO_PADRAO_DA_GRAPH } from "@/lib/graph-version";
 import { HOST_PADRAO_DA_GRAPH, graphBaseUrl, hostAceito, graphHost } from "@/lib/channels/meta/graph-base";
 import {
   HOST_PADRAO_DA_GRAPH_DE_ANUNCIO,
@@ -297,19 +298,19 @@ describe("o eixo de anúncio tem o SEU knob, e ele não herda o do canal", () =>
     process.env.META_GRAPH_BASE_URL = base;
     delete process.env.META_ADS_GRAPH_BASE_URL;
     expect(graphBaseUrl()).toBe(`${base}/v19.0`);
-    expect(baseDaGraphDeAnuncio()).toBe(`${HOST_PADRAO_DA_GRAPH_DE_ANUNCIO}/v22.0`);
+    expect(baseDaGraphDeAnuncio()).toBe(`${HOST_PADRAO_DA_GRAPH_DE_ANUNCIO}/${VERSAO_PADRAO_DA_GRAPH}`);
 
     delete process.env.META_GRAPH_BASE_URL;
     process.env.META_ADS_GRAPH_BASE_URL = base;
     expect(graphBaseUrl()).toBe(`${HOST_PADRAO_DA_GRAPH}/v19.0`);
-    expect(baseDaGraphDeAnuncio()).toBe(`${base}/v22.0`);
+    expect(baseDaGraphDeAnuncio()).toBe(`${base}/${VERSAO_PADRAO_DA_GRAPH}`);
   });
 
   it("o eixo de anúncio usa a versão FIXA dele, não a variável do canal", () => {
     // O anúncio não herda `META_GRAPH_VERSION` — decisão já escrita em
     // `lib/graph-version.ts` e mantida aqui.
     process.env.META_ADS_GRAPH_BASE_URL = base;
-    expect(baseDaGraphDeAnuncio()).toBe(`${base}/v22.0`);
+    expect(baseDaGraphDeAnuncio()).toBe(`${base}/${VERSAO_PADRAO_DA_GRAPH}`);
   });
 
   it("o portão do anúncio é o mesmo: valor ruim cai no host real", () => {
@@ -459,7 +460,7 @@ describe("CONTROLE DE VACUIDADE — o receptor viu requisição, alguma", () => 
 
     // 9 — leitura de métricas de anúncio
     const url = montarUrl("act_123/insights", { fields: "cpm" });
-    expect(url.startsWith(`${base}/v22.0/act_123/insights`)).toBe(true);
+    expect(url.startsWith(`${base}/${VERSAO_PADRAO_DA_GRAPH}/act_123/insights`)).toBe(true);
     expect(new URL(url).searchParams.get("fields")).toBe("cpm");
 
     // ─── A CONTAGEM, que é a asserção que este bloco existe para fazer ────────
@@ -477,8 +478,8 @@ describe("CONTROLE DE VACUIDADE — o receptor viu requisição, alguma", () => 
     // `send` — eles são distinguidos pelo CAMPO pedido, e é isso que se mede.
     expect(noReceptor.some((u) => u === `GET /v19.0/${NUMERO}?fields=display_phone_number,quality_rating`)).toBe(true);
     expect(noReceptor.some((u) => u === "GET /v19.0/987654321")).toBe(true);
-    // Dois caminhos do ANÚNCIO, com a versão do eixo (`v22.0`), não a do canal.
-    expect(noReceptor.some((u) => u.startsWith("POST /v22.0/dataset-de-prova/events"))).toBe(true);
+    // Dois caminhos do ANÚNCIO, com a versão do eixo (`VERSAO_PADRAO_DA_GRAPH`), não a do canal.
+    expect(noReceptor.some((u) => u.startsWith(`POST /${VERSAO_PADRAO_DA_GRAPH}/dataset-de-prova/events`))).toBe(true);
 
     // O token viaja no HEADER, nunca na query string (convenção que a casa
     // mediu e adotou: token em URL vaza para log de proxy).

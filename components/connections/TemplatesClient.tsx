@@ -20,6 +20,7 @@ import {
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
+import { rotaDosModelosOficiais } from "@/lib/channels/rota-dos-modelos-oficiais";
 import { PencilSimple, Trash } from "@/lib/ui/icons";
 
 /** Só APPROVED pode ser disparado — o resto é informação, não opção. */
@@ -80,9 +81,17 @@ function ehMidia(s: TemplateSlotView): boolean {
  * modelo pronto, o operador tinha de disparar para um cliente. Aqui ele salva
  * sem enviar nada, na mesma tela em que sincroniza. Campo vazio esquece o link.
  */
-function LinkDaMidia({ tpl, slot }: { tpl: TemplateView; slot: TemplateSlotView }) {
+function LinkDaMidia({
+  tpl,
+  slot,
+  channelSessionId,
+}: {
+  tpl: TemplateView;
+  slot: TemplateSlotView;
+  channelSessionId?: string;
+}) {
   const t = useT();
-  const salvar = useSaveTemplateValues();
+  const salvar = useSaveTemplateValues(channelSessionId);
   const salvo = tpl.savedValues[slot.valueKey] ?? "";
   const [valor, setValor] = useState(salvo);
   const limpo = valor.trim();
@@ -144,10 +153,18 @@ function LinkDaMidia({ tpl, slot }: { tpl: TemplateView; slot: TemplateSlotView 
   );
 }
 
-export function TemplatesClient() {
+export function TemplatesClient({
+  channelSessionId,
+}: {
+  /**
+   * Qual conta oficial (tela em cartões, várias por organização): a rota responde por ela na
+   * leitura, no sincronizar, no criar/editar e no apagar. Ausente = a mais antiga.
+   */
+  channelSessionId?: string;
+} = {}) {
   const t = useT();
-  const { data, isPending } = useTemplates();
-  const sync = useSyncTemplates();
+  const { data, isPending } = useTemplates(channelSessionId);
+  const sync = useSyncTemplates(channelSessionId);
   const qc = useQueryClient();
 
   // ─── Criar, editar e apagar pela TELA (#3635) ─────────────────────────────
@@ -174,7 +191,7 @@ export function TemplatesClient() {
 
   const gestao = useMutation({
     mutationFn: (corpo: CorpoDoModelo) =>
-      apiClient.post<{ data: Record<string, number> }>("/api/v1/channels/templates", corpo),
+      apiClient.post<{ data: Record<string, number> }>(rotaDosModelosOficiais(channelSessionId), corpo),
     onSuccess: (_r, corpo) => {
       invalidarEspelho();
       toast.success(
@@ -193,7 +210,7 @@ export function TemplatesClient() {
 
   const apagar = useMutation({
     mutationFn: (v: { alvo: AlvoDoApagamento; confirmado: boolean }) =>
-      apiClient.post<{ data: Record<string, number> }>("/api/v1/channels/templates", {
+      apiClient.post<{ data: Record<string, number> }>(rotaDosModelosOficiais(channelSessionId), {
         acao: "apagar",
         name: v.alvo.name,
         language: v.alvo.language,
@@ -347,6 +364,7 @@ export function TemplatesClient() {
                           key={`m:${s.valueKey}:${tpl.savedValues[s.valueKey] ?? ""}`}
                           tpl={tpl}
                           slot={s}
+                          channelSessionId={channelSessionId}
                         />
                       ) : (
                         <div key={`m:${s.onde}:${i}`} className="flex flex-col gap-0.5">
