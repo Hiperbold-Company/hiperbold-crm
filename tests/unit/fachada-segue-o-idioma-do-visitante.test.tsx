@@ -60,9 +60,11 @@ describe("a casca das telas de acesso segue o idioma do visitante", () => {
     h.perfil = null;
   });
 
-  it("sem sessão, navegador em espanhol: o formulário em espanhol", async () => {
+  it("sem sessão, navegador em espanhol: o formulário em português, como a casca", async () => {
+    // Espanhol e inglês saíram do seletor em 17/11/2026 (lib/i18n/registro.ts, `retiradoDoSeletorEm`): o visitante em espanhol lê
+    // a casca e o formulário no padrão — os dois pela mesma função.
     h.aceita = "es-ES,es;q=0.9";
-    expect(await fachada()).toBe(traduzir("Criar conta", "es"));
+    expect(await fachada()).toBe("Criar conta");
     expect(traduzir("Criar conta", "es")).not.toBe("Criar conta");
   });
 

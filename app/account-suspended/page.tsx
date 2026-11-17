@@ -1,3 +1,4 @@
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
@@ -83,7 +84,7 @@ export default async function AccountSuspendedPage({
     redirect(pedidoValido ? `/app/lgpd/requests/${pedidoValido}` : "/app");
   }
 
-  const idioma = user.idioma;
+  const idioma = idiomaDaTela(user.idioma);
   const t = (texto: string) => traduzir(texto, idioma);
   // A MESMA régua da página `/app/lgpd/requests` e das rotas `/api/v1/lgpd/**`.
   const administra =

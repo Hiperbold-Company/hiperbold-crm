@@ -17,7 +17,7 @@ import {
 import { updateTenant } from "@/app/actions/settings/updateTenant";
 import { useT } from "@/hooks/i18n/useT";
 import { irAoDesafioDeMfa } from "@/lib/auth/ir-ao-desafio-de-mfa";
-import { IDIOMAS_VISIVEIS } from "@/lib/i18n/registro";
+import { IDIOMAS_VISIVEIS, REGISTRO_DE_IDIOMAS } from "@/lib/i18n/registro";
 import { MOEDAS_SERVIDAS, simboloDaMoeda, type MoedaServida } from "@/lib/money";
 import { paisesOferecidos, perfilDoPais } from "@/lib/legal/perfil-do-pais";
 import { tenantSchema, type Locale, type TenantInput } from "@/lib/schemas/settings";
@@ -134,7 +134,7 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {IDIOMAS_VISIVEIS.map(({ codigo, nomeNativo }) => (
+                {idiomasDoSeletor(initial.locale).map(({ codigo, nomeNativo }) => (
                   <SelectItem key={codigo} value={codigo}>
                     {nomeNativo}
                   </SelectItem>
@@ -266,4 +266,13 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
       </Card>
     </form>
   );
+}
+
+// Espanhol e inglês saíram do seletor (17/11/2026), mas quem já tinha um deles gravado
+// continua vendo-o aqui: sem isso o Select mostraria pt-BR e salvar outro campo
+// trocaria o idioma da conta sem a pessoa ter pedido.
+function idiomasDoSeletor(gravado: string) {
+  if (IDIOMAS_VISIVEIS.some((i) => i.codigo === gravado)) return IDIOMAS_VISIVEIS;
+  const extra = REGISTRO_DE_IDIOMAS.find((i) => i.codigo === gravado);
+  return extra ? [...IDIOMAS_VISIVEIS, extra] : IDIOMAS_VISIVEIS;
 }

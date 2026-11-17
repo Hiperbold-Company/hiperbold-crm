@@ -1,3 +1,4 @@
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { InterfaceRefresh } from "@/hooks/auth/InterfaceRefresh";
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
@@ -350,7 +351,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // O idioma envolve a árvore inteira e recebe o código PRONTO — ele não
     // pergunta quem está logado. Ver `lib/i18n/IdiomaProvider`: foi o
     // acoplamento com a autenticação que derrubou 32 casos.
-    <IdiomaProvider locale={user.idioma}>
+    <IdiomaProvider locale={idiomaDaTela(user.idioma)}>
     <AuthProvider user={user} activeOrg={activeOrg}>
       {/*
         A COR DA ETIQUETA, uma leitura por tela.

@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 
-import { normalizarIdioma, parseAcceptLanguage, type Idioma } from "@/lib/i18n/idiomas";
+import { idiomaDaTela, normalizarIdioma, parseAcceptLanguage, type Idioma } from "@/lib/i18n/idiomas";
 
 /**
  * O idioma de quem ainda não tem sessão (ou cujo perfil não tem `locale`
@@ -20,7 +20,8 @@ import { normalizarIdioma, parseAcceptLanguage, type Idioma } from "@/lib/i18n/i
 export async function idiomaDoVisitante(
   localeBruto: string | null | undefined,
 ): Promise<Idioma> {
-  if (localeBruto) return normalizarIdioma(localeBruto);
+  // `idiomaDaTela`: é a tela que se pinta, e idioma fora do seletor cai no padrão.
+  if (localeBruto) return idiomaDaTela(normalizarIdioma(localeBruto));
   const hdrs = await headers();
-  return normalizarIdioma(parseAcceptLanguage(hdrs.get("accept-language")));
+  return idiomaDaTela(parseAcceptLanguage(hdrs.get("accept-language")));
 }

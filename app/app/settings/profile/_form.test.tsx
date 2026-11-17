@@ -35,12 +35,15 @@ function renderForm(locale: "pt-BR" | "es", initialLocale: "pt-BR" | "es") {
 
 describe("ProfileForm em espanhol", () => {
   it("hidrata o idioma salvo — não nasce em pt-BR", () => {
-    renderForm("es", "es");
+    // O seletor do perfil só oferece idioma visível (espanhol e inglês saíram em
+    // 17/11/2026); a página entrega `idiomaDaTela(user.locale)`. A hidratação
+    // segue provada, e a tela continua em espanhol.
+    renderForm("es", "pt-BR");
     // O Radix Select também espelha as opções num <select> nativo oculto (por
     // acessibilidade), então "Español" aparece nele mesmo sem ser o valor
     // selecionado — asserção tem que mirar o valor VISÍVEL do combobox, não o
     // texto solto, senão a sabotagem (remover initialLocale) não reprova nada.
-    expect(screen.getByRole("combobox", { name: "Idioma" })).toHaveTextContent("Español");
+    expect(screen.getByRole("combobox", { name: "Idioma" })).toHaveTextContent("Português (BR)");
   });
 
   it("com locale es, os rótulos vêm do dicionário", () => {

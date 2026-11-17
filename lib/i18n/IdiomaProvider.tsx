@@ -2,7 +2,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { traduzir } from "./dicionario";
-import { normalizarIdioma, IDIOMA_PADRAO, type Idioma } from "./idiomas";
+import { IDIOMA_PADRAO, type Idioma } from "./idiomas";
+import { IDIOMAS_COM_TEXTO } from "./registro";
 
 /**
  * O idioma da interface, com contexto PRÓPRIO — não pendurado no de autenticação.
@@ -36,6 +37,15 @@ import { normalizarIdioma, IDIOMA_PADRAO, type Idioma } from "./idiomas";
  * está na tela (a gravação terminou, ou a pessoa navegou), o de fora vence. Sem
  * essa reconciliação o estado local venceria para sempre e uma gravação que
  * FALHOU continuaria parecendo aplicada.
+ *
+ * ─── Ele PINTA o idioma que recebe; quem decide é quem o monta ─────────────
+ *
+ * O provider aceita qualquer idioma com texto (`IDIOMAS_COM_TEXTO`), inclusive
+ * um retirado do seletor, e cai no padrão para o resto. A barreira de "este
+ * idioma não é servido" mora onde o idioma é DECIDIDO — `normalizarIdioma` em
+ * `lib/auth/server.ts` (`AuthUser.idioma`) e `idiomaDoVisitante` nas telas
+ * públicas. Assim a cobertura de tradução de um idioma fora do seletor continua
+ * medida pela tela, e religá-lo não exige reescrever teste nenhum.
  */
 const Ctx = createContext<{ idioma: Idioma; aplicar: (i: Idioma) => void }>({
   idioma: IDIOMA_PADRAO,
@@ -58,6 +68,10 @@ export function idiomaAtual(): Idioma {
   return idiomaFora;
 }
 
+function idiomaQueSabePintar(bruto: string | null | undefined): Idioma {
+  return IDIOMAS_COM_TEXTO.find((idioma) => idioma.codigo === bruto)?.codigo ?? IDIOMA_PADRAO;
+}
+
 export function IdiomaProvider({
   locale,
   children,
@@ -65,7 +79,7 @@ export function IdiomaProvider({
   locale: string | null | undefined;
   children: React.ReactNode;
 }) {
-  const doServidor = normalizarIdioma(locale);
+  const doServidor = idiomaQueSabePintar(locale);
   const [idioma, setIdioma] = useState<Idioma>(doServidor);
 
   useEffect(() => {

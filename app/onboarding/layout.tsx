@@ -1,3 +1,4 @@
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { redirect } from "next/navigation";
 
 import { exigirProvaDeMfa, requireAuth, resolveActiveOrg } from "@/lib/auth/server";
@@ -68,7 +69,7 @@ export default async function OnboardingLayout({ children }: { children: React.R
   const logoDaInstalacao = marcaDoIcone.logoUrl;
 
   return (
-    <IdiomaProvider locale={user.idioma}>
+    <IdiomaProvider locale={idiomaDaTela(user.idioma)}>
       <div className="flex min-h-screen flex-col bg-muted/40">
         <header className="border-b bg-background">
           <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-6 py-4">
