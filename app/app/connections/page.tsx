@@ -44,10 +44,7 @@ export default async function ConnectionsPage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Conexões", idioma)}</h1>
         <p className="text-sm text-muted-foreground">
-          {traduzir(
-            "Por onde seu negócio fala com o cliente. Conecte um número pela API não oficial ou o número oficial da Meta, e acompanhe a saúde de cada um.",
-            idioma,
-          )}
+          {traduzir("Gerencie suas conexões de atendimento", idioma)}
         </p>
         <LinkDeAjudaDaTela />
       </header>
@@ -61,8 +58,8 @@ export default async function ConnectionsPage() {
         podeEditarProtecao={ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager}
         // Só aparece com o servidor e o token de administrador configurados na instalação.
         pareamentoQr={await pareamentoQrDisponivel()}
-        // A aba de redes sociais segue oculta para o cliente até a Meta aprovar o app;
-        // o administrador da plataforma a vê para testar com a conta real.
+        // Instagram e Messenger seguem ocultos no Criar para o cliente até a Meta aprovar o app;
+        // o administrador da plataforma os vê para testar com a conta real.
         redesSociaisLiberadas={user.is_platform_admin || acessoAntecipado("conexao-redes-sociais", activeOrg.orgId)}
       />
     </div>

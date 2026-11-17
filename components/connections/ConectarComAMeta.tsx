@@ -133,11 +133,12 @@ interface Preparado {
 }
 
 export function ConectarComAMeta({
-  jaConectado,
   bloqueio,
 }: {
-  /** Já existe um canal oficial nesta organização: o botão passa a TROCAR o número. */
-  jaConectado: boolean;
+  /**
+   * Desde 17/11/2026 cada número conectado pela Meta é uma conexão NOVA (várias contas oficiais
+   * por organização): o botão nunca substitui a atual, e o teto do plano vale sempre.
+   */
   bloqueio?: BloqueioDoBotao;
 }) {
   const t = useT();
@@ -213,7 +214,7 @@ export function ConectarComAMeta({
   }, []);
 
   const ocupado = fase !== "ocioso";
-  const travadoPeloPlano = !jaConectado && Boolean(bloqueio?.desabilitado);
+  const travadoPeloPlano = Boolean(bloqueio?.desabilitado);
 
   function falhar(mensagem: string) {
     if (!montado.current) return;
@@ -418,14 +419,6 @@ export function ConectarComAMeta({
           )}
         </div>
 
-        {jaConectado ? (
-          <p className="text-xs text-muted-foreground">
-            {t(
-              "Esta organização tem uma conexão oficial; conectar outro número pela Meta substitui a atual.",
-            )}
-          </p>
-        ) : null}
-
         <div>
           <Button
             type="button"
@@ -438,9 +431,7 @@ export function ConectarComAMeta({
               ? t("Abrindo a Meta…")
               : fase === "conectando"
                 ? t("Conectando o número…")
-                : jaConectado
-                  ? t("Trocar número pela Meta")
-                  : t("Conectar com a Meta")}
+                : t("Conectar com a Meta")}
           </Button>
         </div>
 

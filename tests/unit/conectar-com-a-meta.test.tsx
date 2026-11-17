@@ -23,6 +23,8 @@ vi.mock("@/components/feedback/ApiErrorToast", () => ({ showApiError: () => unde
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/clipboard", () => ({ copyToClipboard: async () => undefined }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
+// `CanalOficialClient` esconde o "Remover conexão" de quem não é admin: aqui ele é.
+vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true }));
 
 import { CanalOficialClient } from "@/components/connections/CanalOficialClient";
 
@@ -319,13 +321,14 @@ describe("Conectar com a Meta", () => {
     await waitFor(() => expect(chamadasDoInicio()).toBe(2));
   });
 
-  it("já conectado: o rótulo vira Trocar e o aviso de substituição aparece", async () => {
+  it("já conectado: cada número é uma conexão nova, sem Trocar nem aviso de substituição", async () => {
+    // Várias contas oficiais por organização (17/11/2026): conectar outro número não substitui a atual.
     estadoDoCanal = CONECTADO as typeof NAO_CONECTADO;
     respostasDoInicio = [OFF];
     montar();
     const botao = await screen.findByTestId("btn-conectar-meta");
-    expect(botao.textContent).toBe("Trocar número pela Meta");
-    expect(screen.getByText(/substitui a atual/)).toBeTruthy();
+    expect(botao.textContent).toBe("Conectar com a Meta");
+    expect(screen.queryByText(/substitui a atual/)).toBeNull();
   });
 
   it("limite do plano sem canal conectado: o botão da Meta fica desabilitado como o manual", async () => {

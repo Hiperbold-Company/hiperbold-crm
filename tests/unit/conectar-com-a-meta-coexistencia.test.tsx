@@ -54,7 +54,7 @@ async function clicarQuandoPronto() {
 
 describe("ConectarComAMeta: modo de conexão", () => {
   it("coexistência: o FB.login recebe featureType whatsapp_business_app_onboarding", async () => {
-    render(<ConectarComAMeta jaConectado={false} />);
+    render(<ConectarComAMeta />);
     fireEvent.click(screen.getByTestId("cadastro-meta-modo-coexistencia"));
     const opts = await clicarQuandoPronto();
     expect(opts.config_id).toBe("cfg-1");
@@ -66,7 +66,7 @@ describe("ConectarComAMeta: modo de conexão", () => {
   });
 
   it("padrão (selecionado de início): o FB.login sai como sempre, sem featureType", async () => {
-    render(<ConectarComAMeta jaConectado={false} />);
+    render(<ConectarComAMeta />);
     expect(screen.getByTestId("cadastro-meta-modo-padrao").getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByTestId("cadastro-meta-modo-coexistencia").getAttribute("aria-pressed")).toBe("false");
     const opts = await clicarQuandoPronto();
@@ -75,7 +75,7 @@ describe("ConectarComAMeta: modo de conexão", () => {
   });
 
   it("coexistência e depois padrão de novo volta ao fluxo comum", async () => {
-    render(<ConectarComAMeta jaConectado={false} />);
+    render(<ConectarComAMeta />);
     fireEvent.click(screen.getByTestId("cadastro-meta-modo-coexistencia"));
     fireEvent.click(screen.getByTestId("cadastro-meta-modo-padrao"));
     const opts = await clicarQuandoPronto();
@@ -83,7 +83,7 @@ describe("ConectarComAMeta: modo de conexão", () => {
   });
 
   it("a caixa explicativa muda com a escolha, e só a coexistência traz o aviso do recurso recente", () => {
-    render(<ConectarComAMeta jaConectado={false} />);
+    render(<ConectarComAMeta />);
     expect(screen.getByTestId("cadastro-meta-explicacao-padrao").textContent).toMatch(
       /só pela API oficial/,
     );
@@ -97,7 +97,7 @@ describe("ConectarComAMeta: modo de conexão", () => {
   });
 
   it("os botões de modo ficam desabilitados enquanto o cadastro está em andamento", async () => {
-    render(<ConectarComAMeta jaConectado={false} />);
+    render(<ConectarComAMeta />);
     await clicarQuandoPronto();
     await waitFor(() => {
       expect((screen.getByTestId("cadastro-meta-modo-padrao") as HTMLButtonElement).disabled).toBe(true);
