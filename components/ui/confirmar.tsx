@@ -13,7 +13,7 @@
  * `null` quando a pessoa cancela. Fechar com Esc ou clicando fora conta como
  * cancelar. O provedor mora em `app/providers.tsx`.
  */
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   AlertDialog,
@@ -79,13 +79,13 @@ export function ProvedorDeConfirmacao({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const api = useRef<Api>({
-    confirmar: (o) => abrir("confirmar", o) as Promise<boolean>,
-    perguntar: (o) => abrir("perguntar", o) as Promise<string | null>,
-  });
-  // `abrir` é estável; o ref mantém a identidade da API entre renderizações.
-  api.current.confirmar = (o) => abrir("confirmar", o) as Promise<boolean>;
-  api.current.perguntar = (o) => abrir("perguntar", o) as Promise<string | null>;
+  const api = useMemo<Api>(
+    () => ({
+      confirmar: (o) => abrir("confirmar", o) as Promise<boolean>,
+      perguntar: (o) => abrir("perguntar", o) as Promise<string | null>,
+    }),
+    [abrir],
+  );
 
   function responder(sim: boolean) {
     const p = atual.current;
@@ -100,7 +100,7 @@ export function ProvedorDeConfirmacao({ children }: { children: ReactNode }) {
   const faltaTexto = pedido?.tipo === "perguntar" && !o?.opcional && texto.trim() === "";
 
   return (
-    <Contexto.Provider value={api.current}>
+    <Contexto.Provider value={api}>
       {children}
       <AlertDialog open={pedido !== null} onOpenChange={(aberto) => !aberto && responder(false)}>
         <AlertDialogContent data-testid="confirmacao">

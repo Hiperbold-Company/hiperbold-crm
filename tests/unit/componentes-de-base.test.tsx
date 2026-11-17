@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { ProvedorDeConfirmacao, useConfirmar } from "@/components/ui/confirmar";
@@ -98,9 +98,12 @@ describe("useConfirmar", () => {
 
   it("pedido novo cancela o anterior em vez de deixá-lo pendurado", async () => {
     let primeiro: Promise<boolean> | null = null;
-    let api: ReturnType<typeof useConfirmar> | null = null;
+    const caixa: { api: ReturnType<typeof useConfirmar> | null } = { api: null };
     function Captura() {
-      api = useConfirmar();
+      const api = useConfirmar();
+      useEffect(() => {
+        caixa.api = api;
+      }, [api]);
       return null;
     }
     render(
@@ -109,10 +112,10 @@ describe("useConfirmar", () => {
       </ProvedorDeConfirmacao>,
     );
     act(() => {
-      primeiro = api!.confirmar({ titulo: "Primeiro" });
+      primeiro = caixa.api!.confirmar({ titulo: "Primeiro" });
     });
     act(() => {
-      void api!.confirmar({ titulo: "Segundo" });
+      void caixa.api!.confirmar({ titulo: "Segundo" });
     });
     await expect(primeiro).resolves.toBe(false);
     expect((await screen.findByRole("alertdialog")).textContent).toContain("Segundo");
