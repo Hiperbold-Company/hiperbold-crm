@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useT } from "@/hooks/i18n/useT";
 import { MagnifyingGlass } from "@/lib/ui/icons";
-import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
+import type { Icon as PhosphorIcon } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
 /**

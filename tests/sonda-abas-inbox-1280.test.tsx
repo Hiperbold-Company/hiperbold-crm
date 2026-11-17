@@ -127,7 +127,7 @@ describe("sonda — as 6 abas da Inbox medidas em browser", () => {
         const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
         await page.setContent(
           `<!doctype html><html><head><meta charset="utf-8"><style>${fonteRealEmBase64()}</style>` +
-            `<style>:root{--font-atkinson:"AtkinsonSonda"}</style><style>${css}</style></head>` +
+            `<style>:root{--font-inter:"AtkinsonSonda"}</style><style>${css}</style></head>` +
             `<body style="margin:0"><div id="coluna" style="width:272px">${html}</div></body></html>`,
         );
         for (const larguraDaColuna of COLUNAS) {

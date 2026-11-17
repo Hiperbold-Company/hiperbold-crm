@@ -4,7 +4,7 @@ import { useT } from "@/hooks/i18n/useT";
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { X } from "@/lib/ui/icons";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

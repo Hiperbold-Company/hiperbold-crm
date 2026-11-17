@@ -546,7 +546,7 @@
 
   /* Tipografia */
   --font-sans:
-    var(--font-atkinson), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /* Espaçamento. Os valores são px LITERAIS (`--space-6` = 24px), não rem — e
@@ -783,7 +783,7 @@
     background-color: var(--color-bg);
     color: var(--color-text);
     font-family:
-      var(--font-atkinson),
+      var(--font-inter),
       ui-sans-serif,
       system-ui,
       -apple-system,

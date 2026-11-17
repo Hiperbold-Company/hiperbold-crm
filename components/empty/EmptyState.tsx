@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
+import type { Icon as PhosphorIcon } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 

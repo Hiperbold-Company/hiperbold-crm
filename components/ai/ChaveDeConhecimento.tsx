@@ -27,7 +27,7 @@ import { useT } from "@/hooks/i18n/useT";
  */
 import { useState } from "react";
 import Link from "next/link";
-import { KeyRound, CheckCircle2, TriangleAlert } from "lucide-react";
+import { Key, CheckCircle, Warning } from "@/lib/ui/icons";
 import { toast } from "sonner";
 
 import {
@@ -130,7 +130,7 @@ export function ChaveDeConhecimento({ estado, onChaveCadastrada }: Props) {
         data-testid="conhecimento-chave-conferindo"
         className="flex items-center gap-2 text-xs text-text-muted"
       >
-        <KeyRound className="h-3.5 w-3.5 animate-pulse" aria-hidden />
+        <Key className="h-3.5 w-3.5 animate-pulse" aria-hidden />
         <span>{t("Conferindo a chave de embedding — leva alguns segundos.")}</span>
       </div>
     );
@@ -142,7 +142,7 @@ export function ChaveDeConhecimento({ estado, onChaveCadastrada }: Props) {
         data-testid="conhecimento-chave-ok"
         className="flex flex-wrap items-center gap-2 text-xs text-text-muted"
       >
-        <CheckCircle2 className="h-3.5 w-3.5 text-success-fg" aria-hidden />
+        <CheckCircle className="h-3.5 w-3.5 text-success-fg" aria-hidden />
         <span>
           {t("Pronto para preparar material.")}{" "}
           {estado.chave_em_uso ? (
@@ -180,7 +180,7 @@ export function ChaveDeConhecimento({ estado, onChaveCadastrada }: Props) {
       className="space-y-3 border-warning-bg bg-warning-bg/20 p-4"
     >
       <div className="flex items-start gap-2">
-        <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning-fg" aria-hidden />
+        <Warning className="mt-0.5 h-4 w-4 shrink-0 text-warning-fg" aria-hidden />
         <div className="space-y-1">
           <h3 className="text-sm font-medium">
             {semChave === "google"
@@ -313,7 +313,7 @@ export function ChaveDeConhecimento({ estado, onChaveCadastrada }: Props) {
             onClick={() => setAbrindo(true)}
             data-testid="conhecimento-cadastrar-chave"
           >
-            <KeyRound className="mr-2 h-3.5 w-3.5" aria-hidden />
+            <Key className="mr-2 h-3.5 w-3.5" aria-hidden />
             {t("Cadastrar a chave aqui")}
           </Button>
           <span className="text-xs text-text-muted">

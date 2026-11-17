@@ -12,14 +12,14 @@ import {
 } from "@/components/ui/dialog";
 import {
   FileText,
-  Image as ImageIcon,
-  Upload,
-  Trash2,
-  ExternalLink,
-  Loader2,
+  ImageIcon,
+  UploadSimple,
+  Trash,
+  ArrowSquareOut,
+  CircleNotch,
   Eye,
-  Download,
-} from "lucide-react";
+  DownloadSimple,
+} from "@/lib/ui/icons";
 import type { LeadAttachment } from "@/app/api/v1/leads/[id]/attachments/route";
 
 interface Props {
@@ -265,7 +265,7 @@ export function FileUploadCustomField({
                       className="inline-flex items-center gap-1 rounded-md p-1 text-text-muted hover:text-text hover:bg-muted"
                       title={t("Abrir em nova aba / Baixar")}
                     >
-                      <ExternalLink className="h-3.5 w-3.5" />
+                      <ArrowSquareOut className="h-3.5 w-3.5" />
                     </a>
                   )}
 
@@ -276,7 +276,7 @@ export function FileUploadCustomField({
                       className="rounded-md p-1 text-error-fg hover:bg-error-fg/10"
                       title={t("Remover arquivo")}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </div>
@@ -309,18 +309,18 @@ export function FileUploadCustomField({
           >
             {isUploading ? (
               <div className="flex items-center gap-2 text-xs font-medium text-primary">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <CircleNotch className="h-4 w-4 animate-spin" />
                 <span>{t("Enviando arquivo(s)…")}</span>
               </div>
             ) : isDragging ? (
               <div className="flex items-center gap-2 text-xs font-semibold text-primary">
-                <Upload className="h-4 w-4 animate-bounce" />
+                <UploadSimple className="h-4 w-4 animate-bounce" />
                 <span>{t("Solte os arquivos aqui para enviar")}</span>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-1">
                 <div className="flex items-center gap-1.5 text-xs font-medium text-text">
-                  <Upload className="h-3.5 w-3.5 text-text-muted" />
+                  <UploadSimple className="h-3.5 w-3.5 text-text-muted" />
                   <span>{t("Arraste arquivos aqui ou clique para selecionar")}</span>
                 </div>
                 <span className="text-[10px] text-text-muted">
@@ -362,7 +362,7 @@ export function FileUploadCustomField({
                 className="inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1.5 bg-muted hover:bg-muted/80 text-text transition-colors mr-6"
                 title={t("Baixar arquivo")}
               >
-                <Download className="h-3.5 w-3.5" />
+                <DownloadSimple className="h-3.5 w-3.5" />
                 <span>{t("Baixar")}</span>
               </a>
             )}
@@ -398,7 +398,7 @@ export function FileUploadCustomField({
                     download={previewAttachment.name}
                     className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 bg-primary text-primary-foreground text-xs font-medium shadow-sm hover:bg-primary/90"
                   >
-                    <Download className="h-4 w-4" />
+                    <DownloadSimple className="h-4 w-4" />
                     <span>{t("Baixar arquivo para visualizar")}</span>
                   </a>
                 )}

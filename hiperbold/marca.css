@@ -56,7 +56,7 @@
   --color-neutral-950: #0a1020;
 }
 
-/* Tipografia da marca: Inter no corpo (via --font-atkinson, ver app/layout.tsx)
+/* Tipografia da marca: Inter no corpo (via --font-inter, ver app/layout.tsx)
    e Assistant nos títulos. O ss01 do autor era da Atkinson; na Inter ele troca
    os algarismos, então sai. */
 body {
@@ -67,7 +67,7 @@ h1,
 h2,
 h3,
 h4 {
-  font-family: var(--font-assistant), var(--font-atkinson), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-assistant), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   letter-spacing: -0.01em;
 }
 

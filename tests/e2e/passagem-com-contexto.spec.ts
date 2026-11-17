@@ -262,7 +262,7 @@ test.describe("a passagem para humano chega com contexto", () => {
     // A fonte da INTERFACE, e não um nome de fonte fixo: o botão nativo cai na
     // fonte do sistema se não herdar, e é isso que se quer pegar. O nome já
     // mudou de propósito (a Hiperbold serve a Inter, no lugar da Atkinson, pela
-    // mesma variável `--font-atkinson`), então o que vale é ser a do corpo.
+    // mesma variável `--font-inter`), então o que vale é ser a do corpo.
     expect(m.botao!.fonte).toBe(m.botao!.fonteDoCorpo);
     expect(m.botao!.fonte).not.toMatch(/^(system-ui|-apple-system|arial)/i);
     // O convite tem de estar DENTRO da janela quando a pessoa chega. O fio rola
