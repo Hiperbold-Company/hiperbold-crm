@@ -39,7 +39,7 @@ export const HOST_PADRAO_DA_GRAPH_DE_ANUNCIO = "https://graph.facebook.com";
 const CHAVE = "META_ADS_GRAPH_BASE_URL";
 
 /**
- * A base com a versão — `https://graph.facebook.com/v22.0`.
+ * A base com a versão — `https://graph.facebook.com/v26.0`.
  *
  * A VERSÃO é a constante do eixo (`VERSAO_PADRAO_DA_GRAPH`, a MESMA que
  * `conversions.ts` fixava), e não a função `graphVersion()` do canal: o anúncio

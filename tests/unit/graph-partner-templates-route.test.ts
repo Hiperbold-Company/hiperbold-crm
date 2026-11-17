@@ -36,7 +36,7 @@ vi.mock("@/lib/channels/graph-parceiro/credentials", () => ({
   // virou compartilhado). O caminho deste teste passa pelo adapter dublado, então
   // elas só precisam EXISTIR — mas `vi.mock` reprova import nomeado ausente.
   resolveGraphPartnerCreds: async () => null,
-  graphPartnerGraphBase: () => "https://graph.facebook.com/v22.0",
+  graphPartnerGraphBase: () => "https://graph.facebook.com/v26.0",
 }));
 vi.mock("@/lib/channels/graph-parceiro/session", () => ({ findGraphPartnerSession: h.find }));
 vi.mock("@/lib/channels", async (original) => ({

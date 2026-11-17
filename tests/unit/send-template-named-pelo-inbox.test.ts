@@ -80,7 +80,7 @@ beforeEach(() => {
   vi.mocked(resolveMetaCreds).mockResolvedValue({
     phoneNumberId: "PN",
     token: "tok",
-    graphVersion: "v22.0",
+    graphVersion: "v26.0",
     source: "session",
   });
 });
