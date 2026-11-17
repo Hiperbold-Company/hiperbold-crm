@@ -26841,9 +26841,12 @@ export const DICIONARIO: Traducoes = {
   "Sua assinatura não foi concluída": {
     es: "Tu suscripción no se completó",
   },
-  "A cobrança de {valor} do plano {plano} não foi paga e foi cancelada. Seu acesso continua até {data}; para não perder o acesso, assine novamente pelo CRM.":
+  "Sua assinatura precisa ser renovada": {
+    es: "Tu suscripción necesita renovarse",
+  },
+  "A cobrança de {valor} do plano {plano} não foi paga no prazo. Para continuar usando o CRM, assine novamente pelos Planos.":
     {
-      es: "El cobro de {valor} del plan {plano} no se pagó y fue cancelado. Tu acceso continúa hasta el {data}; para no perder el acceso, suscríbete de nuevo desde el CRM.",
+      es: "El cobro de {valor} del plan {plano} no se pagó a tiempo. Para seguir usando el CRM, suscríbete de nuevo desde los Planes.",
     },
   "Sua conta está suspensa": {
     es: "Tu cuenta está suspendida",

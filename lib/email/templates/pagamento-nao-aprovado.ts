@@ -19,10 +19,12 @@ export interface PagamentoNaoAprovadoEmailOptions extends OpcoesBaseDoEmail {
   plano: string;
   /** Centavos. */
   valor: number;
-  /** ISO. Até quando o acesso continua. */
-  acessoAte: string;
-  /** A cobrança foi cancelada pelo CRM: a assinatura não foi concluída e o botão leva aos Planos para assinar de novo. */
+  /** ISO. Até quando o acesso continua. Ausente em quem nunca pagou: não há período pago a prometer. */
+  acessoAte?: string;
+  /** A cobrança foi cancelada pelo CRM: o botão leva aos Planos para assinar de novo (quem já pagava: "precisa ser renovada"). */
   cobrancaCancelada?: boolean;
+  /** Nenhum pagamento anterior confirmado: a assinatura não chegou a ser concluída. Leva aos Planos, como a cancelada. */
+  nuncaPagou?: boolean;
 }
 
 export function buildPagamentoNaoAprovadoEmail(opts: PagamentoNaoAprovadoEmailOptions): {
@@ -32,21 +34,27 @@ export function buildPagamentoNaoAprovadoEmail(opts: PagamentoNaoAprovadoEmailOp
 } {
   const { idioma, marca } = opts;
   const valor = formatarReais(opts.valor);
-  const data = formatarData(opts.acessoAte);
+  const data = opts.acessoAte ? formatarData(opts.acessoAte) : null;
 
-  const cancelada = opts.cobrancaCancelada === true;
+  const nuncaPagou = opts.nuncaPagou === true;
+  // Sem fatura a pagar: o botão leva aos Planos. Quem nunca pagou sempre cai aqui, mesmo sem o marcador de cancelada.
+  const planos = nuncaPagou || opts.cobrancaCancelada === true;
   const titulo = traduzir(
-    cancelada ? "Sua assinatura não foi concluída" : "Não conseguimos cobrar a renovação do seu plano",
+    !planos
+      ? "Não conseguimos cobrar a renovação do seu plano"
+      : nuncaPagou
+        ? "Sua assinatura não foi concluída"
+        : "Sua assinatura precisa ser renovada",
     idioma,
   );
   const texto = preencher(
     traduzir(
-      cancelada
-        ? "A cobrança de {valor} do plano {plano} não foi paga e foi cancelada. Seu acesso continua até {data}; para não perder o acesso, assine novamente pelo CRM."
+      planos
+        ? "A cobrança de {valor} do plano {plano} não foi paga no prazo. Para continuar usando o CRM, assine novamente pelos Planos."
         : "A cobrança de {valor} do plano {plano} não foi aprovada. Seu acesso continua até {data}; depois disso a conta entra em modo só leitura.",
       idioma,
     ),
-    { valor, plano: opts.plano, data },
+    { valor, plano: opts.plano, data: data ?? "" },
   );
 
   const { html, text } = montarEmailTransacional({
@@ -60,9 +68,9 @@ export function buildPagamentoNaoAprovadoEmail(opts: PagamentoNaoAprovadoEmailOp
     resumo: [
       { rotulo: traduzir("Plano", idioma), valor: opts.plano },
       { rotulo: traduzir("Valor", idioma), valor },
-      { rotulo: traduzir("Acesso até", idioma), valor: data },
+      ...(data ? [{ rotulo: traduzir("Acesso até", idioma), valor: data }] : []),
     ],
-    botao: { texto: traduzir(cancelada ? "Assinar de novo" : "Pagar agora", idioma), url: opts.url },
+    botao: { texto: traduzir(planos ? "Assinar de novo" : "Pagar agora", idioma), url: opts.url },
   });
 
   return { subject: paraAssunto(titulo), html, text };

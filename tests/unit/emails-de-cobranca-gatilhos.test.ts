@@ -358,14 +358,26 @@ describe("pagamento não aprovado: COB-05", () => {
     expect(texto).toContain("/app/settings/plano");
   });
 
-  it("quem nunca pagou nada (sem período) não recebe 'não conseguimos cobrar a renovação'", async () => {
+  it("quem nunca pagou nada (sem período) recebe a variante dos Planos, nunca o texto de renovação", async () => {
     const banco = mundo();
+    for (const o of banco.tabelas.billing_orders!) o.status = "criado";
     banco.tabelas.billing_contracts![0]!.current_period_end = null;
     const c = cenario(banco);
     await c.avisos.aoAplicar(
-      aviso({ eventType: "PAYMENT_OVERDUE", resultado: "aplicado", idDoPagamento: "pay_z", cobranca: cobranca({ id: "pay_z" }) }),
+      aviso({
+        eventType: "PAYMENT_OVERDUE",
+        resultado: "ignorado",
+        idDoPagamento: "pay_z",
+        cobranca: cobranca({ id: "pay_z", invoiceUrl: "https://www.asaas.com/i/abc123" }),
+      }),
     );
-    expect(c.enviadas).toEqual([]);
+    expect(c.enviadas.map((e) => e.emailId)).toEqual(["COB-05"]);
+    const m = c.renderizar(c.enviadas[0]!);
+    expect(m.subject).toBe("Sua assinatura não foi concluída");
+    expect(m.text).toContain("Assinar de novo: https://crm.exemplo.com.br/app/settings/plano/assinar");
+    expect(m.text).not.toContain("asaas.com");
+    expect(m.text).not.toContain("renovação");
+    expect(m.text).not.toContain("Acesso até");
   });
 
   it("carência que já passou não manda 'seu acesso continua': a conta já está só leitura", async () => {
@@ -394,7 +406,7 @@ describe("pagamento não aprovado: COB-05", () => {
     expect(c.enviadas).toEqual([]);
   });
 
-  it("pedido vencido: a fatura guardada no pedido vale mais que a do objeto confirmado", async () => {
+  it("cobrança viva: o botão leva à fatura da cobrança que venceu, não à guardada no pedido", async () => {
     const uuid = "0952c000-0000-4000-8000-000000000002";
     const banco = mundo();
     // Pix de renovação: mesmo plano (outra versão do mesmo code) e mesmo ciclo do contrato.
@@ -403,14 +415,26 @@ describe("pagamento não aprovado: COB-05", () => {
     await c.avisos.aoAplicar(
       aviso({
         eventType: "PAYMENT_OVERDUE",
-        resultado: "aplicado",
+        resultado: "ignorado",
         idDoPagamento: "pay_v",
-        cobranca: cobranca({ id: "pay_v", externalReference: `HC:ord:${uuid}`, invoiceUrl: "https://www.asaas.com/i/outra" }),
+        cobranca: cobranca({ id: "pay_v", externalReference: `HC:ord:${uuid}`, invoiceUrl: "https://www.asaas.com/i/da-cobranca" }),
       }),
     );
     const texto = c.renderizar(c.enviadas[0]!).text;
-    expect(texto).toContain("https://www.asaas.com/i/guardada");
+    expect(texto).toContain("Pagar agora: https://www.asaas.com/i/da-cobranca");
+    expect(texto).not.toContain("guardada");
     expect(texto).toContain("Pro");
+  });
+
+  it("cobrança viva sem fatura própria: cai na guardada no pedido", async () => {
+    const uuid = "0952c000-0000-4000-8000-000000000003";
+    const banco = mundo();
+    banco.tabelas.billing_orders!.push({ id: uuid, organization_id: ORG, tipo: "assinatura", plan_id: "plano-pro-v2", ciclo: "monthly", metodo: "PIX", amount_cents: 34900, parcelas: 1, invoice_url: "https://www.asaas.com/i/guardada" });
+    const c = cenario(banco);
+    await c.avisos.aoAplicar(
+      aviso({ eventType: "PAYMENT_OVERDUE", resultado: "ignorado", idDoPagamento: "pay_w", cobranca: cobranca({ id: "pay_w", externalReference: `HC:ord:${uuid}` }) }),
+    );
+    expect(c.renderizar(c.enviadas[0]!).text).toContain("Pagar agora: https://www.asaas.com/i/guardada");
   });
 
   it("fatura guardada no pedido fora da regra (http ou outro host) não vira botão: leva à tela do plano", async () => {
@@ -422,7 +446,7 @@ describe("pagamento não aprovado: COB-05", () => {
       await c.avisos.aoAplicar(
         aviso({
           eventType: "PAYMENT_OVERDUE",
-          resultado: "aplicado",
+          resultado: "ignorado",
           idDoPagamento: `pay_ruim${i}`,
           cobranca: cobranca({ id: `pay_ruim${i}`, externalReference: `HC:ord:${uuid}` }),
         }),
@@ -444,6 +468,8 @@ describe("pagamento não aprovado: COB-05 só para a RENOVAÇÃO do plano vigent
       resultado,
       idDoPagamento: id,
       cobranca: cobranca({ id, externalReference: ref }),
+      // O banco fecha pedido vencido (`aplicado`) sempre com o alarme de remoção da cobrança; `ignorado` não tem.
+      alarmes: resultado === "aplicado" ? ["remover_cobranca_pendente"] : [],
     });
   const novoPedido = (banco: BancoFalso, id: string, extra: Record<string, unknown>) =>
     banco.tabelas.billing_orders!.push({
@@ -483,10 +509,66 @@ describe("pagamento não aprovado: COB-05 só para a RENOVAÇÃO do plano vigent
       expect(dados.faturaUrl).toBeNull();
       expect(dados.cobrancaCancelada).toBe(true);
       const m = c.renderizar(c.enviadas[0]!);
-      expect(m.subject).toBe("Sua assinatura não foi concluída");
+      // Quem já pagava (o `mundo` tem pedidos pagos): renovação, não "assinatura não concluída".
+      expect(m.subject).toBe("Sua assinatura precisa ser renovada");
       expect(m.text).toContain("Assinar de novo: https://crm.exemplo.com.br/app/settings/plano/assinar");
       expect(m.text).not.toContain("asaas.com");
-      expect(m.text).toContain("assine novamente pelo CRM");
+      expect(m.text).toContain("assine novamente pelos Planos");
+      expect(m.text).not.toContain("cancelada");
+    }
+  });
+
+  it("nunca pagou, com período de avaliação gravado: variante dos Planos, título 'não foi concluída', sem promessa de acesso", async () => {
+    const banco = mundo();
+    for (const o of banco.tabelas.billing_orders!) o.status = "criado";
+    // porEmAvaliacao grava `current_period_end` mesmo sem nenhum pagamento.
+    Object.assign(banco.tabelas.billing_contracts![0]!, { status: "avaliacao", current_period_end: "2026-11-02T03:00:00+00:00" });
+    novoPedido(banco, U(30), { plan_id: "plano-max", status: "criado" });
+    const c = cenario(banco);
+    await c.avisos.aoAplicar(venceu("pay_aval", `HC:ord:${U(30)}`));
+    expect(c.enviadas).toHaveLength(1);
+    expect(c.enviadas[0]!.dados).toMatchObject({ plano: "Max", nuncaPagou: true, cobrancaCancelada: true, faturaUrl: null });
+    const m = c.renderizar(c.enviadas[0]!);
+    expect(m.subject).toBe("Sua assinatura não foi concluída");
+    expect(m.text).toContain("Assinar de novo: https://crm.exemplo.com.br/app/settings/plano/assinar");
+    expect(m.text).not.toContain("Acesso até");
+    expect(m.text).not.toContain("cancelada");
+    expect(c.renderizar(c.enviadas[0]!, "es").subject).toBe("Tu suscripción no se completó");
+  });
+
+  it("nunca pagou e o pedido vencido é pacote de tokens: nada", async () => {
+    const banco = mundo();
+    for (const o of banco.tabelas.billing_orders!) o.status = "criado";
+    novoPedido(banco, U(31), { tipo: "pacote_tokens", plan_id: null, ciclo: null, tokens: 500000 });
+    const c = cenario(banco);
+    await c.avisos.aoAplicar(venceu("pay_pacote", `HC:ord:${U(31)}`));
+    expect(c.enviadas).toEqual([]);
+  });
+
+  it("já pagou, renovação com alarme de remoção: 'precisa ser renovada', em pt, es e en", async () => {
+    const banco = mundo();
+    novoPedido(banco, U(32), {});
+    const c = cenario(banco);
+    await c.avisos.aoAplicar(venceu("pay_ren_cancel", `HC:ord:${U(32)}`));
+    expect(c.enviadas[0]!.dados).toMatchObject({ cobrancaCancelada: true, faturaUrl: null });
+    expect(c.enviadas[0]!.dados).not.toMatchObject({ nuncaPagou: true });
+    expect(c.renderizar(c.enviadas[0]!).subject).toBe("Sua assinatura precisa ser renovada");
+    expect(c.renderizar(c.enviadas[0]!, "es").subject).toBe("Tu suscripción necesita renovarse");
+    expect(c.renderizar(c.enviadas[0]!).text).toContain("Acesso até: 07/11/2026");
+  });
+
+  it("o texto das variantes dos Planos não afirma que a cobrança 'foi cancelada'", async () => {
+    for (const nunca of [true, false]) {
+      const banco = mundo();
+      if (nunca) for (const o of banco.tabelas.billing_orders!) o.status = "criado";
+      novoPedido(banco, U(33), {});
+      const c = cenario(banco);
+      await c.avisos.aoAplicar(venceu("pay_txt", `HC:ord:${U(33)}`));
+      for (const idioma of ["pt-BR", "es"] as const) {
+        const m = c.renderizar(c.enviadas[0]!, idioma);
+        expect(m.text).not.toMatch(/cancelad|cancelled|canceled/i);
+      }
+      expect(c.renderizar(c.enviadas[0]!).text).toContain("não foi paga no prazo");
     }
   });
 

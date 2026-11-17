@@ -119,10 +119,16 @@ const CASOS: Caso[] = [
   },
   {
     id: "COB-05 (cobrança cancelada)",
-    assunto: "Sua assinatura não foi concluída",
-    contem: ["A cobrança de R$ 349,66 do plano Pro não foi paga e foi cancelada", "assine novamente pelo CRM", "Acesso até: 15/10/2026"],
+    assunto: "Sua assinatura precisa ser renovada",
+    contem: ["A cobrança de R$ 349,66 do plano Pro não foi paga no prazo", "assine novamente pelos Planos", "Acesso até: 15/10/2026"],
     montar: (b) =>
       buildPagamentoNaoAprovadoEmail({ ...b, plano: "Pro", valor: 34966, acessoAte: "2026-10-15", cobrancaCancelada: true }),
+  },
+  {
+    id: "COB-05 (nunca pagou)",
+    assunto: "Sua assinatura não foi concluída",
+    contem: ["A cobrança de R$ 349,66 do plano Pro não foi paga no prazo", "assine novamente pelos Planos"],
+    montar: (b) => buildPagamentoNaoAprovadoEmail({ ...b, plano: "Pro", valor: 34966, nuncaPagou: true }),
   },
   {
     id: "COB-06",
