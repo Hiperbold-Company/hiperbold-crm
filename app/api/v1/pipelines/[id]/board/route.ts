@@ -17,7 +17,14 @@ import { type NextRequest } from "next/server";
 
 import { fail, ok, falhaInterna } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
-import { chavesRestritasDosCampos, recortarLinha, recortarSettingsDoFunil } from "@/lib/campos/recorte-por-papel";
+import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
+import {
+  chavesRestritasDosCampos,
+  leitorVeCamposRestritos,
+  recortarLinha,
+  recortarSettingsDoFunil,
+  unirChavesRestritas,
+} from "@/lib/campos/recorte-por-papel";
 import { traduzir } from "@/lib/i18n/dicionario";
 import {
   roteiaProximasAcoes,
@@ -25,7 +32,13 @@ import {
   type PropostaAmbigua,
 } from "@/lib/leads/next-action";
 import type { LeadCandidate } from "@/lib/leads/active-lead";
-import { anexarDadosDoContato, type LinhaDoContatoNoQuadro } from "@/lib/kanban/dados-do-contato";
+import {
+  anexarCargoEEmpresaDoContato,
+  anexarDadosDoContato,
+  type LinhaDoContatoNoQuadro,
+} from "@/lib/kanban/dados-do-contato";
+import { linhasDoCartao, type CampoDoCartao } from "@/lib/kanban/linhas-do-cartao";
+import type { LeitorDosCampos } from "@/lib/campos/recorte-por-papel";
 import {
   anexarAnexosAosNegocios,
   type LinhaDoAnexoNoQuadro,
@@ -350,12 +363,19 @@ async function withConversas(
  * etiqueta, para o payload do quadro não engordar com array vazio em todo card.
  *
  * A MESMA leitura de `contacts` também alimenta telefone, e-mail e links do card
- * (`anexarDadosDoContato`): uma consulta por quadro, não duas.
+ * (`anexarDadosDoContato`): uma consulta por quadro, não duas. E, quando o funil
+ * pôs cargo ou empresa no cartão ("Editar cartão"), os dois saem dessa mesma
+ * leitura (`anexarCargoEEmpresaDoContato`), já sem o campo restrito.
  */
 async function withMarcadoresDoContato(
   supabase: Awaited<ReturnType<typeof createClient>>,
   organizationId: string,
   leadsDoQuadro: Lead[],
+  cartao: {
+    linhas: readonly CampoDoCartao[];
+    restritas: ReadonlySet<string>;
+    leitor: LeitorDosCampos | null | undefined;
+  },
 ): Promise<{ leads: Lead[]; error: string | null }> {
   const contactIds = [
     ...new Set(leadsDoQuadro.map((l) => l.contact_id).filter((c): c is string => !!c)),
@@ -372,7 +392,7 @@ async function withMarcadoresDoContato(
   if (error) return { leads: leadsDoQuadro, error: error.message };
 
   const linhas = (data ?? []) as Array<{ id: string; tags: string[] | null } & LinhaDoContatoNoQuadro>;
-  const leads = anexarDadosDoContato(leadsDoQuadro, linhas);
+  const leads = anexarCargoEEmpresaDoContato(anexarDadosDoContato(leadsDoQuadro, linhas), linhas, cartao);
 
   const porContato = new Map<string, string[]>();
   for (const row of linhas) {
@@ -574,7 +594,13 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   if (pipelineErr) return falhaInterna("internal_error", pipelineErr, { requestId });
   if (stagesErr) return falhaInterna("internal_error", stagesErr, { requestId });
   if (leadsErr) return falhaInterna("internal_error", leadsErr, { requestId });
-  if (!pipeline) return fail("resource_not_found", t("Pipeline não encontrado."), 404, { requestId });
+  // O funil é lido só pelo id (a RLS deixa ver o de TODA organização de que o usuário é membro),
+  // e o papel aplicado adiante é o da organização ATIVA. Funil de outra organização responde 404,
+  // igual ao inexistente: senão quem é admin em A e atendente em B leria o quadro de B recortado
+  // como admin.
+  if (!pipeline || (pipeline as Pipeline).organization_id !== authz.org.orgId) {
+    return fail("resource_not_found", t("Pipeline não encontrado."), 404, { requestId });
+  }
 
   // Contato pessoal some do board mas a linha continua no banco (spec 21, etapa
   // 8, decisão 2 — critério 4): o card não é listado e volta ao desmarcar, com
@@ -686,19 +712,34 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     return falhaInterna("internal_error", leadsComConversa.error, { requestId });
   }
 
-  const leadsComMarcadores = await withMarcadoresDoContato(
-    supabase,
-    (pipeline as Pipeline).organization_id,
-    leadsComConversa.leads,
-  );
-  if (leadsComMarcadores.error) {
-    return falhaInterna("internal_error", leadsComMarcadores.error, { requestId });
-  }
-
   // 1015: campo não público (definição e valor) só sai para administrador. A projeção em
   // `settings.fields` traz o `publico: false` de todos os campos da organização.
   const papel = authz.org.role;
   const restritas = chavesRestritasDosCampos(((pipeline as Pipeline).settings as { fields?: unknown } | null)?.fields);
+
+  // Cargo e empresa do CARTÃO saem do `custom_fields` do CONTATO, e a chave restrita pode estar
+  // declarada em outro funil: para quem não é administrador, valem as chaves restritas da
+  // ORGANIZAÇÃO inteira. Ilegíveis → 500 (fail-closed), nunca o valor sem recorte.
+  const linhasDoCartaoDoFunil = linhasDoCartao((pipeline as Pipeline).settings);
+  let restritasDoCartao: ReadonlySet<string> = restritas;
+  if (
+    (linhasDoCartaoDoFunil.includes("cargo") || linhasDoCartaoDoFunil.includes("empresa")) &&
+    !leitorVeCamposRestritos(papel)
+  ) {
+    const lidas = await chavesRestritasDaOrganizacao(supabase, authz.org.orgId, requestId);
+    if (!lidas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
+    restritasDoCartao = unirChavesRestritas(restritas, lidas.chaves);
+  }
+
+  const leadsComMarcadores = await withMarcadoresDoContato(
+    supabase,
+    (pipeline as Pipeline).organization_id,
+    leadsComConversa.leads,
+    { linhas: linhasDoCartaoDoFunil, restritas: restritasDoCartao, leitor: papel },
+  );
+  if (leadsComMarcadores.error) {
+    return falhaInterna("internal_error", leadsComMarcadores.error, { requestId });
+  }
 
   const board: BoardData = {
     pipeline: {

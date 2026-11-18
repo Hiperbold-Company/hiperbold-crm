@@ -24,7 +24,7 @@ import { type NextRequest } from "next/server";
 import { fail, falhaInterna, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
-import { leitorVeCamposRestritos } from "@/lib/campos/recorte-por-papel";
+import { leitorVeCamposRestritos, chaveEhRestrita } from "@/lib/campos/recorte-por-papel";
 import { chaveSensivelDeCampo } from "@/lib/contacts/campos-sensiveis";
 import { CHAVE_DE_CAMPO_FILTRAVEL } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
@@ -103,7 +103,7 @@ export async function GET(_req: NextRequest): Promise<Response> {
   const montar = (presentes: Set<string>, comDeclarados: boolean): CampoOferecido[] => {
     const todas = new Set<string>([...(comDeclarados ? rotulos.keys() : []), ...presentes]);
     return [...todas]
-      .filter((k) => CHAVE_DE_CAMPO_FILTRAVEL.test(k) && !chaveSensivelDeCampo(k) && !restritas.has(k.toLowerCase()))
+      .filter((k) => CHAVE_DE_CAMPO_FILTRAVEL.test(k) && !chaveSensivelDeCampo(k) && !chaveEhRestrita(restritas)(k))
       .map((key) => ({ key, label: rotulos.get(key) ?? key }))
       .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   };

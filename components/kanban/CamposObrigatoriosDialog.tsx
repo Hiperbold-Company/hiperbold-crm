@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useT } from "@/hooks/i18n/useT";
 import { useMoedaDaOrgAtiva } from "@/hooks/auth/AuthProvider";
 import { exemploDoCampoDeMoeda, lerCampoDeMoeda } from "@/lib/leads/campo-de-moeda";
@@ -171,10 +172,8 @@ export function CamposObrigatoriosDialog({
             if (campo.tipo === "boolean") {
               return (
                 <div key={campo.chave} className="flex items-center gap-2">
-                  <input
+                  <Checkbox
                     id={`campo-${campo.chave}`}
-                    type="checkbox"
-                    className="checkbox"
                     checked={(valores[campo.chave] ?? "") === "true"}
                     onChange={(e) =>
                       setValores((v) => ({

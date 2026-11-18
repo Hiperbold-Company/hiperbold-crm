@@ -2,6 +2,7 @@ import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import type { ReactNode } from "react";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { ProvedorDeConfirmacao } from "@/components/ui/confirmar";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { modulosLigados } from "@/lib/instalacao/modulos";
 import { instalacaoSemSmtp } from "@/lib/email/estado";
@@ -29,9 +30,13 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
   ]);
   return (
     <IdiomaProvider locale={idiomaDaTela(locale)}>
-      <AdminShell userEmail={user.email ?? ""} modulosLigados={modulos} semSmtp={semSmtp}>
-        {children}
-      </AdminShell>
+      {/* O admin também abre formulários do app (ex.: TenantForm no "Editar tenant"),
+          que confirmam pela confirmação do produto. */}
+      <ProvedorDeConfirmacao>
+        <AdminShell userEmail={user.email ?? ""} modulosLigados={modulos} semSmtp={semSmtp}>
+          {children}
+        </AdminShell>
+      </ProvedorDeConfirmacao>
     </IdiomaProvider>
   );
 }

@@ -12,7 +12,7 @@ import type { NextRequest } from "next/server";
 import { ok, fail, falhaInterna } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
-import { leitorVeCamposRestritos } from "@/lib/campos/recorte-por-papel";
+import { leitorVeCamposRestritos, chaveEhRestrita } from "@/lib/campos/recorte-por-papel";
 import type { CandidatoAoNegocio } from "@/lib/followup/negocio-do-roteiro";
 import { montarRoteirosDoContato, type LinhaDoRoteiro } from "@/lib/followup/roteiros-do-contato";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -154,7 +154,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   if (!lidas.ok) return falhaInterna("internal_error", "chaves restritas ilegíveis", { requestId });
   if (lidas.chaves.size === 0) return ok(roteiros, { requestId });
   return ok(
-    roteiros.map((r) => ({ ...r, campos: r.campos.filter((c) => !lidas.chaves.has(c.key.toLowerCase())) })),
+    roteiros.map((r) => ({ ...r, campos: r.campos.filter((c) => !chaveEhRestrita(lidas.chaves)(c.key)) })),
     { requestId },
   );
 }

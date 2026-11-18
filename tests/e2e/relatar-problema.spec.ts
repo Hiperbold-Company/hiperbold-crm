@@ -167,7 +167,9 @@ test("admin da plataforma: o relato aparece com o print e o status em andamento 
   await expect(linha.getByRole("cell", { name: "Sim", exact: true })).toBeVisible(); // tem print
   await foto(page, "06-admin-lista-de-relatos");
 
-  await linha.click();
+  // Clica na DESCRIÇÃO, não no centro da linha: o centro cai no link da tela relatada, que abre
+  // outra aba (e para a propagação) em vez do detalhe.
+  await linha.getByRole("cell").filter({ hasText: DESCRICAO.slice(0, 20) }).click();
   const detalhe = page.getByRole("dialog");
   await expect(detalhe.getByText(DESCRICAO)).toBeVisible();
 

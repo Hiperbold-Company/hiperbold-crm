@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useT } from "@/hooks/i18n/useT";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -407,8 +408,7 @@ export function FilterBar({ filters, onChange, leads, settings }: FilterBarProps
           filters.overdueOnly && "border-accent bg-accent/10",
         )}
       >
-        <input
-          type="checkbox"
+        <Checkbox
           checked={!!filters.overdueOnly}
           onChange={(e) => onChange({ ...filters, overdueOnly: e.target.checked })}
         />

@@ -258,7 +258,7 @@ describe("grupo inbox/conversations (read agent 200, write viewer 403)", () => {
 describe("grupo leads (read agent 200, write viewer 403)", () => {
   it("GET /pipelines/[id]/board permite 200 para agent", async () => {
     session("agent", {
-      crm_pipelines: { id: "p1", name: "Pipeline", settings: {} },
+      crm_pipelines: { id: "p1", name: "Pipeline", organization_id: ORG_ID, settings: {} },
       crm_stages: [],
       crm_leads: [],
     });

@@ -67,12 +67,20 @@ describe("a confirmação de ligar a limpeza cita o anexo de nota interna", () =
     expect(texto).toContain("nota interna");
     expect(texto).toContain("90");
     // a frase velha subdeclarava — não pode voltar
-    expect(texto).not.toBe(
-      "Ao ligar, a mídia de mensagem com mais de 90 dias começará a ser apagada.",
-    );
+    expect(texto).not.toContain("Ao ligar, a mídia de mensagem com mais de 90 dias começará a ser apagada.");
     // confirmar de verdade liga o interruptor
     fireEvent.click(within(dialogo).getByRole("button", { name: "Ligar" }));
     await waitFor(() => expect(chave as HTMLElement).toHaveAttribute("aria-checked", "true"));
+  });
+
+  it("cancelar a confirmação mantém a limpeza desligada", async () => {
+    tela("pt-BR", false);
+    const chave = document.getElementById("media_retention_enforced") as HTMLElement;
+    fireEvent.click(chave);
+    const dialogo = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(chave).toHaveAttribute("aria-checked", "false");
   });
 
   it("a frase de ESTADO (desligado) também cita a nota interna", () => {

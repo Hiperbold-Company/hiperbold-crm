@@ -36,8 +36,7 @@ import {
   chavesRestritasDosCampos,
   leitorVeCamposRestritos,
   recortarValores,
-  unirChavesRestritas,
-} from "@/lib/campos/recorte-por-papel";
+  unirChavesRestritas, chaveEhRestrita } from "@/lib/campos/recorte-por-papel";
 import { cpfsDecifradosDosContatos } from "@/lib/contacts/cpf-do-contato";
 import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { resolverAlvoDeLote } from "@/lib/contacts/alvo-de-lote";
@@ -184,7 +183,8 @@ export async function POST(req: NextRequest): Promise<Response> {
         ...(funis.data ?? []).map((f) => chavesRestritasDosCampos((f.settings as { fields?: unknown } | null)?.fields)),
       );
       for (const c of contatos) c.custom_fields = recortarValores(c.custom_fields, restritas, authz.org.role);
-      for (const chave of [...rotulosDeCampo.keys()]) if (restritas.has(chave.toLowerCase())) rotulosDeCampo.delete(chave);
+      const ehRestrita = chaveEhRestrita(restritas);
+      for (const chave of [...rotulosDeCampo.keys()]) if (ehRestrita(chave)) rotulosDeCampo.delete(chave);
     }
 
     const csv = montarCsvDeContatos(contatos, {

@@ -11,7 +11,7 @@
  *
  * `confirmar` resolve `true`/`false`; `perguntar` resolve o texto digitado, ou
  * `null` quando a pessoa cancela. Fechar com Esc ou clicando fora conta como
- * cancelar. O provedor mora em `app/providers.tsx`.
+ * cancelar. O provedor é montado em `app/app/layout.tsx` e em `app/admin/(protected)/layout.tsx`.
  */
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -70,7 +70,10 @@ export function ProvedorDeConfirmacao({ children }: { children: ReactNode }) {
   const abrir = useCallback((tipo: Pedido["tipo"], opcoes: OpcoesDePergunta) => {
     // Um pedido novo antes de responder o anterior cancela o anterior: nada
     // fica pendurado esperando uma resposta que nunca vem.
-    atual.current?.resolver(tipo === "confirmar" ? false : null);
+    // Responde com o "cancelar" do pedido ANTIGO: um `perguntar` deslocado
+    // devolve null, nunca false.
+    const antigo = atual.current;
+    antigo?.resolver(antigo.tipo === "confirmar" ? false : null);
     return new Promise<boolean | string | null>((resolver) => {
       const p = { tipo, opcoes, resolver };
       atual.current = p;
@@ -141,6 +144,6 @@ export function ProvedorDeConfirmacao({ children }: { children: ReactNode }) {
 
 export function useConfirmar(): Api {
   const api = useContext(Contexto);
-  if (!api) throw new Error("useConfirmar precisa do ProvedorDeConfirmacao (app/providers.tsx)");
+  if (!api) throw new Error("useConfirmar precisa do ProvedorDeConfirmacao (montado em app/app/layout.tsx e app/admin/(protected)/layout.tsx)");
   return api;
 }

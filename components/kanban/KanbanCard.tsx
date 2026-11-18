@@ -1,5 +1,6 @@
 "use client";
 import { Draggable } from "@hello-pangea/dnd";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { MouseEvent } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { cn } from "@/lib/utils";
@@ -7,13 +8,13 @@ import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
 import { rotuloDaRecorrencia } from "@/lib/leads/valor-recorrente";
 import type { Lead } from "@/lib/types/leads";
 import type { Stage } from "@/lib/kanban/types";
+import type { CampoDoCartao } from "@/lib/kanban/linhas-do-cartao";
 import { resolveCardState, stageAgeLabel, type CardInput } from "@/lib/kanban/card-state";
 import { useFusoDaOrganizacao, usePermission } from "@/hooks/auth/AuthProvider";
 import { formataDataNoFuso, ultimaMovimentacao } from "@/lib/kanban/datas-do-lead";
 import { KanbanCardActions } from "./KanbanCardActions";
 import { NextActionSlot } from "./NextActionSlot";
 import { ReactivationSlot } from "./ReactivationSlot";
-import { ConversaSlot } from "./ConversaSlot";
 import { ScoreSlot } from "./ScoreSlot";
 import { OwnerBadge } from "./OwnerBadge";
 import { ContatoNoCard } from "./ContatoNoCard";
@@ -71,6 +72,11 @@ interface KanbanCardProps {
    * de escrita próprias).
    */
   somenteLeitura?: boolean;
+  /**
+   * As linhas da área de contato que o funil escolheu ("Editar cartão"), já
+   * resolvidas por `linhasDoCartao` no quadro. Ausente = o padrão de sempre.
+   */
+  linhas?: readonly CampoDoCartao[];
 }
 
 function formatValor(cents: number | null, currency: string | null): string | null {
@@ -106,6 +112,7 @@ export function KanbanCard({
   onMoverPara,
   denso = false,
   somenteLeitura = false,
+  linhas,
 }: KanbanCardProps) {
   const t = useT();
   // Mover etapa é permissão por perfil (a rota é quem barra): sem ela o card não arrasta.
@@ -236,8 +243,7 @@ export function KanbanCard({
               {/* No funil arquivado a caixa some de vez: seleção só existe
                   para a ação em lote, e escrever ali é o que o arquivo proíbe (#1298). */}
               {!somenteLeitura && (
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={Boolean(isSelected)}
                   aria-label={`${t("Selecionar")}: ${card.title}`}
                   onClick={(e) => {
@@ -379,33 +385,18 @@ export function KanbanCard({
             )}
           </div>
 
-          {/* A última mensagem, com atalho para o inbox. Fica ANTES do rodapé
-              de dono/tempo porque é conteúdo do negócio, não metadado do card —
-              e some por inteiro quando não há conversa.
+          {/* A ÁREA DE CONTATO: até 5 linhas escolhidas por funil ("Editar
+              cartão", `lib/kanban/linhas-do-cartao.ts`) e os links do contato.
+              Padrão = a última mensagem e o telefone, nessa ordem. Linha sem
+              valor some; a área some por inteiro quando não há nada. A última
+              mensagem é só texto: o atalho para o chat mora no dossiê.
 
               ⚠️ NO COMPACTO ela SAI DO CARD (issue #3461, item 2), e é decisão
-              declarada, não perda silenciosa: as duas linhas variáveis do card
-              (esta e o contato abaixo) são as que fazem a altura depender do
-              dado, e densidade com altura variável não densidade — é o mesmo
-              card de antes com outro nome. As duas continuam inteiras no
-              DOSSIÊ (`ConversaNoDossie`, `ContatoDoNegocio`), que abre com o
-              mesmo clique no card. O que fica no compacto é o que se lê de
-              relance para decidir: título, valor, faixa do agente, dono,
-              tarefas e tempo na etapa. */}
-          {!denso && (
-            <>
-              <ConversaSlot
-                conversa={lead.conversa}
-                contactId={lead.contact_id}
-                phone={lead.contact_phone}
-                leadId={lead.id}
-              />
-
-              {/* Telefone, e-mail e links do contato — some por inteiro quando o
-                  negócio não tem nada disso, como a conversa acima. */}
-              <ContatoNoCard lead={lead} />
-            </>
-          )}
+              declarada, não perda silenciosa: é a parte variável do card, e
+              densidade com altura variável não é densidade. Tudo continua
+              inteiro no DOSSIÊ (`ConversaNoDossie`, `ContatoDoNegocio`), que
+              abre com o mesmo clique no card. */}
+          {!denso && <ContatoNoCard lead={lead} linhas={linhas} />}
 
           {/* Os campos `file` do funil (#2829): contagem + o documento clicável.
               Fica junto do contato, entre o conteúdo do negócio e o rodapé de

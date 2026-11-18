@@ -32,6 +32,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+import { ContatoNoCard } from "@/components/kanban/ContatoNoCard";
 import { ConversaSlot } from "@/components/kanban/ConversaSlot";
 import type { Lead } from "@/lib/types/leads";
 
@@ -165,12 +166,36 @@ describe("o elo que some sem barulho", () => {
     expect(fonte).toMatch(/order\("last_message_at",\s*\{\s*ascending:\s*false/);
   });
 
-  it("o card renderiza o slot", () => {
+  it("o CARD não usa mais o slot: a última mensagem é linha do cartão, só texto (decisão do dono, 17/11)", () => {
+    // "Editar cartão": a última mensagem virou uma das linhas configuráveis do
+    // card, sem clique e sem atalho para a conversa. O atalho continua no
+    // DOSSIÊ (`ConversaNoDossie`). O slot segue existindo e testado acima, mas
+    // o card não o monta — e montar de novo traria o elo de volta.
     const fonte = readFileSync("components/kanban/KanbanCard.tsx", "utf8");
-    // A prévia E a ação "Abrir conversa" (#1993) saem do mesmo slot: o card
-    // passa os dois dados do contato para ele decidir qual dos dois pintar.
-    expect(fonte).toMatch(/<ConversaSlot\s+conversa=\{lead\.conversa\}/);
-    expect(fonte).toContain("contactId={lead.contact_id}");
-    expect(fonte).toContain("phone={lead.contact_phone}");
+    expect(fonte).not.toMatch(/<ConversaSlot\b/);
+    expect(fonte).toMatch(/<ContatoNoCard\s+lead=\{lead\}\s+linhas=\{linhas\}/);
+  });
+
+  it("no card, a prévia aparece como texto, sem link nem botão, e o clique chega ao card", () => {
+    const noCard = vi.fn();
+    render(
+      <div onClick={noCard}>
+        <ContatoNoCard lead={{ conversa: conversa({ unread: 3 }) }} />
+      </div>,
+    );
+    expect(screen.getByText("Quiero saber el precio")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+    // As não lidas continuam visíveis, como número.
+    expect(screen.getByLabelText("3 sem ler")).toHaveTextContent("3");
+    fireEvent.click(screen.getByText("Quiero saber el precio"));
+    expect(noCard).toHaveBeenCalledTimes(1);
+  });
+
+  it("no card, contato sem conversa não ganha botão \"Abrir conversa\" nem linha vazia", () => {
+    const { container } = render(
+      <ContatoNoCard lead={{ conversa: null }} linhas={["ultima_mensagem"]} />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });

@@ -1778,6 +1778,12 @@ export const AUDIT_ACTIONS = [
   "bug_report.created",
   /** O administrador da instalação mudou o status (ou a nota) de um relato. */
   "bug_report.status_changed",
+  /**
+   * "Editar cartão" do quadro: as linhas do cartão de um funil
+   * (`crm_pipelines.settings.card_lines`). metadata: os NOMES dos campos e se
+   * voltou ao padrão; nunca valor de contato.
+   */
+  "pipeline.card_lines_updated",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

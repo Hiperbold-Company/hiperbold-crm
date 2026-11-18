@@ -152,6 +152,14 @@ export interface Lead {
   contact_email?: string;
   contact_links?: Array<{ tipo: string; href: string }>;
   /**
+   * Derivado (não é coluna): cargo e empresa do CONTATO (`contacts.custom_fields`,
+   * chaves `cargo`/`job_title` e `empresa`/`company`/`company_name`), já sem o
+   * campo restrito para quem não é administrador. Só vem quando o funil põe a
+   * linha no cartão ("Editar cartão", `lib/kanban/linhas-do-cartao.ts`).
+   */
+  contact_cargo?: string;
+  contact_empresa?: string;
+  /**
    * Derivado (não é coluna): os marcadores das CONVERSAS do contato deste
    * negócio — a terceira caixa, "Tags da conversa" no painel do Inbox, onde a
    * IA também escreve. União de TODAS as conversas do contato, não só da mais
