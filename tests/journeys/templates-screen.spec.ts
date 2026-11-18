@@ -36,7 +36,7 @@ test.describe.configure({ mode: "serial" });
  */
 async function abrirTemplatesDaOficial(page: Page) {
   await page.goto("/app/connections");
-  const cartao = page.locator('[data-testid^="cartao-conexao-"]', { hasText: "WhatsApp oficial" }).first();
+  const cartao = page.locator('[data-testid^="cartao-conexao-"]', { hasText: "WhatsApp API Oficial" }).first();
   await expect(cartao).toBeVisible({ timeout: 20_000 });
   await cartao.getByRole("button", { name: /Gerenciar/ }).click();
   const dialogo = page.getByTestId("gerenciar-conexao");

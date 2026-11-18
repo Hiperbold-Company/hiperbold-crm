@@ -18,8 +18,8 @@ import { cn } from "@/lib/utils";
 
 // Rótulos em tabela de topo: a cerca de i18n resolve t(TABELA[chave]) e cobra o espanhol de cada valor.
 export const TITULO_DO_TIPO: Record<TipoDaConexao, string> = {
-  whatsapp_oficial: "WhatsApp oficial",
-  whatsapp_qr: "WhatsApp por QR Code",
+  whatsapp_oficial: "WhatsApp API Oficial",
+  whatsapp_qr: "UAZAPI (API não oficial)",
   instagram: "Instagram",
   messenger: "Messenger",
   outros: "Outra conexão",

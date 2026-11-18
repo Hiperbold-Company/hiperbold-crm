@@ -36,7 +36,7 @@ test("uma grade só, com Criar e os tipos lado a lado", async ({ page }) => {
 
 test("o Gerenciar de uma conexão oficial tem os Templates da Meta dentro do diálogo", async ({ page }) => {
   await page.goto("/app/connections");
-  const cartaoOficial = page.locator('[data-testid^="cartao-conexao-"]', { hasText: "WhatsApp oficial" }).first();
+  const cartaoOficial = page.locator('[data-testid^="cartao-conexao-"]', { hasText: "WhatsApp API Oficial" }).first();
   test.skip((await cartaoOficial.count()) === 0, "instalação sem conexão oficial semeada");
   await cartaoOficial.getByRole("button", { name: /Gerenciar/ }).click();
 

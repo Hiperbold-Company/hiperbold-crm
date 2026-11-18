@@ -50,8 +50,8 @@ type Icone = ComponentType<{ size?: number; "aria-hidden"?: boolean }>;
 // Rótulos em tabela de topo: a cerca de i18n resolve t(TABELA[chave]) e cobra o espanhol de cada valor.
 // `graph` e `whatsapp_qr_sessao` ficam fora: o rótulo deles nomeia o serviço e vem de `lib/channels/`.
 const ROTULO_DO_TIPO: Record<Exclude<TipoDoCriar, "graph" | "whatsapp_qr_sessao">, string> = {
-  whatsapp_oficial: "WhatsApp oficial",
-  whatsapp_qr: "WhatsApp por QR Code",
+  whatsapp_oficial: "WhatsApp API Oficial",
+  whatsapp_qr: "UAZAPI (API não oficial)",
   instagram: "Instagram",
   messenger: "Messenger",
   parceiro: "Provedor parceiro",
