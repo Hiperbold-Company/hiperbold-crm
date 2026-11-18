@@ -570,12 +570,34 @@ jobs:
     outputs:
       majors: ${{ steps.alcance.outputs.majors }}
       piso: ${{ steps.alcance.outputs.piso }}
+      urgente: ${{ steps.urgente.outputs.urgente }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: github.event_name == 'pull_request'
         with:
-          sparse-checkout: scripts/pr-mexe-no-piso-do-postgres.sh
+          sparse-checkout: |
+            scripts/pr-mexe-no-piso-do-postgres.sh
+            scripts/pr-rota-urgente.sh
           sparse-checkout-cone-mode: false
+
+      # ROTA URGENTE (fork Hiperbold): PR com o rótulo `urgente` que não mexe em
+      # supabase/ pula a matriz `invariants-majors`; o verify e o build
+      # (perf.yml) seguem. Fora de pull_request é sempre `nao`. Regra e lado
+      # seguro em scripts/pr-rota-urgente.sh; os três caminhos do deploy no
+      # cabeçalho de deploy-easypanel.yml.
+      - name: O PR vai pela rota urgente?
+        id: urgente
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ]; then
+            echo "urgente=nao" >> "$GITHUB_OUTPUT"; echo "evento ${GITHUB_EVENT_NAME}: caminho completo"; exit 0
+          fi
+          resposta=$(bash scripts/pr-rota-urgente.sh "$PR") || resposta=nao
+          [ "$resposta" = "sim" ] || resposta=nao
+          echo "urgente=${resposta}" >> "$GITHUB_OUTPUT"
 
       - name: O PR alcança o piso do Postgres?
         id: alcance
@@ -618,6 +640,10 @@ jobs:
     # porquê e a guarda contra fork: comentário do e2e-parte no e2e.yml.
     runs-on: ${{ vars.EXECUTOR_PROPRIO == 'ligado' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'deskcomm-proprio' || 'ubuntu-latest' }}
     needs: [invariants-alcance]
+    # Pulada só na rota urgente (PR com rótulo `urgente` e sem supabase/). O
+    # agregador `invariants` aceita esse pulo apenas em pull_request com
+    # urgente=sim — em todo outro caso `skipped` reprova.
+    if: needs.invariants-alcance.outputs.urgente != 'sim'
     concurrency:
       group: ${{ github.workflow }}-invariants-majors-pg${{ matrix.pg }}-${{ github.event.pull_request.number || github.ref }}${{ github.event_name == 'pull_request' && github.run_attempt != '1' && format('-reentrada-{0}', github.event.pull_request.head.sha) || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.run_attempt != '1' && format('-reentrada-{0}', github.sha) || '' }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
@@ -682,14 +708,24 @@ jobs:
           EVENTO: ${{ github.event_name }}
           PORTAO: ${{ needs.invariants-alcance.result }}
           PISO: ${{ needs.invariants-alcance.outputs.piso }}
+          URGENTE: ${{ needs.invariants-alcance.outputs.urgente }}
           MAJORS: ${{ needs.invariants-majors.result }}
         run: |
           set -euo pipefail
-          echo "evento=${EVENTO} invariants-alcance=${PORTAO} piso=${PISO:-<vazio>}"
+          echo "evento=${EVENTO} invariants-alcance=${PORTAO} piso=${PISO:-<vazio>} urgente=${URGENTE:-<vazio>}"
           echo "invariants-majors: ${MAJORS}"
           # A pergunta tem de ter sido RESPONDIDA: portão que falhou deixa a
           # matriz `skipped`, e isso não pode ler como aprovação.
           [ "$PORTAO" = "success" ]
+          # ROTA URGENTE: o ÚNICO caso em que a matriz pulada passa, e só em
+          # pull_request. O passo seguinte deixa a marca que o portão do deploy
+          # lê (scripts/merge-ja-provado-no-pr.sh) para não tomar este verde
+          # por prova do caminho completo.
+          if [ "$EVENTO" = "pull_request" ] && [ "${URGENTE:-}" = "sim" ]; then
+            [ "$MAJORS" = "skipped" ]
+            echo "::warning::rota urgente: invariants-majors (test:db) pulado de propósito neste PR"
+            exit 0
+          fi
           # Fora de pull_request o piso é OBRIGATÓRIO: a `main` mede as duas.
           if [ "$EVENTO" != "pull_request" ]; then
             [ "$PISO" = "sim" ]
@@ -699,3 +735,9 @@ jobs:
           # reprovando derruba o check obrigatório. `skipped` também reprova, de
           # propósito — perna pulada não mediu nada.
           [ "$MAJORS" = "success" ]
+
+      # A MARCA da rota urgente: nome lido pela API de jobs no portão do deploy.
+      # Só roda quando o passo de cima aceitou o pulo urgente.
+      - name: "Rota urgente: invariants-majors pulado de propósito"
+        if: github.event_name == 'pull_request' && needs.invariants-alcance.outputs.urgente == 'sim'
+        run: echo "este run foi pela rota urgente; o deploy só o aceita pela regra de scripts/merge-ja-provado-no-pr.sh"

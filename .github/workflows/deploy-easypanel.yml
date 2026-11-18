@@ -10,10 +10,40 @@ name: Deploy no EasyPanel (Hiperbold)
 # Sem elas o job falha alto em vez de passar verde sem deployar.
 #
 # O publish-image roda em PARALELO com o ci e o e2e: imagem publicada não prova
-# que o commit passou nos testes (D-121). Por isso o primeiro passo espera o ci
-# e o e2e do MESMO commit terminarem em sucesso e reprova se algum não terminar
-# assim. O deploy manual (workflow_dispatch) passa pelo mesmo portão e só vale
-# na main. A lógica mora em scripts/commit-passou-nos-testes.sh.
+# que o commit passou nos testes (D-121). O primeiro passo decide se o commit
+# pode ir para a produção, e o deploy manual (workflow_dispatch) passa pelo
+# mesmo passo e só vale na main.
+#
+# ── OS TRÊS CAMINHOS, para quem mescla ─────────────────────────────────────────
+# Mesclar SEMPRE com merge commit ("Create a merge commit"). Squash e rebase não
+# passam pelo atalho e caem no caminho 3.
+#
+# 1. PR provado (o normal). O PR em dia com a main (sem "This branch is out of
+#    date"), com ci.yml e e2e.yml verdes no head. Mesclado, o deploy sai assim
+#    que as imagens publicam, sem esperar o reteste da main (~50 min a menos).
+#    Lógica e condições: scripts/merge-ja-provado-no-pr.sh.
+# 2. Rota urgente. Pôr o rótulo `urgente` no PR ANTES do push (ou rodar de novo
+#    o ci e o e2e depois de pôr). No PR, o ci.yml pula a matriz do test:db e o
+#    e2e.yml pula as partes; verify (typecheck+lint+test:unit) e o build
+#    (perf.yml) rodam. Com ci.yml e perf.yml verdes e o PR em dia com a main, o
+#    deploy sai sem e2e. PR que mexe em supabase/ (migration, baseline) NUNCA vai
+#    pela rota urgente: o rótulo é ignorado e vale o caminho completo.
+#    Regra: scripts/pr-rota-urgente.sh.
+# 3. Sem prova pelo PR (squash, PR atrás da main, CI do PR vermelho ou
+#    ilegível, push direto, deploy manual de commit sem PR). O deploy espera o
+#    ci e o e2e do MESMO commit na main terminarem em sucesso e reprova se algum
+#    não terminar assim: scripts/commit-passou-nos-testes.sh. O log do passo diz
+#    qual condição do caminho 1/2 falhou.
+#
+# Nos caminhos 1 e 2 o reteste da main continua rodando. Se ele falhar depois
+# de o deploy ter saído, o alarme-reteste-da-main.yml abre uma issue
+# "Reteste da main falhou depois do deploy: <sha>". Não há rollback automático:
+# quem mesclou decide entre consertar para a frente ou reverter o merge.
+
+# O sha no nome do run é o que o alarme lê para saber se o deploy deste commit
+# saiu (scripts/alarme-reteste-da-main.sh): o head_sha de um run nascido de
+# workflow_run não é, necessariamente, o commit publicado.
+run-name: Deploy ${{ github.event.workflow_run.head_sha || github.sha }}
 
 on:
   workflow_run:
@@ -33,18 +63,22 @@ jobs:
     runs-on: ubuntu-latest
     # O teto do portão é de 55 min (e2e em fila longa), mais o deploy.
     timeout-minutes: 65
-    # Só leitura das execuções do próprio repositório, para o portão consultar o
-    # ci e o e2e. Escrita nenhuma.
+    # Só leitura das execuções e dos PRs do próprio repositório, para o portão
+    # consultar o ci, o e2e e o PR do merge. Escrita nenhuma.
     permissions:
       actions: read
       contents: read
+      pull-requests: read
     steps:
       # Só o script, não o repositório: o job guarda segredo de deploy e não deve
       # baixar nem rodar mais código do que o portão. Sem credencial gravada.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: main
-          sparse-checkout: scripts/commit-passou-nos-testes.sh
+          sparse-checkout: |
+            scripts/commit-passou-nos-testes.sh
+            scripts/merge-ja-provado-no-pr.sh
+            scripts/pr-rota-urgente.sh
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -58,6 +92,12 @@ jobs:
             echo "::error::deploy manual só vale na main (ref: ${GITHUB_REF})"
             exit 1
           fi
+          # Caminhos 1 e 2 (cabeçalho): merge de PR já provado sai sem esperar.
+          if bash scripts/merge-ja-provado-no-pr.sh "${SHA}"; then
+            exit 0
+          fi
+          # Caminho 3: espera o reteste da main deste commit.
+          echo "sem prova pelo PR: espero o ci e o e2e da main para ${SHA}"
           bash scripts/commit-passou-nos-testes.sh "${SHA}"
 
       - name: Conferir configuração

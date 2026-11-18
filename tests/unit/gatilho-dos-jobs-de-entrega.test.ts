@@ -186,8 +186,12 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   // primeira major que reprovasse CANCELARIA a outra, e o relatório diria
   // `cancelled` em vez de medir as duas — cobertura declarada que o CI cancela é
   // o modo de falha que a #454 fecha.
+  // Rota urgente do fork Hiperbold (deploy-easypanel.yml, caminho 2): PR com o
+  // rótulo `urgente` e sem nada em supabase/ pula a matriz. O agregador
+  // `invariants` só aceita esse pulo em pull_request com urgente=sim — medido
+  // pela matriz de desfechos em invariants-so-aceita-o-piso-declarado.test.ts.
   "ci.yml::invariants-majors": {
-    condicao: null,
+    condicao: "needs.invariants-alcance.outputs.urgente != 'sim'",
     efeito:
       "São as duas majors que este repo diz suportar: pg15 é o PISO real do `baseline.sql` " +
       "(`security_invoker` em view) e onde quem digita `pnpm test:db` na própria máquina cai por " +
@@ -227,8 +231,11 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
     // própria, porque o check daquele run está num SHA que já não é o head
     // (vigiado por e2e-so-aceita-pulo-declarado.test.ts e por
     // e2e-head-velho-nao-rouba-a-vaga.test.ts).
+    // E um terceiro: a rota urgente do fork Hiperbold (PR com rótulo `urgente`,
+    // sem supabase/), aceita pelo agregador só em pull_request com urgente=sim.
     condicao:
-      "needs.e2e-alcance.outputs.e2e == 'sim' && needs.e2e-alcance.outputs.head_velho != 'sim'",
+      "needs.e2e-alcance.outputs.e2e == 'sim' && needs.e2e-alcance.outputs.head_velho != 'sim' && " +
+      "needs.e2e-alcance.outputs.urgente != 'sim'",
     efeito:
       "São as partes da matriz Playwright. Pulam em PR que não alcança nada que o " +
       "e2e mede (scripts/pr-alcanca-o-e2e.sh) — único pulo que o agregador `e2e` aceita — " +
@@ -273,6 +280,19 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
       "Este job pede ao EasyPanel da Hiperbold que baixe as imagens novas e reinicie app, worker " +
       "e scheduler. Desligado, as imagens publicam e a produção continua na versão antiga, sem " +
       "erro em lugar nenhum.",
+  },
+  // Exclusivo do fork Hiperbold. As três condições são deliberadas: a de
+  // repositório impede outro fork de abrir issue no próprio repo; a de
+  // `failure` deixa sucesso e cancelamento quietos; a de `push` deixa PR fora
+  // — só o reteste da main importa depois do deploy.
+  "alarme-reteste-da-main.yml::alarme": {
+    condicao:
+      ">- github.repository == 'Hiperbold-Company/hiperbold-crm' && " +
+      "github.event.workflow_run.conclusion == 'failure' && " +
+      "github.event.workflow_run.event == 'push'",
+    efeito:
+      "Este job abre a issue quando o reteste da main falha depois de o deploy pelo portão do PR " +
+      "ter saído. Desligado, a produção roda um commit vermelho na main sem ninguém saber.",
   },
   // Exclusivo do fork Hiperbold, sem condição: o workflow só dispara em push na `main`
   // que mexe em `hiperbold/backup/**` (ou nele mesmo) e no dispatch manual.
