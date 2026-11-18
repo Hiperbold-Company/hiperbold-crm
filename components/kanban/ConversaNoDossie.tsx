@@ -8,6 +8,7 @@ import type { Contact } from "@/lib/types/contacts";
 import { AbrirConversaDoLead, temAlvoParaAbrir } from "./AbrirConversaDoLead";
 import { BotaoNovaAba } from "./BotaoNovaAba";
 import { useAbrirPelaConexao } from "./AbrirPelaConexao";
+import { useSeletorDeConexao } from "./SeletorDeConexao";
 import { ehCanalSocial } from "@/lib/channels/capabilities";
 
 /**
@@ -93,7 +94,18 @@ function BlocoPelaConexao({
     leadId,
     conversaId: conversa.id,
   });
-  return <BlocoDaConversa conversa={conversa} janela={janela} abrindo={abrindo} onAbrir={(n) => void abrir(n)} />;
+  // O seletor de conexão (18/11/2026): marcado com a conexão de quem clica; "Automático" = a
+  // regra de sempre.
+  const { conexao, seletor } = useSeletorDeConexao();
+  return (
+    <BlocoDaConversa
+      conversa={conversa}
+      janela={janela}
+      abrindo={abrindo}
+      onAbrir={(n) => void abrir(n, conexao)}
+      seletor={seletor}
+    />
+  );
 }
 
 function BlocoDaConversa({
@@ -101,12 +113,15 @@ function BlocoDaConversa({
   janela,
   abrindo = false,
   onAbrir,
+  seletor,
 }: {
   conversa: NonNullable<Contact["conversa"]>;
   janela?: ReactNode;
   abrindo?: boolean;
   /** Presente = os dois botões passam pela escolha de conexão. */
   onAbrir?: (novaAba: boolean) => void;
+  /** O seletor de conexão, logo abaixo dos botões. */
+  seletor?: ReactNode;
 }) {
   const t = useT();
 
@@ -118,7 +133,8 @@ function BlocoDaConversa({
   // abre a conversa nesta aba; o quadrado, só com o ícone, abre a MESMA
   // conversa numa nova aba e deixa o funil onde estava.
   return (
-    <div className="mt-3 flex items-stretch gap-2">
+    <div className="mt-3 space-y-2">
+    <div className="flex items-stretch gap-2">
       {janela}
       <Link
         href={destino}
@@ -170,6 +186,8 @@ function BlocoDaConversa({
       ) : (
         <BotaoNovaAba href={destino} />
       )}
+    </div>
+    {seletor}
     </div>
   );
 }

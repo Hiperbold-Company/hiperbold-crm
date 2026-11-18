@@ -110280,6 +110280,71 @@ $hb_1012_cor_da_conexao$;
 comment on column public.channel_sessions.label_color is
   'Chave da cor da etiqueta da conexão (paleta em lib/conexoes/cores.ts). Nula = sem cor. Migration 1012.';
 
+-- ---- o membro responsável pela conexão (migration 1019, fork Hiperbold) ----
+-- Fica ANTES do bloco da 0998 (grant por coluna de channel_sessions lido do catálogo): assim a
+-- instalação nova já concede SELECT da coluna a `authenticated`. Mesmo corpo da migration 1019.
+-- `responsible_user_id` é UM membro ativo da MESMA organização (FK composta para
+-- user_organizations); remover o membro zera o vínculo pelo gatilho. Só marca o padrão do
+-- seletor de conexão do negócio; não é o responsável do roteamento.
+alter table public.channel_sessions add column if not exists responsible_user_id uuid;
+
+update public.channel_sessions cs
+   set responsible_user_id = null
+ where cs.responsible_user_id is not null
+   and not exists (
+     select 1 from public.user_organizations uo
+      where uo.organization_id = cs.organization_id
+        and uo.user_id = cs.responsible_user_id
+        and uo.revoked_at is null
+   );
+
+do $hb_1019_membro_da_conexao$
+begin
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.channel_sessions'::regclass
+       and conname = 'channel_sessions_responsible_member_fkey'
+  ) then
+    alter table public.channel_sessions
+      add constraint channel_sessions_responsible_member_fkey
+      foreign key (responsible_user_id, organization_id)
+      references public.user_organizations (user_id, organization_id)
+      on delete set null (responsible_user_id);
+  end if;
+end
+$hb_1019_membro_da_conexao$;
+
+create index if not exists channel_sessions_responsible_user_idx
+  on public.channel_sessions (organization_id, responsible_user_id)
+  where responsible_user_id is not null;
+
+comment on column public.channel_sessions.responsible_user_id is
+  'Membro responsável pela conexão (um por conexão; nula = nenhum). Só marca o padrão do seletor de conexão do negócio; não dá nem tira permissão. Migration 1019.';
+
+create or replace function public.fn_conexao_solta_membro_revogado()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  update public.channel_sessions
+     set responsible_user_id = null
+   where organization_id = new.organization_id
+     and responsible_user_id = new.user_id;
+  return new;
+end;
+$$;
+
+revoke all on function public.fn_conexao_solta_membro_revogado() from public, anon, authenticated;
+
+drop trigger if exists trg_conexao_solta_membro_revogado on public.user_organizations;
+create trigger trg_conexao_solta_membro_revogado
+  after update of revoked_at on public.user_organizations
+  for each row
+  when (old.revoked_at is null and new.revoked_at is not null)
+  execute function public.fn_conexao_solta_membro_revogado();
+
 -- ---- grants por coluna reaplicados no fim (migration 0998, fork Hiperbold) ----
 -- 0967 (contacts sem cpf_hash/cpf_encrypted, D-216) e 0948 (tokens de webhook, D-128) dão grant
 -- coluna a coluna com a lista do catálogo NO PONTO em que o bloco roda. O merge do upstream de

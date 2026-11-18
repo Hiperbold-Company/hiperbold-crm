@@ -22,6 +22,7 @@ import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
 import { parseDialablePhone } from "@/lib/messaging/contact-card";
 import { modoDeConexaoAoAbrir, type ModoDeConexaoAoAbrir } from "@/lib/schemas/routing";
 import {
+  conexaoPermitidaNoModoRestrito,
   conversaAberta,
   envioPermitidoPelaConexao,
   nomeDaConexao,
@@ -38,6 +39,7 @@ interface SessaoLida {
   status: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string | null;
+  responsible_user_id?: string | null;
 }
 
 export interface EntradaDasOpcoes {
@@ -135,7 +137,7 @@ export async function carregarOpcoesDeAbertura(
     admin.from("organizations").select("settings").eq("id", org).maybeSingle(),
     admin
       .from("channel_sessions")
-      .select("id, display_name, phone_number, provider, status, metadata, created_at")
+      .select("id, display_name, phone_number, provider, status, metadata, created_at, responsible_user_id")
       .eq("organization_id", org)
       .is("archived_at", null)
       .order("created_at", { ascending: true }),
@@ -226,7 +228,7 @@ export async function carregarOpcoesDeAbertura(
     if (!transferido) transferido = await negocioPassadoParaMim(admin, e, contactId);
   }
 
-  return {
+  const base: OpcoesDeAbertura = {
     modo,
     restrito,
     minha_conexao: preferida(minhas),
@@ -236,6 +238,14 @@ export async function carregarOpcoesDeAbertura(
     conversas: conversas.slice(0, 20),
     contato_em_conexao_de_outro: emConexaoDeOutro,
     transferido_para_mim: transferido,
+  };
+  // O seletor do painel do negócio: só o que eu posso usar para iniciar (no modo restrito, a
+  // mesma régua que o POST confere), e quais delas têm a mim como membro responsável (1019).
+  const doSeletor = sessoes.filter((s) => conexaoPermitidaNoModoRestrito(base, s.id));
+  return {
+    ...base,
+    conexoes_do_seletor: doSeletor.map((s) => ({ id: s.id, nome: nomeDaConexao(s), conectada: conectada(s) })),
+    vinculadas_a_mim_ids: doSeletor.filter((s) => s.responsible_user_id === e.userId).map((s) => s.id),
   };
 }
 

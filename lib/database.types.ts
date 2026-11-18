@@ -6782,6 +6782,7 @@ export type Database = {
           pareamento_qr_iniciado_em: string | null;
           phone_number: string | null;
           provider: string;
+          responsible_user_id: string | null;
           status: string;
           status_reason: string | null;
           uazapi_base_url: string | null;
@@ -6842,6 +6843,7 @@ export type Database = {
           pareamento_qr_iniciado_em?: string | null;
           phone_number?: string | null;
           provider?: string;
+          responsible_user_id?: string | null;
           status?: string;
           status_reason?: string | null;
           uazapi_base_url?: string | null;
@@ -6901,6 +6903,7 @@ export type Database = {
           pareamento_qr_iniciado_em?: string | null;
           phone_number?: string | null;
           provider?: string;
+          responsible_user_id?: string | null;
           status?: string;
           status_reason?: string | null;
           uazapi_base_url?: string | null;

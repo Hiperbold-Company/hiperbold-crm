@@ -71,6 +71,7 @@ function cartao(parcial: Partial<CartaoDaConexao> & Pick<CartaoDaConexao, "id" |
     status: "conectado",
     status_bruto: "WORKING",
     created_at: "2026-11-17T00:00:00Z",
+    responsavel_user_id: null,
     oficial: null,
     ...parcial,
   };
