@@ -1201,6 +1201,105 @@ describe("POST /api/v1/ai/followup-flows/:id/duplicate", () => {
     const body = (await res.json()) as { data: Row };
     expect(body.data.name).toBe("Carrinho (cópia 2)");
   });
+
+  // Botão «Duplicar» do cartão em Automações (/app/automacoes): a mesma rota.
+  describe("automação (surface automacao)", () => {
+    const OUTRA = "77777777-7777-4777-8777-777777777777";
+    /** Gatilho manual → «Iniciar outra automação» (ela mesma e outra) → Fim. */
+    function grafoQueCitaASiMesma(proprio: string): FlowGraph {
+      return {
+        nodes: [
+          trigger("t1"),
+          {
+            id: "a1",
+            type: "action",
+            label: "a1",
+            position: pos,
+            config: {
+              actions: [
+                { type: "start_automation", pointer_id: proprio },
+                { type: "start_automation", pointer_id: OUTRA },
+              ],
+            },
+          } as unknown as FlowNode,
+          end("e1"),
+        ],
+        edges: [edge("x1", "t1", "a1"), edge("x2", "a1", "e1")],
+      };
+    }
+
+    it("a cópia continua automação, nasce rascunho e se chama «(cópia)»", async () => {
+      const db = makeDb([origem({ name: "Atribuir CBEXS", surface: "automacao" })], []);
+      session("manager", db);
+      const { POST } = await import("@/app/api/v1/ai/followup-flows/[id]/duplicate/route");
+      const res = await POST(req("POST"), ctx(P1));
+      expect(res.status).toBe(201);
+      const body = (await res.json()) as { data: Row };
+      expect(body.data.surface).toBe("automacao");
+      expect(body.data.status).toBe("draft");
+      expect(body.data.active_version_id).toBeNull();
+      expect(body.data.name).toBe("Atribuir CBEXS (cópia)");
+      expect(body.data.organization_id).toBe(ORG_ID);
+      // O original segue intacto: no ar, com a versão dele.
+      const { data: todos } = await db.from("followup_flow_pointers").select();
+      const original = (todos as Row[]).find((r) => r.id === P1)!;
+      expect(original.status).toBe("active");
+      expect(original.active_version_id).toBe(VID);
+    });
+
+    it("onde o grafo cita a própria automação, a cópia cita a CÓPIA; os outros ids ficam", async () => {
+      const db = makeDb(
+        [
+          origem({
+            surface: "automacao",
+            draft_graph: grafoQueCitaASiMesma(P1.toUpperCase()),
+            trigger_config: { kind: "started_by_automation", from_pointer_ids: [P1, OUTRA] },
+          }),
+        ],
+        [],
+      );
+      session("manager", db);
+      const { POST } = await import("@/app/api/v1/ai/followup-flows/[id]/duplicate/route");
+      const res = await POST(req("POST"), ctx(P1));
+      expect(res.status).toBe(201);
+      const body = (await res.json()) as { data: Row };
+      const novo = String(body.data.id);
+      expect(novo).not.toBe(P1);
+      expect(body.data.draft_graph).toEqual(grafoQueCitaASiMesma(novo));
+      const texto = JSON.stringify(body.data.draft_graph).toLowerCase();
+      expect(texto).not.toContain(P1);
+      expect(texto).toContain(OUTRA);
+      expect(body.data.trigger_config).toEqual({ kind: "started_by_automation", from_pointer_ids: [novo, OUTRA] });
+    });
+
+    it("teto do plano cheio: a recusa do banco vira a frase do plano, sem cópia", async () => {
+      const db = makeDb([origem({ surface: "automacao" })], []);
+      const from = db.from.bind(db);
+      (db as { from: typeof db.from }).from = ((tabela: string) => {
+        const b = from(tabela);
+        if (tabela !== "followup_flow_pointers") return b;
+        return Object.assign(b, {
+          insert: () => ({
+            select: () => ({
+              single: async () => ({
+                data: null,
+                error: { code: "PT402", details: "automacoes", message: "Limite do plano atingido" },
+              }),
+            }),
+          }),
+        });
+      }) as typeof db.from;
+      session("manager", db);
+      const { POST } = await import("@/app/api/v1/ai/followup-flows/[id]/duplicate/route");
+      const res = await POST(req("POST"), ctx(P1));
+      expect(res.status).toBe(402);
+      const body = (await res.json()) as { error: { code: string; message: string } };
+      expect(body.error.message).not.toContain("PT402");
+      expect(vi.mocked(audit)).not.toHaveBeenCalledWith(
+        expect.objectContaining({ action: "followup_flow.duplicated" }),
+      );
+    });
+  });
 });
 
 // Este teste isola o handler; autoridade de suporte é exercitada na suíte própria.

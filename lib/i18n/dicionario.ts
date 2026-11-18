@@ -4612,6 +4612,8 @@ export const DICIONARIO: Traducoes = {
       es: "Este flujo todavía no tiene suficientes cajas para exportar. Arma el flujo en el editor y guárdalo antes.",
     },
   "Fluxo duplicado.": { es: "Flujo duplicado." },
+  "Automação duplicada. A cópia está desligada.": { es: "Automatización duplicada. La copia está desactivada." },
+  "Follow-up duplicado. A cópia está desligada.": { es: "Seguimiento duplicado. La copia está desactivada." },
   "Fluxo renomeado.": { es: "Flujo renombrado." },
   "Novo fluxo de follow-up": { es: "Nuevo flujo de seguimiento" },
   "Nasce como rascunho. Você monta as etapas no editor visual em seguida.": {
