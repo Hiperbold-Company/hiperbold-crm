@@ -15,6 +15,7 @@ import {
 } from "@/hooks/channels/useCadastroIncorporado";
 import { useT } from "@/hooks/i18n/useT";
 import { ApiError } from "@/lib/api/types";
+import { cn } from "@/lib/utils";
 import {
   lerEventoDoCadastroIncorporado,
   type EventoDoCadastroIncorporado,
@@ -419,45 +420,37 @@ export function ConectarComAMeta({
         </div>
 
         <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap gap-2" role="group" aria-label={t("Tipo de conexão")}>
-            <Button
-              type="button"
-              size="sm"
-              variant={coexistencia ? "outline" : "default"}
-              aria-pressed={!coexistencia}
-              onClick={() => {
+          <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label={t("Tipo de conexão")}>
+            <CartaoDeModo
+              selecionado={!coexistencia}
+              onSelecionar={() => {
                 setCoexistencia(false);
                 setConfirmouContatos(false);
               }}
               disabled={ocupado}
-              data-testid="cadastro-meta-modo-padrao"
-            >
-              {t("Conexão padrão")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={coexistencia ? "default" : "outline"}
-              aria-pressed={coexistencia}
-              onClick={() => setCoexistencia(true)}
+              testId="cadastro-meta-modo-padrao"
+              titulo={t("Número novo (conexão padrão)")}
+              descricao={t(
+                "Para um número novo ou que ainda não está no app WhatsApp Business. O número passa a funcionar só pela API oficial.",
+              )}
+            />
+            <CartaoDeModo
+              selecionado={coexistencia}
+              onSelecionar={() => setCoexistencia(true)}
               disabled={ocupado}
-              data-testid="cadastro-meta-modo-coexistencia"
-            >
-              {t("Conexão em coexistência")}
-            </Button>
+              testId="cadastro-meta-modo-coexistencia"
+              titulo={t("Já uso no WhatsApp Business (coexistência)")}
+              descricao={t(
+                "O número continua no app do celular e as conversas aparecem também no CRM. A Meta pede para ler um QR Code no WhatsApp Business.",
+              )}
+            />
           </div>
           {coexistencia ? (
             <div
               data-testid="cadastro-meta-explicacao-coexistencia"
               className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm"
             >
-              <p className="font-medium">{t("Conexão em coexistência")}</p>
-              <p className="mt-1 text-muted-foreground">
-                {t(
-                  "Para um número que já funciona no app WhatsApp Business. A Meta mostra o número do app e pede para ler um QR Code no WhatsApp Business do celular. O número continua funcionando no app.",
-                )}
-              </p>
-              <p className="mt-1 text-muted-foreground">
+              <p className="text-muted-foreground">
                 {t("Recurso recente da Meta: se a conexão falhar, use a conexão padrão.")}
               </p>
               <p className="mt-2 font-medium" data-testid="cadastro-meta-aviso-contatos">
@@ -476,19 +469,7 @@ export function ConectarComAMeta({
                 <span>{t("Entendi e autorizo trazer esses contatos e conversas para o CRM.")}</span>
               </label>
             </div>
-          ) : (
-            <div
-              data-testid="cadastro-meta-explicacao-padrao"
-              className="rounded-md border bg-muted/30 p-3 text-sm"
-            >
-              <p className="font-medium">{t("Conexão padrão")}</p>
-              <p className="mt-1 text-muted-foreground">
-                {t(
-                  "Para um número novo ou que ainda não está no app WhatsApp Business. O número passa a funcionar só pela API oficial.",
-                )}
-              </p>
-            </div>
-          )}
+          ) : null}
         </div>
 
         <div>
@@ -578,5 +559,52 @@ export function ConectarComAMeta({
         ) : null}
       </div>
     </Card>
+  );
+}
+
+/** Cartão selecionável (rádio) de um tipo de conexão: título e explicação dentro do próprio cartão. */
+function CartaoDeModo({
+  selecionado,
+  onSelecionar,
+  disabled,
+  testId,
+  titulo,
+  descricao,
+}: {
+  selecionado: boolean;
+  onSelecionar: () => void;
+  disabled: boolean;
+  testId: string;
+  titulo: string;
+  descricao: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selecionado}
+      onClick={onSelecionar}
+      disabled={disabled}
+      data-testid={testId}
+      className={cn(
+        "flex items-start gap-3 rounded-md border p-3 text-left text-sm transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60",
+        selecionado ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/40",
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
+          selecionado ? "border-primary" : "border-muted-foreground/40",
+        )}
+      >
+        {selecionado ? <span className="size-2 rounded-full bg-primary" /> : null}
+      </span>
+      <span className="flex flex-col gap-1">
+        <span className="font-medium">{titulo}</span>
+        <span className="text-muted-foreground">{descricao}</span>
+      </span>
+    </button>
   );
 }
