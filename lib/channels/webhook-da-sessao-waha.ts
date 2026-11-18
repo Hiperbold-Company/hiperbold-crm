@@ -26,7 +26,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 import type { WebhookDaSessao } from "@/lib/waha/client";
-import { esquecerSessaoDoWebhook } from "@/lib/waha/sessao-do-webhook";
+import { ehSegredoPlaceholder, esquecerSessaoDoWebhook } from "@/lib/waha/sessao-do-webhook";
 
 /** Abaixo disto é placeholder (o `'\x00'` com que a sessão nasce) ou lixo. */
 const MIN_SEGREDO = 16;
@@ -54,10 +54,21 @@ export function urlDoWebhookDaSessao(base: string, token: string): string {
 }
 
 /** `'\x00'` (e o vazio) é o placeholder com que a reserva cria a sessão. */
-function ehPlaceholder(cifrado: string | null | undefined): boolean {
-  if (!cifrado) return true;
-  const hex = cifrado.replace(/^\\x/, "");
-  return /^0*$/.test(hex);
+const ehPlaceholder = ehSegredoPlaceholder;
+
+/**
+ * Decifra o segredo gravado. `{ erro: true }` = o RPC falhou (passageiro);
+ * `segredo: null` = não há segredo utilizável (placeholder ou curto demais).
+ */
+async function decifrarSegredo(
+  admin: SupabaseClient,
+  cifrado: string | null,
+): Promise<{ erro: true } | { erro: false; segredo: string | null }> {
+  if (ehPlaceholder(cifrado)) return { erro: false, segredo: null };
+  const normalizado = cifrado!.startsWith("\\x") ? cifrado! : `\\x${cifrado}`;
+  const dec = await admin.rpc("fn_decrypt_oauth", { ciphertext: normalizado });
+  if (dec.error) return { erro: true };
+  return { erro: false, segredo: typeof dec.data === "string" && dec.data.length >= MIN_SEGREDO ? dec.data : null };
 }
 
 /**
@@ -71,6 +82,14 @@ function ehPlaceholder(cifrado: string | null | undefined): boolean {
 export async function webhookDaSessaoWaha(
   admin: SupabaseClient,
   alvo: { organizationId: string; channelSessionId: string },
+  opcoes: {
+    /**
+     * `false` = só leitura: sessão no placeholder devolve `null` em vez de
+     * ganhar segredo novo. Para quem só reenvia a config (PATCH /acervo): gerar
+     * o segredo é papel de conectar/reconectar, não efeito colateral de um toggle.
+     */
+    gerarSegredo?: boolean;
+  } = {},
 ): Promise<WebhookDaSessao | null> {
   const base = baseDoWebhookDaSessao();
   if (!base) return null;
@@ -91,19 +110,16 @@ export async function webhookDaSessaoWaha(
       return null;
     }
 
-    let segredo: string | null = null;
     const cifrado = linha?.webhook_secret_encrypted ?? null;
-    if (!ehPlaceholder(cifrado)) {
-      const normalizado = cifrado!.startsWith("\\x") ? cifrado! : `\\x${cifrado}`;
-      const dec = await admin.rpc("fn_decrypt_oauth", { ciphertext: normalizado });
-      if (dec.error) {
-        logger.warn("[waha.webhook-da-sessao] não decifrei o segredo; webhook não tocado", {
-          channel_session_id: alvo.channelSessionId,
-        });
-        return null;
-      }
-      if (typeof dec.data === "string" && dec.data.length >= MIN_SEGREDO) segredo = dec.data;
+    const lido = await decifrarSegredo(admin, cifrado);
+    if (lido.erro) {
+      logger.warn("[waha.webhook-da-sessao] não decifrei o segredo; webhook não tocado", {
+        channel_session_id: alvo.channelSessionId,
+      });
+      return null;
     }
+    let segredo = lido.segredo;
+    if (!segredo && opcoes.gerarSegredo === false) return null;
 
     if (!segredo) {
       const novo = randomBytes(32).toString("hex");
@@ -114,22 +130,38 @@ export async function webhookDaSessaoWaha(
         });
         return null;
       }
-      const gravado = await admin
+      // Compare-and-set: só grava se o banco AINDA tem o valor lido (o
+      // placeholder). Duas reconexões ao mesmo tempo gerariam dois segredos, e
+      // a que gravasse por último deixaria o WAHA da outra com a chave errada.
+      // O filtro usa o MESMO texto que a leitura devolveu (o hex `\x00` do
+      // bytea), que o PostgREST converte de volta para bytea na comparação.
+      const cas = admin
         .from("channel_sessions")
         .update({ webhook_secret_encrypted: novoCifrado })
         .eq("organization_id", alvo.organizationId)
         .eq("id", alvo.channelSessionId)
-        .select("id")
-        .maybeSingle();
-      if (gravado.error || !gravado.data) {
+        .eq("provider", "waha");
+      const gravado = await (cifrado === null
+        ? cas.is("webhook_secret_encrypted", null)
+        : cas.eq("webhook_secret_encrypted", cifrado)
+      ).select("id").maybeSingle();
+      if (gravado.error) {
         logger.warn("[waha.webhook-da-sessao] não gravei o segredo; webhook não registrado", {
           channel_session_id: alvo.channelSessionId,
         });
         return null;
       }
+      if (!gravado.data) {
+        // 0 linhas: ou outra reconexão gravou primeiro (usa o segredo dela), ou
+        // o filtro não casou com o banco ainda no placeholder. Logs distintos:
+        // o segundo caso, se acontecer, deixa toda sessão nova sem webhook.
+        segredo = await segredoDeQuemGravouPrimeiro(admin, alvo);
+        if (!segredo) return null;
+      } else {
+        segredo = novo;
+      }
       // A memória de 30 s da rota guardava o segredo `null` desta sessão.
       esquecerSessaoDoWebhook(`token:${token}`);
-      segredo = novo;
     }
 
     return { url: urlDoWebhookDaSessao(base, token), hmacKey: segredo };
@@ -140,4 +172,46 @@ export async function webhookDaSessaoWaha(
     });
     return null;
   }
+}
+
+/**
+ * Releitura depois de um compare-and-set que atingiu 0 linhas. Devolve o
+ * segredo que a outra reconexão gravou, ou `null` (e loga por quê) quando não
+ * há o que usar.
+ */
+async function segredoDeQuemGravouPrimeiro(
+  admin: SupabaseClient,
+  alvo: { organizationId: string; channelSessionId: string },
+): Promise<string | null> {
+  const { data, error } = await admin
+    .from("channel_sessions")
+    .select("webhook_secret_encrypted")
+    .eq("organization_id", alvo.organizationId)
+    .eq("id", alvo.channelSessionId)
+    .eq("provider", "waha")
+    .maybeSingle();
+  const cifrado = (data as { webhook_secret_encrypted?: string | null } | null)?.webhook_secret_encrypted ?? null;
+  if (error || !data) {
+    logger.warn("[waha.webhook-da-sessao] não reli a sessão depois do compare-and-set; webhook não registrado", {
+      channel_session_id: alvo.channelSessionId,
+    });
+    return null;
+  }
+  if (ehPlaceholder(cifrado)) {
+    logger.warn("[waha.webhook-da-sessao] compare-and-set não casou e o banco segue no placeholder; webhook não registrado", {
+      channel_session_id: alvo.channelSessionId,
+    });
+    return null;
+  }
+  const lido = await decifrarSegredo(admin, cifrado);
+  if (lido.erro || !lido.segredo) {
+    logger.warn("[waha.webhook-da-sessao] outra reconexão gravou o segredo, mas não o decifrei; webhook não registrado", {
+      channel_session_id: alvo.channelSessionId,
+    });
+    return null;
+  }
+  logger.info("[waha.webhook-da-sessao] outra reconexão gravou o segredo primeiro; usando o dela", {
+    channel_session_id: alvo.channelSessionId,
+  });
+  return lido.segredo;
 }

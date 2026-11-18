@@ -16,22 +16,42 @@ const TOKEN = "token-da-sessao-0001";
 
 function banco(linha: { webhook_path_token: string | null; webhook_secret_encrypted: string | null }, opcoes: {
   decifraFalha?: boolean; cifraIndisponivel?: boolean;
+  /** Outra reconexão gravou ESTE cifrado entre a nossa leitura e o nosso UPDATE. */
+  gravadoPorOutro?: string;
+  /** O filtro do compare-and-set nunca casa (o UPDATE atinge 0 linhas) e nada mudou no banco. */
+  filtroNuncaCasa?: boolean;
 } = {}) {
   const escritas: Record<string, unknown>[] = [];
   const filtrosDaEscrita: Array<[string, unknown]> = [];
   const cifrados: string[] = [];
   const lidas = { n: 0 };
+  // O valor que o BANCO tem agora: muda com a escrita do "outro" logo depois da
+  // primeira leitura, e com as escritas que o filtro deixar passar.
+  let armazenado = linha.webhook_secret_encrypted;
   const db = {
     from: vi.fn(() => {
       let pendente: Record<string, unknown> | null = null;
+      const filtros: Array<[string, unknown]> = [];
       const b = {
         select: () => b,
         update: (row: Record<string, unknown>) => { pendente = row; return b; },
-        eq: (coluna: string, valor: unknown) => { if (pendente) filtrosDaEscrita.push([coluna, valor]); return b; },
+        eq: (coluna: string, valor: unknown) => {
+          if (pendente) { filtrosDaEscrita.push([coluna, valor]); filtros.push([coluna, valor]); }
+          return b;
+        },
         maybeSingle: async () => {
-          if (pendente) { escritas.push(pendente); return { data: { id: SESSAO }, error: null }; }
+          if (pendente) {
+            // O UPDATE honra o filtro da coluna do segredo de verdade (compare-and-set).
+            const cas = filtros.find(([c]) => c === "webhook_secret_encrypted");
+            if (opcoes.filtroNuncaCasa || (cas && cas[1] !== armazenado)) return { data: null, error: null };
+            escritas.push(pendente);
+            armazenado = pendente.webhook_secret_encrypted as string;
+            return { data: { id: SESSAO }, error: null };
+          }
           lidas.n++;
-          return { data: linha, error: null };
+          const atual = { ...linha, webhook_secret_encrypted: armazenado };
+          if (lidas.n === 1 && opcoes.gravadoPorOutro) armazenado = opcoes.gravadoPorOutro;
+          return { data: atual, error: null };
         },
       };
       return b;
@@ -137,5 +157,31 @@ describe("webhookDaSessaoWaha", () => {
     vi.stubEnv("WAHA_WEBHOOK_BASE_URL", "https://crm.exemplo.com.br");
     const b = banco({ webhook_path_token: null, webhook_secret_encrypted: "\\x00" });
     await expect(webhookDaSessaoWaha(b.db, { organizationId: ORG, channelSessionId: SESSAO })).resolves.toBeNull();
+  });
+
+  it("compare-and-set: o UPDATE só grava sobre o placeholder, filtrado por org, id e provider", async () => {
+    vi.stubEnv("WAHA_WEBHOOK_BASE_URL", "https://crm.exemplo.com.br");
+    const b = banco({ webhook_path_token: TOKEN, webhook_secret_encrypted: "\\x00" });
+    const w = await webhookDaSessaoWaha(b.db, { organizationId: ORG, channelSessionId: SESSAO });
+    expect(w?.hmacKey).toMatch(/^[0-9a-f]{64}$/);
+    expect(b.filtrosDaEscrita).toEqual(expect.arrayContaining([
+      ["organization_id", ORG], ["id", SESSAO], ["provider", "waha"], ["webhook_secret_encrypted", "\\x00"],
+    ]));
+  });
+
+  it("corrida: outra reconexão gravou antes — usa o segredo JÁ gravado, não sobrescreve", async () => {
+    vi.stubEnv("WAHA_WEBHOOK_BASE_URL", "https://crm.exemplo.com.br");
+    const b = banco({ webhook_path_token: TOKEN, webhook_secret_encrypted: "\\x00" }, { gravadoPorOutro: "\\xvencedor" });
+    const w = await webhookDaSessaoWaha(b.db, { organizationId: ORG, channelSessionId: SESSAO });
+    // O dublê decifra qualquer cifrado não-placeholder para este valor: o do vencedor.
+    expect(w?.hmacKey).toBe("segredo-existente-bem-longo-000000");
+    expect(b.escritas).toHaveLength(0);
+  });
+
+  it("UPDATE com 0 linhas e o banco AINDA no placeholder: não registra (log próprio, distinto da corrida)", async () => {
+    vi.stubEnv("WAHA_WEBHOOK_BASE_URL", "https://crm.exemplo.com.br");
+    const b = banco({ webhook_path_token: TOKEN, webhook_secret_encrypted: "\\x00" }, { filtroNuncaCasa: true });
+    await expect(webhookDaSessaoWaha(b.db, { organizationId: ORG, channelSessionId: SESSAO })).resolves.toBeNull();
+    expect(JSON.stringify(avisos.mock.calls)).toContain("compare-and-set não casou");
   });
 });

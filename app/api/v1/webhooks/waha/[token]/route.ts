@@ -151,7 +151,28 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   // e a escolha feita em /admin/sistema não vale para a entrada de mensagens.
   // O memo de 30 s faz disto no máximo uma leitura por janela; nunca lança.
   await carregarComportamentoDaInstalacao();
-  const auth = authenticateWahaWebhook({ rawBody, signatureHeader: sigHeader, sessionSecret });
+  // Rota por token: com segredo próprio a assinatura é obrigatória (interruptor e `.env` não
+  // afrouxam); com o segredo indisponível a resposta é 503 retentável, nunca a
+  // conferência com o segredo global. Regras em lib/waha/webhook-auth.ts.
+  const auth = authenticateWahaWebhook({
+    rawBody,
+    signatureHeader: sigHeader,
+    sessionSecret,
+    porToken: { decifraFalhou: lida.valor?.decifraFalhou === true },
+  });
+  if (!auth.ok && auth.reason === "secret_unavailable") {
+    // Falha NOSSA (banco/decifra), não do remetente: o WAHA reentrega. A
+    // memória não guardou a leitura que falhou; a próxima relê do banco.
+    esquecerSessaoDoWebhook(chaveDaSessao);
+    logger.warn("[waha.webhook] segredo da sessão indisponível; pedindo reentrega", {
+      request_id: requestId,
+      channel_session_id: session.id,
+    });
+    return fail("upstream_unavailable", "segredo da sessão indisponível — reentregue o evento", 503, {
+      requestId,
+      headers: { "Retry-After": String(REENTREGA_EM_SEGUNDOS) },
+    });
+  }
   if (!auth.ok) {
     // Segredo pode ter sido trocado: o próximo evento relê do banco.
     esquecerSessaoDoWebhook(chaveDaSessao);

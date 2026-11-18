@@ -210,9 +210,13 @@ export async function POST(
     // A sessão recriada (volume do WAHA perdido, logout forçado) nasce ignorando
     // grupos, mas o banco pode ter grupos LIGADOS neste número. Ressincroniza o
     // filtro — sem PUT quando já está certo, e nunca lança.
+    // O PUT do filtro reenvia o `config.webhooks` lido do GET: com o webhook da
+    // sessão, a entrada do CRM vai com a chave do banco (o GET pode mascará-la).
     await sincronizarRecebimentoDeGrupos(
       createAdminClient(),
-      (ref, receber) => waha.definirRecebimentoDeGrupos(ref, receber),
+      webhook
+        ? (ref, receber) => waha.definirRecebimentoDeGrupos(ref, receber, webhook)
+        : (ref, receber) => waha.definirRecebimentoDeGrupos(ref, receber),
       { organizationId: activeOrg.orgId, channelSessionId: id, sessionRef: nomeParaOTransporte },
     );
 

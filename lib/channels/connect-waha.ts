@@ -132,9 +132,16 @@ export async function connectWahaChannel(authDb: SupabaseClient, serviceDb: Supa
     // Sessão (re)criada nasce ignorando grupos; reativar um canal arquivado mantém
     // o mesmo id e as linhas LIGADAS de `channel_session_groups`. Ressincroniza o
     // filtro com o banco (sem PUT quando já está certo). Nunca lança.
+    // O PUT do filtro reenvia o `config.webhooks` lido do GET: com o webhook da
+    // sessão, a entrada do CRM vai com a chave do banco (o GET pode mascará-la).
+    // Sem webhook, a chamada é a de sempre.
     await sincronizarRecebimentoDeGrupos(
       serviceDb,
-      waha.definirRecebimentoDeGrupos ? (ref, receber) => waha.definirRecebimentoDeGrupos!(ref, receber) : undefined,
+      waha.definirRecebimentoDeGrupos
+        ? webhook
+          ? (ref, receber) => waha.definirRecebimentoDeGrupos!(ref, receber, webhook)
+          : (ref, receber) => waha.definirRecebimentoDeGrupos!(ref, receber)
+        : undefined,
       { organizationId: input.organizationId, channelSessionId: channel.id, sessionRef: channel.waha_session_name },
     );
     void audit({ action: channel.archived_at ? "channel.reactivated" : "channel.connected", actorUserId: input.userId,

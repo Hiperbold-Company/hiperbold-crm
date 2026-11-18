@@ -54,6 +54,24 @@ export interface SessaoComSegredo<T extends LinhaDaSessao = LinhaDaSessao> {
   session: T;
   /** Segredo decifrado; `null` quando não há credencial ou a decifragem falhou. */
   segredo: string | null;
+  /**
+   * `true` só quando o RPC de decifra LANÇOU (erro do banco) nesta leitura.
+   * A rota por token responde 503 retentável nesse caso, em vez de conferir
+   * com o segredo global (lib/waha/webhook-auth.ts). Ausente nos outros casos.
+   */
+  decifraFalhou?: true;
+}
+
+/**
+ * `'\x00'` (e o vazio) é o placeholder com que a reserva cria a sessão WAHA:
+ * a sessão ainda não ganhou segredo próprio. Usado por quem GRAVA o segredo
+ * (lib/channels/webhook-da-sessao-waha.ts) para decidir se gera um novo e para
+ * o compare-and-set.
+ */
+export function ehSegredoPlaceholder(cifrado: string | null | undefined): boolean {
+  if (!cifrado) return true;
+  const hex = cifrado.replace(/^\\x/, "");
+  return /^0*$/.test(hex);
 }
 
 type Resultado<T extends LinhaDaSessao> =
@@ -91,7 +109,7 @@ export async function sessaoDoWebhook<T extends LinhaDaSessao>(
     segredo = await decifrar(data.webhook_secret_encrypted);
   } catch {
     // Decifragem que falhou (erro do RPC) não vai para a memória: a próxima chamada tenta de novo.
-    return { ok: true, valor: { session: data, segredo: null } };
+    return { ok: true, valor: { session: data, segredo: null, decifraFalhou: true } };
   }
   const valor: SessaoComSegredo<T> = { session: data, segredo };
   if (memoria.size >= MAX_ENTRADAS) {

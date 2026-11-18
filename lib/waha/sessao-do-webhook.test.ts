@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ehSegredoPlaceholder,
   esquecerSessaoDoWebhook,
   limparMemoriaDeSessoes,
   sessaoDoWebhook,
@@ -75,9 +76,10 @@ describe("sessaoDoWebhook", () => {
     const decifrar = vi.fn(async (): Promise<string | null> => {
       throw new Error("rpc fora");
     });
+    // `decifraFalhou` deixa a rota por token responder 503 em vez de cair no segredo global.
     expect(await sessaoDoWebhook("nome:org_x", carregar, decifrar)).toEqual({
       ok: true,
-      valor: { session: linha, segredo: null },
+      valor: { session: linha, segredo: null, decifraFalhou: true },
     });
     await sessaoDoWebhook("nome:org_x", carregar, decifrar);
     expect(carregar).toHaveBeenCalledTimes(2);
@@ -98,5 +100,15 @@ describe("sessaoDoWebhook", () => {
     await sessaoDoWebhook("nome:org_x", a.carregar, a.decifrar);
     const r = await sessaoDoWebhook("token:outro", b.carregar, b.decifrar);
     expect(r.ok && r.valor?.session.organization_id).toBe("o2");
+  });
+});
+
+describe("ehSegredoPlaceholder", () => {
+  it("o '\\x00' com que a sessão nasce (e o vazio) é placeholder; cifrado real não é", () => {
+    expect(ehSegredoPlaceholder("\\x00")).toBe(true);
+    expect(ehSegredoPlaceholder("\\x0000")).toBe(true);
+    expect(ehSegredoPlaceholder("")).toBe(true);
+    expect(ehSegredoPlaceholder(null)).toBe(true);
+    expect(ehSegredoPlaceholder("\\xc30d0407")).toBe(false);
   });
 });

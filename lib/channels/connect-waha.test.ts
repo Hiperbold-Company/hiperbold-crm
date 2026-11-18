@@ -311,6 +311,25 @@ describe("webhook por sessão (WAHA_WEBHOOK_BASE_URL)", () => {
     expect(f.convergir.mock.invocationCallOrder[0]!).toBeLessThan(f.transport.startExistingSession.mock.invocationCallOrder[0]!);
   });
 
+  it("o PUT do filtro de grupos recebe o webhook da sessão (chave do banco, não a do GET)", async () => {
+    vi.stubEnv("WAHA_WEBHOOK_BASE_URL", "https://crm.exemplo.com.br");
+    const f = comWebhook(true);
+    const fromOriginal = (f.db as unknown as { from: (t: string) => unknown }).from;
+    (f.db as unknown as { from: (t: string) => unknown }).from = (t: string) => {
+      if (t !== "channel_session_groups") return fromOriginal(t);
+      const b = {
+        select: () => b,
+        eq: () => b,
+        then: (res: (v: unknown) => unknown) => Promise.resolve({ count: 1, error: null }).then(res),
+      };
+      return b;
+    };
+    const definirRecebimentoDeGrupos = vi.fn(async (..._args: unknown[]) => true);
+    await connectWahaChannel(f.db, f.db, { ...f.transport, definirRecebimentoDeGrupos }, f.input);
+    const [, opcoes] = f.transport.createSession.mock.calls[0] as unknown as [string, { webhook: { url: string; hmacKey: string } }];
+    expect(definirRecebimentoDeGrupos).toHaveBeenCalledWith("owned", true, opcoes.webhook);
+  });
+
   it("sem base, a chamada é a de sempre (sem segundo argumento) e nada é gravado", async () => {
     vi.stubEnv("WAHA_WEBHOOK_BASE_URL", "");
     const f = comWebhook(false);

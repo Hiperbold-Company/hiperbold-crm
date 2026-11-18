@@ -6,7 +6,9 @@
  * - criação sem webhook: o corpo é o de sempre (sem `webhooks`);
  * - convergência: acrescenta/atualiza a entrada do CRM, preserva as alheias, e
  *   NÃO faz PUT (que reinicia a sessão) quando já está igual;
- * - convergência sem a opção (PATCH /acervo) não toca no `webhooks` existente.
+ * - convergência sem a opção não toca no `webhooks` existente;
+ * - chave mascarada no GET: não reinicia a sessão e o PUT leva a chave do banco;
+ * - a entrada do CRM é reconhecida pelo sufixo com o token (troca de base).
  */
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -180,5 +182,81 @@ describe("convergirConfigDaSessao: webhook por sessão", () => {
     } finally {
       aviso.mockRestore();
     }
+  });
+});
+
+/**
+ * O WAHA pode MASCARAR `hmac.key` no GET (asteriscos, vazia ou ausente). Dois
+ * riscos: (a) todo PUT por spread do `config.webhooks` lido regravaria a máscara
+ * como chave; (b) comparar a chave literalmente faria toda reconexão reiniciar
+ * a sessão. E a entrada do CRM é reconhecida pelo SUFIXO com o token desta
+ * linha, para trocar a base pública não deixar a entrada antiga viva.
+ */
+describe("webhook por sessão: chave mascarada no GET e troca de base", () => {
+  const ALHEIO = { url: "https://n8n.exemplo.com/webhook/x", events: ["message"], hmac: { key: "****" } };
+  const mascarada = (key: unknown) => {
+    const e = entradaDoWebhookDaSessao(WEBHOOK) as Record<string, unknown>;
+    return key === undefined ? { ...e, hmac: {} } : { ...e, hmac: { key } };
+  };
+
+  it.each([["asteriscos", "********"], ["vazia", ""], ["ausente", undefined]])(
+    "chave %s com url, eventos e retries iguais: conferido, SEM PUT (não reinicia a sessão)",
+    async (_nome, key) => {
+      await servidor(
+        [{ method: "GET", path: CAMINHO, status: 200, body: sessao("WORKING", { ...FILTRO, webhooks: [mascarada(key)] }) }],
+        async (c) => { await expect(c.convergirConfigDaSessao(NOME, { webhook: WEBHOOK })).resolves.toBe(true); },
+      );
+    },
+  );
+
+  it("chave mascarada + filtro divergente: o PUT leva a chave do BANCO, nunca a máscara", async () => {
+    const recebidos = await servidor(
+      [
+        { method: "GET", path: CAMINHO, status: 200, body: sessao("WORKING", { ignore: { status: false }, webhooks: [ALHEIO, mascarada("********")] }) },
+        { method: "PUT", path: CAMINHO, status: 200, body: sessao("WORKING") },
+      ],
+      async (c) => { await c.convergirConfigDaSessao(NOME, { webhook: WEBHOOK }); },
+    );
+    const put = recebidos[1]!.body as { config: { webhooks: Array<Record<string, unknown>> } };
+    expect(put.config.webhooks).toEqual([ALHEIO, entradaDoWebhookDaSessao(WEBHOOK)]);
+  });
+
+  it("trocou WAHA_WEBHOOK_BASE_URL: a entrada da base ANTIGA com o mesmo token é substituída, não preservada como alheia", async () => {
+    const antiga = entradaDoWebhookDaSessao({ url: "https://antigo.exemplo.net/api/v1/webhooks/waha/token-atual", hmacKey: WEBHOOK.hmacKey });
+    const recebidos = await servidor(
+      [
+        { method: "GET", path: CAMINHO, status: 200, body: sessao("WORKING", { ...FILTRO, webhooks: [ALHEIO, antiga] }) },
+        { method: "PUT", path: CAMINHO, status: 200, body: sessao("WORKING") },
+      ],
+      async (c) => { await c.convergirConfigDaSessao(NOME, { webhook: WEBHOOK }); },
+    );
+    const put = recebidos[1]!.body as { config: { webhooks: unknown[] } };
+    expect(put.config.webhooks).toEqual([ALHEIO, entradaDoWebhookDaSessao(WEBHOOK)]);
+  });
+
+  it("definirRecebimentoDeGrupos com o webhook da sessão: o PUT reaplica a entrada com a chave do banco", async () => {
+    const recebidos = await servidor(
+      [
+        { method: "GET", path: CAMINHO, status: 200, body: sessao("WORKING", { ...FILTRO, webhooks: [ALHEIO, mascarada("****")] }) },
+        { method: "PUT", path: CAMINHO, status: 200, body: sessao("WORKING") },
+        { method: "GET", path: CAMINHO, status: 200, body: sessao("WORKING", { ignore: { ...FILTRO.ignore, groups: false } }) },
+      ],
+      async (c) => { await expect(c.definirRecebimentoDeGrupos(NOME, true, WEBHOOK)).resolves.toBe(true); },
+    );
+    const put = recebidos[1]!.body as { config: { webhooks: unknown[] } };
+    expect(put.config.webhooks).toEqual([ALHEIO, entradaDoWebhookDaSessao(WEBHOOK)]);
+  });
+
+  it("definirRecebimentoDeGrupos SEM o webhook: preserva a lista como veio (comportamento de antes)", async () => {
+    const recebidos = await servidor(
+      [
+        { method: "GET", path: CAMINHO, status: 200, body: sessao("WORKING", { ...FILTRO, webhooks: [ALHEIO] }) },
+        { method: "PUT", path: CAMINHO, status: 200, body: sessao("WORKING") },
+        { method: "GET", path: CAMINHO, status: 200, body: sessao("WORKING", { ignore: { ...FILTRO.ignore, groups: false } }) },
+      ],
+      async (c) => { await expect(c.definirRecebimentoDeGrupos(NOME, true)).resolves.toBe(true); },
+    );
+    const put = recebidos[1]!.body as { config: { webhooks: unknown[] } };
+    expect(put.config.webhooks).toEqual([ALHEIO]);
   });
 });

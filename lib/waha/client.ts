@@ -175,8 +175,10 @@ export interface WebhookDaSessao {
 
 /**
  * O que a conexão pede à sessão: o acervo (ver `OpcoesDeAcervo`) e o webhook
- * por sessão. `webhook` AUSENTE = não toca no bloco `webhooks` da config — é o
- * caso do PATCH /acervo e de toda instalação sem `WAHA_WEBHOOK_BASE_URL`.
+ * por sessão. `webhook` AUSENTE = não toca no bloco `webhooks` da config (o PUT
+ * o reenvia como veio do GET) — é o caso de toda instalação sem
+ * `WAHA_WEBHOOK_BASE_URL` e do PATCH /acervo em sessão ainda sem segredo
+ * próprio. PRESENTE = a entrada do CRM é sempre reaplicada com a chave do banco.
  */
 export interface OpcoesDaSessao extends OpcoesDeAcervo {
   webhook?: WebhookDaSessao;
@@ -192,9 +194,27 @@ export function entradaDoWebhookDaSessao(webhook: WebhookDaSessao): Record<strin
   };
 }
 
-/** Prefixo que identifica as entradas do CRM: tudo até o token (exclusive). */
-function prefixoDoWebhook(url: string): string {
-  return url.slice(0, url.lastIndexOf("/") + 1);
+/** O caminho fixo da rota por token; o token da sessão vem depois dele. */
+const CAMINHO_DO_WEBHOOK_DA_SESSAO = "/api/v1/webhooks/waha/";
+
+/**
+ * A entrada é do CRM para ESTA sessão? Duas réguas, qualquer uma basta:
+ *
+ *  - SUFIXO `/api/v1/webhooks/waha/<token desta linha>`, em qualquer base: trocar
+ *    `WAHA_WEBHOOK_BASE_URL` substitui a entrada da base antiga em vez de
+ *    deixá-la viva como se fosse de terceiro (entregando para um host velho);
+ *  - PREFIXO da base atual + caminho fixo: uma entrada com token antigo nessa
+ *    mesma base aponta para uma URL que já responde 404 e também sai.
+ *
+ * Webhook de terceiro (n8n, outro sistema) não casa com nenhuma e é preservado.
+ */
+function ehEntradaDoCrm(w: Record<string, unknown>, webhook: WebhookDaSessao): boolean {
+  if (typeof w.url !== "string") return false;
+  const i = webhook.url.lastIndexOf(CAMINHO_DO_WEBHOOK_DA_SESSAO);
+  if (i < 0) return w.url === webhook.url;
+  const sufixo = webhook.url.slice(i);
+  const prefixo = webhook.url.slice(0, i + CAMINHO_DO_WEBHOOK_DA_SESSAO.length);
+  return w.url.endsWith(sufixo) || w.url.startsWith(prefixo);
 }
 
 function entradasDeWebhook(config: Record<string, unknown> | null | undefined): Record<string, unknown>[] {
@@ -203,17 +223,32 @@ function entradasDeWebhook(config: Record<string, unknown> | null | undefined): 
   return lista.filter((w): w is Record<string, unknown> => Boolean(w) && typeof w === "object" && !Array.isArray(w));
 }
 
+/** Chave que o GET pode devolver MASCARADA: ausente, vazia ou com asteriscos. Chave real é hex. */
+function chaveMascarada(key: unknown): boolean {
+  return typeof key !== "string" || key === "" || key.includes("*");
+}
+
+function retentativasConferem(retries: unknown): boolean {
+  if (!retries || typeof retries !== "object") return false;
+  const r = retries as Record<string, unknown>;
+  return Object.entries(RETENTATIVAS_DO_WEBHOOK_DA_SESSAO).every(([k, v]) => r[k] === v);
+}
+
 /**
  * A sessão já tem o webhook pedido, e SÓ ele entre os do CRM? Compara URL,
  * conjunto de eventos e chave — campo a campo, tolerando o que o WAHA acrescente
  * (a mesma razão do filtro: `JSON.stringify` é sensível à ordem). Uma entrada
- * do CRM com token antigo ao lado da certa também conta como "falta": ela
- * apontaria para uma URL que já responde 404.
+ * do CRM com token antigo (ou de base antiga) ao lado da certa também conta como
+ * "falta".
+ *
+ * Chave MASCARADA no GET não é comparada (senão toda reconexão reiniciaria a
+ * sessão): aí basta URL, eventos e retries baterem e haver `hmac` presente. O
+ * preço: uma divergência de chave entre banco e WAHA deixa de ser detectável
+ * por aqui — o próximo PUT (que sempre reaplica a chave do banco) a cura.
  */
 function webhookEstaConferido(config: Record<string, unknown> | null | undefined, webhook: WebhookDaSessao | undefined): boolean {
   if (!webhook) return true;
-  const prefixo = prefixoDoWebhook(webhook.url);
-  const nossas = entradasDeWebhook(config).filter((w) => typeof w.url === "string" && w.url.startsWith(prefixo));
+  const nossas = entradasDeWebhook(config).filter((w) => ehEntradaDoCrm(w, webhook));
   const w = nossas[0];
   if (nossas.length !== 1 || !w) return false;
   if (w.url !== webhook.url) return false;
@@ -221,14 +256,20 @@ function webhookEstaConferido(config: Record<string, unknown> | null | undefined
   const esperados: readonly string[] = EVENTOS_DO_WEBHOOK_DA_SESSAO;
   if (eventos.length !== esperados.length || !esperados.every((e) => eventos.includes(e))) return false;
   const hmac = w.hmac && typeof w.hmac === "object" ? (w.hmac as Record<string, unknown>) : null;
-  return hmac?.key === webhook.hmacKey;
+  if (!hmac) return false;
+  if (chaveMascarada(hmac.key)) return retentativasConferem(w.retries);
+  return hmac.key === webhook.hmacKey;
 }
 
-/** Troca a(s) entrada(s) do CRM pela certa e preserva os webhooks alheios. */
+/**
+ * Troca a(s) entrada(s) do CRM pela certa, com a chave do BANCO, e preserva os
+ * webhooks alheios. SEM condição: todo PUT que reenvia `config.webhooks` passa
+ * por aqui quando o webhook da sessão está disponível, porque a entrada lida do
+ * GET pode trazer a chave mascarada — e reenviá-la gravaria a máscara como chave.
+ */
 function aplicarWebhookNaConfig(config: Record<string, unknown>, webhook: WebhookDaSessao | undefined): void {
-  if (!webhook || webhookEstaConferido(config, webhook)) return;
-  const prefixo = prefixoDoWebhook(webhook.url);
-  const alheias = entradasDeWebhook(config).filter((w) => !(typeof w.url === "string" && w.url.startsWith(prefixo)));
+  if (!webhook) return;
+  const alheias = entradasDeWebhook(config).filter((w) => !ehEntradaDoCrm(w, webhook));
   config.webhooks = [...alheias, entradaDoWebhookDaSessao(webhook)];
 }
 
@@ -632,6 +673,10 @@ export class WahaClient {
         && webhookEstaConferido(sessao.config, opcoes.webhook)) return true;
       const config: Record<string, unknown> = { ...sessao.config, ignore: { ...CHAVES_DO_FILTRO_FIXAS, groups: groupsAtual } };
       aplicarAcervoNaConfig(config, guardarHistorico);
+      // Com o webhook da sessão, a entrada do CRM é SEMPRE reaplicada com a chave
+      // do banco (o GET pode trazê-la mascarada). Sem ele, o spread acima reenvia
+      // `webhooks` como veio — se o WAHA mascarar a chave no GET, a máscara vira
+      // a chave. Quem chama sem webhook deveria passá-lo; ver acervo-do-historico.
       aplicarWebhookNaConfig(config, opcoes.webhook);
 
       const res = await this.fetchComTeto(url, {
@@ -877,7 +922,7 @@ export class WahaClient {
    * confirmado — mas medir enquanto ainda está `STARTING` arriscaria ler um
    * `config` transitório, então a espera vem antes da leitura que decide.
    */
-  async definirRecebimentoDeGrupos(name: string, receber: boolean): Promise<boolean> {
+  async definirRecebimentoDeGrupos(name: string, receber: boolean, webhook?: WebhookDaSessao): Promise<boolean> {
     const url = `${this.baseUrl}/api/sessions/${encodeURIComponent(name)}`;
     const ler = async () => {
       const r = await this.fetchComTeto(url, { headers: { "X-Api-Key": this.apiKey } });
@@ -900,10 +945,18 @@ export class WahaClient {
       ...CHAVES_DO_FILTRO_FIXAS,
       groups: !receber,
     };
+    const config: Record<string, unknown> = { ...atual.config, ignore };
+    // O PUT reenvia o `config.webhooks` lido do GET. Com o webhook da sessão em
+    // mãos, a entrada do CRM é reaplicada com a chave do banco (o GET pode
+    // trazê-la mascarada). SEM ele (toggle de grupo pela tela, via adapter, que
+    // só conhece o nome da sessão), a lista vai como veio — e, se o WAHA
+    // mascarar `hmac.key` no GET, a máscara vira a chave até a próxima
+    // reconexão, que reaplica a do banco. Risco conhecido, não medido no WAHA.
+    aplicarWebhookNaConfig(config, webhook);
     const put = await this.fetchComTeto(url, {
       method: "PUT",
       headers: { "X-Api-Key": this.apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ name, config: { ...atual.config, ignore } }),
+      body: JSON.stringify({ name, config }),
     });
     if (!put.ok) return false;
     // Teto de ~10s no total, em passos de 2s: bounded, e curto o bastante para
