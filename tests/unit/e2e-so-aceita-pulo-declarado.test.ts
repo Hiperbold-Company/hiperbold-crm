@@ -48,18 +48,20 @@ const DESFECHOS = "success failure skipped cancelled";
 // `[]` — o falso verde de vacuidade, em escala.
 function combinacoesAceitas(): string[] {
   const programa = `
+for URG in nao sim ""; do
 for HEAD in nao sim; do
 for EVENTO in pull_request push; do
  for ALCANCE in sim nao ""; do
   for PORTAO in ${DESFECHOS}; do
    for PARTES in ${DESFECHOS}; do
-    export HEAD_VELHO=$HEAD EVENTO ALCANCE PORTAO PARTES
+    export URGENTE=$URG HEAD_VELHO=$HEAD EVENTO ALCANCE PORTAO PARTES
     ( eval "$SCRIPT_DO_JOB" ) >/dev/null 2>&1
     rc=$?
-    [ $rc -eq 0 ] && echo "$HEAD $EVENTO \${ALCANCE:-vazio} $PORTAO $PARTES"
+    [ $rc -eq 0 ] && echo "\${URG:-vazio} $HEAD $EVENTO \${ALCANCE:-vazio} $PORTAO $PARTES"
    done
   done
  done
+done
 done
 done
 true`;
@@ -73,14 +75,33 @@ true`;
 
 describe("e2e só aceita o pulo declarado", () => {
   it("controle positivo: o recorte pegou o script que lê os quatro resultados", () => {
-    for (const v of ["$PORTAO", "$ALCANCE", "$PARTES", "$EVENTO", "$HEAD_VELHO"]) {
+    for (const v of ["$PORTAO", "$ALCANCE", "$PARTES", "$EVENTO", "$HEAD_VELHO", "${URGENTE:-}"]) {
       expect(SCRIPT).toContain(v);
     }
   });
 
-  it("da matriz inteira de desfechos (192), passa exatamente o que foi declarado", { timeout: 60_000 }, () => {
+  // A dimensão URGENTE (rota urgente do fork Hiperbold, deploy-easypanel.yml
+  // caminho 2) multiplica a matriz por três. Com `urgente` `nao` ou vazio vale a
+  // régua de antes, linha a linha. Com `sim`, a ÚNICA porta nova é a de partes
+  // PULADAS em pull_request de head atual, com o alcance respondido, qualquer
+  // que seja o `e2e`. Head superado continua reprovando; em push, `sim` não
+  // abre nada.
+  it("da matriz inteira de desfechos (576), passa exatamente o que foi declarado", { timeout: 120_000 }, () => {
+    const urgentes = [
+      "sim nao pull_request sim success skipped",
+      "sim nao pull_request nao success skipped",
+      "sim nao pull_request vazio success skipped",
+      "sim nao push sim success success",
+      "sim nao push nao success success",
+      "sim nao push vazio success success",
+    ];
+    const comPrefixo = (lista: string[]) => [
+      ...lista.map((c) => `nao ${c}`),
+      ...lista.map((c) => `vazio ${c}`),
+      ...urgentes,
+    ];
     expect(combinacoesAceitas().sort()).toEqual(
-      [
+      comPrefixo([
         // PR que alcança: as partes têm de passar.
         "nao pull_request sim success success",
         // PR que não alcança: partes puladas, e SÓ puladas — `failure` não é pulo.
@@ -98,7 +119,7 @@ describe("e2e só aceita o pulo declarado", () => {
         // `skipped` (o check está num SHA que já não é o head, então o pulo
         // como verde é o defeito). Aqui ele REPROVA com mensagem própria, e é
         // a ausência das linhas `sim ...` nesta lista que mede isso.
-      ].sort(),
+      ]).sort(),
     );
   });
 });

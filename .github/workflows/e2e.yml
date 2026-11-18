@@ -83,6 +83,7 @@ jobs:
     outputs:
       e2e: ${{ steps.alcance.outputs.e2e }}
       head_velho: ${{ steps.head_velho.outputs.head_velho }}
+      urgente: ${{ steps.urgente.outputs.urgente }}
     steps:
       # ── PASSO INICIAL: ESTE RUN AINDA É DO HEAD ATUAL DO PR? (#2449) ─────
       #
@@ -177,6 +178,36 @@ jobs:
           echo "e2e=${resposta}" >> "$GITHUB_OUTPUT"
           echo "${n} arquivo(s) no PR → e2e=${resposta}"
 
+      # O script da rota urgente vem da BASE do PR, não do merge ref: o PR não
+      # pode reescrever quem decide o pulo dele. Pasta à parte para não trocar
+      # a versão dos outros scripts deste job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event_name == 'pull_request'
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .base-do-pr
+          sparse-checkout: scripts/pr-rota-urgente.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      # ROTA URGENTE (fork Hiperbold): PR com o rótulo `urgente` que não mexe em
+      # supabase/ pula as partes. Fora de pull_request é sempre `nao`. Regra em
+      # scripts/pr-rota-urgente.sh; os três caminhos do deploy no cabeçalho de
+      # deploy-easypanel.yml.
+      - name: O PR vai pela rota urgente?
+        id: urgente
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ]; then
+            echo "urgente=nao" >> "$GITHUB_OUTPUT"; echo "evento ${GITHUB_EVENT_NAME}: caminho completo"; exit 0
+          fi
+          resposta=$(bash .base-do-pr/scripts/pr-rota-urgente.sh "$PR") || resposta=nao
+          [ "$resposta" = "sim" ] || resposta=nao
+          echo "urgente=${resposta}" >> "$GITHUB_OUTPUT"
+
   # AS DUAS PARTES RODAM EM PARALELO, e o motivo é medido, não estético.
   #
   # Elas rodavam como dois passos do MESMO job, então somavam contra um único
@@ -221,7 +252,9 @@ jobs:
     # atual do PR. Pulando aqui (antes de o job existir para o Actions), o run
     # velho nunca chega ao `concurrency:` — que é exatamente o ponto onde ele
     # roubou a vaga do head novo no #2437.
-    if: needs.e2e-alcance.outputs.e2e == 'sim' && needs.e2e-alcance.outputs.head_velho != 'sim'
+    # E pula na rota urgente (PR com rótulo `urgente` e sem supabase/); o
+    # agregador `e2e` aceita esse pulo só em pull_request com urgente=sim.
+    if: needs.e2e-alcance.outputs.e2e == 'sim' && needs.e2e-alcance.outputs.head_velho != 'sim' && needs.e2e-alcance.outputs.urgente != 'sim'
     # Executor próprio para trabalho NOSSO (push na main, PR de branch deste
     # repo) quando a variável de repositório EXECUTOR_PROPRIO vale `ligado`;
     # máquinas do GitHub para todo o resto, fork inclusive. A expressão decide
@@ -2824,10 +2857,11 @@ jobs:
           PORTAO: ${{ needs.e2e-alcance.result }}
           ALCANCE: ${{ needs.e2e-alcance.outputs.e2e }}
           HEAD_VELHO: ${{ needs.e2e-alcance.outputs.head_velho }}
+          URGENTE: ${{ needs.e2e-alcance.outputs.urgente }}
           PARTES: ${{ needs.e2e-parte.result }}
         run: |
           set -euo pipefail
-          echo "evento=${EVENTO} e2e-alcance=${PORTAO} e2e=${ALCANCE:-<vazio>} head_velho=${HEAD_VELHO:-<vazio>}"
+          echo "evento=${EVENTO} e2e-alcance=${PORTAO} e2e=${ALCANCE:-<vazio>} head_velho=${HEAD_VELHO:-<vazio>} urgente=${URGENTE:-<vazio>}"
           echo "e2e-parte: ${PARTES}"
           # A pergunta tem de ter sido RESPONDIDA: job de alcance que falhou
           # deixa as partes `skipped`, e isso não pode ler como aprovação.
@@ -2854,12 +2888,25 @@ jobs:
             [ "$PARTES" = "skipped" ]
             echo "::error::este run é de um head já superado: as partes pularam sem medir nada e o check deste run está num SHA que já não é o head do PR — o verde (ou o pulo) daqui não vale como medição (#2449). Rode de novo a partir do head atual." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
+          elif [ "$EVENTO" = "pull_request" ] && [ "${URGENTE:-}" = "sim" ]; then
+            # (b) ROTA URGENTE: PR com rótulo `urgente` e sem supabase/. O passo
+            # seguinte deixa a marca que o portão do deploy lê
+            # (scripts/merge-ja-provado-no-pr.sh) para não tomar este verde por
+            # prova do caminho completo.
+            [ "$PARTES" = "skipped" ]
+            echo "::warning::rota urgente: partes do e2e puladas de propósito neste PR" | tee -a "$GITHUB_STEP_SUMMARY"
           elif [ "$EVENTO" = "pull_request" ] && [ "$ALCANCE" = "nao" ]; then
             [ "$PARTES" = "skipped" ]
             echo "PR não alcança nada que o e2e mede — partes puladas (scripts/pr-alcanca-o-e2e.sh)" | tee -a "$GITHUB_STEP_SUMMARY"
           else
             [ "$PARTES" = "success" ]
           fi
+
+      # A MARCA da rota urgente: nome lido pela API de jobs no portão do deploy.
+      # Só roda quando o passo de cima aceitou o pulo urgente.
+      - name: "Rota urgente: partes do e2e puladas de propósito"
+        if: github.event_name == 'pull_request' && needs.e2e-alcance.outputs.urgente == 'sim'
+        run: echo "este run foi pela rota urgente; o deploy só o aceita pela regra de scripts/merge-ja-provado-no-pr.sh"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: always()

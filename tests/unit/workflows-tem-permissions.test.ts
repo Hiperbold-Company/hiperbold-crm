@@ -68,6 +68,10 @@ const ESCRITA_JUSTIFICADA: Record<string, string> = {
     "comenta e rotula o PR cujo número de migration foi tomado depois de ele ficar verde; " +
     "é o mínimo que escreve (um comentário editado por PR + o rótulo), o workflow não roda " +
     "código de PR nenhum e não dispara CI — ver scripts/vigia-colisao-de-migration.ts",
+  "alarme-reteste-da-main.yml::issues: write":
+    'abre (ou comenta) a issue "Reteste da main falhou depois do deploy: <sha>" no fork Hiperbold; ' +
+    "o job não roda código de PR, só o script scripts/alarme-reteste-da-main.sh da main, e não " +
+    "tem escrita em código, pacote nem execução",
   "acolhida.yml::pull-requests: write":
     "comenta a acolhida no PR de fork; é o ÚNICO escopo do workflow (o bloco zera o resto), " +
     "e o job não faz checkout nem usa action nenhuma — ver tests/unit/acolhida-nao-toca-no-fork.test.ts",

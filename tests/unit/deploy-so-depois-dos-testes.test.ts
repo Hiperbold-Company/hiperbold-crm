@@ -1,11 +1,17 @@
 /**
- * O DEPLOY EM PRODUÇÃO SÓ SAI DEPOIS DE ci E e2e VERDES NO MESMO COMMIT (D-121).
+ * O DEPLOY EM PRODUÇÃO SÓ SAI COM O COMMIT PROVADO (D-121).
  *
  * O `publish-image.yml` roda em paralelo com o `ci` e o `e2e`, e o
  * `deploy-easypanel.yml` reagia só à conclusão do publish: commit na main com
  * teste vermelho montava a imagem, o publish ficava verde e o EasyPanel publicava
- * app, worker e scheduler. Agora o deploy passa por `scripts/commit-passou-nos-testes.sh`,
- * que consulta a API do GitHub.
+ * app, worker e scheduler. Agora o deploy passa por um portão que consulta a API
+ * do GitHub, em dois tempos (os três caminhos estão no cabeçalho do workflow):
+ *   - merge de PR já provado no próprio PR, ou pela rota urgente, sai sem
+ *     esperar o reteste da main: `scripts/merge-ja-provado-no-pr.sh`, medido em
+ *     `tests/unit/deploy-pelo-portao-do-pr.test.ts` (junto com o alarme que abre
+ *     issue se o reteste falhar depois);
+ *   - todo o resto espera ci e e2e verdes NO MESMO COMMIT da main:
+ *     `scripts/commit-passou-nos-testes.sh`, medido AQUI.
  *
  * O script roda DE VERDADE aqui, com um `gh` dublê no PATH que serve as respostas
  * da API a partir de arquivos JSON e aplica o filtro `--jq` com o `jq` real: o que
