@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * A rota roda com o `requireRole` DE VERDADE: o que é dublado é a borda dele (quem está logado,
  * a organização ativa e o papel que o banco devolve) e o banco da gravação — duas tabelas em
- * memória (`channel_sessions` e `user_organizations`) que respeitam os filtros. Assim "membro de
- * outra organização é recusado" é medido no estado da tabela, e pela tabela certa.
+ * memória (`channel_sessions` e `user_organizations`) e um dublê de `fn_gravar_membro_da_conexao`
+ * com a mesma regra da migration 1019. A regra no Postgres de verdade (FK, travas, gatilho) é
+ * medida em `tests/invariants/membro-responsavel-da-conexao.test.ts`; aqui, o que a rota faz com
+ * cada resposta (status, corpo, auditoria) e que a organização sai da sessão.
  */
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
@@ -37,36 +39,32 @@ const OBSERVADOR = "99999999-9999-4999-8999-999999999999";
 
 type Linha = Record<string, unknown>;
 let tabelas: Record<string, Linha[]>;
+let banco: ReturnType<typeof bancoEmMemoria>;
 
 function bancoEmMemoria() {
   return {
-    from: (nome: string) => {
-      const tabela = tabelas[nome];
-      if (!tabela) throw new Error(`tabela inesperada: ${nome}`);
-      const filtros: Array<[string, unknown]> = [];
-      let mudanca: Linha | null = null;
-      const b = {
-        select: () => b,
-        update: (v: Linha) => {
-          mudanca = v;
-          return b;
-        },
-        eq: (c: string, v: unknown) => {
-          filtros.push([c, v]);
-          return b;
-        },
-        is: (c: string, v: unknown) => {
-          filtros.push([c, v]);
-          return b;
-        },
-        maybeSingle: async () => {
-          const achadas = tabela.filter((l) => filtros.every(([c, v]) => (l[c] ?? null) === v));
-          if (mudanca) for (const l of achadas) Object.assign(l, mudanca);
-          return { data: achadas[0] ? { ...achadas[0] } : null, error: null };
-        },
-      };
-      return b;
-    },
+    rpc: vi.fn(async (nome: string, a: { p_org: string; p_canal: string; p_user: string | null }) => {
+      if (nome !== "fn_gravar_membro_da_conexao") throw new Error(`rpc inesperada: ${nome}`);
+      const canal = tabelas.channel_sessions!.find(
+        (l) => l.organization_id === a.p_org && l.id === a.p_canal && l.archived_at === null,
+      );
+      if (!canal) return { data: { resultado: "canal_nao_encontrado" }, error: null };
+      if (a.p_user !== null) {
+        const membro = tabelas.user_organizations!.find(
+          (l) =>
+            l.organization_id === a.p_org &&
+            l.user_id === a.p_user &&
+            l.revoked_at === null &&
+            l.role !== "viewer",
+        );
+        if (!membro) return { data: { resultado: "membro_invalido" }, error: null };
+      }
+      const anterior = (canal.responsible_user_id ?? null) as string | null;
+      if (anterior === a.p_user)
+        return { data: { resultado: "sem_mudanca", anterior, atual: a.p_user }, error: null };
+      canal.responsible_user_id = a.p_user;
+      return { data: { resultado: "gravado", anterior, atual: a.p_user }, error: null };
+    }),
   };
 }
 
@@ -112,7 +110,8 @@ beforeEach(() => {
       { organization_id: OUTRA_ORG, user_id: DE_FORA, role: "admin", revoked_at: null },
     ],
   };
-  vi.mocked(createAdminClient).mockReturnValue(bancoEmMemoria() as never);
+  banco = bancoEmMemoria();
+  vi.mocked(createAdminClient).mockReturnValue(banco as never);
   vi.mocked(loadAuthUser).mockResolvedValue({
     id: USUARIO,
     is_platform_admin: false,
@@ -197,6 +196,22 @@ describe("PATCH …/channel-sessions/[id]/responsible (membro responsável pela 
     const r = await chamar({ user_id: INGRID }, CANAL_DA_OUTRA);
     expect(r.status).toBe(404);
     expect(tabelas.channel_sessions![1]!.responsible_user_id).toBeNull();
+  });
+
+  it("a organização da escrita é a da sessão, nunca do corpo", async () => {
+    await chamar({ user_id: INGRID });
+    expect(banco.rpc).toHaveBeenCalledWith("fn_gravar_membro_da_conexao", {
+      p_org: ORG,
+      p_canal: CANAL,
+      p_user: INGRID,
+    });
+  });
+
+  it("falha do banco: 500 e nenhuma auditoria de mudança", async () => {
+    banco.rpc.mockResolvedValueOnce({ data: null, error: { message: "boom" } } as never);
+    const r = await chamar({ user_id: INGRID });
+    expect(r.status).toBe(500);
+    expect(audit).not.toHaveBeenCalledWith(expect.objectContaining({ action: "channel.responsible_changed" }));
   });
 
   it("sem mudança: 200 sem gravar nem auditar", async () => {

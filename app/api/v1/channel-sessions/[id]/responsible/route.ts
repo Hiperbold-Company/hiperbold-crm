@@ -42,56 +42,41 @@ export async function PATCH(req: NextRequest, { params }: Context): Promise<Resp
     return fail("validation_failed", "Escolha um membro da equipe ou nenhum.", 422, { requestId });
   const novo = parsed.data.user_id;
 
+  // A regra (conexão viva desta organização; membro ATIVO dela e que atende, não observador) vale
+  // na PRÓPRIA escrita: `fn_gravar_membro_da_conexao` (migration 1019) trava a conexão e a linha do
+  // membro, então uma remoção concorrente não deixa vínculo com quem já saiu. A organização é a da
+  // sessão, nunca do corpo; a chave estrangeira composta repete a régua da organização no banco.
   const db = createAdminClient();
-  const { data: before, error: readError } = await db
-    .from("channel_sessions")
-    .select("responsible_user_id")
-    .eq("organization_id", auth.org.orgId)
-    .eq("id", id)
-    .is("archived_at", null)
-    .maybeSingle();
-  if (readError)
-    return fail("internal_error", "Não foi possível ler a conexão.", 500, { requestId });
-  if (!before) return fail("not_found", "Canal não encontrado.", 404, { requestId });
-
-  const anterior = (before as { responsible_user_id?: string | null }).responsible_user_id ?? null;
-  if (anterior === novo) return ok({ id, responsible_user_id: anterior }, { requestId });
-
-  if (novo !== null) {
-    // Membro ATIVO desta organização (a da sessão, nunca do corpo), e que atende: o observador
-    // não envia mensagem. A chave estrangeira composta da 1019 repete a régua da organização no banco.
-    const { data: membro, error: membroError } = await db
-      .from("user_organizations")
-      .select("role")
-      .eq("organization_id", auth.org.orgId)
-      .eq("user_id", novo)
-      .is("revoked_at", null)
-      .maybeSingle();
-    if (membroError)
-      return fail("internal_error", "Não foi possível conferir o membro.", 500, { requestId });
-    const papel = (membro as { role?: string } | null)?.role;
-    if (!papel || papel === "viewer")
-      return fail(
-        "validation_failed",
-        "Escolha um membro ativo da equipe que atende conversas.",
-        422,
-        { requestId },
-      );
-  }
-
-  const { data, error } = await db
-    .from("channel_sessions")
-    .update({ responsible_user_id: novo })
-    .eq("organization_id", auth.org.orgId)
-    .eq("id", id)
-    .is("archived_at", null)
-    .select("id, responsible_user_id")
-    .maybeSingle();
+  const { data: rpcData, error } = await db.rpc("fn_gravar_membro_da_conexao", {
+    p_org: auth.org.orgId,
+    p_canal: id,
+    p_user: novo,
+  });
   if (error)
     return fail("internal_error", "Não foi possível salvar o membro responsável.", 500, {
       requestId,
     });
-  if (!data) return fail("not_found", "Canal não encontrado.", 404, { requestId });
+  const resultado = (rpcData ?? {}) as {
+    resultado?: string;
+    anterior?: string | null;
+    atual?: string | null;
+  };
+  if (resultado.resultado === "canal_nao_encontrado")
+    return fail("not_found", "Canal não encontrado.", 404, { requestId });
+  if (resultado.resultado === "membro_invalido")
+    return fail(
+      "validation_failed",
+      "Escolha um membro ativo da equipe que atende conversas.",
+      422,
+      { requestId },
+    );
+  const anterior = resultado.anterior ?? null;
+  if (resultado.resultado === "sem_mudanca")
+    return ok({ id, responsible_user_id: anterior }, { requestId });
+  if (resultado.resultado !== "gravado")
+    return fail("internal_error", "Não foi possível salvar o membro responsável.", 500, {
+      requestId,
+    });
 
   void audit({
     action: "channel.responsible_changed",
@@ -102,5 +87,5 @@ export async function PATCH(req: NextRequest, { params }: Context): Promise<Resp
     requestId,
     metadata: { previous_responsible_user_id: anterior, responsible_user_id: novo },
   });
-  return ok(data, { requestId });
+  return ok({ id, responsible_user_id: novo }, { requestId });
 }
