@@ -76,7 +76,7 @@ function pedidoDaUrl(params: URLSearchParams, t: (s: string) => string): PedidoD
 }
 
 export function ConexoesShell({
-  wahaConfigured: _wahaConfigured,
+  wahaConfigured,
   wacallsConfigured,
   bloqueio,
   graphParceiro = null,
@@ -84,7 +84,10 @@ export function ConexoesShell({
   pareamentoQr = false,
   redesSociaisLiberadas = false,
 }: {
-  /** Sem uso na Hiperbold (sem canal por QR do motor antigo); mantido para a página do autor não mudar. */
+  /**
+   * A instalação tem o serviço de WhatsApp por sessão configurado (calculado no servidor): o Criar
+   * oferece a terceira forma de conexão por QR Code (Hiperbold, 18/11/2026). `false` = não aparece.
+   */
   wahaConfigured: boolean;
   wacallsConfigured: boolean;
   /** O teto de "conexões" do plano, para todos os canais que criam `channel_sessions`. */
@@ -116,6 +119,7 @@ export function ConexoesShell({
     telefonia: !funcaoOculta("conexao-telefone"),
     sociais: !funcaoOculta("conexao-redes-sociais") || redesSociaisLiberadas,
     voz: !funcaoOculta("voz-whatsapp"),
+    qrPorSessao: wahaConfigured,
   };
 
   const [busca, setBusca] = useState("");

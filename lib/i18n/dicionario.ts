@@ -854,6 +854,9 @@ export const DICIONARIO: Traducoes = {
   "Nome interno da conexão": { es: "Nombre interno de la conexión" },
   "Nome interno": { es: "Nombre interno" },
   "Editar nome e cor": { es: "Editar nombre y color" },
+  // O seletor de conexão do painel do negócio.
+  "Abrir pela conexão": { es: "Abrir por la conexión" },
+  "desconectada": { es: "desconectada" },
   "Cor da etiqueta no Chat": { es: "Color de la etiqueta en el Chat" },
   "Prévia no Chat:": { es: "Vista previa en el Chat:" },
   "No Chat:": { es: "En el Chat:" },
@@ -4609,6 +4612,8 @@ export const DICIONARIO: Traducoes = {
       es: "Este flujo todavía no tiene suficientes cajas para exportar. Arma el flujo en el editor y guárdalo antes.",
     },
   "Fluxo duplicado.": { es: "Flujo duplicado." },
+  "Automação duplicada. A cópia está desligada.": { es: "Automatización duplicada. La copia está desactivada." },
+  "Follow-up duplicado. A cópia está desligada.": { es: "Seguimiento duplicado. La copia está desactivada." },
   "Fluxo renomeado.": { es: "Flujo renombrado." },
   "Novo fluxo de follow-up": { es: "Nuevo flujo de seguimiento" },
   "Nasce como rascunho. Você monta as etapas no editor visual em seguida.": {
@@ -8328,6 +8333,16 @@ export const DICIONARIO: Traducoes = {
     },
   "Logo atualizado.": { es: "Logo actualizado." },
   "Logo removido.": { es: "Logo eliminado." },
+  "A logo aparece num círculo ao lado do nome da empresa, no seletor de empresas do menu. Sem logo, o círculo mostra as iniciais.":
+    {
+      es: "El logo aparece en un círculo junto al nombre de la empresa, en el selector de empresas del menú. Sin logo, el círculo muestra las iniciales.",
+    },
+  "Como a marca própria está ligada, ela também é a logo do sistema para esta empresa.": {
+    es: "Como la marca propia está activada, también es el logo del sistema para esta empresa.",
+  },
+  "PNG ou JPG, até 512 KB. O círculo mostra o centro da imagem: prefira uma logo quadrada.": {
+    es: "PNG o JPG, hasta 512 KB. El círculo muestra el centro de la imagen: prefiere un logo cuadrado.",
+  },
   "PNG ou JPG, até": { es: "PNG o JPG, hasta" },
   "KB. Prefira fundo transparente. SVG não é aceito: ele pode executar código quando aberto direto pelo endereço da imagem.":
     {
@@ -9526,6 +9541,9 @@ export const DICIONARIO: Traducoes = {
   "Tipo de conexão": { es: "Tipo de conexión" },
   "Conexão padrão": { es: "Conexión estándar" },
   "Conexão em coexistência": { es: "Conexión en coexistencia" },
+  "Número novo (conexão padrão)": { es: "Número nuevo (conexión estándar)" },
+  "Já uso no WhatsApp Business (coexistência)": { es: "Ya uso WhatsApp Business (coexistencia)" },
+  "O número continua no app do celular e as conversas aparecem também no CRM. A Meta pede para ler um QR Code no WhatsApp Business.": { es: "El número sigue en la app del celular y las conversaciones también aparecen en el CRM. Meta pide escanear un código QR en WhatsApp Business." },
   "Para um número novo ou que ainda não está no app WhatsApp Business. O número passa a funcionar só pela API oficial.": { es: "Para un número nuevo o que aún no está en la app WhatsApp Business. El número pasa a funcionar solo por la API oficial." },
   "Para um número que já funciona no app WhatsApp Business. A Meta mostra o número do app e pede para ler um QR Code no WhatsApp Business do celular. O número continua funcionando no app.": { es: "Para un número que ya funciona en la app WhatsApp Business. Meta muestra el número de la app y pide leer un código QR en el WhatsApp Business del celular. El número sigue funcionando en la app." },
   "Recurso recente da Meta: se a conexão falhar, use a conexão padrão.": { es: "Función reciente de Meta: si la conexión falla, usa la conexión estándar." },
@@ -29018,6 +29036,13 @@ export const DICIONARIO: Traducoes = {
   "WhatsApp oficial (parceiro)": { es: "WhatsApp oficial (proveedor asociado)" },
   "WhatsApp oficial por um intermediário.": { es: "WhatsApp oficial por un intermediario." },
   "WhatsApp por QR Code": { es: "WhatsApp por código QR" },
+  "WhatsApp por QR Code (WAHA)": { es: "WhatsApp por código QR (WAHA)" },
+  "WhatsApp API Oficial": { es: "API oficial de WhatsApp" },
+  "UAZAPI (API não oficial)": { es: "UAZAPI (API no oficial)" },
+  "WAHA (API não oficial)": { es: "WAHA (API no oficial)" },
+  "Não foi possível reconectar.": { es: "No fue posible reconectar." },
+  "Não foi possível gerar um novo QR.": { es: "No fue posible generar un nuevo QR." },
+  "Só o administrador da conta conecta um número por este caminho.": { es: "Solo el administrador de la cuenta conecta un número por este camino." },
   "resultado": { es: "resultado" },
   "resultados": { es: "resultados" },
   "O plano chegou ao limite de conexões: dá para entrar de novo com um número que já está conectado, mas não para conectar um número novo.": { es: "El plan llegó al límite de conexiones: puede volver a entrar con un número que ya está conectado, pero no conectar un número nuevo." },

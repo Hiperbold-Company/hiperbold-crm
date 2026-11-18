@@ -37,6 +37,7 @@ import { z } from "zod";
 
 import { assertWahaConnectionIdle, ChannelConnectionError, renomearSessaoParaOTeto } from "@/lib/channels/connect-waha";
 import { lerGuardarHistorico } from "@/lib/channels/acervo-do-historico";
+import { webhookDaSessaoWaha } from "@/lib/channels/webhook-da-sessao-waha";
 import { nomeDaSessaoCabeNoWaha, podeRenomearSessaoDoWaha } from "@/lib/channels/nome-da-sessao";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sincronizarRecebimentoDeGrupos } from "@/lib/grupos/sincronizar-filtro";
@@ -187,9 +188,18 @@ export async function POST(
     // store (num número já pareado, guarda daqui em diante). Desligada, a
     // chamada é a de sempre, sem segundo argumento — e o store fica como o
     // canal o tem: só o PATCH /acervo desliga.
-    const opcoesAcervo = lerGuardarHistorico(session.metadata) ? { guardarHistorico: true } : undefined;
-    const remote = (await (opcoesAcervo
-      ? waha.startSession(nomeParaOTransporte, opcoesAcervo)
+    //
+    // O webhook por sessão (URL pública + segredo da sessão) vai junto quando a
+    // instalação tem WAHA_WEBHOOK_BASE_URL https; o start o põe na sessão nova
+    // e converge a existente (sem PUT quando já está igual). Sem a variável,
+    // `null` e a chamada é a de sempre. Ver lib/channels/webhook-da-sessao-waha.ts.
+    const webhook = await webhookDaSessaoWaha(createAdminClient(), { organizationId: activeOrg.orgId, channelSessionId: id });
+    const opcoesDaSessao = {
+      ...(lerGuardarHistorico(session.metadata) ? { guardarHistorico: true } : {}),
+      ...(webhook ? { webhook } : {}),
+    };
+    const remote = (await (Object.keys(opcoesDaSessao).length
+      ? waha.startSession(nomeParaOTransporte, opcoesDaSessao)
       : waha.startSession(nomeParaOTransporte))) as { status?: string };
     const nextStatus = remote.status ?? "STARTING";
     const patch = { status: nextStatus, status_reason: null, last_status_change_at: new Date().toISOString(), consecutive_health_fails: 0 };
@@ -200,9 +210,13 @@ export async function POST(
     // A sessão recriada (volume do WAHA perdido, logout forçado) nasce ignorando
     // grupos, mas o banco pode ter grupos LIGADOS neste número. Ressincroniza o
     // filtro — sem PUT quando já está certo, e nunca lança.
+    // O PUT do filtro reenvia o `config.webhooks` lido do GET: com o webhook da
+    // sessão, a entrada do CRM vai com a chave do banco (o GET pode mascará-la).
     await sincronizarRecebimentoDeGrupos(
       createAdminClient(),
-      (ref, receber) => waha.definirRecebimentoDeGrupos(ref, receber),
+      webhook
+        ? (ref, receber) => waha.definirRecebimentoDeGrupos(ref, receber, webhook)
+        : (ref, receber) => waha.definirRecebimentoDeGrupos(ref, receber),
       { organizationId: activeOrg.orgId, channelSessionId: id, sessionRef: nomeParaOTransporte },
     );
 

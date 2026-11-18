@@ -35,6 +35,7 @@ const COLUNAS_EXTRAS = "meta_social_platform, meta_social_username, meta_webhook
 
 export type TipoDaConexao = "whatsapp_oficial" | "whatsapp_qr" | "instagram" | "messenger" | "outros";
 export type StatusDaConexao = "conectado" | "desconectado" | "precisa_atencao";
+export type PareamentoDaConexao = "instancia" | "sessao" | null;
 
 export interface CartaoDaConexao {
   id: string;
@@ -48,12 +49,25 @@ export interface CartaoDaConexao {
   status: StatusDaConexao;
   status_bruto: string;
   created_at: string;
+  /**
+   * Só na conexão por QR: por qual caminho ela se reconecta e se remove. `instancia` = rotas de
+   * `/api/v1/channels/instancia`; `sessao` = rotas de `/api/v1/channel-sessions/[id]` (reconnect,
+   * qr, pairing-code, DELETE). `null` nos demais. A tela decide por aqui, sem nomear provider.
+   */
+  pareamento: PareamentoDaConexao;
   /** Só na oficial; `null` nos demais. */
   oficial: { waba_id: string | null; meta_phone_number_id: string | null; webhook_registrado: boolean } | null;
 }
 
 const PROVIDERS_OFICIAIS_POR_PARCEIRO: readonly string[] = [CHANNEL_PROVIDER_ZERNIO, CHANNEL_PROVIDER_DATAFY];
 const PROVIDERS_POR_QR: readonly string[] = [CHANNEL_PROVIDER_WAHA, CHANNEL_PROVIDER_UAZAPI];
+
+/** O caminho de reconectar e remover da conexão por QR (ver `CartaoDaConexao.pareamento`). */
+export function pareamentoDaConexao(provider: string): PareamentoDaConexao {
+  if (provider === CHANNEL_PROVIDER_WAHA) return "sessao";
+  if (provider === CHANNEL_PROVIDER_UAZAPI) return "instancia";
+  return null;
+}
 
 export function tipoDaConexao(provider: string, metaSocialPlatform: unknown): { tipo: TipoDaConexao; via: CartaoDaConexao["via"] } {
   if (provider === CHANNEL_PROVIDER_META) return { tipo: "whatsapp_oficial", via: "meta" };
@@ -108,6 +122,7 @@ export function cartaoDaLinha(linha: Record<string, unknown>): CartaoDaConexao {
         : texto(linha.phone_number),
     status: statusDaConexao(statusBruto, ehOficialDireta && erroDoWebhook !== null),
     status_bruto: statusBruto,
+    pareamento: pareamentoDaConexao(provider),
     created_at: String(linha.created_at ?? ""),
     oficial:
       tipo === "whatsapp_oficial"

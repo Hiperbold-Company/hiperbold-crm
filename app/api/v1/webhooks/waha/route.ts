@@ -27,6 +27,7 @@ import { chegouPelaBorda } from "@/lib/http/ip-do-cliente";
 import { carregarComportamentoDaInstalacao } from "@/lib/instalacao/comportamento-servidor";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { lerCorpoDaRequisicao } from "@/lib/http/corpo-com-limite";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { conferirContratoWaha, lerRoteamentoWaha } from "@/lib/waha/envelope";
 import { processarEventoWaha, REENTREGA_EM_SEGUNDOS } from "@/lib/waha/desfecho-do-webhook";
@@ -35,6 +36,9 @@ import { authenticateWahaWebhook } from "@/lib/waha/webhook-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/** Teto do corpo de uma entrega do WAHA (pode trazer mídia inline em instalação que a liga). */
+const TETO_CORPO_BYTES = 5 * 1024 * 1024;
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const requestId = randomUUID();
@@ -54,7 +58,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return fail("not_found", "not found", 404, { requestId });
   }
 
-  const rawBody = await req.text();
+  // Teto de 5 MB em fluxo, ANTES de autenticar e de tocar o banco (mesmo da rota por token).
+  const corpoLido = await lerCorpoDaRequisicao(req, TETO_CORPO_BYTES);
+  if (!corpoLido.ok) {
+    return fail("payload_too_large", "request body too large", 413, { requestId });
+  }
+  const rawBody = corpoLido.texto;
   // ─── O contrato do fio, em DOIS momentos ─────────────────────────────────
   //
   // Isto era `JSON.parse(rawBody) as WahaEnvelope`: um cast, que não checa nada
@@ -150,10 +159,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // 200: aqui NÃO houve defeito nenhum no corpo, ao contrário da recusa de
     // contrato acima. O que o WAHA faz com um 4xx aqui nunca foi medido, e esta
     // escolha não se apoia nisso.
-    return ok(
-      { accepted: false, reason: "session_not_registered", session: sessionName },
-      { requestId },
-    );
+    // O nome recebido NÃO volta na resposta (seria oráculo/eco de entrada não autenticada).
+    logger.warn("[waha.webhook] sessão não registrada", { request_id: requestId });
+    return ok({ accepted: false, reason: "session_not_registered" }, { requestId });
   }
 
   // Autenticação fail-closed — regras e o porquê em lib/waha/webhook-auth.ts.

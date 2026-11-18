@@ -38,7 +38,7 @@ describe("seletor de organização no celular", () => {
     render(<TenantSwitcher />);
     const botao = screen.getByTestId("tenant-switcher");
 
-    const nome = botao.querySelector("span");
+    const nome = botao.querySelector("span:not([data-avatar-da-empresa])");
     expect(nome?.textContent).toBe("Studio Mariana Castro");
     expect(nome?.className).toContain("hidden");
     expect(nome?.className).toContain("md:inline");
@@ -56,7 +56,7 @@ describe("seletor de organização no celular", () => {
 
   it("no desktop nada muda: o nome continua escrito", () => {
     render(<TenantSwitcher />);
-    const nome = screen.getByTestId("tenant-switcher").querySelector("span");
+    const nome = screen.getByTestId("tenant-switcher").querySelector("span:not([data-avatar-da-empresa])");
     // `md:inline` é o que devolve o nome acima de 768px — se sumir, o desktop
     // regrediu junto com o conserto do celular.
     expect(nome?.className).toMatch(/md:inline/);

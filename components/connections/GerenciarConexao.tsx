@@ -22,6 +22,7 @@ import { EtiquetaDaConexao } from "./EtiquetaDaConexao";
 import { NumeroOficialCard } from "./NumeroOficialCard";
 import { FormularioOficialManual, ParaIntegrarOficial, WebhookDoNumeroOficial } from "./OficialAvancado";
 import { ReconectarConexao } from "./ReconectarConexao";
+import { ReconectarPorSessao } from "./PareamentoPorSessao";
 import { precisaReconectar, urlDeConectar, type EstadoMetaSocial } from "./RedesSociaisClient";
 import { RemoverConexao } from "./RemoverConexao";
 import { RenomearConexao } from "./RenomearConexao";
@@ -324,6 +325,89 @@ function GerenciarPorQr({
   );
 }
 
+/**
+ * A conexão por QR que vive como SESSÃO no serviço de WhatsApp da instalação (a terceira forma de
+ * conexão, 18/11/2026): reconecta e remove pelas rotas de `/api/v1/channel-sessions/[id]`, nunca
+ * pelas da instância. As rotas exigem administrador; para os demais, reconectar e remover somem.
+ */
+function GerenciarPorSessao({
+  conexao,
+  reconectarAoAbrir,
+  aoConsumirReconectar,
+  podeEditarProtecao,
+  aoMudar,
+  aoReconectar,
+  aoRemovida,
+}: {
+  conexao: CartaoDaConexao;
+  reconectarAoAbrir: boolean;
+  aoConsumirReconectar?: () => void;
+  podeEditarProtecao?: boolean;
+  aoMudar: () => void | Promise<unknown>;
+  aoReconectar?: () => void;
+  aoRemovida: () => void | Promise<unknown>;
+}) {
+  const t = useT();
+  const qc = useQueryClient();
+  const ehAdmin = usePermission("settings.write");
+  const [protecaoAberta, setProtecaoAberta] = useState(false);
+  const oferecerProtecao = podeEditarProtecao !== undefined;
+  const pacingItems = usePacingKnobs(oferecerProtecao).data?.items ?? [];
+
+  const mudou = async () => {
+    await aoMudar();
+    void qc.invalidateQueries({ queryKey: ["conversations"] });
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      {conexao.status_bruto !== "WORKING" && ehAdmin ? (
+        <Card className="p-4" data-testid="gerenciar-reconectar">
+          <ReconectarPorSessao
+            conexaoId={conexao.id}
+            abrirAoMontar={reconectarAoAbrir}
+            aoConectar={() => {
+              void mudou();
+              void qc.invalidateQueries({ queryKey: ["pacing-knobs"] });
+              aoReconectar?.();
+            }}
+            aoAbrirSozinho={reconectarAoAbrir ? aoConsumirReconectar : undefined}
+          />
+        </Card>
+      ) : null}
+
+      <BlocoComum
+        conexao={conexao}
+        nome={conexao.nome}
+        comCor={false}
+        rotaDeRemover={`/api/v1/channel-sessions/${encodeURIComponent(conexao.id)}`}
+        podeRemover={ehAdmin}
+        aoMudar={mudou}
+        aoRemovida={async () => {
+          void qc.invalidateQueries({ queryKey: ["pacing-knobs"] });
+          await aoRemovida();
+        }}
+        acoes={
+          oferecerProtecao ? (
+            <Button variant="outline" size="sm" onClick={() => setProtecaoAberta(true)}>
+              <ShieldCheck size={14} aria-hidden />
+              {t("Proteção de envio")}
+            </Button>
+          ) : null
+        }
+      />
+
+      {oferecerProtecao && protecaoAberta ? (
+        <AntiBanSheet
+          item={pacingItems.find((i) => i.channel_session.id === conexao.id) ?? null}
+          canWrite={Boolean(podeEditarProtecao)}
+          onClose={() => setProtecaoAberta(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function GerenciarRedeSocial({
   conexao,
   aoMudar,
@@ -486,6 +570,16 @@ export function GerenciarConexao({
                   abaInicial={abaInicial}
                   avancadoAberto={avancadoAberto}
                   aoMudar={aoMudar}
+                  aoRemovida={removida}
+                />
+              ) : conexao.tipo === "whatsapp_qr" && conexao.pareamento === "sessao" ? (
+                <GerenciarPorSessao
+                  conexao={conexao}
+                  reconectarAoAbrir={reconectarAoAbrir}
+                  aoConsumirReconectar={aoConsumirReconectar}
+                  podeEditarProtecao={podeEditarProtecao}
+                  aoMudar={aoMudar}
+                  aoReconectar={aoReconectar}
                   aoRemovida={removida}
                 />
               ) : conexao.tipo === "whatsapp_qr" ? (

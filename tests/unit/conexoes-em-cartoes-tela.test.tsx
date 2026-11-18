@@ -70,6 +70,7 @@ function cartao(parcial: Partial<CartaoDaConexao> & Pick<CartaoDaConexao, "id" |
     numero_ou_handle: null,
     status: "conectado",
     status_bruto: "WORKING",
+    pareamento: null,
     created_at: "2026-11-17T00:00:00Z",
     oficial: null,
     ...parcial,
@@ -201,13 +202,13 @@ describe("grade de cartões", () => {
   it("um cartão por conexão, com status, tipo e nome", async () => {
     montar();
     const oficial = await screen.findByTestId(`cartao-conexao-${OFICIAL.id}`);
-    expect(within(oficial).getByTestId("tipo-da-conexao").textContent).toBe("WhatsApp oficial");
+    expect(within(oficial).getByTestId("tipo-da-conexao").textContent).toBe("WhatsApp API Oficial");
     expect(within(oficial).getByTestId("nome-da-conexao").textContent).toBe("Comercial");
     expect(within(oficial).getByText("+55 11 90000-0001")).toBeInTheDocument();
     expect(within(oficial).getByTestId("status-da-conexao").textContent).toBe("Conectado");
 
     const qr = screen.getByTestId(`cartao-conexao-${QR.id}`);
-    expect(within(qr).getByTestId("tipo-da-conexao").textContent).toBe("WhatsApp por QR Code");
+    expect(within(qr).getByTestId("tipo-da-conexao").textContent).toBe("UAZAPI (API não oficial)");
     expect(within(qr).getByTestId("status-da-conexao").textContent).toBe("Desconectado");
 
     const ig = screen.getByTestId(`cartao-conexao-${INSTAGRAM.id}`);

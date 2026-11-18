@@ -30,6 +30,23 @@
  *     false` — e quem chama grava ESSA verdade no log. Antes o log registrava
  *     `valid_signature = true` para evento não verificado.
  *
+ * ─── Rota POR TOKEN (webhook que o CRM registra na sessão) ──────────────────
+ *
+ * A rota `[token]` passa `porToken` (com o aviso de que a decifra lançou); o
+ * estado do segredo vem de `classificarSegredoDaSessao`, e aí as regras são
+ * mais duras:
+ *
+ *  - `proprio`: a sessão tem segredo próprio, que o CRM mesmo pôs no `hmac.key`
+ *    do WAHA. Assinatura ausente ou inválida ⇒ 401, qualquer que seja o
+ *    interruptor do banco ou o `.env`. Só o segredo da sessão confere.
+ *  - `indisponivel`: o RPC de decifra lançou (erro do banco ou pacote real que
+ *    não abre). A rota responde 503 retentável; o segredo GLOBAL nunca entra.
+ *  - `placeholder`: sessão antiga, sem segredo próprio (o `'\x00'` da reserva
+ *    ou outro sentinela). Fica a regra de antes (segredo global, exigência do
+ *    interruptor/env) até a próxima reconexão, que grava o segredo próprio.
+ *
+ * Sem `porToken` (rota global) nada disso vale: a regra é a de sempre.
+ *
  * A defesa que não depende do WAHA saber assinar é de rede: a rota global (sem
  * token) só atende a rede interna do Docker, porque o WAHA fala com o app por
  * ali e nunca precisou dela pela internet. A própria rota recusa com 404 o que
@@ -46,17 +63,68 @@ const MIN_SECRET_LEN = 16;
 
 export type WahaWebhookAuth =
   | { ok: true; signatureVerified: boolean }
-  | { ok: false; reason: "bad_signature" | "signature_required" };
+  | { ok: false; reason: "bad_signature" | "signature_required" | "secret_unavailable" };
+
+/** O estado do segredo de UMA sessão, para a rota por token. Ver o cabeçalho. */
+export type SegredoDaSessao =
+  | { tipo: "proprio"; segredo: string }
+  | { tipo: "placeholder" }
+  | { tipo: "indisponivel" };
 
 export interface WahaWebhookAuthInput {
   rawBody: string;
   signatureHeader: string | null;
   /** Segredo por sessão já decifrado (null quando não há/não decifrou). */
   sessionSecret: string | null;
+  /**
+   * Só a rota POR TOKEN passa, dizendo se o RPC de decifra lançou nesta
+   * leitura. Presente, liga as regras da rota por token (cabeçalho); ausente
+   * (rota global), a regra é a de sempre.
+   */
+  porToken?: { decifraFalhou?: boolean };
+}
+
+/**
+ * Classifica o segredo da sessão da rota por token.
+ *
+ *  - `indisponivel` só quando o RPC de decifra LANÇOU: a última
+ *    `fn_decrypt_oauth` do baseline lança quando um pacote real não abre
+ *    (chave mestra trocada, dado corrompido) e em erro de banco.
+ *  - `proprio` com um segredo decifrado de tamanho de segredo.
+ *  - todo o resto é `placeholder` (regra antiga): a função devolve NULL de
+ *    propósito para o que não é pacote (o `'\x00'` da reserva, `Buffer.from([0])`
+ *    de rotas antigas, lixo) — o mesmo estado que a reconexão trata como "sem
+ *    segredo, gera um novo" (lib/channels/webhook-da-sessao-waha.ts).
+ *    Responder 503 aí faria a sessão antiga perder mensagens até reconectar.
+ */
+export function classificarSegredoDaSessao(input: {
+  segredo: string | null;
+  decifraFalhou?: boolean;
+}): SegredoDaSessao {
+  if (input.decifraFalhou) return { tipo: "indisponivel" };
+  if (input.segredo && input.segredo.length >= MIN_SECRET_LEN) return { tipo: "proprio", segredo: input.segredo };
+  return { tipo: "placeholder" };
 }
 
 export function authenticateWahaWebhook(input: WahaWebhookAuthInput): WahaWebhookAuth {
-  const { rawBody, signatureHeader, sessionSecret } = input;
+  const { rawBody, signatureHeader, porToken } = input;
+  const segredoDaSessao = porToken
+    ? classificarSegredoDaSessao({ segredo: input.sessionSecret, decifraFalhou: porToken.decifraFalhou })
+    : undefined;
+
+  // Rota por token: segredo próprio exige assinatura SEMPRE, e só ele confere.
+  // Segredo indisponível vira 503 na rota — nunca a conferência com o global.
+  if (segredoDaSessao?.tipo === "indisponivel") return { ok: false, reason: "secret_unavailable" };
+  if (segredoDaSessao?.tipo === "proprio") {
+    if (!signatureHeader) return { ok: false, reason: "signature_required" };
+    return verifyHmacSha512(rawBody, signatureHeader, segredoDaSessao.segredo)
+      ? { ok: true, signatureVerified: true }
+      : { ok: false, reason: "bad_signature" };
+  }
+  // `placeholder` (sessão antiga, ainda não reconectada) segue a regra de
+  // antes: segredo global e exigência do interruptor/env. A sessão passa a ter
+  // segredo próprio na próxima reconexão (lib/channels/webhook-da-sessao-waha.ts).
+  const sessionSecret = segredoDaSessao?.tipo === "placeholder" ? null : input.sessionSecret;
 
   const envSecret = (env.WAHA_HMAC_SECRET ?? "").trim();
   const secret =

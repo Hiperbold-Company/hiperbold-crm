@@ -79,6 +79,18 @@ export interface OpcoesDeAbertura {
   contato_em_conexao_de_outro: boolean;
   /** Conversa aberta do contato atribuída a mim, ou negócio passado a mim por outra pessoa. */
   transferido_para_mim: boolean;
+  /**
+   * O seletor de conexão do painel do negócio: as conexões 1:1 da organização pelas quais eu
+   * POSSO iniciar (no modo restrito, só as que `conexaoPermitidaNoModoRestrito` aceita), na
+   * ordem estável de criação. Ausente (resposta antiga) = sem seletor.
+   */
+  conexoes_do_seletor?: ConexaoResumo[];
+  /**
+   * As conexões do seletor em que estou entre os responsáveis do canal
+   * (`channel_routing_responsibles`, Configurações › Atendimento), na mesma ordem. Canal sem
+   * responsáveis próprios não entra. Marcam o padrão do seletor.
+   */
+  vinculadas_a_mim_ids?: string[];
 }
 
 export type MotivoDaRecusa = "conexao_alheia" | "contato_de_outro" | "sem_conexao";
@@ -118,6 +130,18 @@ export function decidirAbertura(op: OpcoesDeAbertura): DecisaoDeAbertura {
   const abertaMinha = op.conversas.find((c) => c.aberta_e_minha);
   if (abertaMinha) return { tipo: "abrir", conversationId: abertaMinha.conversation_id };
   return { tipo: "recusar", motivo: "sem_conexao" };
+}
+
+/**
+ * A conexão que o seletor do painel do negócio já traz marcada: entre as conexões do seletor em
+ * que estou entre os responsáveis do canal (Configurações › Atendimento), a primeira CONECTADA (na ordem de criação); se nenhuma estiver
+ * conectada, a primeira delas. Sem nenhuma vinculada a mim, `null` — o seletor fica em
+ * "Automático" e a abertura segue a regra de sempre (`decidirAbertura`).
+ */
+export function conexaoPadraoDoSeletor(op: Pick<OpcoesDeAbertura, "conexoes_do_seletor" | "vinculadas_a_mim_ids">): ConexaoResumo | null {
+  const minhas = new Set(op.vinculadas_a_mim_ids ?? []);
+  const candidatas = (op.conexoes_do_seletor ?? []).filter((c) => minhas.has(c.id));
+  return candidatas.find((c) => c.conectada) ?? candidatas[0] ?? null;
 }
 
 /** A sessão pedida pode ser usada para INICIAR no modo restrito? */

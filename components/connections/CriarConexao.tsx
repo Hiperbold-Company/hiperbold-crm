@@ -6,12 +6,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
+import { ROTULO_DO_QR_POR_INSTANCIA, ROTULO_DO_QR_POR_SESSAO } from "@/lib/channels/rotulo-do-qr-por-sessao";
 import { rotaDeTemplates } from "@/lib/channels/templates-fonte";
 import { InstagramLogo, MessengerLogo, Microphone, Phone, Plugs, QrCode, WhatsappLogo } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { CanalGraphParceiroClient } from "./CanalGraphParceiroClient";
 import { CanalInstanciaClient } from "./CanalInstanciaClient";
 import { CanalParceiroClient } from "./CanalParceiroClient";
+import { CanalPorSessaoClient } from "./CanalPorSessaoClient";
 import { CanalVozClient } from "./CanalVozClient";
 import { ConectarComAMeta } from "./ConectarComAMeta";
 import { FormularioOficialManual } from "./OficialAvancado";
@@ -33,6 +35,7 @@ import { TemplatesParceiroClient } from "./TemplatesParceiroClient";
 export type TipoDoCriar =
   | "whatsapp_oficial"
   | "whatsapp_qr"
+  | "whatsapp_qr_sessao"
   | "instagram"
   | "messenger"
   | "parceiro"
@@ -45,9 +48,10 @@ export type SubDoCriar = "conexao" | "templates";
 type Icone = ComponentType<{ size?: number; "aria-hidden"?: boolean }>;
 
 // Rótulos em tabela de topo: a cerca de i18n resolve t(TABELA[chave]) e cobra o espanhol de cada valor.
-const ROTULO_DO_TIPO: Record<Exclude<TipoDoCriar, "graph">, string> = {
-  whatsapp_oficial: "WhatsApp oficial",
-  whatsapp_qr: "WhatsApp por QR Code",
+// `graph` e `whatsapp_qr_sessao` ficam fora: o rótulo deles nomeia o serviço e vem de `lib/channels/`.
+const ROTULO_DO_TIPO: Record<Exclude<TipoDoCriar, "graph" | "whatsapp_qr_sessao">, string> = {
+  whatsapp_oficial: "WhatsApp API Oficial",
+  whatsapp_qr: ROTULO_DO_QR_POR_INSTANCIA,
   instagram: "Instagram",
   messenger: "Messenger",
   parceiro: "Provedor parceiro",
@@ -58,6 +62,7 @@ const ROTULO_DO_TIPO: Record<Exclude<TipoDoCriar, "graph">, string> = {
 const DESCRICAO_DO_TIPO: Record<TipoDoCriar, string> = {
   whatsapp_oficial: "Número pela API oficial da Meta.",
   whatsapp_qr: "Leia o QR Code com o celular do número.",
+  whatsapp_qr_sessao: "Leia o QR Code com o celular do número.",
   instagram: "Mensagens do Direct no Chat.",
   messenger: "Mensagens da sua Página do Facebook.",
   parceiro: "WhatsApp oficial por um intermediário.",
@@ -69,6 +74,7 @@ const DESCRICAO_DO_TIPO: Record<TipoDoCriar, string> = {
 const ICONE: Record<TipoDoCriar, Icone> = {
   whatsapp_oficial: WhatsappLogo,
   whatsapp_qr: QrCode,
+  whatsapp_qr_sessao: QrCode,
   instagram: InstagramLogo,
   messenger: MessengerLogo,
   parceiro: Plugs,
@@ -82,10 +88,16 @@ export interface TiposVisiveis {
   telefonia: boolean;
   sociais: boolean;
   voz: boolean;
+  /**
+   * A terceira forma de conexão (QR Code pelo serviço de WhatsApp da instalação): só quando a
+   * instalação o tem configurado (calculado no servidor). Ausente = não aparece.
+   */
+  qrPorSessao?: boolean;
 }
 
 export function tiposDoCriar(mostrar: TiposVisiveis, graphParceiro: { label: string } | null): TipoDoCriar[] {
   const tipos: TipoDoCriar[] = ["whatsapp_oficial", "whatsapp_qr"];
+  if (mostrar.qrPorSessao) tipos.push("whatsapp_qr_sessao");
   if (mostrar.sociais) tipos.push("instagram", "messenger");
   if (mostrar.parceiro) tipos.push("parceiro");
   if (graphParceiro) tipos.push("graph");
@@ -166,7 +178,11 @@ export function CriarConexao({
   const tipo = tipos.includes(escolhido) ? escolhido : primeiro;
 
   const rotulo = (k: TipoDoCriar): string =>
-    k === "graph" ? (graphParceiro?.label ?? t("Provedor parceiro")) : t(ROTULO_DO_TIPO[k]);
+    k === "graph"
+      ? (graphParceiro?.label ?? t("Provedor parceiro"))
+      : k === "whatsapp_qr_sessao"
+        ? t(ROTULO_DO_QR_POR_SESSAO)
+        : t(ROTULO_DO_TIPO[k]);
 
   function conteudo() {
     switch (tipo) {
@@ -197,6 +213,8 @@ export function CriarConexao({
             servidorProprio={adminDaPlataforma}
           />
         );
+      case "whatsapp_qr_sessao":
+        return <CanalPorSessaoClient bloqueio={bloqueio} aoMudar={aoMudar} />;
       case "instagram":
         return <RedesSociaisClient bloqueio={bloqueio} plataformas={["instagram"]} semContas />;
       case "messenger":

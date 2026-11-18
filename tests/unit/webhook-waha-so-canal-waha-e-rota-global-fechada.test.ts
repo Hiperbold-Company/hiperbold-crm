@@ -137,3 +137,73 @@ describe("D-108: rota global fechada por padrão", () => {
     expect(await uazapi.json()).toMatchObject({ data: { accepted: false, reason: "session_not_registered" } });
   });
 });
+
+function pedidoCom(corpo: unknown, headers: Record<string, string> = {}) {
+  const texto = JSON.stringify(corpo);
+  return { headers: new Headers(headers), body: new Response(texto).body } as never;
+}
+
+describe("auditoria: o evento fica amarrado à sessão do token", () => {
+  it("token válido com `session` de outra sessão é 404, sem ecoar nomes, e nada é arquivado nem ingerido", async () => {
+    const r = await postPorToken(pedidoCom({ ...CORPO, session: "outra-sessao" }), {
+      params: Promise.resolve({ token: "token-do-canal-waha" }),
+    });
+
+    expect(r.status).toBe(404);
+    const texto = JSON.stringify(await r.json());
+    expect(texto).not.toContain("outra-sessao");
+    expect(texto).not.toContain("default");
+    expect(despachados).toHaveLength(0);
+    expect(banco.tabelas["webhook_events_log"]).toHaveLength(0);
+  });
+
+  it("token válido sem `session` no corpo também é recusado", async () => {
+    const { session: _s, ...semSessao } = CORPO;
+    const r = await postPorToken(pedidoCom(semSessao), { params: Promise.resolve({ token: "token-do-canal-waha" }) });
+
+    expect(r.status).toBe(404);
+    expect(despachados).toHaveLength(0);
+  });
+
+  it("token válido com a `session` da própria linha segue e ingere", async () => {
+    const r = await postPorToken(pedidoCom({ ...CORPO, session: "default" }), {
+      params: Promise.resolve({ token: "token-do-canal-waha" }),
+    });
+
+    expect(r.status).toBe(200);
+    expect(despachados).toEqual(["s-waha"]);
+  });
+});
+
+describe("auditoria: rota global lê o corpo com teto e não ecoa o nome da sessão", () => {
+  it("corpo acima de 5 MB é 413 antes de autenticar, de consultar sessão ou de arquivar", async () => {
+    envMock.WAHA_GLOBAL_WEBHOOK_ENABLED = "true";
+    const grande = JSON.stringify({ ...CORPO, payload: { ...CORPO.payload, body: "x".repeat(5 * 1024 * 1024 + 10) } });
+    const from = vi.spyOn(banco, "from");
+
+    // Sem Content-Length: quem recusa é a leitura em fluxo, não o cabeçalho.
+    const r = await postGlobal({ headers: new Headers(), body: new Response(grande).body } as never);
+
+    expect(r.status).toBe(413);
+    expect(from).not.toHaveBeenCalled();
+    expect(despachados).toHaveLength(0);
+    expect(banco.tabelas["webhook_events_log"]).toHaveLength(0);
+  });
+
+  it("corpo que declara Content-Length acima do teto também é 413", async () => {
+    envMock.WAHA_GLOBAL_WEBHOOK_ENABLED = "true";
+    const r = await postGlobal(pedidoCom(CORPO, { "content-length": String(6 * 1024 * 1024) }));
+    expect(r.status).toBe(413);
+    expect(despachados).toHaveLength(0);
+  });
+
+  it("session_not_registered não contém o nome da sessão enviado", async () => {
+    envMock.WAHA_GLOBAL_WEBHOOK_ENABLED = "true";
+    const r = await postGlobal(pedidoCom({ ...CORPO, session: "nome-sensivel-xyz" }));
+
+    expect(r.status).toBe(200);
+    const texto = JSON.stringify(await r.json());
+    expect(texto).toContain("session_not_registered");
+    expect(texto).not.toContain("nome-sensivel-xyz");
+  });
+});

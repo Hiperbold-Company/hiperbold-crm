@@ -64,7 +64,12 @@ const TEXTO_DA_RECUSA: Record<MotivoDaRecusa, string> = {
 const FALHA_DA_CONFERENCIA = "Não foi possível conferir a conexão. Tente de novo.";
 
 export function useAbrirPelaConexao(alvo: AlvoDaAbertura): {
-  abrir: (novaAba: boolean) => Promise<void>;
+  /**
+   * `conexao` = a escolhida no seletor do painel do negócio (`SeletorDeConexao.tsx`): a conversa
+   * abre (ou nasce) direto nela, sem a janela de escolha — o POST reaproveita a conversa do
+   * contato naquela conexão. Ausente/`null` = "Automático", a regra de sempre.
+   */
+  abrir: (novaAba: boolean, conexao?: ConexaoResumo | null) => Promise<void>;
   abrindo: boolean;
   janela: ReactNode;
 } {
@@ -160,11 +165,18 @@ export function useAbrirPelaConexao(alvo: AlvoDaAbertura): {
     }
   }
 
-  async function abrir(novaAba: boolean) {
+  async function abrir(novaAba: boolean, conexao?: ConexaoResumo | null) {
     if (!travar()) return;
     // Uma aba só por clique, criada DENTRO do gesto.
     const aba = novaAba ? window.open("", "_blank") : null;
     try {
+      if (conexao) {
+        // A pessoa escolheu a conexão: o servidor confere a regra (modo "só a conexão própria")
+        // e reaproveita a conversa do contato nela, se houver.
+        navegar(aba, novaAba, await iniciar(conexao.id));
+        avisarSeDesconectada(conexao);
+        return;
+      }
       let decisao = await lerDecisao();
       if (!decisao) {
         // Sem a conferência, só segue como antes quem SABIDAMENTE não tem

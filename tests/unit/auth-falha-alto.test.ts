@@ -155,6 +155,8 @@ describe("loadAuthUser — falha de permissão não vira 'sem organização'", (
         interface_settings: { preset: "completa" },
         // Permissões por perfil: sem a chave no banco, o padrão do catálogo.
         permissoes: permissoesPadrao(),
+        // Logo da empresa no seletor: sem `logo_path` na consulta, `null`.
+        logo_url: null,
       },
     ]);
   });

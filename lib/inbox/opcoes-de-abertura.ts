@@ -22,6 +22,7 @@ import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
 import { parseDialablePhone } from "@/lib/messaging/contact-card";
 import { modoDeConexaoAoAbrir, type ModoDeConexaoAoAbrir } from "@/lib/schemas/routing";
 import {
+  conexaoPermitidaNoModoRestrito,
   conversaAberta,
   envioPermitidoPelaConexao,
   nomeDaConexao,
@@ -226,7 +227,7 @@ export async function carregarOpcoesDeAbertura(
     if (!transferido) transferido = await negocioPassadoParaMim(admin, e, contactId);
   }
 
-  return {
+  const base: OpcoesDeAbertura = {
     modo,
     restrito,
     minha_conexao: preferida(minhas),
@@ -236,6 +237,15 @@ export async function carregarOpcoesDeAbertura(
     conversas: conversas.slice(0, 20),
     contato_em_conexao_de_outro: emConexaoDeOutro,
     transferido_para_mim: transferido,
+  };
+  // O seletor do painel do negócio: só o que eu posso usar para iniciar (no modo restrito, a
+  // mesma régua que o POST confere), e em quais delas estou entre os responsáveis do canal
+  // (Configurações › Atendimento). Canal sem responsáveis próprios não conta como meu.
+  const doSeletor = sessoes.filter((s) => conexaoPermitidaNoModoRestrito(base, s.id));
+  return {
+    ...base,
+    conexoes_do_seletor: doSeletor.map((s) => ({ id: s.id, nome: nomeDaConexao(s), conectada: conectada(s) })),
+    vinculadas_a_mim_ids: doSeletor.filter((s) => responsaveisDa(s.id).includes(e.userId)).map((s) => s.id),
   };
 }
 
