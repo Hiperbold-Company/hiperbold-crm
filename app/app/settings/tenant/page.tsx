@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { CabecalhoDaConfiguracao } from "@/components/configuracoes/cabecalho-da-configuracao";
+import { GrupoDeSalvar } from "@/components/configuracoes/grupo-de-salvar";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
@@ -78,50 +79,58 @@ export default async function TenantSettingsPage() {
         titulo={traduzir("Organização", idioma)}
         descricao={traduzir("Dados da empresa, retenção de mídia, DPO. Admin only.", idioma)}
       />
-      {row && (
-        <TenantForm
-          initial={{
-            display_name: row.display_name,
-            legal_name: row.legal_name,
-            cnpj: row.cnpj,
-            // `null` na coluna é Brasil (migration 0277): o seletor não tem
-            // opção vazia, então o país padrão aparece EXPLÍCITO. Salvar sem
-            // trocar nada grava `BR` onde estava `null` — mesmo país, mesma
-            // lei, mesmo calendário; o que muda é a linha deixar de depender
-            // do default implícito.
-            country: row.country ?? "BR",
-            timezone: row.timezone,
-            // `en-US` saiu da lista (nunca teve tradução). Uma linha antiga
-            // com ele cai no padrão em vez de quebrar a tela.
-            locale: normalizarIdioma(row.locale),
-            currency: moedaServidaOu(row.currency),
-            media_retention_days: row.media_retention_days,
-            media_retention_enforced: row.media_retention_enforced,
-            dpo_email: row.dpo_email,
-            privacy_policy_url: row.privacy_policy_url,
-          }}
-        />
-      )}
-      {row && <PerfilDaEmpresaForm initial={typeof oQueFaz === "string" ? oQueFaz : ""} />}
-      {row && alineas && alineasDoArt15Visiveis(row.country) && (
-        <Art15Form
-          pais={row.country}
-          initial={{
-            finalidades: alineas.finalidades ?? "",
-            destinatarios: alineas.destinatarios ?? "",
-            prazo_conservacao: alineas.prazo_conservacao ?? "",
-          }}
-        />
-      )}
-      {row && (
-        <InterfaceDaEmpresaForm
-          initial={row.interface_settings}
-          role={activeOrg.role}
-          camposDeCompra={camposDeCompra}
-        />
-      )}
-      {row && <InboxDaEmpresaForm initial={row.interface_settings} />}
-      {row && <ZonaDePerigoDaOrganizacao displayName={row.display_name} />}
+      {/* A barra do TenantForm mora no grupo, no fim da página, e não dentro
+          do <form>: presa ao rodapé do <form>, ela saía da tela quando a
+          pessoa rolava até os cartões de baixo, com a mudança ainda pendente.
+          Os outros cartões desta tela têm botão próprio e ficam fora da barra
+          (não se registram no grupo). */}
+      <GrupoDeSalvar>
+        {row && (
+          <TenantForm
+            initial={{
+              display_name: row.display_name,
+              legal_name: row.legal_name,
+              cnpj: row.cnpj,
+              // `null` na coluna é Brasil (migration 0277): o seletor não tem
+              // opção vazia, então o país padrão aparece EXPLÍCITO. Sem mudança
+              // não há barra nem gravação, então o `null` fica onde está. Na
+              // primeira vez que qualquer campo desta tela é salvo, o formulário
+              // vai inteiro e grava `BR` no lugar do `null` — mesmo país, mesma
+              // lei, mesmo calendário.
+              country: row.country ?? "BR",
+              timezone: row.timezone,
+              // `en-US` saiu da lista (nunca teve tradução). Uma linha antiga
+              // com ele cai no padrão em vez de quebrar a tela.
+              locale: normalizarIdioma(row.locale),
+              currency: moedaServidaOu(row.currency),
+              media_retention_days: row.media_retention_days,
+              media_retention_enforced: row.media_retention_enforced,
+              dpo_email: row.dpo_email,
+              privacy_policy_url: row.privacy_policy_url,
+            }}
+          />
+        )}
+        {row && <PerfilDaEmpresaForm initial={typeof oQueFaz === "string" ? oQueFaz : ""} />}
+        {row && alineas && alineasDoArt15Visiveis(row.country) && (
+          <Art15Form
+            pais={row.country}
+            initial={{
+              finalidades: alineas.finalidades ?? "",
+              destinatarios: alineas.destinatarios ?? "",
+              prazo_conservacao: alineas.prazo_conservacao ?? "",
+            }}
+          />
+        )}
+        {row && (
+          <InterfaceDaEmpresaForm
+            initial={row.interface_settings}
+            role={activeOrg.role}
+            camposDeCompra={camposDeCompra}
+          />
+        )}
+        {row && <InboxDaEmpresaForm initial={row.interface_settings} />}
+        {row && <ZonaDePerigoDaOrganizacao displayName={row.display_name} />}
+      </GrupoDeSalvar>
     </div>
   );
 }

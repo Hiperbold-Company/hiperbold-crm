@@ -11,11 +11,25 @@ import { ROUTING_MODES, type RoutingMode } from "@/lib/schemas/routing";
 import type { ChannelRoutingSettings } from "@/lib/routing/channel-policies";
 import { MODO_COPY } from "./_form";
 
+type Canal = ChannelRoutingSettings["channels"][number];
+// `explicita`: a pessoa marcou ou desmarcou alguém. Num número que ainda "usa
+// todos os atendentes" (legacy_unconfigured), isso troca o "todos" salvo por
+// uma lista — inclusive a VAZIA, que grava restricted_empty ("ninguém, fica na
+// fila"). Sem a marca, marcar e desmarcar voltava ao "todos" e não havia como
+// gravar a lista vazia num número legado.
+type CanalNaTela = Canal & { explicita?: boolean };
+
+/** O que conta como "mudou": responsáveis como CONJUNTO (a ordem não importa), modo e destino. */
+function chaveDoCanal(c: CanalNaTela): string {
+  const responsaveis = c.mode === "legacy_unconfigured" && !c.explicita ? "todos" : [...c.user_ids].sort();
+  return JSON.stringify([responsaveis, c.distribution_mode ?? null, c.default_assignee_user_id ?? null]);
+}
+
 export function ChannelRoutingForm({ initial }: { initial: ChannelRoutingSettings }) {
   const t = useT(); const router = useRouter();
-  const [channels, setChannels] = useState(initial.channels);
+  const [channels, setChannels] = useState<CanalNaTela[]>(initial.channels);
   // O último salvo de cada número: é contra ele que a barra mede o que mudou.
-  const [salvos, setSalvos] = useState(initial.channels);
+  const [salvos, setSalvos] = useState<CanalNaTela[]>(initial.channels);
   const [busy, setBusy] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   async function save(id: string, reset: boolean): Promise<boolean> {
@@ -31,7 +45,7 @@ export function ChannelRoutingForm({ initial }: { initial: ChannelRoutingSetting
           default_assignee_user_id: alvo?.default_assignee_user_id ?? null }) });
       const result = await response.json();
       if (!response.ok) { setFeedback(t(result.error?.message ?? "Não foi possível salvar. Tente novamente.")); return false; }
-      const aplicar = (c: (typeof channels)[number]) => c.id === id ? { ...c, mode: result.data.mode, user_ids: result.data.user_ids,
+      const aplicar = (c: CanalNaTela): CanalNaTela => c.id === id ? { ...c, explicita: false, mode: result.data.mode, user_ids: result.data.user_ids,
         distribution_mode: result.data.distribution_mode ?? null,
         default_assignee_user_id: result.data.default_assignee_user_id ?? null } : c;
       // O que voltou do servidor é o novo "último salvo" deste número — e só dele.
@@ -43,7 +57,10 @@ export function ChannelRoutingForm({ initial }: { initial: ChannelRoutingSetting
   }
   // Números com mudança pendente. "Voltar ao padrão da organização" continua
   // agindo na hora, por número; o resto vai pela barra, que grava só o que mudou.
-  const mudados = channels.filter((c) => JSON.stringify(c) !== JSON.stringify(salvos.find((s) => s.id === c.id)));
+  const mudados = channels.filter((c) => {
+    const salvo = salvos.find((s) => s.id === c.id);
+    return !salvo || chaveDoCanal(c) !== chaveDoCanal(salvo);
+  });
   const { barra, enviar, salvando, refDoFormulario } = useBarraDeSalvar({
     sujo: mudados.length > 0,
     descartar: () => setChannels(salvos),
@@ -89,7 +106,7 @@ export function ChannelRoutingForm({ initial }: { initial: ChannelRoutingSetting
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {initial.members.map((member) => <label key={member.id} className="flex items-center gap-2 rounded-md p-2 hover:bg-muted">
-          <Checkbox checked={channel.user_ids.includes(member.id)} onChange={(e) => setChannels((current) => current.map((c) => c.id === channel.id ? { ...c, user_ids: e.target.checked ? [...c.user_ids, member.id] : c.user_ids.filter((id) => id !== member.id) } : c))} />
+          <Checkbox checked={channel.user_ids.includes(member.id)} onChange={(e) => setChannels((current) => current.map((c) => c.id === channel.id ? { ...c, explicita: true, user_ids: e.target.checked ? [...c.user_ids, member.id] : c.user_ids.filter((id) => id !== member.id) } : c))} />
           <span>{t(member.name)}</span>
         </label>)}
       </div>

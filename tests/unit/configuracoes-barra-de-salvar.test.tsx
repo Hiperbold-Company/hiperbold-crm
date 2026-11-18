@@ -16,7 +16,10 @@ import {
   useBarraDeSalvar,
   type DesfechoDoSalvar,
 } from "@/components/configuracoes/grupo-de-salvar";
-import { useAvisoDeSaidaSemSalvar } from "@/components/configuracoes/use-aviso-de-saida-sem-salvar";
+import {
+  REARME_MS,
+  useAvisoDeSaidaSemSalvar,
+} from "@/components/configuracoes/use-aviso-de-saida-sem-salvar";
 import { render } from "@/tests/helpers/render-com-confirmacao";
 
 const push = vi.fn();
@@ -102,6 +105,14 @@ describe("BarraDeSalvar", () => {
     expect(gravar).toHaveBeenCalledTimes(1);
   });
 
+  it("Enter num formulário sem mudança não grava", () => {
+    const gravar = vi.fn(async () => "salvo" as const);
+    render(<Formulario gravar={gravar} />);
+    fireEvent.submit(screen.getByLabelText("Nome").closest("form")!);
+    expect(gravar).not.toHaveBeenCalled();
+    expect(barra()).toBeNull();
+  });
+
   it("falha mostra o erro com Tentar de novo, mantém a mudança, e a nova tentativa grava", async () => {
     const gravar = vi
       .fn<(v: string) => Promise<DesfechoDoSalvar>>()
@@ -179,15 +190,75 @@ describe("GrupoDeSalvar: vários formulários, uma barra", () => {
   });
 });
 
-function Guardado({ sujo }: { sujo: boolean }) {
-  useAvisoDeSaidaSemSalvar(sujo);
+/** Faz as vezes do `next/link`: o clique que chega até ele vira navegação do app. */
+const navegouPeloLink = vi.fn();
+
+/** Uma parte que sai da tela por conta própria (como o desafio do segundo fator). */
+function ParteQueSai() {
+  const [valor, setValor] = useState("Ana");
+  const { enviar, liberarSaida } = useBarraDeSalvar({
+    sujo: valor !== "Ana",
+    salvar: async () => "salvo",
+    descartar: () => setValor("Ana"),
+  });
+  return (
+    <form onSubmit={enviar}>
+      <label>
+        Campo
+        <input value={valor} onChange={(e) => setValor(e.target.value)} />
+      </label>
+      <button type="button" onClick={liberarSaida}>
+        Sair pela tela
+      </button>
+    </form>
+  );
+}
+
+describe("GrupoDeSalvar: liberarSaida de uma parte", () => {
+  it("libera o aviso do grupo, que é quem pergunta", () => {
+    render(
+      <GrupoDeSalvar>
+        <ParteQueSai />
+      </GrupoDeSalvar>,
+    );
+    fireEvent.change(screen.getByLabelText("Campo"), { target: { value: "Bia" } });
+    const antes = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(antes);
+    expect(antes.defaultPrevented).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sair pela tela" }));
+    const depois = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(depois);
+    expect(depois.defaultPrevented).toBe(false);
+  });
+});
+
+function Guardado({ sujo, comLink = true }: { sujo: boolean; comLink?: boolean }) {
+  const { liberarSaida } = useAvisoDeSaidaSemSalvar(sujo);
   return (
     <div>
-      <a href="/app/settings/tenant">Organização</a>
+      {comLink ? (
+        <a
+          href="/app/settings/tenant"
+          onClick={(e) => {
+            e.preventDefault();
+            navegouPeloLink();
+          }}
+        >
+          Organização
+        </a>
+      ) : null}
       <a href="#secao">Âncora</a>
       <a href="/app/settings/tenant" target="_blank">
         Nova aba
       </a>
+      <a href="/api/v1/lgpd/export/arquivo.pdf">Baixar pela API</a>
+      <a href="/app/settings/arquivo.csv" download>
+        Baixar arquivo
+      </a>
+      <button type="button" onClick={liberarSaida}>
+        Liberar
+      </button>
     </div>
   );
 }
@@ -239,12 +310,67 @@ describe("useAvisoDeSaidaSemSalvar", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("Descartar e sair navega pelo roteador", async () => {
+  it("Descartar e sair entrega o clique ao próprio link (que sabe o replace e o scroll dele)", async () => {
+    navegouPeloLink.mockReset();
     render(<Guardado sujo />);
     fireEvent.click(screen.getByRole("link", { name: "Organização" }));
+    expect(navegouPeloLink).not.toHaveBeenCalled();
     const dialogo = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Descartar e sair" }));
+    await waitFor(() => expect(navegouPeloLink).toHaveBeenCalledTimes(1));
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("se o link saiu da tela durante a pergunta, Descartar e sair navega pelo roteador", async () => {
+    const { rerender } = render(<Guardado sujo />);
+    fireEvent.click(screen.getByRole("link", { name: "Organização" }));
+    const dialogo = await screen.findByRole("alertdialog");
+    rerender(<Guardado sujo comLink={false} />);
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Descartar e sair" }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/app/settings/tenant"));
+  });
+
+  it("não intercepta link para /api/, link com download, Shift, Alt nem botão do meio", () => {
+    render(<Guardado sujo />);
+    const semNavegar = (e: Event) => e.preventDefault();
+    document.addEventListener("click", semNavegar);
+    try {
+      const segurou = (nome: string, extra: MouseEventInit = {}) => {
+        const e = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, ...extra });
+        const parou = vi.spyOn(e, "stopPropagation");
+        screen.getByRole("link", { name: nome }).dispatchEvent(e);
+        return parou.mock.calls.length > 0 || screen.queryByRole("alertdialog") !== null;
+      };
+      expect(segurou("Baixar pela API")).toBe(false);
+      expect(segurou("Baixar arquivo")).toBe(false);
+      expect(segurou("Nova aba")).toBe(false);
+      expect(segurou("Organização", { shiftKey: true })).toBe(false);
+      expect(segurou("Organização", { altKey: true })).toBe(false);
+      expect(segurou("Organização", { button: 1 })).toBe(false);
+    } finally {
+      document.removeEventListener("click", semNavegar);
+    }
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("liberarSaida vale por um instante: se a página continua aqui, o aviso volta", () => {
+    vi.useFakeTimers();
+    try {
+      render(<Guardado sujo />);
+      fireEvent.click(screen.getByRole("button", { name: "Liberar" }));
+      const liberada = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(liberada);
+      expect(liberada.defaultPrevented).toBe(false);
+
+      act(() => {
+        vi.advanceTimersByTime(REARME_MS);
+      });
+      const depois = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(depois);
+      expect(depois.defaultPrevented).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("não intercepta sem mudança, nem âncora da mesma tela, nova aba ou clique com Ctrl", () => {
@@ -256,7 +382,11 @@ describe("useAvisoDeSaidaSemSalvar", () => {
     };
     // jsdom não navega; o que importa é a tela não segurar o clique.
     const semNavegar = (e: Event) => e.preventDefault();
-    expect(clicar("Organização")).toBe(false);
+    navegouPeloLink.mockReset();
+    clicar("Organização");
+    // Sem mudança o clique chega ao link (o "next/link" daqui) sem pergunta.
+    expect(navegouPeloLink).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
 
     rerender(<Guardado sujo />);
     document.addEventListener("click", semNavegar);
@@ -273,5 +403,70 @@ describe("useAvisoDeSaidaSemSalvar", () => {
       document.removeEventListener("click", semNavegar);
     }
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe("useAvisoDeSaidaSemSalvar: Voltar/Avançar do navegador", () => {
+  const enderecoOriginal = window.location.pathname + window.location.search;
+  let go: ReturnType<typeof vi.spyOn>;
+  /** Faz as vezes do roteador do Next, que ouve `popstate` sem captura. */
+  const roteador = vi.fn();
+
+  beforeEach(() => {
+    go = vi.spyOn(window.history, "go").mockImplementation(() => {});
+    roteador.mockReset();
+    window.addEventListener("popstate", roteador);
+  });
+  afterEach(() => {
+    go.mockRestore();
+    window.removeEventListener("popstate", roteador);
+    window.history.replaceState(null, "", enderecoOriginal);
+  });
+
+  /** O navegador já trocou a URL quando o `popstate` chega. */
+  function voltarPara(endereco: string) {
+    window.history.replaceState(null, "", endereco);
+    window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
+  }
+
+  it("com mudança, Voltar pergunta, desfaz a travessia e o roteador não troca a tela", async () => {
+    render(<Guardado sujo />);
+    voltarPara("/app/pagina-anterior");
+    expect(roteador).not.toHaveBeenCalled();
+    // Sem a Navigation API (jsdom), a travessia é tratada como Voltar: desfaz com +1.
+    expect(go).toHaveBeenCalledWith(1);
+
+    const dialogo = await screen.findByRole("alertdialog");
+    expect(dialogo).toHaveTextContent("Sair sem salvar?");
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Continuar editando" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(go).toHaveBeenCalledTimes(1);
+  });
+
+  it("Descartar e sair refaz a travessia, e o roteador recebe essa", async () => {
+    render(<Guardado sujo />);
+    voltarPara("/app/pagina-anterior");
+    const dialogo = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Descartar e sair" }));
+    await waitFor(() => expect(go).toHaveBeenLastCalledWith(-1));
+
+    // A travessia refeita chega como um `popstate` comum: passa ao roteador.
+    voltarPara("/app/pagina-anterior");
+    expect(roteador).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("sem mudança, ou só trocando a âncora da mesma tela, não pergunta", () => {
+    const { rerender } = render(<Guardado sujo={false} />);
+    voltarPara("/app/pagina-anterior");
+    expect(roteador).toHaveBeenCalledTimes(1);
+    expect(go).not.toHaveBeenCalled();
+
+    window.history.replaceState(null, "", enderecoOriginal);
+    rerender(<Guardado sujo />);
+    voltarPara(`${enderecoOriginal}#secao`);
+    expect(roteador).toHaveBeenCalledTimes(2);
+    expect(go).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 });

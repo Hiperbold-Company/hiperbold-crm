@@ -33,15 +33,44 @@ describe("responsáveis por número na tela",()=>{
   expect(screen.queryByText("Responsáveis salvos.")).not.toBeInTheDocument();
  });
  // ─── Issue #2331: modo e destino padrão POR NÚMERO ───
- it("número sem regra própria sai do formulário sem regra (herda a organização)",async()=>{
+ it("número legado: marcar e desmarcar grava a lista vazia explícita, sem regra própria (herda a organização)",async()=>{
   render(<ChannelRoutingForm initial={initial}/>);
   const b=within(screen.getByRole("group",{name:"Número B"}));
   expect(b.getByTestId("modo-do-numero-b")).toHaveValue("");
-  // A barra só grava o que mudou: marca alguém em B sem tocar no modo.
+  // B "usa todos os atendentes" (legado). Marcar e desmarcar troca o "todos"
+  // salvo por uma lista explícita VAZIA: a barra aparece e Salvar grava a lista
+  // vazia — é o único caminho na tela para "ninguém, fica na fila".
   fireEvent.click(b.getByRole("checkbox",{name:"Bruno"}));
+  fireEvent.click(b.getByRole("checkbox",{name:"Bruno"}));
+  expect(b.getByRole("checkbox",{name:"Bruno"})).not.toBeChecked();
   salvarNaBarra();
-  await waitFor(()=>expect(fetcher).toHaveBeenCalledTimes(1));
-  expect(corpo()).toEqual({channel_session_id:"b",user_ids:["bruno"],reset:false,distribution_mode:null,default_assignee_user_id:null});
+  await waitFor(()=>expect(b.getByText("Ninguém configurado — as conversas ficarão na fila.")).toBeVisible());
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(corpo()).toEqual({channel_session_id:"b",user_ids:[],reset:false,distribution_mode:null,default_assignee_user_id:null});
+  expect(screen.queryByRole("region",{name:"Alterações não salvas"})).toBeNull();
+ });
+ it("responsáveis contam como conjunto: desmarcar e remarcar quem já estava não acende a barra",async()=>{
+  const comDois={...initial,channels:[{...initial.channels[0]!,user_ids:["ana","bruno"]},initial.channels[1]!]};
+  render(<ChannelRoutingForm initial={comDois}/>);
+  const a=within(screen.getByRole("group",{name:"Número A"}));
+  fireEvent.click(a.getByRole("checkbox",{name:"Ana"}));
+  expect(screen.getByRole("region",{name:"Alterações não salvas"})).toBeInTheDocument();
+  // De volta: a lista vira [bruno, ana], o mesmo conjunto do salvo.
+  fireEvent.click(a.getByRole("checkbox",{name:"Ana"}));
+  expect(screen.queryByRole("region",{name:"Alterações não salvas"})).toBeNull();
+  expect(fetcher).not.toHaveBeenCalled();
+ });
+ it("voltar ao padrão depois de mexer num número legado não deixa a barra acesa",async()=>{
+  fetcher.mockResolvedValue({ok:true,json:async()=>({data:{mode:"legacy_unconfigured",user_ids:[],distribution_mode:null,default_assignee_user_id:null}})});
+  render(<ChannelRoutingForm initial={initial}/>);
+  const b=within(screen.getByRole("group",{name:"Número B"}));
+  fireEvent.click(b.getByRole("checkbox",{name:"Bruno"}));
+  fireEvent.click(b.getByRole("checkbox",{name:"Bruno"}));
+  expect(screen.getByRole("region",{name:"Alterações não salvas"})).toBeInTheDocument();
+  fireEvent.click(b.getByRole("button",{name:"Voltar ao padrão da organização"}));
+  await waitFor(()=>expect(screen.getByRole("status")).toHaveTextContent("Responsáveis salvos."));
+  expect(corpo().reset).toBe(true);
+  expect(screen.queryByRole("region",{name:"Alterações não salvas"})).toBeNull();
  });
  it("escolher modo e destino de UM número não encosta no outro",async()=>{
   render(<ChannelRoutingForm initial={initial}/>);

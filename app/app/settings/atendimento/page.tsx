@@ -89,10 +89,13 @@ export default async function AtendimentoSettingsPage() {
         )}
       />
 
-      {/* Três formulários, três endpoints, UMA barra de salvar: o grupo junta
-          o que mudou em qualquer um deles. Os interruptores abaixo gravam na
-          hora e ficam fora da barra. O grupo envolve a página inteira para a
-          barra ficar presa ao rodapé enquanto se rola até o fim. */}
+      {/* Quatro formulários, UMA barra de salvar: o grupo junta o que mudou
+          em qualquer um deles — distribuição, responsáveis por número,
+          assinatura e a janela de pós-venda (dentro de `ClientePelaVenda`).
+          Os interruptores (nome informado, telefone de ficha vazia e "quem já
+          comprou") gravam na hora e ficam fora da barra. O grupo envolve a
+          página inteira para a barra ficar presa ao rodapé enquanto se rola
+          até o fim. */}
       <GrupoDeSalvar>
       <AtendimentoForm
         initial={{ ...routing, visibility_mode: settings.visibility_mode ?? DEFAULT_VISIBILITY_MODE }}

@@ -58,6 +58,8 @@ interface AcoesDaParte {
 interface ApiDoGrupo {
   definir: (id: string, estado: EstadoDaParte, acoes: { current: AcoesDaParte }) => void;
   remover: (id: string) => void;
+  /** Desliga o aviso de saída do grupo para uma saída que a própria tela provoca. */
+  liberarSaida: () => void;
 }
 
 const ContextoDoGrupo = createContext<ApiDoGrupo | null>(null);
@@ -65,6 +67,17 @@ const ContextoDoGrupo = createContext<ApiDoGrupo | null>(null);
 export function GrupoDeSalvar({ children }: { children: ReactNode }) {
   const [estados, setEstados] = useState<Record<string, EstadoDaParte>>({});
   const acoes = useRef(new Map<string, { current: AcoesDaParte }>());
+
+  const partes = Object.entries(estados);
+  const pendentes = partes.filter(([, e]) => e.sujo || e.erro);
+  const sujo = pendentes.length > 0;
+  const salvando = partes.some(([, e]) => e.salvando);
+  const erro = partes.some(([, e]) => e.erro);
+  const barrada = pendentes.find(([, e]) => !e.podeSalvar);
+
+  // O aviso é do grupo: uma parte que sai por conta própria (o desafio do
+  // segundo fator no meio do salvar) libera ESTE aviso, não um da parte.
+  const { liberarSaida } = useAvisoDeSaidaSemSalvar(sujo);
 
   const api = useMemo<ApiDoGrupo>(
     () => ({
@@ -79,18 +92,10 @@ export function GrupoDeSalvar({ children }: { children: ReactNode }) {
           return resto;
         });
       },
+      liberarSaida,
     }),
-    [],
+    [liberarSaida],
   );
-
-  const partes = Object.entries(estados);
-  const pendentes = partes.filter(([, e]) => e.sujo || e.erro);
-  const sujo = pendentes.length > 0;
-  const salvando = partes.some(([, e]) => e.salvando);
-  const erro = partes.some(([, e]) => e.erro);
-  const barrada = pendentes.find(([, e]) => !e.podeSalvar);
-
-  useAvisoDeSaidaSemSalvar(sujo);
 
   async function salvarTudo() {
     // Em sequência, na ordem da tela: o que falhar não impede o resto, e cada
@@ -153,9 +158,9 @@ export function useBarraDeSalvar({
 
   // As funções mudam a cada render (leem o estado do formulário); a barra e o
   // grupo chamam sempre a versão mais nova por esta referência.
-  const funcoes = useRef({ salvar, descartar });
+  const funcoes = useRef({ salvar, descartar, pendente: sujo || erro });
   useEffect(() => {
-    funcoes.current = { salvar, descartar };
+    funcoes.current = { salvar, descartar, pendente: sujo || erro };
   });
 
   const executar = useCallback(async (): Promise<DesfechoDoSalvar> => {
@@ -194,11 +199,15 @@ export function useBarraDeSalvar({
     return () => grupo.remover(id);
   }, [grupo, id]);
 
-  const { liberarSaida } = useAvisoDeSaidaSemSalvar(!grupo && (sujo || erro));
+  const avisoProprio = useAvisoDeSaidaSemSalvar(!grupo && (sujo || erro));
+  const liberarSaida = grupo ? grupo.liberarSaida : avisoProprio.liberarSaida;
 
   const enviar = useCallback(
     (evento?: FormEvent) => {
       evento?.preventDefault();
+      // Enter num formulário sem mudança não grava nada: sem isto, um Enter à
+      // toa fazia um PATCH igual ao salvo e anunciava "salvo".
+      if (!funcoes.current.pendente) return;
       void executar();
     },
     [executar],

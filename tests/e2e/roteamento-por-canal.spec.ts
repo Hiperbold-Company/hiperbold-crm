@@ -191,13 +191,22 @@ test("configura responsáveis por canal e o cron distribui sem misturar números
     await expect(northGroup.getByTestId("channel-routing-state")).toHaveText(
       "Usa todos os atendentes elegíveis da organização.",
     );
+    // O Salvar por número saiu: quem grava é a barra de salvar da tela.
+    const salvarNaBarra = page
+      .getByTestId("barra-de-salvar")
+      .getByRole("button", { name: "Salvar", exact: true });
     await northGroup.getByLabel("Ana Canal Norte", { exact: true }).check();
-    await northGroup.getByRole("button", { name: "Salvar responsáveis" }).click();
+    await salvarNaBarra.click();
     await expect(northGroup.getByTestId("channel-routing-state")).toHaveText(
       "Somente as pessoas selecionadas recebem este número.",
     );
+    await expect(page.getByTestId("barra-de-salvar")).toHaveCount(0);
 
-    await southGroup.getByRole("button", { name: "Salvar responsáveis" }).click();
+    // Canal legado ("usa todos"): marcar e desmarcar troca o "todos" por uma
+    // lista vazia explícita, e salvar grava "ninguém, fica na fila".
+    await southGroup.getByLabel("Ana Canal Norte", { exact: true }).check();
+    await southGroup.getByLabel("Ana Canal Norte", { exact: true }).uncheck();
+    await salvarNaBarra.click();
     await expect(southGroup.getByTestId("channel-routing-state")).toHaveText(
       "Ninguém configurado — as conversas ficarão na fila.",
     );

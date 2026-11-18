@@ -56,7 +56,7 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  const { barra, enviar, liberarSaida } = useBarraDeSalvar({
+  const { barra, enviar, liberarSaida, refDoFormulario } = useBarraDeSalvar({
     sujo,
     descartar: () => setForm(salvo),
     salvar: async () => {
@@ -84,7 +84,7 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
   });
 
   return (
-    <form onSubmit={enviar} className="flex max-w-2xl flex-col gap-6">
+    <form ref={refDoFormulario} onSubmit={enviar} className="flex max-w-2xl flex-col gap-6">
       <SecaoDaConfiguracao id="sec-empresa" titulo={t("Dados da empresa")}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
