@@ -8328,6 +8328,16 @@ export const DICIONARIO: Traducoes = {
     },
   "Logo atualizado.": { es: "Logo actualizado." },
   "Logo removido.": { es: "Logo eliminado." },
+  "A logo aparece num círculo ao lado do nome da empresa, no seletor de empresas do menu. Sem logo, o círculo mostra as iniciais.":
+    {
+      es: "El logo aparece en un círculo junto al nombre de la empresa, en el selector de empresas del menú. Sin logo, el círculo muestra las iniciales.",
+    },
+  "Como a marca própria está ligada, ela também é a logo do sistema para esta empresa.": {
+    es: "Como la marca propia está activada, también es el logo del sistema para esta empresa.",
+  },
+  "PNG ou JPG, até 512 KB. O círculo mostra o centro da imagem: prefira uma logo quadrada.": {
+    es: "PNG o JPG, hasta 512 KB. El círculo muestra el centro de la imagen: prefiere un logo cuadrado.",
+  },
   "PNG ou JPG, até": { es: "PNG o JPG, hasta" },
   "KB. Prefira fundo transparente. SVG não é aceito: ele pode executar código quando aberto direto pelo endereço da imagem.":
     {

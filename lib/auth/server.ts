@@ -38,6 +38,7 @@ import { resolverPermissoes } from "@/lib/permissoes/resolver";
 import { getUserResiliente } from "@/lib/auth/get-user-resiliente";
 import type { User } from "@supabase/supabase-js";
 import { STATUS_OPERANTE, ehOperante } from "@/lib/organizacao/operante";
+import { logoDaEmpresa } from "@/lib/branding/logo-da-empresa";
 import type { AuthUser, Role, UserOrgMembership, ActiveOrg } from "./types";
 
 const ACTIVE_ORG_COOKIE = "active_org";
@@ -69,6 +70,8 @@ interface OrgJoin {
   suspended_kind?: string | null;
   /** `settings->permissoes` — só esta chave do jsonb, nunca `settings` inteiro. */
   permissoes?: unknown;
+  /** `settings->branding->>logo_path` — só o caminho da logo, para o avatar do seletor. */
+  logo_path?: unknown;
 }
 
 /** O mesmo `organizations`, alcançado por outro embed: só as portas da EMPRESA. */
@@ -251,7 +254,7 @@ async function lerPermissoes(
           // issue #1341 acabou de engordar), e o alias traz só as portas da EMPRESA.
           // `timezone` veio do main (fuso da organização nas listas, #1290) e convive
           // com o alias: um embed por relação, sem renomear o que já existia.
-          "organization_id, role, interface_settings, accepted_at, organizations!user_organizations_organization_id_fkey(display_name, locale, timezone, currency, country, status, suspended_kind, permissoes:settings->permissoes), interface_da_empresa:organizations!user_organizations_organization_id_fkey(interface_settings)",
+          "organization_id, role, interface_settings, accepted_at, organizations!user_organizations_organization_id_fkey(display_name, locale, timezone, currency, country, status, suspended_kind, permissoes:settings->permissoes, logo_path:settings->branding->>logo_path), interface_da_empresa:organizations!user_organizations_organization_id_fkey(interface_settings)",
         )
         .eq("user_id", userId)
         .is("revoked_at", null)
@@ -319,6 +322,10 @@ async function lerPermissoes(
       // Permissões por perfil (Hiperbold): resolvidas AQUI, uma vez, pelo
       // resolvedor que nunca lança — valor estragado no banco vira o padrão do catálogo.
       permissoes: resolverPermissoes(org?.permissoes),
+      // O avatar do seletor de empresas: a logo que a empresa enviou, com ou sem
+      // o módulo `marca_por_organizacao` (ver `lib/branding/logo-da-empresa.ts`).
+      // Nunca lança; caminho ausente ou fora do prefixo desta empresa vira `null`.
+      logo_url: logoDaEmpresa(row.organization_id, org?.logo_path),
     };
   });
 

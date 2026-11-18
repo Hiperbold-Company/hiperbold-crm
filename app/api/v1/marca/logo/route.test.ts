@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-import { loadAuthUser, orgAtivaSemPortao } from "@/lib/auth/server";
+import { loadAuthUser, mfaEmDivida, orgAtivaSemPortao } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 import type { AuthUser } from "@/lib/auth/types";
@@ -324,13 +324,63 @@ describe("escopo=instalacao — só o dono do servidor alcança, e a organizaç�
 });
 
 describe("escopo=organizacao com o módulo marca_por_organizacao DESLIGADO (D-178)", () => {
-  it("upload é recusado com 403 antes de subir arquivo ou chamar o banco de marca", async () => {
+  /**
+   * A logo CLARA é também o avatar da empresa no seletor de organizações, e toda
+   * empresa pode enviá-la com o módulo desligado. O logo do tema ESCURO só serve à
+   * marca do produto e continua exigindo o módulo; o ícone da aba nunca é da
+   * organização (422 em `lerAlvo`, módulo ligado ou não).
+   */
+  it("upload da logo clara é aceito: sobe o arquivo e grava pela RPC da organização", async () => {
     vi.mocked(loadAuthUser).mockResolvedValue(usuarioAdminDeOrganizacao());
     const espiao = criarAdminEspiao(null, false);
     vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
 
     const form = new FormData();
     form.set("escopo", "organizacao");
+    form.set("file", arquivoPng());
+
+    const { POST } = await import("./route");
+    const res = await POST(
+      new NextRequest("http://localhost/api/v1/marca/logo", { method: "POST", body: form }),
+    );
+
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(espiao.rpcChamadas).toEqual([
+      expect.objectContaining({
+        nome: "fn_definir_logo_por_tema_da_organizacao",
+        args: expect.objectContaining({
+          p_org: ORG_ID,
+          p_tema: "claro",
+          p_path: expect.stringMatching(new RegExp(`^${ORG_ID}/`)),
+        }),
+      }),
+    ]);
+    expect(espiao.fromChamadas).not.toContain("platform_branding");
+  });
+
+  it("remover a logo clara também é aceito, e apaga só o arquivo da própria empresa", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(usuarioAdminDeOrganizacao());
+    const espiao = criarAdminEspiao(LOGO_DA_ORGANIZACAO, false);
+    vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
+
+    const { DELETE } = await import("./route");
+    const res = await DELETE(
+      new NextRequest("http://localhost/api/v1/marca/logo?escopo=organizacao", { method: "DELETE" }),
+    );
+
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(espiao.rpcChamadas[0]?.args).toMatchObject({ p_tema: "claro", p_path: null });
+    expect(espiao.removeChamadas).toEqual([LOGO_DA_ORGANIZACAO]);
+  });
+
+  it("logo do tema ESCURO continua recusado com 403, antes de subir arquivo ou chamar o banco", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(usuarioAdminDeOrganizacao());
+    const espiao = criarAdminEspiao(null, false);
+    vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
+
+    const form = new FormData();
+    form.set("escopo", "organizacao");
+    form.set("tema", "escuro");
     form.set("file", arquivoPng());
 
     const { POST } = await import("./route");
@@ -346,16 +396,86 @@ describe("escopo=organizacao com o módulo marca_por_organizacao DESLIGADO (D-17
     expect(espiao.fromChamadas).not.toContain("platform_branding");
   });
 
-  it("remover também é recusado, e nada é apagado do storage", async () => {
+  it("remover o logo escuro também é recusado, e nada é apagado do storage", async () => {
     vi.mocked(loadAuthUser).mockResolvedValue(usuarioAdminDeOrganizacao());
     const espiao = criarAdminEspiao(LOGO_DA_ORGANIZACAO, false);
     vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
 
     const { DELETE } = await import("./route");
     const res = await DELETE(
-      new NextRequest("http://localhost/api/v1/marca/logo?escopo=organizacao", { method: "DELETE" }),
+      new NextRequest("http://localhost/api/v1/marca/logo?escopo=organizacao&tema=escuro", {
+        method: "DELETE",
+      }),
     );
 
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: { code: "modulo_desligado" } });
+    expect(espiao.rpcChamadas).toHaveLength(0);
+    expect(espiao.removeChamadas).toHaveLength(0);
+  });
+
+  it("ícone da aba na organização segue recusado (422), sem banco nem storage", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(usuarioAdminDeOrganizacao());
+    const espiao = criarAdminEspiao(null, false);
+    vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
+
+    const form = new FormData();
+    form.set("escopo", "organizacao");
+    form.set("peca", "icone");
+    form.set("file", arquivoPng());
+
+    const { POST } = await import("./route");
+    const res = await POST(
+      new NextRequest("http://localhost/api/v1/marca/logo", { method: "POST", body: form }),
+    );
+
+    expect(res.status).toBe(422);
+    expect(espiao.rpcChamadas).toHaveLength(0);
+    expect(espiao.fromChamadas).toHaveLength(0);
+  });
+
+  it("a logo clara sem o módulo continua exigindo papel admin", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(usuarioAdminDeOrganizacao());
+    vi.mocked(orgAtivaSemPortao).mockResolvedValue({
+      orgId: ORG_ID,
+      name: "Org",
+      role: "agent",
+      org_status: "active",
+    } as never);
+    const espiao = criarAdminEspiao(null, false);
+    vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
+
+    const form = new FormData();
+    form.set("escopo", "organizacao");
+    form.set("file", arquivoPng());
+
+    const { POST } = await import("./route");
+    const res = await POST(
+      new NextRequest("http://localhost/api/v1/marca/logo", { method: "POST", body: form }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: { code: "forbidden_role" } });
+    expect(espiao.rpcChamadas).toHaveLength(0);
+  });
+
+  it("a logo clara sem o módulo continua exigindo o segundo fator em dia", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(usuarioAdminDeOrganizacao());
+    vi.mocked(mfaEmDivida).mockResolvedValueOnce(true);
+    const espiao = criarAdminEspiao(null, false);
+    vi.mocked(createAdminClient).mockReturnValue(espiao.client as never);
+
+    const form = new FormData();
+    form.set("escopo", "organizacao");
+    form.set("file", arquivoPng());
+
+    const { POST } = await import("./route");
+    const res = await POST(
+      new NextRequest("http://localhost/api/v1/marca/logo", { method: "POST", body: form }),
+    );
+
+    // Só o status: quem barra primeiro é `orgAtivaDaApi`, e a rota rotula toda
+    // recusa dele como `org_suspended` (comportamento anterior a esta mudança).
     expect(res.status).toBe(403);
     expect(espiao.rpcChamadas).toHaveLength(0);
     expect(espiao.removeChamadas).toHaveLength(0);
