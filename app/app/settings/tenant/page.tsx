@@ -13,6 +13,11 @@ import { InboxDaEmpresaForm } from "./_inbox";
 import { TenantForm } from "./_form";
 import { InterfaceDaEmpresaForm } from "./_interface";
 import { PerfilDaEmpresaForm } from "./_perfil";
+import { LogoDaEmpresaForm } from "./_logo";
+import { logoDaEmpresa } from "@/lib/branding/logo-da-empresa";
+import { marcaDaOrganizacaoDeSettings } from "@/lib/branding/organizacao";
+import { moduloLigado } from "@/lib/instalacao/modulos";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { camposDoNegocioDosFunis } from "@/lib/leads/compras-do-contato";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +75,15 @@ export default async function TenantSettingsPage() {
   // o que a tela mostra é o que o PDF vai imprimir, inclusive o `null` de quem
   // deixou a alínea em branco.
   const alineas = row ? art15DoControlador(row.settings) : null;
+  // A logo da empresa (avatar do seletor) vale com ou sem o módulo de marca
+  // própria; o módulo só muda o texto que explica onde mais ela aparece.
+  const logoAtual = row
+    ? logoDaEmpresa(activeOrg.orgId, marcaDaOrganizacaoDeSettings(row.settings)?.logo_path ?? null)
+    : null;
+  const marcaPropriaLigada = row
+    ? // Só decide uma frase: falha de leitura não derruba a tela.
+      await moduloLigado(createAdminClient(), "marca_por_organizacao").catch(() => false)
+    : false;
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
@@ -101,6 +115,13 @@ export default async function TenantSettingsPage() {
             dpo_email: row.dpo_email,
             privacy_policy_url: row.privacy_policy_url,
           }}
+        />
+      )}
+      {row && (
+        <LogoDaEmpresaForm
+          logoUrl={logoAtual}
+          nome={row.display_name}
+          marcaPropriaLigada={marcaPropriaLigada}
         />
       )}
       {row && <PerfilDaEmpresaForm initial={typeof oQueFaz === "string" ? oQueFaz : ""} />}

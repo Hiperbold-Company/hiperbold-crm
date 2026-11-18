@@ -183,6 +183,14 @@ export interface UserOrgMembership {
   org_status?: string | null;
   /** `organizations.suspended_kind` — só significa algo com status 'suspended'. */
   suspended_kind?: string | null;
+  /**
+   * A logo da EMPRESA como avatar do seletor de organizações, já como URL
+   * pública (`lib/branding/logo-da-empresa.ts`). Vale com ou sem o módulo
+   * `marca_por_organizacao`: NÃO é a marca do produto, que continua em
+   * `ActiveOrg.marca` e só existe com o módulo ligado. `null` = sem logo, e o
+   * seletor mostra as iniciais.
+   */
+  logo_url?: string | null;
 }
 
 export interface AuthUser {

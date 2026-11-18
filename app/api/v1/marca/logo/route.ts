@@ -58,6 +58,7 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { EscritaDePlatformAdminNegada, requirePlatformAdminEscrita } from "@/lib/auth/requirePlatformAdmin";
+import { invalidarOrg } from "@/lib/auth/cache-curto";
 import { loadAuthUser, mfaEmDivida } from "@/lib/auth/server";
 import { orgAtivaDaApi } from "@/lib/auth/require-role";
 import { escreveComoPlatformAdmin, roleAtLeast } from "@/lib/auth/types";
@@ -144,6 +145,19 @@ type Contexto =
 type Recusa = { readonly codigo: string; readonly mensagem: string; readonly status: number };
 
 /**
+ * A logo da EMPRESA (peça `logo`, tema claro) não depende do módulo
+ * `marca_por_organizacao`: toda organização pode enviá-la, porque ela é o avatar
+ * do seletor de empresas (`lib/branding/logo-da-empresa.ts`). Isso NÃO faz a logo
+ * repintar o produto: com o módulo desligado, `resolverMarcaDaOrganizacao` segue
+ * deixando a camada da organização fora da pilha. O logo do tema escuro só serve
+ * à marca do produto, então continua exigindo o módulo (o ícone da aba nem chega
+ * aqui no escopo da organização: `lerAlvo` já o recusou).
+ */
+function exigeModuloDeMarca(alvo: Alvo): boolean {
+  return !(alvo.peca === "logo" && alvo.tema === "claro");
+}
+
+/**
  * O gate, por escopo. Devolve o contexto JÁ com o prefixo montado de fonte
  * confiável — assim nenhum caminho abaixo tem a oportunidade de montá-lo do body.
  *
@@ -161,7 +175,10 @@ type Recusa = { readonly codigo: string; readonly mensagem: string; readonly sta
  * `lib/auth/require-role.ts`: papel `admin` (ou platform admin com scope `full`,
  * `escreveComoPlatformAdmin`) + `mfaEmDivida`.
  */
-async function abrirContexto(escopo: Escopo): Promise<{ ctx: Contexto } | { recusa: Recusa }> {
+async function abrirContexto(
+  escopo: Escopo,
+  alvo: Alvo,
+): Promise<{ ctx: Contexto } | { recusa: Recusa }> {
   const user = await loadAuthUser();
   if (!user) {
     return { recusa: { codigo: "unauthenticated", mensagem: "Faça login.", status: 401 } };
@@ -205,9 +222,14 @@ async function abrirContexto(escopo: Escopo): Promise<{ ctx: Contexto } | { recu
     };
   }
   // D-178: a marca por empresa é um módulo da instalação, desligado por padrão.
-  // Vale para subir E para remover: com o módulo desligado nada do que a empresa
-  // gravou é aplicado, então não há o que trocar nem o que limpar por aqui.
-  if (!(await moduloLigado(createAdminClient(), "marca_por_organizacao"))) {
+  // Vale para subir E para remover o logo do tema ESCURO, que só a marca do
+  // produto usa. A logo clara é também o avatar da empresa no seletor e fica
+  // liberada com o módulo desligado (ver `exigeModuloDeMarca`). A ordem continua
+  // módulo → papel → MFA para quem passa por esta checagem.
+  if (
+    exigeModuloDeMarca(alvo) &&
+    !(await moduloLigado(createAdminClient(), "marca_por_organizacao"))
+  ) {
     return {
       recusa: {
         codigo: "modulo_desligado",
@@ -340,6 +362,10 @@ async function gravarCaminho(
   if (data !== 1) {
     return { codigo: "internal_error", mensagem: "O logo não foi gravado.", status: 500 };
   }
+  // O avatar do seletor mora no snapshot de vínculos (`lerPermissoes`), que tem
+  // cache curto de 30 s. Sem isto, quem acabou de enviar a logo só a veria no
+  // seletor depois do TTL.
+  invalidarOrg(ctx.orgId);
   return null;
 }
 
@@ -441,7 +467,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const lido = lerAlvo(escopoLido.data, form?.get("peca"), form?.get("tema"));
   if ("mensagem" in lido) return fail("validation_failed", lido.mensagem, 422, { requestId });
   const alvo = lido.alvo;
-  const aberto = await abrirContexto(escopoLido.data);
+  const aberto = await abrirContexto(escopoLido.data, alvo);
   if ("recusa" in aberto) {
     return fail(aberto.recusa.codigo, aberto.recusa.mensagem, aberto.recusa.status, { requestId });
   }
@@ -545,7 +571,7 @@ export async function DELETE(req: NextRequest): Promise<Response> {
   const lido = lerAlvo(escopoLido.data, busca.get("peca"), busca.get("tema"));
   if ("mensagem" in lido) return fail("validation_failed", lido.mensagem, 422, { requestId });
   const alvo = lido.alvo;
-  const aberto = await abrirContexto(escopoLido.data);
+  const aberto = await abrirContexto(escopoLido.data, alvo);
   if ("recusa" in aberto) {
     return fail(aberto.recusa.codigo, aberto.recusa.mensagem, aberto.recusa.status, { requestId });
   }

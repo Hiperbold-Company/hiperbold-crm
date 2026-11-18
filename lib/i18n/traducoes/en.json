@@ -14706,5 +14706,8 @@
   "Motivo da recusa (opcional)": "Reason for declining (optional)",
   "Prazo da solicitação": "Request deadline",
   "Uso do orçamento de IA": "AI budget usage",
-  "Este funil está arquivado. Tire-o do arquivo em Funis para editar o cartão.": "This pipeline is archived. Unarchive it in Pipelines to edit the card."
+  "Este funil está arquivado. Tire-o do arquivo em Funis para editar o cartão.": "This pipeline is archived. Unarchive it in Pipelines to edit the card.",
+  "A logo aparece num círculo ao lado do nome da empresa, no seletor de empresas do menu. Sem logo, o círculo mostra as iniciais.": "The logo appears in a circle next to the company name, in the company switcher in the menu. Without a logo, the circle shows the initials.",
+  "Como a marca própria está ligada, ela também é a logo do sistema para esta empresa.": "Since custom branding is on, it is also the system logo for this company.",
+  "PNG ou JPG, até 512 KB. O círculo mostra o centro da imagem: prefira uma logo quadrada.": "PNG or JPG, up to 512 KB. The circle shows the center of the image: a square logo works best."
 }

@@ -114,6 +114,8 @@ export const CHAVE_DO_MODULO: Record<(typeof MODULOS_OPCIONAIS_POR_FLAG)[number]
   // esta chave ligada, o admin de cada empresa volta a trocar nome, cor e logo
   // dela em Configurações → Marca. Desligada, a tela, a gravação e o efeito do que
   // já estava gravado somem juntos: o dado fica no banco, só não é aplicado.
+  // Exceção: a logo clara da empresa segue enviável em Configurações › Organização,
+  // como avatar do seletor de empresas; desligada, ela não entra na marca do produto.
   marca_por_organizacao: "MODULO_MARCA_POR_ORGANIZACAO",
   // Doc 79 (b): a proposta comercial do #1832 tem DUAS chaves — esta, de quem
   // administra o servidor (quem revende decide se oferece), e a de cada
