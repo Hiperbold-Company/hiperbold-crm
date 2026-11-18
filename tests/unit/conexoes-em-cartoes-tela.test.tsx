@@ -70,6 +70,7 @@ function cartao(parcial: Partial<CartaoDaConexao> & Pick<CartaoDaConexao, "id" |
     numero_ou_handle: null,
     status: "conectado",
     status_bruto: "WORKING",
+    pareamento: null,
     created_at: "2026-11-17T00:00:00Z",
     oficial: null,
     ...parcial,

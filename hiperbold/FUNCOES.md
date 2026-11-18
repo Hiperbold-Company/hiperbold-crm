@@ -28,7 +28,7 @@ A lista de ocultas mora num único arquivo: [`lib/hiperbold/funcoes-ocultas.ts`]
 | Conhecimento, Memória, Ações da IA, Ferramentas externas da IA | O que o agente consulta e pode fazer. |
 | Casos, Alertas, Aviso no WhatsApp, Sugestões da IA, Execuções, Uso e orçamento, Evolução da IA | Acompanhar o que a IA fez e decidir o que ela sugere. |
 | Desempenho, Atividades, Faturamento | Números do período e quanto entrou. |
-| Conexões WhatsApp: **UAZAPI** (QR Code) e **API Oficial (Meta)** | Por onde o negócio fala com o cliente. A opção que se chamava "API não oficial" passou a se chamar UAZAPI. |
+| Conexões WhatsApp: **UAZAPI** (QR Code), **API Oficial (Meta)** e **WAHA** (QR Code) | Por onde o negócio fala com o cliente. A opção que se chamava "API não oficial" passou a se chamar UAZAPI. O WAHA ("WhatsApp por QR Code (WAHA)") aparece no Criar para todas as empresas só quando a instalação tem `WAHA_API_BASE_URL` e `WAHA_API_KEY` (decisão do Filipe, 18/11/2026). |
 | Webhooks (receber e enviar dados) | Avisar outros sistemas quando algo acontece, e receber dados de fora. |
 | Nuvemshop | Trazer pedidos e clientes da loja. |
 | Equipe, Distribuição de atendimento, Tags, Organização, Marca, LGPD, Chaves de integração, Histórico de ações, Notificações, Perfil, Segurança (verificação em duas etapas e sessões) | Configurações do dia a dia. |

@@ -170,6 +170,24 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   }
   const validSignature = auth.signatureVerified;
 
+  // O token resolve a organização e a sessão; a `session` do corpo tem de ser a
+  // MESMA. Sem isto, quem tem o token de uma sessão injeta evento em nome de
+  // outra sessão da mesma organização. Depois do portão de assinatura, para a
+  // diferença 404/401 não virar oráculo do nome da sessão; a resposta é a mesma
+  // de token desconhecido e não ecoa nome algum.
+  // `session` de TIPO errado (nem texto nem ausente) não é recusada aqui: o estágio 2
+  // a reprova pelo contrato e arquiva o corpo cru com esse desfecho (AC do PRD §3.3),
+  // e nada é processado.
+  const sessaoDoCorpo = (roteado as { session?: unknown }).session;
+  const tipoOk = sessaoDoCorpo === undefined || sessaoDoCorpo === null || typeof sessaoDoCorpo === "string";
+  if (tipoOk && sessaoDoCorpo !== session.waha_session_name) {
+    logger.warn("[waha.webhook] session do corpo difere da sessão do token", {
+      request_id: requestId,
+      channel_session_id: session.id,
+    });
+    return fail("not_found", "unknown webhook token", 404, { requestId });
+  }
+
   const eventType = roteado.event ?? "unknown";
   const externalId = roteado.payload?.id ?? null;
 
