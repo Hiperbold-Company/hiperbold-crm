@@ -31,8 +31,7 @@ import { plataformaDaConexao } from "@/lib/channels/listar-conexoes";
 const COLUNAS_BASICAS =
   "id, provider, display_name, phone_number, status, created_at, meta_waba_id, meta_phone_number_id";
 /** Extras de migrations posteriores (canal social, desfecho do webhook da 0311): sem elas, o cartão sai igual. */
-const COLUNAS_EXTRAS =
-  "meta_social_platform, meta_social_username, meta_webhook_override_uri, meta_webhook_override_erro, responsible_user_id";
+const COLUNAS_EXTRAS = "meta_social_platform, meta_social_username, meta_webhook_override_uri, meta_webhook_override_erro";
 
 export type TipoDaConexao = "whatsapp_oficial" | "whatsapp_qr" | "instagram" | "messenger" | "outros";
 export type StatusDaConexao = "conectado" | "desconectado" | "precisa_atencao";
@@ -49,8 +48,6 @@ export interface CartaoDaConexao {
   status: StatusDaConexao;
   status_bruto: string;
   created_at: string;
-  /** O membro responsável pela conexão (migration 1019); `null` = nenhum. */
-  responsavel_user_id: string | null;
   /** Só na oficial; `null` nos demais. */
   oficial: { waba_id: string | null; meta_phone_number_id: string | null; webhook_registrado: boolean } | null;
 }
@@ -112,7 +109,6 @@ export function cartaoDaLinha(linha: Record<string, unknown>): CartaoDaConexao {
     status: statusDaConexao(statusBruto, ehOficialDireta && erroDoWebhook !== null),
     status_bruto: statusBruto,
     created_at: String(linha.created_at ?? ""),
-    responsavel_user_id: texto(linha.responsible_user_id),
     oficial:
       tipo === "whatsapp_oficial"
         ? {

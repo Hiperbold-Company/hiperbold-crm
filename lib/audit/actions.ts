@@ -372,9 +372,6 @@ export const AUDIT_ACTIONS = [
   // A cor da etiqueta da conexão (channel_sessions.label_color, migration 1012,
   // fork Hiperbold). Mesma rota do nome; só aparência no CRM.
   "channel.label_color_changed",
-  // O membro responsável pela conexão (channel_sessions.responsible_user_id,
-  // migration 1019, fork Hiperbold). Só marca o padrão do seletor do negócio.
-  "channel.responsible_changed",
   // A janela de manutenção (#2388): criar, editar e cancelar são mutações da
   // tela e auditam como toda mutação. A pausa e a retomada que a janela aplica
   // saem como `channel.disabled`/`channel.enabled`, com `origem: schedule`.

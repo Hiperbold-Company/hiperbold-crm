@@ -11,9 +11,9 @@ import { conexaoPadraoDoSeletor, type ConexaoResumo } from "@/lib/inbox/conexao-
  *
  * As opções e o padrão vêm de `useMinhasConexoes` (`GET …/open-with-contact/opcoes`): só as
  * conexões da organização ativa pelas quais quem está logado pode iniciar conversa (no modo "só a
- * conexão própria", a mesma régua que o POST confere). Vem marcado com a conexão de que a pessoa é
- * o membro responsável (`conexaoPadraoDoSeletor`); sem nenhuma, em "Automático", que é o
- * comportamento de antes (`decidirAbertura`).
+ * conexão própria", a mesma régua que o POST confere). Vem marcado com a conexão em que a pessoa
+ * está entre os responsáveis do canal em Configurações › Atendimento (`conexaoPadraoDoSeletor`);
+ * sem nenhuma, em "Automático", que é o comportamento de antes (`decidirAbertura`).
  *
  * `conexao` = a escolhida; `null` = Automático. Sem opções (leitura falhou ou resposta antiga), o
  * seletor não aparece e a abertura segue como antes.

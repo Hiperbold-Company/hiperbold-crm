@@ -6782,7 +6782,6 @@ export type Database = {
           pareamento_qr_iniciado_em: string | null;
           phone_number: string | null;
           provider: string;
-          responsible_user_id: string | null;
           status: string;
           status_reason: string | null;
           uazapi_base_url: string | null;
@@ -6843,7 +6842,6 @@ export type Database = {
           pareamento_qr_iniciado_em?: string | null;
           phone_number?: string | null;
           provider?: string;
-          responsible_user_id?: string | null;
           status?: string;
           status_reason?: string | null;
           uazapi_base_url?: string | null;
@@ -6903,7 +6901,6 @@ export type Database = {
           pareamento_qr_iniciado_em?: string | null;
           phone_number?: string | null;
           provider?: string;
-          responsible_user_id?: string | null;
           status?: string;
           status_reason?: string | null;
           uazapi_base_url?: string | null;
@@ -18589,10 +18586,6 @@ export type Database = {
       };
       fn_followup_turno_descartado: { Args: { p_job: string; p_org: string }; Returns: boolean };
       fn_gasto_de_ia_do_mes: { Args: { p_org: string }; Returns: number };
-      fn_gravar_membro_da_conexao: {
-        Args: { p_canal: string; p_org: string; p_user: string | null };
-        Returns: Json;
-      };
       fn_go_live_solta_numero_formado: { Args: Record<PropertyKey, never>; Returns: number };
       fn_google_appointment: {
         Args: { p_action: string; p_args?: Json; p_id: string; p_org: string };

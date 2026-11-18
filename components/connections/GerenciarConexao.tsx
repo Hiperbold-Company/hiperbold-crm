@@ -20,7 +20,6 @@ import { ICONE_DO_TIPO, StatusDaConexaoBadge, tituloDaConexao } from "./CartaoDe
 import { ChannelAiAccess } from "./ChannelAiAccess";
 import { EtiquetaDaConexao } from "./EtiquetaDaConexao";
 import { NumeroOficialCard } from "./NumeroOficialCard";
-import { MembroResponsavelDaConexao } from "./MembroResponsavelDaConexao";
 import { FormularioOficialManual, ParaIntegrarOficial, WebhookDoNumeroOficial } from "./OficialAvancado";
 import { ReconectarConexao } from "./ReconectarConexao";
 import { precisaReconectar, urlDeConectar, type EstadoMetaSocial } from "./RedesSociaisClient";
@@ -87,7 +86,7 @@ function Avancado({ children, abertoAoMontar = false }: { children: ReactNode; a
   );
 }
 
-/** Nome (e etiqueta), renomear, remover, o membro responsável e o acesso da IA: o que toda conexão tem. */
+/** Nome (e etiqueta), renomear, remover e o acesso da IA: o que toda conexão tem. */
 function BlocoComum({
   conexao,
   nome,
@@ -140,11 +139,6 @@ function BlocoComum({
           />
           {podeRemover ? <RemoverConexao rota={rotaDeRemover} aoRemover={aoRemovida} /> : null}
         </div>
-        <MembroResponsavelDaConexao
-          channelId={conexao.id}
-          responsavelUserId={conexao.responsavel_user_id ?? null}
-          onSaved={aoMudar}
-        />
       </Card>
       <ChannelAiAccess channelId={conexao.id} />
     </>

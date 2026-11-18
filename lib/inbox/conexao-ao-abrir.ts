@@ -86,9 +86,9 @@ export interface OpcoesDeAbertura {
    */
   conexoes_do_seletor?: ConexaoResumo[];
   /**
-   * As conexões em que sou o MEMBRO RESPONSÁVEL (`channel_sessions.responsible_user_id`, migration
-   * 1019), na mesma ordem. Só marcam o padrão do seletor: não entram em nenhuma regra de permissão
-   * (essas leem os responsáveis do roteamento, acima).
+   * As conexões do seletor em que estou entre os responsáveis do canal
+   * (`channel_routing_responsibles`, Configurações › Atendimento), na mesma ordem. Canal sem
+   * responsáveis próprios não entra. Marcam o padrão do seletor.
    */
   vinculadas_a_mim_ids?: string[];
 }
@@ -134,7 +134,7 @@ export function decidirAbertura(op: OpcoesDeAbertura): DecisaoDeAbertura {
 
 /**
  * A conexão que o seletor do painel do negócio já traz marcada: entre as conexões do seletor em
- * que sou o membro responsável, a primeira CONECTADA (na ordem de criação); se nenhuma estiver
+ * que estou entre os responsáveis do canal (Configurações › Atendimento), a primeira CONECTADA (na ordem de criação); se nenhuma estiver
  * conectada, a primeira delas. Sem nenhuma vinculada a mim, `null` — o seletor fica em
  * "Automático" e a abertura segue a regra de sempre (`decidirAbertura`).
  */

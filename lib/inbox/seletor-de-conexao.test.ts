@@ -7,8 +7,10 @@ import { CHANNEL_PROVIDER_META_SOCIAL, DEFAULT_CHANNEL_PROVIDER } from "@/lib/ch
 
 /**
  * O seletor de conexão do painel do negócio (pedido do dono do produto, 18/11/2026): vem marcado
- * com a conexão de que o usuário logado é o MEMBRO RESPONSÁVEL (migration 1019). Com várias, a
- * primeira conectada na ordem de criação; sem nenhuma, "Automático" (a regra de sempre).
+ * com a conexão em que o usuário logado está entre os responsáveis do canal
+ * (`channel_routing_responsibles`, Configurações › Atendimento). Com várias, a primeira conectada
+ * na ordem de criação; sem nenhuma, "Automático" (a regra de sempre). Canal sem responsáveis
+ * próprios ("todos os atendentes elegíveis") não conta como vinculado.
  */
 
 const c = (id: string, conectada = true): ConexaoResumo => ({ id, nome: id, conectada });
@@ -106,46 +108,53 @@ function sessao(id: string, org: string, nome: string, extra: Linha = {}): Linha
     metadata: {},
     archived_at: null,
     created_at: "2026-01-01T00:00:00Z",
-    responsible_user_id: null,
     ...extra,
   };
 }
 
-function cenario(p: { modo?: "choose" | "own_only"; ingrid1Fora?: boolean; comRoteamentoDaRosana?: boolean } = {}) {
+function cenario(p: { modo?: "choose" | "own_only"; ingrid1Fora?: boolean } = {}) {
   return bancoEmMemoria({
     organizations: [{ id: ORG, settings: { routing: { conversation_connection_mode: p.modo ?? "choose" } } }],
     channel_sessions: [
       sessao(S_GERAL, ORG, "Número geral"),
-      sessao(S_INGRID_1, ORG, "Ingrid 1", {
-        responsible_user_id: INGRID,
-        ...(p.ingrid1Fora ? { status: "STOPPED" } : {}),
-      }),
-      sessao(S_INGRID_2, ORG, "Ingrid 2", { responsible_user_id: INGRID }),
-      sessao(S_ROSANA, ORG, "Rosana", { responsible_user_id: ROSANA }),
-      sessao(S_INSTAGRAM, ORG, "Instagram", { provider: CHANNEL_PROVIDER_META_SOCIAL, responsible_user_id: INGRID }),
-      sessao(S_ARQUIVADA, ORG, "Arquivada", { archived_at: "2026-06-01T00:00:00Z", responsible_user_id: INGRID }),
-      // Linha forjada: outra empresa com a Ingrid como responsável.
-      sessao(S_OUTRA_ORG, OUTRA_ORG, "De outra empresa", { responsible_user_id: INGRID }),
+      sessao(S_INGRID_1, ORG, "Ingrid 1", p.ingrid1Fora ? { status: "STOPPED" } : {}),
+      sessao(S_INGRID_2, ORG, "Ingrid 2"),
+      sessao(S_ROSANA, ORG, "Rosana"),
+      sessao(S_INSTAGRAM, ORG, "Instagram", { provider: CHANNEL_PROVIDER_META_SOCIAL }),
+      sessao(S_ARQUIVADA, ORG, "Arquivada", { archived_at: "2026-06-01T00:00:00Z" }),
+      sessao(S_OUTRA_ORG, OUTRA_ORG, "De outra empresa"),
     ],
-    channel_routing_policies: p.comRoteamentoDaRosana
-      ? [{ id: "p-rosana", organization_id: ORG, channel_session_id: S_ROSANA }]
-      : [],
-    channel_routing_responsibles: p.comRoteamentoDaRosana
-      ? [{ organization_id: ORG, policy_id: "p-rosana", user_id: ROSANA }]
-      : [],
+    channel_routing_policies: [
+      // O número geral tem política, mas sem responsáveis próprios: não é de ninguém.
+      { id: "p-geral", organization_id: ORG, channel_session_id: S_GERAL },
+      { id: "p-ingrid-1", organization_id: ORG, channel_session_id: S_INGRID_1 },
+      { id: "p-ingrid-2", organization_id: ORG, channel_session_id: S_INGRID_2 },
+      { id: "p-rosana", organization_id: ORG, channel_session_id: S_ROSANA },
+      { id: "p-instagram", organization_id: ORG, channel_session_id: S_INSTAGRAM },
+      { id: "p-arquivada", organization_id: ORG, channel_session_id: S_ARQUIVADA },
+      // Linha forjada: política de OUTRA organização apontando para o número geral desta.
+      { id: "p-forjada", organization_id: OUTRA_ORG, channel_session_id: S_GERAL },
+      { id: "p-outra", organization_id: OUTRA_ORG, channel_session_id: S_OUTRA_ORG },
+    ],
+    channel_routing_responsibles: [
+      { organization_id: ORG, policy_id: "p-ingrid-1", user_id: INGRID },
+      { organization_id: ORG, policy_id: "p-ingrid-2", user_id: INGRID },
+      { organization_id: ORG, policy_id: "p-rosana", user_id: ROSANA },
+      { organization_id: ORG, policy_id: "p-instagram", user_id: INGRID },
+      { organization_id: ORG, policy_id: "p-arquivada", user_id: INGRID },
+      { organization_id: OUTRA_ORG, policy_id: "p-forjada", user_id: INGRID },
+      { organization_id: OUTRA_ORG, policy_id: "p-outra", user_id: INGRID },
+    ],
   });
 }
 
 const base = { organizationId: ORG, userId: INGRID, role: "agent" };
 
 describe("carregarOpcoesDeAbertura — os dados do seletor", () => {
-  it("lista só conexões 1:1 vivas desta organização, e marca as vinculadas a mim", async () => {
+  it("lista só conexões 1:1 vivas desta organização, e marca as que tenho como responsável", async () => {
     const op = await carregarOpcoesDeAbertura(cenario(), base);
     const ids = (op.conexoes_do_seletor ?? []).map((x) => x.id);
     expect(ids).toEqual([S_GERAL, S_INGRID_1, S_INGRID_2, S_ROSANA]);
-    expect(ids).not.toContain(S_INSTAGRAM);
-    expect(ids).not.toContain(S_ARQUIVADA);
-    expect(ids).not.toContain(S_OUTRA_ORG);
     expect(op.vinculadas_a_mim_ids).toEqual([S_INGRID_1, S_INGRID_2]);
     expect(conexaoPadraoDoSeletor(op)?.id).toBe(S_INGRID_1);
   });
@@ -155,18 +164,21 @@ describe("carregarOpcoesDeAbertura — os dados do seletor", () => {
     expect(conexaoPadraoDoSeletor(op)).toEqual({ id: S_INGRID_2, nome: "Ingrid 2", conectada: true });
   });
 
-  it("o vínculo de membro não mexe na regra de permissão (responsáveis do roteamento)", async () => {
+  it("canal sem responsáveis próprios e política de outra organização não contam como meus", async () => {
     const op = await carregarOpcoesDeAbertura(cenario(), base);
-    expect(op.minha_conexao).toBeNull();
-    expect(op.minhas_conexoes_ids).toEqual([]);
+    expect(op.vinculadas_a_mim_ids).not.toContain(S_GERAL);
+    expect(op.vinculadas_a_mim_ids).not.toContain(S_OUTRA_ORG);
+  });
+
+  it("quem não é responsável de canal nenhum: Automático", async () => {
+    const op = await carregarOpcoesDeAbertura(cenario(), { ...base, userId: "00000000-0000-4000-8000-000000000099" });
+    expect(op.vinculadas_a_mim_ids).toEqual([]);
+    expect(conexaoPadraoDoSeletor(op)).toBeNull();
   });
 
   it("modo 'só a conexão própria', atendente: o seletor só traz o que o POST aceitaria", async () => {
-    // A conexão da Rosana tem responsável no roteamento; a Ingrid não tem conexão própria lá,
-    // então só pode iniciar pelos números sem responsável.
-    const op = await carregarOpcoesDeAbertura(cenario({ modo: "own_only", comRoteamentoDaRosana: true }), base);
-    const ids = (op.conexoes_do_seletor ?? []).map((x) => x.id);
-    expect(ids).not.toContain(S_ROSANA);
-    expect(ids).toContain(S_INGRID_1);
+    const op = await carregarOpcoesDeAbertura(cenario({ modo: "own_only" }), base);
+    expect((op.conexoes_do_seletor ?? []).map((x) => x.id)).toEqual([S_INGRID_1, S_INGRID_2]);
+    expect(conexaoPadraoDoSeletor(op)?.id).toBe(S_INGRID_1);
   });
 });

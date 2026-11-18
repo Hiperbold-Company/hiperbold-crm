@@ -3,8 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * O seletor de conexão do painel do negócio (18/11/2026): nasce marcado com a conexão de que
- * quem está logado é o membro responsável, e o clique em "Abrir conversa no Chat do CRM" leva o
+ * O seletor de conexão do painel do negócio (18/11/2026): nasce marcado com a conexão em que
+ * quem está logado é responsável do canal (Configurações › Atendimento), e o clique em "Abrir conversa no Chat do CRM" leva o
  * `channel_session_id` dela ao POST (que reaproveita a conversa do contato naquela conexão). Em
  * "Automático", o caminho de antes.
  */
