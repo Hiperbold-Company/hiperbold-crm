@@ -152,9 +152,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: github.event_name == 'pull_request'
         with:
-          sparse-checkout: |
-            scripts/pr-alcanca-o-e2e.sh
-            scripts/pr-rota-urgente.sh
+          sparse-checkout: scripts/pr-alcanca-o-e2e.sh
           sparse-checkout-cone-mode: false
 
       - name: O PR alcança o que o e2e mede?
@@ -180,6 +178,18 @@ jobs:
           echo "e2e=${resposta}" >> "$GITHUB_OUTPUT"
           echo "${n} arquivo(s) no PR → e2e=${resposta}"
 
+      # O script da rota urgente vem da BASE do PR, não do merge ref: o PR não
+      # pode reescrever quem decide o pulo dele. Pasta à parte para não trocar
+      # a versão dos outros scripts deste job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event_name == 'pull_request'
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .base-do-pr
+          sparse-checkout: scripts/pr-rota-urgente.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       # ROTA URGENTE (fork Hiperbold): PR com o rótulo `urgente` que não mexe em
       # supabase/ pula as partes. Fora de pull_request é sempre `nao`. Regra em
       # scripts/pr-rota-urgente.sh; os três caminhos do deploy no cabeçalho de
@@ -194,7 +204,7 @@ jobs:
           if [ "${GITHUB_EVENT_NAME}" != "pull_request" ]; then
             echo "urgente=nao" >> "$GITHUB_OUTPUT"; echo "evento ${GITHUB_EVENT_NAME}: caminho completo"; exit 0
           fi
-          resposta=$(bash scripts/pr-rota-urgente.sh "$PR") || resposta=nao
+          resposta=$(bash .base-do-pr/scripts/pr-rota-urgente.sh "$PR") || resposta=nao
           [ "$resposta" = "sim" ] || resposta=nao
           echo "urgente=${resposta}" >> "$GITHUB_OUTPUT"
 

@@ -33,11 +33,13 @@ const RAIZ = process.cwd();
 const PORTAO = path.join(RAIZ, "scripts/merge-ja-provado-no-pr.sh");
 const ROTA = path.join(RAIZ, "scripts/pr-rota-urgente.sh");
 const ALARME = path.join(RAIZ, "scripts/alarme-reteste-da-main.sh");
+const TOPO = path.join(RAIZ, "scripts/ainda-e-o-topo-da-main.sh");
 const REPO = "Hiperbold-Company/hiperbold-crm";
 
 const MERGE = "a".repeat(40);
 const HEAD = "b".repeat(40);
 const PAI1 = "c".repeat(40);
+const ARVORE = "e".repeat(40);
 
 const temJq = spawnSync("jq", ["--version"]).status === 0;
 const itComJq = temJq ? it : it.skip;
@@ -123,6 +125,10 @@ interface Run {
   status: string;
   conclusion: string | null;
   urgente?: boolean;
+  /** Números de PR a que o run está amarrado; padrão: o PR 7. */
+  prs?: number[];
+  /** Ramo do head do run; padrão: o do PR 7. */
+  ramo?: string;
 }
 
 const run = (id: number, status: string, conclusion: string | null, urgente = false): Run => ({
@@ -142,7 +148,9 @@ interface Cenario {
   prE2e?: Run | null;
   prPerf?: Run | null;
   rotulos?: string[];
-  arquivos?: string[];
+  arquivos?: (string | { filename: string; previous_filename?: string })[];
+  arvoreMerge?: string;
+  arvoreHead?: string;
   semJobsDe?: number[];
   sem?: string[];
 }
@@ -156,6 +164,9 @@ function respostasDoPortao(c: Cenario = {}): Respostas {
       event: evento,
       status: x.status,
       conclusion: x.conclusion,
+      pull_requests: (x.prs ?? [7]).map((number) => ({ number })),
+      head_branch: x.ramo ?? "lote/x",
+      head_repository: { full_name: REPO },
     })),
   });
   r[`GET repos/${REPO}/commits/${MERGE}/pulls`] = c.pulls ?? [
@@ -164,12 +175,14 @@ function respostasDoPortao(c: Cenario = {}): Respostas {
       merge_commit_sha: MERGE,
       merged_at: "2026-11-18T10:00:00Z",
       base: { ref: "main" },
-      head: { sha: HEAD },
+      head: { sha: HEAD, ref: "lote/x", repo: { full_name: REPO } },
     },
   ];
   r[`GET repos/${REPO}/commits/${MERGE}`] = {
+    commit: { tree: { sha: c.arvoreMerge ?? ARVORE } },
     parents: (c.pais ?? [PAI1, HEAD]).map((sha) => ({ sha })),
   };
+  r[`GET repos/${REPO}/commits/${HEAD}`] = { commit: { tree: { sha: c.arvoreHead ?? ARVORE } } };
   r[`GET repos/${REPO}/compare/${PAI1}...${HEAD}`] = { behind_by: c.behindBy ?? 0 };
   const q = (wf: string, sha: string, evento: string) =>
     `GET repos/${REPO}/actions/workflows/${wf}/runs?head_sha=${sha}&event=${evento}&per_page=30`;
@@ -201,10 +214,8 @@ function respostasDoPortao(c: Cenario = {}): Respostas {
     }
   }
   r[`GET repos/${REPO}/pulls/7`] = { labels: (c.rotulos ?? []).map((name) => ({ name })) };
-  r[`GET repos/${REPO}/pulls/7/files?per_page=100`] = (c.arquivos ?? ["app/page.tsx"]).map(
-    (filename) => ({
-      filename,
-    }),
+  r[`GET repos/${REPO}/pulls/7/files?per_page=100`] = (c.arquivos ?? ["app/page.tsx"]).map((f) =>
+    typeof f === "string" ? { filename: f } : f,
   );
   for (const k of c.sem ?? []) delete r[k];
   return r;
@@ -286,6 +297,46 @@ describe("merge-ja-provado-no-pr.sh — caminho 1, PR provado", () => {
     }
   });
 
+  itComJq("árvore do merge diferente da do head: recusa", () => {
+    const r = portao({ arvoreMerge: "f".repeat(40) });
+    expect(r.codigo).toBe(1);
+    expect(r.saida).toContain("árvore do merge");
+    expect(portao({ sem: [`GET repos/${REPO}/commits/${HEAD}`] }).codigo).toBe(1);
+  });
+
+  itComJq("PR de fork não passa pelo atalho", () => {
+    const r = portao({
+      pulls: [
+        {
+          number: 7,
+          merge_commit_sha: MERGE,
+          merged_at: "x",
+          base: { ref: "main" },
+          head: { sha: HEAD, repo: { full_name: "alguem/hiperbold-crm" } },
+        },
+      ],
+    });
+    expect(r.codigo).toBe(1);
+    expect(r.saida).toContain("fork");
+  });
+
+  itComJq("run do mesmo head amarrado a OUTRO PR não conta", () => {
+    expect(portao({ prCi: { ...run(101, "completed", "success"), prs: [8] } }).codigo).toBe(1);
+  });
+
+  itComJq("ramo apagado depois do merge (pull_requests vazio): amarra pelo ramo do PR", () => {
+    // Medido no PR #58: a API esvazia `.pull_requests` do run quando o ramo some.
+    const mesmoRamo = portao({
+      prCi: { ...run(101, "completed", "success"), prs: [] },
+      prE2e: { ...run(102, "completed", "success"), prs: [] },
+    });
+    expect(mesmoRamo.codigo, mesmoRamo.saida).toBe(0);
+    const outroRamo = portao({
+      prE2e: { ...run(102, "completed", "success"), prs: [], ramo: "outro" },
+    });
+    expect(outroRamo.codigo).toBe(1);
+  });
+
   itComJq("o reteste da main já falhou: o atalho não vale", () => {
     const r = portao({ mainE2e: [run(2, "completed", "failure")] });
     expect(r.codigo).toBe(1);
@@ -301,7 +352,8 @@ describe("merge-ja-provado-no-pr.sh — caminho 1, PR provado", () => {
   itComJq("e2e do PR ainda rodando e sem rótulo urgente: recusa e diz por quê", () => {
     const r = portao({ prE2e: run(102, "in_progress", null) });
     expect(r.codigo).toBe(1);
-    expect(r.saida).toContain("sem o rótulo urgente");
+    expect(r.saida).toContain("(f)");
+    expect(r.saida).toContain("in_progress");
   });
 
   itComJq("ci verde que pulou a matriz pela rota urgente NÃO vale como caminho completo", () => {
@@ -322,10 +374,31 @@ describe("merge-ja-provado-no-pr.sh — caminho 2, rota urgente", () => {
     expect(r.saida).toContain("rota urgente");
   });
 
-  itComJq("rótulo urgente com o e2e do PR ainda rodando: libera sem esperar o e2e", () => {
-    const r = portao({ prE2e: run(102, "in_progress", null), rotulos: ["urgente"] });
-    expect(r.codigo, r.saida).toBe(0);
+  itComJq(
+    "rótulo urgente mas o e2e do PR NÃO pulou pela regra (rodando, sem run, sem marca): recusa",
+    () => {
+      // Só vale a rota urgente que o próprio run do e2e aplicou; rótulo de agora não basta.
+      for (const prE2e of [run(102, "in_progress", null), null, run(102, "completed", "success")]) {
+        const r = portao({ prCi: URGENTE.prCi, prE2e, rotulos: ["urgente"] });
+        expect(r.codigo, r.saida).toBe(1);
+        expect(r.saida).toContain("(f)");
+      }
+    },
+  );
+
+  itComJq("marca do e2e ilegível (API falhando) nunca libera a rota urgente", () => {
+    const r = portao({ ...URGENTE, rotulos: ["urgente"], semJobsDe: [102] });
+    expect(r.codigo, r.saida).toBe(1);
+    expect(r.saida).toContain("jobs ilegíveis");
   });
+
+  itComJq(
+    "e2e do PR com marca urgente mas o ci sem marca (ci mediu tudo): libera pela rota urgente",
+    () => {
+      const r = portao({ prE2e: URGENTE.prE2e, rotulos: ["urgente"] });
+      expect(r.codigo, r.saida).toBe(0);
+    },
+  );
 
   itComJq("rótulo urgente mas o PR mexe em supabase/: exige o caminho completo", () => {
     const r = portao({
@@ -347,7 +420,7 @@ describe("merge-ja-provado-no-pr.sh — caminho 2, rota urgente", () => {
   itComJq("e2e do PR que FALHOU não vira rota urgente", () => {
     const r = portao({ prE2e: run(102, "completed", "failure"), rotulos: ["urgente"] });
     expect(r.codigo).toBe(1);
-    expect(r.saida).toContain("falha real");
+    expect(r.saida).toContain("completed/failure");
   });
 
   it("recusa sha malformado e falta de repositório, sem consultar nada", () => {
@@ -381,6 +454,40 @@ describe("pr-rota-urgente.sh", () => {
     expect(rota(["urgente"], ["app/a.ts", "supabase/baseline.sql"]).stdout.trim()).toBe("nao");
   });
 
+  itComJq.each([
+    ["update.sh"],
+    ["hostgator-setup-kit/update.sh"],
+    ["docker-compose.prod.yml"],
+    ["hiperbold/docker-compose.yml"],
+    ["hostgator-setup-kit/install.sh"],
+    ["scripts/test-db.sh"],
+    ["scripts/test-db-update.sh"],
+    ["scripts/pr-rota-urgente.sh"],
+    [".github/workflows/ci.yml"],
+    [".github/workflows/e2e.yml"],
+  ])("rótulo urgente mas mexe em %s: nao (caminho completo)", (arquivo) => {
+    expect(rota(["urgente"], ["app/a.ts", arquivo]).stdout.trim()).toBe("nao");
+  });
+
+  itComJq("renomeado conta pelo nome antigo também (previous_filename)", () => {
+    const r: Respostas = {
+      [`GET repos/${REPO}/pulls/7`]: { labels: [{ name: "urgente" }] },
+      [`GET repos/${REPO}/pulls/7/files?per_page=100`]: [
+        { filename: "docs/velho.sql", previous_filename: "supabase/migrations/1_0001_x.sql" },
+      ],
+    };
+    expect(rodar(ROTA, ["7"], r).stdout.trim()).toBe("nao");
+  });
+
+  itComJq("outros workflows e scripts não forçam o caminho completo", () => {
+    expect(
+      rota(
+        ["urgente"],
+        [".github/workflows/perf.yml", "scripts/pr-alcanca-o-e2e.sh"],
+      ).stdout.trim(),
+    ).toBe("sim");
+  });
+
   itComJq("falha ao ler rótulos ou arquivos, ou lista vazia: nao", () => {
     expect(rota(null, ["app/a.ts"]).stdout.trim()).toBe("nao");
     expect(rota(["urgente"], null).stdout.trim()).toBe("nao");
@@ -389,6 +496,32 @@ describe("pr-rota-urgente.sh", () => {
 
   it("recusa número de PR malformado", () => {
     expect(rodar(ROTA, ["7; rm -rf /"], {}).codigo).toBe(2);
+  });
+});
+
+// ── topo da main ─────────────────────────────────────────────────────────────
+
+describe("ainda-e-o-topo-da-main.sh", () => {
+  const topo = (sha: string | null) =>
+    rodar(TOPO, [MERGE], sha ? { [`GET repos/${REPO}/commits/main`]: { sha } } : {});
+
+  itComJq("o sha liberado é o topo da main: segue para o deploy", () => {
+    const r = topo(MERGE);
+    expect(r.codigo, r.saida).toBe(0);
+  });
+
+  itComJq("outro merge entrou depois: recusa, o deploy do mais novo cuida", () => {
+    const r = topo("9".repeat(40));
+    expect(r.codigo).toBe(1);
+    expect(r.saida).toContain("já não é o topo da main");
+  });
+
+  itComJq("sem conseguir ler o topo: recusa, nunca deploya no escuro", () => {
+    expect(topo(null).codigo).toBe(1);
+  });
+
+  it("recusa sha malformado", () => {
+    expect(rodar(TOPO, ["main"], {}).codigo).toBe(2);
   });
 });
 
@@ -516,6 +649,22 @@ describe("alarme-reteste-da-main.sh", () => {
     expect(r.chamadas).not.toContain("POST");
   });
 
+  itComJq(
+    "run inteiro cancelado (gatilho `cancelled`) e sem push mais novo: abre, com a conclusão certa",
+    () => {
+      const r = rodar(ALARME, [], respostasDoAlarme({ jobs: soCancelado }), {
+        RUN_ID,
+        SHA: MERGE,
+        WORKFLOW_NOME: "e2e",
+        RUN_URL: "u",
+        CONCLUSAO: "cancelled",
+      });
+      expect(r.codigo, r.saida).toBe(0);
+      expect(abriuIssue(r.chamadas)).toBe(true);
+      expect(r.chamadas).toContain("terminou em `cancelled`");
+    },
+  );
+
   itComJq("jobs ilegíveis contam como falha real (o alarme erra para o lado de avisar)", () => {
     const r = alarme({ jobs: null });
     expect(r.codigo, r.saida).toBe(0);
@@ -541,6 +690,9 @@ describe("os workflows chamam os scripts do jeito que os testes acima medem", ()
     expect(novo).toBeGreaterThan(-1);
     expect(novo).toBeLessThan(antigo);
     expect(antigo).toBeLessThan(easypanel);
+    const topo = deploy.indexOf("bash scripts/ainda-e-o-topo-da-main.sh");
+    expect(topo, "o deploy deixou de conferir o topo da main").toBeGreaterThan(antigo);
+    expect(topo).toBeLessThan(easypanel);
     expect(deploy).toMatch(/if bash scripts\/merge-ja-provado-no-pr\.sh "\$\{SHA\}"; then/);
   });
 
@@ -549,6 +701,7 @@ describe("os workflows chamam os scripts do jeito que os testes acima medem", ()
       "commit-passou-nos-testes.sh",
       "merge-ja-provado-no-pr.sh",
       "pr-rota-urgente.sh",
+      "ainda-e-o-topo-da-main.sh",
     ]) {
       expect(deploy).toContain(`scripts/${s}`);
     }
@@ -562,7 +715,12 @@ describe("os workflows chamam os scripts do jeito que os testes acima medem", ()
       expect(ler(f), f).toMatch(
         /- name: "Rota urgente: [^"]+"\n\s+if: github\.event_name == 'pull_request' && needs\.[a-z0-9-]+\.outputs\.urgente == 'sim'/,
       );
-      expect(ler(f), f).toContain("bash scripts/pr-rota-urgente.sh");
+      // O script da regra vem da BASE do PR (checkout à parte), nunca do merge ref.
+      expect(ler(f), f).toContain('resposta=$(bash .base-do-pr/scripts/pr-rota-urgente.sh "$PR")');
+      expect(ler(f), f).not.toContain("bash scripts/pr-rota-urgente.sh");
+      expect(ler(f), f).toMatch(
+        /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}\n\s+path: \.base-do-pr\n\s+sparse-checkout: scripts\/pr-rota-urgente\.sh\n/,
+      );
     }
     expect(readFileSync(PORTAO, "utf8")).toContain('startswith("Rota urgente")');
   });
@@ -574,6 +732,9 @@ describe("os workflows chamam os scripts do jeito que os testes acima medem", ()
       .filter((l) => !l.trimStart().startsWith("#"))
       .join("\n");
     expect(a).toContain('workflows: ["ci", "e2e"]');
+    expect(a).toContain(
+      "(github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'cancelled')",
+    );
     expect(a).toContain("branches: [main]");
     expect(a).toContain("bash scripts/alarme-reteste-da-main.sh");
     expect(semComentario.match(/^\s+[a-z-]+:\s*write\b/gm)).toEqual(["      issues: write"]);

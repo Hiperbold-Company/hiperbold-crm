@@ -283,12 +283,13 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   },
   // Exclusivo do fork Hiperbold. As três condições são deliberadas: a de
   // repositório impede outro fork de abrir issue no próprio repo; a de
-  // `failure` deixa sucesso e cancelamento quietos; a de `push` deixa PR fora
+  // conclusão deixa só sucesso quieto (`cancelled` entra porque teto estourado
+  // aparece assim; o script separa o superado); a de `push` deixa PR fora
   // — só o reteste da main importa depois do deploy.
   "alarme-reteste-da-main.yml::alarme": {
     condicao:
       ">- github.repository == 'Hiperbold-Company/hiperbold-crm' && " +
-      "github.event.workflow_run.conclusion == 'failure' && " +
+      "(github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'cancelled') && " +
       "github.event.workflow_run.event == 'push'",
     efeito:
       "Este job abre a issue quando o reteste da main falha depois de o deploy pelo portão do PR " +

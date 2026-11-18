@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ALARME: o reteste da main falhou num commit que JÁ FOI para a produção.
 # Usado pelo alarme-reteste-da-main.yml (exclusivo do fork Hiperbold) quando o
-# ci ou o e2e de um push na main termina em `failure`. Com o portão pelo PR
+# ci ou o e2e de um push na main termina em `failure` ou `cancelled`. Com o portão pelo PR
 # (scripts/merge-ja-provado-no-pr.sh), o deploy sai antes do reteste da main;
 # este script é o que torna o vermelho posterior visível. Não faz rollback.
 #
@@ -32,6 +32,8 @@ run_id="${RUN_ID:-}"
 sha="${SHA:-}"
 nome="${WORKFLOW_NOME:-reteste}"
 url="${RUN_URL:-}"
+conclusao="${CONCLUSAO:-failure}"
+case "$conclusao" in failure|cancelled) ;; *) conclusao=failure ;; esac
 if [ -z "$repo" ] || ! printf '%s' "$run_id" | grep -Eq '^[0-9]+$' || ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$'; then
   echo "uso: GITHUB_REPOSITORY=dono/repo RUN_ID=<id> SHA=<sha40> $0" >&2
   exit 2
@@ -52,7 +54,7 @@ elif [ -z "$falhos" ]; then
   if ! ultimo_cancelamento=$(gh api "$api_jobs" --jq "$filtro_cancelados" 2>/dev/null); then
     falhos="(não consegui ler os cancelamentos do run; tratado como falha real)"
   elif [ -z "$ultimo_cancelamento" ]; then
-    falhos="(nenhum job de medida falhou nem foi cancelado, mas o run terminou em failure)"
+    falhos="(nenhum job de medida falhou nem foi cancelado, mas o run terminou em ${conclusao})"
   elif ! dados=$(gh api "repos/${repo}/actions/runs/${run_id}" --jq '[(.workflow_id|tostring), .created_at] | @tsv' 2>/dev/null) || [ -z "$dados" ]; then
     falhos="(cancelado, e não consegui ler o run para saber se foi superado; tratado como falha real)"
   else
@@ -103,7 +105,7 @@ done
 
 # 3. Issue, sem duplicar.
 titulo="Reteste da main falhou depois do deploy: ${sha}"
-corpo="O **${nome}** do push na \`main\` terminou em \`failure\` para o commit \`${sha}\`, que já tinha ido para a produção pelo portão do PR.
+corpo="O **${nome}** do push na \`main\` terminou em \`${conclusao}\` para o commit \`${sha}\`, que já tinha ido para a produção pelo portão do PR.
 
 - Execução: ${url:-run ${run_id}}
 - Jobs que falharam: ${falhos}

@@ -575,10 +575,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: github.event_name == 'pull_request'
         with:
-          sparse-checkout: |
-            scripts/pr-mexe-no-piso-do-postgres.sh
-            scripts/pr-rota-urgente.sh
+          sparse-checkout: scripts/pr-mexe-no-piso-do-postgres.sh
           sparse-checkout-cone-mode: false
+
+      # O script da rota urgente vem da BASE do PR, não do merge ref: o PR não
+      # pode reescrever quem decide o pulo dele. Pasta à parte para não trocar
+      # a versão dos outros scripts deste job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event_name == 'pull_request'
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .base-do-pr
+          sparse-checkout: scripts/pr-rota-urgente.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
 
       # ROTA URGENTE (fork Hiperbold): PR com o rótulo `urgente` que não mexe em
       # supabase/ pula a matriz `invariants-majors`; o verify e o build
@@ -595,7 +605,7 @@ jobs:
           if [ "${GITHUB_EVENT_NAME}" != "pull_request" ]; then
             echo "urgente=nao" >> "$GITHUB_OUTPUT"; echo "evento ${GITHUB_EVENT_NAME}: caminho completo"; exit 0
           fi
-          resposta=$(bash scripts/pr-rota-urgente.sh "$PR") || resposta=nao
+          resposta=$(bash .base-do-pr/scripts/pr-rota-urgente.sh "$PR") || resposta=nao
           [ "$resposta" = "sim" ] || resposta=nao
           echo "urgente=${resposta}" >> "$GITHUB_OUTPUT"
 

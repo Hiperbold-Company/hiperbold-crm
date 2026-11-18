@@ -25,15 +25,34 @@ name: Deploy no EasyPanel (Hiperbold)
 # 2. Rota urgente. Pôr o rótulo `urgente` no PR ANTES do push (ou rodar de novo
 #    o ci e o e2e depois de pôr). No PR, o ci.yml pula a matriz do test:db e o
 #    e2e.yml pula as partes; verify (typecheck+lint+test:unit) e o build
-#    (perf.yml) rodam. Com ci.yml e perf.yml verdes e o PR em dia com a main, o
-#    deploy sai sem e2e. PR que mexe em supabase/ (migration, baseline) NUNCA vai
-#    pela rota urgente: o rótulo é ignorado e vale o caminho completo.
+#    (perf.yml) rodam. Com ci.yml, perf.yml e o e2e (pulado pela regra) verdes e
+#    o PR em dia com a main, o deploy sai sem as partes do e2e. PR que mexe em
+#    supabase/, update.sh, docker-compose*.yml, hostgator-setup-kit/,
+#    scripts/test-db*.sh, no próprio script da regra ou em ci.yml/e2e.yml NUNCA
+#    vai pela rota urgente: o rótulo é ignorado e vale o caminho completo. O
+#    script da regra é lido da BASE do PR, nunca do próprio PR.
 #    Regra: scripts/pr-rota-urgente.sh.
 # 3. Sem prova pelo PR (squash, PR atrás da main, CI do PR vermelho ou
 #    ilegível, push direto, deploy manual de commit sem PR). O deploy espera o
 #    ci e o e2e do MESMO commit na main terminarem em sucesso e reprova se algum
 #    não terminar assim: scripts/commit-passou-nos-testes.sh. O log do passo diz
-#    qual condição do caminho 1/2 falhou.
+#    qual condição do caminho 1/2 falhou. PR de fork cai sempre aqui.
+#
+# Em todos os caminhos, o último passo antes do EasyPanel confere que o commit
+# AINDA é o topo da main (scripts/ainda-e-o-topo-da-main.sh). O EasyPanel não
+# recebe sha, puxa a imagem mais recente; deploy de commit superado levaria o
+# código mais novo com a prova do mais velho. Ele recusa, e o deploy do commit
+# mais novo cuida da produção.
+#
+# Efeitos ACEITOS (revisão do PR #59), para não confundir com defeito:
+#   - merges seguidos: o deploy do commit superado fica VERMELHO (recusa do
+#     topo) e o reteste dele na main também pode ficar vermelho, porque o push
+#     novo cancela os jobs pesados e o agregador lê `cancelled`. Não é falha do
+#     código: confira o run do commit mais novo;
+#   - cascata de superados: numa sequência rápida de merges, só o último é
+#     medido inteiro na main e só ele deploya; os intermediários nunca têm
+#     reteste completo próprio, e o alarme fica quieto para eles (o run foi
+#     superado). Quem mede a árvore final é o reteste do último.
 #
 # Nos caminhos 1 e 2 o reteste da main continua rodando. Se ele falhar depois
 # de o deploy ter saído, o alarme-reteste-da-main.yml abre uma issue
@@ -79,6 +98,7 @@ jobs:
             scripts/commit-passou-nos-testes.sh
             scripts/merge-ja-provado-no-pr.sh
             scripts/pr-rota-urgente.sh
+            scripts/ainda-e-o-topo-da-main.sh
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -99,6 +119,14 @@ jobs:
           # Caminho 3: espera o reteste da main deste commit.
           echo "sem prova pelo PR: espero o ci e o e2e da main para ${SHA}"
           bash scripts/commit-passou-nos-testes.sh "${SHA}"
+
+      # Depois do portão (o caminho 3 pode ter esperado ~50 min) e antes do
+      # EasyPanel: só o topo da main deploya. Ver o cabeçalho.
+      - name: O commit ainda é o topo da main?
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: bash scripts/ainda-e-o-topo-da-main.sh "${SHA}"
 
       - name: Conferir configuração
         run: |
