@@ -4,6 +4,7 @@ import { ArrowRight, ChatCircle } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { BotaoNovaAba } from "./BotaoNovaAba";
 import { useAbrirPelaConexao } from "./AbrirPelaConexao";
+import { useSeletorDeConexao } from "./SeletorDeConexao";
 
 /**
  * A ação "Abrir conversa" — a porta que faltava para o lead sem conversa
@@ -81,18 +82,24 @@ export function AbrirConversaDoLead({ contactId, phone, leadId, variante = "card
   const podeAbrir = telefone.length > 0;
   const semTelefone = t("Sem telefone no contato: cadastre um telefone para abrir a conversa.");
 
+  // O seletor de conexão só existe no painel do negócio (o card do funil segue como antes). O
+  // hook roda nas duas variantes para a ordem dos hooks nunca depender de props.
+  const { conexao, seletor } = useSeletorDeConexao();
+  const conexaoEscolhida = variante === "dossie" ? conexao : null;
+
   if (!temAlvo) return null;
 
   function abrir(novaAba: boolean) {
     if (!podeAbrir || abrindo) return;
-    void abrirPelaConexao(novaAba);
+    void abrirPelaConexao(novaAba, conexaoEscolhida);
   }
 
   if (variante === "dossie") {
     return (
-      // Dois botões lado a lado, como no dossiê com conversa: o largo abre aqui,
-      // o quadrado abre numa nova aba.
-      <div className="mt-3 flex items-stretch gap-2">
+      <div className="mt-3 space-y-2">
+      {/* Dois botões lado a lado, como no dossiê com conversa: o largo abre aqui,
+          o quadrado abre numa nova aba. */}
+      <div className="flex items-stretch gap-2">
         {janela}
         <button
           type="button"
@@ -123,6 +130,8 @@ export function AbrirConversaDoLead({ contactId, phone, leadId, variante = "card
           )}
         </button>
         {podeAbrir && <BotaoNovaAba onClick={() => abrir(true)} disabled={abrindo} />}
+      </div>
+      {podeAbrir ? seletor : null}
       </div>
     );
   }

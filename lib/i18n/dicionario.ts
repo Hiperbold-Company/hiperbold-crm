@@ -854,6 +854,9 @@ export const DICIONARIO: Traducoes = {
   "Nome interno da conexão": { es: "Nombre interno de la conexión" },
   "Nome interno": { es: "Nombre interno" },
   "Editar nome e cor": { es: "Editar nombre y color" },
+  // O seletor de conexão do painel do negócio.
+  "Abrir pela conexão": { es: "Abrir por la conexión" },
+  "desconectada": { es: "desconectada" },
   "Cor da etiqueta no Chat": { es: "Color de la etiqueta en el Chat" },
   "Prévia no Chat:": { es: "Vista previa en el Chat:" },
   "No Chat:": { es: "En el Chat:" },
