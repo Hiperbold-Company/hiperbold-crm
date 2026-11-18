@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { CartaoDaConexao, StatusDaConexao, TipoDaConexao } from "@/hooks/channels/useConexoes";
 import { useT } from "@/hooks/i18n/useT";
-import { ROTULO_DO_QR_POR_SESSAO } from "@/lib/channels/rotulo-do-qr-por-sessao";
+import { ROTULO_DO_QR_POR_INSTANCIA, ROTULO_DO_QR_POR_SESSAO } from "@/lib/channels/rotulo-do-qr-por-sessao";
 import { InstagramLogo, MessengerLogo, Plug, QrCode, WhatsappLogo } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 // Rótulos em tabela de topo: a cerca de i18n resolve t(TABELA[chave]) e cobra o espanhol de cada valor.
 export const TITULO_DO_TIPO: Record<TipoDaConexao, string> = {
   whatsapp_oficial: "WhatsApp API Oficial",
-  whatsapp_qr: "UAZAPI (API não oficial)",
+  whatsapp_qr: ROTULO_DO_QR_POR_INSTANCIA,
   instagram: "Instagram",
   messenger: "Messenger",
   outros: "Outra conexão",

@@ -588,7 +588,7 @@ function CartaoDeModo({
       data-testid={testId}
       className={cn(
         "flex items-start gap-3 rounded-md border p-3 text-left text-sm transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60",
+        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60",
         selecionado ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/40",
       )}
     >

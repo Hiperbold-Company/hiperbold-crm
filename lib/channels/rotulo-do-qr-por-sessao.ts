@@ -7,3 +7,6 @@
  * `rotulo-da-aba-instancia.ts`). Arquivo sem dependências: a tela é um componente de cliente.
  */
 export const ROTULO_DO_QR_POR_SESSAO = "WAHA (API não oficial)";
+
+/** Rótulo da conexão de WhatsApp por QR Code pela instância (a forma padrão), mesmo motivo acima. */
+export const ROTULO_DO_QR_POR_INSTANCIA = "UAZAPI (API não oficial)";

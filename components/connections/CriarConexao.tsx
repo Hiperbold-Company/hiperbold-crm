@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
-import { ROTULO_DO_QR_POR_SESSAO } from "@/lib/channels/rotulo-do-qr-por-sessao";
+import { ROTULO_DO_QR_POR_INSTANCIA, ROTULO_DO_QR_POR_SESSAO } from "@/lib/channels/rotulo-do-qr-por-sessao";
 import { rotaDeTemplates } from "@/lib/channels/templates-fonte";
 import { InstagramLogo, MessengerLogo, Microphone, Phone, Plugs, QrCode, WhatsappLogo } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
@@ -51,7 +51,7 @@ type Icone = ComponentType<{ size?: number; "aria-hidden"?: boolean }>;
 // `graph` e `whatsapp_qr_sessao` ficam fora: o rótulo deles nomeia o serviço e vem de `lib/channels/`.
 const ROTULO_DO_TIPO: Record<Exclude<TipoDoCriar, "graph" | "whatsapp_qr_sessao">, string> = {
   whatsapp_oficial: "WhatsApp API Oficial",
-  whatsapp_qr: "UAZAPI (API não oficial)",
+  whatsapp_qr: ROTULO_DO_QR_POR_INSTANCIA,
   instagram: "Instagram",
   messenger: "Messenger",
   parceiro: "Provedor parceiro",
