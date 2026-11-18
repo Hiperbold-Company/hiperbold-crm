@@ -41,6 +41,7 @@ import {
 import { credencialDaSessao, type CredencialDoInstagram } from "./credencial";
 import { HOST_GRAPH_FACEBOOK, VERSAO_DA_GRAPH_SOCIAL } from "./constantes";
 import { registrarEnvio } from "./envios";
+import { gravarRespostaPrivadaNoChat } from "./ingest";
 import { ErroDaMeta, chamarMeta } from "./oauth";
 
 const GRAPH = `${HOST_GRAPH_FACEBOOK}/${VERSAO_DA_GRAPH_SOCIAL}`;
@@ -363,6 +364,7 @@ async function processarLinha(
   fetcher: typeof fetch | undefined,
 ): Promise<Desfecho> {
   const privada = linha.tipo === "resposta_privada";
+  let comentario: ComentarioDaPrivada | undefined;
 
   const pausa = ctx.pausa[linha.tipo];
   if (pausa) {
@@ -373,12 +375,13 @@ async function processarLinha(
   if (privada) {
     const { data: cs, error: ec } = await admin
       .from("meta_social_comentarios")
-      .select("criado_na_meta_em, recebido_em")
+      .select("criado_na_meta_em, recebido_em, autor_id, autor_usuario")
       .eq("organization_id", linha.organization_id)
       .eq("comment_id", linha.comment_id)
       .limit(1);
     if (ec) throw new Error("meta_social_comment_lookup_failed");
-    const c = ((cs ?? []) as { criado_na_meta_em: string | null; recebido_em: string }[])[0];
+    const c = ((cs ?? []) as ComentarioDaPrivada[])[0];
+    comentario = c;
     if (!c || comentarioVencido(c, agora)) {
       const gravou = await atualizarLinha(admin, linha, { status: "expirada", erro: c ? "prazo_de_7_dias" : "comentario_desconhecido" }, agora);
       if (c) await atualizarComentario(admin, linha, { resposta_privada_status: "expirada" });
@@ -474,12 +477,78 @@ async function processarLinha(
         channelSessionId: linha.channel_session_id,
         mid: idDaMeta,
       });
+      // DEPOIS do registro do mid: o eco que chegar durante a gravação já é
+      // reconhecido como nosso e não vira linha "do celular".
+      await levarPrivadaAoChat(admin, linha, cred, comentario, resposta, idDaMeta, quando);
     }
   } else {
     await atualizarComentario(admin, linha, { resposta_publica_id: idDaMeta, resposta_publica_em: quando });
   }
   if (gravou) await emitirDesfecho(admin, linha, { enviada: true });
   return "enviada";
+}
+
+interface ComentarioDaPrivada {
+  criado_na_meta_em: string | null;
+  recebido_em: string;
+  autor_id?: string | null;
+  autor_usuario?: string | null;
+}
+
+/**
+ * A privada que saiu entra na conversa do comentarista no Chat. O envio JÁ
+ * aconteceu: nada aqui lança, reverte ou reenvia — falha só vai ao log.
+ *
+ * O destinatário é o `recipient_id` que a Meta devolveu no envio (o IGSID do
+ * Direct, o mesmo `clienteId` do eco e das próximas mensagens); sem ele, o
+ * autor do comentário.
+ */
+async function levarPrivadaAoChat(
+  admin: SupabaseClient,
+  linha: LinhaDaFila,
+  cred: Credencial,
+  comentario: ComentarioDaPrivada | undefined,
+  resposta: Record<string, unknown>,
+  mid: string,
+  quando: string,
+): Promise<void> {
+  const daMeta = typeof resposta.recipient_id === "string" && resposta.recipient_id ? resposta.recipient_id : null;
+  const doComentario = comentario?.autor_id || null;
+  if (daMeta && doComentario && daMeta !== doComentario) {
+    logger.warn("[meta-social.fila] destinatário da privada difere do autor do comentário", {
+      organization_id: linha.organization_id,
+    });
+  }
+  const clienteId = daMeta ?? doComentario;
+  if (!clienteId) {
+    logger.warn("[meta-social.fila] privada enviada sem destinatário conhecido: não entrou no Chat", {
+      organization_id: linha.organization_id,
+    });
+    return;
+  }
+  try {
+    const r = await gravarRespostaPrivadaNoChat(admin, {
+      organizationId: linha.organization_id,
+      channelSessionId: linha.channel_session_id,
+      contaId: cred.contaId,
+      clienteId,
+      mid,
+      texto: linha.texto,
+      enviadaEm: quando,
+      autorUsuario: comentario?.autor_usuario ?? null,
+    });
+    if (r.status === "ignored") {
+      logger.warn("[meta-social.fila] privada enviada não entrou no Chat", {
+        organization_id: linha.organization_id,
+        reason: r.reason,
+      });
+    }
+  } catch (err) {
+    logger.error("[meta-social.fila] privada enviada não entrou no Chat", {
+      organization_id: linha.organization_id,
+      detalhe: err instanceof Error ? err.message.slice(0, 200) : "erro",
+    });
+  }
 }
 
 async function tratarErroDaMeta(

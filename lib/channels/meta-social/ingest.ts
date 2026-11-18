@@ -268,3 +268,64 @@ async function marcarLida(
     ? { status: "ingested", reason: "lida" }
     : { status: "ignored", reason: "nada_a_marcar" };
 }
+
+/**
+ * A resposta privada a um comentário (Direct enviado pela fila) entra no Chat.
+ *
+ * Ela não passa pelo composer, então ninguém grava a linha de `messages` — e o
+ * eco que a Meta devolve pelo webhook do Direct é descartado como envio nosso
+ * (`meta_social_envios`). Sem isto, o cliente recebia o Direct e a conversa do
+ * contato no CRM não mostrava nada.
+ *
+ * Mesmo caminho da ingestão do Direct (`ingestZernioInbound` com
+ * `socialMessage`): contato por `social_identity`, conversa pelo IGSID em
+ * `provider_conversation_id` (criados se não existirem), `external_id = mid`
+ * com 23505 = `duplicate`. Com `envioProprio`, a linha sai com a autoria da
+ * automação e a IA NÃO é pausada.
+ *
+ * Organização, sessão e conta vêm de quem chama, lidas da linha da fila e da
+ * credencial filtrada pela organização; nunca do payload da Meta.
+ */
+export async function gravarRespostaPrivadaNoChat(
+  admin: SupabaseClient,
+  input: {
+    organizationId: string;
+    channelSessionId: string;
+    /** A conta do Instagram da sessão (o `contaId` da credencial). */
+    contaId: string;
+    /** IGSID de quem comentou: o mesmo `clienteId` do Direct. */
+    clienteId: string;
+    mid: string;
+    texto: string;
+    enviadaEm: string;
+    /** `@usuario` do comentário: o nome do contato que ainda não existe. */
+    autorUsuario: string | null;
+  },
+  substitutos: Partial<Pick<Dependencias, "ingerir">> = {},
+): Promise<DesfechoDaIngestao> {
+  const ingerir = substitutos.ingerir ?? PADRAO.ingerir;
+  const evento: Extract<EventoMetaSocial, { tipo: "mensagem" }> = {
+    tipo: "mensagem",
+    plataforma: "instagram",
+    contaId: input.contaId,
+    clienteId: input.clienteId,
+    mid: input.mid,
+    direcao: "outbound",
+    texto: input.texto,
+    anexos: [],
+    enviadaEm: input.enviadaEm,
+    appId: null,
+  };
+  // Sem ida à Graph pelo perfil: a fila tem orçamento por conta. O `@usuario`
+  // é o mesmo nome que `perfilDoRemetente` devolve quando falta o nome.
+  const nome = input.autorUsuario ? `@${input.autorUsuario}` : null;
+  const r = await ingerir(admin, {
+    organizationId: input.organizationId,
+    channelSessionId: input.channelSessionId,
+    payload: null,
+    socialMessage: mensagemSocialDoEvento(evento, nome, input.autorUsuario),
+    envioProprio: { sentVia: "automation" },
+  });
+  if (r.status === "unknown_account") return { status: "ignored", reason: "conta_desconhecida" };
+  return { status: r.status, reason: r.reason };
+}
