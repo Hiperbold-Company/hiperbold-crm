@@ -174,7 +174,63 @@ export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
     return q;
   }
 
+  /** Toda RPC chamada, na ordem: para provar o que NÃO foi chamado. */
+  const rpcs: string[] = [];
+  /**
+   * Conversas que `trg_conversation_routing_requested` (AFTER INSERT, `when`
+   * sem dono E `open`/`pending`) mandaria ao rodízio. Fora do `event_log` de
+   * propósito: os testes do canal contam aquela tabela.
+   */
+  const rodizio: string[] = [];
+  const nasceu = (c: Linha) => {
+    t("conversations").push(c);
+    if (c.assigned_to_user_id == null && (c.status === "open" || c.status === "pending")) rodizio.push(String(c.id));
+  };
+
   const rpc = async (nome: string, args: Record<string, unknown>) => {
+    rpcs.push(nome);
+    if (nome === "fn_upsert_wa_conversation_importada") {
+      // A irmã do importador (0760): a que existe volta INTOCADA; a nova nasce
+      // `closed`, sem dono, com `last_message_at` — o gatilho não a vê.
+      const existente = t("conversations").find(
+        (c) =>
+          c.organization_id === args.p_org &&
+          c.contact_id === args.p_contact &&
+          c.channel_session_id === args.p_session,
+      );
+      if (existente) return { data: existente.id, error: null };
+      const id = randomUUID();
+      nasceu({
+        id,
+        organization_id: args.p_org,
+        contact_id: args.p_contact,
+        channel_session_id: args.p_session,
+        channel: "whatsapp",
+        status: "closed",
+        assigned_to_user_id: null,
+        unread_count_for_assignee: 0,
+        last_message_at: args.p_last_message_at ?? null,
+      });
+      return { data: id, error: null };
+    }
+    if (nome === "fn_mark_conversation_message") {
+      // O que a última definição do baseline faz com as colunas que a Fila lê.
+      const c = t("conversations").find((x) => x.id === args.p_conv);
+      if (!c) return { data: null, error: null };
+      const at = String(args.p_at);
+      c.last_message_at = at;
+      c.last_message_preview = args.p_preview;
+      if (args.p_direction === "inbound") {
+        c.last_inbound_at = at;
+        c.unread_count_for_assignee = Number(c.unread_count_for_assignee ?? 0) + 1;
+        c.awaiting_since ??= at;
+      } else {
+        c.last_outbound_at = at;
+        c.unread_count_for_assignee = 0;
+        c.awaiting_since = c.last_inbound_at ?? null;
+      }
+      return { data: null, error: null };
+    }
     if (nome === "fn_upsert_wa_conversation") {
       const existente = t("conversations").find(
         (c) =>
@@ -184,12 +240,14 @@ export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
       );
       if (existente) return { data: existente.id, error: null };
       const id = randomUUID();
-      t("conversations").push({
+      nasceu({
         id,
         organization_id: args.p_org,
         contact_id: args.p_contact,
         channel_session_id: args.p_session,
         channel: "whatsapp",
+        status: "open",
+        assigned_to_user_id: null,
       });
       return { data: id, error: null };
     }
@@ -254,5 +312,5 @@ export function bancoFalso(inicial: Record<string, Linha[]> = {}) {
   };
 
   const db = { from: (nome: string) => consulta(nome), rpc } as unknown as SupabaseClient;
-  return { db, tabelas, t };
+  return { db, tabelas, t, rpcs, rodizio };
 }

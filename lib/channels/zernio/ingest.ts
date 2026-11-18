@@ -82,6 +82,20 @@ export async function ingestZernioInbound(
     channelSessionId: string;
     payload: unknown;
     socialMessage?: SocialMessage;
+    /**
+     * A SAÍDA é um envio do PRÓPRIO CRM que não passou pelo composer (hoje, a
+     * resposta privada a comentário do Instagram, enviada pela fila). Grava com
+     * esta autoria em vez de `external_device` e NÃO pausa a IA: ninguém
+     * respondeu por fora. Ausente = o comportamento de sempre do webhook.
+     *
+     * Também não toca na FILA: a conversa que ainda não existe nasce `closed`
+     * e sem dono (a irmã do importador de histórico,
+     * `fn_upsert_wa_conversation_importada`), que não pede rodízio; a que
+     * existe não passa pelo carimbo (`fn_mark_conversation_message` zeraria as
+     * não lidas e a espera, como se alguém tivesse atendido). Ela entra na Fila
+     * quando o cliente escrever (`fn_service_inbound` reabre).
+     */
+    envioProprio?: { sentVia: "automation" | "system" };
   },
 ): Promise<ZernioIngestResult> {
   const lida = input.socialMessage ?? parseZernioInbound(input.payload);
@@ -186,6 +200,7 @@ export async function ingestZernioInbound(
       contactId: existente.contact_id,
       channelSessionId: input.channelSessionId,
       msg,
+      sentVia: input.envioProprio?.sentVia,
     });
     // O telefone pode chegar agora e faltar no contato — vale gravar.
     //
@@ -212,7 +227,7 @@ export async function ingestZernioInbound(
       }
     }
     if (inseridaNaExistente !== "duplicate") {
-      await marcarConversa(admin, input.organizationId, existente.id, msg);
+      if (!input.envioProprio) await marcarConversa(admin, input.organizationId, existente.id, msg);
       if (msg.attachments[0]?.url) {
         await pedirPersistenciaDaMidia(
           admin,
@@ -232,7 +247,7 @@ export async function ingestZernioInbound(
         existente.id,
         inseridaNaExistente,
       );
-      if (input.socialMessage && msg.direction === "outbound") {
+      if (input.socialMessage && msg.direction === "outbound" && !input.envioProprio) {
         await pausarIaPorAtendimentoManual(admin, {
           organizationId: input.organizationId,
           conversationId: existente.id,
@@ -264,6 +279,7 @@ export async function ingestZernioInbound(
     contactId,
     channelSessionId: input.channelSessionId,
     providerConversationId: msg.conversationId,
+    foraDaFilaDesde: input.envioProprio ? (msg.sentAt ?? new Date().toISOString()) : undefined,
   });
   if (!conversationId) return { status: "ignored", reason: "conversa_nao_resolvida" };
   if (input.socialMessage) {
@@ -291,11 +307,12 @@ export async function ingestZernioInbound(
     contactId,
     channelSessionId: input.channelSessionId,
     msg,
+    sentVia: input.envioProprio?.sentVia,
   });
 
   if (inserted === "duplicate") return { status: "duplicate", conversationId };
 
-  await marcarConversa(admin, input.organizationId, conversationId, msg);
+  if (!input.envioProprio) await marcarConversa(admin, input.organizationId, conversationId, msg);
   if (msg.attachments[0]?.url) {
     await pedirPersistenciaDaMidia(admin, input.organizationId, conversationId, inserted);
   }
@@ -307,7 +324,7 @@ export async function ingestZernioInbound(
   // SAÍDA feita por fora do CRM = uma pessoa respondeu o cliente à mão (celular,
   // outra plataforma na mesma conta). A IA para nesta conversa. O eco do nosso
   // próprio envio já saiu como `"duplicate"` acima. NÃO mexe na origem do lead.
-  if (msg.direction === "outbound") {
+  if (msg.direction === "outbound" && !input.envioProprio) {
     await pausarIaPorAtendimentoManual(admin, {
       organizationId: input.organizationId,
       conversationId,
@@ -567,13 +584,26 @@ async function upsertConversation(
     contactId: string;
     channelSessionId: string;
     providerConversationId: string;
+    /**
+     * Envio próprio do CRM: a conversa que ainda não existe nasce FORA da Fila
+     * (`closed`, sem dono, `last_message_at` = este instante), e a que existe
+     * volta intocada. Ausente = `fn_upsert_wa_conversation` de sempre.
+     */
+    foraDaFilaDesde?: string;
   },
 ): Promise<string | null> {
-  const { data, error } = await admin.rpc("fn_upsert_wa_conversation", {
-    p_org: input.organizationId,
-    p_contact: input.contactId,
-    p_session: input.channelSessionId,
-  });
+  const { data, error } = input.foraDaFilaDesde
+    ? await admin.rpc("fn_upsert_wa_conversation_importada" as never, {
+        p_org: input.organizationId,
+        p_contact: input.contactId,
+        p_session: input.channelSessionId,
+        p_last_message_at: input.foraDaFilaDesde,
+      } as never)
+    : await admin.rpc("fn_upsert_wa_conversation", {
+        p_org: input.organizationId,
+        p_contact: input.contactId,
+        p_session: input.channelSessionId,
+      });
   if (error || !data) return null;
   const conversationId = data as string;
 
@@ -610,6 +640,8 @@ async function insertMessage(
     contactId: string;
     channelSessionId: string;
     msg: ZernioInboundMessage;
+    /** Autoria do envio próprio do CRM; ausente = veio de fora (`external_device`). */
+    sentVia?: "automation" | "system";
   },
 ): Promise<string | "duplicate"> {
   const { msg } = input;
@@ -654,7 +686,7 @@ async function insertMessage(
       // pelo celular. E `removerEcoDoProprioEnvio` filtra por este valor: sem
       // ele, o eco do nosso próprio envio escapa da rede e vira linha
       // duplicada na tela.
-      sent_via: "external_device",
+      sent_via: input.sentVia ?? "external_device",
       status: msg.direction === "outbound" ? (msg.status ?? "sent") : "delivered",
       type: temAnexo ? tipoDoAnexo(primeiro?.type) : msg.location ? "location" : "text",
       // O pino vira link do mapa no corpo: é o que o agente lê e o que a
