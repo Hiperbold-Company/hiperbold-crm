@@ -149,6 +149,90 @@ function aplicarAcervoNaConfig(config: Record<string, unknown>, guardar: boolean
 }
 
 /**
+ * Eventos do webhook POR SESSÃO — os mesmos que o webhook global do compose
+ * assina (`WHATSAPP_HOOK_EVENTS` em docker-compose.prod.yml), e os mesmos que a
+ * ingestão trata (`lib/waha/ingest.ts`). `state.change` está marcado como
+ * obsoleto na doc do WAHA, mas segue reconhecido e a ingestão ainda o trata.
+ */
+export const EVENTOS_DO_WEBHOOK_DA_SESSAO = [
+  "message.any", "message.ack", "message.edited", "message.revoked",
+  "message.reaction", "session.status", "state.change",
+] as const;
+
+/**
+ * Reentrega do WAHA quando o CRM não responde 2xx. Exponencial a partir de 2 s,
+ * 8 tentativas: cobre a janela de um deploy (minutos), não só um soluço.
+ * Formato e políticas (`constant` | `linear` | `exponential`) da doc oficial:
+ * https://waha.devlike.pro/docs/how-to/events/
+ */
+export const RETENTATIVAS_DO_WEBHOOK_DA_SESSAO = { policy: "exponential", delaySeconds: 2, attempts: 8 } as const;
+
+/** O webhook que o CRM registra na config da sessão. `hmacKey` é segredo: nunca vai a log. */
+export interface WebhookDaSessao {
+  url: string;
+  hmacKey: string;
+}
+
+/**
+ * O que a conexão pede à sessão: o acervo (ver `OpcoesDeAcervo`) e o webhook
+ * por sessão. `webhook` AUSENTE = não toca no bloco `webhooks` da config — é o
+ * caso do PATCH /acervo e de toda instalação sem `WAHA_WEBHOOK_BASE_URL`.
+ */
+export interface OpcoesDaSessao extends OpcoesDeAcervo {
+  webhook?: WebhookDaSessao;
+}
+
+/** A entrada de `config.webhooks` no formato da API do WAHA (doc: how-to/events). */
+export function entradaDoWebhookDaSessao(webhook: WebhookDaSessao): Record<string, unknown> {
+  return {
+    url: webhook.url,
+    events: [...EVENTOS_DO_WEBHOOK_DA_SESSAO],
+    hmac: { key: webhook.hmacKey },
+    retries: { ...RETENTATIVAS_DO_WEBHOOK_DA_SESSAO },
+  };
+}
+
+/** Prefixo que identifica as entradas do CRM: tudo até o token (exclusive). */
+function prefixoDoWebhook(url: string): string {
+  return url.slice(0, url.lastIndexOf("/") + 1);
+}
+
+function entradasDeWebhook(config: Record<string, unknown> | null | undefined): Record<string, unknown>[] {
+  const lista = config?.webhooks;
+  if (!Array.isArray(lista)) return [];
+  return lista.filter((w): w is Record<string, unknown> => Boolean(w) && typeof w === "object" && !Array.isArray(w));
+}
+
+/**
+ * A sessão já tem o webhook pedido, e SÓ ele entre os do CRM? Compara URL,
+ * conjunto de eventos e chave — campo a campo, tolerando o que o WAHA acrescente
+ * (a mesma razão do filtro: `JSON.stringify` é sensível à ordem). Uma entrada
+ * do CRM com token antigo ao lado da certa também conta como "falta": ela
+ * apontaria para uma URL que já responde 404.
+ */
+function webhookEstaConferido(config: Record<string, unknown> | null | undefined, webhook: WebhookDaSessao | undefined): boolean {
+  if (!webhook) return true;
+  const prefixo = prefixoDoWebhook(webhook.url);
+  const nossas = entradasDeWebhook(config).filter((w) => typeof w.url === "string" && w.url.startsWith(prefixo));
+  const w = nossas[0];
+  if (nossas.length !== 1 || !w) return false;
+  if (w.url !== webhook.url) return false;
+  const eventos = Array.isArray(w.events) ? w.events : [];
+  const esperados: readonly string[] = EVENTOS_DO_WEBHOOK_DA_SESSAO;
+  if (eventos.length !== esperados.length || !esperados.every((e) => eventos.includes(e))) return false;
+  const hmac = w.hmac && typeof w.hmac === "object" ? (w.hmac as Record<string, unknown>) : null;
+  return hmac?.key === webhook.hmacKey;
+}
+
+/** Troca a(s) entrada(s) do CRM pela certa e preserva os webhooks alheios. */
+function aplicarWebhookNaConfig(config: Record<string, unknown>, webhook: WebhookDaSessao | undefined): void {
+  if (!webhook || webhookEstaConferido(config, webhook)) return;
+  const prefixo = prefixoDoWebhook(webhook.url);
+  const alheias = entradasDeWebhook(config).filter((w) => !(typeof w.url === "string" && w.url.startsWith(prefixo)));
+  config.webhooks = [...alheias, entradaDoWebhookDaSessao(webhook)];
+}
+
+/**
  * As chaves do filtro que o CRM IMPÕE. `groups` fica de fora de propósito: desde a
  * funcionalidade de grupos na inbox, quem decide `groups` é `definirRecebimentoDeGrupos`,
  * a partir de `channel_session_groups`. Compatibilidade e convergência não a tocam.
@@ -375,12 +459,15 @@ export class WahaClient {
   }
 
   /** Porta granular para a futura reserva: created nunca significa ownership. */
-  async createSession(name: string, opcoes: OpcoesDeAcervo = {}): Promise<{ created: boolean; session: WahaSessionSnapshot }> {
+  async createSession(name: string, opcoes: OpcoesDaSessao = {}): Promise<{ created: boolean; session: WahaSessionSnapshot }> {
     // O acervo vai JUNTO com o filtro, mas SÓ quando a conexão pediu (opção
     // desligada por padrão — decisão do mantenedor na issue #999). Sem a opção,
     // o corpo é byte a byte o de sempre. Ver ACERVO_DO_HISTORICO.
     const config: Record<string, unknown> = { ignore: CONVERSAS_IGNORADAS };
     if (opcoes.guardarHistorico) config.noweb = { store: ACERVO_DO_HISTORICO };
+    // Webhook por sessão: só quando a instalação tem URL pública (ver
+    // lib/channels/webhook-da-sessao-waha.ts). Sem ele, o corpo é o de sempre.
+    if (opcoes.webhook) config.webhooks = [entradaDoWebhookDaSessao(opcoes.webhook)];
     const res = await this.fetchComTeto(`${this.baseUrl}/api/sessions`, {
       method: "POST",
       headers: { "X-Api-Key": this.apiKey, "Content-Type": "application/json" },
@@ -397,7 +484,7 @@ export class WahaClient {
   }
 
   /** Compatível com os callers: cria se necessário e inicia, confirmando GET. */
-  async startSession(name: string, opcoes: OpcoesDeAcervo = {}): Promise<{ qr?: string; status: string }> {
+  async startSession(name: string, opcoes: OpcoesDaSessao = {}): Promise<{ qr?: string; status: string }> {
     const creation = await this.createSession(name, opcoes);
     const ignore = creation.session.config?.ignore;
     const filtersCurrent = ignore && typeof ignore === "object" && Object.entries(CHAVES_DO_FILTRO_FIXAS)
@@ -408,7 +495,10 @@ export class WahaClient {
     // fullSync é da vinculação). Sem a opção, o critério é o de sempre
     // e o store fica como estava (ver OpcoesDeAcervo).
     const acervoFalta = !acervoEstaConferido(creation.session.config, opcoes.guardarHistorico);
-    if (!creation.created && (!filtersCurrent || acervoFalta)) await this.convergirConfigDaSessao(name, opcoes);
+    // Mesma régua para o webhook por sessão: sessão que já existia (422) não
+    // recebeu o `webhooks` do POST, então só a convergência o põe lá.
+    const webhookFalta = !webhookEstaConferido(creation.session.config, opcoes.webhook);
+    if (!creation.created && (!filtersCurrent || acervoFalta || webhookFalta)) await this.convergirConfigDaSessao(name, opcoes);
     return this.startExistingSession(name);
   }
 
@@ -486,7 +576,7 @@ export class WahaClient {
    * que não conheça a rota faria toda reconexão falhar por causa de uma
    * economia — trocar mensagem por byte é o negócio errado.
    */
-  async convergirConfigDaSessao(name: string, opcoes: OpcoesDeAcervo = {}): Promise<boolean> {
+  async convergirConfigDaSessao(name: string, opcoes: OpcoesDaSessao = {}): Promise<boolean> {
     const url = `${this.baseUrl}/api/sessions/${encodeURIComponent(name)}`;
     try {
       const atual = await this.fetchComTeto(url, { headers: { "X-Api-Key": this.apiKey } });
@@ -536,9 +626,13 @@ export class WahaClient {
       // O acervo entra na MESMA régua do filtro: sem isto, quem ligou a opção em
       // um número já pareado nunca teria o PUT (o filtro já estava certo), e
       // quem desligou levaria um restart para reafirmar o default da engine.
-      if (filtroConferido && acervoEstaConferido(sessao.config, guardarHistorico)) return true;
+      // O webhook por sessão entra na mesma régua: ausente nas opções = não toca
+      // em `webhooks` (o spread abaixo preserva o que a sessão tem).
+      if (filtroConferido && acervoEstaConferido(sessao.config, guardarHistorico)
+        && webhookEstaConferido(sessao.config, opcoes.webhook)) return true;
       const config: Record<string, unknown> = { ...sessao.config, ignore: { ...CHAVES_DO_FILTRO_FIXAS, groups: groupsAtual } };
       aplicarAcervoNaConfig(config, guardarHistorico);
+      aplicarWebhookNaConfig(config, opcoes.webhook);
 
       const res = await this.fetchComTeto(url, {
         method: "PUT",
@@ -546,7 +640,12 @@ export class WahaClient {
         body: JSON.stringify({ name, config }),
       });
       if (!res.ok) {
-        logger.warn("[waha] não consegui convergir a config da sessão", { status: res.status });
+        // Com webhook pedido, um PUT recusado deixa a sessão de pé e SURDA (sem
+        // entrega ao CRM). Fica no log, sem URL nem chave.
+        logger.warn("[waha] não consegui convergir a config da sessão", {
+          status: res.status,
+          webhook_pedido: Boolean(opcoes.webhook),
+        });
         return false;
       }
       return true;

@@ -229,6 +229,11 @@ const schema = z.object({
   // é `getWahaClient()` (`lib/waha/client.ts`), que já tratava o vazio.
   WAHA_API_BASE_URL: z.string().optional().default(""),
   WAHA_API_KEY: z.string().optional().default(""),
+  // URL PÚBLICA https do CRM (ex.: o domínio do app), usada para registrar o
+  // webhook POR SESSÃO do WAHA: `<base>/api/v1/webhooks/waha/<token da conexão>`,
+  // assinado com o segredo da própria sessão (lib/channels/webhook-da-sessao-waha.ts).
+  // Opcional: vazia, ou http em produção (o kit usa `http://app:3000` só para o
+  // webhook GLOBAL do compose), não registra nada e tudo segue como antes.
   WAHA_WEBHOOK_BASE_URL: z.string().optional().default(""),
   // Segredo com que o WAHA assina os webhooks. O compose já o entrega ao
   // contêiner do WAHA; o app precisa dele para CONFERIR a assinatura — e não o
