@@ -41,6 +41,7 @@ import {
   type TipoDaLista,
 } from "@/lib/automacoes/lista-unica";
 
+import { DuplicarAutomacaoButton } from "./DuplicarAutomacaoButton";
 import { ExportarAutomacaoButton } from "./ExportarAutomacaoButton";
 import { ImportarAutomacaoDialog } from "./ImportarAutomacaoDialog";
 import { ModelosDeAutomacaoDialog, type OpcaoDeCampo, type OpcaoDeEtapa } from "./ModelosDeAutomacaoDialog";
@@ -214,7 +215,12 @@ export function AutomacoesList({
           ) : (
             <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="lista-de-automacoes">
               {lista.map((a) => (
-                <LinhaDaListaUnica key={`${a.tipo}:${a.id}`} linha={a} data_={data_} />
+                <LinhaDaListaUnica
+                  key={`${a.tipo}:${a.id}`}
+                  linha={a}
+                  data_={data_}
+                  bloqueado={motivoDoBloqueio !== null}
+                />
               ))}
             </ul>
           )}
@@ -227,7 +233,16 @@ export function AutomacoesList({
   );
 }
 
-function LinhaDaListaUnica({ linha: a, data_ }: { linha: LinhaDaLista; data_: (iso: string) => string }) {
+function LinhaDaListaUnica({
+  linha: a,
+  data_,
+  bloqueado,
+}: {
+  linha: LinhaDaLista;
+  data_: (iso: string) => string;
+  /** Teto de automações do plano cheio (follow-up não conta): duplicar seria recusado. */
+  bloqueado: boolean;
+}) {
   const t = useT();
   return (
     <li data-testid={`linha-${a.tipo}`} data-id={a.id}>
@@ -264,10 +279,16 @@ function LinhaDaListaUnica({ linha: a, data_ }: { linha: LinhaDaLista; data_: (i
             <Link href={`/app/automacoes/${a.id}/execucoes`} className="text-xs text-accent-600 hover:underline">
               {t("Ver execuções")}
             </Link>
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              <DuplicarAutomacaoButton flowId={a.id} tipo="automacao" bloqueado={bloqueado} />
               <ExportarAutomacaoButton flowId={a.id} />
               <DeleteFollowupFlowButton flowId={a.id} flowName={a.nome} />
             </div>
+          </div>
+        )}
+        {a.tipo === "followup" && (
+          <div className="flex items-center justify-end gap-2 border-t border-border pt-2">
+            <DuplicarAutomacaoButton flowId={a.id} tipo="followup" />
           </div>
         )}
       </Card>

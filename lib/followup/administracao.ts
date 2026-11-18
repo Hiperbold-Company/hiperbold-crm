@@ -46,6 +46,7 @@ import { triggerConfigSchema, type FollowupFlowSurface } from "./api-schemas";
 import { carregaEtapasCitadas } from "./etapas-citadas";
 import { carregaModelosCitados } from "./modelos-citados";
 import type { FlowGraph } from "./graph-schema";
+import { randomId } from "@/lib/random-id";
 import { nomeDaCopia } from "./nome-da-copia";
 import { publishFollowupFlowVersion } from "./publish";
 import { rascunhoDoFluxo } from "@/lib/followup/rascunho";
@@ -352,6 +353,21 @@ export async function apagarFluxo(deps: DepsDeFollowup, id: string): Promise<{ i
 
 const SOURCE_COLUMNS = "id, name, draft_graph, trigger_config, handoff_policy, surface, active_version_id";
 
+/** Troca, em todo texto do grafo, o id `de` (sem caixa) pelo id `para`. */
+function trocarIdNoGrafo<T>(valor: T, de: string, para: string): T {
+  const alvo = de.toLowerCase();
+  const troca = (v: unknown, nivel: number): unknown => {
+    if (nivel > 64) return v;
+    if (typeof v === "string") return v.toLowerCase() === alvo ? para : v;
+    if (Array.isArray(v)) return v.map((x) => troca(x, nivel + 1));
+    if (v && typeof v === "object") {
+      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, troca(x, nivel + 1)]));
+    }
+    return v;
+  };
+  return troca(valor, 0) as T;
+}
+
 /** Clona o ponteiro como rascunho — nunca publica nem passa a mandar mensagem. */
 export async function duplicarFluxo(deps: DepsDeFollowup, id: string): Promise<{ id: string } & Record<string, unknown>> {
   const { data: origem, error: fetchErr } = await deps.supabase
@@ -378,15 +394,20 @@ export async function duplicarFluxo(deps: DepsDeFollowup, id: string): Promise<{
     String(origem.name),
     (nomes ?? []).map((r) => String((r as { name: string }).name)),
   );
+  // O grafo e o gatilho podem citar o próprio fluxo («Iniciar outra automação»
+  // apontando para si; «iniciada pela automação» com ela mesma). Na cópia, essa citação passa a ser a CÓPIA — senão ela iniciaria o
+  // original. O id nasce aqui para tudo sair numa escrita só.
+  const novoId = randomId();
 
   const { data: copia, error: insErr } = await deps.supabase
     .from("followup_flow_pointers")
     .insert({
+      id: novoId,
       organization_id: deps.organizationId,
       name: nome,
       status: "draft",
-      draft_graph,
-      trigger_config: origem.trigger_config,
+      draft_graph: trocarIdNoGrafo(draft_graph, id, novoId),
+      trigger_config: trocarIdNoGrafo(origem.trigger_config, id, novoId),
       handoff_policy: origem.handoff_policy,
       surface: origem.surface ?? "followup",
     })

@@ -80,9 +80,14 @@ export function useCreateFollowupFlow() {
   });
 }
 
-export function useDuplicateFollowupFlow() {
+/**
+ * Duplica o fluxo (a cópia nasce rascunho). `surface` diz em qual lista a cópia
+ * entra: a de automações tem chave própria (`useFollowupFlows({ surface })`).
+ */
+export function useDuplicateFollowupFlow(opts?: { surface?: FollowupFlowSurface; mensagem?: string }) {
   const t = useT();
   const qc = useQueryClient();
+  const surface = opts?.surface;
   return useMutation({
     mutationKey: ["followup", "flows", "duplicate"],
     mutationFn: async (id: string) => {
@@ -90,10 +95,9 @@ export function useDuplicateFollowupFlow() {
       return res.data;
     },
     onSuccess: (created) => {
-      qc.setQueryData<FollowupFlowPointerRow[]>(followupFlowsListQueryKey, (prev) =>
-        prev ? [created, ...prev] : [created],
-      );
-      toast.success(t("Fluxo duplicado."));
+      const chave = surface ? [...followupFlowsListQueryKey, surface] : followupFlowsListQueryKey;
+      qc.setQueryData<FollowupFlowPointerRow[]>(chave, (prev) => (prev ? [created, ...prev] : [created]));
+      toast.success(opts?.mensagem ?? t("Fluxo duplicado."));
     },
     onError: (err) => {
       showApiError(err);
