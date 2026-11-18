@@ -1,0 +1,58 @@
+name: Alarme do reteste da main (Hiperbold)
+
+# Exclusivo do fork Hiperbold-Company/hiperbold-crm. Com o portão pelo PR
+# (scripts/merge-ja-provado-no-pr.sh), o deploy pode sair ANTES do ci e do e2e
+# da main terminarem. Quando um deles termina em `failure` num push da main
+# cujo deploy já saiu (ou é cancelado, que é como o teto estourado do run
+# inteiro aparece), este workflow abre a issue
+# "Reteste da main falhou depois do deploy: <sha>" com o link da execução, sem
+# duplicar (issue aberta para o mesmo sha recebe um comentário). Não faz
+# rollback. A decisão inteira mora em scripts/alarme-reteste-da-main.sh; os três
+# caminhos do deploy estão no cabeçalho de deploy-easypanel.yml.
+
+on:
+  workflow_run:
+    workflows: ["ci", "e2e"]
+    types: [completed]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  alarme:
+    if: >-
+      github.repository == 'Hiperbold-Company/hiperbold-crm' &&
+      (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'cancelled') &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    # ci e e2e do mesmo sha podem falhar juntos: um alarme por vez por sha, sem
+    # cancelar, para o segundo ver a issue que o primeiro abriu (e comentar).
+    concurrency:
+      group: alarme-reteste-${{ github.event.workflow_run.head_sha }}
+      cancel-in-progress: false
+    # O script espera até 20 min um deploy em andamento; mais a folga.
+    timeout-minutes: 30
+    # issues: write para abrir ou comentar a issue; actions: read para ler os
+    # jobs do run que falhou e os runs do deploy; contents: read só para o
+    # checkout esparso do script. Nada além.
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          sparse-checkout: scripts/alarme-reteste-da-main.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Abrir a issue se o deploy deste commit já saiu
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_NOME: ${{ github.event.workflow_run.name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSAO: ${{ github.event.workflow_run.conclusion }}
+        run: bash scripts/alarme-reteste-da-main.sh

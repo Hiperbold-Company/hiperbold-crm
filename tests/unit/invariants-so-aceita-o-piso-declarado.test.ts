@@ -35,17 +35,19 @@ const DESFECHOS = "success failure skipped cancelled";
 
 function combinacoesAceitas(): string[] {
   const programa = `
+for URG in nao sim ""; do
 for EVENTO in pull_request push; do
  for PISO in sim nao ""; do
   for PORTAO in ${DESFECHOS}; do
    for MAJORS in ${DESFECHOS}; do
-    export EVENTO PISO PORTAO MAJORS
+    export URGENTE=$URG EVENTO PISO PORTAO MAJORS
     ( eval "$SCRIPT_DO_JOB" ) >/dev/null 2>&1
     rc=$?
-    [ $rc -eq 0 ] && echo "$EVENTO \${PISO:-vazio} $PORTAO $MAJORS"
+    [ $rc -eq 0 ] && echo "\${URG:-vazio} $EVENTO \${PISO:-vazio} $PORTAO $MAJORS"
    done
   done
  done
+done
 done
 true`;
   return execFileSync("bash", ["-c", programa], {
@@ -58,12 +60,29 @@ true`;
 
 describe("invariants só aceita a matriz reduzida onde ela foi declarada", () => {
   it("controle positivo: o recorte pegou o script que lê os três resultados", () => {
-    for (const v of ["$PORTAO", "$PISO", "$MAJORS", "$EVENTO"]) expect(SCRIPT).toContain(v);
+    for (const v of ["$PORTAO", "$PISO", "$MAJORS", "$EVENTO", "${URGENTE:-}"]) expect(SCRIPT).toContain(v);
   });
 
-  it("da matriz inteira de desfechos (96), passa exatamente o que foi declarado", { timeout: 60_000 }, () => {
+  // A dimensão URGENTE (rota urgente do fork Hiperbold, deploy-easypanel.yml
+  // caminho 2) multiplica a matriz por três. Com `urgente` `nao` ou vazio vale a
+  // régua de antes, linha a linha. Com `sim`, a ÚNICA porta nova é a matriz
+  // PULADA em pull_request com o alcance respondido; `success` ali seria um
+  // `urgente=sim` mentindo sobre o que o run fez. Em push, `sim` não abre nada:
+  // a main mede tudo.
+  it("da matriz inteira de desfechos (288), passa exatamente o que foi declarado", { timeout: 120_000 }, () => {
+    const urgentes = [
+      "sim pull_request sim success skipped",
+      "sim pull_request nao success skipped",
+      "sim pull_request vazio success skipped",
+      "sim push sim success success",
+    ];
+    const comPrefixo = (lista: string[]) => [
+      ...lista.map((c) => `nao ${c}`),
+      ...lista.map((c) => `vazio ${c}`),
+      ...urgentes,
+    ];
     expect(combinacoesAceitas().sort()).toEqual(
-      [
+      comPrefixo([
         // PR: a matriz tem de passar, com piso ou sem ele.
         "pull_request sim success success",
         "pull_request nao success success",
@@ -72,7 +91,7 @@ describe("invariants só aceita a matriz reduzida onde ela foi declarada", () =>
         "pull_request vazio success success",
         // Fora de PR, o piso é obrigatório: `nao` e vazio não passam.
         "push sim success success",
-      ].sort(),
+      ]).sort(),
     );
   });
 });
