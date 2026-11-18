@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { CartaoDaConexao, StatusDaConexao, TipoDaConexao } from "@/hooks/channels/useConexoes";
 import { useT } from "@/hooks/i18n/useT";
+import { ROTULO_DO_QR_POR_SESSAO } from "@/lib/channels/rotulo-do-qr-por-sessao";
 import { InstagramLogo, MessengerLogo, Plug, QrCode, WhatsappLogo } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
@@ -46,11 +47,14 @@ const COR_DO_STATUS: Record<StatusDaConexao, string> = {
   precisa_atencao: "bg-warning",
 };
 
-/** O título do tipo, já com o "(parceiro)" da oficial por intermediário. Sem tradução: quem chama traduz. */
-export function tituloDaConexao(conexao: Pick<CartaoDaConexao, "tipo" | "via">): string {
-  return conexao.tipo === "whatsapp_oficial" && conexao.via === "parceiro"
-    ? TITULO_DA_OFICIAL_POR_PARCEIRO
-    : TITULO_DO_TIPO[conexao.tipo];
+/**
+ * O título do tipo, já com o "(parceiro)" da oficial por intermediário e o nome do serviço na conexão
+ * por QR que se pareia pela sessão (a terceira forma de conexão). Sem tradução: quem chama traduz.
+ */
+export function tituloDaConexao(conexao: Pick<CartaoDaConexao, "tipo" | "via"> & { pareamento?: CartaoDaConexao["pareamento"] }): string {
+  if (conexao.tipo === "whatsapp_oficial" && conexao.via === "parceiro") return TITULO_DA_OFICIAL_POR_PARCEIRO;
+  if (conexao.tipo === "whatsapp_qr" && conexao.pareamento === "sessao") return ROTULO_DO_QR_POR_SESSAO;
+  return TITULO_DO_TIPO[conexao.tipo];
 }
 
 export function StatusDaConexaoBadge({ status }: { status: StatusDaConexao }) {

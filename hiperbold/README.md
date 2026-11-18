@@ -118,7 +118,7 @@ Os de `easypanel/` leem `EASYPANEL_HIPERBOLD_URL` e `EASYPANEL_HIPERBOLD_API_KEY
 `AGENTS.md` e `CLAUDE.md` da raiz são do autor e não são editados aqui; as regras da Hiperbold para este projeto ficam nesta seção.
 
 - **Nome para o cliente:** principal "Hiperbold CRM" (telas, documentos, central de ajuda), secundário "HiperCRM" (e-mails e mensagens leves). "DeskcommCRM" nunca aparece para o cliente.
-- **Canais:** WhatsApp só pela UAZAPI (o cliente conecta lendo o QR dentro do CRM; a instância é criada no servidor UAZAPI da Hiperbold) e pela API oficial da Meta. Instagram e Messenger só pela rota oficial, com o app da Meta do próprio CRM, sem serviço intermediário (D-186).
+- **Canais:** WhatsApp pela UAZAPI (o cliente conecta lendo o QR dentro do CRM; a instância é criada no servidor UAZAPI da Hiperbold), pela API oficial da Meta e pelo WAHA (QR Code), este só quando a instalação tem `WAHA_API_BASE_URL` e `WAHA_API_KEY` (decisão do Filipe, 18/11/2026; as mensagens recebidas exigem `WAHA_GLOBAL_WEBHOOK_ENABLED=true` e o WAHA entregando ao app pela rede interna). Instagram e Messenger só pela rota oficial, com o app da Meta do próprio CRM, sem serviço intermediário (D-186).
 - **Limite de Conexões:** Pro 3, Max 10, Scale 20, somando WhatsApp, Instagram e Messenger, e bloqueia de verdade, independente do modo de bloqueio dos outros itens.
 - **Preço não se inventa:** valor, desconto e parcela vêm do Filipe.
 - **Teste não se enfraquece:** prova vermelha se resolve na causa, nunca afrouxando a prova.

@@ -23,7 +23,7 @@ import type { ChannelProvider } from "@/lib/channels/capabilities";
 import { usePacingKnobs } from "@/hooks/channels/usePacingKnobs";
 import { AntiBanSheet } from "./AntiBanSheet";
 import { GruposSheet } from "./GruposSheet";
-import { PairingOptions } from "./PairingOptions";
+import { QrDialog } from "./PareamentoPorSessao";
 import { ChannelAcervo } from "./ChannelAcervo";
 import { ChannelHistorico } from "./ChannelHistorico";
 import { ChannelAiAccess } from "./ChannelAiAccess";
@@ -40,7 +40,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowsClockwise,
-  CheckCircle,
   CircleNotch,
   Pause,
   Phone,
@@ -702,7 +701,7 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
         <QrDialog
           sessionId={qr.sessionId}
           title={qr.title}
-          wahaConfigured={wahaConfigured}
+          ativo={wahaConfigured}
           onClose={() => setQr(null)}
           onConnected={handleConnected}
           onForcePair={forcePair}
@@ -875,152 +874,6 @@ function ExcluirCanalDialog({
             )}
             {t("Excluir")}
           </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function QrDialog({
-  sessionId,
-  title,
-  wahaConfigured,
-  onClose,
-  onConnected,
-  onForcePair,
-}: {
-  sessionId: string;
-  title: string;
-  wahaConfigured: boolean;
-  onClose: () => void;
-  onConnected: () => void;
-  onForcePair: (sessionId: string) => Promise<void>;
-}) {
-  const t = useT();
-  const [status, setStatus] = useState<string>("STARTING");
-  const [tick, setTick] = useState(0);
-  const [pairing, setPairing] = useState(false);
-  const done = useRef(false);
-
-  useEffect(() => {
-    if (!wahaConfigured) return;
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const res = await apiClient.get<{ data: { status: string } }>(
-          `/api/v1/channel-sessions/${sessionId}`,
-        );
-        if (cancelled) return;
-        const s = res.data.status;
-        setStatus(s);
-        if (s === "WORKING" && !done.current) {
-          done.current = true;
-          onConnected();
-        }
-      } catch {
-        // erro transitório de rede — o próximo tick tenta de novo
-      }
-    };
-    void poll();
-    const iv = setInterval(() => {
-      // ABA OCULTA NÃO PERGUNTA (refs #2821, a convenção da casa): o pareamento
-      // é uma tela de espera — com a aba escondida ninguém está escaneando QR
-      // nenhum, e cada tick de 3 s custa uma consulta ao transporte. A guarda é
-      // a mesma do refetch de segurança (hooks/realtime/useRefetchDeSeguranca.ts):
-      // quem volta para a aba vê o estado no tick seguinte, em no máximo 3 s.
-      if (document.visibilityState !== "visible") return;
-      void poll();
-    }, 3000);
-    return () => {
-      cancelled = true;
-      clearInterval(iv);
-    };
-  }, [sessionId, wahaConfigured, onConnected]);
-
-  // O QR do WhatsApp EXPIRA — medido no WAHA, a imagem muda a cada ~20s. Carregar
-  // uma vez só (o que esta tela fazia) deixava um código morto na tela: quem
-  // demorasse a pegar o celular escaneava algo que o WhatsApp já tinha
-  // invalidado. Recarregamos a cada 15s enquanto estivermos em SCAN_QR_CODE,
-  // com folga sobre a expiração.
-  // A primeira imagem não precisa de tick novo: o <img> só é montado quando o
-  // status vira SCAN_QR_CODE, e essa montagem já busca o QR do momento. O
-  // intervalo cuida só das renovações seguintes.
-  useEffect(() => {
-    if (status !== "SCAN_QR_CODE") return;
-    const iv = setInterval(() => setTick((v) => v + 1), 15_000);
-    return () => clearInterval(iv);
-  }, [status]);
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            {t(
-              "Escolha QR Code ou código de pareamento e confirme no WhatsApp do celular.",
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex min-h-[16rem] flex-col items-center justify-center gap-3 py-2">
-          {status === "SCAN_QR_CODE" ? (
-            <PairingOptions key={sessionId} sessionId={sessionId} qr={
-            // Sem `key={tick}`: trocar só o src reaproveita o mesmo <img>, e o
-            // browser segura o frame anterior até decodificar o novo. Remontar o
-            // elemento a cada refresh é o que causaria o flash branco.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`/api/v1/channel-sessions/${sessionId}/qr?t=${tick}`}
-              alt={t("QR Code para conectar WhatsApp")}
-              className="h-64 w-64 rounded-md border bg-white p-2"
-            />
-            } />
-          ) : status === "WORKING" ? (
-            <div className="flex flex-col items-center gap-2 text-sm font-medium text-success-fg">
-              <CheckCircle size={28} weight="fill" aria-hidden />
-              {t("Conectado!")}
-            </div>
-          ) : status === "FAILED" || status === "STOPPED" ? (
-            // Chegar aqui quase sempre significa credencial revogada: o número
-            // foi desvinculado pelo celular e o engine não tem como voltar
-            // sozinho. Antes esta tela era um beco sem saída ("tente
-            // Reconectar" levava de volta ao mesmo FAILED); agora ela oferece a
-            // única ação que de fato resolve.
-            <div className="flex flex-col items-center gap-3 text-center">
-              <p className="text-sm text-error-fg">
-                {t(
-                  "Este número foi desvinculado do WhatsApp. Para usá-lo de novo é preciso parear outra vez.",
-                )}
-              </p>
-              <Button
-                size="sm"
-                disabled={pairing}
-                onClick={async () => {
-                  setPairing(true);
-                  try {
-                    await onForcePair(sessionId);
-                    setStatus("STARTING");
-                  } catch (err) {
-                    toast.error(errMsg(err, "Não foi possível gerar um novo QR.", t));
-                  } finally {
-                    setPairing(false);
-                  }
-                }}
-              >
-                {pairing ? (
-                  <CircleNotch size={14} className="animate-spin" aria-hidden />
-                ) : (
-                  <ArrowsClockwise size={14} aria-hidden />
-                )}
-                {t("Gerar novo QR")}
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
-              <CircleNotch size={28} className="animate-spin" aria-hidden />
-              {t("Preparando o código…")}
-            </div>
-          )}
         </div>
       </DialogContent>
     </Dialog>

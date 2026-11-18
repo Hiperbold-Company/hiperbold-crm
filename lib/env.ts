@@ -179,7 +179,8 @@ const schema = z.object({
   CPF_ENCRYPTION_KEY: required("CPF_ENCRYPTION_KEY"),
   // Opcional (template genérico) — só necessária ao ligar NUVEMSHOP_ENABLED.
   NUVEMSHOP_OAUTH_ENCRYPTION_KEY: z.string().optional().default(""),
-  WAHA_BYO_ENCRYPTION_KEY: required("WAHA_BYO_ENCRYPTION_KEY"),
+  // Sem leitor no código (medido em 18/11/2026); opcional para a instalação sem WAHA subir.
+  WAHA_BYO_ENCRYPTION_KEY: z.string().optional().default(""),
   /**
    * AES-256-GCM key (32 bytes em base64) usada pra cifrar API keys em
    * `ai_provider_credentials`. Em produção é obrigatória; em dev a default vazia
@@ -221,10 +222,14 @@ const schema = z.object({
    */
   SUPABASE_DB_ADMIN_URL: z.string().optional().default(""),
 
-  // WAHA
-  WAHA_API_BASE_URL: required("WAHA_API_BASE_URL"),
-  WAHA_API_KEY: required("WAHA_API_KEY"),
-  WAHA_WEBHOOK_BASE_URL: required("WAHA_WEBHOOK_BASE_URL"),
+  // WAHA — OPCIONAL da instalação (Hiperbold, 18/11/2026). Vazio = a conexão por QR Code
+  // via WAHA não aparece em Conexões e as rotas de sessão respondem 503
+  // `waha_not_configured`; com `required()` uma instalação sem WAHA não subia (o
+  // `throw` do fim deste arquivo derrubava o boot). Quem decide se o WAHA está de pé
+  // é `getWahaClient()` (`lib/waha/client.ts`), que já tratava o vazio.
+  WAHA_API_BASE_URL: z.string().optional().default(""),
+  WAHA_API_KEY: z.string().optional().default(""),
+  WAHA_WEBHOOK_BASE_URL: z.string().optional().default(""),
   // Segredo com que o WAHA assina os webhooks. O compose já o entrega ao
   // contêiner do WAHA; o app precisa dele para CONFERIR a assinatura — e não o
   // declarava aqui, então nunca teve como verificar nada.
