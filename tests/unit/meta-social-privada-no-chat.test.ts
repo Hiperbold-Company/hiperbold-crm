@@ -21,6 +21,7 @@ vi.mock("@/lib/plataformas-de-anuncio/google/atribuicao", () => ({
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { processarFilaMetaSocial } from "@/lib/channels/meta-social/fila";
 import { gravarRespostaPrivadaNoChat, ingerirEventoMetaSocial, sessaoPelaConta } from "@/lib/channels/meta-social/ingest";
+import { logger } from "@/lib/logger";
 import type { EventoMetaSocial } from "@/lib/channels/meta-social/webhook";
 import { pausarIaPorAtendimentoManual } from "@/lib/escalacao/atendimento-manual";
 
@@ -107,7 +108,26 @@ const eco = (over: Partial<Extract<EventoMetaSocial, { tipo: "mensagem" }>> = {}
 beforeEach(() => {
   vi.mocked(pausarIaPorAtendimentoManual).mockClear();
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+/** O mesmo banco, com o registro de cada `from`/`rpc` na ordem em que o código os chama. */
+function comRegistro(banco: ReturnType<typeof bancoFalso>) {
+  const ordem: string[] = [];
+  const db = {
+    from: (nome: string) => {
+      ordem.push(`from:${nome}`);
+      return banco.db.from(nome);
+    },
+    rpc: (nome: string, args: Record<string, unknown>) => {
+      ordem.push(`rpc:${nome}:${String(args.p_event_type ?? "")}`);
+      return banco.db.rpc(nome, args);
+    },
+  } as unknown as SupabaseClient;
+  return { db, ordem };
+}
 
 describe("resposta privada enviada entra no Chat", () => {
   it("comentarista sem contato nem conversa ganha os dois, e a saída fica na conversa dele", async () => {
@@ -141,7 +161,12 @@ describe("resposta privada enviada entra no Chat", () => {
       channel_session_id: "sessao-a",
       provider_conversation_id: "IGSID-1",
       channel: "instagram",
+      // Fora da Fila até o cliente escrever (decisão do produto, 18/11).
+      status: "closed",
+      assigned_to_user_id: null,
+      last_message_at: AGORA.toISOString(),
     });
+    expect(banco.rodizio).toEqual([]);
 
     const mensagens = banco.t("messages");
     expect(mensagens).toHaveLength(1);
@@ -333,5 +358,153 @@ describe("falha ao gravar no Chat não desfaz o envio", () => {
     expect(banco.t("meta_social_comentarios")[0]).toMatchObject({ resposta_privada_status: "enviada" });
     expect(banco.t("event_log").map((e) => e.event_type)).toContain("instagram.resposta_enviada");
     expect(meta.urls).toHaveLength(1);
+  });
+});
+
+describe("a privada não mexe na Fila", () => {
+  it("conversa existente na Fila: não lidas, espera, prévia, status e dono intactos, e o carimbo não é chamado", async () => {
+    const conversa = {
+      id: "conversa-1",
+      organization_id: ORG_A,
+      contact_id: "contato-1",
+      channel_session_id: "sessao-a",
+      provider_conversation_id: "IGSID-1",
+      channel: "instagram",
+      status: "open",
+      assigned_to_user_id: null,
+      unread_count_for_assignee: 3,
+      awaiting_since: "2026-11-18T11:00:00.000Z",
+      last_inbound_at: "2026-11-18T11:30:00.000Z",
+      last_message_at: "2026-11-18T11:30:00.000Z",
+      last_message_preview: "quero o link",
+    };
+    const banco = bancoFalso({
+      channel_sessions: [sessaoA],
+      contacts: [{ id: "contato-1", organization_id: ORG_A, social_identity: `instagram:${IG_A}:IGSID-1`, name: "Maria" }],
+      conversations: [conversa],
+      meta_social_comentarios: [comentario()],
+      meta_social_fila_de_envio: [privadaNaFila()],
+    });
+    h.db = banco.db;
+
+    await processarFilaMetaSocial(banco.db, AGORA, metaQueEnvia().fetcher);
+
+    expect(banco.t("messages")).toHaveLength(1);
+    expect(banco.t("conversations")).toEqual([expect.objectContaining({ ...conversa, channel: "instagram" })]);
+    expect(banco.rpcs).not.toContain("fn_mark_conversation_message");
+    expect(banco.rodizio).toEqual([]);
+  });
+
+  it("controle: a mensagem do cliente pelo Direct passa pelo carimbo, e conversa nova pela ingestão pede rodízio", async () => {
+    const banco = bancoFalso({ channel_sessions: [sessaoA] });
+    const s = (await sessaoPelaConta(banco.db, "instagram", IG_A))!;
+    await ingerirEventoMetaSocial(banco.db, s, eco({ direcao: "inbound", mid: "mid.cliente", texto: "oi" }), {
+      appIdsProprios: [],
+    });
+    expect(banco.rpcs).toContain("fn_mark_conversation_message");
+    expect(banco.rodizio).toEqual([banco.t("conversations")[0]!.id]);
+  });
+
+  it("o cliente que responde depois cai na MESMA conversa da privada (é ela que o banco reabre)", async () => {
+    const banco = bancoFalso({
+      channel_sessions: [sessaoA],
+      meta_social_comentarios: [comentario()],
+      meta_social_fila_de_envio: [privadaNaFila()],
+    });
+    h.db = banco.db;
+    await processarFilaMetaSocial(banco.db, AGORA, metaQueEnvia().fetcher);
+    const daPrivada = banco.t("conversations")[0]!.id;
+
+    const s = (await sessaoPelaConta(banco.db, "instagram", IG_A))!;
+    const d = await ingerirEventoMetaSocial(banco.db, s, eco({ direcao: "inbound", mid: "mid.cliente", texto: "obrigada!" }), {
+      appIdsProprios: [],
+    });
+
+    expect(d.status).toBe("ingested");
+    expect(banco.t("conversations")).toHaveLength(1);
+    expect(banco.t("messages").map((m) => [m.conversation_id, m.direction])).toEqual([
+      [daPrivada, "outbound"],
+      [daPrivada, "inbound"],
+    ]);
+    // A entrada carimba a conversa (não lidas, espera) como sempre.
+    expect(banco.t("conversations")[0]).toMatchObject({ unread_count_for_assignee: 1 });
+  });
+});
+
+describe("ordem das gravações depois do envio", () => {
+  it("o mid é registrado ANTES de a linha da fila e o comentário serem gravados", async () => {
+    const banco = bancoFalso({
+      channel_sessions: [sessaoA],
+      meta_social_comentarios: [comentario()],
+      meta_social_fila_de_envio: [privadaNaFila()],
+    });
+    const { db, ordem } = comRegistro(banco);
+    h.db = db;
+
+    await processarFilaMetaSocial(db, AGORA, metaQueEnvia().fetcher);
+
+    const registro = ordem.indexOf("from:meta_social_envios");
+    expect(registro).toBeGreaterThan(-1);
+    // Depois do registro, a próxima escrita na fila é o `enviada`.
+    expect(ordem.slice(registro + 1)).toContain("from:meta_social_fila_de_envio");
+    expect(ordem.slice(0, registro).filter((o) => o === "from:meta_social_comentarios")).toHaveLength(1); // só a leitura
+    expect(banco.t("meta_social_fila_de_envio")[0]).toMatchObject({ status: "enviada" });
+  });
+
+  it("o desfecho instagram.resposta_enviada sai ANTES da gravação no Chat", async () => {
+    const banco = bancoFalso({
+      channel_sessions: [sessaoA],
+      meta_social_comentarios: [comentario()],
+      meta_social_fila_de_envio: [privadaNaFila()],
+    });
+    const { db, ordem } = comRegistro(banco);
+    h.db = db;
+
+    await processarFilaMetaSocial(db, AGORA, metaQueEnvia().fetcher);
+
+    const desfecho = ordem.indexOf("rpc:emit_event:instagram.resposta_enviada");
+    const chat = ordem.indexOf("from:messages");
+    expect(desfecho).toBeGreaterThan(-1);
+    expect(chat).toBeGreaterThan(desfecho);
+  });
+
+  it("eco que chegou antes do registro: a gravação volta duplicate e deixa rastro com o comment_id", async () => {
+    const warn = vi.spyOn(logger, "warn");
+    const banco = bancoFalso({
+      channel_sessions: [sessaoA],
+      contacts: [{ id: "contato-1", organization_id: ORG_A, social_identity: `instagram:${IG_A}:IGSID-1` }],
+      conversations: [
+        { id: "conversa-1", organization_id: ORG_A, contact_id: "contato-1", channel_session_id: "sessao-a", provider_conversation_id: "IGSID-1" },
+      ],
+      messages: [{ id: "m-eco", organization_id: ORG_A, conversation_id: "conversa-1", external_id: "mid.priv", direction: "outbound" }],
+      meta_social_comentarios: [comentario()],
+      meta_social_fila_de_envio: [privadaNaFila()],
+    });
+    h.db = banco.db;
+
+    await processarFilaMetaSocial(banco.db, AGORA, metaQueEnvia().fetcher);
+
+    expect(banco.t("messages")).toHaveLength(1);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("eco antes do registro"),
+      expect.objectContaining({ organization_id: ORG_A, comment_id: "C-1" }),
+    );
+  });
+
+  it("destinatário diferente do autor do comentário: o aviso leva o comment_id", async () => {
+    const warn = vi.spyOn(logger, "warn");
+    const banco = bancoFalso({
+      channel_sessions: [sessaoA],
+      meta_social_comentarios: [comentario({ autor_id: "IGSID-DO-COMENTARIO" })],
+      meta_social_fila_de_envio: [privadaNaFila()],
+    });
+    h.db = banco.db;
+
+    await processarFilaMetaSocial(banco.db, AGORA, metaQueEnvia("IGSID-DO-DIRECT").fetcher);
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("difere do autor"),
+      { organization_id: ORG_A, comment_id: "C-1" },
+    );
   });
 });

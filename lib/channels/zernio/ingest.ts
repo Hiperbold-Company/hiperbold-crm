@@ -87,6 +87,13 @@ export async function ingestZernioInbound(
      * resposta privada a comentário do Instagram, enviada pela fila). Grava com
      * esta autoria em vez de `external_device` e NÃO pausa a IA: ninguém
      * respondeu por fora. Ausente = o comportamento de sempre do webhook.
+     *
+     * Também não toca na FILA: a conversa que ainda não existe nasce `closed`
+     * e sem dono (a irmã do importador de histórico,
+     * `fn_upsert_wa_conversation_importada`), que não pede rodízio; a que
+     * existe não passa pelo carimbo (`fn_mark_conversation_message` zeraria as
+     * não lidas e a espera, como se alguém tivesse atendido). Ela entra na Fila
+     * quando o cliente escrever (`fn_service_inbound` reabre).
      */
     envioProprio?: { sentVia: "automation" | "system" };
   },
@@ -220,7 +227,7 @@ export async function ingestZernioInbound(
       }
     }
     if (inseridaNaExistente !== "duplicate") {
-      await marcarConversa(admin, input.organizationId, existente.id, msg);
+      if (!input.envioProprio) await marcarConversa(admin, input.organizationId, existente.id, msg);
       if (msg.attachments[0]?.url) {
         await pedirPersistenciaDaMidia(
           admin,
@@ -272,6 +279,7 @@ export async function ingestZernioInbound(
     contactId,
     channelSessionId: input.channelSessionId,
     providerConversationId: msg.conversationId,
+    foraDaFilaDesde: input.envioProprio ? (msg.sentAt ?? new Date().toISOString()) : undefined,
   });
   if (!conversationId) return { status: "ignored", reason: "conversa_nao_resolvida" };
   if (input.socialMessage) {
@@ -304,7 +312,7 @@ export async function ingestZernioInbound(
 
   if (inserted === "duplicate") return { status: "duplicate", conversationId };
 
-  await marcarConversa(admin, input.organizationId, conversationId, msg);
+  if (!input.envioProprio) await marcarConversa(admin, input.organizationId, conversationId, msg);
   if (msg.attachments[0]?.url) {
     await pedirPersistenciaDaMidia(admin, input.organizationId, conversationId, inserted);
   }
@@ -576,13 +584,26 @@ async function upsertConversation(
     contactId: string;
     channelSessionId: string;
     providerConversationId: string;
+    /**
+     * Envio próprio do CRM: a conversa que ainda não existe nasce FORA da Fila
+     * (`closed`, sem dono, `last_message_at` = este instante), e a que existe
+     * volta intocada. Ausente = `fn_upsert_wa_conversation` de sempre.
+     */
+    foraDaFilaDesde?: string;
   },
 ): Promise<string | null> {
-  const { data, error } = await admin.rpc("fn_upsert_wa_conversation", {
-    p_org: input.organizationId,
-    p_contact: input.contactId,
-    p_session: input.channelSessionId,
-  });
+  const { data, error } = input.foraDaFilaDesde
+    ? await admin.rpc("fn_upsert_wa_conversation_importada" as never, {
+        p_org: input.organizationId,
+        p_contact: input.contactId,
+        p_session: input.channelSessionId,
+        p_last_message_at: input.foraDaFilaDesde,
+      } as never)
+    : await admin.rpc("fn_upsert_wa_conversation", {
+        p_org: input.organizationId,
+        p_contact: input.contactId,
+        p_session: input.channelSessionId,
+      });
   if (error || !data) return null;
   const conversationId = data as string;
 

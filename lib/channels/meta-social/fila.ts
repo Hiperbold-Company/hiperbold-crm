@@ -459,6 +459,17 @@ async function processarLinha(
         ? resposta.id
         : null;
   const quando = agora.toISOString();
+  // O eco desta DM chega pelo webhook do Direct, e pode chegar em
+  // milissegundos: o mid é registrado como envio nosso ANTES de qualquer outra
+  // gravação, para o eco não virar mensagem "respondida pelo celular" (que
+  // pausaria a IA).
+  if (privada && idDaMeta) {
+    await registrarEnvio(admin, {
+      organizationId: linha.organization_id,
+      channelSessionId: linha.channel_session_id,
+      mid: idDaMeta,
+    });
+  }
   const gravou = await atualizarLinha(admin, linha, { status: "enviada", enviada_em: quando, resultado_id: idDaMeta, erro: null }, agora);
   if (privada) {
     ctx.orcamento = (ctx.orcamento ?? 1) - 1;
@@ -469,22 +480,13 @@ async function processarLinha(
       resposta_privada_em: quando,
       resposta_privada_erro: null,
     });
-    // O eco desta DM chega pelo webhook do Direct: registrado como envio
-    // nosso, ele não vira mensagem "respondida pelo celular" (que pausaria a IA).
-    if (idDaMeta) {
-      await registrarEnvio(admin, {
-        organizationId: linha.organization_id,
-        channelSessionId: linha.channel_session_id,
-        mid: idDaMeta,
-      });
-      // DEPOIS do registro do mid: o eco que chegar durante a gravação já é
-      // reconhecido como nosso e não vira linha "do celular".
-      await levarPrivadaAoChat(admin, linha, cred, comentario, resposta, idDaMeta, quando);
-    }
   } else {
     await atualizarComentario(admin, linha, { resposta_publica_id: idDaMeta, resposta_publica_em: quando });
   }
   if (gravou) await emitirDesfecho(admin, linha, { enviada: true });
+  // Por último: o desfecho da automação não espera o Chat, e falha aqui só
+  // vai ao log.
+  if (privada && idDaMeta) await levarPrivadaAoChat(admin, linha, cred, comentario, resposta, idDaMeta, quando);
   return "enviada";
 }
 
@@ -517,12 +519,14 @@ async function levarPrivadaAoChat(
   if (daMeta && doComentario && daMeta !== doComentario) {
     logger.warn("[meta-social.fila] destinatário da privada difere do autor do comentário", {
       organization_id: linha.organization_id,
+      comment_id: linha.comment_id,
     });
   }
   const clienteId = daMeta ?? doComentario;
   if (!clienteId) {
     logger.warn("[meta-social.fila] privada enviada sem destinatário conhecido: não entrou no Chat", {
       organization_id: linha.organization_id,
+      comment_id: linha.comment_id,
     });
     return;
   }
@@ -540,12 +544,21 @@ async function levarPrivadaAoChat(
     if (r.status === "ignored") {
       logger.warn("[meta-social.fila] privada enviada não entrou no Chat", {
         organization_id: linha.organization_id,
+        comment_id: linha.comment_id,
         reason: r.reason,
+      });
+    } else if (r.status === "duplicate") {
+      // O mid já era linha desta organização: o eco chegou antes do registro
+      // e entrou pela ingestão do Direct (como "celular"). Rastro para achar.
+      logger.warn("[meta-social.fila] privada já estava no Chat (eco antes do registro)", {
+        organization_id: linha.organization_id,
+        comment_id: linha.comment_id,
       });
     }
   } catch (err) {
     logger.error("[meta-social.fila] privada enviada não entrou no Chat", {
       organization_id: linha.organization_id,
+      comment_id: linha.comment_id,
       detalhe: err instanceof Error ? err.message.slice(0, 200) : "erro",
     });
   }
