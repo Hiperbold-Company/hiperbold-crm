@@ -197,6 +197,23 @@ DeskcommCRM é um sistema operacional de vendas open source com agentes de IA na
 
 ---
 
+## Antes de criar uma função — procure a que já existe (NÃO NEGOCIÁVEL)
+
+Todo pedido de função nova começa por uma busca no CRM inteiro, **antes** de planejar ou codar:
+telas (`app/app/**`, inclusive Configurações), rotas (`app/api/v1/**`), tabelas e colunas
+(`supabase/baseline.sql`, pela última definição), `lib/**` e os docs (`docs/`). Procure pelo
+conceito, não só pela palavra do pedido: "vincular conexão a atendente" já existia como
+**responsáveis do canal** (`channel_routing_responsibles`, em Configurações › Atendimento), e uma
+sessão escreveu uma coluna, uma rota, uma tela e uma migration em duplicidade antes de alguém
+apontar.
+
+- **Achou algo parecido:** reuse ou estenda. Diga ao dono do produto o que já existe, onde fica
+  na tela e o que falta, antes de escrever código.
+- **Não achou:** diga o que procurou (termos e lugares) no plano ou no briefing, para a ausência
+  ser medida e não suposta.
+- **Briefing de sub-agente** que cria tabela, coluna, rota ou tela nova leva o resultado dessa
+  busca. Quem recebe o briefing também confere, e para se achar duplicidade.
+
 ## Anti-patterns proibidos
 
 1. String que deveria ser FK (ex: `owner_email text` em vez de `owner_user_id uuid`)
