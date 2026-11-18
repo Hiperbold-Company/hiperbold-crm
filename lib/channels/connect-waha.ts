@@ -10,6 +10,7 @@ import type { WahaClient } from "@/lib/waha/client";
 import { WahaSessionError } from "@/lib/waha/client";
 import { sincronizarRecebimentoDeGrupos } from "@/lib/grupos/sincronizar-filtro";
 import { lerLimiteEstourado } from "@/lib/cobranca/limites";
+import { webhookDaSessaoWaha } from "@/lib/channels/webhook-da-sessao-waha";
 
 const channelSchema = z.object({
   id: z.string().uuid(), organization_id: z.string().uuid(), waha_session_name: z.string(),
@@ -26,7 +27,7 @@ export class ChannelConnectionError extends Error {
   constructor(public readonly code: string, public readonly status: number, public readonly technical?: Record<string, unknown>) { super(code); }
 }
 type Transport = Pick<WahaClient, "createSession" | "startExistingSession" | "stopSession">
-  & Partial<Pick<WahaClient, "definirRecebimentoDeGrupos">>;
+  & Partial<Pick<WahaClient, "definirRecebimentoDeGrupos" | "convergirConfigDaSessao">>;
 export interface ConnectChannelInput {
   organizationId: string; idempotencyKey: string; userId: string; requestId: string;
   displayName?: string; onboarding?: boolean; restart?: boolean;
@@ -99,11 +100,27 @@ export async function connectWahaChannel(authDb: SupabaseClient, serviceDb: Supa
     // decisão do mantenedor na #999). Com ela DESLIGADA a chamada continua
     // sendo a de sempre, sem segundo argumento: o rastro não muda para quem
     // não ligou nada.
-    const creation = lerGuardarHistorico(channel.metadata)
-      ? await waha.createSession(channel.waha_session_name, { guardarHistorico: true })
+    //
+    // O webhook por sessão segue a mesma regra: só entra no corpo quando a
+    // instalação tem URL pública (WAHA_WEBHOOK_BASE_URL https); sem ela, `null`
+    // e nada muda. Ver lib/channels/webhook-da-sessao-waha.ts.
+    const webhook = await webhookDaSessaoWaha(serviceDb, { organizationId: input.organizationId, channelSessionId: channel.id });
+    const opcoes = {
+      ...(lerGuardarHistorico(channel.metadata) ? { guardarHistorico: true } : {}),
+      ...(webhook ? { webhook } : {}),
+    };
+    const creation = Object.keys(opcoes).length
+      ? await waha.createSession(channel.waha_session_name, opcoes)
       : await waha.createSession(channel.waha_session_name);
     created = creation.created;
     if (created) await finish("remote_created");
+    // Sessão que JÁ existia (nova tentativa, canal reativado): o POST respondeu
+    // 422 e o `webhooks` não entrou. Só a convergência o põe lá — e ela não
+    // reinicia nada quando já está igual. Só o webhook: o acervo de quem já
+    // existe continua decidido pelo PATCH /acervo e pela reconexão.
+    if (!created && webhook && waha.convergirConfigDaSessao) {
+      await waha.convergirConfigDaSessao(channel.waha_session_name, { webhook });
+    }
     const remote = await waha.startExistingSession(channel.waha_session_name);
     if (remote.name !== channel.waha_session_name || !["STARTING", "SCAN_QR_CODE", "WORKING"].includes(remote.status)) {
       throw new Error("connection_postcondition_failed");
@@ -115,9 +132,16 @@ export async function connectWahaChannel(authDb: SupabaseClient, serviceDb: Supa
     // Sessão (re)criada nasce ignorando grupos; reativar um canal arquivado mantém
     // o mesmo id e as linhas LIGADAS de `channel_session_groups`. Ressincroniza o
     // filtro com o banco (sem PUT quando já está certo). Nunca lança.
+    // O PUT do filtro reenvia o `config.webhooks` lido do GET: com o webhook da
+    // sessão, a entrada do CRM vai com a chave do banco (o GET pode mascará-la).
+    // Sem webhook, a chamada é a de sempre.
     await sincronizarRecebimentoDeGrupos(
       serviceDb,
-      waha.definirRecebimentoDeGrupos ? (ref, receber) => waha.definirRecebimentoDeGrupos!(ref, receber) : undefined,
+      waha.definirRecebimentoDeGrupos
+        ? webhook
+          ? (ref, receber) => waha.definirRecebimentoDeGrupos!(ref, receber, webhook)
+          : (ref, receber) => waha.definirRecebimentoDeGrupos!(ref, receber)
+        : undefined,
       { organizationId: input.organizationId, channelSessionId: channel.id, sessionRef: channel.waha_session_name },
     );
     void audit({ action: channel.archived_at ? "channel.reactivated" : "channel.connected", actorUserId: input.userId,

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { webhookDaSessaoWaha } from "@/lib/channels/webhook-da-sessao-waha";
 import { getWahaClient } from "@/lib/waha/client";
 
 /**
@@ -18,8 +19,10 @@ import { getWahaClient } from "@/lib/waha/client";
  * `POST /api/sessions` responde 422 quando a sessão já existe e a config NÃO é
  * aplicada nesse caminho, então gravar a opção não liga nada por si. O que
  * liga é a convergência (`convergirConfigDaSessao`), que faz GET + PUT em cima
- * do que já está lá: ela preserva filtro, `webhooks` e o resto do `noweb` e
- * só grava o `store`. A credencial de pareamento fica no volume do canal e o
+ * do que já está lá: ela preserva filtro, webhooks alheios e o resto do
+ * `noweb` e grava o `store`. A entrada do webhook do CRM, quando a sessão já
+ * tem segredo próprio, vai reaplicada com a chave do banco (o GET pode
+ * trazê-la mascarada). A credencial de pareamento fica no volume do canal e o
  * PUT só reinicia a sessão — mas, num número JÁ pareado, ligar guarda daqui em
  * diante: o `fullSync` (cerca de 1 ano de histórico) só acontece na
  * vinculação, como a própria #999 diz ("Ligar depois não resolve"). E a doc
@@ -96,6 +99,15 @@ export async function salvarAcervoDoCanal(
   if (erroAoGravar) return null;
   const nome = (data as { waha_session_name?: string | null }).waha_session_name;
   const cliente = getWahaClient();
-  const aplicado = Boolean(cliente && nome && (await cliente.convergirConfigDaSessao(nome, { guardarHistorico: guardar })));
+  if (!cliente || !nome) return { guardar_historico: guardar, aplicado: false };
+  // O PUT da convergência reenvia o `config.webhooks` lido do GET; com o webhook
+  // da sessão, a entrada do CRM vai com a chave do BANCO (o GET pode trazê-la
+  // mascarada). Só leitura: o toggle não gera segredo — sessão no placeholder
+  // segue sem webhook, e a lista vai como veio, até a próxima reconexão.
+  const webhook = await webhookDaSessaoWaha(db, { organizationId, channelSessionId: canalId }, { gerarSegredo: false });
+  const aplicado = await cliente.convergirConfigDaSessao(nome, {
+    guardarHistorico: guardar,
+    ...(webhook ? { webhook } : {}),
+  });
   return { guardar_historico: guardar, aplicado };
 }

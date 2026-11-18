@@ -6,4 +6,4 @@
  * porque a cerca `lint:channels` proíbe nomear provider nas telas (mesmo motivo de
  * `rotulo-da-aba-instancia.ts`). Arquivo sem dependências: a tela é um componente de cliente.
  */
-export const ROTULO_DO_QR_POR_SESSAO = "WhatsApp por QR Code (WAHA)";
+export const ROTULO_DO_QR_POR_SESSAO = "WAHA (API não oficial)";

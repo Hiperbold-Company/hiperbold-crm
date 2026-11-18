@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { connectWahaChannel, renomearSessaoParaOTeto } from "./connect-waha";
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
@@ -219,7 +219,7 @@ describe("I1: conectar/reativar ressincroniza o filtro de grupos", () => {
     await connectWahaChannel(f.db, f.db, { ...f.transport, definirRecebimentoDeGrupos }, f.input);
     expect(definirRecebimentoDeGrupos).toHaveBeenCalledWith("owned", true);
     expect(filtros).toContainEqual(["organization_id", org]);
-    expect(f.transport.startExistingSession.mock.invocationCallOrder[0])
+    expect(f.transport.startExistingSession.mock.invocationCallOrder[0]!)
       .toBeLessThan(definirRecebimentoDeGrupos.mock.invocationCallOrder[0]!);
   });
 });
@@ -246,5 +246,96 @@ describe("a opção por conexão do acervo (#999)", () => {
     const desligado = fixture();
     await connectWahaChannel(desligado.db, desligado.db, desligado.transport, desligado.input);
     expect(desligado.transport.createSession).toHaveBeenCalledWith("owned");
+  });
+});
+
+describe("webhook por sessão (WAHA_WEBHOOK_BASE_URL)", () => {
+  /**
+   * Banco que responde às duas pontas: a reserva/checkpoint (rpc) e a linha da
+   * sessão (token + segredo). O segredo nasce no placeholder `\x00`, como na
+   * reserva real; a cifra é um dublê reversível.
+   */
+  function comWebhook(created: boolean) {
+    const f = fixture();
+    const gravados: Record<string, unknown>[] = [];
+    const rpcOriginal = f.db.rpc;
+    const db = {
+      rpc: vi.fn(async (name: string, args: Record<string, unknown>) => {
+        if (name === "fn_encrypt_oauth") return { data: `\\xCIF-${String(args.plaintext).length}`, error: null };
+        if (name === "fn_decrypt_oauth") return { data: null, error: null };
+        return (rpcOriginal as unknown as (n: string, a: Record<string, unknown>) => Promise<unknown>)(name, args);
+      }),
+      from: vi.fn(() => {
+        let pendente: Record<string, unknown> | null = null;
+        const b = {
+          select: () => b, eq: () => b, is: () => b, neq: () => b,
+          update: (row: Record<string, unknown>) => { pendente = row; return b; },
+          maybeSingle: async () => {
+            if (pendente) { gravados.push(pendente); return { data: { id: key }, error: null }; }
+            return { data: { webhook_path_token: "tok-0001", webhook_secret_encrypted: "\\x00" }, error: null };
+          },
+        };
+        return b;
+      }),
+    } as unknown as SupabaseClient;
+    const convergir = vi.fn(async () => true);
+    const transport = {
+      ...f.transport,
+      createSession: vi.fn(async (nome: string) => ({ created, session: { name: nome, status: "STOPPED" } })),
+      convergirConfigDaSessao: convergir,
+    };
+    return { ...f, db, transport, convergir, gravados };
+  }
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("com base https, a criação leva o webhook do token com o segredo novo, já gravado cifrado", async () => {
+    vi.stubEnv("WAHA_WEBHOOK_BASE_URL", "https://crm.exemplo.com.br");
+    const f = comWebhook(true);
+    await connectWahaChannel(f.db, f.db, f.transport, f.input);
+    const [, opcoes] = f.transport.createSession.mock.calls[0] as unknown as [string, { webhook: { url: string; hmacKey: string } }];
+    expect(opcoes.webhook.url).toBe("https://crm.exemplo.com.br/api/v1/webhooks/waha/tok-0001");
+    expect(opcoes.webhook.hmacKey).toMatch(/^[0-9a-f]{64}$/);
+    expect(f.gravados).toEqual([{ webhook_secret_encrypted: "\\xCIF-64" }]);
+    // Sessão nova: o POST já levou o webhook, não há convergência.
+    expect(f.convergir).not.toHaveBeenCalled();
+  });
+
+  it("sessão que já existia (422): converge só o webhook antes de iniciar", async () => {
+    vi.stubEnv("WAHA_WEBHOOK_BASE_URL", "https://crm.exemplo.com.br");
+    const f = comWebhook(false);
+    await connectWahaChannel(f.db, f.db, f.transport, f.input);
+    expect(f.convergir).toHaveBeenCalledTimes(1);
+    const [nome, opcoes] = f.convergir.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(nome).toBe("owned");
+    expect(Object.keys(opcoes)).toEqual(["webhook"]);
+    expect(f.convergir.mock.invocationCallOrder[0]!).toBeLessThan(f.transport.startExistingSession.mock.invocationCallOrder[0]!);
+  });
+
+  it("o PUT do filtro de grupos recebe o webhook da sessão (chave do banco, não a do GET)", async () => {
+    vi.stubEnv("WAHA_WEBHOOK_BASE_URL", "https://crm.exemplo.com.br");
+    const f = comWebhook(true);
+    const fromOriginal = (f.db as unknown as { from: (t: string) => unknown }).from;
+    (f.db as unknown as { from: (t: string) => unknown }).from = (t: string) => {
+      if (t !== "channel_session_groups") return fromOriginal(t);
+      const b = {
+        select: () => b,
+        eq: () => b,
+        then: (res: (v: unknown) => unknown) => Promise.resolve({ count: 1, error: null }).then(res),
+      };
+      return b;
+    };
+    const definirRecebimentoDeGrupos = vi.fn(async (..._args: unknown[]) => true);
+    await connectWahaChannel(f.db, f.db, { ...f.transport, definirRecebimentoDeGrupos }, f.input);
+    const [, opcoes] = f.transport.createSession.mock.calls[0] as unknown as [string, { webhook: { url: string; hmacKey: string } }];
+    expect(definirRecebimentoDeGrupos).toHaveBeenCalledWith("owned", true, opcoes.webhook);
+  });
+
+  it("sem base, a chamada é a de sempre (sem segundo argumento) e nada é gravado", async () => {
+    vi.stubEnv("WAHA_WEBHOOK_BASE_URL", "");
+    const f = comWebhook(false);
+    await connectWahaChannel(f.db, f.db, f.transport, f.input);
+    expect(f.transport.createSession).toHaveBeenCalledWith("owned");
+    expect(f.convergir).not.toHaveBeenCalled();
+    expect(f.gravados).toEqual([]);
   });
 });

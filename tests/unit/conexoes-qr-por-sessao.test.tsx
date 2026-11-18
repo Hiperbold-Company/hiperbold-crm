@@ -127,7 +127,7 @@ describe("Criar", () => {
     montar({ wahaConfigured: true });
     fireEvent.click(screen.getByTestId("btn-criar-conexao"));
     const tipo = await screen.findByTestId("criar-tipo-whatsapp_qr_sessao");
-    expect(tipo.textContent).toContain("WhatsApp por QR Code (WAHA)");
+    expect(tipo.textContent).toContain("WAHA (API não oficial)");
     // A forma por instância continua lá, ao lado.
     expect(screen.getByTestId("criar-tipo-whatsapp_qr")).toBeInTheDocument();
   });
@@ -184,9 +184,9 @@ describe("cartões", () => {
   it("o título distingue a conexão por sessão da conexão por instância", async () => {
     montar({ wahaConfigured: true });
     const sessao = await screen.findByTestId(`cartao-conexao-${SESSAO}`);
-    expect(within(sessao).getByTestId("tipo-da-conexao").textContent).toBe("WhatsApp por QR Code (WAHA)");
+    expect(within(sessao).getByTestId("tipo-da-conexao").textContent).toBe("WAHA (API não oficial)");
     const instancia = screen.getByTestId(`cartao-conexao-${INSTANCIA}`);
-    expect(within(instancia).getByTestId("tipo-da-conexao").textContent).toBe("WhatsApp por QR Code");
+    expect(within(instancia).getByTestId("tipo-da-conexao").textContent).toBe("UAZAPI (API não oficial)");
   });
 
   it("sessão: reconectar e remover chamam as rotas de channel-sessions, nunca as da instância", async () => {
