@@ -157,7 +157,7 @@ export function TestarClient({ nome, agenteId, versaoId }: Props) {
           {desfecho?.tipo === "erro" && (
             <div
               role="alert"
-              className="space-y-2 rounded-md border border-amber-300/60 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-950/20"
+              className="space-y-2 rounded-md border border-warning/30 bg-warning-bg p-4"
             >
               <p className="text-sm font-medium">
                 {t(

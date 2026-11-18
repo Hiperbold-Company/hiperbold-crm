@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Search } from "lucide-react";
+import { toast } from "sonner";
+import { ArrowLeft, CircleNotch, MagnifyingGlass } from "@/lib/ui/icons";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
@@ -109,13 +110,13 @@ export function NewProposalClient({
     e.preventDefault();
 
     if (!leadId) {
-      alert(t("Por favor, selecione o negócio associado à proposta."));
+      toast.error(t("Por favor, selecione o negócio associado à proposta."));
       return;
     }
 
     const trimmedTitulo = titulo.trim();
     if (!trimmedTitulo) {
-      alert(t("Por favor, informe o título da proposta."));
+      toast.error(t("Por favor, informe o título da proposta."));
       return;
     }
 
@@ -163,7 +164,7 @@ export function NewProposalClient({
             {initialLeads.length === 0 ? (
               <div
                 role="alert"
-                className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300"
+                className="rounded-lg border border-warning/30 bg-warning-bg p-4 text-sm text-warning-fg"
               >
                 <p className="font-medium">
                   {t("Nenhum negócio elegível encontrado")}
@@ -184,7 +185,7 @@ export function NewProposalClient({
 
               {initialLeads.length > 5 ? (
                 <div className="relative mb-2">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <MagnifyingGlass className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="search"
                     placeholder={t("Filtrar negócio por título, cliente ou telefone…")}
@@ -287,7 +288,7 @@ export function NewProposalClient({
             >
               {criando ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <CircleNotch className="mr-2 h-4 w-4 animate-spin" />
                   {t("Criando proposta…")}
                 </>
               ) : (

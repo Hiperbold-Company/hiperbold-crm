@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -269,8 +270,7 @@ export function PainelDoGatilho({
             </div>
           ) : null}
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={tela.tempo.proteger_pela_agenda}
               onChange={(e) => onTela({ ...tela, tempo: { ...tela.tempo, proteger_pela_agenda: e.target.checked } })}
             />

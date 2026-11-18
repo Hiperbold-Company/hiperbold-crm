@@ -27,6 +27,8 @@ import { encerraDemanda } from "@/lib/leads/encerramento";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+import { regravarSettingsDoFunil } from "@/lib/pipelines/regravar-settings";
+
 export const dynamic = "force-dynamic";
 
 /**
@@ -38,26 +40,13 @@ export const dynamic = "force-dynamic";
  */
 async function garanteMotivosDoColdCall(orgId: string, pipelineId: string, lidos: unknown): Promise<boolean> {
   if (!comMotivosDoColdCall(lidos)) return false;
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("crm_pipelines")
-    .select("settings")
-    .eq("id", pipelineId)
-    .eq("organization_id", orgId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  const settings = (data as { settings?: unknown } | null)?.settings;
-  const novos = configDoFunil(settings) ? comMotivosDoColdCall(settings) : null;
-  if (!novos) return false;
-  // ponytail: ler e regravar `settings`; um salvar de Configurações no mesmo instante pode ser
-  // sobrescrito. Merge atômico por RPC se isso aparecer.
-  const { error: erroGravar } = await admin
-    .from("crm_pipelines")
-    .update({ settings: novos })
-    .eq("id", pipelineId)
-    .eq("organization_id", orgId);
-  if (erroGravar) throw new Error(erroGravar.message);
-  return true;
+  // Trava otimista por `updated_at` (`regravarSettingsDoFunil`): ler e regravar `settings`
+  // inteiro apagaria a chave que outro escritor (Configurações, "Editar cartão") gravou no meio.
+  const r = await regravarSettingsDoFunil(createAdminClient(), { organizationId: orgId, pipelineId }, (settings) =>
+    configDoFunil(settings) ? comMotivosDoColdCall(settings) : null,
+  );
+  if (r === "conflito") throw new Error("crm_pipelines.settings: conflito de escrita");
+  return r === "gravou";
 }
 
 export async function POST(req: NextRequest): Promise<Response> {

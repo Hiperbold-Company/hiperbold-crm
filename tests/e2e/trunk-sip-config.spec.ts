@@ -114,7 +114,7 @@ test.describe("trunk SIP — permissão e conteúdo do bloco pjsip.conf", () => 
     // ── CHEGADA PELA NAVEGAÇÃO, não por goto (DoD 14) ──────────────────────
     await page.goto("/app/settings");
     const porta = page.locator('a[href="/app/settings/voip-trunk"]').first();
-    await expect(porta, "não há porta para Trunk SIP em Configurações").toBeVisible();
+    await expect(porta, "não há porta para Linha telefônica (SIP) em Configurações").toBeVisible();
     await porta.click();
     await page.waitForURL(/\/app\/settings\/voip-trunk/);
 

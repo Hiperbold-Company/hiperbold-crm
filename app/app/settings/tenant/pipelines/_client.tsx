@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useT } from "@/hooks/i18n/useT";
 import Link from "next/link";
 import { useState, useTransition } from "react";
@@ -1004,8 +1005,7 @@ function PipelineEditor({
           )}
         </p>
         <label className="flex items-center gap-2 text-xs">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={wonRequired}
             onChange={(e) => setWonRequired(e.target.checked)}
           />
@@ -1015,8 +1015,7 @@ function PipelineEditor({
 
       <div className="space-y-1">
         <label className="flex items-center gap-2 text-xs">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={retomaComoNovo}
             onChange={(e) => setRetomaComoNovo(e.target.checked)}
           />
@@ -1098,7 +1097,7 @@ function PipelineEditor({
             já decide isso (e loga `logger.warn`); o que faltava era quem
             configurou FICAR SABENDO. */}
         {escolhaPerdida && (
-          <p role="alert" className="text-xs font-medium text-amber-600 dark:text-amber-400">
+          <p role="alert" className="text-xs font-medium text-warning-fg">
             {etapaDeclarada === null
               ? t(
                   "Nenhuma etapa escolhida: as conversas novas estão entrando na primeira etapa do funil.",
@@ -1122,8 +1121,7 @@ function PipelineEditor({
           TELA mostra: nenhum negócio é apagado ou arquivado. */}
       <div className="space-y-1">
         <label className="flex flex-wrap items-center gap-2 text-xs">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={ocultarEncerrados}
             onChange={(e) => setOcultarEncerrados(e.target.checked)}
           />
@@ -1157,8 +1155,7 @@ function PipelineEditor({
       {comandaDisponivel && (
         <div className="space-y-1">
           <label className="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={comandaNoGanho}
               onChange={(e) => setComandaNoGanho(e.target.checked)}
             />
@@ -1212,8 +1209,7 @@ function PipelineEditor({
                 <div className="flex flex-wrap gap-3 text-xs">
                   {etapas.map((etapa) => (
                     <label key={etapa.id} className="flex items-center gap-1">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         aria-label={`${t("Exigir em")} ${etapa.name} — ${f.label}`}
                         checked={regra?.etapas?.includes(etapa.id) ?? false}
                         onChange={(e) => mudar(comEtapa(regra, etapa.id, e.target.checked))}
@@ -1223,8 +1219,7 @@ function PipelineEditor({
                     </label>
                   ))}
                   <label className="flex items-center gap-1">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       aria-label={`${t("Ao ganhar")} — ${f.label}`}
                       checked={regra?.ao_ganhar === true}
                       onChange={(e) => mudar(comGatilho(regra, "ao_ganhar", e.target.checked))}
@@ -1232,8 +1227,7 @@ function PipelineEditor({
                     {t("Ao ganhar")}
                   </label>
                   <label className="flex items-center gap-1">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       aria-label={`${t("Ao perder")} — ${f.label}`}
                       checked={regra?.ao_perder === true}
                       onChange={(e) => mudar(comGatilho(regra, "ao_perder", e.target.checked))}

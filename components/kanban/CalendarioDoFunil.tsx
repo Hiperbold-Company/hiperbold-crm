@@ -290,7 +290,7 @@ export function CalendarioDoFunil({ pipelineId, pipeline: funil, stages, leads }
           {cabecalho.map((rotulo, i) => (
             <div
               key={`${rotulo}-${i}`}
-              className="py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+              className="py-2 text-center text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
             >
               {rotulo}
             </div>
@@ -336,14 +336,14 @@ export function CalendarioDoFunil({ pipelineId, pipeline: funil, stages, leads }
                     data-testid={`calendario-negocio-${lead.id}`}
                     title={lead.title}
                     onClick={() => setDossieId(lead.id)}
-                    className="w-full truncate rounded-md bg-primary/10 px-1.5 py-0.5 text-left text-[10px] font-medium text-primary transition-colors hover:bg-primary/20"
+                    className="w-full truncate rounded-md bg-primary/10 px-1.5 py-0.5 text-left text-2xs font-medium text-primary transition-colors hover:bg-primary/20"
                   >
                     {lead.title}
                   </button>
                 ))}
 
                 {excedente > 0 ? (
-                  <span className="pl-1 text-[10px] font-semibold text-muted-foreground">
+                  <span className="pl-1 text-2xs font-semibold text-muted-foreground">
                     +{excedente} {t("mais")}
                   </span>
                 ) : null}

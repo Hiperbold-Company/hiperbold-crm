@@ -70,7 +70,7 @@ export default async function Page() {
       {aviso && (
         <div
           role="status"
-          className="rounded-md border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm dark:border-amber-500/30 dark:bg-amber-950/20"
+          className="rounded-md border border-warning/30 bg-warning-bg px-4 py-3 text-sm"
         >
           <p className="font-medium">
             {traduzir("A troca de modo ainda não chegou ao servidor.", usuario.idioma)}

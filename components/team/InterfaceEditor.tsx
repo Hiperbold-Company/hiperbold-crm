@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useT } from "@/hooks/i18n/useT";
 import { useId } from "react";
 import type { Role } from "@/lib/auth/types";
@@ -62,8 +63,7 @@ export function InterfaceEditor({
                 </legend>
                 {items.map((d) => (
                   <label key={d.href} className="flex items-start gap-2 text-sm max-md:min-h-11 max-md:items-center">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selected.has(d.href)}
                       onChange={(e) => {
                         const next = new Set(

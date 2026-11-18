@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 /**
  * O card de orçamento de IA — a peça que, até a 0159, mentia POR DEFAULT.
@@ -36,6 +37,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -200,7 +202,7 @@ export function BudgetCard({ initialData, isAdmin }: Props) {
       </div>
 
       {chave && (
-        <p className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-200">
+        <p className="mt-3 rounded-md border border-warning/30 bg-warning-bg p-2 text-xs text-warning-fg">
           {chave}
         </p>
       )}
@@ -208,29 +210,18 @@ export function BudgetCard({ initialData, isAdmin }: Props) {
       {status.gasto_incompleto && (
         <p
           data-testid="aviso-medicao-incompleta"
-          className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-200"
+          className="mt-3 rounded-md border border-warning/30 bg-warning-bg p-2 text-xs text-warning-fg"
         >
           {t(AVISO_DE_MEDICAO)}
         </p>
       )}
 
       <div className="mt-4 space-y-2">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full transition-all ${
-              status.pct >= 100
-                ? "bg-destructive"
-                : status.pct >= status.alarm_threshold_pct
-                  ? "bg-amber-500"
-                  : "bg-primary"
-            }`}
-            style={{ width: `${pct}%` }}
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            role="progressbar"
-          />
-        </div>
+        <Progress
+          valor={pct}
+          rotulo={t("Uso do orçamento de IA")}
+          tom={status.pct >= 100 ? "erro" : status.pct >= status.alarm_threshold_pct ? "aviso" : "marca"}
+        />
         <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
           <span>
             <strong>{fmtCents(consumed)}</strong>
@@ -302,7 +293,7 @@ function OpcaoDeModo({
         <span className="block text-sm font-medium">{titulo}</span>
         <span className="block text-xs text-muted-foreground">{corpo}</span>
         {disabled && motivoBloqueado && (
-          <span className="block text-xs text-amber-700 dark:text-amber-300">
+          <span className="block text-xs text-warning-fg">
             {motivoBloqueado}
           </span>
         )}
@@ -481,16 +472,14 @@ function EditBudgetDialog({ status }: { status: BudgetStatus }) {
           )}
 
           {armando && (
-            <div className="space-y-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+            <div className="space-y-1.5 rounded-lg border border-warning/30 bg-warning-bg p-3">
               <p className="text-xs">
                 {t("A parada começa a valer")} <strong>72 {t("horas")}</strong> {t("depois de salvar. É o tempo de você ver o aviso chegar antes que alguma conversa pare.")}
               </p>
               <label className="flex cursor-pointer items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={imediato}
                   onChange={(e) => setImediato(e.target.checked)}
-                  className="h-4 w-4 accent-primary"
                 />
                 {t("Começar a valer agora, sem esperar as 72 horas")}
               </label>

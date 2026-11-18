@@ -4,6 +4,7 @@ import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 
 import { differenceInDays, format, isBefore } from "date-fns";
 import { useT } from "@/hooks/i18n/useT";
+import { Progress } from "@/components/ui/progress";
 import { diasAtePrazo, diasDeAtraso, progressoDoPrazo } from "@/lib/lgpd/sla";
 
 interface SlaTimelineProps {
@@ -92,12 +93,7 @@ export function SlaTimeline({ received_at, due_at, request_type }: SlaTimelinePr
 
   const daysElapsed = differenceInDays(now, receivedAt);
 
-  const progressColor =
-    progress >= 1
-      ? "bg-red-500"
-      : progress >= 0.75
-        ? "bg-yellow-500"
-        : "bg-emerald-500";
+  const tomDoPrazo = progress >= 1 ? "erro" : progress >= 0.75 ? "aviso" : "sucesso";
 
   return (
     <div className="space-y-4">
@@ -113,16 +109,7 @@ export function SlaTimeline({ received_at, due_at, request_type }: SlaTimelinePr
                 : `${Math.abs(diasRestantes)}${t("d em atraso")}`}
           </span>
         </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full rounded-full transition-all ${progressColor}`}
-            style={{ width: `${progressPct}%` }}
-            role="progressbar"
-            aria-valuenow={progressPct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          />
-        </div>
+        <Progress valor={progressPct} rotulo={t("Prazo da solicitação")} tom={tomDoPrazo} />
       </div>
 
       {/* Milestones */}
@@ -130,16 +117,16 @@ export function SlaTimeline({ received_at, due_at, request_type }: SlaTimelinePr
         {milestones.map((m, idx) => {
           const dotColor =
             m.status === "completed"
-              ? "bg-emerald-500 border-emerald-500"
+              ? "bg-success border-success/30"
               : m.status === "current"
-                ? "bg-yellow-500 border-yellow-500 ring-2 ring-yellow-200 dark:ring-yellow-900"
+                ? "bg-warning border-warning/30 ring-2 ring-warning"
                 : "bg-muted border-border";
 
           const labelColor =
             m.status === "completed"
-              ? "text-emerald-700 dark:text-emerald-400"
+              ? "text-success-fg"
               : m.status === "current"
-                ? "text-yellow-700 dark:text-yellow-400 font-medium"
+                ? "text-warning-fg font-medium"
                 : "text-muted-foreground";
 
           const isLast = idx === milestones.length - 1;

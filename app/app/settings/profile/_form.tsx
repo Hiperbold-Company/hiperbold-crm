@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { updateProfile } from "@/app/actions/settings/updateProfile";
 import { useT } from "@/hooks/i18n/useT";
-import { IDIOMAS_VISIVEIS } from "@/lib/i18n/registro";
+import { IDIOMAS_COM_TEXTO, IDIOMAS_VISIVEIS } from "@/lib/i18n/registro";
 import {
   profileSchema,
   SEM_PREFERENCIA_DE_IDIOMA,
@@ -101,7 +101,7 @@ export function ProfileForm({
                     aparecer. Oferecer um idioma que não muda a tela é prometer
                     o que ela não cumpre — `en-US` saiu por isso, e um idioma
                     em construção fica fora pela mesma razão. */}
-                {IDIOMAS_VISIVEIS.map(({ codigo, nomeNativo }) => (
+                {idiomasDoSeletor(initialLocale).map(({ codigo, nomeNativo }) => (
                   <SelectItem key={codigo} value={codigo}>
                     {nomeNativo}
                   </SelectItem>
@@ -146,4 +146,14 @@ export function ProfileForm({
       </Card>
     </form>
   );
+}
+
+// Espanhol e inglês saíram do seletor (17/11/2026), mas quem já tinha um deles gravado
+// continua vendo-o aqui: sem isso o Select mostraria pt-BR e salvar outro campo
+// trocaria o idioma da conta sem a pessoa ter pedido.
+function idiomasDoSeletor(gravado: string) {
+  if (IDIOMAS_VISIVEIS.some((i) => i.codigo === gravado)) return IDIOMAS_VISIVEIS;
+  // Só um idioma que o produto ainda escreve (`IDIOMAS`: es, en); nunca tr nem zh-CN.
+  const extra = IDIOMAS_COM_TEXTO.find((i) => i.codigo === gravado);
+  return extra ? [...IDIOMAS_VISIVEIS, extra] : IDIOMAS_VISIVEIS;
 }

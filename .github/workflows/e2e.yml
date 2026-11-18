@@ -1368,7 +1368,6 @@ jobs:
         automacoes-http-segredo.spec.ts
         fluxo-de-atendimento.spec.ts
         qa-l12-funil.spec.ts
-        i18n-espanhol-na-tela.spec.ts
         extensoes-declarativas.spec.ts
         marca-logo.spec.ts
         suporte-temporario.spec.ts
@@ -1559,6 +1558,7 @@ jobs:
         webhooks.spec.ts
         system-update.spec.ts
         respostas-rapidas-conteudos.spec.ts
+        relatar-problema.spec.ts
 
       # ─── FORA_DO_CI — as que ficaram fora, e o motivo de cada uma ───
       #
@@ -1606,8 +1606,12 @@ jobs:
       # As duas ligam o interruptor "Cobrança dos seus clientes" pela tela de
       # /admin/sistema, e no fork esse módulo está em `MODULOS_AINDA_NAO_LIGAVEIS`
       # (`lib/instalacao/modulos.ts`): a cobrança da instalação é a da Hiperbold.
+      # `i18n-espanhol-na-tela` entrou aqui em 2026-11-17: espanhol e inglês saíram do
+      # seletor de idioma (em construção) e a tela renderiza sempre em português; a spec
+      # inteira prova espanhol na tela. Religar o idioma devolve a spec à PARTE_3.
       FORA_DO_CI: >-
         cadastro-sem-confirmacao-de-email.spec.ts
+        i18n-espanhol-na-tela.spec.ts
         aviso-de-caso-chega-no-whatsapp.spec.ts
         jev-chave-real.spec.ts
         modelos-do-parceiro-editar-apagar.spec.ts

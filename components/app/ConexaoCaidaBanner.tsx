@@ -61,7 +61,7 @@ export function ConexaoCaidaBanner({ caidas }: { caidas: ConexaoCaida[] }) {
     <div
       role="alert"
       aria-live="assertive"
-      className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3 border-b border-red-300 bg-red-100/95 px-4 py-2 text-sm text-red-950 backdrop-blur dark:border-red-800/60 dark:bg-red-950/70 dark:text-red-50"
+      className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3 border-b border-error/40 bg-surface bg-linear-to-b from-error-bg to-error-bg px-4 py-2 text-sm text-error-fg"
     >
       <div className="flex items-center gap-2">
         <span aria-hidden>🔌</span>
@@ -84,7 +84,7 @@ export function ConexaoCaidaBanner({ caidas }: { caidas: ConexaoCaida[] }) {
       </div>
       {podeAbrirConexoes ? <Link
         href={destino}
-        className="rounded-md border border-red-400 bg-white/70 px-3 py-1 font-medium max-md:inline-flex max-md:min-h-11 max-md:items-center text-red-950 hover:bg-white dark:border-red-700 dark:bg-red-900/40 dark:text-red-50 dark:hover:bg-red-900/70"
+        className="rounded-md border border-error/30 bg-surface hover:bg-surface-elevated px-3 py-1 font-medium max-md:inline-flex max-md:min-h-11 max-md:items-center text-error-fg"
       >
         {precisaEscanear ? t("Escanear o QR") : t("Ver conexões")}
       </Link> : <span>{t("Peça a um administrador ou gerente para revisar a conexão do WhatsApp.")}</span>}

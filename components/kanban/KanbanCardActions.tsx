@@ -169,7 +169,7 @@ export function KanbanCardActions({ lead, pipelineId, etapas, onMoverPara }: Kan
                   >
                     {a.name}
                     {a.version_number != null && (
-                      <span className="ml-1.5 font-mono text-[10px] text-text-muted">
+                      <span className="ml-1.5 font-mono text-2xs text-text-muted">
                         v{a.version_number}
                       </span>
                     )}

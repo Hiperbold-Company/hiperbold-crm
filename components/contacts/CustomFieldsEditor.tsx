@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect, useId, useState } from "react";
 /**
  * CustomFieldsEditor — lê `crm_pipelines.settings.fields[]` e renderiza o
@@ -311,8 +312,7 @@ export function CustomFieldsEditor({ fields, value, onChange, mode, disabled, cl
                     const checked = current.includes(o.value);
                     return (
                       <label key={o.value} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={checked}
                           onChange={(e) => {
                             const next = e.target.checked

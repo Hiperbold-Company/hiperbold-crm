@@ -30,14 +30,14 @@ import { EstiloDoTemaDaPlataforma } from "./tema-da-plataforma";
 import "./globals.css";
 import "@/hiperbold/marca.css";
 
-// Hiperbold: Inter no lugar da Atkinson, com o mesmo nome de variável para não
-// editar o globals.css nem tests/unit/tailwind-tokens.test.ts.
+// Hiperbold: Inter, exposta como `--font-inter` (lida pelo globals.css e pelo
+// marca.css).
 //
 // As três fontes da marca (Inter, Assistant, IBM Plex Mono) são servidas de
 // `app/fonts/` (origem e licença no README de lá), e não pelo carregador do Google:
 // aquele baixava a fonte durante o `next build` e o build caía sempre que o
 // Google não respondia. Cada arquivo traz latin + latin-ext juntos.
-const atkinson = localFont({
+const inter = localFont({
   src: [
     { path: "./fonts/inter-400-latin-latin-ext.woff2", weight: "400", style: "normal" },
     { path: "./fonts/inter-500-latin-latin-ext.woff2", weight: "500", style: "normal" },
@@ -45,7 +45,7 @@ const atkinson = localFont({
     { path: "./fonts/inter-700-latin-latin-ext.woff2", weight: "700", style: "normal" },
   ],
   display: "swap",
-  variable: "--font-atkinson",
+  variable: "--font-inter",
 });
 
 const assistant = localFont({
@@ -345,7 +345,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       lang="pt-BR"
       data-theme="light"
       suppressHydrationWarning
-      className={`${atkinson.variable} ${assistant.variable} ${plexMono.variable}`}
+      className={`${inter.variable} ${assistant.variable} ${plexMono.variable}`}
     >
       <head>
         {/* Primeiro de tudo: a cor da instalação, antes do CSS e do script de tema. */}

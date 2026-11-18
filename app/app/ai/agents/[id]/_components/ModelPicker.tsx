@@ -2,7 +2,7 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { Check, ChevronDown, DollarSign } from "lucide-react";
+import { Check, CaretDown, CurrencyDollar } from "@/lib/ui/icons";
 
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
@@ -147,7 +147,7 @@ function PrecoDoModelo({ modelo }: { modelo: ModelOption }) {
           data-testid="preco-do-modelo"
           className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
         >
-          <DollarSign className="size-3.5" aria-hidden="true" />
+          <CurrencyDollar className="size-3.5" aria-hidden="true" />
         </span>
       </TooltipTrigger>
       <TooltipContent side="left">
@@ -269,7 +269,7 @@ export function ModelPicker({
                 {rotuloDoGatilho ??
                   (query.isLoading ? t("Carregando…") : (placeholder ?? t("Selecione um modelo")))}
               </span>
-              <ChevronDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
+              <CaretDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -365,7 +365,7 @@ export function ModelPicker({
         </Popover>
       )}
       {salvoForaDaLista ? (
-        <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="modelo-so-com-chave-propria">
+        <p className="text-xs text-warning-fg" data-testid="modelo-so-com-chave-propria">
           {t("Este modelo só funciona com a sua própria chave. Sem ela, o agente usa o Luna.")}
         </p>
       ) : null}

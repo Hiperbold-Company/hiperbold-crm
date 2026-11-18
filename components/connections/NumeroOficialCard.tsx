@@ -71,7 +71,7 @@ export function NumeroOficialCard({
       </div>
 
       {!dado.disponivel ? (
-        <p className="text-sm text-amber-700 dark:text-amber-400">
+        <p className="text-sm text-warning-fg">
           {t("Não consegui ler o estado do número agora.")} {dado.motivo}
         </p>
       ) : null}
@@ -112,7 +112,7 @@ export function NumeroOficialCard({
 
       {pinGerado ? (
         <div
-          className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3"
+          className="flex flex-col gap-2 rounded-md border border-warning/30 bg-warning-bg p-3"
           data-testid="pin-gerado"
         >
           <p className="text-sm font-medium">{t("Guarde este PIN agora. Ele não será mostrado de novo.")}</p>

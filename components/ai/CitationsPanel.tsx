@@ -76,7 +76,7 @@ export function CitationsPanel({
             })
           )}
           {messageId && (
-            <p className="pt-2 text-[10px] text-muted-foreground">
+            <p className="pt-2 text-2xs text-muted-foreground">
               message_id: {messageId}
             </p>
           )}

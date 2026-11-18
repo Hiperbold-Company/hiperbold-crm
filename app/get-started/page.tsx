@@ -1,3 +1,4 @@
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
@@ -68,7 +69,7 @@ export default async function GetStartedPage() {
     : planoInicialDoSeletor(planos, cadastro?.padraoId ?? null);
 
   return (
-    <IdiomaProvider locale={user.idioma}>
+    <IdiomaProvider locale={idiomaDaTela(user.idioma)}>
       <main className="bg-muted/40 flex min-h-screen items-center justify-center px-4 py-10">
         <div className="w-full max-w-md space-y-6 rounded-lg border bg-background p-6 shadow-sm">
           <div className="space-y-2">

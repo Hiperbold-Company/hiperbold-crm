@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
@@ -127,8 +128,7 @@ export function WelcomeForm({
       </div>
 
       <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={accepted}
           onChange={(e) => setAccepted(e.target.checked)}
           className="mt-1"

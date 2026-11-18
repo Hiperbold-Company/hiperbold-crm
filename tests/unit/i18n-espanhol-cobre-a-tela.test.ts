@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import { DICIONARIO } from "@/lib/i18n/dicionario";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { IDIOMAS, type Idioma } from "@/lib/i18n/idiomas";
-import { IDIOMAS_EM_CONSTRUCAO, IDIOMAS_VISIVEIS } from "@/lib/i18n/registro";
+import type { Idioma } from "@/lib/i18n/idiomas";
+import { IDIOMAS_COM_TEXTO, IDIOMAS_EM_CONSTRUCAO } from "@/lib/i18n/registro";
 
 import {
   AREAS_DE_PRODUTO,
@@ -78,8 +78,13 @@ const RAIZ = join(__dirname, "..", "..");
  * ofensores, que pode ter centenas de linhas e empurrar o conserto para fora
  * da tela. Só cita comando e arquivo que existem.
  */
+// Sem os retirados do seletor (espanhol e inglês desde 17/11/2026): este gate
+// segue cobrando o espanhol, e a régua de baixo o inglês — dizer que eles "não
+// reprovam" seria falso.
 const EM_CONSTRUCAO =
-  IDIOMAS_EM_CONSTRUCAO.map((idioma) => idioma.nomeNativo).join(", ") || "nenhum hoje";
+  IDIOMAS_EM_CONSTRUCAO.filter((idioma) => !("retiradoDoSeletorEm" in idioma))
+    .map((idioma) => idioma.nomeNativo)
+    .join(", ") || "nenhum hoje";
 const COMO_CONSERTAR =
   'Conserto: uma linha em lib/i18n/dicionario.ts, no formato "texto em português": { es: "texto en español" }. ' +
   "Não fala espanhol? Mande o PR assim mesmo e diga isso na descrição. " +
@@ -477,7 +482,9 @@ describe("a chave é o texto em português, e o português não muda", () => {
     // `en-US` e nenhuma tradução existia — escolher não mudava uma letra. Um
     // idioma pode morar numa coluna do dicionário (o espanhol) ou no catálogo
     // `lib/i18n/traducoes/<codigo>.json` (o turco); o que reprova é nenhum dos dois.
-    const outros = IDIOMAS.filter((i) => i !== "pt-BR");
+    // Os COM TEXTO, e não só os servidos: um idioma retirado do seletor
+    // (`retiradoDoSeletorEm`) continua vigiado para poder voltar.
+    const outros = IDIOMAS_COM_TEXTO.map((i) => i.codigo).filter((i) => i !== "pt-BR");
     for (const idioma of outros) {
       const comEsse = Object.values(DICIONARIO).filter((v) =>
         Object.prototype.hasOwnProperty.call(v, idioma),
@@ -647,9 +654,11 @@ function temTraducao(idioma: Idioma): (chave: string) => boolean {
  * para quem mora numa coluna do dicionário. As verificações do espanhol acima
  * ficam como estão.
  */
-const COMPLETOS_ALEM_DO_ESPANHOL = IDIOMAS_VISIVEIS.filter(
-  // Com só pt-BR/es visíveis, inferir um type guard estreitaria o array a never[].
-  (idioma): boolean => idioma.nivel === "completo" && idioma.codigo !== "pt-BR" && idioma.codigo !== "es",
+const COMPLETOS_ALEM_DO_ESPANHOL = IDIOMAS_COM_TEXTO.filter(
+  // Com texto, e não só os visíveis: o inglês saiu do seletor em 17/11/2026 e a
+  // régua dele segue de pé — sem isto o `describe.each` ficaria vazio e verde.
+  // Inferir um type guard estreitaria o array a never[].
+  (idioma): boolean => idioma.codigo !== "pt-BR" && idioma.codigo !== "es",
 ).map((idioma) => idioma.codigo);
 
 const COMO_CONSERTAR_NO_CATALOGO =

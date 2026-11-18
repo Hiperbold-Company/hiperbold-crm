@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Lead } from "@/lib/types/leads";
 
-import { anexarDadosDoContato, type LinhaDoContatoNoQuadro } from "./dados-do-contato";
+import { anexarCargoEEmpresaDoContato, anexarDadosDoContato, type LinhaDoContatoNoQuadro } from "./dados-do-contato";
 
 const lead = (id: string, contact_id: string | null): Lead => ({ id, contact_id }) as Lead;
 
@@ -101,5 +101,48 @@ describe("anexarDadosDoContato — o que o card do funil recebe do contato", () 
       "dois@exemplo.com",
       "um@exemplo.com",
     ]);
+  });
+});
+
+describe("anexarCargoEEmpresaDoContato — linhas do cartão vindas do contato", () => {
+  const contatos = [
+    contato("c1", { custom_fields: { Cargo: "Diretora", empresa: "Loja Azul", outra: "x" } }),
+    contato("c2", { custom_fields: { cargo: "Apagado" }, is_anonymized: true }),
+  ];
+  const leads = () => [lead("l1", "c1"), lead("l2", "c2"), lead("l3", null)];
+
+  it("⭐ anexa só o que o funil pôs no cartão", () => {
+    const so = anexarCargoEEmpresaDoContato(leads(), contatos, {
+      linhas: ["cargo"],
+      restritas: new Set(),
+      leitor: "manager",
+    });
+    expect(so[0]).toMatchObject({ contact_cargo: "Diretora" });
+    expect(so[0]).not.toHaveProperty("contact_empresa");
+    const nada = anexarCargoEEmpresaDoContato(leads(), contatos, {
+      linhas: ["telefone", "ultima_mensagem"],
+      restritas: new Set(),
+      leitor: "manager",
+    });
+    expect(nada[0]).not.toHaveProperty("contact_cargo");
+  });
+
+  it("⭐ campo restrito (publico:false) não chega ao gerente e chega ao administrador", () => {
+    const opcoes = { linhas: ["cargo", "empresa"] as const, restritas: new Set(["cargo"]) };
+    const doGerente = anexarCargoEEmpresaDoContato(leads(), contatos, { ...opcoes, leitor: "manager" });
+    expect(doGerente[0]).not.toHaveProperty("contact_cargo");
+    expect(doGerente[0]).toMatchObject({ contact_empresa: "Loja Azul" });
+    const doAdmin = anexarCargoEEmpresaDoContato(leads(), contatos, { ...opcoes, leitor: "admin" });
+    expect(doAdmin[0]).toMatchObject({ contact_cargo: "Diretora", contact_empresa: "Loja Azul" });
+  });
+
+  it("contato anonimizado é pulado; negócio sem contato passa intacto", () => {
+    const r = anexarCargoEEmpresaDoContato(leads(), contatos, {
+      linhas: ["cargo"],
+      restritas: new Set(),
+      leitor: "admin",
+    });
+    expect(r[1]).not.toHaveProperty("contact_cargo");
+    expect(r[2]).toEqual({ id: "l3", contact_id: null });
   });
 });

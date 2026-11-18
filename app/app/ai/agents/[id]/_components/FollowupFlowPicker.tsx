@@ -6,6 +6,7 @@
  * filtrada client-side — a rota `GET /api/v1/ai/followup-flows` não expõe
  * `?status=` ainda (checado; escopo mínimo não pediu mudança de rota).
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import * as React from "react";
 import Link from "next/link";
 
@@ -62,9 +63,8 @@ export function FollowupFlowPicker({ value, onChange, disabled }: Props) {
             key={f.id}
             className="flex cursor-pointer items-start gap-2 rounded-md p-1 hover:bg-muted/40"
           >
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 rounded-md border-border accent-primary"
+            <Checkbox
+              className="mt-1"
               checked={checked}
               onChange={() => toggle(f.id)}
               disabled={disabled}

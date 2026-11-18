@@ -105,18 +105,20 @@ describe("tela fora do app: o lang do documento é o idioma em que ela foi escri
     document.documentElement.lang = "pt-BR";
   });
 
+  // Espanhol e inglês saíram do seletor em 17/11/2026 (lib/i18n/registro.ts, `retiradoDoSeletorEm`). Quem tinha `es` gravado
+  // tem de ler a tela INTEIRA em português, com `lang="pt-BR"` — nada de tela
+  // meio traduzida. Ao religar o espanhol, este caso volta a ser o de antes
+  // (lang "es" e a contraprova de que o texto muda).
   it.each(TELAS)("%s: o lang acompanha o idioma do texto", async (_rota, montar) => {
     locale.valor = "es";
-    const emEspanhol = render(await montar());
-    const textoEs = emEspanhol.container.textContent;
-    expect(document.documentElement.lang).toBe("es");
-    emEspanhol.unmount();
+    const comEspanholGravado = render(await montar());
+    const textoEs = comEspanholGravado.container.textContent;
+    expect(document.documentElement.lang).toBe("pt-BR");
+    comEspanholGravado.unmount();
 
     locale.valor = "pt-BR";
     const emPortugues = render(await montar());
     expect(document.documentElement.lang).toBe("pt-BR");
-    // Contraprova de que a tela TRADUZ: sem isto, o `lang` poderia estar
-    // "certo" numa tela que nem mudou de idioma.
-    expect(emPortugues.container.textContent).not.toBe(textoEs);
+    expect(emPortugues.container.textContent).toBe(textoEs);
   });
 });

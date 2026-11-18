@@ -98,7 +98,7 @@ export function CalendarioDeTarefas({ tarefas, podeEditar, aoAbrirTarefa, aoClic
         {cabecalhos.map((rotulo) => (
           <div
             key={rotulo}
-            className="py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+            className="py-2 text-center text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
           >
             {rotulo}
           </div>
@@ -144,7 +144,7 @@ export function CalendarioDeTarefas({ tarefas, podeEditar, aoAbrirTarefa, aoClic
                     aoAbrirTarefa(tarefa);
                   }}
                   className={cn(
-                    "w-full truncate rounded-md px-1.5 py-0.5 text-left text-[10px] font-medium",
+                    "w-full truncate rounded-md px-1.5 py-0.5 text-left text-2xs font-medium",
                     estaEncerrada(tarefa)
                       ? "bg-muted text-muted-foreground line-through"
                       : estaAtrasada(tarefa)
@@ -157,7 +157,7 @@ export function CalendarioDeTarefas({ tarefas, podeEditar, aoAbrirTarefa, aoClic
               ))}
 
               {excedente > 0 ? (
-                <span className="pl-1 text-[10px] font-semibold text-muted-foreground">
+                <span className="pl-1 text-2xs font-semibold text-muted-foreground">
                   +{excedente} {t("mais")}
                 </span>
               ) : null}

@@ -3,9 +3,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
+import { AcoesNoCelular } from "@/components/shell/AcoesNoCelular";
+import { FiltrosNoCelular } from "@/components/shell/FiltrosNoCelular";
 import { ArrowsClockwise, Columns, DownloadSimple, Plus, MagnifyingGlass, UploadSimple, UsersThree } from "@/lib/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ErroComRetry } from "@/components/empty/ErroComRetry";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -359,6 +362,22 @@ export function ContactsListClient() {
             descobre olhando a lista, e a barra lateral não precisa crescer para
             um trabalho que se faz de vez em quando.
           */}
+          <AcoesNoCelular
+            acoes={[
+              { rotulo: t("Personalizar colunas"), icone: Columns, onSelect: () => setColunasOpen(true) },
+              { rotulo: t("Duplicados"), icone: UsersThree, onSelect: () => setDuplicadosOpen(true) },
+              ...(podeImportar
+                ? [{ rotulo: t("Importar CSV"), icone: UploadSimple, onSelect: () => setImportOpen(true) }]
+                : []),
+              { rotulo: t("Sincronizar agenda"), icone: ArrowsClockwise, onSelect: () => setSyncOpen(true) },
+              ...(podeExportar && !filtrosAvancadosLigados
+                ? [
+                    { rotulo: t("Exportar CSV"), icone: DownloadSimple, onSelect: () => exportarArquivo("csv") },
+                    { rotulo: t("Exportar vCard"), icone: DownloadSimple, onSelect: () => exportarArquivo("vcf") },
+                  ]
+                : []),
+            ]}
+          >
           <Button variant="outline" onClick={() => setColunasOpen(true)} data-acao="personalizar-colunas">
             <Columns size={16} weight="bold" aria-hidden />
             <span>{t("Personalizar colunas")}</span>
@@ -409,6 +428,7 @@ export function ContactsListClient() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          </AcoesNoCelular>
           <Button onClick={() => setCreateOpen(true)}>
             <Plus size={16} weight="bold" aria-hidden />
             <span>{t("Novo contato")}</span>
@@ -432,6 +452,7 @@ export function ContactsListClient() {
           />
         </div>
 
+        <FiltrosNoCelular ativos={quantidadeDeFiltros(filtros) - (search ? 1 : 0)}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" disabled={tagOptions.length === 0}>
@@ -543,6 +564,7 @@ export function ContactsListClient() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        </FiltrosNoCelular>
 
         {(quantidadeDeFiltros(filtros) > 0 || searchInput.trim() !== "") && (
           <Button
@@ -626,17 +648,13 @@ export function ContactsListClient() {
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
-      ) : q.isError ? (
-        <Card className="p-6 text-center">
-          <p className="text-sm text-error-fg">{t("Erro ao carregar contatos.")}</p>
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-2"
-            onClick={() => q.refetch()}
-          >
-            {t("Tentar novamente")}
-          </Button>
+      ) : q.isError && !q.data ? (
+        <Card>
+          <ErroComRetry
+            titulo={t("Não foi possível carregar os contatos")}
+            onRetry={() => q.refetch()}
+            tentando={q.isFetching}
+          />
         </Card>
       ) : allContacts.length === 0 ? (
         <Card className="p-2">

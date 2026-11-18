@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -153,9 +154,7 @@ function FiltroDeFunil({
             <legend className="text-xs font-medium">{t("Etapas")}</legend>
             <div className="max-h-56 space-y-0.5 overflow-y-auto rounded-md border border-input p-1">
               <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4"
+                <Checkbox
                   checked={marcadas.length === 0}
                   onChange={() => onChange({ etapa: undefined })}
                 />
@@ -166,9 +165,7 @@ function FiltroDeFunil({
                   key={e.id}
                   className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted"
                 >
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
+                  <Checkbox
                     checked={marcadas.includes(e.id)}
                     onChange={() => alternarEtapa(e.id)}
                   />

@@ -29,12 +29,12 @@ import { useState } from "react";
 import {
   BookOpen,
   FileText,
-  HelpCircle,
-  MessageSquare,
+  Question,
+  ChatText,
   Package,
-  RefreshCw,
-  Trash2,
-} from "lucide-react";
+  ArrowsClockwise,
+  Trash,
+} from "@/lib/ui/icons";
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,10 +48,10 @@ import {
 } from "@/lib/ai/rag/tipos-de-fonte";
 import type { SourceRow } from "@/hooks/ai/useKnowledgeSources";
 
-const ICONE_POR_TIPO: Record<string, typeof HelpCircle> = {
-  faq: HelpCircle,
+const ICONE_POR_TIPO: Record<string, typeof Question> = {
+  faq: Question,
   documento: FileText,
-  conversas: MessageSquare,
+  conversas: ChatText,
   catalogo: Package,
 };
 
@@ -184,7 +184,7 @@ export function KnowledgeSourceCard({
           onClick={onReindex}
           data-testid={`material-reindexar-${source.id}`}
         >
-          <RefreshCw
+          <ArrowsClockwise
             className={`mr-2 h-3.5 w-3.5 ${isReindexing ? "animate-spin" : ""}`}
             aria-hidden
           />
@@ -258,7 +258,7 @@ export function KnowledgeSourceCard({
             onClick={onArquivar}
             data-testid={`material-arquivar-${source.id}`}
           >
-            <Trash2 className="mr-2 h-3.5 w-3.5" aria-hidden />
+            <Trash className="mr-2 h-3.5 w-3.5" aria-hidden />
             {t("Arquivar")}
           </Button>
         ) : null}

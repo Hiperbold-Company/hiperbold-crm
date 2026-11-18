@@ -463,29 +463,14 @@ test.describe("datas do compromisso seguem idioma e fuso próprios", () => {
       year = recorded.getUTCFullYear();
     const hour = recorded.getUTCHours(),
       minute = String(recorded.getUTCMinutes()).padStart(2, "0");
-    for (const locale of ["pt-BR", "es"] as const) {
-      if (locale === "es") {
-        await page.keyboard.press("Escape");
-        await page.getByTestId("seletor-de-idioma").click();
-        const reload = page.waitForEvent("load");
-        await page.getByTestId("idioma-es").click();
-        await reload;
-        await expect(page.getByTestId("seletor-de-idioma")).toHaveText("ES");
-        await detail(page, id, "Consulta atravessa meia-noite");
-        await expect(page.getByTestId("compromisso-horario")).toHaveText(
-          "29 ago 2026, 23:30 – 30 ago 2026, 0:30",
-        );
-      }
-      const label =
-        locale === "es" ? "Asistencia registrada por el equipo" : "Presença registrada pela equipe";
-      await expect(page.getByRole("dialog").getByText(new RegExp(`^${label}:`))).toHaveText(
-        new RegExp(`^${label}: ${day}\\b.*\\b${year}, 0?${hour}:${minute}$`),
-      );
-      await evidence(page, info, `datas-${locale}-desktop`);
-      await page.setViewportSize({ width: 390, height: 844 });
-      await evidence(page, info, `datas-${locale}-mobile`);
-      await page.setViewportSize({ width: 1280, height: 720 });
-    }
+    const label = "Presença registrada pela equipe";
+    await expect(page.getByRole("dialog").getByText(new RegExp(`^${label}:`))).toHaveText(
+      new RegExp(`^${label}: ${day}\\b.*\\b${year}, 0?${hour}:${minute}$`),
+    );
+    await evidence(page, info, "datas-pt-BR-desktop");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await evidence(page, info, "datas-pt-BR-mobile");
+    await page.setViewportSize({ width: 1280, height: 720 });
     const preserved = await db
       .from("calendar_appointments")
       .select("starts_at,ends_at,time_zone,outcome_recorded_at,outcome_user_id,revision")

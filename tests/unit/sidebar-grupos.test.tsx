@@ -159,7 +159,7 @@ describe("Sidebar agrupado", () => {
     // #105, e Conexões é a porta.
     const hubAnalise = screen.getByRole("link", { name: /Ver tudo em Análise/ });
     expect(hubAnalise).toHaveAttribute("href", "/app/analise");
-    expect(screen.queryByRole("link", { name: /Audit Log/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Histórico de ações/ })).toBeNull();
 
     // NUVEMSHOP SAIU, e esta linha é a reversão explícita de uma decisão que
     // este mesmo teste travava: a integração tinha sido "desenterrada" para o

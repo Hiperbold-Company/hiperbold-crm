@@ -8,20 +8,20 @@ export function DBAOnlyNotice() {
   return (
     <div
       role="note"
-      className="flex gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-900"
+      className="flex gap-3 rounded-lg border border-info/30 bg-info-bg p-4 text-info-fg"
     >
-      <Info size={20} className="mt-0.5 shrink-0 text-blue-600" aria-hidden />
+      <Info size={20} className="mt-0.5 shrink-0 text-info-fg" aria-hidden />
       <div className="space-y-1">
         <p className="text-sm font-semibold">
           {t("Gerenciamento de Platform Admins é restrito ao DBA")}
         </p>
-        <p className="text-sm leading-relaxed text-blue-800">
+        <p className="text-sm leading-relaxed text-info-fg">
           {t("Conforme Spec 01 §3.4 T-04: adição, remoção ou alteração de")}{" "}
-          <code className="rounded-md bg-blue-100 px-1 font-mono text-xs">
+          <code className="rounded-md bg-info-bg px-1 font-mono text-xs">
             platform_admins
           </code>{" "}
           {t("é feita exclusivamente via SQL pelo DBA, com nota explicativa em")}{" "}
-          <code className="rounded-md bg-blue-100 px-1 font-mono text-xs">
+          <code className="rounded-md bg-info-bg px-1 font-mono text-xs">
             api_audit_log
           </code>
           {t(
@@ -31,7 +31,7 @@ export function DBAOnlyNotice() {
         <p className="pt-1">
           <Link
             href="/runbook/platform-admin-management.md"
-            className="text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
+            className="text-xs font-medium text-info-fg underline underline-offset-2 hover:text-info-fg"
           >
             {t("Ver runbook →")}
           </Link>

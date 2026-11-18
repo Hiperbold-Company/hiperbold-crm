@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { TituloDaAgenda } from "@/components/agenda/TituloDaAgenda";
 import { AgendasConectadas } from "@/components/agenda/AgendasConectadas";
 import { PrazosDePresenca } from "@/components/agenda/PrazosDePresenca";
@@ -204,13 +205,12 @@ function LembreteDoCompromisso({
   return (
     <div className="grid gap-3 border-t border-border pt-3">
       <label className="flex items-center gap-2 text-xs text-text-muted">
-        <input
-          type="checkbox"
+        <Checkbox
           name="reminder_enabled"
           checked={ligado}
           data-testid={`editar-lembrete-${tipo.id}`}
           onChange={(e) => setLigado(e.target.checked)}
-          className="size-4 shrink-0 rounded-sm border-border accent-accent"
+          className="shrink-0"
         />
         {t("Avisar o cliente antes do compromisso, pelo WhatsApp")}
       </label>
@@ -412,7 +412,7 @@ function LembreteDoCompromisso({
           {t("Adicionar lembrete")}
         </Button>
       ) : null}
-      <p className="text-[11px] text-text-muted">
+      <p className="text-2xs text-text-muted">
         {t(
           "Deixe a mensagem em branco para o texto padrão. Variáveis: {{nome}}, {{titulo}}, {{dia}}, {{hora}}, {{endereco}}.",
         )}
@@ -623,7 +623,7 @@ export function TiposDeAgendamentoClient({
                   ))}
                 </select>
               </label>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={serviceDraft} onChange={(e) => setServiceDraft(e.target.checked)}/>{t("Criar como serviço em rascunho")}</label>
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={serviceDraft} onChange={(e) => setServiceDraft(e.target.checked)}/>{t("Criar como serviço em rascunho")}</label>
               {serviceDraft && <p className="text-sm text-text-muted">{t("Depois de criar, abra Serviço e horários para configurar e ativar. Nenhuma reserva é oferecida antes da ativação.")}</p>}
               <div className="flex justify-end gap-2 sm:col-span-2">
                 <Button type="button" variant="ghost" size="sm" onClick={() => setCriando(false)}>
@@ -687,7 +687,7 @@ export function TiposDeAgendamentoClient({
                   rótulo do sistema — traduzir trocaria "Retorno" por
                   "Seguimiento" (chave existente, de outro contexto). */}
               <span className="text-sm font-medium text-text">{tipo.name}</span>
-              <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-text-muted">
+              <span className="rounded-full border border-border px-2 py-0.5 text-2xs text-text-muted">
                 {t(rotuloDe(CATEGORIAS, tipo.category))}
               </span>
               <span className="text-xs tabular-nums text-text-muted">{tipo.duration_minutes} min</span>
@@ -931,7 +931,7 @@ export function TiposDeAgendamentoClient({
                       data-testid={`editar-preco-${tipo.id}`}
                       className="rounded-md border border-border bg-surface-elevated p-2 text-sm text-text"
                     />
-                    <span className="text-[11px] text-text-muted">
+                    <span className="text-2xs text-text-muted">
                       {t("Opcional. Vira o valor sugerido na comanda, e pode ser mudado lá.")}
                     </span>
                   </label>

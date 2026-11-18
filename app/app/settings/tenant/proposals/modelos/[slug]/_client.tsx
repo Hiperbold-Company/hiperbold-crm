@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -128,7 +129,7 @@ export function EditorDeModelo({ slug }: { slug: string }) {
     <div className="mx-auto grid w-full max-w-5xl gap-6 p-6 lg:grid-cols-[1fr_16rem]">
       <div className="space-y-4">
         {importado && modelo.sections.length === 0 ? (
-          <p role="alert" className="text-sm text-amber-800">{t("O modelo importado não está mais disponível. Envie o arquivo de novo.")}</p>
+          <p role="alert" className="text-sm text-warning-fg">{t("O modelo importado não está mais disponível. Envie o arquivo de novo.")}</p>
         ) : null}
         {somenteLeitura ? (
           <p className="text-sm text-muted-foreground">{t("Este é um modelo da plataforma. Personalize-o na lista para editar.")}</p>
@@ -143,13 +144,13 @@ export function EditorDeModelo({ slug }: { slug: string }) {
         </label>
 
         {erros.length > 0 ? (
-          <ul role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <ul role="alert" className="rounded-md border border-error/30 bg-error-bg p-3 text-sm text-error-fg">
             {erros.map((e, i) => <li key={i}>{t(e.mensagem)}</li>)}
           </ul>
         ) : null}
 
         {pedidasAoCliente.length > 1 ? (
-          <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+          <div className="rounded-md border border-info/30 bg-info-bg p-3 text-sm text-info-fg">
             <p className="font-medium">{t("Este modelo vai pedir ao cliente:")}</p>
             <ul className="mt-1 list-disc space-y-1 pl-5">
               {pedidasAoCliente.map((v) => (
@@ -158,7 +159,7 @@ export function EditorDeModelo({ slug }: { slug: string }) {
             </ul>
           </div>
         ) : (
-          <p role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <p role="alert" className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm text-warning-fg">
             {t("Este modelo quase não pede nada ao cliente: a IA não saberá o que perguntar. Troque por {{campo}} o que muda de um projeto para outro.")}
           </p>
         )}
@@ -178,11 +179,11 @@ export function EditorDeModelo({ slug }: { slug: string }) {
             <Textarea aria-label={t("Texto da seção")} value={s.body} disabled={somenteLeitura} rows={4} onChange={(e) => mudarSecao(i, { body: e.target.value })} />
             <div className="flex gap-4 text-sm">
               <label className="flex items-center gap-1">
-                <input type="checkbox" checked={s.required} disabled={somenteLeitura} onChange={(e) => mudarSecao(i, { required: e.target.checked, conditional: e.target.checked ? false : s.conditional })} />
+                <Checkbox checked={s.required} disabled={somenteLeitura} onChange={(e) => mudarSecao(i, { required: e.target.checked, conditional: e.target.checked ? false : s.conditional })} />
                 {t("Obrigatória")}
               </label>
               <label className="flex items-center gap-1">
-                <input type="checkbox" checked={s.conditional} disabled={somenteLeitura} onChange={(e) => mudarSecao(i, { conditional: e.target.checked, required: e.target.checked ? false : s.required })} />
+                <Checkbox checked={s.conditional} disabled={somenteLeitura} onChange={(e) => mudarSecao(i, { conditional: e.target.checked, required: e.target.checked ? false : s.required })} />
                 {t("Só aparece se tiver dado")}
               </label>
             </div>

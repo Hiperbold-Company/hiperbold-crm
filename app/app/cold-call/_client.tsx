@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -11,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ChatThread } from "@/components/inbox/ChatThread";
 import { Composer } from "@/components/inbox/Composer";
 import { Button } from "@/components/ui/button";
+import { Paginacao } from "@/components/ui/paginacao";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,8 +46,6 @@ import {
   CalendarCheck,
   CalendarPlus,
   CaretDown,
-  CaretLeft,
-  CaretRight,
   ChartBar,
   Check,
   Clock,
@@ -131,7 +131,7 @@ function Iniciais({ nome, tamanho = "size-8" }: { nome: string; tamanho?: string
   return (
     <span
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-full border border-accent/30 bg-accent-soft text-[11px] font-bold text-accent",
+        "flex shrink-0 items-center justify-center rounded-full border border-accent/30 bg-accent-soft text-2xs font-bold text-accent",
         tamanho,
       )}
       aria-hidden
@@ -159,7 +159,7 @@ export function SeletorDoResultado({
   return (
     <>
       <label className="mt-3 block text-xs text-text-muted" htmlFor="resultado-cold-call">
-        {t("Resultado Cold Call")}
+        {t("Resultado da ligação")}
       </label>
       <select
         id="resultado-cold-call"
@@ -234,7 +234,7 @@ export function ColdCall() {
   if (consulta.isPending) {
     return (
       <div className="flex flex-col gap-4">
-        <h1>{t("Cold Call")}</h1>
+        <h1>{t("Ligações em lista")}</h1>
         <Skeleton className="h-96 w-full rounded-2xl" />
       </div>
     );
@@ -243,7 +243,7 @@ export function ColdCall() {
   if (consulta.isError || !dados) {
     return (
       <div className="flex flex-col items-start gap-3">
-        <h1>{t("Cold Call")}</h1>
+        <h1>{t("Ligações em lista")}</h1>
         <p className="text-sm text-text-muted">{t("Não consegui carregar a fila de ligações.")}</p>
         <Button variant="outline" onClick={() => void consulta.refetch()}>
           {t("Tentar de novo")}
@@ -255,7 +255,7 @@ export function ColdCall() {
   if (!dados.funil) {
     return (
       <div className="flex flex-col gap-4">
-        <h1>{t("Cold Call")}</h1>
+        <h1>{t("Ligações em lista")}</h1>
         <section className="flex max-w-2xl flex-col items-start gap-4 rounded-2xl border border-border/70 bg-surface p-6">
           <span className="flex size-12 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Phone size={24} weight="duotone" aria-hidden />
@@ -373,8 +373,8 @@ function Fila({
   return (
     <div className="flex flex-col gap-4" data-testid="fila-de-ligacoes">
       <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border/70 pb-3">
-        <h1>{t("Cold Call")}</h1>
-        <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label={t("Cold Call")}>
+        <h1>{t("Ligações em lista")}</h1>
+        <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label={t("Ligações em lista")}>
           <span className="border-b-2 border-accent px-3 py-1.5 font-semibold text-accent">{t("Ações manuais")}</span>
           {podeGerenciar && (
             <button type="button" onClick={aoEditarRoteiro} className="px-3 py-1.5 text-text-muted hover:text-text" data-testid="editar-roteiro">
@@ -483,11 +483,9 @@ function Fila({
               <thead className="border-b border-border/70 text-xs font-medium text-text-muted">
                 <tr>
                   <th className="w-10 py-3 pl-4">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={tudoMarcado}
                       aria-label={t("Selecionar todos")}
-                      className="size-4 accent-[var(--color-accent)]"
                       onChange={() =>
                         setMarcados((atuais) => {
                           const novo = new Set(atuais);
@@ -516,11 +514,9 @@ function Fila({
                   return (
                     <tr key={lead.id} className="border-b border-border/40 last:border-0 hover:bg-surface-elevated/50" data-testid="linha-da-fila">
                       <td className="py-2.5 pl-4">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={marcados.has(lead.id)}
                           aria-label={`${t("Selecionar")} ${lead.titulo}`}
-                          className="size-4 accent-[var(--color-accent)]"
                           onChange={() =>
                             setMarcados((atuais) => {
                               const novo = new Set(atuais);
@@ -552,7 +548,7 @@ function Fila({
                       </td>
                       <td className="px-3 py-2.5 text-text">
                         <span className="inline-flex items-center gap-1.5">
-                          <Phone size={14} weight="fill" className="text-accent" aria-hidden /> {t("Cold Call")}
+                          <Phone size={14} weight="fill" className="text-accent" aria-hidden /> {t("Ligações em lista")}
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-text">
@@ -601,16 +597,8 @@ function Fila({
         )}
 
         {visiveis.length > 0 && (
-          <footer className="flex items-center justify-end gap-2 border-t border-border/60 p-3">
-            <span className="mr-auto pl-1 text-xs tabular-nums text-text-muted">
-              {t("Página")} {atual + 1} {t("de")} {paginas}
-            </span>
-            <Button variant="outline" size="sm" disabled={atual === 0} onClick={() => setPagina(atual - 1)}>
-              <CaretLeft size={14} className="mr-1" aria-hidden /> {t("Anterior")}
-            </Button>
-            <Button variant="outline" size="sm" disabled={atual >= paginas - 1} onClick={() => setPagina(atual + 1)}>
-              {t("Próxima")} <CaretRight size={14} className="ml-1" aria-hidden />
-            </Button>
+          <footer className="border-t border-border/60 p-3">
+            <Paginacao pagina={atual + 1} totalDePaginas={paginas} onIr={(p) => setPagina(p - 1)} />
           </footer>
         )}
       </section>
@@ -835,7 +823,7 @@ function Sessao({
   if (!lead) {
     return (
       <div className="flex flex-col items-start gap-3" data-testid="sessao-concluida">
-        <h1>{t("Cold Call")}</h1>
+        <h1>{t("Ligações em lista")}</h1>
         <section className={cn(CARTAO, "flex w-full max-w-xl flex-col items-start gap-3 p-6")}>
           <h2 className="text-xl font-bold tracking-tight text-text">{t("Fila concluída")}</h2>
           <p className="text-sm text-text-muted">
@@ -884,7 +872,7 @@ function Sessao({
         <span className="flex size-11 items-center justify-center rounded-xl border border-accent/30 bg-accent-soft text-accent">
           <Phone size={22} weight="fill" aria-hidden />
         </span>
-        <h1 className="!text-2xl">{t("Cold Call")}</h1>
+        <h1 className="!text-2xl">{t("Ligações em lista")}</h1>
         <span className="border-b-2 border-accent px-1 pb-1 text-sm font-semibold text-accent">{t("Ligando")}</span>
         <span className="pb-1 text-sm tabular-nums text-text-muted">
           {t("Lead")} {posicao + 1} {t("de")} {ordem.length}
@@ -969,9 +957,9 @@ function Sessao({
             <div className="mt-2 rounded-xl border border-border/60 bg-surface-elevated/30 px-3 py-2.5">
               <p className="flex items-center justify-between gap-2 text-sm font-medium text-text">
                 <span className="flex items-center gap-1.5">
-                  <Phone size={15} weight="fill" aria-hidden /> {t("Cold Calls")}
+                  <Phone size={15} weight="fill" aria-hidden /> {t("Ligações em lista")}
                 </span>
-                <span className="flex size-5 items-center justify-center rounded-full bg-accent text-[11px] font-bold tabular-nums text-accent-foreground">
+                <span className="flex size-5 items-center justify-center rounded-full bg-accent text-2xs font-bold tabular-nums text-accent-foreground">
                   {lead.tentativas}
                 </span>
               </p>
@@ -986,17 +974,17 @@ function Sessao({
             <div className="px-1">
               <Phone size={18} className="mx-auto text-accent" aria-hidden />
               <p className="mt-1 text-lg font-bold tabular-nums text-text">{lead.tentativas}</p>
-              <p className="text-[11px] text-text-muted">{t("Tentativas")}</p>
+              <p className="text-2xs text-text-muted">{t("Tentativas")}</p>
             </div>
             <div className="px-1">
               <Clock size={18} className="mx-auto text-accent" aria-hidden />
               <p className="mt-1 text-lg font-bold tabular-nums text-text">{tempo}</p>
-              <p className="text-[11px] text-text-muted">{t("Duração")}</p>
+              <p className="text-2xs text-text-muted">{t("Duração")}</p>
             </div>
             <div className="px-1" title={t("Leads da fila que pediram reunião, entre os já tentados")}>
               <Check size={18} className="mx-auto text-accent" aria-hidden />
               <p className="mt-1 text-lg font-bold tabular-nums text-text">{conversao}%</p>
-              <p className="text-[11px] text-text-muted">{t("Conversão")}</p>
+              <p className="text-2xs text-text-muted">{t("Conversão")}</p>
             </div>
           </section>
 
@@ -1132,7 +1120,7 @@ function Sessao({
                 {ligacao.motivo && <span className="text-xs text-text-muted">{ligacao.motivo}</span>}
               </p>
               {!ligacao.viaCrm && !lead.nao_ligar && ligacao.fase === "pronta" && (
-                <p className="mt-2 text-center text-[11px] leading-relaxed text-text-muted" data-testid="aviso-sem-telefonia">
+                <p className="mt-2 text-center text-2xs leading-relaxed text-text-muted" data-testid="aviso-sem-telefonia">
                   {t("A ligação pelo CRM ainda não está ligada. Por enquanto, o botão abre o discador do seu aparelho.")}
                 </p>
               )}
@@ -1310,7 +1298,7 @@ function Sessao({
                       {linha.texto}
                     </h3>
                   ) : (
-                    <p key={i} className="text-base leading-relaxed text-text sm:text-[17px]">
+                    <p key={i} className="text-base leading-relaxed text-text sm:text-lg">
                       {linha.marca && <span className="mr-1 font-semibold text-accent">[{linha.marca}]</span>}
                       {linha.texto}
                     </p>

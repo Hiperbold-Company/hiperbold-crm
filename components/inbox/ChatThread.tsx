@@ -306,7 +306,7 @@ export function ChatThread({
         {groups.map((g) => (
           <div key={g.key} className="space-y-1">
             <div className="sticky top-0 z-10 flex justify-center py-1">
-              <span className="rounded-full bg-background/80 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground backdrop-blur">
+              <span className="rounded-full bg-background/80 px-2.5 py-0.5 text-2xs font-medium text-muted-foreground backdrop-blur">
                 {dayLabel(g.date, t, localeDaData)}
               </span>
             </div>

@@ -87,6 +87,7 @@ import { saldoDaOrganizacao, type FonteCarteira } from "@/lib/billing/tokens/sal
 import { linhasDeTokensDeIA, type LinhasDeTokensDeIA } from "@/lib/billing/tokens/linhas-da-tela";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { assinaturaCancelada, estadoDoReembolso, type EstadoDoReembolso } from "@/lib/billing/reembolso/regras";
 import { pagamentosReembolsaveis } from "@/lib/billing/reembolso/elegiveis";
@@ -630,7 +631,7 @@ function BannerDoBloqueio({
 
   if (bloqueio.emCarencia && bloqueio.carenciaAte) {
     return (
-      <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
+      <div className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm text-warning-fg">
         {t("O bloqueio do plano está em carência até")}{" "}
         <span className="font-medium">
           {new Date(bloqueio.carenciaAte).toLocaleDateString(tagDoIdioma)}
@@ -641,7 +642,7 @@ function BannerDoBloqueio({
   }
 
   return (
-    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
+    <div className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm text-warning-fg">
       {t("Nesta fase só o limite de Conexões bloqueia. Os demais itens apenas avisam.")}
     </div>
   );
@@ -679,17 +680,7 @@ function LinhaDeUso({
       </div>
 
       {linha.percentual !== null && (
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full transition-all ${linha.estourou ? "bg-destructive" : "bg-primary"}`}
-            style={{ width: `${linha.percentual}%` }}
-            role="progressbar"
-            aria-valuenow={linha.percentual}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={rotulo}
-          />
-        </div>
+        <Progress valor={linha.percentual} rotulo={rotulo} tom={linha.estourou ? "erro" : "marca"} />
       )}
 
       {linha.chave === "etapas_por_funil" && (
@@ -827,21 +818,11 @@ function SecaoTokensDeIA({
         )}
 
         {carteira.percentual !== null && (
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className={`h-full transition-all ${carteira.estourou ? "bg-destructive" : "bg-primary"}`}
-              style={{ width: `${carteira.percentual}%` }}
-              role="progressbar"
-              aria-valuenow={carteira.percentual}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={t("Consumo do mês")}
-            />
-          </div>
+          <Progress valor={carteira.percentual} rotulo={t("Consumo do mês")} tom={carteira.estourou ? "erro" : "marca"} />
         )}
 
         {carteira.saldoNegativo && (
-          <p className="text-xs text-amber-700 dark:text-amber-300">
+          <p className="text-xs text-warning-fg">
             {t("O consumo passou do contratado. Nesta fase a IA continua respondendo normalmente.")}
           </p>
         )}

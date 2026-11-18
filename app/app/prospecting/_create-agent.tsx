@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -526,8 +527,7 @@ export function ProspectingAgentBuilder(props: Props) {
             <>
               {session.needs_continuity && (
                 <label className="flex items-start gap-2 rounded-lg border bg-background p-3">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     className="mt-1"
                     checked={session.enable_router_continuity}
                     disabled={busy || !!session.uncertain || !!store.error}

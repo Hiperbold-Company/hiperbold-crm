@@ -10,7 +10,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** Se a listagem dos buckets falhar, estes são os que o produto cria (migrations 0014, 0017, 0055, 0155, 0390, 0441). */
+/** Se a listagem dos buckets falhar, estes são os que o produto cria (migrations 0014, 0017, 0055, 0155, 0390, 0441, 1018). */
 export const BUCKETS_CONHECIDOS = [
   "whatsapp-media",
   "ai-policy",
@@ -19,6 +19,7 @@ export const BUCKETS_CONHECIDOS = [
   "brand-logos",
   "catalog-photos",
   "org-sounds",
+  "bug-reports",
 ] as const;
 
 const PAGINA = 100;

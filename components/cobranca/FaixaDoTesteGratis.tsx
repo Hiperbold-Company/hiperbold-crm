@@ -15,7 +15,7 @@ export function FaixaDoTesteGratis({ dias }: { dias: number }) {
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center justify-center gap-2 border-b border-sky-300 bg-sky-50 px-4 py-2 text-sm text-sky-950 dark:border-sky-800/60 dark:bg-sky-950/60 dark:text-sky-50"
+      className="flex flex-wrap items-center justify-center gap-2 border-b border-info/30 bg-info-bg px-4 py-2 text-sm text-info-fg"
     >
       <span>{t(fraseDaFaixa(dias)).replace("{n}", String(dias))}</span>
       <Link href="/app/settings/billing" className="font-medium underline">

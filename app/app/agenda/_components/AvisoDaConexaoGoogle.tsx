@@ -125,7 +125,7 @@ const DESFECHOS: Record<string, Desfecho> = {
     formato: "aviso",
     titulo: "O Google recusou o acesso à agenda",
     corpo:
-      "A autorização funcionou, mas o Google negou a leitura do calendário. Quase sempre é a API do Google Agenda desligada no projeto do Google Cloud desta instalação — ligue em APIs e serviços › Biblioteca › Google Calendar API e conecte de novo. O motivo exato que o Google devolveu ficou registrado no Audit Log, na falha de conexão da agenda.",
+      "A autorização funcionou, mas o Google negou a leitura do calendário. Quase sempre é a API do Google Agenda desligada no projeto do Google Cloud desta instalação — ligue em APIs e serviços › Biblioteca › Google Calendar API e conecte de novo. O motivo exato que o Google devolveu ficou registrado no Histórico de ações, na falha de conexão da agenda.",
     acao: "reconectar",
   },
   nao_consegui_guardar: {

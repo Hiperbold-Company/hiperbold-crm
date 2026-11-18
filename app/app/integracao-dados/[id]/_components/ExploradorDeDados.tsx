@@ -434,7 +434,7 @@ export function ExploradorDeDados({ connectionId, soLiberadas = false }: Props) 
                               title={ehPk ? t("Chave primária") : undefined}
                             >
                               {ehPk && (
-                                <span className="rounded-md bg-surface-elevated px-1 text-[10px] font-semibold text-text-muted">
+                                <span className="rounded-md bg-surface-elevated px-1 text-2xs font-semibold text-text-muted">
                                   PK
                                 </span>
                               )}

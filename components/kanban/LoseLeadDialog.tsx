@@ -186,7 +186,7 @@ export function LoseLeadDialog({
                 maxLength={MAX_LEN}
                 rows={3}
               />
-              <div className="text-right text-[11px] text-muted-foreground tabular-nums">
+              <div className="text-right text-2xs text-muted-foreground tabular-nums">
                 {otherText.length}/{MAX_LEN}
               </div>
               {outroRecusado && (

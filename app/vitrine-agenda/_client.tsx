@@ -103,7 +103,7 @@ export function VitrineDaAgenda() {
               />
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold">{nome}</p>
-                <p className="font-mono text-[10px] text-text-subtle">trilha {trilha}</p>
+                <p className="font-mono text-2xs text-text-subtle">trilha {trilha}</p>
               </div>
             </div>
           ))}

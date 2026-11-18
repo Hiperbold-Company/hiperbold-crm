@@ -26,7 +26,6 @@ const expect = expectBase.configure({ timeout: 20_000 });
 const EVIDENCE = "evidence/extensoes-integracao/e2e/recuperacao";
 const CAPTURES = [
   "recuperacao-dark.png",
-  "recuperacao-es-fallback.png",
   "recuperacao-cancelada.png",
   "recuperacao-interrompida.png",
 ] as const;
@@ -107,7 +106,7 @@ test.afterAll(async () => {
   await atores?.limpar();
 });
 
-test("recupera preparação em HTTP real e mantém tema, idioma e fallback legíveis", async ({
+test("recupera preparação em HTTP real e mantém o tema legível", async ({
   page,
 }, testInfo) => {
   test.setTimeout(240_000);
@@ -125,7 +124,7 @@ test("recupera preparação em HTTP real e mantém tema, idioma e fallback legí
   let receiptCancelado = "";
   let receiptInterrompido = "";
 
-  await test.step("admite o catálogo real e registra tema escuro e fallback em espanhol", async () => {
+  await test.step("admite o catálogo real e registra tema escuro", async () => {
     await login(page, atores!.usuarios.owner.email, atores!.senha);
     await page.goto("/app/extensions");
     await trocarOrganizacao(page, atores!.organizacaoA);
@@ -159,25 +158,6 @@ test("recupera preparação em HTTP real e mantém tema, idioma e fallback legí
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await capturar(page, testInfo, "recuperacao-dark.png");
 
-    await page.getByTestId("seletor-de-idioma").click();
-    const reloadEs = page.waitForEvent("load");
-    await page.getByTestId("idioma-es").click();
-    await reloadEs;
-    await expect(page.getByTestId("seletor-de-idioma")).toHaveText("ES");
-    await expect(page.getByRole("heading", { name: "Extensiones", exact: true })).toBeVisible();
-    await page.getByRole("tab", { name: "Catálogo", exact: true }).click();
-    await expect(page.getByText("Texto disponible en portugués.").first()).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Instalar versión revisada", exact: true }).first(),
-    ).toBeVisible();
-    await capturar(page, testInfo, "recuperacao-es-fallback.png");
-
-    await page.getByTestId("seletor-de-idioma").click();
-    const reloadPt = page.waitForEvent("load");
-    await page.getByTestId("idioma-pt-BR").click();
-    await reloadPt;
-    await expect(page.getByTestId("seletor-de-idioma")).toHaveText("PT");
-    await expect(page.getByRole("heading", { name: "Extensões", exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Catálogo", exact: true }).click();
   });
 

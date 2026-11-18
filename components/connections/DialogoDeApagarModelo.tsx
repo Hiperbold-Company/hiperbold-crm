@@ -63,7 +63,7 @@ export function DialogoDeApagarModelo({
           </AlertDialogDescription>
         </AlertDialogHeader>
         {emUso && (
-          <div className="rounded-md border border-amber-300 bg-amber-50/50 p-2 text-sm dark:border-amber-800/60 dark:bg-amber-950/20">
+          <div className="rounded-md border border-warning/30 bg-warning-bg p-2 text-sm">
             <p className="font-medium">{t("Este modelo está em uso:")}</p>
             <ul className="mt-1 list-disc pl-5">
               {(alvo?.usos ?? []).map((u) => (

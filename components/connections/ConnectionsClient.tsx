@@ -588,7 +588,7 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
                   <Badge variant={info.variant}>{info.label}</Badge>
                   {pausado && <Badge variant="neutral">{t("Pausado")}</Badge>}
                 </div>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-2xs text-muted-foreground">
                   {c.last_health_check_at
                     ? `${t("Verificado")} ${new Date(c.last_health_check_at).toLocaleString(tagDoIdioma)}`
                     : t("Ainda não verificado")}

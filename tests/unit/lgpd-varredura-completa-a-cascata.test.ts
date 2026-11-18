@@ -71,12 +71,14 @@ vi.mock("@/lib/supabase/admin", () => ({
         limit: () => q,
         then: (r: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(r),
       };
-      return { delete: () => q };
+      return { delete: () => q, select: () => q };
     };
     return {
       // Poda sem nada a fazer: o que este arquivo mede é a varredura.
       rpc: async () => ({ data: 0, error: null }),
-      from: (t: string) => (t === "conversation_drafts" ? rascunhosVazios() : cascata.from(t)),
+      // Os relatos de problema (migration 1018): mesma regra, superfície própria e vazia.
+      from: (t: string) =>
+        t === "conversation_drafts" || t === "bug_reports" ? rascunhosVazios() : cascata.from(t),
     };
   },
 }));

@@ -37,7 +37,7 @@ interface Props {
 const COR_DA_PRIORIDADE: Record<PrioridadeDaTarefa, string> = {
   low: "bg-muted text-muted-foreground",
   medium: "bg-primary/10 text-primary",
-  high: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  high: "bg-warning-bg text-warning-fg",
   urgent: "bg-destructive/15 text-destructive",
 };
 
@@ -121,7 +121,7 @@ function Linha({
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{tarefa.description}</p>
         ) : null}
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px]">
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-2xs">
           <span
             className={cn(
               "rounded-full px-2 py-0.5 font-medium",
@@ -182,7 +182,7 @@ function Linha({
             <Button
               variant="destructive"
               size="sm"
-              className="px-2 text-[11px] md:h-7"
+              className="px-2 text-2xs md:h-7"
               disabled={ocupada}
               onClick={() => comBloqueio(() => aoApagar(tarefa))}
             >

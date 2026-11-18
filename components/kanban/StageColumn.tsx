@@ -1,5 +1,6 @@
 "use client";
 import { Droppable } from "@hello-pangea/dnd";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useRef, useState, type CSSProperties } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { cn } from "@/lib/utils";
@@ -8,6 +9,7 @@ import type { Stage } from "@/lib/kanban/types";
 import { buildCardInput } from "@/lib/kanban/card-state";
 import { intervaloDaColuna } from "@/lib/kanban/selecao";
 import { formatSomaPorMoeda, formatValorDoNegocio, MOEDA_PADRAO, somaPorMoeda } from "@/lib/money";
+import type { CampoDoCartao } from "@/lib/kanban/linhas-do-cartao";
 import { KanbanCard, type GestoDeSelecao } from "./KanbanCard";
 
 interface StageColumnProps {
@@ -48,6 +50,8 @@ interface StageColumnProps {
    * escrita) e sem abrir o dossiê, que tem ações próprias.
    */
   somenteLeitura?: boolean;
+  /** As linhas do cartão do funil ("Editar cartão") — atravessa como `denso`. */
+  linhas?: readonly CampoDoCartao[];
 }
 
 export function StageColumn({
@@ -68,6 +72,7 @@ export function StageColumn({
   onRenomear,
   denso = false,
   somenteLeitura = false,
+  linhas,
 }: StageColumnProps) {
   const t = useT();
   // O TOTAL É POR MOEDA (#1531). Antes ele somava todos os `value_cents` e
@@ -193,12 +198,9 @@ export function StageColumn({
             podem ter a mesma aparência num controle que o próximo clique
             inverte. */}
             {!somenteLeitura && (
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={todosSelecionados}
-                ref={(el) => {
-                  if (el) el.indeterminate = selecionadosAqui > 0 && !todosSelecionados;
-                }}
+                indeterminado={selecionadosAqui > 0 && !todosSelecionados}
                 disabled={idsVisiveis.length === 0}
                 onChange={alternarEtapa}
                 aria-label={
@@ -238,13 +240,13 @@ export function StageColumn({
             ) : (
               <h2 className="flex-1 truncate text-sm font-semibold text-text">{stage.name}</h2>
             )}
-            <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-text-muted tabular-nums">
+            <span className="rounded-full bg-surface px-2 py-0.5 text-2xs font-medium text-text-muted tabular-nums">
               {selecionadosAqui > 0 ? `${selecionadosAqui}/${leads.length}` : leads.length}
             </span>
           </div>
 
           {temTotal && (
-            <div className="border-b border-border px-3 py-1.5 text-[11px] text-text-muted tabular-nums">
+            <div className="border-b border-border px-3 py-1.5 text-2xs text-text-muted tabular-nums">
               {formatSomaPorMoeda(totais, formatValorDoNegocio, { primeira })}
               {ponderados !== null && (
                 <span className="ml-2">
@@ -289,11 +291,12 @@ export function StageColumn({
                 onMoverPara={onMoverPara}
                 denso={denso}
                 somenteLeitura={somenteLeitura}
+                linhas={linhas}
               />
             ))}
             {provided.placeholder}
             {leads.length === 0 && !snapshot.isDraggingOver && (
-              <div className="flex h-20 items-center justify-center text-[11px] text-text-muted">
+              <div className="flex h-20 items-center justify-center text-2xs text-text-muted">
                 {t("vazio")}
               </div>
             )}

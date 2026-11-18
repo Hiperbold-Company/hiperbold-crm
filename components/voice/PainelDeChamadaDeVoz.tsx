@@ -31,6 +31,7 @@
  * decorativo — pior que controle ausente, porque ensina que a decisão foi
  * tomada.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import * as React from "react";
 import { toast } from "sonner";
 
@@ -155,7 +156,7 @@ export function PainelDeChamadaDeVoz() {
       </div>
 
       {/* O RISCO, ANTES DO CONTROLE. Sem jargão: quem lê é dono de negócio. */}
-      <div className="rounded-md border border-amber-300/60 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-100">
+      <div className="rounded-md border border-warning/30 bg-warning-bg p-4 text-sm text-warning-fg">
         <p className="font-medium">{t("Leia antes de ligar")}</p>
         <p className="mt-1">
           {t(
@@ -205,8 +206,7 @@ export function PainelDeChamadaDeVoz() {
       ) : (
         <div className="space-y-3">
           <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               className="mt-1"
               checked={aceitou}
               disabled={salvando}

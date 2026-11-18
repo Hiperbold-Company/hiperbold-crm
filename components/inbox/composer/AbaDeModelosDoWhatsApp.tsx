@@ -174,14 +174,14 @@ export function AbaDeModelosDoWhatsApp({
                     <span
                       data-status={m.status.toUpperCase()}
                       className={cn(
-                        "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
+                        "shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-medium",
                         aprovado ? "bg-success-bg text-success-fg" : "bg-muted text-muted-foreground",
                       )}
                     >
                       {rotuloDoStatus(m.status, t)}
                     </span>
                   </span>
-                  <span className="text-[11px] text-muted-foreground">{rotuloDaCategoria(m.category, t)}</span>
+                  <span className="text-2xs text-muted-foreground">{rotuloDaCategoria(m.category, t)}</span>
                 </button>
               </li>
             );
@@ -260,7 +260,7 @@ function EnvioDoModelo({
         const midia = slot.expects === "image" || slot.expects === "video" || slot.expects === "document";
         return (
           <label key={slot.valueKey} className="flex flex-col gap-1">
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-2xs text-muted-foreground">
               {slot.onde} — {midia ? t("link público do arquivo") : `{{${slot.key}}}`}
             </span>
             <input
@@ -397,7 +397,7 @@ export function NovoModelo({
 
       {aba === "json" && (
         <div className="flex flex-col gap-2">
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             {t("O modelo no formato da Meta. Copie para guardar, ou cole um JSON e importe para o formulário.")}
           </p>
           <textarea

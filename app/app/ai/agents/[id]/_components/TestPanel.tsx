@@ -209,8 +209,8 @@ export function TestPanel({ agent, draft, published, readOnly }: Props) {
           </div>
         </div>
 
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
-          <p className="font-medium text-amber-700 dark:text-amber-400">
+        <div className="rounded-md border border-warning/30 bg-warning-bg p-3 text-xs">
+          <p className="font-medium text-warning-fg">
             {t("⚠ Modo teste consome créditos do provider.")}
           </p>
           <p className="mt-1 text-muted-foreground">
@@ -324,7 +324,7 @@ export function TestPanel({ agent, draft, published, readOnly }: Props) {
                     role="status"
                     key={`aviso-${i}`}
                     data-testid="teste-aviso-de-envio"
-                    className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2"
+                    className="rounded-md border border-warning/30 bg-warning-bg p-2"
                   >
                     {x.message}
                   </p>
@@ -360,7 +360,7 @@ export function TestPanel({ agent, draft, published, readOnly }: Props) {
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded-md border border-border/60 px-2 py-1">
-      <p className="text-[10px] tracking-wide text-muted-foreground uppercase">{label}</p>
+      <p className="text-2xs tracking-wide text-muted-foreground uppercase">{label}</p>
       <p className="font-mono">{children}</p>
     </div>
   );

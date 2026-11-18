@@ -7,6 +7,7 @@
  * o que ACONTECE com o cliente e com o atendente, e cada modo tem a sua
  * consequência escrita — inclusive a ruim.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CHAVE_MINHAS_CONEXOES } from "@/hooks/inbox/useMinhasConexoes";
@@ -281,7 +282,7 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
         {combinacaoMorta ? (
           <p
             data-testid="aviso-combinacao-morta"
-            className="rounded-md border border-amber-500/40 bg-amber-50/60 p-3 text-xs dark:bg-amber-900/10"
+            className="rounded-md border border-warning/30 bg-warning-bg p-3 text-xs"
           >
             {t("Com")} <strong>&ldquo;{t("só os seus")}&rdquo;</strong>{" "}
             {t(
@@ -301,15 +302,14 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
           </p>
         </div>
         <label className="flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
+          <Checkbox
             data-testid="devolver-sozinho"
             checked={devolveSozinho}
             disabled={isPending}
             onChange={(e) =>
               setForm((f) => ({ ...f, handoff_return_after_minutes: e.target.checked ? 60 : null }))
             }
-            className="mt-1 h-4 w-4 shrink-0 accent-primary"
+            className="mt-1 shrink-0"
           />
           <span className="space-y-1">
             <span className="block text-sm font-medium">
@@ -393,15 +393,14 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
           </p>
         </div>
         <label className="flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
+          <Checkbox
             data-testid="fica-com-quem-atendeu"
             checked={form.conversation_stays_with_attendant}
             disabled={isPending}
             onChange={(e) =>
               setForm((f) => ({ ...f, conversation_stays_with_attendant: e.target.checked }))
             }
-            className="mt-1 h-4 w-4 shrink-0 accent-primary"
+            className="mt-1 shrink-0"
           />
           <span className="space-y-1">
             <span className="block text-sm font-medium">{t("A conversa fica com quem atendeu")}</span>
@@ -449,13 +448,12 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
           </p>
         </div>
         <label className="flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
+          <Checkbox
             data-testid="dono-ao-mover-interruptor"
             checked={form.assign_owner_on_move}
             disabled={isPending}
             onChange={(e) => setForm((f) => ({ ...f, assign_owner_on_move: e.target.checked }))}
-            className="mt-1 h-4 w-4 shrink-0 accent-primary"
+            className="mt-1 shrink-0"
           />
           <span className="space-y-1">
             <span className="block text-sm font-medium">

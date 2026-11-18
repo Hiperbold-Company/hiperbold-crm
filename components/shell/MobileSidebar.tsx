@@ -69,7 +69,7 @@ export function GavetaDeNavegacao({ comoAba = false }: { comoAba?: boolean }) {
         >
           {comoAba ? <DotsThree size={22} aria-hidden /> : <List size={22} aria-hidden />}
           {comoAba ? (
-            <span className="w-full truncate text-center text-[10px] leading-tight">
+            <span className="w-full truncate text-center text-2xs leading-tight">
               {t("Mais")}
             </span>
           ) : null}

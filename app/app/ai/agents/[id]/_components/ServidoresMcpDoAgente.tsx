@@ -12,6 +12,7 @@
  * Só `admin` vê (as actions recusam o resto). Segredo nunca volta: a tela vê o
  * `last4` da chave e se há `client_secret`.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -385,9 +386,7 @@ export function ServidoresMcpDoAgente({ agentId, toolIds, onChangeToolIds, disab
                   <div className="flex flex-wrap gap-2">
                     {escoposOferecidos.map((e) => (
                       <label key={e} className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs max-md:min-h-11">
-                        <input
-                          type="checkbox"
-                          className="h-3.5 w-3.5 accent-primary"
+                        <Checkbox
                           checked={f.escoposPedidos.includes(e)}
                           onChange={(ev) =>
                             mudar({
@@ -442,7 +441,7 @@ export function ServidoresMcpDoAgente({ agentId, toolIds, onChangeToolIds, disab
                 <p className="text-xs text-muted-foreground">{t("0 = o acesso é revogado assim que a conversa é encerrada.")}</p>
               </div>
 
-              <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+              <div className="space-y-1 rounded-md border border-warning/30 bg-warning-bg p-3">
                 <div className="flex items-center gap-2">
                   <Switch
                     id="mcp-escrita-delegada"
@@ -452,7 +451,7 @@ export function ServidoresMcpDoAgente({ agentId, toolIds, onChangeToolIds, disab
                   />
                   <Label htmlFor="mcp-escrita-delegada">{t("Permitir ações (escrita) durante a conversa")}</Label>
                 </div>
-                <p className="text-xs text-amber-700 dark:text-amber-400">
+                <p className="text-xs text-warning-fg">
                   {t("Ligado, as ferramentas que você marcar como Escrita podem agir na conta do cliente (ligar um aparelho, alterar um pedido) durante a conversa, com o acesso que ele mesmo autorizou. O agente pode errar: ligue só para ações que o cliente pediria a um atendente, e confira a auditoria.")}
                 </p>
               </div>
@@ -588,9 +587,8 @@ function ServidorNaLista({
                 <li key={nome} className="flex flex-wrap items-start gap-3 rounded-md border border-border px-3 py-2" data-testid={`ferramenta-mcp-${servidor.slug}-${nome}`}>
                   {/* O label leva o toque do nome para a caixa: sozinha ela tem 16px. */}
                   <label className="flex flex-1 cursor-pointer items-start gap-3 max-md:min-h-11">
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                    <Checkbox
+                      className="mt-1 shrink-0"
                       checked={marca !== null}
                       onChange={(e) => alternar(nome, e.target.checked)}
                       disabled={disabled}

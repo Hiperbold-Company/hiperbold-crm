@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
@@ -84,11 +85,10 @@ export function MfaForm({ next }: MfaFormProps) {
       />
 
       <label className="flex cursor-pointer items-start gap-2 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={confiar}
           onChange={(e) => setConfiar(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded-md border-border"
+          className="mt-0.5"
         />
         <span>{t("Confiar neste dispositivo por 30 dias")}</span>
       </label>

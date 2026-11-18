@@ -184,7 +184,7 @@ export function RegrasDeConversaoMeta({
                     ))}
                   </select>
                   {r.metaEvent === "LeadSubmitted" && (
-                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                    <p className="text-xs text-warning-fg">
                       {t(
                         "Leads de anúncio Click-to-WhatsApp elegíveis já informam o nascimento. Esta regra informa separadamente a entrada nesta etapa.",
                       )}
@@ -204,7 +204,7 @@ export function RegrasDeConversaoMeta({
                 <p
                   role="alert"
                   data-testid={`aviso-evento-fora-do-canal-${e.id}`}
-                  className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+                  className="mt-2 rounded-md border border-warning/30 bg-warning-bg p-3 text-sm"
                 >
                   {t(
                     "Este evento não sai pelo canal da conversa. Para esta etapa, escolha um destes",

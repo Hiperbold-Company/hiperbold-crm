@@ -154,14 +154,14 @@ describe("validarEscopoDaVersao — ferramenta de conexão MCP externa em tool_i
     expect(await validarEscopoDaVersao(admin, ORG, { tool_ids: [] })).toEqual({ ok: true });
   });
 
-  it("mensagemDoEscopo para tool_ids cita Conexões MCP, não a frase de funil/material", () => {
+  it("mensagemDoEscopo para tool_ids cita Ferramentas externas da IA, não a frase de funil/material", () => {
     const msg = mensagemDoEscopo({ ok: false, campo: "tool_ids", ausentes: ["mcp_n8n__buscar"] });
-    expect(msg).toMatch(/Conexões MCP/);
+    expect(msg).toMatch(/Ferramentas externas da IA/);
     expect(msg).not.toMatch(/funil|material/);
   });
 
   it("mensagemDoEscopo para operator_tool_ids usa a mesma frase de conexão MCP", () => {
     const msg = mensagemDoEscopo({ ok: false, campo: "operator_tool_ids", ausentes: ["mcp_n8n__x"] });
-    expect(msg).toMatch(/Conexões MCP/);
+    expect(msg).toMatch(/Ferramentas externas da IA/);
   });
 });

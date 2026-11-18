@@ -7,7 +7,7 @@ import { ROLE_RANK } from "@/lib/auth/types";
 import { AuditClient } from "./_client";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Audit Log" };
+export const metadata: Metadata = { title: "Histórico de ações" };
 
 export default async function AuditPage() {
   const user = await requireAuth();
@@ -22,7 +22,7 @@ export default async function AuditPage() {
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Audit Log")}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("Histórico de ações")}</h1>
         <p className="text-sm text-muted-foreground">
           {traduzir("Histórico append-only de mutações na organização. Manager+.", idioma)}
         </p>

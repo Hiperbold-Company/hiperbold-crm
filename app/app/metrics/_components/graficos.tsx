@@ -288,7 +288,7 @@ export function MapaDeCalor({ celulas }: { celulas: Array<{ dow: number; hora: n
       <div className="grid min-w-[640px] gap-0.5" style={{ gridTemplateColumns: "3rem repeat(24, minmax(0, 1fr))" }}>
         <span />
         {Array.from({ length: 24 }, (_, h) => (
-          <span key={h} className="text-center text-[10px] text-muted-foreground tabular-nums">
+          <span key={h} className="text-center text-2xs text-muted-foreground tabular-nums">
             {h}
           </span>
         ))}

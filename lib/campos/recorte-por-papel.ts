@@ -77,8 +77,36 @@ export function recortarCampos<T>(campos: readonly T[], leitor: LeitorDosCampos 
 }
 
 /**
- * Os valores (`custom_fields`) que este leitor recebe: sem as chaves restritas (sem diferenciar
- * maiúsculas). Não é objeto → volta como veio. Nada a tirar → o MESMO objeto.
+ * A chave de campo NORMALIZADA: sem acento, minúscula, pontuação e espaço viram `_`, sem `_` nas
+ * pontas ("Company Name" → `company_name`, "Cargo / Posição" → `cargo_posicao`). É a MESMA regra
+ * com que os leitores tolerantes (`cargoEEmpresa`) acham o valor; o recorte a usa também, senão
+ * um valor gravado como "Company Name" escaparia da chave restrita `company_name` e seria lido.
+ */
+export function normalizarChaveDeCampo(chave: string): string {
+  return chave
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+/**
+ * O predicado ÚNICO de "esta chave é restrita": casa sem diferenciar maiúsculas (a regra de sempre)
+ * OU pela forma normalizada. Todo ponto que decide recorte, filtro, exportação ou preservação usa
+ * este, senão um lugar corta "Company Name" e outro não.
+ */
+export function chaveEhRestrita(restritas: ReadonlySet<string>): (chave: string) => boolean {
+  if (restritas.size === 0) return () => false;
+  const normalizadas = new Set([...restritas].map(normalizarChaveDeCampo));
+  return (k: string) => restritas.has(k.toLowerCase()) || normalizadas.has(normalizarChaveDeCampo(k));
+}
+
+/**
+ * Os valores (`custom_fields`) que este leitor recebe: sem as chaves restritas. Uma chave sai se
+ * casa uma restrita sem diferenciar maiúsculas (a regra de sempre) OU pela forma normalizada
+ * (`normalizarChaveDeCampo`) — só acrescenta casos, nunca deixa passar o que antes saía.
+ * Não é objeto → volta como veio. Nada a tirar → o MESMO objeto.
  */
 export function recortarValores<T>(
   valores: T,
@@ -88,9 +116,10 @@ export function recortarValores<T>(
   if (leitorVeCamposRestritos(leitor) || restritas.size === 0) return valores;
   if (!valores || typeof valores !== "object" || Array.isArray(valores)) return valores;
   const entrada = valores as Record<string, unknown>;
-  if (!Object.keys(entrada).some((k) => restritas.has(k.toLowerCase()))) return valores;
+  const restrita = chaveEhRestrita(restritas);
+  if (!Object.keys(entrada).some(restrita)) return valores;
   const saida: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(entrada)) if (!restritas.has(k.toLowerCase())) saida[k] = v;
+  for (const [k, v] of Object.entries(entrada)) if (!restrita(k)) saida[k] = v;
   return saida as T;
 }
 
@@ -125,11 +154,13 @@ export function preservarValoresRestritos(
   restritas: ReadonlySet<string>,
 ): Record<string, unknown> {
   if (restritas.size === 0 || !existente || typeof existente !== "object" || Array.isArray(existente)) return entrada;
-  const presentes = new Set(Object.keys(entrada).map((k) => k.toLowerCase()));
+  const restrita = chaveEhRestrita(restritas);
+  // "Presente" segue a mesma tolerância do recorte: a entrada trazer "company_name" conta como
+  // trazer "Company Name". Senão o valor que o leitor nem recebeu seria apagado ao salvar.
+  const presentes = new Set(Object.keys(entrada).flatMap((k) => [k.toLowerCase(), normalizarChaveDeCampo(k)]));
   let saida: Record<string, unknown> | null = null;
   for (const [k, v] of Object.entries(existente as Record<string, unknown>)) {
-    const lk = k.toLowerCase();
-    if (!restritas.has(lk) || presentes.has(lk)) continue;
+    if (!restrita(k) || presentes.has(k.toLowerCase()) || presentes.has(normalizarChaveDeCampo(k))) continue;
     saida ??= { ...entrada };
     saida[k] = v;
   }

@@ -120,7 +120,7 @@ test.describe("rbac role matrix (spec 13 §4)", () => {
     await loginWithTotp(page, creds.users.admin!.email, creds.admin_totp!.secret);
 
     await page.goto("/app/settings/api-tokens");
-    await expect(page.getByRole("heading", { name: "API Tokens" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Chaves de integração" })).toBeVisible();
     await expectNoBlockingA11y(page);
 
     // /app/settings/billing é só redirect para a tela de plano (Meu plano).

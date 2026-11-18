@@ -16,15 +16,15 @@ interface KPICardProps {
 
 function KPICard({ label, value, subtitle, Icon, accent, danger }: KPICardProps) {
   const iconColor = danger
-    ? "text-red-500"
+    ? "text-error"
     : accent
-      ? "text-amber-500"
+      ? "text-warning"
       : "text-muted-foreground";
 
   const valueColor = danger
-    ? "text-red-600"
+    ? "text-error-fg"
     : accent
-      ? "text-amber-600"
+      ? "text-warning-fg"
       : "text-foreground";
 
   return (

@@ -27377,8 +27377,8 @@ export const DICIONARIO: Traducoes = {
   "O que já está pronto e o que falta para o CRM trabalhar pela sua empresa.": {
     es: "Lo que ya está listo y lo que falta para que el CRM trabaje por tu empresa.",
   },
-  "O essencial está pronto. Os passos abaixo deixam o CRM ainda melhor para a sua equipe.": {
-    es: "Lo esencial está listo. Los pasos de abajo dejan el CRM aún mejor para tu equipo.",
+  "O essencial está pronto. Os primeiros passos que faltam deixam o CRM ainda melhor para a sua equipe.": {
+    es: "Lo esencial está listo. Los primeros pasos que faltan dejan el CRM aún mejor para tu equipo.",
   },
   "Faltam poucos passos para o CRM começar a trabalhar pela sua empresa.": {
     es: "Faltan pocos pasos para que el CRM empiece a trabajar por tu empresa.",
@@ -28961,6 +28961,39 @@ export const DICIONARIO: Traducoes = {
   "Este número já está em outra conexão desta empresa. Remova uma das duas e tente de novo.": { es: "Este número ya está en otra conexión de esta empresa. Elimine una de las dos e inténtelo de nuevo." },
   "Não foi possível falar com o servidor de WhatsApp agora. Tente de novo em instantes.": { es: "No fue posible comunicarse con el servidor de WhatsApp ahora. Inténtelo de nuevo en instantes." },
   "Conectado, mas as mensagens ainda não entram.": { es: "Conectado, pero los mensajes todavía no entran." },
+  // design: componentes
+  "Paginação": { es: "Paginación" },
+  "Página {a} de {b}": { es: "Página {a} de {b}" },
+  "Página {a}": { es: "Página {a}" },
+  // design: cartão do funil
+  "na etapa": { es: "en la etapa" },
+  // design: carregando e erro
+  "Não foi possível carregar": { es: "No fue posible cargar" },
+  "Algo deu errado do nosso lado. Tente de novo em instantes.": { es: "Algo salió mal de nuestro lado. Inténtelo de nuevo en unos instantes." },
+  "Não foi possível carregar os contatos": { es: "No fue posible cargar los contactos" },
+  "Não foi possível carregar as automações": { es: "No fue posible cargar las automaciones" },
+  "Não foi possível carregar as métricas": { es: "No fue posible cargar las métricas" },
+  // design: menu em linguagem clara
+  "Regras das propostas": { es: "Reglas de las propuestas" },
+  "Sugestões da IA": { es: "Sugerencias de la IA" },
+  "Limite da IA nas automações": { es: "Límite de la IA en las automatizaciones" },
+  "Conectar Meta Ads": { es: "Conectar Meta Ads" },
+  "Histórico de ações": { es: "Historial de acciones" },
+  "Chaves de integração": { es: "Claves de integración" },
+  "Linha telefônica (SIP)": { es: "Línea telefónica (SIP)" },
+  "Ferramentas externas da IA": { es: "Herramientas externas de la IA" },
+  "Sistema externo da IA": { es: "Sistema externo de la IA" },
+  "Ações da IA": { es: "Acciones de la IA" },
+  "Ligações em lista": { es: "Llamadas en lista" },
+  "Não roda até o admin aprovar em IA › Ferramentas externas da IA.": { es: "No se ejecuta hasta que el admin lo apruebe en IA › Herramientas externas de la IA." },
+  "Nenhuma conexão MCP. Conecte um servidor em IA › Ferramentas externas da IA para dar ferramentas de outros sistemas ao agente.": { es: "Ninguna conexión MCP. Conecta un servidor en IA › Herramientas externas de la IA para darle al agente herramientas de otros sistemas." },
+  "Nenhum servidor externo respondeu. Confira o endereço e a chave em Configurações › Sistema externo da IA.": { es: "Ningún servidor externo respondió. Revisa la dirección y la clave en Configuración › Sistema externo de la IA." },
+  "Resultado da ligação": { es: "Resultado de la llamada" },
+  "Como deixar as Ligações em lista funcionando": { es: "Cómo dejar las Llamadas en lista funcionando" },
+  "Propostas está desligada nesta organização: o rascunho automático de proposta fica guardado e volta a valer quando alguém ligar em Configurações › Regras das propostas.": { es: "Propuestas está desactivada en esta organización: el borrador automático de propuesta queda guardado y vuelve a valer cuando alguien la active en Configuración › Reglas de las propuestas." },
+  "As propostas estão desligadas para esta organização. Para editar os modelos, ligue as propostas em Configurações › Regras das propostas e salve.": { es: "Las propuestas están desactivadas para esta organización. Para editar los modelos, activa las propuestas en Configuración › Reglas de las propuestas y guarda." },
+  "Ir para Configurações › Regras das propostas": { es: "Ir a Configuración › Reglas de las propuestas" },
+  "Seu agente ainda não aprendeu nada neste período. Ele aprende de três jeitos: você publica uma regra na Memória da IA, aprova uma sugestão de melhoria na aba Propostas do agente, ou instala uma habilidade em Ações da IA.": { es: "Tu agente todavía no aprendió nada en este período. Puede aprender de tres formas: cuando publicas una regla en la Memoria de la IA, cuando apruebas una sugerencia de mejora en la pestaña Propuestas del agente o cuando instalas una habilidad en Acciones de la IA." },
   // Tela de Conexões em cartões (17/11/2026).
   "Chamadas de voz pelo WhatsApp.": { es: "Llamadas de voz por WhatsApp." },
   "Conectar com credenciais (avançado)": { es: "Conectar con credenciales (avanzado)" },
@@ -28990,6 +29023,74 @@ export const DICIONARIO: Traducoes = {
   "O plano chegou ao limite de conexões: dá para entrar de novo com um número que já está conectado, mas não para conectar um número novo.": { es: "El plan llegó al límite de conexiones: puede volver a entrar con un número que ya está conectado, pero no conectar un número nuevo." },
   "A conexão por QR Code ainda não está disponível nesta instalação. Fale com quem administra a instalação.": { es: "La conexión por código QR todavía no está disponible en esta instalación. Hable con quien administra la instalación." },
   "Não foi possível carregar esta conexão. Tente de novo.": { es: "No fue posible cargar esta conexión. Inténtelo de nuevo." },
+  // Início com painel de indicadores (17/11/2026).
+  "Esconder checklist": { es: "Ocultar lista de pasos" },
+  "Exibir checklist": { es: "Mostrar lista de pasos" },
+  "Primeiros passos": { es: "Primeros pasos" },
+  "VER TUDO EM ATENDIMENTO": { es: "VER TODO EN ATENCIÓN" },
+  "VER TUDO EM NEGÓCIOS": { es: "VER TODO EN NEGOCIOS" },
+  "VER TUDO EM ORIGENS": { es: "VER TODO EN ORÍGENES" },
+  "Sem origem rastreada": { es: "Sin origen rastreado" },
+  "Ganhos de origem rastreada": { es: "Ganados de origen rastreado" },
+  "Taxa de ganho de origem rastreada": { es: "Tasa de ganados de origen rastreado" },
+  "Parcial: mais de 50 origens no período": { es: "Parcial: más de 50 orígenes en el período" },
+  "Ganhos ÷ criados com origem rastreada": { es: "Ganados ÷ creados con origen rastreado" },
+  // design: filtros no celular
+  "Filtros": { es: "Filtros" },
+  "Ver resultados": { es: "Ver resultados" },
+  "Escolha os filtros e toque em Ver resultados.": { es: "Elija los filtros y toque en Ver resultados." },
+  "Relatar problema": { es: "Reportar un problema" },
+  "Relatar um problema": { es: "Reportar un problema" },
+  "Descreva o problema encontrado": { es: "Describa el problema encontrado" },
+  "Descreva o problema com 10 a 2000 caracteres.": { es: "Describa el problema con 10 a 2000 caracteres." },
+  "Podemos incluir um print da tela atual?": { es: "¿Podemos incluir una captura de la pantalla actual?" },
+  "O seu print-screen nos ajudará a resolver o problema mais rapidamente.": { es: "Su captura de pantalla nos ayudará a resolver el problema más rápido." },
+  "Print da tela": { es: "Captura de pantalla" },
+  "Recebemos o seu relato. Obrigado!": { es: "Recibimos su reporte. ¡Gracias!" },
+  "Não foi possível enviar o relato. Tente de novo.": { es: "No fue posible enviar el reporte. Inténtelo de nuevo." },
+  "Muitos relatos em pouco tempo. Tente de novo mais tarde.": { es: "Demasiados reportes en poco tiempo. Inténtelo de nuevo más tarde." },
+  "O print precisa ter até 3 MB.": { es: "La captura debe tener hasta 3 MB." },
+  "O print precisa ser uma imagem WebP ou PNG.": { es: "La captura debe ser una imagen WebP o PNG." },
+  "Descartado": { es: "Descartado" },
+  "Não foi possível carregar os relatos.": { es: "No fue posible cargar los reportes." },
+  "Não foi possível abrir o relato.": { es: "No fue posible abrir el reporte." },
+  "Relatos de problema": { es: "Reportes de problemas" },
+  "O que os usuários relataram pelo botão do inseto, em todas as empresas da instalação.": { es: "Lo que los usuarios reportaron con el botón del insecto, en todas las empresas de la instalación." },
+  "Tela": { es: "Pantalla" },
+  "Print": { es: "Captura" },
+  "Nenhum relato com este status.": { es: "Ningún reporte con este estado." },
+  "Relato atualizado.": { es: "Reporte actualizado." },
+  "Não foi possível salvar o relato.": { es: "No fue posible guardar el reporte." },
+  "Relato de problema": { es: "Reporte de problema" },
+  "Contexto": { es: "Contexto" },
+  "Nota interna (opcional)": { es: "Nota interna (opcional)" },
+  "Relatos": { es: "Reportes" },
+  "Problemas relatados pelos usuários pelo botão do inseto, com print e contexto": { es: "Problemas reportados por los usuarios con el botón del insecto, con captura y contexto" },
+  "utm_source: de onde veio o clique (ex.: google, instagram)": { es: "utm_source: de dónde vino el clic (ej.: google, instagram)" },
+  "utm_medium: o tipo de mídia (ex.: cpc, email, social)": { es: "utm_medium: el tipo de medio (ej.: cpc, email, social)" },
+  "utm_campaign: o nome da campanha": { es: "utm_campaign: el nombre de la campaña" },
+  "Escolher o que o cartão deste funil mostra": { es: "Elegir lo que muestra la tarjeta de este embudo" },
+  "Editar cartão": { es: "Editar tarjeta" },
+  "Cartão atualizado.": { es: "Tarjeta actualizada." },
+  "Não foi possível salvar o cartão. Tente de novo.": { es: "No fue posible guardar la tarjeta. Inténtelo de nuevo." },
+  "Escolha até 5 linhas para o cartão deste funil. Vale para toda a equipe. Linha sem valor não aparece no cartão.": { es: "Elija hasta 5 líneas para la tarjeta de este embudo. Vale para todo el equipo. Una línea sin valor no aparece en la tarjeta." },
+  "Prévia": { es: "Vista previa" },
+  "Ana Souza": { es: "Ana Souza" },
+  "Nenhuma linha de contato.": { es: "Ninguna línea de contacto." },
+  "Escolha até 5 linhas, sem repetir campo.": { es: "Elija hasta 5 líneas, sin repetir campo." },
+  "Clínica Bem Viver": { es: "Clínica Bien Vivir" },
+  "Gerente de compras": { es: "Gerente de compras" },
+  "Oi! Queria saber o valor da consulta.": { es: "¡Hola! Quería saber el precio de la consulta." },
+  "Outra pessoa alterou este funil ao mesmo tempo. Recarregue e tente de novo.": { es: "Otra persona cambió este embudo al mismo tiempo. Recargue e inténtelo de nuevo." },
+  // design: confirmação nas telas
+  "Ligar a limpeza de mídia antiga?": { es: "¿Activar la limpieza de medios antiguos?" },
+  "Trocar modelo": { es: "Cambiar modelo" },
+  "Recusar proposta": { es: "Rechazar propuesta" },
+  "Motivo da recusa (opcional)": { es: "Motivo del rechazo (opcional)" },
+  // design: componentes nas telas
+  "Prazo da solicitação": { es: "Plazo de la solicitud" },
+  "Uso do orçamento de IA": { es: "Uso del presupuesto de IA" },
+  "Este funil está arquivado. Tire-o do arquivo em Funis para editar o cartão.": { es: "Este embudo está archivado. Sáquelo del archivo en Embudos para editar la tarjeta." },
 };
 
 /**
@@ -28999,7 +29100,18 @@ export const DICIONARIO: Traducoes = {
  * português, que é exatamente o comportamento de antes desta feature. Uma
  * tradução parcial não pode deixar a tela PIOR do que estava.
  */
+/** `traduzir` com outro leitor de catálogo — o teste mede o inglês por aqui. */
+export function traduzirCom(
+  lerCatalogo: (idioma: Idioma, texto: string) => string | undefined,
+): (texto: string, idioma: Idioma) => string {
+  return (texto, idioma) => {
+    if (idioma === "pt-BR") return texto;
+    return DICIONARIO[texto]?.[idioma] ?? lerCatalogo(idioma, texto) ?? texto;
+  };
+}
+
+const traduzirPeloLeitor = traduzirCom(entradaDoCatalogo);
+
 export function traduzir(texto: string, idioma: Idioma): string {
-  if (idioma === "pt-BR") return texto;
-  return DICIONARIO[texto]?.[idioma] ?? entradaDoCatalogo(idioma, texto) ?? texto;
+  return traduzirPeloLeitor(texto, idioma);
 }

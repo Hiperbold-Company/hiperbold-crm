@@ -32,7 +32,7 @@ export default async function McpPage() {
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Conexões MCP", idioma)}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Ferramentas externas da IA", idioma)}</h1>
         <p className="text-sm text-muted-foreground">
           {traduzir(
             "Ferramentas de outros sistemas que o agente consulta ou aciona durante o atendimento.",

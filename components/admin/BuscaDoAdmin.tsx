@@ -42,7 +42,7 @@ export function BuscaDoAdmin({
       >
         <MagnifyingGlass size={14} aria-hidden />
         <span className="max-lg:sr-only">{t("Buscar...")}</span>
-        <kbd className="ml-2 hidden rounded-md border bg-muted px-1.5 py-0.5 text-[10px] lg:inline">
+        <kbd className="ml-2 hidden rounded-md border bg-muted px-1.5 py-0.5 text-2xs lg:inline">
           ⌘K
         </kbd>
       </Button>

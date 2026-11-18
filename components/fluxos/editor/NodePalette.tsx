@@ -103,7 +103,7 @@ export function NodePalette({ onAdd, variant = "desktop", surface = "followup" }
                 className="flex flex-col gap-1.5 pb-2"
                 data-testid={`palette-grupo-${categoria}`}
               >
-                <h3 className="px-1 text-[11px] font-medium text-text-muted">{t(ROTULO_DO_GRUPO[categoria])}</h3>
+                <h3 className="px-1 text-2xs font-medium text-text-muted">{t(ROTULO_DO_GRUPO[categoria])}</h3>
                 {tipos.map(botao)}
               </div>
             );

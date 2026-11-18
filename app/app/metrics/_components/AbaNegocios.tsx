@@ -13,9 +13,8 @@ import { useState } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { useDesempenhoNegocios, useListaDeNegocios, type DesempenhoNegocios } from "@/hooks/metrics/useDesempenho";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Paginacao } from "@/components/ui/paginacao";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatValorDoNegocio } from "@/lib/money";
 import type { TipoDaLista } from "@/lib/metrics/desempenho";
 
 import {
@@ -25,26 +24,20 @@ import {
   CartaoKpi,
   COR,
   Painel,
-  Rosca,
 } from "./graficos";
+import { CELULA_DE_NUMERO, dinheiro, PainelAtendentesComMaisVendas, PainelPercentualDeGanhos } from "./paineis-compartilhados";
 import { PerdasPanel } from "./PerdasPanel";
 import { PrevisaoPanel } from "./PrevisaoPanel";
 
 /**
  * Célula que, no celular, vira "Rótulo valor" dentro do cartão — o mesmo
- * padrão de `AbaAtendimento.tsx`: o cabeçalho some abaixo de `md` e o rótulo
+ * padrão de `CELULA_DE_NUMERO` (paineis-compartilhados.tsx): o cabeçalho some abaixo de `md` e o rótulo
  * vem do `data-rotulo` da própria célula. Só classes `max-md:`; no computador a
  * tabela não muda.
  */
-const CELULA_DE_NUMERO = "text-right tabular-nums max-md:p-0 max-md:text-left max-md:before:mr-1 max-md:before:text-muted-foreground max-md:before:content-[attr(data-rotulo)]";
 const CELULA_ROTULADA = "max-md:p-0 max-md:before:mr-1 max-md:before:text-muted-foreground max-md:before:content-[attr(data-rotulo)]";
 
 type Medida = "quantidade" | "valor";
-
-function dinheiro(cents: number, moeda: string, semCentavos = false): string {
-  if (!/^[A-Z]{3}$/.test(moeda)) return "—";
-  return formatValorDoNegocio(cents, moeda, { semCentavos });
-}
 
 export function AbaNegocios({
   query,
@@ -139,57 +132,12 @@ export function AbaNegocios({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-5">
-        <Painel
-          className="lg:col-span-2"
-          titulo={t("Percentual de ganhos por atendente")}
-          descricao={t("Quantidade de negócios ganhos no período.")}
-        >
-          {d.atendentes.some((a) => a.ganhos > 0) ? (
-            <Rosca
-              fatias={d.atendentes
-                .filter((a) => a.ganhos > 0)
-                .map((a) => ({ nome: nomeDe(a, t, currentUserId), valor: a.ganhos }))}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">{t("Nenhum negócio ganho no período.")}</p>
-          )}
-        </Painel>
-        <Painel className="lg:col-span-3" titulo={t("Atendentes com mais vendas")}>
-          {d.atendentes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("Sem negócios no período.")}</p>
-          ) : (
-            <Table className="max-md:block">
-              <TableHeader className="max-md:hidden">
-                <TableRow>
-                  <TableHead>{t("Atendente")}</TableHead>
-                  <TableHead className="text-right">{t("Criados")}</TableHead>
-                  <TableHead className="text-right">{t("Ganhos")}</TableHead>
-                  <TableHead className="text-right">{t("Ticket médio")}</TableHead>
-                  <TableHead className="text-right">{t("Total")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="max-md:block">
-                {d.atendentes.map((a) => (
-                  <TableRow key={a.user_id ?? "sem"} className="max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:py-2">
-                    <TableCell className="font-medium max-md:col-span-2 max-md:p-0">{nomeDe(a, t, currentUserId)}</TableCell>
-                    <TableCell data-rotulo={t("Criados")} className={CELULA_DE_NUMERO}>
-                      {a.criados}
-                    </TableCell>
-                    <TableCell data-rotulo={t("Ganhos")} className={CELULA_DE_NUMERO}>
-                      {a.ganhos}
-                    </TableCell>
-                    <TableCell data-rotulo={t("Ticket médio")} className={CELULA_DE_NUMERO}>
-                      {a.ticket_medio_cents == null ? "—" : dinheiro(a.ticket_medio_cents, moeda)}
-                    </TableCell>
-                    <TableCell data-rotulo={t("Total")} className={CELULA_DE_NUMERO}>
-                      {dinheiro(a.valor_ganho_cents, moeda)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Painel>
+        <PainelPercentualDeGanhos atendentes={d.atendentes} nomeDe={(a) => nomeDe(a, t, currentUserId)} />
+        <PainelAtendentesComMaisVendas
+          atendentes={d.atendentes}
+          moeda={moeda}
+          nomeDe={(a) => nomeDe(a, t, currentUserId)}
+        />
       </div>
 
       <TabelaDeNegocios query={query} tipo={tipo} titulo={cartoes.find((c) => c.tipo === tipo)?.titulo ?? ""} />
@@ -361,17 +309,7 @@ function TabelaDeNegocios({ query, tipo, titulo }: { query: string; tipo: TipoDa
         </div>
       )}
       {lista && paginas > 1 ? (
-        <div className="flex items-center justify-end gap-2 text-sm">
-          <Button variant="outline" size="sm" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>
-            {t("Anterior")}
-          </Button>
-          <span className="tabular-nums text-muted-foreground">
-            {pagina} / {paginas}
-          </span>
-          <Button variant="outline" size="sm" disabled={pagina >= paginas} onClick={() => setPagina(pagina + 1)}>
-            {t("Próxima")}
-          </Button>
-        </div>
+        <Paginacao pagina={pagina} totalDePaginas={paginas} onIr={setPagina} />
       ) : null}
     </Painel>
   );

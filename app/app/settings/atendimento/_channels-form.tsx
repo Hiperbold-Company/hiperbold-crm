@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -69,7 +70,7 @@ export function ChannelRoutingForm({ initial }: { initial: ChannelRoutingSetting
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {initial.members.map((member) => <label key={member.id} className="flex items-center gap-2 rounded-md p-2 hover:bg-muted">
-          <input type="checkbox" checked={channel.user_ids.includes(member.id)} onChange={(e) => setChannels((current) => current.map((c) => c.id === channel.id ? { ...c, user_ids: e.target.checked ? [...c.user_ids, member.id] : c.user_ids.filter((id) => id !== member.id) } : c))} />
+          <Checkbox checked={channel.user_ids.includes(member.id)} onChange={(e) => setChannels((current) => current.map((c) => c.id === channel.id ? { ...c, user_ids: e.target.checked ? [...c.user_ids, member.id] : c.user_ids.filter((id) => id !== member.id) } : c))} />
           <span>{t(member.name)}</span>
         </label>)}
       </div>

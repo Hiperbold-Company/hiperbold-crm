@@ -149,7 +149,7 @@ export function FormularioDaDefinicao({
         data-contador={campo}
         data-excedido={estourou ? "true" : undefined}
         className={cn(
-          "self-end text-[10px]",
+          "self-end text-2xs",
           estourou ? "font-semibold text-destructive" : "text-muted-foreground",
         )}
       >
@@ -164,7 +164,7 @@ export function FormularioDaDefinicao({
       <p
         data-erro-do-campo={campo}
         role="alert"
-        className="basis-full text-[11px] font-medium text-destructive"
+        className="basis-full text-2xs font-medium text-destructive"
       >
         {textoDoProblema(problema, t)}
       </p>
@@ -480,8 +480,8 @@ export function FormularioDaDefinicao({
              é recusada, e a recusa chega horas depois sem ninguém ligar uma
              coisa à outra. O formulário deixava digitar `{{1}}` e nunca
              pedia o exemplo. */
-          <div className="flex flex-col gap-1.5 rounded-md border border-amber-300 bg-amber-50/50 p-2 dark:border-amber-800/60 dark:bg-amber-950/20">
-            <p className="text-[11px] text-amber-900 dark:text-amber-200">
+          <div className="flex flex-col gap-1.5 rounded-md border border-warning/30 bg-warning-bg p-2">
+            <p className="text-2xs text-warning-fg">
               {t("A revisão exige um exemplo de cada valor. Sem eles o modelo é recusado.")}
             </p>
             {Array.from({ length: nVariaveis }, (_, i) => {
@@ -519,7 +519,7 @@ export function FormularioDaDefinicao({
                   key={p.variavel}
                   data-erro-do-campo="exemploDaVariavel"
                   role="alert"
-                  className="text-[11px] font-medium text-destructive"
+                  className="text-2xs font-medium text-destructive"
                 >
                   {textoDoProblema(p, t)}
                 </p>
@@ -530,7 +530,7 @@ export function FormularioDaDefinicao({
         {/* O formato do nome e o texto são validados PELA PLATAFORMA, e a
             recusa dela chega inteira ao operador. Repetir a regra aqui a faria
             envelhecer separado da fonte. */}
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           {editando
             ? t(
                 "Ao salvar, a plataforma revisa o modelo de novo. A Meta limita quantas vezes um modelo aprovado pode ser editado; se passar do limite, a resposta dela aparece aqui.",

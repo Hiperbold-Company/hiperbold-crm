@@ -68,7 +68,7 @@ export function MediaRenderer({
             <>
               <span
                 data-testid="rotulo-transcricao"
-                className="text-[10px] uppercase tracking-wide opacity-70"
+                className="text-2xs uppercase tracking-wide opacity-70"
               >
                 {t("Transcrição")}
               </span>

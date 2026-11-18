@@ -63,17 +63,17 @@ export function ChannelAcervo({ channelId }: { channelId: string }) {
       </div>
       {/* Leitura que falhou não é "desligado": mostrar o default aqui afirmaria um estado que ninguém leu. */}
       {query.isError ? (
-        <p role="alert" className="text-[11px] text-destructive">{t("Não foi possível ler esta opção.")}</p>
+        <p role="alert" className="text-2xs text-destructive">{t("Não foi possível ler esta opção.")}</p>
       ) : (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           {ligado
             ? t("Acervo ligado: o servidor do canal guarda as conversas deste número. Num número que já estava pareado, guarda daqui em diante; o histórico anterior (cerca de 1 ano) só chega numa vinculação nova. Ocupa disco lá e não é apagado quando o CRM anonimiza um contato.")
             : t("Acervo desligado: só as mensagens novas entram, como sempre.")}
         </p>
       )}
-      <p className="text-[11px] text-muted-foreground">{t("Ligar ou desligar reinicia a conexão por alguns segundos. Desligar num número já pareado pode apagar o que o canal já guardou.")}</p>
+      <p className="text-2xs text-muted-foreground">{t("Ligar ou desligar reinicia a conexão por alguns segundos. Desligar num número já pareado pode apagar o que o canal já guardou.")}</p>
       {erro && (
-        <p role="alert" className="text-[11px] text-destructive">
+        <p role="alert" className="text-2xs text-destructive">
           {t("Não foi possível guardar esta opção.")}
         </p>
       )}

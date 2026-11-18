@@ -211,7 +211,7 @@ test.describe("navegação agrupada", () => {
     for (const nome of ["Agenda", "Respostas rápidas", "Tarefas", "Follow-ups", "Roteadores", "Usar minha própria chave de IA", "Conexões", "Webhooks e regras antigas"]) {
       await expect(page.getByRole("link", { name: new RegExp(`^${nome}`) }).first()).toBeVisible();
     }
-    for (const nome of ["Comandas", "Provedores", "Meta Ads", "Trunk SIP", "Conversões", "Extensões", "Contas e recebimentos"]) {
+    for (const nome of ["Comandas", "Provedores", "Meta Ads", "Conectar Meta Ads", "Linha telefônica \\(SIP\\)", "Conversões", "Extensões", "Contas e recebimentos"]) {
       await expect(page.getByRole("link", { name: new RegExp(`^${nome}`) })).toHaveCount(0);
     }
   });

@@ -455,7 +455,7 @@ function Conteudo({ payload }: { payload: NonNullable<ReturnType<typeof useEvolu
               // mas não tem data" era inalcançável.
               <Vazio
                 texto={t(
-                  "Seu agente ainda não aprendeu nada neste período. Ele aprende de três jeitos: você publica uma regra na Memória da IA, aprova uma sugestão de melhoria na aba Propostas do agente, ou instala uma habilidade em Skills da IA.",
+                  "Seu agente ainda não aprendeu nada neste período. Ele aprende de três jeitos: você publica uma regra na Memória da IA, aprova uma sugestão de melhoria na aba Propostas do agente, ou instala uma habilidade em Ações da IA.",
                 )}
                 acoes={[
                   { href: "/app/ai/memory", label: t("Publicar uma regra") },

@@ -5,7 +5,7 @@ import { getSmtpConfig } from "@/lib/email/config";
 import { transporteEmVigor } from "@/lib/email/roteador";
 import { CATALOGO_DA_INSTALACAO, definicaoParaATela } from "@/lib/instalacao/catalogo";
 import { estadoParaTela } from "@/lib/instalacao/config";
-import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { idiomaDaTela } from "@/lib/i18n/idiomas";
 
 import { FormularioDeSmtp } from "./_form";
 
@@ -90,7 +90,7 @@ export default async function Page() {
       // O mesmo idioma que a tela de Credenciais usa nos campos iguais a estes:
       // eles são o MESMO componente, e traduzir por caminhos diferentes seria
       // como as duas telas voltariam a divergir.
-      idioma={normalizarIdioma(usuario.locale)}
+      idioma={idiomaDaTela(usuario.locale)}
     />
   );
 }

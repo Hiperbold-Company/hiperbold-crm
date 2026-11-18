@@ -43,6 +43,7 @@
  * O interruptor continua sendo PATCH imediato (é `config` do agente, não da
  * versão) — comportamento de antes, com a mesma rota admin-only.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -89,7 +90,7 @@ const MENSAGEM_DA_RECUSA: Record<
   mfa_required: "Esta ação exige a verificação em duas etapas.",
   upstream_unavailable: "Não foi possível falar com o servidor.",
   sem_servidor:
-    "Nenhum servidor externo respondeu. Confira o endereço e a chave em Configurações › Servidor MCP externo.",
+    "Nenhum servidor externo respondeu. Confira o endereço e a chave em Configurações › Sistema externo da IA.",
 };
 
 export function ServidorExternoNoAtendimento({
@@ -276,9 +277,8 @@ export function ServidorExternoNoAtendimento({
                     data-marcada={marca === null ? "nao" : "sim"}
                     className="flex flex-wrap items-start gap-3 rounded-md border border-border px-3 py-2"
                   >
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 shrink-0 rounded-md border-border accent-primary"
+                    <Checkbox
+                      className="mt-1 shrink-0"
                       data-testid={`marcar-${opcao.nome}`}
                       checked={marca !== null}
                       onChange={(e) => alternarFerramenta(opcao, e.target.checked)}
@@ -326,7 +326,7 @@ export function ServidorExternoNoAtendimento({
           {orfas.length > 0 ? (
             <div
               data-testid="remotas-orfas"
-              className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400"
+              className="space-y-2 rounded-md border border-warning/30 bg-warning-bg p-3 text-xs text-warning-fg"
             >
               <p>
                 {t("O servidor não anuncia mais estas ferramentas marcadas")}:{" "}

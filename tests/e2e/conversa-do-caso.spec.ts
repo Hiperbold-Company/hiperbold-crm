@@ -340,7 +340,7 @@ test.describe("conversar com a IA que abriu o caso", () => {
     // despercebido em screenshot.
     // A fonte da INTERFACE, e não um nome de fonte fixo: o nome já mudou de
     // propósito (a Hiperbold serve a Inter, no lugar da Atkinson, pela mesma
-    // variável `--font-atkinson`). O que se quer pegar é o botão cair na fonte do
+    // variável `--font-inter`). O que se quer pegar é o botão cair na fonte do
     // sistema, e isso é não ser a do corpo.
     expect(m.botao.fonte).toBe(m.botao.fonteDoCorpo);
     expect(m.botao.fundo).toMatch(/^rgba?\(/);

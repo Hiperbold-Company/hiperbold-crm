@@ -142,7 +142,7 @@ export function AuditTable({
                 <TableCell className="font-mono text-xs">{row.action}</TableCell>
                 <TableCell>
                   {row.organizations ? (
-                    <Badge variant="neutral" className="font-mono text-[10px]">
+                    <Badge variant="neutral" className="font-mono text-2xs">
                       {row.organizations.slug}
                     </Badge>
                   ) : (

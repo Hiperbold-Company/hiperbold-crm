@@ -59,7 +59,7 @@ export async function PATCH(req: NextRequest, { params }: Context): Promise<Resp
   await sincronizarAvisoDePausa(
     createAdminClient(),
     { id, organization_id: auth.org.orgId },
-    { autor: (auth.user.full_name ?? "").trim() || auth.user.email || auth.user.id, idioma: auth.user.idioma },
+    { autor: (auth.user.full_name ?? "").trim() || auth.user.email || auth.user.id, idioma: auth.user.idiomaGravado ?? auth.user.idioma },
   );
   return ok(parsed.data, { requestId });
 }

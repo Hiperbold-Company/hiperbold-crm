@@ -137,7 +137,7 @@ export function SecurityClient({
             className={
               "shrink-0 rounded-full px-2 py-0.5 text-xs " +
               (mfaEnrolled
-                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                ? "bg-success-bg text-success-fg"
                 : "bg-muted text-muted-foreground")
             }
           >
@@ -241,7 +241,7 @@ export function SecurityClient({
         {codes ? (
           <RecoveryCodesPanel codes={codes} onAcknowledge={() => setCodes(null)} />
         ) : mfaEnrolled && semCodigos && !gerouAgora ? (
-          <div role="status" className="space-y-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <div role="status" className="space-y-3 rounded-md border border-warning/30 bg-warning-bg p-3 text-sm">
             <p>
               {t(
                 "Você está sem códigos de recuperação válidos: os gerados antes da última atualização deixaram de valer, e cada código só vale uma vez. Sem eles, perder o celular tira o seu acesso.",

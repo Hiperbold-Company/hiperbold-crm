@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
+import { useConfirmar } from "@/components/ui/confirmar";
 import { Input } from "@/components/ui/input";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
@@ -30,6 +31,7 @@ export const CHAVE_DO_MODELO_IMPORTADO = "modelo-importado";
 
 export function ModelosDeProposta() {
   const t = useT();
+  const { confirmar } = useConfirmar();
   const router = useRouter();
   const salvo = useSearchParams().get("salvo");
   const [faixaFechada, setFaixaFechada] = useState(false);
@@ -128,10 +130,10 @@ export function ModelosDeProposta() {
       <div className="mx-auto w-full max-w-3xl space-y-3 p-6">
         <h1 className="text-xl font-semibold">{t("Modelos de proposta")}</h1>
         <p>
-          {t("As propostas estão desligadas para esta organização. Para editar os modelos, ligue as propostas em Configurações › Propostas e salve.")}
+          {t("As propostas estão desligadas para esta organização. Para editar os modelos, ligue as propostas em Configurações › Regras das propostas e salve.")}
         </p>
         <Button asChild variant="outline">
-          <Link href="/app/settings/tenant/proposals">{t("Ir para Configurações › Propostas")}</Link>
+          <Link href="/app/settings/tenant/proposals">{t("Ir para Configurações › Regras das propostas")}</Link>
         </Button>
       </div>
     );
@@ -144,9 +146,9 @@ export function ModelosDeProposta() {
       <h1 className="text-xl font-semibold">{t("Modelos de proposta")}</h1>
 
       {salvo && !faixaFechada ? (
-        <p role="status" className="flex items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+        <p role="status" className="flex items-center justify-between gap-2 rounded-lg border border-success/30 bg-success-bg p-3 text-sm text-success-fg">
           <span>{t("Modelo «{nome}» salvo.").replace("{nome}", salvo)}</span>
-          <button type="button" aria-label={t("Fechar")} onClick={() => setFaixaFechada(true)} className="rounded-md px-2 py-0.5 hover:bg-green-100">
+          <button type="button" aria-label={t("Fechar")} onClick={() => setFaixaFechada(true)} className="rounded-md px-2 py-0.5 hover:bg-success-bg">
             ×
           </button>
         </p>
@@ -170,7 +172,7 @@ export function ModelosDeProposta() {
           }}
         />
         {ocupado && andamento ? <p role="status" className="text-sm text-muted-foreground">{andamento}</p> : null}
-        {mensagem ? <p role="alert" className="text-sm text-red-700">{mensagem}</p> : null}
+        {mensagem ? <p role="alert" className="text-sm text-error-fg">{mensagem}</p> : null}
       </section>
 
       <section className="flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -231,11 +233,12 @@ export function ModelosDeProposta() {
                     <Link href={`/app/settings/tenant/proposals/modelos/${m.slug}`}>{t("Editar")}</Link>
                   </Button>
                   <Button size="sm" variant="ghost" disabled={ocupado}
-                    onClick={() => {
+                    onClick={async () => {
                       const pergunta = m.origem === "personalizado"
                         ? t("Voltar ao modelo da plataforma? As mudanças da empresa deixam de valer nas próximas propostas.")
                         : t("Remover este modelo? As propostas já enviadas não mudam.");
-                      if (window.confirm(pergunta)) void acao(() => apiClient.delete(`/api/v1/settings/proposal-templates/${m.slug}`));
+                      const ok = await confirmar({ titulo: pergunta, confirmar: t("Apagar"), perigo: true });
+                      if (ok) void acao(() => apiClient.delete(`/api/v1/settings/proposal-templates/${m.slug}`));
                     }}>
                     {m.origem === "personalizado" ? t("Voltar ao modelo da plataforma") : t("Remover")}
                   </Button>

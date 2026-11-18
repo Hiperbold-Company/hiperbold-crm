@@ -158,3 +158,17 @@ describe("o elo que some sem barulho", () => {
     expect(fonte).toMatch(/length > 1/);
   });
 });
+
+describe("a conexão vem ANTES das etiquetas (decisão de 17/11)", () => {
+  it("o rótulo da conexão é o primeiro selo da linha, antes das tags do contato", () => {
+    const conv = {
+      ...comCanal({ phone_number: "+5535999", display_name: "Vendas" }),
+      contacts: { ...base.contacts, tags: ["quente"] },
+    } as unknown as ConversationWithContact;
+    pintar(conv, true);
+    const conexao = screen.getByText("Vendas");
+    const tag = screen.getByText("quente");
+    // DOCUMENT_POSITION_FOLLOWING: a tag vem DEPOIS da conexão no DOM.
+    expect(conexao.compareDocumentPosition(tag) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});

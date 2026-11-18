@@ -29,7 +29,7 @@
  */
 
 import { IDIOMA_PADRAO, parseAcceptLanguage } from "@/lib/i18n/idiomas";
-import { idiomaVisivelPorCodigo } from "@/lib/i18n/registro";
+import { idiomaComTextoPorCodigo } from "@/lib/i18n/registro";
 
 /** O que o Google disse sobre o ponto. Todos opcionais: o Google devolve o que tem. */
 export interface EnderecoAproximado {
@@ -155,7 +155,7 @@ export function textoDoEnderecoAproximado(e: EnderecoAproximado): string {
  * Um idioma novo no registro chega aqui sem ninguém mexer neste arquivo.
  */
 export function idiomaDaConsulta(locale: string | null | undefined): string {
-  return idiomaVisivelPorCodigo(parseAcceptLanguage(locale) ?? IDIOMA_PADRAO).tagBcp47;
+  return idiomaComTextoPorCodigo(parseAcceptLanguage(locale) ?? IDIOMA_PADRAO).tagBcp47;
 }
 
 export async function geocodificarReverso(

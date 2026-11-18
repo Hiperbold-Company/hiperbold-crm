@@ -105,7 +105,7 @@ function Linha({
           {aoVivo && (
             // O que chegou AGORA fica marcado: sem isto ele entraria na lista
             // idêntico ao resto e a chegada seria indistinguível do histórico.
-            <span className="ml-1.5 text-[10px] uppercase tracking-wide text-accent">
+            <span className="ml-1.5 text-2xs uppercase tracking-wide text-accent">
               {/* "agora" é de quem acabou de acontecer. Evento manual RETROATIVO que
                   acabou de ser registrado chegou agora, mas aconteceu antes: "agora" ao
                   lado de uma data de semanas atrás confunde, então vira "novo". */}
@@ -114,7 +114,7 @@ function Linha({
           )}
         </p>
         {origem && (
-          <p className="mt-0.5 text-[11px] text-text-muted" data-origem-do-negocio>
+          <p className="mt-0.5 text-2xs text-text-muted" data-origem-do-negocio>
             {t("Em")} {origem}
           </p>
         )}
@@ -126,14 +126,14 @@ function Linha({
         ) : (
           item.reason && <p className="mt-0.5 text-xs text-text-muted">{t(item.reason)}</p>
         )}
-        <p className="mt-0.5 text-[11px] text-text-muted">
+        <p className="mt-0.5 text-2xs text-text-muted">
           {nome} · {quando(item.performed_at, tagDoIdioma)}
           {manual && ` · ${t("registro manual")}`}
         </p>
         {manual && foiRetroativo(item.performed_at, item.created_at) && item.created_at && (
           // Evento anotado muito depois de ocorrer: a data da linha é a do
           // acontecimento, e sem esta o leitor tomaria o registro por contemporâneo.
-          <p className="mt-0.5 text-[11px] text-text-muted" data-registrado-em>
+          <p className="mt-0.5 text-2xs text-text-muted" data-registrado-em>
             {t("registrado em")} {quando(item.created_at, tagDoIdioma)}
           </p>
         )}
@@ -218,7 +218,7 @@ export function LeadTimeline({
                 <span aria-hidden className="mt-1 h-2 w-0.5 shrink-0 bg-border" />
                 <span className="first-letter:uppercase">{b.rotulo}</span>
                 <span className="text-text-muted">· {b.itens.length} {t("ações")}</span>
-                <span aria-hidden className="ml-auto text-[10px]">
+                <span aria-hidden className="ml-auto text-2xs">
                   {aberto ? "−" : "+"}
                 </span>
               </button>
@@ -264,7 +264,7 @@ export function LeadTimeline({
               <span>
                 {nome} · {b.itens.length} {t("ações")}
               </span>
-              <span aria-hidden className="ml-auto text-[10px]">
+              <span aria-hidden className="ml-auto text-2xs">
                 {aberto ? "−" : "+"}
               </span>
             </button>

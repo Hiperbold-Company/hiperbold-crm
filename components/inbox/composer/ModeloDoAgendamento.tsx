@@ -96,12 +96,12 @@ export function ModeloDoAgendamento({
     : null;
 
   return (
-    <div data-testid="modelo-do-agendamento" className="space-y-2 rounded-md border border-amber-300 bg-amber-50/60 p-2 dark:border-amber-800/60 dark:bg-amber-950/30">
-      <p className="text-xs text-amber-900 dark:text-amber-200">
+    <div data-testid="modelo-do-agendamento" className="space-y-2 rounded-md border border-warning/30 bg-warning-bg p-2">
+      <p className="text-xs text-warning-fg">
         {t("A janela de 24 horas estará fechada no horário escolhido. Escolha um modelo aprovado: ele sai se o cliente não escrever antes.")}
       </p>
       {!isLoading && aprovados.length === 0 ? (
-        <p className="text-xs text-amber-900/80 dark:text-amber-200/80">
+        <p className="text-xs text-warning-fg">
           {t("Nenhum modelo aprovado ainda. Crie um em")} <strong>{t("Conexões → Templates")}</strong>
         </p>
       ) : (
@@ -125,7 +125,7 @@ export function ModeloDoAgendamento({
       {previa && <PreviaDoModelo previa={previa} />}
       {(atual?.slots ?? []).map((slot) => (
         <label key={slot.valueKey} className="flex flex-col gap-1">
-          <span className="text-[11px] text-amber-900/80 dark:text-amber-200/80">
+          <span className="text-2xs text-warning-fg">
             {slot.onde} — {`{{${slot.key}}}`}
           </span>
           <input

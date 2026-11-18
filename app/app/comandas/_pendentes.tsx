@@ -15,6 +15,7 @@
  * ninguém descobriria que ele existe. Aparecendo com o aviso, a pessoa sabe que
  * precisa abrir a comanda à mão ou pôr preço no serviço.
  */
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -106,13 +107,11 @@ export function AtendimentosSemComanda({
           const semPreco = p.suggested_price_cents === null;
           return (
             <li key={p.appointment_id} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={marcados.has(p.appointment_id)}
                 disabled={semPreco || !podeLancar}
                 onChange={() => alternar(p.appointment_id)}
                 data-testid={`pendente-${p.appointment_id}`}
-                className="size-4 rounded-sm border-border accent-accent disabled:opacity-40"
               />
               <span className="flex-1">
                 {p.service_name ?? p.title}

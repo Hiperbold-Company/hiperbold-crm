@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -16,6 +17,7 @@ import { camposDeDataDoNegocio } from "@/lib/leads/campos-do-funil";
 import { AutomacoesList } from "./_components/AutomacoesList";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Automações" };
 
 const COLUNAS = "id, name, status, active_version_id, handoff_policy, updated_at";
 const COLUNAS_DOS_FOLLOWUPS = "id, name, status, surface, updated_at";
@@ -40,7 +42,7 @@ export default async function AutomacoesPage() {
   const org = activeOrg.orgId;
   // Lote 5 — tela única: as três fontes, sempre filtrando a organização ativa. Quem chega aqui é
   // gerente ou acima, o mesmo papel que a tela de regras e a edição de follow-ups exigem.
-  const [{ data }, { data: followups }, { data: regras }, { data: funis }, { data: etapas }] = await Promise.all([
+  const [{ data, error: erroDosFluxos }, { data: followups }, { data: regras }, { data: funis }, { data: etapas }] = await Promise.all([
     supabase
       .from("followup_flow_pointers")
       .select(COLUNAS)
@@ -122,6 +124,7 @@ export default async function AutomacoesPage() {
         etapas={etapasAtivas}
         camposDeData={camposDeData}
         motivoDoBloqueio={bloqueio.motivo}
+        falhouNoServidor={Boolean(erroDosFluxos)}
       />
     </div>
   );

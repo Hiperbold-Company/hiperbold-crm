@@ -118,7 +118,7 @@ export function ConversationTagsEditor({ conversationId, orgId, tags }: Props) {
         {tags.length > 0 ? (
           tags.map((tag) => (
             <Fragment key={tag}>
-              <ChipDeEtiqueta tag={tag} className="h-5 gap-1 px-1.5 text-[10px]">
+              <ChipDeEtiqueta tag={tag} className="h-5 gap-1 px-1.5 text-2xs">
                 <button
                   type="button"
                   onClick={() => remove(tag)}
@@ -193,7 +193,7 @@ export function ConversationTagsEditor({ conversationId, orgId, tags }: Props) {
                   : add(tag)
               }
               disabled={mutation.isPending || tags.length >= 20}
-              className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:border-solid hover:text-foreground disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-2xs text-muted-foreground hover:border-solid hover:text-foreground disabled:opacity-50"
             >
               <PontoDaEtiqueta tag={tag} />
               + {tag}
@@ -208,7 +208,7 @@ export function ConversationTagsEditor({ conversationId, orgId, tags }: Props) {
               type="button"
               onClick={() => add(draft)}
               disabled={mutation.isPending || tags.length >= 20}
-              className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:border-solid hover:text-foreground disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-2xs text-muted-foreground hover:border-solid hover:text-foreground disabled:opacity-50"
             >
               {t("Criar")} «{nova}»
             </button>

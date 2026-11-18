@@ -8,6 +8,60 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [2.4.0] — 2026-11-17
+
+### Adicionado
+
+- **A busca (⌘K) acha contatos e conversas** A busca do topo (⌘K, ou a lupa no celular) passa a achar também contatos e conversas do Chat, até 5 de cada, a partir de 2 letras, além das telas. Cada pessoa só encontra o que já poderia ver na tela correspondente. Escolher um resultado abre a ficha do contato ou a conversa. Não é preciso fazer nada para atualizar.
+
+- **"Editar cartão" no funil** No quadro do funil, gerentes e administradores têm o botão "Editar cartão", que escolhe até 5 linhas para a área de contato do cartão: e-mail, empresa, cargo, telefone, última mensagem, origem, utm_source, utm_medium e utm_campaign, na ordem que quiser, com prévia ao vivo. Vale para toda a equipe daquele funil, e "Voltar ao padrão" devolve o cartão de fábrica. Linha sem valor não aparece no cartão. Funil que ninguém configurou continua com a última mensagem e o telefone. Mudança para todos os funis: a última mensagem no cartão passa a ser só texto, sem atalho para a conversa (o atalho continua no painel do negócio), e o botão "Abrir conversa" e o aviso "conversa sem mensagens" saem do cartão. Não é preciso fazer nada para atualizar.
+
+- **Início com os principais indicadores depois dos primeiros passos** Quando os itens obrigatórios dos primeiros passos estão feitos, a tela Início passa a mostrar os principais indicadores da tela Desempenho, com o mesmo seletor de período (padrão: últimos 30 dias). São três seções:
+
+  - Atendimento: atendimentos, finalizados, em aberto, aguardando resposta, médias de primeira resposta e de tempo de resposta, atendimentos por atendente, ranking e "Quando os clientes escrevem".
+  - Negócios: criados, ganhos, perdidos, carteira aberta total, ganhos por atendente e atendentes com mais vendas.
+  - Origens: com origem rastreada, sem origem rastreada, ganhos de origem rastreada e taxa de ganho de origem rastreada. Os três últimos cartões (sem origem rastreada, ganhos de origem rastreada e taxa de ganho de origem rastreada) são novos, não existem na aba Origens. A taxa divide os ganhos só pelos negócios criados com origem rastreada, diferente da "Taxa de ganho" da aba Origens, que divide por todos os criados; o cartão explica a base da conta. Quando o período tem mais de 50 origens, ganhos e taxa aparecem marcados como parciais.
+
+  Cada seção termina num botão que leva à aba correspondente de Desempenho, no mesmo período. O checklist dos primeiros passos passa para uma barra à direita, com um botão para exibir ou esconder; no celular ela abre como gaveta. Enquanto falta algum item obrigatório, a tela continua sendo só o checklist.
+
+- **Botão para relatar problema** No computador, todo usuário do CRM passa a ver uma pequena aba com um inseto na borda direita da tela. Ao clicar, a pessoa descreve o problema e pode mandar junto um print da tela em que estava. Quem administra a instalação vê os relatos em Administração › Relatos, com a descrição, a tela, o print e o contexto técnico, e marca cada um como em andamento, resolvido ou descartado. Os relatos e os prints são apagados sozinhos depois de 90 dias. Não é preciso fazer nada para atualizar.
+
+### Alterado
+
+- **No celular, filtros num botão e ações num menu** No celular, Contatos, o quadro do funil, Automações e o Chat mostram primeiro o conteúdo: os filtros ficam num botão "Filtros" (com o número de filtros ligados), que abre uma gaveta, e as ações menos usadas (importar, exportar, duplicados, modelos) ficam no menu "⋯". No computador nada muda. A aba do navegador passa a mostrar o nome certo em Automações e no quadro do funil. Não é preciso fazer nada para atualizar.
+
+- **Ícones num estilo só** Os poucos ícones que ainda usavam outro desenho (fechar janela, setas de listas, alguns botões de IA, propostas e modelos) passam a seguir o mesmo estilo do resto do sistema. Não é preciso fazer nada para atualizar.
+
+- **Espanhol e inglês saem do seletor de idioma até serem conferidos** O seletor de idioma passa a oferecer só o português. O espanhol tinha telas
+  pela metade e o inglês não traduzia nada, então os dois saem até serem
+  conferidos tela a tela. Quem já usava espanhol ou inglês vê as telas em
+  português, sem precisar fazer nada. E-mails, avisos e mensagens continuam no
+  idioma que estava configurado.
+
+- **Letras e cores seguindo o padrão do sistema** Os textos pequenos de etiquetas, selos e legendas passam a ter um tamanho só (os de 10px, difíceis de ler, ficaram um pouco maiores). Os avisos, erros, confirmações e informações passam a usar as cores do sistema, que acompanham o tema escuro. Não é preciso fazer nada para atualizar.
+
+- **Menu com nomes mais claros** Doze itens do menu e das configurações mudaram de nome para ficarem mais claros, e o título de cada tela acompanha o nome novo. Os endereços das telas continuam os mesmos. Não é preciso fazer nada para atualizar.
+
+  | Nome antigo | Nome novo |
+  |---|---|
+  | Propostas (Configurações) | Regras das propostas |
+  | Propostas (IA) | Sugestões da IA |
+  | Automações (Configurações) | Limite da IA nas automações |
+  | Meta Ads (Configurações) | Conectar Meta Ads |
+  | Audit Log | Histórico de ações |
+  | API Tokens | Chaves de integração |
+  | Trunk SIP | Linha telefônica (SIP) |
+  | Conexões MCP | Ferramentas externas da IA |
+  | Servidor MCP externo | Sistema externo da IA |
+  | Skills | Ações da IA |
+  | Cold Call | Ligações em lista |
+
+- **Carregando e erro iguais nas telas principais** Automações, Desempenho, Conexões, Configurações e o quadro do funil passam a mostrar um esqueleto da tela enquanto carregam, em vez de ficar em branco. Quando uma lista não consegue carregar (Contatos, Automações, Origens em Desempenho), aparece um aviso único com o botão "Tentar novamente". Não é preciso fazer nada para atualizar.
+
+### Corrigido
+
+- **Chave de API em "só os meus" não mostra mais a última mensagem das conversas dos colegas** Numa empresa configurada para cada atendente ver só os próprios atendimentos, uma chave de API de atendente que listava os contatos recebia junto a última mensagem da conversa de cada contato, inclusive das conversas de outros atendentes. Agora essa chave continua listando os contatos, mas sem a conversa. Chaves de gerente ou administrador, os outros modos de visibilidade e o uso pela tela seguem iguais. Integração que precisa da conversa nesse modo usa uma chave de gerente.
+
 ## [2.3.0] — 2026-11-17
 
 ### ⚠️ Requer atenção
@@ -14766,7 +14820,8 @@ Primeira versão marcada do DeskcommCRM. O projeto vinha sendo desenvolvido publ
 
 - **Node 22 é obrigatório para desenvolvimento.** A suíte de invariantes instancia o cliente do Supabase, que exige o `WebSocket` global — nativo apenas a partir do Node 22. Isso não afeta quem apenas hospeda: a VPS roda a imagem pronta.
 
-[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.3.0...HEAD
+[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.4.0...HEAD
+[2.4.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.0.0...v2.1.0

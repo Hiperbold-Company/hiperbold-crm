@@ -9,6 +9,7 @@
 import { useState } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
+import { ErroComRetry } from "@/components/empty/ErroComRetry";
 import { useDesempenhoOrigens, type LinhaDeOrigem } from "@/hooks/metrics/useDesempenho";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatValorDoNegocio } from "@/lib/money";
@@ -20,10 +21,12 @@ type Dimensao = "source" | "medium" | "campaign";
 export function AbaOrigens({ query }: { query: string }) {
   const t = useT();
   const [dim, setDim] = useState<Dimensao>("source");
-  const { data, isLoading, isError } = useDesempenhoOrigens(query);
+  const { data, isLoading, isError, refetch, isFetching } = useDesempenhoOrigens(query);
 
   if (isLoading) return <p className="text-sm text-muted-foreground">{t("Carregando…")}</p>;
-  if (isError || !data) return <p className="text-sm text-destructive">{t("Erro ao carregar métricas.")}</p>;
+  if (isError || !data) {
+    return <ErroComRetry titulo={t("Não foi possível carregar as métricas")} onRetry={() => refetch()} tentando={isFetching} />;
+  }
   const d = data.data;
   const linhas: LinhaDeOrigem[] = dim === "source" ? d.por_source : dim === "medium" ? d.por_medium : d.por_campaign;
   const rotulo = (chave: string | null) => chave ?? t("(sem origem)");

@@ -53,10 +53,10 @@ interface TemplateParceiro {
 }
 
 const COR_DO_ESTADO: Record<string, string> = {
-  APPROVED: "text-emerald-700 dark:text-emerald-400",
-  PENDING: "text-amber-700 dark:text-amber-400",
+  APPROVED: "text-success-fg",
+  PENDING: "text-warning-fg",
   REJECTED: "text-destructive",
-  PAUSED: "text-amber-700 dark:text-amber-400",
+  PAUSED: "text-warning-fg",
   DISABLED: "text-muted-foreground",
 };
 
@@ -227,12 +227,12 @@ export function TemplatesParceiroClient({
                   <span className="break-all font-mono text-sm">{tpl.name}</span>
                   <span className="text-xs text-muted-foreground">{tpl.language}</span>
                   {tpl.category && (
-                    <span className="rounded-md bg-muted px-1.5 text-[10px] uppercase text-muted-foreground">
+                    <span className="rounded-md bg-muted px-1.5 text-2xs uppercase text-muted-foreground">
                       {tpl.category}
                     </span>
                   )}
                   {c.variaveis > 0 && (
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-2xs text-muted-foreground">
                       {c.variaveis} {t("valor(es)")}
                     </span>
                   )}
@@ -250,7 +250,7 @@ export function TemplatesParceiroClient({
                     à vista — não escondido atrás do clique: quem precisa dele
                     não sabe que precisa procurar. */}
                 {tpl.rejectedReason && (
-                  <p className="mt-1 text-[11px] text-destructive">{tpl.rejectedReason}</p>
+                  <p className="mt-1 text-2xs text-destructive">{tpl.rejectedReason}</p>
                 )}
 
                 {expandido && (
@@ -287,7 +287,7 @@ export function TemplatesParceiroClient({
                           </Button>
                         </>
                       )}
-                      <span className="ml-auto text-[10px] text-muted-foreground">
+                      <span className="ml-auto text-2xs text-muted-foreground">
                         {t("Sincronizado em")} {new Date(tpl.syncedAt).toLocaleString(tagDoIdioma)}
                       </span>
                     </div>

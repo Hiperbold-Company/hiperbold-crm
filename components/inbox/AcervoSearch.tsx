@@ -131,7 +131,7 @@ export function AcervoSearch() {
                 >
                   <div className="mb-1 flex items-center justify-between gap-2">
                     {tr.source_name && (
-                      <Badge variant="outline" className="truncate text-[10px]">
+                      <Badge variant="outline" className="truncate text-2xs">
                         {tr.source_name}
                       </Badge>
                     )}
@@ -153,7 +153,7 @@ export function AcervoSearch() {
             </p>
           )}
 
-          <p className="text-[10px] text-muted-foreground" data-testid="acervo-resumo">
+          <p className="text-2xs text-muted-foreground" data-testid="acervo-resumo">
             {t("Materiais consultados")}: {resultado.acervo.fontes} ·{" "}
             {t("limiar")}: {percentual(resultado.acervo.limiar)}
           </p>

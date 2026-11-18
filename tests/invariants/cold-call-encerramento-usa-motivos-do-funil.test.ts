@@ -56,6 +56,13 @@ import { ETAPAS_DO_COLD_CALL, MOTIVOS_DE_PERDA_DO_COLD_CALL, RESULTADOS } from "
 const pool = new pg.Pool({
   connectionString: `postgresql://postgres:postgres@127.0.0.1:${process.env.TEST_DB_PORT ?? 54329}/postgres`,
   max: 4,
+  // Data e hora voltam como TEXTO, como o PostgREST as entrega. Com o `Date` do driver os
+  // microssegundos se perdem, e a trava otimista por `updated_at` (`regravarSettingsDoFunil`)
+  // nunca casaria a linha que acabou de ler.
+  types: {
+    getTypeParser: ((oid: number, formato?: "text" | "binary") =>
+      oid === 1184 || oid === 1114 ? (v: string) => v : pg.types.getTypeParser(oid, formato)) as typeof pg.types.getTypeParser,
+  },
 });
 afterAll(() => pool.end());
 

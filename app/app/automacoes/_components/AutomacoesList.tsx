@@ -26,7 +26,10 @@ import {
 } from "@/hooks/followup/useFollowupFlows";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
+import { ErroComRetry } from "@/components/empty/ErroComRetry";
 import { FlowArrow, Plus } from "@/lib/ui/icons";
+import { AcoesNoCelular } from "@/components/shell/AcoesNoCelular";
+import { FiltrosNoCelular } from "@/components/shell/FiltrosNoCelular";
 import {
   ROTULO_DO_TIPO,
   TIPOS_DA_LISTA,
@@ -53,6 +56,7 @@ export function AutomacoesList({
   etapas = [],
   camposDeData = [],
   motivoDoBloqueio = null,
+  falhouNoServidor = false,
 }: {
   initialData: FollowupFlowPointerRow[];
   /** Lote 5 — tela única: follow-ups e regras antigas lidos no servidor (filtro de organização). */
@@ -63,10 +67,13 @@ export function AutomacoesList({
   camposDeData?: OpcaoDeCampo[];
   /** D-227: o teto de automações do plano está cheio (frase pronta do servidor); `null` = pode criar. */
   motivoDoBloqueio?: string | null;
+  /** A leitura das automações falhou no servidor: a lista vazia não é "nenhuma automação". */
+  falhouNoServidor?: boolean;
 }) {
   const t = useT();
   const idioma = useTagDeIdioma();
-  const { data } = useFollowupFlows({ initialData, surface: "automacao" });
+  const { data, isError, refetch, isFetching } = useFollowupFlows({ initialData, surface: "automacao" });
+  const [servidorFalhou, setServidorFalhou] = useState(falhouNoServidor);
   const [aberto, setAberto] = useState(false);
   const [modelosAberto, setModelosAberto] = useState(false);
   const [importarAberto, setImportarAberto] = useState(false);
@@ -87,7 +94,13 @@ export function AutomacoesList({
     new Date(iso).toLocaleDateString(idioma, { day: "2-digit", month: "2-digit", year: "numeric" });
 
   const botaoNova = (
-    <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-start">
+    <div className="flex w-full items-start gap-2 sm:w-auto">
+      <AcoesNoCelular
+        acoes={[
+          { rotulo: t("Importar"), onSelect: () => setImportarAberto(true), desativada: motivoDoBloqueio !== null },
+          { rotulo: t("Usar um modelo"), onSelect: () => setModelosAberto(true), desativada: motivoDoBloqueio !== null },
+        ]}
+      >
       <Button
         variant="outline"
         onClick={() => setImportarAberto(true)}
@@ -106,7 +119,8 @@ export function AutomacoesList({
       >
         {t("Usar um modelo")}
       </Button>
-      <div className="flex flex-col items-end">
+      </AcoesNoCelular>
+      <div className="flex flex-1 flex-col items-end sm:flex-initial">
       <Button
         onClick={() => setAberto(true)}
         data-testid="nova-automacao"
@@ -120,9 +134,39 @@ export function AutomacoesList({
     </div>
   );
 
+  // Parte da leitura falhou. Sem nada para mostrar, o cartão de erro ocupa a
+  // tela; com follow-ups ou regras já carregados, o erro vira uma faixa acima
+  // da lista — esconder o que carregou bem (e os botões de criar) era pior.
+  const falhou = servidorFalhou || isError;
+  const tentarDeNovo = () => {
+    void refetch().then((r) => {
+      if (!r.isError) setServidorFalhou(false);
+    });
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      {todas.length === 0 ? (
+      {falhou && todas.length > 0 ? (
+        <div
+          role="alert"
+          data-testid="faixa-erro-automacoes"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-error/40 bg-error-bg px-4 py-2 text-sm text-error-fg"
+        >
+          <span>{t("Não foi possível carregar as automações")}</span>
+          <Button type="button" size="sm" variant="outline" onClick={tentarDeNovo} disabled={isFetching}>
+            {t("Tentar novamente")}
+          </Button>
+        </div>
+      ) : null}
+      {falhou && todas.length === 0 ? (
+        <Card>
+          <ErroComRetry
+            titulo={t("Não foi possível carregar as automações")}
+            onRetry={tentarDeNovo}
+            tentando={isFetching}
+          />
+        </Card>
+      ) : todas.length === 0 ? (
         <Card className="flex flex-col items-center gap-3 p-10 text-center">
           <FlowArrow size={36} aria-hidden className="text-text-muted" />
           <h2 className="font-medium">{t("Nenhuma automação ainda")}</h2>
@@ -142,9 +186,10 @@ export function AutomacoesList({
                 onChange={(e) => setBusca(e.target.value)}
                 placeholder={t("Buscar pelo nome")}
                 aria-label={t("Buscar pelo nome")}
-                className="w-56"
+                className="w-full sm:w-56"
                 data-testid="busca-de-automacoes"
               />
+              <FiltrosNoCelular ativos={tipo !== "todos" ? 1 : 0}>
               <div role="group" aria-label={t("Filtrar por tipo")} className="flex flex-wrap gap-1">
                 {FILTROS_DE_TIPO.map((v) => (
                   <Button
@@ -160,6 +205,7 @@ export function AutomacoesList({
                   </Button>
                 ))}
               </div>
+              </FiltrosNoCelular>
             </div>
             {botaoNova}
           </div>

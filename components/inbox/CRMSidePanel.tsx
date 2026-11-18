@@ -418,9 +418,9 @@ function EtiquetasDoNegocio({ tags }: { tags: string[] | null | undefined }) {
   if (!tags || tags.length === 0) return null;
   return (
     <div data-testid="inbox-lead-tags" className="flex flex-wrap items-center gap-1 pt-0.5">
-      <span className="text-[10px] text-muted-foreground">{t("Tags do negócio")}:</span>
+      <span className="text-2xs text-muted-foreground">{t("Tags do negócio")}:</span>
       {tags.map((tag) => (
-        <ChipDeEtiqueta key={tag} tag={tag} className="h-4 px-1.5 text-[10px]" />
+        <ChipDeEtiqueta key={tag} tag={tag} className="h-4 px-1.5 text-2xs" />
       ))}
     </div>
   );
@@ -1136,7 +1136,7 @@ export function CRMSidePanel({
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {tags.map((tag) => (
-              <ChipDeEtiqueta key={tag} tag={tag} className="h-4 px-1.5 text-[10px]" />
+              <ChipDeEtiqueta key={tag} tag={tag} className="h-4 px-1.5 text-2xs" />
             ))}
           </div>
         )}

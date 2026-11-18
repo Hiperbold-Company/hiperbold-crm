@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -241,9 +242,8 @@ function CamposDaAcao({
           </Campo>
           {acao.type === "move_deal" && (
             <label htmlFor={`${prefixo}-trocar-funil`} className="flex items-center gap-2 text-sm text-text">
-              <input
+              <Checkbox
                 id={`${prefixo}-trocar-funil`}
-                type="checkbox"
                 checked={acao.trocar_funil === true}
                 onChange={(e) => {
                   const { trocar_funil: _antes, ...resto } = acao;
@@ -373,9 +373,8 @@ function CamposDaAcao({
             onChange={(v) => onChange({ ...acao, user_id: v })}
           />
           <label htmlFor={`${prefixo}-todas`} className="mt-2 flex items-center gap-2 text-sm text-text">
-            <input
+            <Checkbox
               id={`${prefixo}-todas`}
-              type="checkbox"
               checked={acao.todas === true}
               onChange={(e) => {
                 const { todas: _antes, ...resto } = acao;

@@ -24,11 +24,11 @@ const CORES: Record<
   { moldura: string; rotulo: string; texto: string; borda: string; tracejado: string }
 > = {
   aviso: {
-    moldura: "border-amber-300/70 bg-background/60 dark:border-amber-800/70 dark:bg-black/25",
-    rotulo: "text-amber-900/70 dark:text-amber-200/70",
-    texto: "text-amber-900 dark:text-amber-200",
-    borda: "border-amber-300/60 dark:border-amber-800/60",
-    tracejado: "border-amber-300/70 dark:border-amber-800/70",
+    moldura: "border-warning/30 bg-background/60 dark:bg-black/25",
+    rotulo: "text-warning-fg",
+    texto: "text-warning-fg",
+    borda: "border-warning/30",
+    tracejado: "border-warning/30",
   },
   neutro: {
     moldura: "border-border bg-muted/40",
@@ -60,7 +60,7 @@ function Trecho({ texto }: { texto: string }) {
           <span
             key={i}
             data-testid="parametro-em-falta"
-            className="rounded-md bg-primary/10 px-1 py-0.5 font-mono text-[11px] font-medium text-primary ring-1 ring-primary/20"
+            className="rounded-md bg-primary/10 px-1 py-0.5 font-mono text-2xs font-medium text-primary ring-1 ring-primary/20"
           >
             {parte}
           </span>
@@ -176,14 +176,14 @@ export function PreviaDoModelo({ previa, tom = "aviso" }: { previa: PreviaDaMens
       aria-label={t("Prévia da mensagem")}
       className={`mt-2 flex flex-col gap-1.5 rounded-md border p-2.5 ${cor.moldura}`}
     >
-      <span className={`text-[10px] font-medium tracking-wide uppercase ${cor.rotulo}`}>
+      <span className={`text-2xs font-medium tracking-wide uppercase ${cor.rotulo}`}>
         {t("Prévia da mensagem")}
       </span>
 
       <Bloco bloco={previa} prefixo="previa-" tom={tom} />
 
       {previa.rodape && (
-        <p data-testid="previa-rodape" className={`text-[11px] ${cor.rotulo}`}>
+        <p data-testid="previa-rodape" className={`text-2xs ${cor.rotulo}`}>
           {previa.rodape}
         </p>
       )}
@@ -195,7 +195,7 @@ export function PreviaDoModelo({ previa, tom = "aviso" }: { previa: PreviaDaMens
           key={card.indice}
           className={`flex flex-col gap-1.5 rounded-md border border-dashed p-1.5 ${cor.tracejado}`}
         >
-          <span className={`text-[10px] font-medium tracking-wide uppercase ${cor.rotulo}`}>
+          <span className={`text-2xs font-medium tracking-wide uppercase ${cor.rotulo}`}>
             {t("Item do carrossel")} {card.indice + 1}
           </span>
           <Bloco bloco={card} prefixo={`previa-card-${card.indice}-`} tom={tom} />

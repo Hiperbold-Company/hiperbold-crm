@@ -96,7 +96,7 @@ export function SinoDeTarefas() {
           <ListChecks size={18} aria-hidden />
           <span
             data-testid="sino-de-tarefas-contagem"
-            className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-semibold text-destructive-foreground"
+            className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-2xs leading-none font-semibold text-destructive-foreground"
           >
             {total > 99 ? "99+" : total}
           </span>
@@ -115,7 +115,7 @@ export function SinoDeTarefas() {
                 className="block px-3 py-2 text-sm hover:bg-muted"
               >
                 <span className="block truncate font-medium text-text">{tarefa.title}</span>
-                <span className="block truncate text-[11px] text-text-muted">
+                <span className="block truncate text-2xs text-text-muted">
                   {tarefa.due_date ? formataDataNoFuso(tarefa.due_date, fuso, idioma, true) : ""}
                   {tarefa.lead?.title ? ` · ${tarefa.lead.title}` : ""}
                 </span>

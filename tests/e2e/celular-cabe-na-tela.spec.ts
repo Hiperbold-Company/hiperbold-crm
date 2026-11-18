@@ -130,6 +130,9 @@ const SUPERFICIES = [
   { rota: "/app/metrics?aba=atendimento", nome: "painel-atendimento" },
   { rota: "/app/metrics?aba=atrito", nome: "painel-atrito" },
   { rota: "/app/activities", nome: "relatorios" },
+  // Design, 17/11/2026: filtros que viraram o botão "Filtros" no celular.
+  { rota: "/app/contacts", nome: "contatos" },
+  { rota: "/app/automacoes", nome: "automacoes" },
 ] as const;
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
@@ -441,6 +444,27 @@ test("as superfícies não estouram a tela em 360 nem em 390px", async ({ page }
     estouros,
     "o excedente NÃO ganha barra de rolagem neste produto (overflow-x: clip): ele some pela direita",
   ).toEqual([]);
+});
+
+test("no celular os filtros ficam atrás do botão Filtros, que abre a gaveta", async ({ page }) => {
+  await loginComoAdmin(page, creds);
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Automações fica fora: sem nenhuma automação na organização a tela é o
+  // estado vazio, sem filtros. A gaveta dela é coberta no teste de unidade.
+  for (const rota of ["/app/contacts", "/app/inbox"]) {
+    await abrir(page, rota);
+    const botao = page.getByRole("button", { name: /^Filtros/ }).first();
+    await expect(botao, `${rota}: botão Filtros`).toBeVisible();
+    await expect(botao).toHaveAttribute("aria-expanded", "false");
+    await botao.click();
+    const gaveta = page.getByRole("dialog");
+    await expect(gaveta, `${rota}: a gaveta abriu`).toBeVisible();
+    const caixa = await gaveta.boundingBox();
+    expect(caixa && caixa.width <= 390 + 1, `${rota}: a gaveta cabe na largura`).toBe(true);
+    await page.screenshot({ path: path.join(EVIDENCE, `390-filtros-${rota.split("/").pop()}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(gaveta).toBeHidden();
+  }
 });
 
 test("nenhum controle do painel fica abaixo de 44px de altura em 360px", async ({ page }) => {

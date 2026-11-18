@@ -50,7 +50,7 @@ export function OwnerBadge({
           className={`${compacto ? "h-4 w-4" : "h-6 w-6"} shrink-0 rounded-full border border-dashed border-border-strong`}
           aria-hidden
         />
-        <span className={`truncate text-text-muted ${compacto ? "text-[10px]" : "text-xs"}`}>
+        <span className={`truncate text-text-muted ${compacto ? "text-2xs" : "text-xs"}`}>
           {t("Sem responsável")}
         </span>
       </div>
@@ -72,18 +72,18 @@ export function OwnerBadge({
         className={
           isAgent
             ? // Vazado com anel: o fundo do card atravessa o disco.
-              `flex ${compacto ? "h-4 w-4 text-[8px]" : "h-6 w-6 text-[10px]"} shrink-0 items-center justify-center rounded-full border border-accent bg-surface font-mono font-semibold text-accent ring-1 ring-inset ring-accent/40`
+              `flex ${compacto ? "h-5 w-5 text-2xs" : "h-6 w-6 text-2xs"} shrink-0 items-center justify-center rounded-full border border-accent bg-surface font-mono font-semibold text-accent ring-1 ring-inset ring-accent/40`
             : // Preenchido SÓLIDO: a um metro, o humano é uma mancha escura e o
               // agente é um anel claro. Contraste que não depende da borda —
               // fundo suave fazia os dois lerem como "círculo claro".
-              `flex ${compacto ? "h-4 w-4 text-[8px]" : "h-6 w-6 text-[10px]"} shrink-0 items-center justify-center rounded-full bg-accent font-semibold text-accent-foreground`
+              `flex ${compacto ? "h-5 w-5 text-2xs" : "h-6 w-6 text-2xs"} shrink-0 items-center justify-center rounded-full bg-accent font-semibold text-accent-foreground`
         }
         aria-hidden
       >
         {ownerName ? ownerInitials(ownerName) : "?"}
       </span>
       <span
-        className={`truncate text-text-muted ${compacto ? "max-w-[7rem] text-[10px]" : "max-w-[9rem] text-xs"}`}
+        className={`truncate text-text-muted ${compacto ? "max-w-[7rem] text-2xs" : "max-w-[9rem] text-xs"}`}
       >
         {label}
       </span>

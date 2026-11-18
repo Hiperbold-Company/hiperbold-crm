@@ -153,7 +153,7 @@ export function ExecucoesDeIa() {
       <Card className="mb-6 p-4" data-testid="resumo">
         {resumo.erros === 0 ? (
           <p className="text-sm">
-            <span className="font-medium text-emerald-600 dark:text-emerald-500">
+            <span className="font-medium text-success-fg">
               {t("Nenhuma falha")}
             </span>{" "}
             {t("nas últimas")} {resumo.total} {t("execuções.")}

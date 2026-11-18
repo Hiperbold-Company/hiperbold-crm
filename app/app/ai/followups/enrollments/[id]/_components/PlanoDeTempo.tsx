@@ -64,7 +64,7 @@ export function PlanoDeTempoBloco({ plano, nos, decididoRelativo }: Props) {
                 </p>
               )}
               <p className="text-xs text-text-muted">{d.motivo}</p>
-              <p className="text-[11px] text-text-muted">{d.faixa}</p>
+              <p className="text-2xs text-text-muted">{d.faixa}</p>
             </li>
           );
         })}

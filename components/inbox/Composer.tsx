@@ -30,7 +30,7 @@ import { resolveSlash, TemplateMenu } from "@/components/inbox/composer/Template
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useCreateNote } from "@/hooks/inbox/useCreateNote";
 import { useGruposDeRespostas, useMessageTemplates } from "@/hooks/inbox/useMessageTemplates";
-import { X } from "lucide-react";
+import { X } from "@/lib/ui/icons";
 import { toast } from "sonner";
 import { useSendMessage } from "@/hooks/inbox/useSendMessage";
 import { useUploadMedia, type DestinoDoUpload } from "@/hooks/inbox/useUploadMedia";
@@ -1252,7 +1252,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         {respondendo && mode === "reply" && (
           <div className="mb-1 flex items-start gap-2 rounded-md border-l-2 border-primary bg-muted/60 px-2 py-1.5">
             <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-medium text-primary">
+              <div className="text-2xs font-medium text-primary">
                 {respondendo.direction === "outbound" ? t("Você") : t("Cliente")}
               </div>
               <div className="line-clamp-2 text-xs text-muted-foreground">
@@ -1267,7 +1267,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               aria-label={t("Cancelar resposta")}
               className="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:size-auto lg:p-0.5"
             >
-              <X className="size-4" />
+              <X className="size-4" aria-hidden />
             </button>
           </div>
         )}
@@ -1287,7 +1287,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               />
             )}
             {exigenciaDoAgendamento?.tipo === "sem_saida_fora_da_janela" && (
-              <p role="status" className="text-xs text-amber-800 dark:text-amber-200">
+              <p role="status" className="text-xs text-warning-fg">
                 {t("A janela de 24 horas estará fechada nesse horário e este canal não envia modelo: a mensagem só sai se o cliente escrever antes.")}
               </p>
             )}

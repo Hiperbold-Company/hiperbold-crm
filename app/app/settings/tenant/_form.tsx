@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useConfirmar } from "@/components/ui/confirmar";
 import {
   Select,
   SelectContent,
@@ -17,7 +18,7 @@ import {
 import { updateTenant } from "@/app/actions/settings/updateTenant";
 import { useT } from "@/hooks/i18n/useT";
 import { irAoDesafioDeMfa } from "@/lib/auth/ir-ao-desafio-de-mfa";
-import { IDIOMAS_VISIVEIS } from "@/lib/i18n/registro";
+import { IDIOMAS_COM_TEXTO, IDIOMAS_VISIVEIS } from "@/lib/i18n/registro";
 import { MOEDAS_SERVIDAS, simboloDaMoeda, type MoedaServida } from "@/lib/money";
 import { paisesOferecidos, perfilDoPais } from "@/lib/legal/perfil-do-pais";
 import { tenantSchema, type Locale, type TenantInput } from "@/lib/schemas/settings";
@@ -40,6 +41,7 @@ const TIMEZONES = FUSOS_OFERECIDOS.map((f) => f.codigo);
 
 export function TenantForm({ initial, onSave, onSaved }: Props) {
   const t = useT();
+  const { confirmar } = useConfirmar();
   const [form, setForm] = useState<TenantInput>(initial);
   const [isPending, startTransition] = useTransition();
 
@@ -134,7 +136,7 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {IDIOMAS_VISIVEIS.map(({ codigo, nomeNativo }) => (
+                {idiomasDoSeletor(initial.locale).map(({ codigo, nomeNativo }) => (
                   <SelectItem key={codigo} value={codigo}>
                     {nomeNativo}
                   </SelectItem>
@@ -236,9 +238,15 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
             <Switch
               id="media_retention_enforced"
               checked={form.media_retention_enforced}
-              onCheckedChange={(v) => {
+              onCheckedChange={async (v) => {
                 if (v && !form.media_retention_enforced) {
-                  if (window.confirm(t("Ao ligar, a mídia de mensagem e o anexo de nota interna com mais de {n} dias começarão a ser apagados.").replace("{n}", String(form.media_retention_days)))) {
+                  const ok = await confirmar({
+                    titulo: t("Ligar a limpeza de mídia antiga?"),
+                    descricao: t("Ao ligar, a mídia de mensagem e o anexo de nota interna com mais de {n} dias começarão a ser apagados.").replace("{n}", String(form.media_retention_days)),
+                    confirmar: t("Ligar"),
+                    perigo: true,
+                  });
+                  if (ok) {
                     set("media_retention_enforced", true);
                   }
                 } else {
@@ -266,4 +274,14 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
       </Card>
     </form>
   );
+}
+
+// Espanhol e inglês saíram do seletor (17/11/2026), mas quem já tinha um deles gravado
+// continua vendo-o aqui: sem isso o Select mostraria pt-BR e salvar outro campo
+// trocaria o idioma da conta sem a pessoa ter pedido.
+function idiomasDoSeletor(gravado: string) {
+  if (IDIOMAS_VISIVEIS.some((i) => i.codigo === gravado)) return IDIOMAS_VISIVEIS;
+  // Só um idioma que o produto ainda escreve (`IDIOMAS`: es, en); nunca tr nem zh-CN.
+  const extra = IDIOMAS_COM_TEXTO.find((i) => i.codigo === gravado);
+  return extra ? [...IDIOMAS_VISIVEIS, extra] : IDIOMAS_VISIVEIS;
 }

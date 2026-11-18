@@ -1,4 +1,5 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useId, useMemo, useState } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { Input } from "@/components/ui/input";
@@ -141,7 +142,7 @@ export function SeletorDeEtiquetas({
       )}
 
       {noLimite && (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           {t("Limite de {n} tags atingido. Desmarque uma para escolher outra.").replace("{n}", String(limite))}
         </p>
       )}
@@ -174,7 +175,7 @@ export function SeletorDeEtiquetas({
               <div key={grupo ?? "__outras"} role="group" aria-labelledby={idTitulo}>
                 <p
                   id={idTitulo}
-                  className="px-1 pb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                  className="px-1 pb-0.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground"
                 >
                   {titulo}
                 </p>
@@ -184,12 +185,11 @@ export function SeletorDeEtiquetas({
                     return (
                       <li key={opcao.tag}>
                         <label className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-0.5 text-xs hover:bg-muted has-[:disabled]:cursor-default has-[:disabled]:opacity-60">
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={marcada}
                             onChange={() => alternar(opcao)}
                             disabled={disabled || (!marcada && noLimite)}
-                            className="size-3.5 shrink-0 accent-primary"
+                            className="shrink-0"
                           />
                           {opcao.cor && (
                             <span

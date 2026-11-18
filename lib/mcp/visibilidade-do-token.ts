@@ -172,16 +172,26 @@ const MENSAGEM =
   "This organization restricts each attendant to their own records (own visibility): this token needs role:manager or higher to use this capability.";
 
 /**
- * Recusa (403) o token de papel abaixo de gerente quando a organização está em
- * visibilidade `own`. Falha de leitura da configuração recusa também: decisão de
- * acesso não trata leitura que não aconteceu como "pode".
+ * Regra pura do D-148: a chave fica sem a visão do que tem dono quando a
+ * organização está no modo explícito `own` e o papel da chave está abaixo de
+ * gerente. Qualquer outro modo (ausente, `all`, `own_and_unassigned`) não
+ * restringe.
  */
-export async function exigirVisibilidadeDoToken(
+export function tokenSemVisaoDeDono(modo: unknown, role: Role): boolean {
+  return modo === "own" && ROLE_RANK[role] < ROLE_RANK.manager;
+}
+
+/**
+ * Lê o modo e aplica `tokenSemVisaoDeDono`. Gerente ou acima não consulta o
+ * banco. Falha de leitura lança (500): decisão de acesso não trata leitura que
+ * não aconteceu como "pode".
+ */
+export async function tokenSemVisaoDeDonoNaOrganizacao(
   supabase: SupabaseClient,
   organizationId: string,
   role: Role,
-): Promise<void> {
-  if (ROLE_RANK[role] >= ROLE_RANK.manager) return;
+): Promise<boolean> {
+  if (ROLE_RANK[role] >= ROLE_RANK.manager) return false;
   const { data, error } = await supabase
     .from("organizations")
     .select("settings")
@@ -191,5 +201,20 @@ export async function exigirVisibilidadeDoToken(
     throw new McpAuthError(-32603, 500, "Could not read the organization visibility setting.");
   }
   const modo = (data?.settings as { visibility_mode?: unknown } | null | undefined)?.visibility_mode;
-  if (modo === "own") throw new McpAuthError(-32002, 403, MENSAGEM);
+  return tokenSemVisaoDeDono(modo, role);
+}
+
+/**
+ * Recusa (403) o token de papel abaixo de gerente quando a organização está em
+ * visibilidade `own`. Falha de leitura da configuração recusa também: decisão de
+ * acesso não trata leitura que não aconteceu como "pode".
+ */
+export async function exigirVisibilidadeDoToken(
+  supabase: SupabaseClient,
+  organizationId: string,
+  role: Role,
+): Promise<void> {
+  if (await tokenSemVisaoDeDonoNaOrganizacao(supabase, organizationId, role)) {
+    throw new McpAuthError(-32002, 403, MENSAGEM);
+  }
 }

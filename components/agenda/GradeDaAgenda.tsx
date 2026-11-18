@@ -435,7 +435,7 @@ function FaixaFechada({
           style={{ backgroundColor: corDaTrilha(pessoa.trilha) }}
         />
       )}
-      <span className="ml-1 block truncate text-[10px] font-semibold leading-4 text-text-muted">
+      <span className="ml-1 block truncate text-2xs font-semibold leading-4 text-text-muted">
         {texto}
         <span className="sr-only"> · {rotuloDoTrecho(trecho, t)}</span>
       </span>
@@ -584,11 +584,11 @@ function BlocoDeAgendamento({
         className="absolute inset-y-0 left-0 w-[3px] rounded-l-sm"
         style={{ backgroundColor: doGoogle ? "var(--color-border-strong)" : corDaTrilha(trilha) }}
       />
-      <span className="ml-1 truncate text-[11px] font-semibold leading-4 text-text">
+      <span className="ml-1 truncate text-2xs font-semibold leading-4 text-text">
         {agendamento.titulo}
       </span>
       {duracao >= 45 && (
-        <span className="ml-1 truncate text-[10px] leading-3 tabular-nums text-text-muted">
+        <span className="ml-1 truncate text-2xs leading-3 tabular-nums text-text-muted">
           {rotuloHora(comeca, fuso)}
           {agendamento.quemSeraAtendido ? ` · ${agendamento.quemSeraAtendido}` : ""}
         </span>
@@ -628,7 +628,7 @@ function ColunaDeHoras() {
           className="relative border-b border-border/50 text-right"
           style={{ height: ALTURA_DA_HORA }}
         >
-          <span className="absolute -top-1.5 right-1 text-[10px] tabular-nums text-text-subtle">
+          <span className="absolute -top-1.5 right-1 text-2xs tabular-nums text-text-subtle">
             {String(h).padStart(2, "0")}h
           </span>
         </div>
@@ -676,7 +676,7 @@ function FantasmaDoArraste({
         height: Math.max(pixelsDe(duracaoMin) - 2, 18),
       }}
     >
-      <span className="truncate text-[10px] font-semibold leading-4 text-text">
+      <span className="truncate text-2xs font-semibold leading-4 text-text">
         {valido
           ? rotuloHora(new Date(proposta.instante!), fuso)
           : t(proposta.razao)}
@@ -744,12 +744,12 @@ function ColunaDeDia({
           "sticky top-0 z-20 flex h-8 items-center justify-center gap-1.5 border-b border-border bg-surface px-2",
         )}
       >
-        <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+        <span className="truncate text-2xs font-semibold uppercase tracking-wide text-text-muted">
           {format(dia, "EEE", { locale: localeDaData }).replace(".", "")}
         </span>
         <span
           className={cn(
-            "flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums",
+            "flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-2xs tabular-nums",
             ehHoje ? "bg-accent text-accent-foreground font-semibold" : "text-text",
           )}
         >
@@ -863,7 +863,7 @@ function VisaoDeMes({
         {semanas[0]?.map((d) => (
           <div
             key={`cab-${d.toISOString()}`}
-            className="px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-text-muted"
+            className="px-2 py-1.5 text-center text-2xs font-semibold uppercase tracking-wide text-text-muted"
           >
             {format(d, "EEEEEE", { locale: localeDaData }).replace(".", "")}
           </div>
@@ -887,7 +887,7 @@ function VisaoDeMes({
               <div className="mb-1 flex items-center justify-between px-0.5">
                 <span
                   className={cn(
-                    "flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums",
+                    "flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-2xs tabular-nums",
                     chaveDoDia(d) === chaveDoDiaDoInstante(agora, fuso)
                       ? "bg-accent font-semibold text-accent-foreground"
                       : doMes
@@ -898,7 +898,7 @@ function VisaoDeMes({
                   {format(d, "d")}
                 </span>
                 {doDia.length > 2 && (
-                  <span className="text-[10px] tabular-nums text-text-subtle">
+                  <span className="text-2xs tabular-nums text-text-subtle">
                     +{doDia.length - 2}
                   </span>
                 )}
@@ -913,7 +913,7 @@ function VisaoDeMes({
                     <div
                       key={`fechamento-${f.id}`}
                       data-testid={`fechamento-mes-${f.id}`}
-                      className="truncate rounded-sm px-1 py-0.5 text-[10px] leading-4 text-text-muted"
+                      className="truncate rounded-sm px-1 py-0.5 text-2xs leading-4 text-text-muted"
                       style={{ background: HACHURA_DO_FECHAMENTO }}
                     >
                       {trecho.de === 0 && trecho.ate === 24 * 60
@@ -948,7 +948,7 @@ function VisaoDeMes({
                         className="h-1.5 w-1.5 shrink-0 rounded-full"
                         style={{ backgroundColor: corDaTrilha(trilha) }}
                       />
-                      <span className="truncate text-[10px] leading-4 text-text">
+                      <span className="truncate text-2xs leading-4 text-text">
                         {rotuloHora(new Date(c.comeca), fuso)} {c.titulo}
                       </span>
                     </div>

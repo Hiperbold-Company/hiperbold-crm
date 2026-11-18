@@ -226,7 +226,7 @@ export function AudioPlayer({ messageId, isOutbound, src, mime }: Props) {
           onChange={(e) => seek(Number(e.target.value))}
           className="h-1 w-full cursor-pointer accent-current"
         />
-        <span className="text-[10px] tabular-nums opacity-70">
+        <span className="text-2xs tabular-nums opacity-70">
           {fmt(current)} / {fmt(safeDuration)}
         </span>
       </div>
@@ -239,7 +239,7 @@ export function AudioPlayer({ messageId, isOutbound, src, mime }: Props) {
       >
         <span
           className={cn(
-            "rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums transition-colors",
+            "rounded-full px-2 py-0.5 text-2xs font-semibold tabular-nums transition-colors",
             isOutbound
               ? "bg-primary-foreground/20 text-primary-foreground"
               : "bg-primary/10 text-primary",

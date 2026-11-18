@@ -1,10 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { render } from "@/tests/helpers/render-com-confirmacao";
 import { describe, expect, it, vi } from "vitest";
 
 import { ProfileForm } from "@/app/app/settings/profile/_form";
 import { TenantForm } from "@/app/app/settings/tenant/_form";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
-import { IDIOMAS, IDIOMA_PADRAO, normalizarIdioma, parseAcceptLanguage } from "@/lib/i18n/idiomas";
+import { IDIOMAS, IDIOMA_PADRAO, idiomaDaTela, normalizarIdioma, parseAcceptLanguage } from "@/lib/i18n/idiomas";
 import { REGISTRO_DE_IDIOMAS, type IdiomaRegistrado, type NivelDeIdioma } from "@/lib/i18n/registro";
 
 /**
@@ -39,6 +40,12 @@ vi.mock("@/app/actions/settings/updateTenant", () => ({
  */
 const NIVEIS_QUE_APARECEM: ReadonlySet<NivelDeIdioma> = new Set(["telas_principais", "completo"]);
 const aparece = (idioma: IdiomaRegistrado) => NIVEIS_QUE_APARECEM.has(idioma.nivel);
+/**
+ * Servido = aparece OU saiu do seletor tendo texto (`retiradoDoSeletorEm`, o
+ * espanhol e o inglês desde 17/11/2026). O servido vale para a gravação e as
+ * saídas fora da tela; a TELA só pinta o que aparece (`idiomaDaTela`).
+ */
+const servido = (idioma: IdiomaRegistrado) => aparece(idioma) || idioma.retiradoDoSeletorEm !== undefined;
 const VISIVEIS = REGISTRO_DE_IDIOMAS.filter(aparece);
 
 describe("o registro de idiomas", () => {
@@ -57,12 +64,16 @@ describe("o registro de idiomas", () => {
     expect(REGISTRO_DE_IDIOMAS[0]?.codigo).toBe(IDIOMA_PADRAO);
   });
 
-  it("o português e o espanhol são `completo` — nada neles afrouxa", () => {
-    // É a promessa que faz o gate do espanhol reprovar. Rebaixar o espanhol
-    // aqui soltaria a trava de toda frase de tela sem ninguém mexer no gate.
-    const nivel = (codigo: string) => REGISTRO_DE_IDIOMAS.find((i) => i.codigo === codigo)?.nivel;
-    expect(nivel("pt-BR")).toBe("completo");
-    expect(nivel("es")).toBe("completo");
+  it("o português é `completo`; o espanhol saiu do seletor sem soltar a trava", () => {
+    // espanhol e inglês saíram do seletor em 17/11/2026 (lib/i18n/registro.ts, `retiradoDoSeletorEm`). O gate do espanhol
+    // (`i18n-espanhol-cobre-a-tela`) é fixo em `es` e não lê o nível, e a régua
+    // dos outros idiomas lê `IDIOMAS_COM_TEXTO` — o rebaixamento não solta
+    // frase de tela nenhuma. Religar é voltar o nível a `completo`.
+    const doRegistro = (codigo: string) => REGISTRO_DE_IDIOMAS.find((i) => i.codigo === codigo);
+    expect(doRegistro("pt-BR")?.nivel).toBe("completo");
+    expect(doRegistro("es")?.nivel).toBe("em_construcao");
+    expect(doRegistro("es")).toHaveProperty("retiradoDoSeletorEm", "2026-11-17");
+    expect(doRegistro("en")).toHaveProperty("retiradoDoSeletorEm", "2026-11-17");
   });
 
   it("nenhum idioma declara `telas_principais` enquanto a régua não existe", () => {
@@ -81,15 +92,18 @@ describe("o registro de idiomas", () => {
 
 describe("em construção não chega a ninguém", () => {
   it("a lista servida é exatamente a dos níveis que aparecem, na ordem do registro", () => {
-    expect([...IDIOMAS]).toEqual(VISIVEIS.map((idioma) => idioma.codigo));
+    expect([...IDIOMAS]).toEqual(REGISTRO_DE_IDIOMAS.filter(servido).map((idioma) => idioma.codigo));
+    expect(REGISTRO_DE_IDIOMAS.filter(aparece).map((idioma) => idioma.codigo)).toEqual(VISIVEIS.map((idioma) => idioma.codigo));
   });
 
   it("um valor salvo em idioma que não aparece é servido como o padrão", () => {
     // `user_metadata.locale` e `organizations.locale` não têm CHECK: um valor
     // pode chegar pelo banco. Servi-lo mostraria uma tradução pela metade.
     for (const idioma of REGISTRO_DE_IDIOMAS) {
-      const esperado = aparece(idioma) ? idioma.codigo : IDIOMA_PADRAO;
+      const esperado = servido(idioma) ? idioma.codigo : IDIOMA_PADRAO;
       expect(normalizarIdioma(idioma.codigo), idioma.codigo).toBe(esperado);
+      // A tela: só o que aparece; o resto, inclusive o retirado do seletor, no padrão.
+      expect(idiomaDaTela(idioma.codigo), idioma.codigo).toBe(aparece(idioma) ? idioma.codigo : IDIOMA_PADRAO);
     }
   });
 
@@ -98,7 +112,7 @@ describe("em construção não chega a ninguém", () => {
     // sairia misturado, com o que falta em português.
     for (const idioma of REGISTRO_DE_IDIOMAS) {
       for (const subtag of idioma.subtagsDoNavegador) {
-        const esperado = aparece(idioma) ? idioma.codigo : null;
+        const esperado = servido(idioma) ? idioma.codigo : null;
         expect(parseAcceptLanguage(`${subtag}-XX,${subtag};q=0.9`), subtag).toBe(esperado);
       }
     }

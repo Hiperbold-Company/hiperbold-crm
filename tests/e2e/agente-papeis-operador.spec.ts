@@ -304,7 +304,7 @@ test.describe("A aba do papel que organiza o sistema", () => {
     // vocabulário interno vaza para quem CONFIGURA, ele vaza de novo para quem
     // é atendido — o dono do negócio copia o que lê.
     let corpo = (await pagina.locator("main").innerText()).toLowerCase();
-    // Hiperbold: "Conexões MCP" é o NOME da função na tela (hiperbold/FUNCOES.md, funções ativas;
+    // Hiperbold: "Ferramentas externas da IA" é o NOME da função na tela (hiperbold/FUNCOES.md, funções ativas;
     // seção `secao-mcp-externo` do ToolPicker, 9aa733b8c). Ela sai da varredura; o resto da tela
     // continua proibido de dizer "mcp".
     for (const trecho of await pagina.getByTestId("secao-mcp-externo").allInnerTexts()) {

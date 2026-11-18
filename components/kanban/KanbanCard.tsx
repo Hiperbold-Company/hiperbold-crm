@@ -1,5 +1,6 @@
 "use client";
 import { Draggable } from "@hello-pangea/dnd";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { MouseEvent } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { cn } from "@/lib/utils";
@@ -7,13 +8,13 @@ import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
 import { rotuloDaRecorrencia } from "@/lib/leads/valor-recorrente";
 import type { Lead } from "@/lib/types/leads";
 import type { Stage } from "@/lib/kanban/types";
+import type { CampoDoCartao } from "@/lib/kanban/linhas-do-cartao";
 import { resolveCardState, stageAgeLabel, type CardInput } from "@/lib/kanban/card-state";
 import { useFusoDaOrganizacao, usePermission } from "@/hooks/auth/AuthProvider";
-import { formataDataNoFuso, rotuloDeIdade, ultimaMovimentacao } from "@/lib/kanban/datas-do-lead";
+import { formataDataNoFuso, ultimaMovimentacao } from "@/lib/kanban/datas-do-lead";
 import { KanbanCardActions } from "./KanbanCardActions";
 import { NextActionSlot } from "./NextActionSlot";
 import { ReactivationSlot } from "./ReactivationSlot";
-import { ConversaSlot } from "./ConversaSlot";
 import { ScoreSlot } from "./ScoreSlot";
 import { OwnerBadge } from "./OwnerBadge";
 import { ContatoNoCard } from "./ContatoNoCard";
@@ -71,6 +72,11 @@ interface KanbanCardProps {
    * de escrita próprias).
    */
   somenteLeitura?: boolean;
+  /**
+   * As linhas da área de contato que o funil escolheu ("Editar cartão"), já
+   * resolvidas por `linhasDoCartao` no quadro. Ausente = o padrão de sempre.
+   */
+  linhas?: readonly CampoDoCartao[];
 }
 
 function formatValor(cents: number | null, currency: string | null): string | null {
@@ -106,6 +112,7 @@ export function KanbanCard({
   onMoverPara,
   denso = false,
   somenteLeitura = false,
+  linhas,
 }: KanbanCardProps) {
   const t = useT();
   // Mover etapa é permissão por perfil (a rota é quem barra): sem ela o card não arrasta.
@@ -127,9 +134,10 @@ export function KanbanCard({
   );
   const state = resolveCardState(card, t);
   const age = stageAgeLabel(card.hoursInStage, t);
-  // "movido há 3 dias": a última movimentação (entrada na etapa; se faltar, a criação).
+  // As datas exatas (criação e última movimentação) vão no `title` do tempo na
+  // etapa. A linha "movido há X" saiu do card: repetia o mesmo tempo do rodapé.
   const fuso = useFusoDaOrganizacao();
-  const movido = rotuloDeIdade(ultimaMovimentacao(lead), new Date(), fuso, t);
+  const datasDoCard = `${t("Criado em")} ${formataDataNoFuso(lead.created_at, fuso)} · ${t("Última movimentação")} ${formataDataNoFuso(ultimaMovimentacao(lead), fuso)}`;
 
   // Clique ABRE o dossiê; ctrl/cmd+clique SELECIONA; shift+clique estende até a
   // âncora. "Clicar abre" é a convenção mais forte, e seleção múltipla é recurso
@@ -235,8 +243,7 @@ export function KanbanCard({
               {/* No funil arquivado a caixa some de vez: seleção só existe
                   para a ação em lote, e escrever ali é o que o arquivo proíbe (#1298). */}
               {!somenteLeitura && (
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={Boolean(isSelected)}
                   aria-label={`${t("Selecionar")}: ${card.title}`}
                   onClick={(e) => {
@@ -317,7 +324,7 @@ export function KanbanCard({
             data-testid="card-valor"
             className={cn(
               "flex items-baseline gap-1 font-medium tabular-nums",
-              denso ? "mt-0.5 h-4 text-[11px] leading-4" : "mt-1 h-5 text-xs leading-5",
+              denso ? "mt-0.5 h-4 text-2xs leading-4" : "mt-1 h-5 text-xs leading-5",
               value || recorrente ? "text-text" : "text-text-muted",
             )}
             title={recorrente ? `${value ?? ""} + ${recorrente}`.trim() : undefined}
@@ -378,33 +385,18 @@ export function KanbanCard({
             )}
           </div>
 
-          {/* A última mensagem, com atalho para o inbox. Fica ANTES do rodapé
-              de dono/tempo porque é conteúdo do negócio, não metadado do card —
-              e some por inteiro quando não há conversa.
+          {/* A ÁREA DE CONTATO: até 5 linhas escolhidas por funil ("Editar
+              cartão", `lib/kanban/linhas-do-cartao.ts`) e os links do contato.
+              Padrão = a última mensagem e o telefone, nessa ordem. Linha sem
+              valor some; a área some por inteiro quando não há nada. A última
+              mensagem é só texto: o atalho para o chat mora no dossiê.
 
               ⚠️ NO COMPACTO ela SAI DO CARD (issue #3461, item 2), e é decisão
-              declarada, não perda silenciosa: as duas linhas variáveis do card
-              (esta e o contato abaixo) são as que fazem a altura depender do
-              dado, e densidade com altura variável não densidade — é o mesmo
-              card de antes com outro nome. As duas continuam inteiras no
-              DOSSIÊ (`ConversaNoDossie`, `ContatoDoNegocio`), que abre com o
-              mesmo clique no card. O que fica no compacto é o que se lê de
-              relance para decidir: título, valor, faixa do agente, dono,
-              tarefas e tempo na etapa. */}
-          {!denso && (
-            <>
-              <ConversaSlot
-                conversa={lead.conversa}
-                contactId={lead.contact_id}
-                phone={lead.contact_phone}
-                leadId={lead.id}
-              />
-
-              {/* Telefone, e-mail e links do contato — some por inteiro quando o
-                  negócio não tem nada disso, como a conversa acima. */}
-              <ContatoNoCard lead={lead} />
-            </>
-          )}
+              declarada, não perda silenciosa: é a parte variável do card, e
+              densidade com altura variável não é densidade. Tudo continua
+              inteiro no DOSSIÊ (`ConversaNoDossie`, `ContatoDoNegocio`), que
+              abre com o mesmo clique no card. */}
+          {!denso && <ContatoNoCard lead={lead} linhas={linhas} />}
 
           {/* Os campos `file` do funil (#2829): contagem + o documento clicável.
               Fica junto do contato, entre o conteúdo do negócio e o rodapé de
@@ -427,23 +419,20 @@ export function KanbanCard({
               />
               <TarefasNoCard tarefas={lead.tarefas} />
             </div>
-            <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-text-muted">
-              {state.showStageAge && age
-                ? `${age} ${t("em")} ${card.stageName}`
-                : `${t("em")} ${card.stageName}`}
-            </span>
+            {/* O NOME DA ETAPA NÃO VAI NO RODAPÉ: ele já está no topo da coluna, e
+                nome longo ("ATIVO REALIZADO / SEM RESPOSTA", visto na CBEXS) era
+                `shrink-0` e passava por cima do nome do responsável. Fica só o
+                tempo; a etapa vai no `title`. */}
+            {state.showStageAge && age ? (
+              <span
+                className="min-w-0 shrink truncate whitespace-nowrap text-2xs tabular-nums text-text-muted"
+                title={`${age} ${t("em")} ${card.stageName} · ${datasDoCard}`}
+                data-tempo-na-etapa
+              >
+                {age} {t("na etapa")}
+              </span>
+            ) : null}
           </div>
-          {movido && (
-            // Discreto de propósito: uma linha miúda, sem cor, que não disputa
-            // atenção com o estado do card. A data exata está no `title`.
-            <p
-              className="truncate text-[10px] text-text-muted"
-              data-movido-ha
-              title={`${t("Criado em")} ${formataDataNoFuso(lead.created_at, fuso)} · ${t("Última movimentação")} ${formataDataNoFuso(ultimaMovimentacao(lead), fuso)}`}
-            >
-              {t("movido")} {movido}
-            </p>
-          )}
         </div>
       )}
     </Draggable>

@@ -63,7 +63,7 @@ vi.mock("next/link", () => ({
 }));
 
 const AGORA = new Date("2026-10-27T12:00:00Z");
-/** 5 dias parado na etapa: dá idade para o rodapé escrever "5d em Negociação". */
+/** 5 dias parado na etapa: dá idade para o rodapé escrever "5d na etapa". */
 const ENTRADA_NA_ETAPA = "2026-10-22T12:00:00Z";
 
 const LEAD = {
@@ -130,6 +130,20 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe("rodapé e contato do card (decisão de 17/11)", () => {
+  it("mostra o telefone, não o e-mail, e não repete 'movido há'", () => {
+    const { container } = montar(false);
+    const contato = screen.getByTestId("contato-no-card");
+    expect(contato).toHaveTextContent("+55 11 98888-7777");
+    expect(contato).not.toHaveTextContent("ana@exemplo.com");
+    expect(container.querySelector("[data-movido-ha]")).toBeNull();
+    expect(container.textContent).not.toMatch(/movido/);
+    // As datas exatas continuam a um passar de mouse, no tempo na etapa.
+    const tempo = container.querySelector("[data-tempo-na-etapa]") as HTMLElement;
+    expect(tempo.getAttribute("title")).toMatch(/Criado em .* · Última movimentação /);
+  });
+});
+
 describe("card compacto × confortável (#3461, item 2)", () => {
   it("o confortável mostra a conversa e o contato", () => {
     const { container } = montar(false);
@@ -152,7 +166,11 @@ describe("card compacto × confortável (#3461, item 2)", () => {
     expect(within(cartao).getByText(/2\.500/)).toBeInTheDocument();
     expect(within(cartao).getByText(/Marcos/)).toBeInTheDocument();
     // E o tempo na etapa também.
-    expect(within(cartao).getByText(/Negociação/)).toBeInTheDocument();
+    const tempo = cartao.querySelector("[data-tempo-na-etapa]") as HTMLElement;
+    expect(tempo).toHaveTextContent(/na etapa/);
+    // A etapa sai do texto visível (já está no topo da coluna) e fica no title.
+    expect(tempo).not.toHaveTextContent(/Negociação/);
+    expect(tempo).toHaveAttribute("title", expect.stringContaining("Negociação"));
   });
 
   it("o compacto tira do card a conversa e o contato — e é isto que o PR declara", () => {

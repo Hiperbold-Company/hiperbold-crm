@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
@@ -9,6 +10,7 @@ import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 import { useT } from "@/hooks/i18n/useT";
 import { useIdioma } from "@/lib/i18n/IdiomaProvider";
+import { idiomaDoCadastro } from "@/lib/i18n/idiomas";
 import { fusoDoNavegador } from "@/lib/tempo/fuso-do-navegador";
 import {
   signupSchemaDe,
@@ -122,9 +124,11 @@ export function SignupForm({
           password_confirm: values.password_confirm,
         }
       : { ...semAceite, ...(compraLigada ? { aceite_termos } : {}), plano_escolhido: plano ?? undefined, ciclo_escolhido: ciclo ?? undefined };
-    // O idioma desta tela e o fuso do navegador: a empresa nasce com eles
+    // O idioma do visitante e o fuso do navegador: a empresa nasce com eles
     // quando o e-mail for confirmado (`lib/auth/perfil-da-empresa-nova.ts`).
-    const pistas = { idioma, fuso: fusoDoNavegador() };
+    // `idiomaDoCadastro`: a tela pode estar no padrão por corte (espanhol e
+    // inglês fora do seletor), e aí quem decide é o navegador.
+    const pistas = { idioma: idiomaDoCadastro(idioma, navigator.languages), fuso: fusoDoNavegador() };
     const acao = () => signUp(entrada, convite?.token, captcha.token ?? undefined, pistas);
     void enviar(acao, async (res) => {
       // Token de uso único: gasto aqui, o widget gera outro para a próxima tentativa.
@@ -395,9 +399,8 @@ export function SignupForm({
       {!convite && compraLigada && (
         <div className="space-y-1.5">
           <label className="flex items-start gap-2 text-sm">
-            <input
+            <Checkbox
               id="aceite_termos"
-              type="checkbox"
               className="mt-1"
               aria-invalid={errors.aceite_termos ? true : undefined}
               {...register("aceite_termos")}
