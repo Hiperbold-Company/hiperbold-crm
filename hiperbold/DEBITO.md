@@ -4,6 +4,7 @@ Toda pendência do fork da Hiperbold (técnica, conta, custo, terceiro) fica aqu
 
 ## Abertas
 
+- [ ] **D-240 · Webhook WAHA por sessão: pontos restantes da auditoria (18/11/2026, médio).** (1) `authenticated` pode reescrever `waha_session_name`/`webhook_path_token`/`webhook_secret_encrypted`/`provider` em `channel_sessions` pela REST (GRANT ALL + policy de update): um admin aponta a própria linha para uma sessão do WAHA sem linha (nome previsível, ex. `default`) e recebe as mensagens dela. Corrigir com gatilho que recuse essas colunas para anon/authenticated (migration). (2) Replay: `webhook_events_log` guarda corpo, assinatura e token, legíveis por manager+; guardar só hash e não gravar o token. (3) Rota `[token]` sem rate limit, lê 5 MB antes de autenticar. (4) Toggle de grupo pela tela (`lib/grupos/servico.ts` → `setGroupIntake`) faz PUT sem o webhook: se o WAHA mascarar `hmac.key` no GET, a máscara vira a chave até a próxima reconexão.
 - [ ] **D-239 · Exclusão de organização não desliga sessão WAHA (18/11/2026, médio).** `lib/retencao/exclusao-de-organizacao/conexoes.ts` só encerra instâncias UAZAPI; uma sessão WAHA de organização apagada fica viva no servidor. `desligarCanaisInventariados` (`lib/channels/desligar-da-organizacao.ts:144-160`) já sabe desligar o WAHA: ligar no processo de exclusão. Também: as rotas WAHA exigem admin+MFA, as da UAZAPI aceitam gerente (a tela esconde as ações WAHA de quem não é admin).
 
 ### Ajustes do teste de compra do Filipe (15/10/2026)
