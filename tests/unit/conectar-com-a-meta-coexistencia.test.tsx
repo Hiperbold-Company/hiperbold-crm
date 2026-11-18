@@ -1,8 +1,8 @@
 /**
  * O SELETOR DE MODO (padrão x coexistência) do botão "Conectar com a Meta".
  *
- * Quem escolhe "Conexão em coexistência" abre o popup da Meta com
- * `featureType: whatsapp_business_app_onboarding`; quem fica no "Conexão padrão" abre exatamente o
+ * Quem escolhe "Já uso no WhatsApp Business (coexistência)" abre o popup da Meta com
+ * `featureType: whatsapp_business_app_onboarding`; quem fica no "Número novo (conexão padrão)" abre exatamente o
  * fluxo de sempre. O que se prova é o que o `FB.login` RECEBE, no mesmo tique do clique.
  *
  * Roda com: npx vitest run tests/unit/conectar-com-a-meta-coexistencia.test.tsx
@@ -81,8 +81,8 @@ describe("ConectarComAMeta: modo de conexão", () => {
 
   it("padrão (selecionado de início): o FB.login sai como sempre, sem featureType", async () => {
     render(<ConectarComAMeta />);
-    expect(screen.getByTestId("cadastro-meta-modo-padrao").getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByTestId("cadastro-meta-modo-coexistencia").getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByTestId("cadastro-meta-modo-padrao").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByTestId("cadastro-meta-modo-coexistencia").getAttribute("aria-checked")).toBe("false");
     const opts = await clicarQuandoPronto();
     expect(opts.extras).toEqual({ setup: {}, sessionInfoVersion: "3" });
     expect("featureType" in opts.extras).toBe(false);
@@ -96,18 +96,17 @@ describe("ConectarComAMeta: modo de conexão", () => {
     expect(opts.extras).toEqual({ setup: {}, sessionInfoVersion: "3" });
   });
 
-  it("a caixa explicativa muda com a escolha, e só a coexistência traz o aviso do recurso recente", () => {
+  it("cada cartão traz a própria explicação, e só a coexistência abre o aviso do recurso recente", () => {
     render(<ConectarComAMeta />);
-    expect(screen.getByTestId("cadastro-meta-explicacao-padrao").textContent).toMatch(
-      /só pela API oficial/,
-    );
+    expect(screen.getByTestId("cadastro-meta-modo-padrao").textContent).toMatch(/só pela API oficial/);
+    expect(screen.getByTestId("cadastro-meta-modo-coexistencia").textContent).toMatch(/QR Code/);
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
     expect(screen.queryByTestId("cadastro-meta-explicacao-coexistencia")).toBeNull();
 
     fireEvent.click(screen.getByTestId("cadastro-meta-modo-coexistencia"));
     const caixa = screen.getByTestId("cadastro-meta-explicacao-coexistencia");
-    expect(caixa.textContent).toMatch(/QR Code/);
     expect(caixa.textContent).toMatch(/Recurso recente da Meta: se a conexão falhar, use a conexão padrão\./);
-    expect(screen.queryByTestId("cadastro-meta-explicacao-padrao")).toBeNull();
+    expect(screen.getByTestId("cadastro-meta-modo-coexistencia").getAttribute("aria-checked")).toBe("true");
   });
 
   it("os botões de modo ficam desabilitados enquanto o cadastro está em andamento", async () => {
