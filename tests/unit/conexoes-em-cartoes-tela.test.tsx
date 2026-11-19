@@ -122,6 +122,18 @@ const ESTADO_OFICIAL = {
 
 function responder(path: string): unknown {
   if (path === "/api/v1/channels/conexoes") return { data: h.conexoes };
+  if (path === "/api/v1/channels/meta-social/selecao?plataforma=instagram") {
+    return {
+      data: {
+        plataforma: "instagram",
+        expira_em: "2026-11-19T12:10:00Z",
+        contas: [
+          { id: "17841400000000001", nome: null, usuario: "loja", ja_conectada_aqui: false, em_outra_empresa: false },
+          { id: "17841400000000002", nome: null, usuario: "outra", ja_conectada_aqui: false, em_outra_empresa: false },
+        ],
+      },
+    };
+  }
   if (path === `/api/v1/channels/official?id=${OFICIAL.id}`) {
     if (h.falharOficial) throw new Error("falhou");
     return { data: ESTADO_OFICIAL };
@@ -418,6 +430,20 @@ describe("links antigos de aba", () => {
     expect(screen.getByTestId(`cartao-conexao-${INSTAGRAM.id}`).getAttribute("data-destacado")).toBeNull();
     expect(screen.queryByTestId("criar-conexao")).toBeNull();
     expect(h.toast.success).toHaveBeenCalledTimes(1);
+  });
+
+  it("volta do OAuth com várias contas: abre a escolha das páginas, sem Criar e sem toast", async () => {
+    // D-242: a escolha abre pela tela em cartões (a entrada real da volta), não só pelo Criar.
+    h.busca = "aba=sociais&meta_social=escolher&plataforma=instagram";
+    montar();
+    const dialogo = await screen.findByTestId("escolher-contas-meta");
+    expect(within(dialogo).getByText("Escolha quais páginas conectar nesta empresa")).toBeInTheDocument();
+    expect(await within(dialogo).findByText("@loja")).toBeInTheDocument();
+    for (const caixa of within(dialogo).getAllByRole("checkbox")) expect(caixa).not.toBeChecked();
+    expect(within(dialogo).getByTestId("confirmar-contas-meta")).toBeDisabled();
+    expect(screen.queryByTestId("criar-conexao")).toBeNull();
+    expect(h.toast.success).not.toHaveBeenCalled();
+    expect(h.toast.error).not.toHaveBeenCalled();
   });
 
   it("?aba=sociais sem resultado e com plataforma=messenger abre o Criar no Messenger", async () => {

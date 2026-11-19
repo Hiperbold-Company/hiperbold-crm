@@ -19,7 +19,10 @@
  *   6. troca do código, conta(s), conexão.
  *
  * Todo desfecho volta para `/app/connections?aba=sociais&meta_social=ok|erro|parcial
- * &motivo=<código>&n=<quantas contas>&recusadas=<quantas não>`. Os códigos de
+ * &motivo=<código>&n=<quantas contas>&recusadas=<quantas não>`. Com DUAS ou mais
+ * contas descobertas nada é conectado: volta `meta_social=escolher&plataforma=<x>`
+ * com o cookie selado da escolha (`lib/channels/meta-social/selecao.ts`), e a
+ * tela pergunta quais contas são desta empresa (D-242). Os códigos de
  * `motivo` são os de `lib/channels/meta-social/motivos.ts`, o mesmo conjunto
  * que a tela traduz.
  *
@@ -38,21 +41,28 @@ import { configMetaSocial } from "@/lib/channels/meta-social/config";
 import { PLATAFORMAS_META_SOCIAL, caminhoDoCallback, type PlataformaMetaSocial } from "@/lib/channels/meta-social/constantes";
 import { NOME_DO_VINCULO_META_SOCIAL, verificarEstadoMetaSocial, vinculoMetaSocialConfere } from "@/lib/channels/meta-social/estado";
 import {
+  conectarDescobertas,
+  descobrirMessenger,
+  descobrirPelasPaginas,
+  descobrirPeloSistema,
+  type ContaDescoberta,
+} from "@/lib/channels/meta-social/descoberta";
+import {
   ErroDaMeta,
-  contasInstagramConcedidas,
-  contasInstagramPeloDebugToken,
-  paginasComInstagram,
-  paginasMessenger,
   tokenLongoMessenger,
   trocarCodigoLoginUnificado,
   trocarCodigoMessenger,
   usuarioDoFacebook,
   usuarioDoSistema,
-  type ContaDaMeta,
 } from "@/lib/channels/meta-social/oauth";
 import type { MotivoDaVolta } from "@/lib/channels/meta-social/motivos";
-import { ConexaoRecusada, conectarConta, type Ator } from "@/lib/channels/meta-social/store";
-import { redirectUriDe, voltarParaConexoes } from "@/lib/channels/meta-social/volta";
+import {
+  cifrarTokenDaSelecao,
+  selarSelecaoMetaSocial,
+  type ModoDaDescoberta,
+} from "@/lib/channels/meta-social/selecao";
+import { ConexaoRecusada, type Ator } from "@/lib/channels/meta-social/store";
+import { redirectUriDe, voltarParaConexoes, voltarParaEscolher } from "@/lib/channels/meta-social/volta";
 import { env } from "@/lib/env";
 import { supportCallbackWriteAllowed } from "@/lib/impersonate/support";
 import { logger } from "@/lib/logger";
@@ -172,10 +182,15 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const ator: Ator = { userId, authSessionId: estado.authSessionId };
 
   try {
-    // Cada conta concedida vira um canal: no Instagram, cada conta do portfólio
-    // marcada no login (todas com o MESMO token, o do usuário do sistema); no
-    // Messenger, cada Página (com o token dela).
-    let contas: { conta: ContaDaMeta; token: string; paginaId?: string | null }[];
+    // A descoberta mora em `descoberta.ts`, a MESMA que a escolha usa depois:
+    // no Instagram, cada conta do portfólio marcada no login (todas com o MESMO
+    // token, o do usuário do sistema) ou, pela Página, cada conta com o token
+    // da Página; no Messenger, cada Página (com o token dela).
+    let contas: ContaDescoberta[];
+    let modo: ModoDaDescoberta;
+    let tokenFonte: string;
+    /** Quantas Páginas a descoberta pela Página viu (com ou sem Instagram); 0 nos outros modos. */
+    let paginasVistas = 0;
     let expiraEm: string | null = null;
     let autorizadorId: string | null;
     let empresaId: string | null = null;
@@ -193,19 +208,11 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
       // Página: o debug_token dele pode listar a conta do IG, mas um token de
       // usuário não envia pelo /<IG_ID>/messages e vence em horas.
       const ehSuat = Boolean(empresaId);
-      const assigned = ehSuat ? await contasInstagramConcedidas(suat.token).catch(() => null) : null;
-      let concedidas = assigned ?? [];
-      let planoB: Awaited<ReturnType<typeof contasInstagramPeloDebugToken>> | null = null;
-      let planoBFalhou = false;
-      if (ehSuat && concedidas.length === 0) {
-        planoB = await contasInstagramPeloDebugToken(app, suat.token).catch(() => {
-          planoBFalhou = true;
-          return null;
-        });
-        concedidas = planoB?.contas ?? [];
-      }
-      if (concedidas.length > 0) {
-        contas = concedidas.map((conta) => ({ conta, token: suat.token }));
+      const pelaEmpresa = ehSuat ? await descobrirPeloSistema(app, suat.token) : null;
+      if (pelaEmpresa && pelaEmpresa.contas.length > 0) {
+        contas = pelaEmpresa.contas;
+        modo = "instagram_sistema";
+        tokenFonte = suat.token;
         expiraEm = suat.expiraEmSegundos ? new Date(Date.now() + suat.expiraEmSegundos * 1000).toISOString() : null;
         // O /me do SUAT é o usuário do sistema de integração, não a pessoa: a
         // exclusão de dados casa por ele E pela conta (`exclusao.ts`).
@@ -216,8 +223,10 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
         // Token de Página derivado de token LONGO não vence; se o alongamento
         // falhar (o token pode ser SUAT, que não se alonga), segue com o próprio.
         const longo = await tokenLongoMessenger(app, suat.token).catch(() => suat.token);
-        const planoC = await paginasComInstagram(longo).catch(() => null);
-        if (!planoC || planoC.paginas.length === 0) {
+        const planoC = await descobrirPelasPaginas(longo);
+        if (!planoC || planoC.contas.length === 0) {
+          const pistas = pelaEmpresa?.pistas ?? null;
+          const planoB = pistas?.planoB ?? null;
           const alvos = planoB
             ? Object.entries(planoB.alvos)
                 .map(([escopo, n]) => `${escopo}:${n}`)
@@ -227,53 +236,79 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
           return falhou(
             "nenhuma_conta_instagram",
             [
-              `assigned=${!ehSuat ? "-" : assigned ? assigned.length : "falhou"}`,
-              `debug_token=${planoB ? "ok" : planoBFalhou ? "falhou" : "-"}`,
+              `assigned=${!pistas ? "-" : pistas.assigned !== null ? pistas.assigned : "falhou"}`,
+              `debug_token=${planoB ? "ok" : pistas?.planoBFalhou ? "falhou" : "-"}`,
               `escopos=${(planoB?.escopos ?? []).join(",").slice(0, 300)}`,
               `alvos=${alvos}`,
-              `paginas=${planoC ? `${planoC.vistas}/${planoC.paginas.length}` : "falhou"}`,
+              `paginas=${planoC ? `${planoC.vistas}/${planoC.contas.length}` : "falhou"}`,
             ].join(" "),
           );
         }
-        contas = planoC.paginas.map((p) => ({ conta: p.conta, token: p.token, paginaId: p.paginaId }));
+        contas = planoC.contas;
+        paginasVistas = planoC.vistas;
+        modo = "instagram_pagina";
+        tokenFonte = longo;
         expiraEm = null;
         autorizadorId = await usuarioDoFacebook(longo);
       }
     } else {
       const curto = await trocarCodigoMessenger(app, code, redirectUri);
       const longo = await tokenLongoMessenger(app, curto);
-      const paginas = await paginasMessenger(longo);
-      if (paginas.length === 0) return falhou("nenhuma_pagina");
+      contas = await descobrirMessenger(longo);
+      if (contas.length === 0) return falhou("nenhuma_pagina");
+      modo = "messenger";
+      tokenFonte = longo;
       autorizadorId = await usuarioDoFacebook(longo);
-      contas = paginas.map((p) => ({ conta: { id: p.id, nome: p.nome, usuario: null }, token: p.token }));
     }
 
-    // A conta que estourar o limite do plano (ou estiver em outra organização)
-    // não derruba as outras.
-    let conectadas = 0;
-    let recusadas = 0;
-    let primeiraRecusa: MotivoDaVolta | null = null;
-    for (const c of contas) {
-      try {
-        await conectarConta(admin, {
-          organizationId,
+    // Duas ou mais contas: NADA é conectado aqui (D-242). Quem marca "todas as
+    // páginas" na Meta pode alcançar páginas de outros clientes; a tela
+    // pergunta quais são desta empresa, e só `conectarConta` (na confirmação)
+    // assina webhook na Meta. A escolha guarda o token-fonte, não as contas.
+    // Pela Página, o login que alcançou VÁRIAS Páginas também pergunta, mesmo
+    // com uma só tendo Instagram: quem alcança Páginas de vários clientes é
+    // justamente o operador de agência, e a conta certa precisa ser confirmada.
+    if (contas.length > 1 || (modo === "instagram_pagina" && paginasVistas > 1)) {
+      // O token vai cifrado pela chave do BANCO: o cookie sozinho não entrega o token.
+      const tokenFonteCifrado = await cifrarTokenDaSelecao(admin, tokenFonte);
+      if (!tokenFonteCifrado) return falhou("cifra_indisponivel");
+      const selada = selarSelecaoMetaSocial(
+        {
           plataforma,
-          conta: c.conta,
-          token: c.token,
+          organizationId,
+          userId,
+          ...(estado.authSessionId ? { authSessionId: estado.authSessionId } : {}),
+          modo,
+          tokenFonteCifrado,
           expiraEm,
-          ator,
           autorizadorId,
           empresaId,
-          paginaId: c.paginaId ?? null,
-        });
-        conectadas += 1;
-      } catch (err) {
-        if (!(err instanceof ConexaoRecusada)) throw err;
-        recusadas += 1;
-        // Limite do plano tem precedência na mensagem: é o que a pessoa resolve.
-        if (primeiraRecusa === null || err.motivo === "limite_do_plano") primeiraRecusa = err.motivo;
-      }
+        },
+        { segredo: env.INTERNAL_SECRET, agora: new Date() },
+      );
+      // Só a contagem: ids e nomes das contas podem ser de outros clientes.
+      await audit({
+        action: "channel.meta_social_selection_opened",
+        organizationId,
+        actorUserId: userId,
+        actorAuthSessionId: estado.authSessionId,
+        resourceType: "channel_session",
+        metadata: { plataforma, contas: contas.length, ...(paginasVistas ? { paginas_vistas: paginasVistas } : {}) },
+      });
+      return voltarParaEscolher(plataforma, selada);
     }
+
+    // Uma conta só: conecta direto. A que estourar o limite do plano (ou
+    // estiver em outra organização) volta como recusa.
+    const { conectadas, recusadas, primeiraRecusa } = await conectarDescobertas(admin, {
+      organizationId,
+      plataforma,
+      contas,
+      expiraEm,
+      ator,
+      autorizadorId,
+      empresaId,
+    });
     if (primeiraRecusa && conectadas === 0) return falhou(primeiraRecusa);
     if (primeiraRecusa) {
       // Recusa PARCIAL: umas contas entraram, outras não. Dizer só "erro"

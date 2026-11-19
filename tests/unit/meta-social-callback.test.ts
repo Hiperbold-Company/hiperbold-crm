@@ -166,7 +166,10 @@ describe("login unificado: URL e configuração", () => {
 });
 
 describe("callback do Instagram (login unificado)", () => {
-  it("conecta TODAS as contas concedidas (paginadas) com o SUAT, assina o webhook e queima o nonce", async () => {
+  it("duas ou mais contas concedidas (paginadas): NÃO conecta nenhuma, volta para a escolha e queima o nonce", async () => {
+    // D-242: conectar tudo o que o token alcança levou 66 páginas de outros
+    // clientes para a empresa errada. A conexão das escolhidas, com o SUAT e a
+    // assinatura do webhook, está em `meta-social-escolha-de-contas.test.ts`.
     const banco = novoBanco();
     h.db = banco.db;
     const cookie = assinarVinculoMetaSocial("n-1", SEGREDO);
@@ -176,42 +179,22 @@ describe("callback do Instagram (login unificado)", () => {
     );
 
     const destino = await chamarComState(state, cookie);
-    expect(destino).toContain("meta_social=ok");
-    expect(destino).toContain("n=2");
-    const sessoes = banco.t("channel_sessions");
-    expect(sessoes.map((s) => s.meta_social_account_id).sort()).toEqual(["IG-1", "IG-2"]);
-    for (const s of sessoes) {
-      expect(s).toMatchObject({
-        organization_id: ORG,
-        provider: "meta_social",
-        meta_social_platform: "instagram",
-        meta_social_token_encrypted: "cifrado:SUAT",
-        meta_social_token_expires_at: null,
-        status: "WORKING",
-      });
-      expect(s.metadata).toMatchObject({ meta_autorizador_id: "SU-1", meta_client_business_id: "BIZ-1" });
-    }
-
-    // Tudo em graph.facebook.com; token nunca na URL; assinatura com os campos no corpo.
+    expect(destino).toContain("meta_social=escolher");
+    expect(destino).toContain("plataforma=instagram");
+    expect(banco.t("channel_sessions")).toHaveLength(0);
+    expect(meta.chamadas.some((c) => c.url.includes("/subscribed_apps"))).toBe(false);
+    // As duas páginas da listagem foram lidas (a escolha mostra as duas contas).
+    expect(meta.chamadas.filter((c) => c.url.includes("/me/assigned_instagram_accounts"))).toHaveLength(2);
     for (const c of meta.chamadas) {
       expect(c.url.startsWith("https://graph.facebook.com/v26.0/")).toBe(true);
       expect(c.url).not.toContain("SUAT");
       expect(c.url).not.toContain("segredo-do-app-da-meta");
     }
-    const assinaturas = meta.chamadas.filter((c) => c.url.includes("/subscribed_apps"));
-    expect(assinaturas.map((c) => c.url).sort()).toEqual([
-      "https://graph.facebook.com/v26.0/IG-1/subscribed_apps",
-      "https://graph.facebook.com/v26.0/IG-2/subscribed_apps",
-    ]);
-    expect(new URLSearchParams(String(assinaturas[0]!.init?.body)).get("subscribed_fields")).toBe(
-      "messages,messaging_postbacks,messaging_seen,comments",
-    );
-    expect((assinaturas[0]!.init?.headers as Record<string, string>).authorization).toBe("Bearer SUAT");
 
     const replay = await chamarComState(state, cookie);
     expect(replay).toContain("meta_social=erro");
     expect(replay).toContain("motivo=retorno_nao_verificavel");
-    expect(banco.t("channel_sessions")).toHaveLength(2);
+    expect(banco.t("channel_sessions")).toHaveLength(0);
   });
 
   it("lista vazia, mas a conta está no granular_scopes do debug_token: conecta pelo plano B", async () => {
@@ -238,7 +221,8 @@ describe("callback do Instagram (login unificado)", () => {
           access_token: "TOKEN-DA-PAGINA",
           instagram_business_account: { id: "17841400000000009", username: "loja_ig" },
         },
-        { id: "PAG-SEM-IG", name: "Outra", access_token: "TOKEN-OUTRA" },
+        // Só UMA Página vista: com duas ou mais, a volta abre a escolha (D-242, B1),
+        // ver `meta-social-escolha-de-contas.test.ts`.
       ],
     );
     vi.stubGlobal("fetch", meta.fetcher);
@@ -369,17 +353,19 @@ describe("callback do Instagram (login unificado)", () => {
     );
   });
 
-  it("limite do plano numa das contas: volta parcial, a outra fica conectada", async () => {
+  it("limite do plano com UMA conta: erro limite_do_plano, nada conectado", async () => {
+    // A recusa parcial (umas entram, outras não) só existe com 2+ contas, e
+    // essas passam pela escolha: ver `meta-social-escolha-de-contas.test.ts`.
     const banco = novoBanco();
     h.db = banco.db;
     h.podeCriar.mockReset();
-    h.podeCriar.mockResolvedValueOnce({ pode: true }).mockResolvedValue({ pode: false });
+    h.podeCriar.mockResolvedValue({ pode: false });
+    meta = metaFalsa([[{ id: "IG-1", username: "loja" }]]);
+    vi.stubGlobal("fetch", meta.fetcher);
     const destino = await chamar("n-6");
-    expect(destino).toContain("meta_social=parcial");
-    expect(destino).toContain("n=1");
-    expect(destino).toContain("recusadas=1");
+    expect(destino).toContain("meta_social=erro");
     expect(destino).toContain("motivo=limite_do_plano");
-    expect(banco.t("channel_sessions")).toHaveLength(1);
+    expect(banco.t("channel_sessions")).toHaveLength(0);
   });
 
   it("reconectar a mesma conta na mesma organização atualiza a linha, sem duplicar", async () => {
