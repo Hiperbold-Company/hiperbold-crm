@@ -37,6 +37,7 @@ import { validateFlowForPublish } from "@/lib/followup/validate-publish";
 import * as canal from "./canal-de-comentarios";
 import { comentarioDoInstagramNoPlano, grafoUsaComentarioDoInstagram } from "./comentario-no-plano";
 import { criarExecutorDeEfeitos } from "./efeitos";
+import { versaoDaResposta } from "./efeitos/instagram";
 import type { FatosDaAutomacao } from "./fatos";
 import { casaGatilho, fatosDoEvento, varsDoGatilho, type FatoDeComentario } from "./gatilhos";
 import { aplicarGatilhosDeAutomacao, type GatilhosDb } from "./gatilhos.handler";
@@ -406,6 +407,55 @@ describe("Responder no comentário", () => {
       ok: false,
       erro: "comentario_nao_encontrado",
     });
+  });
+});
+
+describe("Responder no comentário: várias versões sorteadas", () => {
+  const VERSOES = [
+    "Já está no seu Direct!",
+    "Enviei no seu Direct!",
+    "Enviei o que você pediu no seu Direct!",
+  ];
+  const node = no("instagram_public_reply", { text: VERSOES[0], variations: VERSOES.slice(1) });
+
+  it("a versão sai pelo número sorteado: o começo do intervalo é o texto principal, o fim é a última", () => {
+    const config = { text: VERSOES[0]!, variations: VERSOES.slice(1) };
+    expect(versaoDaResposta(config, 0)).toBe(VERSOES[0]);
+    expect(versaoDaResposta(config, 0.34)).toBe(VERSOES[1]);
+    expect(versaoDaResposta(config, 0.999)).toBe(VERSOES[2]);
+  });
+
+  it("sem versões extras (automação antiga), é sempre o texto principal", () => {
+    expect(versaoDaResposta({ text: "Única" }, 0.999)).toBe("Única");
+    expect(versaoDaResposta({ text: "Única", variations: [] }, 0.5)).toBe("Única");
+  });
+
+  it("versão em branco nunca é sorteada", () => {
+    expect(versaoDaResposta({ text: "Principal", variations: ["   "] }, 0.999)).toBe("Principal");
+  });
+
+  it("versão sorteada que fica vazia depois das variáveis cai no texto principal", async () => {
+    const soVariavel = no("instagram_public_reply", {
+      text: "Principal",
+      variations: ["{{contato.campo_que_nao_existe}}"],
+    });
+    for (let i = 0; i < 20; i++) {
+      publica.mockResolvedValueOnce({ status: "na_fila" });
+      expect((await executor.executar(pedido(soVariavel))).desfecho).toEqual({ ok: true });
+      expect(publica.mock.calls.at(-1)![1].texto).toBe("Principal");
+    }
+  });
+
+  it("o canal recebe uma das versões, e ao longo de vários comentários aparecem todas", async () => {
+    const enviados = new Set<string>();
+    for (let i = 0; i < 60; i++) {
+      publica.mockResolvedValueOnce({ status: "na_fila" });
+      expect((await executor.executar(pedido(node))).desfecho).toEqual({ ok: true });
+      const texto = publica.mock.calls.at(-1)![1].texto;
+      expect(VERSOES).toContain(texto);
+      enviados.add(texto);
+    }
+    expect(enviados.size).toBe(VERSOES.length);
   });
 });
 

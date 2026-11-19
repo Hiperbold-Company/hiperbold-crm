@@ -14734,5 +14734,11 @@
   "Já conectada em outra empresa": "Already connected in another company",
   "Já conectada aqui": "Already connected here",
   "Marque no máximo 20 páginas por vez.": "Select at most 20 pages at a time.",
-  "Esta escolha foi aberta em outra sessão. Clique em Conectar de novo.": "This selection was opened in another session. Click Connect again."
+  "Esta escolha foi aberta em outra sessão. Clique em Conectar de novo.": "This selection was opened in another session. Click Connect again.",
+  "Versão 1": "Version 1",
+  "Remover versão": "Remove version",
+  "Adicionar outra versão": "Add another version",
+  "Com mais de uma versão, cada comentário recebe uma delas, sorteada. Variar o texto ajuda a não parecer spam para o Instagram.": "With more than one version, each comment gets one of them at random. Varying the text helps avoid looking like spam to Instagram.",
+  "versões": "versions",
+  "Limite de 10 versões": "Limit of 10 versions"
 }

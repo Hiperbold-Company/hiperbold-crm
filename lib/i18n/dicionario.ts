@@ -28469,6 +28469,15 @@ export const DICIONARIO: Traducoes = {
     es: "Responder todos los comentarios en público la Meta lo interpreta como spam. Úsalo con moderación.",
   },
   "Resposta no comentário": { es: "Respuesta en el comentario" },
+  "Versão 1": { es: "Versión 1" },
+  "Remover versão": { es: "Quitar versión" },
+  "Adicionar outra versão": { es: "Agregar otra versión" },
+  "Com mais de uma versão, cada comentário recebe uma delas, sorteada. Variar o texto ajuda a não parecer spam para o Instagram.":
+    {
+      es: "Con más de una versión, cada comentario recibe una de ellas, sorteada. Variar el texto ayuda a no parecer spam para Instagram.",
+    },
+  "versões": { es: "versiones" },
+  "Limite de 10 versões": { es: "Límite de 10 versiones" },
   "Se houver resposta privada, ela vem antes desta no caminho.": {
     es: "Si hay respuesta privada, va antes de esta en el camino.",
   },
