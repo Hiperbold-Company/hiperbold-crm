@@ -4,9 +4,10 @@
  *
  * Semântica da lixeira, de propósito (não existe "outra forma de apagar"):
  *  1. contato com vínculo RESTRICT que a exclusão não apaga (`VINCULOS_RESTRICT_NAO_APAGADOS`,
- *     hoje a agenda) NÃO é apagado e volta como "bloqueado", com o histórico intacto;
- *  2. apaga as mensagens, as conversas e a ficha. Os negócios (`crm_leads.contact_id`) ficam,
- *     sem contato (`ON DELETE SET NULL`);
+ *     a agenda e o negócio em aberto) NÃO é apagado e volta como "bloqueado", com o histórico
+ *     intacto;
+ *  2. apaga as mensagens, as conversas e a ficha. Os negócios ENCERRADOS (ganho/perdido,
+ *     `crm_leads.contact_id`) ficam, sem contato (`ON DELETE SET NULL`); negócio em aberto barra (item 1);
  *  3. emite `contact.deleted` por contato apagado (quem assina webhook de saída recebe o mesmo
  *     evento da lixeira).
  * É apagamento DEFINITIVO (não anonimiza, não tem lixeira): quem quer preservar histórico
@@ -107,11 +108,13 @@ export async function excluirContatosEmLote(
     // voltou como bloqueado. Falha da checagem não autoriza seguir.
     const barrados = new Set<string>();
     for (const vinculo of VINCULOS_RESTRICT_NAO_APAGADOS) {
-      const { data, error } = await supabase
+      let consulta = supabase
         .from(vinculo.tabela)
         .select("contact_id")
         .eq("organization_id", organizationId)
         .in("contact_id", vivos);
+      if (vinculo.filtro) consulta = consulta.eq(vinculo.filtro.coluna, vinculo.filtro.valor);
+      const { data, error } = await consulta;
       if (error) {
         resultado.interrompido = true;
         resultado.falhou.push(...vivos);

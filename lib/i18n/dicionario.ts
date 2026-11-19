@@ -2866,6 +2866,11 @@ export const DICIONARIO: Traducoes = {
   "Revisar modelos do canal": { es: "Revisar plantillas del canal" },
   "Abrir uma conversa afetada": { es: "Abrir una conversación afectada" },
   "Abrir Agenda": { es: "Abrir Agenda" },
+  "Este contato tem 1 negócio em aberto no Pipeline. Ganhe, perca ou passe o negócio para outro contato antes de excluir.": { es: "Este contacto tiene 1 negocio abierto en el Pipeline. Gana, pierde o pasa el negocio a otro contacto antes de eliminar." },
+  "Este contato tem {n} negócios em aberto no Pipeline. Ganhe, perca ou passe os negócios para outro contato antes de excluir.": { es: "Este contacto tiene {n} negocios abiertos en el Pipeline. Gana, pierde o pasa los negocios a otro contacto antes de eliminar." },
+  "Abrir Pipeline": { es: "Abrir Pipeline" },
+  "não foram excluídos: têm negócio em aberto ou compromisso na agenda.": { es: "no se eliminaron: tienen un negocio abierto o una cita en la agenda." },
+  "Isso remove os contatos selecionados e as conversas e mensagens deles. Os negócios encerrados continuam, sem contato. Contato com negócio em aberto ou compromisso na agenda não é excluído. Esta ação não pode ser desfeita.": { es: "Esto elimina los contactos seleccionados y sus conversaciones y mensajes. Los negocios cerrados continúan, sin contacto. Un contacto con negocio abierto o cita en la agenda no se elimina. Esta acción no se puede deshacer." },
   "Este contato tem 1 compromisso na Agenda. Cancele ou apague o compromisso antes de excluir.": {
     es: "Este contacto tiene 1 cita en la Agenda. Cancela o elimina la cita antes de eliminar el contacto.",
   },

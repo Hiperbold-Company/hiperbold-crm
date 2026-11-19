@@ -53,7 +53,7 @@ export function ExcluirContatosEmLoteDialog({
           </AlertDialogTitle>
           <AlertDialogDescription>
             {t(
-              "Isso remove os contatos selecionados e as conversas e mensagens deles. Os negócios continuam, sem contato. Contato com compromisso na agenda não é excluído. Esta ação não pode ser desfeita.",
+              "Isso remove os contatos selecionados e as conversas e mensagens deles. Os negócios encerrados continuam, sem contato. Contato com negócio em aberto ou compromisso na agenda não é excluído. Esta ação não pode ser desfeita.",
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>

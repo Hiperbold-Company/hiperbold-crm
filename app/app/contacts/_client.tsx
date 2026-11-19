@@ -278,7 +278,7 @@ export function ContactsListClient() {
       }
       if (r.bloqueados > 0) {
         toast.warning(
-          `${r.bloqueados.toLocaleString("pt-BR")} ${t("não foram excluídos: têm compromisso na agenda.")}`,
+          `${r.bloqueados.toLocaleString("pt-BR")} ${t("não foram excluídos: têm negócio em aberto ou compromisso na agenda.")}`,
         );
       }
       limparSelecao();
