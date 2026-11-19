@@ -23,7 +23,7 @@ bash hiperbold/scripts/homologar.sh <branch> --script-local  # usa o homologar-r
 
 | Peça | Onde |
 |---|---|
-| App, APIs do Supabase (mesma origem, via Caddy) | `127.0.0.1:3400` |
+| App, APIs do Supabase (mesma origem, via Caddy) | `127.0.0.1:3490` |
 | Postgres da prévia | `127.0.0.1:16400` (usuário/senha padrão da CLI: `postgres`) |
 | Kong do Supabase (direto) | `127.0.0.1:55321` |
 | worker, scheduler, Redis, SRH | sem porta no host |
@@ -55,8 +55,8 @@ super-admin.
 
 ## Endereço público
 
-`HOMOLOG_ORIGEM` vazio = `http://127.0.0.1:3400` (Windows, ou do Mac com
-`ssh -L 3400:127.0.0.1:3400 filipe@hiperbold-homolog`). Quando o túnel publicar
+`HOMOLOG_ORIGEM` vazio = `http://127.0.0.1:3490` (Windows, ou do Mac com
+`ssh -L 3490:127.0.0.1:3490 filipe@hiperbold-homolog`). Quando o túnel publicar
 `previa-crm.hiperbold.com.br`, ponha `HOMOLOG_ORIGEM=https://previa-crm.hiperbold.com.br` no
 `.env.homolog` e rode de novo (o Supabase reinicia sozinho para o Auth aceitar a origem nova, dados mantidos): o navegador fala com app e Supabase por essa origem.
 

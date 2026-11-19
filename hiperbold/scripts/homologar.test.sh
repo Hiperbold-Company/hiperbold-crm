@@ -35,7 +35,7 @@ confere "branch com ; recusa" 2 'main;rm -rf ~'
 confere "branch com espaço recusa" 2 'main x'
 confere "branch com .. recusa" 2 'a..b'
 confere "branch começando com - recusa" 2 -- '-x'
-HOMOLOG_PORTA_WEB='3400;id' confere "porta de teste inválida recusa" 2 main
+HOMOLOG_PORTA_WEB='3490;id' confere "porta de teste inválida recusa" 2 main
 [ ! -s "$SSH_LOG" ] && echo "ok   nada recusado chegou ao ssh" || { echo "FAIL ssh chamado em caso recusado"; falhas=$((falhas+1)); }
 
 confere "branch válida com barra passa" 0 feat/homologar --zerar --script-local

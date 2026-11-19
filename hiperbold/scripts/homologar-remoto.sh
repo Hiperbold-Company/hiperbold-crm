@@ -10,7 +10,7 @@
 #   2. Dados de exemplo da "Clínica Demonstração" (scripts/demo-site/02 e 03) e
 #      o dono pelo scripts/bootstrap-owner.ts, como o install.sh faz.
 #   3. app + worker + scheduler + Redis/SRH construídos AQUI a partir do clone,
-#      atrás de um Caddy em 127.0.0.1:3400 que serve app e APIs do Supabase na
+#      atrás de um Caddy em 127.0.0.1:3490 que serve app e APIs do Supabase na
 #      mesma origem (como o Caddyfile.single-server).
 #
 # Tudo o que é gerado mora em ~/homologacao, fora do clone (o reset --hard do
@@ -35,9 +35,9 @@ PROJETO="hiperbold-homolog"          # project_id da CLI, nome do compose e da r
 REDE="hiperbold-homolog"
 SB_CLI="npx --yes supabase@2.117.0"  # a mesma versão que os scripts do repo usam
 # Portas fixas da prévia do CRM (~/.claude/regras/hiperbold-homolog.md):
-# app 3400 e banco 16400. 3500 e 16500 ficam reservadas, não usar.
-# HOMOLOG_PORTA_WEB existe só para teste quando a 3400 estiver ocupada.
-PORTA_WEB="${HOMOLOG_PORTA_WEB:-3400}"
+# app 3490 e banco 16400. 3500 e 16500 ficam reservadas, não usar.
+# HOMOLOG_PORTA_WEB existe só para teste quando a 3490 estiver ocupada.
+PORTA_WEB="${HOMOLOG_PORTA_WEB:-3490}"
 PORTA_DB=16400                        # Postgres do Supabase (só 127.0.0.1)
 PORTA_API=55321                       # Kong do Supabase (só 127.0.0.1)
 PORTA_SHADOW=55320

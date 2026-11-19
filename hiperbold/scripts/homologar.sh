@@ -41,7 +41,7 @@ if ! [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || [[ "$BRANCH" == -* || "$BRANCH" ==
   exit 2
 fi
 
-# Só para teste, quando a 3400 estiver ocupada: HOMOLOG_PORTA_WEB=<porta>.
+# Só para teste, quando a 3490 estiver ocupada: HOMOLOG_PORTA_WEB=<porta>.
 PREFIXO=""
 if [ -n "${HOMOLOG_PORTA_WEB:-}" ]; then
   [[ "$HOMOLOG_PORTA_WEB" =~ ^[0-9]{4,5}$ ]] || { echo "HOMOLOG_PORTA_WEB inválida" >&2; exit 2; }
