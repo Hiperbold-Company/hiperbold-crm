@@ -24,7 +24,7 @@ const dados = {
   userId: USER,
   authSessionId: "sessao-1",
   modo: "instagram_sistema" as const,
-  tokenFonte: "SUAT-DO-CLIENTE",
+  tokenFonteCifrado: "\\xc30d04070302-cifrado-pelo-banco",
   expiraEm: "2027-01-01T00:00:00.000Z",
   autorizadorId: "SU-1",
   empresaId: "BIZ-1",
@@ -39,9 +39,8 @@ describe("escolha pendente selada", () => {
     const lida = abrir(valor);
     expect(lida).toMatchObject({ ...dados, expiraEmMs: AGORA.getTime() + VALIDADE_DA_SELECAO_MS });
     expect(lida?.nonce).toMatch(/^[0-9a-f]{32}$/);
-    // Cifrada: o token não aparece no valor do cookie.
-    expect(valor).not.toContain("SUAT");
-    expect(Buffer.from(valor, "base64url").toString("latin1")).not.toContain("SUAT-DO-CLIENTE");
+    // Cifrada: nem o token já cifrado pelo banco aparece no valor do cookie.
+    expect(Buffer.from(valor, "base64url").toString("latin1")).not.toContain("cifrado-pelo-banco");
     // Duas seladas da mesma carga têm nonces diferentes.
     expect(abrir(selarSelecaoMetaSocial(dados, { segredo: SEGREDO, agora: AGORA }))?.nonce).not.toBe(lida?.nonce);
   });
@@ -113,12 +112,17 @@ describe("escolha pendente selada", () => {
     ).toThrow();
   });
 
-  it("um token de 400 caracteres cabe no cookie; um enorme é recusado ao selar", () => {
-    const valor = selarSelecaoMetaSocial({ ...dados, tokenFonte: "E".repeat(400) }, { segredo: SEGREDO, agora: AGORA });
+  it("um token de ~600 caracteres cifrado pelo banco (hex de ~1400) cabe no cookie inteiro abaixo de 4000 bytes", () => {
+    // `pgp_sym_encrypt` devolve bytea: "\x" + 2 caracteres por byte, com ~70 bytes de envelope.
+    const cifrado = `\\x${"ab".repeat(700)}`;
+    const valor = selarSelecaoMetaSocial({ ...dados, tokenFonteCifrado: cifrado }, { segredo: SEGREDO, agora: AGORA });
     expect(valor.length).toBeLessThan(TETO_DA_SELECAO);
-    expect(abrir(valor)?.tokenFonte).toHaveLength(400);
+    // Nome, valor e os atributos que `voltarParaEscolher` grava.
+    const atributos = "; Path=/api/v1/channels/meta-social/selecao; Max-Age=600; HttpOnly; Secure; SameSite=Lax";
+    expect(Buffer.byteLength(`crm_meta_social_selecao=${valor}${atributos}`)).toBeLessThan(4000);
+    expect(abrir(valor)?.tokenFonteCifrado).toBe(cifrado);
     expect(() =>
-      selarSelecaoMetaSocial({ ...dados, tokenFonte: "E".repeat(4000) }, { segredo: SEGREDO, agora: AGORA }),
+      selarSelecaoMetaSocial({ ...dados, tokenFonteCifrado: "E".repeat(4000) }, { segredo: SEGREDO, agora: AGORA }),
     ).toThrow();
   });
 });

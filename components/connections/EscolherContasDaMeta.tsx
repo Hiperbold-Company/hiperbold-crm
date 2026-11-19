@@ -54,6 +54,8 @@ function fraseDoErro(err: unknown, t: (s: string) => string): string {
     return t("A escolha das páginas expirou. Clique em Conectar de novo.");
   if (codigo === "selecao_de_outra_empresa")
     return t("Esta escolha foi aberta em outra empresa. Volte para ela, ou clique em Conectar de novo nesta empresa.");
+  if (codigo === "selecao_de_outra_sessao")
+    return t("Esta escolha foi aberta em outra sessão. Clique em Conectar de novo.");
   return t("Não foi possível carregar as páginas. Tente de novo.");
 }
 

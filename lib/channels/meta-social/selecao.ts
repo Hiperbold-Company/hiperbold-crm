@@ -9,7 +9,7 @@
  * na volta: a tela pergunta quais são desta empresa.
  *
  * O que o cookie guarda: só o TOKEN-FONTE (o já trocado pelo `code`, que é de
- * uso único) e o modo da descoberta, mais o que `conectarConta` precisa e o
+ * uso único), CIFRADO pela chave do banco antes de selar, e o modo da descoberta, mais o que `conectarConta` precisa e o
  * callback calculou. Os tokens de página não cabem (66 deles passam dos 4 KB
  * de um cookie): a listagem e a confirmação REDESCOBREM com o token-fonte
  * (`descoberta.ts`).
@@ -23,6 +23,9 @@
  */
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { decryptWebhookSecret, encryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { ehPlataformaMetaSocial, type PlataformaMetaSocial } from "./constantes";
 
 /** O ramo da descoberta que achou as contas (ver `descoberta.ts`). */
@@ -49,6 +52,19 @@ const VERSAO = "v1";
 const TAMANHO_DO_IV = 12;
 const TAMANHO_DA_TAG = 16;
 /**
+ * Cifra o token-fonte com a chave do BANCO (a mesma do token das conexões).
+ * `null` = cifra indisponível: o chamador recusa, nunca sela o token em claro.
+ */
+export async function cifrarTokenDaSelecao(admin: SupabaseClient, token: string): Promise<string | null> {
+  return encryptWebhookSecret(admin, token);
+}
+
+/** Decifra o token-fonte da escolha. `null` = a chave do banco não abre (ou está fora). */
+export async function decifrarTokenDaSelecao(admin: SupabaseClient, cifrado: string): Promise<string | null> {
+  return decryptWebhookSecret(admin, cifrado);
+}
+
+/**
  * Teto do valor selado. Um cookie inteiro (nome, valor e atributos) cabe em
  * 4096 bytes; acima disso o navegador o descarta calado e a escolha some.
  * Quem sela recusa antes de gravar; quem abre recusa o que passa disso.
@@ -63,8 +79,13 @@ export interface SelecaoMetaSocial {
   nonce: string;
   expiraEmMs: number;
   modo: ModoDaDescoberta;
-  /** O token que a descoberta usa (SUAT ou token de usuário longo). NUNCA sai para a tela. */
-  tokenFonte: string;
+  /**
+   * O token que a descoberta usa (SUAT ou token de usuário longo), JÁ CIFRADO
+   * pela chave do banco (`fn_encrypt_oauth`, a mesma de
+   * `meta_social_token_encrypted`). Quem tem só o `INTERNAL_SECRET` abre o
+   * cookie e continua sem o token. Ver `cifrarTokenDaSelecao`/`decifrarTokenDaSelecao`.
+   */
+  tokenFonteCifrado: string;
   /** Validade do token gravada na conexão (ISO), ou `null` quando não vence. */
   expiraEm: string | null;
   autorizadorId: string | null;
@@ -89,7 +110,7 @@ export function selarSelecaoMetaSocial(
 ): string {
   const segredo = segredoValido(opcoes.segredo);
   if (!dados.organizationId || !dados.userId) throw new Error("escolha sem organização ou usuário");
-  if (!dados.tokenFonte) throw new Error("escolha sem token");
+  if (!dados.tokenFonteCifrado) throw new Error("escolha sem token");
   if (plataformaDoModo(dados.modo) !== dados.plataforma) throw new Error("modo de outra plataforma");
   const nonce = opcoes.nonce?.trim() || randomBytes(16).toString("hex");
   const carga = JSON.stringify({
@@ -100,7 +121,7 @@ export function selarSelecaoMetaSocial(
     n: nonce,
     e: opcoes.agora.getTime() + VALIDADE_DA_SELECAO_MS,
     m: dados.modo,
-    t: dados.tokenFonte,
+    t: dados.tokenFonteCifrado,
     x: dados.expiraEm,
     a: dados.autorizadorId,
     b: dados.empresaId,
@@ -152,10 +173,10 @@ export function abrirSelecaoMetaSocial(
   const organizationId = texto(carga.o);
   const userId = texto(carga.u);
   const nonce = texto(carga.n);
-  const tokenFonte = texto(carga.t);
+  const tokenFonteCifrado = texto(carga.t);
   const authSessionId = texto(carga.s);
   const expiraEmMs = typeof carga.e === "number" ? carga.e : Number.NaN;
-  if (!organizationId || !userId || !nonce || !tokenFonte || !Number.isFinite(expiraEmMs)) return null;
+  if (!organizationId || !userId || !nonce || !tokenFonteCifrado || !Number.isFinite(expiraEmMs)) return null;
   if (opcoes.agora.getTime() > expiraEmMs) return null;
   return {
     plataforma,
@@ -164,7 +185,7 @@ export function abrirSelecaoMetaSocial(
     nonce,
     expiraEmMs,
     modo,
-    tokenFonte,
+    tokenFonteCifrado,
     expiraEm: textoOuNulo(carga.x),
     autorizadorId: textoOuNulo(carga.a),
     empresaId: textoOuNulo(carga.b),

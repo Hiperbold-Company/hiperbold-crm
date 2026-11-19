@@ -6,13 +6,18 @@
  *          empresa. Nenhum token sai, nem o nome de outra organização.
  *   POST   `{ ids }` conecta SÓ as marcadas. Os ids são filtro sobre o que a
  *          redescoberta devolve: id fora dele é ignorado.
- *   DELETE cancela: apaga o cookie, sem efeito na Meta.
+ *   DELETE cancela: queima o nonce (a escolha não vale mais em lugar nenhum) e
+ *          apaga o cookie, sem efeito na Meta.
  *
  * Caminho COM sessão (não está em `lib/auth/public-paths.ts`): a chamada parte
  * da tela, no nosso próprio site. A escolha vem do cookie selado
- * (`lib/channels/meta-social/selecao.ts`), e a organização e a pessoa dele têm
- * de ser as da sessão ATUAL: quem troca de empresa no mesmo navegador não
- * conecta na empresa nova a escolha aberta na anterior.
+ * (`lib/channels/meta-social/selecao.ts`), e a organização, a pessoa e a SESSÃO
+ * DE LOGIN dele têm de ser as da sessão atual: quem troca de empresa no mesmo
+ * navegador não conecta na empresa nova a escolha aberta na anterior, e uma
+ * cópia do cookie não vale noutra sessão.
+ *
+ * O token-fonte vem cifrado pela chave do BANCO dentro do cookie; só aqui, com
+ * o cliente de serviço, ele é decifrado.
  *
  * A confirmação queima o nonce da escolha em `calendar_oauth_nonces` antes de
  * conectar (23505 = já usada): a mesma escolha não conecta duas vezes.
@@ -34,6 +39,7 @@ import { ErroDaMeta } from "@/lib/channels/meta-social/oauth";
 import {
   NOME_DA_SELECAO_META_SOCIAL,
   abrirSelecaoMetaSocial,
+  decifrarTokenDaSelecao,
   type SelecaoMetaSocial,
 } from "@/lib/channels/meta-social/selecao";
 import { situacaoDasContas } from "@/lib/channels/meta-social/store";
@@ -58,27 +64,42 @@ const corpo = z.object({
 
 const REFACA = "Clique em Conectar de novo para escolher as contas.";
 
-type Leitura =
-  | { ok: true; selecao: SelecaoMetaSocial; plataforma: PlataformaMetaSocial }
-  | { ok: false; response: Response };
+type Admin = ReturnType<typeof createAdminClient>;
 
-/** Abre o cookie e confere que a escolha é desta organização e desta pessoa. */
-function lerSelecao(req: NextRequest, auth: { orgId: string; userId: string }, requestId: string): Leitura {
-  const lido = consulta.safeParse({ plataforma: req.nextUrl.searchParams.get("plataforma") });
-  if (!lido.success) {
-    return { ok: false, response: fail("validation_error", "Plataforma inválida.", 400, { requestId, headers }) };
-  }
-  const { plataforma } = lido.data;
-  let selecao: SelecaoMetaSocial | null = null;
+type Leitura =
+  | { ok: true; selecao: SelecaoMetaSocial; plataforma: PlataformaMetaSocial; tokenFonte: string; sessaoAtual: string }
+  /** `recusa` = a escolha existe mas não é desta empresa/pessoa/sessão (vai para a trilha). */
+  | { ok: false; response: Response; recusa?: string };
+
+function abrirDoCookie(req: NextRequest, plataforma: PlataformaMetaSocial): SelecaoMetaSocial | null {
   try {
-    selecao = abrirSelecaoMetaSocial(req.cookies.get(NOME_DA_SELECAO_META_SOCIAL)?.value, {
+    return abrirSelecaoMetaSocial(req.cookies.get(NOME_DA_SELECAO_META_SOCIAL)?.value, {
       segredo: env.INTERNAL_SECRET,
       agora: new Date(),
       plataforma,
     });
   } catch {
-    selecao = null;
+    return null;
   }
+}
+
+/**
+ * Abre o cookie e confere que a escolha é desta organização, desta pessoa e
+ * desta sessão de login; então decifra o token-fonte. Nada aqui tem efeito: a
+ * escolha só se gasta depois, no POST.
+ */
+async function lerSelecao(
+  req: NextRequest,
+  admin: Admin,
+  auth: { orgId: string; userId: string },
+  requestId: string,
+): Promise<Leitura> {
+  const lido = consulta.safeParse({ plataforma: req.nextUrl.searchParams.get("plataforma") });
+  if (!lido.success) {
+    return { ok: false, response: fail("validation_error", "Plataforma inválida.", 400, { requestId, headers }) };
+  }
+  const { plataforma } = lido.data;
+  const selecao = abrirDoCookie(req, plataforma);
   if (!selecao) {
     return {
       ok: false,
@@ -91,6 +112,7 @@ function lerSelecao(req: NextRequest, auth: { orgId: string; userId: string }, r
     // Não apaga o cookie: na empresa (e com a pessoa) certa ela ainda vale.
     return {
       ok: false,
+      recusa: "selecao_de_outra_empresa",
       response: fail(
         "selecao_de_outra_empresa",
         `Esta escolha foi aberta em outra empresa ou por outra pessoa. ${REFACA}`,
@@ -99,7 +121,43 @@ function lerSelecao(req: NextRequest, auth: { orgId: string; userId: string }, r
       ),
     };
   }
-  return { ok: true, selecao, plataforma };
+  // A sessão de login é resolvida aqui, ANTES de qualquer efeito: se ela não
+  // se resolve, a escolha não se gasta.
+  let sessaoAtual: string;
+  try {
+    sessaoAtual = await authenticatedSessionId();
+  } catch {
+    return {
+      ok: false,
+      response: fail("sessao_indisponivel", "Não foi possível confirmar a sua sessão. Tente de novo.", 503, {
+        requestId,
+        headers,
+      }),
+    };
+  }
+  if (selecao.authSessionId && selecao.authSessionId !== sessaoAtual) {
+    return {
+      ok: false,
+      recusa: "selecao_de_outra_sessao",
+      response: fail("selecao_de_outra_sessao", `Esta escolha foi aberta em outra sessão. ${REFACA}`, 403, {
+        requestId,
+        headers,
+      }),
+    };
+  }
+  const tokenFonte = await decifrarTokenDaSelecao(admin, selecao.tokenFonteCifrado);
+  if (!tokenFonte) {
+    return {
+      ok: false,
+      response: fail(
+        "cifra_indisponivel",
+        "O sistema não conseguiu abrir a escolha com segurança. Avise quem cuida do servidor.",
+        503,
+        { requestId, headers },
+      ),
+    };
+  }
+  return { ok: true, selecao, plataforma, tokenFonte, sessaoAtual };
 }
 
 async function appDa(plataforma: PlataformaMetaSocial) {
@@ -107,20 +165,34 @@ async function appDa(plataforma: PlataformaMetaSocial) {
   return plataforma === "instagram" ? cfg.instagram : cfg.messenger;
 }
 
+/** Queima o nonce da escolha. `true` = queimado agora; `false` = já estava; lança em outra falha. */
+async function queimarNonce(admin: Admin, selecao: SelecaoMetaSocial, userId: string): Promise<boolean> {
+  const { error } = await admin.from("calendar_oauth_nonces").insert({
+    nonce: selecao.nonce,
+    organization_id: selecao.organizationId,
+    user_id: userId,
+    expira_em: new Date(selecao.expiraEmMs).toISOString(),
+  });
+  if (!error) return true;
+  if (error.code === "23505") return false;
+  throw new Error("nonce_indisponivel");
+}
+
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const auth = await requireRole("manager", { requestId, resource: "social_connections" });
   if (!auth.ok) return auth.response;
-  const lido = lerSelecao(req, { orgId: auth.org.orgId, userId: auth.user.id }, requestId);
+  const admin = createAdminClient();
+  const lido = await lerSelecao(req, admin, { orgId: auth.org.orgId, userId: auth.user.id }, requestId);
   if (!lido.ok) return lido.response;
-  const { selecao, plataforma } = lido;
+  const { selecao, plataforma, tokenFonte } = lido;
 
   try {
     const app = await appDa(plataforma);
     if (!app) return fail("nao_configurado", "A conexão ainda não foi liberada nesta instalação.", 503, { requestId, headers });
-    const contas = await redescobrir(selecao.modo, app, selecao.tokenFonte);
+    const contas = await redescobrir(selecao.modo, app, tokenFonte);
     const situacao = await situacaoDasContas(
-      createAdminClient(),
+      admin,
       auth.org.orgId,
       plataforma,
       contas.map((c) => c.conta.id),
@@ -162,16 +234,8 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (await mfaEmDivida())
     return fail("mfa_required", "Confirme a verificação em duas etapas.", 403, { requestId, headers });
 
-  // O corpo é validado ANTES de queimar o nonce: um corpo malformado não gasta a escolha.
-  const dados = corpo.safeParse(await req.json().catch(() => null));
-  if (!dados.success) {
-    return fail("validation_error", "Escolha de 1 a 20 contas.", 400, { requestId, headers });
-  }
-  const lido = lerSelecao(req, { orgId: auth.org.orgId, userId: auth.user.id }, requestId);
-  if (!lido.ok) return lido.response;
-  const { selecao, plataforma } = lido;
   const organizationId = auth.org.orgId;
-
+  const plataformaPedida = req.nextUrl.searchParams.get("plataforma") ?? "-";
   const registrarFalha = (motivo: string, detalhe?: string) =>
     audit({
       action: "channel.meta_social_connect_failed",
@@ -179,8 +243,21 @@ export async function POST(req: NextRequest): Promise<Response> {
       actorUserId: auth.user.id,
       resourceType: "channel_session",
       requestId,
-      metadata: { plataforma, motivo, origem: "selecao", ...(detalhe ? { detalhe } : {}) },
+      metadata: { plataforma: plataformaPedida, motivo, origem: "selecao", ...(detalhe ? { detalhe } : {}) },
     });
+
+  // O corpo é validado ANTES de queimar o nonce: um corpo malformado não gasta a escolha.
+  const dados = corpo.safeParse(await req.json().catch(() => null));
+  if (!dados.success) {
+    return fail("validation_error", "Escolha de 1 a 20 contas.", 400, { requestId, headers });
+  }
+  const admin = createAdminClient();
+  const lido = await lerSelecao(req, admin, { orgId: organizationId, userId: auth.user.id }, requestId);
+  if (!lido.ok) {
+    if (lido.recusa) await registrarFalha("retorno_nao_verificavel", `selecao_recusada:${lido.recusa}`);
+    return lido.response;
+  }
+  const { selecao, plataforma, tokenFonte, sessaoAtual } = lido;
 
   try {
     const app = await appDa(plataforma);
@@ -188,9 +265,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     // Redescobre ANTES de queimar: a Meta fora do ar não gasta a escolha.
     const escolhidos = new Set(dados.data.ids);
-    const contas = (await redescobrir(selecao.modo, app, selecao.tokenFonte)).filter((c) =>
-      escolhidos.has(c.conta.id),
-    );
+    const contas = (await redescobrir(selecao.modo, app, tokenFonte)).filter((c) => escolhidos.has(c.conta.id));
     if (contas.length === 0) {
       return fail("nenhuma_conta_escolhida", "Nenhuma das contas marcadas está disponível. Marque de novo.", 422, {
         requestId,
@@ -198,20 +273,17 @@ export async function POST(req: NextRequest): Promise<Response> {
       });
     }
 
-    const admin = createAdminClient();
-    const { error: erroDoNonce } = await admin.from("calendar_oauth_nonces").insert({
-      nonce: selecao.nonce,
-      organization_id: organizationId,
-      user_id: auth.user.id,
-      expira_em: new Date(selecao.expiraEmMs).toISOString(),
-    });
-    if (erroDoNonce) {
-      if (erroDoNonce.code === "23505") {
-        return limparSelecao(
-          fail("selecao_ja_usada", `Esta escolha já foi usada. ${REFACA}`, 409, { requestId, headers }),
-        );
-      }
+    let queimado: boolean;
+    try {
+      queimado = await queimarNonce(admin, selecao, auth.user.id);
+    } catch {
       return fail("internal_error", "Não foi possível confirmar a escolha. Tente de novo.", 503, { requestId, headers });
+    }
+    if (!queimado) {
+      await registrarFalha("retorno_nao_verificavel", "selecao_recusada:selecao_ja_usada");
+      return limparSelecao(
+        fail("selecao_ja_usada", `Esta escolha já foi usada. ${REFACA}`, 409, { requestId, headers }),
+      );
     }
 
     const resultado = await conectarDescobertas(admin, {
@@ -219,11 +291,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       plataforma,
       contas,
       expiraEm: selecao.expiraEm,
-      ator: {
-        userId: auth.user.id,
-        authSessionId: (await authenticatedSessionId()) ?? selecao.authSessionId,
-        requestId,
-      },
+      ator: { userId: auth.user.id, authSessionId: sessaoAtual, requestId },
       autorizadorId: selecao.autorizadorId,
       empresaId: selecao.empresaId,
     });
@@ -256,12 +324,26 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 }
 
-/** Cancelar a escolha: só apaga o cookie. Nada foi conectado e nada vai à Meta. */
-export async function DELETE(): Promise<Response> {
+/**
+ * Cancelar a escolha: nada foi conectado e nada vai à Meta. Quando o cookie
+ * abre e é desta empresa e desta pessoa, o nonce é queimado — uma cópia do
+ * cookie deixa de valer. Cookie ausente, inválido ou de outra empresa: só apaga.
+ */
+export async function DELETE(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const support = await requireSupportWrite();
   if (support) return support;
   const auth = await requireRole("manager", { requestId, resource: "social_connections" });
   if (!auth.ok) return auth.response;
+  const lido = consulta.safeParse({ plataforma: req.nextUrl.searchParams.get("plataforma") });
+  const selecao = lido.success ? abrirDoCookie(req, lido.data.plataforma) : null;
+  if (selecao && selecao.organizationId === auth.org.orgId && selecao.userId === auth.user.id) {
+    try {
+      // `false` (23505) = já queimado: o cancelamento segue igual.
+      await queimarNonce(createAdminClient(), selecao, auth.user.id);
+    } catch {
+      logger.warn("[meta-social.selecao] cancelamento sem queimar o nonce", { organization_id: auth.org.orgId });
+    }
+  }
   return limparSelecao(ok({ cancelada: true }, { requestId, headers }));
 }

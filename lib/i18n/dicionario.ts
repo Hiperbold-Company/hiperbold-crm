@@ -29117,6 +29117,7 @@ export const DICIONARIO: Traducoes = {
   "Uso do orçamento de IA": { es: "Uso del presupuesto de IA" },
   "Este funil está arquivado. Tire-o do arquivo em Funis para editar o cartão.": { es: "Este embudo está archivado. Sáquelo del archivo en Embudos para editar la tarjeta." },
   // conexões: escolha das contas da Meta (D-242)
+  "Esta escolha foi aberta em outra sessão. Clique em Conectar de novo.": { es: "Esta selección se abrió en otra sesión. Haz clic en Conectar de nuevo." },
   "Escolha quais páginas conectar nesta empresa": { es: "Elige qué páginas conectar en esta empresa" },
   "Conecte só as páginas desta empresa. Páginas de outros clientes devem ser conectadas na empresa deles.": { es: "Conecta solo las páginas de esta empresa. Las páginas de otros clientes deben conectarse en la empresa de ellos." },
   "Já conectada em outra empresa": { es: "Ya conectada en otra empresa" },

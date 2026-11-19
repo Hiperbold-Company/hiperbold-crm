@@ -56,7 +56,11 @@ import {
   usuarioDoSistema,
 } from "@/lib/channels/meta-social/oauth";
 import type { MotivoDaVolta } from "@/lib/channels/meta-social/motivos";
-import { selarSelecaoMetaSocial, type ModoDaDescoberta } from "@/lib/channels/meta-social/selecao";
+import {
+  cifrarTokenDaSelecao,
+  selarSelecaoMetaSocial,
+  type ModoDaDescoberta,
+} from "@/lib/channels/meta-social/selecao";
 import { ConexaoRecusada, type Ator } from "@/lib/channels/meta-social/store";
 import { redirectUriDe, voltarParaConexoes, voltarParaEscolher } from "@/lib/channels/meta-social/volta";
 import { env } from "@/lib/env";
@@ -185,6 +189,8 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     let contas: ContaDescoberta[];
     let modo: ModoDaDescoberta;
     let tokenFonte: string;
+    /** Quantas Páginas a descoberta pela Página viu (com ou sem Instagram); 0 nos outros modos. */
+    let paginasVistas = 0;
     let expiraEm: string | null = null;
     let autorizadorId: string | null;
     let empresaId: string | null = null;
@@ -239,6 +245,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
           );
         }
         contas = planoC.contas;
+        paginasVistas = planoC.vistas;
         modo = "instagram_pagina";
         tokenFonte = longo;
         expiraEm = null;
@@ -258,7 +265,13 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     // páginas" na Meta pode alcançar páginas de outros clientes; a tela
     // pergunta quais são desta empresa, e só `conectarConta` (na confirmação)
     // assina webhook na Meta. A escolha guarda o token-fonte, não as contas.
-    if (contas.length > 1) {
+    // Pela Página, o login que alcançou VÁRIAS Páginas também pergunta, mesmo
+    // com uma só tendo Instagram: quem alcança Páginas de vários clientes é
+    // justamente o operador de agência, e a conta certa precisa ser confirmada.
+    if (contas.length > 1 || (modo === "instagram_pagina" && paginasVistas > 1)) {
+      // O token vai cifrado pela chave do BANCO: o cookie sozinho não entrega o token.
+      const tokenFonteCifrado = await cifrarTokenDaSelecao(admin, tokenFonte);
+      if (!tokenFonteCifrado) return falhou("cifra_indisponivel");
       const selada = selarSelecaoMetaSocial(
         {
           plataforma,
@@ -266,13 +279,22 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
           userId,
           ...(estado.authSessionId ? { authSessionId: estado.authSessionId } : {}),
           modo,
-          tokenFonte,
+          tokenFonteCifrado,
           expiraEm,
           autorizadorId,
           empresaId,
         },
         { segredo: env.INTERNAL_SECRET, agora: new Date() },
       );
+      // Só a contagem: ids e nomes das contas podem ser de outros clientes.
+      await audit({
+        action: "channel.meta_social_selection_opened",
+        organizationId,
+        actorUserId: userId,
+        actorAuthSessionId: estado.authSessionId,
+        resourceType: "channel_session",
+        metadata: { plataforma, contas: contas.length, ...(paginasVistas ? { paginas_vistas: paginasVistas } : {}) },
+      });
       return voltarParaEscolher(plataforma, selada);
     }
 

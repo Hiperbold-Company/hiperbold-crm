@@ -30,6 +30,8 @@ const h = vi.hoisted(() => ({
   audit: vi.fn(async (_e: Record<string, unknown>) => undefined),
   podeCriar: vi.fn(async () => ({ pode: true })),
   sessao: { orgId: "", userId: "" },
+  sessaoId: "sessao-atual",
+  sessaoFalha: false,
   suporte: null as Response | null,
   mfa: false,
 }));
@@ -38,7 +40,10 @@ vi.mock("@/lib/audit", () => ({ audit: h.audit, isServiceRoleConfigured: () => t
 vi.mock("@/lib/impersonate/support", () => ({
   supportCallbackWriteAllowed: async () => true,
   requireSupportWrite: async () => h.suporte,
-  authenticatedSessionId: async () => "sessao-atual",
+  authenticatedSessionId: async () => {
+    if (h.sessaoFalha) throw new Error("Sessão ausente.");
+    return h.sessaoId;
+  },
 }));
 vi.mock("@/lib/billing/planos/pode-criar", () => ({ podeCriar: h.podeCriar }));
 vi.mock("@/lib/auth/require-role", () => ({
@@ -57,7 +62,8 @@ import {
   assinarVinculoMetaSocial,
   emitirEstadoMetaSocial,
 } from "@/lib/channels/meta-social/estado";
-import { NOME_DA_SELECAO_META_SOCIAL } from "@/lib/channels/meta-social/selecao";
+import { NOME_DA_SELECAO_META_SOCIAL, abrirSelecaoMetaSocial } from "@/lib/channels/meta-social/selecao";
+import { LOTE_DA_SITUACAO, situacaoDasContas } from "@/lib/channels/meta-social/store";
 
 const IG_1 = "17841400000000001";
 const IG_2 = "17841400000000002";
@@ -92,9 +98,9 @@ const novoBanco = () =>
   bancoFalso({ user_organizations: [{ organization_id: ORG, user_id: USER, role: "admin", revoked_at: null }] });
 
 /** A volta do OAuth; devolve a resposta inteira (para ler o cookie). */
-async function callback(plataforma: "instagram" | "messenger", nonce: string): Promise<Response> {
+async function callback(plataforma: "instagram" | "messenger", nonce: string, authSessionId?: string): Promise<Response> {
   const state = emitirEstadoMetaSocial(
-    { plataforma, organizationId: ORG, userId: USER },
+    { plataforma, organizationId: ORG, userId: USER, ...(authSessionId ? { authSessionId } : {}) },
     { segredo: SEGREDO, agora: new Date(), nonce },
   );
   const { GET } = await import("@/app/api/v1/channels/meta-social/callback/[plataforma]/route");
@@ -159,6 +165,8 @@ beforeEach(() => {
   h.sessao = { orgId: ORG, userId: USER };
   h.suporte = null;
   h.mfa = false;
+  h.sessaoId = "sessao-atual";
+  h.sessaoFalha = false;
   banco = novoBanco();
   h.db = banco.db;
   meta = metaFalsa({
@@ -396,15 +404,150 @@ describe("POST da escolha", () => {
   });
 });
 
+const cancelar = async (plataforma: string, cookie: string | null) =>
+  (await rota()).DELETE(pedido(plataforma, cookie, "DELETE"));
+
 describe("DELETE da escolha", () => {
-  it("cancelar apaga o cookie sem chamar a Meta nem conectar", async () => {
+  it("cancelar queima o nonce e apaga o cookie, sem chamar a Meta nem conectar; a cópia do cookie não vale mais", async () => {
     const cookie = cookieDaEscolha(await callback("instagram", "e-16"));
     const antes = meta.chamadas.length;
-    const res = await (await rota()).DELETE();
+    const res = await cancelar("instagram", cookie);
     expect(res.status).toBe(200);
     expect(apagouOCookie(res)).toBe(true);
     expect(meta.chamadas).toHaveLength(antes);
     expect(banco.t("channel_sessions")).toHaveLength(0);
-    expect(cookie).toBeTruthy();
+    expect(banco.t("calendar_oauth_nonces")).toHaveLength(2); // o do state e o da escolha
+    // Quem guardou o valor do cookie não conecta com ele.
+    expect((await confirmar("instagram", cookie, { ids: [IG_1] })).status).toBe(409);
+    expect(banco.t("channel_sessions")).toHaveLength(0);
+    // Cancelar de novo (já queimado) continua ok.
+    expect((await cancelar("instagram", cookie)).status).toBe(200);
+  });
+
+  it("cookie ausente ou inválido: só apaga", async () => {
+    for (const cookie of [null, "lixo"]) {
+      const res = await cancelar("instagram", cookie);
+      expect(res.status).toBe(200);
+      expect(apagouOCookie(res)).toBe(true);
+    }
+    expect(banco.t("calendar_oauth_nonces")).toHaveLength(0);
+  });
+
+  it("escolha de OUTRA empresa: só apaga o cookie, sem queimar o nonce dela", async () => {
+    const cookie = cookieDaEscolha(await callback("instagram", "e-17"));
+    h.sessao = { orgId: OUTRA_ORG, userId: USER };
+    expect(apagouOCookie(await cancelar("instagram", cookie))).toBe(true);
+    expect(banco.t("calendar_oauth_nonces")).toHaveLength(1);
+  });
+});
+
+describe("achados da auditoria", () => {
+  it("M1: o token-fonte vai cifrado pela chave do BANCO; o INTERNAL_SECRET sozinho não entrega o token", async () => {
+    const cookie = cookieDaEscolha(await callback("instagram", "a-1"));
+    expect(banco.rpcs).toContain("fn_encrypt_oauth");
+    const aberta = abrirSelecaoMetaSocial(cookie, { segredo: SEGREDO, agora: new Date(), plataforma: "instagram" });
+    // O banco falso cifra como "cifrado:<texto>": no cookie está o cifrado, nunca o token cru.
+    expect(aberta?.tokenFonteCifrado).toBe("cifrado:SUAT");
+    expect(JSON.stringify(aberta)).not.toMatch(/"SUAT"/);
+    // A rota decifra pelo banco e redescobre com o token de verdade.
+    expect((await listar("instagram", cookie)).status).toBe(200);
+    expect(banco.rpcs).toContain("fn_decrypt_oauth");
+    const assigned = meta.chamadas.filter((c) => c.url.includes("/me/assigned_instagram_accounts")).at(-1)!;
+    expect((assigned.init?.headers as Record<string, string>).authorization).toBe("Bearer SUAT");
+  });
+
+  it("M1: cifra do banco indisponível: o callback não sela nada e explica", async () => {
+    const original = banco.db.rpc.bind(banco.db);
+    vi.spyOn(banco.db, "rpc").mockImplementation(((nome: string, args: Record<string, unknown>) =>
+      nome === "fn_encrypt_oauth"
+        ? Promise.resolve({ data: null, error: { message: "sem chave" } })
+        : original(nome as never, args as never)) as never);
+    const res = await callback("instagram", "a-2");
+    expect((await destinoDe(res)).searchParams.get("motivo")).toBe("cifra_indisponivel");
+    expect(res.headers.getSetCookie().some((c) => c.startsWith(`${NOME_DA_SELECAO_META_SOCIAL}=`))).toBe(false);
+  });
+
+  it("B1: pela Página, várias Páginas vistas abrem a escolha mesmo com UMA conta do Instagram", async () => {
+    meta = metaFalsa({
+      contasIg: [],
+      paginas: [
+        { id: "PAG-1", name: "Loja", access_token: "TOKEN-PAG-1", instagram_business_account: { id: IG_1, username: "loja" } },
+        { id: "PAG-2", name: "Página de outro cliente", access_token: "TOKEN-PAG-2" },
+      ],
+    });
+    vi.stubGlobal("fetch", meta.fetcher);
+    const res = await callback("instagram", "a-3");
+    expect((await destinoDe(res)).searchParams.get("meta_social")).toBe("escolher");
+    expect(banco.t("channel_sessions")).toHaveLength(0);
+    expect(meta.chamadas.some((c) => c.url.includes("/subscribed_apps"))).toBe(false);
+    const cookie = cookieDaEscolha(res);
+    const lista = (await (await listar("instagram", cookie)).json()) as { data: { contas: { id: string }[] } };
+    expect(lista.data.contas.map((c) => c.id)).toEqual([IG_1]);
+  });
+
+  it("B1: uma conta só pelo SUAT (assigned) continua conectando direto", async () => {
+    meta = metaFalsa({ contasIg: [{ id: IG_1, username: "loja" }] });
+    vi.stubGlobal("fetch", meta.fetcher);
+    const res = await callback("instagram", "a-4");
+    expect((await destinoDe(res)).searchParams.get("meta_social")).toBe("ok");
+    expect(banco.t("channel_sessions").map((s) => s.meta_social_account_id)).toEqual([IG_1]);
+  });
+
+  it("B2: a sessão que não se resolve recusa a confirmação SEM gastar a escolha", async () => {
+    const cookie = cookieDaEscolha(await callback("instagram", "a-5"));
+    h.sessaoFalha = true;
+    const res = await confirmar("instagram", cookie, { ids: [IG_1] });
+    expect(res.status).toBe(503);
+    expect(banco.t("calendar_oauth_nonces")).toHaveLength(1);
+    expect(banco.t("channel_sessions")).toHaveLength(0);
+    h.sessaoFalha = false;
+    expect((await confirmar("instagram", cookie, { ids: [IG_1] })).status).toBe(200);
+  });
+
+  it("B4: escolha aberta noutra SESSÃO de login é recusada no GET e no POST", async () => {
+    const cookie = cookieDaEscolha(await callback("instagram", "a-6", "sessao-que-abriu"));
+    h.sessaoId = "outra-sessao";
+    const lida = await listar("instagram", cookie);
+    expect(lida.status).toBe(403);
+    expect(((await lida.json()) as { error: { code: string } }).error.code).toBe("selecao_de_outra_sessao");
+    const post = await confirmar("instagram", cookie, { ids: [IG_1] });
+    expect(post.status).toBe(403);
+    expect(banco.t("calendar_oauth_nonces")).toHaveLength(1);
+    expect(banco.t("channel_sessions")).toHaveLength(0);
+    h.sessaoId = "sessao-que-abriu";
+    expect((await confirmar("instagram", cookie, { ids: [IG_1] })).status).toBe(200);
+  });
+
+  it("B6: o callback audita a escolha aberta só com contagens; as recusas do POST vão para a trilha", async () => {
+    const cookie = cookieDaEscolha(await callback("instagram", "a-7"));
+    const aberta = h.audit.mock.calls.map(([e]) => e).find((e) => e.action === "channel.meta_social_selection_opened");
+    expect(aberta).toMatchObject({ organizationId: ORG, actorUserId: USER, metadata: { plataforma: "instagram", contas: 3 } });
+    expect(JSON.stringify(aberta)).not.toMatch(/1784140000000000|loja|cliente_de_outro/);
+
+    h.sessao = { orgId: OUTRA_ORG, userId: USER };
+    await confirmar("instagram", cookie, { ids: [IG_1] });
+    h.sessao = { orgId: ORG, userId: USER };
+    await confirmar("instagram", cookie, { ids: [IG_1] });
+    await confirmar("instagram", cookie, { ids: [IG_2] }); // replay
+    const detalhes = h.audit.mock.calls
+      .map(([e]) => e)
+      .filter((e) => e.action === "channel.meta_social_connect_failed")
+      .map((e) => (e.metadata as Record<string, unknown>).detalhe);
+    expect(detalhes).toEqual(["selecao_recusada:selecao_de_outra_empresa", "selecao_recusada:selecao_ja_usada"]);
+  });
+
+  it("B7: situacaoDasContas consulta em lotes de 100 ids", async () => {
+    const ids = Array.from({ length: 250 }, (_, i) => String(10_000 + i));
+    banco.t("channel_sessions").push(
+      { id: "a", organization_id: OUTRA_ORG, provider: "meta_social", meta_social_platform: "messenger", meta_social_account_id: ids[0], archived_at: null },
+      { id: "b", organization_id: ORG, provider: "meta_social", meta_social_platform: "messenger", meta_social_account_id: ids[150], archived_at: null },
+      { id: "c", organization_id: OUTRA_ORG, provider: "meta_social", meta_social_platform: "messenger", meta_social_account_id: ids[249], archived_at: null },
+    );
+    const espiao = vi.spyOn(banco.db, "from");
+    const situacao = await situacaoDasContas(banco.db, ORG, "messenger", ids);
+    expect(LOTE_DA_SITUACAO).toBe(100);
+    expect(espiao.mock.calls.filter(([t]) => t === "channel_sessions")).toHaveLength(3);
+    expect(Object.fromEntries(situacao)).toEqual({ [ids[0]!]: "outra", [ids[150]!]: "aqui", [ids[249]!]: "outra" });
+    expect((await situacaoDasContas(banco.db, ORG, "messenger", [])).size).toBe(0);
   });
 });

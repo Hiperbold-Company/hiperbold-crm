@@ -221,7 +221,8 @@ describe("callback do Instagram (login unificado)", () => {
           access_token: "TOKEN-DA-PAGINA",
           instagram_business_account: { id: "17841400000000009", username: "loja_ig" },
         },
-        { id: "PAG-SEM-IG", name: "Outra", access_token: "TOKEN-OUTRA" },
+        // Só UMA Página vista: com duas ou mais, a volta abre a escolha (D-242, B1),
+        // ver `meta-social-escolha-de-contas.test.ts`.
       ],
     );
     vi.stubGlobal("fetch", meta.fetcher);
