@@ -43,7 +43,10 @@ import {
   utmsMaisRecentesPorContato,
   type NegocioComUtm,
 } from "@/lib/contacts/utm-dos-negocios";
-import { VINCULOS_RESTRICT_NAO_APAGADOS } from "@/lib/contacts/vinculos-restrict";
+import {
+  ERRCODE_CONTATO_COM_NEGOCIO_ABERTO,
+  VINCULOS_RESTRICT_NAO_APAGADOS,
+} from "@/lib/contacts/vinculos-restrict";
 import {
   INDICE_CPF,
   INDICE_EMAIL,
@@ -1110,8 +1113,9 @@ function throwOnDbError(
   idioma: Idioma = "pt-BR",
 ): void {
   if (!err) return;
-  // conversations/messages apontam para contacts com ON DELETE RESTRICT.
-  if (err.code === "23503") {
+  // conversations/messages apontam para contacts com ON DELETE RESTRICT; o gatilho da 1019 recusa
+  // a ficha com negócio em aberto (corrida entre a pré-checagem e a função).
+  if (err.code === "23503" || err.code === ERRCODE_CONTATO_COM_NEGOCIO_ABERTO) {
     throw new ApiError(
       409,
       "state_conflict",
@@ -1198,7 +1202,12 @@ async function contarVinculosRestrict(
   // (texto em pt-BR) segue igual ao da auditoria.
   const por_tabela: Record<string, number> = {};
   for (const vinculo of VINCULOS_RESTRICT_NAO_APAGADOS) {
-    let consulta = supabase
+    // `contarSemRls` (hoje `crm_leads`): a RLS do `agent` esconde o negócio de outro dono, e a
+    // contagem pelo cliente dele daria 0. O cliente de servidor ignora a RLS, então a organização
+    // vem do ctx (sessão/token, nunca do corpo) e o contato já foi conferido acima, pelo cliente
+    // de quem chamou, em `contatoExistente`.
+    const db = vinculo.contarSemRls ? createAdminClient() : supabase;
+    let consulta = db
       .from(vinculo.tabela)
       .select("id", { count: "exact", head: true })
       .eq("contact_id", contactId)

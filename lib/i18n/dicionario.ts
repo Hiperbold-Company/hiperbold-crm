@@ -25943,9 +25943,6 @@ export const DICIONARIO: Traducoes = {
   },
   "1 contato excluído.": { es: "1 contacto eliminado." },
   "contatos excluídos.": { es: "contactos eliminados." },
-  "não foram excluídos: têm compromisso na agenda.": {
-    es: "no se eliminaron: tienen una cita en la agenda.",
-  },
   "contato exportado": { es: "contacto exportado" },
   "contatos exportados": { es: "contactos exportados" },
   "Todos os": { es: "Todos los" },
@@ -25957,10 +25954,6 @@ export const DICIONARIO: Traducoes = {
   "contatos do filtro": { es: "contactos del filtro" },
   "Selecionar esta página": { es: "Seleccionar esta página" },
   "Excluir 1 contato?": { es: "¿Eliminar 1 contacto?" },
-  "Isso remove os contatos selecionados e as conversas e mensagens deles. Os negócios continuam, sem contato. Contato com compromisso na agenda não é excluído. Esta ação não pode ser desfeita.":
-    {
-      es: "Esto elimina los contactos seleccionados y sus conversaciones y mensajes. Los negocios continúan, sin contacto. Un contacto con una cita en la agenda no se elimina. Esta acción no se puede deshacer.",
-    },
   "Para confirmar, digite a quantidade:": { es: "Para confirmar, escribe la cantidad:" },
   "Entrou no CRM": { es: "Entró al CRM" },
   Filtrado: { es: "Filtrado" },
