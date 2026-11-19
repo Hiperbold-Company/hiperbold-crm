@@ -260,6 +260,36 @@ export async function conectarConta(
   return { channelId, reconectado, recebimento };
 }
 
+/**
+ * Onde cada conta da ESCOLHA pendente (D-242) já vive: nesta organização, em
+ * outra, ou em nenhuma. Devolve só a marca por id da conta — nunca a outra
+ * organização nem o nome dela: a tela só precisa saber que não pode marcar.
+ */
+export async function situacaoDasContas(
+  admin: SupabaseClient,
+  organizationId: string,
+  plataforma: PlataformaMetaSocial,
+  contaIds: string[],
+): Promise<Map<string, "aqui" | "outra">> {
+  const situacao = new Map<string, "aqui" | "outra">();
+  if (contaIds.length === 0) return situacao;
+  // cerca-canal: situacao_da_escolha_de_contas (tests/unit/canal-consulta-por-organizacao.test.ts)
+  const { data, error } = await admin
+    .from("channel_sessions")
+    .select("organization_id, meta_social_account_id")
+    .eq("provider", CHANNEL_PROVIDER_META_SOCIAL)
+    .eq("meta_social_platform", plataforma)
+    .in("meta_social_account_id", contaIds)
+    .is("archived_at", null);
+  if (error) throw new Error("meta_social_situacao_failed");
+  for (const l of (data ?? []) as { organization_id: string; meta_social_account_id: string }[]) {
+    // Uma conta viva em outra organização vence: é a que não pode ser marcada.
+    if (situacao.get(l.meta_social_account_id) === "outra") continue;
+    situacao.set(l.meta_social_account_id, l.organization_id === organizationId ? "aqui" : "outra");
+  }
+  return situacao;
+}
+
 export interface ContaListada {
   id: string;
   plataforma: PlataformaMetaSocial;

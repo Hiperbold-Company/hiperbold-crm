@@ -23,6 +23,7 @@ import { apiClient } from "@/lib/api/client";
 import { fraseDoMotivo } from "@/lib/channels/meta-social/motivos";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
+import { EscolherContasDaMeta, type ResultadoDaEscolha } from "./EscolherContasDaMeta";
 import { EtiquetaDaConexao } from "./EtiquetaDaConexao";
 import { RenomearConexao } from "./RenomearConexao";
 
@@ -35,6 +36,10 @@ import { RenomearConexao } from "./RenomearConexao";
  * chega em `/app/connections?aba=sociais&meta_social=ok|erro|parcial&motivo=&n=&recusadas=`. O
  * aviso da volta é lido UMA vez e os parâmetros saem da URL, para um F5 não
  * repetir "conta conectada".
+ *
+ * Com duas ou mais contas a volta é `meta_social=escolher&plataforma=<x>` e nada
+ * foi conectado (D-242): abre a escolha (`EscolherContasDaMeta`), e o desfecho
+ * dela vira o mesmo aviso de ok/parcial/erro da volta.
  */
 
 export type PlataformaSocial = "instagram" | "messenger";
@@ -124,6 +129,23 @@ export function lerAviso(params: URLSearchParams, t: (s: string) => string): Avi
   return null;
 }
 
+/** O desfecho da escolha das contas, no mesmo formato da volta do OAuth (o mesmo aviso). */
+export function avisoDaEscolha(r: ResultadoDaEscolha, t: (s: string) => string): Aviso | null {
+  const p = new URLSearchParams({
+    meta_social: r.conectadas === 0 ? "erro" : r.recusadas > 0 ? "parcial" : "ok",
+    n: String(r.conectadas),
+    recusadas: String(r.recusadas),
+    ...(r.motivo ? { motivo: r.motivo } : {}),
+  });
+  return lerAviso(p, t);
+}
+
+/** A volta pede a escolha das contas? Devolve a plataforma, ou `null`. */
+export function escolhaPedida(params: URLSearchParams): PlataformaSocial | null {
+  if (params.get("meta_social") !== "escolher") return null;
+  return params.get("plataforma") === "messenger" ? "messenger" : "instagram";
+}
+
 const CARTOES: { plataforma: PlataformaSocial; titulo: string }[] = [
   { plataforma: "instagram", titulo: "Instagram Direct" },
   { plataforma: "messenger", titulo: "Facebook Messenger" },
@@ -161,6 +183,9 @@ export function RedesSociaisClient({
   const qc = useQueryClient();
   const [aviso, setAviso] = useState<Aviso | null>(() => lerAviso(new URLSearchParams(params.toString()), t));
   const [paraDesconectar, setParaDesconectar] = useState<ContaSocial | null>(null);
+  const [escolher, setEscolher] = useState<PlataformaSocial | null>(() =>
+    escolhaPedida(new URLSearchParams(params.toString())),
+  );
 
   const query = useQuery({
     queryKey: ["meta-social"],
@@ -173,7 +198,7 @@ export function RedesSociaisClient({
   useEffect(() => {
     const atual = new URLSearchParams(window.location.search);
     if (!atual.has("meta_social")) return;
-    for (const k of ["meta_social", "motivo", "n", "recusadas"]) atual.delete(k);
+    for (const k of ["meta_social", "motivo", "n", "recusadas", "plataforma"]) atual.delete(k);
     const qs = atual.toString();
     window.history.replaceState(null, "", qs ? `${caminho}?${qs}` : caminho);
   }, [caminho]);
@@ -378,6 +403,19 @@ export function RedesSociaisClient({
           </p>
         </div>
       </details>
+
+      {escolher ? (
+        <EscolherContasDaMeta
+          plataforma={escolher}
+          aoFechar={() => setEscolher(null)}
+          aoConcluir={(r) => {
+            setEscolher(null);
+            setAviso(avisoDaEscolha(r, t));
+            void qc.invalidateQueries({ queryKey: ["meta-social"] });
+            void qc.invalidateQueries({ queryKey: ["conexoes"] });
+          }}
+        />
+      ) : null}
 
       <AlertDialog open={!!paraDesconectar} onOpenChange={(aberto) => !aberto && setParaDesconectar(null)}>
         <AlertDialogContent>

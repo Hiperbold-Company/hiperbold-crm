@@ -6,10 +6,11 @@ import { RedesSociaisClient, precisaReconectar, type ContaSocial } from "./Redes
 
 const h = vi.hoisted(() => ({
   get: vi.fn(),
+  post: vi.fn(),
   delete: vi.fn(),
   busca: "aba=sociais",
 }));
-vi.mock("@/lib/api/client", () => ({ apiClient: { get: h.get, delete: h.delete } }));
+vi.mock("@/lib/api/client", () => ({ apiClient: { get: h.get, post: h.post, delete: h.delete } }));
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(h.busca),
   usePathname: () => "/app/connections",
@@ -173,5 +174,129 @@ describe("volta com recusa parcial", () => {
     );
     expect(aviso).toMatchObject({ tipo: "parcial", limite: true });
     expect(aviso!.texto).toBe("2 contas conectadas; 1 não pôde ser conectada: Seu plano chegou ao limite de conexões.");
+  });
+});
+
+describe("volta com várias contas: a escolha das páginas (D-242)", () => {
+  const SELECAO = "/api/v1/channels/meta-social/selecao?plataforma=instagram";
+  type Conta = { id: string; nome: string | null; usuario: string | null; ja_conectada_aqui: boolean; em_outra_empresa: boolean };
+  const contaDaEscolha = (id: string, extra: Partial<Conta> = {}): Conta => ({
+    id,
+    nome: `Página ${id}`,
+    usuario: null,
+    ja_conectada_aqui: false,
+    em_outra_empresa: false,
+    ...extra,
+  });
+
+  function responder(contas: Conta[]) {
+    h.get.mockImplementation(async (url: string) =>
+      url === SELECAO
+        ? { data: { plataforma: "instagram", expira_em: "2026-11-19T12:10:00Z", contas } }
+        : estado({ instagram: true, messenger: true }),
+    );
+  }
+
+  beforeEach(() => {
+    h.busca = "aba=sociais&meta_social=escolher&plataforma=instagram";
+    window.history.replaceState(null, "", `/app/connections?${h.busca}`);
+  });
+
+  it("abre o diálogo com nada marcado; Conectar desabilitado com 0; conta de outra empresa travada", async () => {
+    responder([
+      contaDaEscolha("101"),
+      contaDaEscolha("102", { ja_conectada_aqui: true }),
+      contaDaEscolha("103", { em_outra_empresa: true }),
+    ]);
+    montar();
+    const dialogo = await screen.findByTestId("escolher-contas-meta");
+    expect(within(dialogo).getByText("Escolha quais páginas conectar nesta empresa")).toBeInTheDocument();
+    expect(
+      within(dialogo).getByText(
+        "Conecte só as páginas desta empresa. Páginas de outros clientes devem ser conectadas na empresa deles.",
+      ),
+    ).toBeInTheDocument();
+    await within(dialogo).findByText("Página 101");
+    const caixas = within(dialogo).getAllByRole("checkbox");
+    expect(caixas).toHaveLength(3);
+    for (const c of caixas) expect(c).not.toBeChecked();
+    expect(within(dialogo).getByTestId("confirmar-contas-meta")).toBeDisabled();
+    expect(within(dialogo).getByTestId("confirmar-contas-meta")).toHaveTextContent("Conectar 0");
+
+    expect(within(dialogo).getByRole("checkbox", { name: "Página 103" })).toBeDisabled();
+    expect(within(dialogo).getByText("Já conectada em outra empresa")).toBeInTheDocument();
+    // A já conectada aqui pode ser marcada de novo (reconectar).
+    expect(within(dialogo).getByRole("checkbox", { name: "Página 102" })).toBeEnabled();
+    expect(within(dialogo).getByText("Já conectada aqui")).toBeInTheDocument();
+    // Lista curta: sem busca.
+    expect(within(dialogo).queryByRole("searchbox")).toBeNull();
+    expect(h.get).toHaveBeenCalledWith(SELECAO);
+  });
+
+  it("conecta só as marcadas e mostra o mesmo aviso da volta", async () => {
+    responder([contaDaEscolha("101"), contaDaEscolha("102")]);
+    h.post.mockResolvedValue({ data: { conectadas: 1, recusadas: 0 } });
+    montar();
+    const dialogo = await screen.findByTestId("escolher-contas-meta");
+    fireEvent.click(await within(dialogo).findByRole("checkbox", { name: "Página 102" }));
+    const botao = within(dialogo).getByTestId("confirmar-contas-meta");
+    expect(botao).toHaveTextContent("Conectar 1");
+    expect(botao).toBeEnabled();
+    fireEvent.click(botao);
+    await waitFor(() => expect(h.post).toHaveBeenCalledWith(SELECAO, { ids: ["102"] }));
+    const aviso = await screen.findByTestId("aviso-meta-social");
+    expect(aviso).toHaveTextContent("Conta conectada. As novas mensagens passam a chegar no Chat.");
+    await waitFor(() => expect(screen.queryByTestId("escolher-contas-meta")).toBeNull());
+  });
+
+  it("recusa parcial na confirmação vira o aviso parcial", async () => {
+    responder([contaDaEscolha("101"), contaDaEscolha("102")]);
+    h.post.mockResolvedValue({ data: { conectadas: 1, recusadas: 1, motivo: "limite_do_plano" } });
+    montar();
+    const dialogo = await screen.findByTestId("escolher-contas-meta");
+    fireEvent.click(await within(dialogo).findByRole("checkbox", { name: "Página 101" }));
+    fireEvent.click(within(dialogo).getByRole("checkbox", { name: "Página 102" }));
+    fireEvent.click(within(dialogo).getByTestId("confirmar-contas-meta"));
+    const aviso = await screen.findByTestId("aviso-meta-social");
+    expect(aviso.getAttribute("data-tipo")).toBe("parcial");
+    expect(aviso).toHaveTextContent("Seu plano chegou ao limite de conexões.");
+  });
+
+  it("Cancelar apaga a escolha no servidor e fecha, sem conectar", async () => {
+    responder([contaDaEscolha("101"), contaDaEscolha("102")]);
+    h.delete.mockResolvedValue({});
+    montar();
+    const dialogo = await screen.findByTestId("escolher-contas-meta");
+    await within(dialogo).findByText("Página 101");
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByTestId("escolher-contas-meta")).toBeNull());
+    expect(h.delete).toHaveBeenCalledWith(SELECAO);
+    expect(h.post).not.toHaveBeenCalled();
+  });
+
+  it("mais de 8 contas: a busca filtra pelo nome", async () => {
+    responder(Array.from({ length: 10 }, (_, i) => contaDaEscolha(String(201 + i))));
+    montar();
+    const dialogo = await screen.findByTestId("escolher-contas-meta");
+    await within(dialogo).findByText("Página 201");
+    fireEvent.change(within(dialogo).getByRole("searchbox", { name: "Pesquisar páginas" }), {
+      target: { value: "205" },
+    });
+    expect(within(dialogo).getAllByRole("checkbox")).toHaveLength(1);
+    expect(within(dialogo).getByText("Página 205")).toBeInTheDocument();
+  });
+
+  it("escolha vencida: explica e pede para conectar de novo", async () => {
+    const { ApiError } = await import("@/lib/api/types");
+    h.get.mockImplementation(async (url: string) => {
+      if (url === SELECAO) throw new ApiError(410, "selecao_expirada", undefined, "r");
+      return estado({ instagram: true, messenger: true });
+    });
+    montar();
+    const dialogo = await screen.findByTestId("escolher-contas-meta");
+    expect(
+      await within(dialogo).findByText("A escolha das páginas expirou. Clique em Conectar de novo."),
+    ).toBeInTheDocument();
+    expect(within(dialogo).queryByTestId("confirmar-contas-meta")).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Volta do OAuth do Messenger (várias Páginas, nenhuma, recusa parcial), o id
+ * Volta do OAuth do Messenger (várias Páginas vão para a escolha, uma, nenhuma), o id
  * de quem autorizou guardado na sessão, e a trilha de falha ANTES de o nonce
  * ser queimado sem a organização do `state` (que pode ser cópia).
  */
@@ -76,22 +76,33 @@ beforeEach(() => {
 });
 
 describe("callback do Messenger", () => {
-  it("várias Páginas: cada uma vira um canal, com o id de quem autorizou", async () => {
+  it("várias Páginas: nenhuma vira canal na volta; a tela abre a escolha", async () => {
+    // D-242. A conexão das escolhidas (com o id de quem autorizou) está em
+    // `meta-social-escolha-de-contas.test.ts`.
     const banco = novoBanco();
     h.db = banco.db;
-    vi.stubGlobal(
-      "fetch",
-      metaFalsa([
-        { id: "PAG-1", name: "Loja", access_token: "t1" },
-        { id: "PAG-2", name: "Outlet", access_token: "t2" },
-      ]),
-    );
+    const fetchFalso = metaFalsa([
+      { id: "PAG-1", name: "Loja", access_token: "t1" },
+      { id: "PAG-2", name: "Outlet", access_token: "t2" },
+    ]);
+    vi.stubGlobal("fetch", fetchFalso);
     const destino = await chamar("m-1");
+    expect(destino.searchParams.get("meta_social")).toBe("escolher");
+    expect(destino.searchParams.get("plataforma")).toBe("messenger");
+    expect(banco.t("channel_sessions")).toHaveLength(0);
+    expect(fetchFalso.mock.calls.some(([u]) => String(u).includes("/subscribed_apps"))).toBe(false);
+  });
+
+  it("uma Página só: conecta direto, com o id de quem autorizou", async () => {
+    const banco = novoBanco();
+    h.db = banco.db;
+    vi.stubGlobal("fetch", metaFalsa([{ id: "PAG-1", name: "Loja", access_token: "t1" }]));
+    const destino = await chamar("m-1b");
     expect(destino.searchParams.get("meta_social")).toBe("ok");
-    expect(destino.searchParams.get("n")).toBe("2");
+    expect(destino.searchParams.get("n")).toBe("1");
     const sessoes = banco.t("channel_sessions");
-    expect(sessoes.map((s) => s.meta_social_account_id).sort()).toEqual(["PAG-1", "PAG-2"]);
-    for (const s of sessoes) expect((s.metadata as Record<string, unknown>).meta_autorizador_id).toBe("FB-PESSOA");
+    expect(sessoes.map((s) => s.meta_social_account_id)).toEqual(["PAG-1"]);
+    expect((sessoes[0]!.metadata as Record<string, unknown>).meta_autorizador_id).toBe("FB-PESSOA");
   });
 
   it("nenhuma Página concedida: erro nenhuma_pagina", async () => {
@@ -102,10 +113,9 @@ describe("callback do Messenger", () => {
     expect(destino.searchParams.get("motivo")).toBe("nenhuma_pagina");
   });
 
-  it("recusa parcial: volta 'parcial' com quantas entraram, quantas não e o motivo", async () => {
+  it("uma Página viva em OUTRA organização: erro conta_em_outra_organizacao", async () => {
     const banco = novoBanco();
     h.db = banco.db;
-    // A segunda Página já está viva em OUTRA organização.
     banco.t("channel_sessions").push({
       id: "da-outra",
       organization_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -114,19 +124,11 @@ describe("callback do Messenger", () => {
       meta_social_account_id: "PAG-2",
       archived_at: null,
     });
-    vi.stubGlobal(
-      "fetch",
-      metaFalsa([
-        { id: "PAG-1", name: "Loja", access_token: "t1" },
-        { id: "PAG-2", name: "Outlet", access_token: "t2" },
-      ]),
-    );
+    vi.stubGlobal("fetch", metaFalsa([{ id: "PAG-2", name: "Outlet", access_token: "t2" }]));
     const destino = await chamar("m-3");
-    expect(destino.searchParams.get("meta_social")).toBe("parcial");
-    expect(destino.searchParams.get("n")).toBe("1");
-    expect(destino.searchParams.get("recusadas")).toBe("1");
+    expect(destino.searchParams.get("meta_social")).toBe("erro");
     expect(destino.searchParams.get("motivo")).toBe("conta_em_outra_organizacao");
-    expect(banco.t("channel_sessions").filter((s) => s.organization_id === ORG)).toHaveLength(1);
+    expect(banco.t("channel_sessions").filter((s) => s.organization_id === ORG)).toHaveLength(0);
   });
 
   it("as trocas de token vão por POST, com o segredo no corpo e nunca na URL", async () => {

@@ -29116,6 +29116,17 @@ export const DICIONARIO: Traducoes = {
   "Prazo da solicitação": { es: "Plazo de la solicitud" },
   "Uso do orçamento de IA": { es: "Uso del presupuesto de IA" },
   "Este funil está arquivado. Tire-o do arquivo em Funis para editar o cartão.": { es: "Este embudo está archivado. Sáquelo del archivo en Embudos para editar la tarjeta." },
+  // conexões: escolha das contas da Meta (D-242)
+  "Escolha quais páginas conectar nesta empresa": { es: "Elige qué páginas conectar en esta empresa" },
+  "Conecte só as páginas desta empresa. Páginas de outros clientes devem ser conectadas na empresa deles.": { es: "Conecta solo las páginas de esta empresa. Las páginas de otros clientes deben conectarse en la empresa de ellos." },
+  "Já conectada em outra empresa": { es: "Ya conectada en otra empresa" },
+  "Já conectada aqui": { es: "Ya conectada aquí" },
+  "Pesquisar páginas": { es: "Buscar páginas" },
+  "Nenhuma página encontrada para esta pesquisa.": { es: "No se encontró ninguna página para esta búsqueda." },
+  "Marque no máximo 20 páginas por vez.": { es: "Marca como máximo 20 páginas a la vez." },
+  "A escolha das páginas expirou. Clique em Conectar de novo.": { es: "La selección de páginas expiró. Haz clic en Conectar de nuevo." },
+  "Esta escolha foi aberta em outra empresa. Volte para ela, ou clique em Conectar de novo nesta empresa.": { es: "Esta selección se abrió en otra empresa. Vuelve a ella o haz clic en Conectar de nuevo en esta empresa." },
+  "Não foi possível carregar as páginas. Tente de novo.": { es: "No fue posible cargar las páginas. Inténtalo de nuevo." },
 };
 
 /**
