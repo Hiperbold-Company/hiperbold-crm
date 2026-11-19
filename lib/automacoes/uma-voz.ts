@@ -259,13 +259,15 @@ async function execucoesDoDirectNaConversa(
   if (!c?.channel_session_id || !c.provider_conversation_id) return [];
   const { data, error: e2 } = await admin
     .from("followup_enrollments")
-    .select("id, status, created_at")
+    // A tabela não tem `created_at`: o início da execução é `started_at` (apelidado
+    // para o formato que o resto deste arquivo lê).
+    .select("id, status, created_at:started_at")
     .eq("organization_id", pedido.organizationId)
     .eq("lane", "automacao")
     .eq("vars->gatilho->>tipo", "instagram_comment")
     .eq("vars->gatilho->>channel_session_id", c.channel_session_id)
     .eq("vars->gatilho->>autor_id", c.provider_conversation_id)
-    .order("created_at", { ascending: false })
+    .order("started_at", { ascending: false })
     .limit(50);
   if (e2) throw new Error(e2.message);
   return (data ?? []) as Array<{ id: string; status: string; created_at: string }>;
