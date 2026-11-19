@@ -444,10 +444,16 @@ export function describeNodeConfig(
       const c = config as ConfigOf<"question">;
       return c.question.slice(0, 60);
     }
-    case "instagram_private_reply":
-    case "instagram_public_reply": {
+    case "instagram_private_reply": {
       const c = config as ConfigOf<"instagram_private_reply">;
       return c.text.slice(0, 60);
+    }
+    case "instagram_public_reply": {
+      const c = config as ConfigOf<"instagram_public_reply">;
+      const extras = (c.variations ?? []).filter((v) => v.trim() !== "").length;
+      return extras > 0
+        ? `${c.text.slice(0, 60)} (+${extras} ${extras === 1 ? t("versão") : t("versões")})`
+        : c.text.slice(0, 60);
     }
     case "instagram_check_follow":
       return t("Segue o perfil?");

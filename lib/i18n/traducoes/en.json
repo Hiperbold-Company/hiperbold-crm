@@ -14745,5 +14745,11 @@
   "Este contato tem {n} negócios em aberto no Pipeline. Ganhe, perca ou passe os negócios para outro contato antes de excluir.": "This contact has {n} open deals in the Pipeline. Win, lose or move the deals to another contact before deleting.",
   "Abrir Pipeline": "Open Pipeline",
   "não foram excluídos: têm negócio em aberto ou compromisso na agenda.": "were not deleted: they have an open deal or an appointment on the calendar.",
-  "Isso remove os contatos selecionados e as conversas e mensagens deles. Os negócios encerrados continuam, sem contato. Contato com negócio em aberto ou compromisso na agenda não é excluído. Esta ação não pode ser desfeita.": "This removes the selected contacts and their conversations and messages. Closed deals stay, without a contact. A contact with an open deal or an appointment on the calendar is not deleted. This action cannot be undone."
+  "Isso remove os contatos selecionados e as conversas e mensagens deles. Os negócios encerrados continuam, sem contato. Contato com negócio em aberto ou compromisso na agenda não é excluído. Esta ação não pode ser desfeita.": "This removes the selected contacts and their conversations and messages. Closed deals stay, without a contact. A contact with an open deal or an appointment on the calendar is not deleted. This action cannot be undone.",
+  "Versão 1": "Version 1",
+  "Remover versão": "Remove version",
+  "Adicionar outra versão": "Add another version",
+  "Com mais de uma versão, cada comentário recebe uma delas, sorteada. Variar o texto ajuda a não parecer spam para o Instagram.": "With more than one version, each comment gets one of them at random. Varying the text helps avoid looking like spam to Instagram.",
+  "versões": "versions",
+  "Limite de 10 versões": "Limit of 10 versions"
 }
