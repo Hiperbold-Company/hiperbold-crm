@@ -79,7 +79,7 @@ function clienteFalso(opts?: OpcoesFake): unknown {
                 return resolve(
                   opts?.erroContagem
                     ? { count: null, error: opts.erroContagem }
-                    : { count: opts?.vinculos ?? 0, error: null },
+                    : { count: tabela === "calendar_appointments" ? (opts?.vinculos ?? 0) : 0, error: null },
                 );
               },
             };
@@ -151,6 +151,15 @@ describe("deleteContactHandler", () => {
         filtros: [
           ["contact_id", CONTATO],
           ["organization_id", ORG],
+        ],
+      },
+      {
+        // Negócio em aberto também barra; encerrado não (filtro por status).
+        tabela: "crm_leads",
+        filtros: [
+          ["contact_id", CONTATO],
+          ["organization_id", ORG],
+          ["status", "open"],
         ],
       },
     ]);

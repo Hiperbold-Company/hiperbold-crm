@@ -14,7 +14,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HandlerCtx } from "@/lib/api/handlers/types";
 
-const auditSpy = vi.fn(async () => undefined);
+const auditSpy = vi.fn(async (_evento: unknown) => undefined);
 vi.mock("@/lib/audit", () => ({
   audit: auditSpy,
   isServiceRoleConfigured: () => false,

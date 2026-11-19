@@ -14734,5 +14734,10 @@
   "Já conectada em outra empresa": "Already connected in another company",
   "Já conectada aqui": "Already connected here",
   "Marque no máximo 20 páginas por vez.": "Select at most 20 pages at a time.",
-  "Esta escolha foi aberta em outra sessão. Clique em Conectar de novo.": "This selection was opened in another session. Click Connect again."
+  "Esta escolha foi aberta em outra sessão. Clique em Conectar de novo.": "This selection was opened in another session. Click Connect again.",
+  "Este contato tem 1 negócio em aberto no Pipeline. Ganhe, perca ou passe o negócio para outro contato antes de excluir.": "This contact has 1 open deal in the Pipeline. Win, lose or move the deal to another contact before deleting.",
+  "Este contato tem {n} negócios em aberto no Pipeline. Ganhe, perca ou passe os negócios para outro contato antes de excluir.": "This contact has {n} open deals in the Pipeline. Win, lose or move the deals to another contact before deleting.",
+  "Abrir Pipeline": "Open Pipeline",
+  "não foram excluídos: têm negócio em aberto ou compromisso na agenda.": "were not deleted: they have an open deal or an appointment on the calendar.",
+  "Isso remove os contatos selecionados e as conversas e mensagens deles. Os negócios encerrados continuam, sem contato. Contato com negócio em aberto ou compromisso na agenda não é excluído. Esta ação não pode ser desfeita.": "This removes the selected contacts and their conversations and messages. Closed deals stay, without a contact. A contact with an open deal or an appointment on the calendar is not deleted. This action cannot be undone."
 }

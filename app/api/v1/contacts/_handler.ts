@@ -1135,6 +1135,9 @@ function throwOnDbError(
  * compromisso aconteceu, tem dono e tem texto livre, então ele não cai por
  * cascata junto com a ficha.
  *
+ * Além do RESTRICT, a lista leva `crm_leads` com `status = 'open'`: não é FK (a FK é SET NULL),
+ * é regra de negócio — negócio em aberto sem contato é negócio sem lead. Ganho/perdido não barra.
+ *
  * Conferir esta lista ANTES do primeiro DELETE é o arranjo que a issue #752
  * pede: sem ele, apagar `messages`/`conversations` e só então esbarrar no
  * RESTRICT é destruir o histórico do lead para devolver 409 — o pior dos dois
@@ -1195,11 +1198,13 @@ async function contarVinculosRestrict(
   // (texto em pt-BR) segue igual ao da auditoria.
   const por_tabela: Record<string, number> = {};
   for (const vinculo of VINCULOS_RESTRICT_NAO_APAGADOS) {
-    const { count, error } = await supabase
+    let consulta = supabase
       .from(vinculo.tabela)
       .select("id", { count: "exact", head: true })
       .eq("contact_id", contactId)
       .eq("organization_id", ctx.organization_id);
+    if (vinculo.filtro) consulta = consulta.eq(vinculo.filtro.coluna, vinculo.filtro.valor);
+    const { count, error } = await consulta;
     if (error) {
       // Falha da CONTAGEM não autoriza seguir apagando: seguir aqui é cair no
       // defeito que esta pré-checagem existe para impedir (histórico
