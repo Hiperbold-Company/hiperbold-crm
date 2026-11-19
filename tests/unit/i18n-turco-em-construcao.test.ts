@@ -21,8 +21,9 @@ describe("o turco está registrado, mas em construção", () => {
     expect(parseAcceptLanguage("tr-TR,tr;q=0.9")).toBeNull();
     expect(parseAcceptLanguage("tr-TR,tr;q=0.9,es;q=0.5")).toBe("es");
   });
-  it("nenhum catálogo é lido enquanto nenhum idioma de catálogo é visível", () => {
-    expect(IDIOMAS_COM_CATALOGO).toEqual([]);
+  it("o turco não tem catálogo carregado: só o inglês, que é visível", () => {
+    expect(IDIOMAS_COM_CATALOGO).not.toContain("tr");
+    expect(IDIOMAS_COM_CATALOGO).toEqual(["en"]);
   });
   it("o espanhol continua vindo do dicionário", () => {
     expect(traduzir("Plano atual", "es")).toBe("Plan actual");

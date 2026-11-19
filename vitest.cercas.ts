@@ -70,7 +70,7 @@ function resolver(raiz: string, arquivo: string, especificador: string): string 
   else if (especificador.startsWith(".")) base = join(dirname(arquivo), especificador);
   else return null;
   const candidato = EXTENSOES.map((ext) => base + ext).find(
-    (c) => /\.tsx?$/.test(c) && existsSync(c) && statSync(c).isFile(),
+    (c) => /\.(tsx?|json)$/.test(c) && existsSync(c) && statSync(c).isFile(),
   );
   return candidato ?? null;
 }
@@ -88,6 +88,10 @@ function classificador(raiz: string): (arquivo: string) => boolean {
       !USA_DOM.test(fonte) &&
       ehCerca(fonte, (especificador) => {
         const alvo = resolver(raiz, arquivo, especificador);
+        // JSON do repositório (ex.: o catálogo `lib/i18n/traducoes/en.json`) é
+        // dado puro: não importa nada nem toca o DOM. Não passa pelo USA_DOM
+        // porque o TEXTO traduzido pode conter "window" ou "document".
+        if (alvo !== null && alvo.endsWith(".json")) return true;
         return alvo !== null && classificar(alvo);
       });
     memo.set(arquivo, resultado);
