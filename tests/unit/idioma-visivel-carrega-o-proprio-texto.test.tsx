@@ -128,14 +128,20 @@ vi.mock("next/headers", () => ({
   headers: async () => new Headers({ "accept-language": "es-MX,es;q=0.9,en;q=0.8" }),
 }));
 
-describe("espanhol e inglês fora do seletor (17/11/2026): só a TELA muda", () => {
-  it("o seletor só oferece o português; a gravação e as saídas seguem aceitando es e en", () => {
-    expect(IDIOMAS_VISIVEIS.map((idioma) => idioma.codigo)).toEqual(["pt-BR"]);
+describe("espanhol fora do seletor (17/11/2026; o inglês voltou em 19/11/2026): só a TELA muda", () => {
+  it("o seletor oferece português e inglês; a gravação e as saídas seguem aceitando es", () => {
+    expect(IDIOMAS_VISIVEIS.map((idioma) => idioma.codigo)).toEqual(["pt-BR", "en"]);
     expect(IDIOMAS).toEqual(["pt-BR", "es", "en"]);
     expect(profileSchema.shape.locale.safeParse("es").success).toBe(true);
   });
 
-  it.each(["es", "en"])("quem tinha %s gravado vê a tela em português", (gravado) => {
+  it("quem tem en gravado vê a tela em inglês, pelo catálogo carregado", () => {
+    expect(idiomaDaTela("en")).toBe("en");
+    render(createElement(IdiomaProvider, { locale: "en", children: createElement(Frase, { texto: "Contatos" }) }));
+    expect(screen.getByTestId("frase").textContent).toBe("Contacts");
+  });
+
+  it.each(["es"])("quem tinha %s gravado vê a tela em português", (gravado) => {
     expect(idiomaDaTela(gravado)).toBe(IDIOMA_PADRAO);
     render(
       createElement(IdiomaProvider, { locale: idiomaDaTela(gravado), children: createElement(Frase, { texto: "Contatos" }) }),
@@ -145,7 +151,8 @@ describe("espanhol e inglês fora do seletor (17/11/2026): só a TELA muda", () 
 
   it("idiomaDaTela: visível segue ele mesmo; o resto cai no padrão", () => {
     expect(idiomaDaTela("pt-BR")).toBe("pt-BR");
-    for (const codigo of ["es-MX", "en-US", "tr", "zh-CN", "xx", null, undefined]) {
+    expect(idiomaDaTela("en")).toBe("en");
+    for (const codigo of ["es-MX", "tr", "zh-CN", "xx", null, undefined]) {
       expect(idiomaDaTela(codigo)).toBe(IDIOMA_PADRAO);
     }
   });
