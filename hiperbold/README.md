@@ -127,6 +127,11 @@ Os de `easypanel/` leem `EASYPANEL_HIPERBOLD_URL` e `EASYPANEL_HIPERBOLD_API_KEY
 - **Banco local:** nunca `supabase db reset`; o `hiperbold/scripts/supabase-local.sh` só serve para banco NOVO (apaga os dados locais).
 - **Produção:** deploy, `prod-schema.sh`, EasyPanel e banco real só pela sessão principal, nunca por sub-agente. Variável nova de produção e ação destrutiva no banco pedem confirmação do Filipe.
 - **GitHub:** o `gh` dentro do repositório resolve para o remoto do autor; sempre passar `-R hiperbold/hiperbold-crm`. Fluxos agendados herdados do autor ficam desligados no fork (D-192).
+- **Publicação e testes por tipo de versão (decisão do Filipe, 19/11/2026):**
+  - Um PR só por dia, com tudo o que foi pedido e consertado no dia, inclusive o que os outros chats do CRM estão fazendo.
+  - O tipo da versão sai dos fragmentos de `.changes/`: `exige_acao` é major, `capacidade_nova` é minor, `nada_mudou` é patch.
+  - PR que sobe major ou minor só entra depois dos testes completos verdes: typecheck, lint, test:unit, test:db e e2e. Eles rodam no WSL `hiperbold-homolog` pelo `hiperbold/scripts/verificar.sh` (ver [`verificacao.md`](verificacao.md)).
+  - PR de patch dispensa os testes pesados e vai pela rota urgente (rótulo `urgente`). O verify e o build seguem, porque o build gera a imagem.
 - **Texto:** português do Brasil, sem travessão.
 
 ## Em outra máquina (migração para o Mac, 10/2026)
