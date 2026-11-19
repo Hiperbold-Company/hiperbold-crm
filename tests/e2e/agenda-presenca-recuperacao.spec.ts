@@ -390,7 +390,14 @@ test("Inbox marca cliente/conversa; detalhe antigo confirma presença com evidê
 });
 
 test.describe("datas do compromisso seguem idioma e fuso próprios", () => {
-  test.use({ locale: "en-US", timezoneId: "Pacific/Honolulu" });
+  // O navegador fica em en-US (é o que a prova de fuso mede), mas o pedido diz
+  // pt-BR: com o inglês visível, o Accept-Language en-US levaria a tela ao
+  // inglês, e esta spec afirma o texto em português.
+  test.use({
+    locale: "en-US",
+    timezoneId: "Pacific/Honolulu",
+    extraHTTPHeaders: { "Accept-Language": "pt-BR" },
+  });
 
   test("PT e ES preservam a virada de dia e o instante da presença", async ({ page }, info) => {
     const f = await fixture(),
