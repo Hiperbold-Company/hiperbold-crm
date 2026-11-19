@@ -19,7 +19,26 @@ const revogarAcessosSpy = vi.fn(async (_db: unknown, _org: string, _contato: str
 vi.mock("@/lib/mcp/servidor-externo/do-agente/revogacao", () => ({
   revogarAcessosDoContato: (db: unknown, org: string, contato: string) => revogarAcessosSpy(db, org, contato),
 }));
-const ADMIN = { cliente: "admin" };
+// O cliente de servidor também conta: a contagem de `crm_leads` passa por ele (a RLS do `agent`
+// esconde negócio de outro dono). Registra em `contagens` com a marca `admin`.
+const ADMIN = {
+  cliente: "admin",
+  from: (tabela: string) => {
+    const filtros: Array<[string, unknown]> = [];
+    const cadeia = {
+      select: () => cadeia,
+      eq: (coluna: string, valor: unknown) => {
+        filtros.push([coluna, valor]);
+        return cadeia;
+      },
+      then: (resolve: (valor: unknown) => unknown) => {
+        contagens.push({ tabela, filtros, cliente: "admin" });
+        return resolve({ count: 0, error: null });
+      },
+    };
+    return cadeia;
+  },
+};
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ADMIN }));
 
 const ORG = "c05e7a00-0000-4000-8000-000000000001";
@@ -30,7 +49,7 @@ const USUARIO = "c05e7a00-0000-4000-8000-0000000000a1";
 const FUNCAO = "fn_apagar_contato_com_historico";
 
 const chamadas: Array<{ tabela: string; op: string }> = [];
-const contagens: Array<{ tabela: string; filtros: Array<[string, unknown]> }> = [];
+const contagens: Array<{ tabela: string; filtros: Array<[string, unknown]>; cliente?: "admin" }> = [];
 const rpcs: Array<{ nome: string; args: Record<string, unknown> | undefined }> = [];
 
 interface CadeiaContagem {
@@ -154,8 +173,10 @@ describe("deleteContactHandler", () => {
         ],
       },
       {
-        // Negócio em aberto também barra; encerrado não (filtro por status).
+        // Negócio em aberto também barra; encerrado não (filtro por status). Contado pelo cliente
+        // de servidor, filtrado pela organização do ctx: a RLS do agent esconderia o do colega.
         tabela: "crm_leads",
+        cliente: "admin",
         filtros: [
           ["contact_id", CONTATO],
           ["organization_id", ORG],

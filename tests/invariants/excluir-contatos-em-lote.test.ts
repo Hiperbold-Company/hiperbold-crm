@@ -66,8 +66,9 @@ beforeAll(() => {
     insert into public.crm_pipelines (id, organization_id, name, slug) values ('${PIPELINE}', '${ORG}', 'Funil', 'funil-lote');
     insert into public.crm_stages (id, organization_id, pipeline_id, name, slug, position)
       values ('${STAGE}', '${ORG}', '${PIPELINE}', 'Novo', 'novo', 1000);
-    insert into public.crm_leads (id, organization_id, pipeline_id, stage_id, title, contact_id)
-      values ('${LEAD}', '${ORG}', '${PIPELINE}', '${STAGE}', 'Negócio do vivo', '${C_VIVO}');
+    -- Negócio ENCERRADO (ganho): o aberto barra a exclusão desde a 1019, e o encerrado segue saindo sem contato.
+    insert into public.crm_leads (id, organization_id, pipeline_id, stage_id, title, contact_id, status, closed_at)
+      values ('${LEAD}', '${ORG}', '${PIPELINE}', '${STAGE}', 'Negócio do vivo', '${C_VIVO}', 'won', now());
   `);
 });
 
@@ -89,7 +90,7 @@ function existe(tabela: string, coluna: string, valor: string): boolean {
 }
 
 describe("0971 — fn_excluir_contatos_em_lote", () => {
-  it("gerente apaga mensagens, conversas e ficha numa só chamada; o negócio fica, sem contato", () => {
+  it("gerente apaga mensagens, conversas e ficha numa só chamada; o negócio encerrado fica, sem contato", () => {
     expect(chamar(GERENTE, ORG, [C_VIVO])).toBe(C_VIVO);
     expect(existe("contacts", "id", C_VIVO)).toBe(false);
     expect(existe("messages", "contact_id", C_VIVO)).toBe(false);
