@@ -14723,5 +14723,16 @@
   "Como a marca própria está ligada, ela também é a logo do sistema para esta empresa.": "Since custom branding is on, it is also the system logo for this company.",
   "PNG ou JPG, até 512 KB. O círculo mostra o centro da imagem: prefira uma logo quadrada.": "PNG or JPG, up to 512 KB. The circle shows the center of the image: a square logo works best.",
   "Automação duplicada. A cópia está desligada.": "Automation duplicated. The copy is turned off.",
-  "Follow-up duplicado. A cópia está desligada.": "Follow-up duplicated. The copy is turned off."
+  "Follow-up duplicado. A cópia está desligada.": "Follow-up duplicated. The copy is turned off.",
+  "A escolha das páginas expirou. Clique em Conectar de novo.": "The page selection expired. Click Connect again.",
+  "Esta escolha foi aberta em outra empresa. Volte para ela, ou clique em Conectar de novo nesta empresa.": "This selection was opened in another company. Go back to it, or click Connect again in this company.",
+  "Não foi possível carregar as páginas. Tente de novo.": "Couldn't load the pages. Try again.",
+  "Escolha quais páginas conectar nesta empresa": "Choose which pages to connect to this company",
+  "Conecte só as páginas desta empresa. Páginas de outros clientes devem ser conectadas na empresa deles.": "Connect only this company's pages. Other clients' pages must be connected in their own company.",
+  "Pesquisar páginas": "Search pages",
+  "Nenhuma página encontrada para esta pesquisa.": "No pages found for this search.",
+  "Já conectada em outra empresa": "Already connected in another company",
+  "Já conectada aqui": "Already connected here",
+  "Marque no máximo 20 páginas por vez.": "Select at most 20 pages at a time.",
+  "Esta escolha foi aberta em outra sessão. Clique em Conectar de novo.": "This selection was opened in another session. Click Connect again."
 }

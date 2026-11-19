@@ -90,6 +90,10 @@ interface Consulta {
  * de dados da Meta (0987): ele chega com o id da PESSOA, sem organização, e a
  * organização de cada sessão achada vem da própria linha, que é arquivada
  * filtrando por ela.
+ * A quinta é a ESCOLHA das contas da Meta (D-242): a tela marca como
+ * indisponível a conta já viva em outra organização. Ela lê só
+ * `organization_id` e o id da conta, e a função devolve uma marca por conta
+ * ("aqui" ou "outra"), nunca a outra organização.
  *
  * A lista só cresce com motivo escrito.
  */
@@ -98,6 +102,7 @@ export const MOTIVOS_DECLARADOS: ReadonlyMap<string, string> = new Map([
   ["conta_viva_em_outra_organizacao", "lib/channels/meta-social/store.ts"],
   ["linha_arquivada_da_propria_organizacao", "lib/channels/meta-social/store.ts"],
   ["exclusao_pedida_pela_meta", "lib/channels/meta-social/exclusao.ts"],
+  ["situacao_da_escolha_de_contas", "lib/channels/meta-social/store.ts"],
   ["numero_da_propria_organizacao_vivo_ou_arquivado", "lib/channels/meta/conectar-canal-oficial.ts"],
 ]);
 

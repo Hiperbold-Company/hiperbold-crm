@@ -15,7 +15,8 @@ import { MagnifyingGlass, Plus } from "@/lib/ui/icons";
 import { CartaoDeConexao, tituloDaConexao } from "./CartaoDeConexao";
 import { CriarConexao, type SubDoCriar, type TipoDoCriar } from "./CriarConexao";
 import { GerenciarConexao, type AbaDoGerenciar } from "./GerenciarConexao";
-import { lerAviso } from "./RedesSociaisClient";
+import { EscolherContasDaMeta } from "./EscolherContasDaMeta";
+import { avisoDaEscolha, escolhaPedida, lerAviso } from "./RedesSociaisClient";
 
 /**
  * Conexões — TODOS os canais numa grade só de cartões (decisão do dono do produto, 17/11/2026).
@@ -52,6 +53,8 @@ type PedidoDaUrl =
   | { kind: "reconectar"; id: string }
   | { kind: "templates-oficial" }
   | { kind: "oficial" }
+  /** Volta do OAuth com 2+ contas: nada foi conectado, a pessoa escolhe quais (D-242). */
+  | { kind: "escolher"; plataforma: "instagram" | "messenger" }
   | {
       kind: "social";
       plataforma: "instagram" | "messenger";
@@ -67,6 +70,8 @@ function pedidoDaUrl(params: URLSearchParams, t: (s: string) => string): PedidoD
   if (aba === "oficial") return sub === "templates" ? { kind: "templates-oficial" } : { kind: "oficial" };
   const plataforma = params.get("plataforma") === "messenger" ? "messenger" : "instagram";
   if (aba === "sociais") {
+    const escolher = escolhaPedida(params);
+    if (escolher) return { kind: "escolher", plataforma: escolher };
     const aviso = lerAviso(params, t);
     if (aviso) return { kind: "social", plataforma, aviso };
     return { kind: "criar", tipo: plataforma, sub: "conexao" };
@@ -137,6 +142,8 @@ export function ConexoesShell({
   const [aviso, setAviso] = useState<{ chave: number; tipo: "ok" | "erro" | "parcial"; texto: string } | null>(null);
   const avisoMostrado = useRef<number | null>(null);
   const [contador, setContador] = useState(0);
+  /** A escolha das contas da Meta aberta (volta do OAuth com 2+ contas). */
+  const [escolher, setEscolher] = useState<"instagram" | "messenger" | null>(null);
 
   // A URL é lida A CADA MUDANÇA, não só no primeiro render: a faixa de conexão caída leva a
   // `?reconectar=<id>` estando já na tela, e voltar/avançar no navegador troca os parâmetros.
@@ -151,6 +158,9 @@ export function ConexoesShell({
     if (lido?.kind === "criar") {
       setGerenciar(null);
       setCriar({ tipo: lido.tipo, sub: lido.sub, chave: n });
+    } else if (lido?.kind === "escolher") {
+      setCriar(null);
+      setEscolher(lido.plataforma);
     } else if (lido?.kind === "social") {
       // Volta do OAuth: o Criar não abre; o desfecho vira aviso e o cartão novo ganha destaque.
       setCriar(null);
@@ -344,6 +354,23 @@ export function ConexoesShell({
           pareamentoQr={pareamentoQr}
           temConexaoOficial={lista.some((c) => c.tipo === "whatsapp_oficial" && c.via === "meta")}
           aoMudar={() => void atualizarGrade()}
+        />
+      ) : null}
+
+      {escolher ? (
+        <EscolherContasDaMeta
+          plataforma={escolher}
+          aoFechar={() => setEscolher(null)}
+          aoConcluir={(r) => {
+            setEscolher(null);
+            const lido = avisoDaEscolha(r, t);
+            if (lido) {
+              setAviso({ chave: contador + 1, tipo: lido.tipo, texto: lido.texto });
+              setContador(contador + 1);
+            }
+            void atualizarGrade();
+            void qc.invalidateQueries({ queryKey: ["meta-social"] });
+          }}
         />
       ) : null}
 

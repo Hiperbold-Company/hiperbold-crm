@@ -1426,6 +1426,9 @@ export const AUDIT_ACTIONS = [
   // não deixa rastro. O desfecho bom é `channel.connected`/`channel.reconnected`.
   "channel.meta_social_connect_started",
   "channel.meta_social_connect_failed",
+  // A volta do OAuth trouxe várias contas e abriu a ESCOLHA (D-242): nada foi
+  // conectado ainda. Metadata só com contagens (as contas podem ser de outros clientes).
+  "channel.meta_social_selection_opened",
   // O cron `meta-social-tokens` renovou (ou tentou e falhou) tokens do Instagram.
   // Só quando houve efeito.
   "channel.meta_social_tokens_renewed",
