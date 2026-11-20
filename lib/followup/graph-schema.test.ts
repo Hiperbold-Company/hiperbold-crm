@@ -1702,3 +1702,30 @@ describe('graph-schema', () => {
     });
   });
 });
+
+describe('Responder no comentário: versões extras', () => {
+  const base = { id: 'pub', label: 'Pública', position: { x: 0, y: 0 } };
+  const publica = (config: unknown) =>
+    flowNodeSchema.safeParse({ ...base, type: 'instagram_public_reply', config });
+  const privada = (config: unknown) =>
+    flowNodeSchema.safeParse({ ...base, type: 'instagram_private_reply', config });
+
+  it('aceita a forma antiga, só com o texto', () => {
+    expect(publica({ text: 'Te chamei no Direct!' }).success).toBe(true);
+  });
+
+  it('aceita até 9 versões extras (10 no total) e recusa a 10ª extra', () => {
+    const nove = Array.from({ length: 9 }, (_, i) => `Versão ${i + 2}`);
+    expect(publica({ text: 'Versão 1', variations: nove }).success).toBe(true);
+    expect(publica({ text: 'Versão 1', variations: [...nove, 'Versão 11'] }).success).toBe(false);
+  });
+
+  it('aceita versão extra vazia (caixa recém-criada) e recusa acima do teto de caracteres', () => {
+    expect(publica({ text: 'Ok', variations: [''] }).success).toBe(true);
+    expect(publica({ text: 'Ok', variations: ['x'.repeat(1001)] }).success).toBe(false);
+  });
+
+  it('o Direct continua com um texto só', () => {
+    expect(privada({ text: 'Oi', variations: ['Olá'] }).success).toBe(false);
+  });
+});

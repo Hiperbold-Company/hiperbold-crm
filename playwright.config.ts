@@ -145,6 +145,11 @@ export default defineConfig({
   retries: 0,
   use: {
     baseURL: BASE_URL,
+    // O navegador do Playwright nasce em `en-US`. Com o inglês visível, o
+    // `Accept-Language` levava toda spec ao inglês ("Sign in" em vez de
+    // "Entrar"). As specs afirmam o texto em português, o idioma padrão do
+    // produto; a spec que quiser outro idioma declara o próprio `locale`.
+    locale: "pt-BR",
     // ⚠️ Era `on-first-retry`, e com `retries: 0` logo acima isso significa
     // **trace nunca gravado**. As duas linhas estão certas isoladamente e
     // erradas juntas: uma diz "só no retry", a outra diz "não há retry".

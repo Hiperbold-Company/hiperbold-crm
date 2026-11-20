@@ -74,6 +74,18 @@ export function NodeCard({
   detalhe,
 }: Props) {
   const t = useT();
+  // O nome padrão do bloco sai no idioma de quem lê; o nome que o usuário deu é
+  // dado dele e fica como está.
+  // "Início" e "Fim" são os nomes com que o servidor cria a automação nova
+  // (`grafoInicialDaAutomacao`) e os modelos.
+  const rotulo =
+    label === visual.defaultLabel
+      ? t(visual.defaultLabel)
+      : label === "Início"
+        ? t("Início")
+        : label === "Fim"
+          ? t("Fim")
+          : label;
   const { nomes } = useEtapasDoFluxo();
   const Icon = visual.icon;
   const hasError = (errors?.length ?? 0) > 0;
@@ -103,8 +115,8 @@ export function NodeCard({
           <Icon size={14} aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-text" title={label}>
-            {label}
+          <p className="truncate text-sm font-medium text-text" title={rotulo}>
+            {rotulo}
           </p>
           <p className="line-clamp-2 break-words text-xs text-text-muted" title={subtitle}>
             {subtitle}

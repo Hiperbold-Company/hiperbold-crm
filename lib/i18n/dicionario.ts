@@ -2866,6 +2866,11 @@ export const DICIONARIO: Traducoes = {
   "Revisar modelos do canal": { es: "Revisar plantillas del canal" },
   "Abrir uma conversa afetada": { es: "Abrir una conversación afectada" },
   "Abrir Agenda": { es: "Abrir Agenda" },
+  "Este contato tem 1 negócio em aberto no Pipeline. Ganhe, perca ou passe o negócio para outro contato antes de excluir.": { es: "Este contacto tiene 1 negocio abierto en el Pipeline. Gana, pierde o pasa el negocio a otro contacto antes de eliminar." },
+  "Este contato tem {n} negócios em aberto no Pipeline. Ganhe, perca ou passe os negócios para outro contato antes de excluir.": { es: "Este contacto tiene {n} negocios abiertos en el Pipeline. Gana, pierde o pasa los negocios a otro contacto antes de eliminar." },
+  "Abrir Pipeline": { es: "Abrir Pipeline" },
+  "não foram excluídos: têm negócio em aberto ou compromisso na agenda.": { es: "no se eliminaron: tienen un negocio abierto o una cita en la agenda." },
+  "Isso remove os contatos selecionados e as conversas e mensagens deles. Os negócios encerrados continuam, sem contato. Contato com negócio em aberto ou compromisso na agenda não é excluído. Esta ação não pode ser desfeita.": { es: "Esto elimina los contactos seleccionados y sus conversaciones y mensajes. Los negocios cerrados continúan, sin contacto. Un contacto con negocio abierto o cita en la agenda no se elimina. Esta acción no se puede deshacer." },
   "Este contato tem 1 compromisso na Agenda. Cancele ou apague o compromisso antes de excluir.": {
     es: "Este contacto tiene 1 cita en la Agenda. Cancela o elimina la cita antes de eliminar el contacto.",
   },
@@ -25938,9 +25943,6 @@ export const DICIONARIO: Traducoes = {
   },
   "1 contato excluído.": { es: "1 contacto eliminado." },
   "contatos excluídos.": { es: "contactos eliminados." },
-  "não foram excluídos: têm compromisso na agenda.": {
-    es: "no se eliminaron: tienen una cita en la agenda.",
-  },
   "contato exportado": { es: "contacto exportado" },
   "contatos exportados": { es: "contactos exportados" },
   "Todos os": { es: "Todos los" },
@@ -25952,10 +25954,6 @@ export const DICIONARIO: Traducoes = {
   "contatos do filtro": { es: "contactos del filtro" },
   "Selecionar esta página": { es: "Seleccionar esta página" },
   "Excluir 1 contato?": { es: "¿Eliminar 1 contacto?" },
-  "Isso remove os contatos selecionados e as conversas e mensagens deles. Os negócios continuam, sem contato. Contato com compromisso na agenda não é excluído. Esta ação não pode ser desfeita.":
-    {
-      es: "Esto elimina los contactos seleccionados y sus conversaciones y mensajes. Los negocios continúan, sin contacto. Un contacto con una cita en la agenda no se elimina. Esta acción no se puede deshacer.",
-    },
   "Para confirmar, digite a quantidade:": { es: "Para confirmar, escribe la cantidad:" },
   "Entrou no CRM": { es: "Entró al CRM" },
   Filtrado: { es: "Filtrado" },
@@ -28469,6 +28467,15 @@ export const DICIONARIO: Traducoes = {
     es: "Responder todos los comentarios en público la Meta lo interpreta como spam. Úsalo con moderación.",
   },
   "Resposta no comentário": { es: "Respuesta en el comentario" },
+  "Versão 1": { es: "Versión 1" },
+  "Remover versão": { es: "Quitar versión" },
+  "Adicionar outra versão": { es: "Agregar otra versión" },
+  "Com mais de uma versão, cada comentário recebe uma delas, sorteada. Variar o texto ajuda a não parecer spam para o Instagram.":
+    {
+      es: "Con más de una versión, cada comentario recibe una de ellas, sorteada. Variar el texto ayuda a no parecer spam para Instagram.",
+    },
+  "versões": { es: "versiones" },
+  "Limite de 10 versões": { es: "Límite de 10 versiones" },
   "Se houver resposta privada, ela vem antes desta no caminho.": {
     es: "Si hay respuesta privada, va antes de esta en el camino.",
   },
@@ -28827,6 +28834,9 @@ export const DICIONARIO: Traducoes = {
   "Ação sem tipo: não dá para ler.": { es: "Acción sin tipo: no se puede leer." },
   "Ações da regra": { es: "Acciones de la regla" },
   "Boas-vindas ao novo contato": { es: "Bienvenida al nuevo contacto" },
+  "Te chamei no Direct!": { es: "¡Te escribí por Direct!" },
+  "Oi, @{{gatilho.autor_usuario}}! Te mandei aqui o que você pediu.": { es: "¡Hola, @{{gatilho.autor_usuario}}! Te envié aquí lo que pediste." },
+  "Olá, {{contact.name}}!": { es: "¡Hola, {{contact.name}}!" },
   "Buscar pelo nome": { es: "Buscar por nombre" },
   "Condições da regra": { es: "Condiciones de la regla" },
   "Criar ou mover o negócio tem regras próprias entre funis no motor antigo (transferir, continuar no pós-venda).": { es: "Crear o mover el negocio tiene reglas propias entre embudos en el motor antiguo (transferir, continuar en posventa)." },

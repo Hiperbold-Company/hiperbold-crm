@@ -4,9 +4,10 @@
  *
  * Semântica da lixeira, de propósito (não existe "outra forma de apagar"):
  *  1. contato com vínculo RESTRICT que a exclusão não apaga (`VINCULOS_RESTRICT_NAO_APAGADOS`,
- *     hoje a agenda) NÃO é apagado e volta como "bloqueado", com o histórico intacto;
- *  2. apaga as mensagens, as conversas e a ficha. Os negócios (`crm_leads.contact_id`) ficam,
- *     sem contato (`ON DELETE SET NULL`);
+ *     a agenda e o negócio em aberto) NÃO é apagado e volta como "bloqueado", com o histórico
+ *     intacto;
+ *  2. apaga as mensagens, as conversas e a ficha. Os negócios ENCERRADOS (ganho/perdido,
+ *     `crm_leads.contact_id`) ficam, sem contato (`ON DELETE SET NULL`); negócio em aberto barra (item 1);
  *  3. emite `contact.deleted` por contato apagado (quem assina webhook de saída recebe o mesmo
  *     evento da lixeira).
  * É apagamento DEFINITIVO (não anonimiza, não tem lixeira): quem quer preservar histórico
@@ -102,22 +103,42 @@ export async function excluirContatosEmLote(
     resultado.ignorados += linhas.length - vivos.length;
     if (vivos.length === 0) continue;
 
-    // Vínculos que barram o DELETE da ficha: conferidos ANTES de qualquer exclusão. A função do
-    // banco confere de novo por dentro (defesa em profundidade); aqui é para CLASSIFICAR o que
-    // voltou como bloqueado. Falha da checagem não autoriza seguir.
+    // Vínculos que barram o DELETE da ficha: conferidos ANTES de qualquer exclusão, para
+    // CLASSIFICAR o que volta como bloqueado. A função do banco confere os dois de novo por dentro
+    // (agenda e negócio em aberto, migrations 0971 e 1019) e pula, sem abortar, o contato barrado;
+    // o gatilho `trg_contato_com_negocio_aberto_nao_sai` (1019) recusa a ficha em qualquer outro
+    // caminho. Falha da checagem não autoriza seguir.
+    //
+    // Sem teto de linhas: a resposta do PostgREST pode vir cortada pelo `max_rows` (um contato
+    // com muitos compromissos ocupa muitas linhas). Por isso a consulta se repete só com os
+    // contatos ainda não achados: cada rodada com linha acha pelo menos um contato novo, e só a
+    // resposta VAZIA prova que os restantes não têm vínculo. Nenhum tamanho de página entra na
+    // conta, então um `max_rows` menor não esconde bloqueio.
     const barrados = new Set<string>();
     for (const vinculo of VINCULOS_RESTRICT_NAO_APAGADOS) {
-      const { data, error } = await supabase
-        .from(vinculo.tabela)
-        .select("contact_id")
-        .eq("organization_id", organizationId)
-        .in("contact_id", vivos);
-      if (error) {
-        resultado.interrompido = true;
-        resultado.falhou.push(...vivos);
-        return resultado;
+      let restantes = vivos.filter((id) => !barrados.has(id));
+      while (restantes.length > 0) {
+        let consulta = supabase
+          .from(vinculo.tabela)
+          .select("contact_id")
+          .eq("organization_id", organizationId)
+          .in("contact_id", restantes);
+        if (vinculo.filtro) consulta = consulta.eq(vinculo.filtro.coluna, vinculo.filtro.valor);
+        const { data, error } = await consulta;
+        if (error) {
+          resultado.interrompido = true;
+          resultado.falhou.push(...vivos);
+          return resultado;
+        }
+        const achados = new Set(
+          ((data ?? []) as Array<{ contact_id: string }>)
+            .map((linha) => linha.contact_id)
+            .filter((id) => restantes.includes(id)),
+        );
+        if (achados.size === 0) break;
+        for (const id of achados) barrados.add(id);
+        restantes = restantes.filter((id) => !achados.has(id));
       }
-      for (const linha of (data ?? []) as Array<{ contact_id: string }>) barrados.add(linha.contact_id);
     }
     const apagaveis = vivos.filter((id) => !barrados.has(id));
     resultado.bloqueados.push(...vivos.filter((id) => barrados.has(id)));
@@ -135,7 +156,8 @@ export async function excluirContatosEmLote(
 
     const idsApagados = (Array.isArray(apagados) ? apagados : []) as string[];
     resultado.excluidos.push(...idsApagados);
-    // Sumiu entre a conferência e a função (outra pessoa apagou), ou passou a ter compromisso.
+    // Sumiu entre a conferência e a função (outra pessoa apagou), ou passou a ter compromisso ou
+    // negócio em aberto.
     resultado.inexistentes += apagaveis.length - idsApagados.length;
 
     for (const lote of blocos(idsApagados, EVENTOS_EM_PARALELO)) {

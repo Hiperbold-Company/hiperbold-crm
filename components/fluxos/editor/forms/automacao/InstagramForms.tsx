@@ -5,12 +5,16 @@
  * privado", "Responder no comentário" e "Confere se segue". O texto aceita
  * variáveis; quem confere o tamanho em bytes depois de renderizar é o canal.
  */
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/hooks/i18n/useT";
 import {
   MAX_TEXTO_DA_RESPOSTA_AO_COMENTARIO,
+  MAX_VERSOES_EXTRAS_DA_RESPOSTA_PUBLICA,
+  type InstagramPublicReplyConfig,
   type InstagramReplyConfig,
 } from "@/lib/followup/graph-schema";
+import { Trash } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
 import { AjudaDeVariaveis, Campo, type RespostaDisponivel } from "./comum";
@@ -19,7 +23,7 @@ import { AjudaDeVariaveis, Campo, type RespostaDisponivel } from "./comum";
 export const AVISO_DA_RESPOSTA_PUBLICA =
   "Responder todos os comentários em público é lido como spam pela Meta. Use com moderação.";
 
-function TextoDaResposta({
+function TextoDaResposta<C extends InstagramReplyConfig>({
   id,
   rotulo,
   config,
@@ -28,8 +32,8 @@ function TextoDaResposta({
 }: {
   id: string;
   rotulo: string;
-  config: InstagramReplyConfig;
-  onChange: (c: InstagramReplyConfig) => void;
+  config: C;
+  onChange: (c: C) => void;
   respostas?: RespostaDisponivel[];
 }) {
   const t = useT();
@@ -41,7 +45,7 @@ function TextoDaResposta({
         rows={4}
         maxLength={MAX_TEXTO_DA_RESPOSTA_AO_COMENTARIO}
         value={config.text}
-        onChange={(e) => onChange({ text: e.target.value })}
+        onChange={(e) => onChange({ ...config, text: e.target.value })}
       />
       <p
         className={cn(
@@ -57,6 +61,7 @@ function TextoDaResposta({
         respostas={respostas ?? []}
         onInserir={(v) =>
           onChange({
+            ...config,
             text: `${config.text}${config.text && !config.text.endsWith(" ") ? " " : ""}${v}`,
           })
         }
@@ -88,11 +93,19 @@ export function RespostaPrivadaForm(props: {
 }
 
 export function RespostaPublicaForm(props: {
-  config: InstagramReplyConfig;
-  onChange: (c: InstagramReplyConfig) => void;
+  config: InstagramPublicReplyConfig;
+  onChange: (c: InstagramPublicReplyConfig) => void;
   respostas?: RespostaDisponivel[];
 }) {
   const t = useT();
+  const { config, onChange } = props;
+  const extras = config.variations ?? [];
+  const cheio = extras.length >= MAX_VERSOES_EXTRAS_DA_RESPOSTA_PUBLICA;
+  /** Grava as versões extras; lista vazia some da config (sem a chave `variations`). */
+  function gravarExtras(novas: string[]) {
+    const { variations: _antigas, ...resto } = config;
+    onChange(novas.length > 0 ? { ...resto, variations: novas } : resto);
+  }
   return (
     <div className="space-y-3" data-testid="instagram-publica-form">
       <p
@@ -101,11 +114,61 @@ export function RespostaPublicaForm(props: {
       >
         {t(AVISO_DA_RESPOSTA_PUBLICA)}
       </p>
-      <TextoDaResposta
-        id="instagram-publica-texto"
-        rotulo={t("Resposta no comentário")}
-        {...props}
-      />
+      <TextoDaResposta id="instagram-publica-texto" rotulo={t("Versão 1")} {...props} />
+      {extras.map((v, i) => {
+        const n = i + 2;
+        const id = `instagram-publica-versao-${n}`;
+        return (
+          <Campo key={n} id={id} rotulo={`${t("Versão")} ${n}`}>
+            <Textarea
+              id={id}
+              data-testid={id}
+              rows={3}
+              maxLength={MAX_TEXTO_DA_RESPOSTA_AO_COMENTARIO}
+              value={v}
+              onChange={(e) => gravarExtras(extras.map((x, j) => (j === i ? e.target.value : x)))}
+            />
+            <div className="flex items-center justify-between">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                data-testid={`instagram-publica-remover-versao-${n}`}
+                aria-label={`${t("Remover versão")} ${n}`}
+                onClick={() => gravarExtras(extras.filter((_, j) => j !== i))}
+              >
+                <Trash className="size-4" aria-hidden />
+              </Button>
+              <p
+                className={cn(
+                  "text-xs",
+                  v.length > MAX_TEXTO_DA_RESPOSTA_AO_COMENTARIO
+                    ? "text-error-fg"
+                    : "text-text-muted",
+                )}
+              >
+                {v.length} / {MAX_TEXTO_DA_RESPOSTA_AO_COMENTARIO}
+              </p>
+            </div>
+          </Campo>
+        );
+      })}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        data-testid="instagram-publica-adicionar-versao"
+        disabled={cheio}
+        {...(cheio ? { title: t("Limite de 10 versões") } : {})}
+        onClick={() => gravarExtras([...extras, ""])}
+      >
+        {t("Adicionar outra versão")}
+      </Button>
+      <p className="text-xs text-text-muted">
+        {t(
+          "Com mais de uma versão, cada comentário recebe uma delas, sorteada. Variar o texto ajuda a não parecer spam para o Instagram.",
+        )}
+      </p>
       <p className="text-xs text-text-muted">
         {t("Se houver resposta privada, ela vem antes desta no caminho.")}
       </p>

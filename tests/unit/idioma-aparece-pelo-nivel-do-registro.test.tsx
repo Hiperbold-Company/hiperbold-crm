@@ -64,8 +64,8 @@ describe("o registro de idiomas", () => {
     expect(REGISTRO_DE_IDIOMAS[0]?.codigo).toBe(IDIOMA_PADRAO);
   });
 
-  it("o português é `completo`; o espanhol saiu do seletor sem soltar a trava", () => {
-    // espanhol e inglês saíram do seletor em 17/11/2026 (lib/i18n/registro.ts, `retiradoDoSeletorEm`). O gate do espanhol
+  it("o português e o inglês são `completo`; o espanhol saiu do seletor sem soltar a trava", () => {
+    // espanhol e inglês saíram do seletor em 17/11/2026; o inglês voltou em 19/11/2026 (lib/i18n/registro.ts, `retiradoDoSeletorEm`). O gate do espanhol
     // (`i18n-espanhol-cobre-a-tela`) é fixo em `es` e não lê o nível, e a régua
     // dos outros idiomas lê `IDIOMAS_COM_TEXTO` — o rebaixamento não solta
     // frase de tela nenhuma. Religar é voltar o nível a `completo`.
@@ -73,7 +73,8 @@ describe("o registro de idiomas", () => {
     expect(doRegistro("pt-BR")?.nivel).toBe("completo");
     expect(doRegistro("es")?.nivel).toBe("em_construcao");
     expect(doRegistro("es")).toHaveProperty("retiradoDoSeletorEm", "2026-11-17");
-    expect(doRegistro("en")).toHaveProperty("retiradoDoSeletorEm", "2026-11-17");
+    expect(doRegistro("en")?.nivel).toBe("completo");
+    expect(doRegistro("en")).not.toHaveProperty("retiradoDoSeletorEm");
   });
 
   it("nenhum idioma declara `telas_principais` enquanto a régua não existe", () => {

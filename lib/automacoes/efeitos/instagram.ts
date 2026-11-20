@@ -14,6 +14,8 @@
  * O desfecho escolhe a SAÍDA do bloco (`DesfechoDoEfeito.saida`); o detalhe do
  * evento guarda só o status (nunca o texto do comentário nem o da resposta).
  */
+import { randomInt } from "node:crypto";
+
 import type { ResultadoDoEfeito } from "@/lib/followup/engine";
 import {
   JA_RESPONDIDO_BRANCH_ID,
@@ -74,6 +76,24 @@ function textoDaResposta(c: Contexto, modelo: string): string | null {
   return t;
 }
 
+/**
+ * Escolhe a versão da resposta pública: `text` + `variations` (as só-espaço saem).
+ * `sorteado` em [0, 1); o índice é limitado ao último para nunca sair da lista.
+ */
+export function versaoDaResposta(
+  config: { text: string; variations?: string[] },
+  sorteado: number,
+): string {
+  const lista = [config.text, ...(config.variations ?? []).filter((v) => v.trim() !== "")];
+  const n = lista.length;
+  return lista[Math.min(Math.floor(sorteado * n), n - 1)] ?? config.text;
+}
+
+/** Fonte segura do sorteio (anti-spam: o texto não pode ser previsível). */
+function sorteio(): number {
+  return randomInt(0, 2 ** 48 - 1) / 2 ** 48;
+}
+
 function falha(tipo: NoDoInstagram["type"], erro: string): ResultadoDoEfeito {
   return { desfecho: { ok: false, erro }, detalhes: [{ tipo, ok: false, erro }] };
 }
@@ -120,7 +140,11 @@ export async function executarInstagram(
       return falha(node.type, "comentario_nao_encontrado");
     }
     case "instagram_public_reply": {
-      const t = textoDaResposta(c, node.config.text);
+      // Versão sorteada que não passa (vazia depois das variáveis, ou acima do teto em
+      // bytes) cai no texto principal: a falha não pode virar loteria de 1 em N.
+      const t =
+        textoDaResposta(c, versaoDaResposta(node.config, sorteio())) ??
+        textoDaResposta(c, node.config.text);
       if (!t) return falha(node.type, "texto_invalido");
       let status: Exclude<canal.StatusDoPedido, "expirada">;
       try {

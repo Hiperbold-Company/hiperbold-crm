@@ -131,11 +131,11 @@ export const REGISTRO_DE_IDIOMAS = [
     tagBcp47: "en",
     subtagsDoNavegador: ["en"],
     // Catálogo em `lib/i18n/traducoes/en.json`, lido por `catalogos.ts` (fatia 4
-    // do PROG-022). Promovido a `completo` no Hiperbold CRM em 04/11/2026 (D-225)
-    // e tirado do seletor em 17/11/2026, até a conferência tela a tela.
-    nivel: "em_construcao",
+    // do PROG-022). Promovido a `completo` no Hiperbold CRM em 04/11/2026 (D-225),
+    // tirado do seletor em 17/11/2026 e de volta em 19/11/2026, com as telas do
+    // revisor da Meta (login, conexões, chat, automações) conferidas tela a tela.
+    nivel: "completo",
     fonteDoTexto: "catalogo",
-    retiradoDoSeletorEm: "2026-11-17",
     mantenedor: "Hiperbold",
   },
 ] as const satisfies readonly IdiomaRegistrado[];

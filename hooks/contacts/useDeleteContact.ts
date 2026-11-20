@@ -20,26 +20,51 @@ export function mensagemDeBloqueioPorVinculo(
 ): string | null {
   const porTabela = details?.por_tabela as Record<string, unknown> | undefined;
   const n = porTabela?.calendar_appointments;
-  if (typeof n !== "number" || n < 1) return null;
-  return n === 1
-    ? t("Este contato tem 1 compromisso na Agenda. Cancele ou apague o compromisso antes de excluir.")
-    : t("Este contato tem {n} compromissos na Agenda. Cancele ou apague os compromissos antes de excluir.").replace(
-        "{n}",
-        String(n),
-      );
+  const negocios = porTabela?.crm_leads;
+  const partes: string[] = [];
+  if (typeof negocios === "number" && negocios >= 1) {
+    partes.push(
+      negocios === 1
+        ? t("Este contato tem 1 negócio em aberto no Pipeline. Ganhe, perca ou passe o negócio para outro contato antes de excluir.")
+        : t("Este contato tem {n} negócios em aberto no Pipeline. Ganhe, perca ou passe os negócios para outro contato antes de excluir.").replace(
+            "{n}",
+            String(negocios),
+          ),
+    );
+  }
+  if (typeof n === "number" && n >= 1) {
+    partes.push(
+      n === 1
+        ? t("Este contato tem 1 compromisso na Agenda. Cancele ou apague o compromisso antes de excluir.")
+        : t("Este contato tem {n} compromissos na Agenda. Cancele ou apague os compromissos antes de excluir.").replace(
+            "{n}",
+            String(n),
+          ),
+    );
+  }
+  return partes.length > 0 ? partes.join(" ") : null;
 }
 
 function toastDeBloqueioPorVinculo(err: ApiError): boolean {
   const t = (s: string) => traduzir(s, idiomaAtual());
   const mensagem = mensagemDeBloqueioPorVinculo(err.details, t);
   if (!mensagem) return false;
+  const porTabela = err.details?.por_tabela as Record<string, unknown> | undefined;
+  const temNegocio = typeof porTabela?.crm_leads === "number" && porTabela.crm_leads >= 1;
   toast.error(mensagem, {
-    action: {
-      label: t("Abrir Agenda"),
-      onClick: () => {
-        window.location.href = "/app/agenda";
-      },
-    },
+    action: temNegocio
+      ? {
+          label: t("Abrir Pipeline"),
+          onClick: () => {
+            window.location.href = "/app/kanban";
+          },
+        }
+      : {
+          label: t("Abrir Agenda"),
+          onClick: () => {
+            window.location.href = "/app/agenda";
+          },
+        },
   });
   return true;
 }
