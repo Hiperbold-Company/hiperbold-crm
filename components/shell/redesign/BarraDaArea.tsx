@@ -10,7 +10,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { usePrefetchPorIntencao } from "@/hooks/navigation/prefetchPorIntencao";
 import { cn } from "@/lib/utils";
 
-import { estaEm, useNavegacaoDaMoldura } from "./navegacao";
+import { caminhoNoCatalogo, estaEm, useNavegacaoDaMoldura } from "./navegacao";
 
 /**
  * O TOPO DA ÁREA DE CONTEÚDO na moldura nova.
@@ -39,8 +39,8 @@ export function BarraDaArea({ ajudaBase = null }: { ajudaBase?: string | null })
       className="sticky top-[var(--faixas-de-cima,0px)] z-20 flex min-h-14 items-center gap-2 border-b border-border bg-surface px-3 md:px-6"
     >
       <div className="flex min-w-0 items-center gap-2 md:hidden">
-        {nav.atual && (
-          <span className="truncate text-base font-semibold">{t(nav.atual.label)}</span>
+        {nav.titulo && (
+          <span className="truncate text-base font-semibold">{t(nav.titulo)}</span>
         )}
       </div>
       <nav
@@ -48,7 +48,7 @@ export function BarraDaArea({ ajudaBase = null }: { ajudaBase?: string | null })
         className="hidden min-w-0 flex-1 self-stretch overflow-x-auto md:flex"
       >
         {abas.map((aba) => {
-          const aqui = estaEm(nav.pathname, aba.href);
+          const aqui = estaEm(caminhoNoCatalogo(nav.pathname), aba.href);
           return (
             <Link
               key={aba.href}
