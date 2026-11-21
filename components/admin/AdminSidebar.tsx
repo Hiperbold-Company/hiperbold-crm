@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { ArrowRight } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { SimboloDoProduto } from "@/components/branding/MarcaDoProduto";
@@ -47,6 +48,23 @@ export function AdminSidebar({ userEmail, variant = "desktop", modulosLigados = 
   // batia com o hidratado, que é hydration mismatch. Ver `lib/branding/contexto.tsx`.
   const marca = useMarcaDaInstalacao();
   const destinos = destinosDoAdmin(modulosLigados);
+  const lista = useRef<HTMLElement>(null);
+  const redesignLigado = rd("menu-lista") !== undefined;
+
+  // Com o redesign, os itens têm 40px e a lista passa da dobra: o item da tela
+  // aberta (Credenciais, Recursos opcionais, Extensões) ficava escondido. Rola SÓ
+  // a lista, e só quando o item começa fora da vista; desligado, nada muda.
+  useEffect(() => {
+    const n = lista.current;
+    if (!redesignLigado || !n) return;
+    const ativo = n.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!ativo) return;
+    const caixa = n.getBoundingClientRect();
+    const item = ativo.getBoundingClientRect();
+    if (item.top < caixa.top || item.bottom > caixa.bottom) {
+      n.scrollTop += item.top - caixa.top - (caixa.height - item.height) / 2;
+    }
+  }, [pathname, redesignLigado]);
 
   return (
     <aside
@@ -69,6 +87,7 @@ export function AdminSidebar({ userEmail, variant = "desktop", modulosLigados = 
         </div>
       </div>
       <nav
+        ref={lista}
         className="flex-1 space-y-1 overflow-y-auto p-2"
         data-rd-plataforma={rd("menu-lista")}
         aria-label={t("Navegação plataforma")}>

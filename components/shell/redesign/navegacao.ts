@@ -57,6 +57,19 @@ export function caminhoNoCatalogo(pathname: string): string {
 }
 
 /**
+ * A aba da tela atual: a de caminho mais longo que contém a tela. Sem a
+ * escolha, "/app/tasks/planos" acendia "Tarefas" e "Planos de tarefa" juntas.
+ */
+export function abaDaTela(pathname: string, hrefs: readonly string[]): string | null {
+  const caminho = caminhoNoCatalogo(pathname);
+  let melhor: string | null = null;
+  for (const href of hrefs) {
+    if (estaEm(caminho, href) && (!melhor || href.length > melhor.length)) melhor = href;
+  }
+  return melhor;
+}
+
+/**
  * O hub (`/app/settings`) e as telas de Configurações que o catálogo não lista
  * (billing, templates, canal-oficial, atualizacao) não têm destino próprio:
  * `atual` fica vazio e a faixa do celular ficava sem nome. Nelas o nome é o do

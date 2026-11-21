@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 
 import { AlertsBell } from "@/components/shell/AlertsBell";
 import { AvisoDePropostaEmDestaque } from "@/components/shell/AvisoDePropostaEmDestaque";
@@ -10,7 +11,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { usePrefetchPorIntencao } from "@/hooks/navigation/prefetchPorIntencao";
 import { cn } from "@/lib/utils";
 
-import { caminhoNoCatalogo, estaEm, useNavegacaoDaMoldura } from "./navegacao";
+import { abaDaTela, useNavegacaoDaMoldura } from "./navegacao";
 
 /**
  * O TOPO DA ÁREA DE CONTEÚDO na moldura nova.
@@ -32,6 +33,23 @@ export function BarraDaArea({ ajudaBase = null }: { ajudaBase?: string | null })
   const nav = useNavegacaoDaMoldura();
   const intencao = usePrefetchPorIntencao();
   const abas = nav.abasDaArea.length >= 2 ? nav.abasDaArea : [];
+  const faixa = useRef<HTMLElement>(null);
+  // Uma aba só: a de caminho mais longo que contém a tela atual. Sem isto,
+  // "/app/tasks/planos" acendia "Tarefas" e "Planos de tarefa" juntas.
+  const abaAtual = abaDaTela(nav.pathname, abas.map((aba) => aba.href));
+
+  // Áreas com muitas abas (Configurações) passam da largura: a aba da tela
+  // atual pode nascer fora da vista. Rola só a faixa (nunca a página) até ela.
+  useEffect(() => {
+    const n = faixa.current;
+    const aba = n?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!n || !aba) return;
+    const inicio = aba.offsetLeft - n.offsetLeft;
+    const fim = inicio + aba.offsetWidth;
+    if (inicio < n.scrollLeft || fim > n.scrollLeft + n.clientWidth) {
+      n.scrollLeft = Math.max(0, inicio - 24);
+    }
+  }, [nav.pathname]);
 
   return (
     <header
@@ -44,11 +62,12 @@ export function BarraDaArea({ ajudaBase = null }: { ajudaBase?: string | null })
         )}
       </div>
       <nav
+        ref={faixa}
         aria-label={t("Seções da área")}
         className="hidden min-w-0 flex-1 self-stretch overflow-x-auto md:flex"
       >
         {abas.map((aba) => {
-          const aqui = estaEm(caminhoNoCatalogo(nav.pathname), aba.href);
+          const aqui = aba.href === abaAtual;
           return (
             <Link
               key={aba.href}
