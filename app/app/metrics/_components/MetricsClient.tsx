@@ -16,6 +16,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasMetricas } from "@/lib/redesign/metricas";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   type Aba,
@@ -47,6 +48,7 @@ interface Props {
 
 export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentUserId, funis = [] }: Props) {
   const t = useT();
+  const rd = useMarcaDasMetricas();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -88,7 +90,7 @@ export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentU
       />
 
       <Tabs value={filtros.aba} onValueChange={(v) => mudar({ ...filtros, aba: v as Aba })}>
-        <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
+        <TabsList className="w-full justify-start overflow-x-auto sm:w-auto" data-rd-metricas={rd("abas")}>
           <TabsTrigger value="negocios">{t("Negócios")}</TabsTrigger>
           <TabsTrigger value="origens">{t("Origens")}</TabsTrigger>
           <TabsTrigger value="atendimento">{t("Atendimento")}</TabsTrigger>

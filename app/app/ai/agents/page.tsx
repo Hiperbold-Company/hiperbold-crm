@@ -11,6 +11,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { AgentsList } from "./_components/AgentsList";
 import { logger } from "@/lib/logger";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDasMetricas } from "@/lib/redesign/metricas";
 
 export const dynamic = "force-dynamic";
 
@@ -55,14 +57,15 @@ export default async function AgentsListPage() {
   const agents = (data ?? []) as unknown as AgentRow[];
   const canWrite = ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin;
   const idioma = user.idioma;
+  const rd = marcaDasMetricas(redesignLigado());
   // D-227: o teto de agentes do plano bloqueia sempre; a tela diz o motivo antes de a pessoa tentar.
   const bloqueioDeCriar = canWrite
     ? await bloqueioDoBotaoDeCriacao(createAdminClient(), activeOrg.orgId, "agentes_ia", idioma, logger)
     : null;
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
-      <header className="flex flex-wrap items-end justify-between gap-2">
+    <div className="flex h-full flex-col gap-6 p-6" data-rd-metricas={rd("agentes-tela")}>
+      <header className="flex flex-wrap items-end justify-between gap-2" data-rd-metricas={rd("agentes-cabecalho")}>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             {traduzir("Agentes de IA", idioma)}
