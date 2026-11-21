@@ -917,3 +917,50 @@ Arquivo gerado por `node evidence/redesign/gerar-indice.mjs`. Não edite à mão
 - `evidence/redesign/D3-plataforma/depois-ligada/_admin_users-en-desktop.png`
 - `evidence/redesign/D3-plataforma/depois-ligada/_admin_users-pt-BR-celular.png`
 - `evidence/redesign/D3-plataforma/depois-ligada/_admin_users-pt-BR-desktop.png`
+
+## E3-dialogos-conexoes
+
+### Antes (main, sem a mudança)
+
+- `evidence/redesign/E3-dialogos-conexoes/antes/connections-en-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/antes/connections-en-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/antes/connections-pt-BR-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/antes/connections-pt-BR-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/antes/dlg_criar-en-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/antes/dlg_criar-en-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/antes/dlg_criar-pt-BR-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/antes/dlg_criar-pt-BR-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/antes/dlg_gerenciar-en-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/antes/dlg_gerenciar-en-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/antes/dlg_gerenciar-pt-BR-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/antes/dlg_gerenciar-pt-BR-desktop.png`
+
+### Depois, com a chave desligada (tem de ser igual ao antes)
+
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/connections-en-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/connections-en-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/connections-pt-BR-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/connections-pt-BR-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/dlg_criar-en-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/dlg_criar-en-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/dlg_criar-pt-BR-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/dlg_criar-pt-BR-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/dlg_gerenciar-en-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/dlg_gerenciar-en-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/dlg_gerenciar-pt-BR-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-desligada/dlg_gerenciar-pt-BR-desktop.png`
+
+### Depois, com a chave ligada (visual novo)
+
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/connections-en-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/connections-en-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/connections-pt-BR-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/connections-pt-BR-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/dlg_criar-en-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/dlg_criar-en-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/dlg_criar-pt-BR-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/dlg_criar-pt-BR-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/dlg_gerenciar-en-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/dlg_gerenciar-en-desktop.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/dlg_gerenciar-pt-BR-celular.png`
+- `evidence/redesign/E3-dialogos-conexoes/depois-ligada/dlg_gerenciar-pt-BR-desktop.png`
