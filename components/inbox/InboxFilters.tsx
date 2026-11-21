@@ -39,6 +39,7 @@ import { useConversationCounts } from "@/hooks/inbox/useConversationCounts";
 import { useDepoisDeMontar } from "@/hooks/ui/useDepoisDeMontar";
 import { roleAtLeast, type Role, type VisibilityMode } from "@/lib/auth/types";
 import { SeletorDeAtendente } from "@/components/inbox/SeletorDeAtendente";
+import { useMarcaDoChat } from "@/components/inbox/redesign/marca";
 
 export type InboxTab = "unassigned" | "mine" | "all" | "closed" | "archived" | "ai";
 
@@ -121,6 +122,7 @@ interface Props {
 
 export function InboxFilters({ value, onChange }: Props) {
   const t = useT();
+  const rd = useMarcaDoChat();
   const [searchInput, setSearchInput] = useState(value.search);
   const tabsListRef = useRef<HTMLDivElement>(null);
   const [moreTabs, setMoreTabs] = useState({ left: false, right: false });
@@ -631,7 +633,7 @@ export function InboxFilters({ value, onChange }: Props) {
   );
 
   return (
-    <div className="border-b border-border bg-background">
+    <div data-rd-chat={rd("filtros")} className="border-b border-border bg-background">
       <div className="space-y-2 px-3 pt-3 pb-2">
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
@@ -653,6 +655,7 @@ export function InboxFilters({ value, onChange }: Props) {
               placeholder={celular ? t("Buscar conversas") : t("Buscar por nome, telefone ou última mensagem…")}
               className="h-9 rounded-full border-transparent bg-surface-elevated pl-9 shadow-none focus-visible:border-border focus-visible:bg-background"
               aria-label={t("Buscar conversas")}
+              data-rd-chat={rd("busca")}
             />
           </div>
           {celular ? (
@@ -714,6 +717,7 @@ export function InboxFilters({ value, onChange }: Props) {
           <TabsList
             ref={tabsListRef}
             onScroll={updateMoreTabs}
+            data-rd-chat={rd("abas")}
             className="h-auto min-w-0 flex-1 flex-wrap justify-between gap-x-1 gap-y-2 rounded-none bg-transparent p-0 [scrollbar-width:none]"
           >
             {tabs.map((tab) => {
@@ -723,11 +727,12 @@ export function InboxFilters({ value, onChange }: Props) {
                 <TabsTrigger
                   key={tab}
                   value={tab}
+                  data-rd-chat={rd("aba")}
                   className="shrink-0 gap-1 rounded-none border-b-2 border-transparent px-0 pb-2 pt-1 text-xs font-medium text-text-muted data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-text data-[state=active]:shadow-none"
                 >
                   {t(meta.label)}
                   {depoisDeMontar && typeof count === "number" && count > 0 && (
-                    <span className="text-[11px] tabular-nums text-text-subtle">{count}</span>
+                    <span data-rd-chat={rd("aba-n")} className="text-[11px] tabular-nums text-text-subtle">{count}</span>
                   )}
                 </TabsTrigger>
               );

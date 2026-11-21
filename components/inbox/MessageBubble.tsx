@@ -34,6 +34,7 @@ import { resolveSharedContact } from "@/lib/messaging/contact-card";
 import { lerAnuncioDaMensagem } from "@/lib/leads/atribuicao-de-anuncio";
 import { marcadorDaApagada, textoDaApagadaApareceNaInbox } from "@/lib/messaging/apagada";
 import { AnuncioCard } from "@/components/inbox/AnuncioCard";
+import { useMarcaDoChat } from "@/components/inbox/redesign/marca";
 import {
   extractCitations,
   isAiGeneratedMessage,
@@ -152,6 +153,7 @@ export function MessageBubble({
   }, [editando]);
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const rd = useMarcaDoChat();
   const isOutbound = message.direction === "outbound";
   const time = format(new Date(message.sent_at), "HH:mm", { locale: localeDaData });
   const isFailed = message.status === "failed";
@@ -348,6 +350,7 @@ export function MessageBubble({
   return (
     <div
       data-search-match={searchMatch || undefined}
+      data-rd-chat={rd("bolha-linha")}
       className={cn(
         "group flex w-full min-w-0 items-center gap-1 px-4 py-1",
         isOutbound ? "justify-end" : "justify-start",
@@ -359,6 +362,19 @@ export function MessageBubble({
         // classe utilitária entrava na conta — foi assim que o painel flutuante
         // fez a spec achar que havia mensagem onde não havia (issue #1318).
         data-testid="message-bubble"
+        data-rd-chat={rd("bolha")}
+        // De quem é a bolha, para o desenho do redesign: cliente, IA ou equipe.
+        // Figurinha sem moldura fica de fora (não tem balão a pintar).
+        data-rd-de={
+          rd("bolha") && !isBareSticker
+            ? !isOutbound
+              ? "cliente"
+              : message.sent_via === "ai"
+                ? "ia"
+                : "equipe"
+            : undefined
+        }
+        data-rd-apagada={rd("bolha") && apagada ? "" : undefined}
         className={cn(
           "relative max-w-[75%] min-w-0 text-sm",
           isBareSticker
@@ -497,7 +513,7 @@ export function MessageBubble({
           </p>
         )}
         {senderLabel && (
-          <div className="mb-0.5 flex items-center gap-1 text-2xs font-semibold opacity-80">
+          <div data-rd-chat={rd("autor")} className="mb-0.5 flex items-center gap-1 text-2xs font-semibold opacity-80">
             {message.sent_via === "ai" ? (
               <Robot size={10} weight="duotone" aria-hidden />
             ) : null}
@@ -627,6 +643,7 @@ export function MessageBubble({
         )}
 
         <div
+          data-rd-chat={rd("rodape-da-bolha")}
           className={cn(
             "mt-1 flex items-center justify-end gap-1 text-2xs",
             // O carimbo acompanha o FUNDO: numa bolha apagada (cinza) o

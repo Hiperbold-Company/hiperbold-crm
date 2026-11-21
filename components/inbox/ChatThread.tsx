@@ -26,6 +26,7 @@ import { ROLE_RANK } from "@/lib/auth/types";
 import { capabilitiesOf, transportaMensagem, type ChannelProvider } from "@/lib/channels/capabilities";
 import { montarCartoesDaPassagem, type CartaoDaPassagem } from "@/lib/escalacao/cartao-da-passagem";
 import type { Message, Note } from "@/lib/types/messaging";
+import { useMarcaDoChat } from "@/components/inbox/redesign/marca";
 
 interface Props {
   conversationId: string | null;
@@ -100,6 +101,7 @@ export function ChatThread({
 }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const rd = useMarcaDoChat();
   const q = useMessagesRealtime(conversationId);
   const notes = useConversationNotes(conversationId);
   const passagens = usePassagensDaConversa(conversationId);
@@ -288,6 +290,7 @@ export function ChatThread({
       <div ref={scrollerRef} role="region" aria-label={t("Mensagens da conversa")} tabIndex={0}
         onScroll={scroll.onScroll} onWheel={scroll.onWheel} onTouchMove={scroll.onTouchMove}
         onPointerDown={scroll.onPointerDown} onKeyDown={scroll.onKeyDown}
+        data-rd-chat={rd("fio")}
         className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain py-2">
         <div ref={contentRef}>
         {q.hasNextPage && (
@@ -306,7 +309,7 @@ export function ChatThread({
         {groups.map((g) => (
           <div key={g.key} className="space-y-1">
             <div className="sticky top-0 z-10 flex justify-center py-1">
-              <span className="rounded-full bg-background/80 px-2.5 py-0.5 text-2xs font-medium text-muted-foreground backdrop-blur">
+              <span data-rd-chat={rd("dia")} className="rounded-full bg-background/80 px-2.5 py-0.5 text-2xs font-medium text-muted-foreground backdrop-blur">
                 {dayLabel(g.date, t, localeDaData)}
               </span>
             </div>

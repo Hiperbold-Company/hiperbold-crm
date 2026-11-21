@@ -1731,3 +1731,445 @@
 @media (prefers-reduced-motion: reduce) {
   .cc-ondas-ativa .cc-onda { animation: none; }
 }
+
+/* redesign: chat ──────────────────────────────────────────────────────────
+   A tela do Chat (`/app/inbox`) no redesign Hiperbold, protótipo v49
+   (Conversas, ConversasEscuro, ConversasCelular, ConversaCelular).
+
+   Os componentes são os de sempre; com a chave ligada eles ganham
+   `data-rd-chat="<peça>"` (`components/inbox/redesign/marca.ts`) e as regras
+   abaixo os desenham. TODA regra começa por `[data-redesign="ligado"]` —
+   desligada, nenhuma casa, e `tests/unit/redesign-chat.test.tsx` cobra isso.
+
+   Fora de `@layer` de propósito: vence os utilitários do Tailwind sem
+   `!important`. O preço é que hover/foco das peças pintadas aqui também são
+   declarados aqui.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-redesign="ligado"],
+[data-redesign="ligado"] [data-theme="light"] {
+  --rd-chat-ia-soft: rgba(123, 91, 173, 0.1);
+  --rd-chat-ia-borda: rgba(123, 91, 173, 0.25);
+  --rd-chat-nota-bg: #fbf4e4;
+  --rd-chat-nota-borda: #ead8ae;
+  --rd-chat-nota-fg: #6b4d12;
+  --rd-chat-bolha-cliente: #ffffff;
+  --rd-chat-fundo-fio: #eef2f6;
+  --rd-chat-foco: rgba(1, 57, 176, 0.35);
+  --rd-chat-avatar-0: #0139b0;
+  --rd-chat-avatar-1: #2f7d6d;
+  --rd-chat-avatar-2: #9a5b2e;
+  --rd-chat-avatar-3: #7b5bad;
+  --rd-chat-avatar-4: #3f6c9e;
+}
+
+[data-redesign="ligado"][data-theme="dark"],
+[data-redesign="ligado"] [data-theme="dark"] {
+  --rd-chat-ia-soft: rgba(169, 143, 214, 0.16);
+  --rd-chat-ia-borda: rgba(169, 143, 214, 0.32);
+  --rd-chat-nota-bg: #33291a;
+  --rd-chat-nota-borda: #5a4522;
+  --rd-chat-nota-fg: #ead2a0;
+  --rd-chat-bolha-cliente: #1c2b4d;
+  --rd-chat-fundo-fio: #0f1a33;
+  --rd-chat-foco: rgba(111, 155, 255, 0.45);
+  --rd-chat-avatar-0: #0139b0;
+  --rd-chat-avatar-1: #2f7d6d;
+  --rd-chat-avatar-2: #9a5b2e;
+  --rd-chat-avatar-3: #7b5bad;
+  --rd-chat-avatar-4: #3f6c9e;
+}
+
+/* A grade: um cartão só, como as três colunas do protótipo. */
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-chat="grade"] {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-surface);
+  }
+}
+
+/* ── Lista ── */
+[data-redesign="ligado"] [data-rd-chat="lista"] {
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-chat="titulo-da-lista"] {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+[data-redesign="ligado"] [data-rd-chat="filtros"] {
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-chat="busca"] {
+  height: 38px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  padding-left: 34px;
+  font-size: 14px;
+}
+[data-redesign="ligado"] [data-rd-chat="busca"]:focus-visible {
+  outline: none;
+  border-color: var(--color-border-strong);
+  box-shadow: 0 0 0 3px var(--rd-chat-foco);
+}
+[data-redesign="ligado"] [data-rd-chat="abas"] {
+  justify-content: flex-start;
+  column-gap: 14px;
+  row-gap: 0;
+}
+[data-redesign="ligado"] [data-rd-chat="aba"] {
+  padding: 10px 2px;
+  border-bottom-width: 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-chat="aba"]:hover {
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-chat="aba"][data-state="active"] {
+  color: var(--color-accent);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--color-accent);
+}
+[data-redesign="ligado"] [data-rd-chat="aba-n"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-chat="aba"][data-state="active"] [data-rd-chat="aba-n"] {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+
+/* ── Item da lista ── */
+[data-redesign="ligado"] [data-rd-chat="linha"] {
+  border-bottom-color: var(--color-border);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-chat="item"] {
+  gap: 12px;
+  padding: 12px 14px 12px 16px;
+}
+[data-redesign="ligado"] [data-rd-chat="item"]:hover,
+[data-redesign="ligado"] [data-rd-chat="item"]:focus-visible {
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-chat="item"][aria-current="true"],
+[data-redesign="ligado"] [data-rd-chat="item"][aria-current="true"]:hover {
+  background: var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-chat="marca-aberta"] {
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-accent);
+}
+[data-redesign="ligado"] [data-rd-chat="avatar"] {
+  width: 42px;
+  height: 42px;
+}
+[data-redesign="ligado"] [data-rd-cor="0"] { --rd-chat-avatar: var(--rd-chat-avatar-0); }
+[data-redesign="ligado"] [data-rd-cor="1"] { --rd-chat-avatar: var(--rd-chat-avatar-1); }
+[data-redesign="ligado"] [data-rd-cor="2"] { --rd-chat-avatar: var(--rd-chat-avatar-2); }
+[data-redesign="ligado"] [data-rd-cor="3"] { --rd-chat-avatar: var(--rd-chat-avatar-3); }
+[data-redesign="ligado"] [data-rd-cor="4"] { --rd-chat-avatar: var(--rd-chat-avatar-4); }
+[data-redesign="ligado"] [data-rd-chat="avatar"] > :not(img) {
+  background: var(--rd-chat-avatar, var(--color-accent));
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-chat="ponto"] {
+  border-color: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-chat="nome"] {
+  font-size: 14px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-chat="nome"].font-semibold {
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-rd-chat="hora"] {
+  font-size: 12px;
+}
+[data-redesign="ligado"] [data-rd-chat="previa"] {
+  font-size: 13px;
+}
+[data-redesign="ligado"] [data-rd-chat="nao-lidas"] {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-rd-chat="selos"] {
+  gap: 4px;
+  margin-top: 6px;
+}
+[data-redesign="ligado"] [data-rd-chat="selos"] > * {
+  height: 20px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+/* ── Conversa aberta ── */
+[data-redesign="ligado"] [data-rd-chat="conversa"] {
+  background: var(--rd-chat-fundo-fio);
+}
+[data-redesign="ligado"] [data-rd-chat="barra-celular"] {
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-chat="cabecalho"] {
+  gap: 10px;
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-chat="identidade"] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+}
+[data-redesign="ligado"] [data-rd-chat="identidade"] > [data-rd-chat="avatar"] {
+  grid-row: span 2;
+  width: 40px;
+  height: 40px;
+}
+[data-redesign="ligado"] [data-rd-chat="nome-da-conversa"] {
+  font-size: 16px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-chat="dia"] {
+  padding: 4px 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  backdrop-filter: none;
+  font-size: 12px;
+  font-weight: 400;
+}
+[data-redesign="ligado"] [data-rd-chat="bolha"] {
+  font-size: 14px;
+  line-height: 1.45;
+}
+[data-redesign="ligado"] [data-rd-chat="bolha"][data-rd-de] {
+  padding-top: 8px;
+  padding-bottom: 6px;
+  padding-left: 12px;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.06);
+}
+[data-redesign="ligado"] [data-rd-de="cliente"]:not([data-rd-apagada]) {
+  border-radius: 4px 14px 14px 14px;
+  border: 1px solid var(--color-border);
+  background: var(--rd-chat-bolha-cliente);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-de="equipe"]:not([data-rd-apagada]) {
+  border-radius: 14px 4px 14px 14px;
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+[data-redesign="ligado"] [data-rd-de="ia"]:not([data-rd-apagada]) {
+  border-radius: 14px 4px 14px 14px;
+  background: var(--rd-chat-ia-soft);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-de="ia"]:not([data-rd-apagada]):not(.border-destructive) {
+  border: 1px solid var(--rd-chat-ia-borda);
+}
+[data-redesign="ligado"] [data-rd-chat="autor"] {
+  font-size: 12px;
+}
+[data-redesign="ligado"] [data-rd-de="ia"] [data-rd-chat="autor"] {
+  color: var(--color-ia);
+  opacity: 1;
+}
+[data-redesign="ligado"] [data-rd-chat="rodape-da-bolha"] {
+  font-size: 11px;
+}
+[data-redesign="ligado"] [data-rd-de="ia"] [data-rd-chat="rodape-da-bolha"] {
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-chat="nota-linha"] {
+  justify-content: flex-end;
+}
+[data-redesign="ligado"] [data-rd-chat="nota"] {
+  max-width: 70%;
+  padding: 10px 14px;
+  border: 1px dashed var(--rd-chat-nota-borda);
+  border-radius: 12px;
+  background: var(--rd-chat-nota-bg);
+  color: var(--rd-chat-nota-fg);
+  box-shadow: none;
+}
+
+/* ── Compositor ── */
+[data-redesign="ligado"] [data-rd-chat="compositor"] {
+  border-top-color: var(--color-border);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-chat="travado"] {
+  border-top-color: var(--color-border);
+  background: var(--color-surface-elevated);
+  padding: 14px 20px;
+  color: var(--color-text);
+  font-size: 14px;
+  text-align: left;
+}
+[data-redesign="ligado"] [data-rd-chat="modos"] {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: 10px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-chat="modo-responder"],
+[data-redesign="ligado"] [data-rd-chat="modo-nota"] {
+  padding: 5px 12px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+[data-redesign="ligado"] [data-rd-chat="modo-responder"]:focus-visible,
+[data-redesign="ligado"] [data-rd-chat="modo-nota"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--rd-chat-foco);
+}
+[data-redesign="ligado"] [data-rd-modo="reply"] [data-rd-chat="modo-responder"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+[data-redesign="ligado"] [data-rd-modo="note"] [data-rd-chat="modo-nota"] {
+  background: var(--rd-chat-nota-bg);
+  color: var(--rd-chat-nota-fg);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+[data-redesign="ligado"] [data-rd-chat="campo"]:focus {
+  box-shadow: none;
+}
+
+/* Computador: a caixa do protótipo — o campo em cima, as ferramentas embaixo
+   e o enviar à direita. Só a ORDEM visual muda; a do teclado segue a do DOM. */
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-chat="cabecalho"] {
+    padding: 12px 20px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="acoes"] {
+    padding-left: 52px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="fio"] {
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="bolha-linha"],
+  [data-redesign="ligado"] [data-rd-chat="nota-linha"] {
+    padding: 5px 28px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="bolha"][data-rd-de] {
+    max-width: 62%;
+  }
+  [data-redesign="ligado"] [data-rd-chat="compositor"] {
+    padding: 12px 20px 14px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="caixa"] {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: 12px;
+    background: var(--color-surface);
+  }
+  [data-redesign="ligado"] [data-rd-chat="caixa"]:focus-within {
+    box-shadow: 0 0 0 3px var(--rd-chat-foco);
+  }
+  [data-redesign="ligado"] [data-rd-modo="note"] [data-rd-chat="caixa"] {
+    border: 1px dashed var(--rd-chat-nota-borda);
+    background: var(--rd-chat-nota-bg);
+  }
+  [data-redesign="ligado"] [data-rd-chat="campo"] {
+    order: -1;
+    flex: 1 1 100%;
+    border: 0;
+    background: transparent;
+    padding: 6px 6px 4px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  [data-redesign="ligado"] [data-rd-chat="caixa"] > :last-child {
+    margin-left: auto;
+  }
+}
+
+/* Celular (ConversaCelular): campo em pílula, bolhas mais largas e letra 15px. */
+@media (max-width: 767.98px) {
+  [data-redesign="ligado"] [data-rd-chat="bolha"] {
+    font-size: 15px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="bolha"][data-rd-de] {
+    max-width: 80%;
+  }
+  [data-redesign="ligado"] [data-rd-chat="nome"] {
+    font-size: 16px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="previa"] {
+    font-size: 14px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="campo"] {
+    min-height: 44px;
+    padding: 11px 14px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: 22px;
+    background: var(--color-surface);
+  }
+  [data-redesign="ligado"] [data-rd-modo="note"] [data-rd-chat="campo"] {
+    border-style: dashed;
+    border-color: var(--rd-chat-nota-borda);
+    background: var(--rd-chat-nota-bg);
+  }
+}
+
+/* ── Ficha do contato ── */
+[data-redesign="ligado"] [data-rd-chat="ficha"] {
+  gap: 0;
+  padding: 0;
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-chat="ficha-topo"] {
+  margin: 0;
+  padding: 12px 10px 12px 18px;
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-chat="ficha"] > [data-modulo] > * {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-chat="ficha"] > [data-modulo] > section > h3:first-child {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+/* redesign: chat — fim ─────────────────────────────────────────────────── */
