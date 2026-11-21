@@ -39,8 +39,8 @@ export function BarraDaArea({ ajudaBase = null }: { ajudaBase?: string | null })
       className="sticky top-[var(--faixas-de-cima,0px)] z-20 flex min-h-14 items-center gap-2 border-b border-border bg-surface px-3 md:px-6"
     >
       <div className="flex min-w-0 items-center gap-2 md:hidden">
-        {nav.atual && (
-          <span className="truncate text-base font-semibold">{t(nav.atual.label)}</span>
+        {nav.titulo && (
+          <span className="truncate text-base font-semibold">{t(nav.titulo)}</span>
         )}
       </div>
       <nav

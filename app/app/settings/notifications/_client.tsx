@@ -1,6 +1,7 @@
 "use client";
 
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
 
 import { useState, useSyncExternalStore } from "react";
 
@@ -37,6 +38,7 @@ const LABELS: Record<NotifyCategory, string> = {
 
 export function NotificationPrefsClient() {
   const t = useT();
+  const rd = useMarcaDasConfiguracoes();
   const { permission, request } = useNotificationPermission();
   const prefs = useSyncExternalStore(assinarPrefs, getPrefsSnapshot, getPrefsSnapshotDoServidor);
   const denied = permission === "denied";
@@ -114,7 +116,7 @@ export function NotificationPrefsClient() {
   }
 
   return (
-    <Card className="p-0">
+    <Card data-rd-configuracoes={rd("cartao")} className="p-0">
       <table className="w-full text-sm">
         <thead className="border-b">
           <tr>

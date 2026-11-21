@@ -88,6 +88,8 @@ import { linhasDeTokensDeIA, type LinhasDeTokensDeIA } from "@/lib/billing/token
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { assinaturaCancelada, estadoDoReembolso, type EstadoDoReembolso } from "@/lib/billing/reembolso/regras";
 import { pagamentosReembolsaveis } from "@/lib/billing/reembolso/elegiveis";
@@ -227,9 +229,11 @@ export default async function PlanoEUsoPage() {
         })
       : { tipo: "oculto" };
 
+  const rd = marcaDasConfiguracoes(redesignLigado());
+
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
-      <header className="space-y-1">
+      <header data-rd-configuracoes={rd("cabecalho")} className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{t("Meu plano")}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {t("Quanto sua organização usa de cada item do plano contratado.")}

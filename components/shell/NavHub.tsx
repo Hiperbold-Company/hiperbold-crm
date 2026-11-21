@@ -13,6 +13,7 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { IDIOMA_PADRAO, type Idioma } from "@/lib/i18n/idiomas";
 import { hubSections, type NavGroupId } from "@/lib/navigation/registry";
 import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
+import { marcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
 import { BookOpen, Lightbulb, ListChecks, Warning } from "@/lib/ui/icons";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
@@ -40,6 +41,8 @@ interface NavHubProps {
    * degrada para pt-BR, que é o comportamento de antes.
    */
   locale?: Idioma;
+  /** O redesign está ligado? Só `/app/settings` passa (decidido no servidor); ausente = desligado. */
+  redesignConfiguracoes?: boolean;
 }
 
 const EXTENSION_ICONS: Record<ExtensionManifest["display"]["icon"], typeof ListChecks> = {
@@ -86,12 +89,14 @@ export function NavHub({
   locale = IDIOMA_PADRAO,
   extensionGuides = [],
   extensionsUnavailable = false,
+  redesignConfiguracoes = false,
 }: NavHubProps) {
+  const rd = marcaDasConfiguracoes(redesignConfiguracoes);
   const secoes = hubSections(group, isPlatformAdmin, role, interfaceSettings, modulosLigados, capacidadesLigadas);
 
   return (
-    <div className="flex h-full flex-col gap-8 p-6">
-      <header>
+    <div data-rd-configuracoes={rd("indice")} className="flex h-full flex-col gap-8 p-6">
+      <header data-rd-configuracoes={rd("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir(title, locale)}</h1>
         {subtitle && <p className="text-sm text-muted-foreground">{traduzir(subtitle, locale)}</p>}
         <LinkDeAjudaDaTela />
@@ -101,6 +106,7 @@ export function NavHub({
         <section
           key={section}
           aria-labelledby={`hub-${group}-${slug(section)}`}
+          data-rd-configuracoes={rd("secao-do-indice")}
           className="space-y-3"
         >
           <h2
@@ -109,11 +115,19 @@ export function NavHub({
           >
             {traduzir(section, locale)}
           </h2>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div
+            data-rd-configuracoes={rd("grade-de-atalhos")}
+            className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"
+          >
             {items.map((item) => {
               const Icon = item.icon;
               return (
-                <Link key={item.href} href={item.href} className="block">
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  data-rd-configuracoes={rd("atalho")}
+                  className="block"
+                >
                   <Card className="flex h-full gap-3 p-4 transition-colors hover:border-border-strong">
                     <Icon
                       size={20}

@@ -28,6 +28,8 @@ export interface NavegacaoDaMoldura {
   todas: Array<{ group: NavGroup; items: NavDestination[] }>;
   /** O destino em que a pessoa está, pelo prefixo mais longo. */
   atual: NavDestination | undefined;
+  /** O nome para a faixa do celular: o da tela atual; em Configurações sem porta própria, "Configurações". */
+  titulo: string | undefined;
   /** As abas da área: destinos visíveis do mesmo grupo e da mesma seção. */
   abasDaArea: NavDestination[];
   pathname: string;
@@ -52,6 +54,21 @@ export function caminhoNoCatalogo(pathname: string): string {
     if (estaEm(pathname, de)) return para;
   }
   return pathname;
+}
+
+/**
+ * O hub (`/app/settings`) e as telas de Configurações que o catálogo não lista
+ * (billing, templates, canal-oficial, atualizacao) não têm destino próprio:
+ * `atual` fica vazio e a faixa do celular ficava sem nome. Nelas o nome é o do
+ * hub. Pura — só olha o caminho e o `atual` já calculado.
+ */
+export function tituloDaTela(
+  pathname: string,
+  atual: Pick<NavDestination, "label"> | undefined,
+): string | undefined {
+  if (atual) return atual.label;
+  const hub = NAV_GROUPS.find((g) => g.id === GRUPO_NO_RODAPE)?.hub;
+  return hub && estaEm(pathname, hub.href) ? hub.label : undefined;
 }
 
 export function useNavegacaoDaMoldura(): NavegacaoDaMoldura {
@@ -80,9 +97,11 @@ export function useNavegacaoDaMoldura(): NavegacaoDaMoldura {
     .filter((d) => estaEm(caminho, d.href))
     .sort((a, b) => b.href.length - a.href.length)[0];
 
+  const titulo = tituloDaTela(pathname, atual);
+
   const abasDaArea = atual
     ? visiveis.filter((d) => d.group === atual.group && (d.section ?? "") === (atual.section ?? ""))
     : [];
 
-  return { itens, rodape, todas, atual, abasDaArea, pathname };
+  return { itens, rodape, todas, atual, titulo, abasDaArea, pathname };
 }

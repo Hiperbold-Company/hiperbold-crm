@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { updateProfile } from "@/app/actions/settings/updateProfile";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
 import { IDIOMAS_COM_TEXTO, IDIOMAS_VISIVEIS } from "@/lib/i18n/registro";
 import {
   profileSchema,
@@ -42,6 +43,7 @@ export function ProfileForm({
   initialTimezone,
 }: Props) {
   const t = useT();
+  const rd = useMarcaDasConfiguracoes();
   const [fullName, setFullName] = useState(initialFullName ?? "");
   const [locale, setLocale] = useState<Locale | typeof SEM_PREFERENCIA_DE_IDIOMA>(initialLocale);
   const [timezone, setTimezone] = useState(initialTimezone);
@@ -69,7 +71,7 @@ export function ProfileForm({
 
   return (
     <form onSubmit={handleSubmit} className="max-w-xl">
-      <Card className="space-y-4 p-6">
+      <Card data-rd-configuracoes={rd("cartao")} className="space-y-4 p-6">
         <div className="space-y-2">
           <Label htmlFor="email">{t("Email")}</Label>
           <Input id="email" value={email} disabled />
@@ -138,7 +140,7 @@ export function ProfileForm({
             {t("Upload de arquivo — em breve. Cole uma URL pública.")}
           </p>
         </div>
-        <div className="flex sm:justify-end">
+        <div data-rd-configuracoes={rd("barra-de-salvar")} className="flex sm:justify-end">
           <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
             {isPending ? t("Salvando…") : t("Salvar")}
           </Button>

@@ -53,6 +53,7 @@ import { invalidarCoresDasEtiquetas } from "@/components/tags/CoresDasEtiquetas"
 import { cn } from "@/lib/utils";
 import { PALETA_DE_ETIQUETAS, NOME_DO_TOM, normalizarCorDeEtiqueta } from "@/lib/tags/cor-da-etiqueta";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { useMarcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
 import type { Idioma } from "@/lib/i18n/idiomas";
 import type { AcaoDeVocabulario, LinhaDeVocabulario } from "@/lib/schemas/tags";
 
@@ -114,6 +115,7 @@ const ERRO_EM_PORTUGUES: Record<string, string> = {
 
 export function PainelDeTags({ tags, idioma, paginado = false }: { tags: LinhaDeVocabulario[]; idioma: Idioma; paginado?: boolean }) {
   const t = (texto: string) => traduzir(texto, idioma);
+  const rd = useMarcaDasConfiguracoes();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [alvo, setAlvo] = useState<LinhaDeVocabulario | null>(null);
@@ -282,7 +284,7 @@ export function PainelDeTags({ tags, idioma, paginado = false }: { tags: LinhaDe
 
   return (
     <div className="flex flex-col gap-4">
-      <Card className="overflow-hidden">
+      <Card data-rd-configuracoes={rd("cartao")} className="overflow-hidden">
         {/* O Card corta o que passa da borda, e no celular a tabela passava:
             Renomear, Juntar e Excluir sumiam sem barra de rolagem. Abaixo de
             `md` saem as três colunas de contagem; o invólucro rola se ainda

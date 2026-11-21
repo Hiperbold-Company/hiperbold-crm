@@ -3354,3 +3354,148 @@
   padding: 16px 18px;
 }
 /* redesign: contatos — fim */
+
+/* redesign: configuracoes ─────────────────────────────────────────────────
+   A área Configurações (`/app/settings/**`) no redesign Hiperbold, protótipo
+   v49 (Main, Equipe, Tags, MeuPlano, Faturamento, NotificacoesCelular).
+
+   Os componentes são os de sempre; com a chave ligada o layout da área
+   (`app/app/settings/layout.tsx`) e as peças compartilhadas ganham
+   `data-rd-configuracoes="<peça>"` (`lib/redesign/configuracoes.ts`). A casca
+   "area" não tem caixa (`display: contents`): serve só para escopar o visual de
+   toda tela da área, inclusive as que nenhuma peça marca. TODA regra começa por
+   `[data-redesign="ligado"]` — desligada, nenhuma casa, e
+   `tests/unit/redesign-configuracoes.test.tsx` cobra isso.
+
+   Fora de `@layer` de propósito: vence os utilitários do Tailwind sem
+   `!important`.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-redesign="ligado"] [data-rd-configuracoes="area"] {
+  display: contents;
+}
+
+/* A página: coluna centrada de 880px, como a do protótipo (840 + respiro). */
+[data-redesign="ligado"] [data-rd-configuracoes="area"] > div {
+  box-sizing: border-box;
+  width: 100%;
+  margin-inline: auto;
+  padding: 16px;
+}
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] > div {
+    max-width: 880px;
+    padding: 32px 32px 40px;
+  }
+}
+
+/* O cabeçalho: título 22/26 em 700 e a frase de apoio em cinza. */
+[data-redesign="ligado"] [data-rd-configuracoes="cabecalho"] {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+[data-redesign="ligado"] [data-rd-configuracoes="cabecalho"] h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: normal;
+  color: var(--color-text);
+}
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-configuracoes="cabecalho"] h1 {
+    font-size: 26px;
+  }
+}
+[data-redesign="ligado"] [data-rd-configuracoes="cabecalho"] > p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* Os cartões de toda a área: 12px de raio, borda fina, sem sombra. */
+[data-redesign="ligado"] [data-rd-configuracoes="area"] [data-slot="card"] {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-configuracoes="area"] [data-slot="card-title"] {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Linhas de formulário: rótulo 14/500 e campo de borda forte, raio 8. */
+[data-redesign="ligado"] [data-rd-configuracoes="cartao"] label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-configuracoes="cartao"] input:is([type="text"], [type="url"], [type="email"], [type="number"], [type="search"], [type="password"], [type="tel"]) {
+  border-color: var(--color-border-strong);
+  border-radius: 8px;
+}
+[data-redesign="ligado"] [data-rd-configuracoes="cartao"] input:is([type="text"], [type="url"], [type="email"], [type="number"], [type="search"], [type="password"], [type="tel"]):focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-configuracoes="cartao"] input:disabled {
+  opacity: 0.55;
+}
+
+/* A barra de salvar: separada do formulário por uma linha, botão alto no celular. */
+[data-redesign="ligado"] [data-rd-configuracoes="barra-de-salvar"] {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-configuracoes="barra-de-salvar"] button[type="submit"] {
+  min-height: 44px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+@media (min-width: 640px) {
+  [data-redesign="ligado"] [data-rd-configuracoes="barra-de-salvar"] button[type="submit"] {
+    min-height: 40px;
+  }
+}
+
+/* O índice (`/app/settings`): seções com título em caixa-alta e atalhos em grade. */
+[data-redesign="ligado"] [data-rd-configuracoes="indice"] {
+  gap: 24px;
+}
+[data-redesign="ligado"] [data-rd-configuracoes="secao-do-indice"] > h2 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-configuracoes="grade-de-atalhos"] {
+  gap: 12px;
+}
+[data-redesign="ligado"] [data-rd-configuracoes="atalho"] {
+  border-radius: 12px;
+  text-decoration: none;
+}
+[data-redesign="ligado"] [data-rd-configuracoes="atalho"] [data-slot="card"] {
+  min-height: 44px;
+  padding: 16px 18px;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+[data-redesign="ligado"] [data-rd-configuracoes="atalho"]:hover [data-slot="card"] {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-configuracoes="atalho"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-configuracoes="atalho"] h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+/* redesign: configuracoes — fim ─────────────────────────────────────────── */
