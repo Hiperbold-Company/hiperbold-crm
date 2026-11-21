@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDoSistema } from "@/lib/redesign/sistema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
@@ -26,18 +28,20 @@ export default async function AdminForbiddenPage() {
   // ele, o texto sai em espanhol com `lang="pt-BR"` — leitor de tela na voz
   // errada, e o navegador oferecendo traduzir "do português". As telas que
   // resolvem o idioma "como `admin/forbidden`" fazem o mesmo.
+  const rd = marcaDoSistema(redesignLigado());
+
   return (
     <IdiomaProvider locale={idioma}>
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <Card className="w-full max-w-lg p-8 text-center">
-          <h1 className="text-2xl font-semibold">{traduzir("Acesso negado", idioma)}</h1>
-          <p className="mt-3 text-sm text-muted-foreground">
+      <main className="flex min-h-screen items-center justify-center p-8" data-rd-sistema={rd("pagina")}>
+        <Card className="w-full max-w-lg p-8 text-center" data-rd-sistema={rd("cartao")}>
+          <h1 className="text-2xl font-semibold" data-rd-sistema={rd("titulo")}>{traduzir("Acesso negado", idioma)}</h1>
+          <p className="mt-3 text-sm text-muted-foreground" data-rd-sistema={rd("texto")}>
             {traduzir(
               "Esta área é restrita a administradores da plataforma com MFA ativo. Se você acredita que isso é um erro, contate o time de operações.",
               idioma,
             )}
           </p>
-          <div className="mt-6 flex justify-center gap-2">
+          <div className="mt-6 flex justify-center gap-2" data-rd-sistema={rd("acoes")}>
             <Button asChild variant="outline">
               <Link href="/">{traduzir("Início", idioma)}</Link>
             </Button>
