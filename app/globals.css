@@ -4430,3 +4430,143 @@
   }
 }
 /* redesign: metricas — fim ─────────────────────── */
+
+/* redesign: entrar ───────────────────────────────
+   As telas de entrada no redesign Hiperbold, protótipo v49 (Entrar,
+   EntrarCriarConta, EntrarConvite, PrimeiroAcesso): fundo de página, cartão
+   central com a marca no topo, título forte, campos de 44px com raio 10,
+   botão principal de 46px e o "ou" do Google.
+
+   Cobre Entrar, criar conta, convite, recuperar senha, verificação em duas
+   etapas e o primeiro acesso. Só as cascas (layouts de servidor) ganham
+   `data-rd-entrar="<peça>"` (`lib/redesign/entrar.ts`); formulários, campos e
+   botões são pintados por descendência, sem tocar em handler, action ou
+   validação. TODA regra começa por `[data-redesign="ligado"]` — desligada,
+   nenhuma casa, e `tests/unit/redesign-entrar.test.tsx` cobra isso. Só
+   variáveis de cor que já existem: claro e escuro saem delas.
+
+   Fora de `@layer` de propósito (vence os utilitários sem `!important`), então
+   hover e foco das peças pintadas aqui também são declarados aqui.
+   ─────────────────────────────────────────────── */
+
+/* ── Página e cartão central ── */
+[data-redesign="ligado"] [data-rd-entrar="pagina"] {
+  background: var(--color-bg);
+}
+[data-redesign="ligado"] [data-rd-entrar="cartao"] {
+  box-sizing: border-box;
+  max-width: 440px;
+  padding: 32px 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.08);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-entrar="logo"] {
+  justify-content: flex-start;
+}
+
+/* ── Título e subtítulo (o h1 e o parágrafo logo abaixo) ── */
+[data-redesign="ligado"] [data-rd-entrar="cartao"] h1 {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-entrar="cartao"] h1 + p {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* ── Rótulos e campos ── */
+[data-redesign="ligado"] [data-rd-entrar="cartao"] label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-entrar="cartao"] input:not([type="checkbox"]):not([type="radio"]) {
+  min-height: 44px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+[data-redesign="ligado"] [data-rd-entrar="cartao"] input:not([type="checkbox"]):not([type="radio"]):hover {
+  border-color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-entrar="cartao"] input:not([type="checkbox"]):not([type="radio"]):focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-entrar="cartao"] input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.8;
+}
+
+/* ── Botões de largura total: Entrar / Criar conta / Google ── */
+[data-redesign="ligado"] [data-rd-entrar="cartao"] button.w-full {
+  min-height: 46px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-entrar="cartao"] button[type="submit"].w-full {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+[data-redesign="ligado"] [data-rd-entrar="cartao"] button[type="submit"].w-full:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+[data-redesign="ligado"] [data-rd-entrar="cartao"] button.w-full:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* ── Links ── */
+[data-redesign="ligado"] [data-rd-entrar="cartao"] a {
+  color: var(--color-accent);
+  text-underline-offset: 4px;
+}
+[data-redesign="ligado"] [data-rd-entrar="cartao"] a:hover {
+  color: var(--color-accent-hover);
+}
+
+/* ── Primeiro acesso (onboarding): cabeçalho e conteúdo ── */
+[data-redesign="ligado"] [data-rd-entrar="cabecalho"] {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-entrar="conteudo"] h1,
+[data-redesign="ligado"] [data-rd-entrar="conteudo"] h2 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-entrar="conteudo"] input:not([type="checkbox"]):not([type="radio"]) {
+  min-height: 44px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-entrar="conteudo"] input:not([type="checkbox"]):not([type="radio"]):focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* ── Celular ── */
+@media (max-width: 480px) {
+  [data-redesign="ligado"] [data-rd-entrar="cartao"] {
+    padding: 24px 18px;
+    border-radius: 14px;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="cartao"] h1 {
+    font-size: 24px;
+  }
+}
+/* redesign: entrar — fim ─────────────────────── */

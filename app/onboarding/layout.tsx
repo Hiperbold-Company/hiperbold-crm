@@ -19,6 +19,8 @@ import { destinoSeJaConcluido } from "@/lib/onboarding/destino";
 import { compraPeloClienteDisponivel } from "@/lib/onboarding/precisa-pagar";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDeEntrar } from "@/lib/redesign/entrar";
 
 export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAuth();
@@ -68,10 +70,12 @@ export default async function OnboardingLayout({ children }: { children: React.R
   // de reforço do upstream.
   const logoDaInstalacao = marcaDoIcone.logoUrl;
 
+  const rd = marcaDeEntrar(redesignLigado());
+
   return (
     <IdiomaProvider locale={idiomaDaTela(user.idioma)}>
-      <div className="flex min-h-screen flex-col bg-muted/40">
-        <header className="border-b bg-background">
+      <div className="flex min-h-screen flex-col bg-muted/40" data-rd-entrar={rd("pagina")}>
+        <header className="border-b bg-background" data-rd-entrar={rd("cabecalho")}>
           <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-6 py-4">
             <div className="flex items-center gap-3">
               {logoDaInstalacao ? (
@@ -135,7 +139,7 @@ export default async function OnboardingLayout({ children }: { children: React.R
             </div>
           )}
         </header>
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8" data-rd-entrar={rd("conteudo")}>{children}</main>
       </div>
     </IdiomaProvider>
   );
