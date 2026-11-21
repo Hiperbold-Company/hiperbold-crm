@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoRoteamento } from "@/lib/redesign/roteamento";
 
 interface Caso {
   id: string; router_id: string; conversation_id: string | null; modo: string;
@@ -53,6 +54,7 @@ function motivoDaReserva(motivo: string, t: (texto: string) => string): string {
 
 export function RoteamentoResultados() {
   const t = useT();
+  const rd = useMarcaDoRoteamento();
   const idioma = useTagDeIdioma();
   const [dias, setDias] = useState("30");
   const [modo, setModo] = useState("");
@@ -101,14 +103,14 @@ export function RoteamentoResultados() {
   const routers = dados?.roteadores ?? [];
   const porcentagem = (a: number, b: number) => b ? `${Math.round(100 * a / b)}% (${a}/${b})` : t("Sem pares");
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 p-6" data-testid="resultados-roteamento">
-      <header>
+    <div className="mx-auto w-full max-w-5xl space-y-5 p-6" data-testid="resultados-roteamento" data-rd-roteamento={rd("pagina")}>
+      <header data-rd-roteamento={rd("cabecalho")}>
         <div className="mb-2 flex gap-3 text-sm"><Link href="/app/ai/runs" className="underline">{t("Execuções")}</Link><span aria-current="page" className="font-medium">{t("Roteamento")}</span></div>
-        <h1 className="text-2xl font-semibold">{t("Resultados do roteamento")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t("Compare os modos e revise decisões reais. Concordância entre IAs não é prova de acerto.")}</p>
+        <h1 className="text-2xl font-semibold" data-rd-roteamento={rd("titulo")}>{t("Resultados do roteamento")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground" data-rd-roteamento={rd("descricao")}>{t("Compare os modos e revise decisões reais. Concordância entre IAs não é prova de acerto.")}</p>
         <p className="mt-1 text-xs text-muted-foreground">{t("A janela é a da sua IA de sempre. O Jev recebe só a mensagem atual.")}</p>
       </header>
-      <Card className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
+      <Card className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5" data-rd-roteamento={rd("filtros")}>
         <label className="text-xs">{t("Período")}
           <select className="mt-1 block w-full rounded-md border bg-background p-2" value={dias} onChange={(e) => setDias(e.target.value)}>
             {[7,30,90].map((n) => <option key={n} value={n}>{n} {t("dias")}</option>)}
@@ -133,16 +135,16 @@ export function RoteamentoResultados() {
           <Input id="filtro-contexto" type="number" min={0} max={16} value={contexto} onChange={(e) => setContexto(e.target.value)} placeholder={t("Todas")} className="mt-1" />
         </div>
       </Card>
-      {erro && <Card className="p-4 text-sm text-destructive">{erro} <Button size="sm" variant="outline" onClick={() => void carregar()}>{t("Tentar de novo")}</Button></Card>}
+      {erro && <Card className="p-4 text-sm text-destructive" data-rd-roteamento={rd("faixa-erro")}>{erro} <Button size="sm" variant="outline" onClick={() => void carregar()}>{t("Tentar de novo")}</Button></Card>}
       {!dados && !erro && <p className="text-sm text-muted-foreground">{t("Carregando…")}</p>}
       {r && <>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="p-4"><p className="text-xs text-muted-foreground">{t("Decisões examinadas")}</p><p className="text-xl font-semibold">{r.total}</p><p className="text-xs text-muted-foreground">{t("Até 500 casos recentes pelos filtros.")}</p></Card>
-          <Card className="p-4"><p className="text-xs text-muted-foreground">{t("Jev sem reserva")}</p><p className="text-xl font-semibold">{r.sem_reserva}</p><p className="text-xs text-muted-foreground">{t("Reserva acionada")}: {r.reservas}</p></Card>
-          <Card className="p-4"><p className="text-xs text-muted-foreground">{t("Custo conhecido")}</p><p className="text-xl font-semibold">{dinheiro.format(r.custo_total_cents / 100)}</p><p className="text-xs text-muted-foreground">{r.custos_incompletos ? `${r.custos_incompletos} ${t("casos sem preço completo")}` : t("Jev e reserva incluídos")}</p></Card>
-          <Card className="p-4"><p className="text-xs text-muted-foreground">{t("Tempo total do roteamento")}</p><p className="text-xl font-semibold">{r.mediana_ms ?? "—"} ms</p><p className="text-xs text-muted-foreground">p95: {r.p95_ms ?? "—"} ms</p></Card>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-rd-roteamento={rd("resumo")}>
+          <Card className="p-4" data-rd-roteamento={rd("indicador")}><p className="text-xs text-muted-foreground">{t("Decisões examinadas")}</p><p className="text-xl font-semibold">{r.total}</p><p className="text-xs text-muted-foreground">{t("Até 500 casos recentes pelos filtros.")}</p></Card>
+          <Card className="p-4" data-rd-roteamento={rd("indicador")}><p className="text-xs text-muted-foreground">{t("Jev sem reserva")}</p><p className="text-xl font-semibold">{r.sem_reserva}</p><p className="text-xs text-muted-foreground">{t("Reserva acionada")}: {r.reservas}</p></Card>
+          <Card className="p-4" data-rd-roteamento={rd("indicador")}><p className="text-xs text-muted-foreground">{t("Custo conhecido")}</p><p className="text-xl font-semibold">{dinheiro.format(r.custo_total_cents / 100)}</p><p className="text-xs text-muted-foreground">{r.custos_incompletos ? `${r.custos_incompletos} ${t("casos sem preço completo")}` : t("Jev e reserva incluídos")}</p></Card>
+          <Card className="p-4" data-rd-roteamento={rd("indicador")}><p className="text-xs text-muted-foreground">{t("Tempo total do roteamento")}</p><p className="text-xl font-semibold">{r.mediana_ms ?? "—"} ms</p><p className="text-xs text-muted-foreground">p95: {r.p95_ms ?? "—"} ms</p></Card>
         </div>
-        <Card className="space-y-1 p-4 text-sm">
+        <Card className="space-y-1 p-4 text-sm" data-rd-roteamento={rd("secao")}>
           <p>{t("Concordância de destino")}: <strong>{porcentagem(r.concordancias_destino, r.comparacoes_destino)}</strong> · {t("de intenção")}: <strong>{porcentagem(r.concordancias_intencao, r.comparacoes_intencao)}</strong></p>
           <p>{t("Acerto revisado por pessoa")}: <strong>{porcentagem(r.corretos_revisados, r.revisados)}</strong></p>
           <p className="text-xs text-muted-foreground">{t("A concordância usa apenas os modos comparativos. Reservas sob demanda não formam amostra geral de comparação.")}</p>
@@ -150,7 +152,7 @@ export function RoteamentoResultados() {
         </Card>
       </>}
       {dados && (dados.casos.length ? <div className="space-y-2">
-        {dados.casos.map((c) => <Card key={c.id} className="space-y-2 p-4 text-sm" data-testid={`roteamento-${c.id}`}>
+        {dados.casos.map((c) => <Card key={c.id} className="space-y-2 p-4 text-sm" data-testid={`roteamento-${c.id}`} data-rd-roteamento={rd("caso")}>
           <div className="flex flex-wrap justify-between gap-2"><strong>{nomeDoModo(c.modo, t)}</strong><span className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleString(idioma)} · {c.tempo_total_ms} ms</span></div>
           <p>{t("Escolha final")}: {c.intent_final ?? t("Sem intenção")} · {t("Origem")}: {c.origem === "reserva" ? t("Reserva da IA de sempre") : c.origem === "jev" ? "Jev" : t("IA de sempre")}{c.motivo_reserva ? ` · ${motivoDaReserva(c.motivo_reserva, t)}` : ""}</p>
           <p className="text-xs text-muted-foreground">{t("Janela de histórico")}: {c.context_message_count} · {t("Intenção do Jev")}: {c.intent_jev ?? "—"} · {t("Intenção da IA de sempre")}: {c.intent_tradicional ?? "—"}</p>
@@ -170,7 +172,7 @@ export function RoteamentoResultados() {
             </>}
           </div>
         </Card>)}
-      </div> : <Card className="p-6 text-sm text-muted-foreground">{t("Ainda não há decisões de roteamento nesses filtros.")}</Card>)}
+      </div> : <Card className="p-6 text-sm text-muted-foreground" data-rd-roteamento={rd("vazio")}>{t("Ainda não há decisões de roteamento nesses filtros.")}</Card>)}
     </div>
   );
 }

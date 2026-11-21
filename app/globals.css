@@ -4842,3 +4842,191 @@
   }
 }
 /* redesign: plataforma — fim ─────────────────────── */
+
+/* redesign: roteamento ───────────────────────────────
+   Roteador (editor), resultados do roteamento, dossiê do follow-up e cabeçalho
+   dos fluxos de atendimento no redesign Hiperbold, protótipos v49
+   (Roteadores.dc.html, Execucoes.dc.html, FollowUps.dc.html): seções em
+   cartões de 12px com filete, título de seção em 15px/600, cabeçalho de página
+   no mesmo respiro das demais áreas.
+
+   Os componentes são os de sempre; com a chave ligada ganham
+   `data-rd-roteamento="<peça>"` (`lib/redesign/roteamento.ts`). TODA regra
+   começa por `[data-redesign="ligado"]` — desligada, nenhuma casa, e
+   `tests/unit/redesign-roteamento.test.tsx` cobra isso. Só variáveis de cor que
+   já existem. Fora de `@layer` de propósito (vence os utilitários sem
+   `!important`). Não mexe em max-width nem no padding de raiz das telas que já
+   os declaram (editor, resultados e dossiê); só os fluxos de atendimento
+   (`area`) assumem o cabeçalho de Conexões.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Cabeçalho de página ── */
+[data-redesign="ligado"] [data-rd-roteamento="titulo"] {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-roteamento="descricao"] {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] a[data-rd-roteamento="voltar"]:not([data-slot="button"]) {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] a[data-rd-roteamento="voltar"]:not([data-slot="button"]):hover {
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-roteamento="estado"] {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── Fluxos de atendimento: cabeçalho como o de Conexões ── */
+[data-redesign="ligado"] [data-rd-roteamento="area"] {
+  gap: 0;
+  padding: 0;
+}
+[data-redesign="ligado"] [data-rd-roteamento="area-cabecalho"] {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 16px 16px 0;
+}
+[data-redesign="ligado"] [data-rd-roteamento="area"] > :not(header) {
+  padding: 16px;
+}
+
+/* ── Seções do editor e do dossiê, em cartões ── */
+[data-redesign="ligado"] [data-rd-roteamento="secao"],
+[data-redesign="ligado"] [data-rd-roteamento="teste"],
+[data-redesign="ligado"] [data-rd-roteamento="dossie-secao"],
+[data-redesign="ligado"] [data-rd-roteamento="filtros"],
+[data-redesign="ligado"] [data-rd-roteamento="indicador"],
+[data-redesign="ligado"] [data-rd-roteamento="caso"] {
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-roteamento="secao"],
+[data-redesign="ligado"] [data-rd-roteamento="teste"],
+[data-redesign="ligado"] [data-rd-roteamento="dossie-secao"] {
+  padding: 20px;
+}
+[data-redesign="ligado"] [data-rd-roteamento="secao-titulo"] {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-roteamento="secao"] label,
+[data-redesign="ligado"] [data-rd-roteamento="intencao"] label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-roteamento="secao"] input,
+[data-redesign="ligado"] [data-rd-roteamento="secao"] textarea,
+[data-redesign="ligado"] [data-rd-roteamento="teste"] input,
+[data-redesign="ligado"] [data-rd-roteamento="teste"] textarea {
+  border-radius: 8px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  font-size: 14px;
+}
+[data-redesign="ligado"] [data-rd-roteamento="secao"] input:focus-visible,
+[data-redesign="ligado"] [data-rd-roteamento="secao"] textarea:focus-visible,
+[data-redesign="ligado"] [data-rd-roteamento="teste"] input:focus-visible,
+[data-redesign="ligado"] [data-rd-roteamento="teste"] textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+[data-redesign="ligado"] [data-rd-roteamento="intencao"] {
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  padding: 16px;
+}
+
+/* ── Resultados do roteamento ── */
+[data-redesign="ligado"] [data-rd-roteamento="filtros"] {
+  gap: 12px;
+  padding: 16px;
+}
+[data-redesign="ligado"] [data-rd-roteamento="filtros"] select {
+  border-radius: 8px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  font-size: 14px;
+}
+[data-redesign="ligado"] [data-rd-roteamento="resumo"] {
+  gap: 16px;
+}
+[data-redesign="ligado"] [data-rd-roteamento="indicador"] {
+  padding: 16px;
+}
+[data-redesign="ligado"] [data-rd-roteamento="indicador"] > p:nth-child(2) {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-roteamento="caso"] {
+  padding: 16px;
+}
+[data-redesign="ligado"] [data-rd-roteamento="caso"]:hover {
+  border-color: var(--color-border-strong);
+}
+[data-redesign="ligado"] [data-rd-roteamento="vazio"] {
+  border-radius: 12px;
+  border: 1px dashed var(--color-border-strong);
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-roteamento="faixa-erro"] {
+  border-radius: 12px;
+  border: 1px solid var(--color-warning);
+  background: var(--color-surface);
+  box-shadow: none;
+}
+
+/* ── Dossiê do follow-up ── */
+[data-redesign="ligado"] [data-rd-roteamento="dossie-resumo"] {
+  gap: 16px;
+  padding-top: 4px;
+}
+[data-redesign="ligado"] [data-rd-roteamento="dossie-secao"] h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-roteamento="dossie-acoes"] {
+  gap: 8px;
+}
+[data-redesign="ligado"] [data-rd-roteamento="dossie-acoes"] > * {
+  min-height: 38px;
+  border-radius: 8px;
+}
+
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-roteamento="titulo"] {
+    font-size: 24px;
+  }
+  [data-redesign="ligado"] [data-rd-roteamento="area-cabecalho"] {
+    padding: 24px 32px 0;
+  }
+  [data-redesign="ligado"] [data-rd-roteamento="area"] > :not(header) {
+    padding: 24px 32px;
+  }
+  [data-redesign="ligado"] [data-rd-roteamento="indicador"] {
+    padding: 20px;
+  }
+}
+/* redesign: roteamento — fim ─────────────────────── */

@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { useMarcaDoRoteamento } from "@/lib/redesign/roteamento";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -123,6 +124,7 @@ export function RouterEditorClient({
   classifierModels,
 }: Props) {
   const t = useT();
+  const rd = useMarcaDoRoteamento();
   const nextRouter = useNextRouter();
   const canManage = usePermission("ai.routers.manage");
   const canTest = usePermission("ai.routers.view");
@@ -322,16 +324,17 @@ export function RouterEditorClient({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex flex-col gap-4" data-rd-roteamento={rd("pagina")}>
+      <div className="flex flex-wrap items-center justify-between gap-2" data-rd-roteamento={rd("cabecalho")}>
         <div className="flex items-center gap-3">
           <Link
             href="/app/ai/routers"
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            data-rd-roteamento={rd("voltar")}
           >
             <CaretLeft size={14} aria-hidden /> {t("Roteadores")}
           </Link>
-          <Badge variant={router.is_active ? "success" : "neutral"} className="text-xs">
+          <Badge variant={router.is_active ? "success" : "neutral"} className="text-xs" data-rd-roteamento={rd("estado")}>
             {router.is_active ? t("ativo") : t("inativo")}
           </Badge>
         </div>
@@ -349,8 +352,8 @@ export function RouterEditorClient({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="space-y-4">
-          <Card className="space-y-3 p-4">
-            <h3 className="text-sm font-medium">{t("Identificação")}</h3>
+          <Card className="space-y-3 p-4" data-rd-roteamento={rd("secao")}>
+            <h3 className="text-sm font-medium" data-rd-roteamento={rd("secao-titulo")}>{t("Identificação")}</h3>
             <div className="space-y-1">
               <Label htmlFor="router-name">{t("Nome")}</Label>
               <Input
@@ -389,8 +392,8 @@ export function RouterEditorClient({
             </div>
           </Card>
 
-          <Card className="space-y-3 p-4">
-            <h3 className="text-sm font-medium">{t("Agente por número do remetente")}</h3>
+          <Card className="space-y-3 p-4" data-rd-roteamento={rd("secao")}>
+            <h3 className="text-sm font-medium" data-rd-roteamento={rd("secao-titulo")}>{t("Agente por número do remetente")}</h3>
             <p className="text-xs text-muted-foreground">
               {t(
                 "Com regras nesta lista, o telefone vinculado à conversa escolhe o agente antes da IA. Os demais números usam o fallback público. Intenções, campanhas e o agente anterior não mudam essa escolha.",
@@ -457,8 +460,8 @@ export function RouterEditorClient({
             )}
           </Card>
 
-          <Card className="space-y-3 p-4">
-            <h3 className="text-sm font-medium">{t("Modelo que identifica a intenção")}</h3>
+          <Card className="space-y-3 p-4" data-rd-roteamento={rd("secao")}>
+            <h3 className="text-sm font-medium" data-rd-roteamento={rd("secao-titulo")}>{t("Modelo que identifica a intenção")}</h3>
             <div className="space-y-1">
               <Label htmlFor="router-classifier">{t("Modelo do classificador")}</Label>
               <Select
@@ -522,8 +525,8 @@ export function RouterEditorClient({
             </div>
           </Card>
 
-          <Card className="space-y-3 p-4">
-            <h3 className="text-sm font-medium">{t("Se nenhuma intenção casar")}</h3>
+          <Card className="space-y-3 p-4" data-rd-roteamento={rd("secao")}>
+            <h3 className="text-sm font-medium" data-rd-roteamento={rd("secao-titulo")}>{t("Se nenhuma intenção casar")}</h3>
             <div className="space-y-1">
               <Label htmlFor="router-fallback">{t("Agente de fallback")}</Label>
               <Select
@@ -565,10 +568,10 @@ export function RouterEditorClient({
         </div>
 
         <div className="space-y-4">
-          <Card className="space-y-3 p-4">
+          <Card className="space-y-3 p-4" data-rd-roteamento={rd("secao")}>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
-                <h3 className="text-sm font-medium">{t("Intenções")}</h3>
+                <h3 className="text-sm font-medium" data-rd-roteamento={rd("secao-titulo")}>{t("Intenções")}</h3>
                 <p className="text-xs text-muted-foreground">
                   {t(
                     "Cada intenção descreve uma situação e diz qual agente deve assumir a conversa quando o cliente quer aquilo.",
@@ -591,7 +594,7 @@ export function RouterEditorClient({
             ) : (
               <ul className="flex flex-col gap-3">
                 {draftMembers.map((m, i) => (
-                  <li key={m.key} className="rounded-md border border-border/60 p-3">
+                  <li key={m.key} className="rounded-md border border-border/60 p-3" data-rd-roteamento={rd("intencao")}>
                     <IntentRow
                       member={m}
                       agents={agents}
@@ -943,6 +946,7 @@ function TestPanel({
   pending: boolean;
 }) {
   const t = useT();
+  const rd = useMarcaDoRoteamento();
   // A guarda é sobre a CONFIANÇA, não sobre o campo vizinho. Antes, os três
   // renders checavam `intent_name` e por acaso concordavam — ninguém havia
   // escrito que um vale só com o outro. Bastaria um quarto render sem a guarda
@@ -963,9 +967,9 @@ function TestPanel({
   const abaixoDoMinimo =
     confianca !== null && result !== undefined && confianca < result.min_confidence;
   return (
-    <Card className="space-y-3 p-4">
+    <Card className="space-y-3 p-4" data-rd-roteamento={rd("teste")}>
       <CardHeader className="p-0">
-        <CardTitle className="text-sm">{t("Testar classificação")}</CardTitle>
+        <CardTitle className="text-sm" data-rd-roteamento={rd("secao-titulo")}>{t("Testar classificação")}</CardTitle>
         <CardDescription>
           {t(
             "Escreva uma frase como um cliente escreveria e veja qual intenção e qual agente o roteador escolheria — sem afetar nenhuma conversa real.",

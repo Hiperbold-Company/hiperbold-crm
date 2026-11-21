@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { FollowupFlowPointerRow } from "@/hooks/followup/useFollowupFlows";
 import { FlowsList } from "../followups/_components/FlowsList";
 import { ComoUsar } from "./_components/ComoUsar";
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDoRoteamento } from "@/lib/redesign/roteamento";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +22,7 @@ const FLOW_COLUMNS = "id, name, status, active_version_id, handoff_policy, updat
 export default async function AtendimentoFlowsPage() {
   const user = await requireAuth();
   const t = (texto: string) => traduzir(texto, user.idioma);
+  const rd = marcaDoRoteamento(redesignLigado());
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
 
@@ -35,11 +38,11 @@ export default async function AtendimentoFlowsPage() {
   const canWrite = ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
-      <header className="flex flex-wrap items-end justify-between gap-2">
+    <div className="flex h-full flex-col gap-6 p-6" data-rd-roteamento={rd("area")}>
+      <header className="flex flex-wrap items-end justify-between gap-2" data-rd-roteamento={rd("area-cabecalho")}>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("Fluxos de atendimento")}</h1>
-          <p className="text-sm text-text-muted">
+          <h1 className="text-2xl font-semibold tracking-tight" data-rd-roteamento={rd("titulo")}>{t("Fluxos de atendimento")}</h1>
+          <p className="text-sm text-text-muted" data-rd-roteamento={rd("descricao")}>
             {t(
               "Perguntas que a IA faz durante a conversa, em ordem, e o que fazer ao concluir — os dados ficam guardados por cliente.",
             )}
