@@ -11,6 +11,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { rotuloDoLocal } from "@/lib/agenda/locais";
+import { useMarcaDaAgenda } from "@/lib/redesign/agenda";
 
 type Detalhe = {
   meeting?: MeetingDetail | null;
@@ -63,6 +64,7 @@ export function DetalheDoCompromisso({
   podeEditar?: boolean;
 }) {
   const t = useT();
+  const rd = useMarcaDaAgenda();
   const tagDoIdioma = useTagDeIdioma();
   const qc = useQueryClient();
   const [evidence, setEvidence] = useState("");
@@ -133,7 +135,7 @@ export function DetalheDoCompromisso({
         if (!open) onClose();
       }}
     >
-      <SheetContent className="overflow-y-auto">
+      <SheetContent className="overflow-y-auto" data-rd-agenda={rd("detalhe")}>
         <SheetHeader>
           <SheetTitle>{a?.title ?? t("Compromisso")}</SheetTitle>
         </SheetHeader>

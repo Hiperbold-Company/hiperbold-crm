@@ -836,6 +836,7 @@ export function AgendaClient({
         */}
         <SheetContent
           side="right"
+          data-rd-agenda={rd("marcar-painel")}
           className="flex w-full flex-col overflow-x-hidden overflow-y-auto sm:max-w-3xl lg:max-w-[1040px] lg:px-3"
         >
           <SheetHeader>
