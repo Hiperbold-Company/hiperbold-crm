@@ -33,6 +33,7 @@ import type { FechamentoDaGrade } from "@/lib/agenda/fechamentos-na-grade";
 import { diaLocalISO, instanteDe, partesNoFuso } from "@/lib/agenda/fuso";
 import { cn } from "@/lib/utils";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDaAgenda } from "@/lib/redesign/agenda";
 
 import { corDaTrilha, fundoDaTrilha } from "./paleta";
 import type { Agendamento, Pessoa, VisaoDaAgenda } from "./tipos";
@@ -485,6 +486,7 @@ function BlocoDeAgendamento({
   };
 }) {
   const t = useT();
+  const rd = useMarcaDaAgenda();
   const comeca = new Date(agendamento.comeca);
   const termina = new Date(agendamento.termina);
   const duracao = Math.max(differenceInMinutes(termina, comeca), 15);
@@ -496,6 +498,7 @@ function BlocoDeAgendamento({
     <button
       type="button"
       data-testid={`agendamento-${agendamento.id}`}
+      data-rd-agenda={rd("compromisso")}
       data-origem={agendamento.origem}
       data-trilha={trilha}
       data-situacao={agendamento.situacao}
@@ -1007,6 +1010,7 @@ export function GradeDaAgenda({
   interacao?: InteracaoDaGrade;
   className?: string;
 }) {
+  const rd = useMarcaDaAgenda();
   const dias = visao === "dia" ? [ancora] : diasDaSemanaDe(ancora);
 
   const gradeRef = React.useRef<HTMLDivElement>(null);
@@ -1209,6 +1213,7 @@ export function GradeDaAgenda({
   return (
     <div
       data-testid="grade-da-agenda"
+      data-rd-agenda={rd("grade")}
       data-visao={visao}
       className={cn(
         "flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface",
