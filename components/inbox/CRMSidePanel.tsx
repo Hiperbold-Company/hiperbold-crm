@@ -55,6 +55,7 @@ import { rotuloParaAEquipe } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { AtalhosDoNegocio } from "@/components/kanban/AtalhosDoCard";
 import type { AtalhoDoCard } from "@/lib/leads/atalhos-do-card";
+import { useMarcaDoChat } from "@/components/inbox/redesign/marca";
 
 interface Props {
   conversation: ConversationWithContact | null;
@@ -819,6 +820,7 @@ export function CRMSidePanel({
   const podeVerCarteira = (user.is_platform_admin && !user.support) || roleAtLeast(activeOrg?.role, "agent");
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const rd = useMarcaDoChat();
   const contact = conversation?.contacts ?? null;
   const contactId = contact?.id ?? null;
   const [desfechoDraft, setDesfechoDraft] = useState<DesfechoDraft | null>(null);
@@ -1452,7 +1454,7 @@ export function CRMSidePanel({
   };
 
   return (
-    <aside className="flex h-full flex-col gap-4 overflow-y-auto border-l border-border bg-background p-4">
+    <aside data-rd-chat={rd("ficha")} className="flex h-full flex-col gap-4 overflow-y-auto border-l border-border bg-background p-4">
       {/* A FAIXA DO ALTO (#3004/#3008): o recolher do painel, no mesmo lugar do
           recolher do menu da esquerda, e o botão que abre a personalização da
           lateral. `sticky` para não rolar para fora com o conteúdo, e o
@@ -1466,6 +1468,7 @@ export function CRMSidePanel({
       <div
         className="sticky top-0 z-10 -mx-4 -mt-4 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-4 py-1"
         data-testid="inbox-cabecalho-do-painel"
+        data-rd-chat={rd("ficha-topo")}
       >
         <DialogoDosModulos modulos={modulos} onSalvos={setModulos} />
         {onAlternarRecolhido ? (
