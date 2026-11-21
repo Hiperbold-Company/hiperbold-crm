@@ -5,6 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
 import { redesignLigado } from "@/lib/redesign/chave";
+import { PainelDeEntrar } from "@/components/auth/PainelDeEntrar";
+import { traduzir } from "@/lib/i18n/dicionario";
+import { ProvedorDoRedesign } from "@/lib/redesign/contexto";
 import { marcaDeEntrar } from "@/lib/redesign/entrar";
 
 /**
@@ -60,17 +63,16 @@ export default async function PublicLayout({ children }: { children: React.React
   } = await supabase.auth.getUser();
   const locale = await idiomaDoVisitante((user?.user_metadata?.locale as string | undefined) ?? null);
 
+  const t = (texto: string) => traduzir(texto, locale);
+
   return (
     <IdiomaProvider locale={locale}>
+      <ProvedorDoRedesign ligado={redesignLigado()}>
       <div
         className="flex min-h-screen items-center justify-center bg-background p-6"
         data-rd-entrar={rd("pagina")}
       >
-        {rd("painel") ? (
-          <aside data-rd-entrar={rd("painel")} aria-hidden="true">
-            <p>{marca.nome}</p>
-          </aside>
-        ) : null}
+        <PainelDeEntrar marca={marca} t={t} rd={rd} />
         <div className="w-full max-w-sm space-y-6" data-rd-entrar={rd("cartao")}>
           {marca.logoUrl || marca.logoDarkUrl ? (
             <div className="flex justify-center" data-rd-entrar={rd("logo")}>
@@ -131,6 +133,7 @@ export default async function PublicLayout({ children }: { children: React.React
           {children}
         </div>
       </div>
+      </ProvedorDoRedesign>
     </IdiomaProvider>
   );
 }

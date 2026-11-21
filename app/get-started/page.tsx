@@ -12,6 +12,7 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { lerCadastroNaTela, planoInicialDoSeletor } from "@/lib/cobranca/cadastro";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redesignLigado } from "@/lib/redesign/chave";
+import { PainelDeEntrar } from "@/components/auth/PainelDeEntrar";
 import { marcaDeEntrar } from "@/lib/redesign/entrar";
 
 /**
@@ -77,11 +78,7 @@ export default async function GetStartedPage() {
         className="bg-muted/40 flex min-h-screen items-center justify-center px-4 py-10"
         data-rd-entrar={rd("pagina")}
       >
-        {rd("painel") ? (
-          <aside data-rd-entrar={rd("painel")} aria-hidden="true">
-            <p>{marca.nome}</p>
-          </aside>
-        ) : null}
+        <PainelDeEntrar marca={marca} t={t} rd={rd} />
         <div
           className="w-full max-w-md space-y-6 rounded-lg border bg-background p-6 shadow-sm"
           data-rd-entrar={rd("cartao")}

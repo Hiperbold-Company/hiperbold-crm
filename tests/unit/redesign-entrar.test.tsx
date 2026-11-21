@@ -20,7 +20,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import postcss from "postcss";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ ligado: false }));
+const h = vi.hoisted(() => ({ ligado: false, idioma: "pt-BR" }));
 
 vi.mock("@/lib/redesign/chave", () => ({ redesignLigado: () => h.ligado }));
 vi.mock("@/lib/branding/saida", () => ({
@@ -29,9 +29,10 @@ vi.mock("@/lib/branding/saida", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
 }));
-vi.mock("@/lib/i18n/idiomaAnonimo", () => ({ idiomaDoVisitante: async () => "pt-BR" }));
+vi.mock("@/lib/i18n/idiomaAnonimo", () => ({ idiomaDoVisitante: async () => h.idioma }));
 
 import PublicLayout from "@/app/(public)/layout";
+import { TOTPInput } from "@/components/auth/TOTPInput";
 import { marcaDeEntrar } from "@/lib/redesign/entrar";
 
 async function montar() {
@@ -42,6 +43,7 @@ async function montar() {
 afterEach(() => {
   cleanup();
   h.ligado = false;
+  h.idioma = "pt-BR";
 });
 
 describe("redesign: entrar, DOM", () => {
@@ -77,7 +79,11 @@ describe("redesign: entrar, DOM", () => {
     const { container } = await montar();
     const painel = container.querySelector('aside[data-rd-entrar="painel"]');
     expect(painel).toBeTruthy();
-    expect(painel?.textContent).toBe("Marca X");
+    expect(painel?.querySelector("p")?.textContent).toBe("Marca X");
+    expect(painel?.querySelector("h2")?.textContent).toBe("Todo o seu atendimento de WhatsApp, com IA, num lugar só");
+    expect(painel?.querySelectorAll("li")).toHaveLength(3);
+    expect(painel?.textContent).toContain("Marina Costa");
+    expect(painel?.textContent).not.toContain("Hiperbold");
     expect(painel?.querySelector("img")).toBeNull();
     // o logo testado pelos e2e continua único
     expect(container.querySelectorAll('[data-testid="logo-da-fachada"]')).toHaveLength(1);
@@ -86,12 +92,44 @@ describe("redesign: entrar, DOM", () => {
   it("/get-started marca página, cartão e painel pela mesma regra", () => {
     const fonte = readFileSync(join(process.cwd(), "app/get-started/page.tsx"), "utf8");
     expect(fonte).toContain("marcaDeEntrar(redesignLigado())");
-    for (const p of ["pagina", "cartao", "painel"]) expect(fonte).toContain(`rd("${p}")`);
+    for (const p of ["pagina", "cartao"]) expect(fonte).toContain(`rd("${p}")`);
+    expect(fonte).toContain("<PainelDeEntrar");
   });
 
   it("marcaDeEntrar: ligada devolve a peça, desligada undefined", () => {
     expect(marcaDeEntrar(true)("cartao")).toBe("cartao");
     expect(marcaDeEntrar(false)("cartao")).toBeUndefined();
+  });
+});
+
+describe("redesign: entrar, painel traduzido e dígitos do MFA", () => {
+  it("em inglês o título e os benefícios saem em inglês", async () => {
+    h.ligado = true;
+    h.idioma = "en";
+    const { container } = await montar();
+    const painel = container.querySelector('aside[data-rd-entrar="painel"]');
+    expect(painel?.querySelector("h2")?.textContent).toBe("All your WhatsApp support, with AI, in one place");
+    expect(painel?.textContent).toContain("All conversations in one place");
+  });
+
+  it("desligado, os dígitos não têm data-rd-entrar", async () => {
+    h.ligado = false;
+    const { container } = await montar();
+    cleanup();
+    const r = render(<TOTPInput value="" onChange={() => {}} />);
+    expect(r.container.querySelectorAll("input")).toHaveLength(6);
+    expect(r.container.querySelectorAll("[data-rd-entrar]")).toHaveLength(0);
+    expect(container).toBeTruthy();
+  });
+
+  it("ligado, a casca provê a chave e os 6 dígitos recebem a peça", async () => {
+    h.ligado = true;
+    const { container } = await montar();
+    cleanup();
+    const el = await PublicLayout({ children: <TOTPInput value="" onChange={() => {}} /> });
+    const r = render(el);
+    expect(r.container.querySelectorAll('input[data-rd-entrar="digito"]')).toHaveLength(6);
+    expect(container).toBeTruthy();
   });
 });
 

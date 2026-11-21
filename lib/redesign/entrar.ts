@@ -23,7 +23,8 @@ export type PecaDeEntrar =
   | "logo"
   | "cabecalho"
   | "conteudo"
-  | "painel";
+  | "painel"
+  | "digito";
 
 export type MarcaDeEntrar = (peca: PecaDeEntrar) => PecaDeEntrar | undefined;
 
