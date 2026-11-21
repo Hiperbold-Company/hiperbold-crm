@@ -3952,3 +3952,194 @@
   color: var(--color-text);
 }
 /* redesign: configuracoes — fim ─────────────────────────────────────────── */
+
+/* redesign: inicio ───────────────────────────────
+   As telas Início (checklist e painel), Tarefas e Planos de tarefa no visual do
+   protótipo v49 (Inicio.dc.html, InicioEscuro.dc.html, Tarefas.dc.html,
+   TarefasCelular.dc.html, PlanosTarefa.dc.html).
+
+   As peças são marcadas com `data-rd-inicio` por `useMarcaDoInicio()` /
+   `marcaDoInicio()` (`lib/redesign/inicio.ts`), que só escrevem o atributo com a
+   chave LIGADA. Fora de `@layer`, e TODO seletor começa por
+   `[data-redesign="ligado"]` — vigiado por `tests/unit/redesign-inicio.test.tsx`.
+   Só cor, borda, raio, fonte e espaçamento INTERNO; max-width e padding de raiz
+   ficam com a tela, e o claro e o escuro saem das variáveis de cor existentes.
+   ───────────────────────────────────────────────────────── */
+[data-redesign="ligado"],
+[data-redesign="ligado"] [data-theme="light"] {
+  --rd-in-sombra-cartao: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --rd-in-sombra-seg: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+[data-redesign="ligado"][data-theme="dark"],
+[data-redesign="ligado"] [data-theme="dark"] {
+  --rd-in-sombra-cartao: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --rd-in-sombra-seg: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Cabeçalho de página ------------------------------------------------ */
+[data-redesign="ligado"] [data-rd-inicio="cabecalho"] h1,
+[data-redesign="ligado"] [data-rd-inicio="tarefas-cabecalho"] h1,
+[data-redesign="ligado"] [data-rd-inicio="planos-cabecalho"] h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: normal;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-inicio="cabecalho"] p,
+[data-redesign="ligado"] [data-rd-inicio="tarefas-cabecalho"] p,
+[data-redesign="ligado"] [data-rd-inicio="planos-cabecalho"] p {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+/* ---- Títulos de seção --------------------------------------------------- */
+[data-redesign="ligado"] [data-rd-inicio="secao-titulo"] {
+  letter-spacing: normal;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] h2[data-rd-inicio="secao-titulo"].uppercase {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+/* ---- Início: passos do checklist --------------------------------------- */
+[data-redesign="ligado"] [data-rd-inicio="passo-cartao"] {
+  gap: 12px;
+  padding: 16px;
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-inicio="passo-cartao"]:hover {
+  border-color: var(--color-border-strong);
+}
+[data-redesign="ligado"] [data-rd-inicio="passo"] h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-inicio="passo"] p {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-inicio="progresso"] > p {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* ---- Início: painel de indicadores ------------------------------------- */
+[data-redesign="ligado"] [data-rd-inicio="periodo"] {
+  padding: 12px;
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-inicio="secao"] > h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-rd-inicio="barra"] {
+  border-color: var(--color-border);
+}
+
+/* ---- Tarefas: filtros e visões ----------------------------------------- */
+[data-redesign="ligado"] [data-rd-inicio="tarefas-filtros"] {
+  gap: 8px;
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-filtros"] [data-slot="select-trigger"] {
+  border-color: var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-visoes"] {
+  gap: 2px;
+  padding: 3px;
+  border-color: transparent;
+  border-radius: 9px;
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-visoes"] > button {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-visoes"] > button:hover {
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-visoes"] > button[aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow: var(--rd-in-sombra-seg);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-visoes"] > button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+
+/* ---- Tarefas: faixas, linhas e chips ----------------------------------- */
+[data-redesign="ligado"] [data-rd-inicio="tarefas-faixa"] {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-grupo"] {
+  padding: 6px;
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--rd-in-sombra-cartao);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-linha"] {
+  padding: 12px 14px;
+  border-radius: 10px;
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-linha"]:hover {
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-linha"] > button[role="checkbox"] {
+  border-color: var(--color-border-strong);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-linha"] > div p:first-child {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-prioridade"] {
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-vazio"] {
+  border-color: var(--color-border-strong);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-falha"] {
+  border-radius: 12px;
+}
+
+/* ---- Planos de tarefa --------------------------------------------------- */
+[data-redesign="ligado"] [data-rd-inicio="planos-cartao"] {
+  padding: 16px;
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-inicio="planos-cartao"] h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-inicio="planos-cartao"] li {
+  font-size: 13px;
+}
+/* redesign: inicio — fim ─────────────────────── */

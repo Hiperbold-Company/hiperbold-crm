@@ -40,6 +40,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { randomId } from "@/lib/random-id";
+import { useMarcaDoInicio } from "@/lib/redesign/inicio";
 import { ArrowBendUpLeft } from "@/lib/ui/icons";
 import { LIMITES_DO_PLANO } from "@/lib/tarefas/limites-do-plano";
 import type { PassoDePlano, PlanoDeTarefas } from "@/lib/tarefas/plano";
@@ -73,6 +74,7 @@ function novoPasso(): PassoDePlano {
 
 export function PlanosDeTarefa() {
   const t = useT();
+  const rd = useMarcaDoInicio();
   const qc = useQueryClient();
   const [rascunho, setRascunho] = useState<PlanoDeTarefas | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -153,7 +155,7 @@ export function PlanosDeTarefa() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-6">
+    <div className="mx-auto max-w-3xl space-y-4 p-6" data-rd-inicio={rd("planos-tela")}>
       <div>
         <Link
           href="/app/tasks"
@@ -164,7 +166,7 @@ export function PlanosDeTarefa() {
         </Link>
       </div>
 
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-wrap items-start justify-between gap-3" data-rd-inicio={rd("planos-cabecalho")}>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("Planos de tarefa")}</h1>
           <p className="text-sm text-muted-foreground">
@@ -226,7 +228,7 @@ export function PlanosDeTarefa() {
       ) : null}
 
       {planos.map((plano) => (
-        <Card key={plano.id} className="space-y-2 p-4">
+        <Card key={plano.id} className="space-y-2 p-4" data-rd-inicio={rd("planos-cartao")}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="truncate font-medium">{plano.nome}</h2>

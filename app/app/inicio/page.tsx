@@ -19,6 +19,8 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { carregarPrimeirosPassos } from "@/lib/inicio/carregar";
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDoInicio } from "@/lib/redesign/inicio";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 
@@ -38,6 +40,7 @@ export default async function InicioPage() {
 
   const idioma = user.idioma;
   const t = (texto: string) => traduzir(texto, idioma);
+  const rd = marcaDoInicio(redesignLigado());
   const { passos, contagem } = await carregarPrimeirosPassos(createAdminClient(), activeOrg.orgId, user.id);
 
   // Os obrigatórios cumpridos: o checklist vira barra lateral e a área principal é o painel.
@@ -46,8 +49,8 @@ export default async function InicioPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 sm:p-6">
-      <header className="space-y-3">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 sm:p-6" data-rd-inicio={rd("tela")}>
+      <header className="space-y-3" data-rd-inicio={rd("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">{t("Início")}</h1>
         <p className="text-sm text-muted-foreground">
           {t("Faltam poucos passos para o CRM começar a trabalhar pela sua empresa.")}

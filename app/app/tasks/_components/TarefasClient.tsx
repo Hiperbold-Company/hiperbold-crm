@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { useUser } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoInicio } from "@/lib/redesign/inicio";
 import { ArrowsClockwise, CalendarBlank, ListChecks, Plus } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { useTasks } from "@/hooks/tasks/useTasks";
@@ -43,6 +44,7 @@ export function TarefasClient({
   funis?: FunilDoFiltro[];
 }) {
   const t = useT();
+  const rd = useMarcaDoInicio();
   const usuario = useUser();
   const [modo, setModo] = useState<"lista" | "calendario">("lista");
   const [situacao, setSituacao] = useState<FiltroDeSituacao>("aberto");
@@ -96,8 +98,8 @@ export function TarefasClient({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6" data-rd-inicio={rd("tarefas-tela")}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between" data-rd-inicio={rd("tarefas-cabecalho")}>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("Tarefas")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -107,7 +109,7 @@ export function TarefasClient({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-rd-inicio={rd("tarefas-filtros")}>
           <Select
             value={situacao}
             onValueChange={(v) => setSituacao(v as FiltroDeSituacao)}
@@ -160,7 +162,7 @@ export function TarefasClient({
           )}
 
           {/* O calendário tem 7 colunas: a 390px não cabe, e no celular fica a lista. */}
-          <div className="hidden items-center gap-0.5 rounded-md border bg-muted p-0.5 md:flex">
+          <div className="hidden items-center gap-0.5 rounded-md border bg-muted p-0.5 md:flex" data-rd-inicio={rd("tarefas-visoes")}>
             <button
               type="button"
               onClick={() => setModo("lista")}
@@ -212,7 +214,7 @@ export function TarefasClient({
       </div>
 
       {falhou ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center" data-rd-inicio={rd("tarefas-falha")}>
           <p className="text-sm font-medium text-destructive">
             {t("Não foi possível carregar as tarefas.")}
           </p>

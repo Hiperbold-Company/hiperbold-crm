@@ -16,6 +16,7 @@ import {
   type PrioridadeDaTarefa,
   type Tarefa,
 } from "@/lib/tarefas/tipos";
+import { useMarcaDoInicio } from "@/lib/redesign/inicio";
 import { Check, Kanban, PencilSimple, Trash, UserCircle } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +61,9 @@ function Linha({
   nomeDoResponsavel: string | null;
 }) {
   const t = useT();
+  // Só a tela de Tarefas é redesenhada: o dossiê (mostrarNegocio=false) segue como está.
+  const rdTela = useMarcaDoInicio();
+  const rd: typeof rdTela = mostrarNegocio ? rdTela : () => undefined;
   const tag = useTagDeIdioma();
   const [ocupada, setOcupada] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
@@ -89,6 +93,7 @@ function Linha({
         "group flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/40",
         encerrada && "opacity-60",
       )}
+      data-rd-inicio={rd("tarefas-linha")}
     >
       <button
         type="button"
@@ -127,6 +132,7 @@ function Linha({
               "rounded-full px-2 py-0.5 font-medium",
               COR_DA_PRIORIDADE[tarefa.priority],
             )}
+            data-rd-inicio={rd("tarefas-prioridade")}
           >
             {rotuloDaPrioridade[tarefa.priority]}
           </span>
@@ -215,6 +221,8 @@ export function ListaDeTarefas({
   mostrarNegocio = true,
 }: Props) {
   const t = useT();
+  const rdTela = useMarcaDoInicio();
+  const rd: typeof rdTela = mostrarNegocio ? rdTela : () => undefined;
   const usuario = useUser();
   const grupos = agrupaPorPrazo(tarefas);
   // Os nomes vêm da lista de responsáveis, que é `agent`+ na rota: para quem só
@@ -239,7 +247,7 @@ export function ListaDeTarefas({
 
   if (grupos.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed p-10 text-center">
+      <div className="rounded-xl border border-dashed p-10 text-center" data-rd-inicio={rd("tarefas-vazio")}>
         <p className="text-sm font-medium">{t("Nenhuma tarefa por aqui")}</p>
         <p className="mt-1 text-xs text-muted-foreground">
           {t("Enquanto isto estiver vazio, o que foi combinado vive só na memória de alguém.")}
@@ -249,7 +257,7 @@ export function ListaDeTarefas({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-rd-inicio={rd("tarefas-lista")}>
       {grupos.map((grupo) => (
         <section key={grupo.faixa}>
           <h2
@@ -257,10 +265,11 @@ export function ListaDeTarefas({
               "mb-1 px-3 text-xs font-semibold uppercase tracking-wider",
               grupo.faixa === "atrasada" ? "text-destructive" : "text-muted-foreground",
             )}
+            data-rd-inicio={rd("tarefas-faixa")}
           >
             {rotuloDaFaixa[grupo.faixa]}
           </h2>
-          <div className="rounded-xl border bg-card py-1">
+          <div className="rounded-xl border bg-card py-1" data-rd-inicio={rd("tarefas-grupo")}>
             {grupo.tarefas.map((tarefa) => (
               <Linha
                 key={tarefa.id}
