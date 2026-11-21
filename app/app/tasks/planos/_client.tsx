@@ -279,6 +279,7 @@ function Editor({
   ocupado: boolean;
 }) {
   const t = useT();
+  const rd = useMarcaDoInicio();
   const { data: members } = useAssignableMembers(true);
 
   function mudarPasso(indice: number, campo: Partial<PassoDePlano>) {
@@ -289,7 +290,7 @@ function Editor({
   }
 
   return (
-    <Card className="space-y-4 p-4">
+    <Card className="space-y-4 p-4" data-rd-inicio={rd("planos-editor")}>
       <div className="space-y-1">
         <Label htmlFor="plano-nome">{t("Nome do plano")}</Label>
         <Input
@@ -318,7 +319,7 @@ function Editor({
       <div className="space-y-3">
         <h3 className="text-sm font-medium">{t("Passos do plano")}</h3>
         {plano.passos.map((passo, indice) => (
-          <div key={indice} className="space-y-2 rounded-md border p-3">
+          <div key={indice} className="space-y-2 rounded-md border p-3" data-rd-inicio={rd("planos-passo")}>
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium">
                 {t("Passo")} {indice + 1}

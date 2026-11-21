@@ -105,7 +105,13 @@ export function AgentCard({ agent, canWrite }: Props) {
       <dl className="grid grid-cols-2 gap-2 pt-1 text-xs">
         <div>
           <dt className="text-muted-foreground">{t("Tipo")}</dt>
-          <dd className="font-mono">{agent.kind ?? "rag_bot"}</dd>
+          <dd className="font-mono" data-rd-metricas={rd("agentes-tipo")}>
+            {rd("agentes-tipo")
+              ? (agent.kind ?? "rag_bot") === "mcp_agent"
+                ? t("Agente com ferramentas")
+                : t("Assistente de conhecimento")
+              : (agent.kind ?? "rag_bot")}
+          </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">{t("Prioridade")}</dt>

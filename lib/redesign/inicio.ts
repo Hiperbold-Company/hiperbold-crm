@@ -30,9 +30,14 @@ export type PecaDoInicio =
   | "tarefas-prioridade"
   | "tarefas-vazio"
   | "tarefas-falha"
+  | "tarefas-formulario"
+  | "tarefas-calendario"
+  | "tarefas-calendario-dia"
   | "planos-tela"
   | "planos-cabecalho"
-  | "planos-cartao";
+  | "planos-cartao"
+  | "planos-editor"
+  | "planos-passo";
 
 /**
  * A marca de uma peça: o valor de `data-rd-inicio`, só com a chave LIGADA.

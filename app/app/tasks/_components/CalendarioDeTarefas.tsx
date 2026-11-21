@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoInicio } from "@/lib/redesign/inicio";
 import { diaLocalDoPrazo, estaAtrasada, estaEncerrada, type Tarefa } from "@/lib/tarefas/tipos";
 import { CaretLeft, CaretRight } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ function diasDaGrade(ano: number, mes: number): (Date | null)[] {
 
 export function CalendarioDeTarefas({ tarefas, podeEditar, aoAbrirTarefa, aoClicarNoDia }: Props) {
   const t = useT();
+  const rd = useMarcaDoInicio();
   const tag = useTagDeIdioma();
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
@@ -71,7 +73,7 @@ export function CalendarioDeTarefas({ tarefas, podeEditar, aoAbrirTarefa, aoClic
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-xl border bg-card shadow-sm" data-rd-inicio={rd("tarefas-calendario")}>
       <div className="flex items-center justify-between border-b px-4 py-3">
         <Button
           variant="ghost"
@@ -122,6 +124,8 @@ export function CalendarioDeTarefas({ tarefas, podeEditar, aoAbrirTarefa, aoClic
                 podeEditar && "cursor-pointer transition-colors hover:bg-muted/30",
               )}
               onClick={podeEditar ? () => aoClicarNoDia(chave) : undefined}
+              data-rd-inicio={rd("tarefas-calendario-dia")}
+              data-hoje={chave === diaDeHoje ? "true" : undefined}
             >
               <span
                 className={cn(

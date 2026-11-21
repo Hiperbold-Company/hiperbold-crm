@@ -3,11 +3,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasMetricas } from "@/lib/redesign/metricas";
 import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import type { AgentRow } from "@/hooks/ai/useAgent";
 export function AgentOperation({ agent, readOnly }: { agent: AgentRow; readOnly?: boolean }) {
   const t = useT(),
+    rd = useMarcaDasMetricas(),
     router = useRouter(),
     [busy, setBusy] = useState(false);
   async function change(body: Record<string, unknown>) {
@@ -25,6 +27,7 @@ export function AgentOperation({ agent, readOnly }: { agent: AgentRow; readOnly?
     <section
       className="flex flex-wrap items-center gap-3 rounded-md border p-3"
       aria-label={t("Operação do agente")}
+      data-rd-metricas={rd("agente-operacao")}
     >
       <label className="text-sm max-md:w-full max-md:min-w-0">
         {t("Operação do agente")}{" "}

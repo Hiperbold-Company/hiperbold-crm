@@ -44,6 +44,8 @@ export const DICIONARIO: Traducoes = {
   "Saia do acompanhamento para trocar de organização": { es: "Salga del acompañamiento para cambiar de organización", en: "Leave support mode to switch organizations" },
   "Suas empresas": { es: "Sus empresas", en: "Your companies" },
   "Atual": { es: "Actual", en: "Current" },
+  "Agente com ferramentas": { es: "Agente con herramientas", en: "Agent with tools" },
+  "Assistente de conhecimento": { es: "Asistente de conocimiento", en: "Knowledge assistant" },
   "Meu perfil": { es: "Mi perfil", en: "My profile" },
   "Claro": { es: "Claro", en: "Light" },
   "Escuro": { es: "Oscuro", en: "Dark" },

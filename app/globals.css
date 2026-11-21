@@ -4170,6 +4170,59 @@
 [data-redesign="ligado"] [data-rd-inicio="planos-cartao"] li {
   font-size: 13px;
 }
+/* ---- Tarefas: formulário (diálogo) e calendário ------------------------- */
+[data-redesign="ligado"] [data-rd-inicio="tarefas-formulario"] label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-calendario"] {
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--rd-in-sombra-cartao);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-calendario"] h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-calendario-dia"] {
+  min-height: 96px;
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-calendario-dia"]:hover {
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-inicio="tarefas-calendario-dia"] > button {
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+/* ---- Planos de tarefa: editor e passos ---------------------------------- */
+[data-redesign="ligado"] [data-rd-inicio="planos-editor"] {
+  padding: 18px;
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-inicio="planos-editor"] label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-inicio="planos-editor"] h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-inicio="planos-passo"] {
+  padding: 14px;
+  border-color: var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-elevated);
+}
 /* redesign: inicio — fim ─────────────────────── */
 
 /* redesign: agenda ───────────────────────────────────────────────────────
@@ -4458,6 +4511,26 @@
   [data-redesign="ligado"] [data-rd-metricas="agentes-cabecalho"] h1 {
     font-size: 20px;
   }
+}
+/* ---- Agentes de IA: tipo como selo; detalhe do agente ------------------- */
+[data-redesign="ligado"] [data-rd-metricas="agentes-tipo"] {
+  display: inline-block;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-elevated);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  font-family: inherit;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-metricas="agente-operacao"] {
+  padding: 14px 16px;
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--rd-mt-sombra);
 }
 /* redesign: metricas — fim ─────────────────────── */
 

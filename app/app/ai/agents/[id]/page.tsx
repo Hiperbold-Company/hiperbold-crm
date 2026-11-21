@@ -1,5 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDasMetricas } from "@/lib/redesign/metricas";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { listSelectableChannels } from "@/lib/channels/selectable";
@@ -220,8 +222,10 @@ export default async function AgentEditorPage({ params }: { params: Promise<{ id
     []) as unknown as MaterialDoAcervo[];
   const materiais = [...materiaisVivos, ...materiaisArquivadosMarcados];
 
+  const rd = marcaDasMetricas(redesignLigado());
+
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
+    <div className="flex h-full flex-col gap-6 p-6" data-rd-metricas={rd("agente-tela")}>
       <AgentOperation agent={agent} readOnly={readOnly} />
       {(agent.kind ?? "rag_bot") !== "mcp_agent" && !agent.published_version_id && (
         <LegacyRecovery

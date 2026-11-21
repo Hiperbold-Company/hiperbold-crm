@@ -22,7 +22,10 @@ export type PecaDasMetricas =
   | "agentes-filtros"
   | "agentes-grade"
   | "agentes-cartao"
-  | "agentes-vazio";
+  | "agentes-vazio"
+  | "agentes-tipo"
+  | "agente-tela"
+  | "agente-operacao";
 
 export type MarcaDasMetricas = (peca: PecaDasMetricas) => PecaDasMetricas | undefined;
 
