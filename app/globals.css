@@ -2687,11 +2687,6 @@
 [data-redesign="ligado"] [data-rd-automacoes="pagina"] {
   gap: 24px;
 }
-@media (min-width: 768px) {
-  [data-redesign="ligado"] [data-rd-automacoes="pagina"] {
-    padding: 32px 40px 40px;
-  }
-}
 [data-redesign="ligado"] [data-rd-automacoes="cabecalho"] {
   align-items: flex-start;
   gap: 12px 24px;
