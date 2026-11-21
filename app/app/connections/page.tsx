@@ -12,6 +12,8 @@ import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 import { acessoAntecipado } from "@/lib/hiperbold/funcoes-ocultas";
+import { marcaDasConexoes } from "@/lib/redesign/conexoes";
+import { redesignLigado } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Conexões" };
@@ -26,6 +28,7 @@ export default async function ConnectionsPage() {
     redirect("/403");
   }
   const idioma = user.idioma;
+  const rd = marcaDasConexoes(redesignLigado());
 
   const key = process.env.WAHA_API_KEY;
   const wahaConfigured = Boolean(
@@ -40,10 +43,10 @@ export default async function ConnectionsPage() {
   const bloqueio = await bloqueioDoBotaoDeConexoes(createAdminClient(), activeOrg.orgId, idioma, logger);
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Conexões", idioma)}</h1>
-        <p className="text-sm text-muted-foreground">
+    <div className="flex h-full flex-col gap-6 p-6" data-rd-conexoes={rd("pagina")}>
+      <header data-rd-conexoes={rd("cabecalho")}>
+        <h1 className="text-2xl font-semibold tracking-tight" data-rd-conexoes={rd("titulo")}>{traduzir("Conexões", idioma)}</h1>
+        <p className="text-sm text-muted-foreground" data-rd-conexoes={rd("subtitulo")}>
           {traduzir("Gerencie suas conexões de atendimento", idioma)}
         </p>
         <LinkDeAjudaDaTela />

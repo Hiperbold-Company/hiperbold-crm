@@ -11,6 +11,7 @@ import type { CartaoDaConexao } from "@/hooks/channels/useConexoes";
 import { useOfficialChannel } from "@/hooks/channels/useOfficialChannel";
 import { usePacingKnobs } from "@/hooks/channels/usePacingKnobs";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasConexoes } from "@/lib/redesign/conexoes";
 import { apiClient } from "@/lib/api/client";
 import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
 import { fonteDeTemplates, rotaDeTemplates } from "@/lib/channels/templates-fonte";
@@ -536,6 +537,7 @@ export function GerenciarConexao({
   aoReconectar?: () => void;
 }) {
   const t = useT();
+  const rd = useMarcaDasConexoes();
   const Icone = conexao ? ICONE_DO_TIPO[conexao.tipo] : null;
   const removida = async () => {
     await aoMudar();
@@ -544,7 +546,7 @@ export function GerenciarConexao({
 
   return (
     <Dialog open={conexao !== null} onOpenChange={(aberto) => !aberto && aoFechar()}>
-      <DialogContent className="max-w-3xl gap-0 p-0" data-testid="gerenciar-conexao">
+      <DialogContent className="max-w-3xl gap-0 p-0" data-testid="gerenciar-conexao" data-rd-conexoes={rd("dialogo")}>
         {conexao && Icone ? (
           <>
             <DialogHeader className="border-b px-6 py-5 pr-12">
