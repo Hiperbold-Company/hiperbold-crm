@@ -28,6 +28,7 @@ import { useContactFilterOptions } from "@/hooks/contacts/useContactFilterOption
 import { useBulkDeleteContacts } from "@/hooks/contacts/useBulkDeleteContacts";
 import { useBuscaNaUrl } from "@/hooks/contacts/useBuscaNaUrl";
 import { useBulkContacts, type AcaoEmLoteDeContatos } from "@/hooks/contacts/useBulkContacts";
+import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
 import { ContactsTable } from "@/components/contacts/ContactsTable";
 import { BarraDeContatosEmLote } from "@/components/contacts/BarraDeContatosEmLote";
 import { PontoDaEtiqueta } from "@/components/tags/PontoDaEtiqueta";
@@ -69,6 +70,7 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
 export function ContactsListClient() {
   const t = useT();
+  const rd = useMarcaDoRedesign();
   const clientesLigado = useActiveOrg()?.cliente_pela_agenda === true;
   const router = useRouter();
   const pathname = usePathname();
@@ -335,11 +337,11 @@ export function ContactsListClient() {
   );
 
   return (
-    <div className="space-y-4 md:p-6">
-      <header className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+    <div className="space-y-4 md:p-6" data-rd-contatos={rd("lista")}>
+      <header className="flex flex-wrap items-center justify-between gap-3 sm:gap-4" data-rd-contatos={rd("cabecalho")}>
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("Contatos")}</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight" data-rd-contatos={rd("titulo")}>{t("Contatos")}</h1>
+          <p className="text-sm text-muted-foreground" data-rd-contatos={rd("subtitulo")}>
             {t("Customer 360 — busque, filtre e gerencie contatos.")}
           </p>
           <LinkDeAjudaDaTela />
@@ -436,8 +438,8 @@ export function ContactsListClient() {
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">
-        <div className="relative w-full sm:w-72">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2" data-rd-contatos={rd("filtros")}>
+        <div className="relative w-full sm:w-72" data-rd-contatos={rd("busca")}>
           <MagnifyingGlass
             size={16}
             className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -596,6 +598,7 @@ export function ContactsListClient() {
         <div
           role="status"
           data-faixa-selecionar-todos
+          data-rd-contatos={rd("faixa-todos")}
           className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
         >
           {todosDoFiltro ? (
@@ -674,7 +677,7 @@ export function ContactsListClient() {
               {t("Selecionar todos os contatos visíveis")}
             </Button>
           )}
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden" data-rd-contatos={rd("tabela")}>
             <ContactsTable
               contacts={allContacts}
               selecao={
@@ -689,7 +692,7 @@ export function ContactsListClient() {
               rotulosDeCampo={rotulosDeCampo}
             />
           </Card>
-          <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
+          <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between" data-rd-contatos={rd("rodape")}>
             <p className="text-sm text-muted-foreground">
               {totalDoFiltro !== undefined && totalDoFiltro > allContacts.length
                 ? `${allContacts.length.toLocaleString("pt-BR")} ${t("de")} ${totalDoFiltro.toLocaleString("pt-BR")} ${t("contatos")}`

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
 
 /** Acima disto, a pessoa digita a quantidade para confirmar: clicar sem ler não basta para apagar centenas. */
 export const LIMITE_SEM_DIGITAR = 50;
@@ -33,6 +34,7 @@ export function ExcluirContatosEmLoteDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useT();
+  const rd = useMarcaDoRedesign();
   const [digitado, setDigitado] = useState("");
   const exigeDigitar = quantidade > LIMITE_SEM_DIGITAR;
   const confere = !exigeDigitar || digitado.trim() === String(quantidade);
@@ -44,7 +46,7 @@ export function ExcluirContatosEmLoteDialog({
   const numero = quantidade.toLocaleString("pt-BR");
   return (
     <AlertDialog open={open} onOpenChange={(v) => (pendente ? undefined : onOpenChange(v))}>
-      <AlertDialogContent>
+      <AlertDialogContent data-rd-contatos={rd("dialogo-excluir")}>
         <AlertDialogHeader>
           <AlertDialogTitle>
             {quantidade === 1
