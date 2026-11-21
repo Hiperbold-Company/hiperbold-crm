@@ -4603,7 +4603,6 @@
   box-shadow: var(--shadow-md);
 }
 [data-redesign="ligado"] [data-rd-sistema="titulo"] {
-  margin: 0;
   font-size: 24px;
   font-weight: 700;
   line-height: 1.25;
