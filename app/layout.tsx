@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { redesignLigado } from "@/lib/redesign/chave";
 import { headers } from "next/headers";
 import { Toaster } from "sonner";
 import { coresDaBarraDoNavegador } from "@/lib/branding/barra-do-navegador";
@@ -344,6 +345,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html
       lang="pt-BR"
       data-theme="light"
+      // Só existe com `REDESIGN_HIPERBOLD=ligado` (`lib/redesign/chave.ts`):
+      // desligado, `undefined` não escreve atributo e o documento é o de sempre.
+      data-redesign={redesignLigado() ? "ligado" : undefined}
       suppressHydrationWarning
       className={`${inter.variable} ${assistant.variable} ${plexMono.variable}`}
     >

@@ -17,7 +17,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { setActiveOrg } from "@/app/actions/shell/setActiveOrg";
 
-export function TenantSwitcher() {
+/**
+ * A troca de organização em si, exportada para a moldura do redesign usar o
+ * MESMO caminho (transição, ação, recarga em `/app/inbox`).
+ */
+export function useTrocaDeOrganizacao() {
   const t = useT();
   const user = useUser();
   const active = useActiveOrg();
@@ -37,8 +41,15 @@ export function TenantSwitcher() {
       toast.error(t("Não foi possível trocar de organização. Seu acesso pode ter mudado. Tente novamente."));
     }
   };
+  const podeTrocar = !(user.organizations.length <= 1 && !user.is_platform_admin);
+  return { user, active, isPending, switchTo, podeTrocar };
+}
 
-  if (user.organizations.length <= 1 && !user.is_platform_admin) return null;
+export function TenantSwitcher() {
+  const t = useT();
+  const { user, active, isPending, switchTo, podeTrocar } = useTrocaDeOrganizacao();
+
+  if (!podeTrocar) return null;
 
   // A logo da empresa ativa sai da MESMA lista do menu (`logo_url` de cada
   // vínculo), e não de `active.marca`: aquela é a marca do produto e só existe

@@ -12,6 +12,9 @@ import { useNotifyOpenFromServiceWorker } from "@/lib/notifications/notify_open"
 import { ensureNotifyServiceWorker } from "@/lib/notifications/service_worker";
 import { estiloDaReserva, useOcupacaoDoRodape } from "@/lib/ui/rodape-ocupado";
 import { ProvedorDaCentralDeAjuda } from "@/lib/ajuda/contexto";
+import { MenuLateral } from "@/components/shell/redesign/MenuLateral";
+import { BarraDaArea } from "@/components/shell/redesign/BarraDaArea";
+import { BarraInferiorNova } from "@/components/shell/redesign/BarraInferiorNova";
 
 interface AppShellProps {
   sidebarCollapsed: boolean;
@@ -26,6 +29,13 @@ interface AppShellProps {
   podeAtender: boolean;
   /** Endereço da central de ajuda desta instalação (`HELP_CENTER_URL`); `null` esconde o botão. */
   ajudaBase?: string | null;
+  /**
+   * Moldura do redesign exclusivo Hiperbold (`REDESIGN_HIPERBOLD`, lida no
+   * servidor pelo layout). Ausente ou `false`: a casca de sempre, sem mudança.
+   * Só os três encaixes trocam — menu lateral, topo e barra do celular; os
+   * hooks, o `<main>` e os provedores são os mesmos nas duas.
+   */
+  redesign?: boolean;
   children: ReactNode;
 }
 
@@ -33,6 +43,7 @@ export function AppShell({
   sidebarCollapsed,
   podeAtender,
   ajudaBase = null,
+  redesign = false,
   children,
 }: AppShellProps) {
   useInboundMessageAlerts();
@@ -75,7 +86,11 @@ export function AppShell({
     <div className="flex min-h-[calc(100dvh-var(--faixas-de-cima,0px))] w-full bg-background">
       <BarraDeProgressoNavegacao />
       <div className="hidden md:block">
-        <Sidebar collapsed={sidebarCollapsed} />
+        {redesign ? (
+          <MenuLateral collapsed={sidebarCollapsed} />
+        ) : (
+          <Sidebar collapsed={sidebarCollapsed} />
+        )}
       </div>
       {/*
         `min-w-0` é o que permite a coluna de conteúdo ENCOLHER. Um flex item
@@ -97,7 +112,7 @@ export function AppShell({
         cima da lista.
       */}
       <div className="flex min-h-[calc(100dvh-var(--faixas-de-cima,0px))] min-w-0 flex-1 flex-col">
-        <TopBar ajudaBase={ajudaBase} />
+        {redesign ? <BarraDaArea ajudaBase={ajudaBase} /> : <TopBar ajudaBase={ajudaBase} />}
         {/*
           O RODAPÉ DESCONTA O QUE AS PEÇAS FIXAS OCUPAM (issue #1305).
 
@@ -139,7 +154,7 @@ export function AppShell({
         Ela própria se esconde acima de `md` — o mesmo corte em que a barra
         lateral aparece, logo acima.
       */}
-      <BarraInferior />
+      {redesign ? <BarraInferiorNova /> : <BarraInferior />}
     </div>
     </ProvedorDaCentralDeAjuda>
   );

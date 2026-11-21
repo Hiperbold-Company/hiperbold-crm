@@ -40,6 +40,25 @@ import { TEXTOS_AGENDA_SERVICOS } from "./agenda-servicos";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  // Moldura do redesign exclusivo Hiperbold (`components/shell/redesign/`).
+  "Saia do acompanhamento para trocar de organização": { es: "Salga del acompañamiento para cambiar de organización", en: "Leave support mode to switch organizations" },
+  "Suas empresas": { es: "Sus empresas", en: "Your companies" },
+  "Atual": { es: "Actual", en: "Current" },
+  "Meu perfil": { es: "Mi perfil", en: "My profile" },
+  "Claro": { es: "Claro", en: "Light" },
+  "Escuro": { es: "Oscuro", en: "Dark" },
+  "Igual ao sistema": { es: "Igual al sistema", en: "Match system" },
+  "Buscar seção": { es: "Buscar sección", en: "Search sections" },
+  "Buscar seção…": { es: "Buscar sección…", en: "Search sections…" },
+  "Nenhuma seção com esse nome.": { es: "Ninguna sección con ese nombre.", en: "No section with that name." },
+  "Recolher menu": { es: "Contraer menú", en: "Collapse menu" },
+  "Abrir menu": { es: "Abrir menú", en: "Expand menu" },
+  "Todas as seções": { es: "Todas las secciones", en: "All sections" },
+  "Ajustes": { es: "Ajustes", en: "Settings" },
+  "Seções da área": { es: "Secciones del área", en: "Area sections" },
+  "Trocar de empresa": { es: "Cambiar de empresa", en: "Switch company" },
+  "Todas as telas que você pode abrir, por área.": { es: "Todas las pantallas que puede abrir, por área.", en: "Every screen you can open, by area." },
+  "Sua conta, todas as seções, ajuda, tema e idioma.": { es: "Su cuenta, todas las secciones, ayuda, tema e idioma.", en: "Your account, all sections, help, theme and language." },
   // Campos personalizados da organização (migration 1015, 17/11/2026).
   "A chave não muda depois de criada.": { es: "La clave no cambia después de creada.", en: "The key cannot change after it is created." },
   "A chave usa letras, números e _ e começa por letra.": { es: "La clave usa letras, números y _ y empieza por letra.", en: "The key uses letters, numbers and _ and starts with a letter." },

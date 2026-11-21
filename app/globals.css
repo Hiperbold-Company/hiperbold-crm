@@ -445,6 +445,181 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   REDESIGN EXCLUSIVO HIPERBOLD (chave `REDESIGN_HIPERBOLD`, `lib/redesign/chave.ts`).
+
+   Só casa quando o `<html>` tem `data-redesign="ligado"`, que o layout raiz
+   escreve SÓ com a chave ligada — desligado, nenhuma linha daqui vale.
+   Valores: `.tema-claro`/`.tema-escuro` do protótipo aprovado.
+
+   A ORDEM decide o claro: `[data-redesign="ligado"]` empata (0,1,0) com
+   `:root` e `[data-theme="light"]`, e vence por vir DEPOIS deles. O escuro
+   sobe a (0,2,0) para vencer `[data-theme="dark"]` e o próprio bloco claro, e
+   por isso declara EXATAMENTE as mesmas chaves que ele.
+
+   A marca continua acima: a da instalação é `:root:root` (0,2,0) e
+   `:root:root[data-theme="dark"]` (0,3,0), emitida no `<head>`; a da
+   organização casa o `<body>` e sombreia por herança. As duas vencem o accent
+   daqui, como vencem o do produto hoje.
+
+   Subárvore `data-theme="light"` dentro do redesign recebe o claro daqui, e
+   não a paleta antiga.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-redesign="ligado"],
+[data-redesign="ligado"] [data-theme="light"] {
+  --color-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #eef2f6;
+  --color-overlay: rgba(15, 23, 42, 0.42);
+  --color-text: #0f172a;
+  --color-text-muted: #5a6577;
+  --color-text-subtle: #6b7586;
+  --color-border: #d9e0e7;
+  --color-border-strong: #c3ccd6;
+  --color-accent-50: #eef3fd;
+  --color-accent-100: #dce6fb;
+  --color-accent-200: #b9cdf7;
+  --color-accent-300: #8fb1ff;
+  --color-accent-400: #6f9bff;
+  --color-accent-500: #2f63d0;
+  --color-accent-600: #0139b0;
+  --color-accent-700: #012f92;
+  --color-accent-800: #022574;
+  --color-accent-900: #031c57;
+  --color-accent-950: #020f30;
+  --color-accent: #0139b0;
+  --color-accent-fg: #ffffff;
+  --color-accent-soft: rgba(1, 57, 176, 0.08);
+  --color-accent-hover: #012f92;
+  --color-neutral-50: #f5f7fa;
+  --color-neutral-100: #eef2f6;
+  --color-neutral-200: #d9e0e7;
+  --color-neutral-300: #c3ccd6;
+  --color-neutral-400: #98a2b3;
+  --color-neutral-500: #6b7586;
+  --color-neutral-600: #5a6577;
+  --color-neutral-700: #3b4658;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+  --color-neutral-950: #070b16;
+  --color-success: #5a8a5f;
+  --color-success-bg: #eef4ee;
+  --color-success-fg: #41673f;
+  --color-warning: #b07a2b;
+  --color-warning-bg: #fbf4e4;
+  --color-warning-fg: #875a1a;
+  --color-error: #a94a3c;
+  --color-error-bg: #fbefed;
+  --color-error-fg: #8a3a2e;
+  --color-info: #3f6c9e;
+  --color-info-bg: rgba(63, 108, 158, 0.12);
+  --color-info-fg: #2f5580;
+  --color-ia: #7b5bad;
+  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 8px 28px rgba(15, 23, 42, 0.14), 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow-xl: 0 24px 48px -12px rgba(15, 23, 42, 0.2), 0 8px 16px -4px rgba(15, 23, 42, 0.1);
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-text);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-text);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-accent-fg);
+  --secondary: var(--color-surface-elevated);
+  --secondary-foreground: var(--color-text);
+  --muted: var(--color-surface-elevated);
+  --muted-foreground: var(--color-text-muted);
+  --accent-foreground: var(--color-accent-fg);
+  --destructive: var(--color-error);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-accent-500);
+}
+
+[data-redesign="ligado"][data-theme="dark"],
+[data-redesign="ligado"] [data-theme="dark"] {
+  --color-bg: #0f172a;
+  --color-surface: #14213d;
+  --color-surface-elevated: #1c2b4d;
+  --color-overlay: rgba(5, 10, 20, 0.6);
+  --color-text: #ffffff;
+  --color-text-muted: #a9b4c6;
+  --color-text-subtle: #8692a8;
+  --color-border: #2a3754;
+  --color-border-strong: #3a4866;
+  --color-accent-50: #eef3fd;
+  --color-accent-100: #dce6fb;
+  --color-accent-200: #b9cdf7;
+  --color-accent-300: #8fb1ff;
+  --color-accent-400: #6f9bff;
+  --color-accent-500: #2f63d0;
+  --color-accent-600: #0139b0;
+  --color-accent-700: #012f92;
+  --color-accent-800: #022574;
+  --color-accent-900: #031c57;
+  --color-accent-950: #020f30;
+  --color-accent: #6f9bff;
+  --color-accent-fg: #0a1020;
+  --color-accent-soft: rgba(111, 155, 255, 0.14);
+  --color-accent-hover: #8fb1ff;
+  --color-neutral-50: #f5f7fb;
+  --color-neutral-100: #dfe5ef;
+  --color-neutral-200: #bcc6d6;
+  --color-neutral-300: #a9b4c6;
+  --color-neutral-400: #8692a8;
+  --color-neutral-500: #3a4866;
+  --color-neutral-600: #2a3754;
+  --color-neutral-700: #1c2b4d;
+  --color-neutral-800: #14213d;
+  --color-neutral-900: #0f172a;
+  --color-neutral-950: #0a1020;
+  --color-success: #8fb38a;
+  --color-success-bg: #1e3229;
+  --color-success-fg: #a4ba9a;
+  --color-warning: #d9a75a;
+  --color-warning-bg: #33291a;
+  --color-warning-fg: #e6bd7d;
+  --color-error: #e08a7a;
+  --color-error-bg: #3a2028;
+  --color-error-fg: #f0a698;
+  --color-info: #7da9d6;
+  --color-info-bg: rgba(125, 169, 214, 0.16);
+  --color-info-fg: #a4c3e6;
+  --color-ia: #a98fd6;
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.45), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 32px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 24px 48px -12px rgba(0, 0, 0, 0.65), 0 8px 16px -4px rgba(0, 0, 0, 0.5);
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-text);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-text);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-accent-fg);
+  --secondary: var(--color-surface-elevated);
+  --secondary-foreground: var(--color-text);
+  --muted: var(--color-surface-elevated);
+  --muted-foreground: var(--color-text-muted);
+  --accent-foreground: var(--color-accent-fg);
+  --destructive: var(--color-error);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-accent-400);
+}
+
+/* O protótipo desenha a Inter sem o conjunto estilístico `ss01`. */
+[data-redesign="ligado"] body {
+  font-feature-settings:
+    "rlig" 1,
+    "calt" 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Ponte token → utilitário (o que era `theme.extend` no `tailwind.config.ts`).
 
    `@theme inline` e não `@theme`: com `inline`, o utilitário recebe o
