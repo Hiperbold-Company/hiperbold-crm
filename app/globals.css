@@ -4756,6 +4756,17 @@
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
 }
+/* No desktop o menu tem rolagem própria e fica na tela: sem isto ele crescia com
+   a página, quem rolava era o documento e o item aceso (Credenciais, Recursos
+   opcionais, Extensões) nascia abaixo da dobra. O AdminSidebar rola até ele. */
+@media (min-width: 64rem) {
+  [data-redesign="ligado"] [data-rd-plataforma="menu"] {
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100dvh;
+  }
+}
 [data-redesign="ligado"] [data-rd-plataforma="menu-topo"] {
   border-bottom: 1px solid var(--color-border);
 }
