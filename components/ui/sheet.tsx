@@ -21,6 +21,7 @@ const SheetOverlay = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
+    data-slot="sheet-overlay"
     className={cn(
       // `ds-cortina` no lugar de `animate-in`/`fade-in-0`: aquelas classes vêm
       // do plugin `tailwindcss-animate`, que NUNCA foi instalado neste repo, e
@@ -95,6 +96,7 @@ const SheetContent = React.forwardRef<
           coisa de popper (menu, dica, seletor), e o Sheet não é popper.
         */
         data-lado={side}
+        data-slot="sheet-content"
         className={cn(sheetVariants({ side }), className)}
         {...props}
       >
@@ -150,6 +152,7 @@ const SheetTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Title
     ref={ref}
+    data-slot="sheet-title"
     className={cn("text-lg font-semibold text-foreground", className)}
     {...props}
   />
@@ -162,6 +165,7 @@ const SheetDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Description
     ref={ref}
+    data-slot="sheet-description"
     className={cn("text-sm text-muted-foreground", className)}
     {...props}
   />

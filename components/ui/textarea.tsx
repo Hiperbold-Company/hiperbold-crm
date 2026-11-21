@@ -6,6 +6,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, React.ComponentProps<"tex
   ({ className, ...props }, ref) => {
     return (
       <textarea
+        data-slot="textarea"
         className={cn(
           "flex min-h-[80px] w-full rounded-sm border border-border bg-bg px-4 py-3",
           // `text-base md:text-sm` — pelo mesmo motivo do `components/ui/input.tsx`:

@@ -17,6 +17,7 @@ const AlertDialogOverlay = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
+    data-slot="dialog-overlay"
     className={cn("ds-cortina fixed inset-0 z-50 bg-black/80", className)}
     {...props}
     ref={ref}
@@ -32,6 +33,7 @@ const AlertDialogContent = React.forwardRef<
     <AlertDialogOverlay />
     <AlertDialogPrimitive.Content
       ref={ref}
+      data-slot="alert-dialog-content"
       className={cn(
         // `duration-200` saiu junto com as classes mortas: era duração de
         // TRANSIÇÃO, e aqui nunca houve transição para durar. Quem anima é
@@ -68,6 +70,7 @@ const AlertDialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Title
     ref={ref}
+    data-slot="dialog-title"
     className={cn("text-lg font-semibold", className)}
     {...props}
   />
@@ -80,6 +83,7 @@ const AlertDialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Description
     ref={ref}
+    data-slot="dialog-description"
     className={cn("text-sm text-muted-foreground", className)}
     {...props}
   />
@@ -90,7 +94,14 @@ const AlertDialogAction = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Action>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>
 >(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Action ref={ref} className={cn(buttonVariants(), className)} {...props} />
+  <AlertDialogPrimitive.Action
+    ref={ref}
+    data-slot="button"
+    data-variant="primary"
+    data-size="default"
+    className={cn(buttonVariants(), className)}
+    {...props}
+  />
 ));
 AlertDialogAction.displayName = AlertDialogPrimitive.Action.displayName;
 
@@ -100,6 +111,9 @@ const AlertDialogCancel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Cancel
     ref={ref}
+    data-slot="button"
+    data-variant="outline"
+    data-size="default"
     className={cn(buttonVariants({ variant: "outline" }), "mt-2 sm:mt-0", className)}
     {...props}
   />
