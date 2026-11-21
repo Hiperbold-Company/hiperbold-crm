@@ -1732,6 +1732,458 @@
   .cc-ondas-ativa .cc-onda { animation: none; }
 }
 
+/* redesign: componentes */
+/* ─────────────────────────────────────────────────────────────────────────
+   COMPONENTES BASE DO REDESIGN (chave `REDESIGN_HIPERBOLD`). Fonte: o
+   protótipo aprovado (`Componentes.dc.html` e o `<style>` das telas: `.btn`,
+   `.campo`, `.sel`, `.cx`, `.switch`, `.seg`, `.etq`, `.cartao`, `.toast`).
+
+   TODO seletor deste bloco começa por `[data-redesign="ligado"]` — com a chave
+   desligada nenhuma linha daqui casa. Quem cobra:
+   `tests/unit/redesign-componentes-escopados.test.ts`.
+
+   Por que FORA de `@layer`: em `@layer components` estas regras perderiam
+   para os utilitários do próprio componente (`h-9`, `rounded-sm`, `bg-bg`) e
+   não fariam nada. Fora de camada elas vencem QUALQUER utilitário — inclusive
+   o que o chamador passou em `className`. Por isso cada troca é condicionada à
+   PRESENÇA da classe-base que ela substitui (`[class~="rounded-sm"]`): o `cn()`
+   (tailwind-merge) apaga a classe-base quando o chamador passa uma que conflita
+   (`rounded-full`, `text-error`, `bg-accent-soft`), e aí a regra daqui deixa
+   de casar e o chamador continua mandando.
+
+   Os ganchos são os `data-slot` estáticos de `components/ui/` — atributos
+   inertes, que nada lê com a chave desligada.
+
+   Alturas do protótipo (38px) só de `lg` para cima: abaixo dele vale o piso de
+   44px de toque dos componentes. A fonte de 16px dos campos abaixo de `md`
+   (correção do zoom do Safari no iPhone) não é tocada.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-redesign="ligado"],
+[data-redesign="ligado"] [data-theme="light"] {
+  --redesign-foco: rgba(1, 57, 176, 0.35);
+}
+[data-redesign="ligado"][data-theme="dark"],
+[data-redesign="ligado"] [data-theme="dark"] {
+  --redesign-foco: rgba(111, 155, 255, 0.45);
+}
+
+/* ---- Botão (.btn, .btn-pri, .btn-fan, .btn-per) ------------------------ */
+[data-redesign="ligado"] [data-slot="button"][class~="rounded-sm"] {
+  border-radius: 8px;
+}
+[data-redesign="ligado"] [data-slot="button"][class~="font-medium"] {
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-slot="button"][class~="gap-2"] {
+  gap: 6px;
+}
+[data-redesign="ligado"] [data-slot="button"][class~="shadow-xs"] {
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-slot="button"][class~="disabled:opacity-50"]:disabled {
+  opacity: 0.45;
+}
+/* Fantasma (.btn-fan): fundo de superfície, borda forte, e o hover não pinta
+   de azul — escurece o fundo. */
+[data-redesign="ligado"] [data-slot="button"][class~="bg-surface-elevated"] {
+  background-color: var(--color-surface);
+}
+[data-redesign="ligado"] [data-slot="button"][class~="border-border"] {
+  border-color: var(--color-border-strong);
+}
+[data-redesign="ligado"] [data-slot="button"][class~="hover:border-accent"]:hover {
+  border-color: var(--color-border-strong);
+}
+[data-redesign="ligado"] [data-slot="button"][class~="hover:text-accent"]:hover {
+  color: var(--color-text);
+}
+[data-redesign="ligado"]
+  [data-slot="button"]:is([class~="bg-surface-elevated"], [class~="bg-transparent"]):is(
+    [data-variant="secondary"],
+    [data-variant="outline"]
+  ):not([class*="hover:bg-"]):hover {
+  background-color: var(--color-surface-elevated);
+}
+/* Ícone/sem fundo (.btn-ico): hover em superfície elevada, não em azul. */
+[data-redesign="ligado"] [data-slot="button"][class~="hover:bg-accent-soft"]:hover {
+  background-color: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-slot="button"][class~="focus-visible:ring-2"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+
+/* ---- Campo de texto e área (.campo, .area) ----------------------------- */
+[data-redesign="ligado"] :is([data-slot="input"], [data-slot="textarea"])[class~="rounded-sm"] {
+  border-radius: 8px;
+}
+[data-redesign="ligado"] :is([data-slot="input"], [data-slot="textarea"])[class~="border-border"] {
+  border-color: var(--color-border-strong);
+}
+[data-redesign="ligado"] :is([data-slot="input"], [data-slot="textarea"])[class~="bg-bg"] {
+  background-color: var(--color-surface);
+}
+[data-redesign="ligado"] [data-slot="input"][class~="px-4"] {
+  padding-inline: 12px;
+}
+[data-redesign="ligado"] [data-slot="textarea"][class~="px-4"] {
+  padding-inline: 12px;
+}
+[data-redesign="ligado"] [data-slot="textarea"][class~="py-3"] {
+  padding-block: 10px;
+}
+[data-redesign="ligado"]
+  :is([data-slot="input"], [data-slot="textarea"])[class~="focus-visible:ring-2"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+[data-redesign="ligado"] :is([data-slot="input"], [data-slot="textarea"])[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+[data-redesign="ligado"]
+  :is([data-slot="input"], [data-slot="textarea"])[aria-invalid="true"]:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 30%, transparent);
+}
+
+/* ---- Seleção (.sel) ---------------------------------------------------- */
+[data-redesign="ligado"] [data-slot="select-trigger"][class~="rounded-md"] {
+  border-radius: 8px;
+}
+[data-redesign="ligado"] [data-slot="select-trigger"][class~="border-input"] {
+  border-color: var(--color-border-strong);
+}
+[data-redesign="ligado"] [data-slot="select-trigger"][class~="bg-transparent"] {
+  background-color: var(--color-surface);
+}
+[data-redesign="ligado"] [data-slot="select-trigger"][class~="px-3"] {
+  padding-inline: 10px;
+}
+[data-redesign="ligado"] [data-slot="select-trigger"][class~="shadow-sm"] {
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-slot="select-trigger"][class~="focus:ring-1"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+
+/* Altura de 38px (.btn, .campo, .sel) onde quem aciona é o cursor. */
+@media (width >= 64rem) {
+  [data-redesign="ligado"] [data-slot="button"]:not([data-size="icon"])[class~="lg:h-9"] {
+    height: 38px;
+  }
+  [data-redesign="ligado"] [data-slot="input"][class~="h-10"] {
+    height: 38px;
+  }
+  [data-redesign="ligado"] [data-slot="select-trigger"][class~="h-9"] {
+    height: 38px;
+  }
+}
+
+/* ---- Caixa de marcar (.cx) --------------------------------------------- */
+[data-redesign="ligado"] [data-slot="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 4px;
+  background-color: var(--color-surface);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 12px 12px;
+  vertical-align: middle;
+}
+[data-redesign="ligado"] [data-slot="checkbox"][class~="size-4"] {
+  width: 18px;
+  height: 18px;
+}
+[data-redesign="ligado"] [data-slot="checkbox"]:checked {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7'/%3E%3C/svg%3E");
+}
+[data-redesign="ligado"] [data-slot="checkbox"]:indeterminate {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='4' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
+}
+[data-redesign="ligado"] [data-slot="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+[data-redesign="ligado"] [data-slot="checkbox"]:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---- Interruptor (.switch, .polegar): 40×24, polegar branco de 18 ------ */
+[data-redesign="ligado"] [data-slot="switch"][class~="h-5"] {
+  height: 24px;
+}
+[data-redesign="ligado"] [data-slot="switch"][class~="w-9"] {
+  width: 40px;
+}
+[data-redesign="ligado"] [data-slot="switch"][class~="shadow-sm"] {
+  box-shadow: none;
+}
+[data-redesign="ligado"]
+  [data-slot="switch"][class~="data-[state=unchecked]:bg-input"][data-state="unchecked"] {
+  background-color: var(--color-border-strong);
+}
+[data-redesign="ligado"] [data-slot="switch"][class~="focus-visible:ring-2"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+/* A borda transparente de 2px fica: 2 + 1 de margem = os 3px do protótipo, e o
+   `translate-x-4` (16px) do ligado leva o polegar exatamente aos 19px dele. */
+[data-redesign="ligado"] [data-slot="switch-thumb"][class~="h-4"] {
+  width: 18px;
+  height: 18px;
+  margin-left: 1px;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* ---- Abas segmentadas (.seg) ------------------------------------------- */
+[data-redesign="ligado"] [data-slot="tabs-list"][class~="h-9"] {
+  height: auto;
+}
+[data-redesign="ligado"] [data-slot="tabs-list"][class~="rounded-lg"] {
+  border-radius: 9px;
+}
+[data-redesign="ligado"] [data-slot="tabs-list"][class~="p-1"] {
+  padding: 3px;
+}
+[data-redesign="ligado"] [data-slot="tabs-list"]:not([class*="gap-"]) {
+  gap: 2px;
+}
+[data-redesign="ligado"] [data-slot="tabs-trigger"][class~="rounded-md"] {
+  border-radius: 7px;
+}
+[data-redesign="ligado"] [data-slot="tabs-trigger"][class~="px-3"] {
+  padding-inline: 14px;
+}
+[data-redesign="ligado"] [data-slot="tabs-trigger"][class~="py-1"] {
+  padding-block: 6px;
+}
+[data-redesign="ligado"] [data-slot="tabs-trigger"][class~="text-sm"] {
+  font-size: 13px;
+}
+[data-redesign="ligado"]
+  [data-slot="tabs-trigger"][class~="data-[state=active]:bg-background"][data-state="active"] {
+  background-color: var(--color-surface);
+}
+[data-redesign="ligado"]
+  [data-slot="tabs-trigger"][class~="data-[state=active]:shadow-sm"][data-state="active"] {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+[data-redesign="ligado"] [data-slot="tabs-trigger"][class~="font-medium"][data-state="active"] {
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-slot="tabs-trigger"][class~="focus-visible:ring-2"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+
+/* ---- Etiqueta (.etq): 20px, pílula, 11px semibold ---------------------- */
+[data-redesign="ligado"] [data-slot="badge"][class~="px-3"] {
+  padding-inline: 8px;
+}
+[data-redesign="ligado"] [data-slot="badge"][class~="py-0.5"] {
+  padding-block: 0;
+}
+[data-redesign="ligado"] [data-slot="badge"][class~="leading-5"] {
+  line-height: 18px;
+}
+[data-redesign="ligado"] [data-slot="badge"][class~="text-xs"] {
+  font-size: 11px;
+}
+[data-redesign="ligado"] [data-slot="badge"][class~="font-medium"] {
+  font-weight: 600;
+}
+
+/* ---- Cartão (.cartao): sem sombra, título de 15px ---------------------- */
+[data-redesign="ligado"] [data-slot="card"][class~="shadow-xs"] {
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-slot="card-title"][class~="text-base"] {
+  font-size: 15px;
+}
+
+/* ---- Tabela (.linha, .th) ---------------------------------------------- */
+[data-redesign="ligado"] [data-slot="table-head"]:not([class~="normal-case"]) {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+[data-redesign="ligado"] [data-slot="table-head"][class~="font-medium"] {
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-slot="table-row"][class~="hover:bg-muted/50"]:hover {
+  background-color: var(--color-surface-elevated);
+}
+[data-redesign="ligado"]
+  [data-slot="table-row"][class~="data-[state=selected]:bg-muted"][data-state="selected"] {
+  background-color: var(--color-accent-soft);
+}
+
+/* ---- Menus e painéis flutuantes (.menu-pop, .pop-op, .emp-pop) --------- */
+[data-redesign="ligado"]
+  :is(
+    [data-slot="menu-content"],
+    [data-slot="select-content"],
+    [data-slot="popover-content"]
+  )[class~="rounded-md"] {
+  border-radius: 12px;
+}
+[data-redesign="ligado"]
+  :is([data-slot="menu-content"], [data-slot="select-content"], [data-slot="popover-content"]):is(
+    [class~="shadow-md"],
+    [class~="shadow-lg"]
+  ) {
+  box-shadow: var(--shadow-lg);
+}
+[data-redesign="ligado"] [data-slot="menu-content"][class~="p-1"] {
+  padding: 6px;
+}
+[data-redesign="ligado"]
+  :is([data-slot="menu-item"], [data-slot="menu-item-inset"], [data-slot="select-item"])[class~="rounded-sm"] {
+  border-radius: 8px;
+}
+[data-redesign="ligado"]
+  :is([data-slot="menu-item"], [data-slot="menu-item-inset"], [data-slot="select-item"])[class~="py-1.5"] {
+  padding-block: 9px;
+}
+[data-redesign="ligado"] [data-slot="menu-item"][class~="px-2"] {
+  padding-inline: 10px;
+}
+[data-redesign="ligado"] [data-slot="menu-item-inset"][class~="pr-2"] {
+  padding-right: 10px;
+}
+[data-redesign="ligado"] [data-slot="select-item"][class~="pl-2"] {
+  padding-left: 10px;
+}
+[data-redesign="ligado"]
+  :is(
+    [data-slot="menu-item"],
+    [data-slot="menu-item-inset"],
+    [data-slot="select-item"]
+  )[class~="focus:bg-accent"]:is(:focus, [data-highlighted]) {
+  background-color: var(--color-surface-elevated);
+}
+[data-redesign="ligado"]
+  :is(
+    [data-slot="menu-item"],
+    [data-slot="menu-item-inset"],
+    [data-slot="select-item"]
+  )[class~="focus:text-accent-foreground"]:is(:focus, [data-highlighted]) {
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-slot="menu-item"][class~="data-[state=open]:bg-accent"][data-state="open"] {
+  background-color: var(--color-surface-elevated);
+}
+
+/* ---- Janela, confirmação e gaveta -------------------------------------- */
+[data-redesign="ligado"]
+  :is([data-slot="dialog-overlay"], [data-slot="sheet-overlay"])[class~="bg-black/80"] {
+  background-color: var(--color-overlay);
+}
+[data-redesign="ligado"]
+  :is(
+    [data-slot="dialog-content"],
+    [data-slot="alert-dialog-content"],
+    [data-slot="sheet-content"]
+  )[class~="bg-background"] {
+  background-color: var(--color-surface);
+}
+[data-redesign="ligado"] [data-slot="alert-dialog-content"][class~="border"] {
+  border-color: transparent;
+}
+@media (width >= 40rem) {
+  [data-redesign="ligado"]
+    :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])[class~="sm:rounded-lg"] {
+    border-radius: 14px;
+  }
+}
+[data-redesign="ligado"] [data-slot="dialog-title"][class~="font-semibold"] {
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-slot="dialog-description"][class~="text-sm"] {
+  line-height: 1.5;
+}
+
+/* ---- Aviso rápido (.toast): superfície, ícone em círculo colorido ------
+   Especificidade alta de propósito: o sonner injeta o próprio CSS (sem
+   camada) em tempo de execução, e o `richColors` do `app/layout.tsx` pinta o
+   aviso inteiro de verde/vermelho com seletores de três atributos. */
+[data-redesign="ligado"] [data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+}
+[data-redesign="ligado"]
+  [data-sonner-toaster]
+  [data-sonner-toast][data-styled="true"]
+  [data-description] {
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"]
+  [data-sonner-toaster]
+  [data-sonner-toast][data-styled="true"]:is(
+    [data-type="success"],
+    [data-type="error"],
+    [data-type="warning"],
+    [data-type="info"]
+  )
+  [data-icon] {
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+[data-redesign="ligado"]
+  [data-sonner-toaster]
+  [data-sonner-toast][data-styled="true"]:is(
+    [data-type="success"],
+    [data-type="error"],
+    [data-type="warning"],
+    [data-type="info"]
+  )
+  [data-icon]
+  svg {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+[data-redesign="ligado"] [data-sonner-toaster] [data-sonner-toast][data-type="success"] [data-icon] {
+  background: var(--color-success-bg);
+  color: var(--color-success-fg);
+}
+[data-redesign="ligado"] [data-sonner-toaster] [data-sonner-toast][data-type="error"] [data-icon] {
+  background: var(--color-error-bg);
+  color: var(--color-error-fg);
+}
+[data-redesign="ligado"] [data-sonner-toaster] [data-sonner-toast][data-type="warning"] [data-icon] {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+}
+[data-redesign="ligado"] [data-sonner-toaster] [data-sonner-toast][data-type="info"] [data-icon] {
+  background: var(--color-info-bg);
+  color: var(--color-info-fg);
+}
+[data-redesign="ligado"]
+  [data-sonner-toaster]
+  [data-sonner-toast][data-styled="true"]
+  [data-close-button] {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+/* redesign: componentes — fim */
+
 /* redesign: chat ──────────────────────────────────────────────────────────
    A tela do Chat (`/app/inbox`) no redesign Hiperbold, protótipo v49
    (Conversas, ConversasEscuro, ConversasCelular, ConversaCelular).

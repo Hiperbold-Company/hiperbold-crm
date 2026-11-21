@@ -7,6 +7,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
     return (
       <input
         type={type}
+        data-slot="input"
         className={cn(
           // `min-h-11 lg:min-h-0` — 44px de altura onde o dedo aciona.
           //

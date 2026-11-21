@@ -21,6 +21,7 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
+    data-slot="dialog-overlay"
     className={cn(
       // `ds-cortina` no lugar de `animate-in`/`fade-in-0`: aquelas classes vêm
       // do plugin `tailwindcss-animate`, que nunca foi instalado neste repo, e
@@ -44,6 +45,7 @@ const DialogContent = React.forwardRef<
       <DialogOverlay />
       <DialogPrimitive.Content
         ref={ref}
+        data-slot="dialog-content"
         className={cn(
           // `ds-modal` no lugar das OITO classes de animação que estavam aqui
           // (`animate-in`, `fade-in-0`, `zoom-in-95`, `slide-in-from-left-1/2`,
@@ -107,6 +109,7 @@ const DialogTitle = React.forwardRef<
     // o `anywhere` reduz a largura mínima do item — com `break-word` o grid do
     // modal ainda alarga até caber a palavra inteira, e o texto sai cortado.
     // `leading-tight` porque, quebrando, `leading-none` encosta as linhas.
+    data-slot="dialog-title"
     className={cn(
       "text-lg leading-tight font-semibold tracking-tight [overflow-wrap:anywhere]",
       className,
@@ -122,6 +125,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
+    data-slot="dialog-description"
     className={cn("text-sm text-muted-foreground", className)}
     {...props}
   />
