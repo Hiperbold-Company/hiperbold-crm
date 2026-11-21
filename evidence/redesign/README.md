@@ -1404,6 +1404,53 @@ Arquivo gerado por `node evidence/redesign/gerar-indice.mjs`. Não edite à mão
 - `evidence/redesign/R-revisao/depois-ligada/team-pt-BR-celular.png`
 - `evidence/redesign/R-revisao/depois-ligada/team-pt-BR-desktop.png`
 
+## X1-agenda
+
+### Antes (main, sem a mudança)
+
+- `evidence/redesign/X1-agenda/antes/agenda_detalhe-en-celular.png`
+- `evidence/redesign/X1-agenda/antes/agenda_detalhe-en-desktop.png`
+- `evidence/redesign/X1-agenda/antes/agenda_detalhe-pt-BR-celular.png`
+- `evidence/redesign/X1-agenda/antes/agenda_detalhe-pt-BR-desktop.png`
+- `evidence/redesign/X1-agenda/antes/agenda_marcar-en-celular.png`
+- `evidence/redesign/X1-agenda/antes/agenda_marcar-en-desktop.png`
+- `evidence/redesign/X1-agenda/antes/agenda_marcar-pt-BR-celular.png`
+- `evidence/redesign/X1-agenda/antes/agenda_marcar-pt-BR-desktop.png`
+- `evidence/redesign/X1-agenda/antes/agenda_mes-en-celular.png`
+- `evidence/redesign/X1-agenda/antes/agenda_mes-en-desktop.png`
+- `evidence/redesign/X1-agenda/antes/agenda_mes-pt-BR-celular.png`
+- `evidence/redesign/X1-agenda/antes/agenda_mes-pt-BR-desktop.png`
+
+### Depois, com a chave desligada (tem de ser igual ao antes)
+
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_detalhe-en-celular.png`
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_detalhe-en-desktop.png`
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_detalhe-pt-BR-celular.png`
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_detalhe-pt-BR-desktop.png`
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_marcar-en-celular.png`
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_marcar-en-desktop.png`
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_marcar-pt-BR-celular.png`
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_marcar-pt-BR-desktop.png`
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_mes-en-celular.png`
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_mes-en-desktop.png`
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_mes-pt-BR-celular.png`
+- `evidence/redesign/X1-agenda/depois-desligada/agenda_mes-pt-BR-desktop.png`
+
+### Depois, com a chave ligada (visual novo)
+
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_detalhe-en-celular.png`
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_detalhe-en-desktop.png`
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_detalhe-pt-BR-celular.png`
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_detalhe-pt-BR-desktop.png`
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_marcar-en-celular.png`
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_marcar-en-desktop.png`
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_marcar-pt-BR-celular.png`
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_marcar-pt-BR-desktop.png`
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_mes-en-celular.png`
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_mes-en-desktop.png`
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_mes-pt-BR-celular.png`
+- `evidence/redesign/X1-agenda/depois-ligada/agenda_mes-pt-BR-desktop.png`
+
 ## X3-entrar
 
 ### Antes (main, sem a mudança)
