@@ -4629,6 +4629,11 @@
   font-weight: 600;
   line-height: 20px;
   font-family: inherit;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
   color: var(--color-text-muted);
 }
 [data-redesign="ligado"] [data-rd-metricas="agente-operacao"] {
