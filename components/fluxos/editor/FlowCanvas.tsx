@@ -44,6 +44,7 @@ import { rotuloDoRamo } from "@/lib/followup/rotulo-do-ramo";
 import { useFollowupFlow, type FollowupFlowDetailRow } from "@/hooks/followup/useFollowupFlow";
 import { useT } from "@/hooks/i18n/useT";
 import { useMarcaDasAutomacoes } from "@/lib/redesign/automacoes";
+import { useMarcaDoEditor } from "@/lib/redesign/editor";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Plus, X } from "@/lib/ui/icons";
@@ -120,6 +121,7 @@ interface Props {
 function FlowCanvasInner({ flowId, initialData }: Props) {
   const t = useT();
   const rd = useMarcaDasAutomacoes();
+  const rdEditor = useMarcaDoEditor();
   const { nomes } = useEtapasDoFluxo();
   const { data: flow } = useFollowupFlow(flowId, { initialData });
   // `initial` seeds React Flow state ONCE on mount — it must NOT react to
@@ -427,6 +429,7 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
 
         <div className="relative h-full flex-1" data-testid="flow-canvas" data-rd-automacoes={rd("tela")} onDragOver={onDragOver} onDrop={onDrop}>
           <ReactFlow
+            data-rd-editor={rdEditor("canvas")}
             nodes={nodes}
             edges={edgesForRender}
             nodeTypes={nodeTypes}
