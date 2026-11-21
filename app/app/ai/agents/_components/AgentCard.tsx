@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasMetricas } from "@/lib/redesign/metricas";
 import type { AgentRow } from "@/hooks/ai/useAgent";
 import { AgentStatusBadge, deriveAgentStatus } from "./AgentStatusBadge";
 import { AgentRowMenu } from "./AgentRowMenu";
@@ -65,10 +66,11 @@ export function modeloEmVigor(agent: AgentRow): string {
 
 export function AgentCard({ agent, canWrite }: Props) {
   const t = useT();
+  const rd = useMarcaDasMetricas();
   const status = deriveAgentStatus(agent);
 
   return (
-    <Card className="flex h-full flex-col gap-3 p-4">
+    <Card className="flex h-full flex-col gap-3 p-4" data-rd-metricas={rd("agentes-cartao")}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium" title={agent.name}>

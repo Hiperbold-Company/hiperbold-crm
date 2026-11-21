@@ -12,6 +12,7 @@
 import { useT } from "@/hooks/i18n/useT";
 import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 import { useTeamMembers } from "@/hooks/team/useTeamMembers";
+import { useMarcaDasMetricas } from "@/lib/redesign/metricas";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type Atalho, type FiltrosDaTela, janelaDosFiltros, paraDiaLocal } from "@/lib/metrics/desempenho";
@@ -128,11 +129,13 @@ export function FiltrosDeDesempenho({
 }) {
   const t = useT();
   const equipe = useTeamMembers({ enabled: podeEscolherAtendente });
+  const rd = useMarcaDasMetricas();
 
   return (
     <div
       className="flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-end"
       data-testid="desempenho-filtros"
+      data-rd-metricas={rd("filtros")}
     >
       <SeletorDePeriodo filtros={filtros} onChange={onChange} />
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">

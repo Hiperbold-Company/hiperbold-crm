@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ValoresDoPeriodo } from "@/lib/metrics/valores-do-periodo";
 import { mesLegivel } from "@/lib/metas/periodo";
 import { MOEDA_PADRAO, formatValorDoNegocio } from "@/lib/money";
+import { useMarcaDasMetricas } from "@/lib/redesign/metricas";
 import Link from "next/link";
 
 export interface MetaDaEmpresa {
@@ -59,10 +60,11 @@ interface Props {
 
 export function MetaDoMesPanel({ estado, periodo, metas, podeConfigurar, valores }: Props) {
   const t = useT();
+  const rd = useMarcaDasMetricas();
   const mes = mesLegivel(periodo);
 
   return (
-    <Card>
+    <Card data-rd-metricas={rd("meta")}>
       <CardHeader>
         <CardTitle className="text-base">
           {t("Meta do mês")}

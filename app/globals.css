@@ -4260,3 +4260,173 @@
   }
 }
 /* redesign: agenda — fim ─────────────────────── */
+
+/* redesign: metricas ───────────────────────────────
+   Desempenho e Agentes de IA no visual do protótipo v49 (Metricas.dc.html,
+   MetricasCelular.dc.html, AgentesIA.dc.html). As peças levam `data-rd-metricas`
+   (`useMarcaDasMetricas()` / `marcaDasMetricas()` em `lib/redesign/metricas.ts`),
+   que só escreve o atributo com a chave LIGADA. Fora de `@layer`; TODO seletor
+   começa por `[data-redesign="ligado"]` (vigiado por
+   `tests/unit/redesign-metricas.test.tsx`). Só moldura: cores de série dos
+   gráficos, padding e largura de raiz ficam com a tela.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-redesign="ligado"] {
+  --rd-mt-sombra: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --rd-mt-sombra-hover: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+[data-redesign="ligado"][data-theme="dark"],
+[data-redesign="ligado"] [data-theme="dark"] {
+  --rd-mt-sombra: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --rd-mt-sombra-hover: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Cabeçalho das duas telas ------------------------------------------ */
+[data-redesign="ligado"] [data-rd-metricas="cabecalho"] > h1,
+[data-redesign="ligado"] [data-rd-metricas="agentes-cabecalho"] h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-metricas="cabecalho"] > p,
+[data-redesign="ligado"] [data-rd-metricas="agentes-cabecalho"] h1 + p {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+/* ---- Desempenho: filtros, abas ----------------------------------------- */
+[data-redesign="ligado"] [data-rd-metricas="filtros"] {
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-metricas="filtros"] label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-metricas="abas"] {
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-metricas="abas"] > [data-slot="tabs-trigger"] {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-metricas="abas"] > [data-slot="tabs-trigger"][data-state="active"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+/* ---- Cartões de indicador: número grande + rótulo ---------------------- */
+[data-redesign="ligado"] [data-rd-metricas="kpi"] {
+  gap: 4px;
+  padding: 16px 18px;
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--rd-mt-sombra);
+}
+[data-redesign="ligado"] button[data-rd-metricas="kpi"]:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--rd-mt-sombra-hover);
+}
+[data-redesign="ligado"] [data-rd-metricas="kpi"][aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-metricas="kpi"] > span:nth-child(1) {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-metricas="kpi"] > span:nth-child(2) {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-metricas="kpi"] > span:nth-child(3) {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+
+/* ---- Painéis (áreas de gráfico e listas) e a meta do mês --------------- */
+[data-redesign="ligado"] [data-rd-metricas="painel"],
+[data-redesign="ligado"] [data-rd-metricas="meta"] {
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--rd-mt-sombra);
+}
+[data-redesign="ligado"] [data-rd-metricas="painel"] > header > div > h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-metricas="painel"] > header > div > p {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-metricas="meta"] [data-slot="card-title"] {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ---- Agentes de IA: cartões em grade ----------------------------------- */
+[data-redesign="ligado"] [data-rd-metricas="agentes-grade"] {
+  gap: 14px;
+}
+[data-redesign="ligado"] [data-rd-metricas="agentes-cartao"],
+[data-redesign="ligado"] [data-rd-metricas="agentes-vazio"] {
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--rd-mt-sombra);
+}
+[data-redesign="ligado"] [data-rd-metricas="agentes-cartao"] {
+  padding: 18px;
+}
+[data-redesign="ligado"] [data-rd-metricas="agentes-cartao"]:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--rd-mt-sombra-hover);
+}
+[data-redesign="ligado"] [data-rd-metricas="agentes-cartao"] h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-metricas="agentes-cartao"] dt {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+[data-redesign="ligado"] [data-rd-metricas="agentes-vazio"] {
+  padding: 40px 24px;
+}
+
+@media (max-width: 639px) {
+  [data-redesign="ligado"] [data-rd-metricas="kpi"] {
+    padding: 12px 14px;
+  }
+  [data-redesign="ligado"] [data-rd-metricas="kpi"] > span:nth-child(2) {
+    font-size: 22px;
+  }
+  [data-redesign="ligado"] [data-rd-metricas="cabecalho"] > h1,
+  [data-redesign="ligado"] [data-rd-metricas="agentes-cabecalho"] h1 {
+    font-size: 20px;
+  }
+}
+/* redesign: metricas — fim ─────────────────────── */

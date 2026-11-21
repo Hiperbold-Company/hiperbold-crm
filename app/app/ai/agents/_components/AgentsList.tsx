@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Robot, Plus } from "@/lib/ui/icons";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasMetricas } from "@/lib/redesign/metricas";
 import { useAgentsList } from "@/hooks/ai/useAgents";
 import type { AgentRow } from "@/hooks/ai/useAgent";
 import { AgentCard } from "./AgentCard";
@@ -47,6 +48,7 @@ function BotaoCriarAgente({ motivo, className }: { motivo: string | null; classN
 
 export function AgentsList({ initialData, canWrite, motivoDoBloqueio = null }: Props) {
   const t = useT();
+  const rd = useMarcaDasMetricas();
   const { data, isLoading } = useAgentsList({ initialData });
   const [status, setStatus] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
@@ -67,7 +69,7 @@ export function AgentsList({ initialData, canWrite, motivoDoBloqueio = null }: P
 
   if (!isLoading && agents.length === 0) {
     return (
-      <Card className="flex flex-col items-center gap-3 p-10 text-center">
+      <Card className="flex flex-col items-center gap-3 p-10 text-center" data-rd-metricas={rd("agentes-vazio")}>
         <Robot size={36} aria-hidden className="text-muted-foreground" />
         <h2 className="font-medium">{t("Nenhum agente configurado")}</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
@@ -82,7 +84,7 @@ export function AgentsList({ initialData, canWrite, motivoDoBloqueio = null }: P
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2" data-rd-metricas={rd("agentes-filtros")}>
         <AgentsListFilters
           status={status}
           onStatusChange={setStatus}
@@ -99,7 +101,7 @@ export function AgentsList({ initialData, canWrite, motivoDoBloqueio = null }: P
           {t("Nenhum agente corresponde aos filtros atuais.")}
         </Card>
       ) : (
-        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" data-rd-metricas={rd("agentes-grade")}>
           {filtered.map((agent) => (
             <li key={agent.id}>
               <AgentCard agent={agent} canWrite={canWrite} />
