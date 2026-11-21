@@ -2669,3 +2669,276 @@
   color: var(--color-text-muted);
 }
 /* redesign: chat — fim ─────────────────────────────────────────────────── */
+
+/* redesign: automacoes ───────────────────────────────────────────────────
+   A área Automações no redesign Hiperbold, protótipo v49 (Automacoes,
+   EditorAutomacao, FollowUps, Roteadores, Execucoes; claro e escuro).
+
+   Os componentes são os de sempre; com a chave ligada eles ganham
+   `data-rd-automacoes="<peça>"` (`lib/redesign/automacoes.ts`) e as regras
+   abaixo os desenham. TODA regra começa por `[data-redesign="ligado"]` —
+   desligada, nenhuma casa, e `tests/unit/redesign-automacoes.test.tsx` cobra isso.
+
+   Cores só das variáveis do tema (claro e escuro saem das mesmas). Fora de
+   `@layer` de propósito: vence os utilitários do Tailwind sem `!important`.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Página: cabeçalho como o do protótipo ── */
+[data-redesign="ligado"] [data-rd-automacoes="pagina"] {
+  gap: 24px;
+}
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-automacoes="pagina"] {
+    padding: 32px 40px 40px;
+  }
+}
+[data-redesign="ligado"] [data-rd-automacoes="cabecalho"] {
+  align-items: flex-start;
+  gap: 12px 24px;
+}
+[data-redesign="ligado"] [data-rd-automacoes="titulo"] {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-automacoes="cabecalho"] [data-rd-automacoes="titulo"] {
+    font-size: 26px;
+  }
+}
+[data-redesign="ligado"] [data-rd-automacoes="descricao"] {
+  margin: 6px 0 0;
+  max-width: 680px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-automacoes="link-secundario"] {
+  align-self: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+[data-redesign="ligado"] [data-rd-automacoes="link-secundario"]:hover {
+  text-decoration: underline;
+}
+[data-redesign="ligado"] [data-rd-automacoes="abas"] {
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--color-surface-elevated);
+}
+
+/* ── Barra de busca, filtros e ações ── */
+[data-redesign="ligado"] [data-rd-automacoes="barra"] {
+  align-items: center;
+  gap: 12px;
+}
+[data-redesign="ligado"] input[data-rd-automacoes="busca"] {
+  height: 40px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  font-size: 14px;
+}
+[data-redesign="ligado"] [data-rd-automacoes="filtros"] {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-automacoes="filtros"] > button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-automacoes="filtros"] > button[aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+[data-redesign="ligado"] [data-rd-automacoes="faixa-erro"] {
+  border-radius: 10px;
+}
+
+/* ── Grade e cartões ── */
+[data-redesign="ligado"] [data-rd-automacoes="grade"] {
+  gap: 16px;
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao"] {
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao"]:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao"]:focus-within {
+  border-color: var(--color-border-strong);
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao-corpo"] {
+  gap: 8px;
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao-nome"] {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao-tipo"] {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao-rodape"] {
+  gap: 4px;
+  margin: 0 -6px -6px;
+  padding: 10px 6px 6px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao-rodape"] > a {
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao-rodape"] > a:hover {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+/* ── Chips de estado ── */
+[data-redesign="ligado"] [data-rd-automacoes="estado"] {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+[data-redesign="ligado"] span[data-rd-automacoes="estado"]:not([data-slot]) {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-automacoes="estado"][data-rd-estado="active"] {
+  background: var(--color-success-bg);
+  color: var(--color-success-fg);
+}
+[data-redesign="ligado"] [data-rd-automacoes="estado"][data-rd-estado="draft"] {
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-automacoes="estado"][data-rd-estado="disabled"] {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+}
+
+/* ── Vazio ── */
+[data-redesign="ligado"] [data-rd-automacoes="vazio"] {
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text-muted);
+}
+
+/* ── Execuções: resumo e lista ── */
+[data-redesign="ligado"] [data-rd-automacoes="resumo"] {
+  padding: 16px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-automacoes="lista"] {
+  gap: 8px;
+}
+[data-redesign="ligado"] [data-rd-automacoes="item"] {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-automacoes="item"]:hover {
+  border-color: var(--color-border-strong);
+}
+
+/* ── Editor: barra do topo, paleta, tela e painel ── */
+[data-redesign="ligado"] [data-rd-automacoes="barra-do-editor"] {
+  min-height: 64px;
+  gap: 12px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-automacoes="barra-do-editor"] [data-rd-automacoes="titulo"] {
+  font-size: 17px;
+  font-weight: 700;
+}
+@media (min-width: 1024px) {
+  [data-redesign="ligado"] [data-rd-automacoes="paleta"]:not([class~="w-full"]) {
+    width: 240px;
+    padding: 18px 14px;
+  }
+}
+[data-redesign="ligado"] [data-rd-automacoes="paleta"] {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-automacoes="paleta"] h2 {
+  padding: 0 4px 8px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-automacoes="paleta"] h3 {
+  padding: 12px 4px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-automacoes="paleta"] button {
+  border-radius: 8px;
+  font-size: 14px;
+}
+[data-redesign="ligado"] [data-rd-automacoes="tela"] {
+  background-color: var(--color-bg);
+}
+[data-redesign="ligado"] [data-rd-automacoes="painel"] {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+/* ── Celular ── */
+@media (max-width: 767px) {
+  [data-redesign="ligado"] [data-rd-automacoes="barra"] {
+    align-items: stretch;
+  }
+  [data-redesign="ligado"] [data-rd-automacoes="filtros"] {
+    flex-wrap: wrap;
+  }
+}
+/* redesign: automacoes — fim ─────────────────────────────────────────── */

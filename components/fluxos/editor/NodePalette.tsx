@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { NodeType } from "@/lib/followup/graph-schema";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasAutomacoes } from "@/lib/redesign/automacoes";
 import { NOS_DA_SUPERFICIE } from "@/lib/followup/validate-publish";
 import type { FollowupFlowSurface } from "@/lib/followup/api-schemas";
 import { REGISTRO_DE_NOS, type CategoriaDoNo } from "@/lib/followup/registro-de-nos";
@@ -50,6 +51,7 @@ interface Props {
 /** Sidebar palette — click to add. Native HTML5 drag-and-drop wired in FlowCanvas (increment 3). */
 export function NodePalette({ onAdd, variant = "desktop", surface = "followup" }: Props) {
   const t = useT();
+  const rd = useMarcaDasAutomacoes();
   const isMobile = variant === "mobile";
   const botao = (tipo: NodeType) => {
     const visual = NODE_VISUALS[tipo];
@@ -87,6 +89,7 @@ export function NodePalette({ onAdd, variant = "desktop", surface = "followup" }
           : "hidden w-56 shrink-0 border-r border-border bg-surface lg:flex",
       )}
       data-testid="node-palette"
+      data-rd-automacoes={rd("paleta")}
     >
       <h2 className="px-1 pb-1 text-xs font-medium tracking-wide text-text-muted uppercase">
         {t("Adicionar nó")}

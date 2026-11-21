@@ -28,6 +28,7 @@ import { ApiError } from "@/lib/api/types";
 import type { FlowGraph } from "@/lib/followup/graph-schema";
 import type { PublishValidationError } from "@/lib/followup/validate-publish";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasAutomacoes } from "@/lib/redesign/automacoes";
 import {
   useDisableFollowupFlow,
   usePublishFollowupFlow,
@@ -78,6 +79,7 @@ export function PublishBar({
   canAutoFit = false,
 }: Props) {
   const t = useT();
+  const rd = useMarcaDasAutomacoes();
   const [openDeleteSelection, setOpenDeleteSelection] = useState(false);
   const save = useSaveFollowupFlowDraft(flowId);
   const publish = usePublishFollowupFlow(flowId);
@@ -135,9 +137,9 @@ export function PublishBar({
   const busy = save.isPending || publish.isPending || disable.isPending || rollback.isPending;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3" data-rd-automacoes={rd("barra-do-editor")}>
       <div className="flex items-center gap-1">
-        <h1 className="text-sm font-semibold text-text">{flow.name}</h1>
+        <h1 className="text-sm font-semibold text-text" data-rd-automacoes={rd("titulo")}>{flow.name}</h1>
         <RenameFollowupFlowButton
           flowId={flowId}
           flowName={flow.name}
