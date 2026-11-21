@@ -4788,6 +4788,10 @@
   }
 }
 /* ── Campo de 6 dígitos da verificação em duas etapas ── */
+/* a fileira de dígitos alinha à esquerda, com o título e o checkbox */
+[data-redesign="ligado"] [data-rd-entrar="cartao"] :has(> input[data-rd-entrar="digito"]) {
+  justify-content: flex-start;
+}
 [data-redesign="ligado"] input[data-rd-entrar="digito"] {
   width: 48px;
   height: 56px;
@@ -4804,6 +4808,15 @@
   outline: none;
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+/* no celular as seis caixas dividem a largura do cartão em vez de vazar */
+@media (max-width: 480px) {
+  [data-redesign="ligado"] input[data-rd-entrar="digito"] {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    max-width: 48px;
+  }
 }
 /* redesign: entrar — fim ─────────────────────── */
 
