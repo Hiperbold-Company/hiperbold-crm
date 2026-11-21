@@ -2596,7 +2596,13 @@
   [data-redesign="ligado"] [data-rd-chat="previa"] {
     font-size: 14px;
   }
+  /* O campo ocupa a linha inteira; as ferramentas ficam embaixo. */
+  [data-redesign="ligado"] [data-rd-chat="caixa"] {
+    flex-wrap: wrap;
+  }
   [data-redesign="ligado"] [data-rd-chat="campo"] {
+    order: -1;
+    flex: 1 1 100%;
     min-height: 44px;
     padding: 11px 14px;
     border: 1px solid var(--color-border-strong);
