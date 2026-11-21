@@ -23,6 +23,8 @@ import { mesLocal } from "@/lib/metas/periodo";
 import { createClient } from "@/lib/supabase/server";
 
 import { FormularioDaMeta } from "./_form";
+import { marcaDosAjustes } from "@/lib/redesign/ajustes";
+import { redesignLigado } from "@/lib/redesign/chave";
 
 export const metadata = { title: "Meta de vendas" };
 export const dynamic = "force-dynamic";
@@ -53,7 +55,7 @@ export default async function MetaDeVendasPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
-      <header className="flex flex-col gap-2">
+      <header data-rd-ajustes={marcaDosAjustes(redesignLigado())("cabecalho")} className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">{t("Meta de vendas")}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {t(

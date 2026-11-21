@@ -1,6 +1,8 @@
 import { requireAuth } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { AplicativoNoCelular } from "./_client";
+import { marcaDosAjustes } from "@/lib/redesign/ajustes";
+import { redesignLigado } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,7 @@ export default async function AplicativoPage() {
   const t = (texto: string) => traduzir(texto, user.idioma);
   return (
     <div className="flex h-full flex-col gap-6 p-6">
-      <header>
+      <header data-rd-ajustes={marcaDosAjustes(redesignLigado())("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">{t("App no celular")}</h1>
         <p className="text-sm text-muted-foreground">
           {t("Instale o sistema na tela de início do celular e receba os avisos.")}

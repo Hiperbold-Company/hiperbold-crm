@@ -13,6 +13,7 @@ import { irAoDesafioDeMfa } from "@/lib/auth/ir-ao-desafio-de-mfa";
 import type { Role } from "@/lib/auth/types";
 import { lerInterface, MAX_CAMPOS_DE_COMPRA, type InterfaceSettings } from "@/lib/navigation/interface";
 import type { CustomFieldDef } from "@/lib/schemas/settings";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 interface Props {
   /** O que está gravado hoje em `organizations.interface_settings`. */
@@ -29,6 +30,7 @@ interface Props {
  * num nível acima, e duas telas com a mesma semântica divergem com o tempo.
  */
 export function InterfaceDaEmpresaForm({ initial, role, camposDeCompra = [] }: Props) {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const [value, setValue] = useState<InterfaceSettings>(() => lerInterface(initial).settings);
   const [isPending, startTransition] = useTransition();
@@ -63,7 +65,7 @@ export function InterfaceDaEmpresaForm({ initial, role, camposDeCompra = [] }: P
   }
 
   return (
-    <Card className="space-y-3 p-4">
+    <Card data-rd-ajustes={rd("secao")} className="space-y-3 p-4">
       <h2 className="text-sm font-medium">{t("Menu lateral")}</h2>
       <p className="text-xs text-muted-foreground">
         {t(

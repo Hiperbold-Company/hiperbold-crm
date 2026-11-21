@@ -48,6 +48,7 @@ import {
 import { marcaDaOrganizacaoSchema } from "@/lib/schemas/settings";
 import { dicaDoRelatorio, type VocabularioDaEmpresa } from "@/lib/legal/dica-do-relatorio-de-dados";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 interface Props {
   /**
@@ -147,6 +148,7 @@ function LinhaDeOrigem({ campo, valor }: { campo: string; valor: string }) {
 }
 
 export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, vocabulario }: Props) {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const router = useRouter();
   const [nome, setNome] = useState(gravada.app_name ?? "");
@@ -315,7 +317,7 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
 
   return (
     <form onSubmit={handleSubmit} className="max-w-3xl space-y-6">
-      <Card className="space-y-4 p-6">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-4 p-6">
         <h2 className="text-base font-semibold tracking-tight text-text">
           {t("Como sua empresa aparece")}
         </h2>
@@ -484,7 +486,7 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
         endereço de ENVIO (o domínio) continua sendo o do sistema. O SMTP próprio
         da organização é a fatia 2 e ainda não aparece aqui.
       */}
-      <Card className="space-y-4 p-6">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-4 p-6">
         <h2 className="text-base font-semibold tracking-tight text-text">
           {t("Como seus e-mails saem")}
         </h2>
@@ -542,7 +544,7 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
         cor dela, e de onde vem cada campo, com os motivos que o próprio motor
         emitiu (nunca uma conclusão que a tela tirou por conta).
       */}
-      <Card className="space-y-3 p-6">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-3 p-6">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-text">
             {t("De onde vem cada coisa")}
@@ -585,7 +587,7 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, 
         algum canto do produto e conclui que não funcionou — e "não funcionou" é
         o que ela vai repetir para o fornecedor dela.
       */}
-      <Card className="space-y-2 p-6">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-2 p-6">
         <h2 className="text-base font-semibold tracking-tight text-text">
           {t("O que isto ainda não muda")}
         </h2>

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 /**
  * Cada recusa vira uma frase que diz O QUE FAZER — mesma regra do formulário de
@@ -41,6 +42,7 @@ export function FormularioDeMetaAds({
   contaPadrao: string | null;
   idioma: Idioma;
 }) {
+  const rd = useMarcaDosAjustes();
   const t = (texto: string) => traduzir(texto, idioma);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -89,7 +91,7 @@ export function FormularioDeMetaAds({
   }
 
   return (
-    <Card className="p-6">
+    <Card data-rd-ajustes={rd("secao")} className="p-6">
       <form onSubmit={salvar} className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
           <Label htmlFor="access_token">{t("Token de acesso")}</Label>

@@ -45,6 +45,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useT } from "@/hooks/i18n/useT";
 import { irAoDesafioDeMfa } from "@/lib/auth/ir-ao-desafio-de-mfa";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 /** Todo motivo de recusa que as DUAS actions sabem devolver. */
 type CodigoDeRecusa =
@@ -81,6 +82,7 @@ interface FerramentaAnunciada {
 }
 
 export function CadastroDoServidorMcpExterno() {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const [endpoint, setEndpoint] = useState("");
   const [chave, setChave] = useState("");
@@ -165,7 +167,7 @@ export function CadastroDoServidorMcpExterno() {
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
-      <Card>
+      <Card data-rd-ajustes={rd("secao")}>
         <CardHeader>
           <CardTitle>{t("Endereço e chave")}</CardTitle>
           <CardDescription>
@@ -258,7 +260,7 @@ export function CadastroDoServidorMcpExterno() {
       ) : null}
 
       {teste ? (
-        <Card>
+        <Card data-rd-ajustes={rd("secao")}>
           <CardHeader>
             <CardTitle>{t("O que o servidor oferece")}</CardTitle>
             <CardDescription>

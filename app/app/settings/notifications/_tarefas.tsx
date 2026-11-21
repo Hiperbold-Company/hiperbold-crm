@@ -28,6 +28,7 @@ import {
   preferenciaPadraoDeLembrete,
   type PreferenciaDeLembrete,
 } from "@/lib/tarefas/preferencia-de-lembrete";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 /** As três antecedências que a tela oferece, na ordem em que se leem. */
 const ANTCEDENCIAS: ReadonlyArray<{ min: 15 | 60 | 1440; rotulo: string }> = [
@@ -37,6 +38,7 @@ const ANTCEDENCIAS: ReadonlyArray<{ min: 15 | 60 | 1440; rotulo: string }> = [
 ];
 
 export function TaskReminderPrefs() {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const telefoneExemplo = useTelefoneExemplo();
   const [pref, setPref] = useState<PreferenciaDeLembrete>(() => preferenciaPadraoDeLembrete());
@@ -70,7 +72,7 @@ export function TaskReminderPrefs() {
   }
 
   return (
-    <Card className="p-6">
+    <Card data-rd-ajustes={rd("secao")} className="p-6">
       <h2 className="text-base font-semibold">{t("Lembretes de tarefa")}</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {t(

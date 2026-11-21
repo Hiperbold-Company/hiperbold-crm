@@ -21,6 +21,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 const ERRO_EM_PORTUGUES: Record<string, string> = {
   validation_failed: "Confira os campos: o mês e a quantidade precisam estar preenchidos.",
@@ -37,6 +38,7 @@ export function FormularioDaMeta({
   mes: string;
   alvoAtual: number | null;
 }) {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -65,7 +67,7 @@ export function FormularioDaMeta({
   }
 
   return (
-    <Card className="max-w-xl p-6">
+    <Card data-rd-ajustes={rd("secao")} className="max-w-xl p-6">
       <form onSubmit={salvar} className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
           <Label htmlFor="periodo">{t("Mês")}</Label>

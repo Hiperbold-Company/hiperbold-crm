@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api/client";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 export interface AssinaturaConfig {
   humanos: boolean;
@@ -24,6 +25,7 @@ export interface AssinaturaConfig {
 }
 
 export function AssinaturaForm({ initial }: { initial: AssinaturaConfig }) {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const [form, setForm] = useState(initial);
   const [salvo, setSalvo] = useState(initial);
@@ -58,7 +60,7 @@ export function AssinaturaForm({ initial }: { initial: AssinaturaConfig }) {
 
   return (
     <form onSubmit={salvar} className="flex max-w-3xl flex-col gap-4" data-testid="form-assinatura">
-      <Card className="space-y-4 p-4">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-4 p-4">
         <div>
           <h2 className="text-sm font-semibold">{t("Quem fala aparece na mensagem?")}</h2>
           <p className="text-xs text-muted-foreground">

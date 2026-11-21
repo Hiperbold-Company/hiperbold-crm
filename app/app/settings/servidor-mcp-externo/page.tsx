@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { exigirProvaDeMfa, mfaEmDividaEstrita, requireAuth } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { CadastroDoServidorMcpExterno } from "./_components/CadastroDoServidorMcpExterno";
+import { marcaDosAjustes } from "@/lib/redesign/ajustes";
+import { redesignLigado } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sistema externo da IA" };
@@ -42,7 +44,7 @@ export default async function ServidorMcpExternoPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
-      <header>
+      <header data-rd-ajustes={marcaDosAjustes(redesignLigado())("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">
           {traduzir("Sistema externo da IA", idioma)}
         </h1>

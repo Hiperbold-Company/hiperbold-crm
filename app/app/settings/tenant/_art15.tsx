@@ -26,6 +26,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { art15SettingsSchema, naoInformadoPelo, type Art15Settings } from "@/lib/legal/art15";
 import { perfilDoPais } from "@/lib/legal/perfil-do-pais";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 /** O que a tela pede: string sempre, `null` virando "" na entrada. */
 export type AlineasPreenchidas = {
@@ -42,6 +43,7 @@ export function Art15Form({
   /** `organizations.country`: o aviso cita a frase que o PDF DESTE país imprime. */
   pais: string | null;
 }) {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const naoInformado = naoInformadoPelo(perfilDoPais(pais).papel.controlador);
   const [form, setForm] = useState<AlineasPreenchidas>(initial);
@@ -99,7 +101,7 @@ export function Art15Form({
 
   return (
     <form onSubmit={salvar} className="max-w-2xl" data-testid="form-art15">
-      <Card className="space-y-4 p-6">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-4 p-6">
         <div>
           <h2 className="text-sm font-semibold">{t("Alíneas do art. 15.º do RGPD")}</h2>
           <p className="text-xs text-muted-foreground">
