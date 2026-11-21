@@ -2994,3 +2994,186 @@
   }
 }
 /* redesign: pipeline — fim */
+
+/* redesign: conexoes ──────────────────────────────────────────────────────
+   A tela de Conexões (`/app/connections`) no redesign Hiperbold, protótipo v49
+   (Conexoes.dc.html): cabeçalho de página com filete, barra de busca + Criar,
+   grade de cartões com estado em ponto colorido, ícone em ladrilho e botão
+   no rodapé.
+
+   Os componentes são os de sempre; com a chave ligada eles ganham
+   `data-rd-conexoes="<peça>"` (`lib/redesign/conexoes.ts`). TODA regra começa
+   por `[data-redesign="ligado"]` — desligada, nenhuma casa, e
+   `tests/unit/redesign-conexoes.test.tsx` cobra isso. Só variáveis de cor que
+   já existem: claro e escuro saem delas.
+
+   Fora de `@layer` de propósito (vence os utilitários sem `!important`), então
+   hover e foco das peças pintadas aqui também são declarados aqui.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Página e cabeçalho ── */
+[data-redesign="ligado"] [data-rd-conexoes="pagina"] {
+  gap: 0;
+  padding: 0;
+}
+[data-redesign="ligado"] [data-rd-conexoes="cabecalho"] {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 16px 14px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-conexoes="titulo"] {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-conexoes="subtitulo"] {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+/* O corpo (a barra e a grade) herda o respiro do protótipo: 24px 32px. */
+[data-redesign="ligado"] [data-rd-conexoes="pagina"] > :not(header) {
+  padding: 16px;
+}
+
+/* ── Barra: busca, contador, Criar ── */
+[data-redesign="ligado"] [data-rd-conexoes="busca"] input {
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  font-size: 14px;
+}
+[data-redesign="ligado"] [data-rd-conexoes="busca"] input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+[data-redesign="ligado"] [data-rd-conexoes="contador"] {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-conexoes="criar"] {
+  min-height: 38px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ── Grade e cartões ── */
+[data-redesign="ligado"] [data-rd-conexoes="grade"] {
+  gap: 16px;
+  align-content: start;
+}
+[data-redesign="ligado"] [data-rd-conexoes="cartao"] {
+  gap: 16px;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-conexoes="cartao"]:hover {
+  border-color: var(--color-border-strong);
+}
+[data-redesign="ligado"] [data-rd-conexoes="cartao"]:has([data-status="precisa_atencao"]) {
+  border-color: var(--color-warning);
+}
+[data-redesign="ligado"] [data-rd-conexoes="cartao"][data-destacado="true"] {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-conexoes="status"] {
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-conexoes="status"] > span {
+  width: 8px;
+  height: 8px;
+}
+/* No protótipo, desconectado é âmbar (não vermelho): o vermelho fica para erro. */
+[data-redesign="ligado"] [data-rd-conexoes="status"][data-status="desconectado"] > span {
+  background: var(--color-warning);
+}
+[data-redesign="ligado"] [data-rd-conexoes="icone"] {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-conexoes="tipo"] {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-conexoes="nome"] {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-conexoes="numero"] {
+  min-height: 20px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-conexoes="rodape"] {
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-conexoes="gerenciar"] {
+  min-height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-conexoes="gerenciar"]:hover {
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-conexoes="gerenciar"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* ── Vazio e erro ── */
+[data-redesign="ligado"] [data-rd-conexoes="vazio"] {
+  border-radius: 12px;
+  border: 1px dashed var(--color-border-strong);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-conexoes="erro"] {
+  border-radius: 10px;
+  border-color: var(--color-error);
+  background: var(--color-error-bg);
+}
+
+/* ── Diálogos (Criar e Gerenciar) ── */
+[data-redesign="ligado"] [data-rd-conexoes="dialogo"] {
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* ── Computador: respiro de 32px, como o protótipo ── */
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-conexoes="cabecalho"] {
+    padding: 22px 32px 18px;
+  }
+  [data-redesign="ligado"] [data-rd-conexoes="titulo"] {
+    font-size: 24px;
+  }
+  [data-redesign="ligado"] [data-rd-conexoes="pagina"] > :not(header) {
+    padding: 24px 32px;
+  }
+}
+/* redesign: conexoes — fim ─────────────────────────────────────────────── */

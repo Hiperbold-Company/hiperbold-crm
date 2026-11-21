@@ -11,6 +11,7 @@ import { useConexoes, type CartaoDaConexao } from "@/hooks/channels/useConexoes"
 import { useT } from "@/hooks/i18n/useT";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
+import { useMarcaDasConexoes } from "@/lib/redesign/conexoes";
 import { MagnifyingGlass, Plus } from "@/lib/ui/icons";
 import { CartaoDeConexao, tituloDaConexao } from "./CartaoDeConexao";
 import { CriarConexao, type SubDoCriar, type TipoDoCriar } from "./CriarConexao";
@@ -263,11 +264,12 @@ export function ConexoesShell({
   };
 
   const total = filtradas.length;
+  const rd = useMarcaDasConexoes();
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-rd-conexoes={rd("barra")}>
+        <div className="relative w-full sm:max-w-sm" data-rd-conexoes={rd("busca")}>
           <MagnifyingGlass
             size={16}
             aria-hidden
@@ -284,10 +286,10 @@ export function ConexoesShell({
           />
         </div>
         <div className="flex items-center justify-between gap-4 sm:justify-end">
-          <span className="text-sm text-muted-foreground" role="status" data-testid="contador-conexoes">
+          <span className="text-sm text-muted-foreground" role="status" data-testid="contador-conexoes" data-rd-conexoes={rd("contador")}>
             {total} {total === 1 ? t("resultado") : t("resultados")}
           </span>
-          <Button onClick={() => abrirCriar()} data-testid="btn-criar-conexao">
+          <Button onClick={() => abrirCriar()} data-testid="btn-criar-conexao" data-rd-conexoes={rd("criar")}>
             <Plus size={16} aria-hidden />
             {t("Criar")}
           </Button>
@@ -299,14 +301,14 @@ export function ConexoesShell({
           {t("Carregando…")}
         </p>
       ) : conexoes.isError ? (
-        <p role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">
+        <p role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive" data-rd-conexoes={rd("erro")}>
           {t("Não foi possível carregar as conexões.")}{" "}
           <Button variant="link" className="h-auto p-0" onClick={() => void conexoes.refetch()}>
             {t("Tentar de novo")}
           </Button>
         </p>
       ) : lista.length === 0 ? (
-        <Card className="flex flex-col items-center gap-3 rounded-xl border-dashed p-10 text-center shadow-none" data-testid="conexoes-vazio">
+        <Card className="flex flex-col items-center gap-3 rounded-xl border-dashed p-10 text-center shadow-none" data-testid="conexoes-vazio" data-rd-conexoes={rd("vazio")}>
           <h2 className="text-base font-semibold">{t("Nenhuma conexão ainda")}</h2>
           <p className="max-w-md text-sm text-muted-foreground">
             {t("Conecte o WhatsApp, o Instagram ou o Messenger do seu negócio para atender os clientes pelo Chat.")}
@@ -321,7 +323,7 @@ export function ConexoesShell({
           {t("Nenhuma conexão encontrada para esta pesquisa.")}
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="grade-de-conexoes">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="grade-de-conexoes" data-rd-conexoes={rd("grade")}>
           {filtradas.map((c) => (
             <CartaoDeConexao
               key={c.id}

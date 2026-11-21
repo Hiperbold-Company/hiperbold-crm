@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasConexoes } from "@/lib/redesign/conexoes";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { ROTULO_DO_QR_POR_INSTANCIA, ROTULO_DO_QR_POR_SESSAO } from "@/lib/channels/rotulo-do-qr-por-sessao";
 import { rotaDeTemplates } from "@/lib/channels/templates-fonte";
@@ -166,6 +167,7 @@ export function CriarConexao({
   aoMudar: () => void;
 }) {
   const t = useT();
+  const rd = useMarcaDasConexoes();
   const { user } = useAuth();
   // A mesma régua da barra lateral: o formulário de credenciais é para quem instala.
   const adminDaPlataforma = Boolean(user.is_platform_admin && !user.support);
@@ -255,7 +257,7 @@ export function CriarConexao({
       {/* No celular o diálogo deixa 1rem de cada lado (o `w-full` da base encostava na borda), e os
           tipos QUEBRAM LINHA em vez de rolar de lado: numa faixa rolável, "WhatsApp por QR Code"
           ficava fora da tela e quem não sabe que a faixa rola não o achava. */}
-      <DialogContent className="w-[calc(100%-2rem)] max-w-5xl gap-0 p-0" data-testid="criar-conexao">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-5xl gap-0 p-0" data-testid="criar-conexao" data-rd-conexoes={rd("dialogo")}>
         <DialogHeader className="border-b px-6 py-5 pr-12">
           <DialogTitle>{t("Criar conexão")}</DialogTitle>
           <DialogDescription>{t("Escolha por onde o seu negócio vai falar com o cliente.")}</DialogDescription>
