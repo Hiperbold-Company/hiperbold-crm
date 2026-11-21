@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
 import { useMarcaDasConexoes } from "@/lib/redesign/conexoes";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { ROTULO_DO_QR_POR_INSTANCIA, ROTULO_DO_QR_POR_SESSAO } from "@/lib/channels/rotulo-do-qr-por-sessao";
 import { rotaDeTemplates } from "@/lib/channels/templates-fonte";
@@ -168,6 +169,7 @@ export function CriarConexao({
 }) {
   const t = useT();
   const rd = useMarcaDasConexoes();
+  const rdd = useMarcaDosDialogos();
   const { user } = useAuth();
   // A mesma régua da barra lateral: o formulário de credenciais é para quem instala.
   const adminDaPlataforma = Boolean(user.is_platform_admin && !user.support);
@@ -193,7 +195,7 @@ export function CriarConexao({
           <div className="flex flex-col gap-4">
             <ConectarComAMeta bloqueio={bloqueio} temConexaoOficial={temConexaoOficial} />
             {adminDaPlataforma ? (
-              <details className="rounded-lg border p-3" data-testid="criar-oficial-credenciais">
+              <details className="rounded-lg border p-3" data-testid="criar-oficial-credenciais" data-rd-dialogos={rdd("avancado")}>
                 <summary className="cursor-pointer text-sm font-medium">
                   {t("Conectar com credenciais (avançado)")}
                 </summary>
@@ -258,14 +260,15 @@ export function CriarConexao({
           tipos QUEBRAM LINHA em vez de rolar de lado: numa faixa rolável, "WhatsApp por QR Code"
           ficava fora da tela e quem não sabe que a faixa rola não o achava. */}
       <DialogContent className="w-[calc(100%-2rem)] max-w-5xl gap-0 p-0" data-testid="criar-conexao" data-rd-conexoes={rd("dialogo")}>
-        <DialogHeader className="border-b px-6 py-5 pr-12">
-          <DialogTitle>{t("Criar conexão")}</DialogTitle>
-          <DialogDescription>{t("Escolha por onde o seu negócio vai falar com o cliente.")}</DialogDescription>
+        <DialogHeader className="border-b px-6 py-5 pr-12" data-rd-dialogos={rdd("cabecalho")}>
+          <DialogTitle data-rd-dialogos={rdd("titulo")}>{t("Criar conexão")}</DialogTitle>
+          <DialogDescription data-rd-dialogos={rdd("descricao")}>{t("Escolha por onde o seu negócio vai falar com o cliente.")}</DialogDescription>
         </DialogHeader>
         <div className="grid min-h-0 md:grid-cols-[240px_minmax(0,1fr)]">
           <nav
             aria-label={t("Tipos de conexão")}
             className="flex flex-wrap gap-1 border-b p-3 md:flex-col md:flex-nowrap md:border-r md:border-b-0"
+            data-rd-dialogos={rdd("tipos")}
           >
             {tipos.map((k) => {
               const Icon = ICONE[k];
@@ -280,6 +283,7 @@ export function CriarConexao({
                   }}
                   aria-current={ativo ? "true" : undefined}
                   data-testid={`criar-tipo-${k}`}
+                  data-rd-dialogos={rdd("tipo")}
                   className={cn(
                     "flex shrink-0 items-start gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
                     ativo ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
@@ -296,7 +300,7 @@ export function CriarConexao({
               );
             })}
           </nav>
-          <div className="min-w-0 p-6" data-testid={`criar-conteudo-${tipo}`}>
+          <div className="min-w-0 p-6" data-testid={`criar-conteudo-${tipo}`} data-rd-dialogos={rdd("corpo")}>
             {conteudo()}
           </div>
         </div>

@@ -12,6 +12,7 @@ import { apiClient } from "@/lib/api/client";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { usePacingKnobs } from "@/hooks/channels/usePacingKnobs";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
 import { ShieldCheck } from "@/lib/ui/icons";
 import { AntiBanSheet } from "./AntiBanSheet";
@@ -155,6 +156,7 @@ export function CanalInstanciaClient({
   servidorProprio?: boolean;
 } = {}) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const qc = useQueryClient();
   const cartaoAlvo = useRef<HTMLDivElement | null>(null);
   const [estado, setEstado] = useState<Estado | null>(null);
@@ -262,12 +264,12 @@ export function CanalInstanciaClient({
       ) : null}
       {servidorProprio ? (
       <Avancado ativo={pareamentoQr}>
-        <Card className="flex flex-col gap-4 p-4">
+        <Card className="flex flex-col gap-4 p-4" data-rd-dialogos={rd("secao")}>
           <div>
-            <h3 className="text-sm font-semibold">
+            <h3 className="text-sm font-semibold" data-rd-dialogos={rd("secao-titulo")}>
               {t("Conectar por")} {rotulo}
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground" data-rd-dialogos={rd("secao-texto")}>
               {t(
                 "Um número de WhatsApp pareado numa instância do seu servidor. As mensagens entram e saem pelo CRM, e a entrega é ligada automaticamente.",
               )}
@@ -275,7 +277,7 @@ export function CanalInstanciaClient({
           </div>
 
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5" data-rd-dialogos={rd("campo")}>
               <Label htmlFor="instancia-servidor">{t("Servidor")}</Label>
               <Input
                 id="instancia-servidor"
@@ -286,7 +288,7 @@ export function CanalInstanciaClient({
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5" data-rd-dialogos={rd("campo")}>
               <Label htmlFor="instancia-token">{t("Token da instância")}</Label>
               <Input
                 id="instancia-token"
@@ -301,7 +303,7 @@ export function CanalInstanciaClient({
               </p>
             </div>
 
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5" data-rd-dialogos={rd("campo")}>
               <Label htmlFor="instancia-nome">{t("Apelido (opcional)")}</Label>
               <Input
                 id="instancia-nome"
@@ -312,7 +314,7 @@ export function CanalInstanciaClient({
               />
             </div>
 
-            <div>
+            <div data-rd-dialogos={rd("acoes")}>
               <Button
                 onClick={conectar}
                 disabled={salvando || !servidor || !token || bloqueio?.desabilitado}
@@ -334,7 +336,7 @@ export function CanalInstanciaClient({
       ) : null}
 
       {aviso && (
-        <Card className="flex flex-col gap-2 border-warning/40 bg-warning-bg p-4">
+        <Card className="flex flex-col gap-2 border-warning/40 bg-warning-bg p-4" data-rd-dialogos={rd("aviso")}>
           <h3 className="text-sm font-semibold">{t("Falta ligar a volta")}</h3>
           <p className="text-xs text-muted-foreground">{aviso}</p>
         </Card>

@@ -14,6 +14,7 @@ import {
   type InicioDoCadastroIncorporado,
 } from "@/hooks/channels/useCadastroIncorporado";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import { ApiError } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import {
@@ -152,6 +153,7 @@ export function ConectarComAMeta({
   temConexaoOficial?: boolean;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const finalizar = useFinalizarCadastroIncorporado();
   const sincronizar = useSincronizarContatosDoApp();
   const [nome, setNome] = useState("");
@@ -397,16 +399,16 @@ export function ConectarComAMeta({
   const mostrarPreparando = esperando && !semConfiguracao;
 
   return (
-    <Card className="p-4" data-testid="cadastro-meta-card">
-      <h2 className="font-medium">{t("Conectar com a Meta")}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
+    <Card className="p-4" data-testid="cadastro-meta-card" data-rd-dialogos={rd("secao")}>
+      <h2 className="font-medium" data-rd-dialogos={rd("secao-titulo")}>{t("Conectar com a Meta")}</h2>
+      <p className="mt-1 text-sm text-muted-foreground" data-rd-dialogos={rd("secao-texto")}>
         {t(
           "Entre com a sua conta da Meta e escolha o número. O CRM guarda a credencial e configura o recebimento de mensagens sozinho.",
         )}
       </p>
 
       <div className="mt-4 flex flex-col gap-3">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-rd-dialogos={rd("campo")}>
           <Label htmlFor="cadastro-meta-nome">{t("Nome da conexão (opcional)")}</Label>
           <Input
             id="cadastro-meta-nome"
@@ -420,7 +422,7 @@ export function ConectarComAMeta({
         </div>
 
         <div className="flex flex-col gap-2">
-          <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label={t("Tipo de conexão")}>
+          <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label={t("Tipo de conexão")} data-rd-dialogos={rd("modos")}>
             <CartaoDeModo
               selecionado={!coexistencia}
               onSelecionar={() => {
@@ -449,6 +451,7 @@ export function ConectarComAMeta({
             <div
               data-testid="cadastro-meta-explicacao-coexistencia"
               className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm"
+              data-rd-dialogos={rd("aviso")}
             >
               <p className="text-muted-foreground">
                 {t("Recurso recente da Meta: se a conexão falhar, use a conexão padrão.")}
@@ -472,7 +475,7 @@ export function ConectarComAMeta({
           ) : null}
         </div>
 
-        <div>
+        <div data-rd-dialogos={rd("acoes")}>
           <Button
             type="button"
             onClick={aoClicar}
@@ -578,11 +581,13 @@ function CartaoDeModo({
   titulo: string;
   descricao: string;
 }) {
+  const rd = useMarcaDosDialogos();
   return (
     <button
       type="button"
       role="radio"
       aria-checked={selecionado}
+      data-rd-dialogos={rd("modo")}
       onClick={onSelecionar}
       disabled={disabled}
       data-testid={testId}

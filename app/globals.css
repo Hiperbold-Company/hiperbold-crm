@@ -5158,3 +5158,316 @@
   }
 }
 /* redesign: roteamento — fim ─────────────────────── */
+
+/* redesign: dialogos ───────────────────────────────
+   O INTERIOR dos diálogos de Conexões (`/app/connections`) no redesign, protótipo v49
+   (Conexoes.dc.html): cabeçalho, lista de tipos do Criar, seções, campos, passos numerados,
+   área do QR e do código, cartões de modo, avisos, lista de páginas da Meta, rodapé de ações
+   — e o Gerenciar como gaveta lateral de 520px à direita.
+
+   A casca dos diálogos (raio e borda do Criar e do Gerenciar em janela) é da área `conexoes`;
+   aqui só o que vai dentro. Os componentes ganham `data-rd-dialogos="<peça>"` SÓ com a chave
+   ligada (`lib/redesign/dialogos.ts`). TODA regra começa por `[data-redesign="ligado"]`:
+   desligada, nenhuma casa, e `tests/unit/redesign-dialogos.test.tsx` cobra isso. O conteúdo é
+   portal no `body`, por isso nenhum seletor depende da página. Só variáveis de cor que já
+   existem: claro e escuro saem delas.
+
+   Fora de `@layer` de propósito (vence os utilitários sem `!important`), então hover, foco e
+   estado marcado das peças pintadas aqui também são declarados aqui.
+   ───────────────────────────────────────────────── */
+
+/* ── Gaveta do Gerenciar: largura total no celular, 520px no computador ── */
+[data-redesign="ligado"] [data-rd-dialogos="gaveta"] {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  gap: 0;
+  padding: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-dialogos="gaveta"] [data-rd-dialogos="titulo"] {
+  font-size: 20px;
+}
+
+/* ── Cabeçalho ── */
+[data-redesign="ligado"] [data-rd-dialogos="cabecalho"] {
+  gap: 4px;
+  border-bottom-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-dialogos="titulo"] {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-dialogos="descricao"] {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* ── Tipos do Criar ── */
+[data-redesign="ligado"] [data-rd-dialogos="tipos"] {
+  gap: 2px;
+  padding: 12px;
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-dialogos="tipo"] {
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-dialogos="tipo"]:hover {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-dialogos="tipo"][aria-current="true"] {
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-dialogos="tipo"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* ── Seções (os cartões de dentro do diálogo) ── */
+[data-redesign="ligado"] [data-rd-dialogos="secao"] {
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-dialogos="secao-titulo"] {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-dialogos="secao-texto"] {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* ── Campos ── */
+[data-redesign="ligado"] [data-rd-dialogos="campo"] {
+  gap: 6px;
+}
+[data-redesign="ligado"] [data-rd-dialogos="campo"] label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-dialogos="campo"] [data-slot="input"] {
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  font-size: 14px;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-dialogos="campo"] [data-slot="input"]:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* ── Passos numerados: o número em círculo sai do contador, sem elemento novo ── */
+[data-redesign="ligado"] [data-rd-dialogos="passos"] {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: rd-passo;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-dialogos="passos"] > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  counter-increment: rd-passo;
+}
+[data-redesign="ligado"] [data-rd-dialogos="passos"] > li::before {
+  content: counter(rd-passo);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ── QR Code e código de pareamento ── */
+[data-redesign="ligado"] [data-rd-dialogos="qr"] {
+  border-radius: 12px;
+  border: 1px solid var(--color-border-strong);
+}
+[data-redesign="ligado"] [data-rd-dialogos="codigo"] {
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-dialogos="codigo"] code,
+[data-redesign="ligado"] [data-rd-dialogos="codigo"] [aria-label] {
+  border: 0;
+  background: transparent;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+/* ── QR Code ou código: controle segmentado ── */
+[data-redesign="ligado"] [data-rd-dialogos="forma"] {
+  width: fit-content;
+  margin-inline: auto;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-dialogos="forma"] > [data-slot="button"] {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-dialogos="forma"] > [data-slot="button"]:hover {
+  background: transparent;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-dialogos="forma"] > [data-slot="button"][aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 1px 2px var(--color-border-strong);
+}
+/* Depois do marcado: o anel de foco do botão é box-shadow, e a regra de cima o zeraria. */
+[data-redesign="ligado"] [data-rd-dialogos="forma"] > [data-slot="button"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* ── Cartões de modo (número novo / coexistência) ── */
+[data-redesign="ligado"] [data-rd-dialogos="modos"] {
+  gap: 10px;
+}
+[data-redesign="ligado"] [data-rd-dialogos="modo"] {
+  gap: 12px;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  box-shadow: none;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-dialogos="modo"]:hover {
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-dialogos="modo"][aria-checked="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+[data-redesign="ligado"] [data-rd-dialogos="modo"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* ── Avisos e nota ── */
+[data-redesign="ligado"] [data-rd-dialogos="aviso"] {
+  border-radius: 10px;
+  border: 1px solid var(--color-warning);
+  background: var(--color-warning-bg);
+  box-shadow: none;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-dialogos="nota"] {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--color-accent-soft);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+/* ── Ações e rodapé ── */
+[data-redesign="ligado"] [data-rd-dialogos="acoes"] {
+  gap: 8px;
+}
+[data-redesign="ligado"] :is([data-rd-dialogos="acoes"], [data-rd-dialogos="rodape"]) [data-slot="button"] {
+  min-height: 38px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-dialogos="rodape"] {
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ── Lista de páginas da Meta ── */
+[data-redesign="ligado"] [data-rd-dialogos="lista"] {
+  gap: 6px;
+}
+[data-redesign="ligado"] [data-rd-dialogos="item"] {
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-dialogos="item"]:hover {
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-dialogos="item"]:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+/* ── Avançado (fechado por padrão) ── */
+[data-redesign="ligado"] [data-rd-dialogos="avancado"] {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-dialogos="avancado"] > summary {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* ── Computador ── */
+@media (min-width: 640px) {
+  [data-redesign="ligado"] [data-rd-dialogos="gaveta"] {
+    width: 520px;
+  }
+}
+/* redesign: dialogos — fim ─────────────────────── */

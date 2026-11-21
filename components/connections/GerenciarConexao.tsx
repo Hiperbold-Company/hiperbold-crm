@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth, usePermission } from "@/hooks/auth/AuthProvider";
 import type { CartaoDaConexao } from "@/hooks/channels/useConexoes";
@@ -12,6 +13,7 @@ import { useOfficialChannel } from "@/hooks/channels/useOfficialChannel";
 import { usePacingKnobs } from "@/hooks/channels/usePacingKnobs";
 import { useT } from "@/hooks/i18n/useT";
 import { useMarcaDasConexoes } from "@/lib/redesign/conexoes";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import { apiClient } from "@/lib/api/client";
 import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
 import { fonteDeTemplates, rotaDeTemplates } from "@/lib/channels/templates-fonte";
@@ -74,11 +76,13 @@ function ErroAoCarregar({ aoTentar }: { aoTentar: () => void }) {
 /** Fechado por padrão: o que está aqui é para quem instala, não para quem atende. */
 function Avancado({ children, abertoAoMontar = false }: { children: ReactNode; abertoAoMontar?: boolean }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const [aberto, setAberto] = useState(abertoAoMontar);
   return (
     <details
       className="rounded-lg border p-3"
       data-testid="gerenciar-avancado"
+      data-rd-dialogos={rd("avancado")}
       open={aberto}
       onToggle={(e) => setAberto(e.currentTarget.open)}
     >
@@ -112,14 +116,15 @@ function BlocoComum({
   acoes?: ReactNode;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   // A mesma etiqueta que a lista do Chat mostra para esta conexão.
   const etiqueta = rotuloDoCanalDaConversa({ display_name: nome, phone_number: conexao.numero_ou_handle }, t);
   return (
     <>
-      <Card className="flex flex-col gap-3 p-4" data-testid="gerenciar-bloco-comum">
+      <Card className="flex flex-col gap-3 p-4" data-testid="gerenciar-bloco-comum" data-rd-dialogos={rd("secao")}>
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("Nome da conexão")}</span>
-          <span className="font-medium">{nome ?? t("Conexão sem nome")}</span>
+          <span className="text-xs font-medium text-muted-foreground" data-rd-dialogos={rd("secao-texto")}>{t("Nome da conexão")}</span>
+          <span className="font-medium" data-rd-dialogos={rd("secao-titulo")}>{nome ?? t("Conexão sem nome")}</span>
           {conexao.numero_ou_handle ? (
             <span className="text-sm text-muted-foreground">{conexao.numero_ou_handle}</span>
           ) : null}
@@ -130,7 +135,7 @@ function BlocoComum({
             </div>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" data-rd-dialogos={rd("acoes")}>
           {acoes}
           <RenomearConexao
             channelId={conexao.id}
@@ -242,6 +247,7 @@ function GerenciarPorQr({
   const qc = useQueryClient();
   const podeRemoverSessao = usePermission("settings.write");
   const adminDaPlataforma = useAdminDaPlataforma();
+  const rd = useMarcaDosDialogos();
   const [protecaoAberta, setProtecaoAberta] = useState(false);
   const oferecerProtecao = podeEditarProtecao !== undefined;
   const lista = useQuery({
@@ -267,13 +273,13 @@ function GerenciarPorQr({
     <div className="flex flex-col gap-4">
       {/* "Endereço público do CRM" e "token" são termos de quem instala: só o administrador da plataforma lê. */}
       {c && !c.webhook_registrado && adminDaPlataforma ? (
-        <p className="rounded-md border border-warning/40 bg-warning-bg p-3 text-sm text-warning-fg">
+        <p className="rounded-md border border-warning/40 bg-warning-bg p-3 text-sm text-warning-fg" data-rd-dialogos={rd("aviso")}>
           {t("A entrada de mensagens não está ligada. Reconecte com o mesmo token depois de configurar o endereço público do CRM.")}
         </p>
       ) : null}
 
       {c && c.status !== "WORKING" ? (
-        <Card className="p-4" data-testid="gerenciar-reconectar">
+        <Card className="p-4" data-testid="gerenciar-reconectar" data-rd-dialogos={rd("aviso")}>
           <ReconectarConexao
             conexaoId={c.id}
             abrirAoMontar={reconectarAoAbrir}
@@ -351,6 +357,7 @@ function GerenciarPorSessao({
   const t = useT();
   const qc = useQueryClient();
   const ehAdmin = usePermission("settings.write");
+  const rd = useMarcaDosDialogos();
   const [protecaoAberta, setProtecaoAberta] = useState(false);
   const oferecerProtecao = podeEditarProtecao !== undefined;
   const pacingItems = usePacingKnobs(oferecerProtecao).data?.items ?? [];
@@ -363,7 +370,7 @@ function GerenciarPorSessao({
   return (
     <div className="flex flex-col gap-4">
       {conexao.status_bruto !== "WORKING" && ehAdmin ? (
-        <Card className="p-4" data-testid="gerenciar-reconectar">
+        <Card className="p-4" data-testid="gerenciar-reconectar" data-rd-dialogos={rd("aviso")}>
           <ReconectarPorSessao
             conexaoId={conexao.id}
             abrirAoMontar={reconectarAoAbrir}
@@ -420,6 +427,7 @@ function GerenciarRedeSocial({
 }) {
   const t = useT();
   const qc = useQueryClient();
+  const rd = useMarcaDosDialogos();
   // A mesma chave e a mesma rota da lista de redes sociais: as duas telas leem um cache só.
   const lista = useQuery({
     queryKey: ["meta-social"],
@@ -440,7 +448,7 @@ function GerenciarRedeSocial({
   return (
     <div className="flex flex-col gap-4">
       {atencao ? (
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-4" data-testid="gerenciar-reconectar">
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-4" data-testid="gerenciar-reconectar" data-rd-dialogos={rd("aviso")}>
           <p className="text-sm">{t("Reconecte para continuar recebendo mensagens.")}</p>
           {configurado ? (
             <Button asChild size="sm">
@@ -538,34 +546,38 @@ export function GerenciarConexao({
 }) {
   const t = useT();
   const rd = useMarcaDasConexoes();
+  const rdd = useMarcaDosDialogos();
+  // Chave ligada: o Gerenciar abre como gaveta lateral à direita (protótipo v49). O corpo é o MESMO
+  // nos dois contêineres; só muda quem o embrulha. Desligada, o Dialog e o DOM são os de sempre.
+  const emGaveta = rdd("gaveta") !== undefined;
   const Icone = conexao ? ICONE_DO_TIPO[conexao.tipo] : null;
   const removida = async () => {
     await aoMudar();
     aoFechar();
   };
+  const aoMudarAbertura = (aberto: boolean) => !aberto && aoFechar();
 
-  return (
-    <Dialog open={conexao !== null} onOpenChange={(aberto) => !aberto && aoFechar()}>
-      <DialogContent className="max-w-3xl gap-0 p-0" data-testid="gerenciar-conexao" data-rd-conexoes={rd("dialogo")}>
-        {conexao && Icone ? (
+  // Título e descrição seguem os do Dialog: a gaveta usa a mesma primitiva (Radix Dialog) por baixo.
+  const corpo =
+    conexao && Icone ? (
           <>
-            <DialogHeader className="border-b px-6 py-5 pr-12">
+            <DialogHeader className="border-b px-6 py-5 pr-12" data-rd-dialogos={rdd("cabecalho")}>
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
                   <Icone size={22} aria-hidden />
                 </span>
                 <div className="min-w-0 text-left">
-                  <DialogTitle className="truncate">
+                  <DialogTitle className="truncate" data-rd-dialogos={rdd("titulo")}>
                     {conexao.nome ?? conexao.numero_ou_handle ?? t("Conexão sem nome")}
                   </DialogTitle>
-                  <DialogDescription className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <DialogDescription className="flex flex-wrap items-center gap-x-3 gap-y-1" data-rd-dialogos={rdd("descricao")}>
                     <span>{t(tituloDaConexao(conexao))}</span>
                     <StatusDaConexaoBadge status={conexao.status} />
                   </DialogDescription>
                 </div>
               </div>
             </DialogHeader>
-            <div className="min-w-0 px-6 py-5">
+            <div className="min-w-0 px-6 py-5" data-rd-dialogos={rdd("corpo")}>
               {conexao.tipo === "whatsapp_oficial" && conexao.via === "meta" ? (
                 <GerenciarOficialMeta
                   conexao={conexao}
@@ -606,7 +618,22 @@ export function GerenciarConexao({
               )}
             </div>
           </>
-        ) : null}
+    ) : null;
+
+  if (emGaveta) {
+    return (
+      <Sheet open={conexao !== null} onOpenChange={aoMudarAbertura}>
+        <SheetContent side="right" data-testid="gerenciar-conexao" data-rd-dialogos={rdd("gaveta")}>
+          {corpo}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  return (
+    <Dialog open={conexao !== null} onOpenChange={aoMudarAbertura}>
+      <DialogContent className="max-w-3xl gap-0 p-0" data-testid="gerenciar-conexao" data-rd-conexoes={rd("dialogo")}>
+        {corpo}
       </DialogContent>
     </Dialog>
   );
