@@ -917,3 +917,38 @@ Arquivo gerado por `node evidence/redesign/gerar-indice.mjs`. Não edite à mão
 - `evidence/redesign/D3-plataforma/depois-ligada/_admin_users-en-desktop.png`
 - `evidence/redesign/D3-plataforma/depois-ligada/_admin_users-pt-BR-celular.png`
 - `evidence/redesign/D3-plataforma/depois-ligada/_admin_users-pt-BR-desktop.png`
+
+## E1-nos-do-editor
+
+### Antes (main, sem a mudança)
+
+- `evidence/redesign/E1-nos-do-editor/antes/ai_followups_8e064cac-en-celular.png`
+- `evidence/redesign/E1-nos-do-editor/antes/ai_followups_8e064cac-en-desktop.png`
+- `evidence/redesign/E1-nos-do-editor/antes/ai_followups_8e064cac-pt-BR-celular.png`
+- `evidence/redesign/E1-nos-do-editor/antes/ai_followups_8e064cac-pt-BR-desktop.png`
+- `evidence/redesign/E1-nos-do-editor/antes/automacoes_b75ca0a4-en-celular.png`
+- `evidence/redesign/E1-nos-do-editor/antes/automacoes_b75ca0a4-en-desktop.png`
+- `evidence/redesign/E1-nos-do-editor/antes/automacoes_b75ca0a4-pt-BR-celular.png`
+- `evidence/redesign/E1-nos-do-editor/antes/automacoes_b75ca0a4-pt-BR-desktop.png`
+
+### Depois, com a chave desligada (tem de ser igual ao antes)
+
+- `evidence/redesign/E1-nos-do-editor/depois-desligada/ai_followups_8e064cac-en-celular.png`
+- `evidence/redesign/E1-nos-do-editor/depois-desligada/ai_followups_8e064cac-en-desktop.png`
+- `evidence/redesign/E1-nos-do-editor/depois-desligada/ai_followups_8e064cac-pt-BR-celular.png`
+- `evidence/redesign/E1-nos-do-editor/depois-desligada/ai_followups_8e064cac-pt-BR-desktop.png`
+- `evidence/redesign/E1-nos-do-editor/depois-desligada/automacoes_b75ca0a4-en-celular.png`
+- `evidence/redesign/E1-nos-do-editor/depois-desligada/automacoes_b75ca0a4-en-desktop.png`
+- `evidence/redesign/E1-nos-do-editor/depois-desligada/automacoes_b75ca0a4-pt-BR-celular.png`
+- `evidence/redesign/E1-nos-do-editor/depois-desligada/automacoes_b75ca0a4-pt-BR-desktop.png`
+
+### Depois, com a chave ligada (visual novo)
+
+- `evidence/redesign/E1-nos-do-editor/depois-ligada/ai_followups_8e064cac-en-celular.png`
+- `evidence/redesign/E1-nos-do-editor/depois-ligada/ai_followups_8e064cac-en-desktop.png`
+- `evidence/redesign/E1-nos-do-editor/depois-ligada/ai_followups_8e064cac-pt-BR-celular.png`
+- `evidence/redesign/E1-nos-do-editor/depois-ligada/ai_followups_8e064cac-pt-BR-desktop.png`
+- `evidence/redesign/E1-nos-do-editor/depois-ligada/automacoes_b75ca0a4-en-celular.png`
+- `evidence/redesign/E1-nos-do-editor/depois-ligada/automacoes_b75ca0a4-en-desktop.png`
+- `evidence/redesign/E1-nos-do-editor/depois-ligada/automacoes_b75ca0a4-pt-BR-celular.png`
+- `evidence/redesign/E1-nos-do-editor/depois-ligada/automacoes_b75ca0a4-pt-BR-desktop.png`
