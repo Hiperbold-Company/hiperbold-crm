@@ -1403,3 +1403,98 @@ Arquivo gerado por `node evidence/redesign/gerar-indice.mjs`. Não edite à mão
 - `evidence/redesign/R-revisao/depois-ligada/team-en-desktop.png`
 - `evidence/redesign/R-revisao/depois-ligada/team-pt-BR-celular.png`
 - `evidence/redesign/R-revisao/depois-ligada/team-pt-BR-desktop.png`
+
+## X3-entrar
+
+### Antes (main, sem a mudança)
+
+- `evidence/redesign/X3-entrar/antes/get-started-en-celular.png`
+- `evidence/redesign/X3-entrar/antes/get-started-en-desktop.png`
+- `evidence/redesign/X3-entrar/antes/get-started-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/antes/get-started-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/antes/onboarding-en-celular.png`
+- `evidence/redesign/X3-entrar/antes/onboarding-en-desktop.png`
+- `evidence/redesign/X3-entrar/antes/onboarding-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/antes/onboarding-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/antes/pub_login-en-celular.png`
+- `evidence/redesign/X3-entrar/antes/pub_login-en-desktop.png`
+- `evidence/redesign/X3-entrar/antes/pub_login-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/antes/pub_login-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_forgot-en-celular.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_forgot-en-desktop.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_forgot-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_forgot-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_mfa-en-celular.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_mfa-en-desktop.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_mfa-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_mfa-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_reset-en-celular.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_reset-en-desktop.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_reset-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/antes/pub_login_reset-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/antes/pub_signup-en-celular.png`
+- `evidence/redesign/X3-entrar/antes/pub_signup-en-desktop.png`
+- `evidence/redesign/X3-entrar/antes/pub_signup-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/antes/pub_signup-pt-BR-desktop.png`
+
+### Depois, com a chave desligada (tem de ser igual ao antes)
+
+- `evidence/redesign/X3-entrar/depois-desligada/get-started-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/get-started-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/get-started-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/get-started-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/onboarding-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/onboarding-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/onboarding-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/onboarding-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_forgot-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_forgot-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_forgot-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_forgot-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_mfa-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_mfa-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_mfa-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_mfa-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_reset-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_reset-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_reset-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_login_reset-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_signup-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_signup-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_signup-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-desligada/pub_signup-pt-BR-desktop.png`
+
+### Depois, com a chave ligada (visual novo)
+
+- `evidence/redesign/X3-entrar/depois-ligada/get-started-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/get-started-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/get-started-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/get-started-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/onboarding-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/onboarding-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/onboarding-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/onboarding-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_forgot-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_forgot-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_forgot-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_forgot-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_mfa-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_mfa-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_mfa-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_mfa-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_reset-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_reset-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_reset-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_login_reset-pt-BR-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_signup-en-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_signup-en-desktop.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_signup-pt-BR-celular.png`
+- `evidence/redesign/X3-entrar/depois-ligada/pub_signup-pt-BR-desktop.png`
