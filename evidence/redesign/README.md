@@ -1451,6 +1451,71 @@ Arquivo gerado por `node evidence/redesign/gerar-indice.mjs`. Não edite à mão
 - `evidence/redesign/X1-agenda/depois-ligada/agenda_mes-pt-BR-celular.png`
 - `evidence/redesign/X1-agenda/depois-ligada/agenda_mes-pt-BR-desktop.png`
 
+## X2-tarefas
+
+### Antes (main, sem a mudança)
+
+- `evidence/redesign/X2-tarefas/antes/agente_detalhe-en-celular.png`
+- `evidence/redesign/X2-tarefas/antes/agente_detalhe-en-desktop.png`
+- `evidence/redesign/X2-tarefas/antes/agente_detalhe-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/antes/agente_detalhe-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/antes/agentes_lista-en-celular.png`
+- `evidence/redesign/X2-tarefas/antes/agentes_lista-en-desktop.png`
+- `evidence/redesign/X2-tarefas/antes/agentes_lista-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/antes/agentes_lista-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/antes/planos_editor-en-celular.png`
+- `evidence/redesign/X2-tarefas/antes/planos_editor-en-desktop.png`
+- `evidence/redesign/X2-tarefas/antes/planos_editor-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/antes/planos_editor-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/antes/tarefas_calendario-en-desktop.png`
+- `evidence/redesign/X2-tarefas/antes/tarefas_calendario-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/antes/tarefas_formulario-en-celular.png`
+- `evidence/redesign/X2-tarefas/antes/tarefas_formulario-en-desktop.png`
+- `evidence/redesign/X2-tarefas/antes/tarefas_formulario-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/antes/tarefas_formulario-pt-BR-desktop.png`
+
+### Depois, com a chave desligada (tem de ser igual ao antes)
+
+- `evidence/redesign/X2-tarefas/depois-desligada/agente_detalhe-en-celular.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/agente_detalhe-en-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/agente_detalhe-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/agente_detalhe-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/agentes_lista-en-celular.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/agentes_lista-en-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/agentes_lista-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/agentes_lista-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/planos_editor-en-celular.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/planos_editor-en-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/planos_editor-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/planos_editor-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/tarefas_calendario-en-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/tarefas_calendario-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/tarefas_formulario-en-celular.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/tarefas_formulario-en-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/tarefas_formulario-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/depois-desligada/tarefas_formulario-pt-BR-desktop.png`
+
+### Depois, com a chave ligada (visual novo)
+
+- `evidence/redesign/X2-tarefas/depois-ligada/agente_detalhe-en-celular.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/agente_detalhe-en-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/agente_detalhe-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/agente_detalhe-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/agentes_lista-en-celular.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/agentes_lista-en-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/agentes_lista-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/agentes_lista-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/planos_editor-en-celular.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/planos_editor-en-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/planos_editor-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/planos_editor-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/tarefas_calendario-en-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/tarefas_calendario-pt-BR-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/tarefas_formulario-en-celular.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/tarefas_formulario-en-desktop.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/tarefas_formulario-pt-BR-celular.png`
+- `evidence/redesign/X2-tarefas/depois-ligada/tarefas_formulario-pt-BR-desktop.png`
+
 ## X3-entrar
 
 ### Antes (main, sem a mudança)
