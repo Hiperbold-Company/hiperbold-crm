@@ -3374,19 +3374,17 @@
   display: contents;
 }
 
-/* A página: coluna centrada de 880px nos formulários (protótipo Main: 840 + respiro); página com tabela usa a largura toda, como Tags e Equipe no protótipo. */
-[data-redesign="ligado"] [data-rd-configuracoes="area"] > div {
+/* A página: coluna centrada de 880px nos formulários (protótipo Main: 840 + respiro); página com tabela usa a largura toda, como Tags e Equipe no protótipo. Raiz que já declara max-w-* ou padding próprio fica como está. */
+[data-redesign="ligado"] [data-rd-configuracoes="area"] > div:not([class*="max-w-"]) {
   box-sizing: border-box;
   width: 100%;
   margin-inline: auto;
-  padding: 16px;
 }
 @media (min-width: 768px) {
-  [data-redesign="ligado"] [data-rd-configuracoes="area"] > div {
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] > div:not([class*="max-w-"]) {
     max-width: 880px;
-    padding: 32px 32px 40px;
   }
-  [data-redesign="ligado"] [data-rd-configuracoes="area"] > div:has(table) {
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] > div:not([class*="max-w-"]):has(table) {
     max-width: none;
   }
 }
@@ -3395,6 +3393,7 @@
 [data-redesign="ligado"] [data-rd-configuracoes="cabecalho"] {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 6px;
 }
 [data-redesign="ligado"] [data-rd-configuracoes="cabecalho"] h1 {
