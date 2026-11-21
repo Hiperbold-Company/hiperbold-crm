@@ -4969,6 +4969,17 @@
    Só variáveis de cor que já existem. Não mexe em max-width nem padding de raiz.
    ───────────────────────────────────────────────────────────────────────── */
 
+/* ── Cor de destaque da plataforma (`--plat`, protótipo v49) ──
+   Nasce de `--color-ia` (violeta que já existe, com valor claro e escuro) e é
+   definida na casca e no menu, porque o menu do celular abre num portal fora da
+   casca. `--plat-fg` segue o `--color-accent-fg` do tema. */
+[data-redesign="ligado"] [data-rd-plataforma="casca"],
+[data-redesign="ligado"] [data-rd-plataforma="menu"] {
+  --plat: var(--color-ia);
+  --plat-soft: color-mix(in srgb, var(--color-ia) 14%, transparent);
+  --plat-fg: var(--color-accent-fg);
+}
+
 /* ── Casca, menu e topo ── */
 [data-redesign="ligado"] [data-rd-plataforma="casca"] {
   background: var(--color-bg);
@@ -5020,13 +5031,13 @@
   color: var(--color-text);
 }
 [data-redesign="ligado"] [data-rd-plataforma="menu-item"][aria-current="page"] {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
+  background: var(--plat-soft);
+  color: var(--plat);
   font-weight: 600;
 }
 [data-redesign="ligado"] [data-rd-plataforma="menu-item"]:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--color-accent-soft);
+  box-shadow: 0 0 0 3px var(--plat-soft);
 }
 [data-redesign="ligado"] [data-rd-plataforma="menu-rodape"] {
   border-top: 1px solid var(--color-border);
@@ -5038,15 +5049,44 @@
 
 /* ── Conteúdo: título, cartões e tabelas de todas as telas do painel ── */
 [data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
   line-height: 1.25;
   letter-spacing: 0;
   color: var(--color-text);
 }
 [data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 + p {
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 + p a:not([data-slot="button"]) {
+  color: var(--plat);
+}
+
+/* ── Cabeçalho de cada página do painel (título, descrição e ações) ──
+   Todas têm o mesmo miolo: um bloco com o `h1` e a descrição. Em vez de marcar
+   as ~25 páginas uma a uma, o bloco é achado por `:has(> h1)`. Ganha um filete
+   na cor da plataforma acima do título — só nos blocos que NÃO são flex (num
+   flex o filete viraria um item da linha) — e os botões primários do
+   cabeçalho (inclusive o "criar" marcado) usam a cor da plataforma. */
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] :is(div, header):has(> h1):not([class*="flex"])::before {
+  content: "";
+  display: block;
+  width: 32px;
+  height: 3px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: var(--plat);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] :is(div, header):has(h1) [data-slot="button"][data-variant="primary"],
+[data-redesign="ligado"] [data-rd-plataforma="cabecalho"] [data-slot="button"][data-variant="primary"] {
+  background: var(--plat);
+  color: var(--plat-fg);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] :is(div, header):has(h1) [data-slot="button"][data-variant="primary"]:hover,
+[data-redesign="ligado"] [data-rd-plataforma="cabecalho"] [data-slot="button"][data-variant="primary"]:hover {
+  background: color-mix(in srgb, var(--plat) 88%, black);
 }
 [data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="card"] {
   border: 1px solid var(--color-border);
@@ -5095,6 +5135,9 @@
 @media (max-width: 640px) {
   [data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 {
     font-size: 22px;
+  }
+  [data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 + p {
+    font-size: 14px;
   }
   [data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="table-head"] {
     font-size: 11px;
