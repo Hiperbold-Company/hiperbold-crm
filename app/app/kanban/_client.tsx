@@ -19,7 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
@@ -431,8 +431,7 @@ export function FunisClient({
                           `onSuccess`; o `disabled` evita o envio em dobro.
                         */}
                         <AlertDialogAction
-                          className={buttonVariants({ variant: "destructive" })}
-                          data-variant="destructive"
+                          variant="destructive"
                           disabled={ocupado}
                           data-testid={`excluir-confirmar-${funil.id}`}
                           onClick={(e) => {

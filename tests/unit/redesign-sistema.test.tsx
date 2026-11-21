@@ -22,6 +22,10 @@ vi.mock("@/lib/redesign/chave", () => ({ redesignLigado: () => h.ligado }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
 }));
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers(),
+  cookies: async () => ({ get: () => undefined, getAll: () => [] }),
+}));
 vi.mock("@/app/actions/auth/signOut", () => ({ signOut: vi.fn() }));
 vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn(() => "evt") }));
 vi.mock("@/lib/erros/relatar-erro-do-navegador", () => ({ relatarErroDoNavegador: vi.fn() }));

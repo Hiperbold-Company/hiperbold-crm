@@ -4342,6 +4342,112 @@
     padding: 12px;
   }
 }
+/* Agenda: painel de marcar e detalhe do compromisso (gavetas). */
+[data-redesign="ligado"] [data-rd-agenda="marcar-painel"],
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-painel"] [data-slot="sheet-title"],
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] [data-slot="sheet-title"] {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-painel"] [data-testid="painel-de-marcacao"] {
+  border-radius: 12px;
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-contexto"] {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-contexto"] h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-painel"] [data-testid="tipos-de-agendamento"] button {
+  min-height: 32px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-painel"] [data-testid="tipos-de-agendamento"] button[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] [role="status"],
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] [role="alert"] {
+  border-radius: 12px;
+  border-color: var(--color-border);
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] [data-testid="compromisso-horario"] {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] a:not([data-slot="button"]) {
+  color: var(--color-accent);
+}
+
+/* Agenda: células da visão de mês. */
+[data-redesign="ligado"] [data-rd-agenda="mes-celula"],
+[data-redesign="ligado"] [data-rd-agenda="mes-celula-fora"] {
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-celula"] {
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-celula"]:hover {
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-celula-fora"] {
+  background: var(--color-surface-elevated);
+  opacity: 0.7;
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-numero"],
+[data-redesign="ligado"] [data-rd-agenda="mes-numero-fora"],
+[data-redesign="ligado"] [data-rd-agenda="mes-numero-hoje"] {
+  height: 24px;
+  min-width: 24px;
+  font-size: 12px;
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-numero"] {
+  font-weight: 500;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-numero-fora"] {
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-numero-hoje"] {
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-chip"] {
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-fechado"] {
+  border-radius: 6px;
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-mais"] {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+@media (max-width: 639px) {
+  [data-redesign="ligado"] [data-rd-agenda="mes-celula"],
+  [data-redesign="ligado"] [data-rd-agenda="mes-celula-fora"] {
+    min-height: 64px;
+  }
+  [data-redesign="ligado"] [data-rd-agenda="mes-chip"] {
+    padding: 1px 4px;
+  }
+}
 /* redesign: agenda — fim ─────────────────────── */
 
 /* redesign: metricas ───────────────────────────────
@@ -4677,6 +4783,220 @@
     font-size: 24px;
   }
 }
+/* ── Painel de marca (lado direito, só no computador), como no protótipo:
+   formulário à esquerda, sem moldura, com o logo no topo; painel azul à direita ── */
+[data-redesign="ligado"] [data-rd-entrar="painel"] {
+  display: none;
+}
+@media (min-width: 981px) {
+  [data-redesign="ligado"] [data-rd-entrar="pagina"]:has(> [data-rd-entrar="painel"]) {
+    padding-right: calc(46% + 24px);
+    background: var(--color-surface);
+  }
+  [data-redesign="ligado"] [data-rd-entrar="pagina"]:has(> [data-rd-entrar="painel"]) [data-rd-entrar="cartao"] {
+    border-color: transparent;
+    box-shadow: none;
+    background: transparent;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="painel"] {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 46%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 48px 56px;
+    overflow: hidden;
+    color: var(--color-accent-fg);
+    background:
+      radial-gradient(circle at 85% 8%, rgb(255 255 255 / 0.14), transparent 42%),
+      radial-gradient(circle at 12% 92%, rgb(255 255 255 / 0.08), transparent 46%),
+      linear-gradient(150deg, var(--color-accent) 0%, var(--color-accent-hover) 100%);
+  }
+  [data-redesign="ligado"] [data-rd-entrar="painel"] {
+    gap: 28px;
+    text-align: left;
+    align-items: flex-start;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="painel"] > * {
+    position: relative;
+    margin: 0;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="painel"] > p {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgb(255 255 255 / 0.82);
+    margin-bottom: -12px;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="painel"] h2 {
+    max-width: 520px;
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="painel"] ul {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 0;
+    list-style: none;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="painel"] li {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="beneficio-icone"] {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    background: rgb(255 255 255 / 0.14);
+    border: 1px solid rgb(255 255 255 / 0.18);
+    color: #fff;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="painel"] li b {
+    display: block;
+    font-size: 15.5px;
+    font-weight: 600;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="painel"] li b + span {
+    display: block;
+    font-size: 14px;
+    line-height: 1.45;
+    color: rgb(255 255 255 / 0.82);
+  }
+  [data-redesign="ligado"] [data-rd-entrar="conversa"] {
+    width: 100%;
+    max-width: 420px;
+    overflow: hidden;
+    border-radius: 18px;
+    background: #fff;
+    color: #0f172a;
+    box-shadow: 0 24px 60px rgb(1 16 60 / 0.45);
+  }
+  [data-redesign="ligado"] [data-rd-entrar="conversa-topo"] {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e6ebf1;
+    font-size: 12px;
+    color: #5a6577;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="conversa-topo"] > span:last-child {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="conversa-topo"] b {
+    font-size: 14px;
+    font-weight: 600;
+    color: #0f172a;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="conversa-avatar"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #e8eefc;
+    color: var(--color-accent);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="conversa-corpo"] {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    background: #f4f7fb;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="bolha-cliente"],
+  [data-redesign="ligado"] [data-rd-entrar="bolha-ia"] {
+    max-width: 84%;
+    padding: 9px 12px;
+    border-radius: 14px;
+    font-size: 13.5px;
+    line-height: 1.4;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="bolha-cliente"] {
+    align-self: flex-start;
+    background: #fff;
+    border: 1px solid #e1e7ee;
+    border-top-left-radius: 4px;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="bolha-ia"] {
+    align-self: flex-end;
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
+    border-top-right-radius: 4px;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="selo-ia"] {
+    align-self: flex-end;
+    margin-bottom: -2px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #e3ebff;
+    color: var(--color-accent);
+    font-size: 11.5px;
+    font-weight: 700;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="conversa-rodape"] {
+    padding: 10px 16px;
+    border-top: 1px solid #e6ebf1;
+    background: #eef4ee;
+    color: #41673f;
+    font-size: 12.5px;
+  }
+}
+/* a bolha de exemplo sai quando a tela é baixa demais para ela caber sem apertar */
+@media (min-width: 981px) and (max-height: 780px) {
+  [data-redesign="ligado"] [data-rd-entrar="conversa"] {
+    display: none;
+  }
+}
+/* ── Campo de 6 dígitos da verificação em duas etapas ── */
+/* a fileira de dígitos alinha à esquerda, com o título e o checkbox */
+[data-redesign="ligado"] [data-rd-entrar="cartao"] :has(> input[data-rd-entrar="digito"]) {
+  justify-content: flex-start;
+}
+[data-redesign="ligado"] input[data-rd-entrar="digito"] {
+  width: 48px;
+  height: 56px;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 24px;
+  font-weight: 600;
+  box-shadow: none;
+}
+[data-redesign="ligado"] input[data-rd-entrar="digito"]:focus,
+[data-redesign="ligado"] input[data-rd-entrar="digito"]:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+/* no celular as seis caixas dividem a largura do cartão em vez de vazar */
+@media (max-width: 480px) {
+  [data-redesign="ligado"] input[data-rd-entrar="digito"] {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    max-width: 48px;
+  }
+}
 /* redesign: entrar — fim ─────────────────────── */
 
 /* redesign: sistema ───────────────────────────────
@@ -4828,6 +5148,17 @@
    Só variáveis de cor que já existem. Não mexe em max-width nem padding de raiz.
    ───────────────────────────────────────────────────────────────────────── */
 
+/* ── Cor de destaque da plataforma (`--plat`, protótipo v49) ──
+   Nasce de `--color-ia` (violeta que já existe, com valor claro e escuro) e é
+   definida na casca e no menu, porque o menu do celular abre num portal fora da
+   casca. `--plat-fg` segue o `--color-accent-fg` do tema. */
+[data-redesign="ligado"] [data-rd-plataforma="casca"],
+[data-redesign="ligado"] [data-rd-plataforma="menu"] {
+  --plat: var(--color-ia);
+  --plat-soft: color-mix(in srgb, var(--color-ia) 14%, transparent);
+  --plat-fg: var(--color-accent-fg);
+}
+
 /* ── Casca, menu e topo ── */
 [data-redesign="ligado"] [data-rd-plataforma="casca"] {
   background: var(--color-bg);
@@ -4879,13 +5210,13 @@
   color: var(--color-text);
 }
 [data-redesign="ligado"] [data-rd-plataforma="menu-item"][aria-current="page"] {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
+  background: var(--plat-soft);
+  color: var(--plat);
   font-weight: 600;
 }
 [data-redesign="ligado"] [data-rd-plataforma="menu-item"]:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--color-accent-soft);
+  box-shadow: 0 0 0 3px var(--plat-soft);
 }
 [data-redesign="ligado"] [data-rd-plataforma="menu-rodape"] {
   border-top: 1px solid var(--color-border);
@@ -4897,15 +5228,44 @@
 
 /* ── Conteúdo: título, cartões e tabelas de todas as telas do painel ── */
 [data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
   line-height: 1.25;
   letter-spacing: 0;
   color: var(--color-text);
 }
 [data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 + p {
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 + p a:not([data-slot="button"]) {
+  color: var(--plat);
+}
+
+/* ── Cabeçalho de cada página do painel (título, descrição e ações) ──
+   Todas têm o mesmo miolo: um bloco com o `h1` e a descrição. Em vez de marcar
+   as ~25 páginas uma a uma, o bloco é achado por `:has(> h1)`. Ganha um filete
+   na cor da plataforma acima do título — só nos blocos que NÃO são flex (num
+   flex o filete viraria um item da linha) — e os botões primários do
+   cabeçalho (inclusive o "criar" marcado) usam a cor da plataforma. */
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] :is(div, header):has(> h1):not([class*="flex"])::before {
+  content: "";
+  display: block;
+  width: 32px;
+  height: 3px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: var(--plat);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] :is(div, header):has(h1) [data-slot="button"][data-variant="primary"],
+[data-redesign="ligado"] [data-rd-plataforma="cabecalho"] [data-slot="button"][data-variant="primary"] {
+  background: var(--plat);
+  color: var(--plat-fg);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] :is(div, header):has(h1) [data-slot="button"][data-variant="primary"]:hover,
+[data-redesign="ligado"] [data-rd-plataforma="cabecalho"] [data-slot="button"][data-variant="primary"]:hover {
+  background: color-mix(in srgb, var(--plat) 88%, black);
 }
 [data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="card"] {
   border: 1px solid var(--color-border);
@@ -4954,6 +5314,9 @@
 @media (max-width: 640px) {
   [data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 {
     font-size: 22px;
+  }
+  [data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 + p {
+    font-size: 14px;
   }
   [data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="table-head"] {
     font-size: 11px;

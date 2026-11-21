@@ -29159,6 +29159,20 @@ export const DICIONARIO: Traducoes = {
   "A escolha das páginas expirou. Clique em Conectar de novo.": { es: "La selección de páginas expiró. Haz clic en Conectar de nuevo." },
   "Esta escolha foi aberta em outra empresa. Volte para ela, ou clique em Conectar de novo nesta empresa.": { es: "Esta selección se abrió en otra empresa. Vuelve a ella o haz clic en Conectar de nuevo en esta empresa." },
   "Não foi possível carregar as páginas. Tente de novo.": { es: "No fue posible cargar las páginas. Inténtalo de nuevo." },
+  // Painel de marca das telas de entrada (`components/auth/PainelDeEntrar.tsx`).
+  "Todo o seu atendimento de WhatsApp, com IA, num lugar só": { es: "Toda su atención de WhatsApp, con IA, en un solo lugar", en: "All your WhatsApp support, with AI, in one place" },
+  "Todas as conversas num só lugar": { es: "Todas las conversaciones en un solo lugar", en: "All conversations in one place" },
+  "O WhatsApp da equipe inteira, sem trocar de celular.": { es: "El WhatsApp de todo el equipo, sin cambiar de celular.", en: "The whole team's WhatsApp, without switching phones." },
+  "IA que atende e agenda por você": { es: "IA que atiende y agenda por usted", en: "AI that answers and schedules for you" },
+  "Responde na hora e chama a equipe quando precisa.": { es: "Responde al instante y llama al equipo cuando hace falta.", en: "Replies instantly and calls the team when needed." },
+  "Vendas sempre em dia": { es: "Ventas siempre al día", en: "Sales always up to date" },
+  "Cada conversa vira um negócio no funil, sem anotar nada.": { es: "Cada conversación se vuelve un negocio en el embudo, sin anotar nada.", en: "Every conversation becomes a deal in the funnel, no note-taking." },
+  "WhatsApp · agora": { es: "WhatsApp · ahora", en: "WhatsApp · now" },
+  "Oi! Vocês têm horário amanhã de manhã?": { es: "¡Hola! ¿Tienen horario mañana por la mañana?", en: "Hi! Do you have a slot tomorrow morning?" },
+  "Respondido pela IA": { es: "Respondido por la IA", en: "Answered by AI" },
+  "Tenho 9h30 ou 10h. Qual fica melhor para você?": { es: "Tengo a las 9:30 o a las 10:00. ¿Cuál le queda mejor?", en: "I have 9:30 or 10:00. Which works better for you?" },
+  "9h30 está ótimo!": { es: "¡9:30 está perfecto!", en: "9:30 is great!" },
+  "Consulta marcada e negócio movido para \"Agendado\"": { es: "Cita agendada y negocio movido a \"Agendado\"", en: "Appointment booked and deal moved to \"Scheduled\"" },
 };
 
 /**
