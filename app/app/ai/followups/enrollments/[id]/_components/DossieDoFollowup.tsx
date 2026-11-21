@@ -455,6 +455,7 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
             <AlertDialogCancel>{t("Voltar")}</AlertDialogCancel>
             <AlertDialogAction
               className={buttonVariants({ variant: "destructive" })}
+              data-variant="destructive"
               data-testid="dossie-cancelar-confirmar"
               onClick={() => {
                 cancelar.mutate(id);

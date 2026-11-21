@@ -609,6 +609,7 @@ function PlatformBlock({
             <AlertDialogAction
               data-testid={`extension-remove-confirm-${extension.id}`}
               className={buttonVariants({ variant: "destructive" })}
+              data-variant="destructive"
               disabled={blocked}
               onClick={() => void onRemove(extension)}
             >

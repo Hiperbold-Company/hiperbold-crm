@@ -311,6 +311,7 @@ export function QueueTab({ canWrite }: Props) {
             <AlertDialogCancel>{t("Voltar")}</AlertDialogCancel>
             <AlertDialogAction
               className={buttonVariants({ variant: "destructive" })}
+              data-variant="destructive"
               onClick={() => {
                 if (pendingCancel?.source === "promise") cancelPromise.mutate(pendingCancel.id);
                 else if (pendingCancel) cancelEnrollment.mutate(pendingCancel.id);

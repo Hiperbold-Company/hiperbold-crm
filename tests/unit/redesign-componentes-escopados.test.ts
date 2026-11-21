@@ -76,6 +76,15 @@ describe("redesign: componentes base escopados pela chave", () => {
     expect(violacoes(extrairBloco(CSS)).erros).toEqual([]);
   });
 
+  it("cartão 20px e botão de ícone 34px existem, escopados e respeitando p-0", () => {
+    const bloco = extrairBloco(CSS);
+    expect(bloco).toContain('[data-slot="card-header"][class~="p-6"]:not([class*="p-0"]');
+    expect(bloco).toMatch(/\[data-slot="card-content"\], \[data-slot="card-footer"\]/);
+    expect(bloco).toContain('[data-slot="button"][data-size="icon"][class~="lg:h-9"]');
+    expect(bloco).toMatch(/padding: 20px;/);
+    expect(bloco).toMatch(/width: 34px;/);
+  });
+
   it("controle negativo: a régua reprova seletor sem escopo, lista mista e @keyframes", () => {
     const ruim = `
       .x { color: red; }

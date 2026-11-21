@@ -281,6 +281,7 @@ export function KanbanCardActions({ lead, pipelineId, etapas, onMoverPara }: Kan
             */}
             <AlertDialogAction
               className={buttonVariants({ variant: "destructive" })}
+              data-variant="destructive"
               disabled={bulk.isPending}
               onClick={(e) => {
                 e.preventDefault();

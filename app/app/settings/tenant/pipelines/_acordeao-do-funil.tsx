@@ -231,7 +231,13 @@ export function AcordeaoDoFunil({
     <span className="flex min-w-0 flex-wrap items-center gap-2">
       <span>{pipeline.name}</span>
       {pipeline.is_default && (
-        <span className={badgeVariants({ variant: "secondary", className: "text-2xs" })}>{t("Padrão")}</span>
+        <span
+          data-slot="badge"
+          data-variant="secondary"
+          className={badgeVariants({ variant: "secondary", className: "text-2xs" })}
+        >
+          {t("Padrão")}
+        </span>
       )}
       <span className="text-xs font-normal text-muted-foreground">
         {numeroDeEtapas === 1 ? t("1 etapa") : `${numeroDeEtapas} ${t("etapas")}`}

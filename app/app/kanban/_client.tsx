@@ -432,6 +432,7 @@ export function FunisClient({
                         */}
                         <AlertDialogAction
                           className={buttonVariants({ variant: "destructive" })}
+                          data-variant="destructive"
                           disabled={ocupado}
                           data-testid={`excluir-confirmar-${funil.id}`}
                           onClick={(e) => {

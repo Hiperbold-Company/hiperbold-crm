@@ -1887,6 +1887,14 @@
   }
 }
 
+/* Botão de ícone 34x34 (.btn-ico) onde quem aciona é o cursor; no toque vale o piso de 44px. */
+@media (width >= 64rem) {
+  [data-redesign="ligado"] [data-slot="button"][data-size="icon"][class~="lg:h-9"][class~="lg:w-9"] {
+    height: 34px;
+    width: 34px;
+  }
+}
+
 /* ---- Caixa de marcar (.cx) --------------------------------------------- */
 [data-redesign="ligado"] [data-slot="checkbox"] {
   appearance: none;
@@ -2014,6 +2022,21 @@
 }
 [data-redesign="ligado"] [data-slot="card-title"][class~="text-base"] {
   font-size: 15px;
+}
+/* Respiro de 20px nas partes do cartão. Só onde a classe-base `p-6` ainda está
+   presente: quem zerou ou trocou o padding (`p-0`, `px-*`, `py-*`) continua mandando. */
+[data-redesign="ligado"]
+  [data-slot="card-header"][class~="p-6"]:not([class*="p-0"], [class*="px-"], [class*="py-"]) {
+  padding: 20px;
+}
+[data-redesign="ligado"]
+  :is([data-slot="card-content"], [data-slot="card-footer"])[class~="p-6"][class~="pt-0"]:not(
+    [class*="p-0"],
+    [class*="px-"],
+    [class*="py-"],
+    [class*="pb-"]
+  ) {
+  padding: 0 20px 20px;
 }
 
 /* ---- Tabela (.linha, .th) ---------------------------------------------- */
