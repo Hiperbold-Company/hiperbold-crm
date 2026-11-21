@@ -8,6 +8,7 @@ import { VinculoDaMarcacao } from "@/components/agenda/VinculoDaMarcacao";
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDaAgenda } from "@/lib/redesign/agenda";
 
 import { addDays, format, startOfDay, startOfMonth, startOfWeek } from "date-fns";
 import * as React from "react";
@@ -147,6 +148,7 @@ export function AgendaClient({
 }) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const rd = useMarcaDaAgenda();
   const router = useRouter();
   const [marcando, setMarcando] = React.useState(false);
   // O compromisso criado NESTA abertura do painel. Serve para levar a grade até
@@ -550,6 +552,7 @@ export function AgendaClient({
       data-testid="tela-agenda"
       data-fonte={agendamentosIniciais.length > 0 ? "api" : "api-sem-dado"}
       data-fuso={fusoDeApresentacao ?? "organizacao"}
+      data-rd-agenda={rd("tela")}
       className="flex h-full flex-col gap-4 p-6"
     >
       {tiposIniciais.some((tipo) => tipo.servicoColetivo) && <ReservasColetivas today={hojeNaOrganizacao} zone={fusoDaAgenda} canWrite={podeMarcar}/>}
@@ -571,7 +574,7 @@ export function AgendaClient({
         enderecoDeRetorno={enderecoDeRetorno}
       />
 
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4" data-rd-agenda={rd("cabecalho")}>
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">{tituloDaAgenda ?? t("Agendamentos")}</h1>
           <p className="text-sm text-muted-foreground">
@@ -643,7 +646,7 @@ export function AgendaClient({
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3" data-rd-agenda={rd("barra")}>
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex items-center gap-0.5">
             <Button
@@ -706,6 +709,7 @@ export function AgendaClient({
           <FiltroDePessoas pessoas={pessoas} isolada={isolada} onIsolar={setIsolada} />
           <div
             data-testid="alternador-de-visao"
+            data-rd-agenda={rd("visoes")}
             className="flex items-center gap-0.5 rounded-md border border-border bg-surface p-0.5"
           >
             {VISOES.map((v) => (

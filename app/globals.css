@@ -4141,3 +4141,122 @@
   font-size: 13px;
 }
 /* redesign: inicio — fim ─────────────────────── */
+
+/* redesign: agenda ───────────────────────────────────────────────────────
+   Agenda e Radar. Só aparência; toda regra começa por [data-redesign="ligado"]
+   (fora de @layer, regra sem escopo venceria a tela com a chave desligada).
+   Não toca em max-width nem padding de raiz que a tela já declara. */
+
+/* Agenda: cabeçalho, barra do período e alternador de visão. */
+[data-redesign="ligado"] [data-rd-agenda="cabecalho"] h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-agenda="cabecalho"] p {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-agenda="barra"] {
+  gap: 12px;
+}
+[data-redesign="ligado"] [data-rd-agenda="visoes"] {
+  border-radius: 10px;
+  border-color: var(--color-border);
+  background: var(--color-surface-elevated);
+  padding: 3px;
+}
+[data-redesign="ligado"] [data-rd-agenda="visoes"] button {
+  border-radius: 8px;
+  font-size: 13px;
+  min-height: 32px;
+}
+[data-redesign="ligado"] [data-rd-agenda="visoes"] button[aria-pressed="true"],
+[data-redesign="ligado"] [data-rd-agenda="visoes"] button[aria-selected="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+/* Agenda: a grade do calendário e os compromissos. */
+[data-redesign="ligado"] [data-rd-agenda="grade"] {
+  border-radius: 12px;
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-agenda="compromisso"] {
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+[data-redesign="ligado"] [data-rd-agenda="compromisso"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* Radar: cabeçalho, avisos, contagem e lista de demandas em risco. */
+[data-redesign="ligado"] [data-rd-agenda="radar-cabecalho"] h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-agenda="radar-cabecalho"] p {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-agenda="radar-aviso"] {
+  border-radius: 12px;
+  padding: 14px 16px;
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
+}
+[data-redesign="ligado"] [data-rd-agenda="radar-aviso"] > p:first-child {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-warning-fg);
+}
+[data-redesign="ligado"] [data-rd-agenda="radar-contagem"] {
+  gap: 8px;
+}
+[data-redesign="ligado"] [data-rd-agenda="radar-contagem"] > * {
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-agenda="radar-lista"] {
+  border-radius: 12px;
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+[data-redesign="ligado"] [data-rd-agenda="radar-item"] {
+  min-height: 44px;
+}
+[data-redesign="ligado"] [data-rd-agenda="radar-item"]:hover {
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-agenda="radar-item"] p.truncate:first-child {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-agenda="radar-vazio"] {
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+@media (max-width: 639px) {
+  [data-redesign="ligado"] [data-rd-agenda="cabecalho"] h1,
+  [data-redesign="ligado"] [data-rd-agenda="radar-cabecalho"] h1 {
+    font-size: 20px;
+  }
+  [data-redesign="ligado"] [data-rd-agenda="radar-aviso"] {
+    padding: 12px;
+  }
+}
+/* redesign: agenda — fim ─────────────────────── */
