@@ -13,6 +13,7 @@ import { MediaUnavailable } from "@/components/inbox/media/MediaUnavailable";
 import { VideoMedia } from "@/components/inbox/media/VideoMedia";
 import { kindFromMime } from "@/lib/messaging/media/upload-validation";
 import { partesDoCorpo } from "@/lib/notifications/mentions";
+import { useMarcaDoChat } from "@/components/inbox/redesign/marca";
 
 /**
  * O anexo da nota interna (#1863, F3).
@@ -104,11 +105,12 @@ interface Props {
 export function NoteCard({ note, onDelete }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const rd = useMarcaDoChat();
   const time = format(new Date(note.created_at), "HH:mm", { locale: localeDaData });
 
   return (
-    <div className="group flex w-full min-w-0 justify-center px-4 py-1">
-      <div className="max-w-[85%] min-w-0 rounded-xl border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg shadow-sm">
+    <div data-rd-chat={rd("nota-linha")} className="group flex w-full min-w-0 justify-center px-4 py-1">
+      <div data-rd-chat={rd("nota")} className="max-w-[85%] min-w-0 rounded-xl border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg shadow-sm">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 text-2xs font-semibold opacity-80">
             <NoteIcon size={12} weight="fill" aria-hidden />

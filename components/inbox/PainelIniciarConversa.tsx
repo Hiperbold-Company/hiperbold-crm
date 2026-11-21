@@ -67,7 +67,7 @@ import { apiClient } from "@/lib/api/client";
 import { normalizePhoneBR, phoneForDisplay, samePhone } from "@/lib/channels/phone-variants";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { assumirConversaAoAbrir } from "@/lib/inbox/assumir-conversa-ao-abrir";
-import { ChatCircle, UserCircle, Users } from "@/lib/ui/icons";
+import { ChatCircle, Plus, UserCircle, Users } from "@/lib/ui/icons";
 import { useAuth, usePermission } from "@/hooks/auth/AuthProvider";
 import { useContactList } from "@/hooks/contacts/useContactList";
 import { useT } from "@/hooks/i18n/useT";
@@ -375,12 +375,28 @@ export function IniciarConversaDialog({
  * `agent`, que é o que a rota exige para abrir conversa em nome da organização.
  * Quem não pode atender não vê um botão que o servidor vai recusar.
  */
-export function BotaoIniciarConversa() {
+/**
+ * `noCabecalho` é o desenho do redesign (item B4): o botão principal, compacto,
+ * ao lado do título "Conversas". Sem a prop, o botão de sempre.
+ */
+export function BotaoIniciarConversa({ noCabecalho = false }: { noCabecalho?: boolean } = {}) {
   const t = useT();
   const podeIniciar = usePermission("inbox.claim");
   const [aberto, setAberto] = useState(false);
 
   if (!podeIniciar) return null;
+
+  if (noCabecalho) {
+    return (
+      <>
+        <Button type="button" size="sm" className="gap-1.5" onClick={() => setAberto(true)}>
+          <Plus size={14} weight="bold" aria-hidden />
+          {t("Iniciar conversa")}
+        </Button>
+        <IniciarConversaDialog open={aberto} onOpenChange={setAberto} />
+      </>
+    );
+  }
 
   return (
     <>

@@ -48,6 +48,8 @@ import type { ConversationWithContact } from "@/hooks/inbox/useConversationsReal
 import { rotuloParaAEquipe } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
+import { useMarcaDoChat } from "@/components/inbox/redesign/marca";
+import { AvatarDoContato } from "@/components/inbox/redesign/AvatarDoContato";
 
 interface Props {
   conversation: ConversationWithContact;
@@ -97,6 +99,7 @@ export function ConversationHeader({
   botaoBuscaRef,
 }: Props) {
   const t = useT();
+  const rd = useMarcaDoChat();
   const { user, activeOrg } = useAuth();
   const claim = useClaimConversation();
   const release = useReleaseConversation();
@@ -277,7 +280,7 @@ export function ConversationHeader({
     // DUAS LINHAS SEMPRE (decisão do dono do produto, 17/11, a partir do
     // protótipo): em cima quem é o contato, embaixo as ações. Na linha única o
     // nome espremia em três linhas ("Clínica / Bem / Estar") ao lado dos botões.
-    <div className="flex flex-col gap-2 border-b border-border bg-background px-3 py-2 md:px-4 md:py-3">
+    <div data-rd-chat={rd("cabecalho")} className="flex flex-col gap-2 border-b border-border bg-background px-3 py-2 md:px-4 md:py-3">
       {/* FAIXA DA CARTEIRA (#2591, regra 2): "este cliente pertence à carteira de
           A". `w-full` a põe numa linha própria acima da identidade, sem disputar
           espaço com a barra de ações — a faixa só existe quando o dono é OUTRA
@@ -285,10 +288,13 @@ export function ConversationHeader({
       {c?.id && (
         <FaixaDaCarteira contactId={c.id} quemAtendeId={conversation.assigned_to_user_id} />
       )}
-      <div className="min-w-0">
+      <div data-rd-chat={rd("identidade")} className="min-w-0">
+        {rd("identidade") && (
+          <AvatarDoContato contato={c} nome={displayName} reserva={conversation.id} />
+        )}
         <div className="flex min-w-0 items-center gap-1.5">
           <ChannelLogo channel={conversation.channel_sessions} size={20} />
-          <h2 className="min-w-0 truncate text-base font-semibold" title={displayName}>{displayName}</h2>
+          <h2 data-rd-chat={rd("nome-da-conversa")} className="min-w-0 truncate text-base font-semibold" title={displayName}>{displayName}</h2>
           <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-2xs">
             {t(STATUS_LABEL[status] ?? status)}
           </Badge>
@@ -368,7 +374,7 @@ export function ConversationHeader({
           máscara apaga a borda direita para dizer que a fileira rola, e o `pr-8`
           deixa o último botão fora da máscara quando rolado até o fim. Tudo
           `max-md:` — no computador encolher a janela não é teclado. */}
-      <div className="flex w-full min-w-0 flex-col items-start gap-1 max-md:items-stretch max-md:group-data-[teclado-aberto]/conversa:hidden">
+      <div data-rd-chat={rd("acoes")} className="flex w-full min-w-0 flex-col items-start gap-1 max-md:items-stretch max-md:group-data-[teclado-aberto]/conversa:hidden">
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 max-md:flex-nowrap max-md:overflow-x-auto max-md:pb-1 max-md:pr-8 max-md:[&>*]:shrink-0 max-md:[mask-image:linear-gradient(to_right,black_calc(100%_-_2rem),transparent)]">
         {/* Primeira da barra e sem rótulo escrito: é ferramenta de LEITURA, não
             ação de atendimento, e não muda de lugar com o estado da conversa.
