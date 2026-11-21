@@ -4430,3 +4430,139 @@
   }
 }
 /* redesign: metricas — fim ─────────────────────── */
+
+/* redesign: plataforma ───────────────────────────────
+   O painel da plataforma (`/admin/*`) no redesign Hiperbold, protótipo v49
+   (PlataformaPainel.dc.html e Plat*.dc.html): menu lateral claro com item
+   ativo em tinta suave, topo limpo e área de conteúdo com título forte,
+   cartões e tabelas no desenho novo.
+
+   Os componentes são os de sempre; com a chave ligada eles ganham
+   `data-rd-plataforma="<peça>"` (`lib/redesign/plataforma.ts`). O `main` do
+   painel é uma peça só ("conteudo") e o resto da tela é alcançado por dentro
+   dele, para uma marcação cobrir todas as telas. TODA regra começa por
+   `[data-redesign="ligado"]`; `tests/unit/redesign-plataforma.test.tsx` cobra.
+   Só variáveis de cor que já existem. Não mexe em max-width nem padding de raiz.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Casca, menu e topo ── */
+[data-redesign="ligado"] [data-rd-plataforma="casca"] {
+  background: var(--color-bg);
+}
+[data-redesign="ligado"] [data-rd-plataforma="menu"] {
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-plataforma="menu-topo"] {
+  border-bottom: 1px solid var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-plataforma="menu-marca"] span:first-child {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-plataforma="menu-marca"] span:last-child {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-plataforma="menu-lista"] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+}
+[data-redesign="ligado"] [data-rd-plataforma="menu-item"] {
+  min-height: 40px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-plataforma="menu-item"]:hover {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-plataforma="menu-item"][aria-current="page"] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-plataforma="menu-item"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-plataforma="menu-rodape"] {
+  border-top: 1px solid var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-plataforma="topo"] {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* ── Conteúdo: título, cartões e tabelas de todas as telas do painel ── */
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 + p {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="card"] {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="card-title"] {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="table"] {
+  font-size: 14px;
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="table-head"] {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="table-row"] {
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="table-row"]:hover {
+  background: var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] input:focus-visible,
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] button:focus-visible,
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* ── Botão de criar do cabeçalho marcado (lista de empresas) ── */
+[data-redesign="ligado"] [data-rd-plataforma="criar"] {
+  min-height: 40px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ── Celular ── */
+@media (max-width: 640px) {
+  [data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 {
+    font-size: 22px;
+  }
+  [data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="table-head"] {
+    font-size: 11px;
+  }
+}
+/* redesign: plataforma — fim ─────────────────────── */
