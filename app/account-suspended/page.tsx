@@ -1,3 +1,5 @@
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDoSistema } from "@/lib/redesign/sistema";
 import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -100,23 +102,25 @@ export default async function AccountSuspendedPage({
     .map((o) => ({ id: o.organization_id, nome: o.organization_name }));
   const pedidoAberto = administra ? pedidoValido : undefined;
 
+  const rd = marcaDoSistema(redesignLigado());
+
   return (
     <IdiomaProvider locale={idioma}>
-      <main className="flex min-h-screen flex-col items-center gap-8 p-4 sm:p-8">
-        <Card className="w-full max-w-md space-y-4 p-8 text-center">
-          <h1 className="text-2xl font-semibold">{t("Conta suspensa")}</h1>
+      <main className="flex min-h-screen flex-col items-center gap-8 p-4 sm:p-8" data-rd-sistema={rd("pagina")}>
+        <Card className="w-full max-w-md space-y-4 p-8 text-center" data-rd-sistema={rd("cartao")}>
+          <h1 className="text-2xl font-semibold" data-rd-sistema={rd("titulo")}>{t("Conta suspensa")}</h1>
           {/* Quem participa de várias empresas precisa saber QUAL parou. Dado, não interface: sem t(). */}
-          <p className="text-base font-medium">{ativa.name}</p>
+          <p className="text-base font-medium" data-rd-sistema={rd("destaque")}>{ativa.name}</p>
           {mostra === "pagamento" ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground" data-rd-sistema={rd("texto")}>
               {t("A conta foi suspensa por falta de pagamento. Assim que o pagamento for confirmado, tudo volta a funcionar na hora.")}
             </p>
           ) : !administra ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground" data-rd-sistema={rd("texto")}>
               {t("Sua conta está suspensa. Avise o administrador da sua empresa.")}
             </p>
           ) : suporte ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground" data-rd-sistema={rd("texto")}>
               {t("Sua conta está suspensa. Entre em contato com")}{" "}
               <a
                 href={`mailto:${suporte}`}
@@ -127,13 +131,13 @@ export default async function AccountSuspendedPage({
               {t("para mais informações.")}
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground" data-rd-sistema={rd("texto")}>
               {t(
                 "Sua conta está suspensa. Fale com quem administra este sistema para saber o motivo e como reativá-la.",
               )}
             </p>
           )}
-          <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-2" data-rd-sistema={rd("acoes")}>
             <OutrasOrganizacoes outras={outras} />
             {/* Encerra a sessão, como a irmã /acesso-revogado: um link para /login
                 deixava a pessoa logada, e o próximo /app a trazia de volta aqui. */}
@@ -174,7 +178,7 @@ export default async function AccountSuspendedPage({
               <h2 id="lgpd-no-hub" className="text-lg font-semibold">
                 {t("Solicitações LGPD")}
               </h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground" data-rd-sistema={rd("texto")}>
                 {t("Os pedidos de LGPD dos seus clientes continuam com prazo durante a suspensão.")}
               </p>
             </header>

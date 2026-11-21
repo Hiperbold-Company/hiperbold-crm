@@ -1,3 +1,5 @@
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDoSistema } from "@/lib/redesign/sistema";
 import Link from "next/link";
 
 import { marcaDaSaida } from "@/lib/branding/saida";
@@ -29,19 +31,21 @@ export default async function LegalLayout({ children }: { children: React.ReactN
     (user?.user_metadata?.locale as string | undefined) ?? null,
   );
 
+  const rd = marcaDoSistema(redesignLigado());
+
   return (
     <IdiomaProvider locale={idioma}>
-      <div className="min-h-screen bg-muted/40">
-        <header className="border-b bg-background">
+      <div className="min-h-screen bg-muted/40" data-rd-sistema={rd("pagina")}>
+        <header className="border-b bg-background" data-rd-sistema={rd("cabecalho")}>
           <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-6 py-4">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">{marca.nome}</p>
-            <Link href="/login" className="text-sm underline underline-offset-2">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground" data-rd-sistema={rd("marca")}>{marca.nome}</p>
+            <Link href="/login" className="text-sm underline underline-offset-2" data-rd-sistema={rd("voltar")}>
               {traduzir("Voltar", idioma)}
             </Link>
           </div>
         </header>
         <main className="mx-auto w-full max-w-3xl px-6 py-10">
-          <article className="space-y-6 rounded-lg border bg-background p-8 text-sm leading-relaxed">
+          <article className="space-y-6 rounded-lg border bg-background p-8 text-sm leading-relaxed" data-rd-sistema={rd("documento")}>
             {children}
           </article>
         </main>
