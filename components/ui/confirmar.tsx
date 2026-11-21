@@ -25,10 +25,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/hooks/i18n/useT";
-import { cn } from "@/lib/utils";
 
 export interface OpcoesDeConfirmacao {
   titulo: string;
@@ -127,7 +125,7 @@ export function ProvedorDeConfirmacao({ children }: { children: ReactNode }) {
             <AlertDialogCancel onClick={() => responder(false)}>{o?.cancelar ?? t("Cancelar")}</AlertDialogCancel>
             <AlertDialogAction
               disabled={faltaTexto}
-              className={cn(o?.perigo && buttonVariants({ variant: "destructive" }))}
+              variant={o?.perigo ? "destructive" : "primary"}
               onClick={(e) => {
                 e.preventDefault();
                 responder(true);

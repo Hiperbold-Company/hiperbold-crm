@@ -6,7 +6,7 @@ import Link from "next/link";
 import { format, formatDistanceToNowStrict } from "date-fns";
 
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -310,8 +310,7 @@ export function QueueTab({ canWrite }: Props) {
           <AlertDialogFooter>
             <AlertDialogCancel>{t("Voltar")}</AlertDialogCancel>
             <AlertDialogAction
-              className={buttonVariants({ variant: "destructive" })}
-              data-variant="destructive"
+              variant="destructive"
               onClick={() => {
                 if (pendingCancel?.source === "promise") cancelPromise.mutate(pendingCancel.id);
                 else if (pendingCancel) cancelEnrollment.mutate(pendingCancel.id);

@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { DotsThree, PencilSimple, Users } from "@/lib/ui/icons";
 import { useWinLead, useEditLead } from "@/hooks/kanban/useUpdateLead";
 import { useBulkAction } from "@/hooks/kanban/useBulkAction";
@@ -280,8 +280,7 @@ export function KanbanCardActions({ lead, pipelineId, etapas, onMoverPara }: Kan
               isso é o `disabled`.
             */}
             <AlertDialogAction
-              className={buttonVariants({ variant: "destructive" })}
-              data-variant="destructive"
+              variant="destructive"
               disabled={bulk.isPending}
               onClick={(e) => {
                 e.preventDefault();

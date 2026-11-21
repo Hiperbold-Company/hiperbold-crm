@@ -8,7 +8,7 @@ import Link from "next/link";
 import { format, formatDistanceToNowStrict } from "date-fns";
 
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -457,8 +457,7 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
           <AlertDialogFooter>
             <AlertDialogCancel>{t("Voltar")}</AlertDialogCancel>
             <AlertDialogAction
-              className={buttonVariants({ variant: "destructive" })}
-              data-variant="destructive"
+              variant="destructive"
               data-testid="dossie-cancelar-confirmar"
               onClick={() => {
                 cancelar.mutate(id);

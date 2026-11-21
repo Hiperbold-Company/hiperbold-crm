@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -608,8 +608,7 @@ function PlatformBlock({
             <AlertDialogCancel>{t("Cancelar")}</AlertDialogCancel>
             <AlertDialogAction
               data-testid={`extension-remove-confirm-${extension.id}`}
-              className={buttonVariants({ variant: "destructive" })}
-              data-variant="destructive"
+              variant="destructive"
               disabled={blocked}
               onClick={() => void onRemove(extension)}
             >
