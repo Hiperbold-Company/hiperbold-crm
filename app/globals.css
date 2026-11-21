@@ -3374,7 +3374,7 @@
   display: contents;
 }
 
-/* A página: coluna centrada de 880px, como a do protótipo (840 + respiro). */
+/* A página: coluna centrada de 1040px (o protótipo usa 840; tabelas como Chaves de integração pedem mais). */
 [data-redesign="ligado"] [data-rd-configuracoes="area"] > div {
   box-sizing: border-box;
   width: 100%;
