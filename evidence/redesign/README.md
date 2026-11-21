@@ -952,3 +952,62 @@ Arquivo gerado por `node evidence/redesign/gerar-indice.mjs`. Não edite à mão
 - `evidence/redesign/E1-nos-do-editor/depois-ligada/automacoes_b75ca0a4-en-desktop.png`
 - `evidence/redesign/E1-nos-do-editor/depois-ligada/automacoes_b75ca0a4-pt-BR-celular.png`
 - `evidence/redesign/E1-nos-do-editor/depois-ligada/automacoes_b75ca0a4-pt-BR-desktop.png`
+
+## E2-roteamento
+
+### Antes (main, sem a mudança)
+
+- `evidence/redesign/E2-roteamento/antes/ai_atendimento-en-celular.png`
+- `evidence/redesign/E2-roteamento/antes/ai_atendimento-en-desktop.png`
+- `evidence/redesign/E2-roteamento/antes/ai_atendimento-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/antes/ai_atendimento-pt-BR-desktop.png`
+- `evidence/redesign/E2-roteamento/antes/ai_followups_enrollments_d7bf9fda-en-celular.png`
+- `evidence/redesign/E2-roteamento/antes/ai_followups_enrollments_d7bf9fda-en-desktop.png`
+- `evidence/redesign/E2-roteamento/antes/ai_followups_enrollments_d7bf9fda-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/antes/ai_followups_enrollments_d7bf9fda-pt-BR-desktop.png`
+- `evidence/redesign/E2-roteamento/antes/ai_routers_6701a45b-en-celular.png`
+- `evidence/redesign/E2-roteamento/antes/ai_routers_6701a45b-en-desktop.png`
+- `evidence/redesign/E2-roteamento/antes/ai_routers_6701a45b-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/antes/ai_routers_6701a45b-pt-BR-desktop.png`
+- `evidence/redesign/E2-roteamento/antes/ai_runs_tab_roteamento-en-celular.png`
+- `evidence/redesign/E2-roteamento/antes/ai_runs_tab_roteamento-en-desktop.png`
+- `evidence/redesign/E2-roteamento/antes/ai_runs_tab_roteamento-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/antes/ai_runs_tab_roteamento-pt-BR-desktop.png`
+
+### Depois, com a chave desligada (tem de ser igual ao antes)
+
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_atendimento-en-celular.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_atendimento-en-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_atendimento-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_atendimento-pt-BR-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_followups_enrollments_d7bf9fda-en-celular.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_followups_enrollments_d7bf9fda-en-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_followups_enrollments_d7bf9fda-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_followups_enrollments_d7bf9fda-pt-BR-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_routers_6701a45b-en-celular.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_routers_6701a45b-en-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_routers_6701a45b-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_routers_6701a45b-pt-BR-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_runs_tab_roteamento-en-celular.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_runs_tab_roteamento-en-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_runs_tab_roteamento-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/depois-desligada/ai_runs_tab_roteamento-pt-BR-desktop.png`
+
+### Depois, com a chave ligada (visual novo)
+
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_atendimento-en-celular.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_atendimento-en-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_atendimento-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_atendimento-pt-BR-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_followups_enrollments_d7bf9fda-en-celular.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_followups_enrollments_d7bf9fda-en-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_followups_enrollments_d7bf9fda-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_followups_enrollments_d7bf9fda-pt-BR-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_routers_6701a45b-en-celular.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_routers_6701a45b-en-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_routers_6701a45b-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_routers_6701a45b-pt-BR-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_runs_tab_roteamento-en-celular.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_runs_tab_roteamento-en-desktop.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_runs_tab_roteamento-pt-BR-celular.png`
+- `evidence/redesign/E2-roteamento/depois-ligada/ai_runs_tab_roteamento-pt-BR-desktop.png`
